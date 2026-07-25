@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT=/home/szw/lhm2
+ROOT=${QQCHAT_LAB_ROOT:-/home/szw/lhm2}
 PROJECT=$ROOT/qqchat-enhanced
-PYTHON=$ROOT/envs/qqchat-gpu-qwen3/bin/python
+PYTHON=${QQCHAT_PYTHON:-$ROOT/envs/qqchat-gpu-qwen3/bin/python}
 RUNTIME=$ROOT/runtime
 LOCK_DIR=$RUNTIME/locks/kisaki-r1-extension.lock
 LOG=$RUNTIME/logs/kisaki-r1-extension.log
