@@ -66,22 +66,32 @@ JUDGE_B_CONTRADICTION_TOTAL_GAP = 3.0
 # the scores do not actually support a tie -> disputed.
 JUDGE_B_TIE_DIM_GAP = 2.0
 
-# Major-3 fix: score-derived decision to eliminate position bias.
-# smoke12_v2 showed first_position_preference_rate=1.0 — the judge
-# mechanically selects position A regardless of content, and its scores
-# are also position-biased (score_contradiction_rate=0.0 means scores
-# agree with the biased preferred). Trusting either ``preferred`` or
-# single-run scores cannot fix this.
+# Major-3 fix: score-derived decision to reduce position bias.
+#
+# Prior smoke runs exhibited strong first-position preference (the judge
+# mechanically selects whichever response is in position A). The old
+# decision logic (both runs prefer candidate => passed) could never
+# agree: Run1 picks position-A=candidate, Run2 picks position-A=negative,
+# producing a disputed verdict on every sample.
 #
 # Solution: average the candidate's scores across both orderings.
 # Run1: candidate=A (position A, inflated by bias)
 # Run2: candidate=B (position B, deflated by bias)
-# Averaging cancels the position bias. The decision is then derived
-# from the averaged totals:
+# Averaging reduces the additive position bias. The decision is then
+# derived from the averaged totals:
 #   candidate_avg > negative_avg + TIE_GAP => passed
 #   candidate_avg < negative_avg - TIE_GAP => rejected
 #   otherwise => disputed (genuinely close, not a bias artifact)
+#
+# Policy registration: this is judge_b_policy=double_order_score_mean_v1.
+# JUDGE_B_SCORE_DERIVED_TIE_GAP=1.0 is a PRE-REGISTERED provisional
+# value. Do NOT tune this threshold to lower the disputed rate after
+# seeing smoke results — that would introduce posterior selection bias.
+# The final value can only be set after the 30-sample calibration with
+# human agreement data. Averaging reduces additive bias but does not
+# fully eliminate it; claim "reduction", not "elimination".
 JUDGE_B_SCORE_DERIVED_TIE_GAP = 1.0
+JUDGE_B_POLICY_VERSION = "double_order_score_mean_v1"
 
 
 # ---------------------------------------------------------------------------
@@ -626,19 +636,19 @@ def judge_b(
     negative_avg: dict[str, float] = {}
     score_gap = 0.0
 
-    # Major-3 fix: score-derived decision to eliminate position bias.
+    # Major-3 fix: score-derived decision to reduce position bias.
     #
-    # smoke12_v2 showed first_position_preference_rate=1.0 — the judge
-    # always selects position A, and its scores agree with that biased
-    # selection (score_contradiction_rate=0.0). The old decision logic
-    # (both runs prefer candidate => passed) could never agree because
-    # Run1 picks position-A=candidate and Run2 picks position-A=negative,
-    # producing a disputed verdict on every sample.
+    # Prior smoke runs showed the judge mechanically selects position A
+    # regardless of content, and its scores agree with that biased
+    # selection. The old decision logic (both runs prefer candidate =>
+    # passed) could never agree because Run1 picks position-A=candidate
+    # and Run2 picks position-A=negative, producing a disputed verdict
+    # on every sample.
     #
     # New approach: derive the decision from the AVERAGE of the
     # candidate's scores across both orderings. Position bias inflates
     # the candidate's scores in Run1 (candidate at A) and deflates them
-    # in Run2 (candidate at B). Averaging cancels the bias:
+    # in Run2 (candidate at B). Averaging reduces the additive bias:
     #
     #   candidate_avg[dim] = (p1.scores_a[dim] + p2.scores_b[dim]) / 2
     #   negative_avg[dim]  = (p1.scores_b[dim] + p2.scores_a[dim]) / 2
@@ -646,6 +656,11 @@ def judge_b(
     # The decision is then based on the averaged totals, NOT on the
     # judge's ``preferred`` field. This makes the verdict symmetric:
     # swapping candidate/negative labels does not change the decision.
+    #
+    # Policy: judge_b_policy=double_order_score_mean_v1
+    # TIE_GAP=1.0 is a pre-registered provisional value; do not tune
+    # it based on smoke results (posterior selection bias). The final
+    # value is set only after 30-sample calibration with human agreement.
     #
     # Fail-closed to disputed on any of:
     #   - parse failure (JSON / preferred / confidence / scores invalid)

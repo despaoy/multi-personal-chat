@@ -609,14 +609,17 @@ def _build_run_summary(
             return 0.0
         return sum(1 for r in judge_b_reached if pred(r.get("judge_b", {}))) / jb_count
 
-    # first_position_preference_rate: fraction of Judge B runs where the
-    # judge preferred whichever response was in position A. Average the
-    # run1 and run2 indicators so a sample where both runs preferred
-    # position A counts as 1.0.
-    def _first_pos_a(jb: dict[str, Any]) -> bool:
-        r1 = bool(jb.get("first_position_a_run1", False))
-        r2 = bool(jb.get("first_position_a_run2", False))
-        return r1 or r2
+    # Minor-4 fix: first_position_preference_rate is now computed per-run
+    # (run1_rate + run2_rate) / 2, NOT as "either run preferred A". The
+    # old `r1 or r2` rule inflated the rate: a sample where only one run
+    # preferred A counted as 1.0, masking asymmetric bias. Per-run rates
+    # expose whether the bias is stable across both orderings or only
+    # affects one (e.g. only when candidate is at A).
+    def _first_pos_a_run1(jb: dict[str, Any]) -> bool:
+        return bool(jb.get("first_position_a_run1", False))
+
+    def _first_pos_a_run2(jb: dict[str, Any]) -> bool:
+        return bool(jb.get("first_position_a_run2", False))
 
     # parse failure: final_decision is disputed AND evidence contains a
     # parse-error marker. We approximate by checking if either run's
@@ -715,6 +718,17 @@ def _build_run_summary(
     # agree and calibration cannot produce reliable agreement data.
     disputed_rate = (jb_disputed / jb_count) if jb_count else 0.0
 
+    # Major-1 fix: judge_b_reached_rate prevents a false-green smoke
+    # gate. If all 12 samples are rejected at Hard Gate / Judge A,
+    # jb_count=0 and disputed_rate=0/0=0.0, which would satisfy
+    # disputed_rate_ok without Judge B ever running. Such a run proves
+    # nothing about the pairwise judge — it only proves the generator
+    # or Hard Gate is broken. Require at least 50% of processed samples
+    # to reach Judge B so the disputed_rate and position-bias telemetry
+    # are statistically meaningful.
+    judge_b_reached_rate = (jb_count / processed_count) if processed_count else 0.0
+    judge_b_reached_ok = judge_b_reached_rate >= 0.5
+
     processed_exactly = (
         expected_processed is not None
         and processed_count == expected_processed
@@ -738,23 +752,30 @@ def _build_run_summary(
         "bge_authoritative": bge_authoritative,
         "duplicate_ids": duplicate_ids,
         "no_duplicate_ids": no_duplicate_ids,
+        "judge_b_reached_count": jb_count,
+        "judge_b_reached_rate": round(judge_b_reached_rate, 4),
+        "judge_b_reached_ok": judge_b_reached_ok,
         "disputed_rate": round(disputed_rate, 4),
         "disputed_rate_ok": disputed_rate_ok,
         # Smoke gate: ALL conditions must hold. processed_exactly is
         # only checked when expected_processed is known (quota plan or
         # --limit); otherwise processed_at_least_one is the floor.
+        # Major-1: judge_b_reached_ok is required so a run where all
+        # samples died at Hard Gate / Judge A cannot pass the gate.
         "all_passed": (
             (processed_exactly if expected_processed is not None else processed_at_least_one)
             and scenes_covered_ok
             and parse_failures_zero
             and bge_authoritative
             and no_duplicate_ids
+            and judge_b_reached_ok
             and disputed_rate_ok
         ),
         "smoke_gate_criteria": (
             "processed_exactly (when expected known); scenes_covered >= 6; "
             "parse_failures == 0; bge_authoritative == true; "
-            "no_duplicate_ids; disputed_rate <= 0.25"
+            "no_duplicate_ids; judge_b_reached_rate >= 0.5; "
+            "disputed_rate <= 0.25"
         ),
     }
 
@@ -778,7 +799,14 @@ def _build_run_summary(
             "passed": jb_passed,
             "rejected": jb_rejected,
             "disputed": jb_disputed,
-            "first_position_preference_rate": round(_rate(_first_pos_a), 4),
+            # Minor-4: per-run rates expose asymmetric bias. The averaged
+            # rate is kept for backward compatibility but the per-run
+            # numbers are authoritative for bias diagnosis.
+            "first_position_preference_rate_run1": round(_rate(_first_pos_a_run1), 4),
+            "first_position_preference_rate_run2": round(_rate(_first_pos_a_run2), 4),
+            "first_position_preference_rate": round(
+                (_rate(_first_pos_a_run1) + _rate(_first_pos_a_run2)) / 2.0, 4
+            ),
             "tie_rate": round(_rate(lambda jb: jb.get("is_tie_run1") or jb.get("is_tie_run2")), 4),
             "low_confidence_rate": round(_rate(lambda jb: jb.get("low_confidence_run1") or jb.get("low_confidence_run2")), 4),
             "score_contradiction_rate": round(_rate(lambda jb: jb.get("score_contradiction_run1") or jb.get("score_contradiction_run2")), 4),
@@ -1102,6 +1130,29 @@ def run_pipeline(
     # metrics feed directly into the calibration decision: if
     # first_position_preference_rate is high, Judge B prompt needs
     # revision before the holdout run.
+    #
+    # Major-2 fix: expected_processed must reflect the TOTAL expected
+    # count from the initial run, not the current resume's pending
+    # count. Using len(pending) here would make the acceptance gate
+    # fail on every resume: e.g. initial run had 12 specs, processed 8,
+    # crashed; resume has pending=4, so expected_processed=4 but
+    # processed_count=12 (cumulative) -> processed_exactly=False forever.
+    # We read selected_count from the immutable initial_manifest.json
+    # so the expected total stays constant across resumes.
+    expected_processed_total: int | None = None
+    if initial_manifest_path.exists():
+        try:
+            initial_manifest = json.loads(
+                initial_manifest_path.read_text(encoding="utf-8")
+            )
+            expected_processed_total = initial_manifest.get("selected_count")
+        except (json.JSONDecodeError, OSError):
+            pass
+    if expected_processed_total is None:
+        # Fallback: no manifest (e.g. legacy run). Use this run's pending
+        # count so the gate still has a target, but log a warning.
+        expected_processed_total = len(pending) if pending else None
+
     run_summary = _build_run_summary(
         run_log_path=run_log_path,
         samples_path=samples_path,
@@ -1113,7 +1164,7 @@ def run_pipeline(
         processed_this_run=len(pending),
         initial_manifest_path=initial_manifest_path,
         judge_config_path=judge_config_path,
-        expected_processed=len(pending) if pending else None,
+        expected_processed=expected_processed_total,
     )
     atomic_write_json(output_dir / "run_summary.json", run_summary)
 

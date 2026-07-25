@@ -66,6 +66,17 @@ from kisaki_v4_llm_client import SampleSpec  # noqa: E402
 
 @pytest.fixture(autouse=True)
 def _force_similarity_fallback(monkeypatch):
+    """Minor-5: force ALL tests to run without a real BGE model.
+
+    Previously this fixture only set env=fallback and reset cached
+    state, but left ``_load_embedder`` pointing at the real loader. On
+    a host where BGE IS installed, ``_load_embedder`` would succeed,
+    the backend would resolve to ``bge_embedding``, and every test that
+    asserted ``char_4gram_fallback`` would fail. Tests that need to
+    exercise the strict-mode raise path (e.g.
+    ``test_similarity_backend_strict_raises_without_bge``) install
+    their own ``_load_embedder`` mock on top of this one.
+    """
     monkeypatch.setenv("KISAKI_SIMILARITY_BACKEND", "fallback")
     # Reset the cached backend resolution so the env var takes effect
     import hard_gate_kisaki_v4 as hg
@@ -73,6 +84,19 @@ def _force_similarity_fallback(monkeypatch):
     monkeypatch.setattr(hg, "_SIMILARITY_BACKEND", "")
     monkeypatch.setattr(hg, "_EMBEDDER_LOAD_ATTEMPTED", False)
     monkeypatch.setattr(hg, "_EMBEDDER", None)
+
+    # Minor-5: mock the loader so it never touches the real BGE model.
+    # Returns None and records a load error, exactly as a missing-model
+    # scenario would. Tests that need a successful load must override
+    # ``_load_embedder`` themselves.
+    def _fake_load_embedder():
+        monkeypatch.setattr(hg, "_EMBEDDER", None)
+        monkeypatch.setattr(hg, "_EMBEDDER_LOAD_ATTEMPTED", True)
+        monkeypatch.setattr(hg, "_EMBEDDER_MODEL_PATH", "./models/bge-small-zh-v1.5")
+        monkeypatch.setattr(hg, "_EMBEDDER_LOAD_ERROR", "test: model not available")
+        return None
+
+    monkeypatch.setattr(hg, "_load_embedder", _fake_load_embedder)
 
 
 # ---------------------------------------------------------------------------
@@ -1653,7 +1677,17 @@ def test_judge_b_low_confidence_routes_to_disputed(monkeypatch):
 # ---------------------------------------------------------------------------
 
 def test_similarity_backend_strict_raises_without_bge(monkeypatch):
-    """Fix 5: strict mode (default) must raise if BGE model is missing."""
+    """Fix 5: strict mode (default) must raise if BGE model is missing.
+
+    Minor-5 fix: this test must NOT depend on whether the host machine
+    has a real BGE model installed. Previously it reset
+    ``_EMBEDDER_LOAD_ATTEMPTED=False`` and let ``_load_embedder`` run for
+    real — on a machine with BGE installed the embedder would load
+    successfully, strict mode would NOT raise, and the test would fail.
+    Now we monkeypatch ``_load_embedder`` to return None and record a
+    load error, so the strict-mode raise path is exercised regardless
+    of the host environment.
+    """
     import hard_gate_kisaki_v4 as hg
 
     # Force strict mode and reset cached state
@@ -1662,7 +1696,18 @@ def test_similarity_backend_strict_raises_without_bge(monkeypatch):
     monkeypatch.setattr(hg, "_SIMILARITY_BACKEND", "")
     monkeypatch.setattr(hg, "_EMBEDDER_LOAD_ATTEMPTED", False)
     monkeypatch.setattr(hg, "_EMBEDDER", None)
-    monkeypatch.setattr(hg, "_EMBEDDER_LOAD_ERROR", "test: model not found")
+    monkeypatch.setattr(hg, "_EMBEDDER_LOAD_ERROR", None)
+
+    # Minor-5: force the embedder load to fail without touching the real
+    # model. This keeps the test isolated from the host environment.
+    def _fake_load_embedder():
+        monkeypatch.setattr(hg, "_EMBEDDER", None)
+        monkeypatch.setattr(hg, "_EMBEDDER_LOAD_ATTEMPTED", True)
+        monkeypatch.setattr(hg, "_EMBEDDER_MODEL_PATH", "./models/bge-small-zh-v1.5")
+        monkeypatch.setattr(hg, "_EMBEDDER_LOAD_ERROR", "test: model not available")
+        return None
+
+    monkeypatch.setattr(hg, "_load_embedder", _fake_load_embedder)
 
     with pytest.raises(RuntimeError, match="strict"):
         hg.get_similarity_backend()
@@ -2012,6 +2057,268 @@ def test_run_summary_acceptance_check_fails_on_fallback_bge(monkeypatch, tmp_pat
     ac = summary["acceptance_check"]
     assert ac["bge_authoritative"] is False
     assert ac["all_passed"] is False
+
+
+def test_run_summary_acceptance_check_fails_when_judge_b_never_reached(monkeypatch, tmp_path):
+    """Major-1 regression: if all 12 samples are rejected at Hard Gate /
+    Judge A, jb_count=0 and disputed_rate=0/0=0.0. The old gate would
+    pass (disputed_rate_ok=True) without Judge B ever running. The fix
+    requires judge_b_reached_rate >= 0.5 so such a run fails the gate.
+    """
+    import hard_gate_kisaki_v4 as hg
+    from regen_kisaki_llm_pipeline import _build_run_summary
+    from kisaki_v4_llm_client import build_judge_config, atomic_write_json
+
+    monkeypatch.setenv("KISAKI_SIMILARITY_BACKEND", "fallback")
+    monkeypatch.setattr(hg, "_SIMILARITY_BACKEND_RESOLVED", False)
+    monkeypatch.setattr(hg, "_SIMILARITY_BACKEND", "")
+    monkeypatch.setattr(hg, "_EMBEDDER_LOAD_ATTEMPTED", False)
+    monkeypatch.setattr(hg, "_EMBEDDER", None)
+
+    judge_config_path = tmp_path / "judge_config.json"
+    cfg = build_judge_config(strict_similarity=False)
+    cfg["similarity_backend"] = {
+        "backend": "bge_embedding",
+        "authoritative": "true",
+        "mode": "strict",
+    }
+    atomic_write_json(judge_config_path, cfg)
+
+    # 12 samples across 11 scenes, ALL rejected at Hard Gate (no judge_b)
+    run_log_path = tmp_path / "run_log.jsonl"
+    scenes = ["书籍讨论", "幽默互怼", "日常问候", "观点讨论", "情感倾诉",
+              "求助建议", "回忆往事", "未来展望", "艺术审美", "哲学思辨", "日常问候"]
+    lines = []
+    for i, scene in enumerate(scenes):
+        rec = {
+            "sample_spec_id": f"kisaki_v3neg_{scene}_{i:03d}",
+            "scene": scene,
+            "attempt": 0,
+            "status": "rejected",
+            # No judge_b field — sample never reached Judge B
+        }
+        lines.append(json.dumps(rec, ensure_ascii=False))
+    run_log_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    # All 12 went to rejected_samples.jsonl
+    rejected_path = tmp_path / "rejected_samples.jsonl"
+    rejected_lines = []
+    for i, scene in enumerate(scenes):
+        rejected_lines.append(
+            json.dumps({"sample_spec_id": f"kisaki_v3neg_{scene}_{i:03d}", "scene": scene}, ensure_ascii=False)
+        )
+    rejected_path.write_text("\n".join(rejected_lines) + "\n", encoding="utf-8")
+
+    summary = _build_run_summary(
+        run_log_path=run_log_path,
+        samples_path=tmp_path / "samples.jsonl",
+        rejected_path=rejected_path,
+        disputed_path=tmp_path / "disputed_samples.jsonl",
+        stats={"passed": 0, "rejected": 12, "disputed": 0, "total_processed": 12},
+        run_started_at="2026-07-25T00:00:00",
+        total_specs=111,
+        processed_this_run=12,
+        initial_manifest_path=tmp_path / "run_manifest.json",
+        judge_config_path=judge_config_path,
+        expected_processed=12,
+    )
+    ac = summary["acceptance_check"]
+    # Major-1: judge_b_reached_count == 0, so judge_b_reached_ok is False
+    assert ac["judge_b_reached_count"] == 0
+    assert ac["judge_b_reached_rate"] == 0.0
+    assert ac["judge_b_reached_ok"] is False
+    # disputed_rate is 0.0 (0/0) but the gate must still fail
+    assert ac["disputed_rate"] == 0.0
+    assert ac["disputed_rate_ok"] is True  # disputed_rate alone would pass
+    # all_passed must be False because judge_b_reached_ok is False
+    assert ac["all_passed"] is False
+
+
+def test_run_summary_acceptance_check_fails_on_low_judge_b_reached_rate(monkeypatch, tmp_path):
+    """Major-1 boundary: only 3 of 12 samples reach Judge B (25% < 50%).
+    Gate must fail even if those 3 all pass.
+    """
+    import hard_gate_kisaki_v4 as hg
+    from regen_kisaki_llm_pipeline import _build_run_summary
+    from kisaki_v4_llm_client import build_judge_config, atomic_write_json
+
+    monkeypatch.setenv("KISAKI_SIMILARITY_BACKEND", "fallback")
+    monkeypatch.setattr(hg, "_SIMILARITY_BACKEND_RESOLVED", False)
+    monkeypatch.setattr(hg, "_SIMILARITY_BACKEND", "")
+    monkeypatch.setattr(hg, "_EMBEDDER_LOAD_ATTEMPTED", False)
+    monkeypatch.setattr(hg, "_EMBEDDER", None)
+
+    judge_config_path = tmp_path / "judge_config.json"
+    cfg = build_judge_config(strict_similarity=False)
+    cfg["similarity_backend"] = {
+        "backend": "bge_embedding", "authoritative": "true", "mode": "strict",
+    }
+    atomic_write_json(judge_config_path, cfg)
+
+    scenes = ["书籍讨论", "幽默互怼", "日常问候", "观点讨论", "情感倾诉",
+              "求助建议", "回忆往事", "未来展望", "艺术审美", "哲学思辨", "深夜对话"]
+    run_log_lines = []
+    for i, scene in enumerate(scenes):
+        rec = {
+            "sample_spec_id": f"kisaki_v3neg_{scene}_{i:03d}",
+            "scene": scene, "attempt": 0,
+        }
+        # First 3 samples reach Judge B and pass; rest rejected at Hard Gate
+        if i < 3:
+            rec["status"] = "passed"
+            rec["judge_b"] = {
+                "final_decision": "passed",
+                "first_position_a_run1": False, "first_position_a_run2": False,
+                "is_tie_run1": False, "is_tie_run2": False,
+                "low_confidence_run1": False, "low_confidence_run2": False,
+                "score_contradiction_run1": "", "score_contradiction_run2": "",
+                "evidence_run1": "ok", "evidence_run2": "ok",
+            }
+        else:
+            rec["status"] = "rejected"
+        run_log_lines.append(json.dumps(rec, ensure_ascii=False))
+    run_log_path = tmp_path / "run_log.jsonl"
+    run_log_path.write_text("\n".join(run_log_lines) + "\n", encoding="utf-8")
+
+    summary = _build_run_summary(
+        run_log_path=run_log_path,
+        samples_path=tmp_path / "samples.jsonl",
+        rejected_path=tmp_path / "rejected_samples.jsonl",
+        disputed_path=tmp_path / "disputed_samples.jsonl",
+        stats={"passed": 3, "rejected": 8, "disputed": 0, "total_processed": 11},
+        run_started_at="2026-07-25T00:00:00",
+        total_specs=111, processed_this_run=11,
+        initial_manifest_path=tmp_path / "run_manifest.json",
+        judge_config_path=judge_config_path,
+        expected_processed=11,
+    )
+    ac = summary["acceptance_check"]
+    assert ac["judge_b_reached_count"] == 3
+    # 3/11 = 0.2727 < 0.5
+    assert ac["judge_b_reached_rate"] < 0.5
+    assert ac["judge_b_reached_ok"] is False
+    assert ac["all_passed"] is False
+
+
+def test_run_pipeline_resume_reads_expected_from_initial_manifest(monkeypatch, tmp_path):
+    """Major-2 regression: expected_processed must come from the initial
+    run_manifest.json's selected_count, NOT from the current resume's
+    pending count. Otherwise a resume after a partial crash would have
+    expected_processed < processed_count and fail the gate forever.
+    """
+    import hard_gate_kisaki_v4 as hg
+    from regen_kisaki_llm_pipeline import run_pipeline
+    from kisaki_v4_llm_client import atomic_write_json
+
+    # Force fallback + mock BGE loader (autouse fixture already does this,
+    # but we reinforce it for clarity)
+    monkeypatch.setenv("KISAKI_SIMILARITY_BACKEND", "fallback")
+    monkeypatch.setattr(hg, "_SIMILARITY_BACKEND_RESOLVED", False)
+    monkeypatch.setattr(hg, "_SIMILARITY_BACKEND", "")
+    monkeypatch.setattr(hg, "_EMBEDDER_LOAD_ATTEMPTED", False)
+    monkeypatch.setattr(hg, "_EMBEDDER", None)
+
+    output_dir = tmp_path / "smoke"
+    output_dir.mkdir(parents=True)
+
+    # Build a minimal negative pool with 2 specs
+    neg_pool = output_dir / "v3_negative_pool.jsonl"
+    spec_ids = []
+    for i, scene in enumerate(["书籍讨论", "幽默互怼"]):
+        sid = f"kisaki_v3neg_{scene}_{i:03d}"
+        spec_ids.append(sid)
+        neg_pool.write_text(
+            (neg_pool.read_text(encoding="utf-8") if neg_pool.exists() else "")
+            + json.dumps({
+                "sample_spec_id": sid, "scene": scene,
+                "human_dialogue": ["测试"], "v3_sample_id": f"v3_{i}",
+            }, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+        )
+
+    # Mock build_judge_config to return authoritative config
+    from kisaki_v4_llm_client import build_judge_config
+    def _mock_cfg(*args, **kwargs):
+        cfg = build_judge_config(strict_similarity=False)
+        cfg["similarity_backend"] = {
+            "backend": "bge_embedding", "authoritative": "true", "mode": "strict",
+        }
+        return cfg
+    monkeypatch.setattr("regen_kisaki_llm_pipeline.build_judge_config", _mock_cfg)
+
+    # Simulate an initial run that selected 12 specs but only processed 2
+    # (the 2 in our neg_pool). Write an initial_manifest with selected_count=12.
+    initial_manifest = output_dir / "run_manifest.json"
+    atomic_write_json(initial_manifest, {
+        "manifest_version": 1,
+        "created_at": "2026-07-25T00:00:00",
+        "git": {"commit": "test", "branch": "main", "dirty": "false"},
+        "command_args": {"limit": None, "max_attempts": 3},
+        "input_files": {},
+        "selected_sample_ids": spec_ids,
+        "selected_count": 12,  # Initial run expected 12 total
+        "note": "test",
+    })
+
+    # Mock the pipeline to skip processing (simulate all already completed)
+    progress = output_dir / "progress.json"
+    atomic_write_json(progress, {
+        "started_at": "2026-07-25T00:00:00",
+        "last_updated": "2026-07-25T00:00:00",
+        "completed_spec_ids": spec_ids,
+        "stats": {"passed": 2, "rejected": 0, "disputed": 0, "total_processed": 2},
+        "last_committed_spec_id": spec_ids[-1],
+    })
+
+    # Write samples.jsonl so the resume sees both as completed
+    samples_path = output_dir / "samples.jsonl"
+    for sid in spec_ids:
+        samples_path.write_text(
+            (samples_path.read_text(encoding="utf-8") if samples_path.exists() else "")
+            + json.dumps({"sample_spec_id": sid, "scene": "test", "candidate": {}}, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+        )
+
+    # Write run_log.jsonl so _build_run_summary sees processed specs
+    run_log_path = output_dir / "run_log.jsonl"
+    for sid in spec_ids:
+        run_log_path.write_text(
+            (run_log_path.read_text(encoding="utf-8") if run_log_path.exists() else "")
+            + json.dumps({
+                "sample_spec_id": sid, "scene": "test", "attempt": 0,
+                "status": "passed",
+                "judge_b": {
+                    "final_decision": "passed",
+                    "first_position_a_run1": False, "first_position_a_run2": False,
+                    "is_tie_run1": False, "is_tie_run2": False,
+                    "low_confidence_run1": False, "low_confidence_run2": False,
+                    "score_contradiction_run1": "", "score_contradiction_run2": "",
+                    "evidence_run1": "ok", "evidence_run2": "ok",
+                },
+            }, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+        )
+
+    # Mock generate_one_candidate, judge_a, judge_b (won't be called since
+    # all specs are already completed)
+    monkeypatch.setattr("regen_kisaki_llm_pipeline.generate_one_candidate", lambda *a, **k: {})
+    monkeypatch.setattr("regen_kisaki_llm_pipeline.judge_a", lambda *a, **k: None)
+    monkeypatch.setattr("regen_kisaki_llm_pipeline.judge_b", lambda *a, **k: None)
+
+    summary = run_pipeline(
+        output_dir=output_dir,
+        negative_pool_path=neg_pool,
+        max_attempts=3,
+    )
+
+    # Major-2: expected_processed should be 12 (from initial manifest),
+    # NOT 0 (current pending count)
+    ac = summary["acceptance_check"]
+    assert ac["expected_count"] == 12
+    assert ac["processed_count"] == 2  # both specs already completed
+    # processed_exactly is False (2 != 12), which is correct — the run
+    # is incomplete. The point is expected_count stayed at 12 instead
+    # of dropping to 0.
 
 
 def test_run_pipeline_resume_preserves_initial_manifest(monkeypatch, tmp_path):

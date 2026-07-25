@@ -164,6 +164,32 @@ def build_judge_config(*, strict_similarity: bool = True) -> dict[str, Any]:
             "a known self-preference bias. Mitigated by Judge A (different "
             "family) acting as a cross-check in the two-stage pipeline."
         ),
+        # Major-3 audit: register the Judge B decision policy and its
+        # pre-registered provisional threshold. This makes the policy
+        # auditable from judge_config.json without reading source code,
+        # and documents that the threshold must NOT be tuned based on
+        # smoke results (posterior selection bias). The final threshold
+        # is set only after 30-sample calibration with human agreement.
+        "judge_b_policy": {
+            "version": "double_order_score_mean_v1",
+            "decision_rule": (
+                "Derive final_decision from averaged candidate scores "
+                "across both orderings (Run1: candidate=A, Run2: "
+                "candidate=B). candidate_avg > negative_avg + TIE_GAP "
+                "=> passed; < -TIE_GAP => rejected; else disputed."
+            ),
+            "tie_gap": 1.0,
+            "tie_gap_status": "pre_registered_provisional",
+            "tie_gap_note": (
+                "Do NOT tune this value based on smoke results — that "
+                "introduces posterior selection bias. Final value set "
+                "only after 30-sample calibration with human agreement."
+            ),
+            "bias_reduction_note": (
+                "Averaging reduces additive position bias but does not "
+                "fully eliminate it. Claim 'reduction', not 'elimination'."
+            ),
+        },
         "similarity_backend": similarity_info,
     }
 
