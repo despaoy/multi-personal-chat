@@ -52,6 +52,7 @@ from kisaki_v4_llm_client import (  # noqa: E402
     append_jsonl,
     atomic_write_json,
     build_judge_config,
+    read_jsonl_ids,
 )
 from generate_kisaki_llm_v4 import (  # noqa: E402
     SCENE_DESC_MAP,
@@ -427,6 +428,25 @@ def run_pipeline(
     progress = _load_progress_from(progress_path)
     completed = set(progress["completed_spec_ids"])
     passed_samples = _load_passed_samples_from(samples_path)
+
+    # Major fix (true idempotency): reconcile JSONL outputs against progress.
+    # If a crash happened between append_jsonl() and _save_progress_to(),
+    # the spec's record is on disk in samples/rejected/disputed.jsonl but
+    # its id is NOT in progress.completed_spec_ids. On resume it would be
+    # re-processed, producing a DUPLICATE line. We back-fill such ids into
+    # progress now so they are skipped.
+    jsonl_ids = (
+        read_jsonl_ids(samples_path)
+        | read_jsonl_ids(rejected_path)
+        | read_jsonl_ids(disputed_path)
+    )
+    orphaned = jsonl_ids - completed
+    if orphaned:
+        print(f"[resume] found {len(orphaned)} spec(s) on disk but not in progress — back-filling")
+        for sid in sorted(orphaned):
+            progress["completed_spec_ids"].append(sid)
+        completed = set(progress["completed_spec_ids"])
+        _save_progress_to(progress_path, progress)
 
     # Major-10: write an initial progress.json at start so the run is
     # traceable even when pending is empty (records "run started" state

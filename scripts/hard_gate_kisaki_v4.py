@@ -272,14 +272,46 @@ def ngram_jaccard(s1: str, s2: str, n: int = 3) -> float:
     return inter / union if union else 0.0
 
 
-# Embedding-backed semantic similarity, with safe fallback.
+# Embedding-backed semantic similarity.
+#
+# Major fix: no more silent degradation. The embedding-backed similarity
+# and the char-ngram fallback are DIFFERENT metrics and must not share the
+# same thresholds (0.85 / 0.92). Behaviour is now controlled by
+# KISAKI_SIMILARITY_BACKEND:
+#
+#   "strict"  (default, for Pilot/formal runs): if the BGE embedding model
+#             cannot be loaded, semantic_similarity() raises RuntimeError.
+#             The pipeline must stop — running copy detection on the wrong
+#             metric would silently misclassify samples.
+#
+#   "fallback" (local dev/test only): falls back to char 4-gram cosine.
+#             get_similarity_backend() returns "char_4gram_fallback" so
+#             results can be tagged as non-authoritative.
+#
+# In both modes, get_similarity_backend() exposes which backend is active
+# so the pipeline can record it in judge_config.json / run metadata.
+
 _EMBEDDER = None
 _EMBEDDER_LOAD_ATTEMPTED = False
-_EMBEDDER_MODEL_PATH = None
+_EMBEDDER_MODEL_PATH: str | None = None
+_EMBEDDER_LOAD_ERROR: str | None = None
+_SIMILARITY_BACKEND_RESOLVED = False
+_SIMILARITY_BACKEND: str = ""  # "bge_embedding" or "char_4gram_fallback"
+
+
+def _resolve_backend_mode() -> str:
+    """Return 'strict' or 'fallback' based on env var."""
+    import os
+    return os.getenv("KISAKI_SIMILARITY_BACKEND", "strict").strip().lower()
 
 
 def _load_embedder():
-    global _EMBEDDER, _EMBEDDER_LOAD_ATTEMPTED, _EMBEDDER_MODEL_PATH
+    """Load the BGE embedding model. Returns the model or None.
+
+    On failure, records the error message in _EMBEDDER_LOAD_ERROR so the
+    caller can include it in the RuntimeError raised in strict mode.
+    """
+    global _EMBEDDER, _EMBEDDER_LOAD_ATTEMPTED, _EMBEDDER_MODEL_PATH, _EMBEDDER_LOAD_ERROR
     if _EMBEDDER_LOAD_ATTEMPTED:
         return _EMBEDDER
     _EMBEDDER_LOAD_ATTEMPTED = True
@@ -292,29 +324,82 @@ def _load_embedder():
     try:
         from sentence_transformers import SentenceTransformer  # type: ignore
         _EMBEDDER = SentenceTransformer(model_path)
-    except Exception:
+        _EMBEDDER_LOAD_ERROR = None
+    except Exception as e:
         _EMBEDDER = None
+        _EMBEDDER_LOAD_ERROR = f"{type(e).__name__}: {e}"
     return _EMBEDDER
 
 
-def semantic_similarity(s1: str, s2: str) -> float:
-    """Cosine similarity of embeddings.
+def get_similarity_backend() -> str:
+    """Return the active similarity backend identifier.
 
-    Falls back to character 4-gram TF cosine if sentence-transformers is
-    unavailable. The fallback is conservative (overestimates similarity for
-    short Chinese text), so the combined-rule copy detector treats
-    >0.85 as disputed (not auto-reject) — this absorbs fallback noise.
+    Resolves once and caches. Returns one of:
+      - "bge_embedding"        — BGE model loaded successfully
+      - "char_4gram_fallback"  — using char 4-gram fallback (dev/test only)
+
+    In strict mode (default), if BGE fails to load this function raises
+    RuntimeError instead of returning the fallback identifier.
     """
+    global _SIMILARITY_BACKEND_RESOLVED, _SIMILARITY_BACKEND
+    if _SIMILARITY_BACKEND_RESOLVED:
+        return _SIMILARITY_BACKEND
+
+    mode = _resolve_backend_mode()
     embedder = _load_embedder()
     if embedder is not None:
+        _SIMILARITY_BACKEND = "bge_embedding"
+    elif mode == "fallback":
+        _SIMILARITY_BACKEND = "char_4gram_fallback"
+    else:
+        # strict mode: refuse to proceed
+        raise RuntimeError(
+            "semantic_similarity backend 'strict' requires the BGE embedding "
+            f"model at {_EMBEDDER_MODEL_PATH!r}, but it failed to load: "
+            f"{_EMBEDDER_LOAD_ERROR}. Set KISAKI_SIMILARITY_BACKEND=fallback "
+            "for local dev/test only (results will be tagged non-authoritative)."
+        )
+    _SIMILARITY_BACKEND_RESOLVED = True
+    return _SIMILARITY_BACKEND
+
+
+def get_similarity_backend_info() -> dict[str, str]:
+    """Return a metadata dict describing the similarity backend for logging."""
+    backend = get_similarity_backend()  # may raise in strict mode
+    return {
+        "backend": backend,
+        "model_path": _EMBEDDER_MODEL_PATH or "",
+        "mode": _resolve_backend_mode(),
+        "authoritative": "true" if backend == "bge_embedding" else "false",
+    }
+
+
+def semantic_similarity(s1: str, s2: str) -> float:
+    """Cosine similarity of embeddings (strict) or char n-gram (fallback).
+
+    In strict mode (default), raises RuntimeError if the BGE model is not
+    available — this prevents the copy detector from running on the wrong
+    metric with embedding-calibrated thresholds.
+
+    In fallback mode (KISAKI_SIMILARITY_BACKEND=fallback), uses char 4-gram
+    TF cosine. Results are tagged as non-authoritative via
+    get_similarity_backend().
+    """
+    backend = get_similarity_backend()  # may raise in strict mode
+    if backend == "bge_embedding":
+        embedder = _load_embedder()
+        assert embedder is not None  # guaranteed by get_similarity_backend
         try:
             import numpy as np  # type: ignore
             emb = embedder.encode([s1, s2], normalize_embeddings=True)
             cos = float(np.dot(emb[0], emb[1]))
             return max(0.0, min(1.0, cos))
-        except Exception:
-            pass
-    # Fallback: char 4-gram TF cosine
+        except Exception as e:
+            # Runtime failure (not load failure) — also fail strict.
+            raise RuntimeError(
+                f"BGE embedding inference failed: {type(e).__name__}: {e}"
+            ) from e
+    # Fallback: char 4-gram TF cosine (only reachable in fallback mode)
     return _char_ngram_cosine(s1, s2, n=4)
 
 

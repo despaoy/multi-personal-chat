@@ -66,25 +66,32 @@ MODEL_REGISTRY: dict[str, dict[str, str]] = {
         "role": "judge_a",
         "provider": "dashscope",
         "model_family": "qwen",
-        "model_id": os.getenv("QWEN_JUDGE_A_MODEL", "qwen-max"),
+        # Critical fix: pin to fixed snapshot qwen3-max-2026-01-23 instead of
+        # the floating qwen-max alias, so the model cannot silently upgrade
+        # mid-experiment and break reproducibility.
+        "model_id": os.getenv("QWEN_JUDGE_A_MODEL", "qwen3-max-2026-01-23"),
         "base_url": os.getenv("QWEN_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1"),
-        "version_note": "qwen-max alias (DashScope); pin via QWEN_JUDGE_A_MODEL=<snapshot> for exact reproducibility",
+        "version_note": "qwen3-max-2026-01-23 fixed snapshot (was qwen-max alias); pinned for reproducibility",
     },
     "judge_b": {
         "role": "judge_b",
         "provider": "deepseek",
         "model_family": "deepseek",
-        "model_id": os.getenv("DEEPSEEK_JUDGE_B_MODEL", "deepseek-chat"),
+        # Critical fix: deepseek-chat was deprecated 2026-07-24; use deepseek-v4-pro
+        # for Judge B (pairwise reasoning, stronger).
+        "model_id": os.getenv("DEEPSEEK_JUDGE_B_MODEL", "deepseek-v4-pro"),
         "base_url": os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1"),
-        "version_note": "deepseek-chat (DeepSeek-V3 lineage); user intent was 'v4-pro' but no such public id exists",
+        "version_note": "deepseek-v4-pro (deepseek-chat deprecated 2026-07-24); pairwise reasoning judge",
     },
     "generator": {
         "role": "generator",
         "provider": "deepseek",
         "model_family": "deepseek",
-        "model_id": os.getenv("DEEPSEEK_GENERATOR_MODEL", "deepseek-chat"),
+        # Critical fix: deepseek-chat deprecated; use deepseek-v4-flash for generation
+        # (faster, cheaper, sufficient quality for in-distribution samples).
+        "model_id": os.getenv("DEEPSEEK_GENERATOR_MODEL", "deepseek-v4-flash"),
         "base_url": os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1"),
-        "version_note": "deepseek-chat (DeepSeek-V3 lineage); same family as Judge B (self-preference risk documented)",
+        "version_note": "deepseek-v4-flash (deepseek-chat deprecated 2026-07-24); same family as Judge B (self-preference risk documented)",
     },
 }
 
@@ -107,11 +114,29 @@ def build_judge_config() -> dict[str, Any]:
     ``cross_model_committee_note`` field documents whether the two Judges
     are from different model families (true committee) or the same family
     (two-stage discrimination only).
+
+    Major fix (similarity backend): also records the copy-detection
+    similarity backend (BGE embedding vs char-ngram fallback) and its
+    mode, so formal runs can be validated as using the authoritative
+    embedding backend.
     """
     families = {MODEL_REGISTRY["judge_a"]["model_family"], MODEL_REGISTRY["judge_b"]["model_family"]}
     is_cross_family = len(families) > 1
+
+    # Record similarity backend info (may raise in strict mode if BGE
+    # is missing — that's the desired fail-fast behaviour).
+    try:
+        from hard_gate_kisaki_v4 import get_similarity_backend_info  # type: ignore
+        similarity_info = get_similarity_backend_info()
+    except Exception as e:
+        similarity_info = {
+            "backend": "unavailable",
+            "error": f"{type(e).__name__}: {e}",
+            "authoritative": "false",
+        }
+
     return {
-        "config_version": 1,
+        "config_version": 2,
         "generated_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
         "models": MODEL_REGISTRY,
         "cross_model_committee": is_cross_family,
@@ -133,6 +158,7 @@ def build_judge_config() -> dict[str, Any]:
             "a known self-preference bias. Mitigated by Judge A (different "
             "family) acting as a cross-check in the two-stage pipeline."
         ),
+        "similarity_backend": similarity_info,
     }
 
 
@@ -176,11 +202,51 @@ def atomic_write_json(path: Path, value: Any) -> None:
 
 
 def append_jsonl(path: Path, record: dict[str, Any]) -> None:
-    """Append a single JSON record to a .jsonl file (atomic per-line)."""
+    """Append a single JSON record to a .jsonl file with fsync durability.
+
+    Major fix: previously only called write(), so a crash between the
+    write and progress.json commit could lose the line (or leave a
+    partial line). Now flushes Python buffers + os.fsync() to push the
+    bytes to disk before returning, so the append is durable.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
     line = json.dumps(record, ensure_ascii=False, sort_keys=True) + "\n"
     with path.open("a", encoding="utf-8") as handle:
         handle.write(line)
+        handle.flush()
+        try:
+            os.fsync(handle.fileno())
+        except OSError:
+            # fsync may fail on some filesystems (e.g. network mounts);
+            # flush() is still the important part for Python buffers.
+            pass
+
+
+def read_jsonl_ids(path: Path, id_field: str = "sample_spec_id") -> set[str]:
+    """Read a .jsonl file and return the set of sample_spec_ids it contains.
+
+    Used at pipeline resume time to reconcile the JSONL outputs against
+    progress.json: any spec_id present in the JSONL but not in
+    progress.completed_spec_ids is a "crash between data-write and
+    progress-commit" survivor, and must be back-filled into progress so
+    it is not re-processed (which would create a duplicate line).
+    """
+    if not path.exists():
+        return set()
+    ids: set[str] = set()
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            rec = json.loads(line)
+            sid = rec.get(id_field)
+            if sid:
+                ids.add(str(sid))
+        except json.JSONDecodeError:
+            # Skip malformed/partial trailing line from a crash
+            continue
+    return ids
 
 
 # ---------------------------------------------------------------------------

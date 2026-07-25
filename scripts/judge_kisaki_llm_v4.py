@@ -129,7 +129,22 @@ def parse_judge_a_response(raw: str) -> JudgeAResult:
 
     scores = parsed.get("scores", {}) or {}
     evidence = parsed.get("evidence", {}) or {}
-    violations = list(parsed.get("violations", []) or [])
+
+    # Major fix: violations field type validation.
+    # - If the model returns violations as a non-list (e.g. a string),
+    #   that itself is a contract violation -> fail-closed.
+    # - Coerce valid lists to list[str]; any non-string entry is stringified.
+    raw_violations = parsed.get("violations", [])
+    violations_type_error = False
+    if raw_violations is None:
+        violations = []
+    elif isinstance(raw_violations, list):
+        violations = [str(v) if not isinstance(v, str) else v for v in raw_violations]
+    else:
+        # Non-list violations field -> contract violation
+        violations = [f"violations_field_not_list: {type(raw_violations).__name__}"]
+        violations_type_error = True
+
     reason = parsed.get("reason", "")
 
     # Major-5 fix: mandatory core dims must be present and not NA.
@@ -151,9 +166,21 @@ def parse_judge_a_response(raw: str) -> JudgeAResult:
         if val is not None and val != "not_applicable":
             applicable_dims.append(dim)
 
-    # Pass requires: (1) no missing mandatory dims, (2) all applicable dims ≥ threshold
+    # Major fix: violations participate in the pass decision.
+    # violations represents hard-constraint breaches reported by the Judge
+    # (e.g. "character breaks the fourth wall", "fabricated lore"). Any
+    # non-empty violations list => passed=False, regardless of dimension
+    # scores. A high score with a violation is a contradiction that must
+    # fail-closed. This also covers the violations_type_error case.
+    has_violations = len(violations) > 0
+
+    # Pass requires ALL of:
+    #   (1) no violations (incl. no type error and no missing mandatory dims)
+    #   (2) at least one applicable dim
+    #   (3) all applicable dims >= threshold
     passed = (
-        not missing_mandatory
+        not has_violations
+        and not missing_mandatory
         and bool(applicable_dims)
         and all(
             isinstance(scores.get(dim), (int, float))
@@ -299,11 +326,28 @@ def parse_judge_b_response(raw: str, candidate_is_a: bool) -> tuple[bool, float,
         # Invalid preferred value — also a parse failure (route to disputed)
         return False, 0.0, f"invalid_preferred_value: {preferred!r}; raw={raw[:200]}", False
 
+    # Major fix: confidence must be a numeric value in [0, 1].
+    # - Missing confidence, non-numeric types, or out-of-range values are
+    #   treated as parse failures (parse_ok=False) so the caller routes the
+    #   sample to disputed instead of trusting an uncalibrated verdict.
+    # - Negative values, values > 1, or sentinel defaults (e.g. -1, 999)
+    #   all fail this check.
+    raw_conf = parsed.get("confidence")
+    if raw_conf is None:
+        return False, 0.0, f"missing_confidence; raw={raw[:200]}", False
     try:
-        confidence = float(parsed.get("confidence", 0.0))
+        confidence = float(raw_conf)
     except (TypeError, ValueError):
-        confidence = 0.0
-    evidence = parsed.get("evidence", "")
+        return False, 0.0, f"invalid_confidence_type: {raw_conf!r}; raw={raw[:200]}", False
+    if not (0.0 <= confidence <= 1.0):
+        return False, 0.0, f"confidence_out_of_range: {confidence}; raw={raw[:200]}", False
+
+    # evidence must be a string; coerce if not (but don't fail parse on this)
+    raw_evidence = parsed.get("evidence", "")
+    if isinstance(raw_evidence, str):
+        evidence = raw_evidence
+    else:
+        evidence = json.dumps(raw_evidence, ensure_ascii=False)
 
     prefers_candidate = (preferred == "A") if candidate_is_a else (preferred == "B")
     return prefers_candidate, confidence, evidence, True
