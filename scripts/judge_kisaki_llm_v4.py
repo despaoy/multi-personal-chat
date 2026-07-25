@@ -249,7 +249,7 @@ def judge_a(
 # Judge B: same-question double-order pairwise (DeepSeek)
 # ---------------------------------------------------------------------------
 
-JUDGE_B_SYSTEM_PROMPT = """你是月社妃对话样本的成对比较评审官。你将看到两个回复（A 和 B），它们回答的是**相同的用户提问**。
+JUDGE_B_SYSTEM_PROMPT = """你是月社妃对话样本的成对比较评审官。你将看到两个回复（A 和 B），它们回答的是**相同的用户提问**。A 和 B 的展示顺序是随机的，不暗示哪个是候选或旧样本。
 
 【比较维度】
 1. 人物一致性: 哪个更符合月社妃的人物画像（克制理智、锋利戏谑、对琉璃的情感、元叙事视角）
@@ -257,15 +257,25 @@ JUDGE_B_SYSTEM_PROMPT = """你是月社妃对话样本的成对比较评审官�
 3. 元叙事控制: 哪个避免了过度元叙事（"故事/作者/剧本"过载是 v3 负例的典型问题）
 4. 自然度: 哪个更自然流畅
 
+【评审流程】
+请先在 scores 字段中对 A 和 B 分别给出四个维度的 0-10 分，再据此输出 preferred。
+先评分后选择可以避免先入为主的位置偏好。
+
 【重要】
-- 不要因为位置前后给高分（A 在前不代表 A 更好）
+- A 和 B 的顺序是随机打乱的，A 在前不代表 A 更好
 - 若两者质量接近，选择更贴近原作风格的
 - 若两者都差，仍需选出相对较好的一个
+- 仅当两者在各维度得分都非常接近（差值 ≤ 1 分）且确实无法分辨高下时，才输出 "tie"
+- 不要为了回避判断而滥用 tie
 
 【输出要求】
 严格输出 JSON（不要 markdown 代码块）：
 {
-  "preferred": "A" 或 "B",
+  "scores": {
+    "A": {"人物一致性": 0-10, "原作语气": 0-10, "元叙事控制": 0-10, "自然度": 0-10},
+    "B": {"人物一致性": 0-10, "原作语气": 0-10, "元叙事控制": 0-10, "自然度": 0-10}
+  },
+  "preferred": "A" 或 "B" 或 "tie",
   "confidence": 0.0-1.0,
   "evidence": "一句话说明选择理由",
   "reason": "更详细的对比分析"
@@ -277,7 +287,13 @@ def build_judge_b_prompt(
     response_b: list[dict[str, Any]],
     human_dialogue: list[str],
 ) -> str:
-    """Build the Judge B user prompt for one ordering."""
+    """Build the Judge B user prompt for one ordering.
+
+    Note: response_a / response_b are the two answers to compare; their
+    assignment to the "A"/"B" labels is randomized by the caller (judge_b
+    runs two orders), and the system prompt explicitly tells the judge the
+    order is random and carries no candidate/negative identity hint.
+    """
     def format_resp(resp: list[dict[str, Any]]) -> str:
         lines = []
         for msg in resp:
@@ -296,18 +312,26 @@ def build_judge_b_prompt(
 【回复 B】
 {format_resp(response_b)}
 
-请比较 A 和 B，选出更贴近月社妃原作风格的一个。"""
+请先对 A 和 B 分别给出四个维度的评分，再选出更贴近月社妃原作风格的一个；若两者确实质量接近且无法分辨，可选 tie。"""
 
 
-def parse_judge_b_response(raw: str, candidate_is_a: bool) -> tuple[bool, float, str, bool]:
+def parse_judge_b_response(raw: str, candidate_is_a: bool) -> tuple[bool, float, str, bool, bool]:
     """Parse one Judge B run.
 
-    Returns (prefers_candidate, confidence, evidence, parse_ok).
-    Major-6 fix: parse failure is now surfaced as a separate ``parse_ok``
-    flag instead of being silently mapped to ``prefers_candidate=False``,
-    which previously caused Judge B to treat JSON formatting glitches as
-    a candidate rejection (double-reject => rejected). Callers should
-    route parse failures to ``disputed`` (human review), not ``rejected``.
+    Returns ``(prefers_candidate, confidence, evidence, parse_ok, is_tie)``.
+
+    - ``parse_ok=False``: JSON / field validation failed. Caller routes
+      the sample to ``disputed`` (human review), never ``rejected``.
+    - ``is_tie=True``: the judge returned ``preferred: "tie"``. In this
+      case ``prefers_candidate`` is ``False`` (a tie does not favour the
+      candidate), and the caller routes the sample to ``disputed`` per
+      the "do not relax pass conditions to lower disputed rate" rule.
+    - Otherwise ``preferred`` is ``"A"`` or ``"B"`` and
+      ``prefers_candidate`` is derived from ``candidate_is_a``.
+
+    Major-6 fix: parse failure surfaced via ``parse_ok``.
+    Position-bias fix: ``tie`` is now a first-class verdict so the judge
+    is not forced to pick a side when quality is genuinely close.
     """
     text = raw.strip()
     text = re.sub(r"^```(?:json)?\s*\n?", "", text)
@@ -319,12 +343,12 @@ def parse_judge_b_response(raw: str, candidate_is_a: bool) -> tuple[bool, float,
     except json.JSONDecodeError as e:
         # Return parse_ok=False so caller can route to disputed instead of
         # silently treating this as a candidate loss.
-        return False, 0.0, f"json_parse_error: {e}; raw={raw[:200]}", False
+        return False, 0.0, f"json_parse_error: {e}; raw={raw[:200]}", False, False
 
     preferred = str(parsed.get("preferred", "")).strip().upper()
-    if preferred not in ("A", "B"):
+    if preferred not in ("A", "B", "TIE"):
         # Invalid preferred value — also a parse failure (route to disputed)
-        return False, 0.0, f"invalid_preferred_value: {preferred!r}; raw={raw[:200]}", False
+        return False, 0.0, f"invalid_preferred_value: {preferred!r}; raw={raw[:200]}", False, False
 
     # Major fix: confidence must be a numeric value in [0, 1].
     # - Missing confidence, non-numeric types, or out-of-range values are
@@ -334,13 +358,13 @@ def parse_judge_b_response(raw: str, candidate_is_a: bool) -> tuple[bool, float,
     #   all fail this check.
     raw_conf = parsed.get("confidence")
     if raw_conf is None:
-        return False, 0.0, f"missing_confidence; raw={raw[:200]}", False
+        return False, 0.0, f"missing_confidence; raw={raw[:200]}", False, False
     try:
         confidence = float(raw_conf)
     except (TypeError, ValueError):
-        return False, 0.0, f"invalid_confidence_type: {raw_conf!r}; raw={raw[:200]}", False
+        return False, 0.0, f"invalid_confidence_type: {raw_conf!r}; raw={raw[:200]}", False, False
     if not (0.0 <= confidence <= 1.0):
-        return False, 0.0, f"confidence_out_of_range: {confidence}; raw={raw[:200]}", False
+        return False, 0.0, f"confidence_out_of_range: {confidence}; raw={raw[:200]}", False, False
 
     # evidence must be a string; coerce if not (but don't fail parse on this)
     raw_evidence = parsed.get("evidence", "")
@@ -349,8 +373,12 @@ def parse_judge_b_response(raw: str, candidate_is_a: bool) -> tuple[bool, float,
     else:
         evidence = json.dumps(raw_evidence, ensure_ascii=False)
 
+    # tie: judge could not distinguish — does not favour candidate.
+    if preferred == "TIE":
+        return False, confidence, evidence, True, True
+
     prefers_candidate = (preferred == "A") if candidate_is_a else (preferred == "B")
-    return prefers_candidate, confidence, evidence, True
+    return prefers_candidate, confidence, evidence, True, False
 
 
 def verify_same_question_for_judge_b(
@@ -444,12 +472,28 @@ def judge_b(
     # routes such cases to "disputed" (human review) instead of silently
     # treating them as candidate losses (which would double-reject and
     # wrongly kill the sample).
-    prefers_cand_1, conf1, evid1, parse_ok1 = parse_judge_b_response(raw1, candidate_is_a=True)
-    prefers_cand_2, conf2, evid2, parse_ok2 = parse_judge_b_response(raw2, candidate_is_a=False)
+    # Position-bias fix: is_tie is now surfaced; any tie routes to disputed
+    # (do not relax pass conditions to lower disputed rate).
+    prefers_cand_1, conf1, evid1, parse_ok1, is_tie_1 = parse_judge_b_response(raw1, candidate_is_a=True)
+    prefers_cand_2, conf2, evid2, parse_ok2, is_tie_2 = parse_judge_b_response(raw2, candidate_is_a=False)
 
-    # Decide: any parse failure => disputed (infrastructure issue, not a
-    # genuine quality signal). Otherwise apply the double-order rule.
+    # Position-bias telemetry: did the judge prefer whichever response was
+    # shown in position A? Aggregated across samples this gives the
+    # ``first_position_preference_rate`` (high => strong position bias).
+    # tie does not count as a position-A preference.
+    # run1: candidate is at position A, so prefers_cand_1==True means A was chosen.
+    # run2: candidate is at position B, so prefers_cand_2==True means B was chosen
+    #       (i.e. A was chosen when prefers_cand_2==False).
+    first_pos_a_run1 = bool(parse_ok1 and (not is_tie_1) and prefers_cand_1)
+    first_pos_a_run2 = bool(parse_ok2 and (not is_tie_2) and (not prefers_cand_2))
+
+    # Decide: any parse failure or any tie => disputed. Otherwise apply the
+    # double-order rule.
     if not parse_ok1 or not parse_ok2:
+        decision = "disputed"
+    elif is_tie_1 or is_tie_2:
+        # tie = judge could not distinguish; route to human review per the
+        # "do not relax pass conditions" rule.
         decision = "disputed"
     elif prefers_cand_1 and prefers_cand_2:
         decision = "passed"
@@ -468,6 +512,10 @@ def judge_b(
         final_decision=decision,
         raw_run1=raw1,
         raw_run2=raw2,
+        is_tie_run1=is_tie_1,
+        is_tie_run2=is_tie_2,
+        first_position_a_run1=first_pos_a_run1,
+        first_position_a_run2=first_pos_a_run2,
     )
 
 

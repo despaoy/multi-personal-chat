@@ -186,6 +186,49 @@ def retrieve_few_shots(
     return selected
 
 
+# ---------------------------------------------------------------------------
+# ID-based few-shot lookup (for reference_id consistency fix)
+# ---------------------------------------------------------------------------
+
+_FEW_SHOT_BY_ID: dict[str, dict[str, Any]] | None = None
+
+
+def _load_few_shot_by_id(path: Path = FEW_SHOT_POOL_PATH) -> dict[str, dict[str, Any]]:
+    """Build a sample_id -> record index over the few-shot pool.
+
+    Used by get_few_shots_by_ids() so that Hard Gate copy detection and
+    Judge A see the *exact* same few-shot passages the Generator was
+    anchored on, instead of a fresh retrieve_few_shots() call that may
+    return a different set (different human_dialogue scoring / exclude_ids).
+    """
+    global _FEW_SHOT_BY_ID
+    if _FEW_SHOT_BY_ID is not None:
+        return _FEW_SHOT_BY_ID
+    by_id: dict[str, dict[str, Any]] = {}
+    with path.open("r", encoding="utf-8") as handle:
+        for line in handle:
+            line = line.strip()
+            if not line:
+                continue
+            rec = json.loads(line)
+            by_id[rec["sample_id"]] = rec
+    _FEW_SHOT_BY_ID = by_id
+    return _FEW_SHOT_BY_ID
+
+
+def get_few_shots_by_ids(reference_ids: list[str]) -> list[dict[str, Any]]:
+    """Return few-shot records in the exact order of ``reference_ids``.
+
+    Missing IDs are skipped (logged once at call time via the returned
+    length mismatch). This guarantees Hard Gate and Judge A compare the
+    candidate against the same passages the Generator actually saw.
+    """
+    if not reference_ids:
+        return []
+    by_id = _load_few_shot_by_id()
+    return [by_id[rid] for rid in reference_ids if rid in by_id]
+
+
 def retrieve_negative(sample_spec_id: str) -> dict[str, Any] | None:
     """Retrieve the v3 negative sharing this sample_spec_id."""
     pool = _load_negative_pool()

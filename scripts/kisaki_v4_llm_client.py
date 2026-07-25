@@ -516,6 +516,15 @@ class JudgeBResult:
     final_decision: str  # "passed" | "rejected" | "disputed"
     raw_run1: str = ""
     raw_run2: str = ""
+    # Position-bias fix: tie and first-position preference telemetry.
+    # is_tie_runN: judge returned "tie" for run N (no preference).
+    # first_position_a_runN: judge preferred whichever response was shown
+    #   as "A" in run N. Aggregating across samples yields
+    #   ``first_position_preference_rate`` for bias diagnostics.
+    is_tie_run1: bool = False
+    is_tie_run2: bool = False
+    first_position_a_run1: bool = False
+    first_position_a_run2: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

@@ -341,7 +341,7 @@ def test_judge_b_parse_run1_candidate_is_a_prefers_a():
     # candidate is A, judge says "A" -> prefers candidate
     # Major-6 fix: parse_judge_b_response now returns 4-tuple (added parse_ok)
     raw = json.dumps({"preferred": "A", "confidence": 0.9, "evidence": "A更好", "reason": "..."})
-    prefers, conf, evid, parse_ok = parse_judge_b_response(raw, candidate_is_a=True)
+    prefers, conf, evid, parse_ok, _is_tie = parse_judge_b_response(raw, candidate_is_a=True)
     assert prefers is True
     assert conf == 0.9
     assert parse_ok is True
@@ -350,14 +350,14 @@ def test_judge_b_parse_run1_candidate_is_a_prefers_a():
 def test_judge_b_parse_run2_candidate_is_b_prefers_b():
     # candidate is B, judge says "B" -> prefers candidate
     raw = json.dumps({"preferred": "B", "confidence": 0.8, "evidence": "B更好", "reason": "..."})
-    prefers, conf, evid, parse_ok = parse_judge_b_response(raw, candidate_is_a=False)
+    prefers, conf, evid, parse_ok, _is_tie = parse_judge_b_response(raw, candidate_is_a=False)
     assert prefers is True
     assert parse_ok is True
 
 
 def test_judge_b_parse_failure_returns_parse_ok_false():
     """Major-6: JSON parse failure surfaces as parse_ok=False (not silent reject)."""
-    prefers, conf, evid, parse_ok = parse_judge_b_response("not json", candidate_is_a=True)
+    prefers, conf, evid, parse_ok, _is_tie = parse_judge_b_response("not json", candidate_is_a=True)
     assert parse_ok is False
     assert prefers is False
     assert "json_parse_error" in evid
@@ -366,9 +366,96 @@ def test_judge_b_parse_failure_returns_parse_ok_false():
 def test_judge_b_parse_invalid_preferred_value_returns_parse_ok_false():
     """Major-6: invalid 'preferred' value (not A/B) -> parse_ok=False."""
     raw = json.dumps({"preferred": "C", "confidence": 0.5, "evidence": "", "reason": ""})
-    prefers, conf, evid, parse_ok = parse_judge_b_response(raw, candidate_is_a=True)
+    prefers, conf, evid, parse_ok, _is_tie = parse_judge_b_response(raw, candidate_is_a=True)
     assert parse_ok is False
     assert "invalid_preferred_value" in evid
+
+
+def test_judge_b_parse_tie_returns_is_tie_true():
+    """Position-bias fix: 'tie' is a first-class verdict.
+
+    parse_ok=True (valid parse), is_tie=True (no preference), and
+    prefers_candidate=False (a tie does not favour the candidate).
+    """
+    raw = json.dumps({"preferred": "tie", "confidence": 0.5, "evidence": "两者接近", "reason": "..."})
+    prefers, conf, evid, parse_ok, is_tie = parse_judge_b_response(raw, candidate_is_a=True)
+    assert parse_ok is True
+    assert is_tie is True
+    assert prefers is False
+
+
+def test_judge_b_tie_in_run1_routes_to_disputed(monkeypatch):
+    """Any tie in either run routes to disputed (do not relax pass conditions)."""
+    candidate = {
+        "sample_spec_id": "test_tie1",
+        "conversations": [
+            {"from": "human", "value": "你好"},
+            {"from": "assistant", "value": "因此，没有那个必要。"},
+        ],
+    }
+    negative = {
+        "sample_spec_id": "test_tie1",
+        "conversations": [
+            {"from": "human", "value": "你好"},
+            {"from": "assistant", "value": "正因如此，故事就是这样。"},
+        ],
+    }
+    call_count = [0]
+    def mock_call(messages, **kwargs):
+        call_count[0] += 1
+        if call_count[0] == 1:
+            # Run 1: tie
+            return json.dumps({"preferred": "tie", "confidence": 0.5, "evidence": "接近", "reason": "..."})
+        else:
+            # Run 2: prefers candidate
+            return json.dumps({"preferred": "B", "confidence": 0.9, "evidence": "B", "reason": "..."})
+    monkeypatch.setattr("judge_kisaki_llm_v4.call_judge_b", mock_call)
+    result = judge_b(candidate, negative, "test_tie1")
+    assert result.final_decision == "disputed"
+    assert result.is_tie_run1 is True
+    assert result.is_tie_run2 is False
+
+
+def test_judge_b_first_position_preference_telemetry(monkeypatch):
+    """Position-bias telemetry: first_position_a_runN flags when judge
+    preferred whichever response was shown as 'A'.
+
+    Run 1: candidate is at A; judge prefers A => first_position_a_run1=True.
+    Run 2: candidate is at B; judge prefers A (the negative) =>
+           first_position_a_run2=True (A position chosen).
+    Both runs preferring the A position indicates strong position bias.
+    """
+    candidate = {
+        "sample_spec_id": "test_pos",
+        "conversations": [
+            {"from": "human", "value": "你好"},
+            {"from": "assistant", "value": "因此，没有那个必要。"},
+        ],
+    }
+    negative = {
+        "sample_spec_id": "test_pos",
+        "conversations": [
+            {"from": "human", "value": "你好"},
+            {"from": "assistant", "value": "正因如此，故事就是这样。"},
+        ],
+    }
+    call_count = [0]
+    def mock_call(messages, **kwargs):
+        call_count[0] += 1
+        # Both runs: judge always prefers A (position bias)
+        if call_count[0] == 1:
+            # Run 1: candidate=A, judge prefers A => prefers candidate
+            return json.dumps({"preferred": "A", "confidence": 0.9, "evidence": "A", "reason": "..."})
+        else:
+            # Run 2: negative=A, judge prefers A => prefers negative (not candidate)
+            return json.dumps({"preferred": "A", "confidence": 0.9, "evidence": "A", "reason": "..."})
+    monkeypatch.setattr("judge_kisaki_llm_v4.call_judge_b", mock_call)
+    result = judge_b(candidate, negative, "test_pos")
+    # Both runs chose position A
+    assert result.first_position_a_run1 is True
+    assert result.first_position_a_run2 is True
+    # Position-bias inconsistency => disputed
+    assert result.final_decision == "disputed"
 
 
 def test_judge_b_double_order_consistent_passed(monkeypatch):
@@ -1279,7 +1366,7 @@ def test_judge_a_empty_violations_with_high_scores_passes():
 def test_judge_b_negative_confidence_fails_parse():
     """Fix 4: confidence=-5 => parse_ok=False."""
     raw = json.dumps({"preferred": "A", "confidence": -5, "evidence": "", "reason": ""})
-    prefers, conf, evid, parse_ok = parse_judge_b_response(raw, candidate_is_a=True)
+    prefers, conf, evid, parse_ok, _is_tie = parse_judge_b_response(raw, candidate_is_a=True)
     assert parse_ok is False
     assert "confidence_out_of_range" in evid
 
@@ -1287,7 +1374,7 @@ def test_judge_b_negative_confidence_fails_parse():
 def test_judge_b_confidence_above_one_fails_parse():
     """Fix 4: confidence=1.5 => parse_ok=False."""
     raw = json.dumps({"preferred": "A", "confidence": 1.5, "evidence": "", "reason": ""})
-    prefers, conf, evid, parse_ok = parse_judge_b_response(raw, candidate_is_a=True)
+    prefers, conf, evid, parse_ok, _is_tie = parse_judge_b_response(raw, candidate_is_a=True)
     assert parse_ok is False
     assert "confidence_out_of_range" in evid
 
@@ -1295,7 +1382,7 @@ def test_judge_b_confidence_above_one_fails_parse():
 def test_judge_b_missing_confidence_fails_parse():
     """Fix 4: confidence field absent => parse_ok=False."""
     raw = json.dumps({"preferred": "A", "evidence": "", "reason": ""})
-    prefers, conf, evid, parse_ok = parse_judge_b_response(raw, candidate_is_a=True)
+    prefers, conf, evid, parse_ok, _is_tie = parse_judge_b_response(raw, candidate_is_a=True)
     assert parse_ok is False
     assert "missing_confidence" in evid
 
@@ -1303,7 +1390,7 @@ def test_judge_b_missing_confidence_fails_parse():
 def test_judge_b_non_numeric_confidence_fails_parse():
     """Fix 4: confidence="high" (string) => parse_ok=False."""
     raw = json.dumps({"preferred": "A", "confidence": "high", "evidence": "", "reason": ""})
-    prefers, conf, evid, parse_ok = parse_judge_b_response(raw, candidate_is_a=True)
+    prefers, conf, evid, parse_ok, _is_tie = parse_judge_b_response(raw, candidate_is_a=True)
     assert parse_ok is False
     assert "invalid_confidence_type" in evid
 
@@ -1312,7 +1399,7 @@ def test_judge_b_valid_confidence_passes_parse():
     """Fix 4 sanity: confidence=0.0 and 1.0 are valid boundary values."""
     for conf_val in (0.0, 1.0, 0.5):
         raw = json.dumps({"preferred": "A", "confidence": conf_val, "evidence": "ok", "reason": ""})
-        _, conf, _, parse_ok = parse_judge_b_response(raw, candidate_is_a=True)
+        _, conf, _, parse_ok, _is_tie = parse_judge_b_response(raw, candidate_is_a=True)
         assert parse_ok is True
         assert conf == conf_val
 

@@ -57,6 +57,7 @@ from kisaki_v4_llm_client import (  # noqa: E402
 from generate_kisaki_llm_v4 import (  # noqa: E402
     SCENE_DESC_MAP,
     generate_one_candidate,
+    get_few_shots_by_ids,
     retrieve_few_shots,
     retrieve_negative,
 )
@@ -206,9 +207,39 @@ def _load_passed_samples_from(samples_path: Path) -> list[dict[str, Any]]:
 # ---------------------------------------------------------------------------
 
 def _build_reference_texts(scene: str) -> list[str]:
-    """Pull assistant texts from few-shot pool for copy detection."""
+    """Pull assistant texts from few-shot pool for copy detection.
+
+    Legacy fallback: retrieves by scene without human_dialogue scoring.
+    Only used when a candidate has no ``reference_ids`` field (e.g. old
+    cached candidates). New candidates always go through
+    ``_build_reference_texts_from_candidate`` so Hard Gate and Judge A
+    compare against the *exact* passages the Generator was anchored on.
+    """
     refs: list[str] = []
     for fs in retrieve_few_shots(scene, k=3):
+        for msg in fs.get("conversations", []):
+            if msg.get("from") == "assistant":
+                refs.append(msg.get("value", ""))
+    return refs
+
+
+def _build_reference_texts_from_candidate(candidate: dict[str, Any]) -> list[str]:
+    """Pull assistant texts from the few-shot pool using the candidate's
+    actual ``reference_ids`` — guaranteeing Generator / Hard Gate / Judge A
+    all see the same evidence.
+
+    Consistency fix: previously ``_build_reference_texts(spec.scene)`` ran a
+    fresh ``retrieve_few_shots(scene, k=3)`` without the human_dialogue
+    scoring and exclude_ids that the Generator used, so Hard Gate could
+    check copy against a *different* set of passages than the ones that
+    actually shaped the candidate. This variant reads by ID instead.
+    """
+    reference_ids: list[str] = candidate.get("reference_ids") or []
+    if not reference_ids:
+        # Backwards compatibility: very old candidates may not carry IDs.
+        return _build_reference_texts(candidate.get("scene", ""))
+    refs: list[str] = []
+    for fs in get_few_shots_by_ids(reference_ids):
         for msg in fs.get("conversations", []):
             if msg.get("from") == "assistant":
                 refs.append(msg.get("value", ""))
@@ -258,7 +289,10 @@ def process_one_attempt(
     record["candidate"] = candidate
 
     # 2. Hard gates (code-only, no LLM)
-    references = _build_reference_texts(spec.scene)
+    # Consistency fix: read references by the candidate's actual
+    # reference_ids so Hard Gate and Judge A see the same few-shot
+    # passages the Generator was anchored on (not a fresh retrieve).
+    references = _build_reference_texts_from_candidate(candidate)
     gate_result = run_all_gates(
         candidate,
         scene=spec.scene,
@@ -355,6 +389,107 @@ def process_one_attempt(
 # Pipeline entry (D.1.1 + D.1.4 + D.1.5 + D.1.7)
 # ---------------------------------------------------------------------------
 
+def _get_git_info() -> dict[str, str]:
+    """Return current git commit + branch (best-effort, never raises)."""
+    import subprocess
+    info = {"commit": "unknown", "branch": "unknown", "dirty": "unknown"}
+    try:
+        info["commit"] = subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], cwd=PROJECT_ROOT,
+            text=True, timeout=5, stderr=subprocess.DEVNULL,
+        ).strip()
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        info["branch"] = subprocess.check_output(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=PROJECT_ROOT,
+            text=True, timeout=5, stderr=subprocess.DEVNULL,
+        ).strip()
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        status = subprocess.check_output(
+            ["git", "status", "--porcelain"], cwd=PROJECT_ROOT,
+            text=True, timeout=5, stderr=subprocess.DEVNULL,
+        ).strip()
+        info["dirty"] = "true" if status else "false"
+    except Exception:  # noqa: BLE001
+        pass
+    return info
+
+
+def _sha256_file(path: Path) -> str:
+    """SHA256 of a file's bytes (for input provenance in run_manifest)."""
+    import hashlib
+    h = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(8192), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def _build_run_manifest(
+    *,
+    output_dir: Path,
+    negative_pool_path: Path,
+    quota_plan_path: Path | None,
+    only_spec_ids: set[str] | None,
+    limit: int | None,
+    max_attempts: int,
+    rate_limit_seconds: float,
+    pending: list[SampleSpec],
+) -> dict[str, Any]:
+    """Build a run_manifest.json recording commit, args, input hashes, and
+    the selected sample_spec_ids for this run.
+
+    Provenance fix: the smoke run had no manifest, so it was impossible to
+    tell after the fact which max_attempts was used, which git commit the
+    code came from, or whether the input pool had been modified. This
+    manifest captures all of that so a calibration run can be audited and
+    reproduced.
+    """
+    from generate_kisaki_llm_v4 import FEW_SHOT_POOL_PATH
+
+    input_files: dict[str, Any] = {
+        "negative_pool": {
+            "path": str(negative_pool_path),
+            "sha256": _sha256_file(negative_pool_path) if negative_pool_path.exists() else "",
+        },
+        "few_shot_pool": {
+            "path": str(FEW_SHOT_POOL_PATH),
+            "sha256": _sha256_file(FEW_SHOT_POOL_PATH) if FEW_SHOT_POOL_PATH.exists() else "",
+        },
+    }
+    if quota_plan_path is not None and quota_plan_path.exists():
+        input_files["quota_plan"] = {
+            "path": str(quota_plan_path),
+            "sha256": _sha256_file(quota_plan_path),
+        }
+
+    return {
+        "manifest_version": 1,
+        "created_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+        "git": _get_git_info(),
+        "command_args": {
+            "limit": limit,
+            "max_attempts": max_attempts,
+            "rate_limit_seconds": rate_limit_seconds,
+            "output_dir": str(output_dir),
+            "negative_pool_path": str(negative_pool_path),
+            "quota_plan_path": str(quota_plan_path) if quota_plan_path else None,
+            "only_spec_ids": sorted(only_spec_ids) if only_spec_ids else None,
+        },
+        "input_files": input_files,
+        "selected_sample_ids": [s.sample_spec_id for s in pending],
+        "selected_count": len(pending),
+        "note": (
+            "Models and similarity backend are recorded separately in "
+            "judge_config.json; this manifest captures git/args/inputs/"
+            "selected_ids for run-level provenance."
+        ),
+    }
+
+
 def run_pipeline(
     *,
     limit: int | None = None,
@@ -364,6 +499,7 @@ def run_pipeline(
     output_dir: Path = OUTPUT_DIR,
     negative_pool_path: Path | None = None,
     only_spec_ids: set[str] | None = None,
+    quota_plan_path: Path | None = None,
 ) -> dict[str, Any]:
     """Run the full pipeline. Resume from progress.json if present.
 
@@ -375,6 +511,10 @@ def run_pipeline(
       output_dir: directory for samples/rejected/disputed/run_log/progress
       negative_pool_path: path to v3_negative_pool.jsonl
       only_spec_ids: if set, only process these sample_spec_ids (ignores limit)
+      quota_plan_path: if set, read quota_plan.json and restrict pending to
+        the plan's selected sample_spec_ids (stratified sampling across
+        scenes). Combines with --limit (limit further caps the count) and
+        --only (only_spec_ids takes precedence over the plan).
 
     Major-4 fix: all output paths (samples/rejected/disputed/run_log/progress)
     are now derived from ``output_dir`` instead of mixing in module-level
@@ -453,16 +593,52 @@ def run_pipeline(
     # and last_updated timestamp).
     _save_progress_to(progress_path, progress)
 
+    # Load quota plan (stratified scene sampling) if provided.
+    # The plan restricts pending to its selected sample_spec_ids, so a
+    # calibration run covers all scenes instead of just the first N in
+    # the negative pool (which over-represents 书籍讨论).
+    quota_plan_ids: set[str] | None = None
+    if quota_plan_path is not None:
+        if not quota_plan_path.exists():
+            raise RuntimeError(
+                f"quota_plan.json not found at {quota_plan_path}. "
+                "Run build_kisaki_v4_quota_plan.py first."
+            )
+        plan = json.loads(quota_plan_path.read_text(encoding="utf-8"))
+        quota_plan_ids = set()
+        for scene_block in plan.get("scenes", {}).values():
+            for sid in scene_block.get("sample_spec_ids", []):
+                quota_plan_ids.add(str(sid))
+        print(f"[quota_plan] loaded {len(quota_plan_ids)} spec ids from {quota_plan_path}")
+
     # Filter pending
     pending: list[SampleSpec] = []
     for spec in specs:
         if spec.sample_spec_id in completed:
             continue
+        # only_spec_ids takes precedence over quota_plan (explicit override)
         if only_spec_ids and spec.sample_spec_id not in only_spec_ids:
+            continue
+        if quota_plan_ids is not None and spec.sample_spec_id not in quota_plan_ids:
             continue
         pending.append(spec)
     if limit is not None and only_spec_ids is None:
         pending = pending[:limit]
+
+    # Provenance fix: write run_manifest.json BEFORE processing so the run
+    # is auditable even if it crashes mid-way. Captures git commit, command
+    # args, input file hashes, and the selected sample_spec_ids.
+    manifest = _build_run_manifest(
+        output_dir=output_dir,
+        negative_pool_path=negative_pool_path,
+        quota_plan_path=quota_plan_path,
+        only_spec_ids=only_spec_ids,
+        limit=limit,
+        max_attempts=max_attempts,
+        rate_limit_seconds=rate_limit_seconds,
+        pending=pending,
+    )
+    atomic_write_json(output_dir / "run_manifest.json", manifest)
 
     rate_limiter = RateLimiter(min_interval_seconds=rate_limit_seconds)
 
@@ -586,6 +762,11 @@ def main() -> int:
         "--only", type=str, default=None,
         help="Comma-separated sample_spec_ids to process (skips others, ignores --limit)",
     )
+    parser.add_argument(
+        "--quota-plan", type=Path, default=None,
+        help="Path to quota_plan.json (stratified scene sampling). "
+             "Restricts pending to the plan's selected sample_spec_ids.",
+    )
     args = parser.parse_args()
 
     only_spec_ids: set[str] | None = None
@@ -600,6 +781,7 @@ def main() -> int:
         output_dir=args.output_dir,
         negative_pool_path=args.negative_pool,
         only_spec_ids=only_spec_ids,
+        quota_plan_path=args.quota_plan,
     )
     # Exit non-zero if no specs were processed (e.g. all done or pool missing)
     return 0 if summary["processed_this_run"] >= 0 else 1
