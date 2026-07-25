@@ -547,6 +547,12 @@ class JudgeBResult:
     scores_b_run2: dict[str, float] = field(default_factory=dict)
     score_contradiction_run1: str = ""
     score_contradiction_run2: str = ""
+    # Major-3 fix: score-derived decision telemetry. The final_decision
+    # is now derived from these averaged scores, not from the judge's
+    # ``preferred`` field. These fields make the derivation auditable.
+    candidate_avg_scores: dict[str, float] = field(default_factory=dict)
+    negative_avg_scores: dict[str, float] = field(default_factory=dict)
+    score_derived_gap: float = 0.0
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

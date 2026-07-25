@@ -66,6 +66,23 @@ JUDGE_B_CONTRADICTION_TOTAL_GAP = 3.0
 # the scores do not actually support a tie -> disputed.
 JUDGE_B_TIE_DIM_GAP = 2.0
 
+# Major-3 fix: score-derived decision to eliminate position bias.
+# smoke12_v2 showed first_position_preference_rate=1.0 — the judge
+# mechanically selects position A regardless of content, and its scores
+# are also position-biased (score_contradiction_rate=0.0 means scores
+# agree with the biased preferred). Trusting either ``preferred`` or
+# single-run scores cannot fix this.
+#
+# Solution: average the candidate's scores across both orderings.
+# Run1: candidate=A (position A, inflated by bias)
+# Run2: candidate=B (position B, deflated by bias)
+# Averaging cancels the position bias. The decision is then derived
+# from the averaged totals:
+#   candidate_avg > negative_avg + TIE_GAP => passed
+#   candidate_avg < negative_avg - TIE_GAP => rejected
+#   otherwise => disputed (genuinely close, not a bias artifact)
+JUDGE_B_SCORE_DERIVED_TIE_GAP = 1.0
+
 
 # ---------------------------------------------------------------------------
 # Judge A: 5-dimension semantic scoring (Qwen-Max)
@@ -602,27 +619,73 @@ def judge_b(
     first_pos_a_run1 = bool(p1.parse_ok and (not p1.is_tie) and p1.prefers_candidate)
     first_pos_a_run2 = bool(p2.parse_ok and (not p2.is_tie) and (not p2.prefers_candidate))
 
-    # Decision: fail-closed to disputed on any of:
+    # Major-3: pre-initialize score-derived fields so they exist even
+    # when the decision falls into a fail-closed branch (parse failure,
+    # low confidence, contradiction) before the averaging block runs.
+    candidate_avg: dict[str, float] = {}
+    negative_avg: dict[str, float] = {}
+    score_gap = 0.0
+
+    # Major-3 fix: score-derived decision to eliminate position bias.
+    #
+    # smoke12_v2 showed first_position_preference_rate=1.0 — the judge
+    # always selects position A, and its scores agree with that biased
+    # selection (score_contradiction_rate=0.0). The old decision logic
+    # (both runs prefer candidate => passed) could never agree because
+    # Run1 picks position-A=candidate and Run2 picks position-A=negative,
+    # producing a disputed verdict on every sample.
+    #
+    # New approach: derive the decision from the AVERAGE of the
+    # candidate's scores across both orderings. Position bias inflates
+    # the candidate's scores in Run1 (candidate at A) and deflates them
+    # in Run2 (candidate at B). Averaging cancels the bias:
+    #
+    #   candidate_avg[dim] = (p1.scores_a[dim] + p2.scores_b[dim]) / 2
+    #   negative_avg[dim]  = (p1.scores_b[dim] + p2.scores_a[dim]) / 2
+    #
+    # The decision is then based on the averaged totals, NOT on the
+    # judge's ``preferred`` field. This makes the verdict symmetric:
+    # swapping candidate/negative labels does not change the decision.
+    #
+    # Fail-closed to disputed on any of:
     #   - parse failure (JSON / preferred / confidence / scores invalid)
-    #   - any tie (do not relax pass conditions)
     #   - any low-confidence run (Major-1)
     #   - any preferred-vs-scores contradiction (Major-2)
-    # Only when both runs parse cleanly, are non-tie, non-low-confidence,
-    # non-contradictory, and agree on preference do we pass/reject.
+    # Only when both runs parse cleanly, are non-low-confidence,
+    # non-contradictory, and have valid scores do we derive the decision
+    # from averaged scores.
     if not p1.parse_ok or not p2.parse_ok:
-        decision = "disputed"
-    elif p1.is_tie or p2.is_tie:
         decision = "disputed"
     elif p1.low_confidence or p2.low_confidence:
         decision = "disputed"
     elif p1.score_contradiction or p2.score_contradiction:
         decision = "disputed"
-    elif p1.prefers_candidate and p2.prefers_candidate:
-        decision = "passed"
-    elif (not p1.prefers_candidate) and (not p2.prefers_candidate):
-        decision = "rejected"
     else:
-        decision = "disputed"
+        # Both runs parsed cleanly with valid, non-contradictory scores.
+        # Average the candidate's scores across both orderings to cancel
+        # position bias.
+        candidate_avg = {}
+        negative_avg = {}
+        for dim in JUDGE_B_DIMENSIONS:
+            # Run1: candidate=A → candidate scores in p1.scores_a
+            # Run2: candidate=B → candidate scores in p2.scores_b
+            c_scores = [p1.scores_a.get(dim, 0.0), p2.scores_b.get(dim, 0.0)]
+            # Run1: negative=B → negative scores in p1.scores_b
+            # Run2: negative=A → negative scores in p2.scores_a
+            n_scores = [p1.scores_b.get(dim, 0.0), p2.scores_a.get(dim, 0.0)]
+            candidate_avg[dim] = sum(c_scores) / 2.0
+            negative_avg[dim] = sum(n_scores) / 2.0
+
+        candidate_total = sum(candidate_avg.values())
+        negative_total = sum(negative_avg.values())
+        score_gap = candidate_total - negative_total
+
+        if score_gap > JUDGE_B_SCORE_DERIVED_TIE_GAP:
+            decision = "passed"
+        elif score_gap < -JUDGE_B_SCORE_DERIVED_TIE_GAP:
+            decision = "rejected"
+        else:
+            decision = "disputed"
 
     return JudgeBResult(
         prefers_candidate_run1=p1.prefers_candidate,
@@ -646,6 +709,9 @@ def judge_b(
         scores_b_run2=p2.scores_b,
         score_contradiction_run1=p1.score_contradiction,
         score_contradiction_run2=p2.score_contradiction,
+        candidate_avg_scores=candidate_avg,
+        negative_avg_scores=negative_avg,
+        score_derived_gap=score_gap,
     )
 
 

@@ -403,8 +403,16 @@ def test_judge_b_parse_tie_returns_is_tie_true():
     assert p.prefers_candidate is False
 
 
-def test_judge_b_tie_in_run1_routes_to_disputed(monkeypatch):
-    """Any tie in either run routes to disputed (do not relax pass conditions)."""
+def test_judge_b_tie_in_run1_score_derived_passed(monkeypatch):
+    """Major-3: tie no longer auto-routes to disputed. Decision is derived
+    from averaged scores. When Run1 is tie (equal scores) but Run2's
+    scores make the candidate clearly better on average, the sample passes.
+
+    Run1: tie, _SCORES_TIE (A=28, B=28) → candidate=A gets 28
+    Run2: prefers B(candidate), _SCORES_B_HIGHER (A=24, B=32) → candidate=B gets 32
+    candidate_avg = (28+32)/2 = 30, negative_avg = (28+24)/2 = 26
+    gap = 4 > JUDGE_B_SCORE_DERIVED_TIE_GAP(1.0) → passed
+    """
     candidate = {
         "sample_spec_id": "test_tie1",
         "conversations": [
@@ -432,19 +440,28 @@ def test_judge_b_tie_in_run1_routes_to_disputed(monkeypatch):
                                "scores": _SCORES_B_HIGHER, "reason": "..."})
     monkeypatch.setattr("judge_kisaki_llm_v4.call_judge_b", mock_call)
     result = judge_b(candidate, negative, "test_tie1")
-    assert result.final_decision == "disputed"
+    # Major-3: tie doesn't force disputed; scores decide
+    assert result.final_decision == "passed"
     assert result.is_tie_run1 is True
     assert result.is_tie_run2 is False
+    # Score-derived telemetry
+    assert result.score_derived_gap > 1.0
+    assert result.candidate_avg_scores  # non-empty
 
 
 def test_judge_b_first_position_preference_telemetry(monkeypatch):
     """Position-bias telemetry: first_position_a_runN flags when judge
     preferred whichever response was shown as 'A'.
 
-    Run 1: candidate is at A; judge prefers A => first_position_a_run1=True.
-    Run 2: candidate is at B; judge prefers A (the negative) =>
-           first_position_a_run2=True (A position chosen).
-    Both runs preferring the A position indicates strong position bias.
+    Major-3: with score-derived decisions, position bias in ``preferred``
+    no longer determines the verdict. But the telemetry still flags it
+    for diagnostics. When the judge gives position-A higher scores in
+    BOTH runs, the averaged scores cancel out → gap=0 → disputed.
+
+    Run 1: candidate=A, _SCORES_A_HIGHER → candidate gets A's 32, negative gets B's 24
+    Run 2: negative=A, candidate=B, _SCORES_A_HIGHER → candidate gets B's 24, negative gets A's 32
+    candidate_avg = (32+24)/2 = 28, negative_avg = (24+32)/2 = 28
+    gap = 0 → disputed (within tie_gap)
     """
     candidate = {
         "sample_spec_id": "test_pos",
@@ -474,11 +491,128 @@ def test_judge_b_first_position_preference_telemetry(monkeypatch):
                                "scores": _SCORES_A_HIGHER, "reason": "..."})
     monkeypatch.setattr("judge_kisaki_llm_v4.call_judge_b", mock_call)
     result = judge_b(candidate, negative, "test_pos")
-    # Both runs chose position A
+    # Both runs chose position A — telemetry flags the bias
     assert result.first_position_a_run1 is True
     assert result.first_position_a_run2 is True
-    # Position-bias inconsistency => disputed
+    # Major-3: averaged scores cancel the bias → gap=0 → disputed
     assert result.final_decision == "disputed"
+    assert abs(result.score_derived_gap) < 0.01  # gap ≈ 0
+
+
+def test_judge_b_score_derived_cancels_position_bias(monkeypatch):
+    """Major-3 core test: position-biased scores that would cause a
+    disputed verdict under the old logic now produce a correct verdict
+    via score averaging.
+
+    Scenario: candidate is genuinely better. But the judge has position
+    bias — it always inflates position A's scores by 2 points per dim.
+
+    Run 1: candidate=A (inflated), negative=B (deflated)
+      scores: A={9,9,9,9}=36, B={7,7,7,7}=28
+    Run 2: candidate=B (deflated), negative=A (inflated)
+      scores: A={9,9,9,9}=36, B={7,7,7,7}=28
+      (negative is at A=36, candidate is at B=28)
+
+    Without averaging: Run1 prefers A(candidate)=passed, Run2 prefers
+    A(negative)=rejected → disputed (old behavior).
+
+    With averaging:
+      candidate_avg = (36 + 28) / 2 = 32
+      negative_avg  = (28 + 36) / 2 = 32
+      gap = 0 → disputed
+
+    Hmm — if the bias is perfectly symmetric, averaging gives gap=0.
+    Let's instead test the case where candidate is genuinely better by
+    2 points per dim, and the judge adds a +2 position bias to A:
+
+    Run 1: candidate=A gets genuine(8)+bias(2)=10 per dim, negative=B gets genuine(6)+0=6
+      scores: A={10,10,10,10}=40, B={6,6,6,6}=24
+    Run 2: candidate=B gets genuine(8)+0=8, negative=A gets genuine(6)+bias(2)=8
+      scores: A={8,8,8,8}=32, B={8,8,8,8}=32
+
+    candidate_avg = (40 + 32) / 2 = 36
+    negative_avg  = (24 + 32) / 2 = 28
+    gap = 8 > 1 → passed
+
+    Under old logic: Run1 prefers A(candidate), Run2 prefers A(negative,
+    since A=32 >= B=32 but judge picks A) → disputed.
+    Under new logic: passed (correct — candidate is genuinely better).
+    """
+    candidate = {
+        "sample_spec_id": "test_bias_cancel",
+        "conversations": [
+            {"from": "human", "value": "你好"},
+            {"from": "assistant", "value": "因此，没有那个必要。"},
+        ],
+    }
+    negative = {
+        "sample_spec_id": "test_bias_cancel",
+        "conversations": [
+            {"from": "human", "value": "你好"},
+            {"from": "assistant", "value": "正因如此，故事就是这样。"},
+        ],
+    }
+    call_count = [0]
+    def mock_call(messages, **kwargs):
+        call_count[0] += 1
+        if call_count[0] == 1:
+            # Run 1: candidate=A (inflated by +2 bias), negative=B
+            return json.dumps({
+                "preferred": "A", "confidence": 0.9, "evidence": "A",
+                "scores": {"A": {"人物一致性": 10, "原作语气": 10, "元叙事控制": 10, "自然度": 10},
+                           "B": {"人物一致性": 6, "原作语气": 6, "元叙事控制": 6, "自然度": 6}},
+                "reason": "..."
+            })
+        else:
+            # Run 2: negative=A (inflated by +2 bias), candidate=B
+            # Judge still prefers A (position bias), but scores are closer
+            return json.dumps({
+                "preferred": "A", "confidence": 0.9, "evidence": "A",
+                "scores": {"A": {"人物一致性": 8, "原作语气": 8, "元叙事控制": 8, "自然度": 8},
+                           "B": {"人物一致性": 8, "原作语气": 8, "元叙事控制": 8, "自然度": 8}},
+                "reason": "..."
+            })
+    monkeypatch.setattr("judge_kisaki_llm_v4.call_judge_b", mock_call)
+    result = judge_b(candidate, negative, "test_bias_cancel")
+    # Old logic: disputed (Run1 prefers candidate, Run2 prefers negative)
+    # New logic: passed (averaged scores show candidate is better)
+    assert result.prefers_candidate_run1 is True   # Run1: A=candidate
+    assert result.prefers_candidate_run2 is False  # Run2: A=negative
+    assert result.final_decision == "passed"
+    assert result.score_derived_gap > 1.0
+
+
+def test_judge_b_score_derived_tie_gap_boundary(monkeypatch):
+    """Major-3: when averaged scores are within TIE_GAP (1.0), the
+    verdict is disputed (genuinely close, not a bias artifact)."""
+    candidate = {
+        "sample_spec_id": "test_tie_gap",
+        "conversations": [
+            {"from": "human", "value": "你好"},
+            {"from": "assistant", "value": "因此。"},
+        ],
+    }
+    negative = {
+        "sample_spec_id": "test_tie_gap",
+        "conversations": [
+            {"from": "human", "value": "你好"},
+            {"from": "assistant", "value": "正因如此。"},
+        ],
+    }
+    # Both runs: candidate and negative get nearly equal scores
+    # candidate_avg = (28+28)/2 = 28, negative_avg = (28+28)/2 = 28
+    # gap = 0 → disputed
+    call_count = [0]
+    def mock_call(messages, **kwargs):
+        call_count[0] += 1
+        return json.dumps({
+            "preferred": "A", "confidence": 0.9, "evidence": "A",
+            "scores": _SCORES_TIE, "reason": "..."
+        })
+    monkeypatch.setattr("judge_kisaki_llm_v4.call_judge_b", mock_call)
+    result = judge_b(candidate, negative, "test_tie_gap")
+    assert result.final_decision == "disputed"
+    assert abs(result.score_derived_gap) < 1.0
 
 
 def test_judge_b_double_order_consistent_passed(monkeypatch):
