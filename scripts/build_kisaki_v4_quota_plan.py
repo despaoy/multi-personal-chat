@@ -153,19 +153,36 @@ def build_plan(target: int, min_per_scene: int) -> dict[str, Any]:
         scene_ids[scene].sort()
     total = sum(scene_counter.values())
 
-    # Initial proportional allocation with floor of min_per_scene
+    # Initial proportional allocation with floor of min_per_scene.
+    # Major-2 fix: effective_floor = min(min_per_scene, count) so a scarce
+    # scene (count < min_per_scene) uses its actual size as the floor
+    # instead of an unreachable min_per_scene. This prevents the trim
+    # step from computing a negative gap (quota - min_per_scene < 0)
+    # which previously caused `quota -= negative` to INCREASE the quota
+    # beyond the available sample count, inflating selected_total well
+    # past --target (e.g. --target 12 yielded 19).
+    effective_floor: dict[str, int] = {
+        scene: min(min_per_scene, count)
+        for scene, count in scene_counter.items()
+    }
     quota: dict[str, int] = {}
     for scene, count in scene_counter.items():
-        alloc = max(min_per_scene, round(count / total * target))
+        alloc = max(effective_floor[scene], round(count / total * target))
         quota[scene] = min(alloc, count)
 
-    # Adjust to hit target exactly
+    # Adjust to hit target exactly.
+    # Major-2 fix: trim gap is clamped to >= 0 via max(0, ...). Without
+    # this clamp, a scene whose quota was clipped below min_per_scene
+    # (scarce scenes) produced a negative gap, and `min(current-target,
+    # negative)` selected the negative value, growing the quota instead
+    # of trimming it.
     current = sum(quota.values())
     if current > target:
         for scene in sorted(quota, key=lambda s: -quota[s]):
             if current <= target:
                 break
-            trim = min(current - target, quota[scene] - min_per_scene)
+            gap = max(0, quota[scene] - effective_floor[scene])
+            trim = min(current - target, gap)
             quota[scene] -= trim
             current -= trim
     elif current < target:
@@ -176,6 +193,15 @@ def build_plan(target: int, min_per_scene: int) -> dict[str, Any]:
             add = min(target - current, room)
             quota[scene] += add
             current += add
+
+    # Major-2 fix: if sum(effective_floor) > target, the trim step could
+    # not reach target (every scene is already at its floor). Record
+    # this as a plan-level warning so the operator knows --target was
+    # unsatisfiable with the requested --min-per-scene, and the actual
+    # selected_total will exceed target. The operator should either lower
+    # --min-per-scene or accept the over-selection.
+    floor_sum = sum(effective_floor.values())
+    target_unsatisfiable = current > target
 
     scenes_block: dict[str, dict[str, Any]] = {}
     selected_per_scene: dict[str, list[str]] = {}
@@ -252,6 +278,21 @@ def build_plan(target: int, min_per_scene: int) -> dict[str, Any]:
         "pool_sufficiency_note": pool_sufficiency_note,
         "formal_min_per_scene": FORMAL_MIN_PER_SCENE,
     }
+
+    # Major-2 fix: surface target-unsatisfiable as a top-level plan field
+    # so the pipeline and operator can detect when selected_total will
+    # exceed --target (every scene already at its floor, cannot trim).
+    if target_unsatisfiable:
+        plan["target_unsatisfiable"] = True
+        plan["target_unsatisfiable_reason"] = (
+            f"sum(effective_floor)={floor_sum} > target={target}; every "
+            "scene is already at its min-per-scene floor and cannot be "
+            "trimmed further. Lower --min-per-scene or accept the over-"
+            f"selection (selected_total={selected_total})."
+        )
+    else:
+        plan["target_unsatisfiable"] = False
+
     return plan
 
 
@@ -284,6 +325,9 @@ def main() -> int:
         for w in plan["pool_warnings"]:
             print(f"  [{w['severity']}] {w['scene']}: {w['available']}/{w['formal_min_required']}")
         print(f"\n{plan['pool_sufficiency_note']}")
+    # Major-2: warn when --target could not be hit.
+    if plan.get("target_unsatisfiable"):
+        print(f"\n[target_unsatisfiable] {plan['target_unsatisfiable_reason']}")
     return 0
 
 

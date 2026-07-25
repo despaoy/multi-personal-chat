@@ -547,6 +547,8 @@ def _build_run_summary(
     total_specs: int,
     processed_this_run: int,
     initial_manifest_path: Path,
+    judge_config_path: Path,
+    expected_processed: int | None,
 ) -> dict[str, Any]:
     """Build run_summary.json with final stats + Judge B bias diagnostics.
 
@@ -571,6 +573,12 @@ def _build_run_summary(
     Only samples that REACHED Judge B are counted in the denominator
     (samples rejected at Hard Gate / Judge A do not have Judge B
     results and would skew the rates if included).
+
+    Major-1 fix: ``acceptance_check`` block records the smoke gate
+    criteria (processed count, scene coverage, parse failures, BGE
+    authoritativeness, duplicate IDs, disputed rate). ``run_pipeline``
+    uses ``all_passed`` to decide the process exit code so a smoke run
+    that produces 12 rejected/disputed samples no longer exits 0.
     """
     # Scan run_log.jsonl for the final attempt of each sample_spec_id
     # that reached Judge B.
@@ -640,6 +648,116 @@ def _build_run_summary(
     jb_rejected = sum(1 for r in judge_b_reached if r.get("judge_b", {}).get("final_decision") == "rejected")
     jb_disputed = sum(1 for r in judge_b_reached if r.get("judge_b", {}).get("final_decision") == "disputed")
 
+    # Major-1: acceptance_check — smoke gate criteria.
+    # These are objective, machine-checkable pass conditions. The smoke
+    # run must satisfy ALL of them before the operator can move on to
+    # the 30-sample calibration. Calibration runs may relax the
+    # disputed-rate threshold (calibration is where the threshold is
+    # *tuned*), but the other criteria apply universally.
+    #
+    # processed_count: unique sample_spec_ids that produced a final
+    #   record in any of the three JSONL files. Uses final_by_spec
+    #   (dedup by spec_id) so retries do not inflate the count.
+    # scenes_covered: distinct scene values among those specs.
+    # duplicate_ids: True if any spec_id appears more than once across
+    #   the three JSONL files (indicates a resume bug or a crash mid-
+    #   write that the back-fill did not catch).
+    # bge_authoritative: re-reads judge_config.json and checks the
+    #   similarity_backend fields. A smoke run on fallback backend
+    #   cannot pass acceptance (results are non-authoritative).
+    processed_count = len(final_by_spec)
+    scenes_covered = sorted({
+        rec.get("scene", "")
+        for rec in final_by_spec.values()
+        if rec.get("scene")
+    })
+    scenes_covered_count = len(scenes_covered)
+
+    # Duplicate-id detection across the three JSONL files.
+    seen_ids: list[str] = []
+    for p in (samples_path, rejected_path, disputed_path):
+        if not p.exists():
+            continue
+        for line in p.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                rec = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            sid = rec.get("sample_spec_id")
+            if sid:
+                seen_ids.append(sid)
+    id_counts: dict[str, int] = {}
+    for sid in seen_ids:
+        id_counts[sid] = id_counts.get(sid, 0) + 1
+    duplicate_ids = sorted([sid for sid, c in id_counts.items() if c > 1])
+    no_duplicate_ids = len(duplicate_ids) == 0
+
+    # BGE authoritativeness from judge_config.json (written at start).
+    bge_authoritative = False
+    bge_backend = ""
+    if judge_config_path.exists():
+        try:
+            jcfg = json.loads(judge_config_path.read_text(encoding="utf-8"))
+            sim = jcfg.get("similarity_backend", {}) or {}
+            bge_backend = sim.get("backend", "")
+            bge_authoritative = (
+                sim.get("backend") == "bge_embedding"
+                and sim.get("authoritative") == "true"
+            )
+        except (json.JSONDecodeError, OSError):
+            bge_authoritative = False
+
+    # disputed_rate: among samples that reached Judge B, the fraction
+    # routed to disputed. High disputed rate means the judges cannot
+    # agree and calibration cannot produce reliable agreement data.
+    disputed_rate = (jb_disputed / jb_count) if jb_count else 0.0
+
+    processed_exactly = (
+        expected_processed is not None
+        and processed_count == expected_processed
+    )
+    processed_at_least_one = processed_count > 0
+    scenes_covered_ok = scenes_covered_count >= 6
+    parse_failures_zero = parse_failures == 0
+    disputed_rate_ok = disputed_rate <= 0.25
+
+    acceptance_check = {
+        "processed_count": processed_count,
+        "expected_count": expected_processed,
+        "processed_exactly": processed_exactly,
+        "processed_at_least_one": processed_at_least_one,
+        "scenes_covered": scenes_covered,
+        "scenes_covered_count": scenes_covered_count,
+        "scenes_covered_ok": scenes_covered_ok,
+        "parse_failure_count": parse_failures,
+        "parse_failures_zero": parse_failures_zero,
+        "bge_backend": bge_backend,
+        "bge_authoritative": bge_authoritative,
+        "duplicate_ids": duplicate_ids,
+        "no_duplicate_ids": no_duplicate_ids,
+        "disputed_rate": round(disputed_rate, 4),
+        "disputed_rate_ok": disputed_rate_ok,
+        # Smoke gate: ALL conditions must hold. processed_exactly is
+        # only checked when expected_processed is known (quota plan or
+        # --limit); otherwise processed_at_least_one is the floor.
+        "all_passed": (
+            (processed_exactly if expected_processed is not None else processed_at_least_one)
+            and scenes_covered_ok
+            and parse_failures_zero
+            and bge_authoritative
+            and no_duplicate_ids
+            and disputed_rate_ok
+        ),
+        "smoke_gate_criteria": (
+            "processed_exactly (when expected known); scenes_covered >= 6; "
+            "parse_failures == 0; bge_authoritative == true; "
+            "no_duplicate_ids; disputed_rate <= 0.25"
+        ),
+    }
+
     return {
         "summary_version": 1,
         "generated_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
@@ -667,13 +785,15 @@ def _build_run_summary(
             "parse_failure_rate": round(parse_failures / jb_count if jb_count else 0.0, 4),
             "parse_failure_count": parse_failures,
         },
+        "acceptance_check": acceptance_check,
         "interpretation_notes": (
             "first_position_preference_rate > 0.7 => strong position bias; "
             "revise Judge B prompt. tie_rate > 0.3 => judge dodging; "
             "sharpen rubric. parse_failure_rate > 0.1 => JSON mode unstable. "
             "low_confidence_rate > 0.3 => judge uncertain; consider model "
             "swap. score_contradiction_rate > 0.1 => scores vs preferred "
-            "inconsistent; tighten rubric."
+            "inconsistent; tighten rubric. acceptance_check.all_passed "
+            "must be true before proceeding to 30-sample calibration."
         ),
     }
 
@@ -992,6 +1112,8 @@ def run_pipeline(
         total_specs=len(specs),
         processed_this_run=len(pending),
         initial_manifest_path=initial_manifest_path,
+        judge_config_path=judge_config_path,
+        expected_processed=len(pending) if pending else None,
     )
     atomic_write_json(output_dir / "run_summary.json", run_summary)
 
@@ -1005,6 +1127,7 @@ def run_pipeline(
         "run_log_path": str(run_log_path),
         "progress_path": str(progress_path),
         "run_summary_path": str(output_dir / "run_summary.json"),
+        "acceptance_check": run_summary.get("acceptance_check", {}),
     }
     print(json.dumps(summary, ensure_ascii=False, indent=2))
     return summary
@@ -1051,6 +1174,14 @@ def main() -> int:
         help="Path to quota_plan.json (stratified scene sampling). "
              "Restricts pending to the plan's selected sample_spec_ids.",
     )
+    parser.add_argument(
+        "--strict-acceptance", action="store_true",
+        help="Exit non-zero if acceptance_check.all_passed is false. "
+             "Use this for smoke runs where the run must pass the gate "
+             "(processed count, scene coverage, parse failures, BGE "
+             "authoritativeness, no duplicate IDs, disputed_rate <= 0.25) "
+             "before the operator can proceed to calibration.",
+    )
     args = parser.parse_args()
 
     only_spec_ids: set[str] | None = None
@@ -1067,8 +1198,28 @@ def main() -> int:
         only_spec_ids=only_spec_ids,
         quota_plan_path=args.quota_plan,
     )
-    # Exit non-zero if no specs were processed (e.g. all done or pool missing)
-    return 0 if summary["processed_this_run"] >= 0 else 1
+    # Major-1 fix: exit code reflects whether the run actually processed
+    # samples (not the trivially-true `processed_this_run >= 0`).
+    # --strict-acceptance further requires acceptance_check.all_passed,
+    # so a smoke run that emits 12 rejected/disputed samples exits
+    # non-zero and cannot be mistaken for a green smoke gate.
+    if summary["processed_this_run"] == 0:
+        return 1
+    if args.strict_acceptance:
+        acceptance = summary.get("acceptance_check", {}) or {}
+        if not acceptance.get("all_passed", False):
+            print(
+                "[strict-acceptance] acceptance_check.all_passed is false; "
+                f"failures: processed_count={acceptance.get('processed_count')}, "
+                f"expected_count={acceptance.get('expected_count')}, "
+                f"scenes_covered={acceptance.get('scenes_covered_count')}, "
+                f"parse_failures={acceptance.get('parse_failure_count')}, "
+                f"bge_authoritative={acceptance.get('bge_authoritative')}, "
+                f"duplicate_ids={acceptance.get('duplicate_ids')}, "
+                f"disputed_rate={acceptance.get('disputed_rate')}"
+            )
+            return 2
+    return 0
 
 
 if __name__ == "__main__":

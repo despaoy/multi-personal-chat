@@ -112,11 +112,15 @@ backend/.test_tmp/
 
 # === 模型文件（大文件，不提交）===
 backend/models/
+models/
 *.safetensors
 *.bin
 *.gguf
 *.pt
 *.pth
+
+# === Smoke/trial run outputs (non-authoritative, not for production) ===
+backend/data/character_dialogues/experiments/v3/llm_v4_judged_smoke*/
 
 # === LoRA 适配器 ===
 backend/loras/

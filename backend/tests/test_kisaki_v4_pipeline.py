@@ -1584,3 +1584,442 @@ def test_build_judge_config_includes_similarity_backend(monkeypatch):
     assert config["similarity_backend"]["backend"] == "char_4gram_fallback"
     assert config["similarity_backend"]["authoritative"] == "false"
     assert config["config_version"] == 2
+
+
+# ---------------------------------------------------------------------------
+# Minor: regression tests for V2.1 contract fixes
+# (score contradiction, quota trim bug, interleave, acceptance_check,
+#  immutable manifest)
+# ---------------------------------------------------------------------------
+
+# Scores where B is clearly higher but preferred=A — a contradiction.
+_SCORES_CONTRADICTORY_A = {
+    "A": {"人物一致性": 3, "原作语气": 3, "元叙事控制": 3, "自然度": 3},
+    "B": {"人物一致性": 9, "原作语气": 9, "元叙事控制": 9, "自然度": 9},
+}
+
+# Tie claimed but one dim differs by >2 — not a real tie.
+_SCORES_FALSE_TIE = {
+    "A": {"人物一致性": 7, "原作语气": 7, "元叙事控制": 7, "自然度": 7},
+    "B": {"人物一致性": 7, "原作语气": 7, "元叙事控制": 7, "自然度": 2},
+}
+
+
+def test_judge_b_score_contradiction_routes_to_disputed(monkeypatch):
+    """Major-2: preferred=A but B scores much higher => disputed."""
+    candidate = {
+        "sample_spec_id": "test_contradict",
+        "conversations": [
+            {"from": "human", "value": "你好"},
+            {"from": "assistant", "value": "因此。"},
+        ],
+    }
+    negative = {
+        "sample_spec_id": "test_contradict",
+        "conversations": [
+            {"from": "human", "value": "你好"},
+            {"from": "assistant", "value": "正因如此。"},
+        ],
+    }
+    call_count = [0]
+    def mock_call(messages, **kwargs):
+        call_count[0] += 1
+        # Both runs prefer A (candidate is A in run1, B in run2) but
+        # the other side's scores are much higher.
+        if call_count[0] == 1:
+            # Run 1: candidate is A, preferred=A, but B scores higher
+            return json.dumps({"preferred": "A", "confidence": 0.8,
+                               "evidence": "矛盾",
+                               "scores": _SCORES_CONTRADICTORY_A, "reason": "..."})
+        else:
+            # Run 2: candidate is B, preferred=A (negative), but B scores higher
+            # Swap A/B so the contradiction persists
+            swapped = {"A": _SCORES_CONTRADICTORY_A["B"],
+                       "B": _SCORES_CONTRADICTORY_A["A"]}
+            return json.dumps({"preferred": "A", "confidence": 0.8,
+                               "evidence": "矛盾",
+                               "scores": swapped, "reason": "..."})
+    monkeypatch.setattr("judge_kisaki_llm_v4.call_judge_b", mock_call)
+    result = judge_b(candidate, negative, "test_contradict")
+    assert result.final_decision == "disputed"
+    assert bool(result.score_contradiction_run1) is True
+
+
+def test_judge_b_false_tie_routes_to_disputed(monkeypatch):
+    """Major-2: preferred=tie but a single dim gap > 2 => disputed."""
+    candidate = {
+        "sample_spec_id": "test_false_tie",
+        "conversations": [
+            {"from": "human", "value": "你好"},
+            {"from": "assistant", "value": "因此。"},
+        ],
+    }
+    negative = {
+        "sample_spec_id": "test_false_tie",
+        "conversations": [
+            {"from": "human", "value": "你好"},
+            {"from": "assistant", "value": "正因如此。"},
+        ],
+    }
+    call_count = [0]
+    def mock_call(messages, **kwargs):
+        call_count[0] += 1
+        return json.dumps({"preferred": "tie", "confidence": 0.7,
+                           "evidence": "假平局",
+                           "scores": _SCORES_FALSE_TIE, "reason": "..."})
+    monkeypatch.setattr("judge_kisaki_llm_v4.call_judge_b", mock_call)
+    result = judge_b(candidate, negative, "test_false_tie")
+    assert result.final_decision == "disputed"
+    assert result.is_tie_run1 is True
+    assert bool(result.score_contradiction_run1) is True
+
+
+def test_quota_plan_trim_does_not_produce_negative_gap():
+    """Major-2: trim gap must be clamped to >= 0.
+
+    Previously, a scarce scene (count < min_per_scene) had
+    quota < min_per_scene, so `quota - min_per_scene` was negative,
+    and `min(current-target, negative)` selected the negative,
+    INCREASING the quota instead of trimming it.
+    """
+    from build_kisaki_v4_quota_plan import build_plan
+    # --target 12 --min-per-scene 2: sum(effective_floor)=19 > 12,
+    # so the plan must report target_unsatisfiable and NOT produce
+    # any quota > available.
+    plan = build_plan(target=12, min_per_scene=2)
+    assert plan["target_unsatisfiable"] is True
+    assert plan["selected_total"] == 19  # 11 scenes, floors sum to 19
+    # No scene should have quota > available
+    for scene, block in plan["scenes"].items():
+        assert block["quota"] <= block["available"], (
+            f"scene {scene}: quota {block['quota']} > available {block['available']}"
+        )
+
+
+def test_quota_plan_target_12_min_per_scene_1_hits_exactly_12():
+    """Major-2: --target 12 --min-per-scene 1 should select exactly 12."""
+    from build_kisaki_v4_quota_plan import build_plan
+    plan = build_plan(target=12, min_per_scene=1)
+    assert plan["target_unsatisfiable"] is False
+    assert plan["selected_total"] == 12
+    assert plan["scenes_count"] == 11  # all scenes covered
+
+
+def test_quota_plan_interleave_no_consecutive_same_scene():
+    """Major-5: ordered_sample_spec_ids must interleave scenes.
+
+    No two consecutive ids should come from the same scene when
+    there are >= 2 scenes with samples (round-robin guarantee).
+    """
+    from build_kisaki_v4_quota_plan import build_plan
+    plan = build_plan(target=12, min_per_scene=1)
+    ordered = plan["ordered_sample_spec_ids"]
+    assert len(ordered) == 12
+
+    # Build scene lookup: sample_spec_id -> scene
+    id_to_scene: dict[str, str] = {}
+    for scene, block in plan["scenes"].items():
+        for sid in block["sample_spec_ids"]:
+            id_to_scene[sid] = scene
+
+    # Check no consecutive same scene (except when only 1 scene remains)
+    consecutive_same = 0
+    for i in range(1, len(ordered)):
+        s1 = id_to_scene.get(ordered[i - 1], "")
+        s2 = id_to_scene.get(ordered[i], "")
+        if s1 == s2:
+            consecutive_same += 1
+    # With 11 scenes and 12 samples, at most 1 pair can be consecutive
+    # (the last scene exhausts its quota and the round-robin picks
+    # the only remaining scene). Allow at most 1.
+    assert consecutive_same <= 1, (
+        f"interleave failed: {consecutive_same} consecutive same-scene pairs"
+    )
+
+
+def test_run_summary_acceptance_check_all_passed(monkeypatch, tmp_path):
+    """Major-1: run_summary.acceptance_check.all_passed must be true
+    when all smoke gate criteria are met."""
+    import hard_gate_kisaki_v4 as hg
+    from regen_kisaki_llm_pipeline import _build_run_summary
+
+    # Force fallback so build_judge_config doesn't raise in test env
+    monkeypatch.setenv("KISAKI_SIMILARITY_BACKEND", "fallback")
+    monkeypatch.setattr(hg, "_SIMILARITY_BACKEND_RESOLVED", False)
+    monkeypatch.setattr(hg, "_SIMILARITY_BACKEND", "")
+    monkeypatch.setattr(hg, "_EMBEDDER_LOAD_ATTEMPTED", False)
+    monkeypatch.setattr(hg, "_EMBEDDER", None)
+
+    from kisaki_v4_llm_client import build_judge_config, atomic_write_json
+
+    # Write a judge_config with bge_embedding authoritative=true
+    # (simulating the server environment where BGE loads successfully)
+    judge_config_path = tmp_path / "judge_config.json"
+    cfg = build_judge_config(strict_similarity=False)
+    cfg["similarity_backend"] = {
+        "backend": "bge_embedding",
+        "authoritative": "true",
+        "mode": "strict",
+    }
+    atomic_write_json(judge_config_path, cfg)
+
+    # Build a minimal run_log with 6 specs across 6 scenes, all passed
+    run_log_path = tmp_path / "run_log.jsonl"
+    scenes = ["书籍讨论", "幽默互怼", "日常问候", "观点讨论", "情感倾诉", "求助建议"]
+    for i, scene in enumerate(scenes):
+        rec = {
+            "sample_spec_id": f"kisaki_v3neg_{scene}_{i:03d}",
+            "scene": scene,
+            "attempt": 0,
+            "status": "passed",
+            "judge_b": {
+                "final_decision": "passed",
+                "first_position_a_run1": False,
+                "first_position_a_run2": False,
+                "is_tie_run1": False,
+                "is_tie_run2": False,
+                "low_confidence_run1": False,
+                "low_confidence_run2": False,
+                "score_contradiction_run1": "",
+                "score_contradiction_run2": "",
+                "evidence_run1": "ok",
+                "evidence_run2": "ok",
+            },
+        }
+        run_log_path.write_text(
+            (run_log_path.read_text(encoding="utf-8") if run_log_path.exists() else "")
+            + json.dumps(rec, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+        )
+
+    samples_path = tmp_path / "samples.jsonl"
+    rejected_path = tmp_path / "rejected_samples.jsonl"
+    disputed_path = tmp_path / "disputed_samples.jsonl"
+    # Write one passed sample per spec
+    for i, scene in enumerate(scenes):
+        rec = {"sample_spec_id": f"kisaki_v3neg_{scene}_{i:03d}", "scene": scene}
+        samples_path.write_text(
+            (samples_path.read_text(encoding="utf-8") if samples_path.exists() else "")
+            + json.dumps(rec, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+        )
+
+    summary = _build_run_summary(
+        run_log_path=run_log_path,
+        samples_path=samples_path,
+        rejected_path=rejected_path,
+        disputed_path=disputed_path,
+        stats={"passed": 6, "rejected": 0, "disputed": 0, "total_processed": 6},
+        run_started_at="2026-07-25T00:00:00",
+        total_specs=111,
+        processed_this_run=6,
+        initial_manifest_path=tmp_path / "run_manifest.json",
+        judge_config_path=judge_config_path,
+        expected_processed=6,
+    )
+    ac = summary["acceptance_check"]
+    assert ac["processed_exactly"] is True
+    assert ac["processed_count"] == 6
+    assert ac["scenes_covered_count"] == 6
+    assert ac["scenes_covered_ok"] is True
+    assert ac["parse_failures_zero"] is True
+    assert ac["bge_authoritative"] is True
+    assert ac["no_duplicate_ids"] is True
+    assert ac["disputed_rate"] == 0.0
+    assert ac["disputed_rate_ok"] is True
+    assert ac["all_passed"] is True
+
+
+def test_run_summary_acceptance_check_fails_on_fallback_bge(monkeypatch, tmp_path):
+    """Major-1: acceptance_check must fail when BGE is non-authoritative."""
+    import hard_gate_kisaki_v4 as hg
+    from regen_kisaki_llm_pipeline import _build_run_summary
+    from kisaki_v4_llm_client import build_judge_config, atomic_write_json
+
+    monkeypatch.setenv("KISAKI_SIMILARITY_BACKEND", "fallback")
+    monkeypatch.setattr(hg, "_SIMILARITY_BACKEND_RESOLVED", False)
+    monkeypatch.setattr(hg, "_SIMILARITY_BACKEND", "")
+    monkeypatch.setattr(hg, "_EMBEDDER_LOAD_ATTEMPTED", False)
+    monkeypatch.setattr(hg, "_EMBEDDER", None)
+
+    judge_config_path = tmp_path / "judge_config.json"
+    cfg = build_judge_config(strict_similarity=False)
+    # Leave the fallback backend (non-authoritative)
+    atomic_write_json(judge_config_path, cfg)
+
+    # Minimal run_log with 1 passed sample
+    run_log_path = tmp_path / "run_log.jsonl"
+    rec = {
+        "sample_spec_id": "test_001",
+        "scene": "书籍讨论",
+        "judge_b": {"final_decision": "passed"},
+    }
+    run_log_path.write_text(json.dumps(rec, ensure_ascii=False) + "\n", encoding="utf-8")
+
+    samples_path = tmp_path / "samples.jsonl"
+    samples_path.write_text(
+        json.dumps({"sample_spec_id": "test_001"}, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+
+    summary = _build_run_summary(
+        run_log_path=run_log_path,
+        samples_path=samples_path,
+        rejected_path=tmp_path / "rejected_samples.jsonl",
+        disputed_path=tmp_path / "disputed_samples.jsonl",
+        stats={"passed": 1, "rejected": 0, "disputed": 0, "total_processed": 1},
+        run_started_at="2026-07-25T00:00:00",
+        total_specs=111,
+        processed_this_run=1,
+        initial_manifest_path=tmp_path / "run_manifest.json",
+        judge_config_path=judge_config_path,
+        expected_processed=1,
+    )
+    ac = summary["acceptance_check"]
+    assert ac["bge_authoritative"] is False
+    assert ac["all_passed"] is False
+
+
+def test_run_pipeline_resume_preserves_initial_manifest(monkeypatch, tmp_path):
+    """Major-6: resume run must NOT overwrite run_manifest.json.
+
+    On the first call, run_manifest.json is written. On a second call
+    (resume), a run_manifest_resume_<timestamp>.json is written instead,
+    and the initial manifest is preserved unchanged.
+    """
+    import hard_gate_kisaki_v4 as hg
+    from regen_kisaki_llm_pipeline import run_pipeline
+    from kisaki_v4_llm_client import atomic_write_json
+
+    # Force fallback so the pipeline can start without BGE
+    monkeypatch.setenv("KISAKI_SIMILARITY_BACKEND", "fallback")
+    monkeypatch.setattr(hg, "_SIMILARITY_BACKEND_RESOLVED", False)
+    monkeypatch.setattr(hg, "_SIMILARITY_BACKEND", "")
+    monkeypatch.setattr(hg, "_EMBEDDER_LOAD_ATTEMPTED", False)
+    monkeypatch.setattr(hg, "_EMBEDDER", None)
+
+    # Mock build_judge_config to return an authoritative config so the
+    # Major-3 fail-fast check passes (we are testing manifest preservation,
+    # not BGE loading). Without this mock, run_pipeline would raise
+    # RuntimeError because the fallback backend is non-authoritative.
+    def fake_build_judge_config(**kwargs):
+        return {
+            "config_version": 2,
+            "generated_at": "2026-07-25T00:00:00",
+            "models": {},
+            "cross_model_committee": True,
+            "similarity_backend": {
+                "backend": "bge_embedding",
+                "authoritative": "true",
+                "mode": "strict",
+            },
+        }
+    monkeypatch.setattr("regen_kisaki_llm_pipeline.build_judge_config", fake_build_judge_config)
+
+    # Build a tiny negative pool with 2 specs
+    neg_pool = tmp_path / "v3_negative_pool.jsonl"
+    for i, scene in enumerate(["书籍讨论", "幽默互怼"]):
+        rec = {
+            "sample_spec_id": f"kisaki_v3neg_{scene}_{i:03d}",
+            "scene": scene,
+            "v3_sample_id": f"v3_{i}",
+            "human_dialogue": [f"问题{i}"],
+        }
+        neg_pool.write_text(
+            (neg_pool.read_text(encoding="utf-8") if neg_pool.exists() else "")
+            + json.dumps(rec, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+        )
+
+    output_dir = tmp_path / "out"
+    output_dir.mkdir()
+
+    # Mock generate_one_candidate to avoid API calls
+    def fake_generate(spec, **kwargs):
+        return {
+            "sample_spec_id": spec.sample_spec_id,
+            "scene": spec.scene,
+            "conversations": [
+                {"from": "human", "value": "你好"},
+                {"from": "assistant", "value": "因此。"},
+            ],
+            "reference_ids": ["ref_001"],
+        }
+    monkeypatch.setattr("regen_kisaki_llm_pipeline.generate_one_candidate", fake_generate)
+
+    # Mock retrieve_negative to return a matching negative
+    def fake_negative(sid):
+        return {
+            "sample_spec_id": sid,
+            "conversations": [
+                {"from": "human", "value": "你好"},
+                {"from": "assistant", "value": "正因如此。"},
+            ],
+        }
+    monkeypatch.setattr("regen_kisaki_llm_pipeline.retrieve_negative", fake_negative)
+
+    # Mock retrieve_few_shots to return empty (avoid file deps)
+    monkeypatch.setattr("regen_kisaki_llm_pipeline.retrieve_few_shots", lambda *a, **k: [])
+
+    # Mock get_few_shots_by_ids to return a dummy passage
+    monkeypatch.setattr(
+        "regen_kisaki_llm_pipeline.get_few_shots_by_ids",
+        lambda ids, **k: [{"conversations": [{"from": "assistant", "value": "参考"}]}],
+    )
+
+    # Mock hard gates to pass
+    from hard_gate_kisaki_v4 import GateResult, GateFailure
+    monkeypatch.setattr(
+        "regen_kisaki_llm_pipeline.run_all_gates",
+        lambda *a, **k: GateResult(passed=True, failures=[], disputed_flags=[]),
+    )
+
+    # Mock judge_a and judge_b to pass
+    from judge_kisaki_llm_v4 import JudgeAResult, JudgeBResult
+    monkeypatch.setattr(
+        "regen_kisaki_llm_pipeline.judge_a",
+        lambda *a, **k: JudgeAResult(
+            scores={}, evidence={}, violations=[], reason="ok",
+            applicable_dims=["人物一致性"], passed=True, raw_response="",
+        ),
+    )
+
+    def fake_judge_b(candidate, negative, sid, **kwargs):
+        return JudgeBResult(
+            prefers_candidate_run1=True, prefers_candidate_run2=True,
+            confidence_run1=0.9, confidence_run2=0.9,
+            evidence_run1="ok", evidence_run2="ok",
+            final_decision="passed",
+            raw_run1="{}", raw_run2="{}",
+            is_tie_run1=False, is_tie_run2=False,
+            first_position_a_run1=False, first_position_a_run2=False,
+            low_confidence_run1=False, low_confidence_run2=False,
+            scores_a_run1={}, scores_b_run1={},
+            scores_a_run2={}, scores_b_run2={},
+            score_contradiction_run1="", score_contradiction_run2="",
+        )
+    monkeypatch.setattr("regen_kisaki_llm_pipeline.judge_b", fake_judge_b)
+
+    # First run: processes both specs, writes run_manifest.json
+    run_pipeline(
+        output_dir=output_dir,
+        negative_pool_path=neg_pool,
+        rate_limit_seconds=0,
+        max_attempts=1,
+    )
+    initial_manifest = output_dir / "run_manifest.json"
+    assert initial_manifest.exists()
+    initial_content = initial_manifest.read_text(encoding="utf-8")
+
+    # Second run: resume (no pending), should NOT overwrite initial manifest
+    run_pipeline(
+        output_dir=output_dir,
+        negative_pool_path=neg_pool,
+        rate_limit_seconds=0,
+        max_attempts=1,
+    )
+    # Initial manifest content must be unchanged
+    assert initial_manifest.read_text(encoding="utf-8") == initial_content
+    # A resume manifest should exist
+    resume_files = list(output_dir.glob("run_manifest_resume_*.json"))
+    assert len(resume_files) >= 1, "resume manifest not written"
