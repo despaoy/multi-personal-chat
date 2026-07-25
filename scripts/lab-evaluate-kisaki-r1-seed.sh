@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT=/home/szw/lhm2
+ROOT=${QQCHAT_LAB_ROOT:-/home/szw/lhm2}
 PROJECT=$ROOT/qqchat-enhanced
-PYTHON=$ROOT/envs/qqchat-gpu-qwen3/bin/python
+PYTHON=${QQCHAT_PYTHON:-$ROOT/envs/qqchat-gpu-qwen3/bin/python}
 SEED=${1:?usage: lab-evaluate-kisaki-r1-seed.sh SEED PHYSICAL_GPU}
 GPU=${2:?usage: lab-evaluate-kisaki-r1-seed.sh SEED PHYSICAL_GPU [SCOPE] [VARIANTS_CSV]}
 SCOPE=${3:-formal}

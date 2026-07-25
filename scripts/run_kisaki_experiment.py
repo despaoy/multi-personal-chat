@@ -110,6 +110,11 @@ def main() -> int:
     run_manifest_path = run_dir / "run_manifest.json"
     config["seed"] = args.seed
     config["output_dir"] = str(output_dir)
+    # 运行时覆盖 base_model_path（保持配置文件 frozen，支持跨服务器迁移）
+    model_name = Path(config["base_model_path"]).name
+    resolved_model = SERVER_ROOT / "runtime" / "models" / model_name
+    if resolved_model.exists():
+        config["base_model_path"] = str(resolved_model)
     if args.resume:
         checkpoints = sorted(output_dir.glob("checkpoint-*"))
         config["resume_from_checkpoint"] = str(checkpoints[-1]) if checkpoints else None
