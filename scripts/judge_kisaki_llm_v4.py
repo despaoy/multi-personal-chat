@@ -32,7 +32,9 @@ sys.path.insert(0, str(PROJECT_ROOT / "scripts"))
 
 from kisaki_v4_llm_client import (  # noqa: E402
     JudgeAResult,
+    JudgeBParsed,
     JudgeBResult,
+    RateLimiter,
     SampleSpec,
     call_judge_a,
     call_judge_b,
@@ -48,6 +50,21 @@ JUDGE_A_DIMENSIONS = ("人物一致性", "语境连贯", "自然度", "原作语
 # Only "事实关系" may be NA (when the reply doesn't touch on facts).
 JUDGE_A_MANDATORY_DIMS = ("人物一致性", "语境连贯", "自然度", "原作语气")
 JUDGE_A_PASS_THRESHOLD = 7
+
+# Major-1 fix: pilot confidence threshold for Judge B. Any run with
+# confidence below this routes the sample to disputed (cannot trust the
+# verdict). 0.6 is the pre-calibration default; the final value can only
+# be tuned after the 30-sample calibration with human agreement data.
+JUDGE_B_PILOT_CONFIDENCE_THRESHOLD = 0.6
+
+# Major-2 fix: Judge B 4-dim scoring validation constants.
+JUDGE_B_DIMENSIONS = ("人物一致性", "原作语气", "元叙事控制", "自然度")
+# When preferred=A but A's total score is more than this many points
+# below B's total, the verdict is self-contradictory -> disputed.
+JUDGE_B_CONTRADICTION_TOTAL_GAP = 3.0
+# When preferred=tie, any single-dimension gap larger than this means
+# the scores do not actually support a tie -> disputed.
+JUDGE_B_TIE_DIM_GAP = 2.0
 
 
 # ---------------------------------------------------------------------------
@@ -315,70 +332,156 @@ def build_judge_b_prompt(
 请先对 A 和 B 分别给出四个维度的评分，再选出更贴近月社妃原作风格的一个；若两者确实质量接近且无法分辨，可选 tie。"""
 
 
-def parse_judge_b_response(raw: str, candidate_is_a: bool) -> tuple[bool, float, str, bool, bool]:
-    """Parse one Judge B run.
+def parse_judge_b_response(raw: str, candidate_is_a: bool) -> JudgeBParsed:
+    """Parse one Judge B run into a structured ``JudgeBParsed``.
 
-    Returns ``(prefers_candidate, confidence, evidence, parse_ok, is_tie)``.
+    Major-2 refactor: previously returned a 5-tuple
+    ``(prefers_candidate, confidence, evidence, parse_ok, is_tie)`` that
+    could not carry scores or contradiction info. Now returns a dataclass
+    so the caller (``judge_b``) can route disputed verdicts with full
+    context: low confidence, missing/invalid scores, or a
+    preferred-vs-scores contradiction all surface as distinct reasons.
 
-    - ``parse_ok=False``: JSON / field validation failed. Caller routes
-      the sample to ``disputed`` (human review), never ``rejected``.
-    - ``is_tie=True``: the judge returned ``preferred: "tie"``. In this
-      case ``prefers_candidate`` is ``False`` (a tie does not favour the
-      candidate), and the caller routes the sample to ``disputed`` per
-      the "do not relax pass conditions to lower disputed rate" rule.
-    - Otherwise ``preferred`` is ``"A"`` or ``"B"`` and
-      ``prefers_candidate`` is derived from ``candidate_is_a``.
-
-    Major-6 fix: parse failure surfaced via ``parse_ok``.
-    Position-bias fix: ``tie`` is now a first-class verdict so the judge
-    is not forced to pick a side when quality is genuinely close.
+    Routing rules captured here:
+    - ``parse_ok=False``: JSON parse failed, ``preferred`` invalid,
+      ``confidence`` missing/non-numeric/out-of-range, OR ``scores``
+      missing/malformed. Caller routes to ``disputed`` (never rejected).
+    - ``low_confidence=True``: confidence < pilot threshold (0.6).
+    - ``score_contradiction``: non-empty when ``preferred`` disagrees
+      with the score totals (e.g. preferred=A but B's total is higher by
+      more than ``JUDGE_B_CONTRADICTION_TOTAL_GAP``), or when ``tie`` is
+      claimed but a single-dim gap exceeds ``JUDGE_B_TIE_DIM_GAP``.
+    - ``is_tie=True``: judge returned ``preferred: "tie"``; does not
+      favour the candidate. Caller routes to ``disputed``.
     """
     text = raw.strip()
     text = re.sub(r"^```(?:json)?\s*\n?", "", text)
     text = re.sub(r"\n?```\s*$", "", text)
     text = text.strip()
 
+    def _fail(evidence: str) -> JudgeBParsed:
+        return JudgeBParsed(
+            parse_ok=False, prefers_candidate=False, confidence=0.0,
+            evidence=evidence, is_tie=False,
+        )
+
     try:
         parsed = json.loads(text)
     except json.JSONDecodeError as e:
-        # Return parse_ok=False so caller can route to disputed instead of
-        # silently treating this as a candidate loss.
-        return False, 0.0, f"json_parse_error: {e}; raw={raw[:200]}", False, False
+        return _fail(f"json_parse_error: {e}; raw={raw[:200]}")
 
     preferred = str(parsed.get("preferred", "")).strip().upper()
     if preferred not in ("A", "B", "TIE"):
-        # Invalid preferred value — also a parse failure (route to disputed)
-        return False, 0.0, f"invalid_preferred_value: {preferred!r}; raw={raw[:200]}", False, False
+        return _fail(f"invalid_preferred_value: {preferred!r}; raw={raw[:200]}")
 
-    # Major fix: confidence must be a numeric value in [0, 1].
-    # - Missing confidence, non-numeric types, or out-of-range values are
-    #   treated as parse failures (parse_ok=False) so the caller routes the
-    #   sample to disputed instead of trusting an uncalibrated verdict.
-    # - Negative values, values > 1, or sentinel defaults (e.g. -1, 999)
-    #   all fail this check.
+    # Confidence: must be numeric in [0, 1].
     raw_conf = parsed.get("confidence")
     if raw_conf is None:
-        return False, 0.0, f"missing_confidence; raw={raw[:200]}", False, False
+        return _fail(f"missing_confidence; raw={raw[:200]}")
     try:
         confidence = float(raw_conf)
     except (TypeError, ValueError):
-        return False, 0.0, f"invalid_confidence_type: {raw_conf!r}; raw={raw[:200]}", False, False
+        return _fail(f"invalid_confidence_type: {raw_conf!r}; raw={raw[:200]}")
     if not (0.0 <= confidence <= 1.0):
-        return False, 0.0, f"confidence_out_of_range: {confidence}; raw={raw[:200]}", False, False
+        return _fail(f"confidence_out_of_range: {confidence}; raw={raw[:200]}")
 
-    # evidence must be a string; coerce if not (but don't fail parse on this)
+    # evidence: coerce to string (does not fail parse on its own)
     raw_evidence = parsed.get("evidence", "")
     if isinstance(raw_evidence, str):
         evidence = raw_evidence
     else:
         evidence = json.dumps(raw_evidence, ensure_ascii=False)
 
-    # tie: judge could not distinguish — does not favour candidate.
+    # Major-2 fix: validate scores.A and scores.B (4 dims, 0-10 numeric).
+    # Missing/invalid scores -> parse_ok=False -> disputed. The prompt
+    # explicitly requires scores, so their absence is a contract breach.
+    raw_scores = parsed.get("scores") or {}
+    if not isinstance(raw_scores, dict):
+        return _fail(f"scores_not_object: {type(raw_scores).__name__}; raw={raw[:200]}")
+    scores_a_raw = raw_scores.get("A")
+    scores_b_raw = raw_scores.get("B")
+    if not isinstance(scores_a_raw, dict) or not isinstance(scores_b_raw, dict):
+        return _fail(
+            f"scores_A_B_missing_or_not_object; "
+            f"A_type={type(scores_a_raw).__name__}, "
+            f"B_type={type(scores_b_raw).__name__}; raw={raw[:200]}"
+        )
+    scores_a: dict[str, float] = {}
+    scores_b: dict[str, float] = {}
+    for dim in JUDGE_B_DIMENSIONS:
+        va = scores_a_raw.get(dim)
+        vb = scores_b_raw.get(dim)
+        if va is None or vb is None:
+            return _fail(f"scores_missing_dim: {dim}; raw={raw[:200]}")
+        try:
+            fa = float(va)
+            fb = float(vb)
+        except (TypeError, ValueError):
+            return _fail(
+                f"scores_dim_not_numeric: {dim} "
+                f"A={va!r} B={vb!r}; raw={raw[:200]}"
+            )
+        if not (0.0 <= fa <= 10.0) or not (0.0 <= fb <= 10.0):
+            return _fail(
+                f"scores_dim_out_of_range: {dim} A={fa} B={fb}; raw={raw[:200]}"
+            )
+        scores_a[dim] = fa
+        scores_b[dim] = fb
+
+    # Low-confidence flag (Major-1). Does not fail parse, but caller
+    # routes low-confidence verdicts to disputed.
+    low_confidence = confidence < JUDGE_B_PILOT_CONFIDENCE_THRESHOLD
+
+    # Major-2 fix: detect preferred-vs-scores contradiction.
+    total_a = sum(scores_a.values())
+    total_b = sum(scores_b.values())
+    contradiction = ""
+    if preferred == "A" and (total_b - total_a) > JUDGE_B_CONTRADICTION_TOTAL_GAP:
+        contradiction = (
+            f"preferred=A but B total {total_b:.1f} exceeds A total "
+            f"{total_a:.1f} by {total_b - total_a:.1f} "
+            f"(> {JUDGE_B_CONTRADICTION_TOTAL_GAP})"
+        )
+    elif preferred == "B" and (total_a - total_b) > JUDGE_B_CONTRADICTION_TOTAL_GAP:
+        contradiction = (
+            f"preferred=B but A total {total_a:.1f} exceeds B total "
+            f"{total_b:.1f} by {total_a - total_b:.1f} "
+            f"(> {JUDGE_B_CONTRADICTION_TOTAL_GAP})"
+        )
+    elif preferred == "TIE":
+        # For a tie, no single dim should differ by more than the tie gap.
+        for dim in JUDGE_B_DIMENSIONS:
+            gap = abs(scores_a[dim] - scores_b[dim])
+            if gap > JUDGE_B_TIE_DIM_GAP:
+                contradiction = (
+                    f"preferred=tie but dim '{dim}' gap {gap:.1f} "
+                    f"(A={scores_a[dim]}, B={scores_b[dim]}) "
+                    f"exceeds tie threshold {JUDGE_B_TIE_DIM_GAP}"
+                )
+                break
+        # Also reject "tie" when both runs have very low total scores
+        # (judge dodged the question rather than finding them close).
+        if not contradiction and total_a < 12.0 and total_b < 12.0:
+            contradiction = (
+                f"preferred=tie but both totals low (A={total_a:.1f}, "
+                f"B={total_b:.1f}, both <12) — tie is not justified"
+            )
+
     if preferred == "TIE":
-        return False, confidence, evidence, True, True
+        return JudgeBParsed(
+            parse_ok=True, prefers_candidate=False, confidence=confidence,
+            evidence=evidence, is_tie=True, low_confidence=low_confidence,
+            scores_a=scores_a, scores_b=scores_b,
+            score_contradiction=contradiction,
+        )
 
     prefers_candidate = (preferred == "A") if candidate_is_a else (preferred == "B")
-    return prefers_candidate, confidence, evidence, True, False
+    return JudgeBParsed(
+        parse_ok=True, prefers_candidate=prefers_candidate, confidence=confidence,
+        evidence=evidence, is_tie=False, low_confidence=low_confidence,
+        scores_a=scores_a, scores_b=scores_b,
+        score_contradiction=contradiction,
+    )
 
 
 def verify_same_question_for_judge_b(
@@ -403,8 +506,23 @@ def judge_b(
     *,
     cache_dir: Path | None = None,
     attempt: int = 0,
+    rate_limiter: RateLimiter | None = None,
 ) -> JudgeBResult:
-    """Run Judge B double-order pairwise comparison."""
+    """Run Judge B double-order pairwise comparison.
+
+    Major-1 fix: low-confidence verdicts (either run below pilot
+    threshold 0.6) route to ``disputed`` — a passed verdict on a low-
+    confidence double-order is not trustworthy.
+
+    Major-2 fix: ``parse_judge_b_response`` now validates the 4-dim
+    scores for A and B, and flags contradictions (preferred disagrees
+    with score totals, or tie claimed with large dim gaps). Any
+    contradiction also routes to ``disputed``.
+
+    Rate-limit fix: an optional ``rate_limiter`` is now honoured between
+    the two API calls so the DeepSeek provider is not hit back-to-back
+    (which previously could trigger 429s and waste retry budget).
+    """
     # Pre-flight: enforce same-question constraint
     verify_same_question_for_judge_b(candidate, v3_negative, sample_spec_id)
 
@@ -428,6 +546,8 @@ def judge_b(
         if cache_file1.exists():
             raw1 = json.loads(cache_file1.read_text(encoding="utf-8"))["raw"]
         else:
+            if rate_limiter is not None:
+                rate_limiter.wait()
             raw1 = exponential_backoff_retry(
                 lambda: call_judge_b(messages1, temperature=0.0, max_tokens=4096),
                 max_attempts=4, base_delay=1.0,
@@ -435,12 +555,15 @@ def judge_b(
             cache_file1.parent.mkdir(parents=True, exist_ok=True)
             cache_file1.write_text(json.dumps({"raw": raw1}, ensure_ascii=False, indent=2), encoding="utf-8")
     else:
+        if rate_limiter is not None:
+            rate_limiter.wait()
         raw1 = exponential_backoff_retry(
             lambda: call_judge_b(messages1, temperature=0.0, max_tokens=4096),
             max_attempts=4, base_delay=1.0,
         )
 
     # Run 2: negative as A, candidate as B
+    # Major fix: honour the rate limiter between the two Judge B calls.
     prompt2 = build_judge_b_prompt(neg_conversations, cand_conversations, human_dialogue)
     messages2 = [
         {"role": "system", "content": JUDGE_B_SYSTEM_PROMPT},
@@ -455,6 +578,8 @@ def judge_b(
         if cache_file2.exists():
             raw2 = json.loads(cache_file2.read_text(encoding="utf-8"))["raw"]
         else:
+            if rate_limiter is not None:
+                rate_limiter.wait()
             raw2 = exponential_backoff_retry(
                 lambda: call_judge_b(messages2, temperature=0.0, max_tokens=4096),
                 max_attempts=4, base_delay=1.0,
@@ -462,60 +587,65 @@ def judge_b(
             cache_file2.parent.mkdir(parents=True, exist_ok=True)
             cache_file2.write_text(json.dumps({"raw": raw2}, ensure_ascii=False, indent=2), encoding="utf-8")
     else:
+        if rate_limiter is not None:
+            rate_limiter.wait()
         raw2 = exponential_backoff_retry(
             lambda: call_judge_b(messages2, temperature=0.0, max_tokens=4096),
             max_attempts=4, base_delay=1.0,
         )
 
-    # Parse: run1 candidate_is_a=True, run2 candidate_is_a=False
-    # Major-6 fix: parse failure now surfaces as parse_ok=False; the judge
-    # routes such cases to "disputed" (human review) instead of silently
-    # treating them as candidate losses (which would double-reject and
-    # wrongly kill the sample).
-    # Position-bias fix: is_tie is now surfaced; any tie routes to disputed
-    # (do not relax pass conditions to lower disputed rate).
-    prefers_cand_1, conf1, evid1, parse_ok1, is_tie_1 = parse_judge_b_response(raw1, candidate_is_a=True)
-    prefers_cand_2, conf2, evid2, parse_ok2, is_tie_2 = parse_judge_b_response(raw2, candidate_is_a=False)
+    # Parse both runs.
+    p1 = parse_judge_b_response(raw1, candidate_is_a=True)
+    p2 = parse_judge_b_response(raw2, candidate_is_a=False)
 
-    # Position-bias telemetry: did the judge prefer whichever response was
-    # shown in position A? Aggregated across samples this gives the
-    # ``first_position_preference_rate`` (high => strong position bias).
-    # tie does not count as a position-A preference.
-    # run1: candidate is at position A, so prefers_cand_1==True means A was chosen.
-    # run2: candidate is at position B, so prefers_cand_2==True means B was chosen
-    #       (i.e. A was chosen when prefers_cand_2==False).
-    first_pos_a_run1 = bool(parse_ok1 and (not is_tie_1) and prefers_cand_1)
-    first_pos_a_run2 = bool(parse_ok2 and (not is_tie_2) and (not prefers_cand_2))
+    # Position-bias telemetry (tie does not count as a position-A preference).
+    first_pos_a_run1 = bool(p1.parse_ok and (not p1.is_tie) and p1.prefers_candidate)
+    first_pos_a_run2 = bool(p2.parse_ok and (not p2.is_tie) and (not p2.prefers_candidate))
 
-    # Decide: any parse failure or any tie => disputed. Otherwise apply the
-    # double-order rule.
-    if not parse_ok1 or not parse_ok2:
+    # Decision: fail-closed to disputed on any of:
+    #   - parse failure (JSON / preferred / confidence / scores invalid)
+    #   - any tie (do not relax pass conditions)
+    #   - any low-confidence run (Major-1)
+    #   - any preferred-vs-scores contradiction (Major-2)
+    # Only when both runs parse cleanly, are non-tie, non-low-confidence,
+    # non-contradictory, and agree on preference do we pass/reject.
+    if not p1.parse_ok or not p2.parse_ok:
         decision = "disputed"
-    elif is_tie_1 or is_tie_2:
-        # tie = judge could not distinguish; route to human review per the
-        # "do not relax pass conditions" rule.
+    elif p1.is_tie or p2.is_tie:
         decision = "disputed"
-    elif prefers_cand_1 and prefers_cand_2:
+    elif p1.low_confidence or p2.low_confidence:
+        decision = "disputed"
+    elif p1.score_contradiction or p2.score_contradiction:
+        decision = "disputed"
+    elif p1.prefers_candidate and p2.prefers_candidate:
         decision = "passed"
-    elif (not prefers_cand_1) and (not prefers_cand_2):
+    elif (not p1.prefers_candidate) and (not p2.prefers_candidate):
         decision = "rejected"
     else:
         decision = "disputed"
 
     return JudgeBResult(
-        prefers_candidate_run1=prefers_cand_1,
-        prefers_candidate_run2=prefers_cand_2,
-        confidence_run1=conf1,
-        confidence_run2=conf2,
-        evidence_run1=evid1,
-        evidence_run2=evid2,
+        prefers_candidate_run1=p1.prefers_candidate,
+        prefers_candidate_run2=p2.prefers_candidate,
+        confidence_run1=p1.confidence,
+        confidence_run2=p2.confidence,
+        evidence_run1=p1.evidence,
+        evidence_run2=p2.evidence,
         final_decision=decision,
         raw_run1=raw1,
         raw_run2=raw2,
-        is_tie_run1=is_tie_1,
-        is_tie_run2=is_tie_2,
+        is_tie_run1=p1.is_tie,
+        is_tie_run2=p2.is_tie,
         first_position_a_run1=first_pos_a_run1,
         first_position_a_run2=first_pos_a_run2,
+        low_confidence_run1=p1.low_confidence,
+        low_confidence_run2=p2.low_confidence,
+        scores_a_run1=p1.scores_a,
+        scores_b_run1=p1.scores_b,
+        scores_a_run2=p2.scores_a,
+        scores_b_run2=p2.scores_b,
+        score_contradiction_run1=p1.score_contradiction,
+        score_contradiction_run2=p2.score_contradiction,
     )
 
 

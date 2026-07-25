@@ -216,16 +216,36 @@ def _load_few_shot_by_id(path: Path = FEW_SHOT_POOL_PATH) -> dict[str, dict[str,
     return _FEW_SHOT_BY_ID
 
 
-def get_few_shots_by_ids(reference_ids: list[str]) -> list[dict[str, Any]]:
+def get_few_shots_by_ids(
+    reference_ids: list[str],
+    *,
+    strict: bool = False,
+) -> list[dict[str, Any]]:
     """Return few-shot records in the exact order of ``reference_ids``.
 
-    Missing IDs are skipped (logged once at call time via the returned
-    length mismatch). This guarantees Hard Gate and Judge A compare the
-    candidate against the same passages the Generator actually saw.
+    Other-fix: previously missing IDs were silently skipped, which meant
+    Hard Gate copy detection could run against 1–2 or even 0 references
+    when a few-shot ID was stale or mistyped — quietly weakening the
+    gate. Now ``strict=True`` (used by the formal pipeline) raises
+    ``KeyError`` listing the missing IDs, so the run stops instead of
+    silently degrading. ``strict=False`` preserves the legacy skip
+    behaviour for dev/debug paths.
+
+    Guarantees Generator / Hard Gate / Judge A all see the *same* few-
+    shot passages the Generator was anchored on.
     """
     if not reference_ids:
         return []
     by_id = _load_few_shot_by_id()
+    missing = [rid for rid in reference_ids if rid not in by_id]
+    if missing and strict:
+        raise KeyError(
+            f"get_few_shots_by_ids(strict=True): {len(missing)} reference "
+            f"id(s) not found in few-shot pool: {missing[:5]} "
+            f"(of {len(reference_ids)} requested). The candidate's "
+            f"reference_ids must all exist; aborting before Hard Gate "
+            f"runs on a degraded reference set."
+        )
     return [by_id[rid] for rid in reference_ids if rid in by_id]
 
 

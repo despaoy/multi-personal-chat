@@ -202,6 +202,36 @@ def _load_passed_samples_from(samples_path: Path) -> list[dict[str, Any]]:
     return passed
 
 
+def _recompute_stats_from_jsonl(
+    samples_path: Path,
+    rejected_path: Path,
+    disputed_path: Path,
+) -> dict[str, int]:
+    """Rebuild progress.stats by counting lines in the three JSONL files.
+
+    Other-fix: after a crash-resume back-fill, the in-memory stats could
+    be stale (e.g. stats.passed=5 but samples.jsonl has 6 lines because
+    a record was appended but progress wasn't updated). Counting from
+    disk guarantees the displayed numbers match the actual outputs.
+    """
+    def _count(path: Path) -> int:
+        if not path.exists():
+            return 0
+        return sum(
+            1 for line in path.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        )
+    passed = _count(samples_path)
+    rejected = _count(rejected_path)
+    disputed = _count(disputed_path)
+    return {
+        "passed": passed,
+        "rejected": rejected,
+        "disputed": disputed,
+        "total_processed": passed + rejected + disputed,
+    }
+
+
 # ---------------------------------------------------------------------------
 # Per-sample processing (D.1.2 + D.1.3 + D.1.6)
 # ---------------------------------------------------------------------------
@@ -233,13 +263,28 @@ def _build_reference_texts_from_candidate(candidate: dict[str, Any]) -> list[str
     scoring and exclude_ids that the Generator used, so Hard Gate could
     check copy against a *different* set of passages than the ones that
     actually shaped the candidate. This variant reads by ID instead.
+
+    Other-fix: ``strict=True`` is now passed so a missing reference id
+    aborts the run instead of silently running copy detection against
+    a degraded (possibly empty) reference set. Old cached candidates
+    without ``reference_ids`` are rejected — formal Pilot must not reuse
+    such caches because their few-shot evidence cannot be reconstructed.
     """
     reference_ids: list[str] = candidate.get("reference_ids") or []
     if not reference_ids:
-        # Backwards compatibility: very old candidates may not carry IDs.
-        return _build_reference_texts(candidate.get("scene", ""))
+        # Other-fix: do NOT silently fall back to scene retrieval. A
+        # candidate without reference_ids is a stale cache entry whose
+        # few-shot evidence is unrecoverable; the formal pipeline must
+        # regenerate it.
+        raise RuntimeError(
+            "candidate has no reference_ids — refusing to run Hard Gate "
+            "on a stale cache entry whose few-shot evidence cannot be "
+            "reconstructed. Delete the cache for this sample_spec_id and "
+            "rerun so the Generator emits a fresh candidate with "
+            "reference_ids."
+        )
     refs: list[str] = []
-    for fs in get_few_shots_by_ids(reference_ids):
+    for fs in get_few_shots_by_ids(reference_ids, strict=True):
         for msg in fs.get("conversations", []):
             if msg.get("from") == "assistant":
                 refs.append(msg.get("value", ""))
@@ -356,6 +401,7 @@ def process_one_attempt(
             spec.sample_spec_id,
             cache_dir=cache_dir,
             attempt=attempt,
+            rate_limiter=rate_limiter,
         )
     except Exception as exc:  # noqa: BLE001
         # Same-question violation or API failure — treat as rejected (cannot compare)
@@ -490,6 +536,148 @@ def _build_run_manifest(
     }
 
 
+def _build_run_summary(
+    *,
+    run_log_path: Path,
+    samples_path: Path,
+    rejected_path: Path,
+    disputed_path: Path,
+    stats: dict[str, int],
+    run_started_at: str,
+    total_specs: int,
+    processed_this_run: int,
+    initial_manifest_path: Path,
+) -> dict[str, Any]:
+    """Build run_summary.json with final stats + Judge B bias diagnostics.
+
+    Major-6 fix: scans ``run_log.jsonl`` to aggregate the Judge B
+    telemetry fields (``first_position_a_run1/2``, ``is_tie_run1/2``,
+    ``low_confidence_run1/2``, ``score_contradiction_run1/2``,
+    ``final_decision``) into rates. These rates tell the operator
+    whether Judge B needs prompt revision before the holdout run:
+
+      - ``first_position_preference_rate``: high (>0.7) => strong
+        position bias, prompt must be revised.
+      - ``tie_rate``: high (>0.3) => judge is dodging; consider
+        sharpening the prompt or lowering the tie dim-gap threshold.
+      - ``judge_b_parse_failure_rate``: high (>0.1) => response format
+        is unstable; consider stronger JSON mode enforcement.
+      - ``low_confidence_rate``: high (>0.3) => judge is uncertain;
+        calibration may need a different model or clearer rubric.
+      - ``score_contradiction_rate``: high (>0.1) => judge is
+        inconsistent between scores and preferred; prompt rubric needs
+        tightening.
+
+    Only samples that REACHED Judge B are counted in the denominator
+    (samples rejected at Hard Gate / Judge A do not have Judge B
+    results and would skew the rates if included).
+    """
+    # Scan run_log.jsonl for the final attempt of each sample_spec_id
+    # that reached Judge B.
+    final_by_spec: dict[str, dict[str, Any]] = {}
+    if run_log_path.exists():
+        for line in run_log_path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                rec = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            sid = rec.get("sample_spec_id")
+            if not sid:
+                continue
+            # Keep the latest attempt per spec (final decision)
+            final_by_spec[sid] = rec
+
+    judge_b_reached = [
+        rec for rec in final_by_spec.values()
+        if rec.get("judge_b") is not None
+    ]
+    jb_count = len(judge_b_reached)
+
+    def _rate(pred) -> float:
+        if jb_count == 0:
+            return 0.0
+        return sum(1 for r in judge_b_reached if pred(r.get("judge_b", {}))) / jb_count
+
+    # first_position_preference_rate: fraction of Judge B runs where the
+    # judge preferred whichever response was in position A. Average the
+    # run1 and run2 indicators so a sample where both runs preferred
+    # position A counts as 1.0.
+    def _first_pos_a(jb: dict[str, Any]) -> bool:
+        r1 = bool(jb.get("first_position_a_run1", False))
+        r2 = bool(jb.get("first_position_a_run2", False))
+        return r1 or r2
+
+    # parse failure: final_decision is disputed AND evidence contains a
+    # parse-error marker. We approximate by checking if either run's
+    # evidence starts with a known parse-failure prefix.
+    parse_failures = 0
+    for r in judge_b_reached:
+        jb = r.get("judge_b", {})
+        ev1 = str(jb.get("evidence_run1", ""))
+        ev2 = str(jb.get("evidence_run2", ""))
+        if any(ev1.startswith(p) for p in (
+            "json_parse_error", "invalid_preferred_value",
+            "missing_confidence", "invalid_confidence_type",
+            "confidence_out_of_range", "scores_not_object",
+            "scores_A_B_missing_or_not_object", "scores_missing_dim",
+            "scores_dim_not_numeric", "scores_dim_out_of_range",
+        )):
+            parse_failures += 1
+        elif any(ev2.startswith(p) for p in (
+            "json_parse_error", "invalid_preferred_value",
+            "missing_confidence", "invalid_confidence_type",
+            "confidence_out_of_range", "scores_not_object",
+            "scores_A_B_missing_or_not_object", "scores_missing_dim",
+            "scores_dim_not_numeric", "scores_dim_out_of_range",
+        )):
+            parse_failures += 1
+
+    # Count final decisions among Judge-B-reached samples
+    jb_passed = sum(1 for r in judge_b_reached if r.get("judge_b", {}).get("final_decision") == "passed")
+    jb_rejected = sum(1 for r in judge_b_reached if r.get("judge_b", {}).get("final_decision") == "rejected")
+    jb_disputed = sum(1 for r in judge_b_reached if r.get("judge_b", {}).get("final_decision") == "disputed")
+
+    return {
+        "summary_version": 1,
+        "generated_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+        "run_started_at": run_started_at,
+        "run_ended_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+        "total_specs_in_pool": total_specs,
+        "processed_this_run": processed_this_run,
+        "final_stats": stats,
+        "output_files": {
+            "samples": str(samples_path),
+            "rejected": str(rejected_path),
+            "disputed": str(disputed_path),
+            "run_log": str(run_log_path),
+            "initial_manifest": str(initial_manifest_path),
+        },
+        "judge_b_diagnostics": {
+            "samples_reached_judge_b": jb_count,
+            "passed": jb_passed,
+            "rejected": jb_rejected,
+            "disputed": jb_disputed,
+            "first_position_preference_rate": round(_rate(_first_pos_a), 4),
+            "tie_rate": round(_rate(lambda jb: jb.get("is_tie_run1") or jb.get("is_tie_run2")), 4),
+            "low_confidence_rate": round(_rate(lambda jb: jb.get("low_confidence_run1") or jb.get("low_confidence_run2")), 4),
+            "score_contradiction_rate": round(_rate(lambda jb: jb.get("score_contradiction_run1") or jb.get("score_contradiction_run2")), 4),
+            "parse_failure_rate": round(parse_failures / jb_count if jb_count else 0.0, 4),
+            "parse_failure_count": parse_failures,
+        },
+        "interpretation_notes": (
+            "first_position_preference_rate > 0.7 => strong position bias; "
+            "revise Judge B prompt. tie_rate > 0.3 => judge dodging; "
+            "sharpen rubric. parse_failure_rate > 0.1 => JSON mode unstable. "
+            "low_confidence_rate > 0.3 => judge uncertain; consider model "
+            "swap. score_contradiction_rate > 0.1 => scores vs preferred "
+            "inconsistent; tighten rubric."
+        ),
+    }
+
+
 def run_pipeline(
     *,
     limit: int | None = None,
@@ -548,7 +736,29 @@ def run_pipeline(
     # Major-9: write judge_config.json at pipeline start so every run is
     # self-documenting (records exact model ids, families, and the
     # cross-model-committee / self-preference-risk notes).
-    atomic_write_json(judge_config_path, build_judge_config())
+    # Major-3 fix: build_judge_config(strict_similarity=True) now RAISES
+    # RuntimeError if the BGE model cannot be loaded in strict mode
+    # (the default for Pilot/formal runs). This aborts the pipeline
+    # before any external API call, so no DeepSeek/Qwen budget is spent
+    # on a run whose copy-detection results would be non-authoritative.
+    atomic_write_json(judge_config_path, build_judge_config(strict_similarity=True))
+
+    # Major-3 fix: explicit post-write authoritative check. Even if
+    # build_judge_config somehow succeeded (e.g. BGE loaded but returned
+    # an unexpected backend identifier), we re-read the written config
+    # and refuse to proceed unless backend==bge_embedding and
+    # authoritative=="true". This is the formal-run gate.
+    written_cfg = json.loads(judge_config_path.read_text(encoding="utf-8"))
+    sim_info = written_cfg.get("similarity_backend", {})
+    if sim_info.get("backend") != "bge_embedding" or sim_info.get("authoritative") != "true":
+        raise RuntimeError(
+            "Major-3 fail-fast: similarity backend is not authoritative. "
+            f"backend={sim_info.get('backend')!r}, "
+            f"authoritative={sim_info.get('authoritative')!r}. "
+            "Pilot/formal runs require the BGE embedding model. "
+            "Set KISAKI_SIMILARITY_BACKEND=fallback ONLY for local dev "
+            "and call build_judge_config(strict_similarity=False) explicitly."
+        )
 
     if cache_dir is None:
         cache_dir = output_dir / "cache"
@@ -585,6 +795,13 @@ def run_pipeline(
         print(f"[resume] found {len(orphaned)} spec(s) on disk but not in progress — back-filling")
         for sid in sorted(orphaned):
             progress["completed_spec_ids"].append(sid)
+        # Other-fix: recompute stats from the three JSONL files instead
+        # of trusting the in-memory counters. A crash mid-run could leave
+        # progress.stats stale (e.g. stats says passed=5 but samples.jsonl
+        # has 6 lines). Re-counting keeps the displayed numbers accurate.
+        progress["stats"] = _recompute_stats_from_jsonl(
+            samples_path, rejected_path, disputed_path,
+        )
         completed = set(progress["completed_spec_ids"])
         _save_progress_to(progress_path, progress)
 
@@ -594,9 +811,13 @@ def run_pipeline(
     _save_progress_to(progress_path, progress)
 
     # Load quota plan (stratified scene sampling) if provided.
-    # The plan restricts pending to its selected sample_spec_ids, so a
-    # calibration run covers all scenes instead of just the first N in
-    # the negative pool (which over-represents 书籍讨论).
+    # Major-5 fix: the plan now carries ``ordered_sample_spec_ids``
+    # (interleaved across scenes by round-robin) so the run processes
+    # samples in a truly stratified order rather than following the
+    # negative-pool file order (which clusters same-scene samples).
+    # When a plan is present, ``--limit`` is applied to the ordered
+    # list (preserving stratification) rather than the raw pool order.
+    quota_plan_ordered_ids: list[str] | None = None
     quota_plan_ids: set[str] | None = None
     if quota_plan_path is not None:
         if not quota_plan_path.exists():
@@ -609,25 +830,53 @@ def run_pipeline(
         for scene_block in plan.get("scenes", {}).values():
             for sid in scene_block.get("sample_spec_ids", []):
                 quota_plan_ids.add(str(sid))
+        # Major-5: prefer the interleaved order if the plan provides it;
+        # otherwise fall back to the unordered set (legacy plans).
+        quota_plan_ordered_ids = plan.get("ordered_sample_spec_ids")
+        if quota_plan_ordered_ids:
+            quota_plan_ordered_ids = [str(s) for s in quota_plan_ordered_ids]
         print(f"[quota_plan] loaded {len(quota_plan_ids)} spec ids from {quota_plan_path}")
 
-    # Filter pending
+    # Filter pending.
+    # Major-5: when a quota plan with ``ordered_sample_spec_ids`` is
+    # present, iterate that list (not the raw pool) so the run order is
+    # the interleaved plan order. ``--limit`` then caps the stratified
+    # list instead of breaking stratification by slicing the pool.
     pending: list[SampleSpec] = []
-    for spec in specs:
-        if spec.sample_spec_id in completed:
-            continue
-        # only_spec_ids takes precedence over quota_plan (explicit override)
-        if only_spec_ids and spec.sample_spec_id not in only_spec_ids:
-            continue
-        if quota_plan_ids is not None and spec.sample_spec_id not in quota_plan_ids:
-            continue
-        pending.append(spec)
-    if limit is not None and only_spec_ids is None:
-        pending = pending[:limit]
+    if quota_plan_ordered_ids is not None:
+        specs_by_id = {s.sample_spec_id: s for s in specs}
+        for sid in quota_plan_ordered_ids:
+            if sid in completed:
+                continue
+            if only_spec_ids and sid not in only_spec_ids:
+                continue
+            spec = specs_by_id.get(sid)
+            if spec is not None:
+                pending.append(spec)
+        # --limit caps the stratified list (still preserves scene order)
+        if limit is not None:
+            pending = pending[:limit]
+    else:
+        for spec in specs:
+            if spec.sample_spec_id in completed:
+                continue
+            # only_spec_ids takes precedence over quota_plan (explicit override)
+            if only_spec_ids and spec.sample_spec_id not in only_spec_ids:
+                continue
+            if quota_plan_ids is not None and spec.sample_spec_id not in quota_plan_ids:
+                continue
+            pending.append(spec)
+        if limit is not None and only_spec_ids is None:
+            pending = pending[:limit]
 
-    # Provenance fix: write run_manifest.json BEFORE processing so the run
-    # is auditable even if it crashes mid-way. Captures git commit, command
+    # Provenance fix: write run_manifest BEFORE processing so the run is
+    # auditable even if it crashes mid-way. Captures git commit, command
     # args, input file hashes, and the selected sample_spec_ids.
+    # Major-6 fix: ``run_manifest.json`` is the IMMUTABLE initial record.
+    # On resume (run_manifest.json already exists), we instead append a
+    # ``run_manifest_resume_<timestamp>.json`` so the original run's
+    # provenance is never overwritten. The resume manifest records only
+    # what changed (pending this resume, timestamp, resume_reason).
     manifest = _build_run_manifest(
         output_dir=output_dir,
         negative_pool_path=negative_pool_path,
@@ -638,9 +887,22 @@ def run_pipeline(
         rate_limit_seconds=rate_limit_seconds,
         pending=pending,
     )
-    atomic_write_json(output_dir / "run_manifest.json", manifest)
+    initial_manifest_path = output_dir / "run_manifest.json"
+    if initial_manifest_path.exists():
+        resume_stamp = time.strftime("%Y%m%dT%H%M%S")
+        resume_path = output_dir / f"run_manifest_resume_{resume_stamp}.json"
+        atomic_write_json(resume_path, {
+            **manifest,
+            "manifest_kind": "resume",
+            "resumed_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+            "initial_manifest_path": str(initial_manifest_path),
+        })
+        print(f"[resume] initial run_manifest.json preserved; wrote {resume_path.name}")
+    else:
+        atomic_write_json(initial_manifest_path, manifest)
 
     rate_limiter = RateLimiter(min_interval_seconds=rate_limit_seconds)
+    run_started_at = time.strftime("%Y-%m-%dT%H:%M:%S")
 
     print("=== Kisaki V4 regeneration pipeline ===")
     print(f"Total specs in negative pool: {len(specs)}")
@@ -712,6 +974,27 @@ def run_pipeline(
         _save_progress_to(progress_path, progress)
         print(f"  -> final: {status}")
 
+    # Major-6 fix: write run_summary.json with run-level aggregates.
+    # Unlike run_manifest.json (immutable, written before processing),
+    # run_summary.json is written at the END and captures final stats,
+    # timing, and Judge B bias diagnostics (first-position preference
+    # rate, tie rate, parse failure rate, low-confidence rate). These
+    # metrics feed directly into the calibration decision: if
+    # first_position_preference_rate is high, Judge B prompt needs
+    # revision before the holdout run.
+    run_summary = _build_run_summary(
+        run_log_path=run_log_path,
+        samples_path=samples_path,
+        rejected_path=rejected_path,
+        disputed_path=disputed_path,
+        stats=progress["stats"],
+        run_started_at=run_started_at,
+        total_specs=len(specs),
+        processed_this_run=len(pending),
+        initial_manifest_path=initial_manifest_path,
+    )
+    atomic_write_json(output_dir / "run_summary.json", run_summary)
+
     summary = {
         "total_specs": len(specs),
         "processed_this_run": len(pending),
@@ -721,6 +1004,7 @@ def run_pipeline(
         "disputed_path": str(disputed_path),
         "run_log_path": str(run_log_path),
         "progress_path": str(progress_path),
+        "run_summary_path": str(output_dir / "run_summary.json"),
     }
     print(json.dumps(summary, ensure_ascii=False, indent=2))
     return summary

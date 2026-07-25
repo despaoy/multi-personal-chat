@@ -337,38 +337,56 @@ def test_judge_a_parse_all_na_means_no_applicable_dims():
 # B.8.5: Judge B double-order consistency
 # ---------------------------------------------------------------------------
 
+# Major-2: parse_judge_b_response now requires scores.A and scores.B (4
+# dims each, 0-10) and returns a JudgeBParsed object. These constants
+# provide valid score sets for various test scenarios.
+_SCORES_A_HIGHER = {
+    "A": {"人物一致性": 8, "原作语气": 8, "元叙事控制": 8, "自然度": 8},
+    "B": {"人物一致性": 6, "原作语气": 6, "元叙事控制": 6, "自然度": 6},
+}
+_SCORES_B_HIGHER = {
+    "A": {"人物一致性": 6, "原作语气": 6, "元叙事控制": 6, "自然度": 6},
+    "B": {"人物一致性": 8, "原作语气": 8, "元叙事控制": 8, "自然度": 8},
+}
+_SCORES_TIE = {
+    "A": {"人物一致性": 7, "原作语气": 7, "元叙事控制": 7, "自然度": 7},
+    "B": {"人物一致性": 7, "原作语气": 7, "元叙事控制": 7, "自然度": 7},
+}
+
+
 def test_judge_b_parse_run1_candidate_is_a_prefers_a():
     # candidate is A, judge says "A" -> prefers candidate
-    # Major-6 fix: parse_judge_b_response now returns 4-tuple (added parse_ok)
-    raw = json.dumps({"preferred": "A", "confidence": 0.9, "evidence": "A更好", "reason": "..."})
-    prefers, conf, evid, parse_ok, _is_tie = parse_judge_b_response(raw, candidate_is_a=True)
-    assert prefers is True
-    assert conf == 0.9
-    assert parse_ok is True
+    raw = json.dumps({"preferred": "A", "confidence": 0.9, "evidence": "A更好",
+                      "scores": _SCORES_A_HIGHER, "reason": "..."})
+    p = parse_judge_b_response(raw, candidate_is_a=True)
+    assert p.parse_ok is True
+    assert p.prefers_candidate is True
+    assert p.confidence == 0.9
 
 
 def test_judge_b_parse_run2_candidate_is_b_prefers_b():
     # candidate is B, judge says "B" -> prefers candidate
-    raw = json.dumps({"preferred": "B", "confidence": 0.8, "evidence": "B更好", "reason": "..."})
-    prefers, conf, evid, parse_ok, _is_tie = parse_judge_b_response(raw, candidate_is_a=False)
-    assert prefers is True
-    assert parse_ok is True
+    raw = json.dumps({"preferred": "B", "confidence": 0.8, "evidence": "B更好",
+                      "scores": _SCORES_B_HIGHER, "reason": "..."})
+    p = parse_judge_b_response(raw, candidate_is_a=False)
+    assert p.parse_ok is True
+    assert p.prefers_candidate is True
 
 
 def test_judge_b_parse_failure_returns_parse_ok_false():
     """Major-6: JSON parse failure surfaces as parse_ok=False (not silent reject)."""
-    prefers, conf, evid, parse_ok, _is_tie = parse_judge_b_response("not json", candidate_is_a=True)
-    assert parse_ok is False
-    assert prefers is False
-    assert "json_parse_error" in evid
+    p = parse_judge_b_response("not json", candidate_is_a=True)
+    assert p.parse_ok is False
+    assert p.prefers_candidate is False
+    assert "json_parse_error" in p.evidence
 
 
 def test_judge_b_parse_invalid_preferred_value_returns_parse_ok_false():
     """Major-6: invalid 'preferred' value (not A/B) -> parse_ok=False."""
     raw = json.dumps({"preferred": "C", "confidence": 0.5, "evidence": "", "reason": ""})
-    prefers, conf, evid, parse_ok, _is_tie = parse_judge_b_response(raw, candidate_is_a=True)
-    assert parse_ok is False
-    assert "invalid_preferred_value" in evid
+    p = parse_judge_b_response(raw, candidate_is_a=True)
+    assert p.parse_ok is False
+    assert "invalid_preferred_value" in p.evidence
 
 
 def test_judge_b_parse_tie_returns_is_tie_true():
@@ -377,11 +395,12 @@ def test_judge_b_parse_tie_returns_is_tie_true():
     parse_ok=True (valid parse), is_tie=True (no preference), and
     prefers_candidate=False (a tie does not favour the candidate).
     """
-    raw = json.dumps({"preferred": "tie", "confidence": 0.5, "evidence": "两者接近", "reason": "..."})
-    prefers, conf, evid, parse_ok, is_tie = parse_judge_b_response(raw, candidate_is_a=True)
-    assert parse_ok is True
-    assert is_tie is True
-    assert prefers is False
+    raw = json.dumps({"preferred": "tie", "confidence": 0.5, "evidence": "两者接近",
+                      "scores": _SCORES_TIE, "reason": "..."})
+    p = parse_judge_b_response(raw, candidate_is_a=True)
+    assert p.parse_ok is True
+    assert p.is_tie is True
+    assert p.prefers_candidate is False
 
 
 def test_judge_b_tie_in_run1_routes_to_disputed(monkeypatch):
@@ -404,11 +423,13 @@ def test_judge_b_tie_in_run1_routes_to_disputed(monkeypatch):
     def mock_call(messages, **kwargs):
         call_count[0] += 1
         if call_count[0] == 1:
-            # Run 1: tie
-            return json.dumps({"preferred": "tie", "confidence": 0.5, "evidence": "接近", "reason": "..."})
+            # Run 1: tie (valid tie scores: close, both totals >= 12)
+            return json.dumps({"preferred": "tie", "confidence": 0.7, "evidence": "接近",
+                               "scores": _SCORES_TIE, "reason": "..."})
         else:
-            # Run 2: prefers candidate
-            return json.dumps({"preferred": "B", "confidence": 0.9, "evidence": "B", "reason": "..."})
+            # Run 2: prefers candidate (B), B scores higher
+            return json.dumps({"preferred": "B", "confidence": 0.9, "evidence": "B",
+                               "scores": _SCORES_B_HIGHER, "reason": "..."})
     monkeypatch.setattr("judge_kisaki_llm_v4.call_judge_b", mock_call)
     result = judge_b(candidate, negative, "test_tie1")
     assert result.final_decision == "disputed"
@@ -445,10 +466,12 @@ def test_judge_b_first_position_preference_telemetry(monkeypatch):
         # Both runs: judge always prefers A (position bias)
         if call_count[0] == 1:
             # Run 1: candidate=A, judge prefers A => prefers candidate
-            return json.dumps({"preferred": "A", "confidence": 0.9, "evidence": "A", "reason": "..."})
+            return json.dumps({"preferred": "A", "confidence": 0.9, "evidence": "A",
+                               "scores": _SCORES_A_HIGHER, "reason": "..."})
         else:
             # Run 2: negative=A, judge prefers A => prefers negative (not candidate)
-            return json.dumps({"preferred": "A", "confidence": 0.9, "evidence": "A", "reason": "..."})
+            return json.dumps({"preferred": "A", "confidence": 0.9, "evidence": "A",
+                               "scores": _SCORES_A_HIGHER, "reason": "..."})
     monkeypatch.setattr("judge_kisaki_llm_v4.call_judge_b", mock_call)
     result = judge_b(candidate, negative, "test_pos")
     # Both runs chose position A
@@ -479,9 +502,11 @@ def test_judge_b_double_order_consistent_passed(monkeypatch):
     def mock_call(messages, **kwargs):
         call_count[0] += 1
         if call_count[0] == 1:
-            return json.dumps({"preferred": "A", "confidence": 0.9, "evidence": "A", "reason": "..."})
+            return json.dumps({"preferred": "A", "confidence": 0.9, "evidence": "A",
+                               "scores": _SCORES_A_HIGHER, "reason": "..."})
         else:
-            return json.dumps({"preferred": "B", "confidence": 0.9, "evidence": "B", "reason": "..."})
+            return json.dumps({"preferred": "B", "confidence": 0.9, "evidence": "B",
+                               "scores": _SCORES_B_HIGHER, "reason": "..."})
     monkeypatch.setattr("judge_kisaki_llm_v4.call_judge_b", mock_call)
     result = judge_b(candidate, negative, "test_001")
     assert result.final_decision == "passed"
@@ -509,10 +534,12 @@ def test_judge_b_double_order_inconsistent_disputed(monkeypatch):
     def mock_call(messages, **kwargs):
         call_count[0] += 1
         if call_count[0] == 1:
-            return json.dumps({"preferred": "A", "confidence": 0.9, "evidence": "A", "reason": "..."})
+            return json.dumps({"preferred": "A", "confidence": 0.9, "evidence": "A",
+                               "scores": _SCORES_A_HIGHER, "reason": "..."})
         else:
             # Run 2: negative=A, candidate=B; judge prefers A(=negative) -> not candidate
-            return json.dumps({"preferred": "A", "confidence": 0.9, "evidence": "A", "reason": "..."})
+            return json.dumps({"preferred": "A", "confidence": 0.9, "evidence": "A",
+                               "scores": _SCORES_A_HIGHER, "reason": "..."})
     monkeypatch.setattr("judge_kisaki_llm_v4.call_judge_b", mock_call)
     result = judge_b(candidate, negative, "test_002")
     assert result.final_decision == "disputed"
@@ -541,10 +568,12 @@ def test_judge_b_double_order_both_reject_candidate(monkeypatch):
         call_count[0] += 1
         if call_count[0] == 1:
             # Run 1: candidate=A, judge prefers B(=negative)
-            return json.dumps({"preferred": "B", "confidence": 0.9, "evidence": "B", "reason": "..."})
+            return json.dumps({"preferred": "B", "confidence": 0.9, "evidence": "B",
+                               "scores": _SCORES_B_HIGHER, "reason": "..."})
         else:
             # Run 2: negative=A, candidate=B; judge prefers A(=negative)
-            return json.dumps({"preferred": "A", "confidence": 0.9, "evidence": "A", "reason": "..."})
+            return json.dumps({"preferred": "A", "confidence": 0.9, "evidence": "A",
+                               "scores": _SCORES_A_HIGHER, "reason": "..."})
     monkeypatch.setattr("judge_kisaki_llm_v4.call_judge_b", mock_call)
     result = judge_b(candidate, negative, "test_003")
     assert result.final_decision == "rejected"
@@ -1003,7 +1032,8 @@ def test_judge_b_parse_failure_routes_to_disputed(monkeypatch):
         call_count[0] += 1
         if call_count[0] == 1:
             return "this is not valid json"  # parse failure on run 1
-        return json.dumps({"preferred": "B", "confidence": 0.9, "evidence": "B", "reason": "..."})
+        return json.dumps({"preferred": "B", "confidence": 0.9, "evidence": "B",
+                           "scores": _SCORES_B_HIGHER, "reason": "..."})
     monkeypatch.setattr("judge_kisaki_llm_v4.call_judge_b", mock_call)
     result = judge_b(candidate, negative, "test_parse_fail")
     assert result.final_decision == "disputed"
@@ -1105,6 +1135,18 @@ def test_run_pipeline_writes_all_outputs_to_output_dir(tmp_path, monkeypatch):
             "completed_spec_ids": [],
             "stats": {"passed": 0, "rejected": 0, "disputed": 0, "total_processed": 0},
             "last_committed_spec_id": None,
+        },
+    )
+    # Major-3: mock build_judge_config so the strict BGE fail-fast check
+    # passes without requiring the real BGE model on disk.
+    monkeypatch.setattr(
+        "regen_kisaki_llm_pipeline.build_judge_config",
+        lambda **kwargs: {
+            "config_version": 2,
+            "generated_at": "test",
+            "models": {},
+            "cross_model_committee": True,
+            "similarity_backend": {"backend": "bge_embedding", "authoritative": "true"},
         },
     )
 
@@ -1363,55 +1405,80 @@ def test_judge_a_empty_violations_with_high_scores_passes():
 # Fix 4: Judge B confidence must be in [0, 1]
 # ---------------------------------------------------------------------------
 
+# Major-2: parse_judge_b_response now requires scores.A and scores.B (4
+# dims each, 0-10). Tests that only exercise confidence/preferred must
+# still supply valid scores or parse will fail with scores_* errors.
+_VALID_SCORES = {
+    "A": {"人物一致性": 8, "原作语气": 8, "元叙事控制": 8, "自然度": 8},
+    "B": {"人物一致性": 6, "原作语气": 6, "元叙事控制": 6, "自然度": 6},
+}
+
+
 def test_judge_b_negative_confidence_fails_parse():
     """Fix 4: confidence=-5 => parse_ok=False."""
-    raw = json.dumps({"preferred": "A", "confidence": -5, "evidence": "", "reason": ""})
-    prefers, conf, evid, parse_ok, _is_tie = parse_judge_b_response(raw, candidate_is_a=True)
-    assert parse_ok is False
-    assert "confidence_out_of_range" in evid
+    raw = json.dumps({"preferred": "A", "confidence": -5, "evidence": "",
+                      "scores": _VALID_SCORES, "reason": ""})
+    p = parse_judge_b_response(raw, candidate_is_a=True)
+    assert p.parse_ok is False
+    assert "confidence_out_of_range" in p.evidence
 
 
 def test_judge_b_confidence_above_one_fails_parse():
     """Fix 4: confidence=1.5 => parse_ok=False."""
-    raw = json.dumps({"preferred": "A", "confidence": 1.5, "evidence": "", "reason": ""})
-    prefers, conf, evid, parse_ok, _is_tie = parse_judge_b_response(raw, candidate_is_a=True)
-    assert parse_ok is False
-    assert "confidence_out_of_range" in evid
+    raw = json.dumps({"preferred": "A", "confidence": 1.5, "evidence": "",
+                      "scores": _VALID_SCORES, "reason": ""})
+    p = parse_judge_b_response(raw, candidate_is_a=True)
+    assert p.parse_ok is False
+    assert "confidence_out_of_range" in p.evidence
 
 
 def test_judge_b_missing_confidence_fails_parse():
     """Fix 4: confidence field absent => parse_ok=False."""
-    raw = json.dumps({"preferred": "A", "evidence": "", "reason": ""})
-    prefers, conf, evid, parse_ok, _is_tie = parse_judge_b_response(raw, candidate_is_a=True)
-    assert parse_ok is False
-    assert "missing_confidence" in evid
+    raw = json.dumps({"preferred": "A", "evidence": "",
+                      "scores": _VALID_SCORES, "reason": ""})
+    p = parse_judge_b_response(raw, candidate_is_a=True)
+    assert p.parse_ok is False
+    assert "missing_confidence" in p.evidence
 
 
 def test_judge_b_non_numeric_confidence_fails_parse():
     """Fix 4: confidence="high" (string) => parse_ok=False."""
-    raw = json.dumps({"preferred": "A", "confidence": "high", "evidence": "", "reason": ""})
-    prefers, conf, evid, parse_ok, _is_tie = parse_judge_b_response(raw, candidate_is_a=True)
-    assert parse_ok is False
-    assert "invalid_confidence_type" in evid
+    raw = json.dumps({"preferred": "A", "confidence": "high", "evidence": "",
+                      "scores": _VALID_SCORES, "reason": ""})
+    p = parse_judge_b_response(raw, candidate_is_a=True)
+    assert p.parse_ok is False
+    assert "invalid_confidence_type" in p.evidence
 
 
 def test_judge_b_valid_confidence_passes_parse():
-    """Fix 4 sanity: confidence=0.0 and 1.0 are valid boundary values."""
+    """Fix 4 sanity: confidence=0.0 and 1.0 are valid boundary values.
+
+    Note: confidence=0.0 and 0.5 are below the pilot threshold 0.6, so
+    low_confidence=True; confidence=1.0 is above. parse_ok is True for
+    all three (threshold does not fail parse, only routes to disputed).
+    """
     for conf_val in (0.0, 1.0, 0.5):
-        raw = json.dumps({"preferred": "A", "confidence": conf_val, "evidence": "ok", "reason": ""})
-        _, conf, _, parse_ok, _is_tie = parse_judge_b_response(raw, candidate_is_a=True)
-        assert parse_ok is True
-        assert conf == conf_val
+        raw = json.dumps({"preferred": "A", "confidence": conf_val, "evidence": "ok",
+                          "scores": _VALID_SCORES, "reason": ""})
+        p = parse_judge_b_response(raw, candidate_is_a=True)
+        assert p.parse_ok is True
+        assert p.confidence == conf_val
+    # Boundary: 0.6 exactly is NOT low-confidence (< is strict).
+    raw = json.dumps({"preferred": "A", "confidence": 0.6, "evidence": "ok",
+                      "scores": _VALID_SCORES, "reason": ""})
+    p = parse_judge_b_response(raw, candidate_is_a=True)
+    assert p.parse_ok is True
+    assert p.low_confidence is False
 
 
 def test_judge_b_low_confidence_routes_to_disputed(monkeypatch):
-    """Fix 4: low confidence (below 0.6 pilot threshold) => disputed.
+    """Major-1: low confidence (below 0.6 pilot threshold) => disputed.
 
-    The pilot calibration will determine the exact threshold; for now
-    we document that low-confidence passed verdicts should be treated
-    as disputed by the pipeline (this is a policy check, not a parse
-    check). The parse layer accepts any [0,1] value; the pipeline
-    layer is responsible for the threshold.
+    Both runs prefer the candidate, but confidence=0.3 < 0.6 on both
+    runs. parse_ok=True (0.3 is in [0,1]), scores are valid, no
+    contradiction — but low_confidence=True on both runs, so the
+    judge_b() decision logic routes to disputed instead of passed.
+    The threshold can only be re-tuned after 30-sample calibration.
     """
     candidate = {
         "sample_spec_id": "test_low_conf",
@@ -1431,16 +1498,20 @@ def test_judge_b_low_confidence_routes_to_disputed(monkeypatch):
     def mock_call(messages, **kwargs):
         call_count[0] += 1
         # Both runs prefer candidate but with very low confidence (0.3)
-        return json.dumps({"preferred": "A" if call_count[0] == 1 else "B",
-                           "confidence": 0.3, "evidence": "weak", "reason": "..."})
+        if call_count[0] == 1:
+            return json.dumps({"preferred": "A", "confidence": 0.3, "evidence": "weak",
+                               "scores": _SCORES_A_HIGHER, "reason": "..."})
+        else:
+            return json.dumps({"preferred": "B", "confidence": 0.3, "evidence": "weak",
+                               "scores": _SCORES_B_HIGHER, "reason": "..."})
     monkeypatch.setattr("judge_kisaki_llm_v4.call_judge_b", mock_call)
     result = judge_b(candidate, negative, "test_low_conf")
-    # Parse succeeds (0.3 is in [0,1]), decision is "passed" by the double-order rule.
-    # The pipeline layer should check confidence and route low-conf to disputed.
-    assert result.final_decision == "passed"
+    # Major-1: low confidence routes to disputed, NOT passed
+    assert result.final_decision == "disputed"
     assert result.confidence_run1 == 0.3
     assert result.confidence_run2 == 0.3
-    # Document: pipeline policy should treat avg confidence < 0.6 as disputed
+    assert result.low_confidence_run1 is True
+    assert result.low_confidence_run2 is True
 
 
 # ---------------------------------------------------------------------------

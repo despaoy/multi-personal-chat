@@ -51,15 +51,15 @@ except ImportError:
 # model identities used — required for reproducibility and for the
 # "independent multi-Judge committee" claim (different model families).
 #
-# User-confirmed model assignment (from prior session):
-#   Judge A    -> qwen-max       (Qwen family, strong CN character understanding)
-#   Judge B    -> deepseek-chat  (DeepSeek family, pairwise reasoning)
-#   Generator  -> deepseek-chat  (DeepSeek family)
-# User originally referred to Judge B as "deepseek-v4-pro", but no such
-# public model identifier exists on the DeepSeek API as of 2026-07; the
-# current production model is ``deepseek-chat`` (DeepSeek-V3 lineage).
-# This discrepancy is recorded in ``version_note`` so the research report
-# can document the actual model used versus the user's intent.
+# Current model assignment (V2.1 contract):
+#   Judge A    -> qwen3-max-2026-01-23  (Qwen family, fixed snapshot)
+#   Judge B    -> deepseek-v4-pro       (DeepSeek family, pairwise reasoning)
+#   Generator  -> deepseek-v4-flash     (DeepSeek family)
+# Note: deepseek-chat was deprecated on 2026-07-24; both DeepSeek roles
+# now use the v4 lineage. Judge A and Judge B are from different model
+# families, so the "independent multi-Judge committee" claim holds.
+# Generator and Judge B share the DeepSeek family — self-preference risk
+# is documented in build_judge_config() and mitigated by Judge A.
 
 MODEL_REGISTRY: dict[str, dict[str, str]] = {
     "judge_a": {
@@ -106,7 +106,7 @@ DEEPSEEK_GENERATOR_MODEL = MODEL_REGISTRY["generator"]["model_id"]
 DEEPSEEK_JUDGE_B_MODEL = MODEL_REGISTRY["judge_b"]["model_id"]
 
 
-def build_judge_config() -> dict[str, Any]:
+def build_judge_config(*, strict_similarity: bool = True) -> dict[str, Any]:
     """Build a judge_config.json payload recording all model identities.
 
     Major-9: this payload should be written to ``output_dir/judge_config.json``
@@ -115,20 +115,26 @@ def build_judge_config() -> dict[str, Any]:
     are from different model families (true committee) or the same family
     (two-stage discrimination only).
 
-    Major fix (similarity backend): also records the copy-detection
-    similarity backend (BGE embedding vs char-ngram fallback) and its
-    mode, so formal runs can be validated as using the authoritative
-    embedding backend.
+    Major-3 fix: when ``strict_similarity=True`` (default, required for
+    Pilot/formal runs), a missing BGE model causes this function to RAISE
+    RuntimeError instead of writing ``authoritative=false`` and returning
+    a non-authoritative config. The pipeline must stop before any API
+    call. Pass ``strict_similarity=False`` only for local dev where the
+    fallback metric is explicitly acceptable.
     """
     families = {MODEL_REGISTRY["judge_a"]["model_family"], MODEL_REGISTRY["judge_b"]["model_family"]}
     is_cross_family = len(families) > 1
 
-    # Record similarity backend info (may raise in strict mode if BGE
-    # is missing — that's the desired fail-fast behaviour).
+    # Record similarity backend info. In strict mode (default) a missing
+    # BGE model raises and aborts the run before any API call. In
+    # non-strict mode the exception is captured so the config can still
+    # be written (dev/test only — results will be non-authoritative).
+    from hard_gate_kisaki_v4 import get_similarity_backend_info  # type: ignore
     try:
-        from hard_gate_kisaki_v4 import get_similarity_backend_info  # type: ignore
         similarity_info = get_similarity_backend_info()
     except Exception as e:
+        if strict_similarity:
+            raise
         similarity_info = {
             "backend": "unavailable",
             "error": f"{type(e).__name__}: {e}",
@@ -525,9 +531,45 @@ class JudgeBResult:
     is_tie_run2: bool = False
     first_position_a_run1: bool = False
     first_position_a_run2: bool = False
+    # Major-1 fix: low-confidence routing. Pilot threshold 0.6; if either
+    # run's confidence is below this, the sample routes to disputed
+    # (cannot trust the verdict). The threshold can only be re-tuned
+    # after 30-sample calibration with human agreement data.
+    low_confidence_run1: bool = False
+    low_confidence_run2: bool = False
+    # Major-2 fix: per-run 4-dim scores and contradiction flag. When the
+    # judge's ``preferred`` disagrees with the score totals (e.g. says
+    # preferred=A but B scores strictly higher on all four dims), the run
+    # is marked contradictory and the sample routes to disputed.
+    scores_a_run1: dict[str, float] = field(default_factory=dict)
+    scores_b_run1: dict[str, float] = field(default_factory=dict)
+    scores_a_run2: dict[str, float] = field(default_factory=dict)
+    scores_b_run2: dict[str, float] = field(default_factory=dict)
+    score_contradiction_run1: str = ""
+    score_contradiction_run2: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
+
+
+@dataclass
+class JudgeBParsed:
+    """Structured result of parsing one Judge B run.
+
+    Major-2 fix: replaces the loose 5-tuple return of
+    ``parse_judge_b_response``. Captures scores, contradiction info, and
+    the low-confidence flag alongside the original preferred/confidence
+    fields, so ``judge_b`` can route disputed verdicts with full context.
+    """
+    parse_ok: bool
+    prefers_candidate: bool
+    confidence: float
+    evidence: str
+    is_tie: bool
+    low_confidence: bool = False
+    scores_a: dict[str, float] = field(default_factory=dict)
+    scores_b: dict[str, float] = field(default_factory=dict)
+    score_contradiction: str = ""
 
 
 # ---------------------------------------------------------------------------

@@ -1,12 +1,30 @@
 """Build a stratified quota_plan.json for the Kisaki V4 calibration run.
 
 Reads v3_negative_pool.jsonl, distributes a target sample count across all
-scenes proportionally (with a minimum of 2 per scene that has >=2 samples),
+scenes proportionally (with a minimum of N per scene that has >=N samples),
 and deterministically picks sample_spec_ids by even-spacing sampling so the
 plan is reproducible.
 
+Major-4 fix: the plan now also records ``style_targets`` (documented goals
+for meta-narrative / laughter / sharpness / 正因如此 / length distribution
+that the human reviewer should check during calibration, since the v3
+negative pool does not carry per-sample style tags) and ``pool_warnings``
+(scenes where ``available`` is below the formal-training requirement of
+8-10 per scene, so the operator knows the current pool is only sufficient
+for Pilot calibration, not for the final 111-sample training set).
+
+Major-5 fix: the plan now emits ``ordered_sample_spec_ids`` — a round-
+robin interleaving of the selected ids across scenes — so the pipeline
+processes samples in truly stratified order rather than following the
+negative-pool file order (which clusters same-scene samples and would
+make a ``--limit`` cap over-represent the first scene).
+
 Output: quota_plan.json next to the negative pool, with:
   - per-scene quota and selected sample_spec_ids
+  - ordered_sample_spec_ids (round-robin interleaved)
+  - style_targets (documented, not enforced by code)
+  - pool_warnings (scenes below formal-training sufficiency)
+  - pool_sufficiency_note
   - SHA256 of the source pool (for run_manifest provenance)
   - plan_version and created_at
 
@@ -34,6 +52,42 @@ OUTPUT_PATH = (
     / "experiments" / "v3" / "llm_v4_judged" / "quota_plan.json"
 )
 
+# Major-4: formal training set requires 8-10 samples per scene. Scenes
+# below this threshold are flagged in pool_warnings so the operator knows
+# the current pool only supports Pilot calibration, not the final 111-
+# sample training set (which requires new human prompt specs).
+FORMAL_MIN_PER_SCENE = 8
+
+# Major-4: documented style targets for the human reviewer. These are
+# NOT enforced by the pipeline (the v3 negative pool has no style tags),
+# but they remind the reviewer to check coverage during calibration. The
+# final training set must hit these targets; Pilot calibration only
+# samples them.
+STYLE_TARGETS: dict[str, dict[str, Any]] = {
+    "meta_narrative": {
+        "target_share": 0.15,
+        "note": "samples where 1 meta-narrative word is character-appropriate (书籍讨论/角色设定/观点讨论/突发奇想/回忆故事)",
+    },
+    "laughter_diversity": {
+        "target_kinds": ["呼呼呼", "噗噗", "哎呀"],
+        "note": "at least 2 distinct laughter kinds across the calibration set",
+    },
+    "sharp_expression": {
+        "target_count": 5,
+        "note": "samples containing sharp sarcastic expressions (恕我拒绝/你疯了吗/这可不行/太危险)",
+    },
+    "zheng_yin_ci": {
+        "target_max_per_sample": 1,
+        "target_share_le_0_3": 0.7,
+        "note": "正因如此 should appear in <=30% of samples, at most once per sample",
+    },
+    "length_distribution": {
+        "target_short_share": 0.68,
+        "short_range": "10-40 chars",
+        "note": "68%+ of assistant turns should be 10-40 chars (matches original character style)",
+    },
+}
+
 
 def _sha256_file(path: Path) -> str:
     h = hashlib.sha256()
@@ -55,6 +109,29 @@ def _even_spaced_pick(items: list[str], k: int) -> list[str]:
     if k <= 0:
         return []
     return [items[int(i * n / k)] for i in range(k)]
+
+
+def _interleave_round_robin(
+    scene_to_ids: dict[str, list[str]],
+    scene_order: list[str],
+) -> list[str]:
+    """Major-5: round-robin interleave ids across scenes.
+
+    Takes one id from each scene in turn (in ``scene_order``), repeating
+    until all lists are exhausted. This produces an ordering where no two
+    consecutive samples come from the same scene when there are >=2 scenes
+    with samples — preventing the run from clustering on one scene early.
+    """
+    queues: dict[str, list[str]] = {
+        s: list(scene_to_ids.get(s, [])) for s in scene_order
+    }
+    ordered: list[str] = []
+    while any(queues.values()):
+        for scene in scene_order:
+            q = queues[scene]
+            if q:
+                ordered.append(q.pop(0))
+    return ordered
 
 
 def build_plan(target: int, min_per_scene: int) -> dict[str, Any]:
@@ -101,8 +178,12 @@ def build_plan(target: int, min_per_scene: int) -> dict[str, Any]:
             current += add
 
     scenes_block: dict[str, dict[str, Any]] = {}
+    selected_per_scene: dict[str, list[str]] = {}
     selected_total = 0
-    for scene in sorted(quota):
+    # Major-5: scene_order is sorted alphabetically for deterministic
+    # round-robin interleaving.
+    scene_order = sorted(quota.keys())
+    for scene in scene_order:
         q = quota[scene]
         ids = _even_spaced_pick(scene_ids[scene], q)
         scenes_block[scene] = {
@@ -110,10 +191,49 @@ def build_plan(target: int, min_per_scene: int) -> dict[str, Any]:
             "quota": q,
             "sample_spec_ids": ids,
         }
+        selected_per_scene[scene] = ids
         selected_total += len(ids)
 
+    # Major-5: build the interleaved ordering.
+    ordered_sample_spec_ids = _interleave_round_robin(
+        selected_per_scene, scene_order,
+    )
+
+    # Major-4: flag scenes where the pool is below the formal-training
+    # requirement. These scenes can still be used for Pilot calibration
+    # but cannot support the final 111-sample training set without new
+    # human prompt specs.
+    pool_warnings: list[dict[str, Any]] = []
+    for scene in scene_order:
+        available = scene_counter[scene]
+        if available < FORMAL_MIN_PER_SCENE:
+            pool_warnings.append({
+                "scene": scene,
+                "available": available,
+                "formal_min_required": FORMAL_MIN_PER_SCENE,
+                "severity": "critical" if available < 3 else "major",
+                "message": (
+                    f"scene '{scene}' has only {available} sample(s) in the "
+                    f"pool; formal training set requires >= {FORMAL_MIN_PER_SCENE}. "
+                    "Pilot calibration can proceed but the final 111-sample "
+                    "training set needs new human prompt specs for this scene."
+                ),
+            })
+
+    pool_sufficiency_note = (
+        f"Pool has {total} samples across {len(scenes_block)} scenes. "
+        f"Formal training set requires >={FORMAL_MIN_PER_SCENE} per scene "
+        f"({len(scenes_block) * FORMAL_MIN_PER_SCENE} minimum total). "
+        + (
+            "Pool is INSUFFICIENT for the formal training set; new human "
+            "prompt specs are required before Stage E."
+            if pool_warnings
+            else "Pool is sufficient for the formal training set."
+        )
+    )
+
     plan = {
-        "plan_version": 1,
+        "plan_version": 2,
         "created_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
         "source_pool_path": str(POOL_PATH.relative_to(PROJECT_ROOT)).replace("\\", "/"),
         "source_pool_sha256": _sha256_file(POOL_PATH),
@@ -123,6 +243,14 @@ def build_plan(target: int, min_per_scene: int) -> dict[str, Any]:
         "scenes_count": len(scenes_block),
         "selected_total": selected_total,
         "scenes": scenes_block,
+        # Major-5: interleaved ordering consumed by run_pipeline.
+        "ordered_sample_spec_ids": ordered_sample_spec_ids,
+        # Major-4: documented style targets (reviewer-checked, not code-enforced).
+        "style_targets": STYLE_TARGETS,
+        # Major-4: pool sufficiency diagnostics.
+        "pool_warnings": pool_warnings,
+        "pool_sufficiency_note": pool_sufficiency_note,
+        "formal_min_per_scene": FORMAL_MIN_PER_SCENE,
     }
     return plan
 
@@ -147,9 +275,15 @@ def main() -> int:
     print(f"target_total: {plan['target_total']}")
     print(f"selected_total: {plan['selected_total']}")
     print(f"scenes_count: {plan['scenes_count']}")
+    print(f"ordered_sample_spec_ids: {len(plan['ordered_sample_spec_ids'])} ids (round-robin interleaved)")
     print("per-scene quota:")
     for scene, block in plan["scenes"].items():
         print(f"  {scene}: {block['quota']} / {block['available']}")
+    if plan["pool_warnings"]:
+        print(f"\n[pool_warnings] {len(plan['pool_warnings'])} scene(s) below formal minimum:")
+        for w in plan["pool_warnings"]:
+            print(f"  [{w['severity']}] {w['scene']}: {w['available']}/{w['formal_min_required']}")
+        print(f"\n{plan['pool_sufficiency_note']}")
     return 0
 
 

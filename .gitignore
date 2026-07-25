@@ -14,6 +14,8 @@ node_modules/
 coverage/
 *.lcov
 .nyc_output
+.pytest_cache/
+.pytest_v4_verify_*/
 
 # === Environment variables (敏感配置) ===
 .env
