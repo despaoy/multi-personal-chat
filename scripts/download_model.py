@@ -8,6 +8,12 @@
   python scripts/download_model.py --model Qwen2.5-7B-Instruct --source modelscope
   python scripts/download_model.py --model Qwen3-8B --source hf
   python scripts/download_model.py --model Qwen3-8B-Instruct --output /custom/path
+
+注意:
+  Qwen3-8B 本身即为 Post-training 完成的 Instruct 版本（混合 thinking/non-thinking），
+  Qwen 官方未发布独立的 `-Instruct` 后缀变体。`Qwen3-8B-Instruct` 选项会下载
+  modelscope/HF 上的 `Qwen/Qwen3-8B` 权重，并放入名为 `Qwen3-8B-Instruct` 的目录，
+  以保持与项目训练配置中的 `base_model_path` 约定一致。
 """
 from __future__ import annotations
 
@@ -20,10 +26,13 @@ LAB_ROOT = Path(os.getenv("QQCHAT_LAB_ROOT", "/root/autodl-tmp"))
 MODELS_DIR = LAB_ROOT / "runtime" / "models"
 
 # 模型 ID 映射
+# - modelscope/HF 上均不存在独立的 `Qwen/Qwen3-8B-Instruct`，因为 Qwen3-8B 本身已是
+#   Post-training 完成的 Instruct 版本（支持 thinking/non-thinking 切换）。
+# - "Qwen3-8B-Instruct" 在本项目里仅用作目录名，下载时映射到 `Qwen/Qwen3-8B` 权重。
 MODEL_IDS: dict[str, dict[str, str | None]] = {
     "Qwen3-8B-Instruct": {
-        "modelscope": None,  # modelscope 上暂无
-        "huggingface": "Qwen/Qwen3-8B-Instruct",
+        "modelscope": "Qwen/Qwen3-8B",
+        "huggingface": "Qwen/Qwen3-8B",
     },
     "Qwen3-8B": {
         "modelscope": "Qwen/Qwen3-8B",

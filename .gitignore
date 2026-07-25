@@ -182,6 +182,7 @@ TECHNICAL_DOC.md
 # === 临时 SSH 调试脚本和隧道脚本 ===
 ssh_*.py
 .qqchat_*.py
+.tmp_*.py
 
 # === pnpm 本地缓存 ===
 .pnpm-store/
