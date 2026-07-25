@@ -42,6 +42,10 @@ MODEL_IDS: dict[str, dict[str, str | None]] = {
         "modelscope": "Qwen/Qwen2.5-7B-Instruct",
         "huggingface": "Qwen/Qwen2.5-7B-Instruct",
     },
+    "bge-small-zh-v1.5": {
+        "modelscope": "BAAI/bge-small-zh-v1.5",
+        "huggingface": "BAAI/bge-small-zh-v1.5",
+    },
 }
 
 

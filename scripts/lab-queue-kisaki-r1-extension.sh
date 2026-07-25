@@ -75,6 +75,10 @@ if ! git diff --quiet || ! git diff --cached --quiet || [[ -n "$(git ls-files --
   echo 'refusing_dirty_source=true' >&2
   exit 2
 fi
+# 训练 E1/E2（baseline + NEFTune），供 prompt-v2 baseline 评估使用
+# run_variant 内置 is_complete 幂等检查，已完成的 variant 会自动跳过
+for variant in e1 e2; do run_variant "$variant"; done
+
 gpu=$(wait_for_gpu)
 CURRENT_STAGE=baseline_prompt_v2_seed_${SEED}
 write_state evaluating "variants=e1,e2 gpu=$gpu prompt=v2 scope=baseline"

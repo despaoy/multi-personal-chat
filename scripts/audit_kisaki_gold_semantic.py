@@ -19,9 +19,10 @@ from evaluation.experiment_contracts import dialogue_prompts  # noqa: E402
 EXPERIMENT_DIR = BACKEND / "data" / "character_dialogues" / "experiments"
 DEFAULT_CANDIDATES = BACKEND / "evaluation" / "kisaki_gold_set_v2_candidates.json"
 DEFAULT_AUDIT = EXPERIMENT_DIR / "gold_v2_leakage_audit.json"
+_LAB_ROOT = os.getenv("QQCHAT_LAB_ROOT", "/home/szw/lhm2")
 DEFAULT_MODEL = os.getenv(
     "RAG_EMBEDDING_MODEL",
-    "/home/szw/lhm2/runtime/models/bge-small-zh-v1.5",
+    str(Path(_LAB_ROOT) / "runtime" / "models" / "bge-small-zh-v1.5"),
 )
 
 
