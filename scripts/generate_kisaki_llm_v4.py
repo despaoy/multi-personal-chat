@@ -417,8 +417,13 @@ def generate_one_candidate(
             return cached["candidate"]
 
     # 5. Call DeepSeek with exponential backoff
+    # Smoke fix: deepseek-v4-flash is a reasoning model — reasoning_tokens
+    # come out of the max_tokens budget, so 512 left no room for content
+    # (every smoke sample returned empty). 4096 gives reasoning ~3k and
+    # content ~1k, which is enough for a conversations JSON (≤100 chars
+    # per assistant turn × 1-3 turns + few-shot scaffolding).
     raw = exponential_backoff_retry(
-        lambda: call_generator(messages, temperature=0.8, max_tokens=512),
+        lambda: call_generator(messages, temperature=0.8, max_tokens=4096),
         max_attempts=4,
         base_delay=1.0,
     )

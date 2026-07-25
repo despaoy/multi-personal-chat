@@ -229,7 +229,7 @@ def judge_a(
             return parse_judge_a_response(cached["raw"])
 
     raw = exponential_backoff_retry(
-        lambda: call_judge_a(messages, temperature=0.0, max_tokens=800),
+        lambda: call_judge_a(messages, temperature=0.0, max_tokens=4096),
         max_attempts=4,
         base_delay=1.0,
     )
@@ -401,14 +401,14 @@ def judge_b(
             raw1 = json.loads(cache_file1.read_text(encoding="utf-8"))["raw"]
         else:
             raw1 = exponential_backoff_retry(
-                lambda: call_judge_b(messages1, temperature=0.0, max_tokens=600),
+                lambda: call_judge_b(messages1, temperature=0.0, max_tokens=4096),
                 max_attempts=4, base_delay=1.0,
             )
             cache_file1.parent.mkdir(parents=True, exist_ok=True)
             cache_file1.write_text(json.dumps({"raw": raw1}, ensure_ascii=False, indent=2), encoding="utf-8")
     else:
         raw1 = exponential_backoff_retry(
-            lambda: call_judge_b(messages1, temperature=0.0, max_tokens=600),
+            lambda: call_judge_b(messages1, temperature=0.0, max_tokens=4096),
             max_attempts=4, base_delay=1.0,
         )
 
@@ -428,14 +428,14 @@ def judge_b(
             raw2 = json.loads(cache_file2.read_text(encoding="utf-8"))["raw"]
         else:
             raw2 = exponential_backoff_retry(
-                lambda: call_judge_b(messages2, temperature=0.0, max_tokens=600),
+                lambda: call_judge_b(messages2, temperature=0.0, max_tokens=4096),
                 max_attempts=4, base_delay=1.0,
             )
             cache_file2.parent.mkdir(parents=True, exist_ok=True)
             cache_file2.write_text(json.dumps({"raw": raw2}, ensure_ascii=False, indent=2), encoding="utf-8")
     else:
         raw2 = exponential_backoff_retry(
-            lambda: call_judge_b(messages2, temperature=0.0, max_tokens=600),
+            lambda: call_judge_b(messages2, temperature=0.0, max_tokens=4096),
             max_attempts=4, base_delay=1.0,
         )
 

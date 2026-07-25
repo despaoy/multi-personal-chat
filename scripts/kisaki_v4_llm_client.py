@@ -379,9 +379,17 @@ def call_generator(
     messages: list[dict[str, str]],
     *,
     temperature: float = 0.8,
-    max_tokens: int = 512,
+    max_tokens: int = 4096,
 ) -> str:
-    """Call the DeepSeek generator."""
+    """Call the DeepSeek generator.
+
+    Smoke fix: default max_tokens raised from 512 to 4096 because
+    deepseek-v4-flash is a reasoning model — reasoning_tokens are billed
+    against the max_tokens budget, so 512 left no room for visible content.
+    Also enable response_format=json_object (the generator prompt always
+    asks for a JSON conversations array, so this is safe and improves
+    parseability).
+    """
     return call_openai_compatible(
         base_url=DEEPSEEK_BASE_URL,
         api_key=require_deepseek_key(),
@@ -389,6 +397,7 @@ def call_generator(
         messages=messages,
         temperature=temperature,
         max_tokens=max_tokens,
+        response_format_json=True,
     )
 
 
@@ -396,9 +405,14 @@ def call_judge_a(
     messages: list[dict[str, str]],
     *,
     temperature: float = 0.0,
-    max_tokens: int = 800,
+    max_tokens: int = 4096,
 ) -> str:
-    """Call Qwen-Max for 5-dimension semantic scoring (Judge A)."""
+    """Call Qwen-Max for 5-dimension semantic scoring (Judge A).
+
+    Smoke fix: max_tokens raised from 800 to 4096. qwen3-max-2026-01-23 is
+    a reasoning model — reasoning_tokens are billed against max_tokens, so
+    800 could leave no room for the JSON verdict on longer prompts.
+    """
     return call_openai_compatible(
         base_url=QWEN_BASE_URL,
         api_key=require_qwen_key(),
@@ -414,9 +428,15 @@ def call_judge_b(
     messages: list[dict[str, str]],
     *,
     temperature: float = 0.0,
-    max_tokens: int = 600,
+    max_tokens: int = 4096,
 ) -> str:
-    """Call DeepSeek for pairwise comparison (Judge B)."""
+    """Call DeepSeek for pairwise comparison (Judge B).
+
+    Smoke fix: max_tokens raised from 600 to 4096. deepseek-v4-pro is a
+    reasoning model — reasoning_tokens consumed the entire 600-token
+    budget in the smoke run, producing empty/truncated JSON and sending
+    every sample to disputed.
+    """
     return call_openai_compatible(
         base_url=DEEPSEEK_BASE_URL,
         api_key=require_deepseek_key(),
