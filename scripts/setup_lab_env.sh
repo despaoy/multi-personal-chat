@@ -84,7 +84,7 @@ fi
 # 5. 模型检查
 echo ""
 echo "=== 5. 模型检查 ==="
-for model in Qwen3-8B-Instruct Qwen2.5-7B-Instruct; do
+for model in Qwen3-8B-Instruct Qwen2.5-7B-Instruct bge-small-zh-v1.5; do
     path="$LAB_ROOT/runtime/models/$model"
     if [[ -f "$path/config.json" ]]; then
         size=$(du -sh "$path" 2>/dev/null | cut -f1)
@@ -119,5 +119,26 @@ echo ""
 echo "或者一行搞定:"
 echo "  echo 'export QQCHAT_LAB_ROOT=$LAB_ROOT' >> ~/.bashrc"
 echo "  echo 'export QQCHAT_PYTHON=$VENV_PYTHON' >> ~/.bashrc"
+echo ""
+
+# 8. 下载缺失模型
+echo "=== 8. 下载缺失模型 ==="
+NEED_DOWNLOAD=()
+for model in Qwen3-8B-Instruct bge-small-zh-v1.5; do
+    path="$LAB_ROOT/runtime/models/$model"
+    [[ -f "$path/config.json" ]] || NEED_DOWNLOAD+=("$model")
+done
+if [[ ${#NEED_DOWNLOAD[@]} -gt 0 ]]; then
+    echo "以下模型缺失，可一键下载:"
+    for model in "${NEED_DOWNLOAD[@]}"; do
+        echo "  python $PROJECT/scripts/download_model.py --model $model"
+    done
+    echo ""
+    echo "或下载全部:"
+    echo "  for m in ${NEED_DOWNLOAD[*]}; do python $PROJECT/scripts/download_model.py --model \$m; done"
+else
+    echo "所有必需模型已就绪"
+fi
+
 echo ""
 echo "=== 配置完成 ==="
