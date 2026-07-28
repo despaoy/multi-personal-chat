@@ -102,6 +102,9 @@ async def update_config(request: Request, current_user: dict = Depends(get_curre
 @router.get("/api/model/status")
 async def get_model_status():
     """获取模型状态"""
+    # C3 fix: 原先失败时返回 HTTP 200 + {"success": False}，破坏 REST 语义，
+    # 前端需通过 success 字段而非状态码判断错误。改为 raise HTTPException，
+    # 与模块内其他端点（update_config、set_model_provider）的失败处理一致。
     try:
         from inference.model_manager import get_model_manager
         model_manager = get_model_manager()
@@ -110,11 +113,8 @@ async def get_model_status():
             "status": model_manager.get_status()
         }
     except Exception as e:
-        logger.error(f"获取模型状态失败: {e}")
-        return {
-            "success": False,
-            "error": str(e)
-        }
+        logger.error(f"获取模型状态失败: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="获取模型状态失败")
 
 
 @router.put("/api/model/provider")

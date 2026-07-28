@@ -37,10 +37,13 @@ RUN if [ "$INSTALL_GPU_DEPS" = "true" ]; then \
 COPY . .
 
 # Non-secret runtime defaults. Database and authentication settings are injected by the deploy environment.
+# M5 fix: VLLM_ENABLED=false 与 MODEL_PROVIDER=vllm 矛盾——/ready 会因
+# MODEL_PROVIDER=vllm 认为 vLLM 必需，但 VLLM_ENABLED=false 表示无 vLLM 服务，
+# 导致健康检查永远 503。默认设为空，docker-compose.yml 会正确覆盖两者。
 ENV BACKEND_WORKERS=1
 ENV REDIS_URL=redis://redis:6379/0
 ENV VLLM_ENABLED=false
-ENV MODEL_PROVIDER=vllm
+ENV MODEL_PROVIDER=
 ENV VLLM_BASE_URL=http://vllm:8001
 
 EXPOSE 8000

@@ -81,6 +81,11 @@ async def delete_model(model_name: str, current_user: dict = Depends(get_current
             }
         else:
             raise HTTPException(status_code=400, detail="删除模型失败")
+    except HTTPException:
+        # C1 fix: HTTPException 是 Exception 子类，必须单独捕获并 re-raise，
+        # 否则下方 except Exception 会把 400 改写成 500，丢失原始状态码与语义。
+        # 对比 api/router.py:185、api/auth.py:116 均使用此模式。
+        raise
     except Exception as e:
         logger.error(f"删除模型失败: {e}")
         raise HTTPException(status_code=500, detail=str(e))

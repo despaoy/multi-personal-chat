@@ -612,8 +612,11 @@ class ApiClient {
    * @returns {Promise<HealthResponse>} 服务健康状态及时间戳
    */
   async health(): Promise<HealthResponse> {
-    // 健康检查端点在 /health，不在 /api/health 下
-    const response = await fetch('/health', { credentials: 'include' });
+    // Me3 fix: 走 Next.js 代理路由 /api/health 而非直连 /health。
+    // 原先直连 /health 在纯 Next.js dev 模式（无 nginx）下会 404，
+    // 因为 Next.js 根路径无对应的 page.tsx/route.ts。
+    // src/app/api/health/route.ts 已存在并正确代理到后端 /health。
+    const response = await fetch(`${API_BASE_URL}/health`, { credentials: 'include' });
     if (!response.ok) throw new Error('Health check failed');
     return response.json();
   }

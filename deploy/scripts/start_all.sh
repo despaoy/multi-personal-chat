@@ -181,6 +181,14 @@ LOG_LEVEL=INFO
 
 # ---- 前端配置 ----
 NEXT_PUBLIC_API_URL=/api
+
+# ---- Docker Compose 必需变量 (M3 fix) ----
+# docker-compose.yml 使用 \${VAR:?set VAR} 强制校验，缺失会导致启动失败
+# 请将 CHANGE_ME_ 替换为实际的强随机值
+PG_PASSWORD=CHANGE_ME_TO_A_SECURE_PASSWORD
+JWT_SECRET=CHANGE_ME_TO_A_SECURE_JWT_SECRET_AT_LEAST_32_CHARS
+ALLOWED_ORIGINS=http://localhost:${DEFAULT_FRONTEND_PORT},http://localhost:${DEFAULT_NGINX_PORT}
+ASTRBOT_INTEGRATION_TOKEN=CHANGE_ME_TO_A_RANDOM_TOKEN
 EOF
 
     log_info "默认配置已生成，请检查: ${ENV_FILE}"
