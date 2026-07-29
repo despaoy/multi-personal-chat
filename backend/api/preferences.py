@@ -1,4 +1,4 @@
-"""偏好数据管理 API - DPO/ORPO 训练数据管理"""
+﻿"""偏好数据管理 API - DPO/ORPO 训练数据管理"""
 import json
 import logging
 import secrets
@@ -8,7 +8,7 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Depends
 from app.dependencies import get_current_user
 from db.adapter import db
-from db.models import PreferencePairCreate, PreferencePairUpdate, PreferenceExportRequest, SampleFromHistoryRequest
+from db.schemas import PreferencePairCreate, PreferencePairUpdate, PreferenceExportRequest, SampleFromHistoryRequest
 
 logger = logging.getLogger(__name__)
 router = APIRouter()

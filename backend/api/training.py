@@ -1,4 +1,4 @@
-"""LoRA训练管理API"""
+﻿"""LoRA训练管理API"""
 import asyncio
 import json
 import logging
@@ -13,7 +13,7 @@ from pydantic import BaseModel
 from typing import Optional
 
 from db.adapter import db
-from db.models import DatasetUploadRequest, TrainingStartRequest, DialogueGenerateRequest
+from db.schemas import DatasetUploadRequest, TrainingStartRequest, DialogueGenerateRequest
 from app.config import INPUT_VALIDATOR_AVAILABLE, TRAINING_SCHEMA, generation_state, generation_state_lock, _search_character_info
 
 logger = logging.getLogger(__name__)

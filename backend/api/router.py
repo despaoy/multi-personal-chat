@@ -1,4 +1,4 @@
-"""多 LoRA 路由 API - 路由配置/适配器兼容性/路由日志"""
+﻿"""多 LoRA 路由 API - 路由配置/适配器兼容性/路由日志"""
 import json
 import logging
 from datetime import datetime, timezone
@@ -7,7 +7,7 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Depends
 from app.dependencies import get_current_user, get_current_admin
 from db.adapter import db
-from db.models import RouterConfigUpdate
+from db.schemas import RouterConfigUpdate
 
 logger = logging.getLogger(__name__)
 router = APIRouter()

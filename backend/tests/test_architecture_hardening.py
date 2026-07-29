@@ -1,4 +1,4 @@
-"""Regression coverage for the architecture hardening pass."""
+﻿"""Regression coverage for the architecture hardening pass."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ import pytest
 
 def test_response_cache_identity_isolated_by_lora_and_config(monkeypatch):
     from api import generate
-    from db.models import MessageRequest
+    from db.schemas import MessageRequest
 
     config = {"temperature": 0.7, "maxTokens": 128, "useKnowledgeBase": False}
     monkeypatch.setattr(generate, "db", SimpleNamespace(config=config))

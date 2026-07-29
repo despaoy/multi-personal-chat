@@ -1,11 +1,11 @@
-"""用户认证API"""
+﻿"""用户认证API"""
 
 import asyncio
 import logging
 import time
 from fastapi import APIRouter, HTTPException, Depends, Response, Request
 
-from db.models import RegisterRequest, LoginRequest
+from db.schemas import RegisterRequest, LoginRequest
 from db.adapter import db
 from app.config import create_access_token
 from app.dependencies import get_current_user

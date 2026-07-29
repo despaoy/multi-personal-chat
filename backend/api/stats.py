@@ -1,4 +1,4 @@
-"""System statistics, service status, and lightweight alert snapshots."""
+﻿"""System statistics, service status, and lightweight alert snapshots."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from fastapi import APIRouter, Depends
 from app.config import service_start_time
 from app.dependencies import get_current_admin
 from db.adapter import db
-from db.models import StatsResponse
+from db.schemas import StatsResponse
 from infra.concurrency_control import inference_runtime
 from infra.observability import count_recent, get_consecutive, snapshot as observability_snapshot
 

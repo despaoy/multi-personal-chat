@@ -1,4 +1,4 @@
-"""消息生成API - 支持vLLM高并发推理"""
+﻿"""消息生成API - 支持vLLM高并发推理"""
 import asyncio
 import hashlib
 import json
@@ -9,7 +9,7 @@ import logging
 from typing import Dict, Any
 from fastapi import APIRouter, HTTPException, Depends
 from app.dependencies import get_current_user
-from db.models import MessageRequest, GenerateResponse
+from db.schemas import MessageRequest, GenerateResponse
 from infra.concurrency_control import InferenceQueueFull, inference_runtime
 from infra.security_utils import strip_control_chars
 from inference.lora_utils import resolve_lora_served_name

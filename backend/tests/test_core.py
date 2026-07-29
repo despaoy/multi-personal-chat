@@ -1,4 +1,4 @@
-"""
+﻿"""
 核心模块单元测试
 
 测试不需要外部服务的核心逻辑：
@@ -433,7 +433,7 @@ class TestMultiPlatformStorage:
         assert db.is_session_bot_enabled(sid, "telegram", "42") is False
 
     def test_message_request_preserves_platform_metadata(self):
-        from db.models import MessageRequest
+        from db.schemas import MessageRequest
 
         req = MessageRequest(
             message="hello",
@@ -797,7 +797,7 @@ class TestAstrBotContracts:
 class TestAstrBotIntegrationFlow:
     async def _call_success(self, monkeypatch, platform, conversation_type, conversation_id):
         from api import integrations
-        from db.models import GenerateResponse
+        from db.schemas import GenerateResponse
 
         temp_db = TestMultiPlatformStorage()._make_db()
         monkeypatch.setenv("ENVIRONMENT", "development")

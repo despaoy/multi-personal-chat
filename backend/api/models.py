@@ -1,10 +1,10 @@
-"""模型管理API"""
+﻿"""模型管理API"""
 import logging
 
 from fastapi import APIRouter, HTTPException, Depends
 from app.dependencies import get_current_user, get_current_admin
 
-from db.models import ModelDownloadRequest
+from db.schemas import ModelDownloadRequest
 
 logger = logging.getLogger(__name__)
 router = APIRouter()

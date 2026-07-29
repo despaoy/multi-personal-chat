@@ -1,4 +1,4 @@
-"""实验管理 API - LoRA 消融/RAG 消融/量化基准"""
+﻿"""实验管理 API - LoRA 消融/RAG 消融/量化基准"""
 import asyncio
 import json
 import logging
@@ -11,7 +11,7 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Depends
 from app.dependencies import get_current_user
 from db.adapter import db
-from db.models import ExperimentStartRequest
+from db.schemas import ExperimentStartRequest
 
 logger = logging.getLogger(__name__)
 router = APIRouter()

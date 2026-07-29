@@ -1,4 +1,4 @@
-"""检索评估数据集管理 API"""
+﻿"""检索评估数据集管理 API"""
 import json
 import logging
 import secrets
@@ -8,7 +8,7 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Depends
 from app.dependencies import get_current_user
 from db.adapter import db
-from db.models import RetrievalEvalQuestionCreate
+from db.schemas import RetrievalEvalQuestionCreate
 
 logger = logging.getLogger(__name__)
 router = APIRouter()

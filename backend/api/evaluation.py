@@ -1,4 +1,4 @@
-"""评估相关 API - Gold 评估集管理与评估运行"""
+﻿"""评估相关 API - Gold 评估集管理与评估运行"""
 import json
 import logging
 import secrets
@@ -9,7 +9,7 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Depends
 from app.dependencies import get_current_user
 from db.adapter import db
-from db.models import EvalRunRequest
+from db.schemas import EvalRunRequest
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -138,7 +138,7 @@ async def get_run_detail(run_id: str, current_user: dict = Depends(get_current_u
 @router.post("/api/feedback")
 async def create_feedback(req: dict, current_user: dict = Depends(get_current_user)):
     """创建用户反馈（在线反馈闭环）"""
-    from db.models import FeedbackCreate
+    from db.schemas import FeedbackCreate
     fb = FeedbackCreate(**req)
     try:
         db.execute_sql_insert(

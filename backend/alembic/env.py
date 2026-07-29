@@ -1,14 +1,26 @@
-"""Alembic 环境配置 - 支持 PostgreSQL 异步迁移"""
+"""Alembic 环境配置 - 支持 PostgreSQL 异步迁移
+
+从 db/models.py 读取 target_metadata，确保迁移与 ORM 模型定义一致。
+"""
 
 import os
 import asyncio
+import sys
 from logging.config import fileConfig
+from pathlib import Path
 
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from alembic import context
+
+# 确保 backend/ 在 sys.path 中，以便导入 db.models
+_backend_dir = Path(__file__).resolve().parent.parent
+if str(_backend_dir) not in sys.path:
+    sys.path.insert(0, str(_backend_dir))
+
+from db.models import Base  # noqa: E402
 
 config = context.config
 
@@ -29,22 +41,32 @@ if not db_url:
 if db_url:
     config.set_main_option("sqlalchemy.url", db_url)
 
+# 单一真相源：db/models.py 的 metadata
+target_metadata = Base.metadata
+
 
 def run_migrations_offline() -> None:
     """离线模式 - 生成SQL脚本而不连接数据库"""
     url = config.get_main_option("sqlalchemy.url")
     context.configure(
         url=url,
-        target_metadata=None,
+        target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
+        compare_type=True,
+        compare_server_default=True,
     )
     with context.begin_transaction():
         context.run_migrations()
 
 
 def do_run_migrations(connection: Connection) -> None:
-    context.configure(connection=connection, target_metadata=None)
+    context.configure(
+        connection=connection,
+        target_metadata=target_metadata,
+        compare_type=True,
+        compare_server_default=True,
+    )
     with context.begin_transaction():
         context.run_migrations()
 

@@ -1,4 +1,4 @@
-"""知识库API - 知识库/文件夹/文档管理 + ZIP上传 + 文件夹扫描 + 搜索"""
+﻿"""知识库API - 知识库/文件夹/文档管理 + ZIP上传 + 文件夹扫描 + 搜索"""
 import asyncio
 import logging
 import threading
@@ -12,7 +12,7 @@ from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Depends
 from app.dependencies import get_current_user, get_current_admin
 
 from db.adapter import db
-from db.models import (
+from db.schemas import (
     KnowledgeBaseCreate, KnowledgeBaseUpdate,
     KnowledgeFolderCreate,
     KnowledgeDocumentCreate, KnowledgeDocumentUpdate,
