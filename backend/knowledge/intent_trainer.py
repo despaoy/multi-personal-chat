@@ -239,58 +239,18 @@ async def generate_samples(
             raise RuntimeError("vLLM服务不可用")
         _add_log("vLLM服务连接成功")
 
-        # ── 4. 为每个知识库生成正例（基于文档内容） ──
-        kb_samples: Dict[str, List[str]] = {}
-        total_kbs = len(selected_kbs)
-        for i, kb in enumerate(selected_kbs):
-            _check_cancelled()
-            progress = 12 + int(40 * i / total_kbs)
-            _generation_status.update(
-                stage="generate_kb",
-                message=f"为「{kb['name']}」生成正例样本 ({i+1}/{total_kbs})...",
-                progress=progress,
+        try:
+            # C11 fix: 用嵌套 try/finally 确保 vllm_client 在所有退出路径上被关闭，
+            # 避免每次样本生成泄漏一个 httpx.AsyncClient 连接池
+            return await _generate_samples_inner(
+                vllm_client, selected_kbs, kb_docs,
+                samples_per_kb, negative_count, lora_name,
             )
-            _add_log(f"生成知识库「{kb['name']}」的正例样本...")
-
-            doc_context = kb_docs.get(kb["name"], "")
-            samples = await _generate_kb_samples_with_docs(
-                vllm_client, kb["name"], doc_context, samples_per_kb, lora_name
-            )
-            kb_samples[kb["name"]] = samples
-            _add_log(f"知识库「{kb['name']}」: 生成 {len(samples)} 条正例")
-
-        # ── 5. 生成通用负例（日常闲聊） ──
-        _check_cancelled()
-        _generation_status.update(stage="generate_neg", message="生成通用负例样本...", progress=60)
-        _add_log("生成通用负例样本...")
-        general_negative_count = max(negative_count // 2, 50)
-        negative_samples = await _generate_negative_samples(vllm_client, general_negative_count, lora_name)
-        _add_log(f"通用负例生成完成: {len(negative_samples)} 条")
-
-        # ── 6. 为每个KB生成硬负例（跨域混淆问题） ──
-        _check_cancelled()
-        _generation_status.update(stage="generate_hard_neg", message="生成跨KB硬负例...", progress=70)
-        _add_log("生成跨KB硬负例样本...")
-        hard_neg_per_kb = max(negative_count // (total_kbs * 2), 10)
-        hard_negatives = await _generate_hard_negatives_per_kb(
-            vllm_client, selected_kbs, kb_docs, hard_neg_per_kb, lora_name
-        )
-        for kb_name, hard_negs in hard_negatives.items():
-            # 硬负例归入对应KB的负例池（标签为"none"，但内容是与该KB混淆的跨域问题）
-            negative_samples.extend(hard_negs)
-            _add_log(f"知识库「{kb_name}」: 生成 {len(hard_negs)} 条硬负例")
-
-        # ── 7. 保存样本 ──
-        kb_samples["none"] = list(set(negative_samples))
-        save_samples(kb_samples)
-
-        total = sum(len(v) for v in kb_samples.values())
-        _add_log(f"样本生成完成，共 {total} 条（含硬负例）")
-
-        _generation_status.update(
-            running=False, stage="done", message="样本生成完成", progress=100,
-        )
-        return {"success": True, "total": total, "stats": {k: len(v) for k, v in kb_samples.items()}}
+        finally:
+            try:
+                await vllm_client.close()
+            except Exception as close_err:
+                logger.warning(f"关闭 vLLM 客户端失败: {close_err}")
 
     except RuntimeError as e:
         if "取消" in str(e):
@@ -301,6 +261,65 @@ async def generate_samples(
     except Exception as e:
         _generation_status.update(running=False, stage="error", message=str(e), progress=0)
         return {"error": str(e)}
+
+
+async def _generate_samples_inner(
+    vllm_client, selected_kbs, kb_docs,
+    samples_per_kb: int, negative_count: int, lora_name: Optional[str],
+) -> Dict[str, Any]:
+    """样本生成主逻辑（由 generate_samples 调用，client 由外层负责关闭）"""
+    # ── 4. 为每个知识库生成正例（基于文档内容） ──
+    kb_samples: Dict[str, List[str]] = {}
+    total_kbs = len(selected_kbs)
+    for i, kb in enumerate(selected_kbs):
+        _check_cancelled()
+        progress = 12 + int(40 * i / total_kbs)
+        _generation_status.update(
+            stage="generate_kb",
+            message=f"为「{kb['name']}」生成正例样本 ({i+1}/{total_kbs})...",
+            progress=progress,
+        )
+        _add_log(f"生成知识库「{kb['name']}」的正例样本...")
+
+        doc_context = kb_docs.get(kb["name"], "")
+        samples = await _generate_kb_samples_with_docs(
+            vllm_client, kb["name"], doc_context, samples_per_kb, lora_name
+        )
+        kb_samples[kb["name"]] = samples
+        _add_log(f"知识库「{kb['name']}」: 生成 {len(samples)} 条正例")
+
+    # ── 5. 生成通用负例（日常闲聊） ──
+    _check_cancelled()
+    _generation_status.update(stage="generate_neg", message="生成通用负例样本...", progress=60)
+    _add_log("生成通用负例样本...")
+    general_negative_count = max(negative_count // 2, 50)
+    negative_samples = await _generate_negative_samples(vllm_client, general_negative_count, lora_name)
+    _add_log(f"通用负例生成完成: {len(negative_samples)} 条")
+
+    # ── 6. 为每个KB生成硬负例（跨域混淆问题） ──
+    _check_cancelled()
+    _generation_status.update(stage="generate_hard_neg", message="生成跨KB硬负例...", progress=70)
+    _add_log("生成跨KB硬负例样本...")
+    hard_neg_per_kb = max(negative_count // (total_kbs * 2), 10)
+    hard_negatives = await _generate_hard_negatives_per_kb(
+        vllm_client, selected_kbs, kb_docs, hard_neg_per_kb, lora_name
+    )
+    for kb_name, hard_negs in hard_negatives.items():
+        # 硬负例归入对应KB的负例池（标签为"none"，但内容是与该KB混淆的跨域问题）
+        negative_samples.extend(hard_negs)
+        _add_log(f"知识库「{kb_name}」: 生成 {len(hard_negs)} 条硬负例")
+
+    # ── 7. 保存样本 ──
+    kb_samples["none"] = list(set(negative_samples))
+    save_samples(kb_samples)
+
+    total = sum(len(v) for v in kb_samples.values())
+    _add_log(f"样本生成完成，共 {total} 条（含硬负例）")
+
+    _generation_status.update(
+        running=False, stage="done", message="样本生成完成", progress=100,
+    )
+    return {"success": True, "total": total, "stats": {k: len(v) for k, v in kb_samples.items()}}
 
 
 def _load_kb_documents(kbs: list) -> Dict[str, str]:

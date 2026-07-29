@@ -20,7 +20,7 @@ import { getSupportedLocales, getSupportedTimezones } from '@/lib/i18n';
 
 export default function SettingsPage() {
   return (
-    <AuthGuard>
+    <AuthGuard requireAdmin>
       <SettingsContent />
     </AuthGuard>
   );
@@ -70,13 +70,14 @@ function SettingsContent() {
         // 如果模型提供商变更，同步切换后端提供商
         if (config.modelProvider) {
           try {
-            await fetch('/api/model/provider', {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ provider: config.modelProvider }),
-            });
-          } catch {
-            // 提供商切换失败不阻塞保存
+            // H2 fix: 此前使用裸 fetch，不处理 401 重定向。
+            // 现通过 api 助手调用，token 过期时自动跳转登录页。
+            await api.setModelProvider(String(config.modelProvider));
+          } catch (err) {
+            // 提供商切换失败不阻塞保存，但必须告知用户
+            toast.warning(
+              `配置已保存，但模型提供商切换失败：${err instanceof Error ? err.message : '未知错误'}`
+            );
           }
         }
         // 立即刷新全局设置，使语言/时区变更即时生效
@@ -379,7 +380,7 @@ function SettingsContent() {
                       <Label>{t('settings.model.provider')}</Label>
                       <p className="text-sm text-muted-foreground">{t('settings.model.providerDesc')}</p>
                       <Select
-                        value={getStr('modelProvider', 'mock')}
+                        value={getStr('modelProvider', 'vllm')}
                         onValueChange={(v) => updateField('modelProvider', v)}
                       >
                         <SelectTrigger>
@@ -391,11 +392,11 @@ function SettingsContent() {
                           <SelectItem value="transformers_peft">Transformers + PEFT (本地)</SelectItem>
                           <SelectItem value="ollama">Ollama (本地)</SelectItem>
                           <SelectItem value="llama_cpp">llama.cpp (本地)</SelectItem>
-                          <SelectItem value="mock">Mock (测试)</SelectItem>
+                          <SelectItem value="mock">Mock (仅开发测试)</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
-                    {getStr('modelProvider', 'mock') === 'openai_compat' && (
+                    {getStr('modelProvider', 'vllm') === 'openai_compat' && (
                       <div className="space-y-4 rounded-lg border p-4 bg-muted/30">
                         <div className="space-y-2">
                           <Label>{t('settings.model.apiBaseUrl')}</Label>
@@ -441,8 +442,9 @@ function SettingsContent() {
                           size="sm"
                           onClick={async () => {
                             try {
-                              const res = await fetch('/api/vllm/status');
-                              const data = await res.json();
+                              // H1 fix: 此前使用裸 fetch，既不检查 response.ok 也不处理 401 重定向。
+                              // 现通过 api 助手调用，确保 token 过期时自动跳转登录页。
+                              const data = await api.getVllmStatus();
                               if (data.enabled && data.summary?.all_healthy) {
                                 toast.success(`vLLM 运行正常 (${data.summary.healthy}/${data.summary.total} 实例健康)`);
                               } else if (data.enabled) {

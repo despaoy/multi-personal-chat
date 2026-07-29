@@ -2,7 +2,7 @@
 import logging
 
 from fastapi import APIRouter, HTTPException, Depends
-from app.dependencies import get_current_user
+from app.dependencies import get_current_user, get_current_admin
 
 from db.models import ModelDownloadRequest
 
@@ -48,8 +48,11 @@ async def check_model(model_name: str, current_user: dict = Depends(get_current_
 
 
 @router.post("/api/models/download")
-async def download_model(request: ModelDownloadRequest, current_user: dict = Depends(get_current_user)):
-    """下载模型"""
+async def download_model(request: ModelDownloadRequest, current_user: dict = Depends(get_current_admin)):
+    """下载模型
+
+    C-S1 fix: 模型下载占用大量磁盘/带宽，限定 admin。
+    """
     try:
         from inference.model_manager import get_model_manager
         manager = get_model_manager()
@@ -66,8 +69,11 @@ async def download_model(request: ModelDownloadRequest, current_user: dict = Dep
 
 
 @router.delete("/api/models/{model_name}")
-async def delete_model(model_name: str, current_user: dict = Depends(get_current_user)):
-    """删除模型"""
+async def delete_model(model_name: str, current_user: dict = Depends(get_current_admin)):
+    """删除模型
+
+    C-S1 fix: 模型删除为不可逆操作，限定 admin。
+    """
     try:
         from inference.model_manager import get_model_manager
         manager = get_model_manager()

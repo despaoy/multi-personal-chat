@@ -283,6 +283,7 @@ class VLLMClient:
         self._instance_lock = asyncio.Lock()
 
         # 熔断器：保护 vLLM 调用，20次连续失败后熔断，60秒后半开
+        # 优先注册到全局 circuit_breaker_registry，使 enhanced/stats 端点可见
         self._circuit_breaker = CircuitBreaker(
             name="vllm",
             failure_threshold=20,
@@ -290,6 +291,7 @@ class VLLMClient:
             half_open_max_calls=5,
             degradation_mode=DegradationMode.RAISE,
         )
+        self._register_to_global_registry()
 
         logger.info(
             "VLLMClient 初始化: %d 个实例, 模型=%s, 策略=%s",
@@ -313,6 +315,25 @@ class VLLMClient:
                         ),
                     )
         return self._client
+
+    def _register_to_global_registry(self) -> None:
+        """将熔断器注册到全局 circuit_breaker_registry，使 enhanced/stats 端点可见。
+
+        此前 VLLMClient 内部自建 CircuitBreaker 但未注册到 registry，
+        导致 /api/enhanced/circuit-breaker/stats 看不到 vllm 的熔断状态。
+        """
+        try:
+            from app.config import circuit_breaker_registry
+            if circuit_breaker_registry is not None:
+                # 直接注入已有实例，避免 registry 创建新实例导致状态隔离
+                registry = circuit_breaker_registry
+                if not hasattr(registry, '_breakers'):
+                    return
+                if "vllm" not in registry._breakers:
+                    registry._breakers["vllm"] = self._circuit_breaker
+                    logger.info("VLLMClient 熔断器已注册到全局 registry")
+        except Exception as e:
+            logger.debug(f"注册熔断器到全局 registry 失败（非致命）: {e}")
 
     async def close(self) -> None:
         """关闭连接池，释放资源"""
@@ -899,3 +920,45 @@ def _check_interface() -> None:
         )
 
 _check_interface()
+
+
+# ---------------------------------------------------------------------------
+# 模块级单例：全进程共享同一个 VLLMClient 实例
+# 此前 api/generate.py 和 bot/bot.py 各自创建独立 VLLMClient 实例，
+# 导致连接池重复创建且熔断器状态隔离。现统一为单例。
+# ---------------------------------------------------------------------------
+
+_shared_client: Optional["VLLMClient"] = None
+_shared_client_lock = asyncio.Lock()
+
+
+async def get_vllm_client() -> "VLLMClient":
+    """获取或创建全局共享的 VLLMClient 单例。
+
+    从环境变量读取 VLLM_BASE_URLS / VLLM_MODEL / VLLM_TIMEOUT 进行初始化。
+    所有调用方（api/generate.py、bot/bot.py）应使用此函数而非各自构造实例。
+    """
+    global _shared_client
+    if _shared_client is not None:
+        return _shared_client
+    async with _shared_client_lock:
+        if _shared_client is not None:
+            return _shared_client
+        base_urls = os.getenv("VLLM_BASE_URLS", os.getenv("VLLM_BASE_URL", ""))
+        model = os.getenv("VLLM_MODEL", "")
+        timeout = float(os.getenv("VLLM_TIMEOUT", "120"))
+        _shared_client = VLLMClient(
+            base_urls=base_urls,
+            model=model,
+            timeout=timeout,
+        )
+        logger.info("VLLMClient 全局单例已创建")
+        return _shared_client
+
+
+async def close_shared_vllm_client() -> None:
+    """关闭全局共享的 VLLMClient 单例（应用退出时调用）"""
+    global _shared_client
+    if _shared_client is not None:
+        await _shared_client.close()
+        _shared_client = None

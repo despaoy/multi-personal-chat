@@ -51,6 +51,16 @@ async def _migrate_table(pg_db, table_name: str, pg_table, sqlite_rows: list[dic
         logger.info(f"  ⏭️  {table_name}: 无数据，跳过")
         return 0
 
+    # C2 fix: 使用 pg_table.columns 构建白名单，防止 SQLite 源数据中的
+    # 恶意列名通过 f-string 拼接造成 SQL 注入。只允许目标表实际存在的列。
+    valid_columns = {col.name for col in pg_table.columns}
+    # 同时校验 conflict_columns
+    if conflict_columns:
+        for cc in conflict_columns:
+            if cc not in valid_columns:
+                logger.error(f"  ❌ {table_name}: conflict_column '{cc}' 不存在于目标表")
+                return 0
+
     total = len(sqlite_rows)
     inserted = 0
     failed = 0
@@ -64,7 +74,13 @@ async def _migrate_table(pg_db, table_name: str, pg_table, sqlite_rows: list[dic
                     # 跳过 SQLite 内部字段
                     if key.startswith("_"):
                         continue
+                    # C2 fix: 只保留目标表实际存在的列，防止 SQL 注入
+                    if key not in valid_columns:
+                        continue
                     values[key] = value
+
+                if not values:
+                    continue
 
                 if conflict_columns:
                     # 构建 INSERT ... ON CONFLICT DO NOTHING

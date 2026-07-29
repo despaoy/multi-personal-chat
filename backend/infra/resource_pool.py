@@ -583,8 +583,10 @@ class ModelInferencePool:
                         break
 
                 if slot is None:
-                    # 不应发生，semaphore已控制并发数
-                    self._semaphore.release()
+                    # C-F2 fix: 不应发生，semaphore已控制并发数。
+                    # 原先在此处 release() 后，外层 finally 会再次 release()，
+                    # 导致信号量计数器永久偏移，最终允许超过 max_concurrent 的并发数。
+                    # 现在直接 raise，由 finally 块统一 release 一次。
                     raise RuntimeError("无可用推理槽位（内部错误）")
 
                 self._total_acquired += 1

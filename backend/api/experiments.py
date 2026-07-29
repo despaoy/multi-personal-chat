@@ -209,7 +209,9 @@ async def start_rag_ablation(req: ExperimentStartRequest,
             "UPDATE experiment_runs SET status='failed', completed_at=?, results=? WHERE id=?",
             (_now(), json.dumps({"error": error}), exp_id),
         )
-        return {"success": False, "experiment_id": exp_id, "status": "failed", "error": error}
+        # C5 fix: 模块不可用是服务端故障，应用 503 而非 200+success=False，
+        # 与同函数 except Exception 分支（line 219）的 raise 模式保持一致。
+        raise HTTPException(status_code=503, detail=error)
     except Exception as e:
         logger.exception("RAG ablation failed experiment_id=%s", exp_id)
         db.execute_sql(
@@ -253,6 +255,10 @@ async def start_quantization_benchmark(req: ExperimentStartRequest,
             (_now(), json.dumps(results), exp_id),
         )
         return {"success": True, "experiment_id": exp_id, "status": "completed", "mock": True, "results": results}
+    except HTTPException:
+        # C4 fix: 必须在 except Exception 之前 re-raise，否则 409 会被改写成 500，
+        # 丢失"需在实验室服务器运行"的语义。对比 api/models.py:90 的同模式修复。
+        raise
     except ImportError:
         mock_results = {
             "mock": True,

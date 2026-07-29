@@ -37,9 +37,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 # 应用配置 + 增强模块全局实例
+# C-F1 fix: lifespan 管理的单例 (failover_mgr/backup_mgr/connection_pool/
+# http_client_pool/access_control_mgr) 在 lifespan 中通过 `_cfg.xxx = ...`
+# 重新赋值。这里只导入常量与导入时初始化的单例，不导入会被 lifespan 重赋值的单例，
+# 避免读者误以为本模块中的本地名会跟随 lifespan 更新（实际它们仍指向 None）。
 from app.config import (
-    connection_pool, http_client_pool, backup_mgr, failover_mgr,
-    access_control_mgr, async_task_queue, llm_optimizer,
+    async_task_queue, llm_optimizer,
     RESOURCE_POOL_AVAILABLE, BACKUP_MANAGER_AVAILABLE,
     FAILOVER_AVAILABLE, ACCESS_CONTROL_AVAILABLE,
     load_balancer_mgr, circuit_breaker_registry,
@@ -82,16 +85,22 @@ from api.router import router as lora_router_router
 # ═══════════════════════════════════════════
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global connection_pool, http_client_pool, backup_mgr, failover_mgr, access_control_mgr
+    # C-F1 fix: 原先用 `global x` 赋值只更新 main.py 模块命名空间，
+    # 不会更新 app.config 模块中的同名变量。api/generate.py 等通过
+    # `from app.config import failover_mgr` 在导入时绑定到 None，永远
+    # 看不到 lifespan 中创建的实例。改为通过 `app.config.xxx = ...`
+    # 显式赋值到 config 模块属性，所有通过 `from app import config`
+    # 或 `import app.config` 访问的模块都能看到最新实例。
+    # 注意：已通过 `from app.config import failover_mgr` 导入的模块仍持有
+    # 旧的 None 引用，这些模块需改为 `from app import config` 后用
+    # `config.failover_mgr` 访问（本次修复同步更新调用方）。
+    import app.config as _cfg
 
     logger.info("🚀 QQ智能助手后端服务启动中（增强版）...")
 
     validate_or_raise_for_startup(_STARTUP_ENV)
 
     # 初始化数据库
-    # SQLiteDB 在 __init__ 中已通过 _init_database() 完成建表，无独立 init() 方法。
-    # 此处仅做一次连接探活（SELECT 1），确认数据库文件可读写。
-    # 重要：初始化失败应阻断启动，防止服务带病运行（容器编排会自动重启）。
     try:
         _initialize_database(db)
         logger.info("✅ 数据库初始化完成 (%s)", "PostgreSQL" if is_pg_mode() else "SQLite")
@@ -113,8 +122,8 @@ async def lifespan(app: FastAPI):
         try:
             from infra.resource_pool import ConnectionPool, HttpClientPool
             db_path = str(getattr(db, "db_path", _BACKEND_ROOT / "qq_assistant.db"))
-            connection_pool = ConnectionPool(db_path, max_size=20)
-            http_client_pool = HttpClientPool(max_connections=100)
+            _cfg.connection_pool = ConnectionPool(db_path, max_size=20)
+            _cfg.http_client_pool = HttpClientPool(max_connections=100)
             logger.info("✅ 资源池初始化完成")
         except Exception as e:
             logger.warning(f"资源池初始化失败: {e}")
@@ -123,9 +132,9 @@ async def lifespan(app: FastAPI):
         try:
             from infra.backup_manager import BackupManager
             db_path = str(getattr(db, "db_path", _BACKEND_ROOT / "qq_assistant.db"))
-            backup_mgr = BackupManager(db_path)
+            _cfg.backup_mgr = BackupManager(db_path)
             import asyncio
-            asyncio.create_task(backup_mgr.start_scheduled_backup())
+            asyncio.create_task(_cfg.backup_mgr.start_scheduled_backup())
             logger.info("✅ 备份管理器初始化完成")
         except Exception as e:
             logger.warning(f"备份管理器初始化失败: {e}")
@@ -133,18 +142,18 @@ async def lifespan(app: FastAPI):
     if FAILOVER_AVAILABLE:
         try:
             from infra.failover import FailoverManager, ProviderConfig, FailoverStrategy
-            failover_mgr = FailoverManager(strategy=FailoverStrategy.AUTO_FAILOVER)
+            _cfg.failover_mgr = FailoverManager(strategy=FailoverStrategy.AUTO_FAILOVER)
 
             # 注册 vLLM 推理 provider
             vllm_url = os.getenv("VLLM_BASE_URL", "http://localhost:8001")
-            failover_mgr.add_provider(ProviderConfig(
+            _cfg.failover_mgr.add_provider(ProviderConfig(
                 name="vllm_primary",
                 priority=1,
                 health_check_url=f"{vllm_url}/health",
             ))
 
             # 启动健康检查循环
-            await failover_mgr.start()
+            await _cfg.failover_mgr.start()
             logger.info("✅ 故障转移管理器初始化完成（vLLM provider 已注册）")
         except Exception as e:
             logger.warning(f"故障转移管理器初始化失败: {e}")
@@ -153,7 +162,7 @@ async def lifespan(app: FastAPI):
         try:
             from infra.access_control import AccessControlManager
             db_path = str(getattr(db, "db_path", _BACKEND_ROOT / "qq_assistant.db"))
-            access_control_mgr = AccessControlManager(db_path)
+            _cfg.access_control_mgr = AccessControlManager(db_path)
             logger.info("✅ 访问控制管理器初始化完成")
         except Exception as e:
             logger.warning(f"访问控制管理器初始化失败: {e}")
@@ -165,20 +174,50 @@ async def lifespan(app: FastAPI):
     yield
 
     logger.info("👋 服务关闭中，清理资源...")
-    if connection_pool:
-        await connection_pool.close()
-    if http_client_pool:
-        await http_client_pool.close()
-    if backup_mgr:
-        stop_result = backup_mgr.stop_scheduled_backup()
+    if _cfg.connection_pool:
+        await _cfg.connection_pool.close()
+    if _cfg.http_client_pool:
+        await _cfg.http_client_pool.close()
+    if _cfg.backup_mgr:
+        stop_result = _cfg.backup_mgr.stop_scheduled_backup()
         if hasattr(stop_result, "__await__"):
             await stop_result
-    if failover_mgr:
-        await failover_mgr.stop()
-    if async_task_queue:
-        await async_task_queue.shutdown()
-    if llm_optimizer:
-        await llm_optimizer.close()
+    if _cfg.failover_mgr:
+        await _cfg.failover_mgr.stop()
+    if _cfg.async_task_queue:
+        await _cfg.async_task_queue.shutdown()
+    if _cfg.llm_optimizer:
+        await _cfg.llm_optimizer.close()
+    # C6 fix: 关闭所有模型 Provider 持有的 httpx 客户端与 GPU 句柄
+    try:
+        from inference.model_manager import get_model_manager
+        get_model_manager().shutdown()
+    except Exception as e:
+        logger.warning(f"关闭模型管理器失败: {e}")
+    # C10 fix: 关闭 generate.py 中独立的 vLLM 客户端连接池
+    try:
+        from api.generate import close_vllm_client
+        await close_vllm_client()
+    except Exception as e:
+        logger.warning(f"关闭 vLLM 客户端失败: {e}")
+    # C15 fix: 关闭 bot 模块中挂载在函数属性上的 VLLM 客户端
+    try:
+        from bot.bot import close_bot_vllm_client
+        await close_bot_vllm_client()
+    except Exception as e:
+        logger.warning(f"关闭 bot VLLM 客户端失败: {e}")
+    # 关闭 bot 模块中共享的 HTTP 客户端（RAG 搜索 + Ollama 推理）
+    try:
+        from bot.bot import _close_bot_http_clients
+        await _close_bot_http_clients()
+    except Exception as e:
+        logger.warning(f"关闭 bot HTTP 客户端失败: {e}")
+    # 关闭共享的 async Redis 客户端
+    try:
+        from cache.redis_client import close_async_redis
+        await close_async_redis()
+    except Exception as e:
+        logger.warning(f"关闭 async Redis 客户端失败: {e}")
     logger.info("✅ 资源清理完成")
 
 
@@ -193,9 +232,14 @@ app = FastAPI(
 )
 
 def _allowed_origins() -> list[str]:
-    configured = os.getenv("ALLOWED_ORIGINS") or os.getenv("CORS_ORIGINS")
+    """解析 CORS 允许源，优先 ALLOWED_ORIGINS，旧键 CORS_ORIGINS 发 deprecation warning。"""
+    configured = os.getenv("ALLOWED_ORIGINS")
     if configured:
         return [origin.strip() for origin in configured.split(",") if origin.strip()]
+    legacy = os.getenv("CORS_ORIGINS")
+    if legacy:
+        logger.warning("CORS_ORIGINS 已弃用，请改用 ALLOWED_ORIGINS。旧键将在下个大版本移除。")
+        return [origin.strip() for origin in legacy.split(",") if origin.strip()]
     return [
         "http://localhost:3000",
         "http://localhost:5000",

@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, Request, HTTPException, Depends
-from app.dependencies import get_current_user
+from app.dependencies import get_current_user, get_current_admin
 
 from app.config import (
     LOAD_BALANCER_AVAILABLE,
@@ -19,16 +19,20 @@ from app.config import (
     LLM_OPTIMIZER_AVAILABLE,
     load_balancer_mgr,
     async_task_queue,
-    connection_pool,
-    http_client_pool,
     circuit_breaker_registry,
-    backup_mgr,
-    failover_mgr,
     response_cache,
     rate_limiter,
     encryption_mgr,
-    access_control_mgr,
 )
+# C-F1 fix: connection_pool/http_client_pool/backup_mgr/failover_mgr/
+# access_control_mgr 在 lifespan 中通过 app.config.xxx = ... 赋值。
+# 若在导入时绑定，会永远持有 None。改为动态访问模块属性。
+from app import config as _app_config
+connection_pool = lambda: _app_config.connection_pool
+http_client_pool = lambda: _app_config.http_client_pool
+backup_mgr = lambda: _app_config.backup_mgr
+failover_mgr = lambda: _app_config.failover_mgr
+access_control_mgr = lambda: _app_config.access_control_mgr
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -78,20 +82,25 @@ async def get_enhanced_stats(current_user: dict = Depends(get_current_user)):
     if async_task_queue:
         stats["asyncProcessor"] = async_task_queue.get_queue_stats()
 
-    if connection_pool:
-        stats["connectionPool"] = connection_pool.get_pool_stats()
+    # C-F1 fix: 动态访问 lifespan 中赋值的单例
+    _cp = connection_pool()
+    if _cp:
+        stats["connectionPool"] = _cp.get_pool_stats()
 
-    if http_client_pool:
-        stats["httpClientPool"] = http_client_pool.get_pool_stats()
+    _hcp = http_client_pool()
+    if _hcp:
+        stats["httpClientPool"] = _hcp.get_pool_stats()
 
     if circuit_breaker_registry:
         stats["circuitBreakers"] = circuit_breaker_registry.get_all_stats()
 
-    if backup_mgr:
-        stats["backup"] = backup_mgr.get_backup_stats()
+    _bm = backup_mgr()
+    if _bm:
+        stats["backup"] = _bm.get_backup_stats()
 
-    if failover_mgr:
-        stats["failover"] = failover_mgr.get_failover_status()
+    _fm = failover_mgr()
+    if _fm:
+        stats["failover"] = _fm.get_failover_status()
 
     if response_cache:
         stats["responseCache"] = response_cache.stats()
@@ -121,7 +130,8 @@ async def get_circuit_breaker_stats(current_user: dict = Depends(get_current_use
 
 
 @router.post("/api/enhanced/circuit-breaker/{name}/reset")
-async def reset_circuit_breaker(name: str, current_user: dict = Depends(get_current_user)):
+async def reset_circuit_breaker(name: str, current_user: dict = Depends(get_current_admin)):
+    # C-S1 fix: 重置熔断器影响系统稳定性，限定 admin
     if not circuit_breaker_registry:
         raise HTTPException(status_code=503, detail="熔断器不可用")
     cb = circuit_breaker_registry.get(name)
@@ -135,28 +145,33 @@ async def reset_circuit_breaker(name: str, current_user: dict = Depends(get_curr
 
 @router.get("/api/enhanced/backups")
 async def list_backups(current_user: dict = Depends(get_current_user)):
-    if not backup_mgr:
+    _bm = backup_mgr()
+    if not _bm:
         raise HTTPException(status_code=503, detail="备份管理器不可用")
-    return {"success": True, "backups": backup_mgr.list_backups()}
+    return {"success": True, "backups": _bm.list_backups()}
 
 
 @router.post("/api/enhanced/backups/create")
-async def create_backup(backup_type: str = "full", current_user: dict = Depends(get_current_user)):
-    if not backup_mgr:
+async def create_backup(backup_type: str = "full", current_user: dict = Depends(get_current_admin)):
+    # C-S1 fix: 备份操作影响数据安全，限定 admin
+    _bm = backup_mgr()
+    if not _bm:
         raise HTTPException(status_code=503, detail="备份管理器不可用")
     try:
         if backup_type == "full":
-            path = backup_mgr.create_full_backup()
+            path = _bm.create_full_backup()
         else:
-            path = backup_mgr.create_incremental_backup()
+            path = _bm.create_incremental_backup()
         return {"success": True, "message": "备份创建成功", "path": path}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/api/enhanced/backups/{backup_name}/restore")
-async def restore_backup(backup_name: str, current_user: dict = Depends(get_current_user)):
-    if not backup_mgr:
+async def restore_backup(backup_name: str, current_user: dict = Depends(get_current_admin)):
+    # C-S1 fix: 备份恢复会覆盖现有数据，限定 admin
+    _bm = backup_mgr()
+    if not _bm:
         raise HTTPException(status_code=503, detail="备份管理器不可用")
     try:
         backup_dir = Path(__file__).parent.parent / "backups"
@@ -169,7 +184,7 @@ async def restore_backup(backup_name: str, current_user: dict = Depends(get_curr
             raise HTTPException(status_code=400, detail="无效的备份路径")
         if not backup_path.exists():
             raise HTTPException(status_code=404, detail="备份文件不存在")
-        backup_mgr.restore(str(backup_path))
+        _bm.restore(str(backup_path))
         return {"success": True, "message": "备份恢复成功"}
     except HTTPException:
         raise
@@ -181,9 +196,10 @@ async def restore_backup(backup_name: str, current_user: dict = Depends(get_curr
 
 @router.get("/api/enhanced/failover/status")
 async def get_failover_status(current_user: dict = Depends(get_current_user)):
-    if not failover_mgr:
+    _fm = failover_mgr()
+    if not _fm:
         raise HTTPException(status_code=503, detail="故障转移管理器不可用")
-    return {"success": True, "status": failover_mgr.get_failover_status()}
+    return {"success": True, "status": _fm.get_failover_status()}
 
 
 # --- 缓存管理API ---
@@ -196,7 +212,8 @@ async def get_cache_stats(current_user: dict = Depends(get_current_user)):
 
 
 @router.post("/api/enhanced/cache/invalidate")
-async def invalidate_cache(pattern: Optional[str] = None, current_user: dict = Depends(get_current_user)):
+async def invalidate_cache(pattern: Optional[str] = None, current_user: dict = Depends(get_current_admin)):
+    # C-S1 fix: 缓存失效可能引发性能雪崩，限定 admin
     if not response_cache:
         raise HTTPException(status_code=503, detail="响应缓存不可用")
     response_cache.invalidate(pattern)
@@ -207,27 +224,31 @@ async def invalidate_cache(pattern: Optional[str] = None, current_user: dict = D
 
 @router.get("/api/enhanced/access-control/keys")
 async def list_api_keys(current_user: dict = Depends(get_current_user)):
-    if not access_control_mgr:
+    _acm = access_control_mgr()
+    if not _acm:
         raise HTTPException(status_code=503, detail="访问控制不可用")
-    return {"success": True, "keys": access_control_mgr.list_api_keys()}
+    return {"success": True, "keys": _acm.list_api_keys()}
 
 
 @router.post("/api/enhanced/access-control/keys")
-async def create_api_key(request: Request, current_user: dict = Depends(get_current_user)):
-    if not access_control_mgr:
+async def create_api_key(request: Request, current_user: dict = Depends(get_current_admin)):
+    # C-S1 fix: 签发 API Key 等同于授权访问，限定 admin
+    _acm = access_control_mgr()
+    if not _acm:
         raise HTTPException(status_code=503, detail="访问控制不可用")
     body = await request.json()
     role = body.get("role", "viewer")
     description = body.get("description", "")
-    api_key = access_control_mgr.create_api_key(role, description)
+    api_key = _acm.create_api_key(role, description)
     return {"success": True, "apiKey": api_key}
 
-
 @router.delete("/api/enhanced/access-control/keys/{key_id}")
-async def revoke_api_key(key_id: str, current_user: dict = Depends(get_current_user)):
-    if not access_control_mgr:
+async def revoke_api_key(key_id: str, current_user: dict = Depends(get_current_admin)):
+    # C-S1 fix: 吊销 API Key 影响服务可用性，限定 admin
+    _acm = access_control_mgr()
+    if not _acm:
         raise HTTPException(status_code=503, detail="访问控制不可用")
-    access_control_mgr.revoke_api_key(key_id)
+    _acm.revoke_api_key(key_id)
     return {"success": True, "message": "API Key已吊销"}
 
 

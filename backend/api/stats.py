@@ -9,9 +9,10 @@ from datetime import datetime
 from typing import Any
 
 import psutil
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
 from app.config import service_start_time
+from app.dependencies import get_current_admin
 from db.adapter import db
 from db.models import StatsResponse
 from infra.concurrency_control import inference_runtime
@@ -144,12 +145,12 @@ def _platform_enabled_map() -> dict[str, bool]:
 
 
 def _check_service(port: int) -> bool:
+    # C8 fix: 用 with 语句确保 socket 在异常时也被关闭，避免描述符泄漏
     try:
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(1)
-        result = sock.connect_ex(("localhost", port))
-        sock.close()
-        return result == 0
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.settimeout(1)
+            result = sock.connect_ex(("localhost", port))
+            return result == 0
     except Exception:
         return False
 
@@ -329,21 +330,24 @@ async def get_stats():
 
 
 @router.get("/metrics")
-async def get_metrics():
+async def get_metrics(current_user: dict = Depends(get_current_admin)):
+    # C16 fix: 含 auth_failures 等安全相关指标，限定 admin
     metrics = _metrics_payload()
     metrics["alerts"] = _alerts_from_metrics(metrics)
     return metrics
 
 
 @router.get("/alerts")
-async def get_alerts():
+async def get_alerts(current_user: dict = Depends(get_current_admin)):
+    # C16 fix: 告警含认证失败频率等安全信息，限定 admin
     metrics = _metrics_payload()
     alerts = _alerts_from_metrics(metrics)
     return {"alerts": alerts, "count": len(alerts), "metrics": metrics}
 
 
 @router.get("/activity")
-async def get_activity():
+async def get_activity(current_user: dict = Depends(get_current_admin)):
+    # C16 fix: 消息活动分布可暴露使用模式，限定 admin
     hours = [f"{h:02d}:00" for h in range(0, 24, 2)]
     activity_map: dict[int, dict[str, int]] = {int(h.split(":")[0]): {"messages": 0, "replies": 0} for h in hours}
     for msg in _today_message_rows():
@@ -361,7 +365,8 @@ async def get_activity():
 
 
 @router.get("/services")
-async def get_services():
+async def get_services(current_user: dict = Depends(get_current_admin)):
+    # C16 fix: 服务状态和 uptime 暴露基础设施拓扑，限定 admin
     uptime_str = get_service_uptime()
     astrbot = _astrbot_service_status()
     queue_stats = inference_runtime.stats()

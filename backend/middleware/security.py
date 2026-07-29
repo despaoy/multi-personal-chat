@@ -35,6 +35,12 @@ API_KEYS: list[str] = [
     k.strip() for k in os.getenv("API_KEYS", "").split(",") if k.strip()
 ]
 
+# C18 fix: 服务间认证 Token - 允许内部服务（如 bot）调用后端 API
+# 通过 SERVICE_TOKEN 环境变量配置，逗号分隔支持多个 token
+SERVICE_TOKENS: set[str] = {
+    t.strip() for t in os.getenv("SERVICE_TOKEN", "").split(",") if t.strip()
+}
+
 # 认证白名单路径（前缀匹配）
 AUTH_WHITELIST: set[str] = {
     "/health",
@@ -384,6 +390,14 @@ class SecurityMiddleware(BaseHTTPMiddleware):
         if request.method == "POST" and path in PUBLIC_POST_PATHS:
             return await call_next(request)
 
+        # C18 fix: 服务间认证 - 允许携带有效 X-Service-Token 的内部服务调用（如 bot → RAG）
+        # 这避免了 bot 进程必须持有用户 JWT 的耦合，同时保证非白名单接口不会被匿名访问
+        service_token = request.headers.get("X-Service-Token", "")
+        if service_token and service_token in SERVICE_TOKENS:
+            request.state.user = "service-bot"
+            request.state.auth_type = "service_token"
+            return await call_next(request)
+
         # 读取认证凭证
         api_key = request.headers.get("X-API-Key", "")
         auth_header = request.headers.get("Authorization", "")
@@ -406,6 +420,17 @@ class SecurityMiddleware(BaseHTTPMiddleware):
                 from app.config import JWT_SECRET, JWT_ALGORITHM
 
                 payload = pyjwt.decode(bearer_token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+                # C-S2 fix: 原先中间件解码 JWT 后直接放行，不检查 Token 黑名单。
+                # 导致未使用 Depends(get_current_user) 的路由（如 /api/stats、
+                # /api/model/status）在 Token 注销后仍可访问 24 小时。
+                # 现在在中间件层统一检查黑名单，所有路由都受益。
+                from api.auth import is_token_revoked
+                if is_token_revoked(payload.get("jti", "")):
+                    return JSONResponse(
+                        status_code=401,
+                        content={"detail": "Token 已注销，请重新登录"},
+                        headers={"WWW-Authenticate": "Bearer"},
+                    )
                 request.state.user = payload.get("sub", "unknown")
                 request.state.auth_type = "jwt"
                 request.state.jwt_payload = payload

@@ -17,7 +17,7 @@ import { toast } from 'sonner';
 
 export default function LoraPage() {
   return (
-    <AuthGuard>
+    <AuthGuard requireAdmin>
       <LoraContent />
     </AuthGuard>
   );

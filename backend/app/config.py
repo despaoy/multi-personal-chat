@@ -70,11 +70,17 @@ JWT_ALGORITHM = "HS256"
 JWT_EXPIRY_HOURS = 24
 
 
-def create_access_token(username: str, user_id: int) -> str:
-    """创建 JWT access token"""
+def create_access_token(username: str, user_id: int, role: str = "user") -> str:
+    """创建 JWT access token
+
+    C-S1 fix: 将 role 写入 payload，让 get_current_user 无需 DB 查询即可返回 role。
+    注意：role 变更后旧 token 仍持旧值；敏感操作应通过 get_current_admin
+    做一次 DB 复核以保证准确性。
+    """
     payload = {
         "sub": username,
         "user_id": user_id,
+        "role": role,
         "exp": datetime.now(timezone.utc) + timedelta(hours=JWT_EXPIRY_HOURS),
         "iat": datetime.now(timezone.utc),
         "jti": secrets.token_urlsafe(16),  # 唯一ID，支持吊销
@@ -97,12 +103,24 @@ def verify_token(token: str) -> dict:
 # LLM 并发控制器
 # ============================================
 
-LLM_CONCURRENCY_LIMIT = max(
-    1, int(os.getenv("LLM_MAX_CONCURRENCY", os.getenv("MODEL_MAX_CONCURRENCY", "2")))
-)
+def _resolve_concurrency_limit() -> int:
+    """解析 LLM 并发上限，优先 LLM_MAX_CONCURRENCY，旧键 MODEL_MAX_CONCURRENCY 发 deprecation warning。"""
+    primary = os.getenv("LLM_MAX_CONCURRENCY")
+    if primary:
+        return max(1, int(primary))
+    legacy = os.getenv("MODEL_MAX_CONCURRENCY")
+    if legacy:
+        __logger.warning(
+            "MODEL_MAX_CONCURRENCY 已弃用，请改用 LLM_MAX_CONCURRENCY。旧键将在下个大版本移除。"
+        )
+        return max(1, int(legacy))
+    return 2
+
+
+LLM_CONCURRENCY_LIMIT = _resolve_concurrency_limit()
+# llm_semaphore 限制 Transformers+PEFT 本地模型回退路径的并发（GPU-bound）。
+# 与 inference_runtime（队列+优先级）职责不同，不可合并。
 llm_semaphore = asyncio.Semaphore(LLM_CONCURRENCY_LIMIT)
-llm_request_counter = 0  # 当前排队的请求数
-llm_max_queue = 100  # 最大排队数
 
 
 # ============================================
@@ -111,12 +129,16 @@ llm_max_queue = 100  # 最大排队数
 
 # _logger 已在文件顶部定义为 __logger
 
+# 模块级共享 httpx.Client，避免每次搜索都新建 TCP 连接+TLS 握手。
+# 两个搜索源(DuckDuckGo/Wikipedia)均为短超时(5s)，可安全共享同一客户端。
+import httpx as _httpx_module
+_search_http_client = _httpx_module.Client(timeout=5.0, follow_redirects=True)
+
 
 def _search_character_info(character_desc: str, max_results: int = 3) -> str:
     """在网络上搜索角色信息（短超时+降级，不阻塞生成）"""
 
     import concurrent.futures
-    import httpx
     from urllib.parse import quote
 
     query = f"{character_desc} 角色 人物介绍"
@@ -129,24 +151,24 @@ def _search_character_info(character_desc: str, max_results: int = 3) -> str:
             headers = {
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
             }
-            with httpx.Client(timeout=5.0, follow_redirects=True) as client:
-                resp = client.get(url, headers=headers)
-                if resp.status_code == 200:
-                    from bs4 import BeautifulSoup
+            resp = _search_http_client.get(url, headers=headers)
+            if resp.status_code == 200:
+                from bs4 import BeautifulSoup
 
-                    soup = BeautifulSoup(resp.text, "html.parser")
-                    items = soup.select(".result")
-                    lines = []
-                    for r in items[:max_results]:
-                        t = r.select_one(".result__title")
-                        s = r.select_one(".result__snippet")
-                        if t and s:
-                            lines.append(
-                                f"- {t.get_text(strip=True)}\n  {s.get_text(strip=True)[:250]}"
-                            )
-                    return "\n".join(lines) if lines else ""
-        except Exception:
-            pass
+                soup = BeautifulSoup(resp.text, "html.parser")
+                items = soup.select(".result")
+                lines = []
+                for r in items[:max_results]:
+                    t = r.select_one(".result__title")
+                    s = r.select_one(".result__snippet")
+                    if t and s:
+                        lines.append(
+                            f"- {t.get_text(strip=True)}\n  {s.get_text(strip=True)[:250]}"
+                        )
+                return "\n".join(lines) if lines else ""
+        except Exception as e:
+            # H3 fix (扩展): 此前静默吞噬，DuckDuckGo 搜索失败时无法排障
+            __logger.warning("DuckDuckGo 搜索失败 (query=%s): %s", character_desc, e)
         return ""
 
     def try_wikipedia():
@@ -159,18 +181,18 @@ def _search_character_info(character_desc: str, max_results: int = 3) -> str:
                 "format": "json",
                 "srlimit": 3,
             }
-            with httpx.Client(timeout=5.0) as client:
-                resp = client.get("https://zh.wikipedia.org/w/api.php", params=params)
-                if resp.status_code == 200:
-                    pages = resp.json().get("query", {}).get("search", [])
-                    import re
+            resp = _search_http_client.get("https://zh.wikipedia.org/w/api.php", params=params)
+            if resp.status_code == 200:
+                pages = resp.json().get("query", {}).get("search", [])
+                import re
 
-                    return "\n".join(
-                        f"- {p['title']}\n  {re.sub(r'<[^>]+>', '', p.get('snippet', ''))[:250]}"
-                        for p in pages[:max_results]
-                    )
-        except Exception:
-            pass
+                return "\n".join(
+                    f"- {p['title']}\n  {re.sub(r'<[^>]+>', '', p.get('snippet', ''))[:250]}"
+                    for p in pages[:max_results]
+                )
+        except Exception as e:
+            # H3 fix: 此前静默吞噬，Wikipedia 搜索失败时无法排障
+            __logger.warning("Wikipedia 搜索失败 (query=%s): %s", character_desc, e)
         return ""
 
     # 并行搜索，总超时 6 秒
@@ -185,13 +207,14 @@ def _search_character_info(character_desc: str, max_results: int = 3) -> str:
                 r = future.result(timeout=5)
                 if r and len(r) > len(result):
                     result = r
-            except Exception:
-                pass
+            except Exception as e:
+                # H3 fix (扩展): 此前静默吞噬 future 异常（含超时、子线程内未捕获异常）
+                __logger.warning("搜索 future 失败 (query=%s): %s", character_desc, e)
 
     if result:
-        _logger.info(f"角色信息搜索成功: {len(result)} 字符")
+        __logger.info(f"角色信息搜索成功: {len(result)} 字符")
     else:
-        _logger.info("角色信息搜索无结果（网络受限），将基于用户描述生成")
+        __logger.info("角色信息搜索无结果（网络受限），将基于用户描述生成")
 
     return result
 

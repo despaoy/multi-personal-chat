@@ -45,11 +45,60 @@ def get_redis_pool() -> ConnectionPool:
 
 
 def get_redis() -> redis.Redis:
-    """获取 Redis 客户端"""
+    """获取 Redis 同步客户端"""
     global _client
     if _client is None:
         _client = redis.Redis(connection_pool=get_redis_pool())
     return _client
+
+
+# ============================================
+# 异步 Redis 客户端（统一共享，避免多模块各自创建连接池）
+# 此前 semantic_cache.py 和 message_queue.py 各自调用
+# redis.asyncio.from_url() 创建独立连接池（分别 10/20 连接），
+# 与同步客户端合计 80 个 max 连接。现统一为单一 async 客户端。
+# ============================================
+_async_client: Optional[Any] = None
+_async_lock: Any = None  # asyncio.Lock, 延迟初始化
+
+
+async def get_async_redis():
+    """获取 Redis 异步客户端（单例，全进程共享）。
+
+    返回 redis.asyncio.Redis 实例；若 Redis 不可用则返回 None。
+    所有需要 async Redis 的模块（semantic_cache、message_queue、bot 去重等）
+    都应调用此函数而非各自 from_url 创建独立连接池。
+    """
+    global _async_client, _async_lock
+    if _async_client is not None:
+        return _async_client
+    if _async_lock is None:
+        import asyncio
+        _async_lock = asyncio.Lock()
+    async with _async_lock:
+        if _async_client is not None:
+            return _async_client
+        try:
+            import redis.asyncio as aioredis
+            _async_client = aioredis.Redis(connection_pool=get_redis_pool())
+            await _async_client.ping()
+            logger.info(f"✅ Redis 异步客户端已连接(共享连接池): {REDIS_URL}")
+            return _async_client
+        except Exception as e:
+            logger.warning(f"Redis 异步客户端不可用: {e}")
+            _async_client = None
+            return None
+
+
+async def close_async_redis() -> None:
+    """关闭异步 Redis 客户端（应用退出时调用）"""
+    global _async_client
+    if _async_client is not None:
+        try:
+            await _async_client.aclose()
+        except Exception:
+            pass
+        _async_client = None
 
 
 def health_check() -> bool:

@@ -17,7 +17,7 @@ import { toast } from 'sonner';
 
 export default function RouterPage() {
   return (
-    <AuthGuard>
+    <AuthGuard requireAdmin>
       <RouterContent />
     </AuthGuard>
   );

@@ -2200,6 +2200,92 @@ def test_run_summary_acceptance_check_fails_on_low_judge_b_reached_rate(monkeypa
     assert ac["all_passed"] is False
 
 
+def test_run_summary_acceptance_check_fails_when_all_judge_b_results_rejected(
+    monkeypatch, tmp_path
+):
+    """A smoke run with no accepted samples must not unlock calibration."""
+    import hard_gate_kisaki_v4 as hg
+    from kisaki_v4_llm_client import atomic_write_json, build_judge_config
+    from regen_kisaki_llm_pipeline import _build_run_summary
+
+    monkeypatch.setenv("KISAKI_SIMILARITY_BACKEND", "fallback")
+    monkeypatch.setattr(hg, "_SIMILARITY_BACKEND_RESOLVED", False)
+    monkeypatch.setattr(hg, "_SIMILARITY_BACKEND", "")
+
+    judge_config_path = tmp_path / "judge_config.json"
+    config = build_judge_config(strict_similarity=False)
+    config["similarity_backend"] = {
+        "backend": "bge_embedding",
+        "authoritative": "true",
+        "mode": "strict",
+    }
+    atomic_write_json(judge_config_path, config)
+
+    scenes = [
+        "书籍讨论",
+        "幽默互怼",
+        "日常问候",
+        "观点讨论",
+        "情感倾诉",
+        "求助建议",
+    ]
+    records = []
+    for index in range(12):
+        scene = scenes[index % len(scenes)]
+        records.append(
+            {
+                "sample_spec_id": f"rejected_{index:02d}",
+                "scene": scene,
+                "status": "rejected",
+                "judge_b": {
+                    "final_decision": "rejected",
+                    "first_position_a_run1": False,
+                    "first_position_a_run2": False,
+                    "is_tie_run1": False,
+                    "is_tie_run2": False,
+                    "low_confidence_run1": False,
+                    "low_confidence_run2": False,
+                    "score_contradiction_run1": "",
+                    "score_contradiction_run2": "",
+                    "evidence_run1": "valid",
+                    "evidence_run2": "valid",
+                },
+            }
+        )
+
+    payload = "\n".join(
+        json.dumps(record, ensure_ascii=False) for record in records
+    ) + "\n"
+    run_log_path = tmp_path / "run_log.jsonl"
+    rejected_path = tmp_path / "rejected_samples.jsonl"
+    run_log_path.write_text(payload, encoding="utf-8")
+    rejected_path.write_text(payload, encoding="utf-8")
+
+    summary = _build_run_summary(
+        run_log_path=run_log_path,
+        samples_path=tmp_path / "samples.jsonl",
+        rejected_path=rejected_path,
+        disputed_path=tmp_path / "disputed_samples.jsonl",
+        stats={"passed": 0, "rejected": 12, "disputed": 0, "total_processed": 12},
+        run_started_at="2026-07-28T00:00:00",
+        total_specs=111,
+        processed_this_run=12,
+        initial_manifest_path=tmp_path / "run_manifest.json",
+        judge_config_path=judge_config_path,
+        expected_processed=12,
+    )
+
+    acceptance = summary["acceptance_check"]
+    assert acceptance["judge_b_reached_rate"] == 1.0
+    assert acceptance["judge_b_reached_ok"] is True
+    assert acceptance["disputed_rate"] == 0.0
+    assert acceptance["disputed_rate_ok"] is True
+    assert acceptance["passed_count"] == 0
+    assert acceptance["passed_rate"] == 0.0
+    assert acceptance["passed_rate_ok"] is False
+    assert acceptance["all_passed"] is False
+
+
 def test_run_pipeline_resume_reads_expected_from_initial_manifest(monkeypatch, tmp_path):
     """Major-2 regression: expected_processed must come from the initial
     run_manifest.json's selected_count, NOT from the current resume's

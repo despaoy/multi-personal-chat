@@ -1,6 +1,7 @@
 """知识库API - 知识库/文件夹/文档管理 + ZIP上传 + 文件夹扫描 + 搜索"""
 import asyncio
 import logging
+import threading
 import io
 import os
 import zipfile
@@ -8,7 +9,7 @@ import re
 from pathlib import Path, PurePosixPath
 
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Depends
-from app.dependencies import get_current_user
+from app.dependencies import get_current_user, get_current_admin
 
 from db.adapter import db
 from db.models import (
@@ -17,7 +18,7 @@ from db.models import (
     KnowledgeDocumentCreate, KnowledgeDocumentUpdate,
     KnowledgeSearchRequest
 )
-from app.config import INPUT_VALIDATOR_AVAILABLE, KNOWLEDGE_DOCUMENT_SCHEMA, KNOWLEDGE_SCHEMA, VECTOR_DB_AVAILABLE
+from app.config import INPUT_VALIDATOR_AVAILABLE, KNOWLEDGE_DOCUMENT_SCHEMA, VECTOR_DB_AVAILABLE
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -106,8 +107,11 @@ async def update_knowledge_base(kb_id: int, request: KnowledgeBaseUpdate, curren
 
 
 @router.delete("/api/knowledge/bases/{kb_id}")
-async def delete_knowledge_base(kb_id: int, current_user: dict = Depends(get_current_user)):
-    """删除知识库（级联删除文件夹和文档）"""
+async def delete_knowledge_base(kb_id: int, current_user: dict = Depends(get_current_admin)):
+    """删除知识库（级联删除文件夹和文档）
+
+    C-S1 fix: 级联删除不可逆，限定 admin。
+    """
     existing = db.get_knowledge_base(kb_id)
     if not existing:
         raise HTTPException(status_code=404, detail="知识库不存在")
@@ -142,8 +146,11 @@ async def create_knowledge_folder(kb_id: int, request: KnowledgeFolderCreate, cu
 
 
 @router.delete("/api/knowledge/folders/{folder_id}")
-async def delete_knowledge_folder(folder_id: int, current_user: dict = Depends(get_current_user)):
-    """删除文件夹"""
+async def delete_knowledge_folder(folder_id: int, current_user: dict = Depends(get_current_admin)):
+    """删除文件夹
+
+    s2 fix: 级联删除文件夹下所有文档与向量索引，限定 admin。
+    """
     existing = db.get_knowledge_folder(folder_id)
     if not existing:
         raise HTTPException(status_code=404, detail="文件夹不存在")
@@ -829,8 +836,11 @@ async def update_knowledge_document(doc_id: int, request: KnowledgeDocumentUpdat
 
 
 @router.delete("/api/knowledge/documents/{doc_id}")
-async def delete_knowledge_document(doc_id: int, current_user: dict = Depends(get_current_user)):
-    """删除知识库文档"""
+async def delete_knowledge_document(doc_id: int, current_user: dict = Depends(get_current_admin)):
+    """删除知识库文档
+
+    s2 fix: 删除文档及关联向量索引，限定 admin。
+    """
     try:
         existing_doc = db.get_knowledge_document(doc_id)
         if not existing_doc:
@@ -865,70 +875,80 @@ async def delete_knowledge_document(doc_id: int, current_user: dict = Depends(ge
 # ============================================
 
 _vector_index_built = False
+_vector_index_lock = threading.Lock()
 
 
 def _ensure_vector_index():
     """延迟重建向量索引：首次搜索时从数据库加载chunks并构建Faiss索引。
     避免在启动时阻塞服务（尤其是多worker场景下GPU显存竞争）。
+
+    C7 fix: 用 threading.Lock 保护 check-build-set 序列，防止多个并发搜索请求
+    同时观察到 _vector_index_built == False 并重复构建索引（导致重复向量写入与资源浪费）。
     """
     global _vector_index_built
+    # 双重检查：已构建时直接返回，避免每次搜索都获取锁
     if _vector_index_built:
         return True
 
-    try:
-        from app.config import VECTOR_DB_AVAILABLE
-        if not VECTOR_DB_AVAILABLE:
-            _vector_index_built = True
+    with _vector_index_lock:
+        # 再次检查：可能已被其他线程构建
+        if _vector_index_built:
             return True
 
-        from knowledge.vector_db import get_vector_db
-        vector_db = get_vector_db()
-        stats = vector_db.get_stats()
+        try:
+            from app.config import VECTOR_DB_AVAILABLE
+            if not VECTOR_DB_AVAILABLE:
+                _vector_index_built = True
+                return True
 
-        if stats["total_documents"] > 0:
-            logger.info(f"向量索引已存在: {stats['total_documents']} 个文档，跳过重建")
+            from knowledge.vector_db import get_vector_db
+            vector_db = get_vector_db()
+            stats = vector_db.get_stats()
+
+            if stats["total_documents"] > 0:
+                logger.info(f"向量索引已存在: {stats['total_documents']} 个文档，跳过重建")
+                _vector_index_built = True
+                return True
+
+            logger.info("向量索引为空，从数据库重建...")
+            chunks = db.get_all_knowledge_chunks()
+            if not chunks:
+                logger.info("数据库中无知识库chunks，跳过向量索引重建")
+                _vector_index_built = True
+                return True
+
+            all_docs = {doc["id"]: doc for doc in db.get_knowledge_documents(limit=10000)}
+            vector_docs = []
+            for chunk in chunks:
+                doc = all_docs.get(chunk.get("documentId"))
+                if not doc:
+                    continue
+                kb_name = ""
+                folder_name = doc.get("category", "")
+                if doc.get("knowledge_base_id"):
+                    kb = db.get_knowledge_base(doc["knowledge_base_id"])
+                    if kb:
+                        kb_name = kb["name"]
+                path_prefix = f"[{kb_name}/{folder_name}]" if kb_name else f"[{folder_name}]"
+                enriched = f"{path_prefix} {doc['title']}: {chunk['content']}"
+                vector_docs.append({
+                    "id": f"doc_{chunk['documentId']}_chunk_{chunk['chunkIndex']}",
+                    "chunk_index": chunk["chunkIndex"],
+                    "title": doc["title"],
+                    "content": enriched,
+                    "document_id": chunk["documentId"],
+                    "category": folder_name,
+                    "knowledge_base_id": doc.get("knowledge_base_id"),
+                })
+
+            if vector_docs:
+                vector_db.add_documents(vector_docs)
+                logger.info(f"向量索引重建完成: {len(vector_docs)} 个chunks")
             _vector_index_built = True
             return True
-
-        logger.info("向量索引为空，从数据库重建...")
-        chunks = db.get_all_knowledge_chunks()
-        if not chunks:
-            logger.info("数据库中无知识库chunks，跳过向量索引重建")
-            _vector_index_built = True
-            return True
-
-        all_docs = {doc["id"]: doc for doc in db.get_knowledge_documents(limit=10000)}
-        vector_docs = []
-        for chunk in chunks:
-            doc = all_docs.get(chunk.get("documentId"))
-            if not doc:
-                continue
-            kb_name = ""
-            folder_name = doc.get("category", "")
-            if doc.get("knowledge_base_id"):
-                kb = db.get_knowledge_base(doc["knowledge_base_id"])
-                if kb:
-                    kb_name = kb["name"]
-            path_prefix = f"[{kb_name}/{folder_name}]" if kb_name else f"[{folder_name}]"
-            enriched = f"{path_prefix} {doc['title']}: {chunk['content']}"
-            vector_docs.append({
-                "id": f"doc_{chunk['documentId']}_chunk_{chunk['chunkIndex']}",
-                "chunk_index": chunk["chunkIndex"],
-                "title": doc["title"],
-                "content": enriched,
-                "document_id": chunk["documentId"],
-                "category": folder_name,
-                "knowledge_base_id": doc.get("knowledge_base_id"),
-            })
-
-        if vector_docs:
-            vector_db.add_documents(vector_docs)
-            logger.info(f"向量索引重建完成: {len(vector_docs)} 个chunks")
-        _vector_index_built = True
-        return True
-    except Exception as e:
-        logger.warning(f"向量索引重建失败: {e}")
-        return False
+        except Exception as e:
+            logger.warning(f"向量索引重建失败: {e}")
+            return False
 
 
 @router.post("/api/knowledge/search")
@@ -1073,7 +1093,8 @@ async def generate_intent_samples(request: dict = None, current_user: dict = Dep
 
         status = get_generation_status()
         if status["running"]:
-            return {"success": False, "error": "样本生成正在进行中"}
+            # C5 fix: 冲突状态应用 409，而非 200+success=False
+            raise HTTPException(status_code=409, detail="样本生成正在进行中")
 
         params = request or {}
         kb_ids = params.get("kb_ids", [])
@@ -1083,6 +1104,10 @@ async def generate_intent_samples(request: dict = None, current_user: dict = Dep
 
         asyncio.create_task(generate_samples(kb_ids, samples_per_kb, negative_count, lora_name))
         return {"success": True, "message": "样本生成已启动"}
+    except HTTPException:
+        # C9 fix: C5 引入的 409 必须在 except Exception 之前 re-raise，
+        # 否则会被改写为 500，前端无法识别"冲突"语义
+        raise
     except Exception as e:
         logger.error(f"启动样本生成失败: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -1161,20 +1186,27 @@ async def add_intent_sample(request: dict, current_user: dict = Depends(get_curr
 
 
 @router.post("/api/knowledge/train-intent")
-async def train_intent_classifier(request: dict = None, current_user: dict = Depends(get_current_user)):
-    """使用已审查的样本训练多分类模型"""
+async def train_intent_classifier(request: dict = None, current_user: dict = Depends(get_current_admin)):
+    """使用已审查的样本训练多分类模型
+
+    s2 fix: 触发模型训练消耗计算资源，限定 admin。
+    """
     try:
         from knowledge.intent_trainer import train_intent_classifier as do_train, get_training_status
 
         status = get_training_status()
         if status["running"]:
-            return {"success": False, "error": "训练正在进行中"}
+            # C5 fix: 冲突状态应用 409，而非 200+success=False
+            raise HTTPException(status_code=409, detail="训练正在进行中")
 
         params = request or {}
         kb_ids = params.get("kb_ids")
 
         asyncio.create_task(do_train(kb_ids=kb_ids))
         return {"success": True, "message": "训练已启动"}
+    except HTTPException:
+        # C9 fix: C5 引入的 409 必须在 except Exception 之前 re-raise
+        raise
     except Exception as e:
         logger.error(f"启动意图训练失败: {e}")
         raise HTTPException(status_code=500, detail=str(e))

@@ -145,24 +145,21 @@ class L2RedisCache:
         self._available = False
 
     async def _ensure_client(self):
-        """Lazy init Redis async client"""
+        """Lazy init Redis async client（复用全局共享连接池）"""
         if self._client is not None:
             return self._client
         async with self._lock:
             if self._client is not None:
                 return self._client
             try:
-                import redis.asyncio as aioredis
-                self._client = aioredis.from_url(
-                    self._redis_url,
-                    max_connections=10,
-                    socket_timeout=3,
-                    socket_connect_timeout=2,
-                    decode_responses=True,
-                )
-                await self._client.ping()
+                # 复用 cache.redis_client 的共享连接池，避免独立创建连接池
+                from cache.redis_client import get_async_redis
+                self._client = await get_async_redis()
+                if self._client is None:
+                    self._available = False
+                    return None
                 self._available = True
-                logger.info(f"L2语义缓存已连接: {self._redis_url}")
+                logger.info(f"L2语义缓存已连接(共享连接池): {self._redis_url}")
                 return self._client
             except Exception as e:
                 logger.warning(f"L2 Redis不可用，仅使用L1缓存: {e}")

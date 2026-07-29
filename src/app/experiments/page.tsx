@@ -32,7 +32,7 @@ const EXPERIMENT_TABS: { key: ExperimentType; label: string; typeLabel: string }
 
 export default function ExperimentsPage() {
   return (
-    <AuthGuard>
+    <AuthGuard requireAdmin>
       <ExperimentsContent />
     </AuthGuard>
   );

@@ -90,23 +90,37 @@ const AuthSection = memo(function AuthSection() {
 export function Sidebar() {
   const pathname = usePathname();
   const { t } = useSettings();
+  const { user } = useAuth();
 
-  const navigation = [
+  // M3 fix: 为涉及模型/配置/实验管理的敏感页面标记 adminOnly，
+  // 非管理员用户在侧栏看不到这些入口。注意：后端已对这些端点强制 admin 校验，
+  // 此处仅为 UX 层过滤 + 纵深防御，并非唯一鉴权手段。
+  const isAdmin = user?.role === 'admin';
+
+  const navigation: Array<{
+    name: string;
+    href: string;
+    icon: React.ComponentType<{ className?: string }>;
+    adminOnly?: boolean;
+  }> = [
     { name: t('nav.dashboard'), href: '/', icon: Home },
     { name: t('nav.history'), href: '/history', icon: MessageSquare },
-    { name: t('nav.training'), href: '/training', icon: Zap },
-    { name: t('nav.lora'), href: '/lora', icon: BrainCircuit },
-    { name: t('nav.intentTraining'), href: '/intent-training', icon: Brain },
+    { name: t('nav.training'), href: '/training', icon: Zap, adminOnly: true },
+    { name: t('nav.lora'), href: '/lora', icon: BrainCircuit, adminOnly: true },
+    { name: t('nav.intentTraining'), href: '/intent-training', icon: Brain, adminOnly: true },
     { name: t('nav.monitor'), href: '/monitor', icon: Activity },
-    { name: '平台连接', href: '/integrations', icon: Cable },
+    { name: '平台连接', href: '/integrations', icon: Cable, adminOnly: true },
     { name: t('nav.knowledge'), href: '/knowledge', icon: Database },
     { name: t('nav.evaluation'), href: '/evaluation', icon: ClipboardCheck },
-    { name: t('nav.experiments'), href: '/experiments', icon: FlaskConical },
-    { name: t('nav.router'), href: '/router', icon: Shuffle },
+    { name: t('nav.experiments'), href: '/experiments', icon: FlaskConical, adminOnly: true },
+    { name: t('nav.router'), href: '/router', icon: Shuffle, adminOnly: true },
     { name: t('nav.preferences'), href: '/preferences', icon: Scale },
-    { name: t('nav.claw'), href: '/claw', icon: Terminal },
-    { name: t('nav.settings'), href: '/settings', icon: Settings },
+    { name: t('nav.claw'), href: '/claw', icon: Terminal, adminOnly: true },
+    { name: t('nav.settings'), href: '/settings', icon: Settings, adminOnly: true },
   ];
+
+  // 非管理员过滤掉 adminOnly 项
+  const visibleNavigation = isAdmin ? navigation : navigation.filter((item) => !item.adminOnly);
 
   return (
     <div className="flex h-full w-64 flex-col border-r bg-sidebar">
@@ -119,7 +133,7 @@ export function Sidebar() {
         </div>
       </div>
       <nav className="flex-1 space-y-1 px-3 py-4">
-        {navigation.map((item) => (
+        {visibleNavigation.map((item) => (
           <NavItem
             key={item.href}
             href={item.href}

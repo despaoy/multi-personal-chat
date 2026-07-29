@@ -132,6 +132,10 @@ users_table = Table(
     Column("username", Text, nullable=False, unique=True),
     Column("password_hash", Text, nullable=False),
     Column("created_at", Text, nullable=False),
+    # C4 fix: PG 模式下缺失 role 字段导致 RBAC 完全失效。
+    # SQLite 实现已通过 _ensure_column 添加此列，PG 实现遗漏。
+    # 默认 'user'，首个用户自动升级为 'admin'（见 add_user 实现）。
+    Column("role", Text, nullable=False, server_default="user"),
 )
 
 user_data_table = Table(
@@ -280,6 +284,8 @@ training_tasks_table = Table(
     Column("created_at", Text, server_default=""),
     Column("updated_at", Text, server_default=""),
     # Legacy columns retained for existing PostgreSQL deployments.
+    # 已废弃：新代码不再写入这些列，仅保留以兼容已有数据库（NOT NULL DEFAULT 约束保证旧数据不报错）。
+    # 后续应通过 Alembic 迁移删除这些列。
     Column("taskType", Text, nullable=False, server_default="lora"),
     Column("config", Text),
     Column("result", Text),
@@ -423,12 +429,15 @@ class PgDatabase:
             await self._ensure_column(conn, "training_tasks", "config_json", "TEXT DEFAULT '{}'")
             await self._ensure_column(conn, "training_tasks", "created_at", "TEXT DEFAULT ''")
             await self._ensure_column(conn, "training_tasks", "updated_at", "TEXT DEFAULT ''")
+            # C4 fix: 为已有 PG 数据库添加 users.role 列（新数据库由 create_all 创建）
+            await self._ensure_column(conn, "users", "role", "TEXT NOT NULL DEFAULT 'user'")
             await conn.execute(text('CREATE UNIQUE INDEX IF NOT EXISTS idx_training_tasks_task_id ON training_tasks (task_id)'))
             await conn.execute(text('CREATE INDEX IF NOT EXISTS idx_messages_platform_conversation ON messages (platform, "conversationId", "createdAt")'))
             await conn.execute(text('CREATE INDEX IF NOT EXISTS idx_messages_source_dedup ON messages (platform, adapter, "sourceMessageId")'))
             await conn.execute(text('CREATE INDEX IF NOT EXISTS idx_messages_session_created ON messages ("sessionId", "createdAt")'))
             await conn.execute(text('CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages ("createdAt")'))
-            await conn.execute(text('CREATE INDEX IF NOT EXISTS idx_conversations_platform_conversation ON conversations (platform, "conversationId", "conversationType")'))
+            # idx_conversations_platform_conversation 已删除：UNIQUE(platform, conversationId, conversationType)
+            # 约束会自动创建索引，显式 CREATE INDEX 完全冗余。
             await conn.execute(text('CREATE INDEX IF NOT EXISTS idx_integration_events_trace ON integration_events ("traceId")'))
             await conn.execute(text('CREATE INDEX IF NOT EXISTS idx_integration_events_platform_created ON integration_events (platform, "createdAt")'))
             await conn.execute(text('CREATE INDEX IF NOT EXISTS idx_model_invocations_trace ON model_invocations ("traceId")'))
@@ -487,14 +496,22 @@ class PgDatabase:
             message_id = result.inserted_primary_key[0]
             return {**message, "id": str(message_id), "conversationType": conversation_type, "senderName": sender_name, "createdAt": created_at}
 
-    async def get_messages(self, limit: int = 100, offset: int = 0) -> List[Dict]:
-        """获取消息记录"""
+    async def get_messages(self, limit: int = 100, offset: int = 0, session_id: Optional[str] = None) -> List[Dict]:
+        """获取消息记录，支持按会话 ID 筛选。
+
+        Args:
+            limit: 返回条数上限
+            offset: 偏移量
+            session_id: 可选，指定会话 ID 时在 SQL 层过滤（与 SQLite 实现对齐）
+        """
         async with self.async_session() as session:
             stmt = (
                 messages_table.select()
                 .order_by(messages_table.c.createdAt.desc())
                 .limit(limit).offset(offset)
             )
+            if session_id:
+                stmt = stmt.where(messages_table.c.sessionId == session_id)
             result = await session.execute(stmt)
             return [_row_to_dict(row) for row in result.fetchall()]
 
@@ -973,7 +990,8 @@ class PgDatabase:
 
     KNOWLEDGE_DOC_UPDATABLE_COLUMNS = {
         "title", "content", "category", "knowledge_base_id", "folder_id",
-        "sourceType", "sourceUrl", "fileType", "fileSize", "chunkCount",
+        "sourceType", "sourceUrl", "fileType", "fileSize",
+        "chunkCount", "updatedAt",
     }
 
     async def update_knowledge_document(self, doc_id: int, document: Dict) -> Optional[Dict]:
@@ -1078,13 +1096,18 @@ class PgDatabase:
         """添加用户"""
         now = datetime.now().isoformat()
         async with self.async_session() as session:
+            # C4 fix: 首个用户自动成为 admin，后续用户为普通 user。
+            # 与 SQLite 实现 (database.py:1819-1822) 保持一致。
+            count_stmt = users_table.select().order_by(users_table.c.id).limit(1)
+            existing = await session.execute(count_stmt)
+            role = "admin" if existing.fetchone() is None else "user"
             stmt = users_table.insert().values(
-                username=username, password_hash=password_hash, created_at=now,
+                username=username, password_hash=password_hash, created_at=now, role=role,
             )
             result = await session.execute(stmt)
             await session.commit()
             user_id = result.inserted_primary_key[0]
-            return {"id": user_id, "username": username, "created_at": now}
+            return {"id": user_id, "username": username, "created_at": now, "role": role}
 
     async def get_user(self, user_id: int) -> Optional[Dict]:
         """获取用户 by ID"""
@@ -1097,6 +1120,7 @@ class PgDatabase:
     async def get_user_by_username(self, username: str) -> Optional[Dict]:
         """获取用户 by username"""
         async with self.async_session() as session:
+            # C4 fix: 显式选择 role 列（此前 select(*) 已包含，但 _row_to_dict 需确认）
             stmt = users_table.select().where(users_table.c.username == username)
             result = await session.execute(stmt)
             row = result.fetchone()
@@ -1293,13 +1317,13 @@ class PgDatabase:
                 if len(summary) > 100:
                     summary = summary[:100] + "..."
 
-                # 查询该会话的机器人开关状态
-                setting_stmt = session_settings_table.select().where(
-                    session_settings_table.c.sessionId == session_id
+                # 查询该会话的机器人开关状态（统一从 conversations 表查询）
+                setting_stmt = text(
+                    'SELECT "botEnabled" FROM conversations WHERE platform = :platform AND "conversationId" = :cid ORDER BY "updatedAt" DESC LIMIT 1'
                 )
-                setting_result = await session.execute(setting_stmt)
+                setting_result = await session.execute(setting_stmt, {"platform": platform, "cid": conversation_id})
                 setting_row = setting_result.fetchone()
-                bot_enabled = _row_to_dict(setting_row)["bot_enabled"] if setting_row else 1
+                bot_enabled = _row_to_dict(setting_row)["botEnabled"] if setting_row else 1
 
                 sessions.append({
                     "sessionId": session_id,
@@ -1316,16 +1340,13 @@ class PgDatabase:
             return sessions
 
     async def set_session_bot_enabled(self, session_id: str, enabled: bool, platform: str = "qq", conversation_id: Optional[str] = None) -> None:
-        """设置某个会话的机器人开关"""
-        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        """设置某个会话的机器人开关。
+
+        统一写入 conversations 表（此前同时写 session_settings + conversations 双表，
+        现合并为单表，消除冗余）。
+        """
         async with self.async_session() as session:
-            stmt = text(
-                'INSERT INTO session_settings ("sessionId", platform, "conversationId", "sessionType", "sessionName", bot_enabled, updated_at) '
-                "VALUES (:sid, :platform, :cid, 'private', :sn, :be, :ua) "
-                'ON CONFLICT ("sessionId") DO UPDATE SET platform = EXCLUDED.platform, "conversationId" = EXCLUDED."conversationId", bot_enabled = EXCLUDED.bot_enabled, updated_at = EXCLUDED.updated_at'
-            )
             resolved_conversation_id = conversation_id or session_id
-            await session.execute(stmt, {"sid": session_id, "platform": platform, "cid": resolved_conversation_id, "sn": session_id, "be": int(enabled), "ua": now})
             await self._upsert_conversation_session(
                 session,
                 platform=platform,
@@ -1337,21 +1358,21 @@ class PgDatabase:
             await session.commit()
 
     async def is_session_bot_enabled(self, session_id: str, platform: str = "qq", conversation_id: Optional[str] = None) -> bool:
-        """检查某个会话的机器人是否启用（默认启用）"""
+        """检查某个会话的机器人是否启用（默认启用）。
+
+        统一从 conversations 表查询（此前先查 session_settings 失败再查 conversations，
+        现直接查 conversations，消除双表冗余查询）。
+        """
         async with self.async_session() as session:
-            stmt = session_settings_table.select().where(session_settings_table.c.sessionId == session_id)
-            result = await session.execute(stmt)
+            resolved_conversation_id = conversation_id or session_id
+            stmt = text(
+                'SELECT "botEnabled" FROM conversations WHERE platform = :platform AND "conversationId" = :cid ORDER BY "updatedAt" DESC LIMIT 1'
+            )
+            result = await session.execute(stmt, {"platform": platform, "cid": resolved_conversation_id})
             row = result.fetchone()
-            if row is None and conversation_id:
-                conversation_stmt = text('SELECT "botEnabled" FROM conversations WHERE platform = :platform AND "conversationId" = :conversation_id ORDER BY "updatedAt" DESC LIMIT 1')
-                conversation_result = await session.execute(conversation_stmt, {"platform": platform, "conversation_id": conversation_id})
-                conversation_row = conversation_result.fetchone()
-                if conversation_row is None:
-                    return True
-                return bool(_row_to_dict(conversation_row)["botEnabled"])
             if row is None:
                 return True
-            return bool(_row_to_dict(row)["bot_enabled"])
+            return bool(_row_to_dict(row)["botEnabled"])
 
     # ============================================
     # Claw 工具 CRUD
@@ -1551,10 +1572,10 @@ class PgDatabase:
             await session.execute(text('''
                 INSERT INTO training_tasks (
                     id, task_id, lora_name, status, progress, error_message,
-                    config_json, created_at, updated_at, "taskType", "createdAt", "updatedAt"
+                    config_json, created_at, updated_at
                 ) VALUES (
                     :id, :task_id, :lora_name, :status, :progress, :error_message,
-                    :config_json, :created_at, :updated_at, 'lora', :created_at, :updated_at
+                    :config_json, :created_at, :updated_at
                 )
                 ON CONFLICT (id) DO UPDATE SET
                     task_id = EXCLUDED.task_id,
@@ -1563,8 +1584,7 @@ class PgDatabase:
                     progress = EXCLUDED.progress,
                     error_message = EXCLUDED.error_message,
                     config_json = EXCLUDED.config_json,
-                    updated_at = EXCLUDED.updated_at,
-                    "updatedAt" = EXCLUDED."updatedAt"
+                    updated_at = EXCLUDED.updated_at
             '''), {
                 "id": task_id,
                 "task_id": task_id,
@@ -1801,8 +1821,10 @@ class SyncPgAdapter:
     def add_lora(self, lora_data):
         return self._run(self._pg.add_lora(lora_data))
 
-    def update_lora_status(self, lora_id, active):
-        return self._run(self._pg.update_lora_status(lora_id, active))
+    def update_lora_status(self, lora_id, status):
+        # fix: 参数名 active 暗示布尔值，但 PgDatabase/SQLite 实际需要字符串状态
+        # (如 "active"/"inactive")。与 SQLite Database.update_lora_status(lora_id, status) 对齐。
+        return self._run(self._pg.update_lora_status(lora_id, status))
 
     def delete_lora(self, lora_id):
         return self._run(self._pg.delete_lora(lora_id))
@@ -1828,11 +1850,15 @@ class SyncPgAdapter:
     def get_knowledge_folders(self, kb_id):
         return self._run(self._pg.get_knowledge_folders(kb_id))
 
-    def create_knowledge_folder(self, kb_id, name, parent_id=None):
-        return self._run(self._pg.create_knowledge_folder(kb_id, name, parent_id))
+    def create_knowledge_folder(self, kb_id, name, description=""):
+        # fix: 此前第三参数名为 parent_id，被当作 description 传给 PgDatabase，
+        # 导致文件夹描述被设为 parent_id 值。与 SQLite Database.create_knowledge_folder
+        # (kb_id, name, description="") 对齐。
+        return self._run(self._pg.create_knowledge_folder(kb_id, name, description))
 
-    def update_knowledge_folder(self, folder_id, **kwargs):
-        return self._run(self._pg.update_knowledge_folder(folder_id, **kwargs))
+    # 注意：SQLite Database 和 PgDatabase 均未实现 update_knowledge_folder。
+    # 此前 SyncPgAdapter 委托给不存在的 self._pg.update_knowledge_folder 会抛 AttributeError。
+    # 若未来需要更新文件夹，应在 SQLite/PgDatabase 中先实现，再在此添加委托。
 
     def delete_knowledge_folder(self, folder_id):
         return self._run(self._pg.delete_knowledge_folder(folder_id))
@@ -1912,8 +1938,10 @@ class SyncPgAdapter:
     def save_claw_tool(self, name, description, code, enabled=True):
         return self._run(self._pg.save_claw_tool(name, description, code, enabled))
 
-    def delete_claw_tool(self, tool_id):
-        return self._run(self._pg.delete_claw_tool(tool_id))
+    def delete_claw_tool(self, name):
+        # fix: 参数名 tool_id 误导调用方传 ID，但 PgDatabase/SQLite 实际按 name 删除。
+        # 与 SQLite Database.delete_claw_tool(name) 和 api/claw.py:110 调用方对齐。
+        return self._run(self._pg.delete_claw_tool(name))
 
     def add_audit_log(self, **kwargs):
         return self._run(self._pg.add_audit_log(**kwargs))

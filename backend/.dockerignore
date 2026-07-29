@@ -16,6 +16,10 @@ scripts
 models
 logs
 .env
+# C10 fix: infra/.env 含 ENCRYPTION_KEY 等敏感密钥，必须排除出镜像
+infra/.env
+.env.local
+.env.*.local
 *.egg-info
 .pytest_cache
 .mypy_cache

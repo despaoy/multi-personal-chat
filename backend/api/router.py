@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Depends
-from app.dependencies import get_current_user
+from app.dependencies import get_current_user, get_current_admin
 from db.adapter import db
 from db.models import RouterConfigUpdate
 
@@ -66,8 +66,11 @@ async def get_router_config(current_user: dict = Depends(get_current_user)):
 
 @router.put("/api/router/config")
 async def update_router_config(req: RouterConfigUpdate,
-                               current_user: dict = Depends(get_current_user)):
-    """更新路由配置"""
+                               current_user: dict = Depends(get_current_admin)):
+    """更新路由配置
+
+    C-S1 fix: 路由配置影响全局消息分发，限定 admin。
+    """
     try:
         rows = db.execute_sql("SELECT value FROM config WHERE key='lora_router_config'")
         if rows:

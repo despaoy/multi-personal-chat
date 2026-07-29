@@ -159,6 +159,14 @@ class BaseProvider:
     def set_lora_adapter(self, lora_path: Optional[str]):
         pass
 
+    def close(self):
+        """释放底层资源（httpx 客户端、模型句柄等）。
+
+        C6 fix: 子类若持有 httpx.Client/AsyncClient 等资源，应覆写此方法。
+        ModelManager.shutdown() 会在应用关闭时遍历所有 provider 调用 close()。
+        """
+        pass
+
 
 class OpenAICompatProvider(BaseProvider):
     """OpenAI兼容API提供商（支持DeepSeek、通义千问等）"""
@@ -250,6 +258,15 @@ class OpenAICompatProvider(BaseProvider):
         import asyncio
         return await asyncio.to_thread(self._generate_sync, prompt, session_history, rag_docs, max_tokens_override)
 
+    def close(self):
+        # C6 fix: 释放 httpx 客户端连接池，避免应用关闭时 socket 描述符泄漏
+        client = getattr(self, "_client", None)
+        if client is not None:
+            try:
+                client.close()
+            except Exception:
+                pass
+
 
 class MockProvider(BaseProvider):
     """模拟提供商，用于测试"""
@@ -336,6 +353,15 @@ class OllamaProvider(BaseProvider):
         import asyncio
         return await asyncio.to_thread(self._generate_sync, prompt, session_history, rag_docs, max_tokens_override)
 
+    def close(self):
+        # C6 fix: 释放 httpx 客户端连接池
+        client = getattr(self, "_client", None)
+        if client is not None:
+            try:
+                client.close()
+            except Exception:
+                pass
+
 
 class LlamaCppProvider(BaseProvider):
     """llama.cpp 提供商"""
@@ -398,6 +424,15 @@ class LlamaCppProvider(BaseProvider):
         """异步生成，通过线程池避免阻塞事件循环"""
         import asyncio
         return await asyncio.to_thread(self._generate_sync, prompt, session_history, rag_docs, max_tokens_override)
+
+    def close(self):
+        # C6 fix: 释放 httpx 客户端连接池
+        client = getattr(self, "_client", None)
+        if client is not None:
+            try:
+                client.close()
+            except Exception:
+                pass
 
 
 class TransformersPeftProvider(BaseProvider):
@@ -582,6 +617,21 @@ class TransformersPeftProvider(BaseProvider):
             "loraAdapter": self._lora_path,
         }
 
+    def close(self):
+        # C6 fix: 释放 GPU 显存与模型句柄
+        try:
+            if self._model is not None:
+                import torch
+                del self._model
+                self._model = None
+                self._tokenizer = None
+                self._loaded = False
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                logger.info("TransformersPeftProvider 模型资源已释放")
+        except Exception as e:
+            logger.warning(f"释放 TransformersPeftProvider 资源失败: {e}")
+
 
 class VLLMProvider(BaseProvider):
     """vLLM 提供商 - 高性能推理引擎，支持 Continuous Batching"""
@@ -594,7 +644,11 @@ class VLLMProvider(BaseProvider):
         self._model_name = self.model
         self._loaded = True
         import httpx
-        self._async_client = httpx.AsyncClient(timeout=httpx.Timeout(self.timeout, connect=10.0))
+        # 与 VLLMClient 的连接池配置保持一致（max=50, keepalive=20）
+        self._async_client = httpx.AsyncClient(
+            timeout=httpx.Timeout(self.timeout, connect=10.0),
+            limits=httpx.Limits(max_connections=50, max_keepalive_connections=20),
+        )
         self._refresh_db_config()
 
     def _refresh_db_config(self):
@@ -712,6 +766,30 @@ class VLLMProvider(BaseProvider):
 
         return asyncio.run(self.generate_async(prompt, session_history, rag_docs, max_tokens_override))
 
+    def close(self):
+        # C6 fix: 释放 httpx AsyncClient 连接池
+        client = getattr(self, "_async_client", None)
+        if client is not None:
+            try:
+                # AsyncClient.aclose() 是协程，但 close() 同步方法在 httpx 中也存在
+                # 优先用同步 close() 避免在 shutdown 路径中需要 event loop
+                if hasattr(client, "aclose"):
+                    # 若在 event loop 内，调度关闭；否则用同步 close
+                    try:
+                        import asyncio
+                        loop = asyncio.get_event_loop()
+                        if loop.is_running():
+                            # 已在 loop 内：创建 task 但不等待（best-effort）
+                            asyncio.ensure_future(client.aclose(), loop=loop)
+                        else:
+                            asyncio.run(client.aclose())
+                    except Exception:
+                        client.close()
+                else:
+                    client.close()
+            except Exception as e:
+                logger.warning(f"关闭 vLLM AsyncClient 失败: {e}")
+
 
 class ModelManager:
     """模型管理器，负责多提供商切换、LoRA管理、模型文件操作。"""
@@ -733,12 +811,28 @@ class ModelManager:
 
         self._current_provider = ModelProvider.MOCK
         env_provider = os.getenv("MODEL_PROVIDER", "").strip().lower()
-        db_provider = _db_cfg.get("modelProvider", "mock")
+        # C11 fix: DB 默认值从 "mock" 改为 "vllm"，但保留显式 mock 配置能力（开发环境）
+        db_provider = _db_cfg.get("modelProvider", "vllm")
         provider_name = env_provider or db_provider
         if provider_name in [e.value for e in ModelProvider]:
             self._current_provider = ModelProvider(provider_name)
             source = "environment" if env_provider else "database"
             logger.info(f"Initialized model provider from {source}: {provider_name}")
+        # C11 fix: 生产环境强制禁止 mock 作为默认 provider
+        # 若生产环境显式配置 mock（如演示场景），允许使用但记录警告；
+        # 若是默认值（未配置）且环境为生产，则拒绝启动
+        is_production = os.getenv("ENVIRONMENT", "development").strip().lower() in {"production", "prod"}
+        if is_production and self._current_provider == ModelProvider.MOCK:
+            if not env_provider and db_provider == "mock":
+                # 未显式配置，使用的是默认值 → 拒绝启动
+                raise RuntimeError(
+                    "生产环境禁止使用 mock 作为默认模型提供商。"
+                    "请通过 MODEL_PROVIDER 环境变量或数据库 config.modelProvider "
+                    "显式配置有效的提供商（如 vllm / openai_compat / ollama）。"
+                )
+            logger.warning(
+                "生产环境显式配置为 mock provider，将返回罐头回复，仅适用于演示场景"
+            )
         self._load_cache()
 
     def _load_cache(self):
@@ -838,6 +932,17 @@ class ModelManager:
 
         weight_files = list(model_dir.glob("*.safetensors")) + list(model_dir.glob("*.bin"))
         return bool(weight_files)
+
+    def shutdown(self):
+        """关闭所有 provider 的底层资源（httpx 客户端、GPU 句柄等）。
+
+        C6 fix: 应在应用 lifespan 的 shutdown 阶段调用，避免资源泄漏。
+        """
+        for provider in self._providers.values():
+            try:
+                provider.close()
+            except Exception as e:
+                logger.warning(f"关闭 provider {getattr(provider, 'name', '?')} 失败: {e}")
 
     def download_model_from_hf(self, model_name: str, force: bool = False) -> Dict[str, Any]:
         config = MODEL_CONFIGS.get(model_name)

@@ -79,6 +79,10 @@ RUN_LOG_PATH = OUTPUT_DIR / "run_log.jsonl"
 CACHE_DIR = OUTPUT_DIR / "cache"
 
 MAX_ATTEMPTS = 3  # per-spec retry on hard-gate/judge failure
+SMOKE_MIN_SCENES = 6
+SMOKE_MAX_DISPUTED_RATE = 0.25
+SMOKE_MIN_JUDGE_B_REACHED_RATE = 0.50
+SMOKE_MIN_PASSED_RATE = 0.50
 
 
 # ---------------------------------------------------------------------------
@@ -576,7 +580,8 @@ def _build_run_summary(
 
     Major-1 fix: ``acceptance_check`` block records the smoke gate
     criteria (processed count, scene coverage, parse failures, BGE
-    authoritativeness, duplicate IDs, disputed rate). ``run_pipeline``
+    authoritativeness, duplicate IDs, Judge B reach rate, final pass
+    rate, and disputed rate). `run_pipeline`
     uses ``all_passed`` to decide the process exit code so a smoke run
     that produces 12 rejected/disputed samples no longer exits 0.
     """
@@ -727,18 +732,29 @@ def _build_run_summary(
     # to reach Judge B so the disputed_rate and position-bias telemetry
     # are statistically meaningful.
     judge_b_reached_rate = (jb_count / processed_count) if processed_count else 0.0
-    judge_b_reached_ok = judge_b_reached_rate >= 0.5
+    judge_b_reached_ok = judge_b_reached_rate >= SMOKE_MIN_JUDGE_B_REACHED_RATE
+    passed_count = sum(
+        1 for rec in final_by_spec.values() if rec.get("status") == "passed"
+    )
+    passed_rate = (passed_count / processed_count) if processed_count else 0.0
+    passed_rate_ok = passed_rate >= SMOKE_MIN_PASSED_RATE
 
     processed_exactly = (
         expected_processed is not None
         and processed_count == expected_processed
     )
     processed_at_least_one = processed_count > 0
-    scenes_covered_ok = scenes_covered_count >= 6
+    scenes_covered_ok = scenes_covered_count >= SMOKE_MIN_SCENES
     parse_failures_zero = parse_failures == 0
-    disputed_rate_ok = disputed_rate <= 0.25
+    disputed_rate_ok = disputed_rate <= SMOKE_MAX_DISPUTED_RATE
 
     acceptance_check = {
+        "thresholds": {
+            "min_scenes": SMOKE_MIN_SCENES,
+            "max_disputed_rate": SMOKE_MAX_DISPUTED_RATE,
+            "min_judge_b_reached_rate": SMOKE_MIN_JUDGE_B_REACHED_RATE,
+            "min_passed_rate": SMOKE_MIN_PASSED_RATE,
+        },
         "processed_count": processed_count,
         "expected_count": expected_processed,
         "processed_exactly": processed_exactly,
@@ -755,6 +771,9 @@ def _build_run_summary(
         "judge_b_reached_count": jb_count,
         "judge_b_reached_rate": round(judge_b_reached_rate, 4),
         "judge_b_reached_ok": judge_b_reached_ok,
+        "passed_count": passed_count,
+        "passed_rate": round(passed_rate, 4),
+        "passed_rate_ok": passed_rate_ok,
         "disputed_rate": round(disputed_rate, 4),
         "disputed_rate_ok": disputed_rate_ok,
         # Smoke gate: ALL conditions must hold. processed_exactly is
@@ -769,13 +788,15 @@ def _build_run_summary(
             and bge_authoritative
             and no_duplicate_ids
             and judge_b_reached_ok
+            and passed_rate_ok
             and disputed_rate_ok
         ),
         "smoke_gate_criteria": (
-            "processed_exactly (when expected known); scenes_covered >= 6; "
+            f"processed_exactly (when expected known); scenes_covered >= {SMOKE_MIN_SCENES}; "
             "parse_failures == 0; bge_authoritative == true; "
-            "no_duplicate_ids; judge_b_reached_rate >= 0.5; "
-            "disputed_rate <= 0.25"
+            f"no_duplicate_ids; judge_b_reached_rate >= {SMOKE_MIN_JUDGE_B_REACHED_RATE}; "
+            f"passed_rate >= {SMOKE_MIN_PASSED_RATE}; "
+            f"disputed_rate <= {SMOKE_MAX_DISPUTED_RATE}"
         ),
     }
 
@@ -1230,7 +1251,8 @@ def main() -> int:
         help="Exit non-zero if acceptance_check.all_passed is false. "
              "Use this for smoke runs where the run must pass the gate "
              "(processed count, scene coverage, parse failures, BGE "
-             "authoritativeness, no duplicate IDs, disputed_rate <= 0.25) "
+             "authoritativeness, no duplicate IDs, Judge B reach rate, "
+             "final pass rate, and disputed rate) "
              "before the operator can proceed to calibration.",
     )
     args = parser.parse_args()
@@ -1267,6 +1289,8 @@ def main() -> int:
                 f"parse_failures={acceptance.get('parse_failure_count')}, "
                 f"bge_authoritative={acceptance.get('bge_authoritative')}, "
                 f"duplicate_ids={acceptance.get('duplicate_ids')}, "
+                f"judge_b_reached_rate={acceptance.get('judge_b_reached_rate')}, "
+                f"passed_rate={acceptance.get('passed_rate')}, "
                 f"disputed_rate={acceptance.get('disputed_rate')}"
             )
             return 2

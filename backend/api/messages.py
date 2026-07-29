@@ -3,7 +3,7 @@ import logging
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from app.dependencies import get_current_user
+from app.dependencies import get_current_user, get_current_admin
 from pydantic import BaseModel
 
 from db.adapter import db
@@ -83,8 +83,11 @@ class SessionBotToggle(BaseModel):
 
 
 @router.put("/api/sessions/bot-toggle")
-async def toggle_session_bot(req: SessionBotToggle, current_user: dict = Depends(get_current_user)):
-    """设置某个会话的机器人开关"""
+async def toggle_session_bot(req: SessionBotToggle, current_user: dict = Depends(get_current_admin)):
+    """设置某个会话的机器人开关
+
+    s2 fix: 影响任意会话的机器人开关（IDOR），限定 admin。
+    """
     try:
         db.set_session_bot_enabled(req.sessionId, req.enabled, req.platform, req.conversationId)
         return {"success": True, "sessionId": req.sessionId, "botEnabled": req.enabled}
@@ -104,8 +107,11 @@ class BatchDeleteRequest(BaseModel):
 
 
 @router.delete("/api/messages/batch")
-async def delete_messages_batch(req: BatchDeleteRequest, current_user: dict = Depends(get_current_user)):
-    """批量删除消息（基于筛选条件）— 需认证"""
+async def delete_messages_batch(req: BatchDeleteRequest, current_user: dict = Depends(get_current_admin)):
+    """批量删除消息（基于筛选条件）
+
+    C-S1 fix: 批量删除不可逆，限定 admin。
+    """
     try:
         count = db.delete_messages_by_filter(
             search=req.search,
@@ -123,8 +129,11 @@ async def delete_messages_batch(req: BatchDeleteRequest, current_user: dict = De
 
 
 @router.delete("/api/messages/{msg_id}")
-async def delete_message(msg_id: int, current_user: dict = Depends(get_current_user)):
-    """删除单条消息记录 — 需认证"""
+async def delete_message(msg_id: int, current_user: dict = Depends(get_current_admin)):
+    """删除单条消息记录 — 需 admin
+
+    s2 fix: 消息无所有权字段，批量删除已是 admin，单条删除对齐为 admin。
+    """
     try:
         success = db.delete_message(msg_id)
         if not success:

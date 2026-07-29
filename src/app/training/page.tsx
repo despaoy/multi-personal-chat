@@ -62,7 +62,7 @@ const statusIcons: Record<string, typeof Clock> = {
 
 export default function TrainingPage() {
   return (
-    <AuthGuard>
+    <AuthGuard requireAdmin>
       <TrainingContent />
     </AuthGuard>
   );

@@ -262,7 +262,11 @@ start_bare_metal() {
     local pids=()
 
     # 优雅关闭处理
+    # f4 fix: 此前 cleanup_bare 末尾硬编码 exit 0，导致任何显式调用 cleanup_bare
+    # 的场景（如 standalone 构建缺失）都以成功码退出，后续 exit 1 成为死代码。
+    # 现接受可选退出码参数：信号触发时默认 0，显式调用时可传入 1 表示错误退出。
     cleanup_bare() {
+        local exit_code=${1:-0}
         log_info "正在停止所有服务..."
         for pid in "${pids[@]}"; do
             if kill -0 "${pid}" 2>/dev/null; then
@@ -277,10 +281,10 @@ start_bare_metal() {
             fi
         done
         log_info "所有服务已停止"
-        exit 0
+        exit "${exit_code}"
     }
 
-    trap cleanup_bare SIGTERM SIGINT SIGQUIT
+    trap 'cleanup_bare 0' SIGTERM SIGINT SIGQUIT
 
     # 启动 vLLM 实例 1
     log_step "启动 vLLM 实例 1 (GPU 0, 端口 ${VLLM_PORT1})..."
@@ -320,8 +324,18 @@ start_bare_metal() {
     if [[ -f ".next/standalone/server.js" ]]; then
         PORT="${FRONTEND_PORT}" HOSTNAME="0.0.0.0" node .next/standalone/server.js &
     else
-        log_warn "Standalone frontend build is missing; using development server"
-        pnpm dev --port "${FRONTEND_PORT}" &
+        # M4 fix: 此前缺失 standalone 构建时会静默回退到 `pnpm dev`（开发服务器），
+        # 在生产部署中存在多个问题：
+        #   1. 开发服务器未做性能优化，吞吐远低于 standalone；
+        #   2. 暴露源码映射与详细错误，增加信息泄露面；
+        #   3. 不会启用 middleware 的生产路径匹配等行为，与线上表现不一致。
+        # 现改为硬失败并给出构建指引，避免“看似启动成功实则是 dev 模式”的隐患。
+        log_error "未找到 standalone 前端构建产物: .next/standalone/server.js"
+        log_error "请先执行生产构建: cd \"${PROJECT_DIR}\" && pnpm build"
+        log_error "（next.config.ts 需配置 output: 'standalone'）"
+        # f4 fix: 触发 cleanup 停止已启动的 vLLM/后端进程，并传入退出码 1。
+        # 此前 cleanup_bare 硬编码 exit 0，导致此致命错误被误报为成功。
+        cleanup_bare 1
     fi
     pids+=($!)
 

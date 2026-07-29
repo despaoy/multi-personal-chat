@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useCallback, useEffect, useMemo, useState, type ComponentType } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
@@ -106,7 +106,7 @@ function strFromConfig(config: SystemConfig, key: string, fallback = '') {
 
 export default function IntegrationsPage() {
   return (
-    <AuthGuard>
+    <AuthGuard requireAdmin>
       <IntegrationsContent />
     </AuthGuard>
   );
@@ -125,6 +125,9 @@ function IntegrationsContent() {
   const callbackPath = '/api/integrations/astrbot/messages';
   const backendUrl = strFromConfig(config, 'qqchatBackendUrl', 'http://127.0.0.1:8000');
   const callbackUrl = `${backendUrl.replace(/\/$/, '')}${callbackPath}`;
+  // M2 fix: 此前硬编码 http://127.0.0.1:6185，非本机部署场景下"打开 AstrBot 面板"按钮失效。
+  // 现从 config 读取 astrbotPanelUrl，默认值保持 127.0.0.1:6185 以兼容现有部署。
+  const astrbotPanelUrl = strFromConfig(config, 'astrbotPanelUrl', 'http://127.0.0.1:6185');
   const personalWechatEnabled = boolFromConfig(config, 'astrbotWechatPersonalEnabled', false);
   const personalWechatAdapter = strFromConfig(config, 'astrbotWechatPersonalAdapter', 'gewechat');
   const personalWechatEndpoint = strFromConfig(config, 'astrbotWechatPersonalEndpoint', '');
@@ -136,10 +139,10 @@ function IntegrationsContent() {
       else setLoading(true);
       const [configData, metricsData, servicesData] = await Promise.all([
         api.getConfig(),
-        fetch('/api/stats/metrics').then(async (res) => {
-          if (!res.ok) throw new Error('获取平台指标失败');
-          return res.json() as Promise<StatsMetricsResponse>;
-        }),
+        // M4 fix: 改用 api.getMetrics 走统一 request 助手，
+        // 401（token 过期）时会自动清理用户状态并跳转 /login，
+        // 而非裸 fetch 那样只抛“获取平台指标失败”让用户停在原地。
+        api.getMetrics<StatsMetricsResponse>(),
         api.getServices(),
       ]);
       setConfig(configData.config);
@@ -283,7 +286,7 @@ function IntegrationsContent() {
               <CardDescription>用于登录 AstrBot 与检查当前服务链路。</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              <a href="http://127.0.0.1:6185" target="_blank" rel="noreferrer">
+              <a href={astrbotPanelUrl} target="_blank" rel="noreferrer">
                 <Button className="w-full justify-between" variant="outline">
                   打开 AstrBot 面板
                   <ExternalLink className="h-4 w-4" />
