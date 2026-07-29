@@ -1,4 +1,4 @@
-﻿"""消息生成API - 支持vLLM高并发推理"""
+"""消息生成API - 支持vLLM高并发推理"""
 import asyncio
 import hashlib
 import json
@@ -22,6 +22,7 @@ from app.config import (
     response_cache, rate_limiter,
     INPUT_VALIDATOR_AVAILABLE,
     CIRCUIT_BREAKER_AVAILABLE,
+    is_vllm_enabled, get_vllm_served_model_name,
 )
 # C-F1 fix: failover_mgr 在 lifespan 中通过 app.config.failover_mgr = ...
 # 赋值，导入时绑定到 None 会永远看不到实例。改为动态访问模块属性。
@@ -125,12 +126,9 @@ async def _ensure_vllm():
         if _vllm_initialized:
             return False
         _vllm_initialized = True
-        vllm_enabled = (
-            os.getenv("VLLM_ENABLED", "").lower() == "true"
-            or bool(os.getenv("VLLM_BASE_URLS", "").strip())
-            or bool(os.getenv("VLLM_BASE_URL", "").strip())
-        )
-        if vllm_enabled:
+        # D-1 fix: 统一使用 app.config.is_vllm_enabled() 判定
+        from app.config import is_vllm_enabled
+        if is_vllm_enabled():
             try:
                 # 复用全局共享单例，避免与 bot.py 各自创建独立连接池
                 from inference.vllm_client import get_vllm_client as _get_shared
@@ -175,9 +173,7 @@ def _response_cache_keys(request: MessageRequest, lora_name: str) -> tuple[str, 
         config = db.config or {}
     except Exception:
         config = {}
-    model_name = os.getenv(
-        "VLLM_SERVED_MODEL_NAME", os.getenv("VLLM_MODEL", "qwen3-8b-instruct-awq")
-    )
+    model_name = get_vllm_served_model_name()
     use_knowledge_base = bool(config.get("useKnowledgeBase", True))
     identity = {
         "model": model_name,
@@ -303,7 +299,7 @@ async def generate_reply_core(request: MessageRequest, current_user: dict | None
             reply, used_rag, rag_meta = await _generate_with_vllm(request, vllm_effective_lora, vllm_lora_name)
             cost_time = round(time.time() - start_time, 2)
 
-            model_label = f"vllm/{os.getenv('VLLM_SERVED_MODEL_NAME', os.getenv('VLLM_MODEL', 'qwen3-8b-instruct-awq'))}"
+            model_label = f"vllm/{get_vllm_served_model_name()}"
             await _record_model_invocation(request, model_label, lora_name, cost_time, used_rag=used_rag, completion_text=reply)
             await _save_message(request, reply, "vllm", lora_name, cost_time)
             set_consecutive("model_failure", True)
@@ -311,7 +307,7 @@ async def generate_reply_core(request: MessageRequest, current_user: dict | None
 
             result = GenerateResponse(
                 reply=reply,
-                model=f"vllm/{os.getenv('VLLM_SERVED_MODEL_NAME', os.getenv('VLLM_MODEL', 'qwen3-8b-instruct-awq'))}",
+                model=f"vllm/{get_vllm_served_model_name()}",
                 costTime=cost_time,
                 citations=rag_meta.get("citations"),
                 confidence=rag_meta.get("confidence"),
@@ -330,7 +326,7 @@ async def generate_reply_core(request: MessageRequest, current_user: dict | None
             return result
         except Exception as e:
             failed_cost = round(time.time() - start_time, 2)
-            model_label = f"vllm/{os.getenv('VLLM_SERVED_MODEL_NAME', os.getenv('VLLM_MODEL', 'qwen3-8b-instruct-awq'))}"
+            model_label = f"vllm/{get_vllm_served_model_name()}"
             await _record_model_invocation(
                 request,
                 model_label,

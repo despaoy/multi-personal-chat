@@ -621,7 +621,9 @@ async def generate_with_local_model(prompt: str, session_id: Optional[str] = Non
     logger.info(f"使用 Qwen3-8B + LoRA={lora_name} 生成回复")
 
     # ── 优先使用 vLLM 高并发推理 ──
-    _use_vllm = os.getenv("VLLM_ENABLED", "false").lower() == "true"
+    # D-1 fix: 统一使用 app.config.is_vllm_enabled() 判定
+    from app.config import is_vllm_enabled
+    _use_vllm = is_vllm_enabled()
     if _use_vllm:
         try:
             # 复用全局共享单例，避免与 api/generate.py 各自创建独立连接池

@@ -639,7 +639,9 @@ class VLLMProvider(BaseProvider):
     def __init__(self):
         super().__init__("vllm")
         self.base_url = os.getenv("VLLM_BASE_URL", "http://localhost:8001/v1")
-        self.model = os.getenv("VLLM_SERVED_MODEL_NAME", os.getenv("VLLM_MODEL", "qwen3-8b-instruct-awq"))
+        # D-4 fix: 统一使用 get_vllm_served_model_name() 解析模型名
+        from app.config import get_vllm_served_model_name
+        self.model = get_vllm_served_model_name()
         self.timeout = float(os.getenv("VLLM_TIMEOUT", "120.0"))
         self._model_name = self.model
         self._loaded = True

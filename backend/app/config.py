@@ -124,6 +124,41 @@ llm_semaphore = asyncio.Semaphore(LLM_CONCURRENCY_LIMIT)
 
 
 # ============================================
+# vLLM 启用判定（单一入口，消除 5 处重复逻辑）
+# ============================================
+
+def is_vllm_enabled(env=os.environ) -> bool:
+    """统一判定 vLLM 是否启用。
+
+    启用条件（任一满足即可）：
+    1. VLLM_ENABLED=true/1/yes/on
+    2. VLLM_BASE_URLS 非空（逗号分隔多实例）
+    3. VLLM_BASE_URL 非空（单实例）
+
+    所有调用方应使用本函数，避免散落的 os.getenv 判定导致配 A 忘配 B。
+    """
+    if str(env.get("VLLM_ENABLED", "")).strip().lower() in {"1", "true", "yes", "on"}:
+        return True
+    if str(env.get("VLLM_BASE_URLS", "")).strip():
+        return True
+    if str(env.get("VLLM_BASE_URL", "")).strip():
+        return True
+    return False
+
+
+def get_vllm_served_model_name(env=os.environ) -> str:
+    """统一解析 vLLM 服务模型名。
+
+    优先级：VLLM_SERVED_MODEL_NAME > VLLM_MODEL > 默认值。
+    """
+    return str(
+        env.get("VLLM_SERVED_MODEL_NAME")
+        or env.get("VLLM_MODEL")
+        or "qwen3-8b-instruct-awq"
+    )
+
+
+# ============================================
 # 角色信息网络搜索工具
 # ============================================
 

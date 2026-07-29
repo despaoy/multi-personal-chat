@@ -323,9 +323,11 @@ async def health_check():
 @app.get("/ready")
 async def readiness_check():
     """Readiness checks required local state and the configured inference provider."""
+    # D-1 fix: 统一使用 is_vllm_enabled() 判定 vLLM 启用状态
+    from app.config import is_vllm_enabled
     model_required = (
         os.getenv("MODEL_PROVIDER", "").strip().lower() == "vllm"
-        or os.getenv("VLLM_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}
+        or is_vllm_enabled()
     )
     deps = {"database": False, "faiss": False, "model": not model_required}
     details: dict[str, str] = {}

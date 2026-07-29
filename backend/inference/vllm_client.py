@@ -252,9 +252,9 @@ class VLLMClient:
             u.strip().rstrip("/") for u in raw_urls.split(",") if u.strip()
         ]
         self._api_key: str = api_key or os.getenv("VLLM_API_KEY", "")
-        self._model: str = model or os.getenv(
-            "VLLM_SERVED_MODEL_NAME", os.getenv("VLLM_MODEL", "qwen3-8b-instruct-awq")
-        )
+        # D-4 fix: 统一使用 get_vllm_served_model_name() 解析模型名
+        from app.config import get_vllm_served_model_name
+        self._model: str = model or get_vllm_served_model_name()
         self._timeout: float = timeout or float(os.getenv("VLLM_TIMEOUT", "120"))
         self._max_retries: int = max_retries or int(os.getenv("VLLM_MAX_RETRIES", "3"))
         self._max_concurrency: int = int(os.getenv("VLLM_MAX_CONCURRENCY", "8"))
@@ -945,7 +945,9 @@ async def get_vllm_client() -> "VLLMClient":
         if _shared_client is not None:
             return _shared_client
         base_urls = os.getenv("VLLM_BASE_URLS", os.getenv("VLLM_BASE_URL", ""))
-        model = os.getenv("VLLM_MODEL", "")
+        # D-4 fix: 模型名统一通过 get_vllm_served_model_name() 解析
+        from app.config import get_vllm_served_model_name
+        model = get_vllm_served_model_name()
         timeout = float(os.getenv("VLLM_TIMEOUT", "120"))
         _shared_client = VLLMClient(
             base_urls=base_urls,
