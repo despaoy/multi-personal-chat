@@ -20,20 +20,35 @@ _lora_status_lock = asyncio.Lock()
 
 
 def _resolve_vllm_adapter_path(lora_name: str) -> str:
-    """Map a trusted backend LoRA directory to the path visible by vLLM."""
+    """Map a trusted backend LoRA directory to the path visible by vLLM.
+
+    注意：LORA_ROOT 下可能含有指向其他目录的符号链接（例如把
+    qqchat-data/loras/hutao 链接到 runtime/loras/hutao）。对这些链接，
+    Path.resolve() 会展开成真实路径，导致安全检查误判为"逃逸根目录"。
+    因此用 os.path.normpath（不跟随符号链接）做安全检查，再单独 resolve
+    判断 adapter_config.json 是否存在。
+    """
     local_root = LORA_ROOT.resolve()
-    local_path = (local_root / lora_name).resolve()
-    if not local_path.is_relative_to(local_root):
+    # 安全检查：用 normpath 防止 ../ 穿越，但不跟随符号链接
+    normalized = os.path.normpath(str(local_root / lora_name))
+    normalized_root = os.path.normpath(str(local_root))
+    if normalized != normalized_root and not normalized.startswith(normalized_root + os.sep):
         raise ValueError("LoRA path escapes the configured root")
-    if not (local_path / "adapter_config.json").exists():
-        final_path = local_path / "final"
+
+    # 逻辑相对路径（vLLM 看到的路径，不跟随符号链接）
+    logical_rel = Path(lora_name)
+
+    # resolve 检查文件是否存在（符号链接会被展开，这是预期的）
+    real_path = (local_root / lora_name).resolve()
+    if not (real_path / "adapter_config.json").exists():
+        final_path = real_path / "final"
         if (final_path / "adapter_config.json").exists():
-            local_path = final_path
+            logical_rel = logical_rel / "final"
         else:
             raise FileNotFoundError("LoRA adapter_config.json was not found")
 
     vllm_root = Path(os.getenv("VLLM_LORA_ROOT", str(local_root)))
-    return str(vllm_root / local_path.relative_to(local_root))
+    return str(vllm_root / logical_rel)
 
 
 def _read_lora_metadata(adapter_path: Path) -> dict:
