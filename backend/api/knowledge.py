@@ -1270,7 +1270,12 @@ async def search_knowledge(request: KnowledgeSearchRequest):
                 filters = {"knowledge_base_id": matched[0]["id"]}
                 logger.info(f"搜索过滤: 知识库「{request.knowledgeBaseName}」(id={matched[0]['id']})")
             else:
-                logger.warning(f"未找到知识库「{request.knowledgeBaseName}」，不应用过滤")
+                # fail-closed: 用户明确指定的知识库不存在时不应退化为全库搜索，
+                # 否则会返回其他知识库的内容。返回空结果。
+                logger.warning(
+                    f"未找到知识库「{request.knowledgeBaseName}」，返回空结果（不退化为全库搜索）"
+                )
+                return {"success": True, "query": query, "results": [], "searchType": "empty"}
 
         # 首次搜索时确保向量索引已构建（同步操作，放线程池避免阻塞事件循环）
         # _ensure_vector_index 返回 False 表示重建失败（落盘失败、数量不一致、
@@ -1338,6 +1343,9 @@ async def search_knowledge(request: KnowledgeSearchRequest):
             import re as _re
             import heapq
             query_keywords = _re.findall(r'[\u4e00-\u9fff]|[a-zA-Z]+', query_lower)
+            # 关键词降级必须继承知识库过滤条件，否则会在用户指定 knowledgeBaseName
+            # 时返回其他知识库的内容。target_kb_id 来自上层构造的 filters。
+            target_kb_id = filters.get("knowledge_base_id") if filters else None
             # 使用 JOIN 分批读取 chunk + document，避免 N+1 查询。
             # 使用大小受限的 top-k 堆，扫描完整集合但内存占用恒定为 O(top_k)。
             top_heap: list[tuple[float, int, dict]] = []
@@ -1346,6 +1354,9 @@ async def search_knowledge(request: KnowledgeSearchRequest):
                 doc_title = row.get("doc_title")
                 if doc_title is None:
                     continue  # 孤儿 chunk
+                # 继承上层知识库过滤条件，避免降级路径泄漏其他知识库内容
+                if target_kb_id is not None and row.get("doc_kb_id") != target_kb_id:
+                    continue
                 content = row["content"].lower()
                 # 完整匹配
                 score = content.count(query_lower) * 0.5

@@ -1467,3 +1467,127 @@ class TestEnsureVectorIndexEndToEnd:
         finally:
             kmod.db = original_db
             db.close_connection()
+
+    @pytest.mark.asyncio
+    async def test_keyword_fallback_respects_knowledge_base_filter(self, tmp_path, monkeypatch):
+        """When rebuild fails and search degrades to keyword, the
+        knowledgeBaseName filter must still be honored. Chunks from other
+        knowledge bases must NOT leak into results.
+
+        Two knowledge bases are created, each with a document containing
+        the query term. Without the filter, both would match. The filter
+        must restrict results to only the requested KB.
+        """
+        from api import knowledge as kmod
+        from db.schemas import KnowledgeSearchRequest
+
+        db = self._make_db(tmp_path)
+        original_db = kmod.db
+        kmod.db = db
+        kmod._vector_index_built = False
+
+        # 创建两个知识库
+        db.execute_sql_insert(
+            "INSERT INTO knowledge_bases (id, name, description, created_at, updated_at) "
+            "VALUES (:id, :name, :desc, '2026-01-01', '2026-01-01')",
+            {"id": 1, "name": "KB_ALPHA", "desc": "alpha"},
+        )
+        db.execute_sql_insert(
+            "INSERT INTO knowledge_bases (id, name, description, created_at, updated_at) "
+            "VALUES (:id, :name, :desc, '2026-01-01', '2026-01-01')",
+            {"id": 2, "name": "KB_BETA", "desc": "beta"},
+        )
+        # 两个知识库各一个文档，内容都包含查询词 "shared_term"
+        for doc_id, kb_id, title in [(10, 1, "AlphaDoc"), (20, 2, "BetaDoc")]:
+            db.execute_sql_insert(
+                "INSERT INTO knowledge_documents (id, title, content, category, knowledge_base_id, createdAt, updatedAt) "
+                "VALUES (:id, :title, :content, 'cat', :kb, '2026-01-01', '2026-01-01')",
+                {"id": doc_id, "title": title, "content": "shared_term body", "kb": kb_id},
+            )
+            db.execute_sql_insert(
+                "INSERT INTO knowledge_chunks (documentId, chunkIndex, content, embedding, createdAt) "
+                "VALUES (:doc, 0, :content, NULL, '2026-01-01')",
+                {"doc": doc_id, "content": "shared_term body"},
+            )
+
+        # 强制重建失败，触发关键词降级
+        monkeypatch.setattr(kmod, "_ensure_vector_index", lambda: False)
+
+        try:
+            # 指定 KB_ALPHA 过滤
+            request = KnowledgeSearchRequest(query="shared_term", topK=10, knowledgeBaseName="KB_ALPHA")
+            response = await kmod.search_knowledge(request)
+
+            assert response["success"] is True
+            assert response["searchType"] == "keyword"
+            assert len(response["results"]) == 1, "must return exactly one chunk from KB_ALPHA"
+            result = response["results"][0]
+            assert result["documentTitle"] == "AlphaDoc", (
+                f"must not leak BetaDoc from KB_BETA, got {result['documentTitle']}"
+            )
+
+            # 交叉验证：指定 KB_BETA
+            request_beta = KnowledgeSearchRequest(query="shared_term", topK=10, knowledgeBaseName="KB_BETA")
+            response_beta = await kmod.search_knowledge(request_beta)
+            assert len(response_beta["results"]) == 1
+            assert response_beta["results"][0]["documentTitle"] == "BetaDoc"
+        finally:
+            kmod.db = original_db
+            db.close_connection()
+
+    @pytest.mark.asyncio
+    async def test_nonexistent_knowledge_base_returns_empty(self, tmp_path, monkeypatch):
+        """When the requested knowledgeBaseName does not exist, the search
+        must return an empty result instead of silently falling back to a
+        full-library scan (fail-closed, not fail-open)."""
+        from api import knowledge as kmod
+        from db.schemas import KnowledgeSearchRequest
+
+        db = self._make_db(tmp_path)
+        original_db = kmod.db
+        kmod.db = db
+
+        # 创建一个知识库和文档（不应被检索到）
+        db.execute_sql_insert(
+            "INSERT INTO knowledge_bases (id, name, description, created_at, updated_at) "
+            "VALUES (:id, :name, :desc, '2026-01-01', '2026-01-01')",
+            {"id": 1, "name": "REAL_KB", "desc": "real"},
+        )
+        db.execute_sql_insert(
+            "INSERT INTO knowledge_documents (id, title, content, category, knowledge_base_id, createdAt, updatedAt) "
+            "VALUES (:id, :title, :content, 'cat', :kb, '2026-01-01', '2026-01-01')",
+            {"id": 1, "title": "Doc", "content": "shared content", "kb": 1},
+        )
+        db.execute_sql_insert(
+            "INSERT INTO knowledge_chunks (documentId, chunkIndex, content, embedding, createdAt) "
+            "VALUES (:doc, 0, :content, NULL, '2026-01-01')",
+            {"doc": 1, "content": "shared content"},
+        )
+
+        # 即使索引重建成功，不存在的知识库名称也应直接返回空，不应进入检索路径
+        monkeypatch.setattr(kmod, "_ensure_vector_index", lambda: True)
+
+        # 跟踪 RAG/vector 是否被调用
+        rag_called = {"value": False}
+        try:
+            from knowledge import rag_helper
+            def tracking_get_rag_helper():
+                rag_called["value"] = True
+                raise AssertionError("RAG must not be called for nonexistent KB")
+            monkeypatch.setattr(rag_helper, "get_rag_helper", tracking_get_rag_helper)
+        except ImportError:
+            pass
+
+        try:
+            request = KnowledgeSearchRequest(
+                query="shared", topK=5, knowledgeBaseName="NONEXISTENT_KB"
+            )
+            response = await kmod.search_knowledge(request)
+
+            assert response["success"] is True
+            assert response["results"] == [], "must return empty for nonexistent KB"
+            assert response["searchType"] == "empty"
+            assert not rag_called["value"], "RAG must not be invoked for nonexistent KB"
+        finally:
+            kmod.db = original_db
+            db.close_connection()
