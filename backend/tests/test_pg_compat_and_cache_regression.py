@@ -1417,3 +1417,53 @@ class TestEnsureVectorIndexEndToEnd:
                 crud_t.join(timeout=2)
             kmod.db = original_db
             db.close_connection()
+
+    @pytest.mark.asyncio
+    async def test_search_degrades_to_keyword_when_rebuild_fails(self, tmp_path, monkeypatch):
+        """When _ensure_vector_index() returns False, search_knowledge must
+        skip RAG and vector retrieval, falling through to DB keyword search.
+
+        Verifies the Major fix: the return value of _ensure_vector_index()
+        is no longer ignored. A failing rebuild (disk error, concurrent CRUD,
+        count mismatch) must not serve results from a partial/stale index.
+        """
+        from api import knowledge as kmod
+        from db.schemas import KnowledgeSearchRequest
+
+        db = self._make_db(tmp_path)
+        original_db = kmod.db
+        kmod.db = db
+        kmod._vector_index_built = False
+
+        self._insert_doc_with_chunks(db, 1, "Doc1", ["hello world", "foo bar"])
+
+        # Force _ensure_vector_index to return False (rebuild failed)
+        monkeypatch.setattr(kmod, "_ensure_vector_index", lambda: False)
+
+        # Track whether RAG/vector paths were attempted
+        rag_called = {"value": False}
+        original_get_rag = None
+        try:
+            from knowledge import rag_helper
+            original_get_rag = rag_helper.get_rag_helper
+            def tracking_get_rag_helper():
+                rag_called["value"] = True
+                raise AssertionError("RAG must not be called when rebuild failed")
+            monkeypatch.setattr(rag_helper, "get_rag_helper", tracking_get_rag_helper)
+        except ImportError:
+            pass  # rag_helper not available; RAG block will throw on import anyway
+
+        try:
+            request = KnowledgeSearchRequest(query="hello", topK=5)
+            response = await kmod.search_knowledge(request)
+
+            assert response["success"] is True
+            assert response["searchType"] == "keyword", (
+                f"must degrade to keyword when rebuild fails, got {response['searchType']}"
+            )
+            assert not rag_called["value"], "RAG must not be invoked when index is not ready"
+            # Keyword search should still find the matching chunk
+            assert len(response["results"]) > 0, "keyword fallback must return matching chunks"
+        finally:
+            kmod.db = original_db
+            db.close_connection()

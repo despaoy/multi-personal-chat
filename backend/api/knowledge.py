@@ -898,7 +898,10 @@ _vector_index_lock = threading.Lock()
 # 独立的 revision 锁：保护 revision 自增、dirty 写入和 _vector_index_built 重置
 # 的 read-modify-write 原子性。_ensure_vector_index 的 commit 临界区（revision
 # 校验 + 写 complete + 设 _vector_index_built）也使用此锁，确保 CRUD 的
-# _mark_rebuild_dirty 与重建 commit 互斥。不与 _vector_index_lock 嵌套以避免死锁。
+# _mark_rebuild_dirty 与重建 commit 互斥。
+# 锁顺序约束：允许按 _vector_index_lock → _revision_lock 顺序嵌套获取
+# （_ensure_vector_index 持有 _vector_index_lock 时进入 _revision_lock 临界区）。
+# 严禁反向获取（_revision_lock 内不得请求 _vector_index_lock），否则死锁。
 _revision_lock = threading.Lock()
 
 # 重建状态键，存储在 config 表中。
@@ -1270,30 +1273,39 @@ async def search_knowledge(request: KnowledgeSearchRequest):
                 logger.warning(f"未找到知识库「{request.knowledgeBaseName}」，不应用过滤")
 
         # 首次搜索时确保向量索引已构建（同步操作，放线程池避免阻塞事件循环）
-        await asyncio.to_thread(_ensure_vector_index)
+        # _ensure_vector_index 返回 False 表示重建失败（落盘失败、数量不一致、
+        # 并发 CRUD 等）。此时不能继续 RAG/向量检索，否则会从部分重建或过期
+        # 索引返回结果。降级到 DB 关键词检索，并记录结构化告警。
+        index_ready = await asyncio.to_thread(_ensure_vector_index)
 
         # 优先使用 RAGHelper 完整管线（retrieve_context 是同步阻塞的 CPU 密集型操作）
-        try:
-            from knowledge.rag_helper import get_rag_helper
-            rag = get_rag_helper()
-            results = await asyncio.to_thread(rag.retrieve_context, query, top_k, True, filters, None)
-            if results:
-                formatted = []
-                for r in results:
-                    formatted.append({
-                        "documentId": r.get("id"),
-                        "documentTitle": r.get("title", ""),
-                        "chunkIndex": r.get("chunk_index", 0),
-                        "content": r.get("content", ""),
-                        "score": r.get("normalized_score", r.get("score", 0)),
-                        "searchType": "rag_pipeline"
-                    })
-                return {"success": True, "query": query, "results": formatted, "searchType": "rag_pipeline"}
-        except Exception as e:
-            logger.warning(f"RAGHelper检索失败，回退向量检索: {e}")
+        if index_ready:
+            try:
+                from knowledge.rag_helper import get_rag_helper
+                rag = get_rag_helper()
+                results = await asyncio.to_thread(rag.retrieve_context, query, top_k, True, filters, None)
+                if results:
+                    formatted = []
+                    for r in results:
+                        formatted.append({
+                            "documentId": r.get("id"),
+                            "documentTitle": r.get("title", ""),
+                            "chunkIndex": r.get("chunk_index", 0),
+                            "content": r.get("content", ""),
+                            "score": r.get("normalized_score", r.get("score", 0)),
+                            "searchType": "rag_pipeline"
+                        })
+                    return {"success": True, "query": query, "results": formatted, "searchType": "rag_pipeline"}
+            except Exception as e:
+                logger.warning(f"RAGHelper检索失败，回退向量检索: {e}")
+        else:
+            logger.warning(
+                "vector_index_not_ready action=degrade_to_keyword "
+                "reason=rebuild_returned_false"
+            )
 
         # 回退：向量检索（hybrid_search 同步阻塞，放线程池）
-        if VECTOR_DB_AVAILABLE:
+        if index_ready and VECTOR_DB_AVAILABLE:
             try:
                 from app.config import get_vector_db
                 vector_db = get_vector_db()
