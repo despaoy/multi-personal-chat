@@ -895,8 +895,10 @@ async def delete_knowledge_document(doc_id: int, current_user: dict = Depends(ge
 
 _vector_index_built = False
 _vector_index_lock = threading.Lock()
-# 独立的 revision 锁：避免与 _vector_index_lock 嵌套导致死锁
-# （_ensure_vector_index 持有 _vector_index_lock 时不应阻塞 CRUD 的 revision 自增）
+# 独立的 revision 锁：保护 revision 自增、dirty 写入和 _vector_index_built 重置
+# 的 read-modify-write 原子性。_ensure_vector_index 的 commit 临界区（revision
+# 校验 + 写 complete + 设 _vector_index_built）也使用此锁，确保 CRUD 的
+# _mark_rebuild_dirty 与重建 commit 互斥。不与 _vector_index_lock 嵌套以避免死锁。
 _revision_lock = threading.Lock()
 
 # 重建状态键，存储在 config 表中。
@@ -920,20 +922,6 @@ def _get_rebuild_revision() -> int:
         return int(raw)
     except (ValueError, TypeError):
         return 0
-
-
-def _increment_rebuild_revision() -> int:
-    """原子自增重建修订号并返回新值。
-
-    使用独立的 _revision_lock 保证 read-modify-write 的原子性，避免与
-    _vector_index_lock 嵌套导致死锁（CRUD 可能在 _ensure_vector_index
-    持有 _vector_index_lock 期间并发执行）。
-    """
-    with _revision_lock:
-        current = _get_rebuild_revision()
-        new_rev = current + 1
-        db.set_config_value(_VECTOR_REBUILD_REVISION_KEY, str(new_rev))
-        return new_rev
 
 
 def _compute_chunk_fingerprint() -> str:
