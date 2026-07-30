@@ -340,20 +340,20 @@ class VectorDatabase:
                 logger.warning(f"BM25状态加载失败: {e}")
 
     def _save_bm25(self):
-        try:
-            bm25_data = {
-                "corpus": self.bm25.corpus,
-                "doc_freqs": dict(self.bm25.doc_freqs),
-                "doc_lens": self.bm25.doc_lens,
-                "avgdl": self.bm25.avgdl,
-                "idf": self.bm25.idf,
-                "tokenized_corpus": self.bm25.tokenized_corpus,
-                "built": self.bm25._built,
-            }
-            with open(self.bm25_path, 'wb') as f:
-                pickle.dump(bm25_data, f)
-        except Exception as e:
-            logger.error(f"BM25状态保存失败: {e}")
+        """持久化 BM25 状态，使用原子替换。失败时抛出异常，不吞错。"""
+        bm25_data = {
+            "corpus": self.bm25.corpus,
+            "doc_freqs": dict(self.bm25.doc_freqs),
+            "doc_lens": self.bm25.doc_lens,
+            "avgdl": self.bm25.avgdl,
+            "idf": self.bm25.idf,
+            "tokenized_corpus": self.bm25.tokenized_corpus,
+            "built": self.bm25._built,
+        }
+        tmp_path = str(self.bm25_path) + ".tmp"
+        with open(tmp_path, 'wb') as f:
+            pickle.dump(bm25_data, f)
+        os.replace(tmp_path, str(self.bm25_path))
 
     def _rebuild_id_mapping(self):
         self._id_to_index = {}
@@ -365,16 +365,25 @@ class VectorDatabase:
                     self._id_to_index[faiss_id] = i
 
     def _save_index(self):
+        """持久化 FAISS 索引、metadata 和 BM25 状态，使用原子替换。
+
+        失败时抛出异常（不吞错），确保调用方（如 _ensure_vector_index）
+        不会在落盘失败时误标记 complete。
+        """
         with self._lock:
-            try:
-                faiss.write_index(self.index, str(self.index_path))
-                with open(self.metadata_path, 'wb') as f:
-                    pickle.dump(self.metadata, f)
-                self._save_bm25()
-                self._dirty = False
-                logger.info("FAISS索引和BM25状态保存完成")
-            except Exception as e:
-                logger.error(f"保存索引失败: {e}")
+            # FAISS: 写入临时文件后原子替换
+            tmp_index = str(self.index_path) + ".tmp"
+            faiss.write_index(self.index, tmp_index)
+            os.replace(tmp_index, str(self.index_path))
+            # metadata: 同样原子替换
+            tmp_meta = str(self.metadata_path) + ".tmp"
+            with open(tmp_meta, 'wb') as f:
+                pickle.dump(self.metadata, f)
+            os.replace(tmp_meta, str(self.metadata_path))
+            # BM25
+            self._save_bm25()
+            self._dirty = False
+            logger.info("FAISS索引和BM25状态保存完成")
 
     def _to_faiss_id(self, id_value: Any) -> Optional[int]:
         try:
@@ -911,6 +920,8 @@ class VectorDatabase:
         用于向量索引重建前的清理：确保上次失败的部分批次不会残留，
         也避免删除全部知识后旧磁盘文件被下次启动加载。
         重建状态由调用方（_ensure_vector_index）在 config 表中管理。
+
+        失败时抛出异常（不吞错），确保调用方不会在落盘失败时误标记 complete。
         """
         with self._lock:
             self.index = None
@@ -921,16 +932,9 @@ class VectorDatabase:
             # 重置 BM25：旧文档词频与新文档混合会导致 hybrid/BM25 结果错位
             self.bm25 = BM25Retriever()
             self._dirty = True
-            # 立即持久化空索引，覆盖磁盘上的旧 faiss_index.bin / metadata.pkl / bm25_state.pkl
+            # 立即持久化空索引（原子替换），覆盖磁盘上的旧文件
             # 防止"内存清空但磁盘残留"导致重启后旧内容被加载
-            try:
-                faiss.write_index(self.index, str(self.index_path))
-                with open(self.metadata_path, 'wb') as f:
-                    pickle.dump(self.metadata, f)
-                self._save_bm25()
-                self._dirty = False
-            except Exception as e:
-                logger.error(f"clear_all 持久化空索引失败: {e}")
+            self._save_index()  # 内部使用原子写入，失败时抛出异常
         logger.info("向量索引已清空并持久化空索引，准备重建")
 
     def get_stats(self) -> Dict[str, Any]:
@@ -954,6 +958,7 @@ class VectorDatabase:
                 "use_gpu": self._use_gpu,
                 "bm25_built": self.bm25._built,
                 "bm25_vocab_size": len(self.bm25.doc_freqs),
+                "bm25_corpus_size": len(self.bm25.corpus),
                 "dirty": self._dirty,
             }
 
