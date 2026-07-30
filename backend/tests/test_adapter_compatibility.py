@@ -101,6 +101,45 @@ def test_empty_expected_base_model_skips_check(tmp_path):
     assert any("跳过基座" in w for w in report.warnings)
 
 
+def test_explicit_empty_string_not_overridden_by_env(monkeypatch, tmp_path):
+    """显式传入空字符串必须禁用基座比较，即使 BASE_MODEL_PATH 环境变量已设置。
+
+    回归测试：此前实现用 `expected_base_model or os.getenv(...)`，会把显式
+    空字符串当成未传值，导致同一测试在全量运行（其他用例设置了环境变量）
+    和单独运行时结果不同。改为 None 判断后，空字符串语义稳定。
+    """
+    adapter_dir = tmp_path / "lora2"
+    _write_adapter(adapter_dir, "/some/Qwen2.5-7B-Instruct")
+
+    # 模拟其他测试设置环境变量的场景
+    monkeypatch.setenv("BASE_MODEL_PATH", "/env/Qwen3-8B-Instruct")
+
+    from inference.adapter_checker import AdapterChecker
+    # 显式传入空字符串，应禁用比较，而不是用环境变量做比较
+    checker = AdapterChecker(expected_base_model="", lora_root=str(tmp_path))
+    report = checker.check_adapter("lora2")
+
+    assert report.base_model_mismatch is False
+    assert report.checks["base_model"] is True
+    assert any("跳过基座" in w for w in report.warnings)
+
+
+def test_none_falls_back_to_env(monkeypatch, tmp_path):
+    """传 None（未传值）应回退到环境变量。"""
+    adapter_dir = tmp_path / "lora3"
+    _write_adapter(adapter_dir, "/some/Qwen2.5-7B-Instruct")
+
+    monkeypatch.setenv("BASE_MODEL_PATH", "/env/Qwen3-8B-Instruct")
+
+    from inference.adapter_checker import AdapterChecker
+    checker = AdapterChecker(expected_base_model=None, lora_root=str(tmp_path))
+    report = checker.check_adapter("lora3")
+
+    # 环境变量生效，应检测到不匹配
+    assert report.base_model_mismatch is True
+    assert report.compatible is False
+
+
 def test_empty_actual_base_model_is_error(tmp_path):
     """adapter_config.json 中 base_model 为空应为 error。"""
     adapter_dir = tmp_path / "bad"

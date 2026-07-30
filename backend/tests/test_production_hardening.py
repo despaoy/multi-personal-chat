@@ -629,3 +629,77 @@ async def test_lora_activation_returns_409_for_other_incompatibility(monkeypatch
     # 非 base_model 错误不应携带 LORA_BASE_MODEL_MISMATCH code
     assert "code" not in detail or detail.get("code") != "LORA_BASE_MODEL_MISMATCH"
     assert fake_db.updated is False
+
+
+@pytest.mark.asyncio
+async def test_lora_activation_409_base_model_mismatch_via_testclient(monkeypatch):
+    """真实 HTTP 链路验证：409 LORA_BASE_MODEL_MISMATCH 经过 FastAPI 序列化后
+    响应体结构正确，且 admin 依赖被正确触发。
+
+    覆盖此前直接调用路由函数时未经过的链路：认证依赖、JSON 序列化、
+    HTTPException 到 HTTP 响应的转换。
+    """
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from app.dependencies import get_current_admin
+    from api import loras
+
+    class FakeDb:
+        def __init__(self):
+            self.updated = False
+
+        def get_loras(self):
+            return [{"id": "1", "name": "hutao_lora_7b", "status": "inactive"}]
+
+        def update_lora_status(self, lora_id, status):
+            self.updated = True
+            return {"id": lora_id, "name": "hutao_lora_7b", "status": status}
+
+    class MismatchChecker:
+        def __init__(self, **kwargs):
+            pass
+
+        def check_adapter(self, name):
+            return type(
+                "Report",
+                (),
+                {
+                    "compatible": False,
+                    "errors": ["base_model 不匹配"],
+                    "warnings": [],
+                    "base_model_mismatch": True,
+                    "expected_base_model": "/models/Qwen3-8B-Instruct",
+                    "actual_base_model": "/models/Qwen2.5-7B-Instruct",
+                },
+            )()
+
+    fake_db = FakeDb()
+    monkeypatch.setattr(loras, "db", fake_db)
+    monkeypatch.setattr(loras, "AdapterChecker", MismatchChecker)
+    monkeypatch.setattr(loras, "_resolve_vllm_adapter_path", lambda name: f"/loras/{name}")
+
+    app = FastAPI()
+    app.include_router(loras.router)
+    # 绕过 admin 认证依赖
+    app.dependency_overrides[get_current_admin] = lambda: {"user_id": 1, "username": "tester"}
+
+    client = TestClient(app)
+    try:
+        response = client.put(
+            "/api/loras/1/status",
+            json={"status": "active"},
+        )
+    finally:
+        try:
+            client.close()
+        except Exception:
+            pass
+
+    assert response.status_code == 409
+    body = response.json()
+    detail = body["detail"]
+    assert detail["code"] == "LORA_BASE_MODEL_MISMATCH"
+    assert "Qwen3-8B-Instruct" in detail["expected"]
+    assert "Qwen2.5-7B-Instruct" in detail["actual"]
+    # 预检失败不应改动数据库
+    assert fake_db.updated is False

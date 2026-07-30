@@ -50,9 +50,17 @@ class AdapterCompatibilityReport:
 class AdapterChecker:
     """适配器兼容性检查器。"""
 
-    def __init__(self, expected_base_model: str = "", lora_root: str = ""):
-        self.expected_base_model = expected_base_model or os.getenv("BASE_MODEL_PATH", "")
-        self.lora_root = lora_root or os.getenv("LORA_PATH", "")
+    def __init__(self, expected_base_model: Optional[str] = None, lora_root: Optional[str] = None):
+        # 仅在参数为 None（未传值）时回退到环境变量；显式空字符串表示
+        # 调用方有意禁用基座兼容性比较，不应被环境变量覆盖。
+        if expected_base_model is None:
+            self.expected_base_model = os.getenv("BASE_MODEL_PATH", "")
+        else:
+            self.expected_base_model = expected_base_model
+        if lora_root is None:
+            self.lora_root = os.getenv("LORA_PATH", "")
+        else:
+            self.lora_root = lora_root
 
     def _find_adapter_dir(self, adapter_name: str) -> Optional[Path]:
         """查找适配器目录（支持 final 子目录）。"""
