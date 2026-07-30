@@ -123,7 +123,9 @@ async def lifespan(app: FastAPI):
             from infra.resource_pool import ConnectionPool, HttpClientPool
             db_path = str(getattr(db, "db_path", _BACKEND_ROOT / "qq_assistant.db"))
             _cfg.connection_pool = ConnectionPool(db_path, max_size=20)
-            _cfg.http_client_pool = HttpClientPool(max_connections=100)
+            _cfg.http_client_pool = HttpClientPool(
+                max_connections=100, request_timeout=120.0
+            )
             logger.info("✅ 资源池初始化完成")
         except Exception as e:
             logger.warning(f"资源池初始化失败: {e}")
@@ -141,20 +143,18 @@ async def lifespan(app: FastAPI):
 
     if FAILOVER_AVAILABLE:
         try:
-            from infra.failover import FailoverManager, ProviderConfig, FailoverStrategy
+            from infra.failover import FailoverManager, FailoverStrategy
             _cfg.failover_mgr = FailoverManager(strategy=FailoverStrategy.AUTO_FAILOVER)
 
-            # 注册 vLLM 推理 provider
-            vllm_url = os.getenv("VLLM_BASE_URL", "http://localhost:8001")
-            _cfg.failover_mgr.add_provider(ProviderConfig(
-                name="vllm_primary",
-                priority=1,
-                health_check_url=f"{vllm_url}/health",
-            ))
+            # I-2 fix: 不再注册 vLLM provider 到 FailoverManager。
+            # VLLMClient 内部已有完整的实例健康检查（try_recover + UNHEALTHY 标记）、
+            # 熔断器和故障转移能力，此处冗余注册只会导致两套系统重复做 /health 探测，
+            # 且只注册一个 provider 无转移目标，check_and_failover() 永远返回 None。
+            # 未来如需非 vLLM fallback（如 ollama），可在此处注册。
 
             # 启动健康检查循环
             await _cfg.failover_mgr.start()
-            logger.info("✅ 故障转移管理器初始化完成（vLLM provider 已注册）")
+            logger.info("✅ 故障转移管理器初始化完成（vLLM 由 VLLMClient 内部管理）")
         except Exception as e:
             logger.warning(f"故障转移管理器初始化失败: {e}")
 

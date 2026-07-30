@@ -9,10 +9,7 @@ import logging
 from datetime import datetime
 from typing import Optional, Dict, List, Any
 
-from sqlalchemy import (
-    MetaData, Table, Column, Integer, BigInteger, Text, Float, String,
-    ForeignKey, UniqueConstraint, text,
-)
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 
 logger = logging.getLogger(__name__)
@@ -34,342 +31,36 @@ def _normalize_database_url(database_url: str) -> str:
 # ============================================
 # SQLAlchemy Core 表定义
 # ============================================
-metadata = MetaData()
+# Phase 2 fix: 表定义从 db.models 的 ORM metadata 派生，消除 26 张表的重复定义。
+# models.py 是数据库 schema 的单一真相源，pg_database.py 不再自行声明 Table 对象。
+from db.models import metadata
 
-messages_table = Table(
-    "messages", metadata,
-    Column("id", Integer, primary_key=True, autoincrement=True),
-    Column("sessionType", Text, nullable=False),
-    Column("sessionId", Text, nullable=False),
-    Column("sessionName", Text),
-    Column("platform", Text, nullable=False, server_default="qq"),
-    Column("adapter", Text, nullable=False, server_default="nonebot"),
-    Column("conversationId", Text),
-    Column("conversationType", Text),
-    Column("senderId", Text),
-    Column("senderName", Text),
-    Column("sourceMessageId", Text),
-    Column("traceId", Text),
-    Column("userId", Text),
-    Column("userName", Text),
-    Column("message", Text, nullable=False),
-    Column("reply", Text, nullable=False),
-    Column("modelName", Text),
-    Column("loraName", Text),
-    Column("costTime", Float),
-    Column("createdAt", Text, nullable=False),
-)
-
-loras_table = Table(
-    "loras", metadata,
-    Column("id", Text, primary_key=True),
-    Column("name", Text, nullable=False),
-    Column("description", Text),
-    Column("status", Text, nullable=False, server_default="inactive"),
-    Column("style", Text),
-    Column("size", Text),
-    Column("trainedSteps", Integer),
-    Column("totalSteps", Integer),
-    Column("createdAt", Text),
-)
-
-config_table = Table(
-    "config", metadata,
-    Column("key", Text, primary_key=True),
-    Column("value", Text, nullable=False),
-)
-
-knowledge_bases_table = Table(
-    "knowledge_bases", metadata,
-    Column("id", Integer, primary_key=True, autoincrement=True),
-    Column("name", Text, nullable=False, unique=True),
-    Column("description", Text, server_default=""),
-    Column("created_at", Text, nullable=False),
-    Column("updated_at", Text, nullable=False),
-)
-
-knowledge_folders_table = Table(
-    "knowledge_folders", metadata,
-    Column("id", Integer, primary_key=True, autoincrement=True),
-    Column("knowledge_base_id", Integer, ForeignKey("knowledge_bases.id", ondelete="CASCADE"), nullable=False),
-    Column("name", Text, nullable=False),
-    Column("description", Text, server_default=""),
-    Column("created_at", Text, nullable=False),
-    Column("updated_at", Text, nullable=False),
-    UniqueConstraint("knowledge_base_id", "name"),
-)
-
-knowledge_documents_table = Table(
-    "knowledge_documents", metadata,
-    Column("id", Integer, primary_key=True, autoincrement=True),
-    Column("title", Text, nullable=False),
-    Column("content", Text, nullable=False),
-    Column("category", Text, nullable=False, server_default="未分类"),
-    Column("knowledge_base_id", Integer, ForeignKey("knowledge_bases.id", ondelete="SET NULL")),
-    Column("folder_id", Integer, ForeignKey("knowledge_folders.id", ondelete="SET NULL")),
-    Column("sourceType", Text, nullable=False, server_default="text"),
-    Column("sourceUrl", Text),
-    Column("fileType", Text),
-    Column("fileSize", Integer),
-    Column("chunkCount", Integer, server_default="0"),
-    Column("createdAt", Text, nullable=False),
-    Column("updatedAt", Text, nullable=False),
-)
-
-knowledge_chunks_table = Table(
-    "knowledge_chunks", metadata,
-    Column("id", Integer, primary_key=True, autoincrement=True),
-    Column("documentId", Integer, ForeignKey("knowledge_documents.id", ondelete="CASCADE"), nullable=False),
-    Column("chunkIndex", Integer, nullable=False),
-    Column("content", Text, nullable=False),
-    Column("embedding", BigInteger),  # Faiss 向量 ID（不存 BLOB）
-    Column("createdAt", Text, nullable=False),
-)
-
-users_table = Table(
-    "users", metadata,
-    Column("id", Integer, primary_key=True, autoincrement=True),
-    Column("username", Text, nullable=False, unique=True),
-    Column("password_hash", Text, nullable=False),
-    Column("created_at", Text, nullable=False),
-    # C4 fix: PG 模式下缺失 role 字段导致 RBAC 完全失效。
-    # SQLite 实现已通过 _ensure_column 添加此列，PG 实现遗漏。
-    # 默认 'user'，首个用户自动升级为 'admin'（见 add_user 实现）。
-    Column("role", Text, nullable=False, server_default="user"),
-)
-
-user_data_table = Table(
-    "user_data", metadata,
-    Column("id", Integer, primary_key=True, autoincrement=True),
-    Column("user_id", Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
-    Column("page_key", Text, nullable=False),
-    Column("data_json", Text, nullable=False),
-    Column("updated_at", Text, nullable=False),
-    UniqueConstraint("user_id", "page_key"),
-)
-
-saved_dialogues_table = Table(
-    "saved_dialogues", metadata,
-    Column("id", Integer, primary_key=True, autoincrement=True),
-    Column("name", Text, nullable=False),
-    Column("character_desc", Text, nullable=False),
-    Column("style", Text),
-    Column("dialogue_count", Integer, nullable=False, server_default="0"),
-    Column("dialogues_json", Text, nullable=False),
-    Column("turn_stats", Text),
-    Column("scene_stats", Text),
-    Column("created_at", Text, nullable=False),
-    Column("updated_at", Text, nullable=False),
-)
-
-session_settings_table = Table(
-    "session_settings", metadata,
-    Column("sessionId", Text, primary_key=True),
-    Column("platform", Text, nullable=False, server_default="qq"),
-    Column("conversationId", Text),
-    Column("sessionType", Text, nullable=False, server_default="private"),
-    Column("sessionName", Text),
-    Column("bot_enabled", Integer, nullable=False, server_default="1"),
-    Column("updated_at", Text),
-)
-
-claw_tools_table = Table(
-    "claw_tools", metadata,
-    Column("id", Integer, primary_key=True, autoincrement=True),
-    Column("name", Text, nullable=False, unique=True),
-    Column("description", Text, nullable=False, server_default=""),
-    Column("code", Text, nullable=False, server_default=""),
-    Column("enabled", Integer, nullable=False, server_default="1"),
-    Column("created_at", Text, nullable=False),
-    Column("updated_at", Text, nullable=False),
-)
-
-integration_message_dedup_table = Table(
-    "integration_message_dedup", metadata,
-    Column("dedupKey", Text, primary_key=True),
-    Column("platform", Text, nullable=False),
-    Column("adapter", Text, nullable=False),
-    Column("messageId", Text, nullable=False),
-    Column("createdAt", Text, nullable=False),
-)
-
-conversations_table = Table(
-    "conversations", metadata,
-    Column("id", Integer, primary_key=True, autoincrement=True),
-    Column("platform", Text, nullable=False),
-    Column("conversationId", Text, nullable=False),
-    Column("conversationType", Text, nullable=False, server_default="private"),
-    Column("displayName", Text),
-    Column("botEnabled", Integer, nullable=False, server_default="1"),
-    Column("replyPolicy", Text, nullable=False, server_default="default"),
-    Column("createdAt", Text, nullable=False),
-    Column("updatedAt", Text, nullable=False),
-    UniqueConstraint("platform", "conversationId", "conversationType", name="uq_conversations_platform_conversation"),
-)
-
-integration_events_table = Table(
-    "integration_events", metadata,
-    Column("id", Integer, primary_key=True, autoincrement=True),
-    Column("platform", Text, nullable=False),
-    Column("adapter", Text, nullable=False),
-    Column("sourceMessageId", Text),
-    Column("conversationId", Text),
-    Column("conversationType", Text),
-    Column("senderId", Text),
-    Column("eventType", Text, nullable=False, server_default="message"),
-    Column("eventHash", Text, nullable=False),
-    Column("rawSummary", Text),
-    Column("traceId", Text),
-    Column("status", Text, nullable=False, server_default="received"),
-    Column("createdAt", Text, nullable=False),
-    UniqueConstraint("platform", "adapter", "eventHash", name="uq_integration_events_platform_hash"),
-)
-
-model_invocations_table = Table(
-    "model_invocations", metadata,
-    Column("id", Integer, primary_key=True, autoincrement=True),
-    Column("traceId", Text),
-    Column("platform", Text, nullable=False, server_default="qq"),
-    Column("conversationId", Text),
-    Column("sessionId", Text),
-    Column("modelName", Text),
-    Column("loraName", Text),
-    Column("costTime", Float, server_default="0"),
-    Column("promptTokens", Integer, server_default="0"),
-    Column("completionTokens", Integer, server_default="0"),
-    Column("totalTokens", Integer, server_default="0"),
-    Column("usedRag", Integer, nullable=False, server_default="0"),
-    Column("usedLora", Integer, nullable=False, server_default="0"),
-    Column("errorType", Text, server_default=""),
-    Column("createdAt", Text, nullable=False),
-)
-
-audit_logs_table = Table(
-    "audit_logs", metadata,
-    Column("id", Integer, primary_key=True, autoincrement=True),
-    Column("timestamp", Float, nullable=False),
-    Column("api_key_hash", Text, nullable=False),
-    Column("role", Text, nullable=False),
-    Column("action", Text, nullable=False),
-    Column("resource", Text),
-    Column("detail", Text),
-    Column("ip_address", Text),
-)
-
-intent_samples_table = Table(
-    "intent_samples", metadata,
-    Column("id", Integer, primary_key=True, autoincrement=True),
-    Column("kbName", Text, nullable=False),
-    Column("text", Text, nullable=False),
-    Column("label", Text, nullable=False),
-    Column("createdAt", Text, nullable=False),
-)
-
-intent_active_kbs_table = Table(
-    "intent_active_kbs", metadata,
-    Column("id", Integer, primary_key=True, autoincrement=True),
-    Column("kbName", Text, nullable=False),
-    Column("isActive", Integer, nullable=False, server_default="1"),
-)
-
-training_tasks_table = Table(
-    "training_tasks", metadata,
-    Column("id", Text, primary_key=True),
-    Column("task_id", Text, unique=True),
-    Column("lora_name", Text, server_default=""),
-    Column("status", Text, nullable=False, server_default="pending"),
-    Column("progress", Float, server_default="0"),
-    Column("error_message", Text, server_default=""),
-    Column("config_json", Text, server_default="{}"),
-    Column("created_at", Text, server_default=""),
-    Column("updated_at", Text, server_default=""),
-    # Legacy columns retained for existing PostgreSQL deployments.
-    # 已废弃：新代码不再写入这些列，仅保留以兼容已有数据库（NOT NULL DEFAULT 约束保证旧数据不报错）。
-    # 后续应通过 Alembic 迁移删除这些列。
-    Column("taskType", Text, nullable=False, server_default="lora"),
-    Column("config", Text),
-    Column("result", Text),
-    Column("createdAt", Text, nullable=False, server_default=""),
-    Column("updatedAt", Text, nullable=False, server_default=""),
-)
-
-# ============================================
-# 研究与评估相关表（LLM Research Enhancement Roadmap）
-# ============================================
-gold_eval_runs_table = Table(
-    "gold_eval_runs", metadata,
-    Column("id", Text, primary_key=True),
-    Column("run_at", Text, nullable=False),
-    Column("adapter_name", Text),
-    Column("model_label", Text),
-    Column("total_prompts", Integer, server_default="0"),
-    Column("category_breakdown", Text),
-    Column("metrics", Text),
-    Column("config_snapshot", Text),
-    Column("notes", Text),
-)
-
-experiment_runs_table = Table(
-    "experiment_runs", metadata,
-    Column("id", Text, primary_key=True),
-    Column("experiment_type", Text, nullable=False),
-    Column("hypothesis", Text),
-    Column("status", Text, nullable=False, server_default="pending"),
-    Column("started_at", Text, nullable=False),
-    Column("completed_at", Text),
-    Column("results", Text),
-    Column("config_path", Text),
-    Column("report_path", Text),
-)
-
-retrieval_eval_questions_table = Table(
-    "retrieval_eval_questions", metadata,
-    Column("id", Text, primary_key=True),
-    Column("question", Text, nullable=False),
-    Column("expected_doc_ids", Text),
-    Column("expected_doc_titles", Text),
-    Column("gold_answer", Text),
-    Column("category", Text),
-    Column("created_at", Text, nullable=False),
-)
-
-preference_pairs_table = Table(
-    "preference_pairs", metadata,
-    Column("id", Text, primary_key=True),
-    Column("prompt", Text, nullable=False),
-    Column("chosen", Text, nullable=False),
-    Column("rejected", Text, nullable=False),
-    Column("rubric", Text),
-    Column("annotator", Text),
-    Column("metadata", Text),
-    Column("review_status", Text, nullable=False, server_default="pending"),
-    Column("created_at", Text, nullable=False),
-)
-
-adapter_compatibility_table = Table(
-    "adapter_compatibility", metadata,
-    Column("id", Integer, primary_key=True, autoincrement=True),
-    Column("adapter_name", Text, nullable=False),
-    Column("checked_at", Text, nullable=False),
-    Column("compatible", Integer, nullable=False),
-    Column("checks", Text),
-    Column("warnings", Text),
-    Column("errors", Text),
-)
-
-feedback_table = Table(
-    "feedback", metadata,
-    Column("id", Integer, primary_key=True, autoincrement=True),
-    Column("trace_id", Text),
-    Column("message_id", Text),
-    Column("rating", Text),
-    Column("reason", Text),
-    Column("adapter_name", Text),
-    Column("kb_revision", Text),
-    Column("prompt_version", Text),
-    Column("detail", Text),
-    Column("created_at", Text, nullable=False),
-)
+messages_table = metadata.tables["messages"]
+loras_table = metadata.tables["loras"]
+config_table = metadata.tables["config"]
+knowledge_bases_table = metadata.tables["knowledge_bases"]
+knowledge_folders_table = metadata.tables["knowledge_folders"]
+knowledge_documents_table = metadata.tables["knowledge_documents"]
+knowledge_chunks_table = metadata.tables["knowledge_chunks"]
+users_table = metadata.tables["users"]
+user_data_table = metadata.tables["user_data"]
+saved_dialogues_table = metadata.tables["saved_dialogues"]
+session_settings_table = metadata.tables["session_settings"]
+claw_tools_table = metadata.tables["claw_tools"]
+integration_message_dedup_table = metadata.tables["integration_message_dedup"]
+conversations_table = metadata.tables["conversations"]
+integration_events_table = metadata.tables["integration_events"]
+model_invocations_table = metadata.tables["model_invocations"]
+audit_logs_table = metadata.tables["audit_logs"]
+intent_samples_table = metadata.tables["intent_samples"]
+intent_active_kbs_table = metadata.tables["intent_active_kbs"]
+training_tasks_table = metadata.tables["training_tasks"]
+gold_eval_runs_table = metadata.tables["gold_eval_runs"]
+experiment_runs_table = metadata.tables["experiment_runs"]
+retrieval_eval_questions_table = metadata.tables["retrieval_eval_questions"]
+preference_pairs_table = metadata.tables["preference_pairs"]
+adapter_compatibility_table = metadata.tables["adapter_compatibility"]
+feedback_table = metadata.tables["feedback"]
 
 
 # ============================================
@@ -674,15 +365,8 @@ class PgDatabase:
             for row in result.fetchall():
                 d = _row_to_dict(row)
                 key, value = d["key"], d["value"]
-                if value.lower() == "true":
-                    config_dict[key] = True
-                elif value.lower() == "false":
-                    config_dict[key] = False
-                else:
-                    try:
-                        config_dict[key] = float(value) if "." in value else int(value)
-                    except (ValueError, TypeError):
-                        config_dict[key] = value
+                from db.config_utils import coerce_config_value
+                config_dict[key] = coerce_config_value(value)
             return config_dict
 
     async def get_config_value(self, key: str, default=None):
@@ -1565,6 +1249,9 @@ class PgDatabase:
         }
 
     async def save_training_task(self, task_id: str, task_data: Dict) -> None:
+        # M5 fix: 拒绝空 task_id，与 SQLite 侧保持一致
+        if not task_id or not str(task_id).strip():
+            raise ValueError("task_id 不能为空")
         created_at = task_data.get("created_at", "")
         updated_at = task_data.get("updated_at", "")
         config_json = json.dumps(task_data.get("config", {}), ensure_ascii=False)
@@ -1616,32 +1303,39 @@ class PgDatabase:
             return [self._normalize_training_task(row) for row in result.fetchall()]
 
     async def add_training_task(self, task: Dict) -> Dict:
-        """添加训练任务"""
+        """添加训练任务并返回规范化记录。
+
+        P1-M2 fix: 与 SQLite 侧对齐，统一走 save_training_task + get_training_task，
+        返回 _normalize_training_task 规范化的 DTO，而非 legacy 列。
+        """
+        task_id = task.get("task_id") or task.get("id") or ""
         now = datetime.now().isoformat()
-        async with self.async_session() as session:
-            stmt = training_tasks_table.insert().values(
-                id=task.get("id"),
-                taskType=task.get("taskType", "lora"),
-                status=task.get("status", "pending"),
-                config=task.get("config"),
-                progress=task.get("progress", 0),
-                result=task.get("result"),
-                createdAt=now,
-                updatedAt=now,
-            )
-            await session.execute(stmt)
-            await session.commit()
-            return {**task, "createdAt": now, "updatedAt": now}
+        task_data = {
+            "lora_name": task.get("lora_name", ""),
+            "status": task.get("status", "pending"),
+            "progress": float(task.get("progress", 0) or 0),
+            "error_message": task.get("error_message", ""),
+            "config": task.get("config", {}),
+            "created_at": task.get("created_at", now),
+            "updated_at": task.get("updated_at", now),
+        }
+        await self.save_training_task(task_id, task_data)
+        return await self.get_training_task(task_id) or {**task, "task_id": task_id}
 
     async def get_training_tasks(self, status: Optional[str] = None) -> List[Dict]:
-        """获取训练任务列表"""
+        """获取训练任务列表。
+
+        P1-M2 fix: 返回 _normalize_training_task 规范化的 DTO，与 SQLite 侧一致；
+        排序改用 created_at（与 SQLite 对齐），不再依赖 legacy createdAt 列。
+        """
         async with self.async_session() as session:
             stmt = training_tasks_table.select()
             if status:
                 stmt = stmt.where(training_tasks_table.c.status == status)
-            stmt = stmt.order_by(training_tasks_table.c.createdAt.desc())
+            # 优先用 created_at（新 schema），回退到 createdAt（legacy）
+            stmt = stmt.order_by(training_tasks_table.c.created_at.desc())
             result = await session.execute(stmt)
-            return [_row_to_dict(row) for row in result.fetchall()]
+            return [self._normalize_training_task(row) for row in result.fetchall()]
 
     async def get_training_task(self, task_id: str) -> Optional[Dict]:
         """获取单个训练任务"""
@@ -1651,13 +1345,26 @@ class PgDatabase:
             return self._normalize_training_task(result.fetchone())
 
     async def update_training_task(self, task_id: str, data: Dict) -> Optional[Dict]:
-        """更新训练任务"""
+        """更新训练任务字段。
+
+        P1-M2 fix: 与 SQLite 侧对齐，更新 config_json/updated_at/error_message 等
+        新 schema 列；config 入参为 dict 时序列化为 config_json 存储。
+        返回 _normalize_training_task 规范化的 DTO。
+        """
         now = datetime.now().isoformat()
+        values: Dict = {"updated_at": now}
+        for key in ("status", "progress", "error_message", "lora_name"):
+            if key in data:
+                values[key] = data[key]
+        if "config" in data:
+            # config 是 dict，存到 config_json 列
+            try:
+                values["config_json"] = json.dumps(data["config"], ensure_ascii=False)
+            except (TypeError, ValueError):
+                pass
+        if "config_json" in data:
+            values["config_json"] = data["config_json"]
         async with self.async_session() as session:
-            values = {"updatedAt": now}
-            for key in ("status", "progress", "result", "config"):
-                if key in data:
-                    values[key] = data[key]
             stmt = (
                 training_tasks_table.update()
                 .where(training_tasks_table.c.id == task_id)
@@ -1668,8 +1375,7 @@ class PgDatabase:
 
             sel_stmt = training_tasks_table.select().where(training_tasks_table.c.id == task_id)
             result = await session.execute(sel_stmt)
-            row = result.fetchone()
-            return _row_to_dict(row) if row else None
+            return self._normalize_training_task(result.fetchone())
 
     async def delete_training_task(self, task_id: str) -> bool:
         """删除训练任务"""

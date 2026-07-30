@@ -960,6 +960,20 @@ class SQLiteDB:
         cursor.execute('SELECT COUNT(*) FROM messages')
         return cursor.fetchone()[0]
 
+    def get_recent_messages(self, limit: int = 10) -> list:
+        """获取最近的 N 条消息（按创建时间倒序）。
+
+        Phase 2 fix: 补齐 PG 侧存在但 SQLite 侧缺失的方法，保持双后端接口一致。
+        """
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            'SELECT * FROM messages ORDER BY createdAt DESC LIMIT ?',
+            (limit,),
+        )
+        columns = [desc[0] for desc in cursor.description]
+        return [dict(zip(columns, row)) for row in cursor.fetchall()]
+
     def add_message(self, message: Dict):
         """Add a message record and keep the conversation index in sync."""
         conn = self._get_connection()
@@ -1107,22 +1121,11 @@ class SQLiteDB:
         rows = cursor.fetchall()
 
         config_dict = {}
+        from db.config_utils import coerce_config_value
         for row in rows:
             key = row['key']
             value = row['value']
-            # 尝试转换类型
-            if value.lower() == 'true':
-                config_dict[key] = True
-            elif value.lower() == 'false':
-                config_dict[key] = False
-            else:
-                try:
-                    if '.' in value:
-                        config_dict[key] = float(value)
-                    else:
-                        config_dict[key] = int(value)
-                except:
-                    config_dict[key] = value
+            config_dict[key] = coerce_config_value(value)
         return config_dict
 
     def get_config_value(self, key: str, default=None):
@@ -1151,6 +1154,13 @@ class SQLiteDB:
 
     # SyncPgAdapter 通过 set_config 别名对齐 PG 端方法名
     set_config = update_config
+
+    def set_config_value(self, key: str, value):
+        """更新单个配置项。
+
+        Phase 2 fix: 补齐 PG 侧存在但 SQLite 侧缺失的方法，保持双后端接口一致。
+        """
+        self.update_config({key: value})
 
     # ============================================
     # 审计日志（与 pg_database.py 对齐，此前 SQLite 缺失）
@@ -1929,6 +1939,20 @@ class SQLiteDB:
         row = cursor.fetchone()
         return dict(row) if row else None
 
+    def get_user(self, user_id: int):
+        """通过用户 ID 查找用户。
+
+        Phase 2 fix: 补齐 PG 侧存在但 SQLite 侧缺失的方法，保持双后端接口一致。
+        """
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            'SELECT id, username, password_hash, created_at, role FROM users WHERE id = ?',
+            (user_id,),
+        )
+        row = cursor.fetchone()
+        return dict(row) if row else None
+
     def add_user(self, username: str, password_hash: str):
         """添加用户，返回用户信息 dict"""
         now = datetime.now().isoformat()
@@ -2025,7 +2049,12 @@ class SQLiteDB:
     # 训练任务持久化
     # ============================================
     def save_training_task(self, task_id: str, task_data: dict):
-        """保存训练任务状态到数据库"""
+        """保存训练任务状态到数据库。
+
+        M5 fix: 拒绝空 task_id，与 PG 侧保持一致。
+        """
+        if not task_id or not str(task_id).strip():
+            raise ValueError("task_id 不能为空")
         conn = self._get_connection()
         cursor = conn.cursor()
         import json
@@ -2046,7 +2075,12 @@ class SQLiteDB:
         conn.commit()
 
     def get_training_task(self, task_id: str) -> dict | None:
-        """获取单个训练任务"""
+        """获取单个训练任务。
+
+        P1-M2 fix: 返回与 PG _normalize_training_task 一致的 DTO，
+        只暴露统一字段（task_id/lora_name/status/progress/error_message/
+        config/created_at/updated_at），不泄露 config_json 等内部列。
+        """
         conn = self._get_connection()
         cursor = conn.cursor()
         cursor.execute('SELECT * FROM training_tasks WHERE task_id = ?', (task_id,))
@@ -2054,13 +2088,28 @@ class SQLiteDB:
         if row:
             import json
             columns = [desc[0] for desc in cursor.description]
-            result = dict(zip(columns, row))
-            result['config'] = json.loads(result.get('config_json', '{}'))
-            return result
+            raw = dict(zip(columns, row))
+            try:
+                config = json.loads(raw.get('config_json', '{}') or '{}')
+            except (TypeError, json.JSONDecodeError):
+                config = {}
+            return {
+                "task_id": raw.get("task_id"),
+                "lora_name": raw.get("lora_name", ""),
+                "status": raw.get("status", "pending"),
+                "progress": float(raw.get("progress", 0) or 0),
+                "error_message": raw.get("error_message", ""),
+                "config": config,
+                "created_at": raw.get("created_at", ""),
+                "updated_at": raw.get("updated_at", ""),
+            }
         return None
 
     def get_all_training_tasks(self) -> list:
-        """获取所有训练任务"""
+        """获取所有训练任务。
+
+        P1-M2 fix: 返回统一 DTO，与 PG _normalize_training_task 一致。
+        """
         conn = self._get_connection()
         cursor = conn.cursor()
         cursor.execute('SELECT * FROM training_tasks ORDER BY created_at DESC')
@@ -2069,20 +2118,125 @@ class SQLiteDB:
         import json
         results = []
         for row in rows:
-            result = dict(zip(columns, row))
-            result['config'] = json.loads(result.get('config_json', '{}'))
-            results.append(result)
+            raw = dict(zip(columns, row))
+            try:
+                config = json.loads(raw.get('config_json', '{}') or '{}')
+            except (TypeError, json.JSONDecodeError):
+                config = {}
+            results.append({
+                "task_id": raw.get("task_id"),
+                "lora_name": raw.get("lora_name", ""),
+                "status": raw.get("status", "pending"),
+                "progress": float(raw.get("progress", 0) or 0),
+                "error_message": raw.get("error_message", ""),
+                "config": config,
+                "created_at": raw.get("created_at", ""),
+                "updated_at": raw.get("updated_at", ""),
+            })
         return results
 
-    def delete_training_task(self, task_id: str):
-        """删除训练任务记录"""
+    def add_training_task(self, task: dict) -> dict:
+        """添加训练任务并返回任务记录。
+
+        Phase 2 fix: 补齐 PG 侧存在但 SQLite 侧缺失的方法，保持双后端接口一致。
+        m3 fix: 自动补 created_at/updated_at，与 PG 侧行为一致。
+        """
+        task_id = task.get("task_id") or task.get("id") or ""
+        now = datetime.now().isoformat()
+        task_data = dict(task)
+        # 自动补时间戳（调用方未提供时），与 PG add_training_task 一致
+        if not task_data.get("created_at"):
+            task_data["created_at"] = now
+        if not task_data.get("updated_at"):
+            task_data["updated_at"] = now
+        self.save_training_task(task_id, task_data)
+        return self.get_training_task(task_id) or task_data
+
+    def get_training_tasks(self, status: str | None = None) -> list:
+        """按状态筛选训练任务，status=None 返回全部。
+
+        P1-M2 fix: 返回统一 DTO，与 PG _normalize_training_task 一致。
+        """
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        if status:
+            cursor.execute(
+                'SELECT * FROM training_tasks WHERE status = ? ORDER BY created_at DESC',
+                (status,),
+            )
+        else:
+            cursor.execute('SELECT * FROM training_tasks ORDER BY created_at DESC')
+        rows = cursor.fetchall()
+        columns = [desc[0] for desc in cursor.description]
+        import json
+        results = []
+        for row in rows:
+            raw = dict(zip(columns, row))
+            try:
+                config = json.loads(raw.get('config_json', '{}') or '{}')
+            except (TypeError, json.JSONDecodeError):
+                config = {}
+            results.append({
+                "task_id": raw.get("task_id"),
+                "lora_name": raw.get("lora_name", ""),
+                "status": raw.get("status", "pending"),
+                "progress": float(raw.get("progress", 0) or 0),
+                "error_message": raw.get("error_message", ""),
+                "config": config,
+                "created_at": raw.get("created_at", ""),
+                "updated_at": raw.get("updated_at", ""),
+            })
+        return results
+
+    def update_training_task(self, task_id: str, data: dict):
+        """更新训练任务字段。
+
+        P1-M2 fix: 与 PG 侧对齐，支持 config (dict) 自动序列化为 config_json；
+        返回统一 DTO。
+        """
+        import json
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        allowed = {
+            "status", "progress", "error_message", "config_json",
+            "lora_name",
+        }
+        updates = {k: v for k, v in data.items() if k in allowed}
+        # The storage layer owns updated_at for consistent SQLite/PostgreSQL behavior.
+        updates["updated_at"] = datetime.now().isoformat()
+        # config (dict) → config_json (str)，与 PG 侧一致
+        if "config" in data and "config_json" not in data:
+            try:
+                updates["config_json"] = json.dumps(data["config"], ensure_ascii=False)
+            except (TypeError, ValueError):
+                pass
+        if not updates:
+            return self.get_training_task(task_id)
+        set_clause = ", ".join(f"{k} = ?" for k in updates)
+        params = list(updates.values()) + [task_id]
+        cursor.execute(
+            f'UPDATE training_tasks SET {set_clause} WHERE task_id = ?',
+            params,
+        )
+        conn.commit()
+        return self.get_training_task(task_id)
+
+    def delete_training_task(self, task_id: str) -> bool:
+        """删除训练任务记录。
+
+        M5 fix: 与 PG 侧对齐，返回 bool 表示是否删除了行。
+        """
         conn = self._get_connection()
         cursor = conn.cursor()
         cursor.execute('DELETE FROM training_tasks WHERE task_id = ?', (task_id,))
         conn.commit()
+        return cursor.rowcount > 0
 
     def get_active_training_by_lora_name(self, lora_name: str) -> list:
-        """查找指定lora_name的运行中任务"""
+        """查找指定lora_name的运行中任务。
+
+        M5 fix: 返回统一 DTO，与 PG _normalize_training_task 一致。
+        """
         conn = self._get_connection()
         cursor = conn.cursor()
         cursor.execute(
@@ -2091,7 +2245,25 @@ class SQLiteDB:
         )
         rows = cursor.fetchall()
         columns = [desc[0] for desc in cursor.description]
-        return [dict(zip(columns, row)) for row in rows]
+        import json
+        results = []
+        for row in rows:
+            raw = dict(zip(columns, row))
+            try:
+                config = json.loads(raw.get('config_json', '{}') or '{}')
+            except (TypeError, json.JSONDecodeError):
+                config = {}
+            results.append({
+                "task_id": raw.get("task_id"),
+                "lora_name": raw.get("lora_name", ""),
+                "status": raw.get("status", "pending"),
+                "progress": float(raw.get("progress", 0) or 0),
+                "error_message": raw.get("error_message", ""),
+                "config": config,
+                "created_at": raw.get("created_at", ""),
+                "updated_at": raw.get("updated_at", ""),
+            })
+        return results
 
 # 全局数据库实例
 db = SQLiteDB()

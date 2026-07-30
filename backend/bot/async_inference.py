@@ -119,20 +119,34 @@ class AsyncInferenceService:
     def __init__(
         self,
         backend: str = "mock",
-        ollama_url: str = "http://localhost:11434",
-        vllm_url: str = "http://localhost:8001/v1",
-        openai_url: str = "https://api.deepseek.com",
-        openai_key: str = "",
-        model_name: str = "qwen3-8b",
-        timeout: float = 120.0,
+        ollama_url: str = None,
+        vllm_url: str = None,
+        openai_url: str = None,
+        openai_key: str = None,
+        model_name: str = None,
+        timeout: float = None,
     ):
+        # m-4 fix: 默认值从环境变量读取，与 bot/bot.py Config 类保持一致
         self.backend = backend
-        self.ollama_url = ollama_url
-        self.vllm_url = vllm_url
-        self.openai_url = openai_url
-        self.openai_key = openai_key
-        self.model_name = model_name
-        self.timeout = timeout
+        self.ollama_url = (ollama_url or os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")).rstrip("/")
+        raw_vllm_url = vllm_url or os.getenv("VLLM_BASE_URL", "http://localhost:8001")
+        self.vllm_url = raw_vllm_url.rstrip("/")
+        if not self.vllm_url.endswith("/v1"):
+            self.vllm_url += "/v1"
+        raw_openai_url = openai_url or os.getenv("OPENAI_COMPAT_BASE_URL", "https://api.deepseek.com")
+        self.openai_url = raw_openai_url.rstrip("/")
+        if not self.openai_url.endswith("/v1"):
+            self.openai_url += "/v1"
+        self.openai_key = openai_key or os.getenv("OPENAI_COMPAT_API_KEY", "")
+        if model_name:
+            self.model_name = model_name
+        elif backend == "vllm":
+            self.model_name = os.getenv("VLLM_SERVED_MODEL_NAME", os.getenv("VLLM_MODEL", "qwen3-8b"))
+        elif backend == "openai":
+            self.model_name = os.getenv("OPENAI_COMPAT_MODEL", "deepseek-chat")
+        else:
+            self.model_name = os.getenv("OLLAMA_MODEL", "qwen3-8b")
+        self.timeout = timeout if timeout is not None else float(os.getenv("MODEL_INFERENCE_TIMEOUT", "180"))
         self._stats = {"total": 0, "success": 0, "failed": 0, "total_latency": 0.0, "cache_hits": 0}
 
         # 共享 httpx 客户端（懒初始化）
@@ -352,7 +366,7 @@ class AsyncInferenceService:
         request_messages = messages if messages else [{"role": "user", "content": message}]
         client = await self._ensure_client()
         resp = await client.post(
-            f"{self.openai_url}/v1/chat/completions",
+            f"{self.openai_url}/chat/completions",
             json={
                 "model": self.model_name,
                 "messages": request_messages,

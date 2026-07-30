@@ -84,8 +84,8 @@ async def _is_duplicate_message(message_id: str) -> bool:
             key = f"dedup:msg:{message_id}"
             was_set = await redis.set(key, "1", nx=True, ex=_DEDUP_TTL)
             return was_set is None or was_set is False
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("Redis 去重失败，回退到内存去重: %s", exc)
 
     # 回退到内存去重
     import time
@@ -109,7 +109,8 @@ def _load_db_config() -> Dict[str, Any]:
     """从数据库加载配置，返回字典（通过db.adapter统一访问）"""
     try:
         return db.config
-    except Exception:
+    except Exception as exc:
+        logger.warning("加载数据库配置失败，返回空配置: %s", exc)
         return {}
 
 # 带缓存的配置读取：设置页修改后最多30秒生效，无需重启bot进程
@@ -1293,10 +1294,11 @@ def init_bot():
                 await lora_cmd.finish(f"切换失败: {e}")
 
     logger.info("机器人初始化完成")
-    logger.info("提示: 请配置NapCat连接到 ws://服务器IP:8081/onebot/v11/ws")
+    bot_port = int(os.getenv("BOT_PORT", "8081"))
+    logger.info("提示: 请配置NapCat连接到 ws://服务器IP:%s/onebot/v11/ws", bot_port)
     logger.info("提示: 使用 /help 或 /帮助 查看帮助")
 
-    nonebot.run(host="0.0.0.0", port=8081)
+    nonebot.run(host="0.0.0.0", port=bot_port)
 
 
 if __name__ == "__main__":

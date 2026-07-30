@@ -5,11 +5,12 @@
 ## 阅读顺序
 
 1. [项目 README](../README.md)：项目定位、架构和快速验证。
-2. [部署指南](operations/DEPLOYMENT_GUIDE.md)：本地、实验室服务器和容器部署。
-3. [服务器目录规范](operations/SERVER_LAYOUT.md)：`/home/szw/lhm2` 的唯一推荐布局。
-4. [清理策略](operations/CLEANUP_POLICY.md)：哪些文件可以删除，哪些必须保留。
-5. [代码知识库](architecture/CODE_WIKI.md)：模块职责、API 和调用链。
-6. [生产准备审查](architecture/PRODUCTION_READINESS_REVIEW_2026-07-18.md)：当前风险、限制与后续工作。
+2. [保研项目答辩手册](research/POSTGRADUATE_RECOMMENDATION_DEFENSE_PLAYBOOK.md)：项目叙事、LLM 原理、追问与演示。
+3. [部署指南](operations/DEPLOYMENT_GUIDE.md)：本地、实验室服务器和容器部署。
+4. [服务器目录规范](operations/SERVER_LAYOUT.md)：`/home/szw/lhm2` 的唯一推荐布局。
+5. [清理策略](operations/CLEANUP_POLICY.md)：哪些文件可以删除，哪些必须保留。
+6. [代码知识库](architecture/CODE_WIKI.md)：模块职责、API 和调用链。
+7. [生产准备审查](architecture/PRODUCTION_READINESS_REVIEW_2026-07-18.md)：当前风险、限制与后续工作。
 
 ## 文档分类
 
@@ -27,6 +28,7 @@
 
 ### `research/`
 
+- `POSTGRADUATE_RECOMMENDATION_DEFENSE_PLAYBOOK.md`：保研答辩叙事、技术原理、高频追问和现场演示手册。
 - `KISAKI_EXPERIMENT_INDEX.md`：月社妃 E1/E2、Gold、脚本和历史结果统一入口。
 - `KISAKI_E1_E2_CANONICAL_EXPERIMENT.md`：当前正式 NEFTune 受控实验设计。
 - `KISAKI_CHARACTER_PROFILE.md`：原作证据支持的人物画像。

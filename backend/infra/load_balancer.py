@@ -424,3 +424,44 @@ class LoadBalancerManager:
         stats = self._balancer.get_stats()
         stats["strategy"] = self._strategy_name
         return stats
+
+    def sync_from_vllm_client(self, vllm_client: Any) -> None:
+        """从 VLLMClient 同步实例统计（I-2 fix：桥接模式）。
+
+        VLLMClient 内部已有完整的负载均衡、健康检查和熔断器，
+        此方法将其实例统计同步到 LoadBalancerManager，使
+        /api/enhanced/load-balancer/stats 端点能返回真实数据，
+        而非之前因从未 set_providers 导致的空统计。
+
+        Args:
+            vllm_client: VLLMClient 实例。
+        """
+        try:
+            instances = getattr(vllm_client, "_instances", [])
+            if not instances:
+                return
+
+            # 将 VLLMInstance 映射为 load_balancer 的 Provider
+            providers: List[Provider] = []
+            for inst in instances:
+                status = ProviderStatus.HEALTHY
+                if inst.status.value != "healthy":
+                    status = ProviderStatus.UNHEALTHY
+                providers.append(Provider(
+                    name=inst.name,
+                    url=inst.base_url,
+                    weight=inst.weight,
+                    status=status,
+                    current_connections=inst.current_connections,
+                    total_requests=inst.total_requests,
+                    success_count=inst.success_count,
+                    failure_count=inst.failure_count,
+                    consecutive_failures=inst.consecutive_failures,
+                    total_response_time=inst.total_response_time,
+                    last_failure_time=inst.last_failure_time,
+                    last_used_time=inst.last_used_time,
+                ))
+            self._balancer.set_providers(providers)
+            logger.debug("已从 VLLMClient 同步 %d 个实例统计", len(providers))
+        except Exception as exc:
+            logger.warning("从 VLLMClient 同步统计失败: %s", exc)

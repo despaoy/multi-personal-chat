@@ -77,6 +77,14 @@ async def get_enhanced_stats(current_user: dict = Depends(get_current_user)):
     stats = {}
 
     if load_balancer_mgr:
+        # P1-M3 fix: 实时同步 VLLMClient 统计，避免返回初始化快照
+        try:
+            from api.generate import get_vllm_client
+            vllm_client = await get_vllm_client()
+            if vllm_client is not None:
+                load_balancer_mgr.sync_from_vllm_client(vllm_client)
+        except Exception as exc:
+            logging.getLogger(__name__).debug("实时同步 VLLMClient 统计失败: %s", exc)
         stats["loadBalancer"] = load_balancer_mgr.get_stats()
 
     if async_task_queue:
@@ -117,6 +125,16 @@ async def get_enhanced_stats(current_user: dict = Depends(get_current_user)):
 async def get_load_balancer_stats(current_user: dict = Depends(get_current_user)):
     if not load_balancer_mgr:
         raise HTTPException(status_code=503, detail="负载均衡器不可用")
+    # P1-M3 fix: 每次请求实时从 VLLMClient 同步统计，避免返回初始化快照。
+    # 原 sync_from_vllm_client 只在 _ensure_vllm 初始化时调用一次，之后
+    # VLLMClient 内部 record_success 更新的数据无法反映到监控接口。
+    try:
+        from api.generate import get_vllm_client
+        vllm_client = await get_vllm_client()
+        if vllm_client is not None:
+            load_balancer_mgr.sync_from_vllm_client(vllm_client)
+    except Exception as exc:
+        logging.getLogger(__name__).debug("实时同步 VLLMClient 统计失败: %s", exc)
     return {"success": True, "stats": load_balancer_mgr.get_stats()}
 
 

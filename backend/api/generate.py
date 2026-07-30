@@ -134,6 +134,13 @@ async def _ensure_vllm():
                 from inference.vllm_client import get_vllm_client as _get_shared
                 _vllm_client = await _get_shared()
                 logger.info("✅ vLLM 客户端初始化成功(共享单例)")
+                # I-2 fix: 同步 VLLMClient 实例统计到 load_balancer_mgr，
+                # 使 /api/enhanced/load-balancer/stats 返回真实数据
+                if load_balancer_mgr:
+                    try:
+                        load_balancer_mgr.sync_from_vllm_client(_vllm_client)
+                    except Exception as sync_err:
+                        logger.debug(f"同步 VLLMClient 统计到 load_balancer_mgr 失败: {sync_err}")
                 return True
             except Exception as e:
                 logger.warning(f"vLLM 客户端初始化失败: {e}")
@@ -383,7 +390,10 @@ async def generate_reply_core(request: MessageRequest, current_user: dict | None
                     model_manager.set_lora_adapter(None)
 
                 async def _do_generate_async():
-                    return await asyncio.to_thread(model_manager.generate,
+                    # P0-C1 fix: 直接 await 原生 async_generate，禁止跨事件循环
+                    # 复用缓存的 httpx.AsyncClient（曾用 asyncio.to_thread → asyncio.run
+                    # 创建新循环，第二次请求会报 RuntimeError: Event loop is closed）。
+                    return await model_manager.async_generate(
                         prompt=request.message,
                         session_history=[],
                         rag_docs=None
@@ -412,12 +422,10 @@ async def generate_reply_core(request: MessageRequest, current_user: dict | None
         provider_status = status.get("providers", {}).get(current_provider, {})
         model_name = provider_status.get("modelName", "Unknown")
 
-        if load_balancer_mgr:
-            try:
-                await load_balancer_mgr.record_success(current_provider, cost_time)
-            except Exception as e:
-                logger.warning(f"负载均衡记录成功失败: {e}")
-                pass
+        # I-2 fix: 移除 load_balancer_mgr.record_success 调用。
+        # LoadBalancerManager 从未 set_providers，record_success 因找不到匹配 provider
+        # 成为空操作。VLLMClient 内部的 VLLMInstance.record_success 已记录真实统计，
+        # 并通过 sync_from_vllm_client() 桥接到 load_balancer_mgr 用于可观测性。
 
         await _record_model_invocation(request, model_name, lora_name, cost_time, used_rag=False, completion_text=reply)
         await _save_message(request, reply, model_name, lora_name, cost_time)
@@ -786,8 +794,8 @@ if _PIPELINE_ENABLED:
                         peft_provider.set_lora_adapter(lora_path)
                     model_manager.set_provider(ModelProvider.TRANSFORMERS_PEFT)
 
-                return await asyncio.to_thread(
-                    model_manager.generate,
+                # P0-C1 fix: 直接 await 原生 async_generate，避免跨事件循环复用 AsyncClient
+                return await model_manager.async_generate(
                     prompt=request.message,
                     session_history=[],
                     rag_docs=None,

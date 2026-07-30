@@ -211,7 +211,7 @@ app = FastAPI(
 2. **数据库探活**：`_initialize_database(db)` 执行 `SELECT 1`，失败阻断启动
 3. **Redis 缓存**（可选）：失败降级为数据库直连模式
 4. **资源池 / 备份 / 访问控制**：**仅 SQLite 模式初始化**（这些组件直接持有 SQLite 文件路径）
-5. **故障转移管理器**：注册 vLLM provider（`{VLLM_BASE_URL}/health`），启动健康检查循环
+5. **故障转移管理器**：保留给非 vLLM 后备提供商；vLLM 实例健康检查、熔断和故障转移由 `VLLMClient` 统一管理
 6. **向量索引**：延迟到首次搜索时通过 `_ensure_vector_index()` 重建
 
 关闭阶段逆序清理：`connection_pool` → `http_client_pool` → `backup_mgr` → `failover_mgr` → `async_task_queue` → `llm_optimizer`。
