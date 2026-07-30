@@ -133,6 +133,20 @@ class PgDatabase:
             await conn.execute(text('CREATE INDEX IF NOT EXISTS idx_integration_events_platform_created ON integration_events (platform, "createdAt")'))
             await conn.execute(text('CREATE INDEX IF NOT EXISTS idx_model_invocations_trace ON model_invocations ("traceId")'))
             await conn.execute(text('CREATE INDEX IF NOT EXISTS idx_model_invocations_created ON model_invocations ("createdAt")'))
+            await conn.execute(text('CREATE INDEX IF NOT EXISTS idx_experiment_runs_type ON experiment_runs (experiment_type)'))
+            await conn.execute(text('CREATE INDEX IF NOT EXISTS idx_preference_pairs_status ON preference_pairs (review_status)'))
+            await conn.execute(text('CREATE INDEX IF NOT EXISTS idx_feedback_created ON feedback (created_at)'))
+            await conn.execute(text('CREATE INDEX IF NOT EXISTS idx_adapter_compat_name ON adapter_compatibility (adapter_name)'))
+            # 补充此前缺失的高频外键/过滤列索引（与 SQLite 一致）
+            await conn.execute(text('CREATE INDEX IF NOT EXISTS idx_knowledge_chunks_documentId ON knowledge_chunks ("documentId")'))
+            await conn.execute(text('CREATE INDEX IF NOT EXISTS idx_knowledge_documents_kb_id ON knowledge_documents (knowledge_base_id)'))
+            await conn.execute(text('CREATE INDEX IF NOT EXISTS idx_knowledge_documents_folder_id ON knowledge_documents (folder_id)'))
+            await conn.execute(text('CREATE INDEX IF NOT EXISTS idx_training_tasks_lora_name ON training_tasks (lora_name)'))
+            await conn.execute(text('CREATE INDEX IF NOT EXISTS idx_training_tasks_status ON training_tasks (status)'))
+            await conn.execute(text('CREATE INDEX IF NOT EXISTS idx_intent_samples_kbName ON intent_samples ("kbName")'))
+            await conn.execute(text('CREATE INDEX IF NOT EXISTS idx_feedback_trace_id ON feedback (trace_id)'))
+            await conn.execute(text('CREATE INDEX IF NOT EXISTS idx_feedback_message_id ON feedback (message_id)'))
+            await conn.execute(text('CREATE INDEX IF NOT EXISTS idx_audit_logs_timestamp ON audit_logs (timestamp)'))
         self._initialized = True
         logger.info(f"✅ PostgreSQL 数据库初始化完成: {self.database_url.split('@')[-1]}")
 

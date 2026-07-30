@@ -877,6 +877,34 @@ async def delete_knowledge_document(doc_id: int, current_user: dict = Depends(ge
 _vector_index_built = False
 _vector_index_lock = threading.Lock()
 
+# 重建状态键，存储在 config 表中，格式为 "building:{expected}" 或 "complete:{count}"
+_VECTOR_REBUILD_STATUS_KEY = "vector_index_rebuild_status"
+
+
+def _get_expected_chunk_count() -> int:
+    """获取数据库中 chunk 的预期总数，用于重建完整性校验。"""
+    rows = db.execute_sql("SELECT COUNT(*) AS cnt FROM knowledge_chunks", {})
+    return rows[0]["cnt"] if rows else 0
+
+
+def _read_rebuild_status() -> tuple[str, int]:
+    """读取重建状态，返回 (status, count)。status 为 'building'/'complete'/''。"""
+    raw = db.get_config_value(_VECTOR_REBUILD_STATUS_KEY, "")
+    if not raw:
+        return ("", 0)
+    parts = raw.split(":", 1)
+    if len(parts) != 2:
+        return ("", 0)
+    try:
+        return (parts[0], int(parts[1]))
+    except (ValueError, IndexError):
+        return ("", 0)
+
+
+def _write_rebuild_status(status: str, count: int) -> None:
+    """写入重建状态到 config 表。"""
+    db.set_config_value(_VECTOR_REBUILD_STATUS_KEY, f"{status}:{count}")
+
 
 def _ensure_vector_index():
     """延迟重建向量索引：首次搜索时从数据库加载chunks并构建Faiss索引。
@@ -884,6 +912,13 @@ def _ensure_vector_index():
 
     C7 fix: 用 threading.Lock 保护 check-build-set 序列，防止多个并发搜索请求
     同时观察到 _vector_index_built == False 并重复构建索引（导致重复向量写入与资源浪费）。
+
+    可靠性 fix: 引入重建状态管理（building/complete + 预期数量校验）。
+    此前分批重建中途失败后，已完成批次会持久化到 vector_db，下次启动发现
+    total_documents > 0 就跳过重建，导致不完整索引永久生效。现在：
+    1. 重建前在 config 表标记 building:{expected_count}
+    2. 重建完成后验证写入数量 == 预期数量，才标记 complete:{actual_count}
+    3. 启动时如果状态不是 complete 或数量不匹配，清除现有索引重新构建
     """
     global _vector_index_built
     # 双重检查：已构建时直接返回，避免每次搜索都获取锁
@@ -904,49 +939,90 @@ def _ensure_vector_index():
             from knowledge.vector_db import get_vector_db
             vector_db = get_vector_db()
             stats = vector_db.get_stats()
+            expected_count = _get_expected_chunk_count()
+            status, status_count = _read_rebuild_status()
 
-            if stats["total_documents"] > 0:
-                logger.info(f"向量索引已存在: {stats['total_documents']} 个文档，跳过重建")
+            # 只有状态为 complete 且数量一致时才跳过重建。
+            # 状态为 building（上次中断）或数量不匹配时，清除并重建。
+            if (
+                status == "complete"
+                and status_count == expected_count
+                and stats["total_documents"] == expected_count
+                and expected_count > 0
+            ):
+                logger.info(
+                    f"向量索引已完整: {stats['total_documents']} 个文档（状态 complete，预期 {expected_count}），跳过重建"
+                )
                 _vector_index_built = True
                 return True
 
-            logger.info("向量索引为空，从数据库重建...")
-            # 使用分页迭代避免大库 OOM（Critical fix）
-            all_docs = {doc["id"]: doc for doc in db.get_knowledge_documents(limit=10000)}
-            if not all_docs:
-                logger.info("数据库中无知识库文档，跳过向量索引重建")
+            if expected_count == 0:
+                logger.info("数据库中无知识库 chunk，跳过向量索引重建")
                 _vector_index_built = True
                 return True
 
-            vector_docs = []
-            chunk_count = 0
-            for chunk in db.iter_all_knowledge_chunks(batch_size=500):
-                chunk_count += 1
-                doc = all_docs.get(chunk.get("documentId"))
-                if not doc:
-                    continue
-                kb_name = ""
-                folder_name = doc.get("category", "")
-                if doc.get("knowledge_base_id"):
-                    kb = db.get_knowledge_base(doc["knowledge_base_id"])
-                    if kb:
-                        kb_name = kb["name"]
+            # 需要重建：标记 building，清除现有索引
+            logger.info(
+                "向量索引需要重建: 状态=%s:%d, 实际=%d, 预期=%d",
+                status or "none", status_count, stats["total_documents"], expected_count,
+            )
+            _write_rebuild_status("building", expected_count)
+            vector_db.clear_all()
+
+            # 使用 JOIN 分批读取 chunk + document，避免 N+1 查询。
+            # 预加载知识库名称映射（知识库数量通常很少）。
+            kb_name_map: dict = {}
+            for kb in db.get_knowledge_bases():
+                kb_name_map[kb["id"]] = kb["name"]
+
+            batch_vector_docs = []
+            vector_batch_size = 200
+            total_chunks_indexed = 0
+
+            for row in db.iter_chunks_with_document(batch_size=500):
+                doc_title = row.get("doc_title")
+                if doc_title is None:
+                    continue  # 孤儿 chunk（文档已删除），跳过
+
+                folder_name = row.get("doc_category", "") or ""
+                kb_id = row.get("doc_kb_id")
+                kb_name = kb_name_map.get(kb_id, "") if kb_id else ""
                 path_prefix = f"[{kb_name}/{folder_name}]" if kb_name else f"[{folder_name}]"
-                enriched = f"{path_prefix} {doc['title']}: {chunk['content']}"
-                vector_docs.append({
-                    "id": f"doc_{chunk['documentId']}_chunk_{chunk['chunkIndex']}",
-                    "chunk_index": chunk["chunkIndex"],
-                    "title": doc["title"],
+                enriched = f"{path_prefix} {doc_title}: {row['content']}"
+                batch_vector_docs.append({
+                    "id": f"doc_{row['documentId']}_chunk_{row['chunkIndex']}",
+                    "chunk_index": row["chunkIndex"],
+                    "title": doc_title,
                     "content": enriched,
-                    "document_id": chunk["documentId"],
+                    "document_id": row["documentId"],
                     "category": folder_name,
-                    "knowledge_base_id": doc.get("knowledge_base_id"),
+                    "knowledge_base_id": kb_id,
                 })
 
-            if vector_docs:
-                vector_db.add_documents(vector_docs)
-                logger.info(f"向量索引重建完成: {len(vector_docs)} 个chunks（扫描 {chunk_count} 条）")
-            _vector_index_built = True
+                # 攒够一批立即写入，释放内存
+                if len(batch_vector_docs) >= vector_batch_size:
+                    vector_db.add_documents(batch_vector_docs)
+                    total_chunks_indexed += len(batch_vector_docs)
+                    batch_vector_docs = []
+
+            # 写入最后一批
+            if batch_vector_docs:
+                vector_db.add_documents(batch_vector_docs)
+                total_chunks_indexed += len(batch_vector_docs)
+
+            # 完整性校验：写入数量必须 == 预期数量
+            if total_chunks_indexed == expected_count:
+                _write_rebuild_status("complete", total_chunks_indexed)
+                logger.info(f"向量索引重建完成: {total_chunks_indexed} 个 chunks（数量校验通过）")
+                _vector_index_built = True
+            else:
+                # 数量不匹配：保持 building 状态，下次启动会重新构建
+                logger.error(
+                    "向量索引重建数量不匹配: 已写入 %d, 预期 %d，保持 building 状态等待下次重建",
+                    total_chunks_indexed, expected_count,
+                )
+                # 不设置 _vector_index_built = True，让下次搜索重试
+                return False
             return True
         except Exception as e:
             logger.warning(f"向量索引重建失败: {e}")
@@ -1023,41 +1099,53 @@ async def search_knowledge(request: KnowledgeSearchRequest):
                 logger.warning(f"向量检索失败: {ve}")
 
         # 最终回退：关键词匹配（支持分词匹配，提高召回率）
+        # 关键词回退是同步阻塞的 CPU/IO 密集型操作（全库扫描），在 async
+        # 接口内直接执行会阻塞事件循环。放到线程池执行。
         logger.info("回退到关键词匹配")
-        query_lower = query.lower()
-        # 提取查询中的关键词（中文单字+英文单词）
-        import re as _re
-        query_keywords = _re.findall(r'[\u4e00-\u9fff]|[a-zA-Z]+', query_lower)
-        # 使用分页迭代避免大库 OOM（Critical fix）
-        all_docs = {doc["id"]: doc for doc in db.get_knowledge_documents(limit=1000)}
-        results = []
-        for chunk in db.iter_all_knowledge_chunks(batch_size=500):
-            content = chunk["content"].lower()
-            doc = all_docs.get(chunk["documentId"])
-            if not doc:
-                continue
-            # 完整匹配
-            score = content.count(query_lower) * 0.5
-            if query_lower in doc["title"].lower():
-                score += 1.0
-            # 分词匹配：每个关键词命中加分
-            for kw in query_keywords:
-                if len(kw) >= 2 or (len(kw) == 1 and '\u4e00' <= kw <= '\u9fff'):
-                    score += content.count(kw) * 0.2
-                    if kw in doc["title"].lower():
-                        score += 0.5
-            if score > 0:
-                results.append({
-                    "documentId": chunk["documentId"], "documentTitle": doc["title"],
-                    "chunkIndex": chunk["chunkIndex"], "content": chunk["content"],
-                    "score": round(score, 2), "searchType": "keyword"
-                })
-            # 提前终止：已收集足够候选后排序截断
-            if len(results) >= top_k * 5:
-                break
-        results.sort(key=lambda x: x["score"], reverse=True)
-        results = results[:top_k]
-        return {"success": True, "query": query, "results": results, "searchType": "keyword"}
+
+        def _keyword_fallback():
+            query_lower = query.lower()
+            # 提取查询中的关键词（中文单字+英文单词）
+            import re as _re
+            import heapq
+            query_keywords = _re.findall(r'[\u4e00-\u9fff]|[a-zA-Z]+', query_lower)
+            # 使用 JOIN 分批读取 chunk + document，避免 N+1 查询。
+            # 使用大小受限的 top-k 堆，扫描完整集合但内存占用恒定为 O(top_k)。
+            top_heap: list[tuple[float, int, dict]] = []
+            seq = 0  # 序号作为 tie-breaker，避免 dict 比较
+            for row in db.iter_chunks_with_document(batch_size=500):
+                doc_title = row.get("doc_title")
+                if doc_title is None:
+                    continue  # 孤儿 chunk
+                content = row["content"].lower()
+                # 完整匹配
+                score = content.count(query_lower) * 0.5
+                if query_lower in doc_title.lower():
+                    score += 1.0
+                # 分词匹配：每个关键词命中加分
+                for kw in query_keywords:
+                    if len(kw) >= 2 or (len(kw) == 1 and '\u4e00' <= kw <= '\u9fff'):
+                        score += content.count(kw) * 0.2
+                        if kw in doc_title.lower():
+                            score += 0.5
+                if score > 0:
+                    seq += 1
+                    item = {
+                        "documentId": row["documentId"], "documentTitle": doc_title,
+                        "chunkIndex": row["chunkIndex"], "content": row["content"],
+                        "score": round(score, 2), "searchType": "keyword"
+                    }
+                    # 维护 top_k 堆：堆大小超过 top_k 时弹出最小元素
+                    if len(top_heap) < top_k:
+                        heapq.heappush(top_heap, (item["score"], seq, item))
+                    else:
+                        heapq.heappushpop(top_heap, (item["score"], seq, item))
+            # 堆中元素按分数降序输出
+            top_heap.sort(key=lambda x: x[0], reverse=True)
+            results = [item for _, _, item in top_heap]
+            return {"success": True, "query": query, "results": results, "searchType": "keyword"}
+
+        return await asyncio.to_thread(_keyword_fallback)
     except Exception as e:
         logger.error(f"搜索知识库失败: {e}")
         raise HTTPException(status_code=500, detail=str(e))

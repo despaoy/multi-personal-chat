@@ -247,6 +247,75 @@ class SQLiteDB:
                 FOREIGN KEY (documentId) REFERENCES knowledge_documents(id) ON DELETE CASCADE
             )
         ''')
+        # 老库迁移：将 embedding 列从 BLOB 类型重建为 INTEGER（SQLite 无法直接
+        # 修改列类型，需要重建表）。
+        #
+        # 旧实现用 `SELECT typeof(embedding) FROM knowledge_chunks LIMIT 1` 判断，
+        # 但 typeof() 返回的是"某一行实际存储的值的类型"而非"列声明类型"：
+        #   - 空表 → fetchone() 返回 None，跳过迁移（但列仍是 BLOB）
+        #   - 首行 embedding 为 NULL → typeof 返回 'null'，跳过迁移
+        #   - 首行恰好存了整数 → typeof 返回 'integer'，跳过迁移
+        #   - 只有首行恰好是 BLOB 字节流时才迁移，概率极低。
+        # 正确做法是用 PRAGMA table_info 读取列的声明类型 dtd_type。
+        #
+        # 数据保留策略：旧 BLOB 列可能保存了向量字节流（pickle/np.tobytes()），
+        # 也可能在新版代码运行后保存了有效的 FAISS ID 整数。用 CASE 在行级
+        # 判断 typeof()，仅保留整数，BLOB/NULL 置 NULL 让上层重建向量索引。
+        #
+        # 异常处理：用 SAVEPOINT 包裹表重建，失败时回滚到保存点，避免留下
+        # 新空表和 knowledge_chunks_old 残留导致旧数据不可见。
+        try:
+            cursor.execute("PRAGMA table_info(knowledge_chunks)")
+            columns = cursor.fetchall()
+            # columns: (cid, name, type, notnull, dflt_value, pk)
+            embedding_decl_type = ""
+            for col in columns:
+                if col[1] == "embedding":
+                    embedding_decl_type = (col[2] or "").upper()
+                    break
+
+            needs_migration = embedding_decl_type in ("", "BLOB")
+            if needs_migration:
+                cursor.execute("SAVEPOINT embed_migration")
+                try:
+                    cursor.execute("ALTER TABLE knowledge_chunks RENAME TO knowledge_chunks_old")
+                    cursor.execute('''
+                        CREATE TABLE knowledge_chunks (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            documentId INTEGER NOT NULL,
+                            chunkIndex INTEGER NOT NULL,
+                            content TEXT NOT NULL,
+                            embedding INTEGER,
+                            createdAt TEXT NOT NULL,
+                            FOREIGN KEY (documentId) REFERENCES knowledge_documents(id) ON DELETE CASCADE
+                        )
+                    ''')
+                    # 行级判断：仅保留 typeof()='integer' 的值，BLOB/NULL 置 NULL。
+                    # 这避免了"把向量字节流当作 FAISS ID 复制"的数据损坏，
+                    # 同时不丢失已经正确存储为整数的有效 FAISS ID。
+                    cursor.execute('''
+                        INSERT INTO knowledge_chunks (id, documentId, chunkIndex, content, embedding, createdAt)
+                        SELECT id, documentId, chunkIndex, content,
+                               CASE WHEN typeof(embedding) = 'integer' THEN embedding ELSE NULL END,
+                               createdAt
+                        FROM knowledge_chunks_old
+                    ''')
+                    cursor.execute("DROP TABLE knowledge_chunks_old")
+                    cursor.execute("RELEASE SAVEPOINT embed_migration")
+                    logger.info(
+                        "已将 knowledge_chunks.embedding 从 %s 重建为 INTEGER（保留有效整数，BLOB/NULL 置 NULL）",
+                        embedding_decl_type or "未声明",
+                    )
+                except Exception as migrate_exc:
+                    cursor.execute("ROLLBACK TO SAVEPOINT embed_migration")
+                    cursor.execute("RELEASE SAVEPOINT embed_migration")
+                    logger.error(
+                        "knowledge_chunks.embedding 迁移失败，已回滚到保存点: %s",
+                        migrate_exc,
+                        exc_info=True,
+                    )
+        except sqlite3.OperationalError:
+            pass  # 表不存在（新库），_init_database 会创建
 
         # 创建用户表
         cursor.execute('''
@@ -318,13 +387,68 @@ class SQLiteDB:
             )
         ''')
         # 老库迁移：如果 training_tasks 表缺少 id 列（旧 schema 用 task_id 作 PK），补齐
+        # 此前仅 ADD COLUMN id TEXT，但旧表的主键仍是 task_id，id 列既非主键也非非空，
+        # 导致与 ORM/Alembic 的 schema 不一致。现通过表重建将 id 设为主键。
         try:
             cursor.execute("SELECT id FROM training_tasks LIMIT 1")
+            # 检查 id 列是否为主键（通过 PRAGMA table_info）
+            cursor.execute("PRAGMA table_info(training_tasks)")
+            cols = {row[1]: row for row in cursor.fetchall()}
+            id_col = cols.get("id")
+            task_id_col = cols.get("task_id")
+            # 旧库情况：task_id 为主键 (pk=1)，id 为普通列 (pk=0)
+            # 新库情况：id 为主键 (pk=1)，task_id 为 UNIQUE 列 (pk=0)
+            if task_id_col and task_id_col[5] == 1 and id_col and id_col[5] == 0:
+                # 重建表，将 id 设为主键，task_id 改为 UNIQUE
+                cursor.execute("ALTER TABLE training_tasks RENAME TO training_tasks_old")
+                cursor.execute('''
+                    CREATE TABLE training_tasks (
+                        id TEXT PRIMARY KEY,
+                        task_id TEXT UNIQUE,
+                        lora_name TEXT NOT NULL,
+                        status TEXT NOT NULL DEFAULT 'pending',
+                        progress REAL DEFAULT 0,
+                        error_message TEXT DEFAULT '',
+                        config_json TEXT DEFAULT '{}',
+                        created_at TEXT DEFAULT '',
+                        updated_at TEXT DEFAULT ''
+                    )
+                ''')
+                cursor.execute('''
+                    INSERT INTO training_tasks (id, task_id, lora_name, status, progress, error_message, config_json, created_at, updated_at)
+                    SELECT id, task_id, lora_name, status, progress, error_message, config_json, created_at, updated_at
+                    FROM training_tasks_old
+                ''')
+                cursor.execute("DROP TABLE training_tasks_old")
+                logger.info("已将 training_tasks.id 重建为主键（旧库 task_id 主键 → 新库 id 主键）")
         except sqlite3.OperationalError:
-            # 旧表无 id 列，添加 id 列并用 task_id 值填充
-            cursor.execute("ALTER TABLE training_tasks ADD COLUMN id TEXT")
-            cursor.execute("UPDATE training_tasks SET id = task_id WHERE id IS NULL")
-            logger.info("已为 training_tasks 表添加 id 列并从 task_id 回填")
+            # 旧表完全无 id 列，先添加 id 列并从 task_id 回填，再走主键重建路径
+            try:
+                cursor.execute("SELECT task_id FROM training_tasks LIMIT 1")
+                # 旧表存在但无 id 列
+                cursor.execute("ALTER TABLE training_tasks RENAME TO training_tasks_old")
+                cursor.execute('''
+                    CREATE TABLE training_tasks (
+                        id TEXT PRIMARY KEY,
+                        task_id TEXT UNIQUE,
+                        lora_name TEXT NOT NULL,
+                        status TEXT NOT NULL DEFAULT 'pending',
+                        progress REAL DEFAULT 0,
+                        error_message TEXT DEFAULT '',
+                        config_json TEXT DEFAULT '{}',
+                        created_at TEXT DEFAULT '',
+                        updated_at TEXT DEFAULT ''
+                    )
+                ''')
+                cursor.execute('''
+                    INSERT INTO training_tasks (id, task_id, lora_name, status, progress, error_message, config_json, created_at, updated_at)
+                    SELECT task_id, task_id, lora_name, status, progress, error_message, config_json, created_at, updated_at
+                    FROM training_tasks_old
+                ''')
+                cursor.execute("DROP TABLE training_tasks_old")
+                logger.info("已重建 training_tasks 表（task_id 主键 → id 主键，并从 task_id 回填 id）")
+            except sqlite3.OperationalError:
+                pass  # 新库，表已正确创建
 
         # 创建 Claw 自定义工具表
         cursor.execute('''
@@ -1626,6 +1750,34 @@ class SQLiteDB:
             if len(rows) < batch_size:
                 break
 
+    def iter_chunks_with_document(self, batch_size: int = 500):
+        """分页迭代 chunk 及其所属文档（LEFT JOIN），避免 N+1 查询。
+
+        每次 yield 一条 dict，包含 chunk 字段和 document 字段（以 doc_ 前缀）。
+        孤儿 chunk（文档已删除）的 doc_title 为 None，调用方可跳过。
+        """
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        offset = 0
+        while True:
+            cursor.execute(
+                '''SELECT c.*, d.title AS doc_title, d.category AS doc_category,
+                          d.knowledge_base_id AS doc_kb_id
+                   FROM knowledge_chunks c
+                   LEFT JOIN knowledge_documents d ON c.documentId = d.id
+                   ORDER BY c.documentId, c.chunkIndex
+                   LIMIT ? OFFSET ?''',
+                (batch_size, offset)
+            )
+            rows = cursor.fetchall()
+            if not rows:
+                break
+            for row in rows:
+                yield dict(row)
+            offset += len(rows)
+            if len(rows) < batch_size:
+                break
+
     def get_knowledge_stats(self):
         """获取知识库统计数据"""
         conn = self._get_connection()
@@ -1853,9 +2005,10 @@ class SQLiteDB:
             bot_enabled=enabled,
         )
         conn.commit()
-        # 变更后主动失效缓存
+        # 变更后主动失效缓存（键为 (platform, conversation_id) 元组）
         if hasattr(self, '_bot_enabled_cache'):
-            self._bot_enabled_cache.pop(session_id, None)
+            resolved_conversation_id = conversation_id or session_id
+            self._bot_enabled_cache.pop((platform, resolved_conversation_id), None)
 
     # session bot 开关内存缓存（减少高频读库）
     # TTL 60s，变更时主动失效
@@ -1864,27 +2017,31 @@ class SQLiteDB:
 
         统一从 conversations 表查询（此前先查 session_settings 失败再查 conversations，
         现直接查 conversations，消除双表冗余查询）。
+
+        缓存键为 (platform, conversation_id) 元组，避免 QQ 与 Telegram 出现相同
+        session_id 时相互污染。
         """
         import time as _time
         now = _time.time()
         # 延迟初始化缓存字典（避免模块级全局变量）
         if not hasattr(self, '_bot_enabled_cache'):
             self._bot_enabled_cache: dict = {}
-        cached = self._bot_enabled_cache.get(session_id)
+        resolved_conversation_id = conversation_id or session_id
+        cache_key = (platform, resolved_conversation_id)
+        cached = self._bot_enabled_cache.get(cache_key)
         if cached is not None:
             val, expiry = cached
             if now < expiry:
                 return val
         conn = self._get_connection()
         cursor = conn.cursor()
-        resolved_conversation_id = conversation_id or session_id
         cursor.execute(
             'SELECT botEnabled FROM conversations WHERE platform = ? AND conversationId = ? ORDER BY updatedAt DESC LIMIT 1',
             (platform, resolved_conversation_id),
         )
         row = cursor.fetchone()
         result = True if row is None else bool(row['botEnabled'])
-        self._bot_enabled_cache[session_id] = (result, now + 60)
+        self._bot_enabled_cache[cache_key] = (result, now + 60)
         return result
 
     def mark_integration_message_processed(self, platform: str, adapter: str, message_id: str) -> bool:

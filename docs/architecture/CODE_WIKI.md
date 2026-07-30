@@ -214,7 +214,7 @@ app = FastAPI(
 5. **故障转移管理器**：保留给非 vLLM 后备提供商；vLLM 实例健康检查、熔断和故障转移由 `VLLMClient` 统一管理
 6. **向量索引**：延迟到首次搜索时通过 `_ensure_vector_index()` 重建
 
-关闭阶段逆序清理：`connection_pool` → `http_client_pool` → `backup_mgr` → `failover_mgr` → `async_task_queue` → `llm_optimizer`。
+关闭阶段逆序清理：`connection_pool` → `http_client_pool` → `backup_mgr` → `failover_mgr` → `llm_optimizer` → `sync_pg_db`（PG 模式）。
 
 #### 4.1.3 启动入口
 
@@ -250,7 +250,6 @@ CORS → AuditLog → SecurityHeaders → Security(认证) → RateLimit → Inp
 | 标志 | 模块 | 全局实例 |
 |---|---|---|
 | `LOAD_BALANCER_AVAILABLE` | `infra.load_balancer` | `load_balancer_mgr` |
-| `ASYNC_PROCESSOR_AVAILABLE` | `infra.async_processor` | `async_task_queue` |
 | `RESOURCE_POOL_AVAILABLE` | `infra.resource_pool` | `connection_pool` / `http_client_pool` |
 | `CIRCUIT_BREAKER_AVAILABLE` | `infra.circuit_breaker` | `circuit_breaker_registry` |
 | `BACKUP_MANAGER_AVAILABLE` | `infra.backup_manager` | `backup_mgr` |
@@ -691,16 +690,16 @@ build_citations() / build_context_prompt() → 注入 LLM
     5. 记录对话历史
     6. 写入缓存（**多样化**：已有列表则追加去重，最多 `_cache_variants=3` 个）
 
-#### 4.7.3 async_pipeline.py — 异步消息处理管道
+#### 4.7.3 async_pipeline.py — 群级令牌桶限流器
 
-- `MessageTask`（order=True dataclass）：优先级队列元素，`priority` 越小越优先
-- `GroupRateLimiter`：按群独立的令牌桶限流
-- `AsyncMessagePipeline`：
-  - `__init__(max_queue_size=500, concurrency=10, group_rate_limit=5.0)`
-  - `calculate_priority(group_id, message) -> int`：关键词命中返回对应优先级
-  - `async enqueue(...)`：群限流 → 计算优先级 → Redis Streams 入队，失败回退内存 `PriorityQueue`
-  - `async _worker(worker_id, inference_fn)`：取消息 → `semaphore` 并发控制 → `inference_fn` → 回调；失败移入死信队列
-  - `async start(inference_fn)`：启动 `concurrency` 个 worker + `_claim_loop`（每 15 秒认领超时 pending 消息）
+- `GroupRateLimiter`：按群独立的令牌桶限流（仍在测试中使用）
+  - `__init__(default_rate=30.0, default_capacity=60)`
+  - `acquire(group_id) -> bool`：令牌桶算法，按时间补充令牌
+  - `cleanup(max_age=3600.0)`：清理长时间未使用的桶
+
+> 历史：本模块曾包含 `AsyncMessagePipeline`（基于 Redis Streams 的异步消息
+> 处理管道，含 `MessageTask`/`_worker`/`_claim_loop`），但该类从未在生产
+> 路径被实例化（`bot/bot.py` 直接调用推理层）。已删除以消除死代码。
 
 #### 4.7.4 tools.py — 工具注册与分发
 
@@ -720,7 +719,6 @@ build_citations() / build_context_prompt() → 注入 LLM
 | 组件 | 文件 | 职责 | 关键类 | 设计模式 |
 |---|---|---|---|---|
 | RBAC 访问控制 | `access_control.py` | 角色-权限模型、PBKDF2 密钥哈希、滑动窗口限流、SQLite 审计日志 | `Permission`(Flag 枚举)、`Role`、`RateLimiter`、`AuditLogger`、`AccessControlManager` | 单例、装饰器 |
-| 异步任务队列 | `async_processor.py` | 优先级调度、CPU-bound 线程池、超时取消、5 分钟结果清理 | `TaskStatus`、`TaskItem`、`AsyncTaskQueue` | 生产者-消费者 |
 | SQLite 备份 | `backup_manager.py` | 全量/增量备份、gzip 压缩、SHA256 完整性、保留轮转 | `BackupType`、`BackupInfo`、`BackupManager` | 策略、模板方法 |
 | 熔断器 | `circuit_breaker.py` | 3 状态机（CLOSED/OPEN/HALF_OPEN）、降级模式、全局注册 | `CircuitState`、`DegradationMode`、`CircuitBreaker`、`CircuitBreakerRegistry` | 状态机、装饰器、注册表 |
 | 并发控制 | `concurrency_control.py` | 令牌桶（全局/会话/发送者三级）、推理运行时、会话锁串行化 | `TokenBucketLimiter`、`InferenceRuntime`、`inference_runtime` 单例 | 令牌桶、优先级队列 |

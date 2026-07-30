@@ -140,7 +140,7 @@ class KnowledgeDocumentUpdate(BaseModel):
 class KnowledgeSearchRequest(BaseModel):
     """知识库搜索请求"""
     query: str
-    topK: int = 5
+    topK: int = Field(default=5, ge=1, le=100)
     knowledgeBaseName: Optional[str] = None  # 按知识库名称过滤检索结果
 
 

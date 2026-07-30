@@ -281,9 +281,16 @@ class SemanticCache:
             redis_url=redis_url or os.getenv("REDIS_URL", "redis://localhost:6379/0"),
             default_ttl=l2_ttl,
         )
-        # 防击穿：per-key 互斥锁
+        # 防击穿：per-key 互斥锁，配合引用计数避免并发竞态。
+        # 此前 `_get_key_lock` 在清理 `locked() == False` 的锁时存在竞态：
+        # 锁已返回给调用方 A 但 A 尚未进入 `async with`，此时调用方 B 拿到
+        # 同一 key 会创建新锁，导致防击穿失效。改为引用计数：获取时 +1，
+        # 调用方在 `async with` 退出后调用 _release_key_lock 减 1，只有
+        # 引用计数为 0 且未被持有的锁才允许清理。
         self._key_locks: Dict[str, asyncio.Lock] = {}
+        self._key_lock_refs: Dict[str, int] = {}
         self._locks_guard = asyncio.Lock()
+        self._key_locks_max_size = 4096
 
     def _compute_key(self, text: str, context: Optional[str] = None) -> str:
         """计算缓存键 = hash(normalized_text + optional_context)"""
@@ -293,13 +300,39 @@ class SemanticCache:
         return text_hash(normalized)
 
     async def _get_key_lock(self, key: str) -> asyncio.Lock:
-        """获取 per-key 锁（防击穿）"""
+        """获取 per-key 锁（防击穿），同时增加引用计数。
+
+        引用计数确保：即使锁尚未被 acquire（locked() == False），只要仍有调用方
+        持有引用，就不会被清理，避免同 key 创建多把锁的竞态。
+        """
         async with self._locks_guard:
             lock = self._key_locks.get(key)
             if lock is None:
+                # 容量控制：达到上限时清理空闲且无引用的锁
+                if len(self._key_locks) >= self._key_locks_max_size:
+                    stale = [
+                        k for k, v in self._key_locks.items()
+                        if not v.locked() and self._key_lock_refs.get(k, 0) == 0
+                    ]
+                    for k in stale:
+                        del self._key_locks[k]
+                        self._key_lock_refs.pop(k, None)
                 lock = asyncio.Lock()
                 self._key_locks[key] = lock
+            # 引用计数 +1，调用方必须在 async with 退出后调用 _release_key_lock
+            self._key_lock_refs[key] = self._key_lock_refs.get(key, 0) + 1
             return lock
+
+    async def _release_key_lock(self, key: str) -> None:
+        """释放 per-key 锁的引用计数（在 async with 退出后调用）。
+
+        引用计数减为 0 时，且锁未被持有，可被后续清理回收。
+        """
+        async with self._locks_guard:
+            refs = self._key_lock_refs.get(key, 0)
+            if refs > 0:
+                self._key_lock_refs[key] = refs - 1
+                # 不主动删除锁，留待容量达到上限时统一清理，避免反复创建/销毁
 
     async def get(self, prompt: str, context: Optional[str] = None) -> Optional[Any]:
         """查询缓存：L1 → L2 → Miss
@@ -353,30 +386,34 @@ class SemanticCache:
 
         # 防击穿：per-key 互斥锁，热点 key 过期时只有一个协程回源
         lock = await self._get_key_lock(key)
-        async with lock:
-            # double-check（持锁后可能已被其他协程填充）
-            cached = await self.get(prompt, context)
-            if cached is not None:
-                if cached == self.NULL_MARKER:
+        try:
+            async with lock:
+                # double-check（持锁后可能已被其他协程填充）
+                cached = await self.get(prompt, context)
+                if cached is not None:
+                    if cached == self.NULL_MARKER:
+                        return None
+                    return cached
+
+                # 回源
+                try:
+                    value = await factory()
+                except Exception:
+                    # 回源失败不缓存，让下次请求重试
+                    raise
+
+                if value is None or value == "":
+                    if cache_null:
+                        # 防穿透：缓存空结果，使用较短 TTL
+                        await self._l1.set(key, self.NULL_MARKER, ttl=null_ttl)
+                        await self._l2.set(key, self.NULL_MARKER, ttl=null_ttl)
                     return None
-                return cached
-
-            # 回源
-            try:
-                value = await factory()
-            except Exception:
-                # 回源失败不缓存，让下次请求重试
-                raise
-
-            if value is None or value == "":
-                if cache_null:
-                    # 防穿透：缓存空结果，使用较短 TTL
-                    await self._l1.set(key, self.NULL_MARKER, ttl=null_ttl)
-                    await self._l2.set(key, self.NULL_MARKER, ttl=null_ttl)
-                return None
-            else:
-                await self.set(prompt, value, context)
-                return value
+                else:
+                    await self.set(prompt, value, context)
+                    return value
+        finally:
+            # 必须在 async with 退出后释放引用计数，否则锁永远无法被清理
+            await self._release_key_lock(key)
 
     async def set(self, prompt: str, value: Any, context: Optional[str] = None) -> None:
         """写入缓存：同时写L1和L2"""

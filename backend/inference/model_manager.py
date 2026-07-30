@@ -691,6 +691,10 @@ class VLLMProvider(BaseProvider):
 
     def __init__(self):
         super().__init__("vllm")
+        # base_url / model / timeout 由 VLLMClient 单例从环境变量统一管理，
+        # VLLMProvider 不再持有独立副本，避免设置页修改后状态显示与实际生效不一致。
+        # 这些字段保留为属性是为了向后兼容（部分代码可能读取 provider.base_url），
+        # 但值反映 VLLMClient 的实际配置，不接受 db 覆盖。
         self.base_url = os.getenv("VLLM_BASE_URL", "http://localhost:8001/v1")
         # D-4 fix: 统一使用 get_vllm_served_model_name() 解析模型名
         from app.config import get_vllm_served_model_name
@@ -703,16 +707,18 @@ class VLLMProvider(BaseProvider):
         self._refresh_db_config()
 
     def _refresh_db_config(self):
-        """从数据库刷新配置"""
+        """从数据库刷新生成参数配置。
+
+        注意：vllmBaseUrl / vllmModel / vllmTimeout 由 VLLMClient 单例从
+        环境变量读取，db 配置修改这些字段不会生效（VLLMClient 在首次
+        get_vllm_client() 时锁定配置）。此处不再覆盖 self.base_url/model/timeout，
+        避免 VLLMProvider 的状态显示与 VLLMClient 实际使用的配置不一致。
+        如需运行时切换 vLLM 实例或模型，应通过环境变量 + 重启，或重构
+        VLLMClient 支持热重载。
+        """
         global _db_cfg
         _db_cfg = _get_db_config()
-        if _db_cfg.get("vllmBaseUrl"):
-            self.base_url = _db_cfg["vllmBaseUrl"]
-        if _db_cfg.get("vllmModel"):
-            self.model = _db_cfg["vllmModel"]
-            self._model_name = self.model
-        if _db_cfg.get("vllmTimeout"):
-            self.timeout = float(_db_cfg["vllmTimeout"])
+        # 仅刷新生成参数（maxTokens/temperature 等），不影响 vLLM 连接配置
 
     def _chat_completions_url(self) -> str:
         base = self.base_url.rstrip("/")

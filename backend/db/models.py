@@ -158,6 +158,10 @@ class KnowledgeFolder(Base):
 class KnowledgeDocument(Base):
     """知识库文档内容表"""
     __tablename__ = "knowledge_documents"
+    __table_args__ = (
+        Index("idx_knowledge_documents_kb_id", "knowledge_base_id"),
+        Index("idx_knowledge_documents_folder_id", "folder_id"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     title: Mapped[str] = mapped_column(Text, nullable=False)
@@ -185,6 +189,9 @@ class KnowledgeDocument(Base):
 class KnowledgeChunk(Base):
     """知识库文档分块表，embedding 存储 Faiss 向量 ID"""
     __tablename__ = "knowledge_chunks"
+    __table_args__ = (
+        Index("idx_knowledge_chunks_documentId", "documentId"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     documentId: Mapped[int] = mapped_column(
@@ -399,6 +406,9 @@ class AuditLog(Base):
 class IntentSample(Base):
     """意图分类训练样本表"""
     __tablename__ = "intent_samples"
+    __table_args__ = (
+        Index("idx_intent_samples_kbName", "kbName"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     kbName: Mapped[str] = mapped_column(Text, nullable=False)
@@ -565,6 +575,8 @@ class Feedback(Base):
     __tablename__ = "feedback"
     __table_args__ = (
         Index("idx_feedback_created", "created_at"),
+        Index("idx_feedback_trace_id", "trace_id"),
+        Index("idx_feedback_message_id", "message_id"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)

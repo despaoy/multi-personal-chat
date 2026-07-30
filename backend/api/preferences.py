@@ -1,4 +1,4 @@
-﻿"""偏好数据管理 API - DPO/ORPO 训练数据管理"""
+"""偏好数据管理 API - DPO/ORPO 训练数据管理"""
 import json
 import logging
 import secrets
@@ -25,17 +25,17 @@ async def list_preferences(review_status: Optional[str] = None, limit: int = 50,
     try:
         if review_status:
             rows = db.execute_sql(
-                "SELECT * FROM preference_pairs WHERE review_status=? ORDER BY created_at DESC LIMIT ? OFFSET ?",
-                (review_status, limit, offset),
+                "SELECT * FROM preference_pairs WHERE review_status=:rs ORDER BY created_at DESC LIMIT :lim OFFSET :off",
+                {"rs": review_status, "lim": limit, "off": offset},
             )
             count_rows = db.execute_sql(
-                "SELECT COUNT(*) as cnt FROM preference_pairs WHERE review_status=?",
-                (review_status,),
+                "SELECT COUNT(*) as cnt FROM preference_pairs WHERE review_status=:rs",
+                {"rs": review_status},
             )
         else:
             rows = db.execute_sql(
-                "SELECT * FROM preference_pairs ORDER BY created_at DESC LIMIT ? OFFSET ?",
-                (limit, offset),
+                "SELECT * FROM preference_pairs ORDER BY created_at DESC LIMIT :lim OFFSET :off",
+                {"lim": limit, "off": offset},
             )
             count_rows = db.execute_sql("SELECT COUNT(*) as cnt FROM preference_pairs")
         total = count_rows[0]["cnt"] if count_rows else 0
@@ -69,12 +69,15 @@ async def create_preference(req: PreferencePairCreate,
     try:
         db.execute_sql_insert(
             "INSERT INTO preference_pairs (id, prompt, chosen, rejected, rubric, annotator, metadata, review_status, created_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (pid, req.prompt, req.chosen, req.rejected,
-             json.dumps(req.rubric or {}, ensure_ascii=False),
-             req.annotator,
-             json.dumps(req.metadata or {}, ensure_ascii=False),
-             req.review_status, _now()),
+            "VALUES (:id, :prompt, :chosen, :rejected, :rubric, :annotator, :metadata, :review_status, :created_at)",
+            {
+                "id": pid, "prompt": req.prompt, "chosen": req.chosen,
+                "rejected": req.rejected,
+                "rubric": json.dumps(req.rubric or {}, ensure_ascii=False),
+                "annotator": req.annotator,
+                "metadata": json.dumps(req.metadata or {}, ensure_ascii=False),
+                "review_status": req.review_status, "created_at": _now(),
+            },
         )
         return {"success": True, "id": pid}
     except Exception as e:
@@ -88,20 +91,20 @@ async def update_preference(pid: str, req: PreferencePairUpdate,
     """更新偏好对（审核状态变更等）"""
     try:
         updates = []
-        params = []
+        params: dict = {}
         if req.review_status is not None:
-            updates.append("review_status=?")
-            params.append(req.review_status)
+            updates.append("review_status=:review_status")
+            params["review_status"] = req.review_status
         if req.rubric is not None:
-            updates.append("rubric=?")
-            params.append(json.dumps(req.rubric, ensure_ascii=False))
+            updates.append("rubric=:rubric")
+            params["rubric"] = json.dumps(req.rubric, ensure_ascii=False)
         if req.annotator is not None:
-            updates.append("annotator=?")
-            params.append(req.annotator)
+            updates.append("annotator=:annotator")
+            params["annotator"] = req.annotator
         if not updates:
             return {"success": True, "id": pid, "note": "no fields to update"}
-        params.append(pid)
-        db.execute_sql(f"UPDATE preference_pairs SET {', '.join(updates)} WHERE id=?", tuple(params))
+        params["id"] = pid
+        db.execute_sql(f"UPDATE preference_pairs SET {', '.join(updates)} WHERE id=:id", params)
         return {"success": True, "id": pid}
     except Exception as e:
         logger.error(f"更新偏好对失败: {e}")
@@ -112,7 +115,7 @@ async def update_preference(pid: str, req: PreferencePairUpdate,
 async def delete_preference(pid: str, current_user: dict = Depends(get_current_user)):
     """删除偏好对"""
     try:
-        db.execute_sql("DELETE FROM preference_pairs WHERE id=?", (pid,))
+        db.execute_sql("DELETE FROM preference_pairs WHERE id=:id", {"id": pid})
         return {"success": True}
     except Exception as e:
         logger.error(f"删除偏好对失败: {e}")
@@ -125,8 +128,8 @@ async def export_preferences(req: PreferenceExportRequest,
     """导出偏好对为训练格式（JSONL）"""
     try:
         rows = db.execute_sql(
-            "SELECT * FROM preference_pairs WHERE review_status=? ORDER BY created_at",
-            (req.review_status,),
+            "SELECT * FROM preference_pairs WHERE review_status=:rs ORDER BY created_at",
+            {"rs": req.review_status},
         )
         pairs = []
         for r in (rows or []):
@@ -147,13 +150,13 @@ async def sample_from_history(req: SampleFromHistoryRequest,
     try:
         if req.session_id:
             rows = db.execute_sql(
-                "SELECT message, reply, loraName, traceId FROM messages WHERE sessionId=? AND reply != '' AND LENGTH(reply) >= ? ORDER BY RANDOM() LIMIT ?",
-                (req.session_id, req.min_length, req.limit),
+                "SELECT message, reply, loraName, traceId FROM messages WHERE sessionId=:sid AND reply != '' AND LENGTH(reply) >= :min_len ORDER BY RANDOM() LIMIT :lim",
+                {"sid": req.session_id, "min_len": req.min_length, "lim": req.limit},
             )
         else:
             rows = db.execute_sql(
-                "SELECT message, reply, loraName, traceId FROM messages WHERE reply != '' AND LENGTH(reply) >= ? ORDER BY RANDOM() LIMIT ?",
-                (req.min_length, req.limit),
+                "SELECT message, reply, loraName, traceId FROM messages WHERE reply != '' AND LENGTH(reply) >= :min_len ORDER BY RANDOM() LIMIT :lim",
+                {"min_len": req.min_length, "lim": req.limit},
             )
         candidates = []
         for r in (rows or []):

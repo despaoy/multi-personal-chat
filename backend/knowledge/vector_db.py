@@ -905,6 +905,21 @@ class VectorDatabase:
             self._create_index()
         self.add_documents(documents)
 
+    def clear_all(self):
+        """清空所有向量索引和元数据（不涉及磁盘文件）。
+
+        用于向量索引重建前的清理：确保上次失败的部分批次不会残留。
+        重建状态由调用方（_ensure_vector_index）在 config 表中管理。
+        """
+        with self._lock:
+            self.index = None
+            self.metadata = []
+            self._id_to_index = {}
+            self._query_cache.clear()
+            self._create_index()
+            self._dirty = True
+        logger.info("向量索引已清空，准备重建")
+
     def get_stats(self) -> Dict[str, Any]:
         with self._lock:
             index_type = "unknown"

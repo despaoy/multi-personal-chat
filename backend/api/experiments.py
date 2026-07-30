@@ -38,14 +38,14 @@ async def _run_lora_ablation(exp_id: str, overrides: Optional[dict]) -> None:
         runner = AblationRunner.from_default_config(overrides)
         results = await asyncio.to_thread(runner.run_all)
         db.execute_sql(
-            "UPDATE experiment_runs SET status='completed', completed_at=?, results=? WHERE id=?",
-            (_now(), json.dumps(results, ensure_ascii=False), exp_id),
+            "UPDATE experiment_runs SET status='completed', completed_at=:ts, results=:r WHERE id=:id",
+            {"ts": _now(), "r": json.dumps(results, ensure_ascii=False), "id": exp_id},
         )
     except Exception as exc:
         logger.exception("LoRA ablation failed experiment_id=%s", exp_id)
         db.execute_sql(
-            "UPDATE experiment_runs SET status='failed', completed_at=?, results=? WHERE id=?",
-            (_now(), json.dumps({"error": str(exc)}, ensure_ascii=False), exp_id),
+            "UPDATE experiment_runs SET status='failed', completed_at=:ts, results=:r WHERE id=:id",
+            {"ts": _now(), "r": json.dumps({"error": str(exc)}, ensure_ascii=False), "id": exp_id},
         )
 
 
@@ -63,15 +63,26 @@ async def list_experiments(experiment_type: Optional[str] = None,
         # 统一分页边界校验：limit 上限 500，offset 非负
         limit = max(1, min(int(limit), 500))
         offset = max(0, int(offset))
+        # 使用命名参数 :name，SQLite 与 PostgreSQL 均支持
         if experiment_type:
             rows = db.execute_sql(
-                "SELECT * FROM experiment_runs WHERE experiment_type=? ORDER BY started_at DESC LIMIT ? OFFSET ?",
-                (experiment_type, limit, offset),
+                "SELECT * FROM experiment_runs WHERE experiment_type=:et "
+                "ORDER BY started_at DESC LIMIT :lim OFFSET :off",
+                {"et": experiment_type, "lim": limit, "off": offset},
+            )
+            count_rows = db.execute_sql(
+                "SELECT COUNT(*) AS cnt FROM experiment_runs WHERE experiment_type=:et",
+                {"et": experiment_type},
             )
         else:
             rows = db.execute_sql(
-                "SELECT * FROM experiment_runs ORDER BY started_at DESC LIMIT ? OFFSET ?",
-                (limit, offset),
+                "SELECT * FROM experiment_runs ORDER BY started_at DESC "
+                "LIMIT :lim OFFSET :off",
+                {"lim": limit, "off": offset},
+            )
+            count_rows = db.execute_sql(
+                "SELECT COUNT(*) AS cnt FROM experiment_runs",
+                {},
             )
         experiments = []
         for r in (rows or []):
@@ -85,7 +96,8 @@ async def list_experiments(experiment_type: Optional[str] = None,
                 "started_at": r["started_at"], "completed_at": r["completed_at"],
                 "results": results, "report_path": r["report_path"],
             })
-        return {"success": True, "experiments": experiments, "total": len(experiments)}
+        total = (count_rows[0]["cnt"] if count_rows else 0) or 0
+        return {"success": True, "experiments": experiments, "total": total}
     except Exception as e:
         logger.error(f"列出实验失败: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -95,7 +107,7 @@ async def list_experiments(experiment_type: Optional[str] = None,
 async def get_experiment(exp_id: str, current_user: dict = Depends(get_current_user)):
     """获取单个实验详情"""
     try:
-        rows = db.execute_sql("SELECT * FROM experiment_runs WHERE id=?", (exp_id,))
+        rows = db.execute_sql("SELECT * FROM experiment_runs WHERE id=:id", {"id": exp_id})
         if not rows:
             raise HTTPException(status_code=404, detail="experiment not found")
         r = rows[0]
@@ -128,8 +140,12 @@ async def start_lora_ablation(req: ExperimentStartRequest,
     try:
         db.execute_sql_insert(
             "INSERT INTO experiment_runs (id, experiment_type, hypothesis, status, started_at, results, config_path, report_path) "
-            "VALUES (?, ?, ?, 'running', ?, ?, '', '')",
-            (exp_id, "lora_ablation", req.hypothesis or "LoRA vs DoRA vs RSLoRA ablation", _now(), json.dumps({})),
+            "VALUES (:id, :et, :hyp, 'running', :ts, :r, '', '')",
+            {
+                "id": exp_id, "et": "lora_ablation",
+                "hyp": req.hypothesis or "LoRA vs DoRA vs RSLoRA ablation",
+                "ts": _now(), "r": json.dumps({}),
+            },
         )
     except Exception as e:
         logger.warning(f"记录实验失败（非致命）: {e}")
@@ -145,8 +161,8 @@ async def start_lora_ablation(req: ExperimentStartRequest,
             ],
         }
         db.execute_sql(
-            "UPDATE experiment_runs SET status='completed', completed_at=?, results=? WHERE id=?",
-            (_now(), json.dumps(mock_results), exp_id),
+            "UPDATE experiment_runs SET status='completed', completed_at=:ts, results=:r WHERE id=:id",
+            {"ts": _now(), "r": json.dumps(mock_results), "id": exp_id},
         )
         return {"success": True, "experiment_id": exp_id, "status": "completed", "mock": True, "results": mock_results}
 
@@ -155,8 +171,8 @@ async def start_lora_ablation(req: ExperimentStartRequest,
         "Run scripts/lab-queue-kisaki-r1-extension.sh on the experiment server."
     )
     db.execute_sql(
-        "UPDATE experiment_runs SET status='failed', completed_at=?, results=? WHERE id=?",
-        (_now(), json.dumps({"mock": False, "error": error}), exp_id),
+        "UPDATE experiment_runs SET status='failed', completed_at=:ts, results=:r WHERE id=:id",
+        {"ts": _now(), "r": json.dumps({"mock": False, "error": error}), "id": exp_id},
     )
     raise HTTPException(status_code=409, detail=error)
 
@@ -169,8 +185,12 @@ async def start_rag_ablation(req: ExperimentStartRequest,
     try:
         db.execute_sql_insert(
             "INSERT INTO experiment_runs (id, experiment_type, hypothesis, status, started_at, results, config_path, report_path) "
-            "VALUES (?, ?, ?, 'running', ?, ?, '', '')",
-            (exp_id, "rag_ablation", req.hypothesis or "vector vs BM25 vs hybrid vs hybrid+reranker", _now(), json.dumps({})),
+            "VALUES (:id, :et, :hyp, 'running', :ts, :r, '', '')",
+            {
+                "id": exp_id, "et": "rag_ablation",
+                "hyp": req.hypothesis or "vector vs BM25 vs hybrid vs hybrid+reranker",
+                "ts": _now(), "r": json.dumps({}),
+            },
         )
     except Exception as e:
         logger.warning(f"记录实验失败（非致命）: {e}")
@@ -190,8 +210,8 @@ async def start_rag_ablation(req: ExperimentStartRequest,
             "comparison_table": ablation.build_comparison_table(raw_results),
         }
         db.execute_sql(
-            "UPDATE experiment_runs SET status='completed', completed_at=?, results=? WHERE id=?",
-            (_now(), json.dumps(payload, ensure_ascii=False), exp_id),
+            "UPDATE experiment_runs SET status='completed', completed_at=:ts, results=:r WHERE id=:id",
+            {"ts": _now(), "r": json.dumps(payload, ensure_ascii=False), "id": exp_id},
         )
         return {
             "success": True,
@@ -203,15 +223,15 @@ async def start_rag_ablation(req: ExperimentStartRequest,
     except ValueError as exc:
         error = str(exc)
         db.execute_sql(
-            "UPDATE experiment_runs SET status='failed', completed_at=?, results=? WHERE id=?",
-            (_now(), json.dumps({"mock": req.mock, "error": error}), exp_id),
+            "UPDATE experiment_runs SET status='failed', completed_at=:ts, results=:r WHERE id=:id",
+            {"ts": _now(), "r": json.dumps({"mock": req.mock, "error": error}), "id": exp_id},
         )
         raise HTTPException(status_code=409, detail=error)
     except ImportError:
         error = "RAG ablation module not available"
         db.execute_sql(
-            "UPDATE experiment_runs SET status='failed', completed_at=?, results=? WHERE id=?",
-            (_now(), json.dumps({"error": error}), exp_id),
+            "UPDATE experiment_runs SET status='failed', completed_at=:ts, results=:r WHERE id=:id",
+            {"ts": _now(), "r": json.dumps({"error": error}), "id": exp_id},
         )
         # C5 fix: 模块不可用是服务端故障，应用 503 而非 200+success=False，
         # 与同函数 except Exception 分支（line 219）的 raise 模式保持一致。
@@ -219,8 +239,8 @@ async def start_rag_ablation(req: ExperimentStartRequest,
     except Exception as e:
         logger.exception("RAG ablation failed experiment_id=%s", exp_id)
         db.execute_sql(
-            "UPDATE experiment_runs SET status='failed', completed_at=?, results=? WHERE id=?",
-            (_now(), json.dumps({"error": str(e)}, ensure_ascii=False), exp_id),
+            "UPDATE experiment_runs SET status='failed', completed_at=:ts, results=:r WHERE id=:id",
+            {"ts": _now(), "r": json.dumps({"error": str(e)}, ensure_ascii=False), "id": exp_id},
         )
         raise HTTPException(status_code=500, detail="RAG ablation failed")
 
@@ -233,8 +253,12 @@ async def start_quantization_benchmark(req: ExperimentStartRequest,
     try:
         db.execute_sql_insert(
             "INSERT INTO experiment_runs (id, experiment_type, hypothesis, status, started_at, results, config_path, report_path) "
-            "VALUES (?, ?, ?, 'running', ?, ?, '', '')",
-            (exp_id, "quantization_benchmark", req.hypothesis or "FP16 vs AWQ vs NF4 vs INT8 comparison", _now(), json.dumps({})),
+            "VALUES (:id, :et, :hyp, 'running', :ts, :r, '', '')",
+            {
+                "id": exp_id, "et": "quantization_benchmark",
+                "hyp": req.hypothesis or "FP16 vs AWQ vs NF4 vs INT8 comparison",
+                "ts": _now(), "r": json.dumps({}),
+            },
         )
     except Exception as e:
         logger.warning(f"记录实验失败（非致命）: {e}")
@@ -248,15 +272,15 @@ async def start_quantization_benchmark(req: ExperimentStartRequest,
                 "quantization variant. Use scripts/lab-run-kisaki-r3.sh on the lab server."
             )
             db.execute_sql(
-                "UPDATE experiment_runs SET status='failed', completed_at=?, results=? WHERE id=?",
-                (_now(), json.dumps({"error": error}), exp_id),
+                "UPDATE experiment_runs SET status='failed', completed_at=:ts, results=:r WHERE id=:id",
+                {"ts": _now(), "r": json.dumps({"error": error}), "id": exp_id},
             )
             raise HTTPException(status_code=409, detail=error)
         rows = [item.to_dict() for item in await bench.run_comparison(bench.DEFAULT_CONFIGS, mock=True)]
         results = {"mock": True, "formal": False, "results": rows}
         db.execute_sql(
-            "UPDATE experiment_runs SET status='completed', completed_at=?, results=? WHERE id=?",
-            (_now(), json.dumps(results), exp_id),
+            "UPDATE experiment_runs SET status='completed', completed_at=:ts, results=:r WHERE id=:id",
+            {"ts": _now(), "r": json.dumps(results), "id": exp_id},
         )
         return {"success": True, "experiment_id": exp_id, "status": "completed", "mock": True, "results": results}
     except HTTPException:
@@ -275,15 +299,15 @@ async def start_quantization_benchmark(req: ExperimentStartRequest,
             ],
         }
         db.execute_sql(
-            "UPDATE experiment_runs SET status='completed', completed_at=?, results=? WHERE id=?",
-            (_now(), json.dumps(mock_results), exp_id),
+            "UPDATE experiment_runs SET status='completed', completed_at=:ts, results=:r WHERE id=:id",
+            {"ts": _now(), "r": json.dumps(mock_results), "id": exp_id},
         )
         return {"success": True, "experiment_id": exp_id, "status": "completed", "mock": True, "results": mock_results}
     except Exception as e:
         logger.error(f"量化基准实验失败: {e}")
         db.execute_sql(
-            "UPDATE experiment_runs SET status='failed', completed_at=?, results=? WHERE id=?",
-            (_now(), json.dumps({"error": str(e)}), exp_id),
+            "UPDATE experiment_runs SET status='failed', completed_at=:ts, results=:r WHERE id=:id",
+            {"ts": _now(), "r": json.dumps({"error": str(e)}), "id": exp_id},
         )
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -292,7 +316,7 @@ async def start_quantization_benchmark(req: ExperimentStartRequest,
 async def download_report(exp_id: str, current_user: dict = Depends(get_current_user)):
     """获取实验报告（Markdown 格式）"""
     try:
-        rows = db.execute_sql("SELECT * FROM experiment_runs WHERE id=?", (exp_id,))
+        rows = db.execute_sql("SELECT * FROM experiment_runs WHERE id=:id", {"id": exp_id})
         if not rows:
             raise HTTPException(status_code=404, detail="experiment not found")
         r = rows[0]

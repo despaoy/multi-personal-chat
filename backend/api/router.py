@@ -1,4 +1,4 @@
-﻿"""多 LoRA 路由 API - 路由配置/适配器兼容性/路由日志"""
+"""多 LoRA 路由 API - 路由配置/适配器兼容性/路由日志"""
 import json
 import logging
 from datetime import datetime, timezone
@@ -92,9 +92,9 @@ async def update_router_config(req: RouterConfigUpdate,
         config = _normalize_config(config)
         serialized = json.dumps(config, ensure_ascii=False)
         db.execute_sql(
-            "INSERT INTO config (key, value) VALUES ('lora_router_config', ?) "
-            "ON CONFLICT(key) DO UPDATE SET value=?",
-            (serialized, serialized),
+            "INSERT INTO config (key, value) VALUES ('lora_router_config', :val) "
+            "ON CONFLICT(key) DO UPDATE SET value=:val",
+            {"val": serialized},
         )
         from inference.lora_router import get_lora_router
         get_lora_router(config)
@@ -112,8 +112,8 @@ async def list_adapters(current_user: dict = Depends(get_current_user)):
         adapters = []
         for name, path in LORA_DIR_MAP.items():
             compat_rows = db.execute_sql(
-                "SELECT * FROM adapter_compatibility WHERE adapter_name=? ORDER BY checked_at DESC LIMIT 1",
-                (name,),
+                "SELECT * FROM adapter_compatibility WHERE adapter_name=:name ORDER BY checked_at DESC LIMIT 1",
+                {"name": name},
             )
             compatibility = None
             if compat_rows:
@@ -169,11 +169,14 @@ async def check_adapter_compat(adapter_name: str, current_user: dict = Depends(g
         try:
             db.execute_sql_insert(
                 "INSERT INTO adapter_compatibility (adapter_name, checked_at, compatible, checks, warnings, errors) "
-                "VALUES (?, ?, ?, ?, ?, ?)",
-                (adapter_name, _now(), int(report.compatible),
-                 json.dumps(report.checks, ensure_ascii=False),
-                 json.dumps(report.warnings, ensure_ascii=False),
-                 json.dumps(report.errors, ensure_ascii=False)),
+                "VALUES (:adapter_name, :checked_at, :compatible, :checks, :warnings, :errors)",
+                {
+                    "adapter_name": adapter_name, "checked_at": _now(),
+                    "compatible": int(report.compatible),
+                    "checks": json.dumps(report.checks, ensure_ascii=False),
+                    "warnings": json.dumps(report.warnings, ensure_ascii=False),
+                    "errors": json.dumps(report.errors, ensure_ascii=False),
+                },
             )
         except Exception as e:
             logger.warning(f"存储兼容性记录失败（非致命）: {e}")

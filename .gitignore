@@ -196,3 +196,9 @@ ssh_*.py
 # === 一次性生成的 Wiki/报告（可选保留）===
 # docs/architecture/CODE_WIKI.md
 # docs/research/archive/REAL_VLLM_BENCHMARK_REPORT.md
+
+# === Codex PPT 审查临时目录 ===
+.codex_ppt_review/
+
+# === Kisaki v4 测试临时目录 ===
+.test_tmp_kisaki_v4/

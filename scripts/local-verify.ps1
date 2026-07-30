@@ -64,7 +64,20 @@ $CompileTargets = @(
 )
 
 Invoke-Step "Python syntax check" $Backend $Python.Command ($PyArgs + @("-m", "py_compile") + $CompileTargets)
-Invoke-Step "Alembic migration graph check" $Backend $Python.Command ($PyArgs + @("-m", "alembic", "heads"))
+# Alembic 不提供 __main__ 入口，`python -m alembic` 会报
+# "No module named alembic.__main__"。改为从所选 Python 的 sysconfig
+# 定位 alembic 可执行文件，确保 Python 和 Alembic 使用同一环境。
+$AlembicExe = & $Python.Command @($PyArgs + @("-c", "import sysconfig,os; print(os.path.join(sysconfig.get_path('scripts'),'alembic'+('.exe' if os.name=='nt' else '')))"))
+if (-not (Test-Path $AlembicExe)) {
+    # 回退到 backend venv
+    $VenvAlembic = Join-Path $Backend ".venv\Scripts\alembic.exe"
+    if (Test-Path $VenvAlembic) {
+        $AlembicExe = $VenvAlembic
+    } else {
+        $AlembicExe = "alembic"
+    }
+}
+Invoke-Step "Alembic migration graph check" $Backend $AlembicExe @("heads")
 Invoke-Step "Backend core tests" $Backend $Python.Command ($PyArgs + @(
     "-m", "pytest", "tests", "-q", "--basetemp", $PytestTmp
 ))

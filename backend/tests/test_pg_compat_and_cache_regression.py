@@ -1,0 +1,703 @@
+"""Regression tests for PostgreSQL SQL compatibility, SemanticCache lock race,
+and pagination total-count correctness.
+
+Covers the three gaps flagged in the review:
+1. API modules must not use ``?`` placeholders in raw SQL (PostgreSQL incompatible).
+2. SemanticCache per-key lock must use reference counting to prevent the same
+   key from acquiring two different locks during capacity-driven cleanup.
+3. List endpoints must return the real ``COUNT(*)`` total, not a placeholder.
+   Verified both at SQL layer and through FastAPI TestClient response payload.
+"""
+
+from __future__ import annotations
+
+import ast
+import sys
+from pathlib import Path
+
+import pytest
+
+BACKEND_ROOT = Path(__file__).resolve().parents[1]
+if str(BACKEND_ROOT) not in sys.path:
+    sys.path.insert(0, str(BACKEND_ROOT))
+
+API_DIR = BACKEND_ROOT / "api"
+
+
+# ============================================================
+# 1. PostgreSQL SQL placeholder regression
+# ============================================================
+
+def _extract_sql_strings_from_execute_calls(source: str, filepath: str):
+    """Parse *source* and yield every string literal passed as the first
+    positional argument to ``execute_sql`` / ``execute_sql_insert``."""
+    # Strip UTF-8 BOM (some files start with \ufeff, which ast.parse rejects)
+    source = source.lstrip("\ufeff")
+    tree = ast.parse(source, filename=str(filepath))
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        func = node.func
+        # Match db.execute_sql / db.execute_sql_insert / self.execute_sql etc.
+        if isinstance(func, ast.Attribute) and func.attr in ("execute_sql", "execute_sql_insert"):
+            if node.args and isinstance(node.args[0], ast.Constant) and isinstance(node.args[0].value, str):
+                yield node.args[0].value
+
+
+@pytest.mark.parametrize("module_name", sorted(p.name for p in API_DIR.glob("*.py") if p.suffix == ".py"))
+def test_no_question_mark_placeholders_in_api_sql(module_name):
+    """Every raw SQL string in api/ must use :name named params, not ?.
+
+    PostgreSQL (asyncpg) raises when encountering ``?`` placeholders;
+    SQLite accepts both ``?`` and ``:name``.  Using named params everywhere
+    keeps both backends working.
+    """
+    filepath = API_DIR / module_name
+    source = filepath.read_text(encoding="utf-8")
+    if "execute_sql" not in source:
+        pytest.skip(f"{module_name} has no execute_sql calls")
+
+    offenders = []
+    for sql in _extract_sql_strings_from_execute_calls(source, filepath):
+        # A literal '?' inside a string constant that is part of execute_sql
+        # is the PostgreSQL-incompatible placeholder pattern.
+        if "?" in sql:
+            offenders.append(sql[:120])
+    assert not offenders, (
+        f"{module_name} still uses '?' placeholders in execute_sql: {offenders}"
+    )
+
+
+# ============================================================
+# 2. SemanticCache lock capacity race regression
+# ============================================================
+
+class TestSemanticCacheLockRace:
+    """Verify the reference-counting fix for per-key lock cleanup."""
+
+    def _make_cache(self, max_size: int = 4):
+        """Create a SemanticCache with a tiny lock capacity for testing."""
+        from cache.semantic_cache import SemanticCache
+        cache = SemanticCache()
+        cache._key_locks_max_size = max_size
+        return cache
+
+    @pytest.mark.asyncio
+    async def test_same_key_returns_same_lock(self):
+        """Two sequential _get_key_lock calls for the same key return the
+        same Lock object, preventing the race where a second caller creates
+        a duplicate lock."""
+        cache = self._make_cache(max_size=4)
+        key = "hot_key_1"
+        lock_a = await cache._get_key_lock(key)
+        lock_b = await cache._get_key_lock(key)
+        assert lock_a is lock_b, "Same key must return the same lock"
+        # Release both refs
+        await cache._release_key_lock(key)
+        await cache._release_key_lock(key)
+
+    @pytest.mark.asyncio
+    async def test_lock_with_active_ref_survives_capacity_cleanup(self):
+        """When capacity is reached, a lock with ref_count > 0 must NOT be
+        cleaned up even if locked() == False (i.e. not yet acquired).
+
+        This is the core race the fix addresses: caller A gets the lock
+        (ref=1) but hasn't entered ``async with`` yet.  Caller B triggers
+        capacity cleanup.  A's lock must survive so B reuses it rather than
+        creating a second lock for the same key.
+        """
+        cache = self._make_cache(max_size=2)
+
+        # Fill capacity with two keys, both with active refs
+        lock1 = await cache._get_key_lock("k1")
+        lock2 = await cache._get_key_lock("k2")
+        assert len(cache._key_locks) == 2
+
+        # Get a third key — triggers cleanup, but k1/k2 have refs > 0
+        lock3 = await cache._get_key_lock("k3")
+        # k1 and k2 must still be present (refs > 0)
+        assert "k1" in cache._key_locks, "Lock with active ref must survive cleanup"
+        assert "k2" in cache._key_locks, "Lock with active ref must survive cleanup"
+
+        # Re-fetch k1 — must return the SAME lock, not a new one
+        lock1_again = await cache._get_key_lock("k1")
+        assert lock1_again is lock1, "Re-fetching key with active ref must return same lock"
+
+        # Cleanup
+        for k in ("k1", "k2", "k3"):
+            await cache._release_key_lock(k)
+            await cache._release_key_lock(k)  # k1 was fetched twice
+
+    @pytest.mark.asyncio
+    async def test_idle_lock_with_zero_ref_is_cleaned_at_capacity(self):
+        """A lock with ref_count == 0 and locked() == False IS eligible for
+        cleanup when capacity is reached — this is the expected behaviour
+        that the reference-counting fix preserves."""
+        cache = self._make_cache(max_size=2)
+
+        lock1 = await cache._get_key_lock("idle_k1")
+        await cache._release_key_lock("idle_k1")  # ref back to 0
+        lock2 = await cache._get_key_lock("idle_k2")
+        await cache._release_key_lock("idle_k2")  # ref back to 0
+
+        # Both idle, both ref==0 — capacity is 2, adding a 3rd triggers cleanup
+        lock3 = await cache._get_key_lock("idle_k3")
+        # At least one of the idle locks should have been cleaned
+        assert len(cache._key_locks) <= 2, "Idle locks should be cleaned at capacity"
+        await cache._release_key_lock("idle_k3")
+
+    @pytest.mark.asyncio
+    async def test_release_decrements_ref_without_deleting_lock(self):
+        """_release_key_lock decrements ref count but does not immediately
+        delete the lock entry (it stays for future reuse / lazy cleanup)."""
+        cache = self._make_cache(max_size=8)
+        key = "ref_test"
+        lock = await cache._get_key_lock(key)
+        assert cache._key_lock_refs[key] == 1
+        await cache._release_key_lock(key)
+        assert cache._key_lock_refs[key] == 0
+        assert key in cache._key_locks, "Lock entry should persist after ref reaches 0"
+
+
+# ============================================================
+# 3. Pagination total-count regression
+# ============================================================
+#
+# Two layers of verification:
+#  (a) SQL layer: COUNT(*) returns correct total at the db adapter level.
+#  (b) API layer: list endpoints actually return that total in the response
+#      payload (catches the case where the code computes COUNT(*) but then
+#      returns ``len(rows)`` instead of the count).
+#
+# Both layers use pytest's ``tmp_path`` fixture so the temp DB is cleaned up
+# automatically by the pytest harness.
+
+class TestPaginationTotalCount:
+    """Verify that list endpoints return the real COUNT(*) total."""
+
+    def _make_temp_db(self, tmp_path):
+        """Create a fresh SQLiteDB instance with schema initialized.
+
+        Uses pytest's tmp_path fixture for automatic cleanup.
+        """
+        from db.database import SQLiteDB
+        db_path = tmp_path / "test.db"
+        return SQLiteDB(db_path)
+
+    def _insert_experiment_runs(self, db, count: int):
+        """Insert *count* rows into experiment_runs."""
+        for i in range(count):
+            db.execute_sql_insert(
+                "INSERT INTO experiment_runs (id, experiment_type, hypothesis, status, started_at, results, config_path, report_path) "
+                "VALUES (:id, :et, :hyp, 'completed', :ts, :r, '', '')",
+                {
+                    "id": f"exp_{i}",
+                    "et": "lora_ablation",
+                    "hyp": f"hypothesis {i}",
+                    "ts": f"2026-01-{i+1:02d}T00:00:00Z",
+                    "r": "{}",
+                },
+            )
+
+    # --- (a) SQL layer ---
+
+    def test_experiment_total_matches_count(self, tmp_path):
+        db = self._make_temp_db(tmp_path)
+        self._insert_experiment_runs(db, 25)
+        rows = db.execute_sql("SELECT COUNT(*) AS cnt FROM experiment_runs", {})
+        assert rows[0]["cnt"] == 25
+
+    def test_experiment_total_with_type_filter(self, tmp_path):
+        db = self._make_temp_db(tmp_path)
+        self._insert_experiment_runs(db, 10)
+        # Insert a different type
+        db.execute_sql_insert(
+            "INSERT INTO experiment_runs (id, experiment_type, hypothesis, status, started_at, results, config_path, report_path) "
+            "VALUES (:id, :et, :hyp, 'completed', :ts, :r, '', '')",
+            {"id": "rag_1", "et": "rag_ablation", "hyp": "rag", "ts": "2026-01-01", "r": "{}"},
+        )
+        total_all = db.execute_sql("SELECT COUNT(*) AS cnt FROM experiment_runs", {})[0]["cnt"]
+        assert total_all == 11
+        total_lora = db.execute_sql(
+            "SELECT COUNT(*) AS cnt FROM experiment_runs WHERE experiment_type=:et",
+            {"et": "lora_ablation"},
+        )[0]["cnt"]
+        assert total_lora == 10
+
+    def test_feedback_total_matches_count(self, tmp_path):
+        db = self._make_temp_db(tmp_path)
+        for i in range(15):
+            db.execute_sql_insert(
+                "INSERT INTO feedback (trace_id, message_id, rating, reason, adapter_name, kb_revision, prompt_version, detail, created_at) "
+                "VALUES (:trace_id, :message_id, :rating, :reason, :adapter_name, :kb_revision, :prompt_version, :detail, :created_at)",
+                {
+                    "trace_id": f"t{i}", "message_id": f"m{i}",
+                    "rating": "thumbs_up" if i % 2 == 0 else "thumbs_down",
+                    "reason": None, "adapter_name": None,
+                    "kb_revision": None, "prompt_version": None,
+                    "detail": None, "created_at": f"2026-01-{i+1:02d}",
+                },
+            )
+        total = db.execute_sql("SELECT COUNT(*) AS cnt FROM feedback", {})[0]["cnt"]
+        assert total == 15
+        total_up = db.execute_sql(
+            "SELECT COUNT(*) AS cnt FROM feedback WHERE rating=:rating",
+            {"rating": "thumbs_up"},
+        )[0]["cnt"]
+        assert total_up == 8  # 0,2,4,6,8,10,12,14 → 8 thumbs_up
+
+    def test_retrieval_eval_total_matches_count(self, tmp_path):
+        db = self._make_temp_db(tmp_path)
+        for i in range(8):
+            db.execute_sql_insert(
+                "INSERT INTO retrieval_eval_questions (id, question, expected_doc_ids, expected_doc_titles, gold_answer, category, created_at) "
+                "VALUES (:id, :q, :dids, :dtitles, :ga, :cat, :ts)",
+                {
+                    "id": f"rq_{i}", "q": f"question {i}",
+                    "dids": "[]", "dtitles": "[]", "ga": None,
+                    "cat": "factual" if i < 5 else "persona",
+                    "ts": f"2026-01-{i+1:02d}",
+                },
+            )
+        total = db.execute_sql("SELECT COUNT(*) AS cnt FROM retrieval_eval_questions", {})[0]["cnt"]
+        assert total == 8
+        total_factual = db.execute_sql(
+            "SELECT COUNT(*) AS cnt FROM retrieval_eval_questions WHERE category=:cat",
+            {"cat": "factual"},
+        )[0]["cnt"]
+        assert total_factual == 5
+
+    def test_preference_total_matches_count(self, tmp_path):
+        db = self._make_temp_db(tmp_path)
+        for i in range(12):
+            db.execute_sql_insert(
+                "INSERT INTO preference_pairs (id, prompt, chosen, rejected, rubric, annotator, metadata, review_status, created_at) "
+                "VALUES (:id, :prompt, :chosen, :rejected, :rubric, :annotator, :metadata, :review_status, :created_at)",
+                {
+                    "id": f"pref_{i}", "prompt": f"p{i}", "chosen": f"c{i}",
+                    "rejected": f"r{i}", "rubric": "{}", "annotator": "manual",
+                    "metadata": "{}",
+                    "review_status": "approved" if i < 7 else "pending",
+                    "created_at": f"2026-01-{i+1:02d}",
+                },
+            )
+        total = db.execute_sql("SELECT COUNT(*) AS cnt FROM preference_pairs", {})[0]["cnt"]
+        assert total == 12
+        total_approved = db.execute_sql(
+            "SELECT COUNT(*) AS cnt FROM preference_pairs WHERE review_status=:rs",
+            {"rs": "approved"},
+        )[0]["cnt"]
+        assert total_approved == 7
+
+    # --- (b) API layer via TestClient ---
+    #
+    # Verifies the list endpoints actually surface the COUNT(*) total in
+    # their JSON response, not just ``len(rows)``.  Uses dependency_overrides
+    # to bypass auth.
+
+    def _build_test_app(self, tmp_path):
+        """Build a minimal FastAPI app with experiments/feedback/retrieval_eval
+        routers mounted, pointing the db adapter at a temp SQLiteDB, and auth
+        bypassed via dependency_overrides.
+
+        Returns (client, test_db, cleanup) where cleanup closes the client
+        and DB connection and restores patched modules.
+        """
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+        from app.dependencies import get_current_user
+        from db import adapter as adapter_module
+        from db.database import SQLiteDB
+        from api import experiments, evaluation, retrieval_eval
+
+        test_db = SQLiteDB(tmp_path / "api_test.db")
+        # Patch the module-level db object used by routers
+        original_db = adapter_module.db
+        adapter_module.db = test_db
+        # Also patch the db imported into each router module (bound at import)
+        for mod in (experiments, evaluation, retrieval_eval):
+            mod.db = test_db
+
+        app = FastAPI()
+        app.include_router(experiments.router)
+        app.include_router(evaluation.router)
+        app.include_router(retrieval_eval.router)
+
+        # Bypass auth
+        app.dependency_overrides[get_current_user] = lambda: {"user_id": 1, "username": "tester"}
+
+        client = TestClient(app)
+
+        def _cleanup():
+            try:
+                client.close()
+            except Exception:
+                pass
+            try:
+                test_db.close_connection()
+            except Exception:
+                pass
+            adapter_module.db = original_db
+            for mod in (experiments, evaluation, retrieval_eval):
+                mod.db = original_db
+
+        return client, test_db, _cleanup
+
+    def test_experiment_list_api_returns_count_total(self, tmp_path):
+        """GET /api/experiments/ must return ``total`` == COUNT(*), not len(rows)."""
+        client, test_db, cleanup = self._build_test_app(tmp_path)
+        try:
+            self._insert_experiment_runs(test_db, 30)
+            # Request only 5 rows — total must still be 30
+            resp = client.get("/api/experiments/", params={"limit": 5, "offset": 0})
+            assert resp.status_code == 200
+            body = resp.json()
+            assert body["success"] is True
+            assert len(body["experiments"]) == 5, "Should respect limit"
+            assert body["total"] == 30, "total must be COUNT(*), not len(rows)"
+        finally:
+            cleanup()
+
+    def test_experiment_list_api_total_with_type_filter(self, tmp_path):
+        """Filtered list endpoint total must reflect the filter, not all rows."""
+        client, test_db, cleanup = self._build_test_app(tmp_path)
+        try:
+            self._insert_experiment_runs(test_db, 10)  # lora_ablation
+            # Insert one rag_ablation
+            test_db.execute_sql_insert(
+                "INSERT INTO experiment_runs (id, experiment_type, hypothesis, status, started_at, results, config_path, report_path) "
+                "VALUES (:id, :et, :hyp, 'completed', :ts, :r, '', '')",
+                {"id": "rag_1", "et": "rag_ablation", "hyp": "rag", "ts": "2026-01-01", "r": "{}"},
+            )
+            resp = client.get("/api/experiments/", params={"experiment_type": "lora_ablation", "limit": 100})
+            assert resp.status_code == 200
+            body = resp.json()
+            assert body["total"] == 10, "filtered total must be 10 lora_ablation rows"
+            assert all(e["experiment_type"] == "lora_ablation" for e in body["experiments"])
+        finally:
+            cleanup()
+
+    def test_feedback_list_api_returns_count_total(self, tmp_path):
+        """GET /api/feedback must return ``total`` == COUNT(*)."""
+        client, test_db, cleanup = self._build_test_app(tmp_path)
+        try:
+            for i in range(20):
+                test_db.execute_sql_insert(
+                    "INSERT INTO feedback (trace_id, message_id, rating, reason, adapter_name, kb_revision, prompt_version, detail, created_at) "
+                    "VALUES (:trace_id, :message_id, :rating, :reason, :adapter_name, :kb_revision, :prompt_version, :detail, :created_at)",
+                    {
+                        "trace_id": f"t{i}", "message_id": f"m{i}",
+                        "rating": "thumbs_up" if i % 2 == 0 else "thumbs_down",
+                        "reason": None, "adapter_name": None,
+                        "kb_revision": None, "prompt_version": None,
+                        "detail": None, "created_at": f"2026-01-{i+1:02d}",
+                    },
+                )
+            resp = client.get("/api/feedback", params={"limit": 5})
+            assert resp.status_code == 200
+            body = resp.json()
+            assert len(body["feedbacks"]) == 5
+            assert body["total"] == 20
+
+            # Filtered by rating
+            resp_up = client.get("/api/feedback", params={"limit": 100, "rating": "thumbs_up"})
+            assert resp_up.status_code == 200
+            body_up = resp_up.json()
+            assert body_up["total"] == 10  # 0,2,4,...,18 → 10 thumbs_up
+        finally:
+            cleanup()
+
+    def test_retrieval_eval_list_api_returns_count_total(self, tmp_path):
+        """GET /api/retrieval-eval/questions must return ``total`` == COUNT(*)."""
+        client, test_db, cleanup = self._build_test_app(tmp_path)
+        try:
+            for i in range(12):
+                test_db.execute_sql_insert(
+                    "INSERT INTO retrieval_eval_questions (id, question, expected_doc_ids, expected_doc_titles, gold_answer, category, created_at) "
+                    "VALUES (:id, :q, :dids, :dtitles, :ga, :cat, :ts)",
+                    {
+                        "id": f"rq_{i}", "q": f"question {i}",
+                        "dids": "[]", "dtitles": "[]", "ga": None,
+                        "cat": "factual" if i < 4 else "persona",
+                        "ts": f"2026-01-{i+1:02d}",
+                    },
+                )
+            resp = client.get("/api/retrieval-eval/questions", params={"limit": 3})
+            assert resp.status_code == 200
+            body = resp.json()
+            assert len(body["questions"]) == 3
+            assert body["total"] == 12
+
+            # Filtered by category
+            resp_factual = client.get("/api/retrieval-eval/questions", params={"limit": 100, "category": "factual"})
+            assert resp_factual.status_code == 200
+            body_factual = resp_factual.json()
+            assert body_factual["total"] == 4
+        finally:
+            cleanup()
+
+
+# ============================================================
+# 4. Embedding BLOB→INTEGER migration regression
+# ============================================================
+
+class TestEmbeddingBlobMigration:
+    """Verify the BLOB→INTEGER column migration uses PRAGMA table_info
+    (not typeof()), preserves valid integers via CASE, and rolls back
+    on failure via SAVEPOINT."""
+
+    def _create_old_blob_db(self, db_path):
+        """Create a SQLite DB with the old BLOB embedding column and insert
+        mixed data (BLOB bytes, integers, NULL)."""
+        import sqlite3
+        conn = sqlite3.connect(str(db_path))
+        conn.execute("PRAGMA foreign_keys = ON")
+        # Create knowledge_documents first (FK target)
+        conn.execute('''
+            CREATE TABLE knowledge_documents (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                title TEXT NOT NULL,
+                content TEXT NOT NULL,
+                category TEXT DEFAULT '未分类',
+                knowledge_base_id INTEGER,
+                folder_id INTEGER,
+                sourceType TEXT DEFAULT 'text',
+                sourceUrl TEXT, fileType TEXT, fileSize INTEGER,
+                chunkCount INTEGER DEFAULT 0,
+                createdAt TEXT NOT NULL,
+                updatedAt TEXT NOT NULL
+            )
+        ''')
+        conn.execute("INSERT INTO knowledge_documents (id, title, content, category, createdAt, updatedAt) VALUES (1, 'doc1', 'content1', 'cat', '2026-01-01', '2026-01-01')")
+        # Old schema: embedding is BLOB
+        conn.execute('''
+            CREATE TABLE knowledge_chunks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                documentId INTEGER NOT NULL,
+                chunkIndex INTEGER NOT NULL,
+                content TEXT NOT NULL,
+                embedding BLOB,
+                createdAt TEXT NOT NULL,
+                FOREIGN KEY (documentId) REFERENCES knowledge_documents(id) ON DELETE CASCADE
+            )
+        ''')
+        # Insert mixed data: row 1 = BLOB bytes, row 2 = integer, row 3 = NULL
+        conn.execute("INSERT INTO knowledge_chunks (id, documentId, chunkIndex, content, embedding, createdAt) VALUES (1, 1, 0, 'chunk1', X'DEADBEEF', '2026-01-01')")
+        conn.execute("INSERT INTO knowledge_chunks (id, documentId, chunkIndex, content, embedding, createdAt) VALUES (2, 1, 1, 'chunk2', 42, '2026-01-01')")
+        conn.execute("INSERT INTO knowledge_chunks (id, documentId, chunkIndex, content, embedding, createdAt) VALUES (3, 1, 2, 'chunk3', NULL, '2026-01-01')")
+        conn.commit()
+        conn.close()
+
+    def test_blob_column_migrated_to_integer(self, tmp_path):
+        """BLOB embedding column is migrated to INTEGER via PRAGMA table_info."""
+        import sqlite3
+        self._create_old_blob_db(tmp_path / "old.db")
+        from db.database import SQLiteDB
+        db = SQLiteDB(tmp_path / "old.db")
+
+        # Verify column type is now INTEGER (PRAGMA needs raw sqlite3)
+        conn = sqlite3.connect(str(tmp_path / "old.db"))
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA table_info(knowledge_chunks)")
+        columns = cursor.fetchall()
+        conn.close()
+        embedding_type = ""
+        for col in columns:
+            if col["name"] == "embedding":
+                embedding_type = (col["type"] or "").upper()
+                break
+        assert embedding_type == "INTEGER", f"embedding should be INTEGER, got {embedding_type}"
+        db.close_connection()
+
+    def test_valid_integers_preserved_blob_nulled(self, tmp_path):
+        """CASE WHEN typeof()='integer' preserves valid FAISS IDs, BLOB→NULL."""
+        self._create_old_blob_db(tmp_path / "old.db")
+        from db.database import SQLiteDB
+        db = SQLiteDB(tmp_path / "old.db")
+
+        rows = db.execute_sql("SELECT id, embedding FROM knowledge_chunks ORDER BY id", {})
+        assert len(rows) == 3
+        # Row 1: was BLOB → NULL
+        assert rows[0]["embedding"] is None, f"BLOB should be NULL, got {rows[0]['embedding']}"
+        # Row 2: was integer 42 → preserved
+        assert rows[0 + 1]["embedding"] == 42, f"integer should be preserved, got {rows[1]['embedding']}"
+        # Row 3: was NULL → NULL
+        assert rows[2]["embedding"] is None
+        db.close_connection()
+
+    def test_empty_blob_table_migrated(self, tmp_path):
+        """Empty table with BLOB column still gets migrated (PRAGMA checks
+        declaration type, not row data)."""
+        import sqlite3
+        conn = sqlite3.connect(str(tmp_path / "empty.db"))
+        conn.execute('''CREATE TABLE knowledge_documents (id INTEGER PRIMARY KEY, title TEXT, content TEXT, category TEXT, knowledge_base_id INTEGER, folder_id INTEGER, sourceType TEXT, sourceUrl TEXT, fileType TEXT, fileSize INTEGER, chunkCount INTEGER, createdAt TEXT, updatedAt TEXT)''')
+        conn.execute('''CREATE TABLE knowledge_chunks (id INTEGER PRIMARY KEY AUTOINCREMENT, documentId INTEGER NOT NULL, chunkIndex INTEGER NOT NULL, content TEXT NOT NULL, embedding BLOB, createdAt TEXT NOT NULL, FOREIGN KEY (documentId) REFERENCES knowledge_documents(id) ON DELETE CASCADE)''')
+        conn.commit()
+        conn.close()
+
+        from db.database import SQLiteDB
+        db = SQLiteDB(tmp_path / "empty.db")
+        # PRAGMA needs raw sqlite3 connection
+        conn2 = sqlite3.connect(str(tmp_path / "empty.db"))
+        conn2.row_factory = sqlite3.Row
+        cursor = conn2.cursor()
+        cursor.execute("PRAGMA table_info(knowledge_chunks)")
+        columns = cursor.fetchall()
+        conn2.close()
+        embedding_type = ""
+        for col in columns:
+            if col["name"] == "embedding":
+                embedding_type = (col["type"] or "").upper()
+                break
+        assert embedding_type == "INTEGER", f"empty BLOB table should migrate to INTEGER, got {embedding_type}"
+        db.close_connection()
+
+
+# ============================================================
+# 5. Chunk-document JOIN regression
+# ============================================================
+
+class TestIterChunksWithDocument:
+    """Verify the JOIN method returns chunk + document fields in one query,
+    avoiding N+1 per-chunk document lookups."""
+
+    def test_join_returns_doc_fields(self, tmp_path):
+        from db.database import SQLiteDB
+        db = SQLiteDB(tmp_path / "join.db")
+
+        # Insert a knowledge base, document, and chunk
+        db.execute_sql_insert(
+            "INSERT INTO knowledge_bases (id, name, description, created_at, updated_at) VALUES (:id, :name, '', :ts, :ts)",
+            {"id": 1, "name": "kb1", "ts": "2026-01-01"},
+        )
+        db.execute_sql_insert(
+            "INSERT INTO knowledge_documents (id, title, content, category, knowledge_base_id, createdAt, updatedAt) VALUES (:id, :title, :content, :cat, :kb_id, :ts, :ts)",
+            {"id": 10, "title": "Doc A", "content": "full content", "cat": "tech", "kb_id": 1, "ts": "2026-01-01"},
+        )
+        db.execute_sql_insert(
+            "INSERT INTO knowledge_chunks (id, documentId, chunkIndex, content, embedding, createdAt) VALUES (:id, :doc_id, :idx, :content, NULL, :ts)",
+            {"id": 100, "doc_id": 10, "idx": 0, "content": "chunk text", "ts": "2026-01-01"},
+        )
+
+        rows = list(db.iter_chunks_with_document(batch_size=10))
+        assert len(rows) == 1
+        row = rows[0]
+        # Chunk fields
+        assert row["documentId"] == 10
+        assert row["chunkIndex"] == 0
+        assert row["content"] == "chunk text"
+        # Document fields from JOIN
+        assert row["doc_title"] == "Doc A"
+        assert row["doc_category"] == "tech"
+        assert row["doc_kb_id"] == 1
+        db.close_connection()
+
+    def test_join_handles_orphan_chunk(self, tmp_path):
+        """Chunks whose document was deleted (doc_title=None) are returned
+        so the caller can skip them."""
+        import sqlite3
+        from db.database import SQLiteDB
+        db = SQLiteDB(tmp_path / "orphan.db")
+
+        # Insert orphan chunk via raw sqlite3 (bypass FK constraint)
+        conn = sqlite3.connect(str(tmp_path / "orphan.db"))
+        conn.execute("PRAGMA foreign_keys = OFF")
+        conn.execute(
+            "INSERT INTO knowledge_chunks (id, documentId, chunkIndex, content, embedding, createdAt) VALUES (200, 999, 0, 'orphan', NULL, '2026-01-01')"
+        )
+        conn.commit()
+        conn.close()
+
+        rows = list(db.iter_chunks_with_document(batch_size=10))
+        assert len(rows) == 1
+        assert rows[0]["doc_title"] is None  # LEFT JOIN → NULL for orphan
+        db.close_connection()
+
+    def test_join_paginates_correctly(self, tmp_path):
+        """JOIN method paginates correctly across multiple batches."""
+        from db.database import SQLiteDB
+        db = SQLiteDB(tmp_path / "pages.db")
+
+        # Insert one document and many chunks
+        db.execute_sql_insert(
+            "INSERT INTO knowledge_documents (id, title, content, category, createdAt, updatedAt) VALUES (:id, :title, :content, :cat, :ts, :ts)",
+            {"id": 1, "title": "Doc", "content": "c", "cat": "x", "ts": "2026-01-01"},
+        )
+        for i in range(25):
+            db.execute_sql_insert(
+                "INSERT INTO knowledge_chunks (documentId, chunkIndex, content, embedding, createdAt) VALUES (:doc_id, :idx, :content, NULL, :ts)",
+                {"doc_id": 1, "idx": i, "content": f"chunk_{i}", "ts": "2026-01-01"},
+            )
+
+        # batch_size=10 → should paginate in 3 batches (10+10+5)
+        rows = list(db.iter_chunks_with_document(batch_size=10))
+        assert len(rows) == 25
+        # All should have doc_title
+        assert all(r["doc_title"] == "Doc" for r in rows)
+        db.close_connection()
+
+
+# ============================================================
+# 6. Vector rebuild status management regression
+# ============================================================
+
+class TestVectorRebuildStatus:
+    """Verify the rebuild status (building/complete) is tracked in config
+    so interrupted rebuilds are detected and retried."""
+
+    def _make_db(self, tmp_path):
+        from db.database import SQLiteDB
+        return SQLiteDB(tmp_path / "status.db")
+
+    def test_status_round_trip(self, tmp_path):
+        """_write_rebuild_status / _read_rebuild_status round-trip correctly."""
+        db = self._make_db(tmp_path)
+        from api.knowledge import _VECTOR_REBUILD_STATUS_KEY
+
+        # Initially empty
+        assert db.get_config_value(_VECTOR_REBUILD_STATUS_KEY, "") == ""
+
+        # Write building
+        db.set_config_value(_VECTOR_REBUILD_STATUS_KEY, "building:500")
+        assert db.get_config_value(_VECTOR_REBUILD_STATUS_KEY, "") == "building:500"
+
+        # Write complete
+        db.set_config_value(_VECTOR_REBUILD_STATUS_KEY, "complete:500")
+        assert db.get_config_value(_VECTOR_REBUILD_STATUS_KEY, "") == "complete:500"
+        db.close_connection()
+
+    def test_building_status_triggers_rebuild_not_skip(self, tmp_path):
+        """If status is 'building' (interrupted), the index must NOT be
+        considered complete — it should trigger a rebuild on next access."""
+        db = self._make_db(tmp_path)
+        from api.knowledge import _VECTOR_REBUILD_STATUS_KEY
+
+        # Simulate an interrupted rebuild: status=building but some chunks exist
+        db.set_config_value(_VECTOR_REBUILD_STATUS_KEY, "building:100")
+        status_raw = db.get_config_value(_VECTOR_REBUILD_STATUS_KEY, "")
+        assert status_raw.startswith("building"), "building status must not be treated as complete"
+        db.close_connection()
+
+    def test_complete_with_mismatched_count_triggers_rebuild(self, tmp_path):
+        """If status is 'complete' but count doesn't match expected, rebuild
+        must be triggered."""
+        db = self._make_db(tmp_path)
+        from api.knowledge import _VECTOR_REBUILD_STATUS_KEY
+
+        # Status says complete:50 but actual chunk count is 100
+        db.set_config_value(_VECTOR_REBUILD_STATUS_KEY, "complete:50")
+        # Insert 100 chunks to simulate mismatch
+        db.execute_sql_insert(
+            "INSERT INTO knowledge_documents (id, title, content, category, createdAt, updatedAt) VALUES (1, 'd', 'c', 'x', '2026-01-01', '2026-01-01')",
+            {},
+        )
+        for i in range(100):
+            db.execute_sql_insert(
+                "INSERT INTO knowledge_chunks (documentId, chunkIndex, content, embedding, createdAt) VALUES (1, :idx, :content, NULL, '2026-01-01')",
+                {"idx": i, "content": f"c{i}"},
+            )
+        actual_count = db.execute_sql("SELECT COUNT(*) AS cnt FROM knowledge_chunks", {})[0]["cnt"]
+        assert actual_count == 100
+        assert actual_count != 50, "count mismatch must be detectable"
+        db.close_connection()

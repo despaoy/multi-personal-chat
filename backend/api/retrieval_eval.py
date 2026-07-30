@@ -26,15 +26,26 @@ async def list_questions(category: Optional[str] = None, limit: int = 100, offse
         # 统一分页边界校验：limit 上限 500，offset 非负
         limit = max(1, min(int(limit), 500))
         offset = max(0, int(offset))
+        # 使用命名参数 :name，SQLite 与 PostgreSQL 均支持
         if category:
             rows = db.execute_sql(
-                "SELECT * FROM retrieval_eval_questions WHERE category=? ORDER BY created_at DESC LIMIT ? OFFSET ?",
-                (category, limit, offset),
+                "SELECT * FROM retrieval_eval_questions WHERE category=:cat "
+                "ORDER BY created_at DESC LIMIT :lim OFFSET :off",
+                {"cat": category, "lim": limit, "off": offset},
+            )
+            count_rows = db.execute_sql(
+                "SELECT COUNT(*) AS cnt FROM retrieval_eval_questions WHERE category=:cat",
+                {"cat": category},
             )
         else:
             rows = db.execute_sql(
-                "SELECT * FROM retrieval_eval_questions ORDER BY created_at DESC LIMIT ? OFFSET ?",
-                (limit, offset),
+                "SELECT * FROM retrieval_eval_questions ORDER BY created_at DESC "
+                "LIMIT :lim OFFSET :off",
+                {"lim": limit, "off": offset},
+            )
+            count_rows = db.execute_sql(
+                "SELECT COUNT(*) AS cnt FROM retrieval_eval_questions",
+                {},
             )
         questions = []
         for r in (rows or []):
@@ -52,7 +63,8 @@ async def list_questions(category: Optional[str] = None, limit: int = 100, offse
                 "gold_answer": r["gold_answer"], "category": r["category"],
                 "created_at": r["created_at"],
             })
-        return {"success": True, "questions": questions, "total": len(questions)}
+        total = (count_rows[0]["cnt"] if count_rows else 0) or 0
+        return {"success": True, "questions": questions, "total": total}
     except Exception as e:
         logger.error(f"列出检索评估问题失败: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -66,10 +78,13 @@ async def create_question(req: RetrievalEvalQuestionCreate,
     try:
         db.execute_sql_insert(
             "INSERT INTO retrieval_eval_questions (id, question, expected_doc_ids, expected_doc_titles, gold_answer, category, created_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (qid, req.question, json.dumps(req.expected_doc_ids, ensure_ascii=False),
-             json.dumps(req.expected_doc_titles, ensure_ascii=False),
-             req.gold_answer, req.category, _now()),
+            "VALUES (:id, :q, :dids, :dtitles, :ga, :cat, :ts)",
+            {
+                "id": qid, "q": req.question,
+                "dids": json.dumps(req.expected_doc_ids, ensure_ascii=False),
+                "dtitles": json.dumps(req.expected_doc_titles, ensure_ascii=False),
+                "ga": req.gold_answer, "cat": req.category, "ts": _now(),
+            },
         )
         return {"success": True, "id": qid}
     except Exception as e:
@@ -81,7 +96,7 @@ async def create_question(req: RetrievalEvalQuestionCreate,
 async def delete_question(qid: str, current_user: dict = Depends(get_current_user)):
     """删除检索评估问题"""
     try:
-        db.execute_sql("DELETE FROM retrieval_eval_questions WHERE id=?", (qid,))
+        db.execute_sql("DELETE FROM retrieval_eval_questions WHERE id=:id", {"id": qid})
         return {"success": True}
     except Exception as e:
         logger.error(f"删除检索评估问题失败: {e}")
