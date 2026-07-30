@@ -42,7 +42,7 @@ from fastapi.responses import JSONResponse
 # 重新赋值。这里只导入常量与导入时初始化的单例，不导入会被 lifespan 重赋值的单例，
 # 避免读者误以为本模块中的本地名会跟随 lifespan 更新（实际它们仍指向 None）。
 from app.config import (
-    async_task_queue, llm_optimizer,
+    llm_optimizer,
     RESOURCE_POOL_AVAILABLE, BACKUP_MANAGER_AVAILABLE,
     FAILOVER_AVAILABLE, ACCESS_CONTROL_AVAILABLE,
     load_balancer_mgr, circuit_breaker_registry,
@@ -152,9 +152,12 @@ async def lifespan(app: FastAPI):
             # 且只注册一个 provider 无转移目标，check_and_failover() 永远返回 None。
             # 未来如需非 vLLM fallback（如 ollama），可在此处注册。
 
-            # 启动健康检查循环
-            await _cfg.failover_mgr.start()
-            logger.info("✅ 故障转移管理器初始化完成（vLLM 由 VLLMClient 内部管理）")
+            # 无 provider 时不启动 HealthChecker，避免空转循环（每 10s 唤醒无意义）
+            if _cfg.failover_mgr._providers:
+                await _cfg.failover_mgr.start()
+                logger.info("✅ 故障转移管理器已启动（含 HealthChecker）")
+            else:
+                logger.info("✅ 故障转移管理器已初始化（无 provider，跳过 HealthChecker 启动；vLLM 由 VLLMClient 内部管理）")
         except Exception as e:
             logger.warning(f"故障转移管理器初始化失败: {e}")
 
@@ -184,10 +187,16 @@ async def lifespan(app: FastAPI):
             await stop_result
     if _cfg.failover_mgr:
         await _cfg.failover_mgr.stop()
-    if _cfg.async_task_queue:
-        await _cfg.async_task_queue.shutdown()
     if _cfg.llm_optimizer:
         await _cfg.llm_optimizer.close()
+    # PG 模式下显式关闭引擎连接池与 SyncPgAdapter 后台事件循环，避免多 worker 部署连接泄漏
+    try:
+        if is_pg_mode():
+            from db.pg_database import sync_pg_db
+            sync_pg_db.close()
+            logger.info("✅ PostgreSQL 引擎与 SyncPgAdapter 事件循环已关闭")
+    except Exception as e:
+        logger.warning(f"关闭 PostgreSQL 适配器失败: {e}")
     # C6 fix: 关闭所有模型 Provider 持有的 httpx 客户端与 GPU 句柄
     try:
         from inference.model_manager import get_model_manager
@@ -200,12 +209,6 @@ async def lifespan(app: FastAPI):
         await close_vllm_client()
     except Exception as e:
         logger.warning(f"关闭 vLLM 客户端失败: {e}")
-    # C15 fix: 关闭 bot 模块中挂载在函数属性上的 VLLM 客户端
-    try:
-        from bot.bot import close_bot_vllm_client
-        await close_bot_vllm_client()
-    except Exception as e:
-        logger.warning(f"关闭 bot VLLM 客户端失败: {e}")
     # 关闭 bot 模块中共享的 HTTP 客户端（RAG 搜索 + Ollama 推理）
     try:
         from bot.bot import _close_bot_http_clients

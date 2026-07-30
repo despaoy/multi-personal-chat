@@ -8,7 +8,6 @@ from app.dependencies import get_current_user, get_current_admin
 
 from app.config import (
     LOAD_BALANCER_AVAILABLE,
-    ASYNC_PROCESSOR_AVAILABLE,
     RESOURCE_POOL_AVAILABLE,
     CIRCUIT_BREAKER_AVAILABLE,
     BACKUP_MANAGER_AVAILABLE,
@@ -18,7 +17,6 @@ from app.config import (
     ACCESS_CONTROL_AVAILABLE,
     LLM_OPTIMIZER_AVAILABLE,
     load_balancer_mgr,
-    async_task_queue,
     circuit_breaker_registry,
     response_cache,
     rate_limiter,
@@ -58,7 +56,6 @@ async def get_enhanced_status(current_user: dict = Depends(get_current_user)):
     """获取增强功能状态"""
     status = {
         "loadBalancer": LOAD_BALANCER_AVAILABLE,
-        "asyncProcessor": ASYNC_PROCESSOR_AVAILABLE,
         "resourcePool": RESOURCE_POOL_AVAILABLE,
         "circuitBreaker": CIRCUIT_BREAKER_AVAILABLE,
         "backupManager": BACKUP_MANAGER_AVAILABLE,
@@ -86,9 +83,6 @@ async def get_enhanced_stats(current_user: dict = Depends(get_current_user)):
         except Exception as exc:
             logging.getLogger(__name__).debug("实时同步 VLLMClient 统计失败: %s", exc)
         stats["loadBalancer"] = load_balancer_mgr.get_stats()
-
-    if async_task_queue:
-        stats["asyncProcessor"] = async_task_queue.get_queue_stats()
 
     # C-F1 fix: 动态访问 lifespan 中赋值的单例
     _cp = connection_pool()
@@ -226,7 +220,7 @@ async def get_failover_status(current_user: dict = Depends(get_current_user)):
 async def get_cache_stats(current_user: dict = Depends(get_current_user)):
     if not response_cache:
         raise HTTPException(status_code=503, detail="响应缓存不可用")
-    return {"success": True, "stats": response_cache.get_stats()}
+    return {"success": True, "stats": response_cache.stats}
 
 
 @router.post("/api/enhanced/cache/invalidate")
@@ -277,15 +271,6 @@ async def get_rate_limiter_stats(current_user: dict = Depends(get_current_user))
     if not rate_limiter:
         raise HTTPException(status_code=503, detail="限流器不可用")
     return {"success": True, "stats": rate_limiter.get_stats()}
-
-
-# --- 异步任务队列API ---
-
-@router.get("/api/enhanced/task-queue/stats")
-async def get_task_queue_stats(current_user: dict = Depends(get_current_user)):
-    if not async_task_queue:
-        raise HTTPException(status_code=503, detail="异步任务队列不可用")
-    return {"success": True, "stats": async_task_queue.get_queue_stats()}
 
 
 # --- 加密管理API ---

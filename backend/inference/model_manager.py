@@ -17,10 +17,10 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-# DB 配置缓存（5 秒 TTL，避免每次推理都全表扫描 config）
-_cached_db_config = {}
-_cached_db_config_time: float = 0.0
-_db_config_ttl: float = 5.0
+# DB 配置缓存统一委托给 cache.config_cache（60s TTL + jitter + Redis 共享），
+# 消除三套独立缓存导致的状态不同步问题。
+# 此前 model_manager 维护独立 5s 缓存，与 config_cache 的 60s 缓存失效不联动，
+# 导致配置更新后 inference 层与 API 层行为不一致。
 _db_config_lock = threading.Lock()
 
 
@@ -35,19 +35,29 @@ def _coerce_config_value(value):
 
 
 def _get_db_config():
-    """Read model config through the active database adapter with a short cache."""
-    global _cached_db_config, _cached_db_config_time
+    """Read model config through the unified cache.config_cache layer.
+
+    统一入口：先查 Redis/local 缓存（60s TTL + jitter），未命中则从 db 加载并回填缓存。
+    这样 api/config.py 调用 invalidate_config_cache() 后，所有模块下次读取都会重新加载。
+    """
     with _db_config_lock:
-        now = time.time()
-        if _cached_db_config and (now - _cached_db_config_time) < _db_config_ttl:
-            return _cached_db_config.copy()
+        try:
+            from cache.config_cache import get_cached_config, set_cached_config
+            cached = get_cached_config()
+            if cached is not None:
+                return dict(cached)
+        except Exception:
+            pass
+
         try:
             from db.adapter import db
-
             raw_config = getattr(db, "config", {}) or {}
             result = {key: _coerce_config_value(value) for key, value in raw_config.items()}
-            _cached_db_config = result
-            _cached_db_config_time = now
+            try:
+                from cache.config_cache import set_cached_config
+                set_cached_config(result)
+            except Exception:
+                pass
             return result.copy()
         except Exception as exc:
             logger.warning("Failed to read model config from database adapter: %s", exc)
@@ -721,10 +731,15 @@ class VLLMProvider(BaseProvider):
 
     async def generate_async(self, prompt: str, session_history: List[Dict] = None,
                              rag_docs: List[Dict] = None, max_tokens_override: int = None) -> Tuple[str, float]:
-        """异步生成 - 使用共享 HttpClientPool（R-1 fix）"""
-        import asyncio
-        import httpx
+        """异步生成 - 复用 VLLMClient 全局单例（负载均衡 + 熔断器 + 健康检查）。
 
+        Critical fix: 此前 VLLMProvider 通过 HttpClientPool 直接 POST vLLM，
+        绕过了 VLLMClient 的负载均衡、熔断器、健康检查，导致：
+        1. 同一 vLLM 后端有 3 条独立 HTTP 客户端路径，连接数不可控
+        2. VLLMProvider 路径的失败不会触发熔断器
+        3. VLLMClient 的多实例负载均衡对 VLLMProvider 无效
+        现统一委托给 VLLMClient.generate，消除连接池冗余和状态隔离。
+        """
         self._refresh_db_config()
         start = time.time()
 
@@ -742,54 +757,18 @@ class VLLMProvider(BaseProvider):
         max_tokens = max_tokens_override if max_tokens_override else int(_db_cfg.get('maxTokens', 512))
         temperature = float(_db_cfg.get('temperature', 0.8))
 
-        model_name = self.model
-        if self._lora_adapter:
-            model_name = f"{self.model}:{self._lora_adapter}"
-
-        payload = {
-            "model": model_name,
-            "messages": messages,
-            "max_tokens": max_tokens,
-            "temperature": temperature,
-            "top_p": 0.9,
-        }
-
-        last_error = None
-        async with self._acquire_http_client(timeout=self.timeout) as client:
-            for attempt in range(3):
-                try:
-                    # P1-M4 fix: 显式传入 timeout，使 vllmTimeout 配置在 pool 模式下也生效。
-                    # pool 的 client 默认 timeout 是固定的 120s，请求级 timeout 覆盖它。
-                    resp = await client.post(
-                        self._chat_completions_url(),
-                        json=payload,
-                        headers={"Authorization": "Bearer EMPTY"},
-                        timeout=self.timeout,
-                    )
-                    if resp.status_code == 200:
-                        data = resp.json()
-                        reply = data["choices"][0]["message"]["content"].strip()
-                        cost = round(time.time() - start, 2)
-                        return reply, cost
-                    elif resp.status_code >= 500:
-                        last_error = RuntimeError(f"vLLM返回错误: {resp.status_code} - {resp.text[:200]}")
-                        if attempt < 2:
-                            await asyncio.sleep(1.0 * (attempt + 1))
-                            continue
-                        raise last_error
-                    else:
-                        error_text = resp.text[:200]
-                        raise RuntimeError(f"vLLM返回错误: {resp.status_code} - {error_text}")
-                except httpx.TimeoutException as e:
-                    last_error = RuntimeError(f"vLLM请求超时 (attempt {attempt + 1}/3): {e}")
-                    if attempt < 2:
-                        await asyncio.sleep(1.0 * (attempt + 1))
-                        continue
-                    raise last_error
-                except RuntimeError:
-                    raise
-
-        raise last_error or RuntimeError("vLLM请求失败: 未知错误")
+        # 复用 VLLMClient 全局单例（内部已有 3 次重试 + 熔断器 + 负载均衡）
+        from inference.vllm_client import get_vllm_client
+        client = await get_vllm_client()
+        reply = await client.generate(
+            messages=messages,
+            lora_name=self._lora_adapter,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            top_p=0.9,
+        )
+        cost = round(time.time() - start, 2)
+        return reply, cost
 
     def generate(self, prompt: str, session_history: List[Dict] = None,
                  rag_docs: List[Dict] = None, max_tokens_override: int = None) -> Tuple[str, float]:

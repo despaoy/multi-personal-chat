@@ -474,22 +474,31 @@ class PgDatabase:
                 raise
 
     async def get_knowledge_bases(self) -> List[Dict]:
-        """获取所有知识库"""
+        """获取所有知识库（单次 LEFT JOIN + 聚合，消除 N+1 查询）"""
         async with self.async_session() as session:
-            stmt = knowledge_bases_table.select().order_by(knowledge_bases_table.c.updated_at.desc())
+            # 一次查询获取 KB 列表 + 文档数 + 文件夹数，避免每个 KB 单独 COUNT
+            stmt = text("""
+                SELECT
+                    kb.*,
+                    COALESCE(d.cnt, 0) as documentCount,
+                    COALESCE(f.cnt, 0) as folderCount
+                FROM knowledge_bases kb
+                LEFT JOIN (
+                    SELECT knowledge_base_id, COUNT(*) as cnt
+                    FROM knowledge_documents
+                    GROUP BY knowledge_base_id
+                ) d ON d.knowledge_base_id = kb.id
+                LEFT JOIN (
+                    SELECT knowledge_base_id, COUNT(*) as cnt
+                    FROM knowledge_folders
+                    GROUP BY knowledge_base_id
+                ) f ON f.knowledge_base_id = kb.id
+                ORDER BY kb.updated_at DESC
+            """)
             result = await session.execute(stmt)
-            rows = result.fetchall()
             kb_list = []
-            for row in rows:
+            for row in result.fetchall():
                 kb = _row_to_dict(row)
-                # 统计文档数
-                cnt_stmt = text("SELECT COUNT(*) as cnt FROM knowledge_documents WHERE knowledge_base_id = :kb_id")
-                cnt_result = await session.execute(cnt_stmt, {"kb_id": kb["id"]})
-                kb["documentCount"] = cnt_result.scalar()
-                # 统计文件夹数
-                folder_cnt_stmt = text("SELECT COUNT(*) as cnt FROM knowledge_folders WHERE knowledge_base_id = :kb_id")
-                folder_cnt_result = await session.execute(folder_cnt_stmt, {"kb_id": kb["id"]})
-                kb["folderCount"] = folder_cnt_result.scalar()
                 kb_list.append(kb)
             return kb_list
 
@@ -571,21 +580,25 @@ class PgDatabase:
                 raise
 
     async def get_knowledge_folders(self, kb_id: int) -> List[Dict]:
-        """获取知识库下的所有文件夹"""
+        """获取知识库下的所有文件夹（LEFT JOIN 聚合，消除 N+1）"""
         async with self.async_session() as session:
-            stmt = (
-                knowledge_folders_table.select()
-                .where(knowledge_folders_table.c.knowledge_base_id == kb_id)
-                .order_by(knowledge_folders_table.c.name)
-            )
-            result = await session.execute(stmt)
-            rows = result.fetchall()
+            stmt = text("""
+                SELECT
+                    f.*,
+                    COALESCE(d.cnt, 0) as documentCount
+                FROM knowledge_folders f
+                LEFT JOIN (
+                    SELECT folder_id, COUNT(*) as cnt
+                    FROM knowledge_documents
+                    GROUP BY folder_id
+                ) d ON d.folder_id = f.id
+                WHERE f.knowledge_base_id = :kb_id
+                ORDER BY f.name
+            """)
+            result = await session.execute(stmt, {"kb_id": kb_id})
             folder_list = []
-            for row in rows:
+            for row in result.fetchall():
                 folder = _row_to_dict(row)
-                cnt_stmt = text("SELECT COUNT(*) as cnt FROM knowledge_documents WHERE folder_id = :fid")
-                cnt_result = await session.execute(cnt_stmt, {"fid": folder["id"]})
-                folder["documentCount"] = cnt_result.scalar()
                 folder_list.append(folder)
             return folder_list
 
@@ -748,12 +761,43 @@ class PgDatabase:
             result = await session.execute(stmt)
             return [_row_to_dict(row) for row in result.fetchall()]
 
-    async def get_all_knowledge_chunks(self) -> List[Dict]:
-        """获取所有知识库片段（用于检索）"""
+    async def get_all_knowledge_chunks(self, limit: int | None = None, offset: int = 0) -> List[Dict]:
+        """获取所有知识库片段（用于检索）。
+
+        Args:
+            limit: 返回数量上限，None 表示全量（谨慎使用，大库可能 OOM）
+            offset: 跳过前 N 条
+        """
         async with self.async_session() as session:
             stmt = knowledge_chunks_table.select().order_by(knowledge_chunks_table.c.documentId, knowledge_chunks_table.c.chunkIndex)
+            if limit is not None:
+                stmt = stmt.limit(limit).offset(offset)
             result = await session.execute(stmt)
             return [_row_to_dict(row) for row in result.fetchall()]
+
+    async def iter_all_knowledge_chunks(self, batch_size: int = 500):
+        """分页迭代所有知识库片段，避免大库 OOM。
+
+        异步生成器，每次 yield 一条 chunk dict。
+        """
+        async with self.async_session() as session:
+            offset = 0
+            while True:
+                stmt = (
+                    knowledge_chunks_table.select()
+                    .order_by(knowledge_chunks_table.c.documentId, knowledge_chunks_table.c.chunkIndex)
+                    .limit(batch_size)
+                    .offset(offset)
+                )
+                result = await session.execute(stmt)
+                rows = result.fetchall()
+                if not rows:
+                    break
+                for row in rows:
+                    yield _row_to_dict(row)
+                offset += len(rows)
+                if len(rows) < batch_size:
+                    break
 
     async def get_knowledge_stats(self) -> Dict:
         """获取知识库统计数据"""
@@ -965,7 +1009,7 @@ class PgDatabase:
             await session.commit()
 
     async def get_session_summaries(self) -> List[Dict]:
-        """获取所有会话的聚合统计信息"""
+        """获取所有会话的聚合统计信息（相关子查询消除 N+1）"""
         async with self.async_session() as session:
             stmt = text("""
                 SELECT
@@ -977,7 +1021,13 @@ class PgDatabase:
                     COALESCE("conversationId", "sessionId") as "conversationId",
                     COUNT(*) as message_count,
                     MAX("createdAt") as last_active,
-                    STRING_AGG(message, '||' ORDER BY "createdAt") as recent_messages
+                    STRING_AGG(message, '||' ORDER BY "createdAt") as recent_messages,
+                    COALESCE((
+                        SELECT c."botEnabled" FROM conversations c
+                        WHERE c.platform = COALESCE(messages.platform, 'qq')
+                          AND c."conversationId" = COALESCE(messages."conversationId", messages."sessionId")
+                        ORDER BY c."updatedAt" DESC LIMIT 1
+                    ), 1) as bot_enabled
                 FROM messages
                 GROUP BY "sessionId", "sessionType", "sessionName", platform, adapter, "conversationId"
                 ORDER BY last_active DESC
@@ -1001,14 +1051,6 @@ class PgDatabase:
                 if len(summary) > 100:
                     summary = summary[:100] + "..."
 
-                # 查询该会话的机器人开关状态（统一从 conversations 表查询）
-                setting_stmt = text(
-                    'SELECT "botEnabled" FROM conversations WHERE platform = :platform AND "conversationId" = :cid ORDER BY "updatedAt" DESC LIMIT 1'
-                )
-                setting_result = await session.execute(setting_stmt, {"platform": platform, "cid": conversation_id})
-                setting_row = setting_result.fetchone()
-                bot_enabled = _row_to_dict(setting_row)["botEnabled"] if setting_row else 1
-
                 sessions.append({
                     "sessionId": session_id,
                     "sessionType": session_type,
@@ -1019,7 +1061,7 @@ class PgDatabase:
                     "messageCount": message_count,
                     "lastActive": last_active,
                     "summary": summary,
-                    "botEnabled": bool(bot_enabled),
+                    "botEnabled": bool(d.get("bot_enabled", 1)),
                 })
             return sessions
 
@@ -1481,6 +1523,32 @@ class SyncPgAdapter:
         future = asyncio.run_coroutine_threadsafe(coro, self._loop)
         return future.result(timeout=30)
 
+    def close(self):
+        """关闭后台事件循环与 PostgreSQL 引擎连接池。
+
+        应在应用 shutdown 阶段调用，避免引擎连接池在进程退出前无法
+        显式 dispose，多 worker 部署下可能造成连接泄漏。
+        """
+        if self._loop is None or not self._loop.is_running():
+            self._loop = None
+            self._thread = None
+            return
+        try:
+            # 先在后台循环中 dispose 引擎，确保连接归还给 PG
+            asyncio.run_coroutine_threadsafe(self._pg.close(), self._loop).result(timeout=15)
+        except Exception as e:
+            logger.warning(f"关闭 PgDatabase 引擎失败: {e}")
+        finally:
+            # 停止事件循环并等待 daemon 线程退出
+            try:
+                self._loop.call_soon_threadsafe(self._loop.stop)
+                if self._thread is not None:
+                    self._thread.join(timeout=5)
+            except Exception as e:
+                logger.warning(f"停止 SyncPgAdapter 事件循环失败: {e}")
+            self._loop = None
+            self._thread = None
+
     # 代理所有 PgDatabase 的方法为同步调用
     def init(self):
         self._run(self._pg.init())
@@ -1587,8 +1655,24 @@ class SyncPgAdapter:
     def get_knowledge_chunks(self, doc_id):
         return self._run(self._pg.get_knowledge_chunks(doc_id))
 
-    def get_all_knowledge_chunks(self):
-        return self._run(self._pg.get_all_knowledge_chunks())
+    def get_all_knowledge_chunks(self, limit: int | None = None, offset: int = 0):
+        return self._run(self._pg.get_all_knowledge_chunks(limit=limit, offset=offset))
+
+    def iter_all_knowledge_chunks(self, batch_size: int = 500):
+        """SyncPgAdapter 不支持异步生成器委托，回退到分页批量拉取。
+
+        调用方如需流式迭代，应直接使用 PgDatabase.iter_all_knowledge_chunks（async）。
+        """
+        offset = 0
+        while True:
+            batch = self._run(self._pg.get_all_knowledge_chunks(limit=batch_size, offset=offset))
+            if not batch:
+                break
+            for chunk in batch:
+                yield chunk
+            offset += len(batch)
+            if len(batch) < batch_size:
+                break
 
     def add_knowledge_chunk(self, chunk_data):
         return self._run(self._pg.add_knowledge_chunk(chunk_data))
@@ -1706,7 +1790,8 @@ class SyncPgAdapter:
     @property
     def messages(self):
         """兼容 SQLite 的 messages 属性"""
-        return self.get_messages(limit=10000)
+        # 与 SQLiteDB.messages 对齐，硬编码 limit=1000，避免 PG 模式下加载 10000 行造成内存压力
+        return self.get_messages(limit=1000)
 
     @property
     def loras(self):

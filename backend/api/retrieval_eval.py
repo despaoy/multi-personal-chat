@@ -1,4 +1,4 @@
-﻿"""检索评估数据集管理 API"""
+"""检索评估数据集管理 API"""
 import json
 import logging
 import secrets
@@ -19,19 +19,22 @@ def _now() -> str:
 
 
 @router.get("/api/retrieval-eval/questions")
-async def list_questions(category: Optional[str] = None, limit: int = 100,
+async def list_questions(category: Optional[str] = None, limit: int = 100, offset: int = 0,
                          current_user: dict = Depends(get_current_user)):
     """列出检索评估问题"""
     try:
+        # 统一分页边界校验：limit 上限 500，offset 非负
+        limit = max(1, min(int(limit), 500))
+        offset = max(0, int(offset))
         if category:
             rows = db.execute_sql(
-                "SELECT * FROM retrieval_eval_questions WHERE category=? ORDER BY created_at DESC LIMIT ?",
-                (category, limit),
+                "SELECT * FROM retrieval_eval_questions WHERE category=? ORDER BY created_at DESC LIMIT ? OFFSET ?",
+                (category, limit, offset),
             )
         else:
             rows = db.execute_sql(
-                "SELECT * FROM retrieval_eval_questions ORDER BY created_at DESC LIMIT ?",
-                (limit,),
+                "SELECT * FROM retrieval_eval_questions ORDER BY created_at DESC LIMIT ? OFFSET ?",
+                (limit, offset),
             )
         questions = []
         for r in (rows or []):

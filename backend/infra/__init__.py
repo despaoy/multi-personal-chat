@@ -3,7 +3,6 @@
 提供：
 - 熔断器 (circuit_breaker)
 - 访问控制 (access_control)
-- 异步处理器 (async_processor)
 - 备份管理 (backup_manager)
 - 数据加密 (encryption)
 - 故障转移 (failover)

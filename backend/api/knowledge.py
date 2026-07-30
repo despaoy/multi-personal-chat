@@ -1,4 +1,4 @@
-﻿"""知识库API - 知识库/文件夹/文档管理 + ZIP上传 + 文件夹扫描 + 搜索"""
+"""知识库API - 知识库/文件夹/文档管理 + ZIP上传 + 文件夹扫描 + 搜索"""
 import asyncio
 import logging
 import threading
@@ -911,15 +911,17 @@ def _ensure_vector_index():
                 return True
 
             logger.info("向量索引为空，从数据库重建...")
-            chunks = db.get_all_knowledge_chunks()
-            if not chunks:
-                logger.info("数据库中无知识库chunks，跳过向量索引重建")
+            # 使用分页迭代避免大库 OOM（Critical fix）
+            all_docs = {doc["id"]: doc for doc in db.get_knowledge_documents(limit=10000)}
+            if not all_docs:
+                logger.info("数据库中无知识库文档，跳过向量索引重建")
                 _vector_index_built = True
                 return True
 
-            all_docs = {doc["id"]: doc for doc in db.get_knowledge_documents(limit=10000)}
             vector_docs = []
-            for chunk in chunks:
+            chunk_count = 0
+            for chunk in db.iter_all_knowledge_chunks(batch_size=500):
+                chunk_count += 1
                 doc = all_docs.get(chunk.get("documentId"))
                 if not doc:
                     continue
@@ -943,7 +945,7 @@ def _ensure_vector_index():
 
             if vector_docs:
                 vector_db.add_documents(vector_docs)
-                logger.info(f"向量索引重建完成: {len(vector_docs)} 个chunks")
+                logger.info(f"向量索引重建完成: {len(vector_docs)} 个chunks（扫描 {chunk_count} 条）")
             _vector_index_built = True
             return True
         except Exception as e:
@@ -1026,10 +1028,10 @@ async def search_knowledge(request: KnowledgeSearchRequest):
         # 提取查询中的关键词（中文单字+英文单词）
         import re as _re
         query_keywords = _re.findall(r'[\u4e00-\u9fff]|[a-zA-Z]+', query_lower)
-        all_chunks = db.get_all_knowledge_chunks()
+        # 使用分页迭代避免大库 OOM（Critical fix）
         all_docs = {doc["id"]: doc for doc in db.get_knowledge_documents(limit=1000)}
         results = []
-        for chunk in all_chunks:
+        for chunk in db.iter_all_knowledge_chunks(batch_size=500):
             content = chunk["content"].lower()
             doc = all_docs.get(chunk["documentId"])
             if not doc:
@@ -1050,6 +1052,9 @@ async def search_knowledge(request: KnowledgeSearchRequest):
                     "chunkIndex": chunk["chunkIndex"], "content": chunk["content"],
                     "score": round(score, 2), "searchType": "keyword"
                 })
+            # 提前终止：已收集足够候选后排序截断
+            if len(results) >= top_k * 5:
+                break
         results.sort(key=lambda x: x["score"], reverse=True)
         results = results[:top_k]
         return {"success": True, "query": query, "results": results, "searchType": "keyword"}

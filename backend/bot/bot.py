@@ -113,18 +113,27 @@ def _load_db_config() -> Dict[str, Any]:
         logger.warning("加载数据库配置失败，返回空配置: %s", exc)
         return {}
 
-# 带缓存的配置读取：设置页修改后最多30秒生效，无需重启bot进程
-_db_cfg_cache: Dict[str, Any] = {}
-_db_cfg_cache_ts: float = 0.0
-
+# DB 配置缓存统一委托给 cache.config_cache（60s TTL + jitter + Redis 共享），
+# 消除三套独立缓存导致的状态不同步问题。
+# 此前 bot 维护独立 30s 缓存，与 config_cache 的 60s 缓存失效不联动，
+# 导致配置更新后 bot 层与 API 层行为不一致。
 def _get_db_config() -> Dict[str, Any]:
-    """获取数据库配置（30秒内存缓存）"""
-    global _db_cfg_cache, _db_cfg_cache_ts
-    now = time.time()
-    if not _db_cfg_cache or now - _db_cfg_cache_ts > 30:
-        _db_cfg_cache = _load_db_config()
-        _db_cfg_cache_ts = now
-    return _db_cfg_cache
+    """获取数据库配置（统一走 cache.config_cache，设置页修改后 60s 内全局生效）"""
+    try:
+        from cache.config_cache import get_cached_config, set_cached_config
+        cached = get_cached_config()
+        if cached is not None:
+            return dict(cached)
+    except Exception:
+        pass
+
+    config = _load_db_config()
+    try:
+        from cache.config_cache import set_cached_config
+        set_cached_config(config)
+    except Exception:
+        pass
+    return config
 
 class Config:
     """机器人配置 - 环境变量项为静态属性，数据库项通过@property动态读取（30秒缓存）"""
@@ -599,21 +608,6 @@ def _load_7b_model(lora_name: str = None):
 def is_superuser(event: MessageEvent) -> bool:
     user_id = str(event.user_id)
     return user_id in config.SUPERUSERS
-
-
-async def close_bot_vllm_client():
-    """关闭 bot 进程中的 VLLMClient，应在应用 shutdown 阶段调用。
-
-    C15 fix: 此前 bot 模块独立创建 VLLMClient 实例并挂载在函数属性上，
-    与 api/generate.py 的 _vllm_client 是不同对象。
-    现复用 inference.vllm_client 的全局共享单例，生命周期由
-    close_shared_vllm_client() 统一管理，此处仅清理本地引用。
-    """
-    if hasattr(generate_with_local_model, '_vllm_client'):
-        try:
-            delattr(generate_with_local_model, '_vllm_client')
-        except AttributeError:
-            pass
 
 
 async def generate_with_local_model(prompt: str, session_id: Optional[str] = None, is_claw: bool = False, lora_name: str = None) -> str:

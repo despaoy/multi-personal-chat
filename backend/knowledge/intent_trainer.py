@@ -234,23 +234,16 @@ async def generate_samples(
         # ── 3. 获取vLLM客户端 ──
         _check_cancelled()
         _generation_status.update(stage="connect", message="连接vLLM服务...", progress=10)
-        vllm_client = _get_vllm_client()
+        vllm_client = await _get_vllm_client()
         if not vllm_client:
             raise RuntimeError("vLLM服务不可用")
         _add_log("vLLM服务连接成功")
 
-        try:
-            # C11 fix: 用嵌套 try/finally 确保 vllm_client 在所有退出路径上被关闭，
-            # 避免每次样本生成泄漏一个 httpx.AsyncClient 连接池
-            return await _generate_samples_inner(
-                vllm_client, selected_kbs, kb_docs,
-                samples_per_kb, negative_count, lora_name,
-            )
-        finally:
-            try:
-                await vllm_client.close()
-            except Exception as close_err:
-                logger.warning(f"关闭 vLLM 客户端失败: {close_err}")
+        # 使用全局共享单例，生命周期由 app.main lifespan 统一管理，此处不 close
+        return await _generate_samples_inner(
+            vllm_client, selected_kbs, kb_docs,
+            samples_per_kb, negative_count, lora_name,
+        )
 
     except RuntimeError as e:
         if "取消" in str(e):
@@ -345,17 +338,21 @@ def _load_kb_documents(kbs: list) -> Dict[str, str]:
     return result
 
 
-def _get_vllm_client():
-    """通过 inference 层获取 vLLM 客户端，不依赖 api 层"""
+async def _get_vllm_client():
+    """通过 inference 层获取 vLLM 客户端单例，不依赖 api 层。
+
+    使用全局共享单例（get_vllm_client），避免每次调用创建独立实例导致
+    httpx 连接池与熔断器状态泄漏。单例生命周期由 app.main lifespan 统一管理。
+    """
     # D-1 fix: 统一使用 app.config.is_vllm_enabled() 判定
     from app.config import is_vllm_enabled
     if not is_vllm_enabled():
         logger.warning("vLLM 未启用（缺少 VLLM_ENABLED 或 VLLM_BASE_URLS 环境变量）")
         return None
     try:
-        from inference.vllm_client import VLLMClient
-        client = VLLMClient()
-        logger.info("vLLM 客户端初始化成功（通过 inference 层）")
+        from inference.vllm_client import get_vllm_client
+        client = await get_vllm_client()
+        logger.info("vLLM 客户端单例获取成功（通过 inference 层）")
         return client
     except Exception as e:
         logger.warning(f"vLLM 客户端初始化失败: {e}")

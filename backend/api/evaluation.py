@@ -1,4 +1,4 @@
-﻿"""评估相关 API - Gold 评估集管理与评估运行"""
+"""评估相关 API - Gold 评估集管理与评估运行"""
 import json
 import logging
 import secrets
@@ -72,12 +72,15 @@ async def run_evaluation(req: EvalRunRequest, current_user: dict = Depends(get_c
     return {"success": True, "run_id": run_id, "status": "queued", "mock": req.mock}
 
 @router.get("/api/evaluation/runs")
-async def list_runs(limit: int = 20, current_user: dict = Depends(get_current_user)):
+async def list_runs(limit: int = 20, offset: int = 0, current_user: dict = Depends(get_current_user)):
     """列出评估运行历史"""
     try:
+        # 统一分页边界校验：limit 上限 500，offset 非负
+        limit = max(1, min(int(limit), 500))
+        offset = max(0, int(offset))
         rows = db.execute_sql(
-            "SELECT id, run_at, adapter_name, model_label, total_prompts, metrics, notes FROM gold_eval_runs ORDER BY run_at DESC LIMIT ?",
-            (limit,),
+            "SELECT id, run_at, adapter_name, model_label, total_prompts, metrics, notes FROM gold_eval_runs ORDER BY run_at DESC LIMIT ? OFFSET ?",
+            (limit, offset),
         )
         runs = []
         for r in (rows or []):
@@ -154,19 +157,22 @@ async def create_feedback(req: dict, current_user: dict = Depends(get_current_us
 
 
 @router.get("/api/feedback")
-async def list_feedback(limit: int = 50, rating: Optional[str] = None,
+async def list_feedback(limit: int = 50, offset: int = 0, rating: Optional[str] = None,
                         current_user: dict = Depends(get_current_user)):
     """列出用户反馈"""
     try:
+        # 统一分页边界校验：limit 上限 500，offset 非负
+        limit = max(1, min(int(limit), 500))
+        offset = max(0, int(offset))
         if rating:
             rows = db.execute_sql(
-                "SELECT * FROM feedback WHERE rating=? ORDER BY created_at DESC LIMIT ?",
-                (rating, limit),
+                "SELECT * FROM feedback WHERE rating=? ORDER BY created_at DESC LIMIT ? OFFSET ?",
+                (rating, limit, offset),
             )
         else:
             rows = db.execute_sql(
-                "SELECT * FROM feedback ORDER BY created_at DESC LIMIT ?",
-                (limit,),
+                "SELECT * FROM feedback ORDER BY created_at DESC LIMIT ? OFFSET ?",
+                (limit, offset),
             )
         feedbacks = [dict(r) for r in (rows or [])]
         return {"success": True, "feedbacks": feedbacks, "total": len(feedbacks)}

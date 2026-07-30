@@ -266,13 +266,6 @@ except ImportError:
     LOAD_BALANCER_AVAILABLE = False
 
 try:
-    from infra.async_processor import AsyncTaskQueue
-
-    ASYNC_PROCESSOR_AVAILABLE = True
-except ImportError:
-    ASYNC_PROCESSOR_AVAILABLE = False
-
-try:
     from infra.resource_pool import ConnectionPool, HttpClientPool
 
     RESOURCE_POOL_AVAILABLE = True
@@ -353,7 +346,6 @@ service_start_time = datetime.now()
 # ============================================
 
 load_balancer_mgr = LoadBalancerManager() if LOAD_BALANCER_AVAILABLE else None
-async_task_queue = AsyncTaskQueue() if ASYNC_PROCESSOR_AVAILABLE else None
 connection_pool = None  # 在lifespan中初始化
 http_client_pool = None  # 在lifespan中初始化
 circuit_breaker_registry = CircuitBreakerRegistry() if CIRCUIT_BREAKER_AVAILABLE else None

@@ -18,11 +18,12 @@ import hashlib
 import json
 import logging
 import os
+import random
 import re
 import time
 from collections import OrderedDict
 from dataclasses import dataclass, field
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Awaitable, Callable, Dict, Optional, Tuple
 
 from interfaces import CacheInterface
 
@@ -69,6 +70,9 @@ class CacheEntry:
 class L1LRUCache:
     """L1 进程内LRU缓存"""
 
+    # NULL marker for anti-penetration（防穿透，缓存空结果）
+    NULL_MARKER = "__SC_NULL__"
+
     def __init__(self, max_size: int = 1000, default_ttl: float = 300.0):
         self._max_size = max_size
         self._default_ttl = default_ttl
@@ -91,6 +95,7 @@ class L1LRUCache:
             self._cache.move_to_end(key)
             entry.hit_count += 1
             self._hits += 1
+            # NULL marker 表示"缓存了空结果"，返回 NULL_MARKER 让调用方区分 miss
             return entry.value
 
     async def set(self, key: str, value: Any, ttl: Optional[float] = None) -> None:
@@ -100,11 +105,16 @@ class L1LRUCache:
             elif len(self._cache) >= self._max_size:
                 # Evict oldest
                 self._cache.popitem(last=False)
+            # 防雪崩：TTL 添加 ±10% jitter，避免大量缓存同时过期
+            # 注意：不强制提升到 1s 下限，否则会破坏显式传入的短 TTL（如测试场景）
+            base_ttl = ttl or self._default_ttl
+            jitter = base_ttl * random.uniform(-0.1, 0.1)
+            actual_ttl = max(0.001, base_ttl + jitter)
             self._cache[key] = CacheEntry(
                 key=key,
                 value=value,
                 created_at=time.time(),
-                ttl=ttl or self._default_ttl,
+                ttl=actual_ttl,
             )
 
     async def delete(self, key: str) -> bool:
@@ -191,10 +201,13 @@ class L2RedisCache:
         if not client or not self._available:
             return
         try:
-            ttl = ttl or self._default_ttl
+            base_ttl = ttl or self._default_ttl
+            # 防雪崩：TTL 添加 ±10% jitter
+            jitter = base_ttl * random.uniform(-0.1, 0.1)
+            actual_ttl = max(1, int(base_ttl + jitter))
             # 精确匹配缓存
             cache_key = f"sc:exact:{key}"
-            await client.setex(cache_key, int(ttl), json.dumps(value, ensure_ascii=False, default=str))
+            await client.setex(cache_key, actual_ttl, json.dumps(value, ensure_ascii=False, default=str))
         except Exception as e:
             logger.debug(f"L2 cache set error: {e}")
 
@@ -229,10 +242,10 @@ class L2RedisCache:
             logger.warning(f"L2 cache clear error: {e}")
 
     async def close(self) -> None:
-        if self._client:
-            await self._client.aclose()
-            self._client = None
-            self._available = False
+        # 共享客户端由 cache.redis_client 统一管理，此处不关闭，仅清空本地引用
+        # 与 RedisMessageQueue.close() 保持一致，避免摧毁全局共享连接池
+        self._client = None
+        self._available = False
 
     def stats(self) -> Dict[str, Any]:
         total = self._hits + self._misses
@@ -246,7 +259,15 @@ class L2RedisCache:
 
 
 class SemanticCache:
-    """两级语义缓存：L1进程内LRU + L2 Redis"""
+    """两级语义缓存：L1进程内LRU + L2 Redis
+
+    防护机制：
+    - 防雪崩：L1/L2 的 TTL 均有 ±10% jitter，避免大量缓存同时过期
+    - 防穿透：支持缓存 NULL_MARKER，对空结果也短期缓存（避免反复回源）
+    - 防击穿：get_or_set 提供 per-key 互斥锁，热点 key 过期时只有一个协程回源
+    """
+
+    NULL_MARKER = "__SC_NULL__"
 
     def __init__(
         self,
@@ -260,6 +281,9 @@ class SemanticCache:
             redis_url=redis_url or os.getenv("REDIS_URL", "redis://localhost:6379/0"),
             default_ttl=l2_ttl,
         )
+        # 防击穿：per-key 互斥锁
+        self._key_locks: Dict[str, asyncio.Lock] = {}
+        self._locks_guard = asyncio.Lock()
 
     def _compute_key(self, text: str, context: Optional[str] = None) -> str:
         """计算缓存键 = hash(normalized_text + optional_context)"""
@@ -268,8 +292,23 @@ class SemanticCache:
             normalized = f"{normalized}:{normalize_text(context)}"
         return text_hash(normalized)
 
+    async def _get_key_lock(self, key: str) -> asyncio.Lock:
+        """获取 per-key 锁（防击穿）"""
+        async with self._locks_guard:
+            lock = self._key_locks.get(key)
+            if lock is None:
+                lock = asyncio.Lock()
+                self._key_locks[key] = lock
+            return lock
+
     async def get(self, prompt: str, context: Optional[str] = None) -> Optional[Any]:
-        """查询缓存：L1 → L2 → Miss"""
+        """查询缓存：L1 → L2 → Miss
+
+        返回值：
+        - None: 缓存未命中（miss）
+        - NULL_MARKER: 缓存了空结果（防穿透，调用方应跳过回源）
+        - 其他: 缓存命中
+        """
         key = self._compute_key(prompt, context)
 
         # L1 lookup
@@ -287,6 +326,57 @@ class SemanticCache:
             return result
 
         return None
+
+    async def get_or_set(
+        self,
+        prompt: str,
+        factory: Callable[[], Awaitable[Any]],
+        context: Optional[str] = None,
+        cache_null: bool = True,
+        null_ttl: float = 60.0,
+    ) -> Any:
+        """防击穿查询：如果缓存未命中，只允许一个协程执行 factory，其余等待。
+
+        Args:
+            prompt: 查询文本
+            factory: 缓存未命中时的回源函数（async）
+            context: 上下文（如 group_id）
+            cache_null: 是否缓存空结果（防穿透）
+            null_ttl: 空结果的缓存 TTL（较短，避免长期缓存空值）
+        """
+        key = self._compute_key(prompt, context)
+        cached = await self.get(prompt, context)
+        if cached is not None:
+            if cached == self.NULL_MARKER:
+                return None  # 防穿透：之前缓存了空结果
+            return cached
+
+        # 防击穿：per-key 互斥锁，热点 key 过期时只有一个协程回源
+        lock = await self._get_key_lock(key)
+        async with lock:
+            # double-check（持锁后可能已被其他协程填充）
+            cached = await self.get(prompt, context)
+            if cached is not None:
+                if cached == self.NULL_MARKER:
+                    return None
+                return cached
+
+            # 回源
+            try:
+                value = await factory()
+            except Exception:
+                # 回源失败不缓存，让下次请求重试
+                raise
+
+            if value is None or value == "":
+                if cache_null:
+                    # 防穿透：缓存空结果，使用较短 TTL
+                    await self._l1.set(key, self.NULL_MARKER, ttl=null_ttl)
+                    await self._l2.set(key, self.NULL_MARKER, ttl=null_ttl)
+                return None
+            else:
+                await self.set(prompt, value, context)
+                return value
 
     async def set(self, prompt: str, value: Any, context: Optional[str] = None) -> None:
         """写入缓存：同时写L1和L2"""

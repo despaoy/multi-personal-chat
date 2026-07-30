@@ -242,7 +242,7 @@ class SQLiteDB:
                 documentId INTEGER NOT NULL,
                 chunkIndex INTEGER NOT NULL,
                 content TEXT NOT NULL,
-                embedding BLOB,
+                embedding INTEGER,
                 createdAt TEXT NOT NULL,
                 FOREIGN KEY (documentId) REFERENCES knowledge_documents(id) ON DELETE CASCADE
             )
@@ -306,7 +306,8 @@ class SQLiteDB:
         # 创建训练任务表
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS training_tasks (
-                task_id TEXT PRIMARY KEY,
+                id TEXT PRIMARY KEY,
+                task_id TEXT UNIQUE,
                 lora_name TEXT NOT NULL,
                 status TEXT NOT NULL DEFAULT 'pending',
                 progress REAL DEFAULT 0,
@@ -316,6 +317,14 @@ class SQLiteDB:
                 updated_at TEXT DEFAULT ''
             )
         ''')
+        # 老库迁移：如果 training_tasks 表缺少 id 列（旧 schema 用 task_id 作 PK），补齐
+        try:
+            cursor.execute("SELECT id FROM training_tasks LIMIT 1")
+        except sqlite3.OperationalError:
+            # 旧表无 id 列，添加 id 列并用 task_id 值填充
+            cursor.execute("ALTER TABLE training_tasks ADD COLUMN id TEXT")
+            cursor.execute("UPDATE training_tasks SET id = task_id WHERE id IS NULL")
+            logger.info("已为 training_tasks 表添加 id 列并从 task_id 回填")
 
         # 创建 Claw 自定义工具表
         cursor.execute('''
@@ -539,9 +548,11 @@ class SQLiteDB:
         cursor.execute('PRAGMA cache_size=-8000')  # 8MB cache
         cursor.execute('PRAGMA temp_store=MEMORY')
 
-        # 为高频查询建索引：按 sessionId 查消息，避免全表扫
+        # 为高频查询建索引
         try:
-            cursor.execute('CREATE INDEX IF NOT EXISTS idx_messages_sessionId_createdAt ON messages(sessionId, createdAt)')
+            # 删除与 ORM idx_messages_session_created 语义相同的旧索引名，避免重复维护
+            cursor.execute('DROP INDEX IF EXISTS idx_messages_sessionId_createdAt')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_messages_session_created ON messages(sessionId, createdAt)')
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_messages_platform_conversation ON messages(platform, conversationId, createdAt)')
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_messages_source_dedup ON messages(platform, adapter, sourceMessageId)')
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_messages_createdAt ON messages(createdAt)')
@@ -555,6 +566,16 @@ class SQLiteDB:
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_preference_pairs_status ON preference_pairs(review_status)')
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_feedback_created ON feedback(created_at)')
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_adapter_compat_name ON adapter_compatibility(adapter_name)')
+            # 补充此前缺失的高频外键/过滤列索引
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_knowledge_chunks_documentId ON knowledge_chunks(documentId)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_knowledge_documents_kb_id ON knowledge_documents(knowledge_base_id)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_knowledge_documents_folder_id ON knowledge_documents(folder_id)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_training_tasks_lora_name ON training_tasks(lora_name)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_training_tasks_status ON training_tasks(status)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_intent_samples_kbName ON intent_samples(kbName)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_feedback_trace_id ON feedback(trace_id)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_feedback_message_id ON feedback(message_id)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_audit_logs_timestamp ON audit_logs(timestamp)')
         except Exception:
             pass  # 索引已存在或 SQLite 版本不支，不影响功能
 
@@ -1560,17 +1581,50 @@ class SQLiteDB:
             chunks.append(dict(row))
         return chunks
 
-    def get_all_knowledge_chunks(self):
-        """获取所有知识库片段（用于检索）"""
+    def get_all_knowledge_chunks(self, limit: int | None = None, offset: int = 0):
+        """获取所有知识库片段（用于检索）。
+
+        Args:
+            limit: 返回数量上限，None 表示全量（谨慎使用，大库可能 OOM）
+            offset: 跳过前 N 条
+        """
         conn = self._get_connection()
         cursor = conn.cursor()
-        cursor.execute('SELECT * FROM knowledge_chunks ORDER BY documentId, chunkIndex')
+        if limit is not None:
+            cursor.execute(
+                'SELECT * FROM knowledge_chunks ORDER BY documentId, chunkIndex LIMIT ? OFFSET ?',
+                (limit, offset)
+            )
+        else:
+            cursor.execute('SELECT * FROM knowledge_chunks ORDER BY documentId, chunkIndex')
         rows = cursor.fetchall()
 
         chunks = []
         for row in rows:
             chunks.append(dict(row))
         return chunks
+
+    def iter_all_knowledge_chunks(self, batch_size: int = 500):
+        """分页迭代所有知识库片段，避免大库 OOM。
+
+        生成器，每次 yield 一批（最多 batch_size 条）chunk dict。
+        """
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        offset = 0
+        while True:
+            cursor.execute(
+                'SELECT * FROM knowledge_chunks ORDER BY documentId, chunkIndex LIMIT ? OFFSET ?',
+                (batch_size, offset)
+            )
+            rows = cursor.fetchall()
+            if not rows:
+                break
+            for row in rows:
+                yield dict(row)
+            offset += len(rows)
+            if len(rows) < batch_size:
+                break
 
     def get_knowledge_stats(self):
         """获取知识库统计数据"""
@@ -1722,6 +1776,8 @@ class SQLiteDB:
         cursor = conn.cursor()
 
         # 按 sessionId 聚合：消息数、最近消息内容、最后活跃时间
+        # bot_enabled 统一从 conversations 表查询（与 PG 端对齐），
+        # 使用相关子查询消除 N+1，避免读取已废弃的 session_settings 表导致数据陈旧。
         cursor.execute('''
             SELECT
                 sessionId,
@@ -1732,7 +1788,13 @@ class SQLiteDB:
                 COALESCE(conversationId, sessionId) as conversationId,
                 COUNT(*) as message_count,
                 MAX(createdAt) as last_active,
-                GROUP_CONCAT(message, '||') as recent_messages
+                GROUP_CONCAT(message, '||') as recent_messages,
+                COALESCE((
+                    SELECT c.botEnabled FROM conversations c
+                    WHERE c.platform = COALESCE(messages.platform, 'qq')
+                      AND c.conversationId = COALESCE(messages.conversationId, messages.sessionId)
+                    ORDER BY c.updatedAt DESC LIMIT 1
+                ), 1) as bot_enabled
             FROM messages
             GROUP BY sessionId, sessionType, sessionName, platform, adapter, conversationId
             ORDER BY last_active DESC
@@ -1757,14 +1819,6 @@ class SQLiteDB:
             if len(summary) > 100:
                 summary = summary[:100] + '...'
 
-            # 查询该会话的机器人开关状态
-            cursor.execute(
-                'SELECT bot_enabled FROM session_settings WHERE sessionId = ?',
-                (session_id,)
-            )
-            setting_row = cursor.fetchone()
-            bot_enabled = setting_row['bot_enabled'] if setting_row else 1
-
             sessions.append({
                 'sessionId': session_id,
                 'sessionType': session_type,
@@ -1775,7 +1829,7 @@ class SQLiteDB:
                 'messageCount': message_count,
                 'lastActive': last_active,
                 'summary': summary,
-                'botEnabled': bool(bot_enabled),
+                'botEnabled': bool(row['bot_enabled']),
             })
 
         return sessions
@@ -2059,10 +2113,11 @@ class SQLiteDB:
         cursor = conn.cursor()
         import json
         cursor.execute('''
-            INSERT OR REPLACE INTO training_tasks (task_id, lora_name, status, progress,
+            INSERT OR REPLACE INTO training_tasks (id, task_id, lora_name, status, progress,
             error_message, config_json, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
+            task_id,
             task_id,
             task_data.get('lora_name', ''),
             task_data.get('status', 'pending'),

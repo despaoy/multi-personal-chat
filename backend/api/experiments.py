@@ -1,4 +1,4 @@
-﻿"""实验管理 API - LoRA 消融/RAG 消融/量化基准"""
+"""实验管理 API - LoRA 消融/RAG 消融/量化基准"""
 import asyncio
 import json
 import logging
@@ -56,18 +56,22 @@ def _serialize_results(results):
 @router.get("/api/experiments/")
 async def list_experiments(experiment_type: Optional[str] = None,
                            limit: int = 50,
+                           offset: int = 0,
                            current_user: dict = Depends(get_current_user)):
     """列出实验运行记录"""
     try:
+        # 统一分页边界校验：limit 上限 500，offset 非负
+        limit = max(1, min(int(limit), 500))
+        offset = max(0, int(offset))
         if experiment_type:
             rows = db.execute_sql(
-                "SELECT * FROM experiment_runs WHERE experiment_type=? ORDER BY started_at DESC LIMIT ?",
-                (experiment_type, limit),
+                "SELECT * FROM experiment_runs WHERE experiment_type=? ORDER BY started_at DESC LIMIT ? OFFSET ?",
+                (experiment_type, limit, offset),
             )
         else:
             rows = db.execute_sql(
-                "SELECT * FROM experiment_runs ORDER BY started_at DESC LIMIT ?",
-                (limit,),
+                "SELECT * FROM experiment_runs ORDER BY started_at DESC LIMIT ? OFFSET ?",
+                (limit, offset),
             )
         experiments = []
         for r in (rows or []):

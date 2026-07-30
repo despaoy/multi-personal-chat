@@ -192,17 +192,32 @@ class AsyncInferenceService:
                 logger.warning(f"语义缓存初始化失败: {e}")
 
     async def _ensure_circuit_breaker(self):
-        """懒初始化熔断器"""
+        """懒初始化熔断器，复用全局 vllm 熔断器。
+
+        避免为同一 vLLM 后端创建独立熔断器导致：
+        1. 触发时机不一致（failure_threshold 不同）
+        2. 状态隔离导致 /api/enhanced/circuit-breaker/stats 监控盲区
+        """
         if self._circuit_breaker is None:
             try:
-                from infra.circuit_breaker import CircuitBreaker, DegradationMode
-                self._circuit_breaker = CircuitBreaker(
-                    name="inference_service",
-                    failure_threshold=5,
-                    recovery_timeout=30.0,
-                    half_open_max_calls=2,
-                    degradation_mode=DegradationMode.DEFAULT,
-                )
+                from app.config import circuit_breaker_registry
+                if circuit_breaker_registry is not None:
+                    # 复用 VLLMClient 注册到全局 registry 的 "vllm" 熔断器
+                    self._circuit_breaker = await circuit_breaker_registry.get_or_create(
+                        "vllm",
+                        failure_threshold=20,
+                        recovery_timeout=60.0,
+                        half_open_max_calls=5,
+                    )
+                else:
+                    from infra.circuit_breaker import CircuitBreaker, DegradationMode
+                    self._circuit_breaker = CircuitBreaker(
+                        name="vllm",
+                        failure_threshold=20,
+                        recovery_timeout=60.0,
+                        half_open_max_calls=5,
+                        degradation_mode=DegradationMode.DEFAULT,
+                    )
                 self._circuit_breaker.set_default("[系统提示] 暂时无法处理您的消息，请稍后再试")
             except Exception as e:
                 logger.warning(f"熔断器初始化失败: {e}")
