@@ -104,29 +104,23 @@ class RedisMessageQueue:
                 return self._client
 
             try:
-                self._client = aioredis.from_url(
-                    self._redis_url,
-                    max_connections=20,
-                    socket_timeout=5,
-                    socket_connect_timeout=3,
-                    decode_responses=True,
-                )
+                # 复用 cache.redis_client 的共享连接池，避免独立创建连接池
+                from cache.redis_client import get_async_redis
+                self._client = await get_async_redis()
+                if self._client is None:
+                    raise RuntimeError("Redis 不可用")
                 await self._client.ping()
                 await self._create_consumer_groups()
                 self._use_redis = True
-                logger.info("Redis消息队列已连接: %s", self._redis_url)
+                logger.info("Redis消息队列已连接(共享连接池): %s", self._redis_url)
                 return self._client
             except Exception as e:
                 logger.warning("Redis不可用，回退到内存队列: %s", e)
                 self._use_redis = False
                 if self._fallback_queue is None:
                     self._fallback_queue = asyncio.PriorityQueue(maxsize=MAX_PENDING)
-                if self._client is not None:
-                    try:
-                        await self._client.aclose()
-                    except Exception:
-                        pass
-                    self._client = None
+                # 注意：共享客户端由 cache.redis_client 管理生命周期，此处不关闭
+                self._client = None
                 return None
 
     async def _create_consumer_groups(self) -> None:
@@ -408,15 +402,15 @@ class RedisMessageQueue:
             await asyncio.sleep(interval)
 
     async def close(self) -> None:
-        """关闭连接，停止后台任务。"""
+        """停止后台任务。
+
+        注意：共享 Redis 客户端由 cache.redis_client.close_async_redis() 统一管理，
+        此处仅清空本地引用，不调用 aclose()，否则会关闭其他模块（semantic_cache 等）
+        正在使用的共享客户端。
+        """
         self._running = False
-        if self._client is not None:
-            try:
-                await self._client.aclose()
-            except Exception:
-                pass
-            self._client = None
-            logger.info("Redis消息队列连接已关闭")
+        self._client = None
+        logger.info("Redis消息队列已停止（共享客户端由 redis_client 统一关闭）")
 
 
 # 接口契约验证：确保 RedisMessageQueue 实现 MessageQueueInterface 接口

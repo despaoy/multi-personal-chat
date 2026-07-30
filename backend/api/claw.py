@@ -13,7 +13,7 @@ from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel, Field
 
 from db.adapter import db
-from app.dependencies import get_current_user
+from app.dependencies import get_current_user, get_current_admin
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -74,8 +74,11 @@ async def list_tools(current_user: dict = Depends(get_current_user)):
 # ── 保存（创建/更新）工具 ──
 
 @router.post("/api/claw/tools")
-async def save_tool(req: ToolSaveRequest, current_user: dict = Depends(get_current_user)):
-    """创建或更新自定义 Claw 工具"""
+async def save_tool(req: ToolSaveRequest, current_user: dict = Depends(get_current_admin)):
+    """创建或更新自定义 Claw 工具
+
+    s2 fix: 工具包含可执行 Python 代码，限定 admin。
+    """
     if not req.name or not req.name.strip():
         raise HTTPException(status_code=400, detail="工具名称不能为空")
     
@@ -95,8 +98,11 @@ async def save_tool(req: ToolSaveRequest, current_user: dict = Depends(get_curre
 # ── 删除工具 ──
 
 @router.delete("/api/claw/tools/{name}")
-async def delete_tool(name: str, current_user: dict = Depends(get_current_user)):
-    """删除自定义 Claw 工具"""
+async def delete_tool(name: str, current_user: dict = Depends(get_current_admin)):
+    """删除自定义 Claw 工具
+
+    s2 fix: 工具包含可执行代码，删除影响全局，限定 admin。
+    """
     for bt in BUILTIN_TOOLS:
         if bt["name"] == name:
             raise HTTPException(status_code=400, detail="不能删除内置工具")
@@ -261,8 +267,10 @@ def _run_in_sandbox_process(code: str, args: dict) -> dict:
 
 
 @router.post("/api/claw/tools/execute")
-async def execute_tool_code(req: ToolExecuteRequest, current_user: dict = Depends(get_current_user)):
+async def execute_tool_code(req: ToolExecuteRequest, current_user: dict = Depends(get_current_admin)):
     """Execute a small tool in an isolated child process.
+
+    s2 fix: 执行任意用户代码（子进程沙箱），限定 admin。
 
     Production execution is disabled unless CLAW_CODE_EXECUTION_ENABLED=true.
     This process isolation limits hangs and accidental damage, but it is not a

@@ -1,4 +1,4 @@
-﻿"""AstrBot gateway plugin for qqchat-enhanced.
+"""AstrBot gateway plugin for qqchat-enhanced.
 
 Install this directory as an AstrBot plugin. It normalizes platform events and
 forwards text messages to qqchat-enhanced FastAPI.
@@ -139,8 +139,11 @@ class QQChatGatewayPlugin(Star):
             with urllib.request.urlopen(req, timeout=self.timeout) as resp:
                 return json.loads(resp.read().decode("utf-8"))
         except urllib.error.HTTPError as exc:
+            # 仅记录状态码与短预览，避免将后端完整错误 body（可能含堆栈/数据库错误）
+            # 拼入异常消息后被 catch 写入运维日志，造成信息泄露
             detail = exc.read().decode("utf-8", errors="replace")
-            raise RuntimeError(f"backend returned HTTP {exc.code}: {detail}") from exc
+            preview = detail[:200] if detail else ""
+            raise RuntimeError(f"backend returned HTTP {exc.code}: {preview}") from exc
 
     def _signature(self, timestamp: str, nonce: str, body: bytes) -> str:
         body_hash = hashlib.sha256(body).hexdigest()

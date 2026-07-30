@@ -193,7 +193,9 @@ class RequestCoalescer:
         async with self._lock:
             self._pending.pop(prompt_hash, None)
         from inference.model_manager import get_model_manager
-        return await asyncio.to_thread(get_model_manager().generate, prompt=prompt)
+        # M3 fix: 直接 await async_generate，避免 asyncio.to_thread → asyncio.run
+        # 跨事件循环复用 AsyncClient 导致 "Event loop is closed"
+        return await get_model_manager().async_generate(prompt=prompt)
 
     @property
     def stats(self):

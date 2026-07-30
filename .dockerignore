@@ -4,10 +4,43 @@ node_modules
 *.md
 .env
 .env.local
+
+# M1 fix: 前端镜像不应包含后端源码（敏感逻辑、API密钥、数据库凭证）
+# Dockerfile 的 builder 阶段 COPY . . 会把整个项目复制进构建上下文，
+# 即使 runner 阶段只拷贝 .next/standalone，backend 源码仍会留在 builder 层缓存中，
+# 存在泄露风险并拖慢构建。
+backend/
+astrbot_plugins/
+gametext/
+docs/
+scripts/
+deploy/
+
+# 研究数据与实验产物（体积大且与前端无关）
+backend/data
+backend/experiments
+backend/loras
+backend/knowledge_bases
+backend/models
+backend/logs
+backend/*.db
+backend/**/*.db
+
+# 原有的 Python 缓存与虚拟环境排除项（兼容 backend/.dockerignore）
 backend/venv
 backend/__pycache__
 backend/**/__pycache__
-backend/*.db
-backend/knowledge_bases
-backend/loras
-deploy
+
+# 大体积二进制 / 文档
+*.pptx
+*.pdf
+*.zip
+*.tar.gz
+*.ckpt
+*.safetensors
+*.bin
+
+# 本地工具产物
+.codex_ppt_review/
+.trae/
+.codex/

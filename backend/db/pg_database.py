@@ -9,10 +9,7 @@ import logging
 from datetime import datetime
 from typing import Optional, Dict, List, Any
 
-from sqlalchemy import (
-    MetaData, Table, Column, Integer, BigInteger, Text, Float, String,
-    ForeignKey, UniqueConstraint, text,
-)
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 
 logger = logging.getLogger(__name__)
@@ -34,336 +31,36 @@ def _normalize_database_url(database_url: str) -> str:
 # ============================================
 # SQLAlchemy Core 表定义
 # ============================================
-metadata = MetaData()
+# Phase 2 fix: 表定义从 db.models 的 ORM metadata 派生，消除 26 张表的重复定义。
+# models.py 是数据库 schema 的单一真相源，pg_database.py 不再自行声明 Table 对象。
+from db.models import metadata
 
-messages_table = Table(
-    "messages", metadata,
-    Column("id", Integer, primary_key=True, autoincrement=True),
-    Column("sessionType", Text, nullable=False),
-    Column("sessionId", Text, nullable=False),
-    Column("sessionName", Text),
-    Column("platform", Text, nullable=False, server_default="qq"),
-    Column("adapter", Text, nullable=False, server_default="nonebot"),
-    Column("conversationId", Text),
-    Column("conversationType", Text),
-    Column("senderId", Text),
-    Column("senderName", Text),
-    Column("sourceMessageId", Text),
-    Column("traceId", Text),
-    Column("userId", Text),
-    Column("userName", Text),
-    Column("message", Text, nullable=False),
-    Column("reply", Text, nullable=False),
-    Column("modelName", Text),
-    Column("loraName", Text),
-    Column("costTime", Float),
-    Column("createdAt", Text, nullable=False),
-)
-
-loras_table = Table(
-    "loras", metadata,
-    Column("id", Text, primary_key=True),
-    Column("name", Text, nullable=False),
-    Column("description", Text),
-    Column("status", Text, nullable=False, server_default="inactive"),
-    Column("style", Text),
-    Column("size", Text),
-    Column("trainedSteps", Integer),
-    Column("totalSteps", Integer),
-    Column("createdAt", Text),
-)
-
-config_table = Table(
-    "config", metadata,
-    Column("key", Text, primary_key=True),
-    Column("value", Text, nullable=False),
-)
-
-knowledge_bases_table = Table(
-    "knowledge_bases", metadata,
-    Column("id", Integer, primary_key=True, autoincrement=True),
-    Column("name", Text, nullable=False, unique=True),
-    Column("description", Text, server_default=""),
-    Column("created_at", Text, nullable=False),
-    Column("updated_at", Text, nullable=False),
-)
-
-knowledge_folders_table = Table(
-    "knowledge_folders", metadata,
-    Column("id", Integer, primary_key=True, autoincrement=True),
-    Column("knowledge_base_id", Integer, ForeignKey("knowledge_bases.id", ondelete="CASCADE"), nullable=False),
-    Column("name", Text, nullable=False),
-    Column("description", Text, server_default=""),
-    Column("created_at", Text, nullable=False),
-    Column("updated_at", Text, nullable=False),
-    UniqueConstraint("knowledge_base_id", "name"),
-)
-
-knowledge_documents_table = Table(
-    "knowledge_documents", metadata,
-    Column("id", Integer, primary_key=True, autoincrement=True),
-    Column("title", Text, nullable=False),
-    Column("content", Text, nullable=False),
-    Column("category", Text, nullable=False, server_default="未分类"),
-    Column("knowledge_base_id", Integer, ForeignKey("knowledge_bases.id", ondelete="SET NULL")),
-    Column("folder_id", Integer, ForeignKey("knowledge_folders.id", ondelete="SET NULL")),
-    Column("sourceType", Text, nullable=False, server_default="text"),
-    Column("sourceUrl", Text),
-    Column("fileType", Text),
-    Column("fileSize", Integer),
-    Column("chunkCount", Integer, server_default="0"),
-    Column("createdAt", Text, nullable=False),
-    Column("updatedAt", Text, nullable=False),
-)
-
-knowledge_chunks_table = Table(
-    "knowledge_chunks", metadata,
-    Column("id", Integer, primary_key=True, autoincrement=True),
-    Column("documentId", Integer, ForeignKey("knowledge_documents.id", ondelete="CASCADE"), nullable=False),
-    Column("chunkIndex", Integer, nullable=False),
-    Column("content", Text, nullable=False),
-    Column("embedding", BigInteger),  # Faiss 向量 ID（不存 BLOB）
-    Column("createdAt", Text, nullable=False),
-)
-
-users_table = Table(
-    "users", metadata,
-    Column("id", Integer, primary_key=True, autoincrement=True),
-    Column("username", Text, nullable=False, unique=True),
-    Column("password_hash", Text, nullable=False),
-    Column("created_at", Text, nullable=False),
-)
-
-user_data_table = Table(
-    "user_data", metadata,
-    Column("id", Integer, primary_key=True, autoincrement=True),
-    Column("user_id", Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
-    Column("page_key", Text, nullable=False),
-    Column("data_json", Text, nullable=False),
-    Column("updated_at", Text, nullable=False),
-    UniqueConstraint("user_id", "page_key"),
-)
-
-saved_dialogues_table = Table(
-    "saved_dialogues", metadata,
-    Column("id", Integer, primary_key=True, autoincrement=True),
-    Column("name", Text, nullable=False),
-    Column("character_desc", Text, nullable=False),
-    Column("style", Text),
-    Column("dialogue_count", Integer, nullable=False, server_default="0"),
-    Column("dialogues_json", Text, nullable=False),
-    Column("turn_stats", Text),
-    Column("scene_stats", Text),
-    Column("created_at", Text, nullable=False),
-    Column("updated_at", Text, nullable=False),
-)
-
-session_settings_table = Table(
-    "session_settings", metadata,
-    Column("sessionId", Text, primary_key=True),
-    Column("platform", Text, nullable=False, server_default="qq"),
-    Column("conversationId", Text),
-    Column("sessionType", Text, nullable=False, server_default="private"),
-    Column("sessionName", Text),
-    Column("bot_enabled", Integer, nullable=False, server_default="1"),
-    Column("updated_at", Text),
-)
-
-claw_tools_table = Table(
-    "claw_tools", metadata,
-    Column("id", Integer, primary_key=True, autoincrement=True),
-    Column("name", Text, nullable=False, unique=True),
-    Column("description", Text, nullable=False, server_default=""),
-    Column("code", Text, nullable=False, server_default=""),
-    Column("enabled", Integer, nullable=False, server_default="1"),
-    Column("created_at", Text, nullable=False),
-    Column("updated_at", Text, nullable=False),
-)
-
-integration_message_dedup_table = Table(
-    "integration_message_dedup", metadata,
-    Column("dedupKey", Text, primary_key=True),
-    Column("platform", Text, nullable=False),
-    Column("adapter", Text, nullable=False),
-    Column("messageId", Text, nullable=False),
-    Column("createdAt", Text, nullable=False),
-)
-
-conversations_table = Table(
-    "conversations", metadata,
-    Column("id", Integer, primary_key=True, autoincrement=True),
-    Column("platform", Text, nullable=False),
-    Column("conversationId", Text, nullable=False),
-    Column("conversationType", Text, nullable=False, server_default="private"),
-    Column("displayName", Text),
-    Column("botEnabled", Integer, nullable=False, server_default="1"),
-    Column("replyPolicy", Text, nullable=False, server_default="default"),
-    Column("createdAt", Text, nullable=False),
-    Column("updatedAt", Text, nullable=False),
-    UniqueConstraint("platform", "conversationId", "conversationType", name="uq_conversations_platform_conversation"),
-)
-
-integration_events_table = Table(
-    "integration_events", metadata,
-    Column("id", Integer, primary_key=True, autoincrement=True),
-    Column("platform", Text, nullable=False),
-    Column("adapter", Text, nullable=False),
-    Column("sourceMessageId", Text),
-    Column("conversationId", Text),
-    Column("conversationType", Text),
-    Column("senderId", Text),
-    Column("eventType", Text, nullable=False, server_default="message"),
-    Column("eventHash", Text, nullable=False),
-    Column("rawSummary", Text),
-    Column("traceId", Text),
-    Column("status", Text, nullable=False, server_default="received"),
-    Column("createdAt", Text, nullable=False),
-    UniqueConstraint("platform", "adapter", "eventHash", name="uq_integration_events_platform_hash"),
-)
-
-model_invocations_table = Table(
-    "model_invocations", metadata,
-    Column("id", Integer, primary_key=True, autoincrement=True),
-    Column("traceId", Text),
-    Column("platform", Text, nullable=False, server_default="qq"),
-    Column("conversationId", Text),
-    Column("sessionId", Text),
-    Column("modelName", Text),
-    Column("loraName", Text),
-    Column("costTime", Float, server_default="0"),
-    Column("promptTokens", Integer, server_default="0"),
-    Column("completionTokens", Integer, server_default="0"),
-    Column("totalTokens", Integer, server_default="0"),
-    Column("usedRag", Integer, nullable=False, server_default="0"),
-    Column("usedLora", Integer, nullable=False, server_default="0"),
-    Column("errorType", Text, server_default=""),
-    Column("createdAt", Text, nullable=False),
-)
-
-audit_logs_table = Table(
-    "audit_logs", metadata,
-    Column("id", Integer, primary_key=True, autoincrement=True),
-    Column("timestamp", Float, nullable=False),
-    Column("api_key_hash", Text, nullable=False),
-    Column("role", Text, nullable=False),
-    Column("action", Text, nullable=False),
-    Column("resource", Text),
-    Column("detail", Text),
-    Column("ip_address", Text),
-)
-
-intent_samples_table = Table(
-    "intent_samples", metadata,
-    Column("id", Integer, primary_key=True, autoincrement=True),
-    Column("kbName", Text, nullable=False),
-    Column("text", Text, nullable=False),
-    Column("label", Text, nullable=False),
-    Column("createdAt", Text, nullable=False),
-)
-
-intent_active_kbs_table = Table(
-    "intent_active_kbs", metadata,
-    Column("id", Integer, primary_key=True, autoincrement=True),
-    Column("kbName", Text, nullable=False),
-    Column("isActive", Integer, nullable=False, server_default="1"),
-)
-
-training_tasks_table = Table(
-    "training_tasks", metadata,
-    Column("id", Text, primary_key=True),
-    Column("task_id", Text, unique=True),
-    Column("lora_name", Text, server_default=""),
-    Column("status", Text, nullable=False, server_default="pending"),
-    Column("progress", Float, server_default="0"),
-    Column("error_message", Text, server_default=""),
-    Column("config_json", Text, server_default="{}"),
-    Column("created_at", Text, server_default=""),
-    Column("updated_at", Text, server_default=""),
-    # Legacy columns retained for existing PostgreSQL deployments.
-    Column("taskType", Text, nullable=False, server_default="lora"),
-    Column("config", Text),
-    Column("result", Text),
-    Column("createdAt", Text, nullable=False, server_default=""),
-    Column("updatedAt", Text, nullable=False, server_default=""),
-)
-
-# ============================================
-# 研究与评估相关表（LLM Research Enhancement Roadmap）
-# ============================================
-gold_eval_runs_table = Table(
-    "gold_eval_runs", metadata,
-    Column("id", Text, primary_key=True),
-    Column("run_at", Text, nullable=False),
-    Column("adapter_name", Text),
-    Column("model_label", Text),
-    Column("total_prompts", Integer, server_default="0"),
-    Column("category_breakdown", Text),
-    Column("metrics", Text),
-    Column("config_snapshot", Text),
-    Column("notes", Text),
-)
-
-experiment_runs_table = Table(
-    "experiment_runs", metadata,
-    Column("id", Text, primary_key=True),
-    Column("experiment_type", Text, nullable=False),
-    Column("hypothesis", Text),
-    Column("status", Text, nullable=False, server_default="pending"),
-    Column("started_at", Text, nullable=False),
-    Column("completed_at", Text),
-    Column("results", Text),
-    Column("config_path", Text),
-    Column("report_path", Text),
-)
-
-retrieval_eval_questions_table = Table(
-    "retrieval_eval_questions", metadata,
-    Column("id", Text, primary_key=True),
-    Column("question", Text, nullable=False),
-    Column("expected_doc_ids", Text),
-    Column("expected_doc_titles", Text),
-    Column("gold_answer", Text),
-    Column("category", Text),
-    Column("created_at", Text, nullable=False),
-)
-
-preference_pairs_table = Table(
-    "preference_pairs", metadata,
-    Column("id", Text, primary_key=True),
-    Column("prompt", Text, nullable=False),
-    Column("chosen", Text, nullable=False),
-    Column("rejected", Text, nullable=False),
-    Column("rubric", Text),
-    Column("annotator", Text),
-    Column("metadata", Text),
-    Column("review_status", Text, nullable=False, server_default="pending"),
-    Column("created_at", Text, nullable=False),
-)
-
-adapter_compatibility_table = Table(
-    "adapter_compatibility", metadata,
-    Column("id", Integer, primary_key=True, autoincrement=True),
-    Column("adapter_name", Text, nullable=False),
-    Column("checked_at", Text, nullable=False),
-    Column("compatible", Integer, nullable=False),
-    Column("checks", Text),
-    Column("warnings", Text),
-    Column("errors", Text),
-)
-
-feedback_table = Table(
-    "feedback", metadata,
-    Column("id", Integer, primary_key=True, autoincrement=True),
-    Column("trace_id", Text),
-    Column("message_id", Text),
-    Column("rating", Text),
-    Column("reason", Text),
-    Column("adapter_name", Text),
-    Column("kb_revision", Text),
-    Column("prompt_version", Text),
-    Column("detail", Text),
-    Column("created_at", Text, nullable=False),
-)
+messages_table = metadata.tables["messages"]
+loras_table = metadata.tables["loras"]
+config_table = metadata.tables["config"]
+knowledge_bases_table = metadata.tables["knowledge_bases"]
+knowledge_folders_table = metadata.tables["knowledge_folders"]
+knowledge_documents_table = metadata.tables["knowledge_documents"]
+knowledge_chunks_table = metadata.tables["knowledge_chunks"]
+users_table = metadata.tables["users"]
+user_data_table = metadata.tables["user_data"]
+saved_dialogues_table = metadata.tables["saved_dialogues"]
+session_settings_table = metadata.tables["session_settings"]
+claw_tools_table = metadata.tables["claw_tools"]
+integration_message_dedup_table = metadata.tables["integration_message_dedup"]
+conversations_table = metadata.tables["conversations"]
+integration_events_table = metadata.tables["integration_events"]
+model_invocations_table = metadata.tables["model_invocations"]
+audit_logs_table = metadata.tables["audit_logs"]
+intent_samples_table = metadata.tables["intent_samples"]
+intent_active_kbs_table = metadata.tables["intent_active_kbs"]
+training_tasks_table = metadata.tables["training_tasks"]
+gold_eval_runs_table = metadata.tables["gold_eval_runs"]
+experiment_runs_table = metadata.tables["experiment_runs"]
+retrieval_eval_questions_table = metadata.tables["retrieval_eval_questions"]
+preference_pairs_table = metadata.tables["preference_pairs"]
+adapter_compatibility_table = metadata.tables["adapter_compatibility"]
+feedback_table = metadata.tables["feedback"]
 
 
 # ============================================
@@ -423,16 +120,33 @@ class PgDatabase:
             await self._ensure_column(conn, "training_tasks", "config_json", "TEXT DEFAULT '{}'")
             await self._ensure_column(conn, "training_tasks", "created_at", "TEXT DEFAULT ''")
             await self._ensure_column(conn, "training_tasks", "updated_at", "TEXT DEFAULT ''")
+            # C4 fix: 为已有 PG 数据库添加 users.role 列（新数据库由 create_all 创建）
+            await self._ensure_column(conn, "users", "role", "TEXT NOT NULL DEFAULT 'user'")
             await conn.execute(text('CREATE UNIQUE INDEX IF NOT EXISTS idx_training_tasks_task_id ON training_tasks (task_id)'))
             await conn.execute(text('CREATE INDEX IF NOT EXISTS idx_messages_platform_conversation ON messages (platform, "conversationId", "createdAt")'))
             await conn.execute(text('CREATE INDEX IF NOT EXISTS idx_messages_source_dedup ON messages (platform, adapter, "sourceMessageId")'))
             await conn.execute(text('CREATE INDEX IF NOT EXISTS idx_messages_session_created ON messages ("sessionId", "createdAt")'))
             await conn.execute(text('CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages ("createdAt")'))
-            await conn.execute(text('CREATE INDEX IF NOT EXISTS idx_conversations_platform_conversation ON conversations (platform, "conversationId", "conversationType")'))
+            # idx_conversations_platform_conversation 已删除：UNIQUE(platform, conversationId, conversationType)
+            # 约束会自动创建索引，显式 CREATE INDEX 完全冗余。
             await conn.execute(text('CREATE INDEX IF NOT EXISTS idx_integration_events_trace ON integration_events ("traceId")'))
             await conn.execute(text('CREATE INDEX IF NOT EXISTS idx_integration_events_platform_created ON integration_events (platform, "createdAt")'))
             await conn.execute(text('CREATE INDEX IF NOT EXISTS idx_model_invocations_trace ON model_invocations ("traceId")'))
             await conn.execute(text('CREATE INDEX IF NOT EXISTS idx_model_invocations_created ON model_invocations ("createdAt")'))
+            await conn.execute(text('CREATE INDEX IF NOT EXISTS idx_experiment_runs_type ON experiment_runs (experiment_type)'))
+            await conn.execute(text('CREATE INDEX IF NOT EXISTS idx_preference_pairs_status ON preference_pairs (review_status)'))
+            await conn.execute(text('CREATE INDEX IF NOT EXISTS idx_feedback_created ON feedback (created_at)'))
+            await conn.execute(text('CREATE INDEX IF NOT EXISTS idx_adapter_compat_name ON adapter_compatibility (adapter_name)'))
+            # 补充此前缺失的高频外键/过滤列索引（与 SQLite 一致）
+            await conn.execute(text('CREATE INDEX IF NOT EXISTS idx_knowledge_chunks_documentId ON knowledge_chunks ("documentId")'))
+            await conn.execute(text('CREATE INDEX IF NOT EXISTS idx_knowledge_documents_kb_id ON knowledge_documents (knowledge_base_id)'))
+            await conn.execute(text('CREATE INDEX IF NOT EXISTS idx_knowledge_documents_folder_id ON knowledge_documents (folder_id)'))
+            await conn.execute(text('CREATE INDEX IF NOT EXISTS idx_training_tasks_lora_name ON training_tasks (lora_name)'))
+            await conn.execute(text('CREATE INDEX IF NOT EXISTS idx_training_tasks_status ON training_tasks (status)'))
+            await conn.execute(text('CREATE INDEX IF NOT EXISTS idx_intent_samples_kbName ON intent_samples ("kbName")'))
+            await conn.execute(text('CREATE INDEX IF NOT EXISTS idx_feedback_trace_id ON feedback (trace_id)'))
+            await conn.execute(text('CREATE INDEX IF NOT EXISTS idx_feedback_message_id ON feedback (message_id)'))
+            await conn.execute(text('CREATE INDEX IF NOT EXISTS idx_audit_logs_timestamp ON audit_logs (timestamp)'))
         self._initialized = True
         logger.info(f"✅ PostgreSQL 数据库初始化完成: {self.database_url.split('@')[-1]}")
 
@@ -487,14 +201,22 @@ class PgDatabase:
             message_id = result.inserted_primary_key[0]
             return {**message, "id": str(message_id), "conversationType": conversation_type, "senderName": sender_name, "createdAt": created_at}
 
-    async def get_messages(self, limit: int = 100, offset: int = 0) -> List[Dict]:
-        """获取消息记录"""
+    async def get_messages(self, limit: int = 100, offset: int = 0, session_id: Optional[str] = None) -> List[Dict]:
+        """获取消息记录，支持按会话 ID 筛选。
+
+        Args:
+            limit: 返回条数上限
+            offset: 偏移量
+            session_id: 可选，指定会话 ID 时在 SQL 层过滤（与 SQLite 实现对齐）
+        """
         async with self.async_session() as session:
             stmt = (
                 messages_table.select()
                 .order_by(messages_table.c.createdAt.desc())
                 .limit(limit).offset(offset)
             )
+            if session_id:
+                stmt = stmt.where(messages_table.c.sessionId == session_id)
             result = await session.execute(stmt)
             return [_row_to_dict(row) for row in result.fetchall()]
 
@@ -657,15 +379,8 @@ class PgDatabase:
             for row in result.fetchall():
                 d = _row_to_dict(row)
                 key, value = d["key"], d["value"]
-                if value.lower() == "true":
-                    config_dict[key] = True
-                elif value.lower() == "false":
-                    config_dict[key] = False
-                else:
-                    try:
-                        config_dict[key] = float(value) if "." in value else int(value)
-                    except (ValueError, TypeError):
-                        config_dict[key] = value
+                from db.config_utils import coerce_config_value
+                config_dict[key] = coerce_config_value(value)
             return config_dict
 
     async def get_config_value(self, key: str, default=None):
@@ -773,22 +488,31 @@ class PgDatabase:
                 raise
 
     async def get_knowledge_bases(self) -> List[Dict]:
-        """获取所有知识库"""
+        """获取所有知识库（单次 LEFT JOIN + 聚合，消除 N+1 查询）"""
         async with self.async_session() as session:
-            stmt = knowledge_bases_table.select().order_by(knowledge_bases_table.c.updated_at.desc())
+            # 一次查询获取 KB 列表 + 文档数 + 文件夹数，避免每个 KB 单独 COUNT
+            stmt = text("""
+                SELECT
+                    kb.*,
+                    COALESCE(d.cnt, 0) as documentCount,
+                    COALESCE(f.cnt, 0) as folderCount
+                FROM knowledge_bases kb
+                LEFT JOIN (
+                    SELECT knowledge_base_id, COUNT(*) as cnt
+                    FROM knowledge_documents
+                    GROUP BY knowledge_base_id
+                ) d ON d.knowledge_base_id = kb.id
+                LEFT JOIN (
+                    SELECT knowledge_base_id, COUNT(*) as cnt
+                    FROM knowledge_folders
+                    GROUP BY knowledge_base_id
+                ) f ON f.knowledge_base_id = kb.id
+                ORDER BY kb.updated_at DESC
+            """)
             result = await session.execute(stmt)
-            rows = result.fetchall()
             kb_list = []
-            for row in rows:
+            for row in result.fetchall():
                 kb = _row_to_dict(row)
-                # 统计文档数
-                cnt_stmt = text("SELECT COUNT(*) as cnt FROM knowledge_documents WHERE knowledge_base_id = :kb_id")
-                cnt_result = await session.execute(cnt_stmt, {"kb_id": kb["id"]})
-                kb["documentCount"] = cnt_result.scalar()
-                # 统计文件夹数
-                folder_cnt_stmt = text("SELECT COUNT(*) as cnt FROM knowledge_folders WHERE knowledge_base_id = :kb_id")
-                folder_cnt_result = await session.execute(folder_cnt_stmt, {"kb_id": kb["id"]})
-                kb["folderCount"] = folder_cnt_result.scalar()
                 kb_list.append(kb)
             return kb_list
 
@@ -870,21 +594,25 @@ class PgDatabase:
                 raise
 
     async def get_knowledge_folders(self, kb_id: int) -> List[Dict]:
-        """获取知识库下的所有文件夹"""
+        """获取知识库下的所有文件夹（LEFT JOIN 聚合，消除 N+1）"""
         async with self.async_session() as session:
-            stmt = (
-                knowledge_folders_table.select()
-                .where(knowledge_folders_table.c.knowledge_base_id == kb_id)
-                .order_by(knowledge_folders_table.c.name)
-            )
-            result = await session.execute(stmt)
-            rows = result.fetchall()
+            stmt = text("""
+                SELECT
+                    f.*,
+                    COALESCE(d.cnt, 0) as documentCount
+                FROM knowledge_folders f
+                LEFT JOIN (
+                    SELECT folder_id, COUNT(*) as cnt
+                    FROM knowledge_documents
+                    GROUP BY folder_id
+                ) d ON d.folder_id = f.id
+                WHERE f.knowledge_base_id = :kb_id
+                ORDER BY f.name
+            """)
+            result = await session.execute(stmt, {"kb_id": kb_id})
             folder_list = []
-            for row in rows:
+            for row in result.fetchall():
                 folder = _row_to_dict(row)
-                cnt_stmt = text("SELECT COUNT(*) as cnt FROM knowledge_documents WHERE folder_id = :fid")
-                cnt_result = await session.execute(cnt_stmt, {"fid": folder["id"]})
-                folder["documentCount"] = cnt_result.scalar()
                 folder_list.append(folder)
             return folder_list
 
@@ -973,7 +701,8 @@ class PgDatabase:
 
     KNOWLEDGE_DOC_UPDATABLE_COLUMNS = {
         "title", "content", "category", "knowledge_base_id", "folder_id",
-        "sourceType", "sourceUrl", "fileType", "fileSize", "chunkCount",
+        "sourceType", "sourceUrl", "fileType", "fileSize",
+        "chunkCount", "updatedAt",
     }
 
     async def update_knowledge_document(self, doc_id: int, document: Dict) -> Optional[Dict]:
@@ -1046,10 +775,86 @@ class PgDatabase:
             result = await session.execute(stmt)
             return [_row_to_dict(row) for row in result.fetchall()]
 
-    async def get_all_knowledge_chunks(self) -> List[Dict]:
-        """获取所有知识库片段（用于检索）"""
+    async def get_all_knowledge_chunks(self, limit: int | None = None, offset: int = 0) -> List[Dict]:
+        """获取所有知识库片段（用于检索）。
+
+        Args:
+            limit: 返回数量上限，None 表示全量（谨慎使用，大库可能 OOM）
+            offset: 跳过前 N 条
+        """
         async with self.async_session() as session:
             stmt = knowledge_chunks_table.select().order_by(knowledge_chunks_table.c.documentId, knowledge_chunks_table.c.chunkIndex)
+            if limit is not None:
+                stmt = stmt.limit(limit).offset(offset)
+            result = await session.execute(stmt)
+            return [_row_to_dict(row) for row in result.fetchall()]
+
+    async def iter_all_knowledge_chunks(self, batch_size: int = 500):
+        """分页迭代所有知识库片段，避免大库 OOM。
+
+        异步生成器，每次 yield 一条 chunk dict。
+        """
+        async with self.async_session() as session:
+            offset = 0
+            while True:
+                stmt = (
+                    knowledge_chunks_table.select()
+                    .order_by(knowledge_chunks_table.c.documentId, knowledge_chunks_table.c.chunkIndex)
+                    .limit(batch_size)
+                    .offset(offset)
+                )
+                result = await session.execute(stmt)
+                rows = result.fetchall()
+                if not rows:
+                    break
+                for row in rows:
+                    yield _row_to_dict(row)
+                offset += len(rows)
+                if len(rows) < batch_size:
+                    break
+
+    async def iter_chunks_with_document(self, batch_size: int = 500):
+        """分页迭代 chunk 及其所属文档（LEFT JOIN），避免 N+1 查询。
+
+        与 SQLiteDB.iter_chunks_with_document 行为一致：每次 yield 一条 dict，
+        包含 chunk 字段和文档字段（doc_title / doc_category / doc_kb_id）。
+        孤儿 chunk（文档已删除）的 doc_title 为 None，调用方可跳过。
+        """
+        offset = 0
+        while True:
+            batch = await self.get_chunks_with_document(limit=batch_size, offset=offset)
+            if not batch:
+                break
+            for row in batch:
+                yield row
+            offset += len(batch)
+            if len(batch) < batch_size:
+                break
+
+    async def get_chunks_with_document(self, limit: int = 500, offset: int = 0) -> List[Dict]:
+        """单页查询 chunk + document（LEFT JOIN），返回 dict 列表。
+
+        供 SyncPgAdapter 同步包装使用（async generator 无法直接 _run）。
+        """
+        from sqlalchemy import select
+        async with self.async_session() as session:
+            stmt = (
+                select(
+                    knowledge_chunks_table,
+                    knowledge_documents_table.c.title.label("doc_title"),
+                    knowledge_documents_table.c.category.label("doc_category"),
+                    knowledge_documents_table.c.knowledge_base_id.label("doc_kb_id"),
+                )
+                .select_from(
+                    knowledge_chunks_table.outerjoin(
+                        knowledge_documents_table,
+                        knowledge_chunks_table.c.documentId == knowledge_documents_table.c.id,
+                    )
+                )
+                .order_by(knowledge_chunks_table.c.documentId, knowledge_chunks_table.c.chunkIndex)
+                .limit(limit)
+                .offset(offset)
+            )
             result = await session.execute(stmt)
             return [_row_to_dict(row) for row in result.fetchall()]
 
@@ -1078,13 +883,18 @@ class PgDatabase:
         """添加用户"""
         now = datetime.now().isoformat()
         async with self.async_session() as session:
+            # C4 fix: 首个用户自动成为 admin，后续用户为普通 user。
+            # 与 SQLite 实现 (database.py:1819-1822) 保持一致。
+            count_stmt = users_table.select().order_by(users_table.c.id).limit(1)
+            existing = await session.execute(count_stmt)
+            role = "admin" if existing.fetchone() is None else "user"
             stmt = users_table.insert().values(
-                username=username, password_hash=password_hash, created_at=now,
+                username=username, password_hash=password_hash, created_at=now, role=role,
             )
             result = await session.execute(stmt)
             await session.commit()
             user_id = result.inserted_primary_key[0]
-            return {"id": user_id, "username": username, "created_at": now}
+            return {"id": user_id, "username": username, "created_at": now, "role": role}
 
     async def get_user(self, user_id: int) -> Optional[Dict]:
         """获取用户 by ID"""
@@ -1097,6 +907,7 @@ class PgDatabase:
     async def get_user_by_username(self, username: str) -> Optional[Dict]:
         """获取用户 by username"""
         async with self.async_session() as session:
+            # C4 fix: 显式选择 role 列（此前 select(*) 已包含，但 _row_to_dict 需确认）
             stmt = users_table.select().where(users_table.c.username == username)
             result = await session.execute(stmt)
             row = result.fetchone()
@@ -1257,7 +1068,7 @@ class PgDatabase:
             await session.commit()
 
     async def get_session_summaries(self) -> List[Dict]:
-        """获取所有会话的聚合统计信息"""
+        """获取所有会话的聚合统计信息（相关子查询消除 N+1）"""
         async with self.async_session() as session:
             stmt = text("""
                 SELECT
@@ -1269,7 +1080,13 @@ class PgDatabase:
                     COALESCE("conversationId", "sessionId") as "conversationId",
                     COUNT(*) as message_count,
                     MAX("createdAt") as last_active,
-                    STRING_AGG(message, '||' ORDER BY "createdAt") as recent_messages
+                    STRING_AGG(message, '||' ORDER BY "createdAt") as recent_messages,
+                    COALESCE((
+                        SELECT c."botEnabled" FROM conversations c
+                        WHERE c.platform = COALESCE(messages.platform, 'qq')
+                          AND c."conversationId" = COALESCE(messages."conversationId", messages."sessionId")
+                        ORDER BY c."updatedAt" DESC LIMIT 1
+                    ), 1) as bot_enabled
                 FROM messages
                 GROUP BY "sessionId", "sessionType", "sessionName", platform, adapter, "conversationId"
                 ORDER BY last_active DESC
@@ -1293,14 +1110,6 @@ class PgDatabase:
                 if len(summary) > 100:
                     summary = summary[:100] + "..."
 
-                # 查询该会话的机器人开关状态
-                setting_stmt = session_settings_table.select().where(
-                    session_settings_table.c.sessionId == session_id
-                )
-                setting_result = await session.execute(setting_stmt)
-                setting_row = setting_result.fetchone()
-                bot_enabled = _row_to_dict(setting_row)["bot_enabled"] if setting_row else 1
-
                 sessions.append({
                     "sessionId": session_id,
                     "sessionType": session_type,
@@ -1311,21 +1120,18 @@ class PgDatabase:
                     "messageCount": message_count,
                     "lastActive": last_active,
                     "summary": summary,
-                    "botEnabled": bool(bot_enabled),
+                    "botEnabled": bool(d.get("bot_enabled", 1)),
                 })
             return sessions
 
     async def set_session_bot_enabled(self, session_id: str, enabled: bool, platform: str = "qq", conversation_id: Optional[str] = None) -> None:
-        """设置某个会话的机器人开关"""
-        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        """设置某个会话的机器人开关。
+
+        统一写入 conversations 表（此前同时写 session_settings + conversations 双表，
+        现合并为单表，消除冗余）。
+        """
         async with self.async_session() as session:
-            stmt = text(
-                'INSERT INTO session_settings ("sessionId", platform, "conversationId", "sessionType", "sessionName", bot_enabled, updated_at) '
-                "VALUES (:sid, :platform, :cid, 'private', :sn, :be, :ua) "
-                'ON CONFLICT ("sessionId") DO UPDATE SET platform = EXCLUDED.platform, "conversationId" = EXCLUDED."conversationId", bot_enabled = EXCLUDED.bot_enabled, updated_at = EXCLUDED.updated_at'
-            )
             resolved_conversation_id = conversation_id or session_id
-            await session.execute(stmt, {"sid": session_id, "platform": platform, "cid": resolved_conversation_id, "sn": session_id, "be": int(enabled), "ua": now})
             await self._upsert_conversation_session(
                 session,
                 platform=platform,
@@ -1337,21 +1143,21 @@ class PgDatabase:
             await session.commit()
 
     async def is_session_bot_enabled(self, session_id: str, platform: str = "qq", conversation_id: Optional[str] = None) -> bool:
-        """检查某个会话的机器人是否启用（默认启用）"""
+        """检查某个会话的机器人是否启用（默认启用）。
+
+        统一从 conversations 表查询（此前先查 session_settings 失败再查 conversations，
+        现直接查 conversations，消除双表冗余查询）。
+        """
         async with self.async_session() as session:
-            stmt = session_settings_table.select().where(session_settings_table.c.sessionId == session_id)
-            result = await session.execute(stmt)
+            resolved_conversation_id = conversation_id or session_id
+            stmt = text(
+                'SELECT "botEnabled" FROM conversations WHERE platform = :platform AND "conversationId" = :cid ORDER BY "updatedAt" DESC LIMIT 1'
+            )
+            result = await session.execute(stmt, {"platform": platform, "cid": resolved_conversation_id})
             row = result.fetchone()
-            if row is None and conversation_id:
-                conversation_stmt = text('SELECT "botEnabled" FROM conversations WHERE platform = :platform AND "conversationId" = :conversation_id ORDER BY "updatedAt" DESC LIMIT 1')
-                conversation_result = await session.execute(conversation_stmt, {"platform": platform, "conversation_id": conversation_id})
-                conversation_row = conversation_result.fetchone()
-                if conversation_row is None:
-                    return True
-                return bool(_row_to_dict(conversation_row)["botEnabled"])
             if row is None:
                 return True
-            return bool(_row_to_dict(row)["bot_enabled"])
+            return bool(_row_to_dict(row)["botEnabled"])
 
     # ============================================
     # Claw 工具 CRUD
@@ -1544,6 +1350,9 @@ class PgDatabase:
         }
 
     async def save_training_task(self, task_id: str, task_data: Dict) -> None:
+        # M5 fix: 拒绝空 task_id，与 SQLite 侧保持一致
+        if not task_id or not str(task_id).strip():
+            raise ValueError("task_id 不能为空")
         created_at = task_data.get("created_at", "")
         updated_at = task_data.get("updated_at", "")
         config_json = json.dumps(task_data.get("config", {}), ensure_ascii=False)
@@ -1551,10 +1360,10 @@ class PgDatabase:
             await session.execute(text('''
                 INSERT INTO training_tasks (
                     id, task_id, lora_name, status, progress, error_message,
-                    config_json, created_at, updated_at, "taskType", "createdAt", "updatedAt"
+                    config_json, created_at, updated_at
                 ) VALUES (
                     :id, :task_id, :lora_name, :status, :progress, :error_message,
-                    :config_json, :created_at, :updated_at, 'lora', :created_at, :updated_at
+                    :config_json, :created_at, :updated_at
                 )
                 ON CONFLICT (id) DO UPDATE SET
                     task_id = EXCLUDED.task_id,
@@ -1563,8 +1372,7 @@ class PgDatabase:
                     progress = EXCLUDED.progress,
                     error_message = EXCLUDED.error_message,
                     config_json = EXCLUDED.config_json,
-                    updated_at = EXCLUDED.updated_at,
-                    "updatedAt" = EXCLUDED."updatedAt"
+                    updated_at = EXCLUDED.updated_at
             '''), {
                 "id": task_id,
                 "task_id": task_id,
@@ -1596,32 +1404,39 @@ class PgDatabase:
             return [self._normalize_training_task(row) for row in result.fetchall()]
 
     async def add_training_task(self, task: Dict) -> Dict:
-        """添加训练任务"""
+        """添加训练任务并返回规范化记录。
+
+        P1-M2 fix: 与 SQLite 侧对齐，统一走 save_training_task + get_training_task，
+        返回 _normalize_training_task 规范化的 DTO，而非 legacy 列。
+        """
+        task_id = task.get("task_id") or task.get("id") or ""
         now = datetime.now().isoformat()
-        async with self.async_session() as session:
-            stmt = training_tasks_table.insert().values(
-                id=task.get("id"),
-                taskType=task.get("taskType", "lora"),
-                status=task.get("status", "pending"),
-                config=task.get("config"),
-                progress=task.get("progress", 0),
-                result=task.get("result"),
-                createdAt=now,
-                updatedAt=now,
-            )
-            await session.execute(stmt)
-            await session.commit()
-            return {**task, "createdAt": now, "updatedAt": now}
+        task_data = {
+            "lora_name": task.get("lora_name", ""),
+            "status": task.get("status", "pending"),
+            "progress": float(task.get("progress", 0) or 0),
+            "error_message": task.get("error_message", ""),
+            "config": task.get("config", {}),
+            "created_at": task.get("created_at", now),
+            "updated_at": task.get("updated_at", now),
+        }
+        await self.save_training_task(task_id, task_data)
+        return await self.get_training_task(task_id) or {**task, "task_id": task_id}
 
     async def get_training_tasks(self, status: Optional[str] = None) -> List[Dict]:
-        """获取训练任务列表"""
+        """获取训练任务列表。
+
+        P1-M2 fix: 返回 _normalize_training_task 规范化的 DTO，与 SQLite 侧一致；
+        排序改用 created_at（与 SQLite 对齐），不再依赖 legacy createdAt 列。
+        """
         async with self.async_session() as session:
             stmt = training_tasks_table.select()
             if status:
                 stmt = stmt.where(training_tasks_table.c.status == status)
-            stmt = stmt.order_by(training_tasks_table.c.createdAt.desc())
+            # 优先用 created_at（新 schema），回退到 createdAt（legacy）
+            stmt = stmt.order_by(training_tasks_table.c.created_at.desc())
             result = await session.execute(stmt)
-            return [_row_to_dict(row) for row in result.fetchall()]
+            return [self._normalize_training_task(row) for row in result.fetchall()]
 
     async def get_training_task(self, task_id: str) -> Optional[Dict]:
         """获取单个训练任务"""
@@ -1631,13 +1446,26 @@ class PgDatabase:
             return self._normalize_training_task(result.fetchone())
 
     async def update_training_task(self, task_id: str, data: Dict) -> Optional[Dict]:
-        """更新训练任务"""
+        """更新训练任务字段。
+
+        P1-M2 fix: 与 SQLite 侧对齐，更新 config_json/updated_at/error_message 等
+        新 schema 列；config 入参为 dict 时序列化为 config_json 存储。
+        返回 _normalize_training_task 规范化的 DTO。
+        """
         now = datetime.now().isoformat()
+        values: Dict = {"updated_at": now}
+        for key in ("status", "progress", "error_message", "lora_name"):
+            if key in data:
+                values[key] = data[key]
+        if "config" in data:
+            # config 是 dict，存到 config_json 列
+            try:
+                values["config_json"] = json.dumps(data["config"], ensure_ascii=False)
+            except (TypeError, ValueError):
+                pass
+        if "config_json" in data:
+            values["config_json"] = data["config_json"]
         async with self.async_session() as session:
-            values = {"updatedAt": now}
-            for key in ("status", "progress", "result", "config"):
-                if key in data:
-                    values[key] = data[key]
             stmt = (
                 training_tasks_table.update()
                 .where(training_tasks_table.c.id == task_id)
@@ -1648,8 +1476,7 @@ class PgDatabase:
 
             sel_stmt = training_tasks_table.select().where(training_tasks_table.c.id == task_id)
             result = await session.execute(sel_stmt)
-            row = result.fetchone()
-            return _row_to_dict(row) if row else None
+            return self._normalize_training_task(result.fetchone())
 
     async def delete_training_task(self, task_id: str) -> bool:
         """删除训练任务"""
@@ -1755,6 +1582,32 @@ class SyncPgAdapter:
         future = asyncio.run_coroutine_threadsafe(coro, self._loop)
         return future.result(timeout=30)
 
+    def close(self):
+        """关闭后台事件循环与 PostgreSQL 引擎连接池。
+
+        应在应用 shutdown 阶段调用，避免引擎连接池在进程退出前无法
+        显式 dispose，多 worker 部署下可能造成连接泄漏。
+        """
+        if self._loop is None or not self._loop.is_running():
+            self._loop = None
+            self._thread = None
+            return
+        try:
+            # 先在后台循环中 dispose 引擎，确保连接归还给 PG
+            asyncio.run_coroutine_threadsafe(self._pg.close(), self._loop).result(timeout=15)
+        except Exception as e:
+            logger.warning(f"关闭 PgDatabase 引擎失败: {e}")
+        finally:
+            # 停止事件循环并等待 daemon 线程退出
+            try:
+                self._loop.call_soon_threadsafe(self._loop.stop)
+                if self._thread is not None:
+                    self._thread.join(timeout=5)
+            except Exception as e:
+                logger.warning(f"停止 SyncPgAdapter 事件循环失败: {e}")
+            self._loop = None
+            self._thread = None
+
     # 代理所有 PgDatabase 的方法为同步调用
     def init(self):
         self._run(self._pg.init())
@@ -1801,8 +1654,10 @@ class SyncPgAdapter:
     def add_lora(self, lora_data):
         return self._run(self._pg.add_lora(lora_data))
 
-    def update_lora_status(self, lora_id, active):
-        return self._run(self._pg.update_lora_status(lora_id, active))
+    def update_lora_status(self, lora_id, status):
+        # fix: 参数名 active 暗示布尔值，但 PgDatabase/SQLite 实际需要字符串状态
+        # (如 "active"/"inactive")。与 SQLite Database.update_lora_status(lora_id, status) 对齐。
+        return self._run(self._pg.update_lora_status(lora_id, status))
 
     def delete_lora(self, lora_id):
         return self._run(self._pg.delete_lora(lora_id))
@@ -1828,11 +1683,15 @@ class SyncPgAdapter:
     def get_knowledge_folders(self, kb_id):
         return self._run(self._pg.get_knowledge_folders(kb_id))
 
-    def create_knowledge_folder(self, kb_id, name, parent_id=None):
-        return self._run(self._pg.create_knowledge_folder(kb_id, name, parent_id))
+    def create_knowledge_folder(self, kb_id, name, description=""):
+        # fix: 此前第三参数名为 parent_id，被当作 description 传给 PgDatabase，
+        # 导致文件夹描述被设为 parent_id 值。与 SQLite Database.create_knowledge_folder
+        # (kb_id, name, description="") 对齐。
+        return self._run(self._pg.create_knowledge_folder(kb_id, name, description))
 
-    def update_knowledge_folder(self, folder_id, **kwargs):
-        return self._run(self._pg.update_knowledge_folder(folder_id, **kwargs))
+    # 注意：SQLite Database 和 PgDatabase 均未实现 update_knowledge_folder。
+    # 此前 SyncPgAdapter 委托给不存在的 self._pg.update_knowledge_folder 会抛 AttributeError。
+    # 若未来需要更新文件夹，应在 SQLite/PgDatabase 中先实现，再在此添加委托。
 
     def delete_knowledge_folder(self, folder_id):
         return self._run(self._pg.delete_knowledge_folder(folder_id))
@@ -1855,8 +1714,43 @@ class SyncPgAdapter:
     def get_knowledge_chunks(self, doc_id):
         return self._run(self._pg.get_knowledge_chunks(doc_id))
 
-    def get_all_knowledge_chunks(self):
-        return self._run(self._pg.get_all_knowledge_chunks())
+    def get_all_knowledge_chunks(self, limit: int | None = None, offset: int = 0):
+        return self._run(self._pg.get_all_knowledge_chunks(limit=limit, offset=offset))
+
+    def iter_all_knowledge_chunks(self, batch_size: int = 500):
+        """SyncPgAdapter 不支持异步生成器委托，回退到分页批量拉取。
+
+        调用方如需流式迭代，应直接使用 PgDatabase.iter_all_knowledge_chunks（async）。
+        """
+        offset = 0
+        while True:
+            batch = self._run(self._pg.get_all_knowledge_chunks(limit=batch_size, offset=offset))
+            if not batch:
+                break
+            for chunk in batch:
+                yield chunk
+            offset += len(batch)
+            if len(batch) < batch_size:
+                break
+
+    def iter_chunks_with_document(self, batch_size: int = 500):
+        """同步生成器版本：分页迭代 chunk + document（LEFT JOIN）。
+
+        与 iter_all_knowledge_chunks 同样回退到分页批量拉取，每条 dict 包含
+        chunk 字段及 doc_title / doc_category / doc_kb_id。
+        """
+        # PgDatabase.iter_chunks_with_document 是 async generator，无法直接 _run。
+        # 改为分页调用底层 SQL，与 SQLite 实现保持语义一致。
+        offset = 0
+        while True:
+            batch = self._run(self._pg.get_chunks_with_document(limit=batch_size, offset=offset))
+            if not batch:
+                break
+            for row in batch:
+                yield row
+            offset += len(batch)
+            if len(batch) < batch_size:
+                break
 
     def add_knowledge_chunk(self, chunk_data):
         return self._run(self._pg.add_knowledge_chunk(chunk_data))
@@ -1912,8 +1806,10 @@ class SyncPgAdapter:
     def save_claw_tool(self, name, description, code, enabled=True):
         return self._run(self._pg.save_claw_tool(name, description, code, enabled))
 
-    def delete_claw_tool(self, tool_id):
-        return self._run(self._pg.delete_claw_tool(tool_id))
+    def delete_claw_tool(self, name):
+        # fix: 参数名 tool_id 误导调用方传 ID，但 PgDatabase/SQLite 实际按 name 删除。
+        # 与 SQLite Database.delete_claw_tool(name) 和 api/claw.py:110 调用方对齐。
+        return self._run(self._pg.delete_claw_tool(name))
 
     def add_audit_log(self, **kwargs):
         return self._run(self._pg.add_audit_log(**kwargs))
@@ -1972,7 +1868,8 @@ class SyncPgAdapter:
     @property
     def messages(self):
         """兼容 SQLite 的 messages 属性"""
-        return self.get_messages(limit=10000)
+        # 与 SQLiteDB.messages 对齐，硬编码 limit=1000，避免 PG 模式下加载 10000 行造成内存压力
+        return self.get_messages(limit=1000)
 
     @property
     def loras(self):

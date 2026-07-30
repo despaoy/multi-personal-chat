@@ -2,7 +2,7 @@
 import logging
 
 from fastapi import APIRouter, Request, HTTPException, Depends
-from app.dependencies import get_current_user
+from app.dependencies import get_current_user, get_current_admin
 
 from db.adapter import db
 from app.config import (
@@ -57,8 +57,11 @@ async def get_config(current_user: dict = Depends(get_current_user)):
 
 
 @router.put("/api/config")
-async def update_config(request: Request, current_user: dict = Depends(get_current_user)):
-    """更新系统配置（含脱敏标记的字段自动跳过，保留原值）"""
+async def update_config(request: Request, current_user: dict = Depends(get_current_admin)):
+    """更新系统配置（含脱敏标记的字段自动跳过，保留原值）
+
+    C-S1 fix: 系统配置含 API key 等敏感项，限定 admin。
+    """
     new_config = await request.json()
     # 过滤掉含脱敏标记的未修改字段（前端回传的脱敏值不应覆盖真实凭证）
     new_config = {k: v for k, v in new_config.items()
@@ -102,6 +105,9 @@ async def update_config(request: Request, current_user: dict = Depends(get_curre
 @router.get("/api/model/status")
 async def get_model_status():
     """获取模型状态"""
+    # C3 fix: 原先失败时返回 HTTP 200 + {"success": False}，破坏 REST 语义，
+    # 前端需通过 success 字段而非状态码判断错误。改为 raise HTTPException，
+    # 与模块内其他端点（update_config、set_model_provider）的失败处理一致。
     try:
         from inference.model_manager import get_model_manager
         model_manager = get_model_manager()
@@ -110,16 +116,16 @@ async def get_model_status():
             "status": model_manager.get_status()
         }
     except Exception as e:
-        logger.error(f"获取模型状态失败: {e}")
-        return {
-            "success": False,
-            "error": str(e)
-        }
+        logger.error(f"获取模型状态失败: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="获取模型状态失败")
 
 
 @router.put("/api/model/provider")
-async def set_model_provider(request: Request, current_user: dict = Depends(get_current_user)):
-    """设置模型提供商"""
+async def set_model_provider(request: Request, current_user: dict = Depends(get_current_admin)):
+    """设置模型提供商
+
+    C-S1 fix: 切换模型 provider 影响全局推理，限定 admin。
+    """
     try:
         from inference.model_manager import get_model_manager, ModelProvider
         model_manager = get_model_manager()

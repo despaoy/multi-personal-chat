@@ -27,6 +27,9 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
 USER nextjs
 EXPOSE 5000
+# H3 fix: 显式设置 HOSTNAME=0.0.0.0，确保容器内服务可从外部访问。
+# Next.js standalone server.js 在某些版本默认监听 localhost，会导致容器外不可达。
 ENV PORT=5000
+ENV HOSTNAME=0.0.0.0
 
 CMD ["node", "server.js"]

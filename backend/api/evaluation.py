@@ -9,7 +9,7 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Depends
 from app.dependencies import get_current_user
 from db.adapter import db
-from db.models import EvalRunRequest
+from db.schemas import EvalRunRequest
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -53,8 +53,12 @@ async def run_evaluation(req: EvalRunRequest, current_user: dict = Depends(get_c
     try:
         db.execute_sql_insert(
             "INSERT INTO gold_eval_runs (id, run_at, adapter_name, model_label, total_prompts, category_breakdown, metrics, config_snapshot, notes) "
-            "VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?)",
-            (run_id, run_at, req.adapter_name, req.model_label, json.dumps({}), json.dumps({}), json.dumps(req.model_dump()), ""),
+            "VALUES (:id, :run_at, :adapter_name, :model_label, 0, :cb, :metrics, :cfg, :notes)",
+            {
+                "id": run_id, "run_at": run_at, "adapter_name": req.adapter_name,
+                "model_label": req.model_label, "cb": json.dumps({}),
+                "metrics": json.dumps({}), "cfg": json.dumps(req.model_dump()), "notes": "",
+            },
         )
     except Exception as e:
         logger.warning(f"记录评估运行失败（非致命）: {e}")
@@ -63,8 +67,8 @@ async def run_evaluation(req: EvalRunRequest, current_user: dict = Depends(get_c
     queued_metrics = {"status": "queued", "mock": req.mock}
     try:
         db.execute_sql(
-            "UPDATE gold_eval_runs SET metrics=?, notes=? WHERE id=?",
-            (json.dumps(queued_metrics), "queued", run_id),
+            "UPDATE gold_eval_runs SET metrics=:metrics, notes=:notes WHERE id=:id",
+            {"metrics": json.dumps(queued_metrics), "notes": "queued", "id": run_id},
         )
     except Exception as exc:
         logger.warning("failed to persist queued evaluation run=%s: %s", run_id, exc)
@@ -72,12 +76,20 @@ async def run_evaluation(req: EvalRunRequest, current_user: dict = Depends(get_c
     return {"success": True, "run_id": run_id, "status": "queued", "mock": req.mock}
 
 @router.get("/api/evaluation/runs")
-async def list_runs(limit: int = 20, current_user: dict = Depends(get_current_user)):
+async def list_runs(limit: int = 20, offset: int = 0, current_user: dict = Depends(get_current_user)):
     """列出评估运行历史"""
     try:
+        # 统一分页边界校验：limit 上限 500，offset 非负
+        limit = max(1, min(int(limit), 500))
+        offset = max(0, int(offset))
         rows = db.execute_sql(
-            "SELECT id, run_at, adapter_name, model_label, total_prompts, metrics, notes FROM gold_eval_runs ORDER BY run_at DESC LIMIT ?",
-            (limit,),
+            "SELECT id, run_at, adapter_name, model_label, total_prompts, metrics, notes "
+            "FROM gold_eval_runs ORDER BY run_at DESC LIMIT :lim OFFSET :off",
+            {"lim": limit, "off": offset},
+        )
+        count_rows = db.execute_sql(
+            "SELECT COUNT(*) AS cnt FROM gold_eval_runs",
+            {},
         )
         runs = []
         for r in (rows or []):
@@ -101,8 +113,8 @@ async def get_run_detail(run_id: str, current_user: dict = Depends(get_current_u
     """获取单个评估运行的详细结果"""
     try:
         rows = db.execute_sql(
-            "SELECT * FROM gold_eval_runs WHERE id=?",
-            (run_id,),
+            "SELECT * FROM gold_eval_runs WHERE id=:id",
+            {"id": run_id},
         )
         if not rows:
             raise HTTPException(status_code=404, detail="run not found")
@@ -138,14 +150,19 @@ async def get_run_detail(run_id: str, current_user: dict = Depends(get_current_u
 @router.post("/api/feedback")
 async def create_feedback(req: dict, current_user: dict = Depends(get_current_user)):
     """创建用户反馈（在线反馈闭环）"""
-    from db.models import FeedbackCreate
+    from db.schemas import FeedbackCreate
     fb = FeedbackCreate(**req)
     try:
         db.execute_sql_insert(
             "INSERT INTO feedback (trace_id, message_id, rating, reason, adapter_name, kb_revision, prompt_version, detail, created_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (fb.trace_id, fb.message_id, fb.rating, fb.reason, fb.adapter_name,
-             fb.kb_revision, fb.prompt_version, fb.detail, _now()),
+            "VALUES (:trace_id, :message_id, :rating, :reason, :adapter_name, :kb_revision, :prompt_version, :detail, :created_at)",
+            {
+                "trace_id": fb.trace_id, "message_id": fb.message_id,
+                "rating": fb.rating, "reason": fb.reason,
+                "adapter_name": fb.adapter_name, "kb_revision": fb.kb_revision,
+                "prompt_version": fb.prompt_version, "detail": fb.detail,
+                "created_at": _now(),
+            },
         )
         return {"success": True}
     except Exception as e:
@@ -154,22 +171,37 @@ async def create_feedback(req: dict, current_user: dict = Depends(get_current_us
 
 
 @router.get("/api/feedback")
-async def list_feedback(limit: int = 50, rating: Optional[str] = None,
+async def list_feedback(limit: int = 50, offset: int = 0, rating: Optional[str] = None,
                         current_user: dict = Depends(get_current_user)):
     """列出用户反馈"""
     try:
+        # 统一分页边界校验：limit 上限 500，offset 非负
+        limit = max(1, min(int(limit), 500))
+        offset = max(0, int(offset))
+        # 使用命名参数 :name，SQLite 与 PostgreSQL 均支持
         if rating:
             rows = db.execute_sql(
-                "SELECT * FROM feedback WHERE rating=? ORDER BY created_at DESC LIMIT ?",
-                (rating, limit),
+                "SELECT * FROM feedback WHERE rating=:rating "
+                "ORDER BY created_at DESC LIMIT :lim OFFSET :off",
+                {"rating": rating, "lim": limit, "off": offset},
+            )
+            count_rows = db.execute_sql(
+                "SELECT COUNT(*) AS cnt FROM feedback WHERE rating=:rating",
+                {"rating": rating},
             )
         else:
             rows = db.execute_sql(
-                "SELECT * FROM feedback ORDER BY created_at DESC LIMIT ?",
-                (limit,),
+                "SELECT * FROM feedback ORDER BY created_at DESC "
+                "LIMIT :lim OFFSET :off",
+                {"lim": limit, "off": offset},
+            )
+            count_rows = db.execute_sql(
+                "SELECT COUNT(*) AS cnt FROM feedback",
+                {},
             )
         feedbacks = [dict(r) for r in (rows or [])]
-        return {"success": True, "feedbacks": feedbacks, "total": len(feedbacks)}
+        total = (count_rows[0]["cnt"] if count_rows else 0) or 0
+        return {"success": True, "feedbacks": feedbacks, "total": total}
     except Exception as e:
         logger.error(f"列出反馈失败: {e}")
         raise HTTPException(status_code=500, detail=str(e))

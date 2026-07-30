@@ -39,8 +39,36 @@ def _scan_lora_dirs():
 
 LORA_DIR_MAP = _scan_lora_dirs()
 
-# 兼容旧代码：通过 id 查找路径
-LORA_PATH_MAP = {}
+# C-R1 fix: 原先 LORA_PATH_MAP = {} 是静态空 dict，全程无代码填充，
+# 导致 vLLM 故障回退到 TransformersPeftProvider 时 LoRA 永远不会被加载，
+# 静默退化为 base model。改为函数动态查找：从 db.loras 表的 id 列映射
+# 到 LORA_DIR_MAP 的目录路径。调用方需改为 get_lora_path_by_id(id)。
+def get_lora_path_by_id(lora_id: str) -> str | None:
+    """根据 LoRA id 查找其文件系统路径。
+
+    查找逻辑：
+    1. 遍历 db.loras，找到匹配 id 的 LoRA 记录
+    2. 用 LoRA 的 name 字段在 LORA_DIR_MAP 中查找路径
+    3. 若 name 未命中，尝试用 id 本身作为目录名（历史兼容）
+    """
+    try:
+        for lora in db.loras:
+            if str(lora.get("id")) == str(lora_id):
+                name = lora.get("name", "")
+                if name and name in LORA_DIR_MAP:
+                    return LORA_DIR_MAP[name]
+                # 历史兼容：部分旧 LoRA 的目录名等于 id
+                if str(lora_id) in LORA_DIR_MAP:
+                    return LORA_DIR_MAP[str(lora_id)]
+                return None
+    except Exception:
+        pass
+    return None
+
+
+# 保留 LORA_PATH_MAP 作为空 dict 的向后兼容别名，但标记为废弃。
+# 新代码应使用 get_lora_path_by_id()。
+LORA_PATH_MAP = {}  # deprecated, use get_lora_path_by_id()
 
 def _resolve_path(p: str) -> str:
     if os.path.isabs(p):
@@ -214,11 +242,80 @@ class SQLiteDB:
                 documentId INTEGER NOT NULL,
                 chunkIndex INTEGER NOT NULL,
                 content TEXT NOT NULL,
-                embedding BLOB,
+                embedding INTEGER,
                 createdAt TEXT NOT NULL,
                 FOREIGN KEY (documentId) REFERENCES knowledge_documents(id) ON DELETE CASCADE
             )
         ''')
+        # 老库迁移：将 embedding 列从 BLOB 类型重建为 INTEGER（SQLite 无法直接
+        # 修改列类型，需要重建表）。
+        #
+        # 旧实现用 `SELECT typeof(embedding) FROM knowledge_chunks LIMIT 1` 判断，
+        # 但 typeof() 返回的是"某一行实际存储的值的类型"而非"列声明类型"：
+        #   - 空表 → fetchone() 返回 None，跳过迁移（但列仍是 BLOB）
+        #   - 首行 embedding 为 NULL → typeof 返回 'null'，跳过迁移
+        #   - 首行恰好存了整数 → typeof 返回 'integer'，跳过迁移
+        #   - 只有首行恰好是 BLOB 字节流时才迁移，概率极低。
+        # 正确做法是用 PRAGMA table_info 读取列的声明类型 dtd_type。
+        #
+        # 数据保留策略：旧 BLOB 列可能保存了向量字节流（pickle/np.tobytes()），
+        # 也可能在新版代码运行后保存了有效的 FAISS ID 整数。用 CASE 在行级
+        # 判断 typeof()，仅保留整数，BLOB/NULL 置 NULL 让上层重建向量索引。
+        #
+        # 异常处理：用 SAVEPOINT 包裹表重建，失败时回滚到保存点，避免留下
+        # 新空表和 knowledge_chunks_old 残留导致旧数据不可见。
+        try:
+            cursor.execute("PRAGMA table_info(knowledge_chunks)")
+            columns = cursor.fetchall()
+            # columns: (cid, name, type, notnull, dflt_value, pk)
+            embedding_decl_type = ""
+            for col in columns:
+                if col[1] == "embedding":
+                    embedding_decl_type = (col[2] or "").upper()
+                    break
+
+            needs_migration = embedding_decl_type in ("", "BLOB")
+            if needs_migration:
+                cursor.execute("SAVEPOINT embed_migration")
+                try:
+                    cursor.execute("ALTER TABLE knowledge_chunks RENAME TO knowledge_chunks_old")
+                    cursor.execute('''
+                        CREATE TABLE knowledge_chunks (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            documentId INTEGER NOT NULL,
+                            chunkIndex INTEGER NOT NULL,
+                            content TEXT NOT NULL,
+                            embedding INTEGER,
+                            createdAt TEXT NOT NULL,
+                            FOREIGN KEY (documentId) REFERENCES knowledge_documents(id) ON DELETE CASCADE
+                        )
+                    ''')
+                    # 行级判断：仅保留 typeof()='integer' 的值，BLOB/NULL 置 NULL。
+                    # 这避免了"把向量字节流当作 FAISS ID 复制"的数据损坏，
+                    # 同时不丢失已经正确存储为整数的有效 FAISS ID。
+                    cursor.execute('''
+                        INSERT INTO knowledge_chunks (id, documentId, chunkIndex, content, embedding, createdAt)
+                        SELECT id, documentId, chunkIndex, content,
+                               CASE WHEN typeof(embedding) = 'integer' THEN embedding ELSE NULL END,
+                               createdAt
+                        FROM knowledge_chunks_old
+                    ''')
+                    cursor.execute("DROP TABLE knowledge_chunks_old")
+                    cursor.execute("RELEASE SAVEPOINT embed_migration")
+                    logger.info(
+                        "已将 knowledge_chunks.embedding 从 %s 重建为 INTEGER（保留有效整数，BLOB/NULL 置 NULL）",
+                        embedding_decl_type or "未声明",
+                    )
+                except Exception as migrate_exc:
+                    cursor.execute("ROLLBACK TO SAVEPOINT embed_migration")
+                    cursor.execute("RELEASE SAVEPOINT embed_migration")
+                    logger.error(
+                        "knowledge_chunks.embedding 迁移失败，已回滚到保存点: %s",
+                        migrate_exc,
+                        exc_info=True,
+                    )
+        except sqlite3.OperationalError:
+            pass  # 表不存在（新库），_init_database 会创建
 
         # 创建用户表
         cursor.execute('''
@@ -229,6 +326,9 @@ class SQLiteDB:
                 created_at TEXT NOT NULL
             )
         ''')
+        # C-S1 fix: 新增 role 列支持 RBAC。默认 'user'，首个用户自动升级为 'admin'。
+        # 使用 _ensure_column 做幂等迁移，已有数据库升级时自动添加该列。
+        self._ensure_column(cursor, 'users', 'role', 'TEXT NOT NULL DEFAULT \'user\'')
 
         # 创建用户数据表（表单数据持久化）
         cursor.execute('''
@@ -275,7 +375,8 @@ class SQLiteDB:
         # 创建训练任务表
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS training_tasks (
-                task_id TEXT PRIMARY KEY,
+                id TEXT PRIMARY KEY,
+                task_id TEXT UNIQUE,
                 lora_name TEXT NOT NULL,
                 status TEXT NOT NULL DEFAULT 'pending',
                 progress REAL DEFAULT 0,
@@ -285,6 +386,69 @@ class SQLiteDB:
                 updated_at TEXT DEFAULT ''
             )
         ''')
+        # 老库迁移：如果 training_tasks 表缺少 id 列（旧 schema 用 task_id 作 PK），补齐
+        # 此前仅 ADD COLUMN id TEXT，但旧表的主键仍是 task_id，id 列既非主键也非非空，
+        # 导致与 ORM/Alembic 的 schema 不一致。现通过表重建将 id 设为主键。
+        try:
+            cursor.execute("SELECT id FROM training_tasks LIMIT 1")
+            # 检查 id 列是否为主键（通过 PRAGMA table_info）
+            cursor.execute("PRAGMA table_info(training_tasks)")
+            cols = {row[1]: row for row in cursor.fetchall()}
+            id_col = cols.get("id")
+            task_id_col = cols.get("task_id")
+            # 旧库情况：task_id 为主键 (pk=1)，id 为普通列 (pk=0)
+            # 新库情况：id 为主键 (pk=1)，task_id 为 UNIQUE 列 (pk=0)
+            if task_id_col and task_id_col[5] == 1 and id_col and id_col[5] == 0:
+                # 重建表，将 id 设为主键，task_id 改为 UNIQUE
+                cursor.execute("ALTER TABLE training_tasks RENAME TO training_tasks_old")
+                cursor.execute('''
+                    CREATE TABLE training_tasks (
+                        id TEXT PRIMARY KEY,
+                        task_id TEXT UNIQUE,
+                        lora_name TEXT NOT NULL,
+                        status TEXT NOT NULL DEFAULT 'pending',
+                        progress REAL DEFAULT 0,
+                        error_message TEXT DEFAULT '',
+                        config_json TEXT DEFAULT '{}',
+                        created_at TEXT DEFAULT '',
+                        updated_at TEXT DEFAULT ''
+                    )
+                ''')
+                cursor.execute('''
+                    INSERT INTO training_tasks (id, task_id, lora_name, status, progress, error_message, config_json, created_at, updated_at)
+                    SELECT id, task_id, lora_name, status, progress, error_message, config_json, created_at, updated_at
+                    FROM training_tasks_old
+                ''')
+                cursor.execute("DROP TABLE training_tasks_old")
+                logger.info("已将 training_tasks.id 重建为主键（旧库 task_id 主键 → 新库 id 主键）")
+        except sqlite3.OperationalError:
+            # 旧表完全无 id 列，先添加 id 列并从 task_id 回填，再走主键重建路径
+            try:
+                cursor.execute("SELECT task_id FROM training_tasks LIMIT 1")
+                # 旧表存在但无 id 列
+                cursor.execute("ALTER TABLE training_tasks RENAME TO training_tasks_old")
+                cursor.execute('''
+                    CREATE TABLE training_tasks (
+                        id TEXT PRIMARY KEY,
+                        task_id TEXT UNIQUE,
+                        lora_name TEXT NOT NULL,
+                        status TEXT NOT NULL DEFAULT 'pending',
+                        progress REAL DEFAULT 0,
+                        error_message TEXT DEFAULT '',
+                        config_json TEXT DEFAULT '{}',
+                        created_at TEXT DEFAULT '',
+                        updated_at TEXT DEFAULT ''
+                    )
+                ''')
+                cursor.execute('''
+                    INSERT INTO training_tasks (id, task_id, lora_name, status, progress, error_message, config_json, created_at, updated_at)
+                    SELECT task_id, task_id, lora_name, status, progress, error_message, config_json, created_at, updated_at
+                    FROM training_tasks_old
+                ''')
+                cursor.execute("DROP TABLE training_tasks_old")
+                logger.info("已重建 training_tasks 表（task_id 主键 → id 主键，并从 task_id 回填 id）")
+            except sqlite3.OperationalError:
+                pass  # 新库，表已正确创建
 
         # 创建 Claw 自定义工具表
         cursor.execute('''
@@ -454,6 +618,40 @@ class SQLiteDB:
             )
         ''')
 
+        # 审计日志表（与 pg_database.py 对齐，此前 SQLite 缺失）
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS audit_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp REAL NOT NULL,
+                api_key_hash TEXT NOT NULL,
+                role TEXT NOT NULL,
+                action TEXT NOT NULL,
+                resource TEXT,
+                detail TEXT,
+                ip_address TEXT
+            )
+        ''')
+
+        # 意图样本表（与 pg_database.py 对齐，此前 SQLite 缺失）
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS intent_samples (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                kbName TEXT NOT NULL,
+                text TEXT NOT NULL,
+                label TEXT NOT NULL,
+                createdAt TEXT NOT NULL
+            )
+        ''')
+
+        # 意图激活知识库表（与 pg_database.py 对齐，此前 SQLite 缺失）
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS intent_active_kbs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                kbName TEXT NOT NULL,
+                isActive INTEGER NOT NULL DEFAULT 1
+            )
+        ''')
+
         self._ensure_column(cursor, "messages", "platform", "TEXT NOT NULL DEFAULT 'qq'")
         self._ensure_column(cursor, "messages", "adapter", "TEXT NOT NULL DEFAULT 'nonebot'")
         self._ensure_column(cursor, "messages", "conversationId", "TEXT")
@@ -474,13 +672,16 @@ class SQLiteDB:
         cursor.execute('PRAGMA cache_size=-8000')  # 8MB cache
         cursor.execute('PRAGMA temp_store=MEMORY')
 
-        # 为高频查询建索引：按 sessionId 查消息，避免全表扫
+        # 为高频查询建索引
         try:
-            cursor.execute('CREATE INDEX IF NOT EXISTS idx_messages_sessionId_createdAt ON messages(sessionId, createdAt)')
+            # 删除与 ORM idx_messages_session_created 语义相同的旧索引名，避免重复维护
+            cursor.execute('DROP INDEX IF EXISTS idx_messages_sessionId_createdAt')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_messages_session_created ON messages(sessionId, createdAt)')
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_messages_platform_conversation ON messages(platform, conversationId, createdAt)')
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_messages_source_dedup ON messages(platform, adapter, sourceMessageId)')
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_messages_createdAt ON messages(createdAt)')
-            cursor.execute('CREATE INDEX IF NOT EXISTS idx_conversations_platform_conversation ON conversations(platform, conversationId, conversationType)')
+            # idx_conversations_platform_conversation 已删除：UNIQUE(platform, conversationId, conversationType)
+            # 约束会自动创建索引，显式 CREATE INDEX 完全冗余。
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_integration_events_trace ON integration_events(traceId)')
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_integration_events_platform_created ON integration_events(platform, createdAt)')
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_model_invocations_trace ON model_invocations(traceId)')
@@ -489,6 +690,16 @@ class SQLiteDB:
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_preference_pairs_status ON preference_pairs(review_status)')
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_feedback_created ON feedback(created_at)')
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_adapter_compat_name ON adapter_compatibility(adapter_name)')
+            # 补充此前缺失的高频外键/过滤列索引
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_knowledge_chunks_documentId ON knowledge_chunks(documentId)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_knowledge_documents_kb_id ON knowledge_documents(knowledge_base_id)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_knowledge_documents_folder_id ON knowledge_documents(folder_id)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_training_tasks_lora_name ON training_tasks(lora_name)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_training_tasks_status ON training_tasks(status)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_intent_samples_kbName ON intent_samples(kbName)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_feedback_trace_id ON feedback(trace_id)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_feedback_message_id ON feedback(message_id)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_audit_logs_timestamp ON audit_logs(timestamp)')
         except Exception:
             pass  # 索引已存在或 SQLite 版本不支，不影响功能
 
@@ -735,7 +946,11 @@ class SQLiteDB:
             "groupReply": "true",
             "privateReply": "true",
             "replyDelay": "1",
-            "modelProvider": "mock",
+            # C11 fix: 不再默认 mock。mock provider 会静默返回罐头回复，
+            # 生产部署时若用户未手动配置会误以为服务正常。
+            # 默认改为 vllm（需通过环境变量配置 vLLM 服务），
+            # 若 vLLM 未启动，调用会显式失败而非返回假数据。
+            "modelProvider": "vllm",
             "baseModel": "qwen3-8b",
             "temperature": "0.7",
             "maxTokens": "2048",
@@ -890,6 +1105,20 @@ class SQLiteDB:
         cursor.execute('SELECT COUNT(*) FROM messages')
         return cursor.fetchone()[0]
 
+    def get_recent_messages(self, limit: int = 10) -> list:
+        """获取最近的 N 条消息（按创建时间倒序）。
+
+        Phase 2 fix: 补齐 PG 侧存在但 SQLite 侧缺失的方法，保持双后端接口一致。
+        """
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            'SELECT * FROM messages ORDER BY createdAt DESC LIMIT ?',
+            (limit,),
+        )
+        columns = [desc[0] for desc in cursor.description]
+        return [dict(zip(columns, row)) for row in cursor.fetchall()]
+
     def add_message(self, message: Dict):
         """Add a message record and keep the conversation index in sync."""
         conn = self._get_connection()
@@ -1037,22 +1266,11 @@ class SQLiteDB:
         rows = cursor.fetchall()
 
         config_dict = {}
+        from db.config_utils import coerce_config_value
         for row in rows:
             key = row['key']
             value = row['value']
-            # 尝试转换类型
-            if value.lower() == 'true':
-                config_dict[key] = True
-            elif value.lower() == 'false':
-                config_dict[key] = False
-            else:
-                try:
-                    if '.' in value:
-                        config_dict[key] = float(value)
-                    else:
-                        config_dict[key] = int(value)
-                except:
-                    config_dict[key] = value
+            config_dict[key] = coerce_config_value(value)
         return config_dict
 
     def get_config_value(self, key: str, default=None):
@@ -1077,6 +1295,99 @@ class SQLiteDB:
                 VALUES (?, ?)
             ''', (key, value_str))
 
+        conn.commit()
+
+    # SyncPgAdapter 通过 set_config 别名对齐 PG 端方法名
+    set_config = update_config
+
+    def set_config_value(self, key: str, value):
+        """更新单个配置项。
+
+        Phase 2 fix: 补齐 PG 侧存在但 SQLite 侧缺失的方法，保持双后端接口一致。
+        """
+        self.update_config({key: value})
+
+    # ============================================
+    # 审计日志（与 pg_database.py 对齐，此前 SQLite 缺失）
+    # ============================================
+    def add_audit_log(self, api_key_hash: str, role: str, action: str,
+                      resource: str | None = None, detail: str | None = None,
+                      ip_address: str | None = None) -> None:
+        """记录审计日志"""
+        import time
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+            INSERT INTO audit_logs (timestamp, api_key_hash, role, action, resource, detail, ip_address)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        ''', (time.time(), api_key_hash, role, action, resource, detail, ip_address))
+        conn.commit()
+
+    def get_audit_logs(self, limit: int = 100, offset: int = 0,
+                       role: str | None = None, action: str | None = None) -> list[dict]:
+        """查询审计日志"""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        if role and action:
+            cursor.execute(
+                'SELECT * FROM audit_logs WHERE role = ? AND action = ? ORDER BY id DESC LIMIT ? OFFSET ?',
+                (role, action, limit, offset))
+        elif role:
+            cursor.execute(
+                'SELECT * FROM audit_logs WHERE role = ? ORDER BY id DESC LIMIT ? OFFSET ?',
+                (role, limit, offset))
+        elif action:
+            cursor.execute(
+                'SELECT * FROM audit_logs WHERE action = ? ORDER BY id DESC LIMIT ? OFFSET ?',
+                (action, limit, offset))
+        else:
+            cursor.execute(
+                'SELECT * FROM audit_logs ORDER BY id DESC LIMIT ? OFFSET ?',
+                (limit, offset))
+        return [dict(row) for row in cursor.fetchall()]
+
+    # ============================================
+    # 意图样本管理（与 pg_database.py 对齐，此前 SQLite 缺失）
+    # ============================================
+    def add_intent_sample(self, kb_name: str, text: str, label: str) -> dict:
+        """添加意图样本"""
+        now = datetime.now().isoformat()
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            'INSERT INTO intent_samples (kbName, text, label, createdAt) VALUES (?, ?, ?, ?)',
+            (kb_name, text, label, now))
+        conn.commit()
+        sample_id = cursor.lastrowid
+        return {"id": sample_id, "kbName": kb_name, "text": text, "label": label, "createdAt": now}
+
+    def get_intent_samples(self, kb_name: str | None = None) -> list[dict]:
+        """获取意图样本"""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        if kb_name:
+            cursor.execute('SELECT * FROM intent_samples WHERE kbName = ?', (kb_name,))
+        else:
+            cursor.execute('SELECT * FROM intent_samples')
+        return [dict(row) for row in cursor.fetchall()]
+
+    def get_active_kbs(self) -> list[dict]:
+        """获取活跃的知识库列表"""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        cursor.execute('SELECT * FROM intent_active_kbs WHERE isActive = 1')
+        return [dict(row) for row in cursor.fetchall()]
+
+    def set_active_kb(self, kb_name: str, is_active: bool) -> None:
+        """设置知识库活跃状态"""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            'INSERT OR IGNORE INTO intent_active_kbs (kbName, isActive) VALUES (?, ?)',
+            (kb_name, int(is_active)))
+        cursor.execute(
+            'UPDATE intent_active_kbs SET isActive = ? WHERE kbName = ?',
+            (int(is_active), kb_name))
         conn.commit()
 
     @property
@@ -1295,11 +1606,13 @@ class SQLiteDB:
         return None
 
     # knowledge_documents 表允许更新的列名白名单
+    # 与 pg_database.py 保持一致；此前 SQLite 白名单包含不存在的列
+    # (summary/folderId/kbId/charCount/status/tags/source)，已修正。
     KNOWLEDGE_DOC_UPDATABLE_COLUMNS = {
-        "title", "content", "summary", "folderId", "kbId",
-        "chunkCount", "charCount", "status", "tags", "source",
-        "updatedAt",
-        "knowledge_base_id", "folder_id", "sourceType", "sourceUrl", "fileType", "fileSize",
+        "title", "content", "category",
+        "knowledge_base_id", "folder_id",
+        "sourceType", "sourceUrl", "fileType", "fileSize",
+        "chunkCount", "updatedAt",
     }
 
     def update_knowledge_document(self, doc_id: int, document: Dict):
@@ -1392,17 +1705,78 @@ class SQLiteDB:
             chunks.append(dict(row))
         return chunks
 
-    def get_all_knowledge_chunks(self):
-        """获取所有知识库片段（用于检索）"""
+    def get_all_knowledge_chunks(self, limit: int | None = None, offset: int = 0):
+        """获取所有知识库片段（用于检索）。
+
+        Args:
+            limit: 返回数量上限，None 表示全量（谨慎使用，大库可能 OOM）
+            offset: 跳过前 N 条
+        """
         conn = self._get_connection()
         cursor = conn.cursor()
-        cursor.execute('SELECT * FROM knowledge_chunks ORDER BY documentId, chunkIndex')
+        if limit is not None:
+            cursor.execute(
+                'SELECT * FROM knowledge_chunks ORDER BY documentId, chunkIndex LIMIT ? OFFSET ?',
+                (limit, offset)
+            )
+        else:
+            cursor.execute('SELECT * FROM knowledge_chunks ORDER BY documentId, chunkIndex')
         rows = cursor.fetchall()
 
         chunks = []
         for row in rows:
             chunks.append(dict(row))
         return chunks
+
+    def iter_all_knowledge_chunks(self, batch_size: int = 500):
+        """分页迭代所有知识库片段，避免大库 OOM。
+
+        生成器，每次 yield 一批（最多 batch_size 条）chunk dict。
+        """
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        offset = 0
+        while True:
+            cursor.execute(
+                'SELECT * FROM knowledge_chunks ORDER BY documentId, chunkIndex LIMIT ? OFFSET ?',
+                (batch_size, offset)
+            )
+            rows = cursor.fetchall()
+            if not rows:
+                break
+            for row in rows:
+                yield dict(row)
+            offset += len(rows)
+            if len(rows) < batch_size:
+                break
+
+    def iter_chunks_with_document(self, batch_size: int = 500):
+        """分页迭代 chunk 及其所属文档（LEFT JOIN），避免 N+1 查询。
+
+        每次 yield 一条 dict，包含 chunk 字段和 document 字段（以 doc_ 前缀）。
+        孤儿 chunk（文档已删除）的 doc_title 为 None，调用方可跳过。
+        """
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        offset = 0
+        while True:
+            cursor.execute(
+                '''SELECT c.*, d.title AS doc_title, d.category AS doc_category,
+                          d.knowledge_base_id AS doc_kb_id
+                   FROM knowledge_chunks c
+                   LEFT JOIN knowledge_documents d ON c.documentId = d.id
+                   ORDER BY c.documentId, c.chunkIndex
+                   LIMIT ? OFFSET ?''',
+                (batch_size, offset)
+            )
+            rows = cursor.fetchall()
+            if not rows:
+                break
+            for row in rows:
+                yield dict(row)
+            offset += len(rows)
+            if len(rows) < batch_size:
+                break
 
     def get_knowledge_stats(self):
         """获取知识库统计数据"""
@@ -1554,6 +1928,8 @@ class SQLiteDB:
         cursor = conn.cursor()
 
         # 按 sessionId 聚合：消息数、最近消息内容、最后活跃时间
+        # bot_enabled 统一从 conversations 表查询（与 PG 端对齐），
+        # 使用相关子查询消除 N+1，避免读取已废弃的 session_settings 表导致数据陈旧。
         cursor.execute('''
             SELECT
                 sessionId,
@@ -1564,7 +1940,13 @@ class SQLiteDB:
                 COALESCE(conversationId, sessionId) as conversationId,
                 COUNT(*) as message_count,
                 MAX(createdAt) as last_active,
-                GROUP_CONCAT(message, '||') as recent_messages
+                GROUP_CONCAT(message, '||') as recent_messages,
+                COALESCE((
+                    SELECT c.botEnabled FROM conversations c
+                    WHERE c.platform = COALESCE(messages.platform, 'qq')
+                      AND c.conversationId = COALESCE(messages.conversationId, messages.sessionId)
+                    ORDER BY c.updatedAt DESC LIMIT 1
+                ), 1) as bot_enabled
             FROM messages
             GROUP BY sessionId, sessionType, sessionName, platform, adapter, conversationId
             ORDER BY last_active DESC
@@ -1589,14 +1971,6 @@ class SQLiteDB:
             if len(summary) > 100:
                 summary = summary[:100] + '...'
 
-            # 查询该会话的机器人开关状态
-            cursor.execute(
-                'SELECT bot_enabled FROM session_settings WHERE sessionId = ?',
-                (session_id,)
-            )
-            setting_row = cursor.fetchone()
-            bot_enabled = setting_row['bot_enabled'] if setting_row else 1
-
             sessions.append({
                 'sessionId': session_id,
                 'sessionType': session_type,
@@ -1607,23 +1981,21 @@ class SQLiteDB:
                 'messageCount': message_count,
                 'lastActive': last_active,
                 'summary': summary,
-                'botEnabled': bool(bot_enabled),
+                'botEnabled': bool(row['bot_enabled']),
             })
 
         return sessions
 
     def set_session_bot_enabled(self, session_id: str, enabled: bool, platform: str = "qq", conversation_id: str | None = None):
-        """设置某个会话的机器人开关"""
+        """设置某个会话的机器人开关。
+
+        统一写入 conversations 表（此前同时写 session_settings + conversations 双表，
+        现合并为单表，消除冗余）。session_settings 表保留以兼容旧数据库但不再写入。
+        """
         conn = self._get_connection()
         cursor = conn.cursor()
-        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
         resolved_conversation_id = conversation_id or session_id
-        cursor.execute('''
-            INSERT INTO session_settings (sessionId, platform, conversationId, sessionType, sessionName, bot_enabled, updated_at)
-            VALUES (?, ?, ?, 'private', ?, ?, ?)
-            ON CONFLICT(sessionId) DO UPDATE SET platform = ?, conversationId = ?, bot_enabled = ?, updated_at = ?
-        ''', (session_id, platform, resolved_conversation_id, session_id, int(enabled), now, platform, resolved_conversation_id, int(enabled), now))
         self._upsert_conversation_cursor(
             cursor,
             platform=platform,
@@ -1633,20 +2005,30 @@ class SQLiteDB:
             bot_enabled=enabled,
         )
         conn.commit()
-        # 变更后主动失效缓存
+        # 变更后主动失效缓存（键为 (platform, conversation_id) 元组）
         if hasattr(self, '_bot_enabled_cache'):
-            self._bot_enabled_cache.pop(session_id, None)
+            resolved_conversation_id = conversation_id or session_id
+            self._bot_enabled_cache.pop((platform, resolved_conversation_id), None)
 
     # session bot 开关内存缓存（减少高频读库）
     # TTL 60s，变更时主动失效
     def is_session_bot_enabled(self, session_id: str, platform: str = "qq", conversation_id: str | None = None) -> bool:
-        """检查某个会话的机器人是否启用（默认启用，内存 TTL 缓存）"""
+        """检查某个会话的机器人是否启用（默认启用，内存 TTL 缓存）。
+
+        统一从 conversations 表查询（此前先查 session_settings 失败再查 conversations，
+        现直接查 conversations，消除双表冗余查询）。
+
+        缓存键为 (platform, conversation_id) 元组，避免 QQ 与 Telegram 出现相同
+        session_id 时相互污染。
+        """
         import time as _time
         now = _time.time()
         # 延迟初始化缓存字典（避免模块级全局变量）
         if not hasattr(self, '_bot_enabled_cache'):
             self._bot_enabled_cache: dict = {}
-        cached = self._bot_enabled_cache.get(session_id)
+        resolved_conversation_id = conversation_id or session_id
+        cache_key = (platform, resolved_conversation_id)
+        cached = self._bot_enabled_cache.get(cache_key)
         if cached is not None:
             val, expiry = cached
             if now < expiry:
@@ -1654,20 +2036,12 @@ class SQLiteDB:
         conn = self._get_connection()
         cursor = conn.cursor()
         cursor.execute(
-            'SELECT bot_enabled FROM session_settings WHERE sessionId = ?',
-            (session_id,)
+            'SELECT botEnabled FROM conversations WHERE platform = ? AND conversationId = ? ORDER BY updatedAt DESC LIMIT 1',
+            (platform, resolved_conversation_id),
         )
         row = cursor.fetchone()
-        if row is None and conversation_id:
-            cursor.execute(
-                'SELECT botEnabled FROM conversations WHERE platform = ? AND conversationId = ? ORDER BY updatedAt DESC LIMIT 1',
-                (platform, conversation_id),
-            )
-            conversation_row = cursor.fetchone()
-            result = True if conversation_row is None else bool(conversation_row['botEnabled'])
-        else:
-            result = True if row is None else bool(row['bot_enabled'])
-        self._bot_enabled_cache[session_id] = (result, now + 60)
+        result = True if row is None else bool(row['botEnabled'])
+        self._bot_enabled_cache[cache_key] = (result, now + 60)
         return result
 
     def mark_integration_message_processed(self, platform: str, adapter: str, message_id: str) -> bool:
@@ -1772,7 +2146,21 @@ class SQLiteDB:
         """通过用户名查找用户"""
         conn = self._get_connection()
         cursor = conn.cursor()
-        cursor.execute('SELECT id, username, password_hash, created_at FROM users WHERE username = ?', (username,))
+        cursor.execute('SELECT id, username, password_hash, created_at, role FROM users WHERE username = ?', (username,))
+        row = cursor.fetchone()
+        return dict(row) if row else None
+
+    def get_user(self, user_id: int):
+        """通过用户 ID 查找用户。
+
+        Phase 2 fix: 补齐 PG 侧存在但 SQLite 侧缺失的方法，保持双后端接口一致。
+        """
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            'SELECT id, username, password_hash, created_at, role FROM users WHERE id = ?',
+            (user_id,),
+        )
         row = cursor.fetchone()
         return dict(row) if row else None
 
@@ -1781,13 +2169,17 @@ class SQLiteDB:
         now = datetime.now().isoformat()
         conn = self._get_connection()
         cursor = conn.cursor()
+        # C-S1 fix: 首个用户自动成为 admin，后续用户为普通 user
+        cursor.execute('SELECT COUNT(*) AS count FROM users')
+        user_count = cursor.fetchone()
+        role = 'admin' if (user_count and user_count['count'] == 0) else 'user'
         cursor.execute(
-            'INSERT INTO users (username, password_hash, created_at) VALUES (?, ?, ?)',
-            (username, password_hash, now)
+            'INSERT INTO users (username, password_hash, created_at, role) VALUES (?, ?, ?, ?)',
+            (username, password_hash, now, role)
         )
         conn.commit()
         user_id = cursor.lastrowid
-        return {"id": user_id, "username": username, "created_at": now}
+        return {"id": user_id, "username": username, "created_at": now, "role": role}
 
     # ============================================
     # 用户数据持久化（高层方法）
@@ -1868,15 +2260,21 @@ class SQLiteDB:
     # 训练任务持久化
     # ============================================
     def save_training_task(self, task_id: str, task_data: dict):
-        """保存训练任务状态到数据库"""
+        """保存训练任务状态到数据库。
+
+        M5 fix: 拒绝空 task_id，与 PG 侧保持一致。
+        """
+        if not task_id or not str(task_id).strip():
+            raise ValueError("task_id 不能为空")
         conn = self._get_connection()
         cursor = conn.cursor()
         import json
         cursor.execute('''
-            INSERT OR REPLACE INTO training_tasks (task_id, lora_name, status, progress,
+            INSERT OR REPLACE INTO training_tasks (id, task_id, lora_name, status, progress,
             error_message, config_json, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
+            task_id,
             task_id,
             task_data.get('lora_name', ''),
             task_data.get('status', 'pending'),
@@ -1889,7 +2287,12 @@ class SQLiteDB:
         conn.commit()
 
     def get_training_task(self, task_id: str) -> dict | None:
-        """获取单个训练任务"""
+        """获取单个训练任务。
+
+        P1-M2 fix: 返回与 PG _normalize_training_task 一致的 DTO，
+        只暴露统一字段（task_id/lora_name/status/progress/error_message/
+        config/created_at/updated_at），不泄露 config_json 等内部列。
+        """
         conn = self._get_connection()
         cursor = conn.cursor()
         cursor.execute('SELECT * FROM training_tasks WHERE task_id = ?', (task_id,))
@@ -1897,13 +2300,28 @@ class SQLiteDB:
         if row:
             import json
             columns = [desc[0] for desc in cursor.description]
-            result = dict(zip(columns, row))
-            result['config'] = json.loads(result.get('config_json', '{}'))
-            return result
+            raw = dict(zip(columns, row))
+            try:
+                config = json.loads(raw.get('config_json', '{}') or '{}')
+            except (TypeError, json.JSONDecodeError):
+                config = {}
+            return {
+                "task_id": raw.get("task_id"),
+                "lora_name": raw.get("lora_name", ""),
+                "status": raw.get("status", "pending"),
+                "progress": float(raw.get("progress", 0) or 0),
+                "error_message": raw.get("error_message", ""),
+                "config": config,
+                "created_at": raw.get("created_at", ""),
+                "updated_at": raw.get("updated_at", ""),
+            }
         return None
 
     def get_all_training_tasks(self) -> list:
-        """获取所有训练任务"""
+        """获取所有训练任务。
+
+        P1-M2 fix: 返回统一 DTO，与 PG _normalize_training_task 一致。
+        """
         conn = self._get_connection()
         cursor = conn.cursor()
         cursor.execute('SELECT * FROM training_tasks ORDER BY created_at DESC')
@@ -1912,20 +2330,125 @@ class SQLiteDB:
         import json
         results = []
         for row in rows:
-            result = dict(zip(columns, row))
-            result['config'] = json.loads(result.get('config_json', '{}'))
-            results.append(result)
+            raw = dict(zip(columns, row))
+            try:
+                config = json.loads(raw.get('config_json', '{}') or '{}')
+            except (TypeError, json.JSONDecodeError):
+                config = {}
+            results.append({
+                "task_id": raw.get("task_id"),
+                "lora_name": raw.get("lora_name", ""),
+                "status": raw.get("status", "pending"),
+                "progress": float(raw.get("progress", 0) or 0),
+                "error_message": raw.get("error_message", ""),
+                "config": config,
+                "created_at": raw.get("created_at", ""),
+                "updated_at": raw.get("updated_at", ""),
+            })
         return results
 
-    def delete_training_task(self, task_id: str):
-        """删除训练任务记录"""
+    def add_training_task(self, task: dict) -> dict:
+        """添加训练任务并返回任务记录。
+
+        Phase 2 fix: 补齐 PG 侧存在但 SQLite 侧缺失的方法，保持双后端接口一致。
+        m3 fix: 自动补 created_at/updated_at，与 PG 侧行为一致。
+        """
+        task_id = task.get("task_id") or task.get("id") or ""
+        now = datetime.now().isoformat()
+        task_data = dict(task)
+        # 自动补时间戳（调用方未提供时），与 PG add_training_task 一致
+        if not task_data.get("created_at"):
+            task_data["created_at"] = now
+        if not task_data.get("updated_at"):
+            task_data["updated_at"] = now
+        self.save_training_task(task_id, task_data)
+        return self.get_training_task(task_id) or task_data
+
+    def get_training_tasks(self, status: str | None = None) -> list:
+        """按状态筛选训练任务，status=None 返回全部。
+
+        P1-M2 fix: 返回统一 DTO，与 PG _normalize_training_task 一致。
+        """
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        if status:
+            cursor.execute(
+                'SELECT * FROM training_tasks WHERE status = ? ORDER BY created_at DESC',
+                (status,),
+            )
+        else:
+            cursor.execute('SELECT * FROM training_tasks ORDER BY created_at DESC')
+        rows = cursor.fetchall()
+        columns = [desc[0] for desc in cursor.description]
+        import json
+        results = []
+        for row in rows:
+            raw = dict(zip(columns, row))
+            try:
+                config = json.loads(raw.get('config_json', '{}') or '{}')
+            except (TypeError, json.JSONDecodeError):
+                config = {}
+            results.append({
+                "task_id": raw.get("task_id"),
+                "lora_name": raw.get("lora_name", ""),
+                "status": raw.get("status", "pending"),
+                "progress": float(raw.get("progress", 0) or 0),
+                "error_message": raw.get("error_message", ""),
+                "config": config,
+                "created_at": raw.get("created_at", ""),
+                "updated_at": raw.get("updated_at", ""),
+            })
+        return results
+
+    def update_training_task(self, task_id: str, data: dict):
+        """更新训练任务字段。
+
+        P1-M2 fix: 与 PG 侧对齐，支持 config (dict) 自动序列化为 config_json；
+        返回统一 DTO。
+        """
+        import json
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        allowed = {
+            "status", "progress", "error_message", "config_json",
+            "lora_name",
+        }
+        updates = {k: v for k, v in data.items() if k in allowed}
+        # The storage layer owns updated_at for consistent SQLite/PostgreSQL behavior.
+        updates["updated_at"] = datetime.now().isoformat()
+        # config (dict) → config_json (str)，与 PG 侧一致
+        if "config" in data and "config_json" not in data:
+            try:
+                updates["config_json"] = json.dumps(data["config"], ensure_ascii=False)
+            except (TypeError, ValueError):
+                pass
+        if not updates:
+            return self.get_training_task(task_id)
+        set_clause = ", ".join(f"{k} = ?" for k in updates)
+        params = list(updates.values()) + [task_id]
+        cursor.execute(
+            f'UPDATE training_tasks SET {set_clause} WHERE task_id = ?',
+            params,
+        )
+        conn.commit()
+        return self.get_training_task(task_id)
+
+    def delete_training_task(self, task_id: str) -> bool:
+        """删除训练任务记录。
+
+        M5 fix: 与 PG 侧对齐，返回 bool 表示是否删除了行。
+        """
         conn = self._get_connection()
         cursor = conn.cursor()
         cursor.execute('DELETE FROM training_tasks WHERE task_id = ?', (task_id,))
         conn.commit()
+        return cursor.rowcount > 0
 
     def get_active_training_by_lora_name(self, lora_name: str) -> list:
-        """查找指定lora_name的运行中任务"""
+        """查找指定lora_name的运行中任务。
+
+        M5 fix: 返回统一 DTO，与 PG _normalize_training_task 一致。
+        """
         conn = self._get_connection()
         cursor = conn.cursor()
         cursor.execute(
@@ -1934,7 +2457,25 @@ class SQLiteDB:
         )
         rows = cursor.fetchall()
         columns = [desc[0] for desc in cursor.description]
-        return [dict(zip(columns, row)) for row in rows]
+        import json
+        results = []
+        for row in rows:
+            raw = dict(zip(columns, row))
+            try:
+                config = json.loads(raw.get('config_json', '{}') or '{}')
+            except (TypeError, json.JSONDecodeError):
+                config = {}
+            results.append({
+                "task_id": raw.get("task_id"),
+                "lora_name": raw.get("lora_name", ""),
+                "status": raw.get("status", "pending"),
+                "progress": float(raw.get("progress", 0) or 0),
+                "error_message": raw.get("error_message", ""),
+                "config": config,
+                "created_at": raw.get("created_at", ""),
+                "updated_at": raw.get("updated_at", ""),
+            })
+        return results
 
 # 全局数据库实例
 db = SQLiteDB()

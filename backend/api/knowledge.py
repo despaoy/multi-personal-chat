@@ -1,6 +1,7 @@
 """知识库API - 知识库/文件夹/文档管理 + ZIP上传 + 文件夹扫描 + 搜索"""
 import asyncio
 import logging
+import threading
 import io
 import os
 import zipfile
@@ -8,16 +9,16 @@ import re
 from pathlib import Path, PurePosixPath
 
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Depends
-from app.dependencies import get_current_user
+from app.dependencies import get_current_user, get_current_admin
 
 from db.adapter import db
-from db.models import (
+from db.schemas import (
     KnowledgeBaseCreate, KnowledgeBaseUpdate,
     KnowledgeFolderCreate,
     KnowledgeDocumentCreate, KnowledgeDocumentUpdate,
     KnowledgeSearchRequest
 )
-from app.config import INPUT_VALIDATOR_AVAILABLE, KNOWLEDGE_DOCUMENT_SCHEMA, KNOWLEDGE_SCHEMA, VECTOR_DB_AVAILABLE
+from app.config import INPUT_VALIDATOR_AVAILABLE, KNOWLEDGE_DOCUMENT_SCHEMA, VECTOR_DB_AVAILABLE
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -106,12 +107,17 @@ async def update_knowledge_base(kb_id: int, request: KnowledgeBaseUpdate, curren
 
 
 @router.delete("/api/knowledge/bases/{kb_id}")
-async def delete_knowledge_base(kb_id: int, current_user: dict = Depends(get_current_user)):
-    """删除知识库（级联删除文件夹和文档）"""
+async def delete_knowledge_base(kb_id: int, current_user: dict = Depends(get_current_admin)):
+    """删除知识库（级联删除文件夹和文档）
+
+    C-S1 fix: 级联删除不可逆，限定 admin。
+    """
     existing = db.get_knowledge_base(kb_id)
     if not existing:
         raise HTTPException(status_code=404, detail="知识库不存在")
     db.delete_knowledge_base(kb_id)
+    # 级联删除后标记 dirty，防止向量删除失败时旧内容仍可被检索
+    _mark_rebuild_dirty()
     return {"success": True, "message": "知识库已删除"}
 
 
@@ -142,12 +148,17 @@ async def create_knowledge_folder(kb_id: int, request: KnowledgeFolderCreate, cu
 
 
 @router.delete("/api/knowledge/folders/{folder_id}")
-async def delete_knowledge_folder(folder_id: int, current_user: dict = Depends(get_current_user)):
-    """删除文件夹"""
+async def delete_knowledge_folder(folder_id: int, current_user: dict = Depends(get_current_admin)):
+    """删除文件夹
+
+    s2 fix: 级联删除文件夹下所有文档与向量索引，限定 admin。
+    """
     existing = db.get_knowledge_folder(folder_id)
     if not existing:
         raise HTTPException(status_code=404, detail="文件夹不存在")
     db.delete_knowledge_folder(folder_id)
+    # 级联删除后标记 dirty，防止向量删除失败时旧内容仍可被检索
+    _mark_rebuild_dirty()
     return {"success": True, "message": "文件夹已删除"}
 
 
@@ -296,6 +307,8 @@ async def upload_zip(kb_id: int, file: UploadFile = File(...), current_user: dic
             except Exception as ve:
                 logger.error(f"添加到向量数据库失败: {ve}")
 
+        # 标记向量索引为 dirty，确保下次搜索时重建状态与数据库一致
+        _mark_rebuild_dirty()
         created_docs += 1
 
     zf.close()
@@ -492,7 +505,7 @@ async def import_scanned_directory(directory_name: str, kb_id: int = None, curre
                     })
                 
                 db.update_knowledge_document(document["id"], {"chunkCount": chunk_count})
-                
+
                 if VECTOR_DB_AVAILABLE and vector_docs:
                     try:
                         from app.config import get_vector_db
@@ -500,6 +513,9 @@ async def import_scanned_directory(directory_name: str, kb_id: int = None, curre
                         await asyncio.to_thread(vector_db.add_documents, vector_docs)
                     except Exception as ve:
                         logger.error(f"添加到向量数据库失败: {ve}")
+
+                # 标记向量索引为 dirty，确保下次搜索时重建状态与数据库一致
+                _mark_rebuild_dirty()
 
                 created_docs += 1
 
@@ -565,7 +581,7 @@ async def import_scanned_directory(directory_name: str, kb_id: int = None, curre
                 })
             
             db.update_knowledge_document(document["id"], {"chunkCount": chunk_count})
-            
+
             if VECTOR_DB_AVAILABLE and vector_docs:
                 try:
                     from app.config import get_vector_db
@@ -574,6 +590,8 @@ async def import_scanned_directory(directory_name: str, kb_id: int = None, curre
                 except Exception as ve:
                     logger.error(f"添加到向量数据库失败: {ve}")
 
+            # 标记向量索引为 dirty，确保下次搜索时重建状态与数据库一致
+            _mark_rebuild_dirty()
             created_docs += 1
         except Exception as e:
             errors.append(f"处理根目录文件 {file_path.name} 失败: {str(e)}")
@@ -706,6 +724,8 @@ async def create_knowledge_document(request: KnowledgeDocumentCreate, current_us
             except Exception as ve:
                 logger.error(f"添加到向量数据库失败: {ve}")
 
+        # 标记向量索引为 dirty，确保下次搜索时重建状态与数据库一致
+        _mark_rebuild_dirty()
         logger.info(f"创建知识库文档: {document['title']}, 分块数: {chunk_count}")
         return {
             "success": True,
@@ -815,6 +835,10 @@ async def update_knowledge_document(doc_id: int, request: KnowledgeDocumentUpdat
                 except Exception as ve:
                     logger.warning(f"更新向量数据库失败: {ve}")
 
+            # 内容变更后必须标记 dirty：即使 chunk 数量不变，内容指纹也会不同，
+            # 下次搜索会触发重建，避免旧向量被检索
+            _mark_rebuild_dirty()
+
         logger.info(f"更新知识库文档: {doc_id}")
         return {
             "success": True,
@@ -829,8 +853,11 @@ async def update_knowledge_document(doc_id: int, request: KnowledgeDocumentUpdat
 
 
 @router.delete("/api/knowledge/documents/{doc_id}")
-async def delete_knowledge_document(doc_id: int, current_user: dict = Depends(get_current_user)):
-    """删除知识库文档"""
+async def delete_knowledge_document(doc_id: int, current_user: dict = Depends(get_current_admin)):
+    """删除知识库文档
+
+    s2 fix: 删除文档及关联向量索引，限定 admin。
+    """
     try:
         existing_doc = db.get_knowledge_document(doc_id)
         if not existing_doc:
@@ -851,6 +878,8 @@ async def delete_knowledge_document(doc_id: int, current_user: dict = Depends(ge
                 logger.warning(f"从向量数据库删除文档失败: {ve}")
 
         db.delete_knowledge_document(doc_id)
+        # 删除后标记 dirty，防止向量删除失败时旧内容仍可被检索
+        _mark_rebuild_dirty()
         logger.info(f"删除知识库文档: {doc_id}")
         return {"success": True, "message": "文档删除成功"}
     except HTTPException:
@@ -865,70 +894,359 @@ async def delete_knowledge_document(doc_id: int, current_user: dict = Depends(ge
 # ============================================
 
 _vector_index_built = False
+_vector_index_lock = threading.Lock()
+# 独立的 revision 锁：保护 revision 自增、dirty 写入和 _vector_index_built 重置
+# 的 read-modify-write 原子性。_ensure_vector_index 的 commit 临界区（revision
+# 校验 + 写 complete + 设 _vector_index_built）也使用此锁，确保 CRUD 的
+# _mark_rebuild_dirty 与重建 commit 互斥。
+# 锁顺序约束：允许按 _vector_index_lock → _revision_lock 顺序嵌套获取
+# （_ensure_vector_index 持有 _vector_index_lock 时进入 _revision_lock 临界区）。
+# 严禁反向获取（_revision_lock 内不得请求 _vector_index_lock），否则死锁。
+_revision_lock = threading.Lock()
+
+# 重建状态键，存储在 config 表中。
+# 状态格式：
+#   "building:{expected}"                          - 重建进行中（中断后会触发重建）
+#   "complete:{count}:{fingerprint}:{revision}"    - 重建完成，count + 指纹 + revision 必须同时匹配
+#   "dirty"                                        - 文档 CUD 后标记，下次搜索必须重建
+# fingerprint 基于 chunk 内容+位置哈希，覆盖"数量不变但内容已更新"场景。
+# revision 是单调递增计数器，每次文档 CUD 自增；重建记录 start_revision，
+# 完成时仅当 current_revision == start_revision 才写入 complete，避免
+# 重建期间并发 CRUD 被旧重建任务覆盖。
+_VECTOR_REBUILD_STATUS_KEY = "vector_index_rebuild_status"
+_VECTOR_REBUILD_REVISION_KEY = "vector_index_rebuild_revision"
+_EMPTY_FINGERPRINT = "empty"
+
+
+def _get_rebuild_revision() -> int:
+    """读取当前重建修订号（单调递增）。默认 0。"""
+    raw = db.get_config_value(_VECTOR_REBUILD_REVISION_KEY, "0")
+    try:
+        return int(raw)
+    except (ValueError, TypeError):
+        return 0
+
+
+def _compute_chunk_fingerprint() -> str:
+    """计算 chunk 内容指纹，用于检测内容变更（即使 chunk 数量不变）。
+
+    指纹覆盖每个 chunk 的 (documentId, chunkIndex, content, doc_title,
+    doc_category, doc_kb_id)。使用稳定的串接顺序确保跨后端一致。
+
+    跳过孤儿 chunk（doc_title IS NULL），与 _ensure_vector_index 重建遍历、
+    _get_expected_chunk_count 的 INNER JOIN 数据集完全一致，避免"指纹含孤儿
+    但重建跳过孤儿"导致重建后指纹永远不匹配、反复重建。
+
+    为避免大库一次性加载导致 OOM，使用流式哈希：每读一批更新一次 md5。
+    """
+    import hashlib
+    h = hashlib.md5()
+    for row in db.iter_chunks_with_document(batch_size=500):
+        if row.get("doc_title") is None:
+            continue  # 孤儿 chunk，与重建遍历保持一致
+        parts = (
+            str(row.get("documentId")),
+            str(row.get("chunkIndex")),
+            row.get("content", "") or "",
+            row.get("doc_title") or "",
+            row.get("doc_category") or "",
+            str(row.get("doc_kb_id") or ""),
+        )
+        h.update("\x1f".join(parts).encode("utf-8"))
+        h.update(b"\x1e")  # 记录分隔符
+    return h.hexdigest()[:16]
+
+
+def _get_expected_chunk_count() -> int:
+    """获取数据库中"有效" chunk 的预期总数（与重建遍历范围一致）。
+
+    使用 INNER JOIN：与 _ensure_vector_index 重建时跳过孤儿 chunk 的逻辑一致，
+    避免"预期数量含孤儿但遍历跳过孤儿"导致永久不匹配、每次搜索都重建。
+    """
+    rows = db.execute_sql(
+        "SELECT COUNT(*) AS cnt FROM knowledge_chunks c "
+        "INNER JOIN knowledge_documents d ON c.documentId = d.id",
+        {},
+    )
+    return rows[0]["cnt"] if rows else 0
+
+
+def _read_rebuild_status() -> tuple[str, int, str, int]:
+    """读取重建状态，返回 (status, count, fingerprint, revision)。
+
+    status 为 'building'/'complete'/'dirty'/''。
+    count 为整数，fingerprint 为字符串，revision 为整数（仅 complete 时有意义）。
+    旧格式 "complete:{count}" / "complete:{count}:{fp}" 视为 revision 缺失（-1），
+    会触发重建。
+    """
+    raw = db.get_config_value(_VECTOR_REBUILD_STATUS_KEY, "")
+    if not raw:
+        return ("", 0, "", -1)
+    # dirty 单独处理
+    if raw == "dirty":
+        return ("dirty", 0, "", -1)
+    parts = raw.split(":")
+    if len(parts) < 2:
+        return ("", 0, "", -1)
+    status = parts[0]
+    try:
+        count = int(parts[1])
+    except (ValueError, IndexError):
+        return ("", 0, "", -1)
+    fingerprint = parts[2] if len(parts) >= 3 else ""
+    try:
+        revision = int(parts[3]) if len(parts) >= 4 else -1
+    except (ValueError, IndexError):
+        revision = -1
+    return (status, count, fingerprint, revision)
+
+
+def _write_rebuild_status(
+    status: str, count: int, fingerprint: str = "", revision: int = -1
+) -> None:
+    """写入重建状态到 config 表。
+
+    fingerprint 和 revision 仅在 status='complete' 时有意义。
+    """
+    if status == "complete" and fingerprint:
+        db.set_config_value(
+            _VECTOR_REBUILD_STATUS_KEY, f"{status}:{count}:{fingerprint}:{revision}"
+        )
+    elif fingerprint:
+        db.set_config_value(_VECTOR_REBUILD_STATUS_KEY, f"{status}:{count}:{fingerprint}")
+    else:
+        db.set_config_value(_VECTOR_REBUILD_STATUS_KEY, f"{status}:{count}")
+
+
+def _mark_rebuild_dirty() -> None:
+    """标记向量索引为脏：下次搜索必须重建。
+
+    所有文档创建/更新/删除操作应在事务提交后调用此函数。
+    即使数量未变（仅内容更新），dirty 状态也会强制重建，避免旧向量被检索。
+
+    原子性保证：revision 自增、写 dirty、重置 _vector_index_built 必须在同一
+    _revision_lock 临界区内完成。否则重建线程可能在 CRUD 设置 False 后、
+    等待锁期间把 _vector_index_built 重新设为 True，覆盖 CRUD 的 dirty 信号。
+    """
+    global _vector_index_built
+    with _revision_lock:
+        # 在锁内完成所有状态变更，确保与 _ensure_vector_index 的 commit 临界区互斥
+        _vector_index_built = False
+        try:
+            current = _get_rebuild_revision()
+            new_rev = current + 1
+            db.set_config_value(_VECTOR_REBUILD_REVISION_KEY, str(new_rev))
+            db.set_config_value(_VECTOR_REBUILD_STATUS_KEY, "dirty")
+        except Exception as e:
+            logger.warning(f"标记重建 dirty 持久化失败（内存标志已重置）: {e}")
 
 
 def _ensure_vector_index():
     """延迟重建向量索引：首次搜索时从数据库加载chunks并构建Faiss索引。
     避免在启动时阻塞服务（尤其是多worker场景下GPU显存竞争）。
+
+    C7 fix: 用 threading.Lock 保护 check-build-set 序列，防止多个并发搜索请求
+    同时观察到 _vector_index_built == False 并重复构建索引。
+
+    可靠性 fix: 重建状态 = building/complete/dirty + 数量 + 内容指纹 + revision CAS。
+    - building: 上次重建中断，下次必须重建
+    - dirty: 文档 CUD 后标记，下次必须重建（即使数量不变）
+    - complete:{count}:{fingerprint}:{revision}: 仅当 count、fingerprint、revision
+      都匹配，且 metadata 数量、FAISS ntotal、BM25 corpus 数量一致才跳过
+    - expected_count == 0 时仍调用 clear_all() 持久化空索引，防止旧磁盘文件残留
+    - revision CAS: 重建记录 start_revision，完成时仅当 current_revision ==
+      start_revision 才写入 complete，避免重建期间并发 CRUD 被旧重建任务覆盖
+    - 落盘失败（clear_all/add_documents 抛异常）不会标记 complete，状态保持 building
     """
     global _vector_index_built
+    # 双重检查：已构建时直接返回，避免每次搜索都获取锁
     if _vector_index_built:
         return True
 
-    try:
-        from app.config import VECTOR_DB_AVAILABLE
-        if not VECTOR_DB_AVAILABLE:
-            _vector_index_built = True
+    with _vector_index_lock:
+        # 再次检查：可能已被其他线程构建
+        if _vector_index_built:
             return True
 
-        from knowledge.vector_db import get_vector_db
-        vector_db = get_vector_db()
-        stats = vector_db.get_stats()
+        try:
+            from app.config import VECTOR_DB_AVAILABLE
+            if not VECTOR_DB_AVAILABLE:
+                _vector_index_built = True
+                return True
 
-        if stats["total_documents"] > 0:
-            logger.info(f"向量索引已存在: {stats['total_documents']} 个文档，跳过重建")
-            _vector_index_built = True
+            from knowledge.vector_db import get_vector_db
+            vector_db = get_vector_db()
+            stats = vector_db.get_stats()
+            expected_count = _get_expected_chunk_count()
+            status, status_count, status_fp, status_rev = _read_rebuild_status()
+            current_revision = _get_rebuild_revision()
+
+            # expected_count == 0：必须清空并持久化空索引，防止旧磁盘文件残留
+            if expected_count == 0:
+                needs_clear = (
+                    stats["total_documents"] != 0
+                    or stats["index_size"] != 0
+                    or stats["bm25_corpus_size"] != 0
+                    or status != "complete"
+                    or status_count != 0
+                    or status_rev != current_revision
+                )
+                if needs_clear:
+                    logger.info("数据库无有效 chunk，清空向量索引并持久化空索引")
+                    vector_db.clear_all()  # 失败时抛异常，不会写入 complete
+                # commit 临界区：revision 校验 + 写 complete + 设 _vector_index_built
+                # 必须原子，避免并发 CRUD 在窗口内被覆盖
+                with _revision_lock:
+                    if _get_rebuild_revision() != current_revision:
+                        logger.warning(
+                            "空库清理期间检测到并发 CRUD，不标记 complete，等待下次重建"
+                        )
+                        return False
+                    _write_rebuild_status("complete", 0, _EMPTY_FINGERPRINT, current_revision)
+                    logger.info(f"向量索引已清空并标记 complete:0:empty:{current_revision}")
+                    _vector_index_built = True
+                return True
+
+            # 跳过重建的多重校验：status + count + metadata + FAISS ntotal +
+            # BM25 corpus + fingerprint + revision 必须全部一致。
+            # 指纹计算放在数量校验通过后，避免每次搜索都全表扫描。
+            if (
+                status == "complete"
+                and status_count == expected_count
+                and status_rev == current_revision
+                and stats["total_documents"] == expected_count
+                and stats["index_size"] == expected_count
+                and stats["bm25_corpus_size"] == expected_count
+            ):
+                current_fp = _compute_chunk_fingerprint()
+                if status_fp and status_fp == current_fp:
+                    # commit 临界区：指纹计算期间可能发生 CRUD（已自增 revision），
+                    # 必须在锁内重新校验 revision 才能设置 _vector_index_built
+                    with _revision_lock:
+                        if _get_rebuild_revision() != current_revision:
+                            logger.info(
+                                "跳过检查期间检测到并发 CRUD，放弃跳过，进入重建"
+                            )
+                            # 落入下方重建分支：重新读取最新 revision
+                        else:
+                            logger.info(
+                                "向量索引已完整: %d 个文档（complete，数量+指纹+revision 匹配），跳过重建",
+                                stats["total_documents"],
+                            )
+                            _vector_index_built = True
+                            return True
+                else:
+                    logger.info(
+                        "向量索引指纹不匹配: 状态=%s, 实际=%s，需要重建",
+                        status_fp or "(空)", current_fp,
+                    )
+            else:
+                logger.info(
+                    "向量索引需要重建: 状态=%s:%d:%s:%d, 实际(meta/faiss/bm25)=%d/%d/%d, "
+                    "预期=%d, revision=%d/%d",
+                    status or "none", status_count, status_fp or "(空)", status_rev,
+                    stats["total_documents"], stats["index_size"], stats["bm25_corpus_size"],
+                    expected_count, status_rev, current_revision,
+                )
+
+            # 需要重建：重新读取最新 revision 作为 start_revision。
+            # 顶部读取的 current_revision 可能已过期（跳过分支检测到并发 CRUD
+            # 后落入此路径，或指纹计算期间发生 CRUD）。
+            start_revision = _get_rebuild_revision()
+            _write_rebuild_status("building", expected_count)
+            vector_db.clear_all()  # 失败时抛异常，状态保持 building
+
+            # 使用 JOIN 分批读取 chunk + document，避免 N+1 查询。
+            # 预加载知识库名称映射（知识库数量通常很少）。
+            kb_name_map: dict = {}
+            for kb in db.get_knowledge_bases():
+                kb_name_map[kb["id"]] = kb["name"]
+
+            batch_vector_docs = []
+            vector_batch_size = 200
+            total_chunks_indexed = 0
+            # 同时累积指纹，确保索引内容与指纹一致
+            import hashlib
+            fp_hash = hashlib.md5()
+
+            for row in db.iter_chunks_with_document(batch_size=500):
+                doc_title = row.get("doc_title")
+                if doc_title is None:
+                    continue  # 孤儿 chunk（文档已删除），跳过
+
+                folder_name = row.get("doc_category", "") or ""
+                kb_id = row.get("doc_kb_id")
+                kb_name = kb_name_map.get(kb_id, "") if kb_id else ""
+                path_prefix = f"[{kb_name}/{folder_name}]" if kb_name else f"[{folder_name}]"
+                enriched = f"{path_prefix} {doc_title}: {row['content']}"
+                batch_vector_docs.append({
+                    "id": f"doc_{row['documentId']}_chunk_{row['chunkIndex']}",
+                    "chunk_index": row["chunkIndex"],
+                    "title": doc_title,
+                    "content": enriched,
+                    "document_id": row["documentId"],
+                    "category": folder_name,
+                    "knowledge_base_id": kb_id,
+                })
+
+                # 同步累积指纹（与 _compute_chunk_fingerprint 一致，均跳过孤儿）
+                parts = (
+                    str(row.get("documentId")),
+                    str(row.get("chunkIndex")),
+                    row.get("content", "") or "",
+                    row.get("doc_title") or "",
+                    row.get("doc_category") or "",
+                    str(row.get("doc_kb_id") or ""),
+                )
+                fp_hash.update("\x1f".join(parts).encode("utf-8"))
+                fp_hash.update(b"\x1e")
+
+                # 攒够一批立即写入，释放内存
+                if len(batch_vector_docs) >= vector_batch_size:
+                    vector_db.add_documents(batch_vector_docs)  # 落盘失败时抛异常
+                    total_chunks_indexed += len(batch_vector_docs)
+                    batch_vector_docs = []
+
+            # 写入最后一批
+            if batch_vector_docs:
+                vector_db.add_documents(batch_vector_docs)
+                total_chunks_indexed += len(batch_vector_docs)
+
+            # 完整性校验：写入数量必须 == 预期数量（孤儿 chunk 已在 INNER JOIN 排除）
+            if total_chunks_indexed != expected_count:
+                logger.error(
+                    "向量索引重建数量不匹配: 已写入 %d, 预期 %d，保持 building 状态等待下次重建",
+                    total_chunks_indexed, expected_count,
+                )
+                return False
+
+            # 落盘保证：当 save_on_every_n_adds > 0 且未达阈值时，内存索引完整
+            # 但磁盘仍为空。flush() 强制持久化，异常向上传播（不标记 complete）。
+            vector_db.flush()
+
+            # commit 临界区：revision 校验 + 写 complete + 设 _vector_index_built
+            # 必须在同一 _revision_lock 内原子完成。否则 CRUD 可能在
+            # final_revision 读取后、complete 写入前发生，旧重建会覆盖 dirty。
+            final_fp = fp_hash.hexdigest()[:16]
+            with _revision_lock:
+                final_revision = _get_rebuild_revision()
+                if final_revision != start_revision:
+                    logger.warning(
+                        "重建期间检测到并发 CRUD: start_revision=%d, current=%d，"
+                        "不标记 complete，保持 building 等待下次重建",
+                        start_revision, final_revision,
+                    )
+                    return False
+                _write_rebuild_status("complete", total_chunks_indexed, final_fp, start_revision)
+                logger.info(
+                    f"向量索引重建完成: {total_chunks_indexed} 个 chunks"
+                    f"（数量+指纹+revision CAS 校验通过，revision={start_revision}）"
+                )
+                _vector_index_built = True
             return True
-
-        logger.info("向量索引为空，从数据库重建...")
-        chunks = db.get_all_knowledge_chunks()
-        if not chunks:
-            logger.info("数据库中无知识库chunks，跳过向量索引重建")
-            _vector_index_built = True
-            return True
-
-        all_docs = {doc["id"]: doc for doc in db.get_knowledge_documents(limit=10000)}
-        vector_docs = []
-        for chunk in chunks:
-            doc = all_docs.get(chunk.get("documentId"))
-            if not doc:
-                continue
-            kb_name = ""
-            folder_name = doc.get("category", "")
-            if doc.get("knowledge_base_id"):
-                kb = db.get_knowledge_base(doc["knowledge_base_id"])
-                if kb:
-                    kb_name = kb["name"]
-            path_prefix = f"[{kb_name}/{folder_name}]" if kb_name else f"[{folder_name}]"
-            enriched = f"{path_prefix} {doc['title']}: {chunk['content']}"
-            vector_docs.append({
-                "id": f"doc_{chunk['documentId']}_chunk_{chunk['chunkIndex']}",
-                "chunk_index": chunk["chunkIndex"],
-                "title": doc["title"],
-                "content": enriched,
-                "document_id": chunk["documentId"],
-                "category": folder_name,
-                "knowledge_base_id": doc.get("knowledge_base_id"),
-            })
-
-        if vector_docs:
-            vector_db.add_documents(vector_docs)
-            logger.info(f"向量索引重建完成: {len(vector_docs)} 个chunks")
-        _vector_index_built = True
-        return True
-    except Exception as e:
-        logger.warning(f"向量索引重建失败: {e}")
-        return False
+        except Exception as e:
+            logger.warning(f"向量索引重建失败: {e}")
+            return False
 
 
 @router.post("/api/knowledge/search")
@@ -952,33 +1270,47 @@ async def search_knowledge(request: KnowledgeSearchRequest):
                 filters = {"knowledge_base_id": matched[0]["id"]}
                 logger.info(f"搜索过滤: 知识库「{request.knowledgeBaseName}」(id={matched[0]['id']})")
             else:
-                logger.warning(f"未找到知识库「{request.knowledgeBaseName}」，不应用过滤")
+                # fail-closed: 用户明确指定的知识库不存在时不应退化为全库搜索，
+                # 否则会返回其他知识库的内容。返回空结果。
+                logger.warning(
+                    f"未找到知识库「{request.knowledgeBaseName}」，返回空结果（不退化为全库搜索）"
+                )
+                return {"success": True, "query": query, "results": [], "searchType": "empty"}
 
         # 首次搜索时确保向量索引已构建（同步操作，放线程池避免阻塞事件循环）
-        await asyncio.to_thread(_ensure_vector_index)
+        # _ensure_vector_index 返回 False 表示重建失败（落盘失败、数量不一致、
+        # 并发 CRUD 等）。此时不能继续 RAG/向量检索，否则会从部分重建或过期
+        # 索引返回结果。降级到 DB 关键词检索，并记录结构化告警。
+        index_ready = await asyncio.to_thread(_ensure_vector_index)
 
         # 优先使用 RAGHelper 完整管线（retrieve_context 是同步阻塞的 CPU 密集型操作）
-        try:
-            from knowledge.rag_helper import get_rag_helper
-            rag = get_rag_helper()
-            results = await asyncio.to_thread(rag.retrieve_context, query, top_k, True, filters, None)
-            if results:
-                formatted = []
-                for r in results:
-                    formatted.append({
-                        "documentId": r.get("id"),
-                        "documentTitle": r.get("title", ""),
-                        "chunkIndex": r.get("chunk_index", 0),
-                        "content": r.get("content", ""),
-                        "score": r.get("normalized_score", r.get("score", 0)),
-                        "searchType": "rag_pipeline"
-                    })
-                return {"success": True, "query": query, "results": formatted, "searchType": "rag_pipeline"}
-        except Exception as e:
-            logger.warning(f"RAGHelper检索失败，回退向量检索: {e}")
+        if index_ready:
+            try:
+                from knowledge.rag_helper import get_rag_helper
+                rag = get_rag_helper()
+                results = await asyncio.to_thread(rag.retrieve_context, query, top_k, True, filters, None)
+                if results:
+                    formatted = []
+                    for r in results:
+                        formatted.append({
+                            "documentId": r.get("id"),
+                            "documentTitle": r.get("title", ""),
+                            "chunkIndex": r.get("chunk_index", 0),
+                            "content": r.get("content", ""),
+                            "score": r.get("normalized_score", r.get("score", 0)),
+                            "searchType": "rag_pipeline"
+                        })
+                    return {"success": True, "query": query, "results": formatted, "searchType": "rag_pipeline"}
+            except Exception as e:
+                logger.warning(f"RAGHelper检索失败，回退向量检索: {e}")
+        else:
+            logger.warning(
+                "vector_index_not_ready action=degrade_to_keyword "
+                "reason=rebuild_returned_false"
+            )
 
         # 回退：向量检索（hybrid_search 同步阻塞，放线程池）
-        if VECTOR_DB_AVAILABLE:
+        if index_ready and VECTOR_DB_AVAILABLE:
             try:
                 from app.config import get_vector_db
                 vector_db = get_vector_db()
@@ -1001,38 +1333,59 @@ async def search_knowledge(request: KnowledgeSearchRequest):
                 logger.warning(f"向量检索失败: {ve}")
 
         # 最终回退：关键词匹配（支持分词匹配，提高召回率）
+        # 关键词回退是同步阻塞的 CPU/IO 密集型操作（全库扫描），在 async
+        # 接口内直接执行会阻塞事件循环。放到线程池执行。
         logger.info("回退到关键词匹配")
-        query_lower = query.lower()
-        # 提取查询中的关键词（中文单字+英文单词）
-        import re as _re
-        query_keywords = _re.findall(r'[\u4e00-\u9fff]|[a-zA-Z]+', query_lower)
-        all_chunks = db.get_all_knowledge_chunks()
-        all_docs = {doc["id"]: doc for doc in db.get_knowledge_documents(limit=1000)}
-        results = []
-        for chunk in all_chunks:
-            content = chunk["content"].lower()
-            doc = all_docs.get(chunk["documentId"])
-            if not doc:
-                continue
-            # 完整匹配
-            score = content.count(query_lower) * 0.5
-            if query_lower in doc["title"].lower():
-                score += 1.0
-            # 分词匹配：每个关键词命中加分
-            for kw in query_keywords:
-                if len(kw) >= 2 or (len(kw) == 1 and '\u4e00' <= kw <= '\u9fff'):
-                    score += content.count(kw) * 0.2
-                    if kw in doc["title"].lower():
-                        score += 0.5
-            if score > 0:
-                results.append({
-                    "documentId": chunk["documentId"], "documentTitle": doc["title"],
-                    "chunkIndex": chunk["chunkIndex"], "content": chunk["content"],
-                    "score": round(score, 2), "searchType": "keyword"
-                })
-        results.sort(key=lambda x: x["score"], reverse=True)
-        results = results[:top_k]
-        return {"success": True, "query": query, "results": results, "searchType": "keyword"}
+
+        def _keyword_fallback():
+            query_lower = query.lower()
+            # 提取查询中的关键词（中文单字+英文单词）
+            import re as _re
+            import heapq
+            query_keywords = _re.findall(r'[\u4e00-\u9fff]|[a-zA-Z]+', query_lower)
+            # 关键词降级必须继承知识库过滤条件，否则会在用户指定 knowledgeBaseName
+            # 时返回其他知识库的内容。target_kb_id 来自上层构造的 filters。
+            target_kb_id = filters.get("knowledge_base_id") if filters else None
+            # 使用 JOIN 分批读取 chunk + document，避免 N+1 查询。
+            # 使用大小受限的 top-k 堆，扫描完整集合但内存占用恒定为 O(top_k)。
+            top_heap: list[tuple[float, int, dict]] = []
+            seq = 0  # 序号作为 tie-breaker，避免 dict 比较
+            for row in db.iter_chunks_with_document(batch_size=500):
+                doc_title = row.get("doc_title")
+                if doc_title is None:
+                    continue  # 孤儿 chunk
+                # 继承上层知识库过滤条件，避免降级路径泄漏其他知识库内容
+                if target_kb_id is not None and row.get("doc_kb_id") != target_kb_id:
+                    continue
+                content = row["content"].lower()
+                # 完整匹配
+                score = content.count(query_lower) * 0.5
+                if query_lower in doc_title.lower():
+                    score += 1.0
+                # 分词匹配：每个关键词命中加分
+                for kw in query_keywords:
+                    if len(kw) >= 2 or (len(kw) == 1 and '\u4e00' <= kw <= '\u9fff'):
+                        score += content.count(kw) * 0.2
+                        if kw in doc_title.lower():
+                            score += 0.5
+                if score > 0:
+                    seq += 1
+                    item = {
+                        "documentId": row["documentId"], "documentTitle": doc_title,
+                        "chunkIndex": row["chunkIndex"], "content": row["content"],
+                        "score": round(score, 2), "searchType": "keyword"
+                    }
+                    # 维护 top_k 堆：堆大小超过 top_k 时弹出最小元素
+                    if len(top_heap) < top_k:
+                        heapq.heappush(top_heap, (item["score"], seq, item))
+                    else:
+                        heapq.heappushpop(top_heap, (item["score"], seq, item))
+            # 堆中元素按分数降序输出
+            top_heap.sort(key=lambda x: x[0], reverse=True)
+            results = [item for _, _, item in top_heap]
+            return {"success": True, "query": query, "results": results, "searchType": "keyword"}
+
+        return await asyncio.to_thread(_keyword_fallback)
     except Exception as e:
         logger.error(f"搜索知识库失败: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -1073,7 +1426,8 @@ async def generate_intent_samples(request: dict = None, current_user: dict = Dep
 
         status = get_generation_status()
         if status["running"]:
-            return {"success": False, "error": "样本生成正在进行中"}
+            # C5 fix: 冲突状态应用 409，而非 200+success=False
+            raise HTTPException(status_code=409, detail="样本生成正在进行中")
 
         params = request or {}
         kb_ids = params.get("kb_ids", [])
@@ -1083,6 +1437,10 @@ async def generate_intent_samples(request: dict = None, current_user: dict = Dep
 
         asyncio.create_task(generate_samples(kb_ids, samples_per_kb, negative_count, lora_name))
         return {"success": True, "message": "样本生成已启动"}
+    except HTTPException:
+        # C9 fix: C5 引入的 409 必须在 except Exception 之前 re-raise，
+        # 否则会被改写为 500，前端无法识别"冲突"语义
+        raise
     except Exception as e:
         logger.error(f"启动样本生成失败: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -1161,20 +1519,27 @@ async def add_intent_sample(request: dict, current_user: dict = Depends(get_curr
 
 
 @router.post("/api/knowledge/train-intent")
-async def train_intent_classifier(request: dict = None, current_user: dict = Depends(get_current_user)):
-    """使用已审查的样本训练多分类模型"""
+async def train_intent_classifier(request: dict = None, current_user: dict = Depends(get_current_admin)):
+    """使用已审查的样本训练多分类模型
+
+    s2 fix: 触发模型训练消耗计算资源，限定 admin。
+    """
     try:
         from knowledge.intent_trainer import train_intent_classifier as do_train, get_training_status
 
         status = get_training_status()
         if status["running"]:
-            return {"success": False, "error": "训练正在进行中"}
+            # C5 fix: 冲突状态应用 409，而非 200+success=False
+            raise HTTPException(status_code=409, detail="训练正在进行中")
 
         params = request or {}
         kb_ids = params.get("kb_ids")
 
         asyncio.create_task(do_train(kb_ids=kb_ids))
         return {"success": True, "message": "训练已启动"}
+    except HTTPException:
+        # C9 fix: C5 引入的 409 必须在 except Exception 之前 re-raise
+        raise
     except Exception as e:
         logger.error(f"启动意图训练失败: {e}")
         raise HTTPException(status_code=500, detail=str(e))

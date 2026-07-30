@@ -1,0 +1,222 @@
+{
+  "plan_version": 2,
+  "created_at": "2026-07-25T20:54:05",
+  "source_pool_path": "backend/data/character_dialogues/experiments/v3/llm_v4_judged/v3_negative_pool.jsonl",
+  "source_pool_sha256": "81c4b5334d28fbe68ca9ecbc3bddf918ba14c891644cf45b1dcbed8d7e8adabd",
+  "source_pool_total": 111,
+  "target_total": 30,
+  "min_per_scene": 2,
+  "scenes_count": 11,
+  "selected_total": 30,
+  "scenes": {
+    "书籍讨论": {
+      "available": 40,
+      "quota": 5,
+      "sample_spec_ids": [
+        "kisaki_v3neg_书籍讨论_000",
+        "kisaki_v3neg_书籍讨论_008",
+        "kisaki_v3neg_书籍讨论_016",
+        "kisaki_v3neg_书籍讨论_024",
+        "kisaki_v3neg_书籍讨论_032"
+      ]
+    },
+    "回忆故事": {
+      "available": 1,
+      "quota": 1,
+      "sample_spec_ids": [
+        "kisaki_v3neg_回忆故事_000"
+      ]
+    },
+    "幽默互怼": {
+      "available": 24,
+      "quota": 6,
+      "sample_spec_ids": [
+        "kisaki_v3neg_幽默互怼_000",
+        "kisaki_v3neg_幽默互怼_004",
+        "kisaki_v3neg_幽默互怼_008",
+        "kisaki_v3neg_幽默互怼_012",
+        "kisaki_v3neg_幽默互怼_016",
+        "kisaki_v3neg_幽默互怼_020"
+      ]
+    },
+    "情感倾诉": {
+      "available": 5,
+      "quota": 2,
+      "sample_spec_ids": [
+        "kisaki_v3neg_情感倾诉_000",
+        "kisaki_v3neg_情感倾诉_002"
+      ]
+    },
+    "日常场景": {
+      "available": 1,
+      "quota": 1,
+      "sample_spec_ids": [
+        "kisaki_v3neg_日常场景_000"
+      ]
+    },
+    "日常问候": {
+      "available": 10,
+      "quota": 3,
+      "sample_spec_ids": [
+        "kisaki_v3neg_日常问候_000",
+        "kisaki_v3neg_日常问候_003",
+        "kisaki_v3neg_日常问候_006"
+      ]
+    },
+    "求助建议": {
+      "available": 5,
+      "quota": 2,
+      "sample_spec_ids": [
+        "kisaki_v3neg_求助建议_000",
+        "kisaki_v3neg_求助建议_002"
+      ]
+    },
+    "突发奇想": {
+      "available": 5,
+      "quota": 2,
+      "sample_spec_ids": [
+        "kisaki_v3neg_突发奇想_000",
+        "kisaki_v3neg_突发奇想_002"
+      ]
+    },
+    "观点讨论": {
+      "available": 17,
+      "quota": 5,
+      "sample_spec_ids": [
+        "kisaki_v3neg_观点讨论_000",
+        "kisaki_v3neg_观点讨论_003",
+        "kisaki_v3neg_观点讨论_006",
+        "kisaki_v3neg_观点讨论_010",
+        "kisaki_v3neg_观点讨论_013"
+      ]
+    },
+    "角色设定": {
+      "available": 2,
+      "quota": 2,
+      "sample_spec_ids": [
+        "kisaki_v3neg_角色设定_000",
+        "kisaki_v3neg_角色设定_001"
+      ]
+    },
+    "闲聊吐槽": {
+      "available": 1,
+      "quota": 1,
+      "sample_spec_ids": [
+        "kisaki_v3neg_闲聊吐槽_000"
+      ]
+    }
+  },
+  "ordered_sample_spec_ids": [
+    "kisaki_v3neg_书籍讨论_000",
+    "kisaki_v3neg_回忆故事_000",
+    "kisaki_v3neg_幽默互怼_000",
+    "kisaki_v3neg_情感倾诉_000",
+    "kisaki_v3neg_日常场景_000",
+    "kisaki_v3neg_日常问候_000",
+    "kisaki_v3neg_求助建议_000",
+    "kisaki_v3neg_突发奇想_000",
+    "kisaki_v3neg_观点讨论_000",
+    "kisaki_v3neg_角色设定_000",
+    "kisaki_v3neg_闲聊吐槽_000",
+    "kisaki_v3neg_书籍讨论_008",
+    "kisaki_v3neg_幽默互怼_004",
+    "kisaki_v3neg_情感倾诉_002",
+    "kisaki_v3neg_日常问候_003",
+    "kisaki_v3neg_求助建议_002",
+    "kisaki_v3neg_突发奇想_002",
+    "kisaki_v3neg_观点讨论_003",
+    "kisaki_v3neg_角色设定_001",
+    "kisaki_v3neg_书籍讨论_016",
+    "kisaki_v3neg_幽默互怼_008",
+    "kisaki_v3neg_日常问候_006",
+    "kisaki_v3neg_观点讨论_006",
+    "kisaki_v3neg_书籍讨论_024",
+    "kisaki_v3neg_幽默互怼_012",
+    "kisaki_v3neg_观点讨论_010",
+    "kisaki_v3neg_书籍讨论_032",
+    "kisaki_v3neg_幽默互怼_016",
+    "kisaki_v3neg_观点讨论_013",
+    "kisaki_v3neg_幽默互怼_020"
+  ],
+  "style_targets": {
+    "meta_narrative": {
+      "target_share": 0.15,
+      "note": "samples where 1 meta-narrative word is character-appropriate (书籍讨论/角色设定/观点讨论/突发奇想/回忆故事)"
+    },
+    "laughter_diversity": {
+      "target_kinds": [
+        "呼呼呼",
+        "噗噗",
+        "哎呀"
+      ],
+      "note": "at least 2 distinct laughter kinds across the calibration set"
+    },
+    "sharp_expression": {
+      "target_count": 5,
+      "note": "samples containing sharp sarcastic expressions (恕我拒绝/你疯了吗/这可不行/太危险)"
+    },
+    "zheng_yin_ci": {
+      "target_max_per_sample": 1,
+      "target_share_le_0_3": 0.7,
+      "note": "正因如此 should appear in <=30% of samples, at most once per sample"
+    },
+    "length_distribution": {
+      "target_short_share": 0.68,
+      "short_range": "10-40 chars",
+      "note": "68%+ of assistant turns should be 10-40 chars (matches original character style)"
+    }
+  },
+  "pool_warnings": [
+    {
+      "scene": "回忆故事",
+      "available": 1,
+      "formal_min_required": 8,
+      "severity": "critical",
+      "message": "scene '回忆故事' has only 1 sample(s) in the pool; formal training set requires >= 8. Pilot calibration can proceed but the final 111-sample training set needs new human prompt specs for this scene."
+    },
+    {
+      "scene": "情感倾诉",
+      "available": 5,
+      "formal_min_required": 8,
+      "severity": "major",
+      "message": "scene '情感倾诉' has only 5 sample(s) in the pool; formal training set requires >= 8. Pilot calibration can proceed but the final 111-sample training set needs new human prompt specs for this scene."
+    },
+    {
+      "scene": "日常场景",
+      "available": 1,
+      "formal_min_required": 8,
+      "severity": "critical",
+      "message": "scene '日常场景' has only 1 sample(s) in the pool; formal training set requires >= 8. Pilot calibration can proceed but the final 111-sample training set needs new human prompt specs for this scene."
+    },
+    {
+      "scene": "求助建议",
+      "available": 5,
+      "formal_min_required": 8,
+      "severity": "major",
+      "message": "scene '求助建议' has only 5 sample(s) in the pool; formal training set requires >= 8. Pilot calibration can proceed but the final 111-sample training set needs new human prompt specs for this scene."
+    },
+    {
+      "scene": "突发奇想",
+      "available": 5,
+      "formal_min_required": 8,
+      "severity": "major",
+      "message": "scene '突发奇想' has only 5 sample(s) in the pool; formal training set requires >= 8. Pilot calibration can proceed but the final 111-sample training set needs new human prompt specs for this scene."
+    },
+    {
+      "scene": "角色设定",
+      "available": 2,
+      "formal_min_required": 8,
+      "severity": "critical",
+      "message": "scene '角色设定' has only 2 sample(s) in the pool; formal training set requires >= 8. Pilot calibration can proceed but the final 111-sample training set needs new human prompt specs for this scene."
+    },
+    {
+      "scene": "闲聊吐槽",
+      "available": 1,
+      "formal_min_required": 8,
+      "severity": "critical",
+      "message": "scene '闲聊吐槽' has only 1 sample(s) in the pool; formal training set requires >= 8. Pilot calibration can proceed but the final 111-sample training set needs new human prompt specs for this scene."
+    }
+  ],
+  "pool_sufficiency_note": "Pool has 111 samples across 11 scenes. Formal training set requires >=8 per scene (88 minimum total). Pool is INSUFFICIENT for the formal training set; new human prompt specs are required before Stage E.",
+  "formal_min_per_scene": 8
+}

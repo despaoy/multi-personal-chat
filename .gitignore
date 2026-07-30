@@ -14,6 +14,8 @@ node_modules/
 coverage/
 *.lcov
 .nyc_output
+.pytest_cache/
+.pytest_v4_verify_*/
 
 # === Environment variables (敏感配置) ===
 .env
@@ -110,11 +112,15 @@ backend/.test_tmp/
 
 # === 模型文件（大文件，不提交）===
 backend/models/
+models/
 *.safetensors
 *.bin
 *.gguf
 *.pt
 *.pth
+
+# === Smoke/trial run outputs (non-authoritative, not for production) ===
+backend/data/character_dialogues/experiments/v3/llm_v4_judged_smoke*/
 
 # === LoRA 适配器 ===
 backend/loras/
@@ -190,3 +196,9 @@ ssh_*.py
 # === 一次性生成的 Wiki/报告（可选保留）===
 # docs/architecture/CODE_WIKI.md
 # docs/research/archive/REAL_VLLM_BENCHMARK_REPORT.md
+
+# === Codex PPT 审查临时目录 ===
+.codex_ppt_review/
+
+# === Kisaki v4 测试临时目录 ===
+.test_tmp_kisaki_v4/

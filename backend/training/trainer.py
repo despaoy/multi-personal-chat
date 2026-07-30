@@ -99,8 +99,9 @@ class GpuTemperatureCallback(TrainerCallback):
             try:
                 handle = pynvml.nvmlDeviceGetHandleByIndex(0)
                 return float(pynvml.nvmlDeviceGetTemperature(handle, pynvml.NVML_TEMPERATURE_GPU))
-            except Exception:
-                pass
+            except Exception as e:
+                # H3 fix: 此前静默吞噬，GPU 温度监控失败时无法排障
+                logger.warning("pynvml GPU 温度读取失败: %s", e)
         try:
             import subprocess
             result = subprocess.run(
@@ -109,8 +110,9 @@ class GpuTemperatureCallback(TrainerCallback):
             )
             if result.returncode == 0 and result.stdout.strip():
                 return float(result.stdout.strip().split('\n')[0].strip())
-        except Exception:
-            pass
+        except Exception as e:
+            # H3 fix: nvidia-smi 兜底也失败时记录日志
+            logger.warning("nvidia-smi GPU 温度读取失败: %s", e)
         return -1.0
 
     def on_step_end(self, args, state, control, **kwargs):

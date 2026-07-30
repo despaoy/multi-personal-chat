@@ -1,8 +1,8 @@
-"""用户数据持久化API"""
+﻿"""用户数据持久化API"""
 
 from fastapi import APIRouter, HTTPException, Depends
 
-from db.models import UserDataRequest
+from db.schemas import UserDataRequest
 from db.adapter import db
 from app.dependencies import get_current_user
 

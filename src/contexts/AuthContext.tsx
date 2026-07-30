@@ -37,7 +37,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (res.ok) {
         const data = await res.json();
         if (data.user) {
-          const userData: User = { id: data.user.id, username: data.user.username, created_at: data.user.created_at || '' };
+          // M3 fix: 捕获后端返回的 role 字段，供侧栏按角色过滤导航项
+          const userData: User = {
+            id: data.user.id,
+            username: data.user.username,
+            created_at: data.user.created_at || '',
+            role: data.user.role === 'admin' ? 'admin' : 'user',
+          };
           localStorage.setItem('qq_assistant_user', JSON.stringify(userData));
           setUser(userData);
         }
@@ -73,9 +79,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     const data = await response.json();
     // Only store non-sensitive user info (never store token)
-    const userData = { id: data.user.id, username: data.user.username };
+    // M3 fix: 捕获 role，供侧栏按角色过滤
+    const userData: User = {
+      id: data.user.id,
+      username: data.user.username,
+      created_at: data.user.created_at || '',
+      role: data.user.role === 'admin' ? 'admin' : 'user',
+    };
     localStorage.setItem('qq_assistant_user', JSON.stringify(userData));
-    setUser(data.user);
+    setUser(userData);
   }, []);
 
   const register = useCallback(async (username: string, password: string) => {
@@ -97,9 +109,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     const data = await response.json();
     // Only store non-sensitive user info (never store token)
-    const userData = { id: data.user.id, username: data.user.username };
+    // M3 fix: 捕获 role，供侧栏按角色过滤
+    const userData: User = {
+      id: data.user.id,
+      username: data.user.username,
+      created_at: data.user.created_at || '',
+      role: data.user.role === 'admin' ? 'admin' : 'user',
+    };
     localStorage.setItem('qq_assistant_user', JSON.stringify(userData));
-    setUser(data.user);
+    setUser(userData);
   }, []);
 
   const logout = useCallback(() => {

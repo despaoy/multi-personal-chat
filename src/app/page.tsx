@@ -9,6 +9,7 @@
  */
 
 import { AppLayout } from '@/components/layout/AppLayout';
+import { AuthGuard } from '@/components/layout/AuthGuard';
 import DashboardClient from './DashboardClient';
 
 /** 页面 SEO 元数据 */
@@ -22,12 +23,18 @@ export const metadata = {
  *
  * 负责：
  * - 导出页面 metadata（仅服务器组件可用）
- * - 组装 AppLayout 与 DashboardClient
+ * - 组装 AuthGuard + AppLayout 与 DashboardClient
+ *
+ * M2 fix: 仪表盘作为应用首页，此前是唯一未受 AuthGuard 保护的页面，
+ * 未登录用户可直接访问并触发后续 API 调用。现统一用 AuthGuard 包裹，
+ * 并配合 src/middleware.ts 做集中式路由守卫，形成双层防护。
  */
 export default function Dashboard() {
   return (
-    <AppLayout>
-      <DashboardClient />
-    </AppLayout>
+    <AuthGuard>
+      <AppLayout>
+        <DashboardClient />
+      </AppLayout>
+    </AuthGuard>
   );
 }

@@ -9,20 +9,25 @@ import logging
 from typing import Dict, Any
 from fastapi import APIRouter, HTTPException, Depends
 from app.dependencies import get_current_user
-from db.models import MessageRequest, GenerateResponse
+from db.schemas import MessageRequest, GenerateResponse
 from infra.concurrency_control import InferenceQueueFull, inference_runtime
 from infra.security_utils import strip_control_chars
 from inference.lora_utils import resolve_lora_served_name
 from infra.observability import increment, log_event, set_consecutive
 
 from db.adapter import db
-from db.database import LORA_PATH_MAP
+from db.database import LORA_PATH_MAP, get_lora_path_by_id
 from app.config import (
     llm_semaphore, circuit_breaker_registry, load_balancer_mgr,
-    response_cache, rate_limiter, failover_mgr,
+    response_cache, rate_limiter,
     INPUT_VALIDATOR_AVAILABLE,
     CIRCUIT_BREAKER_AVAILABLE,
+    is_vllm_enabled, get_vllm_served_model_name,
 )
+# C-F1 fix: failover_mgr 在 lifespan 中通过 app.config.failover_mgr = ...
+# 赋值，导入时绑定到 None 会永远看不到实例。改为动态访问模块属性。
+from app import config as _app_config
+_failover_mgr = lambda: _app_config.failover_mgr
 
 if INPUT_VALIDATOR_AVAILABLE:
     from infra.input_validator import InputValidator, MESSAGE_SCHEMA
@@ -107,7 +112,10 @@ def _resolve_kb_id(kb_name: str):
 
 
 async def _ensure_vllm():
-    """延迟初始化 vLLM 客户端，确保 .env 已加载（带锁防竞态）"""
+    """延迟初始化 vLLM 客户端，确保 .env 已加载（带锁防竞态）。
+
+    复用 inference.vllm_client 的全局单例，避免重复创建连接池与熔断器。
+    """
     global _vllm_client, _vllm_initialized
     if _vllm_initialized and _vllm_client:
         return True
@@ -118,16 +126,21 @@ async def _ensure_vllm():
         if _vllm_initialized:
             return False
         _vllm_initialized = True
-        vllm_enabled = (
-            os.getenv("VLLM_ENABLED", "").lower() == "true"
-            or bool(os.getenv("VLLM_BASE_URLS", "").strip())
-            or bool(os.getenv("VLLM_BASE_URL", "").strip())
-        )
-        if vllm_enabled:
+        # D-1 fix: 统一使用 app.config.is_vllm_enabled() 判定
+        from app.config import is_vllm_enabled
+        if is_vllm_enabled():
             try:
-                from inference.vllm_client import VLLMClient
-                _vllm_client = VLLMClient()
-                logger.info("✅ vLLM 客户端初始化成功")
+                # 复用全局共享单例，避免与 bot.py 各自创建独立连接池
+                from inference.vllm_client import get_vllm_client as _get_shared
+                _vllm_client = await _get_shared()
+                logger.info("✅ vLLM 客户端初始化成功(共享单例)")
+                # I-2 fix: 同步 VLLMClient 实例统计到 load_balancer_mgr，
+                # 使 /api/enhanced/load-balancer/stats 返回真实数据
+                if load_balancer_mgr:
+                    try:
+                        load_balancer_mgr.sync_from_vllm_client(_vllm_client)
+                    except Exception as sync_err:
+                        logger.debug(f"同步 VLLMClient 统计到 load_balancer_mgr 失败: {sync_err}")
                 return True
             except Exception as e:
                 logger.warning(f"vLLM 客户端初始化失败: {e}")
@@ -139,6 +152,25 @@ async def get_vllm_client():
     return _vllm_client
 
 
+async def close_vllm_client():
+    """关闭 vLLM 客户端连接池，应在应用 shutdown 阶段调用。
+
+    C10 fix: _vllm_client 是 generate.py 模块级独立单例，不被 ModelManager 管理，
+    需单独关闭以释放 httpx.AsyncClient 连接池。
+    现复用全局单例后，由 close_shared_vllm_client() 统一管理生命周期。
+    """
+    global _vllm_client, _vllm_initialized
+    _vllm_client = None
+    _vllm_initialized = False
+    # 关闭由 main.py lifespan 调用 close_shared_vllm_client() 统一处理
+    try:
+        from inference.vllm_client import close_shared_vllm_client
+        await close_shared_vllm_client()
+        logger.info("vLLM 客户端已关闭(共享单例)")
+    except Exception as e:
+        logger.warning(f"关闭 vLLM 客户端失败: {e}")
+
+
 router = APIRouter()
 
 
@@ -148,9 +180,7 @@ def _response_cache_keys(request: MessageRequest, lora_name: str) -> tuple[str, 
         config = db.config or {}
     except Exception:
         config = {}
-    model_name = os.getenv(
-        "VLLM_SERVED_MODEL_NAME", os.getenv("VLLM_MODEL", "qwen3-8b-instruct-awq")
-    )
+    model_name = get_vllm_served_model_name()
     use_knowledge_base = bool(config.get("useKnowledgeBase", True))
     identity = {
         "model": model_name,
@@ -174,6 +204,18 @@ async def generate_reply_core(request: MessageRequest, current_user: dict | None
     request.traceId = request.traceId or uuid.uuid4().hex
     if _is_high_risk_prompt(request.message):
         return _security_policy_response()
+
+    # C11 fix: 主聊天端点 mock provider 防护
+    # 此前仅 training/generate-dialogues 有此检查，主聊天端点遗漏，
+    # 导致生产环境默认 mock 时静默返回罐头回复。现统一拦截。
+    from inference.model_manager import get_model_manager
+    _mgr = get_model_manager()
+    if _mgr._current_provider.value == "mock":
+        raise HTTPException(
+            status_code=503,
+            detail="当前模型提供商为 mock 模式，无法提供真实推理。"
+                   "请在设置页面配置有效的模型提供商（如 vLLM / DeepSeek API / Ollama）。"
+        )
 
     if rate_limiter:
         limit_key = f"generate:{request.sessionId}" if request.sessionType == "group" else f"generate:private:{request.userId}"
@@ -264,7 +306,7 @@ async def generate_reply_core(request: MessageRequest, current_user: dict | None
             reply, used_rag, rag_meta = await _generate_with_vllm(request, vllm_effective_lora, vllm_lora_name)
             cost_time = round(time.time() - start_time, 2)
 
-            model_label = f"vllm/{os.getenv('VLLM_SERVED_MODEL_NAME', os.getenv('VLLM_MODEL', 'qwen3-8b-instruct-awq'))}"
+            model_label = f"vllm/{get_vllm_served_model_name()}"
             await _record_model_invocation(request, model_label, lora_name, cost_time, used_rag=used_rag, completion_text=reply)
             await _save_message(request, reply, "vllm", lora_name, cost_time)
             set_consecutive("model_failure", True)
@@ -272,7 +314,7 @@ async def generate_reply_core(request: MessageRequest, current_user: dict | None
 
             result = GenerateResponse(
                 reply=reply,
-                model=f"vllm/{os.getenv('VLLM_SERVED_MODEL_NAME', os.getenv('VLLM_MODEL', 'qwen3-8b-instruct-awq'))}",
+                model=f"vllm/{get_vllm_served_model_name()}",
                 costTime=cost_time,
                 citations=rag_meta.get("citations"),
                 confidence=rag_meta.get("confidence"),
@@ -291,7 +333,7 @@ async def generate_reply_core(request: MessageRequest, current_user: dict | None
             return result
         except Exception as e:
             failed_cost = round(time.time() - start_time, 2)
-            model_label = f"vllm/{os.getenv('VLLM_SERVED_MODEL_NAME', os.getenv('VLLM_MODEL', 'qwen3-8b-instruct-awq'))}"
+            model_label = f"vllm/{get_vllm_served_model_name()}"
             await _record_model_invocation(
                 request,
                 model_label,
@@ -333,8 +375,12 @@ async def generate_reply_core(request: MessageRequest, current_user: dict | None
 
         try:
             async with _local_model_lock:
-                if selected_lora and selected_lora["id"] in LORA_PATH_MAP:
-                    lora_path = LORA_PATH_MAP[selected_lora["id"]]
+                # C-R1 fix: 原先 LORA_PATH_MAP 恒为空 dict，此分支永不进入。
+                # 改为调用 get_lora_path_by_id() 动态查找 LoRA 路径。
+                lora_path = None
+                if selected_lora:
+                    lora_path = get_lora_path_by_id(selected_lora["id"])
+                if lora_path:
                     if ModelProvider.TRANSFORMERS_PEFT in model_manager._providers:
                         peft_provider = model_manager._providers[ModelProvider.TRANSFORMERS_PEFT]
                         if hasattr(peft_provider, 'set_lora_adapter'):
@@ -344,7 +390,10 @@ async def generate_reply_core(request: MessageRequest, current_user: dict | None
                     model_manager.set_lora_adapter(None)
 
                 async def _do_generate_async():
-                    return await asyncio.to_thread(model_manager.generate,
+                    # P0-C1 fix: 直接 await 原生 async_generate，禁止跨事件循环
+                    # 复用缓存的 httpx.AsyncClient（曾用 asyncio.to_thread → asyncio.run
+                    # 创建新循环，第二次请求会报 RuntimeError: Event loop is closed）。
+                    return await model_manager.async_generate(
                         prompt=request.message,
                         session_history=[],
                         rag_docs=None
@@ -373,12 +422,10 @@ async def generate_reply_core(request: MessageRequest, current_user: dict | None
         provider_status = status.get("providers", {}).get(current_provider, {})
         model_name = provider_status.get("modelName", "Unknown")
 
-        if load_balancer_mgr:
-            try:
-                await load_balancer_mgr.record_success(current_provider, cost_time)
-            except Exception as e:
-                logger.warning(f"负载均衡记录成功失败: {e}")
-                pass
+        # I-2 fix: 移除 load_balancer_mgr.record_success 调用。
+        # LoadBalancerManager 从未 set_providers，record_success 因找不到匹配 provider
+        # 成为空操作。VLLMClient 内部的 VLLMInstance.record_success 已记录真实统计，
+        # 并通过 sync_from_vllm_client() 桥接到 load_balancer_mgr 用于可观测性。
 
         await _record_model_invocation(request, model_name, lora_name, cost_time, used_rag=False, completion_text=reply)
         await _save_message(request, reply, model_name, lora_name, cost_time)
@@ -428,9 +475,11 @@ async def generate_reply_core(request: MessageRequest, current_user: dict | None
             errorType=type(e).__name__,
         )
         logger.error(f"generate reply failed: {e}", exc_info=True)
-        if failover_mgr:
+        # C-F1 fix: 动态读取 app.config.failover_mgr，而非导入时绑定的 None
+        _fmgr = _failover_mgr()
+        if _fmgr:
             try:
-                fallback_provider = await failover_mgr.check_and_failover()
+                fallback_provider = await _fmgr.check_and_failover()
                 if fallback_provider:
                     logger.info(f"故障转移至: {fallback_provider}")
             except Exception as fe:
@@ -608,13 +657,13 @@ async def _generate_with_vllm(request: MessageRequest, lora_name: str | None, pr
 def _get_system_prompt(lora_name: str) -> str:
     """获取 LoRA 对应的系统提示词"""
     try:
-        from bot.bot import LORA_REGISTRY
-        if lora_name in LORA_REGISTRY:
-            return LORA_REGISTRY[lora_name].get("system_prompt", "")
+        # H1 fix: 此前从 bot.bot 导入 LORA_REGISTRY，造成 API 层反向依赖 bot 层。
+        # 现从 inference.lora_registry 中立层导入，依赖方向：api → inference。
+        from inference.lora_registry import get_lora_system_prompt
+        return get_lora_system_prompt(lora_name)
     except Exception as e:
         logger.warning(f"获取系统提示词失败: {e}")
-        pass
-    return ""
+        return ""
 
 
 def _estimate_tokens(text: str) -> int:
@@ -727,17 +776,26 @@ if _PIPELINE_ENABLED:
             from inference.model_manager import get_model_manager, ModelProvider
             model_manager = get_model_manager()
 
+            # C11 fix: v2 端点同样拦截 mock provider
+            if model_manager._current_provider.value == "mock":
+                raise HTTPException(
+                    status_code=503,
+                    detail="当前模型提供商为 mock 模式，无法提供真实推理。"
+                           "请在设置页面配置有效的模型提供商（如 vLLM / DeepSeek API / Ollama）。"
+                )
+
             async def do_inference():
                 active_lora = next((l for l in db.loras if l["status"] == "active"), None)
-                if active_lora and active_lora["id"] in LORA_PATH_MAP:
-                    lora_path = LORA_PATH_MAP[active_lora["id"]]
+                # C-R1 fix: 使用 get_lora_path_by_id 动态查找路径
+                lora_path = get_lora_path_by_id(active_lora["id"]) if active_lora else None
+                if lora_path:
                     peft_provider = model_manager._providers.get(ModelProvider.TRANSFORMERS_PEFT)
                     if peft_provider and hasattr(peft_provider, 'set_lora_adapter'):
                         peft_provider.set_lora_adapter(lora_path)
                     model_manager.set_provider(ModelProvider.TRANSFORMERS_PEFT)
 
-                return await asyncio.to_thread(
-                    model_manager.generate,
+                # P0-C1 fix: 直接 await 原生 async_generate，避免跨事件循环复用 AsyncClient
+                return await model_manager.async_generate(
                     prompt=request.message,
                     session_history=[],
                     rag_docs=None,

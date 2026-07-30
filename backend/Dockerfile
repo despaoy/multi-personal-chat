@@ -36,13 +36,29 @@ RUN if [ "$INSTALL_GPU_DEPS" = "true" ]; then \
 # Copy application code
 COPY . .
 
+# C7 fix: 创建 non-root 用户并切换，遵循最小权限原则。
+# 此前容器以 root 运行，若 RCE 漏洞被利用，攻击者直接获得容器 root 权限，
+# 可访问挂载的卷、写入系统文件、尝试容器逃逸。
+# backenduser 无 shell、无 home，仅用于运行进程；数据目录权限通过 chown 授予。
+# 预先创建运行时写入的目录并设置权限，Docker 命名卷首次挂载时会继承挂载点所有权。
+RUN groupadd --system --gid 1001 backendgroup && \
+    useradd --system --uid 1001 --gid backendgroup --no-create-home --shell /usr/sbin/nologin backenduser && \
+    mkdir -p /app/data /app/knowledge_bases /app/loras /app/logs && \
+    chown -R backenduser:backendgroup /app
+
 # Non-secret runtime defaults. Database and authentication settings are injected by the deploy environment.
+# M5 fix: VLLM_ENABLED=false 与 MODEL_PROVIDER=vllm 矛盾——/ready 会因
+# MODEL_PROVIDER=vllm 认为 vLLM 必需，但 VLLM_ENABLED=false 表示无 vLLM 服务，
+# 导致健康检查永远 503。默认设为空，docker-compose.yml 会正确覆盖两者。
 ENV BACKEND_WORKERS=1
 ENV REDIS_URL=redis://redis:6379/0
 ENV VLLM_ENABLED=false
-ENV MODEL_PROVIDER=vllm
+ENV MODEL_PROVIDER=
 ENV VLLM_BASE_URL=http://vllm:8001
 
 EXPOSE 8000
+
+# 切换到 non-root 用户运行应用
+USER backenduser
 
 CMD ["python", "run.py", "--host", "0.0.0.0", "--port", "8000"]

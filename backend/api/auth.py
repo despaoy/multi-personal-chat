@@ -1,13 +1,13 @@
-"""用户认证API"""
+﻿"""用户认证API"""
 
 import asyncio
 import logging
 import time
 from fastapi import APIRouter, HTTPException, Depends, Response, Request
 
-from db.models import RegisterRequest, LoginRequest
+from db.schemas import RegisterRequest, LoginRequest
 from db.adapter import db
-from app.config import create_access_token, JWT_EXPIRY_HOURS
+from app.config import create_access_token
 from app.dependencies import get_current_user
 
 router = APIRouter()
@@ -107,11 +107,12 @@ async def register(request: RegisterRequest, response: Response):
 
         user_id = user["id"]
         now = user["created_at"]
-        token = create_access_token(request.username, user_id)
+        # C-S1 fix: 把 role 写入 JWT，让 get_current_user 无需 DB 查询即可返回 role
+        token = create_access_token(request.username, user_id, user.get("role", "user"))
         _set_auth_cookie(response, token)
         return {
             "success": True,
-            "user": {"id": user_id, "username": request.username, "created_at": now}
+            "user": {"id": user_id, "username": request.username, "created_at": now, "role": user.get("role", "user")}
         }
     except HTTPException:
         raise
@@ -133,14 +134,15 @@ async def login(request: LoginRequest, response: Response):
         if not bcrypt.checkpw(request.password.encode('utf-8'), row['password_hash'].encode('utf-8')):
             raise HTTPException(status_code=401, detail="用户名或密码错误")
 
-        token = create_access_token(row['username'], row['id'])
+        token = create_access_token(row['username'], row['id'], row.get('role', 'user'))
         _set_auth_cookie(response, token)
         return {
             "success": True,
             "user": {
                 "id": row['id'],
                 "username": row['username'],
-                "created_at": row['created_at']
+                "created_at": row['created_at'],
+                "role": row.get('role', 'user'),
             }
         }
     except HTTPException:
@@ -172,5 +174,6 @@ async def get_current_user_info(current_user: dict = Depends(get_current_user)):
             "id": current_user["user_id"],
             "username": current_user["username"],
             "created_at": user_row["created_at"] if user_row else "",
+            "role": (user_row or {}).get("role", current_user.get("role", "user")),
         }
     }

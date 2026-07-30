@@ -276,6 +276,7 @@ class HttpClientPool:
         max_connections: int = 100,
         idle_timeout: float = 60.0,
         health_check_interval: float = 30.0,
+        request_timeout: float = 30.0,
     ) -> None:
         """初始化HTTP客户端池。
 
@@ -283,10 +284,14 @@ class HttpClientPool:
             max_connections: 最大连接数。
             idle_timeout: 空闲客户端超时时间（秒）。
             health_check_interval: 健康检查间隔（秒）。
+            request_timeout: 单次HTTP请求超时时间（秒）。
+                LLM 推理场景需设置为 120.0 或更高，默认 30.0 仅适用于
+                短促的 API 调用（如 RAG 检索）。
         """
         self._max_connections = max_connections
         self._idle_timeout = idle_timeout
         self._health_check_interval = health_check_interval
+        self._request_timeout = request_timeout
         self._clients: List[Any] = []  # httpx.AsyncClient instances
         self._client_info: Dict[int, Dict[str, Any]] = {}
         self._semaphore = asyncio.Semaphore(max_connections)
@@ -305,9 +310,10 @@ class HttpClientPool:
             logger.warning("httpx未安装，HttpClientPool将不可用")
 
         logger.info(
-            "HTTP客户端池初始化: max_connections=%d, idle_timeout=%.1fs",
+            "HTTP客户端池初始化: max_connections=%d, idle_timeout=%.1fs, request_timeout=%.1fs",
             max_connections,
             idle_timeout,
+            request_timeout,
         )
 
     def _create_client(self) -> Any:
@@ -319,7 +325,7 @@ class HttpClientPool:
         import httpx
 
         client = httpx.AsyncClient(
-            timeout=httpx.Timeout(30.0),
+            timeout=httpx.Timeout(self._request_timeout),
             limits=httpx.Limits(
                 max_connections=self._max_connections,
                 max_keepalive_connections=self._max_connections // 2,
@@ -456,6 +462,7 @@ class HttpClientPool:
             "in_use": in_use,
             "idle": idle,
             "idle_timeout": self._idle_timeout,
+            "request_timeout": self._request_timeout,
             "total_acquired": self._total_acquired,
             "total_released": self._total_released,
             "total_recycled": self._total_recycled,
@@ -583,8 +590,10 @@ class ModelInferencePool:
                         break
 
                 if slot is None:
-                    # 不应发生，semaphore已控制并发数
-                    self._semaphore.release()
+                    # C-F2 fix: 不应发生，semaphore已控制并发数。
+                    # 原先在此处 release() 后，外层 finally 会再次 release()，
+                    # 导致信号量计数器永久偏移，最终允许超过 max_concurrent 的并发数。
+                    # 现在直接 raise，由 finally 块统一 release 一次。
                     raise RuntimeError("无可用推理槽位（内部错误）")
 
                 self._total_acquired += 1

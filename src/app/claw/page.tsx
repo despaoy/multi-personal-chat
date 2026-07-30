@@ -30,7 +30,7 @@ interface ClawTool {
 
 export default function ClawPage() {
   return (
-    <AuthGuard>
+    <AuthGuard requireAdmin>
       <ClawContent />
     </AuthGuard>
   );

@@ -17,45 +17,47 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-# DB 配置缓存（5 秒 TTL，避免每次推理都全表扫描 config）
-_cached_db_config = {}
-_cached_db_config_time: float = 0.0
-_db_config_ttl: float = 5.0
+# DB 配置缓存统一委托给 cache.config_cache（60s TTL + jitter + Redis 共享），
+# 消除三套独立缓存导致的状态不同步问题。
+# 此前 model_manager 维护独立 5s 缓存，与 config_cache 的 60s 缓存失效不联动，
+# 导致配置更新后 inference 层与 API 层行为不一致。
 _db_config_lock = threading.Lock()
 
 
 def _coerce_config_value(value):
-    """Convert persisted config strings to primitive Python values."""
-    if isinstance(value, (bool, int, float)) or value is None:
-        return value
-    text = str(value)
-    lowered = text.lower()
-    if lowered == 'true':
-        return True
-    if lowered == 'false':
-        return False
-    try:
-        if '.' in text:
-            return float(text)
-        return int(text)
-    except (ValueError, TypeError):
-        return value
+    """Convert persisted config strings to primitive Python values.
+
+    M-3 fix: 委托到 db.config_utils.coerce_config_value，消除重复实现。
+    保留此函数以兼容现有调用方（_get_db_config 内部使用）。
+    """
+    from db.config_utils import coerce_config_value
+    return coerce_config_value(value)
 
 
 def _get_db_config():
-    """Read model config through the active database adapter with a short cache."""
-    global _cached_db_config, _cached_db_config_time
+    """Read model config through the unified cache.config_cache layer.
+
+    统一入口：先查 Redis/local 缓存（60s TTL + jitter），未命中则从 db 加载并回填缓存。
+    这样 api/config.py 调用 invalidate_config_cache() 后，所有模块下次读取都会重新加载。
+    """
     with _db_config_lock:
-        now = time.time()
-        if _cached_db_config and (now - _cached_db_config_time) < _db_config_ttl:
-            return _cached_db_config.copy()
+        try:
+            from cache.config_cache import get_cached_config, set_cached_config
+            cached = get_cached_config()
+            if cached is not None:
+                return dict(cached)
+        except Exception:
+            pass
+
         try:
             from db.adapter import db
-
             raw_config = getattr(db, "config", {}) or {}
             result = {key: _coerce_config_value(value) for key, value in raw_config.items()}
-            _cached_db_config = result
-            _cached_db_config_time = now
+            try:
+                from cache.config_cache import set_cached_config
+                set_cached_config(result)
+            except Exception:
+                pass
             return result.copy()
         except Exception as exc:
             logger.warning("Failed to read model config from database adapter: %s", exc)
@@ -64,6 +66,8 @@ def _get_db_config():
 _db_cfg = _get_db_config()
 from typing import Optional, Dict, Any, List, Tuple
 from dataclasses import dataclass
+from contextlib import asynccontextmanager
+from abc import ABC, abstractmethod
 
 
 class ModelProvider(str, Enum):
@@ -132,16 +136,21 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
 }
 
 
-class BaseProvider:
+class BaseProvider(ABC):
     """模型提供商基类"""
 
     def __init__(self, name: str):
         self.name = name
         self._loaded = False
         self._model_name = ""
+        # R-1 fix: fallback httpx.AsyncClient，仅在 http_client_pool 不可用时使用
+        # （PG 模式 / 测试环境）。生产环境通过 _acquire_http_client 走共享池。
+        self._fallback_async_client: Any = None
 
+    @abstractmethod
     def generate(self, prompt: str, session_history: List[Dict] = None,
                  rag_docs: List[Dict] = None, max_tokens_override: int = None) -> Tuple[str, float]:
+        """子类必须实现同步生成方法"""
         raise NotImplementedError
 
     async def async_generate(self, prompt: str, session_history: List[Dict] = None,
@@ -159,6 +168,68 @@ class BaseProvider:
     def set_lora_adapter(self, lora_path: Optional[str]):
         pass
 
+    @asynccontextmanager
+    async def _acquire_http_client(self, timeout: float = 120.0):
+        """获取 httpx.AsyncClient（R-1 fix：统一复用 HttpClientPool）。
+
+        优先从 app.config.http_client_pool 获取共享客户端；
+        pool 不可用时创建调用级 AsyncClient，并在创建它的事件循环中关闭。
+        生产请求仍通过共享池复用连接。
+
+        Args:
+            timeout: 回退模式下 AsyncClient 的请求超时（秒）。
+
+        Yields:
+            httpx.AsyncClient 实例。
+        """
+        pool = None
+        try:
+            from app.config import http_client_pool
+            pool = http_client_pool
+        except Exception as exc:
+            logger.debug("http_client_pool 不可用，使用 fallback: %s", exc)
+
+        if pool is not None:
+            # P1-M4 fix: pool 的 client 以固定 request_timeout 创建，此处无法
+            # 逐请求覆盖。调用方应在 client.post(...) 时显式传入 timeout 参数
+            # 以使 vllmTimeout 等配置生效（httpx 支持请求级 timeout 覆盖）。
+            async with pool.acquire() as client:
+                yield client
+            return
+
+        # Fallback is for tests and standalone scripts; close it on the creating loop.
+        import httpx
+        async with httpx.AsyncClient(
+            timeout=httpx.Timeout(timeout),
+            limits=httpx.Limits(
+                max_connections=20, max_keepalive_connections=10
+            ),
+        ) as client:
+            yield client
+
+    def close(self):
+        """释放底层资源（httpx 客户端、模型句柄等）。
+
+        C6 fix: 子类若持有 httpx.Client/AsyncClient 等资源，应覆写此方法。
+        ModelManager.shutdown() 会在应用关闭时遍历所有 provider 调用 close()。
+        R-1 fix: 共享 pool 的客户端由 pool 自行管理生命周期，此处仅清理 fallback client。
+        """
+        client = self._fallback_async_client
+        if client is not None:
+            try:
+                import asyncio
+                try:
+                    loop = asyncio.get_event_loop()
+                    if loop.is_running():
+                        asyncio.ensure_future(client.aclose(), loop=loop)
+                    else:
+                        asyncio.run(client.aclose())
+                except RuntimeError:
+                    asyncio.run(client.aclose())
+            except Exception:
+                pass
+            self._fallback_async_client = None
+
 
 class OpenAICompatProvider(BaseProvider):
     """OpenAI兼容API提供商（支持DeepSeek、通义千问等）"""
@@ -170,10 +241,7 @@ class OpenAICompatProvider(BaseProvider):
         self.model = os.getenv("OPENAI_COMPAT_MODEL", "deepseek-chat")
         self._model_name = self.model
         self._loaded = True
-        # 连接池复用（避免每次 generate 都新建 TCP 连接）
-        import httpx
-        self._client = httpx.Client(timeout=120.0,
-            limits=httpx.Limits(max_keepalive_connections=10, max_connections=20))
+        # R-1 fix: 不再自建 httpx.Client，统一通过 _acquire_http_client() 获取共享 AsyncClient
         # 从数据库配置覆盖
         self._refresh_db_config()
 
@@ -189,9 +257,9 @@ class OpenAICompatProvider(BaseProvider):
             self.model = _db_cfg["openaiCompatModel"]
             self._model_name = self.model
 
-    def _generate_sync(self, prompt: str, session_history: List[Dict] = None,
-                       rag_docs: List[Dict] = None, max_tokens_override: int = None) -> Tuple[str, float]:
-        """同步生成实现"""
+    async def _generate_async(self, prompt: str, session_history: List[Dict] = None,
+                              rag_docs: List[Dict] = None, max_tokens_override: int = None) -> Tuple[str, float]:
+        """异步生成实现（R-1 fix: 使用共享 HttpClientPool）"""
         # 每次生成前刷新配置，确保使用最新的API Key
         self._refresh_db_config()
 
@@ -216,19 +284,22 @@ class OpenAICompatProvider(BaseProvider):
         max_tokens = max_tokens_override if max_tokens_override else int(_db_cfg.get('maxTokens', 512))
 
         try:
-            response = self._client.post(
-                f"{self.base_url}/v1/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {self.api_key}",
-                    "Content-Type": "application/json"
-                },
-                json={
-                    "model": self.model,
-                    "messages": messages,
-                    "temperature": float(_db_cfg.get('temperature', 0.8)),
-                    "max_tokens": max_tokens,
-                }
-            )
+            async with self._acquire_http_client(timeout=120.0) as client:
+                # P1-M4 fix: 请求级 timeout 覆盖 pool 默认值，确保生效
+                response = await client.post(
+                    f"{self.base_url}/v1/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {self.api_key}",
+                        "Content-Type": "application/json"
+                    },
+                    json={
+                        "model": self.model,
+                        "messages": messages,
+                        "temperature": float(_db_cfg.get('temperature', 0.8)),
+                        "max_tokens": max_tokens,
+                    },
+                    timeout=120.0,
+                )
             if response.status_code == 200:
                 data = response.json()
                 reply = data["choices"][0]["message"]["content"].strip()
@@ -242,13 +313,18 @@ class OpenAICompatProvider(BaseProvider):
 
     def generate(self, prompt: str, session_history: List[Dict] = None,
                  rag_docs: List[Dict] = None, max_tokens_override: int = None) -> Tuple[str, float]:
-        return self._generate_sync(prompt, session_history, rag_docs, max_tokens_override)
+        # R-1 fix: 同步入口通过 asyncio.run 执行异步实现
+        import asyncio
+        return asyncio.run(self._generate_async(prompt, session_history, rag_docs, max_tokens_override))
 
     async def async_generate(self, prompt: str, session_history: List[Dict] = None,
                              rag_docs: List[Dict] = None, max_tokens_override: int = None) -> Tuple[str, float]:
-        """异步生成，通过线程池避免阻塞事件循环"""
-        import asyncio
-        return await asyncio.to_thread(self._generate_sync, prompt, session_history, rag_docs, max_tokens_override)
+        """异步生成 - 原生 async，无需线程池"""
+        return await self._generate_async(prompt, session_history, rag_docs, max_tokens_override)
+
+    def close(self):
+        # R-1 fix: 共享 pool 的客户端由 pool 管理，此处仅清理 fallback client
+        super().close()
 
 
 class MockProvider(BaseProvider):
@@ -281,13 +357,11 @@ class OllamaProvider(BaseProvider):
         self.model = os.getenv("OLLAMA_MODEL", "qwen2.5:7b")
         self._model_name = self.model
         self._loaded = True
-        import httpx
-        self._client = httpx.Client(timeout=120.0,
-            limits=httpx.Limits(max_keepalive_connections=5, max_connections=10))
+        # R-1 fix: 不再自建 httpx.Client，统一通过 _acquire_http_client() 获取共享 AsyncClient
 
-    def _generate_sync(self, prompt: str, session_history: List[Dict] = None,
-                       rag_docs: List[Dict] = None, max_tokens_override: int = None) -> Tuple[str, float]:
-        """同步生成实现"""
+    async def _generate_async(self, prompt: str, session_history: List[Dict] = None,
+                              rag_docs: List[Dict] = None, max_tokens_override: int = None) -> Tuple[str, float]:
+        """异步生成实现（R-1 fix: 使用共享 HttpClientPool）"""
         start = time.time()
         messages = []
 
@@ -306,15 +380,18 @@ class OllamaProvider(BaseProvider):
         max_tokens = max_tokens_override if max_tokens_override else int(_db_cfg.get('maxTokens', 512))
 
         try:
-            response = self._client.post(
-                f"{self.base_url}/api/chat",
-                json={
-                    "model": self.model,
-                    "messages": messages,
-                    "stream": False,
-                    "options": {"temperature": float(_db_cfg.get('temperature', 0.8)), "top_p": 0.9, "num_predict": max_tokens}
-                }
-            )
+            async with self._acquire_http_client(timeout=120.0) as client:
+                # P1-M4 fix: 请求级 timeout 覆盖 pool 默认值
+                response = await client.post(
+                    f"{self.base_url}/api/chat",
+                    json={
+                        "model": self.model,
+                        "messages": messages,
+                        "stream": False,
+                        "options": {"temperature": float(_db_cfg.get('temperature', 0.8)), "top_p": 0.9, "num_predict": max_tokens}
+                    },
+                    timeout=120.0,
+                )
             if response.status_code == 200:
                 data = response.json()
                 reply = data["message"]["content"].strip()
@@ -328,13 +405,18 @@ class OllamaProvider(BaseProvider):
 
     def generate(self, prompt: str, session_history: List[Dict] = None,
                  rag_docs: List[Dict] = None, max_tokens_override: int = None) -> Tuple[str, float]:
-        return self._generate_sync(prompt, session_history, rag_docs, max_tokens_override)
+        # R-1 fix: 同步入口通过 asyncio.run 执行异步实现
+        import asyncio
+        return asyncio.run(self._generate_async(prompt, session_history, rag_docs, max_tokens_override))
 
     async def async_generate(self, prompt: str, session_history: List[Dict] = None,
                              rag_docs: List[Dict] = None, max_tokens_override: int = None) -> Tuple[str, float]:
-        """异步生成，通过线程池避免阻塞事件循环"""
-        import asyncio
-        return await asyncio.to_thread(self._generate_sync, prompt, session_history, rag_docs, max_tokens_override)
+        """异步生成 - 原生 async，无需线程池"""
+        return await self._generate_async(prompt, session_history, rag_docs, max_tokens_override)
+
+    def close(self):
+        # R-1 fix: 共享 pool 的客户端由 pool 管理，此处仅清理 fallback client
+        super().close()
 
 
 class LlamaCppProvider(BaseProvider):
@@ -345,13 +427,11 @@ class LlamaCppProvider(BaseProvider):
         self.base_url = os.getenv("LLAMA_CPP_URL", "http://localhost:8080")
         self._model_name = "llama.cpp"
         self._loaded = True
-        import httpx
-        self._client = httpx.Client(timeout=120.0,
-            limits=httpx.Limits(max_keepalive_connections=5, max_connections=10))
+        # R-1 fix: 不再自建 httpx.Client，统一通过 _acquire_http_client() 获取共享 AsyncClient
 
-    def _generate_sync(self, prompt: str, session_history: List[Dict] = None,
-                       rag_docs: List[Dict] = None, max_tokens_override: int = None) -> Tuple[str, float]:
-        """同步生成实现"""
+    async def _generate_async(self, prompt: str, session_history: List[Dict] = None,
+                              rag_docs: List[Dict] = None, max_tokens_override: int = None) -> Tuple[str, float]:
+        """异步生成实现（R-1 fix: 使用共享 HttpClientPool）"""
         start = time.time()
         full_prompt = prompt
         if session_history:
@@ -369,15 +449,18 @@ class LlamaCppProvider(BaseProvider):
         max_tokens = max_tokens_override if max_tokens_override else int(_db_cfg.get('maxTokens', 512))
 
         try:
-            response = self._client.post(
-                f"{self.base_url}/completion",
-                json={
-                    "prompt": full_prompt,
-                    "n_predict": max_tokens,
-                    "temperature": float(_db_cfg.get('temperature', 0.8)),
-                    "top_p": 0.9,
-                }
-            )
+            async with self._acquire_http_client(timeout=120.0) as client:
+                # P1-M4 fix: 请求级 timeout 覆盖 pool 默认值
+                response = await client.post(
+                    f"{self.base_url}/completion",
+                    json={
+                        "prompt": full_prompt,
+                        "n_predict": max_tokens,
+                        "temperature": float(_db_cfg.get('temperature', 0.8)),
+                        "top_p": 0.9,
+                    },
+                    timeout=120.0,
+                )
             if response.status_code == 200:
                 data = response.json()
                 reply = data.get("content", "").strip()
@@ -391,13 +474,18 @@ class LlamaCppProvider(BaseProvider):
 
     def generate(self, prompt: str, session_history: List[Dict] = None,
                  rag_docs: List[Dict] = None, max_tokens_override: int = None) -> Tuple[str, float]:
-        return self._generate_sync(prompt, session_history, rag_docs, max_tokens_override)
+        # R-1 fix: 同步入口通过 asyncio.run 执行异步实现
+        import asyncio
+        return asyncio.run(self._generate_async(prompt, session_history, rag_docs, max_tokens_override))
 
     async def async_generate(self, prompt: str, session_history: List[Dict] = None,
                              rag_docs: List[Dict] = None, max_tokens_override: int = None) -> Tuple[str, float]:
-        """异步生成，通过线程池避免阻塞事件循环"""
-        import asyncio
-        return await asyncio.to_thread(self._generate_sync, prompt, session_history, rag_docs, max_tokens_override)
+        """异步生成 - 原生 async，无需线程池"""
+        return await self._generate_async(prompt, session_history, rag_docs, max_tokens_override)
+
+    def close(self):
+        # R-1 fix: 共享 pool 的客户端由 pool 管理，此处仅清理 fallback client
+        super().close()
 
 
 class TransformersPeftProvider(BaseProvider):
@@ -582,32 +670,55 @@ class TransformersPeftProvider(BaseProvider):
             "loraAdapter": self._lora_path,
         }
 
+    def close(self):
+        # C6 fix: 释放 GPU 显存与模型句柄
+        try:
+            if self._model is not None:
+                import torch
+                del self._model
+                self._model = None
+                self._tokenizer = None
+                self._loaded = False
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                logger.info("TransformersPeftProvider 模型资源已释放")
+        except Exception as e:
+            logger.warning(f"释放 TransformersPeftProvider 资源失败: {e}")
+
 
 class VLLMProvider(BaseProvider):
     """vLLM 提供商 - 高性能推理引擎，支持 Continuous Batching"""
 
     def __init__(self):
         super().__init__("vllm")
+        # base_url / model / timeout 由 VLLMClient 单例从环境变量统一管理，
+        # VLLMProvider 不再持有独立副本，避免设置页修改后状态显示与实际生效不一致。
+        # 这些字段保留为属性是为了向后兼容（部分代码可能读取 provider.base_url），
+        # 但值反映 VLLMClient 的实际配置，不接受 db 覆盖。
         self.base_url = os.getenv("VLLM_BASE_URL", "http://localhost:8001/v1")
-        self.model = os.getenv("VLLM_SERVED_MODEL_NAME", os.getenv("VLLM_MODEL", "qwen3-8b-instruct-awq"))
+        # D-4 fix: 统一使用 get_vllm_served_model_name() 解析模型名
+        from app.config import get_vllm_served_model_name
+        self.model = get_vllm_served_model_name()
         self.timeout = float(os.getenv("VLLM_TIMEOUT", "120.0"))
         self._model_name = self.model
         self._loaded = True
-        import httpx
-        self._async_client = httpx.AsyncClient(timeout=httpx.Timeout(self.timeout, connect=10.0))
+        # R-1 fix: 不再自建 httpx.AsyncClient，统一通过 _acquire_http_client() 获取共享 AsyncClient
+        self._lora_adapter: Optional[str] = None
         self._refresh_db_config()
 
     def _refresh_db_config(self):
-        """从数据库刷新配置"""
+        """从数据库刷新生成参数配置。
+
+        注意：vllmBaseUrl / vllmModel / vllmTimeout 由 VLLMClient 单例从
+        环境变量读取，db 配置修改这些字段不会生效（VLLMClient 在首次
+        get_vllm_client() 时锁定配置）。此处不再覆盖 self.base_url/model/timeout，
+        避免 VLLMProvider 的状态显示与 VLLMClient 实际使用的配置不一致。
+        如需运行时切换 vLLM 实例或模型，应通过环境变量 + 重启，或重构
+        VLLMClient 支持热重载。
+        """
         global _db_cfg
         _db_cfg = _get_db_config()
-        if _db_cfg.get("vllmBaseUrl"):
-            self.base_url = _db_cfg["vllmBaseUrl"]
-        if _db_cfg.get("vllmModel"):
-            self.model = _db_cfg["vllmModel"]
-            self._model_name = self.model
-        if _db_cfg.get("vllmTimeout"):
-            self.timeout = float(_db_cfg["vllmTimeout"])
+        # 仅刷新生成参数（maxTokens/temperature 等），不影响 vLLM 连接配置
 
     def _chat_completions_url(self) -> str:
         base = self.base_url.rstrip("/")
@@ -626,10 +737,15 @@ class VLLMProvider(BaseProvider):
 
     async def generate_async(self, prompt: str, session_history: List[Dict] = None,
                              rag_docs: List[Dict] = None, max_tokens_override: int = None) -> Tuple[str, float]:
-        """异步生成 - 使用持久 AsyncClient 不阻塞事件循环"""
-        import asyncio
-        import httpx
+        """异步生成 - 复用 VLLMClient 全局单例（负载均衡 + 熔断器 + 健康检查）。
 
+        Critical fix: 此前 VLLMProvider 通过 HttpClientPool 直接 POST vLLM，
+        绕过了 VLLMClient 的负载均衡、熔断器、健康检查，导致：
+        1. 同一 vLLM 后端有 3 条独立 HTTP 客户端路径，连接数不可控
+        2. VLLMProvider 路径的失败不会触发熔断器
+        3. VLLMClient 的多实例负载均衡对 VLLMProvider 无效
+        现统一委托给 VLLMClient.generate，消除连接池冗余和状态隔离。
+        """
         self._refresh_db_config()
         start = time.time()
 
@@ -647,70 +763,33 @@ class VLLMProvider(BaseProvider):
         max_tokens = max_tokens_override if max_tokens_override else int(_db_cfg.get('maxTokens', 512))
         temperature = float(_db_cfg.get('temperature', 0.8))
 
-        model_name = self.model
-        if hasattr(self, '_lora_adapter') and self._lora_adapter:
-            model_name = f"{self.model}:{self._lora_adapter}"
-
-        payload = {
-            "model": model_name,
-            "messages": messages,
-            "max_tokens": max_tokens,
-            "temperature": temperature,
-            "top_p": 0.9,
-        }
-
-        last_error = None
-        for attempt in range(3):
-            try:
-                resp = await self._async_client.post(
-                    self._chat_completions_url(),
-                    json=payload,
-                    headers={"Authorization": "Bearer EMPTY"}
-                )
-                if resp.status_code == 200:
-                    data = resp.json()
-                    reply = data["choices"][0]["message"]["content"].strip()
-                    cost = round(time.time() - start, 2)
-                    return reply, cost
-                elif resp.status_code >= 500:
-                    last_error = RuntimeError(f"vLLM返回错误: {resp.status_code} - {resp.text[:200]}")
-                    if attempt < 2:
-                        await asyncio.sleep(1.0 * (attempt + 1))
-                        continue
-                    raise last_error
-                else:
-                    error_text = resp.text[:200]
-                    raise RuntimeError(f"vLLM返回错误: {resp.status_code} - {error_text}")
-            except httpx.TimeoutException as e:
-                last_error = RuntimeError(f"vLLM请求超时 (attempt {attempt + 1}/3): {e}")
-                if attempt < 2:
-                    await asyncio.sleep(1.0 * (attempt + 1))
-                    continue
-                raise last_error
-            except RuntimeError:
-                raise
-
-        raise last_error or RuntimeError("vLLM请求失败: 未知错误")
+        # 复用 VLLMClient 全局单例（内部已有 3 次重试 + 熔断器 + 负载均衡）
+        from inference.vllm_client import get_vllm_client
+        client = await get_vllm_client()
+        reply = await client.generate(
+            messages=messages,
+            lora_name=self._lora_adapter,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            top_p=0.9,
+        )
+        cost = round(time.time() - start, 2)
+        return reply, cost
 
     def generate(self, prompt: str, session_history: List[Dict] = None,
                  rag_docs: List[Dict] = None, max_tokens_override: int = None) -> Tuple[str, float]:
-        """同步生成包装 - 在线程池中运行异步方法"""
+        """同步生成包装 - 通过 asyncio.run 执行异步方法"""
         import asyncio
-        import concurrent.futures
-
-        try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-                    future = executor.submit(
-                        asyncio.run,
-                        self.generate_async(prompt, session_history, rag_docs, max_tokens_override)
-                    )
-                    return future.result(timeout=self.timeout + 10)
-        except RuntimeError:
-            pass  # No running event loop
-
         return asyncio.run(self.generate_async(prompt, session_history, rag_docs, max_tokens_override))
+
+    async def async_generate(self, prompt: str, session_history: List[Dict] = None,
+                             rag_docs: List[Dict] = None, max_tokens_override: int = None) -> Tuple[str, float]:
+        """异步生成入口"""
+        return await self.generate_async(prompt, session_history, rag_docs, max_tokens_override)
+
+    def close(self):
+        # R-1 fix: 共享 pool 的客户端由 pool 管理，此处仅清理 fallback client
+        super().close()
 
 
 class ModelManager:
@@ -733,12 +812,28 @@ class ModelManager:
 
         self._current_provider = ModelProvider.MOCK
         env_provider = os.getenv("MODEL_PROVIDER", "").strip().lower()
-        db_provider = _db_cfg.get("modelProvider", "mock")
+        # C11 fix: DB 默认值从 "mock" 改为 "vllm"，但保留显式 mock 配置能力（开发环境）
+        db_provider = _db_cfg.get("modelProvider", "vllm")
         provider_name = env_provider or db_provider
         if provider_name in [e.value for e in ModelProvider]:
             self._current_provider = ModelProvider(provider_name)
             source = "environment" if env_provider else "database"
             logger.info(f"Initialized model provider from {source}: {provider_name}")
+        # C11 fix: 生产环境强制禁止 mock 作为默认 provider
+        # 若生产环境显式配置 mock（如演示场景），允许使用但记录警告；
+        # 若是默认值（未配置）且环境为生产，则拒绝启动
+        is_production = os.getenv("ENVIRONMENT", "development").strip().lower() in {"production", "prod"}
+        if is_production and self._current_provider == ModelProvider.MOCK:
+            if not env_provider and db_provider == "mock":
+                # 未显式配置，使用的是默认值 → 拒绝启动
+                raise RuntimeError(
+                    "生产环境禁止使用 mock 作为默认模型提供商。"
+                    "请通过 MODEL_PROVIDER 环境变量或数据库 config.modelProvider "
+                    "显式配置有效的提供商（如 vllm / openai_compat / ollama）。"
+                )
+            logger.warning(
+                "生产环境显式配置为 mock provider，将返回罐头回复，仅适用于演示场景"
+            )
         self._load_cache()
 
     def _load_cache(self):
@@ -838,6 +933,17 @@ class ModelManager:
 
         weight_files = list(model_dir.glob("*.safetensors")) + list(model_dir.glob("*.bin"))
         return bool(weight_files)
+
+    def shutdown(self):
+        """关闭所有 provider 的底层资源（httpx 客户端、GPU 句柄等）。
+
+        C6 fix: 应在应用 lifespan 的 shutdown 阶段调用，避免资源泄漏。
+        """
+        for provider in self._providers.values():
+            try:
+                provider.close()
+            except Exception as e:
+                logger.warning(f"关闭 provider {getattr(provider, 'name', '?')} 失败: {e}")
 
     def download_model_from_hf(self, model_name: str, force: bool = False) -> Dict[str, Any]:
         config = MODEL_CONFIGS.get(model_name)

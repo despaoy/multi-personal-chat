@@ -366,6 +366,47 @@ def test_postgresql_adapter_exposes_training_persistence_contract():
         }.issubset(methods)
 
 
+def test_all_db_backends_expose_iter_chunks_with_document_contract():
+    """All DB backends (SQLiteDB, PgDatabase, SyncPgAdapter) must implement
+    iter_chunks_with_document to support vector index rebuild without N+1
+    queries. PgDatabase provides both async generator and a non-generator
+    helper (get_chunks_with_document) used by the sync adapter.
+    """
+    source = (BACKEND_ROOT / "db" / "pg_database.py").read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    classes = {
+        node.name: node for node in tree.body if isinstance(node, ast.ClassDef)
+    }
+    pg_methods = {
+        node.name
+        for node in classes["PgDatabase"].body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+    }
+    sync_methods = {
+        node.name
+        for node in classes["SyncPgAdapter"].body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+    }
+    # PgDatabase: async generator + non-generator helper for SyncPgAdapter
+    assert "iter_chunks_with_document" in pg_methods, "PgDatabase must implement iter_chunks_with_document"
+    assert "get_chunks_with_document" in pg_methods, "PgDatabase must implement get_chunks_with_document helper"
+    # SyncPgAdapter: sync generator
+    assert "iter_chunks_with_document" in sync_methods, "SyncPgAdapter must implement iter_chunks_with_document"
+
+    # SQLiteDB: sync generator (already exists, verify contract)
+    sqlite_source = (BACKEND_ROOT / "db" / "database.py").read_text(encoding="utf-8")
+    sqlite_tree = ast.parse(sqlite_source)
+    sqlite_classes = {
+        node.name: node for node in sqlite_tree.body if isinstance(node, ast.ClassDef)
+    }
+    sqlite_methods = {
+        node.name
+        for node in sqlite_classes["SQLiteDB"].body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+    }
+    assert "iter_chunks_with_document" in sqlite_methods, "SQLiteDB must implement iter_chunks_with_document"
+
+
 def test_production_registration_allows_only_bootstrap_user(monkeypatch):
     from api import auth
 

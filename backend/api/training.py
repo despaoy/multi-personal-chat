@@ -1,4 +1,4 @@
-"""LoRA训练管理API"""
+﻿"""LoRA训练管理API"""
 import asyncio
 import json
 import logging
@@ -8,12 +8,12 @@ import time
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Depends
-from app.dependencies import get_current_user
+from app.dependencies import get_current_user, get_current_admin
 from pydantic import BaseModel
 from typing import Optional
 
 from db.adapter import db
-from db.models import DatasetUploadRequest, TrainingStartRequest, DialogueGenerateRequest
+from db.schemas import DatasetUploadRequest, TrainingStartRequest, DialogueGenerateRequest
 from app.config import INPUT_VALIDATOR_AVAILABLE, TRAINING_SCHEMA, generation_state, generation_state_lock, _search_character_info
 
 logger = logging.getLogger(__name__)
@@ -78,8 +78,11 @@ async def list_datasets(current_user: dict = Depends(get_current_user)):
 
 
 @router.post("/api/training/datasets")
-async def create_dataset(request: DatasetUploadRequest, current_user: dict = Depends(get_current_user)):
-    """创建新数据集"""
+async def create_dataset(request: DatasetUploadRequest, current_user: dict = Depends(get_current_admin)):
+    """创建新数据集
+
+    s2 fix: 数据集影响全局训练资源，限定 admin。
+    """
     try:
         from training.preprocessor import get_dataset_preprocessor
         preprocessor = get_dataset_preprocessor()
@@ -185,8 +188,11 @@ class ImportDatasetRequest(BaseModel):
 
 
 @router.post("/api/training/datasets/scan/import")
-async def import_dataset(req: ImportDatasetRequest, current_user: dict = Depends(get_current_user)):
-    """从扫描结果导入数据集到训练目录"""
+async def import_dataset(req: ImportDatasetRequest, current_user: dict = Depends(get_current_admin)):
+    """从扫描结果导入数据集到训练目录
+
+    s2 fix: 可探测服务器目录结构并写入训练目录，限定 admin。
+    """
     try:
         # Validate source_path to prevent path traversal
         backend_dir = str(Path(__file__).parent.parent.resolve())
@@ -261,8 +267,11 @@ async def list_model_configs(current_user: dict = Depends(get_current_user)):
 
 
 @router.post("/api/training/start")
-async def start_training(request: TrainingStartRequest, current_user: dict = Depends(get_current_user)):
-    """启动LoRA训练"""
+async def start_training(request: TrainingStartRequest, current_user: dict = Depends(get_current_admin)):
+    """启动LoRA训练
+
+    C-S1 fix: 训练任务消耗大量 GPU/磁盘资源，限定 admin。
+    """
     try:
         request.lora_name = _validate_resource_name(request.lora_name, "LoRA 名称")
         request.dataset_name = _validate_resource_name(request.dataset_name, "数据集名称")
@@ -393,8 +402,11 @@ async def get_training_task(task_id: str, current_user: dict = Depends(get_curre
 
 
 @router.post("/api/training/tasks/{task_id}/cancel")
-async def cancel_training_task(task_id: str, current_user: dict = Depends(get_current_user)):
-    """取消训练任务"""
+async def cancel_training_task(task_id: str, current_user: dict = Depends(get_current_admin)):
+    """取消训练任务
+
+    s2 fix: 训练任务影响全局 LoRA 资源，限定 admin。
+    """
     try:
         from training.task_manager import get_simple_lora_trainer
         trainer = get_simple_lora_trainer(db=db)
@@ -435,8 +447,11 @@ async def list_predefined_styles(current_user: dict = Depends(get_current_user))
 
 
 @router.post("/api/training/generate-dialogues")
-async def generate_dialogues(request: DialogueGenerateRequest, current_user: dict = Depends(get_current_user)):
-    """基于角色描述生成LoRA训练对话数据"""
+async def generate_dialogues(request: DialogueGenerateRequest, current_user: dict = Depends(get_current_admin)):
+    """基于角色描述生成LoRA训练对话数据
+
+    s2 fix: 消耗 LLM token/GPU 资源，限定 admin。
+    """
 
     # 防止重复生成（异步安全检查+初始化）
     async with generation_state_lock:
@@ -776,11 +791,15 @@ async def generate_dialogues(request: DialogueGenerateRequest, current_user: dic
 
 
 @router.post("/api/training/generate-dialogues/cancel")
-async def cancel_dialogue_generation(current_user: dict = Depends(get_current_user)):
-    """取消正在进行的对话生成"""
+async def cancel_dialogue_generation(current_user: dict = Depends(get_current_admin)):
+    """取消正在进行的对话生成
+
+    s2 fix: 影响全局生成任务，限定 admin。
+    """
     async with generation_state_lock:
         if not generation_state["is_generating"]:
-            return {"success": False, "message": "没有正在进行的生成任务"}
+            # C13 fix: 无任务可取消是冲突状态，应用 409 而非 200+success=False
+            raise HTTPException(status_code=409, detail="没有正在进行的生成任务")
         generation_state["cancel_requested"] = True
     return {"success": True, "message": "已发送取消请求"}
 
@@ -796,11 +815,15 @@ async def get_dialogue_generation_progress(current_user: dict = Depends(get_curr
 
 
 @router.post("/api/training/generate-dialogues/force-reset")
-async def force_reset_generation(current_user: dict = Depends(get_current_user)):
-    """强制重置生成状态（用于断线重连后清理残留状态）"""
+async def force_reset_generation(current_user: dict = Depends(get_current_admin)):
+    """强制重置生成状态（用于断线重连后清理残留状态）
+
+    C-S1 fix: 强制重置会丢失正在进行的生成进度，限定 admin。
+    """
     async with generation_state_lock:
         if not generation_state["is_generating"] and not generation_state["cancel_requested"]:
-            return {"success": False, "message": "没有正在进行的生成任务"}
+            # C13 fix: 无任务可重置是冲突状态，应用 409 而非 200+success=False
+            raise HTTPException(status_code=409, detail="没有正在进行的生成任务")
         generation_state.update({
             "is_generating": False,
             "cancel_requested": False,
@@ -859,8 +882,12 @@ async def list_saved_dialogues(current_user: dict = Depends(get_current_user)):
 
 
 @router.post("/api/training/saved-dialogues")
-async def save_dialogues(request: SaveDialoguesRequest, current_user: dict = Depends(get_current_user)):
-    """保存对话数据"""
+async def save_dialogues(request: SaveDialoguesRequest, current_user: dict = Depends(get_current_admin)):
+    """保存对话数据
+
+    s2 fix: saved_dialogues 表无 user_id 字段，无法做所有权校验。
+    为防止 IDOR（任意用户删除/修改他人对话），统一限定 admin。
+    """
     try:
         now = time.strftime("%Y-%m-%d %H:%M:%S")
         result = db.execute_sql_insert('''
@@ -917,8 +944,11 @@ async def get_saved_dialogue(item_id: int, current_user: dict = Depends(get_curr
 
 
 @router.delete("/api/training/saved-dialogues/{item_id}")
-async def delete_saved_dialogue(item_id: int, current_user: dict = Depends(get_current_user)):
-    """删除已保存对话"""
+async def delete_saved_dialogue(item_id: int, current_user: dict = Depends(get_current_admin)):
+    """删除已保存对话
+
+    s2 fix: IDOR 防护，限定 admin。
+    """
     try:
         rowcount = db.execute_sql('DELETE FROM saved_dialogues WHERE id = :item_id', {"item_id": item_id})
         if rowcount == 0:
@@ -932,8 +962,11 @@ async def delete_saved_dialogue(item_id: int, current_user: dict = Depends(get_c
 
 
 @router.delete("/api/training/saved-dialogues/{item_id}/dialogues/{dialogue_index}")
-async def delete_dialogue_from_saved(item_id: int, dialogue_index: int, current_user: dict = Depends(get_current_user)):
-    """从已保存对话中删除单条对话"""
+async def delete_dialogue_from_saved(item_id: int, dialogue_index: int, current_user: dict = Depends(get_current_admin)):
+    """从已保存对话中删除单条对话
+
+    s2 fix: IDOR 防护，限定 admin。
+    """
     try:
         rows = db.execute_sql('SELECT dialogues_json FROM saved_dialogues WHERE id = :item_id', {"item_id": item_id})
         if not rows:
@@ -964,8 +997,11 @@ async def delete_dialogue_from_saved(item_id: int, dialogue_index: int, current_
 
 
 @router.post("/api/training/saved-dialogues/{item_id}/create-dataset")
-async def create_dataset_from_saved(item_id: int, dataset_name: Optional[str] = None, current_user: dict = Depends(get_current_user)):
-    """从已保存对话创建训练数据集"""
+async def create_dataset_from_saved(item_id: int, dataset_name: Optional[str] = None, current_user: dict = Depends(get_current_admin)):
+    """从已保存对话创建训练数据集
+
+    s2 fix: IDOR 防护，限定 admin。
+    """
     try:
         rows = db.execute_sql('SELECT name, dialogues_json FROM saved_dialogues WHERE id = :item_id', {"item_id": item_id})
         if not rows:

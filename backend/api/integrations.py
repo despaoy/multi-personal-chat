@@ -1,4 +1,4 @@
-"""AstrBot integration endpoints.
+﻿"""AstrBot integration endpoints.
 
 AstrBot acts as the multi-platform gateway. This module accepts normalized
 message events from the AstrBot plugin and delegates generation to the existing
@@ -21,7 +21,7 @@ from pydantic import BaseModel, Field
 
 from api.generate import generate_reply_core
 from db.adapter import db
-from db.models import MessageRequest
+from db.schemas import MessageRequest
 from infra.concurrency_control import InferenceQueueFull, RateLimitExceeded, inference_runtime
 from infra.observability import increment, log_event
 from infra.security_utils import (

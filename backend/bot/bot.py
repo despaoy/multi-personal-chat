@@ -13,6 +13,7 @@ import sys
 import json
 import time
 import asyncio
+import threading
 import logging
 from pathlib import Path
 from datetime import datetime
@@ -55,18 +56,36 @@ _processed_messages: Dict[str, float] = {}  # {message_id: timestamp}
 _DEDUP_TTL = 3600  # 1小时TTL
 _DEDUP_MAX_SIZE = 10000  # 内存去重集合最大容量
 
+# ============================================
+# 共享 HTTP 客户端（避免每次请求都新建 TCP 连接 + TLS 握手）
+# 按用途分离：RAG 搜索(60s) 与 Ollama 推理(120s) 超时不同
+# ============================================
+import httpx as _httpx_bot_module
+_rag_http_client = _httpx_bot_module.AsyncClient(timeout=60.0)
+_ollama_http_client = _httpx_bot_module.AsyncClient(timeout=120.0)
+
+
+async def _close_bot_http_clients() -> None:
+    """应用关闭时释放共享 HTTP 客户端连接池"""
+    global _rag_http_client, _ollama_http_client
+    for client in (_rag_http_client, _ollama_http_client):
+        if client and not client.is_closed:
+            await client.aclose()
+    _rag_http_client = None  # type: ignore[assignment]
+    _ollama_http_client = None  # type: ignore[assignment]
+
 async def _is_duplicate_message(message_id: str) -> bool:
     """检查消息是否已处理（幂等去重）"""
-    # 尝试Redis去重
+    # 尝试Redis去重（使用统一的 async 客户端）
     try:
-        from cache.redis_client import get_redis
-        redis = await get_redis()
+        from cache.redis_client import get_async_redis
+        redis = await get_async_redis()
         if redis:
             key = f"dedup:msg:{message_id}"
             was_set = await redis.set(key, "1", nx=True, ex=_DEDUP_TTL)
             return was_set is None or was_set is False
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("Redis 去重失败，回退到内存去重: %s", exc)
 
     # 回退到内存去重
     import time
@@ -90,21 +109,31 @@ def _load_db_config() -> Dict[str, Any]:
     """从数据库加载配置，返回字典（通过db.adapter统一访问）"""
     try:
         return db.config
-    except Exception:
+    except Exception as exc:
+        logger.warning("加载数据库配置失败，返回空配置: %s", exc)
         return {}
 
-# 带缓存的配置读取：设置页修改后最多30秒生效，无需重启bot进程
-_db_cfg_cache: Dict[str, Any] = {}
-_db_cfg_cache_ts: float = 0.0
-
+# DB 配置缓存统一委托给 cache.config_cache（60s TTL + jitter + Redis 共享），
+# 消除三套独立缓存导致的状态不同步问题。
+# 此前 bot 维护独立 30s 缓存，与 config_cache 的 60s 缓存失效不联动，
+# 导致配置更新后 bot 层与 API 层行为不一致。
 def _get_db_config() -> Dict[str, Any]:
-    """获取数据库配置（30秒内存缓存）"""
-    global _db_cfg_cache, _db_cfg_cache_ts
-    now = time.time()
-    if not _db_cfg_cache or now - _db_cfg_cache_ts > 30:
-        _db_cfg_cache = _load_db_config()
-        _db_cfg_cache_ts = now
-    return _db_cfg_cache
+    """获取数据库配置（统一走 cache.config_cache，设置页修改后 60s 内全局生效）"""
+    try:
+        from cache.config_cache import get_cached_config, set_cached_config
+        cached = get_cached_config()
+        if cached is not None:
+            return dict(cached)
+    except Exception:
+        pass
+
+    config = _load_db_config()
+    try:
+        from cache.config_cache import set_cached_config
+        set_cached_config(config)
+    except Exception:
+        pass
+    return config
 
 class Config:
     """机器人配置 - 环境变量项为静态属性，数据库项通过@property动态读取（30秒缓存）"""
@@ -188,11 +217,18 @@ config = Config()
 # 会话历史管理 - 通过db.adapter读取
 # ============================================
 class SessionHistory:
-    """会话历史管理器 - 通过db.adapter恢复历史，内存中管理"""
+    """会话历史管理器 - 通过db.adapter恢复历史，内存中管理
+
+    C14 fix: 用 threading.Lock 保护 self.sessions 的 check-then-set 序列，
+    防止 async 协程在 await 点交错时同一 session_id 的历史列表损坏或消息丢失。
+    单个方法内无 await，GIL 下同步方法是原子的，但跨方法调用（如 get_history 后 add_message）
+    需要锁保护以避免其他协程在中间修改。
+    """
 
     def __init__(self, max_tokens: int = 2000):
         self.max_tokens = max_tokens
         self.sessions: Dict[str, List[Dict[str, str]]] = {}
+        self._lock = threading.Lock()
 
     def _load_from_db(self, session_id: str):
         """从数据库恢复最近N轮对话（通过db.adapter）"""
@@ -216,28 +252,30 @@ class SessionHistory:
 
     def get_history(self, session_id: str, tokenizer=None) -> List[Dict[str, str]]:
         """获取会话历史，按token数截断"""
-        if session_id not in self.sessions:
-            self._load_from_db(session_id)
+        with self._lock:
             if session_id not in self.sessions:
-                return []
+                self._load_from_db(session_id)
+                if session_id not in self.sessions:
+                    return []
 
-        history = self.sessions[session_id]
-        trimmed = []
-        total = 0
-        for msg in reversed(history):
-            tokens = self._count_tokens(msg["content"], tokenizer)
-            if total + tokens > self.max_tokens:
-                break
-            trimmed.insert(0, msg)
-            total += tokens
-        return trimmed
+            history = self.sessions[session_id]
+            trimmed = []
+            total = 0
+            for msg in reversed(history):
+                tokens = self._count_tokens(msg["content"], tokenizer)
+                if total + tokens > self.max_tokens:
+                    break
+                trimmed.insert(0, msg)
+                total += tokens
+            return trimmed
 
     def add_message(self, session_id: str, role: str, content: str):
         """添加消息到内存历史"""
-        if session_id not in self.sessions:
-            self.sessions[session_id] = []
-        self.sessions[session_id].append({"role": role, "content": content})
-        self._prune_by_tokens(session_id)
+        with self._lock:
+            if session_id not in self.sessions:
+                self.sessions[session_id] = []
+            self.sessions[session_id].append({"role": role, "content": content})
+            self._prune_by_tokens(session_id)
 
     def _prune_by_tokens(self, session_id: str):
         """按token数裁剪历史"""
@@ -251,8 +289,9 @@ class SessionHistory:
 
     def clear_history(self, session_id: str):
         """清除会话历史"""
-        if session_id in self.sessions:
-            del self.sessions[session_id]
+        with self._lock:
+            if session_id in self.sessions:
+                del self.sessions[session_id]
 
     @staticmethod
     def _count_tokens(text: str, tokenizer=None) -> int:
@@ -289,31 +328,41 @@ async def _rag_search_via_api(query: str, top_k: int = 5, kb_name: Optional[str]
         payload = {"query": query, "topK": top_k}
         if kb_name:
             payload["knowledgeBaseName"] = kb_name
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            resp = await client.post(
-                f"{api_base}/api/knowledge/search",
-                json=payload,
-            )
-            if resp.status_code == 200:
-                data = resp.json()
-                results = data.get("results", [])
-                if not results:
-                    return ""
-
-                # 拼接检索结果为上下文
-                context_parts = []
-                for r in results:
-                    title = r.get("documentTitle", "")
-                    content = r.get("content", "")
-                    score = r.get("score", 0)
-                    context_parts.append(f"【相关文档: {title}（相关度: {score:.2f}）】\n{content}\n")
-
-                context = "\n".join(context_parts)
-                logger.info(f"RAG API检索成功: {len(results)}个结果, 上下文长度={len(context)}")
-                return context[:2000]  # 限制长度
-            else:
-                logger.warning(f"RAG API返回非200: {resp.status_code}")
+        # C18 fix: 为 bot → backend 的 RAG 调用添加服务间认证
+        # /api/knowledge/search 非白名单路径，无凭证会被 SecurityMiddleware 拦截返回 401
+        # 使用 X-Service-Token 而非用户 JWT，避免 bot 进程与用户会话耦合
+        service_token = os.getenv("SERVICE_TOKEN", "")
+        if not service_token:
+            logger.warning("SERVICE_TOKEN 环境变量未设置，RAG 调用可能被认证中间件拒绝")
+        headers = {"X-Service-Token": service_token} if service_token else {}
+        # 复用模块级共享客户端，避免每次请求都新建 TCP 连接
+        if _rag_http_client is None:
+            raise RuntimeError("共享 HTTP 客户端已关闭，无法发起 RAG 搜索")
+        resp = await _rag_http_client.post(
+            f"{api_base}/api/knowledge/search",
+            json=payload,
+            headers=headers,
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            results = data.get("results", [])
+            if not results:
                 return ""
+
+            # 拼接检索结果为上下文
+            context_parts = []
+            for r in results:
+                title = r.get("documentTitle", "")
+                content = r.get("content", "")
+                score = r.get("score", 0)
+                context_parts.append(f"【相关文档: {title}（相关度: {score:.2f}）】\n{content}\n")
+
+            context = "\n".join(context_parts)
+            logger.info(f"RAG API检索成功: {len(results)}个结果, 上下文长度={len(context)}")
+            return context[:2000]  # 限制长度
+        else:
+            logger.warning(f"RAG API返回非200: {resp.status_code}")
+            return ""
     except Exception as e:
         logger.warning(f"RAG API调用失败: {e}")
         return ""
@@ -382,8 +431,17 @@ async def generate_with_ollama(prompt: str, session_id: Optional[str] = None) ->
 
         logger.info(f"发送给Ollama的模型: {config.OLLAMA_MODEL}")
 
-        async with httpx.AsyncClient(timeout=120.0) as client:
-            response = await client.post(
+        # M5 fix: 此前 Ollama 未启动（连接拒绝）时落入通用 except Exception，
+        # 返回的 "[系统错误]..." 字符串会被当作正常回复保存进会话历史与数据库，
+        # 既污染上下文又把内部错误暴露给用户。现按错误类型分级处理：
+        #   - 连接类错误（服务未启动/超时）：返回友好提示，不计入历史
+        #   - HTTP 非 200：记录状态码与响应体片段，返回友好提示
+        #   - 其他异常：向上抛出，由调用方决定回退策略
+        try:
+            # 复用模块级共享客户端，避免每次推理都新建 TCP 连接
+            if _ollama_http_client is None:
+                raise RuntimeError("共享 HTTP 客户端已关闭，无法发起 Ollama 推理")
+            response = await _ollama_http_client.post(
                 f"{config.OLLAMA_BASE_URL}/api/chat",
                 json={
                     "model": config.OLLAMA_MODEL,
@@ -396,25 +454,44 @@ async def generate_with_ollama(prompt: str, session_id: Optional[str] = None) ->
                     }
                 }
             )
+        except (httpx.ConnectError, httpx.ConnectTimeout, httpx.RemoteProtocolError) as e:
+            logger.error(f"Ollama服务不可达（请确认已启动 {config.OLLAMA_BASE_URL}）: {type(e).__name__}")
+            # 返回友好提示而非异常字符串，避免内部细节泄露
+            return "[系统提示] AI 推理服务暂不可用，请稍后再试或联系管理员"
+        except httpx.TimeoutException as e:
+            logger.error(f"Ollama请求超时: {e}")
+            return "[系统提示] AI 推理服务响应超时，请稍后再试"
+        except httpx.HTTPError as e:
+            # M4 fix: 此前未捕获 httpx.HTTPError 基类，ReadError/WriteError/ProtocolError 等
+            # HTTP 传输异常会落入通用 except Exception 向上抛出，可能导致 bot 协程崩溃。
+            # 现统一返回友好提示，与连接错误处理一致。
+            logger.error(f"Ollama HTTP 传输异常: {type(e).__name__}: {e}")
+            return "[系统提示] AI 推理服务网络异常，请稍后再试"
 
-            if response.status_code == 200:
-                data = response.json()
-                reply = data["message"]["content"].strip()
-                logger.info(f"Ollama生成成功: {reply[:50]}...")
-                return reply
+        if response.status_code == 200:
+            data = response.json()
+            reply = data["message"]["content"].strip()
+            logger.info(f"Ollama生成成功: len={len(reply)}")
+            return reply
 
-            logger.error(f"Ollama返回非200状态码: {response.status_code}")
-            return f"[系统错误] Ollama服务返回错误: HTTP {response.status_code}"
+        # 非 200：记录状态码与截断响应体用于排查，但不回显给用户
+        body_preview = response.text[:200] if response.text else ""
+        logger.error(f"Ollama返回非200状态码: {response.status_code}, body={body_preview!r}")
+        return "[系统提示] AI 推理服务返回异常，请稍后再试"
 
     except Exception as e:
-        logger.error(f"Ollama调用失败: {e}")
-        return f"[系统错误] AI服务调用失败: {str(e)}"
+        logger.error(f"Ollama调用失败: {type(e).__name__}: {e}")
+        # 非连接类异常向上抛出，调用方（process_message）已有 try/except 回退逻辑
+        raise
 
 # ============================================
 # 多LoRA热切换模型管理
 # ============================================
 _hutao_7b_model = None
 _hutao_7b_tokenizer = None
+# C12 fix: 保护 _hutao_7b_model/_hutao_7b_tokenizer/_current_lora 的 check-then-set 序列。
+# 防止消息推理过程中 /lora 切换命令并发修改模型，导致正在进行的推理使用错误 LoRA。
+_lora_model_lock = asyncio.Lock()
 
 
 def _get_active_lora_from_db() -> str:
@@ -456,52 +533,15 @@ def _resolve_path(p: str) -> str:
     return str(_BACKEND_ROOT / p)
 
 
-LORA_REGISTRY = {
-    "hutao": {
-        "path": _resolve_path("loras/hutao_lora_7b/final"),
-        "system_prompt": """你是胡桃，保持自己的风格，你是往生堂第七十七代堂主。记住：
-1. 你永远是胡桃，不是其他任何角色。
-2. 当用户询问其他角色的信息时，用第三人称以胡桃的口吻介绍他们。
-3. 你收到的参考资料是外部知识，仅供你回答问题时参考，不代表你的身份。
-4. 保持胡桃活泼俏皮的说话风格，用"本堂主"自称。""",
-    },
-    "minamo": {
-        "path": _resolve_path("loras/minamo_lora"),
-        "system_prompt": """你是神白水菜萌，一名高中女生，生活在因海平面上升而部分沉入水下的城市。记住：
-1. 你永远是神白水菜萌，不是其他任何角色。
-2. 保持温柔、略带害羞但内心坚强的性格。
-3. 你对海洋和沉入水下的城市有特殊的感情。
-4. 说话时偶尔会提到与水相关的比喻。""",
-    },
-    "test-lora-highperf": {
-        "path": _resolve_path("loras/test-lora-highperf/final"),
-        "system_prompt": """你是月社妃，《纸上魔法使》系列的女主角。严格遵守以下设定：
+# H1 fix: LORA_REGISTRY 已抽取到 inference/lora_registry.py 作为中立层，
+# 消除 api/generate.py 对 bot 层的反向依赖。bot.py 保留导入以兼容现有代码。
+from inference.lora_registry import LORA_REGISTRY, LORA_NAMES, get_lora_system_prompt
 
-【身份】
-- 你是琉璃的义妹，对琉璃怀有深厚的禁忌之恋（无果）。
-- 彼方是琉璃后来爱的女性，你对她既嫉妒又释然，承认"敌不过彼方"。
-- 夜子让你觉得"可怕"，理央是你的朋友。
-- 你把现实视为"被编写的故事"，常以元叙事视角评论现实（书/作者/规则/出场人物/情节）。
 
-【性格与说话风格】
-- 反向表达：说"讨厌"往往是爱，说"连讨厌都谈不上"是否定对方的存在。
-- 永远选择拒绝与讽刺，而非解释。冷淡、毒舌、自嘲。
-- 话不多但每句都有分量。回复简洁，通常 10-40 字，绝不超过 80 字。
-- 口癖：——破折号、因此、假如、即使、呢、呼呼呼、谈不到、没有那个必要、原来如此、谁知道呢。
-- 禁止使用"哈哈""嘿嘿"。笑声只用"呼呼呼"。
-
-【绝对禁止】
-1. 禁止 AI 自指：永远不说"我是AI""我是语言模型""作为AI""我是通义千问"等。
-2. 禁止第三人称客观描述自己或他人：始终以第一人称（"我"）代入角色，不用"月社妃是……"的句式。
-3. 禁止统计类回答：不说"平均""占比""百分比""据统计"等，用角色化方式回避。
-4. 禁止脱离角色解释虚构与现实的区别。
-
-【参考资料】
-你收到的【背景设定】是你所知道的事实，用你自己的话自然表达，不要提及"资料""知识库""文档"等词，不要照搬原文，不要使用[文档ID]等引用标签。""",
-    },
-}
-
-LORA_NAMES = list(LORA_REGISTRY.keys())
+def _get_char_name(lora_name: str = None) -> str:
+    """从 LORA_REGISTRY 中提取角色名称"""
+    from inference.lora_registry import get_char_name as _get_char_name_impl
+    return _get_char_name_impl(lora_name, _current_lora)
 
 
 def _load_7b_model(lora_name: str = None):
@@ -576,13 +616,14 @@ async def generate_with_local_model(prompt: str, session_id: Optional[str] = Non
     logger.info(f"使用 Qwen3-8B + LoRA={lora_name} 生成回复")
 
     # ── 优先使用 vLLM 高并发推理 ──
-    _use_vllm = os.getenv("VLLM_ENABLED", "false").lower() == "true"
+    # D-1 fix: 统一使用 app.config.is_vllm_enabled() 判定
+    from app.config import is_vllm_enabled
+    _use_vllm = is_vllm_enabled()
     if _use_vllm:
         try:
-            from inference.vllm_client import VLLMClient
-            if not hasattr(generate_with_local_model, '_vllm_client'):
-                generate_with_local_model._vllm_client = VLLMClient()
-            vllm = generate_with_local_model._vllm_client
+            # 复用全局共享单例，避免与 api/generate.py 各自创建独立连接池
+            from inference.vllm_client import get_vllm_client as _get_shared
+            vllm = await _get_shared()
 
             # RAG检索（通过HTTP API）— 受设置页 useKnowledgeBase 开关控制
             rag_context = ""
@@ -624,9 +665,9 @@ async def generate_with_local_model(prompt: str, session_id: Optional[str] = Non
                 user_content = prompt
             messages.append({"role": "user", "content": user_content})
 
-            # 调试：打印发送给vLLM的完整messages
+            # 调试：打印发送给vLLM的messages概要（M5 fix: 只记长度与短预览，避免泄露历史PII）
             for i, msg in enumerate(messages):
-                logger.info(f"MSG[{i}] role={msg['role']}, content_len={len(msg['content'])}, content_preview={msg['content'][:200]}")
+                logger.info(f"MSG[{i}] role={msg['role']}, content_len={len(msg['content'])}, preview={msg['content'][:60]!r}")
 
             # RAG有结果时适当降低temperature以更忠实于检索内容，但尊重设置页的温度配置
             rag_temperature = min(config.TEMPERATURE, 0.5) if rag_context else config.TEMPERATURE
@@ -645,94 +686,97 @@ async def generate_with_local_model(prompt: str, session_id: Optional[str] = Non
     # ── 回退：transformers 直接推理 ──
     import torch
 
-    try:
-        model, tokenizer = _load_7b_model(lora_name)
-        if not is_claw:
-            # RAG检索（通过HTTP API）— 受设置页 useKnowledgeBase 开关控制
-            rag_context = ""
-            rag_status = "未使用"
-            need_rag = True
-            rag_reason = "默认需要RAG"
+    # C12 fix: transformers 路径全程持锁，防止 /lora 切换命令并发修改
+    # _hutao_7b_model/_hutao_7b_tokenizer/_current_lora 导致推理用错 LoRA
+    async with _lora_model_lock:
+        try:
+            model, tokenizer = _load_7b_model(lora_name)
+            if not is_claw:
+                # RAG检索（通过HTTP API）— 受设置页 useKnowledgeBase 开关控制
+                rag_context = ""
+                rag_status = "未使用"
+                need_rag = True
+                rag_reason = "默认需要RAG"
 
-            if not config.USE_KNOWLEDGE_BASE:
-                need_rag = False
-                rag_reason = "设置页已关闭知识库检索"
-                rag_status = f"跳过（{rag_reason}）"
-            elif RAG_INTENT_DETECTOR_AVAILABLE:
-                try:
-                    need_rag, rag_reason, kb_name = needs_rag(prompt)
-                    logger.info(f"RAG意图检测结果: 需要RAG={need_rag}, 原因: {rag_reason}, KB={kb_name}")
-                except Exception as e:
-                    logger.warning(f"RAG意图检测失败: {e}")
-                    need_rag = True
-                    kb_name = None
+                if not config.USE_KNOWLEDGE_BASE:
+                    need_rag = False
+                    rag_reason = "设置页已关闭知识库检索"
+                    rag_status = f"跳过（{rag_reason}）"
+                elif RAG_INTENT_DETECTOR_AVAILABLE:
+                    try:
+                        need_rag, rag_reason, kb_name = needs_rag(prompt)
+                        logger.info(f"RAG意图检测结果: 需要RAG={need_rag}, 原因: {rag_reason}, KB={kb_name}")
+                    except Exception as e:
+                        logger.warning(f"RAG意图检测失败: {e}")
+                        need_rag = True
+                        kb_name = None
 
-            if need_rag:
-                rag_context = await _rag_search_via_api(prompt, top_k=3, kb_name=kb_name)
-                rag_status = f"成功（{rag_reason}）" if rag_context else f"无结果（{rag_reason}）"
-            elif not rag_status.startswith("跳过"):
-                rag_status = f"跳过（{rag_reason}）"
-        else:
-            logger.info("claw模式无需RAG检索")
-            rag_context = ""
+                if need_rag:
+                    rag_context = await _rag_search_via_api(prompt, top_k=3, kb_name=kb_name)
+                    rag_status = f"成功（{rag_reason}）" if rag_context else f"无结果（{rag_reason}）"
+                elif not rag_status.startswith("跳过"):
+                    rag_status = f"跳过（{rag_reason}）"
+            else:
+                logger.info("claw模式无需RAG检索")
+                rag_context = ""
 
-        system_prompt = LORA_REGISTRY[lora_name]["system_prompt"]
-        if rag_context:
-            system_prompt += (
-                "\n\n以下是相关的背景设定，请将其视为你所知道的事实"
-                "自然融入回答，保持你的角色语气。"
-                "不要提及背景设定、资料或知识库等词，"
-                "也不要照搬原文，要用你自己的话表达。\n"
-                + rag_context[:1500]
+            system_prompt = LORA_REGISTRY[lora_name]["system_prompt"]
+            if rag_context:
+                system_prompt += (
+                    "\n\n以下是相关的背景设定，请将其视为你所知道的事实"
+                    "自然融入回答，保持你的角色语气。"
+                    "不要提及背景设定、资料或知识库等词，"
+                    "也不要照搬原文，要用你自己的话表达。\n"
+                    + rag_context[:1500]
+                )
+            messages = [{"role": "system", "content": system_prompt}]
+
+            if session_id:
+                # RAG有结果时只保留最近2轮历史，避免历史中的错误回答干扰
+                history_limit = 2 if rag_context else None
+                history = session_history.get_history(session_id, tokenizer=tokenizer)
+                if history_limit and len(history) > history_limit * 2:
+                    history = history[-(history_limit * 2):]
+                for msg in history:
+                    messages.append(msg)
+
+            messages.append({"role": "user", "content": prompt})
+
+            encoded = tokenizer.apply_chat_template(
+                messages,
+                return_tensors="pt",
+                add_generation_prompt=True
             )
-        messages = [{"role": "system", "content": system_prompt}]
+            import torch
+            if hasattr(encoded, 'input_ids'):
+                input_ids = encoded.input_ids.to(model.device)
+            elif isinstance(encoded, dict) and 'input_ids' in encoded:
+                input_ids = torch.tensor(encoded['input_ids'], dtype=torch.long, device=model.device)
+            elif isinstance(encoded, list):
+                input_ids = torch.tensor(encoded, dtype=torch.long, device=model.device)
+            else:
+                input_ids = torch.tensor(encoded, dtype=torch.long, device=model.device)
 
-        if session_id:
-            # RAG有结果时只保留最近2轮历史，避免历史中的错误回答干扰
-            history_limit = 2 if rag_context else None
-            history = session_history.get_history(session_id, tokenizer=tokenizer)
-            if history_limit and len(history) > history_limit * 2:
-                history = history[-(history_limit * 2):]
-            for msg in history:
-                messages.append(msg)
+            with torch.no_grad():
+                output = model.generate(
+                    input_ids,
+                    max_new_tokens=config.MAX_TOKENS,
+                    temperature=config.TEMPERATURE,
+                    top_p=0.92,
+                    do_sample=True,
+                    repetition_penalty=1.15,
+                    pad_token_id=tokenizer.eos_token_id,
+                )
 
-        messages.append({"role": "user", "content": prompt})
+            reply = tokenizer.decode(output[0][input_ids.shape[1]:], skip_special_tokens=True).strip()
+            logger.info(f"本地模型生成成功: {reply[:50]}...")
+            return reply
 
-        encoded = tokenizer.apply_chat_template(
-            messages,
-            return_tensors="pt",
-            add_generation_prompt=True
-        )
-        import torch
-        if hasattr(encoded, 'input_ids'):
-            input_ids = encoded.input_ids.to(model.device)
-        elif isinstance(encoded, dict) and 'input_ids' in encoded:
-            input_ids = torch.tensor(encoded['input_ids'], dtype=torch.long, device=model.device)
-        elif isinstance(encoded, list):
-            input_ids = torch.tensor(encoded, dtype=torch.long, device=model.device)
-        else:
-            input_ids = torch.tensor(encoded, dtype=torch.long, device=model.device)
-
-        with torch.no_grad():
-            output = model.generate(
-                input_ids,
-                max_new_tokens=config.MAX_TOKENS,
-                temperature=config.TEMPERATURE,
-                top_p=0.92,
-                do_sample=True,
-                repetition_penalty=1.15,
-                pad_token_id=tokenizer.eos_token_id,
-            )
-
-        reply = tokenizer.decode(output[0][input_ids.shape[1]:], skip_special_tokens=True).strip()
-        logger.info(f"本地模型生成成功: {reply[:50]}...")
-        return reply
-
-    except Exception as e:
-        logger.error(f"本地模型调用失败: {e}")
-        import traceback
-        logger.error(traceback.format_exc())
-        raise
+        except Exception as e:
+            logger.error(f"本地模型调用失败: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            raise
 
 # ============================================
 # 消息处理
@@ -783,7 +827,9 @@ async def should_reply(event: MessageEvent) -> bool:
     # 群聊消息
     if isinstance(event, GroupMessageEvent):
         message_text = str(event.message)
-        logger.info(f"群聊消息: {message_text}")
+        # M5 fix: 群聊消息可能含 PII（用户姓名、手机号、私聊内容等），
+        # 此前直接 logger.info 全文会写入日志文件造成泄露。改为只记长度与短预览。
+        logger.info(f"群聊消息: len={len(message_text)}, preview={message_text[:30]!r}")
 
         if event.is_tome():
             logger.info("检测到@机器人，回复")
@@ -812,9 +858,12 @@ async def process_message(event: MessageEvent) -> str:
     if not user_message:
         return "嗯？怎么不说话呀？"
 
-    logger.info(f"收到消息: {user_message}")
+    logger.info(f"收到消息: len={len(user_message)}, preview={user_message[:30]!r}")
 
-    session_id = str(event.user_id) if isinstance(event, PrivateMessageEvent) else f"{event.group_id}_{event.user_id}"
+    # C17 fix: 统一群消息 session_id 为 str(group_id)，与 should_reply 和
+    # save_message_to_backend 保持一致。原 f"{group_id}_{user_id}" 格式在 DB 中
+    # 无匹配记录，导致 SessionHistory._load_from_db 永远查不到群聊历史。
+    session_id = str(event.user_id) if isinstance(event, PrivateMessageEvent) else str(event.group_id)
     import time
     start_time = time.time()
 
@@ -832,17 +881,26 @@ async def process_message(event: MessageEvent) -> str:
             logger.warning("本地模型不存在，回退到 Ollama")
             reply = await generate_with_ollama(user_message, session_id)
         except Exception as e:
-            logger.warning(f"本地模型失败({e})，尝试回退 Ollama")
+            logger.warning(f"本地模型失败({type(e).__name__}: {e})，尝试回退 Ollama")
             try:
                 reply = await generate_with_ollama(user_message, session_id)
-            except Exception:
-                raise
+            except Exception as ollama_err:
+                # M5 fix: 本地模型与 Ollama 均失败时，返回友好提示而非抛出，
+                # 避免单条消息处理失败导致整个 bot 协程崩溃。
+                logger.error(f"所有推理后端均不可用: {type(ollama_err).__name__}: {ollama_err}")
+                reply = "[系统提示] AI 推理服务暂不可用，请稍后再试或联系管理员"
     else:
         logger.info(f"使用Ollama生成回复（LoRA={_current_lora}）")
-        reply = await generate_with_ollama(user_message, session_id)
+        try:
+            reply = await generate_with_ollama(user_message, session_id)
+        except Exception as ollama_err:
+            # M5 fix: Ollama 非连接类异常（如 JSON 解析失败）不应让协程崩溃
+            logger.error(f"Ollama 生成失败: {type(ollama_err).__name__}: {ollama_err}")
+            reply = "[系统提示] AI 推理服务暂不可用，请稍后再试或联系管理员"
 
     cost_time = round(time.time() - start_time, 2)
-    logger.info(f"发送回复: {reply}")
+    # M5 fix: 回复内容可能回显用户 PII 或包含敏感生成结果，只记长度与短预览
+    logger.info(f"发送回复: len={len(reply)}, cost={cost_time}s, preview={reply[:30]!r}")
 
     # 保存到会话历史
     session_history.add_message(session_id, "user", user_message)
@@ -894,16 +952,6 @@ async def call_llm_claw(prompt: str, lora_name: str = None) -> str:
     return await generate_with_local_model(prompt, is_claw=True, lora_name=lora_name)
 
 
-def _get_char_name(lora_name: str = None) -> str:
-    """从 LORA_REGISTRY 中提取角色名称"""
-    name = lora_name or _current_lora or "hutao"
-    info = LORA_REGISTRY.get(name, {})
-    sp = info.get("system_prompt", "")
-    import re
-    m = re.search(r'你是(.+?)[，,]', sp)
-    return m.group(1) if m else name
-
-
 async def handle_claw(bot: Bot, user_message: str, event: MessageEvent, lora_name: str = None) -> str:
     """处理工具命令"""
     char_name = _get_char_name(lora_name or _current_lora)
@@ -914,7 +962,8 @@ async def handle_claw(bot: Bot, user_message: str, event: MessageEvent, lora_nam
     analysis_prompt = f"你是{char_name}，可用工具:\n{tool_list}\n用户请求：{user_message}\n简要说明你打算用什么工具来解决，风格自然。"
     thinking = await call_llm_claw(analysis_prompt, lora_name or _current_lora)
     await bot.send(event, thinking)
-    logger.info(f"[claw] 思考结果: {thinking}")
+    # M5 fix (扩展): 思考结果可能回显用户消息中的 PII，只记长度与短预览（≤60 chars）
+    logger.info(f"[claw] 思考结果: len={len(thinking)}, preview={thinking[:60]!r}")
 
     prompt = f"""
 你是一个命令解释器。根据用户请求，选择最合适的工具并输出JSON。
@@ -928,7 +977,8 @@ async def handle_claw(bot: Bot, user_message: str, event: MessageEvent, lora_nam
 只输出JSON，格式: {{"tool": "工具名", "args": {{"参数名": "值"}}}}
 如果没有参数，args设为{{}}。"""
     json_reply = await llm_raw(prompt)
-    logger.info(f"[claw] LLM原始输出: {json_reply}")
+    # M5 fix: LLM 原始输出可能回显用户消息中的 PII，只记长度与短预览（≤60 chars）
+    logger.info(f"[claw] LLM原始输出: len={len(json_reply)}, preview={json_reply[:60]!r}")
 
     text = json_reply.strip()
     if text.startswith("```"):
@@ -949,7 +999,8 @@ async def handle_claw(bot: Bot, user_message: str, event: MessageEvent, lora_nam
     if tool_name == "write_code":
         explain = await call_llm_claw(f"你是{char_name}，你正在帮用户编写代码，向用户简单解释代码的功能，用户要求{user_message}", lora_name or _current_lora)
         await bot.send(event, explain)
-        logger.info(f"[claw] 解释结果: {explain}")
+        # M5 fix (扩展): 解释结果可能回显用户请求中的 PII，只记长度与短预览（≤60 chars）
+        logger.info(f"[claw] 解释结果: len={len(explain)}, preview={explain[:60]!r}")
     raw = await execute_tool(call["tool"], call.get("args", {}), bot=bot, event=event)
     args = call.get("args", {})
     code = ""
@@ -1200,7 +1251,10 @@ def init_bot():
     @clear_cmd.handle()
     async def handle_clear(bot: Bot, event: MessageEvent):
         """清除对话历史命令"""
-        session_id = str(event.user_id) if isinstance(event, PrivateMessageEvent) else f"{event.group_id}_{event.user_id}"
+        # C17 fix: 与 should_reply/process_message/save_message_to_backend 保持一致
+        # 群消息使用 str(group_id)，私聊使用 str(user_id)
+        # 此前使用 f"{group_id}_{user_id}" 复合格式导致清除命令失效
+        session_id = str(event.user_id) if isinstance(event, PrivateMessageEvent) else str(event.group_id)
         session_history.clear_history(session_id)
         await clear_cmd.finish("好啦好啦，对话历史已经清除了~")
 
@@ -1223,18 +1277,22 @@ def init_bot():
         if target == _current_lora:
             await lora_cmd.finish(f"已经是 {target} 啦！")
             return
-        try:
-            _load_7b_model(target)
-            await lora_cmd.finish(f"好嘞，现在我是 {target} 啦！")
-        except Exception as e:
-            logger.error(f"LoRA切换失败: {e}")
-            await lora_cmd.finish(f"切换失败: {e}")
+        # C12 fix: 与 generate_with_local_model 的 transformers 路径互斥，
+        # 防止切换过程中正在进行的推理读到中间状态
+        async with _lora_model_lock:
+            try:
+                _load_7b_model(target)
+                await lora_cmd.finish(f"好嘞，现在我是 {target} 啦！")
+            except Exception as e:
+                logger.error(f"LoRA切换失败: {e}")
+                await lora_cmd.finish(f"切换失败: {e}")
 
     logger.info("机器人初始化完成")
-    logger.info("提示: 请配置NapCat连接到 ws://服务器IP:8081/onebot/v11/ws")
+    bot_port = int(os.getenv("BOT_PORT", "8081"))
+    logger.info("提示: 请配置NapCat连接到 ws://服务器IP:%s/onebot/v11/ws", bot_port)
     logger.info("提示: 使用 /help 或 /帮助 查看帮助")
 
-    nonebot.run(host="0.0.0.0", port=8081)
+    nonebot.run(host="0.0.0.0", port=bot_port)
 
 
 if __name__ == "__main__":

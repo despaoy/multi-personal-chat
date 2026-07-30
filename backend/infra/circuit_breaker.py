@@ -223,14 +223,16 @@ class CircuitBreaker:
             return self._default_value
 
         if self.degradation_mode == DegradationMode.QUEUE:
-            logger.debug("熔断器 [%s] 请求排队等待恢复", self.name)
-            future: asyncio.Future[Any] = asyncio.get_running_loop().create_future()
-            self._queue.append(future)
-            try:
-                return await asyncio.wait_for(future, timeout=self.recovery_timeout * 2)
-            except asyncio.TimeoutError:
-                logger.warning("熔断器 [%s] 排队等待超时，返回默认值", self.name)
-                return self._default_value
+            # C5 fix: QUEUE 模式的 future await 必须在锁外进行，否则
+            # _release_queue() 无法获取锁来 resolve future → 死锁。
+            # 因此 call() 现在直接处理 QUEUE 模式（锁内创建 future、锁外 await），
+            # 不会走到这里。此分支仅作为防御性兜底：若 _handle_degradation 被直接
+            # 调用处理 QUEUE，返回默认值而非死锁。
+            logger.warning(
+                "熔断器 [%s] QUEUE 降级不应经由 _handle_degradation 处理，返回默认值",
+                self.name,
+            )
+            return self._default_value
 
         # DegradationMode.DEFAULT
         logger.debug("熔断器 [%s] 返回默认值", self.name)
@@ -296,6 +298,13 @@ class CircuitBreaker:
         Raises:
             CircuitOpenError: 熔断器打开且无降级策略时抛出。
         """
+        # C5 fix: QUEUE 降级模式的 future await 必须在锁外进行。
+        # 此前 call() 在 async with self._lock 内调用 _handle_degradation，
+        # QUEUE 模式在锁内 await future；而唯一能 resolve future 的
+        # _release_queue() 从 _transition_to_closed() 调用，后者需要获取
+        # 同一把 self._lock → 确定性死锁。
+        # 修复：锁内仅完成 future 创建与入队，锁外再 await。
+        queue_future: Optional[asyncio.Future[Any]] = None
         async with self._lock:
             self._maybe_transition_to_half_open()
             current_state = self._state
@@ -304,17 +313,49 @@ class CircuitBreaker:
                     self._transition_to_half_open()
                     current_state = CircuitState.HALF_OPEN
                 else:
-                    logger.warning("熔断器 [%s] 处于 OPEN 状态，执行降级", self.name)
-                    return await self._handle_degradation(*args, **kwargs)
+                    # OPEN 状态需要降级。
+                    # QUEUE 模式特殊处理：锁内创建 future 入队，锁外 await。
+                    if (
+                        self.degradation_mode == DegradationMode.QUEUE
+                        and self.fallback is None
+                    ):
+                        logger.debug("熔断器 [%s] 请求排队等待恢复", self.name)
+                        queue_future = asyncio.get_running_loop().create_future()
+                        self._queue.append(queue_future)
+                    else:
+                        logger.warning("熔断器 [%s] 处于 OPEN 状态，执行降级", self.name)
+                        return await self._handle_degradation(*args, **kwargs)
 
             if current_state == CircuitState.HALF_OPEN:
                 if self._half_open_calls >= self.half_open_max_calls:
-                    logger.warning(
-                        "熔断器 [%s] HALF_OPEN 状态已达最大探测调用数，执行降级",
-                        self.name,
-                    )
-                    return await self._handle_degradation(*args, **kwargs)
-                self._half_open_calls += 1
+                    # HALF_OPEN 达上限需要降级，同样特殊处理 QUEUE 模式。
+                    if (
+                        self.degradation_mode == DegradationMode.QUEUE
+                        and self.fallback is None
+                    ):
+                        logger.debug("熔断器 [%s] 请求排队等待恢复", self.name)
+                        queue_future = asyncio.get_running_loop().create_future()
+                        self._queue.append(queue_future)
+                    else:
+                        logger.warning(
+                            "熔断器 [%s] HALF_OPEN 状态已达最大探测调用数，执行降级",
+                            self.name,
+                        )
+                        return await self._handle_degradation(*args, **kwargs)
+                else:
+                    self._half_open_calls += 1
+
+        # C5 fix: QUEUE 模式在锁外 await future。
+        # _release_queue() 在 _transition_to_closed() 中被调用，后者需要
+        # 获取 self._lock；此处已释放锁，_release_queue 可以正常获取并 resolve future。
+        if queue_future is not None:
+            try:
+                await asyncio.wait_for(queue_future, timeout=self.recovery_timeout * 2)
+                logger.info("熔断器 [%s] 排队请求已恢复", self.name)
+                return self._default_value
+            except asyncio.TimeoutError:
+                logger.warning("熔断器 [%s] 排队等待超时，返回默认值", self.name)
+                return self._default_value
 
         try:
             result = await func(*args, **kwargs)

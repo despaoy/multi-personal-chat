@@ -26,7 +26,7 @@ const MAX_KB_COUNT = 8;
 
 export default function IntentTrainingPage() {
   return (
-    <AuthGuard>
+    <AuthGuard requireAdmin>
       <IntentTrainingContent />
     </AuthGuard>
   );

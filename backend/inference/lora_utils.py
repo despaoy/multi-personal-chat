@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
+
+logger = logging.getLogger(__name__)
 
 _DEFAULT_ALIASES = {
     "hutao_lora_7b": "hutao",

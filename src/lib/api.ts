@@ -363,11 +363,15 @@ export interface ScanDirectory {
 export interface KnowledgeSearchResult {
   documentId: number;
   documentTitle: string;
-  chunkId: number;
+  /** 后端多数分支不返回 chunkId，仅部分向量检索路径可能携带 */
+  chunkId?: number;
   chunkIndex: number;
   content: string;
   score: number;
 }
+
+/** 搜索结果类型，与后端 search_knowledge 返回的 searchType 字段对应 */
+export type KnowledgeSearchType = "rag_pipeline" | "hybrid" | "keyword" | "empty";
 
 /** 知识库统计数据 */
 export interface KnowledgeStats {
@@ -420,6 +424,8 @@ export interface KnowledgeUpdateRequest {
 export interface KnowledgeSearchRequest {
   query: string;
   topK?: number;
+  /** 按知识库名称过滤检索结果，用于意图分类器路由后的精准检索 */
+  knowledgeBaseName?: string;
 }
 
 /** 知识库搜索响应 */
@@ -427,6 +433,9 @@ export interface KnowledgeSearchResponse {
   success: boolean;
   query: string;
   results: KnowledgeSearchResult[];
+  /** 检索路径：rag_pipeline | hybrid | keyword | empty
+   * 后端 _ensure_vector_index 失败或不存在的 KB 时会降级 */
+  searchType: KnowledgeSearchType;
 }
 
 /** 知识库统计响应 */
@@ -445,6 +454,10 @@ export interface User {
   id: number;
   username: string;
   created_at: string;
+  /** M3 fix: 用户角色，后端 login/register/me 均已返回该字段。
+   * 缺省为 'user'，首个注册用户为 'admin'。用于前端按角色过滤侧栏导航项。
+   * 类型层强制必填，反映后端契约；AuthContext 会在解析时补齐缺省值。 */
+  role: 'admin' | 'user';
 }
 
 /** 注册请求 */
@@ -571,12 +584,7 @@ class ApiClient {
     if (!response.ok) {
       // 401 时自动清理用户状态并跳转登录页
       if (response.status === 401) {
-        if (typeof window !== 'undefined') {
-          localStorage.removeItem('qq_assistant_user');
-          if (!window.location.pathname.includes('/login')) {
-            window.location.href = '/login';
-          }
-        }
+        this._handle401Redirect();
       }
       // 尝试提取后端错误详情
       let detail = '';
@@ -598,6 +606,32 @@ class ApiClient {
   }
 
   /**
+   * 统一的 401 重定向处理：清除本地用户状态、调用后端清 Cookie、跳转登录页。
+   * 从 request() 提取出来，供 health()/exportDataset() 等返回特殊类型的方法复用，
+   * 避免绕过统一 401 处理导致 token 过期时用户卡在错误状态。
+   */
+  private _handle401Redirect(): void {
+    if (typeof window === 'undefined') return;
+    localStorage.removeItem('qq_assistant_user');
+    if (window.location.pathname.includes('/login')) return;
+    // C6 fix: httpOnly Cookie 无法被 JS 清除，必须调用后端 /api/auth/logout。
+    // 否则 middleware 仍会看到 Cookie 存在，把 /login 重定向回 /，形成死锁。
+    // 使用同步 fetch（带 keepalive 以支持 unload 期间完成）触发后端清 Cookie，
+    // 然后带 ?expired=1 跳转，middleware 识别此参数放行到 /login。
+    try {
+      fetch('/api/auth/logout', {
+        method: 'POST',
+        credentials: 'include',
+        keepalive: true,
+      }).catch(() => { /* 尽力而为，跳转仍需进行 */ });
+    } catch { /* 忽略，继续跳转 */ }
+    // 略微延迟跳转让 logout 请求发出，带 expired 参数绕过 middleware 死锁
+    setTimeout(() => {
+      window.location.href = '/login?expired=1';
+    }, 50);
+  }
+
+  /**
    * 批量删除消息（基于筛选条件）
    */
   async deleteMessagesBatch(filters: { search?: string; sessionType?: string; lora?: string; sessionName?: string; platform?: string }): Promise<{ success: boolean; deleted: number; message: string }> {
@@ -612,9 +646,16 @@ class ApiClient {
    * @returns {Promise<HealthResponse>} 服务健康状态及时间戳
    */
   async health(): Promise<HealthResponse> {
-    // 健康检查端点在 /health，不在 /api/health 下
-    const response = await fetch('/health', { credentials: 'include' });
-    if (!response.ok) throw new Error('Health check failed');
+    // Me3 fix: 走 Next.js 代理路由 /api/health 而非直连 /health。
+    // 原先直连 /health 在纯 Next.js dev 模式（无 nginx）下会 404，
+    // 因为 Next.js 根路径无对应的 page.tsx/route.ts。
+    // src/app/api/health/route.ts 已存在并正确代理到后端 /health。
+    const response = await fetch(`${API_BASE_URL}/health`, { credentials: 'include' });
+    if (!response.ok) {
+      // 复用统一 401 处理（虽然 /health 通常公开，但部署中可能被中间件拦截）
+      if (response.status === 401) this._handle401Redirect();
+      throw new Error('Health check failed');
+    }
     return response.json();
   }
 
@@ -747,6 +788,17 @@ class ApiClient {
     return this.request<ServicesResponse>('/stats/services');
   }
 
+  /**
+   * 获取统计指标（AstrBot 网关状态、各平台连接状态等）
+   *
+   * M4 fix: 此前 integrations 页面用裸 fetch('/api/stats/metrics') 调用，
+   * 绕过了 request 助手，导致 401（token 过期）时不跳转登录页，只显示“获取平台指标失败”。
+   * 现统一走 request 助手，401 时自动清理用户状态并跳转 /login。
+   */
+  async getMetrics<T = Record<string, unknown>>(): Promise<T> {
+    return this.request<T>('/stats/metrics');
+  }
+
 
   /**
    * 列出所有训练数据集
@@ -785,6 +837,10 @@ class ApiClient {
     const response = await fetch(`${API_BASE_URL}/training/datasets/${encodeURIComponent(datasetName)}/export`, {
       credentials: 'include',
     });
+    if (!response.ok && response.status === 401) {
+      // 复用统一 401 处理：导出数据集需要登录，token 过期时引导用户重新登录
+      this._handle401Redirect();
+    }
     return response;
   }
 
@@ -1032,6 +1088,30 @@ class ApiClient {
       method: 'PUT',
       body: JSON.stringify(config),
     });
+  }
+
+  /**
+   * 切换模型提供商（admin 端点）
+   * H1/H2 fix: 此前 settings/page.tsx 使用裸 fetch 调用，不处理 401 重定向。
+   * 现统一通过 api 助手调用，确保 token 过期时自动跳转登录页。
+   */
+  async setModelProvider(provider: string): Promise<{ success: boolean; provider: string }> {
+    return this.request<{ success: boolean; provider: string }>('/model/provider', {
+      method: 'PUT',
+      body: JSON.stringify({ provider }),
+    });
+  }
+
+  /**
+   * 获取 vLLM 连接状态
+   * H1 fix: 此前 settings/page.tsx 使用裸 fetch 调用，既不检查 response.ok
+   * 也不处理 401 重定向。现统一通过 api 助手调用。
+   */
+  async getVllmStatus(): Promise<{
+    enabled: boolean;
+    summary?: { total: number; healthy: number; all_healthy: boolean };
+  }> {
+    return this.request('/vllm/status');
   }
 
   /**

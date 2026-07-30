@@ -524,8 +524,9 @@ def import_dataset_from_folder(source_path: str, dataset_name: str = None) -> di
             with open(info_path, 'r', encoding='utf-8') as f:
                 info = json.load(f)
                 stats = info.get("stats", stats)
-        except Exception:
-            pass
+        except Exception as e:
+            # H3 fix: 此前静默吞噬，dataset_info.json 读取失败时无法排障
+            logger.warning("读取 dataset_info.json 失败: %s", e)
     else:
         # 尝试从 JSON 文件推断统计信息
         for fname in ["train.json", "data.json", "dataset.json"]:
@@ -538,8 +539,9 @@ def import_dataset_from_folder(source_path: str, dataset_name: str = None) -> di
                     stats["total"] = count
                     stats["train"] = count
                     break
-                except Exception:
-                    pass
+                except Exception as e:
+                    # H3 fix: 此前静默吞噬，数据集统计推断失败时无法排障
+                    logger.warning("从 %s 推断统计信息失败: %s", fname, e)
     
     return {
         "success": True,

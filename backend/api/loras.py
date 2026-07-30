@@ -7,10 +7,10 @@ import os
 from typing import Optional
 
 from fastapi import APIRouter, Request, HTTPException, Depends
-from app.dependencies import get_current_user
+from app.dependencies import get_current_user, get_current_admin
 
 from db.adapter import db
-from db.database import LORA_DIR_MAP, LORA_ROOT
+from db.database import LORA_ROOT
 from inference.lora_utils import resolve_lora_served_name
 from inference.adapter_checker import AdapterChecker
 
@@ -47,8 +47,9 @@ def _read_lora_metadata(adapter_path: Path) -> dict:
                 cfg = json.load(f)
             meta["rank"] = cfg.get("r", 0)
             meta["alpha"] = cfg.get("lora_alpha", 0)
-        except Exception:
-            pass
+        except Exception as e:
+            # H3 fix: 此前静默吞噬，adapter_config.json 读取失败时无法排障
+            logger.warning("读取 adapter_config.json 失败 (lora=%s): %s", adapter_path, e)
 
     state_path = adapter_path / "trainer_state.json"
     if not state_path.exists() and adapter_path.name == "final":
@@ -62,8 +63,9 @@ def _read_lora_metadata(adapter_path: Path) -> dict:
                 candidate = max_ckpt / "trainer_state.json"
                 if candidate.exists():
                     state_path = candidate
-        except Exception:
-            pass
+        except Exception as e:
+            # H3 fix: 此前静默吞噬，checkpoint 目录查找失败时无法排障
+            logger.warning("查找 checkpoint 目录失败 (lora=%s): %s", adapter_path, e)
 
     if state_path and state_path.exists():
         try:
@@ -176,8 +178,11 @@ async def scan_loras(current_user: dict = Depends(get_current_user)):
 
 
 @router.put("/api/loras/{lora_id}/status")
-async def update_lora_status(lora_id: str, request: Request, current_user: dict = Depends(get_current_user)):
-    """更新LoRA模型状态"""
+async def update_lora_status(lora_id: str, request: Request, current_user: dict = Depends(get_current_admin)):
+    """更新LoRA模型状态
+
+    s2 fix: 激活/停用 LoRA 直接影响全局推理路由和 vLLM 加载状态，限定 admin。
+    """
     body = await request.json()
     status = body.get("status", "inactive")
     if status not in {"active", "inactive"}:
@@ -266,8 +271,11 @@ async def update_lora_status(lora_id: str, request: Request, current_user: dict 
 
 
 @router.delete("/api/loras/{lora_id}")
-async def delete_lora(lora_id: str, current_user: dict = Depends(get_current_user)):
-    """删除LoRA模型"""
+async def delete_lora(lora_id: str, current_user: dict = Depends(get_current_admin)):
+    """删除LoRA模型
+
+    C-S1 fix: 删除 LoRA 文件不可逆，限定 admin。
+    """
     try:
         # 检查LoRA是否存在
         loras = db.get_loras()
