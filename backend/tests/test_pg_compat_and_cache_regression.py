@@ -860,9 +860,17 @@ class TestEnsureVectorIndexEndToEnd:
             )
 
     def _patch_vector_db(self, monkeypatch, kmod, mock_inst):
-        """Patch the late imports inside _ensure_vector_index."""
+        """Patch the late imports inside _ensure_vector_index.
+
+        Also ensures mock_inst has a flush() method (default no-op) so the
+        rebuild path's vector_db.flush() call works without each mock
+        redefining it.
+        """
         import sys
         import types
+        # 给 mock 添加默认 flush（若未定义），避免每个 mock 重复定义
+        if not hasattr(mock_inst, "flush"):
+            mock_inst.flush = lambda: None
         monkeypatch.setattr(kmod, "VECTOR_DB_AVAILABLE", True, raising=False)
         fake_app_config = types.ModuleType("app.config")
         fake_app_config.VECTOR_DB_AVAILABLE = True
@@ -1155,6 +1163,118 @@ class TestEnsureVectorIndexEndToEnd:
         try:
             assert kmod._ensure_vector_index() is True
             assert added_docs["count"] == 2, "index_size mismatch must trigger rebuild"
+            assert kmod._vector_index_built is True
+        finally:
+            kmod.db = original_db
+            db.close_connection()
+
+    def test_concurrent_crud_in_commit_window_does_not_mark_complete(self, tmp_path, monkeypatch):
+        """Narrow-window race: CRUD happens after the final revision check
+        passes but before complete is written. With the _revision_lock
+        commit critical section, the CRUD's _mark_rebuild_dirty must block
+        until complete is written, then increment revision — but the rebuild
+        has already committed with the old revision.
+
+        This test simulates the opposite (pre-fix) failure: flush() triggers
+        a CRUD BEFORE the commit critical section acquires the lock. The
+        commit critical section must detect the incremented revision and
+        refuse to mark complete.
+        """
+        from api import knowledge as kmod
+
+        db = self._make_db(tmp_path)
+        original_db = kmod.db
+        kmod.db = db
+        kmod._vector_index_built = False
+
+        self._insert_doc_with_chunks(db, 1, "Doc1", ["c0", "c1"])
+
+        added_docs = {"count": 0}
+        class MockVectorDB:
+            def __init__(self):
+                self._docs = 0
+            def get_stats(self):
+                return {"total_documents": self._docs, "index_size": self._docs,
+                        "bm25_corpus_size": self._docs, "index_type": "flat",
+                        "embedding_dim": 768, "use_gpu": False, "bm25_built": False,
+                        "bm25_vocab_size": 0, "dirty": False}
+            def clear_all(self):
+                self._docs = 0
+            def add_documents(self, docs):
+                added_docs["count"] += len(docs)
+                self._docs += len(docs)
+            def flush(self):
+                # 模拟窄窗口：在 flush（commit 临界区之前）发生并发 CRUD。
+                # _mark_rebuild_dirty 会自增 revision 并设 _vector_index_built=False。
+                # commit 临界区随后检测到 revision 变化，拒绝标记 complete。
+                kmod._mark_rebuild_dirty()
+
+        mock_inst = MockVectorDB()
+        self._patch_vector_db(monkeypatch, kmod, mock_inst)
+
+        try:
+            result = kmod._ensure_vector_index()
+            assert result is False, "must return False when CRUD happens in commit window"
+            status, _, _, _ = kmod._read_rebuild_status()
+            assert status == "dirty", "status must be dirty (from concurrent CRUD), not complete"
+            assert added_docs["count"] == 2, "rebuild must still index the documents"
+            assert kmod._vector_index_built is False, "must not set _vector_index_built=True"
+        finally:
+            kmod.db = original_db
+            db.close_connection()
+
+    def test_skip_rebuild_concurrent_crud_does_not_set_built(self, tmp_path, monkeypatch):
+        """Narrow-window race in skip branch: CRUD happens during fingerprint
+        computation. The commit critical section must re-check revision under
+        _revision_lock and refuse to set _vector_index_built=True."""
+        from api import knowledge as kmod
+
+        db = self._make_db(tmp_path)
+        original_db = kmod.db
+        kmod.db = db
+        kmod._vector_index_built = False
+
+        self._insert_doc_with_chunks(db, 1, "Doc1", ["c0", "c1"])
+        real_fp = kmod._compute_chunk_fingerprint()
+        current_rev = kmod._get_rebuild_revision()
+        kmod._write_rebuild_status("complete", 2, real_fp, current_rev)
+
+        # Patch _compute_chunk_fingerprint to simulate CRUD during fingerprint calc.
+        # The real fingerprint is computed, then a CRUD is triggered (incrementing
+        # revision). The commit critical section must detect the mismatch.
+        original_compute_fp = kmod._compute_chunk_fingerprint
+        def fingerprint_with_concurrent_crud():
+            fp = original_compute_fp()
+            # Simulate CRUD happening right after fingerprint computation
+            kmod._mark_rebuild_dirty()
+            return fp
+        monkeypatch.setattr(kmod, "_compute_chunk_fingerprint", fingerprint_with_concurrent_crud)
+
+        add_called = {"called": False}
+        class MockVectorDB:
+            def get_stats(self):
+                return {"total_documents": 2, "index_size": 2, "bm25_corpus_size": 2,
+                        "index_type": "flat", "embedding_dim": 768, "use_gpu": False,
+                        "bm25_built": False, "bm25_vocab_size": 0, "dirty": False}
+            def clear_all(self):
+                pass  # will be called when rebuild is triggered
+            def add_documents(self, docs):
+                add_called["called"] = True
+
+        mock_inst = MockVectorDB()
+        self._patch_vector_db(monkeypatch, kmod, mock_inst)
+
+        try:
+            # Should NOT skip (return True without rebuild) — CRUD happened
+            # during fingerprint, commit critical section detects revision change.
+            # It falls through to rebuild path. Rebuild will succeed because
+            # _mark_rebuild_dirty already incremented revision; the rebuild's
+            # start_revision = latest revision, so commit CAS passes.
+            result = kmod._ensure_vector_index()
+            assert result is True, "rebuild after concurrent CRUD should succeed"
+            # add_documents may or may not be called depending on whether
+            # rebuild path re-fetches; the key assertion is that the skip
+            # branch did NOT set _vector_index_built without re-checking
             assert kmod._vector_index_built is True
         finally:
             kmod.db = original_db

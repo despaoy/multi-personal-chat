@@ -1033,18 +1033,21 @@ def _mark_rebuild_dirty() -> None:
     所有文档创建/更新/删除操作应在事务提交后调用此函数。
     即使数量未变（仅内容更新），dirty 状态也会强制重建，避免旧向量被检索。
 
-    顺序：先重置内存标志，再持久化。即使持久化失败，内存标志也已重置，
-    下次搜索仍会走 _ensure_vector_index 流程（通过 revision CAS 触发重建）。
+    原子性保证：revision 自增、写 dirty、重置 _vector_index_built 必须在同一
+    _revision_lock 临界区内完成。否则重建线程可能在 CRUD 设置 False 后、
+    等待锁期间把 _vector_index_built 重新设为 True，覆盖 CRUD 的 dirty 信号。
     """
-    # 先重置内存标志：即使下面的持久化失败，下次搜索也会重新检查
     global _vector_index_built
-    _vector_index_built = False
-    try:
-        # 自增 revision（独立的 CAS 信号，即使 status 写入失败也能触发重建）
-        _increment_rebuild_revision()
-        db.set_config_value(_VECTOR_REBUILD_STATUS_KEY, "dirty")
-    except Exception as e:
-        logger.warning(f"标记重建 dirty 持久化失败（内存标志已重置）: {e}")
+    with _revision_lock:
+        # 在锁内完成所有状态变更，确保与 _ensure_vector_index 的 commit 临界区互斥
+        _vector_index_built = False
+        try:
+            current = _get_rebuild_revision()
+            new_rev = current + 1
+            db.set_config_value(_VECTOR_REBUILD_REVISION_KEY, str(new_rev))
+            db.set_config_value(_VECTOR_REBUILD_STATUS_KEY, "dirty")
+        except Exception as e:
+            logger.warning(f"标记重建 dirty 持久化失败（内存标志已重置）: {e}")
 
 
 def _ensure_vector_index():
@@ -1100,9 +1103,17 @@ def _ensure_vector_index():
                 if needs_clear:
                     logger.info("数据库无有效 chunk，清空向量索引并持久化空索引")
                     vector_db.clear_all()  # 失败时抛异常，不会写入 complete
-                _write_rebuild_status("complete", 0, _EMPTY_FINGERPRINT, current_revision)
-                logger.info(f"向量索引已清空并标记 complete:0:empty:{current_revision}")
-                _vector_index_built = True
+                # commit 临界区：revision 校验 + 写 complete + 设 _vector_index_built
+                # 必须原子，避免并发 CRUD 在窗口内被覆盖
+                with _revision_lock:
+                    if _get_rebuild_revision() != current_revision:
+                        logger.warning(
+                            "空库清理期间检测到并发 CRUD，不标记 complete，等待下次重建"
+                        )
+                        return False
+                    _write_rebuild_status("complete", 0, _EMPTY_FINGERPRINT, current_revision)
+                    logger.info(f"向量索引已清空并标记 complete:0:empty:{current_revision}")
+                    _vector_index_built = True
                 return True
 
             # 跳过重建的多重校验：status + count + metadata + FAISS ntotal +
@@ -1118,12 +1129,21 @@ def _ensure_vector_index():
             ):
                 current_fp = _compute_chunk_fingerprint()
                 if status_fp and status_fp == current_fp:
-                    logger.info(
-                        "向量索引已完整: %d 个文档（complete，数量+指纹+revision 匹配），跳过重建",
-                        stats["total_documents"],
-                    )
-                    _vector_index_built = True
-                    return True
+                    # commit 临界区：指纹计算期间可能发生 CRUD（已自增 revision），
+                    # 必须在锁内重新校验 revision 才能设置 _vector_index_built
+                    with _revision_lock:
+                        if _get_rebuild_revision() != current_revision:
+                            logger.info(
+                                "跳过检查期间检测到并发 CRUD，放弃跳过，进入重建"
+                            )
+                            # 落入下方重建分支：重新读取最新 revision
+                        else:
+                            logger.info(
+                                "向量索引已完整: %d 个文档（complete，数量+指纹+revision 匹配），跳过重建",
+                                stats["total_documents"],
+                            )
+                            _vector_index_built = True
+                            return True
                 else:
                     logger.info(
                         "向量索引指纹不匹配: 状态=%s, 实际=%s，需要重建",
@@ -1138,8 +1158,10 @@ def _ensure_vector_index():
                     expected_count, status_rev, current_revision,
                 )
 
-            # 需要重建：记录 start_revision，标记 building，清除现有索引
-            start_revision = current_revision
+            # 需要重建：重新读取最新 revision 作为 start_revision。
+            # 顶部读取的 current_revision 可能已过期（跳过分支检测到并发 CRUD
+            # 后落入此路径，或指纹计算期间发生 CRUD）。
+            start_revision = _get_rebuild_revision()
             _write_rebuild_status("building", expected_count)
             vector_db.clear_all()  # 失败时抛异常，状态保持 building
 
@@ -1207,24 +1229,29 @@ def _ensure_vector_index():
                 )
                 return False
 
-            # revision CAS: 重建期间若有并发 CRUD（revision 已自增），不标记 complete。
-            # 保持 building 状态，下次搜索会用新 revision 重新重建。
-            final_revision = _get_rebuild_revision()
-            if final_revision != start_revision:
-                logger.warning(
-                    "重建期间检测到并发 CRUD: start_revision=%d, current=%d，"
-                    "不标记 complete，保持 building 等待下次重建",
-                    start_revision, final_revision,
-                )
-                return False
+            # 落盘保证：当 save_on_every_n_adds > 0 且未达阈值时，内存索引完整
+            # 但磁盘仍为空。flush() 强制持久化，异常向上传播（不标记 complete）。
+            vector_db.flush()
 
+            # commit 临界区：revision 校验 + 写 complete + 设 _vector_index_built
+            # 必须在同一 _revision_lock 内原子完成。否则 CRUD 可能在
+            # final_revision 读取后、complete 写入前发生，旧重建会覆盖 dirty。
             final_fp = fp_hash.hexdigest()[:16]
-            _write_rebuild_status("complete", total_chunks_indexed, final_fp, start_revision)
-            logger.info(
-                f"向量索引重建完成: {total_chunks_indexed} 个 chunks"
-                f"（数量+指纹+revision CAS 校验通过，revision={start_revision}）"
-            )
-            _vector_index_built = True
+            with _revision_lock:
+                final_revision = _get_rebuild_revision()
+                if final_revision != start_revision:
+                    logger.warning(
+                        "重建期间检测到并发 CRUD: start_revision=%d, current=%d，"
+                        "不标记 complete，保持 building 等待下次重建",
+                        start_revision, final_revision,
+                    )
+                    return False
+                _write_rebuild_status("complete", total_chunks_indexed, final_fp, start_revision)
+                logger.info(
+                    f"向量索引重建完成: {total_chunks_indexed} 个 chunks"
+                    f"（数量+指纹+revision CAS 校验通过，revision={start_revision}）"
+                )
+                _vector_index_built = True
             return True
         except Exception as e:
             logger.warning(f"向量索引重建失败: {e}")
