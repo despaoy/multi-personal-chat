@@ -492,3 +492,140 @@ def test_training_resource_names_cannot_escape_output_directory():
     for unsafe in ("..", "../escape", "/tmp/escape", "folder\\escape", "bad:name"):
         with pytest.raises(HTTPException):
             _validate_resource_name(unsafe)
+
+
+@pytest.mark.asyncio
+async def test_lora_activation_returns_409_base_model_mismatch(monkeypatch):
+    """基座不匹配应返回 409 LORA_BASE_MODEL_MISMATCH，且不调用 vLLM、不改动数据库。
+
+    覆盖场景：胡桃/Minamo 的 Qwen2.5-7B LoRA 在 Qwen3-8B vLLM 上激活。
+    预检阶段拦截，避免下游 vLLM 400 被包装成模糊的 502。
+    """
+    from api import loras
+
+    class FakeDb:
+        def __init__(self):
+            self.updated = False
+
+        def get_loras(self):
+            return [{"id": "1", "name": "hutao_lora_7b", "status": "inactive"}]
+
+        def update_lora_status(self, lora_id, status):
+            self.updated = True
+            return {"id": lora_id, "name": "hutao_lora_7b", "status": status}
+
+    class FakeRequest:
+        async def json(self):
+            return {"status": "active"}
+
+    class FakeClient:
+        async def load_lora_adapter(self, name, path):
+            raise AssertionError(
+                "load_lora_adapter must not be called when base_model mismatches"
+            )
+
+        async def unload_lora_adapter(self, name):
+            raise AssertionError(
+                "unload_lora_adapter must not be called during pre-check failure"
+            )
+
+    class MismatchChecker:
+        def __init__(self, **kwargs):
+            pass
+
+        def check_adapter(self, name):
+            return type(
+                "Report",
+                (),
+                {
+                    "compatible": False,
+                    "errors": ["base_model 不匹配: adapter=Qwen2.5-7B-Instruct, expected=Qwen3-8B-Instruct"],
+                    "warnings": [],
+                    "base_model_mismatch": True,
+                    "expected_base_model": "/root/autodl-tmp/runtime/models/Qwen3-8B-Instruct",
+                    "actual_base_model": "/root/hutao-training/models/Qwen2.5-7B-Instruct",
+                },
+            )()
+
+    async def fake_get_client():
+        return FakeClient()
+
+    fake_db = FakeDb()
+    monkeypatch.setattr(loras, "db", fake_db)
+    monkeypatch.setattr(loras, "AdapterChecker", MismatchChecker)
+    monkeypatch.setattr(loras, "_resolve_vllm_adapter_path", lambda name: f"/loras/{name}")
+    import api.generate
+    monkeypatch.setattr(api.generate, "get_vllm_client", fake_get_client)
+
+    with pytest.raises(HTTPException) as exc:
+        await loras.update_lora_status("1", FakeRequest(), {"user_id": 1})
+
+    assert exc.value.status_code == 409
+    detail = exc.value.detail
+    assert detail["code"] == "LORA_BASE_MODEL_MISMATCH"
+    assert "Qwen3-8B-Instruct" in detail["expected"]
+    assert "Qwen2.5-7B-Instruct" in detail["actual"]
+    # 预检失败不应改动数据库
+    assert fake_db.updated is False
+
+
+@pytest.mark.asyncio
+async def test_lora_activation_returns_409_for_other_incompatibility(monkeypatch):
+    """非基座兼容性错误（如缺权重文件）应返回普通 409，不带 LORA_BASE_MODEL_MISMATCH code。"""
+    from api import loras
+
+    class FakeDb:
+        def __init__(self):
+            self.updated = False
+
+        def get_loras(self):
+            return [{"id": "1", "name": "broken_lora", "status": "inactive"}]
+
+        def update_lora_status(self, lora_id, status):
+            self.updated = True
+            return {"id": lora_id, "name": "broken_lora", "status": status}
+
+    class FakeRequest:
+        async def json(self):
+            return {"status": "active"}
+
+    class FakeClient:
+        async def load_lora_adapter(self, name, path):
+            raise AssertionError("load_lora_adapter must not be called on pre-check failure")
+
+    class BrokenChecker:
+        def __init__(self, **kwargs):
+            pass
+
+        def check_adapter(self, name):
+            return type(
+                "Report",
+                (),
+                {
+                    "compatible": False,
+                    "errors": ["adapter_model.safetensors / adapter_model.bin 不存在"],
+                    "warnings": [],
+                    "base_model_mismatch": False,
+                    "expected_base_model": "",
+                    "actual_base_model": "",
+                },
+            )()
+
+    async def fake_get_client():
+        return FakeClient()
+
+    fake_db = FakeDb()
+    monkeypatch.setattr(loras, "db", fake_db)
+    monkeypatch.setattr(loras, "AdapterChecker", BrokenChecker)
+    monkeypatch.setattr(loras, "_resolve_vllm_adapter_path", lambda name: f"/loras/{name}")
+    import api.generate
+    monkeypatch.setattr(api.generate, "get_vllm_client", fake_get_client)
+
+    with pytest.raises(HTTPException) as exc:
+        await loras.update_lora_status("1", FakeRequest(), {"user_id": 1})
+
+    assert exc.value.status_code == 409
+    detail = exc.value.detail
+    # 非 base_model 错误不应携带 LORA_BASE_MODEL_MISMATCH code
+    assert "code" not in detail or detail.get("code") != "LORA_BASE_MODEL_MISMATCH"
+    assert fake_db.updated is False
