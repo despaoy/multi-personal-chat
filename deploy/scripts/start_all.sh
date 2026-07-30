@@ -42,6 +42,36 @@ log_step()  { echo -e "${BLUE}[STEP]${NC} $*"; }
 log_title() { echo -e "${CYAN}========================================${NC}"; echo -e "${CYAN} $* ${NC}"; echo -e "${CYAN}========================================${NC}"; }
 
 # ------------------------------------------
+# 重复进程保护
+# ------------------------------------------
+check_existing_processes() {
+    log_step "检查端口占用（重复启动保护）..."
+
+    local ports=("8001" "8000" "5000")
+    local names=("vLLM" "FastAPI" "Next.js")
+    local conflict=0
+
+    for i in "${!ports[@]}"; do
+        local port="${ports[$i]}"
+        local name="${names[$i]}"
+        # 用 ss 检查端口是否被监听
+        if ss -tlnp 2>/dev/null | grep -q ":${port} "; then
+            local pid
+            pid=$(ss -tlnp 2>/dev/null | grep ":${port} " | grep -oP 'pid=\K[0-9]+' | head -1)
+            log_error "${name} 端口 ${port} 已被 PID=${pid:-unknown} 占用"
+            conflict=1
+        fi
+    done
+
+    if [[ ${conflict} -eq 1 ]]; then
+        log_error "检测到端口冲突，请先停止现有服务再启动"
+        log_error "停止命令: pkill -f 'vllm.entrypoints'; pkill -f 'uvicorn app.main'; pkill -f 'next/dist/bin/next'"
+        exit 1
+    fi
+    log_info "端口检查通过，无冲突"
+}
+
+# ------------------------------------------
 # 环境检查
 # ------------------------------------------
 check_environment() {
@@ -90,8 +120,9 @@ check_environment() {
         exit 1
     fi
 
-    # 检查模型文件
-    check_model_files
+    # NOTE: check_model_files 已移至 load_env 之后执行。
+    # 此前在 check_environment 中调用时，deploy/.env 尚未加载，
+    # MODEL_PATH 会走默认值 backend/models/Qwen3-8B-Instruct-AWQ 导致误报。
 
     # 检查 Python
     if command -v python3 &>/dev/null; then
@@ -491,12 +522,18 @@ main() {
     DOCKER_AVAILABLE=true
     NVIDIA_DOCKER_AVAILABLE=true
 
+    # 重复进程保护（在任何启动操作之前检查端口冲突）
+    check_existing_processes
+
     # 环境检查
     check_environment
 
     # 生成/加载配置
     generate_env_file
     load_env
+
+    # 检查模型文件（必须在 load_env 之后，确保 MODEL_PATH 已从 deploy/.env 加载）
+    check_model_files
 
     # 选择启动模式
     local mode

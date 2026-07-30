@@ -18,6 +18,13 @@ MAX_LORA_RANK="${VLLM_MAX_LORA_RANK:-64}"
 MAX_MODEL_LEN="${VLLM_MAX_MODEL_LEN:-4096}"
 DTYPE="${VLLM_DTYPE:-float16}"
 
+# 当 QUANTIZATION 为 none/空时，不传 --quantization 参数，让 vLLM 从 config.json 自动检测。
+# vLLM 不接受 "none" 作为量化方法名，会抛 ValidationError。
+QUANT_ARG=""
+if [[ -n "${QUANTIZATION}" && "${QUANTIZATION}" != "none" ]]; then
+    QUANT_ARG="--quantization ${QUANTIZATION}"
+fi
+
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -76,16 +83,18 @@ start_vllm() {
     log_info "  Port: ${PORT}"
     log_info "  Model: ${MODEL_PATH}"
     log_info "  Served model: ${SERVED_MODEL_NAME}"
-    log_info "  Quantization: ${QUANTIZATION}"
+    log_info "  Quantization: ${QUANTIZATION:-auto (no flag)}"
     log_info "  LoRA directory: ${LORA_PATH}"
 
     export CUDA_VISIBLE_DEVICES="${GPU_ID}"
     export VLLM_ALLOW_RUNTIME_LORA_UPDATING="${VLLM_ALLOW_RUNTIME_LORA_UPDATING:-True}"
 
+    # QUANT_ARG 为空时不传 --quantization，让 vLLM 自动检测量化方式
+    # shellcheck disable=SC2086
     python3 -m vllm.entrypoints.openai.api_server \
         --model "${MODEL_PATH}" \
         --served-model-name "${SERVED_MODEL_NAME}" \
-        --quantization "${QUANTIZATION}" \
+        ${QUANT_ARG} \
         --enable-lora \
         --max-loras "${MAX_LORAS}" \
         --max-lora-rank "${MAX_LORA_RANK}" \

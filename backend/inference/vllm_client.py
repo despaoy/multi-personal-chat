@@ -11,6 +11,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 import time
 from dataclasses import dataclass, field
 from enum import Enum
@@ -24,6 +25,24 @@ from infra.circuit_breaker import (
 from interfaces import InferenceInterface
 
 logger = logging.getLogger(__name__)
+
+
+# Qwen3 等模型默认开启 thinking 模式，会输出 <think>...</think> 消耗额外 token。
+# 1) 通过 chat_template_kwargs 在请求层关闭（根治）
+# 2) 用正则兜底过滤已生成的 think 段（防御，避免 think 内容发到 QQ/微信）
+_THINK_TAG_RE = re.compile(r"<think>.*?</think>", re.DOTALL | re.IGNORECASE)
+
+
+def _strip_think_tags(text: str) -> str:
+    """移除 <think>...</think> 段并清理多余空白。"""
+    if "<think>" not in text.lower():
+        return text
+    cleaned = _THINK_TAG_RE.sub("", text)
+    return cleaned.strip()
+
+
+# 关闭 thinking 模式的请求参数，注入到 vLLM chat completions payload
+_DISABLE_THINKING_KWARGS = {"enable_thinking": False}
 
 
 # ---------------------------------------------------------------------------
@@ -428,6 +447,8 @@ class VLLMClient:
             "max_tokens": max_tokens,
             "top_p": top_p,
             "stream": False,
+            # 关闭 Qwen3 thinking 模式，避免输出 <think> 段消耗 token
+            "chat_template_kwargs": _DISABLE_THINKING_KWARGS,
         }
 
         last_error: Optional[Exception] = None
@@ -453,6 +474,8 @@ class VLLMClient:
                 if resp.status_code == 200:
                     data = resp.json()
                     text = data["choices"][0]["message"]["content"].strip()
+                    # 兜底过滤：即使 chat_template_kwargs 未生效，也移除 think 段
+                    text = _strip_think_tags(text)
                     elapsed = time.monotonic() - start_time
                     async with self._instance_lock:
                         instance.record_success(elapsed)
@@ -553,6 +576,8 @@ class VLLMClient:
             "max_tokens": max_tokens,
             "top_p": top_p,
             "stream": True,
+            # 关闭 Qwen3 thinking 模式，避免输出 <think> 段消耗 token
+            "chat_template_kwargs": _DISABLE_THINKING_KWARGS,
         }
 
         # 流式请求不重试（连接建立后无法回退）
