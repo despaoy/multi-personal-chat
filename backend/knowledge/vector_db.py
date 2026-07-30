@@ -906,9 +906,10 @@ class VectorDatabase:
         self.add_documents(documents)
 
     def clear_all(self):
-        """清空所有向量索引和元数据（不涉及磁盘文件）。
+        """清空所有向量索引和元数据，并立即持久化空索引到磁盘。
 
-        用于向量索引重建前的清理：确保上次失败的部分批次不会残留。
+        用于向量索引重建前的清理：确保上次失败的部分批次不会残留，
+        也避免删除全部知识后旧磁盘文件被下次启动加载。
         重建状态由调用方（_ensure_vector_index）在 config 表中管理。
         """
         with self._lock:
@@ -917,8 +918,20 @@ class VectorDatabase:
             self._id_to_index = {}
             self._query_cache.clear()
             self._create_index()
+            # 重置 BM25：旧文档词频与新文档混合会导致 hybrid/BM25 结果错位
+            self.bm25 = BM25Retriever()
             self._dirty = True
-        logger.info("向量索引已清空，准备重建")
+            # 立即持久化空索引，覆盖磁盘上的旧 faiss_index.bin / metadata.pkl / bm25_state.pkl
+            # 防止"内存清空但磁盘残留"导致重启后旧内容被加载
+            try:
+                faiss.write_index(self.index, str(self.index_path))
+                with open(self.metadata_path, 'wb') as f:
+                    pickle.dump(self.metadata, f)
+                self._save_bm25()
+                self._dirty = False
+            except Exception as e:
+                logger.error(f"clear_all 持久化空索引失败: {e}")
+        logger.info("向量索引已清空并持久化空索引，准备重建")
 
     def get_stats(self) -> Dict[str, Any]:
         with self._lock:

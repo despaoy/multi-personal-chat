@@ -813,6 +813,51 @@ class PgDatabase:
                 if len(rows) < batch_size:
                     break
 
+    async def iter_chunks_with_document(self, batch_size: int = 500):
+        """分页迭代 chunk 及其所属文档（LEFT JOIN），避免 N+1 查询。
+
+        与 SQLiteDB.iter_chunks_with_document 行为一致：每次 yield 一条 dict，
+        包含 chunk 字段和文档字段（doc_title / doc_category / doc_kb_id）。
+        孤儿 chunk（文档已删除）的 doc_title 为 None，调用方可跳过。
+        """
+        offset = 0
+        while True:
+            batch = await self.get_chunks_with_document(limit=batch_size, offset=offset)
+            if not batch:
+                break
+            for row in batch:
+                yield row
+            offset += len(batch)
+            if len(batch) < batch_size:
+                break
+
+    async def get_chunks_with_document(self, limit: int = 500, offset: int = 0) -> List[Dict]:
+        """单页查询 chunk + document（LEFT JOIN），返回 dict 列表。
+
+        供 SyncPgAdapter 同步包装使用（async generator 无法直接 _run）。
+        """
+        from sqlalchemy import select
+        async with self.async_session() as session:
+            stmt = (
+                select(
+                    knowledge_chunks_table,
+                    knowledge_documents_table.c.title.label("doc_title"),
+                    knowledge_documents_table.c.category.label("doc_category"),
+                    knowledge_documents_table.c.knowledge_base_id.label("doc_kb_id"),
+                )
+                .select_from(
+                    knowledge_chunks_table.outerjoin(
+                        knowledge_documents_table,
+                        knowledge_chunks_table.c.documentId == knowledge_documents_table.c.id,
+                    )
+                )
+                .order_by(knowledge_chunks_table.c.documentId, knowledge_chunks_table.c.chunkIndex)
+                .limit(limit)
+                .offset(offset)
+            )
+            result = await session.execute(stmt)
+            return [_row_to_dict(row) for row in result.fetchall()]
+
     async def get_knowledge_stats(self) -> Dict:
         """获取知识库统计数据"""
         async with self.async_session() as session:
@@ -1684,6 +1729,25 @@ class SyncPgAdapter:
                 break
             for chunk in batch:
                 yield chunk
+            offset += len(batch)
+            if len(batch) < batch_size:
+                break
+
+    def iter_chunks_with_document(self, batch_size: int = 500):
+        """同步生成器版本：分页迭代 chunk + document（LEFT JOIN）。
+
+        与 iter_all_knowledge_chunks 同样回退到分页批量拉取，每条 dict 包含
+        chunk 字段及 doc_title / doc_category / doc_kb_id。
+        """
+        # PgDatabase.iter_chunks_with_document 是 async generator，无法直接 _run。
+        # 改为分页调用底层 SQL，与 SQLite 实现保持语义一致。
+        offset = 0
+        while True:
+            batch = self._run(self._pg.get_chunks_with_document(limit=batch_size, offset=offset))
+            if not batch:
+                break
+            for row in batch:
+                yield row
             offset += len(batch)
             if len(batch) < batch_size:
                 break

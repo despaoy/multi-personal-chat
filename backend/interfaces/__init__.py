@@ -46,6 +46,15 @@ class DatabaseInterface(Protocol):
         """执行 SQL 插入/更新"""
         ...
 
+    def iter_chunks_with_document(self, batch_size: int = 500):
+        """分页迭代 chunk 及其所属文档（LEFT JOIN），避免 N+1 查询。
+
+        每条记录包含 chunk 字段和文档字段（doc_title / doc_category /
+        doc_kb_id）。孤儿 chunk 的 doc_title 为 None。
+        SQLiteDB / SyncPgAdapter 必须实现此方法以支持向量索引重建。
+        """
+        ...
+
 
 # ============================================
 # 推理引擎接口

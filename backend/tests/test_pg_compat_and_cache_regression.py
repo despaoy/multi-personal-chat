@@ -643,61 +643,385 @@ class TestIterChunksWithDocument:
 # ============================================================
 
 class TestVectorRebuildStatus:
-    """Verify the rebuild status (building/complete) is tracked in config
-    so interrupted rebuilds are detected and retried."""
+    """Verify the rebuild status (building/complete/dirty + fingerprint) is
+    tracked in config so interrupted rebuilds and content changes are detected."""
 
     def _make_db(self, tmp_path):
         from db.database import SQLiteDB
         return SQLiteDB(tmp_path / "status.db")
 
+    def _patch_kmod_db(self, kmod, db):
+        """Point api.knowledge.db at the temp db so status helpers use it."""
+        original = kmod.db
+        kmod.db = db
+        return original
+
     def test_status_round_trip(self, tmp_path):
-        """_write_rebuild_status / _read_rebuild_status round-trip correctly."""
+        """_write_rebuild_status / _read_rebuild_status round-trip correctly,
+        including the new fingerprint field."""
+        from api import knowledge as kmod
         db = self._make_db(tmp_path)
-        from api.knowledge import _VECTOR_REBUILD_STATUS_KEY
+        original_db = self._patch_kmod_db(kmod, db)
+        try:
+            from api.knowledge import _VECTOR_REBUILD_STATUS_KEY, _read_rebuild_status, _write_rebuild_status
 
-        # Initially empty
-        assert db.get_config_value(_VECTOR_REBUILD_STATUS_KEY, "") == ""
+            # Initially empty
+            assert db.get_config_value(_VECTOR_REBUILD_STATUS_KEY, "") == ""
 
-        # Write building
-        db.set_config_value(_VECTOR_REBUILD_STATUS_KEY, "building:500")
-        assert db.get_config_value(_VECTOR_REBUILD_STATUS_KEY, "") == "building:500"
+            # Write building (no fingerprint)
+            _write_rebuild_status("building", 500)
+            status, count, fp = _read_rebuild_status()
+            assert (status, count, fp) == ("building", 500, "")
 
-        # Write complete
-        db.set_config_value(_VECTOR_REBUILD_STATUS_KEY, "complete:500")
-        assert db.get_config_value(_VECTOR_REBUILD_STATUS_KEY, "") == "complete:500"
-        db.close_connection()
+            # Write complete with fingerprint
+            _write_rebuild_status("complete", 500, "abc123def456")
+            status, count, fp = _read_rebuild_status()
+            assert (status, count, fp) == ("complete", 500, "abc123def456")
+
+            # Write dirty (special form, no count/fingerprint)
+            db.set_config_value(_VECTOR_REBUILD_STATUS_KEY, "dirty")
+            status, count, fp = _read_rebuild_status()
+            assert (status, count, fp) == ("dirty", 0, "")
+
+            # Old format "complete:{count}" (no fingerprint) → fp empty, triggers rebuild
+            db.set_config_value(_VECTOR_REBUILD_STATUS_KEY, "complete:500")
+            status, count, fp = _read_rebuild_status()
+            assert status == "complete" and count == 500 and fp == "", "old format must parse with empty fp"
+        finally:
+            kmod.db = original_db
+            db.close_connection()
 
     def test_building_status_triggers_rebuild_not_skip(self, tmp_path):
         """If status is 'building' (interrupted), the index must NOT be
         considered complete — it should trigger a rebuild on next access."""
+        from api import knowledge as kmod
         db = self._make_db(tmp_path)
-        from api.knowledge import _VECTOR_REBUILD_STATUS_KEY
+        original_db = self._patch_kmod_db(kmod, db)
+        try:
+            from api.knowledge import _VECTOR_REBUILD_STATUS_KEY, _read_rebuild_status
 
-        # Simulate an interrupted rebuild: status=building but some chunks exist
-        db.set_config_value(_VECTOR_REBUILD_STATUS_KEY, "building:100")
-        status_raw = db.get_config_value(_VECTOR_REBUILD_STATUS_KEY, "")
-        assert status_raw.startswith("building"), "building status must not be treated as complete"
-        db.close_connection()
+            # Simulate an interrupted rebuild: status=building but some chunks exist
+            db.set_config_value(_VECTOR_REBUILD_STATUS_KEY, "building:100")
+            status, _, _ = _read_rebuild_status()
+            assert status == "building", "building status must not be treated as complete"
+        finally:
+            kmod.db = original_db
+            db.close_connection()
+
+    def test_dirty_status_triggers_rebuild(self, tmp_path):
+        """If status is 'dirty' (document CUD), the index must be rebuilt."""
+        from api import knowledge as kmod
+        db = self._make_db(tmp_path)
+        original_db = self._patch_kmod_db(kmod, db)
+        try:
+            from api.knowledge import _mark_rebuild_dirty, _read_rebuild_status
+
+            _mark_rebuild_dirty()
+            status, _, _ = _read_rebuild_status()
+            assert status == "dirty", "dirty status must trigger rebuild"
+        finally:
+            kmod.db = original_db
+            db.close_connection()
 
     def test_complete_with_mismatched_count_triggers_rebuild(self, tmp_path):
         """If status is 'complete' but count doesn't match expected, rebuild
         must be triggered."""
+        from api import knowledge as kmod
         db = self._make_db(tmp_path)
-        from api.knowledge import _VECTOR_REBUILD_STATUS_KEY
+        original_db = self._patch_kmod_db(kmod, db)
+        try:
+            from api.knowledge import _VECTOR_REBUILD_STATUS_KEY, _read_rebuild_status
 
-        # Status says complete:50 but actual chunk count is 100
-        db.set_config_value(_VECTOR_REBUILD_STATUS_KEY, "complete:50")
-        # Insert 100 chunks to simulate mismatch
-        db.execute_sql_insert(
-            "INSERT INTO knowledge_documents (id, title, content, category, createdAt, updatedAt) VALUES (1, 'd', 'c', 'x', '2026-01-01', '2026-01-01')",
-            {},
-        )
-        for i in range(100):
+            # Status says complete:50 but actual chunk count is 100
+            db.set_config_value(_VECTOR_REBUILD_STATUS_KEY, "complete:50:fp")
+            # Insert 1 document and 100 chunks
             db.execute_sql_insert(
-                "INSERT INTO knowledge_chunks (documentId, chunkIndex, content, embedding, createdAt) VALUES (1, :idx, :content, NULL, '2026-01-01')",
-                {"idx": i, "content": f"c{i}"},
+                "INSERT INTO knowledge_documents (id, title, content, category, createdAt, updatedAt) VALUES (1, 'd', 'c', 'x', '2026-01-01', '2026-01-01')",
+                {},
             )
-        actual_count = db.execute_sql("SELECT COUNT(*) AS cnt FROM knowledge_chunks", {})[0]["cnt"]
-        assert actual_count == 100
-        assert actual_count != 50, "count mismatch must be detectable"
-        db.close_connection()
+            for i in range(100):
+                db.execute_sql_insert(
+                    "INSERT INTO knowledge_chunks (documentId, chunkIndex, content, embedding, createdAt) VALUES (1, :idx, :content, NULL, '2026-01-01')",
+                    {"idx": i, "content": f"c{i}"},
+                )
+            actual_count = db.execute_sql("SELECT COUNT(*) AS cnt FROM knowledge_chunks", {})[0]["cnt"]
+            assert actual_count == 100
+            status, count, _ = _read_rebuild_status()
+            assert count == 50 and actual_count == 100, "count mismatch must be detectable"
+        finally:
+            kmod.db = original_db
+            db.close_connection()
+
+    def test_expected_count_excludes_orphan_chunks(self, tmp_path):
+        """_get_expected_chunk_count uses INNER JOIN, so orphan chunks
+        (whose document was deleted) don't cause permanent count mismatch."""
+        import sqlite3
+        from api import knowledge as kmod
+        db = self._make_db(tmp_path)
+        original_db = self._patch_kmod_db(kmod, db)
+        try:
+            from api.knowledge import _get_expected_chunk_count
+
+            # Insert 1 document + 2 chunks
+            db.execute_sql_insert(
+                "INSERT INTO knowledge_documents (id, title, content, category, createdAt, updatedAt) VALUES (1, 'd', 'c', 'x', '2026-01-01', '2026-01-01')",
+                {},
+            )
+            db.execute_sql_insert(
+                "INSERT INTO knowledge_chunks (documentId, chunkIndex, content, embedding, createdAt) VALUES (1, 0, 'c0', NULL, '2026-01-01')",
+                {},
+            )
+            db.execute_sql_insert(
+                "INSERT INTO knowledge_chunks (documentId, chunkIndex, content, embedding, createdAt) VALUES (1, 1, 'c1', NULL, '2026-01-01')",
+                {},
+            )
+            # Insert 1 orphan chunk (documentId references non-existent doc)
+            conn = sqlite3.connect(str(tmp_path / "status.db"))
+            conn.execute("PRAGMA foreign_keys = OFF")
+            conn.execute(
+                "INSERT INTO knowledge_chunks (documentId, chunkIndex, content, embedding, createdAt) VALUES (999, 0, 'orphan', NULL, '2026-01-01')"
+            )
+            conn.commit()
+            conn.close()
+
+            # Expected count = 2 (excludes orphan), NOT 3
+            assert _get_expected_chunk_count() == 2, "expected_count must exclude orphan chunks"
+        finally:
+            kmod.db = original_db
+            db.close_connection()
+
+
+# ============================================================
+# 6b. End-to-end _ensure_vector_index() regression
+# ============================================================
+
+class TestEnsureVectorIndexEndToEnd:
+    """Actually call _ensure_vector_index() with a mocked vector_db to verify
+    the full rebuild state machine: dirty → building → complete:{count}:{fp}."""
+
+    def _make_db(self, tmp_path):
+        from db.database import SQLiteDB
+        return SQLiteDB(tmp_path / "e2e.db")
+
+    def _insert_doc_with_chunks(self, db, doc_id, title, chunks):
+        db.execute_sql_insert(
+            "INSERT INTO knowledge_documents (id, title, content, category, createdAt, updatedAt) "
+            "VALUES (:id, :title, :content, 'cat', '2026-01-01', '2026-01-01')",
+            {"id": doc_id, "title": title, "content": "full"},
+        )
+        for i, c in enumerate(chunks):
+            db.execute_sql_insert(
+                "INSERT INTO knowledge_chunks (documentId, chunkIndex, content, embedding, createdAt) "
+                "VALUES (:doc_id, :idx, :content, NULL, '2026-01-01')",
+                {"doc_id": doc_id, "idx": i, "content": c},
+            )
+
+    def test_empty_db_clears_index_and_marks_complete(self, tmp_path, monkeypatch):
+        """When expected_count == 0, _ensure_vector_index must clear the
+        vector_db and write complete:0:empty, even if old index existed."""
+        from api import knowledge as kmod
+
+        # Point adapter at temp db
+        original_db = kmod.db
+        db = self._make_db(tmp_path)
+        kmod.db = db
+        # Reset in-memory flag
+        kmod._vector_index_built = False
+
+        # Mock vector_db: simulate stale index with 5 docs that must be cleared
+        cleared = {"called": False}
+        class MockVectorDB:
+            def get_stats(self):
+                return {"total_documents": 5, "index_size": 5, "index_type": "flat",
+                        "embedding_dim": 768, "use_gpu": False, "bm25_built": False,
+                        "bm25_vocab_size": 0, "dirty": False}
+            def clear_all(self):
+                cleared["called"] = True
+            def add_documents(self, docs):
+                raise AssertionError("should not add documents when expected_count==0")
+
+        monkeypatch.setattr(kmod, "VECTOR_DB_AVAILABLE", True, raising=False)
+        # Patch the late import inside _ensure_vector_index: it does
+        #   from app.config import VECTOR_DB_AVAILABLE
+        #   from knowledge.vector_db import get_vector_db
+        import sys
+        import types
+        fake_app_config = types.ModuleType("app.config")
+        fake_app_config.VECTOR_DB_AVAILABLE = True
+        fake_app_config.get_vector_db = lambda: MockVectorDB()
+        monkeypatch.setitem(sys.modules, "app.config", fake_app_config)
+        fake_vector_db_mod = types.ModuleType("knowledge.vector_db")
+        fake_vector_db_mod.get_vector_db = lambda: MockVectorDB()
+        monkeypatch.setitem(sys.modules, "knowledge.vector_db", fake_vector_db_mod)
+
+        try:
+            assert kmod._ensure_vector_index() is True
+            assert cleared["called"], "clear_all must be called when stale index exists with 0 chunks"
+            status, count, fp = kmod._read_rebuild_status()
+            assert (status, count, fp) == ("complete", 0, kmod._EMPTY_FINGERPRINT)
+            assert kmod._vector_index_built is True
+        finally:
+            kmod.db = original_db
+            db.close_connection()
+
+    def test_dirty_status_forces_rebuild(self, tmp_path, monkeypatch):
+        """dirty status (from document CUD) must force a full rebuild even if
+        count and fingerprint would otherwise match."""
+        from api import knowledge as kmod
+        import sys
+        import types
+
+        db = self._make_db(tmp_path)
+        original_db = kmod.db
+        kmod.db = db
+        kmod._vector_index_built = False
+
+        # Insert 2 chunks (so expected_count == 2)
+        self._insert_doc_with_chunks(db, 1, "Doc1", ["c0", "c1"])
+
+        # Pre-write a stale complete:2:fakefp that would match count but not fingerprint
+        kmod._write_rebuild_status("complete", 2, "stale_fp")
+
+        added_docs = {"count": 0}
+        class MockVectorDB:
+            def __init__(self):
+                self._docs = 5  # simulate stale index
+            def get_stats(self):
+                return {"total_documents": self._docs, "index_size": self._docs,
+                        "index_type": "flat", "embedding_dim": 768, "use_gpu": False,
+                        "bm25_built": False, "bm25_vocab_size": 0, "dirty": False}
+            def clear_all(self):
+                self._docs = 0
+            def add_documents(self, docs):
+                added_docs["count"] += len(docs)
+                self._docs += len(docs)
+
+        monkeypatch.setattr(kmod, "VECTOR_DB_AVAILABLE", True, raising=False)
+        fake_app_config = types.ModuleType("app.config")
+        fake_app_config.VECTOR_DB_AVAILABLE = True
+        fake_app_config.get_vector_db = lambda: mock_inst
+        monkeypatch.setitem(sys.modules, "app.config", fake_app_config)
+        fake_vector_db_mod = types.ModuleType("knowledge.vector_db")
+        fake_vector_db_mod.get_vector_db = lambda: mock_inst
+        monkeypatch.setitem(sys.modules, "knowledge.vector_db", fake_vector_db_mod)
+
+        mock_inst = MockVectorDB()
+
+        try:
+            assert kmod._ensure_vector_index() is True
+            # Must have rebuilt (fingerprint mismatch → rebuild → add 2 docs)
+            assert added_docs["count"] == 2, "dirty/stale status must trigger rebuild"
+            status, count, fp = kmod._read_rebuild_status()
+            assert status == "complete"
+            assert count == 2
+            assert fp and fp != "stale_fp", "fingerprint must be updated after rebuild"
+            assert kmod._vector_index_built is True
+        finally:
+            kmod.db = original_db
+            db.close_connection()
+
+    def test_complete_with_matching_count_and_fp_skips_rebuild(self, tmp_path, monkeypatch):
+        """When status=complete, count matches, AND fingerprint matches,
+        _ensure_vector_index must skip rebuild (return True without adding)."""
+        from api import knowledge as kmod
+        import sys
+        import types
+
+        db = self._make_db(tmp_path)
+        original_db = kmod.db
+        kmod.db = db
+        kmod._vector_index_built = False
+
+        self._insert_doc_with_chunks(db, 1, "Doc1", ["c0", "c1"])
+
+        # Compute the real fingerprint, then write a matching complete status
+        real_fp = kmod._compute_chunk_fingerprint()
+        kmod._write_rebuild_status("complete", 2, real_fp)
+
+        add_called = {"called": False}
+        class MockVectorDB:
+            def get_stats(self):
+                return {"total_documents": 2, "index_size": 2, "index_type": "flat",
+                        "embedding_dim": 768, "use_gpu": False, "bm25_built": False,
+                        "bm25_vocab_size": 0, "dirty": False}
+            def clear_all(self):
+                raise AssertionError("clear_all must not be called when skipping rebuild")
+            def add_documents(self, docs):
+                add_called["called"] = True
+
+        monkeypatch.setattr(kmod, "VECTOR_DB_AVAILABLE", True, raising=False)
+        fake_app_config = types.ModuleType("app.config")
+        fake_app_config.VECTOR_DB_AVAILABLE = True
+        fake_app_config.get_vector_db = lambda: MockVectorDB()
+        monkeypatch.setitem(sys.modules, "app.config", fake_app_config)
+        fake_vector_db_mod = types.ModuleType("knowledge.vector_db")
+        fake_vector_db_mod.get_vector_db = lambda: MockVectorDB()
+        monkeypatch.setitem(sys.modules, "knowledge.vector_db", fake_vector_db_mod)
+
+        try:
+            assert kmod._ensure_vector_index() is True
+            assert not add_called["called"], "must skip rebuild when count + fp match"
+            assert kmod._vector_index_built is True
+        finally:
+            kmod.db = original_db
+            db.close_connection()
+
+    def test_content_change_with_same_count_forces_rebuild(self, tmp_path, monkeypatch):
+        """When chunk count is unchanged but content is updated, the
+        fingerprint must differ and force a rebuild. This is the core
+        regression for 'content update with same chunk count'."""
+        from api import knowledge as kmod
+        import sys
+        import types
+
+        db = self._make_db(tmp_path)
+        original_db = kmod.db
+        kmod.db = db
+        kmod._vector_index_built = False
+
+        # Insert 2 chunks, compute fingerprint, write complete status
+        self._insert_doc_with_chunks(db, 1, "Doc1", ["original0", "original1"])
+        fp_before = kmod._compute_chunk_fingerprint()
+        kmod._write_rebuild_status("complete", 2, fp_before)
+
+        # Now update chunk content WITHOUT changing count
+        db.execute_sql(
+            "UPDATE knowledge_chunks SET content = :new WHERE documentId = 1 AND chunkIndex = 0",
+            {"new": "modified0"},
+        )
+        # Fingerprint must differ
+        fp_after = kmod._compute_chunk_fingerprint()
+        assert fp_after != fp_before, "content change must produce different fingerprint"
+
+        added_docs = {"count": 0}
+        class MockVectorDB:
+            def __init__(self):
+                self._docs = 2
+            def get_stats(self):
+                return {"total_documents": self._docs, "index_size": self._docs,
+                        "index_type": "flat", "embedding_dim": 768, "use_gpu": False,
+                        "bm25_built": False, "bm25_vocab_size": 0, "dirty": False}
+            def clear_all(self):
+                self._docs = 0
+            def add_documents(self, docs):
+                added_docs["count"] += len(docs)
+                self._docs += len(docs)
+
+        monkeypatch.setattr(kmod, "VECTOR_DB_AVAILABLE", True, raising=False)
+        fake_app_config = types.ModuleType("app.config")
+        fake_app_config.VECTOR_DB_AVAILABLE = True
+        fake_app_config.get_vector_db = lambda: mock_inst
+        monkeypatch.setitem(sys.modules, "app.config", fake_app_config)
+        fake_vector_db_mod = types.ModuleType("knowledge.vector_db")
+        fake_vector_db_mod.get_vector_db = lambda: mock_inst
+        monkeypatch.setitem(sys.modules, "knowledge.vector_db", fake_vector_db_mod)
+        mock_inst = MockVectorDB()
+
+        try:
+            assert kmod._ensure_vector_index() is True
+            assert added_docs["count"] == 2, "content change must trigger rebuild despite same count"
+            status, count, fp = kmod._read_rebuild_status()
+            assert status == "complete" and count == 2 and fp == fp_after
+        finally:
+            kmod.db = original_db
+            db.close_connection()

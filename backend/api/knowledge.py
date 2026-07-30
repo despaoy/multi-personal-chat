@@ -116,6 +116,8 @@ async def delete_knowledge_base(kb_id: int, current_user: dict = Depends(get_cur
     if not existing:
         raise HTTPException(status_code=404, detail="知识库不存在")
     db.delete_knowledge_base(kb_id)
+    # 级联删除后标记 dirty，防止向量删除失败时旧内容仍可被检索
+    _mark_rebuild_dirty()
     return {"success": True, "message": "知识库已删除"}
 
 
@@ -155,6 +157,8 @@ async def delete_knowledge_folder(folder_id: int, current_user: dict = Depends(g
     if not existing:
         raise HTTPException(status_code=404, detail="文件夹不存在")
     db.delete_knowledge_folder(folder_id)
+    # 级联删除后标记 dirty，防止向量删除失败时旧内容仍可被检索
+    _mark_rebuild_dirty()
     return {"success": True, "message": "文件夹已删除"}
 
 
@@ -303,6 +307,8 @@ async def upload_zip(kb_id: int, file: UploadFile = File(...), current_user: dic
             except Exception as ve:
                 logger.error(f"添加到向量数据库失败: {ve}")
 
+        # 标记向量索引为 dirty，确保下次搜索时重建状态与数据库一致
+        _mark_rebuild_dirty()
         created_docs += 1
 
     zf.close()
@@ -499,7 +505,7 @@ async def import_scanned_directory(directory_name: str, kb_id: int = None, curre
                     })
                 
                 db.update_knowledge_document(document["id"], {"chunkCount": chunk_count})
-                
+
                 if VECTOR_DB_AVAILABLE and vector_docs:
                     try:
                         from app.config import get_vector_db
@@ -507,6 +513,9 @@ async def import_scanned_directory(directory_name: str, kb_id: int = None, curre
                         await asyncio.to_thread(vector_db.add_documents, vector_docs)
                     except Exception as ve:
                         logger.error(f"添加到向量数据库失败: {ve}")
+
+                # 标记向量索引为 dirty，确保下次搜索时重建状态与数据库一致
+                _mark_rebuild_dirty()
 
                 created_docs += 1
 
@@ -572,7 +581,7 @@ async def import_scanned_directory(directory_name: str, kb_id: int = None, curre
                 })
             
             db.update_knowledge_document(document["id"], {"chunkCount": chunk_count})
-            
+
             if VECTOR_DB_AVAILABLE and vector_docs:
                 try:
                     from app.config import get_vector_db
@@ -581,6 +590,8 @@ async def import_scanned_directory(directory_name: str, kb_id: int = None, curre
                 except Exception as ve:
                     logger.error(f"添加到向量数据库失败: {ve}")
 
+            # 标记向量索引为 dirty，确保下次搜索时重建状态与数据库一致
+            _mark_rebuild_dirty()
             created_docs += 1
         except Exception as e:
             errors.append(f"处理根目录文件 {file_path.name} 失败: {str(e)}")
@@ -713,6 +724,8 @@ async def create_knowledge_document(request: KnowledgeDocumentCreate, current_us
             except Exception as ve:
                 logger.error(f"添加到向量数据库失败: {ve}")
 
+        # 标记向量索引为 dirty，确保下次搜索时重建状态与数据库一致
+        _mark_rebuild_dirty()
         logger.info(f"创建知识库文档: {document['title']}, 分块数: {chunk_count}")
         return {
             "success": True,
@@ -822,6 +835,10 @@ async def update_knowledge_document(doc_id: int, request: KnowledgeDocumentUpdat
                 except Exception as ve:
                     logger.warning(f"更新向量数据库失败: {ve}")
 
+            # 内容变更后必须标记 dirty：即使 chunk 数量不变，内容指纹也会不同，
+            # 下次搜索会触发重建，避免旧向量被检索
+            _mark_rebuild_dirty()
+
         logger.info(f"更新知识库文档: {doc_id}")
         return {
             "success": True,
@@ -861,6 +878,8 @@ async def delete_knowledge_document(doc_id: int, current_user: dict = Depends(ge
                 logger.warning(f"从向量数据库删除文档失败: {ve}")
 
         db.delete_knowledge_document(doc_id)
+        # 删除后标记 dirty，防止向量删除失败时旧内容仍可被检索
+        _mark_rebuild_dirty()
         logger.info(f"删除知识库文档: {doc_id}")
         return {"success": True, "message": "文档删除成功"}
     except HTTPException:
@@ -877,33 +896,106 @@ async def delete_knowledge_document(doc_id: int, current_user: dict = Depends(ge
 _vector_index_built = False
 _vector_index_lock = threading.Lock()
 
-# 重建状态键，存储在 config 表中，格式为 "building:{expected}" 或 "complete:{count}"
+# 重建状态键，存储在 config 表中。
+# 状态格式：
+#   "building:{expected}"               - 重建进行中（中断后会触发重建）
+#   "complete:{count}:{fingerprint}"    - 重建完成，count + 内容指纹必须同时匹配
+#   "dirty"                             - 文档 CUD 后标记，下次搜索必须重建
+# fingerprint 基于 chunk 内容+位置哈希，覆盖"数量不变但内容已更新"场景。
 _VECTOR_REBUILD_STATUS_KEY = "vector_index_rebuild_status"
+_EMPTY_FINGERPRINT = "empty"
+
+
+def _compute_chunk_fingerprint() -> str:
+    """计算 chunk 内容指纹，用于检测内容变更（即使 chunk 数量不变）。
+
+    指纹覆盖每个 chunk 的 (documentId, chunkIndex, content, doc_title,
+    doc_category, doc_kb_id)。使用稳定的串接顺序确保跨后端一致。
+    孤儿 chunk（doc_title IS NULL）也参与计算，确保孤儿清理后能被检测。
+
+    为避免大库一次性加载导致 OOM，使用流式哈希：每读一批更新一次 md5。
+    """
+    import hashlib
+    h = hashlib.md5()
+    # 使用与 iter_chunks_with_document 相同的 LEFT JOIN，确保遍历范围一致
+    for row in db.iter_chunks_with_document(batch_size=500):
+        # doc_title 可能是 None（孤儿 chunk），统一转 str 以保证跨行稳定
+        parts = (
+            str(row.get("documentId")),
+            str(row.get("chunkIndex")),
+            row.get("content", "") or "",
+            row.get("doc_title") or "",
+            row.get("doc_category") or "",
+            str(row.get("doc_kb_id") or ""),
+        )
+        h.update("\x1f".join(parts).encode("utf-8"))
+        h.update(b"\x1e")  # 记录分隔符
+    return h.hexdigest()[:16]
 
 
 def _get_expected_chunk_count() -> int:
-    """获取数据库中 chunk 的预期总数，用于重建完整性校验。"""
-    rows = db.execute_sql("SELECT COUNT(*) AS cnt FROM knowledge_chunks", {})
+    """获取数据库中"有效" chunk 的预期总数（与重建遍历范围一致）。
+
+    使用 INNER JOIN：与 _ensure_vector_index 重建时跳过孤儿 chunk 的逻辑一致，
+    避免"预期数量含孤儿但遍历跳过孤儿"导致永久不匹配、每次搜索都重建。
+    """
+    rows = db.execute_sql(
+        "SELECT COUNT(*) AS cnt FROM knowledge_chunks c "
+        "INNER JOIN knowledge_documents d ON c.documentId = d.id",
+        {},
+    )
     return rows[0]["cnt"] if rows else 0
 
 
-def _read_rebuild_status() -> tuple[str, int]:
-    """读取重建状态，返回 (status, count)。status 为 'building'/'complete'/''。"""
+def _read_rebuild_status() -> tuple[str, int, str]:
+    """读取重建状态，返回 (status, count, fingerprint)。
+
+    status 为 'building'/'complete'/'dirty'/''。
+    count 为整数（building/complete 时有意义），fingerprint 为字符串（仅 complete 时有意义）。
+    旧格式 "complete:{count}" 视为 fingerprint 缺失，会触发重建。
+    """
     raw = db.get_config_value(_VECTOR_REBUILD_STATUS_KEY, "")
     if not raw:
-        return ("", 0)
-    parts = raw.split(":", 1)
-    if len(parts) != 2:
-        return ("", 0)
+        return ("", 0, "")
+    # dirty 单独处理
+    if raw == "dirty":
+        return ("dirty", 0, "")
+    parts = raw.split(":")
+    if len(parts) < 2:
+        return ("", 0, "")
+    status = parts[0]
     try:
-        return (parts[0], int(parts[1]))
+        count = int(parts[1])
     except (ValueError, IndexError):
-        return ("", 0)
+        return ("", 0, "")
+    fingerprint = parts[2] if len(parts) >= 3 else ""
+    return (status, count, fingerprint)
 
 
-def _write_rebuild_status(status: str, count: int) -> None:
-    """写入重建状态到 config 表。"""
-    db.set_config_value(_VECTOR_REBUILD_STATUS_KEY, f"{status}:{count}")
+def _write_rebuild_status(status: str, count: int, fingerprint: str = "") -> None:
+    """写入重建状态到 config 表。
+
+    fingerprint 仅在 status='complete' 时有意义；其他状态传空字符串即可。
+    """
+    if fingerprint:
+        db.set_config_value(_VECTOR_REBUILD_STATUS_KEY, f"{status}:{count}:{fingerprint}")
+    else:
+        db.set_config_value(_VECTOR_REBUILD_STATUS_KEY, f"{status}:{count}")
+
+
+def _mark_rebuild_dirty() -> None:
+    """标记向量索引为脏：下次搜索必须重建。
+
+    所有文档创建/更新/删除操作应在事务提交后调用此函数。
+    即使数量未变（仅内容更新），dirty 状态也会强制重建，避免旧向量被检索。
+    """
+    try:
+        db.set_config_value(_VECTOR_REBUILD_STATUS_KEY, "dirty")
+        # 重置内存中的 _vector_index_built，确保下次搜索重新走 _ensure_vector_index 流程
+        global _vector_index_built
+        _vector_index_built = False
+    except Exception as e:
+        logger.warning(f"标记重建 dirty 失败: {e}")
 
 
 def _ensure_vector_index():
@@ -911,14 +1003,13 @@ def _ensure_vector_index():
     避免在启动时阻塞服务（尤其是多worker场景下GPU显存竞争）。
 
     C7 fix: 用 threading.Lock 保护 check-build-set 序列，防止多个并发搜索请求
-    同时观察到 _vector_index_built == False 并重复构建索引（导致重复向量写入与资源浪费）。
+    同时观察到 _vector_index_built == False 并重复构建索引。
 
-    可靠性 fix: 引入重建状态管理（building/complete + 预期数量校验）。
-    此前分批重建中途失败后，已完成批次会持久化到 vector_db，下次启动发现
-    total_documents > 0 就跳过重建，导致不完整索引永久生效。现在：
-    1. 重建前在 config 表标记 building:{expected_count}
-    2. 重建完成后验证写入数量 == 预期数量，才标记 complete:{actual_count}
-    3. 启动时如果状态不是 complete 或数量不匹配，清除现有索引重新构建
+    可靠性 fix: 重建状态 = building/complete/dirty + 数量 + 内容指纹。
+    - building: 上次重建中断，下次必须重建
+    - dirty: 文档 CUD 后标记，下次必须重建（即使数量不变）
+    - complete:{count}:{fingerprint}: 仅当 count 和 fingerprint 都匹配才跳过
+    - expected_count == 0 时仍调用 clear_all() 持久化空索引，防止旧磁盘文件残留
     """
     global _vector_index_built
     # 双重检查：已构建时直接返回，避免每次搜索都获取锁
@@ -940,32 +1031,48 @@ def _ensure_vector_index():
             vector_db = get_vector_db()
             stats = vector_db.get_stats()
             expected_count = _get_expected_chunk_count()
-            status, status_count = _read_rebuild_status()
+            status, status_count, status_fp = _read_rebuild_status()
 
-            # 只有状态为 complete 且数量一致时才跳过重建。
-            # 状态为 building（上次中断）或数量不匹配时，清除并重建。
+            # expected_count == 0：必须清空并持久化空索引，防止旧磁盘文件残留
+            if expected_count == 0:
+                if stats["total_documents"] != 0 or status != "complete" or status_count != 0:
+                    logger.info("数据库无有效 chunk，清空向量索引并持久化空索引")
+                    vector_db.clear_all()
+                _write_rebuild_status("complete", 0, _EMPTY_FINGERPRINT)
+                logger.info("向量索引已清空并标记 complete:0:empty")
+                _vector_index_built = True
+                return True
+
+            # 仅当状态为 complete 且 count 和 fingerprint 都匹配时才跳过重建。
+            # 指纹计算放在跳过条件内，避免每次搜索都全表扫描。
+            # 如果状态不完整/不匹配，直接进入重建分支。
             if (
                 status == "complete"
                 and status_count == expected_count
                 and stats["total_documents"] == expected_count
-                and expected_count > 0
             ):
+                # 数量匹配，进一步校验内容指纹
+                current_fp = _compute_chunk_fingerprint()
+                if status_fp and status_fp == current_fp:
+                    logger.info(
+                        "向量索引已完整: %d 个文档（状态 complete，指纹匹配），跳过重建",
+                        stats["total_documents"],
+                    )
+                    _vector_index_built = True
+                    return True
+                else:
+                    logger.info(
+                        "向量索引指纹不匹配: 状态=%s, 实际=%s，需要重建",
+                        status_fp or "(空)", current_fp,
+                    )
+            else:
                 logger.info(
-                    f"向量索引已完整: {stats['total_documents']} 个文档（状态 complete，预期 {expected_count}），跳过重建"
+                    "向量索引需要重建: 状态=%s:%d:%s, 实际=%d, 预期=%d",
+                    status or "none", status_count, status_fp or "(空)",
+                    stats["total_documents"], expected_count,
                 )
-                _vector_index_built = True
-                return True
-
-            if expected_count == 0:
-                logger.info("数据库中无知识库 chunk，跳过向量索引重建")
-                _vector_index_built = True
-                return True
 
             # 需要重建：标记 building，清除现有索引
-            logger.info(
-                "向量索引需要重建: 状态=%s:%d, 实际=%d, 预期=%d",
-                status or "none", status_count, stats["total_documents"], expected_count,
-            )
             _write_rebuild_status("building", expected_count)
             vector_db.clear_all()
 
@@ -978,6 +1085,9 @@ def _ensure_vector_index():
             batch_vector_docs = []
             vector_batch_size = 200
             total_chunks_indexed = 0
+            # 同时累积指纹，确保索引内容与指纹一致
+            import hashlib
+            fp_hash = hashlib.md5()
 
             for row in db.iter_chunks_with_document(batch_size=500):
                 doc_title = row.get("doc_title")
@@ -999,6 +1109,18 @@ def _ensure_vector_index():
                     "knowledge_base_id": kb_id,
                 })
 
+                # 同步累积指纹（与 _compute_chunk_fingerprint 一致）
+                parts = (
+                    str(row.get("documentId")),
+                    str(row.get("chunkIndex")),
+                    row.get("content", "") or "",
+                    row.get("doc_title") or "",
+                    row.get("doc_category") or "",
+                    str(row.get("doc_kb_id") or ""),
+                )
+                fp_hash.update("\x1f".join(parts).encode("utf-8"))
+                fp_hash.update(b"\x1e")
+
                 # 攒够一批立即写入，释放内存
                 if len(batch_vector_docs) >= vector_batch_size:
                     vector_db.add_documents(batch_vector_docs)
@@ -1010,10 +1132,13 @@ def _ensure_vector_index():
                 vector_db.add_documents(batch_vector_docs)
                 total_chunks_indexed += len(batch_vector_docs)
 
-            # 完整性校验：写入数量必须 == 预期数量
+            # 完整性校验：写入数量必须 == 预期数量（孤儿 chunk 已在 INNER JOIN 排除）
             if total_chunks_indexed == expected_count:
-                _write_rebuild_status("complete", total_chunks_indexed)
-                logger.info(f"向量索引重建完成: {total_chunks_indexed} 个 chunks（数量校验通过）")
+                final_fp = fp_hash.hexdigest()[:16]
+                _write_rebuild_status("complete", total_chunks_indexed, final_fp)
+                logger.info(
+                    f"向量索引重建完成: {total_chunks_indexed} 个 chunks（数量+指纹校验通过）"
+                )
                 _vector_index_built = True
             else:
                 # 数量不匹配：保持 building 状态，下次启动会重新构建
