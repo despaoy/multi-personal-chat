@@ -363,11 +363,15 @@ export interface ScanDirectory {
 export interface KnowledgeSearchResult {
   documentId: number;
   documentTitle: string;
-  chunkId: number;
+  /** 后端多数分支不返回 chunkId，仅部分向量检索路径可能携带 */
+  chunkId?: number;
   chunkIndex: number;
   content: string;
   score: number;
 }
+
+/** 搜索结果类型，与后端 search_knowledge 返回的 searchType 字段对应 */
+export type KnowledgeSearchType = "rag_pipeline" | "hybrid" | "keyword" | "empty";
 
 /** 知识库统计数据 */
 export interface KnowledgeStats {
@@ -420,6 +424,8 @@ export interface KnowledgeUpdateRequest {
 export interface KnowledgeSearchRequest {
   query: string;
   topK?: number;
+  /** 按知识库名称过滤检索结果，用于意图分类器路由后的精准检索 */
+  knowledgeBaseName?: string;
 }
 
 /** 知识库搜索响应 */
@@ -427,6 +433,9 @@ export interface KnowledgeSearchResponse {
   success: boolean;
   query: string;
   results: KnowledgeSearchResult[];
+  /** 检索路径：rag_pipeline | hybrid | keyword | empty
+   * 后端 _ensure_vector_index 失败或不存在的 KB 时会降级 */
+  searchType: KnowledgeSearchType;
 }
 
 /** 知识库统计响应 */

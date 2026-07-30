@@ -1591,3 +1591,51 @@ class TestEnsureVectorIndexEndToEnd:
         finally:
             kmod.db = original_db
             db.close_connection()
+
+
+# ============================================================
+# 6c. Search input validation regression
+# ============================================================
+
+class TestSearchInputValidation:
+    """Verify KnowledgeSearchRequest query field validation.
+
+    Empty / whitespace-only queries must be rejected at the schema layer
+    (HTTP 422) before reaching search_knowledge, preventing meaningless
+    vector retrieval or full-library scans.
+    """
+
+    def test_empty_query_rejected(self):
+        from db.schemas import KnowledgeSearchRequest
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            KnowledgeSearchRequest(query="")
+
+    def test_whitespace_only_query_rejected(self):
+        from db.schemas import KnowledgeSearchRequest
+        from pydantic import ValidationError
+
+        # strip_whitespace=True 会在验证前去除首尾空白，纯空白变空字符串
+        # 触发 min_length=1
+        with pytest.raises(ValidationError):
+            KnowledgeSearchRequest(query="   \t\n  ")
+
+    def test_query_strips_surrounding_whitespace(self):
+        from db.schemas import KnowledgeSearchRequest
+
+        req = KnowledgeSearchRequest(query="  hello world  ")
+        assert req.query == "hello world", "leading/trailing whitespace must be stripped"
+
+    def test_overlong_query_rejected(self):
+        from db.schemas import KnowledgeSearchRequest
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            KnowledgeSearchRequest(query="x" * 2001)
+
+    def test_query_at_max_length_accepted(self):
+        from db.schemas import KnowledgeSearchRequest
+
+        req = KnowledgeSearchRequest(query="x" * 2000)
+        assert len(req.query) == 2000

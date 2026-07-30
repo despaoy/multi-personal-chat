@@ -6,8 +6,8 @@ Pydantic 请求/响应模型
 SQLAlchemy ORM 模型（数据库 schema）定义在 db/models.py。
 """
 
-from pydantic import BaseModel, Field
-from typing import Optional, List, Dict, Any, Literal
+from pydantic import BaseModel, Field, StringConstraints
+from typing import Optional, List, Dict, Any, Literal, Annotated
 
 # ============================================
 # 核心消息模型
@@ -139,7 +139,10 @@ class KnowledgeDocumentUpdate(BaseModel):
 
 class KnowledgeSearchRequest(BaseModel):
     """知识库搜索请求"""
-    query: str
+    # 去除首尾空白（strip_whitespace），最小长度 1（拒绝空查询/纯空白），
+    # 最大长度 2000 防止滥用。Pydantic v2 用 StringConstraints 替代 Field 的
+    # strip_whitespace 参数（后者已在 v2 废弃）。
+    query: Annotated[str, StringConstraints(min_length=1, max_length=2000, strip_whitespace=True)]
     topK: int = Field(default=5, ge=1, le=100)
     knowledgeBaseName: Optional[str] = None  # 按知识库名称过滤检索结果
 
@@ -148,7 +151,8 @@ class KnowledgeSearchResult(BaseModel):
     """知识库搜索结果"""
     documentId: int
     documentTitle: str
-    chunkId: int
+    # 多数检索分支（rag_pipeline/keyword/empty）不返回 chunkId，仅部分向量路径可能携带
+    chunkId: Optional[int] = None
     chunkIndex: int
     content: str
     score: float
