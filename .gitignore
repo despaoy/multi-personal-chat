@@ -189,6 +189,8 @@ TECHNICAL_DOC.md
 ssh_*.py
 .qqchat_*.py
 .tmp_*.py
+scripts/_ssh_step*.py
+scripts/_ssh_*.py
 
 # === pnpm 本地缓存 ===
 .pnpm-store/

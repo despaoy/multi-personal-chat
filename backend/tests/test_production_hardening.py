@@ -272,7 +272,7 @@ async def test_lora_status_is_not_changed_when_runtime_load_fails(monkeypatch):
             return type(
                 "Report",
                 (),
-                {"compatible": True, "errors": [], "warnings": []},
+                {"compatible": True, "errors": [], "warnings": [], "base_model_mismatch": False},
             )()
 
     fake_db = FakeDb()
@@ -325,7 +325,7 @@ async def test_lora_switch_unloads_previous_adapter_before_loading_new(monkeypat
             return type(
                 "Report",
                 (),
-                {"compatible": True, "errors": [], "warnings": []},
+                {"compatible": True, "errors": [], "warnings": [], "base_model_mismatch": False},
             )()
 
     async def fake_get_client():

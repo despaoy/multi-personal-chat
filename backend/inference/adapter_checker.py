@@ -26,6 +26,12 @@ class AdapterCompatibilityReport:
     warnings: List[str] = field(default_factory=list)
     errors: List[str] = field(default_factory=list)
     checked_at: str = ""
+    # base_model 不匹配是硬性错误：LoRA 只能加载到训练时使用的基座上，
+    # 跨基座（如 Qwen2.5-7B 适配器加载到 Qwen3-8B）会触发 vLLM 400。
+    # 该标识用于上游返回明确的 409 LORA_BASE_MODEL_MISMATCH，而非模糊的 502。
+    base_model_mismatch: bool = False
+    expected_base_model: str = ""
+    actual_base_model: str = ""
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -35,6 +41,9 @@ class AdapterCompatibilityReport:
             "warnings": self.warnings,
             "errors": self.errors,
             "checked_at": self.checked_at,
+            "base_model_mismatch": self.base_model_mismatch,
+            "expected_base_model": self.expected_base_model,
+            "actual_base_model": self.actual_base_model,
         }
 
 
@@ -93,18 +102,32 @@ class AdapterChecker:
             report.errors.append(f"adapter_config.json 解析失败: {e}")
             return report
 
-        # 1. 检查 base_model_name_or_path
+        # 1. 检查 base_model_name_or_path（按模型名 basename 比较，跨基座为硬错误）
         base_model = cfg.get("base_model_name_or_path", "")
+        report.actual_base_model = base_model
+        report.expected_base_model = self.expected_base_model
         if not base_model:
             report.errors.append("base_model_name_or_path 为空")
             report.checks["base_model"] = False
-        elif self.expected_base_model and base_model != self.expected_base_model:
-            report.warnings.append(
-                f"base_model 不匹配: adapter={base_model}, expected={self.expected_base_model}"
-            )
-            report.checks["base_model"] = True  # 警告但不阻止
-        else:
+        elif not self.expected_base_model:
+            # 未配置期望基座，无法判定，仅警告
+            report.warnings.append("未配置 BASE_MODEL_PATH，跳过基座兼容性检查")
             report.checks["base_model"] = True
+        else:
+            # 比较模型名（basename），避免部署路径不同导致的误判。
+            # 例如训练时 /root/hutao-training/models/Qwen3-8B-Instruct 与
+            # 部署时 /root/autodl-tmp/runtime/models/Qwen3-8B-Instruct 应视为同基座。
+            actual_name = Path(base_model).name
+            expected_name = Path(self.expected_base_model).name
+            if actual_name != expected_name:
+                report.base_model_mismatch = True
+                report.errors.append(
+                    f"base_model 不匹配: adapter={actual_name}, expected={expected_name} "
+                    f"(LoRA 只能加载到训练时使用的基座)"
+                )
+                report.checks["base_model"] = False
+            else:
+                report.checks["base_model"] = True
 
         # 2. 检查 target_modules 非空
         target_modules = cfg.get("target_modules", [])

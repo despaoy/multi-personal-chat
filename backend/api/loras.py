@@ -19,17 +19,53 @@ router = APIRouter()
 _lora_status_lock = asyncio.Lock()
 
 
+def _allowed_real_roots() -> list[Path]:
+    """受信任的 LoRA 真实根目录集合。
+
+    LORA_ROOT 本身总是受信。运维可通过 LORA_ALLOWED_REAL_ROOTS（逗号分隔）
+    显式追加额外的根目录（例如 qqchat-data/loras），用于容纳指向根外的
+    符号链接目标。未列入该集合的根外真实路径将被拒绝，避免任意符号链接
+    把适配器指向受信边界之外的位置。
+    """
+    roots = [LORA_ROOT.resolve()]
+    extra = os.getenv("LORA_ALLOWED_REAL_ROOTS", "")
+    for part in extra.split(","):
+        part = part.strip()
+        if part:
+            roots.append(Path(part).expanduser().resolve())
+    # 去重，保持顺序
+    seen: set[str] = set()
+    unique: list[Path] = []
+    for r in roots:
+        key = str(r)
+        if key not in seen:
+            seen.add(key)
+            unique.append(r)
+    return unique
+
+
+def _is_within_allowed_real(path: Path, allowed_roots: list[Path]) -> bool:
+    """判断真实路径是否位于任一受信根目录之下（含根本身）。"""
+    norm = str(path)
+    for root in allowed_roots:
+        root_str = str(root)
+        if norm == root_str or norm.startswith(root_str + os.sep):
+            return True
+    return False
+
+
 def _resolve_vllm_adapter_path(lora_name: str) -> str:
     """Map a trusted backend LoRA directory to the path visible by vLLM.
 
-    注意：LORA_ROOT 下可能含有指向其他目录的符号链接（例如把
-    qqchat-data/loras/hutao 链接到 runtime/loras/hutao）。对这些链接，
-    Path.resolve() 会展开成真实路径，导致安全检查误判为"逃逸根目录"。
-    因此用 os.path.normpath（不跟随符号链接）做安全检查，再单独 resolve
-    判断 adapter_config.json 是否存在。
+    安全模型分两层：
+    1. 逻辑路径检查：用 os.path.normpath 防止 lora_name 含 ../ 穿越，
+       但不跟随符号链接，因此 LORA_ROOT 下指向其他目录的合法链接不会被误判。
+    2. 真实目标受信边界检查：Path.resolve() 会展开符号链接得到真实路径，
+       要求该真实路径位于 LORA_ROOT 或 LORA_ALLOWED_REAL_ROOTS 之一之下，
+       避免任意符号链接把适配器指向受信边界之外的位置。
     """
     local_root = LORA_ROOT.resolve()
-    # 安全检查：用 normpath 防止 ../ 穿越，但不跟随符号链接
+    # 1) 逻辑路径检查（不跟随符号链接）
     normalized = os.path.normpath(str(local_root / lora_name))
     normalized_root = os.path.normpath(str(local_root))
     if normalized != normalized_root and not normalized.startswith(normalized_root + os.sep):
@@ -38,14 +74,24 @@ def _resolve_vllm_adapter_path(lora_name: str) -> str:
     # 逻辑相对路径（vLLM 看到的路径，不跟随符号链接）
     logical_rel = Path(lora_name)
 
-    # resolve 检查文件是否存在（符号链接会被展开，这是预期的）
+    # 2) resolve 检查文件是否存在（符号链接会被展开）
     real_path = (local_root / lora_name).resolve()
     if not (real_path / "adapter_config.json").exists():
         final_path = real_path / "final"
         if (final_path / "adapter_config.json").exists():
+            real_path = final_path
             logical_rel = logical_rel / "final"
         else:
             raise FileNotFoundError("LoRA adapter_config.json was not found")
+
+    # 3) 受信边界检查：真实路径必须位于 LORA_ROOT 或显式配置的允许根之下
+    allowed_roots = _allowed_real_roots()
+    if not _is_within_allowed_real(real_path, allowed_roots):
+        logger.warning(
+            "LoRA symlink target outside trusted roots: name=%s real=%s allowed=%s",
+            lora_name, real_path, [str(r) for r in allowed_roots],
+        )
+        raise ValueError("LoRA symlink target escapes the trusted roots")
 
     vllm_root = Path(os.getenv("VLLM_LORA_ROOT", str(local_root)))
     return str(vllm_root / logical_rel)
@@ -227,6 +273,17 @@ async def update_lora_status(lora_id: str, request: Request, current_user: dict 
                 checker = AdapterChecker(lora_root=str(LORA_ROOT))
                 compat_report = checker.check_adapter(existing["name"])
                 if not compat_report.compatible:
+                    # 基座不匹配返回明确的 LORA_BASE_MODEL_MISMATCH，
+                    # 避免下游 vLLM 400 被包装成模糊的 502。
+                    if compat_report.base_model_mismatch:
+                        detail = {
+                            "code": "LORA_BASE_MODEL_MISMATCH",
+                            "message": "LoRA 基座与当前 vLLM 基座不兼容",
+                            "expected": compat_report.expected_base_model,
+                            "actual": compat_report.actual_base_model,
+                            "errors": compat_report.errors,
+                        }
+                        raise HTTPException(status_code=409, detail=detail)
                     detail = {
                         "message": "适配器兼容性检查未通过",
                         "errors": compat_report.errors,

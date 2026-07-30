@@ -1,10 +1,13 @@
-"""检查服务器环境：conda环境、GPU、vLLM进程、模型路径"""
-import paramiko
-import time
+"""检查服务器环境：conda环境、GPU、vLLM进程、模型路径。
 
-ssh = paramiko.SSHClient()
-ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-ssh.connect('192.168.166.7', username='szw', password='szw20051024', timeout=10)
+凭据通过 remote_config.connect_ssh() 从 LAB_SSH_KEY 或 LAB_PASS 读取，
+避免在源码中硬编码密码。运行前请设置 LAB_HOST、LAB_USER 以及
+LAB_SSH_KEY 或 LAB_PASS 环境变量。
+"""
+from remote_config import connect_ssh
+
+# 1. 建立 SSH 连接（凭据来自环境变量）
+ssh = connect_ssh()
 
 # 1. lhm2 目录结构
 print("=== lhm2 目录结构 ===")
