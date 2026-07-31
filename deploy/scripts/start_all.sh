@@ -190,6 +190,7 @@ generate_env_file() {
 # ---- 模型配置 ----
 MODEL_PATH=${DEFAULT_MODEL_PATH}
 LORA_PATH=${DEFAULT_LORA_PATH}
+VLLM_LORA_ROOT=${DEFAULT_LORA_PATH}
 
 # ---- 端口配置 ----
 VLLM_PORT1=${DEFAULT_VLLM_PORT1}
@@ -218,6 +219,7 @@ NEXT_PUBLIC_API_URL=/api
 # 请将 CHANGE_ME_ 替换为实际的强随机值
 PG_PASSWORD=CHANGE_ME_TO_A_SECURE_PASSWORD
 JWT_SECRET=CHANGE_ME_TO_A_SECURE_JWT_SECRET_AT_LEAST_32_CHARS
+ENCRYPTION_KEY=CHANGE_ME_TO_BASE64_ENCODED_32_BYTE_KEY
 ALLOWED_ORIGINS=http://localhost:${DEFAULT_FRONTEND_PORT},http://localhost:${DEFAULT_NGINX_PORT}
 ASTRBOT_INTEGRATION_TOKEN=CHANGE_ME_TO_A_RANDOM_TOKEN
 EOF
@@ -240,6 +242,7 @@ load_env() {
     # 设置默认值
     MODEL_PATH="${MODEL_PATH:-${DEFAULT_MODEL_PATH}}"
     LORA_PATH="${LORA_PATH:-${DEFAULT_LORA_PATH}}"
+    VLLM_LORA_ROOT="${VLLM_LORA_ROOT:-${LORA_PATH}}"
     VLLM_PORT1="${VLLM_PORT1:-${DEFAULT_VLLM_PORT1}}"
     VLLM_PORT2="${VLLM_PORT2:-${DEFAULT_VLLM_PORT2}}"
     BACKEND_PORT="${BACKEND_PORT:-${DEFAULT_BACKEND_PORT}}"
@@ -343,7 +346,7 @@ start_bare_metal() {
     # 启动 FastAPI 后端
     log_step "启动 FastAPI 后端 (端口 ${BACKEND_PORT})..."
     cd "${PROJECT_DIR}/backend"
-    python -m uvicorn app.main:app --host 0.0.0.0 --port "${BACKEND_PORT}" &
+    python run.py --host 0.0.0.0 --port "${BACKEND_PORT}" &
     pids+=($!)
 
     # 等待后端就绪

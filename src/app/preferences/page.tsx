@@ -26,7 +26,7 @@ const statusColors: Record<string, string> = {
 
 export default function PreferencesPage() {
   return (
-    <AuthGuard>
+    <AuthGuard requireAdmin>
       <PreferencesContent />
     </AuthGuard>
   );

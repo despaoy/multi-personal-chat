@@ -103,18 +103,18 @@ export function Sidebar() {
     icon: React.ComponentType<{ className?: string }>;
     adminOnly?: boolean;
   }> = [
-    { name: t('nav.dashboard'), href: '/', icon: Home },
-    { name: t('nav.history'), href: '/history', icon: MessageSquare },
+    { name: t('nav.dashboard'), href: '/', icon: Home, adminOnly: true },
+    { name: t('nav.history'), href: '/history', icon: MessageSquare, adminOnly: true },
     { name: t('nav.training'), href: '/training', icon: Zap, adminOnly: true },
     { name: t('nav.lora'), href: '/lora', icon: BrainCircuit, adminOnly: true },
     { name: t('nav.intentTraining'), href: '/intent-training', icon: Brain, adminOnly: true },
-    { name: t('nav.monitor'), href: '/monitor', icon: Activity },
+    { name: t('nav.monitor'), href: '/monitor', icon: Activity, adminOnly: true },
     { name: '平台连接', href: '/integrations', icon: Cable, adminOnly: true },
-    { name: t('nav.knowledge'), href: '/knowledge', icon: Database },
-    { name: t('nav.evaluation'), href: '/evaluation', icon: ClipboardCheck },
+    { name: t('nav.knowledge'), href: '/knowledge', icon: Database, adminOnly: true },
+    { name: t('nav.evaluation'), href: '/evaluation', icon: ClipboardCheck, adminOnly: true },
     { name: t('nav.experiments'), href: '/experiments', icon: FlaskConical, adminOnly: true },
     { name: t('nav.router'), href: '/router', icon: Shuffle, adminOnly: true },
-    { name: t('nav.preferences'), href: '/preferences', icon: Scale },
+    { name: t('nav.preferences'), href: '/preferences', icon: Scale, adminOnly: true },
     { name: t('nav.claw'), href: '/claw', icon: Terminal, adminOnly: true },
     { name: t('nav.settings'), href: '/settings', icon: Settings, adminOnly: true },
   ];

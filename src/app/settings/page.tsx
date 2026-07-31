@@ -27,7 +27,7 @@ export default function SettingsPage() {
 }
 
 function SettingsContent() {
-  const { t, updateSettings } = useSettings();
+  const { t, syncSettings } = useSettings();
   const [config, setConfig] = useState<SystemConfig>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -81,7 +81,7 @@ function SettingsContent() {
           }
         }
         // 立即刷新全局设置，使语言/时区变更即时生效
-        await updateSettings(result.config);
+        syncSettings(result.config);
         toast.success(t('settings.saved'));
       }
     } catch (err) {
@@ -331,14 +331,8 @@ function SettingsContent() {
                       <Input value="/api/integrations/astrbot/messages" readOnly />
                       <p className="text-sm text-muted-foreground">AstrBot 插件会把 QQ、Telegram、微信系消息标准化后发送到这个内部接口。</p>
                     </div>
-                    <div className="space-y-2">
-                      <Label>Integration Token</Label>
-                      <Input
-                        type="password"
-                        value={getStr('astrbotIntegrationToken', '')}
-                        onChange={(e) => updateField('astrbotIntegrationToken', e.target.value)}
-                        placeholder="建议填写一段随机共享密钥，并同步到 ASTRBOT_INTEGRATION_TOKEN"
-                      />
+                    <div className="rounded-md border p-3 text-sm text-muted-foreground">
+                      共享密钥仅从服务器环境变量 ASTRBOT_INTEGRATION_TOKEN / ASTRBOT_INTEGRATION_TOKENS 读取，管理台不会读取或保存密钥。
                     </div>
                     <div className="grid gap-3 md:grid-cols-2">
                       {[

@@ -7,22 +7,32 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { api, type EvaluationRunRecord, type FeedbackRecord, type GoldPromptRecord } from '@/lib/api';
+import { api } from '@/lib/api';
+import type {
+  EvaluationRunRecord,
+  EvaluationRunRequest,
+  FeedbackRecord,
+  GoldPromptRecord,
+  GoldSetResponse,
+} from '@/lib/api-contracts';
 
 export type GoldPrompt = GoldPromptRecord;
 
 export type EvalRun = EvaluationRunRecord;
 
 export type Feedback = FeedbackRecord;
+export type GoldSet = Pick<GoldSetResponse, 'total' | 'category_breakdown' | 'prompts'>;
 
 export function useEvaluation(enabled = true) {
-  const [goldSet, setGoldSet] = useState<{ total: number; category_breakdown: Record<string, number>; prompts: GoldPrompt[] }>({
+  const [goldSet, setGoldSet] = useState<GoldSet>({
     total: 0,
     category_breakdown: {},
     prompts: [],
   });
   const [runs, setRuns] = useState<EvalRun[]>([]);
+  const [runsTotal, setRunsTotal] = useState(0);
   const [feedbacks, setFeedbacks] = useState<Feedback[]>([]);
+  const [feedbackTotal, setFeedbackTotal] = useState(0);
   const [loading, setLoading] = useState(enabled);
   const [error, setError] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
@@ -43,7 +53,9 @@ export function useEvaluation(enabled = true) {
         prompts: gold.prompts || [],
       });
       setRuns(runsResp.runs || []);
+      setRunsTotal(runsResp.total ?? runsResp.runs?.length ?? 0);
       setFeedbacks(fbResp.feedbacks || []);
+      setFeedbackTotal(fbResp.total ?? fbResp.feedbacks?.length ?? 0);
     } catch (err) {
       setError(err instanceof Error ? err.message : '加载评估数据失败');
       console.error('Failed to fetch evaluation data:', err);
@@ -52,7 +64,7 @@ export function useEvaluation(enabled = true) {
     }
   }, [enabled]);
 
-  const runEvaluation = useCallback(async (req: { adapter_name?: string; categories?: string[]; mock?: boolean }) => {
+  const runEvaluation = useCallback(async (req: EvaluationRunRequest) => {
     try {
       setRunning(true);
       const result = await api.runEvaluation(req);
@@ -78,7 +90,9 @@ export function useEvaluation(enabled = true) {
   return {
     goldSet,
     runs,
+    runsTotal,
     feedbacks,
+    feedbackTotal,
     loading,
     error,
     running,

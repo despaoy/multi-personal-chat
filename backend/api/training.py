@@ -1,23 +1,145 @@
-﻿"""LoRA训练管理API"""
+"""LoRA训练管理API"""
 import asyncio
 import json
 import logging
 import math
+import os
 import re
+import tempfile
 import time
+import zipfile
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Depends
-from app.dependencies import get_current_user, get_current_admin
+from fastapi.responses import FileResponse
+from app.dependencies import get_current_admin
 from pydantic import BaseModel
 from typing import Optional
 
 from db.adapter import db
 from db.schemas import DatasetUploadRequest, TrainingStartRequest, DialogueGenerateRequest
-from app.config import INPUT_VALIDATOR_AVAILABLE, TRAINING_SCHEMA, generation_state, generation_state_lock, _search_character_info
+from app.config import INPUT_VALIDATOR_AVAILABLE, TRAINING_SCHEMA, generation_state, get_generation_state_lock, _search_character_info
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+
+_DATASET_EXPORT_MAX_CONCURRENCY = max(
+    1, int(os.getenv("TRAINING_EXPORT_MAX_CONCURRENCY", "2"))
+)
+_DATASET_EXPORT_ACQUIRE_TIMEOUT = max(
+    0.05, float(os.getenv("TRAINING_EXPORT_ACQUIRE_TIMEOUT", "1"))
+)
+_dataset_export_slots: asyncio.BoundedSemaphore | None = None
+_dataset_export_slots_loop: asyncio.AbstractEventLoop | None = None
+
+
+def _get_dataset_export_slots() -> asyncio.BoundedSemaphore:
+    """Return export admission control owned by the active event loop."""
+    global _dataset_export_slots, _dataset_export_slots_loop
+    loop = asyncio.get_running_loop()
+    if _dataset_export_slots is None or _dataset_export_slots_loop is not loop:
+        _dataset_export_slots = asyncio.BoundedSemaphore(
+            _DATASET_EXPORT_MAX_CONCURRENCY
+        )
+        _dataset_export_slots_loop = loop
+    return _dataset_export_slots
+
+
+def _create_export_temp_path() -> Path:
+    """Create a private, collision-safe archive path without holding file data in memory."""
+    fd, raw_path = tempfile.mkstemp(prefix="qqchat-dataset-", suffix=".zip")
+    os.close(fd)
+    return Path(raw_path)
+
+
+def _write_dataset_archive(dataset_dir: Path, archive_path: Path) -> os.stat_result:
+    """Build one dataset archive in a worker thread and reject escaping symlinks."""
+    dataset_root = dataset_dir.resolve(strict=True)
+    with zipfile.ZipFile(
+        archive_path,
+        mode="w",
+        compression=zipfile.ZIP_DEFLATED,
+    ) as archive:
+        for file_path in dataset_root.rglob("*"):
+            if file_path.is_symlink():
+                raise ValueError(f"Unsafe dataset symlink: {file_path.name}")
+            if not file_path.is_file():
+                continue
+            resolved_file = file_path.resolve(strict=True)
+            if not resolved_file.is_relative_to(dataset_root):
+                raise ValueError(f"Dataset file escapes export root: {file_path.name}")
+            archive.write(resolved_file, file_path.relative_to(dataset_root))
+    return archive_path.stat()
+
+
+async def _build_dataset_archive(dataset_dir: Path, archive_path: Path) -> os.stat_result:
+    """Run ZIP compression off-loop while retaining ownership on cancellation."""
+    worker = asyncio.create_task(
+        asyncio.to_thread(_write_dataset_archive, dataset_dir, archive_path)
+    )
+    try:
+        return await asyncio.shield(worker)
+    except asyncio.CancelledError:
+        # A client can cancel the ASGI task more than once. Keep ownership until
+        # the non-cancellable thread has really stopped touching the archive.
+        while not worker.done():
+            try:
+                await asyncio.shield(worker)
+            except asyncio.CancelledError:
+                continue
+            except BaseException:
+                break
+        if worker.done():
+            try:
+                worker.result()
+            except BaseException:
+                pass
+        raise
+
+
+def _remove_export_temp(path: Path) -> None:
+    try:
+        path.unlink(missing_ok=True)
+    except OSError:
+        logger.exception("Failed to remove dataset export temp file: %s", path)
+
+
+class _TemporaryExportFileResponse(FileResponse):
+    """FileResponse that releases its archive and admission slot on every exit path."""
+
+    def __init__(
+        self,
+        path: Path,
+        *,
+        filename: str,
+        stat_result: os.stat_result,
+        semaphore: asyncio.BoundedSemaphore,
+    ) -> None:
+        super().__init__(
+            path,
+            media_type="application/zip",
+            filename=filename,
+            stat_result=stat_result,
+            headers={"Cache-Control": "private, no-store"},
+        )
+        self._temporary_path = path
+        self._semaphore = semaphore
+        self._released = False
+
+    async def __call__(self, scope, receive, send) -> None:
+        try:
+            await super().__call__(scope, receive, send)
+        finally:
+            try:
+                await asyncio.shield(
+                    asyncio.to_thread(_remove_export_temp, self._temporary_path)
+                )
+            finally:
+                if not self._released:
+                    self._released = True
+                    self._semaphore.release()
+
 
 
 def _validate_path(path_str: str, allowed_base: str = None) -> str:
@@ -51,7 +173,7 @@ def _validate_resource_name(name: str, label: str = "名称") -> str:
 
 
 @router.get("/api/training/datasets")
-async def list_datasets(current_user: dict = Depends(get_current_user)):
+async def list_datasets(current_user: dict = Depends(get_current_admin)):
     """列出可用数据集"""
     try:
         from training.preprocessor import get_dataset_preprocessor
@@ -118,55 +240,66 @@ async def create_dataset(request: DatasetUploadRequest, current_user: dict = Dep
 
 
 @router.get("/api/training/datasets/{dataset_name}/export")
-async def export_dataset(dataset_name: str, current_user: dict = Depends(get_current_user)):
-    """导出数据集为 ZIP 文件（用于上传到服务器训练）"""
+async def export_dataset(dataset_name: str, current_user: dict = Depends(get_current_admin)):
+    """导出数据集为 ZIP 文件（用于上传到服务器训练）。"""
+    archive_path: Path | None = None
+    slot_acquired = False
+    response_owns_slot = False
+    export_slots = _get_dataset_export_slots()
     try:
-        import io
-        import zipfile
-        from fastapi.responses import StreamingResponse
-
         dataset_name = _validate_resource_name(dataset_name, "数据集名称")
 
         from training.preprocessor import get_dataset_preprocessor
-        preprocessor = get_dataset_preprocessor()
 
-        dataset_dir = preprocessor.data_dir / dataset_name
-        # Ensure resolved path is within data directory
-        if not dataset_dir.resolve().is_relative_to(preprocessor.data_dir.resolve()):
+        preprocessor = get_dataset_preprocessor()
+        data_root = preprocessor.data_dir.resolve()
+        resolved_dataset = (preprocessor.data_dir / dataset_name).resolve()
+        if not resolved_dataset.is_relative_to(data_root):
             raise HTTPException(status_code=400, detail="无效的数据集路径")
-        if not dataset_dir.exists() or not dataset_dir.is_dir():
+        if not resolved_dataset.exists() or not resolved_dataset.is_dir():
             raise HTTPException(status_code=404, detail=f"数据集不存在: {dataset_name}")
 
-        # 将数据集目录打包为 ZIP
-        zip_buffer = io.BytesIO()
-        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zf:
-            for file_path in dataset_dir.rglob('*'):
-                if file_path.is_file():
-                    arcname = file_path.relative_to(dataset_dir)
-                    zf.write(file_path, arcname)
+        try:
+            await asyncio.wait_for(
+                export_slots.acquire(),
+                timeout=_DATASET_EXPORT_ACQUIRE_TIMEOUT,
+            )
+            slot_acquired = True
+        except asyncio.TimeoutError as exc:
+            raise HTTPException(
+                status_code=503,
+                detail="数据集导出任务繁忙，请稍后重试",
+                headers={"Retry-After": "1"},
+            ) from exc
 
-        zip_buffer.seek(0)
-
-        # RFC 5987 编码文件名，支持中文
-        from urllib.parse import quote
-        encoded_name = quote(dataset_name)
-
-        return StreamingResponse(
-            zip_buffer,
-            media_type='application/zip',
-            headers={
-                'Content-Disposition': f"attachment; filename*=UTF-8''{encoded_name}.zip"
-            }
+        archive_path = _create_export_temp_path()
+        stat_result = await _build_dataset_archive(resolved_dataset, archive_path)
+        response = _TemporaryExportFileResponse(
+            archive_path,
+            filename=f"{dataset_name}.zip",
+            stat_result=stat_result,
+            semaphore=export_slots,
         )
+        response_owns_slot = True
+        return response
     except HTTPException:
         raise
-    except Exception as e:
-        logger.error(f"导出数据集失败: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
+    except Exception as exc:
+        logger.exception("导出数据集失败")
+        raise HTTPException(status_code=500, detail="导出数据集失败") from exc
+    finally:
+        if not response_owns_slot:
+            try:
+                if archive_path is not None:
+                    await asyncio.shield(
+                        asyncio.to_thread(_remove_export_temp, archive_path)
+                    )
+            finally:
+                if slot_acquired:
+                    export_slots.release()
 
 @router.get("/api/training/datasets/scan")
-async def scan_datasets(folder: Optional[str] = None, current_user: dict = Depends(get_current_user)):
+async def scan_datasets(folder: Optional[str] = None, current_user: dict = Depends(get_current_admin)):
     """扫描文件夹，发现所有有效的数据集子文件夹"""
     try:
         from training.preprocessor import scan_datasets_folder, DEFAULT_SCAN_DIR
@@ -223,7 +356,7 @@ async def import_dataset(req: ImportDatasetRequest, current_user: dict = Depends
 
 
 @router.get("/api/training/models")
-async def list_model_configs(current_user: dict = Depends(get_current_user)):
+async def list_model_configs(current_user: dict = Depends(get_current_admin)):
     """列出可用的模型配置（支持多种GPU）"""
     try:
         from training.task_manager import ALL_GPU_CONFIGS
@@ -369,7 +502,7 @@ async def start_training(request: TrainingStartRequest, current_user: dict = Dep
 
 
 @router.get("/api/training/tasks")
-async def list_training_tasks(current_user: dict = Depends(get_current_user)):
+async def list_training_tasks(current_user: dict = Depends(get_current_admin)):
     """列出所有训练任务"""
     try:
         from training.task_manager import get_simple_lora_trainer
@@ -383,7 +516,7 @@ async def list_training_tasks(current_user: dict = Depends(get_current_user)):
 
 
 @router.get("/api/training/tasks/{task_id}")
-async def get_training_task(task_id: str, current_user: dict = Depends(get_current_user)):
+async def get_training_task(task_id: str, current_user: dict = Depends(get_current_admin)):
     """获取训练任务状态"""
     try:
         from training.task_manager import get_simple_lora_trainer
@@ -424,7 +557,7 @@ async def cancel_training_task(task_id: str, current_user: dict = Depends(get_cu
 
 
 @router.get("/api/training/styles")
-async def list_predefined_styles(current_user: dict = Depends(get_current_user)):
+async def list_predefined_styles(current_user: dict = Depends(get_current_admin)):
     """列出预定义的人物风格"""
     try:
         from training.preprocessor import get_dataset_preprocessor
@@ -454,7 +587,7 @@ async def generate_dialogues(request: DialogueGenerateRequest, current_user: dic
     """
 
     # 防止重复生成（异步安全检查+初始化）
-    async with generation_state_lock:
+    async with get_generation_state_lock():
         if generation_state["is_generating"]:
             raise HTTPException(status_code=409, detail="已有生成任务正在运行")
 
@@ -557,7 +690,7 @@ async def generate_dialogues(request: DialogueGenerateRequest, current_user: dic
 
         BATCH_SIZE_PER_TURN = 6
         estimated_batches = sum(max(1, math.ceil(count / BATCH_SIZE_PER_TURN)) for _, count in turn_targets)
-        async with generation_state_lock:
+        async with get_generation_state_lock():
             generation_state["total_batches"] = estimated_batches
         global_batch_num = 0
         scene_idx = 0
@@ -568,7 +701,7 @@ async def generate_dialogues(request: DialogueGenerateRequest, current_user: dic
             max_retries_per_turn = need_count * 3  # 防止模型持续生成不足轮次导致死循环
 
             while generated_this_turn < need_count:
-                async with generation_state_lock:
+                async with get_generation_state_lock():
                     if generation_state["cancel_requested"]:
                         cancel_flag = True
                     else:
@@ -585,7 +718,7 @@ async def generate_dialogues(request: DialogueGenerateRequest, current_user: dic
                 global_batch_num += 1
                 batch_count = min(BATCH_SIZE_PER_TURN, need_count - generated_this_turn)
 
-                async with generation_state_lock:
+                async with get_generation_state_lock():
                     generation_state.update({
                         "batch_num": global_batch_num,
                         "generated_count": len(all_validated),
@@ -743,17 +876,17 @@ async def generate_dialogues(request: DialogueGenerateRequest, current_user: dic
 
                 new_in_batch = all_validated[batch_start_count:]
                 if new_in_batch:
-                    async with generation_state_lock:
+                    async with get_generation_state_lock():
                         generation_state["new_dialogues"] = new_in_batch
                         generation_state["all_generated_dialogues"].extend(new_in_batch)
 
                 logger.info(f"对话生成进度: {len(all_validated)}/{total_target} ({target_turns}轮批次, 已生成{generated_this_turn}/{need_count})")
 
-            async with generation_state_lock:
+            async with get_generation_state_lock():
                 if generation_state["cancel_requested"]:
                     break
 
-        async with generation_state_lock:
+        async with get_generation_state_lock():
             was_cancelled = generation_state["cancel_requested"]
 
         if not all_validated and not was_cancelled:
@@ -764,7 +897,7 @@ async def generate_dialogues(request: DialogueGenerateRequest, current_user: dic
 
         all_validated = all_validated[:total_target]
 
-        async with generation_state_lock:
+        async with get_generation_state_lock():
             generation_state.update({
                 "is_generating": False,
                 "progress": 100 if not was_cancelled else round(len(all_validated) / total_target * 100, 1),
@@ -780,11 +913,11 @@ async def generate_dialogues(request: DialogueGenerateRequest, current_user: dic
         }
 
     except HTTPException:
-        async with generation_state_lock:
+        async with get_generation_state_lock():
             generation_state.update({"is_generating": False, "cancel_requested": False})
         raise
     except Exception as e:
-        async with generation_state_lock:
+        async with get_generation_state_lock():
             generation_state.update({"is_generating": False, "cancel_requested": False})
         logger.error(f"对话生成失败: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -796,7 +929,7 @@ async def cancel_dialogue_generation(current_user: dict = Depends(get_current_ad
 
     s2 fix: 影响全局生成任务，限定 admin。
     """
-    async with generation_state_lock:
+    async with get_generation_state_lock():
         if not generation_state["is_generating"]:
             # C13 fix: 无任务可取消是冲突状态，应用 409 而非 200+success=False
             raise HTTPException(status_code=409, detail="没有正在进行的生成任务")
@@ -805,9 +938,9 @@ async def cancel_dialogue_generation(current_user: dict = Depends(get_current_ad
 
 
 @router.get("/api/training/generate-dialogues/progress")
-async def get_dialogue_generation_progress(current_user: dict = Depends(get_current_user)):
+async def get_dialogue_generation_progress(current_user: dict = Depends(get_current_admin)):
     """获取对话生成进度（含新增对话的实时推送 + 所有已生成对话）"""
-    async with generation_state_lock:
+    async with get_generation_state_lock():
         new_dialogues = generation_state.get("new_dialogues", [])
         generation_state["new_dialogues"] = []
         result = {**generation_state, "new_dialogues": new_dialogues}
@@ -820,7 +953,7 @@ async def force_reset_generation(current_user: dict = Depends(get_current_admin)
 
     C-S1 fix: 强制重置会丢失正在进行的生成进度，限定 admin。
     """
-    async with generation_state_lock:
+    async with get_generation_state_lock():
         if not generation_state["is_generating"] and not generation_state["cancel_requested"]:
             # C13 fix: 无任务可重置是冲突状态，应用 409 而非 200+success=False
             raise HTTPException(status_code=409, detail="没有正在进行的生成任务")
@@ -854,7 +987,7 @@ class SaveDialoguesRequest(BaseModel):
 
 
 @router.get("/api/training/saved-dialogues")
-async def list_saved_dialogues(current_user: dict = Depends(get_current_user)):
+async def list_saved_dialogues(current_user: dict = Depends(get_current_admin)):
     """列出所有已保存的对话"""
     try:
         rows = db.execute_sql('''
@@ -912,7 +1045,7 @@ async def save_dialogues(request: SaveDialoguesRequest, current_user: dict = Dep
 
 
 @router.get("/api/training/saved-dialogues/{item_id}")
-async def get_saved_dialogue(item_id: int, current_user: dict = Depends(get_current_user)):
+async def get_saved_dialogue(item_id: int, current_user: dict = Depends(get_current_admin)):
     """获取单个已保存对话"""
     try:
         rows = db.execute_sql('''

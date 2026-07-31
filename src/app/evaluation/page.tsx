@@ -19,16 +19,27 @@ import { toast } from 'sonner';
 
 export default function EvaluationPage() {
   return (
-    <AuthGuard>
+    <AuthGuard requireAdmin>
       <EvaluationContent />
     </AuthGuard>
   );
 }
 
 function EvaluationContent() {
-  const { goldSet, runs, feedbacks, loading, error, running, refetch, runEvaluation } = useEvaluation();
+  const {
+    goldSet,
+    runs,
+    runsTotal,
+    feedbacks,
+    feedbackTotal,
+    loading,
+    error,
+    running,
+    refetch,
+    runEvaluation,
+  } = useEvaluation();
   const [runDialogOpen, setRunDialogOpen] = useState(false);
-  const [mockMode, setMockMode] = useState(true);
+  const [mockMode, setMockMode] = useState(false);
   const [adapterName, setAdapterName] = useState('');
 
   if (error) {
@@ -52,7 +63,7 @@ function EvaluationContent() {
   const handleRun = async () => {
     try {
       await runEvaluation({ adapter_name: adapterName || undefined, mock: mockMode });
-      toast.success(mockMode ? '评估已完成（mock 模式）' : '评估已启动');
+      toast.success(mockMode ? '演示评估任务已加入队列' : '真实评估任务已加入队列');
       setRunDialogOpen(false);
     } catch {
       toast.error('评估运行失败');
@@ -153,7 +164,7 @@ function EvaluationContent() {
             <Card>
               <CardHeader>
                 <CardTitle>评估运行历史</CardTitle>
-                <CardDescription>最近 {runs.length} 次评估运行</CardDescription>
+                <CardDescription>共 {runsTotal} 次评估运行，当前显示 {runs.length} 条</CardDescription>
               </CardHeader>
               <CardContent>
                 {loading ? (
@@ -165,6 +176,7 @@ function EvaluationContent() {
                     <TableHeader>
                       <TableRow>
                         <TableHead>运行 ID</TableHead>
+                        <TableHead>类型</TableHead>
                         <TableHead>时间</TableHead>
                         <TableHead>适配器</TableHead>
                         <TableHead>提示词数</TableHead>
@@ -175,6 +187,13 @@ function EvaluationContent() {
                       {runs.map((r) => (
                         <TableRow key={r.id}>
                           <TableCell className="font-mono text-xs">{r.id}</TableCell>
+                          <TableCell>
+                            {r.metrics?.mock === true ? (
+                              <Badge className="bg-amber-100 text-amber-900">演示数据</Badge>
+                            ) : (
+                              <Badge variant="outline">真实运行</Badge>
+                            )}
+                          </TableCell>
                           <TableCell className="text-xs">{new Date(r.run_at).toLocaleString()}</TableCell>
                           <TableCell>{r.adapter_name || '-'}</TableCell>
                           <TableCell>{r.total_prompts}</TableCell>
@@ -195,7 +214,7 @@ function EvaluationContent() {
             <Card>
               <CardHeader>
                 <CardTitle>用户反馈</CardTitle>
-                <CardDescription>共 {feedbacks.length} 条反馈</CardDescription>
+                <CardDescription>共 {feedbackTotal} 条反馈，当前显示 {feedbacks.length} 条</CardDescription>
               </CardHeader>
               <CardContent>
                 {loading ? (
@@ -218,9 +237,9 @@ function EvaluationContent() {
                         <TableRow key={i}>
                           <TableCell className="font-mono text-xs">{f.trace_id || '-'}</TableCell>
                           <TableCell>
-                            {f.rating === 'positive' ? (
+                            {f.rating === 'positive' || f.rating === 'thumbs_up' ? (
                               <Badge className="bg-green-100 text-green-800"><ThumbsUp className="mr-1 h-3 w-3" />正面</Badge>
-                            ) : f.rating === 'negative' ? (
+                            ) : f.rating === 'negative' || f.rating === 'thumbs_down' ? (
                               <Badge className="bg-red-100 text-red-800"><ThumbsDown className="mr-1 h-3 w-3" />负面</Badge>
                             ) : (
                               <Badge variant="outline"><MessageSquare className="mr-1 h-3 w-3" />{f.rating}</Badge>

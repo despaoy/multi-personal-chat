@@ -185,7 +185,7 @@ def cache_set(key: str, value: Any, ttl: int = 300) -> bool:
     """设置缓存（JSON 序列化），ttl 单位秒"""
     try:
         raw = json.dumps(value, ensure_ascii=False, default=str)
-        get_redis().setex(key, ttl, raw)
+        get_redis().set(key, raw, ex=ttl)
         return True
     except Exception as e:
         logger.warning(f"cache_set({key}): {e}")

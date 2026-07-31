@@ -43,7 +43,7 @@ import { type KnowledgeDocument, type ScanDirectory } from '@/lib/api';
 
 export default function KnowledgePage() {
   return (
-    <AuthGuard>
+    <AuthGuard requireAdmin>
       <KnowledgeContent />
     </AuthGuard>
   );

@@ -29,6 +29,14 @@ def test_database_url_selects_postgresql_when_flag_is_unset():
         }
     ) is False
     assert _should_use_postgresql({"DATABASE_URL": "sqlite:///local.db"}) is False
+    assert _should_use_postgresql(
+        {
+            "PG_HOST": "db",
+            "PG_USER": "app",
+            "PG_PASSWORD": "strong-password",
+            "PG_DATABASE": "app",
+        }
+    ) is True
 
 
 def test_production_validation_rejects_unsupported_database_and_workers():
@@ -40,11 +48,12 @@ def test_production_validation_rejects_unsupported_database_and_workers():
         "QQCHAT_BACKEND_URL": "http://backend:8000",
         "VLLM_BASE_URL": "http://vllm:8001",
         "JWT_SECRET": "j" * 32,
+        "ENCRYPTION_KEY": "ZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWU=",
         "ALLOWED_ORIGINS": "https://admin.example.com",
         "LOG_LEVEL": "INFO",
     }
 
-    missing_url = validate_deployment_environment(
+    component_config = validate_deployment_environment(
         {
             **base,
             "USE_POSTGRESQL": "true",
@@ -54,7 +63,12 @@ def test_production_validation_rejects_unsupported_database_and_workers():
             "PG_DATABASE": "app",
         }
     )
-    assert any("DATABASE_URL" in error for error in missing_url.errors)
+    assert component_config.ok is True
+
+    incomplete_components = validate_deployment_environment(
+        {**base, "USE_POSTGRESQL": "true", "PG_HOST": "db"}
+    )
+    assert any("DATABASE_URL" in error for error in incomplete_components.errors)
 
     wrong_scheme = validate_deployment_environment(
         {**base, "DATABASE_URL": "sqlite:///app.db"}
@@ -69,6 +83,30 @@ def test_production_validation_rejects_unsupported_database_and_workers():
         }
     )
     assert any("BACKEND_WORKERS" in error for error in multiple_workers.errors)
+
+
+def test_production_validation_allows_container_specific_lora_mount_paths():
+    from infra.deployment import validate_deployment_environment
+
+    result = validate_deployment_environment(
+        {
+            "ENVIRONMENT": "production",
+            "ASTRBOT_INTEGRATION_TOKEN": "a" * 32,
+            "QQCHAT_BACKEND_URL": "http://backend:8000",
+            "DATABASE_URL": "postgresql://user:pass@postgres/qqassistant",
+            "VLLM_BASE_URL": "http://vllm:8001",
+            "JWT_SECRET": "j" * 32,
+        "ENCRYPTION_KEY": "ZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWU=",
+            "ALLOWED_ORIGINS": "https://admin.example.com",
+            "LOG_LEVEL": "INFO",
+            "LORA_PATH": "/app/loras",
+            "VLLM_LORA_ROOT": "/loras",
+        }
+    )
+
+    assert result.ok is True
+    assert result.errors == []
+    assert not any("must match" in warning for warning in result.warnings)
 
 
 def test_postgresql_sync_adapter_keeps_api_method_contracts():
@@ -703,3 +741,221 @@ async def test_lora_activation_409_base_model_mismatch_via_testclient(monkeypatc
     assert "Qwen2.5-7B-Instruct" in detail["actual"]
     # 预检失败不应改动数据库
     assert fake_db.updated is False
+@pytest.mark.asyncio
+async def test_active_lora_is_unloaded_before_registration_delete(monkeypatch):
+    from api import loras
+    import api.generate
+
+    events = []
+
+    class FakeDb:
+        def get_loras(self):
+            return [{"id": "1", "name": "kisaki_lora", "status": "active"}]
+
+        def delete_lora(self, lora_id):
+            events.append(("delete", lora_id))
+            return True
+
+    class Client:
+        async def unload_lora_adapter(self, name):
+            events.append(("unload", name))
+
+    async def get_client():
+        return Client()
+
+    monkeypatch.setattr(loras, "db", FakeDb())
+    monkeypatch.setattr(loras, "_resolve_vllm_adapter_path", lambda name: f"/loras/{name}")
+    monkeypatch.setattr(api.generate, "get_vllm_client", get_client)
+
+    result = await loras.delete_lora("1", current_user={"role": "admin"})
+
+    assert result["success"] is True
+    assert events == [("unload", "kisaki_lora"), ("delete", "1")]
+
+
+@pytest.mark.asyncio
+async def test_active_lora_delete_keeps_registration_when_unload_fails(monkeypatch):
+    from api import loras
+    import api.generate
+
+    class FakeDb:
+        deleted = False
+
+        def get_loras(self):
+            return [{"id": "1", "name": "kisaki_lora", "status": "active"}]
+
+        def delete_lora(self, lora_id):
+            self.deleted = True
+            return True
+
+    class Client:
+        async def unload_lora_adapter(self, name):
+            raise RuntimeError("vLLM unavailable")
+
+    async def get_client():
+        return Client()
+
+    fake_db = FakeDb()
+    monkeypatch.setattr(loras, "db", fake_db)
+    monkeypatch.setattr(loras, "_resolve_vllm_adapter_path", lambda name: f"/loras/{name}")
+    monkeypatch.setattr(api.generate, "get_vllm_client", get_client)
+
+    with pytest.raises(HTTPException) as exc_info:
+        await loras.delete_lora("1", current_user={"role": "admin"})
+
+    assert exc_info.value.status_code == 502
+    assert fake_db.deleted is False
+@pytest.mark.asyncio
+async def test_lora_deactivation_keeps_database_active_when_unload_fails(monkeypatch):
+    from api import loras
+    import api.generate
+
+    class FakeDb:
+        updated = False
+
+        def get_loras(self):
+            return [{"id": "1", "name": "kisaki_lora", "status": "active"}]
+
+        def update_lora_status(self, lora_id, status):
+            self.updated = True
+            return {"id": lora_id, "name": "kisaki_lora", "status": status}
+
+    class Request:
+        async def json(self):
+            return {"status": "inactive"}
+
+    class Client:
+        async def unload_lora_adapter(self, name):
+            raise RuntimeError("vLLM unavailable")
+
+    async def get_client():
+        return Client()
+
+    fake_db = FakeDb()
+    monkeypatch.setattr(loras, "db", fake_db)
+    monkeypatch.setattr(loras, "_resolve_vllm_adapter_path", lambda name: f"/loras/{name}")
+    monkeypatch.setattr(api.generate, "get_vllm_client", get_client)
+
+    with pytest.raises(HTTPException) as exc_info:
+        await loras.update_lora_status("1", Request(), {"role": "admin"})
+
+    assert exc_info.value.status_code == 502
+    assert fake_db.updated is False
+@pytest.mark.asyncio
+async def test_lora_switch_rolls_back_runtime_when_database_update_fails(monkeypatch):
+    from api import loras
+    import api.generate
+
+    events = []
+
+    class FakeDb:
+        def get_loras(self):
+            return [
+                {"id": "1", "name": "old_lora", "status": "active"},
+                {"id": "2", "name": "new_lora", "status": "inactive"},
+            ]
+
+        def update_lora_status(self, lora_id, status):
+            events.append(("db-failed", lora_id, status))
+            raise RuntimeError("database unavailable")
+
+    class Request:
+        async def json(self):
+            return {"status": "active"}
+
+    class Client:
+        async def unload_lora_adapter(self, name):
+            events.append(("unload", name))
+
+        async def load_lora_adapter(self, name, path):
+            events.append(("load", name, path))
+
+    class Checker:
+        def __init__(self, **kwargs):
+            pass
+
+        def check_adapter(self, name):
+            return type(
+                "Report",
+                (),
+                {"compatible": True, "errors": [], "warnings": [], "base_model_mismatch": False},
+            )()
+
+    async def get_client():
+        return Client()
+
+    monkeypatch.setattr(loras, "db", FakeDb())
+    monkeypatch.setattr(loras, "AdapterChecker", Checker)
+    monkeypatch.setattr(loras, "_resolve_vllm_adapter_path", lambda name: f"/loras/{name}")
+    monkeypatch.setattr(api.generate, "get_vllm_client", get_client)
+
+    with pytest.raises(HTTPException) as exc_info:
+        await loras.update_lora_status("2", Request(), {"role": "admin"})
+
+    assert exc_info.value.status_code == 500
+    assert events == [
+        ("unload", "old_lora"),
+        ("load", "new_lora", "/loras/new_lora"),
+        ("db-failed", "2", "active"),
+        ("unload", "new_lora"),
+        ("load", "old_lora", "/loras/old_lora"),
+    ]
+@pytest.mark.asyncio
+async def test_lora_status_update_is_idempotent(monkeypatch):
+    from api import loras
+
+    class FakeDb:
+        def get_loras(self):
+            return [{"id": "1", "name": "kisaki_lora", "status": "active"}]
+
+        def update_lora_status(self, lora_id, status):
+            raise AssertionError("idempotent update must not write the database")
+
+    class Request:
+        async def json(self):
+            return {"status": "active"}
+
+    monkeypatch.setattr(loras, "db", FakeDb())
+
+    result = await loras.update_lora_status("1", Request(), {"role": "admin"})
+
+    assert result["success"] is True
+    assert result["lora"]["status"] == "active"
+@pytest.mark.asyncio
+async def test_active_lora_delete_restores_runtime_when_database_fails(monkeypatch):
+    from api import loras
+    import api.generate
+
+    events = []
+
+    class FakeDb:
+        def get_loras(self):
+            return [{"id": "1", "name": "kisaki_lora", "status": "active"}]
+
+        def delete_lora(self, lora_id):
+            events.append(("db-failed", lora_id))
+            raise RuntimeError("database unavailable")
+
+    class Client:
+        async def unload_lora_adapter(self, name):
+            events.append(("unload", name))
+
+        async def load_lora_adapter(self, name, path):
+            events.append(("load", name, path))
+
+    async def get_client():
+        return Client()
+
+    monkeypatch.setattr(loras, "db", FakeDb())
+    monkeypatch.setattr(loras, "_resolve_vllm_adapter_path", lambda name: f"/loras/{name}")
+    monkeypatch.setattr(api.generate, "get_vllm_client", get_client)
+
+    with pytest.raises(HTTPException) as exc_info:
+        await loras.delete_lora("1", current_user={"role": "admin"})
+
+    assert exc_info.value.status_code == 500
+    assert events == [
+        ("unload", "kisaki_lora"),
+        ("db-failed", "1"),
+        ("load", "kisaki_lora", "/loras/kisaki_lora"),
+    ]

@@ -15,37 +15,24 @@ _BACKEND_ROOT = Path(__file__).parent
 if str(_BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(_BACKEND_ROOT))
 
-# 加载 .env 环境变量（在导入其他模块之前）
-try:
-    from dotenv import load_dotenv
-    load_dotenv(_BACKEND_ROOT / ".env", override=False)
-except ImportError:
-    pass
+# 使用与 app.main 相同的 dotenv 加载器；外部注入变量保持最高优先级。
+from app.env import load_backend_env
 
-# 删除可能存在的旧 pycache，确保使用新模块结构
-import shutil
-for root, dirs, files in os.walk(str(_BACKEND_ROOT)):
-    if '__pycache__' in dirs:
-        shutil.rmtree(os.path.join(root, '__pycache__'), ignore_errors=True)
-    dirs[:] = [d for d in dirs if d not in ('__pycache__', 'venv', '.git', 'models', 'data')]
+load_backend_env()
 
 import uvicorn
 
 
-def _load_env():
-    """加载 .env 文件到环境变量"""
-    env_path = Path(__file__).parent / ".env"
-    if env_path.exists():
-        with open(env_path, "r", encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if line and not line.startswith("#") and "=" in line:
-                    key, _, value = line.partition("=")
-                    key = key.strip()
-                    value = value.strip()
-                    if key and key not in os.environ:
-                        os.environ[key] = value
-
+def _positive_int_env(name: str, default: int) -> int:
+    """Read a positive integer runtime limit with a startup-friendly error."""
+    raw = os.getenv(name, str(default))
+    try:
+        value = int(raw)
+    except (TypeError, ValueError) as exc:
+        raise RuntimeError(f"{name} must be a positive integer") from exc
+    if value < 1:
+        raise RuntimeError(f"{name} must be a positive integer")
+    return value
 
 def main():
     import argparse
@@ -68,12 +55,12 @@ def main():
         port=args.port,
         reload=args.reload,
         workers=worker_count,
-        limit_concurrency=500,
-        timeout_keep_alive=30,
+        limit_concurrency=_positive_int_env("BACKEND_LIMIT_CONCURRENCY", 256),
+        backlog=_positive_int_env("BACKEND_BACKLOG", 512),
+        timeout_keep_alive=_positive_int_env("BACKEND_KEEPALIVE_TIMEOUT", 10),
         timeout_graceful_shutdown=30,
     )
 
 
 if __name__ == "__main__":
-    _load_env()
     main()

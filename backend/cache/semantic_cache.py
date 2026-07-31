@@ -107,7 +107,7 @@ class L1LRUCache:
                 self._cache.popitem(last=False)
             # 防雪崩：TTL 添加 ±10% jitter，避免大量缓存同时过期
             # 注意：不强制提升到 1s 下限，否则会破坏显式传入的短 TTL（如测试场景）
-            base_ttl = ttl or self._default_ttl
+            base_ttl = self._default_ttl if ttl is None else ttl
             jitter = base_ttl * random.uniform(-0.1, 0.1)
             actual_ttl = max(0.001, base_ttl + jitter)
             self._cache[key] = CacheEntry(
@@ -201,13 +201,13 @@ class L2RedisCache:
         if not client or not self._available:
             return
         try:
-            base_ttl = ttl or self._default_ttl
+            base_ttl = self._default_ttl if ttl is None else ttl
             # 防雪崩：TTL 添加 ±10% jitter
             jitter = base_ttl * random.uniform(-0.1, 0.1)
             actual_ttl = max(1, int(base_ttl + jitter))
             # 精确匹配缓存
             cache_key = f"sc:exact:{key}"
-            await client.setex(cache_key, actual_ttl, json.dumps(value, ensure_ascii=False, default=str))
+            await client.set(cache_key, json.dumps(value, ensure_ascii=False, default=str), ex=actual_ttl)
         except Exception as e:
             logger.debug(f"L2 cache set error: {e}")
 
@@ -409,17 +409,24 @@ class SemanticCache:
                         await self._l2.set(key, self.NULL_MARKER, ttl=null_ttl)
                     return None
                 else:
-                    await self.set(prompt, value, context)
+                    await self.set(prompt, value, context=context)
                     return value
         finally:
             # 必须在 async with 退出后释放引用计数，否则锁永远无法被清理
             await self._release_key_lock(key)
 
-    async def set(self, prompt: str, value: Any, context: Optional[str] = None) -> None:
-        """写入缓存：同时写L1和L2"""
+    async def set(
+        self,
+        prompt: str,
+        value: Any,
+        ttl: Optional[float] = None,
+        *,
+        context: Optional[str] = None,
+    ) -> None:
+        """写入缓存：同时写 L1 和 L2，并遵守 CacheInterface 的 TTL 契约。"""
         key = self._compute_key(prompt, context)
-        await self._l1.set(key, value)
-        await self._l2.set(key, value)
+        await self._l1.set(key, value, ttl=ttl)
+        await self._l2.set(key, value, ttl=ttl)
 
     async def delete(self, prompt: str, context: Optional[str] = None) -> bool:
         """删除缓存"""
@@ -456,6 +463,15 @@ async def get_semantic_cache() -> SemanticCache:
     if _semantic_cache is None:
         _semantic_cache = SemanticCache()
     return _semantic_cache
+
+
+async def reset_semantic_cache() -> None:
+    """Close and discard the process-local cache between app lifecycles."""
+    global _semantic_cache
+    cache = _semantic_cache
+    _semantic_cache = None
+    if cache is not None:
+        await cache.close()
 
 
 # 接口契约验证：确保 SemanticCache 实现 CacheInterface 接口

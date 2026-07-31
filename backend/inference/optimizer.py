@@ -343,13 +343,23 @@ class ResponseCache:
         self._cache: OrderedDict[str, CacheEntry] = OrderedDict()
         # prompt_hash -> set of cache_keys，用于按pattern失效
         self._prompt_index: dict[str, set[str]] = {}
-        self._lock = asyncio.Lock()
+        self._lock: asyncio.Lock | None = None
+        self._lock_loop: asyncio.AbstractEventLoop | None = None
         # 互斥锁：防止缓存击穿，每个key一个锁
         self._locks: dict[str, asyncio.Lock] = {}
 
         # 统计
         self._hits = 0
         self._misses = 0
+
+    def _get_lock(self) -> asyncio.Lock:
+        """Rebuild loop-bound mutexes when an application lifecycle restarts."""
+        loop = asyncio.get_running_loop()
+        if self._lock is None or self._lock_loop is not loop:
+            self._lock = asyncio.Lock()
+            self._lock_loop = loop
+            self._locks = {}
+        return self._lock
 
     @staticmethod
     def compute_prompt_hash(prompt: str) -> str:
@@ -407,14 +417,14 @@ class ResponseCache:
 
         # 获取该key对应的互斥锁
         if key not in self._locks:
-            async with self._lock:
+            async with self._get_lock():
                 # double-check: 可能在等待锁时已被其他协程创建
                 if key not in self._locks:
                     self._locks[key] = asyncio.Lock()
         key_lock = self._locks[key]
 
         async with key_lock:
-            async with self._lock:
+            async with self._get_lock():
                 entry = self._cache.get(key)
 
                 if entry is None:
@@ -452,7 +462,7 @@ class ResponseCache:
             result: 要缓存的结果，None时存储空值标记防止穿透
             ttl: 缓存TTL（秒），None则使用默认值
         """
-        async with self._lock:
+        async with self._get_lock():
             key = self._full_key(prompt_hash, cache_key)
             effective_ttl = ttl if ttl is not None else self._default_ttl
 
@@ -515,7 +525,7 @@ class ResponseCache:
         Returns:
             被移除的条目数
         """
-        async with self._lock:
+        async with self._get_lock():
             if pattern is None:
                 count = len(self._cache)
                 self._cache.clear()
@@ -541,7 +551,7 @@ class ResponseCache:
         Returns:
             被清理的条目数
         """
-        async with self._lock:
+        async with self._get_lock():
             keys_to_remove: list[tuple[str, str]] = []
             for key, entry in self._cache.items():
                 if entry.is_expired:

@@ -491,7 +491,18 @@ _hutao_7b_model = None
 _hutao_7b_tokenizer = None
 # C12 fix: 保护 _hutao_7b_model/_hutao_7b_tokenizer/_current_lora 的 check-then-set 序列。
 # 防止消息推理过程中 /lora 切换命令并发修改模型，导致正在进行的推理使用错误 LoRA。
-_lora_model_lock = asyncio.Lock()
+_lora_model_lock: asyncio.Lock | None = None
+_lora_model_lock_loop: asyncio.AbstractEventLoop | None = None
+
+
+def _get_lora_model_lock() -> asyncio.Lock:
+    """Return the model mutation lock for the active bot event loop."""
+    global _lora_model_lock, _lora_model_lock_loop
+    loop = asyncio.get_running_loop()
+    if _lora_model_lock is None or _lora_model_lock_loop is not loop:
+        _lora_model_lock = asyncio.Lock()
+        _lora_model_lock_loop = loop
+    return _lora_model_lock
 
 
 def _get_active_lora_from_db() -> str:
@@ -688,7 +699,7 @@ async def generate_with_local_model(prompt: str, session_id: Optional[str] = Non
 
     # C12 fix: transformers 路径全程持锁，防止 /lora 切换命令并发修改
     # _hutao_7b_model/_hutao_7b_tokenizer/_current_lora 导致推理用错 LoRA
-    async with _lora_model_lock:
+    async with _get_lora_model_lock():
         try:
             model, tokenizer = _load_7b_model(lora_name)
             if not is_claw:
@@ -812,8 +823,17 @@ async def should_reply(event: MessageEvent) -> bool:
     """判断是否应该回复该消息"""
     # 检查该会话是否启用了机器人（通过db.adapter）
     try:
-        session_id = str(event.group_id) if isinstance(event, GroupMessageEvent) else str(event.user_id)
-        if not db.is_session_bot_enabled(session_id):
+        is_group = isinstance(event, GroupMessageEvent)
+        session_id = str(event.group_id) if is_group else str(event.user_id)
+        conversation_type = "group" if is_group else "private"
+        enabled = await asyncio.to_thread(
+            db.is_session_bot_enabled,
+            session_id,
+            "qq",
+            session_id,
+            conversation_type,
+        )
+        if not enabled:
             logger.info(f"会话 {session_id} 机器人已关闭，跳过")
             return False
     except Exception:
@@ -1279,7 +1299,7 @@ def init_bot():
             return
         # C12 fix: 与 generate_with_local_model 的 transformers 路径互斥，
         # 防止切换过程中正在进行的推理读到中间状态
-        async with _lora_model_lock:
+        async with _get_lora_model_lock():
             try:
                 _load_7b_model(target)
                 await lora_cmd.finish(f"好嘞，现在我是 {target} 啦！")

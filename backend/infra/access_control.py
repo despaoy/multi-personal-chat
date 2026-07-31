@@ -32,6 +32,7 @@ from __future__ import annotations
 import asyncio
 import functools
 import hashlib
+import hmac
 import logging
 import os
 import secrets
@@ -465,25 +466,23 @@ class AccessControlManager:
 
     @staticmethod
     def _verify_api_key(api_key: str, stored_hash: str) -> bool:
-        """验证API Key是否与存储的哈希匹配。
-
-        支持新的pbkdf2格式和旧的SHA-256格式（向后兼容）。
-
-        Args:
-            api_key: 待验证的原始API Key
-            stored_hash: 数据库中存储的哈希值
-
-        Returns:
-            是否匹配
-        """
-        if stored_hash.startswith("pbkdf2:"):
-            _, salt_hex, key_hex = stored_hash.split(":")
-            salt = bytes.fromhex(salt_hex)
-            key = hashlib.pbkdf2_hmac('sha256', api_key.encode('utf-8'), salt, 100000)
-            return key.hex() == key_hex
-        # Legacy SHA-256 support
-        return hashlib.sha256(api_key.encode("utf-8")).hexdigest() == stored_hash
-
+        """Verify a key against current PBKDF2 and legacy SHA-256 records."""
+        try:
+            if stored_hash.startswith("pbkdf2:"):
+                _, salt_hex, key_hex = stored_hash.split(":", 2)
+                salt = bytes.fromhex(salt_hex)
+                key = hashlib.pbkdf2_hmac(
+                    "sha256",
+                    api_key.encode("utf-8"),
+                    salt,
+                    100000,
+                )
+                return hmac.compare_digest(key.hex(), key_hex)
+            legacy = hashlib.sha256(api_key.encode("utf-8")).hexdigest()
+            return hmac.compare_digest(legacy, stored_hash)
+        except (AttributeError, TypeError, ValueError):
+            logger.warning("忽略格式损坏的 API Key 哈希记录")
+            return False
     # -------------------------------------------------------------------
     # API Key管理
     # -------------------------------------------------------------------
@@ -496,7 +495,7 @@ class AccessControlManager:
     ) -> dict[str, Any]:
         """创建新的API Key。
 
-        API Key格式：qqa_{role}_{random_hex}
+        API Key格式：qqa_{role}_{public_id}_{random_hex}
 
         Args:
             role: 关联的角色
@@ -509,11 +508,14 @@ class AccessControlManager:
         Raises:
             APIKeyError: 创建失败
         """
-        # 生成API Key
+        # Prefix contains a public lookup id so authentication does not scan and
+        # PBKDF2-check every key of the same role. The secret is still stored only
+        # as a salted hash.
+        public_id = secrets.token_hex(6)
         random_hex = secrets.token_hex(_API_KEY_RANDOM_LENGTH // 2)
-        api_key = f"{_API_KEY_PREFIX}{role.value}_{random_hex}"
+        key_prefix = f"{_API_KEY_PREFIX}{role.value}_{public_id}_"
+        api_key = f"{key_prefix}{random_hex}"
         key_hash = self._hash_api_key(api_key)
-        key_prefix = f"{_API_KEY_PREFIX}{role.value}_"
         created_at = time.time()
 
         try:
@@ -547,7 +549,7 @@ class AccessControlManager:
             }
         except Exception as exc:
             logger.error("创建API Key失败: %s", exc)
-            raise APIKeyError(f"创建API Key失败: {exc}") from exc
+            raise APIKeyError("创建 API Key 失败") from exc
 
     def revoke_api_key(self, api_key: str) -> bool:
         """吊销API Key。
@@ -591,7 +593,7 @@ class AccessControlManager:
                 revoked = cursor.rowcount > 0
 
             if revoked:
-                logger.info("API Key已吊销: %s***", api_key[:12])
+                logger.info("API Key已吊销")
 
                 self._audit_logger.log(
                     api_key_hash=matched_hash,
@@ -603,7 +605,37 @@ class AccessControlManager:
             return revoked
         except Exception as exc:
             logger.error("吊销API Key失败: %s", exc)
-            raise APIKeyError(f"吊销API Key失败: {exc}") from exc
+            raise APIKeyError("吊销 API Key 失败") from exc
+
+    def revoke_api_key_by_id(self, key_id: int) -> bool:
+        """Revoke a managed key by database id without exposing the secret in a URL."""
+        try:
+            with self._get_connection() as conn:
+                row = conn.execute(
+                    "SELECT key_hash, role FROM api_keys WHERE id = ? AND is_active = 1",
+                    (key_id,),
+                ).fetchone()
+                if row is None:
+                    return False
+                cursor = conn.execute(
+                    "UPDATE api_keys SET is_active = 0, revoked_at = ? "
+                    "WHERE id = ? AND is_active = 1",
+                    (time.time(), key_id),
+                )
+                conn.commit()
+                revoked = cursor.rowcount > 0
+
+            if revoked:
+                self._audit_logger.log(
+                    api_key_hash=row["key_hash"],
+                    role=row["role"],
+                    action="revoke_api_key",
+                    detail=f"吊销 API Key id={key_id}",
+                )
+            return revoked
+        except Exception as exc:
+            logger.error("按 ID 吊销 API Key 失败: %s", exc)
+            raise APIKeyError("吊销 API Key 失败") from exc
 
     def list_api_keys(self, include_revoked: bool = False) -> list[dict[str, Any]]:
         """列出所有API Key。
@@ -616,7 +648,7 @@ class AccessControlManager:
         Returns:
             API Key元数据列表
         """
-        query = "SELECT key_prefix, role, description, created_at, revoked_at, is_active, rate_limit FROM api_keys"
+        query = "SELECT id, key_prefix, role, description, created_at, revoked_at, is_active, rate_limit FROM api_keys"
         if not include_revoked:
             query += " WHERE is_active = 1"
         query += " ORDER BY created_at DESC"
@@ -628,79 +660,82 @@ class AccessControlManager:
                 return [dict(row) for row in rows]
         except Exception as exc:
             logger.error("列出API Key失败: %s", exc)
-            return []
+            raise APIKeyError("列出 API Key 失败") from exc
 
     # -------------------------------------------------------------------
     # 认证与授权
     # -------------------------------------------------------------------
 
+    def _authenticate_record(self, api_key: str) -> dict[str, Any]:
+        """Verify and touch one managed API key in a worker thread."""
+        role_name = next((
+            role.value
+            for role in Role
+            if api_key.startswith(f"{_API_KEY_PREFIX}{role.value}_")
+        ), "")
+        if role_name not in {role.value for role in Role}:
+            raise AuthenticationError("无效的API Key")
+
+        role_prefix = f"{_API_KEY_PREFIX}{role_name}_"
+        suffix = api_key[len(role_prefix):]
+        public_id, separator, _secret = suffix.partition("_")
+        candidate_prefix = (
+            f"{role_prefix}{public_id}_"
+            if separator and len(public_id) == 12 and all(ch in "0123456789abcdef" for ch in public_id)
+            else ""
+        )
+
+        with self._get_connection() as conn:
+            rows = []
+            if candidate_prefix:
+                rows.extend(conn.execute(
+                    "SELECT key_hash, role, is_active, rate_limit "
+                    "FROM api_keys WHERE key_prefix = ?",
+                    (candidate_prefix,),
+                ).fetchall())
+            # Legacy keys used only the role prefix. Keep verification support
+            # without forcing new keys back onto an O(n) scan.
+            rows.extend(conn.execute(
+                "SELECT key_hash, role, is_active, rate_limit "
+                "FROM api_keys WHERE key_prefix = ?",
+                (role_prefix,),
+            ).fetchall())
+            matched_row = next(
+                (row for row in rows if self._verify_api_key(api_key, row["key_hash"])),
+                None,
+            )
+            if matched_row is None:
+                raise AuthenticationError("无效的API Key")
+            if not matched_row["is_active"]:
+                raise AuthenticationError("API Key已被吊销")
+
+            conn.execute(
+                "UPDATE api_keys SET last_used_at = ? WHERE key_hash = ?",
+                (time.time(), matched_row["key_hash"]),
+            )
+            conn.commit()
+            return dict(matched_row)
+
     async def authenticate(self, api_key: str) -> dict[str, Any]:
-        """认证API Key，返回关联的用户信息。
-
-        同时执行速率限制检查。
-
-        Args:
-            api_key: 请求中的API Key
-
-        Returns:
-            用户信息字典，包含 role, permissions, key_hash 等
-
-        Raises:
-            AuthenticationError: 认证失败
-            RateLimitError: 速率限制超出
-        """
+        """Authenticate a managed API key without blocking the event loop."""
         if not api_key:
             raise AuthenticationError("缺少API Key")
 
-        key_hash = self._hash_api_key(api_key)
-
         try:
-            with self._get_connection() as conn:
-                cursor = conn.execute(
-                    """
-                    SELECT key_hash, role, is_active, rate_limit
-                    FROM api_keys
-                    WHERE key_prefix = ?
-                    """,
-                    (f"{_API_KEY_PREFIX}{api_key[len(_API_KEY_PREFIX):].split('_', 1)[0]}_" if len(api_key) > len(_API_KEY_PREFIX) else "",),
-                )
-                rows = cursor.fetchall()
-
-            # Find matching key using secure verification
-            matched_row = None
-            for row in rows:
-                if self._verify_api_key(api_key, row["key_hash"]):
-                    matched_row = row
-                    break
-
-            if matched_row is None:
-                logger.warning("认证失败: 无效的API Key %s***", api_key[:8])
-                raise AuthenticationError("无效的API Key")
-
-            if not matched_row["is_active"]:
-                logger.warning("认证失败: API Key已吊销 %s***", api_key[:8])
-                raise AuthenticationError("API Key已被吊销")
-
+            matched_row = await asyncio.to_thread(self._authenticate_record, api_key)
             role = Role(matched_row["role"])
             permissions = _ROLE_PERMISSIONS.get(role, Permission(0))
-
-            # 更新最后使用时间
-            with self._get_connection() as conn:
-                conn.execute(
-                    "UPDATE api_keys SET last_used_at = ? WHERE key_hash = ?",
-                    (time.time(), matched_row["key_hash"]),
-                )
-                conn.commit()
-
-            # 速率限制检查
-            custom_limit = matched_row["rate_limit"]
             stored_hash = matched_row["key_hash"]
+            custom_limit = matched_row["rate_limit"]
+
             if custom_limit:
-                if stored_hash not in self._custom_rate_limiters:
-                    self._custom_rate_limiters[stored_hash] = RateLimiter(limit=custom_limit)
-                await self._custom_rate_limiters[stored_hash].check(api_key)
+                limiter = self._custom_rate_limiters.get(stored_hash)
+                if limiter is None:
+                    limiter = RateLimiter(limit=custom_limit)
+                    self._custom_rate_limiters[stored_hash] = limiter
+                await limiter.check(stored_hash)
             else:
-                await self._rate_limiter.check(api_key)
+                await self._rate_limiter.check(stored_hash)
 
             return {
                 "role": role,
@@ -708,12 +743,11 @@ class AccessControlManager:
                 "key_hash": stored_hash,
                 "rate_limit": custom_limit or _DEFAULT_RATE_LIMIT,
             }
-
         except (AuthenticationError, RateLimitError):
             raise
         except Exception as exc:
             logger.error("认证过程异常: %s", exc)
-            raise AuthenticationError(f"认证失败: {exc}") from exc
+            raise AuthenticationError("认证失败") from exc
 
     def authorize(self, user_info: dict[str, Any], required_permission: Permission) -> bool:
         """检查用户是否拥有所需权限。

@@ -1,4 +1,4 @@
-﻿"""
+"""
 核心模块单元测试
 
 测试不需要外部服务的核心逻辑：
@@ -342,12 +342,12 @@ class TestGroupRateLimiter:
 
 class TestDatabaseConfiguration:
     def test_sqlite_path_uses_database_path_env(self, monkeypatch):
-        from db.database import _database_path_from_env
+        from db.database import BACKEND_DIR, _database_path_from_env
 
         custom_path = Path(".test_tmp") / "config" / f"custom_{uuid.uuid4().hex}.db"
         monkeypatch.setenv("DATABASE_PATH", str(custom_path))
 
-        assert _database_path_from_env() == custom_path
+        assert _database_path_from_env() == BACKEND_DIR / custom_path
 
 class TestMultiPlatformStorage:
     def _make_db(self):
@@ -932,6 +932,7 @@ class TestDeploymentValidation:
         assert any("ASTRBOT_INTEGRATION_TOKEN" in item for item in result.errors)
         assert any("DATABASE_URL" in item for item in result.errors)
         assert any("JWT_SECRET" in item for item in result.errors)
+        assert any("ENCRYPTION_KEY" in item for item in result.errors)
 
     def test_production_accepts_complete_environment(self):
         from infra.deployment import validate_deployment_environment
@@ -943,6 +944,7 @@ class TestDeploymentValidation:
             "DATABASE_URL": "postgresql+asyncpg://user:strongpass@postgres:5432/qqassistant",
             "VLLM_BASE_URL": "http://vllm:8001",
             "JWT_SECRET": "jwt-secret-value-that-is-at-least-32-chars",
+            "ENCRYPTION_KEY": "ZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWVlZWU=",
             "ALLOWED_ORIGINS": "https://admin.example.com",
             "LOG_LEVEL": "INFO",
         })

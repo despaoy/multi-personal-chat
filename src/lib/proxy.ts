@@ -7,21 +7,11 @@ const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:8000';
 const PROXY_TIMEOUT = Number(process.env.PROXY_TIMEOUT_MS || 30000);
 const PROXY_LONG_TIMEOUT = Number(process.env.PROXY_LONG_TIMEOUT_MS || 210000);
 
-function defaultProxyTimeout(path: string): number {
-  const pathOnly = path.split('?')[0];
-  const longRunningPrefixes = [
-    '/api/generate',
-    '/api/training/start',
-    '/api/training/generate-dialogues',
-    '/api/knowledge/bases/',
-    '/api/knowledge/scan/import',
-    '/api/knowledge/train-intent',
-    '/api/evaluation/run',
-    '/api/experiments/',
-  ];
-  return longRunningPrefixes.some((prefix) => pathOnly.startsWith(prefix))
-    ? PROXY_LONG_TIMEOUT
-    : PROXY_TIMEOUT;
+type ProxyTimeoutClass = 'default' | 'long';
+
+interface ProxyRoutePolicy {
+  prefix: string;
+  timeout?: ProxyTimeoutClass;
 }
 
 // 安全：允许转发的后端路径前缀白名单。
@@ -31,33 +21,55 @@ function defaultProxyTimeout(path: string): number {
 //       专用 route 内部也调用 proxyRequest，需要通过白名单校验。
 //       后端安全中间件独立校验认证（AUTH_WHITELIST 保护 login/register），
 //       所以前端白名单不会降低安全性。
-const PROXY_ALLOWED_PREFIXES = [
-  '/api/auth',
-  '/api/messages',
-  '/api/sessions',
-  '/api/generate',
-  '/api/vllm/',
-  '/api/loras',
-  '/api/training',
-  '/api/knowledge',
-  '/api/vector/',
-  '/api/model',
-  '/api/models',
-  '/api/config',
-  '/api/user/',
-  '/api/stats',
-  '/api/services',
-  '/api/claw',
-  '/api/enhanced',
-  '/api/evaluation',
-  '/api/experiments',
-  '/api/retrieval-eval',
-  '/api/preferences',
-  '/api/router',
-  '/api/feedback',
-  '/health',
-  '/ready',
+// 超时等级也在同一份清单中声明，新增接口不需要同步维护第二个数组。
+const PROXY_ROUTE_POLICIES: readonly ProxyRoutePolicy[] = [
+  { prefix: '/api/generate', timeout: 'long' },
+  { prefix: '/api/training/start', timeout: 'long' },
+  { prefix: '/api/training/generate-dialogues', timeout: 'long' },
+  { prefix: '/api/knowledge/bases/', timeout: 'long' },
+  { prefix: '/api/knowledge/scan/import', timeout: 'long' },
+  { prefix: '/api/knowledge/train-intent', timeout: 'long' },
+  { prefix: '/api/evaluation/run', timeout: 'long' },
+  { prefix: '/api/experiments/', timeout: 'long' },
+  { prefix: '/api/auth' },
+  { prefix: '/api/messages' },
+  { prefix: '/api/sessions' },
+  { prefix: '/api/vllm/' },
+  { prefix: '/api/loras' },
+  { prefix: '/api/training' },
+  { prefix: '/api/knowledge' },
+  { prefix: '/api/vector/' },
+  { prefix: '/api/model' },
+  { prefix: '/api/models' },
+  { prefix: '/api/config' },
+  { prefix: '/api/user/' },
+  { prefix: '/api/stats' },
+  { prefix: '/api/services' },
+  { prefix: '/api/claw' },
+  { prefix: '/api/enhanced' },
+  { prefix: '/api/evaluation' },
+  { prefix: '/api/experiments' },
+  { prefix: '/api/retrieval-eval' },
+  { prefix: '/api/preferences' },
+  { prefix: '/api/router' },
+  { prefix: '/api/feedback' },
+  { prefix: '/health' },
+  { prefix: '/ready' },
 ];
+
+function matchesProxyPrefix(path: string, prefix: string): boolean {
+  if (path === prefix) return true;
+  if (prefix.endsWith('/')) return path.startsWith(prefix);
+  return path.startsWith(prefix + '/');
+}
+
+function defaultProxyTimeout(path: string): number {
+  const pathOnly = path.split('?')[0];
+  const policy = PROXY_ROUTE_POLICIES.find(
+    ({ prefix, timeout }) => timeout === 'long' && matchesProxyPrefix(pathOnly, prefix)
+  );
+  return policy ? PROXY_LONG_TIMEOUT : PROXY_TIMEOUT;
+}
 
 /**
  * 校验目标后端路径是否允许通过 catch-all 代理。
@@ -71,11 +83,7 @@ export function isProxyPathAllowed(backendPath: string): boolean {
   // 必须命中白名单前缀：精确匹配或子路径匹配
   // 对于以 / 结尾的前缀（如 /api/vllm/），直接用 startsWith
   // 对于不以 / 结尾的前缀（如 /api/auth），用精确匹配或 path + '/'，避免 /api/model 误匹配 /api/modelxyz
-  return PROXY_ALLOWED_PREFIXES.some((p) => {
-    if (pathOnly === p) return true;
-    if (p.endsWith('/')) return pathOnly.startsWith(p);
-    return pathOnly.startsWith(p + '/');
-  });
+  return PROXY_ROUTE_POLICIES.some(({ prefix }) => matchesProxyPrefix(pathOnly, prefix));
 }
 
 interface ProxyOptions {
@@ -113,7 +121,9 @@ function originsMatch(actualOrigin: string, expectedOrigin: string): boolean {
 function requestVisibleOrigin(request: Request): string {
   const internalUrl = new URL(request.url);
   const forwardedHost = request.headers.get('x-forwarded-host')?.split(',')[0]?.trim();
-  const host = forwardedHost || request.headers.get('host');
+  // Host is browser-visible and cannot be replaced by a client-supplied forwarding header.
+  // A trusted reverse proxy must preserve it (including non-standard ports).
+  const host = request.headers.get('host') || forwardedHost;
   if (!host) return internalUrl.origin;
 
   const forwardedProtocol = request.headers.get('x-forwarded-proto')?.split(',')[0]?.trim();

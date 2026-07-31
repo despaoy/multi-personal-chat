@@ -13,6 +13,9 @@ if str(_BACKEND_ROOT) not in sys.path:
 
 if __name__ == "__main__":
     import uvicorn
+    from app.env import load_backend_env
+    from run import _positive_int_env
+    load_backend_env()
     import os
     worker_count = int(os.getenv("BACKEND_WORKERS", "1"))
     if worker_count != 1:
@@ -23,7 +26,8 @@ if __name__ == "__main__":
         port=8000,
         reload=False,
         workers=worker_count,
-        limit_concurrency=500,
-        timeout_keep_alive=30,
+        limit_concurrency=_positive_int_env("BACKEND_LIMIT_CONCURRENCY", 256),
+        backlog=_positive_int_env("BACKEND_BACKLOG", 512),
+        timeout_keep_alive=_positive_int_env("BACKEND_KEEPALIVE_TIMEOUT", 10),
         timeout_graceful_shutdown=30,
     )

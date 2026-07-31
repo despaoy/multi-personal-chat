@@ -1,7 +1,7 @@
 # QQ智能助手 - Docker Compose（2x3090 各~15G可用显存）
 # 适配策略：单 vLLM 实例 + AWQ 4bit 量化模型
 
-version: "3.8"
+
 
 volumes:
   models:
@@ -64,7 +64,7 @@ services:
               count: 1
               capabilities: [gpu]
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/ready', timeout=8)"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=8)"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -94,8 +94,26 @@ services:
       - MODEL_PROVIDER=vllm
       - VLLM_BASE_URLS=http://vllm:8000
       - VLLM_SERVED_MODEL_NAME=qwen3-8b-instruct-awq
+      # The shared loras volume is /app/loras here and /loras in vLLM.
       - VLLM_LORA_ROOT=/loras
       - BACKEND_WORKERS=1
+      - BACKEND_LIMIT_CONCURRENCY=${BACKEND_LIMIT_CONCURRENCY:-256}
+      - BACKEND_BACKLOG=${BACKEND_BACKLOG:-512}
+      - BACKEND_KEEPALIVE_TIMEOUT=${BACKEND_KEEPALIVE_TIMEOUT:-10}
+      - STATS_CACHE_TTL_SECONDS=${STATS_CACHE_TTL_SECONDS:-5}
+      - STATS_RESOURCE_CACHE_TTL_SECONDS=${STATS_RESOURCE_CACHE_TTL_SECONDS:-15}
+      - AUTH_PASSWORD_WORKERS=${AUTH_PASSWORD_WORKERS:-2}
+      - AUTH_PASSWORD_MAX_PENDING=${AUTH_PASSWORD_MAX_PENDING:-8}
+      - AUTH_PASSWORD_TIMEOUT_SECONDS=${AUTH_PASSWORD_TIMEOUT_SECONDS:-10}
+      - AUTH_DATABASE_WORKERS=${AUTH_DATABASE_WORKERS:-8}
+      - AUTH_DATABASE_MAX_PENDING=${AUTH_DATABASE_MAX_PENDING:-32}
+      - AUTH_DATABASE_TIMEOUT_SECONDS=${AUTH_DATABASE_TIMEOUT_SECONDS:-5}
+      - AUTH_RPM=${BACKEND_PROXY_AUTH_AGGREGATE_RPM:-10000}
+      - RATE_LIMIT_MAX_KEYS=${RATE_LIMIT_MAX_KEYS:-10000}
+      - RATE_LIMIT_CLEANUP_INTERVAL=${RATE_LIMIT_CLEANUP_INTERVAL:-64}
+      - RATE_LIMIT_CLEANUP_BATCH_SIZE=${RATE_LIMIT_CLEANUP_BATCH_SIZE:-64}
+      - TRAINING_EXPORT_MAX_CONCURRENCY=${TRAINING_EXPORT_MAX_CONCURRENCY:-2}
+      - TRAINING_EXPORT_ACQUIRE_TIMEOUT=${TRAINING_EXPORT_ACQUIRE_TIMEOUT:-1}
       - VLLM_TIMEOUT=120
       - VLLM_MAX_RETRIES=3
       - DATABASE_PATH=/app/data/qq_assistant.db
@@ -103,7 +121,7 @@ services:
       - LORA_PATH=/app/loras
       - MODEL_PATH=/app/models
       - LOG_LEVEL=INFO
-      - CORS_ORIGINS=http://localhost:5000,http://localhost:80
+      - ALLOWED_ORIGINS=http://localhost:5000,http://localhost:80
     depends_on:
       vllm:
         condition: service_healthy
@@ -114,7 +132,7 @@ services:
         reservations:
           memory: 1G
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/ready', timeout=8)"]
       interval: 15s
       timeout: 5s
       retries: 3
@@ -166,7 +184,6 @@ services:
     restart: unless-stopped
     ports:
       - "80:80"
-      - "443:443"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
       - nginx_logs:/var/log/nginx

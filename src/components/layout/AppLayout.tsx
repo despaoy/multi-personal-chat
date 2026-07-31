@@ -17,9 +17,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
   useEffect(() => { setMounted(true); }, []);
 
-  const handleLogout = () => {
-    logout();
-    router.push('/login');
+  const handleLogout = async () => {
+    await logout();
+    router.replace('/login');
   };
 
   return (

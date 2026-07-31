@@ -7,16 +7,19 @@ import os
 import zipfile
 import re
 from pathlib import Path, PurePosixPath
+from typing import Any, Awaitable
 
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Depends
-from app.dependencies import get_current_user, get_current_admin
+from app.dependencies import get_current_admin
 
 from db.adapter import db
 from db.schemas import (
     KnowledgeBaseCreate, KnowledgeBaseUpdate,
     KnowledgeFolderCreate,
     KnowledgeDocumentCreate, KnowledgeDocumentUpdate,
-    KnowledgeSearchRequest
+    KnowledgeSearchRequest,
+    IntentSampleGenerateRequest,
+    IntentTrainRequest,
 )
 from app.config import INPUT_VALIDATOR_AVAILABLE, KNOWLEDGE_DOCUMENT_SCHEMA, VECTOR_DB_AVAILABLE
 
@@ -30,6 +33,74 @@ _ZIP_MAX_UNCOMPRESSED_BYTES = int(
     os.getenv("KNOWLEDGE_ZIP_MAX_UNCOMPRESSED_BYTES", str(200 * 1024 * 1024))
 )
 _ZIP_MAX_COMPRESSION_RATIO = float(os.getenv("KNOWLEDGE_ZIP_MAX_COMPRESSION_RATIO", "200"))
+
+
+_intent_task: asyncio.Task[Any] | None = None
+_intent_task_lock: asyncio.Lock | None = None
+_intent_task_lock_loop: asyncio.AbstractEventLoop | None = None
+
+
+def _get_intent_task_lock() -> asyncio.Lock:
+    global _intent_task_lock, _intent_task_lock_loop
+    loop = asyncio.get_running_loop()
+    if _intent_task_lock is None or _intent_task_lock_loop is not loop:
+        _intent_task_lock = asyncio.Lock()
+        _intent_task_lock_loop = loop
+    return _intent_task_lock
+
+
+def _intent_task_finished(completed: asyncio.Task[Any]) -> None:
+    global _intent_task
+    if _intent_task is completed:
+        _intent_task = None
+    if completed.cancelled():
+        return
+    try:
+        error = completed.exception()
+    except asyncio.CancelledError:
+        return
+    if error is not None:
+        logger.error("意图任务后台协程异常: %s", error)
+
+
+def _schedule_intent_task(work: Awaitable[Any], *, name: str) -> asyncio.Task[Any]:
+    global _intent_task
+    task = asyncio.create_task(work, name=name)
+    _intent_task = task
+    task.add_done_callback(_intent_task_finished)
+    return task
+
+
+async def shutdown_intent_tasks(timeout: float | None = None) -> None:
+    """Cooperatively stop the single intent generation/training job."""
+    global _intent_task
+    wait_timeout = (
+        float(os.getenv("INTENT_TASK_SHUTDOWN_TIMEOUT", "10"))
+        if timeout is None
+        else max(float(timeout), 0.0)
+    )
+    async with _get_intent_task_lock():
+        task = _intent_task
+    if task is None or task.done():
+        _intent_task = None
+        return
+
+    from knowledge.intent_trainer import cancel_training
+
+    cancellation_signalled = cancel_training()
+    if not cancellation_signalled and not task.done():
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+        if _intent_task is task:
+            _intent_task = None
+        return
+
+    _, pending = await asyncio.wait({task}, timeout=wait_timeout)
+    if pending:
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+    if _intent_task is task:
+        _intent_task = None
 
 
 def _validated_zip_entries(archive: zipfile.ZipFile) -> list[zipfile.ZipInfo]:
@@ -76,14 +147,14 @@ def _validated_zip_entries(archive: zipfile.ZipFile) -> list[zipfile.ZipInfo]:
 # ============================================
 
 @router.get("/api/knowledge/bases")
-async def list_knowledge_bases(current_user: dict = Depends(get_current_user)):
+async def list_knowledge_bases(current_user: dict = Depends(get_current_admin)):
     """获取所有知识库"""
     bases = db.get_knowledge_bases()
     return {"success": True, "bases": bases}
 
 
 @router.post("/api/knowledge/bases")
-async def create_knowledge_base(request: KnowledgeBaseCreate, current_user: dict = Depends(get_current_user)):
+async def create_knowledge_base(request: KnowledgeBaseCreate, current_user: dict = Depends(get_current_admin)):
     """创建知识库"""
     result = db.create_knowledge_base(request.name, request.description)
     if result is None:
@@ -92,7 +163,7 @@ async def create_knowledge_base(request: KnowledgeBaseCreate, current_user: dict
 
 
 @router.put("/api/knowledge/bases/{kb_id}")
-async def update_knowledge_base(kb_id: int, request: KnowledgeBaseUpdate, current_user: dict = Depends(get_current_user)):
+async def update_knowledge_base(kb_id: int, request: KnowledgeBaseUpdate, current_user: dict = Depends(get_current_admin)):
     """更新知识库"""
     existing = db.get_knowledge_base(kb_id)
     if not existing:
@@ -126,7 +197,7 @@ async def delete_knowledge_base(kb_id: int, current_user: dict = Depends(get_cur
 # ============================================
 
 @router.get("/api/knowledge/bases/{kb_id}/folders")
-async def list_knowledge_folders(kb_id: int, current_user: dict = Depends(get_current_user)):
+async def list_knowledge_folders(kb_id: int, current_user: dict = Depends(get_current_admin)):
     """获取知识库下的文件夹"""
     existing = db.get_knowledge_base(kb_id)
     if not existing:
@@ -136,7 +207,7 @@ async def list_knowledge_folders(kb_id: int, current_user: dict = Depends(get_cu
 
 
 @router.post("/api/knowledge/bases/{kb_id}/folders")
-async def create_knowledge_folder(kb_id: int, request: KnowledgeFolderCreate, current_user: dict = Depends(get_current_user)):
+async def create_knowledge_folder(kb_id: int, request: KnowledgeFolderCreate, current_user: dict = Depends(get_current_admin)):
     """创建文件夹"""
     existing = db.get_knowledge_base(kb_id)
     if not existing:
@@ -167,7 +238,7 @@ async def delete_knowledge_folder(folder_id: int, current_user: dict = Depends(g
 # ============================================
 
 @router.post("/api/knowledge/bases/{kb_id}/upload-zip")
-async def upload_zip(kb_id: int, file: UploadFile = File(...), current_user: dict = Depends(get_current_user)):
+async def upload_zip(kb_id: int, file: UploadFile = File(...), current_user: dict = Depends(get_current_admin)):
     """上传ZIP文件，自动按目录结构创建文件夹和文档
 
     ZIP结构要求：
@@ -365,7 +436,7 @@ def _scan_directory(directory: Path) -> dict:
 
 
 @router.get("/api/knowledge/scan")
-async def scan_knowledge_dirs(current_user: dict = Depends(get_current_user)):
+async def scan_knowledge_dirs(current_user: dict = Depends(get_current_admin)):
     """扫描 knowledge_bases 目录，返回所有可用的知识库文件夹结构
     
     扫描 backend/knowledge_bases/ 下的所有子目录，
@@ -385,7 +456,7 @@ async def scan_knowledge_dirs(current_user: dict = Depends(get_current_user)):
 
 
 @router.post("/api/knowledge/scan/import")
-async def import_scanned_directory(directory_name: str, kb_id: int = None, current_user: dict = Depends(get_current_user)):
+async def import_scanned_directory(directory_name: str, kb_id: int = None, current_user: dict = Depends(get_current_admin)):
     """将扫描到的目录导入到知识库
     
     读取 knowledge_bases/<directory_name> 下的所有文件，
@@ -612,7 +683,7 @@ async def import_scanned_directory(directory_name: str, kb_id: int = None, curre
 # ============================================
 
 @router.get("/api/knowledge/documents")
-async def get_knowledge_documents(limit: int = 100, offset: int = 0, category: str = None, knowledge_base_id: int = None, folder_id: int = None, current_user: dict = Depends(get_current_user)):
+async def get_knowledge_documents(limit: int = 100, offset: int = 0, category: str = None, knowledge_base_id: int = None, folder_id: int = None, current_user: dict = Depends(get_current_admin)):
     """获取知识库文档列表，支持按分类/知识库/文件夹筛选"""
     documents = db.get_knowledge_documents(
         limit=limit, offset=offset,
@@ -629,7 +700,7 @@ async def get_knowledge_documents(limit: int = 100, offset: int = 0, category: s
 
 
 @router.get("/api/knowledge/documents/{doc_id}")
-async def get_knowledge_document(doc_id: int, current_user: dict = Depends(get_current_user)):
+async def get_knowledge_document(doc_id: int, current_user: dict = Depends(get_current_admin)):
     """获取单个知识库文档"""
     document = db.get_knowledge_document(doc_id)
     if not document:
@@ -643,7 +714,7 @@ async def get_knowledge_document(doc_id: int, current_user: dict = Depends(get_c
 
 
 @router.post("/api/knowledge/documents")
-async def create_knowledge_document(request: KnowledgeDocumentCreate, current_user: dict = Depends(get_current_user)):
+async def create_knowledge_document(request: KnowledgeDocumentCreate, current_user: dict = Depends(get_current_admin)):
     """创建知识库文档"""
     try:
         # 输入验证
@@ -741,7 +812,7 @@ async def create_knowledge_document(request: KnowledgeDocumentCreate, current_us
 
 
 @router.put("/api/knowledge/documents/{doc_id}")
-async def update_knowledge_document(doc_id: int, request: KnowledgeDocumentUpdate, current_user: dict = Depends(get_current_user)):
+async def update_knowledge_document(doc_id: int, request: KnowledgeDocumentUpdate, current_user: dict = Depends(get_current_admin)):
     """更新知识库文档"""
     try:
         existing_doc = db.get_knowledge_document(doc_id)
@@ -1250,7 +1321,10 @@ def _ensure_vector_index():
 
 
 @router.post("/api/knowledge/search")
-async def search_knowledge(request: KnowledgeSearchRequest):
+async def search_knowledge(
+    request: KnowledgeSearchRequest,
+    current_user: dict = Depends(get_current_admin),
+):
     """搜索知识库 - 使用 RAGHelper 两阶段检索（向量+BM25混合 → Cross-Encoder精排）
 
     支持通过 knowledgeBaseName 按指定知识库过滤检索结果，
@@ -1392,14 +1466,14 @@ async def search_knowledge(request: KnowledgeSearchRequest):
 
 
 @router.get("/api/knowledge/stats")
-async def get_knowledge_stats(current_user: dict = Depends(get_current_user)):
+async def get_knowledge_stats(current_user: dict = Depends(get_current_admin)):
     """获取知识库统计数据"""
     stats = db.get_knowledge_stats()
     return {"success": True, "stats": stats}
 
 
 @router.get("/api/vector/stats")
-async def get_vector_stats(current_user: dict = Depends(get_current_user)):
+async def get_vector_stats(current_user: dict = Depends(get_current_admin)):
     """获取向量数据库统计数据"""
     if not VECTOR_DB_AVAILABLE:
         raise HTTPException(status_code=503, detail="向量数据库不可用")
@@ -1419,35 +1493,36 @@ async def get_vector_stats(current_user: dict = Depends(get_current_user)):
 # ============================================
 
 @router.post("/api/knowledge/train-intent/generate")
-async def generate_intent_samples(request: dict = None, current_user: dict = Depends(get_current_user)):
+async def generate_intent_samples(
+    request: IntentSampleGenerateRequest | None = None,
+    current_user: dict = Depends(get_current_admin),
+):
     """生成训练样本（LLM基于知识库文档生成，不训练）"""
-    try:
-        from knowledge.intent_trainer import generate_samples, get_generation_status
+    from knowledge.intent_trainer import (
+        generate_samples,
+        get_generation_status,
+        get_training_status,
+    )
 
-        status = get_generation_status()
-        if status["running"]:
-            # C5 fix: 冲突状态应用 409，而非 200+success=False
-            raise HTTPException(status_code=409, detail="样本生成正在进行中")
-
-        params = request or {}
-        kb_ids = params.get("kb_ids", [])
-        samples_per_kb = params.get("samples_per_kb", 100)
-        negative_count = params.get("negative_count", 200)
-        lora_name = params.get("lora_name")
-
-        asyncio.create_task(generate_samples(kb_ids, samples_per_kb, negative_count, lora_name))
-        return {"success": True, "message": "样本生成已启动"}
-    except HTTPException:
-        # C9 fix: C5 引入的 409 必须在 except Exception 之前 re-raise，
-        # 否则会被改写为 500，前端无法识别"冲突"语义
-        raise
-    except Exception as e:
-        logger.error(f"启动样本生成失败: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
+    params = request or IntentSampleGenerateRequest()
+    async with _get_intent_task_lock():
+        if _intent_task is not None and not _intent_task.done():
+            raise HTTPException(status_code=409, detail="已有意图任务正在运行")
+        if get_generation_status()["running"] or get_training_status()["running"]:
+            raise HTTPException(status_code=409, detail="已有意图任务正在运行")
+        _schedule_intent_task(
+            generate_samples(
+                params.kb_ids,
+                params.samples_per_kb,
+                params.negative_count,
+                params.lora_name,
+            ),
+            name="intent-sample-generation",
+        )
+    return {"success": True, "message": "样本生成已启动"}
 
 @router.get("/api/knowledge/train-intent/generate/status")
-async def get_generation_status(current_user: dict = Depends(get_current_user)):
+async def get_generation_status(current_user: dict = Depends(get_current_admin)):
     """查询样本生成进度"""
     try:
         from knowledge.intent_trainer import get_generation_status as get_status
@@ -1457,7 +1532,7 @@ async def get_generation_status(current_user: dict = Depends(get_current_user)):
 
 
 @router.get("/api/knowledge/train-intent/samples")
-async def get_intent_samples(current_user: dict = Depends(get_current_user)):
+async def get_intent_samples(current_user: dict = Depends(get_current_admin)):
     """获取当前所有训练样本"""
     try:
         from knowledge.intent_trainer import get_samples
@@ -1467,7 +1542,7 @@ async def get_intent_samples(current_user: dict = Depends(get_current_user)):
 
 
 @router.put("/api/knowledge/train-intent/samples")
-async def update_intent_sample(request: dict, current_user: dict = Depends(get_current_user)):
+async def update_intent_sample(request: dict, current_user: dict = Depends(get_current_admin)):
     """编辑单条样本"""
     try:
         from knowledge.intent_trainer import update_sample
@@ -1482,7 +1557,7 @@ async def update_intent_sample(request: dict, current_user: dict = Depends(get_c
 
 
 @router.delete("/api/knowledge/train-intent/samples")
-async def delete_intent_sample(label: str, index: int, current_user: dict = Depends(get_current_user)):
+async def delete_intent_sample(label: str, index: int, current_user: dict = Depends(get_current_admin)):
     """删除单条样本"""
     try:
         from knowledge.intent_trainer import delete_sample
@@ -1497,7 +1572,7 @@ async def delete_intent_sample(label: str, index: int, current_user: dict = Depe
 
 
 @router.patch("/api/knowledge/train-intent/samples")
-async def batch_save_intent_samples(request: dict, current_user: dict = Depends(get_current_user)):
+async def batch_save_intent_samples(request: dict, current_user: dict = Depends(get_current_admin)):
     """批量保存样本（覆盖写入）"""
     try:
         from knowledge.intent_trainer import save_samples
@@ -1508,7 +1583,7 @@ async def batch_save_intent_samples(request: dict, current_user: dict = Depends(
 
 
 @router.post("/api/knowledge/train-intent/samples")
-async def add_intent_sample(request: dict, current_user: dict = Depends(get_current_user)):
+async def add_intent_sample(request: dict, current_user: dict = Depends(get_current_admin)):
     """添加单条样本"""
     try:
         from knowledge.intent_trainer import add_sample
@@ -1519,34 +1594,31 @@ async def add_intent_sample(request: dict, current_user: dict = Depends(get_curr
 
 
 @router.post("/api/knowledge/train-intent")
-async def train_intent_classifier(request: dict = None, current_user: dict = Depends(get_current_admin)):
-    """使用已审查的样本训练多分类模型
+async def train_intent_classifier(
+    request: IntentTrainRequest | None = None,
+    current_user: dict = Depends(get_current_admin),
+):
+    """使用已审查的样本训练多分类模型。"""
+    from knowledge.intent_trainer import (
+        get_generation_status,
+        get_training_status,
+        train_intent_classifier as do_train,
+    )
 
-    s2 fix: 触发模型训练消耗计算资源，限定 admin。
-    """
-    try:
-        from knowledge.intent_trainer import train_intent_classifier as do_train, get_training_status
-
-        status = get_training_status()
-        if status["running"]:
-            # C5 fix: 冲突状态应用 409，而非 200+success=False
-            raise HTTPException(status_code=409, detail="训练正在进行中")
-
-        params = request or {}
-        kb_ids = params.get("kb_ids")
-
-        asyncio.create_task(do_train(kb_ids=kb_ids))
-        return {"success": True, "message": "训练已启动"}
-    except HTTPException:
-        # C9 fix: C5 引入的 409 必须在 except Exception 之前 re-raise
-        raise
-    except Exception as e:
-        logger.error(f"启动意图训练失败: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
+    params = request or IntentTrainRequest()
+    async with _get_intent_task_lock():
+        if _intent_task is not None and not _intent_task.done():
+            raise HTTPException(status_code=409, detail="已有意图任务正在运行")
+        if get_generation_status()["running"] or get_training_status()["running"]:
+            raise HTTPException(status_code=409, detail="已有意图任务正在运行")
+        _schedule_intent_task(
+            do_train(kb_ids=params.kb_ids),
+            name="intent-classifier-training",
+        )
+    return {"success": True, "message": "训练已启动"}
 
 @router.get("/api/knowledge/train-intent/status")
-async def get_intent_training_status(current_user: dict = Depends(get_current_user)):
+async def get_intent_training_status(current_user: dict = Depends(get_current_admin)):
     """查询训练进度"""
     try:
         from knowledge.intent_trainer import get_training_status
@@ -1556,7 +1628,7 @@ async def get_intent_training_status(current_user: dict = Depends(get_current_us
 
 
 @router.post("/api/knowledge/train-intent/cancel")
-async def cancel_intent_training(current_user: dict = Depends(get_current_user)):
+async def cancel_intent_training(current_user: dict = Depends(get_current_admin)):
     """取消训练/生成"""
     try:
         from knowledge.intent_trainer import cancel_training
@@ -1567,7 +1639,7 @@ async def cancel_intent_training(current_user: dict = Depends(get_current_user))
 
 
 @router.get("/api/knowledge/train-intent/model")
-async def get_intent_model_info(current_user: dict = Depends(get_current_user)):
+async def get_intent_model_info(current_user: dict = Depends(get_current_admin)):
     """获取当前模型信息"""
     try:
         from knowledge.intent_trainer import get_model_info
@@ -1577,7 +1649,7 @@ async def get_intent_model_info(current_user: dict = Depends(get_current_user)):
 
 
 @router.get("/api/knowledge/train-intent/active-kbs")
-async def get_active_knowledge_bases(current_user: dict = Depends(get_current_user)):
+async def get_active_knowledge_bases(current_user: dict = Depends(get_current_admin)):
     """获取参与检索的知识库"""
     try:
         from knowledge.intent_trainer import get_active_knowledge_bases as get_kbs
@@ -1587,7 +1659,7 @@ async def get_active_knowledge_bases(current_user: dict = Depends(get_current_us
 
 
 @router.post("/api/knowledge/train-intent/active-kbs")
-async def set_active_knowledge_bases(request: dict, current_user: dict = Depends(get_current_user)):
+async def set_active_knowledge_bases(request: dict, current_user: dict = Depends(get_current_admin)):
     """设置参与检索的知识库"""
     try:
         from knowledge.intent_trainer import set_active_knowledge_bases as set_kbs

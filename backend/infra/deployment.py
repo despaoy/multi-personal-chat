@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import logging
 import os
 from dataclasses import dataclass, field
@@ -47,6 +48,13 @@ def _is_truthy(value: str) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "on", "enabled"}
 
 
+def _is_valid_encryption_key(value: str) -> bool:
+    try:
+        return len(base64.urlsafe_b64decode(value.encode("ascii"))) == 32
+    except Exception:
+        return False
+
+
 def validate_deployment_environment(env: Mapping[str, str] | None = None) -> DeploymentValidationResult:
     """Validate production-critical environment variables.
 
@@ -72,12 +80,27 @@ def validate_deployment_environment(env: Mapping[str, str] | None = None) -> Dep
 
     database_url = _value(env, "DATABASE_URL")
     has_database_url = bool(database_url)
-    if production and not has_database_url:
-        errors.append("DATABASE_URL is required for the PostgreSQL application database")
-    elif production and not database_url.startswith(("postgresql://", "postgresql+asyncpg://", "postgres://")):
+    pg_component_keys = ("PG_HOST", "PG_USER", "PG_PASSWORD", "PG_DATABASE")
+    has_pg_components = all(_value(env, key) for key in pg_component_keys)
+    if production and not (has_database_url or has_pg_components):
+        errors.append(
+            "DATABASE_URL or complete PG_HOST/PG_USER/PG_PASSWORD/PG_DATABASE values "
+            "are required for the PostgreSQL application database"
+        )
+    elif production and has_database_url and not database_url.startswith(
+        ("postgresql://", "postgresql+asyncpg://", "postgres://")
+    ):
         errors.append("DATABASE_URL must use a PostgreSQL URL")
-    elif not production and not has_database_url:
+    elif not production and not (has_database_url or has_pg_components):
         warnings.append("SQLite fallback is active; use PostgreSQL for production")
+
+    if has_pg_components:
+        try:
+            pg_port = int(_value(env, "PG_PORT") or "5432")
+            if not 1 <= pg_port <= 65535:
+                raise ValueError
+        except ValueError:
+            errors.append("PG_PORT must be an integer between 1 and 65535")
 
     if production and _value(env, "USE_POSTGRESQL").lower() in {"0", "false", "no", "off"}:
         errors.append("USE_POSTGRESQL=false is not allowed in production")
@@ -90,6 +113,12 @@ def validate_deployment_environment(env: Mapping[str, str] | None = None) -> Dep
         errors.append("JWT_SECRET must be explicitly set to a non-placeholder value with at least 32 characters")
     elif not jwt_secret:
         warnings.append("JWT_SECRET is not set; development will auto-generate one")
+
+    encryption_key = _value(env, "ENCRYPTION_KEY")
+    if production and not _is_valid_encryption_key(encryption_key):
+        errors.append("ENCRYPTION_KEY must be an explicit URL-safe base64 encoded 32-byte key")
+    elif not encryption_key:
+        warnings.append("ENCRYPTION_KEY is not set; development will auto-generate one")
 
     origins = _value(env, "ALLOWED_ORIGINS") or _value(env, "CORS_ORIGINS")
     if production and (not origins or origins == "*" or "localhost" in origins or "127.0.0.1" in origins):
@@ -114,10 +143,13 @@ def validate_deployment_environment(env: Mapping[str, str] | None = None) -> Dep
         warnings.append("Claw code execution is enabled; isolate the backend container and use a read-only filesystem")
 
     log_level = (_value(env, "LOG_LEVEL") or "INFO").upper()
-    lora_path = _value(env, "LORA_PATH")
-    vllm_lora_root = _value(env, "VLLM_LORA_ROOT")
-    if lora_path and vllm_lora_root and lora_path != vllm_lora_root:
-        (errors if production else warnings).append("LORA_PATH and VLLM_LORA_ROOT must match for runtime adapter switching")
+
+    # LORA_PATH is resolved by the backend while VLLM_LORA_ROOT is the path
+    # sent to the vLLM process. They may point at the same host storage through
+    # different container mount points (for example /app/loras and /loras), so
+    # comparing the two strings cannot validate that the storage is shared.
+    # The backend validates its local root when discovering an adapter; vLLM
+    # validates the translated path when the adapter is loaded.
 
     if production and _is_truthy(_value(env, "RERANKER_ENABLED")) and not _value(env, "RERANKER_MODEL_PATH"):
         errors.append("RERANKER_MODEL_PATH is required when RERANKER_ENABLED=true")

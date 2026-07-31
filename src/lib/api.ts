@@ -1,3 +1,37 @@
+import type {
+  ActiveKnowledgeBasesResponse,
+  AdapterCheckResponse,
+  CreateDatasetFromSavedResponse,
+  EvaluationRunRequest,
+  EvaluationRunStartResponse,
+  EvaluationRunsResponse,
+  ExperimentStartRequest,
+  ExperimentStartResponse,
+  ExperimentsResponse,
+  FeedbackListResponse,
+  GoldSetResponse,
+  IntentModelInfo,
+  IntentSamplesResponse,
+  IntentTaskStatus,
+  IntentTrainingStatus,
+  PreferenceCandidate,
+  PreferenceCreateRequest,
+  PreferenceExportRecord,
+  PreferenceExportRequest,
+  PreferencePairRecord,
+  PreferenceReviewStatus,
+  PreferenceSampleRequest,
+  PreferenceUpdateRequest,
+  RouterAdaptersResponse,
+  RouterConfigRecord,
+  RouterConfigResponse,
+  RouterLogsResponse,
+  StatsMetricsResponse,
+  UserDataResponse,
+} from './api-contracts';
+
+export type * from './api-contracts';
+
 /**
  * API 客户端模块
  *
@@ -37,7 +71,7 @@ export interface StatsResponse {
 /** 消息记录 - 记录一次完整的对话交互（用户消息 + 机器人回复） */
 export interface Message {
   id: string;
-  sessionType: 'group' | 'private';
+  sessionType: 'group' | 'private' | 'channel';
   sessionId: string;
   sessionName: string;
   platform?: string;
@@ -63,10 +97,19 @@ export interface MessagesResponse {
   total_all: number;
 }
 
+/** 消息列表查询与批量删除共用的筛选条件 */
+export interface MessageFilters {
+  platform?: string;
+  sessionType?: string;
+  search?: string;
+  lora?: string;
+  sessionName?: string;
+}
+
 /** 会话摘要 */
 export interface SessionSummary {
   sessionId: string;
-  sessionType: 'group' | 'private';
+  sessionType: 'group' | 'private' | 'channel';
   sessionName: string;
   platform?: string;
   adapter?: string;
@@ -634,7 +677,7 @@ class ApiClient {
   /**
    * 批量删除消息（基于筛选条件）
    */
-  async deleteMessagesBatch(filters: { search?: string; sessionType?: string; lora?: string; sessionName?: string; platform?: string }): Promise<{ success: boolean; deleted: number; message: string }> {
+  async deleteMessagesBatch(filters: MessageFilters): Promise<{ success: boolean; deleted: number; message: string }> {
     return this.request<{ success: boolean; deleted: number; message: string }>('/messages/batch', {
       method: 'DELETE',
       body: JSON.stringify(filters),
@@ -673,7 +716,7 @@ class ApiClient {
    * @param {number} [offset] - 分页偏移量
    * @returns {Promise<MessagesResponse>} 消息列表及总数
    */
-  async getMessages(limit?: number, offset?: number, filters?: { platform?: string; sessionType?: string; search?: string; lora?: string; sessionName?: string }): Promise<MessagesResponse> {
+  async getMessages(limit?: number, offset?: number, filters?: MessageFilters): Promise<MessagesResponse> {
     const params = new URLSearchParams();
     if (limit) params.append('limit', limit.toString());
     if (offset) params.append('offset', offset.toString());
@@ -706,10 +749,16 @@ class ApiClient {
   /**
    * 设置会话机器人开关
    */
-  async toggleSessionBot(sessionId: string, enabled: boolean, platform = 'qq', conversationId?: string): Promise<{ success: boolean; sessionId: string; botEnabled: boolean }> {
+  async toggleSessionBot(
+    sessionId: string,
+    enabled: boolean,
+    platform = 'qq',
+    conversationId?: string,
+    conversationType: SessionSummary['sessionType'] = 'private',
+  ): Promise<{ success: boolean; sessionId: string; botEnabled: boolean }> {
     return this.request<{ success: boolean; sessionId: string; botEnabled: boolean }>('/sessions/bot-toggle', {
       method: 'PUT',
-      body: JSON.stringify({ sessionId, enabled, platform, conversationId }),
+      body: JSON.stringify({ sessionId, enabled, platform, conversationId, conversationType }),
     });
   }
 
@@ -754,8 +803,8 @@ class ApiClient {
   /**
    * 扫描 loras 目录，自动发现并注册新的 LoRA 适配器
    */
-  async scanLoras(): Promise<{ success: boolean; message: string; new_count: number }> {
-    return this.request<{ success: boolean; message: string; new_count: number }>('/loras/scan', {
+  async scanLoras(): Promise<{ success: boolean; message: string; new_count: number; updated_count: number; failed_count: number; failed_names: string[] }> {
+    return this.request<{ success: boolean; message: string; new_count: number; updated_count: number; failed_count: number; failed_names: string[] }>('/loras/scan', {
       method: 'POST',
     });
   }
@@ -795,8 +844,8 @@ class ApiClient {
    * 绕过了 request 助手，导致 401（token 过期）时不跳转登录页，只显示“获取平台指标失败”。
    * 现统一走 request 助手，401 时自动清理用户状态并跳转 /login。
    */
-  async getMetrics<T = Record<string, unknown>>(): Promise<T> {
-    return this.request<T>('/stats/metrics');
+  async getMetrics(): Promise<StatsMetricsResponse> {
+    return this.request<StatsMetricsResponse>('/stats/metrics');
   }
 
 
@@ -1184,11 +1233,11 @@ class ApiClient {
   }
 
   /** 获取用户表单数据 */
-  async getUserData(pageKey?: string): Promise<{ success: boolean; data: Record<string, { data_json: string; updated_at: string }> | { page_key: string; data_json: string; updated_at: string } | null }> {
+  async getUserData(pageKey?: string): Promise<UserDataResponse> {
     const params = new URLSearchParams();
     if (pageKey) params.set('page_key', pageKey);
     const qs = params.toString();
-    return this.request<{ success: boolean; data: Record<string, { data_json: string; updated_at: string }> | { page_key: string; data_json: string; updated_at: string } | null }>(`/user/data${qs ? '?' + qs : ''}`);
+    return this.request<UserDataResponse>(`/user/data${qs ? '?' + qs : ''}`);
   }
 
   /** 保存对话数据 */
@@ -1262,10 +1311,10 @@ class ApiClient {
   }
 
   /** 从已保存对话创建数据集 */
-  async createDatasetFromSaved(id: number, datasetName?: string): Promise<{ success: boolean; dataset: Record<string, unknown> }> {
+  async createDatasetFromSaved(id: number, datasetName?: string): Promise<CreateDatasetFromSavedResponse> {
     const params = new URLSearchParams();
     if (datasetName) params.set('dataset_name', datasetName);
-    return this.request<{ success: boolean; dataset: Record<string, unknown> }>(`/training/saved-dialogues/${id}/create-dataset?${params.toString()}`, {
+    return this.request<CreateDatasetFromSavedResponse>(`/training/saved-dialogues/${id}/create-dataset?${params.toString()}`, {
       method: 'POST',
     });
   }
@@ -1278,8 +1327,8 @@ class ApiClient {
   }
 
   /** 获取训练样本 */
-  async getIntentSamples(): Promise<{ success: boolean; samples: Record<string, string[]>; stats: Record<string, number> }> {
-    return this.request<{ success: boolean; samples: Record<string, string[]>; stats: Record<string, number> }>('/knowledge/train-intent/samples');
+  async getIntentSamples(): Promise<IntentSamplesResponse> {
+    return this.request<IntentSamplesResponse>('/knowledge/train-intent/samples');
   }
 
   /** 保存全部样本（批量覆盖） */
@@ -1315,8 +1364,8 @@ class ApiClient {
   }
 
   /** 查询样本生成进度 */
-  async getGenerationStatus(): Promise<{ success: boolean; status: { running: boolean; progress: number; stage: string; message: string } }> {
-    return this.request<{ success: boolean; status: { running: boolean; progress: number; stage: string; message: string } }>('/knowledge/train-intent/generate/status');
+  async getGenerationStatus(): Promise<{ success: boolean; status: IntentTaskStatus }> {
+    return this.request<{ success: boolean; status: IntentTaskStatus }>('/knowledge/train-intent/generate/status');
   }
 
   /** 启动意图分类器训练 */
@@ -1328,8 +1377,8 @@ class ApiClient {
   }
 
   /** 查询训练状态 */
-  async getIntentTrainingStatus(): Promise<{ success: boolean; status: { running: boolean; progress: number; stage: string; message: string; logs?: string[]; result?: Record<string, unknown> } }> {
-    return this.request<{ success: boolean; status: { running: boolean; progress: number; stage: string; message: string; logs?: string[]; result?: Record<string, unknown> } }>('/knowledge/train-intent/status');
+  async getIntentTrainingStatus(): Promise<{ success: boolean; status: IntentTrainingStatus }> {
+    return this.request<{ success: boolean; status: IntentTrainingStatus }>('/knowledge/train-intent/status');
   }
 
   /** 取消训练/生成 */
@@ -1340,13 +1389,13 @@ class ApiClient {
   }
 
   /** 获取意图分类模型信息 */
-  async getIntentModelInfo(): Promise<{ success: boolean; model: { exists: boolean; model_type?: string; label_names?: string[]; training_samples?: number; accuracy?: number; trained_at?: string; samples_per_class?: Record<string, number> } }> {
-    return this.request<{ success: boolean; model: { exists: boolean; model_type?: string; label_names?: string[]; training_samples?: number; accuracy?: number; trained_at?: string; samples_per_class?: Record<string, number> } }>('/knowledge/train-intent/model');
+  async getIntentModelInfo(): Promise<{ success: boolean; model: IntentModelInfo }> {
+    return this.request<{ success: boolean; model: IntentModelInfo }>('/knowledge/train-intent/model');
   }
 
   /** 获取活跃知识库 */
-  async getActiveKnowledgeBases(): Promise<{ success: boolean; active_kbs: { kbName: string; isActive: number }[] }> {
-    return this.request<{ success: boolean; active_kbs: { kbName: string; isActive: number }[] }>('/knowledge/train-intent/active-kbs');
+  async getActiveKnowledgeBases(): Promise<ActiveKnowledgeBasesResponse> {
+    return this.request<ActiveKnowledgeBasesResponse>('/knowledge/train-intent/active-kbs');
   }
 
   // ============================================
@@ -1354,8 +1403,8 @@ class ApiClient {
   // ============================================
 
   /** Evaluation and research APIs */
-  async getGoldSet(): Promise<{ success: boolean; total: number; category_breakdown: Record<string, number>; prompts: GoldPromptRecord[] }> {
-    return this.request<{ success: boolean; total: number; category_breakdown: Record<string, number>; prompts: GoldPromptRecord[] }>('/evaluation/gold-set');
+  async getGoldSet(): Promise<GoldSetResponse> {
+    return this.request<GoldSetResponse>('/evaluation/gold-set');
   }
 
   async runEvaluation(req: EvaluationRunRequest): Promise<EvaluationRunStartResponse> {
@@ -1365,17 +1414,17 @@ class ApiClient {
     });
   }
 
-  async getEvaluationRuns(): Promise<{ success: boolean; runs: EvaluationRunRecord[] }> {
-    return this.request<{ success: boolean; runs: EvaluationRunRecord[] }>('/evaluation/runs');
+  async getEvaluationRuns(): Promise<EvaluationRunsResponse> {
+    return this.request<EvaluationRunsResponse>('/evaluation/runs');
   }
 
-  async getFeedback(rating?: string): Promise<{ success: boolean; feedbacks: FeedbackRecord[]; total: number }> {
+  async getFeedback(rating?: string): Promise<FeedbackListResponse> {
     const query = rating ? `?rating=${encodeURIComponent(rating)}` : '';
-    return this.request<{ success: boolean; feedbacks: FeedbackRecord[]; total: number }>(`/feedback${query}`);
+    return this.request<FeedbackListResponse>(`/feedback${query}`);
   }
 
-  async getExperiments(): Promise<{ success: boolean; experiments: ExperimentRecord[]; total: number }> {
-    return this.request<{ success: boolean; experiments: ExperimentRecord[]; total: number }>('/experiments/');
+  async getExperiments(): Promise<ExperimentsResponse> {
+    return this.request<ExperimentsResponse>('/experiments/');
   }
 
   async startExperiment(type: string, req: ExperimentStartRequest): Promise<ExperimentStartResponse> {
@@ -1389,23 +1438,23 @@ class ApiClient {
     return this.request<{ success: boolean; report: string }>(`/experiments/${expId}/report`);
   }
 
-  async getRouterConfig(): Promise<{ success: boolean; config: RouterConfigRecord }> {
-    return this.request<{ success: boolean; config: RouterConfigRecord }>('/router/config');
+  async getRouterConfig(): Promise<RouterConfigResponse> {
+    return this.request<RouterConfigResponse>('/router/config');
   }
 
-  async updateRouterConfig(req: Partial<RouterConfigRecord>): Promise<{ success: boolean; config: RouterConfigRecord }> {
-    return this.request<{ success: boolean; config: RouterConfigRecord }>('/router/config', {
+  async updateRouterConfig(req: Partial<RouterConfigRecord>): Promise<RouterConfigResponse> {
+    return this.request<RouterConfigResponse>('/router/config', {
       method: 'PUT',
       body: JSON.stringify(req),
     });
   }
 
-  async getRouterAdapters(): Promise<{ success: boolean; adapters: RouterAdapterRecord[]; total: number }> {
-    return this.request<{ success: boolean; adapters: RouterAdapterRecord[]; total: number }>('/router/adapters');
+  async getRouterAdapters(): Promise<RouterAdaptersResponse> {
+    return this.request<RouterAdaptersResponse>('/router/adapters');
   }
 
-  async getRouterLogs(): Promise<{ success: boolean; logs: RoutingLogRecord[]; total: number }> {
-    return this.request<{ success: boolean; logs: RoutingLogRecord[]; total: number }>('/router/logs');
+  async getRouterLogs(): Promise<RouterLogsResponse> {
+    return this.request<RouterLogsResponse>('/router/logs');
   }
 
   async checkAdapter(adapterName: string): Promise<AdapterCheckResponse> {
@@ -1453,171 +1502,3 @@ class ApiClient {
 export const api = new ApiClient();
 
 export default api;
-export type JsonRecord = Record<string, unknown>;
-
-export interface GoldPromptRecord {
-  id: string;
-  prompt: string;
-  category: string;
-  split?: string;
-  rubric?: JsonRecord;
-}
-
-export interface EvaluationRunRecord {
-  id: string;
-  run_at: string;
-  adapter_name: string;
-  model_label: string;
-  total_prompts: number;
-  metrics: JsonRecord;
-  notes?: string;
-}
-
-export interface FeedbackRecord {
-  trace_id: string;
-  message_id?: string;
-  rating: string;
-  reason?: string;
-  adapter_name?: string;
-  kb_revision?: string;
-  detail?: string;
-  created_at: string;
-}
-
-export interface ExperimentRecord {
-  id: string;
-  experiment_type: string;
-  hypothesis: string;
-  status: 'running' | 'completed' | 'failed';
-  started_at: string;
-  completed_at?: string;
-  results: JsonRecord | JsonRecord[];
-  report_path?: string;
-}
-
-export interface ExperimentStartResponse {
-  success: boolean;
-  experiment_id: string;
-  status: 'running' | 'completed' | 'failed';
-  mock?: boolean;
-  results?: JsonRecord | JsonRecord[];
-  error?: string;
-}
-
-export interface RouterConfigRecord {
-  enabled: boolean;
-  default_adapter: string;
-  mode: 'manual' | 'rule' | 'intent';
-  persona_adapters: Record<string, string>;
-  rag_confidence_threshold: number;
-  persona_keywords: Record<string, string[]>;
-}
-
-export interface RouterAdapterRecord {
-  name: string;
-  path: string;
-  compatibility: {
-    compatible: boolean;
-    checked_at: string;
-    checks: Record<string, boolean>;
-    warnings: string[];
-    errors: string[];
-  } | null;
-}
-
-export interface RoutingLogRecord {
-  timestamp: string;
-  trace_id: string;
-  target: string;
-  adapter_name: string;
-  confidence: number;
-  reason: string;
-  fallback: boolean;
-  requires_rag: boolean;
-}
-
-export type PreferenceReviewStatus = 'pending' | 'approved' | 'rejected';
-
-export interface PreferencePairRecord {
-  id: string;
-  prompt: string;
-  chosen: string;
-  rejected: string;
-  rubric: JsonRecord;
-  annotator: string;
-  metadata: JsonRecord;
-  review_status: PreferenceReviewStatus;
-  created_at: string;
-}
-
-export interface PreferenceCandidate {
-  prompt: string;
-  response: string;
-  lora_name?: string;
-  trace_id?: string;
-  needs_annotation: boolean;
-}
-
-export interface EvaluationRunRequest {
-  adapter_name?: string;
-  model_label?: string;
-  categories?: string[];
-  split?: string;
-  max_prompts?: number;
-  mock?: boolean;
-}
-
-export interface EvaluationRunStartResponse {
-  success: boolean;
-  run_id: string;
-  status: 'queued' | 'scheduled';
-  mock: boolean;
-}
-
-export interface ExperimentStartRequest {
-  hypothesis?: string;
-  mock?: boolean;
-  config_overrides?: JsonRecord;
-}
-
-export interface AdapterCheckResponse {
-  success: boolean;
-  adapter_name: string;
-  compatible: boolean;
-  checks: Record<string, boolean>;
-  warnings: string[];
-  errors: string[];
-}
-
-export interface PreferenceCreateRequest {
-  prompt: string;
-  chosen: string;
-  rejected: string;
-  annotator?: string;
-  rubric?: JsonRecord;
-  metadata?: JsonRecord;
-  review_status?: PreferenceReviewStatus;
-}
-
-export interface PreferenceUpdateRequest {
-  review_status?: PreferenceReviewStatus;
-  rubric?: JsonRecord;
-  annotator?: string;
-}
-
-export interface PreferenceExportRequest {
-  review_status: PreferenceReviewStatus;
-  format: 'jsonl';
-}
-
-export interface PreferenceExportRecord {
-  prompt: string;
-  chosen: string;
-  rejected: string;
-  rubric: JsonRecord;
-}
-
-export interface PreferenceSampleRequest {
-  limit?: number;
-  session_id?: string;
-}

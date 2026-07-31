@@ -42,7 +42,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           # Install PyTorch CPU version first (CI has no GPU)
-          pip install torch torchvision torchaudio \
+          pip install torch==2.8.0 torchvision==0.23.0 torchaudio==2.8.0 \
             --index-url https://download.pytorch.org/whl/cpu
           # Install remaining deps (skip GPU-only vllm and torch variants)
           grep -v -E "^(vllm|torch|torchvision|torchaudio)" requirements.txt > requirements-ci.txt

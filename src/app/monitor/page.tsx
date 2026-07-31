@@ -13,7 +13,7 @@ import { useSettings } from '@/contexts/SettingsContext';
 
 export default function MonitorPage() {
   return (
-    <AuthGuard>
+    <AuthGuard requireAdmin>
       <MonitorContent />
     </AuthGuard>
   );

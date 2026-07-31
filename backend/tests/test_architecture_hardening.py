@@ -1,4 +1,4 @@
-﻿"""Regression coverage for the architecture hardening pass."""
+"""Regression coverage for the architecture hardening pass."""
 
 from __future__ import annotations
 
@@ -8,20 +8,19 @@ from types import SimpleNamespace
 import pytest
 
 
-def test_response_cache_identity_isolated_by_lora_and_config(monkeypatch):
+def test_response_cache_identity_isolated_by_lora_and_config():
     from api import generate
     from db.schemas import MessageRequest
 
     config = {"temperature": 0.7, "maxTokens": 128, "useKnowledgeBase": False}
-    monkeypatch.setattr(generate, "db", SimpleNamespace(config=config))
     request = MessageRequest(message="hello", sessionId="session-1", platform="qq")
 
-    base_keys = generate._response_cache_keys(request, "default")
-    lora_keys = generate._response_cache_keys(request, "kisaki")
+    base_keys = generate._response_cache_keys(request, "default", config)
+    lora_keys = generate._response_cache_keys(request, "kisaki", config)
     assert base_keys[:2] != lora_keys[:2]
 
     config["temperature"] = 0.2
-    changed_keys = generate._response_cache_keys(request, "default")
+    changed_keys = generate._response_cache_keys(request, "default", config)
     assert base_keys[:2] != changed_keys[:2]
 
 
@@ -228,3 +227,93 @@ def test_create_access_token_includes_role_in_payload():
     token_default = create_access_token("bob", 43)
     payload_default = pyjwt.decode(token_default, JWT_SECRET, algorithms=[JWT_ALGORITHM])
     assert payload_default["role"] == "user"
+
+def test_sensitive_read_routes_keep_explicit_authorization_dependencies():
+    from fastapi.routing import APIRoute
+
+    from app.main import _ROUTERS
+
+    expected = {
+        ("GET", "/api/messages"): "get_current_admin",
+        ("GET", "/api/sessions"): "get_current_admin",
+        ("POST", "/api/models/check-7b"): "get_current_admin",
+        ("GET", "/api/stats"): "get_current_admin",
+        ("POST", "/api/knowledge/search"): "get_current_admin",
+        ("GET", "/api/model/status"): "get_current_admin",
+        ("GET", "/api/vllm/status"): "get_current_admin",
+    }
+    routes = {
+        (method, route.path): route
+        for router in _ROUTERS
+        for route in router.routes
+        if isinstance(route, APIRoute)
+        for method in route.methods
+    }
+
+    for key, dependency_name in expected.items():
+        route = routes[key]
+        dependency_names = {
+            getattr(dependency.call, "__name__", "")
+            for dependency in route.dependant.dependencies
+        }
+        assert dependency_name in dependency_names, key
+
+def test_mutating_routes_default_to_admin_authorization():
+    """Global writes must fail closed to admin unless explicitly user-scoped."""
+    from fastapi.routing import APIRoute
+
+    from app.main import _ROUTERS
+
+    explicit_exceptions = {
+        ("POST", "/api/generate"): "get_current_user",
+        ("PUT", "/api/user/data"): "get_current_user",
+        ("POST", "/api/feedback"): "get_current_user",
+        ("POST", "/api/auth/register"): None,
+        ("POST", "/api/auth/login"): None,
+        ("POST", "/api/auth/logout"): None,
+        # This endpoint authenticates with the integration token/signature scheme.
+        ("POST", "/api/integrations/astrbot/messages"): None,
+    }
+    unsafe_methods = {"POST", "PUT", "PATCH", "DELETE"}
+
+    for router in _ROUTERS:
+        for route in router.routes:
+            if not isinstance(route, APIRoute):
+                continue
+            dependency_names = {
+                getattr(dependency.call, "__name__", "")
+                for dependency in route.dependant.dependencies
+            }
+            for method in route.methods & unsafe_methods:
+                key = (method, route.path)
+                if key in explicit_exceptions:
+                    expected_dependency = explicit_exceptions[key]
+                    if expected_dependency is not None:
+                        assert expected_dependency in dependency_names, key
+                    continue
+                assert "get_current_admin" in dependency_names, key
+
+
+def test_rag_query_cache_returns_defensive_copy_and_evicts_lru():
+    from collections import OrderedDict
+    from threading import RLock
+
+    from knowledge.rag_helper import RAGHelper
+
+    helper = object.__new__(RAGHelper)
+    helper._query_cache = OrderedDict()
+    helper._cache_lock = RLock()
+    helper._cache_max_size = 2
+    helper._cache_ttl = 60
+
+    helper._add_to_cache("a", [{"content": "original"}])
+    helper._add_to_cache("b", [{"content": "second"}])
+    cached = helper._get_from_cache("a")
+    cached[0]["content"] = "mutated"
+
+    assert helper._get_from_cache("a") == [{"content": "original"}]
+
+    helper._add_to_cache("c", [{"content": "third"}])
+    assert helper._get_from_cache("b") is None
+    assert helper._get_from_cache("a") is not None
+    assert helper._get_from_cache("c") is not None

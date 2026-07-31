@@ -1,18 +1,9 @@
-"""缓存模块
+"""Shared Redis/config cache package.
 
-提供：
-- Redis Streams 消息队列 (message_queue)
-- 语义缓存 (semantic_cache)
-- Redis 客户端 (redis_client)
-- 配置缓存 (config_cache)
+Experimental semantic-cache and Redis Streams queue implementations remain
+available from their explicit submodules, but are not imported at package load.
 """
 
-from .message_queue import RedisMessageQueue, QueueMessage
-from .semantic_cache import SemanticCache, get_semantic_cache
+from .ttl_value_cache import BoundedTTLCache
 
-__all__ = [
-    "RedisMessageQueue",
-    "QueueMessage",
-    "SemanticCache",
-    "get_semantic_cache",
-]
+__all__ = ["BoundedTTLCache"]

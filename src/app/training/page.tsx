@@ -10,17 +10,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Progress } from '@/components/ui/progress';
 import {
   Database,
-  Pause,
-  BrainCircuit,
   RefreshCw,
-  AlertCircle,
   Upload,
   Plus,
   Zap,
   FileText,
-  CheckCircle2,
   XCircle,
-  Clock,
   Sparkles,
   Download,
   Trash2,
@@ -42,23 +37,8 @@ import { Separator } from '@/components/ui/separator';
 import { api, type Dataset, type TrainingTask, type CreateDatasetRequest, type StartTrainingRequest, type DialogueConversation, type DialogueGenerateRequest, type SavedDialogueItem } from '@/lib/api';
 import { toast } from 'sonner';
 import { usePageData } from '@/hooks/usePageData';
-import { TrainingParamsEditor } from '@/components/training/TrainingParamsEditor';
-
-const statusColors: Record<string, string> = {
-  pending: 'bg-yellow-100 text-yellow-800',
-  training: 'bg-blue-100 text-blue-800',
-  completed: 'bg-green-100 text-green-800',
-  failed: 'bg-red-100 text-red-800',
-  cancelled: 'bg-gray-100 text-gray-800'
-};
-
-const statusIcons: Record<string, typeof Clock> = {
-  pending: Clock,
-  training: Zap,
-  completed: CheckCircle2,
-  failed: XCircle,
-  cancelled: XCircle
-};
+import { SavedDialoguesPanel } from '@/components/training/SavedDialoguesPanel';
+import { TrainingTasksPanel } from '@/components/training/TrainingTasksPanel';
 
 export default function TrainingPage() {
   return (
@@ -1248,158 +1228,25 @@ function TrainingContent() {
 
           {/* 已保存对话 Tab */}
           <TabsContent value="saved" className="space-y-4">
-            <Card>
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle className="text-lg flex items-center gap-2">
-                      <Save className="h-5 w-5" />
-                      已保存的对话数据
-                    </CardTitle>
-                    <CardDescription>所有已生成的对话数据集，可预览、导出或创建训练数据</CardDescription>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="relative flex-1">
-                      <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        placeholder="搜索已保存对话..."
-                        value={savedSearchQuery}
-                        onChange={(e) => setSavedSearchQuery(e.target.value)}
-                        className="pl-8 h-9"
-                      />
-                    </div>
-                    <Button variant="outline" size="sm" onClick={loadSavedItems} disabled={savedLoading}>
-                      <RefreshCw className={`h-4 w-4 mr-1 ${savedLoading ? 'animate-spin' : ''}`} />
-                      刷新
-                    </Button>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                {savedItems.length === 0 ? (
-                  <div className="text-center py-12 text-muted-foreground">
-                    <Save className="h-12 w-12 mx-auto mb-3 opacity-30" />
-                    <p className="text-lg">暂无保存的对话数据</p>
-                    <p className="text-sm mt-1">生成对话后点击保存，或开启自动保存模式</p>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                    {savedItems
-                      .filter(item => {
-                        if (!savedSearchQuery) return true;
-                        const q = savedSearchQuery.toLowerCase();
-                        return item.name.toLowerCase().includes(q) ||
-                          item.character_desc.toLowerCase().includes(q);
-                      })
-                      .map((item) => (
-                        <Card key={item.id} className={`cursor-pointer transition-colors ${previewSaveId === item.id ? 'ring-2 ring-primary' : 'hover:bg-accent/50'}`}>
-                          <CardHeader className="pb-2">
-                            <CardTitle className="text-sm truncate">{item.name}</CardTitle>
-                            <CardDescription className="text-xs">
-                              {item.character_desc?.slice(0, 50) || ''}
-                              {(item.character_desc?.length || 0) > 50 ? '...' : ''}
-                            </CardDescription>
-                          </CardHeader>
-                          <CardContent className="pb-2 text-xs space-y-1">
-                            <div className="flex justify-between text-muted-foreground">
-                              <span>{item.dialogue_count} 组对话</span>
-                              <span>{item.style || '默认风格'}</span>
-                            </div>
-                            <div className="text-muted-foreground/70">
-                              保存于: {new Date(item.created_at).toLocaleString('zh-CN')}
-                            </div>
-                          </CardContent>
-                          <CardFooter className="pt-0 gap-1 flex-wrap">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="h-7 text-xs"
-                              onClick={() => handlePreviewSaved(item.id)}
-                            >
-                              <Eye className="h-3 w-3 mr-1" />
-                              预览
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="h-7 text-xs"
-                              onClick={() => handleCreateDatasetFromSaved(item.id)}
-                            >
-                              <FileText className="h-3 w-3 mr-1" />
-                              创建数据集
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="h-7 text-xs text-destructive hover:text-destructive"
-                              onClick={() => handleDeleteSaved(item.id)}
-                            >
-                              <Trash2 className="h-3 w-3" />
-                            </Button>
-                          </CardFooter>
-                        </Card>
-                      ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* 预览区域 */}
-            {previewSaveId && (
-              <Card>
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-base">对话预览</CardTitle>
-                    <Button variant="ghost" size="sm" onClick={() => { setPreviewSaveId(null); setPreviewSaveDialogues([]); }}>
-                      关闭
-                    </Button>
-                  </div>
-                </CardHeader>
-                <CardContent className="max-h-[500px] overflow-y-auto space-y-3">
-                  {previewSaveLoading ? (
-                    <div className="text-center py-8 text-muted-foreground">加载中...</div>
-                  ) : previewSaveDialogues.length === 0 ? (
-                    <div className="text-center py-8 text-muted-foreground">无对话数据</div>
-                  ) : (
-                    previewSaveDialogues.map((d, i) => (
-                      <div key={i} className="border rounded-lg p-3 text-sm relative group">
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteDialogueFromSaved(previewSaveId!, i)}
-                          className="absolute top-2 right-2 p-1 rounded opacity-0 group-hover:opacity-100 hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-all"
-                          title="删除此对话"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                        <div className="flex items-center gap-2 mb-2 pr-6">
-                          <Badge variant="outline" className="text-xs">
-                            {d.scene || `对话 ${i + 1}`}
-                          </Badge>
-                          <Badge variant="secondary" className="text-xs">
-                            {Math.ceil((d.conversations?.length || 0) / 2)} 轮
-                          </Badge>
-                          {d.tags?.map((tag, ti) => (
-                            <Badge key={ti} variant="outline" className="text-xs">{tag}</Badge>
-                          ))}
-                        </div>
-                        <div className="space-y-2 max-h-[200px] overflow-y-auto">
-                          {d.conversations?.map((conv, ci) => (
-                            <div key={ci} className="flex gap-2">
-                              <span className={`shrink-0 text-xs font-medium mt-0.5 ${conv.from === 'human' ? 'text-blue-600' : 'text-green-600'}`}>
-                                {conv.from === 'human' ? 'Q' : 'A'}:
-                              </span>
-                              <span className="text-xs text-muted-foreground">{conv.value}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </CardContent>
-              </Card>
-            )}
+            <SavedDialoguesPanel
+              items={savedItems}
+              loading={savedLoading}
+              searchQuery={savedSearchQuery}
+              previewId={previewSaveId}
+              previewDialogues={previewSaveDialogues}
+              previewLoading={previewSaveLoading}
+              onSearchQueryChange={setSavedSearchQuery}
+              onRefresh={loadSavedItems}
+              onPreview={handlePreviewSaved}
+              onCreateDataset={handleCreateDatasetFromSaved}
+              onDeleteSaved={handleDeleteSaved}
+              onClosePreview={() => {
+                setPreviewSaveId(null);
+                setPreviewSaveDialogues([]);
+              }}
+              onDeletePreviewDialogue={handleDeleteDialogueFromSaved}
+            />
           </TabsContent>
-
           {/* 数据集管理 */}
           <TabsContent value="datasets" className="mt-4 space-y-4">
             <div className="flex justify-end gap-2">
@@ -1688,129 +1535,16 @@ function TrainingContent() {
 
           {/* 训练任务 */}
           <TabsContent value="training" className="mt-4 space-y-4">
-            <div className="flex justify-end">
-              <Dialog open={startTrainingOpen} onOpenChange={setStartTrainingOpen}>
-                <DialogTrigger asChild>
-                  <Button>
-                    <Plus className="mr-2 h-4 w-4" />
-                    新建训练
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="sm:max-w-[760px] max-h-[92vh] flex flex-col">
-                  <DialogHeader>
-                    <DialogTitle>启动 LoRA 训练</DialogTitle>
-                    <DialogDescription>
-                      配置训练参数并启动训练任务；高级设置可一键应用显存预设。
-                    </DialogDescription>
-                  </DialogHeader>
-                  <div className="overflow-y-auto flex-1 min-h-0 pr-1">
-                    <TrainingParamsEditor
-                      datasets={datasets.map((d) => ({
-                        name: d.name,
-                        sampleCount: d.stats?.total ?? 0,
-                      }))}
-                      submitting={trainingSubmitting}
-                      onSubmit={handleStartTraining}
-                    />
-                  </div>
-                  <DialogFooter className="shrink-0">
-                    <Button variant="secondary" onClick={() => setStartTrainingOpen(false)}>
-                      关闭
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
-            </div>
-
-            {tasksLoading ? (
-              <div className="space-y-4">
-                {[1, 2, 3].map((i) => (
-                  <Card key={i}>
-                    <CardHeader>
-                      <Skeleton className="h-6 w-1/2" />
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      <Skeleton className="h-2 w-full" />
-                      <Skeleton className="h-4 w-1/3" />
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            ) : trainingTasks.length === 0 ? (
-              <Card>
-                <CardContent className="pt-6">
-                  <div className="text-center py-12">
-                    <Zap className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-                    <h3 className="text-lg font-semibold mb-2">暂无训练任务</h3>
-                    <p className="text-muted-foreground mb-4">
-                      启动您的第一个LoRA训练任务
-                    </p>
-                    <Button onClick={() => setStartTrainingOpen(true)}>
-                      <Plus className="mr-2 h-4 w-4" />
-                      新建训练
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            ) : (
-              <div className="space-y-4">
-                {trainingTasks.map((task) => {
-                  const StatusIcon = statusIcons[task.status] || Clock;
-                  return (
-                    <Card key={task.task_id}>
-                      <CardHeader>
-                        <div className="flex items-start justify-between">
-                          <div>
-                            <CardTitle className="flex items-center gap-2">
-                              <BrainCircuit className="h-5 w-5 text-muted-foreground" />
-                              {task.lora_name}
-                              <Badge className={statusColors[task.status]}>
-                                <StatusIcon className="h-3 w-3 mr-1" />
-                                {task.status}
-                              </Badge>
-                            </CardTitle>
-                            <CardDescription>
-                              任务ID: {task.task_id}
-                            </CardDescription>
-                          </div>
-                        </div>
-                      </CardHeader>
-                      <CardContent className="space-y-4">
-                        <div className="space-y-2">
-                          <div className="flex justify-between text-sm">
-                            <span className="text-muted-foreground">训练进度</span>
-                            <span>{task.progress}%</span>
-                          </div>
-                          <Progress value={task.progress} className="h-2" />
-                        </div>
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="text-muted-foreground">创建时间</span>
-                          <span>{new Date(task.created_at).toLocaleString()}</span>
-                        </div>
-                        {task.error_message && (
-                          <div className="bg-red-50 text-red-800 p-3 rounded-lg text-sm">
-                            <AlertCircle className="h-4 w-4 inline mr-2" />
-                            {task.error_message}
-                          </div>
-                        )}
-                      </CardContent>
-                      {task.status === 'training' && (
-                        <CardFooter className="border-t pt-4">
-                          <Button
-                            variant="destructive"
-                            className="w-full"
-                            onClick={() => handleCancelTraining(task.task_id)}
-                          >
-                            <Pause className="mr-2 h-4 w-4" />
-                            取消训练
-                          </Button>
-                        </CardFooter>
-                      )}
-                    </Card>
-                  );
-                })}
-              </div>
-            )}
+            <TrainingTasksPanel
+              datasets={datasets}
+              tasks={trainingTasks}
+              loading={tasksLoading}
+              dialogOpen={startTrainingOpen}
+              submitting={trainingSubmitting}
+              onDialogOpenChange={setStartTrainingOpen}
+              onStartTraining={handleStartTraining}
+              onCancelTraining={handleCancelTraining}
+            />
           </TabsContent>
 
         </Tabs>

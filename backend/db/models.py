@@ -388,6 +388,9 @@ class ModelInvocation(Base):
 class AuditLog(Base):
     """API 审计日志表"""
     __tablename__ = "audit_logs"
+    __table_args__ = (
+        Index("idx_audit_logs_timestamp", "timestamp"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     timestamp: Mapped[float] = mapped_column(Float, nullable=False)
@@ -437,12 +440,14 @@ class IntentActiveKb(Base):
 class TrainingTask(Base):
     """LoRA/训练任务记录表。
 
-    taskType/config/result/createdAt/updatedAt 为 legacy 列，保留兼容已有 PG 部署，
-    新代码不再写入。后续应通过 Alembic 迁移删除。
+    Existing PostgreSQL deployments may still contain ignored legacy columns,
+    but the active schema is the same compact contract used by SQLite.
     """
     __tablename__ = "training_tasks"
     __table_args__ = (
         Index("idx_training_tasks_task_id", "task_id", unique=True),
+        Index("idx_training_tasks_lora_name", "lora_name"),
+        Index("idx_training_tasks_status", "status"),
     )
 
     id: Mapped[str] = mapped_column(Text, primary_key=True)
@@ -454,12 +459,6 @@ class TrainingTask(Base):
     config_json: Mapped[Optional[str]] = mapped_column(Text, server_default="{}")
     created_at: Mapped[Optional[str]] = mapped_column(Text, server_default="")
     updated_at: Mapped[Optional[str]] = mapped_column(Text, server_default="")
-    # Legacy columns
-    taskType: Mapped[str] = mapped_column(Text, nullable=False, server_default="lora")
-    config: Mapped[Optional[str]] = mapped_column(Text)
-    result: Mapped[Optional[str]] = mapped_column(Text)
-    createdAt: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
-    updatedAt: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
 
 
 # ============================================

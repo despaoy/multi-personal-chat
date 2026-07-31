@@ -21,26 +21,22 @@ if str(_backend_dir) not in sys.path:
     sys.path.insert(0, str(_backend_dir))
 
 from db.models import Base  # noqa: E402
+from db.urls import resolve_alembic_database_url  # noqa: E402
 
 config = context.config
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# 从环境变量覆盖数据库URL
-db_url = os.getenv("ALEMBIC_DATABASE_URL")
+# 与运行时共用 URL 规则；ALEMBIC_DATABASE_URL 仅作为显式迁移覆盖项。
+db_url = resolve_alembic_database_url()
 if not db_url:
-    # 兼容 Dockerfile 中的 PG_* 环境变量，自动构建连接串
-    pg_host = os.getenv("PG_HOST", "localhost")
-    pg_port = os.getenv("PG_PORT", "5432")
-    pg_user = os.getenv("PG_USER", "qqassistant")
-    pg_password = os.getenv("PG_PASSWORD", "")
-    pg_database = os.getenv("PG_DATABASE", "qqassistant")
-    if pg_password:
-        db_url = f"postgresql+asyncpg://{pg_user}:{pg_password}@{pg_host}:{pg_port}/{pg_database}"
-if db_url:
-    config.set_main_option("sqlalchemy.url", db_url)
-
+    raise RuntimeError(
+        "Database URL is required: set ALEMBIC_DATABASE_URL, DATABASE_URL, "
+        "or the PG_* variables including PG_PASSWORD"
+    )
+# Alembic Config 使用 ConfigParser；百分号必须转义后再写入。
+config.set_main_option("sqlalchemy.url", db_url.replace("%", "%%"))
 # 单一真相源：db/models.py 的 metadata
 target_metadata = Base.metadata
 

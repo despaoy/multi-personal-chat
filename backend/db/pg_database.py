@@ -12,21 +12,13 @@ from typing import Optional, Dict, List, Any
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 
+from cache.ttl_value_cache import BoundedTTLCache
+from db.errors import RegistrationClosedError
+from db.urls import resolve_runtime_database_url
+
 logger = logging.getLogger(__name__)
 
-# ============================================
-# 默认连接字符串
-# ============================================
-DEFAULT_DATABASE_URL = ""  # 必须通过环境变量 DATABASE_URL 配置
 
-
-def _normalize_database_url(database_url: str) -> str:
-    """Use the asyncpg SQLAlchemy dialect for common PostgreSQL URL forms."""
-    if database_url.startswith("postgres://"):
-        return "postgresql+asyncpg://" + database_url[len("postgres://"):]
-    if database_url.startswith("postgresql://"):
-        return "postgresql+asyncpg://" + database_url[len("postgresql://"):]
-    return database_url
 
 # ============================================
 # SQLAlchemy Core 表定义
@@ -83,9 +75,9 @@ class PgDatabase:
     """PostgreSQL 异步数据库类 - 与 SQLiteDB 相同接口的异步版本"""
 
     def __init__(self, database_url: Optional[str] = None):
-        self.database_url = _normalize_database_url(database_url or os.environ.get("DATABASE_URL", DEFAULT_DATABASE_URL))
+        self.database_url = resolve_runtime_database_url(database_url or None)
         if not self.database_url:
-            raise ValueError("DATABASE_URL is required when USE_POSTGRESQL=true")
+            raise ValueError("DATABASE_URL or PG_PASSWORD is required when USE_POSTGRESQL=true")
         self.engine = create_async_engine(
             self.database_url,
             echo=False,
@@ -95,6 +87,10 @@ class PgDatabase:
         )
         self.async_session = async_sessionmaker(
             self.engine, class_=AsyncSession, expire_on_commit=False,
+        )
+        self._bot_enabled_cache: BoundedTTLCache[tuple[str, str, str], bool] = BoundedTTLCache(
+            ttl=float(os.getenv("SESSION_SWITCH_CACHE_TTL", "60")),
+            max_size=int(os.getenv("SESSION_SWITCH_CACHE_MAX_SIZE", "4096")),
         )
         self._initialized = False
 
@@ -114,6 +110,28 @@ class PgDatabase:
             await self._ensure_column(conn, "messages", "senderName", "TEXT")
             await self._ensure_column(conn, "session_settings", "platform", "TEXT NOT NULL DEFAULT 'qq'")
             await self._ensure_column(conn, "session_settings", "conversationId", "TEXT")
+            await self._ensure_column(conn, "session_settings", "sessionType", "TEXT NOT NULL DEFAULT 'private'")
+            await self._ensure_column(conn, "session_settings", "sessionName", "TEXT")
+            await self._ensure_column(conn, "session_settings", "bot_enabled", "INTEGER NOT NULL DEFAULT 1")
+            migrated_at = datetime.now().isoformat()
+            await conn.execute(text('''
+                INSERT INTO conversations (
+                    platform, "conversationId", "conversationType", "displayName",
+                    "botEnabled", "replyPolicy", "createdAt", "updatedAt"
+                )
+                SELECT
+                    COALESCE(platform, 'qq'),
+                    COALESCE("conversationId", "sessionId"),
+                    COALESCE("sessionType", 'private'),
+                    COALESCE(NULLIF("sessionName", ''), "sessionId"),
+                    bot_enabled,
+                    'default',
+                    COALESCE(updated_at, :migrated_at),
+                    COALESCE(updated_at, :migrated_at)
+                FROM session_settings
+                ON CONFLICT (platform, "conversationId", "conversationType") DO NOTHING
+            '''), {"migrated_at": migrated_at})
+            await conn.execute(text('DELETE FROM session_settings'))
             await self._ensure_column(conn, "training_tasks", "task_id", "TEXT")
             await self._ensure_column(conn, "training_tasks", "lora_name", "TEXT DEFAULT ''")
             await self._ensure_column(conn, "training_tasks", "error_message", "TEXT DEFAULT ''")
@@ -127,8 +145,8 @@ class PgDatabase:
             await conn.execute(text('CREATE INDEX IF NOT EXISTS idx_messages_source_dedup ON messages (platform, adapter, "sourceMessageId")'))
             await conn.execute(text('CREATE INDEX IF NOT EXISTS idx_messages_session_created ON messages ("sessionId", "createdAt")'))
             await conn.execute(text('CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages ("createdAt")'))
-            # idx_conversations_platform_conversation 已删除：UNIQUE(platform, conversationId, conversationType)
-            # 约束会自动创建索引，显式 CREATE INDEX 完全冗余。
+            await conn.execute(text('DROP INDEX IF EXISTS idx_conversations_platform_conversation'))
+            # UNIQUE(platform, conversationId, conversationType) 已自动创建索引。
             await conn.execute(text('CREATE INDEX IF NOT EXISTS idx_integration_events_trace ON integration_events ("traceId")'))
             await conn.execute(text('CREATE INDEX IF NOT EXISTS idx_integration_events_platform_created ON integration_events (platform, "createdAt")'))
             await conn.execute(text('CREATE INDEX IF NOT EXISTS idx_model_invocations_trace ON model_invocations ("traceId")'))
@@ -879,15 +897,26 @@ class PgDatabase:
     # ============================================
     # 用户管理
     # ============================================
-    async def add_user(self, username: str, password_hash: str) -> Dict:
-        """添加用户"""
+    async def add_user(
+        self,
+        username: str,
+        password_hash: str,
+        bootstrap_only: bool = False,
+    ) -> Dict:
+        """Add a user while serializing the first-admin decision."""
         now = datetime.now().isoformat()
         async with self.async_session() as session:
-            # C4 fix: 首个用户自动成为 admin，后续用户为普通 user。
-            # 与 SQLite 实现 (database.py:1819-1822) 保持一致。
+            # Serialize the first-admin decision across API workers. The lock is
+            # transaction-scoped and is released automatically on commit/rollback.
+            await session.execute(
+                text("SELECT pg_advisory_xact_lock(hashtext('qqchat:first-admin'))")
+            )
             count_stmt = users_table.select().order_by(users_table.c.id).limit(1)
             existing = await session.execute(count_stmt)
-            role = "admin" if existing.fetchone() is None else "user"
+            has_users = existing.fetchone() is not None
+            if bootstrap_only and has_users:
+                raise RegistrationClosedError("bootstrap administrator already exists")
+            role = "user" if has_users else "admin"
             stmt = users_table.insert().values(
                 username=username, password_hash=password_hash, created_at=now, role=role,
             )
@@ -895,7 +924,6 @@ class PgDatabase:
             await session.commit()
             user_id = result.inserted_primary_key[0]
             return {"id": user_id, "username": username, "created_at": now, "role": role}
-
     async def get_user(self, user_id: int) -> Optional[Dict]:
         """获取用户 by ID"""
         async with self.async_session() as session:
@@ -1071,25 +1099,45 @@ class PgDatabase:
         """获取所有会话的聚合统计信息（相关子查询消除 N+1）"""
         async with self.async_session() as session:
             stmt = text("""
-                SELECT
-                    "sessionId",
-                    "sessionType",
-                    "sessionName",
-                    COALESCE(platform, 'qq') as platform,
-                    COALESCE(adapter, 'nonebot') as adapter,
-                    COALESCE("conversationId", "sessionId") as "conversationId",
-                    COUNT(*) as message_count,
-                    MAX("createdAt") as last_active,
-                    STRING_AGG(message, '||' ORDER BY "createdAt") as recent_messages,
-                    COALESCE((
-                        SELECT c."botEnabled" FROM conversations c
-                        WHERE c.platform = COALESCE(messages.platform, 'qq')
-                          AND c."conversationId" = COALESCE(messages."conversationId", messages."sessionId")
-                        ORDER BY c."updatedAt" DESC LIMIT 1
-                    ), 1) as bot_enabled
-                FROM messages
-                GROUP BY "sessionId", "sessionType", "sessionName", platform, adapter, "conversationId"
-                ORDER BY last_active DESC
+                WITH normalized AS (
+                    SELECT
+                        id, "sessionId", "sessionName",
+                        COALESCE(platform, 'qq') AS platform,
+                        COALESCE(adapter, 'nonebot') AS adapter,
+                        COALESCE("conversationId", "sessionId") AS "conversationId",
+                        COALESCE("conversationType", "sessionType") AS "conversationType",
+                        message, "createdAt"
+                    FROM messages
+                ), ranked AS (
+                    SELECT *,
+                        ROW_NUMBER() OVER (
+                            PARTITION BY platform, "conversationType", "conversationId"
+                            ORDER BY "createdAt" DESC, id DESC
+                        ) AS rn
+                    FROM normalized
+                ), aggregated AS (
+                    SELECT
+                        MAX(CASE WHEN rn = 1 THEN "sessionId" END) AS "sessionId",
+                        "conversationType" AS "sessionType",
+                        MAX(CASE WHEN rn = 1 THEN "sessionName" END) AS "sessionName",
+                        platform,
+                        MAX(CASE WHEN rn = 1 THEN adapter END) AS adapter,
+                        "conversationId", "conversationType",
+                        COUNT(*) AS message_count,
+                        MAX("createdAt") AS last_active,
+                        MAX(CASE WHEN rn = 1 THEN message END) AS recent_1,
+                        MAX(CASE WHEN rn = 2 THEN message END) AS recent_2,
+                        MAX(CASE WHEN rn = 3 THEN message END) AS recent_3
+                    FROM ranked
+                    GROUP BY platform, "conversationId", "conversationType"
+                )
+                SELECT a.*, COALESCE(c."botEnabled", 1) AS bot_enabled
+                FROM aggregated a
+                LEFT JOIN conversations c
+                  ON c.platform = a.platform
+                 AND c."conversationId" = a."conversationId"
+                 AND c."conversationType" = a."conversationType"
+                ORDER BY a.last_active DESC
             """)
             result = await session.execute(stmt)
             sessions = []
@@ -1104,9 +1152,8 @@ class PgDatabase:
                 message_count = d["message_count"]
                 last_active = d["last_active"]
 
-                raw_msgs = (d.get("recent_messages") or "").split("||")
-                recent = [m for m in raw_msgs if m.strip()][-3:]
-                summary = "；".join(recent[:3])
+                recent = [d.get(key) for key in ("recent_3", "recent_2", "recent_1") if d.get(key) and d[key].strip()]
+                summary = "；".join(recent)
                 if len(summary) > 100:
                     summary = summary[:100] + "..."
 
@@ -1124,7 +1171,7 @@ class PgDatabase:
                 })
             return sessions
 
-    async def set_session_bot_enabled(self, session_id: str, enabled: bool, platform: str = "qq", conversation_id: Optional[str] = None) -> None:
+    async def set_session_bot_enabled(self, session_id: str, enabled: bool, platform: str = "qq", conversation_id: Optional[str] = None, conversation_type: str = "private") -> None:
         """设置某个会话的机器人开关。
 
         统一写入 conversations 表（此前同时写 session_settings + conversations 双表，
@@ -1136,28 +1183,34 @@ class PgDatabase:
                 session,
                 platform=platform,
                 conversation_id=resolved_conversation_id,
-                conversation_type="private",
+                conversation_type=conversation_type,
                 display_name=session_id,
                 bot_enabled=enabled,
             )
             await session.commit()
+        self._bot_enabled_cache.invalidate((platform, resolved_conversation_id, conversation_type))
 
-    async def is_session_bot_enabled(self, session_id: str, platform: str = "qq", conversation_id: Optional[str] = None) -> bool:
+    async def is_session_bot_enabled(self, session_id: str, platform: str = "qq", conversation_id: Optional[str] = None, conversation_type: str = "private") -> bool:
         """检查某个会话的机器人是否启用（默认启用）。
 
         统一从 conversations 表查询（此前先查 session_settings 失败再查 conversations，
         现直接查 conversations，消除双表冗余查询）。
         """
+        resolved_conversation_id = conversation_id or session_id
+        cache_key = (platform, resolved_conversation_id, conversation_type)
+        cached = self._bot_enabled_cache.get(cache_key)
+        if cached is not None:
+            return cached
+
         async with self.async_session() as session:
-            resolved_conversation_id = conversation_id or session_id
             stmt = text(
-                'SELECT "botEnabled" FROM conversations WHERE platform = :platform AND "conversationId" = :cid ORDER BY "updatedAt" DESC LIMIT 1'
+                'SELECT "botEnabled" FROM conversations WHERE platform = :platform AND "conversationId" = :cid AND "conversationType" = :ctype LIMIT 1'
             )
-            result = await session.execute(stmt, {"platform": platform, "cid": resolved_conversation_id})
+            result = await session.execute(stmt, {"platform": platform, "cid": resolved_conversation_id, "ctype": conversation_type})
             row = result.fetchone()
-            if row is None:
-                return True
-            return bool(_row_to_dict(row)["botEnabled"])
+            value = True if row is None else bool(_row_to_dict(row)["botEnabled"])
+            self._bot_enabled_cache.set(cache_key, value)
+            return value
 
     # ============================================
     # Claw 工具 CRUD
@@ -1552,6 +1605,7 @@ pg_db = PgDatabase()
 # 同步适配器 - 让现有同步代码无需修改即可使用 PostgreSQL
 # ============================================
 import asyncio
+import concurrent.futures
 import threading
 
 
@@ -1562,55 +1616,169 @@ class SyncPgAdapter:
     确保与现有同步代码（如 SQLite Database 类）兼容。
     """
 
-    def __init__(self, pg: PgDatabase):
+    def __init__(
+        self,
+        pg: PgDatabase,
+        *,
+        init_timeout: float = 30.0,
+        operation_timeout: float = 30.0,
+        close_timeout: float = 15.0,
+        thread_join_timeout: float = 5.0,
+    ):
         self._pg = pg
         self._loop = None
         self._thread = None
+        self._state_lock = threading.RLock()
+        self._pending: set[concurrent.futures.Future] = set()
+        self._closed = False
+        self._init_timeout = self._validate_timeout("init_timeout", init_timeout)
+        self._operation_timeout = self._validate_timeout(
+            "operation_timeout", operation_timeout
+        )
+        self._close_timeout = self._validate_timeout("close_timeout", close_timeout)
+        self._thread_join_timeout = self._validate_timeout(
+            "thread_join_timeout", thread_join_timeout
+        )
 
-    def _ensure_loop(self):
-        """确保后台事件循环正在运行"""
+    @staticmethod
+    def _validate_timeout(name: str, value: float) -> float:
+        timeout = float(value)
+        if timeout <= 0:
+            raise ValueError(f"{name} must be greater than zero")
+        return timeout
+
+    @staticmethod
+    def _run_loop(loop: asyncio.AbstractEventLoop, started: threading.Event) -> None:
+        asyncio.set_event_loop(loop)
+        started.set()
+        loop.run_forever()
+
+    @staticmethod
+    def _close_unsubmitted_coroutine(coro) -> None:
+        close = getattr(coro, "close", None)
+        if callable(close):
+            close()
+
+    async def _shutdown_backend(self) -> None:
+        """Cancel adapter-owned tasks before disposing the async engine."""
+        current = asyncio.current_task()
+        tasks = [
+            task
+            for task in asyncio.all_tasks()
+            if task is not current and not task.done()
+        ]
+        for task in tasks:
+            task.cancel()
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
+        await self._pg.close()
+
+    def _stop_loop_locked(self, *, close_backend: bool) -> None:
+        loop = self._loop
+        thread = self._thread
+        if loop is None:
+            self._thread = None
+            return
+
+        if close_backend and loop.is_running():
+            shutdown_future = asyncio.run_coroutine_threadsafe(
+                self._shutdown_backend(), loop
+            )
+            try:
+                shutdown_future.result(timeout=self._close_timeout)
+            except concurrent.futures.TimeoutError:
+                shutdown_future.cancel()
+                logger.warning("Timed out while closing SyncPgAdapter backend")
+            except Exception as exc:
+                logger.warning("Failed to close SyncPgAdapter backend: %s", exc)
+
+        if loop.is_running():
+            loop.call_soon_threadsafe(loop.stop)
+        if thread is not None and thread is not threading.current_thread():
+            thread.join(timeout=self._thread_join_timeout)
+        if thread is not None and thread.is_alive():
+            logger.warning("SyncPgAdapter event-loop thread did not stop in time")
+        elif not loop.is_running() and not loop.is_closed():
+            loop.close()
+
+        self._loop = None
+        self._thread = None
+
+    def _ensure_loop_locked(self) -> None:
+        """Start and initialize the private loop while holding the state lock."""
+        if self._closed:
+            raise RuntimeError("SyncPgAdapter is closed")
         if self._loop is None or not self._loop.is_running():
-            self._loop = asyncio.new_event_loop()
-            self._thread = threading.Thread(target=self._loop.run_forever, daemon=True)
-            self._thread.start()
+            if self._loop is not None:
+                self._stop_loop_locked(close_backend=False)
+            loop = asyncio.new_event_loop()
+            started = threading.Event()
+            thread = threading.Thread(
+                target=self._run_loop,
+                args=(loop, started),
+                name="sync-pg-adapter",
+                daemon=True,
+            )
+            self._loop = loop
+            self._thread = thread
+            thread.start()
+            if not started.wait(timeout=self._init_timeout):
+                self._stop_loop_locked(close_backend=False)
+                raise TimeoutError("SyncPgAdapter event loop did not start in time")
+
+            init_future = asyncio.run_coroutine_threadsafe(self._pg.init(), loop)
+            try:
+                init_future.result(timeout=self._init_timeout)
+            except concurrent.futures.TimeoutError:
+                init_future.cancel()
+                self._stop_loop_locked(close_backend=True)
+                raise
+            except Exception:
+                self._stop_loop_locked(close_backend=True)
+                raise
+
+    def _ensure_loop(self) -> None:
+        """确保后台事件循环正在运行"""
+        with self._state_lock:
+            self._ensure_loop_locked()
             # 初始化数据库
-            asyncio.run_coroutine_threadsafe(self._pg.init(), self._loop).result(timeout=30)
 
     def _run(self, coro):
         """在后台事件循环中运行协程并等待结果"""
-        self._ensure_loop()
-        future = asyncio.run_coroutine_threadsafe(coro, self._loop)
-        return future.result(timeout=30)
+        future = None
+        try:
+            with self._state_lock:
+                self._ensure_loop_locked()
+                future = asyncio.run_coroutine_threadsafe(coro, self._loop)
+                self._pending.add(future)
+        except BaseException:
+            if future is None:
+                self._close_unsubmitted_coroutine(coro)
+            raise
+
+        try:
+            return future.result(timeout=self._operation_timeout)
+        except concurrent.futures.TimeoutError:
+            future.cancel()
+            raise
+        finally:
+            with self._state_lock:
+                self._pending.discard(future)
 
     def close(self):
-        """关闭后台事件循环与 PostgreSQL 引擎连接池。
-
-        应在应用 shutdown 阶段调用，避免引擎连接池在进程退出前无法
-        显式 dispose，多 worker 部署下可能造成连接泄漏。
-        """
-        if self._loop is None or not self._loop.is_running():
-            self._loop = None
-            self._thread = None
-            return
-        try:
-            # 先在后台循环中 dispose 引擎，确保连接归还给 PG
-            asyncio.run_coroutine_threadsafe(self._pg.close(), self._loop).result(timeout=15)
-        except Exception as e:
-            logger.warning(f"关闭 PgDatabase 引擎失败: {e}")
-        finally:
-            # 停止事件循环并等待 daemon 线程退出
-            try:
-                self._loop.call_soon_threadsafe(self._loop.stop)
-                if self._thread is not None:
-                    self._thread.join(timeout=5)
-            except Exception as e:
-                logger.warning(f"停止 SyncPgAdapter 事件循环失败: {e}")
-            self._loop = None
-            self._thread = None
+        """Cancel pending work and close the private loop exactly once."""
+        with self._state_lock:
+            if self._closed:
+                return
+            self._closed = True
+            for future in tuple(self._pending):
+                future.cancel()
+            self._pending.clear()
+            self._stop_loop_locked(close_backend=True)
 
     # 代理所有 PgDatabase 的方法为同步调用
     def init(self):
-        self._run(self._pg.init())
+        self._ensure_loop()
 
     def get_config(self):
         return self._run(self._pg.get_config())
@@ -1758,8 +1926,8 @@ class SyncPgAdapter:
     def get_knowledge_stats(self):
         return self._run(self._pg.get_knowledge_stats())
 
-    def add_user(self, username, password_hash):
-        return self._run(self._pg.add_user(username, password_hash))
+    def add_user(self, username, password_hash, bootstrap_only=False):
+        return self._run(self._pg.add_user(username, password_hash, bootstrap_only))
 
     def get_user(self, user_id):
         return self._run(self._pg.get_user(user_id))
@@ -1776,11 +1944,11 @@ class SyncPgAdapter:
     def get_session_summaries(self):
         return self._run(self._pg.get_session_summaries())
 
-    def set_session_bot_enabled(self, session_id, enabled, platform="qq", conversation_id=None):
-        return self._run(self._pg.set_session_bot_enabled(session_id, enabled, platform, conversation_id))
+    def set_session_bot_enabled(self, session_id, enabled, platform="qq", conversation_id=None, conversation_type="private"):
+        return self._run(self._pg.set_session_bot_enabled(session_id, enabled, platform, conversation_id, conversation_type))
 
-    def is_session_bot_enabled(self, session_id, platform="qq", conversation_id=None):
-        return self._run(self._pg.is_session_bot_enabled(session_id, platform, conversation_id))
+    def is_session_bot_enabled(self, session_id, platform="qq", conversation_id=None, conversation_type="private"):
+        return self._run(self._pg.is_session_bot_enabled(session_id, platform, conversation_id, conversation_type))
 
     def mark_integration_message_processed(self, platform, adapter, message_id):
         return self._run(self._pg.mark_integration_message_processed(platform, adapter, message_id))

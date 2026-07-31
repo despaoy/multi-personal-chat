@@ -147,7 +147,10 @@ class SimpleLoRATrainer:
         self.db = db
         self.tasks: Dict[str, Dict[str, Any]] = {}
         self._cancel_events: Dict[str, threading.Event] = {}
-        self._lock = asyncio.Lock()
+        self._runner_tasks: Dict[str, asyncio.Task[None]] = {}
+        # Progress callbacks execute in the training worker thread, while API
+        # handlers read the same state on the event-loop thread.
+        self._lock = threading.RLock()
 
         # 从数据库恢复未完成的任务到内存
         if self.db:
@@ -193,7 +196,7 @@ class SimpleLoRATrainer:
             "output_dir": str(self.loras_dir / lora_name),
         }
 
-        async with self._lock:
+        with self._lock:
             self.tasks[task_id] = task
             self._cancel_events[task_id] = threading.Event()
 
@@ -201,7 +204,17 @@ class SimpleLoRATrainer:
         if self.db:
             self.db.save_training_task(task_id, task)
 
-        asyncio.create_task(self._run_training(task_id, lora_name, dataset_path, config))
+        runner = asyncio.create_task(
+            self._run_training(task_id, lora_name, dataset_path, config),
+            name=f"lora-training-{task_id}",
+        )
+        with self._lock:
+            self._runner_tasks[task_id] = runner
+        runner.add_done_callback(
+            lambda completed, tracked_id=task_id: self._discard_runner_task(
+                tracked_id, completed
+            )
+        )
 
         logger.info(f"训练任务已创建: {task_id}, LoRA: {lora_name}")
         return task_id
@@ -209,7 +222,9 @@ class SimpleLoRATrainer:
     async def _run_training(self, task_id: str, lora_name: str, dataset_path: Path, config: Dict[str, Any]):
         cancel_event = self._cancel_events.get(task_id)
 
-        async with self._lock:
+        with self._lock:
+            if self.tasks[task_id].get("status") == "interrupted":
+                return
             self.tasks[task_id]["status"] = "training"
             self.tasks[task_id]["started_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
             self.tasks[task_id]["updated_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
@@ -226,8 +241,8 @@ class SimpleLoRATrainer:
 
             # 检查是否在配置阶段已被取消
             if cancel_event and cancel_event.is_set():
-                async with self._lock:
-                    if self.tasks[task_id]["status"] != "cancelled":
+                with self._lock:
+                    if self.tasks[task_id]["status"] not in ("cancelled", "interrupted"):
                         self.tasks[task_id]["status"] = "cancelled"
                         self.tasks[task_id]["finished_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
                         self.tasks[task_id]["updated_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
@@ -241,9 +256,9 @@ class SimpleLoRATrainer:
 
             trainer = LoRATrainer(train_config)
 
-            async with self._lock:
+            with self._lock:
                 if cancel_event and cancel_event.is_set():
-                    if self.tasks[task_id]["status"] != "cancelled":
+                    if self.tasks[task_id]["status"] not in ("cancelled", "interrupted"):
                         self.tasks[task_id]["status"] = "cancelled"
                         self.tasks[task_id]["finished_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
                         self.tasks[task_id]["updated_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
@@ -256,11 +271,12 @@ class SimpleLoRATrainer:
 
             # 训练进度回调：由 trainer 在每个 step 结束时调用，实时更新任务状态（0-100）
             def _progress_callback(progress: int, current_step: int, total_steps: int):
-                if task_id in self.tasks:
-                    self.tasks[task_id]["progress"] = progress
-                    self.tasks[task_id]["current_step"] = current_step
-                    self.tasks[task_id]["total_steps"] = total_steps
-                    self.tasks[task_id]["updated_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
+                with self._lock:
+                    if task_id in self.tasks:
+                        self.tasks[task_id]["progress"] = progress
+                        self.tasks[task_id]["current_step"] = current_step
+                        self.tasks[task_id]["total_steps"] = total_steps
+                        self.tasks[task_id]["updated_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
 
             # 在线程中执行阻塞的训练操作，传入取消事件和进度回调供训练循环检查
             def _train_with_cancel_check():
@@ -273,8 +289,8 @@ class SimpleLoRATrainer:
 
             # 检查取消事件
             if cancel_event and cancel_event.is_set():
-                async with self._lock:
-                    if self.tasks[task_id]["status"] != "cancelled":
+                with self._lock:
+                    if self.tasks[task_id]["status"] not in ("cancelled", "interrupted"):
                         self.tasks[task_id]["status"] = "cancelled"
                         self.tasks[task_id]["finished_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
                         self.tasks[task_id]["updated_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
@@ -282,8 +298,8 @@ class SimpleLoRATrainer:
                 logger.info(f"训练任务完成后发现已被取消: {task_id}")
                 return
 
-            async with self._lock:
-                if self.tasks[task_id]["status"] == "cancelled":
+            with self._lock:
+                if self.tasks[task_id]["status"] in ("cancelled", "interrupted"):
                     self._persist_task(task_id)
                     logger.info(f"训练任务完成后发现已被取消: {task_id}")
                     return
@@ -300,9 +316,9 @@ class SimpleLoRATrainer:
             logger.error(f"训练任务失败: {task_id}, 错误: {e}")
             import traceback
             logger.error(traceback.format_exc())
-            async with self._lock:
+            with self._lock:
                 # 如果已被取消，不覆盖cancelled状态
-                if self.tasks[task_id]["status"] == "cancelled":
+                if self.tasks[task_id]["status"] in ("cancelled", "interrupted"):
                     self._persist_task(task_id)
                     return
                 self.tasks[task_id]["status"] = "failed"
@@ -311,6 +327,62 @@ class SimpleLoRATrainer:
                 self.tasks[task_id]["updated_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
 
             self._persist_task(task_id)
+
+    def _discard_runner_task(
+        self,
+        task_id: str,
+        completed: asyncio.Task[None],
+    ) -> None:
+        with self._lock:
+            if self._runner_tasks.get(task_id) is completed:
+                self._runner_tasks.pop(task_id, None)
+        if completed.cancelled():
+            return
+        try:
+            error = completed.exception()
+        except asyncio.CancelledError:
+            return
+        if error is not None:
+            logger.error("训练任务协程异常 task_id=%s: %s", task_id, error)
+
+    async def shutdown(self, timeout: float | None = None) -> None:
+        """Signal active trainers, retain state, and join owned runner tasks."""
+        wait_timeout = (
+            float(os.getenv("TRAINING_SHUTDOWN_TIMEOUT", "30"))
+            if timeout is None
+            else max(float(timeout), 0.0)
+        )
+        now = time.strftime("%Y-%m-%d %H:%M:%S")
+        with self._lock:
+            runners = list(self._runner_tasks.values())
+            interrupted_ids = []
+            for task_id, task in self.tasks.items():
+                if task.get("status") not in ("pending", "training"):
+                    continue
+                interrupted_ids.append(task_id)
+                event = self._cancel_events.get(task_id)
+                if event is not None:
+                    event.set()
+                task["status"] = "interrupted"
+                task["error_message"] = "服务关闭，训练任务已中断"
+                task["updated_at"] = now
+                task["finished_at"] = now
+            for task_id in interrupted_ids:
+                self._persist_task(task_id)
+
+        if not runners:
+            return
+
+        _, pending = await asyncio.wait(runners, timeout=wait_timeout)
+        if pending:
+            logger.warning(
+                "训练任务在 %.1f 秒内未结束，取消 %d 个等待协程",
+                wait_timeout,
+                len(pending),
+            )
+            for runner in pending:
+                runner.cancel()
+            await asyncio.gather(*pending, return_exceptions=True)
 
     def _build_config(self, lora_name: str, dataset_path: Path, config: Dict[str, Any]) -> "LoRATrainingConfig":
         from training.trainer import LoRATrainingConfig
@@ -412,10 +484,10 @@ class SimpleLoRATrainer:
         Returns:
             任务状态字典，包含status、progress等字段，不存在则返回None
         """
-        async with self._lock:
+        with self._lock:
             task = self.tasks.get(task_id)
             if task:
-                return task
+                return dict(task)
         # 内存中没有，尝试从数据库读取
         if self.db:
             db_task = self.db.get_training_task(task_id)
@@ -424,7 +496,7 @@ class SimpleLoRATrainer:
         return None
 
     async def get_all_tasks(self) -> List[Dict[str, Any]]:
-        async with self._lock:
+        with self._lock:
             self._cleanup_old_tasks()
 
         # 优先从数据库读取（重启后也能恢复）
@@ -434,8 +506,8 @@ class SimpleLoRATrainer:
             except Exception as e:
                 logger.warning(f"从数据库读取训练任务失败，回退到内存: {e}")
 
-        async with self._lock:
-            return list(self.tasks.values())
+        with self._lock:
+            return [dict(task) for task in self.tasks.values()]
 
     def _cleanup_old_tasks(self, max_completed: int = 50):
         """清理过多的已完成/失败/取消任务，防止tasks字典无限增长。
@@ -445,7 +517,7 @@ class SimpleLoRATrainer:
         """
         completed = [
             tid for tid, t in self.tasks.items()
-            if t.get("status") in ("completed", "failed", "cancelled")
+            if t.get("status") in ("completed", "failed", "cancelled", "interrupted")
         ]
         if len(completed) > max_completed:
             # 按创建时间排序，删除最旧的
@@ -455,7 +527,7 @@ class SimpleLoRATrainer:
                 self._cancel_events.pop(tid, None)
 
     async def cancel_task(self, task_id: str) -> bool:
-        async with self._lock:
+        with self._lock:
             task = self.tasks.get(task_id)
             if task and task["status"] in ("pending", "training"):
                 task["status"] = "cancelled"
@@ -510,3 +582,14 @@ def get_simple_lora_trainer(db=None) -> SimpleLoRATrainer:
     if _simple_lora_trainer is None:
         _simple_lora_trainer = SimpleLoRATrainer(db=db)
     return _simple_lora_trainer
+
+
+async def shutdown_simple_lora_trainer() -> None:
+    """Stop the process-wide trainer and clear it for the next app lifecycle."""
+    global _simple_lora_trainer
+    trainer = _simple_lora_trainer
+    if trainer is None:
+        return
+    await trainer.shutdown()
+    if _simple_lora_trainer is trainer:
+        _simple_lora_trainer = None

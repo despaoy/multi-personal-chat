@@ -1,4 +1,4 @@
-﻿"""AstrBot integration endpoints.
+"""AstrBot integration endpoints.
 
 AstrBot acts as the multi-platform gateway. This module accepts normalized
 message events from the AstrBot plugin and delegates generation to the existing
@@ -21,6 +21,7 @@ from pydantic import BaseModel, Field
 
 from api.generate import generate_reply_core
 from db.adapter import db
+from app.runtime import get_runtime_container
 from db.schemas import MessageRequest
 from infra.concurrency_control import InferenceQueueFull, RateLimitExceeded, inference_runtime
 from infra.observability import increment, log_event
@@ -111,19 +112,12 @@ async def _load_config(timeout: float = _DB_TIMEOUT) -> dict[str, Any]:
         return {}
 
 
-def _allowed_tokens_from_config(config: dict[str, Any]) -> list[str]:
+def _allowed_tokens() -> list[str]:
+    """Load integration secrets only from server-side environment variables."""
     tokens: list[str] = []
     tokens.extend(split_tokens(os.getenv("ASTRBOT_INTEGRATION_TOKEN")))
     tokens.extend(split_tokens(os.getenv("ASTRBOT_INTEGRATION_TOKENS")))
-    tokens.extend(split_tokens(str(config.get("astrbotIntegrationToken", ""))))
-    tokens.extend(split_tokens(str(config.get("astrbotIntegrationTokens", ""))))
-    seen: set[str] = set()
-    unique: list[str] = []
-    for token in tokens:
-        if token and token not in seen:
-            unique.append(token)
-            seen.add(token)
-    return unique
+    return list(dict.fromkeys(token for token in tokens if token))
 
 
 def _signature_required() -> bool:
@@ -134,8 +128,7 @@ def _signature_required() -> bool:
 
 
 async def _check_token(token: str | None) -> tuple[str, list[str]]:
-    config = await _load_config(timeout=_AUTH_TIMEOUT)
-    allowed_tokens = _allowed_tokens_from_config(config)
+    allowed_tokens = _allowed_tokens()
     if not allowed_tokens:
         if is_production():
             raise HTTPException(status_code=503, detail="AstrBot integration token is not configured")
@@ -249,6 +242,15 @@ async def _record_integration_event(request: AstrBotMessageRequest, trace_id: st
         logger.warning("AstrBot integration event log failed traceId=%s", trace_id, exc_info=True)
 
 
+def _request_inference_runtime(http_request: Request):
+    """Resolve the scheduler owned by this FastAPI application."""
+    try:
+        runtime = get_runtime_container(http_request.app).inference_runtime
+    except (AttributeError, RuntimeError):
+        runtime = None
+    return inference_runtime if runtime is None else runtime
+
+
 def _degraded_response(
     request: AstrBotMessageRequest,
     trace_id: str,
@@ -303,6 +305,7 @@ async def receive_astrbot_message(
         logger.warning("AstrBot auth unavailable traceId=%s error=%s", trace_id, exc)
         raise HTTPException(status_code=503, detail="AstrBot integration auth unavailable") from exc
 
+    runtime = _request_inference_runtime(http_request)
     text = _validate_and_normalize_request(request)
     if _is_sensitive_admin_request(text):
         log_event("integration_security_blocked", level="warning", traceId=trace_id, platform=request.platform, conversationId=request.conversationId, senderId=redact_sensitive(request.senderId), model="security-policy", costTime=0, errorType="SecurityPolicy")
@@ -330,19 +333,6 @@ async def receive_astrbot_message(
     await _record_integration_event(request, trace_id, text, dedup_message_id)
 
     try:
-        await inference_runtime.check_rate_limits(request.platform, request.conversationId, request.senderId)
-    except RateLimitExceeded as exc:
-        log_event("integration_rate_limited", level="warning", traceId=trace_id, platform=request.platform, conversationId=request.conversationId, senderId=request.senderId, model=f"rate-limit:{exc.scope}", costTime=0, errorType="RateLimitExceeded")
-        if request.conversationType == "private":
-            return AstrBotMessageResponse(
-                shouldReply=True,
-                replyText="\u8bf7\u6c42\u8fc7\u4e8e\u9891\u7e41\uff0c\u8bf7\u7a0d\u540e\u518d\u8bd5\u3002",
-                model="rate-limit",
-                traceId=trace_id,
-            )
-        return AstrBotMessageResponse(shouldReply=False, model=f"rate-limit:{exc.scope}", traceId=trace_id)
-
-    try:
         is_new = await _run_blocking(
             "dedup-message",
             lambda: db.mark_integration_message_processed(
@@ -357,12 +347,30 @@ async def receive_astrbot_message(
         return _degraded_response(request, trace_id, model="db-unavailable")
     if not is_new:
         return AstrBotMessageResponse(shouldReply=False, model="duplicate", traceId=trace_id)
+    try:
+        await runtime.check_rate_limits(request.platform, request.conversationId, request.senderId)
+    except RateLimitExceeded as exc:
+        log_event("integration_rate_limited", level="warning", traceId=trace_id, platform=request.platform, conversationId=request.conversationId, senderId=request.senderId, model=f"rate-limit:{exc.scope}", costTime=0, errorType="RateLimitExceeded")
+        if request.conversationType == "private":
+            return AstrBotMessageResponse(
+                shouldReply=True,
+                replyText="\u8bf7\u6c42\u8fc7\u4e8e\u9891\u7e41\uff0c\u8bf7\u7a0d\u540e\u518d\u8bd5\u3002",
+                model="rate-limit",
+                traceId=trace_id,
+            )
+        return AstrBotMessageResponse(shouldReply=False, model=f"rate-limit:{exc.scope}", traceId=trace_id)
+
 
     session_id = _session_id(request.platform, request.conversationType, request.conversationId)
     try:
         session_enabled = await _run_blocking(
             "session-switch",
-            lambda: db.is_session_bot_enabled(session_id, request.platform, request.conversationId),
+            lambda: db.is_session_bot_enabled(
+                session_id,
+                request.platform,
+                request.conversationId,
+                request.conversationType,
+            ),
         )
     except Exception:
         increment("db_write_failures")
@@ -387,9 +395,9 @@ async def receive_astrbot_message(
         sourceMessageId=dedup_message_id,
         traceId=trace_id,
     )
-    priority = inference_runtime.priority_for("astrbot", request.conversationType)
+    priority = runtime.priority_for("astrbot", request.conversationType)
     try:
-        result = await inference_runtime.submit(
+        result = await runtime.submit(
             lambda: generate_reply_core(msg, current_user={"username": "astrbot", "user_id": 0}),
             session_id=session_id,
             priority=priority,

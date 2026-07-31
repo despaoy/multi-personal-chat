@@ -7,7 +7,6 @@
 - 数据加密 (encryption)
 - 故障转移 (failover)
 - 输入验证 (input_validator)
-- 负载均衡 (load_balancer)
 - 资源池 (resource_pool)
 """
 

@@ -118,9 +118,19 @@ def _resolve_concurrency_limit() -> int:
 
 
 LLM_CONCURRENCY_LIMIT = _resolve_concurrency_limit()
-# llm_semaphore 限制 Transformers+PEFT 本地模型回退路径的并发（GPU-bound）。
-# 与 inference_runtime（队列+优先级）职责不同，不可合并。
-llm_semaphore = asyncio.Semaphore(LLM_CONCURRENCY_LIMIT)
+# 本地模型回退与统一推理队列职责不同：前者限制 GPU provider 并发，
+# 后者负责所有入口的排队、优先级和会话串行化。
+_llm_semaphore: asyncio.Semaphore | None = None
+_llm_semaphore_loop: asyncio.AbstractEventLoop | None = None
+
+
+def get_llm_semaphore() -> asyncio.Semaphore:
+    global _llm_semaphore, _llm_semaphore_loop
+    loop = asyncio.get_running_loop()
+    if _llm_semaphore is None or _llm_semaphore_loop is not loop:
+        _llm_semaphore = asyncio.Semaphore(LLM_CONCURRENCY_LIMIT)
+        _llm_semaphore_loop = loop
+    return _llm_semaphore
 
 
 # ============================================
@@ -258,12 +268,7 @@ def _search_character_info(character_desc: str, max_results: int = 3) -> str:
 # 增强模块导入
 # ============================================
 
-try:
-    from infra.load_balancer import LoadBalancerManager
-
-    LOAD_BALANCER_AVAILABLE = True
-except ImportError:
-    LOAD_BALANCER_AVAILABLE = False
+LOAD_BALANCER_AVAILABLE = True
 
 try:
     from infra.resource_pool import ConnectionPool, HttpClientPool
@@ -273,7 +278,7 @@ except ImportError:
     RESOURCE_POOL_AVAILABLE = False
 
 try:
-    from infra.circuit_breaker import CircuitBreakerRegistry
+    from infra.circuit_breaker import global_registry
 
     CIRCUIT_BREAKER_AVAILABLE = True
 except ImportError:
@@ -322,17 +327,11 @@ except ImportError:
     ACCESS_CONTROL_AVAILABLE = False
 
 try:
-    from inference.optimizer import (
-        LLMCallOptimizer,
-        ResponseCache,
-        RateLimiter,
-        PromptOptimizer,
-    )
+    from inference.optimizer import ResponseCache
 
     LLM_OPTIMIZER_AVAILABLE = True
 except ImportError:
     LLM_OPTIMIZER_AVAILABLE = False
-
 
 # ============================================
 # 服务启动时间
@@ -345,18 +344,14 @@ service_start_time = datetime.now()
 # 增强模块全局实例
 # ============================================
 
-load_balancer_mgr = LoadBalancerManager() if LOAD_BALANCER_AVAILABLE else None
 connection_pool = None  # 在lifespan中初始化
 http_client_pool = None  # 在lifespan中初始化
-circuit_breaker_registry = CircuitBreakerRegistry() if CIRCUIT_BREAKER_AVAILABLE else None
+circuit_breaker_registry = global_registry if CIRCUIT_BREAKER_AVAILABLE else None
 backup_mgr = None  # 在lifespan中初始化
 failover_mgr = None  # 在lifespan中初始化
 encryption_mgr = EncryptionManager() if ENCRYPTION_AVAILABLE else None
 access_control_mgr = None  # 在lifespan中初始化
-llm_optimizer = LLMCallOptimizer() if LLM_OPTIMIZER_AVAILABLE else None
 response_cache = ResponseCache() if LLM_OPTIMIZER_AVAILABLE else None
-rate_limiter = RateLimiter() if LLM_OPTIMIZER_AVAILABLE else None
-prompt_optimizer = PromptOptimizer() if LLM_OPTIMIZER_AVAILABLE else None
 
 
 # ============================================
@@ -375,7 +370,17 @@ except ImportError:
 # 对话生成状态追踪（异步安全）
 # ============================================
 
-generation_state_lock = asyncio.Lock()
+_generation_state_lock: asyncio.Lock | None = None
+_generation_state_lock_loop: asyncio.AbstractEventLoop | None = None
+
+
+def get_generation_state_lock() -> asyncio.Lock:
+    global _generation_state_lock, _generation_state_lock_loop
+    loop = asyncio.get_running_loop()
+    if _generation_state_lock is None or _generation_state_lock_loop is not loop:
+        _generation_state_lock = asyncio.Lock()
+        _generation_state_lock_loop = loop
+    return _generation_state_lock
 
 generation_state = {
     "is_generating": False,

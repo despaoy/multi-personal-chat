@@ -8,38 +8,15 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { api } from '@/lib/api';
+import type {
+  RouterAdapterRecord,
+  RouterConfigRecord,
+  RoutingLogRecord,
+} from '@/lib/api-contracts';
 
-export interface RouterConfig {
-  enabled: boolean;
-  default_adapter: string;
-  mode: 'manual' | 'rule' | 'intent';
-  persona_adapters: Record<string, string>;
-  rag_confidence_threshold: number;
-  persona_keywords: Record<string, string[]>;
-}
-
-export interface AdapterInfo {
-  name: string;
-  path: string;
-  compatibility: {
-    compatible: boolean;
-    checked_at: string;
-    checks: Record<string, boolean>;
-    warnings: string[];
-    errors: string[];
-  } | null;
-}
-
-export interface RoutingLog {
-  timestamp: string;
-  trace_id: string;
-  target: string;
-  adapter_name: string;
-  confidence: number;
-  reason: string;
-  fallback: boolean;
-  requires_rag: boolean;
-}
+export type RouterConfig = RouterConfigRecord;
+export type AdapterInfo = RouterAdapterRecord;
+export type RoutingLog = RoutingLogRecord;
 
 export function useRouter(enabled = true) {
   const [config, setConfig] = useState<RouterConfig | null>(null);

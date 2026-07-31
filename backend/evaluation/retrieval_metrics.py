@@ -79,77 +79,116 @@ class RetrievalMetrics:
         overlap = gold_tokens & answer_tokens
         return round(len(overlap) / len(gold_tokens), 4)
 
-    def evaluate_dataset(self, dataset_path: str,
-                         retrieve_fn: Callable[[str], List[Dict[str, Any]]],
-                         k: int = 5) -> Dict[str, Any]:
-        """遍历检索评估数据集，计算聚合指标。
+    def evaluate_dataset(
+        self,
+        dataset_path: str,
+        retrieve_fn: Callable[[str], List[Dict[str, Any]]],
+        k: int = 5,
+    ) -> Dict[str, Any]:
+        """Load a versioned dataset file and evaluate its question records."""
+        with open(dataset_path, "r", encoding="utf-8") as handle:
+            dataset = json.load(handle)
+        questions = dataset.get("questions", []) if isinstance(dataset, dict) else dataset
+        if not isinstance(questions, list):
+            raise ValueError("retrieval evaluation dataset must contain a questions list")
+        return self.evaluate_questions(questions, retrieve_fn, k=k)
 
-        Args:
-            dataset_path: retrieval_eval_dataset.json 路径
-            retrieve_fn: 检索函数，签名 (query: str) -> List[Dict]，每个 Dict 需含 id/title 字段
-            k: recall@k / nDCG@k 的 k 值
-
-        Returns:
-            {total, avg_recall@k, avg_mrr, avg_ndcg@k, per_question: [...]}
-        """
-        with open(dataset_path, "r", encoding="utf-8") as f:
-            dataset = json.load(f)
-        questions = dataset.get("questions", [])
-
+    def evaluate_questions(
+        self,
+        questions: List[Dict[str, Any]],
+        retrieve_fn: Callable[[str], List[Dict[str, Any]]],
+        k: int = 5,
+    ) -> Dict[str, Any]:
+        """Evaluate in-memory questions against structured retrieval results."""
         per_question: List[Dict[str, Any]] = []
         recall_sum = 0.0
         mrr_sum = 0.0
         ndcg_sum = 0.0
-        count = 0
+        evaluated = 0
 
-        for q in questions:
-            qid = q.get("id", f"q{count}")
-            query = q.get("question", "")
-            expected_ids = q.get("expected_doc_ids", [])
-            expected_titles = q.get("expected_doc_titles", [])
-            gold_answer = q.get("gold_answer", "")
+        for index, question in enumerate(questions):
+            qid = str(question.get("id", f"q{index}"))
+            query = str(question.get("question", ""))
+            expected_ids = list(dict.fromkeys(
+                str(value).strip()
+                for value in question.get("expected_doc_ids", [])
+                if str(value).strip()
+            ))
+            expected_titles = list(dict.fromkeys(
+                str(value).strip().casefold()
+                for value in question.get("expected_doc_titles", [])
+                if str(value).strip()
+            ))
 
+            error_type = ""
             try:
-                results = retrieve_fn(query)
-            except Exception as e:
-                logger.warning(f"检索失败 ({qid}): {e}")
+                results = retrieve_fn(query) or []
+            except Exception as exc:
+                logger.warning("检索失败 (%s): %s", qid, exc)
                 results = []
+                error_type = type(exc).__name__
 
-            retrieved_ids = [str(r.get("id", r.get("chunk_id", ""))) for r in results]
-            retrieved_titles = [r.get("title", r.get("original_title", "")) for r in results]
+            if expected_ids:
+                expected = expected_ids
+                retrieved: List[str] = []
+                for rank, result in enumerate(results):
+                    aliases = {
+                        str(result.get(key)).strip()
+                        for key in ("document_id", "documentId", "id", "chunk_id")
+                        if result.get(key) is not None and str(result.get(key)).strip()
+                    }
+                    matched = next((item for item in expected if item in aliases), None)
+                    retrieved.append(matched or f"__unmatched_id_{rank}")
+                match_basis = "document_id"
+            elif expected_titles:
+                expected = expected_titles
+                retrieved = [
+                    str(result.get("title", result.get("original_title", "")))
+                    .strip()
+                    .casefold()
+                    for result in results
+                ]
+                match_basis = "title"
+            else:
+                expected = []
+                retrieved = []
+                match_basis = "none"
 
-            # 匹配：按 id 或 title 匹配
-            hit_ids = [eid for eid in expected_ids if eid in retrieved_ids]
-            hit_titles = [et for et in expected_titles if et in retrieved_titles]
-            matched_expected = expected_ids if hit_ids else (expected_titles if expected_titles else [])
-
-            r_at_k = self.recall_at_k(retrieved_ids, expected_ids, k) if expected_ids else 0.0
-            mrr_val = self.mrr(retrieved_ids, expected_ids) if expected_ids else 0.0
-            ndcg_val = self.ndcg(retrieved_ids, expected_ids, k) if expected_ids else 0.0
-
-            recall_sum += r_at_k
-            mrr_sum += mrr_val
-            ndcg_sum += ndcg_val
-            count += 1
+            if expected:
+                recall_value = self.recall_at_k(retrieved, expected, k)
+                mrr_value = self.mrr(retrieved, expected)
+                ndcg_value = self.ndcg(retrieved, expected, k)
+                recall_sum += recall_value
+                mrr_sum += mrr_value
+                ndcg_sum += ndcg_value
+                evaluated += 1
+            else:
+                recall_value = 0.0
+                mrr_value = 0.0
+                ndcg_value = 0.0
 
             per_question.append({
                 "id": qid,
                 "question": query,
-                "recall_at_k": r_at_k,
-                "mrr": mrr_val,
-                "ndcg_at_k": ndcg_val,
+                "recall_at_k": recall_value,
+                "mrr": mrr_value,
+                "ndcg_at_k": ndcg_value,
                 "retrieved_count": len(results),
+                "match_basis": match_basis,
+                "evaluable": bool(expected),
+                "error_type": error_type,
             })
 
         return {
-            "total": count,
-            "avg_recall_at_k": round(recall_sum / max(count, 1), 4),
-            "avg_mrr": round(mrr_sum / max(count, 1), 4),
-            "avg_ndcg_at_k": round(ndcg_sum / max(count, 1), 4),
+            "total": len(questions),
+            "evaluated": evaluated,
+            "avg_recall_at_k": round(recall_sum / max(evaluated, 1), 4),
+            "avg_mrr": round(mrr_sum / max(evaluated, 1), 4),
+            "avg_ndcg_at_k": round(ndcg_sum / max(evaluated, 1), 4),
             "k": k,
+            "mock": False,
             "per_question": per_question,
         }
-
     def evaluate_mock(self) -> Dict[str, Any]:
         """Mock 模式：返回预置结果用于 CPU 验证。"""
         return {

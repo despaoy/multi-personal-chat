@@ -305,7 +305,7 @@ class TestPaginationTotalCount:
         """
         from fastapi import FastAPI
         from fastapi.testclient import TestClient
-        from app.dependencies import get_current_user
+        from app.dependencies import get_current_admin, get_current_user
         from db import adapter as adapter_module
         from db.database import SQLiteDB
         from api import experiments, evaluation, retrieval_eval
@@ -324,7 +324,9 @@ class TestPaginationTotalCount:
         app.include_router(retrieval_eval.router)
 
         # Bypass auth
-        app.dependency_overrides[get_current_user] = lambda: {"user_id": 1, "username": "tester"}
+        authenticated_user = {"user_id": 1, "username": "tester", "role": "admin"}
+        app.dependency_overrides[get_current_user] = lambda: authenticated_user
+        app.dependency_overrides[get_current_admin] = lambda: authenticated_user
 
         client = TestClient(app)
 

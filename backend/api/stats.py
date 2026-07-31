@@ -1,10 +1,13 @@
-﻿"""System statistics, service status, and lightweight alert snapshots."""
+"""System statistics, service status, and lightweight alert snapshots."""
 
 from __future__ import annotations
 
+import asyncio
+import copy
 import os
 import socket
 import subprocess
+import time
 from datetime import datetime
 from typing import Any
 
@@ -19,6 +22,117 @@ from infra.concurrency_control import inference_runtime
 from infra.observability import count_recent, get_consecutive, snapshot as observability_snapshot
 
 router = APIRouter(prefix="/api/stats", tags=["stats"])
+
+# Dashboard hooks poll several stats endpoints at roughly the same time. The
+# underlying payload currently performs multiple synchronous database queries
+# and may inspect up to 10k rows from both messages and model_invocations. Keep
+# the synchronous builder for compatibility, but refresh it once per short
+# window on a worker thread so concurrent polls neither block the event loop nor
+# stampede the database.
+_METRICS_CACHE_TTL_SECONDS = max(
+    0.0, float(os.getenv("STATS_CACHE_TTL_SECONDS", "5"))
+)
+_metrics_cache: dict[str, Any] | None = None
+_metrics_cache_updated_at = 0.0
+_metrics_cache_lock: asyncio.Lock | None = None
+_metrics_cache_lock_loop: asyncio.AbstractEventLoop | None = None
+_RESOURCE_CACHE_TTL_SECONDS = max(
+    0.0, float(os.getenv("STATS_RESOURCE_CACHE_TTL_SECONDS", "15"))
+)
+_resource_cache: dict[str, Any] | None = None
+_resource_cache_updated_at = 0.0
+_resource_cache_lock: asyncio.Lock | None = None
+_resource_cache_lock_loop: asyncio.AbstractEventLoop | None = None
+
+
+def _get_metrics_cache_lock() -> asyncio.Lock:
+    global _metrics_cache_lock, _metrics_cache_lock_loop
+    global _metrics_cache, _metrics_cache_updated_at
+    loop = asyncio.get_running_loop()
+    if _metrics_cache_lock is None or _metrics_cache_lock_loop is not loop:
+        _metrics_cache_lock = asyncio.Lock()
+        _metrics_cache_lock_loop = loop
+        _metrics_cache = None
+        _metrics_cache_updated_at = 0.0
+    return _metrics_cache_lock
+
+
+def _get_resource_cache_lock() -> asyncio.Lock:
+    global _resource_cache_lock, _resource_cache_lock_loop
+    global _resource_cache, _resource_cache_updated_at
+    loop = asyncio.get_running_loop()
+    if _resource_cache_lock is None or _resource_cache_lock_loop is not loop:
+        _resource_cache_lock = asyncio.Lock()
+        _resource_cache_lock_loop = loop
+        _resource_cache = None
+        _resource_cache_updated_at = 0.0
+    return _resource_cache_lock
+
+
+def _reset_metrics_cache() -> None:
+    """Clear the process-local snapshot cache (primarily for tests)."""
+    global _metrics_cache, _metrics_cache_updated_at, _metrics_cache_lock
+    global _metrics_cache_lock_loop
+    global _resource_cache, _resource_cache_updated_at, _resource_cache_lock
+    global _resource_cache_lock_loop
+    _metrics_cache = None
+    _metrics_cache_updated_at = 0.0
+    _metrics_cache_lock = None
+    _metrics_cache_lock_loop = None
+    _resource_cache = None
+    _resource_cache_updated_at = 0.0
+    _resource_cache_lock = None
+    _resource_cache_lock_loop = None
+
+
+async def _metrics_snapshot() -> dict[str, Any]:
+    """Return a copy of a single-flight, short-lived metrics snapshot."""
+    global _metrics_cache, _metrics_cache_updated_at
+
+    cache_lock = _get_metrics_cache_lock()
+    now = time.monotonic()
+    if (
+        _metrics_cache is not None
+        and now - _metrics_cache_updated_at < _METRICS_CACHE_TTL_SECONDS
+    ):
+        return copy.deepcopy(_metrics_cache)
+
+    async with cache_lock:
+        now = time.monotonic()
+        if (
+            _metrics_cache is None
+            or now - _metrics_cache_updated_at >= _METRICS_CACHE_TTL_SECONDS
+        ):
+            _metrics_cache = await asyncio.to_thread(_metrics_payload)
+            _metrics_cache_updated_at = time.monotonic()
+        return copy.deepcopy(_metrics_cache)
+
+
+async def _resource_snapshot() -> dict[str, Any]:
+    """Cache expensive host/GPU probes and collapse concurrent refreshes."""
+    global _resource_cache, _resource_cache_updated_at
+
+    cache_lock = _get_resource_cache_lock()
+    now = time.monotonic()
+    if (
+        _resource_cache is not None
+        and now - _resource_cache_updated_at < _RESOURCE_CACHE_TTL_SECONDS
+    ):
+        return copy.deepcopy(_resource_cache)
+
+    async with cache_lock:
+        now = time.monotonic()
+        if (
+            _resource_cache is None
+            or now - _resource_cache_updated_at >= _RESOURCE_CACHE_TTL_SECONDS
+        ):
+            system, gpu = await asyncio.gather(
+                asyncio.to_thread(get_system_stats), asyncio.to_thread(get_gpu_stats)
+            )
+            _resource_cache = {"system": system, "gpu": gpu}
+            _resource_cache_updated_at = time.monotonic()
+        return copy.deepcopy(_resource_cache)
+
 
 
 def get_gpu_stats():
@@ -304,10 +418,10 @@ def _alerts_from_metrics(metrics: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 @router.get("", response_model=StatsResponse)
-async def get_stats():
-    metrics = _metrics_payload()
-    sys_stats = get_system_stats()
-    gpu_stats = get_gpu_stats()
+async def get_stats(current_user: dict = Depends(get_current_admin)):
+    metrics, resources = await asyncio.gather(_metrics_snapshot(), _resource_snapshot())
+    sys_stats = resources["system"]
+    gpu_stats = resources["gpu"]
     return StatsResponse(
         todayMessages=metrics["todayMessages"],
         todayReplies=metrics["todayReplies"],
@@ -332,7 +446,7 @@ async def get_stats():
 @router.get("/metrics")
 async def get_metrics(current_user: dict = Depends(get_current_admin)):
     # C16 fix: 含 auth_failures 等安全相关指标，限定 admin
-    metrics = _metrics_payload()
+    metrics = await _metrics_snapshot()
     metrics["alerts"] = _alerts_from_metrics(metrics)
     return metrics
 
@@ -340,7 +454,7 @@ async def get_metrics(current_user: dict = Depends(get_current_admin)):
 @router.get("/alerts")
 async def get_alerts(current_user: dict = Depends(get_current_admin)):
     # C16 fix: 告警含认证失败频率等安全信息，限定 admin
-    metrics = _metrics_payload()
+    metrics = await _metrics_snapshot()
     alerts = _alerts_from_metrics(metrics)
     return {"alerts": alerts, "count": len(alerts), "metrics": metrics}
 
@@ -350,7 +464,7 @@ async def get_activity(current_user: dict = Depends(get_current_admin)):
     # C16 fix: 消息活动分布可暴露使用模式，限定 admin
     hours = [f"{h:02d}:00" for h in range(0, 24, 2)]
     activity_map: dict[int, dict[str, int]] = {int(h.split(":")[0]): {"messages": 0, "replies": 0} for h in hours}
-    for msg in _today_message_rows():
+    for msg in await asyncio.to_thread(_today_message_rows):
         try:
             msg_time = datetime.fromisoformat(msg["createdAt"])
         except (ValueError, KeyError, TypeError):
@@ -368,7 +482,7 @@ async def get_activity(current_user: dict = Depends(get_current_admin)):
 async def get_services(current_user: dict = Depends(get_current_admin)):
     # C16 fix: 服务状态和 uptime 暴露基础设施拓扑，限定 admin
     uptime_str = get_service_uptime()
-    astrbot = _astrbot_service_status()
+    astrbot = await asyncio.to_thread(_astrbot_service_status)
     queue_stats = inference_runtime.stats()
     queue_ratio = queue_stats["queue_size"] / max(queue_stats["max_queue_size"], 1)
     queue_status = "degraded" if queue_ratio >= 0.8 else "running"

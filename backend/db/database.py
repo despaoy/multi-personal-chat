@@ -7,6 +7,9 @@ from pathlib import Path
 from datetime import datetime
 from typing import Optional, Dict
 
+from cache.ttl_value_cache import BoundedTTLCache
+from db.errors import RegistrationClosedError
+
 logger = logging.getLogger(__name__)
 
 # LoRA路径映射 - 自动扫描 backend/loras/ 目录
@@ -23,9 +26,9 @@ def _runtime_path_from_env(name: str, default: Path) -> Path:
 LORA_ROOT = _runtime_path_from_env("LORA_PATH", BACKEND_DIR / "loras")
 
 
-def _scan_lora_dirs():
+def _scan_lora_dirs(lora_base: Optional[Path] = None):
     """扫描 loras 目录，自动发现 LoRA 适配器"""
-    lora_base = LORA_ROOT
+    lora_base = lora_base or LORA_ROOT
     path_map = {}
     if lora_base.exists():
         for d in lora_base.iterdir():
@@ -37,7 +40,20 @@ def _scan_lora_dirs():
                     path_map[d.name] = str(d)
     return path_map
 
+
 LORA_DIR_MAP = _scan_lora_dirs()
+_LORA_DIR_MAP_LOCK = threading.RLock()
+
+
+def refresh_lora_dir_map(lora_base: Optional[Path] = None) -> dict[str, str]:
+    """Refresh the shared adapter directory map without replacing its identity."""
+
+    discovered = _scan_lora_dirs(lora_base)
+    with _LORA_DIR_MAP_LOCK:
+        LORA_DIR_MAP.clear()
+        LORA_DIR_MAP.update(discovered)
+        return dict(LORA_DIR_MAP)
+
 
 # C-R1 fix: 原先 LORA_PATH_MAP = {} 是静态空 dict，全程无代码填充，
 # 导致 vLLM 故障回退到 TransformersPeftProvider 时 LoRA 永远不会被加载，
@@ -52,14 +68,15 @@ def get_lora_path_by_id(lora_id: str) -> str | None:
     3. 若 name 未命中，尝试用 id 本身作为目录名（历史兼容）
     """
     try:
+        directory_map = refresh_lora_dir_map()
         for lora in db.loras:
             if str(lora.get("id")) == str(lora_id):
                 name = lora.get("name", "")
-                if name and name in LORA_DIR_MAP:
-                    return LORA_DIR_MAP[name]
+                if name and name in directory_map:
+                    return directory_map[name]
                 # 历史兼容：部分旧 LoRA 的目录名等于 id
-                if str(lora_id) in LORA_DIR_MAP:
-                    return LORA_DIR_MAP[str(lora_id)]
+                if str(lora_id) in directory_map:
+                    return directory_map[str(lora_id)]
                 return None
     except Exception:
         pass
@@ -70,6 +87,7 @@ def get_lora_path_by_id(lora_id: str) -> str | None:
 # 新代码应使用 get_lora_path_by_id()。
 LORA_PATH_MAP = {}  # deprecated, use get_lora_path_by_id()
 
+
 def _resolve_path(p: str) -> str:
     if os.path.isabs(p):
         return p
@@ -79,7 +97,8 @@ def _resolve_path(p: str) -> str:
 def _database_path_from_env() -> Path:
     configured = os.getenv("DATABASE_PATH", "").strip()
     if configured:
-        return Path(configured).expanduser()
+        candidate = Path(configured).expanduser()
+        return candidate if candidate.is_absolute() else BACKEND_DIR / candidate
     return BACKEND_DIR / "qq_assistant.db"
 
 DB_PATH = _database_path_from_env()
@@ -93,6 +112,10 @@ class SQLiteDB:
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._local = threading.local()
+        self._bot_enabled_cache: BoundedTTLCache[tuple[str, str, str], bool] = BoundedTTLCache(
+            ttl=float(os.getenv("SESSION_SWITCH_CACHE_TTL", "60")),
+            max_size=int(os.getenv("SESSION_SWITCH_CACHE_MAX_SIZE", "4096")),
+        )
         self._init_database()
 
     def _get_connection(self):
@@ -662,6 +685,29 @@ class SQLiteDB:
         self._ensure_column(cursor, "messages", "senderName", "TEXT")
         self._ensure_column(cursor, "session_settings", "platform", "TEXT NOT NULL DEFAULT 'qq'")
         self._ensure_column(cursor, "session_settings", "conversationId", "TEXT")
+        self._ensure_column(cursor, "session_settings", "sessionType", "TEXT NOT NULL DEFAULT 'private'")
+        self._ensure_column(cursor, "session_settings", "sessionName", "TEXT")
+        self._ensure_column(cursor, "session_settings", "bot_enabled", "INTEGER NOT NULL DEFAULT 1")
+
+        # One-way compatibility migration: conversations is the canonical switch table.
+        migrated_at = datetime.now().isoformat()
+        cursor.execute('''
+            INSERT OR IGNORE INTO conversations (
+                platform, conversationId, conversationType, displayName,
+                botEnabled, replyPolicy, createdAt, updatedAt
+            )
+            SELECT
+                COALESCE(platform, 'qq'),
+                COALESCE(conversationId, sessionId),
+                COALESCE(sessionType, 'private'),
+                COALESCE(NULLIF(sessionName, ''), sessionId),
+                bot_enabled,
+                'default',
+                COALESCE(updated_at, ?),
+                COALESCE(updated_at, ?)
+            FROM session_settings
+        ''', (migrated_at, migrated_at))
+        cursor.execute('DELETE FROM session_settings')
 
         conn.commit()
 
@@ -674,14 +720,15 @@ class SQLiteDB:
 
         # 为高频查询建索引
         try:
-            # 删除与 ORM idx_messages_session_created 语义相同的旧索引名，避免重复维护
+            # 删除旧命名和与 UNIQUE 约束重复的索引，避免重复维护。
             cursor.execute('DROP INDEX IF EXISTS idx_messages_sessionId_createdAt')
+            cursor.execute('DROP INDEX IF EXISTS idx_messages_createdAt')
+            cursor.execute('DROP INDEX IF EXISTS idx_conversations_platform_conversation')
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_messages_session_created ON messages(sessionId, createdAt)')
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_messages_platform_conversation ON messages(platform, conversationId, createdAt)')
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_messages_source_dedup ON messages(platform, adapter, sourceMessageId)')
-            cursor.execute('CREATE INDEX IF NOT EXISTS idx_messages_createdAt ON messages(createdAt)')
-            # idx_conversations_platform_conversation 已删除：UNIQUE(platform, conversationId, conversationType)
-            # 约束会自动创建索引，显式 CREATE INDEX 完全冗余。
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(createdAt)')
+            # UNIQUE(platform, conversationId, conversationType) 已自动创建索引。
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_integration_events_trace ON integration_events(traceId)')
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_integration_events_platform_created ON integration_events(platform, createdAt)')
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_model_invocations_trace ON model_invocations(traceId)')
@@ -1931,25 +1978,45 @@ class SQLiteDB:
         # bot_enabled 统一从 conversations 表查询（与 PG 端对齐），
         # 使用相关子查询消除 N+1，避免读取已废弃的 session_settings 表导致数据陈旧。
         cursor.execute('''
-            SELECT
-                sessionId,
-                sessionType,
-                sessionName,
-                COALESCE(platform, 'qq') as platform,
-                COALESCE(adapter, 'nonebot') as adapter,
-                COALESCE(conversationId, sessionId) as conversationId,
-                COUNT(*) as message_count,
-                MAX(createdAt) as last_active,
-                GROUP_CONCAT(message, '||') as recent_messages,
-                COALESCE((
-                    SELECT c.botEnabled FROM conversations c
-                    WHERE c.platform = COALESCE(messages.platform, 'qq')
-                      AND c.conversationId = COALESCE(messages.conversationId, messages.sessionId)
-                    ORDER BY c.updatedAt DESC LIMIT 1
-                ), 1) as bot_enabled
-            FROM messages
-            GROUP BY sessionId, sessionType, sessionName, platform, adapter, conversationId
-            ORDER BY last_active DESC
+            WITH normalized AS (
+                SELECT
+                    id, sessionId, sessionName,
+                    COALESCE(platform, 'qq') AS platform,
+                    COALESCE(adapter, 'nonebot') AS adapter,
+                    COALESCE(conversationId, sessionId) AS conversationId,
+                    COALESCE(conversationType, sessionType) AS conversationType,
+                    message, createdAt
+                FROM messages
+            ), ranked AS (
+                SELECT *,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY platform, conversationType, conversationId
+                        ORDER BY createdAt DESC, id DESC
+                    ) AS rn
+                FROM normalized
+            ), aggregated AS (
+                SELECT
+                    MAX(CASE WHEN rn = 1 THEN sessionId END) AS sessionId,
+                    conversationType AS sessionType,
+                    MAX(CASE WHEN rn = 1 THEN sessionName END) AS sessionName,
+                    platform,
+                    MAX(CASE WHEN rn = 1 THEN adapter END) AS adapter,
+                    conversationId, conversationType,
+                    COUNT(*) AS message_count,
+                    MAX(createdAt) AS last_active,
+                    MAX(CASE WHEN rn = 1 THEN message END) AS recent_1,
+                    MAX(CASE WHEN rn = 2 THEN message END) AS recent_2,
+                    MAX(CASE WHEN rn = 3 THEN message END) AS recent_3
+                FROM ranked
+                GROUP BY platform, conversationId, conversationType
+            )
+            SELECT a.*, COALESCE(c.botEnabled, 1) AS bot_enabled
+            FROM aggregated a
+            LEFT JOIN conversations c
+              ON c.platform = a.platform
+             AND c.conversationId = a.conversationId
+             AND c.conversationType = a.conversationType
+            ORDER BY a.last_active DESC
         ''')
         rows = cursor.fetchall()
 
@@ -1965,9 +2032,8 @@ class SQLiteDB:
             last_active = row['last_active']
 
             # 从最近消息中提取摘要（取最近3条用户消息）
-            raw_msgs = (row['recent_messages'] or '').split('||')
-            recent = [m for m in raw_msgs if m.strip()][-3:]
-            summary = '；'.join(recent[:3])
+            recent = [row[key] for key in ('recent_3', 'recent_2', 'recent_1') if row[key] and row[key].strip()]
+            summary = '；'.join(recent)
             if len(summary) > 100:
                 summary = summary[:100] + '...'
 
@@ -1986,7 +2052,7 @@ class SQLiteDB:
 
         return sessions
 
-    def set_session_bot_enabled(self, session_id: str, enabled: bool, platform: str = "qq", conversation_id: str | None = None):
+    def set_session_bot_enabled(self, session_id: str, enabled: bool, platform: str = "qq", conversation_id: str | None = None, conversation_type: str = "private"):
         """设置某个会话的机器人开关。
 
         统一写入 conversations 表（此前同时写 session_settings + conversations 双表，
@@ -2000,48 +2066,39 @@ class SQLiteDB:
             cursor,
             platform=platform,
             conversation_id=resolved_conversation_id,
-            conversation_type='private',
+            conversation_type=conversation_type,
             display_name=session_id,
             bot_enabled=enabled,
         )
         conn.commit()
-        # 变更后主动失效缓存（键为 (platform, conversation_id) 元组）
-        if hasattr(self, '_bot_enabled_cache'):
-            resolved_conversation_id = conversation_id or session_id
-            self._bot_enabled_cache.pop((platform, resolved_conversation_id), None)
+        # 变更后主动失效缓存（键包含 platform、conversation_id、conversation_type）
+        self._bot_enabled_cache.invalidate((platform, resolved_conversation_id, conversation_type))
 
     # session bot 开关内存缓存（减少高频读库）
     # TTL 60s，变更时主动失效
-    def is_session_bot_enabled(self, session_id: str, platform: str = "qq", conversation_id: str | None = None) -> bool:
+    def is_session_bot_enabled(self, session_id: str, platform: str = "qq", conversation_id: str | None = None, conversation_type: str = "private") -> bool:
         """检查某个会话的机器人是否启用（默认启用，内存 TTL 缓存）。
 
         统一从 conversations 表查询（此前先查 session_settings 失败再查 conversations，
         现直接查 conversations，消除双表冗余查询）。
 
-        缓存键为 (platform, conversation_id) 元组，避免 QQ 与 Telegram 出现相同
+        缓存键包含 platform、conversation_id、conversation_type，避免不同平台或会话类型出现相同
         session_id 时相互污染。
         """
-        import time as _time
-        now = _time.time()
-        # 延迟初始化缓存字典（避免模块级全局变量）
-        if not hasattr(self, '_bot_enabled_cache'):
-            self._bot_enabled_cache: dict = {}
         resolved_conversation_id = conversation_id or session_id
-        cache_key = (platform, resolved_conversation_id)
+        cache_key = (platform, resolved_conversation_id, conversation_type)
         cached = self._bot_enabled_cache.get(cache_key)
         if cached is not None:
-            val, expiry = cached
-            if now < expiry:
-                return val
+            return cached
         conn = self._get_connection()
         cursor = conn.cursor()
         cursor.execute(
-            'SELECT botEnabled FROM conversations WHERE platform = ? AND conversationId = ? ORDER BY updatedAt DESC LIMIT 1',
-            (platform, resolved_conversation_id),
+            'SELECT botEnabled FROM conversations WHERE platform = ? AND conversationId = ? AND conversationType = ? LIMIT 1',
+            (platform, resolved_conversation_id, conversation_type),
         )
         row = cursor.fetchone()
         result = True if row is None else bool(row['botEnabled'])
-        self._bot_enabled_cache[cache_key] = (result, now + 60)
+        self._bot_enabled_cache.set(cache_key, result)
         return result
 
     def mark_integration_message_processed(self, platform: str, adapter: str, message_id: str) -> bool:
@@ -2164,24 +2221,36 @@ class SQLiteDB:
         row = cursor.fetchone()
         return dict(row) if row else None
 
-    def add_user(self, username: str, password_hash: str):
-        """添加用户，返回用户信息 dict"""
+    def add_user(
+        self,
+        username: str,
+        password_hash: str,
+        bootstrap_only: bool = False,
+    ):
+        """Add a user while assigning the first admin atomically."""
         now = datetime.now().isoformat()
         conn = self._get_connection()
         cursor = conn.cursor()
-        # C-S1 fix: 首个用户自动成为 admin，后续用户为普通 user
-        cursor.execute('SELECT COUNT(*) AS count FROM users')
-        user_count = cursor.fetchone()
-        role = 'admin' if (user_count and user_count['count'] == 0) else 'user'
-        cursor.execute(
-            'INSERT INTO users (username, password_hash, created_at, role) VALUES (?, ?, ?, ?)',
-            (username, password_hash, now, role)
-        )
-        conn.commit()
-        user_id = cursor.lastrowid
-        return {"id": user_id, "username": username, "created_at": now, "role": role}
-
-    # ============================================
+        try:
+            # Serialize the empty-table check across processes, not only the
+            # asyncio lock in one API worker.
+            cursor.execute("BEGIN IMMEDIATE")
+            cursor.execute("SELECT 1 FROM users LIMIT 1")
+            has_users = cursor.fetchone() is not None
+            if bootstrap_only and has_users:
+                raise RegistrationClosedError("bootstrap administrator already exists")
+            role = "user" if has_users else "admin"
+            cursor.execute(
+                "INSERT INTO users (username, password_hash, created_at, role) "
+                "VALUES (?, ?, ?, ?)",
+                (username, password_hash, now, role),
+            )
+            user_id = cursor.lastrowid
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        return {"id": user_id, "username": username, "created_at": now, "role": role}    # ============================================
     # 用户数据持久化（高层方法）
     # ============================================
     def get_user_data(self, user_id: int, page_key: Optional[str] = None):

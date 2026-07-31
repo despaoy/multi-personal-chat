@@ -219,6 +219,7 @@ class VectorDatabase:
         self._query_cache: OrderedDict = OrderedDict()
         self._query_cache_max_size = 100
         self._query_cache_ttl = 300  # 查询缓存TTL（秒）
+        self._cache_generation = 0
 
         self.bm25 = BM25Retriever()
 
@@ -928,6 +929,7 @@ class VectorDatabase:
             self.metadata = []
             self._id_to_index = {}
             self._query_cache.clear()
+            self._cache_generation += 1
             self._create_index()
             # 重置 BM25：旧文档词频与新文档混合会导致 hybrid/BM25 结果错位
             self.bm25 = BM25Retriever()
@@ -962,11 +964,17 @@ class VectorDatabase:
                 "dirty": self._dirty,
             }
 
-    def clear_cache(self):
-        """清除查询结果缓存"""
-        self._query_cache.clear()
-        logger.info("向量查询缓存已清除")
+    @property
+    def cache_generation(self) -> int:
+        """Monotonic in-process revision used by upper retrieval cache keys."""
+        return self._cache_generation
 
+    def clear_cache(self):
+        """清除查询结果缓存并使上层 RAG 查询缓存自然失效。"""
+        with self._lock:
+            self._query_cache.clear()
+            self._cache_generation += 1
+        logger.info("向量查询缓存已清除")
 
 _vector_db: Optional[VectorDatabase] = None
 

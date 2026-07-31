@@ -245,6 +245,9 @@ async def generate_samples(
             samples_per_kb, negative_count, lora_name,
         )
 
+    except asyncio.CancelledError:
+        _generation_status.update(running=False, stage="cancelled", message="已取消", progress=0)
+        raise
     except RuntimeError as e:
         if "取消" in str(e):
             _generation_status.update(running=False, stage="cancelled", message="已取消", progress=0)
@@ -631,6 +634,15 @@ async def train_intent_classifier(
         _add_log(f"训练完成！准确率={result.get('accuracy', 'N/A')}")
         return result
 
+    except asyncio.CancelledError:
+        _training_status.update(
+            running=False,
+            stage="cancelled",
+            message="训练已取消",
+            progress=0,
+            result={"cancelled": True},
+        )
+        raise
     except RuntimeError as e:
         if "取消" in str(e):
             _training_status.update(running=False, stage="cancelled", message="训练已取消", progress=0, result={"cancelled": True})

@@ -17,9 +17,14 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { api, Message } from '@/lib/api';
+import { api, type Message, type MessageFilters } from '@/lib/api';
 
-export function useMessages(limit = 20, offset = 0, enabled = true, filters?: { platform?: string; sessionType?: string; search?: string; lora?: string; sessionName?: string }) {
+export function useMessages(
+  limit = 20,
+  offset = 0,
+  enabled = true,
+  filters?: MessageFilters,
+) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [total, setTotal] = useState(0);
   const [totalAll, setTotalAll] = useState(0);

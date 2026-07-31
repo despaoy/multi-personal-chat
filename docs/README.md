@@ -10,13 +10,15 @@
 4. [服务器目录规范](operations/SERVER_LAYOUT.md)：`/home/szw/lhm2` 的唯一推荐布局。
 5. [清理策略](operations/CLEANUP_POLICY.md)：哪些文件可以删除，哪些必须保留。
 6. [代码知识库](architecture/CODE_WIKI.md)：模块职责、API 和调用链。
-7. [生产准备审查](architecture/PRODUCTION_READINESS_REVIEW_2026-07-18.md)：当前风险、限制与后续工作。
+7. [可扩展性开发指南](architecture/EXTENSIBILITY_GUIDE.md)：新增功能时的分层边界与最短路径。
+8. [生产准备审查](architecture/PRODUCTION_READINESS_REVIEW_2026-07-18.md)：当前风险、限制与后续工作。
 
 ## 文档分类
 
 ### `architecture/`
 
 - `CODE_WIKI.md`：代码结构与关键调用链。
+- `EXTENSIBILITY_GUIDE.md`：分层边界、新增后端/前端功能的最短路径与兼容性规则。
 - `OPTIMIZATION_STRATEGY.md`：性能、可靠性、安全和部署优化基线。
 - `PRODUCTION_READINESS_REVIEW_2026-07-18.md`：面向个人研究项目的部署前审查。
 

@@ -20,6 +20,10 @@ import {
   SquareCheck, Square, FlipHorizontal2, Trash, ShieldCheck,
 } from 'lucide-react';
 import { api, type KnowledgeBase } from '@/lib/api';
+import type {
+  ActiveKnowledgeBase,
+  IntentModelInfo,
+} from '@/lib/api-contracts';
 import { toast } from 'sonner';
 
 const MAX_KB_COUNT = 8;
@@ -69,11 +73,7 @@ function IntentTrainingContent() {
   const [selectedMap, setSelectedMap] = useState<Record<string, Set<number>>>({});
 
   // 模型信息
-  const [modelInfo, setModelInfo] = useState<{
-    exists: boolean; model_type?: string; label_names?: string[];
-    training_samples?: number; accuracy?: number; trained_at?: string;
-    samples_per_class?: Record<string, number>;
-  } | null>(null);
+  const [modelInfo, setModelInfo] = useState<IntentModelInfo | null>(null);
 
   // 加载数据（仅在挂载时执行一次，避免依赖循环导致无限重渲染/compiling）
   const loadKnowledgeBases = useCallback(async () => {
@@ -86,10 +86,14 @@ function IntentTrainingContent() {
   const loadActiveKbs = useCallback(async () => {
     try {
       const res = await api.getActiveKnowledgeBases();
-      setActiveKbIds(res.active_kbs?.filter((kb: Record<string, unknown>) => kb.isActive).map((kb: Record<string, unknown>) => {
-        const match = knowledgeBases.find(b => b.name === kb.kbName);
-        return match ? match.id : -1;
-      }).filter((id: number) => id > 0) || []);
+      const ids = (res.active_kbs || [])
+        .map((kb: ActiveKnowledgeBase) => {
+          if ('id' in kb) return kb.id;
+          if (!kb.isActive) return -1;
+          return knowledgeBases.find((base) => base.name === kb.kbName)?.id ?? -1;
+        })
+        .filter((id) => id > 0);
+      setActiveKbIds(ids);
     } catch { /* ignore */ }
   }, [knowledgeBases]);
 
@@ -168,7 +172,7 @@ function IntentTrainingContent() {
             } else if (result && 'cancelled' in result) {
               toast.info('训练已取消');
             } else if (result) {
-              toast.success(`训练完成！准确率=${(result as Record<string, unknown>).accuracy}`);
+              toast.success(`训练完成！准确率=${result.accuracy ?? 'N/A'}`);
               loadModelInfo();
               loadActiveKbs();
             }

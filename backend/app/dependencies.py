@@ -1,6 +1,9 @@
 """FastAPI 依赖注入"""
 from fastapi import Request, HTTPException
 from app.config import verify_token
+from infra.auth_work import run_auth_database
+from infra.bounded_executor import BlockingWorkRejected, BlockingWorkTimeout
+from infra.observability import increment
 
 
 async def get_current_user(request: Request) -> dict:
@@ -22,6 +25,15 @@ async def get_current_user(request: Request) -> dict:
             "role": payload.get("role", "user"),
         }
 
+    api_key_payload = getattr(request.state, "api_key_payload", None)
+    if isinstance(api_key_payload, dict):
+        return {
+            "user_id": None,
+            "username": getattr(request.state, "user", "api_key_user"),
+            "role": api_key_payload.get("role", "api_user"),
+            "permissions": api_key_payload.get("permissions"),
+            "auth_type": getattr(request.state, "auth_type", "api_key"),
+        }
     token = None
 
     # 2. 从 Authorization 头获取
@@ -58,12 +70,35 @@ async def get_current_admin(request: Request) -> dict:
     这里在 get_current_user 之后做一次 DB 复核；DB 不可达时按最小权限原则拒绝。
     """
     user = await get_current_user(request)
+    # Managed API keys are authenticated against their own revocation store.
+    # Static environment keys intentionally remain api_user and cannot administer.
+    if user.get("auth_type") in {"api_key", "managed_api_key"}:
+        if user.get("role") != "admin":
+            raise HTTPException(status_code=403, detail="需要管理员权限")
+        return user
 
-    # DB 复核当前用户角色
+    # DB 复核当前用户角色。真实请求使用应用容器；最小化单元测试
+    # 没有 request.app 时保留全局适配器回退。
     try:
-        from db.adapter import db
-        row = db.get_user_by_username(user.get("username", ""))
+        try:
+            from app.runtime import get_runtime_container
+
+            database = get_runtime_container(request.app).db
+        except (AttributeError, RuntimeError):
+            from db.adapter import db as database
+
+        row = await run_auth_database(
+            database.get_user_by_username,
+            user.get("username", ""),
+        )
         current_role = (row or {}).get("role", "user")
+    except (BlockingWorkRejected, BlockingWorkTimeout) as exc:
+        increment("auth_database_admin_unavailable")
+        raise HTTPException(
+            status_code=503,
+            detail="Authentication service is busy; retry later",
+            headers={"Retry-After": "1"},
+        ) from exc
     except Exception:
         # DB 不可达时按最小权限原则拒绝，避免误授权
         raise HTTPException(status_code=503, detail="无法验证用户权限，请稍后重试")

@@ -5,10 +5,14 @@ RAG辅助工具模块 - 优化版
 改进：查询扩展、元数据过滤、分数归一化、查询缓存、多查询检索
 """
 
+import copy
+import json
 import logging
 import os
 import time
 import re
+from collections import OrderedDict
+from threading import RLock
 from typing import List, Dict, Any, Optional
 
 try:
@@ -179,7 +183,8 @@ class RAGHelper:
         self.enable_query_expansion = True
         self.enable_multi_query = True
 
-        self._query_cache: Dict[str, tuple[float, List[Dict[str, Any]]]] = {}
+        self._query_cache: OrderedDict[str, tuple[float, List[Dict[str, Any]]]] = OrderedDict()
+        self._cache_lock = RLock()
         self._cache_max_size = 100
         self._cache_ttl = max(1, int(os.getenv("RAG_RETRIEVAL_CACHE_TTL", "60")))
 
@@ -192,20 +197,26 @@ class RAGHelper:
                 self.enable_reranking = False
 
     def _get_from_cache(self, query: str) -> Optional[List[Dict[str, Any]]]:
-        cached = self._query_cache.get(query)
-        if cached is None:
-            return None
-        expires_at, results = cached
-        if expires_at <= time.monotonic():
-            self._query_cache.pop(query, None)
-            return None
-        return results
+        with self._cache_lock:
+            cached = self._query_cache.get(query)
+            if cached is None:
+                return None
+            expires_at, results = cached
+            if expires_at <= time.monotonic():
+                self._query_cache.pop(query, None)
+                return None
+            self._query_cache.move_to_end(query)
+            return copy.deepcopy(results)
 
-    def _add_to_cache(self, query: str, results: List[Dict[str, Any]]):
-        if len(self._query_cache) >= self._cache_max_size:
-            oldest_key = next(iter(self._query_cache))
-            del self._query_cache[oldest_key]
-        self._query_cache[query] = (time.monotonic() + self._cache_ttl, results)
+    def _add_to_cache(self, query: str, results: List[Dict[str, Any]]) -> None:
+        with self._cache_lock:
+            self._query_cache[query] = (
+                time.monotonic() + self._cache_ttl,
+                copy.deepcopy(results),
+            )
+            self._query_cache.move_to_end(query)
+            while len(self._query_cache) > self._cache_max_size:
+                self._query_cache.popitem(last=False)
 
     def _normalize_scores(self, results: List[Dict[str, Any]], score_key: str = "score") -> List[Dict[str, Any]]:
         if not results:
@@ -254,7 +265,14 @@ class RAGHelper:
         try:
             start_time = time.time()
 
-            cache_key = f"{query}_{top_k}_{filters}"
+            vector_generation = get_vector_db().cache_generation
+            serialized_filters = json.dumps(
+                filters or {}, ensure_ascii=False, sort_keys=True, default=str
+            )
+            cache_key = (
+                f"{query}|{top_k or self.top_k}|rerank={enable_rerank}|"
+                f"filters={serialized_filters}|generation={vector_generation}"
+            )
             if use_cache:
                 cached = self._get_from_cache(cache_key)
                 if cached is not None:
@@ -437,38 +455,17 @@ class RAGHelper:
             "abstained": abstained,
         }
 
-    def build_context_prompt(
-        self,
-        query: str,
-        top_k: Optional[int] = None,
-        filters: Optional[Dict[str, Any]] = None,
-    ) -> str:
-        """构建供大模型使用的上下文字符串。
-
-        先调用retrieve_context检索相关文档，然后将文档内容拼接为
-        带标题和相关性分数的格式化上下文文本，总长度受max_context_length限制。
-
-        Args:
-            query: 用户查询
-            top_k: 检索文档数量
-            filters: 元数据过滤条件
-
-        Returns:
-            格式化后的上下文字符串，若未检索到文档则返回空字符串
-        """
-        results = self.retrieve_context(query, top_k, filters=filters)
-
+    def format_context_results(self, results: List[Dict[str, Any]]) -> str:
+        """把已经检索到的结果格式化为模型上下文，不再次执行检索。"""
         if not results:
             return ""
 
         context_parts = []
         total_length = 0
-
         for result in results:
             doc_content = result.get("content", "")
             doc_title = result.get("title", "")
             score = result.get("normalized_score", result.get("score", 0))
-
             doc_text = f"【相关文档: {doc_title}（相关度: {score:.2f}）】\n{doc_content}\n"
 
             if total_length + len(doc_text) > self.max_context_length:
@@ -476,18 +473,27 @@ class RAGHelper:
                 if remaining > 100:
                     doc_text = f"【相关文档: {doc_title}（相关度: {score:.2f}）】\n{doc_content[:remaining]}...\n"
                     context_parts.append(doc_text)
+                    total_length += len(doc_text)
                 break
 
             context_parts.append(doc_text)
             total_length += len(doc_text)
 
-        if context_parts:
-            context = "\n".join(context_parts)
-            logger.info(f"构建RAG上下文，长度: {total_length}，文档数: {len(context_parts)}")
-            return context
+        if not context_parts:
+            return ""
 
-        return ""
+        logger.info("构建RAG上下文，长度: %d，文档数: %d", total_length, len(context_parts))
+        return "\n".join(context_parts)
 
+    def build_context_prompt(
+        self,
+        query: str,
+        top_k: Optional[int] = None,
+        filters: Optional[Dict[str, Any]] = None,
+    ) -> str:
+        """检索一次并构建模型上下文；已有结果应调用 format_context_results。"""
+        results = self.retrieve_context(query, top_k, filters=filters)
+        return self.format_context_results(results)
     def format_results_for_display(self, results: List[Dict[str, Any]]) -> str:
         if not results:
             return ""
@@ -505,8 +511,9 @@ class RAGHelper:
 
         return "\n".join(parts)
 
-    def clear_cache(self):
-        self._query_cache.clear()
+    def clear_cache(self) -> None:
+        with self._cache_lock:
+            self._query_cache.clear()
         logger.info("RAG查询缓存已清除")
 
 

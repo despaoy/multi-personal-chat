@@ -13,27 +13,12 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { api, ServiceStatus, SystemConfig } from '@/lib/api';
+import type {
+  AstrBotGatewayStatus,
+  PlatformStatusRecord,
+} from '@/lib/api-contracts';
 import { AlertTriangle, Bot, Cable, CheckCircle2, CircleOff, ExternalLink, MessageCircle, RadioTower, RefreshCw, Send, ShieldCheck, Smartphone, WifiOff } from 'lucide-react';
 import { toast } from 'sonner';
-
-type PlatformStatus = {
-  enabled: boolean;
-  status: 'connected' | 'idle' | 'degraded' | 'disabled' | 'running' | 'stopped' | string;
-  lastEvent?: string;
-};
-
-type AstrBotGatewayStatus = {
-  name: string;
-  status: 'running' | 'degraded' | 'stopped' | string;
-  running: boolean;
-  expected: boolean;
-  port: number;
-};
-
-type StatsMetricsResponse = {
-  astrBotGateway?: AstrBotGatewayStatus;
-  platformStatus?: Record<string, PlatformStatus>;
-};
 
 type PlatformCard = {
   key: string;
@@ -115,7 +100,7 @@ export default function IntegrationsPage() {
 function IntegrationsContent() {
   const [config, setConfig] = useState<SystemConfig>({});
   const [gateway, setGateway] = useState<AstrBotGatewayStatus | null>(null);
-  const [platformStatus, setPlatformStatus] = useState<Record<string, PlatformStatus>>({});
+  const [platformStatus, setPlatformStatus] = useState<Record<string, PlatformStatusRecord>>({});
   const [services, setServices] = useState<ServiceStatus[]>([]);
   const [loading, setLoading] = useState(true);
   const [savingKey, setSavingKey] = useState<string | null>(null);
@@ -142,7 +127,7 @@ function IntegrationsContent() {
         // M4 fix: 改用 api.getMetrics 走统一 request 助手，
         // 401（token 过期）时会自动清理用户状态并跳转 /login，
         // 而非裸 fetch 那样只抛“获取平台指标失败”让用户停在原地。
-        api.getMetrics<StatsMetricsResponse>(),
+        api.getMetrics(),
         api.getServices(),
       ]);
       setConfig(configData.config);

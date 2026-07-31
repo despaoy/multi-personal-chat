@@ -119,10 +119,26 @@ class CircuitBreaker:
         self._half_open_calls: int = 0
         self._last_failure_time: Optional[float] = None
         self._stats = CircuitBreakerStats()
-        self._lock = asyncio.Lock()
+        self._lock: asyncio.Lock | None = None
+        self._lock_loop: asyncio.AbstractEventLoop | None = None
         self._cache: Optional[Any] = None
         self._default_value: Any = None
         self._queue: list[asyncio.Future[Any]] = []
+
+    def _get_lock(self) -> asyncio.Lock:
+        """Return a mutex bound to the current application event loop."""
+        loop = asyncio.get_running_loop()
+        if self._lock is None or self._lock_loop is not loop:
+            self._lock = asyncio.Lock()
+            self._lock_loop = loop
+            # Futures cannot migrate between event loops. A proper lifecycle
+            # drains these; clearing here is the defensive restart fallback.
+            self._queue = [
+                future
+                for future in self._queue
+                if not future.done() and future.get_loop() is loop
+            ]
+        return self._lock
 
     @property
     def state(self) -> CircuitState:
@@ -252,7 +268,7 @@ class CircuitBreaker:
         与 call() 内部逻辑一致：成功在 HALF_OPEN → CLOSED，CLOSED 下重置失败计数。
         必须由调用方在确认成功后显式调用。
         """
-        async with self._lock:
+        async with self._get_lock():
             self._stats.record_success()
             if self._state == CircuitState.HALF_OPEN:
                 self._transition_to_closed()
@@ -265,7 +281,7 @@ class CircuitBreaker:
         与 call() 内部逻辑一致：失败在 HALF_OPEN → OPEN，CLOSED 下计数达阈值 → OPEN。
         必须由调用方在捕获异常后显式调用。
         """
-        async with self._lock:
+        async with self._get_lock():
             self._stats.record_failure()
             self._failure_count += 1
             self._last_failure_time = time.monotonic()
@@ -305,7 +321,7 @@ class CircuitBreaker:
         # 同一把 self._lock → 确定性死锁。
         # 修复：锁内仅完成 future 创建与入队，锁外再 await。
         queue_future: Optional[asyncio.Future[Any]] = None
-        async with self._lock:
+        async with self._get_lock():
             self._maybe_transition_to_half_open()
             current_state = self._state
             if current_state == CircuitState.OPEN:
@@ -359,7 +375,7 @@ class CircuitBreaker:
 
         try:
             result = await func(*args, **kwargs)
-            async with self._lock:
+            async with self._get_lock():
                 self._stats.record_success()
                 self._cache = result  # 更新缓存
                 if current_state == CircuitState.HALF_OPEN:
@@ -368,7 +384,7 @@ class CircuitBreaker:
                     self._failure_count = 0
             return result
         except Exception as e:
-            async with self._lock:
+            async with self._get_lock():
                 self._stats.record_failure()
                 self._failure_count += 1
                 self._last_failure_time = time.monotonic()
@@ -404,7 +420,7 @@ class CircuitBreaker:
             async with circuit_breaker:
                 result = await some_service()
         """
-        async with self._lock:
+        async with self._get_lock():
             self._maybe_transition_to_half_open()
             current_state = self._state
             if current_state == CircuitState.OPEN:
@@ -426,14 +442,14 @@ class CircuitBreaker:
 
         try:
             yield self
-            async with self._lock:
+            async with self._get_lock():
                 self._stats.record_success()
                 if current_state == CircuitState.HALF_OPEN:
                     self._transition_to_closed()
                 elif current_state == CircuitState.CLOSED:
                     self._failure_count = 0
         except Exception as e:
-            async with self._lock:
+            async with self._get_lock():
                 self._stats.record_failure()
                 self._failure_count += 1
                 self._last_failure_time = time.monotonic()
@@ -465,14 +481,14 @@ class CircuitBreaker:
 
     async def reset(self) -> None:
         """手动重置熔断器到CLOSED状态。"""
-        async with self._lock:
+        async with self._get_lock():
             self._transition_to_closed()
             self._stats = CircuitBreakerStats()
             logger.info("熔断器 [%s] 已手动重置", self.name)
 
     async def trip(self) -> None:
         """手动触发熔断器到OPEN状态。"""
-        async with self._lock:
+        async with self._get_lock():
             self._transition_to_open()
             logger.info("熔断器 [%s] 已手动触发熔断", self.name)
 
@@ -488,7 +504,15 @@ class CircuitBreakerRegistry:
 
     def __init__(self) -> None:
         self._breakers: dict[str, CircuitBreaker] = {}
-        self._lock = asyncio.Lock()
+        self._lock: asyncio.Lock | None = None
+        self._lock_loop: asyncio.AbstractEventLoop | None = None
+
+    def _get_lock(self) -> asyncio.Lock:
+        loop = asyncio.get_running_loop()
+        if self._lock is None or self._lock_loop is not loop:
+            self._lock = asyncio.Lock()
+            self._lock_loop = loop
+        return self._lock
 
     async def get_or_create(
         self,
@@ -506,7 +530,7 @@ class CircuitBreakerRegistry:
 
         如果同名熔断器已存在，则返回现有实例（忽略其他参数）。
         """
-        async with self._lock:
+        async with self._get_lock():
             if name not in self._breakers:
                 self._breakers[name] = CircuitBreaker(
                     name=name,
@@ -524,7 +548,7 @@ class CircuitBreakerRegistry:
 
     async def get(self, name: str) -> Optional[CircuitBreaker]:
         """获取指定名称的熔断器，不存在则返回None。"""
-        async with self._lock:
+        async with self._get_lock():
             return self._breakers.get(name)
 
     async def remove(self, name: str) -> bool:
@@ -533,7 +557,7 @@ class CircuitBreakerRegistry:
         Returns:
             是否成功移除。
         """
-        async with self._lock:
+        async with self._get_lock():
             if name in self._breakers:
                 del self._breakers[name]
                 logger.info("移除熔断器: %s", name)
@@ -546,9 +570,19 @@ class CircuitBreakerRegistry:
 
     async def reset_all(self) -> None:
         """重置所有熔断器。"""
-        for cb in self._breakers.values():
-            await cb.reset()
+        async with self._get_lock():
+            breakers = list(self._breakers.values())
+        for breaker in breakers:
+            await breaker.reset()
         logger.info("已重置所有熔断器")
+
+    async def clear(self) -> None:
+        """Discard process-wide breakers between application lifecycles."""
+        async with self._get_lock():
+            breakers = list(self._breakers.values())
+            self._breakers.clear()
+        for breaker in breakers:
+            await breaker.reset()
 
     @property
     def names(self) -> list[str]:

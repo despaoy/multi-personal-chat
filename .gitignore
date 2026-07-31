@@ -16,6 +16,8 @@ coverage/
 .nyc_output
 .pytest_cache/
 .pytest_v4_verify_*/
+.pytest_tmp_*/
+backend/.pytest-tmp-*/
 
 # === Environment variables (敏感配置) ===
 .env

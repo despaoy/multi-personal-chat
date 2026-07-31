@@ -2,20 +2,20 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 /**
- * M2 fix: 集中式路由守卫（Edge middleware）
+ * 集中式路由守卫（Next.js Proxy）
  *
  * 此前仅靠各页面单独的 <AuthGuard> 做客户端守卫，存在两个问题：
  *  1. 仪表盘首页（src/app/page.tsx）未包裹 AuthGuard，未登录可直接进入
  *  2. 客户端守卫依赖 /api/auth/me 往返，未登录用户在重定向前会先看到页面骨架/闪烁
  *
- * 此 middleware 在 Edge 层做轻量 Cookie 存在性检查（无法解 JWT，只看 access_token 是否存在），
+ * 此 proxy 在请求进入页面前做轻量 Cookie 存在性检查（无法解 JWT，只看 access_token 是否存在），
  * 真正的 token 有效性仍由后端 + AuthContext 的 /api/auth/me 验证。
- * 形成双层防护：Edge 拦截无 Cookie → 客户端 AuthGuard 拦截无效/过期 token → 后端 401。
+ * 形成双层防护：Proxy 拦截无 Cookie → 客户端 AuthGuard 拦截无效/过期 token → 后端 401。
  *
- * 不在此处解 JWT 的原因：Edge Runtime 默认无法访问后端 JWT_SECRET，
- * 且 Web Crypto 验证会拖慢每次请求；Cookie 存在性检查已足够阻止未登录直访。
+ * 不在此处解 JWT；Cookie 存在性检查只负责阻止未登录直访，
+ * token 的真实性和有效期仍由后端校验。
  */
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const path = request.nextUrl.pathname;
   const isLoginPage = path === '/login';
   // C6 fix: ?expired=1 表示客户端刚检测到 401，正在主动跳转登出。

@@ -32,11 +32,13 @@ function LoraContent() {
     setScanning(true);
     try {
       const result = await api.scanLoras();
+      if (result.new_count > 0 || result.updated_count > 0) {
+        await refetch();
+      }
       if (result.success) {
         toast.success(result.message);
-        refetch();
       } else {
-        toast.error(result.message);
+        toast.warning(result.message);
       }
     } catch {
       toast.error('扫描LoRA失败');

@@ -27,7 +27,7 @@ RUN if [ "$INSTALL_GPU_DEPS" = "true" ]; then \
         pip install --no-cache-dir vllm==0.10.2; \
     else \
         echo "Installing CPU-only dependencies (skipping vLLM)..." && \
-        pip install --no-cache-dir torch torchvision torchaudio \
+        pip install --no-cache-dir torch==2.8.0 torchvision==0.23.0 torchaudio==2.8.0 \
             --index-url https://download.pytorch.org/whl/cpu; \
     fi && \
     grep -v -E "^(torch|torchvision|torchaudio|vllm)" requirements.txt > requirements-filtered.txt && \

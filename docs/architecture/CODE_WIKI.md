@@ -3,7 +3,7 @@
 > 本文档为 `qqchat-enhanced` 项目的结构化代码知识库（Code Wiki），涵盖项目整体架构、模块职责、关键类与函数、依赖关系与运行方式。
 >
 > - **版本基线**：FastAPI 后端 `v2.0.0`、Next.js 前端 `0.1.0`（Next 16.2.9 / React 19.2.3）
-> - **最近核对**：2026-07-18
+> - **最近核对**：2026-07-31
 > - **维护原则**：随代码演进同步更新；任何架构性变更须同步本文档对应章节。
 
 ---
@@ -25,6 +25,7 @@
    - 4.9 [缓存层（cache）](#49-缓存层cache)
    - 4.10 [安全中间件（middleware）](#410-安全中间件middleware)
    - 4.11 [评估与实验体系](#411-评估与实验体系)
+   - 4.12 [分层架构（services / repositories / providers）](#412-分层架构services--repositories--providers)
 5. [前端模块详解](#5-前端模块详解)
    - 5.1 [应用结构与布局](#51-应用结构与布局)
    - 5.2 [页面清单](#52-页面清单)
@@ -54,11 +55,11 @@
 - **管理控制台**：Next.js 16 (App Router) + React 19 + Tailwind v4 + shadcn/ui 提供 14 个页面。
 - **研究严谨性**：Gold Set 评估、质量门（benchmark_gate）、盲评流程、合成数据审核 guardrail。
 
-**当前验证状态**（截至文档生成时）：
-- 后端回归：Windows 本地最近一次 `101 passed, 1 skipped`；实验室 Python 3.12 环境 `102 passed`
+**当前验证状态**（截至文档核对时）：
+- 后端回归：实验室服务器最近一次 `121 passed`；Windows 本地为开发镜像
 - TypeScript 与 Next.js 生产构建通过
 - vLLM 在 RTX 3090 上稳定服务 `Qwen3-8B-Instruct-AWQ`
-- 26 张数据库表已建（PostgreSQL/SQLite 双模式）
+- 26 张数据库表已建（PostgreSQL/SQLite 双模式），Alembic 迁移至 `004_index_cleanup`
 
 ---
 
@@ -117,28 +118,45 @@
 qqchat-enhanced/
 ├── backend/                       # FastAPI 后端（Python 3.12）
 │   ├── api/                       # 18 个 API 路由模块
-│   ├── app/                       # 应用入口、配置、依赖注入
-│   │   ├── main.py                # FastAPI app 实例 + lifespan
+│   ├── app/                       # 应用入口、配置、依赖注入、运行时容器
+│   │   ├── main.py                # create_app 组合根 + lifespan
 │   │   ├── config.py              # 全局配置 + 增强模块单例
-│   │   └── dependencies.py        # get_current_user 依赖
+│   │   ├── dependencies.py        # get_current_user 依赖
+│   │   ├── env.py                 # 统一 backend/.env 加载
+│   │   ├── providers.py           # FastAPI 依赖提供器（Repository/Service）
+│   │   ├── readiness.py           # ReadinessProbe 缓存型就绪探针
+│   │   └── runtime.py             # RuntimeContainer 应用依赖容器
 │   ├── bot/                       # NoneBot2 QQ 机器人入口
-│   ├── cache/                     # Redis 缓存、语义缓存、消息队列
+│   ├── cache/                     # Redis 缓存、语义缓存、消息队列、TTL 缓存
 │   ├── db/                        # 数据库适配器（SQLite/PostgreSQL 双模式）
-│   ├── alembic/                   # 数据库迁移
+│   │   ├── adapter.py             # 双模式选择与对外契约
+│   │   ├── database.py            # SQLite 实现
+│   │   ├── pg_database.py         # PostgreSQL 实现 + SyncPgAdapter
+│   │   ├── urls.py                # PG URL 规范化（运行时 + Alembic 共享）
+│   │   ├── errors.py              # 数据库领域异常
+│   │   ├── models.py              # SQLAlchemy ORM 单一权威
+│   │   ├── schemas.py             # Pydantic schema
+│   │   └── migration.py           # SQLite → PostgreSQL 一次性迁移
+│   ├── alembic/                   # 数据库迁移（001 ~ 004）
 │   ├── evaluation/                # Gold Set、指标、质量门
 │   ├── experiments/               # LoRA/RAG/量化实验框架
 │   ├── inference/                 # vLLM 客户端、LoRA 路由、模型管理
-│   ├── infra/                     # 13 个基础设施组件
+│   ├── infra/                     # 14 个基础设施组件
 │   ├── interfaces/                # Protocol 接口契约
 │   ├── knowledge/                 # RAG 全流水线
 │   ├── middleware/                # 安全中间件链
+│   ├── repositories/              # 持久化 Protocol + 数据库适配实现
+│   │   ├── messages.py            # MessageRepository / MessageQuery
+│   │   └── user_data.py           # UserDataRepository
+│   ├── services/                  # 与 HTTP 传输无关的业务用例
+│   │   ├── chat_generation.py     # ChatGenerationService
+│   │   └── model_management.py    # ModelManagementService
 │   ├── training/                  # SFT + DPO/ORPO 训练
 │   ├── benchmarks/                # 性能基准测试
 │   ├── data/                      # 训练数据、角色对话
 │   ├── scripts/                   # 后端工具脚本
 │   ├── tests/                     # pytest 测试套件
 │   ├── main.py / run.py           # 启动入口
-│   ├── pipeline.py                # 高并发消息管道
 │   ├── Dockerfile
 │   ├── pyproject.toml
 │   └── requirements.txt
@@ -150,10 +168,10 @@ qqchat-enhanced/
 │   │   ├── DashboardClient.tsx    # 仪表盘客户端组件
 │   │   ├── api/                   # 10 个 Next.js API 路由
 │   │   └── [page]/page.tsx        # 14 个业务页面
-│   ├── components/                # 组件（layout/dashboard/training/ui）
+│   ├── components/                # 组件（layout/dashboard/training/history/ui）
 │   ├── contexts/                  # AuthContext + SettingsContext
 │   ├── hooks/                     # 12 个自定义 Hook
-│   └── lib/                       # api.ts / proxy.ts / i18n.ts / utils.ts
+│   └── lib/                       # api.ts / api-contracts.ts / proxy.ts / i18n.ts / utils.ts
 │
 ├── astrbot_plugins/
 │   └── qqchat_gateway/            # AstrBot 网关插件
@@ -179,31 +197,76 @@ qqchat-enhanced/
 └── *.md                           # 项目文档（README/ROADMAP/STATUS...）
 ```
 
+> 历史模块：`backend/infra/load_balancer.py`（vLLM 负载均衡已并入 `inference/vllm_client.py`）、`backend/pipeline.py`、`src/middleware.ts`（被 `src/proxy.ts` 替代）已删除。新增分层动机与迁移路径见 [可扩展性开发指南](EXTENSIBILITY_GUIDE.md)。
+
 ---
 
 ## 4. 后端模块详解
 
 ### 4.1 应用入口与生命周期
 
-**核心文件**：`backend/app/main.py`、`backend/run.py`、`backend/main.py`
+**核心文件**：`backend/app/main.py`、`backend/app/runtime.py`、`backend/app/providers.py`、`backend/app/readiness.py`、`backend/app/env.py`、`backend/run.py`、`backend/main.py`
 
-#### 4.1.1 FastAPI 应用创建
+#### 4.1.1 FastAPI 应用创建（组合根）
+
+应用通过 `create_app(container: RuntimeContainer | None = None) -> FastAPI` 显式装配，模块级 `app = create_app()` 仅作兼容入口：
 
 ```python
 # backend/app/main.py
-app = FastAPI(
-    title="QQ智能助手 API (增强版)",
-    version="2.0.0",
-    lifespan=lifespan,  # 异步生命周期管理
-)
+def create_app(container: RuntimeContainer | None = None) -> FastAPI:
+    runtime_container = container if container is not None else RuntimeContainer.default(startup_env=_STARTUP_ENV)
+    application = FastAPI(title="QQ智能助手 API (增强版)", version="2.0.0", lifespan=lifespan)
+    application.state.runtime_container = runtime_container
+    application.state.readiness_probe = ReadinessProbe(
+        database_check=lambda: get_runtime_container(application).db.execute_sql("SELECT 1"),
+        model_check=_readiness_model_check if model_required else None,
+        model_required=model_required,
+    )
+    _install_middleware(application, runtime_container.startup_env)
+    for router in _ROUTERS:
+        application.include_router(router)
+    application.add_api_route("/", root, methods=["GET"])
+    application.add_api_route("/health", health_check, methods=["GET"])
+    application.add_api_route("/ready", readiness_check, methods=["GET"])
+    application.add_exception_handler(Exception, global_exception_handler)
+    return application
 ```
 
 - **路由挂载**：18 个 `APIRouter` 统一以 `/api` 前缀挂载
 - **CORS**：最外层中间件，确保 401/429 等错误也带 CORS 头
 - **全局异常处理**：`@app.exception_handler(Exception)` 统一返回 500 + 标准格式
-- **健康检查**：`GET /health`（简单存活）、`GET /ready`（数据库 + FAISS 就绪探针）
+- **健康检查**：`GET /health`（简单存活）、`GET /ready`（基于 `ReadinessProbe` 的缓存型就绪探针）
 
-#### 4.1.2 生命周期 `lifespan(app)`
+#### 4.1.2 RuntimeContainer 与依赖注入
+
+`backend/app/runtime.py` 定义 `RuntimeContainer`（`@dataclass(slots=True)`），是单一应用实例拥有的进程级依赖集合：
+
+- 字段：`db`（数据库适配器）、`is_pg_mode()`、`inference_runtime`、`startup_env`（启动时快照 `os.environ`，避免运行中环境变更影响校验）
+- `RuntimeContainer.default(startup_env=None)`：惰性装配生产依赖（`db.adapter.db`、`db.adapter.is_pg_mode`、`infra.concurrency_control.inference_runtime`）
+- `get_runtime_container(app)`：从 `app.state.runtime_container` 取容器，未配置则 `raise RuntimeError`
+
+`backend/app/providers.py` 将 `RuntimeContainer` 适配为 FastAPI 依赖：
+
+| Provider | 返回 | 用途 |
+|---|---|---|
+| `get_message_repository(request)` | `DatabaseMessageRepository` | 消息历史/会话仓储 |
+| `get_user_data_repository(request)` | `DatabaseUserDataRepository` | 用户页面状态仓储 |
+| `get_model_management_service()` | `ModelManagerService` | 模型管理业务用例（包装同步 `ModelManager`） |
+
+`backend/app/env.py:load_backend_env()` 统一加载 `backend/.env`，所有入口点（`run.py`/`main.py`/`app/main.py`）共用同一加载逻辑；显式注入的容器/进程变量优先，不会被 `.env` 覆盖。
+
+#### 4.1.3 ReadinessProbe 缓存型就绪探针
+
+`backend/app/readiness.py` 的 `ReadinessProbe` 替换了原先每请求直查数据库的 `/ready` 实现：
+
+- **TTL 缓存**：成功 5s、失败 1s，避免探针把数据库打满
+- **单飞合并**：`_refresh_lock` + 共享 `_refresh_task`，并发请求复用同一次刷新
+- **同步检查有界卸载**：同步 `database_check` 通过 `BoundedThreadExecutor`（`max_workers=2, max_pending=2`）执行，超时由 `check_timeout=3.0s` 控制
+- **等待预算**：`wait_timeout=4.0s`，超时抛 `ReadinessProbeTimeout` → 503
+- **依赖矩阵**：`database_check` 必需；`model_check` 仅在 `MODEL_PROVIDER=vllm` 或 `is_vllm_enabled` 时必需，否则返回 `not_required`
+- **快照结构**：`{ready, deps:{database, model}, details:{database, model, rag:"not_probed"}}`，深拷贝返回避免外部篡改缓存
+
+#### 4.1.4 生命周期 `lifespan(app)`
 
 启动顺序（带条件初始化）：
 
@@ -214,17 +277,16 @@ app = FastAPI(
 5. **故障转移管理器**：保留给非 vLLM 后备提供商；vLLM 实例健康检查、熔断和故障转移由 `VLLMClient` 统一管理
 6. **向量索引**：延迟到首次搜索时通过 `_ensure_vector_index()` 重建
 
-关闭阶段逆序清理：`connection_pool` → `http_client_pool` → `backup_mgr` → `failover_mgr` → `llm_optimizer` → `sync_pg_db`（PG 模式）。
+关闭阶段依次清理：评估运行器 → LoRA 训练任务 → 意图任务 → `ReadinessProbe` → `InferenceRuntime` → 资源池 → 备份调度器 → 故障转移管理器 → PostgreSQL 适配器 → 模型管理器 → vLLM 客户端 → bot HTTP 客户端 → 熔断器注册表 → Redis（async + sync）→ 语义缓存。
 
-#### 4.1.3 启动入口
+#### 4.1.5 启动入口
 
 | 文件 | 用途 |
 |---|---|
 | `backend/run.py` | 主入口，argparse（`--port/--host/--reload/--workers`），强制 `BACKEND_WORKERS=1` |
 | `backend/main.py` | 向后兼容入口，同样强制单 worker |
-| `backend/pipeline.py` | 高并发消息管道（`MessagePipeline` + `RequestCoalescer` + `BoundedQueue`） |
 
-#### 4.1.4 中间件链
+#### 4.1.6 中间件链
 
 按 Starlette「最后添加最外层」规则，请求实际穿透顺序：
 
@@ -235,7 +297,7 @@ CORS → AuditLog → SecurityHeaders → Security(认证) → RateLimit → Inp
 - `SECURITY_MIDDLEWARE_ENABLED` 控制总开关（默认 true）
 - 生产环境若安全中间件导入失败直接 `raise RuntimeError`
 
-#### 4.1.5 关键配置（`backend/app/config.py`）
+#### 4.1.7 关键配置（`backend/app/config.py`）
 
 | 配置项 | 默认值 | 说明 |
 |---|---|---|
@@ -249,17 +311,18 @@ CORS → AuditLog → SecurityHeaders → Security(认证) → RateLimit → Inp
 
 | 标志 | 模块 | 全局实例 |
 |---|---|---|
-| `LOAD_BALANCER_AVAILABLE` | `infra.load_balancer` | `load_balancer_mgr` |
 | `RESOURCE_POOL_AVAILABLE` | `infra.resource_pool` | `connection_pool` / `http_client_pool` |
 | `CIRCUIT_BREAKER_AVAILABLE` | `infra.circuit_breaker` | `circuit_breaker_registry` |
 | `BACKUP_MANAGER_AVAILABLE` | `infra.backup_manager` | `backup_mgr` |
 | `FAILOVER_AVAILABLE` | `infra.failover` | `failover_mgr` |
 | `ENCRYPTION_AVAILABLE` | `infra.encryption` | `encryption_mgr` |
 | `ACCESS_CONTROL_AVAILABLE` | `infra.access_control` | `access_control_mgr` |
-| `LLM_OPTIMIZER_AVAILABLE` | `inference.optimizer` | `llm_optimizer` / `response_cache` / `rate_limiter` / `prompt_optimizer` |
+| `LLM_OPTIMIZER_AVAILABLE` | `inference.optimizer` | 仅 `response_cache` 为活跃全局实例；其余类作为可复用工具保留 |
 | `VECTOR_DB_AVAILABLE` | `knowledge.vector_db` | — |
 
-#### 4.1.6 依赖注入（`backend/app/dependencies.py`）
+> 历史标志 `LOAD_BALANCER_AVAILABLE`（`infra/load_balancer.py`）已移除：vLLM 多实例健康感知与负载统计已统一收敛到 `inference/vllm_client.py:VLLMClient`。
+
+#### 4.1.8 用户认证依赖（`backend/app/dependencies.py`）
 
 核心函数 `get_current_user(request: Request) -> dict`，三层 Token 提取策略：
 
@@ -282,10 +345,10 @@ CORS → AuditLog → SecurityHeaders → Security(认证) → RateLimit → Inp
 | **auth.py** | `/api/auth` | `POST /register`、`POST /login`、`POST /logout`、`GET /me` | bcrypt 密码哈希、JWT 生成、httpOnly Cookie、Token 黑名单（TTL，上限 10000）、`ALLOW_REGISTRATION` 开关、注册异步锁防并发 |
 | **claw.py** | `/api/claw` | `GET/POST /tools`、`DELETE /tools/{name}`、`POST /tools/execute` | 自定义工具 CRUD、AST 校验、模块白名单、`_FORBIDDEN_TOKENS` 黑名单、`multiprocessing` 子进程 + `RLIMIT_AS`/`RLIMIT_CPU` 沙箱、生产默认禁用 |
 | **config.py** | `/api/config`、`/api/model` | `GET/PUT /config`、`GET /model/status`、`PUT /model/provider` | 敏感字段脱敏、Redis 配置缓存（TTL 60s）、`CONFIG_SCHEMA` 校验、6 种 `ModelProvider` |
-| **enhanced.py** | `/api/enhanced` | `GET /status`、`GET /stats` + 子端点 | 动态探测增强组件可用性、API Key 创建/吊销、备份创建/恢复（路径遍历防护） |
+| **enhanced.py** | `/api/enhanced` | `GET /status`、`GET /stats` + 子端点 | 动态探测增强组件可用性、托管 API Key 创建/按 ID 吊销、备份创建与清单；在线 SQLite 恢复按失败关闭策略返回 409 |
 | **evaluation.py** | `/api/evaluation` | `GET /gold-set`、`POST /run`、`GET /runs`、`GET /runs/{id}`、`POST/GET /feedback` | 异步评估调度、5 类别（persona/safety/rag_grounded/factual/multiturn）、指标与配置快照存档 |
 | **experiments.py** | `/api/experiments` | `GET /`、`GET /{id}`、`POST /lora-ablation`、`POST /rag-ablation`、`POST /quantization-benchmark`、`GET /{id}/report` | 3 类实验、mock 模式、Markdown 报告自动生成 |
-| **generate.py** | `/api/generate`、`/api/vllm` | `POST /generate`、`POST /generate/v2`、`GET /vllm/status` | vLLM 延迟初始化（带锁）、安全策略 prompt、高风险提示词拦截、RAG 缓存（TTL 60s）、熔断器 + 故障转移、Pipeline v2（Corrective RAG） |
+| **generate.py** | `/api/generate`、`/api/vllm` | `POST /generate`、`GET /vllm/status` | 单一有界 `InferenceRuntime`、请求级配置快照、单次 RAG 证据/引用、vLLM 客户端故障转移、响应缓存 |
 | **integrations.py** | `/api/integrations` | `POST /astrbot/messages` | 5 平台支持、`X-Integration-Token` + HMAC 签名、消息去重、会话开关、降级响应 |
 | **knowledge.py** | `/api/knowledge` | 知识库/文件夹/文档/分块 CRUD、`/upload-zip`、`/scan`、`/search`、意图分类训练 | ZIP 安全验证、`simple_text_split` 分块、路径注入检索文本、三阶段搜索回退（RAGHelper → 向量混合 → 关键词） |
 | **loras.py** | `/api/loras` | `GET /`、`POST /scan`、`PUT /{id}/status`、`DELETE /{id}` | `adapter_config.json` + `trainer_state.json` 元数据读取、`AdapterChecker` 兼容性检查、vLLM `load_lora_adapter` |
@@ -304,7 +367,7 @@ CORS → AuditLog → SecurityHeaders → Security(认证) → RateLimit → Inp
 
 #### 4.3.1 双模式适配器架构
 
-**核心文件**：`backend/db/adapter.py`、`backend/db/database.py`、`backend/db/pg_database.py`
+**核心文件**：`backend/db/adapter.py`、`backend/db/urls.py`、`backend/db/errors.py`、`backend/db/database.py`、`backend/db/pg_database.py`、`backend/db/models.py`
 
 **选择机制**：
 
@@ -314,12 +377,23 @@ def _should_use_postgresql(env=os.environ) -> bool:
     if explicit:
         return explicit in {"1", "true", "yes", "on"}
     database_url = str(env.get("DATABASE_URL", "")).strip().lower()
-    return database_url.startswith(("postgresql://", "postgresql+asyncpg://"))
+    if database_url.startswith(("postgres://", "postgresql://", "postgresql+asyncpg://")):
+        return True
+    return all(env.get(key) for key in ("PG_HOST", "PG_USER", "PG_PASSWORD", "PG_DATABASE"))
 ```
 
-- **优先级**：显式 `USE_POSTGRESQL` 环境变量 > `DATABASE_URL` 协议头自动识别
+- **优先级**：显式 `USE_POSTGRESQL` > `DATABASE_URL` 协议头 > 完整 `PG_HOST/PG_USER/PG_PASSWORD/PG_DATABASE` 自动识别
 - **接口契约**：通过 `assert isinstance(db, DatabaseInterface)` 强制实现 `backend/interfaces/__init__.py` 定义的抽象方法
 - **对外 API**：`get_db()` 返回当前实例；`is_pg_mode()` 返回布尔值供业务层分支判断
+
+**URL 规范化（`db/urls.py`）**：运行时与 Alembic 共用同一份 PG URL 解析逻辑，避免双写漂移：
+
+- `normalize_async_database_url(url)`：把 `postgres://`、`postgresql://` 统一为 `postgresql+asyncpg://`
+- `_component_database_url(env)`：当无显式 `DATABASE_URL` 时，从 `PG_HOST/PG_USER/PG_PASSWORD/PG_PORT/PG_DATABASE` 通过 SQLAlchemy `URL.create()` 安全编码密码（含保留字符）后渲染
+- `resolve_runtime_database_url(database_url=None, env=None)`：先看显式 URL，否则回落到分量构造
+- `resolve_alembic_database_url(env=None)`：在运行时解析之上叠加 `ALEMBIC_DATABASE_URL` 覆盖项
+
+**领域异常（`db/errors.py`）**：`RegistrationClosedError`（bootstrap-only 注册与既有用户竞态时抛出），供仓储/服务层共享。
 
 **SQLite 实现**（`database.py`，1932 行）：
 - 全局单例 `db = SQLiteDB()`
@@ -330,7 +404,7 @@ def _should_use_postgresql(env=os.environ) -> bool:
 **PostgreSQL 实现**（`pg_database.py`，1995 行）：
 - `PgDatabase` 使用 `create_async_engine`（`pool_size=10, max_overflow=20, pool_pre_ping=True`）+ `async_sessionmaker`
 - `SyncPgAdapter` 同步包装器：在后台线程运行独立事件循环，每个同步方法通过 `asyncio.run_coroutine_threadsafe(coro, self._loop).result(timeout=...)` 桥接到异步实现
-- URL 规范化：`_normalize_database_url` 将 `postgres://` / `postgresql://` 统一改写为 `postgresql+asyncpg://`
+- URL 规范化：`db/urls.py` 统一处理运行时与 Alembic；`PG_*` 分量通过 SQLAlchemy `URL.create()` 安全编码
 - 全局单例 `sync_pg_db = SyncPgAdapter(pg_db)`
 
 #### 4.3.2 数据库表结构（共 26 张表）
@@ -355,7 +429,7 @@ def _should_use_postgresql(env=os.environ) -> bool:
 | 表名 | 用途 |
 |---|---|
 | `saved_dialogues` | 训练对话存档 |
-| `session_settings` | 会话开关/策略 |
+| `session_settings` | 旧库兼容来源；启动时单向迁移至 canonical `conversations`，之后不再读写 |
 | `claw_tools` | Claw 自定义工具 |
 | `integration_message_dedup` | 集成消息去重 |
 | `conversations` | 集成会话注册表 |
@@ -387,8 +461,10 @@ def _should_use_postgresql(env=os.environ) -> bool:
 |---|---|---|
 | `001_initial` | None | 创建 10 张基础表 |
 | `002_research` | `001_initial` | 创建 6 张研究表 + 4 个索引 |
+| `003_indexes` | `002_research` | 补齐 SQLite 运行时已建但 PG 缺失的索引（Inspector 幂等检查） |
+| `004_index_cleanup` | `003_indexes` | 删除 `conversations` 上与唯一约束重复的 `idx_conversations_platform_conversation`；统一 `messages.createdAt` 索引名为 `idx_messages_created_at` |
 
-**说明**：运行时表未纳入 alembic 版本管理，新部署到 PG 时除 `alembic upgrade` 外仍依赖 `PgDatabase.init()` 补建。
+**说明**：运行时表未纳入 alembic 版本管理，新部署到 PG 时除 `alembic upgrade` 外仍依赖 `PgDatabase.init()` 补建。003/004 均使用 Inspector 先检查再操作，保证"先启动新代码再 upgrade"的场景下幂等。
 
 #### 4.3.4 迁移工具（`backend/db/migration.py`）
 
@@ -544,6 +620,7 @@ build_citations() / build_context_prompt() → 注入 LLM
   - `build_citations(results) -> List[Dict]`：构建引用列表（含 `source_title/evidence_excerpt/score/content_hash/kb_revision`）
   - `should_abstain(confidence, threshold=0.3) -> bool`：是否弃答
   - `retrieve_with_citations(query, top_k, threshold) -> Dict`：返回 `{results, citations, confidence, abstained}`
+  - 当 `abstained=true` 时，生成入口直接返回可配置的 `RAG_ABSTENTION_REPLY`，不再调用无证据的 LLM；历史模型标记为 `rag/abstained`，也不写入模型调用统计。
 
 #### 4.5.4 reranker.py — Cross-Encoder 重排器
 
@@ -712,52 +789,57 @@ build_citations() / build_context_prompt() → 注入 LLM
 
 ### 4.8 基础设施层（infra）
 
-**目录**：`backend/infra/`，共 13 个组件文件。通过 Protocol 接口实现依赖倒置。
+**目录**：`backend/infra/`，共 14 个组件文件。通过 Protocol 接口实现依赖倒置。
 
 #### 基础设施组件清单
 
 | 组件 | 文件 | 职责 | 关键类 | 设计模式 |
 |---|---|---|---|---|
 | RBAC 访问控制 | `access_control.py` | 角色-权限模型、PBKDF2 密钥哈希、滑动窗口限流、SQLite 审计日志 | `Permission`(Flag 枚举)、`Role`、`RateLimiter`、`AuditLogger`、`AccessControlManager` | 单例、装饰器 |
+| 认证工作模块 | `auth_work.py` | 认证流程内部辅助逻辑，供 `access_control` 与 `middleware/security` 共享 | 内部工具函数 | 内聚辅助 |
 | SQLite 备份 | `backup_manager.py` | 全量/增量备份、gzip 压缩、SHA256 完整性、保留轮转 | `BackupType`、`BackupInfo`、`BackupManager` | 策略、模板方法 |
+| 有界线程执行器 | `bounded_executor.py` | 带运行+排队硬上限的专用线程池，超限即拒绝，超时即取消 | `BoundedThreadExecutor`、`BlockingWorkRejected`、`BlockingWorkTimeout` | 有界池 |
 | 熔断器 | `circuit_breaker.py` | 3 状态机（CLOSED/OPEN/HALF_OPEN）、降级模式、全局注册 | `CircuitState`、`DegradationMode`、`CircuitBreaker`、`CircuitBreakerRegistry` | 状态机、装饰器、注册表 |
 | 并发控制 | `concurrency_control.py` | 令牌桶（全局/会话/发送者三级）、推理运行时、会话锁串行化 | `TokenBucketLimiter`、`InferenceRuntime`、`inference_runtime` 单例 | 令牌桶、优先级队列 |
 | 部署校验 | `deployment.py` | 生产环境严格校验 | `DeploymentValidationResult`、`validate_deployment_environment()`、`validate_or_raise_for_startup()` | 校验器 |
 | 字段级加密 | `encryption.py` | AES-256-GCM、格式 `ENC:AES256GCM:{iv}:{ciphertext}:{tag}`、敏感字段检测、密钥轮转 | `EncryptionManager`、`DatabaseEncryptionMiddleware` | 单例、中间件 |
 | 多 Provider 故障转移 | `failover.py` | 健康检查、AUTO/MANUAL/PRIORITY_BASED 策略、自动回切 | `ProviderHealthStatus`、`FailoverStrategy`、`ProviderConfig`、`HealthChecker`、`FailoverManager` | 策略、观察者 |
 | 输入校验 | `input_validator.py` | Schema 驱动、SQL 注入/XSS/路径遍历/命令注入检测 | `FieldType`、`FieldRule`、`Schema`、`InputValidator`；预置 `MESSAGE_SCHEMA` 等 | Schema 校验 |
-| 负载均衡 | `load_balancer.py` | 轮询、Nginx 平滑加权、最少连接 | `Provider`、`BaseBalancer`、`RoundRobinBalancer`、`WeightedBalancer`、`LeastConnectionBalancer`、`LoadBalancerManager` | 策略、工厂 |
+| vLLM 实例均衡 | `inference/vllm_client.py` | 健康感知选择、实例级失败状态与实时统计 | `VLLMClient`、`VLLMInstance` | 共享客户端 |
 | 可观测性 | `observability.py` | 轻量计数器、最近窗口（deque maxlen=1000）、连续失败跟踪、结构化 JSON 日志、敏感字段脱敏 | `increment()`、`set_consecutive()`、`count_recent()`、`snapshot()`、`log_event()` | 计数器、滑动窗口 |
 | 资源池 | `resource_pool.py` | SQLite 连接池、HTTP 客户端池、模型推理池 | `PooledConnection`、`ConnectionPool`、`HttpClientPool`、`ModelInferencePool` | 对象池 |
 | 安全工具 | `security_utils.py` | HMAC 常量时间比较、nonce 重放保护、集成签名验证、敏感字段脱敏 | `constant_time_contains()`、`remember_nonce()`、`integration_signature()`、`verify_integration_signature()`、`redact_sensitive()` | 常量时间比较 |
 
-**设计要点**：所有组件以单进程为前提（强约束 `BACKEND_WORKERS=1`），因为幂等缓存、会话锁、nonce 状态在进程内实现。
+> 历史组件 `load_balancer.py` 已删除：vLLM 多实例健康/负载统计统一收敛到 `inference/vllm_client.py`，不再保留独立负载均衡模块。
+
+**设计要点**：所有组件以单进程为前提（强约束 `BACKEND_WORKERS=1`），因为幂等缓存、会话锁、nonce 状态在进程内实现。`BoundedThreadExecutor` 为 `ReadinessProbe` 和其他需要把同步阻塞工作卸离事件循环的调用方提供有界保护，超限拒绝而不是无限排队。
 
 #### 部署校验规则（`deployment.py`）
 
 生产环境强制校验：
 - `ASTRBOT_INTEGRATION_TOKEN` ≥ 32 字符
-- `DATABASE_URL` 必须为 PostgreSQL
+- `DATABASE_URL` 必须为 PostgreSQL，或提供完整的 `PG_HOST/PG_USER/PG_PASSWORD/PG_DATABASE`
 - `JWT_SECRET` ≥ 32 字符且非占位值
 - `CORS` 非 localhost
 - `BACKEND_WORKERS=1`
 - `SECURITY_MIDDLEWARE_ENABLED` 必需
-- `LORA_PATH=VLLM_LORA_ROOT`
+- `LORA_PATH` 与 `VLLM_LORA_ROOT` 可使用不同容器路径，但必须映射到同一份 LoRA 存储
 
 ---
 
 ### 4.9 缓存层（cache）
 
-**目录**：`backend/cache/`，共 4 个模块，构成多级缓存体系。
+**目录**：`backend/cache/`；生产缓存与实验性工具显式隔离。
 
 | 模块 | 职责 | 关键类 |
 |---|---|---|
-| `redis_client.py` | Redis 连接池（max_connections=50）、JSON 序列化、基础 get/set/delete/exists/incr/expire/keys | `get_redis()` |
+| `redis_client.py` | Redis 连接池（max_connections=50）、JSON 序列化、基础 get/set/delete/exists/incr/expire/keys；同步与异步两套客户端，`close_async_redis()` / `close_sync_redis()` 由 lifespan 统一关闭 | `get_redis()` |
 | `config_cache.py` | 配置缓存，TTL ±10% 抖动防雪崩；双层结构（Redis + 本地内存兜底） | `get_cached_config()`、`set_cached_config()`、`invalidate_config_cache()` |
-| `semantic_cache.py` | 语义缓存，L1 进程内 LRU（max 1000 条、300s TTL）+ L2 Redis（3600s TTL），文本归一化 + SHA256 哈希键 + 前缀分桶 | `L1LRUCache`、`L2RedisCache`、`SemanticCache` |
-| `message_queue.py` | Redis Streams 消息队列，11 个优先级流（`mq:priority:0~10`）、消费组 `mq_workers`、死信流、可见性超时 30s、`MAX_PENDING=500`、`MAX_RETRY=3` | `QueueMessage`、`RedisMessageQueue` |
+| `ttl_value_cache.py` | SQLite/PostgreSQL 会话开关共用的有界、线程安全本地 TTL 缓存 | `BoundedTTLCache` |
+| `semantic_cache.py` | 实验/基准用语义缓存；仅允许显式导入，不进入生产主链路 | `SemanticCache` |
+| `message_queue.py` | 实验性 Redis Streams 队列；不属于生产推理链路 | `QueueMessage`、`RedisMessageQueue` |
 
-**整体架构**：L1 LRU 命中速度极快；未命中走 L2 Redis；语义缓存避免重复推理；消息队列削峰填谷；所有缓存层都通过 Protocol 接口契约保证可替换性。
+**生产缓存/调度主链路**：`config_cache` + `ResponseCache` + `BoundedTTLCache` + `InferenceRuntime`。`semantic_cache.py` 与 `message_queue.py` 仅作为隔离的实验/基准工具保留。
 
 ---
 
@@ -766,7 +848,7 @@ build_citations() / build_context_prompt() → 注入 LLM
 **文件**：`backend/middleware/security.py`，6 个中间件形成纵深防御链：
 
 1. **RequestIdMiddleware**：UUID 请求 ID + contextvars 上下文传播
-2. **SecurityMiddleware**：JWT + API Key 双认证、白名单路径（`AUTH_WHITELIST`）
+2. **SecurityMiddleware**：JWT + 静态/托管 API Key 双认证、认证尝试限流、吊销检查、白名单路径（`AUTH_WHITELIST`）
 3. **RateLimitMiddleware**：RPM/TPM 滑动窗口，分端点配额（auth/generate/default 各自独立）
 4. **InputValidationMiddleware**：请求体大小限制 + prompt 长度限制 + 17 条 prompt injection 模式检测
 5. **SecurityHeadersMiddleware**：X-Frame-Options、CSP、HSTS、X-Content-Type-Options
@@ -804,6 +886,48 @@ build_citations() / build_context_prompt() → 注入 LLM
 | `ablation_runner.py` | LoRA 消融框架，`DEFAULT_VARIANTS` = lora_baseline/lora_neftune/lora_packing/dora/rslora，`controlled_variables` 校验确保单因素 |
 | `quantization_benchmark.py` | 量化基准，`DEFAULT_CONFIGS` = fp16/awq/nf4/int8，pynvml 测量 VRAM，TTFT/decode_tokens_per_s/p50/p95/p99 延迟 |
 | `rag_ablation.py` | RAG 消融，`DEFAULT_VARIANTS` = vector_only/bm25_only/hybrid/hybrid_reranker，复用 `RetrievalMetrics`，纯 CPU 无需 GPU |
+
+---
+
+### 4.12 分层架构（services / repositories / providers）
+
+**目录**：`backend/services/`、`backend/repositories/`、`backend/app/providers.py`
+
+项目正在从"API 路由直接调用 `db` 全局单例"的旧模式，向"路由 → 服务 → 仓储 → 数据库适配器"分层结构增量迁移。新代码应遵循 [可扩展性开发指南](EXTENSIBILITY_GUIDE.md)；旧 API 模块中的 `db` 全局导入是兼容层，不作为新模块的实现模板。
+
+```text
+FastAPI route
+    ↓ 只处理 HTTP 参数、鉴权和错误映射
+Application service (services/)
+    ↓ 编排业务流程，不依赖 FastAPI
+Repository Protocol (repositories/)
+    ↓ 描述领域所需的持久化能力
+Database adapter (db/adapter.py)
+    ↓ SQLite / PostgreSQL 兼容实现
+```
+
+#### 4.12.1 服务层（`backend/services/`）
+
+| 文件 | 服务 | 职责 |
+|---|---|---|
+| `chat_generation.py` | `ChatGenerationService` | 聊天生成用例编排：清洗消息 → 高危 prompt 拦截 → 优先级/限流 → 调用注入的 `generate_handler` → 返回 `GenerateResponse`。`InferenceRuntime` 以 Protocol 注入，便于单元测试用 fake 替换 |
+| `model_management.py` | `ModelManagerService` | 模型管理用例：`list_available_models` / `check_model_exists` / `download_model` / `delete_model`，把同步 `ModelManager` 通过 `asyncio.to_thread` 适配为异步 API |
+
+#### 4.12.2 仓储层（`backend/repositories/`）
+
+| 文件 | Protocol | 适配器 | 用途 |
+|---|---|---|---|
+| `messages.py` | `MessageRepository` | `DatabaseMessageRepository` | 消息历史分页、会话摘要、会话开关、按条件批量/单条删除；`MessageQuery` dataclass 封装筛选条件，避免参数列表膨胀；同步数据库调用通过 `asyncio.to_thread` 卸离事件循环 |
+| `user_data.py` | `UserDataRepository` | `DatabaseUserDataRepository` | 按 `username + page_key` 加载/保存页面状态；用户不存在抛 `UserDataUserNotFoundError` |
+
+#### 4.12.3 依赖提供器（`backend/app/providers.py`）
+
+`providers.py` 是 FastAPI 依赖注入的集中入口，将 `RuntimeContainer` 适配为 Service / Repository：
+
+- `get_message_repository(request)` / `get_user_data_repository(request)`：从 `request.app.state.runtime_container.db` 构造数据库仓储
+- `get_model_management_service()`：从 `inference.model_manager.get_model_manager()` 构造服务
+
+路由通过 `Depends(get_message_repository)` 等注入依赖；`request.app.state.runtime_container` 是唯一数据库来源，禁止在 provider 中重新导入全局数据库单例。
 
 ---
 
@@ -1070,7 +1194,8 @@ curl -fsS http://127.0.0.1:8001/v1/models
 |---|---|---|
 | `ENVIRONMENT` | 环境标识（production 强校验） | development |
 | `USE_POSTGRESQL` | 强制 PG 模式 | 自动识别 |
-| `DATABASE_URL` | PG 连接串 | 空 |
+| `DATABASE_URL` | PG 连接串（与完整 `PG_*` 二选一） | 空 |
+| `PG_HOST/PG_USER/PG_PASSWORD/PG_DATABASE` | 结构化 PG 连接参数，密码会安全编码 | 空 |
 | `DATABASE_PATH` | SQLite 路径 | backend/qq_assistant.db |
 | `LORA_PATH` | LoRA 根目录 | backend/loras |
 | `ALLOW_REGISTRATION` | 开放注册 | — |
@@ -1090,23 +1215,30 @@ curl -fsS http://127.0.0.1:8001/v1/models
 
 ## 8. 测试体系
 
-**目录**：`backend/tests/`，8 个测试文件，覆盖单元 + 集成 + 契约三层。
+**目录**：`backend/tests/`，覆盖单元 + 集成 + 契约 + 并发回压四层。`conftest.py` 通过 `collect_ignore_glob = ["security_test.py", "fault_injection_test.py"]` 排除可执行脚本。
 
-| 文件 | 覆盖范围 |
-|---|---|
-| `conftest.py` | `collect_ignore_glob = ["security_test.py", "fault_injection_test.py"]`，排除可执行脚本 |
-| `test_core.py`（1080 行） | L1LRUCache、TextNormalization、CircuitBreaker、QueueMessage、GroupRateLimiter、MultiPlatformStorage、IntegrationSecurity、AstrBotContracts、AstrBotIntegrationFlow、DeploymentValidation、ServiceStatus、Observability、ConcurrencyControl |
-| `test_character_benchmark.py` | 安全通过判断、quality gate 拒绝短小/塌缩候选、接受匹配健康候选、拒绝重复 sample IDs |
-| `test_production_hardening.py`（384 行） | 生产硬化回归：DATABASE_URL 选择、PostgreSQL sync adapter 契约、路径校验、ZIP 校验、CLAW validator、CLAW 执行生产 opt-in、JWT secret、数据库启动探针、LoRA served name 映射、vLLM LoRA 加载、生产注册、forwarded IP、admin 端点、训练资源名 |
-| `test_service_status_contract.py` | services 不包含平台连接检查 |
-| `test_training_evaluator.py` | 训练评估总结 losses 与 provenance、处理无效/极端 loss、DoRA + RSLoRA 共存、非量化模型用 float16 |
-| `security_test.py` | 可执行渗透测试脚本（`__test__ = False`），8 场景：SQL 注入、XSS、路径遍历、命令注入、认证绕过、权限提升、限流绕过、敏感数据泄露 |
-| `fault_injection_test.py` | 可执行故障注入脚本（`__test__ = False`），6 场景：模型服务故障、数据库故障、网络超时、高负载/限流、熔断器状态转换、备份恢复 |
+### 8.1 测试文件分类
 
-**测试设计约束**（来自项目记忆）：
+| 类别 | 代表性文件 | 覆盖范围 |
+|---|---|---|
+| 核心单元/集成 | `test_core.py`、`test_architecture_hardening.py` | L1LRUCache、CircuitBreaker、MultiPlatformStorage、AstrBot 契约、DeploymentValidation、ServiceStatus、ConcurrencyControl、架构硬化回归 |
+| 应用工厂与运行时 | `test_app_factory.py`、`test_app_configuration_isolation.py`、`test_runtime_unification.py`、`test_readiness_*.py` | `create_app` 组合根、配置隔离、`RuntimeContainer` 统一、`ReadinessProbe` 并发与集成 |
+| 仓储与服务 | `test_message_repository.py`、`test_user_data_repository.py`、`test_chat_generation_service.py`、`test_model_management_service.py` | 新分层架构的 Protocol 契约与异步适配 |
+| 数据库与迁移 | `test_database_urls.py`、`test_pg_compat_and_cache_regression.py`、`test_sync_pg_adapter_concurrency.py` | PG URL 规范化、SQLite/PG 兼容、`SyncPgAdapter` 并发回压 |
+| 认证与安全 | `test_auth_*.py`、`test_security_rate_limiter*.py`、`test_lora_path_security.py`、`test_encryption_key_management.py` | 注册竞态、认证回压、限流器容量、LoRA 路径信任边界、密钥管理 |
+| 训练与评估 | `test_training_task_lifecycle.py`、`test_training_export_concurrency.py`、`test_evaluation_runtime_hardening.py`、`test_retrieval_evaluation_integrity.py` | 训练任务生命周期、导出并发、评估运行时硬化、检索评估完整性 |
+| 研究数据契约 | `test_research_data_api_integrity.py`、`test_experiment_api_integrity.py`、`test_lora_scan_integrity.py`、`test_kisaki_*` | 研究 API 完整性、实验契约、LoRA 扫描、月社妃 Gold/v3/v4 契约 |
+| 基础设施 | `test_circuit_breaker_lifecycle.py`、`test_bounded_executor.py`、`test_semantic_cache_lifecycle.py`、`test_stats_concurrency.py` | 熔断器生命周期、有界执行器、语义缓存、统计并发 |
+| 角色基准 | `test_character_benchmark.py` | quality gate 拒绝短小/塌缩候选、接受健康候选、拒绝重复 sample IDs |
+| 训练评估器 | `test_training_evaluator.py` | losses 与 provenance、极端 loss、DoRA + RSLoRA 共存、非量化模型 float16 |
+| 可执行脚本 | `security_test.py`、`fault_injection_test.py` | 渗透测试 8 场景（SQL 注入/XSS/路径遍历/命令注入/认证绕过/权限提升/限流绕过/敏感数据泄露）、故障注入 6 场景；`__test__ = False`，被 conftest 排除 |
+
+### 8.2 测试设计约束
+
 - CI 测试必须在 Ubuntu 通过；Windows 特定测试使用 `@pytest.mark.skipif(sys.platform == "win32")`
 - 测试超时需考虑环境差异（CI 可能需要更长超时）
 - 严格错误信息断言可能跨平台失败；使用灵活匹配
+- 新分层（services / repositories）测试优先用 fake 依赖做单元测试，再补一条路由注入测试
 
 ---
 
@@ -1235,7 +1367,10 @@ training ──→ inference (intent_trainer 用 VLLMClient 生成样本)
   │
   └──→ training.trainer (preference_trainer 复用 GpuTemperatureCallback)
 
-api ──→ db.adapter (所有路由)
+api ──→ services (chat_generation / model_management)  [新路由优先]
+  │     └─→ repositories (messages / user_data) ──→ db.adapter
+  │
+  ├─[兼容]─→ db.adapter (旧路由直接导入全局单例)
   │
   ├──→ inference (generate / loras / models / router)
   │
@@ -1248,6 +1383,12 @@ api ──→ db.adapter (所有路由)
   ├──→ experiments (experiments)
   │
   └──→ infra (enhanced / stats)
+
+app.main.create_app ──→ app.runtime.RuntimeContainer
+  │                      ├─→ db.adapter
+  │                      └─→ infra.concurrency_control.inference_runtime
+  ├─→ app.readiness.ReadinessProbe ──→ infra.bounded_executor
+  └─→ app.providers ──→ services / repositories
 ```
 
 ---

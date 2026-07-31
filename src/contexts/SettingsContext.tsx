@@ -11,7 +11,7 @@ interface SettingsContextType {
   loading: boolean;
   t: (key: string, fallback?: string) => string;
   formatTime: (date: Date, options?: Intl.DateTimeFormatOptions) => string;
-  updateSettings: (newConfig: SystemConfig) => Promise<void>;
+  syncSettings: (newConfig: SystemConfig) => void;
   refreshSettings: () => Promise<void>;
 }
 
@@ -62,11 +62,9 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const updateSettings = useCallback(async (newConfig: SystemConfig) => {
-    const result = await api.updateConfig(newConfig);
-    if (result.success) {
-      setConfig(result.config);
-    }
+  // Sync a configuration that the caller has already persisted.
+  const syncSettings = useCallback((newConfig: SystemConfig) => {
+    setConfig(newConfig);
   }, []);
 
   const refreshSettings = useCallback(async () => {
@@ -79,7 +77,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   }, [fetchConfig]);
 
   return (
-    <SettingsContext.Provider value={{ locale, timezone, config, loading, t, formatTime, updateSettings, refreshSettings }}>
+    <SettingsContext.Provider value={{ locale, timezone, config, loading, t, formatTime, syncSettings, refreshSettings }}>
       {children}
     </SettingsContext.Provider>
   );

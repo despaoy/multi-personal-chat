@@ -1,16 +1,14 @@
 'use client';
 
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
-import { api, User } from '@/lib/api';
+import { User } from '@/lib/api';
 
 interface AuthContextType {
   user: User | null;
   loading: boolean;
   login: (username: string, password: string) => Promise<void>;
   register: (username: string, password: string) => Promise<void>;
-  logout: () => void;
-  savePageData: (pageKey: string, data: Record<string, unknown>) => Promise<void>;
-  loadPageData: (pageKey: string) => Promise<Record<string, unknown> | null>;
+  logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -120,50 +118,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(userData);
   }, []);
 
-  const logout = useCallback(() => {
-    // 调用后端清除 Cookie
-    fetch('/api/auth/logout', {
-      method: 'POST',
-      credentials: 'include',
-    }).catch(() => {});
-    localStorage.removeItem('qq_assistant_user');
-    setUser(null);
+  const logout = useCallback(async () => {
+    try {
+      // 等待响应完成，确保 HttpOnly Cookie 在页面跳转前已经清除。
+      await fetch('/api/auth/logout', {
+        method: 'POST',
+        credentials: 'include',
+      });
+    } finally {
+      localStorage.removeItem('qq_assistant_user');
+      setUser(null);
+    }
   }, []);
 
-  const savePageData = useCallback(async (pageKey: string, data: Record<string, unknown>) => {
-    if (!user || loading) return;
-    localStorage.setItem(`qq_assistant_data_${pageKey}`, JSON.stringify(data));
-    try {
-      await api.saveUserData(pageKey, JSON.stringify(data));
-    } catch (err) {
-      console.error('Failed to save user data to server:', err);
-    }
-  }, [user, loading]);
-
-  const loadPageData = useCallback(async (pageKey: string): Promise<Record<string, unknown> | null> => {
-    const localData = localStorage.getItem(`qq_assistant_data_${pageKey}`);
-    let result = localData ? (() => { try { return JSON.parse(localData); } catch { return null; } })() : null;
-
-    if (user && !loading) {
-      try {
-        const res = await api.getUserData(pageKey);
-        if (res.success && res.data) {
-          const serverData = 'data_json' in res.data ? JSON.parse((res.data as { data_json: string }).data_json) : null;
-          if (serverData) {
-            result = serverData;
-            localStorage.setItem(`qq_assistant_data_${pageKey}`, JSON.stringify(serverData));
-          }
-        }
-      } catch (err) {
-        console.error('Failed to load user data from server:', err);
-      }
-    }
-
-    return result;
-  }, [user, loading]);
-
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout, savePageData, loadPageData }}>
+    <AuthContext.Provider value={{ user, loading, login, register, logout }}>
       {children}
     </AuthContext.Provider>
   );

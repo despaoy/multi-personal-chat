@@ -6,7 +6,7 @@ Pydantic 请求/响应模型
 SQLAlchemy ORM 模型（数据库 schema）定义在 db/models.py。
 """
 
-from pydantic import BaseModel, Field, StringConstraints
+from pydantic import BaseModel, Field, StringConstraints, field_validator
 from typing import Optional, List, Dict, Any, Literal, Annotated
 
 # ============================================
@@ -84,7 +84,7 @@ class TrainingStartRequest(BaseModel):
 
 class ModelDownloadRequest(BaseModel):
     """模型下载请求"""
-    model_name: str
+    model_name: str = Field(..., min_length=1, max_length=100, pattern=r"^[A-Za-z0-9._-]+$")
     force: bool = False
 
 
@@ -168,11 +168,25 @@ class RegisterRequest(BaseModel):
     username: str = Field(..., min_length=2, max_length=50)
     password: str = Field(..., min_length=8, max_length=100)
 
+    @field_validator("password")
+    @classmethod
+    def validate_bcrypt_password_length(cls, password: str) -> str:
+        if len(password.encode("utf-8")) > 72:
+            raise ValueError("password must not exceed 72 UTF-8 bytes")
+        return password
+
 
 class LoginRequest(BaseModel):
     """用户登录请求"""
-    username: str
-    password: str
+    username: str = Field(..., min_length=1, max_length=50)
+    password: str = Field(..., min_length=1, max_length=100)
+
+    @field_validator("password")
+    @classmethod
+    def validate_bcrypt_password_length(cls, password: str) -> str:
+        if len(password.encode("utf-8")) > 72:
+            raise ValueError("password must not exceed 72 UTF-8 bytes")
+        return password
 
 
 class UserDataRequest(BaseModel):
@@ -239,11 +253,11 @@ class GoldPromptSchema(BaseModel):
 
 class EvalRunRequest(BaseModel):
     """评估运行请求"""
-    adapter_name: Optional[str] = None
-    model_label: Optional[str] = None
-    categories: Optional[List[str]] = None
-    split: str = "eval"
-    max_prompts: Optional[int] = None
+    adapter_name: Optional[str] = Field(default=None, max_length=256)
+    model_label: Optional[str] = Field(default=None, max_length=256)
+    categories: Optional[List[str]] = Field(default=None, max_length=20)
+    split: Literal["eval", "held_out"] = "eval"
+    max_prompts: Optional[int] = Field(default=None, ge=1, le=50)
     mock: bool = False
 
 
@@ -254,64 +268,115 @@ class ExperimentStartRequest(BaseModel):
     mock: bool = False
 
 
+PreferenceReviewStatus = Literal["pending", "approved", "rejected"]
+
+
 class PreferencePairCreate(BaseModel):
     """偏好对创建请求"""
-    prompt: str
-    chosen: str
-    rejected: str
-    rubric: Optional[Dict[str, float]] = None
-    annotator: str = "manual"
-    metadata: Optional[Dict[str, Any]] = None
-    review_status: str = "pending"
+    prompt: str = Field(..., min_length=1, max_length=20_000)
+    chosen: str = Field(..., min_length=1, max_length=20_000)
+    rejected: str = Field(..., min_length=1, max_length=20_000)
+    rubric: Optional[Dict[str, float]] = Field(default=None, max_length=20)
+    annotator: str = Field(default="manual", min_length=1, max_length=100)
+    metadata: Optional[Dict[str, Any]] = Field(default=None, max_length=100)
+    review_status: PreferenceReviewStatus = "pending"
 
 
 class PreferencePairUpdate(BaseModel):
     """偏好对更新请求"""
-    review_status: Optional[str] = None
-    rubric: Optional[Dict[str, float]] = None
-    annotator: Optional[str] = None
+    review_status: Optional[PreferenceReviewStatus] = None
+    rubric: Optional[Dict[str, float]] = Field(default=None, max_length=20)
+    annotator: Optional[str] = Field(default=None, min_length=1, max_length=100)
 
 
 class PreferenceExportRequest(BaseModel):
     """偏好数据导出请求"""
-    review_status: str = "approved"
-    format: str = "jsonl"
+    review_status: PreferenceReviewStatus = "approved"
+    format: Literal["jsonl", "json"] = "jsonl"
+    limit: int = Field(default=10_000, ge=1, le=10_000)
 
 
 class SampleFromHistoryRequest(BaseModel):
     """从消息历史采样偏好对"""
-    limit: int = 20
-    session_id: Optional[str] = None
-    min_length: int = 10
+    limit: int = Field(default=20, ge=1, le=200)
+    session_id: Optional[str] = Field(default=None, max_length=256)
+    min_length: int = Field(default=10, ge=1, le=8_000)
 
 
 class RouterConfigUpdate(BaseModel):
     """路由配置更新请求"""
     enabled: Optional[bool] = None
-    default_adapter: Optional[str] = None
+    default_adapter: Optional[str] = Field(default=None, min_length=1, max_length=128)
     mode: Optional[Literal["manual", "rule", "intent"]] = None
-    persona_adapters: Optional[Dict[str, str]] = None
-    rag_confidence_threshold: Optional[float] = None
-    persona_keywords: Optional[Dict[str, List[str]]] = None
+    persona_adapters: Optional[Dict[str, str]] = Field(default=None, max_length=20)
+    rag_confidence_threshold: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+    persona_keywords: Optional[Dict[str, List[str]]] = Field(default=None, max_length=20)
+
+    @field_validator("persona_adapters")
+    @classmethod
+    def validate_persona_adapters(cls, value: Optional[Dict[str, str]]):
+        if value is None:
+            return value
+        if any(not key or len(key) > 64 or not adapter or len(adapter) > 128 for key, adapter in value.items()):
+            raise ValueError("persona adapter names exceed allowed bounds")
+        return value
+
+    @field_validator("persona_keywords")
+    @classmethod
+    def validate_persona_keywords(cls, value: Optional[Dict[str, List[str]]]):
+        if value is None:
+            return value
+        for persona, keywords in value.items():
+            if not persona or len(persona) > 64 or len(keywords) > 100:
+                raise ValueError("persona keyword groups exceed allowed bounds")
+            if any(not keyword or len(keyword) > 100 for keyword in keywords):
+                raise ValueError("persona keywords exceed allowed bounds")
+        return value
+
+
+class IntentSampleGenerateRequest(BaseModel):
+    """Bounded request for generating intent-classifier samples."""
+    kb_ids: List[int] = Field(default_factory=list, max_length=8)
+    samples_per_kb: int = Field(default=100, ge=1, le=500)
+    negative_count: int = Field(default=200, ge=0, le=1000)
+    lora_name: Optional[str] = Field(default=None, max_length=256)
+
+
+class IntentTrainRequest(BaseModel):
+    """Request for training the lightweight intent classifier."""
+    kb_ids: Optional[List[int]] = Field(default=None, max_length=8)
+
+
+class ApiKeyCreateRequest(BaseModel):
+    """Create one managed API key with bounded metadata."""
+    role: Literal["admin", "operator", "viewer", "api_user"] = "api_user"
+    description: Optional[str] = Field(default=None, max_length=500)
+    rate_limit: Optional[int] = Field(default=None, ge=1, le=10000)
 
 
 class FeedbackCreate(BaseModel):
     """用户反馈创建请求"""
-    trace_id: Optional[str] = None
-    message_id: Optional[str] = None
-    rating: str  # "thumbs_up" | "thumbs_down"
-    reason: Optional[str] = None
-    adapter_name: Optional[str] = None
-    kb_revision: Optional[str] = None
-    prompt_version: Optional[str] = None
-    detail: Optional[str] = None
+    trace_id: Optional[str] = Field(default=None, max_length=128)
+    message_id: Optional[str] = Field(default=None, max_length=256)
+    rating: Literal["positive", "negative", "thumbs_up", "thumbs_down"]
+    reason: Optional[str] = Field(default=None, max_length=2000)
+    adapter_name: Optional[str] = Field(default=None, max_length=256)
+    kb_revision: Optional[str] = Field(default=None, max_length=256)
+    prompt_version: Optional[str] = Field(default=None, max_length=256)
+    detail: Optional[str] = Field(default=None, max_length=10000)
 
 
 class RetrievalEvalQuestionCreate(BaseModel):
     """检索评估问题创建请求"""
-    id: Optional[str] = None
-    question: str
-    expected_doc_ids: List[str] = Field(default_factory=list)
-    expected_doc_titles: List[str] = Field(default_factory=list)
-    gold_answer: Optional[str] = None
-    category: Optional[str] = None
+    id: Optional[str] = Field(default=None, max_length=128)
+    question: str = Field(..., min_length=1, max_length=2000)
+    expected_doc_ids: List[Annotated[str, StringConstraints(max_length=256)]] = Field(
+        default_factory=list,
+        max_length=50,
+    )
+    expected_doc_titles: List[Annotated[str, StringConstraints(max_length=500)]] = Field(
+        default_factory=list,
+        max_length=50,
+    )
+    gold_answer: Optional[str] = Field(default=None, max_length=10000)
+    category: Optional[str] = Field(default=None, max_length=128)

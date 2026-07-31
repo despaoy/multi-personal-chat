@@ -83,7 +83,7 @@ LoRA   BGE/FAISS         Redis
 astrbot_plugins/     AstrBot 网关插件
 backend/
 ├── api/              FastAPI 路由
-├── app/              配置、依赖和应用生命周期
+├── app/              配置、依赖、应用生命周期与运行时容器
 ├── cache/            Redis/内存缓存、队列、语义缓存
 ├── db/               SQLite/PostgreSQL、模型与迁移
 ├── evaluation/       Gold Set、角色、安全与检索指标
@@ -91,6 +91,8 @@ backend/
 ├── inference/        vLLM 客户端、模型与 LoRA 路由
 ├── infra/            安全、并发、熔断、观测
 ├── knowledge/        导入、分块、检索、重排序
+├── repositories/     持久化 Protocol 与数据库适配实现
+├── services/         与 HTTP 传输无关的业务用例
 ├── tests/            后端测试
 └── training/         SFT、偏好训练和任务管理
 deploy/               Compose、Nginx 和部署脚本
@@ -139,13 +141,20 @@ curl -fsS http://127.0.0.1:5000/api/health
 
 ## 配置原则
 
-从 `.env.example` 创建私有 `.env`，至少配置：
+配置文件按运行模式分开，仓库根目录的 `.env` 不是约定入口：
+
+- 裸机后端：复制 `.env.example` 为 `backend/.env`。
+- Docker Compose：复制 `.env.example` 为 `deploy/.env`。
+- Next.js 本地变量：写入根目录 `.env.local`，或由部署平台注入。
+
+至少配置：
 
 - `JWT_SECRET`
+- `ENCRYPTION_KEY`
 - `ASTRBOT_INTEGRATION_TOKEN`
 - `MODEL_PROVIDER=vllm`
 - `VLLM_BASE_URL`
-- `DATABASE_URL` 或 `DATABASE_PATH`
+- PostgreSQL：`DATABASE_URL`，或 `USE_POSTGRESQL=true` + 完整 `PG_*`；SQLite：`DATABASE_PATH`
 - `BASE_MODEL_PATH`
 - `LORA_PATH`
 - `VECTOR_DB_PATH`
@@ -159,6 +168,7 @@ curl -fsS http://127.0.0.1:5000/api/health
 完整索引见 [docs/README.md](docs/README.md)。
 
 - [代码知识库](docs/architecture/CODE_WIKI.md)
+- [可扩展性开发指南](docs/architecture/EXTENSIBILITY_GUIDE.md)
 - [优化策略](docs/architecture/OPTIMIZATION_STRATEGY.md)
 - [生产准备审查](docs/architecture/PRODUCTION_READINESS_REVIEW_2026-07-18.md)
 - [部署指南](docs/operations/DEPLOYMENT_GUIDE.md)

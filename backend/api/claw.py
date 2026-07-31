@@ -13,7 +13,7 @@ from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel, Field
 
 from db.adapter import db
-from app.dependencies import get_current_user, get_current_admin
+from app.dependencies import get_current_admin
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -44,7 +44,7 @@ class ToolExecuteRequest(BaseModel):
 # ── 工具列表 ──
 
 @router.get("/api/claw/tools")
-async def list_tools(current_user: dict = Depends(get_current_user)):
+async def list_tools(current_user: dict = Depends(get_current_admin)):
     """列出所有 Claw 工具（内置 + 自定义）"""
     custom_tools = db.get_claw_tools()
     result = []

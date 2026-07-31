@@ -71,8 +71,11 @@ _NONCE_LENGTH = 12
 # 环境变量名
 _ENV_KEY_NAME = "ENCRYPTION_KEY"
 
-# .env文件路径（相对于backend目录）
-_ENV_FILE_PATH = Path(__file__).parent / ".env"
+# 后端只使用 backend/.env。旧版本曾误写到 backend/infra/.env，保留只读迁移入口。
+_BACKEND_ROOT = Path(__file__).resolve().parents[1]
+_ENV_FILE_PATH = _BACKEND_ROOT / ".env"
+_LEGACY_ENV_FILE_PATH = Path(__file__).resolve().parent / ".env"
+_PRODUCTION_ENVIRONMENTS = {"production", "prod"}
 
 
 # ---------------------------------------------------------------------------
@@ -135,33 +138,68 @@ class EncryptionManager:
     # 密钥管理
     # -------------------------------------------------------------------
 
+    @staticmethod
+    def _decode_key(encoded_key: str, source: str) -> bytes:
+        """Decode and validate one URL-safe base64 AES-256 key."""
+        try:
+            key = base64.urlsafe_b64decode(encoded_key.encode("ascii"))
+        except Exception as exc:
+            raise KeyManagementError(f"解析 {source} 中的 {_ENV_KEY_NAME} 失败") from exc
+        if len(key) != _KEY_LENGTH:
+            raise KeyManagementError(
+                f"{source} 中的 {_ENV_KEY_NAME} 必须解码为 {_KEY_LENGTH} 字节"
+            )
+        return key
+
+    @staticmethod
+    def _read_key_from_file(path: Path) -> Optional[str]:
+        """Read ENCRYPTION_KEY without mutating the process environment."""
+        if not path.exists():
+            return None
+        try:
+            for raw_line in path.read_text(encoding="utf-8").splitlines():
+                line = raw_line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                name, separator, value = line.partition("=")
+                if separator and name.strip() == _ENV_KEY_NAME:
+                    return value.strip().strip('"').strip("'") or None
+        except OSError as exc:
+            raise KeyManagementError(f"读取密钥文件 {path} 失败") from exc
+        return None
+
     def _load_or_generate_key(self) -> bytes:
-        """从环境变量加载密钥，或自动生成并保存。
+        """Load the canonical key, migrate the legacy path, or create a dev key."""
+        candidates = (
+            ("环境变量", os.environ.get(_ENV_KEY_NAME)),
+            (str(_ENV_FILE_PATH), self._read_key_from_file(_ENV_FILE_PATH)),
+        )
+        for source, encoded_key in candidates:
+            if not encoded_key:
+                continue
+            key = self._decode_key(encoded_key, source)
+            os.environ[_ENV_KEY_NAME] = encoded_key
+            logger.info("从%s加载加密密钥成功", source)
+            return key
 
-        Returns:
-            32字节的加密密钥
+        legacy_key = self._read_key_from_file(_LEGACY_ENV_FILE_PATH)
+        if legacy_key:
+            key = self._decode_key(legacy_key, str(_LEGACY_ENV_FILE_PATH))
+            self._save_key_to_env(key)
+            logger.warning(
+                "已将旧路径 %s 中的加密密钥迁移到 %s；确认服务正常后可手动删除旧文件",
+                _LEGACY_ENV_FILE_PATH,
+                _ENV_FILE_PATH,
+            )
+            return key
 
-        Raises:
-            KeyManagementError: 密钥加载或生成失败
-        """
-        # 尝试从环境变量读取
-        env_key = os.environ.get(_ENV_KEY_NAME)
-        if env_key:
-            try:
-                key = base64.urlsafe_b64decode(env_key)
-                if len(key) != _KEY_LENGTH:
-                    raise KeyManagementError(
-                        f"环境变量 {_ENV_KEY_NAME} 中的密钥长度不正确"
-                    )
-                logger.info("从环境变量加载加密密钥成功")
-                return key
-            except Exception as exc:
-                raise KeyManagementError(
-                    f"解析环境变量 {_ENV_KEY_NAME} 失败: {exc}"
-                ) from exc
+        environment = os.getenv("ENVIRONMENT", "development").strip().lower()
+        if environment in _PRODUCTION_ENVIRONMENTS:
+            raise KeyManagementError(
+                "生产环境必须显式配置 ENCRYPTION_KEY，禁止自动生成"
+            )
 
-        # 自动生成密钥
-        logger.info("未找到加密密钥，自动生成新密钥")
+        logger.warning("未找到加密密钥，正在为开发环境生成并持久化新密钥")
         key = AESGCM.generate_key(bit_length=256)
         self._save_key_to_env(key)
         return key
@@ -177,36 +215,46 @@ class EncryptionManager:
         """
         encoded_key = base64.urlsafe_b64encode(key).decode("ascii")
 
+        temp_path = _ENV_FILE_PATH.with_name(
+            f".{_ENV_FILE_PATH.name}.{os.getpid()}.tmp"
+        )
         try:
-            # 读取现有.env内容
             env_lines: list[str] = []
             key_written = False
 
             if _ENV_FILE_PATH.exists():
-                with open(_ENV_FILE_PATH, "r", encoding="utf-8") as f:
-                    env_lines = f.readlines()
-
-                # 检查是否已有ENCRYPTION_KEY行
-                for i, line in enumerate(env_lines):
-                    if line.strip().startswith(f"{_ENV_KEY_NAME}="):
-                        env_lines[i] = f"{_ENV_KEY_NAME}={encoded_key}\n"
+                env_lines = _ENV_FILE_PATH.read_text(encoding="utf-8").splitlines(
+                    keepends=True
+                )
+                for index, line in enumerate(env_lines):
+                    name, separator, _ = line.strip().partition("=")
+                    if separator and name.strip() == _ENV_KEY_NAME:
+                        env_lines[index] = f"{_ENV_KEY_NAME}={encoded_key}\n"
                         key_written = True
                         break
 
+            if env_lines and not env_lines[-1].endswith(("\n", "\r")):
+                env_lines[-1] += "\n"
             if not key_written:
                 env_lines.append(f"{_ENV_KEY_NAME}={encoded_key}\n")
 
-            with open(_ENV_FILE_PATH, "w", encoding="utf-8") as f:
-                f.writelines(env_lines)
+            _ENV_FILE_PATH.parent.mkdir(parents=True, exist_ok=True)
+            temp_path.write_text("".join(env_lines), encoding="utf-8")
+            os.replace(temp_path, _ENV_FILE_PATH)
+            if os.name != "nt":
+                os.chmod(_ENV_FILE_PATH, 0o600)
 
-            # 同时更新当前进程的环境变量
             os.environ[_ENV_KEY_NAME] = encoded_key
-
             logger.info("加密密钥已保存到 %s", _ENV_FILE_PATH)
         except Exception as exc:
             raise KeyManagementError(
                 f"保存密钥到 .env 文件失败: {exc}"
             ) from exc
+        finally:
+            try:
+                temp_path.unlink(missing_ok=True)
+            except OSError:
+                logger.warning("无法清理临时密钥文件 %s", temp_path)
 
     def rotate_key(self, new_key: Optional[bytes] = None) -> None:
         """密钥轮换：使用新密钥替换当前密钥。

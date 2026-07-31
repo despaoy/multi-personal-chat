@@ -20,7 +20,12 @@ def _should_use_postgresql(env=os.environ) -> bool:
         return explicit in {"1", "true", "yes", "on"}
 
     database_url = str(env.get("DATABASE_URL", "")).strip().lower()
-    return database_url.startswith(("postgresql://", "postgresql+asyncpg://"))
+    if database_url.startswith(("postgres://", "postgresql://", "postgresql+asyncpg://")):
+        return True
+    return all(
+        str(env.get(key, "")).strip()
+        for key in ("PG_HOST", "PG_USER", "PG_PASSWORD", "PG_DATABASE")
+    )
 
 
 _USE_PG = _should_use_postgresql()

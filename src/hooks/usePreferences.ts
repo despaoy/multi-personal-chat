@@ -7,7 +7,15 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { api, type JsonRecord, type PreferencePairRecord, type PreferenceReviewStatus } from '@/lib/api';
+import { api } from '@/lib/api';
+import type {
+  PreferenceCreateRequest,
+  PreferenceExportRequest,
+  PreferencePairRecord,
+  PreferenceReviewStatus,
+  PreferenceSampleRequest,
+  PreferenceUpdateRequest,
+} from '@/lib/api-contracts';
 
 export type PreferencePair = PreferencePairRecord;
 
@@ -36,13 +44,7 @@ export function usePreferences(enabled = true) {
     }
   }, [enabled]);
 
-  const createPreference = useCallback(async (req: {
-    prompt: string;
-    chosen: string;
-    rejected: string;
-    annotator?: string;
-    rubric?: JsonRecord;
-  }) => {
+  const createPreference = useCallback(async (req: PreferenceCreateRequest) => {
     try {
       const result = await api.createPreference(req);
       await fetchPreferences(filterStatus);
@@ -54,7 +56,7 @@ export function usePreferences(enabled = true) {
     }
   }, [fetchPreferences, filterStatus]);
 
-  const updatePreference = useCallback(async (id: string, req: { review_status?: PreferenceReviewStatus; rubric?: JsonRecord; annotator?: string }) => {
+  const updatePreference = useCallback(async (id: string, req: PreferenceUpdateRequest) => {
     try {
       await api.updatePreference(id, req);
       setPreferences(prev => prev.map(p => p.id === id ? { ...p, ...req } : p));
@@ -65,7 +67,7 @@ export function usePreferences(enabled = true) {
     }
   }, []);
 
-  const exportPreferences = useCallback(async (req: { review_status: PreferenceReviewStatus; format: 'jsonl' }) => {
+  const exportPreferences = useCallback(async (req: PreferenceExportRequest) => {
     try {
       setExporting(true);
       return await api.exportPreferences(req);
@@ -78,7 +80,7 @@ export function usePreferences(enabled = true) {
     }
   }, []);
 
-  const sampleFromHistory = useCallback(async (req: { limit?: number; session_id?: string }) => {
+  const sampleFromHistory = useCallback(async (req: PreferenceSampleRequest) => {
     try {
       setSampling(true);
       return await api.sampleFromHistory(req);

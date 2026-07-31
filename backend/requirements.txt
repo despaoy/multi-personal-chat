@@ -72,6 +72,7 @@ asyncpg>=0.30.0,<1.0           # PostgreSQL 异步驱动（可选）
 
 # HTTP 客户端
 httpx>=0.28.0,<1.0
+requests>=2.32.0,<3.0
 
 # 工具库
 python-dotenv>=1.0.0

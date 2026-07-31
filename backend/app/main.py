@@ -7,25 +7,18 @@ import sys
 from pathlib import Path
 import os
 import logging
+import inspect
+from collections.abc import Mapping
 
 # 确保 backend 根目录在 Python 路径中，支持跨包导入
 _BACKEND_ROOT = Path(__file__).parent.parent
 if str(_BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(_BACKEND_ROOT))
 
-# 加载 .env 文件到环境变量（确保 worker 进程也能读取配置）
-_env_path = _BACKEND_ROOT / ".env"
-if _env_path.exists():
-    with open(_env_path, "r", encoding="utf-8") as _f:
-        for _line in _f:
-            _line = _line.strip()
-            if _line and not _line.startswith("#") and "=" in _line:
-                _key, _, _value = _line.partition("=")
-                _key = _key.strip()
-                _value = _value.strip()
-                if _key and _key not in os.environ:
-                    os.environ[_key] = _value
+# 统一加载 backend/.env；显式注入的容器/进程变量优先。
+from app.env import load_backend_env
 
+load_backend_env()
 _STARTUP_ENV = dict(os.environ)
 
 import asyncio
@@ -42,12 +35,11 @@ from fastapi.responses import JSONResponse
 # 重新赋值。这里只导入常量与导入时初始化的单例，不导入会被 lifespan 重赋值的单例，
 # 避免读者误以为本模块中的本地名会跟随 lifespan 更新（实际它们仍指向 None）。
 from app.config import (
-    llm_optimizer,
     RESOURCE_POOL_AVAILABLE, BACKUP_MANAGER_AVAILABLE,
     FAILOVER_AVAILABLE, ACCESS_CONTROL_AVAILABLE,
-    load_balancer_mgr, circuit_breaker_registry,
 )
-from db.adapter import db, is_pg_mode
+from app.readiness import ReadinessProbe, ReadinessProbeTimeout
+from app.runtime import RuntimeContainer, get_runtime_container
 from infra.deployment import validate_or_raise_for_startup
 
 logger = logging.getLogger("main")
@@ -58,6 +50,22 @@ def _initialize_database(database) -> None:
     if hasattr(database, "init"):
         database.init()
     database.execute_sql("SELECT 1")
+
+
+async def _close_resource(label: str, resource, method_name: str) -> None:
+    """Close one resource without blocking the event loop or later cleanup."""
+    if resource is None:
+        return
+    try:
+        method = getattr(resource, method_name)
+        if inspect.iscoroutinefunction(method):
+            result = await method()
+        else:
+            result = await asyncio.to_thread(method)
+        if inspect.isawaitable(result):
+            await result
+    except Exception as exc:
+        logger.warning("关闭%s失败: %s", label, exc)
 
 # ── 导入所有 API 路由 ──
 from api.stats import router as stats_router
@@ -83,6 +91,20 @@ from api.router import router as lora_router_router
 # ═══════════════════════════════════════════
 # 应用生命周期
 # ═══════════════════════════════════════════
+_LIFESPAN_RESOURCE_NAMES = (
+    "connection_pool",
+    "http_client_pool",
+    "backup_mgr",
+    "failover_mgr",
+    "access_control_mgr",
+)
+
+
+def _clear_lifespan_resource_references(config_module) -> None:
+    for name in _LIFESPAN_RESOURCE_NAMES:
+        setattr(config_module, name, None)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # C-F1 fix: 原先用 `global x` 赋值只更新 main.py 模块命名空间，
@@ -96,14 +118,19 @@ async def lifespan(app: FastAPI):
     # `config.failover_mgr` 访问（本次修复同步更新调用方）。
     import app.config as _cfg
 
+    _clear_lifespan_resource_references(_cfg)
+    container = get_runtime_container(app)
+    database = container.db
+    postgres_mode = bool(container.is_pg_mode())
+
     logger.info("🚀 QQ智能助手后端服务启动中（增强版）...")
 
-    validate_or_raise_for_startup(_STARTUP_ENV)
+    validate_or_raise_for_startup(container.startup_env)
 
     # 初始化数据库
     try:
-        _initialize_database(db)
-        logger.info("✅ 数据库初始化完成 (%s)", "PostgreSQL" if is_pg_mode() else "SQLite")
+        _initialize_database(database)
+        logger.info("✅ 数据库初始化完成 (%s)", "PostgreSQL" if postgres_mode else "SQLite")
     except Exception as e:
         logger.critical(f"❌ 数据库初始化失败，服务无法启动: {e}", exc_info=True)
         raise RuntimeError(f"数据库初始化失败: {e}") from e
@@ -118,25 +145,42 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Redis 缓存初始化跳过: {e}")
 
-    if RESOURCE_POOL_AVAILABLE and not is_pg_mode():
+    if RESOURCE_POOL_AVAILABLE:
         try:
             from infra.resource_pool import ConnectionPool, HttpClientPool
-            db_path = str(getattr(db, "db_path", _BACKEND_ROOT / "qq_assistant.db"))
-            _cfg.connection_pool = ConnectionPool(db_path, max_size=20)
+
             _cfg.http_client_pool = HttpClientPool(
-                max_connections=100, request_timeout=120.0
+                max_connections=100,
+                request_timeout=120.0,
             )
-            logger.info("✅ 资源池初始化完成")
+            if not postgres_mode:
+                db_path = str(getattr(database, "db_path", _BACKEND_ROOT / "qq_assistant.db"))
+                _cfg.connection_pool = ConnectionPool(db_path, max_size=20)
+            logger.info(
+                "✅ 资源池初始化完成 (%s)",
+                "HTTP" if postgres_mode else "SQLite + HTTP",
+            )
         except Exception as e:
             logger.warning(f"资源池初始化失败: {e}")
 
-    if BACKUP_MANAGER_AVAILABLE and not is_pg_mode():
+    if BACKUP_MANAGER_AVAILABLE and not postgres_mode:
         try:
             from infra.backup_manager import BackupManager
-            db_path = str(getattr(db, "db_path", _BACKEND_ROOT / "qq_assistant.db"))
-            _cfg.backup_mgr = BackupManager(db_path)
-            import asyncio
-            asyncio.create_task(_cfg.backup_mgr.start_scheduled_backup())
+            db_path = str(getattr(database, "db_path", _BACKEND_ROOT / "qq_assistant.db"))
+            db_file = Path(db_path).expanduser()
+            if not db_file.is_absolute():
+                db_file = db_file.resolve()
+            db_path = str(db_file)
+            configured_backup_dir = container.startup_env.get("BACKUP_DIR", "").strip()
+            backup_dir = (
+                Path(configured_backup_dir).expanduser()
+                if configured_backup_dir
+                else db_file.parent / "backups"
+            )
+            if not backup_dir.is_absolute():
+                backup_dir = db_file.parent / backup_dir
+            _cfg.backup_mgr = BackupManager(db_path, backup_dir=str(backup_dir))
+            await _cfg.backup_mgr.start_scheduled_backup()
             logger.info("✅ 备份管理器初始化完成")
         except Exception as e:
             logger.warning(f"备份管理器初始化失败: {e}")
@@ -161,10 +205,10 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.warning(f"故障转移管理器初始化失败: {e}")
 
-    if ACCESS_CONTROL_AVAILABLE and not is_pg_mode():
+    if ACCESS_CONTROL_AVAILABLE and not postgres_mode:
         try:
             from infra.access_control import AccessControlManager
-            db_path = str(getattr(db, "db_path", _BACKEND_ROOT / "qq_assistant.db"))
+            db_path = str(getattr(database, "db_path", _BACKEND_ROOT / "qq_assistant.db"))
             _cfg.access_control_mgr = AccessControlManager(db_path)
             logger.info("✅ 访问控制管理器初始化完成")
         except Exception as e:
@@ -174,78 +218,99 @@ async def lifespan(app: FastAPI):
     # 见 api/knowledge.py search_knowledge 中的 _ensure_vector_index()
 
     logger.info("✅ 增强版服务启动完成！")
-    yield
+    try:
+        yield
+    finally:
+        logger.info("👋 服务关闭中，清理资源...")
+        try:
+            from evaluation.runtime_runner import shutdown_generation_evaluations
 
-    logger.info("👋 服务关闭中，清理资源...")
-    if _cfg.connection_pool:
-        await _cfg.connection_pool.close()
-    if _cfg.http_client_pool:
-        await _cfg.http_client_pool.close()
-    if _cfg.backup_mgr:
-        stop_result = _cfg.backup_mgr.stop_scheduled_backup()
-        if hasattr(stop_result, "__await__"):
-            await stop_result
-    if _cfg.failover_mgr:
-        await _cfg.failover_mgr.stop()
-    if _cfg.llm_optimizer:
-        await _cfg.llm_optimizer.close()
-    # PG 模式下显式关闭引擎连接池与 SyncPgAdapter 后台事件循环，避免多 worker 部署连接泄漏
-    try:
-        if is_pg_mode():
-            from db.pg_database import sync_pg_db
-            sync_pg_db.close()
-            logger.info("✅ PostgreSQL 引擎与 SyncPgAdapter 事件循环已关闭")
-    except Exception as e:
-        logger.warning(f"关闭 PostgreSQL 适配器失败: {e}")
-    # C6 fix: 关闭所有模型 Provider 持有的 httpx 客户端与 GPU 句柄
-    try:
-        from inference.model_manager import get_model_manager
-        get_model_manager().shutdown()
-    except Exception as e:
-        logger.warning(f"关闭模型管理器失败: {e}")
-    # C10 fix: 关闭 generate.py 中独立的 vLLM 客户端连接池
-    try:
-        from api.generate import close_vllm_client
-        await close_vllm_client()
-    except Exception as e:
-        logger.warning(f"关闭 vLLM 客户端失败: {e}")
-    # 关闭 bot 模块中共享的 HTTP 客户端（RAG 搜索 + Ollama 推理）
-    try:
-        from bot.bot import _close_bot_http_clients
-        await _close_bot_http_clients()
-    except Exception as e:
-        logger.warning(f"关闭 bot HTTP 客户端失败: {e}")
-    # 关闭共享的 async Redis 客户端
-    try:
-        from cache.redis_client import close_async_redis
-        await close_async_redis()
-    except Exception as e:
-        logger.warning(f"关闭 async Redis 客户端失败: {e}")
-    # 关闭共享的 sync Redis 客户端与连接池
-    try:
-        from cache.redis_client import close_sync_redis
-        close_sync_redis()
-    except Exception as e:
-        logger.warning(f"关闭 sync Redis 客户端失败: {e}")
-    logger.info("✅ 资源清理完成")
+            await shutdown_generation_evaluations()
+        except Exception as e:
+            logger.warning("关闭评估任务失败: %s", e)
+        try:
+            from training.task_manager import shutdown_simple_lora_trainer
+
+            await shutdown_simple_lora_trainer()
+        except Exception as e:
+            logger.warning("关闭 LoRA 训练任务失败: %s", e)
+        try:
+            from api.knowledge import shutdown_intent_tasks
+
+            await shutdown_intent_tasks()
+        except Exception as e:
+            logger.warning("关闭 RAG 意图任务失败: %s", e)
+        await _close_resource(
+            "readiness probe",
+            getattr(app.state, "readiness_probe", None),
+            "shutdown",
+        )
+        await _close_resource("推理调度器", container.inference_runtime, "shutdown")
+        await _close_resource("SQLite 连接池", _cfg.connection_pool, "close")
+        await _close_resource("HTTP 客户端池", _cfg.http_client_pool, "close")
+        await _close_resource("备份调度器", _cfg.backup_mgr, "stop_scheduled_backup")
+        await _close_resource("故障转移管理器", _cfg.failover_mgr, "stop")
+        # PG 模式下显式关闭引擎连接池与 SyncPgAdapter 后台事件循环。
+        if postgres_mode:
+            await _close_resource("PostgreSQL 适配器", database, "close")
+        # C6 fix: 关闭所有模型 Provider 持有的 httpx 客户端与 GPU 句柄。
+        try:
+            from inference.model_manager import get_model_manager
+
+            await _close_resource("模型管理器", get_model_manager(), "shutdown")
+        except Exception as e:
+            logger.warning(f"获取模型管理器失败: {e}")
+        # C10 fix: 关闭 generate.py 中独立的 vLLM 客户端连接池
+        try:
+            from api.generate import close_vllm_client
+            await close_vllm_client()
+        except Exception as e:
+            logger.warning(f"关闭 vLLM 客户端失败: {e}")
+        # 关闭 bot 模块中共享的 HTTP 客户端（RAG 搜索 + Ollama 推理）
+        try:
+            from bot.bot import _close_bot_http_clients
+            await _close_bot_http_clients()
+        except Exception as e:
+            logger.warning(f"关闭 bot HTTP 客户端失败: {e}")
+        if _cfg.circuit_breaker_registry is not None:
+            await _close_resource(
+                "熔断器注册表",
+                _cfg.circuit_breaker_registry,
+                "clear",
+            )
+        # 关闭共享的 async Redis 客户端
+        try:
+            from cache.redis_client import close_async_redis
+            await close_async_redis()
+        except Exception as e:
+            logger.warning(f"关闭 async Redis 客户端失败: {e}")
+        try:
+            from cache.semantic_cache import reset_semantic_cache
+
+            await reset_semantic_cache()
+        except Exception as e:
+            logger.warning("重置语义缓存失败: %s", e)
+        # 关闭共享的 sync Redis 客户端与连接池
+        try:
+            from cache.redis_client import close_sync_redis
+
+            await asyncio.to_thread(close_sync_redis)
+        except Exception as e:
+            logger.warning(f"关闭 sync Redis 客户端失败: {e}")
+        _clear_lifespan_resource_references(_cfg)
+        logger.info("✅ 资源清理完成")
 
 
 # ═══════════════════════════════════════════
 # 创建应用
 # ═══════════════════════════════════════════
-app = FastAPI(
-    title="QQ智能助手 API (增强版)",
-    description="QQ智能助手后端服务API - 高并发/高可靠/高安全增强版",
-    version="2.0.0",
-    lifespan=lifespan,
-)
-
-def _allowed_origins() -> list[str]:
+def _allowed_origins(env: Mapping[str, str] | None = None) -> list[str]:
     """解析 CORS 允许源，优先 ALLOWED_ORIGINS，旧键 CORS_ORIGINS 发 deprecation warning。"""
-    configured = os.getenv("ALLOWED_ORIGINS")
+    source = os.environ if env is None else env
+    configured = source.get("ALLOWED_ORIGINS")
     if configured:
         return [origin.strip() for origin in configured.split(",") if origin.strip()]
-    legacy = os.getenv("CORS_ORIGINS")
+    legacy = source.get("CORS_ORIGINS")
     if legacy:
         logger.warning("CORS_ORIGINS 已弃用，请改用 ALLOWED_ORIGINS。旧键将在下个大版本移除。")
         return [origin.strip() for origin in legacy.split(",") if origin.strip()]
@@ -260,62 +325,74 @@ def _allowed_origins() -> list[str]:
 # ── 安全中间件（可通过环境变量控制开关） ──
 _SECURITY_ENABLED = os.getenv("SECURITY_MIDDLEWARE_ENABLED", "true").lower() == "true"
 
-if _SECURITY_ENABLED:
-    try:
-        from middleware.security import (
-            SecurityMiddleware,
-            RateLimitMiddleware,
-            InputValidationMiddleware,
-            SecurityHeadersMiddleware,
-            AuditLogMiddleware,
-        )
-        # Starlette's last added middleware is outermost. Request order:
-        # CORS -> audit -> security headers -> auth -> rate limit -> validation.
-        app.add_middleware(InputValidationMiddleware)
-        app.add_middleware(RateLimitMiddleware)
-        app.add_middleware(SecurityMiddleware)
-        app.add_middleware(SecurityHeadersMiddleware)
-        app.add_middleware(AuditLogMiddleware)
-        logger.info("✅ 安全中间件已启用（认证+限流+输入验证+审计+安全头）")
-    except ImportError as e:
-        if os.getenv("ENVIRONMENT", "development").strip().lower() == "production":
-            raise RuntimeError("Security middleware is required in production") from e
-        logger.warning(f"安全中间件导入失败，跳过: {e}")
+def _install_middleware(
+    application: FastAPI,
+    env: Mapping[str, str] | None = None,
+) -> None:
+    source = os.environ if env is None else env
+    security_enabled = (
+        _SECURITY_ENABLED
+        if env is None
+        else source.get("SECURITY_MIDDLEWARE_ENABLED", "true").lower() == "true"
+    )
+    if security_enabled:
+        try:
+            from middleware.security import (
+                SecurityMiddleware,
+                RateLimitMiddleware,
+                InputValidationMiddleware,
+                SecurityHeadersMiddleware,
+                AuditLogMiddleware,
+            )
+            # Starlette's last added middleware is outermost. Request order:
+            # CORS -> audit -> security headers -> auth -> rate limit -> validation.
+            application.add_middleware(InputValidationMiddleware)
+            application.add_middleware(RateLimitMiddleware)
+            application.add_middleware(SecurityMiddleware)
+            application.add_middleware(SecurityHeadersMiddleware)
+            application.add_middleware(AuditLogMiddleware)
+            logger.info("✅ 安全中间件已启用（认证+限流+输入验证+审计+安全头）")
+        except ImportError as e:
+            if source.get("ENVIRONMENT", "development").strip().lower() == "production":
+                raise RuntimeError("Security middleware is required in production") from e
+            logger.warning(f"安全中间件导入失败，跳过: {e}")
 
-# CORS is outermost so even authentication and rate-limit errors include CORS headers.
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=_allowed_origins(),
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+    # CORS is outermost so even authentication and rate-limit errors include CORS headers.
+    application.add_middleware(
+        CORSMiddleware,
+        allow_origins=_allowed_origins(source),
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
 # ── 挂载所有路由 ──
-app.include_router(stats_router)
-app.include_router(messages_router)
-app.include_router(generate_router)
-app.include_router(loras_router)
-app.include_router(training_router)
-app.include_router(knowledge_router)
-app.include_router(models_router)
-app.include_router(config_router)
-app.include_router(auth_router)
-app.include_router(user_data_router)
-app.include_router(enhanced_router)
-app.include_router(claw_router)
-app.include_router(integrations_router)
-app.include_router(evaluation_router)
-app.include_router(experiments_router)
-app.include_router(retrieval_eval_router)
-app.include_router(preferences_router)
-app.include_router(lora_router_router)
+_ROUTERS = (
+    stats_router,
+    messages_router,
+    generate_router,
+    loras_router,
+    training_router,
+    knowledge_router,
+    models_router,
+    config_router,
+    auth_router,
+    user_data_router,
+    enhanced_router,
+    claw_router,
+    integrations_router,
+    evaluation_router,
+    experiments_router,
+    retrieval_eval_router,
+    preferences_router,
+    lora_router_router,
+)
+
 
 
 # ═══════════════════════════════════════════
 # 根路由 & 健康检查
 # ═══════════════════════════════════════════
-@app.get("/")
 async def root():
     return {
         "name": "QQ智能助手 API (增强版)",
@@ -324,66 +401,58 @@ async def root():
     }
 
 
-@app.get("/health")
 async def health_check():
     return {"status": "healthy", "timestamp": datetime.now().isoformat()}
 
 
-@app.get("/ready")
-async def readiness_check():
-    """Readiness checks required local state and the configured inference provider."""
-    # D-1 fix: 统一使用 is_vllm_enabled() 判定 vLLM 启用状态
-    from app.config import is_vllm_enabled
-    model_required = (
-        os.getenv("MODEL_PROVIDER", "").strip().lower() == "vllm"
-        or is_vllm_enabled()
-    )
-    deps = {"database": False, "faiss": False, "model": not model_required}
-    details: dict[str, str] = {}
+async def _readiness_model_check() -> bool:
+    from api.generate import get_vllm_client
 
-    try:
-        from db.adapter import is_pg_mode
-        if is_pg_mode():
-            db.get_config()
-        else:
-            conn = db.get_connection()
-            conn.execute("SELECT 1")
-        deps["database"] = True
-    except Exception as exc:
-        details["database"] = type(exc).__name__
+    client = await get_vllm_client()
+    if client is None:
+        return False
+    health = await client.health_check()
+    return health.get("summary", {}).get("healthy", 0) > 0
 
-    try:
-        from knowledge.vector_db import get_vector_db
-        deps["faiss"] = get_vector_db() is not None
-        details["faiss"] = "ok" if deps["faiss"] else "not_initialized"
-    except Exception as exc:
-        details["faiss"] = type(exc).__name__
 
-    if model_required:
-        try:
-            from api.generate import get_vllm_client
-
-            client = await asyncio.wait_for(get_vllm_client(), timeout=3.0)
-            if client is not None:
-                health = await asyncio.wait_for(client.health_check(), timeout=6.0)
-                deps["model"] = health.get("summary", {}).get("healthy", 0) > 0
-            details["model"] = "ok" if deps["model"] else "unavailable"
-        except Exception as exc:
-            details["model"] = type(exc).__name__
-
-    ready = all(deps.values())
-    if not ready:
+async def readiness_check(request: Request):
+    """Return one cached dependency snapshot without initializing optional RAG."""
+    probe = getattr(request.app.state, "readiness_probe", None)
+    if not isinstance(probe, ReadinessProbe):
         raise HTTPException(
             status_code=503,
-            detail={"ready": False, "deps": deps, "details": details},
+            detail={
+                "ready": False,
+                "deps": {"database": False, "model": False},
+                "details": {"probe": "not_configured"},
+            },
         )
-    return {"status": "ready", "deps": deps}
+    try:
+        snapshot = await probe.get()
+    except ReadinessProbeTimeout as exc:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "ready": False,
+                "deps": {"database": False, "model": False},
+                "details": {"probe": type(exc).__name__},
+            },
+        ) from exc
+    if not snapshot["ready"]:
+        raise HTTPException(
+            status_code=503,
+            detail=snapshot,
+        )
+    return {
+        "status": "ready",
+        "deps": snapshot["deps"],
+        "details": snapshot["details"],
+    }
 
 
 # ═══════════════════════════════════════════
 # 全局异常处理
 # ═══════════════════════════════════════════
-@app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     logger.error(f"请求异常: {exc}")
     return JSONResponse(
@@ -394,3 +463,39 @@ async def global_exception_handler(request: Request, exc: Exception):
             "message": "服务器内部错误",
         },
     )
+
+
+def create_app(container: RuntimeContainer | None = None) -> FastAPI:
+    """Assemble one FastAPI application around an explicit runtime container."""
+    from app.config import is_vllm_enabled
+
+    runtime_container = container if container is not None else RuntimeContainer.default(startup_env=_STARTUP_ENV)
+    application = FastAPI(
+        title="QQ智能助手 API (增强版)",
+        description="QQ智能助手后端服务API - 高并发/高可靠/高安全增强版",
+        version="2.0.0",
+        lifespan=lifespan,
+    )
+    application.state.runtime_container = runtime_container
+    runtime_env = runtime_container.startup_env
+    model_required = (
+        runtime_env.get("MODEL_PROVIDER", "").strip().lower() == "vllm"
+        or is_vllm_enabled(runtime_env)
+    )
+    application.state.readiness_probe = ReadinessProbe(
+        database_check=lambda: get_runtime_container(application).db.execute_sql("SELECT 1"),
+        model_check=_readiness_model_check if model_required else None,
+        model_required=model_required,
+    )
+    _install_middleware(application, runtime_container.startup_env)
+    for router in _ROUTERS:
+        application.include_router(router)
+
+    application.add_api_route("/", root, methods=["GET"])
+    application.add_api_route("/health", health_check, methods=["GET"])
+    application.add_api_route("/ready", readiness_check, methods=["GET"])
+    application.add_exception_handler(Exception, global_exception_handler)
+    return application
+
+
+app = create_app()

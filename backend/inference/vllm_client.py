@@ -954,7 +954,18 @@ _check_interface()
 # ---------------------------------------------------------------------------
 
 _shared_client: Optional["VLLMClient"] = None
-_shared_client_lock = asyncio.Lock()
+_shared_client_lock: asyncio.Lock | None = None
+_shared_client_lock_loop: asyncio.AbstractEventLoop | None = None
+
+
+def _get_shared_client_lock() -> asyncio.Lock:
+    """Return a singleton lock owned by the active application event loop."""
+    global _shared_client_lock, _shared_client_lock_loop
+    loop = asyncio.get_running_loop()
+    if _shared_client_lock is None or _shared_client_lock_loop is not loop:
+        _shared_client_lock = asyncio.Lock()
+        _shared_client_lock_loop = loop
+    return _shared_client_lock
 
 
 async def get_vllm_client() -> "VLLMClient":
@@ -964,9 +975,7 @@ async def get_vllm_client() -> "VLLMClient":
     所有调用方（api/generate.py、bot/bot.py）应使用此函数而非各自构造实例。
     """
     global _shared_client
-    if _shared_client is not None:
-        return _shared_client
-    async with _shared_client_lock:
+    async with _get_shared_client_lock():
         if _shared_client is not None:
             return _shared_client
         base_urls = os.getenv("VLLM_BASE_URLS", os.getenv("VLLM_BASE_URL", ""))
@@ -984,8 +993,10 @@ async def get_vllm_client() -> "VLLMClient":
 
 
 async def close_shared_vllm_client() -> None:
-    """关闭全局共享的 VLLMClient 单例（应用退出时调用）"""
+    """关闭共享客户端；与创建互斥并允许下一生命周期重新创建。"""
     global _shared_client
-    if _shared_client is not None:
-        await _shared_client.close()
+    async with _get_shared_client_lock():
+        client = _shared_client
         _shared_client = None
+        if client is not None:
+            await client.close()

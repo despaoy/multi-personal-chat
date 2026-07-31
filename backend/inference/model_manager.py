@@ -796,10 +796,18 @@ class ModelManager:
     """模型管理器，负责多提供商切换、LoRA管理、模型文件操作。"""
 
     def __init__(self, base_dir: Optional[Path] = None):
-        self.base_dir = base_dir or Path(__file__).parent
-        self.models_dir = self.base_dir / "models"
-        self.models_dir.mkdir(exist_ok=True)
+        backend_dir = Path(__file__).resolve().parents[1]
+        configured_root = os.getenv("MODEL_STORAGE_PATH", "").strip()
+        if configured_root and base_dir is None:
+            model_root = Path(configured_root).expanduser()
+            self.models_dir = model_root if model_root.is_absolute() else backend_dir / model_root
+            self.base_dir = self.models_dir.parent
+        else:
+            self.base_dir = base_dir or backend_dir
+            self.models_dir = self.base_dir / "models"
+        self.models_dir.mkdir(parents=True, exist_ok=True)
         self.cache_file = self.models_dir / "model_cache.json"
+        self._model_files_lock = threading.RLock()
 
         self._providers: Dict[ModelProvider, BaseProvider] = {
             ModelProvider.MOCK: MockProvider(),
@@ -946,13 +954,19 @@ class ModelManager:
                 logger.warning(f"关闭 provider {getattr(provider, 'name', '?')} 失败: {e}")
 
     def download_model_from_hf(self, model_name: str, force: bool = False) -> Dict[str, Any]:
+        """Download one model while serializing destructive model-directory changes."""
+
+        with self._model_files_lock:
+            return self._download_model_from_hf_locked(model_name, force=force)
+
+    def _download_model_from_hf_locked(self, model_name: str, force: bool = False) -> Dict[str, Any]:
         config = MODEL_CONFIGS.get(model_name)
         if not config:
             return {"success": False, "error": f"未知模型: {model_name}"}
 
         model_dir = self.models_dir / config.name
 
-        if model_dir.exists() and not force:
+        if self.check_model_exists(model_name) and not force:
             return {
                 "success": True,
                 "message": f"模型已存在: {config.name}",
@@ -985,6 +999,12 @@ class ModelManager:
             return {"success": False, "error": str(e)}
 
     def delete_model(self, model_name: str) -> bool:
+        """Delete one model without racing an in-process download."""
+
+        with self._model_files_lock:
+            return self._delete_model_locked(model_name)
+
+    def _delete_model_locked(self, model_name: str) -> bool:
         config = MODEL_CONFIGS.get(model_name)
         if not config:
             logger.warning(f"未知模型: {model_name}")
@@ -1008,10 +1028,13 @@ class ModelManager:
 
 
 _model_manager: Optional[ModelManager] = None
+_model_manager_init_lock = threading.Lock()
 
 
 def get_model_manager() -> ModelManager:
     global _model_manager
     if _model_manager is None:
-        _model_manager = ModelManager()
+        with _model_manager_init_lock:
+            if _model_manager is None:
+                _model_manager = ModelManager()
     return _model_manager

@@ -2,7 +2,7 @@
 import logging
 
 from fastapi import APIRouter, Request, HTTPException, Depends
-from app.dependencies import get_current_user, get_current_admin
+from app.dependencies import get_current_admin
 
 from db.adapter import db
 from app.config import (
@@ -18,6 +18,13 @@ router = APIRouter()
 _SENSITIVE_KEYWORDS = ("apikey", "api_key", "secret", "password", "token")
 # 脱敏标记，用于PUT时识别并跳过未修改的字段
 _MASK_MARKER = "****"
+_SERVER_ONLY_CONFIG_KEYS = frozenset({
+    "astrbotIntegrationToken",
+    "astrbotIntegrationTokens",
+})
+_SERVER_ONLY_CONFIG_KEYS_NORMALIZED = frozenset(
+    key.lower() for key in _SERVER_ONLY_CONFIG_KEYS
+)
 
 
 def _mask_value(value: str) -> str:
@@ -33,6 +40,8 @@ def _mask_config(config: dict) -> dict:
     """返回脱敏后的配置副本（不影响缓存中的原始值）"""
     masked = {}
     for k, v in config.items():
+        if str(k).lower() in _SERVER_ONLY_CONFIG_KEYS_NORMALIZED:
+            continue
         if any(s in k.lower() for s in _SENSITIVE_KEYWORDS) and v:
             masked[k] = _mask_value(str(v))
         else:
@@ -45,7 +54,7 @@ def _mask_config(config: dict) -> dict:
 # ============================================
 
 @router.get("/api/config")
-async def get_config(current_user: dict = Depends(get_current_user)):
+async def get_config(current_user: dict = Depends(get_current_admin)):
     """获取系统配置（Redis 缓存优先，TTL 60s；敏感字段脱敏后返回）"""
     cached = get_cached_config()
     if cached is not None:
@@ -63,6 +72,17 @@ async def update_config(request: Request, current_user: dict = Depends(get_curre
     C-S1 fix: 系统配置含 API key 等敏感项，限定 admin。
     """
     new_config = await request.json()
+    if not isinstance(new_config, dict):
+        raise HTTPException(status_code=422, detail="Configuration payload must be an object")
+    server_only = {
+        str(key) for key in new_config
+        if str(key).lower() in _SERVER_ONLY_CONFIG_KEYS_NORMALIZED
+    }
+    if server_only:
+        raise HTTPException(
+            status_code=422,
+            detail="AstrBot integration tokens are server-only environment variables",
+        )
     # 过滤掉含脱敏标记的未修改字段（前端回传的脱敏值不应覆盖真实凭证）
     new_config = {k: v for k, v in new_config.items()
                   if not (isinstance(v, str) and _MASK_MARKER in v)}
@@ -103,7 +123,7 @@ async def update_config(request: Request, current_user: dict = Depends(get_curre
 # ============================================
 
 @router.get("/api/model/status")
-async def get_model_status():
+async def get_model_status(current_user: dict = Depends(get_current_admin)):
     """获取模型状态"""
     # C3 fix: 原先失败时返回 HTTP 200 + {"success": False}，破坏 REST 语义，
     # 前端需通过 success 字段而非状态码判断错误。改为 raise HTTPException，

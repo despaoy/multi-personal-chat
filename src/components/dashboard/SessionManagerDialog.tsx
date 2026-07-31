@@ -19,11 +19,14 @@ import { Label } from '@/components/ui/label';
 import { Users, User, RefreshCw, MessageCircle } from 'lucide-react';
 import { api, type SessionSummary } from '@/lib/api';
 
+const getSessionKey = (session: SessionSummary) =>
+  `${session.platform || 'qq'}:${session.sessionType}:${session.conversationId || session.sessionId}`;
+
 export function SessionManagerDialog() {
   const [open, setOpen] = useState(false);
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [loading, setLoading] = useState(false);
-  const [filter, setFilter] = useState<'all' | 'private' | 'group'>('all');
+  const [filter, setFilter] = useState<'all' | SessionSummary['sessionType']>('all');
   const [platformFilter, setPlatformFilter] = useState('all');
 
   const loadSessions = useCallback(async () => {
@@ -38,12 +41,18 @@ export function SessionManagerDialog() {
     }
   }, []);
 
-  const handleToggleBot = async (sessionId: string, enabled: boolean) => {
+  const handleToggleBot = async (target: SessionSummary, enabled: boolean) => {
     try {
-      const target = sessions.find(s => s.sessionId === sessionId);
-      await api.toggleSessionBot(sessionId, enabled, target?.platform || 'qq', target?.conversationId);
-      setSessions(prev => prev.map(s =>
-        s.sessionId === sessionId ? { ...s, botEnabled: enabled } : s
+      await api.toggleSessionBot(
+        target.sessionId,
+        enabled,
+        target.platform || 'qq',
+        target.conversationId,
+        target.sessionType,
+      );
+      const targetKey = getSessionKey(target);
+      setSessions(prev => prev.map(session =>
+        getSessionKey(session) === targetKey ? { ...session, botEnabled: enabled } : session
       ));
     } catch {
       // ignore
@@ -91,7 +100,7 @@ export function SessionManagerDialog() {
               <SelectItem value="wechat_personal">个人微信</SelectItem>
             </SelectContent>
           </Select>
-          <Select value={filter} onValueChange={(v) => setFilter(v as 'all' | 'private' | 'group')}>
+          <Select value={filter} onValueChange={(v) => setFilter(v as 'all' | SessionSummary['sessionType'])}>
             <SelectTrigger className="w-[120px] h-8 text-xs">
               <SelectValue />
             </SelectTrigger>
@@ -99,6 +108,7 @@ export function SessionManagerDialog() {
               <SelectItem value="all">全部会话</SelectItem>
               <SelectItem value="private">私聊</SelectItem>
               <SelectItem value="group">群聊</SelectItem>
+              <SelectItem value="channel">频道</SelectItem>
             </SelectContent>
           </Select>
           <div className="flex-1" />
@@ -122,7 +132,7 @@ export function SessionManagerDialog() {
           ) : (
             <div className="space-y-2 p-1">
               {filteredSessions.map((session) => (
-                <div key={session.sessionId} className="border rounded-lg p-3 hover:bg-accent/50 transition-colors">
+                <div key={getSessionKey(session)} className="border rounded-lg p-3 hover:bg-accent/50 transition-colors">
                   {/* 头部：会话名 + 类型 + 开关 */}
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2 min-w-0">
@@ -135,7 +145,7 @@ export function SessionManagerDialog() {
                         <div className="text-sm font-medium truncate">{session.sessionName}</div>
                         <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
                           <Badge variant={session.sessionType === 'group' ? 'default' : 'secondary'} className="text-[10px] px-1.5 py-0">
-                            {session.sessionType === 'group' ? '群聊' : '私聊'}
+                            {session.sessionType === 'group' ? '群聊' : session.sessionType === 'channel' ? '频道' : '私聊'}
                           </Badge>
                           <span>{session.messageCount} 条消息</span>
                           <span>·</span>
@@ -144,13 +154,13 @@ export function SessionManagerDialog() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      <Label htmlFor={`bot-${session.sessionId}`} className="text-xs text-muted-foreground cursor-pointer">
+                      <Label htmlFor={`bot-${encodeURIComponent(getSessionKey(session))}`} className="text-xs text-muted-foreground cursor-pointer">
                         机器人
                       </Label>
                       <Switch
-                        id={`bot-${session.sessionId}`}
+                        id={`bot-${encodeURIComponent(getSessionKey(session))}`}
                         checked={session.botEnabled}
-                        onCheckedChange={(checked) => handleToggleBot(session.sessionId, checked)}
+                        onCheckedChange={(checked) => handleToggleBot(session, checked)}
                       />
                     </div>
                   </div>

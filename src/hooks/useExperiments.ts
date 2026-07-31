@@ -7,7 +7,8 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { api, type ExperimentRecord } from '@/lib/api';
+import { api } from '@/lib/api';
+import type { ExperimentRecord, ExperimentStartRequest } from '@/lib/api-contracts';
 
 export type Experiment = ExperimentRecord;
 
@@ -34,7 +35,7 @@ export function useExperiments(enabled = true) {
     }
   }, [enabled]);
 
-  const startExperiment = useCallback(async (type: ExperimentType, req: { hypothesis?: string; mock?: boolean }) => {
+  const startExperiment = useCallback(async (type: ExperimentType, req: ExperimentStartRequest) => {
     try {
       setStarting(true);
       const result = await api.startExperiment(type, req);

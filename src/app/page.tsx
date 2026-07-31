@@ -27,11 +27,11 @@ export const metadata = {
  *
  * M2 fix: 仪表盘作为应用首页，此前是唯一未受 AuthGuard 保护的页面，
  * 未登录用户可直接访问并触发后续 API 调用。现统一用 AuthGuard 包裹，
- * 并配合 src/middleware.ts 做集中式路由守卫，形成双层防护。
+ * 并配合 src/proxy.ts 做集中式路由守卫，形成双层防护。
  */
 export default function Dashboard() {
   return (
-    <AuthGuard>
+    <AuthGuard requireAdmin>
       <AppLayout>
         <DashboardClient />
       </AppLayout>

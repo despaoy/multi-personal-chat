@@ -12,7 +12,7 @@ import os
 import re
 import threading
 import time
-from collections import defaultdict, deque
+from collections import OrderedDict, deque
 from datetime import datetime, timedelta
 from logging.handlers import TimedRotatingFileHandler
 from pathlib import Path
@@ -58,6 +58,14 @@ RATE_LIMIT_TPM: int = int(os.getenv("RATE_LIMIT_TPM", "500000"))
 GENERATE_RPM: int = int(os.getenv("GENERATE_RPM", "60"))
 GENERATE_TPM: int = int(os.getenv("GENERATE_TPM", "500000"))
 AUTH_RPM: int = int(os.getenv("AUTH_RPM", "10"))
+API_KEY_AUTH_RPM: int = int(os.getenv("API_KEY_AUTH_RPM", "60"))
+RATE_LIMIT_MAX_KEYS: int = max(1, int(os.getenv("RATE_LIMIT_MAX_KEYS", "10000")))
+RATE_LIMIT_CLEANUP_INTERVAL: int = max(
+    1, int(os.getenv("RATE_LIMIT_CLEANUP_INTERVAL", "64"))
+)
+RATE_LIMIT_CLEANUP_BATCH_SIZE: int = max(
+    1, int(os.getenv("RATE_LIMIT_CLEANUP_BATCH_SIZE", "64"))
+)
 TRUST_PROXY_HEADERS: bool = os.getenv("TRUST_PROXY_HEADERS", "false").strip().lower() in {"1", "true", "yes", "on"}
 
 # 输入验证
@@ -128,12 +136,13 @@ def _sanitize_dict(data: dict[str, Any]) -> dict[str, Any]:
 
 def _get_client_ip(request: Request) -> str:
     """获取客户端真实 IP，支持代理头。"""
-    forwarded = request.headers.get("X-Forwarded-For", "")
-    if TRUST_PROXY_HEADERS and forwarded:
-        return forwarded.split(",")[0].strip()
-    real_ip = request.headers.get("X-Real-IP", "")
-    if real_ip:
-        return real_ip.strip()
+    if TRUST_PROXY_HEADERS:
+        forwarded = request.headers.get("X-Forwarded-For", "")
+        if forwarded:
+            return forwarded.split(",")[0].strip()
+        real_ip = request.headers.get("X-Real-IP", "")
+        if real_ip:
+            return real_ip.strip()
     client = request.client
     return client.host if client else "unknown"
 
@@ -150,6 +159,14 @@ def _detect_prompt_injection(text: str) -> bool:
 # 滑动窗口限流器
 # ═══════════════════════════════════════════════════════════════
 
+class _WindowState:
+    __slots__ = ("records", "window_sec")
+
+    def __init__(self, window_sec: float) -> None:
+        self.records: deque[Any] = deque()
+        self.window_sec = window_sec
+
+
 class SlidingWindowLimiter:
     """基于内存的滑动窗口限流器。
 
@@ -157,28 +174,124 @@ class SlidingWindowLimiter:
     线程安全，适用于单实例部署。
     """
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        *,
+        max_keys: int = RATE_LIMIT_MAX_KEYS,
+        cleanup_interval: int = RATE_LIMIT_CLEANUP_INTERVAL,
+        cleanup_batch_size: int = RATE_LIMIT_CLEANUP_BATCH_SIZE,
+        clock: Callable[[], float] | None = None,
+    ) -> None:
         # key -> 请求时间戳列表
-        self._request_windows: dict[str, deque[float]] = defaultdict(deque)
+        if max_keys < 1:
+            raise ValueError("max_keys must be positive")
+        if cleanup_interval < 1:
+            raise ValueError("cleanup_interval must be positive")
+        if cleanup_batch_size < 1:
+            raise ValueError("cleanup_batch_size must be positive")
+        self._max_keys = max_keys
+        self._cleanup_interval = cleanup_interval
+        self._cleanup_batch_size = cleanup_batch_size
+        self._clock = clock or time.time
+        self._request_windows: OrderedDict[str, _WindowState] = OrderedDict()
         # key -> token 使用时间戳和数量列表 [(timestamp, token_count)]
-        self._token_windows: dict[str, deque[tuple[float, int]]] = defaultdict(deque)
+        self._token_windows: OrderedDict[str, _WindowState] = OrderedDict()
+        self._request_checks = 0
+        self._token_checks = 0
         self._lock = threading.Lock()
 
-    def _cleanup_window(self, timestamps: deque[float], window_sec: float) -> None:
-        """清理窗口外的过期时间戳。"""
-        cutoff = time.time() - window_sec
-        while timestamps and timestamps[0] < cutoff:
-            timestamps.popleft()
-        # Remove empty keys to prevent memory leak
-        # (caller should handle key removal since it knows the key)
+    @staticmethod
+    def _record_timestamp(record: Any, *, token_window: bool) -> float:
+        return record[0] if token_window else record
 
-    def _cleanup_token_window(
-        self, records: deque[tuple[float, int]], window_sec: float
+    def _cleanup_state(
+        self,
+        state: _WindowState,
+        now: float,
+        *,
+        token_window: bool,
     ) -> None:
-        """清理 Token 窗口外的过期记录。"""
-        cutoff = time.time() - window_sec
-        while records and records[0][0] < cutoff:
-            records.popleft()
+        cutoff = now - state.window_sec
+        while state.records and self._record_timestamp(
+            state.records[0], token_window=token_window
+        ) < cutoff:
+            state.records.popleft()
+
+    def _prune_expired(
+        self,
+        windows: OrderedDict[str, _WindowState],
+        now: float,
+        *,
+        token_window: bool,
+        max_items: int,
+    ) -> int:
+        removed = 0
+        for _ in range(min(max_items, len(windows))):
+            key, state = windows.popitem(last=False)
+            self._cleanup_state(state, now, token_window=token_window)
+            if state.records:
+                windows[key] = state
+            else:
+                removed += 1
+        return removed
+
+    def _maybe_cleanup(
+        self,
+        windows: OrderedDict[str, _WindowState],
+        now: float,
+        *,
+        token_window: bool,
+    ) -> bool:
+        if token_window:
+            self._token_checks += 1
+            due = self._token_checks % self._cleanup_interval == 0
+        else:
+            self._request_checks += 1
+            due = self._request_checks % self._cleanup_interval == 0
+        if due:
+            self._prune_expired(
+                windows,
+                now,
+                token_window=token_window,
+                max_items=self._cleanup_batch_size,
+            )
+        return due
+
+    def _make_room(
+        self,
+        windows: OrderedDict[str, _WindowState],
+        now: float,
+        *,
+        token_window: bool,
+        batch_cleanup_ran: bool,
+    ) -> bool:
+        if len(windows) < self._max_keys:
+            return True
+        if not batch_cleanup_ran:
+            self._prune_expired(
+                windows,
+                now,
+                token_window=token_window,
+                max_items=1,
+            )
+        return len(windows) < self._max_keys
+
+    def _capacity_retry_after(
+        self,
+        windows: OrderedDict[str, _WindowState],
+        now: float,
+        *,
+        token_window: bool,
+    ) -> float:
+        if not windows:
+            return 1.0
+        state = next(iter(windows.values()))
+        if not state.records:
+            return 1.0
+        oldest = self._record_timestamp(
+            state.records[0], token_window=token_window
+        )
+        return max(1.0, oldest + state.window_sec - now)
 
     def check_rpm(self, key: str, limit: int, window_sec: float = 60.0) -> tuple[bool, int, float]:
         """检查 RPM 限制。
@@ -192,22 +305,45 @@ class SlidingWindowLimiter:
             (是否允许, 当前窗口请求数, 重试等待秒数)
         """
         with self._lock:
-            now = time.time()
-            timestamps = self._request_windows[key]
-            self._cleanup_window(timestamps, window_sec)
-            # Remove empty keys to prevent memory leak
-            if not timestamps:
-                self._request_windows.pop(key, None)
-                self._token_windows.pop(key, None)
-            current_count = len(timestamps)
+            now = self._clock()
+            batch_cleanup_ran = self._maybe_cleanup(
+                self._request_windows,
+                now,
+                token_window=False,
+            )
+            state = self._request_windows.get(key)
+            if state is None:
+                if not self._make_room(
+                    self._request_windows,
+                    now,
+                    token_window=False,
+                    batch_cleanup_ran=batch_cleanup_ran,
+                ):
+                    retry_after = self._capacity_retry_after(
+                        self._request_windows, now, token_window=False
+                    )
+                    return False, limit, retry_after
+                state = _WindowState(window_sec)
+            else:
+                state.window_sec = window_sec
+                self._cleanup_state(state, now, token_window=False)
+            current_count = len(state.records)
 
             if current_count >= limit:
                 # 计算最早请求过期时间
-                oldest = timestamps[0] if timestamps else now
-                retry_after = oldest + window_sec - now
+                if state.records:
+                    self._request_windows.move_to_end(key)
+                    oldest = state.records[0]
+                    retry_after = oldest + window_sec - now
+                else:
+                    self._request_windows.pop(key, None)
+                    retry_after = window_sec
                 return False, current_count, max(0, retry_after)
 
-            timestamps.append(now)
+            if key not in self._request_windows:
+                self._request_windows[key] = state
+            state.records.append(now)
+            self._request_windows.move_to_end(key)
             return True, current_count + 1, 0
 
     def check_tpm(self, key: str, token_count: int, limit: int, window_sec: float = 60.0) -> tuple[bool, int, float]:
@@ -223,35 +359,59 @@ class SlidingWindowLimiter:
             (是否允许, 当前窗口 Token 总数, 重试等待秒数)
         """
         with self._lock:
-            now = time.time()
-            records = self._token_windows[key]
-            self._cleanup_token_window(records, window_sec)
-            # Remove empty keys to prevent memory leak
-            if not records:
-                self._token_windows.pop(key, None)
-                self._request_windows.pop(key, None)
-            current_tokens = sum(count for _, count in records)
+            now = self._clock()
+            batch_cleanup_ran = self._maybe_cleanup(
+                self._token_windows,
+                now,
+                token_window=True,
+            )
+            state = self._token_windows.get(key)
+            if state is None:
+                if not self._make_room(
+                    self._token_windows,
+                    now,
+                    token_window=True,
+                    batch_cleanup_ran=batch_cleanup_ran,
+                ):
+                    retry_after = self._capacity_retry_after(
+                        self._token_windows, now, token_window=True
+                    )
+                    return False, limit, retry_after
+                state = _WindowState(window_sec)
+            else:
+                state.window_sec = window_sec
+                self._cleanup_state(state, now, token_window=True)
+            current_tokens = sum(count for _, count in state.records)
 
             if current_tokens + token_count > limit:
-                oldest = records[0][0] if records else now
-                retry_after = oldest + window_sec - now
+                if state.records:
+                    self._token_windows.move_to_end(key)
+                    oldest = state.records[0][0]
+                    retry_after = oldest + window_sec - now
+                else:
+                    self._token_windows.pop(key, None)
+                    retry_after = window_sec
                 return False, current_tokens, max(0, retry_after)
 
-            records.append((now, token_count))
+            if key not in self._token_windows:
+                self._token_windows[key] = state
+            state.records.append((now, token_count))
+            self._token_windows.move_to_end(key)
             return True, current_tokens + token_count, 0
 
     def get_stats(self) -> dict[str, Any]:
         """获取当前限流统计信息。"""
         with self._lock:
-            now = time.time()
+            now = self._clock()
             stats: dict[str, Any] = {
                 "rpm_windows": {},
                 "tpm_windows": {},
             }
             empty_rpm_keys = []
-            for key, timestamps in self._request_windows.items():
-                self._cleanup_window(timestamps, 60.0)
-                if timestamps:
+            for key, state in self._request_windows.items():
+                self._cleanup_state(state, now, token_window=False)
+                if state.records:
+                    timestamps = state.records
                     stats["rpm_windows"][key] = {
                         "count": len(timestamps),
                         "oldest": datetime.fromtimestamp(timestamps[0]).isoformat(),
@@ -259,9 +419,10 @@ class SlidingWindowLimiter:
                 else:
                     empty_rpm_keys.append(key)
             empty_tpm_keys = []
-            for key, records in self._token_windows.items():
-                self._cleanup_token_window(records, 60.0)
-                if records:
+            for key, state in self._token_windows.items():
+                self._cleanup_state(state, now, token_window=True)
+                if state.records:
+                    records = state.records
                     total = sum(c for _, c in records)
                     stats["tpm_windows"][key] = {
                         "total_tokens": total,
@@ -443,16 +604,55 @@ class SecurityMiddleware(BaseHTTPMiddleware):
             if hasattr(request.state, "jwt_payload") and request.state.jwt_payload:
                 return await call_next(request)
 
-        # 尝试 API Key 匹配
-        if api_key and self._api_keys and api_key in self._api_keys:
-            request.state.user = "api_key_user"
-            request.state.auth_type = "api_key"
-            return await call_next(request)
+        # 尝试 API Key 匹配。环境变量 Key 作为固定 api_user；SQLite
+        # 管理器签发的 Key 还会执行哈希校验、吊销检查和独立限流。
+        if api_key:
+            allowed, _, retry_after = _rate_limiter.check_rpm(
+                f"api-key-auth:{_get_client_ip(request)}",
+                API_KEY_AUTH_RPM,
+            )
+            if not allowed:
+                return JSONResponse(
+                    status_code=429,
+                    content={"detail": "API Key 认证尝试过于频繁"},
+                    headers={"Retry-After": str(max(1, int(retry_after)))},
+                )
 
+            if self._api_keys and api_key in self._api_keys:
+                request.state.user = "api_key_user"
+                request.state.auth_type = "api_key"
+                request.state.api_key_payload = {"role": "api_user"}
+                return await call_next(request)
+
+            try:
+                from app import config as app_config
+                from infra.access_control import AuthenticationError, RateLimitError
+
+                manager = app_config.access_control_mgr
+                if manager is not None:
+                    principal = await manager.authenticate(api_key)
+                    role = principal["role"]
+                    request.state.user = f"managed_api_key:{role.value}"
+                    request.state.auth_type = "managed_api_key"
+                    request.state.api_key_payload = {
+                        "role": role.value,
+                        "permissions": principal["permissions"].value,
+                    }
+                    return await call_next(request)
+            except RateLimitError as exc:
+                return JSONResponse(
+                    status_code=429,
+                    content={"detail": "API Key 请求频率超限"},
+                    headers={"Retry-After": str(exc.retry_after)},
+                )
+            except AuthenticationError:
+                pass
+            except Exception as exc:
+                logger.warning("动态 API Key 认证不可用: %s", type(exc).__name__)
         # 没有任何有效凭证
         return JSONResponse(
             status_code=401,
-            content={"detail": "缺少认证凭证，请提供 X-API-Key 或 Authorization: Bearer <key>"},
+            content={"detail": "缺少认证凭证，请提供 X-API-Key 或 Authorization: Bearer <JWT>"},
             headers={"WWW-Authenticate": "Bearer"},
         )
 

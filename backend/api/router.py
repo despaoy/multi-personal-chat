@@ -1,16 +1,37 @@
 """多 LoRA 路由 API - 路由配置/适配器兼容性/路由日志"""
+import asyncio
 import json
 import logging
 from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Depends
-from app.dependencies import get_current_user, get_current_admin
+from app.dependencies import get_current_admin
 from db.adapter import db
 from db.schemas import RouterConfigUpdate
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+_router_config_lock: asyncio.Lock | None = None
+_router_config_lock_loop: asyncio.AbstractEventLoop | None = None
+
+
+def _get_router_config_lock() -> asyncio.Lock:
+    global _router_config_lock, _router_config_lock_loop
+    loop = asyncio.get_running_loop()
+    if _router_config_lock is None or _router_config_lock_loop is not loop:
+        _router_config_lock = asyncio.Lock()
+        _router_config_lock_loop = loop
+    return _router_config_lock
+
+
+async def _execute_sql(query: str, params: Optional[dict] = None):
+    return await asyncio.to_thread(db.execute_sql, query, params or {})
+
+
+async def _execute_sql_insert(query: str, params: Optional[dict] = None):
+    return await asyncio.to_thread(db.execute_sql_insert, query, params or {})
 
 
 def _now() -> str:
@@ -38,10 +59,10 @@ def _normalize_config(config: dict) -> dict:
 
 
 @router.get("/api/router/config")
-async def get_router_config(current_user: dict = Depends(get_current_user)):
+async def get_router_config(current_user: dict = Depends(get_current_admin)):
     """获取路由配置"""
     try:
-        rows = db.execute_sql("SELECT value FROM config WHERE key='lora_router_config'")
+        rows = await _execute_sql("SELECT value FROM config WHERE key='lora_router_config'")
         if rows:
             config = json.loads(rows[0]["value"])
         else:
@@ -61,57 +82,55 @@ async def get_router_config(current_user: dict = Depends(get_current_user)):
         return {"success": True, "config": config}
     except Exception as e:
         logger.error(f"获取路由配置失败: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="LoRA 路由操作失败") from e
 
 
 @router.put("/api/router/config")
 async def update_router_config(req: RouterConfigUpdate,
                                current_user: dict = Depends(get_current_admin)):
-    """更新路由配置
-
-    C-S1 fix: 路由配置影响全局消息分发，限定 admin。
-    """
+    """更新路由配置并原子化同进程内的读改写。"""
     try:
-        rows = db.execute_sql("SELECT value FROM config WHERE key='lora_router_config'")
-        if rows:
-            config = json.loads(rows[0]["value"])
-        else:
-            config = {"enabled": False, "default_adapter": "default", "mode": "manual", "persona_adapters": {}, "rag_confidence_threshold": 0.3, "persona_keywords": {}}
-        if req.enabled is not None:
-            config["enabled"] = req.enabled
-        if req.default_adapter is not None:
-            config["default_adapter"] = req.default_adapter
-        if req.mode is not None:
-            config["mode"] = req.mode
-        if req.persona_adapters is not None:
-            config["persona_adapters"] = req.persona_adapters
-        if req.rag_confidence_threshold is not None:
-            config["rag_confidence_threshold"] = req.rag_confidence_threshold
-        if req.persona_keywords is not None:
-            config["persona_keywords"] = req.persona_keywords
-        config = _normalize_config(config)
-        serialized = json.dumps(config, ensure_ascii=False)
-        db.execute_sql(
-            "INSERT INTO config (key, value) VALUES ('lora_router_config', :val) "
-            "ON CONFLICT(key) DO UPDATE SET value=:val",
-            {"val": serialized},
-        )
-        from inference.lora_router import get_lora_router
-        get_lora_router(config)
+        async with _get_router_config_lock():
+            rows = await _execute_sql(
+                "SELECT value FROM config WHERE key='lora_router_config'"
+            )
+            if rows:
+                config = json.loads(rows[0]["value"])
+            else:
+                config = {
+                    "enabled": False,
+                    "default_adapter": "default",
+                    "mode": "manual",
+                    "persona_adapters": {},
+                    "rag_confidence_threshold": 0.3,
+                    "persona_keywords": {},
+                }
+            config.update(req.model_dump(exclude_none=True))
+            config = _normalize_config(config)
+            serialized = json.dumps(config, ensure_ascii=False)
+            await _execute_sql(
+                "INSERT INTO config (key, value) VALUES ('lora_router_config', :val) "
+                "ON CONFLICT(key) DO UPDATE SET value=:val",
+                {"val": serialized},
+            )
+            from inference.lora_router import get_lora_router
+
+            get_lora_router(config)
         return {"success": True, "config": config}
-    except Exception as e:
-        logger.error(f"更新路由配置失败: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as exc:
+        logger.exception("更新路由配置失败")
+        raise HTTPException(status_code=500, detail="路由配置更新失败") from exc
 
 
 @router.get("/api/router/adapters")
-async def list_adapters(current_user: dict = Depends(get_current_user)):
+async def list_adapters(current_user: dict = Depends(get_current_admin)):
     """列出已注册适配器及兼容性状态"""
     try:
-        from db.database import LORA_DIR_MAP
+        from db.database import refresh_lora_dir_map
+        directory_map = await asyncio.to_thread(refresh_lora_dir_map)
         adapters = []
-        for name, path in LORA_DIR_MAP.items():
-            compat_rows = db.execute_sql(
+        for name, path in directory_map.items():
+            compat_rows = await _execute_sql(
                 "SELECT * FROM adapter_compatibility WHERE adapter_name=:name ORDER BY checked_at DESC LIMIT 1",
                 {"name": name},
             )
@@ -138,36 +157,38 @@ async def list_adapters(current_user: dict = Depends(get_current_user)):
         return {"success": True, "adapters": adapters, "total": len(adapters)}
     except Exception as e:
         logger.error(f"列出适配器失败: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="LoRA 路由操作失败") from e
 
 
 @router.get("/api/router/logs")
-async def get_routing_logs(limit: int = 100, current_user: dict = Depends(get_current_user)):
+async def get_routing_logs(limit: int = 100, current_user: dict = Depends(get_current_admin)):
     """获取路由日志"""
     try:
+        limit = max(1, min(int(limit), 500))
         from inference.lora_router import get_lora_router
         r = get_lora_router()
         logs = r.get_routing_logs(limit=limit)
         return {"success": True, "logs": logs, "total": len(logs)}
-    except ImportError:
-        return {"success": True, "logs": [], "total": 0, "note": "router module not available"}
+    except ImportError as exc:
+        raise HTTPException(status_code=503, detail="LoRA 路由模块不可用") from exc
     except Exception as e:
         logger.error(f"获取路由日志失败: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="LoRA 路由操作失败") from e
 
 
 @router.post("/api/router/check/{adapter_name}")
-async def check_adapter_compat(adapter_name: str, current_user: dict = Depends(get_current_user)):
+async def check_adapter_compat(adapter_name: str, current_user: dict = Depends(get_current_admin)):
     """手动触发适配器兼容性检查"""
     try:
         from inference.adapter_checker import AdapterChecker
-        from db.database import LORA_DIR_MAP
-        if adapter_name not in LORA_DIR_MAP:
+        from db.database import refresh_lora_dir_map
+        directory_map = await asyncio.to_thread(refresh_lora_dir_map)
+        if adapter_name not in directory_map:
             raise HTTPException(status_code=404, detail=f"adapter {adapter_name} not found")
         checker = AdapterChecker()
-        report = checker.check_adapter(LORA_DIR_MAP[adapter_name])
+        report = await asyncio.to_thread(checker.check_adapter, directory_map[adapter_name])
         try:
-            db.execute_sql_insert(
+            await _execute_sql_insert(
                 "INSERT INTO adapter_compatibility (adapter_name, checked_at, compatible, checks, warnings, errors) "
                 "VALUES (:adapter_name, :checked_at, :compatible, :checks, :warnings, :errors)",
                 {
@@ -190,8 +211,8 @@ async def check_adapter_compat(adapter_name: str, current_user: dict = Depends(g
         }
     except HTTPException:
         raise
-    except ImportError:
-        return {"success": True, "adapter_name": adapter_name, "compatible": True, "checks": {}, "warnings": ["checker module not available"], "errors": []}
+    except ImportError as exc:
+        raise HTTPException(status_code=503, detail="适配器兼容性检查模块不可用") from exc
     except Exception as e:
         logger.error(f"兼容性检查失败: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="LoRA 路由操作失败") from e
