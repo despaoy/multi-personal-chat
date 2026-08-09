@@ -2,7 +2,7 @@
 
 > 将 QQChat Enhanced 转化为证据驱动的 LLM 系统研究平台，用于研究生保研面试展示。
 > 合并自原 LLM_RESEARCH_ENHANCEMENT_ROADMAP、PERSONAL_ACTION_AND_LEARNING_ROADMAP、PROJECT_STATUS_AND_NEXT_STEPS。
-> 最近验证：2026-07-18（Python 3.12 环境与 Qwen3 月社妃 E1-E2'' 实验）。
+> 当前主线：KISAKI-LLM-RESEARCH-V4。旧 E1/E2/E2'/E2'' 已统一归档，不再作为当前结论。
 
 ## 1. 项目定位
 
@@ -31,26 +31,22 @@
 - 数据生成器记录生成溯源；非 mock SFT 生成在 vLLM 不可用时显式失败
 - 生成的偏好对为 `pending` 状态；仅人工 approved 的对才被 DPO/ORPO 训练接受
 
-### 验证
+### 当前研究状态
 
-```text
-后端回归：Windows 本地 101 passed、1 skipped；实验室服务器 102 passed
-TypeScript：0 错误
-Next.js 生产构建：通过（28 条路由）
-服务器健康：healthy
-服务器就绪：database=true, faiss=true
-Redis：PONG
-vLLM：默认端口 8001；月社妃 LoRA 对比实验使用 8002，具体由 VLLM_BASE_URL 决定
-```
+- R0V4 正在人工审核人物提示词、原作覆盖、训练候选、验证候选和开发集。
+- V4 正式训练集、固定验证集和 Gold v3 尚未冻结，训练门禁应保持阻塞。
+- 旧 R1 结果只保留为 `legacy_exploratory_non_comparable`。
+- R2/R3 实现可用于契约和工具验证，正式结果仍需冻结数据与隔离的真实服务。
+- 每次发布前的实际测试计数以 CI 或本次验证报告为准，不在路线图中维护易过期数字。
 
 ## 3. 当前限制（不得声称的事项）
 
 - 旧 DPO 报告的 `eval_accuracy=0.65` 是历史占位值，**非真实偏好胜率**
-- E1 baseline 已完成真实评估（eval_loss=2.802, safety=0.13, citation=0.60）；E2'' 重训后 100/100 成功但 citation 跌至 0.05，AI 自指和第三人称问题需 System Prompt 层面解决
+- 旧 E1/E2/E2'/E2'' 指标来自不同数据或评测契约，只能作为问题发现记录，不能声称受控提升
 - 当前 AWQ 结果是热服务单模型基准，**不是** FP16/AWQ/NF4/INT8 对比，也**不是**真实 startup-load/streaming-TTFT 测量
 - 当前 RAG 集是回归基准，声明泛化前需单独编写 held-out 集
 - SQLite + 手动 Redis **不是**生产部署
-- 旧 Qwen2.5 LoRA 已归档；月社妃已完成 Qwen3 E1/E2/E2'/E2''，胡桃和 Minamo 仍需基于 Qwen3 重训
+- 月社妃是唯一正式研究角色；胡桃和 Minamo 只用于外部部署与路由演示，不据此声称跨角色泛化
 
 ## 4. 最高价值研究方向
 

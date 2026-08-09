@@ -163,8 +163,8 @@ async def start_lora_ablation(req: ExperimentStartRequest,
         return {"success": True, "experiment_id": exp_id, "status": "completed", "mock": True, "results": mock_results}
 
     error = (
-        "Formal R1 training is protected by the reproducibility and GPU lock gates. "
-        "Run scripts/lab-queue-kisaki-r1-extension.sh on the experiment server."
+        "Formal R1V4 training is blocked until human review, the V4 dataset, and Gold v3 "
+        "are frozen. Run scripts/validate_kisaki_v4_training_gate.py to inspect blockers."
     )
     await _execute_sql(
         "UPDATE experiment_runs SET status='failed', completed_at=:ts, results=:r WHERE id=:id",

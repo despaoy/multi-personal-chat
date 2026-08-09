@@ -21,6 +21,7 @@ if str(_BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(_BACKEND_DIR))
 
 from evaluation.experiment_contracts import canonical_json_hash, environment_snapshot, hash_tree
+from inference.prompt_policy import PROMPT_POLICY_VERSION, compose_system_prompt
 
 try:
     import pynvml
@@ -66,6 +67,7 @@ class QuantizationConfig:
     startup_time_measured: bool = False
     gpu_index: int = 0
     system_prompt: str = ""
+    prompt_policy_version: Optional[str] = None
     adapter_path: str = ""
 
 
@@ -90,6 +92,7 @@ class BenchmarkResult:
     adapter_sha256: Optional[str] = None
     prompt_sha256: str = ""
     system_prompt_sha256: str = ""
+    prompt_policy_version: Optional[str] = None
     quality_metrics: Dict[str, Any] = field(default_factory=dict)
     concurrency_results: Dict[str, Any] = field(default_factory=dict)
     raw_measurements: List[Dict[str, Any]] = field(default_factory=list)
@@ -270,6 +273,7 @@ class QuantizationBenchmark:
             adapter_sha256=hash_tree(Path(config.adapter_path)) if config.adapter_path and Path(config.adapter_path).exists() else None,
             prompt_sha256=canonical_json_hash(prompts),
             system_prompt_sha256=canonical_json_hash(config.system_prompt),
+            prompt_policy_version=config.prompt_policy_version,
         )
         vram_samples: List[float] = []
         stop_sampling = asyncio.Event()
@@ -332,6 +336,7 @@ class QuantizationBenchmark:
             adapter_sha256=hash_tree(Path(config.adapter_path)) if config.adapter_path and Path(config.adapter_path).exists() else None,
             prompt_sha256=canonical_json_hash(self.DEFAULT_PROMPTS),
             system_prompt_sha256=canonical_json_hash(config.system_prompt),
+            prompt_policy_version=config.prompt_policy_version,
         )
 
     async def run_comparison(self, configs: List[QuantizationConfig], prompts: Optional[List[str]] = None, mock: bool = False) -> List[BenchmarkResult]:
@@ -383,10 +388,14 @@ def main() -> int:
     parser.add_argument("--startup-time-s", type=float)
     parser.add_argument("--gpu-index", type=int, default=0)
     parser.add_argument("--system-prompt-file", type=Path)
+    parser.add_argument("--compose-runtime-policy", action="store_true")
     parser.add_argument("--adapter-path", default="")
     args = parser.parse_args()
     prompt_payload = json.loads(args.prompts_file.read_text(encoding="utf-8")) if args.prompts_file else None
     prompts = prompt_payload.get("prompts") if isinstance(prompt_payload, dict) else prompt_payload
+    system_prompt = args.system_prompt_file.read_text(encoding="utf-8").strip() if args.system_prompt_file else ""
+    if args.compose_runtime_policy:
+        system_prompt = compose_system_prompt(system_prompt)
     config = QuantizationConfig(
         label=args.label,
         model_path=args.model_path,
@@ -396,7 +405,8 @@ def main() -> int:
         startup_time_s=args.startup_time_s,
         startup_time_measured=args.startup_time_s is not None,
         gpu_index=args.gpu_index,
-        system_prompt=args.system_prompt_file.read_text(encoding="utf-8").strip() if args.system_prompt_file else "",
+        system_prompt=system_prompt,
+        prompt_policy_version=PROMPT_POLICY_VERSION if args.compose_runtime_policy else None,
         adapter_path=args.adapter_path,
     )
     benchmark = QuantizationBenchmark(vllm_url=args.vllm_url)

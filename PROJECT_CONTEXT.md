@@ -2,7 +2,7 @@
 
 > 本文件是 AI 助手和维护者进入项目时的当前事实入口。
 >
-> 更新时间：2026-07-31（HEAD `201dd2f`，工作区含分层架构与服务/仓储演进的未提交变更）。详细实验导航见 [月社妃实验总览](docs/research/KISAKI_EXPERIMENT_INDEX.md)。
+> 更新时间：2026-08-09。详细实验导航见 [月社妃实验总览](docs/research/KISAKI_EXPERIMENT_INDEX.md)。
 
 ## 1. 项目定位
 
@@ -17,8 +17,8 @@ QQChat Enhanced 是面向角色对话研究与保研展示的多平台 LLM 系�
 
 | 模块 | 当前实现 |
 |---|---|
-| 基础模型 | Qwen3-8B-Instruct |
-| 量化推理 | Qwen3-8B-Instruct-AWQ + vLLM 0.10.2 |
+| 基础模型 | 官方 `Qwen/Qwen3-8B`，本地别名 `Qwen3-8B-Instruct` |
+| 量化推理 | 官方 `Qwen/Qwen3-8B-AWQ`，本地别名 `Qwen3-8B-Instruct-AWQ` |
 | 训练 | PyTorch 2.8、Transformers 4.57、PEFT、TRL |
 | 后端 | FastAPI + Python 3.12 目标环境 |
 | 前端 | Next.js 16 + React 19 + Node.js 22 |
@@ -45,42 +45,30 @@ QQChat Enhanced 是面向角色对话研究与保研展示的多平台 LLM 系�
 
 运行时模型、checkpoint、日志、数据库和向量索引位于 `runtime/`，不得提交 Git。
 
-## 4. 月社妃 Canonical E1/E2
+## 4. 月社妃 R0V4/R1V4
 
 ### 4.1 当前状态
 
 | 项目 | 当前事实 |
 |---|---|
-| 训练集 | 826 条，SHA256 记录于数据清单 |
-| 固定验证集 | 92 条，E1/E2 共用 |
-| Gold v2 | 150 条，五类各 30 条，已冻结 |
-| 人工审核 | 150/150 approved |
-| 文本泄漏审计 | passed |
-| BGE-M3 语义泄漏审计 | passed，阈值 0.88，unresolved=0 |
-| 实验预检 | ready_for_training |
-| seed 42 | 等待源码提交同步后启动 |
+| 人物画像 | 已确认 |
+| system prompt v3 | 待人工确认 |
+| 训练/验证候选 | 正在逐批人工审核，尚未冻结 |
+| Gold v2 | 150 条，降级为 development only |
+| Gold v3 | 训练数据冻结后建立 |
+| 实验预检 | blocked，符合预期 |
+| R1V4 seed 42 | 禁止在门禁通过前启动 |
 | 正式结论 | 尚未形成 |
-
-Gold v2 内容哈希：`1e3f6542bb46823c6074c6a64172a38b58942fd4f0dcdc491946bd4bfa4e4feb`。
 
 ### 4.2 严格对照
 
-| 项目 | KISAKI-E1 | KISAKI-E2 |
-|---|---|---|
-| 方法 | 标准 LoRA | LoRA + NEFTune |
-| `neftune_noise_alpha` | 0.0 | 5.0 |
-| 数据、验证集、模型、种子 | 固定 | 与 E1 相同 |
-| LoRA | r32、alpha64、7 modules | 与 E1 相同 |
-| 训练轮数 | 3 | 3 |
-| 生成参数 | temperature 0、thinking off | 与 E1 相同 |
-
-配置差异检查必须证明唯一训练变量为 `neftune_noise_alpha`。
+R1V4 固定数据、验证集、基座模型、seed、LoRA r/alpha、target modules、训练预算和评测参数。E1 是标准 LoRA；E2 只启用 NEFTune；E3 只启用 DoRA；E4 只启用 RSLoRA；E5 只启用 Sequence Packing。V4 配置只能在数据冻结后生成至 `experiments/v4/configs/`。
 
 ### 4.3 历史实验
 
 旧 E1、E2、E2' Safety++ 和 E2'' RAG 保留为探索记录，状态统一为 `legacy_exploratory_non_comparable`。这些实验的数据量、提示词、评测脚本或生成参数存在变化，不进入新的 NEFTune 因果结论。
 
-DoRA、RSLoRA、QLoRA、NEFTune 和 Sequence Packing 的后续研究应在当前 E1/E2 基线完成后另立实验 ID，每次只改变受控变量。
+旧配置、脚本、数据和结果均已移至对应 `archive/`，活动代码不得读取。它们保留实际条件，但不能进入 V4 正式对比。
 
 ## 5. 人物与数据规则
 
@@ -102,14 +90,15 @@ DoRA、RSLoRA、QLoRA、NEFTune 和 Sequence Packing 的后续研究应在当前
 
 - 原作直接台词必须保留来源定位。
 - 训练/验证按完整对话切分，防止同一上下文跨集合泄漏。
-- Gold v1 仅作开发集，Gold v2 不进入训练。
+- Gold v1/Gold v2 仅作开发集，均不进入训练。
 - 精确/文本相似泄漏直接阻断，语义相似度不低于 0.88 进入复核。
 - RAG 角色正文保持自然语气，证据放入结构化 `citations`。
 - 合成数据必须标记来源和审核状态，不能冒充原作台词。
 
 ## 6. 实验状态定义
 
-- `ready_for_training`：数据、配置、模型与 Gold 契约通过。
+- `human_review`：审核尚未完成，训练门禁必须阻塞。
+- `frozen`：内容和哈希均已冻结。
 - `training_complete`：训练运行成功并生成 adapter。
 - `automatic_evaluation_passed`：自动指标与质量门通过。
 - `blind_review_complete`：匿名 A/B 人工盲评完成。
@@ -123,30 +112,22 @@ DoRA、RSLoRA、QLoRA、NEFTune 和 Sequence Packing 的后续研究应在当前
 
 ```bash
 python -m pytest backend/tests -q
-python scripts/validate_kisaki_experiments.py
+python scripts/validate_kisaki_v4_training_gate.py
 ```
 
 ### 正式预检
 
 ```bash
-python scripts/validate_kisaki_experiments.py --require-model --formal-eval
+python scripts/validate_kisaki_v4_training_gate.py --disk-path /home/szw/lhm2
 ```
 
-### seed 42 队列
+### 门禁通过后的 seed 42
 
 ```bash
-bash scripts/lab-queue-kisaki-e1-e2.sh pilot
+python scripts/run_kisaki_experiment.py --experiment e1 --seed 42
 ```
 
-### seeds 43/44
-
-seed 42 自动质量门和人工抽查通过后运行：
-
-```bash
-bash scripts/lab-queue-kisaki-e1-e2.sh replicate
-```
-
-队列使用原子锁和 GPU 连续空闲检查，只在 `/home/szw/lhm2` 写入运行资产。
+E2-E5 及补充随机种子只能在 E1 全链路验收后按实验注册表顺序运行。
 
 ## 8. 文档导航
 
@@ -155,7 +136,7 @@ bash scripts/lab-queue-kisaki-e1-e2.sh replicate
 | [项目 README](README.md) | 系统能力、结构与部署入口 |
 | [文档中心](docs/README.md) | 全部文档分类 |
 | [月社妃实验总览](docs/research/KISAKI_EXPERIMENT_INDEX.md) | E1/E2、Gold、脚本和历史结果统一索引 |
-| [Canonical 实验设计](docs/research/KISAKI_E1_E2_CANONICAL_EXPERIMENT.md) | 正式研究问题与通过条件 |
+| [V4 审核与重训练](docs/research/KISAKI_V4_HUMAN_REVIEW_AND_RETRAINING.md) | 当前数据、门禁和训练入口 |
 | [实验资产 README](backend/data/character_dialogues/experiments/README.md) | 数据、配置和结果目录 |
 | [服务器布局](docs/operations/SERVER_LAYOUT.md) | 源码与运行资产边界 |
 | [研究路线图](docs/research/RESEARCH_AND_LEARNING_ROADMAP.md) | 后续 LLM 学习与实验方向 |
@@ -172,7 +153,4 @@ bash scripts/lab-queue-kisaki-e1-e2.sh replicate
 
 ## 10. 最近验证
 
-- 服务器后端测试：`121 passed, 3 warnings`。
-- Gold v2 文本与 BGE-M3 语义泄漏审计：`passed`。
-- 正式实验预检：`ready_for_training`，`errors=[]`。
-- 当前源码提交基线：HEAD `201dd2f`（已推送至 origin/main）；工作区存在分层架构（services/repositories/app 运行时容器）演进的未提交变更，服务器运行前需先确认工作区状态再决定 `git pull` 或暂存本地变更。
+当前重构后的完整测试结果以本次工作结束时的验证报告为准。任何历史测试计数、旧 commit 和旧 `ready_for_training` 状态都不再代表 V4 当前状态。

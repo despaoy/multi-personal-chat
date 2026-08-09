@@ -57,24 +57,25 @@ QQChat Enhanced 不是简单的聊天机器人，而是一个围绕角色语言�
 ### 3.3 8 分钟展示结构
 
 1. 研究问题，45 秒：为什么角色一致性不能只靠 Prompt。
-2. 数据治理，75 秒：1,598 条原作台词、canonical 数据、Gold v2、泄漏审计。
+2. 数据治理，75 秒：1,598 条原作台词、V4 人工审核、冻结契约与防泄漏设计。
 3. PEFT，90 秒：LoRA 基线与 E1-E5 单变量实验。
 4. RAG，60 秒：参数记忆与外部知识分工、检索和回答分层。
 5. 推理，60 秒：BF16、AWQ、动态 LoRA、Merge、真实 TTFT。
 6. 系统，75 秒：AstrBot -> FastAPI -> 队列/RAG -> vLLM -> 数据库。
 7. 结果与诚信，45 秒：prompt-v1 pilot 无显著差异，不能夸大为提升。
-8. 下一步，30 秒：完成 E3-E5、冻结 R2、运行 R3、审核 DPO 偏好对。
+8. 下一步，30 秒：完成 V4 数据审核、R1V4、冻结 R2、运行 R3、审核 DPO 偏好对。
 
 ## 4. 当前事实与结论边界
 
 ### 4.1 已经完成并有仓库证据
 
-- Qwen3-8B-Instruct 训练与 Qwen3-8B-Instruct-AWQ 推理基线。
+- 官方 `Qwen/Qwen3-8B` 训练与 `Qwen/Qwen3-8B-AWQ` 推理基线；项目中的 `-Instruct` 仅是本地兼容目录别名。
 - 月社妃人物画像依据 1,598 条原作直接台词。
-- canonical train 826 条、validation 92 条、Gold v2 150 条已冻结并记录 SHA256。
+- 旧 canonical train 826 条、validation 92 条和 Gold v2 均保留为可追溯历史；Gold v2 现只作开发集。
+- V4 人物画像已确认，prompt v3 与训练/验证候选正在人工审核；正式训练被门禁阻塞。
 - R1-E1 标准 LoRA、R1-E2 LoRA + NEFTune 的 Seed 42 adapter 已完成。
 - prompt-v1 pilot 盲评结果：E1 胜 26、E2 胜 32、平局 62，双侧精确符号检验 p=0.512。
-- R1-E3 DoRA、E4 RSLoRA、E5 Packing 的单变量配置与安全队列已准备。
+- R1V4 已预注册 E1 LoRA、E2 NEFTune、E3 DoRA、E4 RSLoRA、E5 Packing 的单变量设计；配置在数据冻结后生成。
 - R2 的 60 条 held-out RAG 候选集已生成。
 - R3 的真实 SSE TTFT 基准器已经实现。
 - FastAPI、Next.js、SQLite/PostgreSQL、Redis 退化路径、vLLM、AstrBot 网关等工程链路已实现。
@@ -411,7 +412,7 @@ JWT/会话认证回答“你是谁”；CSRF 防护回答“这个浏览器发�
 
 ### P0：让现有证据闭环
 
-1. 使用 prompt v2 重新评测 E1/E2。
+1. 人工批准并冻结人物 prompt v3 后，使用同一有效运行时提示词评测所有 V4 变体。
 2. 依次训练 R1-E3/E4/E5。
 3. 五组使用相同 120 条角色 Gold 和生成参数统一评测。
 4. 完成四组 40 条分层盲评。

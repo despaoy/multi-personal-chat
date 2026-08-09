@@ -1,0 +1,94 @@
+{
+  "created_at": "2026-08-01",
+  "seed": 42,
+  "eval_ratio": 0.15,
+  "rule": "游戏数据按split_group同组同侧、每模块抽1组进eval; 主数据按data_source分层85/15",
+  "main_version": "v5_clean (train_v5_clean.jsonl, 159条, 见 clean_v5_report.json)",
+  "inputs": {
+    "main": "C:\\Users\\13474\\Desktop\\qqchat-enhanced\\backend\\data\\character_dialogues\\experiments\\train_v5_clean.jsonl",
+    "main_count": 159,
+    "game": {
+      "famous": 8,
+      "paper": 2,
+      "riou": 12,
+      "rikata": 3
+    }
+  },
+  "riou_dup_audit": {
+    "main_riou": 12,
+    "game_riou": 12,
+    "id_overlap": [],
+    "messages_sha256_overlap": [],
+    "text_pair_overlap": 0,
+    "conclusion": "两批riou数据无重复(ID/哈希/文本均无交集), 213条成立; data_branch: riou_manual(LLM) vs riou_game(游戏)"
+  },
+  "merged": {
+    "samples": 184,
+    "assistant_turns": 241,
+    "assistant_chars": 3999,
+    "by_module": {
+      "llm": 159,
+      "famous": 8,
+      "paper": 2,
+      "riou": 12,
+      "rikata": 3
+    },
+    "by_source": {
+      "llm_v4_blindfix": 35,
+      "llm_v4_lifestyle": 20,
+      "llm_v4_yoruko": 26,
+      "llm_v4_manual": 66,
+      "llm_v4_riou": 12,
+      "game": 25
+    },
+    "eval_groups": null
+  },
+  "train": {
+    "samples": 157,
+    "assistant_turns": 203,
+    "assistant_chars": 3358,
+    "by_module": {
+      "llm": 138,
+      "paper": 1,
+      "famous": 7,
+      "riou": 10,
+      "rikata": 1
+    },
+    "by_source": {
+      "llm_v4_riou": 11,
+      "llm_v4_lifestyle": 17,
+      "llm_v4_blindfix": 30,
+      "llm_v4_manual": 57,
+      "game": 19,
+      "llm_v4_yoruko": 23
+    },
+    "eval_groups": null
+  },
+  "eval": {
+    "samples": 27,
+    "assistant_turns": 38,
+    "assistant_chars": 641,
+    "by_module": {
+      "llm": 21,
+      "riou": 2,
+      "rikata": 2,
+      "paper": 1,
+      "famous": 1
+    },
+    "by_source": {
+      "llm_v4_blindfix": 5,
+      "llm_v4_yoruko": 3,
+      "llm_v4_manual": 9,
+      "game": 6,
+      "llm_v4_lifestyle": 3,
+      "llm_v4_riou": 1
+    },
+    "eval_groups": null
+  },
+  "game_eval_split_groups": [
+    "2红宝石_妃夜子默契_691_749",
+    "8萤石时空_冒牌货与兄妹_685_762",
+    "8萤石时空_彼方托付_1366_1395",
+    "8萤石时空_理央深层_1310_1330"
+  ]
+}

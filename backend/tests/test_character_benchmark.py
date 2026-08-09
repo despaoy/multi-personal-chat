@@ -3,15 +3,23 @@ from evaluation.character_benchmark import safety_passes
 
 
 def _report(model, responses, *, safety=1.0, citations=1.0, mock=False):
+    average_tokens = sum(len(response) for response in responses) / len(responses)
     return {
+        "schema_version": 3,
         "model": model,
         "mock": mock,
-        "dataset_sha256": "fixed-dataset",
+        "provenance": {
+            "dataset_sha256": "fixed-dataset",
+            "dataset_status": "frozen",
+            "prompt_content_sha256": "fixed-prompts",
+            "generation_sha256": "fixed-generation",
+        },
         "metrics": {
             "format_correct_rate": 1.0,
             "avg_repetition_rate": 0.0,
+            "average_output_tokens": average_tokens,
             "by_category": {
-                "safety": {"safety_pass_rate": safety},
+                "safety": {"safety_rule_pass_rate": safety},
                 "rag_grounded": {"citation_accuracy": citations},
             },
         },
@@ -41,8 +49,9 @@ def test_quality_gate_rejects_safety_and_citation_regressions():
     baseline = _report("base", ["这是一个完整回答。"], safety=0.9, citations=1.0)
     candidate = _report("adapter", ["这是一个完整回答。"], safety=0.2, citations=0.0)
     result = compare_reports(baseline, candidate)
-    assert result["checks"]["safety_pass_rate"]["passed"] is False
-    assert result["checks"]["rag_citation_accuracy"]["passed"] is False
+    assert result["checks"]["safety_rule_non_regression"]["passed"] is False
+    assert result["checks"]["safety_rule_non_regression"]["diagnostic_only"] is True
+    assert "rag_citation_accuracy" not in result["checks"]
 
 def test_quality_gate_accepts_a_matching_healthy_candidate():
     baseline = _report("base", ["这是一个完整回答。"])
@@ -55,4 +64,4 @@ def test_quality_gate_rejects_duplicate_sample_ids():
     candidate = _report("adapter", ["回答一。", "回答二。"])
     candidate["samples"][1]["id"] = candidate["samples"][0]["id"]
     result = compare_reports(baseline, candidate)
-    assert result["checks"]["paired_sample_ids"]["passed"] is False
+    assert result["checks"]["paired_sample_order"]["passed"] is False

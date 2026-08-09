@@ -8,8 +8,8 @@ QQChat Enhanced 是一个面向角色对话研究与保研展示的多平台 LLM
 
 | 模块 | 推荐版本或实现 |
 | --- | --- |
-| 基础模型 | Qwen3-8B-Instruct |
-| 量化推理 | Qwen3-8B-Instruct-AWQ + vLLM 0.10.2 |
+| 基础模型 | `Qwen/Qwen3-8B`（本地兼容别名 `Qwen3-8B-Instruct`） |
+| 量化推理 | `Qwen/Qwen3-8B-AWQ`（本地兼容别名 `Qwen3-8B-Instruct-AWQ`）+ vLLM 0.10.2 |
 | 训练 | PyTorch 2.8、Transformers 4.57、PEFT、TRL |
 | 后端 | Python 3.12 + FastAPI |
 | 前端 | Node.js 22 + Next.js 16 + React 19 |
@@ -18,7 +18,7 @@ QQChat Enhanced 是一个面向角色对话研究与保研展示的多平台 LLM
 | 数据库 | SQLite（本地/单进程）或 PostgreSQL（部署推荐） |
 | 缓存 | Redis 可选；不可用时使用受限的进程内退化实现 |
 
-实验室服务器已验证 PyTorch 2.8.0+cu128、RTX 3090 CUDA、BGE-M3 和 vLLM 0.10.2 可用；最近一次完整后端回归为 `121 passed`。月社妃 Gold v2 已完成人工审核及文本/语义泄漏审计并正式冻结。
+实验室服务器已验证 PyTorch 2.8.0+cu128、RTX 3090 CUDA、BGE-M3 和 vLLM 0.10.2 可用。月社妃 Gold v2 现作为开发评测集；新的 V4 正式训练被人工审核和 Gold v3 冻结门禁阻塞。实际测试计数以当前 CI 或本次验证报告为准。
 
 ## 系统架构
 
@@ -174,7 +174,7 @@ curl -fsS http://127.0.0.1:5000/api/health
 - [部署指南](docs/operations/DEPLOYMENT_GUIDE.md)
 - [保研项目答辩与深度问答手册](docs/research/POSTGRADUATE_RECOMMENDATION_DEFENSE_PLAYBOOK.md)
 - [研究与学习路线](docs/research/RESEARCH_AND_LEARNING_ROADMAP.md)
-- [月社妃 LLM 研究主线 v3](docs/research/KISAKI_LLM_RESEARCH_PROGRAM_V3.md)
+- [月社妃 V4 人工审核与重训练](docs/research/KISAKI_V4_HUMAN_REVIEW_AND_RETRAINING.md)
 - [月社妃实验总览](docs/research/KISAKI_EXPERIMENT_INDEX.md)
 - [月社妃 LoRA 重训计划（历史）](docs/research/archive/KISAKI_LORA_RETRAIN_PLAN.md)
 - [数据集卡片（历史）](docs/data/archive/dataset-card.md)

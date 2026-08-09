@@ -411,23 +411,16 @@ async def generate_with_ollama(prompt: str, session_id: Optional[str] = None) ->
         elif not rag_status.startswith("跳过"):
             rag_status = f"跳过（{rag_reason}）"
 
-        # 构建系统提示词（RAG知识直接嵌入system prompt）
-        system_prompt = LORA_REGISTRY.get(_current_lora, LORA_REGISTRY["hutao"])["system_prompt"]
-        if rag_context:
-            system_prompt += (
-                "\n\n以下是相关的背景设定，请将其视为你所知道的事实"
-                "自然融入回答，保持你的角色语气。"
-                "不要提及背景设定、资料或知识库等词，"
-                "也不要照搬原文，要用你自己的话表达。\n"
-                + rag_context[:1500]
-            )
+        persona_prompt = LORA_REGISTRY.get(_current_lora, LORA_REGISTRY["hutao"])["system_prompt"]
+        system_prompt = compose_system_prompt(persona_prompt, include_rag=bool(rag_context))
         messages = [{"role": "system", "content": system_prompt}]
 
         if session_id:
             for msg in session_history.get_history(session_id):
                 messages.append(msg)
 
-        messages.append({"role": "user", "content": prompt})
+        user_content = build_grounded_user_message(prompt, rag_context, max_chars=1500)
+        messages.append({"role": "user", "content": user_content})
 
         logger.info(f"发送给Ollama的模型: {config.OLLAMA_MODEL}")
 
@@ -547,6 +540,7 @@ def _resolve_path(p: str) -> str:
 # H1 fix: LORA_REGISTRY 已抽取到 inference/lora_registry.py 作为中立层，
 # 消除 api/generate.py 对 bot 层的反向依赖。bot.py 保留导入以兼容现有代码。
 from inference.lora_registry import LORA_REGISTRY, LORA_NAMES, get_lora_system_prompt
+from inference.prompt_policy import build_grounded_user_message, compose_system_prompt
 
 
 def _get_char_name(lora_name: str = None) -> str:
@@ -649,15 +643,8 @@ async def generate_with_local_model(prompt: str, session_id: Optional[str] = Non
                 else:
                     rag_context = await _rag_search_via_api(prompt, top_k=3)
 
-            # 构建系统提示词
-            system_prompt = LORA_REGISTRY.get(lora_name, {}).get("system_prompt", "")
-            if rag_context:
-                system_prompt += (
-                    "\n\n用户消息中可能包含【背景设定】，请将其视为你所知道的事实"
-                    "自然融入回答，保持你的角色语气。"
-                    "不要提及背景设定、资料或知识库等词，"
-                    "也不要照搬原文，要用你自己的话表达。"
-                )
+            persona_prompt = LORA_REGISTRY.get(lora_name, {}).get("system_prompt", "")
+            system_prompt = compose_system_prompt(persona_prompt, include_rag=bool(rag_context))
             messages = [{"role": "system", "content": system_prompt}]
 
             if session_id:
@@ -667,13 +654,7 @@ async def generate_with_local_model(prompt: str, session_id: Optional[str] = Non
                         messages.append(msg)
 
             # RAG知识直接注入user消息，让模型无法忽略
-            if rag_context:
-                user_content = (
-                    f"【背景设定】\n{rag_context[:1500]}\n\n"
-                    f"{prompt}"
-                )
-            else:
-                user_content = prompt
+            user_content = build_grounded_user_message(prompt, rag_context, max_chars=1500)
             messages.append({"role": "user", "content": user_content})
 
             # 调试：打印发送给vLLM的messages概要（M5 fix: 只记长度与短预览，避免泄露历史PII）
@@ -731,15 +712,8 @@ async def generate_with_local_model(prompt: str, session_id: Optional[str] = Non
                 logger.info("claw模式无需RAG检索")
                 rag_context = ""
 
-            system_prompt = LORA_REGISTRY[lora_name]["system_prompt"]
-            if rag_context:
-                system_prompt += (
-                    "\n\n以下是相关的背景设定，请将其视为你所知道的事实"
-                    "自然融入回答，保持你的角色语气。"
-                    "不要提及背景设定、资料或知识库等词，"
-                    "也不要照搬原文，要用你自己的话表达。\n"
-                    + rag_context[:1500]
-                )
+            persona_prompt = LORA_REGISTRY[lora_name]["system_prompt"]
+            system_prompt = compose_system_prompt(persona_prompt, include_rag=bool(rag_context))
             messages = [{"role": "system", "content": system_prompt}]
 
             if session_id:
@@ -751,7 +725,8 @@ async def generate_with_local_model(prompt: str, session_id: Optional[str] = Non
                 for msg in history:
                     messages.append(msg)
 
-            messages.append({"role": "user", "content": prompt})
+            user_content = build_grounded_user_message(prompt, rag_context, max_chars=1500)
+            messages.append({"role": "user", "content": user_content})
 
             encoded = tokenizer.apply_chat_template(
                 messages,

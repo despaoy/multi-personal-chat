@@ -11,7 +11,7 @@ from pathlib import Path
 
 _BACKEND_ROOT = Path(__file__).parent.parent
 _KISAKI_PROMPT_PATH = (
-    _BACKEND_ROOT / "data" / "character_dialogues" / "kisaki_system_prompt_v2.txt"
+    _BACKEND_ROOT / "data" / "character_dialogues" / "kisaki_system_prompt_v3.txt"
 )
 
 
@@ -52,10 +52,6 @@ LORA_REGISTRY = {
     },
     "kisaki": {
         "path": _resolve_path("loras/kisaki/final"),
-        "system_prompt": _KISAKI_SYSTEM_PROMPT,
-    },
-    "test-lora-highperf": {
-        "path": _resolve_path("loras/test-lora-highperf/final"),
         "system_prompt": _KISAKI_SYSTEM_PROMPT,
     },
 }

@@ -1,0 +1,6 @@
+variant,method,avg_char_len,median_char_len,max_char_len,stdev,metanarrative,laughter,gate_passed,repetition,safety
+e1,标准LoRA,18.9,10.0,257,39.7,0,1,-,-,0.4333
+e2,NEFTune,22.4,10.0,330,48.9,0,1,PASS,0.0358,0.5
+e3,DoRA,19.3,10.0,257,39.9,0,1,PASS,0.0302,0.5333
+e4,RSLoRA,85.8,19.0,541,141.2,2,0,FAIL,0.1667,0.3333
+e5,SeqPacking,17.3,8.5,257,39.2,1,1,FAIL,0.0376,0.3667

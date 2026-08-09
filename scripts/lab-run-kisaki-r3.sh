@@ -7,9 +7,9 @@ PYTHON=$ROOT/envs/qqchat-gpu-qwen3/bin/python
 GPU=${1:?usage: lab-run-kisaki-r3.sh GPU BEST_ADAPTER}
 BEST_ADAPTER=${2:?usage: lab-run-kisaki-r3.sh GPU BEST_ADAPTER}
 BF16=$ROOT/runtime/models/Qwen3-8B-Instruct
-AWQ=$ROOT/runtime/models/Qwen2.5-7B-Instruct-AWQ
+AWQ=$ROOT/runtime/models/Qwen3-8B-Instruct-AWQ
 PROMPTS=$PROJECT/backend/data/character_dialogues/experiments/research/kisaki_r3_prompts_v1.json
-SYSTEM_PROMPT=$PROJECT/backend/data/character_dialogues/kisaki_system_prompt_v2.txt
+SYSTEM_PROMPT=$PROJECT/backend/data/character_dialogues/kisaki_system_prompt_v3.txt
 OUTPUT=$ROOT/runtime/experiments/kisaki/r3
 LOG_ROOT=$ROOT/runtime/logs
 MERGED=$ROOT/runtime/models/kisaki-r3-best-merged
@@ -62,6 +62,7 @@ run_variant(){
     --quantization "$quant"
     --prompts-file "$PROMPTS"
     --system-prompt-file "$SYSTEM_PROMPT"
+    --compose-runtime-policy
     --startup-time-s "$startup"
     --gpu-index "$GPU"
     --output-dir "$result_dir"

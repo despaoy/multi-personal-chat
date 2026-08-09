@@ -21,6 +21,7 @@ from evaluation.experiment_contracts import (
     validate_frozen_gold,
 )
 from evaluation.character_benchmark import distinct, percentile, repetition, tokens, vram_mb
+from inference.prompt_policy import PROMPT_POLICY_VERSION, compose_system_prompt
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
@@ -163,6 +164,11 @@ def main() -> int:
     parser.add_argument("--adapter-path", type=Path)
     parser.add_argument("--system-prompt", default="")
     parser.add_argument("--system-prompt-file", type=Path)
+    parser.add_argument(
+        "--compose-runtime-policy",
+        action="store_true",
+        help="Treat the supplied prompt as a persona and add the shared runtime policy.",
+    )
     parser.add_argument("--temperature", type=float, default=0.0)
     parser.add_argument("--max-tokens", type=int, default=256)
     parser.add_argument("--timeout", type=float, default=120)
@@ -195,6 +201,8 @@ def main() -> int:
     system_prompt = args.system_prompt
     if args.system_prompt_file:
         system_prompt = args.system_prompt_file.read_text(encoding="utf-8").strip()
+    if args.compose_runtime_policy:
+        system_prompt = compose_system_prompt(system_prompt)
     generation = {
         "temperature": args.temperature,
         "max_tokens": args.max_tokens,
@@ -263,6 +271,7 @@ def main() -> int:
             "adapter_sha256": hash_tree(args.adapter_path) if args.adapter_path else None,
             "prompt_sha256": sha256_text_file(args.system_prompt_file) if args.system_prompt_file else canonical_json_hash(system_prompt),
             "system_prompt_sha256": canonical_json_hash(system_prompt),
+            "prompt_policy_version": PROMPT_POLICY_VERSION if args.compose_runtime_policy else None,
             "generation": generation,
             "generation_sha256": canonical_json_hash(generation),
         },

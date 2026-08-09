@@ -1,17 +1,14 @@
 import json
 from pathlib import Path
 
-from evaluation.benchmark_gate_v2 import compare_reports
+from evaluation.benchmark_gate import compare_reports
 from evaluation.character_benchmark import safety_passes
 from evaluation.character_benchmark_v3 import evaluate_safety
 from evaluation.experiment_contracts import (
     audit_prompt_leakage,
     canonical_json_hash,
-    compare_experiment_configs,
     sha256_text_file,
-    validate_e1_e2_pair,
     validate_frozen_gold,
-    validate_r1_variant_set,
 )
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -20,44 +17,6 @@ EXPERIMENT_DIR = PROJECT_ROOT / "backend" / "data" / "character_dialogues" / "ex
 
 def _load(path: Path):
     return json.loads(path.read_text(encoding="utf-8"))
-
-
-def test_canonical_e1_e2_have_only_neftune_training_difference():
-    e1 = _load(EXPERIMENT_DIR / "configs" / "kisaki_e1_canonical.json")
-    e2 = _load(EXPERIMENT_DIR / "configs" / "kisaki_e2_canonical.json")
-    assert validate_e1_e2_pair(e1, e2) == []
-    assert compare_experiment_configs(e1, e2) == {"neftune_noise_alpha": (0.0, 5.0)}
-
-
-
-
-def test_r1_e1_to_e5_are_strict_single_variable_ablations():
-    configs = {
-        name: _load(EXPERIMENT_DIR / "configs" / f"kisaki_{name}_canonical.json")
-        for name in ("e1", "e2", "e3", "e4", "e5")
-    }
-    assert validate_r1_variant_set(configs) == []
-    assert compare_experiment_configs(configs["e1"], configs["e3"]) == {
-        "use_dora": (False, True)
-    }
-    assert compare_experiment_configs(configs["e1"], configs["e4"]) == {
-        "use_rslora": (False, True)
-    }
-    assert compare_experiment_configs(configs["e1"], configs["e5"]) == {
-        "packing": (False, True)
-    }
-
-def test_canonical_dataset_manifest_matches_files_and_has_no_split_overlap():
-    manifest = _load(EXPERIMENT_DIR / "canonical_dataset_manifest.json")
-    train = PROJECT_ROOT / manifest["train"]["path"]
-    validation = PROJECT_ROOT / manifest["validation"]["path"]
-    assert sha256_text_file(train) == manifest["train"]["sha256"]
-    assert sha256_text_file(validation) == manifest["validation"]["sha256"]
-    assert manifest["checks"]["train_validation_prompt_overlap"] == 0
-    assert manifest["train"]["count"] > 0
-    assert manifest["validation"]["count"] > 0
-
-
 
 
 def test_portable_text_hash_is_independent_of_line_endings(tmp_path):
@@ -138,5 +97,5 @@ def test_schema_v3_gate_blocks_unfrozen_gold():
     result = compare_reports(baseline, candidate)
 
     assert result["passed"] is False
-    assert result["checks"]["gold_v2_frozen"]["passed"] is False
-    assert "Gold v2 must be frozen" in result["formal_blockers"]
+    assert result["checks"]["frozen_evaluation_set"]["passed"] is False
+    assert "evaluation dataset must be frozen" in result["formal_blockers"]

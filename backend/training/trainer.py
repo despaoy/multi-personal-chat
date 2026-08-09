@@ -1,6 +1,6 @@
 """
 胡桃风格LoRA训练核心脚本
-基于Qwen3-8B-Instruct的LoRA微调，包含完整训练配置、GPU温度保护、早停机制。
+基于 Qwen/Qwen3-8B（本地兼容别名 Qwen3-8B-Instruct）的 LoRA 微调，包含完整训练配置、GPU 温度保护和早停机制。
 """
 import os as _os
 import logging
@@ -46,6 +46,11 @@ except Exception:
 
 from datasets import Dataset, load_dataset
 from trl import SFTTrainer, SFTConfig
+from training.chat_dataset import (
+    normalize_chat_record,
+    pack_tokenized_records,
+    tokenize_assistant_turns,
+)
 from training.evaluator import write_training_evaluation_report
 
 try:
@@ -212,7 +217,7 @@ class LoRATrainingConfig:
     eval_steps: int = 50
     save_strategy: str = "steps"
     save_steps: int = 50
-    save_total_limit: int = 3
+    save_total_limit: int = 1
     load_best_model_at_end: bool = True
     metric_for_best_model: str = "eval_loss"
     greater_is_better: bool = False
@@ -359,117 +364,22 @@ class LoRATrainer:
         dataset = load_dataset("json", data_files=str(self.config.train_data_path))["train"]
         logger.info(f"训练数据加载完成，样本数: {len(dataset)}")
 
-        # 检测数据格式：conversations（多轮）或 user_question/agent_response（单轮）
-        sample = dataset[0]
-        has_conversations = "conversations" in sample
-        logger.info(f"数据格式: {'ShareGPT多轮对话' if has_conversations else '单轮对话(user_question/agent_response)'}")
-
-        def format_and_tokenize(examples):
-            all_input_ids = []
-            all_labels = []
-            all_attention_mask = []
-
-            if has_conversations:
-                # ShareGPT 多轮对话格式
-                for i in range(len(examples["conversations"])):
-                    convs = examples["conversations"][i]
-                    system_text = examples.get("system", [None])[i] if "system" in examples else None
-
-                    # 转换为 Qwen chat 格式
-                    messages = []
-                    if system_text:
-                        messages.append({"role": "system", "content": system_text})
-                    else:
-                        messages.append({"role": "system", "content": self.config.system_prompt})
-
-                    for conv in convs:
-                        role = "user" if conv.get("from") == "human" else "assistant"
-                        messages.append({"role": role, "content": conv.get("value", "")})
-
-                    # 多轮对话：构建 prompt（不含最后assistant回复）和 full_text
-                    prompt_messages = messages[:-1]  # 去掉最后的 assistant 回复
-                    # 确保 prompt 最后一条是 user
-                    if prompt_messages and prompt_messages[-1]["role"] == "assistant":
-                        prompt_messages = prompt_messages[:-1]
-
-                    if self.config.chat_template:
-                        prompt_text = tokenizer.apply_chat_template(
-                            prompt_messages,
-                            tokenize=False,
-                            add_generation_prompt=True
-                        )
-                        full_text = tokenizer.apply_chat_template(
-                            messages,
-                            tokenize=False,
-                            add_generation_prompt=False
-                        )
-                    else:
-                        prompt_text = "\n".join(
-                            f"{m['role']}: {m['content']}" for m in prompt_messages
-                        ) + "\nassistant:"
-                        full_text = "\n".join(
-                            f"{m['role']}: {m['content']}" for m in messages
-                        )
-
-                    prompt_ids = tokenizer.encode(prompt_text, add_special_tokens=False)
-                    full_ids = tokenizer.encode(full_text, add_special_tokens=False)
-
-                    full_ids, prompt_len = self._truncate_preserving_response(
-                        full_ids, prompt_ids
-                    )
-                    labels = [-100] * prompt_len + full_ids[prompt_len:]
-                    attention_mask = [1] * len(full_ids)
-
-                    all_input_ids.append(full_ids)
-                    all_labels.append(labels)
-                    all_attention_mask.append(attention_mask)
-            else:
-                # 旧格式：user_question / agent_response 单轮对话
-                for i in range(len(examples["user_question"])):
-                    user_content = examples["user_question"][i]
-                    assistant_content = examples["agent_response"][i]
-
-                    system_msg = {"role": "system", "content": self.config.system_prompt}
-                    user_msg = {"role": "user", "content": user_content}
-                    assistant_msg = {"role": "assistant", "content": assistant_content}
-
-                    if self.config.chat_template:
-                        prompt_text = tokenizer.apply_chat_template(
-                            [system_msg, user_msg],
-                            tokenize=False,
-                            add_generation_prompt=True
-                        )
-                        full_text = tokenizer.apply_chat_template(
-                            [system_msg, user_msg, assistant_msg],
-                            tokenize=False,
-                            add_generation_prompt=False
-                        )
-                    else:
-                        prompt_text = f"system: {self.config.system_prompt}\nuser: {user_content}\nassistant:"
-                        full_text = f"system: {self.config.system_prompt}\nuser: {user_content}\nassistant: {assistant_content}"
-
-                    prompt_ids = tokenizer.encode(prompt_text, add_special_tokens=False)
-                    full_ids = tokenizer.encode(full_text, add_special_tokens=False)
-
-                    full_ids, prompt_len = self._truncate_preserving_response(
-                        full_ids, prompt_ids
-                    )
-                    labels = [-100] * prompt_len + full_ids[prompt_len:]
-                    attention_mask = [1] * len(full_ids)
-
-                    all_input_ids.append(full_ids)
-                    all_labels.append(labels)
-                    all_attention_mask.append(attention_mask)
-
-            return {
-                "input_ids": all_input_ids,
-                "labels": all_labels,
-                "attention_mask": all_attention_mask,
-            }
+        def format_and_tokenize(record):
+            messages = normalize_chat_record(
+                record,
+                default_system_prompt=self.config.system_prompt,
+            )
+            return tokenize_assistant_turns(
+                tokenizer,
+                messages,
+                max_length=self.config.max_seq_length,
+                truncation_direction=self.config.truncation_direction,
+                use_chat_template=self.config.chat_template,
+            )
 
         tokenized_dataset = dataset.map(
             format_and_tokenize,
-            batched=True,
+            batched=False,
             remove_columns=dataset.column_names,
             desc="Tokenizing dataset",
         )
@@ -478,12 +388,9 @@ class LoRATrainer:
             eval_raw = load_dataset(
                 "json", data_files=str(self.config.eval_data_path)
             )["train"]
-            eval_has_conversations = "conversations" in eval_raw[0]
-            if eval_has_conversations != has_conversations:
-                raise ValueError("Training and evaluation datasets must use the same schema")
             eval_dataset = eval_raw.map(
                 format_and_tokenize,
-                batched=True,
+                batched=False,
                 remove_columns=eval_raw.column_names,
                 desc="Tokenizing fixed evaluation dataset",
             )
@@ -495,6 +402,20 @@ class LoRATrainer:
             )
             train_dataset = split["train"]
             eval_dataset = split["test"]
+
+        if self.config.packing:
+            unpacked_count = len(train_dataset)
+            train_dataset = Dataset.from_list(
+                pack_tokenized_records(
+                    train_dataset,
+                    max_length=self.config.max_seq_length,
+                )
+            )
+            logger.info(
+                "Packed %s training samples into %s label-preserving chunks",
+                unpacked_count,
+                len(train_dataset),
+            )
 
         logger.info(f"训练集: {len(train_dataset)} 样本")
         logger.info(f"验证集: {len(eval_dataset)} 样本")
@@ -745,7 +666,9 @@ class LoRATrainer:
                 report_to=self.config.report_to,
                 gradient_checkpointing=self.config.gradient_checkpointing,
                 seed=self.config.seed,
-                packing=self.config.packing,
+                # Packing is performed above on pre-tokenized records so the
+                # response-only labels survive unchanged across sample joins.
+                packing=False,
                 neftune_noise_alpha=self.config.neftune_noise_alpha or None,
             )
             # 优先用 max_length（trl>=1.8），失败回退 max_seq_length（trl<1.8）
@@ -761,7 +684,6 @@ class LoRATrainer:
                 return_tensors="pt",
             )
 
-            # TRL>=1.8: packing=True 时内部启用 padding-free，不接受自定义 data_collator
             trainer_kwargs = dict(
                 model=model,
                 args=training_args,
@@ -770,8 +692,7 @@ class LoRATrainer:
                 callbacks=callbacks,
                 processing_class=tokenizer,
             )
-            if not self.config.packing:
-                trainer_kwargs["data_collator"] = data_collator
+            trainer_kwargs["data_collator"] = data_collator
             trainer = SFTTrainer(**trainer_kwargs)
 
             logger.info("=" * 60)

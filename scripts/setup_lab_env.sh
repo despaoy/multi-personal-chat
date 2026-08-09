@@ -84,7 +84,7 @@ fi
 # 5. 模型检查
 echo ""
 echo "=== 5. 模型检查 ==="
-for model in Qwen3-8B-Instruct Qwen2.5-7B-Instruct bge-small-zh-v1.5; do
+for model in Qwen3-8B-Instruct Qwen3-8B-Instruct-AWQ bge-m3; do
     path="$LAB_ROOT/runtime/models/$model"
     if [[ -f "$path/config.json" ]]; then
         size=$(du -sh "$path" 2>/dev/null | cut -f1)
@@ -124,7 +124,7 @@ echo ""
 # 8. 下载缺失模型
 echo "=== 8. 下载缺失模型 ==="
 NEED_DOWNLOAD=()
-for model in Qwen3-8B-Instruct bge-small-zh-v1.5; do
+for model in Qwen3-8B-Instruct Qwen3-8B-Instruct-AWQ bge-m3; do
     path="$LAB_ROOT/runtime/models/$model"
     [[ -f "$path/config.json" ]] || NEED_DOWNLOAD+=("$model")
 done

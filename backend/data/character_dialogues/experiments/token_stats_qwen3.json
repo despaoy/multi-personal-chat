@@ -1,0 +1,20 @@
+{
+  "tokenizer": "Qwen3 (Qwen3-4B 同源)",
+  "enable_thinking": false,
+  "loss_mask": "assistant内容+<|im_end|>",
+  "merged": {
+    "samples": 184,
+    "total_tokens": 12665,
+    "assistant_loss_tokens": 4812
+  },
+  "train": {
+    "samples": 157,
+    "total_tokens": 10650,
+    "assistant_loss_tokens": 4050
+  },
+  "eval": {
+    "samples": 27,
+    "total_tokens": 2015,
+    "assistant_loss_tokens": 762
+  }
+}

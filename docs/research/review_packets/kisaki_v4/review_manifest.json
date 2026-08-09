@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "review_id": "KISAKI-V4-HUMAN-REVIEW",
+  "status": "pending_human_review",
+  "batch_size": 50,
+  "counts": {
+    "source_lines": 1598,
+    "game_train_candidates": 801,
+    "constructed_train_candidates": 159,
+    "legacy_validation": 92,
+    "v5_draft_validation": 27,
+    "gold_v2": 150,
+    "gold_v3": 0,
+    "exclusions": 117
+  },
+  "source_hashes": {
+    "raw": "ae02d224449fda48122f07ccb3eda11198882b72338e502449feb9bd47e04c4d",
+    "game_train": "bf923a774237e07c66af1ffe193ce8edc6fbf4d32d742e2b98b3a743f5ed8958",
+    "constructed_train": "00a5b1b761171d8985785ce9818066de42a2759850ac6ceef54d15b225c275d2",
+    "gold_v2": "130afd81fef4e80c87847ef2f0c0742b8064d9c89d775773332bc414eca49a8d",
+    "prompt_v3": "2c51e0e7cbf6318dadcc56117ddd8afc72b9d6c3fc4bb53b6c451fb294acc879"
+  },
+  "packet_file_count": 67,
+  "approval": {
+    "approved_categories": [],
+    "all_required_approved": false,
+    "category_status": {
+      "profile_prompt": "in_review"
+    },
+    "items": {
+      "character_profile": {
+        "status": "approved",
+        "approved_by": "project_owner",
+        "reviewed_at": "2026-08-09",
+        "review_note": "人物画像正确"
+      },
+      "system_prompt_v3": {
+        "status": "pending"
+      }
+    }
+  },
+  "source_coverage": {
+    "original_files_total": 17,
+    "files_with_kisaki_lines": 13
+  }
+}

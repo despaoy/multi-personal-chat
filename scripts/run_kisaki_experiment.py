@@ -1,4 +1,4 @@
-"""Run one canonical Kisaki training experiment with immutable provenance."""
+"""Run one gate-approved Kisaki V4 training experiment with immutable provenance."""
 
 from __future__ import annotations
 
@@ -27,11 +27,13 @@ from evaluation.experiment_contracts import (  # noqa: E402
 )
 
 EXPERIMENT_DIR = BACKEND / "data" / "character_dialogues" / "experiments"
+V4_DIR = EXPERIMENT_DIR / "v4"
 CONFIGS = {
-    name: EXPERIMENT_DIR / "configs" / f"kisaki_{name}_canonical.json"
+    name: V4_DIR / "configs" / f"kisaki_r1v4_{name}.json"
     for name in ("e1", "e2", "e3", "e4", "e5")
 }
-DATASET_MANIFEST = EXPERIMENT_DIR / "canonical_dataset_manifest.json"
+DATASET_MANIFEST = V4_DIR / "canonical_dataset_manifest.json"
+TRAINING_GATE = PROJECT_ROOT / "scripts" / "validate_kisaki_v4_training_gate.py"
 SERVER_ROOT = Path(os.getenv("QQCHAT_LAB_ROOT", "/home/szw/lhm2"))
 
 
@@ -101,11 +103,25 @@ def main() -> int:
     parser.add_argument("--resume", action="store_true")
     args = parser.parse_args()
 
+    gate = subprocess.run(
+        [sys.executable, str(TRAINING_GATE)],
+        cwd=PROJECT_ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if gate.returncode != 0:
+        print(gate.stdout.strip() or gate.stderr.strip(), file=sys.stderr)
+        return 2
+    if not CONFIGS[args.experiment].exists():
+        print(f"v4_experiment_config_missing={CONFIGS[args.experiment]}", file=sys.stderr)
+        return 2
+
     config = _load(CONFIGS[args.experiment])
     dataset = _load(DATASET_MANIFEST)
     experiment_id = str(config["_experiment_id"])
-    output_dir = SERVER_ROOT / "runtime" / "loras" / "kisaki" / "canonical" / args.experiment / f"seed{args.seed}"
-    run_dir = SERVER_ROOT / "runtime" / "experiments" / "kisaki" / args.experiment / f"seed{args.seed}"
+    output_dir = SERVER_ROOT / "runtime" / "loras" / "kisaki" / "r1v4" / args.experiment / f"seed{args.seed}"
+    run_dir = SERVER_ROOT / "runtime" / "experiments" / "kisaki" / "r1v4" / args.experiment / f"seed{args.seed}"
     resolved_config_path = run_dir / "resolved_training_config.json"
     run_manifest_path = run_dir / "run_manifest.json"
     config["seed"] = args.seed

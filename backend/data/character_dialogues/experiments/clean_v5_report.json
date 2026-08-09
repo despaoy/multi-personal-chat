@@ -1,0 +1,56 @@
+{
+  "before": 188,
+  "after": 159,
+  "removed": 29,
+  "removed_reasons": {
+    "kisaki_llm_v4_blindfix_0009": "冲突: 学校'安静不主动搭话'不准确",
+    "kisaki_llm_v4_blindfix_0010": "冲突: '没希望也走'与原作死局态度冲突",
+    "kisaki_llm_v4_blindfix_0013": "短句密度: '嗯。''随你。'堆叠",
+    "kisaki_llm_v4_blindfix_0018": "冲突+空回复: '死局里也有活路'与原作冲突",
+    "kisaki_llm_v4_blindfix_0019": "冲突+空回复: 与死局名场面冲突",
+    "kisaki_llm_v4_blindfix_0024": "奇迹观: '我不许愿'过度绝对",
+    "kisaki_llm_v4_blindfix_0035": "冲突: 理央没来却答'那就好'",
+    "kisaki_llm_v4_blindfix_0036": "模板化: 呼呼呼(与life_0019重复'眼睛有问题')",
+    "kisaki_llm_v4_blindfix_0041": "冲突: 过度自我否定",
+    "kisaki_llm_v4_blindfix_0042": "冲突: '自信不适合我'不准确",
+    "kisaki_llm_v4_blindfix_0055": "模板化: 呼呼呼'无聊'",
+    "kisaki_llm_v4_life_0003": "模板化: 呼呼呼'他懂什么'",
+    "kisaki_llm_v4_life_0009": "短句密度: '哦。放着吧。'与yoruko_0025重复",
+    "kisaki_llm_v4_life_0012": "模板化: 呼呼呼(与0036/0019同'审美/眼睛'模式)",
+    "kisaki_llm_v4_life_0019": "模板化: 呼呼呼(与0036完全重复'你眼睛有问题')",
+    "kisaki_llm_v4_life_0028": "模板化: 呼呼呼'那他想多了'",
+    "kisaki_llm_v4_yoruko_0029": "模板化: 呼呼呼'她想多了'",
+    "kisaki_llm_v4_0037": "冲突: 秋天偏好无原作依据",
+    "kisaki_llm_v4_0060": "冲突: 与彼方'以前是竞争'依据不足",
+    "kisaki_llm_v4_0066": "冲突: '曾经讨厌彼方'依据不足",
+    "kisaki_llm_v4_0067": "冲突: '都位居第二'过度概括",
+    "kisaki_llm_v4_0078": "冲突: '琉璃写的东西更好'疑似错误",
+    "kisaki_llm_v4_0088": "冲突: '位居第二的人都这样'错误强化",
+    "kisaki_llm_v4_0132": "短句密度: '失去重要的人。'与0217重复",
+    "kisaki_llm_v4_0135": "冲突: 直接总结'嘴硬'标签化",
+    "kisaki_llm_v4_0138": "冲突: '夜子来串门'场景关系不准确",
+    "kisaki_llm_v4_0201": "短句密度: '……还好。'与0058重复",
+    "kisaki_llm_v4_0205": "冲突: 再次强化与彼方竞争设定",
+    "kisaki_llm_v4_0219": "奇迹观: '现实没有奇迹'过度绝对"
+  },
+  "empty_fixed": [
+    "kisaki_llm_v4_blindfix_0012",
+    "kisaki_llm_v4_blindfix_0014",
+    "kisaki_llm_v4_blindfix_0015",
+    "kisaki_llm_v4_blindfix_0016",
+    "kisaki_llm_v4_blindfix_0020"
+  ],
+  "kept_huhu": [
+    "kisaki_llm_v4_life_0021",
+    "kisaki_llm_v4_life_0024",
+    "kisaki_llm_v4_yoruko_0028"
+  ],
+  "after_by_source": {
+    "llm_v4_blindfix": 35,
+    "llm_v4_lifestyle": 20,
+    "llm_v4_yoruko": 26,
+    "llm_v4_manual": 66,
+    "llm_v4_riou": 12
+  },
+  "after_turns": 180
+}

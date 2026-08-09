@@ -12,6 +12,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
+from evaluation.experiment_contracts import canonical_json_hash, sha256_text_file
+from inference.prompt_policy import (
+    PROMPT_POLICY_VERSION,
+    build_grounded_user_message,
+    compose_system_prompt,
+)
+
 
 @dataclass
 class RAGAnswerResult:
@@ -58,7 +65,8 @@ class RAGAnswerAblation:
         retrieval_strategy: str = "hybrid_reranker",
     ):
         self.dataset_path = dataset_path
-        self.system_prompt = system_prompt
+        self.persona_prompt = system_prompt.strip()
+        self.system_prompt = compose_system_prompt(self.persona_prompt, include_rag=True)
         self.formal = formal
         self.threshold = threshold
         self.retrieval_strategy = retrieval_strategy
@@ -143,7 +151,12 @@ class RAGAnswerAblation:
                 else:
                     messages = [
                         {"role": "system", "content": self.system_prompt},
-                        {"role": "user", "content": f"背景证据：\n{evidence[:4000]}\n\n问题：{item['question']}"},
+                        {
+                            "role": "user",
+                            "content": build_grounded_user_message(
+                                item["question"], evidence, max_chars=4000
+                            ),
+                        },
                     ]
                     answer = generate(messages)
             except Exception as exc:
@@ -208,6 +221,12 @@ def main() -> int:
         "schema_version": 1, "experiment_id": "R2-ANSWER", "mock": args.mock,
         "formal": args.formal and not args.mock, "retrieval_strategy": args.retrieval_strategy,
         "generated_at": datetime.now(timezone.utc).isoformat(),
+        "provenance": {
+            "persona_prompt_path": str(args.system_prompt_file),
+            "persona_prompt_sha256": sha256_text_file(args.system_prompt_file),
+            "effective_system_prompt_sha256": canonical_json_hash(runner.system_prompt),
+            "prompt_policy_version": PROMPT_POLICY_VERSION,
+        },
         "automatic_faithfulness_is_diagnostic": True, "results": [asdict(row) for row in results],
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)

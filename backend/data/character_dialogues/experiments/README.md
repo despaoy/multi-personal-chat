@@ -1,76 +1,51 @@
 # 月社妃实验资产
 
-> 统一导航见 [月社妃实验总览](../../../../docs/research/KISAKI_EXPERIMENT_INDEX.md)。本目录保存可复现的小型研究资产，不保存模型权重、checkpoint、日志或向量索引。
+> 唯一活动主线是 KISAKI-LLM-RESEARCH-V4。历史契约、脚本、数据和结果仅用于追溯，活动代码不得读取归档目录。
 
-## 当前正式状态
+## 当前权威入口
 
-- `canonical_dataset_manifest.json`：826 条训练数据和 92 条固定验证数据的数量、来源与 SHA256。
-- `canonical_experiment_registry.json`：KISAKI-E1/E2 配置、唯一变量和当前状态。
-- `gold_v2_leakage_audit.json`：文本与 BGE-M3 语义泄漏审计，当前为 `passed`。
-- `../../evaluation/kisaki_gold_set_v2.json`：150 条正式冻结 Gold v2。
-- `configs/kisaki_e1_canonical.json`：标准 LoRA，NEFTune alpha 0.0。
-- `configs/kisaki_e2_canonical.json`：唯一增加 NEFTune alpha 5.0。
+| 作用 | 路径 | 状态 |
+|---|---|---|
+| 研究注册表 | `research/research_program_registry_v4.json` | authoritative |
+| 人工审核清单 | `../../../../docs/research/review_packets/kisaki_v4/review_manifest.json` | pending |
+| 人物提示词 | `../kisaki_system_prompt_v3.txt` | pending human approval |
+| V4 数据清单 | `v4/canonical_dataset_manifest.json` | 审核完成后生成并冻结 |
+| V4 实验配置 | `v4/configs/kisaki_r1v4_e1.json` 至 `e5.json` | 数据冻结后生成 |
+| Gold v2 | `../../../evaluation/kisaki_gold_set_v2.json` | development only |
+| Gold v3 | `../../../evaluation/kisaki_gold_set_v3.json` | 训练数据冻结后建立 |
 
-当前实验状态为 `ready_for_training`。这表示训练契约完整，并不代表 E1/E2 已训练或已形成质量结论。
-
-## 目录结构
-
-```text
-experiments/
-├── README.md
-├── canonical_dataset_manifest.json       数据事实来源
-├── canonical_dataset_exclusions.json     排除与防泄漏记录
-├── canonical_experiment_registry.json    正式实验状态
-├── gold_v2_leakage_audit.json            Gold 泄漏审计
-├── legacy_result_index.json               历史结果索引
-├── tsukiyashiro_kisaki_train.json         固定训练集
-├── tsukiyashiro_kisaki_eval.json          固定验证集
-├── configs/
-│   ├── kisaki_e1_canonical.json           正式 E1
-│   ├── kisaki_e2_canonical.json           正式 E2
-│   └── tsukiyashiro_kisaki_*.json         历史探索配置
-├── results/
-│   ├── archive/                            明确归档的旧结果
-│   └── kisaki_e2*.json                     历史探索结果
-└── research/
-    └── core_research_registry_v2.json      （已归档至 archive/legacy_v3_superseded/，被 v3 取代）
-```
-
-## 事实来源优先级
-
-1. `canonical_dataset_manifest.json` 和文件 SHA256。
-2. `canonical_experiment_registry.json` 与正式配置。
-3. 冻结 Gold v2 及其内容哈希。
-4. 每次运行生成的 run manifest 和 adapter 哈希。
-5. 研究报告。
-
-当报告文字与清单或运行记录冲突时，以前四项为准。
-
-## 可复现命令
-
-从仓库根目录执行：
+正式训练只能通过：
 
 ```bash
-python scripts/build_kisaki_canonical.py
-python scripts/build_kisaki_gold_v2.py
-python scripts/review_kisaki_gold_v2.py summary
-python scripts/validate_kisaki_experiments.py --write-registry
+python scripts/validate_kisaki_v4_training_gate.py
+python scripts/run_kisaki_experiment.py --experiment e1 --seed 42
 ```
 
-`build_kisaki_gold_v2.py` 会生成待审核候选，不能替代已经冻结的正式 Gold。重新构建后必须重新完成人工审核、文本/语义泄漏审计和冻结流程。
+门禁未通过时，训练器必须拒绝启动。当前阶段只允许审核、修订候选数据和运行不消耗 GPU 的契约测试。
 
-服务器正式预检：
+## 活动数据边界
 
-```bash
-python scripts/validate_kisaki_experiments.py --require-model --formal-eval
-```
+- `train_v5_clean.jsonl`、`combined_*.jsonl` 和原作提取文件是 V4 审核候选，不是正式训练集。
+- `v3/llm_v4_judged/` 是合成数据生成阶段的可追溯输入；其目录名表示流水线来源版本，不代表正式 R1 版本。
+- 只有 `v4/canonical_dataset_manifest.json` 状态为 `frozen` 且哈希匹配时，V4 数据才能用于正式训练。
+- Gold v2 仅用于开发；Gold v3 只能在训练数据冻结后建立，避免反向泄漏。
 
-## 状态含义
+## 归档边界
 
-- `ready_for_training`：数据、配置、模型和 Gold 契约通过。
-- `training_complete`：adapter 训练完成。
-- `automatic_evaluation_passed`：自动指标与门禁通过。
-- `blind_review_complete`：匿名 A/B 人工盲评完成。
-- `conclusion_ready`：多随机种子结果和盲评证据完整。
+- `archive/contracts/`：旧 canonical manifest、registry 和 v2/v3 配置。
+- `archive/prompts/`：prompt v1/v2。
+- `archive/registries/`：研究注册表 v3。
+- `results/archive/legacy_exploratory/`：旧 E1/E2/E2'/E2'' 结果。
+- `../../archive/legacy_e2/`：旧 E2 数据增强训练集与补充数据。
+- `scripts/archive/kisaki_legacy/`：旧构建、启动、评测和部署脚本。
 
-历史 E1/E2/E2'/E2'' 统一标记为 `legacy_exploratory_non_comparable`，不得与新的 KISAKI-E1/E2 混合形成正式结论。
+归档内容统一为 `legacy_exploratory_non_comparable`。不得被运行时导入、被活动脚本调用，或进入 V4 正式对比表。
+
+## 状态语义
+
+- `human_review`：审核仍在进行。
+- `frozen`：内容与哈希均已冻结。
+- `training_complete`：仅表示 adapter 生成成功。
+- `automatic_evaluation_passed`：自动指标通过。
+- `blind_review_complete`：匿名人工 A/B 完成。
+- `conclusion_ready`：受控实验、盲评和必要复现实验均完整。

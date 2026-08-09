@@ -369,6 +369,40 @@ async def test_vllm_generation_reuses_one_rag_result(monkeypatch):
     assert calls == 1
     assert meta["citations"] == [{"source_title": "source"}]
     assert "evidence" in captured["messages"][-1]["content"]
+    assert '<retrieved_evidence trust="untrusted"' in captured["messages"][-1]["content"]
+    assert "<user_query>" in captured["messages"][-1]["content"]
+    assert "【事实与安全边界】" in captured["messages"][0]["content"]
+    assert "【检索证据约束】" in captured["messages"][0]["content"]
+
+
+@pytest.mark.asyncio
+async def test_vllm_generation_omits_rag_policy_without_evidence(monkeypatch):
+    from api import generate
+    from db.schemas import MessageRequest
+
+    captured = {}
+
+    class Client:
+        async def generate(self, **kwargs):
+            captured.update(kwargs)
+            return "answer"
+
+    monkeypatch.setattr(generate, "_get_system_prompt", lambda _: "persona")
+    monkeypatch.setattr(generate, "_vllm_client", Client())
+
+    reply, used_rag, meta = await generate._generate_with_vllm(
+        MessageRequest(message="ordinary chat", sessionId="session"),
+        None,
+        runtime_config={"useKnowledgeBase": False},
+    )
+
+    assert reply == "answer"
+    assert used_rag is False
+    assert meta == {}
+    assert "persona" in captured["messages"][0]["content"]
+    assert "【事实与安全边界】" in captured["messages"][0]["content"]
+    assert "【检索证据约束】" not in captured["messages"][0]["content"]
+    assert captured["messages"][-1]["content"] == "ordinary chat"
 
 @pytest.mark.asyncio
 async def test_vllm_rag_abstention_skips_model_generation(monkeypatch):

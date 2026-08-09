@@ -1,0 +1,56 @@
+{
+  "schema_version": 4,
+  "program_id": "KISAKI-LLM-RESEARCH-V4",
+  "authoritative": true,
+  "status": "human_review",
+  "scope": {
+    "primary_persona": "tsukiyashiro_kisaki",
+    "base_model_repo_id": "Qwen/Qwen3-8B",
+    "base_model_local_alias": "Qwen3-8B-Instruct",
+    "pilot_seed": 42,
+    "external_demo_only": ["shenbai_mizunamo", "hutao"]
+  },
+  "active_assets": {
+    "review_manifest": "docs/research/review_packets/kisaki_v4/review_manifest.json",
+    "training_gate": "scripts/validate_kisaki_v4_training_gate.py",
+    "persona_prompt": {
+      "path": "backend/data/character_dialogues/kisaki_system_prompt_v3.txt",
+      "version": 3,
+      "policy_version": "3.1.0",
+      "sha256": "2c51e0e7cbf6318dadcc56117ddd8afc72b9d6c3fc4bb53b6c451fb294acc879",
+      "status": "pending_human_approval",
+      "formal_use_allowed": false
+    },
+    "prompt_policy": {
+      "path": "backend/inference/prompt_policy.py",
+      "version": "3.1.0",
+      "sha256": "ea3fdce5fa80120f49168061dd7dc06c9d39e1a72599bd7b4bcdff76934be1ab"
+    },
+    "canonical_dataset": {
+      "path": "backend/data/character_dialogues/experiments/v4/canonical_dataset_manifest.json",
+      "status": "blocked_until_human_review"
+    },
+    "gold_v2": {
+      "path": "backend/evaluation/kisaki_gold_set_v2.json",
+      "role": "development_only"
+    },
+    "gold_v3": {
+      "path": "backend/evaluation/kisaki_gold_set_v3.json",
+      "status": "blocked_until_training_data_frozen"
+    }
+  },
+  "research": [
+    {"id": "R0V4", "name": "data_prompt_and_gold_review", "status": "active"},
+    {"id": "R1V4", "name": "controlled_peft", "status": "blocked_by_training_gate"},
+    {"id": "R2", "name": "rag_ablation", "status": "blocked_by_dataset_review"},
+    {"id": "R3", "name": "inference_benchmark", "status": "blocked_until_best_adapter"},
+    {"id": "R4", "name": "dpo_pilot", "status": "blocked_until_preference_review"},
+    {"id": "S1", "name": "routing_and_platform_validation", "status": "pending"}
+  ],
+  "legacy": {
+    "status": "archived_non_comparable",
+    "registry": "backend/data/character_dialogues/experiments/archive/registries/research_program_registry_v3.json",
+    "runtime_access_allowed": false,
+    "formal_comparison_allowed": false
+  }
+}

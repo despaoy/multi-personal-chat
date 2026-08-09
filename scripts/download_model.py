@@ -5,7 +5,7 @@
 
 用法:
   python scripts/download_model.py --model Qwen3-8B-Instruct
-  python scripts/download_model.py --model Qwen2.5-7B-Instruct --source modelscope
+  python scripts/download_model.py --model Qwen3-8B-Instruct-AWQ --source modelscope
   python scripts/download_model.py --model Qwen3-8B --source hf
   python scripts/download_model.py --model Qwen3-8B-Instruct --output /custom/path
 
@@ -38,9 +38,17 @@ MODEL_IDS: dict[str, dict[str, str | None]] = {
         "modelscope": "Qwen/Qwen3-8B",
         "huggingface": "Qwen/Qwen3-8B",
     },
-    "Qwen2.5-7B-Instruct": {
-        "modelscope": "Qwen/Qwen2.5-7B-Instruct",
-        "huggingface": "Qwen/Qwen2.5-7B-Instruct",
+    "Qwen3-8B-Instruct-AWQ": {
+        "modelscope": "Qwen/Qwen3-8B-AWQ",
+        "huggingface": "Qwen/Qwen3-8B-AWQ",
+    },
+    "Qwen3-8B-AWQ": {
+        "modelscope": "Qwen/Qwen3-8B-AWQ",
+        "huggingface": "Qwen/Qwen3-8B-AWQ",
+    },
+    "bge-m3": {
+        "modelscope": "BAAI/bge-m3",
+        "huggingface": "BAAI/bge-m3",
     },
     "bge-small-zh-v1.5": {
         "modelscope": "BAAI/bge-small-zh-v1.5",

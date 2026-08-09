@@ -6,13 +6,14 @@ from evaluation.experiment_contracts import normalized_text
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 GOLD_PATH = PROJECT_ROOT / "backend" / "evaluation" / "kisaki_gold_set_v2_candidates.json"
-AUDIT_PATH = (
+REGISTRY_PATH = (
     PROJECT_ROOT
     / "backend"
     / "data"
     / "character_dialogues"
     / "experiments"
-    / "gold_v2_leakage_audit.json"
+    / "research"
+    / "research_program_registry_v4.json"
 )
 
 
@@ -41,8 +42,7 @@ def test_gold_v2_multiturn_items_are_distinct_real_dialogues():
     assert len(first_turns) == len(set(first_turns))
 
 
-def test_gold_v2_text_leakage_gate_passes_independently_of_semantic_review():
-    audit = _load(AUDIT_PATH)
-    assert audit["status"] == "passed"
-    assert audit["matches"] == []
-    assert audit["semantic_audit_status"] in {"pending", "passed", "review_required"}
+def test_gold_v2_is_registered_as_development_only():
+    registry = _load(REGISTRY_PATH)
+    gold_v2 = registry["active_assets"]["gold_v2"]
+    assert gold_v2["role"] == "development_only"

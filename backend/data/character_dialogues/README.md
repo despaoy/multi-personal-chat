@@ -1,39 +1,37 @@
 # 月社妃角色数据
 
-> 当前正式训练体系为 KISAKI-CANONICAL-V2。旧 E2/E2'/E2'' 数据仅保留作探索记录。
+当前唯一活动研究体系为 KISAKI-LLM-RESEARCH-V4。人物画像已确认，system prompt v3、训练候选、验证候选和 Gold 仍需按审核包逐项批准。
 
-## Canonical 数据
+## 活动资产
 
-| 内容 | 文件 | 当前数量 | 用途 |
-|---|---|---:|---|
-| 训练集 | experiments/tsukiyashiro_kisaki_train.json | 826 | KISAKI-E1/E2 共用 |
-| 固定验证集 | experiments/tsukiyashiro_kisaki_eval.json | 92 | 训练损失、早停 |
-| 数据清单 | experiments/canonical_dataset_manifest.json | - | 数量、来源、SHA256 |
-| 排除记录 | experiments/canonical_dataset_exclusions.json | 2 | 重复与 Gold 泄漏审计 |
-| Gold v2 候选 | ../../evaluation/kisaki_gold_set_v2_candidates.json | 150 | 审核与泄漏审计来源 |
-| Gold v2 冻结集 | ../../evaluation/kisaki_gold_set_v2.json | 150 | KISAKI-E1/E2 正式评测 |
+| 内容 | 路径 | 用途 |
+|---|---|---|
+| 原始可追溯台词 | `tsukiyashiro_kisaki_raw.jsonl` | 来源覆盖和证据定位 |
+| 原作训练候选 | `tsukiyashiro_kisaki_sft.json` | 人工审核输入 |
+| 构造训练候选 | `experiments/train_v5_clean.jsonl` | 人工审核输入 |
+| V4 审核包 | `../../../docs/research/review_packets/kisaki_v4/` | 用户逐批审核 |
+| 人物提示词 | `kisaki_system_prompt_v3.txt` | 角色身份、关系、性格和表达 |
+| V4 正式数据 | `experiments/v4/` | 审核并冻结后才会生成 |
+| Gold v2 | `../../evaluation/kisaki_gold_set_v2.json` | 开发评测，不回流训练 |
+| Gold v3 | `../../evaluation/kisaki_gold_set_v3.json` | 最终盲测，尚未生成 |
 
-数量和哈希必须以 canonical_dataset_manifest.json 为准，文档中不再手工维护实验数量。
+## 三层提示词
 
-## 数据边界
+1. 人物层：`kisaki_system_prompt_v3.txt`。
+2. 全局事实与安全层：`backend/inference/prompt_policy.py`。
+3. RAG 证据层：仅检索命中时由同一策略模块条件注入。
 
-- tsukiyashiro_kisaki_raw.jsonl：原始可追溯事件，不直接训练。
-- tsukiyashiro_kisaki_sft.json：游戏文本提取源。
-- kisaki_llm_generated_v3.json：经审核的生成数据源。
-- kisaki_gold_set_v1.json：开发评测集，状态为 development_only。
-- kisaki_gold_set_v2_candidates.json：150 条已人工审核候选。
-- kisaki_gold_set_v2.json：人工审核、文本泄漏与 BGE-M3 语义泄漏审计通过后的正式冻结集。
+人物提示词不承载密钥保护、管理权限或引用格式；RAG 内容被标记为不可信证据，不能覆盖系统规则。
 
-## 构建与验证
+## 审核与训练门禁
 
-从仓库根目录执行：
+```bash
+python scripts/build_kisaki_v4_review_packets.py --help
+python scripts/validate_kisaki_v4_training_gate.py
+```
 
-    python scripts/build_kisaki_canonical.py
-    python scripts/build_kisaki_gold_v2.py
-    python scripts/validate_kisaki_experiments.py --write-registry
+训练数据、固定验证集、Gold v3 和 prompt v3 未全部批准并冻结前，不得启动正式 R1V4 训练。
 
-三个命令必须可重复执行并产生相同数据哈希。150 条候选均为 `approved`，服务器 BGE-M3 语义审计结果为 `passed`，正式 Gold v2 已冻结。
+## 历史资产
 
-## 历史数据
-
-tsukiyashiro_kisaki_train_e2*.json、旧配置和旧结果未删除，但属于 legacy_exploratory_non_comparable。它们改变了数据、训练参数和评测规则，不能用于 NEFTune 严格消融结论。
+旧 E1/E2/E2'/E2'' 数据和补充集位于 `archive/legacy_e2/`，旧提示词、配置和结果位于实验目录的 `archive/`。这些资产只用于研究追溯，不被活动代码读取，也不用于当前结论。

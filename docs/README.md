@@ -31,19 +31,21 @@
 ### `research/`
 
 - `POSTGRADUATE_RECOMMENDATION_DEFENSE_PLAYBOOK.md`：保研答辩叙事、技术原理、高频追问和现场演示手册。
-- `KISAKI_EXPERIMENT_INDEX.md`：月社妃 E1/E2、Gold、脚本和历史结果统一入口。
-- `KISAKI_E1_E2_CANONICAL_EXPERIMENT.md`：当前正式 NEFTune 受控实验设计。
+- `KISAKI_V4_HUMAN_REVIEW_AND_RETRAINING.md`：当前月社妃数据审核、训练门禁和重训练入口。
+- `review_packets/kisaki_v4/00_GUIDE.md`：按批次人工检查人物画像、原作、训练候选、验证集和 Gold v2。
+- `KISAKI_EXPERIMENT_INDEX.md`：月社妃 R0V4-R4、S1、门禁和历史结果统一入口。
+- `archive/KISAKI_E1_E2_CANONICAL_EXPERIMENT.md`：旧 R1 NEFTune 受控实验记录（只读归档）。
 - `KISAKI_CHARACTER_PROFILE.md`：原作证据支持的人物画像。
-- `KISAKI_GOLD_V2_AI_PRESCREEN.md`：Gold v2 审核与冻结记录。
+- `archive/KISAKI_GOLD_V2_AI_PRESCREEN.md`：Gold v2 历史审核与冻结记录。
 - `RESEARCH_AND_LEARNING_ROADMAP.md`：研究主线和学习路线。
 - `BEGINNER_REAL_LLM_EXPERIMENT_GUIDE.md`：真实 LLM 实验操作指南。
-- `archive/KISAKI_LORA_RETRAIN_PLAN.md`：历史 LoRA/DoRA/RSLoRA 消融计划（已被 v3 主线取代）。
-- 其余 `KISAKI_E1_*`、`KISAKI_E2*` 报告：历史探索记录，以实验总览中的状态为准。
+- `archive/KISAKI_LORA_RETRAIN_PLAN.md`：历史 LoRA/DoRA/RSLoRA 消融计划（只读归档）。
+- 旧 `KISAKI_E1_*`、`KISAKI_E2*` 报告统一位于 `research/archive/`，只作历史追溯。
 - `archive/REAL_VLLM_BENCHMARK_REPORT.md`：Qwen2.5 历史基准（迁移对照，已归档）。
 
 ### `data/`
 
-- `archive/dataset-card.md`：历史 v1 数据集卡（已归档，当前数据集以 `backend/data/character_dialogues/experiments/canonical_dataset_manifest.json` 为准）。
+- `archive/dataset-card.md`：历史 v1 数据集卡。当前 V4 数据只有在审核完成后才会生成至 `backend/data/character_dialogues/experiments/v4/`。
 - `human-scoring-rubric.md`：Gold Set 人工评分标准。
 
 ## 维护规则

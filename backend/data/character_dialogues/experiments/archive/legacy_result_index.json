@@ -1,0 +1,25 @@
+{
+  "_note": "Read-only index for legacy exploratory results. Active code must not load this file.",
+  "schema_version": 1,
+  "status": "legacy_exploratory_non_comparable",
+  "result_globs": [
+    "../results/archive/legacy_exploratory/kisaki_e1_baseline_eval*.json",
+    "../results/archive/legacy_exploratory/kisaki_e2_neftune_eval*.json",
+    "../results/archive/legacy_exploratory/kisaki_e2p_neftune_eval*.json",
+    "../results/archive/legacy_exploratory/kisaki_e2pp*.json"
+  ],
+  "actual_training_summary": {
+    "historical_e1": {"source_count": 829, "actual_train_count": 746, "actual_internal_eval_count": 83, "neftune_noise_alpha": 0.0},
+    "historical_e2": {"source_count": 854, "actual_train_count": 768, "actual_internal_eval_count": 86, "neftune_noise_alpha": 5.0},
+    "historical_e2_prime": {"source_count": 874, "actual_train_count": 786, "actual_internal_eval_count": 88, "neftune_noise_alpha": 2.5},
+    "historical_e2_double_prime": {"source_count": 899, "actual_train_count": 809, "actual_internal_eval_count": 90, "neftune_noise_alpha": 2.5}
+  },
+  "non_comparable_reasons": [
+    "fixed eval_data_path was not used by the historical server runs",
+    "training data changed between variants",
+    "Gold v1 prompts influenced supplemental data",
+    "safety and citation scorers changed after generation",
+    "generation settings and serving backends were inconsistent"
+  ],
+  "usage": "Historical debugging only. Do not quote these metrics as controlled ablation evidence."
+}

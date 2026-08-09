@@ -743,7 +743,7 @@ build_citations() / build_context_prompt() → 注入 LLM
   - `_load_from_db(session_id)`：通过 `db.adapter` 的 `db.get_messages(limit=10, session_id=session_id)` 恢复
 - **RAG 集成**：`_rag_search_via_api(query, top_k, kb_name)`：HTTP POST 调用后端 RAG 服务
 - **LoRA 热切换**：
-  - `LORA_REGISTRY`：预置 hutao/minamo/test-lora-highperf（月社妃）角色；月社妃 LoRA 适配器路径为 `loras/kisaki/e2pp_rag_r32/final`
+  - `LORA_REGISTRY`：预置 hutao、minamo、kisaki；月社妃只使用稳定别名 `loras/kisaki/final`，具体实验产物需在验收后显式发布到该路径
   - `_load_7b_model(lora_name)`：加载 Qwen3-8B 4-bit NF4 + PeftModel；热切换时 `load_adapter` + `set_adapter`
 - **推理主流程**：
   - `generate_with_local_model(prompt, session_id, is_claw, lora_name)`：**优先 vLLM**（`inference.vllm_client.VLLMClient`），失败回退 transformers
@@ -1176,7 +1176,7 @@ powershell -ExecutionPolicy Bypass -File scripts/start-local-backend.ps1
 | `deploy/scripts/download_models.sh` | 国内镜像（`HF_ENDPOINT=hf-mirror.com`），下载 Qwen3-8B-AWQ、BGE-M3 和 BGE reranker |
 | `deploy/compare_quantization.sh` | 遍历 fp16/awq/int8 串行启动 vLLM、跑 benchmark |
 | `deploy/run_experiments.sh` | 顺序跑 4 实验，生成 summary.md |
-| `deploy/run_server_experiments.sh` | 6 阶段编排，支持 `--phase N` 或 `--all` |
+| `scripts/run_kisaki_experiment.py`、`lab-run-kisaki-r2.sh`、`lab-run-kisaki-r3.sh`、`lab-run-kisaki-r4-dpo.sh` | 当前受门禁约束的 R1V4-R4 实验入口 |
 | `deploy/verify.sh` | 部署验证（docker compose up、业务流测试） |
 
 ### 7.6 服务器验证命令
@@ -1277,9 +1277,9 @@ curl -fsS http://127.0.0.1:8001/v1/models
 | 脚本 | 用途 |
 |---|---|
 | `extract_character_dialogues.py` | 从源文本提取角色对话数据集（shenbai_mizunamo 神白水菜萌 / tsukiyashiro_kisaki 月社妃），输出 raw.jsonl/sft.json/sft_full.json/excluded.jsonl/manifest.json/coverage_report.json |
-| `build_character_experiments.py` | 构建角色实验资产（150 条 held-out eval + train 集 + lora_ablation_matrix.json 13 变体，已归档至 `archive/legacy_v3_superseded/`） |
+| `scripts/archive/kisaki_legacy/build_character_experiments.py` | 历史角色实验资产构建器，只读归档 |
 | `build_character_rag_eval.py` | 将 held-out RAG 样本转为检索实验 schema |
-| `build_research_assets.py` | 构建研究资产：dataset_cards.json、synthetic_data_audit.json、preference_alignment_configs.json、controlled_peft_ablations.json、core_experiment_registry.json、RESEARCH_EXECUTION_GUIDE.md（dataset_cards/preference_alignment_configs/core_experiment_registry 已归档至 `archive/legacy_v3_superseded/`） |
+| `scripts/archive/kisaki_legacy/build_research_assets.py` | 历史研究资产构建器，只读归档 |
 
 ### 10.2 盲评与审核类（Python）
 
@@ -1297,7 +1297,7 @@ curl -fsS http://127.0.0.1:8001/v1/models
 | 脚本 | 用途 |
 |---|---|
 | `validate_lora_training.py` | LoRA 训练只读预检（基础模型 quantization_config、训练数据格式、输出目录、GPU 快照） |
-| `lab-start-kisaki-training.sh` | 实验服务器启动月社妃 LoRA r32 训练（CUDA_VISIBLE_DEVICES=1，PID 文件防重复） |
+| `run_kisaki_experiment.py` | 通过 V4 人工审核与冻结门禁后启动单个 R1V4 受控实验 |
 | `lab-start-vllm-daemon.sh` | vLLM 守护进程启动器（检测训练进程占用时拒绝启动） |
 | `lab-start-vllm.sh` | vLLM 启动命令（加载 hutao/minamo LoRA，AWQ Marlin，--enable-lora --max-lora-rank 64） |
 | `run_character_benchmark_real.sh` | 跑角色基准评测（base awq + lora 两轮）→ 构造 blind A/B 评测包 |

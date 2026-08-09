@@ -193,6 +193,9 @@ ssh_*.py
 .tmp_*.py
 scripts/_ssh_step*.py
 scripts/_ssh_*.py
+_ssh_*.sh
+scripts/_remote.py
+scripts/qwen3_tokenizer/
 
 # === pnpm 本地缓存 ===
 .pnpm-store/
