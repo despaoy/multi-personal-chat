@@ -7,6 +7,7 @@ RAG意图检测模块
 - 分类器不可用时回退到规则引擎（关键词匹配 + 句式分析）
 """
 
+import os
 import re
 import json
 import pickle
@@ -111,10 +112,18 @@ class RAGIntentDetector:
         self.question_pattern = re.compile(
             r'.*[吗呢吧啊呀么？?]$|.*(吗|呢|吧|啊|呀|么)[？?]?$'
         )
-        
+
         # 特殊字符模式
         self.special_chars_pattern = re.compile(r'[!@#$%^&*()_+\-=\[\]{};\':"\\|,.<>/?~`]')
-        
+
+        # 闲聊白名单：身份询问、陪伴请求等短句，虽含"谁"/"说说"等词但属于闲聊，不走RAG。
+        # 知识查询如"派蒙是谁"/"给我讲讲胡桃"不会匹配此模式，仍正常触发RAG。
+        self.chitchat_pattern = re.compile(
+            r'^(?:你是谁|你叫什么(?:名字)?|我是谁|你是什么(?:人|身份)?|'
+            r'陪我(?:说说话|聊聊天|说话|聊天|聊|唠)|说说话|聊聊天)[吗呢呀啊？?!！。\s]*$',
+            re.IGNORECASE
+        )
+
         logger.info("RAG意图检测器初始化完成")
     
     def needs_rag(self, message: str, context: Optional[Dict[str, Any]] = None) -> Tuple[bool, str]:
@@ -129,6 +138,10 @@ class RAGIntentDetector:
             Tuple[是否需要RAG, 判断原因]
         """
         message = message.strip()
+
+        # 0. 闲聊白名单优先：身份询问、陪伴请求等，虽可能含"谁"/"说说"但属闲聊
+        if self.chitchat_pattern.search(message):
+            return False, "匹配闲聊白名单，不需要RAG"
 
         # 1. 检查消息长度
         if len(message) < self.min_length_for_rag:
@@ -257,7 +270,14 @@ def _load_ml_model():
         return
     try:
         base = Path(__file__).parent
-        model_dir = base.parent / "intent_classifier_model"
+        # 与 intent_trainer.MODEL_DIR 保持一致：优先读 INTENT_MODEL_PATH 环境变量
+        configured = os.getenv("INTENT_MODEL_PATH", "").strip()
+        if configured:
+            model_dir = Path(configured).expanduser()
+            if not model_dir.is_absolute():
+                model_dir = base.parent / model_dir
+        else:
+            model_dir = base.parent / "intent_classifier_model"
         config_path = model_dir / "config.json"
         classifier_path = model_dir / "classifier.joblib"
         legacy_model_path = base.parent / "intent_classifier_model.pkl"
@@ -285,6 +305,10 @@ def _load_ml_model():
             base.parent / "RAG" / embed_model_name,
             base.parent / "models" / embed_model_name,
         ]
+        # 与 .env 的 EMBEDDING_MODEL_PATH 对齐，避免无外网时回退到 huggingface.co
+        env_embed = os.getenv("EMBEDDING_MODEL_PATH", "").strip()
+        if env_embed:
+            local_candidates.append(Path(env_embed).expanduser())
         _ml_encoder = None
         for candidate in local_candidates:
             if candidate.exists():
@@ -294,6 +318,7 @@ def _load_ml_model():
                 except Exception:
                     continue
         if _ml_encoder is None:
+            # 是否离线由部署环境显式配置，不在进程内全局篡改。
             _ml_encoder = SentenceTransformer(embed_model_name)
 
         _ML_AVAILABLE = True

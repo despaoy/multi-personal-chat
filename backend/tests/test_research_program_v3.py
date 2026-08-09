@@ -19,6 +19,20 @@ def test_prompt_v2_corrects_relationship_without_banning_natural_laughter():
     assert "不输出 [文档ID]" in prompt
 
 
+def test_runtime_lora_registry_uses_canonical_kisaki_prompt():
+    from inference.lora_registry import get_lora_system_prompt
+
+    prompt = (
+        PROJECT_ROOT
+        / "backend"
+        / "data"
+        / "character_dialogues"
+        / "kisaki_system_prompt_v2.txt"
+    ).read_text(encoding="utf-8").strip()
+    assert get_lora_system_prompt("kisaki") == prompt
+    assert get_lora_system_prompt("test-lora-highperf") == prompt
+
+
 def test_registry_v3_separates_design_from_runtime_and_forbids_formal_mock():
     registry = json.loads((RESEARCH / "research_program_registry_v3.json").read_text(encoding="utf-8"))
     assert registry["schema_version"] == 3

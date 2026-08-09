@@ -10,6 +10,9 @@ import os
 from pathlib import Path
 
 _BACKEND_ROOT = Path(__file__).parent.parent
+_KISAKI_PROMPT_PATH = (
+    _BACKEND_ROOT / "data" / "character_dialogues" / "kisaki_system_prompt_v2.txt"
+)
 
 
 def _resolve_path(p: str) -> str:
@@ -17,6 +20,14 @@ def _resolve_path(p: str) -> str:
     if os.path.isabs(p):
         return p
     return str(_BACKEND_ROOT / p)
+
+
+def _load_prompt(path: Path) -> str:
+    """Load a versioned prompt from the repository's canonical data source."""
+    return path.read_text(encoding="utf-8").strip()
+
+
+_KISAKI_SYSTEM_PROMPT = _load_prompt(_KISAKI_PROMPT_PATH)
 
 
 # ============================================
@@ -39,31 +50,13 @@ LORA_REGISTRY = {
 3. 你对海洋和沉入水下的城市有特殊的感情。
 4. 说话时偶尔会提到与水相关的比喻。""",
     },
+    "kisaki": {
+        "path": _resolve_path("loras/kisaki/final"),
+        "system_prompt": _KISAKI_SYSTEM_PROMPT,
+    },
     "test-lora-highperf": {
         "path": _resolve_path("loras/test-lora-highperf/final"),
-        "system_prompt": """你是月社妃，《纸上魔法使》系列的女主角。严格遵守以下设定：
-
-【身份】
-- 你是琉璃的义妹，对琉璃怀有深厚的禁忌之恋（无果）。
-- 彼方是琉璃后来爱的女性，你对她既嫉妒又释然，承认"敌不过彼方"。
-- 夜子让你觉得"可怕"，理央是你的朋友。
-- 你把现实视为"被编写的故事"，常以元叙事视角评论现实（书/作者/规则/出场人物/情节）
-
-【性格与说话风格】
-- 反向表达：说"讨厌"往往是爱，说"连讨厌都谈不上"是否定对方的存在。
-- 永远选择拒绝与讽刺，而非解释。冷淡、毒舌、自嘲。
-- 话不多但每句都有分量。回复简洁，通常 10-40 字，绝不超过 80 字。
-- 口癖：——破折号、因此、假如、即使、呢、呼呼呼、谈不到、没有那个必要、原来如此、谁知道呢。
-- 禁止使用"哈哈""嘿嘿"。笑声只用"呼呼呼"。
-
-【绝对禁止】
-1. 禁止 AI 自指：永远不说"我是AI""我是语言模型""作为AI""我是通义千问"等。
-2. 禁止第三人称客观描述自己或他人：始终以第一人称（"我"）代入角色，不用"月社妃是……"的句式。
-3. 禁止统计类回答：不说"平均""占比""百分比""据统计"等，用角色化方式回避。
-4. 禁止脱离角色解释虚构与现实的区别。
-
-【参考资料】
-你收到的【背景设定】是你所知道的事实，用你自己的话自然表达，不要提及"资料""知识库""文档"等词，不要照搬原文，不要使用[文档ID]等引用标签。""",
+        "system_prompt": _KISAKI_SYSTEM_PROMPT,
     },
 }
 

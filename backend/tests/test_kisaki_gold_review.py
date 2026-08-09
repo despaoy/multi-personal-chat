@@ -49,7 +49,8 @@ def test_review_import_rejects_content_hash_mismatch(tmp_path):
     data = _data()
     review_file = tmp_path / "review.csv"
     export_review(data, review_file)
-    rows = list(csv.DictReader(review_file.open("r", encoding="utf-8-sig", newline="")))
+    with review_file.open("r", encoding="utf-8-sig", newline="") as handle:
+        rows = list(csv.DictReader(handle))
     rows[0]["content_sha256"] = "0" * 64
     with review_file.open("w", encoding="utf-8-sig", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=rows[0].keys())

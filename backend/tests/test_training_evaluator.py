@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from training.evaluator import build_training_evaluation, write_training_evaluation_report
 
 
@@ -42,6 +44,8 @@ def test_training_evaluation_handles_invalid_or_extreme_losses():
     assert report["metrics"]["eval_perplexity"] is None
 
 def test_training_config_allows_dora_and_rslora_together():
+    pytest.importorskip("transformers")
+    pytest.importorskip("peft")
     from training.trainer import LoRATrainingConfig
 
     errors = LoRATrainingConfig(
@@ -52,6 +56,9 @@ def test_training_config_allows_dora_and_rslora_together():
     assert "DoRA and RSLoRA cannot be enabled together" not in errors
 
 def test_non_quantized_model_uses_transformers_4_compatible_dtype(monkeypatch, tmp_path: Path):
+    pytest.importorskip("transformers")
+    pytest.importorskip("torch")
+    pytest.importorskip("peft")
     import torch
     import training.trainer as trainer_module
 
@@ -79,6 +86,8 @@ def test_non_quantized_model_uses_transformers_4_compatible_dtype(monkeypatch, t
     assert "dtype" not in captured
 
 def test_gradient_checkpointing_enables_input_grads_and_disables_cache(monkeypatch):
+    pytest.importorskip("transformers")
+    pytest.importorskip("peft")
     import training.trainer as trainer_module
 
     class DummyConfig:

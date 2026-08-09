@@ -90,7 +90,19 @@ def test_experiment_dataclasses_are_json_ready():
     ]
 
 
+def test_intent_detector_chitchat_allowlist_requires_a_complete_short_phrase():
+    from knowledge.intent_detector import RAGIntentDetector
+
+    detector = RAGIntentDetector()
+    assert detector.needs_rag("你是谁？")[0] is False
+    assert detector.needs_rag("陪我聊聊天")[0] is False
+    assert detector.needs_rag("你是谁的妹妹？")[0] is True
+
+
 def test_training_truncation_preserves_supervised_response_tokens():
+    pytest.importorskip("transformers")
+    pytest.importorskip("torch")
+    pytest.importorskip("peft")
     from training.trainer import LoRATrainer
 
     trainer = object.__new__(LoRATrainer)

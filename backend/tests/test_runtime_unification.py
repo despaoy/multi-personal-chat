@@ -41,8 +41,9 @@ def test_fastapi_app_attaches_runtime_and_business_routes():
 
 @pytest.mark.asyncio
 async def test_readiness_uses_runtime_container_database(monkeypatch):
-    from app import config, main
-    from app.runtime import RuntimeContainer
+    from app import main
+    from app.readiness import ReadinessProbe
+    from app.runtime import RuntimeContainer, get_runtime_container
 
     vector_db = ModuleType("knowledge.vector_db")
     vector_db.get_vector_db = lambda: object()
@@ -55,18 +56,23 @@ async def test_readiness_uses_runtime_container_database(monkeypatch):
             calls.append(query)
             return [{"ok": 1}]
 
-    original = main.app.state.runtime_container
+    original_container = main.app.state.runtime_container
     main.app.state.runtime_container = RuntimeContainer(
         db=Database(),
         is_pg_mode=lambda: False,
         startup_env={},
     )
-    monkeypatch.setenv("MODEL_PROVIDER", "transformers")
-    monkeypatch.setattr(config, "is_vllm_enabled", lambda _env=None: False)
+    # 替换 readiness_probe 为 model_not_required，避免依赖 create_app() 时的环境变量
+    original_probe = main.app.state.readiness_probe
+    main.app.state.readiness_probe = ReadinessProbe(
+        database_check=lambda: get_runtime_container(main.app).db.execute_sql("SELECT 1"),
+        model_required=False,
+    )
     try:
         result = await main.readiness_check(SimpleNamespace(app=main.app))
     finally:
-        main.app.state.runtime_container = original
+        main.app.state.runtime_container = original_container
+        main.app.state.readiness_probe = original_probe
 
     assert result["status"] == "ready"
     assert calls == ["SELECT 1"]
