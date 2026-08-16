@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "status": "promoted",
+  "approval_id": "KISAKI-V41-AUTO-BATCH-030",
+  "source_sessions_sha256": "74066b3d0cab82459b463db8732b4a62d637f1b67d357741ee0ab9cd9218b120",
+  "approved_sessions_sha256": "a739a6b54f4c73a16fe59424759d516230596c963069efa140b2ae9e35e3278c",
+  "previous_train": {
+    "count": 846,
+    "sha256": "bc63f3d057ce100f508f247b1b5f438030ca689c57beae4ba037511966bea53d"
+  },
+  "promoted": {
+    "record_count": 4,
+    "assistant_turn_count": 20,
+    "record_ids": [
+      "kisaki_v41_auto_b030_figuring_out_why_new_sneakers_squeak_indoors",
+      "kisaki_v41_auto_b030_declining_to_be_the_judge_between_two_conflicting_friends",
+      "kisaki_v41_auto_b030_refusing_a_cracked_plugin_that_requires_disabling_endpoint_protection",
+      "kisaki_v41_auto_b030_building_email_rules_without_hiding_important_messages"
+    ]
+  },
+  "result_train": {
+    "count": 850,
+    "sha256": "a80fa11a34f383b1ea32ac348632ff1403071b70fb9931a23da954a1a5606ac4"
+  },
+  "validation": {
+    "count": 70,
+    "sha256": "fb5cd5d93027b37be53327cda4e7c6137a7bae97201830fc8aa726727b9777b8",
+    "modified": false
+  },
+  "gold_v3": {
+    "content_modified": false,
+    "contamination_reaudit": "clean",
+    "contamination_audit_path": "backend/evaluation/kisaki_gold_set_v3_contamination_audit.json"
+  }
+}

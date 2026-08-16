@@ -1,0 +1,181 @@
+{
+  "schema_version": 1,
+  "batch_id": "KISAKI-V41-AUTO-BATCH-045",
+  "status": "approved_after_revision",
+  "reviewer": "codex_delegated_by_project_owner",
+  "reviewed_at": "2026-08-16",
+  "candidate_count": 4,
+  "assistant_turn_count": 20,
+  "summary": {
+    "passed_unchanged": 10,
+    "revised_then_passed": 10,
+    "rejected": 0,
+    "approved_complete_sessions": 4
+  },
+  "rubric": [
+    "persona_consistency",
+    "question_answer_alignment",
+    "fact_grounding",
+    "technical_correctness",
+    "multiturn_continuity",
+    "information_timing",
+    "naturalness",
+    "safety_boundary",
+    "template_avoidance"
+  ],
+  "evidence_refs": [
+    "docs/research/review_packets/kisaki_v4/01_PROFILE_PROMPT/01_character_profile.md",
+    "docs/research/review_packets/kisaki_v4/01_PROFILE_PROMPT/02_system_prompt_v3.md",
+    "docs/research/review_packets/kisaki_v4/01_PROFILE_PROMPT/03_contextual_expression_policy_draft.md"
+  ],
+  "parallel_draft_screening": {
+    "authority": "advisory_only",
+    "main_reviewer_rechecked_all_turns": true
+  },
+  "protected_overlap_review": {
+    "threshold": 0.9,
+    "reference_sets": [
+      "train_through_batch_044",
+      "validation",
+      "gold_v21",
+      "gold_v3",
+      "automation_batch_046"
+    ],
+    "candidate_user_turn_count": 20,
+    "combined_candidate_user_turn_count": 40,
+    "match_count": 0,
+    "cross_batch_match_count": 0,
+    "assistant_similarity_match_count": 0,
+    "status": "clean"
+  },
+  "technical_verification": {
+    "status": "not_applicable"
+  },
+  "session_reviews": [
+    {
+      "session_id": "restoring_a_flattened_down_jacket_after_washing",
+      "decision": "pass",
+      "turn_reviews": [
+        {
+          "turn": 1,
+          "decision": "pass",
+          "all_rubric_checks": true
+        },
+        {
+          "turn": 2,
+          "decision": "pass",
+          "all_rubric_checks": true
+        },
+        {
+          "turn": 3,
+          "decision": "pass",
+          "all_rubric_checks": true
+        },
+        {
+          "turn": 4,
+          "decision": "pass",
+          "all_rubric_checks": true
+        },
+        {
+          "turn": 5,
+          "decision": "pass",
+          "all_rubric_checks": true
+        }
+      ]
+    },
+    {
+      "session_id": "accepting_the_end_of_a_friendship_without_a_clear_conflict",
+      "decision": "pass",
+      "turn_reviews": [
+        {
+          "turn": 1,
+          "decision": "pass",
+          "all_rubric_checks": true
+        },
+        {
+          "turn": 2,
+          "decision": "pass",
+          "all_rubric_checks": true
+        },
+        {
+          "turn": 3,
+          "decision": "pass",
+          "all_rubric_checks": true
+        },
+        {
+          "turn": 4,
+          "decision": "pass",
+          "all_rubric_checks": true
+        },
+        {
+          "turn": 5,
+          "decision": "pass",
+          "all_rubric_checks": true
+        }
+      ]
+    },
+    {
+      "session_id": "testing_measurement_invariance_before_comparing_translated_scale_scores",
+      "decision": "pass",
+      "turn_reviews": [
+        {
+          "turn": 1,
+          "decision": "pass",
+          "all_rubric_checks": true
+        },
+        {
+          "turn": 2,
+          "decision": "pass",
+          "all_rubric_checks": true
+        },
+        {
+          "turn": 3,
+          "decision": "pass",
+          "all_rubric_checks": true
+        },
+        {
+          "turn": 4,
+          "decision": "pass",
+          "all_rubric_checks": true
+        },
+        {
+          "turn": 5,
+          "decision": "pass",
+          "all_rubric_checks": true
+        }
+      ]
+    },
+    {
+      "session_id": "recovering_access_after_losing_a_hardware_security_key",
+      "decision": "pass",
+      "turn_reviews": [
+        {
+          "turn": 1,
+          "decision": "pass",
+          "all_rubric_checks": true
+        },
+        {
+          "turn": 2,
+          "decision": "pass",
+          "all_rubric_checks": true
+        },
+        {
+          "turn": 3,
+          "decision": "pass",
+          "all_rubric_checks": true
+        },
+        {
+          "turn": 4,
+          "decision": "pass",
+          "all_rubric_checks": true
+        },
+        {
+          "turn": 5,
+          "decision": "pass",
+          "all_rubric_checks": true
+        }
+      ]
+    }
+  ]
+}
+

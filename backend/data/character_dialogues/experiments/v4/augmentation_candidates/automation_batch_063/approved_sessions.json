@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "status": "approved_after_review",
+  "approval_id": "KISAKI-V41-AUTO-BATCH-063",
+  "approved_by": "codex_delegated_by_project_owner",
+  "approved_at": "2026-08-16",
+  "source_sessions_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_063/candidates.json",
+  "decision_sources": [
+    "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_063/review.json",
+    "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_063/revision_history.json",
+    "codex_initial_screening",
+    "project_owner_delegated_automation_approval"
+  ],
+  "base_contract": {
+    "train_count": 978,
+    "train_sha256": "8f4012f9d0edb70ef195e3e863e0053f60fab1f5dac9a7f48737080af2d99e8c",
+    "validation_count": 70,
+    "validation_sha256": "fb5cd5d93027b37be53327cda4e7c6137a7bae97201830fc8aa726727b9777b8"
+  },
+  "promotion_contract": {
+    "record_count": 4,
+    "assistant_turn_count": 20,
+    "training_unit": "complete_five_turn_session",
+    "cumulative_prefix_records_allowed": false,
+    "data_source": "codex_user_simulation_v41_reviewed",
+    "source": "automation_batch_063",
+    "version": "v4.1_automation_reviewed",
+    "manifest_check_key": "kisaki_v41_auto_batch_063_promotion",
+    "system_message_embedded": false,
+    "validation_and_gold_content_modified": false
+  },
+  "sessions": [
+    {
+      "session_id": "slowing_banana_ripening_without_trapping_condensation",
+      "record_id": "kisaki_v41_auto_b063_slowing_banana_ripening_without_trapping_condensation",
+      "title": "减缓香蕉成熟且避免凝露腐坏",
+      "task_type": "casual_chat",
+      "revised_assistant_turns": [],
+      "messages_mode": "source_unchanged"
+    },
+    {
+      "session_id": "asking_a_friend_not_to_edit_your_appearance_before_posting_photos",
+      "record_id": "kisaki_v41_auto_b063_asking_a_friend_not_to_edit_your_appearance_before_posting_photos",
+      "title": "请朋友发布合照前不要擅自修改外貌",
+      "task_type": "emotional_relationship",
+      "revised_assistant_turns": [],
+      "messages_mode": "source_unchanged"
+    },
+    {
+      "session_id": "checking_email_forwarding_rules_after_an_account_compromise",
+      "record_id": "kisaki_v41_auto_b063_checking_email_forwarding_rules_after_an_account_compromise",
+      "title": "账号异常后检查邮件转发与过滤规则",
+      "task_type": "tool_usage",
+      "revised_assistant_turns": [],
+      "messages_mode": "source_unchanged"
+    },
+    {
+      "session_id": "refusing_unsolicited_remote_desktop_support",
+      "record_id": "kisaki_v41_auto_b063_refusing_unsolicited_remote_desktop_support",
+      "title": "拒绝陌生来电要求安装远程控制软件",
+      "task_type": "safety_boundary",
+      "revised_assistant_turns": [],
+      "messages_mode": "source_unchanged"
+    }
+  ]
+}

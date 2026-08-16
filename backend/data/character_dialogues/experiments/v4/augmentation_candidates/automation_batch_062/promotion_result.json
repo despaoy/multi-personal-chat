@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "status": "promoted",
+  "approval_id": "KISAKI-V41-AUTO-BATCH-062",
+  "source_sessions_sha256": "8888a2812e1163575e7ef867fda45ec84263e2b46cb27a49eebd3674b0f3932e",
+  "approved_sessions_sha256": "e4d7ad994b25f5c1ba4a2c5a30ff28698654d869fea3e7b92326ba27b9d36014",
+  "previous_train": {
+    "count": 974,
+    "sha256": "a6719a9c07dc5593cfe330a004e860c03e503be4e81afd41f714eb348d3ad51a"
+  },
+  "promoted": {
+    "record_count": 4,
+    "assistant_turn_count": 20,
+    "record_ids": [
+      "kisaki_v41_auto_b062_cleaning_a_reusable_straw_with_an_opaque_bend",
+      "kisaki_v41_auto_b062_setting_limits_when_a_friend_expects_reactions_to_every_shared_video",
+      "kisaki_v41_auto_b062_understanding_why_the_moon_looks_larger_near_the_horizon",
+      "kisaki_v41_auto_b062_interpreting_a_noninferiority_margin_without_claiming_equivalence"
+    ]
+  },
+  "result_train": {
+    "count": 978,
+    "sha256": "8f4012f9d0edb70ef195e3e863e0053f60fab1f5dac9a7f48737080af2d99e8c"
+  },
+  "validation": {
+    "count": 70,
+    "sha256": "fb5cd5d93027b37be53327cda4e7c6137a7bae97201830fc8aa726727b9777b8",
+    "modified": false
+  },
+  "gold_v3": {
+    "content_modified": false,
+    "contamination_reaudit": "clean",
+    "contamination_audit_path": "backend/evaluation/kisaki_gold_set_v3_contamination_audit.json"
+  }
+}

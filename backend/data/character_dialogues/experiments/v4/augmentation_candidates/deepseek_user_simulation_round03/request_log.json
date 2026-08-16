@@ -1,0 +1,362 @@
+[
+  {
+    "session_id": "daily_chat",
+    "turn": 1,
+    "request_metadata": {
+      "request_id": null,
+      "usage": {
+        "prompt_tokens": 56799,
+        "completion_tokens": 27,
+        "total_tokens": 56826,
+        "prompt_tokens_details": {
+          "cached_tokens": 50560
+        },
+        "prompt_cache_hit_tokens": 50560,
+        "prompt_cache_miss_tokens": 6239
+      },
+      "finish_reason": "stop"
+    }
+  },
+  {
+    "session_id": "daily_chat",
+    "turn": 2,
+    "request_metadata": {
+      "request_id": null,
+      "usage": {
+        "prompt_tokens": 56842,
+        "completion_tokens": 30,
+        "total_tokens": 56872,
+        "prompt_tokens_details": {
+          "cached_tokens": 56704
+        },
+        "prompt_cache_hit_tokens": 56704,
+        "prompt_cache_miss_tokens": 138
+      },
+      "finish_reason": "stop"
+    }
+  },
+  {
+    "session_id": "daily_chat",
+    "turn": 3,
+    "request_metadata": {
+      "request_id": null,
+      "usage": {
+        "prompt_tokens": 56891,
+        "completion_tokens": 47,
+        "total_tokens": 56938,
+        "prompt_tokens_details": {
+          "cached_tokens": 56832
+        },
+        "prompt_cache_hit_tokens": 56832,
+        "prompt_cache_miss_tokens": 59
+      },
+      "finish_reason": "stop"
+    }
+  },
+  {
+    "session_id": "daily_chat",
+    "turn": 4,
+    "request_metadata": {
+      "request_id": null,
+      "usage": {
+        "prompt_tokens": 56954,
+        "completion_tokens": 55,
+        "total_tokens": 57009,
+        "prompt_tokens_details": {
+          "cached_tokens": 56832
+        },
+        "prompt_cache_hit_tokens": 56832,
+        "prompt_cache_miss_tokens": 122
+      },
+      "finish_reason": "stop"
+    }
+  },
+  {
+    "session_id": "daily_chat",
+    "turn": 5,
+    "request_metadata": {
+      "request_id": null,
+      "usage": {
+        "prompt_tokens": 57024,
+        "completion_tokens": 37,
+        "total_tokens": 57061,
+        "prompt_tokens_details": {
+          "cached_tokens": 56960
+        },
+        "prompt_cache_hit_tokens": 56960,
+        "prompt_cache_miss_tokens": 64
+      },
+      "finish_reason": "stop"
+    }
+  },
+  {
+    "session_id": "research_learning",
+    "turn": 1,
+    "request_metadata": {
+      "request_id": null,
+      "usage": {
+        "prompt_tokens": 56805,
+        "completion_tokens": 161,
+        "total_tokens": 56966,
+        "prompt_tokens_details": {
+          "cached_tokens": 56704
+        },
+        "prompt_cache_hit_tokens": 56704,
+        "prompt_cache_miss_tokens": 101
+      },
+      "finish_reason": "stop"
+    }
+  },
+  {
+    "session_id": "research_learning",
+    "turn": 2,
+    "request_metadata": {
+      "request_id": null,
+      "usage": {
+        "prompt_tokens": 56991,
+        "completion_tokens": 135,
+        "total_tokens": 57126,
+        "prompt_tokens_details": {
+          "cached_tokens": 56960
+        },
+        "prompt_cache_hit_tokens": 56960,
+        "prompt_cache_miss_tokens": 31
+      },
+      "finish_reason": "stop"
+    }
+  },
+  {
+    "session_id": "research_learning",
+    "turn": 3,
+    "request_metadata": {
+      "request_id": null,
+      "usage": {
+        "prompt_tokens": 57150,
+        "completion_tokens": 130,
+        "total_tokens": 57280,
+        "prompt_tokens_details": {
+          "cached_tokens": 57088
+        },
+        "prompt_cache_hit_tokens": 57088,
+        "prompt_cache_miss_tokens": 62
+      },
+      "finish_reason": "stop"
+    }
+  },
+  {
+    "session_id": "research_learning",
+    "turn": 4,
+    "request_metadata": {
+      "request_id": null,
+      "usage": {
+        "prompt_tokens": 57298,
+        "completion_tokens": 116,
+        "total_tokens": 57414,
+        "prompt_tokens_details": {
+          "cached_tokens": 57216
+        },
+        "prompt_cache_hit_tokens": 57216,
+        "prompt_cache_miss_tokens": 82
+      },
+      "finish_reason": "stop"
+    }
+  },
+  {
+    "session_id": "research_learning",
+    "turn": 5,
+    "request_metadata": {
+      "request_id": null,
+      "usage": {
+        "prompt_tokens": 57434,
+        "completion_tokens": 205,
+        "total_tokens": 57639,
+        "prompt_tokens_details": {
+          "cached_tokens": 57344
+        },
+        "prompt_cache_hit_tokens": 57344,
+        "prompt_cache_miss_tokens": 90
+      },
+      "finish_reason": "stop"
+    }
+  },
+  {
+    "session_id": "coding_debug",
+    "turn": 1,
+    "request_metadata": {
+      "request_id": null,
+      "usage": {
+        "prompt_tokens": 56816,
+        "completion_tokens": 214,
+        "total_tokens": 57030,
+        "prompt_tokens_details": {
+          "cached_tokens": 56704
+        },
+        "prompt_cache_hit_tokens": 56704,
+        "prompt_cache_miss_tokens": 112
+      },
+      "finish_reason": "stop"
+    }
+  },
+  {
+    "session_id": "coding_debug",
+    "turn": 2,
+    "request_metadata": {
+      "request_id": null,
+      "usage": {
+        "prompt_tokens": 57054,
+        "completion_tokens": 278,
+        "total_tokens": 57332,
+        "prompt_tokens_details": {
+          "cached_tokens": 56960
+        },
+        "prompt_cache_hit_tokens": 56960,
+        "prompt_cache_miss_tokens": 94
+      },
+      "finish_reason": "stop"
+    }
+  },
+  {
+    "session_id": "coding_debug",
+    "turn": 3,
+    "request_metadata": {
+      "request_id": null,
+      "usage": {
+        "prompt_tokens": 57351,
+        "completion_tokens": 260,
+        "total_tokens": 57611,
+        "prompt_tokens_details": {
+          "cached_tokens": 57216
+        },
+        "prompt_cache_hit_tokens": 57216,
+        "prompt_cache_miss_tokens": 135
+      },
+      "finish_reason": "stop"
+    }
+  },
+  {
+    "session_id": "coding_debug",
+    "turn": 4,
+    "request_metadata": {
+      "request_id": null,
+      "usage": {
+        "prompt_tokens": 57632,
+        "completion_tokens": 338,
+        "total_tokens": 57970,
+        "prompt_tokens_details": {
+          "cached_tokens": 57600
+        },
+        "prompt_cache_hit_tokens": 57600,
+        "prompt_cache_miss_tokens": 32
+      },
+      "finish_reason": "stop"
+    }
+  },
+  {
+    "session_id": "coding_debug",
+    "turn": 5,
+    "request_metadata": {
+      "request_id": null,
+      "usage": {
+        "prompt_tokens": 57989,
+        "completion_tokens": 737,
+        "total_tokens": 58726,
+        "prompt_tokens_details": {
+          "cached_tokens": 57856
+        },
+        "prompt_cache_hit_tokens": 57856,
+        "prompt_cache_miss_tokens": 133
+      },
+      "finish_reason": "stop"
+    }
+  },
+  {
+    "session_id": "project_safety",
+    "turn": 1,
+    "request_metadata": {
+      "request_id": null,
+      "usage": {
+        "prompt_tokens": 56800,
+        "completion_tokens": 38,
+        "total_tokens": 56838,
+        "prompt_tokens_details": {
+          "cached_tokens": 56704
+        },
+        "prompt_cache_hit_tokens": 56704,
+        "prompt_cache_miss_tokens": 96
+      },
+      "finish_reason": "stop"
+    }
+  },
+  {
+    "session_id": "project_safety",
+    "turn": 2,
+    "request_metadata": {
+      "request_id": null,
+      "usage": {
+        "prompt_tokens": 56858,
+        "completion_tokens": 56,
+        "total_tokens": 56914,
+        "prompt_tokens_details": {
+          "cached_tokens": 56832
+        },
+        "prompt_cache_hit_tokens": 56832,
+        "prompt_cache_miss_tokens": 26
+      },
+      "finish_reason": "stop"
+    }
+  },
+  {
+    "session_id": "project_safety",
+    "turn": 3,
+    "request_metadata": {
+      "request_id": null,
+      "usage": {
+        "prompt_tokens": 56936,
+        "completion_tokens": 83,
+        "total_tokens": 57019,
+        "prompt_tokens_details": {
+          "cached_tokens": 56832
+        },
+        "prompt_cache_hit_tokens": 56832,
+        "prompt_cache_miss_tokens": 104
+      },
+      "finish_reason": "stop"
+    }
+  },
+  {
+    "session_id": "project_safety",
+    "turn": 4,
+    "request_metadata": {
+      "request_id": null,
+      "usage": {
+        "prompt_tokens": 57042,
+        "completion_tokens": 71,
+        "total_tokens": 57113,
+        "prompt_tokens_details": {
+          "cached_tokens": 56960
+        },
+        "prompt_cache_hit_tokens": 56960,
+        "prompt_cache_miss_tokens": 82
+      },
+      "finish_reason": "stop"
+    }
+  },
+  {
+    "session_id": "project_safety",
+    "turn": 5,
+    "request_metadata": {
+      "request_id": null,
+      "usage": {
+        "prompt_tokens": 57135,
+        "completion_tokens": 108,
+        "total_tokens": 57243,
+        "prompt_tokens_details": {
+          "cached_tokens": 57088
+        },
+        "prompt_cache_hit_tokens": 57088,
+        "prompt_cache_miss_tokens": 47
+      },
+      "finish_reason": "stop"
+    }
+  }
+]

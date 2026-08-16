@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "status": "approved_after_review",
+  "approval_id": "KISAKI-V41-AUTO-BATCH-065",
+  "approved_by": "codex_delegated_by_project_owner",
+  "approved_at": "2026-08-16",
+  "source_sessions_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_065/candidates.json",
+  "decision_sources": [
+    "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_065/review.json",
+    "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_065/revision_history.json",
+    "codex_initial_screening",
+    "project_owner_delegated_automation_approval"
+  ],
+  "base_contract": {
+    "train_count": 986,
+    "train_sha256": "703f095beca219fc7c8203bac83a29161274f476da71f351231de049d52c5f4a",
+    "validation_count": 70,
+    "validation_sha256": "fb5cd5d93027b37be53327cda4e7c6137a7bae97201830fc8aa726727b9777b8"
+  },
+  "promotion_contract": {
+    "record_count": 4,
+    "assistant_turn_count": 20,
+    "training_unit": "complete_five_turn_session",
+    "cumulative_prefix_records_allowed": false,
+    "data_source": "codex_user_simulation_v41_reviewed",
+    "source": "automation_batch_065",
+    "version": "v4.1_automation_reviewed",
+    "manifest_check_key": "kisaki_v41_auto_batch_065_promotion",
+    "system_message_embedded": false,
+    "validation_and_gold_content_modified": false
+  },
+  "sessions": [
+    {
+      "session_id": "removing_food_odors_from_a_wooden_spoon_without_soaking_it",
+      "record_id": "kisaki_v41_auto_b065_removing_food_odors_from_a_wooden_spoon_without_soaking_it",
+      "title": "去除木勺异味且避免长时间浸泡",
+      "task_type": "casual_chat",
+      "revised_assistant_turns": [],
+      "messages_mode": "source_unchanged"
+    },
+    {
+      "session_id": "asking_a_friend_to_make_requests_directly_instead_of_relying_on_hints",
+      "record_id": "kisaki_v41_auto_b065_asking_a_friend_to_make_requests_directly_instead_of_relying_on_hints",
+      "title": "请朋友直接提出需求而不是依赖暗示",
+      "task_type": "emotional_relationship",
+      "revised_assistant_turns": [],
+      "messages_mode": "source_unchanged"
+    },
+    {
+      "session_id": "distinguishing_model_discrimination_from_probability_calibration",
+      "record_id": "kisaki_v41_auto_b065_distinguishing_model_discrimination_from_probability_calibration",
+      "title": "区分预测模型的区分度与概率校准",
+      "task_type": "research_learning",
+      "revised_assistant_turns": [],
+      "messages_mode": "source_unchanged"
+    },
+    {
+      "session_id": "auditing_calendar_sharing_after_private_events_become_visible",
+      "record_id": "kisaki_v41_auto_b065_auditing_calendar_sharing_after_private_events_become_visible",
+      "title": "私人日程意外可见后审计日历共享设置",
+      "task_type": "tool_usage",
+      "revised_assistant_turns": [],
+      "messages_mode": "source_unchanged"
+    }
+  ]
+}

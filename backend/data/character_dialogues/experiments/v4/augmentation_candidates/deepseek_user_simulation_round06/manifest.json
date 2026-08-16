@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "status": "pending_human_review_with_3_blocked",
+  "method": "codex_authored_user_deepseek_role_only",
+  "model": "deepseek-chat",
+  "temperature": 0.55,
+  "session_count": 4,
+  "turn_count": 20,
+  "status_counts": {
+    "pending_human_review": 17,
+    "blocked_automatic_gate": 3
+  },
+  "generation_gate": {
+    "max_attempts": 3,
+    "attempt_count": 26,
+    "retry_count": 6
+  },
+  "candidate_contract": {
+    "training_candidate_unit": "complete_session_from_sessions.json",
+    "turns_jsonl_purpose": "cumulative_review_trace_only_do_not_train",
+    "assistant_answers_preserved_verbatim": true,
+    "approved_system_prompt_repeated_after_source_corpus": true,
+    "context_conditioned_style_policy": true
+  },
+  "source_contract": {
+    "direct_line_count": 1598,
+    "raw_sha256": "c8d540e7c8e9e3306fc3a1cbe4a79b4b7b3a833ced14b622256b4ca09505fbc9",
+    "profile_sha256": "b00e02319df4aee6a62083f716c424b852b291acf153e660cc727572a417053d",
+    "system_prompt_sha256": "348a4365669aaf698a05cf6554efef4d45ed1084affc7dbfc6b94894bf88c528",
+    "context_style_policy_sha256": "b174190bc2381fd92f94ad3c01080175d57ba980206261b81de580e8dcd21caa",
+    "frozen_train_sha256": "e0285fefefbe541718c08d31f2a76df1d27488742e5a1e01dbeafa85569438fe",
+    "frozen_validation_sha256": "fb5cd5d93027b37be53327cda4e7c6137a7bae97201830fc8aa726727b9777b8"
+  },
+  "secrets_persisted": false,
+  "formal_training_use_allowed": false,
+  "quality_audit_path": "pre_audit.json",
+  "detailed_turn_review_path": "docs/research/review_packets/kisaki_v4/16_DEEPSEEK_USER_SIMULATION_ROUND06/DETAILED_TURN_REVIEW.md",
+  "persona_only_review_path": "docs/research/review_packets/kisaki_v4/16_DEEPSEEK_USER_SIMULATION_ROUND06/PERSONA_ONLY_REVIEW.md",
+  "persona_only_counts": {
+    "approved": 18,
+    "exclude_without_rewrite": 2
+  }
+}

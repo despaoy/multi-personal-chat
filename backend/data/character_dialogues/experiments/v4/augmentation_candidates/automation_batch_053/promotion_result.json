@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "status": "promoted",
+  "approval_id": "KISAKI-V41-AUTO-BATCH-053",
+  "source_sessions_sha256": "a987ac8617ca7b00e824b856480e00497d77fdb7b73ae08ef377ac294231dc93",
+  "approved_sessions_sha256": "cb34e6160a176901b69ca7c356448edded9d565aa11f8d28fc96aa254dd95817",
+  "previous_train": {
+    "count": 938,
+    "sha256": "ff3d3e6c953df208c2a6d795b75e919efe3e2d7065e5a048e7e702e0ccdb4ccb"
+  },
+  "promoted": {
+    "record_count": 4,
+    "assistant_turn_count": 20,
+    "record_ids": [
+      "kisaki_v41_auto_b053_reducing_static_cling_in_laundry_without_fabric_softener",
+      "kisaki_v41_auto_b053_responding_to_a_friend_who_repeatedly_asks_if_you_are_angry",
+      "kisaki_v41_auto_b053_interpreting_a_confidence_interval_that_crosses_the_null_value",
+      "kisaki_v41_auto_b053_moving_an_authenticator_app_to_a_new_phone_without_lockout"
+    ]
+  },
+  "result_train": {
+    "count": 942,
+    "sha256": "46a884795a06136797fba26ce021c7f8baa6a9b7b18a82cc71d98a2eabf7145b"
+  },
+  "validation": {
+    "count": 70,
+    "sha256": "fb5cd5d93027b37be53327cda4e7c6137a7bae97201830fc8aa726727b9777b8",
+    "modified": false
+  },
+  "gold_v3": {
+    "content_modified": false,
+    "contamination_reaudit": "clean",
+    "contamination_audit_path": "backend/evaluation/kisaki_gold_set_v3_contamination_audit.json"
+  }
+}

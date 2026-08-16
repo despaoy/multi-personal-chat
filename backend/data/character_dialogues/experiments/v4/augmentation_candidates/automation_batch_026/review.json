@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "batch_id": "KISAKI-V41-AUTO-BATCH-026",
+  "status": "approved_after_review",
+  "reviewer": "codex_delegated_by_project_owner",
+  "reviewed_at": "2026-08-16",
+  "candidate_count": 4,
+  "assistant_turn_count": 20,
+  "summary": {"passed_unchanged": 20, "revised_then_passed": 0, "rejected": 0, "approved_complete_sessions": 4, "parallel_topic_collision_replaced_before_candidate_freeze": 1},
+  "rubric": ["persona_consistency", "question_answer_alignment", "fact_grounding", "technical_correctness", "multiturn_continuity", "information_timing", "naturalness", "safety_boundary", "template_avoidance"],
+  "evidence_refs": ["docs/research/review_packets/kisaki_v4/01_PROFILE_PROMPT/01_character_profile.md", "backend/data/character_dialogues/kisaki_system_prompt_v3.txt", "docs/research/review_packets/kisaki_v4/01_PROFILE_PROMPT/03_contextual_expression_policy_draft.md"],
+  "parallel_draft_screening": {"agent_role": "readonly_candidate_drafter", "authority": "advisory_only", "main_reviewer_rechecked_all_turns": true, "collision_action": "replaced duplicate window-desk draft with notebook-use session before candidate freeze"},
+  "protected_overlap_review": {"threshold": 0.9, "reference_sets": ["train_through_batch_025", "validation", "gold_v21", "gold_v3", "automation_batch_025"], "candidate_user_turn_count": 20, "match_count": 0, "assistant_similarity_match_count": 0, "status": "clean"},
+  "session_reviews": [
+    {"session_id":"starting_to_use_saved_favorite_notebook","decision":"pass","turn_reviews":[{"turn":1,"decision":"pass","reason":"直面完美主义而不过度上纲。"},{"turn":2,"decision":"pass","reason":"区分保存外观与实际使用。"},{"turn":3,"decision":"pass","reason":"缓解全勤式记录负担。"},{"turn":4,"decision":"pass","reason":"索引方案具体且不过度分类。"},{"turn":5,"decision":"pass","reason":"承接行动，收束自然。"}]},
+    {"session_id":"responding_to_friend_repeated_last_minute_cancellations","decision":"pass","turn_reviews":[{"turn":1,"decision":"pass","reason":"区分可观察行为与动机猜测。"},{"turn":2,"decision":"pass","reason":"避免报复性拒绝，建议明确。"},{"turn":3,"decision":"pass","reason":"体谅与时间边界并存。"},{"turn":4,"decision":"pass","reason":"边界落实到安排方式。"},{"turn":5,"decision":"pass","reason":"不预判关系，保留观察。"}]},
+    {"session_id":"understanding_dew_point_window_condensation","decision":"pass","turn_reviews":[{"turn":1,"decision":"pass","reason":"结露来源与露点解释准确。"},{"turn":2,"decision":"pass","reason":"相对湿度和露点区分正确。"},{"turn":3,"decision":"pass","reason":"加热并非排湿的边界清楚。"},{"turn":4,"decision":"pass","reason":"用露点或绝对湿度判断通风合理。"},{"turn":5,"decision":"pass","reason":"霉斑处置保留材料与专业边界。"}]},
+    {"session_id":"organizing_reference_manager_library_without_losing_metadata","decision":"pass","turn_reviews":[{"turn":1,"decision":"pass","reason":"备份、合并与附件保护顺序正确。"},{"turn":2,"decision":"pass","reason":"DOI 作为候选证据而非盲合并。"},{"turn":3,"decision":"pass","reason":"集合和标签用途区分清楚。"},{"turn":4,"decision":"pass","reason":"自动识别后保留人工核验。"},{"turn":5,"decision":"pass","reason":"完整备份与恢复演练建议可靠。"}]}
+  ]
+}

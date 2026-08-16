@@ -1,0 +1,180 @@
+{
+  "schema_version": 1,
+  "batch_id": "KISAKI-V41-AUTO-BATCH-067",
+  "status": "approved_after_review",
+  "reviewer": "codex_delegated_by_project_owner",
+  "reviewed_at": "2026-08-16",
+  "candidate_count": 4,
+  "assistant_turn_count": 20,
+  "summary": {
+    "passed_unchanged": 20,
+    "revised_then_passed": 0,
+    "rejected": 0,
+    "approved_complete_sessions": 4
+  },
+  "rubric": [
+    "persona_consistency",
+    "question_answer_alignment",
+    "fact_grounding",
+    "technical_correctness",
+    "multiturn_continuity",
+    "information_timing",
+    "naturalness",
+    "safety_boundary",
+    "template_avoidance"
+  ],
+  "evidence_refs": [
+    "docs/research/review_packets/kisaki_v4/01_PROFILE_PROMPT/01_character_profile.md",
+    "docs/research/review_packets/kisaki_v4/01_PROFILE_PROMPT/02_system_prompt_v3.md",
+    "docs/research/review_packets/kisaki_v4/01_PROFILE_PROMPT/03_contextual_expression_policy_draft.md"
+  ],
+  "parallel_draft_screening": {
+    "authority": "advisory_only",
+    "main_reviewer_rechecked_all_turns": true
+  },
+  "protected_overlap_review": {
+    "threshold": 0.9,
+    "reference_sets": [
+      "canonical_train",
+      "validation",
+      "gold_v21",
+      "gold_v3"
+    ],
+    "candidate_user_turn_count": 20,
+    "combined_candidate_user_turn_count": 40,
+    "match_count": 0,
+    "cross_batch_match_count": 0,
+    "assistant_similarity_match_count": 0,
+    "status": "clean"
+  },
+  "technical_verification": {
+    "status": "passed",
+    "details": "Node.js assertions cover sort mutation, shallow copies, toSorted behavior, and frozen input."
+  },
+  "session_reviews": [
+    {
+      "session_id": "drying_a_wet_umbrella_at_work_without_blocking_the_walkway",
+      "decision": "pass",
+      "turn_reviews": [
+        {
+          "turn": 1,
+          "decision": "pass",
+          "all_rubric_checks": true
+        },
+        {
+          "turn": 2,
+          "decision": "pass",
+          "all_rubric_checks": true
+        },
+        {
+          "turn": 3,
+          "decision": "pass",
+          "all_rubric_checks": true
+        },
+        {
+          "turn": 4,
+          "decision": "pass",
+          "all_rubric_checks": true
+        },
+        {
+          "turn": 5,
+          "decision": "pass",
+          "all_rubric_checks": true
+        }
+      ]
+    },
+    {
+      "session_id": "responding_when_group_chat_jokes_keep_targeting_your_accent",
+      "decision": "pass",
+      "turn_reviews": [
+        {
+          "turn": 1,
+          "decision": "pass",
+          "all_rubric_checks": true
+        },
+        {
+          "turn": 2,
+          "decision": "pass",
+          "all_rubric_checks": true
+        },
+        {
+          "turn": 3,
+          "decision": "pass",
+          "all_rubric_checks": true
+        },
+        {
+          "turn": 4,
+          "decision": "pass",
+          "all_rubric_checks": true
+        },
+        {
+          "turn": 5,
+          "decision": "pass",
+          "all_rubric_checks": true
+        }
+      ]
+    },
+    {
+      "session_id": "refusing_to_keep_using_a_cracked_power_strip_with_tape",
+      "decision": "pass",
+      "turn_reviews": [
+        {
+          "turn": 1,
+          "decision": "pass",
+          "all_rubric_checks": true
+        },
+        {
+          "turn": 2,
+          "decision": "pass",
+          "all_rubric_checks": true
+        },
+        {
+          "turn": 3,
+          "decision": "pass",
+          "all_rubric_checks": true
+        },
+        {
+          "turn": 4,
+          "decision": "pass",
+          "all_rubric_checks": true
+        },
+        {
+          "turn": 5,
+          "decision": "pass",
+          "all_rubric_checks": true
+        }
+      ]
+    },
+    {
+      "session_id": "debugging_javascript_sort_mutating_state_shared_with_a_ui",
+      "decision": "pass",
+      "turn_reviews": [
+        {
+          "turn": 1,
+          "decision": "pass",
+          "all_rubric_checks": true
+        },
+        {
+          "turn": 2,
+          "decision": "pass",
+          "all_rubric_checks": true
+        },
+        {
+          "turn": 3,
+          "decision": "pass",
+          "all_rubric_checks": true
+        },
+        {
+          "turn": 4,
+          "decision": "pass",
+          "all_rubric_checks": true
+        },
+        {
+          "turn": 5,
+          "decision": "pass",
+          "all_rubric_checks": true
+        }
+      ]
+    }
+  ]
+}

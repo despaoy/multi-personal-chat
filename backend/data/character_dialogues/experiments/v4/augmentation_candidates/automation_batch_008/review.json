@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "batch_id": "KISAKI-V41-AUTO-BATCH-008",
+  "status": "approved_after_review",
+  "reviewer": "codex_delegated_by_project_owner",
+  "reviewed_at": "2026-08-16",
+  "candidate_count": 4,
+  "assistant_turn_count": 20,
+  "summary": {"passed_unchanged": 20, "revised_then_passed": 0, "rejected": 0, "approved_complete_sessions": 4},
+  "rubric": ["persona_consistency", "question_answer_alignment", "fact_grounding", "technical_correctness", "multiturn_continuity", "information_timing", "naturalness", "safety_boundary", "template_avoidance"],
+  "session_reviews": [
+    {
+      "session_id": "hybrid_retrieval_reranker",
+      "decision": "pass",
+      "turn_reviews": [
+        {"turn": 1, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "pass", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "准确区分语义相似与事实支持，定位引用错误前提。"},
+        {"turn": 2, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "pass", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "BM25 与向量检索优劣及混合召回解释正确。"},
+        {"turn": 3, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "pass", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "reranker 位置、输入与不能恢复漏召回证据的边界清楚。"},
+        {"turn": 4, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "pass", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "检索指标与回答指标分层合理，避免归因混乱。"},
+        {"turn": 5, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "pass", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "用质量延迟曲线做按场景路由，取舍可验证。"}
+      ]
+    },
+    {
+      "session_id": "seed_result_uncertainty",
+      "decision": "pass",
+      "turn_reviews": [
+        {"turn": 1, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "pass", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "拒绝由三个均值直接宣称显著，要求完整结果与差值。"},
+        {"turn": 2, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "pass", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "相同受控 seed 的配对比较与前置条件说明准确。"},
+        {"turn": 3, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "pass", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "指出自由度 2 的 t 区间不稳定，未把 bootstrap 当成信息增量。"},
+        {"turn": 4, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "pass", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "样本量依据方差、效应和预算，并防止结果驱动追加。"},
+        {"turn": 5, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "pass", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "正确解释区间跨零为证据不足，不偷换成必然无效。"}
+      ]
+    },
+    {
+      "session_id": "async_retry_full_jitter",
+      "decision": "pass",
+      "turn_reviews": [
+        {"turn": 1, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "pass", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "限定异常、幂等性、次数、退避、抖动与截止时间。"},
+        {"turn": 2, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "pass", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "惊群与 Retry-After 的解释准确。"},
+        {"turn": 3, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "pass", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "函数可注入休眠和随机源，仅重试明确异常并实现 full jitter。"},
+        {"turn": 4, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "pass", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "非重试异常与取消不会被 RetryableError 分支吞掉。"},
+        {"turn": 5, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "pass", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "测试建议覆盖成功、耗尽、异常分类、上限、序列与幂等边界。"}
+      ]
+    },
+    {
+      "session_id": "issue_priority_planning",
+      "decision": "pass",
+      "turn_reviews": [
+        {"turn": 1, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "pass", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "把紧迫感转换成影响、证据、替代与成本字段。"},
+        {"turn": 2, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "pass", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "可靠性缺陷优先判断有条件且考虑可访问性例外。"},
+        {"turn": 3, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "pass", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "区分研究展示价值与用户产品价值，并限制探索范围。"},
+        {"turn": 4, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "pass", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "唯一入口、分级周期和插队代价形成可执行治理。"},
+        {"turn": 5, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "pass", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "承接用户排序并阻止沉没成本驱动继续。"}
+      ]
+    }
+  ]
+}

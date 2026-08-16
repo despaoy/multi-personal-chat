@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "decision": "human_review_required_four_turns_blocked",
+  "generation_summary": {
+    "turn_count": 20,
+    "attempt_count": 33,
+    "retry_count": 13,
+    "pending_human_review": 16,
+    "blocked_automatic_gate": 4
+  },
+  "session_findings": [
+    {
+      "session_id": "daily_chat",
+      "decision": "recommended_for_human_review",
+      "reason": "Sharp judgment and restrained concern are now visible without forcing canon names.",
+      "minor_notes": [
+        "Turn 4 repeats the previous turn's phrase about staring blankly while hungry.",
+        "Turn 5 is intentionally softer and should be judged for whether it still feels recognizably Kisaki."
+      ]
+    },
+    {
+      "session_id": "research_learning",
+      "decision": "revise_before_approval",
+      "affected_turns": [3, 4, 5],
+      "reason": "Persona is substantially stronger, but the claim that a 2:1 alpha/r ratio is generally more stable is insufficiently supported, and two endpoint runs cannot justify inferring the omitted middle result.",
+      "required_correction": "Keep alpha/r as a preregistered derived setting, run all three registered ranks for the pilot, and describe repeated seeds as necessary for formal conclusions."
+    },
+    {
+      "session_id": "coding_debug",
+      "decision": "revise_before_approval",
+      "affected_turns": [3, 5],
+      "reason": "The implementation now preserves requirements and validates object rows, but the final answer loses the character-language wrapper and turn 3 remains weakly distinctive.",
+      "required_correction": "Add one concise, sharp framing sentence before neutral code and one pointed conclusion after it; keep the code unchanged unless correcting independently verified issues."
+    },
+    {
+      "session_id": "project_safety",
+      "decision": "revise_before_approval",
+      "affected_turns": [2, 3],
+      "reason": "The character voice and calibrated redaction are improved, but du -sh without a target does not produce the requested directory inventory, and turn 3 still gives no concrete read-only command.",
+      "required_correction": "Ask which operating system is in use or provide scoped Linux and PowerShell read-only inventory commands before any deletion proposal."
+    }
+  ],
+  "secret_persisted": false,
+  "frozen_dataset_modified": false,
+  "formal_training_use_allowed": false
+}

@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "split_id": "KISAKI-V4-SPLIT-SEED",
+  "status": "frozen_seed",
+  "train_seed_path": "backend/data/character_dialogues/experiments/archive/v3_pipeline/tsukiyashiro_kisaki_train.json",
+  "validation_seed_path": "backend/data/character_dialogues/experiments/archive/v3_pipeline/tsukiyashiro_kisaki_eval.json",
+  "event_id_migrations": [
+    {
+      "split": "validation",
+      "previous_event_id": "tsukiyashiro_kisaki_raw_6c2fbaab1ae54352",
+      "current_event_id": "tsukiyashiro_kisaki_raw_995fe5c3db93ce48",
+      "reason": "完整恢复嵌套中文引号后，原始事件 ID 随内容重新生成。"
+    }
+  ]
+}

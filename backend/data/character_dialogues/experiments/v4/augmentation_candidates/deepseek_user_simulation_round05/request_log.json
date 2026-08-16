@@ -1,0 +1,700 @@
+[
+  {
+    "session_id": "daily_chat",
+    "turn": 1,
+    "attempt": 1,
+    "request_metadata": {
+      "request_id": null,
+      "usage": {
+        "prompt_tokens": 58041,
+        "completion_tokens": 35,
+        "total_tokens": 58076,
+        "prompt_tokens_details": {
+          "cached_tokens": 56320
+        },
+        "prompt_cache_hit_tokens": 56320,
+        "prompt_cache_miss_tokens": 1721
+      },
+      "finish_reason": "stop"
+    },
+    "automatic_errors": []
+  },
+  {
+    "session_id": "daily_chat",
+    "turn": 2,
+    "attempt": 1,
+    "request_metadata": {
+      "request_id": null,
+      "usage": {
+        "prompt_tokens": 58092,
+        "completion_tokens": 20,
+        "total_tokens": 58112,
+        "prompt_tokens_details": {
+          "cached_tokens": 57984
+        },
+        "prompt_cache_hit_tokens": 57984,
+        "prompt_cache_miss_tokens": 108
+      },
+      "finish_reason": "stop"
+    },
+    "automatic_errors": []
+  },
+  {
+    "session_id": "daily_chat",
+    "turn": 3,
+    "attempt": 1,
+    "request_metadata": {
+      "request_id": null,
+      "usage": {
+        "prompt_tokens": 58131,
+        "completion_tokens": 48,
+        "total_tokens": 58179,
+        "prompt_tokens_details": {
+          "cached_tokens": 58112
+        },
+        "prompt_cache_hit_tokens": 58112,
+        "prompt_cache_miss_tokens": 19
+      },
+      "finish_reason": "stop"
+    },
+    "automatic_errors": []
+  },
+  {
+    "session_id": "daily_chat",
+    "turn": 4,
+    "attempt": 1,
+    "request_metadata": {
+      "request_id": null,
+      "usage": {
+        "prompt_tokens": 58195,
+        "completion_tokens": 48,
+        "total_tokens": 58243,
+        "prompt_tokens_details": {
+          "cached_tokens": 58112
+        },
+        "prompt_cache_hit_tokens": 58112,
+        "prompt_cache_miss_tokens": 83
+      },
+      "finish_reason": "stop"
+    },
+    "automatic_errors": []
+  },
+  {
+    "session_id": "daily_chat",
+    "turn": 5,
+    "attempt": 1,
+    "request_metadata": {
+      "request_id": null,
+      "usage": {
+        "prompt_tokens": 58258,
+        "completion_tokens": 30,
+        "total_tokens": 58288,
+        "prompt_tokens_details": {
+          "cached_tokens": 58240
+        },
+        "prompt_cache_hit_tokens": 58240,
+        "prompt_cache_miss_tokens": 18
+      },
+      "finish_reason": "stop"
+    },
+    "automatic_errors": [
+      "insufficient Kisaki persona salience"
+    ]
+  },
+  {
+    "session_id": "daily_chat",
+    "turn": 5,
+    "attempt": 2,
+    "request_metadata": {
+      "request_id": null,
+      "usage": {
+        "prompt_tokens": 58302,
+        "completion_tokens": 39,
+        "total_tokens": 58341,
+        "prompt_tokens_details": {
+          "cached_tokens": 57984
+        },
+        "prompt_cache_hit_tokens": 57984,
+        "prompt_cache_miss_tokens": 318
+      },
+      "finish_reason": "stop"
+    },
+    "automatic_errors": []
+  },
+  {
+    "session_id": "research_learning",
+    "turn": 1,
+    "attempt": 1,
+    "request_metadata": {
+      "request_id": null,
+      "usage": {
+        "prompt_tokens": 58047,
+        "completion_tokens": 135,
+        "total_tokens": 58182,
+        "prompt_tokens_details": {
+          "cached_tokens": 57984
+        },
+        "prompt_cache_hit_tokens": 57984,
+        "prompt_cache_miss_tokens": 63
+      },
+      "finish_reason": "stop"
+    },
+    "automatic_errors": []
+  },
+  {
+    "session_id": "research_learning",
+    "turn": 2,
+    "attempt": 1,
+    "request_metadata": {
+      "request_id": null,
+      "usage": {
+        "prompt_tokens": 58207,
+        "completion_tokens": 109,
+        "total_tokens": 58316,
+        "prompt_tokens_details": {
+          "cached_tokens": 58112
+        },
+        "prompt_cache_hit_tokens": 58112,
+        "prompt_cache_miss_tokens": 95
+      },
+      "finish_reason": "stop"
+    },
+    "automatic_errors": []
+  },
+  {
+    "session_id": "research_learning",
+    "turn": 3,
+    "attempt": 1,
+    "request_metadata": {
+      "request_id": null,
+      "usage": {
+        "prompt_tokens": 58340,
+        "completion_tokens": 112,
+        "total_tokens": 58452,
+        "prompt_tokens_details": {
+          "cached_tokens": 58240
+        },
+        "prompt_cache_hit_tokens": 58240,
+        "prompt_cache_miss_tokens": 100
+      },
+      "finish_reason": "stop"
+    },
+    "automatic_errors": []
+  },
+  {
+    "session_id": "research_learning",
+    "turn": 4,
+    "attempt": 1,
+    "request_metadata": {
+      "request_id": null,
+      "usage": {
+        "prompt_tokens": 58470,
+        "completion_tokens": 104,
+        "total_tokens": 58574,
+        "prompt_tokens_details": {
+          "cached_tokens": 58368
+        },
+        "prompt_cache_hit_tokens": 58368,
+        "prompt_cache_miss_tokens": 102
+      },
+      "finish_reason": "stop"
+    },
+    "automatic_errors": [
+      "insufficient Kisaki persona salience"
+    ]
+  },
+  {
+    "session_id": "research_learning",
+    "turn": 4,
+    "attempt": 2,
+    "request_metadata": {
+      "request_id": null,
+      "usage": {
+        "prompt_tokens": 58514,
+        "completion_tokens": 88,
+        "total_tokens": 58602,
+        "prompt_tokens_details": {
+          "cached_tokens": 57984
+        },
+        "prompt_cache_hit_tokens": 57984,
+        "prompt_cache_miss_tokens": 530
+      },
+      "finish_reason": "stop"
+    },
+    "automatic_errors": [
+      "insufficient Kisaki persona salience"
+    ]
+  },
+  {
+    "session_id": "research_learning",
+    "turn": 4,
+    "attempt": 3,
+    "request_metadata": {
+      "request_id": null,
+      "usage": {
+        "prompt_tokens": 58514,
+        "completion_tokens": 116,
+        "total_tokens": 58630,
+        "prompt_tokens_details": {
+          "cached_tokens": 58496
+        },
+        "prompt_cache_hit_tokens": 58496,
+        "prompt_cache_miss_tokens": 18
+      },
+      "finish_reason": "stop"
+    },
+    "automatic_errors": []
+  },
+  {
+    "session_id": "research_learning",
+    "turn": 5,
+    "attempt": 1,
+    "request_metadata": {
+      "request_id": null,
+      "usage": {
+        "prompt_tokens": 58606,
+        "completion_tokens": 146,
+        "total_tokens": 58752,
+        "prompt_tokens_details": {
+          "cached_tokens": 58368
+        },
+        "prompt_cache_hit_tokens": 58368,
+        "prompt_cache_miss_tokens": 238
+      },
+      "finish_reason": "stop"
+    },
+    "automatic_errors": [
+      "insufficient Kisaki persona salience",
+      "rank ablation does not preserve alpha/r as a derived setting"
+    ]
+  },
+  {
+    "session_id": "research_learning",
+    "turn": 5,
+    "attempt": 2,
+    "request_metadata": {
+      "request_id": null,
+      "usage": {
+        "prompt_tokens": 58662,
+        "completion_tokens": 140,
+        "total_tokens": 58802,
+        "prompt_tokens_details": {
+          "cached_tokens": 57984
+        },
+        "prompt_cache_hit_tokens": 57984,
+        "prompt_cache_miss_tokens": 678
+      },
+      "finish_reason": "stop"
+    },
+    "automatic_errors": [
+      "rank ablation does not preserve alpha/r as a derived setting"
+    ]
+  },
+  {
+    "session_id": "research_learning",
+    "turn": 5,
+    "attempt": 3,
+    "request_metadata": {
+      "request_id": null,
+      "usage": {
+        "prompt_tokens": 58654,
+        "completion_tokens": 134,
+        "total_tokens": 58788,
+        "prompt_tokens_details": {
+          "cached_tokens": 57984
+        },
+        "prompt_cache_hit_tokens": 57984,
+        "prompt_cache_miss_tokens": 670
+      },
+      "finish_reason": "stop"
+    },
+    "automatic_errors": [
+      "insufficient Kisaki persona salience",
+      "rank ablation does not preserve alpha/r as a derived setting"
+    ]
+  },
+  {
+    "session_id": "coding_debug",
+    "turn": 1,
+    "attempt": 1,
+    "request_metadata": {
+      "request_id": null,
+      "usage": {
+        "prompt_tokens": 58058,
+        "completion_tokens": 75,
+        "total_tokens": 58133,
+        "prompt_tokens_details": {
+          "cached_tokens": 57984
+        },
+        "prompt_cache_hit_tokens": 57984,
+        "prompt_cache_miss_tokens": 74
+      },
+      "finish_reason": "stop"
+    },
+    "automatic_errors": [
+      "requested code answer has no fenced code"
+    ]
+  },
+  {
+    "session_id": "coding_debug",
+    "turn": 1,
+    "attempt": 2,
+    "request_metadata": {
+      "request_id": null,
+      "usage": {
+        "prompt_tokens": 58104,
+        "completion_tokens": 257,
+        "total_tokens": 58361,
+        "prompt_tokens_details": {
+          "cached_tokens": 57984
+        },
+        "prompt_cache_hit_tokens": 57984,
+        "prompt_cache_miss_tokens": 120
+      },
+      "finish_reason": "stop"
+    },
+    "automatic_errors": []
+  },
+  {
+    "session_id": "coding_debug",
+    "turn": 2,
+    "attempt": 1,
+    "request_metadata": {
+      "request_id": null,
+      "usage": {
+        "prompt_tokens": 58339,
+        "completion_tokens": 245,
+        "total_tokens": 58584,
+        "prompt_tokens_details": {
+          "cached_tokens": 57984
+        },
+        "prompt_cache_hit_tokens": 57984,
+        "prompt_cache_miss_tokens": 355
+      },
+      "finish_reason": "stop"
+    },
+    "automatic_errors": []
+  },
+  {
+    "session_id": "coding_debug",
+    "turn": 3,
+    "attempt": 1,
+    "request_metadata": {
+      "request_id": null,
+      "usage": {
+        "prompt_tokens": 58603,
+        "completion_tokens": 271,
+        "total_tokens": 58874,
+        "prompt_tokens_details": {
+          "cached_tokens": 58496
+        },
+        "prompt_cache_hit_tokens": 58496,
+        "prompt_cache_miss_tokens": 107
+      },
+      "finish_reason": "stop"
+    },
+    "automatic_errors": [
+      "insufficient Kisaki persona salience"
+    ]
+  },
+  {
+    "session_id": "coding_debug",
+    "turn": 3,
+    "attempt": 2,
+    "request_metadata": {
+      "request_id": null,
+      "usage": {
+        "prompt_tokens": 58647,
+        "completion_tokens": 245,
+        "total_tokens": 58892,
+        "prompt_tokens_details": {
+          "cached_tokens": 57984
+        },
+        "prompt_cache_hit_tokens": 57984,
+        "prompt_cache_miss_tokens": 663
+      },
+      "finish_reason": "stop"
+    },
+    "automatic_errors": [
+      "insufficient Kisaki persona salience"
+    ]
+  },
+  {
+    "session_id": "coding_debug",
+    "turn": 3,
+    "attempt": 3,
+    "request_metadata": {
+      "request_id": null,
+      "usage": {
+        "prompt_tokens": 58647,
+        "completion_tokens": 260,
+        "total_tokens": 58907,
+        "prompt_tokens_details": {
+          "cached_tokens": 58624
+        },
+        "prompt_cache_hit_tokens": 58624,
+        "prompt_cache_miss_tokens": 23
+      },
+      "finish_reason": "stop"
+    },
+    "automatic_errors": [
+      "insufficient Kisaki persona salience"
+    ]
+  },
+  {
+    "session_id": "coding_debug",
+    "turn": 4,
+    "attempt": 1,
+    "request_metadata": {
+      "request_id": null,
+      "usage": {
+        "prompt_tokens": 58884,
+        "completion_tokens": 185,
+        "total_tokens": 59069,
+        "prompt_tokens_details": {
+          "cached_tokens": 58496
+        },
+        "prompt_cache_hit_tokens": 58496,
+        "prompt_cache_miss_tokens": 388
+      },
+      "finish_reason": "stop"
+    },
+    "automatic_errors": []
+  },
+  {
+    "session_id": "coding_debug",
+    "turn": 5,
+    "attempt": 1,
+    "request_metadata": {
+      "request_id": null,
+      "usage": {
+        "prompt_tokens": 59088,
+        "completion_tokens": 542,
+        "total_tokens": 59630,
+        "prompt_tokens_details": {
+          "cached_tokens": 59008
+        },
+        "prompt_cache_hit_tokens": 59008,
+        "prompt_cache_miss_tokens": 80
+      },
+      "finish_reason": "stop"
+    },
+    "automatic_errors": [
+      "insufficient Kisaki persona salience"
+    ]
+  },
+  {
+    "session_id": "coding_debug",
+    "turn": 5,
+    "attempt": 2,
+    "request_metadata": {
+      "request_id": null,
+      "usage": {
+        "prompt_tokens": 59132,
+        "completion_tokens": 533,
+        "total_tokens": 59665,
+        "prompt_tokens_details": {
+          "cached_tokens": 58880
+        },
+        "prompt_cache_hit_tokens": 58880,
+        "prompt_cache_miss_tokens": 252
+      },
+      "finish_reason": "stop"
+    },
+    "automatic_errors": [
+      "insufficient Kisaki persona salience"
+    ]
+  },
+  {
+    "session_id": "coding_debug",
+    "turn": 5,
+    "attempt": 3,
+    "request_metadata": {
+      "request_id": null,
+      "usage": {
+        "prompt_tokens": 59132,
+        "completion_tokens": 715,
+        "total_tokens": 59847,
+        "prompt_tokens_details": {
+          "cached_tokens": 59008
+        },
+        "prompt_cache_hit_tokens": 59008,
+        "prompt_cache_miss_tokens": 124
+      },
+      "finish_reason": "stop"
+    },
+    "automatic_errors": [
+      "insufficient Kisaki persona salience"
+    ]
+  },
+  {
+    "session_id": "project_safety",
+    "turn": 1,
+    "attempt": 1,
+    "request_metadata": {
+      "request_id": null,
+      "usage": {
+        "prompt_tokens": 58042,
+        "completion_tokens": 41,
+        "total_tokens": 58083,
+        "prompt_tokens_details": {
+          "cached_tokens": 57984
+        },
+        "prompt_cache_hit_tokens": 57984,
+        "prompt_cache_miss_tokens": 58
+      },
+      "finish_reason": "stop"
+    },
+    "automatic_errors": []
+  },
+  {
+    "session_id": "project_safety",
+    "turn": 2,
+    "attempt": 1,
+    "request_metadata": {
+      "request_id": null,
+      "usage": {
+        "prompt_tokens": 58103,
+        "completion_tokens": 48,
+        "total_tokens": 58151,
+        "prompt_tokens_details": {
+          "cached_tokens": 57984
+        },
+        "prompt_cache_hit_tokens": 57984,
+        "prompt_cache_miss_tokens": 119
+      },
+      "finish_reason": "stop"
+    },
+    "automatic_errors": []
+  },
+  {
+    "session_id": "project_safety",
+    "turn": 3,
+    "attempt": 1,
+    "request_metadata": {
+      "request_id": null,
+      "usage": {
+        "prompt_tokens": 58173,
+        "completion_tokens": 53,
+        "total_tokens": 58226,
+        "prompt_tokens_details": {
+          "cached_tokens": 58112
+        },
+        "prompt_cache_hit_tokens": 58112,
+        "prompt_cache_miss_tokens": 61
+      },
+      "finish_reason": "stop"
+    },
+    "automatic_errors": [
+      "inventory guidance is not operationally actionable"
+    ]
+  },
+  {
+    "session_id": "project_safety",
+    "turn": 3,
+    "attempt": 2,
+    "request_metadata": {
+      "request_id": null,
+      "usage": {
+        "prompt_tokens": 58218,
+        "completion_tokens": 40,
+        "total_tokens": 58258,
+        "prompt_tokens_details": {
+          "cached_tokens": 57984
+        },
+        "prompt_cache_hit_tokens": 57984,
+        "prompt_cache_miss_tokens": 234
+      },
+      "finish_reason": "stop"
+    },
+    "automatic_errors": [
+      "insufficient Kisaki persona salience",
+      "inventory guidance is not operationally actionable"
+    ]
+  },
+  {
+    "session_id": "project_safety",
+    "turn": 3,
+    "attempt": 3,
+    "request_metadata": {
+      "request_id": null,
+      "usage": {
+        "prompt_tokens": 58226,
+        "completion_tokens": 79,
+        "total_tokens": 58305,
+        "prompt_tokens_details": {
+          "cached_tokens": 57984
+        },
+        "prompt_cache_hit_tokens": 57984,
+        "prompt_cache_miss_tokens": 242
+      },
+      "finish_reason": "stop"
+    },
+    "automatic_errors": [
+      "insufficient Kisaki persona salience",
+      "inventory guidance is not operationally actionable"
+    ]
+  },
+  {
+    "session_id": "project_safety",
+    "turn": 4,
+    "attempt": 1,
+    "request_metadata": {
+      "request_id": null,
+      "usage": {
+        "prompt_tokens": 58275,
+        "completion_tokens": 44,
+        "total_tokens": 58319,
+        "prompt_tokens_details": {
+          "cached_tokens": 58112
+        },
+        "prompt_cache_hit_tokens": 58112,
+        "prompt_cache_miss_tokens": 163
+      },
+      "finish_reason": "stop"
+    },
+    "automatic_errors": [
+      "insufficient Kisaki persona salience"
+    ]
+  },
+  {
+    "session_id": "project_safety",
+    "turn": 4,
+    "attempt": 2,
+    "request_metadata": {
+      "request_id": null,
+      "usage": {
+        "prompt_tokens": 58319,
+        "completion_tokens": 65,
+        "total_tokens": 58384,
+        "prompt_tokens_details": {
+          "cached_tokens": 57984
+        },
+        "prompt_cache_hit_tokens": 57984,
+        "prompt_cache_miss_tokens": 335
+      },
+      "finish_reason": "stop"
+    },
+    "automatic_errors": []
+  },
+  {
+    "session_id": "project_safety",
+    "turn": 5,
+    "attempt": 1,
+    "request_metadata": {
+      "request_id": null,
+      "usage": {
+        "prompt_tokens": 58362,
+        "completion_tokens": 70,
+        "total_tokens": 58432,
+        "prompt_tokens_details": {
+          "cached_tokens": 58240
+        },
+        "prompt_cache_hit_tokens": 58240,
+        "prompt_cache_miss_tokens": 122
+      },
+      "finish_reason": "stop"
+    },
+    "automatic_errors": []
+  }
+]

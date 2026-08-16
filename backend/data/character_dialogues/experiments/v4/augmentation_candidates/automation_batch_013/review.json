@@ -1,0 +1,98 @@
+{
+  "schema_version": 1,
+  "batch_id": "KISAKI-V41-AUTO-BATCH-013",
+  "status": "approved_after_revision",
+  "reviewer": "codex_delegated_by_project_owner",
+  "reviewed_at": "2026-08-16",
+  "candidate_count": 4,
+  "assistant_turn_count": 20,
+  "summary": {
+    "passed_unchanged": 19,
+    "revised_then_passed": 1,
+    "rejected": 0,
+    "approved_complete_sessions": 4
+  },
+  "rubric": [
+    "persona_consistency",
+    "question_answer_alignment",
+    "fact_grounding",
+    "technical_correctness",
+    "multiturn_continuity",
+    "information_timing",
+    "naturalness",
+    "safety_boundary",
+    "template_avoidance"
+  ],
+  "evidence_refs": [
+    "docs/research/review_packets/kisaki_v4/01_PROFILE_PROMPT/01_character_profile.md",
+    "backend/data/character_dialogues/kisaki_system_prompt_v3.txt",
+    "docs/research/review_packets/kisaki_v4/01_PROFILE_PROMPT/03_contextual_expression_policy_draft.md"
+  ],
+  "technical_verification": {
+    "path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_013/technical_verification.py",
+    "status": "passed_after_revision",
+    "coverage": [
+      "ordinary_fixed_offset_date",
+      "spring_dst_nonexistent_time",
+      "fall_dst_first_ambiguous_time",
+      "fall_dst_second_occurrence_not_reused",
+      "strictly_next_occurrence",
+      "timezone_aware_input_contract",
+      "minute_precision_contract"
+    ]
+  },
+  "protected_overlap_review": {
+    "threshold": 0.9,
+    "reference_sets": ["train", "validation", "gold_v21", "gold_v3"],
+    "candidate_user_turn_count": 20,
+    "reference_user_turn_count": 1495,
+    "match_count": 0,
+    "status": "clean"
+  },
+  "session_reviews": [
+    {
+      "session_id": "yellowing_pothos_leaves",
+      "decision": "pass",
+      "turn_reviews": [
+        {"turn": 1, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "pass", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "否定以单次黄叶判断养护能力的跳跃，同时询问关键条件。"},
+        {"turn": 2, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "pass", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "固定浇水与无排水孔的风险判断正确，戏谑针对错误方法。"},
+        {"turn": 3, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "pass", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "指出剪叶不能处理积水，并给出根腐情况下的换盆动作。"},
+        {"turn": 4, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "pass", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "避免从积水突然转向强光暴晒，建议明亮散射光合理。"},
+        {"turn": 5, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "pass", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "承接换盆计划，用新叶状态作为后续观察指标。"}
+      ]
+    },
+    {
+      "session_id": "friend_jokes_in_group_chat",
+      "decision": "pass",
+      "turn_reviews": [
+        {"turn": 1, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "not_applicable", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "承认当场附和与真实感受可不同，未提前把朋友定性为恶意。"},
+        {"turn": 2, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "not_applicable", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "针对忽视已表达边界的逻辑进行锋利纠正，情境匹配。"},
+        {"turn": 3, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "not_applicable", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "私聊文本可直接使用，界限明确且没有扩大冲突。"},
+        {"turn": 4, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "not_applicable", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "为截图施压情境提供短回复，避免客服化和长篇自证。"},
+        {"turn": 5, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "not_applicable", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "先沟通再按行动调整距离，不采取过度防御性断交。"}
+      ]
+    },
+    {
+      "session_id": "confidence_interval_interpretation",
+      "decision": "pass",
+      "turn_reviews": [
+        {"turn": 1, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "pass", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "频率学派覆盖率解释准确，明确参数固定而区间随机。"},
+        {"turn": 2, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "pass", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "将单次区间解释为与数据相容的值及精度信息，限定模型前提。"},
+        {"turn": 3, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "pass", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "提供自然论文表述，并提醒结合单位与实践含义。"},
+        {"turn": 4, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "pass", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "正确区分统计显著性与实际重要性，列出必要检查。"},
+        {"turn": 5, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "pass", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "可信区间后验概率解释准确，并明确依赖先验、数据和模型。"}
+      ]
+    },
+    {
+      "session_id": "timezone_daily_scheduler",
+      "decision": "pass_after_revision",
+      "turn_reviews": [
+        {"turn": 1, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "pass", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "准确区分周期本地时间意图和实际 UTC 执行时刻。"},
+        {"turn": 2, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "pass", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "固定偏移量与 IANA 区域规则的差异解释正确。"},
+        {"turn": 3, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "pass", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "先要求产品定义缺失与重复时间策略，避免依赖库默认值。"},
+        {"turn": 4, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "pass", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "严格下一次与 UTC 往返验证算法说明完整。"},
+        {"turn": 5, "decision": "revise_then_pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "pass_after_revision", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "明确实现为分钟级调度并拒绝带秒或微秒的 local_time，使逐分钟顺延与‘第一个有效时刻’契约一致。", "revision": "批准稿在说明中加入分钟粒度，并在 next_daily_run 中校验 local_time.second 和 local_time.microsecond 均为零；其余已实测代码保持不变。"}
+      ]
+    }
+  ]
+}

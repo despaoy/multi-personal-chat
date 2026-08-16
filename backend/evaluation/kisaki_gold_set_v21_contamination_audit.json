@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "status": "clean",
+  "threshold": 0.9,
+  "candidate_count": 150,
+  "reference_count": 879,
+  "id_overlaps": [],
+  "text_overlap_matches": [],
+  "rag_evidence_event_count": 23,
+  "rag_evidence_event_overlaps": []
+}

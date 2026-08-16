@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "status": "promoted",
+  "approval_id": "KISAKI-V41-AUTO-BATCH-046",
+  "source_sessions_sha256": "eea9945e0ade61c6cd380cc1b098d972c73ae8c3cb3af80aa684a592e432a02d",
+  "approved_sessions_sha256": "4fd1e4c8f1646fd7826066b6b0b7cce6f272013df825b655591bea4454ed7876",
+  "previous_train": {
+    "count": 910,
+    "sha256": "3721d9c441e23bb22ada3e7291ab9479ece856c23662552d0be7980266fc79dd"
+  },
+  "promoted": {
+    "record_count": 4,
+    "assistant_turn_count": 20,
+    "record_ids": [
+      "kisaki_v41_auto_b046_removing_candle_wax_from_a_tablecloth_without_spreading_the_stain",
+      "kisaki_v41_auto_b046_asking_a_friend_not_to_treat_work_from_home_as_constant_availability",
+      "kisaki_v41_auto_b046_generating_collision_resistant_backup_names_with_the_python_standard_library",
+      "kisaki_v41_auto_b046_understanding_why_shadows_have_soft_edges_and_change_with_distance"
+    ]
+  },
+  "result_train": {
+    "count": 914,
+    "sha256": "4bb160c30e7b82106cb830e695287cbb1d7a48b6b7ce5e3a11ad517543fd0506"
+  },
+  "validation": {
+    "count": 70,
+    "sha256": "fb5cd5d93027b37be53327cda4e7c6137a7bae97201830fc8aa726727b9777b8",
+    "modified": false
+  },
+  "gold_v3": {
+    "content_modified": false,
+    "contamination_reaudit": "clean",
+    "contamination_audit_path": "backend/evaluation/kisaki_gold_set_v3_contamination_audit.json"
+  }
+}

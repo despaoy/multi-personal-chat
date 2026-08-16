@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "status": "approved_after_review",
+  "approval_id": "KISAKI-V41-AUTO-BATCH-059",
+  "approved_by": "codex_delegated_by_project_owner",
+  "approved_at": "2026-08-16",
+  "source_sessions_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_059/candidates.json",
+  "decision_sources": [
+    "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_059/review.json",
+    "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_059/revision_history.json",
+    "codex_initial_screening",
+    "project_owner_delegated_automation_approval"
+  ],
+  "base_contract": {
+    "train_count": 962,
+    "train_sha256": "2270d8b12801b62e1b5a9ea4bc289cea8ca74ef5abd6cb4d46dd37649a88c9cf",
+    "validation_count": 70,
+    "validation_sha256": "fb5cd5d93027b37be53327cda4e7c6137a7bae97201830fc8aa726727b9777b8"
+  },
+  "promotion_contract": {
+    "record_count": 4,
+    "assistant_turn_count": 20,
+    "training_unit": "complete_five_turn_session",
+    "cumulative_prefix_records_allowed": false,
+    "data_source": "codex_user_simulation_v41_reviewed",
+    "source": "automation_batch_059",
+    "version": "v4.1_automation_reviewed",
+    "manifest_check_key": "kisaki_v41_auto_batch_059_promotion",
+    "system_message_embedded": false,
+    "validation_and_gold_content_modified": false
+  },
+  "sessions": [
+    {
+      "session_id": "flattening_a_rolled_paper_poster_without_damaging_the_print",
+      "record_id": "kisaki_v41_auto_b059_flattening_a_rolled_paper_poster_without_damaging_the_print",
+      "title": "展平卷曲纸质海报且不损伤印刷",
+      "task_type": "casual_chat",
+      "revised_assistant_turns": [],
+      "messages_mode": "source_unchanged"
+    },
+    {
+      "session_id": "declining_pressure_to_take_sides_in_a_friends_private_conflict",
+      "record_id": "kisaki_v41_auto_b059_declining_pressure_to_take_sides_in_a_friends_private_conflict",
+      "title": "拒绝因朋友私下倾诉而被迫选边",
+      "task_type": "emotional_relationship",
+      "revised_assistant_turns": [],
+      "messages_mode": "source_unchanged"
+    },
+    {
+      "session_id": "understanding_the_rainbow_colors_on_soap_bubbles",
+      "record_id": "kisaki_v41_auto_b059_understanding_the_rainbow_colors_on_soap_bubbles",
+      "title": "理解肥皂泡表面的彩虹色",
+      "task_type": "knowledge_explanation",
+      "revised_assistant_turns": [],
+      "messages_mode": "source_unchanged"
+    },
+    {
+      "session_id": "handling_scope_change_requests_after_a_project_freeze",
+      "record_id": "kisaki_v41_auto_b059_handling_scope_change_requests_after_a_project_freeze",
+      "title": "项目冻结后处理新增范围请求",
+      "task_type": "project_collaboration",
+      "revised_assistant_turns": [],
+      "messages_mode": "source_unchanged"
+    }
+  ]
+}

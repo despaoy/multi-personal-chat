@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "status": "promoted",
+  "approval_id": "KISAKI-V41-AUTO-BATCH-034",
+  "source_sessions_sha256": "8a64e686bbbd7e9782a3105b8d1533aeb26860b5b6ddfe36e264f3a24bb01ef6",
+  "approved_sessions_sha256": "74d539ca71ca71424d441db65fe97f353ef48f67197ced4c08da9b2dc279f5c6",
+  "previous_train": {
+    "count": 862,
+    "sha256": "3b95cd898d642085f0289169f0df3b5f51595c87fdc1bb76694e51f5b0cd5ce4"
+  },
+  "promoted": {
+    "record_count": 4,
+    "assistant_turn_count": 20,
+    "record_ids": [
+      "kisaki_v41_auto_b034_deciding_what_to_do_with_a_favorite_mug_that_has_a_hairline_crack",
+      "kisaki_v41_auto_b034_coping_when_two_close_friends_develop_a_shared_hobby_without_you",
+      "kisaki_v41_auto_b034_handling_missing_followup_data_in_a_longitudinal_study",
+      "kisaki_v41_auto_b034_refusing_an_overprivileged_browser_extension_for_caption_downloads"
+    ]
+  },
+  "result_train": {
+    "count": 866,
+    "sha256": "0bf24bdae9d7453ad0820f9b0d7768c25e38119a30f7461dc0f11dce0ea7149b"
+  },
+  "validation": {
+    "count": 70,
+    "sha256": "fb5cd5d93027b37be53327cda4e7c6137a7bae97201830fc8aa726727b9777b8",
+    "modified": false
+  },
+  "gold_v3": {
+    "content_modified": false,
+    "contamination_reaudit": "clean",
+    "contamination_audit_path": "backend/evaluation/kisaki_gold_set_v3_contamination_audit.json"
+  }
+}

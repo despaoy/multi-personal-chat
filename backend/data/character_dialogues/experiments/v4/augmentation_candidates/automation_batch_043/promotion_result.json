@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "status": "promoted",
+  "approval_id": "KISAKI-V41-AUTO-BATCH-043",
+  "source_sessions_sha256": "e474866f189c7812d90b532808d8c582388b8d79fcc08ce0edf98580d9853d80",
+  "approved_sessions_sha256": "957466f85efb66a662540659a13273911e977b8d37c48f2429251fec118326b4",
+  "previous_train": {
+    "count": 898,
+    "sha256": "4a0d71e0f383c8ece979cc8172ace405fba50c3c9a624bb1eafb1d4a8d7d000c"
+  },
+  "promoted": {
+    "record_count": 4,
+    "assistant_turn_count": 20,
+    "record_ids": [
+      "kisaki_v41_auto_b043_removing_freezer_odors_from_reusable_ice_trays",
+      "kisaki_v41_auto_b043_asking_a_friend_to_stop_answering_on_your_behalf",
+      "kisaki_v41_auto_b043_understanding_why_warm_sparkling_water_goes_flat_faster",
+      "kisaki_v41_auto_b043_refusing_to_open_an_unknown_found_usb_drive"
+    ]
+  },
+  "result_train": {
+    "count": 902,
+    "sha256": "0e5c3ee41248cfff87a73775c0af80fe0fcdc93ac508a2736aea73b51006374b"
+  },
+  "validation": {
+    "count": 70,
+    "sha256": "fb5cd5d93027b37be53327cda4e7c6137a7bae97201830fc8aa726727b9777b8",
+    "modified": false
+  },
+  "gold_v3": {
+    "content_modified": false,
+    "contamination_reaudit": "clean",
+    "contamination_audit_path": "backend/evaluation/kisaki_gold_set_v3_contamination_audit.json"
+  }
+}

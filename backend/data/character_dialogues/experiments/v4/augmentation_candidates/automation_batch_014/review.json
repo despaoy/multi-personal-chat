@@ -1,0 +1,98 @@
+{
+  "schema_version": 1,
+  "batch_id": "KISAKI-V41-AUTO-BATCH-014",
+  "status": "approved_after_revision",
+  "reviewer": "codex_delegated_by_project_owner",
+  "reviewed_at": "2026-08-16",
+  "candidate_count": 4,
+  "assistant_turn_count": 20,
+  "summary": {
+    "passed_unchanged": 19,
+    "revised_then_passed": 1,
+    "rejected": 0,
+    "approved_complete_sessions": 4
+  },
+  "rubric": [
+    "persona_consistency",
+    "question_answer_alignment",
+    "fact_grounding",
+    "technical_correctness",
+    "multiturn_continuity",
+    "information_timing",
+    "naturalness",
+    "safety_boundary",
+    "template_avoidance"
+  ],
+  "evidence_refs": [
+    "docs/research/review_packets/kisaki_v4/01_PROFILE_PROMPT/01_character_profile.md",
+    "backend/data/character_dialogues/kisaki_system_prompt_v3.txt",
+    "docs/research/review_packets/kisaki_v4/01_PROFILE_PROMPT/03_contextual_expression_policy_draft.md"
+  ],
+  "technical_verification": {
+    "path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_014/technical_verification.py",
+    "status": "passed",
+    "coverage": [
+      "successful_atomic_replace",
+      "cancellation_propagation",
+      "semaphore_release",
+      "temporary_file_cleanup_on_cancel",
+      "temporary_file_cleanup_on_source_failure",
+      "invalid_chunk_type",
+      "existing_destination_preserved_on_failure"
+    ]
+  },
+  "protected_overlap_review": {
+    "threshold": 0.9,
+    "reference_sets": ["train", "validation", "gold_v21", "gold_v3"],
+    "candidate_user_turn_count": 20,
+    "reference_user_turn_count": 1515,
+    "match_count": 0,
+    "status": "clean"
+  },
+  "session_reviews": [
+    {
+      "session_id": "rainy_weekend_outing",
+      "decision": "pass",
+      "turn_reviews": [
+        {"turn": 1, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "pass", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "把降雨概率放回出行偏好和改期成本中判断，未给武断结论。"},
+        {"turn": 2, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "pass", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "识别双方耐雨偏好不同，建议提前约定而非临场迁就。"},
+        {"turn": 3, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "pass", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "正确解释预报不确定性，给出更新时间和判断维度。"},
+        {"turn": 4, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "pass", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "备用活动仍需符合双方兴趣，避免为了完成出门而勉强。"},
+        {"turn": 5, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "pass", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "承接用户形成的规则，简洁收束且不重复全部步骤。"}
+      ]
+    },
+    {
+      "session_id": "sister_failed_exam_support",
+      "decision": "pass",
+      "turn_reviews": [
+        {"turn": 1, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "not_applicable", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "失利场景使用克制关心，优先询问需要而不是输出励志话。"},
+        {"turn": 2, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "not_applicable", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "同时尊重独处与维持联系，没有把空间理解成完全不管。"},
+        {"turn": 3, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "not_applicable", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "指出家人急于规划的真实动机，并给出延后而非逃避讨论的方案。"},
+        {"turn": 4, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "not_applicable", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "消息自然、具体且不要求立即回应。"},
+        {"turn": 5, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "not_applicable", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "严格遵守妹妹提出的边界，以行动而非说教表达照顾。"}
+      ]
+    },
+    {
+      "session_id": "feature_retention_causality",
+      "decision": "pass_after_revision",
+      "turn_reviews": [
+        {"turn": 1, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "pass", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "准确识别功能使用中的自选择混杂。"},
+        {"turn": 2, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "pass", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "说明相关性在描述、预测和提出假设中的价值，没有因非因果而全盘否定。"},
+        {"turn": 3, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "pass", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "指出处理后变量可能成为中介，要求先明确时间顺序。"},
+        {"turn": 4, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "pass", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "准实验和观察研究方案均附带必要假设与局限。"},
+        {"turn": 5, "decision": "revise_then_pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass_after_revision", "technical_correctness": "pass_after_revision", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "原问题未说明 18% 是相对增幅还是百分点，批准文本要求按看板原口径明确，避免擅自改写量纲。", "revision": "写成：“学习计划使用者的次月留存更高；这里要按看板原定义明确写‘高 18 个百分点’还是‘相对高 18%’。调整已观测的使用前差异后，关联仍为某个范围，但因自选择与未观测混杂，不能解释为确定的功能增量。”随后提出验证设计。克制不是把结果说小，而是不替证据虚构权限。"}
+      ]
+    },
+    {
+      "session_id": "asyncio_cancellation_atomic_file",
+      "decision": "pass",
+      "turn_reviews": [
+        {"turn": 1, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "pass", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "信号量上下文、finally 清理和同目录临时文件方案正确。"},
+        {"turn": 2, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "pass", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "CancelledError 继承关系及不吞取消的建议准确。"},
+        {"turn": 3, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "pass", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "shield 使用范围说明正确，避免取消后任务暗中继续。"},
+        {"turn": 4, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "pass", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "同文件系统原子替换与目录持久化的边界说明完整。"},
+        {"turn": 5, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "pass", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "代码已实测成功、取消、源失败和非法块路径，目标文件与信号量状态正确。"}
+      ]
+    }
+  ]
+}

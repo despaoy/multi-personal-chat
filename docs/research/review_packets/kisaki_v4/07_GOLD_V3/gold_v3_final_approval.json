@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "dataset_id": "KISAKI-GOLD-V3",
+  "status": "approved",
+  "approved_by": "project_owner",
+  "reviewed_at": "2026-08-15",
+  "candidate_count": 150,
+  "approved_count": 150,
+  "excluded_count": 0,
+  "candidate_path": "backend/evaluation/kisaki_gold_set_v3_candidates.json",
+  "frozen_path": "backend/evaluation/kisaki_gold_set_v3.json",
+  "content_sha256": "d40e6324f3c775166cd66ca985bc0cdc2902c27fb1cfb34f2d72c8d74259cb40",
+  "review_summary": "三批人工审核完成；定向修订复核后全部通过。"
+}

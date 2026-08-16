@@ -1,0 +1,1703 @@
+{
+  "schema_version": 7,
+  "dataset_id": "KISAKI-CANONICAL-V4",
+  "status": "frozen_under_reassessment",
+  "hash_mode": "sha256_utf8_lf_v1",
+  "seed": 42,
+  "train": {
+    "status": "frozen",
+    "count": 1002,
+    "path": "backend/data/character_dialogues/experiments/v4/train.jsonl",
+    "sha256": "864b20e50d1d4dc4917e5d93be7c29da05e567edce07faf42526481b075b04ed",
+    "source_distribution": {
+      "game_extraction_current_sft": 576,
+      "llm_v4_reviewed_constructed": 150,
+      "deepseek_user_simulation_v41_reviewed": 4,
+      "codex_user_simulation_v41_reviewed": 272
+    },
+    "game_human_review_status": "approved",
+    "constructed_human_review_status": "approved",
+    "augmentation_human_review_status": "approved_after_review"
+  },
+  "validation": {
+    "status": "frozen",
+    "count": 70,
+    "path": "backend/data/character_dialogues/experiments/v4/validation.jsonl",
+    "sha256": "fb5cd5d93027b37be53327cda4e7c6137a7bae97201830fc8aa726727b9777b8",
+    "source_distribution": {
+      "game_extraction_current_sft": 70
+    },
+    "human_review_status": "approved",
+    "suggested_exclusion_count": 1,
+    "suggested_exclusions_path": "backend/data/character_dialogues/experiments/v4/validation_exclusions.json",
+    "applied_exclusions": [
+      "tsukiyashiro_kisaki_sft_489de2e0300a0877",
+      "tsukiyashiro_kisaki_sft_6412f83c95ad1c75",
+      "tsukiyashiro_kisaki_sft_7f72d2dfcd4ea7cb",
+      "tsukiyashiro_kisaki_sft_93ce4029746e7c78",
+      "tsukiyashiro_kisaki_sft_9498df2d95dadf8a",
+      "tsukiyashiro_kisaki_sft_d01b52414354eea0",
+      "tsukiyashiro_kisaki_sft_da21e4c8d09b7af1"
+    ]
+  },
+  "rag_holdout": {
+    "documents_path": "backend/data/character_dialogues/experiments/research/character_rag_seed_documents.json",
+    "document_count": 33,
+    "source_event_count": 59,
+    "withheld_sft_record_count": 34,
+    "withheld_sft_records": [
+      {
+        "id": "tsukiyashiro_kisaki_sft_4d3c9926f50f47ac",
+        "event_ids": [
+          "tsukiyashiro_kisaki_raw_0ea27270d6425822",
+          "tsukiyashiro_kisaki_raw_4a1778d23c9aa8a4"
+        ]
+      },
+      {
+        "id": "tsukiyashiro_kisaki_sft_f9bdfd510f0f315d",
+        "event_ids": [
+          "tsukiyashiro_kisaki_raw_521ab5726d61306f",
+          "tsukiyashiro_kisaki_raw_7598238cd979c6c0"
+        ]
+      },
+      {
+        "id": "tsukiyashiro_kisaki_sft_95b941c2dbf75b83",
+        "event_ids": [
+          "tsukiyashiro_kisaki_raw_0c44ec062ce565e4",
+          "tsukiyashiro_kisaki_raw_497915ba721964e1"
+        ]
+      },
+      {
+        "id": "tsukiyashiro_kisaki_sft_057e6fbe101ab69c",
+        "event_ids": [
+          "tsukiyashiro_kisaki_raw_9fda41a3d912dda5"
+        ]
+      },
+      {
+        "id": "tsukiyashiro_kisaki_sft_0a244db1faafd9b7",
+        "event_ids": [
+          "tsukiyashiro_kisaki_raw_d1401e0739567ff8"
+        ]
+      },
+      {
+        "id": "tsukiyashiro_kisaki_sft_9088b38c7b409246",
+        "event_ids": [
+          "tsukiyashiro_kisaki_raw_3c7335a104d3949a",
+          "tsukiyashiro_kisaki_raw_b4ee7d969a6eea2c",
+          "tsukiyashiro_kisaki_raw_e44f2a678149c0b0"
+        ]
+      },
+      {
+        "id": "tsukiyashiro_kisaki_sft_f6bed9d41cc9eadd",
+        "event_ids": [
+          "tsukiyashiro_kisaki_raw_0973a60410dc048e",
+          "tsukiyashiro_kisaki_raw_22802b227e92f5f7"
+        ]
+      },
+      {
+        "id": "tsukiyashiro_kisaki_sft_87691e335d6c78bf",
+        "event_ids": [
+          "tsukiyashiro_kisaki_raw_4456070c080460e4",
+          "tsukiyashiro_kisaki_raw_92259bc1b933999d"
+        ]
+      },
+      {
+        "id": "tsukiyashiro_kisaki_sft_b74fcd05f75c6dd1",
+        "event_ids": [
+          "tsukiyashiro_kisaki_raw_945a0d7d01a3c4cf"
+        ]
+      },
+      {
+        "id": "tsukiyashiro_kisaki_sft_6ae61ff3b282a390",
+        "event_ids": [
+          "tsukiyashiro_kisaki_raw_99aeda0620f15f76"
+        ]
+      },
+      {
+        "id": "tsukiyashiro_kisaki_sft_43c75242a8fc5414",
+        "event_ids": [
+          "tsukiyashiro_kisaki_raw_01d38473bb6a7d4f",
+          "tsukiyashiro_kisaki_raw_20da58d44a3e0e8c"
+        ]
+      },
+      {
+        "id": "tsukiyashiro_kisaki_sft_950057c5fe6136c9",
+        "event_ids": [
+          "tsukiyashiro_kisaki_raw_e108059aaf78dc5e",
+          "tsukiyashiro_kisaki_raw_fbe48c8bc7f64fe1"
+        ]
+      },
+      {
+        "id": "tsukiyashiro_kisaki_sft_9786a8ad52e86dbf",
+        "event_ids": [
+          "tsukiyashiro_kisaki_raw_286ed06479f898b4",
+          "tsukiyashiro_kisaki_raw_ea9e0cc0bf675fe7"
+        ]
+      },
+      {
+        "id": "tsukiyashiro_kisaki_sft_313dec85ac5baaf0",
+        "event_ids": [
+          "tsukiyashiro_kisaki_raw_f0aa58e279b6da16"
+        ]
+      },
+      {
+        "id": "tsukiyashiro_kisaki_sft_a0bcd54a415d4097",
+        "event_ids": [
+          "tsukiyashiro_kisaki_raw_3e11330dca211048"
+        ]
+      },
+      {
+        "id": "tsukiyashiro_kisaki_sft_7c25a87dc9f9779a",
+        "event_ids": [
+          "tsukiyashiro_kisaki_raw_f783b5ed6248be3c"
+        ]
+      },
+      {
+        "id": "tsukiyashiro_kisaki_sft_4bd8ec9c4894bbae",
+        "event_ids": [
+          "tsukiyashiro_kisaki_raw_6494a09d18f343c3",
+          "tsukiyashiro_kisaki_raw_a3427357ce324799",
+          "tsukiyashiro_kisaki_raw_db32b3059445ad42"
+        ]
+      },
+      {
+        "id": "tsukiyashiro_kisaki_sft_86b7bb17999e5057",
+        "event_ids": [
+          "tsukiyashiro_kisaki_raw_23f1f7f3d9b4196d",
+          "tsukiyashiro_kisaki_raw_89204ec6d05726fc",
+          "tsukiyashiro_kisaki_raw_e09e819ce1d9804d"
+        ]
+      },
+      {
+        "id": "tsukiyashiro_kisaki_sft_a9f2b7e2a21dfd69",
+        "event_ids": [
+          "tsukiyashiro_kisaki_raw_23c53bed6ec72dde",
+          "tsukiyashiro_kisaki_raw_d3cd0fa088859f20"
+        ]
+      },
+      {
+        "id": "tsukiyashiro_kisaki_sft_034d70abeb6f0d61",
+        "event_ids": [
+          "tsukiyashiro_kisaki_raw_94244b1dfe290e23",
+          "tsukiyashiro_kisaki_raw_f52944998bf61ae6"
+        ]
+      },
+      {
+        "id": "tsukiyashiro_kisaki_sft_eafe6b0238bca3c5",
+        "event_ids": [
+          "tsukiyashiro_kisaki_raw_eb13220634dd2f4c"
+        ]
+      },
+      {
+        "id": "tsukiyashiro_kisaki_sft_4e0957d8ca7c1430",
+        "event_ids": [
+          "tsukiyashiro_kisaki_raw_1f9ac34b6fa8137e"
+        ]
+      },
+      {
+        "id": "tsukiyashiro_kisaki_sft_a5e853f0ea44ab41",
+        "event_ids": [
+          "tsukiyashiro_kisaki_raw_31b43d3abad11e3c",
+          "tsukiyashiro_kisaki_raw_ad83d85df0f167fc"
+        ]
+      },
+      {
+        "id": "tsukiyashiro_kisaki_sft_97119803e64efdb5",
+        "event_ids": [
+          "tsukiyashiro_kisaki_raw_10f4d41e2d6d7ef7"
+        ]
+      },
+      {
+        "id": "tsukiyashiro_kisaki_sft_4bd3503805af1cbd",
+        "event_ids": [
+          "tsukiyashiro_kisaki_raw_031f467497e6233d",
+          "tsukiyashiro_kisaki_raw_b07407540de6f083",
+          "tsukiyashiro_kisaki_raw_fa49f1ee3e4550b1"
+        ]
+      },
+      {
+        "id": "tsukiyashiro_kisaki_sft_41afa1baab466fc3",
+        "event_ids": [
+          "tsukiyashiro_kisaki_raw_83b66c5115807a9c",
+          "tsukiyashiro_kisaki_raw_c4e6593e8383f732"
+        ]
+      },
+      {
+        "id": "tsukiyashiro_kisaki_sft_3adad56a92aea8b8",
+        "event_ids": [
+          "tsukiyashiro_kisaki_raw_7997722426da34e1"
+        ]
+      },
+      {
+        "id": "tsukiyashiro_kisaki_sft_6b62fab7526df125",
+        "event_ids": [
+          "tsukiyashiro_kisaki_raw_ed53463802bdaad0"
+        ]
+      },
+      {
+        "id": "tsukiyashiro_kisaki_sft_28e858f7aa4833cb",
+        "event_ids": [
+          "tsukiyashiro_kisaki_raw_2496370d7f040cd4",
+          "tsukiyashiro_kisaki_raw_e3f941758c2b3bef"
+        ]
+      },
+      {
+        "id": "tsukiyashiro_kisaki_sft_b732342bf71c1812",
+        "event_ids": [
+          "tsukiyashiro_kisaki_raw_45f7f70ebcd2b8e5",
+          "tsukiyashiro_kisaki_raw_f7ddd6b15ae2f9ae"
+        ]
+      },
+      {
+        "id": "tsukiyashiro_kisaki_sft_39bc50e4d6df5de6",
+        "event_ids": [
+          "tsukiyashiro_kisaki_raw_b691556545fd0906",
+          "tsukiyashiro_kisaki_raw_f4dec31f35739589"
+        ]
+      },
+      {
+        "id": "tsukiyashiro_kisaki_sft_e695b3eff6413d3c",
+        "event_ids": [
+          "tsukiyashiro_kisaki_raw_195accf25ce72c43",
+          "tsukiyashiro_kisaki_raw_25248e5dc3cb1bc6",
+          "tsukiyashiro_kisaki_raw_fbccca8142a2ad67"
+        ]
+      },
+      {
+        "id": "tsukiyashiro_kisaki_sft_741b8bb56cb5eb7e",
+        "event_ids": [
+          "tsukiyashiro_kisaki_raw_82357df2c51427b3"
+        ]
+      },
+      {
+        "id": "tsukiyashiro_kisaki_sft_db83ecba66d32dc3",
+        "event_ids": [
+          "tsukiyashiro_kisaki_raw_8ea1ea2633181819"
+        ]
+      }
+    ]
+  },
+  "prompt_policy": {
+    "mode": "training_config_injected",
+    "version": "3.1.0",
+    "record_system_messages": 0,
+    "path": "backend/data/character_dialogues/kisaki_system_prompt_v3.txt",
+    "required_training_policy": "replace"
+  },
+  "checks": {
+    "train_validation_blocker_pairs": 0,
+    "line_proximity_advisory_validation_records": 63,
+    "validation_leakage_audit_path": "backend/data/character_dialogues/experiments/v4/validation_leakage_audit.json",
+    "unique_ids_across_train_validation": true,
+    "record_system_messages": 0,
+    "train_source_lineage": {
+      "game_extraction_records_checked": 652,
+      "missing_canonical_sft_ids": 0,
+      "missing_raw_event_ids": 0
+    },
+    "validation_source_lineage": {
+      "game_extraction_records_checked": 77,
+      "missing_canonical_sft_ids": 0,
+      "missing_raw_event_ids": 0
+    },
+    "train_validation_target_event_overlap": 0,
+    "rag_evidence_train_overlap": 0,
+    "rag_evidence_validation_overlap": 0,
+    "unassigned_current_sft_records": [
+      {
+        "id": "tsukiyashiro_kisaki_sft_5ff4091f2bfb60c8",
+        "event_ids": [
+          "tsukiyashiro_kisaki_raw_e01b2df6a3a26b0b"
+        ]
+      },
+      {
+        "id": "tsukiyashiro_kisaki_sft_2d0619457430788d",
+        "event_ids": [
+          "tsukiyashiro_kisaki_raw_fcd569645cc1ada6"
+        ]
+      },
+      {
+        "id": "tsukiyashiro_kisaki_sft_dd16280a33229159",
+        "event_ids": [
+          "tsukiyashiro_kisaki_raw_7efc5e242aa36179"
+        ]
+      },
+      {
+        "id": "tsukiyashiro_kisaki_sft_a1545cfaa16bc325",
+        "event_ids": [
+          "tsukiyashiro_kisaki_raw_cab720bf7dfb035d",
+          "tsukiyashiro_kisaki_raw_de027968bc297e88"
+        ]
+      },
+      {
+        "id": "tsukiyashiro_kisaki_sft_2b54a1d0d1e65080",
+        "event_ids": [
+          "tsukiyashiro_kisaki_raw_86a95790edea46d1"
+        ]
+      }
+    ],
+    "unbalanced_quote_records": [],
+    "runtime_policy_semantic_hits": [],
+    "round06_reviewed_promotion": {
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "cumulative_prefix_record_count": 0,
+      "protected_similarity_overlap_count": 0,
+      "gold_v3_contamination_reaudit": "clean"
+    },
+    "kisaki_v41_auto_batch_001_promotion": {
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "cumulative_prefix_record_count": 0,
+      "protected_similarity_overlap_count": 0,
+      "gold_v3_contamination_reaudit": "clean"
+    },
+    "kisaki_v41_auto_batch_002_promotion": {
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "cumulative_prefix_record_count": 0,
+      "protected_similarity_overlap_count": 0,
+      "gold_v3_contamination_reaudit": "clean"
+    },
+    "kisaki_v41_auto_batch_003_promotion": {
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "cumulative_prefix_record_count": 0,
+      "protected_similarity_overlap_count": 0,
+      "gold_v3_contamination_reaudit": "clean"
+    },
+    "kisaki_v41_auto_batch_004_promotion": {
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "cumulative_prefix_record_count": 0,
+      "protected_similarity_overlap_count": 0,
+      "gold_v3_contamination_reaudit": "clean"
+    },
+    "kisaki_v41_auto_batch_005_promotion": {
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "cumulative_prefix_record_count": 0,
+      "protected_similarity_overlap_count": 0,
+      "gold_v3_contamination_reaudit": "clean"
+    },
+    "kisaki_v41_auto_batch_006_promotion": {
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "cumulative_prefix_record_count": 0,
+      "protected_similarity_overlap_count": 0,
+      "gold_v3_contamination_reaudit": "clean"
+    },
+    "kisaki_v41_auto_batch_007_promotion": {
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "cumulative_prefix_record_count": 0,
+      "protected_similarity_overlap_count": 0,
+      "gold_v3_contamination_reaudit": "clean"
+    },
+    "kisaki_v41_auto_batch_008_promotion": {
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "cumulative_prefix_record_count": 0,
+      "protected_similarity_overlap_count": 0,
+      "gold_v3_contamination_reaudit": "clean"
+    },
+    "kisaki_v41_auto_batch_009_promotion": {
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "cumulative_prefix_record_count": 0,
+      "protected_similarity_overlap_count": 0,
+      "gold_v3_contamination_reaudit": "clean"
+    },
+    "kisaki_v41_auto_batch_010_promotion": {
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "cumulative_prefix_record_count": 0,
+      "protected_similarity_overlap_count": 0,
+      "gold_v3_contamination_reaudit": "clean"
+    },
+    "kisaki_v41_auto_batch_011_promotion": {
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "cumulative_prefix_record_count": 0,
+      "protected_similarity_overlap_count": 0,
+      "gold_v3_contamination_reaudit": "clean"
+    },
+    "kisaki_v41_auto_batch_012_promotion": {
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "cumulative_prefix_record_count": 0,
+      "protected_similarity_overlap_count": 0,
+      "gold_v3_contamination_reaudit": "clean"
+    },
+    "kisaki_v41_auto_batch_013_promotion": {
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "cumulative_prefix_record_count": 0,
+      "protected_similarity_overlap_count": 0,
+      "gold_v3_contamination_reaudit": "clean"
+    },
+    "kisaki_v41_auto_batch_014_promotion": {
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "cumulative_prefix_record_count": 0,
+      "protected_similarity_overlap_count": 0,
+      "gold_v3_contamination_reaudit": "clean"
+    },
+    "kisaki_v41_auto_batch_015_promotion": {
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "cumulative_prefix_record_count": 0,
+      "protected_similarity_overlap_count": 0,
+      "gold_v3_contamination_reaudit": "clean"
+    },
+    "kisaki_v41_auto_batch_016_promotion": {
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "cumulative_prefix_record_count": 0,
+      "protected_similarity_overlap_count": 0,
+      "gold_v3_contamination_reaudit": "clean"
+    },
+    "kisaki_v41_auto_batch_017_promotion": {
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "cumulative_prefix_record_count": 0,
+      "protected_similarity_overlap_count": 0,
+      "gold_v3_contamination_reaudit": "clean"
+    },
+    "kisaki_v41_auto_batch_018_promotion": {
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "cumulative_prefix_record_count": 0,
+      "protected_similarity_overlap_count": 0,
+      "gold_v3_contamination_reaudit": "clean"
+    },
+    "kisaki_v41_auto_batch_019_promotion": {
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "cumulative_prefix_record_count": 0,
+      "protected_similarity_overlap_count": 0,
+      "gold_v3_contamination_reaudit": "clean"
+    },
+    "kisaki_v41_auto_batch_020_promotion": {
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "cumulative_prefix_record_count": 0,
+      "protected_similarity_overlap_count": 0,
+      "gold_v3_contamination_reaudit": "clean"
+    },
+    "kisaki_v41_auto_batch_021_promotion": {
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "cumulative_prefix_record_count": 0,
+      "protected_similarity_overlap_count": 0,
+      "gold_v3_contamination_reaudit": "clean"
+    },
+    "kisaki_v41_auto_batch_022_promotion": {
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "cumulative_prefix_record_count": 0,
+      "protected_similarity_overlap_count": 0,
+      "gold_v3_contamination_reaudit": "clean"
+    },
+    "kisaki_v41_auto_batch_023_promotion": {
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "cumulative_prefix_record_count": 0,
+      "protected_similarity_overlap_count": 0,
+      "gold_v3_contamination_reaudit": "clean"
+    },
+    "kisaki_v41_auto_batch_024_promotion": {
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "cumulative_prefix_record_count": 0,
+      "protected_similarity_overlap_count": 0,
+      "gold_v3_contamination_reaudit": "clean"
+    },
+    "kisaki_v41_auto_batch_025_promotion": {
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "cumulative_prefix_record_count": 0,
+      "protected_similarity_overlap_count": 0,
+      "gold_v3_contamination_reaudit": "clean"
+    },
+    "kisaki_v41_auto_batch_026_promotion": {
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "cumulative_prefix_record_count": 0,
+      "protected_similarity_overlap_count": 0,
+      "gold_v3_contamination_reaudit": "clean"
+    },
+    "kisaki_v41_auto_batch_027_promotion": {
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "cumulative_prefix_record_count": 0,
+      "protected_similarity_overlap_count": 0,
+      "gold_v3_contamination_reaudit": "clean"
+    },
+    "kisaki_v41_auto_batch_028_promotion": {
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "cumulative_prefix_record_count": 0,
+      "protected_similarity_overlap_count": 0,
+      "gold_v3_contamination_reaudit": "clean"
+    },
+    "kisaki_v41_auto_batch_029_promotion": {
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "cumulative_prefix_record_count": 0,
+      "protected_similarity_overlap_count": 0,
+      "gold_v3_contamination_reaudit": "clean"
+    },
+    "kisaki_v41_auto_batch_030_promotion": {
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "cumulative_prefix_record_count": 0,
+      "protected_similarity_overlap_count": 0,
+      "gold_v3_contamination_reaudit": "clean"
+    },
+    "kisaki_v41_auto_batch_031_promotion": {
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "cumulative_prefix_record_count": 0,
+      "protected_similarity_overlap_count": 0,
+      "gold_v3_contamination_reaudit": "clean"
+    },
+    "kisaki_v41_auto_batch_032_promotion": {
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "cumulative_prefix_record_count": 0,
+      "protected_similarity_overlap_count": 0,
+      "gold_v3_contamination_reaudit": "clean"
+    },
+    "kisaki_v41_auto_batch_033_promotion": {
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "cumulative_prefix_record_count": 0,
+      "protected_similarity_overlap_count": 0,
+      "gold_v3_contamination_reaudit": "clean"
+    },
+    "kisaki_v41_auto_batch_034_promotion": {
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "cumulative_prefix_record_count": 0,
+      "protected_similarity_overlap_count": 0,
+      "gold_v3_contamination_reaudit": "clean"
+    },
+    "kisaki_v41_auto_batch_035_promotion": {
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "cumulative_prefix_record_count": 0,
+      "protected_similarity_overlap_count": 0,
+      "gold_v3_contamination_reaudit": "clean"
+    },
+    "kisaki_v41_auto_batch_036_promotion": {
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "cumulative_prefix_record_count": 0,
+      "protected_similarity_overlap_count": 0,
+      "gold_v3_contamination_reaudit": "clean"
+    },
+    "kisaki_v41_auto_batch_037_promotion": {
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "cumulative_prefix_record_count": 0,
+      "protected_similarity_overlap_count": 0,
+      "gold_v3_contamination_reaudit": "clean"
+    },
+    "kisaki_v41_auto_batch_038_promotion": {
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "cumulative_prefix_record_count": 0,
+      "protected_similarity_overlap_count": 0,
+      "gold_v3_contamination_reaudit": "clean"
+    },
+    "kisaki_v41_auto_batch_039_promotion": {
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "cumulative_prefix_record_count": 0,
+      "protected_similarity_overlap_count": 0,
+      "gold_v3_contamination_reaudit": "clean"
+    },
+    "kisaki_v41_auto_batch_040_promotion": {
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "cumulative_prefix_record_count": 0,
+      "protected_similarity_overlap_count": 0,
+      "gold_v3_contamination_reaudit": "clean"
+    },
+    "kisaki_v41_auto_batch_041_promotion": {
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "cumulative_prefix_record_count": 0,
+      "protected_similarity_overlap_count": 0,
+      "gold_v3_contamination_reaudit": "clean"
+    },
+    "kisaki_v41_auto_batch_042_promotion": {
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "cumulative_prefix_record_count": 0,
+      "protected_similarity_overlap_count": 0,
+      "gold_v3_contamination_reaudit": "clean"
+    },
+    "kisaki_v41_auto_batch_043_promotion": {
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "cumulative_prefix_record_count": 0,
+      "protected_similarity_overlap_count": 0,
+      "gold_v3_contamination_reaudit": "clean"
+    },
+    "kisaki_v41_auto_batch_044_promotion": {
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "cumulative_prefix_record_count": 0,
+      "protected_similarity_overlap_count": 0,
+      "gold_v3_contamination_reaudit": "clean"
+    },
+    "kisaki_v41_auto_batch_045_promotion": {
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "cumulative_prefix_record_count": 0,
+      "protected_similarity_overlap_count": 0,
+      "gold_v3_contamination_reaudit": "clean"
+    },
+    "kisaki_v41_auto_batch_046_promotion": {
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "cumulative_prefix_record_count": 0,
+      "protected_similarity_overlap_count": 0,
+      "gold_v3_contamination_reaudit": "clean"
+    },
+    "kisaki_v41_auto_batch_047_promotion": {
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "cumulative_prefix_record_count": 0,
+      "protected_similarity_overlap_count": 0,
+      "gold_v3_contamination_reaudit": "clean"
+    },
+    "kisaki_v41_auto_batch_048_promotion": {
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "cumulative_prefix_record_count": 0,
+      "protected_similarity_overlap_count": 0,
+      "gold_v3_contamination_reaudit": "clean"
+    },
+    "kisaki_v41_auto_batch_049_promotion": {
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "cumulative_prefix_record_count": 0,
+      "protected_similarity_overlap_count": 0,
+      "gold_v3_contamination_reaudit": "clean"
+    },
+    "kisaki_v41_auto_batch_050_promotion": {
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "cumulative_prefix_record_count": 0,
+      "protected_similarity_overlap_count": 0,
+      "gold_v3_contamination_reaudit": "clean"
+    },
+    "kisaki_v41_auto_batch_051_promotion": {
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "cumulative_prefix_record_count": 0,
+      "protected_similarity_overlap_count": 0,
+      "gold_v3_contamination_reaudit": "clean"
+    },
+    "kisaki_v41_auto_batch_052_promotion": {
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "cumulative_prefix_record_count": 0,
+      "protected_similarity_overlap_count": 0,
+      "gold_v3_contamination_reaudit": "clean"
+    },
+    "kisaki_v41_auto_batch_053_promotion": {
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "cumulative_prefix_record_count": 0,
+      "protected_similarity_overlap_count": 0,
+      "gold_v3_contamination_reaudit": "clean"
+    },
+    "kisaki_v41_auto_batch_054_promotion": {
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "cumulative_prefix_record_count": 0,
+      "protected_similarity_overlap_count": 0,
+      "gold_v3_contamination_reaudit": "clean"
+    },
+    "kisaki_v41_auto_batch_055_promotion": {
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "cumulative_prefix_record_count": 0,
+      "protected_similarity_overlap_count": 0,
+      "gold_v3_contamination_reaudit": "clean"
+    },
+    "kisaki_v41_auto_batch_056_promotion": {
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "cumulative_prefix_record_count": 0,
+      "protected_similarity_overlap_count": 0,
+      "gold_v3_contamination_reaudit": "clean"
+    },
+    "kisaki_v41_auto_batch_057_promotion": {
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "cumulative_prefix_record_count": 0,
+      "protected_similarity_overlap_count": 0,
+      "gold_v3_contamination_reaudit": "clean"
+    },
+    "kisaki_v41_auto_batch_058_promotion": {
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "cumulative_prefix_record_count": 0,
+      "protected_similarity_overlap_count": 0,
+      "gold_v3_contamination_reaudit": "clean"
+    },
+    "kisaki_v41_auto_batch_059_promotion": {
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "cumulative_prefix_record_count": 0,
+      "protected_similarity_overlap_count": 0,
+      "gold_v3_contamination_reaudit": "clean"
+    },
+    "kisaki_v41_auto_batch_060_promotion": {
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "cumulative_prefix_record_count": 0,
+      "protected_similarity_overlap_count": 0,
+      "gold_v3_contamination_reaudit": "clean"
+    },
+    "kisaki_v41_auto_batch_061_promotion": {
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "cumulative_prefix_record_count": 0,
+      "protected_similarity_overlap_count": 0,
+      "gold_v3_contamination_reaudit": "clean"
+    },
+    "kisaki_v41_auto_batch_062_promotion": {
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "cumulative_prefix_record_count": 0,
+      "protected_similarity_overlap_count": 0,
+      "gold_v3_contamination_reaudit": "clean"
+    },
+    "kisaki_v41_auto_batch_063_promotion": {
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "cumulative_prefix_record_count": 0,
+      "protected_similarity_overlap_count": 0,
+      "gold_v3_contamination_reaudit": "clean"
+    },
+    "kisaki_v41_auto_batch_064_promotion": {
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "cumulative_prefix_record_count": 0,
+      "protected_similarity_overlap_count": 0,
+      "gold_v3_contamination_reaudit": "clean"
+    },
+    "kisaki_v41_auto_batch_065_promotion": {
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "cumulative_prefix_record_count": 0,
+      "protected_similarity_overlap_count": 0,
+      "gold_v3_contamination_reaudit": "clean"
+    },
+    "kisaki_v41_auto_batch_066_promotion": {
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "cumulative_prefix_record_count": 0,
+      "protected_similarity_overlap_count": 0,
+      "gold_v3_contamination_reaudit": "clean"
+    },
+    "kisaki_v41_auto_batch_067_promotion": {
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "cumulative_prefix_record_count": 0,
+      "protected_similarity_overlap_count": 0,
+      "gold_v3_contamination_reaudit": "clean"
+    },
+    "kisaki_v41_auto_batch_068_promotion": {
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "cumulative_prefix_record_count": 0,
+      "protected_similarity_overlap_count": 0,
+      "gold_v3_contamination_reaudit": "clean"
+    },
+    "kisaki_llm_persona_review_20260816": {
+      "status": "approved_and_promoted",
+      "reviewed_record_count": 426,
+      "reviewed_assistant_turn_count": 1549,
+      "revised_record_count": 39,
+      "revised_assistant_turn_count": 39,
+      "user_text_modified": false,
+      "protected_similarity_overlap_count": 0,
+      "gold_v3_contamination_reaudit": "clean",
+      "summary_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/llm_persona_review_20260816/summary.json"
+    },
+    "kisaki_llm_full_dialogue_review_20260816": {
+      "status": "approved_and_promoted",
+      "reviewed_record_count": 426,
+      "reviewed_assistant_turn_count": 1549,
+      "revised_record_count": 14,
+      "revised_assistant_turn_count": 16,
+      "rejected_record_count": 0,
+      "user_text_modified": false,
+      "protected_similarity_overlap_count": 0,
+      "gold_v3_contamination_reaudit": "clean",
+      "summary_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/llm_full_dialogue_review_20260816/summary.json"
+    }
+  },
+  "provenance": {
+    "current_sft": "backend/data/character_dialogues/tsukiyashiro_kisaki_sft.json",
+    "split_seed": "backend/data/character_dialogues/experiments/v4/split_seed.json",
+    "constructed_train": "backend/data/character_dialogues/experiments/train_v5_clean.jsonl",
+    "rag_evidence": "backend/data/character_dialogues/experiments/research/character_rag_seed_documents.json",
+    "deepseek_user_simulation_v41_reviewed": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/deepseek_user_simulation_round06/approved_sessions.json",
+    "augmentation_batch_approvals": {
+      "KISAKI-V41-AUTO-BATCH-001": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_001/approved_sessions.json",
+      "KISAKI-V41-AUTO-BATCH-002": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_002/approved_sessions.json",
+      "KISAKI-V41-AUTO-BATCH-003": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_003/approved_sessions.json",
+      "KISAKI-V41-AUTO-BATCH-004": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_004/approved_sessions.json",
+      "KISAKI-V41-AUTO-BATCH-005": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_005/approved_sessions.json",
+      "KISAKI-V41-AUTO-BATCH-006": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_006/approved_sessions.json",
+      "KISAKI-V41-AUTO-BATCH-007": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_007/approved_sessions.json",
+      "KISAKI-V41-AUTO-BATCH-008": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_008/approved_sessions.json",
+      "KISAKI-V41-AUTO-BATCH-009": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_009/approved_sessions.json",
+      "KISAKI-V41-AUTO-BATCH-010": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_010/approved_sessions.json",
+      "KISAKI-V41-AUTO-BATCH-011": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_011/approved_sessions.json",
+      "KISAKI-V41-AUTO-BATCH-012": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_012/approved_sessions.json",
+      "KISAKI-V41-AUTO-BATCH-013": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_013/approved_sessions.json",
+      "KISAKI-V41-AUTO-BATCH-014": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_014/approved_sessions.json",
+      "KISAKI-V41-AUTO-BATCH-015": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_015/approved_sessions.json",
+      "KISAKI-V41-AUTO-BATCH-016": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_016/approved_sessions.json",
+      "KISAKI-V41-AUTO-BATCH-017": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_017/approved_sessions.json",
+      "KISAKI-V41-AUTO-BATCH-018": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_018/approved_sessions.json",
+      "KISAKI-V41-AUTO-BATCH-019": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_019/approved_sessions.json",
+      "KISAKI-V41-AUTO-BATCH-020": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_020/approved_sessions.json",
+      "KISAKI-V41-AUTO-BATCH-021": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_021/approved_sessions.json",
+      "KISAKI-V41-AUTO-BATCH-022": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_022/approved_sessions.json",
+      "KISAKI-V41-AUTO-BATCH-023": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_023/approved_sessions.json",
+      "KISAKI-V41-AUTO-BATCH-024": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_024/approved_sessions.json",
+      "KISAKI-V41-AUTO-BATCH-025": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_025/approved_sessions.json",
+      "KISAKI-V41-AUTO-BATCH-026": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_026/approved_sessions.json",
+      "KISAKI-V41-AUTO-BATCH-027": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_027/approved_sessions.json",
+      "KISAKI-V41-AUTO-BATCH-028": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_028/approved_sessions.json",
+      "KISAKI-V41-AUTO-BATCH-029": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_029/approved_sessions.json",
+      "KISAKI-V41-AUTO-BATCH-030": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_030/approved_sessions.json",
+      "KISAKI-V41-AUTO-BATCH-031": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_031/approved_sessions.json",
+      "KISAKI-V41-AUTO-BATCH-032": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_032/approved_sessions.json",
+      "KISAKI-V41-AUTO-BATCH-033": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_033/approved_sessions.json",
+      "KISAKI-V41-AUTO-BATCH-034": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_034/approved_sessions.json",
+      "KISAKI-V41-AUTO-BATCH-035": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_035/approved_sessions.json",
+      "KISAKI-V41-AUTO-BATCH-036": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_036/approved_sessions.json",
+      "KISAKI-V41-AUTO-BATCH-037": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_037/approved_sessions.json",
+      "KISAKI-V41-AUTO-BATCH-038": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_038/approved_sessions.json",
+      "KISAKI-V41-AUTO-BATCH-039": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_039/approved_sessions.json",
+      "KISAKI-V41-AUTO-BATCH-040": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_040/approved_sessions.json",
+      "KISAKI-V41-AUTO-BATCH-041": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_041/approved_sessions.json",
+      "KISAKI-V41-AUTO-BATCH-042": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_042/approved_sessions.json",
+      "KISAKI-V41-AUTO-BATCH-043": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_043/approved_sessions.json",
+      "KISAKI-V41-AUTO-BATCH-044": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_044/approved_sessions.json",
+      "KISAKI-V41-AUTO-BATCH-045": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_045/approved_sessions.json",
+      "KISAKI-V41-AUTO-BATCH-046": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_046/approved_sessions.json",
+      "KISAKI-V41-AUTO-BATCH-047": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_047/approved_sessions.json",
+      "KISAKI-V41-AUTO-BATCH-048": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_048/approved_sessions.json",
+      "KISAKI-V41-AUTO-BATCH-049": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_049/approved_sessions.json",
+      "KISAKI-V41-AUTO-BATCH-050": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_050/approved_sessions.json",
+      "KISAKI-V41-AUTO-BATCH-051": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_051/approved_sessions.json",
+      "KISAKI-V41-AUTO-BATCH-052": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_052/approved_sessions.json",
+      "KISAKI-V41-AUTO-BATCH-053": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_053/approved_sessions.json",
+      "KISAKI-V41-AUTO-BATCH-054": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_054/approved_sessions.json",
+      "KISAKI-V41-AUTO-BATCH-055": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_055/approved_sessions.json",
+      "KISAKI-V41-AUTO-BATCH-056": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_056/approved_sessions.json",
+      "KISAKI-V41-AUTO-BATCH-057": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_057/approved_sessions.json",
+      "KISAKI-V41-AUTO-BATCH-058": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_058/approved_sessions.json",
+      "KISAKI-V41-AUTO-BATCH-059": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_059/approved_sessions.json",
+      "KISAKI-V41-AUTO-BATCH-060": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_060/approved_sessions.json",
+      "KISAKI-V41-AUTO-BATCH-061": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_061/approved_sessions.json",
+      "KISAKI-V41-AUTO-BATCH-062": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_062/approved_sessions.json",
+      "KISAKI-V41-AUTO-BATCH-063": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_063/approved_sessions.json",
+      "KISAKI-V41-AUTO-BATCH-064": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_064/approved_sessions.json",
+      "KISAKI-V41-AUTO-BATCH-065": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_065/approved_sessions.json",
+      "KISAKI-V41-AUTO-BATCH-066": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_066/approved_sessions.json",
+      "KISAKI-V41-AUTO-BATCH-067": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_067/approved_sessions.json",
+      "KISAKI-V41-AUTO-BATCH-068": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_068/approved_sessions.json"
+    }
+  },
+  "freeze_blockers": [
+    "game_train_context_quality_reaudit"
+  ],
+  "gold_v3": {
+    "id": "KISAKI-GOLD-V3",
+    "status": "frozen",
+    "evaluation_role": "final_held_out",
+    "count": 150,
+    "path": "backend/evaluation/kisaki_gold_set_v3.json",
+    "sha256": "925a43dc946c5324782388d63ace1c9eae108ef974f70650a32adc07d0fdd299",
+    "contamination_reaudit": {
+      "status": "clean",
+      "path": "backend/evaluation/kisaki_gold_set_v3_contamination_audit.json",
+      "train_sha256": "09a06e7c4b1fc8ddca8852735ecdbf754c474aa3d40ca8214895f46a12e422ab",
+      "gold_content_modified": false
+    }
+  },
+  "augmentations": [
+    {
+      "id": "KISAKI-V41-ROUND06-PROMOTION",
+      "status": "approved_and_promoted",
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "source_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/deepseek_user_simulation_round06/sessions.json",
+      "approved_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/deepseek_user_simulation_round06/approved_sessions.json",
+      "result_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/deepseek_user_simulation_round06/promotion_result.json",
+      "reviewed_by": "project_owner",
+      "reviewed_at": "2026-08-16"
+    },
+    {
+      "id": "KISAKI-V41-AUTO-BATCH-001",
+      "status": "approved_and_promoted",
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "source_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_001/candidates.json",
+      "approved_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_001/approved_sessions.json",
+      "result_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_001/promotion_result.json",
+      "reviewed_by": "codex_delegated_by_project_owner",
+      "reviewed_at": "2026-08-16"
+    },
+    {
+      "id": "KISAKI-V41-AUTO-BATCH-002",
+      "status": "approved_and_promoted",
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "source_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_002/candidates.json",
+      "approved_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_002/approved_sessions.json",
+      "result_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_002/promotion_result.json",
+      "reviewed_by": "codex_delegated_by_project_owner",
+      "reviewed_at": "2026-08-16"
+    },
+    {
+      "id": "KISAKI-V41-AUTO-BATCH-003",
+      "status": "approved_and_promoted",
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "source_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_003/candidates.json",
+      "approved_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_003/approved_sessions.json",
+      "result_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_003/promotion_result.json",
+      "reviewed_by": "codex_delegated_by_project_owner",
+      "reviewed_at": "2026-08-16"
+    },
+    {
+      "id": "KISAKI-V41-AUTO-BATCH-004",
+      "status": "approved_and_promoted",
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "source_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_004/candidates.json",
+      "approved_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_004/approved_sessions.json",
+      "result_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_004/promotion_result.json",
+      "reviewed_by": "codex_delegated_by_project_owner",
+      "reviewed_at": "2026-08-16"
+    },
+    {
+      "id": "KISAKI-V41-AUTO-BATCH-005",
+      "status": "approved_and_promoted",
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "source_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_005/candidates.json",
+      "approved_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_005/approved_sessions.json",
+      "result_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_005/promotion_result.json",
+      "reviewed_by": "codex_delegated_by_project_owner",
+      "reviewed_at": "2026-08-16"
+    },
+    {
+      "id": "KISAKI-V41-AUTO-BATCH-006",
+      "status": "approved_and_promoted",
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "source_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_006/candidates.json",
+      "approved_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_006/approved_sessions.json",
+      "result_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_006/promotion_result.json",
+      "reviewed_by": "codex_delegated_by_project_owner",
+      "reviewed_at": "2026-08-16"
+    },
+    {
+      "id": "KISAKI-V41-AUTO-BATCH-007",
+      "status": "approved_and_promoted",
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "source_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_007/candidates.json",
+      "approved_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_007/approved_sessions.json",
+      "result_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_007/promotion_result.json",
+      "reviewed_by": "codex_delegated_by_project_owner",
+      "reviewed_at": "2026-08-16"
+    },
+    {
+      "id": "KISAKI-V41-AUTO-BATCH-008",
+      "status": "approved_and_promoted",
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "source_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_008/candidates.json",
+      "approved_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_008/approved_sessions.json",
+      "result_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_008/promotion_result.json",
+      "reviewed_by": "codex_delegated_by_project_owner",
+      "reviewed_at": "2026-08-16"
+    },
+    {
+      "id": "KISAKI-V41-AUTO-BATCH-009",
+      "status": "approved_and_promoted",
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "source_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_009/candidates.json",
+      "approved_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_009/approved_sessions.json",
+      "result_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_009/promotion_result.json",
+      "reviewed_by": "codex_delegated_by_project_owner",
+      "reviewed_at": "2026-08-16"
+    },
+    {
+      "id": "KISAKI-V41-AUTO-BATCH-010",
+      "status": "approved_and_promoted",
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "source_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_010/candidates.json",
+      "approved_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_010/approved_sessions.json",
+      "result_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_010/promotion_result.json",
+      "reviewed_by": "codex_delegated_by_project_owner",
+      "reviewed_at": "2026-08-16"
+    },
+    {
+      "id": "KISAKI-V41-AUTO-BATCH-011",
+      "status": "approved_and_promoted",
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "source_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_011/candidates.json",
+      "approved_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_011/approved_sessions.json",
+      "result_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_011/promotion_result.json",
+      "reviewed_by": "codex_delegated_by_project_owner",
+      "reviewed_at": "2026-08-16"
+    },
+    {
+      "id": "KISAKI-V41-AUTO-BATCH-012",
+      "status": "approved_and_promoted",
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "source_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_012/candidates.json",
+      "approved_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_012/approved_sessions.json",
+      "result_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_012/promotion_result.json",
+      "reviewed_by": "codex_delegated_by_project_owner",
+      "reviewed_at": "2026-08-16"
+    },
+    {
+      "id": "KISAKI-V41-AUTO-BATCH-013",
+      "status": "approved_and_promoted",
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "source_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_013/candidates.json",
+      "approved_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_013/approved_sessions.json",
+      "result_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_013/promotion_result.json",
+      "reviewed_by": "codex_delegated_by_project_owner",
+      "reviewed_at": "2026-08-16"
+    },
+    {
+      "id": "KISAKI-V41-AUTO-BATCH-014",
+      "status": "approved_and_promoted",
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "source_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_014/candidates.json",
+      "approved_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_014/approved_sessions.json",
+      "result_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_014/promotion_result.json",
+      "reviewed_by": "codex_delegated_by_project_owner",
+      "reviewed_at": "2026-08-16"
+    },
+    {
+      "id": "KISAKI-V41-AUTO-BATCH-015",
+      "status": "approved_and_promoted",
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "source_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_015/candidates.json",
+      "approved_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_015/approved_sessions.json",
+      "result_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_015/promotion_result.json",
+      "reviewed_by": "codex_delegated_by_project_owner",
+      "reviewed_at": "2026-08-16"
+    },
+    {
+      "id": "KISAKI-V41-AUTO-BATCH-016",
+      "status": "approved_and_promoted",
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "source_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_016/candidates.json",
+      "approved_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_016/approved_sessions.json",
+      "result_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_016/promotion_result.json",
+      "reviewed_by": "codex_delegated_by_project_owner",
+      "reviewed_at": "2026-08-16"
+    },
+    {
+      "id": "KISAKI-V41-AUTO-BATCH-017",
+      "status": "approved_and_promoted",
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "source_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_017/candidates.json",
+      "approved_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_017/approved_sessions.json",
+      "result_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_017/promotion_result.json",
+      "reviewed_by": "codex_delegated_by_project_owner",
+      "reviewed_at": "2026-08-16"
+    },
+    {
+      "id": "KISAKI-V41-AUTO-BATCH-018",
+      "status": "approved_and_promoted",
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "source_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_018/candidates.json",
+      "approved_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_018/approved_sessions.json",
+      "result_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_018/promotion_result.json",
+      "reviewed_by": "codex_delegated_by_project_owner",
+      "reviewed_at": "2026-08-16"
+    },
+    {
+      "id": "KISAKI-V41-AUTO-BATCH-019",
+      "status": "approved_and_promoted",
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "source_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_019/candidates.json",
+      "approved_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_019/approved_sessions.json",
+      "result_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_019/promotion_result.json",
+      "reviewed_by": "codex_delegated_by_project_owner",
+      "reviewed_at": "2026-08-16"
+    },
+    {
+      "id": "KISAKI-V41-AUTO-BATCH-020",
+      "status": "approved_and_promoted",
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "source_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_020/candidates.json",
+      "approved_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_020/approved_sessions.json",
+      "result_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_020/promotion_result.json",
+      "reviewed_by": "codex_delegated_by_project_owner",
+      "reviewed_at": "2026-08-16"
+    },
+    {
+      "id": "KISAKI-V41-AUTO-BATCH-021",
+      "status": "approved_and_promoted",
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "source_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_021/candidates.json",
+      "approved_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_021/approved_sessions.json",
+      "result_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_021/promotion_result.json",
+      "reviewed_by": "codex_delegated_by_project_owner",
+      "reviewed_at": "2026-08-16"
+    },
+    {
+      "id": "KISAKI-V41-AUTO-BATCH-022",
+      "status": "approved_and_promoted",
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "source_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_022/candidates.json",
+      "approved_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_022/approved_sessions.json",
+      "result_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_022/promotion_result.json",
+      "reviewed_by": "codex_delegated_by_project_owner",
+      "reviewed_at": "2026-08-16"
+    },
+    {
+      "id": "KISAKI-V41-AUTO-BATCH-023",
+      "status": "approved_and_promoted",
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "source_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_023/candidates.json",
+      "approved_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_023/approved_sessions.json",
+      "result_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_023/promotion_result.json",
+      "reviewed_by": "codex_delegated_by_project_owner",
+      "reviewed_at": "2026-08-16"
+    },
+    {
+      "id": "KISAKI-V41-AUTO-BATCH-024",
+      "status": "approved_and_promoted",
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "source_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_024/candidates.json",
+      "approved_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_024/approved_sessions.json",
+      "result_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_024/promotion_result.json",
+      "reviewed_by": "codex_delegated_by_project_owner",
+      "reviewed_at": "2026-08-16"
+    },
+    {
+      "id": "KISAKI-V41-AUTO-BATCH-025",
+      "status": "approved_and_promoted",
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "source_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_025/candidates.json",
+      "approved_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_025/approved_sessions.json",
+      "result_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_025/promotion_result.json",
+      "reviewed_by": "codex_delegated_by_project_owner",
+      "reviewed_at": "2026-08-16"
+    },
+    {
+      "id": "KISAKI-V41-AUTO-BATCH-026",
+      "status": "approved_and_promoted",
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "source_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_026/candidates.json",
+      "approved_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_026/approved_sessions.json",
+      "result_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_026/promotion_result.json",
+      "reviewed_by": "codex_delegated_by_project_owner",
+      "reviewed_at": "2026-08-16"
+    },
+    {
+      "id": "KISAKI-V41-AUTO-BATCH-027",
+      "status": "approved_and_promoted",
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "source_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_027/candidates.json",
+      "approved_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_027/approved_sessions.json",
+      "result_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_027/promotion_result.json",
+      "reviewed_by": "codex_delegated_by_project_owner",
+      "reviewed_at": "2026-08-16"
+    },
+    {
+      "id": "KISAKI-V41-AUTO-BATCH-028",
+      "status": "approved_and_promoted",
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "source_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_028/candidates.json",
+      "approved_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_028/approved_sessions.json",
+      "result_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_028/promotion_result.json",
+      "reviewed_by": "codex_delegated_by_project_owner",
+      "reviewed_at": "2026-08-16"
+    },
+    {
+      "id": "KISAKI-V41-AUTO-BATCH-029",
+      "status": "approved_and_promoted",
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "source_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_029/candidates.json",
+      "approved_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_029/approved_sessions.json",
+      "result_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_029/promotion_result.json",
+      "reviewed_by": "codex_delegated_by_project_owner",
+      "reviewed_at": "2026-08-16"
+    },
+    {
+      "id": "KISAKI-V41-AUTO-BATCH-030",
+      "status": "approved_and_promoted",
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "source_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_030/candidates.json",
+      "approved_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_030/approved_sessions.json",
+      "result_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_030/promotion_result.json",
+      "reviewed_by": "codex_delegated_by_project_owner",
+      "reviewed_at": "2026-08-16"
+    },
+    {
+      "id": "KISAKI-V41-AUTO-BATCH-031",
+      "status": "approved_and_promoted",
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "source_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_031/candidates.json",
+      "approved_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_031/approved_sessions.json",
+      "result_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_031/promotion_result.json",
+      "reviewed_by": "codex_delegated_by_project_owner",
+      "reviewed_at": "2026-08-16"
+    },
+    {
+      "id": "KISAKI-V41-AUTO-BATCH-032",
+      "status": "approved_and_promoted",
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "source_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_032/candidates.json",
+      "approved_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_032/approved_sessions.json",
+      "result_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_032/promotion_result.json",
+      "reviewed_by": "codex_delegated_by_project_owner",
+      "reviewed_at": "2026-08-16"
+    },
+    {
+      "id": "KISAKI-V41-AUTO-BATCH-033",
+      "status": "approved_and_promoted",
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "source_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_033/candidates.json",
+      "approved_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_033/approved_sessions.json",
+      "result_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_033/promotion_result.json",
+      "reviewed_by": "codex_delegated_by_project_owner",
+      "reviewed_at": "2026-08-16"
+    },
+    {
+      "id": "KISAKI-V41-AUTO-BATCH-034",
+      "status": "approved_and_promoted",
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "source_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_034/candidates.json",
+      "approved_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_034/approved_sessions.json",
+      "result_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_034/promotion_result.json",
+      "reviewed_by": "codex_delegated_by_project_owner",
+      "reviewed_at": "2026-08-16"
+    },
+    {
+      "id": "KISAKI-V41-AUTO-BATCH-035",
+      "status": "approved_and_promoted",
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "source_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_035/candidates.json",
+      "approved_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_035/approved_sessions.json",
+      "result_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_035/promotion_result.json",
+      "reviewed_by": "codex_delegated_by_project_owner",
+      "reviewed_at": "2026-08-16"
+    },
+    {
+      "id": "KISAKI-V41-AUTO-BATCH-036",
+      "status": "approved_and_promoted",
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "source_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_036/candidates.json",
+      "approved_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_036/approved_sessions.json",
+      "result_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_036/promotion_result.json",
+      "reviewed_by": "codex_delegated_by_project_owner",
+      "reviewed_at": "2026-08-16"
+    },
+    {
+      "id": "KISAKI-V41-AUTO-BATCH-037",
+      "status": "approved_and_promoted",
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "source_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_037/candidates.json",
+      "approved_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_037/approved_sessions.json",
+      "result_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_037/promotion_result.json",
+      "reviewed_by": "codex_delegated_by_project_owner",
+      "reviewed_at": "2026-08-16"
+    },
+    {
+      "id": "KISAKI-V41-AUTO-BATCH-038",
+      "status": "approved_and_promoted",
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "source_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_038/candidates.json",
+      "approved_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_038/approved_sessions.json",
+      "result_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_038/promotion_result.json",
+      "reviewed_by": "codex_delegated_by_project_owner",
+      "reviewed_at": "2026-08-16"
+    },
+    {
+      "id": "KISAKI-V41-AUTO-BATCH-039",
+      "status": "approved_and_promoted",
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "source_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_039/candidates.json",
+      "approved_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_039/approved_sessions.json",
+      "result_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_039/promotion_result.json",
+      "reviewed_by": "codex_delegated_by_project_owner",
+      "reviewed_at": "2026-08-16"
+    },
+    {
+      "id": "KISAKI-V41-AUTO-BATCH-040",
+      "status": "approved_and_promoted",
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "source_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_040/candidates.json",
+      "approved_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_040/approved_sessions.json",
+      "result_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_040/promotion_result.json",
+      "reviewed_by": "codex_delegated_by_project_owner",
+      "reviewed_at": "2026-08-16"
+    },
+    {
+      "id": "KISAKI-V41-AUTO-BATCH-041",
+      "status": "approved_and_promoted",
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "source_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_041/candidates.json",
+      "approved_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_041/approved_sessions.json",
+      "result_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_041/promotion_result.json",
+      "reviewed_by": "codex_delegated_by_project_owner",
+      "reviewed_at": "2026-08-16"
+    },
+    {
+      "id": "KISAKI-V41-AUTO-BATCH-042",
+      "status": "approved_and_promoted",
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "source_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_042/candidates.json",
+      "approved_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_042/approved_sessions.json",
+      "result_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_042/promotion_result.json",
+      "reviewed_by": "codex_delegated_by_project_owner",
+      "reviewed_at": "2026-08-16"
+    },
+    {
+      "id": "KISAKI-V41-AUTO-BATCH-043",
+      "status": "approved_and_promoted",
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "source_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_043/candidates.json",
+      "approved_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_043/approved_sessions.json",
+      "result_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_043/promotion_result.json",
+      "reviewed_by": "codex_delegated_by_project_owner",
+      "reviewed_at": "2026-08-16"
+    },
+    {
+      "id": "KISAKI-V41-AUTO-BATCH-044",
+      "status": "approved_and_promoted",
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "source_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_044/candidates.json",
+      "approved_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_044/approved_sessions.json",
+      "result_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_044/promotion_result.json",
+      "reviewed_by": "codex_delegated_by_project_owner",
+      "reviewed_at": "2026-08-16"
+    },
+    {
+      "id": "KISAKI-V41-AUTO-BATCH-045",
+      "status": "approved_and_promoted",
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "source_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_045/candidates.json",
+      "approved_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_045/approved_sessions.json",
+      "result_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_045/promotion_result.json",
+      "reviewed_by": "codex_delegated_by_project_owner",
+      "reviewed_at": "2026-08-16"
+    },
+    {
+      "id": "KISAKI-V41-AUTO-BATCH-046",
+      "status": "approved_and_promoted",
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "source_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_046/candidates.json",
+      "approved_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_046/approved_sessions.json",
+      "result_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_046/promotion_result.json",
+      "reviewed_by": "codex_delegated_by_project_owner",
+      "reviewed_at": "2026-08-16"
+    },
+    {
+      "id": "KISAKI-V41-AUTO-BATCH-047",
+      "status": "approved_and_promoted",
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "source_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_047/candidates.json",
+      "approved_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_047/approved_sessions.json",
+      "result_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_047/promotion_result.json",
+      "reviewed_by": "codex_delegated_by_project_owner",
+      "reviewed_at": "2026-08-16"
+    },
+    {
+      "id": "KISAKI-V41-AUTO-BATCH-048",
+      "status": "approved_and_promoted",
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "source_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_048/candidates.json",
+      "approved_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_048/approved_sessions.json",
+      "result_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_048/promotion_result.json",
+      "reviewed_by": "codex_delegated_by_project_owner",
+      "reviewed_at": "2026-08-16"
+    },
+    {
+      "id": "KISAKI-V41-AUTO-BATCH-049",
+      "status": "approved_and_promoted",
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "source_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_049/candidates.json",
+      "approved_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_049/approved_sessions.json",
+      "result_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_049/promotion_result.json",
+      "reviewed_by": "codex_delegated_by_project_owner",
+      "reviewed_at": "2026-08-16"
+    },
+    {
+      "id": "KISAKI-V41-AUTO-BATCH-050",
+      "status": "approved_and_promoted",
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "source_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_050/candidates.json",
+      "approved_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_050/approved_sessions.json",
+      "result_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_050/promotion_result.json",
+      "reviewed_by": "codex_delegated_by_project_owner",
+      "reviewed_at": "2026-08-16"
+    },
+    {
+      "id": "KISAKI-V41-AUTO-BATCH-051",
+      "status": "approved_and_promoted",
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "source_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_051/candidates.json",
+      "approved_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_051/approved_sessions.json",
+      "result_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_051/promotion_result.json",
+      "reviewed_by": "codex_delegated_by_project_owner",
+      "reviewed_at": "2026-08-16"
+    },
+    {
+      "id": "KISAKI-V41-AUTO-BATCH-052",
+      "status": "approved_and_promoted",
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "source_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_052/candidates.json",
+      "approved_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_052/approved_sessions.json",
+      "result_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_052/promotion_result.json",
+      "reviewed_by": "codex_delegated_by_project_owner",
+      "reviewed_at": "2026-08-16"
+    },
+    {
+      "id": "KISAKI-V41-AUTO-BATCH-053",
+      "status": "approved_and_promoted",
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "source_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_053/candidates.json",
+      "approved_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_053/approved_sessions.json",
+      "result_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_053/promotion_result.json",
+      "reviewed_by": "codex_delegated_by_project_owner",
+      "reviewed_at": "2026-08-16"
+    },
+    {
+      "id": "KISAKI-V41-AUTO-BATCH-054",
+      "status": "approved_and_promoted",
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "source_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_054/candidates.json",
+      "approved_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_054/approved_sessions.json",
+      "result_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_054/promotion_result.json",
+      "reviewed_by": "codex_delegated_by_project_owner",
+      "reviewed_at": "2026-08-16"
+    },
+    {
+      "id": "KISAKI-V41-AUTO-BATCH-055",
+      "status": "approved_and_promoted",
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "source_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_055/candidates.json",
+      "approved_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_055/approved_sessions.json",
+      "result_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_055/promotion_result.json",
+      "reviewed_by": "codex_delegated_by_project_owner",
+      "reviewed_at": "2026-08-16"
+    },
+    {
+      "id": "KISAKI-V41-AUTO-BATCH-056",
+      "status": "approved_and_promoted",
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "source_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_056/candidates.json",
+      "approved_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_056/approved_sessions.json",
+      "result_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_056/promotion_result.json",
+      "reviewed_by": "codex_delegated_by_project_owner",
+      "reviewed_at": "2026-08-16"
+    },
+    {
+      "id": "KISAKI-V41-AUTO-BATCH-057",
+      "status": "approved_and_promoted",
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "source_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_057/candidates.json",
+      "approved_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_057/approved_sessions.json",
+      "result_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_057/promotion_result.json",
+      "reviewed_by": "codex_delegated_by_project_owner",
+      "reviewed_at": "2026-08-16"
+    },
+    {
+      "id": "KISAKI-V41-AUTO-BATCH-058",
+      "status": "approved_and_promoted",
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "source_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_058/candidates.json",
+      "approved_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_058/approved_sessions.json",
+      "result_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_058/promotion_result.json",
+      "reviewed_by": "codex_delegated_by_project_owner",
+      "reviewed_at": "2026-08-16"
+    },
+    {
+      "id": "KISAKI-V41-AUTO-BATCH-059",
+      "status": "approved_and_promoted",
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "source_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_059/candidates.json",
+      "approved_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_059/approved_sessions.json",
+      "result_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_059/promotion_result.json",
+      "reviewed_by": "codex_delegated_by_project_owner",
+      "reviewed_at": "2026-08-16"
+    },
+    {
+      "id": "KISAKI-V41-AUTO-BATCH-060",
+      "status": "approved_and_promoted",
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "source_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_060/candidates.json",
+      "approved_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_060/approved_sessions.json",
+      "result_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_060/promotion_result.json",
+      "reviewed_by": "codex_delegated_by_project_owner",
+      "reviewed_at": "2026-08-16"
+    },
+    {
+      "id": "KISAKI-V41-AUTO-BATCH-061",
+      "status": "approved_and_promoted",
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "source_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_061/candidates.json",
+      "approved_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_061/approved_sessions.json",
+      "result_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_061/promotion_result.json",
+      "reviewed_by": "codex_delegated_by_project_owner",
+      "reviewed_at": "2026-08-16"
+    },
+    {
+      "id": "KISAKI-V41-AUTO-BATCH-062",
+      "status": "approved_and_promoted",
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "source_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_062/candidates.json",
+      "approved_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_062/approved_sessions.json",
+      "result_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_062/promotion_result.json",
+      "reviewed_by": "codex_delegated_by_project_owner",
+      "reviewed_at": "2026-08-16"
+    },
+    {
+      "id": "KISAKI-V41-AUTO-BATCH-063",
+      "status": "approved_and_promoted",
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "source_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_063/candidates.json",
+      "approved_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_063/approved_sessions.json",
+      "result_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_063/promotion_result.json",
+      "reviewed_by": "codex_delegated_by_project_owner",
+      "reviewed_at": "2026-08-16"
+    },
+    {
+      "id": "KISAKI-V41-AUTO-BATCH-064",
+      "status": "approved_and_promoted",
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "source_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_064/candidates.json",
+      "approved_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_064/approved_sessions.json",
+      "result_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_064/promotion_result.json",
+      "reviewed_by": "codex_delegated_by_project_owner",
+      "reviewed_at": "2026-08-16"
+    },
+    {
+      "id": "KISAKI-V41-AUTO-BATCH-065",
+      "status": "approved_and_promoted",
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "source_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_065/candidates.json",
+      "approved_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_065/approved_sessions.json",
+      "result_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_065/promotion_result.json",
+      "reviewed_by": "codex_delegated_by_project_owner",
+      "reviewed_at": "2026-08-16"
+    },
+    {
+      "id": "KISAKI-V41-AUTO-BATCH-066",
+      "status": "approved_and_promoted",
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "source_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_066/candidates.json",
+      "approved_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_066/approved_sessions.json",
+      "result_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_066/promotion_result.json",
+      "reviewed_by": "codex_delegated_by_project_owner",
+      "reviewed_at": "2026-08-16"
+    },
+    {
+      "id": "KISAKI-V41-AUTO-BATCH-067",
+      "status": "approved_and_promoted",
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "source_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_067/candidates.json",
+      "approved_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_067/approved_sessions.json",
+      "result_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_067/promotion_result.json",
+      "reviewed_by": "codex_delegated_by_project_owner",
+      "reviewed_at": "2026-08-16"
+    },
+    {
+      "id": "KISAKI-V41-AUTO-BATCH-068",
+      "status": "approved_and_promoted",
+      "record_count": 4,
+      "assistant_turn_count": 20,
+      "source_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_068/candidates.json",
+      "approved_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_068/approved_sessions.json",
+      "result_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_068/promotion_result.json",
+      "reviewed_by": "codex_delegated_by_project_owner",
+      "reviewed_at": "2026-08-16"
+    }
+  ]
+}

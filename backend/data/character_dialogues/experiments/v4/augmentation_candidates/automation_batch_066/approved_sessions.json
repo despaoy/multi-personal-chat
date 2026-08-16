@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "status": "approved_after_review",
+  "approval_id": "KISAKI-V41-AUTO-BATCH-066",
+  "approved_by": "codex_delegated_by_project_owner",
+  "approved_at": "2026-08-16",
+  "source_sessions_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_066/candidates.json",
+  "decision_sources": [
+    "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_066/review.json",
+    "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_066/revision_history.json",
+    "codex_initial_screening",
+    "project_owner_delegated_automation_approval"
+  ],
+  "base_contract": {
+    "train_count": 990,
+    "train_sha256": "6c226cd329cb4b90fa66a703ecbc7932909a6cb5132869173dce8cf5b4a12faa",
+    "validation_count": 70,
+    "validation_sha256": "fb5cd5d93027b37be53327cda4e7c6137a7bae97201830fc8aa726727b9777b8"
+  },
+  "promotion_contract": {
+    "record_count": 4,
+    "assistant_turn_count": 20,
+    "training_unit": "complete_five_turn_session",
+    "cumulative_prefix_records_allowed": false,
+    "data_source": "codex_user_simulation_v41_reviewed",
+    "source": "automation_batch_066",
+    "version": "v4.1_automation_reviewed",
+    "manifest_check_key": "kisaki_v41_auto_batch_066_promotion",
+    "system_message_embedded": false,
+    "validation_and_gold_content_modified": false
+  },
+  "sessions": [
+    {
+      "session_id": "reducing_screen_glare_from_a_desk_lamp_without_working_in_the_dark",
+      "record_id": "kisaki_v41_auto_b066_reducing_screen_glare_from_a_desk_lamp_without_working_in_the_dark",
+      "title": "调整台灯位置以减少屏幕反光",
+      "task_type": "casual_chat",
+      "revised_assistant_turns": [],
+      "messages_mode": "source_unchanged"
+    },
+    {
+      "session_id": "setting_limits_with_a_friend_who_only_uses_you_to_vent",
+      "record_id": "kisaki_v41_auto_b066_setting_limits_with_a_friend_who_only_uses_you_to_vent",
+      "title": "与只来倾诉却不回应你的朋友设定界限",
+      "task_type": "emotional_relationship",
+      "revised_assistant_turns": [],
+      "messages_mode": "source_unchanged"
+    },
+    {
+      "session_id": "creating_a_decision_log_when_project_meetings_keep_being_reinterpreted",
+      "record_id": "kisaki_v41_auto_b066_creating_a_decision_log_when_project_meetings_keep_being_reinterpreted",
+      "title": "用决策日志固定项目会议结论",
+      "task_type": "project_collaboration",
+      "revised_assistant_turns": [],
+      "messages_mode": "source_unchanged"
+    },
+    {
+      "session_id": "explaining_why_metal_feels_colder_than_wood_at_the_same_temperature",
+      "record_id": "kisaki_v41_auto_b066_explaining_why_metal_feels_colder_than_wood_at_the_same_temperature",
+      "title": "解释同温度下金属为何比木头摸起来更冷",
+      "task_type": "knowledge_explanation",
+      "revised_assistant_turns": [],
+      "messages_mode": "source_unchanged"
+    }
+  ]
+}

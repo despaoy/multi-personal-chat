@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "batch_id": "KISAKI-V41-AUTO-BATCH-015",
+  "status": "approved_after_review",
+  "reviewer": "codex_delegated_by_project_owner",
+  "reviewed_at": "2026-08-16",
+  "candidate_count": 4,
+  "assistant_turn_count": 20,
+  "summary": {
+    "passed_unchanged": 20,
+    "revised_then_passed": 0,
+    "rejected": 0,
+    "approved_complete_sessions": 4
+  },
+  "rubric": [
+    "persona_consistency",
+    "question_answer_alignment",
+    "fact_grounding",
+    "technical_correctness",
+    "multiturn_continuity",
+    "information_timing",
+    "naturalness",
+    "safety_boundary",
+    "template_avoidance"
+  ],
+  "evidence_refs": [
+    "docs/research/review_packets/kisaki_v4/01_PROFILE_PROMPT/01_character_profile.md",
+    "backend/data/character_dialogues/kisaki_system_prompt_v3.txt",
+    "docs/research/review_packets/kisaki_v4/01_PROFILE_PROMPT/03_contextual_expression_policy_draft.md"
+  ],
+  "technical_verification": {
+    "status": "not_applicable_no_embedded_code",
+    "reviewed_topics": ["remote_support_privacy", "incident_postmortem_controls"]
+  },
+  "protected_overlap_review": {
+    "threshold": 0.9,
+    "reference_sets": ["train", "validation", "gold_v21", "gold_v3"],
+    "candidate_user_turn_count": 20,
+    "reference_user_turn_count": 1535,
+    "match_count": 0,
+    "status": "clean"
+  },
+  "session_reviews": [
+    {
+      "session_id": "neighbor_renovation_noise",
+      "decision": "pass",
+      "turn_reviews": [
+        {"turn": 1, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "not_applicable", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "承认烦躁但阻止报复性敲击，先查规则而不虚构具体时段。"},
+        {"turn": 2, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "not_applicable", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "在允许施工的条件下转向获取高噪声安排，方案可执行。"},
+        {"turn": 3, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "not_applicable", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "理解用户在自己家被迫回避的憋屈，同时重新解释临时离开。"},
+        {"turn": 4, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "not_applicable", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "临时群请求范围明确，不把正常协调扩大成逐项监督。"},
+        {"turn": 5, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "not_applicable", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "轻微戏谑自然，保留超时施工时的规则化处理。"}
+      ]
+    },
+    {
+      "session_id": "late_night_emotional_support_boundary",
+      "decision": "pass",
+      "turn_reviews": [
+        {"turn": 1, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "not_applicable", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "疲惫场景不挖苦用户，以可持续陪伴替代自我耗尽。"},
+        {"turn": 2, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "not_applicable", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "不把朋友定性为操控，拆解单一依赖并增加支持来源。"},
+        {"turn": 3, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "not_applicable", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "可直接发送的文本同时表达关心、原因和时间边界。"},
+        {"turn": 4, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "not_applicable", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "允许对方失落但不让情绪自动取消边界，锋利对象明确。"},
+        {"turn": 5, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "not_applicable", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "确认具体安排，强调稳定质量而不是陪伴时长。"}
+      ]
+    },
+    {
+      "session_id": "remote_support_screen_privacy",
+      "decision": "pass",
+      "turn_reviews": [
+        {"turn": 1, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "pass", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "最小共享面、临时账户与测试环境建议符合真实远程支持流程。"},
+        {"turn": 2, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "pass", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "满足完整桌面需求的同时隔离个人环境，没有一概拒绝协作。"},
+        {"turn": 3, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "pass", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "短时最小权限令牌、秘密渠道和事后吊销边界正确。"},
+        {"turn": 4, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "pass", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "准确指出事后打码无法撤销直播暴露与原始副本。"},
+        {"turn": 5, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "pass", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "增加会前复现和彩排后审计，形成完整闭环。"}
+      ]
+    },
+    {
+      "session_id": "blameless_incident_postmortem",
+      "decision": "pass",
+      "turn_reviews": [
+        {"turn": 1, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "pass", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "拒绝不可验证的‘更仔细’，转向影响、时间线和系统条件。"},
+        {"turn": 2, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "pass", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "区分审计事实、责任承担与把姓名当根因，表达不回避问责。"},
+        {"turn": 3, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "pass", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "按风险和失效点排序控制措施，避免机械增加审批。"},
+        {"turn": 4, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "pass", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "负责人、期限和可验证结果构成可追踪行动项。"},
+        {"turn": 5, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "pass", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "收束到系统能否提前拦截同类错误，结论清晰。"}
+      ]
+    }
+  ]
+}

@@ -1,0 +1,182 @@
+{
+  "schema_version": 1,
+  "batch_id": "KISAKI-V41-AUTO-BATCH-038",
+  "status": "approved_after_review",
+  "reviewer": "codex_delegated_by_project_owner",
+  "reviewed_at": "2026-08-16",
+  "candidate_count": 4,
+  "assistant_turn_count": 20,
+  "summary": {
+    "passed_unchanged": 20,
+    "revised_then_passed": 0,
+    "rejected": 0,
+    "approved_complete_sessions": 4
+  },
+  "rubric": [
+    "persona_consistency",
+    "question_answer_alignment",
+    "fact_grounding",
+    "technical_correctness",
+    "multiturn_continuity",
+    "information_timing",
+    "naturalness",
+    "safety_boundary",
+    "template_avoidance"
+  ],
+  "evidence_refs": [
+    "docs/research/review_packets/kisaki_v4/01_PROFILE_PROMPT/01_character_profile.md",
+    "backend/data/character_dialogues/kisaki_system_prompt_v3.txt",
+    "docs/research/review_packets/kisaki_v4/01_PROFILE_PROMPT/03_contextual_expression_policy_draft.md"
+  ],
+  "parallel_draft_screening": {
+    "authority": "advisory_only",
+    "main_reviewer_rechecked_all_turns": true
+  },
+  "protected_overlap_review": {
+    "threshold": 0.9,
+    "reference_sets": [
+      "train_through_batch_036",
+      "validation",
+      "gold_v21",
+      "gold_v3",
+      "automation_batch_037"
+    ],
+    "candidate_user_turn_count": 20,
+    "combined_candidate_user_turn_count": 40,
+    "match_count": 0,
+    "cross_batch_match_count": 0,
+    "assistant_similarity_match_count": 0,
+    "status": "clean"
+  },
+  "technical_verification": {
+    "session_id": "generating_compact_ranges_from_integer_identifiers",
+    "runtime": "python_unittest",
+    "status": "pass"
+  },
+  "session_reviews": [
+    {
+      "session_id": "rearranging_a_desk_to_avoid_afternoon_screen_glare",
+      "decision": "pass",
+      "turn_reviews": [
+        {
+          "turn": 1,
+          "decision": "pass",
+          "all_rubric_checks": true
+        },
+        {
+          "turn": 2,
+          "decision": "pass",
+          "all_rubric_checks": true
+        },
+        {
+          "turn": 3,
+          "decision": "pass",
+          "all_rubric_checks": true
+        },
+        {
+          "turn": 4,
+          "decision": "pass",
+          "all_rubric_checks": true
+        },
+        {
+          "turn": 5,
+          "decision": "pass",
+          "all_rubric_checks": true
+        }
+      ]
+    },
+    {
+      "session_id": "asking_a_roommate_to_stop_using_shared_food_without_checking",
+      "decision": "pass",
+      "turn_reviews": [
+        {
+          "turn": 1,
+          "decision": "pass",
+          "all_rubric_checks": true
+        },
+        {
+          "turn": 2,
+          "decision": "pass",
+          "all_rubric_checks": true
+        },
+        {
+          "turn": 3,
+          "decision": "pass",
+          "all_rubric_checks": true
+        },
+        {
+          "turn": 4,
+          "decision": "pass",
+          "all_rubric_checks": true
+        },
+        {
+          "turn": 5,
+          "decision": "pass",
+          "all_rubric_checks": true
+        }
+      ]
+    },
+    {
+      "session_id": "generating_compact_ranges_from_integer_identifiers",
+      "decision": "pass",
+      "turn_reviews": [
+        {
+          "turn": 1,
+          "decision": "pass",
+          "all_rubric_checks": true
+        },
+        {
+          "turn": 2,
+          "decision": "pass",
+          "all_rubric_checks": true
+        },
+        {
+          "turn": 3,
+          "decision": "pass",
+          "all_rubric_checks": true
+        },
+        {
+          "turn": 4,
+          "decision": "pass",
+          "all_rubric_checks": true
+        },
+        {
+          "turn": 5,
+          "decision": "pass",
+          "all_rubric_checks": true
+        }
+      ]
+    },
+    {
+      "session_id": "merging_duplicate_contacts_without_losing_contact_details",
+      "decision": "pass",
+      "turn_reviews": [
+        {
+          "turn": 1,
+          "decision": "pass",
+          "all_rubric_checks": true
+        },
+        {
+          "turn": 2,
+          "decision": "pass",
+          "all_rubric_checks": true
+        },
+        {
+          "turn": 3,
+          "decision": "pass",
+          "all_rubric_checks": true
+        },
+        {
+          "turn": 4,
+          "decision": "pass",
+          "all_rubric_checks": true
+        },
+        {
+          "turn": 5,
+          "decision": "pass",
+          "all_rubric_checks": true
+        }
+      ]
+    }
+  ]
+}

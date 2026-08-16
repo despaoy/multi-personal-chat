@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "status": "approved_after_revision",
+  "approval_id": "KISAKI-V41-AUTO-BATCH-044",
+  "approved_by": "codex_delegated_by_project_owner",
+  "approved_at": "2026-08-16",
+  "source_sessions_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_044/candidates.json",
+  "decision_sources": [
+    "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_044/review.json",
+    "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_044/revision_history.json",
+    "parallel_subagent_initial_screening",
+    "project_owner_delegated_automation_approval"
+  ],
+  "base_contract": {
+    "train_count": 902,
+    "train_sha256": "0e5c3ee41248cfff87a73775c0af80fe0fcdc93ac508a2736aea73b51006374b",
+    "validation_count": 70,
+    "validation_sha256": "fb5cd5d93027b37be53327cda4e7c6137a7bae97201830fc8aa726727b9777b8"
+  },
+  "promotion_contract": {
+    "record_count": 4,
+    "assistant_turn_count": 20,
+    "training_unit": "complete_five_turn_session",
+    "cumulative_prefix_records_allowed": false,
+    "data_source": "codex_user_simulation_v41_reviewed",
+    "source": "automation_batch_044",
+    "version": "v4.1_automation_reviewed",
+    "manifest_check_key": "kisaki_v41_auto_batch_044_promotion",
+    "system_message_embedded": false,
+    "validation_and_gold_content_modified": false
+  },
+  "sessions": [
+    {
+      "session_id": "letting_an_expiring_loyalty_card_go_without_forcing_an_extra_purchase",
+      "record_id": "kisaki_v41_auto_b044_letting_an_expiring_loyalty_card_go_without_forcing_an_extra_purchase",
+      "title": "不为即将到期的积分卡勉强安排额外消费",
+      "task_type": "casual_chat",
+      "revised_assistant_turns": [],
+      "messages_mode": "source_unchanged"
+    },
+    {
+      "session_id": "asking_a_friend_to_stop_relaying_updates_about_an_ex",
+      "record_id": "kisaki_v41_auto_b044_asking_a_friend_to_stop_relaying_updates_about_an_ex",
+      "title": "请朋友停止转述前任近况并保留正常友谊",
+      "task_type": "emotional_relationship",
+      "revised_assistant_turns": [],
+      "messages_mode": "source_unchanged"
+    },
+    {
+      "session_id": "fixing_zero_identifiers_dropped_by_truthiness_checks_across_pages",
+      "record_id": "kisaki_v41_auto_b044_fixing_zero_identifiers_dropped_by_truthiness_checks_across_pages",
+      "title": "修复分页数据中因真值判断而被遗漏的零值标识符",
+      "task_type": "code_debugging",
+      "revised_assistant_turns": [],
+      "messages_mode": "source_unchanged"
+    },
+    {
+      "session_id": "introducing_evidence_based_defect_severity_before_backlog_prioritization",
+      "record_id": "kisaki_v41_auto_b044_introducing_evidence_based_defect_severity_before_backlog_prioritization",
+      "title": "用影响证据和统一分级避免缺陷优先级被声音大小左右",
+      "task_type": "project_collaboration",
+      "revised_assistant_turns": [],
+      "messages_mode": "source_unchanged"
+    }
+  ]
+}
+

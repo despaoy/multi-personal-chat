@@ -1,0 +1,179 @@
+{
+  "schema_version": 1,
+  "batch_id": "KISAKI-V41-AUTO-BATCH-061",
+  "status": "approved_after_review",
+  "reviewer": "codex_delegated_by_project_owner",
+  "reviewed_at": "2026-08-16",
+  "candidate_count": 4,
+  "assistant_turn_count": 20,
+  "summary": {
+    "passed_unchanged": 20,
+    "revised_then_passed": 0,
+    "rejected": 0,
+    "approved_complete_sessions": 4
+  },
+  "rubric": [
+    "persona_consistency",
+    "question_answer_alignment",
+    "fact_grounding",
+    "technical_correctness",
+    "multiturn_continuity",
+    "information_timing",
+    "naturalness",
+    "safety_boundary",
+    "template_avoidance"
+  ],
+  "evidence_refs": [
+    "docs/research/review_packets/kisaki_v4/01_PROFILE_PROMPT/01_character_profile.md",
+    "docs/research/review_packets/kisaki_v4/01_PROFILE_PROMPT/02_system_prompt_v3.md",
+    "docs/research/review_packets/kisaki_v4/01_PROFILE_PROMPT/03_contextual_expression_policy_draft.md"
+  ],
+  "parallel_draft_screening": {
+    "authority": "advisory_only",
+    "main_reviewer_rechecked_all_turns": true
+  },
+  "protected_overlap_review": {
+    "threshold": 0.9,
+    "reference_sets": [
+      "canonical_train",
+      "validation",
+      "gold_v21",
+      "gold_v3"
+    ],
+    "candidate_user_turn_count": 20,
+    "combined_candidate_user_turn_count": 20,
+    "match_count": 0,
+    "cross_batch_match_count": 0,
+    "assistant_similarity_match_count": 0,
+    "status": "clean"
+  },
+  "technical_verification": {
+    "status": "not_applicable"
+  },
+  "session_reviews": [
+    {
+      "session_id": "drying_and_storing_a_bicycle_helmet_after_riding_in_rain",
+      "decision": "pass",
+      "turn_reviews": [
+        {
+          "turn": 1,
+          "decision": "pass",
+          "all_rubric_checks": true
+        },
+        {
+          "turn": 2,
+          "decision": "pass",
+          "all_rubric_checks": true
+        },
+        {
+          "turn": 3,
+          "decision": "pass",
+          "all_rubric_checks": true
+        },
+        {
+          "turn": 4,
+          "decision": "pass",
+          "all_rubric_checks": true
+        },
+        {
+          "turn": 5,
+          "decision": "pass",
+          "all_rubric_checks": true
+        }
+      ]
+    },
+    {
+      "session_id": "asking_a_friend_not_to_forward_private_voice_messages",
+      "decision": "pass",
+      "turn_reviews": [
+        {
+          "turn": 1,
+          "decision": "pass",
+          "all_rubric_checks": true
+        },
+        {
+          "turn": 2,
+          "decision": "pass",
+          "all_rubric_checks": true
+        },
+        {
+          "turn": 3,
+          "decision": "pass",
+          "all_rubric_checks": true
+        },
+        {
+          "turn": 4,
+          "decision": "pass",
+          "all_rubric_checks": true
+        },
+        {
+          "turn": 5,
+          "decision": "pass",
+          "all_rubric_checks": true
+        }
+      ]
+    },
+    {
+      "session_id": "understanding_why_cutting_onions_makes_eyes_water",
+      "decision": "pass",
+      "turn_reviews": [
+        {
+          "turn": 1,
+          "decision": "pass",
+          "all_rubric_checks": true
+        },
+        {
+          "turn": 2,
+          "decision": "pass",
+          "all_rubric_checks": true
+        },
+        {
+          "turn": 3,
+          "decision": "pass",
+          "all_rubric_checks": true
+        },
+        {
+          "turn": 4,
+          "decision": "pass",
+          "all_rubric_checks": true
+        },
+        {
+          "turn": 5,
+          "decision": "pass",
+          "all_rubric_checks": true
+        }
+      ]
+    },
+    {
+      "session_id": "handing_off_incident_command_during_a_long_running_outage",
+      "decision": "pass",
+      "turn_reviews": [
+        {
+          "turn": 1,
+          "decision": "pass",
+          "all_rubric_checks": true
+        },
+        {
+          "turn": 2,
+          "decision": "pass",
+          "all_rubric_checks": true
+        },
+        {
+          "turn": 3,
+          "decision": "pass",
+          "all_rubric_checks": true
+        },
+        {
+          "turn": 4,
+          "decision": "pass",
+          "all_rubric_checks": true
+        },
+        {
+          "turn": 5,
+          "decision": "pass",
+          "all_rubric_checks": true
+        }
+      ]
+    }
+  ]
+}

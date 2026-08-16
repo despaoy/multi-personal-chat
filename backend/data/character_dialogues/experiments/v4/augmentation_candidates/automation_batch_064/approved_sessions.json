@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "status": "approved_after_review",
+  "approval_id": "KISAKI-V41-AUTO-BATCH-064",
+  "approved_by": "codex_delegated_by_project_owner",
+  "approved_at": "2026-08-16",
+  "source_sessions_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_064/candidates.json",
+  "decision_sources": [
+    "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_064/review.json",
+    "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_064/revision_history.json",
+    "codex_initial_screening",
+    "project_owner_delegated_automation_approval"
+  ],
+  "base_contract": {
+    "train_count": 982,
+    "train_sha256": "a675b1cdeee4dfa592b8ded08f3abc52008ef55bee3c2bd25352c77f6bccc985",
+    "validation_count": 70,
+    "validation_sha256": "fb5cd5d93027b37be53327cda4e7c6137a7bae97201830fc8aa726727b9777b8"
+  },
+  "promotion_contract": {
+    "record_count": 4,
+    "assistant_turn_count": 20,
+    "training_unit": "complete_five_turn_session",
+    "cumulative_prefix_records_allowed": false,
+    "data_source": "codex_user_simulation_v41_reviewed",
+    "source": "automation_batch_064",
+    "version": "v4.1_automation_reviewed",
+    "manifest_check_key": "kisaki_v41_auto_batch_064_promotion",
+    "system_message_embedded": false,
+    "validation_and_gold_content_modified": false
+  },
+  "sessions": [
+    {
+      "session_id": "removing_pills_from_a_sweater_without_thinning_the_fabric",
+      "record_id": "kisaki_v41_auto_b064_removing_pills_from_a_sweater_without_thinning_the_fabric",
+      "title": "去除毛衣起球且避免损伤织物",
+      "task_type": "casual_chat",
+      "revised_assistant_turns": [],
+      "messages_mode": "source_unchanged"
+    },
+    {
+      "session_id": "asking_a_friend_not_to_share_your_live_location_without_permission",
+      "record_id": "kisaki_v41_auto_b064_asking_a_friend_not_to_share_your_live_location_without_permission",
+      "title": "请朋友不要擅自共享你的实时位置",
+      "task_type": "emotional_relationship",
+      "revised_assistant_turns": [],
+      "messages_mode": "source_unchanged"
+    },
+    {
+      "session_id": "checking_identification_assumptions_in_a_regression_discontinuity_design",
+      "record_id": "kisaki_v41_auto_b064_checking_identification_assumptions_in_a_regression_discontinuity_design",
+      "title": "检查回归不连续设计的识别假设",
+      "task_type": "research_learning",
+      "revised_assistant_turns": [],
+      "messages_mode": "source_unchanged"
+    },
+    {
+      "session_id": "redacting_sensitive_text_from_a_pdf_instead_of_covering_it_visually",
+      "record_id": "kisaki_v41_auto_b064_redacting_sensitive_text_from_a_pdf_instead_of_covering_it_visually",
+      "title": "真正删除 PDF 敏感文字而非仅视觉遮盖",
+      "task_type": "safety_boundary",
+      "revised_assistant_turns": [],
+      "messages_mode": "source_unchanged"
+    }
+  ]
+}

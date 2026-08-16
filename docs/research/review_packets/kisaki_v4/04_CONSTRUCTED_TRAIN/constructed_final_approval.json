@@ -1,0 +1,17 @@
+{
+  "schema_version": 3,
+  "approval_id": "KISAKI-V4-CONSTRUCTED-FINAL-APPROVAL-R2",
+  "status": "approved",
+  "scope": "all_constructed_training_candidates_after_round_02",
+  "reviewed_count": 159,
+  "approved_count": 150,
+  "excluded_count": 9,
+  "dataset_path": "backend/data/character_dialogues/experiments/train_v5_clean.jsonl",
+  "round_02_decisions_path": "docs/research/review_packets/kisaki_v4/04_CONSTRUCTED_TRAIN/review_round_02/review_decisions.json",
+  "round_02_exclusions_path": "docs/research/review_packets/kisaki_v4/04_CONSTRUCTED_TRAIN/review_round_02/excluded_records.jsonl",
+  "final_check_path": "docs/research/review_packets/kisaki_v4/04_CONSTRUCTED_TRAIN/ALL_REVIEWED_FINAL_CHECK.md",
+  "decision": "approve_all_current_constructed_candidates",
+  "approved_by": "project_owner",
+  "reviewed_at": "2026-08-12",
+  "approval_statement": "本轮复核指定的7条已修订，其余143条通过；当前150条构造候选全部批准。"
+}

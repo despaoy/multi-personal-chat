@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "status": "approved_after_review",
+  "approval_id": "KISAKI-V41-AUTO-BATCH-051",
+  "approved_by": "codex_delegated_by_project_owner",
+  "approved_at": "2026-08-16",
+  "source_sessions_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_051/candidates.json",
+  "decision_sources": [
+    "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_051/review.json",
+    "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_051/revision_history.json",
+    "codex_initial_screening",
+    "project_owner_delegated_automation_approval"
+  ],
+  "base_contract": {
+    "train_count": 930,
+    "train_sha256": "2dd9c1595d62cc8c89352a653dbaece4342922c83e8c93d8d0267d18cfe67509",
+    "validation_count": 70,
+    "validation_sha256": "fb5cd5d93027b37be53327cda4e7c6137a7bae97201830fc8aa726727b9777b8"
+  },
+  "promotion_contract": {
+    "record_count": 4,
+    "assistant_turn_count": 20,
+    "training_unit": "complete_five_turn_session",
+    "cumulative_prefix_records_allowed": false,
+    "data_source": "codex_user_simulation_v41_reviewed",
+    "source": "automation_batch_051",
+    "version": "v4.1_automation_reviewed",
+    "manifest_check_key": "kisaki_v41_auto_batch_051_promotion",
+    "system_message_embedded": false,
+    "validation_and_gold_content_modified": false
+  },
+  "sessions": [
+    {
+      "session_id": "keeping_cut_fresh_herbs_from_wilting_too_quickly",
+      "record_id": "kisaki_v41_auto_b051_keeping_cut_fresh_herbs_from_wilting_too_quickly",
+      "title": "让剪下的鲜香草不那么快萎蔫",
+      "task_type": "casual_chat",
+      "revised_assistant_turns": [],
+      "messages_mode": "source_unchanged"
+    },
+    {
+      "session_id": "setting_limits_when_a_friend_uses_expensive_gifts_to_create_obligation",
+      "record_id": "kisaki_v41_auto_b051_setting_limits_when_a_friend_uses_expensive_gifts_to_create_obligation",
+      "title": "朋友用昂贵礼物制造亏欠感时设限",
+      "task_type": "emotional_relationship",
+      "revised_assistant_turns": [],
+      "messages_mode": "source_unchanged"
+    },
+    {
+      "session_id": "verifying_an_external_drive_copy_before_deleting_the_source",
+      "record_id": "kisaki_v41_auto_b051_verifying_an_external_drive_copy_before_deleting_the_source",
+      "title": "删除源文件前验证移动硬盘副本",
+      "task_type": "tool_usage",
+      "revised_assistant_turns": [],
+      "messages_mode": "source_unchanged"
+    },
+    {
+      "session_id": "refusing_to_install_an_untrusted_browser_extension_for_work",
+      "record_id": "kisaki_v41_auto_b051_refusing_to_install_an_untrusted_browser_extension_for_work",
+      "title": "拒绝为工作安装来源不明的浏览器扩展",
+      "task_type": "safety_boundary",
+      "revised_assistant_turns": [],
+      "messages_mode": "source_unchanged"
+    }
+  ]
+}

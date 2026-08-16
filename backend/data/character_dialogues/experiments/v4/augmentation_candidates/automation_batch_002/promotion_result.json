@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "status": "promoted",
+  "approval_id": "KISAKI-V41-AUTO-BATCH-002",
+  "source_sessions_sha256": "491340331ff2ccc077444b6daedddf568975b72062d330932afbaeb4203474fb",
+  "approved_sessions_sha256": "795031dc18e13f55c56c491d7f1948568af358eb301ef3d199d33366089cbfba",
+  "previous_train": {
+    "count": 734,
+    "sha256": "0af33cd7b24d51cd417ca029ba744a993f7668e7e806566f43d057de21173888"
+  },
+  "promoted": {
+    "record_count": 4,
+    "assistant_turn_count": 20,
+    "record_ids": [
+      "kisaki_v41_auto_b002_headphone_purchase",
+      "kisaki_v41_auto_b002_sibling_borrowing_boundary",
+      "kisaki_v41_auto_b002_typescript_message_deduper",
+      "kisaki_v41_auto_b002_spreadsheet_email_cleanup"
+    ]
+  },
+  "result_train": {
+    "count": 738,
+    "sha256": "100c9799ee254c32082d96c5a2ce906231e54f56c56a32e89b82961a4b2060bb"
+  },
+  "validation": {
+    "count": 70,
+    "sha256": "fb5cd5d93027b37be53327cda4e7c6137a7bae97201830fc8aa726727b9777b8",
+    "modified": false
+  },
+  "gold_v3": {
+    "content_modified": false,
+    "contamination_reaudit": "clean",
+    "contamination_audit_path": "backend/evaluation/kisaki_gold_set_v3_contamination_audit.json"
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "status": "promoted",
+  "approval_id": "KISAKI-V41-AUTO-BATCH-009",
+  "source_sessions_sha256": "bc09d8d6cb2f4ce12c48ab2f6b1f090d288418ad9af7917c7490448732b58c13",
+  "approved_sessions_sha256": "629c7b23c8024117140dec4deec805dda2d0db08351eca5feab7aa33067c0a02",
+  "previous_train": {
+    "count": 762,
+    "sha256": "deae1d33f1e69404e0edecd1e9f92b2700f9ae01d6fb6e4b31d8049069f9da5f"
+  },
+  "promoted": {
+    "record_count": 4,
+    "assistant_turn_count": 20,
+    "record_ids": [
+      "kisaki_v41_auto_b009_postgres_online_not_null",
+      "kisaki_v41_auto_b009_cross_queue_trace_context",
+      "kisaki_v41_auto_b009_rag_document_prompt_injection",
+      "kisaki_v41_auto_b009_sqlalchemy_conversation_n_plus_one"
+    ]
+  },
+  "result_train": {
+    "count": 766,
+    "sha256": "a6e0e2cbe1959c56d629f0b31f789b9cf7d96ac7444e7b5a9d3b1302353a5593"
+  },
+  "validation": {
+    "count": 70,
+    "sha256": "fb5cd5d93027b37be53327cda4e7c6137a7bae97201830fc8aa726727b9777b8",
+    "modified": false
+  },
+  "gold_v3": {
+    "content_modified": false,
+    "contamination_reaudit": "clean",
+    "contamination_audit_path": "backend/evaluation/kisaki_gold_set_v3_contamination_audit.json"
+  }
+}

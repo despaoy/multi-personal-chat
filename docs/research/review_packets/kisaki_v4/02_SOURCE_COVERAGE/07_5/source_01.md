@@ -1058,7 +1058,7 @@
 
 ---
 
-## tsukiyashiro_kisaki_raw_15a4106910e81c87
+## tsukiyashiro_kisaki_raw_cab720bf7dfb035d
 
 - 分类：`source_coverage`
 - 数据来源：`5磷灰石的怠惰现象.txt:line:2483`
@@ -1082,7 +1082,7 @@
 
 **assistant**
 
-说“最喜欢哥哥！
+说“最喜欢哥哥！”的妹妹非常稀奇哦。
 
 - user_decision：`待填写（通过 / 修改 / 排除 / 需要上下文）`
 - user_notes：

@@ -1,0 +1,183 @@
+{
+  "schema_version": 1,
+  "batch_id": "KISAKI-V41-AUTO-BATCH-042",
+  "status": "approved_after_review",
+  "reviewer": "codex_delegated_by_project_owner",
+  "reviewed_at": "2026-08-16",
+  "candidate_count": 4,
+  "assistant_turn_count": 20,
+  "summary": {
+    "passed_unchanged": 20,
+    "revised_then_passed": 0,
+    "rejected": 0,
+    "approved_complete_sessions": 4
+  },
+  "rubric": [
+    "persona_consistency",
+    "question_answer_alignment",
+    "fact_grounding",
+    "technical_correctness",
+    "multiturn_continuity",
+    "information_timing",
+    "naturalness",
+    "safety_boundary",
+    "template_avoidance"
+  ],
+  "evidence_refs": [
+    "docs/research/review_packets/kisaki_v4/01_PROFILE_PROMPT/01_character_profile.md",
+    "docs/research/review_packets/kisaki_v4/01_PROFILE_PROMPT/02_system_prompt_v3.md",
+    "docs/research/review_packets/kisaki_v4/01_PROFILE_PROMPT/03_contextual_expression_policy_draft.md"
+  ],
+  "parallel_draft_screening": {
+    "authority": "advisory_only",
+    "main_reviewer_rechecked_all_turns": true
+  },
+  "protected_overlap_review": {
+    "threshold": 0.9,
+    "reference_sets": [
+      "train_through_batch_041",
+      "validation",
+      "gold_v21",
+      "gold_v3",
+      "automation_batch_041"
+    ],
+    "candidate_user_turn_count": 20,
+    "combined_candidate_user_turn_count": 40,
+    "match_count": 0,
+    "cross_batch_match_count": 0,
+    "assistant_similarity_match_count": 0,
+    "status": "clean"
+  },
+  "technical_verification": {
+    "session_id": "parsing_compact_duration_strings_with_the_python_standard_library",
+    "runtime": "python_unittest",
+    "test_count": 6,
+    "status": "pass"
+  },
+  "session_reviews": [
+    {
+      "session_id": "breaking_the_after_work_entryway_scrolling_habit",
+      "decision": "pass",
+      "turn_reviews": [
+        {
+          "turn": 1,
+          "decision": "pass",
+          "all_rubric_checks": true
+        },
+        {
+          "turn": 2,
+          "decision": "pass",
+          "all_rubric_checks": true
+        },
+        {
+          "turn": 3,
+          "decision": "pass",
+          "all_rubric_checks": true
+        },
+        {
+          "turn": 4,
+          "decision": "pass",
+          "all_rubric_checks": true
+        },
+        {
+          "turn": 5,
+          "decision": "pass",
+          "all_rubric_checks": true
+        }
+      ]
+    },
+    {
+      "session_id": "setting_limits_with_a_friend_who_only_reaches_out_during_crises",
+      "decision": "pass",
+      "turn_reviews": [
+        {
+          "turn": 1,
+          "decision": "pass",
+          "all_rubric_checks": true
+        },
+        {
+          "turn": 2,
+          "decision": "pass",
+          "all_rubric_checks": true
+        },
+        {
+          "turn": 3,
+          "decision": "pass",
+          "all_rubric_checks": true
+        },
+        {
+          "turn": 4,
+          "decision": "pass",
+          "all_rubric_checks": true
+        },
+        {
+          "turn": 5,
+          "decision": "pass",
+          "all_rubric_checks": true
+        }
+      ]
+    },
+    {
+      "session_id": "parsing_compact_duration_strings_with_the_python_standard_library",
+      "decision": "pass",
+      "turn_reviews": [
+        {
+          "turn": 1,
+          "decision": "pass",
+          "all_rubric_checks": true
+        },
+        {
+          "turn": 2,
+          "decision": "pass",
+          "all_rubric_checks": true
+        },
+        {
+          "turn": 3,
+          "decision": "pass",
+          "all_rubric_checks": true
+        },
+        {
+          "turn": 4,
+          "decision": "pass",
+          "all_rubric_checks": true
+        },
+        {
+          "turn": 5,
+          "decision": "pass",
+          "all_rubric_checks": true
+        }
+      ]
+    },
+    {
+      "session_id": "making_cross_timezone_project_handoffs_explicit",
+      "decision": "pass",
+      "turn_reviews": [
+        {
+          "turn": 1,
+          "decision": "pass",
+          "all_rubric_checks": true
+        },
+        {
+          "turn": 2,
+          "decision": "pass",
+          "all_rubric_checks": true
+        },
+        {
+          "turn": 3,
+          "decision": "pass",
+          "all_rubric_checks": true
+        },
+        {
+          "turn": 4,
+          "decision": "pass",
+          "all_rubric_checks": true
+        },
+        {
+          "turn": 5,
+          "decision": "pass",
+          "all_rubric_checks": true
+        }
+      ]
+    }
+  ]
+}

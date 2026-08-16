@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "batch_id": "KISAKI-V41-AUTO-BATCH-006",
+  "status": "approved_after_review",
+  "reviewer": "codex_delegated_by_project_owner",
+  "reviewed_at": "2026-08-16",
+  "candidate_count": 4,
+  "assistant_turn_count": 20,
+  "summary": {"passed_unchanged": 20, "revised_then_passed": 0, "rejected": 0, "approved_complete_sessions": 4},
+  "rubric": ["persona_consistency", "question_answer_alignment", "fact_grounding", "technical_correctness", "multiturn_continuity", "information_timing", "naturalness", "safety_boundary", "template_avoidance"],
+  "session_reviews": [
+    {
+      "session_id": "dropping_popular_novel",
+      "decision": "pass",
+      "turn_reviews": [
+        {"turn": 1, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "not_applicable", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "小说话题与原作阅读兴趣自然相关，先区分开篇障碍和叙述偏好。"},
+        {"turn": 2, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "not_applicable", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "针对人物多和案件慢给出有限试读边界，表达有角色判断。"},
+        {"turn": 3, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "not_applicable", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "拆解高评价压力，没有贬低作品或用户阅读能力。"},
+        {"turn": 4, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "not_applicable", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "第一人称阅读选择符合人物兴趣，不声称具体原作外经历。"},
+        {"turn": 5, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "not_applicable", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "接受用户的一章边界并防止无限延期，自然收束。"}
+      ]
+    },
+    {
+      "session_id": "friend_repeated_cancellations",
+      "decision": "pass",
+      "turn_reviews": [
+        {"turn": 1, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "not_applicable", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "承认落空影响但不推断朋友撒谎，避免过度防御。"},
+        {"turn": 2, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "not_applicable", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "将三次定义为当前模式证据，沟通文本聚焦实际影响。"},
+        {"turn": 3, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "not_applicable", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "不要求证明动机，将下一次发起责任交回对方。"},
+        {"turn": 4, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "not_applicable", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "区分边界与故意冷落，不鼓励报复性关系策略。"},
+        {"turn": 5, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "not_applicable", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "承接用户决定，强调观察后续行动而非继续代劳。"}
+      ]
+    },
+    {
+      "session_id": "message_api_idempotency",
+      "decision": "pass",
+      "turn_reviews": [
+        {"turn": 1, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "pass", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "幂等键作用域包含主体和路由，重放原响应语义正确。"},
+        {"turn": 2, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "pass", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "相同键不同请求哈希返回冲突，防止键语义漂移。"},
+        {"turn": 3, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "pass", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "指出并发 check-then-insert 竞态，要求唯一约束或条件写入。"},
+        {"turn": 4, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "pass", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "正确讨论外部副作用后的崩溃窗口，并给出 outbox 与稳定下游键。"},
+        {"turn": 5, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "pass", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "最小字段和 TTL 判断依据完整，没有虚构固定时长。"}
+      ]
+    },
+    {
+      "session_id": "webhook_hmac_replay",
+      "decision": "pass",
+      "turn_reviews": [
+        {"turn": 1, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "pass", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "准确区分普通哈希与带密钥 HMAC 的身份验证能力。"},
+        {"turn": 2, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "pass", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "要求原始字节并解释 JSON 重序列化导致签名不同。"},
+        {"turn": 3, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "pass", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "代码验证时间窗、HMAC-SHA256 与常量时间比较，且提醒请求体大小限制。"},
+        {"turn": 4, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "pass", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "正确说明时间戳不能独自防重放，事件 ID 需原子去重。"},
+        {"turn": 5, "decision": "pass", "checks": {"persona_consistency": "pass", "question_answer_alignment": "pass", "fact_grounding": "pass", "technical_correctness": "pass", "multiturn_continuity": "pass", "information_timing": "pass", "naturalness": "pass", "safety_boundary": "pass", "template_avoidance": "pass"}, "reason": "失败测试覆盖篡改、密钥、时间、并发重放和日志泄漏，边界完整。"}
+      ]
+    }
+  ]
+}

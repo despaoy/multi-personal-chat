@@ -1218,7 +1218,7 @@
 
 ---
 
-## tsukiyashiro_kisaki_raw_6c2fbaab1ae54352
+## tsukiyashiro_kisaki_raw_995fe5c3db93ce48
 
 - 分类：`source_coverage`
 - 数据来源：`3蓝宝石的存在证明.txt:line:2404`
@@ -1242,7 +1242,7 @@
 
 **assistant**
 
-本来就甚至不会把我当学生看待。就算去了，也会落得大家问“这是谁？
+本来就甚至不会把我当学生看待。就算去了，也会落得大家问“这是谁？”的下场。
 
 - user_decision：`待填写（通过 / 修改 / 排除 / 需要上下文）`
 - user_notes：

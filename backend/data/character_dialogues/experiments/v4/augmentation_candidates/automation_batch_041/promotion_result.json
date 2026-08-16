@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "status": "promoted",
+  "approval_id": "KISAKI-V41-AUTO-BATCH-041",
+  "source_sessions_sha256": "ecea044c0f7281b8884b6d91411d8af67d00f20a3a047a52789d2eb65eb9f8dd",
+  "approved_sessions_sha256": "3ee5357003328fd34f353893778677fa2cb5d69b4d7874e3a3dcd5804f6e3163",
+  "previous_train": {
+    "count": 890,
+    "sha256": "a51b82a3aa5c15aaa7d071ba262c15eee3781d04f6cc61203a2b1cb1fc79ab10"
+  },
+  "promoted": {
+    "record_count": 4,
+    "assistant_turn_count": 20,
+    "record_ids": [
+      "kisaki_v41_auto_b041_remembering_to_bring_a_reusable_tote_without_collecting_more_bags",
+      "kisaki_v41_auto_b041_responding_when_a_friend_turns_your_good_news_into_a_comparison",
+      "kisaki_v41_auto_b041_distinguishing_regression_to_the_mean_from_an_intervention_effect",
+      "kisaki_v41_auto_b041_migrating_password_manager_data_without_losing_special_fields"
+    ]
+  },
+  "result_train": {
+    "count": 894,
+    "sha256": "4d87c2952986fc65c59249353da4c02cb29cc8f249f78b3f8d7fa3b50f47ffa5"
+  },
+  "validation": {
+    "count": 70,
+    "sha256": "fb5cd5d93027b37be53327cda4e7c6137a7bae97201830fc8aa726727b9777b8",
+    "modified": false
+  },
+  "gold_v3": {
+    "content_modified": false,
+    "contamination_reaudit": "clean",
+    "contamination_audit_path": "backend/evaluation/kisaki_gold_set_v3_contamination_audit.json"
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "status": "promoted",
+  "approval_id": "KISAKI-V41-AUTO-BATCH-018",
+  "source_sessions_sha256": "4bb69547de9ba756a3437ae30636393702a1a640617d051ce894604523a1429b",
+  "approved_sessions_sha256": "c34cb6b3ba68db475a34bd527fbb0d608f8b7585c89323926acebfcfd7abaab4",
+  "previous_train": {
+    "count": 798,
+    "sha256": "c7f1f3e7bb8430492c6727a22c17795d72c7c81da8e8626c41b353e5679ee2ad"
+  },
+  "promoted": {
+    "record_count": 4,
+    "assistant_turn_count": 20,
+    "record_ids": [
+      "kisaki_v41_auto_b018_returning_to_hobby_class_after_absences",
+      "kisaki_v41_auto_b018_feeling_overindebted_to_supportive_friend",
+      "kisaki_v41_auto_b018_password_hashing_salt_encryption_migration",
+      "kisaki_v41_auto_b018_diagnosing_slow_page_with_network_panel"
+    ]
+  },
+  "result_train": {
+    "count": 802,
+    "sha256": "b43a523d75f699503f12e14d1388dfb4279ab19e00d906c5d3febc5a991d10e2"
+  },
+  "validation": {
+    "count": 70,
+    "sha256": "fb5cd5d93027b37be53327cda4e7c6137a7bae97201830fc8aa726727b9777b8",
+    "modified": false
+  },
+  "gold_v3": {
+    "content_modified": false,
+    "contamination_reaudit": "clean",
+    "contamination_audit_path": "backend/evaluation/kisaki_gold_set_v3_contamination_audit.json"
+  }
+}

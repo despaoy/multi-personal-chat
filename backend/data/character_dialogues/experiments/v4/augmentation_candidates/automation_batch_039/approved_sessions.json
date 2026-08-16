@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "status": "approved_after_revision",
+  "approval_id": "KISAKI-V41-AUTO-BATCH-039",
+  "approved_by": "codex_delegated_by_project_owner",
+  "approved_at": "2026-08-16",
+  "source_sessions_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_039/candidates.json",
+  "decision_sources": [
+    "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_039/review.json",
+    "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_039/revision_history.json",
+    "parallel_subagent_initial_screening",
+    "project_owner_delegated_automation_approval"
+  ],
+  "base_contract": {
+    "train_count": 882,
+    "train_sha256": "f9d80c7579753dc689aa26bbdc14ae72f96199cebefa84f5b0dc7f7e8242d789",
+    "validation_count": 70,
+    "validation_sha256": "fb5cd5d93027b37be53327cda4e7c6137a7bae97201830fc8aa726727b9777b8"
+  },
+  "promotion_contract": {
+    "record_count": 4,
+    "assistant_turn_count": 20,
+    "training_unit": "complete_five_turn_session",
+    "cumulative_prefix_records_allowed": false,
+    "data_source": "codex_user_simulation_v41_reviewed",
+    "source": "automation_batch_039",
+    "version": "v4.1_automation_reviewed",
+    "manifest_check_key": "kisaki_v41_auto_batch_039_promotion",
+    "system_message_embedded": false,
+    "validation_and_gold_content_modified": false
+  },
+  "sessions": [
+    {
+      "session_id": "making_weekday_breakfast_less_repetitive_without_extra_morning_work",
+      "record_id": "kisaki_v41_auto_b039_making_weekday_breakfast_less_repetitive_without_extra_morning_work",
+      "title": "在不增加晨间负担的情况下换换早餐口味",
+      "task_type": "casual_chat",
+      "revised_assistant_turns": [],
+      "messages_mode": "source_unchanged"
+    },
+    {
+      "session_id": "repairing_trust_after_forgetting_a_friends_important_presentation",
+      "record_id": "kisaki_v41_auto_b039_repairing_trust_after_forgetting_a_friends_important_presentation",
+      "title": "忘记朋友重要汇报后坦率道歉并用行动修复",
+      "task_type": "emotional_relationship",
+      "revised_assistant_turns": [],
+      "messages_mode": "source_unchanged"
+    },
+    {
+      "session_id": "planning_analysis_for_multiple_outcomes_and_timepoints_in_a_pilot_study",
+      "record_id": "kisaki_v41_auto_b039_planning_analysis_for_multiple_outcomes_and_timepoints_in_a_pilot_study",
+      "title": "为包含多个结局和时点的试点研究控制多重检验",
+      "task_type": "research_learning",
+      "revised_assistant_turns": [],
+      "messages_mode": "source_unchanged"
+    },
+    {
+      "session_id": "preventing_a_senior_opinion_from_anchoring_project_design_reviews",
+      "record_id": "kisaki_v41_auto_b039_preventing_a_senior_opinion_from_anchoring_project_design_reviews",
+      "title": "减少资深成员先发言对方案评审造成的锚定",
+      "task_type": "project_collaboration",
+      "revised_assistant_turns": [],
+      "messages_mode": "source_unchanged"
+    }
+  ]
+}

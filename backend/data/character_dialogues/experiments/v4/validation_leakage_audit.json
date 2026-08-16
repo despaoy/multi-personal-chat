@@ -1,0 +1,2606 @@
+{
+  "schema_version": 1,
+  "status": "pending_review",
+  "thresholds": {
+    "user_similarity_block": 0.9,
+    "line_proximity_advisory": 5
+  },
+  "policy": {
+    "blockers": [
+      "exact_user_question",
+      "near_duplicate_user_question",
+      "target_event_overlap",
+      "explicit_dialogue_block_overlap",
+      "explicit_context_window_overlap"
+    ],
+    "advisory_only": [
+      "line_proximity_only"
+    ]
+  },
+  "candidate_blockers": [
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_318cc23e4d31b96e",
+      "validation_id": "tsukiyashiro_kisaki_sft_da21e4c8d09b7af1",
+      "train_user": "那你怎么回答了他？",
+      "validation_user": "那你怎么回答他？",
+      "user_similarity": 0.9411764706,
+      "train_source_file": "3蓝宝石的存在证明.txt",
+      "train_source_lines": [
+        3415,
+        3417
+      ],
+      "validation_source_file": "3蓝宝石的存在证明.txt",
+      "validation_source_lines": [
+        3399,
+        3402
+      ],
+      "line_distance": 13,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [
+        "near_duplicate_user_question"
+      ]
+    }
+  ],
+  "line_proximity_advisories": [
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_9851b8fd118c76e5",
+      "validation_id": "tsukiyashiro_kisaki_sft_3648c20354dbb614",
+      "train_user": "……什么？",
+      "validation_user": "……真的？",
+      "user_similarity": 0.6,
+      "train_source_file": "8萤石的时空残影.txt",
+      "train_source_lines": [
+        1765,
+        1770
+      ],
+      "validation_source_file": "8萤石的时空残影.txt",
+      "validation_source_lines": [
+        1752,
+        1764
+      ],
+      "line_distance": 1,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_2f8810975f933a71",
+      "validation_id": "tsukiyashiro_kisaki_sft_58942808cc6d4985",
+      "train_user": "妃觉得我遭拒绝，再也站不起来也行吗？",
+      "validation_user": "即使我受伤，大哭大叫，站不起来，心碎，自闭，再也笑不出来也是？",
+      "user_similarity": 0.3265306122,
+      "train_source_file": "12青金石的幻想图书馆.txt",
+      "train_source_lines": [
+        2293,
+        2296
+      ],
+      "validation_source_file": "12青金石的幻想图书馆.txt",
+      "validation_source_lines": [
+        2298,
+        2303
+      ],
+      "line_distance": 2,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_f898856c33ef668b",
+      "validation_id": "tsukiyashiro_kisaki_sft_58942808cc6d4985",
+      "train_user": "我的好友是鬼，不是鬼也是恶魔。\n比起什么魔法使要可怕太多了。",
+      "validation_user": "即使我受伤，大哭大叫，站不起来，心碎，自闭，再也笑不出来也是？",
+      "user_similarity": 0.1666666667,
+      "train_source_file": "12青金石的幻想图书馆.txt",
+      "train_source_lines": [
+        2307,
+        2317
+      ],
+      "validation_source_file": "12青金石的幻想图书馆.txt",
+      "validation_source_lines": [
+        2298,
+        2303
+      ],
+      "line_distance": 4,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_8fc856e17a118013",
+      "validation_id": "tsukiyashiro_kisaki_sft_8cc10044828d54ee",
+      "train_user": "我说你！",
+      "validation_user": "我好幸福啊，居然有这么厉害的妹妹。",
+      "user_similarity": 0.0952380952,
+      "train_source_file": "1翡翠的排挤原理.txt",
+      "train_source_lines": [
+        85,
+        89
+      ],
+      "validation_source_file": "1翡翠的排挤原理.txt",
+      "validation_source_lines": [
+        90,
+        97
+      ],
+      "line_distance": 1,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_a4d08d7ff82971dd",
+      "validation_id": "tsukiyashiro_kisaki_sft_8cc10044828d54ee",
+      "train_user": "多管闲事！\n……你啊，嘴里不干不净的，当心某天说漏嘴让同学发现你的恶劣本性。",
+      "validation_user": "我好幸福啊，居然有这么厉害的妹妹。",
+      "user_similarity": 0.1481481481,
+      "train_source_file": "1翡翠的排挤原理.txt",
+      "train_source_lines": [
+        98,
+        106
+      ],
+      "validation_source_file": "1翡翠的排挤原理.txt",
+      "validation_source_lines": [
+        90,
+        97
+      ],
+      "line_distance": 1,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_01bcc431a281e6fb",
+      "validation_id": "tsukiyashiro_kisaki_sft_92f74f5456456c15",
+      "train_user": "小孩子的时候，好像每天都泡在那个图书馆里看书啊。\n那家伙——夜子现在还是书迷吗？",
+      "validation_user": "是啊……除掉和书有关的部分，那家伙还剩下什么？\n我闻到书的味道。",
+      "user_similarity": 0.2,
+      "train_source_file": "1翡翠的排挤原理.txt",
+      "train_source_lines": [
+        132,
+        135
+      ],
+      "validation_source_file": "1翡翠的排挤原理.txt",
+      "validation_source_lines": [
+        139,
+        142
+      ],
+      "line_distance": 4,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_804ee27d54f28497",
+      "validation_id": "tsukiyashiro_kisaki_sft_92f74f5456456c15",
+      "train_user": "依然是没人会靠近的气氛耶。",
+      "validation_user": "是啊……除掉和书有关的部分，那家伙还剩下什么？\n我闻到书的味道。",
+      "user_similarity": 0.1363636364,
+      "train_source_file": "1翡翠的排挤原理.txt",
+      "train_source_lines": [
+        144,
+        145
+      ],
+      "validation_source_file": "1翡翠的排挤原理.txt",
+      "validation_source_lines": [
+        139,
+        142
+      ],
+      "line_distance": 2,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_27129b67fe7cb69f",
+      "validation_id": "tsukiyashiro_kisaki_sft_7f72d2dfcd4ea7cb",
+      "train_user": "我明白。",
+      "validation_user": "是啊……适材适所呢。\n可也不算一点进展也没有……\n尽管仍找不到线索，甚至没看到犯人的容姿，但这也算一种收获。",
+      "user_similarity": 0.0357142857,
+      "train_source_file": "1翡翠的排挤原理.txt",
+      "train_source_lines": [
+        2766,
+        2770
+      ],
+      "validation_source_file": "1翡翠的排挤原理.txt",
+      "validation_source_lines": [
+        2771,
+        2780
+      ],
+      "line_distance": 1,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_431bf6f8fbe92b0d",
+      "validation_id": "tsukiyashiro_kisaki_sft_7f72d2dfcd4ea7cb",
+      "train_user": "……看起来是这样吗？",
+      "validation_user": "是啊……适材适所呢。\n可也不算一点进展也没有……\n尽管仍找不到线索，甚至没看到犯人的容姿，但这也算一种收获。",
+      "user_similarity": 0.1290322581,
+      "train_source_file": "1翡翠的排挤原理.txt",
+      "train_source_lines": [
+        2781,
+        2782
+      ],
+      "validation_source_file": "1翡翠的排挤原理.txt",
+      "validation_source_lines": [
+        2771,
+        2780
+      ],
+      "line_distance": 1,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_d83152b486554ca0",
+      "validation_id": "tsukiyashiro_kisaki_sft_7f72d2dfcd4ea7cb",
+      "train_user": "我不觉得她是那种满脑子幻想的少女。",
+      "validation_user": "是啊……适材适所呢。\n可也不算一点进展也没有……\n尽管仍找不到线索，甚至没看到犯人的容姿，但这也算一种收获。",
+      "user_similarity": 0.0869565217,
+      "train_source_file": "1翡翠的排挤原理.txt",
+      "train_source_lines": [
+        2783,
+        2784
+      ],
+      "validation_source_file": "1翡翠的排挤原理.txt",
+      "validation_source_lines": [
+        2771,
+        2780
+      ],
+      "line_distance": 3,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_692700307ce71b2f",
+      "validation_id": "tsukiyashiro_kisaki_sft_7f72d2dfcd4ea7cb",
+      "train_user": "不管怎样，如果我在她身边能让她轻松点……那就够了。",
+      "validation_user": "是啊……适材适所呢。\n可也不算一点进展也没有……\n尽管仍找不到线索，甚至没看到犯人的容姿，但这也算一种收获。",
+      "user_similarity": 0.0779220779,
+      "train_source_file": "1翡翠的排挤原理.txt",
+      "train_source_lines": [
+        2785,
+        2789
+      ],
+      "validation_source_file": "1翡翠的排挤原理.txt",
+      "validation_source_lines": [
+        2771,
+        2780
+      ],
+      "line_distance": 5,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_556e164250f53cd6",
+      "validation_id": "tsukiyashiro_kisaki_sft_4de14325ad043f16",
+      "train_user": "真啰嗦……",
+      "validation_user": "这当然。我是感觉妃会喜欢才推荐的。本小姐挑选的小说可不会有错。",
+      "user_similarity": 0.0,
+      "train_source_file": "2红宝石的天作之合.txt",
+      "train_source_lines": [
+        716,
+        721
+      ],
+      "validation_source_file": "2红宝石的天作之合.txt",
+      "validation_source_lines": [
+        722,
+        723
+      ],
+      "line_distance": 1,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_ac54e334c865ceea",
+      "validation_id": "tsukiyashiro_kisaki_sft_b815139014bff341",
+      "train_user": "……那不行吧。",
+      "validation_user": "喂喂，紧急的时候该怎么办？",
+      "user_similarity": 0.0,
+      "train_source_file": "2红宝石的天作之合.txt",
+      "train_source_lines": [
+        1797,
+        1804
+      ],
+      "validation_source_file": "2红宝石的天作之合.txt",
+      "validation_source_lines": [
+        1791,
+        1794
+      ],
+      "line_distance": 3,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_061eccc2222c44de",
+      "validation_id": "tsukiyashiro_kisaki_sft_69906fccfa2982ad",
+      "train_user": "没错呢。\n那个木头人儿太为所欲为了。明明闭上嘴的话还有点顺眼的，为什么他的贫嘴就停不下来？\n本来啊，我为什么得和那家伙上学？要伴儿的话，明明找其他女孩子就好了。",
+      "validation_user": "没错。话虽如此，那个笨蛋好像没有领会行动中蕴含的深意。假如是理解后选了我，那我要杀了他。\n在教室里也随随便便向我搭话，他是不是错认我是他的朋友啦？",
+      "user_similarity": 0.16,
+      "train_source_file": "2红宝石的天作之合.txt",
+      "train_source_lines": [
+        1910,
+        1916
+      ],
+      "validation_source_file": "2红宝石的天作之合.txt",
+      "validation_source_lines": [
+        1917,
+        1920
+      ],
+      "line_distance": 1,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_061eccc2222c44de",
+      "validation_id": "tsukiyashiro_kisaki_sft_46f7095e8d4430fc",
+      "train_user": "没错呢。\n那个木头人儿太为所欲为了。明明闭上嘴的话还有点顺眼的，为什么他的贫嘴就停不下来？\n本来啊，我为什么得和那家伙上学？要伴儿的话，明明找其他女孩子就好了。",
+      "validation_user": "真恶心。",
+      "user_similarity": 0.0243902439,
+      "train_source_file": "2红宝石的天作之合.txt",
+      "train_source_lines": [
+        1910,
+        1916
+      ],
+      "validation_source_file": "2红宝石的天作之合.txt",
+      "validation_source_lines": [
+        1921,
+        1926
+      ],
+      "line_distance": 5,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_0e6d752e550e8e60",
+      "validation_id": "tsukiyashiro_kisaki_sft_46f7095e8d4430fc",
+      "train_user": "当然。",
+      "validation_user": "真恶心。",
+      "user_similarity": 0.2857142857,
+      "train_source_file": "2红宝石的天作之合.txt",
+      "train_source_lines": [
+        1927,
+        1931
+      ],
+      "validation_source_file": "2红宝石的天作之合.txt",
+      "validation_source_lines": [
+        1921,
+        1926
+      ],
+      "line_distance": 1,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_173320d9352498cf",
+      "validation_id": "tsukiyashiro_kisaki_sft_e4880c9c7fca1342",
+      "train_user": "没有，这种事。",
+      "validation_user": "……假若我真的很开心，我真是这么想。\n这一切都是遵从红宝石的计划。连这份开心的心情，也是魔法之书带来的幻想。",
+      "user_similarity": 0.1,
+      "train_source_file": "2红宝石的天作之合.txt",
+      "train_source_lines": [
+        1932,
+        1933
+      ],
+      "validation_source_file": "2红宝石的天作之合.txt",
+      "validation_source_lines": [
+        1938,
+        1948
+      ],
+      "line_distance": 5,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_3d6192d0190589a6",
+      "validation_id": "tsukiyashiro_kisaki_sft_e4880c9c7fca1342",
+      "train_user": "不要连妃也说些奇怪的话。",
+      "validation_user": "……假若我真的很开心，我真是这么想。\n这一切都是遵从红宝石的计划。连这份开心的心情，也是魔法之书带来的幻想。",
+      "user_similarity": 0.1230769231,
+      "train_source_file": "2红宝石的天作之合.txt",
+      "train_source_lines": [
+        1934,
+        1936
+      ],
+      "validation_source_file": "2红宝石的天作之合.txt",
+      "validation_source_lines": [
+        1938,
+        1948
+      ],
+      "line_distance": 2,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_1a30de58baace6da",
+      "validation_id": "tsukiyashiro_kisaki_sft_e4880c9c7fca1342",
+      "train_user": "……我无法理解妃想说什么。",
+      "validation_user": "……假若我真的很开心，我真是这么想。\n这一切都是遵从红宝石的计划。连这份开心的心情，也是魔法之书带来的幻想。",
+      "user_similarity": 0.1818181818,
+      "train_source_file": "2红宝石的天作之合.txt",
+      "train_source_lines": [
+        1949,
+        1951
+      ],
+      "validation_source_file": "2红宝石的天作之合.txt",
+      "validation_source_lines": [
+        1938,
+        1948
+      ],
+      "line_distance": 1,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_2734e97b49381142",
+      "validation_id": "tsukiyashiro_kisaki_sft_e4880c9c7fca1342",
+      "train_user": "……不要再说了。\n为什么得和妃讨论那个，令人不快的男人呀？我想聊些更开心的事情。\n妃不是讨厌琉璃吗？",
+      "validation_user": "……假若我真的很开心，我真是这么想。\n这一切都是遵从红宝石的计划。连这份开心的心情，也是魔法之书带来的幻想。",
+      "user_similarity": 0.1782178218,
+      "train_source_file": "2红宝石的天作之合.txt",
+      "train_source_lines": [
+        1952,
+        1958
+      ],
+      "validation_source_file": "2红宝石的天作之合.txt",
+      "validation_source_lines": [
+        1938,
+        1948
+      ],
+      "line_distance": 4,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_37050a2927ec1dcb",
+      "validation_id": "tsukiyashiro_kisaki_sft_3db2eeb9a11a67fc",
+      "train_user": "……从这个口吻来看，你也明白真相？",
+      "validation_user": "不要高兴地承认！令人气愤啊。",
+      "user_similarity": 0.0,
+      "train_source_file": "2红宝石的天作之合.txt",
+      "train_source_lines": [
+        2702,
+        2705
+      ],
+      "validation_source_file": "2红宝石的天作之合.txt",
+      "validation_source_lines": [
+        2698,
+        2700
+      ],
+      "line_distance": 2,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_07c2487aed61915a",
+      "validation_id": "tsukiyashiro_kisaki_sft_ff6338b17cc44212",
+      "train_user": "稀奇啊，你竟然会关注陌生人。",
+      "validation_user": "……有什么根据吗？",
+      "user_similarity": 0.0,
+      "train_source_file": "3蓝宝石的存在证明.txt",
+      "train_source_lines": [
+        149,
+        152
+      ],
+      "validation_source_file": "3蓝宝石的存在证明.txt",
+      "validation_source_lines": [
+        153,
+        156
+      ],
+      "line_distance": 1,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_6cb8a677ae1ca329",
+      "validation_id": "tsukiyashiro_kisaki_sft_ff6338b17cc44212",
+      "train_user": "啊，差点忘了！\n今天有准备甜点。我试着做了一下点心……\n已经吃不下了？",
+      "validation_user": "……有什么根据吗？",
+      "user_similarity": 0.1428571429,
+      "train_source_file": "3蓝宝石的存在证明.txt",
+      "train_source_lines": [
+        158,
+        165
+      ],
+      "validation_source_file": "3蓝宝石的存在证明.txt",
+      "validation_source_lines": [
+        153,
+        156
+      ],
+      "line_distance": 2,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_d60c96dbb59a436c",
+      "validation_id": "tsukiyashiro_kisaki_sft_4f21ddbbf6b70998",
+      "train_user": "她不好意思了吧？毕竟你大肆表扬她。",
+      "validation_user": "这个奶油泡芙看起来完全不觉得是自制的。其实是买回来的吧？",
+      "user_similarity": 0.1333333333,
+      "train_source_file": "3蓝宝石的存在证明.txt",
+      "train_source_lines": [
+        206,
+        207
+      ],
+      "validation_source_file": "3蓝宝石的存在证明.txt",
+      "validation_source_lines": [
+        201,
+        205
+      ],
+      "line_distance": 1,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_17fb8cceaf4c4c35",
+      "validation_id": "tsukiyashiro_kisaki_sft_4f21ddbbf6b70998",
+      "train_user": "我开动了。\n……实在说不上是有教养的行为呢。",
+      "validation_user": "这个奶油泡芙看起来完全不觉得是自制的。其实是买回来的吧？",
+      "user_similarity": 0.1632653061,
+      "train_source_file": "3蓝宝石的存在证明.txt",
+      "train_source_lines": [
+        210,
+        214
+      ],
+      "validation_source_file": "3蓝宝石的存在证明.txt",
+      "validation_source_lines": [
+        201,
+        205
+      ],
+      "line_distance": 5,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_b11aa6835b2b7465",
+      "validation_id": "tsukiyashiro_kisaki_sft_c7c36ca25ed60ec3",
+      "train_user": "好，好厉害。对我来说是无法想象的世界啊。",
+      "validation_user": "才不是呢。只是对妃的这类经历感兴趣而已。",
+      "user_similarity": 0.2,
+      "train_source_file": "3蓝宝石的存在证明.txt",
+      "train_source_lines": [
+        290,
+        293
+      ],
+      "validation_source_file": "3蓝宝石的存在证明.txt",
+      "validation_source_lines": [
+        296,
+        297
+      ],
+      "line_distance": 3,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_dc6efe315f17bd9a",
+      "validation_id": "tsukiyashiro_kisaki_sft_c7c36ca25ed60ec3",
+      "train_user": "你是我的朋友啊。关心朋友有什么奇怪？",
+      "validation_user": "才不是呢。只是对妃的这类经历感兴趣而已。",
+      "user_similarity": 0.1578947368,
+      "train_source_file": "3蓝宝石的存在证明.txt",
+      "train_source_lines": [
+        298,
+        301
+      ],
+      "validation_source_file": "3蓝宝石的存在证明.txt",
+      "validation_source_lines": [
+        296,
+        297
+      ],
+      "line_distance": 1,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_f4af9575a39d9461",
+      "validation_id": "tsukiyashiro_kisaki_sft_c7c36ca25ed60ec3",
+      "train_user": "是吗？这样啊？虽然有猜到，但总觉得很可惜呢。\n以你的脸蛋，恋爱想谈多少场就有多少场吧。对象是任君挑选。",
+      "validation_user": "才不是呢。只是对妃的这类经历感兴趣而已。",
+      "user_similarity": 0.1428571429,
+      "train_source_file": "3蓝宝石的存在证明.txt",
+      "train_source_lines": [
+        302,
+        310
+      ],
+      "validation_source_file": "3蓝宝石的存在证明.txt",
+      "validation_source_lines": [
+        296,
+        297
+      ],
+      "line_distance": 5,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_ecf18739d3c6e73e",
+      "validation_id": "tsukiyashiro_kisaki_sft_940933a6d8ed79ee",
+      "train_user": "什、什么啊？这么认真。\n不要突然说这种话啦。",
+      "validation_user": "呼呼，苦瓜脸的贫乳女仆不也可爱？",
+      "user_similarity": 0.0540540541,
+      "train_source_file": "3蓝宝石的存在证明.txt",
+      "train_source_lines": [
+        318,
+        326
+      ],
+      "validation_source_file": "3蓝宝石的存在证明.txt",
+      "validation_source_lines": [
+        329,
+        330
+      ],
+      "line_distance": 3,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_164b75c4a181eadb",
+      "validation_id": "tsukiyashiro_kisaki_sft_940933a6d8ed79ee",
+      "train_user": "………等等，唯独别给我那个。\n喝着那样的泥汤，还能愉快地聊天吗？",
+      "validation_user": "呼呼，苦瓜脸的贫乳女仆不也可爱？",
+      "user_similarity": 0.1276595745,
+      "train_source_file": "3蓝宝石的存在证明.txt",
+      "train_source_lines": [
+        331,
+        334
+      ],
+      "validation_source_file": "3蓝宝石的存在证明.txt",
+      "validation_source_lines": [
+        329,
+        330
+      ],
+      "line_distance": 1,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_1552442ff5466f56",
+      "validation_id": "tsukiyashiro_kisaki_sft_c6e4a2bb17e08ed3",
+      "train_user": "为什么要说得这么倒胃口啊？",
+      "validation_user": "………明明是想抢过来的美味，可以给我吗？",
+      "user_similarity": 0.0606060606,
+      "train_source_file": "3蓝宝石的存在证明.txt",
+      "train_source_lines": [
+        613,
+        616
+      ],
+      "validation_source_file": "3蓝宝石的存在证明.txt",
+      "validation_source_lines": [
+        618,
+        619
+      ],
+      "line_distance": 2,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_af72d8df087875b3",
+      "validation_id": "tsukiyashiro_kisaki_sft_c6e4a2bb17e08ed3",
+      "train_user": "这样啊。\n滴、滴下来了。",
+      "validation_user": "………明明是想抢过来的美味，可以给我吗？",
+      "user_similarity": 0.064516129,
+      "train_source_file": "3蓝宝石的存在证明.txt",
+      "train_source_lines": [
+        620,
+        624
+      ],
+      "validation_source_file": "3蓝宝石的存在证明.txt",
+      "validation_source_lines": [
+        618,
+        619
+      ],
+      "line_distance": 1,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_af72d8df087875b3",
+      "validation_id": "tsukiyashiro_kisaki_sft_1eb36081bb9990b7",
+      "train_user": "这样啊。\n滴、滴下来了。",
+      "validation_user": "勺、勺子呢？",
+      "user_similarity": 0.1176470588,
+      "train_source_file": "3蓝宝石的存在证明.txt",
+      "train_source_lines": [
+        620,
+        624
+      ],
+      "validation_source_file": "3蓝宝石的存在证明.txt",
+      "validation_source_lines": [
+        625,
+        626
+      ],
+      "line_distance": 1,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_c916f70fb8dd1c4c",
+      "validation_id": "tsukiyashiro_kisaki_sft_1eb36081bb9990b7",
+      "train_user": "会沾到手上啦。\n……好冰。\n沁凉的感觉。\n………有妃的味道。",
+      "validation_user": "勺、勺子呢？",
+      "user_similarity": 0.0,
+      "train_source_file": "3蓝宝石的存在证明.txt",
+      "train_source_lines": [
+        628,
+        637
+      ],
+      "validation_source_file": "3蓝宝石的存在证明.txt",
+      "validation_source_lines": [
+        625,
+        626
+      ],
+      "line_distance": 2,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_f12b47f147b9f0f5",
+      "validation_id": "tsukiyashiro_kisaki_sft_be2398297fe0e444",
+      "train_user": "嗯？对方又没有要求我保密。而且，为了取得你们的信任，有必要说点自己的事情吧。\n四条琉璃和月社妃。很抱歉让你们做自我介绍，其实我知道你们。\n之前就知道了。啊，是不是该叫四条妃？",
+      "validation_user": "……哈哈，真可爱。算了，你希望这么叫的话就这么叫吧。\n因此我也知道翡翠那件事。不过因为不知道长相，所以真的认错人了。\n那件事之后，你们摆出了好像相关人员一样的架子吧？",
+      "user_similarity": 0.1084337349,
+      "train_source_file": "3蓝宝石的存在证明.txt",
+      "train_source_lines": [
+        823,
+        829
+      ],
+      "validation_source_file": "3蓝宝石的存在证明.txt",
+      "validation_source_lines": [
+        832,
+        837
+      ],
+      "line_distance": 3,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_5875c216d8a61b02",
+      "validation_id": "tsukiyashiro_kisaki_sft_a737aaeedfb369fa",
+      "train_user": "可能说得有点过了。可那是危险到，我不得不这样警告你们的存在啊。",
+      "validation_user": "……就算是这样，你也要插手吗？",
+      "user_similarity": 0.1739130435,
+      "train_source_file": "3蓝宝石的存在证明.txt",
+      "train_source_lines": [
+        856,
+        859
+      ],
+      "validation_source_file": "3蓝宝石的存在证明.txt",
+      "validation_source_lines": [
+        860,
+        863
+      ],
+      "line_distance": 1,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_5875c216d8a61b02",
+      "validation_id": "tsukiyashiro_kisaki_sft_7ba719f151767dc8",
+      "train_user": "可能说得有点过了。可那是危险到，我不得不这样警告你们的存在啊。",
+      "validation_user": "……纵令不听从刺激摆布也能得到幸福。普通地生活就好啦。",
+      "user_similarity": 0.1379310345,
+      "train_source_file": "3蓝宝石的存在证明.txt",
+      "train_source_lines": [
+        856,
+        859
+      ],
+      "validation_source_file": "3蓝宝石的存在证明.txt",
+      "validation_source_lines": [
+        864,
+        867
+      ],
+      "line_distance": 5,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_c5463ce7bba96916",
+      "validation_id": "tsukiyashiro_kisaki_sft_cafd12ac5218d939",
+      "train_user": "在这儿多待一会吧。",
+      "validation_user": "啊，真怀念呀。\n……不再弹了？",
+      "user_similarity": 0.0869565217,
+      "train_source_file": "3蓝宝石的存在证明.txt",
+      "train_source_lines": [
+        929,
+        933
+      ],
+      "validation_source_file": "3蓝宝石的存在证明.txt",
+      "validation_source_lines": [
+        938,
+        942
+      ],
+      "line_distance": 5,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_bc6a8eccbc365131",
+      "validation_id": "tsukiyashiro_kisaki_sft_cafd12ac5218d939",
+      "train_user": "从荒废的样子来看，好像很久以前就有了。",
+      "validation_user": "啊，真怀念呀。\n……不再弹了？",
+      "user_similarity": 0.1212121212,
+      "train_source_file": "3蓝宝石的存在证明.txt",
+      "train_source_lines": [
+        934,
+        937
+      ],
+      "validation_source_file": "3蓝宝石的存在证明.txt",
+      "validation_source_lines": [
+        938,
+        942
+      ],
+      "line_distance": 1,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_b9d3a978fd7ac681",
+      "validation_id": "tsukiyashiro_kisaki_sft_c8c7717293964fac",
+      "train_user": "少见呀，居然在外面听到你的心声。",
+      "validation_user": "这样啊。\n没人会为了拜访这里而特地爬山吧。",
+      "user_similarity": 0.0555555556,
+      "train_source_file": "3蓝宝石的存在证明.txt",
+      "train_source_lines": [
+        952,
+        955
+      ],
+      "validation_source_file": "3蓝宝石的存在证明.txt",
+      "validation_source_lines": [
+        943,
+        949
+      ],
+      "line_distance": 3,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_bd2cf644273dada1",
+      "validation_id": "tsukiyashiro_kisaki_sft_8d90e5c60ca91b2b",
+      "train_user": "自己对它上瘾的程度，让我想到麻药啊。",
+      "validation_user": "……啊，对耶。",
+      "user_similarity": 0.16,
+      "train_source_file": "3蓝宝石的存在证明.txt",
+      "train_source_lines": [
+        989,
+        994
+      ],
+      "validation_source_file": "3蓝宝石的存在证明.txt",
+      "validation_source_lines": [
+        995,
+        998
+      ],
+      "line_distance": 1,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_03e3de2203bfe938",
+      "validation_id": "tsukiyashiro_kisaki_sft_8d90e5c60ca91b2b",
+      "train_user": "我也，一样啊。",
+      "validation_user": "……啊，对耶。",
+      "user_similarity": 0.2857142857,
+      "train_source_file": "3蓝宝石的存在证明.txt",
+      "train_source_lines": [
+        999,
+        1004
+      ],
+      "validation_source_file": "3蓝宝石的存在证明.txt",
+      "validation_source_lines": [
+        995,
+        998
+      ],
+      "line_distance": 1,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_6cf781882843e28b",
+      "validation_id": "tsukiyashiro_kisaki_sft_5fbeecfde811a50e",
+      "train_user": "……我错了。",
+      "validation_user": "……我知道了。\n再下去就停下吧。我要忍不住了。",
+      "user_similarity": 0.3571428571,
+      "train_source_file": "3蓝宝石的存在证明.txt",
+      "train_source_lines": [
+        1038,
+        1040
+      ],
+      "validation_source_file": "3蓝宝石的存在证明.txt",
+      "validation_source_lines": [
+        1034,
+        1037
+      ],
+      "line_distance": 1,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_82bee4979f4fa626",
+      "validation_id": "tsukiyashiro_kisaki_sft_5fbeecfde811a50e",
+      "train_user": "你的性格真糟糕……",
+      "validation_user": "……我知道了。\n再下去就停下吧。我要忍不住了。",
+      "user_similarity": 0.1290322581,
+      "train_source_file": "3蓝宝石的存在证明.txt",
+      "train_source_lines": [
+        1041,
+        1042
+      ],
+      "validation_source_file": "3蓝宝石的存在证明.txt",
+      "validation_source_lines": [
+        1034,
+        1037
+      ],
+      "line_distance": 4,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_015958c10491e2bc",
+      "validation_id": "tsukiyashiro_kisaki_sft_8d8c5cf4c0bc1ba3",
+      "train_user": "………\n万一你想回到普通兄妹关系时的保险嘛。",
+      "validation_user": "对耶。倒不如说我们的爱突破了誓约——可以这样解释？",
+      "user_similarity": 0.0434782609,
+      "train_source_file": "3蓝宝石的存在证明.txt",
+      "train_source_lines": [
+        1043,
+        1058
+      ],
+      "validation_source_file": "3蓝宝石的存在证明.txt",
+      "validation_source_lines": [
+        1059,
+        1062
+      ],
+      "line_distance": 1,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_d37db3959eff7cf5",
+      "validation_id": "tsukiyashiro_kisaki_sft_8d8c5cf4c0bc1ba3",
+      "train_user": "……或许我不过想找这样子的借口，使我们的关系正当化罢了。\n好啦，我们回去吧。",
+      "validation_user": "对耶。倒不如说我们的爱突破了誓约——可以这样解释？",
+      "user_similarity": 0.1612903226,
+      "train_source_file": "3蓝宝石的存在证明.txt",
+      "train_source_lines": [
+        1063,
+        1075
+      ],
+      "validation_source_file": "3蓝宝石的存在证明.txt",
+      "validation_source_lines": [
+        1059,
+        1062
+      ],
+      "line_distance": 1,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_38a21f368c7aab0c",
+      "validation_id": "tsukiyashiro_kisaki_sft_6412f83c95ad1c75",
+      "train_user": "啊！妃，早～",
+      "validation_user": "ＯＫ，放心吧。",
+      "user_similarity": 0.1538461538,
+      "train_source_file": "3蓝宝石的存在证明.txt",
+      "train_source_lines": [
+        1444,
+        1447
+      ],
+      "validation_source_file": "3蓝宝石的存在证明.txt",
+      "validation_source_lines": [
+        1440,
+        1443
+      ],
+      "line_distance": 1,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_34a6bf7a1186ea7d",
+      "validation_id": "tsukiyashiro_kisaki_sft_8bcd6d9da31ad73b",
+      "train_user": "……不，不用麻烦了。\n这不是确凿的现实。",
+      "validation_user": "啊，错不了。\n魔法之书打开了。新的故事开始了。\n现在的你毫无疑问——",
+      "user_similarity": 0.1960784314,
+      "train_source_file": "3蓝宝石的存在证明.txt",
+      "train_source_lines": [
+        2072,
+        2078
+      ],
+      "validation_source_file": "3蓝宝石的存在证明.txt",
+      "validation_source_lines": [
+        2080,
+        2090
+      ],
+      "line_distance": 2,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_3a537848f9beba61",
+      "validation_id": "tsukiyashiro_kisaki_sft_8bcd6d9da31ad73b",
+      "train_user": "不成你——\n——打开了魔法之书？",
+      "validation_user": "啊，错不了。\n魔法之书打开了。新的故事开始了。\n现在的你毫无疑问——",
+      "user_similarity": 0.2553191489,
+      "train_source_file": "3蓝宝石的存在证明.txt",
+      "train_source_lines": [
+        2093,
+        2097
+      ],
+      "validation_source_file": "3蓝宝石的存在证明.txt",
+      "validation_source_lines": [
+        2080,
+        2090
+      ],
+      "line_distance": 3,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_61b69ee46ae1577e",
+      "validation_id": "tsukiyashiro_kisaki_sft_2e2eb168869192b6",
+      "train_user": "……我果然是扮演主人公的恋人吗？",
+      "validation_user": "别担心。就算忘记，我也会让自己想起来。我哪可能真忘记你？",
+      "user_similarity": 0.0909090909,
+      "train_source_file": "3蓝宝石的存在证明.txt",
+      "train_source_lines": [
+        2183,
+        2187
+      ],
+      "validation_source_file": "3蓝宝石的存在证明.txt",
+      "validation_source_lines": [
+        2188,
+        2189
+      ],
+      "line_distance": 1,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_fddab00543837089",
+      "validation_id": "tsukiyashiro_kisaki_sft_2e2eb168869192b6",
+      "train_user": "别这么说。能安心迎来结局就行了。",
+      "validation_user": "别担心。就算忘记，我也会让自己想起来。我哪可能真忘记你？",
+      "user_similarity": 0.1363636364,
+      "train_source_file": "3蓝宝石的存在证明.txt",
+      "train_source_lines": [
+        2190,
+        2194
+      ],
+      "validation_source_file": "3蓝宝石的存在证明.txt",
+      "validation_source_lines": [
+        2188,
+        2189
+      ],
+      "line_distance": 1,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_8588cec03a6002ca",
+      "validation_id": "tsukiyashiro_kisaki_sft_57541197565cd7a2",
+      "train_user": "……也是呢。",
+      "validation_user": "我连自己平常是什么样都不记得啊。\n你不去上学吗？",
+      "user_similarity": 0.1379310345,
+      "train_source_file": "3蓝宝石的存在证明.txt",
+      "train_source_lines": [
+        2405,
+        2414
+      ],
+      "validation_source_file": "3蓝宝石的存在证明.txt",
+      "validation_source_lines": [
+        2400,
+        2404
+      ],
+      "line_distance": 1,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_0479b880283546a5",
+      "validation_id": "tsukiyashiro_kisaki_sft_504a11714b2f6ae5",
+      "train_user": "……哈？\n喂、喂！",
+      "validation_user": "不、不行。\n……啊，妃。",
+      "user_similarity": 0.2105263158,
+      "train_source_file": "3蓝宝石的存在证明.txt",
+      "train_source_lines": [
+        3346,
+        3364
+      ],
+      "validation_source_file": "3蓝宝石的存在证明.txt",
+      "validation_source_lines": [
+        3368,
+        3372
+      ],
+      "line_distance": 4,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_7d1f08ac1f654b0d",
+      "validation_id": "tsukiyashiro_kisaki_sft_8200be47150a2550",
+      "train_user": "这、这种事我不知道啊？",
+      "validation_user": "可能是同样穿着鹰山学园的校服，他们凝望你哦。",
+      "user_similarity": 0.0,
+      "train_source_file": "3蓝宝石的存在证明.txt",
+      "train_source_lines": [
+        3392,
+        3396
+      ],
+      "validation_source_file": "3蓝宝石的存在证明.txt",
+      "validation_source_lines": [
+        3385,
+        3388
+      ],
+      "line_distance": 4,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_7d1f08ac1f654b0d",
+      "validation_id": "tsukiyashiro_kisaki_sft_da21e4c8d09b7af1",
+      "train_user": "这、这种事我不知道啊？",
+      "validation_user": "那你怎么回答他？",
+      "user_similarity": 0.1052631579,
+      "train_source_file": "3蓝宝石的存在证明.txt",
+      "train_source_lines": [
+        3392,
+        3396
+      ],
+      "validation_source_file": "3蓝宝石的存在证明.txt",
+      "validation_source_lines": [
+        3399,
+        3402
+      ],
+      "line_distance": 3,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_9b963fd82fcc879f",
+      "validation_id": "tsukiyashiro_kisaki_sft_da21e4c8d09b7af1",
+      "train_user": "哪可能？这种事连报告都不需要。\n喂，妃。他对你说了什么话？",
+      "validation_user": "那你怎么回答他？",
+      "user_similarity": 0.0555555556,
+      "train_source_file": "3蓝宝石的存在证明.txt",
+      "train_source_lines": [
+        3407,
+        3414
+      ],
+      "validation_source_file": "3蓝宝石的存在证明.txt",
+      "validation_source_lines": [
+        3399,
+        3402
+      ],
+      "line_distance": 5,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_6b5d45a6b36adc8c",
+      "validation_id": "tsukiyashiro_kisaki_sft_c77783cf389a9e40",
+      "train_user": "不知道哦。这就是那个啦，请说是哥哥力量。\n你捉迷藏很笨耶。",
+      "validation_user": "可不知什么时候你就不会哭了。果然是托认识了夜子他们的福吗？",
+      "user_similarity": 0.1403508772,
+      "train_source_file": "3蓝宝石的存在证明.txt",
+      "train_source_lines": [
+        3577,
+        3582
+      ],
+      "validation_source_file": "3蓝宝石的存在证明.txt",
+      "validation_source_lines": [
+        3586,
+        3589
+      ],
+      "line_distance": 4,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_fcc8aec40284b251",
+      "validation_id": "tsukiyashiro_kisaki_sft_c77783cf389a9e40",
+      "train_user": "……这有点寂寞耶。\n明明哭着的你很可爱。",
+      "validation_user": "可不知什么时候你就不会哭了。果然是托认识了夜子他们的福吗？",
+      "user_similarity": 0.0833333333,
+      "train_source_file": "3蓝宝石的存在证明.txt",
+      "train_source_lines": [
+        3590,
+        3593
+      ],
+      "validation_source_file": "3蓝宝石的存在证明.txt",
+      "validation_source_lines": [
+        3586,
+        3589
+      ],
+      "line_distance": 1,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_7f5d48a18c5f92b3",
+      "validation_id": "tsukiyashiro_kisaki_sft_c77783cf389a9e40",
+      "train_user": "这很费劲耶。",
+      "validation_user": "可不知什么时候你就不会哭了。果然是托认识了夜子他们的福吗？",
+      "user_similarity": 0.0571428571,
+      "train_source_file": "3蓝宝石的存在证明.txt",
+      "train_source_lines": [
+        3594,
+        3598
+      ],
+      "validation_source_file": "3蓝宝石的存在证明.txt",
+      "validation_source_lines": [
+        3586,
+        3589
+      ],
+      "line_distance": 5,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_7f5d48a18c5f92b3",
+      "validation_id": "tsukiyashiro_kisaki_sft_546ae632fe45b17a",
+      "train_user": "这很费劲耶。",
+      "validation_user": "是啊。总有一天我会让你流下高兴的眼泪！\n……总有一天得好好告白。",
+      "user_similarity": 0.0540540541,
+      "train_source_file": "3蓝宝石的存在证明.txt",
+      "train_source_lines": [
+        3594,
+        3598
+      ],
+      "validation_source_file": "3蓝宝石的存在证明.txt",
+      "validation_source_lines": [
+        3599,
+        3603
+      ],
+      "line_distance": 1,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_012a5e86aeefb59e",
+      "validation_id": "tsukiyashiro_kisaki_sft_c8fe797a9a6823d1",
+      "train_user": "好的。",
+      "validation_user": "在这里打开了蓝宝石的原因吗？",
+      "user_similarity": 0.1176470588,
+      "train_source_file": "3蓝宝石的存在证明.txt",
+      "train_source_lines": [
+        3633,
+        3638
+      ],
+      "validation_source_file": "3蓝宝石的存在证明.txt",
+      "validation_source_lines": [
+        3640,
+        3645
+      ],
+      "line_distance": 2,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_ac0fe612ef2504db",
+      "validation_id": "tsukiyashiro_kisaki_sft_c8fe797a9a6823d1",
+      "train_user": "你喜欢废墟？",
+      "validation_user": "在这里打开了蓝宝石的原因吗？",
+      "user_similarity": 0.1,
+      "train_source_file": "3蓝宝石的存在证明.txt",
+      "train_source_lines": [
+        3646,
+        3650
+      ],
+      "validation_source_file": "3蓝宝石的存在证明.txt",
+      "validation_source_lines": [
+        3640,
+        3645
+      ],
+      "line_distance": 1,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_554483449171665f",
+      "validation_id": "tsukiyashiro_kisaki_sft_95c6cba149368e44",
+      "train_user": "你什么意思啊……",
+      "validation_user": "哪有大哥会看妹妹看得入迷咧？",
+      "user_similarity": 0.0,
+      "train_source_file": "4紫水晶的怪异传说.txt",
+      "train_source_lines": [
+        1069,
+        1077
+      ],
+      "validation_source_file": "4紫水晶的怪异传说.txt",
+      "validation_source_lines": [
+        1066,
+        1068
+      ],
+      "line_distance": 1,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_f93cd72f3eb9a1bb",
+      "validation_id": "tsukiyashiro_kisaki_sft_08457b6a40f464af",
+      "train_user": "喂，别碰。它带着什么菌的话要怎么办？",
+      "validation_user": "金吉拉？就野猫来说，这个品种有点过于高贵了。",
+      "user_similarity": 0.1,
+      "train_source_file": "4紫水晶的怪异传说.txt",
+      "train_source_lines": [
+        1094,
+        1096
+      ],
+      "validation_source_file": "4紫水晶的怪异传说.txt",
+      "validation_source_lines": [
+        1089,
+        1090
+      ],
+      "line_distance": 4,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_875d7e787c28ab27",
+      "validation_id": "tsukiyashiro_kisaki_sft_a05b73e3c4c249e6",
+      "train_user": "不，不像是野猫啊……不怕人。",
+      "validation_user": "……你打算怎么办？",
+      "user_similarity": 0.1739130435,
+      "train_source_file": "4紫水晶的怪异传说.txt",
+      "train_source_lines": [
+        1124,
+        1129
+      ],
+      "validation_source_file": "4紫水晶的怪异传说.txt",
+      "validation_source_lines": [
+        1132,
+        1135
+      ],
+      "line_distance": 3,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_e5040a9b71f73eaf",
+      "validation_id": "tsukiyashiro_kisaki_sft_a05b73e3c4c249e6",
+      "train_user": "别告诉我要养它。我们没法把它带回那个家的。",
+      "validation_user": "……你打算怎么办？",
+      "user_similarity": 0.0,
+      "train_source_file": "4紫水晶的怪异传说.txt",
+      "train_source_lines": [
+        1136,
+        1139
+      ],
+      "validation_source_file": "4紫水晶的怪异传说.txt",
+      "validation_source_lines": [
+        1132,
+        1135
+      ],
+      "line_distance": 1,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_b471146664c79c6a",
+      "validation_id": "tsukiyashiro_kisaki_sft_a05b73e3c4c249e6",
+      "train_user": "顺带提一下，图书馆也不行哦。作为图书馆，那里自然没有养动物的可能……最重要的是夜子也不会容许。",
+      "validation_user": "……你打算怎么办？",
+      "user_similarity": 0.0714285714,
+      "train_source_file": "4紫水晶的怪异传说.txt",
+      "train_source_lines": [
+        1140,
+        1146
+      ],
+      "validation_source_file": "4紫水晶的怪异传说.txt",
+      "validation_source_lines": [
+        1132,
+        1135
+      ],
+      "line_distance": 5,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_0e32eafa4201e586",
+      "validation_id": "tsukiyashiro_kisaki_sft_9498df2d95dadf8a",
+      "train_user": "……你果然在生气吗？",
+      "validation_user": "心领了。",
+      "user_similarity": 0.0,
+      "train_source_file": "4紫水晶的怪异传说.txt",
+      "train_source_lines": [
+        2038,
+        2047
+      ],
+      "validation_source_file": "4紫水晶的怪异传说.txt",
+      "validation_source_lines": [
+        2033,
+        2037
+      ],
+      "line_distance": 1,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_aa55412e50601ca5",
+      "validation_id": "tsukiyashiro_kisaki_sft_b275722f060ec316",
+      "train_user": "夜子只对书有兴趣。汀好像对学校这个东西没有感情。",
+      "validation_user": "……原来如此，这真是个困难的问题。\n琉璃还没有……\n……不是根本就没有和我玩恋人游戏的从容吗？",
+      "user_similarity": 0.0869565217,
+      "train_source_file": "5磷灰石的怠惰现象.txt",
+      "train_source_lines": [
+        156,
+        157
+      ],
+      "validation_source_file": "5磷灰石的怠惰现象.txt",
+      "validation_source_lines": [
+        148,
+        154
+      ],
+      "line_distance": 2,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_aa55412e50601ca5",
+      "validation_id": "tsukiyashiro_kisaki_sft_d01b52414354eea0",
+      "train_user": "夜子只对书有兴趣。汀好像对学校这个东西没有感情。",
+      "validation_user": "真坚强呀。",
+      "user_similarity": 0.0689655172,
+      "train_source_file": "5磷灰石的怠惰现象.txt",
+      "train_source_lines": [
+        156,
+        157
+      ],
+      "validation_source_file": "5磷灰石的怠惰现象.txt",
+      "validation_source_lines": [
+        161,
+        163
+      ],
+      "line_distance": 4,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_aa431fb52514899c",
+      "validation_id": "tsukiyashiro_kisaki_sft_b275722f060ec316",
+      "train_user": "我明白你想说什么。",
+      "validation_user": "……原来如此，这真是个困难的问题。\n琉璃还没有……\n……不是根本就没有和我玩恋人游戏的从容吗？",
+      "user_similarity": 0.037037037,
+      "train_source_file": "5磷灰石的怠惰现象.txt",
+      "train_source_lines": [
+        158,
+        160
+      ],
+      "validation_source_file": "5磷灰石的怠惰现象.txt",
+      "validation_source_lines": [
+        148,
+        154
+      ],
+      "line_distance": 4,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_aa431fb52514899c",
+      "validation_id": "tsukiyashiro_kisaki_sft_d01b52414354eea0",
+      "train_user": "我明白你想说什么。",
+      "validation_user": "真坚强呀。",
+      "user_similarity": 0.1428571429,
+      "train_source_file": "5磷灰石的怠惰现象.txt",
+      "train_source_lines": [
+        158,
+        160
+      ],
+      "validation_source_file": "5磷灰石的怠惰现象.txt",
+      "validation_source_lines": [
+        161,
+        163
+      ],
+      "line_distance": 1,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_1f11534267d2b576",
+      "validation_id": "tsukiyashiro_kisaki_sft_8f202f59f64a55c0",
+      "train_user": "……可我不觉得那样的一天会到来。",
+      "validation_user": "这是你构想的，一年之后的我们吗？",
+      "user_similarity": 0.0625,
+      "train_source_file": "5磷灰石的怠惰现象.txt",
+      "train_source_lines": [
+        179,
+        187
+      ],
+      "validation_source_file": "5磷灰石的怠惰现象.txt",
+      "validation_source_lines": [
+        190,
+        191
+      ],
+      "line_distance": 3,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_cf5fe2b82d26c55b",
+      "validation_id": "tsukiyashiro_kisaki_sft_8f202f59f64a55c0",
+      "train_user": "现实可没这么仁慈。",
+      "validation_user": "这是你构想的，一年之后的我们吗？",
+      "user_similarity": 0.08,
+      "train_source_file": "5磷灰石的怠惰现象.txt",
+      "train_source_lines": [
+        192,
+        201
+      ],
+      "validation_source_file": "5磷灰石的怠惰现象.txt",
+      "validation_source_lines": [
+        190,
+        191
+      ],
+      "line_distance": 1,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_8dafa403976ad7b7",
+      "validation_id": "tsukiyashiro_kisaki_sft_171aa48139d35bc4",
+      "train_user": "啊，当然了。",
+      "validation_user": "啊，对耶。",
+      "user_similarity": 0.5454545455,
+      "train_source_file": "8萤石的怠惰现象.txt",
+      "train_source_lines": [
+        132,
+        143
+      ],
+      "validation_source_file": "8萤石的怠惰现象.txt",
+      "validation_source_lines": [
+        144,
+        151
+      ],
+      "line_distance": 1,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_925eda25fda5f67f",
+      "validation_id": "tsukiyashiro_kisaki_sft_5d1cfd2e113b86e6",
+      "train_user": "根据我打听到的情报，貌似相当溺爱它的样子。\n怎样？拜托她的话，她会把萤带过来。",
+      "validation_user": "不过，你——",
+      "user_similarity": 0.0454545455,
+      "train_source_file": "8萤石的怠惰现象.txt",
+      "train_source_lines": [
+        207,
+        214
+      ],
+      "validation_source_file": "8萤石的怠惰现象.txt",
+      "validation_source_lines": [
+        215,
+        217
+      ],
+      "line_distance": 1,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_adf444768925f77d",
+      "validation_id": "tsukiyashiro_kisaki_sft_5d1cfd2e113b86e6",
+      "train_user": "别用这个借口了。",
+      "validation_user": "不过，你——",
+      "user_similarity": 0.0,
+      "train_source_file": "8萤石的怠惰现象.txt",
+      "train_source_lines": [
+        218,
+        224
+      ],
+      "validation_source_file": "8萤石的怠惰现象.txt",
+      "validation_source_lines": [
+        215,
+        217
+      ],
+      "line_distance": 1,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_2ca649b59c6d22aa",
+      "validation_id": "tsukiyashiro_kisaki_sft_4a1b8889200877ac",
+      "train_user": "好啦。\n马上就要换地方了。",
+      "validation_user": "非常棒的侦探部！",
+      "user_similarity": 0.0,
+      "train_source_file": "8萤石的怠惰现象.txt",
+      "train_source_lines": [
+        439,
+        447
+      ],
+      "validation_source_file": "8萤石的怠惰现象.txt",
+      "validation_source_lines": [
+        451,
+        453
+      ],
+      "line_distance": 4,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_c7d967e16b20e89c",
+      "validation_id": "tsukiyashiro_kisaki_sft_4a1b8889200877ac",
+      "train_user": "说什么傻话？\n看到你留下的妄想日记后，我想要努力了。",
+      "validation_user": "非常棒的侦探部！",
+      "user_similarity": 0.0606060606,
+      "train_source_file": "8萤石的怠惰现象.txt",
+      "train_source_lines": [
+        454,
+        457
+      ],
+      "validation_source_file": "8萤石的怠惰现象.txt",
+      "validation_source_lines": [
+        451,
+        453
+      ],
+      "line_distance": 1,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_05ec05e835d548d7",
+      "validation_id": "tsukiyashiro_kisaki_sft_be72b7ffd3d34654",
+      "train_user": "假如萤能幸福，我觉得那样也没关系。而妃有多么爱萤，我已确认了。",
+      "validation_user": "……月社，这样真的好吗？",
+      "user_similarity": 0.0930232558,
+      "train_source_file": "8萤石的怠惰现象.txt",
+      "train_source_lines": [
+        556,
+        564
+      ],
+      "validation_source_file": "8萤石的怠惰现象.txt",
+      "validation_source_lines": [
+        565,
+        566
+      ],
+      "line_distance": 1,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_db3508cf45013d3c",
+      "validation_id": "tsukiyashiro_kisaki_sft_be72b7ffd3d34654",
+      "train_user": "……我明白了。那么我就连同月社的份，负起责任照顾萤！\n尽管如此，还是定期见面吧。看样子萤也很喜欢月社。",
+      "validation_user": "……月社，这样真的好吗？",
+      "user_similarity": 0.1612903226,
+      "train_source_file": "8萤石的怠惰现象.txt",
+      "train_source_lines": [
+        569,
+        577
+      ],
+      "validation_source_file": "8萤石的怠惰现象.txt",
+      "validation_source_lines": [
+        565,
+        566
+      ],
+      "line_distance": 3,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_a0a297918c9ff4d0",
+      "validation_id": "tsukiyashiro_kisaki_sft_41221a157ed21787",
+      "train_user": "喵～喵～\n喵？",
+      "validation_user": "啊，我明白。",
+      "user_similarity": 0.0,
+      "train_source_file": "8萤石的怠惰现象.txt",
+      "train_source_lines": [
+        588,
+        594
+      ],
+      "validation_source_file": "8萤石的怠惰现象.txt",
+      "validation_source_lines": [
+        595,
+        596
+      ],
+      "line_distance": 1,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_71470b7e5c33dd21",
+      "validation_id": "tsukiyashiro_kisaki_sft_41221a157ed21787",
+      "train_user": "我当然般明白。",
+      "validation_user": "啊，我明白。",
+      "user_similarity": 0.6153846154,
+      "train_source_file": "8萤石的怠惰现象.txt",
+      "train_source_lines": [
+        597,
+        601
+      ],
+      "validation_source_file": "8萤石的怠惰现象.txt",
+      "validation_source_lines": [
+        595,
+        596
+      ],
+      "line_distance": 1,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_78341de484b2d840",
+      "validation_id": "tsukiyashiro_kisaki_sft_c522ef88f1e6e486",
+      "train_user": "我不想用语言，而想用行动来表示。",
+      "validation_user": "不……是老实感到高兴。\n只是、只是出于高兴。\n毕竟你说过假如自己不是妹妹就好了……能听到你这么说，我真的好高兴。",
+      "user_similarity": 0.0571428571,
+      "train_source_file": "8萤石的怠惰现象.txt",
+      "train_source_lines": [
+        1007,
+        1009
+      ],
+      "validation_source_file": "8萤石的怠惰现象.txt",
+      "validation_source_lines": [
+        1011,
+        1018
+      ],
+      "line_distance": 2,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_ffbbbbb5ea941344",
+      "validation_id": "tsukiyashiro_kisaki_sft_c522ef88f1e6e486",
+      "train_user": "你是软弱的女孩子嘛。",
+      "validation_user": "不……是老实感到高兴。\n只是、只是出于高兴。\n毕竟你说过假如自己不是妹妹就好了……能听到你这么说，我真的好高兴。",
+      "user_similarity": 0.125,
+      "train_source_file": "8萤石的怠惰现象.txt",
+      "train_source_lines": [
+        1019,
+        1021
+      ],
+      "validation_source_file": "8萤石的怠惰现象.txt",
+      "validation_source_lines": [
+        1011,
+        1018
+      ],
+      "line_distance": 1,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_4e718769d6b2a123",
+      "validation_id": "tsukiyashiro_kisaki_sft_93ce4029746e7c78",
+      "train_user": "……好遗憾呀。",
+      "validation_user": "那件事以来吧？",
+      "user_similarity": 0.0,
+      "train_source_file": "8萤石的怠惰现象.txt",
+      "train_source_lines": [
+        1272,
+        1275
+      ],
+      "validation_source_file": "8萤石的怠惰现象.txt",
+      "validation_source_lines": [
+        1276,
+        1280
+      ],
+      "line_distance": 1,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_f515aff90a8b2163",
+      "validation_id": "tsukiyashiro_kisaki_sft_2fb35221f71ff96a",
+      "train_user": "你讨厌这种天真的想法耶。",
+      "validation_user": "你对每一部小说都想得太深入了。更多的作为娱乐来享受啦。",
+      "user_similarity": 0.1538461538,
+      "train_source_file": "8萤石的时空残影.txt",
+      "train_source_lines": [
+        14,
+        18
+      ],
+      "validation_source_file": "8萤石的时空残影.txt",
+      "validation_source_lines": [
+        19,
+        20
+      ],
+      "line_distance": 1,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_a54a87eb6a0f2b98",
+      "validation_id": "tsukiyashiro_kisaki_sft_2fb35221f71ff96a",
+      "train_user": "可是，实际中发生这种事情会怎样？\n要是珍爱的人死了——还是会许愿让那个人复活吧。",
+      "validation_user": "你对每一部小说都想得太深入了。更多的作为娱乐来享受啦。",
+      "user_similarity": 0.0606060606,
+      "train_source_file": "8萤石的时空残影.txt",
+      "train_source_lines": [
+        24,
+        30
+      ],
+      "validation_source_file": "8萤石的时空残影.txt",
+      "validation_source_lines": [
+        19,
+        20
+      ],
+      "line_distance": 4,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_395c75d2f1d01cbe",
+      "validation_id": "tsukiyashiro_kisaki_sft_75dae4e188bc6243",
+      "train_user": "毫无疑问是妈妈。除了妈妈，我想不到还有谁能写魔法之书。而且，这是妈妈的字迹。",
+      "validation_user": "……不知道。\n我也是不知情的人。不对，我知道这可行……不过妈妈讨厌写书，而且最重要的是这个行为……",
+      "user_similarity": 0.1627906977,
+      "train_source_file": "8萤石的时空残影.txt",
+      "train_source_lines": [
+        173,
+        175
+      ],
+      "validation_source_file": "8萤石的时空残影.txt",
+      "validation_source_lines": [
+        176,
+        181
+      ],
+      "line_distance": 1,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_81f359a5dc055f73",
+      "validation_id": "tsukiyashiro_kisaki_sft_87a14839f33b37ef",
+      "train_user": "听我说，妃。",
+      "validation_user": "你喜欢我吗？",
+      "user_similarity": 0.1666666667,
+      "train_source_file": "8萤石的时空残影.txt",
+      "train_source_lines": [
+        732,
+        733
+      ],
+      "validation_source_file": "8萤石的时空残影.txt",
+      "validation_source_lines": [
+        735,
+        743
+      ],
+      "line_distance": 2,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_7248037dc4b2f354",
+      "validation_id": "tsukiyashiro_kisaki_sft_87a14839f33b37ef",
+      "train_user": "……这样啊。\n这么，一回事吗？",
+      "validation_user": "你喜欢我吗？",
+      "user_similarity": 0.2,
+      "train_source_file": "8萤石的时空残影.txt",
+      "train_source_lines": [
+        744,
+        751
+      ],
+      "validation_source_file": "8萤石的时空残影.txt",
+      "validation_source_lines": [
+        735,
+        743
+      ],
+      "line_distance": 1,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_19853cefb8912422",
+      "validation_id": "tsukiyashiro_kisaki_sft_c0803a17e98f3725",
+      "train_user": "……我没有那么想。只是觉得，会不会有一些其他做法。",
+      "validation_user": "那是因为，你在这个图书馆里特别的人。\n我有一件想向你请教的事。\n——你的死因是什么？",
+      "user_similarity": 0.1230769231,
+      "train_source_file": "8萤石的时空残影.txt",
+      "train_source_lines": [
+        980,
+        983
+      ],
+      "validation_source_file": "8萤石的时空残影.txt",
+      "validation_source_lines": [
+        986,
+        994
+      ],
+      "line_distance": 3,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_f65682995f8a9046",
+      "validation_id": "tsukiyashiro_kisaki_sft_c0803a17e98f3725",
+      "train_user": "这样啊……\n由于设定而不能说真话吗？",
+      "validation_user": "那是因为，你在这个图书馆里特别的人。\n我有一件想向你请教的事。\n——你的死因是什么？",
+      "user_similarity": 0.0701754386,
+      "train_source_file": "8萤石的时空残影.txt",
+      "train_source_lines": [
+        995,
+        1006
+      ],
+      "validation_source_file": "8萤石的时空残影.txt",
+      "validation_source_lines": [
+        986,
+        994
+      ],
+      "line_distance": 1,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_87509ea053ce4111",
+      "validation_id": "tsukiyashiro_kisaki_sft_c4553d9fc672875b",
+      "train_user": "理、理央没有，那样的打算……",
+      "validation_user": "……对呢。\n妃为什么能保持那么正常？\n明明纸上存在这种东西，真的没救般不幸，可妃跟往常一样。我觉得那好厉害。",
+      "user_similarity": 0.0606060606,
+      "train_source_file": "8萤石的时空残影.txt",
+      "train_source_lines": [
+        1293,
+        1298
+      ],
+      "validation_source_file": "8萤石的时空残影.txt",
+      "validation_source_lines": [
+        1302,
+        1313
+      ],
+      "line_distance": 4,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_a570c178b66bcdf9",
+      "validation_id": "tsukiyashiro_kisaki_sft_c4553d9fc672875b",
+      "train_user": "嗯、嗯……",
+      "validation_user": "……对呢。\n妃为什么能保持那么正常？\n明明纸上存在这种东西，真的没救般不幸，可妃跟往常一样。我觉得那好厉害。",
+      "user_similarity": 0.0701754386,
+      "train_source_file": "8萤石的时空残影.txt",
+      "train_source_lines": [
+        1299,
+        1301
+      ],
+      "validation_source_file": "8萤石的时空残影.txt",
+      "validation_source_lines": [
+        1302,
+        1313
+      ],
+      "line_distance": 1,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_75dc0bfbd8d82779",
+      "validation_id": "tsukiyashiro_kisaki_sft_c4553d9fc672875b",
+      "train_user": "妃和琉璃交往过呢。",
+      "validation_user": "……对呢。\n妃为什么能保持那么正常？\n明明纸上存在这种东西，真的没救般不幸，可妃跟往常一样。我觉得那好厉害。",
+      "user_similarity": 0.0655737705,
+      "train_source_file": "8萤石的时空残影.txt",
+      "train_source_lines": [
+        1315,
+        1316
+      ],
+      "validation_source_file": "8萤石的时空残影.txt",
+      "validation_source_lines": [
+        1302,
+        1313
+      ],
+      "line_distance": 2,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_33835fcb7fb6d58e",
+      "validation_id": "tsukiyashiro_kisaki_sft_c4553d9fc672875b",
+      "train_user": "嗯……我知道。",
+      "validation_user": "……对呢。\n妃为什么能保持那么正常？\n明明纸上存在这种东西，真的没救般不幸，可妃跟往常一样。我觉得那好厉害。",
+      "user_similarity": 0.1355932203,
+      "train_source_file": "8萤石的时空残影.txt",
+      "train_source_lines": [
+        1317,
+        1319
+      ],
+      "validation_source_file": "8萤石的时空残影.txt",
+      "validation_source_lines": [
+        1302,
+        1313
+      ],
+      "line_distance": 4,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_e730c0bfe67e6731",
+      "validation_id": "tsukiyashiro_kisaki_sft_f18cbcdab3cb0f46",
+      "train_user": "现在这里没有棋子。要去借一副回来吗？",
+      "validation_user": "你找我有事吗？",
+      "user_similarity": 0.24,
+      "train_source_file": "8萤石的时空残影.txt",
+      "train_source_lines": [
+        1367,
+        1368
+      ],
+      "validation_source_file": "8萤石的时空残影.txt",
+      "validation_source_lines": [
+        1364,
+        1366
+      ],
+      "line_distance": 1,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_b423cecb60f167ba",
+      "validation_id": "tsukiyashiro_kisaki_sft_f18cbcdab3cb0f46",
+      "train_user": "……唔，这么一回事呀。",
+      "validation_user": "你找我有事吗？",
+      "user_similarity": 0.1111111111,
+      "train_source_file": "8萤石的时空残影.txt",
+      "train_source_lines": [
+        1369,
+        1377
+      ],
+      "validation_source_file": "8萤石的时空残影.txt",
+      "validation_source_lines": [
+        1364,
+        1366
+      ],
+      "line_distance": 3,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_8362b849415ba1a6",
+      "validation_id": "tsukiyashiro_kisaki_sft_e3fd6b16e20dc960",
+      "train_user": "好吧。",
+      "validation_user": "……为什么是校服？",
+      "user_similarity": 0.0,
+      "train_source_file": "8萤石的时空残影.txt",
+      "train_source_lines": [
+        1417,
+        1420
+      ],
+      "validation_source_file": "8萤石的时空残影.txt",
+      "validation_source_lines": [
+        1415,
+        1416
+      ],
+      "line_distance": 1,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_66c3da65a788add5",
+      "validation_id": "tsukiyashiro_kisaki_sft_84f0cd8818b3fa80",
+      "train_user": "你真美呀。\n幻想，唯美，是这样你，让我陷入情网吧。",
+      "validation_user": "啊，明白。",
+      "user_similarity": 0.0689655172,
+      "train_source_file": "8萤石的时空残影.txt",
+      "train_source_lines": [
+        1506,
+        1515
+      ],
+      "validation_source_file": "8萤石的时空残影.txt",
+      "validation_source_lines": [
+        1520,
+        1524
+      ],
+      "line_distance": 5,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_f47d988e75a98c23",
+      "validation_id": "tsukiyashiro_kisaki_sft_3648c20354dbb614",
+      "train_user": "…………\n你为什么死了？",
+      "validation_user": "……真的？",
+      "user_similarity": 0.375,
+      "train_source_file": "8萤石的时空残影.txt",
+      "train_source_lines": [
+        1745,
+        1751
+      ],
+      "validation_source_file": "8萤石的时空残影.txt",
+      "validation_source_lines": [
+        1752,
+        1764
+      ],
+      "line_distance": 1,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_35b06e707eb001ad",
+      "validation_id": "tsukiyashiro_kisaki_sft_cdf8382f9800411e",
+      "train_user": "明白我的想法也要？",
+      "validation_user": "我一直一直都没有忘记你哦。\n不过对呀。你不会原谅这样的我耶。",
+      "user_similarity": 0.1052631579,
+      "train_source_file": "8萤石的时空残影.txt",
+      "train_source_lines": [
+        1788,
+        1802
+      ],
+      "validation_source_file": "8萤石的时空残影.txt",
+      "validation_source_lines": [
+        1806,
+        1818
+      ],
+      "line_distance": 4,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_7bd053ce61da2fdf",
+      "validation_id": "tsukiyashiro_kisaki_sft_cc78e716c3e2f525",
+      "train_user": "既然是这样，就别要求这种事啊……你个笨蛋妹妹！",
+      "validation_user": "笨蛋。",
+      "user_similarity": 0.1538461538,
+      "train_source_file": "8萤石的时空残影.txt",
+      "train_source_lines": [
+        1840,
+        1858
+      ],
+      "validation_source_file": "8萤石的时空残影.txt",
+      "validation_source_lines": [
+        1861,
+        1864
+      ],
+      "line_distance": 3,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_46c1d2b885d864ff",
+      "validation_id": "tsukiyashiro_kisaki_sft_cc78e716c3e2f525",
+      "train_user": "你真的是笨蛋啊。\n啊……",
+      "validation_user": "笨蛋。",
+      "user_similarity": 0.4285714286,
+      "train_source_file": "8萤石的时空残影.txt",
+      "train_source_lines": [
+        1868,
+        1876
+      ],
+      "validation_source_file": "8萤石的时空残影.txt",
+      "validation_source_lines": [
+        1861,
+        1864
+      ],
+      "line_distance": 4,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_360c258674cd8961",
+      "validation_id": "tsukiyashiro_kisaki_sft_cb079efbbecc1ce6",
+      "train_user": "……为什么？",
+      "validation_user": "你果然知道什么。\n也就说，不知道的只有我？",
+      "user_similarity": 0.2307692308,
+      "train_source_file": "9白珍珠的泡沫爱慕.txt",
+      "train_source_lines": [
+        1700,
+        1704
+      ],
+      "validation_source_file": "9白珍珠的泡沫爱慕.txt",
+      "validation_source_lines": [
+        1694,
+        1699
+      ],
+      "line_distance": 1,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_b32595b3b0f50bba",
+      "validation_id": "tsukiyashiro_kisaki_sft_9ef7d6b3b00e7a86",
+      "train_user": "可是，我不想起来不行。或者说，不得不分清白珍珠的真假。",
+      "validation_user": "你太看得起我了。就算猜到答案，我也对有没有猜中感到不安。",
+      "user_similarity": 0.1454545455,
+      "train_source_file": "9白珍珠的泡沫爱慕.txt",
+      "train_source_lines": [
+        1710,
+        1714
+      ],
+      "validation_source_file": "9白珍珠的泡沫爱慕.txt",
+      "validation_source_lines": [
+        1715,
+        1716
+      ],
+      "line_distance": 1,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_55091918905ae426",
+      "validation_id": "tsukiyashiro_kisaki_sft_9ef7d6b3b00e7a86",
+      "train_user": "没错。我不确认，不弄清答案不行。",
+      "validation_user": "你太看得起我了。就算猜到答案，我也对有没有猜中感到不安。",
+      "user_similarity": 0.2272727273,
+      "train_source_file": "9白珍珠的泡沫爱慕.txt",
+      "train_source_lines": [
+        1717,
+        1721
+      ],
+      "validation_source_file": "9白珍珠的泡沫爱慕.txt",
+      "validation_source_lines": [
+        1715,
+        1716
+      ],
+      "line_distance": 1,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_37e7c443f3ed462b",
+      "validation_id": "tsukiyashiro_kisaki_sft_0ee8e1c5499863fb",
+      "train_user": "我真的喜欢过你哦。\n我确实对你怀过这种感情。我不明白这种感情的根源，是不是魔法之书搞的鬼。\n哪怕真实如何——喜欢上你的日子是确凿的。喜欢上你的感情决不是冒牌货。",
+      "validation_user": "我终于能够把你当做过去。现在可以笑着说出这句话了。",
+      "user_similarity": 0.0970873786,
+      "train_source_file": "9白珍珠的泡沫爱慕.txt",
+      "train_source_lines": [
+        1762,
+        1767
+      ],
+      "validation_source_file": "9白珍珠的泡沫爱慕.txt",
+      "validation_source_lines": [
+        1770,
+        1772
+      ],
+      "line_distance": 3,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_f01adc2a4756d19b",
+      "validation_id": "tsukiyashiro_kisaki_sft_0ee8e1c5499863fb",
+      "train_user": "现在站在我眼前的妃是真货吗？",
+      "validation_user": "我终于能够把你当做过去。现在可以笑着说出这句话了。",
+      "user_similarity": 0.1025641026,
+      "train_source_file": "9白珍珠的泡沫爱慕.txt",
+      "train_source_lines": [
+        1776,
+        1777
+      ],
+      "validation_source_file": "9白珍珠的泡沫爱慕.txt",
+      "validation_source_lines": [
+        1770,
+        1772
+      ],
+      "line_distance": 4,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    },
+    {
+      "train_id": "tsukiyashiro_kisaki_sft_0dd10bcf129f3f07",
+      "validation_id": "tsukiyashiro_kisaki_sft_c0207865c166951f",
+      "train_user": "感谢你阅读纸上魔法使的体验版！",
+      "validation_user": "这些敬请诸位来亲眼确认！",
+      "user_similarity": 0.0740740741,
+      "train_source_file": "日后谈.txt",
+      "train_source_lines": [
+        1,
+        2
+      ],
+      "validation_source_file": "日后谈.txt",
+      "validation_source_lines": [
+        5,
+        6
+      ],
+      "line_distance": 3,
+      "target_event_id_overlap": [],
+      "explicit_block_overlap": {},
+      "explicit_context_window_overlap": [],
+      "reasons": [],
+      "advisory": "line_proximity_only"
+    }
+  ],
+  "summary": {
+    "candidate_blocker_pairs": 1,
+    "line_proximity_advisory_pairs": 111,
+    "line_proximity_advisory_validation_records": 63
+  }
+}

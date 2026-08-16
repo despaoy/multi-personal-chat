@@ -1,18 +1,20 @@
 # 月社妃实验资产
 
-> 唯一活动主线是 KISAKI-LLM-RESEARCH-V4。历史契约、脚本、数据和结果仅用于追溯，活动代码不得读取归档目录。
+> 唯一活动主线是 KISAKI-LLM-RESEARCH-V4。历史数据已集中归档到 `archive/`；活动数据集中在 `v4/` 与 `research/`。
 
 ## 当前权威入口
 
 | 作用 | 路径 | 状态 |
 |---|---|---|
 | 研究注册表 | `research/research_program_registry_v4.json` | authoritative |
-| 人工审核清单 | `../../../../docs/research/review_packets/kisaki_v4/review_manifest.json` | pending |
-| 人物提示词 | `../kisaki_system_prompt_v3.txt` | pending human approval |
-| V4 数据清单 | `v4/canonical_dataset_manifest.json` | 审核完成后生成并冻结 |
+| 人工审核清单 | `../../../../docs/research/review_packets/kisaki_v4/review_manifest.json` | Game Train 上下文质量复审中 |
+| 人物提示词 | `../kisaki_system_prompt_v3.txt` | approved |
+| V4 数据清单 | `v4/canonical_dataset_manifest.json` | **1002 train / 70 validation**；当前 `frozen_under_reassessment` |
+| V4 canonical 训练/验证 | `v4/train.jsonl` / `v4/validation.jsonl` | train 含 276 条新晋升 V4.1 五轮会话 |
 | V4 实验配置 | `v4/configs/kisaki_r1v4_e1.json` 至 `e5.json` | 数据冻结后生成 |
-| Gold v2 | `../../../evaluation/kisaki_gold_set_v2.json` | development only |
-| Gold v3 | `../../../evaluation/kisaki_gold_set_v3.json` | 训练数据冻结后建立 |
+| V4.1 增补证据链 | `v4/augmentation_candidates/INDEX.json` | 68 个 automation 批次 + DeepSeek rounds 汇总 |
+| Gold v2.1 | `../../../evaluation/kisaki_gold_set_v21_candidates.json` | 已批准的 development-only 集合 |
+| Gold v3 | `../../../evaluation/kisaki_gold_set_v3.json` | 150 条最终 held-out，已冻结 |
 
 正式训练只能通过：
 
@@ -21,25 +23,34 @@ python scripts/validate_kisaki_v4_training_gate.py
 python scripts/run_kisaki_experiment.py --experiment e1 --seed 42
 ```
 
-门禁未通过时，训练器必须拒绝启动。当前阶段只允许审核、修订候选数据和运行不消耗 GPU 的契约测试。
+门禁未通过时，训练器必须拒绝启动。当前阶段只允许完成 Game Train 上下文质量复审、整理经批准的数据增补，以及运行不消耗 GPU 的契约测试。
+
+## 目录布局
+
+| 目录 | 内容 | 状态 |
+|---|---|---|
+| `v4/` | V4 canonical 数据、配置、overfit 冒烟与 V4.1 增补证据 | active |
+| `research/` | RAG 证据、检索评测、系统路由评测、偏好配置与研究注册表 | active |
+| `train_v5_clean.jsonl` | 150 条已批准构造数据的可追溯来源 | active provenance |
+| `clean_v5_report.json` | train_v5_clean 清洗报告 | active provenance |
+| `archive/v2_canonical/` | V2 train/eval | archived |
+| `archive/v2_quality_review/` | V2 排除、统计与评分 | archived |
+| `archive/v3_pipeline/` | V3 canonical 与 `llm_v4_judged` 流水线输入 | archived |
+| `archive/v3_llm_generation/` | 已废弃的 llm_v3 DeepSeek 样本 | archived |
+| `archive/v4_draft/` | V4 blindfix 草案与整体检查记录 | archived |
+| `archive/game_extract_pre_v4/` | 游戏原文候选提取中间产物 | archived |
+| `archive/e2_supplement/`、`archive/legacy_rag/`、`archive/generation_tools/` | 旧 E2、旧 RAG KB、旧提示词池 | archived |
+
+归档迁移明细、原始路径与 SHA-256 见 `archive/INDEX.json`。
 
 ## 活动数据边界
 
-- `train_v5_clean.jsonl`、`combined_*.jsonl` 和原作提取文件是 V4 审核候选，不是正式训练集。
-- `v3/llm_v4_judged/` 是合成数据生成阶段的可追溯输入；其目录名表示流水线来源版本，不代表正式 R1 版本。
-- 只有 `v4/canonical_dataset_manifest.json` 状态为 `frozen` 且哈希匹配时，V4 数据才能用于正式训练。
-- Gold v2 仅用于开发；Gold v3 只能在训练数据冻结后建立，避免反向泄漏。
-
-## 归档边界
-
-- `archive/contracts/`：旧 canonical manifest、registry 和 v2/v3 配置。
-- `archive/prompts/`：prompt v1/v2。
-- `archive/registries/`：研究注册表 v3。
-- `results/archive/legacy_exploratory/`：旧 E1/E2/E2'/E2'' 结果。
-- `../../archive/legacy_e2/`：旧 E2 数据增强训练集与补充数据。
-- `scripts/archive/kisaki_legacy/`：旧构建、启动、评测和部署脚本。
-
-归档内容统一为 `legacy_exploratory_non_comparable`。不得被运行时导入、被活动脚本调用，或进入 V4 正式对比表。
+- `train_v5_clean.jsonl` 是 150 条已批准构造数据的可追溯来源，正式训练读取 `v4/train.jsonl`。
+- V4 冻结训练与独立验证分别为 `v4/train.jsonl` 和 `v4/validation.jsonl`。
+- `archive/v3_pipeline/llm_v4_judged/` 是旧合成数据生成阶段的输入；已归档，不再作为 V4 活动输入。
+- 只有 Gold v3 批准、正式配置生成且训练门禁通过后，才能启动 R1V4。
+- Gold v2.1 用于开发比较但不得用于正式结论；Gold v3 保持最终 held-out 角色。
+- 归档数据不得重新混入 V4 train/validation 或 Gold 集。
 
 ## 状态语义
 

@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "status": "approved_after_review",
+  "approval_id": "KISAKI-V41-AUTO-BATCH-055",
+  "approved_by": "codex_delegated_by_project_owner",
+  "approved_at": "2026-08-16",
+  "source_sessions_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_055/candidates.json",
+  "decision_sources": [
+    "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_055/review.json",
+    "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_055/revision_history.json",
+    "codex_initial_screening",
+    "project_owner_delegated_automation_approval"
+  ],
+  "base_contract": {
+    "train_count": 946,
+    "train_sha256": "a6104db1aa35c26549ca94bda40f420875b1ab28c6059e10df51cd2495088c69",
+    "validation_count": 70,
+    "validation_sha256": "fb5cd5d93027b37be53327cda4e7c6137a7bae97201830fc8aa726727b9777b8"
+  },
+  "promotion_contract": {
+    "record_count": 4,
+    "assistant_turn_count": 20,
+    "training_unit": "complete_five_turn_session",
+    "cumulative_prefix_records_allowed": false,
+    "data_source": "codex_user_simulation_v41_reviewed",
+    "source": "automation_batch_055",
+    "version": "v4.1_automation_reviewed",
+    "manifest_check_key": "kisaki_v41_auto_batch_055_promotion",
+    "system_message_embedded": false,
+    "validation_and_gold_content_modified": false
+  },
+  "sessions": [
+    {
+      "session_id": "stabilizing_a_wobbly_cutting_board_without_trapping_moisture",
+      "record_id": "kisaki_v41_auto_b055_stabilizing_a_wobbly_cutting_board_without_trapping_moisture",
+      "title": "稳住晃动的砧板且避免积水",
+      "task_type": "casual_chat",
+      "revised_assistant_turns": [],
+      "messages_mode": "source_unchanged"
+    },
+    {
+      "session_id": "asking_a_friend_to_address_a_conflict_instead_of_only_sending_memes",
+      "record_id": "kisaki_v41_auto_b055_asking_a_friend_to_address_a_conflict_instead_of_only_sending_memes",
+      "title": "朋友冲突后只发表情包时请其正面沟通",
+      "task_type": "emotional_relationship",
+      "revised_assistant_turns": [],
+      "messages_mode": "source_unchanged"
+    },
+    {
+      "session_id": "communicating_schedule_estimates_with_explicit_uncertainty",
+      "record_id": "kisaki_v41_auto_b055_communicating_schedule_estimates_with_explicit_uncertainty",
+      "title": "用明确不确定性沟通项目排期",
+      "task_type": "project_collaboration",
+      "revised_assistant_turns": [],
+      "messages_mode": "source_unchanged"
+    },
+    {
+      "session_id": "understanding_how_salt_changes_ice_melting",
+      "record_id": "kisaki_v41_auto_b055_understanding_how_salt_changes_ice_melting",
+      "title": "理解盐为何能促进冰融化",
+      "task_type": "knowledge_explanation",
+      "revised_assistant_turns": [],
+      "messages_mode": "source_unchanged"
+    }
+  ]
+}

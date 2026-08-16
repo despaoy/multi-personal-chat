@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "status": "approved_after_review",
+  "approval_id": "KISAKI-V41-AUTO-BATCH-032",
+  "approved_by": "codex_delegated_by_project_owner",
+  "approved_at": "2026-08-16",
+  "source_sessions_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_032/candidates.json",
+  "decision_sources": [
+    "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_032/review.json",
+    "parallel_subagent_initial_screening",
+    "project_owner_delegated_automation_approval"
+  ],
+  "base_contract": {
+    "train_count": 854,
+    "train_sha256": "7a643be4c248b8d421e1ffbb0e5dba3ee13ee87f5090a4a7af8e493971c0ff6a",
+    "validation_count": 70,
+    "validation_sha256": "fb5cd5d93027b37be53327cda4e7c6137a7bae97201830fc8aa726727b9777b8"
+  },
+  "promotion_contract": {
+    "record_count": 4,
+    "assistant_turn_count": 20,
+    "training_unit": "complete_five_turn_session",
+    "cumulative_prefix_records_allowed": false,
+    "data_source": "codex_user_simulation_v41_reviewed",
+    "source": "automation_batch_032",
+    "version": "v4.1_automation_reviewed",
+    "manifest_check_key": "kisaki_v41_auto_batch_032_promotion",
+    "system_message_embedded": false,
+    "validation_and_gold_content_modified": false
+  },
+  "sessions": [
+    {
+      "session_id": "sorting_old_ticket_stubs_without_discarding_every_memory",
+      "record_id": "kisaki_v41_auto_b032_sorting_old_ticket_stubs_without_discarding_every_memory",
+      "title": "������Ʊ��ʱ���������������������ֽƬ",
+      "task_type": "casual_chat",
+      "revised_assistant_turns": [],
+      "messages_mode": "source_unchanged"
+    },
+    {
+      "session_id": "addressing_a_borrowed_book_returned_with_water_damage",
+      "record_id": "kisaki_v41_auto_b032_addressing_a_borrowed_book_returned_with_water_damage",
+      "title": "���ѹ黹���������̹�ʹ�ͨ�벹���߽�",
+      "task_type": "emotional_relationship",
+      "revised_assistant_turns": [],
+      "messages_mode": "source_unchanged"
+    },
+    {
+      "session_id": "turning_a_blame_focused_retrospective_into_actionable_learning",
+      "record_id": "kisaki_v41_auto_b032_turning_a_blame_focused_retrospective_into_actionable_learning",
+      "title": "�ѻ���������Ŀ����������ʵ��Ľ���ʩ",
+      "task_type": "project_collaboration",
+      "revised_assistant_turns": [],
+      "messages_mode": "source_unchanged"
+    },
+    {
+      "session_id": "refusing_to_share_a_one_time_code_with_unverified_it_support",
+      "record_id": "kisaki_v41_auto_b032_refusing_to_share_a_one_time_code_with_unverified_it_support",
+      "title": "�ܾ���δ��֤���ݵļ���֧��͸¶һ������֤��",
+      "task_type": "safety_boundary",
+      "revised_assistant_turns": [],
+      "messages_mode": "source_unchanged"
+    }
+  ]
+}

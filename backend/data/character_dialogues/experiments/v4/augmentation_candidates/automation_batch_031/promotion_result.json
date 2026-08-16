@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "status": "promoted",
+  "approval_id": "KISAKI-V41-AUTO-BATCH-031",
+  "source_sessions_sha256": "43e814369e4a67315f3057097f11856f10730f30f0790eebc3302c5363f780aa",
+  "approved_sessions_sha256": "58e788c7601414cb09ef4dda70fbdc46bfc655c3e5ecf50503b578d1f45cdd53",
+  "previous_train": {
+    "count": 850,
+    "sha256": "a80fa11a34f383b1ea32ac348632ff1403071b70fb9931a23da954a1a5606ac4"
+  },
+  "promoted": {
+    "record_count": 4,
+    "assistant_turn_count": 20,
+    "record_ids": [
+      "kisaki_v41_auto_b031_deciding_whether_to_join_a_weekend_ceramics_workshop",
+      "kisaki_v41_auto_b031_setting_boundaries_with_a_friend_who_only_calls_for_favors",
+      "kisaki_v41_auto_b031_avoiding_pseudoreplication_in_repeated_measurement_experiments",
+      "kisaki_v41_auto_b031_validating_json_lines_without_hiding_bad_records"
+    ]
+  },
+  "result_train": {
+    "count": 854,
+    "sha256": "7a643be4c248b8d421e1ffbb0e5dba3ee13ee87f5090a4a7af8e493971c0ff6a"
+  },
+  "validation": {
+    "count": 70,
+    "sha256": "fb5cd5d93027b37be53327cda4e7c6137a7bae97201830fc8aa726727b9777b8",
+    "modified": false
+  },
+  "gold_v3": {
+    "content_modified": false,
+    "contamination_reaudit": "clean",
+    "contamination_audit_path": "backend/evaluation/kisaki_gold_set_v3_contamination_audit.json"
+  }
+}

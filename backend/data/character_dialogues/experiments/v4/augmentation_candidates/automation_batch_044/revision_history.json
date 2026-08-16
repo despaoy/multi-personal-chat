@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "revision_count": 1,
+  "items": [
+    {
+      "attempt": 1,
+      "original_session_id": "fixing_zero_identifiers_dropped_by_truthiness_checks_across_pages",
+      "original_task_type": "code_debugging",
+      "decision": "revise",
+      "reason": "接口上下文已声明 null 非法，严格实现与测试必须显式拒绝 None",
+      "revised_session_id": "fixing_zero_identifiers_dropped_by_truthiness_checks_across_pages",
+      "revised_assistant_turns": [
+        4,
+        5
+      ],
+      "approved": true,
+      "approved_source": "main_reviewer"
+    }
+  ]
+}
+

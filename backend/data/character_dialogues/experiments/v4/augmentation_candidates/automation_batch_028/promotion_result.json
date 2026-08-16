@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "status": "promoted",
+  "approval_id": "KISAKI-V41-AUTO-BATCH-028",
+  "source_sessions_sha256": "a3a4269c4824326712b5f36d1b0d63e10c6c3cc85cbced86b589fc7e03f44ce4",
+  "approved_sessions_sha256": "7a9dc428c1b896ecb0b6a6e3d0a707b2d4e38a39ab6b5b4328c6c298a24dcc64",
+  "previous_train": {
+    "count": 838,
+    "sha256": "caeaf6751e328f7616fca7c8e0d16901f0f68ec2742fe26cdbce5e396ddb7db1"
+  },
+  "promoted": {
+    "record_count": 4,
+    "assistant_turn_count": 20,
+    "record_ids": [
+      "kisaki_v41_auto_b028_drying_laundry_during_a_week_of_rain",
+      "kisaki_v41_auto_b028_learning_to_listen_before_offering_solutions_to_a_friend",
+      "kisaki_v41_auto_b028_migrating_calendars_without_duplicates_or_lost_sharing",
+      "kisaki_v41_auto_b028_parsing_quoted_csv_and_decimal_amounts_with_stdlib"
+    ]
+  },
+  "result_train": {
+    "count": 842,
+    "sha256": "3e411420bce7b54ff123c16dff41b3290f6994ba6b79489fbb77ba99cf87e392"
+  },
+  "validation": {
+    "count": 70,
+    "sha256": "fb5cd5d93027b37be53327cda4e7c6137a7bae97201830fc8aa726727b9777b8",
+    "modified": false
+  },
+  "gold_v3": {
+    "content_modified": false,
+    "contamination_reaudit": "clean",
+    "contamination_audit_path": "backend/evaluation/kisaki_gold_set_v3_contamination_audit.json"
+  }
+}

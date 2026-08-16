@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "status": "promoted",
+  "approval_id": "KISAKI-V41-AUTO-BATCH-058",
+  "source_sessions_sha256": "645346a7f70ad68b638aca063390a1c270808a8d8a590c6f26882d7bab4582bf",
+  "approved_sessions_sha256": "6498b457388102e33faf0efc8ed750fa7d376f29ec42f263083f2c1d3a81bb81",
+  "previous_train": {
+    "count": 958,
+    "sha256": "ee9d2ecd92dfb065009bf9c71325f9fe3010d2487a62d2e3240157e4deff4448"
+  },
+  "promoted": {
+    "record_count": 4,
+    "assistant_turn_count": 20,
+    "record_ids": [
+      "kisaki_v41_auto_b058_removing_a_burnt_food_smell_from_a_microwave_safely",
+      "kisaki_v41_auto_b058_responding_when_a_friend_keeps_you_tentative_until_a_better_plan_appears",
+      "kisaki_v41_auto_b058_handling_cluster_robust_inference_with_few_clusters",
+      "kisaki_v41_auto_b058_recovering_an_unsaved_spreadsheet_without_overwriting_newer_versions"
+    ]
+  },
+  "result_train": {
+    "count": 962,
+    "sha256": "2270d8b12801b62e1b5a9ea4bc289cea8ca74ef5abd6cb4d46dd37649a88c9cf"
+  },
+  "validation": {
+    "count": 70,
+    "sha256": "fb5cd5d93027b37be53327cda4e7c6137a7bae97201830fc8aa726727b9777b8",
+    "modified": false
+  },
+  "gold_v3": {
+    "content_modified": false,
+    "contamination_reaudit": "clean",
+    "contamination_audit_path": "backend/evaluation/kisaki_gold_set_v3_contamination_audit.json"
+  }
+}

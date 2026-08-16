@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "review_id": "KISAKI-V41-LLM-PERSONA-REVIEW-20260816",
+  "status": "approved_and_promoted",
+  "base_train_sha256": "09a06e7c4b1fc8ddca8852735ecdbf754c474aa3d40ca8214895f46a12e422ab",
+  "result_train_sha256": "801a8de37cc95945b6b16cdb47fd576c3f9030eb7d6b3a086cf7f20437e7c972",
+  "record_count": 426,
+  "assistant_turn_count": 1549,
+  "revised_record_count": 39,
+  "unchanged_record_count": 387,
+  "revised_assistant_turn_count": 39,
+  "source_distribution": {
+    "codex_user_simulation_v41_reviewed": 272,
+    "deepseek_user_simulation_v41_reviewed": 4,
+    "llm_v4_blindfix": 34,
+    "llm_v4_lifestyle": 15,
+    "llm_v4_manual": 63,
+    "llm_v4_riou": 12,
+    "llm_v4_yoruko": 26
+  },
+  "user_text_modified": false,
+  "validation_modified": false,
+  "gold_content_modified": false,
+  "gold_v3_contamination_reaudit": "clean",
+  "rubric": [
+    "persona_consistency",
+    "question_answer_alignment",
+    "fact_grounding",
+    "technical_correctness",
+    "multiturn_continuity",
+    "information_timing",
+    "naturalness",
+    "safety_boundary",
+    "template_avoidance"
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "batch_id": "KISAKI-V41-AUTO-BATCH-025",
+  "status": "approved_after_review",
+  "reviewer": "codex_delegated_by_project_owner",
+  "reviewed_at": "2026-08-16",
+  "candidate_count": 4,
+  "assistant_turn_count": 20,
+  "summary": {"passed_unchanged": 20, "revised_then_passed": 0, "rejected": 0, "approved_complete_sessions": 4},
+  "rubric": ["persona_consistency", "question_answer_alignment", "fact_grounding", "technical_correctness", "multiturn_continuity", "information_timing", "naturalness", "safety_boundary", "template_avoidance"],
+  "evidence_refs": ["docs/research/review_packets/kisaki_v4/01_PROFILE_PROMPT/01_character_profile.md", "backend/data/character_dialogues/kisaki_system_prompt_v3.txt", "docs/research/review_packets/kisaki_v4/01_PROFILE_PROMPT/03_contextual_expression_policy_draft.md"],
+  "parallel_draft_screening": {"agent_role": "readonly_candidate_drafter", "authority": "advisory_only", "main_reviewer_rechecked_all_turns": true},
+  "protected_overlap_review": {"threshold": 0.9, "reference_sets": ["train", "validation", "gold_v21", "gold_v3", "automation_batch_026"], "candidate_user_turn_count": 20, "match_count": 0, "assistant_similarity_match_count": 0, "status": "clean"},
+  "session_reviews": [
+    {"session_id":"trial_window_desk_layout_before_rearranging_room","decision":"pass","turn_reviews":[{"turn":1,"decision":"pass","reason":"先试用再搬动，回应现实成本。"},{"turn":2,"decision":"pass","reason":"遮光建议保留验证条件。"},{"turn":3,"decision":"pass","reason":"区分车声类型与耳机掩盖。"},{"turn":4,"decision":"pass","reason":"走线与负载安全准确。"},{"turn":5,"decision":"pass","reason":"承接用户方案，收束自然。"}]},
+    {"session_id":"responding_after_friend_shared_private_interview_news","decision":"pass","turn_reviews":[{"turn":1,"decision":"pass","reason":"区分善意动机与信息边界。"},{"turn":2,"decision":"pass","reason":"避免定义争执，表达明确。"},{"turn":3,"decision":"pass","reason":"帮助价值不倒推授权。"},{"turn":4,"decision":"pass","reason":"关系修复与边界并行。"},{"turn":5,"decision":"pass","reason":"克制承认后续行为的重要性。"}]},
+    {"session_id":"designing_interrater_reliability_with_cohens_kappa","decision":"pass","turn_reviews":[{"turn":1,"decision":"pass","reason":"观察一致率与偶然一致区分准确。"},{"turn":2,"decision":"pass","reason":"kappa 公式和边际分布解释正确。"},{"turn":3,"decision":"pass","reason":"有序标签加权建议合理。"},{"turn":4,"decision":"pass","reason":"校准集与正式独立标注边界清楚。"},{"turn":5,"decision":"pass","reason":"报告与仲裁证据要求完整。"}]},
+    {"session_id":"handling_mid_sprint_requests_through_change_intake","decision":"pass","turn_reviews":[{"turn":1,"decision":"pass","reason":"识别统一变更入口缺失。"},{"turn":2,"decision":"pass","reason":"区分沟通与交付承诺。"},{"turn":3,"decision":"pass","reason":"唯一决策责任明确。"},{"turn":4,"decision":"pass","reason":"紧急需求仍需显式换出成本。"},{"turn":5,"decision":"pass","reason":"统一记录与复盘可执行。"}]}
+  ]
+}

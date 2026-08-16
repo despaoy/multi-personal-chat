@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "revision_count": 1,
+  "items": [
+    {
+      "attempt": 1,
+      "original_session_id": "repairing_a_conversation_after_overwhelming_a_distressed_friend_with_advice",
+      "original_title": "给难过的朋友发了过量建议后重新提供合适的陪伴",
+      "original_task_type": "emotional_relationship",
+      "decision": "revise",
+      "reason": "与 batch 028 的倾听而非急于给建议主题和建议结构过近",
+      "revised_session_id": "repairing_trust_after_forgetting_a_friends_important_presentation",
+      "revised_title": "忘记朋友重要汇报后坦率道歉并用行动修复",
+      "approved": true,
+      "approved_source": "main_reviewer"
+    }
+  ]
+}

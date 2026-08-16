@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "status": "promoted",
+  "approval_id": "KISAKI-V41-AUTO-BATCH-036",
+  "source_sessions_sha256": "0e595d767b9436787c442f4d34a88ecb02b0fb795e08baf637fcde08a6825477",
+  "approved_sessions_sha256": "6cff21234802923454362b4d6250217097df73a07a4e66092c0392760d6260be",
+  "previous_train": {
+    "count": 870,
+    "sha256": "e8dfbb4182dbb7397170f0c3f37821fbaeada484caa60a28a72cbb6151b845ce"
+  },
+  "promoted": {
+    "record_count": 4,
+    "assistant_turn_count": 20,
+    "record_ids": [
+      "kisaki_v41_auto_b036_packing_away_an_unfinished_puzzle_without_treating_it_as_failure",
+      "kisaki_v41_auto_b036_maintaining_a_friendship_after_moving_to_different_time_zones",
+      "kisaki_v41_auto_b036_understanding_why_a_mirror_seems_to_reverse_left_and_right",
+      "kisaki_v41_auto_b036_correcting_photo_capture_times_without_losing_original_metadata"
+    ]
+  },
+  "result_train": {
+    "count": 874,
+    "sha256": "e7b090a57d8e741868ff75a8c991a93d22a45daa209aeccfae7fa4abe33f224e"
+  },
+  "validation": {
+    "count": 70,
+    "sha256": "fb5cd5d93027b37be53327cda4e7c6137a7bae97201830fc8aa726727b9777b8",
+    "modified": false
+  },
+  "gold_v3": {
+    "content_modified": false,
+    "contamination_reaudit": "clean",
+    "contamination_audit_path": "backend/evaluation/kisaki_gold_set_v3_contamination_audit.json"
+  }
+}

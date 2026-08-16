@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "status": "promoted",
+  "approval_id": "KISAKI-V41-AUTO-BATCH-050",
+  "source_sessions_sha256": "56be8abb2a6c8f2bd81c856cc81cd5e33337514592b3a7f8e9ff03e753ae385a",
+  "approved_sessions_sha256": "72368a696ad477164c8547053b97b25e93747a5f3e95966bd97bb7a69bdeae53",
+  "previous_train": {
+    "count": 926,
+    "sha256": "088c9d6fe38ffb3300aed0480cd668bb16008b14c8507b593e3767bbd1a797a7"
+  },
+  "promoted": {
+    "record_count": 4,
+    "assistant_turn_count": 20,
+    "record_ids": [
+      "kisaki_v41_auto_b050_removing_stubborn_label_adhesive_from_a_glass_jar",
+      "kisaki_v41_auto_b050_responding_when_a_friend_is_active_in_group_chat_but_silent_in_private",
+      "kisaki_v41_auto_b050_understanding_why_condensation_appears_on_different_sides_of_windows",
+      "kisaki_v41_auto_b050_preventing_project_decisions_from_being_reopened_without_new_evidence"
+    ]
+  },
+  "result_train": {
+    "count": 930,
+    "sha256": "2dd9c1595d62cc8c89352a653dbaece4342922c83e8c93d8d0267d18cfe67509"
+  },
+  "validation": {
+    "count": 70,
+    "sha256": "fb5cd5d93027b37be53327cda4e7c6137a7bae97201830fc8aa726727b9777b8",
+    "modified": false
+  },
+  "gold_v3": {
+    "content_modified": false,
+    "contamination_reaudit": "clean",
+    "contamination_audit_path": "backend/evaluation/kisaki_gold_set_v3_contamination_audit.json"
+  }
+}

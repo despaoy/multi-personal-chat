@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "decision": "human_review_required_three_turns_blocked",
+  "generation_summary": {
+    "turn_count": 20,
+    "attempt_count": 26,
+    "retry_count": 6,
+    "pending_human_review": 17,
+    "blocked_automatic_gate": 3
+  },
+  "context_policy_assessment": {
+    "sharpness_distribution": "appropriate_direction",
+    "finding": "Sharpness is now limited to flawed shortcuts and high-risk actions, but soft modes still need distinctive observation, autonomy, and restrained rhythm rather than generic warmth."
+  },
+  "session_findings": [
+    {
+      "session_id": "daily_chat",
+      "decision": "revise_selected_turns",
+      "affected_turns": [1, 3],
+      "reason": "Turn 1 assumes breathing difficulty that the user did not state; turn 3 anticipates the ten-minute constraint before the user introduces it. Turn 2 is supported by the canonical meteor-shower and stray-cat scene.",
+      "required_correction": "Keep restrained care and use only information already present in the conversation; retain the evidence-backed star and cat imagery."
+    },
+    {
+      "session_id": "research_learning",
+      "decision": "revise_before_approval",
+      "affected_turns": [3, 4, 5],
+      "reason": "The style intensity is appropriate, but the answer overstates convergence effects and incorrectly suggests repeating the same seed as independent evidence.",
+      "required_correction": "Use the same preregistered seed set across configurations, such as 42/43/44; distinguish a seed-42 pilot from a multi-seed conclusion; avoid unsupported stability claims."
+    },
+    {
+      "session_id": "coding_debug",
+      "decision": "revise_before_approval",
+      "affected_turns": [1, 2, 5],
+      "reason": "Normal coding requests are no longer over-sharpened, which is correct, but earlier versions can still fail on decoded non-object JSON and the final answer lacks a characterful framing sentence.",
+      "required_correction": "Preserve calm precision, validate decoded rows as objects, and add a concise Kisaki judgment outside otherwise neutral code."
+    },
+    {
+      "session_id": "project_safety",
+      "decision": "recommended_for_human_review",
+      "reason": "The sequence correctly moves from firm boundary to pointed clarification, actionable inventory, firm credential handling, and calm calibrated redaction."
+    }
+  ],
+  "secret_persisted": false,
+  "frozen_dataset_modified": false,
+  "formal_training_use_allowed": false,
+  "detailed_review_counts": {
+    "approved": 9,
+    "revise": 11,
+    "exclude": 0
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "status": "promoted",
+  "approval_id": "KISAKI-V41-AUTO-BATCH-019",
+  "source_sessions_sha256": "6156cc8ea19a5e71a3ed2199674b7425521770a3b27d1dcdc2067763c5a643f6",
+  "approved_sessions_sha256": "5708f6cbc019885524ee2af3ef4e3cb4838e360b12fd15558bed2f93f0ccf857",
+  "previous_train": {
+    "count": 802,
+    "sha256": "b43a523d75f699503f12e14d1388dfb4279ab19e00d906c5d3febc5a991d10e2"
+  },
+  "promoted": {
+    "record_count": 4,
+    "assistant_turn_count": 20,
+    "record_ids": [
+      "kisaki_v41_auto_b019_leaving_neighborhood_group_after_losing_interest",
+      "kisaki_v41_auto_b019_friend_checks_phone_during_conversations",
+      "kisaki_v41_auto_b019_interpreting_frequentist_confidence_intervals",
+      "kisaki_v41_auto_b019_python_mutable_default_argument_bug"
+    ]
+  },
+  "result_train": {
+    "count": 806,
+    "sha256": "e4404c935d0c3e5d54e7d1f395b667356c8e5d2e7430d41c18f2bcaf19412a5a"
+  },
+  "validation": {
+    "count": 70,
+    "sha256": "fb5cd5d93027b37be53327cda4e7c6137a7bae97201830fc8aa726727b9777b8",
+    "modified": false
+  },
+  "gold_v3": {
+    "content_modified": false,
+    "contamination_reaudit": "clean",
+    "contamination_audit_path": "backend/evaluation/kisaki_gold_set_v3_contamination_audit.json"
+  }
+}

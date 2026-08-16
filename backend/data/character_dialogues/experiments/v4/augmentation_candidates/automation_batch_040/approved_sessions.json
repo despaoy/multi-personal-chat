@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "status": "approved_after_revision",
+  "approval_id": "KISAKI-V41-AUTO-BATCH-040",
+  "approved_by": "codex_delegated_by_project_owner",
+  "approved_at": "2026-08-16",
+  "source_sessions_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_040/candidates.json",
+  "decision_sources": [
+    "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_040/review.json",
+    "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_040/revision_history.json",
+    "parallel_subagent_initial_screening",
+    "project_owner_delegated_automation_approval"
+  ],
+  "base_contract": {
+    "train_count": 886,
+    "train_sha256": "91186fdf785a7c98e33f2b1359adab1d9abb9826e890fd97e2af7181b7635871",
+    "validation_count": 70,
+    "validation_sha256": "fb5cd5d93027b37be53327cda4e7c6137a7bae97201830fc8aa726727b9777b8"
+  },
+  "promotion_contract": {
+    "record_count": 4,
+    "assistant_turn_count": 20,
+    "training_unit": "complete_five_turn_session",
+    "cumulative_prefix_records_allowed": false,
+    "data_source": "codex_user_simulation_v41_reviewed",
+    "source": "automation_batch_040",
+    "version": "v4.1_automation_reviewed",
+    "manifest_check_key": "kisaki_v41_auto_batch_040_promotion",
+    "system_message_embedded": false,
+    "validation_and_gold_content_modified": false
+  },
+  "sessions": [
+    {
+      "session_id": "changing_an_alarm_sound_that_now_feels_stressful",
+      "record_id": "kisaki_v41_auto_b040_changing_an_alarm_sound_that_now_feels_stressful",
+      "title": "更换已经形成紧张联想的闹铃声",
+      "task_type": "casual_chat",
+      "revised_assistant_turns": [],
+      "messages_mode": "source_unchanged"
+    },
+    {
+      "session_id": "refusing_to_upload_a_raw_crash_dump_to_a_public_analyzer",
+      "record_id": "kisaki_v41_auto_b040_refusing_to_upload_a_raw_crash_dump_to_a_public_analyzer",
+      "title": "拒绝把可能含敏感内存的崩溃转储上传公共分析站",
+      "task_type": "safety_boundary",
+      "revised_assistant_turns": [],
+      "messages_mode": "source_unchanged"
+    },
+    {
+      "session_id": "fixing_shared_lists_created_with_dict_fromkeys",
+      "record_id": "kisaki_v41_auto_b040_fixing_shared_lists_created_with_dict_fromkeys",
+      "title": "修复 dict.fromkeys 让多个键共享同一列表的问题",
+      "task_type": "code_debugging",
+      "revised_assistant_turns": [],
+      "messages_mode": "source_unchanged"
+    },
+    {
+      "session_id": "understanding_why_microwaved_food_heats_unevenly",
+      "record_id": "kisaki_v41_auto_b040_understanding_why_microwaved_food_heats_unevenly",
+      "title": "理解微波炉加热食物为何容易冷热不均",
+      "task_type": "knowledge_explanation",
+      "revised_assistant_turns": [],
+      "messages_mode": "source_unchanged"
+    }
+  ]
+}

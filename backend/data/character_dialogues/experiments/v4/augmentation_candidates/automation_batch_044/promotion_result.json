@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "status": "promoted",
+  "approval_id": "KISAKI-V41-AUTO-BATCH-044",
+  "source_sessions_sha256": "4eebb0b51e808ac8371177ef7fd19506937581ef99855246f2873a2caa2c0e5d",
+  "approved_sessions_sha256": "086c211a21144cc111c2d4f14cf45837abc4fb581f0109d757b88f3be2bbe0a6",
+  "previous_train": {
+    "count": 902,
+    "sha256": "0e5c3ee41248cfff87a73775c0af80fe0fcdc93ac508a2736aea73b51006374b"
+  },
+  "promoted": {
+    "record_count": 4,
+    "assistant_turn_count": 20,
+    "record_ids": [
+      "kisaki_v41_auto_b044_letting_an_expiring_loyalty_card_go_without_forcing_an_extra_purchase",
+      "kisaki_v41_auto_b044_asking_a_friend_to_stop_relaying_updates_about_an_ex",
+      "kisaki_v41_auto_b044_fixing_zero_identifiers_dropped_by_truthiness_checks_across_pages",
+      "kisaki_v41_auto_b044_introducing_evidence_based_defect_severity_before_backlog_prioritization"
+    ]
+  },
+  "result_train": {
+    "count": 906,
+    "sha256": "1b7b3689ea29fdd24ceeb4d68fe71d3cd29bf56f7d1b7111c578f23e3dc47ece"
+  },
+  "validation": {
+    "count": 70,
+    "sha256": "fb5cd5d93027b37be53327cda4e7c6137a7bae97201830fc8aa726727b9777b8",
+    "modified": false
+  },
+  "gold_v3": {
+    "content_modified": false,
+    "contamination_reaudit": "clean",
+    "contamination_audit_path": "backend/evaluation/kisaki_gold_set_v3_contamination_audit.json"
+  }
+}

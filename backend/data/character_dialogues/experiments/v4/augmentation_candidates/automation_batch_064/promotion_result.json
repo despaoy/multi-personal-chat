@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "status": "promoted",
+  "approval_id": "KISAKI-V41-AUTO-BATCH-064",
+  "source_sessions_sha256": "0588643d65ee335d2dbef62ccec39dd6d087704307c2ef91f6110bac10777040",
+  "approved_sessions_sha256": "3a1d166f7ae5239dad72b47852d643e8554112599f0a9b6fd189ffbaca738b0d",
+  "previous_train": {
+    "count": 982,
+    "sha256": "a675b1cdeee4dfa592b8ded08f3abc52008ef55bee3c2bd25352c77f6bccc985"
+  },
+  "promoted": {
+    "record_count": 4,
+    "assistant_turn_count": 20,
+    "record_ids": [
+      "kisaki_v41_auto_b064_removing_pills_from_a_sweater_without_thinning_the_fabric",
+      "kisaki_v41_auto_b064_asking_a_friend_not_to_share_your_live_location_without_permission",
+      "kisaki_v41_auto_b064_checking_identification_assumptions_in_a_regression_discontinuity_design",
+      "kisaki_v41_auto_b064_redacting_sensitive_text_from_a_pdf_instead_of_covering_it_visually"
+    ]
+  },
+  "result_train": {
+    "count": 986,
+    "sha256": "703f095beca219fc7c8203bac83a29161274f476da71f351231de049d52c5f4a"
+  },
+  "validation": {
+    "count": 70,
+    "sha256": "fb5cd5d93027b37be53327cda4e7c6137a7bae97201830fc8aa726727b9777b8",
+    "modified": false
+  },
+  "gold_v3": {
+    "content_modified": false,
+    "contamination_reaudit": "clean",
+    "contamination_audit_path": "backend/evaluation/kisaki_gold_set_v3_contamination_audit.json"
+  }
+}

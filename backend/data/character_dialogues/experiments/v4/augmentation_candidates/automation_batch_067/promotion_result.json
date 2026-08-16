@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "status": "promoted",
+  "approval_id": "KISAKI-V41-AUTO-BATCH-067",
+  "source_sessions_sha256": "e035a286b0f22674132f5775577233e14d348c71b801c832f9f4bdd5873fd15e",
+  "approved_sessions_sha256": "39b2966140728b50e520b08403d5f811fb77b8c06f6d28c4571d7e1a3d558898",
+  "previous_train": {
+    "count": 994,
+    "sha256": "c73b0c2b9aa84c5c112b3b6e30f774c1af9d0dd96d8b14fea3a503dda001d2c5"
+  },
+  "promoted": {
+    "record_count": 4,
+    "assistant_turn_count": 20,
+    "record_ids": [
+      "kisaki_v41_auto_b067_drying_a_wet_umbrella_at_work_without_blocking_the_walkway",
+      "kisaki_v41_auto_b067_responding_when_group_chat_jokes_keep_targeting_your_accent",
+      "kisaki_v41_auto_b067_refusing_to_keep_using_a_cracked_power_strip_with_tape",
+      "kisaki_v41_auto_b067_debugging_javascript_sort_mutating_state_shared_with_a_ui"
+    ]
+  },
+  "result_train": {
+    "count": 998,
+    "sha256": "d4d7be39323ad6f9e1555049c727a7f478aa52ddf7568cb68a9f36421baef099"
+  },
+  "validation": {
+    "count": 70,
+    "sha256": "fb5cd5d93027b37be53327cda4e7c6137a7bae97201830fc8aa726727b9777b8",
+    "modified": false
+  },
+  "gold_v3": {
+    "content_modified": false,
+    "contamination_reaudit": "clean",
+    "contamination_audit_path": "backend/evaluation/kisaki_gold_set_v3_contamination_audit.json"
+  }
+}

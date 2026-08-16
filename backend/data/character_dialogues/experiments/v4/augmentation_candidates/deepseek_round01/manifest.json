@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "status": "pending_human_review",
+  "created_at": "2026-08-15T22:08:25+0800",
+  "model": "deepseek-chat",
+  "temperature": 0.7,
+  "candidate_count": 20,
+  "status_counts": {
+    "pending_human_review": 18,
+    "blocked_automatic_gate": 2
+  },
+  "task_counts": {
+    "casual_chat": 4,
+    "emotional_support": 3,
+    "code_generation": 3,
+    "code_debugging": 3,
+    "technical_explanation": 2,
+    "summarization": 1,
+    "translation": 1,
+    "planning": 1,
+    "safe_clarification": 1,
+    "safe_refusal": 1
+  },
+  "source_contract": {
+    "direct_line_count": 1598,
+    "raw_sha256": "c8d540e7c8e9e3306fc3a1cbe4a79b4b7b3a833ced14b622256b4ca09505fbc9",
+    "profile_sha256": "b00e02319df4aee6a62083f716c424b852b291acf153e660cc727572a417053d",
+    "system_prompt_sha256": "348a4365669aaf698a05cf6554efef4d45ed1084affc7dbfc6b94894bf88c528",
+    "frozen_train_sha256": "e0285fefefbe541718c08d31f2a76df1d27488742e5a1e01dbeafa85569438fe",
+    "frozen_validation_sha256": "fb5cd5d93027b37be53327cda4e7c6137a7bae97201830fc8aa726727b9777b8"
+  },
+  "secrets_persisted": false,
+  "formal_training_use_allowed": false,
+  "output_files": [
+    "candidates.jsonl",
+    "raw_responses.json",
+    "manifest.json"
+  ],
+  "revalidated_at": "2026-08-15T22:10:55+0800"
+}

@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "status": "promoted",
+  "approval_id": "KISAKI-V41-AUTO-BATCH-038",
+  "source_sessions_sha256": "8f9550a74bf445c037f8eb0d5bef45226610c7fc2700f3ea7d2e0cd9abf6168f",
+  "approved_sessions_sha256": "a37b3ec646cffbc95767549e3451a01ef33a4643dff371f4d9ae0daf79bb90a3",
+  "previous_train": {
+    "count": 878,
+    "sha256": "8b02f39f8460e90bca686131badf06e9ec3a3a1499dcfce670c95fab19b69848"
+  },
+  "promoted": {
+    "record_count": 4,
+    "assistant_turn_count": 20,
+    "record_ids": [
+      "kisaki_v41_auto_b038_rearranging_a_desk_to_avoid_afternoon_screen_glare",
+      "kisaki_v41_auto_b038_asking_a_roommate_to_stop_using_shared_food_without_checking",
+      "kisaki_v41_auto_b038_generating_compact_ranges_from_integer_identifiers",
+      "kisaki_v41_auto_b038_merging_duplicate_contacts_without_losing_contact_details"
+    ]
+  },
+  "result_train": {
+    "count": 882,
+    "sha256": "f9d80c7579753dc689aa26bbdc14ae72f96199cebefa84f5b0dc7f7e8242d789"
+  },
+  "validation": {
+    "count": 70,
+    "sha256": "fb5cd5d93027b37be53327cda4e7c6137a7bae97201830fc8aa726727b9777b8",
+    "modified": false
+  },
+  "gold_v3": {
+    "content_modified": false,
+    "contamination_reaudit": "clean",
+    "contamination_audit_path": "backend/evaluation/kisaki_gold_set_v3_contamination_audit.json"
+  }
+}

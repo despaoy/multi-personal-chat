@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "status": "approved_after_revision",
+  "approval_id": "KISAKI-V41-AUTO-BATCH-034",
+  "approved_by": "codex_delegated_by_project_owner",
+  "approved_at": "2026-08-16",
+  "source_sessions_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_034/candidates.json",
+  "decision_sources": ["backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_034/review.json", "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_034/revision_history.json", "parallel_subagent_initial_screening", "project_owner_delegated_automation_approval"],
+  "base_contract": {"train_count": 862, "train_sha256": "3b95cd898d642085f0289169f0df3b5f51595c87fdc1bb76694e51f5b0cd5ce4", "validation_count": 70, "validation_sha256": "fb5cd5d93027b37be53327cda4e7c6137a7bae97201830fc8aa726727b9777b8"},
+  "promotion_contract": {"record_count": 4, "assistant_turn_count": 20, "training_unit": "complete_five_turn_session", "cumulative_prefix_records_allowed": false, "data_source": "codex_user_simulation_v41_reviewed", "source": "automation_batch_034", "version": "v4.1_automation_reviewed", "manifest_check_key": "kisaki_v41_auto_batch_034_promotion", "system_message_embedded": false, "validation_and_gold_content_modified": false},
+  "sessions": [
+    {"session_id": "deciding_what_to_do_with_a_favorite_mug_that_has_a_hairline_crack", "record_id": "kisaki_v41_auto_b034_deciding_what_to_do_with_a_favorite_mug_that_has_a_hairline_crack", "title": "处理出现细裂纹但舍不得丢的常用杯子", "task_type": "casual_chat", "revised_assistant_turns": [], "messages_mode": "source_unchanged"},
+    {"session_id": "coping_when_two_close_friends_develop_a_shared_hobby_without_you", "record_id": "kisaki_v41_auto_b034_coping_when_two_close_friends_develop_a_shared_hobby_without_you", "title": "两位好友有了共同爱好后处理被落下的感受", "task_type": "emotional_relationship", "revised_assistant_turns": [], "messages_mode": "source_unchanged"},
+    {"session_id": "handling_missing_followup_data_in_a_longitudinal_study", "record_id": "kisaki_v41_auto_b034_handling_missing_followup_data_in_a_longitudinal_study", "title": "在纵向研究中识别失访机制并处理缺失数据", "task_type": "research_learning", "revised_assistant_turns": [], "messages_mode": "source_unchanged"},
+    {"session_id": "refusing_an_overprivileged_browser_extension_for_caption_downloads", "record_id": "kisaki_v41_auto_b034_refusing_an_overprivileged_browser_extension_for_caption_downloads", "title": "拒绝给字幕下载扩展不必要的全站访问权限", "task_type": "safety_boundary", "revised_assistant_turns": [], "messages_mode": "source_unchanged"}
+  ]
+}

@@ -11,6 +11,7 @@
 - 原作定位：`3蓝宝石的存在证明.txt:line:97`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`duplicate_prompt_lower_rank`
 
 **user**
 
@@ -35,6 +36,7 @@
 - 原作定位：`3蓝宝石的存在证明.txt:line:2038`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`duplicate_prompt_lower_rank, short_reply`
 
 **user**
 
@@ -59,6 +61,7 @@
 - 原作定位：`3蓝宝石的存在证明.txt:line:2531`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`duplicate_prompt_lower_rank`
 
 **user**
 
@@ -83,6 +86,7 @@
 - 原作定位：`3蓝宝石的存在证明.txt:line:660`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`duplicate_prompt_lower_rank`
 
 **user**
 
@@ -108,6 +112,7 @@
 - 原作定位：`3蓝宝石的存在证明.txt:line:2772`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`duplicate_prompt_lower_rank`
 
 **user**
 
@@ -133,6 +138,7 @@
 - 原作定位：`1翡翠的排挤原理.txt:line:2761`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`duplicate_prompt_lower_rank`
 
 **user**
 
@@ -157,6 +163,7 @@
 - 原作定位：`1翡翠的排挤原理.txt:line:3086`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`duplicate_prompt_lower_rank`
 
 **user**
 
@@ -182,6 +189,7 @@
 - 原作定位：`6芙蓉石的长年隔绝.txt:line:62`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`duplicate_prompt_lower_rank`
 
 **user**
 
@@ -206,6 +214,7 @@
 - 原作定位：`8萤石的怠惰现象.txt:line:857`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`duplicate_prompt_lower_rank`
 
 **user**
 
@@ -230,6 +239,7 @@
 - 原作定位：`8萤石的怠惰现象.txt:line:899`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`duplicate_prompt_lower_rank`
 
 **user**
 
@@ -254,6 +264,7 @@
 - 原作定位：`1翡翠的排挤原理.txt:line:2795`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`duplicate_prompt_lower_rank`
 
 **user**
 
@@ -278,6 +289,7 @@
 - 原作定位：`8萤石的时空残影.txt:line:1016`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`duplicate_prompt_lower_rank`
 
 **user**
 
@@ -302,6 +314,7 @@
 - 原作定位：`8萤石的时空残影.txt:line:1476`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`duplicate_prompt_lower_rank`
 
 **user**
 
@@ -326,6 +339,7 @@
 - 原作定位：`8萤石的时空残影.txt:line:1495`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`duplicate_prompt_lower_rank`
 
 **user**
 
@@ -350,6 +364,7 @@
 - 原作定位：`12青金石的幻想图书馆.txt:line:2099`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`duplicate_prompt_lower_rank`
 
 **user**
 
@@ -374,6 +389,7 @@
 - 原作定位：`4紫水晶的怪异传说.txt:line:2482`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`duplicate_prompt_lower_rank`
 
 **user**
 
@@ -398,6 +414,7 @@
 - 原作定位：`日后谈.txt:line:8`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`duplicate_prompt_lower_rank`
 
 **user**
 

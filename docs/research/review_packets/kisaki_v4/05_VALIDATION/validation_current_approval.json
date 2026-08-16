@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "review_id": "KISAKI-V4-CURRENT-VALIDATION-REVIEW",
+  "status": "approved",
+  "candidate_count": 77,
+  "default_decision": "approve",
+  "excluded_ids": [
+    "tsukiyashiro_kisaki_sft_da21e4c8d09b7af1",
+    "tsukiyashiro_kisaki_sft_6412f83c95ad1c75",
+    "tsukiyashiro_kisaki_sft_9498df2d95dadf8a",
+    "tsukiyashiro_kisaki_sft_7f72d2dfcd4ea7cb",
+    "tsukiyashiro_kisaki_sft_d01b52414354eea0",
+    "tsukiyashiro_kisaki_sft_93ce4029746e7c78",
+    "tsukiyashiro_kisaki_sft_489de2e0300a0877"
+  ],
+  "approved_count": 70,
+  "excluded_count": 7,
+  "reviewed_by": "project_owner",
+  "reviewed_at": "2026-08-12",
+  "notes": "当前77条候选已复核。3条错配或近似重复、4条依赖缺失上下文，共排除7条。"
+}

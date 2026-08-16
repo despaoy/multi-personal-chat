@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "revision_count": 1,
+  "items": [
+    {
+      "attempt": 1,
+      "original_session_id": "removing_freezer_odors_from_reusable_ice_trays",
+      "original_task_type": "casual_chat",
+      "decision": "revise",
+      "reason": "移除无情境口头禅式开头，保留具体安全纠正",
+      "revised_session_id": "removing_freezer_odors_from_reusable_ice_trays",
+      "revised_assistant_turns": [
+        4
+      ],
+      "approved": true,
+      "approved_source": "main_reviewer"
+    }
+  ]
+}
+

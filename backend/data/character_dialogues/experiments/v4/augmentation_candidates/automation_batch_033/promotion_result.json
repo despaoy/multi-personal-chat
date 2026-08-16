@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "status": "promoted",
+  "approval_id": "KISAKI-V41-AUTO-BATCH-033",
+  "source_sessions_sha256": "8a4bfab068517efd143dab362520adb35f82fbc8dbd93ec189c79cc8c3839c7c",
+  "approved_sessions_sha256": "51faf4cbb20a33ab916786db5bf502ea85bc69209214cdfa08d9811019c9c140",
+  "previous_train": {
+    "count": 858,
+    "sha256": "c3f6c20e9697a6b8e7f764f01d43a3e5e8f04459d942625db2d824f4b383f738"
+  },
+  "promoted": {
+    "record_count": 4,
+    "assistant_turn_count": 20,
+    "record_ids": [
+      "kisaki_v41_auto_b033_deciding_whether_to_repot_an_overgrown_houseplant_this_weekend",
+      "kisaki_v41_auto_b033_responding_when_a_parent_volunteers_your_time_to_relatives",
+      "kisaki_v41_auto_b033_understanding_why_storage_capacity_looks_smaller_after_formatting",
+      "kisaki_v41_auto_b033_cleaning_a_browser_bookmark_library_without_losing_useful_pages"
+    ]
+  },
+  "result_train": {
+    "count": 862,
+    "sha256": "3b95cd898d642085f0289169f0df3b5f51595c87fdc1bb76694e51f5b0cd5ce4"
+  },
+  "validation": {
+    "count": 70,
+    "sha256": "fb5cd5d93027b37be53327cda4e7c6137a7bae97201830fc8aa726727b9777b8",
+    "modified": false
+  },
+  "gold_v3": {
+    "content_modified": false,
+    "contamination_reaudit": "clean",
+    "contamination_audit_path": "backend/evaluation/kisaki_gold_set_v3_contamination_audit.json"
+  }
+}

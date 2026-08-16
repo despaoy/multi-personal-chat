@@ -11,6 +11,7 @@
 - 原作定位：`10黑曜石的因果目录.txt:line:633`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_reply, short_reply`
 
 **user**
 
@@ -36,6 +37,7 @@
 - 原作定位：`12青金石的幻想图书馆.txt:line:1496`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_prompt`
 
 **user**
 
@@ -60,6 +62,7 @@
 - 原作定位：`12青金石的幻想图书馆.txt:line:1550`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_prompt`
 
 **user**
 
@@ -86,6 +89,7 @@
 - 原作定位：`12青金石的幻想图书馆.txt:line:2077`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_prompt`
 
 **user**
 
@@ -110,6 +114,7 @@
 - 原作定位：`12青金石的幻想图书馆.txt:line:2122`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_prompt`
 
 **user**
 
@@ -134,6 +139,7 @@
 - 原作定位：`12青金石的幻想图书馆.txt:line:2125`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_prompt`
 
 **user**
 
@@ -159,6 +165,7 @@
 - 原作定位：`12青金石的幻想图书馆.txt:line:2132`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_prompt`
 
 **user**
 
@@ -183,6 +190,7 @@
 - 原作定位：`12青金石的幻想图书馆.txt:line:2152`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_reply, short_reply`
 
 **user**
 
@@ -208,6 +216,7 @@
 - 原作定位：`12青金石的幻想图书馆.txt:line:2166`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_prompt`
 
 **user**
 
@@ -232,6 +241,7 @@
 - 原作定位：`12青金石的幻想图书馆.txt:line:2189`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_prompt`
 
 **user**
 
@@ -257,6 +267,7 @@
 - 原作定位：`12青金石的幻想图书馆.txt:line:2251`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_prompt`
 
 **user**
 
@@ -282,6 +293,7 @@
 - 原作定位：`12青金石的幻想图书馆.txt:line:2269`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_prompt`
 
 **user**
 
@@ -306,6 +318,7 @@
 - 原作定位：`1翡翠的排挤原理.txt:line:74`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_prompt`
 
 **user**
 
@@ -331,6 +344,7 @@
 - 原作定位：`1翡翠的排挤原理.txt:line:847`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_prompt`
 
 **user**
 
@@ -355,6 +369,7 @@
 - 原作定位：`1翡翠的排挤原理.txt:line:855`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_prompt`
 
 **user**
 
@@ -379,6 +394,7 @@
 - 原作定位：`1翡翠的排挤原理.txt:line:1283`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_reply, short_reply`
 
 **user**
 
@@ -409,6 +425,7 @@
 - 原作定位：`1翡翠的排挤原理.txt:line:1293`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_prompt, short_reply`
 
 **user**
 
@@ -433,6 +450,7 @@
 - 原作定位：`1翡翠的排挤原理.txt:line:2128`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_reply, short_reply`
 
 **user**
 
@@ -457,6 +475,7 @@
 - 原作定位：`1翡翠的排挤原理.txt:line:2749`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_prompt`
 
 **user**
 
@@ -481,6 +500,7 @@
 - 原作定位：`1翡翠的排挤原理.txt:line:2791`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_prompt, short_reply`
 
 **user**
 
@@ -505,6 +525,7 @@
 - 原作定位：`1翡翠的排挤原理.txt:line:2835`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_prompt`
 
 **user**
 
@@ -530,6 +551,7 @@
 - 原作定位：`1翡翠的排挤原理.txt:line:2849`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_prompt`
 
 **user**
 
@@ -554,6 +576,7 @@
 - 原作定位：`1翡翠的排挤原理.txt:line:3525`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_prompt`
 
 **user**
 
@@ -578,6 +601,7 @@
 - 原作定位：`1翡翠的排挤原理.txt:line:3536`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_prompt`
 
 **user**
 
@@ -602,6 +626,7 @@
 - 原作定位：`2红宝石的天作之合.txt:line:144`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_reply, short_reply`
 
 **user**
 
@@ -626,6 +651,7 @@
 - 原作定位：`2红宝石的天作之合.txt:line:708`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_prompt`
 
 **user**
 
@@ -650,6 +676,7 @@
 - 原作定位：`2红宝石的天作之合.txt:line:1758`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_prompt`
 
 **user**
 
@@ -674,6 +701,7 @@
 - 原作定位：`2红宝石的天作之合.txt:line:1767`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_prompt`
 
 **user**
 
@@ -701,6 +729,7 @@
 - 原作定位：`2红宝石的天作之合.txt:line:1784`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_prompt`
 
 **user**
 
@@ -725,6 +754,7 @@
 - 原作定位：`2红宝石的天作之合.txt:line:1810`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_prompt`
 
 **user**
 
@@ -749,6 +779,7 @@
 - 原作定位：`2红宝石的天作之合.txt:line:2749`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_prompt`
 
 **user**
 
@@ -775,6 +806,7 @@
 - 原作定位：`2红宝石的天作之合.txt:line:2760`
 - AI 初步建议：`待确认`
 - 自动问题：assistant 回复超过 100 字，需确认场景是否确实需要长回答
+- 排除原因：`low_information_prompt`
 
 **user**
 
@@ -802,6 +834,7 @@
 - 原作定位：`3蓝宝石的存在证明.txt:line:25`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_prompt, missing_context`
 
 **user**
 
@@ -828,6 +861,7 @@
 - 原作定位：`3蓝宝石的存在证明.txt:line:42`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_prompt`
 
 **user**
 
@@ -858,6 +892,7 @@
 - 原作定位：`3蓝宝石的存在证明.txt:line:284`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_reply, short_reply`
 
 **user**
 
@@ -883,6 +918,7 @@
 - 原作定位：`3蓝宝石的存在证明.txt:line:585`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_prompt`
 
 **user**
 
@@ -907,6 +943,7 @@
 - 原作定位：`3蓝宝石的存在证明.txt:line:654`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_prompt, short_reply`
 
 **user**
 
@@ -931,6 +968,7 @@
 - 原作定位：`3蓝宝石的存在证明.txt:line:658`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_prompt`
 
 **user**
 
@@ -955,6 +993,7 @@
 - 原作定位：`3蓝宝石的存在证明.txt:line:822`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_prompt`
 
 **user**
 
@@ -979,6 +1018,7 @@
 - 原作定位：`3蓝宝石的存在证明.txt:line:907`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_reply, short_reply`
 
 **user**
 
@@ -1005,6 +1045,7 @@
 - 原作定位：`3蓝宝石的存在证明.txt:line:974`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_prompt`
 
 **user**
 
@@ -1029,6 +1070,7 @@
 - 原作定位：`3蓝宝石的存在证明.txt:line:1030`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_prompt`
 
 **user**
 
@@ -1053,6 +1095,7 @@
 - 原作定位：`3蓝宝石的存在证明.txt:line:1964`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_prompt`
 
 **user**
 
@@ -1078,6 +1121,7 @@
 - 原作定位：`3蓝宝石的存在证明.txt:line:1986`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_prompt`
 
 **user**
 
@@ -1104,6 +1148,7 @@
 - 原作定位：`3蓝宝石的存在证明.txt:line:2197`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_prompt`
 
 **user**
 
@@ -1129,6 +1174,7 @@
 - 原作定位：`3蓝宝石的存在证明.txt:line:2204`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_prompt`
 
 **user**
 
@@ -1153,6 +1199,7 @@
 - 原作定位：`3蓝宝石的存在证明.txt:line:2389`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_prompt`
 
 **user**
 
@@ -1178,6 +1225,7 @@
 - 原作定位：`3蓝宝石的存在证明.txt:line:2547`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_prompt`
 
 **user**
 
@@ -1203,6 +1251,7 @@
 - 原作定位：`3蓝宝石的存在证明.txt:line:2758`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_prompt`
 
 **user**
 
@@ -1227,6 +1276,7 @@
 - 原作定位：`3蓝宝石的存在证明.txt:line:2766`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_prompt`
 
 **user**
 

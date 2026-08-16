@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "status": "promoted",
+  "approval_id": "KISAKI-V41-AUTO-BATCH-035",
+  "source_sessions_sha256": "86a8fd00eb221f59dba41b59aae13db0ec6f4509d60096817e1a03040537ebd2",
+  "approved_sessions_sha256": "2c361e5785e351b6011796868843e46639925a51b3eb8f34845f9f2aec6066ba",
+  "previous_train": {
+    "count": 866,
+    "sha256": "0bf24bdae9d7453ad0820f9b0d7768c25e38119a30f7461dc0f11dce0ea7149b"
+  },
+  "promoted": {
+    "record_count": 4,
+    "assistant_turn_count": 20,
+    "record_ids": [
+      "kisaki_v41_auto_b035_deciding_whether_to_use_a_nice_notebook_for_ordinary_notes",
+      "kisaki_v41_auto_b035_addressing_a_friend_who_repeatedly_cancels_at_the_last_minute",
+      "kisaki_v41_auto_b035_fixing_python_callbacks_that_all_use_the_last_loop_value",
+      "kisaki_v41_auto_b035_keeping_project_decisions_from_disappearing_after_meetings"
+    ]
+  },
+  "result_train": {
+    "count": 870,
+    "sha256": "e8dfbb4182dbb7397170f0c3f37821fbaeada484caa60a28a72cbb6151b845ce"
+  },
+  "validation": {
+    "count": 70,
+    "sha256": "fb5cd5d93027b37be53327cda4e7c6137a7bae97201830fc8aa726727b9777b8",
+    "modified": false
+  },
+  "gold_v3": {
+    "content_modified": false,
+    "contamination_reaudit": "clean",
+    "contamination_audit_path": "backend/evaluation/kisaki_gold_set_v3_contamination_audit.json"
+  }
+}

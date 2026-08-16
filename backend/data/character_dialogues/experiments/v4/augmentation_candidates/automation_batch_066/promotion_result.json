@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "status": "promoted",
+  "approval_id": "KISAKI-V41-AUTO-BATCH-066",
+  "source_sessions_sha256": "fdef5bcebc80554472ed7087b396c93d603038031bd440f9a0e16b35399d02be",
+  "approved_sessions_sha256": "9f0ca797f69ede37b893ca429da643375123e71b327c6aeacc7f187ac96c152e",
+  "previous_train": {
+    "count": 990,
+    "sha256": "6c226cd329cb4b90fa66a703ecbc7932909a6cb5132869173dce8cf5b4a12faa"
+  },
+  "promoted": {
+    "record_count": 4,
+    "assistant_turn_count": 20,
+    "record_ids": [
+      "kisaki_v41_auto_b066_reducing_screen_glare_from_a_desk_lamp_without_working_in_the_dark",
+      "kisaki_v41_auto_b066_setting_limits_with_a_friend_who_only_uses_you_to_vent",
+      "kisaki_v41_auto_b066_creating_a_decision_log_when_project_meetings_keep_being_reinterpreted",
+      "kisaki_v41_auto_b066_explaining_why_metal_feels_colder_than_wood_at_the_same_temperature"
+    ]
+  },
+  "result_train": {
+    "count": 994,
+    "sha256": "c73b0c2b9aa84c5c112b3b6e30f774c1af9d0dd96d8b14fea3a503dda001d2c5"
+  },
+  "validation": {
+    "count": 70,
+    "sha256": "fb5cd5d93027b37be53327cda4e7c6137a7bae97201830fc8aa726727b9777b8",
+    "modified": false
+  },
+  "gold_v3": {
+    "content_modified": false,
+    "contamination_reaudit": "clean",
+    "contamination_audit_path": "backend/evaluation/kisaki_gold_set_v3_contamination_audit.json"
+  }
+}

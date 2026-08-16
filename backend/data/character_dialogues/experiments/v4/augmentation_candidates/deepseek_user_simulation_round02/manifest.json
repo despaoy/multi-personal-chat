@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "status": "rejected_quality_audit",
+  "method": "codex_authored_user_deepseek_role_only",
+  "model": "deepseek-chat",
+  "temperature": 0.65,
+  "session_count": 4,
+  "turn_count": 20,
+  "status_counts": {
+    "pending_human_review": 20
+  },
+  "source_contract": {
+    "direct_line_count": 1598,
+    "raw_sha256": "c8d540e7c8e9e3306fc3a1cbe4a79b4b7b3a833ced14b622256b4ca09505fbc9",
+    "profile_sha256": "b00e02319df4aee6a62083f716c424b852b291acf153e660cc727572a417053d",
+    "system_prompt_sha256": "348a4365669aaf698a05cf6554efef4d45ed1084affc7dbfc6b94894bf88c528",
+    "frozen_train_sha256": "e0285fefefbe541718c08d31f2a76df1d27488742e5a1e01dbeafa85569438fe",
+    "frozen_validation_sha256": "fb5cd5d93027b37be53327cda4e7c6137a7bae97201830fc8aa726727b9777b8"
+  },
+  "secrets_persisted": false,
+  "formal_training_use_allowed": false,
+  "quality_audit": {
+    "decision": "do_not_promote",
+    "reasons": [
+      "role prompt inherited conflicting training-data designer instructions",
+      "persona salience was weak in casual dialogue",
+      "LoRA control-variable guidance was internally inconsistent",
+      "the minimal LoRA training code did not construct causal-LM labels",
+      "the final safety answer was overly defensive"
+    ]
+  }
+}

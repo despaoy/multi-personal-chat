@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "review_id": "KISAKI-GOLD-V2.1-CURRENT-REVIEW",
+  "status": "approved",
+  "evaluation_role": "development_only",
+  "candidate_count": 150,
+  "approved_count": 150,
+  "revised_ids": [
+    "kisaki_v21_factual_003",
+    "kisaki_v21_factual_021",
+    "kisaki_v21_factual_022",
+    "kisaki_v21_factual_023",
+    "kisaki_v21_factual_024",
+    "kisaki_v21_safety_025"
+  ],
+  "reviewed_by": "project_owner",
+  "reviewed_at": "2026-08-12",
+  "notes": "144条原样通过，6条按本轮意见修订后通过。仅批准为development set，不得作为最终盲测集。"
+}

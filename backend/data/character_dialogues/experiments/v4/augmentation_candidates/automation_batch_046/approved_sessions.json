@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "status": "approved_after_revision",
+  "approval_id": "KISAKI-V41-AUTO-BATCH-046",
+  "approved_by": "codex_delegated_by_project_owner",
+  "approved_at": "2026-08-16",
+  "source_sessions_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_046/candidates.json",
+  "decision_sources": [
+    "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_046/review.json",
+    "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_046/revision_history.json",
+    "parallel_subagent_initial_screening",
+    "project_owner_delegated_automation_approval"
+  ],
+  "base_contract": {
+    "train_count": 910,
+    "train_sha256": "3721d9c441e23bb22ada3e7291ab9479ece856c23662552d0be7980266fc79dd",
+    "validation_count": 70,
+    "validation_sha256": "fb5cd5d93027b37be53327cda4e7c6137a7bae97201830fc8aa726727b9777b8"
+  },
+  "promotion_contract": {
+    "record_count": 4,
+    "assistant_turn_count": 20,
+    "training_unit": "complete_five_turn_session",
+    "cumulative_prefix_records_allowed": false,
+    "data_source": "codex_user_simulation_v41_reviewed",
+    "source": "automation_batch_046",
+    "version": "v4.1_automation_reviewed",
+    "manifest_check_key": "kisaki_v41_auto_batch_046_promotion",
+    "system_message_embedded": false,
+    "validation_and_gold_content_modified": false
+  },
+  "sessions": [
+    {
+      "session_id": "removing_candle_wax_from_a_tablecloth_without_spreading_the_stain",
+      "record_id": "kisaki_v41_auto_b046_removing_candle_wax_from_a_tablecloth_without_spreading_the_stain",
+      "title": "清理桌布上的蜡油而不把污渍继续摊开",
+      "task_type": "casual_chat",
+      "revised_assistant_turns": [],
+      "messages_mode": "source_unchanged"
+    },
+    {
+      "session_id": "asking_a_friend_not_to_treat_work_from_home_as_constant_availability",
+      "record_id": "kisaki_v41_auto_b046_asking_a_friend_not_to_treat_work_from_home_as_constant_availability",
+      "title": "朋友把居家办公当成随时有空时说明界限",
+      "task_type": "emotional_relationship",
+      "revised_assistant_turns": [],
+      "messages_mode": "source_unchanged"
+    },
+    {
+      "session_id": "generating_collision_resistant_backup_names_with_the_python_standard_library",
+      "record_id": "kisaki_v41_auto_b046_generating_collision_resistant_backup_names_with_the_python_standard_library",
+      "title": "使用 Python 标准库生成可排序且避免覆盖的备份文件名",
+      "task_type": "code_generation",
+      "revised_assistant_turns": [],
+      "messages_mode": "source_unchanged"
+    },
+    {
+      "session_id": "understanding_why_shadows_have_soft_edges_and_change_with_distance",
+      "record_id": "kisaki_v41_auto_b046_understanding_why_shadows_have_soft_edges_and_change_with_distance",
+      "title": "理解影子边缘为何模糊并随距离改变",
+      "task_type": "knowledge_explanation",
+      "revised_assistant_turns": [],
+      "messages_mode": "source_unchanged"
+    }
+  ]
+}

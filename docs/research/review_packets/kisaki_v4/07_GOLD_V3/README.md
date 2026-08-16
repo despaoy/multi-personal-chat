@@ -1,5 +1,3 @@
-# Gold v3 状态
+# Gold v3 审核
 
-状态：`blocked_until_training_data_frozen`。
-
-Gold v3 必须在训练数据审核、修订和冻结后生成。现在提前生成会让题目反向影响训练数据。
+Gold v3 已在 V4 train/validation 冻结后独立生成。三批人工审核及定向复核均已完成，150 条全部批准并冻结为最终盲测集。

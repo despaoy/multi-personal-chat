@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "status": "promoted",
+  "approval_id": "KISAKI-V41-AUTO-BATCH-049",
+  "source_sessions_sha256": "8a57b8ffcb8f98e9a33740ab6bc3ec6c4145f33ceb33753db01ba2d2d4c57e2b",
+  "approved_sessions_sha256": "68446dce2f0f5aa3dc0d04845a0598770521217c7fa90b43c8c0a70913eb49d9",
+  "previous_train": {
+    "count": 922,
+    "sha256": "b0045c981b9c9227667896c6deb92c5641a1814d0a5e15b31e447ce43fce4ed6"
+  },
+  "promoted": {
+    "record_count": 4,
+    "assistant_turn_count": 20,
+    "record_ids": [
+      "kisaki_v41_auto_b049_cleaning_a_reusable_water_bottle_lid_with_a_hidden_gasket",
+      "kisaki_v41_auto_b049_asking_a_sibling_to_stop_borrowing_things_without_permission",
+      "kisaki_v41_auto_b049_scheduling_a_daily_local_time_across_daylight_saving_changes",
+      "kisaki_v41_auto_b049_refusing_to_post_employee_medical_details_in_a_team_spreadsheet"
+    ]
+  },
+  "result_train": {
+    "count": 926,
+    "sha256": "088c9d6fe38ffb3300aed0480cd668bb16008b14c8507b593e3767bbd1a797a7"
+  },
+  "validation": {
+    "count": 70,
+    "sha256": "fb5cd5d93027b37be53327cda4e7c6137a7bae97201830fc8aa726727b9777b8",
+    "modified": false
+  },
+  "gold_v3": {
+    "content_modified": false,
+    "contamination_reaudit": "clean",
+    "contamination_audit_path": "backend/evaluation/kisaki_gold_set_v3_contamination_audit.json"
+  }
+}

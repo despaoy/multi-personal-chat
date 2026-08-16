@@ -1,0 +1,218 @@
+{
+  "schema_version": 1,
+  "created_at_utc": "2026-08-16T14:18:38Z",
+  "purpose": "Historical/legacy Kisaki training-data assets archived out of the active working surface. Current active datasets live in experiments/v4/ and experiments/research/.",
+  "entry_count": 30,
+  "entries": [
+    {
+      "original_path": "backend/data/character_dialogues/experiments/train.jsonl",
+      "archived_path": "backend/data/character_dialogues/experiments/archive/v4_draft/train.jsonl",
+      "sha256": "6caee988e45c07449610356d5bd6dd0f171ecfa502ecbae48add543e2f9ad270",
+      "bytes": 96370,
+      "category": "v4_draft"
+    },
+    {
+      "original_path": "backend/data/character_dialogues/experiments/eval.jsonl",
+      "archived_path": "backend/data/character_dialogues/experiments/archive/v4_draft/eval.jsonl",
+      "sha256": "0eb5768b598af740769a9cf835ce78cc6b21fcb19ef61ff09f468a1482f49319",
+      "bytes": 16289,
+      "category": "v4_draft"
+    },
+    {
+      "original_path": "backend/data/character_dialogues/experiments/combined_review.md",
+      "archived_path": "backend/data/character_dialogues/experiments/archive/v4_draft/combined_review.md",
+      "sha256": "fecbab94b257ae9115eeb177e63834358241f4c0013c9548c5edb856ca2c02fc",
+      "bytes": 45215,
+      "category": "v4_draft"
+    },
+    {
+      "original_path": "backend/data/character_dialogues/experiments/token_stats_qwen3.json",
+      "archived_path": "backend/data/character_dialogues/experiments/archive/v4_draft/token_stats_qwen3.json",
+      "sha256": "4541857782527e2840cf574d103b671ed92b25d8bf736e112bdebd4ca6ec4d80",
+      "bytes": 430,
+      "category": "v4_draft"
+    },
+    {
+      "original_path": "backend/data/character_dialogues/experiments/daily_prompts_v1.json",
+      "archived_path": "backend/data/character_dialogues/experiments/archive/generation_tools/daily_prompts_v1.json",
+      "sha256": "316b71e59dc86d51b4eae07c342843d8e1160c9fe6c3504dea1514adc367f125",
+      "bytes": 39576,
+      "category": "generation_tools"
+    },
+    {
+      "original_path": "backend/data/character_dialogues/experiments/kisaki_v2_sample_scoring.json",
+      "archived_path": "backend/data/character_dialogues/experiments/archive/v2_quality_review/kisaki_v2_sample_scoring.json",
+      "sha256": "3c941facb9bda521be84d4fb8040f9afd7d5e1a27062674370651fd3fcf6fe7c",
+      "bytes": 13839,
+      "category": "v2_quality_review"
+    },
+    {
+      "original_path": "backend/data/character_dialogues/experiments/kisaki_sft_v2_excluded.jsonl",
+      "archived_path": "backend/data/character_dialogues/experiments/archive/v2_quality_review/kisaki_sft_v2_excluded.jsonl",
+      "sha256": "ce5443088e66dcbc392eed0aa45f640a7dec2e93eecf6324261c70e42aa21914",
+      "bytes": 18878,
+      "category": "v2_quality_review"
+    },
+    {
+      "original_path": "backend/data/character_dialogues/experiments/kisaki_sft_v2_stats.json",
+      "archived_path": "backend/data/character_dialogues/experiments/archive/v2_quality_review/kisaki_sft_v2_stats.json",
+      "sha256": "d7563777ffec4c5bec6ba3508f763642e1e727c22f3811663bb40959fb0e2056",
+      "bytes": 809,
+      "category": "v2_quality_review"
+    },
+    {
+      "original_path": "backend/data/character_dialogues/experiments/tsukiyashiro_kisaki_train.json",
+      "archived_path": "backend/data/character_dialogues/experiments/archive/v2_canonical/tsukiyashiro_kisaki_train.json",
+      "sha256": "d91780fbe8e5d2a294109e5a024e41fc87039ac1d079849ef19e3f58bfb3132e",
+      "bytes": 988967,
+      "category": "v2_canonical"
+    },
+    {
+      "original_path": "backend/data/character_dialogues/experiments/tsukiyashiro_kisaki_eval.json",
+      "archived_path": "backend/data/character_dialogues/experiments/archive/v2_canonical/tsukiyashiro_kisaki_eval.json",
+      "sha256": "5c2d71816f5119aa70858115123953cad67c49927cc35a5e78251c97bfc61769",
+      "bytes": 106584,
+      "category": "v2_canonical"
+    },
+    {
+      "original_path": "backend/data/character_dialogues/experiments/game_extract_manifest.json",
+      "archived_path": "backend/data/character_dialogues/experiments/archive/game_extract_pre_v4/game_extract_manifest.json",
+      "sha256": "e8f471762a1d428ef1e473f1302bf507099448c4a6f6992c66640d318ca4a604",
+      "bytes": 1962,
+      "category": "game_extract_pre_v4"
+    },
+    {
+      "original_path": "backend/data/character_dialogues/experiments/game_extract_merged.jsonl",
+      "archived_path": "backend/data/character_dialogues/experiments/archive/game_extract_pre_v4/game_extract_merged.jsonl",
+      "sha256": "73bc91e3340a4c21a7a27651b56be0e623cab5070b785f25ac9aada9afff68ad",
+      "bytes": 35150,
+      "category": "game_extract_pre_v4"
+    },
+    {
+      "original_path": "backend/data/character_dialogues/experiments/game_extract_train.jsonl",
+      "archived_path": "backend/data/character_dialogues/experiments/archive/game_extract_pre_v4/game_extract_train.jsonl",
+      "sha256": "e07ff4af9e1f086c1dbec902a5480959b5b01cceb82f146bb65cdb733e2e3f07",
+      "bytes": 29528,
+      "category": "game_extract_pre_v4"
+    },
+    {
+      "original_path": "backend/data/character_dialogues/experiments/game_extract_eval.jsonl",
+      "archived_path": "backend/data/character_dialogues/experiments/archive/game_extract_pre_v4/game_extract_eval.jsonl",
+      "sha256": "c7ddcfa8031c92c77e46f7e5d379b57f78b16a70876514a46a868e6f7d4e16f9",
+      "bytes": 5622,
+      "category": "game_extract_pre_v4"
+    },
+    {
+      "original_path": "backend/data/character_dialogues/experiments/game_famous_candidates.jsonl",
+      "archived_path": "backend/data/character_dialogues/experiments/archive/game_extract_pre_v4/game_famous_candidates.jsonl",
+      "sha256": "0a064232dd2b39580218a94b12d35a503c48a917705545d1810ccc4870458b22",
+      "bytes": 11808,
+      "category": "game_extract_pre_v4"
+    },
+    {
+      "original_path": "backend/data/character_dialogues/experiments/game_famous_eval_candidates.jsonl",
+      "archived_path": "backend/data/character_dialogues/experiments/archive/game_extract_pre_v4/game_famous_eval_candidates.jsonl",
+      "sha256": "0c039ed800380a9d380ec79850dc42423aabab5e47bdc4ca6ae5b7f817737fa0",
+      "bytes": 1591,
+      "category": "game_extract_pre_v4"
+    },
+    {
+      "original_path": "backend/data/character_dialogues/experiments/game_famous_paper_state.jsonl",
+      "archived_path": "backend/data/character_dialogues/experiments/archive/game_extract_pre_v4/game_famous_paper_state.jsonl",
+      "sha256": "84bdf4b1bd5d002c3bfd5a0ad677790e2f4cbc877e25957f06868ba2e186e6d2",
+      "bytes": 3126,
+      "category": "game_extract_pre_v4"
+    },
+    {
+      "original_path": "backend/data/character_dialogues/experiments/game_rikata_candidates.jsonl",
+      "archived_path": "backend/data/character_dialogues/experiments/archive/game_extract_pre_v4/game_rikata_candidates.jsonl",
+      "sha256": "3f047a91cb315992064c52a80371b002837608c0fd9f0c0f1df5dad8e7acb35c",
+      "bytes": 4689,
+      "category": "game_extract_pre_v4"
+    },
+    {
+      "original_path": "backend/data/character_dialogues/experiments/game_riou_candidates.jsonl",
+      "archived_path": "backend/data/character_dialogues/experiments/archive/game_extract_pre_v4/game_riou_candidates.jsonl",
+      "sha256": "e83a67cd18fe1f0bb6b75b47208caeb275f86d2cf1670a1a630460e84a76a6d8",
+      "bytes": 13720,
+      "category": "game_extract_pre_v4"
+    },
+    {
+      "original_path": "backend/data/character_dialogues/kisaki_e2_supplement.json",
+      "archived_path": "backend/data/character_dialogues/experiments/archive/e2_supplement/kisaki_e2_supplement.json",
+      "sha256": "3cb3fb60b9c1cb6edef002a6a870eac1e65f70cde70c26a9ce22feb4ace32064",
+      "bytes": 12051,
+      "category": "e2_supplement"
+    },
+    {
+      "original_path": "backend/data/character_dialogues/kisaki_knowledge_base.json",
+      "archived_path": "backend/data/character_dialogues/experiments/archive/legacy_rag/kisaki_knowledge_base.json",
+      "sha256": "e1ca8cd2dd79144b14fc85426d1d23cfd1eb43350c653096f528bdd3957e654c",
+      "bytes": 6269,
+      "category": "legacy_rag"
+    },
+    {
+      "original_path": "backend/data/character_dialogues/kisaki_llm_generated_v3.json",
+      "archived_path": "backend/data/character_dialogues/experiments/archive/v3_llm_generation/kisaki_llm_generated_v3.json",
+      "sha256": "8d62b88423aa6e96db2718baf9d6dc6fe6aa3e3a9f36ca5ed306975d601a3e0c",
+      "bytes": 208580,
+      "category": "v3_llm_generation"
+    },
+    {
+      "original_path": "backend/data/character_dialogues/experiments/v3/canonical_dataset_manifest.json",
+      "archived_path": "backend/data/character_dialogues/experiments/archive/v3_pipeline/canonical_dataset_manifest.json",
+      "sha256": "31a8e0f9797f94e944b8cf8bed18966d6e6b5c5052e604ac048caf73b31a6933",
+      "bytes": 3038,
+      "category": "v3_pipeline"
+    },
+    {
+      "original_path": "backend/data/character_dialogues/experiments/v3/llm_v4_judged/few_shot_pool.jsonl",
+      "archived_path": "backend/data/character_dialogues/experiments/archive/v3_pipeline/llm_v4_judged/few_shot_pool.jsonl",
+      "sha256": "ea3d26fc4299927fdaa214c269462a6c735bec52fd59f87f7bc9896727dbc205",
+      "bytes": 546219,
+      "category": "v3_pipeline"
+    },
+    {
+      "original_path": "backend/data/character_dialogues/experiments/v3/llm_v4_judged/quota_plan.json",
+      "archived_path": "backend/data/character_dialogues/experiments/archive/v3_pipeline/llm_v4_judged/quota_plan.json",
+      "sha256": "9b5fef2cf0a8ed6899e0ad8d8eace258fd6bf9a5206c993059da5262aab08d55",
+      "bytes": 7854,
+      "category": "v3_pipeline"
+    },
+    {
+      "original_path": "backend/data/character_dialogues/experiments/v3/llm_v4_judged/quota_plan_smoke12.json",
+      "archived_path": "backend/data/character_dialogues/experiments/archive/v3_pipeline/llm_v4_judged/quota_plan_smoke12.json",
+      "sha256": "c89816fa1b67f3fba0ece28f32547964fa470fcfb841fe8055d0b7a895d6b268",
+      "bytes": 6448,
+      "category": "v3_pipeline"
+    },
+    {
+      "original_path": "backend/data/character_dialogues/experiments/v3/llm_v4_judged/train_source_whitelist.json",
+      "archived_path": "backend/data/character_dialogues/experiments/archive/v3_pipeline/llm_v4_judged/train_source_whitelist.json",
+      "sha256": "2586db04a4347f0a92fe8da8f31a3550f7da15684047e53def29537f7718aed8",
+      "bytes": 178105,
+      "category": "v3_pipeline"
+    },
+    {
+      "original_path": "backend/data/character_dialogues/experiments/v3/llm_v4_judged/v3_negative_pool.jsonl",
+      "archived_path": "backend/data/character_dialogues/experiments/archive/v3_pipeline/llm_v4_judged/v3_negative_pool.jsonl",
+      "sha256": "81c4b5334d28fbe68ca9ecbc3bddf918ba14c891644cf45b1dcbed8d7e8adabd",
+      "bytes": 225150,
+      "category": "v3_pipeline"
+    },
+    {
+      "original_path": "backend/data/character_dialogues/experiments/v3/tsukiyashiro_kisaki_eval.json",
+      "archived_path": "backend/data/character_dialogues/experiments/archive/v3_pipeline/tsukiyashiro_kisaki_eval.json",
+      "sha256": "dd0543e6b33cfee171c95b352989ef58cb060ebfc14d873340bd41914442beba",
+      "bytes": 89735,
+      "category": "v3_pipeline"
+    },
+    {
+      "original_path": "backend/data/character_dialogues/experiments/v3/tsukiyashiro_kisaki_train.json",
+      "archived_path": "backend/data/character_dialogues/experiments/archive/v3_pipeline/tsukiyashiro_kisaki_train.json",
+      "sha256": "4ff75cf17e617de5d2abec2a60c562207531674022f29f3faf455db30bfe59a2",
+      "bytes": 810617,
+      "category": "v3_pipeline"
+    }
+  ]
+}

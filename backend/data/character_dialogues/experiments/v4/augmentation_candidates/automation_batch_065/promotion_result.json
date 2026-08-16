@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "status": "promoted",
+  "approval_id": "KISAKI-V41-AUTO-BATCH-065",
+  "source_sessions_sha256": "d25b5b9787a96014c93dd40f8a50a2d90ae9e9af5c9692240142807678923b2b",
+  "approved_sessions_sha256": "4dcb90bb199ede77ea7eff9cb82fa12b18ce64954866dafc8a0ba12ba36ae5e2",
+  "previous_train": {
+    "count": 986,
+    "sha256": "703f095beca219fc7c8203bac83a29161274f476da71f351231de049d52c5f4a"
+  },
+  "promoted": {
+    "record_count": 4,
+    "assistant_turn_count": 20,
+    "record_ids": [
+      "kisaki_v41_auto_b065_removing_food_odors_from_a_wooden_spoon_without_soaking_it",
+      "kisaki_v41_auto_b065_asking_a_friend_to_make_requests_directly_instead_of_relying_on_hints",
+      "kisaki_v41_auto_b065_distinguishing_model_discrimination_from_probability_calibration",
+      "kisaki_v41_auto_b065_auditing_calendar_sharing_after_private_events_become_visible"
+    ]
+  },
+  "result_train": {
+    "count": 990,
+    "sha256": "6c226cd329cb4b90fa66a703ecbc7932909a6cb5132869173dce8cf5b4a12faa"
+  },
+  "validation": {
+    "count": 70,
+    "sha256": "fb5cd5d93027b37be53327cda4e7c6137a7bae97201830fc8aa726727b9777b8",
+    "modified": false
+  },
+  "gold_v3": {
+    "content_modified": false,
+    "contamination_reaudit": "clean",
+    "contamination_audit_path": "backend/evaluation/kisaki_gold_set_v3_contamination_audit.json"
+  }
+}

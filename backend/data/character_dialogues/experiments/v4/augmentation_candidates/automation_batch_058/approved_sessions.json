@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "status": "approved_after_review",
+  "approval_id": "KISAKI-V41-AUTO-BATCH-058",
+  "approved_by": "codex_delegated_by_project_owner",
+  "approved_at": "2026-08-16",
+  "source_sessions_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_058/candidates.json",
+  "decision_sources": [
+    "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_058/review.json",
+    "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_058/revision_history.json",
+    "codex_initial_screening",
+    "project_owner_delegated_automation_approval"
+  ],
+  "base_contract": {
+    "train_count": 958,
+    "train_sha256": "ee9d2ecd92dfb065009bf9c71325f9fe3010d2487a62d2e3240157e4deff4448",
+    "validation_count": 70,
+    "validation_sha256": "fb5cd5d93027b37be53327cda4e7c6137a7bae97201830fc8aa726727b9777b8"
+  },
+  "promotion_contract": {
+    "record_count": 4,
+    "assistant_turn_count": 20,
+    "training_unit": "complete_five_turn_session",
+    "cumulative_prefix_records_allowed": false,
+    "data_source": "codex_user_simulation_v41_reviewed",
+    "source": "automation_batch_058",
+    "version": "v4.1_automation_reviewed",
+    "manifest_check_key": "kisaki_v41_auto_batch_058_promotion",
+    "system_message_embedded": false,
+    "validation_and_gold_content_modified": false
+  },
+  "sessions": [
+    {
+      "session_id": "removing_a_burnt_food_smell_from_a_microwave_safely",
+      "record_id": "kisaki_v41_auto_b058_removing_a_burnt_food_smell_from_a_microwave_safely",
+      "title": "安全去除微波炉里的焦味",
+      "task_type": "casual_chat",
+      "revised_assistant_turns": [],
+      "messages_mode": "source_unchanged"
+    },
+    {
+      "session_id": "responding_when_a_friend_keeps_you_tentative_until_a_better_plan_appears",
+      "record_id": "kisaki_v41_auto_b058_responding_when_a_friend_keeps_you_tentative_until_a_better_plan_appears",
+      "title": "朋友总把约定悬着等待更好安排时设限",
+      "task_type": "emotional_relationship",
+      "revised_assistant_turns": [],
+      "messages_mode": "source_unchanged"
+    },
+    {
+      "session_id": "handling_cluster_robust_inference_with_few_clusters",
+      "record_id": "kisaki_v41_auto_b058_handling_cluster_robust_inference_with_few_clusters",
+      "title": "少量聚类条件下进行稳健推断",
+      "task_type": "research_learning",
+      "revised_assistant_turns": [],
+      "messages_mode": "source_unchanged"
+    },
+    {
+      "session_id": "recovering_an_unsaved_spreadsheet_without_overwriting_newer_versions",
+      "record_id": "kisaki_v41_auto_b058_recovering_an_unsaved_spreadsheet_without_overwriting_newer_versions",
+      "title": "恢复未保存表格且避免覆盖新版本",
+      "task_type": "tool_usage",
+      "revised_assistant_turns": [],
+      "messages_mode": "source_unchanged"
+    }
+  ]
+}

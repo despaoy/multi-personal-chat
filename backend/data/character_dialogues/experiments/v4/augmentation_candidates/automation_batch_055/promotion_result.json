@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "status": "promoted",
+  "approval_id": "KISAKI-V41-AUTO-BATCH-055",
+  "source_sessions_sha256": "1150cecb73fcdda8054c957ace614419668adeb1c6069040c4452793cb8bdf77",
+  "approved_sessions_sha256": "e0d7f14c52bac7b1946fadafa8999ae39edaf34fa6cfa7ec64b52c9815ee119c",
+  "previous_train": {
+    "count": 946,
+    "sha256": "a6104db1aa35c26549ca94bda40f420875b1ab28c6059e10df51cd2495088c69"
+  },
+  "promoted": {
+    "record_count": 4,
+    "assistant_turn_count": 20,
+    "record_ids": [
+      "kisaki_v41_auto_b055_stabilizing_a_wobbly_cutting_board_without_trapping_moisture",
+      "kisaki_v41_auto_b055_asking_a_friend_to_address_a_conflict_instead_of_only_sending_memes",
+      "kisaki_v41_auto_b055_communicating_schedule_estimates_with_explicit_uncertainty",
+      "kisaki_v41_auto_b055_understanding_how_salt_changes_ice_melting"
+    ]
+  },
+  "result_train": {
+    "count": 950,
+    "sha256": "b75686c5a39d8b2038c5f1d6137a49870db977d115931d5579a06ad2ac8f50c7"
+  },
+  "validation": {
+    "count": 70,
+    "sha256": "fb5cd5d93027b37be53327cda4e7c6137a7bae97201830fc8aa726727b9777b8",
+    "modified": false
+  },
+  "gold_v3": {
+    "content_modified": false,
+    "contamination_reaudit": "clean",
+    "contamination_audit_path": "backend/evaluation/kisaki_gold_set_v3_contamination_audit.json"
+  }
+}

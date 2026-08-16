@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "status": "promoted",
+  "approval_id": "KISAKI-V41-AUTO-BATCH-063",
+  "source_sessions_sha256": "5ad0dc7dc835410222e2d62fa86fd745f5b76c97b9985c1421fb396c3977e028",
+  "approved_sessions_sha256": "7dc7ccb0eb6dd51b67d79df2069f0b5df3fc42bcb091a047eb6fd257b54a65d7",
+  "previous_train": {
+    "count": 978,
+    "sha256": "8f4012f9d0edb70ef195e3e863e0053f60fab1f5dac9a7f48737080af2d99e8c"
+  },
+  "promoted": {
+    "record_count": 4,
+    "assistant_turn_count": 20,
+    "record_ids": [
+      "kisaki_v41_auto_b063_slowing_banana_ripening_without_trapping_condensation",
+      "kisaki_v41_auto_b063_asking_a_friend_not_to_edit_your_appearance_before_posting_photos",
+      "kisaki_v41_auto_b063_checking_email_forwarding_rules_after_an_account_compromise",
+      "kisaki_v41_auto_b063_refusing_unsolicited_remote_desktop_support"
+    ]
+  },
+  "result_train": {
+    "count": 982,
+    "sha256": "a675b1cdeee4dfa592b8ded08f3abc52008ef55bee3c2bd25352c77f6bccc985"
+  },
+  "validation": {
+    "count": 70,
+    "sha256": "fb5cd5d93027b37be53327cda4e7c6137a7bae97201830fc8aa726727b9777b8",
+    "modified": false
+  },
+  "gold_v3": {
+    "content_modified": false,
+    "contamination_reaudit": "clean",
+    "contamination_audit_path": "backend/evaluation/kisaki_gold_set_v3_contamination_audit.json"
+  }
+}

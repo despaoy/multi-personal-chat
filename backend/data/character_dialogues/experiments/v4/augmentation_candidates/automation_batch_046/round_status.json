@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "status": "approved_and_promoted",
+  "reason": "下一轮重新执行保护集、跨批次与技术检查后完成权威审核，并以 batch 045 的计数和哈希为基线原子晋升。",
+  "candidate_count": 4,
+  "canonical_modified": true,
+  "promotion_result": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_046/promotion_result.json"
+}

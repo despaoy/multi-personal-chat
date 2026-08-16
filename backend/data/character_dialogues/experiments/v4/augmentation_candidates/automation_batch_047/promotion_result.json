@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "status": "promoted",
+  "approval_id": "KISAKI-V41-AUTO-BATCH-047",
+  "source_sessions_sha256": "1a90370df1003a66060bccef4a065db126e1d5dcd45564b39d355bbb70c0868d",
+  "approved_sessions_sha256": "58107fbd2276ee18dedd24c7051193a5c00e55e6cc12799735aadd2a2c57467d",
+  "previous_train": {
+    "count": 914,
+    "sha256": "4bb160c30e7b82106cb830e695287cbb1d7a48b6b7ce5e3a11ad517543fd0506"
+  },
+  "promoted": {
+    "record_count": 4,
+    "assistant_turn_count": 20,
+    "record_ids": [
+      "kisaki_v41_auto_b047_fixing_a_wooden_drawer_that_sticks_only_in_humid_weather",
+      "kisaki_v41_auto_b047_responding_when_a_friend_keeps_downplaying_their_own_good_news",
+      "kisaki_v41_auto_b047_defining_done_before_handing_a_feature_to_another_team",
+      "kisaki_v41_auto_b047_refusing_to_upload_customer_records_to_an_unapproved_public_ai_service"
+    ]
+  },
+  "result_train": {
+    "count": 918,
+    "sha256": "0e124ad200db764f26d3c8f85573ab86bec37450756a551ae1c488e0395ec4b7"
+  },
+  "validation": {
+    "count": 70,
+    "sha256": "fb5cd5d93027b37be53327cda4e7c6137a7bae97201830fc8aa726727b9777b8",
+    "modified": false
+  },
+  "gold_v3": {
+    "content_modified": false,
+    "contamination_reaudit": "clean",
+    "contamination_audit_path": "backend/evaluation/kisaki_gold_set_v3_contamination_audit.json"
+  }
+}

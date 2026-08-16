@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "status": "promoted",
+  "approval_id": "KISAKI-V41-AUTO-BATCH-061",
+  "source_sessions_sha256": "68d04f3bf75506eaaebd06651429c9534ba458da9248ccbec919c3cd0623714e",
+  "approved_sessions_sha256": "379a4edd45d23ac9030511fa86c5f2300b3c4aa3a3140262aaee4e787cc84b3c",
+  "previous_train": {
+    "count": 970,
+    "sha256": "fda9398750f2bc2b85fc6023ebafcfecb11be74d65f868a125230c6dacf20137"
+  },
+  "promoted": {
+    "record_count": 4,
+    "assistant_turn_count": 20,
+    "record_ids": [
+      "kisaki_v41_auto_b061_drying_and_storing_a_bicycle_helmet_after_riding_in_rain",
+      "kisaki_v41_auto_b061_asking_a_friend_not_to_forward_private_voice_messages",
+      "kisaki_v41_auto_b061_understanding_why_cutting_onions_makes_eyes_water",
+      "kisaki_v41_auto_b061_handing_off_incident_command_during_a_long_running_outage"
+    ]
+  },
+  "result_train": {
+    "count": 974,
+    "sha256": "a6719a9c07dc5593cfe330a004e860c03e503be4e81afd41f714eb348d3ad51a"
+  },
+  "validation": {
+    "count": 70,
+    "sha256": "fb5cd5d93027b37be53327cda4e7c6137a7bae97201830fc8aa726727b9777b8",
+    "modified": false
+  },
+  "gold_v3": {
+    "content_modified": false,
+    "contamination_reaudit": "clean",
+    "contamination_audit_path": "backend/evaluation/kisaki_gold_set_v3_contamination_audit.json"
+  }
+}

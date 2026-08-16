@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "status": "approved_after_review",
+  "approval_id": "KISAKI-V41-AUTO-BATCH-060",
+  "approved_by": "codex_delegated_by_project_owner",
+  "approved_at": "2026-08-16",
+  "source_sessions_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_060/candidates.json",
+  "decision_sources": [
+    "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_060/review.json",
+    "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_060/revision_history.json",
+    "codex_initial_screening",
+    "project_owner_delegated_automation_approval"
+  ],
+  "base_contract": {
+    "train_count": 966,
+    "train_sha256": "250166ada420696faa59b04b3a9229206f0c8075869c14e21101d397f1e2e9f0",
+    "validation_count": 70,
+    "validation_sha256": "fb5cd5d93027b37be53327cda4e7c6137a7bae97201830fc8aa726727b9777b8"
+  },
+  "promotion_contract": {
+    "record_count": 4,
+    "assistant_turn_count": 20,
+    "training_unit": "complete_five_turn_session",
+    "cumulative_prefix_records_allowed": false,
+    "data_source": "codex_user_simulation_v41_reviewed",
+    "source": "automation_batch_060",
+    "version": "v4.1_automation_reviewed",
+    "manifest_check_key": "kisaki_v41_auto_batch_060_promotion",
+    "system_message_embedded": false,
+    "validation_and_gold_content_modified": false
+  },
+  "sessions": [
+    {
+      "session_id": "separating_two_drinking_glasses_stuck_inside_each_other",
+      "record_id": "kisaki_v41_auto_b060_separating_two_drinking_glasses_stuck_inside_each_other",
+      "title": "安全分开套住的两个玻璃杯",
+      "task_type": "casual_chat",
+      "revised_assistant_turns": [],
+      "messages_mode": "source_unchanged"
+    },
+    {
+      "session_id": "giving_feedback_to_a_friend_who_requests_honesty_but_argues_every_point",
+      "record_id": "kisaki_v41_auto_b060_giving_feedback_to_a_friend_who_requests_honesty_but_argues_every_point",
+      "title": "朋友要求诚实意见却逐条争辩时调整回应",
+      "task_type": "emotional_relationship",
+      "revised_assistant_turns": [],
+      "messages_mode": "source_unchanged"
+    },
+    {
+      "session_id": "separating_mediation_from_post_treatment_confounding",
+      "record_id": "kisaki_v41_auto_b060_separating_mediation_from_post_treatment_confounding",
+      "title": "区分中介分析与处理后混杂",
+      "task_type": "research_learning",
+      "revised_assistant_turns": [],
+      "messages_mode": "source_unchanged"
+    },
+    {
+      "session_id": "scanning_receipts_with_ocr_before_discarding_the_originals",
+      "record_id": "kisaki_v41_auto_b060_scanning_receipts_with_ocr_before_discarding_the_originals",
+      "title": "用 OCR 归档票据后再处理原件",
+      "task_type": "tool_usage",
+      "revised_assistant_turns": [],
+      "messages_mode": "source_unchanged"
+    }
+  ]
+}

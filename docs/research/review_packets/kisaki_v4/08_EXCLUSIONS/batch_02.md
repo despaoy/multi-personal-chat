@@ -11,6 +11,7 @@
 - 原作定位：`3蓝宝石的存在证明.txt:line:2780`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_prompt`
 
 **user**
 
@@ -35,6 +36,7 @@
 - 原作定位：`3蓝宝石的存在证明.txt:line:2792`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_prompt`
 
 **user**
 
@@ -59,6 +61,7 @@
 - 原作定位：`3蓝宝石的存在证明.txt:line:2870`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_reply, short_reply`
 
 **user**
 
@@ -84,6 +87,7 @@
 - 原作定位：`3蓝宝石的存在证明.txt:line:3285`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_prompt`
 
 **user**
 
@@ -108,6 +112,7 @@
 - 原作定位：`3蓝宝石的存在证明.txt:line:3289`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_prompt`
 
 **user**
 
@@ -132,6 +137,7 @@
 - 原作定位：`3蓝宝石的存在证明.txt:line:3322`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_prompt`
 
 **user**
 
@@ -156,6 +162,7 @@
 - 原作定位：`3蓝宝石的存在证明.txt:line:3391`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_prompt`
 
 **user**
 
@@ -180,6 +187,7 @@
 - 原作定位：`3蓝宝石的存在证明.txt:line:3406`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_prompt`
 
 **user**
 
@@ -204,6 +212,7 @@
 - 原作定位：`3蓝宝石的存在证明.txt:line:3519`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_prompt`
 
 **user**
 
@@ -229,6 +238,7 @@
 - 原作定位：`3蓝宝石的存在证明.txt:line:3551`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_prompt`
 
 **user**
 
@@ -253,6 +263,7 @@
 - 原作定位：`3蓝宝石的存在证明.txt:line:3657`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_prompt`
 
 **user**
 
@@ -278,6 +289,7 @@
 - 原作定位：`4紫水晶的怪异传说.txt:line:1060`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_prompt`
 
 **user**
 
@@ -304,6 +316,7 @@
 - 原作定位：`4紫水晶的怪异传说.txt:line:1086`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_reply, short_reply`
 
 **user**
 
@@ -328,6 +341,7 @@
 - 原作定位：`4紫水晶的怪异传说.txt:line:1121`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_prompt`
 
 **user**
 
@@ -352,6 +366,7 @@
 - 原作定位：`4紫水晶的怪异传说.txt:line:1156`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_prompt`
 
 **user**
 
@@ -377,6 +392,7 @@
 - 原作定位：`4紫水晶的怪异传说.txt:line:1174`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_prompt`
 
 **user**
 
@@ -401,6 +417,7 @@
 - 原作定位：`4紫水晶的怪异传说.txt:line:2073`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_prompt`
 
 **user**
 
@@ -425,6 +442,7 @@
 - 原作定位：`5磷灰石的怠惰现象.txt:line:205`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_prompt`
 
 **user**
 
@@ -449,6 +467,7 @@
 - 原作定位：`5磷灰石的怠惰现象.txt:line:507`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_prompt`
 
 **user**
 
@@ -474,6 +493,7 @@
 - 原作定位：`5磷灰石的怠惰现象.txt:line:2486`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_prompt`
 
 **user**
 
@@ -498,6 +518,7 @@
 - 原作定位：`6芙蓉石的长年隔绝.txt:line:44`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_prompt, missing_context`
 
 **user**
 
@@ -522,6 +543,7 @@
 - 原作定位：`6芙蓉石的长年隔绝.txt:line:58`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_prompt`
 
 **user**
 
@@ -546,6 +568,7 @@
 - 原作定位：`7黑珍珠的求爱信号.txt:line:250`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_prompt`
 
 **user**
 
@@ -573,6 +596,7 @@
 - 原作定位：`8萤石的怠惰现象.txt:line:196`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_reply, short_reply`
 
 **user**
 
@@ -600,6 +624,7 @@
 - 原作定位：`8萤石的怠惰现象.txt:line:228`
 - AI 初步建议：`待确认`
 - 自动问题：assistant 回复超过 100 字，需确认场景是否确实需要长回答
+- 排除原因：`low_information_prompt`
 
 **user**
 
@@ -630,6 +655,7 @@
 - 原作定位：`8萤石的怠惰现象.txt:line:612`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_prompt`
 
 **user**
 
@@ -656,6 +682,7 @@
 - 原作定位：`8萤石的怠惰现象.txt:line:906`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_prompt`
 
 **user**
 
@@ -680,6 +707,7 @@
 - 原作定位：`8萤石的怠惰现象.txt:line:919`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_prompt`
 
 **user**
 
@@ -705,6 +733,7 @@
 - 原作定位：`8萤石的怠惰现象.txt:line:1023`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_prompt`
 
 **user**
 
@@ -729,6 +758,7 @@
 - 原作定位：`8萤石的怠惰现象.txt:line:1039`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_prompt`
 
 **user**
 
@@ -753,6 +783,7 @@
 - 原作定位：`8萤石的怠惰现象.txt:line:1202`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_prompt`
 
 **user**
 
@@ -778,6 +809,7 @@
 - 原作定位：`8萤石的怠惰现象.txt:line:1236`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_prompt`
 
 **user**
 
@@ -802,6 +834,7 @@
 - 原作定位：`8萤石的时空残影.txt:line:1`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_prompt, missing_context`
 
 **user**
 
@@ -827,6 +860,7 @@
 - 原作定位：`8萤石的时空残影.txt:line:11`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_prompt`
 
 **user**
 
@@ -852,6 +886,7 @@
 - 原作定位：`8萤石的时空残影.txt:line:38`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_prompt`
 
 **user**
 
@@ -876,6 +911,7 @@
 - 原作定位：`8萤石的时空残影.txt:line:185`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_prompt`
 
 **user**
 
@@ -900,6 +936,7 @@
 - 原作定位：`8萤石的时空残影.txt:line:212`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_prompt`
 
 **user**
 
@@ -927,6 +964,7 @@
 - 原作定位：`8萤石的时空残影.txt:line:655`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_prompt`
 
 **user**
 
@@ -952,6 +990,7 @@
 - 原作定位：`8萤石的时空残影.txt:line:683`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_prompt`
 
 **user**
 
@@ -977,6 +1016,7 @@
 - 原作定位：`8萤石的时空残影.txt:line:688`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_prompt`
 
 **user**
 
@@ -1002,6 +1042,7 @@
 - 原作定位：`8萤石的时空残影.txt:line:693`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_prompt`
 
 **user**
 
@@ -1027,6 +1068,7 @@
 - 原作定位：`8萤石的时空残影.txt:line:696`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_prompt`
 
 **user**
 
@@ -1052,6 +1094,7 @@
 - 原作定位：`8萤石的时空残影.txt:line:701`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_prompt`
 
 **user**
 
@@ -1077,6 +1120,7 @@
 - 原作定位：`8萤石的时空残影.txt:line:724`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_prompt`
 
 **user**
 
@@ -1102,6 +1146,7 @@
 - 原作定位：`8萤石的时空残影.txt:line:854`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_prompt`
 
 **user**
 
@@ -1126,6 +1171,7 @@
 - 原作定位：`8萤石的时空残影.txt:line:863`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_prompt`
 
 **user**
 
@@ -1150,6 +1196,7 @@
 - 原作定位：`8萤石的时空残影.txt:line:1008`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_prompt`
 
 **user**
 
@@ -1175,6 +1222,7 @@
 - 原作定位：`8萤石的时空残影.txt:line:1211`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_prompt`
 
 **user**
 
@@ -1199,6 +1247,7 @@
 - 原作定位：`8萤石的时空残影.txt:line:1292`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_prompt`
 
 **user**
 
@@ -1223,6 +1272,7 @@
 - 原作定位：`9白珍珠的泡沫爱慕.txt:line:1676`
 - AI 初步建议：`建议通过`
 - 自动问题：未发现硬性问题
+- 排除原因：`low_information_prompt`
 
 **user**
 

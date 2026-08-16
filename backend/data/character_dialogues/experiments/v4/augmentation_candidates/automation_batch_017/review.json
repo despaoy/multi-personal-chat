@@ -1,0 +1,18 @@
+{
+  "schema_version":1,"batch_id":"KISAKI-V41-AUTO-BATCH-017","status":"approved_after_review","reviewer":"codex_delegated_by_project_owner","reviewed_at":"2026-08-16","candidate_count":4,"assistant_turn_count":20,
+  "summary":{"passed_unchanged":20,"revised_then_passed":0,"rejected":0,"approved_complete_sessions":4},
+  "rubric":["persona_consistency","question_answer_alignment","fact_grounding","technical_correctness","multiturn_continuity","information_timing","naturalness","safety_boundary","template_avoidance"],
+  "evidence_refs":["docs/research/review_packets/kisaki_v4/01_PROFILE_PROMPT/01_character_profile.md","backend/data/character_dialogues/kisaki_system_prompt_v3.txt","docs/research/review_packets/kisaki_v4/01_PROFILE_PROMPT/03_contextual_expression_policy_draft.md"],
+  "technical_verification":{"status":"passed","coverage":["HTTP cache freshness and revalidation semantics","ETag and 304 response reuse","Cache-Control private no-cache no-store distinctions","notification acceptance criteria and authorization edge cases"]},
+  "protected_overlap_review":{"threshold":0.9,"reference_sets":["train","validation","gold_v21","gold_v3","automation_batch_018"],"candidate_user_turn_count":20,"match_count":0,"status":"clean"},
+  "session_reviews":[
+    {"session_id":"neighborhood_cat_follows_home","decision":"pass","turn_reviews":[
+      {"turn":1,"decision":"pass","reason":"没有把亲人和跟随直接判成走失，先收集可见证据。"},{"turn":2,"decision":"pass","reason":"优先处理车道风险，动作建议克制可行。"},{"turn":3,"decision":"pass","reason":"在不能收养的限制下给出扫芯片、救助和寻主替代方案。"},{"turn":4,"decision":"pass","reason":"认领核验要求具体，避免仅凭口头主张交付。"},{"turn":5,"decision":"pass","reason":"承接主人到场并自然收束，猫元素由情境触发而非机械植入。"}]},
+    {"session_id":"repairing_trust_after_private_disclosure","decision":"pass","turn_reviews":[
+      {"turn":1,"decision":"pass","reason":"区分道歉与信任修复，未催促用户立即表态。"},{"turn":2,"decision":"pass","reason":"准确区分担心的动机与未经同意的越界。"},{"turn":3,"decision":"pass","reason":"补救动作具体，也没有虚构信息能够完全收回。"},{"turn":4,"decision":"pass","reason":"允许用户暂时不给原谅条件，表达边界自然。"},{"turn":5,"decision":"pass","reason":"以持续行动作为恢复依据，不把谨慎距离描述为惩罚。"}]},
+    {"session_id":"http_cache_etag_304","decision":"pass","turn_reviews":[
+      {"turn":1,"decision":"pass","reason":"正确说明缓存对象并区分浏览器与普通 API 客户端。"},{"turn":2,"decision":"pass","reason":"正确区分新鲜度过期与条目删除。"},{"turn":3,"decision":"pass","reason":"ETag、If-None-Match 与 304 流程准确。"},{"turn":4,"decision":"pass","reason":"准确说明 304 依赖已有缓存响应体。"},{"turn":5,"decision":"pass","reason":"private、no-cache、no-store 和 s-maxage 的边界准确。"}]},
+    {"session_id":"verifiable_notification_acceptance_criteria","decision":"pass","turn_reviews":[
+      {"turn":1,"decision":"pass","reason":"把及时改写为可测时限并补齐触发与内容。"},{"turn":2,"decision":"pass","reason":"未读计数和点击状态转换可执行。"},{"turn":3,"decision":"pass","reason":"去重键、用户范围与结果定义清晰。"},{"turn":4,"decision":"pass","reason":"同时覆盖界面和接口权限，避免隐藏按钮式伪安全。"},{"turn":5,"decision":"pass","reason":"补充计时口径、证据与测试数据，收束具有角色判断力。"}]}
+  ]
+}

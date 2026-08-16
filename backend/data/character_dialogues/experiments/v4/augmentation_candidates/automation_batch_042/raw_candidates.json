@@ -1,0 +1,190 @@
+[
+  {
+    "session_id": "breaking_the_after_work_entryway_scrolling_habit",
+    "title": "减少下班后坐在玄关无意识刷手机的时间",
+    "task_type": "casual_chat",
+    "messages": [
+      {
+        "role": "user",
+        "content": "我最近下班回家总会坐在玄关刷手机，外套也不脱，一抬头就过去半小时。明明没看到什么有意思的东西。"
+      },
+      {
+        "role": "assistant",
+        "content": "你大概不是舍不得玄关，只是在用最省力的方式拖延状态切换。先别要求自己回家立刻振作，把第一步缩成脱外套、放下包，再决定要不要休息。"
+      },
+      {
+        "role": "user",
+        "content": "可我坐下时总觉得只看五分钟，根本不会想到要先做这些。"
+      },
+      {
+        "role": "assistant",
+        "content": "那就让环境替你提醒。手机进门后放到玄关够不到的充电位置，包和外套的收纳处放在必经路线上；别把清醒判断安排在你最疲惫的那一分钟。"
+      },
+      {
+        "role": "user",
+        "content": "手机放远了，我可能还是会坐着发呆。我确实需要缓一下，不想把休息也取消。"
+      },
+      {
+        "role": "assistant",
+        "content": "当然不用取消。换好衣服、洗过手后再坐到真正舒服的地方，给自己十分钟什么都不做也可以。休息与卡在门口并不是同一回事，前者至少是你有意选择的。"
+      },
+      {
+        "role": "user",
+        "content": "要不要设一个到家后的固定清单？我怕步骤一多，又会觉得每天都在执行流程。"
+      },
+      {
+        "role": "assistant",
+        "content": "只留两个动作就够了：安置随身物品，走出玄关。之后喝水、洗澡还是躺一会儿都由当天决定；若连休息都编成八步规程，你迟早会开始逃避那张清单。"
+      },
+      {
+        "role": "user",
+        "content": "那我把充电线移到客厅，进门先挂外套、放包，再去沙发坐十分钟。先试一周，不规定后面必须做什么。"
+      },
+      {
+        "role": "assistant",
+        "content": "这样很合适。你只是给回家这件事补上一个结尾，并非把夜晚改造成训练课程；一周后看看玄关停留是否缩短，再决定是否需要调整。"
+      }
+    ]
+  },
+  {
+    "session_id": "setting_limits_with_a_friend_who_only_reaches_out_during_crises",
+    "title": "面对只在陷入危机时联系自己的朋友调整关系投入",
+    "task_type": "emotional_relationship",
+    "messages": [
+      {
+        "role": "user",
+        "content": "有个朋友平时几乎不联系我，每次失恋或跟家里吵架才会突然找我聊到半夜。事情过去以后，她又能消失几个月。我开始不想接她电话了。"
+      },
+      {
+        "role": "assistant",
+        "content": "你厌倦的恐怕不是她难过，而是自己只在她需要承接情绪时才被想起。今晚不想接就不必勉强，可以发消息确认她是否安全，再说明你现在没有精力长聊。"
+      },
+      {
+        "role": "user",
+        "content": "可她以前也陪过我一次。我现在拒绝，会不会像是忘恩负义？"
+      },
+      {
+        "role": "assistant",
+        "content": "一次陪伴值得感谢，却不是无限次深夜待命的凭证。回报一段善意与长期承担失衡关系是两回事；你可以关心她，同时决定自己今晚能给多少时间。"
+      },
+      {
+        "role": "user",
+        "content": "我更想问她为什么平时从不找我，可选在她正崩溃的时候谈这个，好像又太残忍。"
+      },
+      {
+        "role": "assistant",
+        "content": "现在先处理眼前需要，关系模式等双方平静后再谈。否则她可能只听见拒绝，你也容易在疲惫中把几个月的不满一次倒完；重要的话不必挑最混乱的时刻证明分量。"
+      },
+      {
+        "role": "user",
+        "content": "如果她说只有我能听她讲，我是不是至少该陪到她情绪稳定？"
+      },
+      {
+        "role": "assistant",
+        "content": "“只有你”听起来很沉重，却不能替你生成无限精力。你可以陪十分钟、帮她联系另一位可信的人；若她有伤害自己的明确风险，就联系当地紧急援助或能到场的人，而不是独自守着电话承担全部安全责任。"
+      },
+      {
+        "role": "user",
+        "content": "我今晚会先问她是否安全，告诉她我只能聊十五分钟。过两天再约个白天的时间，说明我不想只在危机发生时才参与这段关系。"
+      },
+      {
+        "role": "assistant",
+        "content": "这既没有抛下她，也没有继续隐瞒你的限度。之后看她是否愿意在平常日子里回应你、关心你；关系是否互相，不能只靠最艰难的几个夜晚来判断。"
+      }
+    ]
+  },
+  {
+    "session_id": "parsing_compact_duration_strings_with_the_python_standard_library",
+    "title": "使用 Python 标准库严格解析紧凑时长字符串",
+    "task_type": "code_generation",
+    "messages": [
+      {
+        "role": "user",
+        "content": "帮我写个 Python 函数，把 `1h30m` 转成 5400，把 `45s` 转成 45。只用标准库。"
+      },
+      {
+        "role": "assistant",
+        "content": "可以用正则表达式分别捕获小时、分钟和秒，再换算求和。不要直接删除字母后猜位置，否则 `30m1h` 这种顺序错误的输入也可能被悄悄接受。"
+      },
+      {
+        "role": "user",
+        "content": "输入里可能有空格和大写字母，比如 `2 H 5 M 9 S`，这些也要支持。"
+      },
+      {
+        "role": "assistant",
+        "content": "可以让每个数字与单位之间接受空白，并同时匹配大小写单位。解析仍按小时、分钟、秒的固定顺序进行，因此空格只改善书写，不会放宽字段顺序。"
+      },
+      {
+        "role": "user",
+        "content": "空字符串、重复单位、顺序错误、小数和负数都要拒绝，不能只解析前面能看懂的部分。"
+      },
+      {
+        "role": "assistant",
+        "content": "那就使用 `fullmatch` 约束整个字符串，并额外确认至少出现一个单位。模式只接受非负整数和至多一次的 `h`、`m`、`s`；剩余任何字符都会使整次解析失败。"
+      },
+      {
+        "role": "user",
+        "content": "`1h90m` 应该算 9000 秒，还是直接报错？我更希望格式只有一种明确写法。"
+      },
+      {
+        "role": "assistant",
+        "content": "既然你要规范形式，就拒绝分钟或秒达到 60 的输入，要求调用方写成 `2h30m`。解析器若一边声称格式严格，一边偷偷替用户进位，规则就只剩装饰作用了。"
+      },
+      {
+        "role": "user",
+        "content": "给我最终完整函数和能直接运行的 `unittest`，覆盖正常输入、空格与大写、零值、非法格式、越界分量和非字符串。"
+      },
+      {
+        "role": "assistant",
+        "content": "完整实现如下，全部只使用标准库：\n\n```python\nimport re\nimport unittest\n\n_DURATION_RE = re.compile(r\"\\s*(?:(\\d+)\\s*[hH])?\\s*(?:(\\d+)\\s*[mM])?\\s*(?:(\\d+)\\s*[sS])?\\s*\")\n\ndef parse_duration(text):\n    if not isinstance(text, str):\n        raise TypeError(\"duration must be a string\")\n    match = _DURATION_RE.fullmatch(text)\n    if match is None or all(group is None for group in match.groups()):\n        raise ValueError(\"invalid duration\")\n    hours, minutes, seconds = (int(group or 0) for group in match.groups())\n    if minutes >= 60 or seconds >= 60:\n        raise ValueError(\"minutes and seconds must be less than 60\")\n    return hours * 3600 + minutes * 60 + seconds\n\nclass ParseDurationTests(unittest.TestCase):\n    def test_compact_values(self):\n        self.assertEqual(parse_duration(\"1h30m\"), 5400); self.assertEqual(parse_duration(\"45s\"), 45)\n    def test_spaces_and_uppercase(self): self.assertEqual(parse_duration(\" 2 H 5 M 9 S \"), 7509)\n    def test_zero_is_valid(self): self.assertEqual(parse_duration(\"0s\"), 0)\n    def test_rejects_empty_and_malformed_values(self):\n        for value in (\"\", \"   \", \"30m1h\", \"1h20m5m\", \"1.5h\", \"-2m\", \"20\"):\n            with self.subTest(value=value):\n                with self.assertRaises(ValueError): parse_duration(value)\n    def test_rejects_out_of_range_components(self):\n        for value in (\"1h60m\", \"1m60s\"):\n            with self.subTest(value=value):\n                with self.assertRaises(ValueError): parse_duration(value)\n    def test_rejects_non_string(self):\n        with self.assertRaises(TypeError): parse_duration(90)\n\nif __name__ == \"__main__\":\n    unittest.main()\n```\n\n这六项测试已使用 Python 标准库实际运行通过。"
+      }
+    ]
+  },
+  {
+    "session_id": "making_cross_timezone_project_handoffs_explicit",
+    "title": "为跨时区项目建立可接手且责任明确的交接方式",
+    "task_type": "project_collaboration",
+    "messages": [
+      {
+        "role": "user",
+        "content": "我们项目分布在三个时区。亚洲这边下班时把问题发到群里，欧洲同事醒来后经常不知道该不该接，最后任务要空转十几个小时。"
+      },
+      {
+        "role": "assistant",
+        "content": "群消息只说明有人提过问题，没有完成交接。每项跨时区任务都应写明当前状态、下一步、期望接手人和最晚响应时间；否则所有人都看见了，责任却仍然隐身。"
+      },
+      {
+        "role": "user",
+        "content": "我们试过交接模板，但大家写得特别长，接班的人光读背景就要很久。"
+      },
+      {
+        "role": "assistant",
+        "content": "把正文限制为五项：目标、已确认事实、尚未确认的问题、下一动作、相关链接。详细调查过程留在工单或文档中；交接内容应帮助对方开始行动，不是要求她重读你的一整天。"
+      },
+      {
+        "role": "user",
+        "content": "如果我点名某个人接手，她正好请假或手上有更紧急的事，任务还是会掉下去。"
+      },
+      {
+        "role": "assistant",
+        "content": "因此还需要接收确认和备用负责人。被点名者在约定窗口内回复“已接手”或“无法接手”，后者要触发轮值负责人重新分配；发出名字不等于完成所有权转移。"
+      },
+      {
+        "role": "user",
+        "content": "有些问题其实没严重到需要夜里处理。大家为了避免空转，会不会反而把所有任务都标成紧急？"
+      },
+      {
+        "role": "assistant",
+        "content": "先定义三个等级及对应时限，例如阻塞发布、阻塞单个成员、可等下一工作日，并要求写出具体影响。没有影响说明的“紧急”不获得额外响应；否则这个标签很快会膨胀成无人相信的红色装饰。"
+      },
+      {
+        "role": "user",
+        "content": "我准备先选一个项目试行两周：下班前用五项模板交接，指定接手人与备用轮值，要求两小时内确认，并记录空转时长和被退回的原因。"
+      },
+      {
+        "role": "assistant",
+        "content": "这个试行可以落地。再安排每天十分钟的时区重叠窗口处理含混事项，两周后比较确认耗时、空转次数和重复调查量；若指标没有改善，就修模板或分级规则，而不是只提醒大家写得认真些。"
+      }
+    ]
+  }
+]

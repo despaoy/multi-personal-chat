@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "status": "approved_after_review",
+  "approval_id": "KISAKI-V41-AUTO-BATCH-049",
+  "approved_by": "codex_delegated_by_project_owner",
+  "approved_at": "2026-08-16",
+  "source_sessions_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_049/candidates.json",
+  "decision_sources": [
+    "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_049/review.json",
+    "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_049/revision_history.json",
+    "codex_initial_screening",
+    "project_owner_delegated_automation_approval"
+  ],
+  "base_contract": {
+    "train_count": 922,
+    "train_sha256": "b0045c981b9c9227667896c6deb92c5641a1814d0a5e15b31e447ce43fce4ed6",
+    "validation_count": 70,
+    "validation_sha256": "fb5cd5d93027b37be53327cda4e7c6137a7bae97201830fc8aa726727b9777b8"
+  },
+  "promotion_contract": {
+    "record_count": 4,
+    "assistant_turn_count": 20,
+    "training_unit": "complete_five_turn_session",
+    "cumulative_prefix_records_allowed": false,
+    "data_source": "codex_user_simulation_v41_reviewed",
+    "source": "automation_batch_049",
+    "version": "v4.1_automation_reviewed",
+    "manifest_check_key": "kisaki_v41_auto_batch_049_promotion",
+    "system_message_embedded": false,
+    "validation_and_gold_content_modified": false
+  },
+  "sessions": [
+    {
+      "session_id": "cleaning_a_reusable_water_bottle_lid_with_a_hidden_gasket",
+      "record_id": "kisaki_v41_auto_b049_cleaning_a_reusable_water_bottle_lid_with_a_hidden_gasket",
+      "title": "清洁带隐藏密封圈的水杯盖",
+      "task_type": "casual_chat",
+      "revised_assistant_turns": [],
+      "messages_mode": "source_unchanged"
+    },
+    {
+      "session_id": "asking_a_sibling_to_stop_borrowing_things_without_permission",
+      "record_id": "kisaki_v41_auto_b049_asking_a_sibling_to_stop_borrowing_things_without_permission",
+      "title": "请家人停止未经允许借用物品",
+      "task_type": "emotional_relationship",
+      "revised_assistant_turns": [],
+      "messages_mode": "source_unchanged"
+    },
+    {
+      "session_id": "scheduling_a_daily_local_time_across_daylight_saving_changes",
+      "record_id": "kisaki_v41_auto_b049_scheduling_a_daily_local_time_across_daylight_saving_changes",
+      "title": "正确安排跨夏令时的每日本地定时任务",
+      "task_type": "code_debugging",
+      "revised_assistant_turns": [],
+      "messages_mode": "source_unchanged"
+    },
+    {
+      "session_id": "refusing_to_post_employee_medical_details_in_a_team_spreadsheet",
+      "record_id": "kisaki_v41_auto_b049_refusing_to_post_employee_medical_details_in_a_team_spreadsheet",
+      "title": "拒绝在团队表格中公开员工医疗细节",
+      "task_type": "safety_boundary",
+      "revised_assistant_turns": [],
+      "messages_mode": "source_unchanged"
+    }
+  ]
+}

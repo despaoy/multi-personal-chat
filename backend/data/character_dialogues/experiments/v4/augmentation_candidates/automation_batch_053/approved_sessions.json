@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "status": "approved_after_review",
+  "approval_id": "KISAKI-V41-AUTO-BATCH-053",
+  "approved_by": "codex_delegated_by_project_owner",
+  "approved_at": "2026-08-16",
+  "source_sessions_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_053/candidates.json",
+  "decision_sources": [
+    "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_053/review.json",
+    "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_053/revision_history.json",
+    "codex_initial_screening",
+    "project_owner_delegated_automation_approval"
+  ],
+  "base_contract": {
+    "train_count": 938,
+    "train_sha256": "ff3d3e6c953df208c2a6d795b75e919efe3e2d7065e5a048e7e702e0ccdb4ccb",
+    "validation_count": 70,
+    "validation_sha256": "fb5cd5d93027b37be53327cda4e7c6137a7bae97201830fc8aa726727b9777b8"
+  },
+  "promotion_contract": {
+    "record_count": 4,
+    "assistant_turn_count": 20,
+    "training_unit": "complete_five_turn_session",
+    "cumulative_prefix_records_allowed": false,
+    "data_source": "codex_user_simulation_v41_reviewed",
+    "source": "automation_batch_053",
+    "version": "v4.1_automation_reviewed",
+    "manifest_check_key": "kisaki_v41_auto_batch_053_promotion",
+    "system_message_embedded": false,
+    "validation_and_gold_content_modified": false
+  },
+  "sessions": [
+    {
+      "session_id": "reducing_static_cling_in_laundry_without_fabric_softener",
+      "record_id": "kisaki_v41_auto_b053_reducing_static_cling_in_laundry_without_fabric_softener",
+      "title": "不用柔顺剂减少衣物静电",
+      "task_type": "casual_chat",
+      "revised_assistant_turns": [],
+      "messages_mode": "source_unchanged"
+    },
+    {
+      "session_id": "responding_to_a_friend_who_repeatedly_asks_if_you_are_angry",
+      "record_id": "kisaki_v41_auto_b053_responding_to_a_friend_who_repeatedly_asks_if_you_are_angry",
+      "title": "朋友反复确认你是否生气时回应",
+      "task_type": "emotional_relationship",
+      "revised_assistant_turns": [],
+      "messages_mode": "source_unchanged"
+    },
+    {
+      "session_id": "interpreting_a_confidence_interval_that_crosses_the_null_value",
+      "record_id": "kisaki_v41_auto_b053_interpreting_a_confidence_interval_that_crosses_the_null_value",
+      "title": "正确解释跨越零值的置信区间",
+      "task_type": "research_learning",
+      "revised_assistant_turns": [],
+      "messages_mode": "source_unchanged"
+    },
+    {
+      "session_id": "moving_an_authenticator_app_to_a_new_phone_without_lockout",
+      "record_id": "kisaki_v41_auto_b053_moving_an_authenticator_app_to_a_new_phone_without_lockout",
+      "title": "更换手机时安全迁移验证器",
+      "task_type": "tool_usage",
+      "revised_assistant_turns": [],
+      "messages_mode": "source_unchanged"
+    }
+  ]
+}

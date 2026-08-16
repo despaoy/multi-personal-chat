@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "status": "approved_and_promoted",
+  "candidate_count": 4,
+  "canonical_modified": true,
+  "reason": "恢复后重新执行保护集与跨批次检查，并以 batch 050 最终计数和哈希重建 base contract 后晋升。",
+  "promotion_result": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_051/promotion_result.json"
+}

@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "revision_count": 1,
+  "items": [
+    {
+      "attempt": 1,
+      "original_session_id": "understanding_why_metal_feels_colder_than_wood_at_the_same_temperature",
+      "original_title": "理解同温金属为何比木材摸起来更冷",
+      "original_task_type": "knowledge_explanation",
+      "decision": "revise",
+      "reason": "与 batch 029 已晋升的同温金属和木材触感主题重复",
+      "revised_session_id": "understanding_why_microwaved_food_heats_unevenly",
+      "revised_title": "理解微波炉加热食物为何容易冷热不均",
+      "approved": true,
+      "approved_source": "main_reviewer"
+    }
+  ]
+}

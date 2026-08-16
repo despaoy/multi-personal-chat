@@ -1,0 +1,76 @@
+{
+  "schema_version": 1,
+  "status": "approved_after_revision",
+  "approval_id": "KISAKI-V41-AUTO-BATCH-013",
+  "approved_by": "codex_delegated_by_project_owner",
+  "approved_at": "2026-08-16",
+  "source_sessions_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_013/candidates.json",
+  "decision_sources": [
+    "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_013/review.json",
+    "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_013/technical_verification.py",
+    "project_owner_delegated_automation_approval"
+  ],
+  "base_contract": {
+    "train_count": 778,
+    "train_sha256": "f7daf31590282b5905a5dc2da61bee29f72c571f8f4f603098eafe33dde188b3",
+    "validation_count": 70,
+    "validation_sha256": "fb5cd5d93027b37be53327cda4e7c6137a7bae97201830fc8aa726727b9777b8"
+  },
+  "promotion_contract": {
+    "record_count": 4,
+    "assistant_turn_count": 20,
+    "training_unit": "complete_five_turn_session",
+    "cumulative_prefix_records_allowed": false,
+    "data_source": "codex_user_simulation_v41_reviewed",
+    "source": "automation_batch_013",
+    "version": "v4.1_automation_reviewed",
+    "manifest_check_key": "kisaki_v41_auto_batch_013_promotion",
+    "system_message_embedded": false,
+    "validation_and_gold_content_modified": false
+  },
+  "sessions": [
+    {
+      "session_id": "yellowing_pothos_leaves",
+      "record_id": "kisaki_v41_auto_b013_yellowing_pothos_leaves",
+      "title": "绿萝叶片发黄后的处理",
+      "task_type": "casual_chat",
+      "revised_assistant_turns": [],
+      "messages_mode": "source_unchanged"
+    },
+    {
+      "session_id": "friend_jokes_in_group_chat",
+      "record_id": "kisaki_v41_auto_b013_friend_jokes_in_group_chat",
+      "title": "朋友在群聊反复拿自己开玩笑",
+      "task_type": "emotional_relationship",
+      "revised_assistant_turns": [],
+      "messages_mode": "source_unchanged"
+    },
+    {
+      "session_id": "confidence_interval_interpretation",
+      "record_id": "kisaki_v41_auto_b013_confidence_interval_interpretation",
+      "title": "正确解释置信区间与可信区间",
+      "task_type": "research_learning",
+      "revised_assistant_turns": [],
+      "messages_mode": "source_unchanged"
+    },
+    {
+      "session_id": "timezone_daily_scheduler",
+      "record_id": "kisaki_v41_auto_b013_timezone_daily_scheduler",
+      "title": "Python 每日本地时间调度与夏令时处理",
+      "task_type": "code_debugging",
+      "revised_assistant_turns": [5],
+      "messages": [
+        {"role": "user", "content": "我在 Python 里给全球用户做每天早上九点提醒，现在只存一个 naive datetime，换到不同时区就会漂。"},
+        {"role": "assistant", "content": "因为 naive datetime 根本没有说明“九点属于哪里”。周期提醒应保存本地钟点和 IANA 时区名，每次计算下一次执行时再转成 UTC；只存第一次换算出的 UTC，会让采用夏令时的用户半年后莫名早到或迟到。"},
+        {"role": "user", "content": "我给每个用户存一个 +08:00、-05:00 这样的偏移量不行吗？"},
+        {"role": "assistant", "content": "固定偏移量不知道夏令时何时切换，也不知道当地规则后来是否变更。存 `Asia/Shanghai`、`America/New_York` 这样的区域标识；偏移量只是某个瞬间的结果，不是时区规则的替身。"},
+        {"role": "user", "content": "夏令时开始那天可能根本没有 02:30，结束时又会出现两个 01:30，这该怎么算？"},
+        {"role": "assistant", "content": "先把产品规则写出来，代码才知道替谁作决定。比如：不存在的本地时间顺延到当天第一个有效时刻，重复时间取第一次；也可以选择跳过或取第二次，但必须固定并测试，不能让库的默认行为暗中决定。"},
+        {"role": "user", "content": "就按你说的规则。函数接收当前 UTC、每天的本地 time 和时区名，返回下一次 UTC。"},
+        {"role": "assistant", "content": "还要规定“当前时刻恰好等于执行点”时返回下一天，我会用严格大于来处理。候选本地时间先往返 UTC 验证：没有有效映射就逐分钟顺延，有两个映射则选较早的 UTC。"},
+        {"role": "user", "content": "给我完整代码，再提醒一下调用时最容易漏掉什么。"},
+        {"role": "assistant", "content": "下面按分钟粒度实现。调用方必须传入带时区的 `after_utc`，并确保运行环境安装了 IANA 时区数据；数据库里保存时区名和本地钟点，最终执行时刻才保存或比较 UTC。\n\n```python\nfrom __future__ import annotations\n\nfrom datetime import datetime, time, timedelta, timezone\nfrom zoneinfo import ZoneInfo\n\n\ndef _valid_utc_instants(local_naive: datetime, zone: ZoneInfo) -> list[datetime]:\n    instants: set[datetime] = set()\n    for fold in (0, 1):\n        local = local_naive.replace(tzinfo=zone, fold=fold)\n        utc = local.astimezone(timezone.utc)\n        round_trip = utc.astimezone(zone).replace(tzinfo=None)\n        if round_trip == local_naive:\n            instants.add(utc)\n    return sorted(instants)\n\n\ndef _resolve_first_valid(local_naive: datetime, zone: ZoneInfo) -> datetime:\n    for minutes in range(24 * 60 + 1):\n        instants = _valid_utc_instants(\n            local_naive + timedelta(minutes=minutes), zone\n        )\n        if instants:\n            return instants[0]\n    raise ValueError(\"no valid local time found within 24 hours\")\n\n\ndef next_daily_run(\n    after_utc: datetime, local_time: time, time_zone: str\n) -> datetime:\n    if after_utc.tzinfo is None or after_utc.utcoffset() is None:\n        raise ValueError(\"after_utc must be timezone-aware\")\n    if local_time.tzinfo is not None:\n        raise ValueError(\"local_time must not carry tzinfo\")\n    if local_time.second or local_time.microsecond:\n        raise ValueError(\"local_time must have minute precision\")\n\n    after = after_utc.astimezone(timezone.utc)\n    zone = ZoneInfo(time_zone)\n    start_date = after.astimezone(zone).date()\n\n    for day_offset in range(370):\n        local_naive = datetime.combine(\n            start_date + timedelta(days=day_offset), local_time\n        )\n        candidate = _resolve_first_valid(local_naive, zone)\n        if candidate > after:\n            return candidate\n    raise RuntimeError(\"could not find the next daily run\")\n```\n\n别把系统当前时区混进测试。至少固定验证普通日期、春季缺失时间、秋季重复时间，以及执行点相等时滚到下一天。"}
+      ]
+    }
+  ]
+}

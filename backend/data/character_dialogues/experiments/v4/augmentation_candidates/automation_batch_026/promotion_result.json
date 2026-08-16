@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "status": "promoted",
+  "approval_id": "KISAKI-V41-AUTO-BATCH-026",
+  "source_sessions_sha256": "f2c87053064d6ee1678b135cffaeddafda58a3d35df1ddb095ea86a8ab4927dc",
+  "approved_sessions_sha256": "3ec3b20013f3663ea5c0166ef37b723c2a8b9481d47a38c3acc8b1651a900d1c",
+  "previous_train": {
+    "count": 830,
+    "sha256": "6856dc09212d7d5fcc709eb1c23b295643f1d2527ea061e77c331a3128717a6d"
+  },
+  "promoted": {
+    "record_count": 4,
+    "assistant_turn_count": 20,
+    "record_ids": [
+      "kisaki_v41_auto_b026_starting_to_use_saved_favorite_notebook",
+      "kisaki_v41_auto_b026_responding_to_friend_repeated_last_minute_cancellations",
+      "kisaki_v41_auto_b026_understanding_dew_point_window_condensation",
+      "kisaki_v41_auto_b026_organizing_reference_manager_library_without_losing_metadata"
+    ]
+  },
+  "result_train": {
+    "count": 834,
+    "sha256": "041410e620faa86a1cf5c36f09a4e724cb88773a318b374afe551668162a97d8"
+  },
+  "validation": {
+    "count": 70,
+    "sha256": "fb5cd5d93027b37be53327cda4e7c6137a7bae97201830fc8aa726727b9777b8",
+    "modified": false
+  },
+  "gold_v3": {
+    "content_modified": false,
+    "contamination_reaudit": "clean",
+    "contamination_audit_path": "backend/evaluation/kisaki_gold_set_v3_contamination_audit.json"
+  }
+}

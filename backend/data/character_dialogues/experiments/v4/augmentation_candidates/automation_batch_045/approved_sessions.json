@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "status": "approved_after_revision",
+  "approval_id": "KISAKI-V41-AUTO-BATCH-045",
+  "approved_by": "codex_delegated_by_project_owner",
+  "approved_at": "2026-08-16",
+  "source_sessions_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_045/candidates.json",
+  "decision_sources": [
+    "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_045/review.json",
+    "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_045/revision_history.json",
+    "parallel_subagent_initial_screening",
+    "project_owner_delegated_automation_approval"
+  ],
+  "base_contract": {
+    "train_count": 906,
+    "train_sha256": "1b7b3689ea29fdd24ceeb4d68fe71d3cd29bf56f7d1b7111c578f23e3dc47ece",
+    "validation_count": 70,
+    "validation_sha256": "fb5cd5d93027b37be53327cda4e7c6137a7bae97201830fc8aa726727b9777b8"
+  },
+  "promotion_contract": {
+    "record_count": 4,
+    "assistant_turn_count": 20,
+    "training_unit": "complete_five_turn_session",
+    "cumulative_prefix_records_allowed": false,
+    "data_source": "codex_user_simulation_v41_reviewed",
+    "source": "automation_batch_045",
+    "version": "v4.1_automation_reviewed",
+    "manifest_check_key": "kisaki_v41_auto_batch_045_promotion",
+    "system_message_embedded": false,
+    "validation_and_gold_content_modified": false
+  },
+  "sessions": [
+    {
+      "session_id": "restoring_a_flattened_down_jacket_after_washing",
+      "record_id": "kisaki_v41_auto_b045_restoring_a_flattened_down_jacket_after_washing",
+      "title": "清洗后逐步恢复羽绒服的蓬松度",
+      "task_type": "casual_chat",
+      "revised_assistant_turns": [],
+      "messages_mode": "source_unchanged"
+    },
+    {
+      "session_id": "accepting_the_end_of_a_friendship_without_a_clear_conflict",
+      "record_id": "kisaki_v41_auto_b045_accepting_the_end_of_a_friendship_without_a_clear_conflict",
+      "title": "面对没有争吵却逐渐结束的友谊",
+      "task_type": "emotional_relationship",
+      "revised_assistant_turns": [],
+      "messages_mode": "source_unchanged"
+    },
+    {
+      "session_id": "testing_measurement_invariance_before_comparing_translated_scale_scores",
+      "record_id": "kisaki_v41_auto_b045_testing_measurement_invariance_before_comparing_translated_scale_scores",
+      "title": "跨语言比较量表得分前检验测量等值性",
+      "task_type": "research_learning",
+      "revised_assistant_turns": [],
+      "messages_mode": "source_unchanged"
+    },
+    {
+      "session_id": "recovering_access_after_losing_a_hardware_security_key",
+      "record_id": "kisaki_v41_auto_b045_recovering_access_after_losing_a_hardware_security_key",
+      "title": "丢失硬件安全密钥后安全恢复账号访问",
+      "task_type": "tool_usage",
+      "revised_assistant_turns": [],
+      "messages_mode": "source_unchanged"
+    }
+  ]
+}
+

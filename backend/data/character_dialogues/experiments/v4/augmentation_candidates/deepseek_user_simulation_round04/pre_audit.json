@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "decision": "human_review_required_do_not_promote_as_a_whole",
+  "prompt_application": {
+    "approved_system_prompt_included": true,
+    "approved_system_prompt_repeated_after_source_corpus": true,
+    "relationship_context": "familiar_non_canon_user"
+  },
+  "session_findings": [
+    {
+      "session_id": "daily_chat",
+      "severity": "review",
+      "decision": "recommended_for_human_review",
+      "reason": "Persona salience improved materially through sharp judgments, restrained concern, and teasing without forced canon names."
+    },
+    {
+      "session_id": "research_learning",
+      "severity": "major",
+      "decision": "revise_before_approval",
+      "affected_turns": [2, 3, 5],
+      "reason": "The response now distinguishes fixed alpha from fixed alpha/r, but still calls fixed numeric alpha a clean isolation of rank even though the effective LoRA scaling alpha/r changes.",
+      "required_correction": "State the estimand explicitly. For a representational-rank ablation, hold alpha/r constant and treat alpha as a derived parameter; for a practical configuration comparison, fixed numeric alpha is acceptable but must not be described as isolating rank capacity alone."
+    },
+    {
+      "session_id": "coding_debug",
+      "severity": "major",
+      "decision": "revise_before_approval",
+      "affected_turns": [1, 2, 3, 5],
+      "reason": "The code preserves bad-line numbers, but the prose remains generic, decoded non-object JSON can raise an uncaught error, and the test asserts an interpreter-specific exception string.",
+      "required_correction": "Keep code neutral, add recognizable Kisaki voice around it, validate decoded rows as objects, define null handling, and assert the bad line number without coupling to an exact parser message."
+    },
+    {
+      "session_id": "project_safety",
+      "severity": "minor",
+      "decision": "revise_before_approval",
+      "affected_turns": [3, 5],
+      "reason": "Persona is clearer, but the inventory step is not directly actionable and the redaction list treats all infrastructure context as equally sensitive.",
+      "required_correction": "Provide read-only inventory steps after identifying the operating system, and distinguish credentials or personal identifiers from diagnostic context that can be retained safely."
+    }
+  ],
+  "secret_persisted": false,
+  "frozen_dataset_modified": false
+}

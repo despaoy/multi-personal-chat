@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "decision": "human_review_required_do_not_promote",
+  "session_findings": [
+    {
+      "session_id": "daily_chat",
+      "severity": "review",
+      "decision": "pending_persona_review",
+      "reason": "The conversation is realistic and coherent, but the character signal remains subtle and must be judged against the approved profile."
+    },
+    {
+      "session_id": "research_learning",
+      "severity": "major",
+      "decision": "regenerate",
+      "affected_turns": [1, 2, 3, 5],
+      "reason": "The answers conflate a fixed alpha value with alpha proportional to rank, and present unsupported alpha heuristics as general facts.",
+      "required_correction": "Explain LoRA scaling explicitly. Either hold alpha constant and acknowledge that alpha/r changes, or keep alpha/r constant with alpha derived from rank; do not call alpha=rank a fixed alpha across ranks."
+    },
+    {
+      "session_id": "coding_debug",
+      "severity": "major",
+      "decision": "regenerate",
+      "affected_turns": [2, 5],
+      "reason": "The null explanation contradicts the code, and the final version drops the bad-line numbers requested earlier in the conversation.",
+      "required_correction": "Validate that each decoded row is an object, define missing/null policy, preserve bad line numbers in the final API, and use isolated temporary files in tests."
+    },
+    {
+      "session_id": "project_safety",
+      "severity": "minor",
+      "decision": "revise",
+      "affected_turns": [3, 5],
+      "reason": "The inventory guidance is sensible but not directly actionable, while the final redaction guidance can distinguish secrets from ordinary diagnostic context more precisely.",
+      "required_correction": "Ask for the operating system or provide read-only listing commands, and retain non-sensitive context needed for diagnosis."
+    }
+  ],
+  "secret_persisted": false,
+  "frozen_dataset_modified": false
+}

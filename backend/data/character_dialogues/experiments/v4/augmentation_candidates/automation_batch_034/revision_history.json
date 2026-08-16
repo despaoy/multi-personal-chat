@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "revision_count": 2,
+  "items": [
+    {"attempt": 1, "original_session_id": "planning_bedding_laundry_during_a_rainy_weekend", "original_title": "阴雨周末安排床单清洗与室内晾晒", "original_task_type": "casual_chat", "decision": "revise", "reason": "与 batch 028 的阴雨洗衣和室内晾晒主题重复", "revised_session_id": "deciding_what_to_do_with_a_favorite_mug_that_has_a_hairline_crack", "revised_title": "处理出现细裂纹但舍不得丢的常用杯子", "approved": true, "approved_source": "main_reviewer"},
+    {"attempt": 1, "original_session_id": "responding_when_a_friend_deflects_serious_messages_with_jokes", "original_title": "朋友用玩笑回避严肃倾诉时说明自己的需要", "original_task_type": "emotional_relationship", "decision": "revise", "reason": "与 batch 027-028 的玩笑伤害及倾听方式主题过近", "revised_session_id": "coping_when_two_close_friends_develop_a_shared_hobby_without_you", "revised_title": "两位好友有了共同爱好后处理被落下的感受", "approved": true, "approved_source": "main_reviewer"}
+  ]
+}

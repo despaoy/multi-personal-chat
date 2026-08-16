@@ -1,11 +1,11 @@
 {
   "schema_version": 3,
-  "extraction_version": "v2_qwen3",
+  "extraction_version": "v3_continuous_dialogue_blocks",
   "extraction_policy": {
     "tsukiyashiro_kisaki": "只把显式[妃]/[月社妃]作为目标说话人；克丽索贝莉露是独立角色，即使冒用月社妃姓名也不并入。",
-    "source_policy": "gametext/纸上魔法使/*.txt 全部视为 canonical 来源；按文件隔离上下文，连续目标台词合并。",
+    "source_policy": "gametext/纸上魔法使/*.txt 全部视为 canonical 来源；只在同一连续对话块内配对，最多允许 4 行中间叙述，空行和明确场景重置会断开上下文。",
     "quality_policy": "排除无上下文、低信息、超长和重复样本；过短回复（<5字）按占比控制（≤15%）。",
-    "v2_changes": "适配 gametext 结构；移除 ATRI；新增短回复占比控制缓解 v1 塌缩问题。"
+    "v3_changes": "保留物理行号与对话块；拒绝跨长旁白或场景切换配对；未知说话者不注入 interlocutor；保留嵌套中文引号。"
   },
   "characters": {
     "tsukiyashiro_kisaki": {
@@ -14,20 +14,28 @@
       "all_supplied_unique_utterances": 1551,
       "canonical_direct_occurrences": 1598,
       "raw_source_coverage_percent": 100.0,
-      "full_sft_examples": 818,
-      "full_sft_covered_canonical_occurrences": 1435,
-      "recommended_sft_examples": 801,
-      "recommended_sft_unique_prompts": 801,
-      "recommended_sft_covered_canonical_occurrences": 1415,
-      "short_reply_count_in_recommended": 44,
-      "short_reply_ratio_in_recommended": 0.0549,
+      "full_sft_examples": 784,
+      "full_sft_covered_canonical_occurrences": 1273,
+      "recommended_sft_examples": 768,
+      "recommended_sft_unique_prompts": 768,
+      "recommended_sft_covered_canonical_occurrences": 1254,
+      "short_reply_count_in_recommended": 45,
+      "short_reply_ratio_in_recommended": 0.0586,
       "short_reply_max_ratio": 0.15,
       "reply_length_meaningful": {
         "min": 2,
-        "max": 662,
-        "mean": 28.0
+        "max": 555,
+        "mean": 26.6
       },
-      "excluded_turn_reasons": {},
+      "excluded_turn_reasons": {
+        "duplicate_prompt_lower_rank": 16,
+        "long_narration_gap": 72,
+        "low_information_prompt": 166,
+        "low_information_reply": 12,
+        "missing_context": 82,
+        "scene_boundary": 7,
+        "short_reply": 24
+      },
       "source_files": {
         "10黑曜石的因果目录.txt": 23,
         "12青金石的幻想图书馆.txt": 119,

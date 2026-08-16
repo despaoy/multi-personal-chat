@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "status": "promoted",
+  "approval_id": "KISAKI-V41-AUTO-BATCH-029",
+  "source_sessions_sha256": "5bf8cf1db3f8486fb5fcd387ef3c5ece15e52d93b2e213b01e1fcfe8856c7fc9",
+  "approved_sessions_sha256": "ef90ea27f648424ace1441f85c490641e5a56b6015cb7375044c7260dce2bb53",
+  "previous_train": {
+    "count": 842,
+    "sha256": "3e411420bce7b54ff123c16dff41b3290f6994ba6b79489fbb77ba99cf87e392"
+  },
+  "promoted": {
+    "record_count": 4,
+    "assistant_turn_count": 20,
+    "record_ids": [
+      "kisaki_v41_auto_b029_going_to_an_early_movie_screening_alone",
+      "kisaki_v41_auto_b029_talking_to_a_friend_who_disappears_into_a_new_relationship",
+      "kisaki_v41_auto_b029_understanding_why_metal_feels_colder_than_wood",
+      "kisaki_v41_auto_b029_preparing_project_handoff_before_key_member_leave"
+    ]
+  },
+  "result_train": {
+    "count": 846,
+    "sha256": "bc63f3d057ce100f508f247b1b5f438030ca689c57beae4ba037511966bea53d"
+  },
+  "validation": {
+    "count": 70,
+    "sha256": "fb5cd5d93027b37be53327cda4e7c6137a7bae97201830fc8aa726727b9777b8",
+    "modified": false
+  },
+  "gold_v3": {
+    "content_modified": false,
+    "contamination_reaudit": "clean",
+    "contamination_audit_path": "backend/evaluation/kisaki_gold_set_v3_contamination_audit.json"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "dataset_id": "KISAKI-CANONICAL-V4",
+  "status": "candidate_suggestions",
+  "exclusions": [
+    {
+      "validation_id": "tsukiyashiro_kisaki_sft_da21e4c8d09b7af1",
+      "paired_train_id": "tsukiyashiro_kisaki_sft_318cc23e4d31b96e",
+      "reason": "near_duplicate_user_question"
+    }
+  ]
+}

@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "status": "promoted",
+  "approval_id": "KISAKI-V41-AUTO-BATCH-052",
+  "source_sessions_sha256": "3610f9c3751d28c70d4813eaedd9333e699b409c720aa048d75c7357c6ee3170",
+  "approved_sessions_sha256": "4a84f4283e3e0a3257b7b56ec898d0f37b7674bf506e15f11a23ebf6149f38eb",
+  "previous_train": {
+    "count": 934,
+    "sha256": "12df850382ab0a890725cd6f2e2f87cd8fd0d4c74c57b87db3c09f972e2f6f00"
+  },
+  "promoted": {
+    "record_count": 4,
+    "assistant_turn_count": 20,
+    "record_ids": [
+      "kisaki_v41_auto_b052_stopping_a_fitted_sheet_from_twisting_other_laundry_in_the_dryer",
+      "kisaki_v41_auto_b052_coping_when_two_close_friends_become_closer_to_each_other",
+      "kisaki_v41_auto_b052_distinguishing_mcar_mar_and_mnar_in_missing_data",
+      "kisaki_v41_auto_b052_understanding_why_metal_feels_colder_than_wood_at_the_same_temperature"
+    ]
+  },
+  "result_train": {
+    "count": 938,
+    "sha256": "ff3d3e6c953df208c2a6d795b75e919efe3e2d7065e5a048e7e702e0ccdb4ccb"
+  },
+  "validation": {
+    "count": 70,
+    "sha256": "fb5cd5d93027b37be53327cda4e7c6137a7bae97201830fc8aa726727b9777b8",
+    "modified": false
+  },
+  "gold_v3": {
+    "content_modified": false,
+    "contamination_reaudit": "clean",
+    "contamination_audit_path": "backend/evaluation/kisaki_gold_set_v3_contamination_audit.json"
+  }
+}

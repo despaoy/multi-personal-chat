@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "dataset_id": "KISAKI-CANONICAL-V4",
+  "dataset_status": "frozen",
+  "prompt_policy_version": "3.1.0",
+  "experiments": [
+    "R1-E1",
+    "R1-E2",
+    "R1-E3",
+    "R1-E4",
+    "R1-E5"
+  ]
+}

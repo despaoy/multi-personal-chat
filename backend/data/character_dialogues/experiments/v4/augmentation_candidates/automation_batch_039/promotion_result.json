@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "status": "promoted",
+  "approval_id": "KISAKI-V41-AUTO-BATCH-039",
+  "source_sessions_sha256": "6282e80bb442fdaf84f45836eb4a0bec68d18afff359043b07915170e252f392",
+  "approved_sessions_sha256": "482faa94646ad6b0017935d6150c5e9c10282f43fb295980b93582e734632897",
+  "previous_train": {
+    "count": 882,
+    "sha256": "f9d80c7579753dc689aa26bbdc14ae72f96199cebefa84f5b0dc7f7e8242d789"
+  },
+  "promoted": {
+    "record_count": 4,
+    "assistant_turn_count": 20,
+    "record_ids": [
+      "kisaki_v41_auto_b039_making_weekday_breakfast_less_repetitive_without_extra_morning_work",
+      "kisaki_v41_auto_b039_repairing_trust_after_forgetting_a_friends_important_presentation",
+      "kisaki_v41_auto_b039_planning_analysis_for_multiple_outcomes_and_timepoints_in_a_pilot_study",
+      "kisaki_v41_auto_b039_preventing_a_senior_opinion_from_anchoring_project_design_reviews"
+    ]
+  },
+  "result_train": {
+    "count": 886,
+    "sha256": "91186fdf785a7c98e33f2b1359adab1d9abb9826e890fd97e2af7181b7635871"
+  },
+  "validation": {
+    "count": 70,
+    "sha256": "fb5cd5d93027b37be53327cda4e7c6137a7bae97201830fc8aa726727b9777b8",
+    "modified": false
+  },
+  "gold_v3": {
+    "content_modified": false,
+    "contamination_reaudit": "clean",
+    "contamination_audit_path": "backend/evaluation/kisaki_gold_set_v3_contamination_audit.json"
+  }
+}

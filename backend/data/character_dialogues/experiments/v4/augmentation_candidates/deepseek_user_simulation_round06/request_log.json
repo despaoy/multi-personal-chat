@@ -1,0 +1,570 @@
+[
+  {
+    "session_id": "daily_chat",
+    "turn": 1,
+    "attempt": 1,
+    "style_mode": "restrained_care",
+    "request_metadata": {
+      "request_id": null,
+      "usage": {
+        "prompt_tokens": 59345,
+        "completion_tokens": 31,
+        "total_tokens": 59376,
+        "prompt_tokens_details": {
+          "cached_tokens": 56960
+        },
+        "prompt_cache_hit_tokens": 56960,
+        "prompt_cache_miss_tokens": 2385
+      },
+      "finish_reason": "stop"
+    },
+    "automatic_errors": []
+  },
+  {
+    "session_id": "daily_chat",
+    "turn": 2,
+    "attempt": 1,
+    "style_mode": "light_banter",
+    "request_metadata": {
+      "request_id": null,
+      "usage": {
+        "prompt_tokens": 59392,
+        "completion_tokens": 25,
+        "total_tokens": 59417,
+        "prompt_tokens_details": {
+          "cached_tokens": 59264
+        },
+        "prompt_cache_hit_tokens": 59264,
+        "prompt_cache_miss_tokens": 128
+      },
+      "finish_reason": "stop"
+    },
+    "automatic_errors": []
+  },
+  {
+    "session_id": "daily_chat",
+    "turn": 3,
+    "attempt": 1,
+    "style_mode": "restrained_care",
+    "request_metadata": {
+      "request_id": null,
+      "usage": {
+        "prompt_tokens": 59436,
+        "completion_tokens": 44,
+        "total_tokens": 59480,
+        "prompt_tokens_details": {
+          "cached_tokens": 59264
+        },
+        "prompt_cache_hit_tokens": 59264,
+        "prompt_cache_miss_tokens": 172
+      },
+      "finish_reason": "stop"
+    },
+    "automatic_errors": []
+  },
+  {
+    "session_id": "daily_chat",
+    "turn": 4,
+    "attempt": 1,
+    "style_mode": "calm_precise",
+    "request_metadata": {
+      "request_id": null,
+      "usage": {
+        "prompt_tokens": 59496,
+        "completion_tokens": 45,
+        "total_tokens": 59541,
+        "prompt_tokens_details": {
+          "cached_tokens": 59392
+        },
+        "prompt_cache_hit_tokens": 59392,
+        "prompt_cache_miss_tokens": 104
+      },
+      "finish_reason": "stop"
+    },
+    "automatic_errors": []
+  },
+  {
+    "session_id": "daily_chat",
+    "turn": 5,
+    "attempt": 1,
+    "style_mode": "soft_personal",
+    "request_metadata": {
+      "request_id": null,
+      "usage": {
+        "prompt_tokens": 59556,
+        "completion_tokens": 23,
+        "total_tokens": 59579,
+        "prompt_tokens_details": {
+          "cached_tokens": 59520
+        },
+        "prompt_cache_hit_tokens": 59520,
+        "prompt_cache_miss_tokens": 36
+      },
+      "finish_reason": "stop"
+    },
+    "automatic_errors": []
+  },
+  {
+    "session_id": "research_learning",
+    "turn": 1,
+    "attempt": 1,
+    "style_mode": "calm_precise",
+    "request_metadata": {
+      "request_id": null,
+      "usage": {
+        "prompt_tokens": 59351,
+        "completion_tokens": 41,
+        "total_tokens": 59392,
+        "prompt_tokens_details": {
+          "cached_tokens": 59264
+        },
+        "prompt_cache_hit_tokens": 59264,
+        "prompt_cache_miss_tokens": 87
+      },
+      "finish_reason": "stop"
+    },
+    "automatic_errors": []
+  },
+  {
+    "session_id": "research_learning",
+    "turn": 2,
+    "attempt": 1,
+    "style_mode": "pointed_correction",
+    "request_metadata": {
+      "request_id": null,
+      "usage": {
+        "prompt_tokens": 59417,
+        "completion_tokens": 58,
+        "total_tokens": 59475,
+        "prompt_tokens_details": {
+          "cached_tokens": 59392
+        },
+        "prompt_cache_hit_tokens": 59392,
+        "prompt_cache_miss_tokens": 25
+      },
+      "finish_reason": "stop"
+    },
+    "automatic_errors": []
+  },
+  {
+    "session_id": "research_learning",
+    "turn": 3,
+    "attempt": 1,
+    "style_mode": "calm_precise",
+    "request_metadata": {
+      "request_id": null,
+      "usage": {
+        "prompt_tokens": 59499,
+        "completion_tokens": 72,
+        "total_tokens": 59571,
+        "prompt_tokens_details": {
+          "cached_tokens": 59392
+        },
+        "prompt_cache_hit_tokens": 59392,
+        "prompt_cache_miss_tokens": 107
+      },
+      "finish_reason": "stop"
+    },
+    "automatic_errors": []
+  },
+  {
+    "session_id": "research_learning",
+    "turn": 4,
+    "attempt": 1,
+    "style_mode": "pointed_correction",
+    "request_metadata": {
+      "request_id": null,
+      "usage": {
+        "prompt_tokens": 59589,
+        "completion_tokens": 53,
+        "total_tokens": 59642,
+        "prompt_tokens_details": {
+          "cached_tokens": 59520
+        },
+        "prompt_cache_hit_tokens": 59520,
+        "prompt_cache_miss_tokens": 69
+      },
+      "finish_reason": "stop"
+    },
+    "automatic_errors": []
+  },
+  {
+    "session_id": "research_learning",
+    "turn": 5,
+    "attempt": 1,
+    "style_mode": "decisive_delivery",
+    "request_metadata": {
+      "request_id": null,
+      "usage": {
+        "prompt_tokens": 59662,
+        "completion_tokens": 132,
+        "total_tokens": 59794,
+        "prompt_tokens_details": {
+          "cached_tokens": 59520
+        },
+        "prompt_cache_hit_tokens": 59520,
+        "prompt_cache_miss_tokens": 142
+      },
+      "finish_reason": "stop"
+    },
+    "automatic_errors": [
+      "rank ablation does not preserve alpha/r as a derived setting"
+    ]
+  },
+  {
+    "session_id": "research_learning",
+    "turn": 5,
+    "attempt": 2,
+    "style_mode": "decisive_delivery",
+    "request_metadata": {
+      "request_id": null,
+      "usage": {
+        "prompt_tokens": 59719,
+        "completion_tokens": 129,
+        "total_tokens": 59848,
+        "prompt_tokens_details": {
+          "cached_tokens": 59264
+        },
+        "prompt_cache_hit_tokens": 59264,
+        "prompt_cache_miss_tokens": 455
+      },
+      "finish_reason": "stop"
+    },
+    "automatic_errors": [
+      "style mode decisive_delivery lacks a characterful framing judgment",
+      "rank ablation does not preserve alpha/r as a derived setting"
+    ]
+  },
+  {
+    "session_id": "research_learning",
+    "turn": 5,
+    "attempt": 3,
+    "style_mode": "decisive_delivery",
+    "request_metadata": {
+      "request_id": null,
+      "usage": {
+        "prompt_tokens": 59732,
+        "completion_tokens": 74,
+        "total_tokens": 59806,
+        "prompt_tokens_details": {
+          "cached_tokens": 59264
+        },
+        "prompt_cache_hit_tokens": 59264,
+        "prompt_cache_miss_tokens": 468
+      },
+      "finish_reason": "stop"
+    },
+    "automatic_errors": [
+      "rank ablation does not preserve alpha/r as a derived setting"
+    ]
+  },
+  {
+    "session_id": "coding_debug",
+    "turn": 1,
+    "attempt": 1,
+    "style_mode": "calm_precise",
+    "request_metadata": {
+      "request_id": null,
+      "usage": {
+        "prompt_tokens": 59362,
+        "completion_tokens": 345,
+        "total_tokens": 59707,
+        "prompt_tokens_details": {
+          "cached_tokens": 59264
+        },
+        "prompt_cache_hit_tokens": 59264,
+        "prompt_cache_miss_tokens": 98
+      },
+      "finish_reason": "stop"
+    },
+    "automatic_errors": []
+  },
+  {
+    "session_id": "coding_debug",
+    "turn": 2,
+    "attempt": 1,
+    "style_mode": "calm_precise",
+    "request_metadata": {
+      "request_id": null,
+      "usage": {
+        "prompt_tokens": 59731,
+        "completion_tokens": 303,
+        "total_tokens": 60034,
+        "prompt_tokens_details": {
+          "cached_tokens": 59648
+        },
+        "prompt_cache_hit_tokens": 59648,
+        "prompt_cache_miss_tokens": 83
+      },
+      "finish_reason": "stop"
+    },
+    "automatic_errors": [
+      "generic assistant opening"
+    ]
+  },
+  {
+    "session_id": "coding_debug",
+    "turn": 2,
+    "attempt": 2,
+    "style_mode": "calm_precise",
+    "request_metadata": {
+      "request_id": null,
+      "usage": {
+        "prompt_tokens": 59780,
+        "completion_tokens": 239,
+        "total_tokens": 60019,
+        "prompt_tokens_details": {
+          "cached_tokens": 59264
+        },
+        "prompt_cache_hit_tokens": 59264,
+        "prompt_cache_miss_tokens": 516
+      },
+      "finish_reason": "stop"
+    },
+    "automatic_errors": [
+      "generic assistant opening"
+    ]
+  },
+  {
+    "session_id": "coding_debug",
+    "turn": 2,
+    "attempt": 3,
+    "style_mode": "calm_precise",
+    "request_metadata": {
+      "request_id": null,
+      "usage": {
+        "prompt_tokens": 59780,
+        "completion_tokens": 276,
+        "total_tokens": 60056,
+        "prompt_tokens_details": {
+          "cached_tokens": 59776
+        },
+        "prompt_cache_hit_tokens": 59776,
+        "prompt_cache_miss_tokens": 4
+      },
+      "finish_reason": "stop"
+    },
+    "automatic_errors": [
+      "generic assistant opening"
+    ]
+  },
+  {
+    "session_id": "coding_debug",
+    "turn": 3,
+    "attempt": 1,
+    "style_mode": "light_banter",
+    "request_metadata": {
+      "request_id": null,
+      "usage": {
+        "prompt_tokens": 60026,
+        "completion_tokens": 318,
+        "total_tokens": 60344,
+        "prompt_tokens_details": {
+          "cached_tokens": 59648
+        },
+        "prompt_cache_hit_tokens": 59648,
+        "prompt_cache_miss_tokens": 378
+      },
+      "finish_reason": "stop"
+    },
+    "automatic_errors": []
+  },
+  {
+    "session_id": "coding_debug",
+    "turn": 4,
+    "attempt": 1,
+    "style_mode": "calm_precise",
+    "request_metadata": {
+      "request_id": null,
+      "usage": {
+        "prompt_tokens": 60365,
+        "completion_tokens": 277,
+        "total_tokens": 60642,
+        "prompt_tokens_details": {
+          "cached_tokens": 60288
+        },
+        "prompt_cache_hit_tokens": 60288,
+        "prompt_cache_miss_tokens": 77
+      },
+      "finish_reason": "stop"
+    },
+    "automatic_errors": []
+  },
+  {
+    "session_id": "coding_debug",
+    "turn": 5,
+    "attempt": 1,
+    "style_mode": "decisive_delivery",
+    "request_metadata": {
+      "request_id": null,
+      "usage": {
+        "prompt_tokens": 60661,
+        "completion_tokens": 633,
+        "total_tokens": 61294,
+        "prompt_tokens_details": {
+          "cached_tokens": 60544
+        },
+        "prompt_cache_hit_tokens": 60544,
+        "prompt_cache_miss_tokens": 117
+      },
+      "finish_reason": "stop"
+    },
+    "automatic_errors": [
+      "style mode decisive_delivery lacks a characterful framing judgment",
+      "final code does not validate decoded JSON objects"
+    ]
+  },
+  {
+    "session_id": "coding_debug",
+    "turn": 5,
+    "attempt": 2,
+    "style_mode": "decisive_delivery",
+    "request_metadata": {
+      "request_id": null,
+      "usage": {
+        "prompt_tokens": 60728,
+        "completion_tokens": 525,
+        "total_tokens": 61253,
+        "prompt_tokens_details": {
+          "cached_tokens": 59264
+        },
+        "prompt_cache_hit_tokens": 59264,
+        "prompt_cache_miss_tokens": 1464
+      },
+      "finish_reason": "stop"
+    },
+    "automatic_errors": [
+      "style mode decisive_delivery lacks a characterful framing judgment",
+      "final code does not validate decoded JSON objects"
+    ]
+  },
+  {
+    "session_id": "coding_debug",
+    "turn": 5,
+    "attempt": 3,
+    "style_mode": "decisive_delivery",
+    "request_metadata": {
+      "request_id": null,
+      "usage": {
+        "prompt_tokens": 60728,
+        "completion_tokens": 574,
+        "total_tokens": 61302,
+        "prompt_tokens_details": {
+          "cached_tokens": 60672
+        },
+        "prompt_cache_hit_tokens": 60672,
+        "prompt_cache_miss_tokens": 56
+      },
+      "finish_reason": "stop"
+    },
+    "automatic_errors": [
+      "style mode decisive_delivery lacks a characterful framing judgment",
+      "final code does not validate decoded JSON objects"
+    ]
+  },
+  {
+    "session_id": "project_safety",
+    "turn": 1,
+    "attempt": 1,
+    "style_mode": "firm_boundary",
+    "request_metadata": {
+      "request_id": null,
+      "usage": {
+        "prompt_tokens": 59346,
+        "completion_tokens": 45,
+        "total_tokens": 59391,
+        "prompt_tokens_details": {
+          "cached_tokens": 59264
+        },
+        "prompt_cache_hit_tokens": 59264,
+        "prompt_cache_miss_tokens": 82
+      },
+      "finish_reason": "stop"
+    },
+    "automatic_errors": []
+  },
+  {
+    "session_id": "project_safety",
+    "turn": 2,
+    "attempt": 1,
+    "style_mode": "pointed_correction",
+    "request_metadata": {
+      "request_id": null,
+      "usage": {
+        "prompt_tokens": 59411,
+        "completion_tokens": 59,
+        "total_tokens": 59470,
+        "prompt_tokens_details": {
+          "cached_tokens": 59264
+        },
+        "prompt_cache_hit_tokens": 59264,
+        "prompt_cache_miss_tokens": 147
+      },
+      "finish_reason": "stop"
+    },
+    "automatic_errors": []
+  },
+  {
+    "session_id": "project_safety",
+    "turn": 3,
+    "attempt": 1,
+    "style_mode": "decisive_delivery",
+    "request_metadata": {
+      "request_id": null,
+      "usage": {
+        "prompt_tokens": 59492,
+        "completion_tokens": 135,
+        "total_tokens": 59627,
+        "prompt_tokens_details": {
+          "cached_tokens": 59392
+        },
+        "prompt_cache_hit_tokens": 59392,
+        "prompt_cache_miss_tokens": 100
+      },
+      "finish_reason": "stop"
+    },
+    "automatic_errors": []
+  },
+  {
+    "session_id": "project_safety",
+    "turn": 4,
+    "attempt": 1,
+    "style_mode": "firm_boundary",
+    "request_metadata": {
+      "request_id": null,
+      "usage": {
+        "prompt_tokens": 59650,
+        "completion_tokens": 62,
+        "total_tokens": 59712,
+        "prompt_tokens_details": {
+          "cached_tokens": 59520
+        },
+        "prompt_cache_hit_tokens": 59520,
+        "prompt_cache_miss_tokens": 130
+      },
+      "finish_reason": "stop"
+    },
+    "automatic_errors": []
+  },
+  {
+    "session_id": "project_safety",
+    "turn": 5,
+    "attempt": 1,
+    "style_mode": "calm_precise",
+    "request_metadata": {
+      "request_id": null,
+      "usage": {
+        "prompt_tokens": 59734,
+        "completion_tokens": 76,
+        "total_tokens": 59810,
+        "prompt_tokens_details": {
+          "cached_tokens": 59648
+        },
+        "prompt_cache_hit_tokens": 59648,
+        "prompt_cache_miss_tokens": 86
+      },
+      "finish_reason": "stop"
+    },
+    "automatic_errors": []
+  }
+]

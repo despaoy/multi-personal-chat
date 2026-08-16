@@ -1,0 +1,175 @@
+{
+  "schema_version": 1,
+  "batch_id": "KISAKI-V41-AUTO-BATCH-032",
+  "status": "approved_after_review",
+  "reviewer": "codex_delegated_by_project_owner",
+  "reviewed_at": "2026-08-16",
+  "candidate_count": 4,
+  "assistant_turn_count": 20,
+  "summary": {
+    "passed_unchanged": 20,
+    "revised_then_passed": 0,
+    "rejected": 0,
+    "approved_complete_sessions": 4
+  },
+  "rubric": [
+    "persona_consistency",
+    "question_answer_alignment",
+    "fact_grounding",
+    "technical_correctness",
+    "multiturn_continuity",
+    "information_timing",
+    "naturalness",
+    "safety_boundary",
+    "template_avoidance"
+  ],
+  "evidence_refs": [
+    "docs/research/review_packets/kisaki_v4/01_PROFILE_PROMPT/01_character_profile.md",
+    "backend/data/character_dialogues/kisaki_system_prompt_v3.txt",
+    "docs/research/review_packets/kisaki_v4/01_PROFILE_PROMPT/03_contextual_expression_policy_draft.md"
+  ],
+  "parallel_draft_screening": {
+    "authority": "advisory_only",
+    "main_reviewer_rechecked_all_turns": true
+  },
+  "protected_overlap_review": {
+    "threshold": 0.9,
+    "reference_sets": [
+      "train_through_batch_031",
+      "validation",
+      "gold_v21",
+      "gold_v3",
+      "automation_batch_031"
+    ],
+    "candidate_user_turn_count": 20,
+    "match_count": 0,
+    "assistant_similarity_match_count": 0,
+    "status": "clean"
+  },
+  "session_reviews": [
+    {
+      "session_id": "sorting_old_ticket_stubs_without_discarding_every_memory",
+      "decision": "pass",
+      "turn_reviews": [
+        {
+          "turn": 1,
+          "decision": "pass",
+          "reason": "主审逐项复核通过：人物一致、问答对应、事实与连续性可靠，表达和安全边界合适。"
+        },
+        {
+          "turn": 2,
+          "decision": "pass",
+          "reason": "主审逐项复核通过：人物一致、问答对应、事实与连续性可靠，表达和安全边界合适。"
+        },
+        {
+          "turn": 3,
+          "decision": "pass",
+          "reason": "主审逐项复核通过：人物一致、问答对应、事实与连续性可靠，表达和安全边界合适。"
+        },
+        {
+          "turn": 4,
+          "decision": "pass",
+          "reason": "主审逐项复核通过：人物一致、问答对应、事实与连续性可靠，表达和安全边界合适。"
+        },
+        {
+          "turn": 5,
+          "decision": "pass",
+          "reason": "主审逐项复核通过：人物一致、问答对应、事实与连续性可靠，表达和安全边界合适。"
+        }
+      ]
+    },
+    {
+      "session_id": "addressing_a_borrowed_book_returned_with_water_damage",
+      "decision": "pass",
+      "turn_reviews": [
+        {
+          "turn": 1,
+          "decision": "pass",
+          "reason": "主审逐项复核通过：人物一致、问答对应、事实与连续性可靠，表达和安全边界合适。"
+        },
+        {
+          "turn": 2,
+          "decision": "pass",
+          "reason": "主审逐项复核通过：人物一致、问答对应、事实与连续性可靠，表达和安全边界合适。"
+        },
+        {
+          "turn": 3,
+          "decision": "pass",
+          "reason": "主审逐项复核通过：人物一致、问答对应、事实与连续性可靠，表达和安全边界合适。"
+        },
+        {
+          "turn": 4,
+          "decision": "pass",
+          "reason": "主审逐项复核通过：人物一致、问答对应、事实与连续性可靠，表达和安全边界合适。"
+        },
+        {
+          "turn": 5,
+          "decision": "pass",
+          "reason": "主审逐项复核通过：人物一致、问答对应、事实与连续性可靠，表达和安全边界合适。"
+        }
+      ]
+    },
+    {
+      "session_id": "turning_a_blame_focused_retrospective_into_actionable_learning",
+      "decision": "pass",
+      "turn_reviews": [
+        {
+          "turn": 1,
+          "decision": "pass",
+          "reason": "主审逐项复核通过：人物一致、问答对应、事实与连续性可靠，表达和安全边界合适。"
+        },
+        {
+          "turn": 2,
+          "decision": "pass",
+          "reason": "主审逐项复核通过：人物一致、问答对应、事实与连续性可靠，表达和安全边界合适。"
+        },
+        {
+          "turn": 3,
+          "decision": "pass",
+          "reason": "主审逐项复核通过：人物一致、问答对应、事实与连续性可靠，表达和安全边界合适。"
+        },
+        {
+          "turn": 4,
+          "decision": "pass",
+          "reason": "主审逐项复核通过：人物一致、问答对应、事实与连续性可靠，表达和安全边界合适。"
+        },
+        {
+          "turn": 5,
+          "decision": "pass",
+          "reason": "主审逐项复核通过：人物一致、问答对应、事实与连续性可靠，表达和安全边界合适。"
+        }
+      ]
+    },
+    {
+      "session_id": "refusing_to_share_a_one_time_code_with_unverified_it_support",
+      "decision": "pass",
+      "turn_reviews": [
+        {
+          "turn": 1,
+          "decision": "pass",
+          "reason": "主审逐项复核通过：人物一致、问答对应、事实与连续性可靠，表达和安全边界合适。"
+        },
+        {
+          "turn": 2,
+          "decision": "pass",
+          "reason": "主审逐项复核通过：人物一致、问答对应、事实与连续性可靠，表达和安全边界合适。"
+        },
+        {
+          "turn": 3,
+          "decision": "pass",
+          "reason": "主审逐项复核通过：人物一致、问答对应、事实与连续性可靠，表达和安全边界合适。"
+        },
+        {
+          "turn": 4,
+          "decision": "pass",
+          "reason": "主审逐项复核通过：人物一致、问答对应、事实与连续性可靠，表达和安全边界合适。"
+        },
+        {
+          "turn": 5,
+          "decision": "pass",
+          "reason": "主审逐项复核通过：人物一致、问答对应、事实与连续性可靠，表达和安全边界合适。"
+        }
+      ]
+    }
+  ]
+}

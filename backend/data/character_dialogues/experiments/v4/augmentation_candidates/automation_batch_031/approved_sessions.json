@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "status": "approved_after_review",
+  "approval_id": "KISAKI-V41-AUTO-BATCH-031",
+  "approved_by": "codex_delegated_by_project_owner",
+  "approved_at": "2026-08-16",
+  "source_sessions_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_031/candidates.json",
+  "decision_sources": [
+    "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_031/review.json",
+    "executed_standard_library_technical_verification",
+    "parallel_subagent_initial_screening",
+    "project_owner_delegated_automation_approval"
+  ],
+  "base_contract": {
+    "train_count": 850,
+    "train_sha256": "a80fa11a34f383b1ea32ac348632ff1403071b70fb9931a23da954a1a5606ac4",
+    "validation_count": 70,
+    "validation_sha256": "fb5cd5d93027b37be53327cda4e7c6137a7bae97201830fc8aa726727b9777b8"
+  },
+  "promotion_contract": {
+    "record_count": 4,
+    "assistant_turn_count": 20,
+    "training_unit": "complete_five_turn_session",
+    "cumulative_prefix_records_allowed": false,
+    "data_source": "codex_user_simulation_v41_reviewed",
+    "source": "automation_batch_031",
+    "version": "v4.1_automation_reviewed",
+    "manifest_check_key": "kisaki_v41_auto_batch_031_promotion",
+    "system_message_embedded": false,
+    "validation_and_gold_content_modified": false
+  },
+  "sessions": [
+    {
+      "session_id": "deciding_whether_to_join_a_weekend_ceramics_workshop",
+      "record_id": "kisaki_v41_auto_b031_deciding_whether_to_join_a_weekend_ceramics_workshop",
+      "title": "��ƣ�������֮������Ƿ�μ���ĩ��������",
+      "task_type": "casual_chat",
+      "revised_assistant_turns": [],
+      "messages_mode": "source_unchanged"
+    },
+    {
+      "session_id": "setting_boundaries_with_a_friend_who_only_calls_for_favors",
+      "record_id": "kisaki_v41_auto_b031_setting_boundaries_with_a_friend_who_only_calls_for_favors",
+      "title": "���ֻ����Ҫ��æʱ��ϵ�����ѽ����߽�",
+      "task_type": "emotional_relationship",
+      "revised_assistant_turns": [],
+      "messages_mode": "source_unchanged"
+    },
+    {
+      "session_id": "avoiding_pseudoreplication_in_repeated_measurement_experiments",
+      "record_id": "kisaki_v41_auto_b031_avoiding_pseudoreplication_in_repeated_measurement_experiments",
+      "title": "���ظ�����ʵ�������ֹ۲��������������",
+      "task_type": "research_learning",
+      "revised_assistant_turns": [],
+      "messages_mode": "source_unchanged"
+    },
+    {
+      "session_id": "validating_json_lines_without_hiding_bad_records",
+      "record_id": "kisaki_v41_auto_b031_validating_json_lines_without_hiding_bad_records",
+      "title": "�ñ�׼������У�� JSONL ������׼ȷ����λ��",
+      "task_type": "code_debugging",
+      "revised_assistant_turns": [],
+      "messages_mode": "source_unchanged"
+    }
+  ]
+}

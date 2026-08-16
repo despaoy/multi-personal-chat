@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "revision_count": 2,
+  "items": [
+    {
+      "attempt": 1,
+      "original_session_id": "addressing_a_friend_who_repeatedly_cancels_after_plans_are_fixed",
+      "original_task_type": "emotional_relationship",
+      "decision": "revise",
+      "reason": "与 batch 027、035 的朋友临时取消约定主题重复",
+      "revised_session_id": "accepting_the_end_of_a_friendship_without_a_clear_conflict",
+      "approved": true,
+      "approved_source": "main_reviewer"
+    },
+    {
+      "attempt": 1,
+      "original_session_id": "planning_a_cluster_randomized_school_intervention_with_few_clusters",
+      "original_task_type": "research_learning",
+      "decision": "revise",
+      "reason": "与 batch 037 的学校整群随机试验主题重复",
+      "revised_session_id": "testing_measurement_invariance_before_comparing_translated_scale_scores",
+      "approved": true,
+      "approved_source": "main_reviewer"
+    }
+  ]
+}
+

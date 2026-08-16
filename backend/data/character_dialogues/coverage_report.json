@@ -5,20 +5,28 @@
     "all_supplied_unique_utterances": 1551,
     "canonical_direct_occurrences": 1598,
     "raw_source_coverage_percent": 100.0,
-    "full_sft_examples": 818,
-    "full_sft_covered_canonical_occurrences": 1435,
-    "recommended_sft_examples": 801,
-    "recommended_sft_unique_prompts": 801,
-    "recommended_sft_covered_canonical_occurrences": 1415,
-    "short_reply_count_in_recommended": 44,
-    "short_reply_ratio_in_recommended": 0.0549,
+    "full_sft_examples": 784,
+    "full_sft_covered_canonical_occurrences": 1273,
+    "recommended_sft_examples": 768,
+    "recommended_sft_unique_prompts": 768,
+    "recommended_sft_covered_canonical_occurrences": 1254,
+    "short_reply_count_in_recommended": 45,
+    "short_reply_ratio_in_recommended": 0.0586,
     "short_reply_max_ratio": 0.15,
     "reply_length_meaningful": {
       "min": 2,
-      "max": 662,
-      "mean": 28.0
+      "max": 555,
+      "mean": 26.6
     },
-    "excluded_turn_reasons": {},
+    "excluded_turn_reasons": {
+      "duplicate_prompt_lower_rank": 16,
+      "long_narration_gap": 72,
+      "low_information_prompt": 166,
+      "low_information_reply": 12,
+      "missing_context": 82,
+      "scene_boundary": 7,
+      "short_reply": 24
+    },
     "source_files": {
       "10黑曜石的因果目录.txt": 23,
       "12青金石的幻想图书馆.txt": 119,

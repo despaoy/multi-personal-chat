@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "revision_count": 1,
+  "items": [
+    {
+      "attempt": 1,
+      "original_session_id": "troubleshooting_new_shoes_that_squeak_on_office_floors",
+      "original_title": "排查新鞋在办公室地面发出吱响的原因",
+      "original_task_type": "casual_chat",
+      "decision": "revise",
+      "reason": "与 batch 030 已晋升的新运动鞋室内异响主题重复",
+      "revised_session_id": "remembering_to_bring_a_reusable_tote_without_collecting_more_bags",
+      "revised_title": "记得带购物袋又不继续囤积更多袋子",
+      "approved": true,
+      "approved_source": "main_reviewer"
+    }
+  ]
+}

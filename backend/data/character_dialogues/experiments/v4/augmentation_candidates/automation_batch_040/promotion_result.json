@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "status": "promoted",
+  "approval_id": "KISAKI-V41-AUTO-BATCH-040",
+  "source_sessions_sha256": "a7487c995a0aa774712a4671a99486a406a3e356413052571c9dbff4f974b5c1",
+  "approved_sessions_sha256": "40da50a19518b412639e14ef82fd47e1a9470f6bbf7d90df13917f48a9bfc053",
+  "previous_train": {
+    "count": 886,
+    "sha256": "91186fdf785a7c98e33f2b1359adab1d9abb9826e890fd97e2af7181b7635871"
+  },
+  "promoted": {
+    "record_count": 4,
+    "assistant_turn_count": 20,
+    "record_ids": [
+      "kisaki_v41_auto_b040_changing_an_alarm_sound_that_now_feels_stressful",
+      "kisaki_v41_auto_b040_refusing_to_upload_a_raw_crash_dump_to_a_public_analyzer",
+      "kisaki_v41_auto_b040_fixing_shared_lists_created_with_dict_fromkeys",
+      "kisaki_v41_auto_b040_understanding_why_microwaved_food_heats_unevenly"
+    ]
+  },
+  "result_train": {
+    "count": 890,
+    "sha256": "a51b82a3aa5c15aaa7d071ba262c15eee3781d04f6cc61203a2b1cb1fc79ab10"
+  },
+  "validation": {
+    "count": 70,
+    "sha256": "fb5cd5d93027b37be53327cda4e7c6137a7bae97201830fc8aa726727b9777b8",
+    "modified": false
+  },
+  "gold_v3": {
+    "content_modified": false,
+    "contamination_reaudit": "clean",
+    "contamination_audit_path": "backend/evaluation/kisaki_gold_set_v3_contamination_audit.json"
+  }
+}

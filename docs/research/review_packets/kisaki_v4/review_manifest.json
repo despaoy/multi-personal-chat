@@ -1,46 +1,165 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "review_id": "KISAKI-V4-HUMAN-REVIEW",
-  "status": "pending_human_review",
+  "status": "blocked_pending_game_context_quality_review",
   "batch_size": 50,
   "counts": {
     "source_lines": 1598,
-    "game_train_candidates": 801,
-    "constructed_train_candidates": 159,
-    "legacy_validation": 92,
-    "v5_draft_validation": 27,
-    "gold_v2": 150,
-    "gold_v3": 0,
-    "exclusions": 117
+    "game_train_approved": 576,
+    "constructed_train_approved": 150,
+    "reviewed_multiturn_augmentation": 276,
+    "frozen_train": 1002,
+    "frozen_validation": 70,
+    "rag_withheld_sft_records": 34,
+    "gold_v21": 150,
+    "gold_v3": 150,
+    "game_train_exclusions": 76,
+    "constructed_exclusions": 9,
+    "validation_exclusions": 7
   },
-  "source_hashes": {
-    "raw": "ae02d224449fda48122f07ccb3eda11198882b72338e502449feb9bd47e04c4d",
-    "game_train": "bf923a774237e07c66af1ffe193ce8edc6fbf4d32d742e2b98b3a743f5ed8958",
-    "constructed_train": "00a5b1b761171d8985785ce9818066de42a2759850ac6ceef54d15b225c275d2",
-    "gold_v2": "130afd81fef4e80c87847ef2f0c0742b8064d9c89d775773332bc414eca49a8d",
-    "prompt_v3": "2c51e0e7cbf6318dadcc56117ddd8afc72b9d6c3fc4bb53b6c451fb294acc879"
-  },
-  "packet_file_count": 67,
   "approval": {
-    "approved_categories": [],
+    "approved_categories": [
+      "profile_prompt",
+      "source_coverage",
+      "constructed_train",
+      "validation",
+      "gold_v21",
+      "gold_v3",
+      "experiment_configs",
+      "exclusions"
+    ],
     "all_required_approved": false,
     "category_status": {
-      "profile_prompt": "in_review"
+      "profile_prompt": "approved_by_project_owner",
+      "source_coverage": "approved_by_reproducible_source_audit",
+      "game_train": "source_review_approved_context_quality_reaudit_pending",
+      "constructed_train": "approved_by_project_owner",
+      "validation": "approved_70_excluded_7",
+      "gold_v21": "approved_development_only",
+      "exclusions": "approved_by_reproducible_source_audit",
+      "gold_v3": "approved_final_held_out",
+      "experiment_configs": "approved_after_technical_overfit"
     },
     "items": {
       "character_profile": {
         "status": "approved",
         "approved_by": "project_owner",
-        "reviewed_at": "2026-08-09",
-        "review_note": "人物画像正确"
+        "reviewed_at": "2026-08-09"
       },
       "system_prompt_v3": {
-        "status": "pending"
+        "status": "approved",
+        "approved_by": "project_owner",
+        "reviewed_at": "2026-08-09",
+        "path": "backend/data/character_dialogues/kisaki_system_prompt_v3.txt",
+        "prompt_policy_version": "3.1.0"
+      },
+      "game_train_current": {
+        "status": "context_quality_reaudit_pending",
+        "candidate_count": 652,
+        "reviewed_count": 652,
+        "approved_count": 576,
+        "excluded_count": 76,
+        "pending_count": 0,
+        "progress_path": "03_GAME_TRAIN/game_train_review_progress_round03.json",
+        "approval_path": "03_GAME_TRAIN/game_train_final_approval.json"
+      },
+      "constructed_train_final": {
+        "status": "approved",
+        "candidate_count": 150,
+        "excluded_count": 9,
+        "reviewed_count": 159,
+        "approval_path": "04_CONSTRUCTED_TRAIN/constructed_final_approval.json"
+      },
+      "deepseek_user_simulation_round06": {
+        "status": "approved_after_revision",
+        "record_count": 4,
+        "assistant_turn_count": 20,
+        "approved_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/deepseek_user_simulation_round06/approved_sessions.json",
+        "promotion_result_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/deepseek_user_simulation_round06/promotion_result.json"
+      },
+      "automated_multiturn_augmentation": {
+        "status": "active_delegated_review",
+        "approved_batch_count": 68,
+        "approved_record_count": 272,
+        "assistant_turn_count": 1360,
+        "last_approval_id": "KISAKI-V41-AUTO-BATCH-068",
+        "target_records": 1000,
+        "target_assistant_turns": 1500,
+        "target_assistant_characters": 80000
+      },
+      "validation_current": {
+        "status": "approved",
+        "candidate_count": 77,
+        "approved_count": 70,
+        "excluded_count": 7,
+        "suggested_leakage_exclusions": 1,
+        "approval_path": "05_VALIDATION/validation_current_approval.json",
+        "historical_review_path": "05_VALIDATION/validation_final_review_decisions.json"
+      },
+      "gold_v21": {
+        "status": "approved",
+        "evaluation_role": "development_only",
+        "candidate_count": 150,
+        "approval_path": "06_GOLD_V21/gold_v21_current_approval.json"
+      },
+      "gold_v3": {
+        "status": "approved",
+        "evaluation_role": "final_held_out",
+        "candidate_count": 150,
+        "candidate_path": "../../../../../backend/evaluation/kisaki_gold_set_v3_candidates.json",
+        "review_path": "07_GOLD_V3",
+        "approval_path": "07_GOLD_V3/gold_v3_final_approval.json",
+        "content_sha256": "d40e6324f3c775166cd66ca985bc0cdc2902c27fb1cfb34f2d72c8d74259cb40"
+      },
+      "experiment_configs": {
+        "status": "approved",
+        "count": 5,
+        "path": "../../../../../backend/data/character_dialogues/experiments/v4/configs/config_manifest.json"
+      },
+      "overfit_20": {
+        "status": "approved_for_training_pipeline_only",
+        "sample_count": 20,
+        "generated_count": 20,
+        "empty_response_count": 0,
+        "exact_normalized_match_count": 20,
+        "manifest_path": "../../../../../backend/data/character_dialogues/experiments/v4/overfit_20/manifest.json",
+        "human_review_path": "09_OVERFIT_TEST/review.md",
+        "decision_path": "09_OVERFIT_TEST/technical_review_decision.json",
+        "sample_context_quality": "failed",
+        "character_chat_quality": "not_established"
+      },
+      "llm_persona_review": {
+        "status": "approved_and_promoted",
+        "review_id": "KISAKI-V41-LLM-PERSONA-REVIEW-20260816",
+        "record_count": 426,
+        "assistant_turn_count": 1549,
+        "revised_record_count": 39,
+        "revised_assistant_turn_count": 39,
+        "summary_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/llm_persona_review_20260816/summary.json"
+      },
+      "llm_full_dialogue_review": {
+        "status": "approved_and_promoted",
+        "review_id": "KISAKI-V41-LLM-FULL-DIALOGUE-REVIEW-20260816",
+        "record_count": 426,
+        "assistant_turn_count": 1549,
+        "revised_record_count": 14,
+        "revised_assistant_turn_count": 16,
+        "summary_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/llm_full_dialogue_review_20260816/summary.json"
       }
     }
   },
-  "source_coverage": {
-    "original_files_total": 17,
-    "files_with_kisaki_lines": 13
-  }
+  "source_audit": {
+    "status": "passed_for_source_alignment",
+    "path": "02_SOURCE_COVERAGE/SOURCE_ALIGNMENT_AUDIT.json"
+  },
+  "pipeline": [
+    "build_candidates",
+    "render_review_packets",
+    "apply_human_decisions",
+    "freeze_train_validation",
+    "build_and_review_gold_v3",
+    "generate_r1v4_configs",
+    "train",
+    "formal_evaluation"
+  ]
 }

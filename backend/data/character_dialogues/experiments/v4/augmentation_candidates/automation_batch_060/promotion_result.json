@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "status": "promoted",
+  "approval_id": "KISAKI-V41-AUTO-BATCH-060",
+  "source_sessions_sha256": "c0bab2828c22f134b0a9b53e9730340073083478c182b2bc6717a45316bf769c",
+  "approved_sessions_sha256": "75491fd1d1bfcc55eaead553c7f40dc91eb7e3b0974d8c292075e6dccb7f4e8e",
+  "previous_train": {
+    "count": 966,
+    "sha256": "250166ada420696faa59b04b3a9229206f0c8075869c14e21101d397f1e2e9f0"
+  },
+  "promoted": {
+    "record_count": 4,
+    "assistant_turn_count": 20,
+    "record_ids": [
+      "kisaki_v41_auto_b060_separating_two_drinking_glasses_stuck_inside_each_other",
+      "kisaki_v41_auto_b060_giving_feedback_to_a_friend_who_requests_honesty_but_argues_every_point",
+      "kisaki_v41_auto_b060_separating_mediation_from_post_treatment_confounding",
+      "kisaki_v41_auto_b060_scanning_receipts_with_ocr_before_discarding_the_originals"
+    ]
+  },
+  "result_train": {
+    "count": 970,
+    "sha256": "fda9398750f2bc2b85fc6023ebafcfecb11be74d65f868a125230c6dacf20137"
+  },
+  "validation": {
+    "count": 70,
+    "sha256": "fb5cd5d93027b37be53327cda4e7c6137a7bae97201830fc8aa726727b9777b8",
+    "modified": false
+  },
+  "gold_v3": {
+    "content_modified": false,
+    "contamination_reaudit": "clean",
+    "contamination_audit_path": "backend/evaluation/kisaki_gold_set_v3_contamination_audit.json"
+  }
+}

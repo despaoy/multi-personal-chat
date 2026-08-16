@@ -10,7 +10,21 @@
       "metadata": {
         "persona": "tsukiyashiro_kisaki",
         "held_out": true
-      }
+      },
+      "source_lineage": [
+        {
+          "segment_index": 1,
+          "source_path": "gametext/纸上魔法使/3蓝宝石的存在证明.txt",
+          "source_line_start": 2794,
+          "source_line_end": 2794
+        }
+      ],
+      "source_event_ids": [
+        "tsukiyashiro_kisaki_raw_f783b5ed6248be3c"
+      ],
+      "source_path": "gametext/纸上魔法使/3蓝宝石的存在证明.txt",
+      "source_line_start": 2794,
+      "source_line_end": 2794
     },
     {
       "id": "tsukiyashiro_kisaki_doc_002",
@@ -20,7 +34,28 @@
       "metadata": {
         "persona": "tsukiyashiro_kisaki",
         "held_out": true
-      }
+      },
+      "source_lineage": [
+        {
+          "segment_index": 1,
+          "source_path": "gametext/纸上魔法使/8萤石的时空残影.txt",
+          "source_line_start": 1741,
+          "source_line_end": 1741
+        },
+        {
+          "segment_index": 2,
+          "source_path": "gametext/纸上魔法使/8萤石的时空残影.txt",
+          "source_line_start": 1744,
+          "source_line_end": 1744
+        }
+      ],
+      "source_event_ids": [
+        "tsukiyashiro_kisaki_raw_f4dec31f35739589",
+        "tsukiyashiro_kisaki_raw_b691556545fd0906"
+      ],
+      "source_path": "gametext/纸上魔法使/8萤石的时空残影.txt",
+      "source_line_start": 1741,
+      "source_line_end": 1744
     },
     {
       "id": "tsukiyashiro_kisaki_doc_003",
@@ -30,7 +65,21 @@
       "metadata": {
         "persona": "tsukiyashiro_kisaki",
         "held_out": true
-      }
+      },
+      "source_lineage": [
+        {
+          "segment_index": 1,
+          "source_path": "gametext/纸上魔法使/6芙蓉石的长年隔绝.txt",
+          "source_line_start": 56,
+          "source_line_end": 56
+        }
+      ],
+      "source_event_ids": [
+        "tsukiyashiro_kisaki_raw_10f4d41e2d6d7ef7"
+      ],
+      "source_path": "gametext/纸上魔法使/6芙蓉石的长年隔绝.txt",
+      "source_line_start": 56,
+      "source_line_end": 56
     },
     {
       "id": "tsukiyashiro_kisaki_doc_004",
@@ -40,7 +89,21 @@
       "metadata": {
         "persona": "tsukiyashiro_kisaki",
         "held_out": true
-      }
+      },
+      "source_lineage": [
+        {
+          "segment_index": 1,
+          "source_path": "gametext/纸上魔法使/1翡翠的排挤原理.txt",
+          "source_line_start": 292,
+          "source_line_end": 292
+        }
+      ],
+      "source_event_ids": [
+        "tsukiyashiro_kisaki_raw_9fda41a3d912dda5"
+      ],
+      "source_path": "gametext/纸上魔法使/1翡翠的排挤原理.txt",
+      "source_line_start": 292,
+      "source_line_end": 292
     },
     {
       "id": "tsukiyashiro_kisaki_doc_005",
@@ -50,7 +113,21 @@
       "metadata": {
         "persona": "tsukiyashiro_kisaki",
         "held_out": true
-      }
+      },
+      "source_lineage": [
+        {
+          "segment_index": 1,
+          "source_path": "gametext/纸上魔法使/9白珍珠的泡沫爱慕.txt",
+          "source_line_start": 1692,
+          "source_line_end": 1692
+        }
+      ],
+      "source_event_ids": [
+        "tsukiyashiro_kisaki_raw_82357df2c51427b3"
+      ],
+      "source_path": "gametext/纸上魔法使/9白珍珠的泡沫爱慕.txt",
+      "source_line_start": 1692,
+      "source_line_end": 1692
     },
     {
       "id": "tsukiyashiro_kisaki_doc_006",
@@ -60,7 +137,28 @@
       "metadata": {
         "persona": "tsukiyashiro_kisaki",
         "held_out": true
-      }
+      },
+      "source_lineage": [
+        {
+          "segment_index": 1,
+          "source_path": "gametext/纸上魔法使/8萤石的时空残影.txt",
+          "source_line_start": 1682,
+          "source_line_end": 1682
+        },
+        {
+          "segment_index": 2,
+          "source_path": "gametext/纸上魔法使/8萤石的时空残影.txt",
+          "source_line_start": 1683,
+          "source_line_end": 1683
+        }
+      ],
+      "source_event_ids": [
+        "tsukiyashiro_kisaki_raw_f7ddd6b15ae2f9ae",
+        "tsukiyashiro_kisaki_raw_45f7f70ebcd2b8e5"
+      ],
+      "source_path": "gametext/纸上魔法使/8萤石的时空残影.txt",
+      "source_line_start": 1682,
+      "source_line_end": 1683
     },
     {
       "id": "tsukiyashiro_kisaki_doc_007",
@@ -70,7 +168,21 @@
       "metadata": {
         "persona": "tsukiyashiro_kisaki",
         "held_out": true
-      }
+      },
+      "source_lineage": [
+        {
+          "segment_index": 1,
+          "source_path": "gametext/纸上魔法使/3蓝宝石的存在证明.txt",
+          "source_line_start": 328,
+          "source_line_end": 328
+        }
+      ],
+      "source_event_ids": [
+        "tsukiyashiro_kisaki_raw_f0aa58e279b6da16"
+      ],
+      "source_path": "gametext/纸上魔法使/3蓝宝石的存在证明.txt",
+      "source_line_start": 328,
+      "source_line_end": 328
     },
     {
       "id": "tsukiyashiro_kisaki_doc_008",
@@ -80,7 +192,21 @@
       "metadata": {
         "persona": "tsukiyashiro_kisaki",
         "held_out": true
-      }
+      },
+      "source_lineage": [
+        {
+          "segment_index": 1,
+          "source_path": "gametext/纸上魔法使/8萤石的时空残影.txt",
+          "source_line_start": 121,
+          "source_line_end": 121
+        }
+      ],
+      "source_event_ids": [
+        "tsukiyashiro_kisaki_raw_7997722426da34e1"
+      ],
+      "source_path": "gametext/纸上魔法使/8萤石的时空残影.txt",
+      "source_line_start": 121,
+      "source_line_end": 121
     },
     {
       "id": "tsukiyashiro_kisaki_doc_009",
@@ -90,17 +216,70 @@
       "metadata": {
         "persona": "tsukiyashiro_kisaki",
         "held_out": true
-      }
+      },
+      "source_lineage": [
+        {
+          "segment_index": 1,
+          "source_path": "gametext/纸上魔法使/8萤石的时空残影.txt",
+          "source_line_start": 1037,
+          "source_line_end": 1037
+        },
+        {
+          "segment_index": 2,
+          "source_path": "gametext/纸上魔法使/8萤石的时空残影.txt",
+          "source_line_start": 1039,
+          "source_line_end": 1039
+        }
+      ],
+      "source_event_ids": [
+        "tsukiyashiro_kisaki_raw_2496370d7f040cd4",
+        "tsukiyashiro_kisaki_raw_e3f941758c2b3bef"
+      ],
+      "source_path": "gametext/纸上魔法使/8萤石的时空残影.txt",
+      "source_line_start": 1037,
+      "source_line_end": 1039
     },
     {
       "id": "tsukiyashiro_kisaki_doc_010",
       "title": "tsukiyashiro_kisaki held-out evidence",
       "category": "tsukiyashiro_kisaki",
-      "content": "……为了确认这点，是需要时间的。",
+      "content": "[琉璃] 「就算不做这种事，我也一直——」\n一直，无时无刻，\n都没有忘记你哦。\n[妃] 「……为了确认这点，是需要时间的。」",
       "metadata": {
         "persona": "tsukiyashiro_kisaki",
         "held_out": true
-      }
+      },
+      "source_lineage": [
+        {
+          "segment_index": 1,
+          "source_path": "gametext/纸上魔法使/8萤石的时空残影.txt",
+          "source_line_start": 665,
+          "source_line_end": 665
+        },
+        {
+          "segment_index": 2,
+          "source_path": "gametext/纸上魔法使/8萤石的时空残影.txt",
+          "source_line_start": 666,
+          "source_line_end": 666
+        },
+        {
+          "segment_index": 3,
+          "source_path": "gametext/纸上魔法使/8萤石的时空残影.txt",
+          "source_line_start": 667,
+          "source_line_end": 667
+        },
+        {
+          "segment_index": 4,
+          "source_path": "gametext/纸上魔法使/8萤石的时空残影.txt",
+          "source_line_start": 668,
+          "source_line_end": 668
+        }
+      ],
+      "source_event_ids": [
+        "tsukiyashiro_kisaki_raw_ed53463802bdaad0"
+      ],
+      "source_path": "gametext/纸上魔法使/8萤石的时空残影.txt",
+      "source_line_start": 665,
+      "source_line_end": 668
     },
     {
       "id": "tsukiyashiro_kisaki_doc_011",
@@ -110,7 +289,35 @@
       "metadata": {
         "persona": "tsukiyashiro_kisaki",
         "held_out": true
-      }
+      },
+      "source_lineage": [
+        {
+          "segment_index": 1,
+          "source_path": "gametext/纸上魔法使/4紫水晶的怪异传说.txt",
+          "source_line_start": 2049,
+          "source_line_end": 2049
+        },
+        {
+          "segment_index": 2,
+          "source_path": "gametext/纸上魔法使/4紫水晶的怪异传说.txt",
+          "source_line_start": 2052,
+          "source_line_end": 2052
+        },
+        {
+          "segment_index": 3,
+          "source_path": "gametext/纸上魔法使/4紫水晶的怪异传说.txt",
+          "source_line_start": 2054,
+          "source_line_end": 2054
+        }
+      ],
+      "source_event_ids": [
+        "tsukiyashiro_kisaki_raw_23f1f7f3d9b4196d",
+        "tsukiyashiro_kisaki_raw_e09e819ce1d9804d",
+        "tsukiyashiro_kisaki_raw_89204ec6d05726fc"
+      ],
+      "source_path": "gametext/纸上魔法使/4紫水晶的怪异传说.txt",
+      "source_line_start": 2049,
+      "source_line_end": 2054
     },
     {
       "id": "tsukiyashiro_kisaki_doc_012",
@@ -120,7 +327,21 @@
       "metadata": {
         "persona": "tsukiyashiro_kisaki",
         "held_out": true
-      }
+      },
+      "source_lineage": [
+        {
+          "segment_index": 1,
+          "source_path": "gametext/纸上魔法使/日后谈.txt",
+          "source_line_start": 4,
+          "source_line_end": 4
+        }
+      ],
+      "source_event_ids": [
+        "tsukiyashiro_kisaki_raw_8ea1ea2633181819"
+      ],
+      "source_path": "gametext/纸上魔法使/日后谈.txt",
+      "source_line_start": 4,
+      "source_line_end": 4
     },
     {
       "id": "tsukiyashiro_kisaki_doc_013",
@@ -130,7 +351,21 @@
       "metadata": {
         "persona": "tsukiyashiro_kisaki",
         "held_out": true
-      }
+      },
+      "source_lineage": [
+        {
+          "segment_index": 1,
+          "source_path": "gametext/纸上魔法使/1翡翠的排挤原理.txt",
+          "source_line_start": 3033,
+          "source_line_end": 3033
+        }
+      ],
+      "source_event_ids": [
+        "tsukiyashiro_kisaki_raw_d1401e0739567ff8"
+      ],
+      "source_path": "gametext/纸上魔法使/1翡翠的排挤原理.txt",
+      "source_line_start": 3033,
+      "source_line_end": 3033
     },
     {
       "id": "tsukiyashiro_kisaki_doc_014",
@@ -140,17 +375,82 @@
       "metadata": {
         "persona": "tsukiyashiro_kisaki",
         "held_out": true
-      }
+      },
+      "source_lineage": [
+        {
+          "segment_index": 1,
+          "source_path": "gametext/纸上魔法使/8萤石的时空残影.txt",
+          "source_line_start": 48,
+          "source_line_end": 48
+        },
+        {
+          "segment_index": 2,
+          "source_path": "gametext/纸上魔法使/8萤石的时空残影.txt",
+          "source_line_start": 50,
+          "source_line_end": 50
+        }
+      ],
+      "source_event_ids": [
+        "tsukiyashiro_kisaki_raw_83b66c5115807a9c",
+        "tsukiyashiro_kisaki_raw_c4e6593e8383f732"
+      ],
+      "source_path": "gametext/纸上魔法使/8萤石的时空残影.txt",
+      "source_line_start": 48,
+      "source_line_end": 50
     },
     {
       "id": "tsukiyashiro_kisaki_doc_015",
       "title": "tsukiyashiro_kisaki held-out evidence",
       "category": "tsukiyashiro_kisaki",
-      "content": "即使不能，我也做到不表现出来。我会让你体会到这份爱的宽大。",
+      "content": "[妃] 「今后，假若发生同样的事情。」\n[妃] 「我避免再妒忌，也不会再多嘴啰嗦。」\n[妃] 「我不想让你看到我丑陋的地方。妒忌可是无谓的感情。」\n[妃] 「我相信你不会变心。因此，我不会再妒忌。」\n[妃] 「即使不能，我也做到不表现出来。我会让你体会到这份爱的宽大。」",
       "metadata": {
         "persona": "tsukiyashiro_kisaki",
         "held_out": true
-      }
+      },
+      "source_lineage": [
+        {
+          "segment_index": 1,
+          "source_path": "gametext/纸上魔法使/4紫水晶的怪异传说.txt",
+          "source_line_start": 2052,
+          "source_line_end": 2052
+        },
+        {
+          "segment_index": 2,
+          "source_path": "gametext/纸上魔法使/4紫水晶的怪异传说.txt",
+          "source_line_start": 2054,
+          "source_line_end": 2054
+        },
+        {
+          "segment_index": 3,
+          "source_path": "gametext/纸上魔法使/4紫水晶的怪异传说.txt",
+          "source_line_start": 2059,
+          "source_line_end": 2059
+        },
+        {
+          "segment_index": 4,
+          "source_path": "gametext/纸上魔法使/4紫水晶的怪异传说.txt",
+          "source_line_start": 2066,
+          "source_line_end": 2066
+        },
+        {
+          "segment_index": 5,
+          "source_path": "gametext/纸上魔法使/4紫水晶的怪异传说.txt",
+          "source_line_start": 2068,
+          "source_line_end": 2068
+        }
+      ],
+      "source_event_ids": [
+        "tsukiyashiro_kisaki_raw_e09e819ce1d9804d",
+        "tsukiyashiro_kisaki_raw_89204ec6d05726fc",
+        "tsukiyashiro_kisaki_raw_d3cd0fa088859f20",
+        "tsukiyashiro_kisaki_raw_23c53bed6ec72dde",
+        "tsukiyashiro_kisaki_raw_94244b1dfe290e23",
+        "tsukiyashiro_kisaki_raw_f52944998bf61ae6",
+        "tsukiyashiro_kisaki_raw_eb13220634dd2f4c"
+      ],
+      "source_path": "gametext/纸上魔法使/4紫水晶的怪异传说.txt",
+      "source_line_start": 2052,
+      "source_line_end": 2068
     },
     {
       "id": "tsukiyashiro_kisaki_doc_016",
@@ -160,7 +460,28 @@
       "metadata": {
         "persona": "tsukiyashiro_kisaki",
         "held_out": true
-      }
+      },
+      "source_lineage": [
+        {
+          "segment_index": 1,
+          "source_path": "gametext/纸上魔法使/1翡翠的排挤原理.txt",
+          "source_line_start": 3844,
+          "source_line_end": 3844
+        },
+        {
+          "segment_index": 2,
+          "source_path": "gametext/纸上魔法使/1翡翠的排挤原理.txt",
+          "source_line_start": 3847,
+          "source_line_end": 3847
+        }
+      ],
+      "source_event_ids": [
+        "tsukiyashiro_kisaki_raw_92259bc1b933999d",
+        "tsukiyashiro_kisaki_raw_4456070c080460e4"
+      ],
+      "source_path": "gametext/纸上魔法使/1翡翠的排挤原理.txt",
+      "source_line_start": 3844,
+      "source_line_end": 3847
     },
     {
       "id": "tsukiyashiro_kisaki_doc_017",
@@ -170,7 +491,28 @@
       "metadata": {
         "persona": "tsukiyashiro_kisaki",
         "held_out": true
-      }
+      },
+      "source_lineage": [
+        {
+          "segment_index": 1,
+          "source_path": "gametext/纸上魔法使/12青金石的幻想图书馆.txt",
+          "source_line_start": 2142,
+          "source_line_end": 2142
+        },
+        {
+          "segment_index": 2,
+          "source_path": "gametext/纸上魔法使/12青金石的幻想图书馆.txt",
+          "source_line_start": 2144,
+          "source_line_end": 2144
+        }
+      ],
+      "source_event_ids": [
+        "tsukiyashiro_kisaki_raw_0c44ec062ce565e4",
+        "tsukiyashiro_kisaki_raw_497915ba721964e1"
+      ],
+      "source_path": "gametext/纸上魔法使/12青金石的幻想图书馆.txt",
+      "source_line_start": 2142,
+      "source_line_end": 2144
     },
     {
       "id": "tsukiyashiro_kisaki_doc_018",
@@ -180,7 +522,28 @@
       "metadata": {
         "persona": "tsukiyashiro_kisaki",
         "held_out": true
-      }
+      },
+      "source_lineage": [
+        {
+          "segment_index": 1,
+          "source_path": "gametext/纸上魔法使/1翡翠的排挤原理.txt",
+          "source_line_start": 4358,
+          "source_line_end": 4358
+        },
+        {
+          "segment_index": 2,
+          "source_path": "gametext/纸上魔法使/1翡翠的排挤原理.txt",
+          "source_line_start": 4361,
+          "source_line_end": 4361
+        }
+      ],
+      "source_event_ids": [
+        "tsukiyashiro_kisaki_raw_01d38473bb6a7d4f",
+        "tsukiyashiro_kisaki_raw_20da58d44a3e0e8c"
+      ],
+      "source_path": "gametext/纸上魔法使/1翡翠的排挤原理.txt",
+      "source_line_start": 4358,
+      "source_line_end": 4361
     },
     {
       "id": "tsukiyashiro_kisaki_doc_019",
@@ -190,7 +553,21 @@
       "metadata": {
         "persona": "tsukiyashiro_kisaki",
         "held_out": true
-      }
+      },
+      "source_lineage": [
+        {
+          "segment_index": 1,
+          "source_path": "gametext/纸上魔法使/4紫水晶的怪异传说.txt",
+          "source_line_start": 2456,
+          "source_line_end": 2456
+        }
+      ],
+      "source_event_ids": [
+        "tsukiyashiro_kisaki_raw_1f9ac34b6fa8137e"
+      ],
+      "source_path": "gametext/纸上魔法使/4紫水晶的怪异传说.txt",
+      "source_line_start": 2456,
+      "source_line_end": 2456
     },
     {
       "id": "tsukiyashiro_kisaki_doc_020",
@@ -200,7 +577,28 @@
       "metadata": {
         "persona": "tsukiyashiro_kisaki",
         "held_out": true
-      }
+      },
+      "source_lineage": [
+        {
+          "segment_index": 1,
+          "source_path": "gametext/纸上魔法使/2红宝石的天作之合.txt",
+          "source_line_start": 746,
+          "source_line_end": 746
+        },
+        {
+          "segment_index": 2,
+          "source_path": "gametext/纸上魔法使/2红宝石的天作之合.txt",
+          "source_line_start": 749,
+          "source_line_end": 749
+        }
+      ],
+      "source_event_ids": [
+        "tsukiyashiro_kisaki_raw_286ed06479f898b4",
+        "tsukiyashiro_kisaki_raw_ea9e0cc0bf675fe7"
+      ],
+      "source_path": "gametext/纸上魔法使/2红宝石的天作之合.txt",
+      "source_line_start": 746,
+      "source_line_end": 749
     },
     {
       "id": "tsukiyashiro_kisaki_doc_021",
@@ -210,7 +608,28 @@
       "metadata": {
         "persona": "tsukiyashiro_kisaki",
         "held_out": true
-      }
+      },
+      "source_lineage": [
+        {
+          "segment_index": 1,
+          "source_path": "gametext/纸上魔法使/12青金石的幻想图书馆.txt",
+          "source_line_start": 1196,
+          "source_line_end": 1196
+        },
+        {
+          "segment_index": 2,
+          "source_path": "gametext/纸上魔法使/12青金石的幻想图书馆.txt",
+          "source_line_start": 1198,
+          "source_line_end": 1198
+        }
+      ],
+      "source_event_ids": [
+        "tsukiyashiro_kisaki_raw_4a1778d23c9aa8a4",
+        "tsukiyashiro_kisaki_raw_0ea27270d6425822"
+      ],
+      "source_path": "gametext/纸上魔法使/12青金石的幻想图书馆.txt",
+      "source_line_start": 1196,
+      "source_line_end": 1198
     },
     {
       "id": "tsukiyashiro_kisaki_doc_022",
@@ -220,7 +639,28 @@
       "metadata": {
         "persona": "tsukiyashiro_kisaki",
         "held_out": true
-      }
+      },
+      "source_lineage": [
+        {
+          "segment_index": 1,
+          "source_path": "gametext/纸上魔法使/5磷灰石的怠惰现象.txt",
+          "source_line_start": 168,
+          "source_line_end": 168
+        },
+        {
+          "segment_index": 2,
+          "source_path": "gametext/纸上魔法使/5磷灰石的怠惰现象.txt",
+          "source_line_start": 170,
+          "source_line_end": 170
+        }
+      ],
+      "source_event_ids": [
+        "tsukiyashiro_kisaki_raw_ad83d85df0f167fc",
+        "tsukiyashiro_kisaki_raw_31b43d3abad11e3c"
+      ],
+      "source_path": "gametext/纸上魔法使/5磷灰石的怠惰现象.txt",
+      "source_line_start": 168,
+      "source_line_end": 170
     },
     {
       "id": "tsukiyashiro_kisaki_doc_023",
@@ -230,7 +670,35 @@
       "metadata": {
         "persona": "tsukiyashiro_kisaki",
         "held_out": true
-      }
+      },
+      "source_lineage": [
+        {
+          "segment_index": 1,
+          "source_path": "gametext/纸上魔法使/9白珍珠的泡沫爱慕.txt",
+          "source_line_start": 1682,
+          "source_line_end": 1682
+        },
+        {
+          "segment_index": 2,
+          "source_path": "gametext/纸上魔法使/9白珍珠的泡沫爱慕.txt",
+          "source_line_start": 1685,
+          "source_line_end": 1685
+        },
+        {
+          "segment_index": 3,
+          "source_path": "gametext/纸上魔法使/9白珍珠的泡沫爱慕.txt",
+          "source_line_start": 1687,
+          "source_line_end": 1687
+        }
+      ],
+      "source_event_ids": [
+        "tsukiyashiro_kisaki_raw_25248e5dc3cb1bc6",
+        "tsukiyashiro_kisaki_raw_fbccca8142a2ad67",
+        "tsukiyashiro_kisaki_raw_195accf25ce72c43"
+      ],
+      "source_path": "gametext/纸上魔法使/9白珍珠的泡沫爱慕.txt",
+      "source_line_start": 1682,
+      "source_line_end": 1687
     },
     {
       "id": "tsukiyashiro_kisaki_doc_024",
@@ -240,7 +708,28 @@
       "metadata": {
         "persona": "tsukiyashiro_kisaki",
         "held_out": true
-      }
+      },
+      "source_lineage": [
+        {
+          "segment_index": 1,
+          "source_path": "gametext/纸上魔法使/12青金石的幻想图书馆.txt",
+          "source_line_start": 2108,
+          "source_line_end": 2108
+        },
+        {
+          "segment_index": 2,
+          "source_path": "gametext/纸上魔法使/12青金石的幻想图书馆.txt",
+          "source_line_start": 2111,
+          "source_line_end": 2111
+        }
+      ],
+      "source_event_ids": [
+        "tsukiyashiro_kisaki_raw_521ab5726d61306f",
+        "tsukiyashiro_kisaki_raw_7598238cd979c6c0"
+      ],
+      "source_path": "gametext/纸上魔法使/12青金石的幻想图书馆.txt",
+      "source_line_start": 2108,
+      "source_line_end": 2111
     },
     {
       "id": "tsukiyashiro_kisaki_doc_025",
@@ -250,7 +739,21 @@
       "metadata": {
         "persona": "tsukiyashiro_kisaki",
         "held_out": true
-      }
+      },
+      "source_lineage": [
+        {
+          "segment_index": 1,
+          "source_path": "gametext/纸上魔法使/3蓝宝石的存在证明.txt",
+          "source_line_start": 816,
+          "source_line_end": 816
+        }
+      ],
+      "source_event_ids": [
+        "tsukiyashiro_kisaki_raw_3e11330dca211048"
+      ],
+      "source_path": "gametext/纸上魔法使/3蓝宝石的存在证明.txt",
+      "source_line_start": 816,
+      "source_line_end": 816
     },
     {
       "id": "tsukiyashiro_kisaki_doc_026",
@@ -260,7 +763,35 @@
       "metadata": {
         "persona": "tsukiyashiro_kisaki",
         "held_out": true
-      }
+      },
+      "source_lineage": [
+        {
+          "segment_index": 1,
+          "source_path": "gametext/纸上魔法使/1翡翠的排挤原理.txt",
+          "source_line_start": 3527,
+          "source_line_end": 3527
+        },
+        {
+          "segment_index": 2,
+          "source_path": "gametext/纸上魔法使/1翡翠的排挤原理.txt",
+          "source_line_start": 3530,
+          "source_line_end": 3530
+        },
+        {
+          "segment_index": 3,
+          "source_path": "gametext/纸上魔法使/1翡翠的排挤原理.txt",
+          "source_line_start": 3533,
+          "source_line_end": 3533
+        }
+      ],
+      "source_event_ids": [
+        "tsukiyashiro_kisaki_raw_e44f2a678149c0b0",
+        "tsukiyashiro_kisaki_raw_3c7335a104d3949a",
+        "tsukiyashiro_kisaki_raw_b4ee7d969a6eea2c"
+      ],
+      "source_path": "gametext/纸上魔法使/1翡翠的排挤原理.txt",
+      "source_line_start": 3527,
+      "source_line_end": 3533
     },
     {
       "id": "tsukiyashiro_kisaki_doc_027",
@@ -270,7 +801,28 @@
       "metadata": {
         "persona": "tsukiyashiro_kisaki",
         "held_out": true
-      }
+      },
+      "source_lineage": [
+        {
+          "segment_index": 1,
+          "source_path": "gametext/纸上魔法使/2红宝石的天作之合.txt",
+          "source_line_start": 169,
+          "source_line_end": 169
+        },
+        {
+          "segment_index": 2,
+          "source_path": "gametext/纸上魔法使/2红宝石的天作之合.txt",
+          "source_line_start": 171,
+          "source_line_end": 171
+        }
+      ],
+      "source_event_ids": [
+        "tsukiyashiro_kisaki_raw_e108059aaf78dc5e",
+        "tsukiyashiro_kisaki_raw_fbe48c8bc7f64fe1"
+      ],
+      "source_path": "gametext/纸上魔法使/2红宝石的天作之合.txt",
+      "source_line_start": 169,
+      "source_line_end": 171
     },
     {
       "id": "tsukiyashiro_kisaki_doc_028",
@@ -280,7 +832,35 @@
       "metadata": {
         "persona": "tsukiyashiro_kisaki",
         "held_out": true
-      }
+      },
+      "source_lineage": [
+        {
+          "segment_index": 1,
+          "source_path": "gametext/纸上魔法使/8萤石的怠惰现象.txt",
+          "source_line_start": 10,
+          "source_line_end": 10
+        },
+        {
+          "segment_index": 2,
+          "source_path": "gametext/纸上魔法使/8萤石的怠惰现象.txt",
+          "source_line_start": 13,
+          "source_line_end": 13
+        },
+        {
+          "segment_index": 3,
+          "source_path": "gametext/纸上魔法使/8萤石的怠惰现象.txt",
+          "source_line_start": 15,
+          "source_line_end": 15
+        }
+      ],
+      "source_event_ids": [
+        "tsukiyashiro_kisaki_raw_fa49f1ee3e4550b1",
+        "tsukiyashiro_kisaki_raw_b07407540de6f083",
+        "tsukiyashiro_kisaki_raw_031f467497e6233d"
+      ],
+      "source_path": "gametext/纸上魔法使/8萤石的怠惰现象.txt",
+      "source_line_start": 10,
+      "source_line_end": 15
     },
     {
       "id": "tsukiyashiro_kisaki_doc_029",
@@ -290,7 +870,28 @@
       "metadata": {
         "persona": "tsukiyashiro_kisaki",
         "held_out": true
-      }
+      },
+      "source_lineage": [
+        {
+          "segment_index": 1,
+          "source_path": "gametext/纸上魔法使/1翡翠的排挤原理.txt",
+          "source_line_start": 3574,
+          "source_line_end": 3574
+        },
+        {
+          "segment_index": 2,
+          "source_path": "gametext/纸上魔法使/1翡翠的排挤原理.txt",
+          "source_line_start": 3576,
+          "source_line_end": 3576
+        }
+      ],
+      "source_event_ids": [
+        "tsukiyashiro_kisaki_raw_22802b227e92f5f7",
+        "tsukiyashiro_kisaki_raw_0973a60410dc048e"
+      ],
+      "source_path": "gametext/纸上魔法使/1翡翠的排挤原理.txt",
+      "source_line_start": 3574,
+      "source_line_end": 3576
     },
     {
       "id": "tsukiyashiro_kisaki_doc_030",
@@ -300,7 +901,108 @@
       "metadata": {
         "persona": "tsukiyashiro_kisaki",
         "held_out": true
-      }
+      },
+      "source_lineage": [
+        {
+          "segment_index": 1,
+          "source_path": "gametext/纸上魔法使/3蓝宝石的存在证明.txt",
+          "source_line_start": 3377,
+          "source_line_end": 3377
+        },
+        {
+          "segment_index": 2,
+          "source_path": "gametext/纸上魔法使/3蓝宝石的存在证明.txt",
+          "source_line_start": 3381,
+          "source_line_end": 3381
+        },
+        {
+          "segment_index": 3,
+          "source_path": "gametext/纸上魔法使/3蓝宝石的存在证明.txt",
+          "source_line_start": 3384,
+          "source_line_end": 3384
+        }
+      ],
+      "source_event_ids": [
+        "tsukiyashiro_kisaki_raw_db32b3059445ad42",
+        "tsukiyashiro_kisaki_raw_a3427357ce324799",
+        "tsukiyashiro_kisaki_raw_6494a09d18f343c3"
+      ],
+      "source_path": "gametext/纸上魔法使/3蓝宝石的存在证明.txt",
+      "source_line_start": 3377,
+      "source_line_end": 3384
+    },
+    {
+      "id": "tsukiyashiro_kisaki_doc_031",
+      "title": "tsukiyashiro_kisaki held-out evidence",
+      "category": "tsukiyashiro_kisaki",
+      "content": "我想和理央还有夜子穿着同样的校服，一起到这间学校上学。可是，只有我年纪小一岁呢。",
+      "metadata": {
+        "persona": "tsukiyashiro_kisaki",
+        "held_out": true
+      },
+      "source_lineage": [
+        {
+          "segment_index": 1,
+          "source_path": "gametext/纸上魔法使/1翡翠的排挤原理.txt",
+          "source_line_start": 3852,
+          "source_line_end": 3852
+        }
+      ],
+      "source_event_ids": [
+        "tsukiyashiro_kisaki_raw_945a0d7d01a3c4cf"
+      ],
+      "source_path": "gametext/纸上魔法使/1翡翠的排挤原理.txt",
+      "source_line_start": 3852,
+      "source_line_end": 3852
+    },
+    {
+      "id": "tsukiyashiro_kisaki_doc_032",
+      "title": "tsukiyashiro_kisaki held-out evidence",
+      "category": "tsukiyashiro_kisaki",
+      "content": "想快点办完事情，回去尝理央的晚餐啊……",
+      "metadata": {
+        "persona": "tsukiyashiro_kisaki",
+        "held_out": true
+      },
+      "source_lineage": [
+        {
+          "segment_index": 1,
+          "source_path": "gametext/纸上魔法使/1翡翠的排挤原理.txt",
+          "source_line_start": 3863,
+          "source_line_end": 3863
+        }
+      ],
+      "source_event_ids": [
+        "tsukiyashiro_kisaki_raw_99aeda0620f15f76"
+      ],
+      "source_path": "gametext/纸上魔法使/1翡翠的排挤原理.txt",
+      "source_line_start": 3863,
+      "source_line_end": 3863
+    },
+    {
+      "id": "tsukiyashiro_kisaki_doc_033",
+      "title": "tsukiyashiro_kisaki held-out evidence",
+      "category": "tsukiyashiro_kisaki",
+      "content": "怎么办呢？这书是夜子借我的，要不你自己去问她拿许可？",
+      "metadata": {
+        "persona": "tsukiyashiro_kisaki",
+        "held_out": true
+      },
+      "source_lineage": [
+        {
+          "segment_index": 1,
+          "source_path": "gametext/纸上魔法使/1翡翠的排挤原理.txt",
+          "source_line_start": 292,
+          "source_line_end": 292
+        }
+      ],
+      "source_event_ids": [
+        "tsukiyashiro_kisaki_raw_9fda41a3d912dda5"
+      ],
+      "source_path": "gametext/纸上魔法使/1翡翠的排挤原理.txt",
+      "source_line_start": 292,
+      "source_line_end": 292
     }
-  ]
+  ],
+  "kb_revision": "bc05f01458ac6e107c6fa26e5e01abb16319b7e5cd803c6fcd609d3fbc79944a"
 }

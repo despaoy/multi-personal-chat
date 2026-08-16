@@ -1,0 +1,14 @@
+{
+  "schema_version":1,"batch_id":"KISAKI-V41-AUTO-BATCH-036","status":"approved_after_revision","reviewer":"codex_delegated_by_project_owner","reviewed_at":"2026-08-16","candidate_count":4,"assistant_turn_count":20,
+  "summary":{"passed_unchanged":15,"revised_then_passed":5,"rejected":0,"approved_complete_sessions":4},
+  "rubric":["persona_consistency","question_answer_alignment","fact_grounding","technical_correctness","multiturn_continuity","information_timing","naturalness","safety_boundary","template_avoidance"],
+  "evidence_refs":["docs/research/review_packets/kisaki_v4/01_PROFILE_PROMPT/01_character_profile.md","backend/data/character_dialogues/kisaki_system_prompt_v3.txt","docs/research/review_packets/kisaki_v4/01_PROFILE_PROMPT/03_contextual_expression_policy_draft.md"],
+  "parallel_draft_screening":{"authority":"advisory_only","main_reviewer_rechecked_all_turns":true},
+  "protected_overlap_review":{"threshold":0.9,"reference_sets":["train_through_batch_034","validation","gold_v21","gold_v3","automation_batch_035"],"candidate_user_turn_count":20,"combined_candidate_user_turn_count":40,"match_count":0,"cross_batch_match_count":0,"assistant_similarity_match_count":0,"status":"clean"},
+  "session_reviews":[
+    {"session_id":"packing_away_an_unfinished_puzzle_without_treating_it_as_failure","decision":"pass","turn_reviews":[{"turn":1,"decision":"pass","all_rubric_checks":true},{"turn":2,"decision":"pass","all_rubric_checks":true},{"turn":3,"decision":"pass","all_rubric_checks":true},{"turn":4,"decision":"pass","all_rubric_checks":true},{"turn":5,"decision":"pass","all_rubric_checks":true}]},
+    {"session_id":"maintaining_a_friendship_after_moving_to_different_time_zones","decision":"revise_then_pass","turn_reviews":[{"turn":1,"decision":"pass","all_rubric_checks":true},{"turn":2,"decision":"pass","all_rubric_checks":true},{"turn":3,"decision":"pass","all_rubric_checks":true},{"turn":4,"decision":"pass","all_rubric_checks":true},{"turn":5,"decision":"pass","all_rubric_checks":true}]},
+    {"session_id":"understanding_why_a_mirror_seems_to_reverse_left_and_right","decision":"pass","turn_reviews":[{"turn":1,"decision":"pass","all_rubric_checks":true},{"turn":2,"decision":"pass","all_rubric_checks":true},{"turn":3,"decision":"pass","all_rubric_checks":true},{"turn":4,"decision":"pass","all_rubric_checks":true},{"turn":5,"decision":"pass","all_rubric_checks":true}]},
+    {"session_id":"correcting_photo_capture_times_without_losing_original_metadata","decision":"pass","turn_reviews":[{"turn":1,"decision":"pass","all_rubric_checks":true},{"turn":2,"decision":"pass","all_rubric_checks":true},{"turn":3,"decision":"pass","all_rubric_checks":true},{"turn":4,"decision":"pass","all_rubric_checks":true},{"turn":5,"decision":"pass","all_rubric_checks":true}]}
+  ]
+}

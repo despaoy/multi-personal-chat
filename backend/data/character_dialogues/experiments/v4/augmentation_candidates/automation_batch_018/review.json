@@ -1,0 +1,18 @@
+{
+  "schema_version":1,"batch_id":"KISAKI-V41-AUTO-BATCH-018","status":"approved_after_review","reviewer":"codex_delegated_by_project_owner","reviewed_at":"2026-08-16","candidate_count":4,"assistant_turn_count":20,
+  "summary":{"passed_unchanged":20,"revised_then_passed":0,"rejected":0,"approved_complete_sessions":4},
+  "rubric":["persona_consistency","question_answer_alignment","fact_grounding","technical_correctness","multiturn_continuity","information_timing","naturalness","safety_boundary","template_avoidance"],
+  "evidence_refs":["docs/research/review_packets/kisaki_v4/01_PROFILE_PROMPT/01_character_profile.md","backend/data/character_dialogues/kisaki_system_prompt_v3.txt","docs/research/review_packets/kisaki_v4/01_PROFILE_PROMPT/03_contextual_expression_policy_draft.md"],
+  "technical_verification":{"status":"passed","coverage":["password hashing salt pepper and migration semantics","Network panel timing and TTFB diagnosis","HAR evidence redaction"]},
+  "protected_overlap_review":{"threshold":0.9,"reference_sets":["train","validation","gold_v21","gold_v3","automation_batch_017"],"candidate_user_turn_count":20,"match_count":0,"status":"clean"},
+  "session_reviews":[
+    {"session_id":"returning_to_hobby_class_after_absences","decision":"pass","turn_reviews":[
+      {"turn":1,"decision":"pass","reason":"区分兴趣消失与缺席羞耻，没有替用户决定。"},{"turn":2,"decision":"pass","reason":"轻微戏谑指向全勤检讨前提，未否定尴尬。"},{"turn":3,"decision":"pass","reason":"给出联系老师和降低本节目标的具体办法。"},{"turn":4,"decision":"pass","reason":"没有用已付费用制造沉没成本压力。"},{"turn":5,"decision":"pass","reason":"承接周六返课决定，自然收束反复审议。"}]},
+    {"session_id":"feeling_overindebted_to_supportive_friend","decision":"pass","turn_reviews":[
+      {"turn":1,"decision":"pass","reason":"承认帮助的重量，同时纠正无限负债解释。"},{"turn":2,"decision":"pass","reason":"区分感激与无条件服从，边界表达不过度防御。"},{"turn":3,"decision":"pass","reason":"回应预算限制，没有把朋友预判为索取者。"},{"turn":4,"decision":"pass","reason":"避免昂贵礼物式机械结算，建议可承受的真诚回馈。"},{"turn":5,"decision":"pass","reason":"允许关系阶段性不对等，情绪收束温和。"}]},
+    {"session_id":"password_hashing_salt_encryption_migration","decision":"pass","turn_reviews":[
+      {"turn":1,"decision":"pass","reason":"可逆加密、普通哈希与密码哈希边界准确。"},{"turn":2,"decision":"pass","reason":"逐记录随机盐、公开存储及 pepper 的区别准确。"},{"turn":3,"decision":"pass","reason":"登录时重哈希与长期未登录账户重置策略可执行。"},{"turn":4,"decision":"pass","reason":"链式包装被准确限定为过渡方案，未夸大风险消除效果。"},{"turn":5,"decision":"pass","reason":"覆盖算法版本、参数、盐、pepper 管理和渐进升级。"}]},
+    {"session_id":"diagnosing_slow_page_with_network_panel","decision":"pass","turn_reviews":[
+      {"turn":1,"decision":"pass","reason":"冷加载采集步骤明确，提醒重新加载具有情境锋利。"},{"turn":2,"decision":"pass","reason":"按主文档、关键资源和瀑布依赖缩小范围。"},{"turn":3,"decision":"pass","reason":"没有仅凭高 TTFB 武断归因，给出服务端证据链。"},{"turn":4,"decision":"pass","reason":"区分传输大小、资源大小、冷缓存和暖缓存表现。"},{"turn":5,"decision":"pass","reason":"交付证据完整，并提醒 HAR 与凭据脱敏。"}]}
+  ]
+}

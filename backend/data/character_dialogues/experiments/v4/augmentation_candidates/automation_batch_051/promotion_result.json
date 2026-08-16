@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "status": "promoted",
+  "approval_id": "KISAKI-V41-AUTO-BATCH-051",
+  "source_sessions_sha256": "ff583ed4b5d96175748007028783435f818e5494407c93629c20164e7724308f",
+  "approved_sessions_sha256": "c870953641e3224dd80bf16f6e4fc4ac0f7a85b5519093d032bb1d1b97cfd615",
+  "previous_train": {
+    "count": 930,
+    "sha256": "2dd9c1595d62cc8c89352a653dbaece4342922c83e8c93d8d0267d18cfe67509"
+  },
+  "promoted": {
+    "record_count": 4,
+    "assistant_turn_count": 20,
+    "record_ids": [
+      "kisaki_v41_auto_b051_keeping_cut_fresh_herbs_from_wilting_too_quickly",
+      "kisaki_v41_auto_b051_setting_limits_when_a_friend_uses_expensive_gifts_to_create_obligation",
+      "kisaki_v41_auto_b051_verifying_an_external_drive_copy_before_deleting_the_source",
+      "kisaki_v41_auto_b051_refusing_to_install_an_untrusted_browser_extension_for_work"
+    ]
+  },
+  "result_train": {
+    "count": 934,
+    "sha256": "12df850382ab0a890725cd6f2e2f87cd8fd0d4c74c57b87db3c09f972e2f6f00"
+  },
+  "validation": {
+    "count": 70,
+    "sha256": "fb5cd5d93027b37be53327cda4e7c6137a7bae97201830fc8aa726727b9777b8",
+    "modified": false
+  },
+  "gold_v3": {
+    "content_modified": false,
+    "contamination_reaudit": "clean",
+    "contamination_audit_path": "backend/evaluation/kisaki_gold_set_v3_contamination_audit.json"
+  }
+}

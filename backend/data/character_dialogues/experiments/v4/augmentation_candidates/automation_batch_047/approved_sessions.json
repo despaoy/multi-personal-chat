@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "status": "approved_after_review",
+  "approval_id": "KISAKI-V41-AUTO-BATCH-047",
+  "approved_by": "codex_delegated_by_project_owner",
+  "approved_at": "2026-08-16",
+  "source_sessions_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_047/candidates.json",
+  "decision_sources": [
+    "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_047/review.json",
+    "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_047/revision_history.json",
+    "parallel_subagent_initial_screening",
+    "project_owner_delegated_automation_approval"
+  ],
+  "base_contract": {
+    "train_count": 914,
+    "train_sha256": "4bb160c30e7b82106cb830e695287cbb1d7a48b6b7ce5e3a11ad517543fd0506",
+    "validation_count": 70,
+    "validation_sha256": "fb5cd5d93027b37be53327cda4e7c6137a7bae97201830fc8aa726727b9777b8"
+  },
+  "promotion_contract": {
+    "record_count": 4,
+    "assistant_turn_count": 20,
+    "training_unit": "complete_five_turn_session",
+    "cumulative_prefix_records_allowed": false,
+    "data_source": "codex_user_simulation_v41_reviewed",
+    "source": "automation_batch_047",
+    "version": "v4.1_automation_reviewed",
+    "manifest_check_key": "kisaki_v41_auto_batch_047_promotion",
+    "system_message_embedded": false,
+    "validation_and_gold_content_modified": false
+  },
+  "sessions": [
+    {
+      "session_id": "fixing_a_wooden_drawer_that_sticks_only_in_humid_weather",
+      "record_id": "kisaki_v41_auto_b047_fixing_a_wooden_drawer_that_sticks_only_in_humid_weather",
+      "title": "处理只在潮湿天气卡住的木抽屉",
+      "task_type": "casual_chat",
+      "revised_assistant_turns": [],
+      "messages_mode": "source_unchanged"
+    },
+    {
+      "session_id": "responding_when_a_friend_keeps_downplaying_their_own_good_news",
+      "record_id": "kisaki_v41_auto_b047_responding_when_a_friend_keeps_downplaying_their_own_good_news",
+      "title": "朋友总把自己的好消息说得不值一提时回应",
+      "task_type": "emotional_relationship",
+      "revised_assistant_turns": [],
+      "messages_mode": "source_unchanged"
+    },
+    {
+      "session_id": "defining_done_before_handing_a_feature_to_another_team",
+      "record_id": "kisaki_v41_auto_b047_defining_done_before_handing_a_feature_to_another_team",
+      "title": "跨团队交接功能前明确完成定义",
+      "task_type": "project_collaboration",
+      "revised_assistant_turns": [],
+      "messages_mode": "source_unchanged"
+    },
+    {
+      "session_id": "refusing_to_upload_customer_records_to_an_unapproved_public_ai_service",
+      "record_id": "kisaki_v41_auto_b047_refusing_to_upload_customer_records_to_an_unapproved_public_ai_service",
+      "title": "拒绝把客户记录上传到未批准的公共 AI 服务",
+      "task_type": "safety_boundary",
+      "revised_assistant_turns": [],
+      "messages_mode": "source_unchanged"
+    }
+  ]
+}

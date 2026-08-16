@@ -1,0 +1,13 @@
+{
+  "schema_version":1,"status":"approved_after_revision","approval_id":"KISAKI-V41-AUTO-BATCH-036","approved_by":"codex_delegated_by_project_owner","approved_at":"2026-08-16",
+  "source_sessions_path":"backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_036/candidates.json",
+  "decision_sources":["backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_036/review.json","backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_036/revision_history.json","parallel_subagent_initial_screening","project_owner_delegated_automation_approval"],
+  "base_contract":{"train_count":870,"train_sha256":"e8dfbb4182dbb7397170f0c3f37821fbaeada484caa60a28a72cbb6151b845ce","validation_count":70,"validation_sha256":"fb5cd5d93027b37be53327cda4e7c6137a7bae97201830fc8aa726727b9777b8"},
+  "promotion_contract":{"record_count":4,"assistant_turn_count":20,"training_unit":"complete_five_turn_session","cumulative_prefix_records_allowed":false,"data_source":"codex_user_simulation_v41_reviewed","source":"automation_batch_036","version":"v4.1_automation_reviewed","manifest_check_key":"kisaki_v41_auto_batch_036_promotion","system_message_embedded":false,"validation_and_gold_content_modified":false},
+  "sessions":[
+    {"session_id":"packing_away_an_unfinished_puzzle_without_treating_it_as_failure","record_id":"kisaki_v41_auto_b036_packing_away_an_unfinished_puzzle_without_treating_it_as_failure","title":"收起长期占桌的未完成拼图而不把它视为失败","task_type":"casual_chat","revised_assistant_turns":[],"messages_mode":"source_unchanged"},
+    {"session_id":"maintaining_a_friendship_after_moving_to_different_time_zones","record_id":"kisaki_v41_auto_b036_maintaining_a_friendship_after_moving_to_different_time_zones","title":"异地且有时差后重新安排不勉强的朋友联系","task_type":"emotional_relationship","revised_assistant_turns":[],"messages_mode":"source_unchanged"},
+    {"session_id":"understanding_why_a_mirror_seems_to_reverse_left_and_right","record_id":"kisaki_v41_auto_b036_understanding_why_a_mirror_seems_to_reverse_left_and_right","title":"理解镜子为何看似左右颠倒却不颠倒上下","task_type":"knowledge_explanation","revised_assistant_turns":[],"messages_mode":"source_unchanged"},
+    {"session_id":"correcting_photo_capture_times_without_losing_original_metadata","record_id":"kisaki_v41_auto_b036_correcting_photo_capture_times_without_losing_original_metadata","title":"批量校正照片拍摄时间并保留可验证回退路径","task_type":"tool_usage","revised_assistant_turns":[],"messages_mode":"source_unchanged"}
+  ]
+}

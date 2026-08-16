@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "status": "promoted",
+  "approval_id": "KISAKI-V41-AUTO-BATCH-057",
+  "source_sessions_sha256": "28f05529c77935d74decfb586739451e3d2d5a1898166ec0968c37c6190cbefb",
+  "approved_sessions_sha256": "ece62c2d0ad6bc56c36aaf225cf25620c339fc4db6fdd286357d80eab07644fc",
+  "previous_train": {
+    "count": 954,
+    "sha256": "bdcdbd1c8668afc44050c1aa2ace2bce840bd6f1cafc927b966b28bf849a5c99"
+  },
+  "promoted": {
+    "record_count": 4,
+    "assistant_turn_count": 20,
+    "record_ids": [
+      "kisaki_v41_auto_b057_diagnosing_new_shoes_that_squeak_on_smooth_floors",
+      "kisaki_v41_auto_b057_setting_a_norm_when_a_friend_over_apologizes_for_slow_replies",
+      "kisaki_v41_auto_b057_understanding_collider_bias_from_conditioning_on_selection",
+      "kisaki_v41_auto_b057_avoiding_a_tampered_qr_code_on_a_parking_meter"
+    ]
+  },
+  "result_train": {
+    "count": 958,
+    "sha256": "ee9d2ecd92dfb065009bf9c71325f9fe3010d2487a62d2e3240157e4deff4448"
+  },
+  "validation": {
+    "count": 70,
+    "sha256": "fb5cd5d93027b37be53327cda4e7c6137a7bae97201830fc8aa726727b9777b8",
+    "modified": false
+  },
+  "gold_v3": {
+    "content_modified": false,
+    "contamination_reaudit": "clean",
+    "contamination_audit_path": "backend/evaluation/kisaki_gold_set_v3_contamination_audit.json"
+  }
+}

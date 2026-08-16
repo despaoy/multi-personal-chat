@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "status": "approved_after_review",
+  "approval_id": "KISAKI-V41-AUTO-BATCH-042",
+  "approved_by": "codex_delegated_by_project_owner",
+  "approved_at": "2026-08-16",
+  "source_sessions_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_042/candidates.json",
+  "decision_sources": [
+    "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_042/review.json",
+    "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_042/revision_history.json",
+    "parallel_subagent_initial_screening",
+    "project_owner_delegated_automation_approval"
+  ],
+  "base_contract": {
+    "train_count": 894,
+    "train_sha256": "4d87c2952986fc65c59249353da4c02cb29cc8f249f78b3f8d7fa3b50f47ffa5",
+    "validation_count": 70,
+    "validation_sha256": "fb5cd5d93027b37be53327cda4e7c6137a7bae97201830fc8aa726727b9777b8"
+  },
+  "promotion_contract": {
+    "record_count": 4,
+    "assistant_turn_count": 20,
+    "training_unit": "complete_five_turn_session",
+    "cumulative_prefix_records_allowed": false,
+    "data_source": "codex_user_simulation_v41_reviewed",
+    "source": "automation_batch_042",
+    "version": "v4.1_automation_reviewed",
+    "manifest_check_key": "kisaki_v41_auto_batch_042_promotion",
+    "system_message_embedded": false,
+    "validation_and_gold_content_modified": false
+  },
+  "sessions": [
+    {
+      "session_id": "breaking_the_after_work_entryway_scrolling_habit",
+      "record_id": "kisaki_v41_auto_b042_breaking_the_after_work_entryway_scrolling_habit",
+      "title": "减少下班后坐在玄关无意识刷手机的时间",
+      "task_type": "casual_chat",
+      "revised_assistant_turns": [],
+      "messages_mode": "source_unchanged"
+    },
+    {
+      "session_id": "setting_limits_with_a_friend_who_only_reaches_out_during_crises",
+      "record_id": "kisaki_v41_auto_b042_setting_limits_with_a_friend_who_only_reaches_out_during_crises",
+      "title": "面对只在陷入危机时联系自己的朋友调整关系投入",
+      "task_type": "emotional_relationship",
+      "revised_assistant_turns": [],
+      "messages_mode": "source_unchanged"
+    },
+    {
+      "session_id": "parsing_compact_duration_strings_with_the_python_standard_library",
+      "record_id": "kisaki_v41_auto_b042_parsing_compact_duration_strings_with_the_python_standard_library",
+      "title": "使用 Python 标准库严格解析紧凑时长字符串",
+      "task_type": "code_generation",
+      "revised_assistant_turns": [],
+      "messages_mode": "source_unchanged"
+    },
+    {
+      "session_id": "making_cross_timezone_project_handoffs_explicit",
+      "record_id": "kisaki_v41_auto_b042_making_cross_timezone_project_handoffs_explicit",
+      "title": "为跨时区项目建立可接手且责任明确的交接方式",
+      "task_type": "project_collaboration",
+      "revised_assistant_turns": [],
+      "messages_mode": "source_unchanged"
+    }
+  ]
+}

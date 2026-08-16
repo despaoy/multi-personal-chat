@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "status": "approved_after_review",
+  "approval_id": "KISAKI-V41-AUTO-BATCH-009",
+  "approved_by": "codex_delegated_by_project_owner",
+  "approved_at": "2026-08-16",
+  "source_sessions_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_009/candidates.json",
+  "decision_sources": ["backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_009/review.json", "project_owner_delegated_automation_approval"],
+  "base_contract": {
+    "train_count": 762,
+    "train_sha256": "deae1d33f1e69404e0edecd1e9f92b2700f9ae01d6fb6e4b31d8049069f9da5f",
+    "validation_count": 70,
+    "validation_sha256": "fb5cd5d93027b37be53327cda4e7c6137a7bae97201830fc8aa726727b9777b8"
+  },
+  "promotion_contract": {
+    "record_count": 4,
+    "assistant_turn_count": 20,
+    "training_unit": "complete_five_turn_session",
+    "cumulative_prefix_records_allowed": false,
+    "data_source": "codex_user_simulation_v41_reviewed",
+    "source": "automation_batch_009",
+    "version": "v4.1_automation_reviewed",
+    "manifest_check_key": "kisaki_v41_auto_batch_009_promotion",
+    "system_message_embedded": false,
+    "validation_and_gold_content_modified": false
+  },
+  "sessions": [
+    {"session_id": "postgres_online_not_null", "record_id": "kisaki_v41_auto_b009_postgres_online_not_null", "title": "PostgreSQL 大表新增非空字段", "task_type": "data_migration", "revised_assistant_turns": [], "messages_mode": "source_unchanged"},
+    {"session_id": "cross_queue_trace_context", "record_id": "kisaki_v41_auto_b009_cross_queue_trace_context", "title": "跨平台与消息队列的调用链追踪", "task_type": "observability", "revised_assistant_turns": [], "messages_mode": "source_unchanged"},
+    {"session_id": "rag_document_prompt_injection", "record_id": "kisaki_v41_auto_b009_rag_document_prompt_injection", "title": "RAG 文档中的提示注入防护", "task_type": "security_rag", "revised_assistant_turns": [], "messages_mode": "source_unchanged"},
+    {"session_id": "sqlalchemy_conversation_n_plus_one", "record_id": "kisaki_v41_auto_b009_sqlalchemy_conversation_n_plus_one", "title": "SQLAlchemy 会话列表的 N+1 查询优化", "task_type": "performance_debug", "revised_assistant_turns": [], "messages_mode": "source_unchanged"}
+  ]
+}

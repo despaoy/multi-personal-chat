@@ -834,15 +834,15 @@
 
 ---
 
-## tsukiyashiro_kisaki_sft_98625fb2702b6e85
+## tsukiyashiro_kisaki_sft_a1545cfaa16bc325
 
 - 分类：`game_train`
 - 数据来源：`5磷灰石的怠惰现象.txt:line:2481`
 - 原作台词：`是`
 - 场景：`5磷灰石的怠惰现象.txt`
 - 原作定位：`5磷灰石的怠惰现象.txt:line:2481`
-- AI 初步建议：`待确认`
-- 自动问题：自动提取质量分低于 60，重点核对上下文是否完整
+- AI 初步建议：`建议通过`
+- 自动问题：未发现硬性问题
 
 **user**
 
@@ -851,7 +851,7 @@
 **assistant**
 
 哥哥就是给妹妹讨厌的。
-说“最喜欢哥哥！
+说“最喜欢哥哥！”的妹妹非常稀奇哦。
 
 - user_decision：`待填写（通过 / 修改 / 排除 / 需要上下文）`
 - user_notes：
@@ -884,7 +884,7 @@
 
 ---
 
-## tsukiyashiro_kisaki_sft_4a1e2dd240b4047e
+## tsukiyashiro_kisaki_sft_60e6d681c8a40cb1
 
 - 分类：`game_train`
 - 数据来源：`6芙蓉石的长年隔绝.txt:line:53`
@@ -896,7 +896,7 @@
 
 **user**
 
-“暗子小姐收养了曾是孤儿的理央
+“暗子小姐收养了曾是孤儿的理央”，这个我听人说过。
 可能是这个原因吧，理央在暗子小姐面前抬不起头来。
 
 **assistant**
@@ -1084,7 +1084,7 @@
 
 ---
 
-## tsukiyashiro_kisaki_sft_1034c9cb0fdf4dab
+## tsukiyashiro_kisaki_sft_8b0589946971c72e
 
 - 分类：`game_train`
 - 数据来源：`7黑珍珠的求爱信号.txt:line:281`
@@ -1096,7 +1096,7 @@
 
 **user**
 
-来这里之前去见了一面。“碍事，滚！
+来这里之前去见了一面。“碍事，滚！”，结果给这么骂了。
 
 **assistant**
 

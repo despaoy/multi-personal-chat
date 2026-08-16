@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "status": "approved_for_training_pipeline_only",
+  "purpose": "Verify the 20-record train-to-adapter-to-generation path before R1V4.",
+  "sample_count": 20,
+  "source_distribution": {
+    "game_extraction": 10,
+    "llm_v4_blindfix": 2,
+    "llm_v4_lifestyle": 2,
+    "llm_v4_manual": 2,
+    "llm_v4_riou": 2,
+    "llm_v4_yoruko": 2
+  },
+  "train_path": "backend/data/character_dialogues/experiments/v4/overfit_20/train.jsonl",
+  "cases_path": "backend/data/character_dialogues/experiments/v4/overfit_20/cases.json",
+  "config_path": "backend/data/character_dialogues/experiments/v4/overfit_20/config.json",
+  "results_path": "backend/data/character_dialogues/experiments/v4/overfit_20/results.json",
+  "human_review_path": "docs/research/review_packets/kisaki_v4/09_OVERFIT_TEST/review.md",
+  "technical_result": {
+    "generated_count": 20,
+    "empty_response_count": 0,
+    "exact_normalized_match_count": 20,
+    "final_eval_loss": 0.00004362802428659051,
+    "final_eval_token_accuracy": 1.0
+  },
+  "sample_context_quality": "failed",
+  "character_chat_quality": "not_established"
+}

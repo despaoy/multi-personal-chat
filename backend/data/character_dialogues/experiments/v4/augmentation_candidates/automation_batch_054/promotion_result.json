@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "status": "promoted",
+  "approval_id": "KISAKI-V41-AUTO-BATCH-054",
+  "source_sessions_sha256": "fc80eeb31cb81018b9259b4ecd681d1b72858adf94f10df0268b17e1cea7b5e1",
+  "approved_sessions_sha256": "04824fc8961f419f09912cb98f59ff6fa438e3231ee7860257c59b0aa209b686",
+  "previous_train": {
+    "count": 942,
+    "sha256": "46a884795a06136797fba26ce021c7f8baa6a9b7b18a82cc71d98a2eabf7145b"
+  },
+  "promoted": {
+    "record_count": 4,
+    "assistant_turn_count": 20,
+    "record_ids": [
+      "kisaki_v41_auto_b054_removing_mineral_cloudiness_from_a_glass_vase",
+      "kisaki_v41_auto_b054_setting_boundaries_when_a_friend_turns_shared_goals_into_supervision",
+      "kisaki_v41_auto_b054_understanding_why_sealed_snack_bags_puff_up_at_high_altitude",
+      "kisaki_v41_auto_b054_refusing_to_share_a_photo_of_an_access_badge_for_convenience"
+    ]
+  },
+  "result_train": {
+    "count": 946,
+    "sha256": "a6104db1aa35c26549ca94bda40f420875b1ab28c6059e10df51cd2495088c69"
+  },
+  "validation": {
+    "count": 70,
+    "sha256": "fb5cd5d93027b37be53327cda4e7c6137a7bae97201830fc8aa726727b9777b8",
+    "modified": false
+  },
+  "gold_v3": {
+    "content_modified": false,
+    "contamination_reaudit": "clean",
+    "contamination_audit_path": "backend/evaluation/kisaki_gold_set_v3_contamination_audit.json"
+  }
+}

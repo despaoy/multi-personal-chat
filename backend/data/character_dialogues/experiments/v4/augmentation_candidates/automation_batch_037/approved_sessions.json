@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "status": "approved_after_review",
+  "approval_id": "KISAKI-V41-AUTO-BATCH-037",
+  "approved_by": "codex_delegated_by_project_owner",
+  "approved_at": "2026-08-16",
+  "source_sessions_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_037/candidates.json",
+  "decision_sources": [
+    "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_037/review.json",
+    "parallel_subagent_initial_screening",
+    "project_owner_delegated_automation_approval"
+  ],
+  "base_contract": {
+    "train_count": 874,
+    "train_sha256": "e7b090a57d8e741868ff75a8c991a93d22a45daa209aeccfae7fa4abe33f224e",
+    "validation_count": 70,
+    "validation_sha256": "fb5cd5d93027b37be53327cda4e7c6137a7bae97201830fc8aa726727b9777b8"
+  },
+  "promotion_contract": {
+    "record_count": 4,
+    "assistant_turn_count": 20,
+    "training_unit": "complete_five_turn_session",
+    "cumulative_prefix_records_allowed": false,
+    "data_source": "codex_user_simulation_v41_reviewed",
+    "source": "automation_batch_037",
+    "version": "v4.1_automation_reviewed",
+    "manifest_check_key": "kisaki_v41_auto_batch_037_promotion",
+    "system_message_embedded": false,
+    "validation_and_gold_content_modified": false
+  },
+  "sessions": [
+    {
+      "session_id": "getting_a_song_out_of_your_head_after_hearing_the_same_piano_phrase",
+      "record_id": "kisaki_v41_auto_b037_getting_a_song_out_of_your_head_after_hearing_the_same_piano_phrase",
+      "title": "邻居反复练琴后缓解脑中循环的旋律",
+      "task_type": "casual_chat",
+      "revised_assistant_turns": [],
+      "messages_mode": "source_unchanged"
+    },
+    {
+      "session_id": "responding_when_a_friend_announces_your_private_news_first",
+      "record_id": "kisaki_v41_auto_b037_responding_when_a_friend_announces_your_private_news_first",
+      "title": "朋友擅自公开尚未准备宣布的个人消息后重建边界",
+      "task_type": "emotional_relationship",
+      "revised_assistant_turns": [],
+      "messages_mode": "source_unchanged"
+    },
+    {
+      "session_id": "analyzing_student_outcomes_in_a_cluster_randomized_school_trial",
+      "record_id": "kisaki_v41_auto_b037_analyzing_student_outcomes_in_a_cluster_randomized_school_trial",
+      "title": "在学校整群随机试验中正确处理班级内相关性",
+      "task_type": "research_learning",
+      "revised_assistant_turns": [],
+      "messages_mode": "source_unchanged"
+    },
+    {
+      "session_id": "refusing_to_disable_tls_verification_to_fix_package_downloads",
+      "record_id": "kisaki_v41_auto_b037_refusing_to_disable_tls_verification_to_fix_package_downloads",
+      "title": "拒绝关闭 TLS 校验并安全排查依赖下载证书错误",
+      "task_type": "safety_boundary",
+      "revised_assistant_turns": [],
+      "messages_mode": "source_unchanged"
+    }
+  ]
+}

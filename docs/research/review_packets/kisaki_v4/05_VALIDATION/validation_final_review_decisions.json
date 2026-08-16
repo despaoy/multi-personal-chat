@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "review_id": "KISAKI-V4-VALIDATION-FINAL-REVIEW",
+  "status": "approved",
+  "reviewed_by": "project_owner",
+  "reviewed_at": "2026-08-09",
+  "scope_count": 83,
+  "default_decision": "approve",
+  "default_reason": "项目负责人确认其余验证样本的原作问答、人物归属与独立性均可接受。",
+  "expected_summary": {
+    "approved_unchanged": 78,
+    "approved_after_revision": 1,
+    "excluded": 4,
+    "final_count": 79
+  },
+  "overrides": [
+    {
+      "id": "tsukiyashiro_kisaki_sft_5f551467a2f1f315",
+      "decision": "exclude",
+      "reason": "抽取跨越长篇旁白和场景转换，问答不对应。"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_4864e81c27d0e077",
+      "decision": "exclude",
+      "reason": "跨越 22 行并发生明确场景重置，assistant 不是对 user 的回应。"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_6412f83c95ad1c75",
+      "decision": "exclude",
+      "reason": "角色入场形成新对话，问候不回应前一句。"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_9498df2d95dadf8a",
+      "decision": "exclude",
+      "reason": "叙事切换后的新话题被错误拼接为问答。"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_57541197565cd7a2",
+      "previous_id": "tsukiyashiro_kisaki_sft_7d0495639b83782a",
+      "decision": "revise_and_approve",
+      "reason": "嵌套中文引号导致旧候选内容截断，恢复原作完整台词。",
+      "target_event_ids": [
+        "tsukiyashiro_kisaki_raw_995fe5c3db93ce48"
+      ],
+      "previous_target_event_ids": [
+        "tsukiyashiro_kisaki_raw_6c2fbaab1ae54352"
+      ],
+      "revised_assistant_messages": [
+        "本来就甚至不会把我当学生看待。就算去了，也会落得大家问“这是谁？”的下场。"
+      ]
+    }
+  ],
+  "policy_notes": [
+    "超过 100 字的完整原作表达不因构造样本长度约束而截断。",
+    "敏感词不构成原作验证样本的自动排除理由。",
+    "安全行为由运行时策略与 Gold 安全评测单独验证。"
+  ]
+}

@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "status": "approved_after_revision",
+  "approval_id": "KISAKI-V41-AUTO-BATCH-043",
+  "approved_by": "codex_delegated_by_project_owner",
+  "approved_at": "2026-08-16",
+  "source_sessions_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_043/candidates.json",
+  "decision_sources": [
+    "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_043/review.json",
+    "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_043/revision_history.json",
+    "parallel_subagent_initial_screening",
+    "project_owner_delegated_automation_approval"
+  ],
+  "base_contract": {
+    "train_count": 898,
+    "train_sha256": "4a0d71e0f383c8ece979cc8172ace405fba50c3c9a624bb1eafb1d4a8d7d000c",
+    "validation_count": 70,
+    "validation_sha256": "fb5cd5d93027b37be53327cda4e7c6137a7bae97201830fc8aa726727b9777b8"
+  },
+  "promotion_contract": {
+    "record_count": 4,
+    "assistant_turn_count": 20,
+    "training_unit": "complete_five_turn_session",
+    "cumulative_prefix_records_allowed": false,
+    "data_source": "codex_user_simulation_v41_reviewed",
+    "source": "automation_batch_043",
+    "version": "v4.1_automation_reviewed",
+    "manifest_check_key": "kisaki_v41_auto_batch_043_promotion",
+    "system_message_embedded": false,
+    "validation_and_gold_content_modified": false
+  },
+  "sessions": [
+    {
+      "session_id": "removing_freezer_odors_from_reusable_ice_trays",
+      "record_id": "kisaki_v41_auto_b043_removing_freezer_odors_from_reusable_ice_trays",
+      "title": "排查冰块沾上冰箱气味的来源",
+      "task_type": "casual_chat",
+      "revised_assistant_turns": [],
+      "messages_mode": "source_unchanged"
+    },
+    {
+      "session_id": "asking_a_friend_to_stop_answering_on_your_behalf",
+      "record_id": "kisaki_v41_auto_b043_asking_a_friend_to_stop_answering_on_your_behalf",
+      "title": "朋友总替自己回答时重新拿回表达空间",
+      "task_type": "emotional_relationship",
+      "revised_assistant_turns": [],
+      "messages_mode": "source_unchanged"
+    },
+    {
+      "session_id": "understanding_why_warm_sparkling_water_goes_flat_faster",
+      "record_id": "kisaki_v41_auto_b043_understanding_why_warm_sparkling_water_goes_flat_faster",
+      "title": "理解温度、压力与汽水跑气速度的关系",
+      "task_type": "knowledge_explanation",
+      "revised_assistant_turns": [],
+      "messages_mode": "source_unchanged"
+    },
+    {
+      "session_id": "refusing_to_open_an_unknown_found_usb_drive",
+      "record_id": "kisaki_v41_auto_b043_refusing_to_open_an_unknown_found_usb_drive",
+      "title": "拒绝在个人电脑上打开捡到的未知 U 盘",
+      "task_type": "safety_boundary",
+      "revised_assistant_turns": [],
+      "messages_mode": "source_unchanged"
+    }
+  ]
+}
+

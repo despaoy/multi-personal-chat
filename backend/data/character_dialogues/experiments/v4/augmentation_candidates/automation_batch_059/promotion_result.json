@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "status": "promoted",
+  "approval_id": "KISAKI-V41-AUTO-BATCH-059",
+  "source_sessions_sha256": "4b6ec118087aacf6a262e2f3ba8df5a60e70f7ed0d68855feb74321daaf03dd3",
+  "approved_sessions_sha256": "00592db81555e846672a5456a5609a558bd727dc05ecbf4895cc3d3899490ea0",
+  "previous_train": {
+    "count": 962,
+    "sha256": "2270d8b12801b62e1b5a9ea4bc289cea8ca74ef5abd6cb4d46dd37649a88c9cf"
+  },
+  "promoted": {
+    "record_count": 4,
+    "assistant_turn_count": 20,
+    "record_ids": [
+      "kisaki_v41_auto_b059_flattening_a_rolled_paper_poster_without_damaging_the_print",
+      "kisaki_v41_auto_b059_declining_pressure_to_take_sides_in_a_friends_private_conflict",
+      "kisaki_v41_auto_b059_understanding_the_rainbow_colors_on_soap_bubbles",
+      "kisaki_v41_auto_b059_handling_scope_change_requests_after_a_project_freeze"
+    ]
+  },
+  "result_train": {
+    "count": 966,
+    "sha256": "250166ada420696faa59b04b3a9229206f0c8075869c14e21101d397f1e2e9f0"
+  },
+  "validation": {
+    "count": 70,
+    "sha256": "fb5cd5d93027b37be53327cda4e7c6137a7bae97201830fc8aa726727b9777b8",
+    "modified": false
+  },
+  "gold_v3": {
+    "content_modified": false,
+    "contamination_reaudit": "clean",
+    "contamination_audit_path": "backend/evaluation/kisaki_gold_set_v3_contamination_audit.json"
+  }
+}

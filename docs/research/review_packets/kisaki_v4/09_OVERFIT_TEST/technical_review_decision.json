@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "status": "approved_for_training_pipeline_only",
+  "reviewed_at": "2026-08-15",
+  "reviewed_by": "project_owner",
+  "technical_overfit": "passed",
+  "sample_context_quality": "failed",
+  "character_chat_quality": "not_established",
+  "context_dependent_ids": [
+    "tsukiyashiro_kisaki_sft_7fbd89cf1b6d1aaf",
+    "tsukiyashiro_kisaki_sft_f6b4e055a7b46fb9",
+    "tsukiyashiro_kisaki_sft_7cc599b07a988c02",
+    "tsukiyashiro_kisaki_sft_e2eac0a35741c47b",
+    "tsukiyashiro_kisaki_sft_e3ce43499af7acac",
+    "tsukiyashiro_kisaki_sft_fe2fc989e25093cd",
+    "tsukiyashiro_kisaki_sft_f50bfbd842146a3d",
+    "tsukiyashiro_kisaki_sft_9c4f3ddf44c532e8"
+  ],
+  "conclusion": "本测试仅证明数据读取、assistant loss、LoRA 更新、保存与重新加载生成链路正常。"
+}

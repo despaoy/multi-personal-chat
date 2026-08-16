@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "status": "promoted",
+  "approval_id": "KISAKI-V41-AUTO-BATCH-004",
+  "source_sessions_sha256": "4b05b97f1374d755bb757d97e79525dfe7b42f5b1758b42565f1b1a1e5abf540",
+  "approved_sessions_sha256": "0a120e4d94a3aa149dcec49ddf782e39f14918dab4192a16f2c54846fa672bf6",
+  "previous_train": {
+    "count": 742,
+    "sha256": "857f72ceea80154259cea8d0434f84b6928dec9ddb8a683c6893912ca63d6563"
+  },
+  "promoted": {
+    "record_count": 4,
+    "assistant_turn_count": 20,
+    "record_ids": [
+      "kisaki_v41_auto_b004_weekday_dinner_choice",
+      "kisaki_v41_auto_b004_distant_classmate_wedding",
+      "kisaki_v41_auto_b004_async_message_singleflight",
+      "kisaki_v41_auto_b004_git_bisect_regression"
+    ]
+  },
+  "result_train": {
+    "count": 746,
+    "sha256": "9f204689a18ec2dd4771a75e340a753b70266954abf1585fd4b767f3f67514ac"
+  },
+  "validation": {
+    "count": 70,
+    "sha256": "fb5cd5d93027b37be53327cda4e7c6137a7bae97201830fc8aa726727b9777b8",
+    "modified": false
+  },
+  "gold_v3": {
+    "content_modified": false,
+    "contamination_reaudit": "clean",
+    "contamination_audit_path": "backend/evaluation/kisaki_gold_set_v3_contamination_audit.json"
+  }
+}

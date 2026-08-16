@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "audit": "KISAKI-SOURCE-ALIGNMENT",
+  "passed": true,
+  "counts": {
+    "source_files": 17,
+    "raw_dialogues": 1598,
+    "recommended_sft": 801,
+    "full_sft": 818,
+    "excluded": 117,
+    "raw_with_disposition": 1598
+  },
+  "checks": {
+    "deterministic_re_extraction": true,
+    "source_attribution": true,
+    "unique_ids": true,
+    "complete_disposition": true
+  },
+  "errors": []
+}

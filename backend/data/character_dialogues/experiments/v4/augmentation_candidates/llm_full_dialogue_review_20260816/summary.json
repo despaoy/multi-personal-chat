@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "review_id": "KISAKI-V41-LLM-FULL-DIALOGUE-REVIEW-20260816",
+  "status": "approved_and_promoted",
+  "base_train_sha256": "801a8de37cc95945b6b16cdb47fd576c3f9030eb7d6b3a086cf7f20437e7c972",
+  "result_train_sha256": "864b20e50d1d4dc4917e5d93be7c29da05e567edce07faf42526481b075b04ed",
+  "record_count": 426,
+  "assistant_turn_count": 1549,
+  "revised_record_count": 14,
+  "unchanged_record_count": 412,
+  "revised_assistant_turn_count": 16,
+  "rejected_record_count": 0,
+  "task_family_distribution": {
+    "casual": 63,
+    "constructed_character": 154,
+    "emotional_relationship": 64,
+    "knowledge_research": 47,
+    "project_tool": 45,
+    "safety": 22,
+    "technical": 31
+  },
+  "long_code_records_explicitly_reviewed": [
+    "kisaki_v41_auto_b012_incremental_jsonl_byte_parser",
+    "kisaki_v41_auto_b013_timezone_daily_scheduler",
+    "kisaki_v41_auto_b016_safe_zip_extraction",
+    "kisaki_v41_auto_b040_fixing_shared_lists_created_with_dict_fromkeys",
+    "kisaki_v41_round06_coding_debug"
+  ],
+  "user_text_modified": false,
+  "validation_modified": false,
+  "gold_content_modified": false,
+  "gold_v3_contamination_reaudit": "clean",
+  "rubric": [
+    "persona_consistency",
+    "question_answer_alignment",
+    "fact_grounding",
+    "technical_or_domain_correctness",
+    "multiturn_continuity",
+    "information_timing",
+    "naturalness",
+    "safety_boundary",
+    "template_avoidance",
+    "repetition_control"
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "status": "approved_after_review",
+  "approval_id": "KISAKI-V41-AUTO-BATCH-033",
+  "approved_by": "codex_delegated_by_project_owner",
+  "approved_at": "2026-08-16",
+  "source_sessions_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_033/candidates.json",
+  "decision_sources": ["backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_033/review.json", "parallel_subagent_initial_screening", "project_owner_delegated_automation_approval"],
+  "base_contract": {"train_count": 858, "train_sha256": "c3f6c20e9697a6b8e7f764f01d43a3e5e8f04459d942625db2d824f4b383f738", "validation_count": 70, "validation_sha256": "fb5cd5d93027b37be53327cda4e7c6137a7bae97201830fc8aa726727b9777b8"},
+  "promotion_contract": {"record_count": 4, "assistant_turn_count": 20, "training_unit": "complete_five_turn_session", "cumulative_prefix_records_allowed": false, "data_source": "codex_user_simulation_v41_reviewed", "source": "automation_batch_033", "version": "v4.1_automation_reviewed", "manifest_check_key": "kisaki_v41_auto_batch_033_promotion", "system_message_embedded": false, "validation_and_gold_content_modified": false},
+  "sessions": [
+    {"session_id": "deciding_whether_to_repot_an_overgrown_houseplant_this_weekend", "record_id": "kisaki_v41_auto_b033_deciding_whether_to_repot_an_overgrown_houseplant_this_weekend", "title": "判断周末是否给长势拥挤的绿植换盆", "task_type": "casual_chat", "revised_assistant_turns": [], "messages_mode": "source_unchanged"},
+    {"session_id": "responding_when_a_parent_volunteers_your_time_to_relatives", "record_id": "kisaki_v41_auto_b033_responding_when_a_parent_volunteers_your_time_to_relatives", "title": "父母擅自替自己答应亲戚请求后的边界沟通", "task_type": "emotional_relationship", "revised_assistant_turns": [], "messages_mode": "source_unchanged"},
+    {"session_id": "understanding_why_storage_capacity_looks_smaller_after_formatting", "record_id": "kisaki_v41_auto_b033_understanding_why_storage_capacity_looks_smaller_after_formatting", "title": "理解存储设备标称容量与系统显示容量的差异", "task_type": "knowledge_explanation", "revised_assistant_turns": [], "messages_mode": "source_unchanged"},
+    {"session_id": "cleaning_a_browser_bookmark_library_without_losing_useful_pages", "record_id": "kisaki_v41_auto_b033_cleaning_a_browser_bookmark_library_without_losing_useful_pages", "title": "分阶段整理浏览器书签并验证同步与导出", "task_type": "tool_usage", "revised_assistant_turns": [], "messages_mode": "source_unchanged"}
+  ]
+}

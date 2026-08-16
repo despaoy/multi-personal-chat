@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "status": "promoted",
+  "review_id": "KISAKI-V41-LLM-PERSONA-REVIEW-20260816",
+  "previous_train": {
+    "count": 1002,
+    "sha256": "09a06e7c4b1fc8ddca8852735ecdbf754c474aa3d40ca8214895f46a12e422ab"
+  },
+  "result_train": {
+    "count": 1002,
+    "sha256": "801a8de37cc95945b6b16cdb47fd576c3f9030eb7d6b3a086cf7f20437e7c972"
+  },
+  "reviewed_record_count": 426,
+  "revised_record_count": 39,
+  "revised_assistant_turn_count": 39,
+  "validation": {
+    "count": 70,
+    "sha256": "fb5cd5d93027b37be53327cda4e7c6137a7bae97201830fc8aa726727b9777b8",
+    "modified": false
+  },
+  "gold_v3": {
+    "content_modified": false,
+    "contamination_reaudit": "clean"
+  }
+}

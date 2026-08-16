@@ -1,14 +1,17 @@
 {
-  "schema_version": 4,
+  "schema_version": 5,
   "program_id": "KISAKI-LLM-RESEARCH-V4",
   "authoritative": true,
-  "status": "human_review",
+  "status": "game_context_quality_reaudit",
   "scope": {
     "primary_persona": "tsukiyashiro_kisaki",
     "base_model_repo_id": "Qwen/Qwen3-8B",
     "base_model_local_alias": "Qwen3-8B-Instruct",
     "pilot_seed": 42,
-    "external_demo_only": ["shenbai_mizunamo", "hutao"]
+    "external_demo_only": [
+      "shenbai_mizunamo",
+      "hutao"
+    ]
   },
   "active_assets": {
     "review_manifest": "docs/research/review_packets/kisaki_v4/review_manifest.json",
@@ -17,40 +20,82 @@
       "path": "backend/data/character_dialogues/kisaki_system_prompt_v3.txt",
       "version": 3,
       "policy_version": "3.1.0",
-      "sha256": "2c51e0e7cbf6318dadcc56117ddd8afc72b9d6c3fc4bb53b6c451fb294acc879",
-      "status": "pending_human_approval",
-      "formal_use_allowed": false
+      "status": "approved",
+      "formal_use_allowed": true
     },
     "prompt_policy": {
       "path": "backend/inference/prompt_policy.py",
-      "version": "3.1.0",
-      "sha256": "ea3fdce5fa80120f49168061dd7dc06c9d39e1a72599bd7b4bcdff76934be1ab"
+      "version": "3.1.0"
     },
     "canonical_dataset": {
       "path": "backend/data/character_dialogues/experiments/v4/canonical_dataset_manifest.json",
-      "status": "blocked_until_human_review"
+      "status": "frozen_under_reassessment",
+      "train_count": 1002,
+      "game_train_count": 576,
+      "constructed_train_count": 150,
+      "reviewed_multiturn_augmentation_count": 276,
+      "constructed_train_review_status": "approved",
+      "validation_count": 70,
+      "independent_validation_status": "approved_and_frozen",
+      "game_train_excluded_count": 76,
+      "validation_excluded_count": 7,
+      "rag_withheld_sft_records": 34,
+      "training_system_prompt_policy": "replace"
     },
-    "gold_v2": {
-      "path": "backend/evaluation/kisaki_gold_set_v2.json",
-      "role": "development_only"
+    "gold_v21": {
+      "path": "backend/evaluation/kisaki_gold_set_v21_candidates.json",
+      "role": "development_only",
+      "status": "approved_development_only",
+      "formal_use_allowed": false,
+      "category_counts": {
+        "persona": 30,
+        "factual": 20,
+        "persona_knowledge": 10,
+        "multiturn": 30,
+        "safety": 30,
+        "rag_grounded": 30
+      },
+      "runtime_contract_status": "implemented_and_tested",
+      "rag_kb_revision": "766a190a60d3dc22403f537230335fbc9f80dabee57ea8fa6a32e4bb6f2452e7"
     },
     "gold_v3": {
       "path": "backend/evaluation/kisaki_gold_set_v3.json",
-      "status": "blocked_until_training_data_frozen"
+      "role": "final_held_out",
+      "status": "frozen",
+      "formal_use_allowed": true,
+      "candidate_count": 150
     }
   },
   "research": [
-    {"id": "R0V4", "name": "data_prompt_and_gold_review", "status": "active"},
-    {"id": "R1V4", "name": "controlled_peft", "status": "blocked_by_training_gate"},
-    {"id": "R2", "name": "rag_ablation", "status": "blocked_by_dataset_review"},
-    {"id": "R3", "name": "inference_benchmark", "status": "blocked_until_best_adapter"},
-    {"id": "R4", "name": "dpo_pilot", "status": "blocked_until_preference_review"},
-    {"id": "S1", "name": "routing_and_platform_validation", "status": "pending"}
-  ],
-  "legacy": {
-    "status": "archived_non_comparable",
-    "registry": "backend/data/character_dialogues/experiments/archive/registries/research_program_registry_v3.json",
-    "runtime_access_allowed": false,
-    "formal_comparison_allowed": false
-  }
+    {
+      "id": "R0V4",
+      "name": "data_prompt_and_gold_review",
+      "status": "game_context_quality_reaudit"
+    },
+    {
+      "id": "R1V4",
+      "name": "controlled_peft",
+      "status": "blocked_until_game_context_reaudit"
+    },
+    {
+      "id": "R2",
+      "name": "rag_ablation",
+      "status": "blocked_until_r1v4"
+    },
+    {
+      "id": "R3",
+      "name": "inference_benchmark",
+      "status": "blocked_until_best_adapter"
+    },
+    {
+      "id": "R4",
+      "name": "dpo_pilot",
+      "status": "blocked_until_preference_review"
+    },
+    {
+      "id": "S1",
+      "name": "routing_and_platform_validation",
+      "status": "pending"
+    }
+  ]
 }

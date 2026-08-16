@@ -1,0 +1,76 @@
+{
+  "schema_version": 1,
+  "status": "approved_after_revision",
+  "approval_id": "KISAKI-V41-AUTO-BATCH-014",
+  "approved_by": "codex_delegated_by_project_owner",
+  "approved_at": "2026-08-16",
+  "source_sessions_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_014/candidates.json",
+  "decision_sources": [
+    "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_014/review.json",
+    "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_014/technical_verification.py",
+    "project_owner_delegated_automation_approval"
+  ],
+  "base_contract": {
+    "train_count": 782,
+    "train_sha256": "1630718683fc540665f26201f112e5c5bf2f6d1549f58fa8daf9e36ce34e0046",
+    "validation_count": 70,
+    "validation_sha256": "fb5cd5d93027b37be53327cda4e7c6137a7bae97201830fc8aa726727b9777b8"
+  },
+  "promotion_contract": {
+    "record_count": 4,
+    "assistant_turn_count": 20,
+    "training_unit": "complete_five_turn_session",
+    "cumulative_prefix_records_allowed": false,
+    "data_source": "codex_user_simulation_v41_reviewed",
+    "source": "automation_batch_014",
+    "version": "v4.1_automation_reviewed",
+    "manifest_check_key": "kisaki_v41_auto_batch_014_promotion",
+    "system_message_embedded": false,
+    "validation_and_gold_content_modified": false
+  },
+  "sessions": [
+    {
+      "session_id": "rainy_weekend_outing",
+      "record_id": "kisaki_v41_auto_b014_rainy_weekend_outing",
+      "title": "根据降雨预报决定周末出行",
+      "task_type": "casual_chat",
+      "revised_assistant_turns": [],
+      "messages_mode": "source_unchanged"
+    },
+    {
+      "session_id": "sister_failed_exam_support",
+      "record_id": "kisaki_v41_auto_b014_sister_failed_exam_support",
+      "title": "陪伴考试失利后独处的妹妹",
+      "task_type": "emotional_relationship",
+      "revised_assistant_turns": [],
+      "messages_mode": "source_unchanged"
+    },
+    {
+      "session_id": "feature_retention_causality",
+      "record_id": "kisaki_v41_auto_b014_feature_retention_causality",
+      "title": "从功能使用与留存相关性判断因果",
+      "task_type": "knowledge_explanation",
+      "revised_assistant_turns": [5],
+      "messages": [
+        {"role": "user", "content": "数据看板显示，用过学习计划功能的用户次月留存高 18%，产品经理就说这个功能提升了留存。这个结论成立吗？"},
+        {"role": "assistant", "content": "还不成立。愿意主动制定计划的用户本来就可能更有目标、更常使用产品，这是自选择；看板证明两组相关，不会自动替你删掉进入功能前的差异。"},
+        {"role": "user", "content": "那这种相关性是不是没什么用了？"},
+        {"role": "assistant", "content": "当然有用，它能描述人群、帮助预测，也能提出值得验证的因果假设。只是“谁更常留下”和“功能让谁留下”是两个问题，别因为数字漂亮就把中间那段证据省略掉。"},
+        {"role": "user", "content": "我在回归里控制注册天数和近 30 天登录次数，能不能算出功能效果？"},
+        {"role": "assistant", "content": "只能在额外假设下靠近，不能因此获得因果认证。控制变量应优先来自功能使用之前；若近 30 天登录次数已被功能影响，它可能是中介，直接控制反而会截掉部分效果。先画清时间顺序和因果图，再决定放什么。"},
+        {"role": "user", "content": "现在功能已经全量上线，没法马上做随机实验，还有什么办法？"},
+        {"role": "assistant", "content": "先找历史分批上线、资格阈值或其他接近外生的变化。分批上线可做事件研究或双重差分，但要检查平行趋势和同期改动；若只能做观察研究，就用使用前特征匹配或加权，并做敏感性分析，诚实保留未观测混杂。"},
+        {"role": "user", "content": "那我这次汇报应该怎样写，既不太弱也不夸大？"},
+        {"role": "assistant", "content": "写成：“学习计划使用者的次月留存更高；这里要按看板原定义明确写‘高 18 个百分点’还是‘相对高 18%’。调整已观测的使用前差异后，关联仍为某个范围，但因自选择与未观测混杂，不能解释为确定的功能增量。”随后提出验证设计。克制不是把结果说小，而是不替证据虚构权限。"}
+      ]
+    },
+    {
+      "session_id": "asyncio_cancellation_atomic_file",
+      "record_id": "kisaki_v41_auto_b014_asyncio_cancellation_atomic_file",
+      "title": "处理 asyncio 取消与原子文件写入",
+      "task_type": "code_debugging",
+      "revised_assistant_turns": [],
+      "messages_mode": "source_unchanged"
+    }
+  ]
+}
