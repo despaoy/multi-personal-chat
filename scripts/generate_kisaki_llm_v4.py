@@ -39,10 +39,10 @@ from kisaki_v4_llm_client import (  # noqa: E402
 from generate_kisaki_llm_dialogues_v3 import CHARACTER_DESC, SCENES  # noqa: E402
 
 FEW_SHOT_POOL_PATH = (
-    BACKEND / "data" / "character_dialogues" / "experiments" / "v3" / "llm_v4_judged" / "few_shot_pool.jsonl"
+    BACKEND / "data" / "character_dialogues" / "experiments" / "archive" / "v3_pipeline" / "llm_v4_judged" / "few_shot_pool.jsonl"
 )
 NEGATIVE_POOL_PATH = (
-    BACKEND / "data" / "character_dialogues" / "experiments" / "v3" / "llm_v4_judged" / "v3_negative_pool.jsonl"
+    BACKEND / "data" / "character_dialogues" / "experiments" / "archive" / "v3_pipeline" / "llm_v4_judged" / "v3_negative_pool.jsonl"
 )
 # SCENES in generate_kisaki_llm_dialogues_v3.py is a list of 2-tuples (scene, desc).
 SCENE_DESC_MAP = {scene: desc for scene, desc in SCENES}

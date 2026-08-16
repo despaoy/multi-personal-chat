@@ -15,7 +15,7 @@ if str(BACKEND) not in sys.path:
 
 
 def content_hash(text: str) -> str:
-    return hashlib.md5(text.encode("utf-8")).hexdigest()[:12]
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
 def main() -> int:

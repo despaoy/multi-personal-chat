@@ -19,10 +19,7 @@ if str(BACKEND) not in sys.path:
     sys.path.insert(0, str(BACKEND))
 
 from evaluation.experiment_contracts import (  # noqa: E402
-    canonical_json_hash,
     environment_snapshot,
-    hash_tree,
-    sha256_file,
     sha256_text_file,
 )
 
@@ -34,7 +31,7 @@ CONFIGS = {
 }
 DATASET_MANIFEST = V4_DIR / "canonical_dataset_manifest.json"
 TRAINING_GATE = PROJECT_ROOT / "scripts" / "validate_kisaki_v4_training_gate.py"
-SERVER_ROOT = Path(os.getenv("QQCHAT_LAB_ROOT", "/home/szw/lhm2"))
+SERVER_ROOT = Path(os.getenv("QQCHAT_LAB_ROOT", str(PROJECT_ROOT / "runtime")))
 
 
 def _load(path: Path) -> Any:
@@ -88,12 +85,39 @@ def gpu_snapshot() -> list[dict[str, Any]]:
 
 
 def _best_checkpoint(output_dir: Path) -> str | None:
-    state_files = sorted(output_dir.glob("checkpoint-*/trainer_state.json"))
+    state_files = sorted(
+        output_dir.glob("checkpoint-*/trainer_state.json"),
+        key=lambda path: _checkpoint_step(path.parent),
+    )
     if not state_files:
         return None
     state = _load(state_files[-1])
     value = state.get("best_model_checkpoint")
     return str(value) if value else None
+
+
+def _checkpoint_step(path: Path) -> int:
+    try:
+        return int(path.name.rsplit("-", 1)[1])
+    except (IndexError, ValueError):
+        return -1
+
+
+def prompt_contract_error(config: dict[str, Any], dataset: dict[str, Any]) -> str | None:
+    contract = dataset.get("prompt_policy", {})
+    required_policy = contract.get("required_training_policy")
+    if config.get("system_prompt_policy") != required_policy:
+        return "system_prompt_policy"
+    prompt_path_value = contract.get("path")
+    if not prompt_path_value:
+        return "prompt_path"
+    prompt_path = Path(prompt_path_value)
+    prompt_path = prompt_path if prompt_path.is_absolute() else PROJECT_ROOT / prompt_path
+    if not prompt_path.exists():
+        return "prompt_path"
+    if config.get("system_prompt", "").strip() != prompt_path.read_text(encoding="utf-8").strip():
+        return "system_prompt_content"
+    return None
 
 
 def main() -> int:
@@ -119,6 +143,9 @@ def main() -> int:
 
     config = _load(CONFIGS[args.experiment])
     dataset = _load(DATASET_MANIFEST)
+    if prompt_error := prompt_contract_error(config, dataset):
+        print(f"canonical_prompt_contract_failed={prompt_error}", file=sys.stderr)
+        return 2
     experiment_id = str(config["_experiment_id"])
     output_dir = SERVER_ROOT / "runtime" / "loras" / "kisaki" / "r1v4" / args.experiment / f"seed{args.seed}"
     run_dir = SERVER_ROOT / "runtime" / "experiments" / "kisaki" / "r1v4" / args.experiment / f"seed{args.seed}"
@@ -132,7 +159,7 @@ def main() -> int:
     if resolved_model.exists():
         config["base_model_path"] = str(resolved_model)
     if args.resume:
-        checkpoints = sorted(output_dir.glob("checkpoint-*"))
+        checkpoints = sorted(output_dir.glob("checkpoint-*"), key=_checkpoint_step)
         config["resume_from_checkpoint"] = str(checkpoints[-1]) if checkpoints else None
     elif output_dir.exists() and any(output_dir.iterdir()):
         print(f"refusing_to_overwrite_nonempty_output={output_dir}", file=sys.stderr)
@@ -161,8 +188,6 @@ def main() -> int:
         "seed": args.seed,
         "started_at": started_at,
         "resolved_config": str(resolved_config_path),
-        "config_sha256": sha256_file(resolved_config_path),
-        "config_contract_sha256": canonical_json_hash(config),
         "dataset": {
             "train_count": dataset["train"]["count"],
             "validation_count": dataset["validation"]["count"],
@@ -192,7 +217,6 @@ def main() -> int:
         run_manifest["status"] = "training_complete"
         run_manifest["adapter"] = {
             "path": str(final_adapter),
-            "sha256": hash_tree(final_adapter),
             "best_checkpoint": _best_checkpoint(output_dir),
             "training_evaluation": str(output_dir / "training_evaluation.json"),
         }

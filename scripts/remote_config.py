@@ -10,6 +10,7 @@ import paramiko
 
 HOST = os.getenv("LAB_HOST", "").strip()
 USER = os.getenv("LAB_USER", "").strip()
+PORT = int(os.getenv("LAB_PORT", "22"))
 
 
 def connect_ssh(*, timeout: int = 15) -> paramiko.SSHClient:
@@ -34,6 +35,7 @@ def connect_ssh(*, timeout: int = 15) -> paramiko.SSHClient:
         client.set_missing_host_key_policy(paramiko.RejectPolicy())
     client.connect(
         HOST,
+        port=PORT,
         username=USER,
         password=password,
         key_filename=str(Path(key_file).expanduser()) if key_file else None,

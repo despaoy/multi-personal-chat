@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT=/home/szw/lhm2
+ROOT="${QQCHAT_LAB_ROOT:?set QQCHAT_LAB_ROOT to the lab root}"
 PROJECT=$ROOT/qqchat-enhanced
 LAUNCHER=$PROJECT/scripts/lab-start-vllm.sh
 PIDFILE=$ROOT/runtime/vllm.pid

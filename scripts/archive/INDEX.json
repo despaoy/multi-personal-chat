@@ -1,0 +1,398 @@
+{
+  "schema_version": 1,
+  "created_at_utc": "2026-08-16T15:20:55Z",
+  "purpose": "Historical scripts archived out of the active scripts surface. Do not use for formal experiments.",
+  "entry_count": 65,
+  "entries": [
+    {
+      "archived_path": "scripts/archive/legacy_lab_scripts/__pycache__/check_server_env.cpython-310.pyc",
+      "original_path": "scripts/check_server_env.cpython-310.pyc",
+      "sha256": "218b9fdc4aeb92b4f19816167d24e5c89e5d96b0b9c0ce8467227e4677b32d8b",
+      "bytes": 2438
+    },
+    {
+      "archived_path": "scripts/archive/legacy_lab_scripts/__pycache__/ssh_check_kisaki.cpython-310.pyc",
+      "original_path": "scripts/ssh_check_kisaki.cpython-310.pyc",
+      "sha256": "df8b24bf21db65ac6792ab320716dd7ceedb23eb506ecda06580ae16ccd76f95",
+      "bytes": 3112
+    },
+    {
+      "archived_path": "scripts/archive/legacy_lab_scripts/__pycache__/ssh_check_pipeline.cpython-310.pyc",
+      "original_path": "scripts/ssh_check_pipeline.cpython-310.pyc",
+      "sha256": "bfe69f9bcb56d84eaa4b87759dcd7fc8a6d55b7ea3cc5293f0b205a7e071389c",
+      "bytes": 3462
+    },
+    {
+      "archived_path": "scripts/archive/legacy_lab_scripts/__pycache__/ssh_cleanup_and_eval.cpython-310.pyc",
+      "original_path": "scripts/ssh_cleanup_and_eval.cpython-310.pyc",
+      "sha256": "15f3888f1428cc912a368b06789c3e5569779a46a284f2b1044947455ea80f10",
+      "bytes": 4044
+    },
+    {
+      "archived_path": "scripts/archive/legacy_lab_scripts/__pycache__/ssh_compare_training.cpython-310.pyc",
+      "original_path": "scripts/ssh_compare_training.cpython-310.pyc",
+      "sha256": "5cffca02f4f6a63f30c54733e1cd6939736e0306fe2fdaaab8e0a10ab7f2d76f",
+      "bytes": 1523
+    },
+    {
+      "archived_path": "scripts/archive/legacy_lab_scripts/__pycache__/ssh_deploy_pipeline.cpython-310.pyc",
+      "original_path": "scripts/ssh_deploy_pipeline.cpython-310.pyc",
+      "sha256": "854b43e064d133418d60e6b4b3f2ad710b70e7f4ad6556043374de4faedbeab4",
+      "bytes": 6860
+    },
+    {
+      "archived_path": "scripts/archive/legacy_lab_scripts/__pycache__/ssh_diagnose_disk.cpython-310.pyc",
+      "original_path": "scripts/ssh_diagnose_disk.cpython-310.pyc",
+      "sha256": "853f41bc4139094e0a3a08b1a646db329503453c2d775599c281bc8b252da3e4",
+      "bytes": 3118
+    },
+    {
+      "archived_path": "scripts/archive/legacy_lab_scripts/__pycache__/ssh_free_disk_and_eval.cpython-310.pyc",
+      "original_path": "scripts/ssh_free_disk_and_eval.cpython-310.pyc",
+      "sha256": "8d20f8f85905bd12098a0b1579a61b1f2cf9b3c5db7e17467942c6e40a1dbc00",
+      "bytes": 3071
+    },
+    {
+      "archived_path": "scripts/archive/legacy_lab_scripts/__pycache__/ssh_start_eval.cpython-310.pyc",
+      "original_path": "scripts/ssh_start_eval.cpython-310.pyc",
+      "sha256": "a6f706a49cd5baad9cf74860a2417719f616b065321b16eaf5f90015f0fefa8a",
+      "bytes": 2978
+    },
+    {
+      "archived_path": "scripts/archive/legacy_lab_scripts/check_server_env.py",
+      "original_path": "scripts/check_server_env.py",
+      "sha256": "e204427dfa3136f582a2ebd912c626f419b2d3d61391bd8617e516b93d9f62e6",
+      "bytes": 2976
+    },
+    {
+      "archived_path": "scripts/archive/legacy_lab_scripts/ssh_check_kisaki.py",
+      "original_path": "scripts/ssh_check_kisaki.py",
+      "sha256": "a8972ee7e25d4ca76324ec5959b0745a234fede0e6cb899435d0c73ee0397018",
+      "bytes": 2880
+    },
+    {
+      "archived_path": "scripts/archive/legacy_lab_scripts/ssh_check_pipeline.py",
+      "original_path": "scripts/ssh_check_pipeline.py",
+      "sha256": "f9e8fdcb9386c1c46f37e2551d28ef56acea5bd89827d0e157af6628c7d3588b",
+      "bytes": 3229
+    },
+    {
+      "archived_path": "scripts/archive/legacy_lab_scripts/ssh_cleanup_and_eval.py",
+      "original_path": "scripts/ssh_cleanup_and_eval.py",
+      "sha256": "e3ebcb321ccc28574930acd9c0a19bf13a61a56177b17a8c7000396309e0e160",
+      "bytes": 3784
+    },
+    {
+      "archived_path": "scripts/archive/legacy_lab_scripts/ssh_compare_training.py",
+      "original_path": "scripts/ssh_compare_training.py",
+      "sha256": "0a4a28a2066cadb162cbd2727277fe66deb9b4eead36bc2fdd620d7a5f4c1e78",
+      "bytes": 1242
+    },
+    {
+      "archived_path": "scripts/archive/legacy_lab_scripts/ssh_deploy_pipeline.py",
+      "original_path": "scripts/ssh_deploy_pipeline.py",
+      "sha256": "3a846c9d684ba0787a5d9ef6aebd279f9e1b46a916b9464c5ea3ecfb7f20c49e",
+      "bytes": 7366
+    },
+    {
+      "archived_path": "scripts/archive/legacy_lab_scripts/ssh_diagnose_disk.py",
+      "original_path": "scripts/ssh_diagnose_disk.py",
+      "sha256": "3fbca18f5e9489ae7e087ea1d88775ccc5695d9cbc9e0bac743c7771f1285c34",
+      "bytes": 2946
+    },
+    {
+      "archived_path": "scripts/archive/legacy_lab_scripts/ssh_free_disk_and_eval.py",
+      "original_path": "scripts/ssh_free_disk_and_eval.py",
+      "sha256": "388f83bfa3a7ba257d2c749cbad48c8c44aead5515355e910d9dc46a9e7c28b0",
+      "bytes": 2800
+    },
+    {
+      "archived_path": "scripts/archive/legacy_lab_scripts/ssh_start_eval.py",
+      "original_path": "scripts/ssh_start_eval.py",
+      "sha256": "844cc92b1b7abcc4ec73354b1d1dd951b00cf405e523c6bad79f608b880e2eb4",
+      "bytes": 3674
+    },
+    {
+      "archived_path": "scripts/archive/legacy_review_tools/__pycache__/auto_review_blind_ab.cpython-310.pyc",
+      "original_path": "scripts/auto_review_blind_ab.cpython-310.pyc",
+      "sha256": "c0b9b919838df21c38ff1aba762daf0b51418c85d5e997c2fb4ceaf4ac9c7200",
+      "bytes": 7100
+    },
+    {
+      "archived_path": "scripts/archive/legacy_review_tools/__pycache__/auto_review_blind_ab_deepseek.cpython-310.pyc",
+      "original_path": "scripts/auto_review_blind_ab_deepseek.cpython-310.pyc",
+      "sha256": "87f8ddb4598f21b7c3b98dcc104ef7f977419d716b1ad854c8bd5c63e6ed9915",
+      "bytes": 6859
+    },
+    {
+      "archived_path": "scripts/archive/legacy_review_tools/__pycache__/build_blind_ab_review.cpython-310.pyc",
+      "original_path": "scripts/build_blind_ab_review.cpython-310.pyc",
+      "sha256": "b3d76e4d296b759ea8061060dc5eb9842459d2055e8aba588f5032aa5415ad79",
+      "bytes": 2099
+    },
+    {
+      "archived_path": "scripts/archive/legacy_review_tools/__pycache__/build_stratified_blind_review.cpython-310.pyc",
+      "original_path": "scripts/build_stratified_blind_review.cpython-310.pyc",
+      "sha256": "c07d19d6757610c929b6dcaec603008e8cbc83153db0ae873500d5794255932e",
+      "bytes": 3618
+    },
+    {
+      "archived_path": "scripts/archive/legacy_review_tools/__pycache__/filter_v4_candidates.cpython-310.pyc",
+      "original_path": "scripts/filter_v4_candidates.cpython-310.pyc",
+      "sha256": "c72310aa7f9a8acd82f26c5f0b7e0bd46ca091905c86adbf8ba39db053819635",
+      "bytes": 4559
+    },
+    {
+      "archived_path": "scripts/archive/legacy_review_tools/__pycache__/fix_v4_blindfix.cpython-310.pyc",
+      "original_path": "scripts/fix_v4_blindfix.cpython-310.pyc",
+      "sha256": "f4c37a87844c6371f513d94ee070db1bcc29858edc9c94cd8e73bb60597a0786",
+      "bytes": 8202
+    },
+    {
+      "archived_path": "scripts/archive/legacy_review_tools/__pycache__/generate_v4_blindfix.cpython-310.pyc",
+      "original_path": "scripts/generate_v4_blindfix.cpython-310.pyc",
+      "sha256": "e8b1de58a35e534582e95eeef85d134e20651acc9496d1a4840c037c4f16069b",
+      "bytes": 11540
+    },
+    {
+      "archived_path": "scripts/archive/legacy_review_tools/__pycache__/generate_v4_lifestyle.cpython-310.pyc",
+      "original_path": "scripts/generate_v4_lifestyle.cpython-310.pyc",
+      "sha256": "8008d7f4d926874ef215e7e122b53550269fc6e42d6c839e63fcb64205d9e3f0",
+      "bytes": 4663
+    },
+    {
+      "archived_path": "scripts/archive/legacy_review_tools/__pycache__/generate_v4_yoruko.cpython-310.pyc",
+      "original_path": "scripts/generate_v4_yoruko.cpython-310.pyc",
+      "sha256": "4113801c7366d6f22162774f9e27b46aacbf0711f4afeef4dc952af7d685031f",
+      "bytes": 5122
+    },
+    {
+      "archived_path": "scripts/archive/legacy_review_tools/__pycache__/regenerate_v4_blindfix.cpython-310.pyc",
+      "original_path": "scripts/regenerate_v4_blindfix.cpython-310.pyc",
+      "sha256": "8c4e470d964c03b1468177bad3fc1a58212e6d6863eba04328e9e286a5b5b563",
+      "bytes": 10740
+    },
+    {
+      "archived_path": "scripts/archive/legacy_review_tools/__pycache__/review_blind_ab.cpython-310.pyc",
+      "original_path": "scripts/review_blind_ab.cpython-310.pyc",
+      "sha256": "b168d750a6969a844eb028cc522c4817d89e7fa0b9fc16c956e6f1e220c39d00",
+      "bytes": 4088
+    },
+    {
+      "archived_path": "scripts/archive/legacy_review_tools/__pycache__/score_blind_ab.cpython-310.pyc",
+      "original_path": "scripts/score_blind_ab.cpython-310.pyc",
+      "sha256": "4022daa773e39482c7b28d6dae48ef24cb733b3cd36cc26b7f7b2cc55f25e456",
+      "bytes": 3426
+    },
+    {
+      "archived_path": "scripts/archive/legacy_review_tools/auto_review_blind_ab.py",
+      "original_path": "scripts/auto_review_blind_ab.py",
+      "sha256": "fe133de8cbe3fdb37020b3461bc6e5f0c292b657eb1f7b5c639a991ed1a72974",
+      "bytes": 7420
+    },
+    {
+      "archived_path": "scripts/archive/legacy_review_tools/auto_review_blind_ab_deepseek.py",
+      "original_path": "scripts/auto_review_blind_ab_deepseek.py",
+      "sha256": "bf3a294a17e4925607839ae77296d5eca1972b461ea332d891c2f3201de2c049",
+      "bytes": 7748
+    },
+    {
+      "archived_path": "scripts/archive/legacy_review_tools/build_blind_ab_review.py",
+      "original_path": "scripts/build_blind_ab_review.py",
+      "sha256": "92cc922e20da4a53261e09571c1bd7dc0842059513d4ece1b5c19cea757fd378",
+      "bytes": 1740
+    },
+    {
+      "archived_path": "scripts/archive/legacy_review_tools/build_stratified_blind_review.py",
+      "original_path": "scripts/build_stratified_blind_review.py",
+      "sha256": "d89b0585da072a31a75105bbf25be9170f39ef2cd58456933d66e6bb87ca163e",
+      "bytes": 3967
+    },
+    {
+      "archived_path": "scripts/archive/legacy_review_tools/filter_v4_candidates.py",
+      "original_path": "scripts/filter_v4_candidates.py",
+      "sha256": "570d134a9bb93d6dd62b9298bf4b8e3ad9f95a8c7d2e1d82af54da925b40db75",
+      "bytes": 8389
+    },
+    {
+      "archived_path": "scripts/archive/legacy_review_tools/fix_v4_blindfix.py",
+      "original_path": "scripts/fix_v4_blindfix.py",
+      "sha256": "c36ae4802cca27ac0b282278a3936e924babd843158eebe58e3cba83159bc2f6",
+      "bytes": 9956
+    },
+    {
+      "archived_path": "scripts/archive/legacy_review_tools/generate_v4_blindfix.py",
+      "original_path": "scripts/generate_v4_blindfix.py",
+      "sha256": "e74e1721bbb80383122256940cf35c24cdeade63ca30d4a4e2410b08b5bb3065",
+      "bytes": 13201
+    },
+    {
+      "archived_path": "scripts/archive/legacy_review_tools/generate_v4_lifestyle.py",
+      "original_path": "scripts/generate_v4_lifestyle.py",
+      "sha256": "177bf9125355a1af4567cbc81a09da73cb9092deff503d34518b16b5d21feec6",
+      "bytes": 5387
+    },
+    {
+      "archived_path": "scripts/archive/legacy_review_tools/generate_v4_yoruko.py",
+      "original_path": "scripts/generate_v4_yoruko.py",
+      "sha256": "b139e11583e9314eae13130a4ce7a99e132a703a3570f143ec8bc0c657b5835f",
+      "bytes": 5969
+    },
+    {
+      "archived_path": "scripts/archive/legacy_review_tools/regenerate_v4_blindfix.py",
+      "original_path": "scripts/regenerate_v4_blindfix.py",
+      "sha256": "d476dd9111f0528a5bf2c13380c79ee27a14d22f1b8d2edd7c8b80dc29543e1b",
+      "bytes": 12830
+    },
+    {
+      "archived_path": "scripts/archive/legacy_review_tools/review_blind_ab.py",
+      "original_path": "scripts/review_blind_ab.py",
+      "sha256": "6ad8a3a3427a2df1c89afbc5d9411526c82edc689aff040cee8b3506b1be9e9b",
+      "bytes": 3771
+    },
+    {
+      "archived_path": "scripts/archive/legacy_review_tools/score_blind_ab.py",
+      "original_path": "scripts/score_blind_ab.py",
+      "sha256": "aa91e6c4c2ec80aefeade564b7adbde79ca1eef70336cbfbc15ae520fa9daab6",
+      "bytes": 3182
+    },
+    {
+      "archived_path": "scripts/archive/legacy_windows_tools/__pycache__/build_blind_review_ui.cpython-310.pyc",
+      "original_path": "scripts/build_blind_review_ui.cpython-310.pyc",
+      "sha256": "8897120cb37bd774c810af9bd9e603de3c0fcd651bf0aea9a59159bea426a162",
+      "bytes": 16919
+    },
+    {
+      "archived_path": "scripts/archive/legacy_windows_tools/__pycache__/build_v4_review_ui.cpython-310.pyc",
+      "original_path": "scripts/build_v4_review_ui.cpython-310.pyc",
+      "sha256": "d3f4a3f73282b4bed6cba4ef0ac2b0f5bce50e12d4cebf6f724d83478cf343ad",
+      "bytes": 17507
+    },
+    {
+      "archived_path": "scripts/archive/legacy_windows_tools/__pycache__/build_v4_unified_review_ui.cpython-310.pyc",
+      "original_path": "scripts/build_v4_unified_review_ui.cpython-310.pyc",
+      "sha256": "ec2c9db588fa56a767a0d3ecb4fadbb539d2de43cf23775be3c37c7a6e12d736",
+      "bytes": 14055
+    },
+    {
+      "archived_path": "scripts/archive/legacy_windows_tools/__pycache__/clean_main_v5.cpython-310.pyc",
+      "original_path": "scripts/clean_main_v5.cpython-310.pyc",
+      "sha256": "78625f85ae3831db57ef41c0ce5a1404383aca1718716139a77894b7343c9446",
+      "bytes": 5944
+    },
+    {
+      "archived_path": "scripts/archive/legacy_windows_tools/__pycache__/fix_riou_positions.cpython-310.pyc",
+      "original_path": "scripts/fix_riou_positions.cpython-310.pyc",
+      "sha256": "b715fe62b62996f8e3247ed880191e0457de8aafc0b7ea84b4a8e4b7f5dbddbf",
+      "bytes": 1781
+    },
+    {
+      "archived_path": "scripts/archive/legacy_windows_tools/__pycache__/generate_v4_candidates.cpython-310.pyc",
+      "original_path": "scripts/generate_v4_candidates.cpython-310.pyc",
+      "sha256": "d39b4eb706f17b13330982577c352e0f54b546ae65453ccb2d3b9f1e160585ed",
+      "bytes": 24497
+    },
+    {
+      "archived_path": "scripts/archive/legacy_windows_tools/__pycache__/merge_game_extract_v1.cpython-310.pyc",
+      "original_path": "scripts/merge_game_extract_v1.cpython-310.pyc",
+      "sha256": "c78842d2c1244e320e7261066f29d1a58b38615cf6375c66d737fb16c3f160cf",
+      "bytes": 7393
+    },
+    {
+      "archived_path": "scripts/archive/legacy_windows_tools/__pycache__/rebuild_famous_v1.cpython-310.pyc",
+      "original_path": "scripts/rebuild_famous_v1.cpython-310.pyc",
+      "sha256": "4cc947d5f129160c40ab687e372430ce6de283b35784ad85ca51ab287fea0b0d",
+      "bytes": 20243
+    },
+    {
+      "archived_path": "scripts/archive/legacy_windows_tools/__pycache__/rebuild_game_data_v4.cpython-310.pyc",
+      "original_path": "scripts/rebuild_game_data_v4.cpython-310.pyc",
+      "sha256": "bb907d73e97a152758121fdac34f48d910ea2e939d0cb0e0ba01c224d55a31ca",
+      "bytes": 4883
+    },
+    {
+      "archived_path": "scripts/archive/legacy_windows_tools/__pycache__/ssh_fetch_blind.cpython-310.pyc",
+      "original_path": "scripts/ssh_fetch_blind.cpython-310.pyc",
+      "sha256": "b1d561f1e8a8207b432f8e3861cc9489cbeda4cdb009ea8ee0e2c6b4f130d98b",
+      "bytes": 3679
+    },
+    {
+      "archived_path": "scripts/archive/legacy_windows_tools/__pycache__/ssh_fetch_results.cpython-310.pyc",
+      "original_path": "scripts/ssh_fetch_results.cpython-310.pyc",
+      "sha256": "8092a520de41a0927eda66fe54230b0c9c801e7ca516f5ce2eb29613e72fe44a",
+      "bytes": 3252
+    },
+    {
+      "archived_path": "scripts/archive/legacy_windows_tools/build_blind_review_ui.py",
+      "original_path": "scripts/build_blind_review_ui.py",
+      "sha256": "b9e6dad9608fda396f761c7c4587d9ff6a4bb392ac24c232a713933ee7cc6cd4",
+      "bytes": 16546
+    },
+    {
+      "archived_path": "scripts/archive/legacy_windows_tools/build_v4_review_ui.py",
+      "original_path": "scripts/build_v4_review_ui.py",
+      "sha256": "53155773c7363c4ad2bcff5ec224c48813d4a7fb9b9c6f574d1121d118855621",
+      "bytes": 17204
+    },
+    {
+      "archived_path": "scripts/archive/legacy_windows_tools/build_v4_unified_review_ui.py",
+      "original_path": "scripts/build_v4_unified_review_ui.py",
+      "sha256": "731bfc04bc34bb550b0d32ded4bd74d113c155e7d7ba6bdc6738aaafdeccceb8",
+      "bytes": 13921
+    },
+    {
+      "archived_path": "scripts/archive/legacy_windows_tools/clean_main_v5.py",
+      "original_path": "scripts/clean_main_v5.py",
+      "sha256": "5f26c79fbbc89c2407e3c5007ee11e49e871b2d51e05821d7cc70a3823e81990",
+      "bytes": 6655
+    },
+    {
+      "archived_path": "scripts/archive/legacy_windows_tools/fix_riou_positions.py",
+      "original_path": "scripts/fix_riou_positions.py",
+      "sha256": "0452786fdc9280dc9f34d8fddde4149448b66da6b62a8de3cbf889ee7b5321b4",
+      "bytes": 1556
+    },
+    {
+      "archived_path": "scripts/archive/legacy_windows_tools/generate_v4_candidates.py",
+      "original_path": "scripts/generate_v4_candidates.py",
+      "sha256": "3c79233e09dff999c53529c0f74450b778c1ddc8e83e0cc45a30344bf5f3ca07",
+      "bytes": 30151
+    },
+    {
+      "archived_path": "scripts/archive/legacy_windows_tools/merge_game_extract_v1.py",
+      "original_path": "scripts/merge_game_extract_v1.py",
+      "sha256": "ecc232dacfb8ca560c499f183f3b93f80f43226be955db272dcf63623fff2cd6",
+      "bytes": 5923
+    },
+    {
+      "archived_path": "scripts/archive/legacy_windows_tools/rebuild_famous_v1.py",
+      "original_path": "scripts/rebuild_famous_v1.py",
+      "sha256": "f948f820cf2c8ff67bf3963bc4adc04971152be574117b41c6e043134512673b",
+      "bytes": 23993
+    },
+    {
+      "archived_path": "scripts/archive/legacy_windows_tools/rebuild_game_data_v4.py",
+      "original_path": "scripts/rebuild_game_data_v4.py",
+      "sha256": "436f1433debd5e871f32fabd9c30c53d2e9c83dbc7f3930cae6e7452768354c0",
+      "bytes": 5041
+    },
+    {
+      "archived_path": "scripts/archive/legacy_windows_tools/ssh_fetch_blind.py",
+      "original_path": "scripts/ssh_fetch_blind.py",
+      "sha256": "fa58f764571a5cb28132c29b078438dec91178d74f93a2feb9147fc99fd0c5b9",
+      "bytes": 4374
+    },
+    {
+      "archived_path": "scripts/archive/legacy_windows_tools/ssh_fetch_results.py",
+      "original_path": "scripts/ssh_fetch_results.py",
+      "sha256": "8ad33536b9caffe622aa4cdb19659a2556e09c359453a86fb12a98c63aaaa069",
+      "bytes": 3625
+    },
+    {
+      "archived_path": "scripts/archive/README.md",
+      "original_path": null,
+      "sha256": "a9f1f770d6da1e893cb4ca7deb987aa3cbcab86ae32d656c80f1e84d7bdbf828",
+      "bytes": 837
+    }
+  ]
+}

@@ -1,4 +1,4 @@
-"""从游戏文本提取月社妃角色对话，生成可审计的 raw 和 SFT 数据集（v2，Qwen3-8B 基座）。
+"""从游戏文本提取月社妃角色对话，生成可审计的 raw 和 SFT 数据集。
 
 v2 改进（相对 v1）：
 - 适配 gametext/纸上魔法使/*.txt 数据源结构
@@ -7,7 +7,12 @@ v2 改进（相对 v1）：
 - 保留 v1 的质量评分、去重、excluded 审计逻辑
 """
 from __future__ import annotations
-import argparse, hashlib, json, re, unicodedata
+
+import argparse
+import hashlib
+import json
+import re
+import unicodedata
 from collections import Counter
 from pathlib import Path
 
@@ -19,13 +24,31 @@ TARGETS = {
         "system": "你正在扮演月社妃。请依据给定角色设定和原作中的语言习惯，自然地回应。",
     },
 }
-SCRIPT_RE = re.compile(r"\[(?P<speaker>[^\]]+)\]\s*[「『“](?P<text>.*?)[」』”]", re.DOTALL)
+SCRIPT_RE = re.compile(
+    r"\[(?P<speaker>[^\]]+)\]\s*(?:"
+    r"「(?P<corner_text>.*?)」|"
+    r"『(?P<double_corner_text>.*?)』|"
+    r"“(?P<curly_text>.*?)”"
+    r")",
+    re.DOTALL,
+)
 SPACE_RE = re.compile(r"\s+")
 MEANING_RE = re.compile(r"[\w\u3400-\u9fff]", re.UNICODE)
 
 # v2 新增：过短回复阈值与占比上限
 SHORT_REPLY_THRESHOLD = 5  # 有效字符数 < 5 视为过短
 SHORT_REPLY_MAX_RATIO = 0.15  # 过短回复在最终 SFT 中占比 ≤ 15%
+MAX_INTERVENING_NARRATION_LINES = 4
+SCENE_RESET_RE = re.compile(
+    r"^(?:"
+    r"次日|翌日|第二天|数日后|几天后|隔天|"
+    r"第二天早上|当天(?:早上|上午|下午|晚上)?|"
+    r"放学后|清晨|早晨|傍晚|夜晚|深夜|"
+    r"与此同时|另一方面|梦中|回忆的讲述(?:翻到下一页|已经结束)"
+    r")"
+)
+UNCERTAIN_SPEAKER_RE = re.compile(r"^[?？]+$")
+UNCERTAIN_SPEAKER_LABELS = {"声音", "某人", "不明", "众人", "全员"}
 
 
 def clean(text):
@@ -45,22 +68,81 @@ def stable_id(*parts):
     return hashlib.sha256("|".join(parts).encode("utf-8")).hexdigest()[:16]
 
 
+def _separator_lines(separator):
+    return [line.strip() for line in separator.replace("\r\n", "\n").replace("\r", "\n").split("\n")]
+
+
+def scene_reset_in(separator):
+    normalized = separator.replace("\r\n", "\n").replace("\r", "\n")
+    if re.search(r"\n\s*\n", normalized):
+        return True
+    return any(SCENE_RESET_RE.match(line) for line in _separator_lines(normalized) if line)
+
+
+def dialogue_link_reason(previous, current):
+    """Return why two dialogue events cannot belong to one continuous block."""
+
+    separator = current.get("separator_before", "")
+    if scene_reset_in(separator):
+        return "scene_boundary"
+    narration_lines = sum(1 for line in _separator_lines(separator) if line)
+    if narration_lines > MAX_INTERVENING_NARRATION_LINES:
+        return "long_narration_gap"
+    if current["line_start"] <= previous["line_end"]:
+        return "overlapping_dialogue_events"
+    return None
+
+
+def reliable_speaker_label(label):
+    normalized = clean(label)
+    return bool(
+        normalized
+        and normalized not in UNCERTAIN_SPEAKER_LABELS
+        and not UNCERTAIN_SPEAKER_RE.fullmatch(normalized)
+    )
+
+
 def read_script_events(path, source_id=None):
     """从纸上魔法使脚本文件提取对话事件。
 
     文件格式：[角色名] 「对话内容」
-    旁白行（无 [] 标签）不被提取为事件，保留纯对话序列。
+    同时保留台词物理行号及相邻台词之间的原文，用于识别长旁白和场景切换。
     """
     source_id = source_id or path.name
     text = path.read_text(encoding="utf-8")
     events = []
+    previous_match_end = 0
     for match in SCRIPT_RE.finditer(text):
-        line = text.count("\n", 0, match.start()) + 1
+        line_start = text.count("\n", 0, match.start()) + 1
+        line_end = text.count("\n", 0, match.end()) + 1
+        dialogue = next(
+            value
+            for value in (
+                match.group("corner_text"),
+                match.group("double_corner_text"),
+                match.group("curly_text"),
+            )
+            if value is not None
+        )
         events.append({
             "speaker": clean(match.group("speaker")),
-            "text": clean(match.group("text")),
-            "source": f"{source_id}:line:{line}",
+            "text": clean(dialogue),
+            "source": f"{source_id}:line:{line_start}",
+            "line_start": line_start,
+            "line_end": line_end,
+            "separator_before": text[previous_match_end:match.start()],
         })
+        previous_match_end = match.end()
+
+    block_start_line = None
+    previous = None
+    for event in events:
+        if previous is None or dialogue_link_reason(previous, event):
+            block_start_line = event["line_start"]
+        event["scene_block_id"] = (
+            f"{source_id}:scene-block:{block_start_line}"
+        )
+        previous = event
     return events
 
 
@@ -97,6 +179,10 @@ def make_raw(groups, target_key):
                 "speaker_kind": kind,
                 "text": event["text"],
                 "source": event["source"],
+                "source_file": group["source_id"],
+                "source_line_start": event["line_start"],
+                "source_line_end": event["line_end"],
+                "scene_block_id": event["scene_block_id"],
                 "source_role": group["source_role"],
                 "eligible_for_sft": kind == "direct" and group["source_role"] == "canonical",
             })
@@ -126,13 +212,27 @@ def build_candidates(groups, target_key):
                 continue
             start, reply_events = index, []
             while index < len(events) and events[index]["speaker"] in aliases:
+                if reply_events and dialogue_link_reason(reply_events[-1], events[index]):
+                    break
                 if events[index]["text"]:
                     reply_events.append(events[index])
                 index += 1
             cursor = start - 1
-            context_speaker = events[cursor]["speaker"] if cursor >= 0 else None
+            boundary_reason = None
+            if cursor >= 0:
+                boundary_reason = dialogue_link_reason(events[cursor], events[start])
+            context_source_speaker = (
+                events[cursor]["speaker"] if cursor >= 0 and boundary_reason is None else None
+            )
+            context_speaker = (
+                context_source_speaker
+                if context_source_speaker and reliable_speaker_label(context_source_speaker)
+                else None
+            )
             context_events = []
-            while cursor >= 0 and events[cursor]["speaker"] == context_speaker:
+            while cursor >= 0 and events[cursor]["speaker"] == context_source_speaker:
+                if context_events and dialogue_link_reason(events[cursor], context_events[-1]):
+                    break
                 if events[cursor]["text"]:
                     context_events.append(events[cursor])
                 cursor -= 1
@@ -140,6 +240,8 @@ def build_candidates(groups, target_key):
             prompt = "\n".join(x["text"] for x in context_events).strip()
             reply = "\n".join(x["text"] for x in reply_events).strip()
             reasons = []
+            if boundary_reason:
+                reasons.append(boundary_reason)
             if not context_events:
                 reasons.append("missing_context")
             if meaningful_len(prompt) < 2:
@@ -162,9 +264,22 @@ def build_candidates(groups, target_key):
                 "source_file": group["source_id"],
                 "source_speaker_label": event["speaker"],
                 "context_speaker_label": context_speaker,
+                "context_source_speaker_label": context_source_speaker,
                 "prompt": prompt,
                 "reply": reply,
                 "target_event_ids": ids,
+                "scene_block_id": event["scene_block_id"],
+                "dialogue_block_id": (
+                    f"{group['source_id']}:turn:"
+                    f"{context_events[0]['line_start'] if context_events else event['line_start']}-"
+                    f"{reply_events[-1]['line_end'] if reply_events else event['line_end']}"
+                ),
+                "source_line_start": context_events[0]["line_start"] if context_events else event["line_start"],
+                "source_line_end": reply_events[-1]["line_end"] if reply_events else event["line_end"],
+                "context_line_start": context_events[0]["line_start"] if context_events else None,
+                "context_line_end": context_events[-1]["line_end"] if context_events else None,
+                "response_line_start": reply_events[0]["line_start"] if reply_events else event["line_start"],
+                "response_line_end": reply_events[-1]["line_end"] if reply_events else event["line_end"],
                 "response_line_count": len(reply_events),
                 "quality_score": quality_score(prompt, reply, len(reply_events)),
                 "reasons": reasons,
@@ -173,7 +288,30 @@ def build_candidates(groups, target_key):
     return candidates
 
 
-def as_sft(item, target_key):
+def as_sft(item, target_key, *, include_exclusion_reasons=False):
+    metadata = {
+        "character": TARGETS[target_key]["display_name"],
+        "source": item["source"],
+        "source_file": item["source_file"],
+        "source_speaker_label": item["source_speaker_label"],
+        "context_speaker_label": item["context_speaker_label"],
+        "context_source_speaker_label": item.get("context_source_speaker_label"),
+        "target_event_ids": item["target_event_ids"],
+        "dialogue_block_id": item.get("dialogue_block_id"),
+        "scene_block_id": item.get("scene_block_id"),
+        "source_line_start": item.get("source_line_start"),
+        "source_line_end": item.get("source_line_end"),
+        "context_line_start": item.get("context_line_start"),
+        "context_line_end": item.get("context_line_end"),
+        "response_line_start": item.get("response_line_start"),
+        "response_line_end": item.get("response_line_end"),
+        "response_line_count": item["response_line_count"],
+        "quality_score": item["quality_score"],
+        "is_short_reply": item.get("is_short_reply", False),
+        "extraction": "explicit-label-continuous-dialogue-block-v3",
+    }
+    if include_exclusion_reasons:
+        metadata["exclusion_reasons"] = sorted(set(item.get("reasons", [])))
     return {
         "id": f"{target_key}_sft_{stable_id(target_key, item['source'], item['prompt'], item['reply'])}",
         "system": TARGETS[target_key]["system"],
@@ -181,18 +319,7 @@ def as_sft(item, target_key):
             {"from": "human", "value": item["prompt"]},
             {"from": "assistant", "value": item["reply"]},
         ],
-        "metadata": {
-            "character": TARGETS[target_key]["display_name"],
-            "source": item["source"],
-            "source_file": item["source_file"],
-            "source_speaker_label": item["source_speaker_label"],
-            "context_speaker_label": item["context_speaker_label"],
-            "target_event_ids": item["target_event_ids"],
-            "response_line_count": item["response_line_count"],
-            "quality_score": item["quality_score"],
-            "is_short_reply": item.get("is_short_reply", False),
-            "extraction": "explicit-label-source-bounded-turn-grouped-v2",
-        },
+        "metadata": metadata,
     }
 
 
@@ -267,7 +394,12 @@ def make_sft(groups, target_key):
     return (
         [as_sft(x, target_key) for x in recommended],
         [as_sft(x, target_key) for x in full_by_pair.values()],
-        [as_sft(x, target_key) if "conversations" not in x else x for x in all_excluded],
+        [
+            as_sft(x, target_key, include_exclusion_reasons=True)
+            if "conversations" not in x
+            else x
+            for x in all_excluded
+        ],
     )
 
 
@@ -285,7 +417,11 @@ def summary(raw, recommended, full, excluded):
     canonical = {x["id"] for x in raw if x["source_role"] == "canonical" and x["speaker_kind"] == "direct"}
     full_ids = {i for x in full for i in x["metadata"]["target_event_ids"]}
     recommended_ids = {i for x in recommended for i in x["metadata"]["target_event_ids"]}
-    reasons = Counter(r for x in excluded for r in x.get("reasons", []))
+    reasons = Counter(
+        reason
+        for item in excluded
+        for reason in item.get("metadata", {}).get("exclusion_reasons", [])
+    )
     short_in_recommended = sum(1 for x in recommended if x["metadata"].get("is_short_reply"))
     reply_lengths = [meaningful_len(x["conversations"][1]["value"]) for x in recommended]
     return {
@@ -341,35 +477,18 @@ def main():
 
     manifest = {
         "schema_version": 3,
-        "extraction_version": "v2_qwen3",
+        "extraction_version": "v3_continuous_dialogue_blocks",
         "extraction_policy": {
             "tsukiyashiro_kisaki": "只把显式[妃]/[月社妃]作为目标说话人；克丽索贝莉露是独立角色，即使冒用月社妃姓名也不并入。",
-            "source_policy": "gametext/纸上魔法使/*.txt 全部视为 canonical 来源；按文件隔离上下文，连续目标台词合并。",
+            "source_policy": "gametext/纸上魔法使/*.txt 全部视为 canonical 来源；只在同一连续对话块内配对，最多允许 4 行中间叙述，空行和明确场景重置会断开上下文。",
             "quality_policy": "排除无上下文、低信息、超长和重复样本；过短回复（<5字）按占比控制（≤15%）。",
-            "v2_changes": "适配 gametext 结构；移除 ATRI；新增短回复占比控制缓解 v1 塌缩问题。",
+            "v3_changes": "保留物理行号与对话块；拒绝跨长旁白或场景切换配对；未知说话者不注入 interlocutor；保留嵌套中文引号。",
         },
         "characters": {target_key: char_summary},
     }
     write_json(args.output_dir / "manifest.json", manifest)
     write_json(args.output_dir / "coverage_report.json", {target_key: char_summary})
 
-    (args.output_dir / "README.md").write_text(
-        "# 月社妃角色对话训练数据（v2）\n\n"
-        "## 文件说明\n\n"
-        "- `tsukiyashiro_kisaki_raw.jsonl`：完整可追溯语料，用于覆盖审计，不直接训练。\n"
-        "- `tsukiyashiro_kisaki_sft.json`：推荐训练集，过短回复占比已控制（≤15%）。\n"
-        "- `tsukiyashiro_kisaki_sft_full.json`：上下文有效的完整候选集，仅去除完全相同问答。\n"
-        "- `tsukiyashiro_kisaki_excluded.jsonl`：排除候选及原因，避免静默丢数据。\n"
-        "- `manifest.json` / `coverage_report.json`：覆盖率与排除统计。\n\n"
-        "## v2 改进\n\n"
-        "- 适配 gametext/纸上魔法使/*.txt 数据源\n"
-        "- 移除已清除的深白水波（ATRI）相关代码\n"
-        "- 新增过短回复（<5字）占比控制（≤15%），缓解 v1 回复塌缩\n"
-        "- 保留质量评分、去重、excluded 审计逻辑\n\n"
-        "## 使用建议\n\n"
-        "默认训练 sft 文件；先人工抽查 excluded；按剧情文件划分训练/验证集；固定数据哈希、脚本版本和随机种子。\n",
-        encoding="utf-8", newline="\n"
-    )
     print(json.dumps(manifest, ensure_ascii=False, indent=2))
 
 

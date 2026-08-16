@@ -69,7 +69,7 @@ from judge_kisaki_llm_v4 import judge_a, judge_b  # noqa: E402
 # ---------------------------------------------------------------------------
 
 OUTPUT_DIR = (
-    BACKEND / "data" / "character_dialogues" / "experiments" / "v3" / "llm_v4_judged"
+    BACKEND / "data" / "character_dialogues" / "experiments" / "archive" / "v3_pipeline" / "llm_v4_judged"
 )
 PROGRESS_PATH = OUTPUT_DIR / "progress.json"
 SAMPLES_PATH = OUTPUT_DIR / "samples.jsonl"

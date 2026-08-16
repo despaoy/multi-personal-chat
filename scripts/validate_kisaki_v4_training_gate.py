@@ -7,11 +7,18 @@ import argparse
 import hashlib
 import json
 import shutil
+import sys
 from pathlib import Path
 from typing import Any
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+BACKEND_ROOT = PROJECT_ROOT / "backend"
+if str(BACKEND_ROOT) not in sys.path:
+    sys.path.insert(0, str(BACKEND_ROOT))
+
+from evaluation.experiment_contracts import validate_frozen_gold  # noqa: E402
+from inference.prompt_policy import PROMPT_POLICY_VERSION  # noqa: E402
 DEFAULT_REVIEW = PROJECT_ROOT / "docs" / "research" / "review_packets" / "kisaki_v4" / "review_manifest.json"
 DEFAULT_DATASET = PROJECT_ROOT / "backend" / "data" / "character_dialogues" / "experiments" / "v4" / "canonical_dataset_manifest.json"
 DEFAULT_GOLD = PROJECT_ROOT / "backend" / "evaluation" / "kisaki_gold_set_v3.json"
@@ -22,7 +29,7 @@ REQUIRED_CATEGORIES = {
     "game_train",
     "constructed_train",
     "validation",
-    "gold_v2",
+    "gold_v21",
     "exclusions",
     "experiment_configs",
 }
@@ -35,8 +42,14 @@ def _load(path: Path) -> dict[str, Any]:
     return value
 
 
-def _sha256(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+def _sha256_text(path: Path) -> str:
+    text = path.read_text(encoding="utf-8").replace("\r\n", "\n").replace("\r", "\n")
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def _resolve(value: str) -> Path:
+    path = Path(value)
+    return path if path.is_absolute() else PROJECT_ROOT / path
 
 
 def validate_gate(
@@ -65,8 +78,11 @@ def validate_gate(
             blockers.append("system prompt v3 has not been explicitly approved")
         if not prompt_path.exists():
             blockers.append("system prompt v3 is missing")
-        elif review.get("source_hashes", {}).get("prompt_v3") != _sha256(prompt_path):
-            blockers.append("system prompt v3 hash does not match the reviewed prompt")
+        reviewed_prompt_path = _resolve(str(prompt_review.get("path", "")))
+        if reviewed_prompt_path.resolve() != prompt_path.resolve():
+            blockers.append("system prompt v3 path does not match the reviewed prompt")
+        if prompt_review.get("prompt_policy_version") != PROMPT_POLICY_VERSION:
+            blockers.append("reviewed prompt policy version is stale")
 
     if not dataset_path.exists():
         blockers.append("canonical V4 dataset manifest is missing")
@@ -74,20 +90,28 @@ def validate_gate(
         dataset = _load(dataset_path)
         if dataset.get("status") != "frozen":
             blockers.append("canonical V4 dataset is not frozen")
+        if dataset.get("freeze_blockers"):
+            blockers.append("canonical V4 dataset still has freeze blockers")
+        prompt_contract = dataset.get("prompt_policy", {})
+        if prompt_contract.get("version") != PROMPT_POLICY_VERSION:
+            blockers.append("canonical V4 prompt policy version is stale")
         for key in ("train", "validation"):
-            if not dataset.get(key, {}).get("sha256"):
+            contract = dataset.get(key, {})
+            expected_hash = contract.get("sha256")
+            if not expected_hash:
                 blockers.append(f"canonical V4 {key} hash is missing")
+                continue
+            data_file = _resolve(str(contract.get("path", "")))
+            if not data_file.exists() or _sha256_text(data_file) != expected_hash:
+                blockers.append(f"canonical V4 {key} file does not match its frozen hash")
 
     if not gold_path.exists():
         blockers.append("Gold v3 is missing")
     else:
         gold = _load(gold_path)
-        if gold.get("status") != "frozen":
-            blockers.append("Gold v3 is not frozen")
+        blockers.extend(validate_frozen_gold(gold, require_final_held_out=True))
         if gold.get("total_prompts") != 150:
             blockers.append("Gold v3 must contain exactly 150 prompts")
-        if not gold.get("content_sha256"):
-            blockers.append("Gold v3 content hash is missing")
 
     free_gb = None
     if disk_path is not None:

@@ -15,7 +15,7 @@ BACKEND = PROJECT_ROOT / "backend"
 if str(BACKEND) not in sys.path:
     sys.path.insert(0, str(BACKEND))
 
-from evaluation.experiment_contracts import git_commit, hash_tree, sha256_file
+from evaluation.experiment_contracts import git_commit, sha256_file
 
 
 def _inside(path: Path, root: Path) -> bool:
@@ -31,7 +31,7 @@ def main() -> int:
     parser.add_argument("--base-model", type=Path, required=True)
     parser.add_argument("--adapter", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--allowed-root", type=Path, default=Path(os.getenv("QQCHAT_LAB_ROOT", "/home/szw/lhm2")))
+    parser.add_argument("--allowed-root", type=Path, default=Path(os.getenv("QQCHAT_LAB_ROOT", str(PROJECT_ROOT / "runtime"))))
     parser.add_argument("--experiment-id", required=True)
     args = parser.parse_args()
 
@@ -44,7 +44,11 @@ def main() -> int:
     marker = args.output / "merge_manifest.json"
     if marker.exists():
         existing = json.loads(marker.read_text(encoding="utf-8"))
-        if existing.get("status") == "complete" and existing.get("adapter_hash") == hash_tree(args.adapter):
+        if (
+            existing.get("status") == "complete"
+            and existing.get("experiment_id") == args.experiment_id
+            and existing.get("adapter") == str(args.adapter)
+        ):
             print(marker)
             return 0
         raise SystemExit(f"refusing to overwrite incomplete or mismatched merge: {args.output}")
@@ -87,7 +91,6 @@ def main() -> int:
             "base_model": str(args.base_model),
             "base_config_sha256": sha256_file(args.base_model / "config.json"),
             "adapter": str(args.adapter),
-            "adapter_hash": hash_tree(args.adapter),
             "adapter_method": {
                 "use_dora": bool(adapter_config.get("use_dora", False)),
                 "use_rslora": bool(adapter_config.get("use_rslora", False)),

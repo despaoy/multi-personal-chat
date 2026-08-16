@@ -8,7 +8,7 @@ generator can produce a candidate answering the **same human dialogue**
 for fair A/B comparison in Judge B.
 
 Outputs:
-  - ``v3/llm_v4_judged/v3_negative_pool.jsonl``
+  - ``archive/v3_pipeline/llm_v4_judged/v3_negative_pool.jsonl``
 """
 
 from __future__ import annotations
@@ -27,10 +27,10 @@ if str(BACKEND) not in sys.path:
     sys.path.insert(0, str(BACKEND))
 
 V2_TRAIN_PATH = (
-    BACKEND / "data" / "character_dialogues" / "experiments" / "tsukiyashiro_kisaki_train.json"
+    BACKEND / "data" / "character_dialogues" / "experiments" / "archive" / "v2_canonical" / "tsukiyashiro_kisaki_train.json"
 )
 OUTPUT_DIR = (
-    BACKEND / "data" / "character_dialogues" / "experiments" / "v3" / "llm_v4_judged"
+    BACKEND / "data" / "character_dialogues" / "experiments" / "archive" / "v3_pipeline" / "llm_v4_judged"
 )
 NEGATIVE_POOL_PATH = OUTPUT_DIR / "v3_negative_pool.jsonl"
 

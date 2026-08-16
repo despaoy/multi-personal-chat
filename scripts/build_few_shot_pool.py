@@ -2,8 +2,8 @@
 
 Reads the 715 game_extraction training samples from V3 train, tags each
 with a scene label via keyword matching, and writes:
-  - ``v3/llm_v4_judged/train_source_whitelist.json``  (precise source-line whitelist)
-  - ``v3/llm_v4_judged/few_shot_pool.jsonl``           (per-sample few-shot records)
+  - ``archive/v3_pipeline/llm_v4_judged/train_source_whitelist.json``  (precise source-line whitelist)
+  - ``archive/v3_pipeline/llm_v4_judged/few_shot_pool.jsonl``           (per-sample few-shot records)
 
 Verifies:
   - every few-shot record's ``source_file + line_range`` is within the 715
@@ -27,9 +27,9 @@ BACKEND = PROJECT_ROOT / "backend"
 if str(BACKEND) not in sys.path:
     sys.path.insert(0, str(BACKEND))
 
-V3_TRAIN_PATH = BACKEND / "data" / "character_dialogues" / "experiments" / "v3" / "tsukiyashiro_kisaki_train.json"
-V3_EVAL_PATH = BACKEND / "data" / "character_dialogues" / "experiments" / "v3" / "tsukiyashiro_kisaki_eval.json"
-OUTPUT_DIR = BACKEND / "data" / "character_dialogues" / "experiments" / "v3" / "llm_v4_judged"
+V3_TRAIN_PATH = BACKEND / "data" / "character_dialogues" / "experiments" / "archive" / "v3_pipeline" / "tsukiyashiro_kisaki_train.json"
+V3_EVAL_PATH = BACKEND / "data" / "character_dialogues" / "experiments" / "archive" / "v3_pipeline" / "tsukiyashiro_kisaki_eval.json"
+OUTPUT_DIR = BACKEND / "data" / "character_dialogues" / "experiments" / "archive" / "v3_pipeline" / "llm_v4_judged"
 WHITELIST_PATH = OUTPUT_DIR / "train_source_whitelist.json"
 FEW_SHOT_POOL_PATH = OUTPUT_DIR / "few_shot_pool.jsonl"
 

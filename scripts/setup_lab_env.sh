@@ -8,10 +8,10 @@ set -euo pipefail
 detect_lab_root() {
     if [[ -n "${QQCHAT_LAB_ROOT:-}" ]]; then
         echo "$QQCHAT_LAB_ROOT"
-    elif [[ -d /root/autodl-tmp ]]; then
-        echo "/root/autodl-tmp"
-    elif [[ -d /home/szw/lhm2 ]]; then
-        echo "/home/szw/lhm2"
+    elif [[ -d ${QQCHAT_LAB_ROOT:-/tmp/qqchat-lab} ]]; then
+        echo "${QQCHAT_LAB_ROOT:-/tmp/qqchat-lab}"
+    elif [[ -d ${QQCHAT_LAB_ROOT:-$HOME/qqchat-lab} ]]; then
+        echo "${QQCHAT_LAB_ROOT:-$HOME/qqchat-lab}"
     else
         echo "$HOME/lab"
     fi

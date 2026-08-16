@@ -22,7 +22,8 @@ import os
 import sys
 from pathlib import Path
 
-LAB_ROOT = Path(os.getenv("QQCHAT_LAB_ROOT", "/root/autodl-tmp"))
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+LAB_ROOT = Path(os.getenv("QQCHAT_LAB_ROOT", str(PROJECT_ROOT / "runtime")))
 MODELS_DIR = LAB_ROOT / "runtime" / "models"
 
 # 模型 ID 映射

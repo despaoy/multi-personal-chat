@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import re
 from collections import Counter, defaultdict
@@ -30,10 +29,6 @@ def load_jsonl(path: Path) -> list[dict[str, Any]]:
         for line in path.read_text(encoding="utf-8").splitlines()
         if line.strip()
     ]
-
-
-def sha256(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 def safe_name(value: str) -> str:
@@ -85,8 +80,11 @@ def format_record(record: dict[str, Any], *, category: str, original: bool) -> s
         f"- 原作定位：`{metadata.get('source', record.get('source', '无'))}`",
         f"- AI 初步建议：`{suggested}`",
         f"- 自动问题：{'；'.join(issues) if issues else '未发现硬性问题'}",
-        "",
     ]
+    exclusion_reasons = metadata.get("exclusion_reasons", [])
+    if exclusion_reasons:
+        lines.append(f"- 排除原因：`{', '.join(exclusion_reasons)}`")
+    lines.append("")
     if metadata.get("context"):
         lines.extend(("**原作上下文**", "", "```text", metadata["context"], "```", ""))
     for message in messages_of(record):
@@ -133,6 +131,76 @@ def write_batches(
     return outputs
 
 
+def write_gold_review_batches(
+    output_dir: Path,
+    records: list[dict[str, Any]],
+    batch_size: int = 50,
+) -> list[Path]:
+    """Render Gold review packets from the current JSON, never old Markdown."""
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    outputs: list[Path] = []
+    for offset in range(0, len(records), batch_size):
+        batch = records[offset:offset + batch_size]
+        lines = [
+            f"# Gold v2.1 审核批次 {offset // batch_size + 1}",
+            "",
+            f"> 本批 {len(batch)} 条。当前均为 development 候选，不是最终盲测集。",
+            "",
+        ]
+        for record in batch:
+            lines.extend(
+                [
+                    f"## {record['id']}",
+                    "",
+                    f"- category：`{record['category']}`",
+                    f"- cluster_id：`{record.get('cluster_id', '-')}`",
+                    f"- interlocutor：`{record.get('interlocutor', '-')}`",
+                    "",
+                ]
+            )
+            if record.get("conversation"):
+                for turn, message in enumerate(record["conversation"], 1):
+                    lines.extend((f"**user {turn}**", "", message["content"], ""))
+            else:
+                lines.extend(("**prompt**", "", str(record.get("prompt", "")), ""))
+            for label in (
+                "required_facts",
+                "required_behaviors",
+                "optional_style_traits",
+                "forbidden_claims",
+                "evidence_refs",
+                "required_answer_facts",
+                "gold_answer",
+                "distractor_refs",
+                "turn_rubrics",
+                "rubric",
+            ):
+                lines.extend(
+                    (
+                        f"**{label}**",
+                        "",
+                        "```json",
+                        json.dumps(record.get(label), ensure_ascii=False, indent=2),
+                        "```",
+                        "",
+                    )
+                )
+            lines.extend(
+                (
+                    "- user_decision：`待填写（通过 / 修改 / 排除 / 需要证据）`",
+                    "- user_notes：",
+                    "",
+                    "---",
+                    "",
+                )
+            )
+        target = output_dir / f"batch_{offset // batch_size + 1:02d}.md"
+        target.write_text("\n".join(lines), encoding="utf-8", newline="\n")
+        outputs.append(target)
+    return outputs
+
+
 def write_source_index(output: Path, raw: list[dict[str, Any]]) -> dict[str, int]:
     counts = Counter(row["source"].split(":line:", 1)[0] for row in raw)
     source_files = sorted(GAMETEXT_DIR.glob("*.txt"), key=lambda path: path.name)
@@ -157,7 +225,11 @@ def write_source_index(output: Path, raw: list[dict[str, Any]]) -> dict[str, int
     }
 
 
-def build(output: Path, batch_size: int) -> dict[str, Any]:
+def build(
+    output: Path,
+    batch_size: int,
+    candidate_dir: Path | None = None,
+) -> dict[str, Any]:
     if output.exists() and any(output.iterdir()):
         raise FileExistsError(
             f"review output is not empty: {output}; use a new version directory "
@@ -224,7 +296,13 @@ def build(output: Path, batch_size: int) -> dict[str, Any]:
         )
     source_coverage = write_source_index(output, raw)
 
-    game_train = load_json(CHARACTER_DIR / "tsukiyashiro_kisaki_sft.json")
+    candidate_dir = candidate_dir or EXPERIMENT_DIR / "v4"
+    canonical_train = load_jsonl(candidate_dir / "train_candidate.jsonl")
+    game_train = [
+        record
+        for record in canonical_train
+        if record.get("metadata", {}).get("data_source") == "game_extraction"
+    ]
     game_outputs = write_batches(
         output / "03_GAME_TRAIN",
         game_train,
@@ -232,7 +310,11 @@ def build(output: Path, batch_size: int) -> dict[str, Any]:
         original=True,
         batch_size=batch_size,
     )
-    constructed = load_jsonl(EXPERIMENT_DIR / "train_v5_clean.jsonl")
+    constructed = [
+        record
+        for record in canonical_train
+        if record.get("metadata", {}).get("data_source") != "game_extraction"
+    ]
     constructed_outputs = write_batches(
         output / "04_CONSTRUCTED_TRAIN",
         constructed,
@@ -242,51 +324,21 @@ def build(output: Path, batch_size: int) -> dict[str, Any]:
     )
 
     validation_dir = output / "05_VALIDATION"
-    legacy_validation = load_json(EXPERIMENT_DIR / "tsukiyashiro_kisaki_eval.json")
-    draft_validation = load_jsonl(EXPERIMENT_DIR / "combined_eval.jsonl")
+    draft_validation = load_jsonl(candidate_dir / "validation_candidate.jsonl")
     validation_outputs = write_batches(
-        validation_dir / "legacy_v3",
-        legacy_validation,
-        category="legacy_v3_validation",
-        original=False,
-        batch_size=batch_size,
-    )
-    validation_outputs += write_batches(
-        validation_dir / "v5_draft",
+        validation_dir / "v4_independent",
         draft_validation,
-        category="v5_draft_validation",
+        category="v4_independent_validation",
         original=False,
         batch_size=batch_size,
     )
 
-    gold_v2 = load_json(EVALUATION_DIR / "kisaki_gold_set_v2.json")
-    gold_records = [
-        {
-            "id": item["id"],
-            "metadata": {
-                "scene": item["category"],
-                "source": "KISAKI-GOLD-V2",
-                "expected_behavior": item.get("expected_behavior", ""),
-            },
-            "messages": [{"role": "user", "content": item["prompt"]}],
-        }
-        for item in gold_v2["prompts"]
-    ]
-    gold_outputs = write_batches(
-        output / "06_GOLD_V2",
-        gold_records,
-        category="gold_v2_development",
-        original=False,
-        batch_size=batch_size,
-    )
+    gold_v21 = load_json(EVALUATION_DIR / "kisaki_gold_set_v21_candidates.json")
+    gold_target = output / "06_GOLD_V21"
+    gold_outputs = write_gold_review_batches(gold_target, gold_v21["prompts"])
     gold_v3_dir = output / "07_GOLD_V3"
-    gold_v3_dir.mkdir()
-    (gold_v3_dir / "README.md").write_text(
-        "# Gold v3 状态\n\n"
-        "状态：`blocked_until_training_data_frozen`。\n\n"
-        "Gold v3 必须在训练数据审核、修订和冻结后生成。现在提前生成会让题目反向影响训练数据。\n",
-        encoding="utf-8",
-    )
+    gold_v3 = load_json(EVALUATION_DIR / "kisaki_gold_set_v3_candidates.json")
+    gold_v3_outputs = write_gold_review_batches(gold_v3_dir, gold_v3["prompts"])
 
     exclusions = load_jsonl(CHARACTER_DIR / "tsukiyashiro_kisaki_excluded.jsonl")
     exclusion_outputs = write_batches(
@@ -324,26 +376,19 @@ def build(output: Path, batch_size: int) -> dict[str, Any]:
         "source_lines": len(raw),
         "game_train_candidates": len(game_train),
         "constructed_train_candidates": len(constructed),
-        "legacy_validation": len(legacy_validation),
-        "v5_draft_validation": len(draft_validation),
-        "gold_v2": len(gold_records),
-        "gold_v3": 0,
+        "v4_independent_validation": len(draft_validation),
+        "gold_v21": len(gold_v21["prompts"]),
+        "gold_v3": len(gold_v3["prompts"]),
         "exclusions": len(exclusions),
     }
-    packet_files = source_outputs + game_outputs + constructed_outputs + validation_outputs + gold_outputs + exclusion_outputs
+    packet_files = (source_outputs + game_outputs + constructed_outputs + validation_outputs
+                    + gold_outputs + gold_v3_outputs + exclusion_outputs)
     manifest = {
         "schema_version": 1,
         "review_id": "KISAKI-V4-HUMAN-REVIEW",
         "status": "pending_human_review",
         "batch_size": batch_size,
         "counts": counts,
-        "source_hashes": {
-            "raw": sha256(CHARACTER_DIR / "tsukiyashiro_kisaki_raw.jsonl"),
-            "game_train": sha256(CHARACTER_DIR / "tsukiyashiro_kisaki_sft.json"),
-            "constructed_train": sha256(EXPERIMENT_DIR / "train_v5_clean.jsonl"),
-            "gold_v2": sha256(EVALUATION_DIR / "kisaki_gold_set_v2.json"),
-            "prompt_v3": sha256(prompt_v3),
-        },
         "source_coverage": source_coverage,
         "packet_file_count": len(packet_files),
         "approval": {
@@ -365,7 +410,7 @@ def build(output: Path, batch_size: int) -> dict[str, Any]:
         "正式训练保持关闭，直到所有必需分类得到项目负责人明确批准。\n\n"
         "## 建议顺序\n\n"
         "1. `01_PROFILE_PROMPT`\n2. `02_SOURCE_COVERAGE`\n3. `03_GAME_TRAIN`\n"
-        "4. `04_CONSTRUCTED_TRAIN`\n5. `05_VALIDATION`\n6. `06_GOLD_V2`\n"
+        "4. `04_CONSTRUCTED_TRAIN`\n5. `05_VALIDATION`\n6. `06_GOLD_V21`\n"
         "7. 数据冻结后再生成 `07_GOLD_V3`\n8. `08_EXCLUSIONS`\n9. `09_EXPERIMENT_CONFIGS`\n\n"
         "## 回复格式\n\n"
         "- `全部通过`\n- `样本 ID：修改建议`\n- `样本 ID：排除，原因`\n"
@@ -427,61 +472,117 @@ def augment_source_context(output: Path) -> int:
     return changed
 
 
-def refresh_gold_v2(output: Path, batch_size: int) -> int:
-    """Refresh only untouched Gold v2 packet files after a formatter fix."""
+def refresh_v4_validation(output: Path, batch_size: int) -> int:
+    """Write review packets for the independent V4 held-out validation set."""
 
-    target = output / "06_GOLD_V2"
-    for path in target.glob("*.md"):
-        text = path.read_text(encoding="utf-8")
-        expected = text.count("## kisaki_v2_")
-        placeholders = text.count("user_decision：`待填写（通过 / 修改 / 排除 / 需要上下文）`")
-        has_notes = any(
-            section.split("- user_notes：", 1)[1].split("- revised_candidate：", 1)[0].strip()
-            for section in text.split("## kisaki_v2_")[1:]
-            if "- user_notes：" in section and "- revised_candidate：" in section
-        )
-        if expected != placeholders or has_notes:
-            raise RuntimeError(f"refusing to overwrite reviewed Gold packet: {path}")
-    gold_v2 = load_json(EVALUATION_DIR / "kisaki_gold_set_v2.json")
-    records = [
-        {
-            "id": item["id"],
-            "metadata": {
-                "scene": item["category"],
-                "source": "KISAKI-GOLD-V2",
-                "expected_behavior": item.get("expected_behavior", ""),
-            },
-            "messages": [{"role": "user", "content": item["prompt"]}],
-        }
-        for item in gold_v2["prompts"]
-    ]
+    target = output / "05_VALIDATION" / "v4_independent"
+    if target.exists() and any(target.glob("*.md")):
+        raise RuntimeError(f"refusing to overwrite existing V4 validation review: {target}")
+    records = load_jsonl(EXPERIMENT_DIR / "v4" / "validation_candidate.jsonl")
     return len(
         write_batches(
             target,
             records,
-            category="gold_v2_development",
-            original=False,
+            category="v4_independent_validation",
+            original=True,
             batch_size=batch_size,
         )
     )
+
+
+def write_consolidated_constructed_review(output: Path) -> dict[str, int]:
+    """Write one final-check document from the currently reviewed V4 records."""
+
+    records = load_jsonl(EXPERIMENT_DIR / "train_v5_clean.jsonl")
+    pending = [
+        record["id"]
+        for record in records
+        if not record.get("metadata", {}).get("human_review")
+    ]
+    if pending:
+        raise RuntimeError(
+            "refusing to build a final-check document with pending records: "
+            + ", ".join(pending)
+        )
+
+    lines = [
+        "# 月社妃 V4 构造训练数据统一复核稿",
+        "",
+        f"> 共 {len(records)} 条，全部已完成初次人工审核。本文件展示实际将进入候选数据集的最终问答，供冻结前统一复核。",
+        "",
+        "统一 system prompt 已单独审核，本文件不在每条样本中重复展示。请重点检查事实、人物关系、角色辨识度、问答对应和批量句式重复。",
+        "",
+        "复核时可直接回复：`全部通过`，或填写 `样本 ID：修改建议/排除原因`。",
+        "",
+    ]
+    status_counts: Counter[str] = Counter()
+    for record in records:
+        metadata = record.get("metadata", {})
+        review = metadata["human_review"]
+        status_counts[review["status"]] += 1
+        status_label = {
+            "approved_unchanged": "原样通过",
+            "approved_after_revision": "修改后通过",
+        }.get(review["status"], review["status"])
+        lines.extend(
+            [
+                f"## {record['id']}",
+                "",
+                f"- 场景：`{metadata.get('scene', '未标注')}`",
+                f"- 数据来源：`{metadata.get('data_source', metadata.get('source', 'unknown'))}`",
+                f"- 初审状态：`{status_label}`",
+                f"- 修改理由：{review.get('reason', '无')}",
+                "",
+            ]
+        )
+        turn = 0
+        for message in messages_of(record):
+            if message["role"] == "system":
+                continue
+            if message["role"] == "user":
+                turn += 1
+                label = f"user {turn}"
+            else:
+                label = f"assistant {turn}"
+            lines.extend((f"**{label}**", "", message["content"], ""))
+        lines.extend(("- final_decision：`待统一复核`", "- final_notes：", "", "---", ""))
+
+    target = output / "04_CONSTRUCTED_TRAIN" / "ALL_REVIEWED_FINAL_CHECK.md"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8", newline="\n")
+    return {
+        "records": len(records),
+        "approved_unchanged": status_counts["approved_unchanged"],
+        "approved_after_revision": status_counts["approved_after_revision"],
+    }
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--batch-size", type=int, default=50)
+    parser.add_argument("--candidate-dir", type=Path)
     parser.add_argument("--augment-source-context", action="store_true")
-    parser.add_argument("--refresh-gold-v2", action="store_true")
+    parser.add_argument("--consolidated-constructed-review", action="store_true")
+    parser.add_argument("--refresh-v4-validation", action="store_true")
     args = parser.parse_args()
     if not 40 <= args.batch_size <= 60:
         raise SystemExit("--batch-size must be between 40 and 60")
     if args.augment_source_context:
         print(json.dumps({"updated_files": augment_source_context(args.output.resolve())}))
         return
-    if args.refresh_gold_v2:
-        print(json.dumps({"updated_files": refresh_gold_v2(args.output.resolve(), args.batch_size)}))
+    if args.consolidated_constructed_review:
+        print(
+            json.dumps(
+                write_consolidated_constructed_review(args.output.resolve()),
+                ensure_ascii=False,
+            )
+        )
         return
-    manifest = build(args.output.resolve(), args.batch_size)
+    if args.refresh_v4_validation:
+        print(json.dumps({"updated_files": refresh_v4_validation(args.output.resolve(), args.batch_size)}))
+        return
+    manifest = build(args.output.resolve(), args.batch_size, args.candidate_dir)
     print(json.dumps(manifest, ensure_ascii=False, indent=2))
 
 

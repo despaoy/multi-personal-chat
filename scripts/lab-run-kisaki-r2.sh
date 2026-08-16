@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
-ROOT=/home/szw/lhm2
+ROOT="${QQCHAT_LAB_ROOT:?set QQCHAT_LAB_ROOT to the lab root}"
 PROJECT=$ROOT/qqchat-enhanced
-PYTHON=$ROOT/envs/qqchat-gpu-qwen3/bin/python
+PYTHON="${QQCHAT_LAB_PYTHON:-$ROOT/envs/qqchat-gpu-qwen3/bin/python}"
 GPU=${1:?usage: lab-run-kisaki-r2.sh GPU MODEL_PATH}
 MODEL=${2:?usage: lab-run-kisaki-r2.sh GPU MODEL_PATH}
 DATASET=$PROJECT/backend/data/character_dialogues/experiments/research/kisaki_rag_eval_v2.json

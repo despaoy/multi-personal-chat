@@ -45,11 +45,11 @@ from typing import Any
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 POOL_PATH = (
     PROJECT_ROOT / "backend" / "data" / "character_dialogues"
-    / "experiments" / "v3" / "llm_v4_judged" / "v3_negative_pool.jsonl"
+    / "experiments" / "archive" / "v3_pipeline" / "llm_v4_judged" / "v3_negative_pool.jsonl"
 )
 OUTPUT_PATH = (
     PROJECT_ROOT / "backend" / "data" / "character_dialogues"
-    / "experiments" / "v3" / "llm_v4_judged" / "quota_plan.json"
+    / "experiments" / "archive" / "v3_pipeline" / "llm_v4_judged" / "quota_plan.json"
 )
 
 # Major-4: formal training set requires 8-10 samples per scene. Scenes
