@@ -6,12 +6,51 @@ import asyncio
 import json
 import logging
 from collections import Counter
+from pathlib import Path
 from typing import Any, Mapping
 
 logger = logging.getLogger(__name__)
 _evaluation_lock: asyncio.Lock | None = None
 _evaluation_lock_loop: asyncio.AbstractEventLoop | None = None
 _evaluation_tasks: set[asyncio.Task[None]] = set()
+
+EVALUATION_DIR = Path(__file__).resolve().parent
+RUNTIME_DATASETS = {
+    "kisaki_v21": EVALUATION_DIR / "kisaki_gold_set_v21_candidates.json",
+    "kisaki_v3": EVALUATION_DIR / "kisaki_gold_set_v3.json",
+    "legacy_general": EVALUATION_DIR / "gold_prompts.json",
+}
+
+
+def load_runtime_dataset(dataset_id: str) -> dict[str, Any]:
+    path = RUNTIME_DATASETS.get(dataset_id)
+    if path is None:
+        raise ValueError(f"unknown evaluation dataset: {dataset_id}")
+    if not path.exists():
+        raise ValueError(f"evaluation dataset is unavailable: {dataset_id}")
+    value = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(value, dict) or not isinstance(value.get("prompts"), list):
+        raise ValueError(f"evaluation dataset is invalid: {dataset_id}")
+    return value
+
+
+def conversation_turns(item: Mapping[str, Any]) -> list[str]:
+    conversation = item.get("conversation")
+    if isinstance(conversation, list):
+        turns = [
+            str(message.get("content", ""))
+            for message in conversation
+            if isinstance(message, Mapping)
+            and message.get("role") == "user"
+            and str(message.get("content", "")).strip()
+        ]
+        if turns:
+            return turns
+    turns = item.get("turns")
+    if isinstance(turns, list) and turns:
+        return [str(turn) for turn in turns if str(turn).strip()]
+    prompt = str(item.get("prompt", "")).strip()
+    return [prompt] if prompt else []
 
 
 def _get_evaluation_lock() -> asyncio.Lock:
@@ -51,15 +90,20 @@ async def execute_generation_evaluation(run_id: str, options: Mapping[str, Any],
     async with _get_evaluation_lock():
         try:
             from evaluation.generation_metrics import GenerationMetrics
-            from evaluation.gold_set_manager import get_gold_set_manager
 
-            prompts = await asyncio.to_thread(get_gold_set_manager().load_set)
+            dataset_id = str(options.get("dataset_id") or "kisaki_v21")
+            dataset = await asyncio.to_thread(load_runtime_dataset, dataset_id)
+            prompts = [
+                item
+                for item in dataset["prompts"]
+                if item.get("benchmark_suite", "character") == "character"
+            ]
             categories = options.get("categories") or []
             split = options.get("split") or "eval"
             if categories:
                 prompts = [item for item in prompts if item.get("category") in categories]
-            if split:
-                prompts = [item for item in prompts if item.get("split") == split]
+            if split and any("split" in item for item in prompts):
+                prompts = [item for item in prompts if item.get("split", "eval") == split]
 
             requested_limit = options.get("max_prompts")
             limit = min(max(int(requested_limit or 25), 1), 50)
@@ -70,35 +114,72 @@ async def execute_generation_evaluation(run_id: str, options: Mapping[str, Any],
             metric = GenerationMetrics()
 
             if options.get("mock"):
-                result = metric.evaluate_mock([str(item.get("prompt", "")) for item in prompts])
+                result = metric.evaluate_mock(
+                    [conversation_turns(item)[-1] for item in prompts]
+                )
             else:
                 from api.generate import get_vllm_client
+                from inference.generation_request import (
+                    GenerationRequest,
+                    generate_character_response,
+                )
+                from inference.lora_registry import get_lora_system_prompt
 
                 client = await get_vllm_client()
                 if client is None:
                     raise RuntimeError("vLLM client is unavailable")
 
                 responses: list[str] = []
-                samples: list[dict[str, str]] = []
+                samples: list[dict[str, Any]] = []
                 generation_errors = 0
                 adapter_name = options.get("adapter_name") or None
+                persona_key = str(options.get("persona_key") or adapter_name or "kisaki")
+                persona_prompt = get_lora_system_prompt(persona_key)
                 for item in prompts:
-                    prompt = str(item.get("prompt", ""))
+                    turns = conversation_turns(item)
+                    history: list[dict[str, str]] = []
+                    turn_responses: list[str] = []
                     try:
-                        reply = await client.generate(
-                            messages=[{"role": "user", "content": prompt}],
-                            lora_name=adapter_name,
-                            temperature=0.0,
-                            max_tokens=256,
-                        )
+                        for turn in turns:
+                            generated = await generate_character_response(
+                                GenerationRequest(
+                                    message=turn,
+                                    persona_prompt=persona_prompt,
+                                    interlocutor=str(item.get("interlocutor") or "普通用户"),
+                                    history=history,
+                                    lora_name=adapter_name,
+                                    temperature=float(options.get("temperature", 0.0)),
+                                    max_tokens=int(options.get("max_tokens", 256)),
+                                    top_p=float(options.get("top_p", 0.9)),
+                                ),
+                                client.generate,
+                            )
+                            reply = generated.reply
+                            turn_responses.append(reply)
+                            history.extend(
+                                (
+                                    {"role": "user", "content": turn},
+                                    {"role": "assistant", "content": reply},
+                                )
+                            )
                     except Exception as exc:
                         generation_errors += 1
                         logger.warning("evaluation generation failed run=%s: %s", run_id, exc)
                         reply = f"[GENERATION_ERROR] {type(exc).__name__}"
                     responses.append(reply)
-                    samples.append({"prompt": prompt, "response": reply})
+                    samples.append(
+                        {
+                            "id": item.get("id"),
+                            "turns": turns,
+                            "turn_responses": turn_responses,
+                            "response": reply,
+                        }
+                    )
 
                 result = {
+                    "dataset_id": dataset_id,
+                    "dataset_status": dataset.get("status"),
+                    "dataset_role": dataset.get("evaluation_role"),
                     "total_prompts": len(prompts),
                     "distinct_1": metric.distinct_n(responses, 1),
                     "distinct_2": metric.distinct_n(responses, 2),

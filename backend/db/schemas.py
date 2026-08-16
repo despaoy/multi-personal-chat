@@ -253,6 +253,7 @@ class GoldPromptSchema(BaseModel):
 
 class EvalRunRequest(BaseModel):
     """评估运行请求"""
+    dataset_id: Literal["kisaki_v21", "kisaki_v3", "legacy_general"] = "kisaki_v21"
     adapter_name: Optional[str] = Field(default=None, max_length=256)
     model_label: Optional[str] = Field(default=None, max_length=256)
     categories: Optional[List[str]] = Field(default=None, max_length=20)

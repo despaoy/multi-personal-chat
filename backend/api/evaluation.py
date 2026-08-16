@@ -20,22 +20,32 @@ def _now() -> str:
 
 
 @router.get("/api/evaluation/gold-set")
-async def get_gold_set(category: Optional[str] = None, split: Optional[str] = None,
+async def get_gold_set(dataset_id: str = "kisaki_v21", category: Optional[str] = None, split: Optional[str] = None,
                        current_user: dict = Depends(get_current_admin)):
     """返回 Gold 评估集（可按 category/split 过滤）"""
     try:
-        from evaluation.gold_set_manager import get_gold_set_manager
-        mgr = get_gold_set_manager()
-        prompts = await asyncio.to_thread(mgr.load_set)
+        from evaluation.runtime_runner import load_runtime_dataset
+        dataset = await asyncio.to_thread(load_runtime_dataset, dataset_id)
+        prompts = dataset["prompts"]
         if category:
             prompts = [p for p in prompts if p.get("category") == category]
-        if split:
-            prompts = [p for p in prompts if p.get("split") == split]
+        if split and any("split" in item for item in prompts):
+            prompts = [p for p in prompts if p.get("split", "eval") == split]
         categories = {}
         for p in prompts:
             c = p.get("category", "unknown")
             categories[c] = categories.get(c, 0) + 1
-        return {"success": True, "total": len(prompts), "category_breakdown": categories, "prompts": prompts}
+        return {
+            "success": True,
+            "dataset_id": dataset_id,
+            "dataset_status": dataset.get("status"),
+            "dataset_role": dataset.get("evaluation_role"),
+            "total": len(prompts),
+            "category_breakdown": categories,
+            "prompts": prompts,
+        }
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except ImportError:
         return {"success": True, "total": 0, "category_breakdown": {}, "prompts": [], "note": "evaluation module not initialized"}
     except Exception as exc:

@@ -123,8 +123,8 @@ class AdapterChecker:
             report.checks["base_model"] = True
         else:
             # 比较模型名（basename），避免部署路径不同导致的误判。
-            # 例如训练时 /root/hutao-training/models/Qwen3-8B-Instruct 与
-            # 部署时 /root/autodl-tmp/runtime/models/Qwen3-8B-Instruct 应视为同基座。
+            # 例如训练时 /lab/training/models/Qwen3-8B-Instruct 与
+            # 部署时 /lab/runtime/models/Qwen3-8B-Instruct 应视为同基座。
             actual_name = Path(base_model).name
             expected_name = Path(self.expected_base_model).name
             if actual_name != expected_name:

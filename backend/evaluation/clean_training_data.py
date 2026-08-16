@@ -1,4 +1,4 @@
-"""训练数据清洗流水线 - 实现 docs/data/archive/dataset-card.md 第 3 节描述的 8 步清洗（数据集卡为历史 v1，已归档）。
+"""训练数据清洗流水线，保留通用的八步清洗实现。
 
 用法:
     python -m evaluation.clean_training_data --input <raw_data.json> --output <clean_dir>

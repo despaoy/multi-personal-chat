@@ -91,6 +91,123 @@ def test_normalize_rejects_adjacent_same_role_messages():
         )
 
 
+def test_normalize_replace_policy_uses_only_configured_system_prompt():
+    messages = normalize_chat_record(
+        {
+            "messages": [
+                {"role": "system", "content": "旧短提示词"},
+                {"role": "user", "content": "问题"},
+                {"role": "assistant", "content": "回答"},
+            ]
+        },
+        default_system_prompt="完整 prompt v3",
+        system_prompt_policy="replace",
+    )
+
+    assert messages[0] == {"role": "system", "content": "完整 prompt v3"}
+    assert sum(message["role"] == "system" for message in messages) == 1
+
+
+def test_normalize_require_match_rejects_prompt_drift():
+    with pytest.raises(ValueError, match="does not match"):
+        normalize_chat_record(
+            {
+                "system": "旧短提示词",
+                "conversations": [
+                    {"from": "human", "value": "问题"},
+                    {"from": "gpt", "value": "回答"},
+                ],
+            },
+            default_system_prompt="完整 prompt v3",
+            system_prompt_policy="require_match",
+        )
+
+
+def test_normalize_rejects_system_message_after_conversation_starts():
+    with pytest.raises(ValueError, match="only allowed at the beginning"):
+        normalize_chat_record(
+            {
+                "messages": [
+                    {"role": "user", "content": "问题"},
+                    {"role": "system", "content": "迟到的系统消息"},
+                    {"role": "assistant", "content": "回答"},
+                ]
+            },
+            default_system_prompt="完整 prompt v3",
+            system_prompt_policy="replace",
+        )
+
+
+def test_normalize_injects_context_speaker_from_game_metadata():
+    messages = normalize_chat_record(
+        {
+            "messages": [
+                {"role": "user", "content": "你怎么了？"},
+                {"role": "assistant", "content": "没什么。"},
+            ],
+            "metadata": {"context_speaker_label": "夜子"},
+        },
+        default_system_prompt="完整 prompt v3",
+        system_prompt_policy="replace",
+    )
+
+    assert messages[0] == {
+        "role": "system",
+        "content": "完整 prompt v3\n\n当前对话者：夜子。",
+    }
+    assert messages[1:] == [
+        {"role": "user", "content": "你怎么了？"},
+        {"role": "assistant", "content": "没什么。"},
+    ]
+
+
+def test_normalize_does_not_invent_context_speaker():
+    messages = normalize_chat_record(
+        {
+            "messages": [
+                {"role": "user", "content": "你好。"},
+                {"role": "assistant", "content": "晚上好。"},
+            ]
+        },
+        default_system_prompt="完整 prompt v3",
+        system_prompt_policy="replace",
+    )
+
+    assert messages[0]["content"] == "完整 prompt v3"
+
+
+def test_context_speaker_does_not_change_supervised_assistant_tokens():
+    tokenizer = TinyChatTokenizer()
+    record = {
+        "messages": [
+            {"role": "user", "content": "你怎么了？"},
+            {"role": "assistant", "content": "没什么。"},
+        ]
+    }
+    without_speaker = normalize_chat_record(
+        record,
+        default_system_prompt="完整 prompt v3",
+        system_prompt_policy="replace",
+    )
+    with_speaker = normalize_chat_record(
+        {**record, "metadata": {"context_speaker_label": "夜子"}},
+        default_system_prompt="完整 prompt v3",
+        system_prompt_policy="replace",
+    )
+
+    supervised = []
+    for messages in (without_speaker, with_speaker):
+        tokenized = tokenize_assistant_turns(tokenizer, messages, max_length=512)
+        supervised.append(
+            [
+                token_id
+                for token_id, label in zip(tokenized["input_ids"], tokenized["labels"])
+                if label != -100
+            ]
+        )
+    assert supervised[0] == supervised[1]
+
+
 def test_packing_preserves_response_only_labels():
     records = [
         {"input_ids": [1, 2, 3], "labels": [-100, 2, 3], "attention_mask": [1, 1, 1]},

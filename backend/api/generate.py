@@ -13,8 +13,12 @@ from app.runtime import get_runtime_container
 from db.schemas import MessageRequest, GenerateResponse
 from infra.concurrency_control import InferenceQueueFull, RateLimitExceeded, inference_runtime
 from infra.security_utils import strip_control_chars
+from inference.generation_request import (
+    GenerationRequest as CharacterGenerationRequest,
+    RetrievalResult,
+    generate_character_response,
+)
 from inference.lora_utils import resolve_lora_served_name
-from inference.prompt_policy import build_grounded_user_message, compose_system_prompt
 from infra.observability import increment, log_event, set_consecutive
 from services.chat_generation import ChatGenerationService
 
@@ -615,11 +619,13 @@ async def _generate_with_vllm(request: MessageRequest, lora_name: str | None, pr
     _cfg = runtime_config or {}
     _temperature = float(_cfg.get('temperature', os.getenv("VLLM_TEMPERATURE", "0.7")))
     _max_tokens = int(_cfg.get('maxTokens', os.getenv("VLLM_MAX_TOKENS", "2048")))
+    _top_p = float(_cfg.get('topP', os.getenv("VLLM_TOP_P", "0.9")))
     _use_kb = _cfg.get('useKnowledgeBase', True)
 
     # RAG 检索（受设置页 useKnowledgeBase 开关控制）
     rag_context = ""
     rag_meta: Dict[str, Any] = {}
+    retrieval = RetrievalResult()
     filters = None
     if _use_kb:
         try:
@@ -656,6 +662,13 @@ async def _generate_with_vllm(request: MessageRequest, lora_name: str | None, pr
 
                 from knowledge.rag_helper import get_rag_helper
                 rag_context = get_rag_helper().format_context_results(bundle.get("results", []))
+                retrieval = RetrievalResult(
+                    status="ok",
+                    evidence=rag_context,
+                    documents=tuple(bundle.get("results", [])),
+                    citations=tuple(rag_meta.get("citations", [])),
+                    confidence=bundle.get("confidence"),
+                )
         except Exception as e:
             increment("rag_failures")
             log_event(
@@ -672,26 +685,21 @@ async def _generate_with_vllm(request: MessageRequest, lora_name: str | None, pr
             logger.warning("RAG retrieval failed: %s", e)
             rag_meta = {}
 
-    persona_prompt = _get_system_prompt(prompt_lora_name or lora_name)
-    system_prompt = compose_system_prompt(persona_prompt, include_rag=bool(rag_context))
-    messages = [{"role": "system", "content": system_prompt}]
-
-    # RAG知识注入user消息
-    user_content = build_grounded_user_message(request.message, rag_context, max_chars=800)
-    messages.append({"role": "user", "content": user_content})
-
-    # RAG命中时适当降低温度以更忠实于检索内容
-    _gen_temperature = min(_temperature, 0.5) if rag_context else _temperature
-
-    # 调用 vLLM
-    reply = await _vllm_client.generate(
-        messages=messages,
-        lora_name=lora_name if lora_name != "default" else None,
-        temperature=_gen_temperature,
-        max_tokens=_max_tokens,
+    generation = await generate_character_response(
+        CharacterGenerationRequest(
+            message=request.message,
+            persona_prompt=_get_system_prompt(prompt_lora_name or lora_name),
+            interlocutor=request.senderName or request.userName or "普通用户",
+            retrieval=retrieval,
+            lora_name=lora_name if lora_name != "default" else None,
+            temperature=_temperature,
+            max_tokens=_max_tokens,
+            top_p=_top_p,
+        ),
+        _vllm_client.generate,
     )
 
-    return reply, bool(rag_context), rag_meta
+    return generation.reply, generation.plan.retrieval.has_evidence, rag_meta
 
 
 def _get_system_prompt(lora_name: str) -> str:

@@ -43,7 +43,8 @@ def test_kisaki_rag_gold_answers_are_contained_in_expected_held_out_documents():
     documents = _json(RESEARCH_DIR / "character_rag_seed_documents.json")["documents"]
     questions = _json(RESEARCH_DIR / "character_rag_retrieval_eval.json")["questions"]
     by_id = {document["id"]: document for document in documents}
-    assert len(documents) == len(questions) == 30
+    assert len(documents) == 33
+    assert len(questions) == 30
     for question in questions:
         assert question["expected_doc_ids"]
         for document_id in question["expected_doc_ids"]:

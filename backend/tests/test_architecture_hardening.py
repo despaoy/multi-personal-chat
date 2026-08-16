@@ -99,23 +99,6 @@ def test_intent_detector_chitchat_allowlist_requires_a_complete_short_phrase():
     assert detector.needs_rag("你是谁的妹妹？")[0] is True
 
 
-def test_training_truncation_preserves_supervised_response_tokens():
-    pytest.importorskip("transformers")
-    pytest.importorskip("torch")
-    pytest.importorskip("peft")
-    from training.trainer import LoRATrainer
-
-    trainer = object.__new__(LoRATrainer)
-    trainer.config = SimpleNamespace(max_seq_length=5, truncation_direction="left")
-    full_ids, prompt_len = trainer._truncate_preserving_response(
-        [1, 2, 3, 4, 5, 90, 91, 92], [1, 2, 3, 4, 5]
-    )
-    labels = [-100] * prompt_len + full_ids[prompt_len:]
-
-    assert full_ids == [4, 5, 90, 91, 92]
-    assert labels[-3:] == [90, 91, 92]
-
-
 # ============================================================
 # C-S1 fix: RBAC admin 依赖回归测试
 # 验证 get_current_admin 在 admin/user/DB不可达 三种场景下的行为

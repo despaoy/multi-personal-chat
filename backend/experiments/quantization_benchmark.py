@@ -20,7 +20,7 @@ _PROJECT_ROOT = _BACKEND_DIR.parent
 if str(_BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(_BACKEND_DIR))
 
-from evaluation.experiment_contracts import canonical_json_hash, environment_snapshot, hash_tree
+from evaluation.experiment_contracts import environment_snapshot
 from inference.prompt_policy import PROMPT_POLICY_VERSION, compose_system_prompt
 
 try:
@@ -88,10 +88,7 @@ class BenchmarkResult:
     completed_requests: int = 0
     failed_requests: int = 0
     quality_score: float = 0.0
-    model_sha256: Optional[str] = None
-    adapter_sha256: Optional[str] = None
-    prompt_sha256: str = ""
-    system_prompt_sha256: str = ""
+    prompt_count: int = 0
     prompt_policy_version: Optional[str] = None
     quality_metrics: Dict[str, Any] = field(default_factory=dict)
     concurrency_results: Dict[str, Any] = field(default_factory=dict)
@@ -269,10 +266,7 @@ class QuantizationBenchmark:
             startup_time_s=config.startup_time_s,
             startup_time_measured=config.startup_time_measured,
             timestamp=datetime.now(timezone.utc).isoformat(),
-            model_sha256=hash_tree(Path(config.model_path)) if config.model_path and Path(config.model_path).exists() else None,
-            adapter_sha256=hash_tree(Path(config.adapter_path)) if config.adapter_path and Path(config.adapter_path).exists() else None,
-            prompt_sha256=canonical_json_hash(prompts),
-            system_prompt_sha256=canonical_json_hash(config.system_prompt),
+            prompt_count=len(prompts),
             prompt_policy_version=config.prompt_policy_version,
         )
         vram_samples: List[float] = []
@@ -332,10 +326,7 @@ class QuantizationBenchmark:
             p99_latency_ms=350.0,
             quality_metrics={"mock": True},
             timestamp=datetime.now(timezone.utc).isoformat(),
-            model_sha256=hash_tree(Path(config.model_path)) if config.model_path and Path(config.model_path).exists() else None,
-            adapter_sha256=hash_tree(Path(config.adapter_path)) if config.adapter_path and Path(config.adapter_path).exists() else None,
-            prompt_sha256=canonical_json_hash(self.DEFAULT_PROMPTS),
-            system_prompt_sha256=canonical_json_hash(config.system_prompt),
+            prompt_count=len(self.DEFAULT_PROMPTS),
             prompt_policy_version=config.prompt_policy_version,
         )
 

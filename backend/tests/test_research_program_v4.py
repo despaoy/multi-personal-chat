@@ -67,9 +67,27 @@ def test_prompt_policy_layers_are_conditional_and_not_duplicated():
 
 def test_registry_v4_is_authoritative_and_blocks_unreviewed_formal_work():
     registry = json.loads((RESEARCH / "research_program_registry_v4.json").read_text(encoding="utf-8"))
-    assert registry["schema_version"] == 4
+    assert registry["schema_version"] == 5
     assert registry["authoritative"] is True
-    assert registry["active_assets"]["persona_prompt"]["formal_use_allowed"] is False
+    assert registry["active_assets"]["persona_prompt"]["formal_use_allowed"] is True
+    assert registry["active_assets"]["gold_v21"]["formal_use_allowed"] is False
+    assert next(item for item in registry["research"] if item["id"] == "R1V4")["status"] == "blocked_until_game_context_reaudit"
+    canonical = json.loads(
+        (
+            PROJECT_ROOT
+            / "backend/data/character_dialogues/experiments/v4/canonical_dataset_manifest.json"
+        ).read_text(encoding="utf-8")
+    )
+    canonical_asset = registry["active_assets"]["canonical_dataset"]
+    assert canonical_asset["train_count"] == canonical["train"]["count"]
+    assert canonical_asset["reviewed_multiturn_augmentation_count"] == sum(
+        canonical["train"]["source_distribution"].get(source, 0)
+        for source in {
+            "deepseek_user_simulation_v41_reviewed",
+            "codex_user_simulation_v41_reviewed",
+        }
+    )
+    assert registry["active_assets"]["gold_v3"]["status"] == "frozen"
     assert [item["id"] for item in registry["research"]] == ["R0V4", "R1V4", "R2", "R3", "R4", "S1"]
 
 
@@ -132,7 +150,7 @@ def test_quantization_benchmark_marks_mock_and_uses_real_latency_percentiles():
     bench = QuantizationBenchmark(warmup_requests=5, repeats=3, concurrency_levels=(1, 4, 8))
     mock = bench.benchmark_model_mock(QuantizationConfig("bf16", "", "bf16"))
     assert mock.mock is True
-    assert mock.prompt_sha256
+    assert mock.prompt_count == len(bench.DEFAULT_PROMPTS)
     policy_mock = bench.benchmark_model_mock(
         QuantizationConfig("bf16-policy", "", "bf16", prompt_policy_version="3.1.0")
     )
@@ -175,12 +193,16 @@ def test_multiturn_benchmark_inserts_assistant_replies(monkeypatch):
 
     monkeypatch.setattr(character_benchmark_v3, "_call", fake_call)
     response, latency, error, context = character_benchmark_v3._call_conversation(
-        "http://test", "model", "system", ["turn-1", "turn-2", "turn-3"], {}, 1
+        "http://test", "model", "system", ["turn-1", "turn-2", "turn-3"], {}, 1,
+        interlocutor="琉璃",
     )
     assert response == "reply-3"
     assert context == ["reply-1", "reply-2"]
     assert latency == 15.0
     assert error == ""
+    assert observed[0][0]["role"] == "system"
+    assert observed[0][0]["content"].startswith("system\n\n【事实与安全边界】")
+    assert observed[0][0]["content"].endswith("当前对话者：琉璃。")
     assert observed[1][-2:] == [
         {"role": "assistant", "content": "reply-1"},
         {"role": "user", "content": "turn-2"},
@@ -195,6 +217,27 @@ def test_citation_contract_includes_stable_source_id():
     ])
     assert citations[0]["source_id"] == "doc-1"
     assert citations[0]["source_title"] == "chapter"
+
+
+def test_citation_contract_preserves_original_source_lineage():
+    from knowledge.rag_helper import RAGHelper
+
+    helper = object.__new__(RAGHelper)
+    lineage = [{"source_event_id": "raw-1", "source_path": "game.txt", "source_line": 7}]
+    citation = helper.build_citations([{
+        "id": "doc-1",
+        "title": "chapter",
+        "content": "evidence",
+        "score": 0.8,
+        "source_path": "game.txt",
+        "source_line": 7,
+        "source_event_ids": ["raw-1"],
+        "source_lineage": lineage,
+    }])[0]
+    assert citation["source_path"] == "game.txt"
+    assert citation["source_line"] == 7
+    assert citation["source_event_ids"] == ["raw-1"]
+    assert citation["source_lineage"] == lineage
 
 def test_s1_router_supports_project_personas_and_keeps_modes_separate():
     from inference.lora_router import LoRARouter, RouteTarget

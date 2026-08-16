@@ -142,3 +142,19 @@ def test_evaluation_and_feedback_inputs_are_bounded():
         FeedbackCreate(rating="unknown")
     with pytest.raises(ValidationError):
         FeedbackCreate(rating="thumbs_up", detail="x" * 10001)
+
+
+def test_runtime_evaluation_defaults_to_current_kisaki_development_set():
+    request = EvalRunRequest()
+    dataset = runtime_runner.load_runtime_dataset(request.dataset_id)
+    assert request.dataset_id == "kisaki_v21"
+    assert dataset["evaluation_role"] == "development_only"
+    assert all(item.get("persona", "kisaki") == "kisaki" for item in dataset["prompts"])
+
+
+def test_runtime_evaluation_preserves_multiturn_user_context():
+    item = runtime_runner.load_runtime_dataset("kisaki_v21")["prompts"][60]
+    assert item["category"] == "multiturn"
+    assert runtime_runner.conversation_turns(item) == [
+        message["content"] for message in item["conversation"]
+    ]

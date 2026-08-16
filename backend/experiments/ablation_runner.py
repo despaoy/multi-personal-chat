@@ -73,7 +73,7 @@ class AblationRunner:
             "base_model_path": os.getenv("BASE_MODEL_PATH", "models/Qwen3-8B-Instruct"),
             "train_data_path": os.getenv(
                 "LORA_ABLATION_TRAIN_DATA",
-                "backend/data/character_dialogues/tsukiyashiro_kisaki_train.json",
+                "backend/data/character_dialogues/experiments/v4/train.jsonl",
             ),
             "lora_r": 32,
             "lora_alpha": 64,

@@ -8,11 +8,15 @@ def _report(model, responses, *, safety=1.0, citations=1.0, mock=False):
         "schema_version": 3,
         "model": model,
         "mock": mock,
+        "evaluation_status": "formal",
+        "formal_review": {"status": "pending"},
         "provenance": {
             "dataset_sha256": "fixed-dataset",
             "dataset_status": "frozen",
-            "prompt_content_sha256": "fixed-prompts",
-            "generation_sha256": "fixed-generation",
+            "dataset_id": "gold-v3",
+            "dataset_role": "final_held_out",
+            "prompt_policy_version": "3.1.0",
+            "generation": {"temperature": 0.0},
         },
         "metrics": {
             "format_correct_rate": 1.0,
@@ -64,4 +68,12 @@ def test_quality_gate_rejects_duplicate_sample_ids():
     candidate = _report("adapter", ["回答一。", "回答二。"])
     candidate["samples"][1]["id"] = candidate["samples"][0]["id"]
     result = compare_reports(baseline, candidate)
-    assert result["checks"]["paired_sample_order"]["passed"] is False
+    assert result["checks"]["paired_sample_ids"]["passed"] is False
+
+
+def test_quality_gate_allows_formal_conclusion_after_bound_review():
+    baseline = _report("base", ["这是一个完整回答。"])
+    candidate = _report("adapter", ["这是一个完整回答。"])
+    baseline["formal_review"]["status"] = "complete"
+    candidate["formal_review"]["status"] = "complete"
+    assert compare_reports(baseline, candidate)["formal_conclusion_allowed"] is True

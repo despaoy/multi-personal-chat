@@ -42,11 +42,18 @@ def compare_reports(
     candidate_ids = [sample.get("id") for sample in candidate_samples]
     paired = (
         bool(baseline_ids)
-        and baseline_ids == candidate_ids
+        and set(baseline_ids) == set(candidate_ids)
         and len(set(baseline_ids)) == len(baseline_ids)
+        and len(set(candidate_ids)) == len(candidate_ids)
     )
     baseline_provenance = baseline.get("provenance", {})
     candidate_provenance = candidate.get("provenance", {})
+    same_dataset_identity = (
+        bool(baseline_provenance.get("dataset_id"))
+        and baseline_provenance.get("dataset_id") == candidate_provenance.get("dataset_id")
+        and bool(baseline_provenance.get("dataset_role"))
+        and baseline_provenance.get("dataset_role") == candidate_provenance.get("dataset_role")
+    )
     gold_frozen = (
         baseline_provenance.get("dataset_status") == "frozen"
         and candidate_provenance.get("dataset_status") == "frozen"
@@ -78,22 +85,29 @@ def compare_reports(
             "passed": baseline.get("schema_version") == 3 and candidate.get("schema_version") == 3,
             "value": [baseline.get("schema_version"), candidate.get("schema_version")],
         },
-        "paired_sample_order": {"passed": paired, "value": len(candidate_ids)},
-        "same_prompt_content": {
+        "paired_sample_ids": {"passed": paired, "value": len(candidate_ids)},
+        "same_dataset_identity": {
+            "passed": same_dataset_identity,
+            "value": [
+                candidate_provenance.get("dataset_id"),
+                candidate_provenance.get("dataset_role"),
+            ],
+        },
+        "same_prompt_policy": {
             "passed": (
-                bool(baseline_provenance.get("prompt_content_sha256"))
-                and baseline_provenance.get("prompt_content_sha256")
-                == candidate_provenance.get("prompt_content_sha256")
+                bool(baseline_provenance.get("prompt_policy_version"))
+                and baseline_provenance.get("prompt_policy_version")
+                == candidate_provenance.get("prompt_policy_version")
             ),
-            "value": candidate_provenance.get("prompt_content_sha256"),
+            "value": candidate_provenance.get("prompt_policy_version"),
         },
         "same_generation_contract": {
             "passed": (
-                bool(baseline_provenance.get("generation_sha256"))
-                and baseline_provenance.get("generation_sha256")
-                == candidate_provenance.get("generation_sha256")
+                bool(baseline_provenance.get("generation"))
+                and baseline_provenance.get("generation")
+                == candidate_provenance.get("generation")
             ),
-            "value": candidate_provenance.get("generation_sha256"),
+            "value": candidate_provenance.get("generation"),
         },
         "frozen_evaluation_set": {
             "passed": gold_frozen,
@@ -125,20 +139,41 @@ def compare_reports(
             "diagnostic_only": True,
         },
     }
-    formal_blockers = ["blind human review must be completed"]
+    formal_runs = (
+        baseline.get("evaluation_status") == "formal"
+        and candidate.get("evaluation_status") == "formal"
+    )
+    final_held_out = (
+        baseline_provenance.get("dataset_role") == "final_held_out"
+        and candidate_provenance.get("dataset_role") == "final_held_out"
+    )
+    human_review_complete = (
+        baseline.get("formal_review", {}).get("status") == "complete"
+        and candidate.get("formal_review", {}).get("status") == "complete"
+    )
+    formal_blockers = []
     if not gold_frozen:
-        formal_blockers.insert(0, "evaluation dataset must be frozen")
+        formal_blockers.append("evaluation dataset must be frozen")
+    if not same_dataset_identity:
+        formal_blockers.append("dataset ID and role must match")
+    if not final_held_out:
+        formal_blockers.append("evaluation dataset must be final_held_out")
+    if not formal_runs:
+        formal_blockers.append("both reports must be formal runs")
+    if not human_review_complete:
+        formal_blockers.append("blind human review must be completed")
     required_checks = [
         item for item in checks.values() if not item.get("diagnostic_only", False)
     ]
+    automated_passed = all(item["passed"] for item in required_checks)
     return {
         "schema_version": 2,
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "baseline_model": baseline.get("model"),
         "candidate_model": candidate.get("model"),
-        "passed": all(item["passed"] for item in required_checks),
+        "passed": automated_passed,
         "checks": checks,
-        "formal_conclusion_allowed": False,
+        "formal_conclusion_allowed": automated_passed and not formal_blockers,
         "formal_blockers": formal_blockers,
     }
 

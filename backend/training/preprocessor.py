@@ -487,10 +487,11 @@ def import_dataset_from_folder(source_path: str, dataset_name: str = None) -> di
     # Validate source_path to prevent path traversal
     backend_dir = str(Path(__file__).parent.parent.resolve())
     allowed_dirs = [backend_dir]
-    # Allow autodl-tmp directory if it exists
-    autodl_tmp = "/root/autodl-tmp"
-    if Path(autodl_tmp).exists():
-        allowed_dirs.append(str(Path(autodl_tmp).resolve()))
+    # Allow a configured lab root when present. The default remains the
+    # backend directory only, so local deployments are fail-closed.
+    lab_root = os.getenv("QQCHAT_LAB_ROOT", "").strip()
+    if lab_root and Path(lab_root).exists():
+        allowed_dirs.append(str(Path(lab_root).resolve()))
     try:
         validated_path = _validate_path(source_path)
         resolved = Path(validated_path)

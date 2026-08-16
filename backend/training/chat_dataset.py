@@ -13,10 +13,39 @@ from typing import Any, Iterable, Mapping, Sequence
 SUPPORTED_ROLES = {"system", "user", "assistant"}
 
 
+def _context_speaker(record: Mapping[str, Any]) -> str | None:
+    metadata = record.get("metadata")
+    if not isinstance(metadata, Mapping):
+        return None
+
+    for key in ("context_speaker_label", "interlocutor"):
+        value = metadata.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+
+    interlocutors = metadata.get("interlocutors")
+    if isinstance(interlocutors, Sequence) and not isinstance(interlocutors, (str, bytes)):
+        values = [value.strip() for value in interlocutors if isinstance(value, str) and value.strip()]
+        if len(values) == 1:
+            return values[0]
+    return None
+
+
+def _append_context_speaker(messages: list[dict[str, str]], speaker: str | None) -> None:
+    if not speaker:
+        return
+    context_line = f"当前对话者：{speaker}。"
+    if messages and messages[0]["role"] == "system":
+        messages[0]["content"] = f"{messages[0]['content'].rstrip()}\n\n{context_line}"
+    else:
+        messages.insert(0, {"role": "system", "content": context_line})
+
+
 def normalize_chat_record(
     record: Mapping[str, Any],
     *,
     default_system_prompt: str,
+    system_prompt_policy: str = "preserve",
 ) -> list[dict[str, str]]:
     """Return one validated OpenAI-style message sequence."""
 
@@ -46,13 +75,37 @@ def normalize_chat_record(
             raise ValueError(f"empty content at message {index}")
         messages.append({"role": role, "content": content})
 
+    system_positions = [index for index, message in enumerate(messages) if message["role"] == "system"]
+    if any(index != 0 for index in system_positions):
+        raise ValueError("system message is only allowed at the beginning of a conversation")
+
+    if system_prompt_policy not in {"preserve", "replace", "require_match"}:
+        raise ValueError(f"unsupported system prompt policy: {system_prompt_policy!r}")
     explicit_system = record.get("system")
-    if messages and messages[0]["role"] == "system":
-        pass
-    elif isinstance(explicit_system, str) and explicit_system.strip():
-        messages.insert(0, {"role": "system", "content": explicit_system})
-    elif default_system_prompt.strip():
-        messages.insert(0, {"role": "system", "content": default_system_prompt})
+    embedded_systems = [message["content"] for message in messages if message["role"] == "system"]
+    if isinstance(explicit_system, str) and explicit_system.strip():
+        embedded_systems.append(explicit_system)
+    if len(embedded_systems) > 1:
+        raise ValueError("chat record contains multiple system prompts")
+
+    messages = [message for message in messages if message["role"] != "system"]
+    configured_prompt = default_system_prompt.strip()
+    if system_prompt_policy == "replace":
+        if not configured_prompt:
+            raise ValueError("replace system prompt policy requires a configured prompt")
+        messages.insert(0, {"role": "system", "content": configured_prompt})
+    elif system_prompt_policy == "require_match":
+        if not configured_prompt:
+            raise ValueError("require_match system prompt policy requires a configured prompt")
+        if embedded_systems and embedded_systems[0].strip() != configured_prompt:
+            raise ValueError("record system prompt does not match configured prompt")
+        messages.insert(0, {"role": "system", "content": configured_prompt})
+    elif embedded_systems:
+        messages.insert(0, {"role": "system", "content": embedded_systems[0]})
+    elif configured_prompt:
+        messages.insert(0, {"role": "system", "content": configured_prompt})
+
+    _append_context_speaker(messages, _context_speaker(record))
 
     conversational = [message["role"] for message in messages if message["role"] != "system"]
     if not conversational or "assistant" not in conversational:

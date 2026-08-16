@@ -421,8 +421,11 @@ class RAGHelper:
                 "source_title": r.get("title", r.get("original_title", "未知来源")),
                 "evidence_excerpt": content[:200] + ("..." if len(content) > 200 else ""),
                 "score": round(r.get("normalized_score", r.get("score", 0)), 4),
-                "content_hash": r.get("content_hash", ""),
                 "kb_revision": r.get("kb_revision", ""),
+                "source_path": r.get("source_path", ""),
+                "source_line": r.get("source_line"),
+                "source_event_ids": list(r.get("source_event_ids", [])),
+                "source_lineage": list(r.get("source_lineage", [])),
                 "section": r.get("section", r.get("category", "")),
                 "version": r.get("version", "1.0"),
             })

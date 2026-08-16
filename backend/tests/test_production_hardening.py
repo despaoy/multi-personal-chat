@@ -580,7 +580,7 @@ async def test_lora_activation_returns_409_base_model_mismatch(monkeypatch):
                     "errors": ["base_model 不匹配: adapter=Qwen2.5-7B-Instruct, expected=Qwen3-8B-Instruct"],
                     "warnings": [],
                     "base_model_mismatch": True,
-                    "expected_base_model": "/root/autodl-tmp/runtime/models/Qwen3-8B-Instruct",
+                    "expected_base_model": "/lab/runtime/models/Qwen3-8B-Instruct",
                     "actual_base_model": "/root/hutao-training/models/Qwen2.5-7B-Instruct",
                 },
             )()

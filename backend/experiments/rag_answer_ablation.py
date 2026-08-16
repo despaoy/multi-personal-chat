@@ -12,7 +12,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
-from evaluation.experiment_contracts import canonical_json_hash, sha256_text_file
 from inference.prompt_policy import (
     PROMPT_POLICY_VERSION,
     build_grounded_user_message,
@@ -223,8 +222,6 @@ def main() -> int:
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "provenance": {
             "persona_prompt_path": str(args.system_prompt_file),
-            "persona_prompt_sha256": sha256_text_file(args.system_prompt_file),
-            "effective_system_prompt_sha256": canonical_json_hash(runner.system_prompt),
             "prompt_policy_version": PROMPT_POLICY_VERSION,
         },
         "automatic_faithfulness_is_diagnostic": True, "results": [asdict(row) for row in results],

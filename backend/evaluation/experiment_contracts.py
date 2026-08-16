@@ -63,18 +63,6 @@ def canonical_json_hash(value: Any) -> str:
     return hashlib.sha256(encoded).hexdigest()
 
 
-def hash_tree(path: Path) -> str | None:
-    """Hash a file or directory without depending on filesystem ordering."""
-    if not path.exists():
-        return None
-    if path.is_file():
-        return sha256_file(path)
-    entries: list[tuple[str, str]] = []
-    for item in sorted(candidate for candidate in path.rglob("*") if candidate.is_file()):
-        entries.append((item.relative_to(path).as_posix(), sha256_file(item)))
-    return canonical_json_hash(entries)
-
-
 def dialogue_prompts(item: Mapping[str, Any]) -> list[str]:
     conversations = item.get("conversations", [])
     return [
@@ -212,10 +200,16 @@ def validate_r1_variant_set(configs: Mapping[str, Mapping[str, Any]]) -> list[st
     return errors
 
 
-def validate_frozen_gold(data: Mapping[str, Any]) -> list[str]:
+def validate_frozen_gold(
+    data: Mapping[str, Any], *, require_final_held_out: bool = False
+) -> list[str]:
     errors: list[str] = []
     if data.get("status") != "frozen":
         errors.append("Gold set status must be 'frozen' for a formal evaluation")
+    if require_final_held_out and data.get("evaluation_role") != "final_held_out":
+        errors.append("Formal evaluation requires evaluation_role='final_held_out'")
+    if require_final_held_out and data.get("formal_use_allowed") is not True:
+        errors.append("Formal evaluation requires formal_use_allowed=true")
     prompts = data.get("prompts")
     if not isinstance(prompts, list) or not prompts:
         errors.append("Gold set must contain a non-empty prompts list")

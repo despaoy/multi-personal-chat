@@ -41,10 +41,6 @@ def _strip_think_tags(text: str) -> str:
     return cleaned.strip()
 
 
-# 关闭 thinking 模式的请求参数，注入到 vLLM chat completions payload
-_DISABLE_THINKING_KWARGS = {"enable_thinking": False}
-
-
 # ---------------------------------------------------------------------------
 # 数据类与枚举
 # ---------------------------------------------------------------------------
@@ -402,6 +398,9 @@ class VLLMClient:
         max_tokens: int = 2048,
         stream: bool = False,
         top_p: float = 0.9,
+        repetition_penalty: float = 1.0,
+        frequency_penalty: float = 0.0,
+        enable_thinking: bool = False,
     ) -> Any:
         """生成回复
 
@@ -422,12 +421,26 @@ class VLLMClient:
         """
         if stream:
             return self._generate_stream_with_circuit(
-                messages, lora_name, temperature, max_tokens, top_p
+                messages,
+                lora_name,
+                temperature,
+                max_tokens,
+                top_p,
+                repetition_penalty,
+                frequency_penalty,
+                enable_thinking,
             )
         async with self._request_semaphore:
             return await self._circuit_breaker.call(
                 self._generate_non_stream,
-                messages, lora_name, temperature, max_tokens, top_p
+                messages,
+                lora_name,
+                temperature,
+                max_tokens,
+                top_p,
+                repetition_penalty,
+                frequency_penalty,
+                enable_thinking,
             )
 
     async def _generate_non_stream(
@@ -437,6 +450,9 @@ class VLLMClient:
         temperature: float,
         max_tokens: int,
         top_p: float,
+        repetition_penalty: float,
+        frequency_penalty: float,
+        enable_thinking: bool,
     ) -> str:
         """非流式生成"""
         model_name = self._resolve_model_name(lora_name)
@@ -446,9 +462,10 @@ class VLLMClient:
             "temperature": temperature,
             "max_tokens": max_tokens,
             "top_p": top_p,
+            "repetition_penalty": repetition_penalty,
+            "frequency_penalty": frequency_penalty,
             "stream": False,
-            # 关闭 Qwen3 thinking 模式，避免输出 <think> 段消耗 token
-            "chat_template_kwargs": _DISABLE_THINKING_KWARGS,
+            "chat_template_kwargs": {"enable_thinking": enable_thinking},
         }
 
         last_error: Optional[Exception] = None
@@ -544,6 +561,9 @@ class VLLMClient:
         temperature: float,
         max_tokens: int,
         top_p: float,
+        repetition_penalty: float,
+        frequency_penalty: float,
+        enable_thinking: bool,
     ) -> AsyncGenerator[str, None]:
         """流式生成，带熔断器保护"""
         async with self._request_semaphore:
@@ -551,7 +571,14 @@ class VLLMClient:
                 raise CircuitOpenError("vLLM circuit is open")
             try:
                 async for chunk in self._generate_stream(
-                    messages, lora_name, temperature, max_tokens, top_p
+                    messages,
+                    lora_name,
+                    temperature,
+                    max_tokens,
+                    top_p,
+                    repetition_penalty,
+                    frequency_penalty,
+                    enable_thinking,
                 ):
                     yield chunk
                 await self._circuit_breaker.record_success()
@@ -566,6 +593,9 @@ class VLLMClient:
         temperature: float,
         max_tokens: int,
         top_p: float,
+        repetition_penalty: float,
+        frequency_penalty: float,
+        enable_thinking: bool,
     ) -> AsyncGenerator[str, None]:
         """流式生成，逐 token 产出"""
         model_name = self._resolve_model_name(lora_name)
@@ -575,9 +605,10 @@ class VLLMClient:
             "temperature": temperature,
             "max_tokens": max_tokens,
             "top_p": top_p,
+            "repetition_penalty": repetition_penalty,
+            "frequency_penalty": frequency_penalty,
             "stream": True,
-            # 关闭 Qwen3 thinking 模式，避免输出 <think> 段消耗 token
-            "chat_template_kwargs": _DISABLE_THINKING_KWARGS,
+            "chat_template_kwargs": {"enable_thinking": enable_thinking},
         }
 
         # 流式请求不重试（连接建立后无法回退）

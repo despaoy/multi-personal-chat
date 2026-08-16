@@ -236,6 +236,7 @@ class LoRATrainingConfig:
     logging_dir: Optional[str] = None
 
     system_prompt: str = "你是胡桃，保持你的风格"
+    system_prompt_policy: str = "preserve"
     train_test_split: float = 0.9
     seed: int = 42
     resume_from_checkpoint: Optional[str] = None
@@ -269,6 +270,10 @@ class LoRATrainingConfig:
             errors.append(f"neftune_noise_alpha cannot be negative: {self.neftune_noise_alpha}")
         if self.packing and self.max_seq_length < 128:
             errors.append(f"max_seq_length must be at least 128 when packing is enabled: {self.max_seq_length}")
+        if self.system_prompt_policy not in {"preserve", "replace", "require_match"}:
+            errors.append("system_prompt_policy must be preserve, replace, or require_match")
+        if self.system_prompt_policy in {"replace", "require_match"} and not self.system_prompt.strip():
+            errors.append(f"system_prompt is required when policy is {self.system_prompt_policy}")
         return errors
 
     def to_dict(self) -> Dict[str, Any]:
@@ -336,26 +341,6 @@ class LoRATrainer:
         self._tokenizer = tokenizer
         return tokenizer
 
-    def _truncate_preserving_response(
-        self, full_ids: List[int], prompt_ids: List[int]
-    ) -> tuple[List[int], int]:
-        """Fit a sample to max length without silently removing all supervised tokens."""
-        prompt_len = min(len(prompt_ids), len(full_ids))
-        if len(full_ids) <= self.config.max_seq_length:
-            return full_ids, prompt_len
-
-        prompt_part = full_ids[:prompt_len]
-        response_part = full_ids[prompt_len:]
-        if len(response_part) >= self.config.max_seq_length:
-            return response_part[: self.config.max_seq_length], 0
-
-        keep_prompt = self.config.max_seq_length - len(response_part)
-        if self.config.truncation_direction == "right":
-            prompt_part = prompt_part[:keep_prompt]
-        else:
-            prompt_part = prompt_part[-keep_prompt:] if keep_prompt else []
-        return prompt_part + response_part, len(prompt_part)
-
     def _load_and_preprocess_data(self, tokenizer: AutoTokenizer) -> Dict[str, Dataset]:
         logger.info("=" * 60)
         logger.info("步骤1: 加载和预处理训练数据")
@@ -368,6 +353,7 @@ class LoRATrainer:
             messages = normalize_chat_record(
                 record,
                 default_system_prompt=self.config.system_prompt,
+                system_prompt_policy=self.config.system_prompt_policy,
             )
             return tokenize_assistant_turns(
                 tokenizer,

@@ -25,12 +25,21 @@ def test_portable_text_hash_is_independent_of_line_endings(tmp_path):
     lf_hash = sha256_text_file(sample)
     sample.write_bytes(b'{"value": 1}\r\n{"value": 2}\r\n')
     assert sha256_text_file(sample) == lf_hash
-def test_gold_v2_candidates_are_balanced_and_cannot_be_used_formally():
-    candidates = _load(PROJECT_ROOT / "backend" / "evaluation" / "kisaki_gold_set_v2_candidates.json")
-    assert candidates["status"] == "draft"
-    assert candidates["total_prompts"] == 150
-    assert set(candidates["category_counts"].values()) == {30}
-    assert validate_frozen_gold(candidates)
+def test_formal_gold_requires_final_held_out_role_not_only_frozen_status():
+    prompts = [{"id": "probe", "prompt": "test"}]
+    development = {
+        "status": "frozen",
+        "evaluation_role": "development_only",
+        "formal_use_allowed": False,
+        "prompts": prompts,
+        "content_sha256": canonical_json_hash(prompts),
+    }
+    errors = validate_frozen_gold(development, require_final_held_out=True)
+    assert "Formal evaluation requires evaluation_role='final_held_out'" in errors
+    assert "Formal evaluation requires formal_use_allowed=true" in errors
+
+    final = dict(development, evaluation_role="final_held_out", formal_use_allowed=True)
+    assert validate_frozen_gold(final, require_final_held_out=True) == []
 
 
 def test_gold_leakage_detects_exact_and_near_duplicate_prompts():
@@ -66,11 +75,15 @@ def _v3_report(model: str):
         "schema_version": 3,
         "mock": False,
         "model": model,
+        "evaluation_status": "formal",
+        "formal_review": {"status": "pending"},
         "provenance": {
-            "prompt_content_sha256": "same-prompts",
-            "generation_sha256": canonical_json_hash(generation),
+            "prompt_policy_version": "3.1.0",
+            "generation": generation,
             "dataset_sha256": "same-frozen-gold",
             "dataset_status": "frozen",
+            "dataset_id": "gold-v3",
+            "dataset_role": "final_held_out",
         },
         "metrics": {
             "format_correct_rate": 1.0,

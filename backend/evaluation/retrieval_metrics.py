@@ -45,8 +45,14 @@ class RetrievalMetrics:
         def dcg(rels: List[float]) -> float:
             return sum(r / math.log2(i + 2) for i, r in enumerate(rels))
 
-        rels = [1.0 if rid in expected_ids else 0.0 for rid in retrieved_ids[:k]]
-        ideal_rels = sorted(rels, reverse=True)
+        expected = set(expected_ids)
+        seen: set[str] = set()
+        rels = []
+        for retrieved_id in retrieved_ids[:k]:
+            relevant = retrieved_id in expected and retrieved_id not in seen
+            rels.append(1.0 if relevant else 0.0)
+            seen.add(retrieved_id)
+        ideal_rels = [1.0] * min(len(expected), k)
         idcg = dcg(ideal_rels)
         if idcg == 0:
             return 0.0

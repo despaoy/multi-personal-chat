@@ -48,7 +48,7 @@ async def test_vllm_direct():
     print("=" * 60)
 
     vllm_url = os.getenv("VLLM_URL", "http://localhost:8001")
-    model_id = "/root/autodl-tmp/models/Qwen/Qwen2___5-7B-Instruct"
+    model_id = os.getenv("VLLM_BENCHMARK_MODEL_ID", "Qwen3-8B-Instruct-AWQ")
 
     for concurrency in [1, 3, 5, 8, 10]:
         total = concurrency * 3

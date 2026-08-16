@@ -41,7 +41,7 @@ def test_base_model_match_is_compatible(tmp_path):
 
     from inference.adapter_checker import AdapterChecker
     checker = AdapterChecker(
-        expected_base_model="/root/autodl-tmp/runtime/models/Qwen3-8B-Instruct",
+        expected_base_model="/lab/runtime/models/Qwen3-8B-Instruct",
         lora_root=str(tmp_path),
     )
     report = checker.check_adapter("kisaki")
@@ -58,7 +58,7 @@ def test_base_model_mismatch_is_incompatible(tmp_path):
 
     from inference.adapter_checker import AdapterChecker
     checker = AdapterChecker(
-        expected_base_model="/root/autodl-tmp/runtime/models/Qwen3-8B-Instruct",
+        expected_base_model="/lab/runtime/models/Qwen3-8B-Instruct",
         lora_root=str(tmp_path),
     )
     report = checker.check_adapter("hutao")
@@ -78,7 +78,7 @@ def test_relative_base_model_path_compared_by_basename(tmp_path):
 
     from inference.adapter_checker import AdapterChecker
     checker = AdapterChecker(
-        expected_base_model="/root/autodl-tmp/runtime/models/Qwen3-8B-Instruct",
+        expected_base_model="/lab/runtime/models/Qwen3-8B-Instruct",
         lora_root=str(tmp_path),
     )
     report = checker.check_adapter("minamo")
