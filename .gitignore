@@ -209,3 +209,7 @@ scripts/qwen3_tokenizer/
 
 # === Kisaki v4 测试临时目录 ===
 .test_tmp_kisaki_v4/
+
+# === Local lab runtime / non-project presentation files ===
+/runtime/
+/*.pptx

@@ -3,6 +3,8 @@
 QQChat Enhanced 是一个面向角色对话研究与保研展示的多平台 LLM 系统。项目覆盖数据治理、LoRA/DoRA/RSLoRA 微调、AWQ 高效推理、混合 RAG、评测体系、AstrBot 消息网关以及可观测的 Web 管理台。
 
 > 当前定位：单机可部署、证据驱动的研究原型。项目强调完整的“数据 -> 训练 -> 推理 -> 检索 -> 评测 -> 多平台交付”链路，不以堆叠云原生组件为目标。
+>
+> 发布状态：代码可构建、测试可复现；R1V4 正式训练仍被数据质量门禁阻塞，当前仓库不包含任何“正式实验结论”。
 
 ## 当前技术基线
 
@@ -18,7 +20,7 @@ QQChat Enhanced 是一个面向角色对话研究与保研展示的多平台 LLM
 | 数据库 | SQLite（本地/单进程）或 PostgreSQL（部署推荐） |
 | 缓存 | Redis 可选；不可用时使用受限的进程内退化实现 |
 
-实验室服务器已验证 PyTorch 2.8.0+cu128、RTX 3090 CUDA、BGE-M3 和 vLLM 0.10.2 可用。月社妃 Gold v2 现作为开发评测集；新的 V4 正式训练被人工审核和 Gold v3 冻结门禁阻塞。实际测试计数以当前 CI 或本次验证报告为准。
+实验室服务器已验证 PyTorch 2.8.0+cu128、RTX 3090 CUDA、BGE-M3 和 vLLM 0.10.2 可用。月社妃 V4 当前包含 1002 条训练数据（576 条原作、150 条既有构造数据、276 条经审核晋升的 V4.1 五轮会话，其中 DeepSeek round06 4 条、Codex 自动化批次 272 条）和 70 条独立验证数据，Gold v2.1 已批准为开发集，Gold v3 的 150 条最终盲测已冻结。正式训练仍由 Game Train 上下文质量复审门禁阻塞；权威计数以 V4 canonical manifest 为准。
 
 ## 系统架构
 
@@ -84,6 +86,7 @@ astrbot_plugins/     AstrBot 网关插件
 backend/
 ├── api/              FastAPI 路由
 ├── app/              配置、依赖、应用生命周期与运行时容器
+├── data/             月社妃语料、canonical 数据集与历史数据归档
 ├── cache/            Redis/内存缓存、队列、语义缓存
 ├── db/               SQLite/PostgreSQL、模型与迁移
 ├── evaluation/       Gold Set、角色、安全与检索指标
@@ -98,7 +101,7 @@ backend/
 deploy/               Compose、Nginx 和部署脚本
 docs/                 架构、运维、研究和数据文档
 gametext/             可审计的原始角色语料
-scripts/              验证、训练、评测和服务器启动工具
+scripts/              验证、训练、评测和服务器启动工具（分类索引见 scripts/README.md）
 src/                  Next.js 管理台
 ```
 
@@ -111,7 +114,9 @@ src/                  Next.js 管理台
 ```powershell
 pnpm install --frozen-lockfile
 pnpm ts-check
+pnpm lint
 pnpm build
+pnpm audit --prod
 py -3.12 -m pytest backend/tests -q
 powershell -ExecutionPolicy Bypass -File scripts/local-verify.ps1
 ```
@@ -120,9 +125,12 @@ powershell -ExecutionPolicy Bypass -File scripts/local-verify.ps1
 
 ### 实验室服务器
 
+实验室脚本统一通过 `QQCHAT_LAB_ROOT` 指定服务器根目录，不在代码中硬编码个人路径：
+
 ```bash
-source /home/szw/lhm2/activate_qqchat.sh
-cd /home/szw/lhm2/qqchat-enhanced
+export QQCHAT_LAB_ROOT=/path/to/lab-root
+source "$QQCHAT_LAB_ROOT/activate_qqchat.sh"
+cd "$QQCHAT_LAB_ROOT/qqchat-enhanced"
 python -m pip check
 python -m pytest backend/tests -q
 pnpm ts-check
@@ -171,23 +179,26 @@ curl -fsS http://127.0.0.1:5000/api/health
 - [可扩展性开发指南](docs/architecture/EXTENSIBILITY_GUIDE.md)
 - [优化策略](docs/architecture/OPTIMIZATION_STRATEGY.md)
 - [生产准备审查](docs/architecture/PRODUCTION_READINESS_REVIEW_2026-07-18.md)
+- [发布前检查清单](docs/RELEASE_CHECKLIST.md)
 - [部署指南](docs/operations/DEPLOYMENT_GUIDE.md)
 - [保研项目答辩与深度问答手册](docs/research/POSTGRADUATE_RECOMMENDATION_DEFENSE_PLAYBOOK.md)
 - [研究与学习路线](docs/research/RESEARCH_AND_LEARNING_ROADMAP.md)
 - [月社妃 V4 人工审核与重训练](docs/research/KISAKI_V4_HUMAN_REVIEW_AND_RETRAINING.md)
 - [月社妃实验总览](docs/research/KISAKI_EXPERIMENT_INDEX.md)
-- [月社妃 LoRA 重训计划（历史）](docs/research/archive/KISAKI_LORA_RETRAIN_PLAN.md)
-- [数据集卡片（历史）](docs/data/archive/dataset-card.md)
 - [人工评分标准](docs/data/human-scoring-rubric.md)
 
 ## 研究诚信
 
 - mock 输出不能作为真实实验结果。
-- 历史 Qwen2.5 报告必须标为迁移前对照，不与 Qwen3 当前结果混算。
+- 旧版本结果仅从 Git 历史追溯，不与 Qwen3 当前结果混算。
 - 偏好数据必须保留审核状态；DPO/ORPO 不表述为 RLHF。
 - 每次实验记录代码提交、数据哈希、模型版本、随机种子、硬件、命令和原始结果。
 - Gold Set 不得进入训练集，任何重叠都必须在报告中披露。
 - 结论同时报告质量、延迟、显存和失败样本，不只展示最好结果。
+
+## 安全
+
+密钥策略和报告方式见 [SECURITY.md](SECURITY.md)。
 
 ## 许可证
 

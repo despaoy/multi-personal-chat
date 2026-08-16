@@ -12,7 +12,7 @@
 ## 2. 获取源码
 
 ```bash
-cd /home/szw/lhm2
+cd "$QQCHAT_LAB_ROOT"
 git clone https://github.com/despaoy/qqchat-enhanced.git
 cd qqchat-enhanced
 git status -sb
@@ -23,7 +23,7 @@ git status -sb
 ## 3. 激活环境
 
 ```bash
-source /home/szw/lhm2/activate_qqchat.sh
+source "$QQCHAT_LAB_ROOT"/activate_qqchat.sh
 python --version
 python -m pip check
 node --version
@@ -39,7 +39,7 @@ pnpm --version
 ### 4.1 裸机模式
 
 ```bash
-cd /home/szw/lhm2/qqchat-enhanced
+cd "$QQCHAT_LAB_ROOT/qqchat-enhanced"
 cp .env.example backend/.env
 chmod 600 backend/.env
 ```
@@ -52,18 +52,18 @@ chmod 600 backend/.env
 - `ALLOWED_ORIGINS`
 - `MODEL_PROVIDER=vllm`
 - `VLLM_BASE_URL=http://127.0.0.1:8001`
-- `BASE_MODEL_PATH=/home/szw/lhm2/runtime/models/Qwen3-8B-Instruct`
-- `LORA_PATH=/home/szw/lhm2/runtime/loras`
-- `VLLM_LORA_ROOT=/home/szw/lhm2/runtime/loras`
-- `EMBEDDING_MODEL_PATH=/home/szw/lhm2/runtime/models/bge-m3`
-- `RERANKER_MODEL_PATH=/home/szw/lhm2/runtime/models/bge-reranker-v2-m3`
+- `BASE_MODEL_PATH="$QQCHAT_LAB_ROOT"/runtime/models/Qwen3-8B-Instruct`
+- `LORA_PATH="$QQCHAT_LAB_ROOT"/runtime/loras`
+- `VLLM_LORA_ROOT="$QQCHAT_LAB_ROOT"/runtime/loras`
+- `EMBEDDING_MODEL_PATH="$QQCHAT_LAB_ROOT"/runtime/models/bge-m3`
+- `RERANKER_MODEL_PATH="$QQCHAT_LAB_ROOT"/runtime/models/bge-reranker-v2-m3`
 
 Next.js 本地启动如需覆盖 `BACKEND_URL`，写入仓库根目录 `.env.local`，不要写入根目录 `.env`。
 
 ### 4.2 Docker Compose 模式
 
 ```bash
-cd /home/szw/lhm2/qqchat-enhanced
+cd "$QQCHAT_LAB_ROOT/qqchat-enhanced"
 cp .env.example deploy/.env
 chmod 600 deploy/.env
 ```
@@ -87,7 +87,7 @@ Compose 只从 `deploy/.env` 做变量插值。复制后至少设置：
 ## 5. 验证源码
 
 ```bash
-cd /home/szw/lhm2/qqchat-enhanced
+cd "$QQCHAT_LAB_ROOT/qqchat-enhanced"
 python -m pytest backend/tests -q
 pnpm install --frozen-lockfile
 pnpm ts-check
@@ -106,7 +106,7 @@ vLLM 示例：
 
 ```bash
 CUDA_VISIBLE_DEVICES=0 vllm serve \
-  /home/szw/lhm2/runtime/models/Qwen3-8B-Instruct-AWQ \
+  "$QQCHAT_LAB_ROOT"/runtime/models/Qwen3-8B-Instruct-AWQ \
   --served-model-name qwen3-8b-instruct-awq \
   --host 127.0.0.1 \
   --port 8001 \
@@ -120,7 +120,7 @@ CUDA_VISIBLE_DEVICES=0 vllm serve \
 后端：
 
 ```bash
-cd /home/szw/lhm2/qqchat-enhanced
+cd "$QQCHAT_LAB_ROOT/qqchat-enhanced"
 uvicorn backend.app.main:app --host 127.0.0.1 --port 8000 --workers 1
 ```
 
@@ -129,7 +129,7 @@ SQLite 只使用一个 worker。切换 PostgreSQL并确认共享限流、队列�
 前端：
 
 ```bash
-cd /home/szw/lhm2/qqchat-enhanced
+cd "$QQCHAT_LAB_ROOT/qqchat-enhanced"
 pnpm build
 pnpm start
 ```

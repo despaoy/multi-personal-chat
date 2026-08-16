@@ -33,8 +33,8 @@
 
 ### 当前研究状态
 
-- R0V4 正在人工审核人物提示词、原作覆盖、训练候选、验证候选和开发集。
-- V4 正式训练集、固定验证集和 Gold v3 尚未冻结，训练门禁应保持阻塞。
+- R0V4 已完成人物提示词、原作覆盖、构造训练候选、validation 和 Gold 审核；V4.1 的 276 条五轮会话已逐批审核晋升。
+- V4 train 当前 1002 条；canonical 状态为 `frozen_under_reassessment`，Gold v3 已冻结；训练门禁仍因 Game Train 上下文质量复审保持阻塞。
 - 旧 R1 结果只保留为 `legacy_exploratory_non_comparable`。
 - R2/R3 实现可用于契约和工具验证，正式结果仍需冻结数据与隔离的真实服务。
 - 每次发布前的实际测试计数以 CI 或本次验证报告为准，不在路线图中维护易过期数字。
@@ -153,7 +153,7 @@ LLM-as-a-judge 仅用固定 rubric、held-out judge 模型或盲人工抽样，�
 **Learn**：训练/验证/held-out 区别；随机种子作为实验控制；mock/smoke/benchmark/研究结论的区别；Git 工作流
 
 **Do**：
-1. 阅读 `README.md`、`docs/data/archive/dataset-card.md`（历史 v1 数据集卡）、`docs/data/human-scoring-rubric.md`、本文件
+1. 阅读 `README.md`、`docs/data/human-scoring-rubric.md` 和本文件
 2. 创建实验日志，每次运行记录：日期、Git commit、命令、GPU、模型、数据版本、结果路径
 3. 每次实验前检查服务器：`nvidia-smi`、`curl /health`、`curl /ready`、`redis-cli ping`
 4. 轮换暴露的密码和 token，QQ/微信集成使用测试账号
@@ -167,7 +167,7 @@ LLM-as-a-judge 仅用固定 rubric、held-out judge 模型或盲人工抽样，�
 **Learn**：数据溯源、license、去重、污染、数据泄露；SFT 对话格式与按对话切分；Gold Set 设计；人工评估
 
 **Do**：
-1. 完成每个训练语料的 `docs/data/archive/dataset-card.md`（历史 v1 数据集卡）
+1. 以 canonical manifest 和人物数据 README 记录训练语料边界
 2. 审核生成 SFT 样本，仅保留事实可接受、persona 一致、不重复的输出
 3. 构建 ≥100 prompt 的 held-out Gold Set（30 persona + 20 factual + 20 RAG + 15 safety + 15 multiturn）
 4. 确保 Gold Set prompt 不出现在 SFT 训练文件

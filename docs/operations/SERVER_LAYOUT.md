@@ -1,11 +1,11 @@
 # 服务器目录规范
 
-适用范围：无 root 权限的实验室服务器，项目根目录固定为 `/home/szw/lhm2`。
+适用范围：无 root 权限的实验室服务器，项目根目录固定为 `"$QQCHAT_LAB_ROOT"`。
 
 ## 规范布局
 
 ```text
-/home/szw/lhm2/
+"$QQCHAT_LAB_ROOT"/
 ├── activate_qqchat.sh          # 统一环境入口
 ├── qqchat-enhanced/            # Git 源码及被忽略的分模式配置文件
 ├── envs/                       # 当前用户的 Conda/venv 环境
@@ -57,7 +57,7 @@ pnpm         10.34.2
 激活命令：
 
 ```bash
-source /home/szw/lhm2/activate_qqchat.sh
+source "$QQCHAT_LAB_ROOT"/activate_qqchat.sh
 ```
 
 激活脚本统一设置：`DATABASE_PATH`、`VECTOR_DB_PATH`、`LORA_PATH`、`VLLM_LORA_ROOT`、`AUDIT_LOG_DIR` 和 `HF_HOME`。
@@ -75,7 +75,7 @@ source /home/szw/lhm2/activate_qqchat.sh
 
 ## 禁止事项
 
-- 不在 `/home/szw/lhm2` 之外创建、移动或删除项目文件。
+- 不在 `"$QQCHAT_LAB_ROOT"` 之外创建、移动或删除项目文件。
 - 不把模型、数据库或 LoRA 放入 Git 仓库。
 - 不在服务运行时删除 `.next`、`node_modules`、当前日志或正在使用的 PID 文件。
 - 不覆盖服务器未提交实验文件；同步前必须先提交、归档或逐文件比对。

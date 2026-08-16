@@ -1270,26 +1270,24 @@ curl -fsS http://127.0.0.1:8001/v1/models
 
 ## 10. 脚本工具清单
 
-**目录**：`scripts/`，17 个脚本，分四类。
+**目录**：`scripts/`。以下仅列活动入口。
 
 ### 10.1 数据构建类（Python）
 
 | 脚本 | 用途 |
 |---|---|
 | `extract_character_dialogues.py` | 从源文本提取角色对话数据集（shenbai_mizunamo 神白水菜萌 / tsukiyashiro_kisaki 月社妃），输出 raw.jsonl/sft.json/sft_full.json/excluded.jsonl/manifest.json/coverage_report.json |
-| `scripts/archive/kisaki_legacy/build_character_experiments.py` | 历史角色实验资产构建器，只读归档 |
 | `build_character_rag_eval.py` | 将 held-out RAG 样本转为检索实验 schema |
-| `scripts/archive/kisaki_legacy/build_research_assets.py` | 历史研究资产构建器，只读归档 |
 
 ### 10.2 盲评与审核类（Python）
 
 | 脚本 | 用途 |
 |---|---|
-| `build_blind_ab_review.py` | 从两份 benchmark 报告构造确定性盲评包（seed 控制左右顺序随机化，source_hashes 防篡改） |
-| `review_blind_ab.py` | 可恢复的匿名 A/B 人工评测 CLI（命令 a/b/t/i/s/q，强制填写理由） |
-| `auto_review_blind_ab.py` | AI 裁判预审（OpenAI 兼容 API），按 20% 比例抽样构造人工复核包 |
-| `auto_review_blind_ab_deepseek.py` | DeepSeek API 变体（支持 response_format json_object、429/5xx 重试） |
-| `score_blind_ab.py` | 揭盲并统计模型胜率（win_rate_on_decisive、by_category） |
+| `scripts/archive/legacy_review_tools/build_blind_ab_review.py` | 从两份 benchmark 报告构造确定性盲评包（seed 控制左右顺序随机化，source_hashes 防篡改） |
+| `scripts/archive/legacy_review_tools/review_blind_ab.py` | 可恢复的匿名 A/B 人工评测 CLI（命令 a/b/t/i/s/q，强制填写理由） |
+| `scripts/archive/legacy_review_tools/auto_review_blind_ab.py` | AI 裁判预审（OpenAI 兼容 API），按 20% 比例抽样构造人工复核包 |
+| `scripts/archive/legacy_review_tools/auto_review_blind_ab_deepseek.py` | DeepSeek API 变体（支持 response_format json_object、429/5xx 重试） |
+| `scripts/archive/legacy_review_tools/score_blind_ab.py` | 揭盲并统计模型胜率（win_rate_on_decisive、by_category） |
 | `review_preference_candidates.py` | DPO/ORPO 偏好对人工审核 CLI（a 批准/r 拒绝/e 编辑/s 跳过/q 保存退出） |
 
 ### 10.3 训练与基准类
@@ -1300,7 +1298,6 @@ curl -fsS http://127.0.0.1:8001/v1/models
 | `run_kisaki_experiment.py` | 通过 V4 人工审核与冻结门禁后启动单个 R1V4 受控实验 |
 | `lab-start-vllm-daemon.sh` | vLLM 守护进程启动器（检测训练进程占用时拒绝启动） |
 | `lab-start-vllm.sh` | vLLM 启动命令（加载 hutao/minamo LoRA，AWQ Marlin，--enable-lora --max-lora-rank 64） |
-| `run_character_benchmark_real.sh` | 跑角色基准评测（base awq + lora 两轮）→ 构造 blind A/B 评测包 |
 
 ### 10.4 本地验证类（PowerShell）
 
@@ -1430,8 +1427,6 @@ app.main.create_app ──→ app.runtime.RuntimeContainer
 | `docs/architecture/CODE_WIKI.md` | 本文档：代码知识库（权威技术文档） |
 | `docs/architecture/OPTIMIZATION_STRATEGY.md` | 并发/可靠/安全/可观测/部署原则 |
 | `docs/research/RESEARCH_AND_LEARNING_ROADMAP.md` | 研究路线图、10 周计划、部署验收、学习资源（合并自 PROJECT_STATUS/LLM_RESEARCH/PERSONAL_ACTION 三份文档） |
-| `docs/research/archive/REAL_VLLM_BENCHMARK_REPORT.md` | 真实 vLLM 基准报告（已归档，Qwen2.5 历史对照） |
 | `docs/research/BEGINNER_REAL_LLM_EXPERIMENT_GUIDE.md` | 新手实验指南 |
-| `docs/data/archive/dataset-card.md` | 训练数据来源与使用约束（已归档，历史 v1 数据集卡） |
 | `docs/data/human-scoring-rubric.md` | 盲评与偏好标注评分标准 |
 | `astrbot_plugins/qqchat_gateway/README.md` | AstrBot 网关插件安装说明 |

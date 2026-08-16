@@ -2,7 +2,7 @@
 
 > 本文件是 AI 助手和维护者进入项目时的当前事实入口。
 >
-> 更新时间：2026-08-09。详细实验导航见 [月社妃实验总览](docs/research/KISAKI_EXPERIMENT_INDEX.md)。
+> 更新时间：2026-08-16。详细实验导航见 [月社妃实验总览](docs/research/KISAKI_EXPERIMENT_INDEX.md)。
 
 ## 1. 项目定位
 
@@ -29,18 +29,18 @@ QQChat Enhanced 是面向角色对话研究与保研展示的多平台 LLM 系�
 
 ## 3. 实验室服务器
 
-所有操作限制在 `/home/szw/lhm2`。
+实验室根目录通过 `QQCHAT_LAB_ROOT` 注入；部署根不写入仓库。
 
 | 用途 | 路径或状态 |
 |---|---|
-| 项目 | `/home/szw/lhm2/qqchat-enhanced` |
-| 正式训练环境 | `/home/szw/lhm2/envs/qqchat-gpu-qwen3`，Python 3.11 |
-| 后端测试/Embedding 环境 | `/home/szw/lhm2/envs/qqchat-gpu`，Python 3.10 |
-| 基础模型 | `/home/szw/lhm2/runtime/models/Qwen3-8B-Instruct` |
-| Embedding | `/home/szw/lhm2/runtime/models/bge-m3` |
-| LoRA 输出 | `/home/szw/lhm2/runtime/loras/kisaki/canonical/` |
-| 实验结果 | `/home/szw/lhm2/runtime/experiments/kisaki/` |
-| 日志 | `/home/szw/lhm2/runtime/logs/` |
+| 项目 | `$QQCHAT_LAB_ROOT/qqchat-enhanced` |
+| 正式训练环境 | `$QQCHAT_LAB_ROOT/envs/qqchat-gpu-qwen3`，Python 3.11 |
+| 后端测试/Embedding 环境 | `$QQCHAT_LAB_ROOT/envs/qqchat-gpu`，Python 3.10 |
+| 基础模型 | `$QQCHAT_LAB_ROOT/runtime/models/Qwen3-8B-Instruct` |
+| Embedding | `$QQCHAT_LAB_ROOT/runtime/models/bge-m3` |
+| LoRA 输出 | `$QQCHAT_LAB_ROOT/runtime/loras/kisaki/canonical/` |
+| 实验结果 | `$QQCHAT_LAB_ROOT/runtime/experiments/kisaki/` |
+| 日志 | `$QQCHAT_LAB_ROOT/runtime/logs/` |
 | GPU | 2 x RTX 3090，共享资源，只等待空闲，不抢占其他进程 |
 
 运行时模型、checkpoint、日志、数据库和向量索引位于 `runtime/`，不得提交 Git。
@@ -52,11 +52,12 @@ QQChat Enhanced 是面向角色对话研究与保研展示的多平台 LLM 系�
 | 项目 | 当前事实 |
 |---|---|
 | 人物画像 | 已确认 |
-| system prompt v3 | 待人工确认 |
-| 训练/验证候选 | 正在逐批人工审核，尚未冻结 |
-| Gold v2 | 150 条，降级为 development only |
-| Gold v3 | 训练数据冻结后建立 |
-| 实验预检 | blocked，符合预期 |
+| system prompt v3 | 已批准，正式使用策略为 `replace` |
+| V4 train | 当前 1002 条；576 条原作 + 150 条既有构造 + 276 条经审核晋升的 V4.1 五轮会话（DeepSeek round06 4 条 + Codex 自动化批次 272 条） |
+| V4 validation | 已冻结 70 条独立原作数据 |
+| Gold v2.1 | 150 条，已批准为 development only |
+| Gold v3 | 150 条最终盲测，已审核并冻结 |
+| 实验预检 | blocked：Game Train 上下文质量复审尚未完成 |
 | R1V4 seed 42 | 禁止在门禁通过前启动 |
 | 正式结论 | 尚未形成 |
 
@@ -66,9 +67,7 @@ R1V4 固定数据、验证集、基座模型、seed、LoRA r/alpha、target modu
 
 ### 4.3 历史实验
 
-旧 E1、E2、E2' Safety++ 和 E2'' RAG 保留为探索记录，状态统一为 `legacy_exploratory_non_comparable`。这些实验的数据量、提示词、评测脚本或生成参数存在变化，不进入新的 NEFTune 因果结论。
-
-旧配置、脚本、数据和结果均已移至对应 `archive/`，活动代码不得读取。它们保留实际条件，但不能进入 V4 正式对比。
+旧 E1、E2、E2' Safety++ 和 E2'' RAG 不进入 V4 结论。为避免仓库内形成第二套入口，旧数据、脚本和结果已从工作树移除，需要时从 Git 历史追溯。
 
 ## 5. 人物与数据规则
 
@@ -88,10 +87,10 @@ R1V4 固定数据、验证集、基座模型、seed、LoRA r/alpha、target modu
 
 ### 5.2 数据治理
 
-- 原作直接台词必须保留来源定位。
+- 当前来源审计覆盖 1,598 条原作直接台词，并保留来源定位。
 - 训练/验证按完整对话切分，防止同一上下文跨集合泄漏。
-- Gold v1/Gold v2 仅作开发集，均不进入训练。
-- 精确/文本相似泄漏直接阻断，语义相似度不低于 0.88 进入复核。
+- Gold v2.1 是已批准的开发评测集，Gold v3 是已冻结的最终盲测集；二者均不进入训练。
+- 精确/文本相似泄漏直接阻断，相似度不低于 0.90 进入复核。
 - RAG 角色正文保持自然语气，证据放入结构化 `citations`。
 - 合成数据必须标记来源和审核状态，不能冒充原作台词。
 
@@ -118,7 +117,8 @@ python scripts/validate_kisaki_v4_training_gate.py
 ### 正式预检
 
 ```bash
-python scripts/validate_kisaki_v4_training_gate.py --disk-path /home/szw/lhm2
+export QQCHAT_LAB_ROOT=/path/to/lab-root
+python scripts/validate_kisaki_v4_training_gate.py --disk-path "$QQCHAT_LAB_ROOT"
 ```
 
 ### 门禁通过后的 seed 42
@@ -138,6 +138,8 @@ E2-E5 及补充随机种子只能在 E1 全链路验收后按实验注册表顺�
 | [月社妃实验总览](docs/research/KISAKI_EXPERIMENT_INDEX.md) | E1/E2、Gold、脚本和历史结果统一索引 |
 | [V4 审核与重训练](docs/research/KISAKI_V4_HUMAN_REVIEW_AND_RETRAINING.md) | 当前数据、门禁和训练入口 |
 | [实验资产 README](backend/data/character_dialogues/experiments/README.md) | 数据、配置和结果目录 |
+| [脚本索引](scripts/README.md) | 活动脚本、历史脚本归档与实验室环境变量 |
+| [发布前检查清单](docs/RELEASE_CHECKLIST.md) | 可发布边界、验证命令与当前 blocker |
 | [服务器布局](docs/operations/SERVER_LAYOUT.md) | 源码与运行资产边界 |
 | [研究路线图](docs/research/RESEARCH_AND_LEARNING_ROADMAP.md) | 后续 LLM 学习与实验方向 |
 

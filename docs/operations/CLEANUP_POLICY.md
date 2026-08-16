@@ -30,10 +30,10 @@
 
 ```bash
 git status -sb
-find /home/szw/lhm2/qqchat-enhanced -type d \
+find "$QQCHAT_LAB_ROOT/qqchat-enhanced" -type d \
   \( -name __pycache__ -o -name .pytest_cache \) -print
-find /home/szw/lhm2/runtime -name '*.pid' -type f -print
-du -sh /home/szw/lhm2/*
+find "$QQCHAT_LAB_ROOT"/runtime -name '*.pid' -type f -print
+du -sh "$QQCHAT_LAB_ROOT"/*
 ```
 
 正在运行的前端需要 `.next` 和 `node_modules`；正在训练或推理时不能删除当前日志、PID、checkpoint、模型或 adapter。
