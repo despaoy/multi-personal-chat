@@ -80,7 +80,7 @@ if [[ -d "$PROJECT/.git" ]]; then
     fi
 else
     echo "  代码未找到: $PROJECT"
-    echo "  请先 clone: git clone https://github.com/despaoy/multipersonal-chat-system.git $PROJECT"
+    echo "  请先 clone: git clone https://github.com/despaoy/qqchat-enhanced.git $PROJECT"
 fi
 
 # 5. 模型检查

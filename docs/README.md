@@ -4,14 +4,14 @@
 
 ## 阅读顺序
 
-1. [项目 README](../README.md)：项目定位、架构和快速验证。
-2. [保研项目答辩手册](research/POSTGRADUATE_RECOMMENDATION_DEFENSE_PLAYBOOK.md)：项目叙事、LLM 原理、追问与演示。
-3. [部署指南](operations/DEPLOYMENT_GUIDE.md)：本地、实验室服务器和容器部署。
-4. [服务器目录规范](operations/SERVER_LAYOUT.md)：`$MULTIPERSONAL_LAB_ROOT` 的唯一推荐布局。
-5. [清理策略](operations/CLEANUP_POLICY.md)：哪些文件可以删除，哪些必须保留。
-6. [代码知识库](architecture/CODE_WIKI.md)：模块职责、API 和调用链。
-7. [可扩展性开发指南](architecture/EXTENSIBILITY_GUIDE.md)：新增功能时的分层边界与最短路径。
-8. [生产准备审查](architecture/PRODUCTION_READINESS_REVIEW_2026-07-18.md)：当前风险、限制与后续工作。
+1. [项目 README](../README.md)：项目定位、能力、架构和快速开始。
+2. [部署指南](operations/DEPLOYMENT_GUIDE.md)：本地、服务器和容器部署。
+3. [服务器目录规范](operations/SERVER_LAYOUT.md)：源码与运行时资产的目录边界。
+4. [代码知识库](architecture/CODE_WIKI.md)：模块职责、API 和调用链。
+5. [可扩展性开发指南](architecture/EXTENSIBILITY_GUIDE.md)：新增功能时的分层边界与最短路径。
+6. [生产准备审查](architecture/PRODUCTION_READINESS_REVIEW_2026-07-18.md)：当前风险、限制与后续工作。
+7. [清理策略](operations/CLEANUP_POLICY.md)：哪些文件可以删除，哪些必须保留。
+8. [发布前检查清单](RELEASE_CHECKLIST.md)：可发布边界和验证命令。
 
 ## 文档分类
 
@@ -20,7 +20,7 @@
 - `CODE_WIKI.md`：代码结构与关键调用链。
 - `EXTENSIBILITY_GUIDE.md`：分层边界、新增后端/前端功能的最短路径与兼容性规则。
 - `OPTIMIZATION_STRATEGY.md`：性能、可靠性、安全和部署优化基线。
-- `PRODUCTION_READINESS_REVIEW_2026-07-18.md`：面向个人研究项目的部署前审查。
+- `PRODUCTION_READINESS_REVIEW_2026-07-18.md`：部署前风险与限制审查。
 
 ### `operations/`
 
@@ -30,7 +30,7 @@
 
 ### `research/`
 
-- `POSTGRADUATE_RECOMMENDATION_DEFENSE_PLAYBOOK.md`：保研答辩叙事、技术原理、高频追问和现场演示手册。
+- `POSTGRADUATE_RECOMMENDATION_DEFENSE_PLAYBOOK.md`：研究叙事、技术原理和现场问答手册（作者个人答辩案例，可按需忽略）。
 - `KISAKI_V4_HUMAN_REVIEW_AND_RETRAINING.md`：当前月社妃数据审核、训练门禁和重训练入口。
 - `review_packets/kisaki_v4/00_GUIDE.md`：V4 数据和 Gold 审核入口。
 - `KISAKI_EXPERIMENT_INDEX.md`：月社妃 R0V4-R4、S1 和门禁统一入口。
@@ -50,6 +50,7 @@
 - 路径、端口和版本以环境变量及锁文件为准，文档中的值仅为推荐默认值。
 - 架构、依赖、启动方式或数据目录发生变化时，同一提交必须更新相关文档。
 
-### 发布与维护
+### `maintainer/`
 
+- `PROJECT_CONTEXT.md`：维护者与 AI 助手使用的内部项目上下文，不属于最终用户阅读路径。
 - [发布前检查清单](RELEASE_CHECKLIST.md)：仓库可发布边界、验证命令和当前 blocker。

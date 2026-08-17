@@ -13,10 +13,13 @@
 
 ```bash
 cd "$MULTIPERSONAL_LAB_ROOT"
-git clone https://github.com/despaoy/multipersonal-chat-system.git
-cd multipersonal-chat-system
+git clone https://github.com/despaoy/qqchat-enhanced.git
+cd qqchat-enhanced
 git status -sb
 ```
+
+> 若远端仓库已完成重命名，请将克隆地址替换为
+> `https://github.com/despaoy/multipersonal-chat-system.git`。
 
 服务器工作区非干净时，不要直接执行 `git pull`。先保存实验文件，再同步。
 

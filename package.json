@@ -54,7 +54,7 @@
     "typescript": "^5"
   },
   "packageManager": "pnpm@10.34.2",
-  "description": "Multi-platform LLM system for character-dialogue research: data governance, LoRA/DoRA/RSLoRA training, AWQ inference, hybrid RAG, evaluation, and AstrBot gateway.",
+  "description": "MultiPersonal Chat System: a multi-platform LLM system for character-dialogue research, covering data governance, LoRA/DoRA/RSLoRA training, AWQ inference, hybrid RAG, evaluation, and AstrBot integration.",
   "license": "MIT",
   "engines": {
     "node": ">=22"

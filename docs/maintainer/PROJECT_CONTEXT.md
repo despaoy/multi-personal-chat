@@ -1,8 +1,8 @@
-# 项目上下文
+# 维护者项目上下文
 
-> 本文件是 AI 助手和维护者进入项目时的当前事实入口。
+> 本文件是维护者和 AI 助手进入项目时的内部事实入口，不面向最终用户。
 >
-> 更新时间：2026-08-16。详细实验导航见 [月社妃实验总览](docs/research/KISAKI_EXPERIMENT_INDEX.md)。
+> 更新时间：2026-08-16。详细实验导航见 [月社妃实验总览](../research/KISAKI_EXPERIMENT_INDEX.md)。
 
 ## 1. 项目定位
 
@@ -83,7 +83,7 @@ R1V4 固定数据、验证集、基座模型、seed、LoRA r/alpha、target modu
 - 理央属于妃珍视的共同生活圈。
 - 元叙事主要用于魔法之书、命运、角色和故事结构相关语境。
 
-完整依据见 [人物画像](docs/research/KISAKI_CHARACTER_PROFILE.md)。
+完整依据见 [人物画像](../research/KISAKI_CHARACTER_PROFILE.md)。
 
 ### 5.2 数据治理
 
@@ -133,15 +133,15 @@ E2-E5 及补充随机种子只能在 E1 全链路验收后按实验注册表顺�
 
 | 入口 | 用途 |
 |---|---|
-| [项目 README](README.md) | 系统能力、结构与部署入口 |
-| [文档中心](docs/README.md) | 全部文档分类 |
-| [月社妃实验总览](docs/research/KISAKI_EXPERIMENT_INDEX.md) | E1/E2、Gold、脚本和历史结果统一索引 |
-| [V4 审核与重训练](docs/research/KISAKI_V4_HUMAN_REVIEW_AND_RETRAINING.md) | 当前数据、门禁和训练入口 |
-| [实验资产 README](backend/data/character_dialogues/experiments/README.md) | 数据、配置和结果目录 |
-| [脚本索引](scripts/README.md) | 活动脚本、历史脚本归档与实验室环境变量 |
-| [发布前检查清单](docs/RELEASE_CHECKLIST.md) | 可发布边界、验证命令与当前 blocker |
-| [服务器布局](docs/operations/SERVER_LAYOUT.md) | 源码与运行资产边界 |
-| [研究路线图](docs/research/RESEARCH_AND_LEARNING_ROADMAP.md) | 后续 LLM 学习与实验方向 |
+| [项目 README](../../README.md) | 系统能力、结构与部署入口 |
+| [文档中心](../README.md) | 全部文档分类 |
+| [月社妃实验总览](../research/KISAKI_EXPERIMENT_INDEX.md) | E1/E2、Gold、脚本和历史结果统一索引 |
+| [V4 审核与重训练](../research/KISAKI_V4_HUMAN_REVIEW_AND_RETRAINING.md) | 当前数据、门禁和训练入口 |
+| [实验资产 README](../../backend/data/character_dialogues/experiments/README.md) | 数据、配置和结果目录 |
+| [脚本索引](../../scripts/README.md) | 活动脚本、历史脚本归档与实验室环境变量 |
+| [发布前检查清单](../RELEASE_CHECKLIST.md) | 可发布边界、验证命令与当前 blocker |
+| [服务器布局](../operations/SERVER_LAYOUT.md) | 源码与运行资产边界 |
+| [研究路线图](../research/RESEARCH_AND_LEARNING_ROADMAP.md) | 后续 LLM 学习与实验方向 |
 
 ## 9. 工作规则
 
