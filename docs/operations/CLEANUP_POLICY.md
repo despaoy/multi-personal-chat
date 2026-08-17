@@ -30,7 +30,7 @@
 
 ```bash
 git status -sb
-find "$MULTIPERSONAL_LAB_ROOT/multipersonal-chat-system" -type d \
+find "$MULTIPERSONAL_LAB_ROOT/multi-personal-chat" -type d \
   \( -name __pycache__ -o -name .pytest_cache \) -print
 find "$MULTIPERSONAL_LAB_ROOT"/runtime -name '*.pid' -type f -print
 du -sh "$MULTIPERSONAL_LAB_ROOT"/*

@@ -7,7 +7,7 @@
 ```text
 "$MULTIPERSONAL_LAB_ROOT"/
 ├── activate_qqchat.sh          # 统一环境入口
-├── multipersonal-chat-system/            # Git 源码及被忽略的分模式配置文件
+├── multi-personal-chat/            # Git 源码及被忽略的分模式配置文件
 ├── envs/                       # 当前用户的 Conda/venv 环境
 │   └── qqchat-py312/           # 推荐 Python 3.12 环境
 ├── tools/                      # Miniconda 等用户级工具
@@ -31,11 +31,11 @@
 
 | 资产 | 唯一位置 | 是否进 Git |
 | --- | --- | --- |
-| Python/TypeScript 源码 | `multipersonal-chat-system/` | 是 |
+| Python/TypeScript 源码 | `multi-personal-chat/` | 是 |
 | 环境配置模板 | `.env.example` | 是 |
-| 裸机后端实际配置 | `multipersonal-chat-system/backend/.env` | 否 |
-| Compose 实际配置 | `multipersonal-chat-system/deploy/.env` | 否 |
-| Next.js 本地配置 | `multipersonal-chat-system/.env.local` | 否 |
+| 裸机后端实际配置 | `multi-personal-chat/backend/.env` | 否 |
+| Compose 实际配置 | `multi-personal-chat/deploy/.env` | 否 |
+| Next.js 本地配置 | `multi-personal-chat/.env.local` | 否 |
 | 基座与量化模型 | `runtime/models/` | 否 |
 | LoRA adapter | `runtime/loras/` | 否 |
 | RAG 向量索引 | `runtime/rag/` | 否 |

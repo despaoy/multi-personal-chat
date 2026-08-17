@@ -35,7 +35,7 @@ def _env(name: str, legacy_name: str, default: str) -> str:
 
 @register(
     "multipersonal_gateway",
-    "multipersonal-chat-system",
+    "multi-personal-chat",
     "Forward AstrBot multi-platform messages to MultiPersonal Chat System FastAPI.",
     "0.1.0",
 )

@@ -18,7 +18,7 @@
 
 ```bash
 source "$MULTIPERSONAL_LAB_ROOT"/activate_qqchat.sh
-cd "$MULTIPERSONAL_LAB_ROOT/multipersonal-chat-system"
+cd "$MULTIPERSONAL_LAB_ROOT/multi-personal-chat"
 
 python --version
 python -m pip check
@@ -38,7 +38,7 @@ git status -sb
 
 | 内容 | 目录 |
 | --- | --- |
-| 代码、配置模板、可提交数据 | `"$MULTIPERSONAL_LAB_ROOT/multipersonal-chat-system"/` |
+| 代码、配置模板、可提交数据 | `"$MULTIPERSONAL_LAB_ROOT/multi-personal-chat"/` |
 | 基座、AWQ、Embedding、Reranker | `"$MULTIPERSONAL_LAB_ROOT"/runtime/models/` |
 | LoRA checkpoint 和 final | `"$MULTIPERSONAL_LAB_ROOT"/runtime/loras/` |
 | 日志、评测和临时输出 | `runtime/logs/`、`runtime/results/`、`runtime/tmp/` |

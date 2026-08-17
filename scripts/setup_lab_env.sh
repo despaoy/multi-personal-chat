@@ -20,7 +20,7 @@ detect_lab_root() {
 }
 
 LAB_ROOT=${1:-$(detect_lab_root)}
-PROJECT=$LAB_ROOT/multipersonal-chat-system
+PROJECT=$LAB_ROOT/multi-personal-chat
 
 echo "=== KISAKI 实验环境配置 ==="
 echo "LAB_ROOT: $LAB_ROOT"
@@ -80,7 +80,7 @@ if [[ -d "$PROJECT/.git" ]]; then
     fi
 else
     echo "  代码未找到: $PROJECT"
-    echo "  请先 clone: git clone https://github.com/despaoy/qqchat-enhanced.git $PROJECT"
+    echo "  请先 clone: git clone https://github.com/despaoy/multi-personal-chat.git $PROJECT"
 fi
 
 # 5. 模型检查

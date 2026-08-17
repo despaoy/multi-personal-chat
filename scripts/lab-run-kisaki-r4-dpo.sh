@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT="${MULTIPERSONAL_LAB_ROOT:-${QQCHAT_LAB_ROOT:?set MULTIPERSONAL_LAB_ROOT or QQCHAT_LAB_ROOT to the lab root}}"
-PROJECT=$ROOT/multipersonal-chat-system
+PROJECT=$ROOT/multi-personal-chat
 PYTHON="${MULTIPERSONAL_LAB_PYTHON:-${QQCHAT_LAB_PYTHON:-$ROOT/envs/qqchat-gpu-qwen3/bin/python}}"
 GPU=${1:?usage: lab-run-kisaki-r4-dpo.sh GPU BEST_R1_ADAPTER PREFERENCE_SOURCE}
 BEST_ADAPTER=${2:?usage: lab-run-kisaki-r4-dpo.sh GPU BEST_R1_ADAPTER PREFERENCE_SOURCE}

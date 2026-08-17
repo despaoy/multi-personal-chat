@@ -12,7 +12,7 @@ from remote_config import connect_ssh
 
 
 ROOT = Path(__file__).resolve().parents[1]
-REMOTE_ROOT = os.getenv("MULTIPERSONAL_REMOTE_ROOT") or os.getenv("QQCHAT_REMOTE_ROOT", "/workspace/multipersonal-chat-system")
+REMOTE_ROOT = os.getenv("MULTIPERSONAL_REMOTE_ROOT") or os.getenv("QQCHAT_REMOTE_ROOT", "/workspace/multi-personal-chat")
 REMOTE_LAB_ROOT = os.getenv("MULTIPERSONAL_LAB_ROOT") or os.getenv("QQCHAT_LAB_ROOT") or str(Path(REMOTE_ROOT).parent)
 PYTHON = os.getenv("MULTIPERSONAL_REMOTE_PYTHON") or os.getenv("MULTIPERSONAL_REMOTE_PYTHON", "python")
 QUEUE_LOG = "/tmp/kisaki_r1v4_queue.log"

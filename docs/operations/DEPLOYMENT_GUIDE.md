@@ -13,13 +13,10 @@
 
 ```bash
 cd "$MULTIPERSONAL_LAB_ROOT"
-git clone https://github.com/despaoy/qqchat-enhanced.git
-cd qqchat-enhanced
+git clone https://github.com/despaoy/multi-personal-chat.git
+cd multi-personal-chat
 git status -sb
 ```
-
-> 若远端仓库已完成重命名，请将克隆地址替换为
-> `https://github.com/despaoy/multipersonal-chat-system.git`。
 
 服务器工作区非干净时，不要直接执行 `git pull`。先保存实验文件，再同步。
 
@@ -42,7 +39,7 @@ pnpm --version
 ### 4.1 裸机模式
 
 ```bash
-cd "$MULTIPERSONAL_LAB_ROOT/multipersonal-chat-system"
+cd "$MULTIPERSONAL_LAB_ROOT/multi-personal-chat"
 cp .env.example backend/.env
 chmod 600 backend/.env
 ```
@@ -66,7 +63,7 @@ Next.js 本地启动如需覆盖 `BACKEND_URL`，写入仓库根目录 `.env.loc
 ### 4.2 Docker Compose 模式
 
 ```bash
-cd "$MULTIPERSONAL_LAB_ROOT/multipersonal-chat-system"
+cd "$MULTIPERSONAL_LAB_ROOT/multi-personal-chat"
 cp .env.example deploy/.env
 chmod 600 deploy/.env
 ```
@@ -90,7 +87,7 @@ Compose 只从 `deploy/.env` 做变量插值。复制后至少设置：
 ## 5. 验证源码
 
 ```bash
-cd "$MULTIPERSONAL_LAB_ROOT/multipersonal-chat-system"
+cd "$MULTIPERSONAL_LAB_ROOT/multi-personal-chat"
 python -m pytest backend/tests -q
 pnpm install --frozen-lockfile
 pnpm ts-check
@@ -123,7 +120,7 @@ CUDA_VISIBLE_DEVICES=0 vllm serve \
 后端：
 
 ```bash
-cd "$MULTIPERSONAL_LAB_ROOT/multipersonal-chat-system"
+cd "$MULTIPERSONAL_LAB_ROOT/multi-personal-chat"
 uvicorn backend.app.main:app --host 127.0.0.1 --port 8000 --workers 1
 ```
 
@@ -132,7 +129,7 @@ SQLite 只使用一个 worker。切换 PostgreSQL并确认共享限流、队列�
 前端：
 
 ```bash
-cd "$MULTIPERSONAL_LAB_ROOT/multipersonal-chat-system"
+cd "$MULTIPERSONAL_LAB_ROOT/multi-personal-chat"
 pnpm build
 pnpm start
 ```

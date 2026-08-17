@@ -1,6 +1,6 @@
 # MultiPersonal Chat System — 代码知识库
 
-> 本文档为 `multipersonal-chat-system` 项目的结构化代码知识库（Code Wiki），涵盖项目整体架构、模块职责、关键类与函数、依赖关系与运行方式。
+> 本文档为 `multi-personal-chat` 项目的结构化代码知识库（Code Wiki），涵盖项目整体架构、模块职责、关键类与函数、依赖关系与运行方式。
 >
 > - **版本基线**：FastAPI 后端 `v2.0.0`、Next.js 前端 `0.1.0`（Next 16.2.9 / React 19.2.3）
 > - **最近核对**：2026-07-31
@@ -115,7 +115,7 @@
 ## 3. 仓库目录结构
 
 ```text
-multipersonal-chat-system/
+multi-personal-chat/
 ├── backend/                       # FastAPI 后端（Python 3.12）
 │   ├── api/                       # 18 个 API 路由模块
 │   ├── app/                       # 应用入口、配置、依赖注入、运行时容器

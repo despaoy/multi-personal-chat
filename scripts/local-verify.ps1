@@ -45,7 +45,7 @@ function Invoke-Step {
 
 $Python = Find-Python
 $PyArgs = @($Python.Args)
-$PytestTmp = Join-Path ([IO.Path]::GetTempPath()) ("multipersonal-chat-system-pytest-{0}" -f $PID)
+$PytestTmp = Join-Path ([IO.Path]::GetTempPath()) ("multi-personal-chat-pytest-{0}" -f $PID)
 
 $CompileTargets = @(
     "app/main.py",

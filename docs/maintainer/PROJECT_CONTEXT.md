@@ -33,7 +33,7 @@ MultiPersonal Chat System 是面向角色对话研究与保研展示的多平台
 
 | 用途 | 路径或状态 |
 |---|---|
-| 项目 | `$MULTIPERSONAL_LAB_ROOT/multipersonal-chat-system` |
+| 项目 | `$MULTIPERSONAL_LAB_ROOT/multi-personal-chat` |
 | 正式训练环境 | `$MULTIPERSONAL_LAB_ROOT/envs/qqchat-gpu-qwen3`，Python 3.11 |
 | 后端测试/Embedding 环境 | `$MULTIPERSONAL_LAB_ROOT/envs/qqchat-gpu`，Python 3.10 |
 | 基础模型 | `$MULTIPERSONAL_LAB_ROOT/runtime/models/Qwen3-8B-Instruct` |

@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT="${MULTIPERSONAL_LAB_ROOT:-${QQCHAT_LAB_ROOT:?set MULTIPERSONAL_LAB_ROOT or QQCHAT_LAB_ROOT to the lab root}}"
-PROJECT=$ROOT/multipersonal-chat-system
+PROJECT=$ROOT/multi-personal-chat
 LAUNCHER=$PROJECT/scripts/lab-start-vllm.sh
 PIDFILE=$ROOT/runtime/vllm.pid
 LOGFILE=$ROOT/runtime/logs/vllm.log
