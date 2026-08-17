@@ -1,4 +1,4 @@
-# QQChat Enhanced 文档中心
+# MultiPersonal Chat System 文档中心
 
 本文档目录只保存可维护的项目说明和可复现研究记录。模型权重、LoRA 产物、数据库、日志与向量索引不进入 Git。
 
@@ -7,7 +7,7 @@
 1. [项目 README](../README.md)：项目定位、架构和快速验证。
 2. [保研项目答辩手册](research/POSTGRADUATE_RECOMMENDATION_DEFENSE_PLAYBOOK.md)：项目叙事、LLM 原理、追问与演示。
 3. [部署指南](operations/DEPLOYMENT_GUIDE.md)：本地、实验室服务器和容器部署。
-4. [服务器目录规范](operations/SERVER_LAYOUT.md)：`$QQCHAT_LAB_ROOT` 的唯一推荐布局。
+4. [服务器目录规范](operations/SERVER_LAYOUT.md)：`$MULTIPERSONAL_LAB_ROOT` 的唯一推荐布局。
 5. [清理策略](operations/CLEANUP_POLICY.md)：哪些文件可以删除，哪些必须保留。
 6. [代码知识库](architecture/CODE_WIKI.md)：模块职责、API 和调用链。
 7. [可扩展性开发指南](architecture/EXTENSIBILITY_GUIDE.md)：新增功能时的分层边界与最短路径。

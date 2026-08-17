@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-QQ智能助手 - 异步推理服务 (供消息管道使用)
+MultiPersonal Chat System - 异步推理服务 (供消息管道使用)
 
 将不同推理后端 (Mock/Ollama/vLLM) 统一为异步接口，
 供 AsyncMessagePipeline 使用。

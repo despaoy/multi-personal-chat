@@ -22,7 +22,7 @@ from inference.prompt_policy import PROMPT_POLICY_VERSION  # noqa: E402
 
 
 V4_DIR = BACKEND / "data/character_dialogues/experiments/v4"
-LAB_ROOT = os.getenv("QQCHAT_LAB_ROOT", str(PROJECT_ROOT / "runtime")).rstrip("/\\")
+LAB_ROOT = (os.getenv("MULTIPERSONAL_LAB_ROOT") or os.getenv("QQCHAT_LAB_ROOT") or str(PROJECT_ROOT / "runtime")).rstrip("/\\")
 DEFAULT_MANIFEST = V4_DIR / "canonical_dataset_manifest.json"
 DEFAULT_OUTPUT = V4_DIR / "configs"
 DEFAULT_TEMPLATE = V4_DIR / "r1v4_base_config.json"

@@ -31,7 +31,7 @@ CONFIGS = {
 }
 DATASET_MANIFEST = V4_DIR / "canonical_dataset_manifest.json"
 TRAINING_GATE = PROJECT_ROOT / "scripts" / "validate_kisaki_v4_training_gate.py"
-SERVER_ROOT = Path(os.getenv("QQCHAT_LAB_ROOT", str(PROJECT_ROOT / "runtime")))
+SERVER_ROOT = Path(os.getenv("MULTIPERSONAL_LAB_ROOT") or os.getenv("QQCHAT_LAB_ROOT") or str(PROJECT_ROOT / "runtime"))
 
 
 def _load(path: Path) -> Any:

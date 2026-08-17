@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""QQ智能助手 - 后端主服务入口（向后兼容）
+"""MultiPersonal Chat System - 后端主服务入口（向后兼容）
 
 此文件保留用于向后兼容。新入口请使用 run.py。
 实际应用逻辑已拆分到 app/main.py。

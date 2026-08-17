@@ -988,7 +988,7 @@ class SQLiteDB:
     def _init_default_config(self, cursor):
         """初始化默认配置"""
         default_config = {
-            "botName": "QQ智能助手",
+            "botName": "MultiPersonal Chat System",
             "autoReply": "true",
             "groupReply": "true",
             "privateReply": "true",

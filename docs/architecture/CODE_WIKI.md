@@ -1,6 +1,6 @@
-# QQChat Enhanced — 代码知识库
+# MultiPersonal Chat System — 代码知识库
 
-> 本文档为 `qqchat-enhanced` 项目的结构化代码知识库（Code Wiki），涵盖项目整体架构、模块职责、关键类与函数、依赖关系与运行方式。
+> 本文档为 `multipersonal-chat-system` 项目的结构化代码知识库（Code Wiki），涵盖项目整体架构、模块职责、关键类与函数、依赖关系与运行方式。
 >
 > - **版本基线**：FastAPI 后端 `v2.0.0`、Next.js 前端 `0.1.0`（Next 16.2.9 / React 19.2.3）
 > - **最近核对**：2026-07-31
@@ -45,7 +45,7 @@
 
 ## 1. 项目概览
 
-**QQChat Enhanced** 是一个面向角色对话、知识检索、LoRA 适配与可复现 LLM 实验的多平台智能助手系统。
+**MultiPersonal Chat System** 是一个面向角色对话、知识检索、LoRA 适配与可复现 LLM 实验的多平台智能助手系统。
 
 - **平台接入**：通过 AstrBot 网关插件接入 QQ / Telegram / 企业微信 / 公众号 / 个人微信等 IM 平台。
 - **核心服务**：FastAPI 提供认证、配置、知识库、训练、评估、实验等完整 REST API。
@@ -72,7 +72,7 @@
                              │
                   ┌──────────▼──────────┐
                   │       AstrBot        │
-                  │  (qqchat_gateway)    │
+                  │  (multipersonal_gateway)    │
                   └──────────┬──────────┘
                              │ HMAC 签名 + Token
                   ┌──────────▼──────────┐
@@ -115,7 +115,7 @@
 ## 3. 仓库目录结构
 
 ```text
-qqchat-enhanced/
+multipersonal-chat-system/
 ├── backend/                       # FastAPI 后端（Python 3.12）
 │   ├── api/                       # 18 个 API 路由模块
 │   ├── app/                       # 应用入口、配置、依赖注入、运行时容器
@@ -174,7 +174,7 @@ qqchat-enhanced/
 │   └── lib/                       # api.ts / api-contracts.ts / proxy.ts / i18n.ts / utils.ts
 │
 ├── astrbot_plugins/
-│   └── qqchat_gateway/            # AstrBot 网关插件
+│   └── multipersonal_gateway/            # AstrBot 网关插件
 │       ├── main.py
 │       ├── metadata.yaml
 │       └── README.md
@@ -215,7 +215,7 @@ qqchat-enhanced/
 # backend/app/main.py
 def create_app(container: RuntimeContainer | None = None) -> FastAPI:
     runtime_container = container if container is not None else RuntimeContainer.default(startup_env=_STARTUP_ENV)
-    application = FastAPI(title="QQ智能助手 API (增强版)", version="2.0.0", lifespan=lifespan)
+    application = FastAPI(title="MultiPersonal Chat System API (增强版)", version="2.0.0", lifespan=lifespan)
     application.state.runtime_container = runtime_container
     application.state.readiness_probe = ReadinessProbe(
         database_check=lambda: get_runtime_container(application).db.execute_sql("SELECT 1"),
@@ -1083,17 +1083,17 @@ src/components/
 
 ## 6. AstrBot 网关插件
 
-**目录**：`astrbot_plugins/qqchat_gateway/`，3 个文件构成独立可安装的 AstrBot 插件。
+**目录**：`astrbot_plugins/multipersonal_gateway/`，3 个文件构成独立可安装的 AstrBot 插件。
 
 | 文件 | 说明 |
 |---|---|
-| `metadata.yaml` | name=qqchat_gateway，version=0.1.0 |
+| `metadata.yaml` | name=multipersonal_gateway，version=0.1.0 |
 | `main.py` | `QQChatGatewayPlugin(Star)` 继承 AstrBot Star 基类 |
 | `README.md` | 安装与配置说明 |
 
 **核心机制**：
 
-- **配置**：环境变量驱动（`QQCHAT_BACKEND_URL`、`ASTRBOT_INTEGRATION_TOKEN`、`QQCHAT_TRIGGER_PREFIXES=/ai,/chat,@bot`、`QQCHAT_REPLY_GROUP_ALL`、`QQCHAT_BACKEND_TIMEOUT=60`、`QQCHAT_DEDUP_TTL=300`）
+- **配置**：环境变量驱动（`MULTIPERSONAL_BACKEND_URL`、`ASTRBOT_INTEGRATION_TOKEN`、`MULTIPERSONAL_TRIGGER_PREFIXES=/ai,/chat,@bot`、`MULTIPERSONAL_REPLY_GROUP_ALL`、`MULTIPERSONAL_BACKEND_TIMEOUT=60`、`MULTIPERSONAL_DEDUP_TTL=300`）
 - **转发逻辑**：`@filter.event_message_type(filter.EventMessageType.ALL)` 拦截所有消息 → `_should_forward` 判断 → `_build_payload` 构造标准化 payload → 去重
 - **签名机制**：`_signature` 计算 `sha256=HMAC(token, "timestamp.nonce.body_hash")`，请求头携带 `X-Integration-Token` / `X-Integration-Timestamp` / `X-Integration-Nonce` / `X-Integration-Signature`
 - **平台归一化**：`_platform` 多源探测（telegram/wecom/wechat_official/wechat_personal/qq）；`_adapter` 映射（qq→napcat、wechat_personal→gewechat）
@@ -1429,4 +1429,4 @@ app.main.create_app ──→ app.runtime.RuntimeContainer
 | `docs/research/RESEARCH_AND_LEARNING_ROADMAP.md` | 研究路线图、10 周计划、部署验收、学习资源（合并自 PROJECT_STATUS/LLM_RESEARCH/PERSONAL_ACTION 三份文档） |
 | `docs/research/BEGINNER_REAL_LLM_EXPERIMENT_GUIDE.md` | 新手实验指南 |
 | `docs/data/human-scoring-rubric.md` | 盲评与偏好标注评分标准 |
-| `astrbot_plugins/qqchat_gateway/README.md` | AstrBot 网关插件安装说明 |
+| `astrbot_plugins/multipersonal_gateway/README.md` | AstrBot 网关插件安装说明 |

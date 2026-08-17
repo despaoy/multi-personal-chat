@@ -6,7 +6,7 @@
 
 ## 1. 项目定位
 
-QQChat Enhanced 是面向角色对话研究与保研展示的多平台 LLM 系统，覆盖数据治理、LoRA 微调、AWQ 推理、混合 RAG、评测、AstrBot 网关和 Web 管理台。
+MultiPersonal Chat System 是面向角色对话研究与保研展示的多平台 LLM 系统，覆盖数据治理、LoRA 微调、AWQ 推理、混合 RAG、评测、AstrBot 网关和 Web 管理台。
 
 - 定位：单机可部署、证据驱动的研究原型。
 - 主线：数据 -> 训练 -> 推理 -> 检索 -> 评测 -> 多平台交付。
@@ -29,18 +29,18 @@ QQChat Enhanced 是面向角色对话研究与保研展示的多平台 LLM 系�
 
 ## 3. 实验室服务器
 
-实验室根目录通过 `QQCHAT_LAB_ROOT` 注入；部署根不写入仓库。
+实验室根目录通过 `MULTIPERSONAL_LAB_ROOT` 注入；部署根不写入仓库。
 
 | 用途 | 路径或状态 |
 |---|---|
-| 项目 | `$QQCHAT_LAB_ROOT/qqchat-enhanced` |
-| 正式训练环境 | `$QQCHAT_LAB_ROOT/envs/qqchat-gpu-qwen3`，Python 3.11 |
-| 后端测试/Embedding 环境 | `$QQCHAT_LAB_ROOT/envs/qqchat-gpu`，Python 3.10 |
-| 基础模型 | `$QQCHAT_LAB_ROOT/runtime/models/Qwen3-8B-Instruct` |
-| Embedding | `$QQCHAT_LAB_ROOT/runtime/models/bge-m3` |
-| LoRA 输出 | `$QQCHAT_LAB_ROOT/runtime/loras/kisaki/canonical/` |
-| 实验结果 | `$QQCHAT_LAB_ROOT/runtime/experiments/kisaki/` |
-| 日志 | `$QQCHAT_LAB_ROOT/runtime/logs/` |
+| 项目 | `$MULTIPERSONAL_LAB_ROOT/multipersonal-chat-system` |
+| 正式训练环境 | `$MULTIPERSONAL_LAB_ROOT/envs/qqchat-gpu-qwen3`，Python 3.11 |
+| 后端测试/Embedding 环境 | `$MULTIPERSONAL_LAB_ROOT/envs/qqchat-gpu`，Python 3.10 |
+| 基础模型 | `$MULTIPERSONAL_LAB_ROOT/runtime/models/Qwen3-8B-Instruct` |
+| Embedding | `$MULTIPERSONAL_LAB_ROOT/runtime/models/bge-m3` |
+| LoRA 输出 | `$MULTIPERSONAL_LAB_ROOT/runtime/loras/kisaki/canonical/` |
+| 实验结果 | `$MULTIPERSONAL_LAB_ROOT/runtime/experiments/kisaki/` |
+| 日志 | `$MULTIPERSONAL_LAB_ROOT/runtime/logs/` |
 | GPU | 2 x RTX 3090，共享资源，只等待空闲，不抢占其他进程 |
 
 运行时模型、checkpoint、日志、数据库和向量索引位于 `runtime/`，不得提交 Git。
@@ -117,8 +117,8 @@ python scripts/validate_kisaki_v4_training_gate.py
 ### 正式预检
 
 ```bash
-export QQCHAT_LAB_ROOT=/path/to/lab-root
-python scripts/validate_kisaki_v4_training_gate.py --disk-path "$QQCHAT_LAB_ROOT"
+export MULTIPERSONAL_LAB_ROOT=/path/to/lab-root
+python scripts/validate_kisaki_v4_training_gate.py --disk-path "$MULTIPERSONAL_LAB_ROOT"
 ```
 
 ### 门禁通过后的 seed 42

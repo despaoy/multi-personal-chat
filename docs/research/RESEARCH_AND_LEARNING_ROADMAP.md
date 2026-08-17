@@ -1,6 +1,6 @@
 # 研究与学习路线图
 
-> 将 QQChat Enhanced 转化为证据驱动的 LLM 系统研究平台，用于研究生保研面试展示。
+> 将 MultiPersonal Chat System 转化为证据驱动的 LLM 系统研究平台，用于研究生保研面试展示。
 > 合并自原 LLM_RESEARCH_ENHANCEMENT_ROADMAP、PERSONAL_ACTION_AND_LEARNING_ROADMAP、PROJECT_STATUS_AND_NEXT_STEPS。
 > 当前主线：KISAKI-LLM-RESEARCH-V4。旧 E1/E2/E2'/E2'' 已统一归档，不再作为当前结论。
 
@@ -261,7 +261,7 @@ LLM-as-a-judge 仅用固定 rubric、held-out judge 模型或盲人工抽样，�
 
 **Do**：
 1. 配置 QQ/NapCat 连接 AstrBot
-2. 安装配置 `qqchat_gateway`（backend URL + shared token）
+2. 安装配置 `multipersonal_gateway`（backend URL + shared token）
 3. 测试私聊、群 @、prefix trigger、重复 message ID、缺失 token、超时
 4. 个人微信用测试账号，视为可选（稳定性和合规风险）
 5. 捕获相同 trace ID 贯穿 AstrBot 日志、FastAPI 日志、消息历史
@@ -298,7 +298,7 @@ LLM-as-a-judge 仅用固定 rubric、held-out judge 模型或盲人工抽样，�
 ### C. 真实平台验收
 
 1. 配置 QQ/NapCat 连接 AstrBot（不直连旧 NoneBot 路径）
-2. 在 AstrBot 中配置 `qqchat_gateway`（与 FastAPI 相同 integration token）
+2. 在 AstrBot 中配置 `multipersonal_gateway`（与 FastAPI 相同 integration token）
 3. 测试 QQ 私聊、群 @/prefix trigger、重复 message ID、超大文本、缺失 token、backend 超时
 4. 个人微信用测试账号，验证私聊和群行为后才启用真实联系人
 5. 每个平台验收测试保存一个 trace ID 及对应 AstrBot、FastAPI、数据库记录

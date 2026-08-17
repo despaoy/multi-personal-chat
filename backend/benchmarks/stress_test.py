@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-QQ智能助手 — 本地模型+LoRA 并发压力测试
+MultiPersonal Chat System — 本地模型+LoRA 并发压力测试
 
 测试目标：
   - 本地大模型（Transformers/PEFT + LoRA）在群聊场景下的并发回复生成能力
@@ -362,7 +362,7 @@ async def main():
     args = parser.parse_args()
 
     print("=" * 70)
-    print("  QQ智能助手 — 本地模型 + LoRA 压力测试")
+    print("  MultiPersonal Chat System — 本地模型 + LoRA 压力测试")
     print(f"  目标: {BASE_URL}")
     print("=" * 70)
 

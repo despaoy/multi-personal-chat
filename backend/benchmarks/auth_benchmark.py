@@ -156,7 +156,7 @@ async def benchmark_api_with_auth(cookies, total=500, concurrency=100):
 
 async def main():
     print("=" * 60)
-    print("  QQ智能助手 带认证并发压力测试")
+    print("  MultiPersonal Chat System 带认证并发压力测试")
     print("=" * 60)
 
     # 获取认证Cookie

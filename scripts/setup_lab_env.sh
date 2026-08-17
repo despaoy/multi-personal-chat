@@ -1,24 +1,26 @@
 #!/usr/bin/env bash
 # 快速配置 KISAKI 实验环境
 # 用法: bash scripts/setup_lab_env.sh [LAB_ROOT]
-# 默认 LAB_ROOT 通过 QQCHAT_LAB_ROOT 环境变量或自动检测
+# 默认 LAB_ROOT 通过 MULTIPERSONAL_LAB_ROOT（或旧名 QQCHAT_LAB_ROOT）环境变量或自动检测
 set -euo pipefail
 
 # 自动检测 LAB_ROOT
 detect_lab_root() {
-    if [[ -n "${QQCHAT_LAB_ROOT:-}" ]]; then
+    if [[ -n "${MULTIPERSONAL_LAB_ROOT:-}" ]]; then
+        echo "$MULTIPERSONAL_LAB_ROOT"
+    elif [[ -n "${QQCHAT_LAB_ROOT:-}" ]]; then
         echo "$QQCHAT_LAB_ROOT"
-    elif [[ -d ${QQCHAT_LAB_ROOT:-/tmp/qqchat-lab} ]]; then
-        echo "${QQCHAT_LAB_ROOT:-/tmp/qqchat-lab}"
-    elif [[ -d ${QQCHAT_LAB_ROOT:-$HOME/qqchat-lab} ]]; then
-        echo "${QQCHAT_LAB_ROOT:-$HOME/qqchat-lab}"
+    elif [[ -d ${MULTIPERSONAL_LAB_ROOT:-/tmp/multipersonal-lab} ]]; then
+        echo "${MULTIPERSONAL_LAB_ROOT:-/tmp/multipersonal-lab}"
+    elif [[ -d ${MULTIPERSONAL_LAB_ROOT:-$HOME/multipersonal-lab} ]]; then
+        echo "${MULTIPERSONAL_LAB_ROOT:-$HOME/multipersonal-lab}"
     else
         echo "$HOME/lab"
     fi
 }
 
 LAB_ROOT=${1:-$(detect_lab_root)}
-PROJECT=$LAB_ROOT/qqchat-enhanced
+PROJECT=$LAB_ROOT/multipersonal-chat-system
 
 echo "=== KISAKI 实验环境配置 ==="
 echo "LAB_ROOT: $LAB_ROOT"
@@ -78,7 +80,7 @@ if [[ -d "$PROJECT/.git" ]]; then
     fi
 else
     echo "  代码未找到: $PROJECT"
-    echo "  请先 clone: git clone https://github.com/despaoy/qqchat-enhanced.git $PROJECT"
+    echo "  请先 clone: git clone https://github.com/despaoy/multipersonal-chat-system.git $PROJECT"
 fi
 
 # 5. 模型检查
@@ -113,12 +115,14 @@ echo ""
 echo "=== 7. 环境变量配置 ==="
 echo "请在 ~/.bashrc 中添加以下内容（或运行脚本前 export）:"
 echo ""
-echo "  export QQCHAT_LAB_ROOT=$LAB_ROOT"
-echo "  export QQCHAT_PYTHON=$VENV_PYTHON"
+echo "  export MULTIPERSONAL_LAB_ROOT=$LAB_ROOT
+  # 兼容旧变量：export QQCHAT_LAB_ROOT=$LAB_ROOT"
+echo "  export MULTIPERSONAL_PYTHON=$VENV_PYTHON
+  # 兼容旧变量：export QQCHAT_PYTHON=$VENV_PYTHON"
 echo ""
 echo "或者一行搞定:"
-echo "  echo 'export QQCHAT_LAB_ROOT=$LAB_ROOT' >> ~/.bashrc"
-echo "  echo 'export QQCHAT_PYTHON=$VENV_PYTHON' >> ~/.bashrc"
+echo "  echo 'export MULTIPERSONAL_LAB_ROOT=$LAB_ROOT' >> ~/.bashrc"
+echo "  echo 'export MULTIPERSONAL_PYTHON=$VENV_PYTHON' >> ~/.bashrc"
 echo ""
 
 # 8. 下载缺失模型

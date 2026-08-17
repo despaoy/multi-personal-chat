@@ -1,5 +1,5 @@
 #!/bin/bash
-# QQ智能助手 - 一键运行完整实验套件
+# MultiPersonal Chat System - 一键运行完整实验套件
 # 用法: bash deploy/run_experiments.sh [--mock] [--output-dir <dir>]
 #
 # 顺序执行 4 个实验脚本：
@@ -42,7 +42,7 @@ if ! command -v "${PYTHON}" &>/dev/null; then
     PYTHON="python"
 fi
 
-echo -e "=== QQ智能助手 实验套件 ==="
+echo -e "=== MultiPersonal Chat System 实验套件 ==="
 echo -e "输出目录: ${YELLOW}${OUTPUT_DIR}${NC}"
 echo -e "Mock 模式: ${YELLOW}${MOCK:-否}${NC}"
 echo -e "Python: ${YELLOW}${PYTHON}${NC}"

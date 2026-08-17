@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-QQ智能助手 - vLLM 推理服务启动脚本
+MultiPersonal Chat System - vLLM 推理服务启动脚本
 
 在 RTX 3090 (24GB) 上使用 vLLM 启动 Qwen3-8B 推理服务。
 
@@ -69,7 +69,7 @@ def build_args(args) -> list:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="vLLM 推理服务启动器 (QQ智能助手)")
+    parser = argparse.ArgumentParser(description="vLLM 推理服务启动器 (MultiPersonal Chat System)")
     parser.add_argument("--host", default="0.0.0.0", help="监听地址")
     parser.add_argument("--port", type=int, default=8001, help="监听端口 (不要让 FastAPI 占用)")
     parser.add_argument("--model", default="Qwen/Qwen3-8B",

@@ -1,5 +1,5 @@
 """
-QQ智能助手并发压力测试
+MultiPersonal Chat System并发压力测试
 
 模拟NapCat收到大量消息的场景，测试系统实际上限。
 测试维度：
@@ -432,7 +432,7 @@ async def benchmark_find_limit(base_url: str):
 # ============================================
 
 async def main():
-    parser = argparse.ArgumentParser(description="QQ智能助手并发压力测试")
+    parser = argparse.ArgumentParser(description="MultiPersonal Chat System并发压力测试")
     parser.add_argument("--mode", default="all",
                         choices=["all", "api", "inference", "cache", "ratelimit", "queue", "limit"],
                         help="测试模式")
@@ -445,7 +445,7 @@ async def main():
     args = parser.parse_args()
 
     print("=" * 60)
-    print("  QQ智能助手 并发压力测试")
+    print("  MultiPersonal Chat System 并发压力测试")
     print(f"  目标: {args.url}")
     print(f"  总请求数: {args.total}, 并发数: {args.concurrency}")
     print("=" * 60)

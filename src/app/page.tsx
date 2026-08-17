@@ -14,8 +14,8 @@ import DashboardClient from './DashboardClient';
 
 /** 页面 SEO 元数据 */
 export const metadata = {
-  title: '仪表盘 | QQ智能助手',
-  description: 'QQ智能助手管理平台',
+  title: '仪表盘 | MultiPersonal Chat System',
+  description: 'MultiPersonal Chat System管理平台',
 };
 
 /**

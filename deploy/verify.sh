@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# QQ智能助手 - Docker Compose 部署验证
+# MultiPersonal Chat System - Docker Compose 部署验证
 #
 # 默认只访问 Compose 发布的 Nginx 入口（http://127.0.0.1）。
 # 可选：
@@ -121,7 +121,7 @@ print_summary() {
         "${YELLOW}" "${SKIP}" "${NC}"
 }
 
-echo "=== QQ智能助手 Docker Compose 部署验证 ==="
+echo "=== MultiPersonal Chat System Docker Compose 部署验证 ==="
 echo "公开入口: ${VERIFY_BASE_URL}"
 
 echo "[1/5] 检查本机依赖..."

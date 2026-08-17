@@ -1,7 +1,7 @@
-"""AstrBot gateway plugin for qqchat-enhanced.
+"""AstrBot gateway plugin for MultiPersonal Chat System.
 
 Install this directory as an AstrBot plugin. It normalizes platform events and
-forwards text messages to qqchat-enhanced FastAPI.
+forwards text messages to the MultiPersonal Chat System FastAPI backend.
 """
 
 from __future__ import annotations
@@ -25,23 +25,31 @@ from astrbot.api.star import Context, Star, register
 DEFAULT_TIMEOUT = 60
 
 
+def _env(name: str, legacy_name: str, default: str) -> str:
+    """Prefer the MULTIPERSONAL_* variable and fall back to the legacy QQCHAT_* alias."""
+    value = os.getenv(name)
+    if value is not None:
+        return value
+    return os.getenv(legacy_name, default)
+
+
 @register(
-    "qqchat_gateway",
-    "qqchat-enhanced",
-    "Forward AstrBot multi-platform messages to qqchat-enhanced FastAPI.",
+    "multipersonal_gateway",
+    "multipersonal-chat-system",
+    "Forward AstrBot multi-platform messages to MultiPersonal Chat System FastAPI.",
     "0.1.0",
 )
-class QQChatGatewayPlugin(Star):
+class MultiPersonalGatewayPlugin(Star):
     def __init__(self, context: Context):
         super().__init__(context)
-        self.backend_url = os.getenv("QQCHAT_BACKEND_URL", "http://127.0.0.1:8000").rstrip("/")
+        self.backend_url = _env("MULTIPERSONAL_BACKEND_URL", "QQCHAT_BACKEND_URL", "http://127.0.0.1:8000").rstrip("/")
         self.integration_token = os.getenv("ASTRBOT_INTEGRATION_TOKEN", "")
         self.command_prefixes = tuple(
-            p.strip() for p in os.getenv("QQCHAT_TRIGGER_PREFIXES", "/ai,/chat,@bot").split(",") if p.strip()
+            p.strip() for p in _env("MULTIPERSONAL_TRIGGER_PREFIXES", "QQCHAT_TRIGGER_PREFIXES", "/ai,/chat,@bot").split(",") if p.strip()
         )
-        self.reply_on_group_all = os.getenv("QQCHAT_REPLY_GROUP_ALL", "false").lower() == "true"
-        self.timeout = float(os.getenv("QQCHAT_BACKEND_TIMEOUT", str(DEFAULT_TIMEOUT)))
-        self.dedup_ttl = float(os.getenv("QQCHAT_DEDUP_TTL", "300"))
+        self.reply_on_group_all = _env("MULTIPERSONAL_REPLY_GROUP_ALL", "QQCHAT_REPLY_GROUP_ALL", "false").lower() == "true"
+        self.timeout = float(_env("MULTIPERSONAL_BACKEND_TIMEOUT", "QQCHAT_BACKEND_TIMEOUT", str(DEFAULT_TIMEOUT)))
+        self.dedup_ttl = float(_env("MULTIPERSONAL_DEDUP_TTL", "QQCHAT_DEDUP_TTL", "300"))
         self._seen_events: dict[str, float] = {}
 
     @filter.event_message_type(filter.EventMessageType.ALL)
@@ -55,7 +63,7 @@ class QQChatGatewayPlugin(Star):
         payload = self._build_payload(event, text)
         dedup_key = self._dedup_key(payload)
         if self._is_duplicate(dedup_key):
-            logger.info("qqchat gateway skipped duplicate event: %s", dedup_key)
+            logger.info("multipersonal gateway skipped duplicate event: %s", dedup_key)
             event.stop_event()
             return
 
@@ -63,7 +71,7 @@ class QQChatGatewayPlugin(Star):
             response = await asyncio.to_thread(self._post_message, payload)
         except Exception as exc:
             logger.warning(
-                "qqchat gateway request failed: platform=%s conversation=%s messageId=%s error=%s",
+                "multipersonal gateway request failed: platform=%s conversation=%s messageId=%s error=%s",
                 payload["platform"],
                 payload["conversationId"],
                 payload["messageId"],
@@ -210,7 +218,7 @@ class QQChatGatewayPlugin(Star):
 
     def _adapter(self, platform: str) -> str:
         if platform == "qq":
-            return os.getenv("QQCHAT_QQ_ADAPTER", "napcat")
+            return _env("MULTIPERSONAL_QQ_ADAPTER", "QQCHAT_QQ_ADAPTER", "napcat")
         if platform == "telegram":
             return "telegram"
         if platform == "wecom":
@@ -218,7 +226,7 @@ class QQChatGatewayPlugin(Star):
         if platform == "wechat_official":
             return "official_account"
         if platform == "wechat_personal":
-            return os.getenv("QQCHAT_WECHAT_ADAPTER", "gewechat")
+            return _env("MULTIPERSONAL_WECHAT_ADAPTER", "QQCHAT_WECHAT_ADAPTER", "gewechat")
         return "other"
 
     def _conversation_type(self, event: AstrMessageEvent) -> str:

@@ -1,5 +1,5 @@
 # ============================================
-# QQ智能助手 - Python 依赖
+# MultiPersonal Chat System - Python 依赖
 # 目标环境: Python 3.12+ / CUDA 12.8 (RTX 3090 / AutoDL PyTorch 2.8)
 # ============================================
 #

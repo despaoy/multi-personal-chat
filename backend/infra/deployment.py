@@ -75,8 +75,8 @@ def validate_deployment_environment(env: Mapping[str, str] | None = None) -> Dep
     elif production and any(len(token) < 32 for token in token_values if token):
         errors.append("ASTRBOT integration tokens must contain at least 32 characters")
 
-    if not _has_any(env, "QQCHAT_BACKEND_URL", "BACKEND_URL"):
-        (errors if production else warnings).append("QQCHAT_BACKEND_URL is required for AstrBot callback configuration")
+    if not _has_any(env, "MULTIPERSONAL_BACKEND_URL", "QQCHAT_BACKEND_URL", "BACKEND_URL"):
+        (errors if production else warnings).append("MULTIPERSONAL_BACKEND_URL is required for AstrBot callback configuration")
 
     database_url = _value(env, "DATABASE_URL")
     has_database_url = bool(database_url)

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""QQ智能助手 - 后端启动入口
+"""MultiPersonal Chat System - 后端启动入口
 
 使用方式:
     python run.py               # 启动服务（端口8000）
@@ -36,7 +36,7 @@ def _positive_int_env(name: str, default: int) -> int:
 
 def main():
     import argparse
-    parser = argparse.ArgumentParser(description="QQ智能助手后端服务")
+    parser = argparse.ArgumentParser(description="MultiPersonal Chat System后端服务")
     parser.add_argument("--port", type=int, default=8000, help="监听端口（默认8000）")
     parser.add_argument("--host", default="0.0.0.0", help="监听地址")
     parser.add_argument("--reload", action="store_true", help="开发模式热重载")

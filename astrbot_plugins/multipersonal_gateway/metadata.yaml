@@ -1,0 +1,4 @@
+﻿name: multipersonal_gateway
+desc: Forward AstrBot multi-platform messages to MultiPersonal Chat System FastAPI.
+version: 0.1.0
+author: multipersonal-chat-system

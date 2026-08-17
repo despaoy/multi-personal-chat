@@ -1,4 +1,0 @@
-﻿name: qqchat_gateway
-desc: Forward AstrBot multi-platform messages to qqchat-enhanced FastAPI.
-version: 0.1.0
-author: qqchat-enhanced

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  QQ智能助手 - RTX 3090 双卡部署脚本
+  MultiPersonal Chat System - RTX 3090 双卡部署脚本
   目标: 2×NVIDIA GeForce RTX 3090 24GB + E5-2680
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -94,7 +94,7 @@ python -m vllm.entrypoints.openai.api_server \\
 def print_config():
     """打印部署配置"""
     print("=" * 60)
-    print("  QQ智能助手 - RTX 3090 双卡部署方案")
+    print("  MultiPersonal Chat System - RTX 3090 双卡部署方案")
     print("=" * 60)
 
     print(f"\n[硬件]")

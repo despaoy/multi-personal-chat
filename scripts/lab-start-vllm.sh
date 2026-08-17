@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT="${QQCHAT_LAB_ROOT:?set QQCHAT_LAB_ROOT to the lab root}"
+ROOT="${MULTIPERSONAL_LAB_ROOT:-${QQCHAT_LAB_ROOT:?set MULTIPERSONAL_LAB_ROOT or QQCHAT_LAB_ROOT to the lab root}}"
 MODEL=$ROOT/runtime/models/Qwen3-8B-Instruct-AWQ
-ENV_DIR="${QQCHAT_LAB_ENV_DIR:-$ROOT/envs/qqchat-gpu-qwen3}"
+ENV_DIR="${MULTIPERSONAL_LAB_ENV_DIR:-${QQCHAT_LAB_ENV_DIR:-$ROOT/envs/qqchat-gpu-qwen3}}"
 
 # Adapters are loaded through the authenticated backend after compatibility checks.
 # Old Qwen2.5 adapters may remain on disk; the checker rejects them against Qwen3.

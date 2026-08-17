@@ -12,14 +12,14 @@ from remote_config import connect_ssh
 
 
 ROOT = Path(__file__).resolve().parents[1]
-REMOTE_ROOT = os.getenv("QQCHAT_REMOTE_ROOT", "/workspace/qqchat-enhanced")
-REMOTE_LAB_ROOT = os.getenv("QQCHAT_LAB_ROOT", str(Path(REMOTE_ROOT).parent))
-REMOTE_PYTHON = os.getenv("QQCHAT_REMOTE_PYTHON", "python")
-REMOTE_MODEL = os.getenv(
+REMOTE_ROOT = os.getenv("MULTIPERSONAL_REMOTE_ROOT") or os.getenv("QQCHAT_REMOTE_ROOT", "/workspace/multipersonal-chat-system")
+REMOTE_LAB_ROOT = os.getenv("MULTIPERSONAL_LAB_ROOT") or os.getenv("QQCHAT_LAB_ROOT") or str(Path(REMOTE_ROOT).parent)
+REMOTE_PYTHON = os.getenv("MULTIPERSONAL_REMOTE_PYTHON") or os.getenv("MULTIPERSONAL_REMOTE_PYTHON", "python")
+REMOTE_MODEL = os.getenv("MULTIPERSONAL_REMOTE_MODEL") or os.getenv(
     "QQCHAT_REMOTE_MODEL",
     f"{REMOTE_ROOT}/runtime/models/Qwen3-8B-Instruct",
 )
-REMOTE_OUTPUT = os.getenv(
+REMOTE_OUTPUT = os.getenv("MULTIPERSONAL_REMOTE_OUTPUT") or os.getenv(
     "QQCHAT_REMOTE_OUTPUT",
     f"{REMOTE_LAB_ROOT}/runtime/loras/kisaki/r1v4/overfit20",
 )
@@ -70,7 +70,7 @@ def upload(client) -> None:
 
 def start(client) -> None:
     command = (
-        f"cd {REMOTE_ROOT} && export QQCHAT_LAB_ROOT={REMOTE_LAB_ROOT} && "
+        f"cd {REMOTE_ROOT} && export MULTIPERSONAL_LAB_ROOT={REMOTE_LAB_ROOT} && "
         f"nohup {REMOTE_PYTHON} scripts/run_kisaki_v4_overfit_test.py "
         f"--base-model {REMOTE_MODEL} --output-dir {REMOTE_OUTPUT} "
         f"> {LOG} 2>&1 < /dev/null & echo $!"

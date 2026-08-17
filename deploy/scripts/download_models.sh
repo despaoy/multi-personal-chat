@@ -1,6 +1,6 @@
 #!/bin/bash
 # ============================================
-# QQ智能助手 - 国内镜像模型下载脚本
+# MultiPersonal Chat System - 国内镜像模型下载脚本
 # 用法: bash download_models.sh [all|base|embed|rerank]
 # ============================================
 set -euo pipefail

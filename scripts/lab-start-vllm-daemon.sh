@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT="${QQCHAT_LAB_ROOT:?set QQCHAT_LAB_ROOT to the lab root}"
-PROJECT=$ROOT/qqchat-enhanced
+ROOT="${MULTIPERSONAL_LAB_ROOT:-${QQCHAT_LAB_ROOT:?set MULTIPERSONAL_LAB_ROOT or QQCHAT_LAB_ROOT to the lab root}}"
+PROJECT=$ROOT/multipersonal-chat-system
 LAUNCHER=$PROJECT/scripts/lab-start-vllm.sh
 PIDFILE=$ROOT/runtime/vllm.pid
 LOGFILE=$ROOT/runtime/logs/vllm.log

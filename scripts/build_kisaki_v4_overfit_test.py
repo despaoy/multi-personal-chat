@@ -12,7 +12,7 @@ from typing import Any
 
 
 ROOT = Path(__file__).resolve().parents[1]
-LAB_ROOT = os.getenv("QQCHAT_LAB_ROOT", str(ROOT / "runtime")).rstrip("/\\")
+LAB_ROOT = (os.getenv("MULTIPERSONAL_LAB_ROOT") or os.getenv("QQCHAT_LAB_ROOT") or str(ROOT / "runtime")).rstrip("/\\")
 V4 = ROOT / "backend/data/character_dialogues/experiments/v4"
 TRAIN = V4 / "train.jsonl"
 BASE_CONFIG = V4 / "r1v4_base_config.json"

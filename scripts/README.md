@@ -39,12 +39,13 @@ V4 experiments.
 
 ## Lab / remote scripts
 
-Lab scripts require environment variables rather than hard-coded personal paths:
+Lab scripts require environment variables rather than hard-coded personal paths.
+Legacy `QQCHAT_*` variable names remain supported as fallback aliases during migration:
 
-- `QQCHAT_LAB_ROOT`: lab root, e.g. `/lab` or `/data`
-- `QQCHAT_REMOTE_ROOT`: remote repository root for SSH scripts
-- `QQCHAT_REMOTE_PYTHON`: remote Python interpreter
-- `QQCHAT_REMOTE_MODEL`: remote base model path
+- `MULTIPERSONAL_LAB_ROOT`: lab root, e.g. `/lab` or `/data`
+- `MULTIPERSONAL_REMOTE_ROOT`: remote repository root for SSH scripts
+- `MULTIPERSONAL_REMOTE_PYTHON`: remote Python interpreter
+- `MULTIPERSONAL_REMOTE_MODEL`: remote base model path
 - `LAB_HOST` / `LAB_USER` / `LAB_SSH_KEY` or `LAB_PASS`: SSH credentials
 
 Examples: `lab-run-kisaki-r2.sh`, `remote_kisaki_r1v4.py`,

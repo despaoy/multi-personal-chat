@@ -1,5 +1,5 @@
 """
-QQ智能助手 - 真实消息场景极限压测
+MultiPersonal Chat System - 真实消息场景极限压测
 
 模拟真实QQ群消息场景，测试系统最大每秒消息处理量。
 消息类型分布：
@@ -241,7 +241,7 @@ async def run_benchmark(
 
 async def main():
     print("=" * 60)
-    print("  QQ智能助手 - 真实消息场景极限压测")
+    print("  MultiPersonal Chat System - 真实消息场景极限压测")
     print(f"  目标: {BASE_URL}")
     print("=" * 60)
 

@@ -1,4 +1,4 @@
-# QQ智能助手 - Docker Compose（2x3090 各~15G可用显存）
+# MultiPersonal Chat System - Docker Compose（2x3090 各~15G可用显存）
 # 适配策略：单 vLLM 实例 + AWQ 4bit 量化模型
 
 
@@ -32,7 +32,7 @@ services:
   # ============================================
   vllm:
     image: vllm/vllm-openai:v0.10.2
-    container_name: qq-assistant-vllm
+    container_name: multipersonal-vllm
     restart: unless-stopped
     ports:
       - "127.0.0.1:8001:8000"
@@ -70,7 +70,7 @@ services:
       retries: 5
       start_period: 120s
     networks:
-      - qq-assistant-net
+      - multipersonal-net
 
   # ============================================
   # FastAPI 后端
@@ -81,7 +81,7 @@ services:
       dockerfile: Dockerfile
       args:
         INSTALL_GPU_DEPS: "false"
-    container_name: qq-assistant-backend
+    container_name: multipersonal-backend
     restart: unless-stopped
     ports:
       - "127.0.0.1:8000:8000"
@@ -138,7 +138,7 @@ services:
       retries: 3
       start_period: 30s
     networks:
-      - qq-assistant-net
+      - multipersonal-net
 
   # ============================================
   # Next.js 前端
@@ -149,7 +149,7 @@ services:
       dockerfile: Dockerfile
       args:
         - NEXT_PUBLIC_API_URL=/api
-    container_name: qq-assistant-frontend
+    container_name: multipersonal-frontend
     restart: unless-stopped
     ports:
       - "127.0.0.1:5000:5000"
@@ -173,14 +173,14 @@ services:
       retries: 3
       start_period: 30s
     networks:
-      - qq-assistant-net
+      - multipersonal-net
 
   # ============================================
   # Nginx 反向代理
   # ============================================
   nginx:
     image: nginx:1.25-alpine
-    container_name: qq-assistant-nginx
+    container_name: multipersonal-nginx
     restart: unless-stopped
     ports:
       - "80:80"
@@ -192,10 +192,10 @@ services:
       - backend
       - frontend
     networks:
-      - qq-assistant-net
+      - multipersonal-net
 
 networks:
-  qq-assistant-net:
+  multipersonal-net:
     driver: bridge
     ipam:
       config:

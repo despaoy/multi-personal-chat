@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-安全渗透测试脚本 - QQ智能助手后端API
+安全渗透测试脚本 - MultiPersonal Chat System后端API
 测试常见安全漏洞，验证系统的安全防护能力
 """
 
@@ -888,7 +888,7 @@ async def test_sensitive_data_exposure(client: httpx.AsyncClient, base_url: str)
 # ── 主流程 ────────────────────────────────────────────────
 
 async def run_all_tests(base_url: str):
-    print(f"{Color.BOLD}QQ智能助手 - 安全渗透测试{Color.RESET}")
+    print(f"{Color.BOLD}MultiPersonal Chat System - 安全渗透测试{Color.RESET}")
     print(f"  目标: {base_url}\n")
 
     async with httpx.AsyncClient(timeout=httpx.Timeout(30.0)) as client:
@@ -958,7 +958,7 @@ async def run_all_tests(base_url: str):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="QQ智能助手后端API安全渗透测试")
+    parser = argparse.ArgumentParser(description="MultiPersonal Chat System后端API安全渗透测试")
     parser.add_argument(
         "--base-url",
         default="http://localhost:8000",

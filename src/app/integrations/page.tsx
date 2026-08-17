@@ -51,7 +51,7 @@ const personalWechatSteps = [
   '在本页打开“个人微信”开关，并选择你准备在 AstrBot 中使用的适配器。',
   '打开 AstrBot 面板，在插件市场或平台适配器区域安装/启用个人微信适配器，例如 GeWeChat 或 WechatPadPro。',
   '在 AstrBot 中创建个人微信机器人实例，按适配器要求填写服务地址、token、appId 等信息并扫码登录。',
-  '确认 qqchat_gateway 插件已启用，并设置 QQCHAT_BACKEND_URL 指向本项目后端，ASTRBOT_INTEGRATION_TOKEN 与后端一致。',
+  '确认 multipersonal_gateway 插件已启用，并设置 MULTIPERSONAL_BACKEND_URL 指向本项目后端，ASTRBOT_INTEGRATION_TOKEN 与后端一致。',
   '用个人微信给机器人发一条私聊测试消息，回到本页刷新，个人微信状态应从“等待消息”变为“已连接”。',
 ];
 

@@ -22,7 +22,7 @@ __logger = logging.getLogger(__name__)
 
 
 def _validate_jwt_secret(secret: str, environment: str) -> str:
-    if secret and secret != "qq-assistant-jwt-secret-change-in-production" and len(secret) >= 32:
+    if secret and secret != "multipersonal-jwt-secret-change-in-production" and len(secret) >= 32:
         return secret
     if environment.strip().lower() == "production":
         raise RuntimeError("JWT_SECRET must be explicitly set to at least 32 characters in production")

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-故障注入测试脚本 - QQ智能助手后端API
+故障注入测试脚本 - MultiPersonal Chat System后端API
 模拟各类故障场景，验证系统的容错和恢复能力
 """
 
@@ -675,7 +675,7 @@ async def test_backup_recovery(client: httpx.AsyncClient, base_url: str):
 # ── 主流程 ────────────────────────────────────────────────
 
 async def run_all_tests(base_url: str):
-    print(f"{Color.BOLD}QQ智能助手 - 故障注入测试{Color.RESET}")
+    print(f"{Color.BOLD}MultiPersonal Chat System - 故障注入测试{Color.RESET}")
     print(f"  目标: {base_url}\n")
 
     async with httpx.AsyncClient(timeout=httpx.Timeout(30.0)) as client:
@@ -725,7 +725,7 @@ async def run_all_tests(base_url: str):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="QQ智能助手后端API故障注入测试")
+    parser = argparse.ArgumentParser(description="MultiPersonal Chat System后端API故障注入测试")
     parser.add_argument(
         "--base-url",
         default="http://localhost:8000",

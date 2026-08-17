@@ -1,4 +1,4 @@
-# QQChat Enhanced 生产准备审查
+# MultiPersonal Chat System 生产准备审查
 
 > 审查日期：2026-07-18
 > 范围：个人研究项目、单机 RTX 3090 部署、多平台 LLM 演示

@@ -489,7 +489,7 @@ def import_dataset_from_folder(source_path: str, dataset_name: str = None) -> di
     allowed_dirs = [backend_dir]
     # Allow a configured lab root when present. The default remains the
     # backend directory only, so local deployments are fail-closed.
-    lab_root = os.getenv("QQCHAT_LAB_ROOT", "").strip()
+    lab_root = (os.getenv("MULTIPERSONAL_LAB_ROOT") or os.getenv("QQCHAT_LAB_ROOT", "")).strip()
     if lab_root and Path(lab_root).exists():
         allowed_dirs.append(str(Path(lab_root).resolve()))
     try:

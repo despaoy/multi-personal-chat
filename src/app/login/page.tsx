@@ -71,7 +71,7 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <CardTitle className="text-2xl">QQ智能助手</CardTitle>
+          <CardTitle className="text-2xl">MultiPersonal Chat System</CardTitle>
           <CardDescription>登录或注册以保存您的数据</CardDescription>
         </CardHeader>
         <CardContent>

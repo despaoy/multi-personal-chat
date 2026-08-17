@@ -14,7 +14,7 @@
 1. 不包含真实 `JWT_SECRET`、`ENCRYPTION_KEY`、API key 或 SSH 私钥。
 2. `README.md` 中的技术基线、数据计数和门禁状态与当前事实一致。
 3. 数据统计以 `backend/data/character_dialogues/experiments/v4/canonical_dataset_manifest.json` 为权威。
-4. 活动脚本不包含个人机器路径；实验室路径一律使用 `QQCHAT_LAB_ROOT` / `QQCHAT_REMOTE_*` 环境变量。
+4. 活动脚本不包含个人机器路径；实验室路径一律使用 `MULTIPERSONAL_LAB_ROOT` / `MULTIPERSONAL_REMOTE_*` 环境变量。
 5. 历史脚本和数据位于 `scripts/archive/` 与 `experiments/archive/`，并具有 README 说明。
 6. 未把 mock 输出、旧版实验指标或未通过的训练结果表述为正式结论。
 

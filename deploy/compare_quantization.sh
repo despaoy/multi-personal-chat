@@ -1,5 +1,5 @@
 #!/bin/bash
-# QQ智能助手 - 量化对比启动脚本
+# MultiPersonal Chat System - 量化对比启动脚本
 # 用法: bash deploy/compare_quantization.sh <model_path> [--mock] [--vllm-port <port>]
 #
 # 按序启动不同量化配置的 vLLM 进程，运行基准测试，收集结果。

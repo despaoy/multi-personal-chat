@@ -23,7 +23,7 @@ import sys
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-LAB_ROOT = Path(os.getenv("QQCHAT_LAB_ROOT", str(PROJECT_ROOT / "runtime")))
+LAB_ROOT = Path(os.getenv("MULTIPERSONAL_LAB_ROOT") or os.getenv("QQCHAT_LAB_ROOT") or str(PROJECT_ROOT / "runtime"))
 MODELS_DIR = LAB_ROOT / "runtime" / "models"
 
 # 模型 ID 映射

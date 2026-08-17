@@ -1,4 +1,4 @@
-# QQChat Enhanced 保研项目答辩与深度问答手册
+# MultiPersonal Chat System 保研项目答辩与深度问答手册
 
 > 版本：2026-08-09，基于 `KISAKI-LLM-RESEARCH-V4`、当前代码架构与仓库证据更新。
 >
@@ -6,7 +6,7 @@
 
 ## 1. 项目定位
 
-QQChat Enhanced 不是单纯的聊天机器人，也不是若干 LLM 框架的拼装演示。它是一个以角色对话为研究对象、以可复现实验为核心、能够通过真实 IM 平台交付的单机 LLM 研究系统。
+MultiPersonal Chat System 不是单纯的聊天机器人，也不是若干 LLM 框架的拼装演示。它是一个以角色对话为研究对象、以可复现实验为核心、能够通过真实 IM 平台交付的单机 LLM 研究系统。
 
 项目试图回答四个递进问题：
 
@@ -121,7 +121,7 @@ Gold v2.1 的 150 条候选包括：persona 30、factual 20、persona knowledge 
 
 ```mermaid
 flowchart LR
-    IM[QQ / 微信 / Telegram] --> AB[AstrBot + qqchat_gateway]
+    IM[QQ / 微信 / Telegram] --> AB[AstrBot + multipersonal_gateway]
     WEB[Next.js 16 管理台] --> API[FastAPI 应用工厂]
     AB --> API
     API --> MW[认证 / 限流 / 输入校验 / 审计]

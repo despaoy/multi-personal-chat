@@ -1,6 +1,6 @@
-# QQChat Enhanced
+# MultiPersonal Chat System
 
-QQChat Enhanced 是一个面向角色对话研究与保研展示的多平台 LLM 系统。项目覆盖数据治理、LoRA/DoRA/RSLoRA 微调、AWQ 高效推理、混合 RAG、评测体系、AstrBot 消息网关以及可观测的 Web 管理台。
+MultiPersonal Chat System 是一个面向角色对话研究与保研展示的多平台 LLM 系统。项目覆盖数据治理、LoRA/DoRA/RSLoRA 微调、AWQ 高效推理、混合 RAG、评测体系、AstrBot 消息网关以及可观测的 Web 管理台。
 
 > 当前定位：单机可部署、证据驱动的研究原型。项目强调完整的“数据 -> 训练 -> 推理 -> 检索 -> 评测 -> 多平台交付”链路，不以堆叠云原生组件为目标。
 >
@@ -29,7 +29,7 @@ QQ / WeChat / Telegram
           |
        AstrBot
           |
-  qqchat_gateway plugin
+  multipersonal_gateway plugin
           |
       FastAPI core
    /       |        \
@@ -125,12 +125,12 @@ powershell -ExecutionPolicy Bypass -File scripts/local-verify.ps1
 
 ### 实验室服务器
 
-实验室脚本统一通过 `QQCHAT_LAB_ROOT` 指定服务器根目录，不在代码中硬编码个人路径：
+实验室脚本统一通过 `MULTIPERSONAL_LAB_ROOT` 指定服务器根目录，不在代码中硬编码个人路径：
 
 ```bash
-export QQCHAT_LAB_ROOT=/path/to/lab-root
-source "$QQCHAT_LAB_ROOT/activate_qqchat.sh"
-cd "$QQCHAT_LAB_ROOT/qqchat-enhanced"
+export MULTIPERSONAL_LAB_ROOT=/path/to/lab-root
+source "$MULTIPERSONAL_LAB_ROOT/activate_qqchat.sh"
+cd "$MULTIPERSONAL_LAB_ROOT/multipersonal-chat-system"
 python -m pip check
 python -m pytest backend/tests -q
 pnpm ts-check

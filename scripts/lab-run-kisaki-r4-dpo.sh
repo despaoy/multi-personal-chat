@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT="${QQCHAT_LAB_ROOT:?set QQCHAT_LAB_ROOT to the lab root}"
-PROJECT=$ROOT/qqchat-enhanced
-PYTHON="${QQCHAT_LAB_PYTHON:-$ROOT/envs/qqchat-gpu-qwen3/bin/python}"
+ROOT="${MULTIPERSONAL_LAB_ROOT:-${QQCHAT_LAB_ROOT:?set MULTIPERSONAL_LAB_ROOT or QQCHAT_LAB_ROOT to the lab root}}"
+PROJECT=$ROOT/multipersonal-chat-system
+PYTHON="${MULTIPERSONAL_LAB_PYTHON:-${QQCHAT_LAB_PYTHON:-$ROOT/envs/qqchat-gpu-qwen3/bin/python}}"
 GPU=${1:?usage: lab-run-kisaki-r4-dpo.sh GPU BEST_R1_ADAPTER PREFERENCE_SOURCE}
 BEST_ADAPTER=${2:?usage: lab-run-kisaki-r4-dpo.sh GPU BEST_R1_ADAPTER PREFERENCE_SOURCE}
 PREFERENCE_SOURCE=${3:?usage: lab-run-kisaki-r4-dpo.sh GPU BEST_R1_ADAPTER PREFERENCE_SOURCE}

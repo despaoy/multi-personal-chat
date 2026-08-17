@@ -1,4 +1,4 @@
-# 人工评分 Rubric：QQChat Enhanced Gold Set 评测指南
+# 人工评分 Rubric：MultiPersonal Chat System Gold Set 评测指南
 
 > 范围：通用 Gold Set 105 条；月社妃 Qwen3 实验另使用 kisaki_gold_set_v1.json 100 条，但沿用相同盲评原则。
 

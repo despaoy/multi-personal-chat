@@ -17,8 +17,8 @@
 登录服务器后执行：
 
 ```bash
-source "$QQCHAT_LAB_ROOT"/activate_qqchat.sh
-cd "$QQCHAT_LAB_ROOT/qqchat-enhanced"
+source "$MULTIPERSONAL_LAB_ROOT"/activate_qqchat.sh
+cd "$MULTIPERSONAL_LAB_ROOT/multipersonal-chat-system"
 
 python --version
 python -m pip check
@@ -32,15 +32,15 @@ git status -sb
 - `pip check` 无依赖冲突。
 - 目标 GPU 至少有约 20GB 可用显存。
 - Git 工作区的重要数据已经提交或归档。
-- 模型存在于 `"$QQCHAT_LAB_ROOT"/runtime/models/`。
+- 模型存在于 `"$MULTIPERSONAL_LAB_ROOT"/runtime/models/`。
 
 ## 3. 理解四类目录
 
 | 内容 | 目录 |
 | --- | --- |
-| 代码、配置模板、可提交数据 | `"$QQCHAT_LAB_ROOT/qqchat-enhanced"/` |
-| 基座、AWQ、Embedding、Reranker | `"$QQCHAT_LAB_ROOT"/runtime/models/` |
-| LoRA checkpoint 和 final | `"$QQCHAT_LAB_ROOT"/runtime/loras/` |
+| 代码、配置模板、可提交数据 | `"$MULTIPERSONAL_LAB_ROOT/multipersonal-chat-system"/` |
+| 基座、AWQ、Embedding、Reranker | `"$MULTIPERSONAL_LAB_ROOT"/runtime/models/` |
+| LoRA checkpoint 和 final | `"$MULTIPERSONAL_LAB_ROOT"/runtime/loras/` |
 | 日志、评测和临时输出 | `runtime/logs/`、`runtime/results/`、`runtime/tmp/` |
 
 不要把 AWQ 模型用于普通 SFT。训练使用官方 `Qwen/Qwen3-8B` 权重，AWQ 版本 `Qwen/Qwen3-8B-AWQ` 主要用于推理基准。

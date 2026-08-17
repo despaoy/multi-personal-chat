@@ -1,4 +1,4 @@
-"""QQ智能助手 - 后端主应用
+"""MultiPersonal Chat System - 后端主应用
 
 整合所有模块，创建 FastAPI 应用实例。
 路由按领域拆分到 api/ 下各模块，通过 APIRouter 挂载。
@@ -123,7 +123,7 @@ async def lifespan(app: FastAPI):
     database = container.db
     postgres_mode = bool(container.is_pg_mode())
 
-    logger.info("🚀 QQ智能助手后端服务启动中（增强版）...")
+    logger.info("🚀 MultiPersonal Chat System后端服务启动中（增强版）...")
 
     validate_or_raise_for_startup(container.startup_env)
 
@@ -395,7 +395,7 @@ _ROUTERS = (
 # ═══════════════════════════════════════════
 async def root():
     return {
-        "name": "QQ智能助手 API (增强版)",
+        "name": "MultiPersonal Chat System API (增强版)",
         "version": "2.0.0",
         "status": "running",
     }
@@ -471,8 +471,8 @@ def create_app(container: RuntimeContainer | None = None) -> FastAPI:
 
     runtime_container = container if container is not None else RuntimeContainer.default(startup_env=_STARTUP_ENV)
     application = FastAPI(
-        title="QQ智能助手 API (增强版)",
-        description="QQ智能助手后端服务API - 高并发/高可靠/高安全增强版",
+        title="MultiPersonal Chat System API (增强版)",
+        description="MultiPersonal Chat System后端服务API - 高并发/高可靠/高安全增强版",
         version="2.0.0",
         lifespan=lifespan,
     )

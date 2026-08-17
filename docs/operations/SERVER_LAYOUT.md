@@ -1,13 +1,13 @@
 # 服务器目录规范
 
-适用范围：无 root 权限的实验室服务器，项目根目录固定为 `"$QQCHAT_LAB_ROOT"`。
+适用范围：无 root 权限的实验室服务器，项目根目录固定为 `"$MULTIPERSONAL_LAB_ROOT"`。
 
 ## 规范布局
 
 ```text
-"$QQCHAT_LAB_ROOT"/
+"$MULTIPERSONAL_LAB_ROOT"/
 ├── activate_qqchat.sh          # 统一环境入口
-├── qqchat-enhanced/            # Git 源码及被忽略的分模式配置文件
+├── multipersonal-chat-system/            # Git 源码及被忽略的分模式配置文件
 ├── envs/                       # 当前用户的 Conda/venv 环境
 │   └── qqchat-py312/           # 推荐 Python 3.12 环境
 ├── tools/                      # Miniconda 等用户级工具
@@ -31,11 +31,11 @@
 
 | 资产 | 唯一位置 | 是否进 Git |
 | --- | --- | --- |
-| Python/TypeScript 源码 | `qqchat-enhanced/` | 是 |
+| Python/TypeScript 源码 | `multipersonal-chat-system/` | 是 |
 | 环境配置模板 | `.env.example` | 是 |
-| 裸机后端实际配置 | `qqchat-enhanced/backend/.env` | 否 |
-| Compose 实际配置 | `qqchat-enhanced/deploy/.env` | 否 |
-| Next.js 本地配置 | `qqchat-enhanced/.env.local` | 否 |
+| 裸机后端实际配置 | `multipersonal-chat-system/backend/.env` | 否 |
+| Compose 实际配置 | `multipersonal-chat-system/deploy/.env` | 否 |
+| Next.js 本地配置 | `multipersonal-chat-system/.env.local` | 否 |
 | 基座与量化模型 | `runtime/models/` | 否 |
 | LoRA adapter | `runtime/loras/` | 否 |
 | RAG 向量索引 | `runtime/rag/` | 否 |
@@ -57,7 +57,7 @@ pnpm         10.34.2
 激活命令：
 
 ```bash
-source "$QQCHAT_LAB_ROOT"/activate_qqchat.sh
+source "$MULTIPERSONAL_LAB_ROOT"/activate_qqchat.sh
 ```
 
 激活脚本统一设置：`DATABASE_PATH`、`VECTOR_DB_PATH`、`LORA_PATH`、`VLLM_LORA_ROOT`、`AUDIT_LOG_DIR` 和 `HF_HOME`。
@@ -75,7 +75,7 @@ source "$QQCHAT_LAB_ROOT"/activate_qqchat.sh
 
 ## 禁止事项
 
-- 不在 `"$QQCHAT_LAB_ROOT"` 之外创建、移动或删除项目文件。
+- 不在 `"$MULTIPERSONAL_LAB_ROOT"` 之外创建、移动或删除项目文件。
 - 不把模型、数据库或 LoRA 放入 Git 仓库。
 - 不在服务运行时删除 `.next`、`node_modules`、当前日志或正在使用的 PID 文件。
 - 不覆盖服务器未提交实验文件；同步前必须先提交、归档或逐文件比对。

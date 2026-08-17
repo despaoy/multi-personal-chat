@@ -18,11 +18,11 @@ import { AuthProvider } from '@/contexts/AuthContext';
 
 export const metadata: Metadata = {
   title: {
-    default: 'QQ智能助手 | 管理平台',
-    template: '%s | QQ智能助手',
+    default: 'MultiPersonal Chat System | 管理平台',
+    template: '%s | MultiPersonal Chat System',
   },
   description:
-    '基于本地大语言模型的QQ智能助手管理平台，支持个性化风格定制和历史记录管理。',
+    '基于本地大语言模型的MultiPersonal Chat System管理平台，支持个性化风格定制和历史记录管理。',
   keywords: [
     'QQ机器人',
     '智能助手',
@@ -30,7 +30,7 @@ export const metadata: Metadata = {
     'LoRA微调',
     '个性化聊天',
   ],
-  authors: [{ name: 'QQ智能助手团队' }],
+  authors: [{ name: 'MultiPersonal Chat System团队' }],
 };
 
 export default function RootLayout({

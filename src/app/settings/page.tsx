@@ -193,7 +193,7 @@ function SettingsContent() {
                       <Label htmlFor="system-name">{t('settings.general.systemName')}</Label>
                       <Input
                         id="system-name"
-                        value={getStr('botName', 'QQ智能助手')}
+                        value={getStr('botName', 'MultiPersonal Chat System')}
                         onChange={(e) => updateField('botName', e.target.value)}
                       />
                     </div>

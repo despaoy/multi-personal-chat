@@ -170,7 +170,7 @@ class VectorDatabase:
         Path.home() / ".cache" / "huggingface" / "hub" / "models--sentence-transformers--paraphrase-multilingual-MiniLM-L12-v2",
         # 国内镜像/ModelScope 缓存路径
         Path.home() / ".cache" / "modelscope" / "hub" / "iic" / "nlp_corom_sentence-embedding_chinese-base",
-        Path(os.getenv("QQCHAT_LAB_ROOT", "")) / "models" / "paraphrase-multilingual-MiniLM-L12-v2",
+        Path(os.getenv("MULTIPERSONAL_LAB_ROOT") or os.getenv("QQCHAT_LAB_ROOT", "")) / "models" / "paraphrase-multilingual-MiniLM-L12-v2",
     ]
 
     @classmethod

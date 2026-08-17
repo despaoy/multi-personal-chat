@@ -31,7 +31,7 @@ def main() -> int:
     parser.add_argument("--base-model", type=Path, required=True)
     parser.add_argument("--adapter", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--allowed-root", type=Path, default=Path(os.getenv("QQCHAT_LAB_ROOT", str(PROJECT_ROOT / "runtime"))))
+    parser.add_argument("--allowed-root", type=Path, default=Path(os.getenv("MULTIPERSONAL_LAB_ROOT") or os.getenv("QQCHAT_LAB_ROOT") or str(PROJECT_ROOT / "runtime")))
     parser.add_argument("--experiment-id", required=True)
     args = parser.parse_args()
 

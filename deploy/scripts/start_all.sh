@@ -1,6 +1,6 @@
 #!/bin/bash
 # ============================================
-# QQ智能助手 - 一键启动脚本
+# MultiPersonal Chat System - 一键启动脚本
 # 支持两种模式：docker-compose / bare-metal
 # 用法: ./start_all.sh [docker|bare]
 # ============================================
@@ -184,7 +184,7 @@ generate_env_file() {
     log_step "生成默认配置文件: ${ENV_FILE}"
 
     cat > "${ENV_FILE}" << EOF
-# QQ智能助手 - 部署配置
+# MultiPersonal Chat System - 部署配置
 # 由 start_all.sh 自动生成，请根据实际情况修改
 
 # ---- 模型配置 ----
@@ -421,7 +421,7 @@ wait_for_services_docker() {
 
         for service in "${services[@]}"; do
             local status
-            status=$(docker inspect --format='{{.State.Health.Status}}' "qq-assistant-${service}" 2>/dev/null || echo "unknown")
+            status=$(docker inspect --format='{{.State.Health.Status}}' "multipersonal-${service}" 2>/dev/null || echo "unknown")
 
             if [[ "${status}" != "healthy" ]]; then
                 all_healthy=false
@@ -519,7 +519,7 @@ select_mode() {
 # 主流程
 # ------------------------------------------
 main() {
-    log_title "QQ智能助手 - 一键启动"
+    log_title "MultiPersonal Chat System - 一键启动"
 
     # 初始化
     DOCKER_AVAILABLE=true

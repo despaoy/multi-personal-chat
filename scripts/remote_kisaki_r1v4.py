@@ -12,9 +12,9 @@ from remote_config import connect_ssh
 
 
 ROOT = Path(__file__).resolve().parents[1]
-REMOTE_ROOT = os.getenv("QQCHAT_REMOTE_ROOT", "/workspace/qqchat-enhanced")
-REMOTE_LAB_ROOT = os.getenv("QQCHAT_LAB_ROOT", str(Path(REMOTE_ROOT).parent))
-PYTHON = os.getenv("QQCHAT_REMOTE_PYTHON", "python")
+REMOTE_ROOT = os.getenv("MULTIPERSONAL_REMOTE_ROOT") or os.getenv("QQCHAT_REMOTE_ROOT", "/workspace/multipersonal-chat-system")
+REMOTE_LAB_ROOT = os.getenv("MULTIPERSONAL_LAB_ROOT") or os.getenv("QQCHAT_LAB_ROOT") or str(Path(REMOTE_ROOT).parent)
+PYTHON = os.getenv("MULTIPERSONAL_REMOTE_PYTHON") or os.getenv("MULTIPERSONAL_REMOTE_PYTHON", "python")
 QUEUE_LOG = "/tmp/kisaki_r1v4_queue.log"
 FILES = (
     "backend/data/character_dialogues/experiments/v4/train.jsonl",
@@ -76,7 +76,7 @@ def start(client) -> None:
         for name in ("e1", "e2", "e3", "e4", "e5")
     )
     shell = (
-        f"cd {REMOTE_ROOT}; export QQCHAT_LAB_ROOT={REMOTE_LAB_ROOT}; "
+        f"cd {REMOTE_ROOT}; export MULTIPERSONAL_LAB_ROOT={REMOTE_LAB_ROOT}; "
         f"{queue} touch /tmp/kisaki_r1v4_complete"
     )
     code, out, err = command(
