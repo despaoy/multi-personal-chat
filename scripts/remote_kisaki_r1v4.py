@@ -176,6 +176,22 @@ def reclone(client) -> None:
         raise RuntimeError(err or f"reclone failed with exit code {code}")
 
 
+def update_checkout(client) -> None:
+    """Fast-forward a clean remote checkout to the configured branch."""
+
+    command_text = (
+        f"cd '{REMOTE_ROOT}' && "
+        "test -z \"$(git status --porcelain --untracked-files=no)\" || "
+        "{ echo tracked_changes_refuse_update; exit 3; }; "
+        f"git fetch origin {shlex.quote(REPOSITORY_BRANCH)} && "
+        "git merge --ff-only FETCH_HEAD && git rev-parse HEAD"
+    )
+    code, out, err = command(client, command_text, timeout=120)
+    print(out)
+    if code:
+        raise RuntimeError(err or f"remote update failed with exit code {code}")
+
+
 def start(client, experiments: list[str]) -> None:
     queue = " ".join(
         f"echo START_{name}; {PYTHON} scripts/run_kisaki_experiment.py --experiment {name} --seed 42 "
@@ -318,7 +334,7 @@ def main() -> int:
     parser.add_argument(
         "action",
         choices=(
-            "upload", "clean-stale", "reclone", "preflight",
+            "upload", "clean-stale", "reclone", "update", "preflight",
             "start", "status", "inspect", "inspect-project", "inspect-assets", "stop",
         ),
     )
@@ -340,6 +356,7 @@ def main() -> int:
                 "upload": upload,
                 "clean-stale": clean_stale_training,
                 "reclone": reclone,
+                "update": update_checkout,
                 "preflight": preflight,
                 "status": status,
                 "inspect": inspect_remote,
