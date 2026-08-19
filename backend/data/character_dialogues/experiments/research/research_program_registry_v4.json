@@ -2,7 +2,7 @@
   "schema_version": 5,
   "program_id": "KISAKI-LLM-RESEARCH-V4",
   "authoritative": true,
-  "status": "game_context_quality_reaudit",
+  "status": "r1v4_ready",
   "scope": {
     "primary_persona": "tsukiyashiro_kisaki",
     "base_model_repo_id": "Qwen/Qwen3-8B",
@@ -29,18 +29,19 @@
     },
     "canonical_dataset": {
       "path": "backend/data/character_dialogues/experiments/v4/canonical_dataset_manifest.json",
-      "status": "frozen_under_reassessment",
-      "train_count": 1002,
-      "game_train_count": 576,
+      "status": "frozen",
+      "train_count": 948,
+      "game_train_count": 522,
       "constructed_train_count": 150,
       "reviewed_multiturn_augmentation_count": 276,
       "constructed_train_review_status": "approved",
       "validation_count": 70,
       "independent_validation_status": "approved_and_frozen",
-      "game_train_excluded_count": 76,
+      "game_train_excluded_count": 130,
       "validation_excluded_count": 7,
       "rag_withheld_sft_records": 34,
-      "training_system_prompt_policy": "replace"
+      "training_system_prompt_policy": "replace",
+      "game_context_review_status": "approved_and_promoted"
     },
     "gold_v21": {
       "path": "backend/evaluation/kisaki_gold_set_v21_candidates.json",
@@ -70,12 +71,12 @@
     {
       "id": "R0V4",
       "name": "data_prompt_and_gold_review",
-      "status": "game_context_quality_reaudit"
+      "status": "complete"
     },
     {
       "id": "R1V4",
       "name": "controlled_peft",
-      "status": "blocked_until_game_context_reaudit"
+      "status": "ready"
     },
     {
       "id": "R2",

@@ -4,6 +4,7 @@ PostgreSQL 异步数据库访问层
 """
 
 import os
+import time
 import json
 import logging
 from datetime import datetime
@@ -37,7 +38,7 @@ knowledge_chunks_table = metadata.tables["knowledge_chunks"]
 users_table = metadata.tables["users"]
 user_data_table = metadata.tables["user_data"]
 saved_dialogues_table = metadata.tables["saved_dialogues"]
-session_settings_table = metadata.tables["session_settings"]
+api_keys_table = metadata.tables["api_keys"]
 claw_tools_table = metadata.tables["claw_tools"]
 integration_message_dedup_table = metadata.tables["integration_message_dedup"]
 conversations_table = metadata.tables["conversations"]
@@ -108,30 +109,36 @@ class PgDatabase:
             await self._ensure_column(conn, "messages", "traceId", "TEXT")
             await self._ensure_column(conn, "messages", "conversationType", "TEXT")
             await self._ensure_column(conn, "messages", "senderName", "TEXT")
-            await self._ensure_column(conn, "session_settings", "platform", "TEXT NOT NULL DEFAULT 'qq'")
-            await self._ensure_column(conn, "session_settings", "conversationId", "TEXT")
-            await self._ensure_column(conn, "session_settings", "sessionType", "TEXT NOT NULL DEFAULT 'private'")
-            await self._ensure_column(conn, "session_settings", "sessionName", "TEXT")
-            await self._ensure_column(conn, "session_settings", "bot_enabled", "INTEGER NOT NULL DEFAULT 1")
-            migrated_at = datetime.now().isoformat()
-            await conn.execute(text('''
-                INSERT INTO conversations (
-                    platform, "conversationId", "conversationType", "displayName",
-                    "botEnabled", "replyPolicy", "createdAt", "updatedAt"
-                )
-                SELECT
-                    COALESCE(platform, 'qq'),
-                    COALESCE("conversationId", "sessionId"),
-                    COALESCE("sessionType", 'private'),
-                    COALESCE(NULLIF("sessionName", ''), "sessionId"),
-                    bot_enabled,
-                    'default',
-                    COALESCE(updated_at, :migrated_at),
-                    COALESCE(updated_at, :migrated_at)
-                FROM session_settings
-                ON CONFLICT (platform, "conversationId", "conversationType") DO NOTHING
-            '''), {"migrated_at": migrated_at})
-            await conn.execute(text('DELETE FROM session_settings'))
+            # One-way compatibility migration: legacy session_settings is folded into
+            # conversations and then removed. Fresh databases never create this table.
+            try:
+                result = await conn.execute(text("SELECT to_regclass('public.session_settings')"))
+                if result.scalar():
+                    migrated_at = datetime.now().isoformat()
+                    await conn.execute(text('''
+                        INSERT INTO conversations (
+                            platform, "conversationId", "conversationType", "displayName",
+                            "botEnabled", "replyPolicy", "createdAt", "updatedAt"
+                        )
+                        SELECT
+                            COALESCE(platform, 'qq'),
+                            COALESCE("conversationId", "sessionId"),
+                            COALESCE("sessionType", 'private'),
+                            COALESCE(NULLIF("sessionName", ''), "sessionId"),
+                            bot_enabled,
+                            'default',
+                            COALESCE(updated_at, :migrated_at),
+                            COALESCE(updated_at, :migrated_at)
+                        FROM session_settings
+                        ON CONFLICT (platform, "conversationId", "conversationType")
+                        DO UPDATE SET
+                            "botEnabled" = EXCLUDED."botEnabled",
+                            "displayName" = EXCLUDED."displayName",
+                            "updatedAt" = EXCLUDED."updatedAt"
+                    '''), {"migrated_at": migrated_at})
+                    await conn.execute(text('DROP TABLE IF EXISTS session_settings'))
+            except Exception:
+                logger.warning("session_settings migration skipped", exc_info=True)
             await self._ensure_column(conn, "training_tasks", "task_id", "TEXT")
             await self._ensure_column(conn, "training_tasks", "lora_name", "TEXT DEFAULT ''")
             await self._ensure_column(conn, "training_tasks", "error_message", "TEXT DEFAULT ''")
@@ -1282,6 +1289,105 @@ class PgDatabase:
     # ============================================
     # 审计日志
     # ============================================
+    # ============================================
+    # API Key 管理（统一访问控制）
+    # ============================================
+    async def create_api_key_record(self, key_hash: str, key_prefix: str, role: str,
+                                    description: Optional[str] = None,
+                                    rate_limit: Optional[int] = None) -> Dict:
+        """Create a managed API key row in the main database."""
+        async with self.async_session() as session:
+            created_at = time.time()
+            result = await session.execute(
+                api_keys_table.insert().values(
+                    key_hash=key_hash,
+                    key_prefix=key_prefix,
+                    role=role,
+                    description=description,
+                    created_at=created_at,
+                    rate_limit=rate_limit,
+                )
+            )
+            await session.commit()
+            return {
+                "id": result.inserted_primary_key[0],
+                "key_hash": key_hash,
+                "key_prefix": key_prefix,
+                "role": role,
+                "description": description,
+                "created_at": created_at,
+                "rate_limit": rate_limit,
+            }
+
+    async def get_api_key_by_hash(self, key_hash: str) -> Optional[Dict]:
+        """Return one managed API key row by stored hash."""
+        async with self.async_session() as session:
+            result = await session.execute(
+                api_keys_table.select().where(api_keys_table.c.key_hash == key_hash)
+            )
+            row = result.fetchone()
+            return _row_to_dict(row) if row else None
+
+    async def get_api_key_by_id(self, key_id: int) -> Optional[Dict]:
+        """Return one managed API key row by database id."""
+        async with self.async_session() as session:
+            result = await session.execute(
+                api_keys_table.select().where(api_keys_table.c.id == key_id)
+            )
+            row = result.fetchone()
+            return _row_to_dict(row) if row else None
+
+    async def list_api_keys(self, include_revoked: bool = False) -> List[Dict]:
+        """List managed API key metadata from the main database."""
+        async with self.async_session() as session:
+            stmt = api_keys_table.select()
+            if not include_revoked:
+                stmt = stmt.where(api_keys_table.c.is_active == 1)
+            stmt = stmt.order_by(api_keys_table.c.created_at.desc())
+            result = await session.execute(stmt)
+            return [_row_to_dict(row) for row in result.fetchall()]
+
+    async def revoke_api_key_by_hash(self, key_hash: str) -> bool:
+        """Revoke a managed API key by its stored hash."""
+        async with self.async_session() as session:
+            result = await session.execute(
+                api_keys_table.update()
+                .where(api_keys_table.c.key_hash == key_hash)
+                .where(api_keys_table.c.is_active == 1)
+                .values(is_active=0, revoked_at=time.time())
+            )
+            await session.commit()
+            return result.rowcount > 0
+
+    async def revoke_api_key_by_id(self, key_id: int) -> bool:
+        """Revoke a managed API key by its database id."""
+        async with self.async_session() as session:
+            result = await session.execute(
+                api_keys_table.update()
+                .where(api_keys_table.c.id == key_id)
+                .where(api_keys_table.c.is_active == 1)
+                .values(is_active=0, revoked_at=time.time())
+            )
+            await session.commit()
+            return result.rowcount > 0
+
+    async def get_api_key_rows_by_prefix(self, prefix: str) -> List[Dict]:
+        """Return active/inactive key rows matching a key prefix."""
+        async with self.async_session() as session:
+            stmt = api_keys_table.select().where(api_keys_table.c.key_prefix == prefix)
+            result = await session.execute(stmt)
+            return [_row_to_dict(row) for row in result.fetchall()]
+
+    async def touch_api_key(self, key_hash: str) -> None:
+        """Update last_used_at for a managed API key."""
+        async with self.async_session() as session:
+            await session.execute(
+                api_keys_table.update()
+                .where(api_keys_table.c.key_hash == key_hash)
+                .values(last_used_at=time.time())
+            )
+            await session.commit()
+
     async def add_audit_log(
         self,
         api_key_hash: str,
@@ -1940,6 +2046,30 @@ class SyncPgAdapter:
 
     def save_user_data(self, user_id, page_key, data_json):
         return self._run(self._pg.save_user_data(user_id, page_key, data_json))
+
+    def create_api_key_record(self, key_hash, key_prefix, role, description=None, rate_limit=None):
+        return self._run(self._pg.create_api_key_record(key_hash, key_prefix, role, description, rate_limit))
+
+    def get_api_key_by_hash(self, key_hash):
+        return self._run(self._pg.get_api_key_by_hash(key_hash))
+
+    def get_api_key_by_id(self, key_id):
+        return self._run(self._pg.get_api_key_by_id(key_id))
+
+    def list_api_keys(self, include_revoked=False):
+        return self._run(self._pg.list_api_keys(include_revoked))
+
+    def revoke_api_key_by_hash(self, key_hash):
+        return self._run(self._pg.revoke_api_key_by_hash(key_hash))
+
+    def revoke_api_key_by_id(self, key_id):
+        return self._run(self._pg.revoke_api_key_by_id(key_id))
+
+    def get_api_key_rows_by_prefix(self, prefix):
+        return self._run(self._pg.get_api_key_rows_by_prefix(prefix))
+
+    def touch_api_key(self, key_hash):
+        return self._run(self._pg.touch_api_key(key_hash))
 
     def get_session_summaries(self):
         return self._run(self._pg.get_session_summaries())

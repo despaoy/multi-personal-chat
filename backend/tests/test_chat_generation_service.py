@@ -90,6 +90,55 @@ async def test_generate_short_circuits_high_risk_prompt():
 
 
 @pytest.mark.asyncio
+async def test_generate_short_circuits_high_risk_history_user_message():
+    handler_called = False
+
+    async def handler(_request, _current_user):
+        nonlocal handler_called
+        handler_called = True
+        raise AssertionError("high-risk history must not reach the model handler")
+
+    service = _make_service(handler, high_risk=lambda message: message == "secret")
+    request = MessageRequest(
+        message="continue",
+        history=[
+            {"role": "user", "content": "secret"},
+            {"role": "assistant", "content": "ok"},
+        ],
+    )
+
+    response = await service.generate(request)
+
+    assert response.model == "security-policy"
+    assert handler_called is False
+
+
+@pytest.mark.asyncio
+async def test_generate_sanitizes_history_user_messages():
+    captured: dict[str, Any] = {}
+
+    async def handler(request, current_user):
+        captured["history"] = request.history
+        return GenerateResponse(reply="ok", model="fake", costTime=0.0)
+
+    service = _make_service(handler)
+    request = MessageRequest(
+        message="hello",
+        history=[
+            {"role": "user", "content": " \x00hello "},
+            {"role": "assistant", "content": "keep"},
+        ],
+    )
+
+    await service.generate(request)
+
+    assert captured["history"] == [
+        {"role": "user", "content": "hello"},
+        {"role": "assistant", "content": "keep"},
+    ]
+
+
+@pytest.mark.asyncio
 async def test_generate_queued_owns_admission_control_and_session_identity():
     runtime = _FakeInferenceRuntime()
 
@@ -114,7 +163,7 @@ async def test_generate_reply_core_keeps_compatibility_entry_point(monkeypatch):
     expected = GenerateResponse(reply="compat", model="fake", costTime=0.0)
 
     class _FakeService:
-        async def generate(self, request, current_user):
+        async def generate(self, request, current_user, **kwargs):
             assert request.message == "hello"
             assert current_user == {"username": "integration"}
             return expected

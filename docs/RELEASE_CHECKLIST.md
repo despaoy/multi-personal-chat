@@ -30,22 +30,22 @@ pnpm ts-check
 pnpm lint
 pnpm build
 
-# 研究门禁（预期在 Game Train 复审完成前为 passed=false）
+# 研究门禁（数据或审核状态变化后必须重新执行）
 python scripts/validate_kisaki_v4_training_gate.py
 
 # 单命令本地基线（Windows）
 powershell -ExecutionPolicy Bypass -File scripts/local-verify.ps1 -Frontend
 ```
 
-## 当前发布 blocker
+## 当前发布状态
 
-- `game_train` 人工审核分类仍为 pending。
-- V4 canonical manifest 状态仍为 `frozen_under_reassessment`。
-- 上述项关闭前，R1V4 正式训练结论不能写进发布说明。
+- `game_train` 上下文质量复审已批准并晋升。
+- V4 canonical manifest 状态为 `frozen`，无 freeze blocker。
+- R1V4 仍须以本次工作树实际训练门禁和测试结果为准，未运行的实验不得写成正式结论。
 
 ## 最新验证记录
 
-- 后端：`python -m pytest backend/tests -q` → 614 passed, 13 skipped；`local-verify.ps1 -Frontend` 通过（2026-08-16 工作树）
+- 后端：`python -m pytest backend/tests -q` → 610 passed, 13 skipped（2026-08-19 工作树）
 - 前端：`pnpm ts-check`、`pnpm lint`、`pnpm build` 均通过；`pnpm audit --prod` 无已知漏洞（2026-08-16 工作树）
 - Python：`python -m compileall -q backend scripts astrbot_plugins` 通过
-- 训练门禁：`passed=false`，blocker 与上文一致
+- 训练门禁：`passed=true`，无 blocker（2026-08-19 工作树）

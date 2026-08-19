@@ -50,7 +50,7 @@ git status -sb
 训练前必须确认 Gold Set 没有进入训练集：
 
 ```bash
-python scripts/build_kisaki_v4_review_packets.py --help
+python scripts/validate_kisaki_v4_training_gate.py
 python scripts/validate_kisaki_v4_training_gate.py
 python -m pytest backend/tests/test_character_benchmark.py -q
 ```

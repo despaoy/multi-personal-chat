@@ -1,6 +1,6 @@
 # 人工评分 Rubric：MultiPersonal Chat System Gold Set 评测指南
 
-> 范围：通用 Gold Set 105 条；月社妃 Qwen3 实验另使用 kisaki_gold_set_v1.json 100 条，但沿用相同盲评原则。
+> 范围：通用 Gold Set 105 条；早期 `kisaki_gold_set_v1.json` 已移出活动目录，仅通过 Git 历史追溯。
 
 > 本文件定义 `backend/evaluation/gold_prompts.json` 中 105 条 Gold Set 的人工评分标准。
 > 适用类别：`persona` / `safety` / `rag_grounded` / `factual` / `multiturn`

@@ -325,72 +325,6 @@ async def benchmark_ratelimit(base_url: str, total: int = 100, concurrency: int 
 
 
 # ============================================
-# 测试5: 消息队列吞吐
-# ============================================
-
-async def benchmark_queue(total: int = 500, concurrency: int = 50):
-    """测试Redis Streams消息队列吞吐"""
-    print("\n📨 测试5: 消息队列吞吐 (Redis Streams)")
-
-    try:
-        from cache.message_queue import RedisMessageQueue
-    except ImportError:
-        print("  ⚠️ 无法导入RedisMessageQueue，跳过")
-        return []
-
-    mq = RedisMessageQueue(redis_url=os.getenv("REDIS_URL", "redis://localhost:6379/0"))
-
-    # 入队测试
-    enqueue_times = []
-    enqueue_errors = 0
-
-    async def enqueue_one():
-        start = time.monotonic()
-        try:
-            ok = await mq.enqueue(
-                group_id="bench_group",
-                user_id="bench_user",
-                message=f"benchmark message",
-                priority=5,
-            )
-            latency = (time.monotonic() - start) * 1000
-            return RequestResult(success=ok, status_code=200 if ok else 503, latency_ms=latency)
-        except Exception as e:
-            latency = (time.monotonic() - start) * 1000
-            return RequestResult(success=False, status_code=0, latency_ms=latency, error=str(e))
-
-    r1 = await run_concurrent_test("入队 (enqueue)", enqueue_one, total, concurrency)
-    print(r1.summary())
-
-    # 出队测试
-    dequeue_results = []
-    start = time.monotonic()
-    for _ in range(min(total, 100)):
-        try:
-            msg = await mq.dequeue(timeout=0.5)
-            if msg:
-                dequeue_results.append(True)
-            else:
-                dequeue_results.append(False)
-        except Exception:
-            dequeue_results.append(False)
-    dequeue_duration = time.monotonic() - start
-
-    dequeue_success = sum(dequeue_results)
-    print(f"  出队: {dequeue_success}/{len(dequeue_results)} 成功, "
-          f"QPS={dequeue_success/dequeue_duration:.1f}, 耗时={dequeue_duration:.2f}s")
-
-    # 队列统计
-    try:
-        stats = await mq.get_stats()
-        print(f"  队列统计: {json.dumps(stats, indent=2, ensure_ascii=False)}")
-    except Exception as e:
-        print(f"  队列统计获取失败: {e}")
-
-    return [r1]
-
-
-# ============================================
 # 测试6: 逐步增加并发找到上限
 # ============================================
 
@@ -474,9 +408,6 @@ async def main():
 
     if args.mode in ("all", "cache"):
         all_results.extend(await benchmark_cache(args.url, min(args.total, 50), args.concurrency))
-
-    if args.mode in ("all", "queue"):
-        all_results.extend(await benchmark_queue(args.total, args.concurrency))
 
     # 最终汇总
     print("\n" + "=" * 60)

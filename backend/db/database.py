@@ -1,6 +1,7 @@
 import os
 import json
 import sqlite3
+import time
 import logging
 import threading
 from pathlib import Path
@@ -353,6 +354,22 @@ class SQLiteDB:
         # 使用 _ensure_column 做幂等迁移，已有数据库升级时自动添加该列。
         self._ensure_column(cursor, 'users', 'role', 'TEXT NOT NULL DEFAULT \'user\'')
 
+        # 创建 API Key 表（统一访问控制，SQLite 与 PostgreSQL 共用主库）
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS api_keys (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                key_hash TEXT NOT NULL UNIQUE,
+                key_prefix TEXT NOT NULL,
+                role TEXT NOT NULL,
+                description TEXT,
+                created_at REAL NOT NULL,
+                revoked_at REAL,
+                last_used_at REAL,
+                is_active INTEGER NOT NULL DEFAULT 1,
+                rate_limit INTEGER
+            )
+        ''')
+
         # 创建用户数据表（表单数据持久化）
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS user_data (
@@ -382,25 +399,12 @@ class SQLiteDB:
             )
         ''')
 
-        # 会话设置表：每个会话的机器人开关状态
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS session_settings (
-                sessionId TEXT PRIMARY KEY,
-                platform TEXT NOT NULL DEFAULT 'qq',
-                conversationId TEXT,
-                sessionType TEXT NOT NULL DEFAULT 'private',
-                sessionName TEXT,
-                bot_enabled INTEGER NOT NULL DEFAULT 1,
-                updated_at TEXT
-            )
-        ''')
-
         # 创建训练任务表
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS training_tasks (
                 id TEXT PRIMARY KEY,
                 task_id TEXT UNIQUE,
-                lora_name TEXT NOT NULL,
+                lora_name TEXT NOT NULL DEFAULT '',
                 status TEXT NOT NULL DEFAULT 'pending',
                 progress REAL DEFAULT 0,
                 error_message TEXT DEFAULT '',
@@ -683,31 +687,75 @@ class SQLiteDB:
         self._ensure_column(cursor, "messages", "traceId", "TEXT")
         self._ensure_column(cursor, "messages", "conversationType", "TEXT")
         self._ensure_column(cursor, "messages", "senderName", "TEXT")
-        self._ensure_column(cursor, "session_settings", "platform", "TEXT NOT NULL DEFAULT 'qq'")
-        self._ensure_column(cursor, "session_settings", "conversationId", "TEXT")
-        self._ensure_column(cursor, "session_settings", "sessionType", "TEXT NOT NULL DEFAULT 'private'")
-        self._ensure_column(cursor, "session_settings", "sessionName", "TEXT")
-        self._ensure_column(cursor, "session_settings", "bot_enabled", "INTEGER NOT NULL DEFAULT 1")
-
-        # One-way compatibility migration: conversations is the canonical switch table.
-        migrated_at = datetime.now().isoformat()
-        cursor.execute('''
-            INSERT OR IGNORE INTO conversations (
-                platform, conversationId, conversationType, displayName,
-                botEnabled, replyPolicy, createdAt, updatedAt
-            )
-            SELECT
-                COALESCE(platform, 'qq'),
-                COALESCE(conversationId, sessionId),
-                COALESCE(sessionType, 'private'),
-                COALESCE(NULLIF(sessionName, ''), sessionId),
-                bot_enabled,
-                'default',
-                COALESCE(updated_at, ?),
-                COALESCE(updated_at, ?)
-            FROM session_settings
-        ''', (migrated_at, migrated_at))
-        cursor.execute('DELETE FROM session_settings')
+        # One-way compatibility migration: legacy session_settings is folded into
+        # conversations and then removed. Fresh databases never create this table.
+        try:
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='session_settings'")
+            if cursor.fetchone():
+                # Older legacy tables may lack the columns introduced later.
+                cursor.execute("PRAGMA table_info(session_settings)")
+                legacy_cols = {row[1] for row in cursor.fetchall()}
+                if "platform" not in legacy_cols:
+                    cursor.execute("ALTER TABLE session_settings ADD COLUMN platform TEXT NOT NULL DEFAULT 'qq'")
+                if "conversationId" not in legacy_cols:
+                    cursor.execute("ALTER TABLE session_settings ADD COLUMN conversationId TEXT")
+                if "conversationType" not in legacy_cols:
+                    cursor.execute("ALTER TABLE session_settings ADD COLUMN conversationType TEXT NOT NULL DEFAULT 'private'")
+                    cursor.execute("UPDATE session_settings SET conversationType = sessionType")
+                if "sessionName" not in legacy_cols:
+                    cursor.execute("ALTER TABLE session_settings ADD COLUMN sessionName TEXT")
+                if "bot_enabled" not in legacy_cols:
+                    cursor.execute("ALTER TABLE session_settings ADD COLUMN bot_enabled INTEGER NOT NULL DEFAULT 1")
+                if "updated_at" not in legacy_cols:
+                    cursor.execute("ALTER TABLE session_settings ADD COLUMN updated_at TEXT")
+                migrated_at = datetime.now().isoformat()
+                cursor.execute('''
+                    INSERT OR IGNORE INTO conversations (
+                        platform, conversationId, conversationType, displayName,
+                        botEnabled, replyPolicy, createdAt, updatedAt
+                    )
+                    SELECT
+                        COALESCE(platform, 'qq'),
+                        COALESCE(conversationId, sessionId),
+                        COALESCE(conversationType, sessionType, 'private'),
+                        COALESCE(NULLIF(sessionName, ''), sessionId),
+                        bot_enabled,
+                        'default',
+                        COALESCE(updated_at, ?),
+                        COALESCE(updated_at, ?)
+                    FROM session_settings
+                ''', (migrated_at, migrated_at))
+                # SQLite does not allow DO UPDATE with INSERT...SELECT...FROM;
+                # refresh existing conversations so the latest legacy state wins.
+                cursor.execute('''
+                    UPDATE conversations
+                    SET
+                        botEnabled = COALESCE((SELECT s.bot_enabled FROM session_settings s
+                                              WHERE COALESCE(s.platform, 'qq') = conversations.platform
+                                                AND COALESCE(s.conversationId, s.sessionId) = conversations.conversationId
+                                                AND COALESCE(s.conversationType, s.sessionType, 'private') = conversations.conversationType),
+                                             conversations.botEnabled),
+                        displayName = COALESCE((SELECT COALESCE(NULLIF(s.sessionName, ''), s.sessionId) FROM session_settings s
+                                              WHERE COALESCE(s.platform, 'qq') = conversations.platform
+                                                AND COALESCE(s.conversationId, s.sessionId) = conversations.conversationId
+                                                AND COALESCE(s.conversationType, s.sessionType, 'private') = conversations.conversationType),
+                                             conversations.displayName),
+                        updatedAt = COALESCE((SELECT s.updated_at FROM session_settings s
+                                             WHERE COALESCE(s.platform, 'qq') = conversations.platform
+                                               AND COALESCE(s.conversationId, s.sessionId) = conversations.conversationId
+                                               AND COALESCE(s.conversationType, s.sessionType, 'private') = conversations.conversationType),
+                                             conversations.updatedAt)
+                    WHERE EXISTS (
+                        SELECT 1 FROM session_settings s
+                        WHERE COALESCE(s.platform, 'qq') = conversations.platform
+                          AND COALESCE(s.conversationId, s.sessionId) = conversations.conversationId
+                          AND COALESCE(s.conversationType, s.sessionType, 'private') = conversations.conversationType
+                    )
+                ''')
+                cursor.execute("DROP TABLE session_settings")
+                logger.info("已迁移并删除旧的 session_settings 表")
+        except sqlite3.OperationalError:
+            pass
 
         conn.commit()
 
@@ -2055,8 +2103,8 @@ class SQLiteDB:
     def set_session_bot_enabled(self, session_id: str, enabled: bool, platform: str = "qq", conversation_id: str | None = None, conversation_type: str = "private"):
         """设置某个会话的机器人开关。
 
-        统一写入 conversations 表（此前同时写 session_settings + conversations 双表，
-        现合并为单表，消除冗余）。session_settings 表保留以兼容旧数据库但不再写入。
+        统一写入 conversations 表。旧 session_settings 数据会在初始化时单向迁移，
+        随后删除旧表。
         """
         conn = self._get_connection()
         cursor = conn.cursor()
@@ -2251,6 +2299,114 @@ class SQLiteDB:
             conn.rollback()
             raise
         return {"id": user_id, "username": username, "created_at": now, "role": role}    # ============================================
+    # API Key 管理（统一访问控制）
+    # ============================================
+    def create_api_key_record(self, key_hash: str, key_prefix: str, role: str,
+                              description: str | None = None,
+                              rate_limit: int | None = None) -> dict:
+        """Create a managed API key row in the main database."""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        created_at = time.time()
+        cursor.execute(
+            "INSERT INTO api_keys (key_hash, key_prefix, role, description, created_at, rate_limit) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (key_hash, key_prefix, role, description, created_at, rate_limit),
+        )
+        conn.commit()
+        return {
+            "id": cursor.lastrowid,
+            "key_hash": key_hash,
+            "key_prefix": key_prefix,
+            "role": role,
+            "description": description,
+            "created_at": created_at,
+            "rate_limit": rate_limit,
+        }
+
+    def get_api_key_by_hash(self, key_hash: str) -> dict | None:
+        """Return one managed API key row by stored hash."""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT id, key_hash, key_prefix, role, description, created_at, revoked_at, "
+            "last_used_at, is_active, rate_limit FROM api_keys WHERE key_hash = ?",
+            (key_hash,),
+        )
+        row = cursor.fetchone()
+        return dict(row) if row else None
+
+    def get_api_key_by_id(self, key_id: int) -> dict | None:
+        """Return one managed API key row by database id."""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT id, key_hash, key_prefix, role, description, created_at, revoked_at, "
+            "last_used_at, is_active, rate_limit FROM api_keys WHERE id = ?",
+            (key_id,),
+        )
+        row = cursor.fetchone()
+        return dict(row) if row else None
+
+    def list_api_keys(self, include_revoked: bool = False) -> list[dict]:
+        """List managed API key metadata from the main database."""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        query = (
+            "SELECT id, key_prefix, role, description, created_at, revoked_at, "
+            "is_active, rate_limit FROM api_keys"
+        )
+        if not include_revoked:
+            query += " WHERE is_active = 1"
+        query += " ORDER BY created_at DESC"
+        cursor.execute(query)
+        return [dict(row) for row in cursor.fetchall()]
+
+    def revoke_api_key_by_hash(self, key_hash: str) -> bool:
+        """Revoke a managed API key by its stored hash."""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "UPDATE api_keys SET is_active = 0, revoked_at = ? "
+            "WHERE key_hash = ? AND is_active = 1",
+            (time.time(), key_hash),
+        )
+        conn.commit()
+        return cursor.rowcount > 0
+
+    def revoke_api_key_by_id(self, key_id: int) -> bool:
+        """Revoke a managed API key by its database id."""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "UPDATE api_keys SET is_active = 0, revoked_at = ? "
+            "WHERE id = ? AND is_active = 1",
+            (time.time(), key_id),
+        )
+        conn.commit()
+        return cursor.rowcount > 0
+
+    def get_api_key_rows_by_prefix(self, prefix: str) -> list[dict]:
+        """Return active/inactive key rows matching a key prefix."""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT key_hash, role, is_active, rate_limit FROM api_keys WHERE key_prefix = ?",
+            (prefix,),
+        )
+        return [dict(row) for row in cursor.fetchall()]
+
+    def touch_api_key(self, key_hash: str) -> None:
+        """Update last_used_at for a managed API key."""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "UPDATE api_keys SET last_used_at = ? WHERE key_hash = ?",
+            (time.time(), key_hash),
+        )
+        conn.commit()
+
+    # ============================================
     # 用户数据持久化（高层方法）
     # ============================================
     def get_user_data(self, user_id: int, page_key: Optional[str] = None):

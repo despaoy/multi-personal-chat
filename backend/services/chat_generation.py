@@ -9,7 +9,7 @@ from db.schemas import GenerateResponse, MessageRequest
 
 
 GenerateHandler = Callable[
-    [MessageRequest, dict[str, Any] | None],
+    ...,
     Awaitable[GenerateResponse],
 ]
 
@@ -64,6 +64,7 @@ class ChatGenerationService:
         self,
         request: MessageRequest,
         current_user: dict[str, Any] | None = None,
+        **kwargs: Any,
     ) -> GenerateResponse:
         """Normalize and validate request policy before model orchestration."""
 
@@ -71,7 +72,21 @@ class ChatGenerationService:
         request.traceId = request.traceId or self._trace_id_factory()
         if self._is_high_risk_prompt(request.message):
             return self._security_response_factory()
-        return await self._generate_handler(request, current_user)
+
+        # Public callers may supply history. Apply the same sanitation and
+        # high-risk policy to every historical user message before it reaches
+        # the model.
+        sanitized_history: list[dict[str, str]] = []
+        for item in request.history or []:
+            entry = dict(item)
+            if entry.get("role") == "user":
+                content = self._sanitize_message(entry.get("content", "") or "").strip()
+                if self._is_high_risk_prompt(content):
+                    return self._security_response_factory()
+                entry["content"] = content
+            sanitized_history.append(entry)
+        request.history = sanitized_history
+        return await self._generate_handler(request, current_user, **kwargs)
 
     async def generate_queued(
         self,

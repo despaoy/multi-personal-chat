@@ -1,6 +1,6 @@
 # 月社妃角色数据
 
-当前唯一活动研究体系为 KISAKI-LLM-RESEARCH-V4。人物画像、system prompt v3、训练集、验证集、Gold v2.1 和 Gold v3 均已有审核记录；当前因 Game Train 上下文质量复审未完成、canonical 数据集仍有 freeze blocker，正式训练保持阻塞。
+当前唯一活动研究体系为 KISAKI-LLM-RESEARCH-V4。人物画像、system prompt v3、训练集、验证集、Gold v2.1 和 Gold v3 均已审核；Game Train 上下文质量复审已经完成，canonical 数据集已重新冻结。
 
 ## 活动资产
 
@@ -12,13 +12,13 @@
 | 构造训练候选 | `experiments/train_v5_clean.jsonl` | 150 条已批准构造数据的可追溯来源 |
 | V4 审核包 | `../../../docs/research/review_packets/kisaki_v4/` | 用户逐批审核 |
 | 人物提示词 | `kisaki_system_prompt_v3.txt` | 已确认的角色身份、关系、性格和表达 |
-| V4 canonical 数据 | `experiments/v4/` | **1002 条 train、70 条 validation**；状态 `frozen_under_reassessment` |
+| V4 canonical 数据 | `experiments/v4/` | **948 条 train、70 条 validation**；状态 `frozen` |
 | V4.1 增补证据 | `experiments/v4/augmentation_candidates/` | 276 个新生成五轮会话的生成、审核与晋升记录 |
 | Gold v2.1 | `../../evaluation/kisaki_gold_set_v21_candidates.json` | 已批准的 development-only 评测集，不回流训练 |
 | Gold v3 | `../../evaluation/kisaki_gold_set_v3.json` | 150 条最终盲测，已审核并冻结 |
 | 历史数据归档 | `experiments/archive/` | 已退出活动工作面的 V2/V3/V4 草稿与旧实验资产 |
 
-V4 train 的 canonical 来源分布：576 条原作提取 + 150 条既有已审核构造 + 4 条 DeepSeek round06 五轮会话 + 272 条 Codex 自动化批次五轮会话 = **1002 条**。V4.1 增补前后的完整晋升哈希链见 `experiments/v4/augmentation_candidates/INDEX.json`。
+V4 train 的 canonical 来源分布：522 条原作提取 + 150 条既有已审核构造 + 4 条 DeepSeek round06 五轮会话 + 272 条 Codex 自动化批次五轮会话 = **948 条**。最终 Game Train 审核记录见 `experiments/v4/game_train_context_review_approval.json`。
 
 ## 三层提示词
 
@@ -33,7 +33,7 @@ V4 train 的 canonical 来源分布：576 条原作提取 + 150 条既有已审�
 ## 审核与训练门禁
 
 ```bash
-python scripts/build_kisaki_v4_review_packets.py --help
+python scripts/validate_kisaki_v4_training_gate.py
 python scripts/validate_kisaki_v4_training_gate.py
 ```
 

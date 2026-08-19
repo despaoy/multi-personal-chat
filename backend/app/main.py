@@ -205,12 +205,11 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.warning(f"故障转移管理器初始化失败: {e}")
 
-    if ACCESS_CONTROL_AVAILABLE and not postgres_mode:
+    if ACCESS_CONTROL_AVAILABLE:
         try:
             from infra.access_control import AccessControlManager
-            db_path = str(getattr(database, "db_path", _BACKEND_ROOT / "qq_assistant.db"))
-            _cfg.access_control_mgr = AccessControlManager(db_path)
-            logger.info("✅ 访问控制管理器初始化完成")
+            _cfg.access_control_mgr = AccessControlManager(database)
+            logger.info("✅ 访问控制管理器初始化完成（统一 DB adapter）")
         except Exception as e:
             logger.warning(f"访问控制管理器初始化失败: {e}")
 
@@ -284,12 +283,6 @@ async def lifespan(app: FastAPI):
             await close_async_redis()
         except Exception as e:
             logger.warning(f"关闭 async Redis 客户端失败: {e}")
-        try:
-            from cache.semantic_cache import reset_semantic_cache
-
-            await reset_semantic_cache()
-        except Exception as e:
-            logger.warning("重置语义缓存失败: %s", e)
         # 关闭共享的 sync Redis 客户端与连接池
         try:
             from cache.redis_client import close_sync_redis

@@ -1,21 +1,21 @@
 {
-  "schema_version": 7,
+  "schema_version": 8,
   "dataset_id": "KISAKI-CANONICAL-V4",
-  "status": "frozen_under_reassessment",
+  "status": "frozen",
   "hash_mode": "sha256_utf8_lf_v1",
   "seed": 42,
   "train": {
     "status": "frozen",
-    "count": 1002,
+    "count": 948,
     "path": "backend/data/character_dialogues/experiments/v4/train.jsonl",
-    "sha256": "864b20e50d1d4dc4917e5d93be7c29da05e567edce07faf42526481b075b04ed",
+    "sha256": "903c07934f29ea764ea14b28208e2a78468e33fe6f7de0d53d85bd642358cfb8",
     "source_distribution": {
-      "game_extraction_current_sft": 576,
+      "game_extraction_current_sft": 522,
       "llm_v4_reviewed_constructed": 150,
       "deepseek_user_simulation_v41_reviewed": 4,
       "codex_user_simulation_v41_reviewed": 272
     },
-    "game_human_review_status": "approved",
+    "game_human_review_status": "approved_after_context_reaudit",
     "constructed_human_review_status": "approved",
     "augmentation_human_review_status": "approved_after_review"
   },
@@ -291,7 +291,7 @@
     "unique_ids_across_train_validation": true,
     "record_system_messages": 0,
     "train_source_lineage": {
-      "game_extraction_records_checked": 652,
+      "game_extraction_records_checked": 522,
       "missing_canonical_sft_ids": 0,
       "missing_raw_event_ids": 0
     },
@@ -843,6 +843,17 @@
       "protected_similarity_overlap_count": 0,
       "gold_v3_contamination_reaudit": "clean",
       "summary_path": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/llm_full_dialogue_review_20260816/summary.json"
+    },
+    "train_effective_assistant_targets": 2071,
+    "game_context_review": {
+      "status": "approved_and_promoted",
+      "reviewed_record_count": 576,
+      "pass_unchanged_count": 415,
+      "context_added_count": 107,
+      "excluded_count": 54,
+      "result_record_count": 522,
+      "approval_path": "backend/data/character_dialogues/experiments/v4/game_train_context_review_approval.json",
+      "gold_v3_contamination_reaudit": "clean"
     }
   },
   "provenance": {
@@ -920,11 +931,10 @@
       "KISAKI-V41-AUTO-BATCH-066": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_066/approved_sessions.json",
       "KISAKI-V41-AUTO-BATCH-067": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_067/approved_sessions.json",
       "KISAKI-V41-AUTO-BATCH-068": "backend/data/character_dialogues/experiments/v4/augmentation_candidates/automation_batch_068/approved_sessions.json"
-    }
+    },
+    "game_context_review_approval": "backend/data/character_dialogues/experiments/v4/game_train_context_review_approval.json"
   },
-  "freeze_blockers": [
-    "game_train_context_quality_reaudit"
-  ],
+  "freeze_blockers": [],
   "gold_v3": {
     "id": "KISAKI-GOLD-V3",
     "status": "frozen",
@@ -935,7 +945,7 @@
     "contamination_reaudit": {
       "status": "clean",
       "path": "backend/evaluation/kisaki_gold_set_v3_contamination_audit.json",
-      "train_sha256": "09a06e7c4b1fc8ddca8852735ecdbf754c474aa3d40ca8214895f46a12e422ab",
+      "train_sha256": "903c07934f29ea764ea14b28208e2a78468e33fe6f7de0d53d85bd642358cfb8",
       "gold_content_modified": false
     }
   },

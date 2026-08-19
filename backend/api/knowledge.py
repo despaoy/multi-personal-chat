@@ -11,6 +11,7 @@ from typing import Any, Awaitable
 
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Depends
 from app.dependencies import get_current_admin
+from infra.db_executor import run_db
 
 from db.adapter import db
 from db.schemas import (
@@ -149,14 +150,14 @@ def _validated_zip_entries(archive: zipfile.ZipFile) -> list[zipfile.ZipInfo]:
 @router.get("/api/knowledge/bases")
 async def list_knowledge_bases(current_user: dict = Depends(get_current_admin)):
     """获取所有知识库"""
-    bases = db.get_knowledge_bases()
+    bases = await run_db(db.get_knowledge_bases)
     return {"success": True, "bases": bases}
 
 
 @router.post("/api/knowledge/bases")
 async def create_knowledge_base(request: KnowledgeBaseCreate, current_user: dict = Depends(get_current_admin)):
     """创建知识库"""
-    result = db.create_knowledge_base(request.name, request.description)
+    result = await run_db(db.create_knowledge_base, request.name, request.description)
     if result is None:
         raise HTTPException(status_code=409, detail="知识库名称已存在")
     return {"success": True, "base": result}
@@ -165,7 +166,7 @@ async def create_knowledge_base(request: KnowledgeBaseCreate, current_user: dict
 @router.put("/api/knowledge/bases/{kb_id}")
 async def update_knowledge_base(kb_id: int, request: KnowledgeBaseUpdate, current_user: dict = Depends(get_current_admin)):
     """更新知识库"""
-    existing = db.get_knowledge_base(kb_id)
+    existing = await run_db(db.get_knowledge_base, kb_id)
     if not existing:
         raise HTTPException(status_code=404, detail="知识库不存在")
     data = {}
@@ -173,7 +174,7 @@ async def update_knowledge_base(kb_id: int, request: KnowledgeBaseUpdate, curren
         data["name"] = request.name
     if request.description is not None:
         data["description"] = request.description
-    result = db.update_knowledge_base(kb_id, data)
+    result = await run_db(db.update_knowledge_base, kb_id, data)
     return {"success": True, "base": result}
 
 
@@ -183,12 +184,12 @@ async def delete_knowledge_base(kb_id: int, current_user: dict = Depends(get_cur
 
     C-S1 fix: 级联删除不可逆，限定 admin。
     """
-    existing = db.get_knowledge_base(kb_id)
+    existing = await run_db(db.get_knowledge_base, kb_id)
     if not existing:
         raise HTTPException(status_code=404, detail="知识库不存在")
-    db.delete_knowledge_base(kb_id)
+    await run_db(db.delete_knowledge_base, kb_id)
     # 级联删除后标记 dirty，防止向量删除失败时旧内容仍可被检索
-    _mark_rebuild_dirty()
+    await run_db(_mark_rebuild_dirty)
     return {"success": True, "message": "知识库已删除"}
 
 
@@ -199,20 +200,20 @@ async def delete_knowledge_base(kb_id: int, current_user: dict = Depends(get_cur
 @router.get("/api/knowledge/bases/{kb_id}/folders")
 async def list_knowledge_folders(kb_id: int, current_user: dict = Depends(get_current_admin)):
     """获取知识库下的文件夹"""
-    existing = db.get_knowledge_base(kb_id)
+    existing = await run_db(db.get_knowledge_base, kb_id)
     if not existing:
         raise HTTPException(status_code=404, detail="知识库不存在")
-    folders = db.get_knowledge_folders(kb_id)
+    folders = await run_db(db.get_knowledge_folders, kb_id)
     return {"success": True, "folders": folders}
 
 
 @router.post("/api/knowledge/bases/{kb_id}/folders")
 async def create_knowledge_folder(kb_id: int, request: KnowledgeFolderCreate, current_user: dict = Depends(get_current_admin)):
     """创建文件夹"""
-    existing = db.get_knowledge_base(kb_id)
+    existing = await run_db(db.get_knowledge_base, kb_id)
     if not existing:
         raise HTTPException(status_code=404, detail="知识库不存在")
-    result = db.create_knowledge_folder(kb_id, request.name, request.description)
+    result = await run_db(db.create_knowledge_folder, kb_id, request.name, request.description)
     if result is None:
         raise HTTPException(status_code=409, detail="文件夹名称已存在")
     return {"success": True, "folder": result}
@@ -224,12 +225,12 @@ async def delete_knowledge_folder(folder_id: int, current_user: dict = Depends(g
 
     s2 fix: 级联删除文件夹下所有文档与向量索引，限定 admin。
     """
-    existing = db.get_knowledge_folder(folder_id)
+    existing = await run_db(db.get_knowledge_folder, folder_id)
     if not existing:
         raise HTTPException(status_code=404, detail="文件夹不存在")
-    db.delete_knowledge_folder(folder_id)
+    await run_db(db.delete_knowledge_folder, folder_id)
     # 级联删除后标记 dirty，防止向量删除失败时旧内容仍可被检索
-    _mark_rebuild_dirty()
+    await run_db(_mark_rebuild_dirty)
     return {"success": True, "message": "文件夹已删除"}
 
 
@@ -246,7 +247,7 @@ async def upload_zip(kb_id: int, file: UploadFile = File(...), current_user: dic
     - 顶层目录下的.txt文件作为文档
     - 例: 角色/胡桃.txt, 事件/活动剧情.txt
     """
-    existing = db.get_knowledge_base(kb_id)
+    existing = await run_db(db.get_knowledge_base, kb_id)
     if not existing:
         raise HTTPException(status_code=404, detail="知识库不存在")
 
@@ -293,10 +294,10 @@ async def upload_zip(kb_id: int, file: UploadFile = File(...), current_user: dic
 
         # 获取或创建文件夹
         if folder_name not in created_folders:
-            folder = db.create_knowledge_folder(kb_id, folder_name)
+            folder = await run_db(db.create_knowledge_folder, kb_id, folder_name)
             if folder is None:
                 # 文件夹已存在，查找它
-                folders = db.get_knowledge_folders(kb_id)
+                folders = await run_db(db.get_knowledge_folders, kb_id)
                 folder = next((f for f in folders if f["name"] == folder_name), None)
             if folder:
                 created_folders[folder_name] = folder["id"]
@@ -334,7 +335,7 @@ async def upload_zip(kb_id: int, file: UploadFile = File(...), current_user: dic
             "fileSize": len(file_content.encode('utf-8')),
             "chunkCount": 0
         }
-        document = db.add_knowledge_document(document_data)
+        document = await run_db(db.add_knowledge_document, document_data)
 
         # 分块处理
         from knowledge.text_splitter import simple_text_split
@@ -349,7 +350,7 @@ async def upload_zip(kb_id: int, file: UploadFile = File(...), current_user: dic
                 "content": chunk_content,
                 "embedding": None
             }
-            db.add_knowledge_chunk(chunk)
+            await run_db(db.add_knowledge_chunk, chunk)
             chunk_count += 1
 
             # 注入文件夹路径到检索文本：知识库名/文件夹名/文档名 + 内容
@@ -367,7 +368,7 @@ async def upload_zip(kb_id: int, file: UploadFile = File(...), current_user: dic
             })
 
         # 更新文档的chunkCount
-        db.update_knowledge_document(document["id"], {"chunkCount": chunk_count})
+        await run_db(db.update_knowledge_document, document["id"], {"chunkCount": chunk_count})
 
         # 添加到向量数据库
         if VECTOR_DB_AVAILABLE and vector_docs:
@@ -379,7 +380,7 @@ async def upload_zip(kb_id: int, file: UploadFile = File(...), current_user: dic
                 logger.error(f"添加到向量数据库失败: {ve}")
 
         # 标记向量索引为 dirty，确保下次搜索时重建状态与数据库一致
-        _mark_rebuild_dirty()
+        await run_db(_mark_rebuild_dirty)
         created_docs += 1
 
     zf.close()
@@ -470,14 +471,14 @@ async def import_scanned_directory(directory_name: str, kb_id: int = None, curre
     
     # 获取或创建知识库
     if kb_id:
-        kb = db.get_knowledge_base(kb_id)
+        kb = await run_db(db.get_knowledge_base, kb_id)
         if not kb:
             raise HTTPException(status_code=404, detail="知识库不存在")
     else:
-        kb = db.create_knowledge_base(directory_name)
+        kb = await run_db(db.create_knowledge_base, directory_name)
         if kb is None:
             # 已存在同名知识库，查找它
-            all_bases = db.get_knowledge_bases()
+            all_bases = await run_db(db.get_knowledge_bases)
             kb = next((b for b in all_bases if b["name"] == directory_name), None)
             if not kb:
                 raise HTTPException(status_code=500, detail="无法创建或找到知识库")
@@ -496,9 +497,9 @@ async def import_scanned_directory(directory_name: str, kb_id: int = None, curre
         folder_name = sub_dir.name
         
         # 创建文件夹
-        folder = db.create_knowledge_folder(kb_id, folder_name)
+        folder = await run_db(db.create_knowledge_folder, kb_id, folder_name)
         if folder is None:
-            folders = db.get_knowledge_folders(kb_id)
+            folders = await run_db(db.get_knowledge_folders, kb_id)
             folder = next((f for f in folders if f["name"] == folder_name), None)
         if folder:
             created_folders[folder_name] = folder["id"]
@@ -545,7 +546,7 @@ async def import_scanned_directory(directory_name: str, kb_id: int = None, curre
                     "fileSize": file_size,
                     "chunkCount": 0
                 }
-                document = db.add_knowledge_document(document_data)
+                document = await run_db(db.add_knowledge_document, document_data)
                 
                 # 分块 + 路径注入
                 from knowledge.text_splitter import simple_text_split
@@ -560,7 +561,7 @@ async def import_scanned_directory(directory_name: str, kb_id: int = None, curre
                         "content": chunk_content,
                         "embedding": None
                     }
-                    db.add_knowledge_chunk(chunk)
+                    await run_db(db.add_knowledge_chunk, chunk)
                     chunk_count += 1
                     
                     enriched_content = f"[{kb_name}/{folder_name}] {doc_title}: {chunk_content}"
@@ -575,7 +576,7 @@ async def import_scanned_directory(directory_name: str, kb_id: int = None, curre
                         "knowledge_base_id": kb_id,
                     })
                 
-                db.update_knowledge_document(document["id"], {"chunkCount": chunk_count})
+                await run_db(db.update_knowledge_document, document["id"], {"chunkCount": chunk_count})
 
                 if VECTOR_DB_AVAILABLE and vector_docs:
                     try:
@@ -586,7 +587,7 @@ async def import_scanned_directory(directory_name: str, kb_id: int = None, curre
                         logger.error(f"添加到向量数据库失败: {ve}")
 
                 # 标记向量索引为 dirty，确保下次搜索时重建状态与数据库一致
-                _mark_rebuild_dirty()
+                await run_db(_mark_rebuild_dirty)
 
                 created_docs += 1
 
@@ -622,7 +623,7 @@ async def import_scanned_directory(directory_name: str, kb_id: int = None, curre
                 "fileSize": file_path.stat().st_size,
                 "chunkCount": 0
             }
-            document = db.add_knowledge_document(document_data)
+            document = await run_db(db.add_knowledge_document, document_data)
             
             from knowledge.text_splitter import simple_text_split
             chunks = simple_text_split(content)
@@ -636,7 +637,7 @@ async def import_scanned_directory(directory_name: str, kb_id: int = None, curre
                     "content": chunk_content,
                     "embedding": None
                 }
-                db.add_knowledge_chunk(chunk)
+                await run_db(db.add_knowledge_chunk, chunk)
                 chunk_count += 1
                 
                 enriched_content = f"[{kb_name}] {doc_title}: {chunk_content}"
@@ -651,7 +652,7 @@ async def import_scanned_directory(directory_name: str, kb_id: int = None, curre
                     "knowledge_base_id": kb_id,
                 })
             
-            db.update_knowledge_document(document["id"], {"chunkCount": chunk_count})
+            await run_db(db.update_knowledge_document, document["id"], {"chunkCount": chunk_count})
 
             if VECTOR_DB_AVAILABLE and vector_docs:
                 try:
@@ -662,7 +663,7 @@ async def import_scanned_directory(directory_name: str, kb_id: int = None, curre
                     logger.error(f"添加到向量数据库失败: {ve}")
 
             # 标记向量索引为 dirty，确保下次搜索时重建状态与数据库一致
-            _mark_rebuild_dirty()
+            await run_db(_mark_rebuild_dirty)
             created_docs += 1
         except Exception as e:
             errors.append(f"处理根目录文件 {file_path.name} 失败: {str(e)}")
@@ -685,13 +686,13 @@ async def import_scanned_directory(directory_name: str, kb_id: int = None, curre
 @router.get("/api/knowledge/documents")
 async def get_knowledge_documents(limit: int = 100, offset: int = 0, category: str = None, knowledge_base_id: int = None, folder_id: int = None, current_user: dict = Depends(get_current_admin)):
     """获取知识库文档列表，支持按分类/知识库/文件夹筛选"""
-    documents = db.get_knowledge_documents(
+    documents = await run_db(db.get_knowledge_documents,
         limit=limit, offset=offset,
         category=category,
         knowledge_base_id=knowledge_base_id,
         folder_id=folder_id
     )
-    stats = db.get_knowledge_stats()
+    stats = await run_db(db.get_knowledge_stats)
     return {
         "success": True,
         "documents": documents,
@@ -702,10 +703,10 @@ async def get_knowledge_documents(limit: int = 100, offset: int = 0, category: s
 @router.get("/api/knowledge/documents/{doc_id}")
 async def get_knowledge_document(doc_id: int, current_user: dict = Depends(get_current_admin)):
     """获取单个知识库文档"""
-    document = db.get_knowledge_document(doc_id)
+    document = await run_db(db.get_knowledge_document, doc_id)
     if not document:
         raise HTTPException(status_code=404, detail="文档不存在")
-    chunks = db.get_knowledge_chunks(doc_id)
+    chunks = await run_db(db.get_knowledge_chunks, doc_id)
     return {
         "success": True,
         "document": document,
@@ -728,11 +729,11 @@ async def create_knowledge_document(request: KnowledgeDocumentCreate, current_us
         kb_name = ""
         folder_name = request.category
         if request.knowledge_base_id:
-            kb = db.get_knowledge_base(request.knowledge_base_id)
+            kb = await run_db(db.get_knowledge_base, request.knowledge_base_id)
             if kb:
                 kb_name = kb["name"]
         if request.folder_id:
-            folder = db.get_knowledge_folder(request.folder_id)
+            folder = await run_db(db.get_knowledge_folder, request.folder_id)
             if folder:
                 folder_name = folder["name"]
 
@@ -749,7 +750,7 @@ async def create_knowledge_document(request: KnowledgeDocumentCreate, current_us
             "fileSize": request.fileSize,
             "chunkCount": 0
         }
-        document = db.add_knowledge_document(document_data)
+        document = await run_db(db.add_knowledge_document, document_data)
 
         # 分块处理 - 注入路径到检索文本
         from knowledge.text_splitter import simple_text_split
@@ -764,7 +765,7 @@ async def create_knowledge_document(request: KnowledgeDocumentCreate, current_us
                 "content": chunk_content,
                 "embedding": None
             }
-            db.add_knowledge_chunk(chunk)
+            await run_db(db.add_knowledge_chunk, chunk)
             chunk_count += 1
 
             # 注入文件夹路径到检索文本
@@ -783,7 +784,7 @@ async def create_knowledge_document(request: KnowledgeDocumentCreate, current_us
             })
 
         # 更新文档的chunkCount
-        db.update_knowledge_document(document["id"], {"chunkCount": chunk_count})
+        await run_db(db.update_knowledge_document, document["id"], {"chunkCount": chunk_count})
 
         # 添加到向量数据库
         if VECTOR_DB_AVAILABLE and vector_docs:
@@ -796,7 +797,7 @@ async def create_knowledge_document(request: KnowledgeDocumentCreate, current_us
                 logger.error(f"添加到向量数据库失败: {ve}")
 
         # 标记向量索引为 dirty，确保下次搜索时重建状态与数据库一致
-        _mark_rebuild_dirty()
+        await run_db(_mark_rebuild_dirty)
         logger.info(f"创建知识库文档: {document['title']}, 分块数: {chunk_count}")
         return {
             "success": True,
@@ -815,7 +816,7 @@ async def create_knowledge_document(request: KnowledgeDocumentCreate, current_us
 async def update_knowledge_document(doc_id: int, request: KnowledgeDocumentUpdate, current_user: dict = Depends(get_current_admin)):
     """更新知识库文档"""
     try:
-        existing_doc = db.get_knowledge_document(doc_id)
+        existing_doc = await run_db(db.get_knowledge_document, doc_id)
         if not existing_doc:
             raise HTTPException(status_code=404, detail="文档不存在")
 
@@ -840,11 +841,11 @@ async def update_knowledge_document(doc_id: int, request: KnowledgeDocumentUpdat
         if request.fileSize is not None:
             update_data["fileSize"] = request.fileSize
 
-        updated_doc = db.update_knowledge_document(doc_id, update_data)
+        updated_doc = await run_db(db.update_knowledge_document, doc_id, update_data)
 
         # 如果内容更新了，重新分块
         if "content" in update_data:
-            db.execute_sql('DELETE FROM knowledge_chunks WHERE documentId = :doc_id', {"doc_id": doc_id})
+            await run_db(db.execute_sql, 'DELETE FROM knowledge_chunks WHERE documentId = :doc_id', {"doc_id": doc_id})
 
             # 获取路径信息用于注入
             kb_name = ""
@@ -852,11 +853,11 @@ async def update_knowledge_document(doc_id: int, request: KnowledgeDocumentUpdat
             kb_id = update_data.get("knowledge_base_id", existing_doc.get("knowledge_base_id"))
             folder_id = update_data.get("folder_id", existing_doc.get("folder_id"))
             if kb_id:
-                kb = db.get_knowledge_base(kb_id)
+                kb = await run_db(db.get_knowledge_base, kb_id)
                 if kb:
                     kb_name = kb["name"]
             if folder_id:
-                folder = db.get_knowledge_folder(folder_id)
+                folder = await run_db(db.get_knowledge_folder, folder_id)
                 if folder:
                     folder_name = folder["name"]
 
@@ -872,7 +873,7 @@ async def update_knowledge_document(doc_id: int, request: KnowledgeDocumentUpdat
                     "content": chunk_content,
                     "embedding": None
                 }
-                db.add_knowledge_chunk(chunk)
+                await run_db(db.add_knowledge_chunk, chunk)
                 chunk_count += 1
 
                 path_prefix = f"[{kb_name}/{folder_name}]" if kb_name else f"[{folder_name}]"
@@ -890,7 +891,7 @@ async def update_knowledge_document(doc_id: int, request: KnowledgeDocumentUpdat
                     "knowledge_base_id": kb_id,
                 })
 
-            db.update_knowledge_document(doc_id, {"chunkCount": chunk_count})
+            await run_db(db.update_knowledge_document, doc_id, {"chunkCount": chunk_count})
 
             if VECTOR_DB_AVAILABLE and vector_docs:
                 try:
@@ -908,7 +909,7 @@ async def update_knowledge_document(doc_id: int, request: KnowledgeDocumentUpdat
 
             # 内容变更后必须标记 dirty：即使 chunk 数量不变，内容指纹也会不同，
             # 下次搜索会触发重建，避免旧向量被检索
-            _mark_rebuild_dirty()
+            await run_db(_mark_rebuild_dirty)
 
         logger.info(f"更新知识库文档: {doc_id}")
         return {
@@ -930,7 +931,7 @@ async def delete_knowledge_document(doc_id: int, current_user: dict = Depends(ge
     s2 fix: 删除文档及关联向量索引，限定 admin。
     """
     try:
-        existing_doc = db.get_knowledge_document(doc_id)
+        existing_doc = await run_db(db.get_knowledge_document, doc_id)
         if not existing_doc:
             raise HTTPException(status_code=404, detail="文档不存在")
 
@@ -939,7 +940,7 @@ async def delete_knowledge_document(doc_id: int, current_user: dict = Depends(ge
                 from app.config import get_vector_db
                 vector_db = get_vector_db()
                 chunk_ids = []
-                chunks = db.get_knowledge_chunks(doc_id)
+                chunks = await run_db(db.get_knowledge_chunks, doc_id)
                 for chunk in chunks:
                     chunk_id = f"doc_{doc_id}_chunk_{chunk.get('chunkIndex', chunk.get('id', 0))}"
                     chunk_ids.append(chunk_id)
@@ -948,9 +949,9 @@ async def delete_knowledge_document(doc_id: int, current_user: dict = Depends(ge
             except Exception as ve:
                 logger.warning(f"从向量数据库删除文档失败: {ve}")
 
-        db.delete_knowledge_document(doc_id)
+        await run_db(db.delete_knowledge_document, doc_id)
         # 删除后标记 dirty，防止向量删除失败时旧内容仍可被检索
-        _mark_rebuild_dirty()
+        await run_db(_mark_rebuild_dirty)
         logger.info(f"删除知识库文档: {doc_id}")
         return {"success": True, "message": "文档删除成功"}
     except HTTPException:
@@ -1338,7 +1339,7 @@ async def search_knowledge(
         filters = None
         if request.knowledgeBaseName:
             # 查询知识库名称对应的ID
-            all_bases = db.get_knowledge_bases()
+            all_bases = await run_db(db.get_knowledge_bases)
             matched = [b for b in all_bases if b["name"] == request.knowledgeBaseName]
             if matched:
                 filters = {"knowledge_base_id": matched[0]["id"]}
@@ -1468,7 +1469,7 @@ async def search_knowledge(
 @router.get("/api/knowledge/stats")
 async def get_knowledge_stats(current_user: dict = Depends(get_current_admin)):
     """获取知识库统计数据"""
-    stats = db.get_knowledge_stats()
+    stats = await run_db(db.get_knowledge_stats)
     return {"success": True, "stats": stats}
 
 

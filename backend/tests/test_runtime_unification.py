@@ -117,7 +117,9 @@ def test_legacy_session_switch_migrates_to_conversations(tmp_path):
     assert db.is_session_bot_enabled(
         "legacy-room", "qq", "legacy-room", "group"
     ) is False
-    remaining = db.execute_sql("SELECT COUNT(*) AS count FROM session_settings")
+    remaining = db.execute_sql(
+        "SELECT COUNT(*) AS count FROM sqlite_master WHERE type='table' AND name='session_settings'"
+    )
     assert remaining[0]["count"] == 0
 
 
@@ -757,7 +759,7 @@ def test_app_config_async_controls_restart_on_a_fresh_event_loop(monkeypatch):
     assert second_lock is not first_lock
 
 def test_response_cache_restarts_on_a_fresh_event_loop():
-    from inference.optimizer import ResponseCache
+    from cache.response_cache import ResponseCache
 
     cache = ResponseCache(default_ttl=60)
     prompt_hash = cache.compute_prompt_hash("hello")

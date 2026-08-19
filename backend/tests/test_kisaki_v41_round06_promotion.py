@@ -128,7 +128,7 @@ def test_round06_manifest_count_hash_and_reaudit_match_files():
     validation = _jsonl(V4 / "validation.jsonl")
     assert manifest["train"]["count"] == len(train)
     assert manifest["train"]["sha256"] == module._text_sha256(V4 / "train.jsonl")
-    assert manifest["train"]["source_distribution"]["game_extraction_current_sft"] == 576
+    assert manifest["train"]["source_distribution"]["game_extraction_current_sft"] == 522
     assert manifest["train"]["source_distribution"]["llm_v4_reviewed_constructed"] == 150
     assert manifest["train"]["source_distribution"]["deepseek_user_simulation_v41_reviewed"] == 4
     assert audit["status"] == "clean"

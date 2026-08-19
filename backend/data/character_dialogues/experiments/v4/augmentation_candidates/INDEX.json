@@ -2,13 +2,13 @@
   "schema_version": 1,
   "created_at_utc": "2026-08-16T14:19:58Z",
   "summary": {
-    "canonical_train_count": 1002,
-    "canonical_train_sha256": "864b20e50d1d4dc4917e5d93be7c29da05e567edce07faf42526481b075b04ed",
+    "canonical_train_count": 948,
+    "canonical_train_sha256": "903c07934f29ea764ea14b28208e2a78468e33fe6f7de0d53d85bd642358cfb8",
     "canonical_validation_count": 70,
     "canonical_validation_sha256": "fb5cd5d93027b37be53327cda4e7c6137a7bae97201830fc8aa726727b9777b8",
-    "assistant_turn_count": 2125,
+    "effective_assistant_target_count": 2071,
     "source_distribution": {
-      "game_extraction": 576,
+      "game_extraction": 522,
       "llm_v4_blindfix": 34,
       "llm_v4_lifestyle": 15,
       "llm_v4_yoruko": 26,

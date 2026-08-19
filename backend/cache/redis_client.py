@@ -62,7 +62,7 @@ def get_redis() -> redis.Redis:
 
 # ============================================
 # 异步 Redis 客户端（统一共享，避免多模块各自创建连接池）
-# 此前 semantic_cache.py 和 message_queue.py 各自调用
+# 此前多个模块各自调用
 # redis.asyncio.from_url() 创建独立连接池（分别 10/20 连接），
 # 与同步客户端合计 80 个 max 连接。现统一为单一 async 客户端。
 # ============================================
@@ -93,8 +93,8 @@ async def get_async_redis():
     """获取 Redis 异步客户端（单例，全进程共享）。
 
     返回 redis.asyncio.Redis 实例；若 Redis 不可用则返回 None。
-    所有需要 async Redis 的模块（semantic_cache、message_queue、bot 去重等）
-    都应调用此函数而非各自 from_url 创建独立连接池。
+    所有需要 async Redis 的生产模块（配置缓存、bot 去重等）都应调用此函数，
+    不得各自通过 from_url 创建独立连接池。
     """
     global _async_client, _async_lock
     if _async_client is not None:

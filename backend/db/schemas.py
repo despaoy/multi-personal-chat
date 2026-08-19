@@ -30,6 +30,26 @@ class MessageRequest(BaseModel):
     senderId: str = ""
     sourceMessageId: str = ""
     traceId: str = ""
+    history: list[dict[str, str]] = Field(default_factory=list, max_length=40)
+
+    @field_validator("history")
+    @classmethod
+    def _validate_history(cls, value: list[dict[str, str]]) -> list[dict[str, str]]:
+        total_chars = 0
+        for item in value:
+            if not isinstance(item, dict):
+                raise ValueError("history items must be objects")
+            if item.get("role") not in {"user", "assistant"}:
+                raise ValueError("history role must be 'user' or 'assistant'")
+            content = item.get("content")
+            if not isinstance(content, str) or not content.strip():
+                raise ValueError("history content must be a non-empty string")
+            if len(content) > 4000:
+                raise ValueError("history content exceeds 4000 characters")
+            total_chars += len(content)
+        if total_chars > 24000:
+            raise ValueError("history total content exceeds 24000 characters")
+        return value
 
 
 class GenerateResponse(BaseModel):

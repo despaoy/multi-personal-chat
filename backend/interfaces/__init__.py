@@ -34,15 +34,15 @@ class DatabaseInterface(Protocol):
         """获取 LoRA 模型列表"""
         ...
 
-    def update_config(self, key: str, value: Any) -> None:
+    def update_config(self, new_config: Dict[str, Any]) -> None:
         """更新系统配置"""
         ...
 
-    def execute_sql(self, query: str, params: tuple = ()) -> List[Dict[str, Any]]:
+    def execute_sql(self, query: str, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         """执行 SQL 查询"""
         ...
 
-    def execute_sql_insert(self, query: str, params: tuple = ()) -> Any:
+    def execute_sql_insert(self, query: str, params: Optional[Dict[str, Any]] = None) -> Any:
         """执行 SQL 插入/更新"""
         ...
 
@@ -103,29 +103,6 @@ class CacheInterface(Protocol):
 
     async def clear(self) -> None:
         """清除所有缓存"""
-        ...
-
-
-# ============================================
-# 消息队列接口
-# ============================================
-
-@runtime_checkable
-class MessageQueueInterface(Protocol):
-    """消息队列接口 - Redis Streams / 内存队列的统一抽象"""
-
-    async def enqueue(
-        self, group_id: str, user_id: str, message: str, priority: int = 10
-    ) -> bool:
-        """入队消息"""
-        ...
-
-    async def dequeue(self, timeout: float = 1.0) -> Optional[Any]:
-        """出队消息"""
-        ...
-
-    async def get_stats(self) -> Dict[str, Any]:
-        """获取队列统计"""
         ...
 
 

@@ -327,7 +327,7 @@ except ImportError:
     ACCESS_CONTROL_AVAILABLE = False
 
 try:
-    from inference.optimizer import ResponseCache
+    from cache.response_cache import ResponseCache
 
     LLM_OPTIMIZER_AVAILABLE = True
 except ImportError:

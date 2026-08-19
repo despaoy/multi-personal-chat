@@ -191,27 +191,52 @@ async def close_vllm_client():
 router = APIRouter()
 
 
-def _response_cache_keys(request: MessageRequest, lora_name: str, config: Dict[str, Any]) -> tuple[str, str, int]:
+def _response_cache_keys(
+    request: MessageRequest,
+    lora_name: str,
+    config: Dict[str, Any],
+    *,
+    enable_rag: bool = True,
+) -> tuple[str, str, int]:
     """Include every response-affecting setting in the cache identity."""
     model_name = get_vllm_served_model_name()
     use_knowledge_base = bool(config.get("useKnowledgeBase", True))
+    interlocutor = request.senderName or request.userName or ""
+    prompt_identity = {
+        "message": request.message,
+        "history": list(request.history or []),
+        "interlocutor": interlocutor,
+        "enable_rag": enable_rag,
+    }
     identity = {
         "model": model_name,
         "lora": lora_name,
         "temperature": float(config.get("temperature", os.getenv("VLLM_TEMPERATURE", "0.7"))),
         "max_tokens": int(config.get("maxTokens", os.getenv("VLLM_MAX_TOKENS", "2048"))),
+        "top_p": float(config.get("topP", os.getenv("VLLM_TOP_P", "0.9"))),
         "use_knowledge_base": use_knowledge_base,
+        "enable_rag": enable_rag,
         "platform": request.platform,
         "conversation_type": request.conversationType or request.sessionType,
         "conversation_id": request.conversationId or request.sessionId,
+        "interlocutor": interlocutor,
     }
-    prompt_hash = hashlib.sha256(request.message.encode("utf-8")).hexdigest()
+    prompt_hash = hashlib.sha256(
+        json.dumps(prompt_identity, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
     serialized = json.dumps(identity, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     cache_key = hashlib.sha256(serialized.encode("utf-8")).hexdigest()
     return prompt_hash, cache_key, 60 if use_knowledge_base else 300
 
 
-async def _generate_reply_impl(request: MessageRequest, current_user: dict | None = None):
+async def _generate_reply_impl(
+    request: MessageRequest,
+    current_user: dict | None = None,
+    *,
+    persist_message: bool = True,
+    enable_rag: bool = True,
+    record_invocation: bool = True,
+):
     """默认聊天生成实现：优先使用 vLLM，回退到模型管理器。"""
     # C11 fix: 主聊天端点 mock provider 防护
     # 此前仅 training/generate-dialogues 有此检查，主聊天端点遗漏，
@@ -303,24 +328,38 @@ async def _generate_reply_impl(request: MessageRequest, current_user: dict | Non
             # A failed capability probe should not make the model unavailable.
             logger.warning("failed to query vLLM LoRA inventory: %s", e)
 
+    start_time = time.time()
     prompt_hash = cache_key = ""
     cache_ttl = 300
     if response_cache:
         try:
-            prompt_hash, cache_key, cache_ttl = _response_cache_keys(request, lora_name, runtime_config)
+            prompt_hash, cache_key, cache_ttl = _response_cache_keys(
+                request, lora_name, runtime_config, enable_rag=enable_rag
+            )
             cached = await response_cache.get(prompt_hash, cache_key)
             if cached:
                 logger.debug("response cache hit")
+                if persist_message:
+                    cached_model = cached.get("model", "response-cache")
+                    stored_model_name = "vllm" if cached_model.startswith("vllm/") else cached_model
+                    await _save_message(
+                        request,
+                        cached.get("reply", ""),
+                        stored_model_name,
+                        lora_name,
+                        round(time.time() - start_time, 2),
+                    )
                 return GenerateResponse(**cached)
         except Exception as e:
             logger.warning("response cache read failed: %s", e)
 
-    start_time = time.time()
-
     # ── 优先使用 vLLM 高并发推理 ──
     if await _ensure_vllm() and _vllm_client:
         try:
-            reply, used_rag, rag_meta = await _generate_with_vllm(request, vllm_effective_lora, vllm_lora_name, runtime_config)
+            reply, used_rag, rag_meta = await _generate_with_vllm(
+                request, vllm_effective_lora, vllm_lora_name, runtime_config,
+                enable_rag=enable_rag,
+            )
             cost_time = round(time.time() - start_time, 2)
 
             model_invoked = rag_meta.get("modelInvoked", True) is not False
@@ -331,7 +370,7 @@ async def _generate_reply_impl(request: MessageRequest, current_user: dict | Non
             )
             stored_model_name = "vllm" if model_invoked else model_label
             stored_lora_name = lora_name if model_invoked else "default"
-            if model_invoked:
+            if model_invoked and record_invocation:
                 await _record_model_invocation(
                     request,
                     model_label,
@@ -341,13 +380,14 @@ async def _generate_reply_impl(request: MessageRequest, current_user: dict | Non
                     completion_text=reply,
                 )
                 set_consecutive("model_failure", True)
-            await _save_message(
-                request,
-                reply,
-                stored_model_name,
-                stored_lora_name,
-                cost_time,
-            )
+            if persist_message:
+                await _save_message(
+                    request,
+                    reply,
+                    stored_model_name,
+                    stored_lora_name,
+                    cost_time,
+                )
             log_event(
                 "message_generated",
                 traceId=request.traceId,
@@ -381,14 +421,15 @@ async def _generate_reply_impl(request: MessageRequest, current_user: dict | Non
         except Exception as e:
             failed_cost = round(time.time() - start_time, 2)
             model_label = f"vllm/{get_vllm_served_model_name()}"
-            await _record_model_invocation(
-                request,
-                model_label,
-                lora_name,
-                failed_cost,
-                used_rag=False,
-                error_type=type(e).__name__,
-            )
+            if record_invocation:
+                await _record_model_invocation(
+                    request,
+                    model_label,
+                    lora_name,
+                    failed_cost,
+                    used_rag=False,
+                    error_type=type(e).__name__,
+                )
             increment("model_failures")
             log_event(
                 "model_invocation_failed",
@@ -443,7 +484,7 @@ async def _generate_reply_impl(request: MessageRequest, current_user: dict | Non
                     # 创建新循环，第二次请求会报 RuntimeError: Event loop is closed）。
                     return await model_manager.async_generate(
                         prompt=request.message,
-                        session_history=[],
+                        session_history=request.history or [],
                         rag_docs=None
                     )
 
@@ -471,8 +512,10 @@ async def _generate_reply_impl(request: MessageRequest, current_user: dict | Non
         model_name = provider_status.get("modelName", "Unknown")
 
 
-        await _record_model_invocation(request, model_name, lora_name, cost_time, used_rag=False, completion_text=reply)
-        await _save_message(request, reply, model_name, lora_name, cost_time)
+        if record_invocation:
+            await _record_model_invocation(request, model_name, lora_name, cost_time, used_rag=False, completion_text=reply)
+        if persist_message:
+            await _save_message(request, reply, model_name, lora_name, cost_time)
         set_consecutive("model_failure", True)
         log_event("message_generated", traceId=request.traceId, platform=request.platform, conversationId=request.conversationId or request.sessionId, senderId=request.senderId or request.userId, model=model_name, costTime=cost_time, errorType="", usedRag=False)
 
@@ -497,14 +540,15 @@ async def _generate_reply_impl(request: MessageRequest, current_user: dict | Non
         raise
     except Exception as e:
         failed_cost = round(time.time() - start_time, 2) if "start_time" in locals() else 0.0
-        await _record_model_invocation(
-            request,
-            "model_manager",
-            lora_name if "lora_name" in locals() else "default",
-            failed_cost,
-            used_rag=False,
-            error_type=type(e).__name__,
-        )
+        if record_invocation:
+            await _record_model_invocation(
+                request,
+                "model_manager",
+                lora_name if "lora_name" in locals() else "default",
+                failed_cost,
+                used_rag=False,
+                error_type=type(e).__name__,
+            )
         increment("model_failures")
         set_consecutive("model_failure", False)
         log_event(
@@ -575,10 +619,20 @@ def get_request_chat_generation_service(request: Request) -> ChatGenerationServi
 async def generate_reply_core(
     request: MessageRequest,
     current_user: dict | None = None,
+    *,
+    persist_message: bool = True,
+    enable_rag: bool = True,
+    record_invocation: bool = True,
 ):
     """Compatibility entry point used by integrations and existing callers."""
 
-    return await get_chat_generation_service().generate(request, current_user)
+    return await get_chat_generation_service().generate(
+        request,
+        current_user,
+        persist_message=persist_message,
+        enable_rag=enable_rag,
+        record_invocation=record_invocation,
+    )
 
 
 @router.post("/api/generate")
@@ -613,14 +667,21 @@ async def _retrieve_rag_bundle(query: str, top_k: int, filters: Dict[str, Any] |
 
     return await asyncio.to_thread(retrieve)
 
-async def _generate_with_vllm(request: MessageRequest, lora_name: str | None, prompt_lora_name: str | None = None, runtime_config: Dict[str, Any] | None = None) -> tuple[str, bool, Dict[str, Any]]:
+async def _generate_with_vllm(
+    request: MessageRequest,
+    lora_name: str | None,
+    prompt_lora_name: str | None = None,
+    runtime_config: Dict[str, Any] | None = None,
+    *,
+    enable_rag: bool = True,
+) -> tuple[str, bool, Dict[str, Any]]:
     """使用 vLLM 客户端生成回复，返回 (reply, used_rag, rag_meta)。"""
     # 使用请求开始时读取的配置快照，避免同一次生成多次同步访问数据库。
     _cfg = runtime_config or {}
     _temperature = float(_cfg.get('temperature', os.getenv("VLLM_TEMPERATURE", "0.7")))
     _max_tokens = int(_cfg.get('maxTokens', os.getenv("VLLM_MAX_TOKENS", "2048")))
     _top_p = float(_cfg.get('topP', os.getenv("VLLM_TOP_P", "0.9")))
-    _use_kb = _cfg.get('useKnowledgeBase', True)
+    _use_kb = _cfg.get('useKnowledgeBase', True) and enable_rag
 
     # RAG 检索（受设置页 useKnowledgeBase 开关控制）
     rag_context = ""
@@ -688,6 +749,7 @@ async def _generate_with_vllm(request: MessageRequest, lora_name: str | None, pr
     generation = await generate_character_response(
         CharacterGenerationRequest(
             message=request.message,
+            history=request.history or [],
             persona_prompt=_get_system_prompt(prompt_lora_name or lora_name),
             interlocutor=request.senderName or request.userName or "普通用户",
             retrieval=retrieval,

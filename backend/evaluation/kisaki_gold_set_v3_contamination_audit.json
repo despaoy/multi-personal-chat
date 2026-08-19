@@ -3,13 +3,13 @@
   "status": "clean",
   "similarity_threshold": 0.9,
   "candidate_count": 150,
-  "frozen_reference_count": 1072,
+  "frozen_reference_count": 1018,
   "development_reference_count": 150,
   "duplicate_ids": [],
   "duplicate_normalized_prompts": [],
   "text_overlap_matches": [],
   "rag_evidence_event_count": 32,
   "rag_evidence_event_overlaps": [],
-  "frozen_train_sha256": "864b20e50d1d4dc4917e5d93be7c29da05e567edce07faf42526481b075b04ed",
+  "frozen_train_sha256": "903c07934f29ea764ea14b28208e2a78468e33fe6f7de0d53d85bd642358cfb8",
   "frozen_validation_sha256": "fb5cd5d93027b37be53327cda4e7c6137a7bae97201830fc8aa726727b9777b8"
 }

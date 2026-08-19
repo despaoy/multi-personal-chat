@@ -36,12 +36,9 @@ import hmac
 import logging
 import os
 import secrets
-import sqlite3
 import time
-from contextlib import contextmanager
 from enum import Enum, Flag, auto
-from pathlib import Path
-from typing import Any, Callable, Generator, Optional
+from typing import Any, Callable, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -60,12 +57,6 @@ _DEFAULT_RATE_LIMIT = 60
 
 # 速率限制窗口（秒）
 _RATE_LIMIT_WINDOW = 60
-
-# 审计日志最大保留条数
-_MAX_AUDIT_LOG_ENTRIES = 10000
-
-# 数据库路径
-_DB_PATH = Path(os.getenv("DATABASE_PATH") or Path(__file__).parent.parent / "qq_assistant.db")
 
 
 # ---------------------------------------------------------------------------
@@ -251,214 +242,40 @@ class RateLimiter:
 
 
 # ---------------------------------------------------------------------------
-# 审计日志
-# ---------------------------------------------------------------------------
-
-class AuditLogger:
-    """审计日志记录器，记录所有敏感操作。
-
-    审计日志存储在SQLite数据库的audit_logs表中。
-    """
-
-    def __init__(self, db_path: str | Path = _DB_PATH) -> None:
-        """初始化审计日志记录器。
-
-        Args:
-            db_path: SQLite数据库文件路径
-        """
-        self._db_path = str(db_path)
-        self._init_table()
-
-    def _init_table(self) -> None:
-        """初始化审计日志表。"""
-        with self._get_connection() as conn:
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS audit_logs (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    timestamp REAL NOT NULL,
-                    api_key_hash TEXT NOT NULL,
-                    role TEXT NOT NULL,
-                    action TEXT NOT NULL,
-                    resource TEXT,
-                    detail TEXT,
-                    ip_address TEXT
-                )
-            """)
-            conn.commit()
-
-    @contextmanager
-    def _get_connection(self) -> Generator[sqlite3.Connection, None, None]:
-        """获取数据库连接的上下文管理器。"""
-        conn = sqlite3.connect(self._db_path)
-        conn.row_factory = sqlite3.Row
-        try:
-            yield conn
-        finally:
-            conn.close()
-
-    def log(
-        self,
-        api_key_hash: str,
-        role: str,
-        action: str,
-        resource: Optional[str] = None,
-        detail: Optional[str] = None,
-        ip_address: Optional[str] = None,
-    ) -> None:
-        """记录审计日志。
-
-        Args:
-            api_key_hash: API Key的哈希值（不存储原始Key）
-            role: 操作者角色
-            action: 操作类型
-            resource: 操作的资源标识
-            detail: 操作详情
-            ip_address: 请求来源IP
-        """
-        try:
-            with self._get_connection() as conn:
-                conn.execute(
-                    """
-                    INSERT INTO audit_logs (timestamp, api_key_hash, role, action, resource, detail, ip_address)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (time.time(), api_key_hash, role, action, resource, detail, ip_address),
-                )
-                conn.commit()
-
-                # 清理过多的日志
-                conn.execute(
-                    "DELETE FROM audit_logs WHERE id NOT IN "
-                    "(SELECT id FROM audit_logs ORDER BY id DESC LIMIT ?)",
-                    (_MAX_AUDIT_LOG_ENTRIES,),
-                )
-                conn.commit()
-
-            logger.debug("审计日志已记录: %s %s", action, resource or "")
-        except Exception as exc:
-            logger.error("审计日志记录失败: %s", exc)
-
-    def get_logs(
-        self,
-        limit: int = 100,
-        offset: int = 0,
-        role: Optional[str] = None,
-        action: Optional[str] = None,
-    ) -> list[dict[str, Any]]:
-        """查询审计日志。
-
-        Args:
-            limit: 返回条数上限
-            offset: 偏移量
-            role: 按角色筛选
-            action: 按操作类型筛选
-
-        Returns:
-            审计日志列表
-        """
-        conditions: list[str] = []
-        params: list[Any] = []
-
-        if role:
-            conditions.append("role = ?")
-            params.append(role)
-        if action:
-            conditions.append("action = ?")
-            params.append(action)
-
-        where_clause = ""
-        if conditions:
-            where_clause = "WHERE " + " AND ".join(conditions)
-
-        query = f"""
-            SELECT * FROM audit_logs {where_clause}
-            ORDER BY id DESC LIMIT ? OFFSET ?
-        """
-        params.extend([limit, offset])
-
-        try:
-            with self._get_connection() as conn:
-                cursor = conn.execute(query, params)
-                rows = cursor.fetchall()
-                return [dict(row) for row in rows]
-        except Exception as exc:
-            logger.error("查询审计日志失败: %s", exc)
-            return []
-
-
-# ---------------------------------------------------------------------------
 # 访问控制管理器
 # ---------------------------------------------------------------------------
 
 class AccessControlManager:
     """基于角色的访问控制管理器。
 
-    提供API Key管理、认证、授权和速率限制功能。
-
-    Attributes:
-        _db_path: SQLite数据库路径
-        _rate_limiter: 速率限制器
-        _audit_logger: 审计日志记录器
+    所有 API Key 和审计记录都写入统一 DB adapter（SQLite/PostgreSQL 主库），
+    不再自行创建 SQLite 文件或表。
     """
 
     def __init__(
         self,
-        db_path: str | Path = _DB_PATH,
+        database: Any | None = None,
         rate_limit: int = _DEFAULT_RATE_LIMIT,
     ) -> None:
         """初始化访问控制管理器。
 
         Args:
-            db_path: SQLite数据库路径
-            rate_limit: 每分钟默认请求限制
+            database: 数据库 adapter。默认使用 ``db.adapter.db``。
+            rate_limit: 每分钟默认请求限制。
         """
-        self._db_path = str(db_path)
+        if database is None:
+            from db.adapter import db as database
+        self._db = database
         self._rate_limiter = RateLimiter(limit=rate_limit)
         self._custom_rate_limiters: dict[str, RateLimiter] = {}
-        self._audit_logger = AuditLogger(db_path)
-        self._init_tables()
-        logger.info("AccessControlManager 初始化完成")
+        logger.info("AccessControlManager 初始化完成（统一 DB adapter）")
 
-    def _init_tables(self) -> None:
-        """初始化数据库表。"""
-        with self._get_connection() as conn:
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS api_keys (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    key_hash TEXT NOT NULL UNIQUE,
-                    key_prefix TEXT NOT NULL,
-                    role TEXT NOT NULL,
-                    description TEXT,
-                    created_at REAL NOT NULL,
-                    revoked_at REAL,
-                    last_used_at REAL,
-                    is_active INTEGER NOT NULL DEFAULT 1,
-                    rate_limit INTEGER
-                )
-            """)
-            conn.commit()
-
-    @contextmanager
-    def _get_connection(self) -> Generator[sqlite3.Connection, None, None]:
-        """获取数据库连接的上下文管理器。"""
-        conn = sqlite3.connect(self._db_path)
-        conn.row_factory = sqlite3.Row
-        try:
-            yield conn
-        finally:
-            conn.close()
 
     @staticmethod
     def _hash_api_key(api_key: str) -> str:
         """计算API Key的哈希值，使用pbkdf2_hmac加盐哈希。
 
         使用随机盐 + PBKDF2-HMAC-SHA256 进行安全哈希，存储哈希值而非原始Key。
-
-        Args:
-            api_key: 原始API Key
-
-        Returns:
-            格式为 "pbkdf2:{salt_hex}:{key_hex}" 的哈希值
         """
         salt = os.urandom(16)
         key = hashlib.pbkdf2_hmac('sha256', api_key.encode('utf-8'), salt, 100000)
@@ -483,191 +300,13 @@ class AccessControlManager:
         except (AttributeError, TypeError, ValueError):
             logger.warning("忽略格式损坏的 API Key 哈希记录")
             return False
+
     # -------------------------------------------------------------------
     # API Key管理
     # -------------------------------------------------------------------
 
-    def create_api_key(
-        self,
-        role: Role,
-        description: Optional[str] = None,
-        rate_limit: Optional[int] = None,
-    ) -> dict[str, Any]:
-        """创建新的API Key。
-
-        API Key格式：qqa_{role}_{public_id}_{random_hex}
-
-        Args:
-            role: 关联的角色
-            description: Key的描述信息
-            rate_limit: 自定义速率限制（None则使用默认值）
-
-        Returns:
-            包含API Key和元数据的字典
-
-        Raises:
-            APIKeyError: 创建失败
-        """
-        # Prefix contains a public lookup id so authentication does not scan and
-        # PBKDF2-check every key of the same role. The secret is still stored only
-        # as a salted hash.
-        public_id = secrets.token_hex(6)
-        random_hex = secrets.token_hex(_API_KEY_RANDOM_LENGTH // 2)
-        key_prefix = f"{_API_KEY_PREFIX}{role.value}_{public_id}_"
-        api_key = f"{key_prefix}{random_hex}"
-        key_hash = self._hash_api_key(api_key)
-        created_at = time.time()
-
-        try:
-            with self._get_connection() as conn:
-                conn.execute(
-                    """
-                    INSERT INTO api_keys (key_hash, key_prefix, role, description, created_at, rate_limit)
-                    VALUES (?, ?, ?, ?, ?, ?)
-                    """,
-                    (key_hash, key_prefix, role.value, description, created_at, rate_limit),
-                )
-                conn.commit()
-
-            logger.info("API Key创建成功: %s*** (角色: %s)", key_prefix, role.value)
-
-            # 审计日志
-            self._audit_logger.log(
-                api_key_hash=key_hash,
-                role=role.value,
-                action="create_api_key",
-                detail=f"创建了角色为 {role.value} 的API Key",
-            )
-
-            return {
-                "api_key": api_key,
-                "key_prefix": key_prefix,
-                "role": role.value,
-                "description": description,
-                "created_at": created_at,
-                "rate_limit": rate_limit,
-            }
-        except Exception as exc:
-            logger.error("创建API Key失败: %s", exc)
-            raise APIKeyError("创建 API Key 失败") from exc
-
-    def revoke_api_key(self, api_key: str) -> bool:
-        """吊销API Key。
-
-        Args:
-            api_key: 要吊销的API Key
-
-        Returns:
-            True如果成功吊销，False如果Key不存在或已吊销
-
-        Raises:
-            APIKeyError: 吊销操作失败
-        """
-        try:
-            with self._get_connection() as conn:
-                # Find the key by verifying against stored hashes
-                cursor = conn.execute(
-                    "SELECT key_hash, key_prefix FROM api_keys WHERE is_active = 1"
-                )
-                rows = cursor.fetchall()
-
-                matched_hash = None
-                for row in rows:
-                    if self._verify_api_key(api_key, row["key_hash"]):
-                        matched_hash = row["key_hash"]
-                        break
-
-                if matched_hash is None:
-                    return False
-
-                cursor = conn.execute(
-                    """
-                    UPDATE api_keys
-                    SET is_active = 0, revoked_at = ?
-                    WHERE key_hash = ? AND is_active = 1
-                    """,
-                    (time.time(), matched_hash),
-                )
-                conn.commit()
-
-                revoked = cursor.rowcount > 0
-
-            if revoked:
-                logger.info("API Key已吊销")
-
-                self._audit_logger.log(
-                    api_key_hash=matched_hash,
-                    role="system",
-                    action="revoke_api_key",
-                    detail="API Key已被吊销",
-                )
-
-            return revoked
-        except Exception as exc:
-            logger.error("吊销API Key失败: %s", exc)
-            raise APIKeyError("吊销 API Key 失败") from exc
-
-    def revoke_api_key_by_id(self, key_id: int) -> bool:
-        """Revoke a managed key by database id without exposing the secret in a URL."""
-        try:
-            with self._get_connection() as conn:
-                row = conn.execute(
-                    "SELECT key_hash, role FROM api_keys WHERE id = ? AND is_active = 1",
-                    (key_id,),
-                ).fetchone()
-                if row is None:
-                    return False
-                cursor = conn.execute(
-                    "UPDATE api_keys SET is_active = 0, revoked_at = ? "
-                    "WHERE id = ? AND is_active = 1",
-                    (time.time(), key_id),
-                )
-                conn.commit()
-                revoked = cursor.rowcount > 0
-
-            if revoked:
-                self._audit_logger.log(
-                    api_key_hash=row["key_hash"],
-                    role=row["role"],
-                    action="revoke_api_key",
-                    detail=f"吊销 API Key id={key_id}",
-                )
-            return revoked
-        except Exception as exc:
-            logger.error("按 ID 吊销 API Key 失败: %s", exc)
-            raise APIKeyError("吊销 API Key 失败") from exc
-
-    def list_api_keys(self, include_revoked: bool = False) -> list[dict[str, Any]]:
-        """列出所有API Key。
-
-        注意：不返回完整的Key，仅返回前缀和元数据。
-
-        Args:
-            include_revoked: 是否包含已吊销的Key
-
-        Returns:
-            API Key元数据列表
-        """
-        query = "SELECT id, key_prefix, role, description, created_at, revoked_at, is_active, rate_limit FROM api_keys"
-        if not include_revoked:
-            query += " WHERE is_active = 1"
-        query += " ORDER BY created_at DESC"
-
-        try:
-            with self._get_connection() as conn:
-                cursor = conn.execute(query)
-                rows = cursor.fetchall()
-                return [dict(row) for row in rows]
-        except Exception as exc:
-            logger.error("列出API Key失败: %s", exc)
-            raise APIKeyError("列出 API Key 失败") from exc
-
-    # -------------------------------------------------------------------
-    # 认证与授权
-    # -------------------------------------------------------------------
-
-    def _authenticate_record(self, api_key: str) -> dict[str, Any]:
-        """Verify and touch one managed API key in a worker thread."""
+    def _find_matching_key_hash(self, api_key: str) -> str:
+        """Resolve the stored hash for a raw API key using the DB adapter."""
         role_name = next((
             role.value
             for role in Role
@@ -685,36 +324,123 @@ class AccessControlManager:
             else ""
         )
 
-        with self._get_connection() as conn:
-            rows = []
-            if candidate_prefix:
-                rows.extend(conn.execute(
-                    "SELECT key_hash, role, is_active, rate_limit "
-                    "FROM api_keys WHERE key_prefix = ?",
-                    (candidate_prefix,),
-                ).fetchall())
-            # Legacy keys used only the role prefix. Keep verification support
-            # without forcing new keys back onto an O(n) scan.
-            rows.extend(conn.execute(
-                "SELECT key_hash, role, is_active, rate_limit "
-                "FROM api_keys WHERE key_prefix = ?",
-                (role_prefix,),
-            ).fetchall())
-            matched_row = next(
-                (row for row in rows if self._verify_api_key(api_key, row["key_hash"])),
-                None,
-            )
-            if matched_row is None:
-                raise AuthenticationError("无效的API Key")
-            if not matched_row["is_active"]:
-                raise AuthenticationError("API Key已被吊销")
+        rows: list[dict[str, Any]] = []
+        if candidate_prefix:
+            rows.extend(self._db.get_api_key_rows_by_prefix(candidate_prefix))
+        # Legacy keys used only the role prefix. Keep verification support.
+        rows.extend(self._db.get_api_key_rows_by_prefix(role_prefix))
+        matched = next(
+            (row for row in rows if self._verify_api_key(api_key, row["key_hash"])),
+            None,
+        )
+        if matched is None:
+            raise AuthenticationError("无效的API Key")
+        if not matched["is_active"]:
+            raise AuthenticationError("API Key已被吊销")
+        return matched["key_hash"]
 
-            conn.execute(
-                "UPDATE api_keys SET last_used_at = ? WHERE key_hash = ?",
-                (time.time(), matched_row["key_hash"]),
+    def create_api_key(
+        self,
+        role: Role,
+        description: Optional[str] = None,
+        rate_limit: Optional[int] = None,
+    ) -> dict[str, Any]:
+        """创建新的API Key并写入主数据库。"""
+        public_id = secrets.token_hex(6)
+        random_hex = secrets.token_hex(_API_KEY_RANDOM_LENGTH // 2)
+        key_prefix = f"{_API_KEY_PREFIX}{role.value}_{public_id}_"
+        api_key = f"{key_prefix}{random_hex}"
+        key_hash = self._hash_api_key(api_key)
+
+        try:
+            record = self._db.create_api_key_record(
+                key_hash=key_hash,
+                key_prefix=key_prefix,
+                role=role.value,
+                description=description,
+                rate_limit=rate_limit,
             )
-            conn.commit()
-            return dict(matched_row)
+            logger.info("API Key创建成功: %s*** (角色: %s)", key_prefix, role.value)
+            self._db.add_audit_log(
+                api_key_hash=key_hash,
+                role=role.value,
+                action="create_api_key",
+                detail=f"创建了角色为 {role.value} 的API Key",
+            )
+            return {
+                "api_key": api_key,
+                "key_prefix": key_prefix,
+                "role": role.value,
+                "description": description,
+                "created_at": record["created_at"],
+                "rate_limit": rate_limit,
+            }
+        except Exception as exc:
+            logger.error("创建API Key失败: %s", exc)
+            raise APIKeyError("创建 API Key 失败") from exc
+
+    def revoke_api_key(self, api_key: str) -> bool:
+        """吊销API Key（通过原始 Key 查找哈希）。"""
+        try:
+            matched_hash = self._find_matching_key_hash(api_key)
+            revoked = self._db.revoke_api_key_by_hash(matched_hash)
+            if revoked:
+                logger.info("API Key已吊销")
+                self._db.add_audit_log(
+                    api_key_hash=matched_hash,
+                    role="system",
+                    action="revoke_api_key",
+                    detail="API Key已被吊销",
+                )
+            return revoked
+        except AuthenticationError:
+            return False
+        except Exception as exc:
+            logger.error("吊销API Key失败: %s", exc)
+            raise APIKeyError("吊销 API Key 失败") from exc
+
+    def revoke_api_key_by_id(self, key_id: int) -> bool:
+        """Revoke a managed key by database id without exposing the secret in a URL."""
+        try:
+            row = self._db.get_api_key_by_id(key_id)
+            if row is None or not row.get("is_active"):
+                return False
+            revoked = self._db.revoke_api_key_by_id(key_id)
+            if revoked:
+                self._db.add_audit_log(
+                    api_key_hash=row["key_hash"],
+                    role=row["role"],
+                    action="revoke_api_key",
+                    detail=f"吊销 API Key id={key_id}",
+                )
+            return revoked
+        except Exception as exc:
+            logger.error("按 ID 吊销 API Key 失败: %s", exc)
+            raise APIKeyError("吊销 API Key 失败") from exc
+
+    def list_api_keys(self, include_revoked: bool = False) -> list[dict[str, Any]]:
+        """列出所有API Key元数据。"""
+        try:
+            return self._db.list_api_keys(include_revoked=include_revoked)
+        except Exception as exc:
+            logger.error("列出API Key失败: %s", exc)
+            raise APIKeyError("列出 API Key 失败") from exc
+
+    # -------------------------------------------------------------------
+    # 认证与授权
+    # -------------------------------------------------------------------
+
+    def _authenticate_record(self, api_key: str) -> dict[str, Any]:
+        """Verify and touch one managed API key in a worker thread."""
+        key_hash = self._find_matching_key_hash(api_key)
+        matched_row = self._db.get_api_key_by_hash(key_hash)
+        if matched_row is None:
+            raise AuthenticationError("无效的API Key")
+        if not matched_row["is_active"]:
+            raise AuthenticationError("API Key已被吊销")
+
+        self._db.touch_api_key(key_hash)
+        return dict(matched_row)
 
     async def authenticate(self, api_key: str) -> dict[str, Any]:
         """Authenticate a managed API key without blocking the event loop."""
@@ -750,18 +476,7 @@ class AccessControlManager:
             raise AuthenticationError("认证失败") from exc
 
     def authorize(self, user_info: dict[str, Any], required_permission: Permission) -> bool:
-        """检查用户是否拥有所需权限。
-
-        Args:
-            user_info: authenticate()返回的用户信息
-            required_permission: 需要的权限
-
-        Returns:
-            True如果用户拥有所需权限
-
-        Raises:
-            AuthorizationError: 权限不足
-        """
+        """检查用户是否拥有所需权限。"""
         user_permissions: Permission = user_info.get("permissions", Permission(0))
 
         if not (user_permissions & required_permission):
@@ -788,18 +503,8 @@ class AccessControlManager:
         role: Optional[str] = None,
         action: Optional[str] = None,
     ) -> list[dict[str, Any]]:
-        """查询审计日志。
-
-        Args:
-            limit: 返回条数上限
-            offset: 偏移量
-            role: 按角色筛选
-            action: 按操作类型筛选
-
-        Returns:
-            审计日志列表
-        """
-        return self._audit_logger.get_logs(limit, offset, role, action)
+        """查询统一 DB 中的审计日志。"""
+        return self._db.get_audit_logs(limit, offset, role, action)
 
     def log_action(
         self,
@@ -809,20 +514,12 @@ class AccessControlManager:
         detail: Optional[str] = None,
         ip_address: Optional[str] = None,
     ) -> None:
-        """记录用户操作审计日志。
-
-        Args:
-            user_info: 用户信息
-            action: 操作类型
-            resource: 操作资源
-            detail: 操作详情
-            ip_address: 请求IP
-        """
+        """记录用户操作审计日志到统一 DB。"""
         role = user_info.get("role", Role.VIEWER)
         role_value = role.value if isinstance(role, Role) else str(role)
         key_hash = user_info.get("key_hash", "unknown")
 
-        self._audit_logger.log(
+        self._db.add_audit_log(
             api_key_hash=key_hash,
             role=role_value,
             action=action,

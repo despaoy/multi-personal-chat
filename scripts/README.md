@@ -11,7 +11,6 @@ V4 experiments.
 | `extract_character_dialogues.py` | Extract attributable Kisaki lines from `gametext/` |
 | `audit_kisaki_source_alignment.py` | Audit source-line alignment and RAG lineage |
 | `build_kisaki_v4_canonical_draft.py` | Rebuild V4 canonical train/validation draft |
-| `build_kisaki_v4_review_packets.py` | Generate human-review packets |
 | `freeze_kisaki_v4_dataset.py` | Freeze reviewed train/validation |
 | `finalize_kisaki_v4_dataset.py` | Advance canonical state after Gold approval |
 | `build_kisaki_gold_v21.py` / `build_kisaki_gold_v3.py` | Build Gold sets and contamination audits |

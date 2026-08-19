@@ -53,7 +53,7 @@ $CompileTargets = @(
     "api/loras.py",
     "api/stats.py",
     "api/integrations.py",
-    "bot/async_inference.py",
+    "bot/bot.py",
     "db/database.py",
     "db/pg_database.py",
     "inference/vllm_client.py",

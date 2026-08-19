@@ -19,20 +19,21 @@
   },
   "approval": {
     "approved_categories": [
-      "profile_prompt",
-      "source_coverage",
       "constructed_train",
-      "validation",
+      "exclusions",
+      "experiment_configs",
+      "game_train",
       "gold_v21",
       "gold_v3",
-      "experiment_configs",
-      "exclusions"
+      "profile_prompt",
+      "source_coverage",
+      "validation"
     ],
-    "all_required_approved": false,
+    "all_required_approved": true,
     "category_status": {
       "profile_prompt": "approved_by_project_owner",
       "source_coverage": "approved_by_reproducible_source_audit",
-      "game_train": "source_review_approved_context_quality_reaudit_pending",
+      "game_train": "approved_after_context_quality_reaudit",
       "constructed_train": "approved_by_project_owner",
       "validation": "approved_70_excluded_7",
       "gold_v21": "approved_development_only",
@@ -54,14 +55,16 @@
         "prompt_policy_version": "3.1.0"
       },
       "game_train_current": {
-        "status": "context_quality_reaudit_pending",
-        "candidate_count": 652,
-        "reviewed_count": 652,
-        "approved_count": 576,
-        "excluded_count": 76,
-        "pending_count": 0,
-        "progress_path": "03_GAME_TRAIN/game_train_review_progress_round03.json",
-        "approval_path": "03_GAME_TRAIN/game_train_final_approval.json"
+        "status": "approved_and_promoted",
+        "original_candidate_count": 652,
+        "initial_excluded_count": 76,
+        "context_reaudit_input_count": 576,
+        "context_reaudit_pass_unchanged_count": 415,
+        "context_reaudit_context_added_count": 107,
+        "context_reaudit_excluded_count": 54,
+        "final_approved_count": 522,
+        "final_total_excluded_count": 130,
+        "approval_path": "backend/data/character_dialogues/experiments/v4/game_train_context_review_approval.json"
       },
       "constructed_train_final": {
         "status": "approved",

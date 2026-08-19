@@ -317,7 +317,6 @@ CORS → AuditLog → SecurityHeaders → Security(认证) → RateLimit → Inp
 | `FAILOVER_AVAILABLE` | `infra.failover` | `failover_mgr` |
 | `ENCRYPTION_AVAILABLE` | `infra.encryption` | `encryption_mgr` |
 | `ACCESS_CONTROL_AVAILABLE` | `infra.access_control` | `access_control_mgr` |
-| `LLM_OPTIMIZER_AVAILABLE` | `inference.optimizer` | 仅 `response_cache` 为活跃全局实例；其余类作为可复用工具保留 |
 | `VECTOR_DB_AVAILABLE` | `knowledge.vector_db` | — |
 
 > 历史标志 `LOAD_BALANCER_AVAILABLE`（`infra/load_balancer.py`）已移除：vLLM 多实例健康感知与负载统计已统一收敛到 `inference/vllm_client.py:VLLMClient`。
@@ -732,7 +731,7 @@ build_citations() / build_context_prompt() → 注入 LLM
 
 ### 4.7 机器人接入层（bot）
 
-**目录**：`backend/bot/`，共 4 个文件。基于 NoneBot2 + OneBot v11 协议的 QQ 机器人入口。
+**目录**：`backend/bot/`。基于 NoneBot2 + OneBot v11 协议的 QQ 机器人入口。
 
 #### 4.7.1 bot.py — 机器人主流程（核心）
 
@@ -741,44 +740,18 @@ build_citations() / build_context_prompt() → 注入 LLM
 - **配置管理**：`Config` 类，环境变量项为静态属性，数据库项通过 `@property` 动态读取（30 秒缓存）
 - **会话历史**：`SessionHistory(max_tokens)`
   - `_load_from_db(session_id)`：通过 `db.adapter` 的 `db.get_messages(limit=10, session_id=session_id)` 恢复
-- **RAG 集成**：`_rag_search_via_api(query, top_k, kb_name)`：HTTP POST 调用后端 RAG 服务
+- **统一生成链**：构造 `MessageRequest` 后调用 `generate_reply_core`，与 API/AstrBot 共用 prompt、RAG、失败回退和 `InferenceRuntime` 调度
 - **LoRA 热切换**：
   - `LORA_REGISTRY`：预置 hutao、minamo、kisaki；月社妃只使用稳定别名 `loras/kisaki/final`，具体实验产物需在验收后显式发布到该路径
   - `_load_7b_model(lora_name)`：加载 Qwen3-8B 4-bit NF4 + PeftModel；热切换时 `load_adapter` + `set_adapter`
-- **推理主流程**：
-  - `generate_with_local_model(prompt, session_id, is_claw, lora_name)`：**优先 vLLM**（`inference.vllm_client.VLLMClient`），失败回退 transformers
-  - `process_message(event) -> str`：同步 LoRA → 生成回复 → 保存历史 → 保存数据库 → 动态延迟
+- **推理主流程**：`process_message(event) -> str` 在会话锁内读取历史、调用统一生成服务并写回历史，保证同会话消息顺序一致
 - **消息处理**：
   - `should_reply(event)`：私聊总是回复；群聊检查 `db.is_session_bot_enabled` + @机器人/包含名字/触发词
   - `handle_all_messages`：幂等去重 → should_reply → 普通消息走 `process_message`（智能分段发送 `_smart_split_reply`）；`/claw` 命令进入工具模式
   - `handle_claw(bot, user_message, event, lora_name)`：LLM 思考 → LLM 生成 JSON 命令 → `execute_tool` → 结果以角色语气报告
 - **启动**：`init_bot()`：nonebot.init(driver="~fastapi") + 注册 OneBotV11Adapter + `nonebot.run(host, port=8081)`
 
-#### 4.7.2 async_inference.py — 异步推理服务
-
-- `ConversationManager`：对话历史管理器（KV Cache 复用），key 为 `f"{group_id}:{user_id}"`，LRU 淘汰
-- `AsyncInferenceService`：
-  - 懒初始化：`_ensure_client`（httpx 连接池）、`_ensure_cache`（语义缓存）、`_ensure_circuit_breaker`（5 次失败熔断，30 秒恢复）
-  - `async infer(group_id, user_id, message) -> str`：**完整推理流程**
-    1. 语义缓存查询（支持多样化：缓存为列表则 `random.choice`）
-    2. 熔断器 open 则降级返回默认提示
-    3. 获取对话历史构建完整 messages
-    4. 按 backend 分发 `_infer_mock/_infer_ollama/_infer_vllm/_infer_openai`
-    5. 记录对话历史
-    6. 写入缓存（**多样化**：已有列表则追加去重，最多 `_cache_variants=3` 个）
-
-#### 4.7.3 async_pipeline.py — 群级令牌桶限流器
-
-- `GroupRateLimiter`：按群独立的令牌桶限流（仍在测试中使用）
-  - `__init__(default_rate=30.0, default_capacity=60)`
-  - `acquire(group_id) -> bool`：令牌桶算法，按时间补充令牌
-  - `cleanup(max_age=3600.0)`：清理长时间未使用的桶
-
-> 历史：本模块曾包含 `AsyncMessagePipeline`（基于 Redis Streams 的异步消息
-> 处理管道，含 `MessageTask`/`_worker`/`_claim_loop`），但该类从未在生产
-> 路径被实例化（`bot/bot.py` 直接调用推理层）。已删除以消除死代码。
-
-#### 4.7.4 tools.py — 工具注册与分发
+#### 4.7.2 tools.py — 工具注册与分发
 
 - `TOOLS: Dict[str, Dict]`：全局工具表
 - `register_tool(name, description, handler)`：注册工具
@@ -829,17 +802,16 @@ build_citations() / build_context_prompt() → 注入 LLM
 
 ### 4.9 缓存层（cache）
 
-**目录**：`backend/cache/`；生产缓存与实验性工具显式隔离。
+**目录**：`backend/cache/`；只保留生产链路实际使用的缓存实现。
 
 | 模块 | 职责 | 关键类 |
 |---|---|---|
 | `redis_client.py` | Redis 连接池（max_connections=50）、JSON 序列化、基础 get/set/delete/exists/incr/expire/keys；同步与异步两套客户端，`close_async_redis()` / `close_sync_redis()` 由 lifespan 统一关闭 | `get_redis()` |
 | `config_cache.py` | 配置缓存，TTL ±10% 抖动防雪崩；双层结构（Redis + 本地内存兜底） | `get_cached_config()`、`set_cached_config()`、`invalidate_config_cache()` |
 | `ttl_value_cache.py` | SQLite/PostgreSQL 会话开关共用的有界、线程安全本地 TTL 缓存 | `BoundedTTLCache` |
-| `semantic_cache.py` | 实验/基准用语义缓存；仅允许显式导入，不进入生产主链路 | `SemanticCache` |
-| `message_queue.py` | 实验性 Redis Streams 队列；不属于生产推理链路 | `QueueMessage`、`RedisMessageQueue` |
+| `response_cache.py` | 生成回复的有界进程内缓存；键覆盖历史、对话者、RAG 与采样参数 | `ResponseCache` |
 
-**生产缓存/调度主链路**：`config_cache` + `ResponseCache` + `BoundedTTLCache` + `InferenceRuntime`。`semantic_cache.py` 与 `message_queue.py` 仅作为隔离的实验/基准工具保留。
+**生产缓存/调度主链路**：`config_cache` + `ResponseCache` + `BoundedTTLCache` + `InferenceRuntime`。未接入生产的语义缓存与 Redis Streams 消息队列已删除。
 
 ---
 
@@ -1228,7 +1200,7 @@ curl -fsS http://127.0.0.1:8001/v1/models
 | 认证与安全 | `test_auth_*.py`、`test_security_rate_limiter*.py`、`test_lora_path_security.py`、`test_encryption_key_management.py` | 注册竞态、认证回压、限流器容量、LoRA 路径信任边界、密钥管理 |
 | 训练与评估 | `test_training_task_lifecycle.py`、`test_training_export_concurrency.py`、`test_evaluation_runtime_hardening.py`、`test_retrieval_evaluation_integrity.py` | 训练任务生命周期、导出并发、评估运行时硬化、检索评估完整性 |
 | 研究数据契约 | `test_research_data_api_integrity.py`、`test_experiment_api_integrity.py`、`test_lora_scan_integrity.py`、`test_kisaki_*` | 研究 API 完整性、实验契约、LoRA 扫描、月社妃 Gold/v3/v4 契约 |
-| 基础设施 | `test_circuit_breaker_lifecycle.py`、`test_bounded_executor.py`、`test_semantic_cache_lifecycle.py`、`test_stats_concurrency.py` | 熔断器生命周期、有界执行器、语义缓存、统计并发 |
+| 基础设施 | `test_circuit_breaker_lifecycle.py`、`test_bounded_executor.py`、`test_async_db_executor.py`、`test_stats_concurrency.py` | 熔断器生命周期、有界执行器、异步数据库卸载、统计并发 |
 | 角色基准 | `test_character_benchmark.py` | quality gate 拒绝短小/塌缩候选、接受健康候选、拒绝重复 sample IDs |
 | 训练评估器 | `test_training_evaluator.py` | losses 与 provenance、极端 loss、DoRA + RSLoRA 共存、非量化模型 float16 |
 | 可执行脚本 | `security_test.py`、`fault_injection_test.py` | 渗透测试 8 场景（SQL 注入/XSS/路径遍历/命令注入/认证绕过/权限提升/限流绕过/敏感数据泄露）、故障注入 6 场景；`__test__ = False`，被 conftest 排除 |

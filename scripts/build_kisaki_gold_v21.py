@@ -350,7 +350,7 @@ def load_jsonl(path: Path) -> list[dict[str, Any]]:
 
 
 def contamination_audit(rows: list[dict[str, Any]]) -> dict[str, Any]:
-    references = load_jsonl(V4_DIR / "train_candidate.jsonl") + load_jsonl(V4_DIR / "validation_candidate.jsonl")
+    references = load_jsonl(V4_DIR / "train.jsonl") + load_jsonl(V4_DIR / "validation.jsonl")
     reference_texts = [(record["id"], text) for record in references for text in user_texts(record)]
     matches = []
     for row in rows:

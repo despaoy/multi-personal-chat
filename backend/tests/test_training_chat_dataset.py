@@ -252,6 +252,42 @@ def test_qwen3_labels_every_assistant_turn_and_masks_user_tokens():
     ) == 2
 
 
+def test_qwen3_can_supervise_only_the_final_assistant_turn():
+    tokenizer = TinyChatTokenizer()
+    messages = [
+        {"role": "user", "content": "历史问题"},
+        {"role": "assistant", "content": "历史回答"},
+        {"role": "user", "content": "当前问题"},
+        {"role": "assistant", "content": "最终回答"},
+    ]
+
+    tokenized = tokenize_assistant_turns(
+        tokenizer,
+        messages,
+        max_length=512,
+        assistant_supervision="last",
+    )
+    supervised_ids = [
+        token_id
+        for token_id, label in zip(tokenized["input_ids"], tokenized["labels"])
+        if label != -100
+    ]
+    supervised_text = tokenizer.decode(supervised_ids, skip_special_tokens=True)
+    assert "历史回答" not in supervised_text
+    assert "最终回答" in supervised_text
+    assert supervised_ids.count(tokenizer.end_token_id) == 1
+
+
+def test_qwen3_rejects_unknown_assistant_supervision_mode():
+    with pytest.raises(ValueError, match="assistant supervision"):
+        tokenize_assistant_turns(
+            TinyChatTokenizer(),
+            [{"role": "user", "content": "问题"}, {"role": "assistant", "content": "回答"}],
+            max_length=512,
+            assistant_supervision="final-ish",
+        )
+
+
 def test_qwen3_truncation_keeps_supervised_tokens():
     tokenizer = TinyChatTokenizer()
     tokenized = tokenize_assistant_turns(

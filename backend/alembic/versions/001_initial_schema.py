@@ -174,21 +174,6 @@ def upgrade() -> None:
     )
 
     # ============================================
-    # 会话设置表
-    # ============================================
-    op.create_table(
-        'session_settings',
-        sa.Column('sessionId', sa.Text(), nullable=False),
-        sa.Column('platform', sa.Text(), nullable=False, server_default='qq'),
-        sa.Column('conversationId', sa.Text(), nullable=True),
-        sa.Column('sessionType', sa.Text(), nullable=False, server_default='private'),
-        sa.Column('sessionName', sa.Text(), nullable=True),
-        sa.Column('bot_enabled', sa.Integer(), nullable=False, server_default='1'),
-        sa.Column('updated_at', sa.Text(), nullable=True),
-        sa.PrimaryKeyConstraint('sessionId'),
-    )
-
-    # ============================================
     # Claw 工具表
     # ============================================
     op.create_table(
@@ -426,7 +411,6 @@ def downgrade() -> None:
     op.drop_table('conversations')
     op.drop_table('integration_message_dedup')
     op.drop_table('claw_tools')
-    op.drop_table('session_settings')
     op.drop_table('user_data')
     op.drop_table('knowledge_chunks')
     op.drop_table('knowledge_documents')

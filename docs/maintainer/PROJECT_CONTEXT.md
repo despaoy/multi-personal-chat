@@ -2,7 +2,7 @@
 
 > 本文件是维护者和 AI 助手进入项目时的内部事实入口，不面向最终用户。
 >
-> 更新时间：2026-08-16。详细实验导航见 [月社妃实验总览](../research/KISAKI_EXPERIMENT_INDEX.md)。
+> 更新时间：2026-08-19。详细实验导航见 [月社妃实验总览](../research/KISAKI_EXPERIMENT_INDEX.md)。
 
 ## 1. 项目定位
 
@@ -53,12 +53,12 @@ MultiPersonal Chat System 是面向角色对话研究与保研展示的多平台
 |---|---|
 | 人物画像 | 已确认 |
 | system prompt v3 | 已批准，正式使用策略为 `replace` |
-| V4 train | 当前 1002 条；576 条原作 + 150 条既有构造 + 276 条经审核晋升的 V4.1 五轮会话（DeepSeek round06 4 条 + Codex 自动化批次 272 条） |
+| V4 train | 当前 948 条；522 条原作 + 150 条既有构造 + 276 条经审核晋升的 V4.1 五轮会话（DeepSeek round06 4 条 + Codex 自动化批次 272 条） |
 | V4 validation | 已冻结 70 条独立原作数据 |
 | Gold v2.1 | 150 条，已批准为 development only |
 | Gold v3 | 150 条最终盲测，已审核并冻结 |
-| 实验预检 | blocked：Game Train 上下文质量复审尚未完成 |
-| R1V4 seed 42 | 禁止在门禁通过前启动 |
+| 实验预检 | Game Train 复审已完成；运行正式门禁确认当前环境 |
+| R1V4 seed 42 | 门禁通过后可启动 |
 | 正式结论 | 尚未形成 |
 
 ### 4.2 严格对照

@@ -256,7 +256,7 @@ async def migrate(sqlite_path: str | Path = SQLITE_DB_PATH):
         knowledge_bases_table, knowledge_folders_table,
         knowledge_documents_table, knowledge_chunks_table,
         users_table, user_data_table, saved_dialogues_table,
-        session_settings_table, claw_tools_table,
+        api_keys_table, claw_tools_table,
         audit_logs_table, intent_samples_table,
         intent_active_kbs_table, training_tasks_table,
         # Phase 2 fix: 补齐此前遗漏的 10 张表
@@ -307,7 +307,7 @@ async def migrate(sqlite_path: str | Path = SQLITE_DB_PATH):
         ("knowledge_chunks", knowledge_chunks_table, None, None),
         ("user_data", user_data_table, None, None),
         ("saved_dialogues", saved_dialogues_table, None, None),
-        ("session_settings", session_settings_table, ["sessionId"], None),
+        ("api_keys", api_keys_table, ["id"], None),
         ("claw_tools", claw_tools_table, ["name"], None),
         ("audit_logs", audit_logs_table, None, None),
         ("intent_samples", intent_samples_table, None, None),

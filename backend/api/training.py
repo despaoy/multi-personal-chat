@@ -13,6 +13,7 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import FileResponse
 from app.dependencies import get_current_admin
+from infra.db_executor import run_db
 from pydantic import BaseModel
 from typing import Optional
 
@@ -991,7 +992,7 @@ class SaveDialoguesRequest(BaseModel):
 async def list_saved_dialogues(current_user: dict = Depends(get_current_admin)):
     """列出所有已保存的对话"""
     try:
-        rows = db.execute_sql('''
+        rows = await run_db(db.execute_sql, '''
             SELECT id, name, character_desc, style, dialogue_count,
                    turn_stats, scene_stats, created_at, updated_at
             FROM saved_dialogues ORDER BY updated_at DESC
@@ -1024,7 +1025,7 @@ async def save_dialogues(request: SaveDialoguesRequest, current_user: dict = Dep
     """
     try:
         now = time.strftime("%Y-%m-%d %H:%M:%S")
-        result = db.execute_sql_insert('''
+        result = await run_db(db.execute_sql_insert, '''
             INSERT INTO saved_dialogues
             (name, character_desc, style, dialogue_count, dialogues_json, turn_stats, scene_stats, created_at, updated_at)
             VALUES (:name, :character_desc, :style, :dialogue_count, :dialogues_json, :turn_stats, :scene_stats, :created_at, :updated_at)
@@ -1049,7 +1050,7 @@ async def save_dialogues(request: SaveDialoguesRequest, current_user: dict = Dep
 async def get_saved_dialogue(item_id: int, current_user: dict = Depends(get_current_admin)):
     """获取单个已保存对话"""
     try:
-        rows = db.execute_sql('''
+        rows = await run_db(db.execute_sql, '''
             SELECT id, name, character_desc, style, dialogue_count,
                    dialogues_json, turn_stats, scene_stats, created_at, updated_at
             FROM saved_dialogues WHERE id = :item_id
@@ -1084,7 +1085,7 @@ async def delete_saved_dialogue(item_id: int, current_user: dict = Depends(get_c
     s2 fix: IDOR 防护，限定 admin。
     """
     try:
-        rowcount = db.execute_sql('DELETE FROM saved_dialogues WHERE id = :item_id', {"item_id": item_id})
+        rowcount = await run_db(db.execute_sql, 'DELETE FROM saved_dialogues WHERE id = :item_id', {"item_id": item_id})
         if rowcount == 0:
             raise HTTPException(status_code=404, detail="对话不存在")
         return {"success": True, "message": "删除成功"}
@@ -1102,7 +1103,7 @@ async def delete_dialogue_from_saved(item_id: int, dialogue_index: int, current_
     s2 fix: IDOR 防护，限定 admin。
     """
     try:
-        rows = db.execute_sql('SELECT dialogues_json FROM saved_dialogues WHERE id = :item_id', {"item_id": item_id})
+        rows = await run_db(db.execute_sql, 'SELECT dialogues_json FROM saved_dialogues WHERE id = :item_id', {"item_id": item_id})
         if not rows:
             raise HTTPException(status_code=404, detail="对话不存在")
 
@@ -1112,7 +1113,7 @@ async def delete_dialogue_from_saved(item_id: int, dialogue_index: int, current_
 
         dialogues.pop(dialogue_index)
         now = time.strftime("%Y-%m-%d %H:%M:%S")
-        db.execute_sql('''
+        await run_db(db.execute_sql, '''
             UPDATE saved_dialogues
             SET dialogues_json = :dialogues_json, dialogue_count = :dialogue_count, updated_at = :updated_at
             WHERE id = :item_id
@@ -1137,7 +1138,7 @@ async def create_dataset_from_saved(item_id: int, dataset_name: Optional[str] = 
     s2 fix: IDOR 防护，限定 admin。
     """
     try:
-        rows = db.execute_sql('SELECT name, dialogues_json FROM saved_dialogues WHERE id = :item_id', {"item_id": item_id})
+        rows = await run_db(db.execute_sql, 'SELECT name, dialogues_json FROM saved_dialogues WHERE id = :item_id', {"item_id": item_id})
         if not rows:
             raise HTTPException(status_code=404, detail="对话不存在")
 

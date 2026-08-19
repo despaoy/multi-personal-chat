@@ -2,8 +2,8 @@
 
 ## 当前状态
 
-- 正式训练：`blocked_pending_game_context_quality_review`
-- V4 train：当前 1002 条（576 原作 + 150 既有构造 + 4 条 DeepSeek round06 五轮会话 + 272 条 Codex 自动化批次五轮会话）
+- 正式训练：Game Train 复审已关闭，等待当前环境正式门禁复验
+- V4 train：当前 948 条（522 原作 + 150 既有构造 + 4 条 DeepSeek round06 五轮会话 + 272 条 Codex 自动化批次五轮会话）
 - V4 validation：70 条已冻结
 - Gold v2.1：150 条，已批准为 `development_only`
 - Gold v3：150 条最终盲测，已审核并冻结
@@ -14,7 +14,7 @@
 
 ## 人工审核入口
 
-人物画像、system prompt、构造数据、validation、Gold v2.1 和 Gold v3 均已有批准记录。当前需完成 `review_packets/kisaki_v4/10_FINAL_REVIEW/02_GAME_CONTEXT/` 的上下文质量复审并关闭对应 blocker；Gold 内容不得因训练增补而反向修改，增补后只重跑污染审计。
+人物画像、system prompt、构造数据、validation、Gold v2.1、Gold v3 和 Game Train 上下文质量均已有批准记录。最终 Game Train 审核将 576 条收敛为 522 条，其中 107 条补充上下文并仅监督最后一个 assistant 回合；Gold 内容未修改，污染复审为 `clean`。
 
 ## 训练门禁
 
@@ -30,15 +30,10 @@
 ## 单向执行顺序
 
 ```text
-build_kisaki_v4_canonical_draft.py
-→ build_kisaki_v4_review_packets.py（新目录）
-→ 人工填写当前 game / constructed / validation 决定
-→ freeze_kisaki_v4_dataset.py
-→ 建立并审核 Gold v3
-→ finalize_kisaki_v4_dataset.py
+canonical train / validation / Gold v3 已冻结
 → build_kisaki_r1v4_configs.py
 → validate_kisaki_v4_training_gate.py
 → run_kisaki_experiment.py
 ```
 
-候选构建不读取最终批准文件；审核包不允许覆盖已有人工结果。`freeze_kisaki_v4_dataset.py` 只冻结 train/validation，Gold v3 批准后再由 `finalize_kisaki_v4_dataset.py` 将 canonical 状态推进为 `frozen`。
+历史候选和逐批复审包已在批准晋升后删除，最终决定以 canonical manifest 与 `game_train_context_review_approval.json` 为准。

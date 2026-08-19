@@ -42,7 +42,7 @@ for _tbl_name in [
     "knowledge_bases_table", "knowledge_folders_table",
     "knowledge_documents_table", "knowledge_chunks_table",
     "user_data_table", "saved_dialogues_table",
-    "session_settings_table", "claw_tools_table",
+    "api_keys_table", "claw_tools_table",
     "audit_logs_table", "intent_samples_table",
     "intent_active_kbs_table", "training_tasks_table",
     "integration_message_dedup_table", "conversations_table",

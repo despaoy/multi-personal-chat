@@ -6,7 +6,6 @@ from __future__ import annotations
 import argparse
 import copy
 import json
-import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -22,7 +21,6 @@ from inference.prompt_policy import PROMPT_POLICY_VERSION  # noqa: E402
 
 
 V4_DIR = BACKEND / "data/character_dialogues/experiments/v4"
-LAB_ROOT = (os.getenv("MULTIPERSONAL_LAB_ROOT") or os.getenv("QQCHAT_LAB_ROOT") or str(PROJECT_ROOT / "runtime")).rstrip("/\\")
 DEFAULT_MANIFEST = V4_DIR / "canonical_dataset_manifest.json"
 DEFAULT_OUTPUT = V4_DIR / "configs"
 DEFAULT_TEMPLATE = V4_DIR / "r1v4_base_config.json"
@@ -92,7 +90,8 @@ def build_configs(
                 "eval_data_path": manifest["validation"]["path"],
                 "system_prompt": system_prompt.strip(),
                 "system_prompt_policy": manifest["prompt_policy"]["required_training_policy"],
-                "output_dir": f"{LAB_ROOT}/runtime/loras/kisaki/r1v4/{name}/seed42",
+                # The runner resolves this against MULTIPERSONAL_LAB_ROOT at runtime.
+                "output_dir": f"runtime/loras/kisaki/r1v4/{name}/seed42",
                 "save_total_limit": 1,
                 "neftune_noise_alpha": variant["neftune_noise_alpha"],
                 "use_dora": variant["use_dora"],

@@ -1,10 +1,10 @@
 {
   "schema_version": 1,
-  "status": "pending_final_human_review",
-  "game_train": 576,
+  "status": "completed_historical_snapshot",
+  "game_train": 522,
   "constructed_train": 150,
   "validation": 70,
-  "game_batches": 12,
+  "game_batches": 0,
   "constructed_batches": 3,
   "validation_batches": 2
 }

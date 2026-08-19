@@ -49,7 +49,27 @@ class User(Base):
 
 
 # ============================================
-# 2. 配置表
+# 2. API Key 表（统一访问控制）
+# ============================================
+
+class ApiKey(Base):
+    """托管 API Key，统一存主数据库（SQLite/PostgreSQL）"""
+    __tablename__ = "api_keys"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    key_hash: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    key_prefix: Mapped[str] = mapped_column(Text, nullable=False)
+    role: Mapped[str] = mapped_column(Text, nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text)
+    created_at: Mapped[float] = mapped_column(Float, nullable=False)
+    revoked_at: Mapped[Optional[float]] = mapped_column(Float)
+    last_used_at: Mapped[Optional[float]] = mapped_column(Float)
+    is_active: Mapped[int] = mapped_column(Integer, nullable=False, server_default="1")
+    rate_limit: Mapped[Optional[int]] = mapped_column(Integer)
+
+
+# ============================================
+# 3. 配置表
 # ============================================
 
 class Config(Base):
@@ -244,23 +264,6 @@ class SavedDialogue(Base):
 
 
 # ============================================
-# 11. 会话设置表
-# ============================================
-
-class SessionSetting(Base):
-    """会话级设置表（机器人开关等）"""
-    __tablename__ = "session_settings"
-
-    sessionId: Mapped[str] = mapped_column(Text, primary_key=True)
-    platform: Mapped[str] = mapped_column(Text, nullable=False, server_default="qq")
-    conversationId: Mapped[Optional[str]] = mapped_column(Text)
-    sessionType: Mapped[str] = mapped_column(Text, nullable=False, server_default="private")
-    sessionName: Mapped[Optional[str]] = mapped_column(Text)
-    bot_enabled: Mapped[int] = mapped_column(Integer, nullable=False, server_default="1")
-    updated_at: Mapped[Optional[str]] = mapped_column(Text)
-
-
-# ============================================
 # 12. Claw 工具表
 # ============================================
 
@@ -452,7 +455,7 @@ class TrainingTask(Base):
 
     id: Mapped[str] = mapped_column(Text, primary_key=True)
     task_id: Mapped[Optional[str]] = mapped_column(Text)
-    lora_name: Mapped[Optional[str]] = mapped_column(Text, server_default="")
+    lora_name: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
     status: Mapped[str] = mapped_column(Text, nullable=False, server_default="pending")
     progress: Mapped[Optional[float]] = mapped_column(Float, server_default="0")
     error_message: Mapped[Optional[str]] = mapped_column(Text, server_default="")

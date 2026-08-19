@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 
 from db.adapter import db
 from app.dependencies import get_current_admin
+from infra.db_executor import run_db
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -46,7 +47,7 @@ class ToolExecuteRequest(BaseModel):
 @router.get("/api/claw/tools")
 async def list_tools(current_user: dict = Depends(get_current_admin)):
     """列出所有 Claw 工具（内置 + 自定义）"""
-    custom_tools = db.get_claw_tools()
+    custom_tools = await run_db(db.get_claw_tools)
     result = []
     # 内置工具在前
     for t in BUILTIN_TOOLS:
@@ -88,7 +89,7 @@ async def save_tool(req: ToolSaveRequest, current_user: dict = Depends(get_curre
             raise HTTPException(status_code=400, detail=f"工具名称 '{req.name}' 与内置工具冲突")
     
     try:
-        db.save_claw_tool(req.name.strip(), req.description.strip(), req.code, req.enabled)
+        await run_db(db.save_claw_tool, req.name.strip(), req.description.strip(), req.code, req.enabled)
         return {"success": True, "message": "工具已保存"}
     except Exception as e:
         logger.error(f"保存 Claw 工具失败: {e}")
@@ -107,7 +108,7 @@ async def delete_tool(name: str, current_user: dict = Depends(get_current_admin)
         if bt["name"] == name:
             raise HTTPException(status_code=400, detail="不能删除内置工具")
     
-    success = db.delete_claw_tool(name)
+    success = await run_db(db.delete_claw_tool, name)
     if not success:
         raise HTTPException(status_code=404, detail="工具不存在")
     return {"success": True, "message": "工具已删除"}

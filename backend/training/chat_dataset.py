@@ -192,8 +192,15 @@ def tokenize_assistant_turns(
     max_length: int,
     truncation_direction: str = "left",
     use_chat_template: bool = True,
+    assistant_supervision: str = "all",
 ) -> dict[str, list[int]]:
-    """Tokenize once and supervise every assistant body plus its end marker."""
+    """Tokenize once and supervise selected assistant bodies and end markers."""
+
+    if assistant_supervision not in {"all", "last"}:
+        raise ValueError(
+            "assistant supervision must be 'all' or 'last', got "
+            f"{assistant_supervision!r}"
+        )
 
     rendered = _render_chat(
         tokenizer,
@@ -210,10 +217,12 @@ def tokenize_assistant_turns(
     labels = [-100] * len(input_ids)
     spans = _content_spans(rendered, messages)
 
+    assistant_spans = [span for span in spans if span[0] == "assistant"]
+    if assistant_supervision == "last":
+        assistant_spans = assistant_spans[-1:]
+
     assistant_token_ranges: list[tuple[int, int]] = []
-    for role, char_start, char_end in spans:
-        if role != "assistant":
-            continue
+    for _, char_start, char_end in assistant_spans:
         token_indexes = [
             index
             for index, (start, end) in enumerate(offsets)

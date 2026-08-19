@@ -9,7 +9,7 @@
 | 研究注册表 | `research/research_program_registry_v4.json` | authoritative |
 | 人工审核清单 | `../../../../docs/research/review_packets/kisaki_v4/review_manifest.json` | Game Train 上下文质量复审中 |
 | 人物提示词 | `../kisaki_system_prompt_v3.txt` | approved |
-| V4 数据清单 | `v4/canonical_dataset_manifest.json` | **1002 train / 70 validation**；当前 `frozen_under_reassessment` |
+| V4 数据清单 | `v4/canonical_dataset_manifest.json` | **948 train / 70 validation**；当前 `frozen` |
 | V4 canonical 训练/验证 | `v4/train.jsonl` / `v4/validation.jsonl` | train 含 276 条新晋升 V4.1 五轮会话 |
 | V4 实验配置 | `v4/configs/kisaki_r1v4_e1.json` 至 `e5.json` | 数据冻结后生成 |
 | V4.1 增补证据链 | `v4/augmentation_candidates/INDEX.json` | 68 个 automation 批次 + DeepSeek rounds 汇总 |

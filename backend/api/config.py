@@ -10,6 +10,7 @@ from app.config import (
     CONFIG_SCHEMA,
 )
 from cache.config_cache import get_cached_config, set_cached_config, invalidate_config_cache
+from infra.db_executor import run_db
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -56,12 +57,12 @@ def _mask_config(config: dict) -> dict:
 @router.get("/api/config")
 async def get_config(current_user: dict = Depends(get_current_admin)):
     """获取系统配置（Redis 缓存优先，TTL 60s；敏感字段脱敏后返回）"""
-    cached = get_cached_config()
+    cached = await run_db(get_cached_config)
     if cached is not None:
         return {"config": _mask_config(cached), "cached": True}
 
-    config = db.config
-    set_cached_config(config)
+    config = await run_db(lambda: db.config)
+    await run_db(set_cached_config, config)
     return {"config": _mask_config(config)}
 
 
@@ -94,9 +95,9 @@ async def update_config(request: Request, current_user: dict = Depends(get_curre
             is_valid, errors = InputValidator.validate(entry, CONFIG_SCHEMA)
             if not is_valid:
                 raise HTTPException(status_code=422, detail={"message": f"配置项 '{key}' 验证失败", "errors": errors})
-    db.update_config(new_config)
+    await run_db(db.update_config, new_config)
     # 使缓存失效
-    invalidate_config_cache()
+    await run_db(invalidate_config_cache)
     # 同步OpenAI兼容提供商配置
     compat_keys = {'openaiCompatBaseUrl', 'openaiCompatApiKey', 'openaiCompatModel'}
     if compat_keys & set(new_config.keys()):
@@ -115,7 +116,7 @@ async def update_config(request: Request, current_user: dict = Depends(get_curre
                     provider._model_name = new_config['openaiCompatModel']
         except Exception as e:
             logger.warning(f"同步OpenAI兼容配置失败: {e}")
-    return {"success": True, "message": "配置已更新", "config": _mask_config(db.config)}
+    return {"success": True, "message": "配置已更新", "config": _mask_config(await run_db(lambda: db.config))}
 
 
 # ============================================
@@ -168,11 +169,11 @@ async def set_model_provider(request: Request, current_user: dict = Depends(get_
         success = model_manager.set_provider(provider_map[provider_name])
 
         if success:
-            db.update_config({"modelProvider": provider_name})
-            invalidate_config_cache()
+            await run_db(db.update_config, {"modelProvider": provider_name})
+            await run_db(invalidate_config_cache)
             if provider_name == "openai_compat":
                 compat_provider = model_manager.get_current_provider()
-                cfg = db.config
+                cfg = await run_db(lambda: db.config)
                 if hasattr(compat_provider, 'api_key') and cfg.get('openaiCompatApiKey'):
                     compat_provider.api_key = cfg['openaiCompatApiKey']
                 if hasattr(compat_provider, 'base_url') and cfg.get('openaiCompatBaseUrl'):

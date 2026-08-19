@@ -13,9 +13,11 @@ from fastapi.testclient import TestClient
 
 @pytest.mark.asyncio
 async def test_managed_api_keys_are_authenticatable_listable_and_revocable(tmp_path) -> None:
+    from db.database import SQLiteDB
     from infra.access_control import AccessControlManager, AuthenticationError, Role
 
-    manager = AccessControlManager(tmp_path / "access.db")
+    database = SQLiteDB(tmp_path / "access.db")
+    manager = AccessControlManager(database)
     created = manager.create_api_key(Role.API_USER, "integration", 20)
 
     assert created["api_key"].startswith(created["key_prefix"])
@@ -39,7 +41,10 @@ def test_managed_api_keys_flow_through_security_dependencies(tmp_path, monkeypat
     from infra.access_control import AccessControlManager, Role
     from middleware.security import SecurityMiddleware
 
-    manager = AccessControlManager(tmp_path / "middleware-access.db")
+    from db.database import SQLiteDB
+
+    database = SQLiteDB(tmp_path / "middleware-access.db")
+    manager = AccessControlManager(database)
     user_key = manager.create_api_key(Role.API_USER)["api_key"]
     admin_key = manager.create_api_key(Role.ADMIN)["api_key"]
     monkeypatch.setattr(app_config, "access_control_mgr", manager)

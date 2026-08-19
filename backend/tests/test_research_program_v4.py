@@ -65,13 +65,13 @@ def test_prompt_policy_layers_are_conditional_and_not_duplicated():
     assert wrapped.count("</retrieved_evidence>") == 1
 
 
-def test_registry_v4_is_authoritative_and_blocks_unreviewed_formal_work():
+def test_registry_v4_is_authoritative_and_marks_reviewed_r1_ready():
     registry = json.loads((RESEARCH / "research_program_registry_v4.json").read_text(encoding="utf-8"))
     assert registry["schema_version"] == 5
     assert registry["authoritative"] is True
     assert registry["active_assets"]["persona_prompt"]["formal_use_allowed"] is True
     assert registry["active_assets"]["gold_v21"]["formal_use_allowed"] is False
-    assert next(item for item in registry["research"] if item["id"] == "R1V4")["status"] == "blocked_until_game_context_reaudit"
+    assert next(item for item in registry["research"] if item["id"] == "R1V4")["status"] == "ready"
     canonical = json.loads(
         (
             PROJECT_ROOT

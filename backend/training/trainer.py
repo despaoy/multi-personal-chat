@@ -355,12 +355,19 @@ class LoRATrainer:
                 default_system_prompt=self.config.system_prompt,
                 system_prompt_policy=self.config.system_prompt_policy,
             )
+            metadata = record.get("metadata")
+            assistant_supervision = (
+                metadata.get("assistant_supervision", "all")
+                if isinstance(metadata, dict)
+                else "all"
+            )
             return tokenize_assistant_turns(
                 tokenizer,
                 messages,
                 max_length=self.config.max_seq_length,
                 truncation_direction=self.config.truncation_direction,
                 use_chat_template=self.config.chat_template,
+                assistant_supervision=assistant_supervision,
             )
 
         tokenized_dataset = dataset.map(
