@@ -268,7 +268,7 @@ def inspect_assets(client) -> None:
         "\\( -iname '*.db' -o -iname '*.sqlite' -o -iname '*.sqlite3' \\) "
         "-not -path './node_modules/*' -printf '%s %p\\n' 2>/dev/null | sort -n; "
         "echo ADAPTERS; find backend/loras loras -type f -name adapter_config.json "
-        "-print 2>/dev/null"
+        "-print 2>/dev/null || true"
     )
     code, out, err = command(client, check, timeout=120)
     print(out)
