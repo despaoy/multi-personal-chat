@@ -53,6 +53,9 @@ LORA_REGISTRY = {
     "kisaki": {
         "path": _resolve_path("loras/kisaki/final"),
         "system_prompt": _KISAKI_SYSTEM_PROMPT,
+        # 人物身份只允许显式映射：kisaki LoRA 对应月社妃的审核画像。
+        # 不根据 LoRA 名称模糊猜测人物，未映射的 LoRA 返回 None。
+        "character_id": "tsukiyashiro_kisaki",
     },
 }
 
@@ -71,6 +74,24 @@ def get_lora_system_prompt(lora_name: str) -> str:
     if lora_name in LORA_REGISTRY:
         return LORA_REGISTRY[lora_name].get("system_prompt", "")
     return ""
+
+
+def get_lora_character_id(lora_name: str) -> str | None:
+    """获取指定 LoRA 显式映射的人物ID。
+
+    只允许注册表中明确声明的映射，不根据 LoRA 名称模糊猜测人物。
+    未映射的 LoRA（如 hutao/minamo）或未知名称返回 None，
+    调用方应保持原有生成行为。
+
+    Args:
+        lora_name: LoRA 名称。
+
+    Returns:
+        映射的人物ID，未映射时为 None。
+    """
+    if lora_name in LORA_REGISTRY:
+        return LORA_REGISTRY[lora_name].get("character_id")
+    return None
 
 
 def get_char_name(lora_name: str = None, current_lora: str = None) -> str:

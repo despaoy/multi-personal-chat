@@ -404,7 +404,12 @@ async def test_vllm_generation_omits_rag_policy_without_evidence(monkeypatch):
     assert "persona" in captured["messages"][0]["content"]
     assert "【事实与安全边界】" in captured["messages"][0]["content"]
     assert "【检索证据约束】" not in captured["messages"][0]["content"]
-    assert captured["messages"][-1]["content"] == "ordinary chat"
+    # 对话者昵称进入用户消息的不可信 speaker_label 区，不再进系统提示词；
+    # 无检索证据时用户消息只含称呼参考与问题本身，不含 RAG 证据区
+    last_content = captured["messages"][-1]["content"]
+    assert "ordinary chat" in last_content
+    assert '<speaker_label trust="untrusted"' in last_content
+    assert "【检索证据】" not in last_content
 
 @pytest.mark.asyncio
 async def test_vllm_rag_abstention_skips_model_generation(monkeypatch):

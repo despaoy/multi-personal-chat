@@ -436,18 +436,37 @@ def promote(
 
     promoted_ids = {record["id"] for record in promoted}
     existing_ids = {record["id"] for record in train}
-    present = promoted_ids & existing_ids
+    auxiliary_path = v4_dir / "cleanup/candidate/technical_auxiliary.jsonl"
+    auxiliary = _load_jsonl(auxiliary_path) if auxiliary_path.is_file() else []
+    auxiliary_ids = {record["id"] for record in auxiliary}
+    if existing_ids & auxiliary_ids:
+        raise ValueError("cleanup auxiliary records also exist in canonical train")
+    present = promoted_ids & (existing_ids | auxiliary_ids)
     if present and present != promoted_ids:
         raise ValueError("canonical train contains a partial Round 06 promotion")
     if present == promoted_ids:
-        actual = {record["id"]: record for record in train if record["id"] in promoted_ids}
+        actual = {
+            record["id"]: record
+            for record in train + auxiliary
+            if record["id"] in promoted_ids
+        }
         expected = {record["id"]: record for record in promoted}
+        comparable = copy.deepcopy(actual)
+        for record in comparable.values():
+            metadata = record.get("metadata", {})
+            for downstream_field in (
+                "formal_training_status",
+                "formal_training_exclusion_reason",
+                "interlocutor_kind",
+                "interlocutor_label",
+            ):
+                metadata.pop(downstream_field, None)
         mismatched = {
             record_id
             for record_id in promoted_ids
             if actual[record_id] != expected[record_id]
             and not _matches_authorized_downstream_review(
-                actual[record_id], expected[record_id]
+                comparable[record_id], expected[record_id]
             )
         }
         if mismatched:
@@ -462,6 +481,8 @@ def promote(
             "train_count": len(train),
             "train_sha256": train_sha256,
             "record_ids": sorted(promoted_ids),
+            "formal_record_count": len(promoted_ids & existing_ids),
+            "auxiliary_record_count": len(promoted_ids & auxiliary_ids),
         }
 
     if len(train) != base_contract["train_count"]:

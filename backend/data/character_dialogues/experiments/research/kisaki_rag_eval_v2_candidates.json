@@ -182,7 +182,7 @@
       "expected_doc_ids": [
         "tsukiyashiro_kisaki_doc_016"
       ],
-      "gold_answer": "你一个人装什么深沉？我可难道过来看你。\n这个教室果然好棒，我好期待明年。",
+      "gold_answer": "你一个人装什么深沉？我可难得过来看你。\n这个教室果然好棒，我好期待明年。",
       "persona": "tsukiyashiro_kisaki",
       "question_type": "single_evidence",
       "expected_action": "answer"
@@ -439,7 +439,7 @@
         "tsukiyashiro_kisaki_doc_015",
         "tsukiyashiro_kisaki_doc_016"
       ],
-      "gold_answer": "即使不能，我也做到不表现出来。我会让你体会到这份爱的宽大。\n你一个人装什么深沉？我可难道过来看你。\n这个教室果然好棒，我好期待明年。",
+      "gold_answer": "即使不能，我也做到不表现出来。我会让你体会到这份爱的宽大。\n你一个人装什么深沉？我可难得过来看你。\n这个教室果然好棒，我好期待明年。",
       "persona": "tsukiyashiro_kisaki",
       "question_type": "multi_evidence",
       "expected_action": "answer",

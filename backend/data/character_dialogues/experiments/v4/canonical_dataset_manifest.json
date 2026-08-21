@@ -1,23 +1,30 @@
 {
-  "schema_version": 8,
+  "schema_version": 12,
   "dataset_id": "KISAKI-CANONICAL-V4",
   "status": "frozen",
   "hash_mode": "sha256_utf8_lf_v1",
   "seed": 42,
   "train": {
     "status": "frozen",
-    "count": 948,
+    "count": 926,
     "path": "backend/data/character_dialogues/experiments/v4/train.jsonl",
-    "sha256": "903c07934f29ea764ea14b28208e2a78468e33fe6f7de0d53d85bd642358cfb8",
+    "sha256": "8791a57ad2b8bce7824f93185c99125b37b15e4a136bee28b2cfae1e609cd245",
     "source_distribution": {
       "game_extraction_current_sft": 522,
       "llm_v4_reviewed_constructed": 150,
-      "deepseek_user_simulation_v41_reviewed": 4,
-      "codex_user_simulation_v41_reviewed": 272
+      "deepseek_user_simulation_v41_reviewed": 3,
+      "codex_user_simulation_v41_reviewed": 251
     },
     "game_human_review_status": "approved_after_context_reaudit",
     "constructed_human_review_status": "approved",
-    "augmentation_human_review_status": "approved_after_review"
+    "augmentation_human_review_status": "approved_after_review",
+    "assistant_supervision_targets": 1961,
+    "speaker_contract": {
+      "version": "1.0",
+      "canonical_character_records": 522,
+      "generic_user_records": 404,
+      "source_verified_multiturn_records": 107
+    }
   },
   "validation": {
     "status": "frozen",
@@ -279,10 +286,16 @@
   },
   "prompt_policy": {
     "mode": "training_config_injected",
-    "version": "3.1.0",
+    "version": "3.3.0",
     "record_system_messages": 0,
     "path": "backend/data/character_dialogues/kisaki_system_prompt_v3.txt",
-    "required_training_policy": "replace"
+    "required_training_policy": "replace",
+    "persona_revision": "v3",
+    "composition_contract_path": "backend/data/character_dialogues/PROMPT_COMPOSITION_CONTRACT.md",
+    "stable_persona_content_changed": false,
+    "dynamic_context_source": "backend/character/context_builder.py",
+    "speaker_context_location": "untrusted_user_region",
+    "alignment_id": "KISAKI-PROMPT-POLICY-ALIGNMENT-20260821"
   },
   "checks": {
     "train_validation_blocker_pairs": 0,
@@ -942,11 +955,15 @@
     "count": 150,
     "path": "backend/evaluation/kisaki_gold_set_v3.json",
     "sha256": "925a43dc946c5324782388d63ace1c9eae108ef974f70650a32adc07d0fdd299",
+    "formal_use_allowed": true,
     "contamination_reaudit": {
       "status": "clean",
       "path": "backend/evaluation/kisaki_gold_set_v3_contamination_audit.json",
-      "train_sha256": "903c07934f29ea764ea14b28208e2a78468e33fe6f7de0d53d85bd642358cfb8",
-      "gold_content_modified": false
+      "sha256": "ecdab65ddd79218b1ea70bc25508dba23e279462b7375fb90bc287d29ab1a6cc",
+      "train_sha256": "8791a57ad2b8bce7824f93185c99125b37b15e4a136bee28b2cfae1e609cd245",
+      "validation_sha256": "fb5cd5d93027b37be53327cda4e7c6137a7bae97201830fc8aa726727b9777b8",
+      "frozen_reference_count": 996,
+      "gold_content_sha256": "d40e6324f3c775166cd66ca985bc0cdc2902c27fb1cfb34f2d72c8d74259cb40"
     }
   },
   "augmentations": [
@@ -1709,5 +1726,62 @@
       "reviewed_by": "codex_delegated_by_project_owner",
       "reviewed_at": "2026-08-16"
     }
-  ]
+  ],
+  "cleanup_revision": {
+    "policy_id": "KISAKI-V4-LENGTH-CLEANUP-20260821",
+    "status": "promoted",
+    "approval_path": "backend/data/character_dialogues/experiments/v4/cleanup/promotion_approval.json",
+    "candidate_manifest_path": "backend/data/character_dialogues/experiments/v4/cleanup/candidate/manifest.json",
+    "candidate_manifest_sha256": "68ac4a47d304f5ef457372427a75c048a94290b01b1b68cf8e50881bfeedd813",
+    "previous_train_count": 948,
+    "previous_train_sha256": "903c07934f29ea764ea14b28208e2a78468e33fe6f7de0d53d85bd642358cfb8",
+    "formal_train_count": 926,
+    "formal_train_sha256": "24e010335a1564496c596fbae20e065b5e063b70c7456951629b8f18fbe623fd",
+    "technical_auxiliary_count": 22,
+    "technical_auxiliary_path": "backend/data/character_dialogues/experiments/v4/cleanup/candidate/technical_auxiliary.jsonl",
+    "technical_auxiliary_sha256": "7a1f00ae3cddc9c0d42d6a986fe245474a39361042df68b9e625073038ef6ad7",
+    "scene_metadata_repair_count": 8,
+    "target_max_sequence_length": 1280,
+    "maximum_observed_tokens": 1165,
+    "manual_record_by_record_review_claimed": false
+  },
+  "speaker_contract_revision": {
+    "contract_id": "KISAKI-SPEAKER-CONTRACT-V1",
+    "version": "1.0",
+    "status": "applied",
+    "documentation_path": "backend/data/character_dialogues/experiments/v4/SPEAKER_CONTRACT.md",
+    "previous_train_sha256": "24e010335a1564496c596fbae20e065b5e063b70c7456951629b8f18fbe623fd",
+    "result_train_sha256": "4c8980195754ba27ac728c24c27f59eb6ebe327662aa8ebb4a4692564038de09",
+    "record_count": 926,
+    "canonical_character_records": 522,
+    "generic_user_records": 404,
+    "source_verified_multiturn_records": 107,
+    "canonical_speaker_distribution": {
+      "琉璃": 338,
+      "夜子": 107,
+      "理央": 22,
+      "彼方": 20,
+      "汀": 16,
+      "父亲": 7,
+      "奏": 4,
+      "母亲": 3,
+      "克丽索贝莉露": 2,
+      "暗子": 2,
+      "岬": 1
+    },
+    "message_level_labels_added": 0,
+    "gold_or_validation_modified": false
+  },
+  "surface_normalization_revision": {
+    "policy_id": "KISAKI-SURFACE-NORMALIZATION-20260821",
+    "status": "applied_and_refrozen",
+    "semantic_content_modified": false,
+    "raw_sources_modified": false,
+    "item_count": 3,
+    "ledger_path": "backend/data/character_dialogues/experiments/v4/text_normalizations.json",
+    "ledger_sha256": "0507395b06e6c15751eb904b90bbcacf99f90d608a36fd2b7f2e459db3dcbb36",
+    "previous_train_sha256": "4c8980195754ba27ac728c24c27f59eb6ebe327662aa8ebb4a4692564038de09",
+    "result_train_sha256": "8791a57ad2b8bce7824f93185c99125b37b15e4a136bee28b2cfae1e609cd245",
+    "gold_reaudit_status": "clean"
+  }
 }

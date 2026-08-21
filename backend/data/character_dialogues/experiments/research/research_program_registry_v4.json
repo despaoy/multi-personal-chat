@@ -1,8 +1,8 @@
 {
-  "schema_version": 5,
+  "schema_version": 7,
   "program_id": "KISAKI-LLM-RESEARCH-V4",
   "authoritative": true,
-  "status": "r1v4_ready",
+  "status": "r1v4_seed42_ready",
   "scope": {
     "primary_persona": "tsukiyashiro_kisaki",
     "base_model_repo_id": "Qwen/Qwen3-8B",
@@ -19,21 +19,24 @@
     "persona_prompt": {
       "path": "backend/data/character_dialogues/kisaki_system_prompt_v3.txt",
       "version": 3,
-      "policy_version": "3.1.0",
-      "status": "approved",
-      "formal_use_allowed": true
+      "policy_version": "3.3.0",
+      "status": "approved_policy_aligned",
+      "formal_use_allowed": true,
+      "composition_contract_path": "backend/data/character_dialogues/PROMPT_COMPOSITION_CONTRACT.md"
     },
     "prompt_policy": {
       "path": "backend/inference/prompt_policy.py",
-      "version": "3.1.0"
+      "version": "3.3.0",
+      "status": "active",
+      "alignment_id": "KISAKI-PROMPT-POLICY-ALIGNMENT-20260821"
     },
     "canonical_dataset": {
       "path": "backend/data/character_dialogues/experiments/v4/canonical_dataset_manifest.json",
       "status": "frozen",
-      "train_count": 948,
+      "train_count": 926,
       "game_train_count": 522,
       "constructed_train_count": 150,
-      "reviewed_multiturn_augmentation_count": 276,
+      "reviewed_multiturn_augmentation_count": 254,
       "constructed_train_review_status": "approved",
       "validation_count": 70,
       "independent_validation_status": "approved_and_frozen",
@@ -41,7 +44,8 @@
       "validation_excluded_count": 7,
       "rag_withheld_sft_records": 34,
       "training_system_prompt_policy": "replace",
-      "game_context_review_status": "approved_and_promoted"
+      "game_context_review_status": "approved_and_promoted",
+      "technical_auxiliary_count": 22
     },
     "gold_v21": {
       "path": "backend/evaluation/kisaki_gold_set_v21_candidates.json",
@@ -64,7 +68,22 @@
       "role": "final_held_out",
       "status": "frozen",
       "formal_use_allowed": true,
-      "candidate_count": 150
+      "candidate_count": 150,
+      "content_sha256": "d40e6324f3c775166cd66ca985bc0cdc2902c27fb1cfb34f2d72c8d74259cb40",
+      "contamination_audit_path": "backend/evaluation/kisaki_gold_set_v3_contamination_audit.json"
+    },
+    "r1v4_configs": {
+      "path": "backend/data/character_dialogues/experiments/v4/configs/config_manifest.json",
+      "schema_version": 3,
+      "status": "generated_for_frozen_dataset",
+      "formal_use_allowed": true,
+      "experiment_count": 5,
+      "pilot_seed": 42,
+      "max_seq_length": 1280,
+      "train_sha256": "8791a57ad2b8bce7824f93185c99125b37b15e4a136bee28b2cfae1e609cd245",
+      "validation_sha256": "fb5cd5d93027b37be53327cda4e7c6137a7bae97201830fc8aa726727b9777b8",
+      "prompt_policy_version": "3.3.0",
+      "single_variable_contract": "validated"
     }
   },
   "research": [
@@ -76,7 +95,7 @@
     {
       "id": "R1V4",
       "name": "controlled_peft",
-      "status": "ready"
+      "status": "seed42_ready"
     },
     {
       "id": "R2",

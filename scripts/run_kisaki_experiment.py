@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import importlib.metadata
 import json
 import os
@@ -117,6 +118,31 @@ def prompt_contract_error(config: dict[str, Any], dataset: dict[str, Any]) -> st
         return "prompt_path"
     if config.get("system_prompt", "").strip() != prompt_path.read_text(encoding="utf-8").strip():
         return "system_prompt_content"
+    prompt_hash = hashlib.sha256(
+        config.get("system_prompt", "").strip().encode("utf-8")
+    ).hexdigest()
+    if config.get("_prompt_content_sha256") != prompt_hash:
+        return "prompt_content_hash"
+    if config.get("_prompt_policy_version") != contract.get("version"):
+        return "prompt_policy_version"
+    return None
+
+
+def dataset_contract_error(config: dict[str, Any], dataset: dict[str, Any]) -> str | None:
+    if dataset.get("status") != "frozen" or dataset.get("freeze_blockers"):
+        return "dataset_status"
+    if config.get("_dataset_version") != dataset.get("dataset_id"):
+        return "dataset_version"
+    bindings = (
+        ("train", "train_data_path", "_train_data_sha256"),
+        ("validation", "eval_data_path", "_validation_data_sha256"),
+    )
+    for split, path_key, hash_key in bindings:
+        contract = dataset.get(split, {})
+        if config.get(path_key) != contract.get("path"):
+            return f"{split}_path"
+        if config.get(hash_key) != contract.get("sha256"):
+            return f"{split}_hash"
     return None
 
 
@@ -143,6 +169,9 @@ def main() -> int:
 
     config = _load(CONFIGS[args.experiment])
     dataset = _load(DATASET_MANIFEST)
+    if dataset_error := dataset_contract_error(config, dataset):
+        print(f"canonical_dataset_contract_failed={dataset_error}", file=sys.stderr)
+        return 2
     if prompt_error := prompt_contract_error(config, dataset):
         print(f"canonical_prompt_contract_failed={prompt_error}", file=sys.stderr)
         return 2

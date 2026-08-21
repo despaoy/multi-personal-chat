@@ -9,36 +9,34 @@ from __future__ import annotations
 
 from typing import Any, Iterable, Mapping, Sequence
 
+from inference.prompt_policy import (
+    build_grounded_user_message,
+    sanitize_speaker_label,
+)
+from training.speaker_contract import (
+    parse_speaker_contract,
+    resolve_message_speaker,
+)
+
 
 SUPPORTED_ROLES = {"system", "user", "assistant"}
 
 
-def _context_speaker(record: Mapping[str, Any]) -> str | None:
-    metadata = record.get("metadata")
-    if not isinstance(metadata, Mapping):
-        return None
-
-    for key in ("context_speaker_label", "interlocutor"):
-        value = metadata.get(key)
-        if isinstance(value, str) and value.strip():
-            return value.strip()
-
-    interlocutors = metadata.get("interlocutors")
-    if isinstance(interlocutors, Sequence) and not isinstance(interlocutors, (str, bytes)):
-        values = [value.strip() for value in interlocutors if isinstance(value, str) and value.strip()]
-        if len(values) == 1:
-            return values[0]
-    return None
-
-
-def _append_context_speaker(messages: list[dict[str, str]], speaker: str | None) -> None:
-    if not speaker:
-        return
-    context_line = f"当前对话者：{speaker}。"
-    if messages and messages[0]["role"] == "system":
-        messages[0]["content"] = f"{messages[0]['content'].rstrip()}\n\n{context_line}"
-    else:
-        messages.insert(0, {"role": "system", "content": context_line})
+def _attach_speaker_boundaries(messages: list[dict[str, str]]) -> None:
+    """Use the same untrusted speaker boundary as production inference."""
+    for message in messages:
+        speaker = message.pop("speaker_label", None)
+        if message["role"] != "user" or not speaker:
+            continue
+        sanitized = sanitize_speaker_label(speaker)
+        if not sanitized:
+            raise ValueError("speaker label contains no safe characters")
+        message["content"] = build_grounded_user_message(
+            message["content"],
+            "",
+            max_chars=0,
+            speaker=sanitized,
+        )
 
 
 def normalize_chat_record(
@@ -48,6 +46,8 @@ def normalize_chat_record(
     system_prompt_policy: str = "preserve",
 ) -> list[dict[str, str]]:
     """Return one validated OpenAI-style message sequence."""
+
+    speaker_contract = parse_speaker_contract(record)
 
     if isinstance(record.get("messages"), list):
         raw_messages: Iterable[Mapping[str, Any]] = record["messages"]
@@ -73,7 +73,15 @@ def normalize_chat_record(
             raise ValueError(f"unsupported role at message {index}: {role!r}")
         if not isinstance(content, str) or not content.strip():
             raise ValueError(f"empty content at message {index}")
-        messages.append({"role": role, "content": content})
+        message = {"role": role, "content": content}
+        speaker = resolve_message_speaker(
+            raw,
+            role=role,
+            contract=speaker_contract,
+        )
+        if speaker:
+            message["speaker_label"] = speaker
+        messages.append(message)
 
     system_positions = [index for index, message in enumerate(messages) if message["role"] == "system"]
     if any(index != 0 for index in system_positions):
@@ -105,7 +113,7 @@ def normalize_chat_record(
     elif configured_prompt:
         messages.insert(0, {"role": "system", "content": configured_prompt})
 
-    _append_context_speaker(messages, _context_speaker(record))
+    _attach_speaker_boundaries(messages)
 
     conversational = [message["role"] for message in messages if message["role"] != "system"]
     if not conversational or "assistant" not in conversational:

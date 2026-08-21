@@ -579,6 +579,56 @@ export interface SaveDialoguesRequest {
   scene_stats?: Record<string, number>;
 }
 
+/** 角色长期记忆隔离范围（与后端 UserScope 一致） */
+export interface CharacterMemoryScope {
+  platform: string;
+  adapter: string;
+  sender_id: string;
+  conversation_type: string;
+  conversation_id: string;
+}
+
+/** 角色关系记录 */
+export interface CharacterRelationshipRecord {
+  character_id: string;
+  platform: string;
+  adapter: string;
+  sender_id: string;
+  conversation_type: string;
+  conversation_id: string;
+  relationship_stage: string;
+  preferred_address: string;
+  summary: string;
+  interaction_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+/** 角色长期记忆记录 */
+export interface CharacterMemoryRecord {
+  id: number;
+  character_id: string;
+  memory_type: string;
+  memory_key: string;
+  content: string;
+  importance: number;
+  source_message_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** 把隔离范围序列化为 URL 查询串 */
+function buildScopeQuery(scope: CharacterMemoryScope): string {
+  const params = new URLSearchParams({
+    platform: scope.platform,
+    adapter: scope.adapter,
+    sender_id: scope.sender_id,
+    conversation_type: scope.conversation_type,
+    conversation_id: scope.conversation_id,
+  });
+  return params.toString();
+}
+
 /**
  * API 客户端类
  *
@@ -1493,6 +1543,68 @@ class ApiClient {
     return this.request<{ success: boolean; candidates: PreferenceCandidate[]; total: number }>('/preferences/sample-from-history', {
       method: 'POST',
       body: JSON.stringify(req),
+    });
+  }
+
+  // ═══ 角色与长期记忆管理（admin） ═══
+
+  async listCharacters(): Promise<{ success: boolean; characters: Array<{ character_id: string; display_name: string; version: string }> }> {
+    return this.request('/characters');
+  }
+
+  async getCharacterRelationship(
+    characterId: string,
+    scope: CharacterMemoryScope,
+  ): Promise<{ success: boolean; relationship: CharacterRelationshipRecord | null }> {
+    return this.request(`/characters/${encodeURIComponent(characterId)}/relationship?${buildScopeQuery(scope)}`);
+  }
+
+  async updateCharacterRelationship(
+    characterId: string,
+    scope: CharacterMemoryScope,
+    data: { stage: string; preferred_address?: string; summary?: string },
+  ): Promise<{ success: boolean; relationship: CharacterRelationshipRecord }> {
+    return this.request(`/characters/${encodeURIComponent(characterId)}/relationship?${buildScopeQuery(scope)}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async listCharacterMemories(
+    characterId: string,
+    scope: CharacterMemoryScope,
+  ): Promise<{ success: boolean; memories: CharacterMemoryRecord[] }> {
+    return this.request(`/characters/${encodeURIComponent(characterId)}/memories?${buildScopeQuery(scope)}`);
+  }
+
+  async updateCharacterMemory(
+    characterId: string,
+    memoryId: number,
+    scope: CharacterMemoryScope,
+    data: { content: string; importance: number },
+  ): Promise<{ success: boolean }> {
+    return this.request(`/characters/${encodeURIComponent(characterId)}/memories/${memoryId}?${buildScopeQuery(scope)}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteCharacterMemory(
+    characterId: string,
+    memoryId: number,
+    scope: CharacterMemoryScope,
+  ): Promise<{ success: boolean; message: string }> {
+    return this.request(`/characters/${encodeURIComponent(characterId)}/memories/${memoryId}?${buildScopeQuery(scope)}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async clearCharacterMemories(
+    characterId: string,
+    scope: CharacterMemoryScope,
+  ): Promise<{ success: boolean; deleted: number; message: string }> {
+    return this.request(`/characters/${encodeURIComponent(characterId)}/memories?${buildScopeQuery(scope)}`, {
+      method: 'DELETE',
     });
   }
 

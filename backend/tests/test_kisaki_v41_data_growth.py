@@ -65,11 +65,20 @@ def test_automation_batches_have_complete_review_and_promotion_provenance():
 
 def test_automation_records_are_complete_sessions_with_balanced_task_types():
     train = _jsonl(V4 / "train.jsonl")
-    records = [row for row in train if row.get("metadata", {}).get("data_source") == DATA_SOURCE]
+    auxiliary = _jsonl(V4 / "cleanup/candidate/technical_auxiliary.jsonl")
+    formal_records = [
+        row for row in train if row.get("metadata", {}).get("data_source") == DATA_SOURCE
+    ]
+    auxiliary_records = [
+        row for row in auxiliary if row.get("metadata", {}).get("data_source") == DATA_SOURCE
+    ]
+    records = formal_records + auxiliary_records
     batches = _batch_dirs()
 
     assert len(records) == len(batches) * 4
     assert len({record["id"] for record in records}) == len(records)
+    assert len(formal_records) == 251
+    assert len(auxiliary_records) == 21
     assert all(record["metadata"]["turns"] == 5 for record in records)
     assert all(
         [message["role"] for message in record["messages"]] == ["user", "assistant"] * 5
@@ -87,7 +96,7 @@ def test_automation_records_are_complete_sessions_with_balanced_task_types():
     assert social >= math.ceil(len(records) * 0.35)
 
 
-def test_automation_source_count_and_gold_reaudit_match_canonical_files():
+def test_automation_source_count_matches_canonical_and_gold_reaudit_is_current():
     module = _module()
     train = _jsonl(V4 / "train.jsonl")
     validation = _jsonl(V4 / "validation.jsonl")
@@ -101,7 +110,11 @@ def test_automation_source_count_and_gold_reaudit_match_canonical_files():
     assert audit["status"] == "clean"
     assert audit["text_overlap_matches"] == []
     assert audit["frozen_reference_count"] == len(train) + len(validation)
+    assert audit["frozen_train_count"] == len(train)
+    assert audit["frozen_validation_count"] == len(validation)
     assert audit["frozen_train_sha256"] == manifest["train"]["sha256"]
+    assert manifest["gold_v3"]["status"] == "frozen"
+    assert manifest["gold_v3"]["formal_use_allowed"] is True
 
 
 def test_gold_contamination_helper_returns_a_complete_clean_audit():

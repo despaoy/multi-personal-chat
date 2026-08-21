@@ -13,6 +13,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[2]
 V4 = ROOT / "backend/data/character_dialogues/experiments/v4"
 TRAIN = V4 / "train.jsonl"
+AUXILIARY = V4 / "cleanup/candidate/technical_auxiliary.jsonl"
 ARTIFACTS = V4 / "augmentation_candidates/llm_full_dialogue_review_20260816"
 PROMOTER = ROOT / "scripts/promote_kisaki_v41_round06.py"
 REVIEW_ID = "KISAKI-V41-LLM-FULL-DIALOGUE-REVIEW-20260816"
@@ -35,7 +36,8 @@ def _module():
 
 
 def _record(record_id: str) -> dict:
-    return next(record for record in _jsonl(TRAIN) if record["id"] == record_id)
+    records = _jsonl(TRAIN) + _jsonl(AUXILIARY)
+    return next(record for record in records if record["id"] == record_id)
 
 
 def _last_python_namespace(record_id: str) -> dict:

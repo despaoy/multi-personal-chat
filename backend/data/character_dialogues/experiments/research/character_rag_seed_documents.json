@@ -456,10 +456,19 @@
       "id": "tsukiyashiro_kisaki_doc_016",
       "title": "tsukiyashiro_kisaki held-out evidence",
       "category": "tsukiyashiro_kisaki",
-      "content": "你一个人装什么深沉？我可难道过来看你。\n这个教室果然好棒，我好期待明年。",
+      "content": "你一个人装什么深沉？我可难得过来看你。\n这个教室果然好棒，我好期待明年。",
       "metadata": {
         "persona": "tsukiyashiro_kisaki",
-        "held_out": true
+        "held_out": true,
+        "surface_normalizations": [
+          {
+            "id": "kisaki_norm_003",
+            "policy": "surface_only_no_semantic_edit",
+            "source_event_id": "tsukiyashiro_kisaki_raw_92259bc1b933999d",
+            "original": "我可难道过来看你",
+            "reason": "修复语境中明显的同音误字；不改变来访、学校或期待明年的主题。"
+          }
+        ]
       },
       "source_lineage": [
         {

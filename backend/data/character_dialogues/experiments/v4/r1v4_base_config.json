@@ -20,7 +20,7 @@
   "lora_r": 32,
   "lr_scheduler_type": "cosine",
   "max_grad_norm": 0.5,
-  "max_seq_length": 1024,
+  "max_seq_length": 1280,
   "metric_for_best_model": "eval_loss",
   "num_train_epochs": 3,
   "optim": "paged_adamw_32bit",

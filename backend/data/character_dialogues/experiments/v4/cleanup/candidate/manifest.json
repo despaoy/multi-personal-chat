@@ -1,0 +1,97 @@
+{
+  "schema_version": 1,
+  "dataset_id": "KISAKI-CANONICAL-V4-CLEANUP-CANDIDATE",
+  "status": "ready_for_review",
+  "source": {
+    "canonical_manifest_path": "backend/data/character_dialogues/experiments/v4/canonical_dataset_manifest.json",
+    "canonical_train_path": "backend/data/character_dialogues/experiments/v4/train.jsonl",
+    "canonical_train_sha256": "903c07934f29ea764ea14b28208e2a78468e33fe6f7de0d53d85bd642358cfb8",
+    "canonical_train_count": 948
+  },
+  "train": {
+    "path": "backend/data/character_dialogues/experiments/v4/cleanup/candidate/train.jsonl",
+    "count": 926,
+    "sha256": "24e010335a1564496c596fbae20e065b5e063b70c7456951629b8f18fbe623fd",
+    "assistant_supervision_targets": 1961,
+    "source_distribution": {
+      "codex_user_simulation_v41_reviewed": 251,
+      "deepseek_user_simulation_v41_reviewed": 3,
+      "game_extraction": 522,
+      "llm_v4_blindfix": 34,
+      "llm_v4_lifestyle": 15,
+      "llm_v4_manual": 63,
+      "llm_v4_riou": 12,
+      "llm_v4_yoruko": 26
+    }
+  },
+  "validation": {
+    "path": "backend/data/character_dialogues/experiments/v4/validation.jsonl",
+    "count": 70,
+    "sha256": "fb5cd5d93027b37be53327cda4e7c6137a7bae97201830fc8aa726727b9777b8",
+    "modified": false
+  },
+  "formal_training_exclusions": {
+    "count": 22,
+    "path": "backend/data/character_dialogues/experiments/v4/cleanup/candidate/technical_auxiliary.jsonl",
+    "sha256": "7a1f00ae3cddc9c0d42d6a986fe245474a39361042df68b9e625073038ef6ad7",
+    "ids": [
+      "kisaki_v41_round06_coding_debug",
+      "kisaki_v41_auto_b002_typescript_message_deduper",
+      "kisaki_v41_auto_b004_async_message_singleflight",
+      "kisaki_v41_auto_b006_webhook_hmac_replay",
+      "kisaki_v41_auto_b008_async_retry_full_jitter",
+      "kisaki_v41_auto_b012_incremental_jsonl_byte_parser",
+      "kisaki_v41_auto_b013_timezone_daily_scheduler",
+      "kisaki_v41_auto_b014_asyncio_cancellation_atomic_file",
+      "kisaki_v41_auto_b016_safe_zip_extraction",
+      "kisaki_v41_auto_b019_python_mutable_default_argument_bug",
+      "kisaki_v41_auto_b021_javascript_async_foreach_not_awaited",
+      "kisaki_v41_auto_b024_python_timezone_aware_datetime_dst_ambiguity",
+      "kisaki_v41_auto_b028_parsing_quoted_csv_and_decimal_amounts_with_stdlib",
+      "kisaki_v41_auto_b031_validating_json_lines_without_hiding_bad_records",
+      "kisaki_v41_auto_b035_fixing_python_callbacks_that_all_use_the_last_loop_value",
+      "kisaki_v41_auto_b038_generating_compact_ranges_from_integer_identifiers",
+      "kisaki_v41_auto_b040_fixing_shared_lists_created_with_dict_fromkeys",
+      "kisaki_v41_auto_b042_parsing_compact_duration_strings_with_the_python_standard_library",
+      "kisaki_v41_auto_b044_fixing_zero_identifiers_dropped_by_truthiness_checks_across_pages",
+      "kisaki_v41_auto_b046_generating_collision_resistant_backup_names_with_the_python_standard_library",
+      "kisaki_v41_auto_b049_scheduling_a_daily_local_time_across_daylight_saving_changes",
+      "kisaki_v41_auto_b068_writing_and_testing_an_atomic_json_configuration_writer_in_python"
+    ],
+    "reason_counts": {
+      "code_dominant_auxiliary_capability_sample": 18,
+      "truncation_damaged_and_code_dominant": 4
+    }
+  },
+  "scene_metadata_repairs": {
+    "count": 8,
+    "ids": [
+      "kisaki_v41_auto_b031_avoiding_pseudoreplication_in_repeated_measurement_experiments",
+      "kisaki_v41_auto_b031_deciding_whether_to_join_a_weekend_ceramics_workshop",
+      "kisaki_v41_auto_b031_setting_boundaries_with_a_friend_who_only_calls_for_favors",
+      "kisaki_v41_auto_b031_validating_json_lines_without_hiding_bad_records",
+      "kisaki_v41_auto_b032_addressing_a_borrowed_book_returned_with_water_damage",
+      "kisaki_v41_auto_b032_refusing_to_share_a_one_time_code_with_unverified_it_support",
+      "kisaki_v41_auto_b032_sorting_old_ticket_stubs_without_discarding_every_memory",
+      "kisaki_v41_auto_b032_turning_a_blame_focused_retrospective_into_actionable_learning"
+    ]
+  },
+  "training_contract": {
+    "truncation_direction": "left",
+    "token_audit": {
+      "tokenizer_path": "runtime/tmp/qwen3-8b-tokenizer",
+      "chat_template": true,
+      "max_sequence_length": 1280,
+      "record_count": 926,
+      "minimum_tokens": 567,
+      "median_tokens": 635.0,
+      "maximum_tokens": 1165,
+      "records_over_limit": 0
+    }
+  },
+  "promotion_blockers": [
+    "human_review_of_cleanup_candidate_pending",
+    "gold_set_chronology_and_hash_refreeze_pending",
+    "prompt_policy_alignment_pending"
+  ]
+}

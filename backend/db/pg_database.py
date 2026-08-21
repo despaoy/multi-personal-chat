@@ -988,6 +988,359 @@ class PgDatabase:
             return True
 
     # ============================================
+    # 角色关系与长期记忆
+    # ============================================
+    @staticmethod
+    def _character_scope_params(
+        character_id: str,
+        platform: str,
+        adapter: str,
+        sender_id: str,
+        conversation_type: str,
+        conversation_id: str,
+        **extra: Any,
+    ) -> dict:
+        """组装角色记忆隔离范围的 SQL 绑定参数（与 SQLite 侧语义一致）。"""
+        params = {
+            "character_id": character_id,
+            "platform": platform,
+            "adapter": adapter,
+            "sender_id": sender_id,
+            "conversation_type": conversation_type,
+            "conversation_id": conversation_id,
+        }
+        params.update(extra)
+        return params
+
+    _CHARACTER_SCOPE_SQL = (
+        "character_id = :character_id AND platform = :platform AND adapter = :adapter "
+        "AND sender_id = :sender_id AND conversation_type = :conversation_type "
+        "AND conversation_id = :conversation_id"
+    )
+
+    async def get_character_relationship(
+        self,
+        character_id: str,
+        platform: str,
+        adapter: str,
+        sender_id: str,
+        conversation_type: str,
+        conversation_id: str,
+    ) -> Optional[dict]:
+        """读取指定角色+用户范围的关系状态，不存在时返回 None。"""
+        async with self.async_session() as session:
+            stmt = text(
+                "SELECT * FROM character_relationships WHERE "
+                + self._CHARACTER_SCOPE_SQL
+            )
+            result = await session.execute(
+                stmt,
+                self._character_scope_params(
+                    character_id, platform, adapter, sender_id, conversation_type, conversation_id
+                ),
+            )
+            row = result.fetchone()
+            return _row_to_dict(row) if row else None
+
+    async def upsert_character_relationship(
+        self,
+        character_id: str,
+        platform: str,
+        adapter: str,
+        sender_id: str,
+        conversation_type: str,
+        conversation_id: str,
+        relationship_stage: str,
+        preferred_address: str = "",
+        summary: str = "",
+        interaction_count: Optional[int] = None,
+    ) -> dict:
+        """写入关系状态（单条 UPSERT 原子完成）。
+
+        interaction_count 为 None 时 UPDATE 子句不触碰该列、保留数据库
+        当前值：先 SELECT 计数再写回的实现在并发下会用旧计数覆盖
+        increment_character_interaction 刚自增的结果（管理端更新关系与
+        新消息并发时计数回退）。RETURNING * 返回写入后的真实记录。
+        """
+        now = datetime.now().isoformat()
+        set_clauses = [
+            "relationship_stage = EXCLUDED.relationship_stage",
+            "preferred_address = EXCLUDED.preferred_address",
+            "summary = EXCLUDED.summary",
+        ]
+        if interaction_count is not None:
+            set_clauses.append("interaction_count = EXCLUDED.interaction_count")
+        set_clauses.append("updated_at = EXCLUDED.updated_at")
+        stmt = text(
+            "INSERT INTO character_relationships ("
+            "character_id, platform, adapter, sender_id, conversation_type, "
+            "conversation_id, relationship_stage, preferred_address, summary, "
+            "interaction_count, created_at, updated_at) VALUES ("
+            ":character_id, :platform, :adapter, :sender_id, :conversation_type, "
+            ":conversation_id, :relationship_stage, :preferred_address, :summary, "
+            ":interaction_count, :now, :now) "
+            "ON CONFLICT (character_id, platform, adapter, sender_id, conversation_type, conversation_id) "
+            f"DO UPDATE SET {', '.join(set_clauses)} "
+            "RETURNING *"
+        )
+        params = self._character_scope_params(
+            character_id, platform, adapter, sender_id, conversation_type, conversation_id,
+            relationship_stage=relationship_stage,
+            preferred_address=preferred_address,
+            summary=summary,
+            interaction_count=(
+                int(interaction_count) if interaction_count is not None else 0
+            ),
+            now=now,
+        )
+        async with self.async_session() as session:
+            result = await session.execute(stmt, params)
+            row = result.fetchone()
+            await session.commit()
+            if row is None:  # pragma: no cover - RETURNING 必返回一行
+                raise RuntimeError("upsert_character_relationship RETURNING 未返回行")
+            return _row_to_dict(row)
+
+    async def increment_character_interaction(
+        self,
+        character_id: str,
+        platform: str,
+        adapter: str,
+        sender_id: str,
+        conversation_type: str,
+        conversation_id: str,
+    ) -> int:
+        """交互轮数 +1，返回自增后的值（首次交互时从 1 开始）。
+
+        单条 UPSERT ... RETURNING 原子完成：先 SELECT 再 UPDATE 的
+        实现在并发下会丢失更新（两条并发消息都从 10 更新到 11）。
+        """
+        now = datetime.now().isoformat()
+        params = self._character_scope_params(
+            character_id, platform, adapter, sender_id, conversation_type, conversation_id, now=now
+        )
+        async with self.async_session() as session:
+            stmt = text(
+                "INSERT INTO character_relationships ("
+                "character_id, platform, adapter, sender_id, conversation_type, "
+                "conversation_id, relationship_stage, preferred_address, summary, "
+                "interaction_count, created_at, updated_at) VALUES ("
+                ":character_id, :platform, :adapter, :sender_id, :conversation_type, "
+                ":conversation_id, 'stranger', '', '', 1, :now, :now) "
+                "ON CONFLICT (character_id, platform, adapter, sender_id, conversation_type, conversation_id) "
+                "DO UPDATE SET interaction_count = character_relationships.interaction_count + 1, "
+                "updated_at = EXCLUDED.updated_at "
+                "RETURNING interaction_count"
+            )
+            result = await session.execute(stmt, params)
+            new_count = int(result.scalar_one())
+            await session.commit()
+            return new_count
+
+    async def list_character_memories(
+        self,
+        character_id: str,
+        platform: str,
+        adapter: str,
+        sender_id: str,
+        conversation_type: str,
+        conversation_id: str,
+        limit: int = 30,
+    ) -> List[dict]:
+        """读取指定范围内最近的记忆（按 updated_at 倒序，最多 limit 条）。"""
+        async with self.async_session() as session:
+            stmt = text(
+                "SELECT * FROM character_memories WHERE "
+                + self._CHARACTER_SCOPE_SQL
+                + " ORDER BY updated_at DESC LIMIT :limit"
+            )
+            result = await session.execute(
+                stmt,
+                self._character_scope_params(
+                    character_id, platform, adapter, sender_id, conversation_type, conversation_id,
+                    limit=max(1, min(int(limit), 200)),
+                ),
+            )
+            return [_row_to_dict(row) for row in result.fetchall()]
+
+    async def add_or_update_character_memory(
+        self,
+        character_id: str,
+        platform: str,
+        adapter: str,
+        sender_id: str,
+        conversation_type: str,
+        conversation_id: str,
+        memory_type: str,
+        memory_key: str,
+        content: str,
+        importance: float = 0.0,
+        source_message_id: Optional[str] = None,
+    ) -> dict:
+        """写入一条记忆（同 memory_key upsert，更新内容与时间戳）。"""
+        now = datetime.now().isoformat()
+        async with self.async_session() as session:
+            stmt = text(
+                "INSERT INTO character_memories ("
+                "character_id, platform, adapter, sender_id, conversation_type, "
+                "conversation_id, memory_type, memory_key, content, importance, "
+                "source_message_id, created_at, updated_at) VALUES ("
+                ":character_id, :platform, :adapter, :sender_id, :conversation_type, "
+                ":conversation_id, :memory_type, :memory_key, :content, :importance, "
+                ":source_message_id, :now, :now) "
+                "ON CONFLICT (character_id, platform, adapter, sender_id, conversation_type, "
+                "conversation_id, memory_key) DO UPDATE SET "
+                "memory_type = EXCLUDED.memory_type, content = EXCLUDED.content, "
+                "importance = EXCLUDED.importance, source_message_id = EXCLUDED.source_message_id, "
+                "updated_at = EXCLUDED.updated_at RETURNING id, created_at"
+            )
+            result = await session.execute(
+                stmt,
+                self._character_scope_params(
+                    character_id, platform, adapter, sender_id, conversation_type, conversation_id,
+                    memory_type=memory_type,
+                    memory_key=memory_key,
+                    content=content,
+                    importance=float(importance),
+                    source_message_id=source_message_id,
+                    now=now,
+                ),
+            )
+            row = result.fetchone()
+            await session.commit()
+            record = _row_to_dict(row) if row else {}
+            return {
+                "id": record.get("id"),
+                "created_at": record.get("created_at", now),
+                "character_id": character_id,
+                "memory_type": memory_type,
+                "memory_key": memory_key,
+                "content": content,
+                "importance": float(importance),
+                "source_message_id": source_message_id,
+                "updated_at": now,
+            }
+
+    async def delete_character_memory(
+        self,
+        memory_id: int,
+        character_id: str,
+        platform: str,
+        adapter: str,
+        sender_id: str,
+        conversation_type: str,
+        conversation_id: str,
+    ) -> bool:
+        """删除一条记忆。必须同时匹配隔离范围，防止越权删除其他用户记忆。"""
+        async with self.async_session() as session:
+            stmt = text(
+                "DELETE FROM character_memories WHERE id = :memory_id AND "
+                + self._CHARACTER_SCOPE_SQL
+            )
+            result = await session.execute(
+                stmt,
+                self._character_scope_params(
+                    character_id, platform, adapter, sender_id, conversation_type, conversation_id,
+                    memory_id=int(memory_id),
+                ),
+            )
+            await session.commit()
+            return bool(result.rowcount)
+
+    async def clear_character_memories(
+        self,
+        character_id: str,
+        platform: str,
+        adapter: str,
+        sender_id: str,
+        conversation_type: str,
+        conversation_id: str,
+    ) -> int:
+        """清空指定范围内的全部记忆，返回删除条数。"""
+        async with self.async_session() as session:
+            stmt = text(
+                "DELETE FROM character_memories WHERE " + self._CHARACTER_SCOPE_SQL
+            )
+            result = await session.execute(
+                stmt,
+                self._character_scope_params(
+                    character_id, platform, adapter, sender_id, conversation_type, conversation_id
+                ),
+            )
+            await session.commit()
+            return int(result.rowcount)
+
+    async def list_conversation_history(
+        self,
+        platform: str,
+        adapter: str,
+        sender_id: str,
+        conversation_type: str,
+        conversation_id: str,
+        limit: int = 8,
+        max_chars: int = 6000,
+    ) -> List[dict]:
+        """按用户范围读取最近对话历史，组装成角色生成用的消息列表。
+
+        语义与 SQLite 侧 list_conversation_history 一致：
+        - 私聊：platform+adapter+senderId 下全部私聊记录；
+        - 群聊/频道：再加 conversationId（群/频道）过滤；
+        - 返回按时间正序的 [{"role", "content"}]，超预算从最旧一侧截断。
+        """
+        async with self.async_session() as session:
+            if conversation_type in ("group", "channel"):
+                stmt = text(
+                    'SELECT message, reply FROM messages WHERE platform = :platform '
+                    'AND adapter = :adapter AND "senderId" = :sender_id '
+                    'AND "conversationId" = :conversation_id '
+                    'ORDER BY "createdAt" DESC LIMIT :limit'
+                )
+                params: dict = {
+                    "platform": platform,
+                    "adapter": adapter,
+                    "sender_id": sender_id,
+                    "conversation_id": conversation_id,
+                    "limit": max(1, min(int(limit), 50)),
+                }
+            else:
+                stmt = text(
+                    'SELECT message, reply FROM messages WHERE platform = :platform '
+                    'AND adapter = :adapter AND "senderId" = :sender_id '
+                    'AND ("conversationType" = :private OR "conversationType" = :empty) '
+                    'ORDER BY "createdAt" DESC LIMIT :limit'
+                )
+                params = {
+                    "platform": platform,
+                    "adapter": adapter,
+                    "sender_id": sender_id,
+                    "private": "private",
+                    "empty": "",
+                    "limit": max(1, min(int(limit), 50)),
+                }
+            result = await session.execute(stmt, params)
+            rows = result.fetchall()
+        turns: List[dict] = []
+        for row in reversed(rows):
+            d = _row_to_dict(row)
+            message = (d.get("message") or "").strip()
+            reply = (d.get("reply") or "").strip()
+            if message:
+                turns.append({"role": "user", "content": message})
+            if reply:
+                turns.append({"role": "assistant", "content": reply})
+        if max_chars > 0:
+            kept: List[dict] = []
+            total = 0
+            for item in reversed(turns):
+                total += len(item["content"])
+                if total > max_chars and kept:
+                    break
+                kept.append(item)
+            kept.reverse()
+            turns = kept
+        return turns
+
+    # ============================================
     # 会话管理
     # ============================================
     async def _upsert_conversation_session(
@@ -2046,6 +2399,49 @@ class SyncPgAdapter:
 
     def save_user_data(self, user_id, page_key, data_json):
         return self._run(self._pg.save_user_data(user_id, page_key, data_json))
+
+    # 角色关系与长期记忆（委托 PgDatabase 异步实现）
+    def get_character_relationship(self, character_id, platform, adapter, sender_id, conversation_type, conversation_id):
+        return self._run(self._pg.get_character_relationship(
+            character_id, platform, adapter, sender_id, conversation_type, conversation_id
+        ))
+
+    def upsert_character_relationship(self, character_id, platform, adapter, sender_id, conversation_type, conversation_id, relationship_stage, preferred_address="", summary="", interaction_count=None):
+        return self._run(self._pg.upsert_character_relationship(
+            character_id, platform, adapter, sender_id, conversation_type, conversation_id,
+            relationship_stage, preferred_address, summary, interaction_count
+        ))
+
+    def increment_character_interaction(self, character_id, platform, adapter, sender_id, conversation_type, conversation_id):
+        return self._run(self._pg.increment_character_interaction(
+            character_id, platform, adapter, sender_id, conversation_type, conversation_id
+        ))
+
+    def list_character_memories(self, character_id, platform, adapter, sender_id, conversation_type, conversation_id, limit=30):
+        return self._run(self._pg.list_character_memories(
+            character_id, platform, adapter, sender_id, conversation_type, conversation_id, limit
+        ))
+
+    def add_or_update_character_memory(self, character_id, platform, adapter, sender_id, conversation_type, conversation_id, memory_type, memory_key, content, importance=0.0, source_message_id=None):
+        return self._run(self._pg.add_or_update_character_memory(
+            character_id, platform, adapter, sender_id, conversation_type, conversation_id,
+            memory_type, memory_key, content, importance, source_message_id
+        ))
+
+    def delete_character_memory(self, memory_id, character_id, platform, adapter, sender_id, conversation_type, conversation_id):
+        return self._run(self._pg.delete_character_memory(
+            memory_id, character_id, platform, adapter, sender_id, conversation_type, conversation_id
+        ))
+
+    def clear_character_memories(self, character_id, platform, adapter, sender_id, conversation_type, conversation_id):
+        return self._run(self._pg.clear_character_memories(
+            character_id, platform, adapter, sender_id, conversation_type, conversation_id
+        ))
+
+    def list_conversation_history(self, platform, adapter, sender_id, conversation_type, conversation_id, limit=8, max_chars=6000):
+        return self._run(self._pg.list_conversation_history(
+            platform, adapter, sender_id, conversation_type, conversation_id, limit, max_chars
+        ))
 
     def create_api_key_record(self, key_hash, key_prefix, role, description=None, rate_limit=None):
         return self._run(self._pg.create_api_key_record(key_hash, key_prefix, role, description, rate_limit))

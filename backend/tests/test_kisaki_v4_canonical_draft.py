@@ -1,3 +1,4 @@
+import hashlib
 import importlib.util
 import json
 from pathlib import Path
@@ -299,12 +300,32 @@ def test_v4_runner_requires_replace_policy_and_exact_prompt_v3():
         PROJECT_ROOT / "backend/data/character_dialogues/kisaki_system_prompt_v3.txt"
     ).read_text(encoding="utf-8")
 
+    valid = {
+        "system_prompt_policy": "replace",
+        "system_prompt": prompt,
+        "_prompt_policy_version": dataset["prompt_policy"]["version"],
+        "_prompt_content_sha256": hashlib.sha256(
+            prompt.strip().encode("utf-8")
+        ).hexdigest(),
+    }
+    assert module.prompt_contract_error(valid, dataset) is None
     assert module.prompt_contract_error(
-        {"system_prompt_policy": "replace", "system_prompt": prompt}, dataset
-    ) is None
-    assert module.prompt_contract_error(
-        {"system_prompt_policy": "preserve", "system_prompt": prompt}, dataset
+        {**valid, "system_prompt_policy": "preserve"}, dataset
     ) == "system_prompt_policy"
     assert module.prompt_contract_error(
-        {"system_prompt_policy": "replace", "system_prompt": "旧短提示词"}, dataset
+        {**valid, "system_prompt": "旧短提示词"}, dataset
     ) == "system_prompt_content"
+    assert module.prompt_contract_error(
+        {**valid, "_prompt_policy_version": "3.1.0"}, dataset
+    ) == "prompt_policy_version"
+    valid_dataset = {
+        "_dataset_version": dataset["dataset_id"],
+        "train_data_path": dataset["train"]["path"],
+        "eval_data_path": dataset["validation"]["path"],
+        "_train_data_sha256": dataset["train"]["sha256"],
+        "_validation_data_sha256": dataset["validation"]["sha256"],
+    }
+    assert module.dataset_contract_error(valid_dataset, dataset) is None
+    assert module.dataset_contract_error(
+        {**valid_dataset, "_train_data_sha256": "stale"}, dataset
+    ) == "train_hash"

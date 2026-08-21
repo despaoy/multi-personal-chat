@@ -50,7 +50,7 @@ def test_gold_v3_has_unique_ids_and_pending_human_decisions():
     assert all(row["contamination_status"] == "clean" for row in data["prompts"])
 
 
-def test_gold_v3_contamination_audit_is_clean_and_bound_to_frozen_hashes():
+def test_gold_v3_reaudit_is_clean_and_bound_to_current_frozen_data():
     audit = json.loads(
         (ROOT / "backend/evaluation/kisaki_gold_set_v3_contamination_audit.json").read_text(
             encoding="utf-8"
@@ -61,11 +61,33 @@ def test_gold_v3_contamination_audit_is_clean_and_bound_to_frozen_hashes():
             encoding="utf-8"
         )
     )
+    gold = json.loads(
+        (ROOT / "backend/evaluation/kisaki_gold_set_v3.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    approval = json.loads(
+        (
+            ROOT
+            / "docs/research/review_packets/kisaki_v4/07_GOLD_V3/gold_v3_final_approval.json"
+        ).read_text(encoding="utf-8")
+    )
+    assert audit["schema_version"] == 2
     assert audit["status"] == "clean"
     assert audit["candidate_count"] == 150
+    assert audit["frozen_reference_count"] == 996
+    assert audit["frozen_train_count"] == manifest["train"]["count"] == 926
+    assert audit["frozen_validation_count"] == manifest["validation"]["count"] == 70
     assert audit["text_overlap_matches"] == []
     assert audit["duplicate_normalized_prompts"] == []
     assert audit["rag_evidence_event_overlaps"] == []
+    assert audit["candidate_content_sha256"] == gold["content_sha256"]
+    assert gold["content_sha256"] == approval["content_sha256"]
+    assert manifest["status"] == "frozen"
+    assert manifest["freeze_blockers"] == []
+    assert manifest["gold_v3"]["status"] == "frozen"
+    assert manifest["gold_v3"]["formal_use_allowed"] is True
+    assert manifest["gold_v3"]["contamination_reaudit"]["status"] == "clean"
     assert audit["frozen_train_sha256"] == manifest["train"]["sha256"]
     assert audit["frozen_validation_sha256"] == manifest["validation"]["sha256"]
 

@@ -21,7 +21,7 @@ ignore = [
 ]
 
 [tool.ruff.lint.isort]
-known-first-party = ["api", "app", "bot", "cache", "db", "infra", "inference", "knowledge", "middleware", "training", "interfaces"]
+known-first-party = ["api", "app", "bot", "cache", "character", "db", "infra", "inference", "knowledge", "middleware", "training", "interfaces"]
 
 [tool.ruff.format]
 quote-style = "double"

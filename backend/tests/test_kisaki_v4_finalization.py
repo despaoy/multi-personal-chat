@@ -37,11 +37,13 @@ def _fixture(tmp_path: Path):
             "status": "frozen_data_pending_gold",
             "train": {
                 "status": "frozen",
+                "count": 1,
                 "path": str(train),
                 "sha256": module._text_hash(train),
             },
             "validation": {
                 "status": "frozen",
+                "count": 1,
                 "path": str(validation),
                 "sha256": module._text_hash(validation),
             },
@@ -61,6 +63,10 @@ def _fixture(tmp_path: Path):
         },
     )
     prompts = [{"id": f"gold-{index:03d}", "prompt": "test"} for index in range(150)]
+    content_sha256 = canonical_json_hash(prompts)
+    review_payload = json.loads(review.read_text(encoding="utf-8"))
+    review_payload["approval"]["items"]["gold_v3"]["content_sha256"] = content_sha256
+    _write(review, review_payload)
     gold = tmp_path / "gold.json"
     _write(
         gold,
@@ -71,26 +77,99 @@ def _fixture(tmp_path: Path):
             "formal_use_allowed": True,
             "total_prompts": len(prompts),
             "prompts": prompts,
-            "content_sha256": canonical_json_hash(prompts),
+            "content_sha256": content_sha256,
         },
     )
-    return module, manifest, gold, review
+    approval = tmp_path / "approval.json"
+    _write(
+        approval,
+        {
+            "status": "approved",
+            "approved_count": 150,
+            "content_sha256": content_sha256,
+        },
+    )
+    audit = tmp_path / "audit.json"
+    _write(
+        audit,
+        {
+            "schema_version": 2,
+            "status": "clean",
+            "candidate_count": 150,
+            "candidate_content_sha256": content_sha256,
+            "frozen_train_count": 1,
+            "frozen_validation_count": 1,
+            "frozen_reference_count": 2,
+            "frozen_train_sha256": module._text_hash(train),
+            "frozen_validation_sha256": module._text_hash(validation),
+            "duplicate_ids": [],
+            "duplicate_normalized_prompts": [],
+            "text_overlap_matches": [],
+            "rag_evidence_event_overlaps": [],
+        },
+    )
+    registry = tmp_path / "registry.json"
+    _write(
+        registry,
+        {
+            "status": "r0v4_gold_refreeze_pending",
+            "active_assets": {
+                "canonical_dataset": {"status": "frozen_data_pending_gold"},
+                "gold_v3": {
+                    "status": "stale_after_canonical_cleanup",
+                    "formal_use_allowed": False,
+                },
+            },
+            "research": [
+                {"id": "R0V4", "status": "gold_refreeze_pending"},
+                {"id": "R1V4", "status": "blocked_until_r0v4_refrozen"},
+            ],
+        },
+    )
+    return module, manifest, gold, review, audit, approval, registry
 
 
 def test_finalizer_attaches_approved_gold_and_clears_blockers(tmp_path):
-    module, manifest, gold, review = _fixture(tmp_path)
-    result = module.finalize(manifest, gold, review)
+    module, manifest, gold, review, audit, approval, registry = _fixture(tmp_path)
+    result = module.finalize(manifest, gold, review, audit, approval, registry)
     assert result["status"] == "frozen"
     assert result["freeze_blockers"] == []
     assert result["gold_v3"]["id"] == "KISAKI-GOLD-V3"
     assert result["gold_v3"]["count"] == 150
     assert result["gold_v3"]["sha256"] == module._text_hash(gold)
+    assert result["gold_v3"]["formal_use_allowed"] is True
+    assert result["gold_v3"]["contamination_reaudit"]["status"] == "clean"
+    updated_registry = json.loads(registry.read_text(encoding="utf-8"))
+    assert updated_registry["active_assets"]["canonical_dataset"]["status"] == "frozen"
+    assert updated_registry["active_assets"]["gold_v3"]["formal_use_allowed"] is True
+    assert updated_registry["research"] == [
+        {"id": "R0V4", "status": "complete"},
+        {"id": "R1V4", "status": "config_regeneration_pending"},
+    ]
 
 
 def test_finalizer_refuses_pending_gold_review(tmp_path):
-    module, manifest, gold, review = _fixture(tmp_path)
+    module, manifest, gold, review, audit, approval, registry = _fixture(tmp_path)
     payload = json.loads(review.read_text(encoding="utf-8"))
     payload["approval"]["items"]["gold_v3"]["status"] = "pending_human_review"
     _write(review, payload)
     with pytest.raises(ValueError, match="Gold v3 human review is not approved"):
-        module.finalize(manifest, gold, review)
+        module.finalize(manifest, gold, review, audit, approval, registry)
+
+
+def test_finalizer_refuses_stale_train_audit(tmp_path):
+    module, manifest, gold, review, audit, approval, registry = _fixture(tmp_path)
+    payload = json.loads(audit.read_text(encoding="utf-8"))
+    payload["frozen_train_sha256"] = "stale"
+    _write(audit, payload)
+    with pytest.raises(ValueError, match="stale train split"):
+        module.finalize(manifest, gold, review, audit, approval, registry)
+
+
+def test_finalizer_refuses_audit_for_different_gold_content(tmp_path):
+    module, manifest, gold, review, audit, approval, registry = _fixture(tmp_path)
+    payload = json.loads(audit.read_text(encoding="utf-8"))
+    payload["candidate_content_sha256"] = "different-gold"
+    _write(audit, payload)
+    with pytest.raises(ValueError, match="does not match frozen Gold content"):
+        module.finalize(manifest, gold, review, audit, approval, registry)

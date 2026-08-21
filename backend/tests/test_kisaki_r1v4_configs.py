@@ -23,8 +23,8 @@ def test_r1v4_config_builder_changes_one_registered_factor():
     builder = _module("build_kisaki_r1v4_configs", "scripts/build_kisaki_r1v4_configs.py")
     manifest = {
         "dataset_id": "KISAKI-CANONICAL-V4",
-        "train": {"path": "train.jsonl"},
-        "validation": {"path": "validation.jsonl"},
+        "train": {"path": "train.jsonl", "sha256": "train-hash"},
+        "validation": {"path": "validation.jsonl", "sha256": "validation-hash"},
         "prompt_policy": {"required_training_policy": "replace"},
     }
     template = json.loads(builder.DEFAULT_TEMPLATE.read_text(encoding="utf-8"))
@@ -37,6 +37,13 @@ def test_r1v4_config_builder_changes_one_registered_factor():
         "R1-E4",
         "R1-E5",
     ]
+    assert {config["_train_data_sha256"] for config in configs.values()} == {
+        "train-hash"
+    }
+    assert {config["_validation_data_sha256"] for config in configs.values()} == {
+        "validation-hash"
+    }
+    assert {config["max_seq_length"] for config in configs.values()} == {1280}
 
 
 def test_r1v4_config_writer_refuses_a_draft_dataset(tmp_path):
@@ -48,6 +55,85 @@ def test_r1v4_config_writer_refuses_a_draft_dataset(tmp_path):
     )
     with pytest.raises(ValueError, match="must be frozen"):
         builder.write_configs(manifest, tmp_path / "configs")
+
+
+def test_active_r1v4_configs_bind_current_data_prompt_and_single_variables():
+    builder = _module(
+        "build_kisaki_r1v4_configs_active", "scripts/build_kisaki_r1v4_configs.py"
+    )
+    canonical = json.loads(builder.DEFAULT_MANIFEST.read_text(encoding="utf-8"))
+    config_manifest = json.loads(
+        (builder.DEFAULT_OUTPUT / "config_manifest.json").read_text(encoding="utf-8")
+    )
+    configs = {
+        name: json.loads(
+            (builder.DEFAULT_OUTPUT / f"kisaki_r1v4_{name}.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        for name in builder.VARIANTS
+    }
+
+    assert config_manifest["schema_version"] == 3
+    assert config_manifest["status"] == "generated_for_frozen_dataset"
+    assert config_manifest["formal_use_allowed"] is True
+    assert config_manifest["train"]["sha256"] == canonical["train"]["sha256"]
+    assert config_manifest["validation"]["sha256"] == canonical["validation"]["sha256"]
+    assert config_manifest["prompt_policy_version"] == builder.PROMPT_POLICY_VERSION
+    assert config_manifest["single_variable_contract"]["status"] == "validated"
+    assert validate_r1_variant_set(configs) == []
+    assert {config["max_seq_length"] for config in configs.values()} == {1280}
+    for name, config in configs.items():
+        assert config["_train_data_sha256"] == canonical["train"]["sha256"]
+        assert config["_validation_data_sha256"] == canonical["validation"]["sha256"]
+        assert config["_prompt_policy_version"] == builder.PROMPT_POLICY_VERSION
+        assert config_manifest["config_files"][name]["sha256"] == builder._text_sha256(
+            builder.DEFAULT_OUTPUT / f"kisaki_r1v4_{name}.json"
+        )
+
+
+def test_r1v4_config_writer_refuses_a_template_that_would_truncate_canonical_data(
+    tmp_path, monkeypatch
+):
+    builder = _module(
+        "build_kisaki_r1v4_configs_length", "scripts/build_kisaki_r1v4_configs.py"
+    )
+    train = tmp_path / "train.jsonl"
+    validation = tmp_path / "validation.jsonl"
+    prompt = tmp_path / "prompt.txt"
+    train.write_text('{"id":"train"}\n', encoding="utf-8")
+    validation.write_text('{"id":"validation"}\n', encoding="utf-8")
+    prompt.write_text("persona prompt\n", encoding="utf-8")
+    monkeypatch.setattr(builder, "PROMPT_PATH", prompt)
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(
+        json.dumps(
+            {
+                "dataset_id": "KISAKI-CANONICAL-V4",
+                "status": "frozen",
+                "freeze_blockers": [],
+                "train": {
+                    "path": str(train),
+                    "count": 1,
+                    "sha256": builder._text_sha256(train),
+                },
+                "validation": {
+                    "path": str(validation),
+                    "count": 1,
+                    "sha256": builder._text_sha256(validation),
+                },
+                "prompt_policy": {"required_training_policy": "replace"},
+                "cleanup_revision": {"maximum_observed_tokens": 1165},
+            }
+        ),
+        encoding="utf-8",
+    )
+    template = tmp_path / "template.json"
+    payload = json.loads(builder.DEFAULT_TEMPLATE.read_text(encoding="utf-8"))
+    payload["max_seq_length"] = 1024
+    template.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(ValueError, match="max_seq_length"):
+        builder.write_configs(manifest, tmp_path / "configs", template)
 
 
 def test_checkpoint_steps_are_sorted_numerically():

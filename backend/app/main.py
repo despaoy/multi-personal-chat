@@ -86,6 +86,7 @@ from api.experiments import router as experiments_router
 from api.retrieval_eval import router as retrieval_eval_router
 from api.preferences import router as preferences_router
 from api.router import router as lora_router_router
+from api.characters import router as characters_router
 
 
 # ═══════════════════════════════════════════
@@ -379,6 +380,7 @@ _ROUTERS = (
     retrieval_eval_router,
     preferences_router,
     lora_router_router,
+    characters_router,
 )
 
 

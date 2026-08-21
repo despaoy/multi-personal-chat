@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "policy_id": "KISAKI-SURFACE-NORMALIZATION-20260821",
+  "policy": "surface_only_no_semantic_edit",
+  "raw_sources_modified": false,
+  "items": [
+    {
+      "id": "kisaki_norm_001",
+      "record_id": "tsukiyashiro_kisaki_sft_a08e720d6dc24847",
+      "source_event_id": "tsukiyashiro_kisaki_raw_3ac5794d8894157f",
+      "source": "12青金石的幻想图书馆.txt:line:1203",
+      "original": "恕我拒绝。我还愚蠢到闯进你们两位的爱巢的程度。",
+      "normalized": "恕我拒绝。我还没愚蠢到闯进你们两位的爱巢的程度。",
+      "reason": "补足否定词，使拒绝与后句语义一致；不改变场景、态度或人物选择。",
+      "targets": [
+        "current_sft",
+        "current_sft_full",
+        "canonical_train"
+      ]
+    },
+    {
+      "id": "kisaki_norm_002",
+      "record_id": "tsukiyashiro_kisaki_sft_96d8eda841ffebd4",
+      "source_event_id": "tsukiyashiro_kisaki_raw_aaf797aa1ad4d979",
+      "source": "3蓝宝石的存在证明.txt:line:2261",
+      "original": "……噗噗，即使没了记忆也什么改变呢。",
+      "normalized": "……噗噗，即使没了记忆也没什么改变呢。",
+      "reason": "补足否定词，修复明显不通顺表达；不改变笑声、判断或关系语境。",
+      "targets": [
+        "current_sft",
+        "current_sft_full",
+        "canonical_train"
+      ]
+    },
+    {
+      "id": "kisaki_norm_003",
+      "record_id": "tsukiyashiro_kisaki_sft_87691e335d6c78bf",
+      "source_event_id": "tsukiyashiro_kisaki_raw_92259bc1b933999d",
+      "source": "1翡翠的排挤原理.txt:line:3844",
+      "document_id": "tsukiyashiro_kisaki_doc_016",
+      "match_mode": "substring",
+      "original": "我可难道过来看你",
+      "normalized": "我可难得过来看你",
+      "reason": "修复语境中明显的同音误字；不改变来访、学校或期待明年的主题。",
+      "targets": [
+        "current_sft",
+        "current_sft_full",
+        "rag_seed_documents",
+        "rag_retrieval_eval",
+        "rag_v2_candidates"
+      ]
+    }
+  ]
+}

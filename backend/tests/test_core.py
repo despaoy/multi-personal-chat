@@ -608,7 +608,7 @@ class TestAstrBotIntegrationFlow:
         monkeypatch.setattr(integrations, "db", temp_db)
         monkeypatch.setattr(integrations, "inference_runtime", _FakeRuntime())
 
-        async def fake_generate(message_request, current_user=None):
+        async def fake_generate(message_request, current_user=None, **kwargs):
             assert message_request.platform == platform
             assert message_request.conversationId == conversation_id
             assert message_request.sessionId == f"{platform}:{conversation_type}:{conversation_id}"

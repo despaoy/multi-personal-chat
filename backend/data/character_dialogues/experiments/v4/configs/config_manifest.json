@@ -1,13 +1,94 @@
 {
-  "schema_version": 1,
+  "schema_version": 3,
+  "status": "generated_for_frozen_dataset",
+  "formal_use_allowed": true,
   "dataset_id": "KISAKI-CANONICAL-V4",
   "dataset_status": "frozen",
-  "prompt_policy_version": "3.1.0",
+  "dataset_manifest_path": "backend/data/character_dialogues/experiments/v4/canonical_dataset_manifest.json",
+  "dataset_manifest_sha256": "72070a79769c6c3ce5ebc8102b7c4a7da6c21e2326e1320f267a851f633805cb",
+  "train": {
+    "path": "backend/data/character_dialogues/experiments/v4/train.jsonl",
+    "count": 926,
+    "sha256": "8791a57ad2b8bce7824f93185c99125b37b15e4a136bee28b2cfae1e609cd245"
+  },
+  "validation": {
+    "path": "backend/data/character_dialogues/experiments/v4/validation.jsonl",
+    "count": 70,
+    "sha256": "fb5cd5d93027b37be53327cda4e7c6137a7bae97201830fc8aa726727b9777b8"
+  },
+  "prompt": {
+    "path": "backend/data/character_dialogues/kisaki_system_prompt_v3.txt",
+    "sha256": "2c51e0e7cbf6318dadcc56117ddd8afc72b9d6c3fc4bb53b6c451fb294acc879"
+  },
+  "prompt_policy_version": "3.3.0",
   "experiments": [
     "R1-E1",
     "R1-E2",
     "R1-E3",
     "R1-E4",
     "R1-E5"
-  ]
+  ],
+  "config_files": {
+    "e1": {
+      "experiment_id": "R1-E1",
+      "comparison_role": "baseline",
+      "path": "backend/data/character_dialogues/experiments/v4/configs/kisaki_r1v4_e1.json",
+      "sha256": "79e10771815fd5b529a16aa66fd28514eeb70f57790a00ca57dbc9970c76621b"
+    },
+    "e2": {
+      "experiment_id": "R1-E2",
+      "comparison_role": "neftune_only",
+      "path": "backend/data/character_dialogues/experiments/v4/configs/kisaki_r1v4_e2.json",
+      "sha256": "74c0402b7bc29b495e7b01f8b27ecb94c087230566f4666023c055575b9ee7db"
+    },
+    "e3": {
+      "experiment_id": "R1-E3",
+      "comparison_role": "dora_only",
+      "path": "backend/data/character_dialogues/experiments/v4/configs/kisaki_r1v4_e3.json",
+      "sha256": "41dde3b41e6f0bf14772febd9e4f35245619b27436beb4e513e9fb6790215172"
+    },
+    "e4": {
+      "experiment_id": "R1-E4",
+      "comparison_role": "rslora_only",
+      "path": "backend/data/character_dialogues/experiments/v4/configs/kisaki_r1v4_e4.json",
+      "sha256": "f12b5328dcb05d86c8281fb4db34b4b765d941852b213c6f57e21436678666e0"
+    },
+    "e5": {
+      "experiment_id": "R1-E5",
+      "comparison_role": "packing_only",
+      "path": "backend/data/character_dialogues/experiments/v4/configs/kisaki_r1v4_e5.json",
+      "sha256": "8f97431877ef595af48007b36a0155f425f98ee14acaed7d48102a511a6940e9"
+    }
+  },
+  "single_variable_contract": {
+    "status": "validated",
+    "baseline": "R1-E1",
+    "differences": {
+      "R1-E1": {},
+      "R1-E2": {
+        "neftune_noise_alpha": [
+          0.0,
+          5.0
+        ]
+      },
+      "R1-E3": {
+        "use_dora": [
+          false,
+          true
+        ]
+      },
+      "R1-E4": {
+        "use_rslora": [
+          false,
+          true
+        ]
+      },
+      "R1-E5": {
+        "packing": [
+          false,
+          true
+        ]
+      }
+    }
+  }
 }

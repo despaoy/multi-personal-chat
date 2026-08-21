@@ -1,15 +1,18 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "status": "clean",
   "similarity_threshold": 0.9,
   "candidate_count": 150,
-  "frozen_reference_count": 1018,
+  "frozen_reference_count": 996,
+  "frozen_train_count": 926,
+  "frozen_validation_count": 70,
   "development_reference_count": 150,
   "duplicate_ids": [],
   "duplicate_normalized_prompts": [],
   "text_overlap_matches": [],
   "rag_evidence_event_count": 32,
   "rag_evidence_event_overlaps": [],
-  "frozen_train_sha256": "903c07934f29ea764ea14b28208e2a78468e33fe6f7de0d53d85bd642358cfb8",
+  "candidate_content_sha256": "d40e6324f3c775166cd66ca985bc0cdc2902c27fb1cfb34f2d72c8d74259cb40",
+  "frozen_train_sha256": "8791a57ad2b8bce7824f93185c99125b37b15e4a136bee28b2cfae1e609cd245",
   "frozen_validation_sha256": "fb5cd5d93027b37be53327cda4e7c6137a7bae97201830fc8aa726727b9777b8"
 }

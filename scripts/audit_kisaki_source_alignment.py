@@ -14,10 +14,24 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 CHARACTER_DIR = PROJECT_ROOT / "backend" / "data" / "character_dialogues"
 DEFAULT_GAMETEXT = PROJECT_ROOT / "gametext" / "纸上魔法使"
 EXTRACTOR = PROJECT_ROOT / "scripts" / "extract_character_dialogues.py"
+NORMALIZER = PROJECT_ROOT / "scripts" / "apply_kisaki_v4_text_normalizations.py"
+NORMALIZATION_LEDGER = (
+    CHARACTER_DIR / "experiments/v4/text_normalizations.json"
+)
 
 
 def _extractor():
     spec = importlib.util.spec_from_file_location("extract_character_dialogues", EXTRACTOR)
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
+
+
+def _normalizer():
+    spec = importlib.util.spec_from_file_location(
+        "apply_kisaki_v4_text_normalizations", NORMALIZER
+    )
     module = importlib.util.module_from_spec(spec)
     assert spec.loader is not None
     spec.loader.exec_module(module)
@@ -45,6 +59,10 @@ def audit(gametext: Path = DEFAULT_GAMETEXT) -> dict[str, Any]:
     ]
     expected_raw = extractor.make_raw(groups, target)
     expected_sft, expected_full, expected_excluded = extractor.make_sft(groups, target)
+    normalizer = _normalizer()
+    normalization_items = _load_json(NORMALIZATION_LEDGER)["items"]
+    expected_sft = normalizer.normalize_sft_rows(expected_sft, normalization_items)
+    expected_full = normalizer.normalize_sft_rows(expected_full, normalization_items)
     stored_raw = _load_jsonl(CHARACTER_DIR / f"{target}_raw.jsonl")
     stored_sft = _load_json(CHARACTER_DIR / f"{target}_sft.json")
     stored_full = _load_json(CHARACTER_DIR / f"{target}_sft_full.json")

@@ -78,15 +78,25 @@ def test_round06_approval_builds_four_complete_sessions_not_prefixes():
 
 def test_round06_promoted_records_are_the_only_new_training_units():
     train = _jsonl(V4 / "train.jsonl")
-    promoted = [
+    auxiliary = _jsonl(V4 / "cleanup/candidate/technical_auxiliary.jsonl")
+    formal = [
         record
         for record in train
         if record.get("metadata", {}).get("data_source")
         == "deepseek_user_simulation_v41_reviewed"
     ]
+    moved = [
+        record
+        for record in auxiliary
+        if record.get("metadata", {}).get("data_source")
+        == "deepseek_user_simulation_v41_reviewed"
+    ]
+    promoted = formal + moved
 
     assert len(train) >= 730
     assert len(promoted) == 4
+    assert len(formal) == 3
+    assert [record["id"] for record in moved] == ["kisaki_v41_round06_coding_debug"]
     assert {record["metadata"]["turns"] for record in promoted} == {5}
     assert all("system" not in {message["role"] for message in record["messages"]} for record in promoted)
     assert not any("_turn_" in record["id"] for record in promoted)
@@ -115,7 +125,7 @@ def test_round06_has_no_protected_prompt_overlap():
     assert module._similarity_matches(candidates, references) == []
 
 
-def test_round06_manifest_count_hash_and_reaudit_match_files():
+def test_round06_manifest_count_hash_and_current_reaudit_are_explicit():
     module = _module()
     manifest = json.loads((V4 / "canonical_dataset_manifest.json").read_text(encoding="utf-8"))
     audit = json.loads(
@@ -130,12 +140,14 @@ def test_round06_manifest_count_hash_and_reaudit_match_files():
     assert manifest["train"]["sha256"] == module._text_sha256(V4 / "train.jsonl")
     assert manifest["train"]["source_distribution"]["game_extraction_current_sft"] == 522
     assert manifest["train"]["source_distribution"]["llm_v4_reviewed_constructed"] == 150
-    assert manifest["train"]["source_distribution"]["deepseek_user_simulation_v41_reviewed"] == 4
+    assert manifest["train"]["source_distribution"]["deepseek_user_simulation_v41_reviewed"] == 3
     assert audit["status"] == "clean"
     assert audit["frozen_reference_count"] == len(train) + len(validation)
+    assert audit["frozen_train_count"] == len(train)
+    assert audit["frozen_validation_count"] == len(validation)
     assert audit["frozen_train_sha256"] == manifest["train"]["sha256"]
     assert audit["frozen_validation_sha256"] == manifest["validation"]["sha256"]
-    assert manifest["gold_v3"]["contamination_reaudit"]["gold_content_modified"] is False
+    assert manifest["gold_v3"]["contamination_reaudit"]["status"] == "clean"
 
 
 def test_round06_chat_normalization_supervises_all_assistant_turns():
@@ -163,3 +175,5 @@ def test_round06_promotion_is_idempotent_after_success():
     assert result["status"] == "already_promoted"
     manifest = json.loads((V4 / "canonical_dataset_manifest.json").read_text(encoding="utf-8"))
     assert result["train_count"] == manifest["train"]["count"]
+    assert result["formal_record_count"] == 3
+    assert result["auxiliary_record_count"] == 1

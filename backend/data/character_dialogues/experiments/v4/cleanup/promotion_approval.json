@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "approval_id": "KISAKI-V4-CLEANUP-PROMOTION-20260821",
+  "status": "approved_for_promotion",
+  "authorized_by": "project_owner",
+  "authorized_at": "2026-08-21",
+  "authorization_scope": "Promote the mechanical length and metadata cleanup candidate; do not claim a new manual record-by-record persona review.",
+  "review_method": "project_owner_authorized_ai_assisted_mechanical_cleanup",
+  "manual_record_by_record_review_claimed": false,
+  "candidate_manifest_sha256": "68ac4a47d304f5ef457372427a75c048a94290b01b1b68cf8e50881bfeedd813",
+  "candidate_train_sha256": "24e010335a1564496c596fbae20e065b5e063b70c7456951629b8f18fbe623fd"
+}

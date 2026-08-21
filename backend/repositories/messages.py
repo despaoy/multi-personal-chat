@@ -6,6 +6,8 @@ import asyncio
 from dataclasses import dataclass
 from typing import Any, Protocol
 
+from character.models import UserScope
+
 
 @dataclass(frozen=True, slots=True)
 class MessageQuery:
@@ -45,6 +47,14 @@ class MessageRepository(Protocol):
         conversation_type: str,
     ) -> None: ...
 
+    async def list_recent_conversation_history(
+        self,
+        user_scope: UserScope,
+        *,
+        limit: int = 8,
+        max_chars: int = 6000,
+    ) -> list[dict[str, str]]: ...
+
     async def delete_filtered(self, query: MessageQuery) -> int: ...
 
     async def delete(self, message_id: int) -> bool: ...
@@ -78,6 +88,33 @@ class DatabaseMessageRepository:
 
     async def list_session_summaries(self) -> list[dict[str, Any]]:
         return list(await asyncio.to_thread(self._database.get_session_summaries))
+
+    async def list_recent_conversation_history(
+        self,
+        user_scope: UserScope,
+        *,
+        limit: int = 8,
+        max_chars: int = 6000,
+    ) -> list[dict[str, str]]:
+        """按用户范围读取最近对话历史（时间正序，超预算从最旧一侧截断）。
+
+        私聊读取该用户全部私聊记录；群聊/频道只读取该用户在该会话内的
+        记录，与长期记忆的隔离范围保持一致。
+        """
+        if not hasattr(self._database, "list_conversation_history"):
+            return []
+        return list(
+            await asyncio.to_thread(
+                self._database.list_conversation_history,
+                user_scope.platform,
+                user_scope.adapter,
+                user_scope.sender_id,
+                user_scope.conversation_type,
+                user_scope.conversation_id,
+                limit,
+                max_chars,
+            )
+        )
 
     async def set_session_bot_enabled(
         self,

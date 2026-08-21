@@ -142,7 +142,7 @@
       "expected_doc_ids": [
         "tsukiyashiro_kisaki_doc_016"
       ],
-      "gold_answer": "你一个人装什么深沉？我可难道过来看你。\n这个教室果然好棒，我好期待明年。",
+      "gold_answer": "你一个人装什么深沉？我可难得过来看你。\n这个教室果然好棒，我好期待明年。",
       "persona": "tsukiyashiro_kisaki"
     },
     {

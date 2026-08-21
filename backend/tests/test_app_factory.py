@@ -121,6 +121,41 @@ def test_run_entrypoint_does_not_delete_bytecode_or_reparse_dotenv() -> None:
     assert "shutil.rmtree" not in source
     assert "def _load_env" not in source
 
+def test_generate_service_binds_character_context_to_container_db() -> None:
+    """生成链路的角色上下文服务必须绑定当前应用容器的数据库。
+
+    管理接口已走容器数据库；若生成链路（prepare/complete_turn）
+    仍用全局服务，create_app(custom_container) 的实例会把人物
+    记忆/关系读写到全局数据库，与管理接口脱节。
+    """
+    from fastapi import Request
+
+    from api.generate import get_request_chat_generation_service
+    from app.main import create_app
+    from app.runtime import RuntimeContainer
+
+    container = RuntimeContainer(
+        db=SimpleNamespace(),
+        is_pg_mode=lambda: False,
+        inference_runtime=None,
+        startup_env={},
+    )
+    application = create_app(container)
+    http_request = Request({"type": "http", "app": application})
+    service = get_request_chat_generation_service(http_request)
+
+    # 注入容器角色服务的 handler 是 partial；其角色服务的记忆仓储
+    # 必须绑定容器数据库，而不是全局单例
+    handler = service._generate_handler
+    character_service = handler.keywords["character_service"]
+    assert character_service is not None
+    assert character_service._memory_repo._database is container.db
+    # 消息持久化/调用记录/生成配置同样必须走容器数据库：
+    # 只注入人物服务时，上一轮消息写入全局库、下一轮从容器库
+    # 读不到，历史会断裂
+    assert handler.keywords["message_db"] is container.db
+
+
 def test_astrbot_endpoint_uses_runtime_container_inference_runtime() -> None:
     from fastapi import Request
 
@@ -144,6 +179,27 @@ def test_astrbot_endpoint_uses_runtime_container_inference_runtime() -> None:
     request = Request({"type": "http", "app": application})
 
     assert _request_inference_runtime(request) is runtime
+
+def test_astrbot_endpoint_resolves_container_character_service() -> None:
+    """astrbot 生成链路的角色上下文服务必须绑定容器数据库。"""
+    from fastapi import Request
+
+    from api.integrations import _request_character_service
+    from app.main import create_app
+    from app.runtime import RuntimeContainer
+
+    container = RuntimeContainer(
+        db=SimpleNamespace(),
+        is_pg_mode=lambda: False,
+        inference_runtime=None,
+        startup_env={},
+    )
+    application = create_app(container)
+    request = Request({"type": "http", "app": application})
+
+    service = _request_character_service(request)
+    assert service is not None
+    assert service._memory_repo._database is container.db
 
 def test_lifespan_resource_references_are_cleared_between_application_runs() -> None:
     from app.main import _clear_lifespan_resource_references

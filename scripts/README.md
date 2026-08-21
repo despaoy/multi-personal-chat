@@ -13,6 +13,7 @@ V4 experiments.
 | `build_kisaki_v4_canonical_draft.py` | Rebuild V4 canonical train/validation draft |
 | `freeze_kisaki_v4_dataset.py` | Freeze reviewed train/validation |
 | `finalize_kisaki_v4_dataset.py` | Advance canonical state after Gold approval |
+| `reaudit_kisaki_gold_v3.py` | Re-audit approved Gold v3 against the current frozen train/validation splits |
 | `build_kisaki_gold_v21.py` / `build_kisaki_gold_v3.py` | Build Gold sets and contamination audits |
 | `build_kisaki_r1v4_configs.py` | Generate E1-E5 single-variable configs |
 | `validate_kisaki_v4_training_gate.py` | Formal training gate |

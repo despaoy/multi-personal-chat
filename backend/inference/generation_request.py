@@ -9,13 +9,17 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from inference.prompt_policy import (
     PROMPT_POLICY_VERSION,
     build_grounded_user_message,
     compose_system_prompt,
+    sanitize_speaker_label,
 )
+
+if TYPE_CHECKING:  # pragma: no cover - 仅类型注解使用，避免运行时反向依赖
+    from character.models import CompiledCharacterContext
 
 
 Message = dict[str, str]
@@ -56,6 +60,8 @@ class GenerationRequest:
     enable_thinking: bool = False
     evidence_max_chars: int = 800
     apply_prompt_policy: bool = True
+    # 可选的角色上下文：None 时生成行为与旧链路完全一致。
+    character_context: "CompiledCharacterContext | None" = None
 
 
 @dataclass(frozen=True)
@@ -91,14 +97,27 @@ def _conversation_history(history: Sequence[Mapping[str, str]]) -> list[Message]
 
 def _system_prompt(request: GenerationRequest) -> str:
     if request.apply_prompt_policy:
+        persona = request.persona_prompt.strip()
+        context = request.character_context
+        dynamic_context = ""
+        if context is not None:
+            # 人物已有现成提示词（如月社妃 Prompt v3）时不再拼接
+            # profile_context，避免人物规则重复；只有没有现成提示词的
+            # 人物才使用结构化画像作为替代。
+            if not persona:
+                persona = context.profile_context
+            dynamic_context = context.dynamic_context
         prompt = compose_system_prompt(
-            request.persona_prompt,
+            persona,
             include_rag=request.retrieval.has_evidence,
+            dynamic_context=dynamic_context,
         )
     else:
         prompt = request.persona_prompt.strip()
-    if request.interlocutor.strip():
-        prompt = f"{prompt}\n\n当前对话者：{request.interlocutor.strip()}。".strip()
+    # 对话者昵称（senderName，用户可控）不进入系统提示词：
+    # 净化只能删除结构字符，语义级注入内容仍会以系统区权威出现。
+    # 3.3.0 起改由 build_grounded_user_message 放入用户消息的
+    # <speaker_label> 不可信参考区。
     return prompt
 
 
@@ -117,6 +136,14 @@ def build_generation_request(request: GenerationRequest) -> GenerationPlan:
                 request.message,
                 request.retrieval.evidence if request.retrieval.has_evidence else "",
                 max_chars=request.evidence_max_chars,
+                # 长期记忆只进入用户消息的不可信参考区，绝不进入系统提示词。
+                memory_context=(
+                    request.character_context.reference_context
+                    if request.character_context is not None
+                    else ""
+                ),
+                # 对话者昵称（用户可控）同样只进不可信参考区。
+                speaker=sanitize_speaker_label(request.interlocutor),
             ),
         }
     )

@@ -251,6 +251,35 @@ def _request_inference_runtime(http_request: Request):
     return inference_runtime if runtime is None else runtime
 
 
+def _request_container_db(http_request: Request):
+    """Resolve this app's container db when it differs from the global singleton.
+
+    生成链路（消息持久化/调用记录/生成配置）与人物上下文必须读写
+    同一数据库；返回 None 表示与全局单例相同，调用方直接用全局。
+    """
+    try:
+        container_db = get_runtime_container(http_request.app).db
+    except (AttributeError, RuntimeError):
+        return None
+    if container_db is db:
+        return None
+    return container_db
+
+
+def _request_character_service(http_request: Request):
+    """Resolve the character context service bound to this app's container db.
+
+    生成链路的角色记忆/关系必须与角色管理接口读写同一（容器）数据库；
+    容器数据库即全局单例时返回 None，回退全局默认服务。
+    """
+    container_db = _request_container_db(http_request)
+    if container_db is None:
+        return None
+    from services.character_context import build_character_context_service
+
+    return build_character_context_service(container_db)
+
+
 def _degraded_response(
     request: AstrBotMessageRequest,
     trace_id: str,
@@ -396,9 +425,16 @@ async def receive_astrbot_message(
         traceId=trace_id,
     )
     priority = runtime.priority_for("astrbot", request.conversationType)
+    character_service = _request_character_service(http_request)
+    message_db = _request_container_db(http_request)
     try:
         result = await runtime.submit(
-            lambda: generate_reply_core(msg, current_user={"username": "astrbot", "user_id": 0}),
+            lambda: generate_reply_core(
+                msg,
+                current_user={"username": "astrbot", "user_id": 0},
+                character_service=character_service,
+                message_db=message_db,
+            ),
             session_id=session_id,
             priority=priority,
             timeout=_MODEL_TIMEOUT,

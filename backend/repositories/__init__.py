@@ -11,8 +11,15 @@ from repositories.user_data import (
     UserDataRepository,
     UserDataUserNotFoundError,
 )
+from repositories.character_memory import (
+    CharacterMemoryRepository,
+    DatabaseCharacterMemoryRepository,
+    get_default_character_memory_repository,
+)
 
 __all__ = [
+    "CharacterMemoryRepository",
+    "DatabaseCharacterMemoryRepository",
     "DatabaseMessageRepository",
     "DatabaseUserDataRepository",
     "MessagePage",
@@ -20,4 +27,5 @@ __all__ = [
     "MessageRepository",
     "UserDataRepository",
     "UserDataUserNotFoundError",
+    "get_default_character_memory_repository",
 ]

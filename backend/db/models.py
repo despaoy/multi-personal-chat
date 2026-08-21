@@ -2,7 +2,7 @@
 SQLAlchemy ORM 模型 - 数据库 schema 的单一真相源
 
 使用 SQLAlchemy 2.0 declarative 风格（DeclarativeBase + Mapped + mapped_column）
-定义全部 26 张表。本文件作为数据库 schema 的唯一权威定义，供 alembic 迁移
+定义全部 28 张表。本文件作为数据库 schema 的唯一权威定义，供 alembic 迁移
 和应用层共享。
 
 字段命名与类型严格对齐 backend/db/pg_database.py 中的 PostgreSQL Core 表定义，
@@ -591,3 +591,79 @@ class Feedback(Base):
     prompt_version: Mapped[Optional[str]] = mapped_column(Text)
     detail: Mapped[Optional[str]] = mapped_column(Text)
     created_at: Mapped[str] = mapped_column(Text, nullable=False)
+
+
+# ============================================
+# 27. 角色关系表
+# ============================================
+
+class CharacterRelationship(Base):
+    """角色关系表：人物与当前聊天用户的关系状态。
+
+    主键为完整的记忆隔离范围（平台+适配器+发送者+会话类型+会话ID），
+    与 character.models.UserScope.memory_scope_key 语义一致：
+    私聊按用户隔离，群聊按"群+用户"隔离。
+    """
+    __tablename__ = "character_relationships"
+
+    character_id: Mapped[str] = mapped_column(Text, primary_key=True)
+    platform: Mapped[str] = mapped_column(Text, primary_key=True)
+    adapter: Mapped[str] = mapped_column(Text, primary_key=True)
+    sender_id: Mapped[str] = mapped_column(Text, primary_key=True)
+    conversation_type: Mapped[str] = mapped_column(Text, primary_key=True)
+    conversation_id: Mapped[str] = mapped_column(Text, primary_key=True)
+    relationship_stage: Mapped[str] = mapped_column(Text, nullable=False)
+    preferred_address: Mapped[str] = mapped_column(Text, nullable=False)
+    summary: Mapped[str] = mapped_column(Text, nullable=False)
+    interaction_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[str] = mapped_column(Text, nullable=False)
+    updated_at: Mapped[str] = mapped_column(Text, nullable=False)
+
+
+# ============================================
+# 28. 角色长期记忆表
+# ============================================
+
+class CharacterMemory(Base):
+    """角色长期记忆表：按角色+用户范围隔离的用户事实与共同经历。
+
+    memory_key 在同一范围内唯一（upsert 键），例如
+    "user_name"、"preference_甜食"，防止同一事实反复入库。
+    """
+    __tablename__ = "character_memories"
+    __table_args__ = (
+        Index(
+            "idx_character_memories_scope",
+            "character_id",
+            "platform",
+            "adapter",
+            "sender_id",
+            "conversation_type",
+            "conversation_id",
+        ),
+        UniqueConstraint(
+            "character_id",
+            "platform",
+            "adapter",
+            "sender_id",
+            "conversation_type",
+            "conversation_id",
+            "memory_key",
+            name="uq_character_memory_key",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    character_id: Mapped[str] = mapped_column(Text, nullable=False)
+    platform: Mapped[str] = mapped_column(Text, nullable=False)
+    adapter: Mapped[str] = mapped_column(Text, nullable=False)
+    sender_id: Mapped[str] = mapped_column(Text, nullable=False)
+    conversation_type: Mapped[str] = mapped_column(Text, nullable=False)
+    conversation_id: Mapped[str] = mapped_column(Text, nullable=False)
+    memory_type: Mapped[str] = mapped_column(Text, nullable=False)
+    memory_key: Mapped[str] = mapped_column(Text, nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    importance: Mapped[float] = mapped_column(Float, nullable=False)
+    source_message_id: Mapped[Optional[str]] = mapped_column(Text)
+    created_at: Mapped[str] = mapped_column(Text, nullable=False)
+    updated_at: Mapped[str] = mapped_column(Text, nullable=False)

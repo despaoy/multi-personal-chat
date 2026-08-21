@@ -151,14 +151,128 @@ def test_normalize_injects_context_speaker_from_game_metadata():
         system_prompt_policy="replace",
     )
 
-    assert messages[0] == {
-        "role": "system",
-        "content": "完整 prompt v3\n\n当前对话者：夜子。",
-    }
+    assert messages[0] == {"role": "system", "content": "完整 prompt v3"}
     assert messages[1:] == [
-        {"role": "user", "content": "你怎么了？"},
+        {
+            "role": "user",
+            "content": (
+                '<speaker_label trust="untrusted" purpose="addressing_reference">\n'
+                "当前对话者：夜子。\n"
+                "</speaker_label>\n\n"
+                "<user_query>\n"
+                "你怎么了？\n"
+                "</user_query>"
+            ),
+        },
         {"role": "assistant", "content": "没什么。"},
     ]
+
+
+def test_normalize_wraps_each_user_turn_with_the_runtime_speaker_boundary():
+    messages = normalize_chat_record(
+        {
+            "messages": [
+                {"role": "user", "content": "第一问"},
+                {"role": "assistant", "content": "第一答"},
+                {"role": "user", "content": "第二问"},
+                {"role": "assistant", "content": "第二答"},
+            ],
+            "metadata": {"context_speaker_label": "夜子"},
+        },
+        default_system_prompt="完整 prompt v3",
+        system_prompt_policy="replace",
+    )
+
+    assert messages[0]["content"] == "完整 prompt v3"
+    user_messages = [message["content"] for message in messages if message["role"] == "user"]
+    assert len(user_messages) == 2
+    assert all('<speaker_label trust="untrusted"' in content for content in user_messages)
+    assert user_messages[0].endswith("<user_query>\n第一问\n</user_query>")
+    assert user_messages[1].endswith("<user_query>\n第二问\n</user_query>")
+
+
+def test_message_speaker_overrides_record_speaker_per_user_turn():
+    messages = normalize_chat_record(
+        {
+            "messages": [
+                {"role": "user", "content": "第一问", "speaker_label": "夜子"},
+                {"role": "assistant", "content": "第一答"},
+                {"role": "user", "content": "第二问", "speaker_label": "琉璃"},
+                {"role": "assistant", "content": "第二答"},
+            ],
+            "metadata": {
+                "interlocutor_kind": "canonical_character",
+                "interlocutor_label": "夜子",
+            },
+        },
+        default_system_prompt="完整 prompt v3",
+        system_prompt_policy="replace",
+    )
+
+    user_messages = [message["content"] for message in messages if message["role"] == "user"]
+    assert "当前对话者：夜子。" in user_messages[0]
+    assert "当前对话者：琉璃。" in user_messages[1]
+    assert messages[0] == {"role": "system", "content": "完整 prompt v3"}
+    assert all(set(message) == {"role", "content"} for message in messages)
+
+
+def test_generic_user_contract_does_not_invent_a_named_speaker():
+    messages = normalize_chat_record(
+        {
+            "messages": [
+                {"role": "user", "content": "夜子今天很安静。"},
+                {"role": "assistant", "content": "是呢。"},
+            ],
+            "metadata": {"interlocutor_kind": "generic_user"},
+        },
+        default_system_prompt="完整 prompt v3",
+        system_prompt_policy="replace",
+    )
+
+    assert messages[1] == {"role": "user", "content": "夜子今天很安静。"}
+
+
+def test_canonical_character_contract_requires_a_label():
+    with pytest.raises(ValueError, match="require interlocutor_label"):
+        normalize_chat_record(
+            {
+                "messages": [
+                    {"role": "user", "content": "问题"},
+                    {"role": "assistant", "content": "回答"},
+                ],
+                "metadata": {"interlocutor_kind": "canonical_character"},
+            },
+            default_system_prompt="完整 prompt v3",
+        )
+
+
+@pytest.mark.parametrize(
+    "messages, metadata, error",
+    [
+        (
+            [
+                {"role": "user", "content": "问题", "speaker_label": "夜子"},
+                {"role": "assistant", "content": "回答"},
+            ],
+            {"interlocutor_kind": "generic_user"},
+            "must not contain named user turns",
+        ),
+        (
+            [
+                {"role": "user", "content": "问题"},
+                {"role": "assistant", "content": "回答", "speaker_label": "妃"},
+            ],
+            {},
+            "only allowed on user messages",
+        ),
+    ],
+)
+def test_speaker_contract_rejects_identity_conflicts(messages, metadata, error):
+    with pytest.raises(ValueError, match=error):
+        normalize_chat_record(
+            {"messages": messages, "metadata": metadata},
+            default_system_prompt="完整 prompt v3",
+        )
 
 
 def test_normalize_does_not_invent_context_speaker():

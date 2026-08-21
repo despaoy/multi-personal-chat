@@ -607,7 +607,7 @@
       },
       {
         "from": "assistant",
-        "value": "恕我拒绝。我还愚蠢到闯进你们两位的爱巢的程度。"
+        "value": "恕我拒绝。我还没愚蠢到闯进你们两位的爱巢的程度。"
       }
     ],
     "metadata": {
@@ -631,7 +631,16 @@
       "response_line_count": 1,
       "quality_score": 66,
       "is_short_reply": false,
-      "extraction": "explicit-label-continuous-dialogue-block-v3"
+      "extraction": "explicit-label-continuous-dialogue-block-v3",
+      "surface_normalizations": [
+        {
+          "id": "kisaki_norm_001",
+          "policy": "surface_only_no_semantic_edit",
+          "source_event_id": "tsukiyashiro_kisaki_raw_3ac5794d8894157f",
+          "original": "恕我拒绝。我还愚蠢到闯进你们两位的爱巢的程度。",
+          "reason": "补足否定词，使拒绝与后句语义一致；不改变场景、态度或人物选择。"
+        }
+      ]
     }
   },
   {
@@ -5550,7 +5559,7 @@
       },
       {
         "from": "assistant",
-        "value": "你一个人装什么深沉？我可难道过来看你。\n这个教室果然好棒，我好期待明年。"
+        "value": "你一个人装什么深沉？我可难得过来看你。\n这个教室果然好棒，我好期待明年。"
       }
     ],
     "metadata": {
@@ -5575,7 +5584,16 @@
       "response_line_count": 2,
       "quality_score": 63,
       "is_short_reply": false,
-      "extraction": "explicit-label-continuous-dialogue-block-v3"
+      "extraction": "explicit-label-continuous-dialogue-block-v3",
+      "surface_normalizations": [
+        {
+          "id": "kisaki_norm_003",
+          "policy": "surface_only_no_semantic_edit",
+          "source_event_id": "tsukiyashiro_kisaki_raw_92259bc1b933999d",
+          "original": "我可难道过来看你",
+          "reason": "修复语境中明显的同音误字；不改变来访、学校或期待明年的主题。"
+        }
+      ]
     }
   },
   {
@@ -13219,7 +13237,7 @@
       },
       {
         "from": "assistant",
-        "value": "……噗噗，即使没了记忆也什么改变呢。"
+        "value": "……噗噗，即使没了记忆也没什么改变呢。"
       }
     ],
     "metadata": {
@@ -13243,7 +13261,16 @@
       "response_line_count": 1,
       "quality_score": 66,
       "is_short_reply": false,
-      "extraction": "explicit-label-continuous-dialogue-block-v3"
+      "extraction": "explicit-label-continuous-dialogue-block-v3",
+      "surface_normalizations": [
+        {
+          "id": "kisaki_norm_002",
+          "policy": "surface_only_no_semantic_edit",
+          "source_event_id": "tsukiyashiro_kisaki_raw_aaf797aa1ad4d979",
+          "original": "……噗噗，即使没了记忆也什么改变呢。",
+          "reason": "补足否定词，修复明显不通顺表达；不改变笑声、判断或关系语境。"
+        }
+      ]
     }
   },
   {

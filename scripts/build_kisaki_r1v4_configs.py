@@ -5,7 +5,9 @@ from __future__ import annotations
 
 import argparse
 import copy
+import hashlib
 import json
+import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -16,7 +18,10 @@ BACKEND = PROJECT_ROOT / "backend"
 if str(BACKEND) not in sys.path:
     sys.path.insert(0, str(BACKEND))
 
-from evaluation.experiment_contracts import validate_r1_variant_set  # noqa: E402
+from evaluation.experiment_contracts import (  # noqa: E402
+    R1_VARIANT_DIFFS,
+    validate_r1_variant_set,
+)
 from inference.prompt_policy import PROMPT_POLICY_VERSION  # noqa: E402
 
 
@@ -69,6 +74,32 @@ def _load(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def _text_sha256_value(value: str) -> str:
+    normalized = value.replace("\r\n", "\n").replace("\r", "\n")
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+
+
+def _text_sha256(path: Path) -> str:
+    return _text_sha256_value(path.read_text(encoding="utf-8"))
+
+
+def _path_label(path: Path) -> str:
+    try:
+        return path.resolve().relative_to(PROJECT_ROOT).as_posix()
+    except ValueError:
+        return path.resolve().as_posix()
+
+
+def _write_json_atomic(path: Path, value: dict[str, Any]) -> None:
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    temporary.write_text(
+        json.dumps(value, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+        newline="\n",
+    )
+    os.replace(temporary, path)
+
+
 def build_configs(
     manifest: dict[str, Any],
     template: dict[str, Any],
@@ -85,7 +116,10 @@ def build_configs(
                 "_comparison_role": variant["role"],
                 "_dataset_manifest_path": "backend/data/character_dialogues/experiments/v4/canonical_dataset_manifest.json",
                 "_dataset_version": manifest["dataset_id"],
+                "_train_data_sha256": manifest["train"]["sha256"],
+                "_validation_data_sha256": manifest["validation"]["sha256"],
                 "_prompt_policy_version": PROMPT_POLICY_VERSION,
+                "_prompt_content_sha256": _text_sha256_value(system_prompt.strip()),
                 "train_data_path": manifest["train"]["path"],
                 "eval_data_path": manifest["validation"]["path"],
                 "system_prompt": system_prompt.strip(),
@@ -116,31 +150,66 @@ def write_configs(
     manifest = _load(manifest_path)
     if manifest.get("status") != "frozen" or manifest.get("freeze_blockers"):
         raise ValueError("V4 dataset must be frozen without blockers before configs are generated")
+    maximum_observed_tokens = int(
+        manifest.get("cleanup_revision", {}).get("maximum_observed_tokens", 0)
+    )
+    template = _load(template_path)
+    if int(template.get("max_seq_length", 0)) < maximum_observed_tokens:
+        raise ValueError(
+            "max_seq_length is smaller than the canonical maximum observed tokens"
+        )
+    system_prompt = PROMPT_PATH.read_text(encoding="utf-8")
     configs = build_configs(
         manifest,
-        _load(template_path),
-        PROMPT_PATH.read_text(encoding="utf-8"),
+        template,
+        system_prompt,
     )
     output_dir.mkdir(parents=True, exist_ok=True)
+    config_files: dict[str, dict[str, Any]] = {}
     for name, config in configs.items():
         path = output_dir / f"kisaki_r1v4_{name}.json"
-        path.write_text(
-            json.dumps(config, ensure_ascii=False, indent=2) + "\n",
-            encoding="utf-8",
-            newline="\n",
-        )
+        _write_json_atomic(path, config)
+        config_files[name] = {
+            "experiment_id": config["_experiment_id"],
+            "comparison_role": config["_comparison_role"],
+            "path": _path_label(path),
+            "sha256": _text_sha256(path),
+        }
     summary = {
-        "schema_version": 1,
+        "schema_version": 3,
+        "status": "generated_for_frozen_dataset",
+        "formal_use_allowed": True,
         "dataset_id": manifest["dataset_id"],
         "dataset_status": manifest["status"],
+        "dataset_manifest_path": _path_label(manifest_path),
+        "dataset_manifest_sha256": _text_sha256(manifest_path),
+        "train": {
+            "path": manifest["train"]["path"],
+            "count": manifest["train"]["count"],
+            "sha256": manifest["train"]["sha256"],
+        },
+        "validation": {
+            "path": manifest["validation"]["path"],
+            "count": manifest["validation"]["count"],
+            "sha256": manifest["validation"]["sha256"],
+        },
+        "prompt": {
+            "path": _path_label(PROMPT_PATH),
+            "sha256": _text_sha256(PROMPT_PATH),
+        },
         "prompt_policy_version": PROMPT_POLICY_VERSION,
         "experiments": [configs[name]["_experiment_id"] for name in sorted(configs)],
+        "config_files": config_files,
+        "single_variable_contract": {
+            "status": "validated",
+            "baseline": "R1-E1",
+            "differences": {
+                configs[name]["_experiment_id"]: differences
+                for name, differences in R1_VARIANT_DIFFS.items()
+            },
+        },
     }
-    (output_dir / "config_manifest.json").write_text(
-        json.dumps(summary, ensure_ascii=False, indent=2) + "\n",
-        encoding="utf-8",
-        newline="\n",
-    )
+    _write_json_atomic(output_dir / "config_manifest.json", summary)
     return summary
 
 

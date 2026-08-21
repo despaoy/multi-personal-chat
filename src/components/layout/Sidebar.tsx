@@ -1,6 +1,6 @@
 'use client';
 
-import { Home, MessageSquare, Settings, BrainCircuit, Activity, Database, Bot, Zap, User, LogIn, Terminal, Brain, Cable, ClipboardCheck, FlaskConical, Shuffle, Scale } from 'lucide-react';
+import { Home, MessageSquare, Settings, BrainCircuit, Activity, Database, Bot, Zap, User, LogIn, Terminal, Brain, Cable, ClipboardCheck, FlaskConical, Shuffle, Scale, Users } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
@@ -107,6 +107,7 @@ export function Sidebar() {
     { name: t('nav.history'), href: '/history', icon: MessageSquare, adminOnly: true },
     { name: t('nav.training'), href: '/training', icon: Zap, adminOnly: true },
     { name: t('nav.lora'), href: '/lora', icon: BrainCircuit, adminOnly: true },
+    { name: '角色与记忆', href: '/characters', icon: Users, adminOnly: true },
     { name: t('nav.intentTraining'), href: '/intent-training', icon: Brain, adminOnly: true },
     { name: t('nav.monitor'), href: '/monitor', icon: Activity, adminOnly: true },
     { name: '平台连接', href: '/integrations', icon: Cable, adminOnly: true },

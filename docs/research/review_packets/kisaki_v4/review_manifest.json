@@ -1,14 +1,14 @@
 {
   "schema_version": 2,
   "review_id": "KISAKI-V4-HUMAN-REVIEW",
-  "status": "blocked_pending_game_context_quality_review",
+  "status": "r1v4_seed42_ready",
   "batch_size": 50,
   "counts": {
     "source_lines": 1598,
-    "game_train_approved": 576,
+    "game_train_approved": 522,
     "constructed_train_approved": 150,
-    "reviewed_multiturn_augmentation": 276,
-    "frozen_train": 1002,
+    "reviewed_multiturn_augmentation": 254,
+    "frozen_train": 926,
     "frozen_validation": 70,
     "rag_withheld_sft_records": 34,
     "gold_v21": 150,
@@ -39,7 +39,7 @@
       "gold_v21": "approved_development_only",
       "exclusions": "approved_by_reproducible_source_audit",
       "gold_v3": "approved_final_held_out",
-      "experiment_configs": "approved_after_technical_overfit"
+      "experiment_configs": "regenerated_for_current_frozen_dataset"
     },
     "items": {
       "character_profile": {
@@ -52,7 +52,14 @@
         "approved_by": "project_owner",
         "reviewed_at": "2026-08-09",
         "path": "backend/data/character_dialogues/kisaki_system_prompt_v3.txt",
-        "prompt_policy_version": "3.1.0"
+        "prompt_policy_version": "3.3.0",
+        "policy_alignment": {
+          "id": "KISAKI-PROMPT-POLICY-ALIGNMENT-20260821",
+          "status": "aligned_without_persona_content_change",
+          "composition_contract_path": "backend/data/character_dialogues/PROMPT_COMPOSITION_CONTRACT.md",
+          "speaker_boundary": "untrusted_user_region",
+          "persona_content_changed": false
+        }
       },
       "game_train_current": {
         "status": "approved_and_promoted",
@@ -112,12 +119,20 @@
         "candidate_path": "../../../../../backend/evaluation/kisaki_gold_set_v3_candidates.json",
         "review_path": "07_GOLD_V3",
         "approval_path": "07_GOLD_V3/gold_v3_final_approval.json",
-        "content_sha256": "d40e6324f3c775166cd66ca985bc0cdc2902c27fb1cfb34f2d72c8d74259cb40"
+        "content_sha256": "d40e6324f3c775166cd66ca985bc0cdc2902c27fb1cfb34f2d72c8d74259cb40",
+        "contamination_reaudit_status": "clean",
+        "contamination_reference_count": 996
       },
       "experiment_configs": {
-        "status": "approved",
+        "status": "generated_for_frozen_dataset",
         "count": 5,
-        "path": "../../../../../backend/data/character_dialogues/experiments/v4/configs/config_manifest.json"
+        "path": "../../../../../backend/data/character_dialogues/experiments/v4/configs/config_manifest.json",
+        "formal_use_allowed": true,
+        "schema_version": 3,
+        "prompt_policy_version": "3.3.0",
+        "max_seq_length": 1280,
+        "single_variable_contract": "validated",
+        "regeneration_status": "complete_after_r0v4_refreeze"
       },
       "overfit_20": {
         "status": "approved_for_training_pipeline_only",

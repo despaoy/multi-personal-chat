@@ -374,9 +374,24 @@ def build_rag() -> list[dict[str, Any]]:
     return rows
 
 
-def contamination_audit(rows: list[dict[str, Any]]) -> dict[str, Any]:
-    frozen = load_jsonl(V4 / "train.jsonl") + load_jsonl(V4 / "validation.jsonl")
-    v21 = load_json(V21)["prompts"]
+def contamination_audit(
+    rows: list[dict[str, Any]],
+    *,
+    train_path: Path | None = None,
+    validation_path: Path | None = None,
+    manifest_path: Path | None = None,
+    development_gold_path: Path | None = None,
+) -> dict[str, Any]:
+    train_path = train_path or V4 / "train.jsonl"
+    validation_path = validation_path or V4 / "validation.jsonl"
+    manifest_path = manifest_path or V4 / "canonical_dataset_manifest.json"
+    development_gold_path = development_gold_path or V21
+
+    train = load_jsonl(train_path)
+    validation = load_jsonl(validation_path)
+    frozen = train + validation
+    v21 = load_json(development_gold_path)["prompts"]
+    manifest = load_json(manifest_path)
     references = [(r["id"], text, "frozen_data") for r in frozen for text in user_texts(r)]
     references += [(r["id"], text, "gold_v21") for r in v21 for text in user_texts(r)]
     matches = []
@@ -399,14 +414,16 @@ def contamination_audit(rows: list[dict[str, Any]]) -> dict[str, Any]:
     prompts = [normalized(text) for row in rows for text in user_texts(row)]
     duplicate_prompts = sorted(key for key, count in Counter(prompts).items() if count > 1)
     status = "clean" if not matches and not rag_overlap and not duplicate_ids and not duplicate_prompts else "blocked"
-    return {"schema_version": 1, "status": status, "similarity_threshold": SIMILARITY_THRESHOLD,
+    return {"schema_version": 2, "status": status, "similarity_threshold": SIMILARITY_THRESHOLD,
             "candidate_count": len(rows), "frozen_reference_count": len(frozen),
+            "frozen_train_count": len(train), "frozen_validation_count": len(validation),
             "development_reference_count": len(v21), "duplicate_ids": duplicate_ids,
             "duplicate_normalized_prompts": duplicate_prompts,
             "text_overlap_matches": matches, "rag_evidence_event_count": len(rag_event_ids),
             "rag_evidence_event_overlaps": rag_overlap,
-            "frozen_train_sha256": load_json(V4 / "canonical_dataset_manifest.json")["train"]["sha256"],
-            "frozen_validation_sha256": load_json(V4 / "canonical_dataset_manifest.json")["validation"]["sha256"]}
+            "candidate_content_sha256": canonical_hash(rows),
+            "frozen_train_sha256": manifest["train"]["sha256"],
+            "frozen_validation_sha256": manifest["validation"]["sha256"]}
 
 
 def review_block(label: str, value: Any) -> list[str]:
