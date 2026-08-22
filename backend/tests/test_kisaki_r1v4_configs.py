@@ -97,6 +97,32 @@ def test_e1_calibration_only_reduces_optimization_intensity():
         assert calibration[field] == baseline[field]
 
 
+def test_e1_alpha32_calibration_applies_scale_diagnostic_result():
+    builder = _module(
+        "build_kisaki_r1v4_alpha32_calibration",
+        "scripts/build_kisaki_r1v4_configs.py",
+    )
+    baseline = json.loads(
+        (builder.DEFAULT_OUTPUT / "kisaki_r1v4_e1.json").read_text(encoding="utf-8")
+    )
+    calibration = builder.build_e1_alpha32_calibration_config(baseline)
+
+    assert calibration["_experiment_id"] == "R1-E1-CAL-LR2E5-A32"
+    assert calibration["_formal_variant"] is False
+    assert calibration["learning_rate"] == 2e-5
+    assert calibration["num_train_epochs"] == 1
+    assert calibration["lora_r"] == 32
+    assert calibration["lora_alpha"] == 32
+    assert calibration["target_modules"] == baseline["target_modules"]
+
+    differences = {
+        key
+        for key in set(baseline) | set(calibration)
+        if baseline.get(key) != calibration.get(key)
+    }
+    assert differences == builder.ALPHA32_CALIBRATION_ALLOWED_DIFFS
+
+
 def test_active_r1v4_configs_bind_current_data_prompt_and_single_variables():
     builder = _module(
         "build_kisaki_r1v4_configs_active", "scripts/build_kisaki_r1v4_configs.py"
@@ -126,6 +152,16 @@ def test_active_r1v4_configs_bind_current_data_prompt_and_single_variables():
     calibration_path = builder.DEFAULT_OUTPUT / f"kisaki_r1v4_{builder.CALIBRATION_NAME}.json"
     assert config_manifest["calibration_config"]["sha256"] == builder._text_sha256(
         calibration_path
+    )
+    alpha32_path = (
+        builder.DEFAULT_OUTPUT
+        / f"kisaki_r1v4_{builder.ALPHA32_CALIBRATION_NAME}.json"
+    )
+    assert config_manifest["followup_calibration_config"]["experiment_id"] == (
+        "R1-E1-CAL-LR2E5-A32"
+    )
+    assert config_manifest["followup_calibration_config"]["sha256"] == (
+        builder._text_sha256(alpha32_path)
     )
     assert config_manifest["training_contract"] == {
         "revision": "r1v4_stability_v2",

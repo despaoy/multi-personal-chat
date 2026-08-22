@@ -35,6 +35,7 @@ CONFIGS = {
         "e4",
         "e5",
         "e1_calibration_lr2e5",
+        "e1_calibration_lr2e5_alpha32",
     )
 }
 DATASET_MANIFEST = V4_DIR / "canonical_dataset_manifest.json"
