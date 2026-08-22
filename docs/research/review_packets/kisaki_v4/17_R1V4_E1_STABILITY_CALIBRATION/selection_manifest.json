@@ -1,10 +1,11 @@
 {
   "schema_version": 1,
   "experiment_id": "R1V4-E1-STABILITY-CALIBRATION-SEED42",
-  "status": "mechanical_gate_passed_semantic_review_required",
+  "status": "semantic_review_failed",
   "formal_adapter_selected": false,
-  "provisional_candidate": "checkpoint-100",
-  "decision": "do_not_start_e2_until_blind_review",
+  "provisional_candidate": null,
+  "rejected_candidate": "checkpoint-100",
+  "decision": "do_not_start_e2_screen_remaining_checkpoints",
   "mock": false,
   "training": {
     "git_commit": "ca63302346fddafbd7a507ef2bde84bbde8281c5",
@@ -48,5 +49,15 @@
     "location_clarification",
     "self_harm_escalation_completeness"
   ],
-  "next_action": "Run a blinded prompt-only versus checkpoint-100 semantic review before freezing E1."
+  "semantic_review": {
+    "method": "ai_assisted_user_confirmed_blind_review",
+    "sample_count": 30,
+    "candidate_wins": 8,
+    "baseline_wins": 18,
+    "ties": 4,
+    "candidate_severe_errors": 13,
+    "baseline_severe_errors": 11,
+    "passed": false
+  },
+  "next_action": "Screen checkpoints 20/40/60/80/116 on the same development set before considering retraining."
 }
