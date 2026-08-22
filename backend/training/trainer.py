@@ -572,7 +572,7 @@ class LoRATrainer:
             ValueError: 训练配置有错误时抛出
         """
         logger.info("=" * 60)
-        logger.info("优化版胡桃LoRA训练开始")
+        logger.info("LoRA训练开始")
         logger.info("=" * 60)
 
         config_errors = self.config.validate()

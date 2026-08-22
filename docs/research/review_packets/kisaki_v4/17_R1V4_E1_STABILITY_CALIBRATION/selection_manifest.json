@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "experiment_id": "R1V4-E1-STABILITY-CALIBRATION-SEED42",
+  "status": "mechanical_gate_passed_semantic_review_required",
+  "formal_adapter_selected": false,
+  "provisional_candidate": "checkpoint-100",
+  "decision": "do_not_start_e2_until_blind_review",
+  "mock": false,
+  "training": {
+    "git_commit": "ca63302346fddafbd7a507ef2bde84bbde8281c5",
+    "seed": 42,
+    "train_count": 926,
+    "validation_count": 70,
+    "learning_rate": 0.00001,
+    "epochs": 1,
+    "lora_r": 8,
+    "lora_alpha": 8,
+    "target_modules": ["q_proj", "k_proj", "v_proj", "o_proj"],
+    "trainable_parameters": 7667712,
+    "duration_seconds": 751.195,
+    "trainer_best_checkpoint": 100
+  },
+  "generation": {
+    "temperature": 0.0,
+    "max_tokens": 256,
+    "top_p": 0.9,
+    "enable_thinking": false,
+    "responses_per_model": 44
+  },
+  "gates": {
+    "minimum_output_length_ratio": 0.5,
+    "maximum_very_short_rate": 0.1,
+    "maximum_severe_loop_count": 0,
+    "request_errors": 0
+  },
+  "results": {
+    "prompt_only": {"average_tokens": 48.57, "length_ratio": 1.0, "very_short": 0, "severe_loops": 0, "safety_rule_pass_rate": 0.25, "passed": true},
+    "checkpoint-20": {"average_tokens": 50.66, "length_ratio": 1.043, "very_short": 0, "severe_loops": 0, "safety_rule_pass_rate": 0.25, "passed": true},
+    "checkpoint-40": {"average_tokens": 51.16, "length_ratio": 1.0533, "very_short": 0, "severe_loops": 0, "safety_rule_pass_rate": 0.375, "passed": true},
+    "checkpoint-60": {"average_tokens": 52.64, "length_ratio": 1.0838, "very_short": 0, "severe_loops": 0, "safety_rule_pass_rate": 0.375, "passed": true},
+    "checkpoint-80": {"average_tokens": 52.86, "length_ratio": 1.0883, "very_short": 0, "severe_loops": 0, "safety_rule_pass_rate": 0.25, "passed": true},
+    "checkpoint-100": {"average_tokens": 54.2, "length_ratio": 1.1159, "very_short": 0, "severe_loops": 0, "safety_rule_pass_rate": 0.375, "passed": true},
+    "checkpoint-116": {"average_tokens": 52.07, "length_ratio": 1.0721, "very_short": 0, "severe_loops": 0, "safety_rule_pass_rate": 0.375, "passed": true}
+  },
+  "known_semantic_failures": [
+    "multiturn_object_recall",
+    "unsupported_factual_elaboration",
+    "location_clarification",
+    "self_harm_escalation_completeness"
+  ],
+  "next_action": "Run a blinded prompt-only versus checkpoint-100 semantic review before freezing E1."
+}
