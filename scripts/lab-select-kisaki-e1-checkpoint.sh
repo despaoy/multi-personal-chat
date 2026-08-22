@@ -7,7 +7,8 @@ PYTHON="${MULTIPERSONAL_LAB_PYTHON:-${QQCHAT_LAB_PYTHON:-$ROOT/envs/qqchat-gpu-q
 GPU="${1:-0}"
 PORT="${KISAKI_CHECKPOINT_PORT:-8001}"
 MODEL="$ROOT/runtime/models/Qwen3-8B-Instruct"
-ADAPTER_ROOT="$ROOT/runtime/loras/kisaki/r1v4/e1/seed42"
+ADAPTER_ROOT="${KISAKI_CHECKPOINT_ADAPTER_ROOT:-$ROOT/runtime/loras/kisaki/r1v4/e1/seed42}"
+CHECKPOINT_LABELS_CSV="${KISAKI_CHECKPOINT_LABELS:-100,150,200,232}"
 SELECTION_ROOT="$ROOT/runtime/experiments/kisaki/r1v4/e1/checkpoint-selection"
 OUTPUT="${KISAKI_CHECKPOINT_OUTPUT:-$SELECTION_ROOT}"
 DATASET="${KISAKI_CHECKPOINT_DATASET:-$SELECTION_ROOT/devset30.json}"
@@ -18,7 +19,26 @@ PID_FILE="$OUTPUT/vllm.pid"
 COMPLETE_MARKER="$OUTPUT/evaluation.complete"
 VLLM_PID=""
 
-declare -a STEPS=(100 150 200 232)
+IFS=',' read -r -a CHECKPOINT_LABELS <<<"$CHECKPOINT_LABELS_CSV"
+declare -a LORA_MODULES=()
+
+adapter_path() {
+  local label="$1"
+  if [[ "$label" == final ]]; then
+    printf '%s/final\n' "$ADAPTER_ROOT"
+  else
+    printf '%s/checkpoint-%s\n' "$ADAPTER_ROOT" "$label"
+  fi
+}
+
+result_label() {
+  local label="$1"
+  if [[ "$label" == final ]]; then
+    printf 'final\n'
+  else
+    printf 'checkpoint-%s\n' "$label"
+  fi
+}
 
 cleanup() {
   if [[ -n "$VLLM_PID" ]] && kill -0 "$VLLM_PID" 2>/dev/null; then
@@ -37,11 +57,18 @@ trap cleanup EXIT INT TERM
   echo "invalid_compose_runtime_policy=$COMPOSE_RUNTIME_POLICY" >&2
   exit 2
 }
-for step in "${STEPS[@]}"; do
-  [[ -f "$ADAPTER_ROOT/checkpoint-$step/adapter_config.json" ]] || {
-    echo "adapter_missing=$ADAPTER_ROOT/checkpoint-$step" >&2
+(( ${#CHECKPOINT_LABELS[@]} > 0 )) || { echo "checkpoint_labels_empty=true" >&2; exit 2; }
+for label in "${CHECKPOINT_LABELS[@]}"; do
+  [[ "$label" == final || "$label" =~ ^[0-9]+$ ]] || {
+    echo "invalid_checkpoint_label=$label" >&2
     exit 2
   }
+  path="$(adapter_path "$label")"
+  [[ -f "$path/adapter_config.json" ]] || {
+    echo "adapter_missing=$path" >&2
+    exit 2
+  }
+  LORA_MODULES+=("kisaki-e1-$label=$path")
 done
 
 mkdir -p "$OUTPUT"
@@ -72,12 +99,8 @@ CUDA_VISIBLE_DEVICES="$GPU" "$PYTHON" -m vllm.entrypoints.openai.api_server \
   --gpu-memory-utilization 0.90 \
   --enable-lora \
   --max-lora-rank 32 \
-  --max-loras 4 \
-  --lora-modules \
-    "kisaki-e1-step100=$ADAPTER_ROOT/checkpoint-100" \
-    "kisaki-e1-step150=$ADAPTER_ROOT/checkpoint-150" \
-    "kisaki-e1-step200=$ADAPTER_ROOT/checkpoint-200" \
-    "kisaki-e1-step232=$ADAPTER_ROOT/checkpoint-232" \
+  --max-loras "${#LORA_MODULES[@]}" \
+  --lora-modules "${LORA_MODULES[@]}" \
   >"$LOG" 2>&1 &
 VLLM_PID=$!
 printf '%s\n' "$VLLM_PID" >"$PID_FILE"
@@ -135,8 +158,8 @@ run_benchmark() {
 }
 
 run_benchmark prompt_only kisaki-e1-base
-for step in "${STEPS[@]}"; do
-  run_benchmark "checkpoint-$step" "kisaki-e1-step$step" "$ADAPTER_ROOT/checkpoint-$step"
+for label in "${CHECKPOINT_LABELS[@]}"; do
+  run_benchmark "$(result_label "$label")" "kisaki-e1-$label" "$(adapter_path "$label")"
 done
 
 printf 'completed_at=%s\ncompose_runtime_policy=%s\n' \
