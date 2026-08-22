@@ -2,6 +2,14 @@
   "schema_version": 3,
   "status": "generated_for_frozen_dataset",
   "formal_use_allowed": true,
+  "training_contract": {
+    "revision": "r1v4_stability_v2",
+    "reason": "Reduce update strength after the first E1 pilot showed free-generation collapse.",
+    "learning_rate": 0.0001,
+    "num_train_epochs": 2,
+    "save_total_limit": 4,
+    "data_changed": false
+  },
   "dataset_id": "KISAKI-CANONICAL-V4",
   "dataset_status": "frozen",
   "dataset_manifest_path": "backend/data/character_dialogues/experiments/v4/canonical_dataset_manifest.json",
@@ -33,31 +41,31 @@
       "experiment_id": "R1-E1",
       "comparison_role": "baseline",
       "path": "backend/data/character_dialogues/experiments/v4/configs/kisaki_r1v4_e1.json",
-      "sha256": "79e10771815fd5b529a16aa66fd28514eeb70f57790a00ca57dbc9970c76621b"
+      "sha256": "15f0ecd5d5c630d9b798e76a820efe69c21b2926910a6d296fc09ef4cfaec53a"
     },
     "e2": {
       "experiment_id": "R1-E2",
       "comparison_role": "neftune_only",
       "path": "backend/data/character_dialogues/experiments/v4/configs/kisaki_r1v4_e2.json",
-      "sha256": "74c0402b7bc29b495e7b01f8b27ecb94c087230566f4666023c055575b9ee7db"
+      "sha256": "2c86caad64fdacfdc4e93504d50debe3126432457debaff837c0ec182279d356"
     },
     "e3": {
       "experiment_id": "R1-E3",
       "comparison_role": "dora_only",
       "path": "backend/data/character_dialogues/experiments/v4/configs/kisaki_r1v4_e3.json",
-      "sha256": "41dde3b41e6f0bf14772febd9e4f35245619b27436beb4e513e9fb6790215172"
+      "sha256": "fa52578ca6b9ca26f45cb33397a78ccf470b2a9b22ba2425dc78b0c374d02c06"
     },
     "e4": {
       "experiment_id": "R1-E4",
       "comparison_role": "rslora_only",
       "path": "backend/data/character_dialogues/experiments/v4/configs/kisaki_r1v4_e4.json",
-      "sha256": "f12b5328dcb05d86c8281fb4db34b4b765d941852b213c6f57e21436678666e0"
+      "sha256": "58abae45e314b3659b27bb709a301dcb0661737c8fcc3aafc6b4f2b63f5cac96"
     },
     "e5": {
       "experiment_id": "R1-E5",
       "comparison_role": "packing_only",
       "path": "backend/data/character_dialogues/experiments/v4/configs/kisaki_r1v4_e5.json",
-      "sha256": "8f97431877ef595af48007b36a0155f425f98ee14acaed7d48102a511a6940e9"
+      "sha256": "527240a851f3c537e030aa27588d354f9c3dfdac530a1d5d889d33907b16e465"
     }
   },
   "single_variable_contract": {

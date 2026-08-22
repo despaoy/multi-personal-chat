@@ -44,6 +44,9 @@ def test_r1v4_config_builder_changes_one_registered_factor():
         "validation-hash"
     }
     assert {config["max_seq_length"] for config in configs.values()} == {1280}
+    assert {config["learning_rate"] for config in configs.values()} == {1e-4}
+    assert {config["num_train_epochs"] for config in configs.values()} == {2}
+    assert {config["save_total_limit"] for config in configs.values()} == {4}
 
 
 def test_r1v4_config_writer_refuses_a_draft_dataset(tmp_path):
@@ -81,8 +84,19 @@ def test_active_r1v4_configs_bind_current_data_prompt_and_single_variables():
     assert config_manifest["validation"]["sha256"] == canonical["validation"]["sha256"]
     assert config_manifest["prompt_policy_version"] == builder.PROMPT_POLICY_VERSION
     assert config_manifest["single_variable_contract"]["status"] == "validated"
+    assert config_manifest["training_contract"] == {
+        "revision": "r1v4_stability_v2",
+        "reason": "Reduce update strength after the first E1 pilot showed free-generation collapse.",
+        "learning_rate": 1e-4,
+        "num_train_epochs": 2,
+        "save_total_limit": 4,
+        "data_changed": False,
+    }
     assert validate_r1_variant_set(configs) == []
     assert {config["max_seq_length"] for config in configs.values()} == {1280}
+    assert {config["learning_rate"] for config in configs.values()} == {1e-4}
+    assert {config["num_train_epochs"] for config in configs.values()} == {2}
+    assert {config["save_total_limit"] for config in configs.values()} == {4}
     for name, config in configs.items():
         assert config["_train_data_sha256"] == canonical["train"]["sha256"]
         assert config["_validation_data_sha256"] == canonical["validation"]["sha256"]

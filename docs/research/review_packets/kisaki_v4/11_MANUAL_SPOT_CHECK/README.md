@@ -53,7 +53,7 @@
 - E3：仅 `use_dora=true`。
 - E4：仅 `use_rslora=true`。
 - E5：仅 `packing=true`。
-- 五组共同使用同一数据、Prompt、模型、Seed 42、r=32、alpha=64、7 个 target modules 和 3 epochs。
+- 五组共同使用同一数据、Prompt、模型、Seed 42、r=32、alpha=64、7 个 target modules 和 2 epochs；该训练强度来自首轮 E1 生成塌缩后的统一稳定性修订。
 
 ### 步骤 9：修复长样本截断风险
 

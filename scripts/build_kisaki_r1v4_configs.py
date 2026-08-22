@@ -126,7 +126,6 @@ def build_configs(
                 "system_prompt_policy": manifest["prompt_policy"]["required_training_policy"],
                 # The runner resolves this against MULTIPERSONAL_LAB_ROOT at runtime.
                 "output_dir": f"runtime/loras/kisaki/r1v4/{name}/seed42",
-                "save_total_limit": 1,
                 "neftune_noise_alpha": variant["neftune_noise_alpha"],
                 "use_dora": variant["use_dora"],
                 "use_rslora": variant["use_rslora"],
@@ -179,6 +178,14 @@ def write_configs(
         "schema_version": 3,
         "status": "generated_for_frozen_dataset",
         "formal_use_allowed": True,
+        "training_contract": {
+            "revision": "r1v4_stability_v2",
+            "reason": "Reduce update strength after the first E1 pilot showed free-generation collapse.",
+            "learning_rate": template["learning_rate"],
+            "num_train_epochs": template["num_train_epochs"],
+            "save_total_limit": template["save_total_limit"],
+            "data_changed": False,
+        },
         "dataset_id": manifest["dataset_id"],
         "dataset_status": manifest["status"],
         "dataset_manifest_path": _path_label(manifest_path),
