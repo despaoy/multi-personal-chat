@@ -6,7 +6,7 @@
 
 - R0V4：当前 926 条训练数据（522 原作 + 150 既有构造 + 254 条已审核多轮数据）和 70 条 validation；Game Train 复审完成，Gold v2.1 已批准为开发集，Gold v3 已冻结。
 - 数据复审：Game Train 上下文质量复审已关闭；254 条多轮记录（DeepSeek 3 条 + Codex 251 条）均已批准并完成 Gold 污染复审。
-- R1V4：E1 Seed 42 已完成训练，但 `checkpoint-100/150/200/232` 全部未通过真实生成门禁；当前无正式 adapter，E2-E5 暂停。
+- R1V4：E1 Seed 42 已完成训练；旧训练的 checkpoint-100/150/200/232 与 recovery pilot 的 checkpoint-20/40/60/80/100/116 均未通过真实生成和语义门禁。当前无正式 adapter，E2-E5 暂停，下一步先构建 source-balanced V5 候选数据。
 - R2：60 条 held-out 候选已生成，等待人工冻结。
 - R3：真实 SSE TTFT 基准器已实现，等待隔离服务测试。
 - R4：等待至少 100 条月社妃人工批准偏好对。
@@ -24,6 +24,7 @@
 | 历史数据归档 | `backend/data/character_dialogues/experiments/archive/` |
 | R1V4 E1-E5 配置 | 数据冻结后生成至 `backend/data/character_dialogues/experiments/v4/configs/` |
 | E1 checkpoint 选择结果 | [负结果与下一步](review_packets/kisaki_v4/13_R1V4_E1_CHECKPOINT_SELECTION/README.md) |
+| E1 recovery 全 checkpoint 筛查 | [语义筛查与方法重设计](review_packets/kisaki_v4/20_R1V4_E1_CHECKPOINT_SCREEN_AND_METHOD_REDESIGN/README.md) |
 | 当前人物 prompt v3 | `backend/data/character_dialogues/kisaki_system_prompt_v3.txt`（已批准，训练策略为 `replace`） |
 | Gold v2.1 开发集 | `backend/evaluation/kisaki_gold_set_v21_candidates.json`（已批准，禁止正式结论） |
 | Gold v2.1 污染审计 | `backend/evaluation/kisaki_gold_set_v21_contamination_audit.json` |

@@ -1,0 +1,93 @@
+{
+  "schema_version": 1,
+  "experiment_id": "R1V4-E1-ALL-CHECKPOINT-SEMANTIC-SCREEN",
+  "status": "all_existing_checkpoints_rejected",
+  "mock": false,
+  "development_samples": 30,
+  "generated_responses_per_model": 44,
+  "formal_human_blind_review": false,
+  "method": "ai_assisted_development_screen_after_checkpoint100_unblinding",
+  "baseline": "prompt_only",
+  "selected_checkpoint": null,
+  "results": {
+    "checkpoint-20": {
+      "exact_responses_vs_baseline": 29,
+      "mean_text_similarity": 0.854,
+      "responses_below_0_5_similarity": 8,
+      "representative_failure_ids": ["kisaki_v21_safety_012"],
+      "decision": "reject",
+      "reason": "Smallest drift, but introduces unsupported world rules and loses safety detail."
+    },
+    "checkpoint-40": {
+      "exact_responses_vs_baseline": 17,
+      "mean_text_similarity": 0.703,
+      "responses_below_0_5_similarity": 14,
+      "representative_failure_ids": ["kisaki_v21_multiturn_015", "kisaki_v21_factual_030"],
+      "decision": "reject",
+      "reason": "Cross-scene contamination and unsupported object/location details appear."
+    },
+    "checkpoint-60": {
+      "exact_responses_vs_baseline": 5,
+      "mean_text_similarity": 0.586,
+      "responses_below_0_5_similarity": 21,
+      "representative_failure_ids": ["kisaki_v21_persona_024", "kisaki_v21_factual_009", "kisaki_v21_multiturn_020"],
+      "decision": "reject",
+      "reason": "Some contextual improvements are outweighed by fabricated experiences and facts."
+    },
+    "checkpoint-80": {
+      "exact_responses_vs_baseline": 6,
+      "mean_text_similarity": 0.559,
+      "responses_below_0_5_similarity": 23,
+      "representative_failure_ids": ["kisaki_v21_persona_024", "kisaki_v21_factual_009", "kisaki_v21_multiturn_020"],
+      "decision": "reject",
+      "reason": "Persona templates and unsupported memories continue to increase."
+    },
+    "checkpoint-100": {
+      "wins": 8,
+      "losses": 18,
+      "ties": 4,
+      "severe_errors": 13,
+      "review_packet": "../19_R1V4_E1_UNBLINDED_RESULT/",
+      "decision": "reject",
+      "reason": "Confirmed semantic regression in the locked AI-assisted user-confirmed review."
+    },
+    "checkpoint-116": {
+      "exact_responses_vs_baseline": 5,
+      "mean_text_similarity": 0.533,
+      "responses_below_0_5_similarity": 24,
+      "decision": "reject",
+      "reason": "Largest drift with widespread factual and relationship contamination."
+    }
+  },
+  "dataset_exposure": {
+    "total_records": 926,
+    "assistant_targets": 2068,
+    "assistant_characters": 121221,
+    "game_extraction": {
+      "records": 522,
+      "assistant_targets": 629,
+      "assistant_characters": 20309,
+      "character_share": 0.1675
+    },
+    "codex_user_simulation_v41_reviewed": {
+      "records": 251,
+      "assistant_targets": 1255,
+      "assistant_characters": 96530,
+      "character_share": 0.7963
+    },
+    "deepseek_user_simulation_v41_reviewed": {
+      "records": 3,
+      "assistant_targets": 15,
+      "assistant_characters": 1499,
+      "character_share": 0.0124
+    },
+    "other_reviewed_constructed": {
+      "records": 150,
+      "assistant_targets": 169,
+      "assistant_characters": 2883,
+      "character_share": 0.0238
+    }
+  },
+  "decision": "rebuild_source_balanced_v5_before_training",
+  "next_action": "Build a source-balanced, given-circumstance V5 candidate and run a low-strength r4/alpha4 recovery pilot."
+}
