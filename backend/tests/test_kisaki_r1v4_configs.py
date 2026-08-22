@@ -60,6 +60,43 @@ def test_r1v4_config_writer_refuses_a_draft_dataset(tmp_path):
         builder.write_configs(manifest, tmp_path / "configs")
 
 
+def test_e1_calibration_only_reduces_optimization_intensity():
+    builder = _module(
+        "build_kisaki_r1v4_calibration", "scripts/build_kisaki_r1v4_configs.py"
+    )
+    baseline = json.loads(
+        (builder.DEFAULT_OUTPUT / "kisaki_r1v4_e1.json").read_text(encoding="utf-8")
+    )
+    calibration = builder.build_e1_calibration_config(baseline)
+
+    assert calibration["_experiment_id"] == "R1-E1-CAL-LR2E5"
+    assert calibration["_formal_variant"] is False
+    assert calibration["learning_rate"] == 2e-5
+    assert calibration["num_train_epochs"] == 1
+    assert calibration["eval_steps"] == calibration["save_steps"] == 25
+    assert calibration["save_total_limit"] == 5
+
+    differences = {
+        key
+        for key in set(baseline) | set(calibration)
+        if baseline.get(key) != calibration.get(key)
+    }
+    assert differences == builder.CALIBRATION_ALLOWED_DIFFS
+    for field in (
+        "train_data_path",
+        "eval_data_path",
+        "_train_data_sha256",
+        "_validation_data_sha256",
+        "system_prompt",
+        "_prompt_content_sha256",
+        "lora_r",
+        "lora_alpha",
+        "target_modules",
+        "seed",
+    ):
+        assert calibration[field] == baseline[field]
+
+
 def test_active_r1v4_configs_bind_current_data_prompt_and_single_variables():
     builder = _module(
         "build_kisaki_r1v4_configs_active", "scripts/build_kisaki_r1v4_configs.py"
@@ -84,6 +121,12 @@ def test_active_r1v4_configs_bind_current_data_prompt_and_single_variables():
     assert config_manifest["validation"]["sha256"] == canonical["validation"]["sha256"]
     assert config_manifest["prompt_policy_version"] == builder.PROMPT_POLICY_VERSION
     assert config_manifest["single_variable_contract"]["status"] == "validated"
+    assert config_manifest["calibration_config"]["experiment_id"] == "R1-E1-CAL-LR2E5"
+    assert config_manifest["calibration_config"]["formal_use_allowed"] is False
+    calibration_path = builder.DEFAULT_OUTPUT / f"kisaki_r1v4_{builder.CALIBRATION_NAME}.json"
+    assert config_manifest["calibration_config"]["sha256"] == builder._text_sha256(
+        calibration_path
+    )
     assert config_manifest["training_contract"] == {
         "revision": "r1v4_stability_v2",
         "reason": "Reduce update strength after the first E1 pilot showed free-generation collapse.",

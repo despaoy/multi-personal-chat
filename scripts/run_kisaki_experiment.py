@@ -28,7 +28,14 @@ EXPERIMENT_DIR = BACKEND / "data" / "character_dialogues" / "experiments"
 V4_DIR = EXPERIMENT_DIR / "v4"
 CONFIGS = {
     name: V4_DIR / "configs" / f"kisaki_r1v4_{name}.json"
-    for name in ("e1", "e2", "e3", "e4", "e5")
+    for name in (
+        "e1",
+        "e2",
+        "e3",
+        "e4",
+        "e5",
+        "e1_calibration_lr2e5",
+    )
 }
 DATASET_MANIFEST = V4_DIR / "canonical_dataset_manifest.json"
 TRAINING_GATE = PROJECT_ROOT / "scripts" / "validate_kisaki_v4_training_gate.py"

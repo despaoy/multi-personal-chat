@@ -69,6 +69,24 @@ VARIANTS = {
     },
 }
 
+CALIBRATION_NAME = "e1_calibration_lr2e5"
+CALIBRATION_OVERRIDES = {
+    "learning_rate": 2e-5,
+    "num_train_epochs": 1,
+    "eval_steps": 25,
+    "save_steps": 25,
+    "save_total_limit": 5,
+}
+CALIBRATION_ALLOWED_DIFFS = {
+    "_experiment_id",
+    "_comparison_role",
+    "_calibration_parent",
+    "_calibration_reason",
+    "_formal_variant",
+    "output_dir",
+    *CALIBRATION_OVERRIDES,
+}
+
 
 def _load(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
@@ -141,6 +159,35 @@ def build_configs(
     return configs
 
 
+def build_e1_calibration_config(e1_config: dict[str, Any]) -> dict[str, Any]:
+    """Build a non-formal E1 run that only lowers optimization intensity."""
+
+    config = copy.deepcopy(e1_config)
+    config.update(CALIBRATION_OVERRIDES)
+    config.update(
+        {
+            "_experiment_id": "R1-E1-CAL-LR2E5",
+            "_comparison_role": "stability_calibration_not_formal_variant",
+            "_calibration_parent": "R1-E1",
+            "_calibration_reason": "All LR=1e-4 checkpoints failed the free-generation gate.",
+            "_formal_variant": False,
+            "output_dir": f"runtime/loras/kisaki/r1v4/{CALIBRATION_NAME}/seed42",
+        }
+    )
+    differences = {
+        key
+        for key in set(e1_config) | set(config)
+        if e1_config.get(key) != config.get(key)
+    }
+    unexpected = differences - CALIBRATION_ALLOWED_DIFFS
+    if unexpected:
+        raise ValueError(
+            "E1 calibration changes non-calibration fields: "
+            + ", ".join(sorted(unexpected))
+        )
+    return config
+
+
 def write_configs(
     manifest_path: Path = DEFAULT_MANIFEST,
     output_dir: Path = DEFAULT_OUTPUT,
@@ -174,6 +221,9 @@ def write_configs(
             "path": _path_label(path),
             "sha256": _text_sha256(path),
         }
+    calibration = build_e1_calibration_config(configs["e1"])
+    calibration_path = output_dir / f"kisaki_r1v4_{CALIBRATION_NAME}.json"
+    _write_json_atomic(calibration_path, calibration)
     summary = {
         "schema_version": 3,
         "status": "generated_for_frozen_dataset",
@@ -207,6 +257,14 @@ def write_configs(
         "prompt_policy_version": PROMPT_POLICY_VERSION,
         "experiments": [configs[name]["_experiment_id"] for name in sorted(configs)],
         "config_files": config_files,
+        "calibration_config": {
+            "experiment_id": calibration["_experiment_id"],
+            "formal_use_allowed": False,
+            "parent": calibration["_calibration_parent"],
+            "path": _path_label(calibration_path),
+            "sha256": _text_sha256(calibration_path),
+            "overrides": CALIBRATION_OVERRIDES,
+        },
         "single_variable_contract": {
             "status": "validated",
             "baseline": "R1-E1",

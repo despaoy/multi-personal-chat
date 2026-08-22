@@ -68,6 +68,20 @@
       "sha256": "527240a851f3c537e030aa27588d354f9c3dfdac530a1d5d889d33907b16e465"
     }
   },
+  "calibration_config": {
+    "experiment_id": "R1-E1-CAL-LR2E5",
+    "formal_use_allowed": false,
+    "parent": "R1-E1",
+    "path": "backend/data/character_dialogues/experiments/v4/configs/kisaki_r1v4_e1_calibration_lr2e5.json",
+    "sha256": "0fa2a5cab80c21833ad8d64e19bd19db4abb0f618bdbaa2ab1a96a4a4fedd8a1",
+    "overrides": {
+      "learning_rate": 2e-05,
+      "num_train_epochs": 1,
+      "eval_steps": 25,
+      "save_steps": 25,
+      "save_total_limit": 5
+    }
+  },
   "single_variable_contract": {
     "status": "validated",
     "baseline": "R1-E1",
