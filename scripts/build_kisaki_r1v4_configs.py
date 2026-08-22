@@ -95,6 +95,18 @@ ALPHA32_CALIBRATION_ALLOWED_DIFFS = {
     *CALIBRATION_ALLOWED_DIFFS,
     "lora_alpha",
 }
+ALPHA16_CALIBRATION_NAME = "e1_calibration_lr2e5_alpha16"
+ALPHA16_CALIBRATION_OVERRIDES = {
+    **CALIBRATION_OVERRIDES,
+    "eval_steps": 20,
+    "save_steps": 20,
+    "save_total_limit": 6,
+    "lora_alpha": 16,
+}
+ALPHA16_CALIBRATION_ALLOWED_DIFFS = {
+    *CALIBRATION_ALLOWED_DIFFS,
+    "lora_alpha",
+}
 
 
 def _load(path: Path) -> dict[str, Any]:
@@ -197,21 +209,29 @@ def build_e1_calibration_config(e1_config: dict[str, Any]) -> dict[str, Any]:
     return config
 
 
-def build_e1_alpha32_calibration_config(
+def _build_e1_followup_calibration_config(
     e1_config: dict[str, Any],
+    *,
+    overrides: dict[str, Any],
+    allowed_diffs: set[str],
+    experiment_id: str,
+    comparison_role: str,
+    parent: str,
+    reason: str,
+    output_name: str,
 ) -> dict[str, Any]:
-    """Build the follow-up run selected by the post-training scale diagnostic."""
+    """Build one non-formal stability follow-up without changing its data contract."""
 
     config = copy.deepcopy(e1_config)
-    config.update(ALPHA32_CALIBRATION_OVERRIDES)
+    config.update(overrides)
     config.update(
         {
-            "_experiment_id": "R1-E1-CAL-LR2E5-A32",
-            "_comparison_role": "alpha32_stability_calibration_not_formal_variant",
-            "_calibration_parent": "R1-E1-CAL-LR2E5",
-            "_calibration_reason": "Post-training alpha scaling isolated excessive adapter update strength.",
+            "_experiment_id": experiment_id,
+            "_comparison_role": comparison_role,
+            "_calibration_parent": parent,
+            "_calibration_reason": reason,
             "_formal_variant": False,
-            "output_dir": f"runtime/loras/kisaki/r1v4/{ALPHA32_CALIBRATION_NAME}/seed42",
+            "output_dir": f"runtime/loras/kisaki/r1v4/{output_name}/seed42",
         }
     )
     differences = {
@@ -219,13 +239,50 @@ def build_e1_alpha32_calibration_config(
         for key in set(e1_config) | set(config)
         if e1_config.get(key) != config.get(key)
     }
-    unexpected = differences - ALPHA32_CALIBRATION_ALLOWED_DIFFS
+    unexpected = differences - allowed_diffs
     if unexpected:
         raise ValueError(
-            "E1 alpha32 calibration changes non-calibration fields: "
+            "E1 follow-up calibration changes non-calibration fields: "
             + ", ".join(sorted(unexpected))
         )
     return config
+
+
+def build_e1_alpha32_calibration_config(
+    e1_config: dict[str, Any],
+) -> dict[str, Any]:
+    """Build the follow-up run selected by the first scale diagnostic."""
+
+    return _build_e1_followup_calibration_config(
+        e1_config,
+        overrides=ALPHA32_CALIBRATION_OVERRIDES,
+        allowed_diffs=ALPHA32_CALIBRATION_ALLOWED_DIFFS,
+        experiment_id="R1-E1-CAL-LR2E5-A32",
+        comparison_role="alpha32_stability_calibration_not_formal_variant",
+        parent="R1-E1-CAL-LR2E5",
+        reason="Post-training alpha scaling isolated excessive adapter update strength.",
+        output_name=ALPHA32_CALIBRATION_NAME,
+    )
+
+
+def build_e1_alpha16_calibration_config(
+    e1_config: dict[str, Any],
+) -> dict[str, Any]:
+    """Build the lower-strength run selected after alpha32 failed semantic review."""
+
+    return _build_e1_followup_calibration_config(
+        e1_config,
+        overrides=ALPHA16_CALIBRATION_OVERRIDES,
+        allowed_diffs=ALPHA16_CALIBRATION_ALLOWED_DIFFS,
+        experiment_id="R1-E1-CAL-LR2E5-A16",
+        comparison_role="alpha16_stability_calibration_not_formal_variant",
+        parent="R1-E1-CAL-LR2E5-A32",
+        reason=(
+            "Alpha32 checkpoint 25 passed length gates but failed semantic review; "
+            "inference scaling localized the stable range near alpha16."
+        ),
+        output_name=ALPHA16_CALIBRATION_NAME,
+    )
 
 
 def write_configs(
@@ -269,6 +326,11 @@ def write_configs(
         output_dir / f"kisaki_r1v4_{ALPHA32_CALIBRATION_NAME}.json"
     )
     _write_json_atomic(alpha32_calibration_path, alpha32_calibration)
+    alpha16_calibration = build_e1_alpha16_calibration_config(configs["e1"])
+    alpha16_calibration_path = (
+        output_dir / f"kisaki_r1v4_{ALPHA16_CALIBRATION_NAME}.json"
+    )
+    _write_json_atomic(alpha16_calibration_path, alpha16_calibration)
     summary = {
         "schema_version": 3,
         "status": "generated_for_frozen_dataset",
@@ -317,6 +379,14 @@ def write_configs(
             "path": _path_label(alpha32_calibration_path),
             "sha256": _text_sha256(alpha32_calibration_path),
             "overrides": ALPHA32_CALIBRATION_OVERRIDES,
+        },
+        "stability_calibration_config": {
+            "experiment_id": alpha16_calibration["_experiment_id"],
+            "formal_use_allowed": False,
+            "parent": alpha16_calibration["_calibration_parent"],
+            "path": _path_label(alpha16_calibration_path),
+            "sha256": _text_sha256(alpha16_calibration_path),
+            "overrides": ALPHA16_CALIBRATION_OVERRIDES,
         },
         "single_variable_contract": {
             "status": "validated",
