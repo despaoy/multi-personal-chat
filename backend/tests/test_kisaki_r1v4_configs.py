@@ -152,6 +152,50 @@ def test_e1_alpha16_calibration_preserves_contract_and_earlier_checkpoints():
     assert differences == builder.ALPHA16_CALIBRATION_ALLOWED_DIFFS
 
 
+def test_e1_capacity_calibration_reduces_rank_and_freezes_mlp_projections():
+    builder = _module(
+        "build_kisaki_r1v4_capacity_calibration",
+        "scripts/build_kisaki_r1v4_configs.py",
+    )
+    baseline = json.loads(
+        (builder.DEFAULT_OUTPUT / "kisaki_r1v4_e1.json").read_text(encoding="utf-8")
+    )
+    calibration = builder.build_e1_capacity_calibration_config(baseline)
+
+    assert calibration["_experiment_id"] == "R1-E1-CAL-R8-ATTN"
+    assert calibration["_calibration_parent"] == "R1-E1-CAL-LR2E5-A16"
+    assert calibration["_formal_variant"] is False
+    assert calibration["learning_rate"] == 1e-5
+    assert calibration["num_train_epochs"] == 1
+    assert calibration["lora_r"] == 8
+    assert calibration["lora_alpha"] == 8
+    assert calibration["target_modules"] == [
+        "q_proj",
+        "k_proj",
+        "v_proj",
+        "o_proj",
+    ]
+    assert calibration["eval_steps"] == calibration["save_steps"] == 20
+    assert calibration["save_total_limit"] == 6
+
+    differences = {
+        key
+        for key in set(baseline) | set(calibration)
+        if baseline.get(key) != calibration.get(key)
+    }
+    assert differences == builder.CAPACITY_CALIBRATION_ALLOWED_DIFFS
+    for field in (
+        "train_data_path",
+        "eval_data_path",
+        "_train_data_sha256",
+        "_validation_data_sha256",
+        "system_prompt",
+        "_prompt_content_sha256",
+        "seed",
+    ):
+        assert calibration[field] == baseline[field]
+
+
 def test_active_r1v4_configs_bind_current_data_prompt_and_single_variables():
     builder = _module(
         "build_kisaki_r1v4_configs_active", "scripts/build_kisaki_r1v4_configs.py"
@@ -201,6 +245,16 @@ def test_active_r1v4_configs_bind_current_data_prompt_and_single_variables():
     )
     assert config_manifest["stability_calibration_config"]["sha256"] == (
         builder._text_sha256(alpha16_path)
+    )
+    capacity_path = (
+        builder.DEFAULT_OUTPUT
+        / f"kisaki_r1v4_{builder.CAPACITY_CALIBRATION_NAME}.json"
+    )
+    assert config_manifest["capacity_calibration_config"]["experiment_id"] == (
+        "R1-E1-CAL-R8-ATTN"
+    )
+    assert config_manifest["capacity_calibration_config"]["sha256"] == (
+        builder._text_sha256(capacity_path)
     )
     assert config_manifest["training_contract"] == {
         "revision": "r1v4_stability_v2",

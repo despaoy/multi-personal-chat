@@ -107,6 +107,23 @@ ALPHA16_CALIBRATION_ALLOWED_DIFFS = {
     *CALIBRATION_ALLOWED_DIFFS,
     "lora_alpha",
 }
+CAPACITY_CALIBRATION_NAME = "e1_calibration_r8_attention_lr1e5"
+CAPACITY_CALIBRATION_OVERRIDES = {
+    **CALIBRATION_OVERRIDES,
+    "learning_rate": 1e-5,
+    "eval_steps": 20,
+    "save_steps": 20,
+    "save_total_limit": 6,
+    "lora_r": 8,
+    "lora_alpha": 8,
+    "target_modules": ["q_proj", "k_proj", "v_proj", "o_proj"],
+}
+CAPACITY_CALIBRATION_ALLOWED_DIFFS = {
+    *CALIBRATION_ALLOWED_DIFFS,
+    "lora_r",
+    "lora_alpha",
+    "target_modules",
+}
 
 
 def _load(path: Path) -> dict[str, Any]:
@@ -285,6 +302,26 @@ def build_e1_alpha16_calibration_config(
     )
 
 
+def build_e1_capacity_calibration_config(
+    e1_config: dict[str, Any],
+) -> dict[str, Any]:
+    """Build an attention-only low-rank run after full-module runs collapsed."""
+
+    return _build_e1_followup_calibration_config(
+        e1_config,
+        overrides=CAPACITY_CALIBRATION_OVERRIDES,
+        allowed_diffs=CAPACITY_CALIBRATION_ALLOWED_DIFFS,
+        experiment_id="R1-E1-CAL-R8-ATTN",
+        comparison_role="low_rank_attention_stability_calibration_not_formal_variant",
+        parent="R1-E1-CAL-LR2E5-A16",
+        reason=(
+            "Rank32 full-module training collapsed between steps 20 and 40 even at "
+            "alpha16; reduce trainable capacity and leave MLP projections frozen."
+        ),
+        output_name=CAPACITY_CALIBRATION_NAME,
+    )
+
+
 def write_configs(
     manifest_path: Path = DEFAULT_MANIFEST,
     output_dir: Path = DEFAULT_OUTPUT,
@@ -331,6 +368,11 @@ def write_configs(
         output_dir / f"kisaki_r1v4_{ALPHA16_CALIBRATION_NAME}.json"
     )
     _write_json_atomic(alpha16_calibration_path, alpha16_calibration)
+    capacity_calibration = build_e1_capacity_calibration_config(configs["e1"])
+    capacity_calibration_path = (
+        output_dir / f"kisaki_r1v4_{CAPACITY_CALIBRATION_NAME}.json"
+    )
+    _write_json_atomic(capacity_calibration_path, capacity_calibration)
     summary = {
         "schema_version": 3,
         "status": "generated_for_frozen_dataset",
@@ -387,6 +429,14 @@ def write_configs(
             "path": _path_label(alpha16_calibration_path),
             "sha256": _text_sha256(alpha16_calibration_path),
             "overrides": ALPHA16_CALIBRATION_OVERRIDES,
+        },
+        "capacity_calibration_config": {
+            "experiment_id": capacity_calibration["_experiment_id"],
+            "formal_use_allowed": False,
+            "parent": capacity_calibration["_calibration_parent"],
+            "path": _path_label(capacity_calibration_path),
+            "sha256": _text_sha256(capacity_calibration_path),
+            "overrides": CAPACITY_CALIBRATION_OVERRIDES,
         },
         "single_variable_contract": {
             "status": "validated",

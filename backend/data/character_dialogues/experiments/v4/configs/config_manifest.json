@@ -112,6 +112,28 @@
       "lora_alpha": 16
     }
   },
+  "capacity_calibration_config": {
+    "experiment_id": "R1-E1-CAL-R8-ATTN",
+    "formal_use_allowed": false,
+    "parent": "R1-E1-CAL-LR2E5-A16",
+    "path": "backend/data/character_dialogues/experiments/v4/configs/kisaki_r1v4_e1_calibration_r8_attention_lr1e5.json",
+    "sha256": "5cc5a817c76e4bda3c06b5462ebe1d59edb5b083d34890347db8b373d824ae1d",
+    "overrides": {
+      "learning_rate": 1e-05,
+      "num_train_epochs": 1,
+      "eval_steps": 20,
+      "save_steps": 20,
+      "save_total_limit": 6,
+      "lora_r": 8,
+      "lora_alpha": 8,
+      "target_modules": [
+        "q_proj",
+        "k_proj",
+        "v_proj",
+        "o_proj"
+      ]
+    }
+  },
   "single_variable_contract": {
     "status": "validated",
     "baseline": "R1-E1",
