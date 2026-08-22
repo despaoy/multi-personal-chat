@@ -99,7 +99,8 @@ CUDA_VISIBLE_DEVICES="$GPU" "$PYTHON" -m vllm.entrypoints.openai.api_server \
   --gpu-memory-utilization 0.90 \
   --enable-lora \
   --max-lora-rank 32 \
-  --max-loras "${#LORA_MODULES[@]}" \
+  --max-loras 1 \
+  --max-cpu-loras "${#LORA_MODULES[@]}" \
   --lora-modules "${LORA_MODULES[@]}" \
   >"$LOG" 2>&1 &
 VLLM_PID=$!
