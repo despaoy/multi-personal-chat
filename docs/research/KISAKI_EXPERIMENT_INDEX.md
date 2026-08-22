@@ -4,9 +4,9 @@
 
 ## 当前状态
 
-- R0V4：当前 948 条训练数据（522 原作 + 150 既有构造 + 276 条 V4.1 五轮会话）和 70 条 validation；Game Train 复审完成，Gold v2.1 已批准为开发集，Gold v3 已冻结。
-- 数据复审：Game Train 上下文质量复审已关闭；V4.1 的 276 条五轮会话（DeepSeek round06 4 条 + Codex 自动化批次 272 条）均已修订/批准并完成 Gold 污染复审。
-- R1V4：数据已冻结，重新通过当前环境训练门禁后可运行。
+- R0V4：当前 926 条训练数据（522 原作 + 150 既有构造 + 254 条已审核多轮数据）和 70 条 validation；Game Train 复审完成，Gold v2.1 已批准为开发集，Gold v3 已冻结。
+- 数据复审：Game Train 上下文质量复审已关闭；254 条多轮记录（DeepSeek 3 条 + Codex 251 条）均已批准并完成 Gold 污染复审。
+- R1V4：E1 Seed 42 已完成训练，但 `checkpoint-100/150/200/232` 全部未通过真实生成门禁；当前无正式 adapter，E2-E5 暂停。
 - R2：60 条 held-out 候选已生成，等待人工冻结。
 - R3：真实 SSE TTFT 基准器已实现，等待隔离服务测试。
 - R4：等待至少 100 条月社妃人工批准偏好对。
@@ -23,6 +23,7 @@
 | V4.1 增补证据链 | `backend/data/character_dialogues/experiments/v4/augmentation_candidates/INDEX.json` |
 | 历史数据归档 | `backend/data/character_dialogues/experiments/archive/` |
 | R1V4 E1-E5 配置 | 数据冻结后生成至 `backend/data/character_dialogues/experiments/v4/configs/` |
+| E1 checkpoint 选择结果 | [负结果与下一步](review_packets/kisaki_v4/13_R1V4_E1_CHECKPOINT_SELECTION/README.md) |
 | 当前人物 prompt v3 | `backend/data/character_dialogues/kisaki_system_prompt_v3.txt`（已批准，训练策略为 `replace`） |
 | Gold v2.1 开发集 | `backend/evaluation/kisaki_gold_set_v21_candidates.json`（已批准，禁止正式结论） |
 | Gold v2.1 污染审计 | `backend/evaluation/kisaki_gold_set_v21_contamination_audit.json` |
@@ -35,5 +36,5 @@
 3. 旧实验只通过 Git 历史追溯，不作为工作树中的第二套入口。
 4. RAG 引用属于结构化响应，不训练人物正文输出文档 ID。
 5. 单种子只称 pilot；最终只为 E1 与最佳变体补 Seed 43/44。
-6. V4 审核完成前禁止生成正式配置或启动 GPU 训练。
+6. E1 未通过开发集生成门禁前，不得启动 E2-E5。
 7. 正式训练仅使用 V4 manifest 指向的冻结资产。

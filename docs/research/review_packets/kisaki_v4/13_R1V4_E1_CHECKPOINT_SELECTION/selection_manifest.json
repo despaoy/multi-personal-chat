@@ -1,0 +1,121 @@
+{
+  "schema_version": 1,
+  "experiment_id": "R1V4-E1-SEED42-CHECKPOINT-SELECTION",
+  "status": "failed_generation_gate",
+  "selected_checkpoint": null,
+  "decision": "do_not_start_e2",
+  "training": {
+    "git_commit": "f2451e50e647a71a53bfe1c6f9f252b1236fa5f9",
+    "learning_rate": 0.0001,
+    "epochs": 2,
+    "checkpoints": [100, 150, 200, 232],
+    "trainer_best_checkpoint": 150
+  },
+  "development_set": {
+    "id": "KISAKI-GOLD-V2.1-CHECKPOINT-DEV30",
+    "role": "development_checkpoint_selection",
+    "formal_use_allowed": false,
+    "sha256": "7b3e741861f3133ddffb132af88c5b53f86fe5e9fcec12ff30446bffa9bb45253",
+    "counts": {
+      "persona": 8,
+      "factual": 5,
+      "persona_knowledge": 2,
+      "multiturn": 7,
+      "safety": 8
+    },
+    "evaluated_responses_per_model": 44
+  },
+  "generation": {
+    "temperature": 0.0,
+    "max_tokens": 256,
+    "top_p": 0.9,
+    "repetition_penalty": 1.0,
+    "frequency_penalty": 0.0,
+    "enable_thinking": false,
+    "mock": false
+  },
+  "gates": {
+    "request_errors": 0,
+    "minimum_output_length_ratio": 0.5,
+    "maximum_very_short_rate": 0.1,
+    "maximum_severe_loop_count": 0,
+    "very_short_definition": "not more than 3 diagnostic tokens",
+    "severe_loop_definition": "per-response four-gram repetition rate at least 0.5"
+  },
+  "profiles": {
+    "production_runtime_policy_3_3_0": {
+      "evaluation_git_commit": "60157303e4450e63dcf34f3ce815f6457a636ac7",
+      "baseline_average_tokens": 48.5682,
+      "candidates": {
+        "checkpoint-100": {
+          "average_tokens": 9.3636,
+          "output_length_ratio": 0.1928,
+          "very_short_count": 19,
+          "severe_loop_count": 0,
+          "passed": false
+        },
+        "checkpoint-150": {
+          "average_tokens": 7.0682,
+          "output_length_ratio": 0.1455,
+          "very_short_count": 17,
+          "severe_loop_count": 0,
+          "passed": false
+        },
+        "checkpoint-200": {
+          "average_tokens": 24.4318,
+          "output_length_ratio": 0.503,
+          "very_short_count": 17,
+          "severe_loop_count": 3,
+          "passed": false
+        },
+        "checkpoint-232": {
+          "average_tokens": 24.0909,
+          "output_length_ratio": 0.496,
+          "very_short_count": 17,
+          "severe_loop_count": 3,
+          "passed": false
+        }
+      }
+    },
+    "training_prompt_match_diagnostic": {
+      "evaluation_git_commit": "4bf6f6c65a1cdb668b6c917b1327395695a7c8db",
+      "baseline_average_tokens": 48.0455,
+      "candidates": {
+        "checkpoint-100": {
+          "average_tokens": 14.4545,
+          "output_length_ratio": 0.3009,
+          "very_short_count": 20,
+          "severe_loop_count": 0,
+          "passed": false
+        },
+        "checkpoint-150": {
+          "average_tokens": 6.8182,
+          "output_length_ratio": 0.1419,
+          "very_short_count": 16,
+          "severe_loop_count": 0,
+          "passed": false
+        },
+        "checkpoint-200": {
+          "average_tokens": 24.4318,
+          "output_length_ratio": 0.5085,
+          "very_short_count": 16,
+          "severe_loop_count": 3,
+          "passed": false
+        },
+        "checkpoint-232": {
+          "average_tokens": 24.0682,
+          "output_length_ratio": 0.5009,
+          "very_short_count": 17,
+          "severe_loop_count": 3,
+          "passed": false
+        }
+      }
+    }
+  },
+  "diagnosis": {
+    "prompt_policy_mismatch_is_primary_cause": false,
+    "trainer_loss_is_sufficient_for_selection": false,
+    "data_rewrite_required_before_next_calibration": false,
+    "next_action": "Run a lower-intensity E1 calibration without overwriting this failed run."
+  }
+}
