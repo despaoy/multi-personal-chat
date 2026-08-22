@@ -8,9 +8,11 @@ GPU="${1:-0}"
 PORT="${KISAKI_CHECKPOINT_PORT:-8001}"
 MODEL="$ROOT/runtime/models/Qwen3-8B-Instruct"
 ADAPTER_ROOT="$ROOT/runtime/loras/kisaki/r1v4/e1/seed42"
-OUTPUT="$ROOT/runtime/experiments/kisaki/r1v4/e1/checkpoint-selection"
-DATASET="$OUTPUT/devset30.json"
+SELECTION_ROOT="$ROOT/runtime/experiments/kisaki/r1v4/e1/checkpoint-selection"
+OUTPUT="${KISAKI_CHECKPOINT_OUTPUT:-$SELECTION_ROOT}"
+DATASET="${KISAKI_CHECKPOINT_DATASET:-$SELECTION_ROOT/devset30.json}"
 PROMPT="$PROJECT/backend/data/character_dialogues/kisaki_system_prompt_v3.txt"
+COMPOSE_RUNTIME_POLICY="${KISAKI_CHECKPOINT_COMPOSE_POLICY:-true}"
 LOG="$OUTPUT/vllm.log"
 PID_FILE="$OUTPUT/vllm.pid"
 COMPLETE_MARKER="$OUTPUT/evaluation.complete"
@@ -31,6 +33,10 @@ trap cleanup EXIT INT TERM
 [[ -f "$MODEL/config.json" ]] || { echo "base_model_missing=$MODEL" >&2; exit 2; }
 [[ -f "$DATASET" ]] || { echo "development_dataset_missing=$DATASET" >&2; exit 2; }
 [[ -f "$PROMPT" ]] || { echo "system_prompt_missing=$PROMPT" >&2; exit 2; }
+[[ "$COMPOSE_RUNTIME_POLICY" == true || "$COMPOSE_RUNTIME_POLICY" == false ]] || {
+  echo "invalid_compose_runtime_policy=$COMPOSE_RUNTIME_POLICY" >&2
+  exit 2
+}
 for step in "${STEPS[@]}"; do
   [[ -f "$ADAPTER_ROOT/checkpoint-$step/adapter_config.json" ]] || {
     echo "adapter_missing=$ADAPTER_ROOT/checkpoint-$step" >&2
@@ -109,7 +115,6 @@ run_benchmark() {
     --model "$served_model"
     --model-path "$MODEL"
     --system-prompt-file "$PROMPT"
-    --compose-runtime-policy
     --temperature 0
     --max-tokens 256
     --top-p 0.9
@@ -118,6 +123,11 @@ run_benchmark() {
     --timeout 120
     --gpu "$GPU"
   )
+  if [[ "$COMPOSE_RUNTIME_POLICY" == true ]]; then
+    args+=(--compose-runtime-policy)
+  else
+    args+=(--no-compose-runtime-policy)
+  fi
   if [[ -n "$adapter_path" ]]; then
     args+=(--adapter-path "$adapter_path")
   fi
@@ -129,5 +139,8 @@ for step in "${STEPS[@]}"; do
   run_benchmark "checkpoint-$step" "kisaki-e1-step$step" "$ADAPTER_ROOT/checkpoint-$step"
 done
 
-printf 'completed_at=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >"$COMPLETE_MARKER"
+printf 'completed_at=%s\ncompose_runtime_policy=%s\n' \
+  "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  "$COMPOSE_RUNTIME_POLICY" \
+  >"$COMPLETE_MARKER"
 echo "checkpoint_selection_complete=$OUTPUT"
