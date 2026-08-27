@@ -48,7 +48,7 @@ powershell -ExecutionPolicy Bypass -File scripts/local-verify.ps1 -Frontend
 
 ## 最新验证记录（2026-08-28）
 
-- 远端基线：本地 `206e523` 与远端 `codex/v4-mainline-repair` 一致；本节结果针对其上的收尾工作树。
+- 远端基线：收尾提交已合入 `main`；验证时本地工作区与 `origin/main` 一致。
 - 仓库完整性：通过；全部 README 本地链接有效，20 个 FastAPI 路由模块均挂载，15 个管理页均进入导航，31 个归档源文件均有大小和 SHA-256（生成的 `pyc` 不归档）。
 - 后端：`python -m pytest backend/tests -q` → **1457 passed, 12 skipped**；4 条警告均为第三方弃用提示。
 - Python：`compileall`、Alembic head（`006_character_memory`）和 `pip check` 均通过。
@@ -57,3 +57,14 @@ powershell -ExecutionPolicy Bypass -File scripts/local-verify.ps1 -Frontend
 - 前端：TypeScript、ESLint、Next.js 16.2.11 生产构建均通过；构建生成 29 个页面/路由。
 - 依赖安全：`pnpm audit --prod` → `No known vulnerabilities found`。
 - 清洁度：验证生成的 `.next/`、`node_modules/`、TypeScript 缓存和 pytest 临时目录已删除；它们均可按锁文件重建。
+
+## 服务器上线核验（2026-08-28）
+
+- 部署工作区：`/root/autodl-tmp/multi-personal-chat`，新鲜克隆并同步至 `main@e9ea119`；旧实验目录 `qqchat-enhanced` 的未提交代码、数据和评测报告保持原样，未被覆盖。
+- 跨平台门禁：在 Linux 新鲜克隆中修正并验证归档文件 LF 哈希；`compileall` 后仓库完整性检查仍通过，生成的 `__pycache__` / `pyc` 不计入归档资产。
+- 后端：Python 3.12.4，`1458 passed, 11 skipped`；`pip check`、Python 编译、训练门禁和 Alembic head `006_character_memory` 均通过。
+- 前端：Node.js 22.23.1、pnpm 10.34.2；锁文件安装、TypeScript、ESLint、Next.js 生产构建及官方 npm 生产依赖审计通过，29 个页面/路由生成，无已知生产依赖漏洞。
+- 真实推理：RTX 3090 上以 vLLM 0.10.2 成功加载 Qwen3-8B-Instruct BF16；模型列表、最小生成、FastAPI `/health` / `/ready` 均通过。
+- 端到端：Next.js 入口与 API 代理、临时用户注册、管理员 Cookie 鉴权、真实生成、消息持久化查询和注销均通过；临时服务、数据库、Cookie 和响应文件已清理，GPU 与端口已释放。
+- 当前生产阻断项：尚未配置 PostgreSQL/Redis、AstrBot 集成令牌与回调地址、正式域名 CORS、TLS/反向代理。旧裸机配置只能通过开发模式验证；在这些运营参数补齐前不得声明为公网生产就绪。
+- 非阻断提示：裸机执行 `pnpm start` 可正常服务，但 Next.js 对 `output: standalone` 给出启动方式提示；Compose/Docker 镜像路径使用 standalone 产物，裸机长期运行应由正式进程守护配置明确启动命令。
