@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "generator": "knowledge.game_rag.scene_metadata_review",
+  "source_boundary_manifest": {
+    "schema_version": 1,
+    "boundary_review_status": "approved",
+    "reviewer": "project_owner_01",
+    "total_scenes": 262,
+    "manifest_sha256": "d5adc8c37b46204ff69a4dd0be7a5b95f537ade318b556c707e875262c8aea60",
+    "scenes_sha256": "80850fa52279fd707d27665526c2c8d368e96e6ed08dd43b001d7bf159c4e784",
+    "bundle_sha256": "b82d753eb93dbc1614b89e98c8498f03884c7d5dd433d223ef853708052c8595"
+  },
+  "total_scenes": 262,
+  "scene_review_status": "approved",
+  "note": "P4A enriched scenes: approved scene metadata applied on top of the frozen P3 bundle identified by source_boundary_manifest.manifest_sha256; P3 frozen artifacts stay untouched."
+}

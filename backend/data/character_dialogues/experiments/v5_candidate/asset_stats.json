@@ -1,0 +1,105 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-08-22T08:12:36.326583+00:00",
+  "supervision_contract": "assistant_supervision 缺省 all；last 只监督最后一条 assistant 消息（与 backend/training/chat_dataset.py 训练契约一致）",
+  "token_estimation": "chars * 0.65 (Qwen 系近似；占比以字符口径为准)",
+  "multiturn_definition": "assistant 目标数 > 1",
+  "grand_total": {
+    "records": 926,
+    "raw_assistant_messages": 2068,
+    "supervised_assistant_targets": 1961,
+    "supervised_assistant_chars": 117345,
+    "est_supervised_assistant_tokens": 76274,
+    "multiturn_records": 373
+  },
+  "by_source": [
+    {
+      "source_group": "game_extraction_current_sft",
+      "records": 522,
+      "raw_assistant_messages": 629,
+      "supervised_assistant_targets": 522,
+      "raw_assistant_chars": 20309,
+      "supervised_assistant_chars": 16433,
+      "total_chars": 32617,
+      "est_supervised_assistant_tokens": 10434,
+      "est_total_tokens": 20960,
+      "multiturn_records": 107,
+      "supervision_counts": {
+        "all": 415,
+        "last": 107
+      },
+      "avg_supervised_chars_per_target": 31.5,
+      "avg_supervised_targets_per_record": 1.0,
+      "initial_status": "keep_core",
+      "supervised_char_share": 14.0,
+      "record_share": 56.37
+    },
+    {
+      "source_group": "codex_user_simulation_v41_reviewed",
+      "records": 251,
+      "raw_assistant_messages": 1255,
+      "supervised_assistant_targets": 1255,
+      "raw_assistant_chars": 96530,
+      "supervised_assistant_chars": 96530,
+      "total_chars": 137320,
+      "est_supervised_assistant_tokens": 62617,
+      "est_total_tokens": 89131,
+      "multiturn_records": 251,
+      "supervision_counts": {
+        "all": 251,
+        "last": 0
+      },
+      "avg_supervised_chars_per_target": 76.9,
+      "avg_supervised_targets_per_record": 5.0,
+      "initial_status": "pending_review",
+      "supervised_char_share": 82.26,
+      "record_share": 27.11
+    },
+    {
+      "source_group": "llm_v4_reviewed_constructed",
+      "records": 150,
+      "raw_assistant_messages": 169,
+      "supervised_assistant_targets": 169,
+      "raw_assistant_chars": 2883,
+      "supervised_assistant_chars": 2883,
+      "total_chars": 4221,
+      "est_supervised_assistant_tokens": 1801,
+      "est_total_tokens": 2671,
+      "multiturn_records": 12,
+      "supervision_counts": {
+        "all": 150,
+        "last": 0
+      },
+      "avg_supervised_chars_per_target": 17.1,
+      "avg_supervised_targets_per_record": 1.13,
+      "initial_status": "pending_review",
+      "supervised_char_share": 2.46,
+      "record_share": 16.2
+    },
+    {
+      "source_group": "deepseek_user_simulation_v41_reviewed",
+      "records": 3,
+      "raw_assistant_messages": 15,
+      "supervised_assistant_targets": 15,
+      "raw_assistant_chars": 1499,
+      "supervised_assistant_chars": 1499,
+      "total_chars": 1911,
+      "est_supervised_assistant_tokens": 973,
+      "est_total_tokens": 1241,
+      "multiturn_records": 3,
+      "supervision_counts": {
+        "all": 3,
+        "last": 0
+      },
+      "avg_supervised_chars_per_target": 99.9,
+      "avg_supervised_targets_per_record": 5.0,
+      "initial_status": "pending_review",
+      "supervised_char_share": 1.28,
+      "record_share": 0.32
+    }
+  ],
+  "issues_summary": {
+    "records_with_issues": 0,
+    "issue_types": {}
+  }
+}

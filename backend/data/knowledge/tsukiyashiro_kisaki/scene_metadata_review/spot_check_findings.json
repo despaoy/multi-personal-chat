@@ -1,0 +1,76 @@
+{
+  "findings": [
+    {
+      "id": "F1",
+      "severity": "high",
+      "category": "viewpoint 系统性 unknown（叙述者身份无法识别）",
+      "scope": "全局（viewpoint_unknown=207/259=79.9%；抽检 29 个成功场景中约 19 个属此类）",
+      "description": "本作以主角琉璃的第一人称叙事为主体，但大量场景中叙述者仅以「我」自指、无自报姓名，模型按 prompt 契约（无法判断叙述者时填 unknown）保守输出 unknown。抽检确认这些场景的原文普遍带有 [琉璃] 说话人标记或明确的「我」叙述（如 scene_ebe282ccfd748887「下船，踏上小岛的瞬间……我犹如扑向母亲怀抱的孩子般跑起来」、scene_6bf3e7cf2262e0e6「第二天，我身着新校服」、scene_730b02d1c862bff1「半路上和妃道别后，我向藤壶学园走去」），人工可快速判定为琉璃第一人称。",
+      "impact": "候选对 viewpoint 字段的人工提速作用有限；但 unknown 是契约允许的诚实输出，不是错误。人工审核时可建立速查规则：有 [琉璃] 说话人标记且叙述为「我」口吻的场景直接判定琉璃第一人称。"
+    },
+    {
+      "id": "F2",
+      "severity": "high",
+      "category": "人物别名未归一（全名/简称并存）",
+      "scope": "全局（抽检中至少 8 个场景出现）",
+      "description": "同一人物的姓名变体在 mentioned/present 中并存计数：妃/月社妃（scene_ebe282ccfd748887、scene_921836e104cc114f）、彼方/日向彼方（scene_730b02d1c862bff1、scene_f9b344f1a7317a49）、琉璃/四条琉璃（scene_906024c999551209）、夜子/遊行寺夜子（scene_655d54d8e90e8995、scene_906024c999551209）、暗子/遊行寺暗子/神宮寺暗子（scene_655d54d8e90e8995）。另有同一场景内 mentioned 用全名而 present 用简称的不一致（scene_c71b115e55d95564）。P4A 规范化只做去空白/去重/排序，不做别名合并，属契约边界而非违规。",
+      "impact": "人物集合统计口径失真；人工审核需统一别名。建议后续建立人物别名映射表（妃=月社妃、琉璃=四条琉璃、夜子=遊行寺夜子、彼方=日向彼方、理央=伏见理央、汀=遊行寺汀、暗子=遊行寺暗子、岬=本条岬、奏=本城奏）并在人工定稿时归一。"
+    },
+    {
+      "id": "F3",
+      "severity": "medium",
+      "category": "第一人称叙述者缺席 present_characters",
+      "scope": "独白类场景（抽检确认 3 个：scene_6d7f74124bb1d663、scene_993aa9d89a6c9a42、scene_3214ed22914cd801）",
+      "description": "纯独白场景（speakers 仅一人、无对话对手）中叙述者本人未计入 present：夜子独白（scene_6d7f74124bb1d663，speakers=[夜子]）、夜子母亲忏悔独白（scene_993aa9d89a6c9a42）、彼方独白（scene_3214ed22914cd801，speakers=[彼方]，叙述者彼方同时缺席 mentioned 与 present）。prompt 已含「第一人称叙述者应计入 present」的提醒，对话场景基本遵守，但独白场景仍系统性遗漏。",
+      "impact": "独白场景的 present=[] 与「已审核且确认无人」语义冲突（叙述者必然在场）。人工审核需补叙述者。"
+    },
+    {
+      "id": "F4",
+      "severity": "medium",
+      "category": "书中故事提示契约应用不充分",
+      "scope": "魔法之书正文场景（抽检确认 2 个：scene_655d54d8e90e8995、scene_f9b344f1a7317a49 开头部分）",
+      "description": "以《宝石名》标题开头的魔法之书正文（scene_655d54d8e90e8995《黑曜石的因果目录》为遊行寺暗子忏悔故事）候选给出 reality_status=character_claim 而非提示契约倾向的 fictional；scene_f9b344f1a7317a49 开头的《翡翠的排挤原理》书中段落被并入 current 时间线。提示契约（书中故事→fictional/hypothetical）未被稳定应用。",
+      "impact": "书中故事场景的 reality_status/temporal_scope 需人工重点复核；凡场景以《宝石名》书名开头的段落应优先核对。"
+    },
+    {
+      "id": "F5",
+      "severity": "medium",
+      "category": "第三人称误判（第一人称叙述被标第三人称）",
+      "scope": "局部（抽检确认 1 个：scene_6d539b1b02ec01e2）",
+      "description": "scene_6d539b1b02ec01e2 原文为琉璃叙述「我妹妹当時以钢琴为人生追求」（叙述者=妃之兄琉璃），候选 viewpoint=第三人称、present=[]，两者均误。temporal_scope=flashback 判断正确。",
+      "impact": "个别场景 viewpoint/present 需人工纠正；结合 F1 说明模型对叙述人称的判断不稳定（同类文本在别的场景输出 unknown 或 琉璃第一人称）。"
+    },
+    {
+      "id": "F6",
+      "severity": "low",
+      "category": "evidence 信息量偏低",
+      "scope": "全局（avg 1.57 spans/场景，多为整场景或整分片范围）",
+      "description": "绝大多数候选的 evidence 覆盖整个场景 span（单分片场景）或全部分片 span 的并集（多分片场景），仅起到「指向本场景」的作用，未定位到支撑判断的具体行。",
+      "impact": "不构成越界或错误（全部在界内、覆盖率 100%），但对人工复核的定位价值低于预期；人工审核时应自行圈定关键证据行，候选 evidence 仅作粗定位。"
+    },
+    {
+      "id": "F7",
+      "severity": "info",
+      "category": "分片分歧处理符合契约",
+      "scope": "全局（viewpoint 64 / temporal 21 / reality 52 处分歧）",
+      "description": "全部 137 处分片意见分歧均按 P4B 契约归并为 unknown 并追加告警，无擅自择优；告警文本正确列出各分片取值（如「unknown/琉璃第一人称/第三人称」）。",
+      "impact": "无问题；分歧告警可直接指导人工优先复核长场景。"
+    },
+    {
+      "id": "F8",
+      "severity": "info",
+      "category": "3 个失败场景需人工直接审核",
+      "scope": "scene_0cfa2e664341ebce、scene_504131e9df789cb9、scene_cca1256fbf01a2f2",
+      "description": "三场景各经 9 次尝试均因 schema_violation 失败（模型确定性输出裸「第一人称」或 evidence 为单对象）。人工预审参考：scene_0cfa2e664341ebce 开头即「我是日向彼方！」（彼方第一人称独白，speaker=[彼方]）；scene_504131e9df789cb9 为琉璃梦境醒来场景（[琉璃] 说话人+「我」叙述，含梦境回忆元素）；scene_cca1256fbf01a2f2 为理央视角的魔法之书故事收尾段（「理央完成恋情，已无遗憾」），reality 倾向书中故事。",
+      "impact": "该三场景无候选参考，人工从零审核；预审线索仅供参考，不构成决定。"
+    }
+  ],
+  "recommendations": [
+    "R1（人工审核流程）：viewpoint 审核建立速查规则——凡场景含 [琉璃] 说话人标记且叙述为「我」口吻的，直接判定「琉璃第一人称」；独白场景按 speakers 判定叙述者并计入 present。预计可一次性解决约八成 viewpoint=unknown 记录。",
+    "R2（数据治理）：在人工定稿前建立人物别名映射表并归一 mentioned/present（候选不回改，只改人工字段）；映射表建议作为独立资产维护，供后续 P5 检索层复用。",
+    "R3（重点复核）：以《宝石名》标题开头的书中故事场景优先复核 reality_status（候选倾向 character_claim，契约倾向 fictional）；带「分片意见不一致」告警的 87 个长场景优先复核分类字段。",
+    "R4（失败场景）：3 个失败场景由人工直接从零审核（预审线索见 F8），审核后如需重跑候选须填写显式 rerun_reason。",
+    "R5（后续迭代）：若未来重跑候选，可考虑在 prompt 中给出主角叙述者提示（如「本作主线叙述者通常为琉璃」）与人物别名表以收敛 unknown 比例与别名分裂；该改动需先经外部评审并记录于设计文档。",
+    "R6（evidence）：人工审核以完整场景原文为准，候选 evidence 仅作场景级粗定位。"
+  ]
+}

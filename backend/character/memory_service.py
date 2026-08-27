@@ -6,14 +6,15 @@ MIN_RELEVANCE 的记忆直接淘汰——重要性/新近度只对相关记忆�
 不能把无关记忆"顶"进上下文。
 
 不调用 LLM、不做向量检索：第一版使用规则打分（中文二元字符匹配），
-保证可独立测试和可解释。权重与候选上限是常量，不暴露成每请求可调参数。
+并在比较前去掉记忆存储格式中的固定叙述前缀，避免“用户说”等包装词
+造成假相关。权重与候选上限是常量，不暴露成每请求可调参数。
 """
 
 from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from character.context_builder import MAX_MEMORY_ITEMS
@@ -49,17 +50,13 @@ INTENT_RELEVANCE_FLOOR = 0.4
 #   （"你叫什么名字以及我叫什么名字"，需遍历全部话题词而非首个）。
 _CLAUSE_SPLIT_PATTERN = re.compile(r"[，。！？；、,.!?;：:]+")
 # 多字代词在前，避免"你们"被截断成"你"
-_PRONOUN_PATTERN = re.compile(
-    r"我们|咱们|你们|她们|他们|它们|咱|您|你|她|他|它|我"
-)
+_PRONOUN_PATTERN = re.compile(r"我们|咱们|你们|她们|他们|它们|咱|您|你|她|他|它|我")
 _USER_SUBJECTS = frozenset(("我", "我们", "咱", "咱们"))
 _NAME_TOPIC_PATTERN = re.compile(r"名字|叫什么|叫啥|是谁")
 _PREFERENCE_TOPIC_PATTERN = re.compile(r"喜欢|讨厌|钟意|爱好|偏好|爱")
 # 约定是双方共同记忆，主体允许"我/我们/咱/你"（"你答应过我什么"）；
 # 话题限定"约好/说好/答应过/承诺过/约定"，抽象提问（"什么是承诺"）无主体不触发
-_PROMISE_INTENT_PATTERN = re.compile(
-    r"(?:我们|咱|我|你).{0,6}(?:约好|说好|答应过|承诺过|许诺过|约定)"
-)
+_PROMISE_INTENT_PATTERN = re.compile(r"(?:我们|咱|我|你).{0,6}(?:约好|说好|答应过|承诺过|许诺过|约定)")
 
 # 新近度半衰期（天）：30 天前的记忆新近度得分约为一半
 RECENCY_HALF_LIFE_DAYS = 30.0
@@ -68,6 +65,32 @@ RECENCY_HALF_LIFE_DAYS = 30.0
 CANDIDATE_LIMIT = 30
 
 _VALID_MEMORY_TYPES = ("user_fact", "shared_event", "promise", "conversation_summary")
+
+# 数据库存储使用第三人称安全描述，防止用户原话被当作指令注入模型。
+# 这些固定包装词不属于事实主题，检索时应去掉；否则多条记忆会因为
+# 共享“用户说/用户提到”而产生无意义的词面重合。
+_MEMORY_CONTENT_PREFIXES = tuple(
+    sorted(
+        (
+            "用户说自己来自或居住在",
+            "用户正在进行或准备：",
+            "用户正在准备或学习",
+            "用户提到共同经历：",
+            "用户说自己的专业是",
+            "用户明确提到：",
+            "用户提到约定：",
+            "用户说自己叫",
+            "用户的名字是",
+            "用户说不喜欢",
+            "用户说喜欢",
+            "用户说自己在",
+            "用户说自己是",
+            "用户提到：",
+        ),
+        key=len,
+        reverse=True,
+    )
+)
 
 
 def _parse_timestamp(value: Any) -> datetime | None:
@@ -82,7 +105,7 @@ def _parse_timestamp(value: Any) -> datetime | None:
     except ValueError:
         return None
     if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
+        parsed = parsed.replace(tzinfo=UTC)
     return parsed
 
 
@@ -99,9 +122,7 @@ def _bigrams(text: str) -> frozenset[str]:
         return frozenset()
     if len(normalized) == 1:
         return frozenset((normalized,))
-    return frozenset(
-        normalized[i : i + 2] for i in range(len(normalized) - 1)
-    )
+    return frozenset(normalized[i : i + 2] for i in range(len(normalized) - 1))
 
 
 def _relevance(query_grams: frozenset[str], content: str) -> float:
@@ -114,6 +135,16 @@ def _relevance(query_grams: frozenset[str], content: str) -> float:
     overlap = len(query_grams & content_grams)
     union = len(query_grams | content_grams)
     return overlap / union if union else 0.0
+
+
+def _retrieval_text(content: str) -> str:
+    """返回用于相关度计算的事实主体，保留未知/历史格式原文。"""
+    text = (content or "").strip()
+    for prefix in _MEMORY_CONTENT_PREFIXES:
+        if text.startswith(prefix):
+            subject = text[len(prefix) :].strip()
+            return subject or text
+    return text
 
 
 @dataclass(frozen=True)
@@ -150,9 +181,7 @@ def _topic_subjects(clause: str, topic_pattern: re.Pattern[str]) -> list[str]:
             last_pronoun = found.group()
         if last_pronoun is None:
             continue
-        subjects.append(
-            "user" if last_pronoun in _USER_SUBJECTS else "non_user"
-        )
+        subjects.append("user" if last_pronoun in _USER_SUBJECTS else "non_user")
     return subjects
 
 
@@ -199,9 +228,7 @@ def _detect_memory_intents(query: str) -> _MemoryIntents:
     )
 
 
-def _matches_intent(
-    row: dict[str, Any], intents: _MemoryIntents
-) -> bool:
+def _matches_intent(row: dict[str, Any], intents: _MemoryIntents) -> bool:
     """判断记忆行是否命中当前询问意图（按 memory_key / memory_type）。"""
     memory_key = str(row.get("memory_key") or "")
     memory_type = str(row.get("memory_type") or "")
@@ -265,15 +292,13 @@ class CharacterMemoryService:
         询问角色自身（"你叫什么名字""你喜欢什么"）时，对应用户
         私人记忆被抑制，即使词面匹配也不注入。
         """
-        records = await self._repo.list_memory_records(
-            character_id, user_scope, limit=CANDIDATE_LIMIT
-        )
+        records = await self._repo.list_memory_records(character_id, user_scope, limit=CANDIDATE_LIMIT)
         if not records:
             return (), 0
 
         query_grams = _bigrams(query)
         intents = _detect_memory_intents(query)
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         scored: list[tuple[float, MemoryItem]] = []
         for row in records:
             content = str(row.get("content") or "").strip()
@@ -281,7 +306,7 @@ class CharacterMemoryService:
                 continue
             if _is_suppressed(row, intents):
                 continue
-            relevance = _relevance(query_grams, content)
+            relevance = _relevance(query_grams, _retrieval_text(content))
             if _matches_intent(row, intents):
                 relevance = max(relevance, INTENT_RELEVANCE_FLOOR)
             elif relevance < MIN_RELEVANCE:

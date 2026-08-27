@@ -1,0 +1,1219 @@
+{
+  "domain": "tsukiyashiro_kisaki",
+  "eval_file": "C:\\Users\\13474\\Desktop\\qqchat-enhanced\\backend\\data\\eval\\rag_retrieval\\tsukiyashiro_kisaki.jsonl",
+  "entries": 48,
+  "top_k": 5,
+  "index_stats": {
+    "tsukiyashiro_kisaki": {
+      "domain_id": "tsukiyashiro_kisaki",
+      "document_count": 409,
+      "document_type_counts": {
+        "fact": 218,
+        "relation": 32,
+        "event": 159
+      },
+      "vector_dimension": 384,
+      "index_version": "v1",
+      "bm25": {
+        "docs": 409,
+        "vocab": 29000,
+        "avgdl": 654.7,
+        "built": true
+      },
+      "healthy": true
+    }
+  },
+  "embedding_model": "paraphrase-multilingual-MiniLM-L12-v2",
+  "stages": [
+    {
+      "stage": "sparse_only",
+      "n": 48,
+      "hit@1": 0.4792,
+      "hit@3": 0.6458,
+      "hit@5": 0.6875,
+      "mrr": 0.5684,
+      "categories": {
+        "exact_fact": {
+          "n": 4,
+          "hit1": 3,
+          "hit5": 3,
+          "mrr": 3.0
+        },
+        "identity": {
+          "n": 4,
+          "hit1": 2,
+          "hit5": 4,
+          "mrr": 3.0
+        },
+        "kinship": {
+          "n": 4,
+          "hit1": 1,
+          "hit5": 2,
+          "mrr": 1.5
+        },
+        "dynamic_relation": {
+          "n": 4,
+          "hit1": 0,
+          "hit5": 0,
+          "mrr": 0.0
+        },
+        "event_query": {
+          "n": 4,
+          "hit1": 3,
+          "hit5": 4,
+          "mrr": 3.5
+        },
+        "causality": {
+          "n": 4,
+          "hit1": 3,
+          "hit5": 4,
+          "mrr": 3.3333
+        },
+        "world_setting": {
+          "n": 4,
+          "hit1": 3,
+          "hit5": 3,
+          "mrr": 3.0
+        },
+        "alias": {
+          "n": 4,
+          "hit1": 0,
+          "hit5": 0,
+          "mrr": 0.0
+        },
+        "cross_volume": {
+          "n": 4,
+          "hit1": 0,
+          "hit5": 2,
+          "mrr": 1.0
+        },
+        "narrative_layer": {
+          "n": 4,
+          "hit1": 3,
+          "hit5": 4,
+          "mrr": 3.2
+        },
+        "negation_correction": {
+          "n": 4,
+          "hit1": 1,
+          "hit5": 3,
+          "mrr": 1.75
+        },
+        "no_answer": {
+          "n": 4,
+          "hit1": 4,
+          "hit5": 4,
+          "mrr": 4.0
+        }
+      },
+      "failures": [
+        {
+          "id": "ev_exact_fact_02",
+          "category": "exact_fact",
+          "query": "琉璃的身份是什么",
+          "expected_ids": [
+            "fact_1fd21628049f0ede",
+            "fact_ced6a01e12e614d1"
+          ],
+          "expected_count": 2,
+          "returned_ids": [
+            "fact_55c79b273a377f2a",
+            "fact_576ea3b185bf074f",
+            "fact_8c91d0b037cc8526",
+            "fact_c4a018ed6a257980",
+            "fact_bb0b2c32d4215f9e"
+          ],
+          "elapsed_ms": 20.4
+        },
+        {
+          "id": "ev_kinship_03",
+          "category": "kinship",
+          "query": "夜子和汀是什么关系",
+          "expected_ids": [
+            "manual_relation_29ced62dcc8d4f4d",
+            "manual_relation_417ac8c5e66f95e5"
+          ],
+          "expected_count": 2,
+          "returned_ids": [
+            "event_b31ff6d76eca646e",
+            "fact_6a1ac262b3f5d7d9",
+            "rel_7752f8266cd83200",
+            "event_252c88367499904e",
+            "rel_51728c8d78f7b5cf"
+          ],
+          "elapsed_ms": 21.6
+        },
+        {
+          "id": "ev_kinship_04",
+          "category": "kinship",
+          "query": "暗子是妃的什么人",
+          "expected_ids": [
+            "rel_f814639e13d0faf8"
+          ],
+          "expected_count": 1,
+          "returned_ids": [
+            "event_949fa55178d062d3",
+            "event_abe21a4e7a573b9e",
+            "fact_6a302d1557087e48",
+            "event_0fcde8c99a5d15c4",
+            "fact_6961b88c16531703"
+          ],
+          "elapsed_ms": 20.7
+        },
+        {
+          "id": "ev_dyn_relation_01",
+          "category": "dynamic_relation",
+          "query": "理央和夜子的关系是什么",
+          "expected_ids": [
+            "rel_1c74cfb1f43dab51",
+            "rel_7f97b8bd6854b893"
+          ],
+          "expected_count": 2,
+          "returned_ids": [
+            "event_57cc8f1c07ccc882",
+            "event_137fee5dbe99475c",
+            "fact_6a1ac262b3f5d7d9",
+            "event_5f62d252b314323c",
+            "rel_5e7800a566fc9792"
+          ],
+          "elapsed_ms": 22.7
+        },
+        {
+          "id": "ev_dyn_relation_02",
+          "category": "dynamic_relation",
+          "query": "琉璃和理央后来变成了什么关系",
+          "expected_ids": [
+            "rel_aa91c18b46927932"
+          ],
+          "expected_count": 1,
+          "returned_ids": [
+            "fact_8aba8568e725b5da",
+            "fact_85a6a25fcf3faf65",
+            "fact_c60b5a0e5cee967c",
+            "event_cfaf5ba63b91eb2e",
+            "event_949fa55178d062d3"
+          ],
+          "elapsed_ms": 22.5
+        },
+        {
+          "id": "ev_dyn_relation_03",
+          "category": "dynamic_relation",
+          "query": "夜子对琉璃的感情变成了什么样",
+          "expected_ids": [
+            "manual_relation_31c17bd9be427a43",
+            "rel_52d054b748c1cb0c"
+          ],
+          "expected_count": 2,
+          "returned_ids": [
+            "rel_6a24070d0e62b551",
+            "event_c6f5d5931d4394a4",
+            "event_2de39dc56b603946",
+            "event_1a5dd12f6e3760c8",
+            "event_b31ff6d76eca646e"
+          ],
+          "elapsed_ms": 22.0
+        },
+        {
+          "id": "ev_dyn_relation_04",
+          "category": "dynamic_relation",
+          "query": "克丽索贝莉露和彼方是什么关系",
+          "expected_ids": [
+            "rel_8cb732fd3d4cd7b1"
+          ],
+          "expected_count": 1,
+          "returned_ids": [
+            "event_36fef741329d1bdc",
+            "event_9a363337c39bfb83",
+            "event_d5adc37c1f7edd1c",
+            "event_062538099e8c94f9",
+            "event_38b57bdcdc636e94"
+          ],
+          "elapsed_ms": 20.7
+        },
+        {
+          "id": "ev_setting_04",
+          "category": "world_setting",
+          "query": "《月社妃》这本书的设定是什么",
+          "expected_ids": [
+            "fact_ca3dcf16ed06835c"
+          ],
+          "expected_count": 1,
+          "returned_ids": [
+            "fact_15e63b1a24ceb8a5",
+            "fact_c4c57423ed9d28f3",
+            "event_5176cc5c9b437727",
+            "event_4ef1c03e9cca7315",
+            "fact_255678c1749e1112"
+          ],
+          "elapsed_ms": 21.4
+        },
+        {
+          "id": "ev_alias_01",
+          "category": "alias",
+          "query": "遊行寺夜子的目标是什么",
+          "expected_ids": [
+            "fact_0bcef7e7b6845675",
+            "fact_22719796c8bfefad",
+            "fact_da4d0bda6d2eec8b",
+            "fact_e4049017e43973b0"
+          ],
+          "expected_count": 4,
+          "returned_ids": [
+            "fact_3bb07b32573634eb",
+            "event_5b719ae7c94fe250",
+            "fact_7cd643ea69281e1b",
+            "fact_ed3b4d237f92b2b2",
+            "event_b31ff6d76eca646e"
+          ],
+          "elapsed_ms": 18.5
+        },
+        {
+          "id": "ev_alias_02",
+          "category": "alias",
+          "query": "月社妃是琉璃的什么人",
+          "expected_ids": [
+            "rel_5f4279ab2663d517",
+            "rel_99b2edf6334ca3e5"
+          ],
+          "expected_count": 2,
+          "returned_ids": [
+            "event_af4a672926909cb6",
+            "event_aec0433e81ccc2a2",
+            "fact_ca3dcf16ed06835c",
+            "fact_15e63b1a24ceb8a5",
+            "event_adeeaff3e006f69d"
+          ],
+          "elapsed_ms": 31.5
+        },
+        {
+          "id": "ev_alias_03",
+          "category": "alias",
+          "query": "伏见理央是谁",
+          "expected_ids": [
+            "fact_0fcb48d2b7dcfd6f",
+            "fact_55c79b273a377f2a",
+            "fact_600f9343198db251",
+            "fact_78a3027670e9eae1",
+            "fact_e24c31ade87d5499"
+          ],
+          "expected_count": 5,
+          "returned_ids": [
+            "fact_138156ecc9a8a247",
+            "fact_c4459f31a65553cb",
+            "fact_9c1bdada30fcce05",
+            "fact_4d44cc225aed7796",
+            "event_46be4a75e6ac1b6e"
+          ],
+          "elapsed_ms": 21.2
+        },
+        {
+          "id": "ev_alias_04",
+          "category": "alias",
+          "query": "新来琉璃是什么身份",
+          "expected_ids": [
+            "fact_1fd21628049f0ede",
+            "fact_ced6a01e12e614d1"
+          ],
+          "expected_count": 2,
+          "returned_ids": [
+            "fact_4945b68cd06c49d5",
+            "rel_6a24070d0e62b551",
+            "fact_8aba8568e725b5da",
+            "fact_55c79b273a377f2a",
+            "fact_576ea3b185bf074f"
+          ],
+          "elapsed_ms": 19.6
+        },
+        {
+          "id": "ev_cross_volume_01",
+          "category": "cross_volume",
+          "query": "夜子和琉璃的关系经历了哪些变化",
+          "expected_ids": [
+            "manual_relation_31c17bd9be427a43",
+            "rel_52d054b748c1cb0c",
+            "rel_e941e64d3a762f31"
+          ],
+          "expected_count": 3,
+          "returned_ids": [
+            "fact_83f737894534e1d7",
+            "event_b31ff6d76eca646e",
+            "event_3db7b11a2f23b116",
+            "event_137fee5dbe99475c",
+            "event_32382b8bbbfef2d1"
+          ],
+          "elapsed_ms": 22.3
+        },
+        {
+          "id": "ev_cross_volume_04",
+          "category": "cross_volume",
+          "query": "琉璃和理央小时候是什么关系",
+          "expected_ids": [
+            "manual_relation_e5b8b24f7400fceb"
+          ],
+          "expected_count": 1,
+          "returned_ids": [
+            "event_32382b8bbbfef2d1",
+            "event_137fee5dbe99475c",
+            "event_af4a672926909cb6",
+            "event_57cc8f1c07ccc882",
+            "event_5f62d252b314323c"
+          ],
+          "elapsed_ms": 20.2
+        },
+        {
+          "id": "ev_negation_03",
+          "category": "negation_correction",
+          "query": "理央是夜子的仆人吗",
+          "expected_ids": [
+            "rel_7f97b8bd6854b893"
+          ],
+          "expected_count": 1,
+          "returned_ids": [
+            "fact_78a3027670e9eae1",
+            "rel_5e7800a566fc9792",
+            "rel_51728c8d78f7b5cf",
+            "fact_691dede16db82d78",
+            "fact_2a4167abd736bcdc"
+          ],
+          "elapsed_ms": 19.6
+        }
+      ]
+    },
+    {
+      "stage": "vector_only",
+      "n": 48,
+      "hit@1": 0.4375,
+      "hit@3": 0.5208,
+      "hit@5": 0.625,
+      "mrr": 0.4997,
+      "categories": {
+        "exact_fact": {
+          "n": 4,
+          "hit1": 0,
+          "hit5": 2,
+          "mrr": 1.0
+        },
+        "identity": {
+          "n": 4,
+          "hit1": 1,
+          "hit5": 2,
+          "mrr": 1.3333
+        },
+        "kinship": {
+          "n": 4,
+          "hit1": 1,
+          "hit5": 2,
+          "mrr": 1.5
+        },
+        "dynamic_relation": {
+          "n": 4,
+          "hit1": 1,
+          "hit5": 2,
+          "mrr": 1.25
+        },
+        "event_query": {
+          "n": 4,
+          "hit1": 2,
+          "hit5": 3,
+          "mrr": 2.25
+        },
+        "causality": {
+          "n": 4,
+          "hit1": 3,
+          "hit5": 4,
+          "mrr": 3.2
+        },
+        "world_setting": {
+          "n": 4,
+          "hit1": 2,
+          "hit5": 2,
+          "mrr": 2.0
+        },
+        "alias": {
+          "n": 4,
+          "hit1": 0,
+          "hit5": 1,
+          "mrr": 0.25
+        },
+        "cross_volume": {
+          "n": 4,
+          "hit1": 1,
+          "hit5": 1,
+          "mrr": 1.0
+        },
+        "narrative_layer": {
+          "n": 4,
+          "hit1": 2,
+          "hit5": 3,
+          "mrr": 2.2
+        },
+        "negation_correction": {
+          "n": 4,
+          "hit1": 4,
+          "hit5": 4,
+          "mrr": 4.0
+        },
+        "no_answer": {
+          "n": 4,
+          "hit1": 4,
+          "hit5": 4,
+          "mrr": 4.0
+        }
+      },
+      "failures": [
+        {
+          "id": "ev_exact_fact_02",
+          "category": "exact_fact",
+          "query": "琉璃的身份是什么",
+          "expected_ids": [
+            "fact_1fd21628049f0ede",
+            "fact_ced6a01e12e614d1"
+          ],
+          "expected_count": 2,
+          "returned_ids": [
+            "event_040698d28cccbab0",
+            "fact_613a55ee54631a7e",
+            "fact_d43eb42724ed23e5",
+            "event_cb14c98fc6218ca8",
+            "fact_d14a9a7c71a55003"
+          ],
+          "elapsed_ms": 14.7
+        },
+        {
+          "id": "ev_exact_fact_03",
+          "category": "exact_fact",
+          "query": "理央的身份是什么",
+          "expected_ids": [
+            "fact_0fcb48d2b7dcfd6f",
+            "fact_55c79b273a377f2a",
+            "fact_600f9343198db251",
+            "fact_78a3027670e9eae1",
+            "fact_e24c31ade87d5499"
+          ],
+          "expected_count": 5,
+          "returned_ids": [
+            "event_aae37a9b033f7b4f",
+            "manual_relation_e5b8b24f7400fceb",
+            "fact_613a55ee54631a7e",
+            "rel_453e9fab98e91f60",
+            "rel_7f97b8bd6854b893"
+          ],
+          "elapsed_ms": 16.1
+        },
+        {
+          "id": "ev_identity_01",
+          "category": "identity",
+          "query": "夜子是游行寺家的什么人",
+          "expected_ids": [
+            "fact_0547665fd2d685fa",
+            "fact_5b5ae20ecfb0d532",
+            "fact_a35c8fe6a7db3ae5",
+            "fact_cf3399398e29864c"
+          ],
+          "expected_count": 4,
+          "returned_ids": [
+            "event_3936a1bc70fe5d2f",
+            "fact_1fd21628049f0ede",
+            "fact_84189d6cad937859",
+            "event_d0f119d3255473b0",
+            "fact_91bb4fa640f75f2e"
+          ],
+          "elapsed_ms": 15.6
+        },
+        {
+          "id": "ev_identity_02",
+          "category": "identity",
+          "query": "克丽索贝莉露是什么人",
+          "expected_ids": [
+            "fact_06d046d41b06f184",
+            "fact_251809a384ececda",
+            "fact_2a4167abd736bcdc",
+            "fact_2c7fc90234c8eebd",
+            "fact_576ea3b185bf074f",
+            "fact_64e8751d5062032e",
+            "fact_94b9200459faa6da",
+            "fact_bb0b2c32d4215f9e"
+          ],
+          "expected_count": 9,
+          "returned_ids": [
+            "fact_80bf10712bf1d4d9",
+            "event_040698d28cccbab0",
+            "event_adc4cf32a1f80a70",
+            "fact_a11ecbd2568cfee3",
+            "rel_99b2edf6334ca3e5"
+          ],
+          "elapsed_ms": 16.2
+        },
+        {
+          "id": "ev_kinship_01",
+          "category": "kinship",
+          "query": "暗子和夜子是什么关系",
+          "expected_ids": [
+            "rel_51728c8d78f7b5cf"
+          ],
+          "expected_count": 1,
+          "returned_ids": [
+            "rel_81e13ce00c3597c5",
+            "event_4ef1c03e9cca7315",
+            "event_3936a1bc70fe5d2f",
+            "rel_15678d327e6fde5b",
+            "event_d0f119d3255473b0"
+          ],
+          "elapsed_ms": 11.2
+        },
+        {
+          "id": "ev_kinship_03",
+          "category": "kinship",
+          "query": "夜子和汀是什么关系",
+          "expected_ids": [
+            "manual_relation_29ced62dcc8d4f4d",
+            "manual_relation_417ac8c5e66f95e5"
+          ],
+          "expected_count": 2,
+          "returned_ids": [
+            "rel_52d054b748c1cb0c",
+            "manual_relation_31c17bd9be427a43",
+            "fact_9d5a281f182d2aa6",
+            "rel_ababbb6a60f249cd",
+            "rel_15678d327e6fde5b"
+          ],
+          "elapsed_ms": 13.8
+        },
+        {
+          "id": "ev_dyn_relation_02",
+          "category": "dynamic_relation",
+          "query": "琉璃和理央后来变成了什么关系",
+          "expected_ids": [
+            "rel_aa91c18b46927932"
+          ],
+          "expected_count": 1,
+          "returned_ids": [
+            "manual_relation_e5b8b24f7400fceb",
+            "event_5c206631ef2bc432",
+            "fact_613a55ee54631a7e",
+            "event_137fee5dbe99475c",
+            "event_57cc8f1c07ccc882"
+          ],
+          "elapsed_ms": 12.1
+        },
+        {
+          "id": "ev_dyn_relation_04",
+          "category": "dynamic_relation",
+          "query": "克丽索贝莉露和彼方是什么关系",
+          "expected_ids": [
+            "rel_8cb732fd3d4cd7b1"
+          ],
+          "expected_count": 1,
+          "returned_ids": [
+            "event_53e4c00d7e909887",
+            "fact_80bf10712bf1d4d9",
+            "rel_307306f509bb0c50",
+            "fact_d14a9a7c71a55003",
+            "rel_5f4279ab2663d517"
+          ],
+          "elapsed_ms": 16.3
+        },
+        {
+          "id": "ev_event_01",
+          "category": "event_query",
+          "query": "琉璃和彼方初次见面发生了什么",
+          "expected_ids": [
+            "event_8558a07d30b69bb3",
+            "event_fc4692df8d6ec563"
+          ],
+          "expected_count": 2,
+          "returned_ids": [
+            "event_7dba818a04d0021b",
+            "manual_relation_e5b8b24f7400fceb",
+            "event_962b225fa8c578ae",
+            "manual_relation_21cd33c1cf656ca1",
+            "event_36fef741329d1bdc"
+          ],
+          "elapsed_ms": 10.5
+        },
+        {
+          "id": "ev_setting_03",
+          "category": "world_setting",
+          "query": "纸上魔法使指的是什么",
+          "expected_ids": [
+            "event_062538099e8c94f9",
+            "event_0c0f2eb50efb30c0",
+            "event_2e667d091668778c",
+            "event_38b57bdcdc636e94",
+            "event_4ef1c03e9cca7315",
+            "event_7aa11ce4e560b77c",
+            "event_86f6ac618d88b527",
+            "event_a1833753fba819d7"
+          ],
+          "expected_count": 22,
+          "returned_ids": [
+            "fact_40a102e73d85ad79",
+            "fact_ab833dfd22ecd818",
+            "fact_10f1159e758a2af0",
+            "fact_6bab6e47522f879d",
+            "fact_c60b5a0e5cee967c"
+          ],
+          "elapsed_ms": 13.5
+        },
+        {
+          "id": "ev_setting_04",
+          "category": "world_setting",
+          "query": "《月社妃》这本书的设定是什么",
+          "expected_ids": [
+            "fact_ca3dcf16ed06835c"
+          ],
+          "expected_count": 1,
+          "returned_ids": [
+            "fact_73a9d588f38b101b",
+            "event_11fd138133c76b0c",
+            "fact_15e63b1a24ceb8a5",
+            "fact_c4c57423ed9d28f3",
+            "fact_6a1ac262b3f5d7d9"
+          ],
+          "elapsed_ms": 16.1
+        },
+        {
+          "id": "ev_alias_01",
+          "category": "alias",
+          "query": "遊行寺夜子的目标是什么",
+          "expected_ids": [
+            "fact_0bcef7e7b6845675",
+            "fact_22719796c8bfefad",
+            "fact_da4d0bda6d2eec8b",
+            "fact_e4049017e43973b0"
+          ],
+          "expected_count": 4,
+          "returned_ids": [
+            "event_3936a1bc70fe5d2f",
+            "fact_1fd21628049f0ede",
+            "fact_84189d6cad937859",
+            "event_d0f119d3255473b0",
+            "event_7d1798d3913f5c7f"
+          ],
+          "elapsed_ms": 12.7
+        },
+        {
+          "id": "ev_alias_03",
+          "category": "alias",
+          "query": "伏见理央是谁",
+          "expected_ids": [
+            "fact_0fcb48d2b7dcfd6f",
+            "fact_55c79b273a377f2a",
+            "fact_600f9343198db251",
+            "fact_78a3027670e9eae1",
+            "fact_e24c31ade87d5499"
+          ],
+          "expected_count": 5,
+          "returned_ids": [
+            "manual_relation_e5b8b24f7400fceb",
+            "rel_453e9fab98e91f60",
+            "event_aae37a9b033f7b4f",
+            "event_5672324adf3d004f",
+            "event_6d25426970b5ca15"
+          ],
+          "elapsed_ms": 18.4
+        },
+        {
+          "id": "ev_alias_04",
+          "category": "alias",
+          "query": "新来琉璃是什么身份",
+          "expected_ids": [
+            "fact_1fd21628049f0ede",
+            "fact_ced6a01e12e614d1"
+          ],
+          "expected_count": 2,
+          "returned_ids": [
+            "event_040698d28cccbab0",
+            "manual_relation_e5b8b24f7400fceb",
+            "event_cb14c98fc6218ca8",
+            "fact_80bf10712bf1d4d9",
+            "fact_54ce4dd3e2f48b91"
+          ],
+          "elapsed_ms": 18.2
+        },
+        {
+          "id": "ev_cross_volume_01",
+          "category": "cross_volume",
+          "query": "夜子和琉璃的关系经历了哪些变化",
+          "expected_ids": [
+            "manual_relation_31c17bd9be427a43",
+            "rel_52d054b748c1cb0c",
+            "rel_e941e64d3a762f31"
+          ],
+          "expected_count": 3,
+          "returned_ids": [
+            "event_3db7b11a2f23b116",
+            "event_4ef1c03e9cca7315",
+            "rel_15678d327e6fde5b",
+            "event_09b4fc490dfb1a54",
+            "rel_81e13ce00c3597c5"
+          ],
+          "elapsed_ms": 18.9
+        },
+        {
+          "id": "ev_cross_volume_02",
+          "category": "cross_volume",
+          "query": "克丽索贝莉露的身世是什么",
+          "expected_ids": [
+            "fact_06d046d41b06f184",
+            "fact_251809a384ececda",
+            "fact_2a4167abd736bcdc",
+            "fact_2c7fc90234c8eebd",
+            "fact_576ea3b185bf074f",
+            "fact_64e8751d5062032e",
+            "fact_94b9200459faa6da",
+            "fact_bb0b2c32d4215f9e"
+          ],
+          "expected_count": 9,
+          "returned_ids": [
+            "fact_80bf10712bf1d4d9",
+            "fact_8fd89a9a8b2012c8",
+            "event_0c0f2eb50efb30c0",
+            "event_36c2443bbdf7d73c",
+            "fact_7db86b5070ca24b4"
+          ],
+          "elapsed_ms": 17.3
+        },
+        {
+          "id": "ev_cross_volume_03",
+          "category": "cross_volume",
+          "query": "理央的失忆出现过几次",
+          "expected_ids": [
+            "fact_5a876eb3f9220e0a",
+            "fact_5e895c141f53c622"
+          ],
+          "expected_count": 2,
+          "returned_ids": [
+            "fact_f2696a3259631f6e",
+            "event_fd449de27918cffc",
+            "event_fb9d65a1094da8c2",
+            "fact_59b7c078ee500cb9",
+            "fact_cb9bd576622b23ab"
+          ],
+          "elapsed_ms": 20.1
+        },
+        {
+          "id": "ev_narrative_04",
+          "category": "narrative_layer",
+          "query": "夜子声称自己是什么样的人",
+          "expected_ids": [
+            "fact_d0c86d8a82dcbcad"
+          ],
+          "expected_count": 1,
+          "returned_ids": [
+            "fact_94de5ced0bc39df0",
+            "rel_160632234a507562",
+            "event_84ae8490c36df8d8",
+            "rel_5e7800a566fc9792",
+            "rel_52d054b748c1cb0c"
+          ],
+          "elapsed_ms": 19.9
+        }
+      ]
+    },
+    {
+      "stage": "hybrid",
+      "n": 48,
+      "hit@1": 0.5625,
+      "hit@3": 0.7292,
+      "hit@5": 0.7917,
+      "mrr": 0.65,
+      "categories": {
+        "exact_fact": {
+          "n": 4,
+          "hit1": 3,
+          "hit5": 4,
+          "mrr": 3.5
+        },
+        "identity": {
+          "n": 4,
+          "hit1": 2,
+          "hit5": 4,
+          "mrr": 2.8333
+        },
+        "kinship": {
+          "n": 4,
+          "hit1": 4,
+          "hit5": 4,
+          "mrr": 4.0
+        },
+        "dynamic_relation": {
+          "n": 4,
+          "hit1": 1,
+          "hit5": 1,
+          "mrr": 1.0
+        },
+        "event_query": {
+          "n": 4,
+          "hit1": 1,
+          "hit5": 4,
+          "mrr": 1.7833
+        },
+        "causality": {
+          "n": 4,
+          "hit1": 4,
+          "hit5": 4,
+          "mrr": 4.0
+        },
+        "world_setting": {
+          "n": 4,
+          "hit1": 3,
+          "hit5": 3,
+          "mrr": 3.0
+        },
+        "alias": {
+          "n": 4,
+          "hit1": 1,
+          "hit5": 1,
+          "mrr": 1.0
+        },
+        "cross_volume": {
+          "n": 4,
+          "hit1": 0,
+          "hit5": 2,
+          "mrr": 0.75
+        },
+        "narrative_layer": {
+          "n": 4,
+          "hit1": 3,
+          "hit5": 4,
+          "mrr": 3.3333
+        },
+        "negation_correction": {
+          "n": 4,
+          "hit1": 1,
+          "hit5": 3,
+          "mrr": 2.0
+        },
+        "no_answer": {
+          "n": 4,
+          "hit1": 4,
+          "hit5": 4,
+          "mrr": 4.0
+        }
+      },
+      "failures": [
+        {
+          "id": "ev_dyn_relation_01",
+          "category": "dynamic_relation",
+          "query": "理央和夜子的关系是什么",
+          "expected_ids": [
+            "rel_1c74cfb1f43dab51",
+            "rel_7f97b8bd6854b893"
+          ],
+          "expected_count": 2,
+          "returned_ids": [
+            "rel_51728c8d78f7b5cf",
+            "fact_6a1ac262b3f5d7d9",
+            "event_57cc8f1c07ccc882",
+            "rel_5e7800a566fc9792",
+            "fact_4d44cc225aed7796"
+          ],
+          "elapsed_ms": 89.5
+        },
+        {
+          "id": "ev_dyn_relation_02",
+          "category": "dynamic_relation",
+          "query": "琉璃和理央后来变成了什么关系",
+          "expected_ids": [
+            "rel_aa91c18b46927932"
+          ],
+          "expected_count": 1,
+          "returned_ids": [
+            "event_137fee5dbe99475c",
+            "event_cfaf5ba63b91eb2e",
+            "event_32382b8bbbfef2d1",
+            "rel_51728c8d78f7b5cf",
+            "event_c6f5d5931d4394a4"
+          ],
+          "elapsed_ms": 73.0
+        },
+        {
+          "id": "ev_dyn_relation_03",
+          "category": "dynamic_relation",
+          "query": "夜子对琉璃的感情变成了什么样",
+          "expected_ids": [
+            "manual_relation_31c17bd9be427a43",
+            "rel_52d054b748c1cb0c"
+          ],
+          "expected_count": 2,
+          "returned_ids": [
+            "event_09b4fc490dfb1a54",
+            "fact_cded898792a16e03",
+            "event_6f1369e76e75f136",
+            "rel_6a24070d0e62b551",
+            "event_c6f5d5931d4394a4"
+          ],
+          "elapsed_ms": 72.6
+        },
+        {
+          "id": "ev_setting_04",
+          "category": "world_setting",
+          "query": "《月社妃》这本书的设定是什么",
+          "expected_ids": [
+            "fact_ca3dcf16ed06835c"
+          ],
+          "expected_count": 1,
+          "returned_ids": [
+            "fact_73a9d588f38b101b",
+            "fact_15e63b1a24ceb8a5",
+            "fact_9cae8b5b73c97db2",
+            "fact_c4c57423ed9d28f3",
+            "event_5176cc5c9b437727"
+          ],
+          "elapsed_ms": 94.8
+        },
+        {
+          "id": "ev_alias_02",
+          "category": "alias",
+          "query": "月社妃是琉璃的什么人",
+          "expected_ids": [
+            "rel_5f4279ab2663d517",
+            "rel_99b2edf6334ca3e5"
+          ],
+          "expected_count": 2,
+          "returned_ids": [
+            "event_af4a672926909cb6",
+            "fact_255678c1749e1112",
+            "event_11fd138133c76b0c",
+            "rel_b077601df5d3d129",
+            "event_2257567bb5e834f5"
+          ],
+          "elapsed_ms": 81.7
+        },
+        {
+          "id": "ev_alias_03",
+          "category": "alias",
+          "query": "伏见理央是谁",
+          "expected_ids": [
+            "fact_0fcb48d2b7dcfd6f",
+            "fact_55c79b273a377f2a",
+            "fact_600f9343198db251",
+            "fact_78a3027670e9eae1",
+            "fact_e24c31ade87d5499"
+          ],
+          "expected_count": 5,
+          "returned_ids": [
+            "fact_d14a9a7c71a55003",
+            "event_46be4a75e6ac1b6e",
+            "fact_6a1ac262b3f5d7d9",
+            "fact_da4d0bda6d2eec8b",
+            "fact_4d44cc225aed7796"
+          ],
+          "elapsed_ms": 79.1
+        },
+        {
+          "id": "ev_alias_04",
+          "category": "alias",
+          "query": "新来琉璃是什么身份",
+          "expected_ids": [
+            "fact_1fd21628049f0ede",
+            "fact_ced6a01e12e614d1"
+          ],
+          "expected_count": 2,
+          "returned_ids": [
+            "fact_55c79b273a377f2a",
+            "event_040698d28cccbab0",
+            "fact_8c91d0b037cc8526",
+            "fact_c4a018ed6a257980",
+            "fact_bb0b2c32d4215f9e"
+          ],
+          "elapsed_ms": 85.2
+        },
+        {
+          "id": "ev_cross_volume_01",
+          "category": "cross_volume",
+          "query": "夜子和琉璃的关系经历了哪些变化",
+          "expected_ids": [
+            "manual_relation_31c17bd9be427a43",
+            "rel_52d054b748c1cb0c",
+            "rel_e941e64d3a762f31"
+          ],
+          "expected_count": 3,
+          "returned_ids": [
+            "event_3db7b11a2f23b116",
+            "fact_83f737894534e1d7",
+            "fact_01a25a79a4570c82",
+            "event_b31ff6d76eca646e",
+            "fact_07d1d051b633bd09"
+          ],
+          "elapsed_ms": 77.8
+        },
+        {
+          "id": "ev_cross_volume_04",
+          "category": "cross_volume",
+          "query": "琉璃和理央小时候是什么关系",
+          "expected_ids": [
+            "manual_relation_e5b8b24f7400fceb"
+          ],
+          "expected_count": 1,
+          "returned_ids": [
+            "rel_51728c8d78f7b5cf",
+            "event_abe21a4e7a573b9e",
+            "event_137fee5dbe99475c",
+            "event_5f62d252b314323c",
+            "fact_6a1ac262b3f5d7d9"
+          ],
+          "elapsed_ms": 82.2
+        },
+        {
+          "id": "ev_negation_03",
+          "category": "negation_correction",
+          "query": "理央是夜子的仆人吗",
+          "expected_ids": [
+            "rel_7f97b8bd6854b893"
+          ],
+          "expected_count": 1,
+          "returned_ids": [
+            "fact_78a3027670e9eae1",
+            "rel_5e7800a566fc9792",
+            "rel_51728c8d78f7b5cf",
+            "fact_c4459f31a65553cb",
+            "event_e2ff959e987fbd30"
+          ],
+          "elapsed_ms": 84.1
+        }
+      ]
+    },
+    {
+      "stage": "hybrid_rerank",
+      "n": 48,
+      "hit@1": 0.6875,
+      "hit@3": 0.875,
+      "hit@5": 0.9375,
+      "mrr": 0.7889,
+      "categories": {
+        "exact_fact": {
+          "n": 4,
+          "hit1": 3,
+          "hit5": 4,
+          "mrr": 3.5
+        },
+        "identity": {
+          "n": 4,
+          "hit1": 3,
+          "hit5": 4,
+          "mrr": 3.25
+        },
+        "kinship": {
+          "n": 4,
+          "hit1": 4,
+          "hit5": 4,
+          "mrr": 4.0
+        },
+        "dynamic_relation": {
+          "n": 4,
+          "hit1": 3,
+          "hit5": 4,
+          "mrr": 3.5
+        },
+        "event_query": {
+          "n": 4,
+          "hit1": 1,
+          "hit5": 4,
+          "mrr": 2.0833
+        },
+        "causality": {
+          "n": 4,
+          "hit1": 3,
+          "hit5": 4,
+          "mrr": 3.2
+        },
+        "world_setting": {
+          "n": 4,
+          "hit1": 3,
+          "hit5": 3,
+          "mrr": 3.0
+        },
+        "alias": {
+          "n": 4,
+          "hit1": 2,
+          "hit5": 2,
+          "mrr": 2.0
+        },
+        "cross_volume": {
+          "n": 4,
+          "hit1": 0,
+          "hit5": 4,
+          "mrr": 2.0
+        },
+        "narrative_layer": {
+          "n": 4,
+          "hit1": 3,
+          "hit5": 4,
+          "mrr": 3.3333
+        },
+        "negation_correction": {
+          "n": 4,
+          "hit1": 4,
+          "hit5": 4,
+          "mrr": 4.0
+        },
+        "no_answer": {
+          "n": 4,
+          "hit1": 4,
+          "hit5": 4,
+          "mrr": 4.0
+        }
+      },
+      "failures": [
+        {
+          "id": "ev_setting_04",
+          "category": "world_setting",
+          "query": "《月社妃》这本书的设定是什么",
+          "expected_ids": [
+            "fact_ca3dcf16ed06835c"
+          ],
+          "expected_count": 1,
+          "returned_ids": [
+            "fact_ea3bb7661f38221d",
+            "fact_73a9d588f38b101b",
+            "fact_15e63b1a24ceb8a5",
+            "fact_9cae8b5b73c97db2",
+            "fact_c4c57423ed9d28f3"
+          ],
+          "elapsed_ms": 84.3
+        },
+        {
+          "id": "ev_alias_03",
+          "category": "alias",
+          "query": "伏见理央是谁",
+          "expected_ids": [
+            "fact_0fcb48d2b7dcfd6f",
+            "fact_55c79b273a377f2a",
+            "fact_600f9343198db251",
+            "fact_78a3027670e9eae1",
+            "fact_e24c31ade87d5499"
+          ],
+          "expected_count": 5,
+          "returned_ids": [
+            "fact_6a1ac262b3f5d7d9",
+            "fact_da4d0bda6d2eec8b",
+            "fact_4d44cc225aed7796",
+            "fact_70125a878641d672",
+            "fact_a593586cb5a4eb78"
+          ],
+          "elapsed_ms": 84.1
+        },
+        {
+          "id": "ev_alias_04",
+          "category": "alias",
+          "query": "新来琉璃是什么身份",
+          "expected_ids": [
+            "fact_1fd21628049f0ede",
+            "fact_ced6a01e12e614d1"
+          ],
+          "expected_count": 2,
+          "returned_ids": [
+            "fact_55c79b273a377f2a",
+            "fact_8c91d0b037cc8526",
+            "fact_c4a018ed6a257980",
+            "fact_bb0b2c32d4215f9e",
+            "fact_0547665fd2d685fa"
+          ],
+          "elapsed_ms": 83.0
+        }
+      ]
+    }
+  ]
+}

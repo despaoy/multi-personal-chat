@@ -1,0 +1,18 @@
+{
+  "phase": "run",
+  "recorded_at": "2026-08-26T06:10:18+00:00",
+  "note": "client_stats 仅统计本次进程；lifetime_state_stats 从 candidate_run.json 的逐场景 attempts 确定性推导，覆盖全部断点续跑。二者均不进入 P4A 审核文档。",
+  "client_stats": {
+    "calls": 9,
+    "failures": 0,
+    "prompt_tokens": 14424,
+    "eval_tokens": 1287,
+    "total_latency_s": 26.76600000000326,
+    "max_latency_s": 4.327999999994063
+  },
+  "lifetime_state_stats": {
+    "total_attempts": 441,
+    "minimum_required_calls": 410,
+    "excess_retry_calls": 31
+  }
+}

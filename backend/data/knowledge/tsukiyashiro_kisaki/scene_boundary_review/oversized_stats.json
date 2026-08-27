@@ -1,0 +1,752 @@
+{
+  "schema_version": 1,
+  "mode": "decisions",
+  "oversized_thresholds": {
+    "span_lines": 300,
+    "dialogue_turns": 150
+  },
+  "total_scenes": 262,
+  "total_oversized_scenes": 24,
+  "total_oversized_low_candidates": 133,
+  "units": {
+    "vol01_1翡翠的排挤原理": {
+      "story_title": "1翡翠的排挤原理",
+      "boundaries": [
+        31,
+        708,
+        875,
+        1195,
+        1230,
+        1323,
+        1604,
+        1731,
+        1860,
+        1965,
+        2133,
+        2334,
+        2634,
+        2735,
+        2866,
+        3105,
+        3298,
+        3496,
+        3611,
+        3830,
+        4440
+      ],
+      "scenes": 22,
+      "oversized_scenes": [
+        {
+          "line_start": 31,
+          "line_end": 707,
+          "span_lines": 677,
+          "dialogue_turns": 306,
+          "low_candidates": [
+            37,
+            122,
+            158,
+            327,
+            339,
+            368,
+            543,
+            706
+          ]
+        },
+        {
+          "line_start": 875,
+          "line_end": 1194,
+          "span_lines": 320,
+          "dialogue_turns": 170,
+          "low_candidates": [
+            898,
+            1194
+          ]
+        },
+        {
+          "line_start": 3830,
+          "line_end": 4439,
+          "span_lines": 610,
+          "dialogue_turns": 247,
+          "low_candidates": [
+            4029,
+            4072,
+            4104,
+            4130,
+            4276,
+            4298,
+            4312,
+            4348,
+            4419,
+            4432
+          ]
+        }
+      ],
+      "oversized_low_candidate_count": 20,
+      "remaining_low_candidate_count": 46
+    },
+    "vol02_2红宝石的天作之合": {
+      "story_title": "2红宝石的天作之合",
+      "boundaries": [
+        50,
+        602,
+        751,
+        824,
+        1102,
+        1121,
+        1238,
+        1680,
+        1888,
+        1967,
+        2383,
+        2411,
+        2659,
+        2798
+      ],
+      "scenes": 15,
+      "oversized_scenes": [
+        {
+          "line_start": 50,
+          "line_end": 600,
+          "span_lines": 551,
+          "dialogue_turns": 259,
+          "low_candidates": [
+            50,
+            199,
+            208,
+            257,
+            387
+          ]
+        },
+        {
+          "line_start": 1238,
+          "line_end": 1679,
+          "span_lines": 442,
+          "dialogue_turns": 236,
+          "low_candidates": [
+            1354
+          ]
+        },
+        {
+          "line_start": 1967,
+          "line_end": 2382,
+          "span_lines": 416,
+          "dialogue_turns": 223,
+          "low_candidates": [
+            2157,
+            2351,
+            2365,
+            2382
+          ]
+        }
+      ],
+      "oversized_low_candidate_count": 10,
+      "remaining_low_candidate_count": 17
+    },
+    "vol03_3蓝宝石的存在证明": {
+      "story_title": "3蓝宝石的存在证明",
+      "boundaries": [
+        86,
+        346,
+        513,
+        553,
+        1072,
+        1230,
+        1603,
+        1728,
+        1849,
+        2100,
+        2163,
+        2822,
+        3098,
+        3250,
+        3766,
+        4113
+      ],
+      "scenes": 17,
+      "oversized_scenes": [
+        {
+          "line_start": 553,
+          "line_end": 1071,
+          "span_lines": 519,
+          "dialogue_turns": 281,
+          "low_candidates": [
+            702
+          ]
+        },
+        {
+          "line_start": 1230,
+          "line_end": 1602,
+          "span_lines": 373,
+          "dialogue_turns": 132,
+          "low_candidates": [
+            1299,
+            1315,
+            1579
+          ]
+        },
+        {
+          "line_start": 2163,
+          "line_end": 2820,
+          "span_lines": 658,
+          "dialogue_turns": 307,
+          "low_candidates": [
+            2212,
+            2362,
+            2422,
+            2430,
+            2459,
+            2511,
+            2553,
+            2662,
+            2808,
+            2815
+          ]
+        },
+        {
+          "line_start": 3250,
+          "line_end": 3765,
+          "span_lines": 516,
+          "dialogue_turns": 214,
+          "low_candidates": [
+            3445,
+            3459,
+            3490,
+            3497,
+            3571,
+            3605
+          ]
+        },
+        {
+          "line_start": 3766,
+          "line_end": 4112,
+          "span_lines": 347,
+          "dialogue_turns": 81,
+          "low_candidates": [
+            3795,
+            3820,
+            3826,
+            3868,
+            3903,
+            3929,
+            3947,
+            3959,
+            3971,
+            3983,
+            3995,
+            4002,
+            4050,
+            4065,
+            4088,
+            4112
+          ]
+        }
+      ],
+      "oversized_low_candidate_count": 36,
+      "remaining_low_candidate_count": 34
+    },
+    "vol04_4紫水晶的怪异传说": {
+      "story_title": "4紫水晶的怪异传说",
+      "boundaries": [
+        66,
+        420,
+        558,
+        768,
+        859,
+        1032,
+        1191,
+        1372,
+        1422,
+        1701,
+        2035,
+        2076,
+        2424,
+        2499,
+        2620,
+        2659,
+        2756,
+        3315
+      ],
+      "scenes": 19,
+      "oversized_scenes": [
+        {
+          "line_start": 66,
+          "line_end": 419,
+          "span_lines": 354,
+          "dialogue_turns": 171,
+          "low_candidates": [
+            88,
+            261,
+            389,
+            405,
+            414
+          ]
+        },
+        {
+          "line_start": 1701,
+          "line_end": 2034,
+          "span_lines": 334,
+          "dialogue_turns": 169,
+          "low_candidates": [
+            1724,
+            1734,
+            1882
+          ]
+        },
+        {
+          "line_start": 2076,
+          "line_end": 2422,
+          "span_lines": 347,
+          "dialogue_turns": 157,
+          "low_candidates": [
+            2170,
+            2297,
+            2304,
+            2333,
+            2363,
+            2371,
+            2391,
+            2412
+          ]
+        },
+        {
+          "line_start": 2756,
+          "line_end": 3314,
+          "span_lines": 559,
+          "dialogue_turns": 244,
+          "low_candidates": [
+            2866,
+            2944,
+            2966,
+            3133,
+            3153
+          ]
+        }
+      ],
+      "oversized_low_candidate_count": 21,
+      "remaining_low_candidate_count": 32
+    },
+    "vol05_5磷灰石的怠惰现象": {
+      "story_title": "5磷灰石的怠惰现象",
+      "boundaries": [
+        218,
+        262,
+        339,
+        545,
+        786,
+        849,
+        870,
+        961,
+        1006,
+        1091,
+        1283,
+        1573,
+        1800,
+        2361,
+        3056
+      ],
+      "scenes": 16,
+      "oversized_scenes": [
+        {
+          "line_start": 1800,
+          "line_end": 2359,
+          "span_lines": 560,
+          "dialogue_turns": 270,
+          "low_candidates": [
+            2021,
+            2196,
+            2219
+          ]
+        },
+        {
+          "line_start": 2361,
+          "line_end": 3055,
+          "span_lines": 695,
+          "dialogue_turns": 311,
+          "low_candidates": [
+            2706,
+            2804,
+            3032,
+            3054
+          ]
+        }
+      ],
+      "oversized_low_candidate_count": 7,
+      "remaining_low_candidate_count": 23
+    },
+    "vol06_6芙蓉石的长年隔绝": {
+      "story_title": "6芙蓉石的长年隔绝",
+      "boundaries": [
+        272,
+        719,
+        729,
+        1219,
+        1262,
+        1425,
+        1616,
+        1841,
+        2144,
+        2439,
+        2567,
+        2750,
+        2891,
+        3060,
+        3116,
+        3686,
+        3712
+      ],
+      "scenes": 18,
+      "oversized_scenes": [
+        {
+          "line_start": 272,
+          "line_end": 718,
+          "span_lines": 447,
+          "dialogue_turns": 240,
+          "low_candidates": [
+            339,
+            716
+          ]
+        },
+        {
+          "line_start": 729,
+          "line_end": 1218,
+          "span_lines": 490,
+          "dialogue_turns": 220,
+          "low_candidates": [
+            816,
+            1018,
+            1057,
+            1105,
+            1193,
+            1213
+          ]
+        },
+        {
+          "line_start": 1841,
+          "line_end": 2143,
+          "span_lines": 303,
+          "dialogue_turns": 123,
+          "low_candidates": [
+            1914,
+            2066,
+            2078,
+            2113,
+            2135
+          ]
+        },
+        {
+          "line_start": 3116,
+          "line_end": 3685,
+          "span_lines": 570,
+          "dialogue_turns": 241,
+          "low_candidates": [
+            3177,
+            3187,
+            3387,
+            3394,
+            3511,
+            3535,
+            3551,
+            3591,
+            3645,
+            3684
+          ]
+        }
+      ],
+      "oversized_low_candidate_count": 23,
+      "remaining_low_candidate_count": 25
+    },
+    "vol06_6芙蓉石的终焉轮回": {
+      "story_title": "6芙蓉石的终焉轮回",
+      "boundaries": [
+        114,
+        141,
+        359,
+        403,
+        661,
+        767,
+        850,
+        874,
+        965,
+        1061,
+        1222,
+        1340,
+        1384,
+        1444,
+        1704,
+        1934,
+        2106,
+        2264,
+        2510,
+        2550
+      ],
+      "scenes": 21,
+      "oversized_scenes": [
+        {
+          "line_start": 403,
+          "line_end": 660,
+          "span_lines": 258,
+          "dialogue_turns": 153,
+          "low_candidates": [
+            540
+          ]
+        }
+      ],
+      "oversized_low_candidate_count": 1,
+      "remaining_low_candidate_count": 52
+    },
+    "vol07_7黑珍珠的求爱信号": {
+      "story_title": "7黑珍珠的求爱信号",
+      "boundaries": [
+        102,
+        237,
+        342,
+        452,
+        612,
+        855,
+        983,
+        1249,
+        1365,
+        1477,
+        1526,
+        1566,
+        1590,
+        1812,
+        2218,
+        2262,
+        2412
+      ],
+      "scenes": 18,
+      "oversized_scenes": [
+        {
+          "line_start": 1812,
+          "line_end": 2217,
+          "span_lines": 406,
+          "dialogue_turns": 171,
+          "low_candidates": [
+            1908,
+            1950,
+            2072,
+            2087,
+            2097,
+            2107,
+            2147,
+            2169,
+            2216
+          ]
+        }
+      ],
+      "oversized_low_candidate_count": 9,
+      "remaining_low_candidate_count": 26
+    },
+    "vol08_8萤石的怠惰现象": {
+      "story_title": "8萤石的怠惰现象",
+      "boundaries": [
+        36,
+        77,
+        152,
+        188,
+        254,
+        336,
+        631,
+        661,
+        801,
+        944,
+        1051,
+        1156,
+        1185,
+        1426
+      ],
+      "scenes": 15,
+      "oversized_scenes": [],
+      "oversized_low_candidate_count": 0,
+      "remaining_low_candidate_count": 27
+    },
+    "vol08_8萤石的时空残影": {
+      "story_title": "8萤石的时空残影",
+      "boundaries": [
+        51,
+        319,
+        615,
+        809,
+        1054,
+        1260,
+        1407,
+        1527,
+        1579,
+        1717
+      ],
+      "scenes": 11,
+      "oversized_scenes": [],
+      "oversized_low_candidate_count": 0,
+      "remaining_low_candidate_count": 29
+    },
+    "vol09_9白珍珠的泡沫爱慕": {
+      "story_title": "9白珍珠的泡沫爱慕",
+      "boundaries": [
+        98,
+        165,
+        310,
+        483,
+        741,
+        1007,
+        1096,
+        1171,
+        1262,
+        1427,
+        1465,
+        1558,
+        1659,
+        1807
+      ],
+      "scenes": 15,
+      "oversized_scenes": [],
+      "oversized_low_candidate_count": 0,
+      "remaining_low_candidate_count": 26
+    },
+    "vol09_9绿幽灵水晶的命运连锁": {
+      "story_title": "9绿幽灵水晶的命运连锁",
+      "boundaries": [
+        161,
+        213,
+        291,
+        443,
+        519,
+        758,
+        1018,
+        1093,
+        1191,
+        1258,
+        1393,
+        1510,
+        1534,
+        1724,
+        1759,
+        1986,
+        2161,
+        2356
+      ],
+      "scenes": 19,
+      "oversized_scenes": [],
+      "oversized_low_candidate_count": 0,
+      "remaining_low_candidate_count": 24
+    },
+    "vol10_10黑曜石的因果目录": {
+      "story_title": "10黑曜石的因果目录",
+      "boundaries": [
+        171,
+        433,
+        568,
+        741,
+        790,
+        846,
+        898
+      ],
+      "scenes": 8,
+      "oversized_scenes": [],
+      "oversized_low_candidate_count": 0,
+      "remaining_low_candidate_count": 34
+    },
+    "vol11_11黑玛瑙的不在证明": {
+      "story_title": "11黑玛瑙的不在证明",
+      "boundaries": [
+        100,
+        225,
+        301,
+        427,
+        525,
+        649,
+        832,
+        905,
+        1042,
+        1152,
+        1211,
+        1269,
+        1323,
+        1495,
+        1566
+      ],
+      "scenes": 16,
+      "oversized_scenes": [],
+      "oversized_low_candidate_count": 0,
+      "remaining_low_candidate_count": 34
+    },
+    "vol12_12青金石的幻想图书馆": {
+      "story_title": "12青金石的幻想图书馆",
+      "boundaries": [
+        266,
+        459,
+        672,
+        755,
+        833,
+        922,
+        1045,
+        1175,
+        1379,
+        1492,
+        1594,
+        1712,
+        1976,
+        2333,
+        2553
+      ],
+      "scenes": 16,
+      "oversized_scenes": [
+        {
+          "line_start": 1976,
+          "line_end": 2332,
+          "span_lines": 357,
+          "dialogue_turns": 128,
+          "low_candidates": [
+            1994,
+            2024,
+            2034,
+            2053,
+            2193,
+            2228
+          ]
+        }
+      ],
+      "oversized_low_candidate_count": 6,
+      "remaining_low_candidate_count": 55
+    },
+    "vol13_13璀璨的紫翠玉": {
+      "story_title": "13璀璨的紫翠玉",
+      "boundaries": [
+        80,
+        207,
+        295,
+        432,
+        563,
+        765,
+        935
+      ],
+      "scenes": 8,
+      "oversized_scenes": [],
+      "oversized_low_candidate_count": 0,
+      "remaining_low_candidate_count": 39
+    },
+    "epilogue_meta": {
+      "story_title": "日后谈·宣传元叙事",
+      "boundaries": [],
+      "scenes": 1,
+      "oversized_scenes": [],
+      "oversized_low_candidate_count": 0,
+      "remaining_low_candidate_count": 0
+    },
+    "epilogue_bonus": {
+      "story_title": "日后谈·萤色光景（追加剧本）",
+      "boundaries": [
+        105,
+        285,
+        335,
+        470,
+        632,
+        758
+      ],
+      "scenes": 7,
+      "oversized_scenes": [],
+      "oversized_low_candidate_count": 0,
+      "remaining_low_candidate_count": 16
+    }
+  }
+}

@@ -3,12 +3,13 @@
 整合所有模块，创建 FastAPI 应用实例。
 路由按领域拆分到 api/ 下各模块，通过 APIRouter 挂载。
 """
-import sys
-from pathlib import Path
-import os
-import logging
+
 import inspect
+import logging
+import os
+import sys
 from collections.abc import Mapping
+from pathlib import Path
 
 # 确保 backend 根目录在 Python 路径中，支持跨包导入
 _BACKEND_ROOT = Path(__file__).parent.parent
@@ -35,8 +36,10 @@ from fastapi.responses import JSONResponse
 # 重新赋值。这里只导入常量与导入时初始化的单例，不导入会被 lifespan 重赋值的单例，
 # 避免读者误以为本模块中的本地名会跟随 lifespan 更新（实际它们仍指向 None）。
 from app.config import (
-    RESOURCE_POOL_AVAILABLE, BACKUP_MANAGER_AVAILABLE,
-    FAILOVER_AVAILABLE, ACCESS_CONTROL_AVAILABLE,
+    ACCESS_CONTROL_AVAILABLE,
+    BACKUP_MANAGER_AVAILABLE,
+    FAILOVER_AVAILABLE,
+    RESOURCE_POOL_AVAILABLE,
 )
 from app.readiness import ReadinessProbe, ReadinessProbeTimeout
 from app.runtime import RuntimeContainer, get_runtime_container
@@ -67,27 +70,28 @@ async def _close_resource(label: str, resource, method_name: str) -> None:
     except Exception as exc:
         logger.warning("关闭%s失败: %s", label, exc)
 
+
 # ── 导入所有 API 路由 ──
-from api.stats import router as stats_router
-from api.messages import router as messages_router
-from api.generate import router as generate_router
-from api.loras import router as loras_router
-from api.training import router as training_router
-from api.knowledge import router as knowledge_router
-from api.models import router as models_router
-from api.config import router as config_router
+from api.ask import router as ask_router
 from api.auth import router as auth_router
-from api.user_data import router as user_data_router
-from api.enhanced import router as enhanced_router
+from api.characters import router as characters_router
 from api.claw import router as claw_router
-from api.integrations import router as integrations_router
+from api.config import router as config_router
+from api.enhanced import router as enhanced_router
 from api.evaluation import router as evaluation_router
 from api.experiments import router as experiments_router
-from api.retrieval_eval import router as retrieval_eval_router
+from api.generate import router as generate_router
+from api.integrations import router as integrations_router
+from api.knowledge import router as knowledge_router
+from api.loras import router as loras_router
+from api.messages import router as messages_router
+from api.models import router as models_router
 from api.preferences import router as preferences_router
+from api.retrieval_eval import router as retrieval_eval_router
 from api.router import router as lora_router_router
-from api.characters import router as characters_router
-
+from api.stats import router as stats_router
+from api.training import router as training_router
+from api.user_data import router as user_data_router
 
 # ═══════════════════════════════════════════
 # 应用生命周期
@@ -138,7 +142,8 @@ async def lifespan(app: FastAPI):
 
     # 初始化 Redis 缓存（可选，失败不影响服务）
     try:
-        from cache.redis_client import get_redis, health_check
+        from cache.redis_client import health_check
+
         if health_check():
             logger.info("✅ Redis 缓存连接正常")
         else:
@@ -167,6 +172,7 @@ async def lifespan(app: FastAPI):
     if BACKUP_MANAGER_AVAILABLE and not postgres_mode:
         try:
             from infra.backup_manager import BackupManager
+
             db_path = str(getattr(database, "db_path", _BACKEND_ROOT / "qq_assistant.db"))
             db_file = Path(db_path).expanduser()
             if not db_file.is_absolute():
@@ -174,9 +180,7 @@ async def lifespan(app: FastAPI):
             db_path = str(db_file)
             configured_backup_dir = container.startup_env.get("BACKUP_DIR", "").strip()
             backup_dir = (
-                Path(configured_backup_dir).expanduser()
-                if configured_backup_dir
-                else db_file.parent / "backups"
+                Path(configured_backup_dir).expanduser() if configured_backup_dir else db_file.parent / "backups"
             )
             if not backup_dir.is_absolute():
                 backup_dir = db_file.parent / backup_dir
@@ -189,6 +193,7 @@ async def lifespan(app: FastAPI):
     if FAILOVER_AVAILABLE:
         try:
             from infra.failover import FailoverManager, FailoverStrategy
+
             _cfg.failover_mgr = FailoverManager(strategy=FailoverStrategy.AUTO_FAILOVER)
 
             # I-2 fix: 不再注册 vLLM provider 到 FailoverManager。
@@ -202,13 +207,16 @@ async def lifespan(app: FastAPI):
                 await _cfg.failover_mgr.start()
                 logger.info("✅ 故障转移管理器已启动（含 HealthChecker）")
             else:
-                logger.info("✅ 故障转移管理器已初始化（无 provider，跳过 HealthChecker 启动；vLLM 由 VLLMClient 内部管理）")
+                logger.info(
+                    "✅ 故障转移管理器已初始化（无 provider，跳过 HealthChecker 启动；vLLM 由 VLLMClient 内部管理）"
+                )
         except Exception as e:
             logger.warning(f"故障转移管理器初始化失败: {e}")
 
     if ACCESS_CONTROL_AVAILABLE:
         try:
             from infra.access_control import AccessControlManager
+
             _cfg.access_control_mgr = AccessControlManager(database)
             logger.info("✅ 访问控制管理器初始化完成（统一 DB adapter）")
         except Exception as e:
@@ -240,6 +248,12 @@ async def lifespan(app: FastAPI):
             await shutdown_intent_tasks()
         except Exception as e:
             logger.warning("关闭 RAG 意图任务失败: %s", e)
+        try:
+            from character.memory_llm import shutdown_memory_enrichment
+
+            await shutdown_memory_enrichment()
+        except Exception as e:
+            logger.warning("关闭后台长期记忆任务失败: %s", e)
         await _close_resource(
             "readiness probe",
             getattr(app.state, "readiness_probe", None),
@@ -263,12 +277,14 @@ async def lifespan(app: FastAPI):
         # C10 fix: 关闭 generate.py 中独立的 vLLM 客户端连接池
         try:
             from api.generate import close_vllm_client
+
             await close_vllm_client()
         except Exception as e:
             logger.warning(f"关闭 vLLM 客户端失败: {e}")
         # 关闭 bot 模块中共享的 HTTP 客户端（RAG 搜索 + Ollama 推理）
         try:
             from bot.bot import _close_bot_http_clients
+
             await _close_bot_http_clients()
         except Exception as e:
             logger.warning(f"关闭 bot HTTP 客户端失败: {e}")
@@ -281,6 +297,7 @@ async def lifespan(app: FastAPI):
         # 关闭共享的 async Redis 客户端
         try:
             from cache.redis_client import close_async_redis
+
             await close_async_redis()
         except Exception as e:
             logger.warning(f"关闭 async Redis 客户端失败: {e}")
@@ -319,25 +336,25 @@ def _allowed_origins(env: Mapping[str, str] | None = None) -> list[str]:
 # ── 安全中间件（可通过环境变量控制开关） ──
 _SECURITY_ENABLED = os.getenv("SECURITY_MIDDLEWARE_ENABLED", "true").lower() == "true"
 
+
 def _install_middleware(
     application: FastAPI,
     env: Mapping[str, str] | None = None,
 ) -> None:
     source = os.environ if env is None else env
     security_enabled = (
-        _SECURITY_ENABLED
-        if env is None
-        else source.get("SECURITY_MIDDLEWARE_ENABLED", "true").lower() == "true"
+        _SECURITY_ENABLED if env is None else source.get("SECURITY_MIDDLEWARE_ENABLED", "true").lower() == "true"
     )
     if security_enabled:
         try:
             from middleware.security import (
-                SecurityMiddleware,
-                RateLimitMiddleware,
-                InputValidationMiddleware,
-                SecurityHeadersMiddleware,
                 AuditLogMiddleware,
+                InputValidationMiddleware,
+                RateLimitMiddleware,
+                SecurityHeadersMiddleware,
+                SecurityMiddleware,
             )
+
             # Starlette's last added middleware is outermost. Request order:
             # CORS -> audit -> security headers -> auth -> rate limit -> validation.
             application.add_middleware(InputValidationMiddleware)
@@ -360,6 +377,7 @@ def _install_middleware(
         allow_headers=["*"],
     )
 
+
 # ── 挂载所有路由 ──
 _ROUTERS = (
     stats_router,
@@ -381,8 +399,8 @@ _ROUTERS = (
     preferences_router,
     lora_router_router,
     characters_router,
+    ask_router,
 )
-
 
 
 # ═══════════════════════════════════════════
@@ -473,10 +491,7 @@ def create_app(container: RuntimeContainer | None = None) -> FastAPI:
     )
     application.state.runtime_container = runtime_container
     runtime_env = runtime_container.startup_env
-    model_required = (
-        runtime_env.get("MODEL_PROVIDER", "").strip().lower() == "vllm"
-        or is_vllm_enabled(runtime_env)
-    )
+    model_required = runtime_env.get("MODEL_PROVIDER", "").strip().lower() == "vllm" or is_vllm_enabled(runtime_env)
     application.state.readiness_probe = ReadinessProbe(
         database_check=lambda: get_runtime_container(application).db.execute_sql("SELECT 1"),
         model_check=_readiness_model_check if model_required else None,

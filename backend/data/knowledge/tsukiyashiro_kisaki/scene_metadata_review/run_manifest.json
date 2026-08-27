@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "generator": "knowledge.game_rag.scene_metadata_candidate",
+  "model_id": "ollama:qwen2.5:7b",
+  "generation_params": {
+    "chunk_max_lines": 150,
+    "temperature": 0.2,
+    "top_p": 0.9,
+    "num_predict": 1024,
+    "num_ctx": 16384,
+    "timeout_s": 300,
+    "max_attempts": 3,
+    "provider": "ollama",
+    "base_url": "http://localhost:11434"
+  },
+  "source_bundle": {
+    "schema_version": 1,
+    "boundary_review_status": "approved",
+    "reviewer": "project_owner_01",
+    "total_scenes": 262,
+    "manifest_sha256": "d5adc8c37b46204ff69a4dd0be7a5b95f537ade318b556c707e875262c8aea60",
+    "scenes_sha256": "80850fa52279fd707d27665526c2c8d368e96e6ed08dd43b001d7bf159c4e784",
+    "bundle_sha256": "b82d753eb93dbc1614b89e98c8498f03884c7d5dd433d223ef853708052c8595"
+  },
+  "total_scenes": 262,
+  "scene_status_counts": {
+    "pending": 0,
+    "success": 259,
+    "failed": 3
+  },
+  "run_counts": {
+    "attempted": 3,
+    "succeeded": 0,
+    "failed": 3,
+    "skipped": 0
+  },
+  "attempted_scene_ids": [
+    "scene_0cfa2e664341ebce",
+    "scene_504131e9df789cb9",
+    "scene_cca1256fbf01a2f2"
+  ],
+  "started_at": "2026-08-26T06:09:51+00:00",
+  "completed_at": "2026-08-26T06:10:18+00:00",
+  "note": "P4B candidate run manifest: 记录模型标识、参数、输入 bundle 摘要与计数；时间戳等非确定性信息只记录在本 manifest，不进入候选运行状态或 P4A 审核状态。"
+}

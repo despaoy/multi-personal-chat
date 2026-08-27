@@ -1,0 +1,227 @@
+{
+  "generated_at": "2026-08-27T08:17:26.505941+00:00",
+  "source_decisions": {
+    "path": "backend\\data\\character_dialogues\\experiments\\v5_candidate\\constructed_review_decisions.json",
+    "review_status": "approved",
+    "needs_revision_count": 13,
+    "kept_count": 130
+  },
+  "source_dataset": "KISAKI-CANONICAL-V4",
+  "counts": {
+    "tasks": 13,
+    "candidates": 12,
+    "drops": 1
+  },
+  "checks": {
+    "tasks_complete": true,
+    "new_ids_unique": true,
+    "parent_ids_in_needs_revision": true,
+    "structure_ok": true,
+    "assistant_length_ok": true,
+    "no_exact_duplicate_with_kept": true,
+    "openings_unique": true,
+    "validation_overlap_flags": []
+  },
+  "note": "自动检查只标记风险，不代替人工批准；候选状态一律 pending_review",
+  "per_task": [
+    {
+      "parent_record_id": "kisaki_llm_v4_0106",
+      "action": "rewrite",
+      "new_id": "kisaki_llm_v4_0106__rewrite_v1",
+      "structure_errors": [],
+      "assistant_chars": [
+        20
+      ],
+      "over_max_chars": [],
+      "out_of_recommended": [],
+      "duplicate_with_kept": [],
+      "opening_conflict_with": null,
+      "fact_risks": []
+    },
+    {
+      "parent_record_id": "kisaki_llm_v4_0110",
+      "action": "rewrite",
+      "new_id": "kisaki_llm_v4_0110__rewrite_v1",
+      "structure_errors": [],
+      "assistant_chars": [
+        22
+      ],
+      "over_max_chars": [],
+      "out_of_recommended": [],
+      "duplicate_with_kept": [],
+      "opening_conflict_with": null,
+      "fact_risks": [
+        {
+          "type": "frequency_word",
+          "word": "一直"
+        }
+      ]
+    },
+    {
+      "parent_record_id": "kisaki_llm_v4_0147",
+      "action": "rewrite",
+      "new_id": "kisaki_llm_v4_0147__rewrite_v1",
+      "structure_errors": [],
+      "assistant_chars": [
+        24
+      ],
+      "over_max_chars": [],
+      "out_of_recommended": [],
+      "duplicate_with_kept": [],
+      "opening_conflict_with": null,
+      "fact_risks": []
+    },
+    {
+      "parent_record_id": "kisaki_llm_v4_0151",
+      "action": "rewrite",
+      "new_id": "kisaki_llm_v4_0151__rewrite_v1",
+      "structure_errors": [],
+      "assistant_chars": [
+        19
+      ],
+      "over_max_chars": [],
+      "out_of_recommended": [],
+      "duplicate_with_kept": [],
+      "opening_conflict_with": null,
+      "fact_risks": []
+    },
+    {
+      "parent_record_id": "kisaki_llm_v4_0202",
+      "action": "rewrite",
+      "new_id": "kisaki_llm_v4_0202__rewrite_v1",
+      "structure_errors": [],
+      "assistant_chars": [
+        5,
+        25,
+        9
+      ],
+      "over_max_chars": [],
+      "out_of_recommended": [
+        5,
+        9
+      ],
+      "duplicate_with_kept": [],
+      "opening_conflict_with": null,
+      "fact_risks": [
+        {
+          "type": "character_name_not_introduced",
+          "word": "夜子"
+        },
+        {
+          "type": "character_name_not_introduced",
+          "word": "理央"
+        }
+      ]
+    },
+    {
+      "parent_record_id": "kisaki_llm_v4_blindfix_0015",
+      "action": "rewrite",
+      "new_id": "kisaki_llm_v4_blindfix_0015__rewrite_v1",
+      "structure_errors": [],
+      "assistant_chars": [
+        4,
+        26
+      ],
+      "over_max_chars": [],
+      "out_of_recommended": [
+        4
+      ],
+      "duplicate_with_kept": [],
+      "opening_conflict_with": null,
+      "fact_risks": []
+    },
+    {
+      "parent_record_id": "kisaki_llm_v4_blindfix_0021",
+      "action": "rewrite",
+      "new_id": "kisaki_llm_v4_blindfix_0021__rewrite_v1",
+      "structure_errors": [],
+      "assistant_chars": [
+        23
+      ],
+      "over_max_chars": [],
+      "out_of_recommended": [],
+      "duplicate_with_kept": [],
+      "opening_conflict_with": null,
+      "fact_risks": []
+    },
+    {
+      "parent_record_id": "kisaki_llm_v4_blindfix_0048",
+      "action": "drop",
+      "structure_errors": [],
+      "assistant_chars": null,
+      "duplicate_with_kept": false,
+      "opening_conflict": null,
+      "fact_risks": []
+    },
+    {
+      "parent_record_id": "kisaki_llm_v4_blindfix_0053",
+      "action": "rewrite",
+      "new_id": "kisaki_llm_v4_blindfix_0053__rewrite_v1",
+      "structure_errors": [],
+      "assistant_chars": [
+        17
+      ],
+      "over_max_chars": [],
+      "out_of_recommended": [],
+      "duplicate_with_kept": [],
+      "opening_conflict_with": null,
+      "fact_risks": []
+    },
+    {
+      "parent_record_id": "kisaki_llm_v4_yoruko_0003",
+      "action": "rewrite",
+      "new_id": "kisaki_llm_v4_yoruko_0003__rewrite_v1",
+      "structure_errors": [],
+      "assistant_chars": [
+        22
+      ],
+      "over_max_chars": [],
+      "out_of_recommended": [],
+      "duplicate_with_kept": [],
+      "opening_conflict_with": null,
+      "fact_risks": []
+    },
+    {
+      "parent_record_id": "kisaki_llm_v4_yoruko_0006",
+      "action": "rewrite",
+      "new_id": "kisaki_llm_v4_yoruko_0006__rewrite_v1",
+      "structure_errors": [],
+      "assistant_chars": [
+        22
+      ],
+      "over_max_chars": [],
+      "out_of_recommended": [],
+      "duplicate_with_kept": [],
+      "opening_conflict_with": null,
+      "fact_risks": []
+    },
+    {
+      "parent_record_id": "kisaki_llm_v4_yoruko_0015",
+      "action": "rewrite",
+      "new_id": "kisaki_llm_v4_yoruko_0015__rewrite_v1",
+      "structure_errors": [],
+      "assistant_chars": [
+        23
+      ],
+      "over_max_chars": [],
+      "out_of_recommended": [],
+      "duplicate_with_kept": [],
+      "opening_conflict_with": null,
+      "fact_risks": []
+    },
+    {
+      "parent_record_id": "kisaki_llm_v4_yoruko_0023",
+      "action": "rewrite",
+      "new_id": "kisaki_llm_v4_yoruko_0023__rewrite_v1",
+      "structure_errors": [],
+      "assistant_chars": [
+        20
+      ],
+      "over_max_chars": [],
+      "out_of_recommended": [],
+      "duplicate_with_kept": [],
+      "opening_conflict_with": null,
+      "fact_risks": []
+    }
+  ]
+}

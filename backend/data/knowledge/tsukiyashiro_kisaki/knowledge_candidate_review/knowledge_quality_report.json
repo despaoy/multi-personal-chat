@@ -1,0 +1,3540 @@
+{
+  "schema_version": 1,
+  "generator": "knowledge.game_rag.knowledge_candidate",
+  "model_id": "ollama:qwen2.5:7b",
+  "generation_params": {
+    "chunk_max_chars": 6000,
+    "max_facts_per_scene": 8,
+    "max_relations_per_scene": 5,
+    "max_events_per_scene": 3
+  },
+  "source_enriched": {
+    "schema_version": 1,
+    "scene_review_status": "approved",
+    "total_scenes": 262,
+    "boundary_bundle_sha256": "b82d753eb93dbc1614b89e98c8498f03884c7d5dd433d223ef853708052c8595",
+    "enriched_manifest_sha256": "8307924b29e60199badcfbff78e7a9fcf50ddc90c9a09ca2fc4eaf3932f9f600",
+    "enriched_scenes_sha256": "c5ba1d707f40cf0356352f6a998e29fb588f90d3dd0037b4695579331ff2c06b",
+    "enriched_bundle_sha256": "26f431f127bd5cb92d6a5598269454608f03311025e02022ef5b3762eba90484"
+  },
+  "scene_status_counts": {
+    "success": 262
+  },
+  "model_calls": {
+    "total_attempts": 374,
+    "minimum_required_calls": 288,
+    "note": "total_attempts 为状态中逐场景累计模型调用（含分片与重试）；minimum_required_calls 为成功场景分片各一次调用的理论下限。"
+  },
+  "card_counts": {
+    "fact": 951,
+    "relation": 46,
+    "event": 310,
+    "total": 1307
+  },
+  "per_unit": {
+    "epilogue_bonus": {
+      "scenes": 7,
+      "facts": 33,
+      "relations": 2,
+      "events": 9
+    },
+    "epilogue_meta": {
+      "scenes": 1,
+      "facts": 2,
+      "relations": 0,
+      "events": 1
+    },
+    "vol01_1翡翠的排挤原理": {
+      "scenes": 22,
+      "facts": 72,
+      "relations": 0,
+      "events": 27
+    },
+    "vol02_2红宝石的天作之合": {
+      "scenes": 15,
+      "facts": 55,
+      "relations": 4,
+      "events": 21
+    },
+    "vol03_3蓝宝石的存在证明": {
+      "scenes": 17,
+      "facts": 74,
+      "relations": 8,
+      "events": 23
+    },
+    "vol04_4紫水晶的怪异传说": {
+      "scenes": 19,
+      "facts": 70,
+      "relations": 2,
+      "events": 27
+    },
+    "vol05_5磷灰石的怠惰现象": {
+      "scenes": 16,
+      "facts": 64,
+      "relations": 7,
+      "events": 19
+    },
+    "vol06_6芙蓉石的终焉轮回": {
+      "scenes": 21,
+      "facts": 61,
+      "relations": 2,
+      "events": 22
+    },
+    "vol06_6芙蓉石的长年隔绝": {
+      "scenes": 18,
+      "facts": 78,
+      "relations": 3,
+      "events": 21
+    },
+    "vol07_7黑珍珠的求爱信号": {
+      "scenes": 18,
+      "facts": 57,
+      "relations": 2,
+      "events": 20
+    },
+    "vol08_8萤石的怠惰现象": {
+      "scenes": 15,
+      "facts": 44,
+      "relations": 3,
+      "events": 15
+    },
+    "vol08_8萤石的时空残影": {
+      "scenes": 11,
+      "facts": 53,
+      "relations": 1,
+      "events": 11
+    },
+    "vol09_9白珍珠的泡沫爱慕": {
+      "scenes": 15,
+      "facts": 46,
+      "relations": 3,
+      "events": 17
+    },
+    "vol09_9绿幽灵水晶的命运连锁": {
+      "scenes": 19,
+      "facts": 61,
+      "relations": 3,
+      "events": 21
+    },
+    "vol10_10黑曜石的因果目录": {
+      "scenes": 8,
+      "facts": 30,
+      "relations": 0,
+      "events": 8
+    },
+    "vol11_11黑玛瑙的不在证明": {
+      "scenes": 16,
+      "facts": 63,
+      "relations": 2,
+      "events": 19
+    },
+    "vol12_12青金石的幻想图书馆": {
+      "scenes": 16,
+      "facts": 56,
+      "relations": 3,
+      "events": 19
+    },
+    "vol13_13璀璨的紫翠玉": {
+      "scenes": 8,
+      "facts": 32,
+      "relations": 1,
+      "events": 10
+    }
+  },
+  "empty_scenes": [],
+  "capped_scenes": [],
+  "deduped_in_scene_total": 11,
+  "deduped_cross_scene_total": 54,
+  "dropped_invalid_total": 1319,
+  "scenes_with_dropped_invalid": [
+    {
+      "scene_id": "scene_6d7f74124bb1d663",
+      "story_unit_id": "vol01_1翡翠的排挤原理",
+      "facts": 3,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 3
+    },
+    {
+      "scene_id": "scene_ebe282ccfd748887",
+      "story_unit_id": "vol01_1翡翠的排挤原理",
+      "facts": 0,
+      "relations": 0,
+      "events": 3,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 13
+    },
+    {
+      "scene_id": "scene_6bf3e7cf2262e0e6",
+      "story_unit_id": "vol01_1翡翠的排挤原理",
+      "facts": 3,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 6
+    },
+    {
+      "scene_id": "scene_730b02d1c862bff1",
+      "story_unit_id": "vol01_1翡翠的排挤原理",
+      "facts": 6,
+      "relations": 0,
+      "events": 2,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 5
+    },
+    {
+      "scene_id": "scene_3214ed22914cd801",
+      "story_unit_id": "vol01_1翡翠的排挤原理",
+      "facts": 1,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 3
+    },
+    {
+      "scene_id": "scene_9444192071da8ab9",
+      "story_unit_id": "vol01_1翡翠的排挤原理",
+      "facts": 4,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 4
+    },
+    {
+      "scene_id": "scene_ea6b4694ffee8c92",
+      "story_unit_id": "vol01_1翡翠的排挤原理",
+      "facts": 4,
+      "relations": 0,
+      "events": 0,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 7
+    },
+    {
+      "scene_id": "scene_31fe04e441358f66",
+      "story_unit_id": "vol01_1翡翠的排挤原理",
+      "facts": 1,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 3
+    },
+    {
+      "scene_id": "scene_c71b115e55d95564",
+      "story_unit_id": "vol01_1翡翠的排挤原理",
+      "facts": 6,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 6
+    },
+    {
+      "scene_id": "scene_ff4f000367d8eb52",
+      "story_unit_id": "vol01_1翡翠的排挤原理",
+      "facts": 7,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 3
+    },
+    {
+      "scene_id": "scene_35e1dbfe595a1f4f",
+      "story_unit_id": "vol01_1翡翠的排挤原理",
+      "facts": 3,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 5
+    },
+    {
+      "scene_id": "scene_6a7035787e0e3353",
+      "story_unit_id": "vol01_1翡翠的排挤原理",
+      "facts": 1,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 5
+    },
+    {
+      "scene_id": "scene_f9b344f1a7317a49",
+      "story_unit_id": "vol01_1翡翠的排挤原理",
+      "facts": 1,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 10
+    },
+    {
+      "scene_id": "scene_ee298ea6ea95b9ec",
+      "story_unit_id": "vol01_1翡翠的排挤原理",
+      "facts": 7,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 3
+    },
+    {
+      "scene_id": "scene_f6849dec2ea0aa9a",
+      "story_unit_id": "vol01_1翡翠的排挤原理",
+      "facts": 4,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 7
+    },
+    {
+      "scene_id": "scene_b82a98a950239ff7",
+      "story_unit_id": "vol01_1翡翠的排挤原理",
+      "facts": 4,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 9
+    },
+    {
+      "scene_id": "scene_30a842af7db2c626",
+      "story_unit_id": "vol01_1翡翠的排挤原理",
+      "facts": 2,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 5
+    },
+    {
+      "scene_id": "scene_5eccbd605afa02cd",
+      "story_unit_id": "vol01_1翡翠的排挤原理",
+      "facts": 3,
+      "relations": 0,
+      "events": 3,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 6
+    },
+    {
+      "scene_id": "scene_650df6d2ec38f2ba",
+      "story_unit_id": "vol01_1翡翠的排挤原理",
+      "facts": 3,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 5
+    },
+    {
+      "scene_id": "scene_efbce54fdd087cee",
+      "story_unit_id": "vol01_1翡翠的排挤原理",
+      "facts": 3,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 6
+    },
+    {
+      "scene_id": "scene_c5ecb06c220264ee",
+      "story_unit_id": "vol01_1翡翠的排挤原理",
+      "facts": 5,
+      "relations": 0,
+      "events": 2,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 6
+    },
+    {
+      "scene_id": "scene_09ff4b438da7ef8b",
+      "story_unit_id": "vol01_1翡翠的排挤原理",
+      "facts": 1,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 1,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 9
+    },
+    {
+      "scene_id": "scene_993aa9d89a6c9a42",
+      "story_unit_id": "vol02_2红宝石的天作之合",
+      "facts": 2,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 5
+    },
+    {
+      "scene_id": "scene_f79646ed4c87ac69",
+      "story_unit_id": "vol02_2红宝石的天作之合",
+      "facts": 7,
+      "relations": 0,
+      "events": 2,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 3
+    },
+    {
+      "scene_id": "scene_44c9b0e0b74fbefc",
+      "story_unit_id": "vol02_2红宝石的天作之合",
+      "facts": 4,
+      "relations": 1,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 4
+    },
+    {
+      "scene_id": "scene_2b17a78a5d2a2434",
+      "story_unit_id": "vol02_2红宝石的天作之合",
+      "facts": 4,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 3
+    },
+    {
+      "scene_id": "scene_51804607b93c84f1",
+      "story_unit_id": "vol02_2红宝石的天作之合",
+      "facts": 5,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 4
+    },
+    {
+      "scene_id": "scene_c7a18f9bd8ebcee2",
+      "story_unit_id": "vol02_2红宝石的天作之合",
+      "facts": 2,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 5
+    },
+    {
+      "scene_id": "scene_31919623d49c5e38",
+      "story_unit_id": "vol02_2红宝石的天作之合",
+      "facts": 2,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 3
+    },
+    {
+      "scene_id": "scene_be1cff14ae08575b",
+      "story_unit_id": "vol02_2红宝石的天作之合",
+      "facts": 5,
+      "relations": 0,
+      "events": 2,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 7
+    },
+    {
+      "scene_id": "scene_b7761943b6355dc9",
+      "story_unit_id": "vol02_2红宝石的天作之合",
+      "facts": 3,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 1,
+      "dropped_invalid": 5
+    },
+    {
+      "scene_id": "scene_db47f100bb107316",
+      "story_unit_id": "vol02_2红宝石的天作之合",
+      "facts": 2,
+      "relations": 2,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 7
+    },
+    {
+      "scene_id": "scene_e754c0e839766dcc",
+      "story_unit_id": "vol02_2红宝石的天作之合",
+      "facts": 4,
+      "relations": 1,
+      "events": 3,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 7
+    },
+    {
+      "scene_id": "scene_349141088047fbe9",
+      "story_unit_id": "vol02_2红宝石的天作之合",
+      "facts": 0,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 1,
+      "dropped_invalid": 4
+    },
+    {
+      "scene_id": "scene_a2aff4b602087cd1",
+      "story_unit_id": "vol02_2红宝石的天作之合",
+      "facts": 3,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 1,
+      "dropped_invalid": 9
+    },
+    {
+      "scene_id": "scene_37eb22d09c997ec6",
+      "story_unit_id": "vol02_2红宝石的天作之合",
+      "facts": 5,
+      "relations": 0,
+      "events": 3,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 2
+    },
+    {
+      "scene_id": "scene_f8947e1e7bab8c17",
+      "story_unit_id": "vol02_2红宝石的天作之合",
+      "facts": 7,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 2
+    },
+    {
+      "scene_id": "scene_6d539b1b02ec01e2",
+      "story_unit_id": "vol03_3蓝宝石的存在证明",
+      "facts": 3,
+      "relations": 1,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 3
+    },
+    {
+      "scene_id": "scene_7bb15ba608309479",
+      "story_unit_id": "vol03_3蓝宝石的存在证明",
+      "facts": 3,
+      "relations": 3,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 1,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 6
+    },
+    {
+      "scene_id": "scene_73da1fd47da77d6d",
+      "story_unit_id": "vol03_3蓝宝石的存在证明",
+      "facts": 8,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 1,
+      "dropped_invalid": 4
+    },
+    {
+      "scene_id": "scene_0cfa2e664341ebce",
+      "story_unit_id": "vol03_3蓝宝石的存在证明",
+      "facts": 7,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 1,
+      "dropped_invalid": 1
+    },
+    {
+      "scene_id": "scene_55260b685ba23dc7",
+      "story_unit_id": "vol03_3蓝宝石的存在证明",
+      "facts": 7,
+      "relations": 0,
+      "events": 2,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 6
+    },
+    {
+      "scene_id": "scene_02708ffd60574ba5",
+      "story_unit_id": "vol03_3蓝宝石的存在证明",
+      "facts": 5,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 2
+    },
+    {
+      "scene_id": "scene_9d6db90e32490887",
+      "story_unit_id": "vol03_3蓝宝石的存在证明",
+      "facts": 4,
+      "relations": 0,
+      "events": 2,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 9
+    },
+    {
+      "scene_id": "scene_c9098dff53c1cf8e",
+      "story_unit_id": "vol03_3蓝宝石的存在证明",
+      "facts": 1,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 5
+    },
+    {
+      "scene_id": "scene_76fd6fe20281cb14",
+      "story_unit_id": "vol03_3蓝宝石的存在证明",
+      "facts": 4,
+      "relations": 1,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 1
+    },
+    {
+      "scene_id": "scene_6ce2bd7b5eb91bf9",
+      "story_unit_id": "vol03_3蓝宝石的存在证明",
+      "facts": 4,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 9
+    },
+    {
+      "scene_id": "scene_888cb2d834238e67",
+      "story_unit_id": "vol03_3蓝宝石的存在证明",
+      "facts": 4,
+      "relations": 0,
+      "events": 0,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 6
+    },
+    {
+      "scene_id": "scene_1337d70a10d7cbb5",
+      "story_unit_id": "vol03_3蓝宝石的存在证明",
+      "facts": 4,
+      "relations": 3,
+      "events": 3,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 6
+    },
+    {
+      "scene_id": "scene_033a4ea728eb5162",
+      "story_unit_id": "vol03_3蓝宝石的存在证明",
+      "facts": 6,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 7
+    },
+    {
+      "scene_id": "scene_dfcb7026f6d5a069",
+      "story_unit_id": "vol03_3蓝宝石的存在证明",
+      "facts": 0,
+      "relations": 0,
+      "events": 3,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 1,
+      "dropped_invalid": 12
+    },
+    {
+      "scene_id": "scene_5a98bffd423b3617",
+      "story_unit_id": "vol03_3蓝宝石的存在证明",
+      "facts": 4,
+      "relations": 0,
+      "events": 2,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 7
+    },
+    {
+      "scene_id": "scene_54d37495a48dabf6",
+      "story_unit_id": "vol03_3蓝宝石的存在证明",
+      "facts": 6,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 1,
+      "dropped_invalid": 5
+    },
+    {
+      "scene_id": "scene_46476fd52b9081bb",
+      "story_unit_id": "vol03_3蓝宝石的存在证明",
+      "facts": 4,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 5
+    },
+    {
+      "scene_id": "scene_504131e9df789cb9",
+      "story_unit_id": "vol04_4紫水晶的怪异传说",
+      "facts": 1,
+      "relations": 1,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 1,
+      "dropped_invalid": 7
+    },
+    {
+      "scene_id": "scene_921836e104cc114f",
+      "story_unit_id": "vol04_4紫水晶的怪异传说",
+      "facts": 3,
+      "relations": 0,
+      "events": 3,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 8
+    },
+    {
+      "scene_id": "scene_dcb59664bf29a262",
+      "story_unit_id": "vol04_4紫水晶的怪异传说",
+      "facts": 5,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 2
+    },
+    {
+      "scene_id": "scene_c8bce766cf41c8bf",
+      "story_unit_id": "vol04_4紫水晶的怪异传说",
+      "facts": 1,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 6
+    },
+    {
+      "scene_id": "scene_641af49c3f262dc9",
+      "story_unit_id": "vol04_4紫水晶的怪异传说",
+      "facts": 1,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 4
+    },
+    {
+      "scene_id": "scene_c0c9c409d1006100",
+      "story_unit_id": "vol04_4紫水晶的怪异传说",
+      "facts": 7,
+      "relations": 0,
+      "events": 3,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 1,
+      "dropped_invalid": 2
+    },
+    {
+      "scene_id": "scene_7b59425f482fd631",
+      "story_unit_id": "vol04_4紫水晶的怪异传说",
+      "facts": 5,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 1,
+      "dropped_invalid": 3
+    },
+    {
+      "scene_id": "scene_5d50985c714352d0",
+      "story_unit_id": "vol04_4紫水晶的怪异传说",
+      "facts": 3,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 1,
+      "dropped_invalid": 5
+    },
+    {
+      "scene_id": "scene_93d01b8f0e6a6ba9",
+      "story_unit_id": "vol04_4紫水晶的怪异传说",
+      "facts": 4,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 5
+    },
+    {
+      "scene_id": "scene_d43b2dcfd6e33fca",
+      "story_unit_id": "vol04_4紫水晶的怪异传说",
+      "facts": 2,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 5
+    },
+    {
+      "scene_id": "scene_79d643f3452c9381",
+      "story_unit_id": "vol04_4紫水晶的怪异传说",
+      "facts": 4,
+      "relations": 1,
+      "events": 2,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 5
+    },
+    {
+      "scene_id": "scene_e12c97231da78a9d",
+      "story_unit_id": "vol04_4紫水晶的怪异传说",
+      "facts": 3,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 3
+    },
+    {
+      "scene_id": "scene_eb0eb0f0448ecc42",
+      "story_unit_id": "vol04_4紫水晶的怪异传说",
+      "facts": 4,
+      "relations": 0,
+      "events": 3,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 7
+    },
+    {
+      "scene_id": "scene_0d92e99e483f6cbe",
+      "story_unit_id": "vol04_4紫水晶的怪异传说",
+      "facts": 7,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 4
+    },
+    {
+      "scene_id": "scene_cf61146294650d70",
+      "story_unit_id": "vol04_4紫水晶的怪异传说",
+      "facts": 5,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 7
+    },
+    {
+      "scene_id": "scene_72481f4571f037f8",
+      "story_unit_id": "vol04_4紫水晶的怪异传说",
+      "facts": 2,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 3
+    },
+    {
+      "scene_id": "scene_56480f79d4ea203b",
+      "story_unit_id": "vol04_4紫水晶的怪异传说",
+      "facts": 5,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 3
+    },
+    {
+      "scene_id": "scene_7e96da8ab664efcc",
+      "story_unit_id": "vol04_4紫水晶的怪异传说",
+      "facts": 5,
+      "relations": 0,
+      "events": 2,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 8
+    },
+    {
+      "scene_id": "scene_826b3ca924b87e3e",
+      "story_unit_id": "vol04_4紫水晶的怪异传说",
+      "facts": 3,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 8
+    },
+    {
+      "scene_id": "scene_d9345e17cc0c6914",
+      "story_unit_id": "vol05_5磷灰石的怠惰现象",
+      "facts": 4,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 9
+    },
+    {
+      "scene_id": "scene_f24773aeacc160b4",
+      "story_unit_id": "vol05_5磷灰石的怠惰现象",
+      "facts": 5,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 2
+    },
+    {
+      "scene_id": "scene_86543f47e62b897e",
+      "story_unit_id": "vol05_5磷灰石的怠惰现象",
+      "facts": 5,
+      "relations": 0,
+      "events": 0,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 4
+    },
+    {
+      "scene_id": "scene_9dd4ef84698e0810",
+      "story_unit_id": "vol05_5磷灰石的怠惰现象",
+      "facts": 2,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 6
+    },
+    {
+      "scene_id": "scene_ebf7ba4dbfed1ab9",
+      "story_unit_id": "vol05_5磷灰石的怠惰现象",
+      "facts": 7,
+      "relations": 2,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 4
+    },
+    {
+      "scene_id": "scene_b876c94fe61c7915",
+      "story_unit_id": "vol05_5磷灰石的怠惰现象",
+      "facts": 5,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 1,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 3
+    },
+    {
+      "scene_id": "scene_371f8cd933cdd82c",
+      "story_unit_id": "vol05_5磷灰石的怠惰现象",
+      "facts": 3,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 5
+    },
+    {
+      "scene_id": "scene_f836b892ae902a29",
+      "story_unit_id": "vol05_5磷灰石的怠惰现象",
+      "facts": 3,
+      "relations": 1,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 7
+    },
+    {
+      "scene_id": "scene_f4025404dc9d1dd7",
+      "story_unit_id": "vol05_5磷灰石的怠惰现象",
+      "facts": 5,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 2
+    },
+    {
+      "scene_id": "scene_0f168d439e95d54e",
+      "story_unit_id": "vol05_5磷灰石的怠惰现象",
+      "facts": 0,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 6
+    },
+    {
+      "scene_id": "scene_f6f825b9e6756f71",
+      "story_unit_id": "vol05_5磷灰石的怠惰现象",
+      "facts": 3,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 5
+    },
+    {
+      "scene_id": "scene_2b8fcbd620fd9285",
+      "story_unit_id": "vol05_5磷灰石的怠惰现象",
+      "facts": 5,
+      "relations": 1,
+      "events": 2,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 5
+    },
+    {
+      "scene_id": "scene_321bce68f06193a9",
+      "story_unit_id": "vol05_5磷灰石的怠惰现象",
+      "facts": 4,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 5
+    },
+    {
+      "scene_id": "scene_03f52bd00f1f591a",
+      "story_unit_id": "vol05_5磷灰石的怠惰现象",
+      "facts": 6,
+      "relations": 0,
+      "events": 2,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 6
+    },
+    {
+      "scene_id": "scene_e5d4aa08d08dfb1e",
+      "story_unit_id": "vol05_5磷灰石的怠惰现象",
+      "facts": 5,
+      "relations": 0,
+      "events": 3,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 6
+    },
+    {
+      "scene_id": "scene_738062af949eef8e",
+      "story_unit_id": "vol05_5磷灰石的怠惰现象",
+      "facts": 2,
+      "relations": 3,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 3
+    },
+    {
+      "scene_id": "scene_e156abf7feeca1dd",
+      "story_unit_id": "vol06_6芙蓉石的长年隔绝",
+      "facts": 4,
+      "relations": 1,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 6
+    },
+    {
+      "scene_id": "scene_8f79079a5a0a06c6",
+      "story_unit_id": "vol06_6芙蓉石的长年隔绝",
+      "facts": 6,
+      "relations": 0,
+      "events": 2,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 7
+    },
+    {
+      "scene_id": "scene_b7724fa396129114",
+      "story_unit_id": "vol06_6芙蓉石的长年隔绝",
+      "facts": 5,
+      "relations": 0,
+      "events": 2,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 8
+    },
+    {
+      "scene_id": "scene_a5a55187d81a59d4",
+      "story_unit_id": "vol06_6芙蓉石的长年隔绝",
+      "facts": 3,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 2
+    },
+    {
+      "scene_id": "scene_afe10b0094054908",
+      "story_unit_id": "vol06_6芙蓉石的长年隔绝",
+      "facts": 6,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 5
+    },
+    {
+      "scene_id": "scene_a185011b08533028",
+      "story_unit_id": "vol06_6芙蓉石的长年隔绝",
+      "facts": 3,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 6
+    },
+    {
+      "scene_id": "scene_e87bbe1402bf8ad2",
+      "story_unit_id": "vol06_6芙蓉石的长年隔绝",
+      "facts": 6,
+      "relations": 1,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 5
+    },
+    {
+      "scene_id": "scene_c7d0a069eee9d060",
+      "story_unit_id": "vol06_6芙蓉石的长年隔绝",
+      "facts": 4,
+      "relations": 1,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 1,
+      "dropped_invalid": 5
+    },
+    {
+      "scene_id": "scene_07c725781821cc9b",
+      "story_unit_id": "vol06_6芙蓉石的长年隔绝",
+      "facts": 4,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 1,
+      "dropped_invalid": 5
+    },
+    {
+      "scene_id": "scene_7088959981f2f841",
+      "story_unit_id": "vol06_6芙蓉石的长年隔绝",
+      "facts": 6,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 2,
+      "dropped_invalid": 5
+    },
+    {
+      "scene_id": "scene_1e478ecb71988762",
+      "story_unit_id": "vol06_6芙蓉石的长年隔绝",
+      "facts": 7,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 4
+    },
+    {
+      "scene_id": "scene_22301e4e423b5fe0",
+      "story_unit_id": "vol06_6芙蓉石的长年隔绝",
+      "facts": 4,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 7
+    },
+    {
+      "scene_id": "scene_c5fb5a28cab34095",
+      "story_unit_id": "vol06_6芙蓉石的长年隔绝",
+      "facts": 5,
+      "relations": 0,
+      "events": 2,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 2
+    },
+    {
+      "scene_id": "scene_233e7a679bb95082",
+      "story_unit_id": "vol06_6芙蓉石的长年隔绝",
+      "facts": 3,
+      "relations": 0,
+      "events": 0,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 4
+    },
+    {
+      "scene_id": "scene_b652c029aca42002",
+      "story_unit_id": "vol06_6芙蓉石的长年隔绝",
+      "facts": 5,
+      "relations": 0,
+      "events": 2,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 1,
+      "dropped_invalid": 5
+    },
+    {
+      "scene_id": "scene_cca1256fbf01a2f2",
+      "story_unit_id": "vol06_6芙蓉石的长年隔绝",
+      "facts": 2,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 2
+    },
+    {
+      "scene_id": "scene_a99965da589e4e56",
+      "story_unit_id": "vol06_6芙蓉石的长年隔绝",
+      "facts": 4,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 2
+    },
+    {
+      "scene_id": "scene_673f862538a9321f",
+      "story_unit_id": "vol06_6芙蓉石的终焉轮回",
+      "facts": 1,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 4
+    },
+    {
+      "scene_id": "scene_263fe6bda5c1b924",
+      "story_unit_id": "vol06_6芙蓉石的终焉轮回",
+      "facts": 2,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 3
+    },
+    {
+      "scene_id": "scene_caf8ada4f88821b1",
+      "story_unit_id": "vol06_6芙蓉石的终焉轮回",
+      "facts": 3,
+      "relations": 0,
+      "events": 2,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 8
+    },
+    {
+      "scene_id": "scene_246b27248e96685f",
+      "story_unit_id": "vol06_6芙蓉石的终焉轮回",
+      "facts": 4,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 6
+    },
+    {
+      "scene_id": "scene_a57a2719c52d8390",
+      "story_unit_id": "vol06_6芙蓉石的终焉轮回",
+      "facts": 3,
+      "relations": 1,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 9
+    },
+    {
+      "scene_id": "scene_556697910cbbc969",
+      "story_unit_id": "vol06_6芙蓉石的终焉轮回",
+      "facts": 5,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 2,
+      "dropped_invalid": 2
+    },
+    {
+      "scene_id": "scene_50b909d5ccc1fff8",
+      "story_unit_id": "vol06_6芙蓉石的终焉轮回",
+      "facts": 5,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 4
+    },
+    {
+      "scene_id": "scene_15068e28416c0b5e",
+      "story_unit_id": "vol06_6芙蓉石的终焉轮回",
+      "facts": 1,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 1,
+      "dropped_invalid": 3
+    },
+    {
+      "scene_id": "scene_65b0a271b5ec98a1",
+      "story_unit_id": "vol06_6芙蓉石的终焉轮回",
+      "facts": 2,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 1,
+      "dropped_invalid": 4
+    },
+    {
+      "scene_id": "scene_60f75a18c473e774",
+      "story_unit_id": "vol06_6芙蓉石的终焉轮回",
+      "facts": 5,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 1,
+      "dropped_invalid": 5
+    },
+    {
+      "scene_id": "scene_8485b9fb85107fd8",
+      "story_unit_id": "vol06_6芙蓉石的终焉轮回",
+      "facts": 5,
+      "relations": 1,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 4
+    },
+    {
+      "scene_id": "scene_d69e7283b7853d06",
+      "story_unit_id": "vol06_6芙蓉石的终焉轮回",
+      "facts": 3,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 4
+    },
+    {
+      "scene_id": "scene_3d767e9420b917e6",
+      "story_unit_id": "vol06_6芙蓉石的终焉轮回",
+      "facts": 3,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 3
+    },
+    {
+      "scene_id": "scene_c0ea35ca1b791249",
+      "story_unit_id": "vol06_6芙蓉石的终焉轮回",
+      "facts": 3,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 4
+    },
+    {
+      "scene_id": "scene_5324cb7446077afe",
+      "story_unit_id": "vol06_6芙蓉石的终焉轮回",
+      "facts": 5,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 6
+    },
+    {
+      "scene_id": "scene_931465d6b3c20d7b",
+      "story_unit_id": "vol06_6芙蓉石的终焉轮回",
+      "facts": 0,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 7
+    },
+    {
+      "scene_id": "scene_da3a7c6d3ad0b89c",
+      "story_unit_id": "vol06_6芙蓉石的终焉轮回",
+      "facts": 4,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 7
+    },
+    {
+      "scene_id": "scene_2d2bc442523a3447",
+      "story_unit_id": "vol06_6芙蓉石的终焉轮回",
+      "facts": 4,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 8
+    },
+    {
+      "scene_id": "scene_891c5cad3c14c322",
+      "story_unit_id": "vol06_6芙蓉石的终焉轮回",
+      "facts": 0,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 5
+    },
+    {
+      "scene_id": "scene_3737468ca11cf4ef",
+      "story_unit_id": "vol06_6芙蓉石的终焉轮回",
+      "facts": 1,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 1,
+      "dropped_invalid": 3
+    },
+    {
+      "scene_id": "scene_fddf170c33e9a90e",
+      "story_unit_id": "vol06_6芙蓉石的终焉轮回",
+      "facts": 2,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 8
+    },
+    {
+      "scene_id": "scene_4f165859a7c6d7b5",
+      "story_unit_id": "vol07_7黑珍珠的求爱信号",
+      "facts": 1,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 6
+    },
+    {
+      "scene_id": "scene_4a799255985b3def",
+      "story_unit_id": "vol07_7黑珍珠的求爱信号",
+      "facts": 3,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 8
+    },
+    {
+      "scene_id": "scene_6a1c997c7175238a",
+      "story_unit_id": "vol07_7黑珍珠的求爱信号",
+      "facts": 0,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 8
+    },
+    {
+      "scene_id": "scene_ab34c974facc2d41",
+      "story_unit_id": "vol07_7黑珍珠的求爱信号",
+      "facts": 4,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 1,
+      "dropped_invalid": 8
+    },
+    {
+      "scene_id": "scene_2933a4ff1a4b9bba",
+      "story_unit_id": "vol07_7黑珍珠的求爱信号",
+      "facts": 6,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 1,
+      "dropped_invalid": 6
+    },
+    {
+      "scene_id": "scene_6809b8fae3736b5c",
+      "story_unit_id": "vol07_7黑珍珠的求爱信号",
+      "facts": 2,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 5
+    },
+    {
+      "scene_id": "scene_365ca64bbd6f6946",
+      "story_unit_id": "vol07_7黑珍珠的求爱信号",
+      "facts": 2,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 1,
+      "dropped_invalid": 2
+    },
+    {
+      "scene_id": "scene_b5cae8d069f54831",
+      "story_unit_id": "vol07_7黑珍珠的求爱信号",
+      "facts": 2,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 11
+    },
+    {
+      "scene_id": "scene_e57a2206bff98204",
+      "story_unit_id": "vol07_7黑珍珠的求爱信号",
+      "facts": 5,
+      "relations": 1,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 7
+    },
+    {
+      "scene_id": "scene_8d91f4fd1fbc5270",
+      "story_unit_id": "vol07_7黑珍珠的求爱信号",
+      "facts": 1,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 1,
+      "dropped_invalid": 5
+    },
+    {
+      "scene_id": "scene_48a8471fec93c385",
+      "story_unit_id": "vol07_7黑珍珠的求爱信号",
+      "facts": 6,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 2
+    },
+    {
+      "scene_id": "scene_247f2bdec34bbd2f",
+      "story_unit_id": "vol07_7黑珍珠的求爱信号",
+      "facts": 1,
+      "relations": 1,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 3
+    },
+    {
+      "scene_id": "scene_9692d9ed369851e6",
+      "story_unit_id": "vol07_7黑珍珠的求爱信号",
+      "facts": 3,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 1
+    },
+    {
+      "scene_id": "scene_9af5c5c6b6ee2e84",
+      "story_unit_id": "vol07_7黑珍珠的求爱信号",
+      "facts": 4,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 4
+    },
+    {
+      "scene_id": "scene_1a32fdee32b96034",
+      "story_unit_id": "vol07_7黑珍珠的求爱信号",
+      "facts": 2,
+      "relations": 0,
+      "events": 3,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 8
+    },
+    {
+      "scene_id": "scene_0bdc138f6abc2ade",
+      "story_unit_id": "vol07_7黑珍珠的求爱信号",
+      "facts": 2,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 5
+    },
+    {
+      "scene_id": "scene_d26c38165aab038d",
+      "story_unit_id": "vol07_7黑珍珠的求爱信号",
+      "facts": 8,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 4
+    },
+    {
+      "scene_id": "scene_7310623d12ae281a",
+      "story_unit_id": "vol07_7黑珍珠的求爱信号",
+      "facts": 5,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 3
+    },
+    {
+      "scene_id": "scene_479321d701a01cdd",
+      "story_unit_id": "vol08_8萤石的怠惰现象",
+      "facts": 1,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 3
+    },
+    {
+      "scene_id": "scene_a63a0c1977962e9b",
+      "story_unit_id": "vol08_8萤石的怠惰现象",
+      "facts": 2,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 4
+    },
+    {
+      "scene_id": "scene_a4cb080aa433fe74",
+      "story_unit_id": "vol08_8萤石的怠惰现象",
+      "facts": 2,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 1,
+      "dropped_invalid": 6
+    },
+    {
+      "scene_id": "scene_75b39d8369653cd6",
+      "story_unit_id": "vol08_8萤石的怠惰现象",
+      "facts": 3,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 3
+    },
+    {
+      "scene_id": "scene_e583fcbb15a3eb49",
+      "story_unit_id": "vol08_8萤石的怠惰现象",
+      "facts": 1,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 1,
+      "dropped_invalid": 5
+    },
+    {
+      "scene_id": "scene_54286f83e4febf69",
+      "story_unit_id": "vol08_8萤石的怠惰现象",
+      "facts": 2,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 5
+    },
+    {
+      "scene_id": "scene_a7d01841d9ff38f2",
+      "story_unit_id": "vol08_8萤石的怠惰现象",
+      "facts": 1,
+      "relations": 1,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 8
+    },
+    {
+      "scene_id": "scene_b75b08e2860e6c26",
+      "story_unit_id": "vol08_8萤石的怠惰现象",
+      "facts": 2,
+      "relations": 1,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 2
+    },
+    {
+      "scene_id": "scene_447d4d70af6d63f0",
+      "story_unit_id": "vol08_8萤石的怠惰现象",
+      "facts": 5,
+      "relations": 1,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 7
+    },
+    {
+      "scene_id": "scene_30b5e8d6b30397a2",
+      "story_unit_id": "vol08_8萤石的怠惰现象",
+      "facts": 5,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 4
+    },
+    {
+      "scene_id": "scene_552ee7ca49d4d4e1",
+      "story_unit_id": "vol08_8萤石的怠惰现象",
+      "facts": 5,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 4
+    },
+    {
+      "scene_id": "scene_6b2790aebc42ccdc",
+      "story_unit_id": "vol08_8萤石的怠惰现象",
+      "facts": 3,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 5
+    },
+    {
+      "scene_id": "scene_3987ee8458b9145d",
+      "story_unit_id": "vol08_8萤石的怠惰现象",
+      "facts": 1,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 4
+    },
+    {
+      "scene_id": "scene_84686efdca33b920",
+      "story_unit_id": "vol08_8萤石的怠惰现象",
+      "facts": 4,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 9
+    },
+    {
+      "scene_id": "scene_5569ca4300e3f995",
+      "story_unit_id": "vol08_8萤石的怠惰现象",
+      "facts": 7,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 2
+    },
+    {
+      "scene_id": "scene_0de1fe4200288330",
+      "story_unit_id": "vol08_8萤石的时空残影",
+      "facts": 5,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 1
+    },
+    {
+      "scene_id": "scene_45c0a06694d8fcfa",
+      "story_unit_id": "vol08_8萤石的时空残影",
+      "facts": 5,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 8
+    },
+    {
+      "scene_id": "scene_01e9a40a84c9cc04",
+      "story_unit_id": "vol08_8萤石的时空残影",
+      "facts": 5,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 8
+    },
+    {
+      "scene_id": "scene_14acd8b5b0ccea1e",
+      "story_unit_id": "vol08_8萤石的时空残影",
+      "facts": 3,
+      "relations": 1,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 2,
+      "dropped_invalid": 3
+    },
+    {
+      "scene_id": "scene_03892110196599d8",
+      "story_unit_id": "vol08_8萤石的时空残影",
+      "facts": 6,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 7
+    },
+    {
+      "scene_id": "scene_faccee46e38bcc24",
+      "story_unit_id": "vol08_8萤石的时空残影",
+      "facts": 6,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 7
+    },
+    {
+      "scene_id": "scene_7c2b7f093ff18465",
+      "story_unit_id": "vol08_8萤石的时空残影",
+      "facts": 6,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 2,
+      "dropped_invalid": 4
+    },
+    {
+      "scene_id": "scene_d12ee520f4138f41",
+      "story_unit_id": "vol08_8萤石的时空残影",
+      "facts": 5,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 1,
+      "dropped_invalid": 1
+    },
+    {
+      "scene_id": "scene_307c826e02b38f08",
+      "story_unit_id": "vol08_8萤石的时空残影",
+      "facts": 4,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 2
+    },
+    {
+      "scene_id": "scene_c679f0ea6d0e120f",
+      "story_unit_id": "vol08_8萤石的时空残影",
+      "facts": 5,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 2
+    },
+    {
+      "scene_id": "scene_2a7fa684d754c77f",
+      "story_unit_id": "vol08_8萤石的时空残影",
+      "facts": 3,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 3
+    },
+    {
+      "scene_id": "scene_994d83e385b1d207",
+      "story_unit_id": "vol09_9白珍珠的泡沫爱慕",
+      "facts": 1,
+      "relations": 1,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 6
+    },
+    {
+      "scene_id": "scene_a81eb85064944f3f",
+      "story_unit_id": "vol09_9白珍珠的泡沫爱慕",
+      "facts": 6,
+      "relations": 1,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 3
+    },
+    {
+      "scene_id": "scene_8096a8fda1582c0f",
+      "story_unit_id": "vol09_9白珍珠的泡沫爱慕",
+      "facts": 3,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 4
+    },
+    {
+      "scene_id": "scene_aa7f0adce8e1cfb6",
+      "story_unit_id": "vol09_9白珍珠的泡沫爱慕",
+      "facts": 3,
+      "relations": 1,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 1,
+      "dropped_invalid": 6
+    },
+    {
+      "scene_id": "scene_fe19b451cccfa06b",
+      "story_unit_id": "vol09_9白珍珠的泡沫爱慕",
+      "facts": 5,
+      "relations": 0,
+      "events": 3,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 4
+    },
+    {
+      "scene_id": "scene_4c12797b28638d2b",
+      "story_unit_id": "vol09_9白珍珠的泡沫爱慕",
+      "facts": 4,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 2,
+      "dropped_invalid": 7
+    },
+    {
+      "scene_id": "scene_6ff0257384e9403d",
+      "story_unit_id": "vol09_9白珍珠的泡沫爱慕",
+      "facts": 0,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 8
+    },
+    {
+      "scene_id": "scene_1beca08ad2b2e2e0",
+      "story_unit_id": "vol09_9白珍珠的泡沫爱慕",
+      "facts": 0,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 5
+    },
+    {
+      "scene_id": "scene_98c80d83aa0586af",
+      "story_unit_id": "vol09_9白珍珠的泡沫爱慕",
+      "facts": 4,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 7
+    },
+    {
+      "scene_id": "scene_0b6fb1875b5eeae7",
+      "story_unit_id": "vol09_9白珍珠的泡沫爱慕",
+      "facts": 1,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 6
+    },
+    {
+      "scene_id": "scene_5c69747083bea3ba",
+      "story_unit_id": "vol09_9白珍珠的泡沫爱慕",
+      "facts": 2,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 2
+    },
+    {
+      "scene_id": "scene_0be59cc6f1aa3b72",
+      "story_unit_id": "vol09_9白珍珠的泡沫爱慕",
+      "facts": 3,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 4
+    },
+    {
+      "scene_id": "scene_537d73870f38a31b",
+      "story_unit_id": "vol09_9白珍珠的泡沫爱慕",
+      "facts": 5,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 2
+    },
+    {
+      "scene_id": "scene_5df1b207252c417a",
+      "story_unit_id": "vol09_9白珍珠的泡沫爱慕",
+      "facts": 7,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 5
+    },
+    {
+      "scene_id": "scene_e987c0dad15d2f37",
+      "story_unit_id": "vol09_9白珍珠的泡沫爱慕",
+      "facts": 2,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 1,
+      "dropped_invalid": 6
+    },
+    {
+      "scene_id": "scene_906024c999551209",
+      "story_unit_id": "vol09_9绿幽灵水晶的命运连锁",
+      "facts": 2,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 6
+    },
+    {
+      "scene_id": "scene_1118bc75d2577368",
+      "story_unit_id": "vol09_9绿幽灵水晶的命运连锁",
+      "facts": 3,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 6
+    },
+    {
+      "scene_id": "scene_40ecea9e0245dc45",
+      "story_unit_id": "vol09_9绿幽灵水晶的命运连锁",
+      "facts": 2,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 6
+    },
+    {
+      "scene_id": "scene_3698158e202e558e",
+      "story_unit_id": "vol09_9绿幽灵水晶的命运连锁",
+      "facts": 6,
+      "relations": 1,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 4
+    },
+    {
+      "scene_id": "scene_4fd0a6b9dc515fa3",
+      "story_unit_id": "vol09_9绿幽灵水晶的命运连锁",
+      "facts": 0,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 7
+    },
+    {
+      "scene_id": "scene_cff5280733ff5127",
+      "story_unit_id": "vol09_9绿幽灵水晶的命运连锁",
+      "facts": 2,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 4
+    },
+    {
+      "scene_id": "scene_4543694a746bc6f7",
+      "story_unit_id": "vol09_9绿幽灵水晶的命运连锁",
+      "facts": 6,
+      "relations": 0,
+      "events": 3,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 7
+    },
+    {
+      "scene_id": "scene_bf9027f22f82fdf6",
+      "story_unit_id": "vol09_9绿幽灵水晶的命运连锁",
+      "facts": 7,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 2
+    },
+    {
+      "scene_id": "scene_1d156ad9c555cb73",
+      "story_unit_id": "vol09_9绿幽灵水晶的命运连锁",
+      "facts": 4,
+      "relations": 2,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 1,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 4
+    },
+    {
+      "scene_id": "scene_3eb1b6c100638240",
+      "story_unit_id": "vol09_9绿幽灵水晶的命运连锁",
+      "facts": 7,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 3
+    },
+    {
+      "scene_id": "scene_a0ec8e1c7293029a",
+      "story_unit_id": "vol09_9绿幽灵水晶的命运连锁",
+      "facts": 5,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 4
+    },
+    {
+      "scene_id": "scene_fa127b5872711dab",
+      "story_unit_id": "vol09_9绿幽灵水晶的命运连锁",
+      "facts": 2,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 3
+    },
+    {
+      "scene_id": "scene_bba0207beace89a0",
+      "story_unit_id": "vol09_9绿幽灵水晶的命运连锁",
+      "facts": 2,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 7
+    },
+    {
+      "scene_id": "scene_b5c82bbe862e8dad",
+      "story_unit_id": "vol09_9绿幽灵水晶的命运连锁",
+      "facts": 2,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 3
+    },
+    {
+      "scene_id": "scene_d2be43cc794d8457",
+      "story_unit_id": "vol09_9绿幽灵水晶的命运连锁",
+      "facts": 0,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 6
+    },
+    {
+      "scene_id": "scene_fa7757008faeaa87",
+      "story_unit_id": "vol09_9绿幽灵水晶的命运连锁",
+      "facts": 0,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 9
+    },
+    {
+      "scene_id": "scene_5321a3a5fe43d2e6",
+      "story_unit_id": "vol09_9绿幽灵水晶的命运连锁",
+      "facts": 1,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 9
+    },
+    {
+      "scene_id": "scene_007997a62b4a8ec3",
+      "story_unit_id": "vol09_9绿幽灵水晶的命运连锁",
+      "facts": 5,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 4
+    },
+    {
+      "scene_id": "scene_655d54d8e90e8995",
+      "story_unit_id": "vol10_10黑曜石的因果目录",
+      "facts": 2,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 5
+    },
+    {
+      "scene_id": "scene_d57fc10c20e992c8",
+      "story_unit_id": "vol10_10黑曜石的因果目录",
+      "facts": 4,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 1,
+      "deduped_cross_scene": 1,
+      "dropped_invalid": 7
+    },
+    {
+      "scene_id": "scene_4fce1c2889d164e6",
+      "story_unit_id": "vol10_10黑曜石的因果目录",
+      "facts": 6,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 5
+    },
+    {
+      "scene_id": "scene_cd692664bcab4315",
+      "story_unit_id": "vol10_10黑曜石的因果目录",
+      "facts": 7,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 3
+    },
+    {
+      "scene_id": "scene_a9aa59257ae8e3e9",
+      "story_unit_id": "vol10_10黑曜石的因果目录",
+      "facts": 3,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 5
+    },
+    {
+      "scene_id": "scene_9a7bed8874bf8ae5",
+      "story_unit_id": "vol10_10黑曜石的因果目录",
+      "facts": 3,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 5
+    },
+    {
+      "scene_id": "scene_2d6b81d908a6dfd4",
+      "story_unit_id": "vol10_10黑曜石的因果目录",
+      "facts": 3,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 3
+    },
+    {
+      "scene_id": "scene_f525aa94993d1850",
+      "story_unit_id": "vol10_10黑曜石的因果目录",
+      "facts": 2,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 3
+    },
+    {
+      "scene_id": "scene_7f6315ad480ca6cc",
+      "story_unit_id": "vol11_11黑玛瑙的不在证明",
+      "facts": 5,
+      "relations": 1,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 1,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 4
+    },
+    {
+      "scene_id": "scene_8deae70b35c527d7",
+      "story_unit_id": "vol11_11黑玛瑙的不在证明",
+      "facts": 3,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 3
+    },
+    {
+      "scene_id": "scene_8704477a69964d88",
+      "story_unit_id": "vol11_11黑玛瑙的不在证明",
+      "facts": 2,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 5
+    },
+    {
+      "scene_id": "scene_d4185ef33b074afa",
+      "story_unit_id": "vol11_11黑玛瑙的不在证明",
+      "facts": 2,
+      "relations": 1,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 1,
+      "dropped_invalid": 3
+    },
+    {
+      "scene_id": "scene_b73e3c49f6fa75cb",
+      "story_unit_id": "vol11_11黑玛瑙的不在证明",
+      "facts": 2,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 5
+    },
+    {
+      "scene_id": "scene_28e2c9570856b133",
+      "story_unit_id": "vol11_11黑玛瑙的不在证明",
+      "facts": 6,
+      "relations": 0,
+      "events": 3,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 1,
+      "dropped_invalid": 6
+    },
+    {
+      "scene_id": "scene_7e8fa9f4e1c2572f",
+      "story_unit_id": "vol11_11黑玛瑙的不在证明",
+      "facts": 3,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 5
+    },
+    {
+      "scene_id": "scene_c1883f26fc42166b",
+      "story_unit_id": "vol11_11黑玛瑙的不在证明",
+      "facts": 2,
+      "relations": 0,
+      "events": 2,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 1,
+      "dropped_invalid": 4
+    },
+    {
+      "scene_id": "scene_d30ea490766bf2ed",
+      "story_unit_id": "vol11_11黑玛瑙的不在证明",
+      "facts": 5,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 1,
+      "dropped_invalid": 7
+    },
+    {
+      "scene_id": "scene_bd5b1dc78c327f8e",
+      "story_unit_id": "vol11_11黑玛瑙的不在证明",
+      "facts": 3,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 4
+    },
+    {
+      "scene_id": "scene_9f00b1623c6616d1",
+      "story_unit_id": "vol11_11黑玛瑙的不在证明",
+      "facts": 7,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 1,
+      "dropped_invalid": 3
+    },
+    {
+      "scene_id": "scene_0dfae7a5321fc6a4",
+      "story_unit_id": "vol11_11黑玛瑙的不在证明",
+      "facts": 3,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 3
+    },
+    {
+      "scene_id": "scene_4c3f8382dfb56d02",
+      "story_unit_id": "vol11_11黑玛瑙的不在证明",
+      "facts": 2,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 4
+    },
+    {
+      "scene_id": "scene_90c0da25bf0ed038",
+      "story_unit_id": "vol11_11黑玛瑙的不在证明",
+      "facts": 8,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 3
+    },
+    {
+      "scene_id": "scene_b07cc0d2c06396a0",
+      "story_unit_id": "vol11_11黑玛瑙的不在证明",
+      "facts": 7,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 4
+    },
+    {
+      "scene_id": "scene_af4e4f0f0d4e7629",
+      "story_unit_id": "vol11_11黑玛瑙的不在证明",
+      "facts": 3,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 2,
+      "dropped_invalid": 6
+    },
+    {
+      "scene_id": "scene_384b9ccb5288ef74",
+      "story_unit_id": "vol12_12青金石的幻想图书馆",
+      "facts": 6,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 5
+    },
+    {
+      "scene_id": "scene_2781a377b3b788ac",
+      "story_unit_id": "vol12_12青金石的幻想图书馆",
+      "facts": 3,
+      "relations": 0,
+      "events": 2,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 2,
+      "dropped_invalid": 8
+    },
+    {
+      "scene_id": "scene_a8ffbe3e1e4bc266",
+      "story_unit_id": "vol12_12青金石的幻想图书馆",
+      "facts": 4,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 5
+    },
+    {
+      "scene_id": "scene_ccdbe360780915b9",
+      "story_unit_id": "vol12_12青金石的幻想图书馆",
+      "facts": 4,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 1,
+      "dropped_invalid": 4
+    },
+    {
+      "scene_id": "scene_49d8a626fd917340",
+      "story_unit_id": "vol12_12青金石的幻想图书馆",
+      "facts": 5,
+      "relations": 1,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 7
+    },
+    {
+      "scene_id": "scene_38c3285749070248",
+      "story_unit_id": "vol12_12青金石的幻想图书馆",
+      "facts": 6,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 3
+    },
+    {
+      "scene_id": "scene_9f78319482859f83",
+      "story_unit_id": "vol12_12青金石的幻想图书馆",
+      "facts": 6,
+      "relations": 0,
+      "events": 2,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 7
+    },
+    {
+      "scene_id": "scene_1d5a64b254f21370",
+      "story_unit_id": "vol12_12青金石的幻想图书馆",
+      "facts": 1,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 6
+    },
+    {
+      "scene_id": "scene_cb83a63c51df2e79",
+      "story_unit_id": "vol12_12青金石的幻想图书馆",
+      "facts": 3,
+      "relations": 2,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 6
+    },
+    {
+      "scene_id": "scene_14be648270599be9",
+      "story_unit_id": "vol12_12青金石的幻想图书馆",
+      "facts": 0,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 11
+    },
+    {
+      "scene_id": "scene_0a1b8e0bd7773bcb",
+      "story_unit_id": "vol12_12青金石的幻想图书馆",
+      "facts": 3,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 9
+    },
+    {
+      "scene_id": "scene_e7b6679be17b71e9",
+      "story_unit_id": "vol12_12青金石的幻想图书馆",
+      "facts": 4,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 5
+    },
+    {
+      "scene_id": "scene_e50222d351084f96",
+      "story_unit_id": "vol12_12青金石的幻想图书馆",
+      "facts": 0,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 9
+    },
+    {
+      "scene_id": "scene_67d75f430b8e5e04",
+      "story_unit_id": "vol12_12青金石的幻想图书馆",
+      "facts": 3,
+      "relations": 0,
+      "events": 2,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 9
+    },
+    {
+      "scene_id": "scene_61b49b2be7197107",
+      "story_unit_id": "vol12_12青金石的幻想图书馆",
+      "facts": 1,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 7
+    },
+    {
+      "scene_id": "scene_3836aa9c1e80e781",
+      "story_unit_id": "vol12_12青金石的幻想图书馆",
+      "facts": 7,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 2
+    },
+    {
+      "scene_id": "scene_4c57301908d12659",
+      "story_unit_id": "vol13_13璀璨的紫翠玉",
+      "facts": 3,
+      "relations": 1,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 6
+    },
+    {
+      "scene_id": "scene_b4cbb3c86add661f",
+      "story_unit_id": "vol13_13璀璨的紫翠玉",
+      "facts": 1,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 2,
+      "dropped_invalid": 4
+    },
+    {
+      "scene_id": "scene_d213e27b18ef359d",
+      "story_unit_id": "vol13_13璀璨的紫翠玉",
+      "facts": 6,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 4
+    },
+    {
+      "scene_id": "scene_b0cea79b44ccce5b",
+      "story_unit_id": "vol13_13璀璨的紫翠玉",
+      "facts": 5,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 8
+    },
+    {
+      "scene_id": "scene_aab974aa4da7aa48",
+      "story_unit_id": "vol13_13璀璨的紫翠玉",
+      "facts": 3,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 4
+    },
+    {
+      "scene_id": "scene_5943cde2e14dc3ee",
+      "story_unit_id": "vol13_13璀璨的紫翠玉",
+      "facts": 4,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 2,
+      "dropped_invalid": 4
+    },
+    {
+      "scene_id": "scene_e40b2d835c9c6778",
+      "story_unit_id": "vol13_13璀璨的紫翠玉",
+      "facts": 6,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 1,
+      "dropped_invalid": 4
+    },
+    {
+      "scene_id": "scene_29a3faf20644e0a7",
+      "story_unit_id": "vol13_13璀璨的紫翠玉",
+      "facts": 4,
+      "relations": 0,
+      "events": 3,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 9
+    },
+    {
+      "scene_id": "scene_b33f3adaf98b715d",
+      "story_unit_id": "epilogue_meta",
+      "facts": 2,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 6
+    },
+    {
+      "scene_id": "scene_cc6a73c7c868182e",
+      "story_unit_id": "epilogue_bonus",
+      "facts": 4,
+      "relations": 1,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 6
+    },
+    {
+      "scene_id": "scene_2249e3986f4fbaac",
+      "story_unit_id": "epilogue_bonus",
+      "facts": 7,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 3
+    },
+    {
+      "scene_id": "scene_ae08ec9c787f0b18",
+      "story_unit_id": "epilogue_bonus",
+      "facts": 5,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 2,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 2
+    },
+    {
+      "scene_id": "scene_493c1aaacfdefedd",
+      "story_unit_id": "epilogue_bonus",
+      "facts": 4,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 3
+    },
+    {
+      "scene_id": "scene_6ce4346e7d8e156f",
+      "story_unit_id": "epilogue_bonus",
+      "facts": 4,
+      "relations": 0,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 3,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 2
+    },
+    {
+      "scene_id": "scene_af5c0647448f84de",
+      "story_unit_id": "epilogue_bonus",
+      "facts": 7,
+      "relations": 0,
+      "events": 3,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 4
+    },
+    {
+      "scene_id": "scene_7f600854773073b0",
+      "story_unit_id": "epilogue_bonus",
+      "facts": 2,
+      "relations": 1,
+      "events": 1,
+      "dropped_by_cap": 0,
+      "deduped_in_scene": 0,
+      "deduped_cross_scene": 0,
+      "dropped_invalid": 7
+    }
+  ],
+  "duplicate_groups": [
+    {
+      "card_type": "fact",
+      "payload_key": "克丽索贝莉露|身份|魔法使",
+      "card_ids": [
+        "fact_576ea3b185bf074f",
+        "fact_94b9200459faa6da",
+        "fact_f1092610c2ea56f0"
+      ],
+      "scene_ids": [
+        "scene_67d75f430b8e5e04",
+        "scene_7310623d12ae281a",
+        "scene_cd692664bcab4315"
+      ]
+    },
+    {
+      "card_type": "fact",
+      "payload_key": "夜子|偏好|喜欢琉璃",
+      "card_ids": [
+        "fact_8c3b1e48df214638",
+        "fact_cded898792a16e03"
+      ],
+      "scene_ids": [
+        "scene_4fce1c2889d164e6",
+        "scene_7e8fa9f4e1c2572f"
+      ]
+    },
+    {
+      "card_type": "fact",
+      "payload_key": "夜子|偏好|讨厌琉璃",
+      "card_ids": [
+        "fact_acad4753325925a0",
+        "fact_f9d44d64ea9c443e"
+      ],
+      "scene_ids": [
+        "scene_e57a2206bff98204",
+        "scene_f836b892ae902a29"
+      ]
+    },
+    {
+      "card_type": "fact",
+      "payload_key": "夜子|状态|失忆",
+      "card_ids": [
+        "fact_6a1ac262b3f5d7d9",
+        "fact_d290d41ef81ad573",
+        "fact_59be1050b8922df7"
+      ],
+      "scene_ids": [
+        "scene_1337d70a10d7cbb5",
+        "scene_2d2bc442523a3447",
+        "scene_54d37495a48dabf6"
+      ]
+    },
+    {
+      "card_type": "fact",
+      "payload_key": "夜子|状态|闭门不出",
+      "card_ids": [
+        "fact_8448da7bb9f56ab0",
+        "fact_a58df92c9a0a9aee",
+        "fact_ec1325dcb4f4d872",
+        "fact_ed4188a9983494c2",
+        "fact_fee1f4ca4bd4da00",
+        "fact_d599ffccb3457134",
+        "fact_9d0764eaff0c736e",
+        "fact_5565df414a6b1d6b",
+        "fact_60e8e7438e80871c",
+        "fact_90e54a958c829569",
+        "fact_f70203db9e1d3eba",
+        "fact_f676ee7883404509",
+        "fact_8bc825dfa1d7f808",
+        "fact_b49a400c97ae198e",
+        "fact_ec5bee2f728e8617"
+      ],
+      "scene_ids": [
+        "scene_22301e4e423b5fe0",
+        "scene_2d2bc442523a3447",
+        "scene_38c3285749070248",
+        "scene_4fce1c2889d164e6",
+        "scene_504131e9df789cb9",
+        "scene_51804607b93c84f1",
+        "scene_56480f79d4ea203b",
+        "scene_6bf3e7cf2262e0e6",
+        "scene_7088959981f2f841",
+        "scene_730b02d1c862bff1",
+        "scene_73da1fd47da77d6d",
+        "scene_826b3ca924b87e3e",
+        "scene_a81eb85064944f3f",
+        "scene_dcb59664bf29a262",
+        "scene_f8947e1e7bab8c17"
+      ]
+    },
+    {
+      "card_type": "fact",
+      "payload_key": "夜子|行为|向琉璃示好",
+      "card_ids": [
+        "fact_d13ceea56c1c3778",
+        "fact_e078bb8f4385d7de"
+      ],
+      "scene_ids": [
+        "scene_3eb1b6c100638240",
+        "scene_a0ec8e1c7293029a"
+      ]
+    },
+    {
+      "card_type": "fact",
+      "payload_key": "夜子|行为|闭门不出",
+      "card_ids": [
+        "fact_21431461cb46e6de",
+        "fact_5b96fcf085b897e3"
+      ],
+      "scene_ids": [
+        "scene_371f8cd933cdd82c",
+        "scene_51804607b93c84f1"
+      ]
+    },
+    {
+      "card_type": "fact",
+      "payload_key": "夜子|身份|遊行寺夜子",
+      "card_ids": [
+        "fact_92e3097aa989c974",
+        "fact_c30069a7e13414cf"
+      ],
+      "scene_ids": [
+        "scene_4c12797b28638d2b",
+        "scene_b652c029aca42002"
+      ]
+    },
+    {
+      "card_type": "fact",
+      "payload_key": "妃|死因|自杀",
+      "card_ids": [
+        "fact_7db86b5070ca24b4",
+        "fact_e33ccc529e93bec6"
+      ],
+      "scene_ids": [
+        "scene_7f6315ad480ca6cc",
+        "scene_9a7bed8874bf8ae5"
+      ]
+    },
+    {
+      "card_type": "fact",
+      "payload_key": "妃|状态|纸上存在",
+      "card_ids": [
+        "fact_e07d1540a07b4b9f",
+        "fact_433359af8b02bc3a",
+        "fact_7e7d890a3b76ba08",
+        "fact_6961b88c16531703"
+      ],
+      "scene_ids": [
+        "scene_03892110196599d8",
+        "scene_30b5e8d6b30397a2",
+        "scene_5df1b207252c417a",
+        "scene_84686efdca33b920"
+      ]
+    },
+    {
+      "card_type": "fact",
+      "payload_key": "妃|身份|月社妃",
+      "card_ids": [
+        "fact_44c7b2b9abf5a9e2",
+        "fact_7bb4c2d6015bd19a",
+        "fact_5179452a2db25341"
+      ],
+      "scene_ids": [
+        "scene_5df1b207252c417a",
+        "scene_9444192071da8ab9",
+        "scene_c5ecb06c220264ee"
+      ]
+    },
+    {
+      "card_type": "fact",
+      "payload_key": "彼方|行为|领养萤",
+      "card_ids": [
+        "fact_1ecaeb69f5649666",
+        "fact_f6311cc4bc6b9b23"
+      ],
+      "scene_ids": [
+        "scene_2249e3986f4fbaac",
+        "scene_af5c0647448f84de"
+      ]
+    },
+    {
+      "card_type": "fact",
+      "payload_key": "汀|行为|破坏魔法之书",
+      "card_ids": [
+        "fact_1000bb36e0c6db5a",
+        "fact_fe67de3c7c81fdfc"
+      ],
+      "scene_ids": [
+        "scene_738062af949eef8e",
+        "scene_a185011b08533028"
+      ]
+    },
+    {
+      "card_type": "fact",
+      "payload_key": "理央|偏好|喜欢琉璃",
+      "card_ids": [
+        "fact_9c5c96cd0737fd66",
+        "fact_70125a878641d672"
+      ],
+      "scene_ids": [
+        "scene_07c725781821cc9b",
+        "scene_9f00b1623c6616d1"
+      ]
+    },
+    {
+      "card_type": "fact",
+      "payload_key": "理央|状态|失忆",
+      "card_ids": [
+        "fact_5e895c141f53c622",
+        "fact_5a876eb3f9220e0a"
+      ],
+      "scene_ids": [
+        "scene_8485b9fb85107fd8",
+        "scene_e87bbe1402bf8ad2"
+      ]
+    },
+    {
+      "card_type": "fact",
+      "payload_key": "理央|状态|记忆障碍",
+      "card_ids": [
+        "fact_f2696a3259631f6e",
+        "fact_59b7c078ee500cb9",
+        "fact_084ebb54616c1411"
+      ],
+      "scene_ids": [
+        "scene_3d767e9420b917e6",
+        "scene_c0ea35ca1b791249",
+        "scene_d69e7283b7853d06"
+      ]
+    },
+    {
+      "card_type": "fact",
+      "payload_key": "理央|行为|撒娇",
+      "card_ids": [
+        "fact_6b474c456f9d4f75",
+        "fact_b2ba89d42a4e3596",
+        "fact_d779a60edb228ea7"
+      ],
+      "scene_ids": [
+        "scene_a57a2719c52d8390",
+        "scene_caf8ada4f88821b1",
+        "scene_e87bbe1402bf8ad2"
+      ]
+    },
+    {
+      "card_type": "fact",
+      "payload_key": "理央|身份|纸上存在",
+      "card_ids": [
+        "fact_e24c31ade87d5499",
+        "fact_ec9a1d19011fd0cc"
+      ],
+      "scene_ids": [
+        "scene_4fce1c2889d164e6",
+        "scene_a7d01841d9ff38f2"
+      ]
+    },
+    {
+      "card_type": "fact",
+      "payload_key": "琉璃|偏好|喜欢妃",
+      "card_ids": [
+        "fact_22539907a9c3b459",
+        "fact_ed24b8f577b42975"
+      ],
+      "scene_ids": [
+        "scene_4fce1c2889d164e6",
+        "scene_a4cb080aa433fe74"
+      ]
+    },
+    {
+      "card_type": "fact",
+      "payload_key": "琉璃|性格|冷静",
+      "card_ids": [
+        "fact_6b495bac5f33f35b",
+        "fact_0b4436bf264dbddc"
+      ],
+      "scene_ids": [
+        "scene_1118bc75d2577368",
+        "scene_9f78319482859f83"
+      ]
+    },
+    {
+      "card_type": "fact",
+      "payload_key": "琉璃|状态|在世",
+      "card_ids": [
+        "fact_4184f6dae4661b6e",
+        "fact_2c25540e5b9125e6"
+      ],
+      "scene_ids": [
+        "scene_826b3ca924b87e3e",
+        "scene_e987c0dad15d2f37"
+      ]
+    },
+    {
+      "card_type": "fact",
+      "payload_key": "琉璃|状态|纸上存在",
+      "card_ids": [
+        "fact_20b421311ae04ba9",
+        "fact_ed46bd4614a2b137",
+        "fact_cd8608841365b3d3"
+      ],
+      "scene_ids": [
+        "scene_28e2c9570856b133",
+        "scene_3836aa9c1e80e781",
+        "scene_7f6315ad480ca6cc"
+      ]
+    },
+    {
+      "card_type": "fact",
+      "payload_key": "琉璃|身份|四条琉璃",
+      "card_ids": [
+        "fact_54f5d36f4c72ee52",
+        "fact_234649e0059a552e"
+      ],
+      "scene_ids": [
+        "scene_7f6315ad480ca6cc",
+        "scene_9444192071da8ab9"
+      ]
+    },
+    {
+      "card_type": "relation",
+      "payload_key": "克丽索贝莉露|敌对|琉璃",
+      "card_ids": [
+        "rel_b083ca1e0bbbf174",
+        "rel_9672d4976d8c4892"
+      ],
+      "scene_ids": [
+        "scene_aa7f0adce8e1cfb6",
+        "scene_b75b08e2860e6c26"
+      ]
+    },
+    {
+      "card_type": "relation",
+      "payload_key": "夜子|朋友|妃",
+      "card_ids": [
+        "rel_81e344c12e2e3319",
+        "rel_d7e3c41dc82490c5",
+        "rel_5e7800a566fc9792",
+        "rel_9c71a9cd57b92f4f"
+      ],
+      "scene_ids": [
+        "scene_1337d70a10d7cbb5",
+        "scene_44c9b0e0b74fbefc",
+        "scene_7bb15ba608309479",
+        "scene_db47f100bb107316"
+      ]
+    },
+    {
+      "card_type": "relation",
+      "payload_key": "夜子|朋友|彼方",
+      "card_ids": [
+        "rel_342e310d032b13ac",
+        "rel_9f654283d4afcd9a",
+        "rel_160632234a507562"
+      ],
+      "scene_ids": [
+        "scene_738062af949eef8e",
+        "scene_e57a2206bff98204",
+        "scene_ebf7ba4dbfed1ab9"
+      ]
+    },
+    {
+      "card_type": "relation",
+      "payload_key": "夜子|朋友|琉璃",
+      "card_ids": [
+        "rel_d1267e68705a1243",
+        "rel_52d054b748c1cb0c"
+      ],
+      "scene_ids": [
+        "scene_1d156ad9c555cb73",
+        "scene_738062af949eef8e"
+      ]
+    },
+    {
+      "card_type": "relation",
+      "payload_key": "妃|朋友|彼方",
+      "card_ids": [
+        "rel_453e9fab98e91f60",
+        "rel_307306f509bb0c50"
+      ],
+      "scene_ids": [
+        "scene_a7d01841d9ff38f2",
+        "scene_cb83a63c51df2e79"
+      ]
+    },
+    {
+      "card_type": "relation",
+      "payload_key": "岬|朋友|琉璃",
+      "card_ids": [
+        "rel_6a24070d0e62b551",
+        "rel_0be1049e1437d541"
+      ],
+      "scene_ids": [
+        "scene_76fd6fe20281cb14",
+        "scene_e754c0e839766dcc"
+      ]
+    },
+    {
+      "card_type": "relation",
+      "payload_key": "彼方|朋友|琉璃",
+      "card_ids": [
+        "rel_c2130e03a710cdcf",
+        "rel_7752f8266cd83200",
+        "rel_47989ec1da8e3ebb",
+        "rel_f6a59dbf60350bac",
+        "rel_f692179b463b0907",
+        "rel_427cb118a4c8b6a0"
+      ],
+      "scene_ids": [
+        "scene_447d4d70af6d63f0",
+        "scene_738062af949eef8e",
+        "scene_a57a2719c52d8390",
+        "scene_cb83a63c51df2e79",
+        "scene_e87bbe1402bf8ad2",
+        "scene_ebf7ba4dbfed1ab9"
+      ]
+    },
+    {
+      "card_type": "relation",
+      "payload_key": "琉璃|妹妹|妃",
+      "card_ids": [
+        "rel_63bdaf6d819be0b5",
+        "rel_99b2edf6334ca3e5"
+      ],
+      "scene_ids": [
+        "scene_1337d70a10d7cbb5",
+        "scene_6d539b1b02ec01e2"
+      ]
+    }
+  ],
+  "duplicate_group_count": 31,
+  "conflict_groups": [
+    {
+      "card_type": "fact",
+      "group_key": "妃|死因",
+      "card_ids": [
+        "fact_12994f07eb402548",
+        "fact_a9aa93da8b3e72a6",
+        "fact_7a9619f69f733976",
+        "fact_b8378345458a257d",
+        "fact_8d78f52a6b27837e",
+        "fact_7db86b5070ca24b4",
+        "fact_2e5a82769918f230",
+        "fact_e33ccc529e93bec6"
+      ],
+      "values": [
+        "不明",
+        "事故",
+        "交通事故",
+        "可能是事故",
+        "意外身亡",
+        "自杀",
+        "自缢"
+      ],
+      "description": "妃|死因 存在多个不同取值: 不明 vs 事故 vs 交通事故 vs 可能是事故 vs 意外身亡 vs 自杀 vs 自缢"
+    }
+  ],
+  "conflict_group_count": 1,
+  "failed_scenes": [],
+  "evidence_quality": {
+    "fact_relation_max_lines": 24,
+    "event_max_lines": 60,
+    "overbroad_counts": {
+      "fact": 0,
+      "relation": 0,
+      "event": 0,
+      "total": 0
+    },
+    "note": "旧模型运行使用整段范围示例，过宽 evidence 仅作风险标记；候选不得据此直接批准。"
+  },
+  "reality_status_distribution": {
+    "objective": 1291,
+    "character_claim": 4,
+    "fictional": 12
+  },
+  "predicate_distribution": {
+    "偏好": 38,
+    "状态": 64,
+    "目标": 30,
+    "身份": 117,
+    "行为": 436,
+    "性格": 68,
+    "设定": 75,
+    "经历": 104,
+    "外貌": 8,
+    "死因": 9,
+    "能力": 2
+  },
+  "relation_distribution": {
+    "朋友": 23,
+    "敌对": 6,
+    "妹妹": 2,
+    "主人": 1,
+    "照顾对象": 1,
+    "哥哥": 1,
+    "依赖对象": 5,
+    "憎恨对象": 1,
+    "恋人": 1,
+    "创造者": 2,
+    "母亲": 1,
+    "儿时好友": 1,
+    "搭档": 1
+  },
+  "gates": {
+    "no_approved_cards": true,
+    "review_statuses": {
+      "draft": 1299,
+      "needs_review": 8
+    },
+    "embedding_generated": false
+  },
+  "manual_review_final": {
+    "review_status": "approved",
+    "reviewer": "project_owner_01",
+    "source_candidate_count": 1307,
+    "approved_counts": {
+      "fact": 218,
+      "relation": 32,
+      "event": 159
+    },
+    "approved_total": 409,
+    "rejected_total": 907,
+    "patched_counts": {
+      "event": 23,
+      "fact": 39,
+      "relation": 3
+    },
+    "manual_question_count": 0
+  }
+}

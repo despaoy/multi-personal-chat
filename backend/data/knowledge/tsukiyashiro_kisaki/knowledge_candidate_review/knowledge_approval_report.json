@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "reviewer": "project_owner_01",
+  "source_candidate_count": 1307,
+  "manual_added_count": 9,
+  "decision_counts": {
+    "approved": 400,
+    "rejected": 907
+  },
+  "approved_counts": {
+    "fact": 218,
+    "relation": 32,
+    "event": 159
+  },
+  "approved_total": 409,
+  "patched_counts": {
+    "event": 23,
+    "fact": 39,
+    "relation": 3
+  },
+  "manual_question_count": 0,
+  "review_status": "approved",
+  "notes": "P5 approval summary; embedding and indexing are separate P6 steps."
+}

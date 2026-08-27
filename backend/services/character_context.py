@@ -5,8 +5,9 @@
 2. 模型生成回复（调用方负责）；
 3. complete_turn：生成后写入新记忆、更新关系。
 
-服务本身不调用 LLM、不访问 vLLM；所有可变数据经仓储读写，
-所有规则计算委托给 character 包内的纯函数模块。
+服务本身不直接访问 vLLM；启用后台记忆判断时只提交一个有界任务，
+不等待第二次模型调用。所有可变数据经仓储读写，规则计算与 LLM
+候选校验委托给 character 包内的独立模块。
 """
 
 from __future__ import annotations
@@ -84,6 +85,7 @@ class _TurnOutcome:
     """complete_turn 的执行结果（用于日志与测试断言）。"""
 
     new_memories: int = 0
+    memory_enrichment_scheduled: bool = False
     interaction_count: int = 0
     stage: str = "stranger"
     preferred_address: str = ""
@@ -126,9 +128,7 @@ class CharacterContextService:
         profile, relationship, memories, history = await asyncio.gather(
             asyncio.to_thread(self._profiles.get_profile, character_id),
             self._memory_repo.get_relationship(character_id, user_scope),
-            self._memory_service.load_relevant_memories(
-                character_id, user_scope, turn.message
-            ),
+            self._memory_service.load_relevant_memories(character_id, user_scope, turn.message),
             self._load_history(turn, user_scope),
         )
         memories_items, memory_candidates = memories
@@ -153,12 +153,8 @@ class CharacterContextService:
         )
         compiled = compile_character_context(context)
 
-        relationship_record = await self._memory_repo.get_relationship_record(
-            character_id, user_scope
-        )
-        interaction_count = int(
-            (relationship_record or {}).get("interaction_count") or 0
-        )
+        relationship_record = await self._memory_repo.get_relationship_record(character_id, user_scope)
+        interaction_count = int((relationship_record or {}).get("interaction_count") or 0)
 
         return PreparedCharacterTurn(
             character_id=character_id,
@@ -197,23 +193,37 @@ class CharacterContextService:
                 exc_info=True,
             )
 
-        # 2. 提取并写入新记忆
+        # 2. 提取记忆候选。启用 LLM 时只提交后台复核任务；未启用时
+        # 保留原规则写入，方便离线开发和向后兼容。
         try:
             extracted = extract_memories(turn.message)
-            for item in extracted[:4]:
-                await self._memory_repo.add_or_update_memory(
-                    prepared.character_id,
-                    prepared.user_scope,
-                    MemoryItem(
-                        memory_id="",
-                        memory_type=item.memory_type,  # type: ignore[arg-type]
-                        content=item.content,
-                        importance=item.importance,
-                    ),
-                    memory_key=item.memory_key,
+            from character.memory_llm import get_memory_enrichment_scheduler
+
+            scheduler = get_memory_enrichment_scheduler()
+            if scheduler.enabled:
+                outcome.memory_enrichment_scheduled = scheduler.schedule(
+                    repository=self._memory_repo,
+                    character_id=prepared.character_id,
+                    user_scope=prepared.user_scope,
+                    message=turn.message,
+                    rule_hints=extracted,
                     source_message_id=source_message_id or None,
                 )
-                outcome.new_memories += 1
+            else:
+                for item in extracted[:4]:
+                    await self._memory_repo.add_or_update_memory(
+                        prepared.character_id,
+                        prepared.user_scope,
+                        MemoryItem(
+                            memory_id="",
+                            memory_type=item.memory_type,  # type: ignore[arg-type]
+                            content=item.content,
+                            importance=item.importance,
+                        ),
+                        memory_key=item.memory_key,
+                        source_message_id=source_message_id or None,
+                    )
+                    outcome.new_memories += 1
         except Exception:
             logger.warning(
                 "角色长期记忆写入失败 character=%s error=%s",
@@ -223,9 +233,7 @@ class CharacterContextService:
 
         # 3. 关系阶段推进与称呼偏好
         try:
-            stage = next_relationship_stage(
-                prepared.relationship.stage, outcome.interaction_count
-            )
+            stage = next_relationship_stage(prepared.relationship.stage, outcome.interaction_count)
             address = extract_preferred_address(turn.message)
             if stage != prepared.relationship.stage or address:
                 await self._memory_repo.upsert_relationship(
@@ -248,9 +256,7 @@ class CharacterContextService:
 
         return outcome
 
-    async def _load_history(
-        self, turn: TurnInput, user_scope: UserScope
-    ) -> list[dict[str, str]]:
+    async def _load_history(self, turn: TurnInput, user_scope: UserScope) -> list[dict[str, str]]:
         """调用方带现场历史时直接使用，否则从数据库读取。"""
         if turn.history:
             return list(turn.history)

@@ -1,0 +1,2143 @@
+{
+  "schema_version": 2,
+  "min_dialogue_turns": 6,
+  "oversized_thresholds": {
+    "span_lines": 300,
+    "dialogue_turns": 150
+  },
+  "units": {
+    "vol01_1翡翠的排挤原理": {
+      "story_title": "1翡翠的排挤原理",
+      "source_path": "gametext/纸上魔法使/1翡翠的排挤原理.txt",
+      "content_scope": "main_story",
+      "volume_number": 1,
+      "line_range": [
+        1,
+        null
+      ],
+      "segments": 3225,
+      "dialogues": 1991,
+      "candidates_total": 75,
+      "candidates_by_signal": {
+        "blank_line": 2,
+        "long_narration_gap": 66,
+        "time_jump": 3,
+        "time_of_day": 4
+      },
+      "candidates_by_confidence": {
+        "high": 3,
+        "low": 66,
+        "medium": 6
+      },
+      "must_review_candidates": {
+        "708": {
+          "signal": "time_jump",
+          "confidence": "high",
+          "state": "effective"
+        },
+        "1230": {
+          "signal": "blank_line",
+          "confidence": "medium",
+          "state": "effective"
+        },
+        "2334": {
+          "signal": "blank_line",
+          "confidence": "medium",
+          "state": "effective"
+        },
+        "2608": {
+          "signal": "time_of_day",
+          "confidence": "medium",
+          "state": "auto_merged"
+        },
+        "2616": {
+          "signal": "time_of_day",
+          "confidence": "medium",
+          "state": "auto_merged"
+        },
+        "2635": {
+          "signal": "time_of_day",
+          "confidence": "medium",
+          "state": "effective"
+        },
+        "3497": {
+          "signal": "time_of_day",
+          "confidence": "medium",
+          "state": "effective"
+        },
+        "3612": {
+          "signal": "time_jump",
+          "confidence": "high",
+          "state": "effective"
+        },
+        "3758": {
+          "signal": "time_jump",
+          "confidence": "high",
+          "state": "effective"
+        }
+      },
+      "boundaries_effective": 7,
+      "boundaries_auto_merged": 2,
+      "scenes": 8,
+      "scene_dialogue_turns": [
+        311,
+        272,
+        423,
+        129,
+        409,
+        61,
+        76,
+        310
+      ],
+      "scene_span_lines_min": 115,
+      "scene_span_lines_max": 1103,
+      "oversized_scenes": [
+        {
+          "line_start": 1,
+          "line_end": 707,
+          "span_lines": 707,
+          "dialogue_turns": 311,
+          "low_candidates": [
+            18,
+            37,
+            122,
+            158,
+            327,
+            339,
+            368,
+            543,
+            706
+          ]
+        },
+        {
+          "line_start": 708,
+          "line_end": 1228,
+          "span_lines": 521,
+          "dialogue_turns": 272,
+          "low_candidates": [
+            874,
+            898,
+            1194,
+            1209,
+            1223
+          ]
+        },
+        {
+          "line_start": 1230,
+          "line_end": 2332,
+          "span_lines": 1103,
+          "dialogue_turns": 423,
+          "low_candidates": [
+            1271,
+            1277,
+            1288,
+            1312,
+            1322,
+            1353,
+            1372,
+            1539,
+            1547,
+            1579,
+            1585,
+            1598,
+            1663,
+            1812,
+            1843,
+            1856,
+            1864,
+            1870,
+            1886,
+            1899,
+            1926,
+            1957,
+            2130,
+            2142,
+            2148,
+            2316
+          ]
+        },
+        {
+          "line_start": 2334,
+          "line_end": 2634,
+          "span_lines": 301,
+          "dialogue_turns": 129,
+          "low_candidates": [
+            2413,
+            2545,
+            2594
+          ]
+        },
+        {
+          "line_start": 2635,
+          "line_end": 3496,
+          "span_lines": 862,
+          "dialogue_turns": 409,
+          "low_candidates": [
+            2731,
+            2857,
+            2986,
+            3096,
+            3156,
+            3294,
+            3372,
+            3388,
+            3449,
+            3478
+          ]
+        },
+        {
+          "line_start": 3758,
+          "line_end": 4521,
+          "span_lines": 764,
+          "dialogue_turns": 310,
+          "low_candidates": [
+            3802,
+            4029,
+            4072,
+            4104,
+            4130,
+            4276,
+            4298,
+            4312,
+            4348,
+            4419,
+            4432,
+            4516
+          ]
+        }
+      ],
+      "oversized_low_candidate_count": 65,
+      "remaining_low_candidate_count": 1
+    },
+    "vol02_2红宝石的天作之合": {
+      "story_title": "2红宝石的天作之合",
+      "source_path": "gametext/纸上魔法使/2红宝石的天作之合.txt",
+      "content_scope": "main_story",
+      "volume_number": 2,
+      "line_range": [
+        1,
+        null
+      ],
+      "segments": 2135,
+      "dialogues": 1364,
+      "candidates_total": 34,
+      "candidates_by_signal": {
+        "blank_line": 2,
+        "long_narration_gap": 27,
+        "time_jump": 2,
+        "time_of_day": 3
+      },
+      "candidates_by_confidence": {
+        "high": 2,
+        "low": 27,
+        "medium": 5
+      },
+      "must_review_candidates": {
+        "602": {
+          "signal": "blank_line",
+          "confidence": "medium",
+          "state": "effective"
+        },
+        "824": {
+          "signal": "time_of_day",
+          "confidence": "medium",
+          "state": "effective"
+        },
+        "1121": {
+          "signal": "time_jump",
+          "confidence": "high",
+          "state": "effective"
+        },
+        "1967": {
+          "signal": "blank_line",
+          "confidence": "medium",
+          "state": "effective"
+        },
+        "2399": {
+          "signal": "time_of_day",
+          "confidence": "medium",
+          "state": "effective"
+        },
+        "2463": {
+          "signal": "time_of_day",
+          "confidence": "medium",
+          "state": "effective"
+        },
+        "2798": {
+          "signal": "time_jump",
+          "confidence": "high",
+          "state": "effective"
+        }
+      },
+      "boundaries_effective": 7,
+      "boundaries_auto_merged": 0,
+      "scenes": 8,
+      "scene_dialogue_turns": [
+        262,
+        90,
+        137,
+        431,
+        223,
+        26,
+        182,
+        13
+      ],
+      "scene_span_lines_min": 34,
+      "scene_span_lines_max": 845,
+      "oversized_scenes": [
+        {
+          "line_start": 1,
+          "line_end": 600,
+          "span_lines": 600,
+          "dialogue_turns": 262,
+          "low_candidates": [
+            50,
+            199,
+            208,
+            257,
+            387
+          ]
+        },
+        {
+          "line_start": 1121,
+          "line_end": 1965,
+          "span_lines": 845,
+          "dialogue_turns": 431,
+          "low_candidates": [
+            1354,
+            1879,
+            1889
+          ]
+        },
+        {
+          "line_start": 1967,
+          "line_end": 2398,
+          "span_lines": 432,
+          "dialogue_turns": 223,
+          "low_candidates": [
+            2157,
+            2351,
+            2365,
+            2382
+          ]
+        },
+        {
+          "line_start": 2463,
+          "line_end": 2797,
+          "span_lines": 335,
+          "dialogue_turns": 182,
+          "low_candidates": [
+            2477,
+            2655,
+            2686,
+            2792
+          ]
+        }
+      ],
+      "oversized_low_candidate_count": 16,
+      "remaining_low_candidate_count": 11
+    },
+    "vol03_3蓝宝石的存在证明": {
+      "story_title": "3蓝宝石的存在证明",
+      "source_path": "gametext/纸上魔法使/3蓝宝石的存在证明.txt",
+      "content_scope": "main_story",
+      "volume_number": 3,
+      "line_range": [
+        1,
+        null
+      ],
+      "segments": 2798,
+      "dialogues": 1779,
+      "candidates_total": 74,
+      "candidates_by_signal": {
+        "blank_line": 2,
+        "long_narration_gap": 70,
+        "time_of_day": 2
+      },
+      "candidates_by_confidence": {
+        "low": 70,
+        "medium": 4
+      },
+      "must_review_candidates": {
+        "1230": {
+          "signal": "blank_line",
+          "confidence": "medium",
+          "state": "effective"
+        },
+        "1624": {
+          "signal": "time_of_day",
+          "confidence": "medium",
+          "state": "effective"
+        },
+        "2822": {
+          "signal": "blank_line",
+          "confidence": "medium",
+          "state": "effective"
+        },
+        "3098": {
+          "signal": "time_of_day",
+          "confidence": "medium",
+          "state": "effective"
+        }
+      },
+      "boundaries_effective": 4,
+      "boundaries_auto_merged": 0,
+      "scenes": 5,
+      "scene_dialogue_turns": [
+        596,
+        134,
+        500,
+        125,
+        424
+      ],
+      "scene_span_lines_min": 276,
+      "scene_span_lines_max": 1228,
+      "oversized_scenes": [
+        {
+          "line_start": 1,
+          "line_end": 1228,
+          "span_lines": 1228,
+          "dialogue_turns": 596,
+          "low_candidates": [
+            30,
+            43,
+            62,
+            70,
+            82,
+            193,
+            251,
+            345,
+            511,
+            529,
+            535,
+            702,
+            1084,
+            1096,
+            1108,
+            1181,
+            1216
+          ]
+        },
+        {
+          "line_start": 1230,
+          "line_end": 1623,
+          "span_lines": 394,
+          "dialogue_turns": 134,
+          "low_candidates": [
+            1299,
+            1315,
+            1579,
+            1603
+          ]
+        },
+        {
+          "line_start": 1624,
+          "line_end": 2820,
+          "span_lines": 1197,
+          "dialogue_turns": 500,
+          "low_candidates": [
+            1628,
+            1699,
+            1713,
+            1788,
+            2011,
+            2098,
+            2212,
+            2362,
+            2422,
+            2430,
+            2459,
+            2511,
+            2553,
+            2662,
+            2808,
+            2815
+          ]
+        },
+        {
+          "line_start": 3098,
+          "line_end": 4321,
+          "span_lines": 1224,
+          "dialogue_turns": 424,
+          "low_candidates": [
+            3102,
+            3248,
+            3445,
+            3459,
+            3490,
+            3497,
+            3571,
+            3605,
+            3795,
+            3820,
+            3826,
+            3868,
+            3903,
+            3929,
+            3947,
+            3959,
+            3971,
+            3983,
+            3995,
+            4002,
+            4050,
+            4065,
+            4088,
+            4112,
+            4128,
+            4148,
+            4154,
+            4177,
+            4201,
+            4209,
+            4308
+          ]
+        }
+      ],
+      "oversized_low_candidate_count": 68,
+      "remaining_low_candidate_count": 2
+    },
+    "vol04_4紫水晶的怪异传说": {
+      "story_title": "4紫水晶的怪异传说",
+      "source_path": "gametext/纸上魔法使/4紫水晶的怪异传说.txt",
+      "content_scope": "main_story",
+      "volume_number": 4,
+      "line_range": [
+        1,
+        null
+      ],
+      "segments": 2476,
+      "dialogues": 1543,
+      "candidates_total": 59,
+      "candidates_by_signal": {
+        "blank_line": 2,
+        "long_narration_gap": 53,
+        "time_of_day": 4
+      },
+      "candidates_by_confidence": {
+        "low": 53,
+        "medium": 6
+      },
+      "must_review_candidates": {
+        "860": {
+          "signal": "time_of_day",
+          "confidence": "medium",
+          "state": "effective"
+        },
+        "1032": {
+          "signal": "blank_line",
+          "confidence": "medium",
+          "state": "effective"
+        },
+        "1192": {
+          "signal": "time_of_day",
+          "confidence": "medium",
+          "state": "auto_merged"
+        },
+        "1200": {
+          "signal": "time_of_day",
+          "confidence": "medium",
+          "state": "effective"
+        },
+        "2424": {
+          "signal": "blank_line",
+          "confidence": "medium",
+          "state": "effective"
+        },
+        "2497": {
+          "signal": "time_of_day",
+          "confidence": "medium",
+          "state": "effective"
+        }
+      },
+      "boundaries_effective": 5,
+      "boundaries_auto_merged": 1,
+      "scenes": 6,
+      "scene_dialogue_turns": [
+        374,
+        93,
+        75,
+        568,
+        36,
+        397
+      ],
+      "scene_span_lines_min": 73,
+      "scene_span_lines_max": 1223,
+      "oversized_scenes": [
+        {
+          "line_start": 1,
+          "line_end": 859,
+          "span_lines": 859,
+          "dialogue_turns": 374,
+          "low_candidates": [
+            18,
+            33,
+            40,
+            63,
+            88,
+            261,
+            389,
+            405,
+            414,
+            532,
+            574,
+            596,
+            616,
+            664,
+            678,
+            767,
+            773,
+            858
+          ]
+        },
+        {
+          "line_start": 1200,
+          "line_end": 2422,
+          "span_lines": 1223,
+          "dialogue_turns": 568,
+          "low_candidates": [
+            1360,
+            1370,
+            1512,
+            1525,
+            1688,
+            1694,
+            1724,
+            1734,
+            1882,
+            2074,
+            2170,
+            2297,
+            2304,
+            2333,
+            2363,
+            2371,
+            2391,
+            2412
+          ]
+        },
+        {
+          "line_start": 2497,
+          "line_end": 3413,
+          "span_lines": 917,
+          "dialogue_turns": 397,
+          "low_candidates": [
+            2611,
+            2654,
+            2689,
+            2713,
+            2751,
+            2866,
+            2944,
+            2966,
+            3133,
+            3153,
+            3408
+          ]
+        }
+      ],
+      "oversized_low_candidate_count": 47,
+      "remaining_low_candidate_count": 6
+    },
+    "vol05_5磷灰石的怠惰现象": {
+      "story_title": "5磷灰石的怠惰现象",
+      "source_path": "gametext/纸上魔法使/5磷灰石的怠惰现象.txt",
+      "content_scope": "main_story",
+      "volume_number": 5,
+      "line_range": [
+        1,
+        null
+      ],
+      "segments": 2270,
+      "dialogues": 1439,
+      "candidates_total": 36,
+      "candidates_by_signal": {
+        "blank_line": 3,
+        "long_narration_gap": 30,
+        "time_jump": 2,
+        "time_of_day": 1
+      },
+      "candidates_by_confidence": {
+        "high": 2,
+        "low": 30,
+        "medium": 4
+      },
+      "must_review_candidates": {
+        "329": {
+          "signal": "time_of_day",
+          "confidence": "medium",
+          "state": "effective"
+        },
+        "786": {
+          "signal": "blank_line",
+          "confidence": "medium",
+          "state": "effective"
+        },
+        "1091": {
+          "signal": "time_jump",
+          "confidence": "high",
+          "state": "effective"
+        },
+        "1574": {
+          "signal": "time_jump",
+          "confidence": "high",
+          "state": "effective"
+        },
+        "1800": {
+          "signal": "blank_line",
+          "confidence": "medium",
+          "state": "effective"
+        },
+        "2361": {
+          "signal": "blank_line",
+          "confidence": "medium",
+          "state": "effective"
+        }
+      },
+      "boundaries_effective": 6,
+      "boundaries_auto_merged": 0,
+      "scenes": 7,
+      "scene_dialogue_turns": [
+        139,
+        235,
+        65,
+        243,
+        122,
+        270,
+        365
+      ],
+      "scene_span_lines_min": 225,
+      "scene_span_lines_max": 818,
+      "oversized_scenes": [
+        {
+          "line_start": 1,
+          "line_end": 328,
+          "span_lines": 328,
+          "dialogue_turns": 139,
+          "low_candidates": [
+            25,
+            211,
+            261,
+            270
+          ]
+        },
+        {
+          "line_start": 329,
+          "line_end": 784,
+          "span_lines": 456,
+          "dialogue_turns": 235,
+          "low_candidates": [
+            545
+          ]
+        },
+        {
+          "line_start": 786,
+          "line_end": 1090,
+          "span_lines": 305,
+          "dialogue_turns": 65,
+          "low_candidates": [
+            849,
+            860,
+            867,
+            960,
+            974,
+            983,
+            1005,
+            1056,
+            1078
+          ]
+        },
+        {
+          "line_start": 1091,
+          "line_end": 1573,
+          "span_lines": 483,
+          "dialogue_turns": 243,
+          "low_candidates": [
+            1277,
+            1369,
+            1491,
+            1546,
+            1558,
+            1567
+          ]
+        },
+        {
+          "line_start": 1800,
+          "line_end": 2359,
+          "span_lines": 560,
+          "dialogue_turns": 270,
+          "low_candidates": [
+            2021,
+            2196,
+            2219
+          ]
+        },
+        {
+          "line_start": 2361,
+          "line_end": 3178,
+          "span_lines": 818,
+          "dialogue_turns": 365,
+          "low_candidates": [
+            2706,
+            2804,
+            3032,
+            3054,
+            3062,
+            3076,
+            3171
+          ]
+        }
+      ],
+      "oversized_low_candidate_count": 30,
+      "remaining_low_candidate_count": 0
+    },
+    "vol06_6芙蓉石的长年隔绝": {
+      "story_title": "6芙蓉石的长年隔绝",
+      "source_path": "gametext/纸上魔法使/6芙蓉石的长年隔绝.txt",
+      "content_scope": "main_story",
+      "volume_number": 6,
+      "line_range": [
+        1,
+        null
+      ],
+      "segments": 2642,
+      "dialogues": 1612,
+      "candidates_total": 52,
+      "candidates_by_signal": {
+        "blank_line": 2,
+        "long_narration_gap": 48,
+        "time_of_day": 2
+      },
+      "candidates_by_confidence": {
+        "low": 48,
+        "medium": 4
+      },
+      "must_review_candidates": {
+        "273": {
+          "signal": "time_of_day",
+          "confidence": "medium",
+          "state": "effective"
+        },
+        "1262": {
+          "signal": "blank_line",
+          "confidence": "medium",
+          "state": "effective"
+        },
+        "2439": {
+          "signal": "blank_line",
+          "confidence": "medium",
+          "state": "effective"
+        },
+        "3180": {
+          "signal": "time_of_day",
+          "confidence": "medium",
+          "state": "effective"
+        }
+      },
+      "boundaries_effective": 4,
+      "boundaries_auto_merged": 0,
+      "scenes": 5,
+      "scene_dialogue_turns": [
+        121,
+        475,
+        475,
+        319,
+        222
+      ],
+      "scene_span_lines_min": 272,
+      "scene_span_lines_max": 1176,
+      "oversized_scenes": [
+        {
+          "line_start": 273,
+          "line_end": 1260,
+          "span_lines": 988,
+          "dialogue_turns": 475,
+          "low_candidates": [
+            339,
+            716,
+            816,
+            1018,
+            1057,
+            1105,
+            1193,
+            1213,
+            1255
+          ]
+        },
+        {
+          "line_start": 1262,
+          "line_end": 2437,
+          "span_lines": 1176,
+          "dialogue_turns": 475,
+          "low_candidates": [
+            1340,
+            1362,
+            1385,
+            1406,
+            1416,
+            1533,
+            1553,
+            1566,
+            1584,
+            1602,
+            1672,
+            1914,
+            2066,
+            2078,
+            2113,
+            2135,
+            2432
+          ]
+        },
+        {
+          "line_start": 2439,
+          "line_end": 3179,
+          "span_lines": 741,
+          "dialogue_turns": 319,
+          "low_candidates": [
+            2458,
+            2467,
+            2561,
+            2719,
+            2748,
+            2803,
+            2882,
+            2890,
+            2945,
+            3060,
+            3177
+          ]
+        },
+        {
+          "line_start": 3180,
+          "line_end": 3735,
+          "span_lines": 556,
+          "dialogue_turns": 222,
+          "low_candidates": [
+            3187,
+            3387,
+            3394,
+            3511,
+            3535,
+            3551,
+            3591,
+            3645,
+            3684,
+            3708,
+            3725
+          ]
+        }
+      ],
+      "oversized_low_candidate_count": 48,
+      "remaining_low_candidate_count": 0
+    },
+    "vol06_6芙蓉石的终焉轮回": {
+      "story_title": "6芙蓉石的终焉轮回",
+      "source_path": "gametext/纸上魔法使/6芙蓉石的终焉轮回.txt",
+      "content_scope": "main_story",
+      "volume_number": 6,
+      "line_range": [
+        1,
+        null
+      ],
+      "segments": 1788,
+      "dialogues": 1079,
+      "candidates_total": 59,
+      "candidates_by_signal": {
+        "blank_line": 2,
+        "long_narration_gap": 53,
+        "time_jump": 2,
+        "time_of_day": 2
+      },
+      "candidates_by_confidence": {
+        "high": 2,
+        "low": 53,
+        "medium": 4
+      },
+      "must_review_candidates": {
+        "682": {
+          "signal": "time_of_day",
+          "confidence": "medium",
+          "state": "effective"
+        },
+        "727": {
+          "signal": "time_of_day",
+          "confidence": "medium",
+          "state": "effective"
+        },
+        "874": {
+          "signal": "blank_line",
+          "confidence": "medium",
+          "state": "effective"
+        },
+        "1704": {
+          "signal": "blank_line",
+          "confidence": "medium",
+          "state": "effective"
+        },
+        "2060": {
+          "signal": "time_jump",
+          "confidence": "high",
+          "state": "effective"
+        },
+        "2558": {
+          "signal": "time_jump",
+          "confidence": "high",
+          "state": "auto_merged"
+        }
+      },
+      "boundaries_effective": 5,
+      "boundaries_auto_merged": 1,
+      "scenes": 6,
+      "scene_dialogue_turns": [
+        318,
+        18,
+        73,
+        393,
+        97,
+        180
+      ],
+      "scene_span_lines_min": 45,
+      "scene_span_lines_max": 829,
+      "oversized_scenes": [
+        {
+          "line_start": 1,
+          "line_end": 681,
+          "span_lines": 681,
+          "dialogue_turns": 318,
+          "low_candidates": [
+            101,
+            154,
+            254,
+            294,
+            358,
+            396,
+            540
+          ]
+        },
+        {
+          "line_start": 874,
+          "line_end": 1702,
+          "span_lines": 829,
+          "dialogue_turns": 393,
+          "low_candidates": [
+            1112,
+            1121,
+            1191,
+            1444,
+            1450,
+            1604,
+            1610,
+            1687,
+            1695
+          ]
+        },
+        {
+          "line_start": 1704,
+          "line_end": 2059,
+          "span_lines": 356,
+          "dialogue_turns": 97,
+          "low_candidates": [
+            1716,
+            1765,
+            1809,
+            1818,
+            1832,
+            1838,
+            1845,
+            1851,
+            1858,
+            1894,
+            1920,
+            1929,
+            1995,
+            2022,
+            2037,
+            2057
+          ]
+        },
+        {
+          "line_start": 2060,
+          "line_end": 2607,
+          "span_lines": 548,
+          "dialogue_turns": 180,
+          "low_candidates": [
+            2086,
+            2098,
+            2104,
+            2264,
+            2283,
+            2290,
+            2296,
+            2306,
+            2320,
+            2331,
+            2339,
+            2350,
+            2379,
+            2418,
+            2493,
+            2500,
+            2516,
+            2545,
+            2574,
+            2584
+          ]
+        }
+      ],
+      "oversized_low_candidate_count": 52,
+      "remaining_low_candidate_count": 1
+    },
+    "vol07_7黑珍珠的求爱信号": {
+      "story_title": "7黑珍珠的求爱信号",
+      "source_path": "gametext/纸上魔法使/7黑珍珠的求爱信号.txt",
+      "content_scope": "main_story",
+      "volume_number": 7,
+      "line_range": [
+        1,
+        null
+      ],
+      "segments": 1817,
+      "dialogues": 1105,
+      "candidates_total": 37,
+      "candidates_by_signal": {
+        "blank_line": 2,
+        "long_narration_gap": 35
+      },
+      "candidates_by_confidence": {
+        "low": 35,
+        "medium": 2
+      },
+      "must_review_candidates": {
+        "855": {
+          "signal": "blank_line",
+          "confidence": "medium",
+          "state": "effective"
+        },
+        "1812": {
+          "signal": "blank_line",
+          "confidence": "medium",
+          "state": "effective"
+        }
+      },
+      "boundaries_effective": 2,
+      "boundaries_auto_merged": 0,
+      "scenes": 3,
+      "scene_dialogue_turns": [
+        376,
+        417,
+        312
+      ],
+      "scene_span_lines_min": 788,
+      "scene_span_lines_max": 956,
+      "oversized_scenes": [
+        {
+          "line_start": 1,
+          "line_end": 853,
+          "span_lines": 853,
+          "dialogue_turns": 376,
+          "low_candidates": [
+            98,
+            125,
+            235,
+            314,
+            708,
+            809,
+            826
+          ]
+        },
+        {
+          "line_start": 855,
+          "line_end": 1810,
+          "span_lines": 956,
+          "dialogue_turns": 417,
+          "low_candidates": [
+            948,
+            981,
+            1190,
+            1246,
+            1352,
+            1418,
+            1445,
+            1454,
+            1462,
+            1469,
+            1525,
+            1545,
+            1696
+          ]
+        },
+        {
+          "line_start": 1812,
+          "line_end": 2599,
+          "span_lines": 788,
+          "dialogue_turns": 312,
+          "low_candidates": [
+            1908,
+            1950,
+            2072,
+            2087,
+            2097,
+            2107,
+            2147,
+            2169,
+            2216,
+            2347,
+            2362,
+            2403,
+            2510,
+            2588,
+            2594
+          ]
+        }
+      ],
+      "oversized_low_candidate_count": 35,
+      "remaining_low_candidate_count": 0
+    },
+    "vol08_8萤石的怠惰现象": {
+      "story_title": "8萤石的怠惰现象",
+      "source_path": "gametext/纸上魔法使/8萤石的怠惰现象.txt",
+      "content_scope": "main_story",
+      "volume_number": 8,
+      "line_range": [
+        1,
+        null
+      ],
+      "segments": 998,
+      "dialogues": 598,
+      "candidates_total": 29,
+      "candidates_by_signal": {
+        "blank_line": 1,
+        "long_narration_gap": 27,
+        "time_of_day": 1
+      },
+      "candidates_by_confidence": {
+        "low": 27,
+        "medium": 2
+      },
+      "must_review_candidates": {
+        "338": {
+          "signal": "time_of_day",
+          "confidence": "medium",
+          "state": "effective"
+        },
+        "631": {
+          "signal": "blank_line",
+          "confidence": "medium",
+          "state": "effective"
+        }
+      },
+      "boundaries_effective": 2,
+      "boundaries_auto_merged": 0,
+      "scenes": 3,
+      "scene_dialogue_turns": [
+        144,
+        130,
+        324
+      ],
+      "scene_span_lines_min": 292,
+      "scene_span_lines_max": 813,
+      "oversized_scenes": [
+        {
+          "line_start": 1,
+          "line_end": 337,
+          "span_lines": 337,
+          "dialogue_turns": 144,
+          "low_candidates": [
+            33,
+            73,
+            187
+          ]
+        },
+        {
+          "line_start": 631,
+          "line_end": 1443,
+          "span_lines": 813,
+          "dialogue_turns": 324,
+          "low_candidates": [
+            725,
+            821,
+            941,
+            967,
+            1046,
+            1113,
+            1123,
+            1136,
+            1145,
+            1161,
+            1175,
+            1323,
+            1336,
+            1346,
+            1357,
+            1376,
+            1391,
+            1408,
+            1428
+          ]
+        }
+      ],
+      "oversized_low_candidate_count": 22,
+      "remaining_low_candidate_count": 5
+    },
+    "vol08_8萤石的时空残影": {
+      "story_title": "8萤石的时空残影",
+      "source_path": "gametext/纸上魔法使/8萤石的时空残影.txt",
+      "content_scope": "main_story",
+      "volume_number": 8,
+      "line_range": [
+        1,
+        null
+      ],
+      "segments": 1288,
+      "dialogues": 785,
+      "candidates_total": 34,
+      "candidates_by_signal": {
+        "blank_line": 2,
+        "long_narration_gap": 29,
+        "time_of_day": 3
+      },
+      "candidates_by_confidence": {
+        "low": 29,
+        "medium": 5
+      },
+      "must_review_candidates": {
+        "638": {
+          "signal": "time_of_day",
+          "confidence": "medium",
+          "state": "effective"
+        },
+        "809": {
+          "signal": "blank_line",
+          "confidence": "medium",
+          "state": "effective"
+        },
+        "1056": {
+          "signal": "time_of_day",
+          "confidence": "medium",
+          "state": "effective"
+        },
+        "1260": {
+          "signal": "blank_line",
+          "confidence": "medium",
+          "state": "effective"
+        },
+        "1505": {
+          "signal": "time_of_day",
+          "confidence": "medium",
+          "state": "effective"
+        }
+      },
+      "boundaries_effective": 5,
+      "boundaries_auto_merged": 0,
+      "scenes": 6,
+      "scene_dialogue_turns": [
+        272,
+        66,
+        101,
+        116,
+        97,
+        133
+      ],
+      "scene_span_lines_min": 170,
+      "scene_span_lines_max": 637,
+      "oversized_scenes": [
+        {
+          "line_start": 1,
+          "line_end": 637,
+          "span_lines": 637,
+          "dialogue_turns": 272,
+          "low_candidates": [
+            51,
+            61,
+            216,
+            311,
+            319,
+            508,
+            595,
+            613,
+            626,
+            634
+          ]
+        },
+        {
+          "line_start": 1505,
+          "line_end": 1896,
+          "span_lines": 392,
+          "dialogue_turns": 133,
+          "low_candidates": [
+            1525,
+            1590,
+            1598,
+            1610,
+            1651,
+            1665,
+            1684,
+            1722,
+            1780,
+            1819,
+            1892
+          ]
+        }
+      ],
+      "oversized_low_candidate_count": 21,
+      "remaining_low_candidate_count": 8
+    },
+    "vol09_9白珍珠的泡沫爱慕": {
+      "story_title": "9白珍珠的泡沫爱慕",
+      "source_path": "gametext/纸上魔法使/9白珍珠的泡沫爱慕.txt",
+      "content_scope": "main_story",
+      "volume_number": 9,
+      "line_range": [
+        1,
+        null
+      ],
+      "segments": 1183,
+      "dialogues": 722,
+      "candidates_total": 29,
+      "candidates_by_signal": {
+        "blank_line": 2,
+        "long_narration_gap": 26,
+        "time_of_day": 1
+      },
+      "candidates_by_confidence": {
+        "low": 26,
+        "medium": 3
+      },
+      "must_review_candidates": {
+        "483": {
+          "signal": "blank_line",
+          "confidence": "medium",
+          "state": "effective"
+        },
+        "1097": {
+          "signal": "time_of_day",
+          "confidence": "medium",
+          "state": "effective"
+        },
+        "1262": {
+          "signal": "blank_line",
+          "confidence": "medium",
+          "state": "effective"
+        }
+      },
+      "boundaries_effective": 3,
+      "boundaries_auto_merged": 0,
+      "scenes": 4,
+      "scene_dialogue_turns": [
+        183,
+        164,
+        47,
+        328
+      ],
+      "scene_span_lines_min": 164,
+      "scene_span_lines_max": 736,
+      "oversized_scenes": [
+        {
+          "line_start": 1,
+          "line_end": 481,
+          "span_lines": 481,
+          "dialogue_turns": 183,
+          "low_candidates": [
+            11,
+            22,
+            90,
+            119,
+            134,
+            149,
+            301,
+            463,
+            472
+          ]
+        },
+        {
+          "line_start": 483,
+          "line_end": 1096,
+          "span_lines": 614,
+          "dialogue_turns": 164,
+          "low_candidates": [
+            806,
+            919,
+            1005,
+            1083
+          ]
+        },
+        {
+          "line_start": 1262,
+          "line_end": 1997,
+          "span_lines": 736,
+          "dialogue_turns": 328,
+          "low_candidates": [
+            1271,
+            1426,
+            1591,
+            1659,
+            1668,
+            1725,
+            1957,
+            1964,
+            1976
+          ]
+        }
+      ],
+      "oversized_low_candidate_count": 22,
+      "remaining_low_candidate_count": 4
+    },
+    "vol09_9绿幽灵水晶的命运连锁": {
+      "story_title": "9绿幽灵水晶的命运连锁",
+      "source_path": "gametext/纸上魔法使/9绿幽灵水晶的命运连锁.txt",
+      "content_scope": "main_story",
+      "volume_number": 9,
+      "line_range": [
+        1,
+        null
+      ],
+      "segments": 1804,
+      "dialogues": 1099,
+      "candidates_total": 36,
+      "candidates_by_signal": {
+        "blank_line": 2,
+        "long_narration_gap": 24,
+        "time_jump": 2,
+        "time_of_day": 8
+      },
+      "candidates_by_confidence": {
+        "high": 2,
+        "low": 24,
+        "medium": 10
+      },
+      "must_review_candidates": {
+        "213": {
+          "signal": "time_jump",
+          "confidence": "high",
+          "state": "effective"
+        },
+        "443": {
+          "signal": "time_of_day",
+          "confidence": "medium",
+          "state": "auto_merged"
+        },
+        "445": {
+          "signal": "time_of_day",
+          "confidence": "medium",
+          "state": "effective"
+        },
+        "758": {
+          "signal": "time_jump",
+          "confidence": "high",
+          "state": "effective"
+        },
+        "1018": {
+          "signal": "blank_line",
+          "confidence": "medium",
+          "state": "effective"
+        },
+        "1592": {
+          "signal": "time_of_day",
+          "confidence": "medium",
+          "state": "effective"
+        },
+        "1711": {
+          "signal": "time_of_day",
+          "confidence": "medium",
+          "state": "auto_merged"
+        },
+        "1759": {
+          "signal": "time_of_day",
+          "confidence": "medium",
+          "state": "effective"
+        },
+        "1984": {
+          "signal": "time_of_day",
+          "confidence": "medium",
+          "state": "auto_merged"
+        },
+        "1986": {
+          "signal": "blank_line",
+          "confidence": "medium",
+          "state": "effective"
+        },
+        "2162": {
+          "signal": "time_of_day",
+          "confidence": "medium",
+          "state": "effective"
+        },
+        "2356": {
+          "signal": "time_of_day",
+          "confidence": "medium",
+          "state": "effective"
+        }
+      },
+      "boundaries_effective": 9,
+      "boundaries_auto_merged": 3,
+      "scenes": 10,
+      "scene_dialogue_turns": [
+        101,
+        119,
+        146,
+        119,
+        255,
+        51,
+        91,
+        69,
+        83,
+        65
+      ],
+      "scene_span_lines_min": 148,
+      "scene_span_lines_max": 574,
+      "oversized_scenes": [
+        {
+          "line_start": 445,
+          "line_end": 757,
+          "span_lines": 313,
+          "dialogue_turns": 146,
+          "low_candidates": [
+            518,
+            526,
+            553,
+            576,
+            757
+          ]
+        },
+        {
+          "line_start": 1018,
+          "line_end": 1591,
+          "span_lines": 574,
+          "dialogue_turns": 255,
+          "low_candidates": [
+            1189,
+            1383,
+            1500,
+            1507
+          ]
+        }
+      ],
+      "oversized_low_candidate_count": 9,
+      "remaining_low_candidate_count": 15
+    },
+    "vol10_10黑曜石的因果目录": {
+      "story_title": "10黑曜石的因果目录",
+      "source_path": "gametext/纸上魔法使/10黑曜石的因果目录.txt",
+      "content_scope": "main_story",
+      "volume_number": 10,
+      "line_range": [
+        1,
+        null
+      ],
+      "segments": 299,
+      "dialogues": 165,
+      "candidates_total": 36,
+      "candidates_by_signal": {
+        "long_narration_gap": 34,
+        "time_jump": 1,
+        "time_of_day": 1
+      },
+      "candidates_by_confidence": {
+        "high": 1,
+        "low": 34,
+        "medium": 1
+      },
+      "must_review_candidates": {
+        "99": {
+          "signal": "time_of_day",
+          "confidence": "medium",
+          "state": "auto_merged"
+        },
+        "846": {
+          "signal": "time_jump",
+          "confidence": "high",
+          "state": "effective"
+        }
+      },
+      "boundaries_effective": 1,
+      "boundaries_auto_merged": 1,
+      "scenes": 2,
+      "scene_dialogue_turns": [
+        158,
+        7
+      ],
+      "scene_span_lines_min": 81,
+      "scene_span_lines_max": 845,
+      "oversized_scenes": [
+        {
+          "line_start": 1,
+          "line_end": 845,
+          "span_lines": 845,
+          "dialogue_turns": 158,
+          "low_candidates": [
+            95,
+            123,
+            142,
+            150,
+            156,
+            163,
+            242,
+            248,
+            261,
+            387,
+            424,
+            482,
+            489,
+            522,
+            528,
+            555,
+            611,
+            622,
+            640,
+            676,
+            698,
+            719,
+            741,
+            751,
+            766,
+            774,
+            781,
+            804,
+            838,
+            844
+          ]
+        }
+      ],
+      "oversized_low_candidate_count": 30,
+      "remaining_low_candidate_count": 4
+    },
+    "vol11_11黑玛瑙的不在证明": {
+      "story_title": "11黑玛瑙的不在证明",
+      "source_path": "gametext/纸上魔法使/11黑玛瑙的不在证明.txt",
+      "content_scope": "main_story",
+      "volume_number": 11,
+      "line_range": [
+        1,
+        null
+      ],
+      "segments": 1078,
+      "dialogues": 614,
+      "candidates_total": 38,
+      "candidates_by_signal": {
+        "blank_line": 2,
+        "long_narration_gap": 34,
+        "time_jump": 1,
+        "time_of_day": 1
+      },
+      "candidates_by_confidence": {
+        "high": 1,
+        "low": 34,
+        "medium": 3
+      },
+      "must_review_candidates": {
+        "427": {
+          "signal": "blank_line",
+          "confidence": "medium",
+          "state": "effective"
+        },
+        "532": {
+          "signal": "time_of_day",
+          "confidence": "medium",
+          "state": "effective"
+        },
+        "608": {
+          "signal": "time_jump",
+          "confidence": "high",
+          "state": "effective"
+        },
+        "905": {
+          "signal": "blank_line",
+          "confidence": "medium",
+          "state": "effective"
+        }
+      },
+      "boundaries_effective": 4,
+      "boundaries_auto_merged": 0,
+      "scenes": 5,
+      "scene_dialogue_turns": [
+        174,
+        48,
+        28,
+        115,
+        249
+      ],
+      "scene_span_lines_min": 76,
+      "scene_span_lines_max": 765,
+      "oversized_scenes": [
+        {
+          "line_start": 1,
+          "line_end": 425,
+          "span_lines": 425,
+          "dialogue_turns": 174,
+          "low_candidates": [
+            6,
+            27,
+            107,
+            294,
+            371
+          ]
+        },
+        {
+          "line_start": 905,
+          "line_end": 1669,
+          "span_lines": 765,
+          "dialogue_turns": 249,
+          "low_candidates": [
+            946,
+            959,
+            983,
+            992,
+            1008,
+            1023,
+            1029,
+            1041,
+            1098,
+            1148,
+            1186,
+            1202,
+            1209,
+            1269,
+            1281,
+            1303,
+            1316,
+            1366,
+            1376,
+            1409,
+            1493,
+            1553,
+            1652,
+            1664
+          ]
+        }
+      ],
+      "oversized_low_candidate_count": 29,
+      "remaining_low_candidate_count": 5
+    },
+    "vol12_12青金石的幻想图书馆": {
+      "story_title": "12青金石的幻想图书馆",
+      "source_path": "gametext/纸上魔法使/12青金石的幻想图书馆.txt",
+      "content_scope": "main_story",
+      "volume_number": 12,
+      "line_range": [
+        1,
+        null
+      ],
+      "segments": 1635,
+      "dialogues": 946,
+      "candidates_total": 67,
+      "candidates_by_signal": {
+        "blank_line": 3,
+        "long_narration_gap": 61,
+        "time_of_day": 3
+      },
+      "candidates_by_confidence": {
+        "low": 61,
+        "medium": 6
+      },
+      "must_review_candidates": {
+        "459": {
+          "signal": "blank_line",
+          "confidence": "medium",
+          "state": "effective"
+        },
+        "757": {
+          "signal": "time_of_day",
+          "confidence": "medium",
+          "state": "effective"
+        },
+        "1175": {
+          "signal": "blank_line",
+          "confidence": "medium",
+          "state": "effective"
+        },
+        "1379": {
+          "signal": "time_of_day",
+          "confidence": "medium",
+          "state": "effective"
+        },
+        "2553": {
+          "signal": "blank_line",
+          "confidence": "medium",
+          "state": "auto_merged"
+        },
+        "2567": {
+          "signal": "time_of_day",
+          "confidence": "medium",
+          "state": "effective"
+        }
+      },
+      "boundaries_effective": 5,
+      "boundaries_auto_merged": 1,
+      "scenes": 6,
+      "scene_dialogue_turns": [
+        136,
+        95,
+        126,
+        96,
+        444,
+        49
+      ],
+      "scene_span_lines_min": 134,
+      "scene_span_lines_max": 1188,
+      "oversized_scenes": [
+        {
+          "line_start": 1,
+          "line_end": 457,
+          "span_lines": 457,
+          "dialogue_turns": 136,
+          "low_candidates": [
+            11,
+            45,
+            72,
+            84,
+            100,
+            126,
+            247,
+            388,
+            406,
+            414,
+            448
+          ]
+        },
+        {
+          "line_start": 757,
+          "line_end": 1173,
+          "span_lines": 417,
+          "dialogue_turns": 126,
+          "low_candidates": [
+            801,
+            832,
+            853,
+            860,
+            866,
+            881,
+            899,
+            915,
+            921,
+            1044,
+            1140,
+            1156
+          ]
+        },
+        {
+          "line_start": 1379,
+          "line_end": 2566,
+          "span_lines": 1188,
+          "dialogue_turns": 444,
+          "low_candidates": [
+            1579,
+            1603,
+            1610,
+            1668,
+            1708,
+            1794,
+            1899,
+            1925,
+            1974,
+            1994,
+            2024,
+            2034,
+            2053,
+            2193,
+            2228,
+            2354,
+            2374,
+            2385,
+            2420,
+            2436,
+            2541,
+            2558
+          ]
+        }
+      ],
+      "oversized_low_candidate_count": 45,
+      "remaining_low_candidate_count": 16
+    },
+    "vol13_13璀璨的紫翠玉": {
+      "story_title": "13璀璨的紫翠玉",
+      "source_path": "gametext/纸上魔法使/13璀璨的紫翠玉.txt",
+      "content_scope": "main_story",
+      "volume_number": 13,
+      "line_range": [
+        1,
+        null
+      ],
+      "segments": 496,
+      "dialogues": 284,
+      "candidates_total": 42,
+      "candidates_by_signal": {
+        "blank_line": 1,
+        "long_narration_gap": 39,
+        "time_of_day": 2
+      },
+      "candidates_by_confidence": {
+        "low": 39,
+        "medium": 3
+      },
+      "must_review_candidates": {
+        "563": {
+          "signal": "time_of_day",
+          "confidence": "medium",
+          "state": "effective"
+        },
+        "599": {
+          "signal": "time_of_day",
+          "confidence": "medium",
+          "state": "effective"
+        },
+        "765": {
+          "signal": "blank_line",
+          "confidence": "medium",
+          "state": "effective"
+        }
+      },
+      "boundaries_effective": 3,
+      "boundaries_auto_merged": 0,
+      "scenes": 4,
+      "scene_dialogue_turns": [
+        94,
+        7,
+        20,
+        163
+      ],
+      "scene_span_lines_min": 36,
+      "scene_span_lines_max": 562,
+      "oversized_scenes": [
+        {
+          "line_start": 1,
+          "line_end": 562,
+          "span_lines": 562,
+          "dialogue_turns": 94,
+          "low_candidates": [
+            15,
+            21,
+            70,
+            77,
+            195,
+            219,
+            301,
+            315,
+            332,
+            342,
+            348,
+            370,
+            391,
+            444,
+            450,
+            459,
+            466,
+            494,
+            505,
+            516,
+            532,
+            548,
+            559
+          ]
+        },
+        {
+          "line_start": 765,
+          "line_end": 1146,
+          "span_lines": 382,
+          "dialogue_turns": 163,
+          "low_candidates": [
+            840,
+            922,
+            929,
+            1110,
+            1141
+          ]
+        }
+      ],
+      "oversized_low_candidate_count": 28,
+      "remaining_low_candidate_count": 11
+    },
+    "epilogue_meta": {
+      "story_title": "日后谈·宣传元叙事",
+      "source_path": "gametext/纸上魔法使/日后谈.txt",
+      "content_scope": "promotional_meta",
+      "volume_number": null,
+      "line_range": [
+        1,
+        37
+      ],
+      "segments": 37,
+      "dialogues": 35,
+      "candidates_total": 0,
+      "candidates_by_signal": {},
+      "candidates_by_confidence": {},
+      "must_review_candidates": {},
+      "boundaries_effective": 0,
+      "boundaries_auto_merged": 0,
+      "scenes": 1,
+      "scene_dialogue_turns": [
+        35
+      ],
+      "scene_span_lines_min": 37,
+      "scene_span_lines_max": 37,
+      "oversized_scenes": [],
+      "oversized_low_candidate_count": 0,
+      "remaining_low_candidate_count": 0
+    },
+    "epilogue_bonus": {
+      "story_title": "日后谈·萤色光景（追加剧本）",
+      "source_path": "gametext/纸上魔法使/日后谈.txt",
+      "content_scope": "bonus_story",
+      "volume_number": null,
+      "line_range": [
+        38,
+        null
+      ],
+      "segments": 538,
+      "dialogues": 370,
+      "candidates_total": 21,
+      "candidates_by_signal": {
+        "blank_line": 1,
+        "long_narration_gap": 16,
+        "time_jump": 3,
+        "time_of_day": 1
+      },
+      "candidates_by_confidence": {
+        "high": 3,
+        "low": 16,
+        "medium": 2
+      },
+      "must_review_candidates": {
+        "285": {
+          "signal": "time_jump",
+          "confidence": "high",
+          "state": "effective"
+        },
+        "470": {
+          "signal": "time_jump",
+          "confidence": "high",
+          "state": "effective"
+        },
+        "632": {
+          "signal": "time_jump",
+          "confidence": "high",
+          "state": "effective"
+        },
+        "728": {
+          "signal": "time_of_day",
+          "confidence": "medium",
+          "state": "effective"
+        },
+        "879": {
+          "signal": "blank_line",
+          "confidence": "medium",
+          "state": "auto_merged"
+        }
+      },
+      "boundaries_effective": 4,
+      "boundaries_auto_merged": 1,
+      "scenes": 5,
+      "scene_dialogue_turns": [
+        114,
+        108,
+        104,
+        28,
+        16
+      ],
+      "scene_span_lines_min": 96,
+      "scene_span_lines_max": 246,
+      "oversized_scenes": [],
+      "oversized_low_candidate_count": 0,
+      "remaining_low_candidate_count": 16
+    }
+  }
+}

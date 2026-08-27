@@ -1,46 +1,54 @@
 """消息生成API - 支持vLLM高并发推理"""
+
 import asyncio
 import functools
 import hashlib
 import json
+import logging
 import os
 import time
 import uuid
-import logging
-from typing import Dict, Any
-from fastapi import APIRouter, HTTPException, Depends, Request
+from typing import Any
+
+from fastapi import APIRouter, Depends, HTTPException, Request
+
+# C-F1 fix: failover_mgr 在 lifespan 中通过 app.config.failover_mgr = ...
+# 赋值，导入时绑定到 None 会永远看不到实例。改为动态访问模块属性。
+from app import config as _app_config
+from app.config import (
+    INPUT_VALIDATOR_AVAILABLE,
+    circuit_breaker_registry,
+    get_llm_semaphore,
+    get_vllm_served_model_name,
+    response_cache,
+)
 from app.dependencies import get_current_admin, get_current_user
 from app.runtime import get_runtime_container
-from db.schemas import MessageRequest, GenerateResponse
-from infra.concurrency_control import InferenceQueueFull, RateLimitExceeded, inference_runtime
-from infra.security_utils import strip_control_chars
+from db.adapter import db
+from db.database import get_lora_path_by_id
+from db.schemas import GenerateResponse, MessageRequest
 from inference.generation_request import (
     GenerationRequest as CharacterGenerationRequest,
+)
+from inference.generation_request import (
     RetrievalResult,
     build_generation_request,
     generate_character_response,
 )
-from inference.lora_utils import resolve_lora_served_name
 from inference.lora_registry import get_lora_character_id
+from inference.lora_utils import resolve_lora_served_name
+from infra.concurrency_control import InferenceQueueFull, RateLimitExceeded, inference_runtime
 from infra.observability import increment, log_event, set_consecutive
+from infra.security_utils import strip_control_chars
 from services.chat_generation import ChatGenerationService
 
-from db.adapter import db
-from db.database import get_lora_path_by_id
-from app.config import (
-    get_llm_semaphore, circuit_breaker_registry,
-    response_cache,
-    INPUT_VALIDATOR_AVAILABLE,
-    CIRCUIT_BREAKER_AVAILABLE,
-    is_vllm_enabled, get_vllm_served_model_name,
-)
-# C-F1 fix: failover_mgr 在 lifespan 中通过 app.config.failover_mgr = ...
-# 赋值，导入时绑定到 None 会永远看不到实例。改为动态访问模块属性。
-from app import config as _app_config
-_failover_mgr = lambda: _app_config.failover_mgr
+
+def _failover_mgr():
+    return _app_config.failover_mgr
+
 
 if INPUT_VALIDATOR_AVAILABLE:
-    from infra.input_validator import InputValidator, MESSAGE_SCHEMA
+    from infra.input_validator import MESSAGE_SCHEMA, InputValidator
 
 logger = logging.getLogger(__name__)
 
@@ -54,19 +62,33 @@ _RAG_TIMEOUT = float(os.getenv("RAG_TIMEOUT", "8"))
 _DB_WRITE_TIMEOUT = float(os.getenv("DB_WRITE_TIMEOUT", "3"))
 _MODEL_INFERENCE_TIMEOUT = float(os.getenv("MODEL_INFERENCE_TIMEOUT", "180"))
 _RAG_ABSTENTION_REPLY = (
-    os.getenv("RAG_ABSTENTION_REPLY", "").strip()
-    or "我没有找到足够可靠的信息，暂时无法回答这个问题。"
+    os.getenv("RAG_ABSTENTION_REPLY", "").strip() or "我没有找到足够可靠的信息，暂时无法回答这个问题。"
 )
 _local_model_lock: asyncio.Lock | None = None
 _local_model_lock_loop: asyncio.AbstractEventLoop | None = None
 
 _HIGH_RISK_PROMPT_PATTERNS = (
-    "export config", "dump config", "show config", "read .env", "cat .env",
-    "read secret", "show secret", "read token", "show token", "print env",
-    "reveal system prompt", "show system prompt", "ignore previous instructions and export",
-    "\u5bfc\u51fa\u914d\u7f6e", "\u8bfb\u53d6\u914d\u7f6e", "\u663e\u793a\u914d\u7f6e",
-    "\u8bfb\u53d6\u5bc6\u94a5", "\u663e\u793a\u5bc6\u94a5",
-    "\u8bfb\u53d6token", "\u663e\u793atoken", "\u8bfb\u53d6.env",
+    "export config",
+    "dump config",
+    "show config",
+    "read .env",
+    "cat .env",
+    "read secret",
+    "show secret",
+    "read token",
+    "show token",
+    "print env",
+    "reveal system prompt",
+    "show system prompt",
+    "ignore previous instructions and export",
+    "\u5bfc\u51fa\u914d\u7f6e",
+    "\u8bfb\u53d6\u914d\u7f6e",
+    "\u663e\u793a\u914d\u7f6e",
+    "\u8bfb\u53d6\u5bc6\u94a5",
+    "\u663e\u793a\u5bc6\u94a5",
+    "\u8bfb\u53d6token",
+    "\u663e\u793atoken",
+    "\u8bfb\u53d6.env",
     "\u5ffd\u7565\u4e4b\u524d\u6307\u4ee4\u5e76\u5bfc\u51fa",
 )
 
@@ -111,10 +133,12 @@ def _read_shared_kb_config_mapping() -> dict:
     """
     try:
         from pathlib import Path
+
         config_path = Path(__file__).parent.parent / "intent_classifier_model" / "config.json"
         if config_path.exists():
             import json
-            with open(config_path, "r", encoding="utf-8") as f:
+
+            with open(config_path, encoding="utf-8") as f:
                 config = json.load(f)
             mapping = config.get("kb_name_to_id", {})
             return mapping if isinstance(mapping, dict) else {}
@@ -194,6 +218,7 @@ async def _ensure_vllm():
             logger.warning("vLLM 客户端初始化失败: %s", exc)
             return False
 
+
 async def get_vllm_client():
     if not await _ensure_vllm():
         return None
@@ -214,13 +239,14 @@ async def close_vllm_client():
         except Exception as exc:
             logger.warning("关闭 vLLM 客户端失败: %s", exc)
 
+
 router = APIRouter()
 
 
 def _response_cache_keys(
     request: MessageRequest,
     lora_name: str,
-    config: Dict[str, Any],
+    config: dict[str, Any],
     *,
     enable_rag: bool = True,
 ) -> tuple[str, str, int]:
@@ -283,12 +309,13 @@ async def _generate_reply_impl(
     # 此前仅 training/generate-dialogues 有此检查，主聊天端点遗漏，
     # 导致生产环境默认 mock 时静默返回罐头回复。现统一拦截。
     from inference.model_manager import get_model_manager
+
     _mgr = get_model_manager()
     if _mgr._current_provider.value == "mock":
         raise HTTPException(
             status_code=503,
             detail="当前模型提供商为 mock 模式，无法提供真实推理。"
-                   "请在设置页面配置有效的模型提供商（如 vLLM / DeepSeek API / Ollama）。"
+            "请在设置页面配置有效的模型提供商（如 vLLM / DeepSeek API / Ollama）。",
         )
 
     # 输入验证
@@ -308,17 +335,13 @@ async def _generate_reply_impl(
         runtime_config, loras = {}, []
 
     # 获取LoRA：始终计算 active_lora，优先使用前端指定的，否则使用当前激活的
-    active_lora = next((l for l in loras if l["status"] == "active"), None)
+    active_lora = next((item for item in loras if item["status"] == "active"), None)
     selected_lora = active_lora
 
     if not request.loraName:
         try:
             raw_router_config = runtime_config.get("lora_router_config", {"enabled": False})
-            router_config = (
-                json.loads(raw_router_config)
-                if isinstance(raw_router_config, str)
-                else raw_router_config
-            )
+            router_config = json.loads(raw_router_config) if isinstance(raw_router_config, str) else raw_router_config
             if not isinstance(router_config, dict):
                 router_config = {"enabled": False}
             if router_config.get("enabled"):
@@ -341,7 +364,9 @@ async def _generate_reply_impl(
                             request.traceId,
                         )
         except Exception:
-            logger.warning("LoRA routing failed; using explicit/active adapter traceId=%s", request.traceId, exc_info=True)
+            logger.warning(
+                "LoRA routing failed; using explicit/active adapter traceId=%s", request.traceId, exc_info=True
+            )
     if request.loraName:
         selected_lora = next((item for item in loras if item["name"] == request.loraName), None)
         if selected_lora is None:
@@ -388,7 +413,10 @@ async def _generate_reply_impl(
     if use_response_cache:
         try:
             prompt_hash, cache_key, cache_ttl = _response_cache_keys(
-                request, lora_name, runtime_config, enable_rag=enable_rag,
+                request,
+                lora_name,
+                runtime_config,
+                enable_rag=enable_rag,
             )
             cached = await response_cache.get(prompt_hash, cache_key)
             if cached:
@@ -412,7 +440,10 @@ async def _generate_reply_impl(
     if await _ensure_vllm() and _vllm_client:
         try:
             reply, used_rag, rag_meta = await _generate_with_vllm(
-                request, vllm_effective_lora, vllm_lora_name, runtime_config,
+                request,
+                vllm_effective_lora,
+                vllm_lora_name,
+                runtime_config,
                 enable_rag=enable_rag,
                 prepared_character_turn=prepared_character_turn,
                 message_db=message_db,
@@ -420,11 +451,7 @@ async def _generate_reply_impl(
             cost_time = round(time.time() - start_time, 2)
 
             model_invoked = rag_meta.get("modelInvoked", True) is not False
-            model_label = (
-                f"vllm/{get_vllm_served_model_name()}"
-                if model_invoked
-                else "rag/abstained"
-            )
+            model_label = f"vllm/{get_vllm_served_model_name()}" if model_invoked else "rag/abstained"
             stored_model_name = "vllm" if model_invoked else model_label
             stored_lora_name = lora_name if model_invoked else "default"
             if model_invoked and record_invocation:
@@ -453,7 +480,9 @@ async def _generate_reply_impl(
             # 消息保存失败时跳过回写，保持消息记录与人物状态一致。
             if prepared_character_turn is not None and persist_message and message_saved:
                 await _complete_character_turn(
-                    prepared_character_turn, request, reply,
+                    prepared_character_turn,
+                    request,
+                    reply,
                     character_service=character_service,
                 )
             log_event(
@@ -478,9 +507,7 @@ async def _generate_reply_impl(
             )
             if use_response_cache:
                 try:
-                    await response_cache.set(
-                        prompt_hash, cache_key, result.model_dump(), ttl=cache_ttl
-                    )
+                    await response_cache.set(prompt_hash, cache_key, result.model_dump(), ttl=cache_ttl)
                 except Exception as e:
                     logger.warning(f"vLLM缓存写入失败: {e}")
                     pass
@@ -520,7 +547,8 @@ async def _generate_reply_impl(
 
     # ── 回退：使用原有模型管理器 ──
     try:
-        from inference.model_manager import get_model_manager, ModelProvider
+        from inference.model_manager import ModelProvider, get_model_manager
+
         model_manager = get_model_manager()
 
         semaphore = get_llm_semaphore()
@@ -528,8 +556,8 @@ async def _generate_reply_impl(
         try:
             await asyncio.wait_for(semaphore.acquire(), timeout=30.0)
             sem_acquired = True
-        except asyncio.TimeoutError:
-            raise HTTPException(status_code=503, detail="服务繁忙，请稍后再试")
+        except TimeoutError as exc:
+            raise HTTPException(status_code=503, detail="服务繁忙，请稍后再试") from exc
 
         try:
             async with _loop_local_lock("local_model"):
@@ -544,7 +572,7 @@ async def _generate_reply_impl(
                 if lora_path:
                     if ModelProvider.TRANSFORMERS_PEFT in model_manager._providers:
                         peft_provider = model_manager._providers[ModelProvider.TRANSFORMERS_PEFT]
-                        if hasattr(peft_provider, 'set_lora_adapter'):
+                        if hasattr(peft_provider, "set_lora_adapter"):
                             peft_provider.set_lora_adapter(lora_path)
                         model_manager.set_provider(ModelProvider.TRANSFORMERS_PEFT)
                 else:
@@ -567,9 +595,7 @@ async def _generate_reply_impl(
                             model_manager=model_manager,
                         )
                     return await model_manager.async_generate(
-                        prompt=request.message,
-                        session_history=request.history or [],
-                        rag_docs=None
+                        prompt=request.message, session_history=request.history or [], rag_docs=None
                     )
 
                 if circuit_breaker_registry:
@@ -595,38 +621,52 @@ async def _generate_reply_impl(
         provider_status = status.get("providers", {}).get(current_provider, {})
         model_name = provider_status.get("modelName", "Unknown")
 
-
         if record_invocation:
             await _record_model_invocation(
-                request, model_name, lora_name, cost_time, used_rag=False,
-                completion_text=reply, database=message_db,
+                request,
+                model_name,
+                lora_name,
+                cost_time,
+                used_rag=False,
+                completion_text=reply,
+                database=message_db,
             )
         message_saved = False
         if persist_message:
             message_saved = await _save_message(
-                request, reply, model_name, lora_name, cost_time,
+                request,
+                reply,
+                model_name,
+                lora_name,
+                cost_time,
                 database=message_db,
             )
         # 同 vLLM 路径：消息保存成功才回写人物状态，persist_message=False 不回写
         if prepared_character_turn is not None and persist_message and message_saved:
             await _complete_character_turn(
-                prepared_character_turn, request, reply,
+                prepared_character_turn,
+                request,
+                reply,
                 character_service=character_service,
             )
         set_consecutive("model_failure", True)
-        log_event("message_generated", traceId=request.traceId, platform=request.platform, conversationId=request.conversationId or request.sessionId, senderId=request.senderId or request.userId, model=model_name, costTime=cost_time, errorType="", usedRag=False)
-
-        result = GenerateResponse(
-            reply=reply,
-            model=f"{model_name} ({current_provider})",
-            costTime=cost_time
+        log_event(
+            "message_generated",
+            traceId=request.traceId,
+            platform=request.platform,
+            conversationId=request.conversationId or request.sessionId,
+            senderId=request.senderId or request.userId,
+            model=model_name,
+            costTime=cost_time,
+            errorType="",
+            usedRag=False,
         )
+
+        result = GenerateResponse(reply=reply, model=f"{model_name} ({current_provider})", costTime=cost_time)
 
         if use_response_cache:
             try:
-                await response_cache.set(
-                    prompt_hash, cache_key, result.model_dump(), ttl=cache_ttl
-                )
+                await response_cache.set(prompt_hash, cache_key, result.model_dump(), ttl=cache_ttl)
             except Exception as e:
                 logger.warning(f"模型管理器缓存写入失败: {e}")
                 pass
@@ -672,7 +712,7 @@ async def _generate_reply_impl(
                 logger.warning(f"故障转移失败: {fe}")
         # 安全：不把内部异常字符串返回给客户端（信息泄露），
         # 真实详情已写入日志（含 exc_info=True），客户端只收到通用消息。
-        raise HTTPException(status_code=500, detail="生成回复失败，请稍后重试")
+        raise HTTPException(status_code=500, detail="生成回复失败，请稍后重试") from e
 
 
 # ═══════════════════════════════════════════
@@ -680,9 +720,7 @@ async def _generate_reply_impl(
 # ═══════════════════════════════════════════
 
 
-async def _prepare_character_turn(
-    request: MessageRequest, character_id: str, *, character_service=None
-):
+async def _prepare_character_turn(request: MessageRequest, character_id: str, *, character_service=None):
     """准备角色上下文；任何失败都降级为无角色上下文的旧行为。
 
     返回 prepared_turn | None。
@@ -710,15 +748,11 @@ async def _prepare_character_turn(
         service = character_service or get_default_character_context_service()
         return await service.prepare_turn(turn_input, character_id)
     except Exception as e:
-        logger.warning(
-            "角色上下文准备失败，按无角色上下文继续 character=%s: %s", character_id, e
-        )
+        logger.warning("角色上下文准备失败，按无角色上下文继续 character=%s: %s", character_id, e)
         return None
 
 
-async def _complete_character_turn(
-    prepared, request: MessageRequest, reply: str, *, character_service=None
-) -> None:
+async def _complete_character_turn(prepared, request: MessageRequest, reply: str, *, character_service=None) -> None:
     """生成成功后回写角色记忆与关系；失败只记日志，不影响返回结果。
 
     character_service 语义同 _prepare_character_turn：必须与准备阶段
@@ -742,7 +776,9 @@ async def _complete_character_turn(
         service = character_service or get_default_character_context_service()
         await asyncio.wait_for(
             service.complete_turn(
-                prepared, turn_input, reply,
+                prepared,
+                turn_input,
+                reply,
                 source_message_id=request.sourceMessageId,
             ),
             timeout=_DB_WRITE_TIMEOUT,
@@ -756,9 +792,7 @@ async def _complete_character_turn(
 # ═══════════════════════════════════════════
 
 
-def _build_chat_generation_service(
-    runtime, character_service=None, message_db=None
-) -> ChatGenerationService:
+def _build_chat_generation_service(runtime, character_service=None, message_db=None) -> ChatGenerationService:
     handler = _generate_reply_impl
     if character_service is not None or message_db is not None:
         # 角色上下文服务与消息库均绑定当前应用容器的数据库，
@@ -800,11 +834,7 @@ def get_request_chat_generation_service(request: Request) -> ChatGenerationServi
     from services.character_context import build_character_context_service
 
     container = get_runtime_container(request.app)
-    runtime = (
-        inference_runtime
-        if container.inference_runtime is None
-        else container.inference_runtime
-    )
+    runtime = inference_runtime if container.inference_runtime is None else container.inference_runtime
     character_service = None
     message_db = None
     if container.db is not db:
@@ -857,59 +887,78 @@ async def generate_reply(
             status_code=429,
             detail="请求过于频繁，请稍后重试",
             headers={"Retry-After": str(max(1, int(exc.retry_after)))},
-        )
-    except InferenceQueueFull:
-        raise HTTPException(status_code=503, detail="推理队列已满，请稍后再试")
-    except asyncio.TimeoutError:
-        raise HTTPException(status_code=503, detail="推理排队超时，请稍后再试")
+        ) from exc
+    except InferenceQueueFull as exc:
+        raise HTTPException(status_code=503, detail="推理队列已满，请稍后再试") from exc
+    except TimeoutError as exc:
+        raise HTTPException(status_code=503, detail="推理排队超时，请稍后再试") from exc
 
-async def _retrieve_rag_bundle(query: str, top_k: int, filters: Dict[str, Any] | None) -> Dict[str, Any]:
-    """Run one retrieval pass and return context evidence plus confidence metadata."""
-    def retrieve() -> Dict[str, Any]:
+
+async def _retrieve_rag_bundle(query: str, top_k: int, filters: dict[str, Any] | None) -> dict[str, Any]:
+    """Run one retrieval pass and return context evidence plus confidence metadata.
+
+    P6 统一知识管线优先：查询命中已注册知识域（实体/别名/卷名门控）
+    时走 rag_pipeline 并返回带引用与 context_text 的 bundle；未命中
+    域或索引不可用时回退既有 RAGHelper 链路，普通聊天不加载游戏库。
+    """
+
+    def retrieve() -> dict[str, Any]:
+        try:
+            from knowledge.rag_pipeline.service import get_rag_pipeline_service
+
+            p6 = get_rag_pipeline_service()
+            if p6.is_available():
+                bundle = p6.retrieve_with_citations(query, top_k=top_k, filters=filters)
+                if bundle is not None:
+                    return bundle
+        except Exception as e:  # noqa: BLE001 - P6 故障不拖垮聊天，回退旧链路
+            logger.warning("P6 rag_pipeline retrieval failed, fallback to legacy: %s", e)
+
         from knowledge.rag_helper import get_rag_helper
 
         if os.getenv("CORRECTIVE_RAG_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}:
             from knowledge.corrective_rag import get_corrective_rag
+
             return get_corrective_rag().retrieve_with_correction(query, top_k=top_k, filters=filters)
         return get_rag_helper().retrieve_with_citations(query, top_k=top_k, filters=filters)
 
     return await asyncio.to_thread(retrieve)
 
+
 async def _generate_with_vllm(
     request: MessageRequest,
     lora_name: str | None,
     prompt_lora_name: str | None = None,
-    runtime_config: Dict[str, Any] | None = None,
+    runtime_config: dict[str, Any] | None = None,
     *,
     enable_rag: bool = True,
     prepared_character_turn=None,
     message_db=None,
-) -> tuple[str, bool, Dict[str, Any]]:
+) -> tuple[str, bool, dict[str, Any]]:
     """使用 vLLM 客户端生成回复，返回 (reply, used_rag, rag_meta)。"""
     # 使用请求开始时读取的配置快照，避免同一次生成多次同步访问数据库。
     _cfg = runtime_config or {}
-    _temperature = float(_cfg.get('temperature', os.getenv("VLLM_TEMPERATURE", "0.7")))
-    _max_tokens = int(_cfg.get('maxTokens', os.getenv("VLLM_MAX_TOKENS", "2048")))
-    _top_p = float(_cfg.get('topP', os.getenv("VLLM_TOP_P", "0.9")))
-    _use_kb = _cfg.get('useKnowledgeBase', True) and enable_rag
+    _temperature = float(_cfg.get("temperature", os.getenv("VLLM_TEMPERATURE", "0.7")))
+    _max_tokens = int(_cfg.get("maxTokens", os.getenv("VLLM_MAX_TOKENS", "2048")))
+    _top_p = float(_cfg.get("topP", os.getenv("VLLM_TOP_P", "0.9")))
+    _use_kb = _cfg.get("useKnowledgeBase", True) and enable_rag
 
     # RAG 检索（受设置页 useKnowledgeBase 开关控制）
     rag_context = ""
-    rag_meta: Dict[str, Any] = {}
+    rag_meta: dict[str, Any] = {}
     retrieval = RetrievalResult()
     filters = None
     if _use_kb:
         try:
             from knowledge.intent_detector import needs_rag
+
             need_rag, _, kb_name = await asyncio.wait_for(
                 asyncio.to_thread(needs_rag, request.message),
                 timeout=_RAG_TIMEOUT,
             )
             if need_rag:
                 if kb_name:
-                    kb_id = await asyncio.to_thread(
-                        _resolve_kb_id, kb_name, database=message_db
-                    )
+                    kb_id = await asyncio.to_thread(_resolve_kb_id, kb_name, database=message_db)
                     if kb_id is not None:
                         filters = {"knowledge_base_id": kb_id}
                         logger.info("RAG路由: 消息→「%s」(id=%s)", kb_name, kb_id)
@@ -919,7 +968,10 @@ async def _generate_with_vllm(
                     timeout=_RAG_TIMEOUT,
                 )
                 citations_enabled = os.getenv("RAG_CITATIONS_ENABLED", "true").strip().lower() in {
-                    "1", "true", "yes", "on"
+                    "1",
+                    "true",
+                    "yes",
+                    "on",
                 }
                 rag_meta = {
                     "citations": bundle.get("citations", []) if citations_enabled else [],
@@ -933,8 +985,15 @@ async def _generate_with_vllm(
                     rag_meta["modelInvoked"] = False
                     return _RAG_ABSTENTION_REPLY, True, rag_meta
 
-                from knowledge.rag_helper import get_rag_helper
-                rag_context = get_rag_helper().format_context_results(bundle.get("results", []))
+                # P6 bundle 自带预算内组装的 context_text；旧链路结果
+                # 继续用 RAGHelper 的格式化器
+                p6_context = bundle.get("context_text") or ""
+                if p6_context:
+                    rag_context = p6_context
+                else:
+                    from knowledge.rag_helper import get_rag_helper
+
+                    rag_context = get_rag_helper().format_context_results(bundle.get("results", []))
                 retrieval = RetrievalResult(
                     status="ok",
                     evidence=rag_context,
@@ -966,18 +1025,14 @@ async def _generate_with_vllm(
             history=(
                 tuple(request.history or [])
                 if (request.history or [])
-                else (
-                    prepared_character_turn.history if prepared_character_turn else ()
-                )
+                else (prepared_character_turn.history if prepared_character_turn else ())
             ),
             persona_prompt=_get_system_prompt(prompt_lora_name or lora_name),
             interlocutor=request.senderName or request.userName or "普通用户",
             retrieval=retrieval,
             # 编译后的角色上下文：画像/关系/情景/决策进系统提示词，
             # 长期记忆只进用户消息的不可信参考区。
-            character_context=(
-                prepared_character_turn.compiled if prepared_character_turn else None
-            ),
+            character_context=(prepared_character_turn.compiled if prepared_character_turn else None),
             lora_name=lora_name if lora_name != "default" else None,
             temperature=_temperature,
             max_tokens=_max_tokens,
@@ -992,7 +1047,7 @@ async def _generate_with_vllm(
 async def _generate_with_model_manager_character(
     request: MessageRequest,
     lora_name: str,
-    runtime_config: Dict[str, Any] | None,
+    runtime_config: dict[str, Any] | None,
     *,
     prepared_character_turn,
     model_manager,
@@ -1010,21 +1065,13 @@ async def _generate_with_model_manager_character(
     plan = build_generation_request(
         CharacterGenerationRequest(
             message=request.message,
-            history=(
-                tuple(request.history or [])
-                if (request.history or [])
-                else prepared_character_turn.history
-            ),
+            history=(tuple(request.history or []) if (request.history or []) else prepared_character_turn.history),
             persona_prompt=_get_system_prompt(lora_name),
             interlocutor=request.senderName or request.userName or "普通用户",
             character_context=prepared_character_turn.compiled,
             lora_name=lora_name if lora_name != "default" else None,
-            temperature=float(
-                _cfg.get("temperature", os.getenv("VLLM_TEMPERATURE", "0.7"))
-            ),
-            max_tokens=int(
-                _cfg.get("maxTokens", os.getenv("VLLM_MAX_TOKENS", "2048"))
-            ),
+            temperature=float(_cfg.get("temperature", os.getenv("VLLM_TEMPERATURE", "0.7"))),
+            max_tokens=int(_cfg.get("maxTokens", os.getenv("VLLM_MAX_TOKENS", "2048"))),
             top_p=float(_cfg.get("topP", os.getenv("VLLM_TOP_P", "0.9"))),
         )
     )
@@ -1043,6 +1090,7 @@ def _get_system_prompt(lora_name: str) -> str:
         # H1 fix: 此前从 bot.bot 导入 LORA_REGISTRY，造成 API 层反向依赖 bot 层。
         # 现从 inference.lora_registry 中立层导入，依赖方向：api → inference。
         from inference.lora_registry import get_lora_system_prompt
+
         return get_lora_system_prompt(lora_name)
     except Exception as e:
         logger.warning(f"获取系统提示词失败: {e}")
@@ -1072,26 +1120,39 @@ async def _record_model_invocation(
         prompt_tokens = _estimate_tokens(request.message)
         completion_tokens = 0 if error_type else _estimate_tokens(completion_text)
         await asyncio.wait_for(
-            asyncio.to_thread(target_db.add_model_invocation, {
-                "traceId": request.traceId,
-                "platform": request.platform,
-                "conversationId": request.conversationId or request.sessionId,
-                "sessionId": request.sessionId,
-                "modelName": model_name,
-                "loraName": lora_name,
-                "costTime": cost_time,
-                "promptTokens": prompt_tokens,
-                "completionTokens": completion_tokens,
-                "totalTokens": prompt_tokens + completion_tokens,
-                "usedRag": used_rag,
-                "usedLora": bool(lora_name and lora_name != "default"),
-                "errorType": error_type,
-            }),
+            asyncio.to_thread(
+                target_db.add_model_invocation,
+                {
+                    "traceId": request.traceId,
+                    "platform": request.platform,
+                    "conversationId": request.conversationId or request.sessionId,
+                    "sessionId": request.sessionId,
+                    "modelName": model_name,
+                    "loraName": lora_name,
+                    "costTime": cost_time,
+                    "promptTokens": prompt_tokens,
+                    "completionTokens": completion_tokens,
+                    "totalTokens": prompt_tokens + completion_tokens,
+                    "usedRag": used_rag,
+                    "usedLora": bool(lora_name and lora_name != "default"),
+                    "errorType": error_type,
+                },
+            ),
             timeout=_DB_WRITE_TIMEOUT,
         )
     except Exception as e:
         increment("db_write_failures")
-        log_event("db_write_failed", level="warning", traceId=request.traceId, platform=request.platform, conversationId=request.conversationId or request.sessionId, senderId=request.senderId or request.userId, model=model_name, costTime=cost_time, errorType=type(e).__name__)
+        log_event(
+            "db_write_failed",
+            level="warning",
+            traceId=request.traceId,
+            platform=request.platform,
+            conversationId=request.conversationId or request.sessionId,
+            senderId=request.senderId or request.userId,
+            model=model_name,
+            costTime=cost_time,
+            errorType=type(e).__name__,
+        )
         logger.warning("Failed to save model invocation traceId=%s error=%s", request.traceId, e)
 
 
@@ -1114,32 +1175,45 @@ async def _save_message(
     target_db = database if database is not None else db
     try:
         await asyncio.wait_for(
-            asyncio.to_thread(target_db.add_message, {
-                "sessionType": request.sessionType,
-                "sessionId": request.sessionId,
-                "sessionName": request.sessionName or request.userName or request.sessionId or "test-session",
-                "conversationType": request.conversationType or request.sessionType,
-                "platform": request.platform,
-                "adapter": request.adapter,
-                "conversationId": request.conversationId or request.sessionId,
-                "senderId": request.senderId or request.userId,
-                "senderName": request.senderName or request.userName,
-                "sourceMessageId": request.sourceMessageId,
-                "traceId": request.traceId,
-                "userId": request.userId,
-                "userName": request.userName,
-                "message": request.message,
-                "reply": reply,
-                "modelName": model_name,
-                "loraName": lora_name,
-                "costTime": cost_time,
-            }),
+            asyncio.to_thread(
+                target_db.add_message,
+                {
+                    "sessionType": request.sessionType,
+                    "sessionId": request.sessionId,
+                    "sessionName": request.sessionName or request.userName or request.sessionId or "test-session",
+                    "conversationType": request.conversationType or request.sessionType,
+                    "platform": request.platform,
+                    "adapter": request.adapter,
+                    "conversationId": request.conversationId or request.sessionId,
+                    "senderId": request.senderId or request.userId,
+                    "senderName": request.senderName or request.userName,
+                    "sourceMessageId": request.sourceMessageId,
+                    "traceId": request.traceId,
+                    "userId": request.userId,
+                    "userName": request.userName,
+                    "message": request.message,
+                    "reply": reply,
+                    "modelName": model_name,
+                    "loraName": lora_name,
+                    "costTime": cost_time,
+                },
+            ),
             timeout=_DB_WRITE_TIMEOUT,
         )
         return True
     except Exception as e:
         increment("db_write_failures")
-        log_event("db_write_failed", level="warning", traceId=request.traceId, platform=request.platform, conversationId=request.conversationId or request.sessionId, senderId=request.senderId or request.userId, model=model_name, costTime=cost_time, errorType=type(e).__name__)
+        log_event(
+            "db_write_failed",
+            level="warning",
+            traceId=request.traceId,
+            platform=request.platform,
+            conversationId=request.conversationId or request.sessionId,
+            senderId=request.senderId or request.userId,
+            model=model_name,
+            costTime=cost_time,
+            errorType=type(e).__name__,
+        )
         logger.warning(
             "Failed to save message record traceId=%s sessionId=%s error=%s",
             request.traceId,
@@ -1152,6 +1226,7 @@ async def _save_message(
 # ═══════════════════════════════════════════
 # vLLM 状态查询路由
 # ═══════════════════════════════════════════
+
 
 @router.get("/api/vllm/status")
 async def vllm_status(current_user: dict = Depends(get_current_admin)):

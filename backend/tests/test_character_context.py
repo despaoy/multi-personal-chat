@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import dataclasses
+from datetime import UTC
 
 import pytest
 
@@ -94,12 +95,18 @@ def _memory(index: int, content: str, memory_type: str = "user_fact") -> MemoryI
 
 def test_private_and_group_scopes_differ():
     private_scope = build_user_scope(
-        platform="qq", adapter="onebot", sender_id="10001",
-        conversation_id="", conversation_type="private",
+        platform="qq",
+        adapter="onebot",
+        sender_id="10001",
+        conversation_id="",
+        conversation_type="private",
     )
     group_scope = build_user_scope(
-        platform="qq", adapter="onebot", sender_id="10001",
-        conversation_id="20001", conversation_type="group",
+        platform="qq",
+        adapter="onebot",
+        sender_id="10001",
+        conversation_id="20001",
+        conversation_type="group",
     )
     assert private_scope.memory_scope_key != group_scope.memory_scope_key
     # 元组结构：私聊不含会话ID，群聊含群ID
@@ -111,12 +118,18 @@ def test_private_and_group_scopes_differ():
 
 def test_qq_and_wechat_scopes_differ():
     qq_scope = build_user_scope(
-        platform="QQ", adapter="onebot", sender_id="10001",
-        conversation_id="", conversation_type="private",
+        platform="QQ",
+        adapter="onebot",
+        sender_id="10001",
+        conversation_id="",
+        conversation_type="private",
     )
     wechat_scope = build_user_scope(
-        platform="WeChat", adapter="wechat-pad", sender_id="10001",
-        conversation_id="", conversation_type="private",
+        platform="WeChat",
+        adapter="wechat-pad",
+        sender_id="10001",
+        conversation_id="",
+        conversation_type="private",
     )
     assert qq_scope.platform == "qq"
     assert wechat_scope.platform == "wechat"
@@ -126,12 +139,18 @@ def test_qq_and_wechat_scopes_differ():
 def test_same_platform_user_different_adapter_scopes_differ():
     """同一平台不同适配器（如 NapCat 与 OneBot）的用户ID可能互不通用，必须隔离。"""
     onebot_scope = build_user_scope(
-        platform="qq", adapter="OneBot", sender_id="10001",
-        conversation_id="", conversation_type="private",
+        platform="qq",
+        adapter="OneBot",
+        sender_id="10001",
+        conversation_id="",
+        conversation_type="private",
     )
     napcat_scope = build_user_scope(
-        platform="qq", adapter="NapCat", sender_id="10001",
-        conversation_id="", conversation_type="private",
+        platform="qq",
+        adapter="NapCat",
+        sender_id="10001",
+        conversation_id="",
+        conversation_type="private",
     )
     assert onebot_scope.adapter == "onebot"
     assert napcat_scope.adapter == "napcat"
@@ -141,12 +160,18 @@ def test_same_platform_user_different_adapter_scopes_differ():
 def test_private_and_group_with_similar_fields_do_not_collide():
     """私聊用户ID本身含分隔符（如复合ID）时，不得与群聊范围碰撞。"""
     private_scope = build_user_scope(
-        platform="qq", adapter="onebot", sender_id="20001:10001",
-        conversation_id="", conversation_type="private",
+        platform="qq",
+        adapter="onebot",
+        sender_id="20001:10001",
+        conversation_id="",
+        conversation_type="private",
     )
     group_scope = build_user_scope(
-        platform="qq", adapter="onebot", sender_id="10001",
-        conversation_id="20001", conversation_type="group",
+        platform="qq",
+        adapter="onebot",
+        sender_id="10001",
+        conversation_id="20001",
+        conversation_type="group",
     )
     assert private_scope.memory_scope_key != group_scope.memory_scope_key
     assert private_scope.memory_scope_key == ("qq", "onebot", "private", "20001:10001")
@@ -155,23 +180,36 @@ def test_private_and_group_with_similar_fields_do_not_collide():
 
 def test_channel_scope_includes_channel_id():
     channel_scope = build_user_scope(
-        platform="telegram", adapter="telegram", sender_id="10001",
-        conversation_id="ch_90001", conversation_type="channel",
+        platform="telegram",
+        adapter="telegram",
+        sender_id="10001",
+        conversation_id="ch_90001",
+        conversation_type="channel",
     )
     assert channel_scope.memory_scope_key == (
-        "telegram", "telegram", "channel", "ch_90001", "10001",
+        "telegram",
+        "telegram",
+        "channel",
+        "ch_90001",
+        "10001",
     )
 
 
 def test_channel_scope_differs_from_group_scope():
     """相同会话ID下，频道与群聊必须隔离。"""
     channel_scope = build_user_scope(
-        platform="telegram", adapter="telegram", sender_id="10001",
-        conversation_id="90001", conversation_type="channel",
+        platform="telegram",
+        adapter="telegram",
+        sender_id="10001",
+        conversation_id="90001",
+        conversation_type="channel",
     )
     group_scope = build_user_scope(
-        platform="telegram", adapter="telegram", sender_id="10001",
-        conversation_id="90001", conversation_type="group",
+        platform="telegram",
+        adapter="telegram",
+        sender_id="10001",
+        conversation_id="90001",
+        conversation_type="group",
     )
     assert channel_scope.memory_scope_key != group_scope.memory_scope_key
 
@@ -185,24 +223,33 @@ def test_different_group_members_have_different_scopes():
 def test_empty_sender_is_rejected():
     with pytest.raises(ValueError):
         build_user_scope(
-            platform="qq", adapter="onebot", sender_id="  ",
-            conversation_id="20001", conversation_type="group",
+            platform="qq",
+            adapter="onebot",
+            sender_id="  ",
+            conversation_id="20001",
+            conversation_type="group",
         )
 
 
 def test_group_without_conversation_id_is_rejected():
     with pytest.raises(ValueError):
         build_user_scope(
-            platform="qq", adapter="onebot", sender_id="10001",
-            conversation_id="", conversation_type="group",
+            platform="qq",
+            adapter="onebot",
+            sender_id="10001",
+            conversation_id="",
+            conversation_type="group",
         )
 
 
 def test_channel_without_conversation_id_is_rejected():
     with pytest.raises(ValueError):
         build_user_scope(
-            platform="telegram", adapter="telegram", sender_id="10001",
-            conversation_id="", conversation_type="channel",
+            platform="telegram",
+            adapter="telegram",
+            sender_id="10001",
+            conversation_id="",
+            conversation_type="channel",
         )
 
 
@@ -285,9 +332,7 @@ def test_preferred_address_only_enters_reference_context():
 
 def test_no_memories_yields_empty_reference_context():
     # 无记忆且无称呼偏好 → 参考区为空
-    context = dataclasses.replace(
-        _context(), relationship=RelationshipState(stage="familiar")
-    )
+    context = dataclasses.replace(_context(), relationship=RelationshipState(stage="familiar"))
     compiled = compile_character_context(context)
     assert compiled.reference_context == ""
     assert compiled.used_memory_ids == ()
@@ -311,9 +356,7 @@ def _section_lines(context_text: str, title: str) -> list[str]:
 
 
 def test_profile_lists_are_limited_to_eight_items():
-    profile = dataclasses.replace(
-        _profile(), traits=tuple(f"性格点{i:02d}" for i in range(1, 13))
-    )
+    profile = dataclasses.replace(_profile(), traits=tuple(f"性格点{i:02d}" for i in range(1, 13)))
     context = dataclasses.replace(_context(), profile=profile)
     compiled = compile_character_context(context)
     trait_lines = _section_lines(compiled.profile_context, "人物核心性格")
@@ -349,15 +392,9 @@ def test_relationship_summary_is_truncated():
 
 def test_situation_and_decision_fields_are_truncated():
     long_text = "情景描述" * 80  # 320 字符 > 200
-    situation = SituationState(
-        topic=long_text, emotion_hint=long_text, response_goal=long_text
-    )
-    decision = DecisionPlan(
-        intent=long_text, tone=long_text, action=long_text, avoid=long_text
-    )
-    context = dataclasses.replace(
-        _context(), situation=situation, decision=decision
-    )
+    situation = SituationState(topic=long_text, emotion_hint=long_text, response_goal=long_text)
+    decision = DecisionPlan(intent=long_text, tone=long_text, action=long_text, avoid=long_text)
+    context = dataclasses.replace(_context(), situation=situation, decision=decision)
     compiled = compile_character_context(context)
     for title in ("当前情景", "本轮行为决策"):
         lines = _section_lines(compiled.dynamic_context, title)
@@ -382,9 +419,7 @@ def test_boundaries_and_decision_survive_oversized_descriptions():
         _context(),
         profile=profile,
         relationship=RelationshipState(stage="close", summary=long_text * 2),
-        situation=SituationState(
-            topic=long_text, emotion_hint=long_text, response_goal=long_text
-        ),
+        situation=SituationState(topic=long_text, emotion_hint=long_text, response_goal=long_text),
     )
     compiled = compile_character_context(context)
     profile_area = compiled.profile_context
@@ -397,9 +432,7 @@ def test_boundaries_and_decision_survive_oversized_descriptions():
     assert "简短回答" in dynamic_area
     assert "长篇大论" in dynamic_area
     # 边界和决策段没有被截断标记污染
-    for line in _section_lines(profile_area, "人物行为边界") + _section_lines(
-        dynamic_area, "本轮行为决策"
-    ):
+    for line in _section_lines(profile_area, "人物行为边界") + _section_lines(dynamic_area, "本轮行为决策"):
         assert not line.endswith("…")
 
 
@@ -476,14 +509,10 @@ def test_context_objects_are_frozen():
 
 
 def test_compile_functions_are_independently_callable():
-    context = _context(
-        memories=(_memory(1, "用户喜欢喝咖啡"),)
-    )
+    context = _context(memories=(_memory(1, "用户喜欢喝咖啡"),))
 
     profile_ctx = compile_profile_context(context.profile)
-    dynamic_ctx = compile_dynamic_context(
-        context.relationship, context.situation, context.decision
-    )
+    dynamic_ctx = compile_dynamic_context(context.relationship, context.situation, context.decision)
     reference_ctx, used_ids = compile_reference_context(
         context.memories,
         preferred_address=context.relationship.preferred_address,
@@ -562,7 +591,7 @@ def _memory_record(
     memory_type: str = "user_fact",
     importance: float = 0.5,
 ) -> dict:
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     return {
         "id": index,
@@ -570,7 +599,7 @@ def _memory_record(
         "memory_key": memory_key,
         "content": content,
         "importance": importance,
-        "updated_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at": datetime.now(UTC).isoformat(),
     }
 
 
@@ -635,6 +664,35 @@ async def test_unrelated_question_still_filters_irrelevant_memories():
     assert selected == ()
 
 
+async def test_storage_boilerplate_does_not_create_false_relevance():
+    """第三人称安全包装词不是事实主题，不能导致批量误召回。"""
+    selected, _total = await _recall("用户之前说了什么", _typical_records())
+    assert selected == ()
+
+
+async def test_memory_topic_is_compared_without_storage_boilerplate():
+    """弱改写仍可通过事实主题召回，且无关记忆不会靠重要度混入。"""
+    records = [
+        _memory_record(
+            1,
+            "goal_保研面试",
+            "用户正在进行或准备：保研面试",
+            memory_type="shared_event",
+            importance=0.7,
+        ),
+        _memory_record(
+            2,
+            "summary_exam",
+            "聊过期中考试复习安排",
+            memory_type="conversation_summary",
+            importance=1.0,
+        ),
+    ]
+
+    selected, _total = await _recall("面试准备得怎么样了", records)
+    assert [item.content for item in selected] == ["用户正在进行或准备：保研面试"]
+
+
 async def test_intent_floor_keeps_strong_lexical_match_first():
     """意图兜底只保底：词面强匹配（相关度 1.0）仍优先于意图保底分。"""
     records = [
@@ -665,30 +723,26 @@ async def test_character_self_questions_do_not_recall_user_private_memories():
     for query in ("你叫什么名字", "她叫什么名字", "他叫什么名字"):
         selected, _total = await _recall(query, _typical_records())
         assert selected == (), (
-            f"{query!r} 询问角色/第三方名字，不应召回用户私人记忆，"
-            f"实际召回 {[item.content for item in selected]}"
+            f"{query!r} 询问角色/第三方名字，不应召回用户私人记忆，实际召回 {[item.content for item in selected]}"
         )
     for query in ("你喜欢什么", "你讨厌什么", "你的爱好是什么", "她喜欢什么"):
         selected, _total = await _recall(query, _typical_records())
         assert selected == (), (
-            f"{query!r} 询问角色/第三方喜好，不应召回用户私人记忆，"
-            f"实际召回 {[item.content for item in selected]}"
+            f"{query!r} 询问角色/第三方喜好，不应召回用户私人记忆，实际召回 {[item.content for item in selected]}"
         )
     # 主体与话题间隔超过固定窗口的稍长语句也必须抑制：
     # "平时最"这类状语不能成为绕过窗口的通道
     for query in ("你平时最喜欢什么", "她平时最喜欢什么", "你平时最爱聊什么"):
         selected, _total = await _recall(query, _typical_records())
         assert selected == (), (
-            f"{query!r} 主体与话题间隔较长，不应召回用户私人记忆，"
-            f"实际召回 {[item.content for item in selected]}"
+            f"{query!r} 主体与话题间隔较长，不应召回用户私人记忆，实际召回 {[item.content for item in selected]}"
         )
     # 空白不是子句边界："你 平时最喜欢什么"若按空白拆分，话题子句
     # 失去主体代词，抑制失效
     for query in ("你 平时最喜欢什么", "她 平时 最 喜欢什么"):
         selected, _total = await _recall(query, _typical_records())
         assert selected == (), (
-            f"{query!r} 用空白分割主体与话题，不应召回用户私人记忆，"
-            f"实际召回 {[item.content for item in selected]}"
+            f"{query!r} 用空白分割主体与话题，不应召回用户私人记忆，实际召回 {[item.content for item in selected]}"
         )
     selected, _total = await _recall("什么是承诺", _typical_records())
     assert selected == (), "抽象概念提问不应召回私人约定记忆"
@@ -705,21 +759,17 @@ async def test_whitespace_and_conjunction_do_not_break_subject_detection():
     """
     # 空白割裂主体与话题词：仍必须召回
     selected, _total = await _recall("你知道我 叫什么名字吗", _typical_records())
-    assert any(
-        item.content == "用户说自己叫小明" for item in selected
-    ), "空白割裂主体与话题词，名字记忆未被召回"
+    assert any(item.content == "用户说自己叫小明" for item in selected), "空白割裂主体与话题词，名字记忆未被召回"
 
     # 连接词长句：两个话题词（你→非用户、我→用户），不抑制且可召回
-    selected, _total = await _recall(
-        "你叫什么名字以及我叫什么名字", _typical_records()
+    selected, _total = await _recall("你叫什么名字以及我叫什么名字", _typical_records())
+    assert any(item.content == "用户说自己叫小明" for item in selected), (
+        "连接词长句只分析首个话题词，用户名字记忆未被召回"
     )
-    assert any(
-        item.content == "用户说自己叫小明" for item in selected
-    ), "连接词长句只分析首个话题词，用户名字记忆未被召回"
 
 
 async def test_lexical_preference_overlap_suppressed_for_character_questions():
-    """"你喜欢什么"与"用户说喜欢咖啡"共享"喜欢"bigram（Jaccard≈0.11），
+    """ "你喜欢什么"与"用户说喜欢咖啡"共享"喜欢"bigram（Jaccard≈0.11），
     词面匹配本可通过 MIN_RELEVANCE 门槛；非用户主体抑制必须挡住这种泄漏，
     包括主体与话题间隔较长的"你平时最喜欢什么"。
     """
@@ -731,10 +781,7 @@ async def test_lexical_preference_overlap_suppressed_for_character_questions():
     # "你平时最喜欢什么"同样共享"喜欢"，且"平时最"超出旧的固定窗口
     for query in ("你喜欢什么", "你叫什么名字", "你平时最喜欢什么"):
         selected, _total = await _recall(query, records)
-        assert selected == (), (
-            f"{query!r} 的词面匹配泄漏了用户私人记忆："
-            f"{[item.content for item in selected]}"
-        )
+        assert selected == (), f"{query!r} 的词面匹配泄漏了用户私人记忆：{[item.content for item in selected]}"
 
 
 async def test_user_subject_questions_still_recall_despite_other_pronouns():

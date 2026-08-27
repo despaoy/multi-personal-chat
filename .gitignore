@@ -139,6 +139,8 @@ backend/vector_db/
 vector_db/
 *.faiss
 *.index
+# P6 local build output; rebuild from approved knowledge cards.
+backend/data/knowledge/*/rag_index/
 
 # === 知识库语料 ===
 backend/knowledge_bases/

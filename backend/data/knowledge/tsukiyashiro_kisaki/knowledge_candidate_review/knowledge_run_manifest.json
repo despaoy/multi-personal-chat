@@ -1,0 +1,70 @@
+{
+  "schema_version": 1,
+  "generator": "knowledge.game_rag.knowledge_candidate",
+  "model_id": "ollama:qwen2.5:7b",
+  "generation_params": {
+    "chunk_max_chars": 6000,
+    "max_facts_per_scene": 8,
+    "max_relations_per_scene": 5,
+    "max_events_per_scene": 3
+  },
+  "source_enriched": {
+    "schema_version": 1,
+    "scene_review_status": "approved",
+    "total_scenes": 262,
+    "boundary_bundle_sha256": "b82d753eb93dbc1614b89e98c8498f03884c7d5dd433d223ef853708052c8595",
+    "enriched_manifest_sha256": "8307924b29e60199badcfbff78e7a9fcf50ddc90c9a09ca2fc4eaf3932f9f600",
+    "enriched_scenes_sha256": "c5ba1d707f40cf0356352f6a998e29fb588f90d3dd0037b4695579331ff2c06b",
+    "enriched_bundle_sha256": "26f431f127bd5cb92d6a5598269454608f03311025e02022ef5b3762eba90484"
+  },
+  "total_scenes": 262,
+  "scene_status_counts": {
+    "success": 262
+  },
+  "card_counts": {
+    "fact": 951,
+    "relation": 46,
+    "event": 310,
+    "total": 1307
+  },
+  "attempted_scene_ids": [
+    "scene_4c3f8382dfb56d02",
+    "scene_90c0da25bf0ed038",
+    "scene_b07cc0d2c06396a0",
+    "scene_af4e4f0f0d4e7629",
+    "scene_384b9ccb5288ef74",
+    "scene_2781a377b3b788ac",
+    "scene_a8ffbe3e1e4bc266",
+    "scene_ccdbe360780915b9",
+    "scene_49d8a626fd917340",
+    "scene_38c3285749070248",
+    "scene_9f78319482859f83",
+    "scene_1d5a64b254f21370",
+    "scene_14be648270599be9",
+    "scene_0a1b8e0bd7773bcb",
+    "scene_e7b6679be17b71e9",
+    "scene_e50222d351084f96",
+    "scene_67d75f430b8e5e04",
+    "scene_61b49b2be7197107",
+    "scene_3836aa9c1e80e781",
+    "scene_4c57301908d12659",
+    "scene_b4cbb3c86add661f",
+    "scene_d213e27b18ef359d",
+    "scene_b0cea79b44ccce5b",
+    "scene_aab974aa4da7aa48",
+    "scene_5943cde2e14dc3ee",
+    "scene_e40b2d835c9c6778",
+    "scene_29a3faf20644e0a7"
+  ],
+  "model_call_stats": {
+    "calls": 28,
+    "failures": 0,
+    "prompt_tokens": 121446,
+    "eval_tokens": 24840,
+    "total_latency_s": 588.4049999999552,
+    "max_latency_s": 35.34399999999732
+  },
+  "started_at": "2026-08-26T12:59:01.734511+00:00",
+  "completed_at": "2026-08-26T13:08:51.599388+00:00",
+  "notes": "P5 knowledge candidate run manifest: 记录模型标识、参数、输入 enriched 摘要与计数；时间戳与调用统计等非确定性信息只记录在本 manifest，不进入候选运行状态或候选文档。"
+}
