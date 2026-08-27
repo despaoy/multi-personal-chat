@@ -447,6 +447,13 @@ class TestQueryAnalyzer:
         analysis = analyzer.analyze("甲的哥哥是谁")
         assert analysis.matched_domains == ["test_domain"]
 
+    def test_single_char_entity_final_death_query_prefers_objective_fact(self, analyzer: QueryAnalyzer):
+        analysis = analyzer.analyze("甲最终是怎么死的")
+        assert analysis.matched_domains == ["test_domain"]
+        assert analysis.entities == ["甲"]
+        assert analysis.doc_type_preferences == ["fact"]
+        assert analysis.reality_preferences == ["objective"]
+
     def test_multi_entity_matches(self, analyzer: QueryAnalyzer):
         analysis = analyzer.analyze("甲和乙是什么关系")
         assert analysis.matched_domains == ["test_domain"]

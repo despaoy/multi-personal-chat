@@ -89,7 +89,16 @@ FACT_QUERY_WORDS = [
     "哪些",
     "什么类型",
     "什么属性",
+    "死因",
+    "怎么死",
+    "如何死",
+    "如何死亡",
+    "因何而死",
+    "死亡原因",
 ]
+
+DEATH_QUERY_WORDS = ["死因", "怎么死", "如何死", "如何死亡", "因何而死", "死亡原因"]
+FINALITY_QUERY_WORDS = ["最终", "最后", "到底", "真相", "实际"]
 
 REALITY_WORDS: dict[str, list[str]] = {
     "objective": ["真相", "真实", "实际上", "事实上", "客观", "现实中", "真的"],
@@ -263,6 +272,12 @@ class QueryAnalyzer:
         for value, words in REALITY_WORDS.items():
             if _contains_any(query, words):
                 reality_prefs.append(value)
+        if (
+            _contains_any(query, DEATH_QUERY_WORDS)
+            and _contains_any(query, FINALITY_QUERY_WORDS)
+            and "objective" not in reality_prefs
+        ):
+            reality_prefs.insert(0, "objective")
         temporal_prefs: list[str] = []
         for value, words in TEMPORAL_WORDS.items():
             if _contains_any(query, words):
