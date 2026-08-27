@@ -1,4 +1,4 @@
-"""数据集格式转换工具 - 将hutao_dialogues.json转换为LoRA训练格式"""
+"""数据集格式转换工具 - 将 hutao_dialogues.json 转为 LoRA 格式（历史工具）。"""
 
 import json
 from pathlib import Path

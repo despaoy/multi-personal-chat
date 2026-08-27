@@ -12,13 +12,13 @@
 | 构造训练候选 | `experiments/train_v5_clean.jsonl` | 150 条已批准构造数据的可追溯来源 |
 | V4 审核包 | `../../../docs/research/review_packets/kisaki_v4/` | 用户逐批审核 |
 | 人物提示词 | `kisaki_system_prompt_v3.txt` | 已确认的角色身份、关系、性格和表达 |
-| V4 canonical 数据 | `experiments/v4/` | **948 条 train、70 条 validation**；状态 `frozen` |
+| V4 canonical 数据 | `experiments/v4/` | **926 条 train、1961 个监督目标、70 条 validation**；状态 `frozen` |
 | V4.1 增补证据 | `experiments/v4/augmentation_candidates/` | 276 个新生成五轮会话的生成、审核与晋升记录 |
 | Gold v2.1 | `../../evaluation/kisaki_gold_set_v21_candidates.json` | 已批准的 development-only 评测集，不回流训练 |
 | Gold v3 | `../../evaluation/kisaki_gold_set_v3.json` | 150 条最终盲测，已审核并冻结 |
 | 历史数据归档 | `experiments/archive/` | 已退出活动工作面的 V2/V3/V4 草稿与旧实验资产 |
 
-V4 train 的 canonical 来源分布：522 条原作提取 + 150 条既有已审核构造 + 4 条 DeepSeek round06 五轮会话 + 272 条 Codex 自动化批次五轮会话 = **948 条**。最终 Game Train 审核记录见 `experiments/v4/game_train_context_review_approval.json`。
+V4 train 的 canonical 来源分布：522 条原作提取 + 150 条既有已审核构造 + 3 条 DeepSeek 用户模拟 + 251 条 Codex 用户模拟 = **926 条**。V4.1 增补和 Game Train 复审后曾形成 948 条快照；2026-08-21 长度清理再将 22 条代码主导或截断损伤记录移入技术辅助集。权威计数和哈希只读取 `experiments/v4/canonical_dataset_manifest.json`。
 
 ## 三层提示词
 
@@ -34,7 +34,6 @@ V4 train 的 canonical 来源分布：522 条原作提取 + 150 条既有已审�
 
 ```bash
 python scripts/validate_kisaki_v4_training_gate.py
-python scripts/validate_kisaki_v4_training_gate.py
 ```
 
-原作台词归属、定位和覆盖由可复现审计负责。Game Train 上下文质量复审完成、canonical 状态恢复为最终 `frozen` 且训练门禁通过前，不得启动正式 R1V4 训练。旧实验资产统一在 `experiments/archive/` 归档，不再散落在活动目录；需要更早的历史版本时从 Git 历史追溯。
+原作台词归属、定位和覆盖由可复现审计负责。canonical 当前为 `frozen`；R1V4 的现有 checkpoint 均已拒绝，未经新的数据/方法审核和训练门禁复验不得推进 E2-E5。旧实验资产统一在 `experiments/archive/` 归档，需要更早版本时从 Git 历史追溯。

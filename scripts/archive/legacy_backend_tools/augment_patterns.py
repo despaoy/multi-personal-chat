@@ -1,4 +1,4 @@
-"""扩充边界case的样本量 - 用模板批量生成同模式变体"""
+"""扩充边界case的样本量 - 用模板批量生成同模式变体（历史工具）。"""
 import json
 from pathlib import Path
 

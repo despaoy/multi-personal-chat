@@ -196,6 +196,10 @@ def test_active_runtime_and_experiment_entrypoints_do_not_read_archives():
         for path in root.rglob("*"):
             if not path.is_file() or "archive" in path.parts:
                 continue
+            if path.name == "check_repository_integrity.py":
+                # Repository maintenance verifies archive provenance; it is not a
+                # runtime or experiment entrypoint and intentionally reads the index.
+                continue
             if path.suffix not in {".py", ".sh", ".ps1"}:
                 continue
             content = path.read_text(encoding="utf-8", errors="replace").replace("\\", "/")

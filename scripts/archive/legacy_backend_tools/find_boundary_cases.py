@@ -1,4 +1,4 @@
-"""筛选真实的边界 case（排除 LLM 幻觉样本），供人工标注"""
+"""筛选真实的边界 case（排除 LLM 幻觉样本），供人工标注（历史工具）。"""
 import sys, json, sqlite3
 sys.path.insert(0, "d:/projects/backend")
 from pathlib import Path

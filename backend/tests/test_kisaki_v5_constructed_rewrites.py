@@ -21,7 +21,6 @@ import pytest
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 V5_DIR = PROJECT_ROOT / "backend/data/character_dialogues/experiments/v5_candidate"
 V4_DIR = PROJECT_ROOT / "backend/data/character_dialogues/experiments/v4"
-OUT_DIR = V5_DIR / "constructed_rewrite_v1"
 
 
 def _module():
@@ -194,18 +193,20 @@ def test_normalize_text():
 
 
 @pytest.fixture(scope="module")
-def run_real():
+def run_real(tmp_path_factory):
     mod = _module()
+    out_dir = tmp_path_factory.mktemp("kisaki-v5-constructed-rewrites")
+    mod.OUT_DIR = out_dir
     train_path = V4_DIR / "train.jsonl"
     sha_before = hashlib.sha256(train_path.read_bytes()).hexdigest()
     rc = mod.main()
     sha_after = hashlib.sha256(train_path.read_bytes()).hexdigest()
-    return rc, sha_before, sha_after
+    return rc, sha_before, sha_after, out_dir
 
 
 def test_real_run_success_and_v4_untouched(run_real):
     """脚本退出码 0，且 V4 train.jsonl 前后 sha256 一致（冻结数据只读）"""
-    rc, sha_before, sha_after = run_real
+    rc, sha_before, sha_after, _out_dir = run_real
     assert rc == 0
     assert sha_before == sha_after
 
@@ -213,10 +214,11 @@ def test_real_run_success_and_v4_untouched(run_real):
 def test_real_products_structure(run_real):
     """12 候选 + 1 drop；候选状态 pending_review；ID/父 ID 规则"""
     _module()
-    report = json.loads((OUT_DIR / "validation_report.json").read_text(encoding="utf-8"))
+    out_dir = run_real[3]
+    report = json.loads((out_dir / "validation_report.json").read_text(encoding="utf-8"))
     assert report["counts"] == {"tasks": 13, "candidates": 12, "drops": 1}
 
-    tasks = json.loads((OUT_DIR / "rewrite_tasks.json").read_text(encoding="utf-8"))["tasks"]
+    tasks = json.loads((out_dir / "rewrite_tasks.json").read_text(encoding="utf-8"))["tasks"]
     drops = [t for t in tasks if t["action"] == "drop"]
     assert len(drops) == 1
     assert drops[0]["parent_record_id"] == "kisaki_llm_v4_blindfix_0048"
@@ -224,7 +226,7 @@ def test_real_products_structure(run_real):
 
     candidates = [
         json.loads(line)
-        for line in (OUT_DIR / "candidates.jsonl").read_text(encoding="utf-8").splitlines()
+        for line in (out_dir / "candidates.jsonl").read_text(encoding="utf-8").splitlines()
         if line.strip()
     ]
     assert len(candidates) == 12
@@ -241,7 +243,8 @@ def test_real_products_structure(run_real):
 def test_real_candidates_quality(run_real):
     """结构合法、长度 ≤100、与 130 条保留样本无完全重复、开头唯一"""
     mod = _module()
-    report = json.loads((OUT_DIR / "validation_report.json").read_text(encoding="utf-8"))
+    out_dir = run_real[3]
+    report = json.loads((out_dir / "validation_report.json").read_text(encoding="utf-8"))
     checks = report["checks"]
     assert checks["tasks_complete"]
     assert checks["new_ids_unique"]
@@ -254,7 +257,7 @@ def test_real_candidates_quality(run_real):
 
     candidates = [
         json.loads(line)
-        for line in (OUT_DIR / "candidates.jsonl").read_text(encoding="utf-8").splitlines()
+        for line in (out_dir / "candidates.jsonl").read_text(encoding="utf-8").splitlines()
         if line.strip()
     ]
     for c in candidates:
@@ -264,7 +267,7 @@ def test_real_candidates_quality(run_real):
 def test_real_review_batch_material(run_real):
     """审核材料：13 条对照 + 勾选行（keep/revise/drop）+ 人工备注栏"""
     _module()
-    md = (OUT_DIR / "review_batch.md").read_text(encoding="utf-8")
+    md = (run_real[3] / "review_batch.md").read_text(encoding="utf-8")
     assert md.count("- **人工选择**: [ ] keep  [ ] revise  [ ] drop") == 13
     assert md.count("- 人工备注: ______") == 13
     assert md.count("## [") == 13

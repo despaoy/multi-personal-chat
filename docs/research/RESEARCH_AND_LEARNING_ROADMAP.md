@@ -34,7 +34,7 @@
 ### 当前研究状态
 
 - R0V4 已完成人物提示词、原作覆盖、构造训练候选、validation 和 Gold 审核；V4.1 的 276 条五轮会话已逐批审核晋升。
-- V4 train 当前 948 条；canonical 状态为 `frozen`，Game Train 上下文质量复审和 Gold v3 冻结均已完成，可在正式门禁复验后推进 R1V4。
+- V4 train 当前 926 条、1961 个监督目标；canonical 状态为 `frozen`。R1V4 E1 与 recovery checkpoint 均未通过生成和语义门禁，当前无正式 adapter，E2-E5 暂停。
 - 旧 R1 结果只保留为 `legacy_exploratory_non_comparable`。
 - R2/R3 实现可用于契约和工具验证，正式结果仍需冻结数据与隔离的真实服务。
 - 每次发布前的实际测试计数以 CI 或本次验证报告为准，不在路线图中维护易过期数字。

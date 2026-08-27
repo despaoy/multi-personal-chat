@@ -4,7 +4,7 @@
 
 本审核比较 Prompt-only 与稳定性校准训练所得候选 checkpoint，但在审核完成前隐藏二者身份。它回答的不是“模型能不能正常生成”，而是“LoRA 是否真的改善了月社妃的人物表现，并且没有带来更严重的事实、多轮或安全问题”。
 
-当前状态为 `ai_assisted_review_pending_human_confirmation`。用户已独立填写前 6 题总体选择，随后由 AI 在不揭盲的情况下补充五维评分、理由及其余 24 题初审。E2 继续暂停，checkpoint 100 仍只是候选，不是正式 E1。
+本审核已完成 AI 辅助、用户确认并揭盲。checkpoint-100 以 8 胜、18 负、4 平落后 Prompt-only，已拒绝；E2 继续暂停。最终结论见 [`../19_R1V4_E1_UNBLINDED_RESULT/README.md`](../19_R1V4_E1_UNBLINDED_RESULT/README.md)。
 
 ## 文件说明
 

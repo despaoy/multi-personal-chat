@@ -1,4 +1,4 @@
-"""将人工标注的边界case注入训练数据并重新训练"""
+"""将人工标注的边界 case 注入旧训练缓存并重新训练（历史工具）。"""
 import json, sys
 from pathlib import Path
 from collections import OrderedDict

@@ -2,8 +2,8 @@
 
 > 本文档为 `multi-personal-chat` 项目的结构化代码知识库（Code Wiki），涵盖项目整体架构、模块职责、关键类与函数、依赖关系与运行方式。
 >
-> - **版本基线**：FastAPI 后端 `v2.0.0`、Next.js 前端 `0.1.0`（Next 16.2.9 / React 19.2.3）
-> - **最近核对**：2026-07-31
+> - **版本基线**：FastAPI 后端 `v2.0.0`、Next.js 前端 `0.1.0`（Next 16.2.11 / React 19.2.3）
+> - **最近核对**：2026-08-28；可执行验证结果以 [`../RELEASE_CHECKLIST.md`](../RELEASE_CHECKLIST.md) 为准
 > - **维护原则**：随代码演进同步更新；任何架构性变更须同步本文档对应章节。
 
 ---
@@ -52,14 +52,10 @@
 - **推理后端**：以 vLLM（`Qwen3-8B-Instruct-AWQ`）为主，支持多实例负载均衡、LoRA 热切换；同时兼容 Ollama / llama.cpp / Transformers+PEFT / OpenAI 兼容 / Mock 多后端。
 - **RAG 能力**：FAISS 向量检索 + BM25 关键词混合 + Cross-Encoder 重排 + 纠错 RAG。
 - **训练能力**：SFT LoRA 微调、DPO/ORPO 偏好对齐，含 GPU 温度保护、早停、可取消。
-- **管理控制台**：Next.js 16 (App Router) + React 19 + Tailwind v4 + shadcn/ui 提供 14 个页面。
+- **管理控制台**：Next.js 16 (App Router) + React 19 + Tailwind v4 + shadcn/ui 提供 15 个管理页面和登录页。
 - **研究严谨性**：Gold Set 评估、质量门（benchmark_gate）、盲评流程、合成数据审核 guardrail。
 
-**当前验证状态**（截至文档核对时）：
-- 后端回归：实验室服务器最近一次 `121 passed`；Windows 本地为开发镜像
-- TypeScript 与 Next.js 生产构建通过
-- vLLM 在 RTX 3090 上稳定服务 `Qwen3-8B-Instruct-AWQ`
-- 26 张数据库表已建（PostgreSQL/SQLite 双模式），Alembic 迁移至 `004_index_cleanup`
+**当前验证状态**：仓库级检查、后端测试、TypeScript、Lint、生产构建、依赖审计和训练门禁均由发布清单逐次记录；历史测试数量和服务器运行状态不在本文固化。Alembic 当前唯一 head 为 `006_character_memory`。
 
 ---
 
@@ -117,7 +113,7 @@
 ```text
 multi-personal-chat/
 ├── backend/                       # FastAPI 后端（Python 3.12）
-│   ├── api/                       # 18 个 API 路由模块
+│   ├── api/                       # 20 个 API 路由模块
 │   ├── app/                       # 应用入口、配置、依赖注入、运行时容器
 │   │   ├── main.py                # create_app 组合根 + lifespan
 │   │   ├── config.py              # 全局配置 + 增强模块单例
@@ -406,7 +402,7 @@ def _should_use_postgresql(env=os.environ) -> bool:
 - URL 规范化：`db/urls.py` 统一处理运行时与 Alembic；`PG_*` 分量通过 SQLAlchemy `URL.create()` 安全编码
 - 全局单例 `sync_pg_db = SyncPgAdapter(pg_db)`
 
-#### 4.3.2 数据库表结构（共 26 张表）
+#### 4.3.2 数据库表结构（共 28 张 ORM 表）
 
 **核心业务表**（初始模式 `001_initial`）
 
@@ -428,7 +424,6 @@ def _should_use_postgresql(env=os.environ) -> bool:
 | 表名 | 用途 |
 |---|---|
 | `saved_dialogues` | 训练对话存档 |
-| `session_settings` | 旧库兼容来源；启动时单向迁移至 canonical `conversations`，之后不再读写 |
 | `claw_tools` | Claw 自定义工具 |
 | `integration_message_dedup` | 集成消息去重 |
 | `conversations` | 集成会话注册表 |
@@ -437,6 +432,9 @@ def _should_use_postgresql(env=os.environ) -> bool:
 | `intent_samples` | 意图分类训练样本 |
 | `intent_active_kbs` | 意图路由激活知识库 |
 | `training_tasks` | 训练任务 |
+| `character_relationships` | 按平台、会话和发送者隔离的角色关系状态 |
+| `character_memories` | 带来源与可见性边界的角色长期记忆 |
+| `api_keys` | 统一 API key 权限与撤销状态 |
 
 **研究与评估表**（迁移 `002_research`）
 
@@ -462,8 +460,10 @@ def _should_use_postgresql(env=os.environ) -> bool:
 | `002_research` | `001_initial` | 创建 6 张研究表 + 4 个索引 |
 | `003_indexes` | `002_research` | 补齐 SQLite 运行时已建但 PG 缺失的索引（Inspector 幂等检查） |
 | `004_index_cleanup` | `003_indexes` | 删除 `conversations` 上与唯一约束重复的 `idx_conversations_platform_conversation`；统一 `messages.createdAt` 索引名为 `idx_messages_created_at` |
+| `005_unified_access` | `004_index_cleanup` | 统一 API key 存储并移除旧 `session_settings` 表 |
+| `006_character_memory` | `005_unified_access` | 新增角色关系与长期记忆表 |
 
-**说明**：运行时表未纳入 alembic 版本管理，新部署到 PG 时除 `alembic upgrade` 外仍依赖 `PgDatabase.init()` 补建。003/004 均使用 Inspector 先检查再操作，保证"先启动新代码再 upgrade"的场景下幂等。
+**说明**：ORM metadata 是 28 张当前表的结构权威；Alembic 保留从历史版本升级所需的显式变更。新部署仍会在启动时执行幂等初始化，003–006 使用 Inspector 防止“先启动新代码再 upgrade”时重复建表或索引。
 
 #### 4.3.4 迁移工具（`backend/db/migration.py`）
 
@@ -907,7 +907,7 @@ Database adapter (db/adapter.py)
 
 ### 5.1 应用结构与布局
 
-**技术栈**：Next.js 16.2.9（App Router，默认 Turbopack）、React 19.2.3、Tailwind CSS v4 + shadcn/ui（new-york 风格）
+**技术栈**：Next.js 16.2.11（App Router，默认 Turbopack）、React 19.2.3、Tailwind CSS v4 + shadcn/ui（new-york 风格）
 
 **Provider 嵌套**（`src/app/layout.tsx`）：
 
@@ -1313,11 +1313,11 @@ curl -fsS http://127.0.0.1:8001/v1/models
 
 ### 11.2 前端核心依赖
 
-- `next: 16.2.9`、`react: 19.2.3`、`react-dom: 19.2.3`
+- `next: 16.2.11`、`react: 19.2.3`、`react-dom: 19.2.3`
 - `tailwindcss: ^4`、`shadcn: ^2.4.0`、Radix UI 全套（avatar/dialog/dropdown-menu/select 等）
 - `recharts: ^3.2.1`、`sonner: ^2.0.7`、`next-themes: ^0.4.6`、`lucide-react: ^0.468.0`
 - `date-fns: ^4.1.0`、`clsx: ^2.1.1`、`tailwind-merge: ^2.6.0`、`class-variance-authority: ^0.7.1`
-- `packageManager: pnpm@9.15.0`
+- `packageManager: pnpm@10.34.2`
 
 ### 11.3 模块间调用关系
 

@@ -52,6 +52,7 @@ jobs:
           python -m compileall -q . ../scripts ../astrbot_plugins
           python -m alembic heads
           python -m pip check
+          python ../scripts/check_repository_integrity.py
       - name: Run tests
         run: |
           set -o pipefail

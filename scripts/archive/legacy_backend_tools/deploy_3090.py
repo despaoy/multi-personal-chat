@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  MultiPersonal Chat System - RTX 3090 双卡部署脚本
+  MultiPersonal Chat System - RTX 3090 双卡部署脚本（历史方案）
   目标: 2×NVIDIA GeForce RTX 3090 24GB + E5-2680
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 

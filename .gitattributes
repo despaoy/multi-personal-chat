@@ -1,3 +1,11 @@
-# Shell entrypoints are executed on Linux servers.
-*.sh text eol=lf
+# Repository text is normalized so frozen data hashes and generated evidence are
+# identical on Windows and Linux. PowerShell remains CRLF for native tooling.
+* text=auto eol=lf
 *.ps1 text eol=crlf
+
+# Hash-bound research assets must never follow the local core.autocrlf setting.
+*.json text eol=lf
+*.jsonl text eol=lf
+*.md text eol=lf
+*.py text eol=lf
+*.sh text eol=lf

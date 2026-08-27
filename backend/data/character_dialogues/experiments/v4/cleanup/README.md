@@ -1,6 +1,6 @@
 # 月社妃 V4 清洁候选
 
-本目录保存针对正式训练长度审计生成的清理策略、候选、辅助数据和晋升记录。候选已于 2026-08-21 晋升到活动 `../train.jsonl`，但整个 R0 仍处于重新冻结阶段。
+本目录保存针对正式训练长度审计生成的清理策略、候选、辅助数据和晋升记录。候选已于 2026-08-21 晋升到活动 `../train.jsonl`，R0 已完成重新冻结。
 
 ## 处理结果
 
@@ -18,4 +18,4 @@
 - `candidate/manifest.json`：数量、来源、监督目标、分词审计和后续阻塞项。
 - `promotion_approval.json`：项目负责人授权的机械清理晋升记录；不声称重新逐条人工审核 926 条数据。
 
-当前正式训练集已经与 `candidate/train.jsonl` 一致。Gold v3 与 prompt policy 契约重新绑定前，不得启动正式 R1 实验。
+当前正式训练集已经与 `candidate/train.jsonl` 一致；Gold v3 复审、prompt policy 和 speaker contract 均已重新绑定。后续实验仍须重新执行正式训练门禁。

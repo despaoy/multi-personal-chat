@@ -2,11 +2,12 @@
 
 ## 当前状态
 
-- 正式训练：Game Train 复审已关闭，等待当前环境正式门禁复验
-- V4 train：当前 948 条（522 原作 + 150 既有构造 + 4 条 DeepSeek round06 五轮会话 + 272 条 Codex 自动化批次五轮会话）
+- 正式训练：Game Train 复审和 V4 冻结已关闭；R1V4 现有 checkpoint 全部未通过门禁
+- V4 train：当前 926 条（522 原作 + 150 既有构造 + 3 条 DeepSeek 用户模拟 + 251 条 Codex 用户模拟），1961 个监督目标
 - V4 validation：70 条已冻结
 - Gold v2.1：150 条，已批准为 `development_only`
 - Gold v3：150 条最终盲测，已审核并冻结
+- 当前 adapter：无；E2-E5 暂停，下一步为 source-balanced V5 候选审核
 
 ## 为什么需要 V4
 

@@ -1,5 +1,5 @@
 """
-本地4bit推理脚本
+历史胡桃本地 4bit 推理脚本
 使用Qwen3-8B基础模型加载胡桃LoRA适配器进行本地推理，适用于RTX 4060 Laptop 8GB。
 通过BitsAndBytes的NF4量化将推理显存控制在~4GB。
 

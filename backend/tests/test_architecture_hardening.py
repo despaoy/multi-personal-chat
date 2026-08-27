@@ -260,6 +260,8 @@ def test_mutating_routes_default_to_admin_authorization():
     from app.main import _ROUTERS
 
     explicit_exceptions = {
+        ("POST", "/api/ask"): "get_current_user",
+        ("POST", "/api/ask/stream"): "get_current_user",
         ("POST", "/api/generate"): "get_current_user",
         ("PUT", "/api/user/data"): "get_current_user",
         ("POST", "/api/feedback"): "get_current_user",

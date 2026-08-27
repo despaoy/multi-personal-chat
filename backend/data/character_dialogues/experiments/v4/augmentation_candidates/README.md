@@ -11,9 +11,10 @@
 | 已晋升 automation 完整会话 | 272 个 / 1360 个 assistant 回合 |
 | 已晋升 DeepSeek round06 会话 | 4 个 / 20 个 assistant 回合 |
 | 新进入 V4.1 的会话合计 | **276 个 / 1380 个 assistant 回合** |
-| 当前 canonical train | 948 条 / 2071 个有效 assistant 监督目标 |
+| 增补与 Game Train 复审后的历史快照 | 948 条 / 2071 个有效 assistant 监督目标 |
+| 当前 canonical train | 926 条 / 1961 个有效 assistant 监督目标 |
 
-V4.1 增补完成时 canonical 曾达到 1002 条；后续 Game Train 上下文复审排除 54 条原作记录，因此当前总数低于本目录各批晋升完成时的历史快照。
+V4.1 增补完成时 canonical 曾达到 1002 条；Game Train 上下文复审排除 54 条原作记录后为 948 条，长度清理再移出 22 条技术辅助/截断损伤记录，最终为 926 条。本目录只记录增补证据，当前值以 `../canonical_dataset_manifest.json` 为准。
 
 ## 子目录约定
 

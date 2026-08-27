@@ -4,7 +4,7 @@
 
 > **定位**：证据驱动的研究原型，不是云原生组件堆叠。每个实验结果都要求保留数据哈希、随机种子、硬件、命令和原始结果。
 >
-> **发布状态**：代码可以构建、测试可以复现；当前仓库不包含任何“正式实验结论”。
+> **发布状态**：工程收尾中。已保留可复现的负实验结果，但当前没有通过门禁的正式 LoRA adapter；发布结论以 [`docs/RELEASE_CHECKLIST.md`](docs/RELEASE_CHECKLIST.md) 的本次验证记录为准。
 
 ## 核心能力
 
@@ -65,6 +65,7 @@ LoRA   BGE/FAISS         Redis
 ```text
 astrbot_plugins/     AstrBot 网关插件
 backend/
+├── README.md         后端边界、入口与验证
 ├── api/              FastAPI 路由
 ├── app/              配置、依赖、应用生命周期与运行时容器
 ├── data/             角色语料、canonical 数据集与历史数据归档
@@ -106,6 +107,7 @@ src/                  Next.js 管理台
 # 后端
 python -m pytest backend/tests -q
 python -m compileall -q backend scripts astrbot_plugins
+python scripts/check_repository_integrity.py
 
 # 前端
 pnpm install --frozen-lockfile
@@ -146,7 +148,7 @@ powershell -ExecutionPolicy Bypass -File scripts/local-verify.ps1 -Frontend
 
 ## 当前研究状态
 
-仓库内置示例角色为“月社妃”，当前 canonical 数据为 1002 条训练记录和 70 条独立验证记录。数据、审核和训练门禁的权威状态见：
+仓库内置示例角色为“月社妃”，当前 canonical 数据为 **926 条训练记录、1961 个有效 assistant 监督目标和 70 条独立验证记录**。R1V4 E1 及 recovery checkpoint 均未通过真实生成与语义门禁，当前无正式 adapter，E2-E5 暂停。数据、审核和训练状态的权威入口见：
 
 - [月社妃实验总览](docs/research/KISAKI_EXPERIMENT_INDEX.md)
 - [V4 人工审核与重训练](docs/research/KISAKI_V4_HUMAN_REVIEW_AND_RETRAINING.md)
@@ -162,6 +164,7 @@ powershell -ExecutionPolicy Bypass -File scripts/local-verify.ps1 -Frontend
 - [可扩展性开发指南](docs/architecture/EXTENSIBILITY_GUIDE.md)
 - [生产准备审查](docs/architecture/PRODUCTION_READINESS_REVIEW_2026-07-18.md)
 - [发布前检查清单](docs/RELEASE_CHECKLIST.md)
+- [后端目录与入口](backend/README.md)
 - [人工评分标准](docs/data/human-scoring-rubric.md)
 
 ## 研究诚信

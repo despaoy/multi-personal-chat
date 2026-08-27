@@ -92,6 +92,7 @@ Invoke-Step "Backend core tests" $Backend $Python.Command ($PyArgs + @(
     "-m", "pytest", "tests", "-q", "--basetemp", $PytestTmp
 ))
 Invoke-Step "API smoke test and mock AstrBot event" $Backend $Python.Command ($PyArgs + @("-m", "scripts.local_smoke"))
+Invoke-Step "Repository integrity" $Root $Python.Command ($PyArgs + @("scripts/check_repository_integrity.py"))
 Invoke-Step "Git whitespace check" $Root "git" @("diff", "--check")
 
 if ($Frontend) {

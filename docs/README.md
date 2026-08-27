@@ -1,6 +1,6 @@
 # MultiPersonal Chat System 文档中心
 
-本文档目录只保存可维护的项目说明和可复现研究记录。模型权重、LoRA 产物、数据库、日志与向量索引不进入 Git。
+本文档目录只保存可维护的项目说明和可复现研究记录。模型权重、LoRA 产物、数据库、日志与向量索引不进入 Git。最近一次结构与链接核对：2026-08-28。
 
 ## 阅读顺序
 
@@ -12,6 +12,7 @@
 6. [生产准备审查](architecture/PRODUCTION_READINESS_REVIEW_2026-07-18.md)：当前风险、限制与后续工作。
 7. [清理策略](operations/CLEANUP_POLICY.md)：哪些文件可以删除，哪些必须保留。
 8. [发布前检查清单](RELEASE_CHECKLIST.md)：可发布边界和验证命令。
+9. [后端说明](../backend/README.md)与[脚本索引](../scripts/README.md)：代码入口与维护工具。
 
 ## 文档分类
 
@@ -54,3 +55,5 @@
 
 - `PROJECT_CONTEXT.md`：维护者与 AI 助手使用的内部项目上下文，不属于最终用户阅读路径。
 - [发布前检查清单](RELEASE_CHECKLIST.md)：仓库可发布边界、验证命令和当前 blocker。
+
+研究审核包中的 README 属于带时间点的证据记录；它们描述当时状态，不作为当前发布事实。当前事实只以项目 README、实验总览、canonical manifest 和发布清单为准。
