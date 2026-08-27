@@ -72,6 +72,11 @@ EVENT_QUERY_WORDS = [
     "后来",
     "怎么样了",
     "如何",
+    "为什么",
+    "为何",
+    "怎么会",
+    "导致",
+    "造成",
 ]
 
 FACT_QUERY_WORDS = [
@@ -97,8 +102,52 @@ FACT_QUERY_WORDS = [
     "死亡原因",
 ]
 
-DEATH_QUERY_WORDS = ["死因", "怎么死", "如何死", "如何死亡", "因何而死", "死亡原因"]
+DEATH_QUERY_WORDS = [
+    "死因",
+    "怎么死",
+    "如何死",
+    "如何死亡",
+    "因何而死",
+    "死亡原因",
+    "自缢",
+    "上吊",
+    "自杀",
+    "身亡",
+]
 FINALITY_QUERY_WORDS = ["最终", "最后", "到底", "真相", "实际"]
+
+PREDICATE_QUERY_WORDS: dict[str, list[str]] = {
+    "身份": ["身份", "是谁", "是什么人", "做什么工作"],
+    "目标": ["目标", "目的", "想要做什么"],
+    "状态": ["状态", "现状", "怎么样", "变成", "成为", "恢复"],
+    "性格": ["性格", "什么样的人"],
+    "死因": DEATH_QUERY_WORDS,
+    "设定": ["设定", "有什么作用", "什么效果"],
+    "经历": ["经历", "遭遇", "发生过什么"],
+    "偏好": ["喜欢什么", "偏好", "爱好"],
+    "能力": ["能力", "会什么", "能做什么"],
+    "外貌": ["外貌", "长什么样", "样貌"],
+}
+
+RELATION_TYPE_QUERY_WORDS: dict[str, list[str]] = {
+    "哥哥": ["哥哥", "兄长"],
+    "妹妹": ["妹妹"],
+    "姐姐": ["姐姐"],
+    "弟弟": ["弟弟"],
+    "母亲": ["母亲", "妈妈"],
+    "父亲": ["父亲", "爸爸"],
+    "朋友": ["朋友", "好友"],
+    "恋人": ["恋人", "情侣", "交往"],
+    "主人": ["主人", "主仆", "仆人", "女仆"],
+    "创造者": ["创造者", "创造了", "创造的"],
+    "敌对": ["敌对", "敌人"],
+}
+
+LEXICAL_QUERY_EXPANSIONS: dict[str, list[str]] = {
+    "上吊": ["自缢"],
+    "自杀": ["自缢", "轻生", "主动赴死"],
+    "车祸": ["交通事故"],
+}
 
 REALITY_WORDS: dict[str, list[str]] = {
     "objective": ["真相", "真实", "实际上", "事实上", "客观", "现实中", "真的"],
@@ -129,12 +178,16 @@ class QueryAnalysis:
     entities: list[str] = field(default_factory=list)
     matched_domains: list[str] = field(default_factory=list)
     expanded_keywords: list[str] = field(default_factory=list)
+    lexical_expansions: list[str] = field(default_factory=list)
     doc_type_preferences: list[str] = field(default_factory=list)
+    predicate_preferences: list[str] = field(default_factory=list)
+    relation_type_preferences: list[str] = field(default_factory=list)
     reality_preferences: list[str] = field(default_factory=list)
     temporal_preferences: list[str] = field(default_factory=list)
     scope_preferences: list[str] = field(default_factory=list)
     story_hits: list[str] = field(default_factory=list)
     wants_real_history: bool = False
+    causal_intent: bool = False
     # domain 命中的信号强度（诊断用）
     domain_hit_reasons: dict[str, str] = field(default_factory=dict)
 
@@ -265,8 +318,23 @@ class QueryAnalyzer:
             doc_type_prefs.append("event")
         if _contains_any(query, FACT_QUERY_WORDS):
             doc_type_prefs.append("fact")
+        if _contains_any(query, DEATH_QUERY_WORDS):
+            doc_type_prefs.append("fact")
         # 去重且保持稳定顺序
         doc_type_prefs = list(dict.fromkeys(doc_type_prefs))
+
+        causal_intent = bool(_contains_any(query, ["为什么", "为何", "怎么会", "导致", "造成"]))
+        if causal_intent:
+            doc_type_prefs = list(dict.fromkeys([*doc_type_prefs, "fact"]))
+
+        predicate_prefs = [
+            predicate for predicate, words in PREDICATE_QUERY_WORDS.items() if _contains_any(query, words)
+        ]
+        if "是什么" in query and not predicate_prefs:
+            predicate_prefs.append("设定")
+        relation_type_prefs = [
+            relation for relation, words in RELATION_TYPE_QUERY_WORDS.items() if _contains_any(query, words)
+        ]
 
         reality_prefs: list[str] = []
         for value, words in REALITY_WORDS.items():
@@ -293,6 +361,11 @@ class QueryAnalyzer:
         for word in _contains_any(query, RELATION_QUERY_WORDS + EVENT_QUERY_WORDS + FACT_QUERY_WORDS):
             if word not in expanded:
                 expanded.append(word)
+        lexical_expansions: list[str] = []
+        for trigger, alternatives in LEXICAL_QUERY_EXPANSIONS.items():
+            if trigger in query:
+                lexical_expansions.extend(alternatives)
+        lexical_expansions = list(dict.fromkeys(lexical_expansions))
 
         return QueryAnalysis(
             original_query=query,
@@ -300,11 +373,15 @@ class QueryAnalyzer:
             entities=all_entities,
             matched_domains=matched_domains,
             expanded_keywords=expanded[:12],
+            lexical_expansions=lexical_expansions,
             doc_type_preferences=doc_type_prefs,
+            predicate_preferences=predicate_prefs,
+            relation_type_preferences=relation_type_prefs,
             reality_preferences=reality_prefs,
             temporal_preferences=temporal_prefs,
             scope_preferences=scope_prefs,
             story_hits=story_hits,
             wants_real_history=wants_real_history,
+            causal_intent=causal_intent,
             domain_hit_reasons=domain_reasons,
         )

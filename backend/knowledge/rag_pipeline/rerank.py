@@ -85,6 +85,9 @@ _WEIGHTS = {
     "layer_alignment": 0.10,
     "story_hit": 0.05,
     "identity_alignment": 0.08,
+    "predicate_alignment": 0.16,
+    "relation_type_alignment": 0.16,
+    "causal_evidence": 0.12,
     "length_penalty": -0.10,
 }
 
@@ -93,6 +96,12 @@ _WEIGHTS = {
 _IDENTITY_INTENT_WORDS = ["是谁", "什么身份", "是什么人", "是什么人物", "个人资料"]
 
 _LONG_CONTENT_CHARS = 1500
+_CAUSAL_MARKERS = ("因为", "由于", "所以", "导致", "造成", "原因", "起因", "因而", "因此")
+_TERM_ALTERNATIVES: dict[str, tuple[str, ...]] = {
+    "上吊": ("自缢",),
+    "自杀": ("自缢", "轻生", "主动赴死"),
+    "车祸": ("交通事故",),
+}
 
 
 def _env_flag(name: str, default: str = "false") -> bool:
@@ -150,9 +159,29 @@ class DeterministicReranker:
             if identity_intent and "身份" in text:
                 score += _WEIGHTS["identity_alignment"]
 
+            if (
+                analysis.predicate_preferences
+                and doc.metadata.get("predicate") in analysis.predicate_preferences
+            ):
+                score += _WEIGHTS["predicate_alignment"]
+
+            if (
+                analysis.relation_type_preferences
+                and doc.metadata.get("relation") in analysis.relation_type_preferences
+            ):
+                score += _WEIGHTS["relation_type_alignment"]
+
+            causal_text = f"{doc.title} {doc.summary}"
+            if analysis.causal_intent and any(marker in causal_text for marker in _CAUSAL_MARKERS):
+                score += _WEIGHTS["causal_evidence"]
+
             # 查询词覆盖率
             if query_terms:
-                covered = sum(1 for term in query_terms if term in text)
+                covered = sum(
+                    1
+                    for term in query_terms
+                    if term in text or any(alternative in text for alternative in _TERM_ALTERNATIVES.get(term, ()))
+                )
                 score += _WEIGHTS["keyword_coverage"] * (covered / len(query_terms))
 
             # 关系方向完整性：关系卡主体与对象同时命中查询实体
@@ -212,7 +241,16 @@ class PipelineReranker:
 
             encoder = get_reranker()
             # 探测一次模型可用性（加载失败时 rerank 返回原始顺序）
-            probe = encoder.rerank("probe", [{"title": "t", "content": "c"}], top_k=1)
+            # CrossEncoderReranker 对单候选会直接返回且不加载模型，
+            # 因此探针必须至少包含两项，才能确认真实模型分数可用。
+            probe = encoder.rerank(
+                "probe",
+                [
+                    {"id": "probe_relevant", "title": "relevant", "content": "probe relevant"},
+                    {"id": "probe_other", "title": "other", "content": "unrelated"},
+                ],
+                top_k=1,
+            )
             if probe and "rerank_score" not in probe[0]:
                 self._cross_encoder_unavailable = True
                 logger.info("CrossEncoder 模型不可用，P6 使用确定性降级重排")

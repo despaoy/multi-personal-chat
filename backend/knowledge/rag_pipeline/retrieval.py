@@ -171,7 +171,10 @@ class HybridRetriever:
     ) -> dict[int, tuple]:
         """BM25 通道：归一查询与原始查询各查一次，取每文档最优名次。"""
         best: dict[int, tuple] = {}  # row -> (best_rank, best_score)
-        for query_text in (analysis.normalized_query, analysis.original_query):
+        query_texts = [analysis.normalized_query, analysis.original_query]
+        if analysis.lexical_expansions:
+            query_texts.append(f"{analysis.normalized_query} {' '.join(analysis.lexical_expansions)}")
+        for query_text in dict.fromkeys(query_texts):
             for rank0, (row, score) in enumerate(self.index.search_sparse(query_text, recall_k)):
                 doc = self.index.get_document(row)
                 if doc is None or not match_metadata_filters(doc, filters):

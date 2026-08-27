@@ -28,6 +28,7 @@ import sys
 import time
 from collections import defaultdict
 from pathlib import Path
+from statistics import mean
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -132,6 +133,7 @@ def run_stage(
     category_stats: dict[str, dict[str, Any]] = defaultdict(lambda: {"n": 0, "hit1": 0, "hit5": 0, "mrr": 0.0})
     failures: list[dict[str, Any]] = []
     no_answer_total = 0
+    latencies_ms: list[float] = []
 
     for entry in eval_entries:
         expected = expected_map[entry["id"]]
@@ -150,6 +152,7 @@ def run_stage(
             **stage_kwargs,
         )
         elapsed = time.time() - start
+        latencies_ms.append(elapsed * 1000)
 
         results = (bundle or {}).get("results", [])
         result_ids = [str(r.get("id")) for r in results]
@@ -207,6 +210,8 @@ def run_stage(
             )
 
     n = len(eval_entries)
+    ordered_latencies = sorted(latencies_ms)
+    p95_index = max(0, int(len(ordered_latencies) * 0.95 + 0.999999) - 1)
     return {
         "stage": stage_name,
         "n": n,
@@ -214,6 +219,10 @@ def run_stage(
         "hit@3": round(hits_at[3] / n, 4) if n else 0.0,
         "hit@5": round(hits_at[5] / n, 4) if n else 0.0,
         "mrr": round(mrr_total / n, 4) if n else 0.0,
+        "latency_ms": {
+            "mean": round(mean(latencies_ms), 1) if latencies_ms else 0.0,
+            "p95": round(ordered_latencies[p95_index], 1) if ordered_latencies else 0.0,
+        },
         "categories": {
             k: {kk: (round(vv, 4) if isinstance(vv, float) else vv) for kk, vv in v.items()}
             for k, v in category_stats.items()
@@ -269,6 +278,8 @@ def main() -> int:
     if not pipeline.load_indexes():
         print("索引不可用，请先运行 build_knowledge_index.py")
         return 1
+    if not pipeline.warmup_embedding():
+        print("[警告] embedding 预热失败，向量阶段会自动降级")
 
     print(f"评估集: {eval_path}（{len(eval_entries)} 条）")
     print(f"索引文档: {pipeline.domain_stats()[args.domain]['document_count']}")
@@ -280,7 +291,8 @@ def main() -> int:
         stage_results.append(result)
         print(
             f"{stage_name:>16}: Hit@1={result['hit@1']:.3f} Hit@3={result['hit@3']:.3f} "
-            f"Hit@5={result['hit@5']:.3f} MRR={result['mrr']:.3f} 失败={len(result['failures'])}"
+            f"Hit@5={result['hit@5']:.3f} MRR={result['mrr']:.3f} "
+            f"P95={result['latency_ms']['p95']:.1f}ms 失败={len(result['failures'])}"
         )
 
     print()

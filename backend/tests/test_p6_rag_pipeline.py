@@ -428,6 +428,31 @@ class TestDomainIndex:
 
 
 class TestQueryAnalyzer:
+    def test_extracts_structured_fact_and_relation_preferences(self, analyzer: QueryAnalyzer):
+        death = analyzer.analyze("妃最终是怎么死的", domain_id="test_domain")
+        assert death.doc_type_preferences == ["fact"]
+        assert death.predicate_preferences == ["死因"]
+
+        kinship = analyzer.analyze("甲的哥哥是谁", domain_id="test_domain")
+        assert kinship.doc_type_preferences == ["relation", "fact"]
+        assert kinship.predicate_preferences == ["身份"]
+        assert kinship.relation_type_preferences == ["哥哥"]
+
+    def test_causal_question_keeps_event_and_fact_candidates(self, analyzer: QueryAnalyzer):
+        analysis = analyzer.analyze("甲为什么会失忆", domain_id="test_domain")
+        assert analysis.doc_type_preferences == ["event", "fact"]
+        assert analysis.causal_intent is True
+        transition = analyzer.analyze("甲为什么会变成吸血鬼", domain_id="test_domain")
+        assert transition.predicate_preferences == ["状态"]
+
+    def test_self_harm_wording_is_recognized_as_death_fact(self, analyzer: QueryAnalyzer):
+        analysis = analyzer.analyze("甲最后是上吊自缢身亡的吗", domain_id="test_domain")
+        assert analysis.doc_type_preferences == ["fact"]
+        assert analysis.predicate_preferences == ["死因"]
+        assert analysis.reality_preferences == ["objective"]
+        assert analysis.lexical_expansions == ["自缢"]
+        assert analyzer.analyze("谁上吊自杀了").lexical_expansions == ["自缢", "轻生", "主动赴死"]
+
     @pytest.fixture()
     def analyzer(self) -> QueryAnalyzer:
         return QueryAnalyzer([make_domain_config(Path("unused"), Path("unused"))])
@@ -596,6 +621,26 @@ class TestReranker:
         assert reranker.uses_cross_encoder is False  # 降级到确定性重排
         assert all(c.rerank_score is not None for c in result)
 
+    def test_cross_encoder_availability_probe_uses_two_candidates(self, monkeypatch):
+        import knowledge.reranker as reranker_module
+
+        class ProbeSensitiveEncoder:
+            def __init__(self):
+                self.probe_sizes = []
+
+            def rerank(self, query, docs, top_k=5):
+                self.probe_sizes.append(len(docs))
+                if len(docs) == 1:
+                    return [dict(docs[0])]
+                return [{**docs[0], "rerank_score": 1.0}]
+
+        encoder = ProbeSensitiveEncoder()
+        monkeypatch.setattr(reranker_module, "get_reranker", lambda: encoder)
+        pipeline_reranker = PipelineReranker(cross_encoder_enabled=True)
+
+        assert pipeline_reranker._resolve_cross_encoder() is encoder
+        assert encoder.probe_sizes == [2]
+
     def test_deterministic_reranker_preserves_relation_hit(self, domain_config):
         """精确实体+关系方向命中不应被长 evidence 文档吞掉。"""
         analysis = QueryAnalyzer([domain_config]).analyze("甲与乙是什么关系")
@@ -630,6 +675,58 @@ class TestReranker:
         analysis = QueryAnalyzer([domain_config]).analyze("甲最终是怎么死的")
         scored = DeterministicReranker().rerank(analysis, candidates)
         assert scored[0][0].document.title == "甲死于交通事故"
+
+    def test_deterministic_reranker_uses_relation_type_metadata(self, domain_config):
+        from knowledge.rag_pipeline.retrieval import RetrievalCandidate
+
+        documents = domain_config.loader(domain_config.source_root)
+        relation_doc = next(d for d in documents if d.document_type == "relation")
+        relation_doc.metadata["relation"] = "哥哥"
+        relation_doc.title = "甲的哥哥是乙"
+        event_doc = next(d for d in documents if d.document_type == "event")
+        event_doc.title = "甲与乙讨论哥哥"
+        candidates = [
+            RetrievalCandidate(row=0, document=event_doc, fused_score=0.06),
+            RetrievalCandidate(row=1, document=relation_doc, fused_score=0.04),
+        ]
+        analysis = QueryAnalyzer([domain_config]).analyze("甲的哥哥是谁")
+        scored = DeterministicReranker().rerank(analysis, candidates)
+        assert scored[0][0].document.document_type == "relation"
+
+    def test_deterministic_reranker_prefers_explicit_causal_evidence(self, domain_config):
+        from knowledge.rag_pipeline.retrieval import RetrievalCandidate
+
+        documents = domain_config.loader(domain_config.source_root)
+        causal_doc = next(d for d in documents if d.document_type == "fact")
+        causal_doc.summary = "甲因为红色水晶的影响而失忆"
+        nearby_doc = next(d for d in documents if d.document_type == "event")
+        nearby_doc.summary = "甲谈论了失忆后的生活"
+        nearby_doc.embedding_text = nearby_doc.summary
+        candidates = [
+            RetrievalCandidate(row=0, document=nearby_doc, fused_score=0.06),
+            RetrievalCandidate(row=1, document=causal_doc, fused_score=0.04),
+        ]
+        analysis = QueryAnalyzer([domain_config]).analyze("甲为什么会失忆")
+        scored = DeterministicReranker().rerank(analysis, candidates)
+        assert scored[0][0].document.summary.startswith("甲因为")
+
+    def test_deterministic_reranker_matches_death_method_synonyms(self, domain_config):
+        from knowledge.rag_pipeline.retrieval import RetrievalCandidate
+
+        documents = domain_config.loader(domain_config.source_root)
+        death_doc = next(d for d in documents if d.document_type == "fact")
+        death_doc.metadata["predicate"] = "死因"
+        death_doc.title = "甲最终自缢身亡"
+        death_doc.summary = "甲以自缢结束生命"
+        unrelated = next(d for d in documents if d.document_type == "event")
+        unrelated.title = "其他人的死亡"
+        candidates = [
+            RetrievalCandidate(row=0, document=unrelated, fused_score=0.06),
+            RetrievalCandidate(row=1, document=death_doc, fused_score=0.04),
+        ]
+        analysis = QueryAnalyzer([domain_config]).analyze("到底是谁后来上吊自杀了")
+        scored = DeterministicReranker().rerank(analysis, candidates)
+        assert scored[0][0].document.title == "甲最终自缢身亡"
 
 
 # ---------------------------------------------------------------------------
