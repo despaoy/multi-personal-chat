@@ -7,134 +7,134 @@
     {
       "archived_path": "scripts/archive/legacy_lab_scripts/check_server_env.py",
       "original_path": "scripts/check_server_env.py",
-      "sha256": "3314742026075b5e75dafab39acc2df2bff6c0cb98183590ecff9c707a89ae71",
-      "bytes": 3049
+      "sha256": "e204427dfa3136f5582a2ebd912c626f419b2d3d61391bd8617e516b93d9f62e6",
+      "bytes": 2976
     },
     {
       "archived_path": "scripts/archive/legacy_review_tools/auto_review_blind_ab.py",
       "original_path": "scripts/auto_review_blind_ab.py",
-      "sha256": "6ccec002ef688530895ca6b5f31b0730bb8009c2d1a11d760a21cea95c88d0c8",
-      "bytes": 7624
+      "sha256": "fe133de88cbe3fdb37020b3461bc6e5f0c292b657eb1f7b5c639a991ed1a72974",
+      "bytes": 7420
     },
     {
       "archived_path": "scripts/archive/legacy_review_tools/auto_review_blind_ab_deepseek.py",
       "original_path": "scripts/auto_review_blind_ab_deepseek.py",
-      "sha256": "117c61c6ed9667eaae6331139348887a12c7250f7515f9a6cd7511e53b5bd1ca",
-      "bytes": 7960
+      "sha256": "bf3a294a17e4925607839ae77296d5eca1972b461ea332d891c2f3201de2c049",
+      "bytes": 7748
     },
     {
       "archived_path": "scripts/archive/legacy_review_tools/build_blind_ab_review.py",
       "original_path": "scripts/build_blind_ab_review.py",
-      "sha256": "f806a6e2b8a2e51b1aeea3844f2f3112869a0ad84ac450d33d4f4721671721f0",
-      "bytes": 1756
+      "sha256": "92cc922ee20da4a53261e09571c1bd7dc0842059513d4ece1b5c19cea757fd378",
+      "bytes": 1740
     },
     {
       "archived_path": "scripts/archive/legacy_review_tools/build_stratified_blind_review.py",
       "original_path": "scripts/build_stratified_blind_review.py",
-      "sha256": "e9466855fb2a86240af41c09affdc6e17936248bd7ecec702cfdd7eb85d2199f",
-      "bytes": 4065
+      "sha256": "d89b0585da072a31a75105bbf25be9170f39ef2cd58456933d66e6bb87ca163e",
+      "bytes": 3967
     },
     {
       "archived_path": "scripts/archive/legacy_review_tools/filter_v4_candidates.py",
       "original_path": "scripts/filter_v4_candidates.py",
-      "sha256": "38dbf27fa2d532af8ea87d76f6a6abf71270912dd5eb1475e9f84d7aed4c6334",
-      "bytes": 8627
+      "sha256": "570d134aa9bb93d6dd62b9298bf4b8e3ad9f95a8c7d2e1d82af54da925b40db75",
+      "bytes": 8389
     },
     {
       "archived_path": "scripts/archive/legacy_review_tools/fix_v4_blindfix.py",
       "original_path": "scripts/fix_v4_blindfix.py",
-      "sha256": "e031d26620d296252dd8bcb8b1de25670d1723e35be42f658f15d2799a8f9921",
-      "bytes": 10166
+      "sha256": "c36ae4802cca27acc0b282278a3936e924babd843158eebe58e3cba83159bc2f6",
+      "bytes": 9956
     },
     {
       "archived_path": "scripts/archive/legacy_review_tools/generate_v4_blindfix.py",
       "original_path": "scripts/generate_v4_blindfix.py",
-      "sha256": "37e69b10831349936e12ef84a7c61fcc2502891b903d672d5c0d01f8d01008ef",
-      "bytes": 13459
+      "sha256": "e74e17211bbb80383122256940cf35c24cdeade63ca30d4a4e2410b08b5bb3065",
+      "bytes": 13201
     },
     {
       "archived_path": "scripts/archive/legacy_review_tools/generate_v4_lifestyle.py",
       "original_path": "scripts/generate_v4_lifestyle.py",
-      "sha256": "ee3874960d08cccd7c326572e984ebd6d0d7477d533be9f4cce7fb8fdaf1f501",
-      "bytes": 5513
+      "sha256": "177bf91225355a1af4567cbc81a09da73cb9092deff503d34518b16b5d21feec6",
+      "bytes": 5387
     },
     {
       "archived_path": "scripts/archive/legacy_review_tools/generate_v4_yoruko.py",
       "original_path": "scripts/generate_v4_yoruko.py",
-      "sha256": "2090b1d55be7ed2aef17476062b492f553bef7f48266ae7f96ef0d5494255cfc",
-      "bytes": 6108
+      "sha256": "b139e115583e9314eae13130a4ce7a99e132a703a3570f143ec8bc0c657b5835f",
+      "bytes": 5969
     },
     {
       "archived_path": "scripts/archive/legacy_review_tools/regenerate_v4_blindfix.py",
       "original_path": "scripts/regenerate_v4_blindfix.py",
-      "sha256": "9049d16342aab38086a9994f0a9848626ee3d877ee74c1bd09b23ec99df31d17",
-      "bytes": 13089
+      "sha256": "d476dd91111f0528a5bf2c13380c79ee27a14d22f1b8d2edd7c8b80dc29543e1b",
+      "bytes": 12830
     },
     {
       "archived_path": "scripts/archive/legacy_review_tools/review_blind_ab.py",
       "original_path": "scripts/review_blind_ab.py",
-      "sha256": "5d8a22909f79a3923c5d58a3875a122de33a5b3414aa562de758e556d4d14153",
-      "bytes": 3875
+      "sha256": "6ad8a3a3427a2df11c89afbc5d9411526c82edc689aff040cee8b3506b1be9e9b",
+      "bytes": 3771
     },
     {
       "archived_path": "scripts/archive/legacy_review_tools/score_blind_ab.py",
       "original_path": "scripts/score_blind_ab.py",
-      "sha256": "449601c1cda8f15fbb75a6817248674a65d471e98238a5d6cd7677f0d79b7673",
-      "bytes": 3268
+      "sha256": "aa91e6c4c2ec80aeefeade564b7adbde79ca1eef70336cbfbc15ae520fa9daab6",
+      "bytes": 3182
     },
     {
       "archived_path": "scripts/archive/legacy_windows_tools/build_blind_review_ui.py",
       "original_path": "scripts/build_blind_review_ui.py",
-      "sha256": "c6ccae4e07cb094a11b026a5acbc5c3bee8f08e1eef2b2a9767d0c7b5a58dc8d",
-      "bytes": 16910
+      "sha256": "b9e6dad99608fda396f761c7c4587d9ff6a4bb392ac24c232a713933ee7cc6cd4",
+      "bytes": 16546
     },
     {
       "archived_path": "scripts/archive/legacy_windows_tools/build_v4_review_ui.py",
       "original_path": "scripts/build_v4_review_ui.py",
-      "sha256": "eb58cabdb0309a985edb285156721eeddf545e5d2459f02e4e4f2ab68dc636b6",
-      "bytes": 17596
+      "sha256": "531557733c7363c4ad2bcff5ec224c48813d4a7fb9b9c6f574d1121d118855621",
+      "bytes": 17204
     },
     {
       "archived_path": "scripts/archive/legacy_windows_tools/build_v4_unified_review_ui.py",
       "original_path": "scripts/build_v4_unified_review_ui.py",
-      "sha256": "bbb4117b99eb01b89c8ec6b34f5f32ec076253643d4cf70c84b656f83dc58f83",
-      "bytes": 14253
+      "sha256": "731bfc04bc34bb550b0d32ded4bd74d113c155e7d7ba6bdc6738aaafdeccceb8",
+      "bytes": 13921
     },
     {
       "archived_path": "scripts/archive/legacy_windows_tools/clean_main_v5.py",
       "original_path": "scripts/clean_main_v5.py",
-      "sha256": "6a2a0667b39212f8c89a0b5cf40057b0f3acca561a144fa935d3697603fe166d",
-      "bytes": 6789
+      "sha256": "5f26c79fbbc89c24407e3c5007ee11e49e871b2d51e05821d7cc70a3823e81990",
+      "bytes": 6655
     },
     {
       "archived_path": "scripts/archive/legacy_windows_tools/fix_riou_positions.py",
       "original_path": "scripts/fix_riou_positions.py",
-      "sha256": "09ceb67b8f0f512b14cc2b87df2678b7972c4017f8b5a45d4225c2fe584add10",
-      "bytes": 1590
+      "sha256": "0452786ffdc9280dc9f34d8fddde4149448b66da6b62a8de3cbf889ee7b5321b4",
+      "bytes": 1556
     },
     {
       "archived_path": "scripts/archive/legacy_windows_tools/generate_v4_candidates.py",
       "original_path": "scripts/generate_v4_candidates.py",
-      "sha256": "e81c63b098dfc0cd267707b0a2086efbf1f97259d7063b7fb75f6107003b97d9",
-      "bytes": 30696
+      "sha256": "3c79233ee09dff999c53529c0f74450b778c1ddc8e83e0cc45a30344bf5f3ca07",
+      "bytes": 30151
     },
     {
       "archived_path": "scripts/archive/legacy_windows_tools/merge_game_extract_v1.py",
       "original_path": "scripts/merge_game_extract_v1.py",
-      "sha256": "ee53a93bf4ab6f122c1bcf169de93e190128cd23038fd5c82f753c7982a523f7",
-      "bytes": 6080
+      "sha256": "ecc232daacfb8ca560c499f183f3b93f80f43226be955db272dcf63623fff2cd6",
+      "bytes": 5923
     },
     {
       "archived_path": "scripts/archive/legacy_windows_tools/rebuild_famous_v1.py",
       "original_path": "scripts/rebuild_famous_v1.py",
-      "sha256": "1ff8090e2980249836d67457220c4998ed93b60fe059cf75a82fc0dcdce6bbcc",
-      "bytes": 24378
+      "sha256": "f948f8200cf2c8ff67bf3963bc4adc04971152be574117b41c6e043134512673b",
+      "bytes": 23993
     },
     {
       "archived_path": "scripts/archive/legacy_windows_tools/rebuild_game_data_v4.py",
       "original_path": "scripts/rebuild_game_data_v4.py",
-      "sha256": "eaff068db332f00a51f254fe8d6b6490dbd70aa814f56fe140117c4a1fd51890",
-      "bytes": 5165
+      "sha256": "436f14333debd5e871f32fabd9c30c53d2e9c83dbc7f3930cae6e7452768354c0",
+      "bytes": 5041
     },
     {
       "archived_path": "scripts/archive/legacy_backend_tools/augment_patterns.py",
