@@ -110,7 +110,10 @@ def _check_archive_index(errors: list[str]) -> None:
     actual_paths = {
         path.relative_to(ROOT).as_posix()
         for path in (ROOT / "scripts/archive").rglob("*")
-        if path.is_file() and path != index_path
+        if path.is_file()
+        and path != index_path
+        and "__pycache__" not in path.parts
+        and path.suffix != ".pyc"
     }
     if missing := sorted(indexed_paths - actual_paths):
         errors.append(f"archive entries missing on disk: {', '.join(missing)}")
