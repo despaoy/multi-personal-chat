@@ -612,6 +612,25 @@ class TestReranker:
         best_doc = scored[0][0].document
         assert best_doc.document_type == "relation"
 
+    def test_deterministic_reranker_keeps_meaningful_single_char_term(self, domain_config):
+        """单字实体另行计分，但“死”等单字语义词不能从覆盖率中丢失。"""
+        from knowledge.rag_pipeline.retrieval import RetrievalCandidate
+
+        documents = domain_config.loader(domain_config.source_root)
+        death_fact = next(d for d in documents if d.document_type == "fact")
+        death_fact.title = "甲死于交通事故"
+        death_fact.summary = "甲的死亡原因是交通事故"
+        unrelated_event = next(d for d in documents if d.document_type == "event")
+        unrelated_event.title = "家庭会议"
+        unrelated_event.summary = "甲最终接受了家庭会议的决定"
+        candidates = [
+            RetrievalCandidate(row=0, document=unrelated_event, fused_score=0.05),
+            RetrievalCandidate(row=1, document=death_fact, fused_score=0.04),
+        ]
+        analysis = QueryAnalyzer([domain_config]).analyze("甲最终是怎么死的")
+        scored = DeterministicReranker().rerank(analysis, candidates)
+        assert scored[0][0].document.title == "甲死于交通事故"
+
 
 # ---------------------------------------------------------------------------
 # 上下文构建

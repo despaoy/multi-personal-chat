@@ -45,6 +45,9 @@ _STOPWORDS = {
     "怎么",
     "什么",
     "为什么",
+    "谁",
+    "哪",
+    "几",
     "哪里",
     "哪个",
     "请问",
@@ -96,7 +99,7 @@ def _env_flag(name: str, default: str = "false") -> bool:
     return os.getenv(name, default).strip().lower() in {"1", "true", "yes", "on"}
 
 
-def _tokenize_query_terms(query: str) -> list[str]:
+def _tokenize_query_terms(query: str, excluded_terms: set[str] | None = None) -> list[str]:
     """查询词切分：优先 jieba（中文正确分词），缺失时确定性回退。"""
     try:
         import jieba
@@ -104,7 +107,14 @@ def _tokenize_query_terms(query: str) -> list[str]:
         tokens = [t.strip() for t in jieba.cut(query) if t.strip()]
     except ImportError:
         tokens = re.findall(r"[\u4e00-\u9fff]+|[a-zA-Z0-9]+", query)
-    return [t for t in tokens if len(t) >= 2 and t not in _STOPWORDS]
+    excluded = excluded_terms or set()
+    return [
+        token
+        for token in tokens
+        if token not in _STOPWORDS
+        and token not in excluded
+        and (len(token) >= 2 or bool(re.fullmatch(r"[\u4e00-\u9fff]", token)))
+    ]
 
 
 class DeterministicReranker:
@@ -119,7 +129,7 @@ class DeterministicReranker:
         query_entities = set(analysis.entities)
         # 词覆盖基于归一化查询（别名已替换为规范名）
         query_text = analysis.normalized_query or analysis.original_query
-        query_terms = _tokenize_query_terms(query_text)
+        query_terms = _tokenize_query_terms(query_text, query_entities)
         identity_intent = any(word in query_text for word in _IDENTITY_INTENT_WORDS)
         scored: list[tuple] = []
         for candidate in candidates:
