@@ -139,44 +139,44 @@
     {
       "archived_path": "scripts/archive/legacy_backend_tools/augment_patterns.py",
       "original_path": "backend/scripts/augment_patterns.py",
-      "sha256": "341c1fd5731e261579abcc87c9c135efaf79a3a926f89ef58392606484a66f2e",
-      "bytes": 3070
+      "sha256": "5cae0ae4e86e3f1eb73ade0a99d89e341ea3928ef4446aa320000e9e8bbb4bf6",
+      "bytes": 2993
     },
     {
       "archived_path": "scripts/archive/legacy_backend_tools/convert_dataset.py",
       "original_path": "backend/scripts/convert_dataset.py",
-      "sha256": "2266ddb66efa281e41a08a158bfadeeb97350ceab2a07c6732d4d47c78d403f9",
-      "bytes": 1479
+      "sha256": "affd3e2cd86be6c0ff1d9ce89931b3db7f898e5a7b2888049631094140a3f54c",
+      "bytes": 1435
     },
     {
       "archived_path": "scripts/archive/legacy_backend_tools/dataset_manager.py",
       "original_path": "backend/scripts/dataset_manager.py",
-      "sha256": "5c7d2fb27145232e0a2bd38a8d68aeba22df50e5064569944f74a11c464a7fcd",
-      "bytes": 8631
+      "sha256": "8bb418e3d4c5497421de53db8ae7cb1cd9bf3054f9c263e978f9014291b946ac",
+      "bytes": 8416
     },
     {
       "archived_path": "scripts/archive/legacy_backend_tools/deploy_3090.py",
       "original_path": "backend/scripts/deploy_3090.py",
-      "sha256": "b27b3a84d975e5365a166e28fbd26d60cbaa10738d2cef4a798a95d1148f3a49",
-      "bytes": 7399
+      "sha256": "a13048b759b30da202791e2b9312c22b78367e937b897d790e9318c5fb854691",
+      "bytes": 7204
     },
     {
       "archived_path": "scripts/archive/legacy_backend_tools/find_boundary_cases.py",
       "original_path": "backend/scripts/find_boundary_cases.py",
-      "sha256": "ee2db571c4f2927ea2c295f41c53b5ce6e879fb4434a758b90edca0f3cbe62ef",
-      "bytes": 3550
+      "sha256": "c1dd960f3608de9c48c56880504c1e9e17add369a3293202a8cffefc28d03ea9",
+      "bytes": 3468
     },
     {
       "archived_path": "scripts/archive/legacy_backend_tools/inject_labels.py",
       "original_path": "backend/scripts/inject_labels.py",
-      "sha256": "0f4804021312b3779bc899ffdfb93a274561e734fa8018e3286626c20fafce68",
-      "bytes": 4378
+      "sha256": "c964db7bd508803bf87e7ceb4ecfc22b638af2188379d475ed139939c59aba7f",
+      "bytes": 4292
     },
     {
       "archived_path": "scripts/archive/legacy_backend_tools/local_infer_7b.py",
       "original_path": "backend/scripts/local_infer_7b.py",
-      "sha256": "d3fa8425f7713e9cf075812b502b32712d901b6054871d703c09439f4668f4a9",
-      "bytes": 6145
+      "sha256": "d904c500c5dbfd7f7117f53eec4899a907f3ded61ebfed34ad3d3f175efd0bc1",
+      "bytes": 5969
     },
     {
       "archived_path": "scripts/archive/legacy_backend_tools/README.md",
@@ -187,8 +187,8 @@
     {
       "archived_path": "scripts/archive/README.md",
       "original_path": null,
-      "sha256": "af6add3bf50c7ad0d4bb87425f3b692338790b90bce5f11747806ae832edd9cf",
-      "bytes": 1218
+      "sha256": "54b6b8b2660c6654b9aff2b0ecfc5f374bbce406392229866d3606269aea81ed",
+      "bytes": 1207
     }
   ]
 }
