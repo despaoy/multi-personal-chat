@@ -25,6 +25,12 @@ if TYPE_CHECKING:  # pragma: no cover - 仅类型注解使用，避免运行时�
 Message = dict[str, str]
 RetrievalStatus = Literal["not_requested", "ok", "abstained", "error"]
 
+MEMORY_ATTRIBUTION_POLICY = (
+    "长期记忆参考中的‘用户’始终指当前对话者，不是角色自身。"
+    "当对话者用第一人称询问自己的历史信息时，回答必须用第二人称‘你’归属这些事实，"
+    "不得把用户的姓名、偏好、目标或经历说成角色的第一人称事实。"
+)
+
 
 @dataclass(frozen=True)
 class RetrievalResult:
@@ -107,6 +113,10 @@ def _system_prompt(request: GenerationRequest) -> str:
             if not persona:
                 persona = context.profile_context
             dynamic_context = context.dynamic_context
+            if context.reference_context:
+                dynamic_context = "\n\n".join(
+                    part for part in (dynamic_context, MEMORY_ATTRIBUTION_POLICY) if part
+                )
         prompt = compose_system_prompt(
             persona,
             include_rag=request.retrieval.has_evidence,

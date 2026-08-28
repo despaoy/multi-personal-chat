@@ -59,6 +59,7 @@ _vllm_init_lock: asyncio.Lock | None = None
 _vllm_init_lock_loop: asyncio.AbstractEventLoop | None = None
 
 _RAG_TIMEOUT = float(os.getenv("RAG_TIMEOUT", "8"))
+_RAG_COLD_START_TIMEOUT = float(os.getenv("RAG_COLD_START_TIMEOUT", "60"))
 _DB_WRITE_TIMEOUT = float(os.getenv("DB_WRITE_TIMEOUT", "3"))
 _MODEL_INFERENCE_TIMEOUT = float(os.getenv("MODEL_INFERENCE_TIMEOUT", "180"))
 _RAG_ABSTENTION_REPLY = (
@@ -504,6 +505,9 @@ async def _generate_reply_impl(
                 citations=rag_meta.get("citations"),
                 confidence=rag_meta.get("confidence"),
                 abstained=rag_meta.get("abstained", False),
+                answerMode=rag_meta.get("answerMode"),
+                domainId=rag_meta.get("domainId"),
+                warnings=rag_meta.get("warnings"),
             )
             if use_response_cache:
                 try:
@@ -907,10 +911,12 @@ async def _retrieve_rag_bundle(query: str, top_k: int, filters: dict[str, Any] |
             from knowledge.rag_pipeline.service import get_rag_pipeline_service
 
             p6 = get_rag_pipeline_service()
-            if p6.is_available():
-                bundle = p6.retrieve_with_citations(query, top_k=top_k, filters=filters)
-                if bundle is not None:
-                    return bundle
+            # retrieve_with_citations 内部负责首次惰性加载索引。不能先用
+            # is_available() 短路，否则后端重启后的第一条聊天永远无法
+            # 触发索引加载，会错误回退到空的 legacy 知识库。
+            bundle = p6.retrieve_with_citations(query, top_k=top_k, filters=filters)
+            if bundle is not None:
+                return bundle
         except Exception as e:  # noqa: BLE001 - P6 故障不拖垮聊天，回退旧链路
             logger.warning("P6 rag_pipeline retrieval failed, fallback to legacy: %s", e)
 
@@ -923,6 +929,19 @@ async def _retrieve_rag_bundle(query: str, top_k: int, filters: dict[str, Any] |
         return get_rag_helper().retrieve_with_citations(query, top_k=top_k, filters=filters)
 
     return await asyncio.to_thread(retrieve)
+
+
+def _rag_retrieval_timeout() -> float:
+    """Allow the first P6 index/model load to finish without weakening steady-state limits."""
+
+    try:
+        from knowledge.rag_pipeline.service import get_rag_pipeline_service
+
+        if not get_rag_pipeline_service().is_available():
+            return max(_RAG_TIMEOUT, _RAG_COLD_START_TIMEOUT)
+    except Exception:  # noqa: BLE001 - retrieval owns the fallback/error handling
+        pass
+    return _RAG_TIMEOUT
 
 
 async def _generate_with_vllm(
@@ -965,7 +984,7 @@ async def _generate_with_vllm(
 
                 bundle = await asyncio.wait_for(
                     _retrieve_rag_bundle(request.message, 3, filters),
-                    timeout=_RAG_TIMEOUT,
+                    timeout=_rag_retrieval_timeout(),
                 )
                 citations_enabled = os.getenv("RAG_CITATIONS_ENABLED", "true").strip().lower() in {
                     "1",
@@ -977,6 +996,11 @@ async def _generate_with_vllm(
                     "citations": bundle.get("citations", []) if citations_enabled else [],
                     "confidence": bundle.get("confidence"),
                     "abstained": bundle.get("abstained", False),
+                    "answerMode": (
+                        "abstention" if bundle.get("abstained", False) else "grounded_answer"
+                    ),
+                    "domainId": next(iter(bundle.get("domains") or []), None),
+                    "warnings": bundle.get("warnings") or None,
                     "modelInvoked": True,
                 }
                 if bundle.get("abstained", False):

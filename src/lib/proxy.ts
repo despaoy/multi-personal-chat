@@ -36,6 +36,7 @@ const PROXY_ROUTE_POLICIES: readonly ProxyRoutePolicy[] = [
   { prefix: '/api/sessions' },
   { prefix: '/api/vllm/' },
   { prefix: '/api/loras' },
+  { prefix: '/api/characters' },
   { prefix: '/api/training' },
   { prefix: '/api/knowledge' },
   { prefix: '/api/vector/' },

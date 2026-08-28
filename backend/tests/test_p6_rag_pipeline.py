@@ -23,6 +23,7 @@ import json
 import os
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
@@ -930,6 +931,30 @@ class TestBusinessIntegration:
 
         return FakeService()
 
+    def test_cold_p6_service_gets_extended_retrieval_timeout(self, monkeypatch):
+        pytest.importorskip("api.generate")
+        import api.generate as generate_module
+        import knowledge.rag_pipeline.service as service_module
+
+        cold_service = SimpleNamespace(is_available=lambda: False)
+        monkeypatch.setattr(service_module, "get_rag_pipeline_service", lambda: cold_service)
+        monkeypatch.setattr(generate_module, "_RAG_TIMEOUT", 8.0)
+        monkeypatch.setattr(generate_module, "_RAG_COLD_START_TIMEOUT", 60.0)
+
+        assert generate_module._rag_retrieval_timeout() == 60.0
+
+    def test_loaded_p6_service_keeps_steady_state_timeout(self, monkeypatch):
+        pytest.importorskip("api.generate")
+        import api.generate as generate_module
+        import knowledge.rag_pipeline.service as service_module
+
+        loaded_service = SimpleNamespace(is_available=lambda: True)
+        monkeypatch.setattr(service_module, "get_rag_pipeline_service", lambda: loaded_service)
+        monkeypatch.setattr(generate_module, "_RAG_TIMEOUT", 8.0)
+        monkeypatch.setattr(generate_module, "_RAG_COLD_START_TIMEOUT", 60.0)
+
+        assert generate_module._rag_retrieval_timeout() == 8.0
+
     @pytest.mark.asyncio
     async def test_p6_bundle_used_when_domain_matched(self, fake_service, monkeypatch):
         pytest.importorskip("api.generate")
@@ -950,10 +975,15 @@ class TestBusinessIntegration:
         import knowledge.rag_pipeline.service as service_module
 
         class UnavailableService:
-            def is_available(self) -> bool:
-                return False
+            def __init__(self):
+                self.calls: list[str] = []
 
-        monkeypatch.setattr(service_module, "get_rag_pipeline_service", lambda: UnavailableService())
+            def retrieve_with_citations(self, query, top_k=5, filters=None, domain_id=None):
+                self.calls.append(query)
+                return None
+
+        unavailable = UnavailableService()
+        monkeypatch.setattr(service_module, "get_rag_pipeline_service", lambda: unavailable)
 
         legacy_bundle = {
             "results": [{"id": "legacy_1", "title": "旧链路结果", "content": "c"}],
@@ -972,6 +1002,7 @@ class TestBusinessIntegration:
         monkeypatch.setenv("CORRECTIVE_RAG_ENABLED", "false")
 
         bundle = await generate_module._retrieve_rag_bundle("今天天气怎么样", 3, None)
+        assert unavailable.calls == ["今天天气怎么样"]
         assert bundle is legacy_bundle
 
     @pytest.mark.asyncio

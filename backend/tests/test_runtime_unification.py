@@ -340,6 +340,7 @@ async def test_vllm_generation_reuses_one_rag_result(monkeypatch):
             "citations": [{"source_title": "source"}],
             "confidence": 0.9,
             "abstained": False,
+            "domains": ["tsukiyashiro_kisaki"],
         }
 
     class Client:
@@ -370,6 +371,8 @@ async def test_vllm_generation_reuses_one_rag_result(monkeypatch):
     assert used_rag is True
     assert calls == 1
     assert meta["citations"] == [{"source_title": "source"}]
+    assert meta["answerMode"] == "grounded_answer"
+    assert meta["domainId"] == "tsukiyashiro_kisaki"
     assert "evidence" in captured["messages"][-1]["content"]
     assert '<retrieved_evidence trust="untrusted"' in captured["messages"][-1]["content"]
     assert "<user_query>" in captured["messages"][-1]["content"]

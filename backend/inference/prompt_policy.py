@@ -123,6 +123,13 @@ def build_grounded_user_message(
             f"{escape(memory_context, quote=False)}\n"
             "</character_memory>"
         )
+        parts.append(
+            '<memory_response_contract source="application">\n'
+            "这些记忆的主体是当前对话者。当对话者用‘我’询问自己时，"
+            "请用‘你’回答；例如‘我最近要完成什么’应回答‘你最近要完成……’，"
+            "不得回答‘我最近要完成……’。\n"
+            "</memory_response_contract>"
+        )
     if evidence:
         bounded_evidence = escape(_truncate_evidence(evidence, max_chars), quote=False)
         parts.append(

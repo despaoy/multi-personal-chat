@@ -34,7 +34,7 @@ class RAGIntentDetector:
     def __init__(self):
         # 配置参数
         self.min_length_for_rag = 3  # 最小长度才考虑RAG
-        self.max_length_for_no_rag = 10  # 超过此长度更可能需RAG
+        self.max_length_for_no_rag = 10  # 仅用于诊断长消息，长度本身不是知识意图
         
         # 知识查询关键词（需要RAG）
         self.knowledge_keywords = [
@@ -124,6 +124,14 @@ class RAGIntentDetector:
             re.IGNORECASE
         )
 
+        # 个人上下文/长期记忆问句应由角色记忆链路回答，不是外部知识查询。
+        # 放在知识关键词之前，避免“我叫什么”里的“什么”误触发 RAG。
+        self.personal_context_pattern = re.compile(
+            r'(?:你(?:还)?记得我|我叫什么|我喜欢什么|我不喜欢什么|'
+            r'我最近要|我之前说过|我说过什么|以后叫我|我不叫)',
+            re.IGNORECASE,
+        )
+
         logger.info("RAG意图检测器初始化完成")
     
     def needs_rag(self, message: str, context: Optional[Dict[str, Any]] = None) -> Tuple[bool, str]:
@@ -142,6 +150,9 @@ class RAGIntentDetector:
         # 0. 闲聊白名单优先：身份询问、陪伴请求等，虽可能含"谁"/"说说"但属闲聊
         if self.chitchat_pattern.search(message):
             return False, "匹配闲聊白名单，不需要RAG"
+
+        if self.personal_context_pattern.search(message):
+            return False, "匹配个人上下文/长期记忆询问，不需要RAG"
 
         # 1. 检查消息长度
         if len(message) < self.min_length_for_rag:
@@ -174,9 +185,11 @@ class RAGIntentDetector:
             elif len(message) >= 100:
                 return True, "是长疑问句，需要RAG"
 
-        # 6. 检查消息长度
+        # 6. 长度不能单独构成 RAG 意图。长的个人陈述、偏好和目标
+        # 应继续走普通人格对话；否则会在知识库未命中时被错误弃答，
+        # 连带破坏长期记忆的写入与召回。知识关键词和疑问句已在上面判定。
         if len(message) > self.max_length_for_no_rag:
-            return True, f"消息较长（{len(message)}字符），可能需要RAG"
+            return False, f"消息较长（{len(message)}字符）但无知识查询特征，不需要RAG"
 
         # 默认情况：不需要RAG
         return False, "未检测到明确需要RAG的特征"

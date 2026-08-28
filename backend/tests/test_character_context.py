@@ -116,6 +116,27 @@ def test_private_and_group_scopes_differ():
     assert private_scope.conversation_id == "10001"
 
 
+def test_private_scope_ignores_transient_conversation_id():
+    first_session = build_user_scope(
+        platform="qq",
+        adapter="onebot",
+        sender_id="10001",
+        conversation_id="temporary-session-a",
+        conversation_type="private",
+    )
+    later_session = build_user_scope(
+        platform="qq",
+        adapter="onebot",
+        sender_id="10001",
+        conversation_id="temporary-session-b",
+        conversation_type="private",
+    )
+
+    assert first_session.conversation_id == "10001"
+    assert later_session.conversation_id == "10001"
+    assert first_session.memory_scope_key == later_session.memory_scope_key
+
+
 def test_qq_and_wechat_scopes_differ():
     qq_scope = build_user_scope(
         platform="QQ",
@@ -521,6 +542,8 @@ def test_compile_functions_are_independently_callable():
     assert "月社妃" in profile_ctx
     assert "familiar" in dynamic_ctx
     assert "用户喜欢喝咖啡" in reference_ctx
+    assert "当前对话者（用户）先前明确提供" in reference_ctx
+    assert "不是角色自身的属性或经历" in reference_ctx
     assert used_ids == ("mem_001",)
 
     # 与组合入口的结果一致

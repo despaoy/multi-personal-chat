@@ -99,6 +99,23 @@ def test_intent_detector_chitchat_allowlist_requires_a_complete_short_phrase():
     assert detector.needs_rag("你是谁的妹妹？")[0] is True
 
 
+def test_intent_detector_long_personal_statements_do_not_trigger_retrieval():
+    from knowledge.intent_detector import RAGIntentDetector
+
+    detector = RAGIntentDetector()
+    assert detector.needs_rag("我最喜欢雨夜读书，也不喜欢别人替我做决定。")[0] is False
+    assert detector.needs_rag("下个月我要完成毕业项目，请提醒我别放弃。")[0] is False
+
+
+def test_intent_detector_memory_recall_questions_do_not_trigger_retrieval():
+    from knowledge.intent_detector import RAGIntentDetector
+
+    detector = RAGIntentDetector()
+    assert detector.needs_rag("你还记得我叫什么吗？")[0] is False
+    assert detector.needs_rag("我喜欢什么？")[0] is False
+    assert detector.needs_rag("我最近要完成什么？")[0] is False
+
+
 # ============================================================
 # C-S1 fix: RBAC admin 依赖回归测试
 # 验证 get_current_admin 在 admin/user/DB不可达 三种场景下的行为

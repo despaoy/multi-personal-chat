@@ -239,7 +239,9 @@ def test_memories_enter_user_message_not_system():
     # 记忆只进入用户消息的不可信参考区
     assert "用户喜欢喝咖啡" not in system
     assert '<character_memory trust="untrusted"' in user_message
+    assert '<memory_response_contract source="application">' in user_message
     assert "用户喜欢喝咖啡" in user_message
+    assert "长期记忆参考中的‘用户’始终指当前对话者" in system
     # 记忆在系统提示词中不出现安全声明
     assert "仅作为历史事实参考" not in system
 
