@@ -64,8 +64,14 @@ export function ActivityChart() {
         <CardTitle>今日活动趋势</CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="h-[300px]">
-          <ResponsiveContainer width="100%" height="100%">
+        <div className="h-[300px] min-h-0 min-w-0">
+          <ResponsiveContainer
+            width="100%"
+            height="100%"
+            minWidth={0}
+            minHeight={0}
+            initialDimension={{ width: 800, height: 300 }}
+          >
             <LineChart data={activity}>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
               <XAxis dataKey="time" stroke="var(--muted-foreground)" tick={{ fontSize: 12 }} />

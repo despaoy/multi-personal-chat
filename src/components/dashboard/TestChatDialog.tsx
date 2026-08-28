@@ -46,13 +46,16 @@ export function TestChatDialog({ loras }: { loras: LoraModel[] }) {
     setLoading(true);
 
     try {
+      const requestedLora = selectedLora && selectedLora !== 'default'
+        ? selectedLora
+        : undefined;
       const response = await api.generateReply({
         message: input,
         sessionType,
         sessionId: sessionType === 'group' ? 'test-group' : 'test-private',
         userId: 'dashboard-user',
         userName: sessionType === 'group' ? '群成员' : '测试用户',
-        loraName: selectedLora || undefined,
+        loraName: requestedLora,
       });
       setMessages(prev => [...prev, {
         role: 'assistant',

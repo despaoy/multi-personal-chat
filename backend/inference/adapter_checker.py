@@ -89,6 +89,14 @@ class AdapterChecker:
             if resolved:
                 path = resolved
 
+        # 注册表可能保存适配器根目录，而实际 PEFT 产物位于 final/。
+        # 即使根目录本身存在，也必须继续解析 final 子目录；否则路由页
+        # 会把已经被 vLLM 成功加载的适配器误报为“不兼容”。
+        if not (path / "adapter_config.json").exists():
+            final = path / "final"
+            if (final / "adapter_config.json").exists():
+                path = final
+
         adapter_name = path.name if path.name != "final" else path.parent.name
         report = AdapterCompatibilityReport(
             adapter_name=adapter_name,

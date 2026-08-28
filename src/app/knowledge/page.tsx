@@ -258,7 +258,7 @@ function KnowledgeContent() {
 
   return (
     <AppLayout>
-      <div className="flex gap-6 h-[calc(100vh-8rem)]">
+      <div className="flex min-w-0 gap-6 h-[calc(100vh-8rem)]">
         {/* 左侧：知识库+文件夹树 */}
         <div className="w-72 shrink-0 flex flex-col gap-4">
           {/* 知识库列表 */}
@@ -395,9 +395,9 @@ function KnowledgeContent() {
         </div>
 
         {/* 右侧：文档内容区 */}
-        <div className="flex-1 space-y-6 overflow-auto">
+        <div className="min-w-0 flex-1 space-y-6 overflow-auto">
           {/* 标题栏 */}
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
             <div>
               <h2 className="text-2xl font-bold tracking-tight">
                 {activeBase ? activeBase.name : '知识库'}
@@ -407,7 +407,7 @@ function KnowledgeContent() {
                 {activeBaseId ? '管理和检索知识库文档' : '选择左侧知识库或查看全部文档'}
               </p>
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <Button variant="outline" onClick={handleOpenScanDialog}>
                 <ScanSearch className="mr-2 h-4 w-4" />
                 扫描文件夹

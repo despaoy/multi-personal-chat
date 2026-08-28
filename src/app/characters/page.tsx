@@ -232,7 +232,7 @@ function CharactersContent() {
       <div>
         <h1 className="text-3xl font-bold">角色与记忆管理</h1>
         <p className="text-muted-foreground mt-1">
-          查看和管理角色长期记忆与关系状态。记忆按「平台 + 适配器 + 会话 + 用户」严格隔离。
+          查看和管理角色长期记忆与关系状态。私聊按用户隔离；群聊和频道按「会话 + 用户」隔离。
         </p>
       </div>
 

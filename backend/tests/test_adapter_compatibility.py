@@ -51,6 +51,25 @@ def test_base_model_match_is_compatible(tmp_path):
     assert report.checks["base_model"] is True
 
 
+def test_existing_adapter_root_resolves_final_subdirectory(tmp_path):
+    """注册表传入已存在的根目录时，也应检查其 final/ PEFT 产物。"""
+    adapter_root = tmp_path / "kisaki"
+    _write_adapter(adapter_root / "final", "/root/training/models/Qwen3-8B-Instruct")
+
+    from inference.adapter_checker import AdapterChecker
+
+    checker = AdapterChecker(
+        expected_base_model="/lab/runtime/models/Qwen3-8B-Instruct",
+        lora_root=str(tmp_path),
+    )
+    report = checker.check_adapter(adapter_root)
+
+    assert report.adapter_name == "kisaki"
+    assert report.compatible is True
+    assert report.checks["config_exists"] is True
+    assert report.checks["weights_exist"] is True
+
+
 def test_base_model_mismatch_is_incompatible(tmp_path):
     """Qwen2.5-7B 适配器加载到 Qwen3-8B 基座应判为不兼容。"""
     adapter_dir = tmp_path / "hutao"

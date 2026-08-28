@@ -7,11 +7,12 @@
  * - 四个统计卡片（今日回复数、平均响应时间、活跃会话、模型负载）
  * - 24 小时活动趋势折线图
  * - 系统状态面板（模型信息、系统资源、服务状态）
- * - 快捷操作入口（测试回复、切换模型、重启服务、管理会话）
+ * - 快捷操作入口（测试回复、切换模型、检查服务、管理会话）
  */
 
 import { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
+import Link from 'next/link';
 import { StatCard } from '@/components/dashboard/StatCard';
 import { TestChatDialog } from '@/components/dashboard/TestChatDialog';
 import { SessionManagerDialog } from '@/components/dashboard/SessionManagerDialog';
@@ -311,10 +312,13 @@ export default function DashboardClient() {
                 </DialogContent>
               </Dialog>
 
-              {/* 重启服务 */}
-              <Button variant="ghost" className="flex flex-col items-center justify-center rounded-lg border p-4 h-auto hover:bg-muted transition-colors">
-                <Zap className="h-6 w-6 mb-2 text-primary" />
-                <span className="text-sm font-medium">重启服务</span>
+              {/* 服务进程由外部 supervisor/screen 管理，前端提供可用的状态入口，
+                  不展示一个无法安全实现的“重启”假按钮。 */}
+              <Button asChild variant="ghost" className="flex flex-col items-center justify-center rounded-lg border p-4 h-auto hover:bg-muted transition-colors">
+                <Link href="/monitor">
+                  <Zap className="h-6 w-6 mb-2 text-primary" />
+                  <span className="text-sm font-medium">检查服务</span>
+                </Link>
               </Button>
 
               {/* 管理会话（已拆分为独立组件，隔离会话列表状态） */}
