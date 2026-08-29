@@ -1,9 +1,9 @@
-"""P7 corrective RAG 适配（与既有 CorrectiveRAG 协调，不重写）。
+"""Corrective RAG 适配（与通用知识库 CorrectiveRAG 协调，不重写）。
 
 与既有 knowledge/corrective_rag.py 的关系：
 - 既有 CorrectiveRAG 服务 legacy RAGHelper 链路（api/generate
   回退分支），保持不动
-- 本模块服务 P6 pipeline bundle：首次检索不足 → 关键词改写
+- 本模块服务结构化检索 bundle：首次检索不足 → 关键词改写
   （jieba，无 LLM）→ 二次检索 → 证据合并 → 最终 abstention
 
 guardrail（沿用既有路线图约束）：
@@ -79,7 +79,7 @@ RetrieveFn = Callable[..., Any]
 
 
 class CorrectiveRetrievalAdapter:
-    """P6 bundle 的纠正性检索：改写 → 重试 → 合并。"""
+    """结构化 bundle 的纠正性检索：改写 → 重试 → 合并。"""
 
     def __init__(self, retrieve: RetrieveFn, max_retries: int = 1):
         self._retrieve = retrieve
@@ -138,7 +138,7 @@ class CorrectiveRetrievalAdapter:
         for _attempt in range(self.max_retries):
             candidate = self.reformulate_query(current_query, bundle or {})
             if candidate == current_query:
-                logger.info("P7 corrective: 重写查询无新增信息，停止重试")
+                logger.info("Grounded Answer corrective: 重写查询无新增信息，停止重试")
                 break
             current_query = candidate
             retry_bundle = self._retrieve(current_query, top_k=top_k, filters=filters)
@@ -154,7 +154,7 @@ class CorrectiveRetrievalAdapter:
                 return merged, info
             bundle = retry_bundle
 
-        logger.info("P7 corrective: 重试后仍低置信度，交由 abstention 策略裁决")
+        logger.info("Grounded Answer corrective: 重试后仍低置信度，交由 abstention 策略裁决")
         return bundle, info
 
     @staticmethod

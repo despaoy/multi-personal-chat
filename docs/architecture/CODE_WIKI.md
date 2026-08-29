@@ -3,7 +3,7 @@
 > 本文档为 `multi-personal-chat` 项目的结构化代码知识库（Code Wiki），涵盖项目整体架构、模块职责、关键类与函数、依赖关系与运行方式。
 >
 > - **版本基线**：FastAPI 后端 `v2.0.0`、Next.js 前端 `0.1.0`（Next 16.2.11 / React 19.2.3）
-> - **最近核对**：2026-08-28；可执行验证结果以 [`../RELEASE_CHECKLIST.md`](../RELEASE_CHECKLIST.md) 为准
+> - **最近核对**：2026-08-29；可执行验证结果以 [`../RELEASE_CHECKLIST.md`](../RELEASE_CHECKLIST.md) 为准
 > - **维护原则**：随代码演进同步更新；任何架构性变更须同步本文档对应章节。
 
 ---
@@ -50,7 +50,7 @@
 - **平台接入**：通过 AstrBot 网关插件接入 QQ / Telegram / 企业微信 / 公众号 / 个人微信等 IM 平台。
 - **核心服务**：FastAPI 提供认证、配置、知识库、训练、评估、实验等完整 REST API。
 - **推理后端**：以 vLLM（`Qwen3-8B-Instruct-AWQ`）为主，支持多实例负载均衡、LoRA 热切换；同时兼容 Ollama / llama.cpp / Transformers+PEFT / OpenAI 兼容 / Mock 多后端。
-- **RAG 能力**：FAISS 向量检索 + BM25 关键词混合 + Cross-Encoder 重排 + 纠错 RAG。
+- **RAG 能力**：多粒度角色知识检索，以及独立的用户知识库混合检索与纠错 RAG。
 - **训练能力**：SFT LoRA 微调、DPO/ORPO 偏好对齐，含 GPU 温度保护、早停、可取消。
 - **管理控制台**：Next.js 16 (App Router) + React 19 + Tailwind v4 + shadcn/ui 提供 15 个管理页面和登录页。
 - **研究严谨性**：Gold Set 评估、质量门（benchmark_gate）、盲评流程、合成数据审核 guardrail。
@@ -345,7 +345,7 @@ CORS → AuditLog → SecurityHeaders → Security(认证) → RateLimit → Inp
 | **experiments.py** | `/api/experiments` | `GET /`、`GET /{id}`、`POST /lora-ablation`、`POST /rag-ablation`、`POST /quantization-benchmark`、`GET /{id}/report` | 3 类实验、mock 模式、Markdown 报告自动生成 |
 | **generate.py** | `/api/generate`、`/api/vllm` | `POST /generate`、`GET /vllm/status` | 单一有界 `InferenceRuntime`、请求级配置快照、单次 RAG 证据/引用、vLLM 客户端故障转移、响应缓存 |
 | **integrations.py** | `/api/integrations` | `POST /astrbot/messages` | 5 平台支持、`X-Integration-Token` + HMAC 签名、消息去重、会话开关、降级响应 |
-| **knowledge.py** | `/api/knowledge` | 知识库/文件夹/文档/分块 CRUD、`/upload-zip`、`/scan`、`/search`、意图分类训练 | ZIP 安全验证、`simple_text_split` 分块、路径注入检索文本、三阶段搜索回退（RAGHelper → 向量混合 → 关键词） |
+| **knowledge.py** | `/api/knowledge` | 知识库/文件夹/文档/分块 CRUD、`/upload-zip`、`/scan`、`/search`、意图分类训练 | ZIP 安全验证、`simple_text_split` 分块、通用知识库证据检索、向量混合和关键词降级 |
 | **loras.py** | `/api/loras` | `GET /`、`POST /scan`、`PUT /{id}/status`、`DELETE /{id}` | `adapter_config.json` + `trainer_state.json` 元数据读取、`AdapterChecker` 兼容性检查、vLLM `load_lora_adapter` |
 | **messages.py** | `/api/messages`、`/api/sessions` | `GET /messages`、`GET /sessions`、`PUT /sessions/bot-toggle`、`DELETE /messages/batch`、`DELETE /messages/{id}` | SQL 层多条件过滤（search/sessionType/lora/sessionId/platform） |
 | **models.py** | `/api/models` | `GET /`、`GET /check/{name}`、`POST /download`、`DELETE /{name}`、`POST /check-7b` | HuggingFace 模型下载、检查、删除 |
@@ -568,102 +568,68 @@ def _should_use_postgresql(env=os.environ) -> bool:
 
 ### 4.5 知识检索层（knowledge）
 
-**目录**：`backend/knowledge/`，共 10 个文件。提供完整的 RAG 检索增强生成流水线。
+`backend/knowledge/` 同时提供角色作品知识检索和用户管理的通用知识库。两者
+共享部分检索基础设施，但拥有不同的数据模型和路由边界。
 
-#### 4.5.1 RAG 检索流程总览
+#### 4.5.1 多粒度角色知识检索
+
+生产入口为 `multiscale_rag/runtime.py:MultiScaleRagRuntime`。索引按
+`story → scene → fact/relation/event → evidence` 组织，并物理分为知识卡、
+故事/场景和原文证据三个分区。
 
 ```text
-用户查询
+用户消息
   ↓
-intent_detector.needs_rag() ──ML 多分类(置信度)──→ 规则安全网
-  ↓ (need_rag=True, kb_name)
-rag_helper.retrieve_context()
-  ├─ QueryExpander.expand_query() → 5 个变体
-  ├─ 每个变体 vector_db.hybrid_search() (向量+BM25 融合, 召回 top_k*4)
-  ├─ 多查询去重融合 + query_count 加分 + 区域加权
-  ├─ 按 final_score 排序 (第一阶段粗排)
-  ├─ CrossEncoderReranker.rerank() (第二阶段精排, 可选)
-  └─ 分数归一化
+QueryAnalyzer：作品域门控、别名归一和实体识别
   ↓
-compute_confidence() → should_abstain(threshold=0.3)
-  ↓ (置信度低)
-corrective_rag.retrieve_with_correction() → reformulate_query() 重试一次
+service.py：问题粒度路由
   ↓
-build_citations() / build_context_prompt() → 注入 LLM
+BM25 + 向量 + 实体召回
+  ↓
+RRF 融合 + 确定性重排序
+  ↓
+父场景回填 + citation + confidence + context_text
+  ↓
+grounded_answer：引用校验、证据约束生成或拒答
 ```
 
-#### 4.5.2 vector_db.py — FAISS 向量数据库（核心）
+`runtime.retrieve_with_citations()` 返回结构化证据 bundle。无作品域命中时返回
+`None`；带 `knowledge_base_id` 的请求也返回 `None`，由通用知识库处理。
 
-**关键类**：
-- `IndexConfig`（dataclass）：`index_type=auto`/`nlist=100`/`nprobe=10`/`m_hnsw=32`/`ef_construction=200`/`ef_search=64`/`auto_switch_threshold=10000`
-- `BM25Retriever`：BM25 关键词检索器，`k1=1.5, b=0.75`，jieba 中文分词 + 英文单词切分
-- `VectorDatabase`：
-  - `EMBEDDING_DIM = 384`，使用 `paraphrase-multilingual-MiniLM-L12-v2` 嵌入模型
-  - `_determine_index_type()`：auto 模式按文档数自动选型（<1万 Flat / <10万 IVF / ≥10万 HNSW）
-  - `add_documents(documents, kb_revision)`：注入 RAG 2.0 证据化元数据，批量 embedding，`add_with_ids`，同步更新 BM25
-  - `search(query, top_k, threshold, filters)`：纯向量检索，含查询缓存 + 过滤器（`_match_filters` 支持 `$contains/$gt/$lt/$in`）
-  - `hybrid_search(query, top_k, threshold, keyword_weight=0.3, filters)`：**核心混合检索**。召回 `top_k*3`，向量与 BM25 分数各自归一化后按 `(1-kw)*vector + kw*bm25` 融合
+#### 4.5.2 通用用户知识库
 
-**设计要点**：GPU 自动检测与 OOM 回退；索引自动迁移带异常恢复；数据变更后 `clear_cache` 防脏读。
+`rag_helper.py` 和 `vector_db.py` 处理上传文档与知识库过滤器：
 
-#### 4.5.3 rag_helper.py — RAG 上层封装（核心）
+- `VectorDatabase` 提供 FAISS 向量索引和 BM25 关键词索引；
+- `RAGHelper` 负责查询扩展、混合召回、可选 Cross-Encoder 重排、引用和置信度；
+- `corrective_rag.py` 可在低置信度时重写查询并重试；
+- `intent_detector.py` 结合 ML 分类器和规则判断是否检索以及目标知识库；
+- `importer.py`、`text_splitter.py` 和 API 导入端点负责文档解析与分块。
 
-**关键类**：
-- `QueryExpander`：内置 `synonym_map`（胡桃/钟离/七七/魈等角色同义词）、`region_keywords`（璃月/蒙德/稻妻/须弥）、`domain_keywords`
-  - `expand_query(query) -> List[str]`：同义词替换 + 领域关键词追加 + 区域限定查询，最多 5 个变体
-- `RAGHelper`：
-  - `retrieve_context(query, top_k, enable_rerank, filters, use_cache) -> List[Dict]`：**两阶段检索核心**
-    - 第一阶段：多查询扩展（每个变体 `hybrid_search` 召回 `top_k*4`），按 doc_key 去重融合，多查询命中加分（`query_count*0.05`），区域加权
-    - 第二阶段：Cross-Encoder 重排（若启用），取 `final_top_k`，分数归一化
-  - `compute_confidence(results) -> float`：`top1_score × coverage`
-  - `build_citations(results) -> List[Dict]`：构建引用列表（含 `source_title/evidence_excerpt/score/content_hash/kb_revision`）
-  - `should_abstain(confidence, threshold=0.3) -> bool`：是否弃答
-  - `retrieve_with_citations(query, top_k, threshold) -> Dict`：返回 `{results, citations, confidence, abstained}`
-  - 当 `abstained=true` 时，生成入口直接返回可配置的 `RAG_ABSTENTION_REPLY`，不再调用无证据的 LLM；历史模型标记为 `rag/abstained`，也不写入模型调用统计。
+`/api/knowledge/search` 的稳定字段 `retrievalMode` 取值为 `evidence`、
+`hybrid`、`keyword` 或 `empty`，分别表示结构化证据结果、向量/关键词混合
+结果、关键词降级结果和无结果。`searchType` 仅为旧客户端保留，并计划在下一个
+API major 版本移除。
 
-#### 4.5.4 reranker.py — Cross-Encoder 重排器
+#### 4.5.3 共享检索内核
 
-- `RerankConfig`：`model_name=bge-reranker-base`/`device=cuda:0`/`batch_size=8`/`max_length=512`
-- `CrossEncoderReranker`：
-  - `_load_model()`：GPU 不可用回退 CPU，FP16 加载
-  - `rerank(query, candidates, top_k=5) -> List[Dict]`：批量 `(query, doc)` 配对打分，`outputs.logits[:, 0]` 取分
+`retrieval_core/` 提供 canonical 文档契约、知识域注册、embedding 抽象、
+BM25/向量/实体召回、RRF 和重排序。它不包含生产编排入口，也不应作为第三条
+RAG 服务使用。
 
-#### 4.5.5 corrective_rag.py — 纠正性 RAG
+#### 4.5.4 Grounded Answer
 
-由 `CORRECTIVE_RAG_ENABLED` 控制（默认 false）。
-- `CorrectiveRAG`：
-  - `reformulate_query(query, top_results) -> str`：从 top 结果提取关键词（去停用词），追加最多 5 个到原查询
-  - `retrieve_with_correction(query, top_k) -> Dict`：首次检索 → 低置信度则重写重试 → 仍低则弃答
+`grounded_answer/` 将结构化检索 bundle 转换为 `EvidencePacket`，执行回答模式
+判断、引用绑定和引用校验。`abstained=true` 或证据不满足约束时不调用无证据
+生成路径。
 
-#### 4.5.6 intent_detector.py — RAG 意图检测（核心）
+#### 4.5.5 索引与配置
 
-**职责**：判断用户消息是否需要触发 RAG 检索。混合方案：ML 分类器优先 + 规则引擎兜底。
+角色知识索引由 `backend/scripts/build_character_rag_index.py` 构建，运行时通过
+`CHARACTER_RAG_INDEX_ROOT` 定位。`CHARACTER_RAG_ABSTAIN_THRESHOLD` 控制拒答
+阈值。磁盘索引的 `v3` 是格式版本，不是另一条在线链路。
 
-- `RAGIntentDetector`：规则引擎
-  - 内置 `knowledge_keywords`（问题词 + 原神领域词）与 `social_keywords`（问候/感谢/闲聊）
-  - `needs_rag(message, context) -> Tuple[bool, str]`：6 步规则判定
-- 模块级 ML 函数：
-  - `_load_ml_model()`：加载 `intent_classifier_model/`（joblib 格式 classifier+scaler + config.json）
-  - `_ml_predict(message) -> Tuple[bool, str, float, Optional[str]]`：**多分类预测**，返回 (是否需 RAG, 原因, 置信度, **预测的 KB 名称**)
-  - `needs_rag(message, context) -> Tuple[bool, str, Optional[str]]`：**融合策略**
-    - ML 高置信度（≥0.65）信任 ML，但 ML 预测"不需要"时检查规则引擎安全网
-    - ML 低置信度时用规则做 tiebreaker
-
-#### 4.5.7 intent_trainer.py — 意图分类器训练
-
-- `async generate_samples(kb_ids, samples_per_kb=100, negative_count=200, lora_name)`：LLM 生成正例、通用负例、**硬负例**（跨 KB 混淆问题，标签为 "none"）
-- `async train_intent_classifier(kb_ids, samples_per_kb, negative_count, lora_name)`：
-  - 加载已审查样本 → `_train_multiclass_model`（线程池执行）
-  - `sentence_transformers` 编码 → `StandardScaler` → `LogisticRegression(class_weight="balanced")` → 5 折交叉验证 → `joblib.dump` 保存
-
-#### 4.5.8 其他文件
-
-| 文件 | 职责 |
-|---|---|
-| `importer.py` | 批量导入原神知识库（.txt），智能分块 + 元数据增强 |
-| `seed_kb_importer.py` | 将 `data/kb_seed_documents.json` 导入向量数据库 |
-| `text_splitter.py` | `smart_text_split`：三阶递进式中文语义感知分块（段落→句子→定长） |
-| `qdrant_client.py` | Qdrant 预留模块（后续升级路径） |
+完整说明见 [多粒度角色知识检索](CHARACTER_KNOWLEDGE_RETRIEVAL.md)。
 
 ---
 
@@ -1374,7 +1340,7 @@ app.main.create_app ──→ app.runtime.RuntimeContainer
 
 5. **LoRA 热切换**：vLLM `--enable-lora` + `load_lora_adapter` 在线加载；transformers 后端通过 `PeftModel.from_pretrained` 重新挂载；`AdapterChecker` 激活前兼容性检查，不兼容降级 default。
 
-6. **RAG 两阶段检索**：多查询扩展（5 变体）→ 向量+BM25 混合召回（top_k*4）→ 多查询去重融合 + 区域加权 → Cross-Encoder 重排 → 置信度弃答 + 纠错 RAG。
+6. **检索职责分离**：作品事实进入多粒度角色知识检索；用户上传文档进入通用知识库；两者均返回引用和置信度，并由 Grounded Answer 约束生成。
 
 7. **研究严谨性 guardrail**：
    - 合成偏好对 `pending` 状态禁训练，需人工审核 `approved` 才可用

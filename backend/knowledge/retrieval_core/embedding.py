@@ -1,4 +1,4 @@
-"""Embedding Provider 抽象与缓存（P6）。
+"""Shared embedding provider abstraction and cache.
 
 - EmbeddingProvider 协议：单条/批量向量化、模型 ID、维度、超时、
   错误传播。领域代码不读环境密钥、不初始化云端客户端、不写死

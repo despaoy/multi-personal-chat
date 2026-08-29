@@ -7,7 +7,7 @@
 
 **仓库内发布：** 源码、配置模板、可审计角色语料、canonical 数据与审核证据、文档、测试和部署编排。
 
-**仓库外保留（Git 忽略）：** 模型权重、LoRA checkpoint、数据库、日志、向量索引、`.env` 密钥、`runtime/`、`node_modules/`、个人 PPT 和编辑器缓存。
+**仓库外保留（Git 忽略）：** 模型权重、LoRA checkpoint、数据库、日志、向量索引、原始评测报告、个人笔记、`.env` 密钥、`runtime/`、`node_modules/`、个人 PPT 和编辑器缓存。
 
 ## 发布前必须为真
 
@@ -17,12 +17,16 @@
 4. 活动脚本不包含个人机器路径；实验室路径一律使用 `MULTIPERSONAL_LAB_ROOT` / `MULTIPERSONAL_REMOTE_*` 环境变量。
 5. 历史脚本和数据位于 `scripts/archive/` 与 `experiments/archive/`，并具有 README 说明。
 6. 未把 mock 输出、旧版实验指标或未通过的训练结果表述为正式结论。
-7. `python scripts/check_repository_integrity.py` 通过：冻结哈希/计数、API 挂载、前端导航、脚本索引、README 链接、归档和生成物边界一致。
+7. 生产文档只使用“多粒度角色知识检索”功能名；P6/P7 和实验 V3 不出现在活动 API、类名或部署入口中。
+8. 生成的 `character_knowledge_index_v*/` 不进入 Git；发布部署能够按文档重建并只读挂载索引。
+9. `python scripts/check_repository_integrity.py` 通过：冻结哈希/计数、API 挂载、前端导航、脚本索引、README 链接、归档和生成物边界一致。
 
 ## 验证命令
 
 ```bash
 # 后端
+python -m ruff check backend/api/ask.py backend/api/generate.py backend/api/knowledge.py backend/db/schemas.py backend/knowledge/multiscale_rag backend/knowledge/retrieval_core backend/knowledge/grounded_answer backend/scripts/build_character_rag_index.py
+python -m ruff format --check backend/api/ask.py backend/api/generate.py backend/api/knowledge.py backend/db/schemas.py backend/knowledge/multiscale_rag backend/knowledge/retrieval_core backend/knowledge/grounded_answer backend/scripts/build_character_rag_index.py
 python -m pytest backend/tests -q
 python -m compileall -q backend scripts astrbot_plugins
 python scripts/check_repository_integrity.py
@@ -57,6 +61,16 @@ powershell -ExecutionPolicy Bypass -File scripts/local-verify.ps1 -Frontend
 - 前端：TypeScript、ESLint、Next.js 16.2.11 生产构建均通过；构建生成 29 个页面/路由。
 - 依赖安全：`pnpm audit --prod` → `No known vulnerabilities found`。
 - 清洁度：验证生成的 `.next/`、`node_modules/`、TypeScript 缓存和 pytest 临时目录已删除；它们均可按锁文件重建。
+
+## 角色知识检索迁移验证（2026-08-29）
+
+- 生产入口统一为 `knowledge.multiscale_rag:MultiScaleRagRuntime`，共享基础组件统一为 `knowledge.retrieval_core`。
+- 构建入口统一为 `backend/scripts/build_character_rag_index.py`，默认产物目录为 `character_knowledge_index_v3/`。
+- 在线生成和 Grounded Answer 的相关回归测试为 **43 passed, 1 skipped**；真实关系查询返回结构化引用和上下文。
+- P6 的 14 个归档代码文件均通过大小和 SHA-256 清单校验，活动代码不导入归档模块。
+- 角色检索模块、公共知识 API 和索引构建入口已纳入 Ruff lint/format CI 门禁。
+- Windows 与 Linux 的文本归档校验统一按仓库 LF 表示计算；仓库完整性检查通过。
+- Python 3.10 完整后端测试为 **1407 passed, 16 skipped**；TypeScript、ESLint、Next.js 生产构建和生产依赖安全审计通过。
 
 ## 服务器上线核验（2026-08-28）
 

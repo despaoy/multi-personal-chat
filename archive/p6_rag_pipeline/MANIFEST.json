@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "archived_at": "2026-08-29",
+  "reason": "Replaced by the production multi-scale character knowledge retrieval service",
+  "files": [
+    {"original_path":"docs/research/P6_UNIFIED_RAG_PIPELINE.md","archived_path":"archive/p6_rag_pipeline/docs/P6_UNIFIED_RAG_PIPELINE.md","bytes":7123,"sha256":"6b643e3ad7fa65a655d75ea3b2c59727d2124a55612fcbf3f4a85d787f3a5098"},
+    {"original_path":"backend/knowledge/rag_pipeline/context.py","archived_path":"archive/p6_rag_pipeline/knowledge/context.py","bytes":10083,"sha256":"6accad346ac833eb44f522764dc45e1546e0de37ca4fa74aa59f8ce376b6ca6f"},
+    {"original_path":"backend/knowledge/rag_pipeline/pipeline.py","archived_path":"archive/p6_rag_pipeline/knowledge/pipeline.py","bytes":8958,"sha256":"a48a390f6ce3ffe994af03337a9164de72513ad493f646c1e7b73e4b663ed28e"},
+    {"original_path":"backend/knowledge/rag_pipeline/service.py","archived_path":"archive/p6_rag_pipeline/knowledge/service.py","bytes":4956,"sha256":"2d1eacd0f4819579b8c6117213fa0fd2707e95d67c09d1aa9190f84b04530054"},
+    {"original_path":"backend/scripts/build_knowledge_index.py","archived_path":"archive/p6_rag_pipeline/scripts/build_knowledge_index.py","bytes":8164,"sha256":"ad78e0893839c18c7054dad74bd26c07339f8fc91ff661f32046bd39424081e4"},
+    {"original_path":"backend/scripts/evaluate_rag_retrieval.py","archived_path":"archive/p6_rag_pipeline/scripts/evaluate_rag_retrieval.py","bytes":13088,"sha256":"a03e881270656ee959b2859946cc0aa5b8427d0acf2a4e42511628f901f53c4a"},
+    {"original_path":"backend/tests/test_p6_rag_pipeline.py","archived_path":"archive/p6_rag_pipeline/tests/test_p6_rag_pipeline.py","bytes":47907,"sha256":"db20015fe6e882bcb3046e1fd36536054d596cb206ae3f247885705936892f1d"},
+    {"original_path":"backend/tests/test_multiscale_rag_experiment.py","archived_path":"archive/p6_rag_pipeline/multiscale_preselection/test_multiscale_rag_experiment.py","bytes":14785,"sha256":"c2b3e3e1977425daaced0c7730a5959e64bacbb5b51796456377941d03c334da"},
+    {"original_path":"backend/knowledge/multiscale_rag/evaluation.py","archived_path":"archive/p6_rag_pipeline/multiscale_preselection/evaluation.py","bytes":2762,"sha256":"970e09bf2a5c26b0d4e5bb7b76365d7e9df7c32610e30d491dc5c356aff58f4a"},
+    {"original_path":"backend/knowledge/multiscale_rag/service.py","archived_path":"archive/p6_rag_pipeline/multiscale_preselection/service.py","bytes":9399,"sha256":"75db8ddefdb89553e3c196d3094f1138647d2b5a2fd2f2dbdff96dc3816d0c71"},
+    {"original_path":"backend/knowledge/multiscale_rag/service_v2.py","archived_path":"archive/p6_rag_pipeline/multiscale_preselection/service_v2.py","bytes":4583,"sha256":"23ad78b801a2ffbedf4de660d1bcfcaae9c1a19138a211db00e6223bc087c170"},
+    {"original_path":"backend/scripts/evaluate_multiscale_rag_ab.py","archived_path":"archive/p6_rag_pipeline/multiscale_preselection/evaluate_multiscale_rag_ab.py","bytes":14372,"sha256":"0e187c3209d4b02a992a6ed351036116cf777da6da24dc0a62dfabb4177c5822"},
+    {"original_path":"backend/scripts/evaluate_multiscale_vector_v2_ab.py","archived_path":"archive/p6_rag_pipeline/multiscale_preselection/evaluate_multiscale_vector_v2_ab.py","bytes":16081,"sha256":"1ec9616bdea6b888cef3cb167a1d5359d062107efecc6a036f4583e5d3a5b020"},
+    {"original_path":"backend/scripts/evaluate_multiscale_vector_v3_ab.py","archived_path":"archive/p6_rag_pipeline/multiscale_preselection/evaluate_multiscale_vector_v3_ab.py","bytes":14617,"sha256":"4fc8d3164de2ad7876782db97cae99689f186ad296016d80b62b6ba402f871b9"}
+  ]
+}

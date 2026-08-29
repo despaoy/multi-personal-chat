@@ -6,6 +6,8 @@
     "build": "next build",
     "dev": "next dev -p 5000",
     "lint": "eslint src next.config.ts eslint.config.mjs postcss.config.mjs",
+    "lint:python:retrieval": "python -m ruff check backend/api/ask.py backend/api/generate.py backend/api/knowledge.py backend/db/schemas.py backend/knowledge/multiscale_rag backend/knowledge/retrieval_core backend/knowledge/grounded_answer backend/scripts/build_character_rag_index.py",
+    "format:python:retrieval:check": "python -m ruff format --check backend/api/ask.py backend/api/generate.py backend/api/knowledge.py backend/db/schemas.py backend/knowledge/multiscale_rag backend/knowledge/retrieval_core backend/knowledge/grounded_answer backend/scripts/build_character_rag_index.py",
     "verify:repo": "python scripts/check_repository_integrity.py",
     "start": "next start -p 5000",
     "ts-check": "tsc -p tsconfig.json",
@@ -55,7 +57,7 @@
     "typescript": "^5"
   },
   "packageManager": "pnpm@10.34.2",
-  "description": "MultiPersonal Chat System: a multi-platform LLM system for character-dialogue research, covering data governance, LoRA/DoRA/RSLoRA training, AWQ inference, hybrid RAG, evaluation, and AstrBot integration.",
+  "description": "MultiPersonal Chat System: a multi-platform LLM system for character-dialogue research, covering data governance, parameter-efficient training, AWQ inference, multi-scale character RAG, evaluation, and AstrBot integration.",
   "license": "MIT",
   "engines": {
     "node": ">=22"

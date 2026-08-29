@@ -15,7 +15,8 @@ QUANTIZATION="${VLLM_QUANTIZATION:-awq_marlin}"
 GPU_MEMORY_UTILIZATION="${VLLM_GPU_MEMORY_UTILIZATION:-0.82}"
 MAX_LORAS="${VLLM_MAX_LORAS:-4}"
 MAX_LORA_RANK="${VLLM_MAX_LORA_RANK:-64}"
-MAX_MODEL_LEN="${VLLM_MAX_MODEL_LEN:-4096}"
+MAX_MODEL_LEN="${VLLM_MAX_MODEL_LEN:-24576}"
+MAX_NUM_SEQS="${VLLM_MAX_NUM_SEQS:-8}"
 DTYPE="${VLLM_DTYPE:-float16}"
 
 # 当 QUANTIZATION 为 none/空时，不传 --quantization 参数，让 vLLM 从 config.json 自动检测。
@@ -100,6 +101,7 @@ start_vllm() {
         --max-lora-rank "${MAX_LORA_RANK}" \
         --gpu-memory-utilization "${GPU_MEMORY_UTILIZATION}" \
         --max-model-len "${MAX_MODEL_LEN}" \
+        --max-num-seqs "${MAX_NUM_SEQS}" \
         --dtype "${DTYPE}" \
         --tensor-parallel-size 1 \
         --host 0.0.0.0 \

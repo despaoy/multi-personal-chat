@@ -1,4 +1,4 @@
-"""Source Loader（P6）：approved 知识卡 → canonical 索引文档。
+"""Shared source loader: approved cards to canonical index documents.
 
 ApprovedCardsLoader 面向 P5 产出的通用知识卡契约
 （fact / relation / event + review_status），不包含任何作品专属

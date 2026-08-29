@@ -2,7 +2,7 @@
 
 > 本文件是维护者和 AI 助手进入项目时的内部事实入口，不面向最终用户。
 >
-> 更新时间：2026-08-28。详细实验导航见 [月社妃实验总览](../research/KISAKI_EXPERIMENT_INDEX.md)。
+> 更新时间：2026-08-29。详细实验导航见 [月社妃实验总览](../research/KISAKI_EXPERIMENT_INDEX.md)。
 
 ## 1. 项目定位
 
@@ -22,7 +22,7 @@ MultiPersonal Chat System 是面向角色对话研究与保研展示的多平台
 | 训练 | PyTorch 2.8、Transformers 4.57、PEFT、TRL |
 | 后端 | FastAPI + Python 3.12 目标环境 |
 | 前端 | Next.js 16 + React 19 + Node.js 22 |
-| RAG | BGE-M3、FAISS/BM25 Hybrid、可选 Reranker |
+| RAG | 多粒度角色知识检索；通用用户知识库使用 FAISS/BM25 Hybrid 与可选 Reranker |
 | 平台 | AstrBot 网关，接入 QQ、微信系和 Telegram |
 | 数据 | SQLite 本地开发；PostgreSQL 生产推荐 |
 | 缓存 | Redis 可选；不可用时受限降级到进程内实现 |
@@ -94,7 +94,16 @@ R1V4 固定数据、验证集、基座模型、seed、LoRA r/alpha、target modu
 - RAG 角色正文保持自然语气，证据放入结构化 `citations`。
 - 合成数据必须标记来源和审核状态，不能冒充原作台词。
 
-## 6. 实验状态定义
+## 6. 知识检索命名与边界
+
+- 对外功能名统一为“多粒度角色知识检索（Multi-scale Character RAG）”。
+- 生产包是 `knowledge.multiscale_rag`，运行类是 `MultiScaleRagRuntime`。
+- `knowledge.retrieval_core` 是共享基础组件，不是独立链路。
+- `knowledge.rag_helper` 处理用户管理的通用知识库，不称为 P6。
+- 磁盘目录 `character_knowledge_index_v3` 中的 `v3` 仅表示索引格式版本。
+- P6/P7 等阶段号只允许出现在历史研究记录和归档中，不用于活动服务、公共 API 或使用者文档中的功能名称。
+
+## 7. 实验状态定义
 
 - `human_review`：审核尚未完成，训练门禁必须阻塞。
 - `frozen`：内容和哈希均已冻结。
@@ -105,7 +114,7 @@ R1V4 固定数据、验证集、基座模型、seed、LoRA r/alpha、target modu
 
 “训练完成”不等于“效果更好”。正式报告必须同时保留失败样本、均值、标准差、延迟和显存。
 
-## 7. 常用命令
+## 8. 常用命令
 
 ### 本地/服务器测试
 
@@ -129,12 +138,13 @@ python scripts/run_kisaki_experiment.py --experiment e1 --seed 42
 
 E2-E5 及补充随机种子只能在 E1 全链路验收后按实验注册表顺序运行。
 
-## 8. 文档导航
+## 9. 文档导航
 
 | 入口 | 用途 |
 |---|---|
 | [项目 README](../../README.md) | 系统能力、结构与部署入口 |
 | [文档中心](../README.md) | 全部文档分类 |
+| [角色知识检索](../architecture/CHARACTER_KNOWLEDGE_RETRIEVAL.md) | 生产检索边界、索引、配置和降级 |
 | [月社妃实验总览](../research/KISAKI_EXPERIMENT_INDEX.md) | E1/E2、Gold、脚本和历史结果统一索引 |
 | [V4 审核与重训练](../research/KISAKI_V4_HUMAN_REVIEW_AND_RETRAINING.md) | 当前数据、门禁和训练入口 |
 | [实验资产 README](../../backend/data/character_dialogues/experiments/README.md) | 数据、配置和结果目录 |
@@ -143,7 +153,7 @@ E2-E5 及补充随机种子只能在 E1 全链路验收后按实验注册表顺�
 | [服务器布局](../operations/SERVER_LAYOUT.md) | 源码与运行资产边界 |
 | [研究路线图](../research/RESEARCH_AND_LEARNING_ROADMAP.md) | 后续 LLM 学习与实验方向 |
 
-## 9. 工作规则
+## 10. 工作规则
 
 1. 先读取本文件和对应模块 README，再修改代码或实验资产。
 2. 不覆盖用户未提交且与任务无关的改动。
@@ -153,6 +163,6 @@ E2-E5 及补充随机种子只能在 E1 全链路验收后按实验注册表顺�
 6. 历史报告保留实际条件，不改写为当前实验结果。
 7. 项目事实变化时，同一提交更新本文件和实验索引。
 
-## 10. 最近验证
+## 11. 最近验证
 
 当前重构后的完整测试结果以本次工作结束时的验证报告为准。任何历史测试计数、旧 commit 和旧 `ready_for_training` 状态都不再代表 V4 当前状态。

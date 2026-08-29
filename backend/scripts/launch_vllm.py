@@ -76,12 +76,12 @@ def main():
                         help="模型名称或本地路径")
     parser.add_argument("--served-name", default="qwen3-8b",
                         help="对外暴露的模型名")
-    parser.add_argument("--max-model-len", type=int, default=4096,
-                        help="最大上下文长度 (RTX 3090 24GB 推荐 4096-8192)")
+    parser.add_argument("--max-model-len", type=int, default=24576,
+                        help="最大上下文长度（Qwen3-8B-AWQ / RTX 3090 24GB 默认 24576）")
     parser.add_argument("--gpu-mem-util", type=float, default=0.90,
                         help="GPU 显存利用率 (0-1)")
-    parser.add_argument("--max-num-seqs", type=int, default=64,
-                        help="最大并发序列数 (Continuous Batching 上限)")
+    parser.add_argument("--max-num-seqs", type=int, default=8,
+                        help="最大并发序列数（长上下文模式默认 8）")
     parser.add_argument("--max-batched-tokens", type=int, default=8192,
                         help="单次 batch 最大 token 数")
     parser.add_argument("--tensor-parallel", type=int, default=1,

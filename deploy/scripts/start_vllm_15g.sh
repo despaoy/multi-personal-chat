@@ -61,7 +61,8 @@ start_vllm() {
         --max-loras 4 \
         --max-lora-rank 64 \
         --gpu-memory-utilization 0.5 \
-        --max-model-len 4096 \
+        --max-model-len "${VLLM_MAX_MODEL_LEN:-24576}" \
+        --max-num-seqs "${VLLM_MAX_NUM_SEQS:-4}" \
         --dtype float16 \
         --tensor-parallel-size 1 \
         --host 0.0.0.0 \

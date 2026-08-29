@@ -1,6 +1,6 @@
-# Backend scripts
+# Backend maintenance scripts
 
-本目录只保存与 FastAPI 服务和当前 RAG 数据链直接相关的维护入口。角色研究与训练实验脚本位于仓库根目录的 [`../../scripts/`](../../scripts/README.md)；旧胡桃/原神缓存工具已移至 `scripts/archive/legacy_backend_tools/`。
+本目录保存 FastAPI 服务和生产知识数据所需的维护入口。角色研究与训练实验脚本位于仓库根目录的 [`../../scripts/`](../../scripts/README.md)。脚本应从仓库根目录或 `backend/` 目录运行，并通过参数或项目相对路径读取输入。
 
 | 脚本 | 用途 |
 | --- | --- |
@@ -12,7 +12,9 @@
 | `approve_scene_metadata.py` | 在显式批准后晋升场景元数据 |
 | `run_knowledge_candidates.py` | 从批准场景生成 P5 知识卡候选 |
 | `finalize_knowledge_review.py` | 应用批准的知识卡审核决定 |
-| `build_knowledge_index.py` | 构建 P6 统一知识索引 |
-| `evaluate_rag_retrieval.py` | 离线评估 P6 检索效果 |
+| `build_character_rag_index.py` | 构建生产多粒度角色知识索引 |
 
-所有脚本从仓库或 `backend/` 根目录运行，输入路径必须显式或相对项目解析，不得写入个人机器绝对路径。
+角色知识索引构建说明见
+[`../../docs/architecture/CHARACTER_KNOWLEDGE_RETRIEVAL.md`](../../docs/architecture/CHARACTER_KNOWLEDGE_RETRIEVAL.md)。历史实验脚本位于 `archive/`，不属于受支持的生产入口。
+
+脚本不得写入个人机器绝对路径。覆盖已有索引或审核产物的操作必须要求显式确认参数。

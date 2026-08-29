@@ -238,7 +238,7 @@ def main() -> None:
         "patched_counts": dict(sorted(patch_counts.items())),
         "manual_question_count": 0,
         "review_status": "approved",
-        "notes": "P5 approval summary; embedding and indexing are separate P6 steps.",
+        "notes": "P5 approval summary; embedding and multi-scale indexing are separate steps.",
     }
     _write_json(REPORT_PATH, report)
 

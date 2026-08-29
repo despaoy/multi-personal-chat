@@ -22,7 +22,7 @@
     ├── logs/                   # 服务与实验日志
     ├── loras/                  # LoRA 训练产物和可加载 adapter
     ├── models/                 # 基座、AWQ、Embedding、Reranker
-    ├── rag/                    # 向量索引及知识库运行数据
+    ├── rag/                    # 角色知识索引及通用知识库向量数据
     ├── results/                # 评测和基准结果
     └── tmp/                    # 可随时清理的临时文件
 ```
@@ -38,7 +38,7 @@
 | Next.js 本地配置 | `multi-personal-chat/.env.local` | 否 |
 | 基座与量化模型 | `runtime/models/` | 否 |
 | LoRA adapter | `runtime/loras/` | 否 |
-| RAG 向量索引 | `runtime/rag/` | 否 |
+| 角色知识索引与通用知识库向量数据 | `runtime/rag/` | 否 |
 | 数据库 | `runtime/db/` | 否 |
 | 实验报告 JSON | `runtime/results/`；经筛选的报告可复制进仓库 | 视用途 |
 | 日志/PID/临时文件 | `runtime/logs/`、`runtime/tmp/` | 否 |
@@ -60,7 +60,7 @@ pnpm         10.34.2
 source "$MULTIPERSONAL_LAB_ROOT"/activate_qqchat.sh
 ```
 
-激活脚本统一设置：`DATABASE_PATH`、`VECTOR_DB_PATH`、`LORA_PATH`、`VLLM_LORA_ROOT`、`AUDIT_LOG_DIR` 和 `HF_HOME`。
+激活脚本统一设置：`DATABASE_PATH`、`VECTOR_DB_PATH`、`CHARACTER_RAG_INDEX_ROOT`、`LORA_PATH`、`VLLM_LORA_ROOT`、`AUDIT_LOG_DIR` 和 `HF_HOME`。
 
 ## 端口约定
 

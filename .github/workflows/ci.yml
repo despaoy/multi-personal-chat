@@ -47,6 +47,11 @@ jobs:
           # Install remaining deps (skip GPU-only vllm and torch variants)
           grep -v -E "^(vllm|torch|torchvision|torchaudio)" requirements.txt > requirements-ci.txt
           pip install -r requirements-ci.txt
+          pip install "ruff>=0.16.4,<0.17"
+      - name: Lint character retrieval modules
+        run: |
+          python -m ruff check api/ask.py api/generate.py api/knowledge.py db/schemas.py knowledge/multiscale_rag knowledge/retrieval_core knowledge/grounded_answer scripts/build_character_rag_index.py
+          python -m ruff format --check api/ask.py api/generate.py api/knowledge.py db/schemas.py knowledge/multiscale_rag knowledge/retrieval_core knowledge/grounded_answer scripts/build_character_rag_index.py
       - name: Syntax and dependency checks
         run: |
           python -m compileall -q . ../scripts ../astrbot_plugins

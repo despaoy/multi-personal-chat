@@ -1,38 +1,66 @@
 """知识库API - 知识库/文件夹/文档管理 + ZIP上传 + 文件夹扫描 + 搜索"""
+
 import asyncio
-import logging
-import threading
 import io
+import logging
 import os
-import zipfile
 import re
+import threading
+import zipfile
+from collections.abc import Awaitable
 from pathlib import Path, PurePosixPath
-from typing import Any, Awaitable
+from typing import Any, Literal
 
-from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Depends
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+
+from app.config import INPUT_VALIDATOR_AVAILABLE, KNOWLEDGE_DOCUMENT_SCHEMA, VECTOR_DB_AVAILABLE
 from app.dependencies import get_current_admin
-from infra.db_executor import run_db
-
 from db.adapter import db
 from db.schemas import (
-    KnowledgeBaseCreate, KnowledgeBaseUpdate,
-    KnowledgeFolderCreate,
-    KnowledgeDocumentCreate, KnowledgeDocumentUpdate,
-    KnowledgeSearchRequest,
     IntentSampleGenerateRequest,
     IntentTrainRequest,
+    KnowledgeBaseCreate,
+    KnowledgeBaseUpdate,
+    KnowledgeDocumentCreate,
+    KnowledgeDocumentUpdate,
+    KnowledgeFolderCreate,
+    KnowledgeSearchRequest,
 )
-from app.config import INPUT_VALIDATOR_AVAILABLE, KNOWLEDGE_DOCUMENT_SCHEMA, VECTOR_DB_AVAILABLE
+from infra.db_executor import run_db
 
 logger = logging.getLogger(__name__)
+
+KnowledgeRetrievalMode = Literal["evidence", "hybrid", "keyword", "empty"]
+
+_LEGACY_SEARCH_TYPE: dict[KnowledgeRetrievalMode, str] = {
+    "evidence": "rag_pipeline",
+    "hybrid": "hybrid",
+    "keyword": "keyword",
+    "empty": "empty",
+}
+
+
+def _knowledge_search_response(
+    query: str,
+    results: list[dict[str, Any]],
+    retrieval_mode: KnowledgeRetrievalMode,
+) -> dict[str, Any]:
+    """Build the versioned search contract while preserving legacy clients."""
+    return {
+        "success": True,
+        "query": query,
+        "results": results,
+        "searchType": _LEGACY_SEARCH_TYPE[retrieval_mode],
+        "retrievalMode": retrieval_mode,
+    }
+
+
 router = APIRouter()
 
 _ZIP_MAX_BYTES = int(os.getenv("KNOWLEDGE_ZIP_MAX_BYTES", str(100 * 1024 * 1024)))
 _ZIP_MAX_FILES = int(os.getenv("KNOWLEDGE_ZIP_MAX_FILES", "1000"))
 _ZIP_MAX_ENTRY_BYTES = int(os.getenv("KNOWLEDGE_ZIP_MAX_ENTRY_BYTES", str(10 * 1024 * 1024)))
-_ZIP_MAX_UNCOMPRESSED_BYTES = int(
-    os.getenv("KNOWLEDGE_ZIP_MAX_UNCOMPRESSED_BYTES", str(200 * 1024 * 1024))
-)
+_ZIP_MAX_UNCOMPRESSED_BYTES = int(os.getenv("KNOWLEDGE_ZIP_MAX_UNCOMPRESSED_BYTES", str(200 * 1024 * 1024)))
 _ZIP_MAX_COMPRESSION_RATIO = float(os.getenv("KNOWLEDGE_ZIP_MAX_COMPRESSION_RATIO", "200"))
 
 
@@ -76,9 +104,7 @@ async def shutdown_intent_tasks(timeout: float | None = None) -> None:
     """Cooperatively stop the single intent generation/training job."""
     global _intent_task
     wait_timeout = (
-        float(os.getenv("INTENT_TASK_SHUTDOWN_TIMEOUT", "10"))
-        if timeout is None
-        else max(float(timeout), 0.0)
+        float(os.getenv("INTENT_TASK_SHUTDOWN_TIMEOUT", "10")) if timeout is None else max(float(timeout), 0.0)
     )
     async with _get_intent_task_lock():
         task = _intent_task
@@ -136,16 +162,17 @@ def _validated_zip_entries(archive: zipfile.ZipFile) -> list[zipfile.ZipInfo]:
         if total_uncompressed > _ZIP_MAX_UNCOMPRESSED_BYTES:
             raise HTTPException(status_code=413, detail="ZIP expands beyond the allowed size")
         if entry.file_size and (
-            entry.compress_size == 0
-            or entry.file_size / entry.compress_size > _ZIP_MAX_COMPRESSION_RATIO
+            entry.compress_size == 0 or entry.file_size / entry.compress_size > _ZIP_MAX_COMPRESSION_RATIO
         ):
             raise HTTPException(status_code=413, detail="ZIP compression ratio is suspicious")
 
     return entries
 
+
 # ============================================
 # 知识库管理
 # ============================================
+
 
 @router.get("/api/knowledge/bases")
 async def list_knowledge_bases(current_user: dict = Depends(get_current_admin)):
@@ -164,7 +191,9 @@ async def create_knowledge_base(request: KnowledgeBaseCreate, current_user: dict
 
 
 @router.put("/api/knowledge/bases/{kb_id}")
-async def update_knowledge_base(kb_id: int, request: KnowledgeBaseUpdate, current_user: dict = Depends(get_current_admin)):
+async def update_knowledge_base(
+    kb_id: int, request: KnowledgeBaseUpdate, current_user: dict = Depends(get_current_admin)
+):
     """更新知识库"""
     existing = await run_db(db.get_knowledge_base, kb_id)
     if not existing:
@@ -197,6 +226,7 @@ async def delete_knowledge_base(kb_id: int, current_user: dict = Depends(get_cur
 # 文件夹管理
 # ============================================
 
+
 @router.get("/api/knowledge/bases/{kb_id}/folders")
 async def list_knowledge_folders(kb_id: int, current_user: dict = Depends(get_current_admin)):
     """获取知识库下的文件夹"""
@@ -208,7 +238,9 @@ async def list_knowledge_folders(kb_id: int, current_user: dict = Depends(get_cu
 
 
 @router.post("/api/knowledge/bases/{kb_id}/folders")
-async def create_knowledge_folder(kb_id: int, request: KnowledgeFolderCreate, current_user: dict = Depends(get_current_admin)):
+async def create_knowledge_folder(
+    kb_id: int, request: KnowledgeFolderCreate, current_user: dict = Depends(get_current_admin)
+):
     """创建文件夹"""
     existing = await run_db(db.get_knowledge_base, kb_id)
     if not existing:
@@ -238,6 +270,7 @@ async def delete_knowledge_folder(folder_id: int, current_user: dict = Depends(g
 # ZIP上传
 # ============================================
 
+
 @router.post("/api/knowledge/bases/{kb_id}/upload-zip")
 async def upload_zip(kb_id: int, file: UploadFile = File(...), current_user: dict = Depends(get_current_admin)):
     """上传ZIP文件，自动按目录结构创建文件夹和文档
@@ -251,7 +284,7 @@ async def upload_zip(kb_id: int, file: UploadFile = File(...), current_user: dic
     if not existing:
         raise HTTPException(status_code=404, detail="知识库不存在")
 
-    if not file.filename or not file.filename.endswith('.zip'):
+    if not file.filename or not file.filename.endswith(".zip"):
         raise HTTPException(status_code=400, detail="请上传ZIP文件")
 
     try:
@@ -271,7 +304,7 @@ async def upload_zip(kb_id: int, file: UploadFile = File(...), current_user: dic
     for zip_entry in zip_entries:
         entry = zip_entry.filename
         # 跳过目录条目和隐藏文件
-        if entry.endswith('/') or entry.startswith('.') or '__MACOSX' in entry:
+        if entry.endswith("/") or entry.startswith(".") or "__MACOSX" in entry:
             continue
 
         # 解析路径：folder_name/filename.txt
@@ -285,11 +318,11 @@ async def upload_zip(kb_id: int, file: UploadFile = File(...), current_user: dic
             filename = parts[-1]
 
         # 只处理文本文件
-        if not filename.lower().endswith(('.txt', '.md', '.json')):
+        if not filename.lower().endswith((".txt", ".md", ".json")):
             continue
 
         # 安全检查
-        if '..' in entry or entry.startswith('/'):
+        if ".." in entry or entry.startswith("/"):
             continue
 
         # 获取或创建文件夹
@@ -309,10 +342,10 @@ async def upload_zip(kb_id: int, file: UploadFile = File(...), current_user: dic
 
         # 读取文件内容
         try:
-            file_content = zf.read(zip_entry).decode('utf-8')
+            file_content = zf.read(zip_entry).decode("utf-8")
         except UnicodeDecodeError:
             try:
-                file_content = zf.read(zip_entry).decode('gbk')
+                file_content = zf.read(zip_entry).decode("gbk")
             except UnicodeDecodeError:
                 errors.append(f"文件编码不支持: {entry}")
                 continue
@@ -321,7 +354,7 @@ async def upload_zip(kb_id: int, file: UploadFile = File(...), current_user: dic
             continue
 
         # 文档标题 = 文件名（去掉扩展名）
-        doc_title = re.sub(r'\.(txt|md|json)$', '', filename)
+        doc_title = re.sub(r"\.(txt|md|json)$", "", filename)
 
         # 创建文档 - 注入文件夹路径到category
         document_data = {
@@ -331,41 +364,39 @@ async def upload_zip(kb_id: int, file: UploadFile = File(...), current_user: dic
             "knowledge_base_id": kb_id,
             "folder_id": folder_id,
             "sourceType": "file",
-            "fileType": filename.rsplit('.', 1)[-1] if '.' in filename else "txt",
-            "fileSize": len(file_content.encode('utf-8')),
-            "chunkCount": 0
+            "fileType": filename.rsplit(".", 1)[-1] if "." in filename else "txt",
+            "fileSize": len(file_content.encode("utf-8")),
+            "chunkCount": 0,
         }
         document = await run_db(db.add_knowledge_document, document_data)
 
         # 分块处理
         from knowledge.text_splitter import simple_text_split
+
         chunks = simple_text_split(file_content)
         chunk_count = 0
         vector_docs = []
 
         for i, chunk_content in enumerate(chunks):
-            chunk = {
-                "documentId": document["id"],
-                "chunkIndex": i,
-                "content": chunk_content,
-                "embedding": None
-            }
+            chunk = {"documentId": document["id"], "chunkIndex": i, "content": chunk_content, "embedding": None}
             await run_db(db.add_knowledge_chunk, chunk)
             chunk_count += 1
 
             # 注入文件夹路径到检索文本：知识库名/文件夹名/文档名 + 内容
             enriched_content = f"[{kb_name}/{folder_name}] {doc_title}: {chunk_content}"
 
-            vector_docs.append({
-                "id": f"doc_{document['id']}_chunk_{i}",
-                "chunk_index": i,
-                "title": doc_title,
-                "content": enriched_content,
-                "source_type": "file",
-                "document_id": document["id"],
-                "category": folder_name,
-                "knowledge_base_id": kb_id,
-            })
+            vector_docs.append(
+                {
+                    "id": f"doc_{document['id']}_chunk_{i}",
+                    "chunk_index": i,
+                    "title": doc_title,
+                    "content": enriched_content,
+                    "source_type": "file",
+                    "document_id": document["id"],
+                    "category": folder_name,
+                    "knowledge_base_id": kb_id,
+                }
+            )
 
         # 更新文档的chunkCount
         await run_db(db.update_knowledge_document, document["id"], {"chunkCount": chunk_count})
@@ -374,10 +405,11 @@ async def upload_zip(kb_id: int, file: UploadFile = File(...), current_user: dic
         if VECTOR_DB_AVAILABLE and vector_docs:
             try:
                 from app.config import get_vector_db
+
                 vector_db = get_vector_db()
                 await asyncio.to_thread(vector_db.add_documents, vector_docs)
             except Exception as ve:
-                logger.error(f"添加到向量数据库失败: {ve}")
+                logger.error("添加到向量数据库失败: %s", ve)
 
         # 标记向量索引为 dirty，确保下次搜索时重建状态与数据库一致
         await run_db(_mark_rebuild_dirty)
@@ -385,13 +417,13 @@ async def upload_zip(kb_id: int, file: UploadFile = File(...), current_user: dic
 
     zf.close()
 
-    logger.info(f"ZIP上传完成: 知识库={kb_name}, 文件夹={len(created_folders)}, 文档={created_docs}")
+    logger.info("ZIP上传完成: 知识库=%s, 文件夹=%d, 文档=%d", kb_name, len(created_folders), created_docs)
     return {
         "success": True,
         "message": f"成功导入 {created_docs} 个文档到 {len(created_folders)} 个文件夹",
         "createdFolders": list(created_folders.keys()),
         "createdDocs": created_docs,
-        "errors": errors
+        "errors": errors,
     }
 
 
@@ -400,23 +432,17 @@ async def upload_zip(kb_id: int, file: UploadFile = File(...), current_user: dic
 # ============================================
 
 KNOWLEDGE_BASES_DIR = Path(__file__).parent.parent / "knowledge_bases"
-SUPPORTED_EXTENSIONS = {'.txt', '.md', '.json', '.csv', '.html', '.xml'}
+SUPPORTED_EXTENSIONS = {".txt", ".md", ".json", ".csv", ".html", ".xml"}
 
 
 def _scan_directory(directory: Path) -> dict:
     """扫描目录结构，返回树形结构"""
-    result = {
-        "name": directory.name,
-        "type": "folder",
-        "children": [],
-        "fileCount": 0,
-        "totalSize": 0
-    }
+    result = {"name": directory.name, "type": "folder", "children": [], "fileCount": 0, "totalSize": 0}
     if not directory.exists():
         return result
-    
+
     for item in sorted(directory.iterdir()):
-        if item.name.startswith('.') or item.name == '__pycache__':
+        if item.name.startswith(".") or item.name == "__pycache__":
             continue
         if item.is_dir():
             sub = _scan_directory(item)
@@ -425,12 +451,14 @@ def _scan_directory(directory: Path) -> dict:
             result["totalSize"] += sub["totalSize"]
         elif item.is_file() and item.suffix.lower() in SUPPORTED_EXTENSIONS:
             file_size = item.stat().st_size
-            result["children"].append({
-                "name": item.name,
-                "type": "file",
-                "size": file_size,
-                "extension": item.suffix.lower(),
-            })
+            result["children"].append(
+                {
+                    "name": item.name,
+                    "type": "file",
+                    "size": file_size,
+                    "extension": item.suffix.lower(),
+                }
+            )
             result["fileCount"] += 1
             result["totalSize"] += file_size
     return result
@@ -439,36 +467,38 @@ def _scan_directory(directory: Path) -> dict:
 @router.get("/api/knowledge/scan")
 async def scan_knowledge_dirs(current_user: dict = Depends(get_current_admin)):
     """扫描 knowledge_bases 目录，返回所有可用的知识库文件夹结构
-    
+
     扫描 backend/knowledge_bases/ 下的所有子目录，
     每个顶层子目录被视为一个知识库候选项。
     """
     if not KNOWLEDGE_BASES_DIR.exists():
         return {"success": True, "directories": [], "message": "知识库目录不存在"}
-    
+
     directories = []
     for item in sorted(KNOWLEDGE_BASES_DIR.iterdir()):
-        if not item.is_dir() or item.name.startswith('.'):
+        if not item.is_dir() or item.name.startswith("."):
             continue
         tree = _scan_directory(item)
         directories.append(tree)
-    
+
     return {"success": True, "directories": directories}
 
 
 @router.post("/api/knowledge/scan/import")
-async def import_scanned_directory(directory_name: str, kb_id: int = None, current_user: dict = Depends(get_current_admin)):
+async def import_scanned_directory(
+    directory_name: str, kb_id: int = None, current_user: dict = Depends(get_current_admin)
+):
     """将扫描到的目录导入到知识库
-    
+
     读取 knowledge_bases/<directory_name> 下的所有文件，
     自动按子目录创建文件夹，按文件创建文档。
-    
+
     如果 kb_id 为空，则自动创建新知识库。
     """
     target_dir = KNOWLEDGE_BASES_DIR / directory_name
     if not target_dir.exists() or not target_dir.is_dir():
         raise HTTPException(status_code=404, detail=f"目录不存在: {directory_name}")
-    
+
     # 获取或创建知识库
     if kb_id:
         kb = await run_db(db.get_knowledge_base, kb_id)
@@ -482,20 +512,20 @@ async def import_scanned_directory(directory_name: str, kb_id: int = None, curre
             kb = next((b for b in all_bases if b["name"] == directory_name), None)
             if not kb:
                 raise HTTPException(status_code=500, detail="无法创建或找到知识库")
-    
+
     kb_id = kb["id"]
     kb_name = kb["name"]
     created_folders = {}
     created_docs = 0
     errors = []
-    
+
     # 遍历子目录
     for sub_dir in sorted(target_dir.iterdir()):
-        if sub_dir.name.startswith('.') or not sub_dir.is_dir():
+        if sub_dir.name.startswith(".") or not sub_dir.is_dir():
             continue
-        
+
         folder_name = sub_dir.name
-        
+
         # 创建文件夹
         folder = await run_db(db.create_knowledge_folder, kb_id, folder_name)
         if folder is None:
@@ -506,34 +536,34 @@ async def import_scanned_directory(directory_name: str, kb_id: int = None, curre
         else:
             errors.append(f"无法创建文件夹: {folder_name}")
             continue
-        
+
         folder_id = created_folders[folder_name]
-        
+
         # 遍历文件夹中的文件
         for file_path in sorted(sub_dir.iterdir()):
             if not file_path.is_file() or file_path.suffix.lower() not in SUPPORTED_EXTENSIONS:
                 continue
-            
+
             try:
                 # 尝试多种编码读取
                 content = None
-                for encoding in ['utf-8', 'gbk', 'gb2312', 'utf-16']:
+                for encoding in ["utf-8", "gbk", "gb2312", "utf-16"]:
                     try:
                         content = file_path.read_text(encoding=encoding)
                         break
                     except (UnicodeDecodeError, UnicodeError):
                         continue
-                
+
                 if content is None:
                     errors.append(f"文件编码不支持: {file_path.name}")
                     continue
-                
+
                 if not content.strip():
                     continue
-                
+
                 doc_title = file_path.stem
                 file_size = file_path.stat().st_size
-                
+
                 # 创建文档
                 document_data = {
                     "title": doc_title,
@@ -542,49 +572,48 @@ async def import_scanned_directory(directory_name: str, kb_id: int = None, curre
                     "knowledge_base_id": kb_id,
                     "folder_id": folder_id,
                     "sourceType": "file",
-                    "fileType": file_path.suffix.lstrip('.'),
+                    "fileType": file_path.suffix.lstrip("."),
                     "fileSize": file_size,
-                    "chunkCount": 0
+                    "chunkCount": 0,
                 }
                 document = await run_db(db.add_knowledge_document, document_data)
-                
+
                 # 分块 + 路径注入
                 from knowledge.text_splitter import simple_text_split
+
                 chunks = simple_text_split(content)
                 chunk_count = 0
                 vector_docs = []
-                
+
                 for i, chunk_content in enumerate(chunks):
-                    chunk = {
-                        "documentId": document["id"],
-                        "chunkIndex": i,
-                        "content": chunk_content,
-                        "embedding": None
-                    }
+                    chunk = {"documentId": document["id"], "chunkIndex": i, "content": chunk_content, "embedding": None}
                     await run_db(db.add_knowledge_chunk, chunk)
                     chunk_count += 1
-                    
+
                     enriched_content = f"[{kb_name}/{folder_name}] {doc_title}: {chunk_content}"
-                    vector_docs.append({
-                        "id": f"doc_{document['id']}_chunk_{i}",
-                        "chunk_index": i,
-                        "title": doc_title,
-                        "content": enriched_content,
-                        "source_type": "file",
-                        "document_id": document["id"],
-                        "category": folder_name,
-                        "knowledge_base_id": kb_id,
-                    })
-                
+                    vector_docs.append(
+                        {
+                            "id": f"doc_{document['id']}_chunk_{i}",
+                            "chunk_index": i,
+                            "title": doc_title,
+                            "content": enriched_content,
+                            "source_type": "file",
+                            "document_id": document["id"],
+                            "category": folder_name,
+                            "knowledge_base_id": kb_id,
+                        }
+                    )
+
                 await run_db(db.update_knowledge_document, document["id"], {"chunkCount": chunk_count})
 
                 if VECTOR_DB_AVAILABLE and vector_docs:
                     try:
                         from app.config import get_vector_db
+
                         vector_db = get_vector_db()
                         await asyncio.to_thread(vector_db.add_documents, vector_docs)
                     except Exception as ve:
-                        logger.error(f"添加到向量数据库失败: {ve}")
+                        logger.error("添加到向量数据库失败: %s", ve)
 
                 # 标记向量索引为 dirty，确保下次搜索时重建状态与数据库一致
                 await run_db(_mark_rebuild_dirty)
@@ -593,24 +622,24 @@ async def import_scanned_directory(directory_name: str, kb_id: int = None, curre
 
             except Exception as e:
                 errors.append(f"处理文件 {file_path.name} 失败: {str(e)}")
-    
+
     # 也处理根目录下的文件（不属于任何子文件夹）
     for file_path in sorted(target_dir.iterdir()):
         if not file_path.is_file() or file_path.suffix.lower() not in SUPPORTED_EXTENSIONS:
             continue
-        
+
         try:
             content = None
-            for encoding in ['utf-8', 'gbk', 'gb2312', 'utf-16']:
+            for encoding in ["utf-8", "gbk", "gb2312", "utf-16"]:
                 try:
                     content = file_path.read_text(encoding=encoding)
                     break
                 except (UnicodeDecodeError, UnicodeError):
                     continue
-            
+
             if content is None or not content.strip():
                 continue
-            
+
             doc_title = file_path.stem
             document_data = {
                 "title": doc_title,
@@ -619,63 +648,62 @@ async def import_scanned_directory(directory_name: str, kb_id: int = None, curre
                 "knowledge_base_id": kb_id,
                 "folder_id": None,
                 "sourceType": "file",
-                "fileType": file_path.suffix.lstrip('.'),
+                "fileType": file_path.suffix.lstrip("."),
                 "fileSize": file_path.stat().st_size,
-                "chunkCount": 0
+                "chunkCount": 0,
             }
             document = await run_db(db.add_knowledge_document, document_data)
-            
+
             from knowledge.text_splitter import simple_text_split
+
             chunks = simple_text_split(content)
             chunk_count = 0
             vector_docs = []
-            
+
             for i, chunk_content in enumerate(chunks):
-                chunk = {
-                    "documentId": document["id"],
-                    "chunkIndex": i,
-                    "content": chunk_content,
-                    "embedding": None
-                }
+                chunk = {"documentId": document["id"], "chunkIndex": i, "content": chunk_content, "embedding": None}
                 await run_db(db.add_knowledge_chunk, chunk)
                 chunk_count += 1
-                
+
                 enriched_content = f"[{kb_name}] {doc_title}: {chunk_content}"
-                vector_docs.append({
-                    "id": f"doc_{document['id']}_chunk_{i}",
-                    "chunk_index": i,
-                    "title": doc_title,
-                    "content": enriched_content,
-                    "source_type": "file",
-                    "document_id": document["id"],
-                    "category": "未分类",
-                    "knowledge_base_id": kb_id,
-                })
-            
+                vector_docs.append(
+                    {
+                        "id": f"doc_{document['id']}_chunk_{i}",
+                        "chunk_index": i,
+                        "title": doc_title,
+                        "content": enriched_content,
+                        "source_type": "file",
+                        "document_id": document["id"],
+                        "category": "未分类",
+                        "knowledge_base_id": kb_id,
+                    }
+                )
+
             await run_db(db.update_knowledge_document, document["id"], {"chunkCount": chunk_count})
 
             if VECTOR_DB_AVAILABLE and vector_docs:
                 try:
                     from app.config import get_vector_db
+
                     vector_db = get_vector_db()
                     await asyncio.to_thread(vector_db.add_documents, vector_docs)
                 except Exception as ve:
-                    logger.error(f"添加到向量数据库失败: {ve}")
+                    logger.error("添加到向量数据库失败: %s", ve)
 
             # 标记向量索引为 dirty，确保下次搜索时重建状态与数据库一致
             await run_db(_mark_rebuild_dirty)
             created_docs += 1
         except Exception as e:
             errors.append(f"处理根目录文件 {file_path.name} 失败: {str(e)}")
-    
-    logger.info(f"扫描导入完成: 知识库={kb_name}, 文件夹={len(created_folders)}, 文档={created_docs}")
+
+    logger.info("扫描导入完成: 知识库=%s, 文件夹=%d, 文档=%d", kb_name, len(created_folders), created_docs)
     return {
         "success": True,
         "message": f"成功导入 {created_docs} 个文档到 {len(created_folders)} 个文件夹",
         "knowledgeBase": kb,
         "createdFolders": list(created_folders.keys()),
         "createdDocs": created_docs,
-        "errors": errors
+        "errors": errors,
     }
 
 
@@ -683,21 +711,27 @@ async def import_scanned_directory(directory_name: str, kb_id: int = None, curre
 # 文档管理
 # ============================================
 
+
 @router.get("/api/knowledge/documents")
-async def get_knowledge_documents(limit: int = 100, offset: int = 0, category: str = None, knowledge_base_id: int = None, folder_id: int = None, current_user: dict = Depends(get_current_admin)):
+async def get_knowledge_documents(
+    limit: int = 100,
+    offset: int = 0,
+    category: str = None,
+    knowledge_base_id: int = None,
+    folder_id: int = None,
+    current_user: dict = Depends(get_current_admin),
+):
     """获取知识库文档列表，支持按分类/知识库/文件夹筛选"""
-    documents = await run_db(db.get_knowledge_documents,
-        limit=limit, offset=offset,
+    documents = await run_db(
+        db.get_knowledge_documents,
+        limit=limit,
+        offset=offset,
         category=category,
         knowledge_base_id=knowledge_base_id,
-        folder_id=folder_id
+        folder_id=folder_id,
     )
     stats = await run_db(db.get_knowledge_stats)
-    return {
-        "success": True,
-        "documents": documents,
-        "stats": stats
-    }
+    return {"success": True, "documents": documents, "stats": stats}
 
 
 @router.get("/api/knowledge/documents/{doc_id}")
@@ -707,11 +741,7 @@ async def get_knowledge_document(doc_id: int, current_user: dict = Depends(get_c
     if not document:
         raise HTTPException(status_code=404, detail="文档不存在")
     chunks = await run_db(db.get_knowledge_chunks, doc_id)
-    return {
-        "success": True,
-        "document": document,
-        "chunks": chunks
-    }
+    return {"success": True, "document": document, "chunks": chunks}
 
 
 @router.post("/api/knowledge/documents")
@@ -721,6 +751,7 @@ async def create_knowledge_document(request: KnowledgeDocumentCreate, current_us
         # 输入验证
         if INPUT_VALIDATOR_AVAILABLE:
             from infra.input_validator import InputValidator
+
             is_valid, errors = InputValidator.validate(request.model_dump(), KNOWLEDGE_DOCUMENT_SCHEMA)
             if not is_valid:
                 raise HTTPException(status_code=422, detail={"message": "输入验证失败", "errors": errors})
@@ -748,23 +779,19 @@ async def create_knowledge_document(request: KnowledgeDocumentCreate, current_us
             "sourceUrl": request.sourceUrl,
             "fileType": request.fileType,
             "fileSize": request.fileSize,
-            "chunkCount": 0
+            "chunkCount": 0,
         }
         document = await run_db(db.add_knowledge_document, document_data)
 
         # 分块处理 - 注入路径到检索文本
         from knowledge.text_splitter import simple_text_split
+
         chunks = simple_text_split(request.content)
         chunk_count = 0
         vector_docs = []
 
         for i, chunk_content in enumerate(chunks):
-            chunk = {
-                "documentId": document["id"],
-                "chunkIndex": i,
-                "content": chunk_content,
-                "embedding": None
-            }
+            chunk = {"documentId": document["id"], "chunkIndex": i, "content": chunk_content, "embedding": None}
             await run_db(db.add_knowledge_chunk, chunk)
             chunk_count += 1
 
@@ -772,16 +799,18 @@ async def create_knowledge_document(request: KnowledgeDocumentCreate, current_us
             path_prefix = f"[{kb_name}/{folder_name}]" if kb_name else f"[{folder_name}]"
             enriched_content = f"{path_prefix} {request.title}: {chunk_content}"
 
-            vector_docs.append({
-                "id": f"doc_{document['id']}_chunk_{i}",
-                "chunk_index": i,
-                "title": request.title,
-                "content": enriched_content,
-                "source_type": request.sourceType,
-                "document_id": document["id"],
-                "category": folder_name,
-                "knowledge_base_id": request.knowledge_base_id,
-            })
+            vector_docs.append(
+                {
+                    "id": f"doc_{document['id']}_chunk_{i}",
+                    "chunk_index": i,
+                    "title": request.title,
+                    "content": enriched_content,
+                    "source_type": request.sourceType,
+                    "document_id": document["id"],
+                    "category": folder_name,
+                    "knowledge_base_id": request.knowledge_base_id,
+                }
+            )
 
         # 更新文档的chunkCount
         await run_db(db.update_knowledge_document, document["id"], {"chunkCount": chunk_count})
@@ -790,30 +819,28 @@ async def create_knowledge_document(request: KnowledgeDocumentCreate, current_us
         if VECTOR_DB_AVAILABLE and vector_docs:
             try:
                 from app.config import get_vector_db
+
                 vector_db = get_vector_db()
                 await asyncio.to_thread(vector_db.add_documents, vector_docs)
-                logger.info(f"文档已添加到向量数据库: {document['title']}")
+                logger.info("文档已添加到向量数据库: %s", document["title"])
             except Exception as ve:
-                logger.error(f"添加到向量数据库失败: {ve}")
+                logger.error("添加到向量数据库失败: %s", ve)
 
         # 标记向量索引为 dirty，确保下次搜索时重建状态与数据库一致
         await run_db(_mark_rebuild_dirty)
-        logger.info(f"创建知识库文档: {document['title']}, 分块数: {chunk_count}")
-        return {
-            "success": True,
-            "message": "文档创建成功",
-            "document": document,
-            "chunkCount": chunk_count
-        }
+        logger.info("创建知识库文档: %s, 分块数: %d", document["title"], chunk_count)
+        return {"success": True, "message": "文档创建成功", "document": document, "chunkCount": chunk_count}
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"创建知识库文档失败: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("创建知识库文档失败: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.put("/api/knowledge/documents/{doc_id}")
-async def update_knowledge_document(doc_id: int, request: KnowledgeDocumentUpdate, current_user: dict = Depends(get_current_admin)):
+async def update_knowledge_document(
+    doc_id: int, request: KnowledgeDocumentUpdate, current_user: dict = Depends(get_current_admin)
+):
     """更新知识库文档"""
     try:
         existing_doc = await run_db(db.get_knowledge_document, doc_id)
@@ -845,7 +872,7 @@ async def update_knowledge_document(doc_id: int, request: KnowledgeDocumentUpdat
 
         # 如果内容更新了，重新分块
         if "content" in update_data:
-            await run_db(db.execute_sql, 'DELETE FROM knowledge_chunks WHERE documentId = :doc_id', {"doc_id": doc_id})
+            await run_db(db.execute_sql, "DELETE FROM knowledge_chunks WHERE documentId = :doc_id", {"doc_id": doc_id})
 
             # 获取路径信息用于注入
             kb_name = ""
@@ -862,17 +889,13 @@ async def update_knowledge_document(doc_id: int, request: KnowledgeDocumentUpdat
                     folder_name = folder["name"]
 
             from knowledge.text_splitter import simple_text_split
+
             chunks = simple_text_split(update_data["content"])
             chunk_count = 0
             vector_docs = []
 
             for i, chunk_content in enumerate(chunks):
-                chunk = {
-                    "documentId": doc_id,
-                    "chunkIndex": i,
-                    "content": chunk_content,
-                    "embedding": None
-                }
+                chunk = {"documentId": doc_id, "chunkIndex": i, "content": chunk_content, "embedding": None}
                 await run_db(db.add_knowledge_chunk, chunk)
                 chunk_count += 1
 
@@ -880,16 +903,18 @@ async def update_knowledge_document(doc_id: int, request: KnowledgeDocumentUpdat
                 doc_title = update_data.get("title", existing_doc.get("title", ""))
                 enriched_content = f"{path_prefix} {doc_title}: {chunk_content}"
 
-                vector_docs.append({
-                    "id": f"doc_{doc_id}_chunk_{i}",
-                    "chunk_index": i,
-                    "title": doc_title,
-                    "content": enriched_content,
-                    "source_type": update_data.get("sourceType", existing_doc.get("sourceType", "text")),
-                    "document_id": doc_id,
-                    "category": folder_name,
-                    "knowledge_base_id": kb_id,
-                })
+                vector_docs.append(
+                    {
+                        "id": f"doc_{doc_id}_chunk_{i}",
+                        "chunk_index": i,
+                        "title": doc_title,
+                        "content": enriched_content,
+                        "source_type": update_data.get("sourceType", existing_doc.get("sourceType", "text")),
+                        "document_id": doc_id,
+                        "category": folder_name,
+                        "knowledge_base_id": kb_id,
+                    }
+                )
 
             await run_db(db.update_knowledge_document, doc_id, {"chunkCount": chunk_count})
 
@@ -900,28 +925,25 @@ async def update_knowledge_document(doc_id: int, request: KnowledgeDocumentUpdat
                         old_chunk_ids.append(f"doc_{doc_id}_chunk_{i}")
                     if old_chunk_ids:
                         from app.config import get_vector_db
+
                         vector_db = get_vector_db()
                         await asyncio.to_thread(vector_db.delete_documents, old_chunk_ids)
                     await asyncio.to_thread(vector_db.add_documents, vector_docs)
-                    logger.info(f"文档 {doc_id} 向量数据库已更新")
+                    logger.info("文档 %s 向量数据库已更新", doc_id)
                 except Exception as ve:
-                    logger.warning(f"更新向量数据库失败: {ve}")
+                    logger.warning("更新向量数据库失败: %s", ve)
 
             # 内容变更后必须标记 dirty：即使 chunk 数量不变，内容指纹也会不同，
             # 下次搜索会触发重建，避免旧向量被检索
             await run_db(_mark_rebuild_dirty)
 
-        logger.info(f"更新知识库文档: {doc_id}")
-        return {
-            "success": True,
-            "message": "文档更新成功",
-            "document": updated_doc
-        }
+        logger.info("更新知识库文档: %s", doc_id)
+        return {"success": True, "message": "文档更新成功", "document": updated_doc}
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"更新知识库文档失败: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("更新知识库文档失败: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.delete("/api/knowledge/documents/{doc_id}")
@@ -938,6 +960,7 @@ async def delete_knowledge_document(doc_id: int, current_user: dict = Depends(ge
         if VECTOR_DB_AVAILABLE:
             try:
                 from app.config import get_vector_db
+
                 vector_db = get_vector_db()
                 chunk_ids = []
                 chunks = await run_db(db.get_knowledge_chunks, doc_id)
@@ -947,18 +970,18 @@ async def delete_knowledge_document(doc_id: int, current_user: dict = Depends(ge
                 if chunk_ids:
                     await asyncio.to_thread(vector_db.delete_documents, chunk_ids)
             except Exception as ve:
-                logger.warning(f"从向量数据库删除文档失败: {ve}")
+                logger.warning("从向量数据库删除文档失败: %s", ve)
 
         await run_db(db.delete_knowledge_document, doc_id)
         # 删除后标记 dirty，防止向量删除失败时旧内容仍可被检索
         await run_db(_mark_rebuild_dirty)
-        logger.info(f"删除知识库文档: {doc_id}")
+        logger.info("删除知识库文档: %s", doc_id)
         return {"success": True, "message": "文档删除成功"}
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"删除知识库文档失败: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("删除知识库文档失败: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # ============================================
@@ -1012,6 +1035,7 @@ def _compute_chunk_fingerprint() -> str:
     为避免大库一次性加载导致 OOM，使用流式哈希：每读一批更新一次 md5。
     """
     import hashlib
+
     h = hashlib.md5()
     for row in db.iter_chunks_with_document(batch_size=500):
         if row.get("doc_title") is None:
@@ -1036,8 +1060,7 @@ def _get_expected_chunk_count() -> int:
     避免"预期数量含孤儿但遍历跳过孤儿"导致永久不匹配、每次搜索都重建。
     """
     rows = db.execute_sql(
-        "SELECT COUNT(*) AS cnt FROM knowledge_chunks c "
-        "INNER JOIN knowledge_documents d ON c.documentId = d.id",
+        "SELECT COUNT(*) AS cnt FROM knowledge_chunks c INNER JOIN knowledge_documents d ON c.documentId = d.id",
         {},
     )
     return rows[0]["cnt"] if rows else 0
@@ -1073,17 +1096,13 @@ def _read_rebuild_status() -> tuple[str, int, str, int]:
     return (status, count, fingerprint, revision)
 
 
-def _write_rebuild_status(
-    status: str, count: int, fingerprint: str = "", revision: int = -1
-) -> None:
+def _write_rebuild_status(status: str, count: int, fingerprint: str = "", revision: int = -1) -> None:
     """写入重建状态到 config 表。
 
     fingerprint 和 revision 仅在 status='complete' 时有意义。
     """
     if status == "complete" and fingerprint:
-        db.set_config_value(
-            _VECTOR_REBUILD_STATUS_KEY, f"{status}:{count}:{fingerprint}:{revision}"
-        )
+        db.set_config_value(_VECTOR_REBUILD_STATUS_KEY, f"{status}:{count}:{fingerprint}:{revision}")
     elif fingerprint:
         db.set_config_value(_VECTOR_REBUILD_STATUS_KEY, f"{status}:{count}:{fingerprint}")
     else:
@@ -1110,7 +1129,7 @@ def _mark_rebuild_dirty() -> None:
             db.set_config_value(_VECTOR_REBUILD_REVISION_KEY, str(new_rev))
             db.set_config_value(_VECTOR_REBUILD_STATUS_KEY, "dirty")
         except Exception as e:
-            logger.warning(f"标记重建 dirty 持久化失败（内存标志已重置）: {e}")
+            logger.warning("标记重建 dirty 持久化失败（内存标志已重置）: %s", e)
 
 
 def _ensure_vector_index():
@@ -1142,11 +1161,13 @@ def _ensure_vector_index():
 
         try:
             from app.config import VECTOR_DB_AVAILABLE
+
             if not VECTOR_DB_AVAILABLE:
                 _vector_index_built = True
                 return True
 
             from knowledge.vector_db import get_vector_db
+
             vector_db = get_vector_db()
             stats = vector_db.get_stats()
             expected_count = _get_expected_chunk_count()
@@ -1170,12 +1191,10 @@ def _ensure_vector_index():
                 # 必须原子，避免并发 CRUD 在窗口内被覆盖
                 with _revision_lock:
                     if _get_rebuild_revision() != current_revision:
-                        logger.warning(
-                            "空库清理期间检测到并发 CRUD，不标记 complete，等待下次重建"
-                        )
+                        logger.warning("空库清理期间检测到并发 CRUD，不标记 complete，等待下次重建")
                         return False
                     _write_rebuild_status("complete", 0, _EMPTY_FINGERPRINT, current_revision)
-                    logger.info(f"向量索引已清空并标记 complete:0:empty:{current_revision}")
+                    logger.info("向量索引已清空并标记 complete:0:empty:%s", current_revision)
                     _vector_index_built = True
                 return True
 
@@ -1196,9 +1215,7 @@ def _ensure_vector_index():
                     # 必须在锁内重新校验 revision 才能设置 _vector_index_built
                     with _revision_lock:
                         if _get_rebuild_revision() != current_revision:
-                            logger.info(
-                                "跳过检查期间检测到并发 CRUD，放弃跳过，进入重建"
-                            )
+                            logger.info("跳过检查期间检测到并发 CRUD，放弃跳过，进入重建")
                             # 落入下方重建分支：重新读取最新 revision
                         else:
                             logger.info(
@@ -1210,15 +1227,22 @@ def _ensure_vector_index():
                 else:
                     logger.info(
                         "向量索引指纹不匹配: 状态=%s, 实际=%s，需要重建",
-                        status_fp or "(空)", current_fp,
+                        status_fp or "(空)",
+                        current_fp,
                     )
             else:
                 logger.info(
-                    "向量索引需要重建: 状态=%s:%d:%s:%d, 实际(meta/faiss/bm25)=%d/%d/%d, "
-                    "预期=%d, revision=%d/%d",
-                    status or "none", status_count, status_fp or "(空)", status_rev,
-                    stats["total_documents"], stats["index_size"], stats["bm25_corpus_size"],
-                    expected_count, status_rev, current_revision,
+                    "向量索引需要重建: 状态=%s:%d:%s:%d, 实际(meta/faiss/bm25)=%d/%d/%d, 预期=%d, revision=%d/%d",
+                    status or "none",
+                    status_count,
+                    status_fp or "(空)",
+                    status_rev,
+                    stats["total_documents"],
+                    stats["index_size"],
+                    stats["bm25_corpus_size"],
+                    expected_count,
+                    status_rev,
+                    current_revision,
                 )
 
             # 需要重建：重新读取最新 revision 作为 start_revision。
@@ -1239,6 +1263,7 @@ def _ensure_vector_index():
             total_chunks_indexed = 0
             # 同时累积指纹，确保索引内容与指纹一致
             import hashlib
+
             fp_hash = hashlib.md5()
 
             for row in db.iter_chunks_with_document(batch_size=500):
@@ -1251,15 +1276,17 @@ def _ensure_vector_index():
                 kb_name = kb_name_map.get(kb_id, "") if kb_id else ""
                 path_prefix = f"[{kb_name}/{folder_name}]" if kb_name else f"[{folder_name}]"
                 enriched = f"{path_prefix} {doc_title}: {row['content']}"
-                batch_vector_docs.append({
-                    "id": f"doc_{row['documentId']}_chunk_{row['chunkIndex']}",
-                    "chunk_index": row["chunkIndex"],
-                    "title": doc_title,
-                    "content": enriched,
-                    "document_id": row["documentId"],
-                    "category": folder_name,
-                    "knowledge_base_id": kb_id,
-                })
+                batch_vector_docs.append(
+                    {
+                        "id": f"doc_{row['documentId']}_chunk_{row['chunkIndex']}",
+                        "chunk_index": row["chunkIndex"],
+                        "title": doc_title,
+                        "content": enriched,
+                        "document_id": row["documentId"],
+                        "category": folder_name,
+                        "knowledge_base_id": kb_id,
+                    }
+                )
 
                 # 同步累积指纹（与 _compute_chunk_fingerprint 一致，均跳过孤儿）
                 parts = (
@@ -1288,7 +1315,8 @@ def _ensure_vector_index():
             if total_chunks_indexed != expected_count:
                 logger.error(
                     "向量索引重建数量不匹配: 已写入 %d, 预期 %d，保持 building 状态等待下次重建",
-                    total_chunks_indexed, expected_count,
+                    total_chunks_indexed,
+                    expected_count,
                 )
                 return False
 
@@ -1306,18 +1334,20 @@ def _ensure_vector_index():
                     logger.warning(
                         "重建期间检测到并发 CRUD: start_revision=%d, current=%d，"
                         "不标记 complete，保持 building 等待下次重建",
-                        start_revision, final_revision,
+                        start_revision,
+                        final_revision,
                     )
                     return False
                 _write_rebuild_status("complete", total_chunks_indexed, final_fp, start_revision)
                 logger.info(
-                    f"向量索引重建完成: {total_chunks_indexed} 个 chunks"
-                    f"（数量+指纹+revision CAS 校验通过，revision={start_revision}）"
+                    "向量索引重建完成: %s 个 chunks（数量+指纹+revision CAS 校验通过，revision=%s）",
+                    total_chunks_indexed,
+                    start_revision,
                 )
                 _vector_index_built = True
             return True
         except Exception as e:
-            logger.warning(f"向量索引重建失败: {e}")
+            logger.warning("向量索引重建失败: %s", e)
             return False
 
 
@@ -1343,14 +1373,12 @@ async def search_knowledge(
             matched = [b for b in all_bases if b["name"] == request.knowledgeBaseName]
             if matched:
                 filters = {"knowledge_base_id": matched[0]["id"]}
-                logger.info(f"搜索过滤: 知识库「{request.knowledgeBaseName}」(id={matched[0]['id']})")
+                logger.info("搜索过滤: 知识库「%s」(id=%s)", request.knowledgeBaseName, matched[0]["id"])
             else:
                 # fail-closed: 用户明确指定的知识库不存在时不应退化为全库搜索，
                 # 否则会返回其他知识库的内容。返回空结果。
-                logger.warning(
-                    f"未找到知识库「{request.knowledgeBaseName}」，返回空结果（不退化为全库搜索）"
-                )
-                return {"success": True, "query": query, "results": [], "searchType": "empty"}
+                logger.warning("未找到知识库「%s」，返回空结果（不退化为全库搜索）", request.knowledgeBaseName)
+                return _knowledge_search_response(query, [], "empty")
 
         # 首次搜索时确保向量索引已构建（同步操作，放线程池避免阻塞事件循环）
         # _ensure_vector_index 返回 False 表示重建失败（落盘失败、数量不一致、
@@ -1362,32 +1390,33 @@ async def search_knowledge(
         if index_ready:
             try:
                 from knowledge.rag_helper import get_rag_helper
+
                 rag = get_rag_helper()
                 results = await asyncio.to_thread(rag.retrieve_context, query, top_k, True, filters, None)
                 if results:
                     formatted = []
                     for r in results:
-                        formatted.append({
-                            "documentId": r.get("id"),
-                            "documentTitle": r.get("title", ""),
-                            "chunkIndex": r.get("chunk_index", 0),
-                            "content": r.get("content", ""),
-                            "score": r.get("normalized_score", r.get("score", 0)),
-                            "searchType": "rag_pipeline"
-                        })
-                    return {"success": True, "query": query, "results": formatted, "searchType": "rag_pipeline"}
+                        formatted.append(
+                            {
+                                "documentId": r.get("id"),
+                                "documentTitle": r.get("title", ""),
+                                "chunkIndex": r.get("chunk_index", 0),
+                                "content": r.get("content", ""),
+                                "score": r.get("normalized_score", r.get("score", 0)),
+                                "searchType": "rag_pipeline",
+                            }
+                        )
+                    return _knowledge_search_response(query, formatted, "evidence")
             except Exception as e:
-                logger.warning(f"RAGHelper检索失败，回退向量检索: {e}")
+                logger.warning("通用证据检索失败，回退向量检索: %s", e)
         else:
-            logger.warning(
-                "vector_index_not_ready action=degrade_to_keyword "
-                "reason=rebuild_returned_false"
-            )
+            logger.warning("vector_index_not_ready action=degrade_to_keyword reason=rebuild_returned_false")
 
         # 回退：向量检索（hybrid_search 同步阻塞，放线程池）
         if index_ready and VECTOR_DB_AVAILABLE:
             try:
                 from app.config import get_vector_db
+
                 vector_db = get_vector_db()
                 vector_results = await asyncio.to_thread(
                     lambda: vector_db.hybrid_search(query, top_k=top_k, filters=filters)
@@ -1395,17 +1424,19 @@ async def search_knowledge(
                 if vector_results:
                     formatted = []
                     for r in vector_results:
-                        formatted.append({
-                            "documentId": r.get("id"),
-                            "documentTitle": r.get("title", ""),
-                            "chunkIndex": r.get("chunk_index", r.get("chunk_id", 0)),
-                            "content": r.get("content", ""),
-                            "score": r.get("score", 0),
-                            "searchType": "hybrid"
-                        })
-                    return {"success": True, "query": query, "results": formatted, "searchType": "hybrid"}
+                        formatted.append(
+                            {
+                                "documentId": r.get("id"),
+                                "documentTitle": r.get("title", ""),
+                                "chunkIndex": r.get("chunk_index", r.get("chunk_id", 0)),
+                                "content": r.get("content", ""),
+                                "score": r.get("score", 0),
+                                "searchType": "hybrid",
+                            }
+                        )
+                    return _knowledge_search_response(query, formatted, "hybrid")
             except Exception as ve:
-                logger.warning(f"向量检索失败: {ve}")
+                logger.warning("向量检索失败: %s", ve)
 
         # 最终回退：关键词匹配（支持分词匹配，提高召回率）
         # 关键词回退是同步阻塞的 CPU/IO 密集型操作（全库扫描），在 async
@@ -1415,9 +1446,10 @@ async def search_knowledge(
         def _keyword_fallback():
             query_lower = query.lower()
             # 提取查询中的关键词（中文单字+英文单词）
-            import re as _re
             import heapq
-            query_keywords = _re.findall(r'[\u4e00-\u9fff]|[a-zA-Z]+', query_lower)
+            import re as _re
+
+            query_keywords = _re.findall(r"[\u4e00-\u9fff]|[a-zA-Z]+", query_lower)
             # 关键词降级必须继承知识库过滤条件，否则会在用户指定 knowledgeBaseName
             # 时返回其他知识库的内容。target_kb_id 来自上层构造的 filters。
             target_kb_id = filters.get("knowledge_base_id") if filters else None
@@ -1439,16 +1471,19 @@ async def search_knowledge(
                     score += 1.0
                 # 分词匹配：每个关键词命中加分
                 for kw in query_keywords:
-                    if len(kw) >= 2 or (len(kw) == 1 and '\u4e00' <= kw <= '\u9fff'):
+                    if len(kw) >= 2 or (len(kw) == 1 and "\u4e00" <= kw <= "\u9fff"):
                         score += content.count(kw) * 0.2
                         if kw in doc_title.lower():
                             score += 0.5
                 if score > 0:
                     seq += 1
                     item = {
-                        "documentId": row["documentId"], "documentTitle": doc_title,
-                        "chunkIndex": row["chunkIndex"], "content": row["content"],
-                        "score": round(score, 2), "searchType": "keyword"
+                        "documentId": row["documentId"],
+                        "documentTitle": doc_title,
+                        "chunkIndex": row["chunkIndex"],
+                        "content": row["content"],
+                        "score": round(score, 2),
+                        "searchType": "keyword",
                     }
                     # 维护 top_k 堆：堆大小超过 top_k 时弹出最小元素
                     if len(top_heap) < top_k:
@@ -1458,12 +1493,12 @@ async def search_knowledge(
             # 堆中元素按分数降序输出
             top_heap.sort(key=lambda x: x[0], reverse=True)
             results = [item for _, _, item in top_heap]
-            return {"success": True, "query": query, "results": results, "searchType": "keyword"}
+            return _knowledge_search_response(query, results, "keyword")
 
         return await asyncio.to_thread(_keyword_fallback)
     except Exception as e:
-        logger.error(f"搜索知识库失败: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("搜索知识库失败: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/api/knowledge/stats")
@@ -1481,17 +1516,19 @@ async def get_vector_stats(current_user: dict = Depends(get_current_admin)):
 
     try:
         from app.config import get_vector_db
+
         vector_db = get_vector_db()
         stats = await asyncio.to_thread(vector_db.get_stats)
         return {"success": True, "stats": stats}
     except Exception as e:
-        logger.error(f"获取向量数据库统计失败: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("获取向量数据库统计失败: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # ============================================
 # 意图分类器训练
 # ============================================
+
 
 @router.post("/api/knowledge/train-intent/generate")
 async def generate_intent_samples(
@@ -1522,14 +1559,16 @@ async def generate_intent_samples(
         )
     return {"success": True, "message": "样本生成已启动"}
 
+
 @router.get("/api/knowledge/train-intent/generate/status")
 async def get_generation_status(current_user: dict = Depends(get_current_admin)):
     """查询样本生成进度"""
     try:
         from knowledge.intent_trainer import get_generation_status as get_status
+
         return {"success": True, "status": get_status()}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/api/knowledge/train-intent/samples")
@@ -1537,9 +1576,10 @@ async def get_intent_samples(current_user: dict = Depends(get_current_admin)):
     """获取当前所有训练样本"""
     try:
         from knowledge.intent_trainer import get_samples
+
         return {"success": True, **get_samples()}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.put("/api/knowledge/train-intent/samples")
@@ -1547,6 +1587,7 @@ async def update_intent_sample(request: dict, current_user: dict = Depends(get_c
     """编辑单条样本"""
     try:
         from knowledge.intent_trainer import update_sample
+
         result = update_sample(request.get("label"), request.get("index"), request.get("text"))
         if "error" in result:
             raise HTTPException(status_code=400, detail=result["error"])
@@ -1554,7 +1595,7 @@ async def update_intent_sample(request: dict, current_user: dict = Depends(get_c
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.delete("/api/knowledge/train-intent/samples")
@@ -1562,6 +1603,7 @@ async def delete_intent_sample(label: str, index: int, current_user: dict = Depe
     """删除单条样本"""
     try:
         from knowledge.intent_trainer import delete_sample
+
         result = delete_sample(label, index)
         if "error" in result:
             raise HTTPException(status_code=400, detail=result["error"])
@@ -1569,7 +1611,7 @@ async def delete_intent_sample(label: str, index: int, current_user: dict = Depe
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.patch("/api/knowledge/train-intent/samples")
@@ -1577,10 +1619,11 @@ async def batch_save_intent_samples(request: dict, current_user: dict = Depends(
     """批量保存样本（覆盖写入）"""
     try:
         from knowledge.intent_trainer import save_samples
+
         result = save_samples(request.get("samples", {}))
         return {"success": True, "stats": result.get("stats", {})}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.post("/api/knowledge/train-intent/samples")
@@ -1588,10 +1631,11 @@ async def add_intent_sample(request: dict, current_user: dict = Depends(get_curr
     """添加单条样本"""
     try:
         from knowledge.intent_trainer import add_sample
-        result = add_sample(request.get("label"), request.get("text"))
+
+        add_sample(request.get("label"), request.get("text"))
         return {"success": True}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.post("/api/knowledge/train-intent")
@@ -1603,6 +1647,8 @@ async def train_intent_classifier(
     from knowledge.intent_trainer import (
         get_generation_status,
         get_training_status,
+    )
+    from knowledge.intent_trainer import (
         train_intent_classifier as do_train,
     )
 
@@ -1618,14 +1664,16 @@ async def train_intent_classifier(
         )
     return {"success": True, "message": "训练已启动"}
 
+
 @router.get("/api/knowledge/train-intent/status")
 async def get_intent_training_status(current_user: dict = Depends(get_current_admin)):
     """查询训练进度"""
     try:
         from knowledge.intent_trainer import get_training_status
+
         return {"success": True, "status": get_training_status()}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.post("/api/knowledge/train-intent/cancel")
@@ -1633,10 +1681,11 @@ async def cancel_intent_training(current_user: dict = Depends(get_current_admin)
     """取消训练/生成"""
     try:
         from knowledge.intent_trainer import cancel_training
+
         result = cancel_training()
         return {"success": result, "message": "已发送取消请求" if result else "没有正在进行的任务"}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/api/knowledge/train-intent/model")
@@ -1644,9 +1693,10 @@ async def get_intent_model_info(current_user: dict = Depends(get_current_admin))
     """获取当前模型信息"""
     try:
         from knowledge.intent_trainer import get_model_info
+
         return {"success": True, "model": get_model_info()}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/api/knowledge/train-intent/active-kbs")
@@ -1654,9 +1704,10 @@ async def get_active_knowledge_bases(current_user: dict = Depends(get_current_ad
     """获取参与检索的知识库"""
     try:
         from knowledge.intent_trainer import get_active_knowledge_bases as get_kbs
+
         return {"success": True, "active_kbs": get_kbs()}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.post("/api/knowledge/train-intent/active-kbs")
@@ -1664,6 +1715,7 @@ async def set_active_knowledge_bases(request: dict, current_user: dict = Depends
     """设置参与检索的知识库"""
     try:
         from knowledge.intent_trainer import set_active_knowledge_bases as set_kbs
+
         result = set_kbs(request.get("kb_ids", []))
         if "error" in result:
             raise HTTPException(status_code=400, detail=result["error"])
@@ -1671,4 +1723,4 @@ async def set_active_knowledge_bases(request: dict, current_user: dict = Depends
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e

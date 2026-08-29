@@ -1,6 +1,6 @@
-"""P7 grounded-answer 服务编排。
+"""Grounded-answer 服务编排。
 
-链路：P6 检索 bundle → 模式识别 → EvidencePacket → grounded prompt
+链路：结构化检索 bundle → 模式识别 → EvidencePacket → grounded prompt
     → 生成（注入式 Provider）→ citation 解析/校验/绑定 → 统一结果
 
 职责边界：
@@ -33,7 +33,7 @@ from .models import (  # noqa: E402
     GroundedAnswerResult,
 )
 from .modes import AnswerModeDecider, ModeDecision
-from .packet import EvidencePacketBuilder, is_p6_bundle
+from .packet import EvidencePacketBuilder, is_structured_retrieval_bundle
 from .prompt import GroundedPromptBuilder
 from .validator import CitationValidator
 
@@ -149,7 +149,7 @@ class GroundedAnswerService:
                 cached.timings.total_ms = (time.perf_counter() - start) * 1000
                 return cached
 
-        # 检索（P6 同步 CPU 检索放线程池）
+        # 角色知识检索是同步 CPU 工作，放入线程池避免阻塞事件循环。
         retrieval_start = time.perf_counter()
         try:
             bundle, corrective_info = await self._retrieve_with_optional_correction(
@@ -160,7 +160,7 @@ class GroundedAnswerService:
         except Exception as exc:  # noqa: BLE001 - 检索故障转为明确降级结果
             timings.retrieval_ms = (time.perf_counter() - retrieval_start) * 1000
             timings.total_ms = (time.perf_counter() - start) * 1000
-            logger.warning("P7 检索失败（降级 abstention）: %s", type(exc).__name__)
+            logger.warning("Grounded Answer 检索失败（降级 abstention）: %s", type(exc).__name__)
             return GroundedAnswerResult(
                 answer=self.abstention_reply,
                 answer_mode=AnswerMode.ABSTENTION,
@@ -259,7 +259,7 @@ class GroundedAnswerService:
             raise
         except Exception as exc:  # noqa: BLE001 - SSE 内返回结构化降级序列
             timings.retrieval_ms = (time.perf_counter() - retrieval_start) * 1000
-            logger.warning("P7 流式检索失败（降级 abstention）: %s", type(exc).__name__)
+            logger.warning("Grounded Answer 流式检索失败（降级 abstention）: %s", type(exc).__name__)
             packet = EvidencePacket(
                 query=query,
                 domain_id=domain_id,
@@ -398,10 +398,10 @@ class GroundedAnswerService:
                     first_token = False
                 chunks.append(str(chunk))
         except asyncio.CancelledError:
-            logger.info("P7 流式生成被客户端取消 query_len=%d", len(query))
+            logger.info("Grounded Answer 流式生成被客户端取消 query_len=%d", len(query))
             raise
         except TimeoutError:
-            logger.warning("P7 流式生成超时（降级 abstention）query_len=%d", len(query))
+            logger.warning("Grounded Answer 流式生成超时（降级 abstention）query_len=%d", len(query))
             yield AnswerStreamEvent(
                 type="error",
                 data={
@@ -428,7 +428,7 @@ class GroundedAnswerService:
             )
             return
         except Exception as e:  # noqa: BLE001 - 中途失败不得返回伪完整 citations
-            logger.warning("P7 流式生成失败（降级 abstention）: %s", e)
+            logger.warning("Grounded Answer 流式生成失败（降级 abstention）: %s", e)
             yield AnswerStreamEvent(
                 type="error",
                 data={
@@ -628,7 +628,7 @@ class GroundedAnswerService:
             )
         except TimeoutError:
             timings.generation_ms = (time.perf_counter() - generation_start) * 1000
-            logger.warning("P7 生成超时（降级 abstention）query_len=%d", len(query))
+            logger.warning("Grounded Answer 生成超时（降级 abstention）query_len=%d", len(query))
             return self._degraded_result(
                 packet,
                 decision,
@@ -641,7 +641,7 @@ class GroundedAnswerService:
             raise
         except Exception as e:  # noqa: BLE001 - Provider 故障保留 evidence、明确降级
             timings.generation_ms = (time.perf_counter() - generation_start) * 1000
-            logger.warning("P7 生成失败（降级 abstention）: %s", type(e).__name__)
+            logger.warning("Grounded Answer 生成失败（降级 abstention）: %s", type(e).__name__)
             return self._degraded_result(
                 packet,
                 decision,
@@ -723,14 +723,14 @@ class GroundedAnswerService:
         bundle: dict[str, Any] | None,
         decision: ModeDecision,
     ) -> EvidencePacket:
-        if bundle is None or not is_p6_bundle(bundle):
+        if bundle is None or not is_structured_retrieval_bundle(bundle):
             mode = AnswerMode.NO_RAG if bundle is None else decision.mode
             return EvidencePacket(
                 query=query,
                 domain_id=None,
                 answer_mode=mode,
                 retrieval_confidence=0.0,
-                warnings=["non_p6_bundle"] if bundle is not None else [],
+                warnings=["unsupported_retrieval_bundle"] if bundle is not None else [],
             )
         return self.packet_builder.build(
             query,
@@ -884,36 +884,24 @@ _service_lock = asyncio.Lock()
 
 
 def build_default_grounded_answer_service() -> GroundedAnswerService:
-    """默认服务实例：P6 检索 + 进程内缓存 + env 配置。"""
-    from knowledge.rag_pipeline.service import get_rag_pipeline_service
+    """默认服务实例：角色知识检索 + 进程内缓存 + env 配置。"""
+    from knowledge.multiscale_rag.constants import INDEX_FORMAT_VERSION
+    from knowledge.multiscale_rag.runtime import get_multiscale_rag_service
 
-    p6 = get_rag_pipeline_service()
-    registry = p6.pipeline.registry
+    character_rag = get_multiscale_rag_service()
 
     def _retriever(query: str, *, top_k: int, filters: dict | None, domain_id: str | None):
-        return p6.pipeline.retrieve(
-            query,
-            domain_id=domain_id,
-            top_k=top_k,
-            filters=filters,
-            mode="hybrid",
-            use_rerank=True,
-            use_context=True,
-        )
+        return character_rag.retrieve_with_citations(query, domain_id=domain_id, top_k=top_k, filters=filters)
 
     def _domain_supplement(domain_id: str) -> str:
-        config = registry.get(domain_id)
-        if config is None:
+        if domain_id != character_rag.config.domain_id:
             return ""
-        return getattr(config, "prompt_supplement", "") or ""
+        return getattr(character_rag.config, "prompt_supplement", "") or ""
 
     def _index_version_resolver(domain_id: str | None) -> str:
-        if domain_id:
-            config = registry.get(domain_id)
-            if config is None:
-                return "unknown"
-            return f"{config.domain_id}:{config.index_version}"
-        return ",".join(f"{c.domain_id}:{c.index_version}" for c in registry.list_domains(enabled_only=True))
+        if domain_id and domain_id != character_rag.config.domain_id:
+            return "unknown"
+        return f"{character_rag.config.domain_id}:{INDEX_FORMAT_VERSION}"
 
     return GroundedAnswerService(
         retriever=_retriever,

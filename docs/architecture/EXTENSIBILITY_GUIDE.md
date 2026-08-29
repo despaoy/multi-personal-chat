@@ -70,6 +70,16 @@ Database adapter
 - 新的路由策略统一登记在 `src/lib/proxy.ts`，避免白名单和超时规则分散。
 - 新的页面持久化统一使用 `usePageData`，缓存键必须包含用户和页面维度。
 
+### 扩展角色知识域
+
+1. 在 `knowledge.retrieval_core.registry` 注册知识域、别名、来源根目录和叙事策略。
+2. 将原始资料转换为经过审核的 story、scene、fact/relation/event 和 evidence 文档，不直接修改生成的向量文件。
+3. 复用 `knowledge.multiscale_rag` 的结构化 bundle 契约；不要复制 runtime 创建新的版本号链路。
+4. 为新知识域建立独立索引目录，并通过 manifest 记录索引格式、embedding 模型和文档数量。
+5. 新增域门控、关系/事件路由、原文路径边界和无证据拒答测试。
+
+通用用户文档仍进入 `rag_helper`/`vector_db` 路径。不要把用户上传资料写入角色作品索引，也不要让角色检索忽略 `knowledge_base_id`。
+
 ## 5. 验证清单
 
 后端：

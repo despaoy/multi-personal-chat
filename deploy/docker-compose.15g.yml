@@ -51,7 +51,8 @@ services:
       --max-loras 4
       --max-lora-rank 64
       --gpu-memory-utilization 0.5
-      --max-model-len 4096
+      --max-model-len ${VLLM_MAX_MODEL_LEN:-24576}
+      --max-num-seqs ${VLLM_MAX_NUM_SEQS:-4}
       --dtype float16
       --tensor-parallel-size 1
       --host 0.0.0.0
@@ -89,6 +90,7 @@ services:
       - data:/app/data
       - loras:/app/loras
       - models:/app/models:ro
+      - ../backend/data/knowledge/tsukiyashiro_kisaki/character_knowledge_index_v3:/app/character_knowledge_index:ro
     environment:
       - VLLM_ENABLED=true
       - MODEL_PROVIDER=vllm
@@ -118,6 +120,8 @@ services:
       - VLLM_MAX_RETRIES=3
       - DATABASE_PATH=/app/data/qq_assistant.db
       - VECTOR_DB_PATH=/app/data/vector_db
+      - CHARACTER_RAG_INDEX_ROOT=/app/character_knowledge_index
+      - CHARACTER_RAG_ABSTAIN_THRESHOLD=${CHARACTER_RAG_ABSTAIN_THRESHOLD:-0.25}
       - LORA_PATH=/app/loras
       - MODEL_PATH=/app/models
       - LOG_LEVEL=INFO

@@ -1,10 +1,10 @@
-"""Evidence Packet 构建（P6 bundle → P7 证据包）。
+"""Evidence Packet 构建（retrieval bundle → grounded-answer evidence）。
 
 - citation key 稳定分配：S1..Sn，按重排后检索排名顺序
 - 只有实际进入 prompt（预算内）的文档才拥有 citation key，
   模型无法引用未提供的文档
-- 证据块格式化与 P6 ContextBuilder 一致的事实来源，
-  但由 P7 重新按 key 标记，供 prompt builder 包裹
+- 证据块格式化与检索上下文一致的事实来源，
+  但由回答层重新按 key 标记，供 prompt builder 包裹
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# P6 上下文里证据摘录的截断长度（与 ContextBuilder 默认一致）
+# 检索上下文里证据摘录的截断长度
 _EVIDENCE_CHARS = 360
 
 
@@ -54,10 +54,10 @@ def _extract_evidence_text(content: str, limit: int = _EVIDENCE_CHARS) -> str:
 
 
 class EvidencePacketBuilder:
-    """P6 bundle → EvidencePacket。"""
+    """Retrieval bundle → EvidencePacket。"""
 
     def __init__(self, evidence_budget_chars: int = 2400):
-        # 预算略高于 P6 context 预算（2000）：P6 已做一次预算裁剪，
+        # 上游已做一次预算裁剪，
         # 此处防止异常超大 bundle 直接塞满 prompt
         self.evidence_budget = max(600, int(evidence_budget_chars))
 
@@ -69,7 +69,7 @@ class EvidencePacketBuilder:
         *,
         warnings: list[str] | None = None,
     ) -> EvidencePacket:
-        """bundle 契约见 P6 RagPipeline.retrieve 返回值。"""
+        """bundle 契约见角色知识检索 runtime 返回值。"""
         packet_warnings = list(warnings or [])
         results = list(bundle.get("results") or [])
         citations = list(bundle.get("citations") or [])
@@ -157,6 +157,6 @@ class EvidencePacketBuilder:
         )
 
 
-def is_p6_bundle(bundle: Mapping[str, Any] | None) -> bool:
-    """区分 P6 管线 bundle 与 legacy RAGHelper bundle（契约判别）。"""
+def is_structured_retrieval_bundle(bundle: Mapping[str, Any] | None) -> bool:
+    """区分结构化证据 bundle 与通用知识库兼容结果。"""
     return bundle is not None and "query_analysis" in bundle and "domains" in bundle

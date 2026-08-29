@@ -60,19 +60,19 @@ class GenerateResponse(BaseModel):
     citations: list[dict[str, Any]] | None = None
     confidence: float | None = None
     abstained: bool = False
-    # P7 扩展（全部可选，向后兼容）：回答模式 / 知识域 / 告警
+    # Grounded Answer 扩展（全部可选，向后兼容）：回答模式 / 知识域 / 告警
     answerMode: str | None = None
     domainId: str | None = None
     warnings: list[str] | None = None
 
 
 # ============================================
-# P7 grounded-answer 问答契约
+# Grounded Answer 问答契约
 # ============================================
 
 
 class AskRequest(BaseModel):
-    """知识问答请求（P7）：域门控 + 证据约束回答 + 引用返回。"""
+    """知识问答请求：域门控 + 证据约束回答 + 引用返回。"""
 
     message: str = Field(..., min_length=1, max_length=2000)
     domainId: str | None = Field(None, max_length=64)
@@ -220,7 +220,7 @@ class KnowledgeSearchResult(BaseModel):
 
     documentId: int
     documentTitle: str
-    # 多数检索分支（rag_pipeline/keyword/empty）不返回 chunkId，仅部分向量路径可能携带
+    # 多数检索分支（evidence/keyword/empty）不返回 chunkId，仅部分向量路径可能携带
     chunkId: int | None = None
     chunkIndex: int
     content: str

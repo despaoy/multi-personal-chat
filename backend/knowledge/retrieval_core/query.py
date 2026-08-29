@@ -1,4 +1,4 @@
-"""查询理解与别名归一（P6）。
+"""Shared query analysis and alias normalization.
 
 轻量规则分析（不调用 LLM 做实时分类）：
 - 实体识别与 domain 自动选择（alias 归一）

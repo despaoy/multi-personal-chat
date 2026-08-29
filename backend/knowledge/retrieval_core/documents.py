@@ -1,4 +1,4 @@
-"""统一知识索引文档契约（P6）。
+"""Shared canonical knowledge-document contract.
 
 Canonical Document：所有知识域的源数据（approved 卡、角色记忆、
 用户文档等）经 loader 转换为本模型的实例后再进入 embedding、

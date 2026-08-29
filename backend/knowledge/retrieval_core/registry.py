@@ -1,4 +1,4 @@
-"""知识域注册表（P6）。
+"""Shared knowledge-domain registry.
 
 知识域（namespace）通过 KnowledgeDomainConfig 声明：
 - domain_id 与数据源位置
@@ -69,7 +69,7 @@ class KnowledgeDomainConfig:
     story_titles: list[str] = field(default_factory=list)
     narrative_policy: NarrativeLayerPolicy = field(default_factory=NarrativeLayerPolicy)
     retrieval_defaults: RetrievalDefaults = field(default_factory=RetrievalDefaults)
-    # P7：域专属回答表达规则（如层级的固定说法）只能放这里，
+    # 域专属回答表达规则（如层级的固定说法）只能放这里，
     # 核心回答代码不得写死任何作品内容；缺省为空（无补充规则）
     prompt_supplement: str = ""
     index_version: str = "v1"

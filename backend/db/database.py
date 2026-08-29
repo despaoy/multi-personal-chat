@@ -1094,7 +1094,7 @@ class SQLiteDB:
             "baseModel": "qwen3-8b",
             "temperature": "0.7",
             "maxTokens": "2048",
-            "contextWindow": "8k",
+            "contextWindow": "24k",
             "useKnowledgeBase": "true",
             "language": "zh-CN",
             "timezone": "Asia/Shanghai",

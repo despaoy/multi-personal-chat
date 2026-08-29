@@ -14,12 +14,14 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from datetime import UTC, datetime
-from typing import Any
+from datetime import datetime, timezone
+from typing import TYPE_CHECKING, Any
 
 from character.context_builder import MAX_MEMORY_ITEMS
 from character.models import MemoryItem, UserScope
-from repositories.character_memory import CharacterMemoryRepository
+
+if TYPE_CHECKING:
+    from repositories.character_memory import CharacterMemoryRepository
 
 # 综合得分权重：相关度 60% + 重要性 30% + 新近度 10%
 WEIGHT_RELEVANCE = 0.6
@@ -105,7 +107,7 @@ def _parse_timestamp(value: Any) -> datetime | None:
     except ValueError:
         return None
     if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=UTC)
+        parsed = parsed.replace(tzinfo=timezone.utc)
     return parsed
 
 
@@ -236,9 +238,7 @@ def _matches_intent(row: dict[str, Any], intents: _MemoryIntents) -> bool:
         return True
     if intents.preference and memory_key.startswith("preference_"):
         return True
-    if intents.promise and memory_type == "promise":
-        return True
-    return False
+    return bool(intents.promise and memory_type == "promise")
 
 
 def _is_suppressed(row: dict[str, Any], intents: _MemoryIntents) -> bool:
@@ -251,9 +251,7 @@ def _is_suppressed(row: dict[str, Any], intents: _MemoryIntents) -> bool:
     memory_key = str(row.get("memory_key") or "")
     if intents.suppress_name and memory_key.startswith("user_name"):
         return True
-    if intents.suppress_preference and memory_key.startswith("preference_"):
-        return True
-    return False
+    return bool(intents.suppress_preference and memory_key.startswith("preference_"))
 
 
 def _recency(updated_at: Any, now: datetime) -> float:
@@ -298,7 +296,7 @@ class CharacterMemoryService:
 
         query_grams = _bigrams(query)
         intents = _detect_memory_intents(query)
-        now = datetime.now(UTC)
+        now = datetime.now(timezone.utc)
         scored: list[tuple[float, MemoryItem]] = []
         for row in records:
             content = str(row.get("content") or "").strip()

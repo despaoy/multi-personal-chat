@@ -175,7 +175,7 @@ class Config:
 
     @property
     def CONTEXT_WINDOW(self):
-        return _get_db_config().get('contextWindow', '8k')
+        return _get_db_config().get('contextWindow', '24k')
 
     @property
     def USE_KNOWLEDGE_BASE(self):
@@ -301,9 +301,17 @@ class SessionHistory:
         return max(1, len(text) // 2)
 
 # 全局会话历史管理器
-_context_window_map = {'4k': 4000, '8k': 8000, '16k': 16000, '32k': 32000}
-_context_tokens = _context_window_map.get(str(config.CONTEXT_WINDOW), 2000)
-session_history = SessionHistory(max_tokens=_context_tokens // 2)
+_context_window_map = {
+    '4k': 4096,
+    '8k': 8192,
+    '16k': 16384,
+    '24k': 24576,
+    '32k': 32768,
+}
+_context_tokens = _context_window_map.get(str(config.CONTEXT_WINDOW), 24576)
+# 历史最多使用上下文的约三分之一；其余预算留给人物规则、当前消息、
+# 按需 RAG 证据和输出，避免长会话把生成空间全部挤占。
+session_history = SessionHistory(max_tokens=_context_tokens // 3)
 claw_sessions: Dict[str, bool] = {}
 
 # ============================================

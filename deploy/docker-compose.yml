@@ -53,7 +53,8 @@ services:
       --max-loras 4
       --max-lora-rank 64
       --gpu-memory-utilization 0.82
-      --max-model-len 4096
+      --max-model-len ${VLLM_MAX_MODEL_LEN:-24576}
+      --max-num-seqs ${VLLM_MAX_NUM_SEQS:-8}
       --dtype float16
       --host 0.0.0.0
       --port 8001
@@ -102,6 +103,8 @@ services:
       # before asking vLLM to load them.
       VLLM_LORA_ROOT: /loras
       LORA_PATH: /app/loras
+      CHARACTER_RAG_INDEX_ROOT: /app/character_knowledge_index
+      CHARACTER_RAG_ABSTAIN_THRESHOLD: "${CHARACTER_RAG_ABSTAIN_THRESHOLD:-0.25}"
       ENVIRONMENT: ${ENVIRONMENT:-production}
       ASTRBOT_INTEGRATION_TOKEN: ${ASTRBOT_INTEGRATION_TOKEN:?set ASTRBOT_INTEGRATION_TOKEN}
       MULTIPERSONAL_BACKEND_URL: http://backend:8000
@@ -132,6 +135,7 @@ services:
     volumes:
       - backend_data:/app/data
       - ./data/knowledge_bases:/app/knowledge_bases
+      - ../backend/data/knowledge/tsukiyashiro_kisaki/character_knowledge_index_v3:/app/character_knowledge_index:ro
       # Shared with vllm:/loras above; the target paths intentionally differ.
       - ./data/loras:/app/loras
     healthcheck:

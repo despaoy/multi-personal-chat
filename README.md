@@ -1,6 +1,6 @@
 # MultiPersonal Chat System
 
-一个面向角色对话的单机多平台 LLM 系统。它把一条完整链路放在一个仓库里：可审计的角色语料、LoRA/DoRA/RSLoRA 微调、AWQ 高效推理、混合 RAG、自动化评测、AstrBot 多平台消息接入，以及一个可观测的 Web 管理台。
+一个面向角色对话的单机多平台 LLM 系统。它在一个仓库中提供可审计的角色语料、LoRA/DoRA/RSLoRA 微调、AWQ 高效推理、多粒度角色知识检索、自动化评测、AstrBot 多平台消息接入和 Web 管理台。
 
 > **定位**：证据驱动的研究原型，不是云原生组件堆叠。每个实验结果都要求保留数据哈希、随机种子、硬件、命令和原始结果。
 >
@@ -17,9 +17,12 @@
 
 ### 知识检索（RAG）
 
-- FAISS 向量检索 + BM25 关键词检索的混合召回，可选 Reranker。
-- Corrective RAG、引用、置信度和拒答策略。
-- 文档导入、分块、索引更新、检索评测和缓存失效。
+- 多粒度角色知识检索将作品知识组织为故事、场景、事实/关系/事件知识卡和原文证据，按问题类型路由到对应粒度。
+- BM25、向量和实体混合召回，经 RRF 融合与重排序后回填父场景，并返回引用、置信度和拒答状态。
+- 通用用户知识库独立处理上传文档、分块、索引更新和带 `knowledge_base_id` 的检索，不与角色作品索引混用。
+- Grounded Answer 对检索证据进行引用校验；证据不足时请求澄清或拒答。
+
+架构、索引构建和配置见[多粒度角色知识检索](docs/architecture/CHARACTER_KNOWLEDGE_RETRIEVAL.md)。
 
 ### 多平台接入
 
@@ -45,7 +48,7 @@ QQ / WeChat / Telegram
           |
       FastAPI core
    /       |        \
-vLLM     RAG      SQLite/PostgreSQL
+vLLM  Character RAG  SQLite/PostgreSQL
   |        |              |
 LoRA   BGE/FAISS         Redis
           |
@@ -75,7 +78,7 @@ backend/
 ├── experiments/      LoRA/RAG/量化消融
 ├── inference/        vLLM 客户端、模型与 LoRA 路由
 ├── infra/            安全、并发、熔断、观测
-├── knowledge/        导入、分块、检索、重排序
+├── knowledge/        角色知识检索、通用知识库、共享检索内核与证据回答
 ├── repositories/     持久化 Protocol 与数据库适配实现
 ├── services/         与 HTTP 传输无关的业务用例
 ├── tests/            后端测试
@@ -140,7 +143,7 @@ powershell -ExecutionPolicy Bypass -File scripts/local-verify.ps1 -Frontend
 - `MODEL_PROVIDER=vllm`
 - `VLLM_BASE_URL`
 - `BASE_MODEL_PATH`、`LORA_PATH`
-- `VECTOR_DB_PATH`、`EMBEDDING_MODEL_PATH`
+- `VECTOR_DB_PATH`、`CHARACTER_RAG_INDEX_ROOT`、`EMBEDDING_MODEL_PATH`
 - 数据库：PostgreSQL 使用 `DATABASE_URL` 或 `PG_*`；SQLite 使用 `DATABASE_PATH`
 - `ALLOWED_ORIGINS`
 
@@ -161,11 +164,14 @@ powershell -ExecutionPolicy Bypass -File scripts/local-verify.ps1 -Frontend
 - [部署与验收指南](docs/operations/DEPLOYMENT_GUIDE.md)
 - [服务器目录规范](docs/operations/SERVER_LAYOUT.md)
 - [代码知识库](docs/architecture/CODE_WIKI.md)
+- [多粒度角色知识检索](docs/architecture/CHARACTER_KNOWLEDGE_RETRIEVAL.md)
 - [可扩展性开发指南](docs/architecture/EXTENSIBILITY_GUIDE.md)
 - [生产准备审查](docs/architecture/PRODUCTION_READINESS_REVIEW_2026-07-18.md)
 - [发布前检查清单](docs/RELEASE_CHECKLIST.md)
 - [后端目录与入口](backend/README.md)
 - [人工评分标准](docs/data/human-scoring-rubric.md)
+- [贡献指南](CONTRIBUTING.md)
+- [变更记录](CHANGELOG.md)
 
 ## 研究诚信
 

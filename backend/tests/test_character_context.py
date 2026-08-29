@@ -10,7 +10,7 @@
 from __future__ import annotations
 
 import dataclasses
-from datetime import UTC
+from datetime import timezone
 
 import pytest
 
@@ -622,7 +622,7 @@ def _memory_record(
         "memory_key": memory_key,
         "content": content,
         "importance": importance,
-        "updated_at": datetime.now(UTC).isoformat(),
+        "updated_at": datetime.now(timezone.utc).isoformat(),
     }
 
 

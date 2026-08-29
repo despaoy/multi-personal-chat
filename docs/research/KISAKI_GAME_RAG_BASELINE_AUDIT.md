@@ -6,6 +6,9 @@
 - 性质：本阶段未修改任何业务代码、数据文件和配置；仅新增本文档。
   统计通过临时只读脚本完成（`scripts/extract_character_dialogues.py` 的解析逻辑以 import 方式复用），临时脚本已删除。
 
+> 本文是 P0 时点的审计记录，不描述当前生产命名或运行入口。当前架构见
+> [多粒度角色知识检索](../architecture/CHARACTER_KNOWLEDGE_RETRIEVAL.md)。
+
 ---
 
 ## 1. 原始文本基线
@@ -179,7 +182,7 @@
    - P8 要求"分离原神与月社妃查询扩展"确认必要：需要按知识库域选择扩展器，而非全局单例。
 2. **中文 Corrective RAG 查询重写失效**（`corrective_rag.py` L24-63）：`_tokenize` 把中文拆为单字，`reformulate_query` 中 `len(tok) > 1` 过滤后**纯中文 top 结果提取的关键词为空**，重写查询与原查询相同；第二次检索命中 RAGHelper 缓存（cache_key 含查询文本）返回同一结果，必然再次低于阈值而弃答。即"中文重写从未产生新查询"，P8 修复点明确：重写需产出实质性新查询（如 jieba 分词 + 去停用词 + 实体替换），且重试应绕过或失效缓存。
 3. **intent_detector 规则引擎含原神关键词**（L57-66：蒙德/璃月/稻妻/须弥/枫丹…；L96：胡桃/往生堂）：通用知识词（"什么/为什么"等）仍工作，妃相关疑问句可触发 RAG，但规则原因字段会误导日志。ML 多分类器按 KB 路由是正确方向，需为月社妃游戏知识库补充训练样本或显式 KB 映射。
-4. **分块器非对话感知**（`text_splitter.py`）：600 字固定分块 + 100 字符机械重叠，会把游戏台词拦腰截断、把不同说话人的台词混入同块。且参数不一致：`importer.py` 用 600/150，`api/knowledge.py` ZIP 上传用默认 600/100。P6 的"场景子块按 6–12 轮对话切分、相邻块按对话轮重叠"即针对此。
+4. **分块器非对话感知**（`text_splitter.py`）：600 字固定分块 + 100 字符机械重叠，会把游戏台词拦腰截断、把不同说话人的台词混入同块。且参数不一致：`importer.py` 用 600/150，`api/knowledge.py` ZIP 上传用默认 600/100。当时规划的后续场景分块方案以“6–12轮对话切分、相邻块按对话轮重叠”解决这一问题。
 5. **引用链路已具备**（好消息）：`rag_helper.build_citations` 已输出 `source_path/source_line/source_event_ids/source_lineage/kb_revision`；`generate.py` 已实现 abstained 拒答且 `modelInvoked=false`；seed documents 已示范 `source_lineage` 结构。P9 集成的工作量主要是把游戏 RAG 的证据字段映射进现有 citations，而非新建管线。
 6. **评估基线注意事项**：`compute_confidence` 取绝对分数（0.7×top + 0.3×top3 均值）、阈值 0.3。embedding 模型随部署环境而变（见 §4.2），切换或跨环境对比（如本地 vs 服务器 BGE-M3）后分数分布会变，后续检索模型与索引消融（P10 正式评测前完成）时阈值需随基线重新标定，不能沿用 0.3 直接比较，且必须在 run manifest 中记录实际模型。
 

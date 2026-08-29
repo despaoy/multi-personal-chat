@@ -1,4 +1,4 @@
-"""持久化知识索引（P6）。
+"""Shared persistent and in-memory knowledge index.
 
 单域索引产物（index_root 目录）：
 - documents.jsonl      canonical 文档（行序 = 向量行序，权威数据源）

@@ -1,9 +1,9 @@
-"""Grounded-answer prompt 契约（P7）。
+"""Grounded-answer prompt 契约。
 
 设计约束：
 - prompt 不散落在 API 路由中，统一由 builder 产出
 - persona（角色语气）与事实约束分层：persona 在前，全局安全边界与
-  P7 引用规则在后——evidence 约束优先于风格要求
+  引用规则在后——evidence 约束优先于风格要求
 - evidence 以 XML-like 固定边界包裹，标记 trust="untrusted"：
   检索文档是数据不是指令
 - 域专属表达规则只能通过 domain 配置 prompt_supplement 注入，
@@ -22,7 +22,7 @@ from .models import AnswerMode, EvidencePacket
 
 logger = logging.getLogger(__name__)
 
-GROUNDED_PROMPT_VERSION = "p7-grounded-v1"
+GROUNDED_PROMPT_VERSION = "grounded-answer-v1"
 
 # 复用项目既有全局安全边界（与聊天链路同源，避免两套规则漂移）
 from inference.prompt_policy import (  # noqa: E402

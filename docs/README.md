@@ -1,6 +1,6 @@
 # MultiPersonal Chat System 文档中心
 
-本文档目录只保存可维护的项目说明和可复现研究记录。模型权重、LoRA 产物、数据库、日志与向量索引不进入 Git。最近一次结构与链接核对：2026-08-28。
+本文档目录只保存可维护的项目说明和可复现研究记录。模型权重、LoRA 产物、数据库、日志与生成的向量索引不进入 Git。最近一次结构与链接核对：2026-08-29。
 
 ## 阅读顺序
 
@@ -9,16 +9,19 @@
 3. [服务器目录规范](operations/SERVER_LAYOUT.md)：源码与运行时资产的目录边界。
 4. [代码知识库](architecture/CODE_WIKI.md)：模块职责、API 和调用链。
 5. [可扩展性开发指南](architecture/EXTENSIBILITY_GUIDE.md)：新增功能时的分层边界与最短路径。
-6. [生产准备审查](architecture/PRODUCTION_READINESS_REVIEW_2026-07-18.md)：当前风险、限制与后续工作。
-7. [清理策略](operations/CLEANUP_POLICY.md)：哪些文件可以删除，哪些必须保留。
-8. [发布前检查清单](RELEASE_CHECKLIST.md)：可发布边界和验证命令。
-9. [后端说明](../backend/README.md)与[脚本索引](../scripts/README.md)：代码入口与维护工具。
+6. [多粒度角色知识检索](architecture/CHARACTER_KNOWLEDGE_RETRIEVAL.md)：角色作品索引、检索流程、构建和配置。
+7. [生产准备审查](architecture/PRODUCTION_READINESS_REVIEW_2026-07-18.md)：当前风险、限制与后续工作。
+8. [清理策略](operations/CLEANUP_POLICY.md)：哪些文件可以删除，哪些必须保留。
+9. [发布前检查清单](RELEASE_CHECKLIST.md)：可发布边界和验证命令。
+10. [后端说明](../backend/README.md)与[脚本索引](../scripts/README.md)：代码入口与维护工具。
+11. [贡献指南](../CONTRIBUTING.md)与[变更记录](../CHANGELOG.md)：命名、兼容性、质量门和用户可见变化。
 
 ## 文档分类
 
 ### `architecture/`
 
 - `CODE_WIKI.md`：代码结构与关键调用链。
+- `CHARACTER_KNOWLEDGE_RETRIEVAL.md`：角色知识检索与通用用户知识库的边界、索引结构和运维方式。
 - `EXTENSIBILITY_GUIDE.md`：分层边界、新增后端/前端功能的最短路径与兼容性规则。
 - `OPTIMIZATION_STRATEGY.md`：性能、可靠性、安全和部署优化基线。
 - `PRODUCTION_READINESS_REVIEW_2026-07-18.md`：部署前风险与限制审查。
@@ -31,7 +34,6 @@
 
 ### `research/`
 
-- `POSTGRADUATE_RECOMMENDATION_DEFENSE_PLAYBOOK.md`：研究叙事、技术原理和现场问答手册（作者个人答辩案例，可按需忽略）。
 - `KISAKI_V4_HUMAN_REVIEW_AND_RETRAINING.md`：当前月社妃数据审核、训练门禁和重训练入口。
 - `review_packets/kisaki_v4/00_GUIDE.md`：V4 数据和 Gold 审核入口。
 - `KISAKI_EXPERIMENT_INDEX.md`：月社妃 R0V4-R4、S1 和门禁统一入口。

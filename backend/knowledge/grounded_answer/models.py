@@ -1,8 +1,8 @@
-"""P7 grounded-answer 数据契约。
+"""Grounded-answer 数据契约。
 
-检索（P6）与回答（P7）分离：
-- P6 负责：找到知识、排序、过滤、组装上下文、提供 citation metadata
-- P7 负责：判断是否需要知识回答、把证据转成受约束的回答、
+检索层与回答层分离：
+- 角色知识检索负责：找到知识、排序、过滤、组装上下文、提供 citation metadata
+- Grounded Answer 负责：判断是否需要知识回答、把证据转成受约束的回答、
   标明事实层级、返回合法引用、证据不足时拒绝编造
 
 EvidencePacket 是回答模型可使用知识的唯一来源；
@@ -144,7 +144,7 @@ class AnswerTimings:
 
 @dataclass
 class GroundedAnswerResult:
-    """P7 回答统一结果（非流式与流式最终结构语义一致）。"""
+    """有证据回答的统一结果（非流式与流式最终结构语义一致）。"""
 
     answer: str
     answer_mode: AnswerMode

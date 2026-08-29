@@ -144,7 +144,7 @@ def _read_shared_kb_config_mapping() -> dict:
             mapping = config.get("kb_name_to_id", {})
             return mapping if isinstance(mapping, dict) else {}
     except Exception as e:
-        logger.debug(f"从模型config读取KB映射失败: {e}")
+        logger.debug("从模型config读取KB映射失败: %s", e)
     return {}
 
 
@@ -164,7 +164,7 @@ def _resolve_kb_id(kb_name: str, *, database=None):
                 if b["name"] == kb_name:
                     return b["id"]
         except Exception as e:
-            logger.warning(f"数据库查询KB ID失败: {e}")
+            logger.warning("数据库查询KB ID失败: %s", e)
         return None
 
     # 全局路径：优先从模型config读取（训练时保存的映射，避免每次查库）
@@ -179,7 +179,7 @@ def _resolve_kb_id(kb_name: str, *, database=None):
             if b["name"] == kb_name:
                 return b["id"]
     except Exception as e:
-        logger.warning(f"数据库查询KB ID失败: {e}")
+        logger.warning("数据库查询KB ID失败: %s", e)
 
     return None
 
@@ -513,7 +513,7 @@ async def _generate_reply_impl(
                 try:
                     await response_cache.set(prompt_hash, cache_key, result.model_dump(), ttl=cache_ttl)
                 except Exception as e:
-                    logger.warning(f"vLLM缓存写入失败: {e}")
+                    logger.warning("vLLM缓存写入失败: %s", e)
                     pass
 
             return result
@@ -542,7 +542,7 @@ async def _generate_reply_impl(
                 costTime=failed_cost,
                 errorType=type(e).__name__,
             )
-            logger.warning(f"vLLM inference failed, falling back to model manager: {e}")
+            logger.warning("vLLM inference failed, falling back to model manager: %s", e)
             if vllm_effective_lora:
                 raise HTTPException(
                     status_code=503,
@@ -672,7 +672,7 @@ async def _generate_reply_impl(
             try:
                 await response_cache.set(prompt_hash, cache_key, result.model_dump(), ttl=cache_ttl)
             except Exception as e:
-                logger.warning(f"模型管理器缓存写入失败: {e}")
+                logger.warning("模型管理器缓存写入失败: %s", e)
                 pass
 
         return result
@@ -704,16 +704,16 @@ async def _generate_reply_impl(
             costTime=failed_cost,
             errorType=type(e).__name__,
         )
-        logger.error(f"generate reply failed: {e}", exc_info=True)
+        logger.exception("generate reply failed: %s", e)
         # C-F1 fix: 动态读取 app.config.failover_mgr，而非导入时绑定的 None
         _fmgr = _failover_mgr()
         if _fmgr:
             try:
                 fallback_provider = await _fmgr.check_and_failover()
                 if fallback_provider:
-                    logger.info(f"故障转移至: {fallback_provider}")
+                    logger.info("故障转移至: %s", fallback_provider)
             except Exception as fe:
-                logger.warning(f"故障转移失败: {fe}")
+                logger.warning("故障转移失败: %s", fe)
         # 安全：不把内部异常字符串返回给客户端（信息泄露），
         # 真实详情已写入日志（含 exc_info=True），客户端只收到通用消息。
         raise HTTPException(status_code=500, detail="生成回复失败，请稍后重试") from e
@@ -899,26 +899,20 @@ async def generate_reply(
 
 
 async def _retrieve_rag_bundle(query: str, top_k: int, filters: dict[str, Any] | None) -> dict[str, Any]:
-    """Run one retrieval pass and return context evidence plus confidence metadata.
-
-    P6 统一知识管线优先：查询命中已注册知识域（实体/别名/卷名门控）
-    时走 rag_pipeline 并返回带引用与 context_text 的 bundle；未命中
-    域或索引不可用时回退既有 RAGHelper 链路，普通聊天不加载游戏库。
-    """
+    """Retrieve curated character knowledge, then use the generic KB fallback."""
 
     def retrieve() -> dict[str, Any]:
         try:
-            from knowledge.rag_pipeline.service import get_rag_pipeline_service
+            from knowledge.multiscale_rag.runtime import get_multiscale_rag_service
 
-            p6 = get_rag_pipeline_service()
-            # retrieve_with_citations 内部负责首次惰性加载索引。不能先用
-            # is_available() 短路，否则后端重启后的第一条聊天永远无法
-            # 触发索引加载，会错误回退到空的 legacy 知识库。
-            bundle = p6.retrieve_with_citations(query, top_k=top_k, filters=filters)
+            character_rag = get_multiscale_rag_service()
+            # retrieve_with_citations 内部完成惰性加载和域门控。不能先用
+            # is_available() 短路，否则冷启动首条请求无法触发索引加载。
+            bundle = character_rag.retrieve_with_citations(query, top_k=top_k, filters=filters)
             if bundle is not None:
                 return bundle
-        except Exception as e:  # noqa: BLE001 - P6 故障不拖垮聊天，回退旧链路
-            logger.warning("P6 rag_pipeline retrieval failed, fallback to legacy: %s", e)
+        except Exception as e:  # noqa: BLE001 - character RAG failure uses generic KB fallback
+            logger.warning("Character knowledge retrieval failed; using generic KB fallback: %s", e)
 
         from knowledge.rag_helper import get_rag_helper
 
@@ -932,12 +926,12 @@ async def _retrieve_rag_bundle(query: str, top_k: int, filters: dict[str, Any] |
 
 
 def _rag_retrieval_timeout() -> float:
-    """Allow the first P6 index/model load to finish without weakening steady-state limits."""
+    """Allow character-index cold start without weakening steady-state limits."""
 
     try:
-        from knowledge.rag_pipeline.service import get_rag_pipeline_service
+        from knowledge.multiscale_rag.runtime import get_multiscale_rag_service
 
-        if not get_rag_pipeline_service().is_available():
+        if not get_multiscale_rag_service().is_warm():
             return max(_RAG_TIMEOUT, _RAG_COLD_START_TIMEOUT)
     except Exception:  # noqa: BLE001 - retrieval owns the fallback/error handling
         pass
@@ -996,9 +990,7 @@ async def _generate_with_vllm(
                     "citations": bundle.get("citations", []) if citations_enabled else [],
                     "confidence": bundle.get("confidence"),
                     "abstained": bundle.get("abstained", False),
-                    "answerMode": (
-                        "abstention" if bundle.get("abstained", False) else "grounded_answer"
-                    ),
+                    "answerMode": ("abstention" if bundle.get("abstained", False) else "grounded_answer"),
                     "domainId": next(iter(bundle.get("domains") or []), None),
                     "warnings": bundle.get("warnings") or None,
                     "modelInvoked": True,
@@ -1009,11 +1001,11 @@ async def _generate_with_vllm(
                     rag_meta["modelInvoked"] = False
                     return _RAG_ABSTENTION_REPLY, True, rag_meta
 
-                # P6 bundle 自带预算内组装的 context_text；旧链路结果
-                # 继续用 RAGHelper 的格式化器
-                p6_context = bundle.get("context_text") or ""
-                if p6_context:
-                    rag_context = p6_context
+                # 角色知识检索结果自带按粒度组装的 context_text；
+                # 通用知识库结果继续使用 RAGHelper 的格式化器。
+                character_knowledge_context = bundle.get("context_text") or ""
+                if character_knowledge_context:
+                    rag_context = character_knowledge_context
                 else:
                     from knowledge.rag_helper import get_rag_helper
 
@@ -1117,7 +1109,7 @@ def _get_system_prompt(lora_name: str) -> str:
 
         return get_lora_system_prompt(lora_name)
     except Exception as e:
-        logger.warning(f"获取系统提示词失败: {e}")
+        logger.warning("获取系统提示词失败: %s", e)
         return ""
 
 

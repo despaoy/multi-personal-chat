@@ -413,8 +413,11 @@ export interface KnowledgeSearchResult {
   score: number;
 }
 
-/** 搜索结果类型，与后端 search_knowledge 返回的 searchType 字段对应 */
+/** @deprecated 使用 KnowledgeRetrievalMode。保留该类型用于兼容旧 API 客户端。 */
 export type KnowledgeSearchType = "rag_pipeline" | "hybrid" | "keyword" | "empty";
+
+/** 稳定的知识检索模式。 */
+export type KnowledgeRetrievalMode = "evidence" | "hybrid" | "keyword" | "empty";
 
 /** 知识库统计数据 */
 export interface KnowledgeStats {
@@ -476,9 +479,10 @@ export interface KnowledgeSearchResponse {
   success: boolean;
   query: string;
   results: KnowledgeSearchResult[];
-  /** 检索路径：rag_pipeline | hybrid | keyword | empty
-   * 后端 _ensure_vector_index 失败或不存在的 KB 时会降级 */
+  /** @deprecated 使用 retrievalMode；将在下一个 API major 版本移除。 */
   searchType: KnowledgeSearchType;
+  /** 检索路径；向量索引不可用或目标知识库不存在时会降级。 */
+  retrievalMode: KnowledgeRetrievalMode;
 }
 
 /** 知识库统计响应 */

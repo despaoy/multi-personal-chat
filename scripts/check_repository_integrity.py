@@ -11,19 +11,34 @@ from pathlib import Path
 from urllib.parse import unquote
 
 ROOT = Path(__file__).resolve().parents[1]
+ARCHIVE_TEXT_SUFFIXES = frozenset(
+    {".json", ".md", ".ps1", ".py", ".sh", ".toml", ".txt", ".yaml", ".yml"}
+)
 
 
 def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def _canonical_archive_bytes(path: Path) -> bytes:
+    """Return the repository-canonical payload for cross-platform archive checks."""
+    payload = path.read_bytes()
+    if path.suffix.lower() in ARCHIVE_TEXT_SUFFIXES:
+        return payload.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+    return payload
+
+
 def _jsonl_count(path: Path) -> int:
-    return sum(bool(line.strip()) for line in path.read_text(encoding="utf-8").splitlines())
+    return sum(
+        bool(line.strip()) for line in path.read_text(encoding="utf-8").splitlines()
+    )
 
 
 def _check_frozen_dataset(errors: list[str]) -> None:
     base = ROOT / "backend/data/character_dialogues/experiments/v4"
-    manifest = json.loads((base / "canonical_dataset_manifest.json").read_text(encoding="utf-8"))
+    manifest = json.loads(
+        (base / "canonical_dataset_manifest.json").read_text(encoding="utf-8")
+    )
     for split in ("train", "validation"):
         path = ROOT / manifest[split]["path"]
         actual_hash = _sha256(path)
@@ -38,10 +53,15 @@ def _check_api_mounts(errors: list[str]) -> None:
     api_modules = {
         path.stem
         for path in (ROOT / "backend/api").glob("*.py")
-        if path.name != "__init__.py" and "APIRouter(" in path.read_text(encoding="utf-8")
+        if path.name != "__init__.py"
+        and "APIRouter(" in path.read_text(encoding="utf-8")
     }
     main_text = (ROOT / "backend/app/main.py").read_text(encoding="utf-8")
-    mounted = set(re.findall(r"^from api\.([a-zA-Z0-9_]+) import router as ", main_text, re.MULTILINE))
+    mounted = set(
+        re.findall(
+            r"^from api\.([a-zA-Z0-9_]+) import router as ", main_text, re.MULTILINE
+        )
+    )
     if missing := sorted(api_modules - mounted):
         errors.append(f"API modules not mounted: {', '.join(missing)}")
     if stale := sorted(mounted - api_modules):
@@ -64,25 +84,39 @@ def _check_frontend_navigation(errors: list[str]) -> None:
 
 def _check_script_indexes(errors: list[str]) -> None:
     indexes = (
-        (ROOT / "scripts", ROOT / "scripts/README.md", {"__init__.py", "check_repository_integrity.py"}),
+        (
+            ROOT / "scripts",
+            ROOT / "scripts/README.md",
+            {"__init__.py", "check_repository_integrity.py"},
+        ),
         (ROOT / "backend/scripts", ROOT / "backend/scripts/README.md", set()),
-        (ROOT / "backend/benchmarks", ROOT / "backend/benchmarks/README.md", {"__init__.py"}),
+        (
+            ROOT / "backend/benchmarks",
+            ROOT / "backend/benchmarks/README.md",
+            {"__init__.py"},
+        ),
     )
     for directory, readme_path, excluded in indexes:
         readme = readme_path.read_text(encoding="utf-8")
         active = {
             path.name
             for path in directory.iterdir()
-            if path.is_file() and path.suffix in {".py", ".ps1", ".sh"} and path.name not in excluded
+            if path.is_file()
+            and path.suffix in {".py", ".ps1", ".sh"}
+            and path.name not in excluded
         }
         if missing := sorted(name for name in active if f"`{name}`" not in readme):
-            errors.append(f"{readme_path.relative_to(ROOT)} missing scripts: {', '.join(missing)}")
+            errors.append(
+                f"{readme_path.relative_to(ROOT)} missing scripts: {', '.join(missing)}"
+            )
 
 
 def _check_readme_links(errors: list[str]) -> None:
     pattern = re.compile(r"!?(?:\[[^\]]*\])\(([^)]+)\)")
     for readme in ROOT.rglob("README.md"):
-        if any(part in {"node_modules", ".git"} for part in readme.parts):
+        if any(
+            part in {"node_modules", ".git", "local-notes"} for part in readme.parts
+        ):
             continue
         text = readme.read_text(encoding="utf-8")
         for raw_target in pattern.findall(text):
@@ -94,7 +128,9 @@ def _check_readme_links(errors: list[str]) -> None:
             try:
                 resolved.relative_to(ROOT)
             except ValueError:
-                errors.append(f"{readme.relative_to(ROOT)} link escapes repository: {raw_target}")
+                errors.append(
+                    f"{readme.relative_to(ROOT)} link escapes repository: {raw_target}"
+                )
                 continue
             if not resolved.exists():
                 errors.append(f"{readme.relative_to(ROOT)} broken link: {raw_target}")
@@ -123,18 +159,55 @@ def _check_archive_index(errors: list[str]) -> None:
         path = ROOT / entry["archived_path"]
         if not path.exists():
             continue
-        if entry.get("bytes") != path.stat().st_size:
+        payload = _canonical_archive_bytes(path)
+        if entry.get("bytes") != len(payload):
             errors.append(f"archive size mismatch: {entry['archived_path']}")
-        if entry.get("sha256") != _sha256(path):
+        if entry.get("sha256") != hashlib.sha256(payload).hexdigest():
             errors.append(f"archive hash mismatch: {entry['archived_path']}")
+
+
+def _check_p6_archive_manifest(errors: list[str]) -> None:
+    manifest_path = ROOT / "archive/p6_rag_pipeline/MANIFEST.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    entries = manifest.get("files", [])
+    if not entries:
+        errors.append("P6 archive manifest contains no files")
+        return
+    for entry in entries:
+        path = ROOT / entry["archived_path"]
+        if not path.is_file():
+            errors.append(f"P6 archive file missing: {entry['archived_path']}")
+            continue
+        payload = _canonical_archive_bytes(path)
+        if entry.get("bytes") != len(payload):
+            errors.append(f"P6 archive size mismatch: {entry['archived_path']}")
+        if entry.get("sha256") != hashlib.sha256(payload).hexdigest():
+            errors.append(f"P6 archive hash mismatch: {entry['archived_path']}")
 
 
 def _check_tracked_artifacts(errors: list[str]) -> None:
     result = subprocess.run(
-        ["git", "ls-files"], cwd=ROOT, check=True, capture_output=True, text=True, encoding="utf-8"
+        ["git", "ls-files"],
+        cwd=ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
     )
-    forbidden = re.compile(r"(?:^|/)(?:__pycache__|\.pytest_cache|\.next|node_modules)(?:/|$)|\.pyc$")
-    tracked = [path for path in result.stdout.splitlines() if forbidden.search(path)]
+    forbidden = re.compile(
+        r"(?:^|/)(?:__pycache__|\.pytest_cache|\.next|node_modules)(?:/|$)"
+        r"|\.pyc$"
+        r"|^local-notes/"
+        r"|^archive/p6_rag_pipeline/artifacts/"
+        r"|^backend/data/eval/rag_retrieval/reports/archive/"
+        r"|^backend/data/eval/rag_retrieval/reports/[^/]*_multiscale_[^/]*\.json$"
+        r"|^docs/research/POSTGRADUATE_[^/]*\.md$"
+    )
+    tracked = [
+        path
+        for path in result.stdout.splitlines()
+        if (ROOT / path).exists() and forbidden.search(path)
+    ]
     if tracked:
         errors.append(f"tracked generated artifacts: {', '.join(tracked[:10])}")
 
@@ -147,6 +220,7 @@ def main() -> int:
     _check_script_indexes(errors)
     _check_readme_links(errors)
     _check_archive_index(errors)
+    _check_p6_archive_manifest(errors)
     _check_tracked_artifacts(errors)
     if errors:
         print("Repository integrity check failed:", file=sys.stderr)

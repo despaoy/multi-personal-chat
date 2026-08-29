@@ -25,6 +25,9 @@ if TYPE_CHECKING:  # pragma: no cover - 仅类型注解使用，避免运行时�
 Message = dict[str, str]
 RetrievalStatus = Literal["not_requested", "ok", "abstained", "error"]
 
+DEFAULT_CONTEXT_WINDOW_TOKENS = 24576
+CONTEXT_SAFETY_MARGIN_TOKENS = 512
+
 MEMORY_ATTRIBUTION_POLICY = (
     "长期记忆参考中的‘用户’始终指当前对话者，不是角色自身。"
     "当对话者用第一人称询问自己的历史信息时，回答必须用第二人称‘你’归属这些事实，"
@@ -64,7 +67,8 @@ class GenerationRequest:
     repetition_penalty: float = 1.0
     frequency_penalty: float = 0.0
     enable_thinking: bool = False
-    evidence_max_chars: int = 800
+    evidence_max_chars: int = 6000
+    context_window_tokens: int = DEFAULT_CONTEXT_WINDOW_TOKENS
     apply_prompt_policy: bool = True
     # 可选的角色上下文：None 时生成行为与旧链路完全一致。
     character_context: "CompiledCharacterContext | None" = None
@@ -99,6 +103,41 @@ def _conversation_history(history: Sequence[Mapping[str, str]]) -> list[Message]
         if role in {"user", "assistant"} and content:
             messages.append({"role": role, "content": content})
     return messages
+
+
+def _estimated_tokens(text: str) -> int:
+    """Conservative tokenizer-free estimate for mixed Chinese/ASCII text."""
+    non_ascii = sum(1 for char in text if ord(char) > 127)
+    ascii_chars = len(text) - non_ascii
+    return non_ascii + (ascii_chars + 3) // 4
+
+
+def _trim_history_to_budget(
+    history: list[Message],
+    *,
+    fixed_messages: Sequence[Message],
+    context_window_tokens: int,
+    max_output_tokens: int,
+) -> list[Message]:
+    """Keep the newest complete history messages within the input budget."""
+    fixed_tokens = sum(_estimated_tokens(item["content"]) + 4 for item in fixed_messages)
+    available = max(
+        0,
+        int(context_window_tokens)
+        - int(max_output_tokens)
+        - CONTEXT_SAFETY_MARGIN_TOKENS
+        - fixed_tokens,
+    )
+    kept: list[Message] = []
+    used = 0
+    for item in reversed(history):
+        cost = _estimated_tokens(item["content"]) + 4
+        if used + cost > available:
+            break
+        kept.append(item)
+        used += cost
+    kept.reverse()
+    return kept
 
 
 def _system_prompt(request: GenerationRequest) -> str:
@@ -138,25 +177,30 @@ def build_generation_request(request: GenerationRequest) -> GenerationPlan:
     messages: list[Message] = []
     if system_prompt:
         messages.append({"role": "system", "content": system_prompt})
-    messages.extend(_conversation_history(request.history))
-    messages.append(
-        {
-            "role": "user",
-            "content": build_grounded_user_message(
-                request.message,
-                request.retrieval.evidence if request.retrieval.has_evidence else "",
-                max_chars=request.evidence_max_chars,
-                # 长期记忆只进入用户消息的不可信参考区，绝不进入系统提示词。
-                memory_context=(
-                    request.character_context.reference_context
-                    if request.character_context is not None
-                    else ""
-                ),
-                # 对话者昵称（用户可控）同样只进不可信参考区。
-                speaker=sanitize_speaker_label(request.interlocutor),
+    current_user_message = {
+        "role": "user",
+        "content": build_grounded_user_message(
+            request.message,
+            request.retrieval.evidence if request.retrieval.has_evidence else "",
+            max_chars=request.evidence_max_chars,
+            # 长期记忆只进入用户消息的不可信参考区，绝不进入系统提示词。
+            memory_context=(
+                request.character_context.reference_context
+                if request.character_context is not None
+                else ""
             ),
-        }
+            # 对话者昵称（用户可控）同样只进不可信参考区。
+            speaker=sanitize_speaker_label(request.interlocutor),
+        ),
+    }
+    history = _trim_history_to_budget(
+        _conversation_history(request.history),
+        fixed_messages=(*messages, current_user_message),
+        context_window_tokens=request.context_window_tokens,
+        max_output_tokens=request.max_tokens,
     )
+    messages.extend(history)
+    messages.append(current_user_message)
 
     temperature = (
         min(request.temperature, 0.5)

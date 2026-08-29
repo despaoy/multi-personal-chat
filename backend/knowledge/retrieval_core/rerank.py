@@ -1,4 +1,4 @@
-"""Reranker 接入（P6）。
+"""Shared reranker integration.
 
 优先接入项目现有 CrossEncoderReranker（bge-reranker-base，
 RERANKER_ENABLED 控制）；本地模型不可用时走确定性特征降级
@@ -159,10 +159,7 @@ class DeterministicReranker:
             if identity_intent and "身份" in text:
                 score += _WEIGHTS["identity_alignment"]
 
-            if (
-                analysis.predicate_preferences
-                and doc.metadata.get("predicate") in analysis.predicate_preferences
-            ):
+            if analysis.predicate_preferences and doc.metadata.get("predicate") in analysis.predicate_preferences:
                 score += _WEIGHTS["predicate_alignment"]
 
             if (
@@ -253,12 +250,12 @@ class PipelineReranker:
             )
             if probe and "rerank_score" not in probe[0]:
                 self._cross_encoder_unavailable = True
-                logger.info("CrossEncoder 模型不可用，P6 使用确定性降级重排")
+                logger.info("CrossEncoder 模型不可用，使用确定性降级重排")
                 return None
             return encoder
         except Exception as e:  # noqa: BLE001 - 任何失败都走降级
             self._cross_encoder_unavailable = True
-            logger.info("CrossEncoder 初始化失败，P6 使用确定性降级重排: %s", e)
+            logger.info("CrossEncoder 初始化失败，使用确定性降级重排: %s", e)
             return None
 
     def rerank(

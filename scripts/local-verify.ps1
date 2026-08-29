@@ -64,6 +64,18 @@ $CompileTargets = @(
 )
 
 Invoke-Step "Python syntax check" $Backend $Python.Command ($PyArgs + @("-m", "py_compile") + $CompileTargets)
+Invoke-Step "Character retrieval lint" $Root $Python.Command ($PyArgs + @(
+    "-m", "ruff", "check",
+    "backend/api/ask.py", "backend/api/generate.py", "backend/api/knowledge.py", "backend/db/schemas.py",
+    "backend/knowledge/multiscale_rag", "backend/knowledge/retrieval_core",
+    "backend/knowledge/grounded_answer", "backend/scripts/build_character_rag_index.py"
+))
+Invoke-Step "Character retrieval format check" $Root $Python.Command ($PyArgs + @(
+    "-m", "ruff", "format", "--check",
+    "backend/api/ask.py", "backend/api/generate.py", "backend/api/knowledge.py", "backend/db/schemas.py",
+    "backend/knowledge/multiscale_rag", "backend/knowledge/retrieval_core",
+    "backend/knowledge/grounded_answer", "backend/scripts/build_character_rag_index.py"
+))
 # Alembic 不提供 __main__ 入口，`python -m alembic` 会报
 # "No module named alembic.__main__"。改为从所选 Python 的 sysconfig
 # 定位 alembic 可执行文件，确保 Python 和 Alembic 使用同一环境。

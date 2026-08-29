@@ -57,6 +57,8 @@ chmod 600 backend/.env
 - `VLLM_LORA_ROOT="$MULTIPERSONAL_LAB_ROOT"/runtime/loras`
 - `EMBEDDING_MODEL_PATH="$MULTIPERSONAL_LAB_ROOT"/runtime/models/bge-m3`
 - `RERANKER_MODEL_PATH="$MULTIPERSONAL_LAB_ROOT"/runtime/models/bge-reranker-v2-m3`
+- `CHARACTER_RAG_INDEX_ROOT="$MULTIPERSONAL_LAB_ROOT"/runtime/rag/character_knowledge_index_v3`
+- `CHARACTER_RAG_ABSTAIN_THRESHOLD=0.25`
 
 Next.js 本地启动如需覆盖 `BACKEND_URL`，写入仓库根目录 `.env.local`，不要写入根目录 `.env`。
 
@@ -83,6 +85,27 @@ Compose 只从 `deploy/.env` 做变量插值。复制后至少设置：
 模型文件放在 `deploy/data/models/Qwen3-8B-Instruct-AWQ`；不要把宿主机模型路径误写成容器内路径。
 
 生产或公开网络禁止空 token、默认 JWT 密钥和宽泛 CORS。
+
+### 4.3 角色知识索引
+
+多粒度角色知识索引是生成产物，不随源码发布。部署前使用与运行时相同的
+embedding 模型构建：
+
+```bash
+cd "$MULTIPERSONAL_LAB_ROOT/multi-personal-chat"
+python backend/scripts/build_character_rag_index.py \
+  --embedding-model-path "$MULTIPERSONAL_LAB_ROOT/runtime/models/bge-m3"
+```
+
+默认输出到
+`backend/data/knowledge/tsukiyashiro_kisaki/character_knowledge_index_v3/`。
+标准 Compose 和 15GB 显存 Compose 都会将该目录只读挂载为
+`/app/character_knowledge_index`，并设置 `CHARACTER_RAG_INDEX_ROOT`。
+
+裸机部署如将索引复制到仓库外，必须在 `backend/.env` 中更新
+`CHARACTER_RAG_INDEX_ROOT`。每个索引分区都应同时包含 `documents.jsonl`、
+`vectors.npy` 和 `manifest.json`。索引缺失时后端仍可启动，但角色作品问答会
+降级到通用知识库或拒答。
 
 ## 5. 验证源码
 
@@ -112,7 +135,8 @@ CUDA_VISIBLE_DEVICES=0 vllm serve \
   --port 8001 \
   --quantization awq_marlin \
   --gpu-memory-utilization 0.88 \
-  --max-model-len 8192 \
+  --max-model-len 24576 \
+  --max-num-seqs 8 \
   --enable-lora \
   --max-lora-rank 64
 ```
@@ -162,7 +186,7 @@ VERIFY_BASE_URL=https://chat.example.com VERIFY_USERNAME=admin VERIFY_PASSWORD='
 
 未提供账号时脚本只做无写入的部署就绪检查，不会自动注册或残留测试用户。
 
-真实验收还应覆盖：登录、生成、历史入库、LoRA 扫描/切换、知识库导入/检索、AstrBot 鉴权与幂等、监控指标。
+真实验收还应覆盖：登录、生成、历史入库、LoRA 扫描/切换、角色知识检索、通用知识库导入/检索、AstrBot 鉴权与幂等、监控指标。
 
 ## 8. SSH 映射
 

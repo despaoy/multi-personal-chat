@@ -43,8 +43,9 @@ from repositories.messages import MessageRepository
 logger = logging.getLogger(__name__)
 
 # prepare_turn 并发加载时历史读取的参数
-HISTORY_LIMIT = 8
-HISTORY_MAX_CHARS = 6000
+HISTORY_LIMIT = 24
+# 约对应 8K 中文/混合 token，和 24K 模型窗口的三分之一历史预算对齐。
+HISTORY_MAX_CHARS = 16000
 
 
 @dataclass(frozen=True)

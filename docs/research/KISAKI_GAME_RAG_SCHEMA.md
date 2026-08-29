@@ -6,6 +6,9 @@
 - 测试：`backend/tests/test_game_rag_models.py`（33 项，全部通过）
 - 上游依据：`KISAKI_GAME_RAG_BASELINE_AUDIT.md`（P0/P0.1/P0.2 修订后）
 
+> 本文是 P1 阶段的数据契约记录。阶段号只用于研究过程追溯；当前生产功能名、
+> 索引和运行入口见[多粒度角色知识检索](../architecture/CHARACTER_KNOWLEDGE_RETRIEVAL.md)。
+
 本阶段只定义数据契约，不包含解析、切分、向量化、数据库写入或 API 集成。
 
 ---
@@ -102,7 +105,7 @@ P0.2 审计修正后确立的语义维度分离原则：**内容类型、时间�
 
 ## 5. 已知边界（P1 范围外）
 
-- 不含 `embedding_text` / FAISS / BM25 / 数据库主键 / API 响应字段（P6+ 再定）；
+- 不含 `embedding_text` / FAISS / BM25 / 数据库主键 / API 响应字段（当时规划由后续索引阶段决定）；
 - `SourceSpan` 不校验路径存在性（P1 不读文件）；
 - `mentioned_characters` / `present_characters` 的抽取方式（P4 本地 LLM + 人工审核）不在本阶段定义；
 - 人物缺席状态不存储，由 `speakers / mentioned_characters / present_characters` 运行时推导（P0.2 决议）。

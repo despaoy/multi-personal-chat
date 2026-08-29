@@ -289,6 +289,26 @@ def test_generation_request_character_context_default_none():
     assert request.character_context is None
 
 
+def test_generation_request_uses_24k_context_and_keeps_newest_history():
+    history = tuple(
+        {"role": "user" if index % 2 == 0 else "assistant", "content": str(index) + "旧" * 600}
+        for index in range(20)
+    )
+    request = GenerationRequest(
+        message="当前问题",
+        history=history,
+        context_window_tokens=4096,
+        max_tokens=512,
+    )
+    plan = build_generation_request(request)
+
+    assert GenerationRequest(message="测试").context_window_tokens == 24576
+    retained = [item["content"] for item in plan.messages if item["role"] != "system"][:-1]
+    assert retained
+    assert retained[-1].startswith("19")
+    assert not retained[0].startswith("0")
+
+
 def test_character_context_field_is_typed_on_request():
     """GenerationRequest 可携带 CompiledCharacterContext 且不可变。"""
     context = _character_context()

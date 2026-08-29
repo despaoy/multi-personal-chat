@@ -1,0 +1,4 @@
+-r requirements.txt
+
+# Formatting and linting. Keep this compatible with backend/pyproject.toml.
+ruff>=0.16.4,<0.17

@@ -1,7 +1,7 @@
 """回答模式识别与 abstention 策略（确定性规则，无额外模型调用）。
 
-信号来源（复用上游意图检测、P6 域门控与检索结果，不新增低质量分类模型）：
-- P6 bundle 的 confidence / abstained / results / query_analysis
+信号来源（复用上游意图检测、角色知识域门控与检索结果，不新增低质量分类模型）：
+- 角色知识检索结果的 confidence / abstained / results / query_analysis
 - 检索置信度、top1/top2 差距、sparse 与 vector 是否共同命中、实体匹配
 - 调用方是否注入 persona（角色语气）
 
@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 class AbstentionThresholds:
     """abstention / clarification 门槛（综合多信号，非单一向量分数）。"""
 
-    # 低于 hard → abstention（P6 已按 0.25 输出 abstained，这里二次确认）
+    # 低于 hard → abstention（检索层已输出 abstained，这里二次确认）
     hard_confidence: float = 0.25
     # [hard, soft) 且实体缺失 → clarification；否则 grounded 带限定
     soft_confidence: float = 0.45
@@ -47,7 +47,7 @@ class ModeDecision:
 
 
 def _top_rerank_scores(bundle: Mapping[str, Any], limit: int = 2) -> list[float | None]:
-    """按检索排名取前 N 个归一化重排分（P6 results 顺序即排名顺序）。"""
+    """按检索排名取前 N 个归一化重排分（results 顺序即排名顺序）。"""
     scores: list[float | None] = []
     citation_by_id = {str(c.get("source_id")): c for c in (bundle.get("citations") or [])}
     for item in (bundle.get("results") or [])[:limit]:

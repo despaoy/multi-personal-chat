@@ -1,4 +1,4 @@
-"""混合检索（P6）：稀疏召回 + 向量召回 + 实体精确召回 + RRF 融合。
+"""Shared hybrid retrieval: sparse + vector + entity recall + RRF fusion.
 
 三路召回通道：
 1. sparse：BM25（归一查询 + 原始查询，取最优名次）

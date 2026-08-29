@@ -391,11 +391,12 @@ async def test_model_manager_fallback_uses_character_context(monkeypatch):
     assert recorded == []
 
     session_history = captured["session_history"]
-    # 系统提示词包含编译后的关系动态，且不含长期记忆（不可信数据不进系统区）
+    # 系统提示词包含编译后的关系动态，但不含具体记忆内容；安全规则本身
+    # 可以使用“长期记忆参考”这一术语来约束模型如何解释不可信参考区。
     system_message = session_history[0]
     assert system_message["role"] == "system"
     assert "关系动态：熟悉阶段" in system_message["content"]
-    assert "长期记忆" not in system_message["content"]
+    assert "长期记忆：用户说自己叫小明" not in system_message["content"]
     # request.history 为空时使用数据库加载的历史
     assert any(m["content"] == "数据库历史消息" for m in session_history)
     # 长期记忆进入最终用户消息的不可信参考区

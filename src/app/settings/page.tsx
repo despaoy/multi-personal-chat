@@ -503,7 +503,7 @@ function SettingsContent() {
                     <div className="space-y-2">
                       <Label>{t('settings.model.contextWindow')}</Label>
                       <Select
-                        value={getStr('contextWindow', '8k')}
+                        value={getStr('contextWindow', '24k')}
                         onValueChange={(v) => updateField('contextWindow', v)}
                       >
                         <SelectTrigger>
@@ -513,6 +513,7 @@ function SettingsContent() {
                           <SelectItem value="4k">4K tokens</SelectItem>
                           <SelectItem value="8k">8K tokens</SelectItem>
                           <SelectItem value="16k">16K tokens</SelectItem>
+                          <SelectItem value="24k">24K tokens</SelectItem>
                           <SelectItem value="32k">32K tokens</SelectItem>
                         </SelectContent>
                       </Select>

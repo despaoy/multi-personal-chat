@@ -141,6 +141,7 @@ vector_db/
 *.index
 # P6 local build output; rebuild from approved knowledge cards.
 backend/data/knowledge/*/rag_index/
+backend/data/knowledge/*/character_knowledge_index_v*/
 
 # === 知识库语料 ===
 backend/knowledge_bases/
@@ -208,6 +209,15 @@ scripts/qwen3_tokenizer/
 
 # === Codex PPT 审查临时目录 ===
 .codex_ppt_review/
+
+# === Repository-local temporary artifacts ===
+/tmp/
+/local-notes/
+
+# === Local evaluation evidence and retired generated artifacts ===
+/archive/p6_rag_pipeline/artifacts/
+/backend/data/eval/rag_retrieval/reports/archive/
+/backend/data/eval/rag_retrieval/reports/*_multiscale_*.json
 
 # === Kisaki v4 测试临时目录 ===
 .test_tmp_kisaki_v4/

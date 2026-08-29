@@ -1,4 +1,4 @@
-"""P7 知识问答 API（grounded-answer 业务入口）。
+"""知识问答 API（Grounded Answer 业务入口）。
 
 - POST /api/ask        非流式：answer + 绑定 citations + retrieval metadata
 - POST /api/ask/stream 流式（SSE）：meta → delta* → citations → done/error
@@ -161,7 +161,7 @@ async def ask(request: AskRequest, current_user: dict = Depends(get_current_user
     )
     cost_time = time.perf_counter() - start
     logger.info(
-        "p7_ask domain=%s mode=%s abstained=%s citations=%d cost=%.2fs",
+        "grounded_answer domain=%s mode=%s abstained=%s citations=%d cost=%.2fs",
         result.domain_id,
         result.answer_mode.value,
         result.abstained,
@@ -216,7 +216,7 @@ async def ask_stream(
             async for event in stream:
                 # 客户端断开：终止生成器（取消传播到底层 httpx 流）
                 if await http_request.is_disconnected():
-                    logger.info("p7_ask_stream client disconnected")
+                    logger.info("grounded_answer_stream client disconnected")
                     break
                 payload = dict(event.data)
                 if event.type == "citations":
@@ -225,7 +225,7 @@ async def ask_stream(
                     "utf-8"
                 )
         except Exception as e:  # noqa: BLE001 - SSE 中途异常以 error 事件收尾
-            logger.warning("p7_ask_stream failed: %s", type(e).__name__)
+            logger.warning("grounded_answer_stream failed: %s", type(e).__name__)
             yield "data: {}\n\n".format(
                 json.dumps(
                     {"type": "error", "kind": "internal_error", "message": "服务内部错误"},
