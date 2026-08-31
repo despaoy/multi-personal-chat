@@ -32,7 +32,6 @@ from inference.generation_request import (
 )
 from inference.generation_request import (
     RetrievalResult,
-    build_generation_request,
     generate_character_response,
 )
 from inference.lora_registry import get_lora_character_id
@@ -1049,6 +1048,7 @@ async def _generate_with_vllm(
             # 编译后的角色上下文：画像/关系/情景/决策进系统提示词，
             # 长期记忆只进用户消息的不可信参考区。
             character_context=(prepared_character_turn.compiled if prepared_character_turn else None),
+            reply_guard=getattr(prepared_character_turn, "reply_guard", None),
             lora_name=lora_name if lora_name != "default" else None,
             temperature=_temperature,
             max_tokens=_max_tokens,
@@ -1078,26 +1078,33 @@ async def _generate_with_model_manager_character(
     session_history（系统提示词+历史）与最后一条用户消息。
     """
     _cfg = runtime_config or {}
-    plan = build_generation_request(
-        CharacterGenerationRequest(
-            message=request.message,
-            history=(tuple(request.history or []) if (request.history or []) else prepared_character_turn.history),
-            persona_prompt=_get_system_prompt(lora_name),
-            interlocutor=request.senderName or request.userName or "普通用户",
-            character_context=prepared_character_turn.compiled,
-            lora_name=lora_name if lora_name != "default" else None,
-            temperature=float(_cfg.get("temperature", os.getenv("VLLM_TEMPERATURE", "0.7"))),
-            max_tokens=int(_cfg.get("maxTokens", os.getenv("VLLM_MAX_TOKENS", "2048"))),
-            top_p=float(_cfg.get("topP", os.getenv("VLLM_TOP_P", "0.9"))),
+    generation_request = CharacterGenerationRequest(
+        message=request.message,
+        history=(tuple(request.history or []) if (request.history or []) else prepared_character_turn.history),
+        persona_prompt=_get_system_prompt(lora_name),
+        interlocutor=request.senderName or request.userName or "普通用户",
+        character_context=prepared_character_turn.compiled,
+        reply_guard=getattr(prepared_character_turn, "reply_guard", None),
+        lora_name=lora_name if lora_name != "default" else None,
+        temperature=float(_cfg.get("temperature", os.getenv("VLLM_TEMPERATURE", "0.7"))),
+        max_tokens=int(_cfg.get("maxTokens", os.getenv("VLLM_MAX_TOKENS", "2048"))),
+        top_p=float(_cfg.get("topP", os.getenv("VLLM_TOP_P", "0.9"))),
+    )
+    total_cost = 0.0
+
+    async def _model_manager_adapter(*, messages, max_tokens, **_kwargs):
+        nonlocal total_cost
+        reply, call_cost = await model_manager.async_generate(
+            prompt=messages[-1]["content"],
+            session_history=messages[:-1],
+            rag_docs=None,
+            max_tokens_override=max_tokens,
         )
-    )
-    messages = [dict(message) for message in plan.messages]
-    reply, cost_time = await model_manager.async_generate(
-        prompt=messages[-1]["content"],
-        session_history=messages[:-1],
-        rag_docs=None,
-    )
-    return reply, cost_time
+        total_cost += call_cost
+        return reply
+
+    generation = await generate_character_response(generation_request, _model_manager_adapter)
+    return generation.reply, round(total_cost, 2)
 
 
 def _get_system_prompt(lora_name: str) -> str:

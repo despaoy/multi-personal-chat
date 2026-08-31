@@ -1,8 +1,8 @@
-"""轻量角色上下文模块（第一步）。
+"""角色上下文与选择性语义复核模块。
 
 统一表示人物信息（人物画像 + 当前关系 + 当前情景 + 相关记忆 + 本轮行为决策），
-并安全、高效地整理成模型输入。暂时不改数据库、不调用额外 LLM、
-不修改现有生成链路。
+并安全、高效地整理成模型输入。确定性规则始终先执行；调用方可为含混、
+非安全轮注入一次闭集语义复核，失败时原样回退规则状态。
 """
 
 from character.context_builder import (
@@ -21,23 +21,26 @@ from character.context_builder import (
     compile_profile_context,
     compile_reference_context,
 )
-from character.profile_registry import (
-    CharacterProfileNotFoundError,
-    CharacterProfileRegistry,
-    get_default_profile_registry,
-)
 from character.models import (
     CharacterContext,
     CharacterProfile,
     CompiledCharacterContext,
     DecisionPlan,
+    InteractionState,
     MemoryItem,
     MemoryType,
     RelationshipStage,
     RelationshipState,
     SituationState,
     UserScope,
+    WeightedSignal,
 )
+from character.profile_registry import (
+    CharacterProfileNotFoundError,
+    CharacterProfileRegistry,
+    get_default_profile_registry,
+)
+from character.semantic_state_estimator import SemanticReviewOutcome, SemanticStateEstimator
 
 __all__ = [
     "MAX_DECISION_FIELD_CHARS",
@@ -56,12 +59,16 @@ __all__ = [
     "CharacterProfile",
     "CompiledCharacterContext",
     "DecisionPlan",
+    "InteractionState",
     "MemoryItem",
     "MemoryType",
     "RelationshipStage",
     "RelationshipState",
     "SituationState",
+    "SemanticReviewOutcome",
+    "SemanticStateEstimator",
     "UserScope",
+    "WeightedSignal",
     "build_user_scope",
     "compile_character_context",
     "compile_dynamic_context",

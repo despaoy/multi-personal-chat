@@ -625,10 +625,11 @@ class CharacterRelationship(Base):
 # ============================================
 
 class CharacterMemory(Base):
-    """角色长期记忆表：按角色+用户范围隔离的用户事实与共同经历。
+    """角色长期记忆 claim。
 
-    memory_key 在同一范围内唯一（upsert 键），例如
-    "user_name"、"preference_甜食"，防止同一事实反复入库。
+    聊天消息仍是不可变的原始 event；本表保存从 event 提炼出的 claim。
+    ``revision=0`` 是旧 ``add_or_update`` 调用的兼容槽，新的写入使用递增
+    revision 形成 append-only 版本链。旧记录迁移后默认属于 conversation scope。
     """
     __tablename__ = "character_memories"
     __table_args__ = (
@@ -641,6 +642,17 @@ class CharacterMemory(Base):
             "conversation_type",
             "conversation_id",
         ),
+        Index(
+            "idx_character_memories_active_lookup",
+            "platform",
+            "adapter",
+            "sender_id",
+            "scope_level",
+            "status",
+            "updated_at",
+        ),
+        Index("idx_character_memories_parent", "parent_memory_id"),
+        Index("idx_character_memories_supersedes", "supersedes_memory_id"),
         UniqueConstraint(
             "character_id",
             "platform",
@@ -648,8 +660,10 @@ class CharacterMemory(Base):
             "sender_id",
             "conversation_type",
             "conversation_id",
+            "scope_level",
             "memory_key",
-            name="uq_character_memory_key",
+            "revision",
+            name="uq_character_memory_revision",
         ),
     )
 
@@ -660,10 +674,23 @@ class CharacterMemory(Base):
     sender_id: Mapped[str] = mapped_column(Text, nullable=False)
     conversation_type: Mapped[str] = mapped_column(Text, nullable=False)
     conversation_id: Mapped[str] = mapped_column(Text, nullable=False)
+    scope_level: Mapped[str] = mapped_column(Text, nullable=False, server_default="conversation")
     memory_type: Mapped[str] = mapped_column(Text, nullable=False)
     memory_key: Mapped[str] = mapped_column(Text, nullable=False)
+    revision: Mapped[int] = mapped_column(Integer, nullable=False, server_default="1")
+    relation_type: Mapped[str] = mapped_column(Text, nullable=False, server_default="ADD")
+    status: Mapped[str] = mapped_column(Text, nullable=False, server_default="active")
+    parent_memory_id: Mapped[Optional[int]] = mapped_column(Integer)
+    supersedes_memory_id: Mapped[Optional[int]] = mapped_column(Integer)
     content: Mapped[str] = mapped_column(Text, nullable=False)
     importance: Mapped[float] = mapped_column(Float, nullable=False)
+    confidence: Mapped[float] = mapped_column(Float, nullable=False, server_default="1.0")
     source_message_id: Mapped[Optional[str]] = mapped_column(Text)
+    source_message_ids_json: Mapped[str] = mapped_column(Text, nullable=False, server_default="[]")
+    evidence_json: Mapped[str] = mapped_column(Text, nullable=False, server_default="[]")
+    metadata_json: Mapped[str] = mapped_column(Text, nullable=False, server_default="{}")
+    valid_from: Mapped[Optional[str]] = mapped_column(Text)
+    valid_to: Mapped[Optional[str]] = mapped_column(Text)
+    observed_at: Mapped[Optional[str]] = mapped_column(Text)
     created_at: Mapped[str] = mapped_column(Text, nullable=False)
     updated_at: Mapped[str] = mapped_column(Text, nullable=False)

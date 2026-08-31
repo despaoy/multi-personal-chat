@@ -6,13 +6,12 @@ bot 层（API 层导入 bot 层），违反分层架构。本模块作为中立�
 
 依赖方向：api/ → inference/ ← bot/
 """
+
 import os
 from pathlib import Path
 
 _BACKEND_ROOT = Path(__file__).parent.parent
-_KISAKI_PROMPT_PATH = (
-    _BACKEND_ROOT / "data" / "character_dialogues" / "kisaki_system_prompt_v3.txt"
-)
+_KISAKI_PROMPT_PATH = _BACKEND_ROOT / "data" / "character_dialogues" / "kisaki_runtime_prompt_v4.txt"
 
 
 def _resolve_path(p: str) -> str:
@@ -105,8 +104,9 @@ def get_char_name(lora_name: str = None, current_lora: str = None) -> str:
         角色名称字符串。
     """
     import re
+
     name = lora_name or current_lora or "hutao"
     info = LORA_REGISTRY.get(name, {})
     sp = info.get("system_prompt", "")
-    m = re.search(r'你是(.+?)[，,]', sp)
+    m = re.search(r"你是(.+?)[，,]", sp)
     return m.group(1) if m else name

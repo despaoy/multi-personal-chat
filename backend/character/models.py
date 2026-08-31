@@ -15,6 +15,50 @@ from typing import Literal
 RelationshipStage = Literal["stranger", "acquaintance", "familiar", "close"]
 MemoryType = Literal["user_fact", "shared_event", "promise", "conversation_summary"]
 ConversationType = Literal["private", "group", "channel"]
+MemoryStatus = Literal["active", "current", "pending", "superseded", "retracted", "archived"]
+
+
+@dataclass(frozen=True)
+class WeightedSignal:
+    """A normalized, trusted interaction signal.
+
+    ``signal_id`` is always chosen by application code from a closed
+    vocabulary.  User text is deliberately not stored here because these
+    values are later compiled into the trusted system-prompt area.
+    """
+
+    signal_id: str
+    score: float = 0.0
+
+
+@dataclass(frozen=True)
+class InteractionState:
+    """Soft, multi-dimensional estimate of the current interaction.
+
+    Unlike :class:`SituationState`, this object does not force a turn into one
+    mutually-exclusive bucket.  It preserves competing situation hypotheses,
+    dialogue acts, user needs and social/affective dimensions.  All strings are
+    application-owned enum values; no user-controlled text may be copied into
+    this object.
+    """
+
+    primary_situation: str = "daily"
+    situation_scores: tuple[WeightedSignal, ...] = ()
+    user_acts: tuple[WeightedSignal, ...] = ()
+    user_needs: tuple[WeightedSignal, ...] = ()
+    valence: float = 0.0
+    arousal: float = 0.0
+    warmth: float = 0.0
+    face_threat: float = 0.0
+    conversation_phase: str = "sustaining"
+    confidence: float = 0.0
+    safety_triggered: bool = False
+
+    @property
+    def has_soft_context(self) -> bool:
+        """Whether the state contains information worth compiling."""
+
+        return bool(self.situation_scores or self.user_acts or self.user_needs or self.safety_triggered)
 
 
 @dataclass(frozen=True)
@@ -103,12 +147,44 @@ class SituationState:
 
 @dataclass(frozen=True)
 class MemoryItem:
-    """已经被选中的一条相关记忆（由调用方完成检索与排序）。"""
+    """已经被选中的一条相关记忆（由调用方完成检索与排序）。
+
+    前四个字段保持第一版的顺序，旧调用方使用
+    ``MemoryItem(id, type, content, importance)`` 时无需修改。其余字段是
+    claim 生命周期与证据包元数据，只会进入不可信参考区：
+
+    - ``status``/``valid_from``/``valid_to`` 表示版本及有效时间；
+    - ``historical`` 只由检索服务在明确历史问答中设置，允许旧版本作为
+      带时间边界的参考进入不可信上下文；
+    - ``relation_type`` 保留本次 claim 与历史版本的关系；
+    - ``evidence`` 与 ``source_message_ids`` 让回答能够追溯到原始事件，
+      但其中的文本仍是用户控制内容，不能提升为系统指令。
+    """
 
     memory_id: str
     memory_type: MemoryType
     content: str
     importance: float = 0.0
+    evidence: tuple[str, ...] = ()
+    valid_from: str = ""
+    valid_to: str = ""
+    confidence: float = 1.0
+    status: MemoryStatus = "active"
+    relation_type: str = "ADD"
+    source_message_ids: tuple[str, ...] = ()
+    historical: bool = False
+
+    @property
+    def relation(self) -> str:
+        """兼容把关系字段简称为 relation 的消费方。"""
+
+        return self.relation_type
+
+    @property
+    def source_ids(self) -> tuple[str, ...]:
+        """兼容通用 evidence packet 对来源 ID 的称呼。"""
+
+        return self.source_message_ids
 
 
 @dataclass(frozen=True)
@@ -122,6 +198,8 @@ class DecisionPlan:
     tone: str = ""
     action: str = ""
     avoid: str = ""
+    strategy_ids: tuple[str, ...] = ()
+    confidence: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -134,6 +212,7 @@ class CharacterContext:
     situation: SituationState = field(default_factory=SituationState)
     memories: tuple[MemoryItem, ...] = ()
     decision: DecisionPlan = field(default_factory=DecisionPlan)
+    interaction: InteractionState = field(default_factory=InteractionState)
 
 
 @dataclass(frozen=True)

@@ -28,17 +28,32 @@ def test_prompt_v3_contains_only_persona_and_style_rules():
     assert "不等于发言者就是该人物" in composition
 
 
-def test_runtime_lora_registry_uses_canonical_kisaki_prompt():
+def test_runtime_lora_registry_uses_hardened_kisaki_prompt_without_mutating_frozen_training_prompt():
     from inference.lora_registry import get_lora_system_prompt
 
-    prompt = (
+    runtime_prompt = (
+        PROJECT_ROOT
+        / "backend"
+        / "data"
+        / "character_dialogues"
+        / "kisaki_runtime_prompt_v4.txt"
+    ).read_text(encoding="utf-8").strip()
+    frozen_training_prompt = (
         PROJECT_ROOT
         / "backend"
         / "data"
         / "character_dialogues"
         / "kisaki_system_prompt_v3.txt"
     ).read_text(encoding="utf-8").strip()
-    assert get_lora_system_prompt("kisaki") == prompt
+
+    assert get_lora_system_prompt("kisaki") == runtime_prompt
+    assert runtime_prompt != frozen_training_prompt
+    assert "当前对话者默认是作品之外的独立用户" in runtime_prompt
+    assert "不编造原作人物当前的行为" in runtime_prompt
+    assert "负向情绪、关系冲突和安全风险场景不以笑声开头" in runtime_prompt
+    assert "“呼呼呼”" not in runtime_prompt
+    for canonical_name in ("琉璃", "彼方", "夜子", "理央"):
+        assert canonical_name not in runtime_prompt
     assert get_lora_system_prompt("test-lora-highperf") == ""
 
 

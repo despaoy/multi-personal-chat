@@ -651,7 +651,8 @@ def _typical_records() -> list[dict]:
 async def _recall(query: str, records: list[dict]):
     from character.memory_service import CharacterMemoryService
 
-    service = CharacterMemoryService(_FakeMemoryRepo(records))
+    # 本节验证原 bigram/主体规则的回归行为；CAHM 混合检索另有独立测试。
+    service = CharacterMemoryService(_FakeMemoryRepo(records), semantic_enabled=False)
     return await service.load_relevant_memories("kisaki", _scope(), query)
 
 

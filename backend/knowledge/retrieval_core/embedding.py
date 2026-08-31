@@ -220,6 +220,17 @@ class SentenceTransformerEmbeddingProvider:
         return self.embed_texts([query])[0]
 
 
+_default_embedding_provider: SentenceTransformerEmbeddingProvider | None = None
+
+
+def get_default_embedding_provider() -> SentenceTransformerEmbeddingProvider:
+    """返回进程内共享的惰性 embedding provider，避免业务模块重复加载模型。"""
+    global _default_embedding_provider
+    if _default_embedding_provider is None:
+        _default_embedding_provider = SentenceTransformerEmbeddingProvider()
+    return _default_embedding_provider
+
+
 def _cuda_available() -> bool:
     try:
         import torch

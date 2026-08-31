@@ -19,6 +19,7 @@ from .embedding import (
     EmbeddingProvider,
     SentenceTransformerEmbeddingProvider,
     embedding_cache_key,
+    get_default_embedding_provider,
 )
 from .index import DomainIndex, build_domain_index
 from .loaders import AliasEntityNormalizer, ApprovedCardsLoader, UnapprovedDataError
@@ -52,6 +53,7 @@ __all__ = [
     "RetrievalCandidate",
     "RetrievalDefaults",
     "SentenceTransformerEmbeddingProvider",
+    "get_default_embedding_provider",
     "SourceReference",
     "UnapprovedDataError",
     "build_default_registry",

@@ -13,6 +13,10 @@ from db.errors import RegistrationClosedError
 
 logger = logging.getLogger(__name__)
 
+_MEMORY_SCOPE_LEVELS = ("user_global", "user_character", "conversation")
+_MEMORY_RELATION_TYPES = ("ADD", "MERGE", "SUPERSEDE", "COEXIST", "PENDING", "RETRACT", "NOOP")
+_MEMORY_STATUSES = ("active", "pending", "superseded", "retracted", "archived")
+
 # LoRA路径映射 - 自动扫描 backend/loras/ 目录
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 
@@ -702,26 +706,9 @@ class SQLiteDB:
             )
         ''')
 
-        # 角色长期记忆表：memory_key 在同一范围内唯一（upsert 键）
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS character_memories (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                character_id TEXT NOT NULL,
-                platform TEXT NOT NULL,
-                adapter TEXT NOT NULL,
-                sender_id TEXT NOT NULL,
-                conversation_type TEXT NOT NULL,
-                conversation_id TEXT NOT NULL,
-                memory_type TEXT NOT NULL,
-                memory_key TEXT NOT NULL,
-                content TEXT NOT NULL,
-                importance REAL NOT NULL DEFAULT 0.0,
-                source_message_id TEXT,
-                created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL,
-                UNIQUE(character_id, platform, adapter, sender_id, conversation_type, conversation_id, memory_key)
-            )
-        ''')
+        # 聊天消息是不可变 event；角色长期记忆表保存可版本化 claim。
+        self._create_character_memories_table(cursor)
+        self._ensure_character_memory_claim_schema(cursor)
 
         self._ensure_column(cursor, "messages", "platform", "TEXT NOT NULL DEFAULT 'qq'")
         self._ensure_column(cursor, "messages", "adapter", "TEXT NOT NULL DEFAULT 'nonebot'")
@@ -840,6 +827,9 @@ class SQLiteDB:
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_feedback_message_id ON feedback(message_id)')
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_audit_logs_timestamp ON audit_logs(timestamp)')
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_character_memories_scope ON character_memories(character_id, platform, adapter, sender_id, conversation_type, conversation_id)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_character_memories_active_lookup ON character_memories(platform, adapter, sender_id, scope_level, status, updated_at)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_character_memories_parent ON character_memories(parent_memory_id)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_character_memories_supersedes ON character_memories(supersedes_memory_id)')
         except Exception:
             pass  # 索引已存在或 SQLite 版本不支，不影响功能
 
@@ -866,6 +856,119 @@ class SQLiteDB:
         columns = {row[1] for row in cursor.fetchall()}
         if column not in columns:
             cursor.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+
+    @staticmethod
+    def _create_character_memories_table(cursor, table_name: str = "character_memories") -> None:
+        """Create the v2 claim table.
+
+        ``revision=0`` is reserved for the legacy in-place UPSERT API.  New
+        append-only claims start at revision 1, so both contracts can coexist.
+        ``table_name`` is internal and only ever receives a constant below.
+        """
+        if table_name not in {"character_memories", "character_memories_claim_v2"}:
+            raise ValueError("invalid internal character memory table name")
+        cursor.execute(f'''
+            CREATE TABLE IF NOT EXISTS {table_name} (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                character_id TEXT NOT NULL,
+                platform TEXT NOT NULL,
+                adapter TEXT NOT NULL,
+                sender_id TEXT NOT NULL,
+                conversation_type TEXT NOT NULL,
+                conversation_id TEXT NOT NULL,
+                scope_level TEXT NOT NULL DEFAULT 'conversation',
+                memory_type TEXT NOT NULL,
+                memory_key TEXT NOT NULL,
+                revision INTEGER NOT NULL DEFAULT 1,
+                relation_type TEXT NOT NULL DEFAULT 'ADD',
+                status TEXT NOT NULL DEFAULT 'active',
+                parent_memory_id INTEGER,
+                supersedes_memory_id INTEGER,
+                content TEXT NOT NULL,
+                importance REAL NOT NULL DEFAULT 0.0,
+                confidence REAL NOT NULL DEFAULT 1.0,
+                source_message_id TEXT,
+                source_message_ids_json TEXT NOT NULL DEFAULT '[]',
+                evidence_json TEXT NOT NULL DEFAULT '[]',
+                metadata_json TEXT NOT NULL DEFAULT '{{}}',
+                valid_from TEXT,
+                valid_to TEXT,
+                observed_at TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                UNIQUE(
+                    character_id, platform, adapter, sender_id,
+                    conversation_type, conversation_id, scope_level,
+                    memory_key, revision
+                )
+            )
+        ''')
+
+    def _ensure_character_memory_claim_schema(self, cursor) -> None:
+        """Upgrade old SQLite memory rows to the append-only claim contract.
+
+        SQLite cannot drop the old seven-column UNIQUE constraint in place, so
+        an old table is rebuilt once after all additive columns are present.
+        IDs and timestamps are copied unchanged; old rows enter revision 0 in
+        conversation scope and remain readable through the legacy API.
+        """
+        definitions = {
+            "scope_level": "TEXT NOT NULL DEFAULT 'conversation'",
+            "revision": "INTEGER NOT NULL DEFAULT 0",
+            "relation_type": "TEXT NOT NULL DEFAULT 'ADD'",
+            "status": "TEXT NOT NULL DEFAULT 'active'",
+            "parent_memory_id": "INTEGER",
+            "supersedes_memory_id": "INTEGER",
+            "confidence": "REAL NOT NULL DEFAULT 1.0",
+            "source_message_ids_json": "TEXT NOT NULL DEFAULT '[]'",
+            "evidence_json": "TEXT NOT NULL DEFAULT '[]'",
+            "metadata_json": "TEXT NOT NULL DEFAULT '{}'",
+            "valid_from": "TEXT",
+            "valid_to": "TEXT",
+            "observed_at": "TEXT",
+        }
+        for column, definition in definitions.items():
+            self._ensure_column(cursor, "character_memories", column, definition)
+
+        desired_unique = [
+            "character_id",
+            "platform",
+            "adapter",
+            "sender_id",
+            "conversation_type",
+            "conversation_id",
+            "scope_level",
+            "memory_key",
+            "revision",
+        ]
+        cursor.execute("PRAGMA index_list(character_memories)")
+        for index in cursor.fetchall():
+            # PRAGMA index_list columns: seq, name, unique, origin, partial.
+            if not bool(index[2]):
+                continue
+            index_name = str(index[1])
+            cursor.execute(f'PRAGMA index_info("{index_name}")')
+            if [str(row[2]) for row in cursor.fetchall()] == desired_unique:
+                return
+
+        replacement = "character_memories_claim_v2"
+        cursor.execute(f"DROP TABLE IF EXISTS {replacement}")
+        self._create_character_memories_table(cursor, replacement)
+        columns = [
+            "id", "character_id", "platform", "adapter", "sender_id",
+            "conversation_type", "conversation_id", "scope_level", "memory_type",
+            "memory_key", "revision", "relation_type", "status", "parent_memory_id",
+            "supersedes_memory_id", "content", "importance", "confidence",
+            "source_message_id", "source_message_ids_json", "evidence_json",
+            "metadata_json", "valid_from", "valid_to", "observed_at", "created_at",
+            "updated_at",
+        ]
+        column_sql = ", ".join(columns)
+        cursor.execute(
+            f"INSERT INTO {replacement} ({column_sql}) SELECT {column_sql} FROM character_memories"
+        )
+        cursor.execute("DROP TABLE character_memories")
+        cursor.execute(f"ALTER TABLE {replacement} RENAME TO character_memories")
 
     def _init_default_loras(self, cursor):
         """初始化默认LoRA数据 - 自动扫描 loras/ 目录并注册"""
@@ -2660,18 +2763,142 @@ class SQLiteDB:
         conversation_id: str,
         limit: int = 30,
     ) -> list:
-        """读取指定范围内最近的记忆（按 updated_at 倒序，最多 limit 条）。"""
+        """Legacy exact-conversation read, restricted to active claims."""
         conn = self._get_connection()
         cursor = conn.cursor()
         where, params = self._character_scope_where(
             character_id, platform, adapter, sender_id, conversation_type, conversation_id
         )
         cursor.execute(
-            f"SELECT * FROM character_memories WHERE {where} ORDER BY updated_at DESC LIMIT ?",
+            f"SELECT * FROM character_memories WHERE {where} "
+            "AND scope_level = 'conversation' AND status = 'active' "
+            "ORDER BY updated_at DESC, revision DESC LIMIT ?",
             [*params, max(1, min(int(limit), 200))],
         )
         columns = [desc[0] for desc in cursor.description]
         return [dict(zip(columns, row)) for row in cursor.fetchall()]
+
+    @staticmethod
+    def _claim_storage_scope(
+        character_id: str,
+        conversation_type: str,
+        conversation_id: str,
+        scope_level: str,
+    ) -> tuple[str, str, str]:
+        if scope_level not in _MEMORY_SCOPE_LEVELS:
+            raise ValueError(f"unknown memory scope_level: {scope_level!r}")
+        if scope_level == "conversation":
+            return character_id, conversation_type, conversation_id
+        if scope_level == "user_character":
+            return character_id, "*", "*"
+        return "*", "*", "*"
+
+    @staticmethod
+    def _character_claim_access_where(
+        character_id: str,
+        platform: str,
+        adapter: str,
+        sender_id: str,
+        conversation_type: str,
+        conversation_id: str,
+        scope_levels: Optional[tuple[str, ...]] = None,
+        *,
+        table: str = "",
+    ) -> tuple[str, list]:
+        levels = scope_levels or _MEMORY_SCOPE_LEVELS
+        invalid = set(levels) - set(_MEMORY_SCOPE_LEVELS)
+        if invalid:
+            raise ValueError(f"unknown memory scope levels: {sorted(invalid)!r}")
+        prefix = f"{table}." if table else ""
+        clauses: list[str] = []
+        params: list = []
+        if "conversation" in levels:
+            clauses.append(
+                f"({prefix}scope_level = 'conversation' AND {prefix}character_id = ? "
+                f"AND {prefix}conversation_type = ? AND {prefix}conversation_id = ?)"
+            )
+            params.extend([character_id, conversation_type, conversation_id])
+        if "user_character" in levels:
+            clauses.append(
+                f"({prefix}scope_level = 'user_character' AND {prefix}character_id = ? "
+                f"AND {prefix}conversation_type = '*' AND {prefix}conversation_id = '*')"
+            )
+            params.append(character_id)
+        if "user_global" in levels:
+            clauses.append(
+                f"({prefix}scope_level = 'user_global' AND {prefix}character_id = '*' "
+                f"AND {prefix}conversation_type = '*' AND {prefix}conversation_id = '*')"
+            )
+        if not clauses:
+            return "0 = 1", []
+        identity = (
+            f"{prefix}platform = ? AND {prefix}adapter = ? AND {prefix}sender_id = ?"
+        )
+        return f"{identity} AND ({' OR '.join(clauses)})", [platform, adapter, sender_id, *params]
+
+    def list_character_memory_claims(
+        self,
+        character_id: str,
+        platform: str,
+        adapter: str,
+        sender_id: str,
+        conversation_type: str,
+        conversation_id: str,
+        limit: int = 30,
+        *,
+        include_inactive: bool = False,
+        scope_levels: Optional[tuple[str, ...]] = None,
+    ) -> list:
+        """Read the three visible claim layers for one user and character.
+
+        Conversation claims take precedence, followed by user-character and
+        user-global claims.  Retrieval uses active-only reads; management and
+        audit callers may opt into historical rows.
+        """
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        where, params = self._character_claim_access_where(
+            character_id,
+            platform,
+            adapter,
+            sender_id,
+            conversation_type,
+            conversation_id,
+            scope_levels,
+        )
+        status_sql = "" if include_inactive else " AND status = 'active'"
+        cursor.execute(
+            "SELECT * FROM character_memories WHERE "
+            + where
+            + status_sql
+            + " ORDER BY CASE scope_level WHEN 'conversation' THEN 0 "
+            "WHEN 'user_character' THEN 1 ELSE 2 END, updated_at DESC, revision DESC LIMIT ?",
+            [*params, max(1, min(int(limit), 500))],
+        )
+        return [dict(row) for row in cursor.fetchall()]
+
+    def get_character_memory_claim(
+        self,
+        memory_id: int,
+        character_id: str,
+        platform: str,
+        adapter: str,
+        sender_id: str,
+        conversation_type: str,
+        conversation_id: str,
+    ) -> Optional[Dict]:
+        """Return one visible claim by ID, including inactive history."""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        where, params = self._character_claim_access_where(
+            character_id, platform, adapter, sender_id, conversation_type, conversation_id
+        )
+        cursor.execute(
+            f"SELECT * FROM character_memories WHERE id = ? AND {where}",
+            [int(memory_id), *params],
+        )
+        row = cursor.fetchone()
+        return dict(row) if row else None
 
     def add_or_update_character_memory(
         self,
@@ -2687,10 +2914,11 @@ class SQLiteDB:
         importance: float = 0.0,
         source_message_id: Optional[str] = None,
     ) -> Dict:
-        """写入一条记忆（同 memory_key upsert，更新内容与时间戳）。
+        """Legacy in-place UPSERT using reserved revision 0.
 
-        单条 UPSERT 原子完成：先 SELECT 再 INSERT/UPDATE 的实现在并发下
-        相同 memory_key 会撞唯一约束（两个线程都查不到既有行然后各自 INSERT）。
+        New memory lifecycle code must call :meth:`append_character_memory_claim`.
+        This compatibility slot keeps existing callers and concurrency behavior
+        stable while no longer preventing multiple append-only revisions.
         """
         conn = self._get_connection()
         cursor = conn.cursor()
@@ -2701,11 +2929,15 @@ class SQLiteDB:
         cursor.execute('''
             INSERT INTO character_memories (
                 character_id, platform, adapter, sender_id, conversation_type,
-                conversation_id, memory_type, memory_key, content, importance,
-                source_message_id, created_at, updated_at
+                conversation_id, scope_level, memory_type, memory_key, revision,
+                relation_type, status, content, importance, confidence,
+                source_message_id, source_message_ids_json, evidence_json,
+                metadata_json, observed_at, created_at, updated_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(character_id, platform, adapter, sender_id, conversation_type, conversation_id, memory_key)
+            VALUES (?, ?, ?, ?, ?, ?, 'conversation', ?, ?, 0, 'ADD', 'active',
+                    ?, ?, 1.0, ?, '[]', '[]', '{}', ?, ?, ?)
+            ON CONFLICT(character_id, platform, adapter, sender_id, conversation_type,
+                        conversation_id, scope_level, memory_key, revision)
             DO UPDATE SET
                 memory_type = excluded.memory_type,
                 content = excluded.content,
@@ -2715,18 +2947,141 @@ class SQLiteDB:
         ''', (
             character_id, platform, adapter, sender_id, conversation_type,
             conversation_id, memory_type, memory_key, content, float(importance),
-            source_message_id, now, now,
+            source_message_id, now, now, now,
         ))
         conn.commit()
         # 写入后回读真实记录（id 与 created_at 以数据库为准）
         cursor.execute(
-            f"SELECT * FROM character_memories WHERE {where} AND memory_key = ?",
+            f"SELECT * FROM character_memories WHERE {where} AND scope_level = 'conversation' "
+            "AND memory_key = ? AND revision = 0",
             [*params, memory_key],
         )
         row = cursor.fetchone()
         if row is None:  # pragma: no cover - 提交成功后行必存在
             raise RuntimeError("add_or_update_character_memory 提交后读取失败")
         return dict(row)
+
+    def append_character_memory_claim(
+        self,
+        character_id: str,
+        platform: str,
+        adapter: str,
+        sender_id: str,
+        conversation_type: str,
+        conversation_id: str,
+        memory_type: str,
+        memory_key: str,
+        content: str,
+        importance: float = 0.0,
+        source_message_id: Optional[str] = None,
+        *,
+        relation_type: str = "ADD",
+        scope_level: str = "conversation",
+        status: Optional[str] = None,
+        parent_memory_id: Optional[int] = None,
+        supersedes_memory_id: Optional[int] = None,
+        evidence_json: str = "[]",
+        confidence: float = 1.0,
+        valid_from: Optional[str] = None,
+        valid_to: Optional[str] = None,
+        observed_at: Optional[str] = None,
+        source_message_ids_json: str = "[]",
+        metadata_json: str = "{}",
+    ) -> Dict:
+        """Atomically append one versioned claim and update its target status."""
+        relation = str(relation_type or "ADD").upper()
+        if relation not in _MEMORY_RELATION_TYPES:
+            raise ValueError(f"unknown memory relation_type: {relation_type!r}")
+        if relation == "NOOP":
+            return {
+                "id": 0,
+                "persisted": False,
+                "relation_type": "NOOP",
+                "memory_key": memory_key,
+            }
+        resolved_status = status or (
+            "pending" if relation == "PENDING" else "retracted" if relation == "RETRACT" else "active"
+        )
+        if resolved_status not in _MEMORY_STATUSES:
+            raise ValueError(f"unknown memory status: {resolved_status!r}")
+        if not str(memory_key).strip():
+            raise ValueError("memory_key must not be empty")
+        if not str(content).strip():
+            raise ValueError("memory content must not be empty")
+        confidence_value = max(0.0, min(float(confidence), 1.0))
+        importance_value = max(0.0, min(float(importance), 1.0))
+        storage_character, storage_type, storage_conversation = self._claim_storage_scope(
+            character_id, conversation_type, conversation_id, scope_level
+        )
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        now = datetime.now().isoformat()
+        observed = observed_at or now
+        try:
+            cursor.execute("BEGIN IMMEDIATE")
+            target_id = supersedes_memory_id
+            if relation == "RETRACT" and target_id is None:
+                target_id = parent_memory_id
+            if target_id is not None:
+                target_where, target_params = self._character_claim_access_where(
+                    character_id, platform, adapter, sender_id, conversation_type, conversation_id
+                )
+                cursor.execute(
+                    f"SELECT id FROM character_memories WHERE id = ? AND {target_where}",
+                    [int(target_id), *target_params],
+                )
+                if cursor.fetchone() is None:
+                    raise ValueError("target memory is not visible in the requested user scope")
+
+            cursor.execute(
+                "SELECT COALESCE(MAX(revision), 0) + 1 FROM character_memories WHERE "
+                "character_id = ? AND platform = ? AND adapter = ? AND sender_id = ? "
+                "AND conversation_type = ? AND conversation_id = ? AND scope_level = ? "
+                "AND memory_key = ?",
+                (
+                    storage_character, platform, adapter, sender_id, storage_type,
+                    storage_conversation, scope_level, memory_key,
+                ),
+            )
+            revision = int(cursor.fetchone()[0])
+            cursor.execute('''
+                INSERT INTO character_memories (
+                    character_id, platform, adapter, sender_id, conversation_type,
+                    conversation_id, scope_level, memory_type, memory_key, revision,
+                    relation_type, status, parent_memory_id, supersedes_memory_id,
+                    content, importance, confidence, source_message_id,
+                    source_message_ids_json, evidence_json, metadata_json,
+                    valid_from, valid_to, observed_at, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                storage_character, platform, adapter, sender_id, storage_type,
+                storage_conversation, scope_level, memory_type, memory_key, revision,
+                relation, resolved_status, parent_memory_id, supersedes_memory_id,
+                content, importance_value, confidence_value, source_message_id,
+                source_message_ids_json, evidence_json, metadata_json,
+                valid_from, valid_to, observed, now, now,
+            ))
+            memory_id = int(cursor.lastrowid)
+
+            if target_id is not None and relation in {"SUPERSEDE", "MERGE", "RETRACT"}:
+                target_status = "retracted" if relation == "RETRACT" else "superseded"
+                cursor.execute(
+                    "UPDATE character_memories SET status = ?, valid_to = COALESCE(valid_to, ?), "
+                    "updated_at = ? WHERE id = ?",
+                    (target_status, observed, now, int(target_id)),
+                )
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+
+        cursor.execute("SELECT * FROM character_memories WHERE id = ?", (memory_id,))
+        row = cursor.fetchone()
+        if row is None:  # pragma: no cover - committed insert must be visible
+            raise RuntimeError("append_character_memory_claim committed but row is missing")
+        record = dict(row)
+        record["persisted"] = True
+        return record
 
     def delete_character_memory(
         self,
@@ -2738,19 +3093,96 @@ class SQLiteDB:
         conversation_type: str,
         conversation_id: str,
     ) -> bool:
-        """删除一条记忆。必须同时匹配隔离范围，防止越权删除其他用户记忆。"""
+        """Physically erase one visible claim (privacy/legacy DELETE semantics)."""
+        return bool(self.erase_character_memories(
+            character_id,
+            platform,
+            adapter,
+            sender_id,
+            conversation_type,
+            conversation_id,
+            memory_id=int(memory_id),
+        ))
+
+    def erase_character_memories(
+        self,
+        character_id: str,
+        platform: str,
+        adapter: str,
+        sender_id: str,
+        conversation_type: str,
+        conversation_id: str,
+        *,
+        memory_id: Optional[int] = None,
+        memory_key: Optional[str] = None,
+        scope_level: Optional[str] = None,
+    ) -> int:
+        """Physically erase a claim/key and every derived descendant.
+
+        No tombstone, reason, or evidence is retained: ERASE is deliberately a
+        privacy operation, unlike RETRACT which keeps an auditable version row.
+        """
+        if memory_id is None and not str(memory_key or "").strip():
+            raise ValueError("ERASE requires memory_id or memory_key")
+        levels = (scope_level,) if scope_level else None
+        where, params = self._character_claim_access_where(
+            character_id,
+            platform,
+            adapter,
+            sender_id,
+            conversation_type,
+            conversation_id,
+            levels,
+        )
         conn = self._get_connection()
         cursor = conn.cursor()
-        where, params = self._character_scope_where(
-            character_id, platform, adapter, sender_id, conversation_type, conversation_id
-        )
-        cursor.execute(
-            f"DELETE FROM character_memories WHERE id = ? AND {where}",
-            [int(memory_id), *params],
-        )
-        deleted = cursor.rowcount > 0
-        conn.commit()
-        return deleted
+        try:
+            cursor.execute("BEGIN IMMEDIATE")
+            if memory_id is not None:
+                cursor.execute(
+                    f"SELECT id FROM character_memories WHERE id = ? AND {where}",
+                    [int(memory_id), *params],
+                )
+            else:
+                cursor.execute(
+                    f"SELECT id FROM character_memories WHERE memory_key = ? AND {where}",
+                    [str(memory_key).strip(), *params],
+                )
+            erase_ids = {int(row[0]) for row in cursor.fetchall()}
+            frontier = set(erase_ids)
+            child_where, child_params = self._character_claim_access_where(
+                character_id,
+                platform,
+                adapter,
+                sender_id,
+                conversation_type,
+                conversation_id,
+                levels,
+                table="child",
+            )
+            while frontier:
+                placeholders = ",".join("?" for _ in frontier)
+                values = [*frontier, *frontier, *child_params]
+                cursor.execute(
+                    f"SELECT child.id FROM character_memories child WHERE "
+                    f"(child.parent_memory_id IN ({placeholders}) "
+                    f"OR child.supersedes_memory_id IN ({placeholders})) AND {child_where}",
+                    values,
+                )
+                found = {int(row[0]) for row in cursor.fetchall()} - erase_ids
+                erase_ids.update(found)
+                frontier = found
+            if erase_ids:
+                placeholders = ",".join("?" for _ in erase_ids)
+                cursor.execute(
+                    f"DELETE FROM character_memories WHERE id IN ({placeholders})",
+                    list(erase_ids),
+                )
+            conn.commit()
+            return len(erase_ids)
+        except Exception:
+            conn.rollback()
+            raise
 
     def clear_character_memories(
         self,
@@ -2761,13 +3193,16 @@ class SQLiteDB:
         conversation_type: str,
         conversation_id: str,
     ) -> int:
-        """清空指定范围内的全部记忆，返回删除条数。"""
+        """Physically clear all conversation-scope versions for one exact scope."""
         conn = self._get_connection()
         cursor = conn.cursor()
         where, params = self._character_scope_where(
             character_id, platform, adapter, sender_id, conversation_type, conversation_id
         )
-        cursor.execute(f"DELETE FROM character_memories WHERE {where}", params)
+        cursor.execute(
+            f"DELETE FROM character_memories WHERE {where} AND scope_level = 'conversation'",
+            params,
+        )
         deleted = cursor.rowcount
         conn.commit()
         return deleted

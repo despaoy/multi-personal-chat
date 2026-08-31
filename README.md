@@ -24,6 +24,22 @@
 
 架构、索引构建和配置见[多粒度角色知识检索](docs/architecture/CHARACTER_KNOWLEDGE_RETRIEVAL.md)。
 
+### 版本化长期记忆
+
+- 普通陈述在会话空闲或达到批量阈值后后台归纳；显式记住、纠错和删除走即时路径，不阻塞当前回复。
+- claim 使用追加版本、有效时间、原文 evidence 与来源 ID，区分补充、替代、条件共存、待确认、撤回和物理删除。
+- 记忆分为 conversation、user-character、user-global 三层；跨会话或跨角色晋升必须来自用户原文的显式授权。
+- 默认检索先做生命周期过滤，再以 query expansion、semantic/lexical 多通道和 RRF 融合，注入内容始终位于不可信参考边界。
+
+配置、边界与平衡版评测命令见 [CAHM 方法与实验记录](backend/experiments/CAHM.md)。
+
+### 自然互动上下文
+
+- 普通单意图轮不再向模型重复机械的“情景、意图、语气、行动、避免”模板，只保留关系与人物落地边界。
+- 安全、事实依据、明确边界和收尾继续由确定性规则约束；反讽、复杂否定、多意图、指代或候选接近时，可由基础模型低温复核一次结构化互动状态。
+- 语义复核只接受闭集标签和有界数值；超时、异常或非法输出原样回退规则状态，并记录不含对话原文的诊断。
+- 通过 `DYNAMIC_CONTEXT_SEMANTIC_REVIEW_ENABLED` 和 `DYNAMIC_CONTEXT_SEMANTIC_REVIEW_TIMEOUT_SECONDS` 控制该实验功能；默认关闭，完成人工盲审后再显式启用。
+
 ### 多平台接入
 
 - AstrBot 网关插件 `multipersonal_gateway` 统一接入 QQ、Telegram、企业微信、公众号和个人微信。

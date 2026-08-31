@@ -7,7 +7,6 @@ generation-parameter contract seen by the model.
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -19,7 +18,10 @@ from inference.prompt_policy import (
 )
 
 if TYPE_CHECKING:  # pragma: no cover - 仅类型注解使用，避免运行时反向依赖
+    from collections.abc import Awaitable, Callable, Mapping, Sequence
+
     from character.models import CompiledCharacterContext
+    from character.output_guard import ReplyGuard
 
 
 Message = dict[str, str]
@@ -71,7 +73,10 @@ class GenerationRequest:
     context_window_tokens: int = DEFAULT_CONTEXT_WINDOW_TOKENS
     apply_prompt_policy: bool = True
     # 可选的角色上下文：None 时生成行为与旧链路完全一致。
-    character_context: "CompiledCharacterContext | None" = None
+    character_context: CompiledCharacterContext | None = None
+    # Optional deterministic output contract. It may trigger at most one
+    # regeneration and never feeds the failed reply back to the model.
+    reply_guard: ReplyGuard | None = None
 
 
 @dataclass(frozen=True)
@@ -93,6 +98,10 @@ class GenerationPlan:
 class GenerationResult:
     reply: str
     plan: GenerationPlan
+    guard_violations: tuple[str, ...] = ()
+    guard_retried: bool = False
+    guard_post_retry_violations: tuple[str, ...] = ()
+    guard_fallback: str = ""
 
 
 def _conversation_history(history: Sequence[Mapping[str, str]]) -> list[Message]:
@@ -123,10 +132,7 @@ def _trim_history_to_budget(
     fixed_tokens = sum(_estimated_tokens(item["content"]) + 4 for item in fixed_messages)
     available = max(
         0,
-        int(context_window_tokens)
-        - int(max_output_tokens)
-        - CONTEXT_SAFETY_MARGIN_TOKENS
-        - fixed_tokens,
+        int(context_window_tokens) - int(max_output_tokens) - CONTEXT_SAFETY_MARGIN_TOKENS - fixed_tokens,
     )
     kept: list[Message] = []
     used = 0
@@ -153,9 +159,7 @@ def _system_prompt(request: GenerationRequest) -> str:
                 persona = context.profile_context
             dynamic_context = context.dynamic_context
             if context.reference_context:
-                dynamic_context = "\n\n".join(
-                    part for part in (dynamic_context, MEMORY_ATTRIBUTION_POLICY) if part
-                )
+                dynamic_context = "\n\n".join(part for part in (dynamic_context, MEMORY_ATTRIBUTION_POLICY) if part)
         prompt = compose_system_prompt(
             persona,
             include_rag=request.retrieval.has_evidence,
@@ -185,9 +189,7 @@ def build_generation_request(request: GenerationRequest) -> GenerationPlan:
             max_chars=request.evidence_max_chars,
             # 长期记忆只进入用户消息的不可信参考区，绝不进入系统提示词。
             memory_context=(
-                request.character_context.reference_context
-                if request.character_context is not None
-                else ""
+                request.character_context.reference_context if request.character_context is not None else ""
             ),
             # 对话者昵称（用户可控）同样只进不可信参考区。
             speaker=sanitize_speaker_label(request.interlocutor),
@@ -202,11 +204,7 @@ def build_generation_request(request: GenerationRequest) -> GenerationPlan:
     messages.extend(history)
     messages.append(current_user_message)
 
-    temperature = (
-        min(request.temperature, 0.5)
-        if request.retrieval.has_evidence
-        else request.temperature
-    )
+    temperature = min(request.temperature, 0.5) if request.retrieval.has_evidence else request.temperature
     generation = {
         "temperature": temperature,
         "max_tokens": request.max_tokens,
@@ -232,12 +230,54 @@ async def generate_character_response(
 
     plan = build_generation_request(request)
     if not plan.should_generate:
-        raise RuntimeError(
-            plan.retrieval.reason or f"retrieval status is {plan.retrieval.status}"
-        )
+        raise RuntimeError(plan.retrieval.reason or f"retrieval status is {plan.retrieval.status}")
+    messages = [dict(message) for message in plan.messages]
     reply = await generate(
-        messages=[dict(message) for message in plan.messages],
+        messages=messages,
         lora_name=plan.lora_name,
         **dict(plan.generation),
     )
-    return GenerationResult(reply=reply, plan=plan)
+    from character.output_guard import (
+        FACTUAL_HARD_VIOLATIONS,
+        FORBIDDEN_LAUGHTER,
+        UNPROMPTED_CANONICAL_IDENTITY,
+        UNPROMPTED_LORE_FLOURISH,
+        apply_retry_instruction,
+        deterministic_fallback,
+        retry_instruction,
+        validate_reply,
+    )
+
+    violations = validate_reply(reply, request.reply_guard)
+    if not violations:
+        return GenerationResult(reply=reply, plan=plan)
+
+    corrected_messages = apply_retry_instruction(messages, retry_instruction(violations))
+    reply = await generate(
+        messages=corrected_messages,
+        lora_name=plan.lora_name,
+        **dict(plan.generation),
+    )
+    remaining = validate_reply(reply, request.reply_guard)
+    fallback = deterministic_fallback(remaining, request.reply_guard, candidate_reply=reply)
+    closed_hard_violation_ids = FACTUAL_HARD_VIOLATIONS | frozenset(
+        {UNPROMPTED_CANONICAL_IDENTITY, UNPROMPTED_LORE_FLOURISH, FORBIDDEN_LAUGHTER}
+    )
+    closed_hard_failures = closed_hard_violation_ids.intersection(remaining)
+    if closed_hard_failures:
+        if fallback is None:
+            raise RuntimeError("deterministic closed guard fallback is missing")
+        fallback_violations = validate_reply(fallback[1], request.reply_guard)
+        if closed_hard_violation_ids.intersection(fallback_violations):
+            raise RuntimeError("deterministic closed guard fallback did not close the violation")
+    fallback_kind = ""
+    if fallback is not None:
+        fallback_kind, reply = fallback
+    return GenerationResult(
+        reply=reply,
+        plan=plan,
+        guard_violations=violations,
+        guard_retried=True,
+        guard_post_retry_violations=remaining,
+        guard_fallback=fallback_kind,
+    )

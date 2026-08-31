@@ -19,6 +19,10 @@ from db.urls import resolve_runtime_database_url
 
 logger = logging.getLogger(__name__)
 
+_MEMORY_SCOPE_LEVELS = ("user_global", "user_character", "conversation")
+_MEMORY_RELATION_TYPES = ("ADD", "MERGE", "SUPERSEDE", "COEXIST", "PENDING", "RETRACT", "NOOP")
+_MEMORY_STATUSES = ("active", "pending", "superseded", "retracted", "archived")
+
 
 
 # ============================================
@@ -109,6 +113,33 @@ class PgDatabase:
             await self._ensure_column(conn, "messages", "traceId", "TEXT")
             await self._ensure_column(conn, "messages", "conversationType", "TEXT")
             await self._ensure_column(conn, "messages", "senderName", "TEXT")
+            # Existing deployments may predate versioned memory claims. Keep
+            # runtime initialization compatible even before Alembic 007 runs.
+            memory_claim_columns = {
+                "scope_level": "TEXT NOT NULL DEFAULT 'conversation'",
+                "revision": "INTEGER NOT NULL DEFAULT 0",
+                "relation_type": "TEXT NOT NULL DEFAULT 'ADD'",
+                "status": "TEXT NOT NULL DEFAULT 'active'",
+                "parent_memory_id": "INTEGER",
+                "supersedes_memory_id": "INTEGER",
+                "confidence": "DOUBLE PRECISION NOT NULL DEFAULT 1.0",
+                "source_message_ids_json": "TEXT NOT NULL DEFAULT '[]'",
+                "evidence_json": "TEXT NOT NULL DEFAULT '[]'",
+                "metadata_json": "TEXT NOT NULL DEFAULT '{}'",
+                "valid_from": "TEXT",
+                "valid_to": "TEXT",
+                "observed_at": "TEXT",
+            }
+            for column, definition in memory_claim_columns.items():
+                await self._ensure_column(conn, "character_memories", column, definition)
+            await conn.execute(text(
+                "ALTER TABLE character_memories DROP CONSTRAINT IF EXISTS uq_character_memory_key"
+            ))
+            await conn.execute(text(
+                "CREATE UNIQUE INDEX IF NOT EXISTS uq_character_memory_revision ON character_memories ("
+                "character_id, platform, adapter, sender_id, conversation_type, conversation_id, "
+                "scope_level, memory_key, revision)"
+            ))
             # One-way compatibility migration: legacy session_settings is folded into
             # conversations and then removed. Fresh databases never create this table.
             try:
@@ -172,6 +203,16 @@ class PgDatabase:
             await conn.execute(text('CREATE INDEX IF NOT EXISTS idx_feedback_trace_id ON feedback (trace_id)'))
             await conn.execute(text('CREATE INDEX IF NOT EXISTS idx_feedback_message_id ON feedback (message_id)'))
             await conn.execute(text('CREATE INDEX IF NOT EXISTS idx_audit_logs_timestamp ON audit_logs (timestamp)'))
+            await conn.execute(text(
+                "CREATE INDEX IF NOT EXISTS idx_character_memories_active_lookup ON character_memories "
+                "(platform, adapter, sender_id, scope_level, status, updated_at)"
+            ))
+            await conn.execute(text(
+                "CREATE INDEX IF NOT EXISTS idx_character_memories_parent ON character_memories (parent_memory_id)"
+            ))
+            await conn.execute(text(
+                "CREATE INDEX IF NOT EXISTS idx_character_memories_supersedes ON character_memories (supersedes_memory_id)"
+            ))
         self._initialized = True
         logger.info(f"✅ PostgreSQL 数据库初始化完成: {self.database_url.split('@')[-1]}")
 
@@ -1147,12 +1188,13 @@ class PgDatabase:
         conversation_id: str,
         limit: int = 30,
     ) -> List[dict]:
-        """读取指定范围内最近的记忆（按 updated_at 倒序，最多 limit 条）。"""
+        """Legacy exact-conversation read, restricted to active claims."""
         async with self.async_session() as session:
             stmt = text(
                 "SELECT * FROM character_memories WHERE "
                 + self._CHARACTER_SCOPE_SQL
-                + " ORDER BY updated_at DESC LIMIT :limit"
+                + " AND scope_level = 'conversation' AND status = 'active' "
+                "ORDER BY updated_at DESC, revision DESC LIMIT :limit"
             )
             result = await session.execute(
                 stmt,
@@ -1162,6 +1204,120 @@ class PgDatabase:
                 ),
             )
             return [_row_to_dict(row) for row in result.fetchall()]
+
+    @staticmethod
+    def _claim_storage_scope(
+        character_id: str,
+        conversation_type: str,
+        conversation_id: str,
+        scope_level: str,
+    ) -> tuple[str, str, str]:
+        if scope_level not in _MEMORY_SCOPE_LEVELS:
+            raise ValueError(f"unknown memory scope_level: {scope_level!r}")
+        if scope_level == "conversation":
+            return character_id, conversation_type, conversation_id
+        if scope_level == "user_character":
+            return character_id, "*", "*"
+        return "*", "*", "*"
+
+    @staticmethod
+    def _character_claim_access_sql(
+        scope_levels: Optional[tuple[str, ...]] = None,
+        *,
+        table: str = "",
+    ) -> str:
+        levels = scope_levels or _MEMORY_SCOPE_LEVELS
+        invalid = set(levels) - set(_MEMORY_SCOPE_LEVELS)
+        if invalid:
+            raise ValueError(f"unknown memory scope levels: {sorted(invalid)!r}")
+        prefix = f"{table}." if table else ""
+        clauses: list[str] = []
+        if "conversation" in levels:
+            clauses.append(
+                f"({prefix}scope_level = 'conversation' AND {prefix}character_id = :character_id "
+                f"AND {prefix}conversation_type = :conversation_type "
+                f"AND {prefix}conversation_id = :conversation_id)"
+            )
+        if "user_character" in levels:
+            clauses.append(
+                f"({prefix}scope_level = 'user_character' AND {prefix}character_id = :character_id "
+                f"AND {prefix}conversation_type = '*' AND {prefix}conversation_id = '*')"
+            )
+        if "user_global" in levels:
+            clauses.append(
+                f"({prefix}scope_level = 'user_global' AND {prefix}character_id = '*' "
+                f"AND {prefix}conversation_type = '*' AND {prefix}conversation_id = '*')"
+            )
+        if not clauses:
+            return "FALSE"
+        return (
+            f"{prefix}platform = :platform AND {prefix}adapter = :adapter "
+            f"AND {prefix}sender_id = :sender_id AND ({' OR '.join(clauses)})"
+        )
+
+    async def list_character_memory_claims(
+        self,
+        character_id: str,
+        platform: str,
+        adapter: str,
+        sender_id: str,
+        conversation_type: str,
+        conversation_id: str,
+        limit: int = 30,
+        *,
+        include_inactive: bool = False,
+        scope_levels: Optional[tuple[str, ...]] = None,
+    ) -> List[dict]:
+        access_sql = self._character_claim_access_sql(scope_levels)
+        status_sql = "" if include_inactive else " AND status = 'active'"
+        async with self.async_session() as session:
+            result = await session.execute(
+                text(
+                    "SELECT * FROM character_memories WHERE "
+                    + access_sql
+                    + status_sql
+                    + " ORDER BY CASE scope_level WHEN 'conversation' THEN 0 "
+                    "WHEN 'user_character' THEN 1 ELSE 2 END, updated_at DESC, revision DESC LIMIT :limit"
+                ),
+                self._character_scope_params(
+                    character_id,
+                    platform,
+                    adapter,
+                    sender_id,
+                    conversation_type,
+                    conversation_id,
+                    limit=max(1, min(int(limit), 500)),
+                ),
+            )
+            return [_row_to_dict(row) for row in result.fetchall()]
+
+    async def get_character_memory_claim(
+        self,
+        memory_id: int,
+        character_id: str,
+        platform: str,
+        adapter: str,
+        sender_id: str,
+        conversation_type: str,
+        conversation_id: str,
+    ) -> Optional[dict]:
+        async with self.async_session() as session:
+            result = await session.execute(
+                text(
+                    "SELECT * FROM character_memories WHERE id = :memory_id AND "
+                    + self._character_claim_access_sql()
+                ),
+                self._character_scope_params(
+                    character_id,
+                    platform,
+                    adapter,
+                    sender_id,
+                    conversation_type,
+                    conversation_id,
+                    memory_id=int(memory_id),
+                ),
+            )
+            return _row_to_dict(result.fetchone())
 
     async def add_or_update_character_memory(
         self,
@@ -1177,22 +1333,25 @@ class PgDatabase:
         importance: float = 0.0,
         source_message_id: Optional[str] = None,
     ) -> dict:
-        """写入一条记忆（同 memory_key upsert，更新内容与时间戳）。"""
+        """Legacy in-place UPSERT using reserved revision 0."""
         now = datetime.now().isoformat()
         async with self.async_session() as session:
             stmt = text(
                 "INSERT INTO character_memories ("
                 "character_id, platform, adapter, sender_id, conversation_type, "
-                "conversation_id, memory_type, memory_key, content, importance, "
-                "source_message_id, created_at, updated_at) VALUES ("
+                "conversation_id, scope_level, memory_type, memory_key, revision, "
+                "relation_type, status, content, importance, confidence, "
+                "source_message_id, source_message_ids_json, evidence_json, metadata_json, "
+                "observed_at, created_at, updated_at) VALUES ("
                 ":character_id, :platform, :adapter, :sender_id, :conversation_type, "
-                ":conversation_id, :memory_type, :memory_key, :content, :importance, "
-                ":source_message_id, :now, :now) "
+                ":conversation_id, 'conversation', :memory_type, :memory_key, 0, "
+                "'ADD', 'active', :content, :importance, 1.0, :source_message_id, "
+                "'[]', '[]', '{}', :now, :now, :now) "
                 "ON CONFLICT (character_id, platform, adapter, sender_id, conversation_type, "
-                "conversation_id, memory_key) DO UPDATE SET "
+                "conversation_id, scope_level, memory_key, revision) DO UPDATE SET "
                 "memory_type = EXCLUDED.memory_type, content = EXCLUDED.content, "
                 "importance = EXCLUDED.importance, source_message_id = EXCLUDED.source_message_id, "
-                "updated_at = EXCLUDED.updated_at RETURNING id, created_at"
+                "updated_at = EXCLUDED.updated_at RETURNING *"
             )
             result = await session.execute(
                 stmt,
@@ -1208,18 +1367,148 @@ class PgDatabase:
             )
             row = result.fetchone()
             await session.commit()
+            return _row_to_dict(row) if row else {}
+
+    async def append_character_memory_claim(
+        self,
+        character_id: str,
+        platform: str,
+        adapter: str,
+        sender_id: str,
+        conversation_type: str,
+        conversation_id: str,
+        memory_type: str,
+        memory_key: str,
+        content: str,
+        importance: float = 0.0,
+        source_message_id: Optional[str] = None,
+        *,
+        relation_type: str = "ADD",
+        scope_level: str = "conversation",
+        status: Optional[str] = None,
+        parent_memory_id: Optional[int] = None,
+        supersedes_memory_id: Optional[int] = None,
+        evidence_json: str = "[]",
+        confidence: float = 1.0,
+        valid_from: Optional[str] = None,
+        valid_to: Optional[str] = None,
+        observed_at: Optional[str] = None,
+        source_message_ids_json: str = "[]",
+        metadata_json: str = "{}",
+    ) -> dict:
+        relation = str(relation_type or "ADD").upper()
+        if relation not in _MEMORY_RELATION_TYPES:
+            raise ValueError(f"unknown memory relation_type: {relation_type!r}")
+        if relation == "NOOP":
+            return {"id": 0, "persisted": False, "relation_type": "NOOP", "memory_key": memory_key}
+        resolved_status = status or (
+            "pending" if relation == "PENDING" else "retracted" if relation == "RETRACT" else "active"
+        )
+        if resolved_status not in _MEMORY_STATUSES:
+            raise ValueError(f"unknown memory status: {resolved_status!r}")
+        if not str(memory_key).strip() or not str(content).strip():
+            raise ValueError("memory_key and content must not be empty")
+        storage_character, storage_type, storage_conversation = self._claim_storage_scope(
+            character_id, conversation_type, conversation_id, scope_level
+        )
+        now = datetime.now().isoformat()
+        observed = observed_at or now
+        target_id = supersedes_memory_id
+        if relation == "RETRACT" and target_id is None:
+            target_id = parent_memory_id
+        params = self._character_scope_params(
+            character_id,
+            platform,
+            adapter,
+            sender_id,
+            conversation_type,
+            conversation_id,
+            storage_character=storage_character,
+            storage_type=storage_type,
+            storage_conversation=storage_conversation,
+            scope_level=scope_level,
+            memory_type=memory_type,
+            memory_key=memory_key,
+            content=content,
+            importance=max(0.0, min(float(importance), 1.0)),
+            confidence=max(0.0, min(float(confidence), 1.0)),
+            source_message_id=source_message_id,
+            source_message_ids_json=source_message_ids_json,
+            evidence_json=evidence_json,
+            metadata_json=metadata_json,
+            relation_type=relation,
+            status=resolved_status,
+            parent_memory_id=parent_memory_id,
+            supersedes_memory_id=supersedes_memory_id,
+            target_id=target_id,
+            valid_from=valid_from,
+            valid_to=valid_to,
+            observed_at=observed,
+            now=now,
+        )
+        async with self.async_session() as session:
+            # Serialize revision allocation per logical key without locking the
+            # full table. Hash collisions only reduce concurrency, not safety.
+            lock_key = "\x1f".join(
+                [storage_character, platform, adapter, sender_id, storage_type,
+                 storage_conversation, scope_level, memory_key]
+            )
+            await session.execute(
+                text("SELECT pg_advisory_xact_lock(hashtext(:lock_key))"),
+                {"lock_key": lock_key},
+            )
+            if target_id is not None:
+                target = await session.execute(
+                    text(
+                        "SELECT id FROM character_memories WHERE id = :target_id AND "
+                        + self._character_claim_access_sql()
+                    ),
+                    params,
+                )
+                if target.fetchone() is None:
+                    raise ValueError("target memory is not visible in the requested user scope")
+            revision_result = await session.execute(
+                text(
+                    "SELECT COALESCE(MAX(revision), 0) + 1 FROM character_memories WHERE "
+                    "character_id = :storage_character AND platform = :platform AND adapter = :adapter "
+                    "AND sender_id = :sender_id AND conversation_type = :storage_type "
+                    "AND conversation_id = :storage_conversation AND scope_level = :scope_level "
+                    "AND memory_key = :memory_key"
+                ),
+                params,
+            )
+            params["revision"] = int(revision_result.scalar_one())
+            inserted = await session.execute(
+                text(
+                    "INSERT INTO character_memories ("
+                    "character_id, platform, adapter, sender_id, conversation_type, conversation_id, "
+                    "scope_level, memory_type, memory_key, revision, relation_type, status, "
+                    "parent_memory_id, supersedes_memory_id, content, importance, confidence, "
+                    "source_message_id, source_message_ids_json, evidence_json, metadata_json, "
+                    "valid_from, valid_to, observed_at, created_at, updated_at) VALUES ("
+                    ":storage_character, :platform, :adapter, :sender_id, :storage_type, "
+                    ":storage_conversation, :scope_level, :memory_type, :memory_key, :revision, "
+                    ":relation_type, :status, :parent_memory_id, :supersedes_memory_id, :content, "
+                    ":importance, :confidence, :source_message_id, :source_message_ids_json, "
+                    ":evidence_json, :metadata_json, :valid_from, :valid_to, :observed_at, :now, :now) "
+                    "RETURNING *"
+                ),
+                params,
+            )
+            row = inserted.fetchone()
+            if target_id is not None and relation in {"SUPERSEDE", "MERGE", "RETRACT"}:
+                await session.execute(
+                    text(
+                        "UPDATE character_memories SET status = :target_status, "
+                        "valid_to = COALESCE(valid_to, :observed_at), updated_at = :now "
+                        "WHERE id = :target_id"
+                    ),
+                    {**params, "target_status": "retracted" if relation == "RETRACT" else "superseded"},
+                )
+            await session.commit()
             record = _row_to_dict(row) if row else {}
-            return {
-                "id": record.get("id"),
-                "created_at": record.get("created_at", now),
-                "character_id": character_id,
-                "memory_type": memory_type,
-                "memory_key": memory_key,
-                "content": content,
-                "importance": float(importance),
-                "source_message_id": source_message_id,
-                "updated_at": now,
-            }
+            record["persisted"] = True
+            return record
 
     async def delete_character_memory(
         self,
@@ -1231,21 +1520,66 @@ class PgDatabase:
         conversation_type: str,
         conversation_id: str,
     ) -> bool:
-        """删除一条记忆。必须同时匹配隔离范围，防止越权删除其他用户记忆。"""
+        """Physically erase one visible claim (privacy/legacy DELETE semantics)."""
+        return bool(await self.erase_character_memories(
+            character_id,
+            platform,
+            adapter,
+            sender_id,
+            conversation_type,
+            conversation_id,
+            memory_id=int(memory_id),
+        ))
+
+    async def erase_character_memories(
+        self,
+        character_id: str,
+        platform: str,
+        adapter: str,
+        sender_id: str,
+        conversation_type: str,
+        conversation_id: str,
+        *,
+        memory_id: Optional[int] = None,
+        memory_key: Optional[str] = None,
+        scope_level: Optional[str] = None,
+    ) -> int:
+        if memory_id is None and not str(memory_key or "").strip():
+            raise ValueError("ERASE requires memory_id or memory_key")
+        levels = (scope_level,) if scope_level else None
+        access_sql = self._character_claim_access_sql(levels, table="root")
+        child_access_sql = self._character_claim_access_sql(levels, table="child")
+        selector = "root.id = :memory_id" if memory_id is not None else "root.memory_key = :memory_key"
+        params = self._character_scope_params(
+            character_id,
+            platform,
+            adapter,
+            sender_id,
+            conversation_type,
+            conversation_id,
+            memory_id=int(memory_id) if memory_id is not None else None,
+            memory_key=str(memory_key or "").strip(),
+        )
         async with self.async_session() as session:
-            stmt = text(
-                "DELETE FROM character_memories WHERE id = :memory_id AND "
-                + self._CHARACTER_SCOPE_SQL
-            )
             result = await session.execute(
-                stmt,
-                self._character_scope_params(
-                    character_id, platform, adapter, sender_id, conversation_type, conversation_id,
-                    memory_id=int(memory_id),
+                text(
+                    "WITH RECURSIVE lineage(id) AS ("
+                    "SELECT root.id FROM character_memories root WHERE "
+                    + selector
+                    + " AND "
+                    + access_sql
+                    + " UNION SELECT child.id FROM character_memories child "
+                    "JOIN lineage parent ON (child.parent_memory_id = parent.id "
+                    "OR child.supersedes_memory_id = parent.id) WHERE "
+                    + child_access_sql
+                    + ") "
+                    "DELETE FROM character_memories WHERE id IN (SELECT id FROM lineage) RETURNING id"
                 ),
+                params,
             )
+            deleted = len(result.fetchall())
             await session.commit()
-            return bool(result.rowcount)
+            return deleted
 
     async def clear_character_memories(
         self,
@@ -1256,10 +1590,11 @@ class PgDatabase:
         conversation_type: str,
         conversation_id: str,
     ) -> int:
-        """清空指定范围内的全部记忆，返回删除条数。"""
+        """Physically clear all conversation-scope versions for one exact scope."""
         async with self.async_session() as session:
             stmt = text(
                 "DELETE FROM character_memories WHERE " + self._CHARACTER_SCOPE_SQL
+                + " AND scope_level = 'conversation'"
             )
             result = await session.execute(
                 stmt,
@@ -2422,15 +2757,37 @@ class SyncPgAdapter:
             character_id, platform, adapter, sender_id, conversation_type, conversation_id, limit
         ))
 
+    def list_character_memory_claims(self, character_id, platform, adapter, sender_id, conversation_type, conversation_id, limit=30, *, include_inactive=False, scope_levels=None):
+        return self._run(self._pg.list_character_memory_claims(
+            character_id, platform, adapter, sender_id, conversation_type, conversation_id, limit,
+            include_inactive=include_inactive, scope_levels=scope_levels,
+        ))
+
+    def get_character_memory_claim(self, memory_id, character_id, platform, adapter, sender_id, conversation_type, conversation_id):
+        return self._run(self._pg.get_character_memory_claim(
+            memory_id, character_id, platform, adapter, sender_id, conversation_type, conversation_id
+        ))
+
     def add_or_update_character_memory(self, character_id, platform, adapter, sender_id, conversation_type, conversation_id, memory_type, memory_key, content, importance=0.0, source_message_id=None):
         return self._run(self._pg.add_or_update_character_memory(
             character_id, platform, adapter, sender_id, conversation_type, conversation_id,
             memory_type, memory_key, content, importance, source_message_id
         ))
 
+    def append_character_memory_claim(self, character_id, platform, adapter, sender_id, conversation_type, conversation_id, memory_type, memory_key, content, importance=0.0, source_message_id=None, **kwargs):
+        return self._run(self._pg.append_character_memory_claim(
+            character_id, platform, adapter, sender_id, conversation_type, conversation_id,
+            memory_type, memory_key, content, importance, source_message_id, **kwargs
+        ))
+
     def delete_character_memory(self, memory_id, character_id, platform, adapter, sender_id, conversation_type, conversation_id):
         return self._run(self._pg.delete_character_memory(
             memory_id, character_id, platform, adapter, sender_id, conversation_type, conversation_id
+        ))
+
+    def erase_character_memories(self, character_id, platform, adapter, sender_id, conversation_type, conversation_id, **kwargs):
+        return self._run(self._pg.erase_character_memories(
+            character_id, platform, adapter, sender_id, conversation_type, conversation_id, **kwargs
         ))
 
     def clear_character_memories(self, character_id, platform, adapter, sender_id, conversation_type, conversation_id):

@@ -13,6 +13,8 @@
 | `run_knowledge_candidates.py` | 从批准场景生成 P5 知识卡候选 |
 | `finalize_knowledge_review.py` | 应用批准的知识卡审核决定 |
 | `build_character_rag_index.py` | 构建生产多粒度角色知识索引 |
+| `evaluate_interaction_policy.py` | 离线比较机械规则与柔性互动策略，并校验误触发、组合集中度、延迟及动态提示长度 |
+| `run_interaction_reply_review.py` | 通过真实角色生成链路生成多场景盲审材料，不使用 mock 替代回复 |
 
 角色知识索引构建说明见
 [`../../docs/architecture/CHARACTER_KNOWLEDGE_RETRIEVAL.md`](../../docs/architecture/CHARACTER_KNOWLEDGE_RETRIEVAL.md)。历史实验脚本位于 `archive/`，不属于受支持的生产入口。

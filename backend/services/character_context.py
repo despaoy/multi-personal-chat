@@ -14,7 +14,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 from character.context_builder import (
     build_user_scope,
@@ -30,15 +31,27 @@ from character.memory_service import CharacterMemoryService
 from character.models import (
     CharacterContext,
     CompiledCharacterContext,
+    DecisionPlan,
+    InteractionState,
     MemoryItem,
     RelationshipState,
     SituationState,
     UserScope,
 )
-from character.profile_registry import CharacterProfileRegistry
-from character.situation_analyzer import SITUATION_DAILY, SITUATION_LABELS, SituationAnalyzer
-from repositories.character_memory import CharacterMemoryRepository
-from repositories.messages import MessageRepository
+from character.output_guard import ReplyGuard, build_reply_guard
+from character.semantic_state_estimator import SemanticReviewOutcome, SemanticStateEstimator
+from character.situation_analyzer import (
+    RESPONSE_GOALS,
+    SITUATION_DAILY,
+    SITUATION_LABELS,
+    SituationAnalyzer,
+    affect_label,
+)
+
+if TYPE_CHECKING:
+    from character.profile_registry import CharacterProfileRegistry
+    from repositories.character_memory import CharacterMemoryRepository
+    from repositories.messages import MessageRepository
 
 logger = logging.getLogger(__name__)
 
@@ -79,6 +92,19 @@ class PreparedCharacterTurn:
     relationship: RelationshipState
     memory_candidates: int
     interaction_count: int
+    reply_guard: ReplyGuard
+    # Expose the trusted, post-review state and bounded diagnostics so
+    # evaluation/observability never has to re-run the analyzer and silently
+    # report a different state from the one actually used for generation.
+    interaction: InteractionState = field(default_factory=InteractionState)
+    decision: DecisionPlan = field(default_factory=DecisionPlan)
+    semantic_review_status: str = "disabled"
+    semantic_review_reasons: tuple[str, ...] = ()
+    semantic_review_latency_ms: float = 0.0
+    semantic_review_history_count: int = 0
+    semantic_review_rule_confidence: float = 0.0
+    semantic_review_confidence: float | None = None
+    semantic_review_fallback_reason: str = ""
 
 
 @dataclass
@@ -87,6 +113,8 @@ class _TurnOutcome:
 
     new_memories: int = 0
     memory_enrichment_scheduled: bool = False
+    memory_enrichment_status: str = "skipped"
+    memory_enrichment_mode: str = "none"
     interaction_count: int = 0
     stage: str = "stranger"
     preferred_address: str = ""
@@ -104,6 +132,7 @@ class CharacterContextService:
         memory_service: CharacterMemoryService | None = None,
         situation_analyzer: SituationAnalyzer | None = None,
         decision_policy: DecisionPolicy | None = None,
+        semantic_estimator: SemanticStateEstimator | None = None,
     ) -> None:
         self._profiles = profile_registry
         self._memory_repo = memory_repository
@@ -111,6 +140,7 @@ class CharacterContextService:
         self._memory_service = memory_service or CharacterMemoryService(memory_repository)
         self._situation_analyzer = situation_analyzer or SituationAnalyzer()
         self._decision_policy = decision_policy or DecisionPolicy()
+        self._semantic_estimator = semantic_estimator
 
     async def prepare_turn(self, turn: TurnInput, character_id: str) -> PreparedCharacterTurn:
         """加载本轮全部上下文并编译成模型输入。
@@ -134,21 +164,93 @@ class CharacterContextService:
         )
         memories_items, memory_candidates = memories
 
-        situation_type, response_goal = self._situation_analyzer.analyze(turn.message)
+        # Reuse the already-loaded history: no extra database/model call. The
+        # caller-provided live history wins over the persisted fallback.
+        effective_history = tuple(turn.history) or tuple(history)
+        analysis_ok = True
+        try:
+            interaction = self._situation_analyzer.estimate(
+                turn.message,
+                effective_history,
+            )
+        except Exception:
+            # Analysis is an enhancement. Preserve the character path with a
+            # neutral legacy plan if a custom analyzer or a future rule fails.
+            logger.warning("互动状态分析失败，按中性角色策略继续", exc_info=True)
+            interaction = InteractionState()
+            analysis_ok = False
+
+        semantic_outcome: SemanticReviewOutcome | None = None
+        semantic_review_status = "analysis_failed" if not analysis_ok else "disabled"
+        semantic_review_reasons: tuple[str, ...] = ()
+        semantic_review_latency_ms = 0.0
+        semantic_review_history_count = 0
+        semantic_review_rule_confidence = 0.0
+        semantic_review_confidence: float | None = None
+        semantic_review_fallback_reason = ""
+        if analysis_ok and self._semantic_estimator is not None:
+            # The estimator itself owns timeout, validation and fail-closed
+            # recovery.  Its reviewer calls only the low-level base model and
+            # cannot re-enter this character-context pipeline.
+            try:
+                semantic_outcome = await self._semantic_estimator.refine_with_diagnostics(
+                    turn.message,
+                    effective_history,
+                    interaction,
+                )
+            except Exception:
+                # A future custom estimator must obey the same fail-closed
+                # contract as the built-in implementation.  Cancellation is
+                # not an Exception on supported Python versions and still
+                # propagates to the request owner.
+                logger.warning("语义复核编排失败，保留规则互动状态", exc_info=True)
+                semantic_review_status = "fallback"
+                semantic_review_fallback_reason = "error"
+            else:
+                interaction = semantic_outcome.state
+                semantic_review_status = semantic_outcome.status
+                semantic_review_reasons = semantic_outcome.reasons
+                semantic_review_latency_ms = semantic_outcome.latency_ms
+                semantic_review_history_count = semantic_outcome.history_count
+                semantic_review_rule_confidence = semantic_outcome.rule_confidence
+                semantic_review_confidence = semantic_outcome.review_confidence
+                semantic_review_fallback_reason = semantic_outcome.fallback_reason
+                _observe_semantic_review(semantic_outcome)
+        situation_type = (
+            interaction.primary_situation if interaction.primary_situation in SITUATION_LABELS else SITUATION_DAILY
+        )
+
         situation = SituationState(
             # 系统提示词中只放固定分类标签，用户消息原文绝不进入
             # 系统提示词（提示词注入防护）
             topic=SITUATION_LABELS.get(situation_type, SITUATION_LABELS[SITUATION_DAILY]),
-            emotion_hint=self._situation_analyzer.detect_emotion(turn.message),
-            response_goal=response_goal,
+            emotion_hint=(
+                affect_label(interaction.valence, interaction.arousal) if interaction.has_soft_context else ""
+            ),
+            response_goal=(
+                self._situation_analyzer.response_goal(interaction)
+                if interaction.has_soft_context
+                else RESPONSE_GOALS[SITUATION_DAILY]
+            ),
         )
-        decision = self._decision_policy.decide(profile, relationship, situation_type)
+        try:
+            decision = self._decision_policy.decide(
+                profile,
+                relationship,
+                situation_type,
+                interaction=interaction if interaction.has_soft_context else None,
+                has_relevant_memory=bool(memories_items),
+            )
+        except Exception:
+            logger.warning("互动策略评分失败，按旧版角色策略继续", exc_info=True)
+            decision = self._decision_policy.decide(profile, relationship, situation_type)
 
         context = CharacterContext(
             profile=profile,
             user_scope=user_scope,
             relationship=relationship,
             situation=situation,
+            interaction=interaction,
             memories=memories_items,
             decision=decision,
         )
@@ -161,10 +263,27 @@ class CharacterContextService:
             character_id=character_id,
             user_scope=user_scope,
             compiled=compiled,
-            history=tuple(turn.history) or tuple(history),
+            history=effective_history,
             relationship=relationship,
             memory_candidates=memory_candidates,
             interaction_count=interaction_count,
+            reply_guard=build_reply_guard(
+                profile,
+                turn.message,
+                effective_history,
+                interaction,
+                decision,
+                has_relevant_memory=bool(memories_items),
+            ),
+            interaction=interaction,
+            decision=decision,
+            semantic_review_status=semantic_review_status,
+            semantic_review_reasons=semantic_review_reasons,
+            semantic_review_latency_ms=semantic_review_latency_ms,
+            semantic_review_history_count=semantic_review_history_count,
+            semantic_review_rule_confidence=semantic_review_rule_confidence,
+            semantic_review_confidence=semantic_review_confidence,
+            semantic_review_fallback_reason=semantic_review_fallback_reason,
         )
 
     async def complete_turn(
@@ -198,19 +317,36 @@ class CharacterContextService:
         # 保留原规则写入，方便离线开发和向后兼容。
         try:
             extracted = extract_memories(turn.message)
-            from character.memory_llm import get_memory_enrichment_scheduler
+            from character.memory_llm import (
+                classify_memory_write_mode,
+                get_memory_enrichment_scheduler,
+            )
 
             scheduler = get_memory_enrichment_scheduler()
             if scheduler.enabled:
+                outcome.memory_enrichment_mode = classify_memory_write_mode(turn.message)
                 outcome.memory_enrichment_scheduled = scheduler.schedule(
                     repository=self._memory_repo,
                     character_id=prepared.character_id,
                     user_scope=prepared.user_scope,
                     message=turn.message,
                     rule_hints=extracted,
+                    history=prepared.history[-4:],
                     source_message_id=source_message_id or None,
+                    # 只传递本轮真正注入回复上下文的 IDs。“刚才那条说错了”
+                    # 可据此定向纠错；reply 本身绝不进入记忆证据。
+                    feedback_target_ids=prepared.compiled.used_memory_ids,
+                    source_type="user",
+                )
+                outcome.memory_enrichment_status = (
+                    "queued_hot"
+                    if outcome.memory_enrichment_scheduled and outcome.memory_enrichment_mode == "hot"
+                    else "buffered_idle"
+                    if outcome.memory_enrichment_scheduled
+                    else scheduler.status.last_outcome
                 )
             else:
+                outcome.memory_enrichment_mode = "rules"
                 for item in extracted[:4]:
                     await self._memory_repo.add_or_update_memory(
                         prepared.character_id,
@@ -225,6 +361,7 @@ class CharacterContextService:
                         source_message_id=source_message_id or None,
                     )
                     outcome.new_memories += 1
+                outcome.memory_enrichment_status = "saved" if outcome.new_memories else "no_change"
         except Exception:
             logger.warning(
                 "角色长期记忆写入失败 character=%s error=%s",
@@ -277,14 +414,47 @@ def build_character_context_service(database) -> CharacterContextService:
     而不是全局单例——否则多应用实例/测试注入会读写到错误的数据库。
     """
     from character.profile_registry import get_default_profile_registry
+    from character.semantic_review_adapter import create_default_semantic_review_runtime
     from repositories.character_memory import DatabaseCharacterMemoryRepository
     from repositories.messages import DatabaseMessageRepository
+
+    semantic_runtime = create_default_semantic_review_runtime()
 
     return CharacterContextService(
         profile_registry=get_default_profile_registry(),
         memory_repository=DatabaseCharacterMemoryRepository(database),
         message_repository=DatabaseMessageRepository(database),
+        semantic_estimator=SemanticStateEstimator(
+            semantic_runtime.reviewer,
+            timeout_seconds=semantic_runtime.timeout_seconds,
+        ),
     )
+
+
+def _observe_semantic_review(outcome: SemanticReviewOutcome) -> None:
+    """Record text-free semantic-review metrics without risking the turn."""
+
+    if outcome.status not in {"applied", "fallback", "recursive_skip"}:
+        return
+    try:
+        from infra.observability import increment, log_event
+
+        increment(f"dynamic_context_semantic_review_{outcome.status}")
+        if outcome.fallback_reason:
+            increment(f"dynamic_context_semantic_review_fallback_{outcome.fallback_reason}")
+        log_event(
+            "dynamic_context_semantic_review",
+            status=outcome.status,
+            reasons=list(outcome.reasons),
+            latencyMs=round(outcome.latency_ms, 3),
+            historyCount=outcome.history_count,
+            ruleConfidence=outcome.rule_confidence,
+            reviewConfidence=outcome.review_confidence,
+            fallbackReason=outcome.fallback_reason,
+        )
+    except Exception:
+        # Diagnostics must never turn an optional review into a request failure.
+        logger.debug("语义复核诊断记录失败", exc_info=True)
 
 
 _default_service: CharacterContextService | None = None

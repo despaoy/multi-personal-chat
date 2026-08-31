@@ -146,15 +146,25 @@ async def list_character_memories(
     conversation_type: str,
     conversation_id: str,
     limit: int = 100,
+    include_inactive: bool = True,
+    scope_level: str | None = None,
     repo: DatabaseCharacterMemoryRepository = Depends(get_character_memory_repository),
 ):
-    """列出指定角色+用户范围的长期记忆。"""
+    """列出三层可见 claim；管理端默认包含版本历史。"""
     user_scope = _build_scope(
         platform, adapter, sender_id, conversation_type, conversation_id
     )
+    if scope_level is not None and scope_level not in {
+        "user_global", "user_character", "conversation"
+    }:
+        raise HTTPException(status_code=400, detail="scope_level 必须是 user_global、user_character 或 conversation")
     try:
         records = await repo.list_memory_records(
-            character_id, user_scope, limit=max(1, min(limit, 200))
+            character_id,
+            user_scope,
+            limit=max(1, min(limit, 500)),
+            include_inactive=include_inactive,
+            scope_levels=(scope_level,) if scope_level else None,
         )
     except Exception:
         logger.error("查询角色记忆失败 character=%s", character_id, exc_info=True)
@@ -177,18 +187,15 @@ async def update_character_memory(
     conversation_id: str,
     repo: DatabaseCharacterMemoryRepository = Depends(get_character_memory_repository),
 ):
-    """修正单条记忆的内容与重要度（key 不变，视为覆盖写）。"""
+    """修正记忆并追加 SUPERSEDE claim，保留旧版本与证据链。"""
     user_scope = _build_scope(
         platform, adapter, sender_id, conversation_type, conversation_id
     )
     try:
-        records = await repo.list_memory_records(
-            character_id, user_scope, limit=200
-        )
-        target = next((r for r in records if int(r.get("id") or 0) == memory_id), None)
+        target = await repo.get_memory_record(memory_id, character_id, user_scope)
         if target is None:
             raise HTTPException(status_code=404, detail="记忆不存在")
-        await repo.add_or_update_memory(
+        record = await repo.append_claim(
             character_id,
             user_scope,
             MemoryItem(
@@ -198,14 +205,28 @@ async def update_character_memory(
                 importance=request.importance,
             ),
             memory_key=str(target.get("memory_key") or f"memory_{memory_id}"),
+            relation_type="SUPERSEDE",
+            scope_level=str(target.get("scope_level") or "conversation"),
+            parent_memory_id=memory_id,
+            supersedes_memory_id=memory_id,
+            evidence=tuple(target.get("evidence") or ()),
+            confidence=float(target.get("confidence") or 1.0),
+            attributed_to=str(target.get("attributed_to") or "user"),
+            valid_from=target.get("valid_from"),
             source_message_id=target.get("source_message_id"),
+            source_message_ids=tuple(target.get("source_message_ids") or ()),
+            metadata={
+                **dict(target.get("metadata") or {}),
+                "manual_correction": True,
+                "corrected_memory_id": memory_id,
+            },
         )
     except HTTPException:
         raise
     except Exception:
         logger.error("更新角色记忆失败 character=%s memory=%s", character_id, memory_id, exc_info=True)
         raise HTTPException(status_code=500, detail="更新记忆失败") from None
-    return {"success": True}
+    return {"success": True, "memory": record}
 
 
 @router.delete(
@@ -222,18 +243,20 @@ async def delete_character_memory(
     conversation_id: str,
     repo: DatabaseCharacterMemoryRepository = Depends(get_character_memory_repository),
 ):
-    """删除单条记忆（必须匹配完整隔离范围）。"""
+    """隐私 ERASE：物理删除目标 claim 及其派生版本，不保留 tombstone。"""
     user_scope = _build_scope(
         platform, adapter, sender_id, conversation_type, conversation_id
     )
     try:
-        deleted = await repo.delete_memory(memory_id, character_id, user_scope)
+        deleted = await repo.erase_memory(
+            character_id, user_scope, memory_id=memory_id
+        )
     except Exception:
         logger.error("删除角色记忆失败 character=%s memory=%s", character_id, memory_id, exc_info=True)
         raise HTTPException(status_code=500, detail="删除记忆失败") from None
     if not deleted:
         raise HTTPException(status_code=404, detail="记忆不存在")
-    return {"success": True, "message": "记忆已删除"}
+    return {"success": True, "deleted": deleted, "message": "记忆已物理删除"}
 
 
 @router.delete(

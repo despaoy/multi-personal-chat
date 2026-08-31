@@ -103,6 +103,9 @@ class _Repository:
     def __init__(self) -> None:
         self.writes = []
 
+    async def list_memory_records(self, character_id, user_scope, limit=30):
+        return []
+
     async def add_or_update_memory(
         self,
         character_id,
