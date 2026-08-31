@@ -210,9 +210,29 @@ scripts/qwen3_tokenizer/
 # === Codex PPT 审查临时目录 ===
 .codex_ppt_review/
 
+# === Codex 本机恢复工具（包含设备路径与任务标识，不进入仓库）===
+/.codex-recovery-tools/
+
 # === Repository-local temporary artifacts ===
 /tmp/
 /local-notes/
+
+# === 私有评测归档与可复现迭代输出 ===
+/archive/evaluations/
+/backend/evaluation/interaction_reply_review_*.json
+/backend/evaluation/interaction_reply_review_*.md
+/backend/evaluation/results/cahm_ablation_results.json
+/backend/evaluation/results/cahm_ablation_results.md
+/backend/evaluation/results/cahm_ablation_threshold_*.json
+/backend/evaluation/results/cahm_ablation_threshold_*.md
+/backend/evaluation/results/cahm_balanced_local.json
+/backend/evaluation/results/cahm_balanced_local.md
+/backend/evaluation/results/cahm_balanced_results.json
+/backend/evaluation/results/cahm_balanced_results.md
+/backend/evaluation/results/cahm_balanced_server_qwen3_8b.json
+/backend/evaluation/results/cahm_balanced_server_qwen3_8b.md
+/backend/evaluation/results/cahm_balanced_server_qwen3_8b_optimized.json
+/backend/evaluation/results/cahm_balanced_server_qwen3_8b_optimized.md
 
 # === Local evaluation evidence and retired generated artifacts ===
 /archive/p6_rag_pipeline/artifacts/

@@ -1,0 +1,491 @@
+{
+  "method": "CAHM recommended balanced memory evaluation",
+  "generated_at": "2026-08-30T11:51:47.663452+00:00",
+  "dataset": {
+    "path": "/root/autodl-tmp/multi-personal-chat/backend/evaluation/data/cahm_balanced_gold.jsonl",
+    "total": 40,
+    "relation": 20,
+    "retrieval": 20
+  },
+  "configuration": {
+    "embedding_model": "paraphrase-multilingual-MiniLM-L12-v2",
+    "memory_llm_evaluated": true,
+    "memory_llm_model": "qwen3-8b-memory",
+    "metric_definitions": {
+      "target_accuracy": "Only Gold operations that require a target are counted",
+      "wrong_memory_injection_rate": "Selected non-Gold memory items divided by all selected memory items",
+      "lifecycle_leakage_rate": "Selected rows of that original status divided by all selected memory items",
+      "evidence_completeness": "Required Gold claims retrieved with both evidence text and source message IDs",
+      "latency": "Wall-clock retrieval latency after one provider warmup; no values are synthesized"
+    }
+  },
+  "relation": {
+    "evaluated": true,
+    "reason": "",
+    "cases": 20,
+    "successfully_processed_cases": 20,
+    "operation_accuracy": 0.9,
+    "operation_macro_f1": 0.9125,
+    "target_accuracy": 0.8888888888888888,
+    "target_evaluated_cases": 9,
+    "status_accuracy": 0.8571428571428571,
+    "status_evaluated_cases": 14,
+    "per_operation": {
+      "ADD": {
+        "support": 4,
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "COEXIST": {
+        "support": 3,
+        "precision": 1.0,
+        "recall": 0.6666666666666666,
+        "f1": 0.8
+      },
+      "ERASE": {
+        "support": 1,
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "MERGE": {
+        "support": 2,
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "NOOP": {
+        "support": 5,
+        "precision": 0.7142857142857143,
+        "recall": 1.0,
+        "f1": 0.8333333333333333
+      },
+      "PENDING": {
+        "support": 2,
+        "precision": 1.0,
+        "recall": 0.5,
+        "f1": 0.6666666666666666
+      },
+      "RETRACT": {
+        "support": 1,
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      },
+      "SUPERSEDE": {
+        "support": 2,
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0
+      }
+    },
+    "latency_ms": {
+      "average_ms": 2556.066653644666,
+      "median_ms": 2689.7929534316063,
+      "p95_ms": 3699.5979165658355,
+      "max_ms": 9398.347733542323
+    },
+    "failures": [
+      {
+        "id": "b_e05",
+        "category": "conditional_coexist",
+        "message": "不是完全讨厌咖啡，只是不喜欢太苦的。",
+        "gold": {
+          "operation": "COEXIST",
+          "target_memory_id": "103",
+          "target_memory_key": "",
+          "status": "active"
+        },
+        "predicted": {
+          "operation": "NOOP",
+          "target_memory_id": "",
+          "target_memory_key": "",
+          "status": null,
+          "all_operations": []
+        },
+        "error": "",
+        "raw_llm_output": "{\"memories\":[{\"kind\":\"like\",\"value\":\"不苦的咖啡\",\"content\":\"用户开头的第三人称事实\",\"evidence\":\"不是完全讨厌咖啡，只是不喜欢太苦的。\",\"confidence\":0.95,\"operation\":\"COEXIST\",\"target_memory_id\":\"103\",\"target_memory_key\":\"preference_咖啡\",\"attributed_to\":\"user\",\"qualifiers\":{\"condition\":\"咖啡的苦度\"},\"valid_from\":\"2026-08-30T11:51:00.357793+00:00\",\"scope_level\":\"conversation\"}]}"
+      },
+      {
+        "id": "b_e06",
+        "category": "pending",
+        "message": "我可能明年会换工作。",
+        "gold": {
+          "operation": "PENDING",
+          "target_memory_id": "",
+          "target_memory_key": "",
+          "status": "pending"
+        },
+        "predicted": {
+          "operation": "NOOP",
+          "target_memory_id": "",
+          "target_memory_key": "",
+          "status": null,
+          "all_operations": []
+        },
+        "error": "",
+        "raw_llm_output": "{\"memories\":[]}"
+      }
+    ]
+  },
+  "retrieval": {
+    "legacy_hybrid": {
+      "name": "legacy_hybrid",
+      "description": "Legacy fixed weighted hybrid score without expansion, lifecycle filtering, or evidence packets",
+      "requested_configuration": {
+        "name": "legacy_hybrid",
+        "description": "Legacy fixed weighted hybrid score without expansion, lifecycle filtering, or evidence packets",
+        "rrf_enabled": false,
+        "query_expansion_enabled": false,
+        "version_filter_enabled": false,
+        "evidence_enabled": false,
+        "semantic_enabled": true,
+        "gate_enabled": true,
+        "min_hybrid_score": 0.35,
+        "candidate_limit": 100
+      },
+      "effective_configuration": {
+        "semantic_enabled": true,
+        "gate_enabled": true,
+        "min_hybrid_score": 0.35,
+        "candidate_limit": 100,
+        "include_pending": false,
+        "rrf_enabled": false,
+        "query_expansion_enabled": false,
+        "version_filter_enabled": false,
+        "evidence_enabled": false
+      },
+      "unsupported_service_switches": [],
+      "historical_query_control_supported": true,
+      "cases": 20,
+      "successfully_processed_cases": 20,
+      "relevant_cases": 16,
+      "recall_at_1": 0.59375,
+      "recall_at_5": 0.75,
+      "mrr": 0.6875,
+      "wrong_memory_injection_rate": 0.3157894736842105,
+      "injected_memories": 19,
+      "wrong_injected_memories": 6,
+      "lifecycle_leakage": {
+        "pending_count": 1,
+        "superseded_count": 2,
+        "retracted_count": 1,
+        "archived_count": 0,
+        "pending_rate": 0.05263157894736842,
+        "superseded_rate": 0.10526315789473684,
+        "retracted_rate": 0.05263157894736842,
+        "archived_rate": 0.0,
+        "invalid_time_count": 1,
+        "invalid_time_rate": 0.05263157894736842
+      },
+      "evidence_completeness": 0.0,
+      "evidence_complete_claims": 0,
+      "evidence_required_claims": 1,
+      "average_retrieval_latency_ms": 9.069294761866331,
+      "latency_ms": {
+        "average_ms": 9.069294761866331,
+        "median_ms": 8.735848125070333,
+        "p95_ms": 10.799785144627094,
+        "max_ms": 28.619554825127125
+      },
+      "embedding_failure_count": 0,
+      "embedding_failures": [],
+      "failures": [
+        {
+          "id": "b_r01",
+          "category": "current_version",
+          "query": "我现在做哪个点云方向？",
+          "gold_ids": [
+            "202"
+          ],
+          "selected_ids": [
+            "201",
+            "202"
+          ],
+          "missed_gold_ids_at_5": [],
+          "wrong_ids": [
+            "201"
+          ],
+          "leaked_ids": {
+            "pending": [],
+            "superseded": [
+              "201"
+            ],
+            "retracted": [],
+            "archived": []
+          },
+          "invalid_time_ids": [
+            "201"
+          ],
+          "missing_evidence_ids": [],
+          "error": ""
+        },
+        {
+          "id": "b_r02",
+          "category": "historical_version",
+          "query": "我今年六月还在做什么点云方向？",
+          "gold_ids": [
+            "201"
+          ],
+          "selected_ids": [
+            "201",
+            "202"
+          ],
+          "missed_gold_ids_at_5": [],
+          "wrong_ids": [
+            "202"
+          ],
+          "leaked_ids": {
+            "pending": [],
+            "superseded": [],
+            "retracted": [],
+            "archived": []
+          },
+          "invalid_time_ids": [],
+          "missing_evidence_ids": [],
+          "error": ""
+        },
+        {
+          "id": "b_r03",
+          "category": "pending_exclusion",
+          "query": "我现在在哪里工作？",
+          "gold_ids": [
+            "203"
+          ],
+          "selected_ids": [
+            "204"
+          ],
+          "missed_gold_ids_at_5": [
+            "203"
+          ],
+          "wrong_ids": [
+            "204"
+          ],
+          "leaked_ids": {
+            "pending": [
+              "204"
+            ],
+            "superseded": [],
+            "retracted": [],
+            "archived": []
+          },
+          "invalid_time_ids": [],
+          "missing_evidence_ids": [],
+          "error": ""
+        },
+        {
+          "id": "b_r04",
+          "category": "retracted_exclusion",
+          "query": "我喜欢喝什么咖啡？",
+          "gold_ids": [
+            "206"
+          ],
+          "selected_ids": [
+            "205",
+            "206"
+          ],
+          "missed_gold_ids_at_5": [],
+          "wrong_ids": [
+            "205"
+          ],
+          "leaked_ids": {
+            "pending": [],
+            "superseded": [],
+            "retracted": [
+              "205"
+            ],
+            "archived": []
+          },
+          "invalid_time_ids": [],
+          "missing_evidence_ids": [],
+          "error": ""
+        },
+        {
+          "id": "b_r06",
+          "category": "synonym_rrf",
+          "query": "我的升学申请准备得怎样？",
+          "gold_ids": [
+            "209"
+          ],
+          "selected_ids": [],
+          "missed_gold_ids_at_5": [
+            "209"
+          ],
+          "wrong_ids": [],
+          "leaked_ids": {
+            "pending": [],
+            "superseded": [],
+            "retracted": [],
+            "archived": []
+          },
+          "invalid_time_ids": [],
+          "missing_evidence_ids": [],
+          "error": ""
+        },
+        {
+          "id": "b_r07",
+          "category": "research_synonym",
+          "query": "我当前的科研方向是什么？",
+          "gold_ids": [
+            "211"
+          ],
+          "selected_ids": [
+            "212"
+          ],
+          "missed_gold_ids_at_5": [
+            "211"
+          ],
+          "wrong_ids": [
+            "212"
+          ],
+          "leaked_ids": {
+            "pending": [],
+            "superseded": [],
+            "retracted": [],
+            "archived": []
+          },
+          "invalid_time_ids": [],
+          "missing_evidence_ids": [],
+          "error": ""
+        },
+        {
+          "id": "b_r13",
+          "category": "evidence_packet",
+          "query": "为什么推荐我无咖啡因饮料？",
+          "gold_ids": [
+            "217"
+          ],
+          "selected_ids": [
+            "217"
+          ],
+          "missed_gold_ids_at_5": [],
+          "wrong_ids": [],
+          "leaked_ids": {
+            "pending": [],
+            "superseded": [],
+            "retracted": [],
+            "archived": []
+          },
+          "invalid_time_ids": [],
+          "missing_evidence_ids": [
+            "217"
+          ],
+          "error": ""
+        },
+        {
+          "id": "b_r16",
+          "category": "goal_detail_merge",
+          "query": "保研面试具体在练什么？",
+          "gold_ids": [
+            "223"
+          ],
+          "selected_ids": [
+            "223",
+            "222"
+          ],
+          "missed_gold_ids_at_5": [],
+          "wrong_ids": [
+            "222"
+          ],
+          "leaked_ids": {
+            "pending": [],
+            "superseded": [
+              "222"
+            ],
+            "retracted": [],
+            "archived": []
+          },
+          "invalid_time_ids": [],
+          "missing_evidence_ids": [],
+          "error": ""
+        },
+        {
+          "id": "b_r17",
+          "category": "temporary_location",
+          "query": "我这周在哪里？",
+          "gold_ids": [
+            "224"
+          ],
+          "selected_ids": [],
+          "missed_gold_ids_at_5": [
+            "224"
+          ],
+          "wrong_ids": [],
+          "leaked_ids": {
+            "pending": [],
+            "superseded": [],
+            "retracted": [],
+            "archived": []
+          },
+          "invalid_time_ids": [],
+          "missing_evidence_ids": [],
+          "error": ""
+        }
+      ]
+    },
+    "balanced_default": {
+      "name": "balanced_default",
+      "description": "Balanced RRF retrieval with query expansion, lifecycle filtering, and evidence packets",
+      "requested_configuration": {
+        "name": "balanced_default",
+        "description": "Balanced RRF retrieval with query expansion, lifecycle filtering, and evidence packets",
+        "rrf_enabled": true,
+        "query_expansion_enabled": true,
+        "version_filter_enabled": true,
+        "evidence_enabled": true,
+        "semantic_enabled": true,
+        "gate_enabled": true,
+        "min_hybrid_score": 0.35,
+        "candidate_limit": 100
+      },
+      "effective_configuration": {
+        "semantic_enabled": true,
+        "gate_enabled": true,
+        "min_hybrid_score": 0.35,
+        "candidate_limit": 100,
+        "include_pending": false,
+        "rrf_enabled": true,
+        "query_expansion_enabled": true,
+        "version_filter_enabled": true,
+        "evidence_enabled": true
+      },
+      "unsupported_service_switches": [],
+      "historical_query_control_supported": true,
+      "cases": 20,
+      "successfully_processed_cases": 20,
+      "relevant_cases": 16,
+      "recall_at_1": 0.96875,
+      "recall_at_5": 1.0,
+      "mrr": 1.0,
+      "wrong_memory_injection_rate": 0.0,
+      "injected_memories": 17,
+      "wrong_injected_memories": 0,
+      "lifecycle_leakage": {
+        "pending_count": 0,
+        "superseded_count": 0,
+        "retracted_count": 0,
+        "archived_count": 0,
+        "pending_rate": 0.0,
+        "superseded_rate": 0.0,
+        "retracted_rate": 0.0,
+        "archived_rate": 0.0,
+        "invalid_time_count": 0,
+        "invalid_time_rate": 0.0
+      },
+      "evidence_completeness": 1.0,
+      "evidence_complete_claims": 1,
+      "evidence_required_claims": 1,
+      "average_retrieval_latency_ms": 7.969082845374942,
+      "latency_ms": {
+        "average_ms": 7.969082845374942,
+        "median_ms": 8.726977743208408,
+        "p95_ms": 10.264987125992775,
+        "max_ms": 10.33069472759962
+      },
+      "embedding_failure_count": 0,
+      "embedding_failures": [],
+      "failures": []
+    }
+  }
+}

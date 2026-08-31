@@ -1,0 +1,1519 @@
+{
+  "method": "CAHM: Context-Aware Hybrid Memory / 上下文感知混合长期记忆",
+  "generated_at": "2026-08-30T09:12:01.561981+00:00",
+  "dataset": {
+    "path": "/root/autodl-tmp/multi-personal-chat/backend/evaluation/data/cahm_memory_gold.jsonl",
+    "total": 60,
+    "extraction": 18,
+    "retrieval": 42
+  },
+  "configuration": {
+    "embedding_model": "paraphrase-multilingual-MiniLM-L12-v2",
+    "context_extraction_evaluated": true,
+    "semantic_candidate_limit": 100,
+    "min_hybrid_memory_score": 0.35,
+    "hybrid_weights": {
+      "semantic": 0.65,
+      "lexical": 0.15,
+      "importance": 0.15,
+      "recency": 0.05
+    }
+  },
+  "groups": [
+    {
+      "name": "A. Baseline",
+      "context_extraction": false,
+      "semantic_retrieval": false,
+      "confidence_gate": false,
+      "extraction": {
+        "precision": 1.0,
+        "recall": 0.6666666666666666,
+        "f1": 0.8
+      },
+      "extraction_failures": [
+        {
+          "id": "e11",
+          "category": "semantic_expression",
+          "message": "我平时不碰含咖啡因的东西。",
+          "gold": [
+            "semantic:dislike:含咖啡因的东西"
+          ],
+          "predicted": [],
+          "false_positive": [],
+          "false_negative": [
+            "semantic:dislike:含咖啡因的东西"
+          ],
+          "raw_llm_output": ""
+        },
+        {
+          "id": "e12",
+          "category": "semantic_expression",
+          "message": "最近主要在复现点云模型。",
+          "gold": [
+            "semantic:goal:复现点云模型"
+          ],
+          "predicted": [],
+          "false_positive": [],
+          "false_negative": [
+            "semantic:goal:复现点云模型"
+          ],
+          "raw_llm_output": ""
+        },
+        {
+          "id": "e13",
+          "category": "context_ellipsis",
+          "message": "还是上次那个方向。",
+          "gold": [
+            "semantic:goal:点云补全"
+          ],
+          "predicted": [],
+          "false_positive": [],
+          "false_negative": [
+            "semantic:goal:点云补全"
+          ],
+          "raw_llm_output": ""
+        },
+        {
+          "id": "e14",
+          "category": "context_update",
+          "message": "补全方向暂时不考虑了，我最近改做点云识别。",
+          "gold": [
+            "semantic:goal:点云识别"
+          ],
+          "predicted": [],
+          "false_positive": [],
+          "false_negative": [
+            "semantic:goal:点云识别"
+          ],
+          "raw_llm_output": ""
+        },
+        {
+          "id": "e15",
+          "category": "context_update",
+          "message": "不是完全讨厌咖啡，只是不喜欢太苦的。",
+          "gold": [
+            "semantic:dislike:太苦的"
+          ],
+          "predicted": [],
+          "false_positive": [],
+          "false_negative": [
+            "semantic:dislike:太苦的"
+          ],
+          "raw_llm_output": ""
+        }
+      ],
+      "retrieval_recall_at_1": 0.59375,
+      "retrieval_recall_at_5": 0.59375,
+      "mrr": 0.59375,
+      "wrong_memory_injection_rate": 0.13636363636363635,
+      "average_retrieval_latency_ms": 0.02596427553466388,
+      "retrieval_failures": [
+        {
+          "id": "r01",
+          "category": "synonym",
+          "query": "我保研准备得怎么样？",
+          "gold_ids": [
+            "m1"
+          ],
+          "selected_ids": [],
+          "wrong_ids": []
+        },
+        {
+          "id": "r02",
+          "category": "synonym",
+          "query": "推免准备到哪一步了？",
+          "gold_ids": [
+            "m1"
+          ],
+          "selected_ids": [],
+          "wrong_ids": []
+        },
+        {
+          "id": "r05",
+          "category": "synonym",
+          "query": "我当前在做什么研究工作？",
+          "gold_ids": [
+            "m1"
+          ],
+          "selected_ids": [],
+          "wrong_ids": []
+        },
+        {
+          "id": "r06",
+          "category": "synonym",
+          "query": "最近的科研方向进展如何？",
+          "gold_ids": [
+            "m1"
+          ],
+          "selected_ids": [],
+          "wrong_ids": []
+        },
+        {
+          "id": "r08",
+          "category": "synonym",
+          "query": "我在哪座城市生活？",
+          "gold_ids": [
+            "m1"
+          ],
+          "selected_ids": [],
+          "wrong_ids": []
+        },
+        {
+          "id": "r09",
+          "category": "synonym",
+          "query": "我就职于哪家公司？",
+          "gold_ids": [
+            "m1"
+          ],
+          "selected_ids": [],
+          "wrong_ids": []
+        },
+        {
+          "id": "r10",
+          "category": "synonym",
+          "query": "我读的是什么方向？",
+          "gold_ids": [
+            "m1"
+          ],
+          "selected_ids": [],
+          "wrong_ids": []
+        },
+        {
+          "id": "r11",
+          "category": "direct",
+          "query": "点云识别最近进展如何？",
+          "gold_ids": [
+            "m1"
+          ],
+          "selected_ids": [
+            "m1",
+            "m2"
+          ],
+          "wrong_ids": [
+            "m2"
+          ]
+        },
+        {
+          "id": "r19",
+          "category": "irrelevant_suppression",
+          "query": "我最近准备的事情怎么样？",
+          "gold_ids": [
+            "m2"
+          ],
+          "selected_ids": [],
+          "wrong_ids": []
+        },
+        {
+          "id": "r20",
+          "category": "irrelevant_suppression",
+          "query": "研究任务有进展吗？",
+          "gold_ids": [
+            "m2"
+          ],
+          "selected_ids": [],
+          "wrong_ids": []
+        },
+        {
+          "id": "r22",
+          "category": "irrelevant_suppression",
+          "query": "我的学业背景是什么？",
+          "gold_ids": [
+            "m2"
+          ],
+          "selected_ids": [],
+          "wrong_ids": []
+        },
+        {
+          "id": "r23",
+          "category": "irrelevant_suppression",
+          "query": "我现在的训练目标是什么？",
+          "gold_ids": [
+            "m2"
+          ],
+          "selected_ids": [],
+          "wrong_ids": []
+        },
+        {
+          "id": "r33",
+          "category": "update",
+          "query": "我现在的点云方向是什么？",
+          "gold_ids": [
+            "m1"
+          ],
+          "selected_ids": [
+            "m1",
+            "m2"
+          ],
+          "wrong_ids": [
+            "m2"
+          ]
+        },
+        {
+          "id": "r34",
+          "category": "update",
+          "query": "咖啡方面我真正不喜欢什么？",
+          "gold_ids": [
+            "m1"
+          ],
+          "selected_ids": [
+            "m1",
+            "m2"
+          ],
+          "wrong_ids": [
+            "m2"
+          ]
+        },
+        {
+          "id": "r35",
+          "category": "update",
+          "query": "我最近改做的任务是什么？",
+          "gold_ids": [
+            "m1"
+          ],
+          "selected_ids": [],
+          "wrong_ids": []
+        },
+        {
+          "id": "r36",
+          "category": "update",
+          "query": "现在的升学目标是什么？",
+          "gold_ids": [
+            "m1"
+          ],
+          "selected_ids": [],
+          "wrong_ids": []
+        }
+      ],
+      "injected_memories": 22,
+      "wrong_injected_memories": 3
+    },
+    {
+      "name": "B. Semantic Retrieval",
+      "context_extraction": false,
+      "semantic_retrieval": true,
+      "confidence_gate": false,
+      "extraction": {
+        "precision": 1.0,
+        "recall": 0.6666666666666666,
+        "f1": 0.8
+      },
+      "extraction_failures": [
+        {
+          "id": "e11",
+          "category": "semantic_expression",
+          "message": "我平时不碰含咖啡因的东西。",
+          "gold": [
+            "semantic:dislike:含咖啡因的东西"
+          ],
+          "predicted": [],
+          "false_positive": [],
+          "false_negative": [
+            "semantic:dislike:含咖啡因的东西"
+          ],
+          "raw_llm_output": ""
+        },
+        {
+          "id": "e12",
+          "category": "semantic_expression",
+          "message": "最近主要在复现点云模型。",
+          "gold": [
+            "semantic:goal:复现点云模型"
+          ],
+          "predicted": [],
+          "false_positive": [],
+          "false_negative": [
+            "semantic:goal:复现点云模型"
+          ],
+          "raw_llm_output": ""
+        },
+        {
+          "id": "e13",
+          "category": "context_ellipsis",
+          "message": "还是上次那个方向。",
+          "gold": [
+            "semantic:goal:点云补全"
+          ],
+          "predicted": [],
+          "false_positive": [],
+          "false_negative": [
+            "semantic:goal:点云补全"
+          ],
+          "raw_llm_output": ""
+        },
+        {
+          "id": "e14",
+          "category": "context_update",
+          "message": "补全方向暂时不考虑了，我最近改做点云识别。",
+          "gold": [
+            "semantic:goal:点云识别"
+          ],
+          "predicted": [],
+          "false_positive": [],
+          "false_negative": [
+            "semantic:goal:点云识别"
+          ],
+          "raw_llm_output": ""
+        },
+        {
+          "id": "e15",
+          "category": "context_update",
+          "message": "不是完全讨厌咖啡，只是不喜欢太苦的。",
+          "gold": [
+            "semantic:dislike:太苦的"
+          ],
+          "predicted": [],
+          "false_positive": [],
+          "false_negative": [
+            "semantic:dislike:太苦的"
+          ],
+          "raw_llm_output": ""
+        }
+      ],
+      "retrieval_recall_at_1": 0.84375,
+      "retrieval_recall_at_5": 1.0,
+      "mrr": 0.921875,
+      "wrong_memory_injection_rate": 0.6,
+      "average_retrieval_latency_ms": 9.432222117625532,
+      "retrieval_failures": [
+        {
+          "id": "r01",
+          "category": "synonym",
+          "query": "我保研准备得怎么样？",
+          "gold_ids": [
+            "m1"
+          ],
+          "selected_ids": [
+            "m2",
+            "m1"
+          ],
+          "wrong_ids": [
+            "m2"
+          ]
+        },
+        {
+          "id": "r02",
+          "category": "synonym",
+          "query": "推免准备到哪一步了？",
+          "gold_ids": [
+            "m1"
+          ],
+          "selected_ids": [
+            "m1",
+            "m2"
+          ],
+          "wrong_ids": [
+            "m2"
+          ]
+        },
+        {
+          "id": "r03",
+          "category": "synonym",
+          "query": "推荐饮料要避开什么？",
+          "gold_ids": [
+            "m1"
+          ],
+          "selected_ids": [
+            "m1",
+            "m2"
+          ],
+          "wrong_ids": [
+            "m2"
+          ]
+        },
+        {
+          "id": "r04",
+          "category": "synonym",
+          "query": "我的饮品偏好是什么？",
+          "gold_ids": [
+            "m1"
+          ],
+          "selected_ids": [
+            "m1",
+            "m2"
+          ],
+          "wrong_ids": [
+            "m2"
+          ]
+        },
+        {
+          "id": "r05",
+          "category": "synonym",
+          "query": "我当前在做什么研究工作？",
+          "gold_ids": [
+            "m1"
+          ],
+          "selected_ids": [
+            "m1",
+            "m2"
+          ],
+          "wrong_ids": [
+            "m2"
+          ]
+        },
+        {
+          "id": "r06",
+          "category": "synonym",
+          "query": "最近的科研方向进展如何？",
+          "gold_ids": [
+            "m1"
+          ],
+          "selected_ids": [
+            "m2",
+            "m1"
+          ],
+          "wrong_ids": [
+            "m2"
+          ]
+        },
+        {
+          "id": "r07",
+          "category": "synonym",
+          "query": "升学申请准备得怎样？",
+          "gold_ids": [
+            "m1"
+          ],
+          "selected_ids": [
+            "m1",
+            "m2"
+          ],
+          "wrong_ids": [
+            "m2"
+          ]
+        },
+        {
+          "id": "r08",
+          "category": "synonym",
+          "query": "我在哪座城市生活？",
+          "gold_ids": [
+            "m1"
+          ],
+          "selected_ids": [
+            "m1",
+            "m2"
+          ],
+          "wrong_ids": [
+            "m2"
+          ]
+        },
+        {
+          "id": "r09",
+          "category": "synonym",
+          "query": "我就职于哪家公司？",
+          "gold_ids": [
+            "m1"
+          ],
+          "selected_ids": [
+            "m1",
+            "m2"
+          ],
+          "wrong_ids": [
+            "m2"
+          ]
+        },
+        {
+          "id": "r10",
+          "category": "synonym",
+          "query": "我读的是什么方向？",
+          "gold_ids": [
+            "m1"
+          ],
+          "selected_ids": [
+            "m1",
+            "m2"
+          ],
+          "wrong_ids": [
+            "m2"
+          ]
+        },
+        {
+          "id": "r11",
+          "category": "direct",
+          "query": "点云识别最近进展如何？",
+          "gold_ids": [
+            "m1"
+          ],
+          "selected_ids": [
+            "m1",
+            "m2"
+          ],
+          "wrong_ids": [
+            "m2"
+          ]
+        },
+        {
+          "id": "r12",
+          "category": "direct",
+          "query": "拿铁这个喜好还记得吗？",
+          "gold_ids": [
+            "m1"
+          ],
+          "selected_ids": [
+            "m1",
+            "m2"
+          ],
+          "wrong_ids": [
+            "m2"
+          ]
+        },
+        {
+          "id": "r13",
+          "category": "direct",
+          "query": "杭州生活怎么样？",
+          "gold_ids": [
+            "m1"
+          ],
+          "selected_ids": [
+            "m1",
+            "m2"
+          ],
+          "wrong_ids": [
+            "m2"
+          ]
+        },
+        {
+          "id": "r14",
+          "category": "direct",
+          "query": "计算机专业最近忙吗？",
+          "gold_ids": [
+            "m1"
+          ],
+          "selected_ids": [
+            "m1",
+            "m2"
+          ],
+          "wrong_ids": [
+            "m2"
+          ]
+        },
+        {
+          "id": "r15",
+          "category": "direct",
+          "query": "雅思备考到哪了？",
+          "gold_ids": [
+            "m1"
+          ],
+          "selected_ids": [
+            "m1",
+            "m2"
+          ],
+          "wrong_ids": [
+            "m2"
+          ]
+        },
+        {
+          "id": "r16",
+          "category": "direct",
+          "query": "我们周五约好了什么？",
+          "gold_ids": [
+            "m1"
+          ],
+          "selected_ids": [
+            "m1",
+            "m2"
+          ],
+          "wrong_ids": [
+            "m2"
+          ]
+        },
+        {
+          "id": "r17",
+          "category": "direct",
+          "query": "半程马拉松训练如何？",
+          "gold_ids": [
+            "m1"
+          ],
+          "selected_ids": [
+            "m1",
+            "m2"
+          ],
+          "wrong_ids": [
+            "m2"
+          ]
+        },
+        {
+          "id": "r18",
+          "category": "direct",
+          "query": "远帆科技工作还顺利吗？",
+          "gold_ids": [
+            "m1"
+          ],
+          "selected_ids": [
+            "m1",
+            "m2"
+          ],
+          "wrong_ids": [
+            "m2"
+          ]
+        },
+        {
+          "id": "r19",
+          "category": "irrelevant_suppression",
+          "query": "我最近准备的事情怎么样？",
+          "gold_ids": [
+            "m2"
+          ],
+          "selected_ids": [
+            "m2",
+            "m1"
+          ],
+          "wrong_ids": [
+            "m1"
+          ]
+        },
+        {
+          "id": "r20",
+          "category": "irrelevant_suppression",
+          "query": "研究任务有进展吗？",
+          "gold_ids": [
+            "m2"
+          ],
+          "selected_ids": [
+            "m1",
+            "m2"
+          ],
+          "wrong_ids": [
+            "m1"
+          ]
+        },
+        {
+          "id": "r21",
+          "category": "irrelevant_suppression",
+          "query": "饮料推荐要注意什么？",
+          "gold_ids": [
+            "m2"
+          ],
+          "selected_ids": [
+            "m2",
+            "m1"
+          ],
+          "wrong_ids": [
+            "m1"
+          ]
+        },
+        {
+          "id": "r22",
+          "category": "irrelevant_suppression",
+          "query": "我的学业背景是什么？",
+          "gold_ids": [
+            "m2"
+          ],
+          "selected_ids": [
+            "m2",
+            "m1"
+          ],
+          "wrong_ids": [
+            "m1"
+          ]
+        },
+        {
+          "id": "r23",
+          "category": "irrelevant_suppression",
+          "query": "我现在的训练目标是什么？",
+          "gold_ids": [
+            "m2"
+          ],
+          "selected_ids": [
+            "m2",
+            "m1"
+          ],
+          "wrong_ids": [
+            "m1"
+          ]
+        },
+        {
+          "id": "r24",
+          "category": "irrelevant_suppression",
+          "query": "我准备申请的事情怎样了？",
+          "gold_ids": [
+            "m2"
+          ],
+          "selected_ids": [
+            "m2",
+            "m1"
+          ],
+          "wrong_ids": [
+            "m1"
+          ]
+        },
+        {
+          "id": "r25",
+          "category": "subject",
+          "query": "我叫什么名字？",
+          "gold_ids": [
+            "m1"
+          ],
+          "selected_ids": [
+            "m1",
+            "m2"
+          ],
+          "wrong_ids": [
+            "m2"
+          ]
+        },
+        {
+          "id": "r26",
+          "category": "subject",
+          "query": "你叫什么名字？",
+          "gold_ids": [],
+          "selected_ids": [
+            "m2"
+          ],
+          "wrong_ids": [
+            "m2"
+          ]
+        },
+        {
+          "id": "r27",
+          "category": "subject",
+          "query": "我喜欢什么？",
+          "gold_ids": [
+            "m1"
+          ],
+          "selected_ids": [
+            "m1",
+            "m2"
+          ],
+          "wrong_ids": [
+            "m2"
+          ]
+        },
+        {
+          "id": "r28",
+          "category": "subject",
+          "query": "你喜欢什么？",
+          "gold_ids": [],
+          "selected_ids": [
+            "m2"
+          ],
+          "wrong_ids": [
+            "m2"
+          ]
+        },
+        {
+          "id": "r29",
+          "category": "subject",
+          "query": "你知道我叫什么吗？",
+          "gold_ids": [
+            "m1"
+          ],
+          "selected_ids": [
+            "m1",
+            "m2"
+          ],
+          "wrong_ids": [
+            "m2"
+          ]
+        },
+        {
+          "id": "r30",
+          "category": "subject",
+          "query": "她叫什么名字？",
+          "gold_ids": [],
+          "selected_ids": [
+            "m2"
+          ],
+          "wrong_ids": [
+            "m2"
+          ]
+        },
+        {
+          "id": "r31",
+          "category": "subject",
+          "query": "你问我喜欢什么？",
+          "gold_ids": [
+            "m1"
+          ],
+          "selected_ids": [
+            "m1",
+            "m2"
+          ],
+          "wrong_ids": [
+            "m2"
+          ]
+        },
+        {
+          "id": "r32",
+          "category": "subject",
+          "query": "我问你喜欢什么？",
+          "gold_ids": [],
+          "selected_ids": [
+            "m2"
+          ],
+          "wrong_ids": [
+            "m2"
+          ]
+        },
+        {
+          "id": "r33",
+          "category": "update",
+          "query": "我现在的点云方向是什么？",
+          "gold_ids": [
+            "m1"
+          ],
+          "selected_ids": [
+            "m2",
+            "m1"
+          ],
+          "wrong_ids": [
+            "m2"
+          ]
+        },
+        {
+          "id": "r34",
+          "category": "update",
+          "query": "咖啡方面我真正不喜欢什么？",
+          "gold_ids": [
+            "m1"
+          ],
+          "selected_ids": [
+            "m2",
+            "m1"
+          ],
+          "wrong_ids": [
+            "m2"
+          ]
+        },
+        {
+          "id": "r35",
+          "category": "update",
+          "query": "我最近改做的任务是什么？",
+          "gold_ids": [
+            "m1"
+          ],
+          "selected_ids": [
+            "m1",
+            "m2"
+          ],
+          "wrong_ids": [
+            "m2"
+          ]
+        },
+        {
+          "id": "r36",
+          "category": "update",
+          "query": "现在的升学目标是什么？",
+          "gold_ids": [
+            "m1"
+          ],
+          "selected_ids": [
+            "m1",
+            "m2"
+          ],
+          "wrong_ids": [
+            "m2"
+          ]
+        },
+        {
+          "id": "r37",
+          "category": "no_match",
+          "query": "今天天气怎么样？",
+          "gold_ids": [],
+          "selected_ids": [
+            "m1",
+            "m2"
+          ],
+          "wrong_ids": [
+            "m1",
+            "m2"
+          ]
+        },
+        {
+          "id": "r38",
+          "category": "no_match",
+          "query": "帮我写一个排序函数。",
+          "gold_ids": [],
+          "selected_ids": [
+            "m2",
+            "m1"
+          ],
+          "wrong_ids": [
+            "m2",
+            "m1"
+          ]
+        },
+        {
+          "id": "r39",
+          "category": "no_match",
+          "query": "解释一下量子纠缠。",
+          "gold_ids": [],
+          "selected_ids": [
+            "m1",
+            "m2"
+          ],
+          "wrong_ids": [
+            "m1",
+            "m2"
+          ]
+        },
+        {
+          "id": "r40",
+          "category": "no_match",
+          "query": "给我讲个笑话。",
+          "gold_ids": [],
+          "selected_ids": [
+            "m1",
+            "m2"
+          ],
+          "wrong_ids": [
+            "m1",
+            "m2"
+          ]
+        },
+        {
+          "id": "r41",
+          "category": "no_match",
+          "query": "现在几点？",
+          "gold_ids": [],
+          "selected_ids": [
+            "m1",
+            "m2"
+          ],
+          "wrong_ids": [
+            "m1",
+            "m2"
+          ]
+        },
+        {
+          "id": "r42",
+          "category": "no_match",
+          "query": "把这句话翻译成英文。",
+          "gold_ids": [],
+          "selected_ids": [
+            "m2",
+            "m1"
+          ],
+          "wrong_ids": [
+            "m2",
+            "m1"
+          ]
+        }
+      ],
+      "injected_memories": 80,
+      "wrong_injected_memories": 48
+    },
+    {
+      "name": "C. Context Extraction",
+      "context_extraction": true,
+      "semantic_retrieval": false,
+      "confidence_gate": false,
+      "extraction": {
+        "precision": 1.0,
+        "recall": 0.7333333333333333,
+        "f1": 0.846153846153846
+      },
+      "extraction_failures": [
+        {
+          "id": "e02",
+          "category": "direct_rule",
+          "message": "我的专业是计算机。",
+          "gold": [
+            "key:user_major"
+          ],
+          "predicted": [],
+          "false_positive": [],
+          "false_negative": [
+            "key:user_major"
+          ],
+          "raw_llm_output": "{\"memories\":[{\"kind\":\"user_fact\",\"value\":\"计算机\",\"content\":\"用户的专业是计算机\",\"evidence\":\"我的专业是计算机\",\"confidence\":1.0,\"operation\":\"ADD\",\"target_memory_key\":\"\"}]}"
+        },
+        {
+          "id": "e09",
+          "category": "direct_rule",
+          "message": "下次一定带你去看展。",
+          "gold": [
+            "key:promise_带你去看展"
+          ],
+          "predicted": [],
+          "false_positive": [],
+          "false_negative": [
+            "key:promise_带你去看展"
+          ],
+          "raw_llm_output": "{\"memories\":[]}"
+        },
+        {
+          "id": "e13",
+          "category": "context_ellipsis",
+          "message": "还是上次那个方向。",
+          "gold": [
+            "semantic:goal:点云补全"
+          ],
+          "predicted": [],
+          "false_positive": [],
+          "false_negative": [
+            "semantic:goal:点云补全"
+          ],
+          "raw_llm_output": "{\"memories\":[]}"
+        },
+        {
+          "id": "e15",
+          "category": "context_update",
+          "message": "不是完全讨厌咖啡，只是不喜欢太苦的。",
+          "gold": [
+            "semantic:dislike:太苦的"
+          ],
+          "predicted": [],
+          "false_positive": [],
+          "false_negative": [
+            "semantic:dislike:太苦的"
+          ],
+          "raw_llm_output": "{\"memories\":[{\"kind\":\"dislike\",\"value\":\"太苦的咖啡\",\"content\":\"用户不喜欢太苦的咖啡\",\"evidence\":\"不是完全讨厌咖啡，只是不喜欢太苦的。\",\"confidence\":0.95,\"operation\":\"UPDATE\",\"target_memory_key\":\"preference_咖啡\"}]}"
+        }
+      ],
+      "retrieval_recall_at_1": 0.59375,
+      "retrieval_recall_at_5": 0.59375,
+      "mrr": 0.59375,
+      "wrong_memory_injection_rate": 0.13636363636363635,
+      "average_retrieval_latency_ms": 0.046494660810345693,
+      "retrieval_failures": [
+        {
+          "id": "r01",
+          "category": "synonym",
+          "query": "我保研准备得怎么样？",
+          "gold_ids": [
+            "m1"
+          ],
+          "selected_ids": [],
+          "wrong_ids": []
+        },
+        {
+          "id": "r02",
+          "category": "synonym",
+          "query": "推免准备到哪一步了？",
+          "gold_ids": [
+            "m1"
+          ],
+          "selected_ids": [],
+          "wrong_ids": []
+        },
+        {
+          "id": "r05",
+          "category": "synonym",
+          "query": "我当前在做什么研究工作？",
+          "gold_ids": [
+            "m1"
+          ],
+          "selected_ids": [],
+          "wrong_ids": []
+        },
+        {
+          "id": "r06",
+          "category": "synonym",
+          "query": "最近的科研方向进展如何？",
+          "gold_ids": [
+            "m1"
+          ],
+          "selected_ids": [],
+          "wrong_ids": []
+        },
+        {
+          "id": "r08",
+          "category": "synonym",
+          "query": "我在哪座城市生活？",
+          "gold_ids": [
+            "m1"
+          ],
+          "selected_ids": [],
+          "wrong_ids": []
+        },
+        {
+          "id": "r09",
+          "category": "synonym",
+          "query": "我就职于哪家公司？",
+          "gold_ids": [
+            "m1"
+          ],
+          "selected_ids": [],
+          "wrong_ids": []
+        },
+        {
+          "id": "r10",
+          "category": "synonym",
+          "query": "我读的是什么方向？",
+          "gold_ids": [
+            "m1"
+          ],
+          "selected_ids": [],
+          "wrong_ids": []
+        },
+        {
+          "id": "r11",
+          "category": "direct",
+          "query": "点云识别最近进展如何？",
+          "gold_ids": [
+            "m1"
+          ],
+          "selected_ids": [
+            "m1",
+            "m2"
+          ],
+          "wrong_ids": [
+            "m2"
+          ]
+        },
+        {
+          "id": "r19",
+          "category": "irrelevant_suppression",
+          "query": "我最近准备的事情怎么样？",
+          "gold_ids": [
+            "m2"
+          ],
+          "selected_ids": [],
+          "wrong_ids": []
+        },
+        {
+          "id": "r20",
+          "category": "irrelevant_suppression",
+          "query": "研究任务有进展吗？",
+          "gold_ids": [
+            "m2"
+          ],
+          "selected_ids": [],
+          "wrong_ids": []
+        },
+        {
+          "id": "r22",
+          "category": "irrelevant_suppression",
+          "query": "我的学业背景是什么？",
+          "gold_ids": [
+            "m2"
+          ],
+          "selected_ids": [],
+          "wrong_ids": []
+        },
+        {
+          "id": "r23",
+          "category": "irrelevant_suppression",
+          "query": "我现在的训练目标是什么？",
+          "gold_ids": [
+            "m2"
+          ],
+          "selected_ids": [],
+          "wrong_ids": []
+        },
+        {
+          "id": "r33",
+          "category": "update",
+          "query": "我现在的点云方向是什么？",
+          "gold_ids": [
+            "m1"
+          ],
+          "selected_ids": [
+            "m1",
+            "m2"
+          ],
+          "wrong_ids": [
+            "m2"
+          ]
+        },
+        {
+          "id": "r34",
+          "category": "update",
+          "query": "咖啡方面我真正不喜欢什么？",
+          "gold_ids": [
+            "m1"
+          ],
+          "selected_ids": [
+            "m1",
+            "m2"
+          ],
+          "wrong_ids": [
+            "m2"
+          ]
+        },
+        {
+          "id": "r35",
+          "category": "update",
+          "query": "我最近改做的任务是什么？",
+          "gold_ids": [
+            "m1"
+          ],
+          "selected_ids": [],
+          "wrong_ids": []
+        },
+        {
+          "id": "r36",
+          "category": "update",
+          "query": "现在的升学目标是什么？",
+          "gold_ids": [
+            "m1"
+          ],
+          "selected_ids": [],
+          "wrong_ids": []
+        }
+      ],
+      "injected_memories": 22,
+      "wrong_injected_memories": 3
+    },
+    {
+      "name": "D. Full CAHM",
+      "context_extraction": true,
+      "semantic_retrieval": true,
+      "confidence_gate": true,
+      "extraction": {
+        "precision": 1.0,
+        "recall": 0.7333333333333333,
+        "f1": 0.846153846153846
+      },
+      "extraction_failures": [
+        {
+          "id": "e02",
+          "category": "direct_rule",
+          "message": "我的专业是计算机。",
+          "gold": [
+            "key:user_major"
+          ],
+          "predicted": [],
+          "false_positive": [],
+          "false_negative": [
+            "key:user_major"
+          ],
+          "raw_llm_output": "{\"memories\":[{\"kind\":\"user_fact\",\"value\":\"计算机\",\"content\":\"用户的专业是计算机\",\"evidence\":\"我的专业是计算机\",\"confidence\":1.0,\"operation\":\"ADD\",\"target_memory_key\":\"\"}]}"
+        },
+        {
+          "id": "e09",
+          "category": "direct_rule",
+          "message": "下次一定带你去看展。",
+          "gold": [
+            "key:promise_带你去看展"
+          ],
+          "predicted": [],
+          "false_positive": [],
+          "false_negative": [
+            "key:promise_带你去看展"
+          ],
+          "raw_llm_output": "{\"memories\":[]}"
+        },
+        {
+          "id": "e13",
+          "category": "context_ellipsis",
+          "message": "还是上次那个方向。",
+          "gold": [
+            "semantic:goal:点云补全"
+          ],
+          "predicted": [],
+          "false_positive": [],
+          "false_negative": [
+            "semantic:goal:点云补全"
+          ],
+          "raw_llm_output": "{\"memories\":[]}"
+        },
+        {
+          "id": "e15",
+          "category": "context_update",
+          "message": "不是完全讨厌咖啡，只是不喜欢太苦的。",
+          "gold": [
+            "semantic:dislike:太苦的"
+          ],
+          "predicted": [],
+          "false_positive": [],
+          "false_negative": [
+            "semantic:dislike:太苦的"
+          ],
+          "raw_llm_output": "{\"memories\":[{\"kind\":\"dislike\",\"value\":\"太苦的咖啡\",\"content\":\"用户不喜欢太苦的咖啡\",\"evidence\":\"不是完全讨厌咖啡，只是不喜欢太苦的。\",\"confidence\":0.95,\"operation\":\"UPDATE\",\"target_memory_key\":\"preference_咖啡\"}]}"
+        }
+      ],
+      "retrieval_recall_at_1": 0.65625,
+      "retrieval_recall_at_5": 0.71875,
+      "mrr": 0.6875,
+      "wrong_memory_injection_rate": 0.25806451612903225,
+      "average_retrieval_latency_ms": 8.683366213171254,
+      "retrieval_failures": [
+        {
+          "id": "r01",
+          "category": "synonym",
+          "query": "我保研准备得怎么样？",
+          "gold_ids": [
+            "m1"
+          ],
+          "selected_ids": [],
+          "wrong_ids": []
+        },
+        {
+          "id": "r05",
+          "category": "synonym",
+          "query": "我当前在做什么研究工作？",
+          "gold_ids": [
+            "m1"
+          ],
+          "selected_ids": [],
+          "wrong_ids": []
+        },
+        {
+          "id": "r06",
+          "category": "synonym",
+          "query": "最近的科研方向进展如何？",
+          "gold_ids": [
+            "m1"
+          ],
+          "selected_ids": [
+            "m2"
+          ],
+          "wrong_ids": [
+            "m2"
+          ]
+        },
+        {
+          "id": "r08",
+          "category": "synonym",
+          "query": "我在哪座城市生活？",
+          "gold_ids": [
+            "m1"
+          ],
+          "selected_ids": [],
+          "wrong_ids": []
+        },
+        {
+          "id": "r09",
+          "category": "synonym",
+          "query": "我就职于哪家公司？",
+          "gold_ids": [
+            "m1"
+          ],
+          "selected_ids": [],
+          "wrong_ids": []
+        },
+        {
+          "id": "r10",
+          "category": "synonym",
+          "query": "我读的是什么方向？",
+          "gold_ids": [
+            "m1"
+          ],
+          "selected_ids": [],
+          "wrong_ids": []
+        },
+        {
+          "id": "r11",
+          "category": "direct",
+          "query": "点云识别最近进展如何？",
+          "gold_ids": [
+            "m1"
+          ],
+          "selected_ids": [
+            "m1",
+            "m2"
+          ],
+          "wrong_ids": [
+            "m2"
+          ]
+        },
+        {
+          "id": "r12",
+          "category": "direct",
+          "query": "拿铁这个喜好还记得吗？",
+          "gold_ids": [
+            "m1"
+          ],
+          "selected_ids": [
+            "m1",
+            "m2"
+          ],
+          "wrong_ids": [
+            "m2"
+          ]
+        },
+        {
+          "id": "r19",
+          "category": "irrelevant_suppression",
+          "query": "我最近准备的事情怎么样？",
+          "gold_ids": [
+            "m2"
+          ],
+          "selected_ids": [],
+          "wrong_ids": []
+        },
+        {
+          "id": "r20",
+          "category": "irrelevant_suppression",
+          "query": "研究任务有进展吗？",
+          "gold_ids": [
+            "m2"
+          ],
+          "selected_ids": [],
+          "wrong_ids": []
+        },
+        {
+          "id": "r22",
+          "category": "irrelevant_suppression",
+          "query": "我的学业背景是什么？",
+          "gold_ids": [
+            "m2"
+          ],
+          "selected_ids": [],
+          "wrong_ids": []
+        },
+        {
+          "id": "r33",
+          "category": "update",
+          "query": "我现在的点云方向是什么？",
+          "gold_ids": [
+            "m1"
+          ],
+          "selected_ids": [
+            "m2",
+            "m1"
+          ],
+          "wrong_ids": [
+            "m2"
+          ]
+        },
+        {
+          "id": "r34",
+          "category": "update",
+          "query": "咖啡方面我真正不喜欢什么？",
+          "gold_ids": [
+            "m1"
+          ],
+          "selected_ids": [
+            "m2",
+            "m1"
+          ],
+          "wrong_ids": [
+            "m2"
+          ]
+        },
+        {
+          "id": "r36",
+          "category": "update",
+          "query": "现在的升学目标是什么？",
+          "gold_ids": [
+            "m1"
+          ],
+          "selected_ids": [
+            "m1",
+            "m2"
+          ],
+          "wrong_ids": [
+            "m2"
+          ]
+        },
+        {
+          "id": "r39",
+          "category": "no_match",
+          "query": "解释一下量子纠缠。",
+          "gold_ids": [],
+          "selected_ids": [
+            "m1"
+          ],
+          "wrong_ids": [
+            "m1"
+          ]
+        },
+        {
+          "id": "r42",
+          "category": "no_match",
+          "query": "把这句话翻译成英文。",
+          "gold_ids": [],
+          "selected_ids": [
+            "m2"
+          ],
+          "wrong_ids": [
+            "m2"
+          ]
+        }
+      ],
+      "injected_memories": 31,
+      "wrong_injected_memories": 8
+    }
+  ]
+}
