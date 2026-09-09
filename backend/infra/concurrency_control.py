@@ -8,7 +8,10 @@ import logging
 import os
 import time
 from dataclasses import dataclass, field
-from typing import Any, Awaitable, Callable
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
 
 logger = logging.getLogger(__name__)
 
@@ -200,7 +203,11 @@ class InferenceRuntime:
             if not future.done():
                 future.cancel()
             if item.running_task is not None and not item.running_task.done():
-                item.running_task.cancel()
+                running_task = item.running_task
+                running_task.cancel()
+                # Do not release a gateway retry lease while the previous
+                # generation coroutine is still unwinding its cancellation.
+                await asyncio.gather(running_task, return_exceptions=True)
             raise
 
     async def _ensure_workers(self) -> None:

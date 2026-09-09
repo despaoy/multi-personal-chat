@@ -261,6 +261,7 @@ async def migrate(sqlite_path: str | Path = SQLITE_DB_PATH):
         intent_active_kbs_table, training_tasks_table,
         # Phase 2 fix: 补齐此前遗漏的 10 张表
         integration_message_dedup_table,
+        integration_receipts_table,
         conversations_table,
         integration_events_table,
         model_invocations_table,
@@ -318,6 +319,7 @@ async def migrate(sqlite_path: str | Path = SQLITE_DB_PATH):
         ("training_tasks", training_tasks_table, ["id"], {"task_id": "id"}),
         # Phase 2 fix: 补齐遗漏的 10 张表
         ("integration_message_dedup", integration_message_dedup_table, ["dedupKey"], None),
+        ("integration_receipts", integration_receipts_table, ["receipt_key"], None),
         ("conversations", conversations_table, None, None),
         ("integration_events", integration_events_table, None, None),
         ("model_invocations", model_invocations_table, None, None),

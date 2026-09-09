@@ -45,6 +45,7 @@ saved_dialogues_table = metadata.tables["saved_dialogues"]
 api_keys_table = metadata.tables["api_keys"]
 claw_tools_table = metadata.tables["claw_tools"]
 integration_message_dedup_table = metadata.tables["integration_message_dedup"]
+integration_receipts_table = metadata.tables["integration_receipts"]
 conversations_table = metadata.tables["conversations"]
 integration_events_table = metadata.tables["integration_events"]
 model_invocations_table = metadata.tables["model_invocations"]
@@ -1628,6 +1629,8 @@ class PgDatabase:
                     'SELECT message, reply FROM messages WHERE platform = :platform '
                     'AND adapter = :adapter AND "senderId" = :sender_id '
                     'AND "conversationId" = :conversation_id '
+                    'AND NOT EXISTS (SELECT 1 FROM integration_receipts r '
+                    'WHERE r.owner = messages."traceId" AND r.status <> \'delivered\') '
                     'ORDER BY "createdAt" DESC LIMIT :limit'
                 )
                 params: dict = {
@@ -1642,6 +1645,8 @@ class PgDatabase:
                     'SELECT message, reply FROM messages WHERE platform = :platform '
                     'AND adapter = :adapter AND "senderId" = :sender_id '
                     'AND ("conversationType" = :private OR "conversationType" = :empty) '
+                    'AND NOT EXISTS (SELECT 1 FROM integration_receipts r '
+                    'WHERE r.owner = messages."traceId" AND r.status <> \'delivered\') '
                     'ORDER BY "createdAt" DESC LIMIT :limit'
                 )
                 params = {
@@ -1910,6 +1915,19 @@ class PgDatabase:
     # ============================================
     # Claw 工具 CRUD
     # ============================================
+    async def integration_receipt(self, operation: str, **params):
+        from db.integration_receipts import STATEMENTS
+
+        async with self.async_session() as session:
+            if operation == "claim":
+                await session.execute(text(STATEMENTS["archive"]), params)
+            result = await session.execute(text(STATEMENTS[operation]), params)
+            if operation == "get":
+                row = result.fetchone()
+                return _row_to_dict(row) if row else None
+            await session.commit()
+            return result.rowcount > 0
+
     async def mark_integration_message_processed(self, platform: str, adapter: str, message_id: str) -> bool:
         if not message_id:
             return True
@@ -2832,6 +2850,9 @@ class SyncPgAdapter:
 
     def is_session_bot_enabled(self, session_id, platform="qq", conversation_id=None, conversation_type="private"):
         return self._run(self._pg.is_session_bot_enabled(session_id, platform, conversation_id, conversation_type))
+
+    def integration_receipt(self, operation, **params):
+        return self._run(self._pg.integration_receipt(operation, **params))
 
     def mark_integration_message_processed(self, platform, adapter, message_id):
         return self._run(self._pg.mark_integration_message_processed(platform, adapter, message_id))

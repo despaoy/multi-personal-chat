@@ -477,7 +477,8 @@ class TestIntegrationSecurity:
         assert active == "old-token"
         assert "new-token" in allowed
 
-    def test_security_middleware_allows_astrbot_endpoint_to_handle_own_token(self):
+    @pytest.mark.parametrize("path", ["/api/integrations/astrbot/messages", "/api/integrations/astrbot/delivery"])
+    def test_security_middleware_allows_astrbot_endpoint_to_handle_own_token(self, path):
         from fastapi import FastAPI
         from fastapi.testclient import TestClient
 
@@ -485,12 +486,12 @@ class TestIntegrationSecurity:
 
         app = FastAPI()
 
-        @app.post("/api/integrations/astrbot/messages")
+        @app.post(path)
         async def integration_endpoint():
             return {"ok": True}
 
         app.add_middleware(SecurityMiddleware)
-        response = TestClient(app).post("/api/integrations/astrbot/messages", headers={"X-Integration-Token": "test-token"})
+        response = TestClient(app).post(path, headers={"X-Integration-Token": "test-token"})
 
         assert response.status_code == 200
         assert response.json() == {"ok": True}
@@ -582,7 +583,7 @@ class TestAstrBotContracts:
         resp = AstrBotMessageResponse(shouldReply=True, replyText="ok", model="mock", costTime=0.1, traceId="trace")
         payload = resp.model_dump()
 
-        assert set(payload) == {"shouldReply", "replyText", "model", "costTime", "traceId"}
+        assert set(payload) == {"shouldReply", "replyText", "model", "costTime", "traceId", "receiptId", "deliveryToken", "retryable"}
         assert payload["shouldReply"] is True
 
     def test_main_app_exposes_astrbot_endpoint(self, monkeypatch):

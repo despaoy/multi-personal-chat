@@ -284,6 +284,18 @@ class ClawTool(Base):
 # 13. 集成消息去重表
 # ============================================
 
+class IntegrationReceipt(Base):
+    """Generation result retained until the gateway acknowledges sending."""
+
+    __tablename__ = "integration_receipts"
+    __table_args__ = (Index("idx_integration_receipt_owner", "owner"),)
+    receipt_key: Mapped[str] = mapped_column(Text, primary_key=True)
+    owner: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(Text, nullable=False)
+    response: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
+    expires_at: Mapped[float] = mapped_column(Float, nullable=False)
+
+
 class IntegrationMessageDedup(Base):
     """集成平台消息去重表"""
     __tablename__ = "integration_message_dedup"

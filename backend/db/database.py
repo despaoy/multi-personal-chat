@@ -498,6 +498,10 @@ class SQLiteDB:
             )
         ''')
 
+        from db.integration_receipts import CREATE_SQL
+
+        cursor.execute(CREATE_SQL)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_integration_receipt_owner ON integration_receipts(owner)")
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS integration_message_dedup (
                 dedupKey TEXT PRIMARY KEY,
@@ -2297,6 +2301,19 @@ class SQLiteDB:
         self._bot_enabled_cache.set(cache_key, result)
         return result
 
+    def integration_receipt(self, operation: str, **params):
+        from db.integration_receipts import STATEMENTS
+
+        conn = self._get_connection()
+        if operation == "claim":
+            conn.execute(STATEMENTS["archive"], params)
+        cursor = conn.execute(STATEMENTS[operation], params)
+        if operation == "get":
+            row = cursor.fetchone()
+            return dict(row) if row else None
+        conn.commit()
+        return cursor.rowcount > 0
+
     def mark_integration_message_processed(self, platform: str, adapter: str, message_id: str) -> bool:
         if not message_id:
             return True
@@ -3226,7 +3243,9 @@ class SQLiteDB:
         """
         conn = self._get_connection()
         cursor = conn.cursor()
-        conditions = ["platform = ?", "adapter = ?", 'senderId = ?']
+        from db.integration_receipts import HISTORY_DELIVERY_FILTER
+
+        conditions = ["platform = ?", "adapter = ?", 'senderId = ?', HISTORY_DELIVERY_FILTER]
         params: list = [platform, adapter, sender_id]
         if conversation_type in ("group", "channel"):
             conditions.append('"conversationId" = ?')

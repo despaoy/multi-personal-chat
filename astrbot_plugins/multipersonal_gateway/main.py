@@ -21,8 +21,7 @@ from astrbot.api import logger
 from astrbot.api.event import AstrMessageEvent, filter
 from astrbot.api.star import Context, Star, register
 
-
-DEFAULT_TIMEOUT = 60
+DEFAULT_TIMEOUT = 210
 
 
 def _env(name: str, legacy_name: str, default: str) -> str:
@@ -45,12 +44,20 @@ class MultiPersonalGatewayPlugin(Star):
         self.backend_url = _env("MULTIPERSONAL_BACKEND_URL", "QQCHAT_BACKEND_URL", "http://127.0.0.1:8000").rstrip("/")
         self.integration_token = os.getenv("ASTRBOT_INTEGRATION_TOKEN", "")
         self.command_prefixes = tuple(
-            p.strip() for p in _env("MULTIPERSONAL_TRIGGER_PREFIXES", "QQCHAT_TRIGGER_PREFIXES", "/ai,/chat,@bot").split(",") if p.strip()
+            p.strip()
+            for p in _env("MULTIPERSONAL_TRIGGER_PREFIXES", "QQCHAT_TRIGGER_PREFIXES", "/ai,/chat,@bot").split(",")
+            if p.strip()
         )
-        self.reply_on_group_all = _env("MULTIPERSONAL_REPLY_GROUP_ALL", "QQCHAT_REPLY_GROUP_ALL", "false").lower() == "true"
-        self.timeout = float(_env("MULTIPERSONAL_BACKEND_TIMEOUT", "QQCHAT_BACKEND_TIMEOUT", str(DEFAULT_TIMEOUT)))
+        self.reply_on_group_all = (
+            _env("MULTIPERSONAL_REPLY_GROUP_ALL", "QQCHAT_REPLY_GROUP_ALL", "false").lower() == "true"
+        )
+        self.timeout = max(
+            16, float(_env("MULTIPERSONAL_BACKEND_TIMEOUT", "QQCHAT_BACKEND_TIMEOUT", str(DEFAULT_TIMEOUT)))
+        )
         self.dedup_ttl = float(_env("MULTIPERSONAL_DEDUP_TTL", "QQCHAT_DEDUP_TTL", "300"))
         self._seen_events: dict[str, float] = {}
+        self._inflight: set[str] = set()
+        self._sent_receipts: dict[str, dict[str, Any]] = {}
 
     @filter.event_message_type(filter.EventMessageType.ALL)
     async def on_message(self, event: AstrMessageEvent):
@@ -62,14 +69,37 @@ class MultiPersonalGatewayPlugin(Star):
 
         payload = self._build_payload(event, text)
         dedup_key = self._dedup_key(payload)
-        if self._is_duplicate(dedup_key):
+        if dedup_key in self._inflight:
+            event.stop_event()
+            return
+        if self._seen_events.get(dedup_key, 0) > time.monotonic():
+            pending_ack = self._sent_receipts.get(dedup_key)
+            if pending_ack and await self._acknowledge(pending_ack, "delivered"):
+                self._sent_receipts.pop(dedup_key, None)
             logger.info("multipersonal gateway skipped duplicate event: %s", dedup_key)
             event.stop_event()
             return
 
+        self._inflight.add(dedup_key)
         try:
             response = await asyncio.to_thread(self._post_message, payload)
-        except Exception as exc:
+            if response.get("shouldReply") and response.get("replyText"):
+                try:
+                    # Await the adapter send before acknowledging delivery.
+                    await event.send(event.plain_result(str(response["replyText"])))
+                except Exception:  # noqa: BLE001 - platform SDK exceptions vary by adapter
+                    await self._acknowledge(response, "delivery_failed")
+                    logger.warning("Platform send failed; generated reply retained for retry", exc_info=True)
+                    return
+                if not response.get("retryable"):
+                    self._is_duplicate(dedup_key)  # Mark only after send succeeds.
+                    if response.get("receiptId"):
+                        self._sent_receipts[dedup_key] = response
+                        if await self._acknowledge(response, "delivered"):
+                            self._sent_receipts.pop(dedup_key, None)
+            elif not response.get("retryable"):
+                self._is_duplicate(dedup_key)
+        except Exception as exc:  # noqa: BLE001 - gateway isolates transport/JSON failures
             logger.warning(
                 "multipersonal gateway request failed: platform=%s conversation=%s messageId=%s error=%s",
                 payload["platform"],
@@ -78,20 +108,26 @@ class MultiPersonalGatewayPlugin(Star):
                 exc,
             )
             if payload["conversationType"] == "private":
-                yield event.plain_result("[\u7cfb\u7edf\u63d0\u793a] \u540e\u7aef\u670d\u52a1\u6682\u65f6\u4e0d\u53ef\u7528\uff0c\u8bf7\u7a0d\u540e\u518d\u8bd5\u3002")
+                yield event.plain_result(
+                    "[\u7cfb\u7edf\u63d0\u793a] \u540e\u7aef\u670d\u52a1\u6682\u65f6\u4e0d\u53ef\u7528\uff0c\u8bf7\u7a0d\u540e\u518d\u8bd5\u3002"
+                )
+        finally:
+            self._inflight.discard(dedup_key)
             event.stop_event()
-            return
 
-        logger.info(
-            "qqchat gateway traceId=%s platform=%s conversation=%s shouldReply=%s",
-            response.get("traceId", ""),
-            payload["platform"],
-            payload["conversationId"],
-            response.get("shouldReply"),
-        )
-        if response.get("shouldReply") and response.get("replyText"):
-            yield event.plain_result(str(response["replyText"]))
-        event.stop_event()
+    async def _acknowledge(self, response: dict[str, Any], status: str) -> bool:
+        if not response.get("receiptId"):
+            return True
+        payload = {"receiptId": response["receiptId"], "deliveryToken": response["deliveryToken"], "status": status}
+        for attempt in range(3):
+            try:
+                await asyncio.to_thread(self._post_json, "/api/integrations/astrbot/delivery", payload, 30)
+                return True
+            except Exception:  # noqa: BLE001 - retry transport and acknowledgement parsing failures
+                if attempt < 2:
+                    await asyncio.sleep(0.25 * (attempt + 1))
+        logger.warning("Delivery acknowledgement failed; will retry on duplicate event")
+        return False
 
     def _message_text(self, event: AstrMessageEvent) -> str:
         text = getattr(event, "message_str", "") or ""
@@ -109,7 +145,8 @@ class MultiPersonalGatewayPlugin(Star):
         if callable(is_at):
             try:
                 return bool(is_at())
-            except Exception:
+            except Exception:  # noqa: BLE001 - optional adapter capability
+                logger.debug("Unable to read adapter wake flag", exc_info=True)
                 return False
         return False
 
@@ -129,10 +166,14 @@ class MultiPersonalGatewayPlugin(Star):
             "senderName": self._sender_name(event) or sender_id,
             "text": self._strip_prefix(text),
             "raw": raw,
+            "requestBudgetSeconds": min(180, max(1, self.timeout - 15)),
         }
 
     def _post_message(self, payload: dict[str, Any]) -> dict[str, Any]:
-        url = f"{self.backend_url}/api/integrations/astrbot/messages"
+        return self._post_json("/api/integrations/astrbot/messages", payload, self.timeout)
+
+    def _post_json(self, path: str, payload: dict[str, Any], timeout: float) -> dict[str, Any]:
+        url = f"{self.backend_url}{path}"
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         headers = {"Content-Type": "application/json"}
         if self.integration_token:
@@ -144,7 +185,7 @@ class MultiPersonalGatewayPlugin(Star):
             headers["X-Integration-Signature"] = self._signature(timestamp, nonce, body)
         req = urllib.request.Request(url, data=body, headers=headers, method="POST")
         try:
-            with urllib.request.urlopen(req, timeout=self.timeout) as resp:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
                 return json.loads(resp.read().decode("utf-8"))
         except urllib.error.HTTPError as exc:
             # 仅记录状态码与短预览，避免将后端完整错误 body（可能含堆栈/数据库错误）
@@ -155,21 +196,33 @@ class MultiPersonalGatewayPlugin(Star):
 
     def _signature(self, timestamp: str, nonce: str, body: bytes) -> str:
         body_hash = hashlib.sha256(body).hexdigest()
-        payload = f"{timestamp}.{nonce}.{body_hash}".encode("utf-8")
+        payload = f"{timestamp}.{nonce}.{body_hash}".encode()
         digest = hmac.new(self.integration_token.encode("utf-8"), payload, hashlib.sha256).hexdigest()
         return "sha256=" + digest
 
     def _dedup_key(self, payload: dict[str, Any]) -> str:
         message_id = str(payload.get("messageId") or "").strip()
         if message_id:
-            return f"{payload['platform']}:{payload['adapter']}:{message_id}"
-        basis = "|".join([
-            str(payload.get("platform") or ""),
-            str(payload.get("adapter") or ""),
-            str(payload.get("conversationId") or ""),
-            str(payload.get("senderId") or ""),
-            str(payload.get("text") or ""),
-        ])
+            return json.dumps(
+                [
+                    payload["platform"],
+                    payload["adapter"],
+                    payload["conversationType"],
+                    payload["conversationId"],
+                    payload["senderId"],
+                    message_id,
+                ],
+                ensure_ascii=False,
+            )
+        basis = "|".join(
+            [
+                str(payload.get("platform") or ""),
+                str(payload.get("adapter") or ""),
+                str(payload.get("conversationId") or ""),
+                str(payload.get("senderId") or ""),
+                str(payload.get("text") or ""),
+            ]
+        )
         return "fallback:" + hashlib.sha256(basis.encode("utf-8")).hexdigest()
 
     def _is_duplicate(self, key: str) -> bool:
@@ -182,6 +235,7 @@ class MultiPersonalGatewayPlugin(Star):
             expired = [k for k, deadline in self._seen_events.items() if deadline <= now]
             for old_key in expired[:1024]:
                 self._seen_events.pop(old_key, None)
+                self._sent_receipts.pop(old_key, None)
         return False
 
     def _platform(self, event: AstrMessageEvent) -> str:
@@ -190,8 +244,8 @@ class MultiPersonalGatewayPlugin(Star):
         if callable(getter):
             try:
                 candidates.append(str(getter()))
-            except Exception:
-                pass
+            except Exception:  # noqa: BLE001 - optional adapter capability
+                logger.debug("Unable to read adapter platform name", exc_info=True)
         for attr in ("platform", "platform_id", "platform_name"):
             value = getattr(event, attr, None)
             if value:
@@ -246,8 +300,8 @@ class MultiPersonalGatewayPlugin(Star):
         if callable(getter):
             try:
                 return str(getter())
-            except Exception:
-                pass
+            except Exception:  # noqa: BLE001 - optional adapter capability
+                logger.debug("Unable to read adapter conversation ID", exc_info=True)
         return self._sender_id(event)
 
     def _sender_id(self, event: AstrMessageEvent) -> str:
@@ -259,8 +313,8 @@ class MultiPersonalGatewayPlugin(Star):
         if callable(getter):
             try:
                 return str(getter())
-            except Exception:
-                pass
+            except Exception:  # noqa: BLE001 - optional adapter capability
+                logger.debug("Unable to read adapter sender ID", exc_info=True)
         return "unknown"
 
     def _sender_name(self, event: AstrMessageEvent) -> str:
@@ -270,8 +324,21 @@ class MultiPersonalGatewayPlugin(Star):
 
     def _message_id(self, event: AstrMessageEvent) -> str:
         raw = self._raw_event(event)
-        value = raw.get("message_id") or raw.get("id") or raw.get("msg_id")
-        return str(value or "")
+        value = (
+            raw.get("message_id")
+            or raw.get("id")
+            or raw.get("msg_id")
+            or getattr(getattr(event, "message_obj", None), "message_id", None)
+        )
+        if value is not None and str(value):
+            return str(value)
+        # Distinct events with the same text are legitimate messages. Keep a
+        # stable synthetic ID for retries of this event rather than hashing text.
+        value = getattr(event, "_multipersonal_message_id", None)
+        if value is None:
+            value = "event:" + uuid.uuid4().hex
+            event._multipersonal_message_id = value
+        return str(value)
 
     def _raw_event(self, event: AstrMessageEvent) -> dict[str, Any]:
         raw = getattr(event, "raw_message", None) or getattr(event, "raw", None) or {}
@@ -280,7 +347,8 @@ class MultiPersonalGatewayPlugin(Star):
         if hasattr(raw, "dict"):
             try:
                 return raw.dict()
-            except Exception:
+            except Exception:  # noqa: BLE001 - adapter-specific raw event model
+                logger.debug("Unable to normalize raw adapter event", exc_info=True)
                 return {}
         return {}
 
@@ -288,5 +356,5 @@ class MultiPersonalGatewayPlugin(Star):
         stripped = text.strip()
         for prefix in self.command_prefixes:
             if stripped.startswith(prefix):
-                return stripped[len(prefix):].strip() or stripped
+                return stripped[len(prefix) :].strip() or stripped
         return stripped

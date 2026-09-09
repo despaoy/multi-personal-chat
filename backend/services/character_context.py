@@ -156,13 +156,16 @@ class CharacterContextService:
             conversation_type=turn.conversation_type,
         )
 
-        profile, relationship, memories, history = await asyncio.gather(
+        profile, relationship_record, memories, history = await asyncio.gather(
             asyncio.to_thread(self._profiles.get_profile, character_id),
-            self._memory_repo.get_relationship(character_id, user_scope),
+            self._memory_repo.get_relationship_record(character_id, user_scope),
             self._memory_service.load_relevant_memories(character_id, user_scope, turn.message),
             self._load_history(turn, user_scope),
         )
         memories_items, memory_candidates = memories
+        from repositories.character_memory import relationship_from_record
+
+        relationship = relationship_from_record(relationship_record)
 
         # Reuse the already-loaded history: no extra database/model call. The
         # caller-provided live history wins over the persisted fallback.
@@ -256,7 +259,6 @@ class CharacterContextService:
         )
         compiled = compile_character_context(context)
 
-        relationship_record = await self._memory_repo.get_relationship_record(character_id, user_scope)
         interaction_count = int((relationship_record or {}).get("interaction_count") or 0)
 
         return PreparedCharacterTurn(

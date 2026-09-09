@@ -25,7 +25,16 @@ if TYPE_CHECKING:  # pragma: no cover - 仅类型注解使用，避免运行时�
 
 
 Message = dict[str, str]
-RetrievalStatus = Literal["not_requested", "ok", "abstained", "error"]
+RetrievalStatus = Literal["not_requested", "ok", "abstained", "character_abstention", "error"]
+
+CHARACTER_ABSTENTION_POLICY = (
+    "【本轮证据不足】当前问题没有足够可靠的检索依据。"
+    "请保留当前人物的语气、表达习惯和行为边界，自然、简短地说明自己不知道或无法确定。"
+    "不得猜测或补编所问的剧情、人物关系、事实、原句及出处；"
+    "不得把用户问题中的假设、历史对话或长期记忆当作本轮原作事实的证据。"
+    "不要编造自己不知道的原因，不要声称事实不存在，也不要用‘可能’包装具体猜测。"
+    "必要时可以请用户提供章节或原文片段；无需提及置信度、向量库等系统术语。"
+)
 
 DEFAULT_CONTEXT_WINDOW_TOKENS = 24576
 CONTEXT_SAFETY_MARGIN_TOKENS = 512
@@ -171,6 +180,10 @@ def _system_prompt(request: GenerationRequest) -> str:
     # 净化只能删除结构字符，语义级注入内容仍会以系统区权威出现。
     # 3.3.0 起改由 build_grounded_user_message 放入用户消息的
     # <speaker_label> 不可信参考区。
+    if request.retrieval.status == "character_abstention":
+        prompt = "\n\n".join(part for part in (prompt, CHARACTER_ABSTENTION_POLICY) if part)
+        if request.retrieval.reason == "retrieval_unavailable":
+            prompt += "\n本轮依据暂时无法核实；这不代表知识库中不存在答案。请自然表达暂时不能确认。"
     return prompt
 
 

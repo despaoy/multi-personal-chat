@@ -295,6 +295,7 @@ async def _generate_reply_impl(
     record_invocation: bool = True,
     character_service=None,
     message_db=None,
+    delivery_context: dict | None = None,
 ):
     """默认聊天生成实现：优先使用 vLLM，回退到模型管理器。
 
@@ -454,6 +455,7 @@ async def _generate_reply_impl(
             model_label = f"vllm/{get_vllm_served_model_name()}" if model_invoked else "rag/abstained"
             stored_model_name = "vllm" if model_invoked else model_label
             stored_lora_name = lora_name if model_invoked else "default"
+            generation_error = rag_meta.get("generationError", "")
             if model_invoked and record_invocation:
                 await _record_model_invocation(
                     request,
@@ -462,9 +464,12 @@ async def _generate_reply_impl(
                     cost_time,
                     used_rag=used_rag,
                     completion_text=reply,
+                    error_type=generation_error,
                     database=message_db,
                 )
-                set_consecutive("model_failure", True)
+                set_consecutive("model_failure", not bool(generation_error))
+                if generation_error:
+                    increment("model_failures")
             message_saved = False
             if persist_message:
                 message_saved = await _save_message(
@@ -478,7 +483,9 @@ async def _generate_reply_impl(
             # 仅当本轮消息确实要持久化且保存成功时才回写人物状态：
             # persist_message=False（如 Claw 内部推理）不得污染人物记忆；
             # 消息保存失败时跳过回写，保持消息记录与人物状态一致。
-            if prepared_character_turn is not None and persist_message and message_saved:
+            if delivery_context is not None:
+                delivery_context.update(message_saved=message_saved, character_id=mapped_character_id)
+            if prepared_character_turn is not None and persist_message and message_saved and delivery_context is None:
                 await _complete_character_turn(
                     prepared_character_turn,
                     request,
@@ -493,7 +500,7 @@ async def _generate_reply_impl(
                 senderId=request.senderId or request.userId,
                 model=model_label,
                 costTime=cost_time,
-                errorType="",
+                errorType=generation_error,
                 usedRag=used_rag,
             )
 
@@ -548,7 +555,9 @@ async def _generate_reply_impl(
                     detail="所选 LoRA 推理失败，请检查 vLLM 适配器状态",
                 ) from e
 
-    # ── 回退：使用原有模型管理器 ──
+    # ── 回退：使用原有模型管理器，共享检索与提示词策略 ──
+    fallback_rag_meta: dict[str, Any] = {}
+    fallback_used_rag = False
     try:
         from inference.model_manager import ModelProvider, get_model_manager
 
@@ -582,6 +591,8 @@ async def _generate_reply_impl(
                     model_manager.set_lora_adapter(None)
 
                 async def _do_generate_async():
+                    nonlocal fallback_rag_meta, fallback_used_rag
+
                     # P0-C1 fix: 直接 await 原生 async_generate，禁止跨事件循环
                     # 复用缓存的 httpx.AsyncClient（曾用 asyncio.to_thread → asyncio.run
                     # 创建新循环，第二次请求会报 RuntimeError: Event loop is closed）。
@@ -589,17 +600,25 @@ async def _generate_reply_impl(
                     # （画像/关系/情景/决策进系统提示词，长期记忆与对话者
                     # 昵称进不可信参考区，数据库历史兜底），避免两条路径
                     # 对有状态人物对话行为不一致。
-                    if prepared_character_turn is not None:
-                        return await _generate_with_model_manager_character(
-                            request,
-                            lora_name,
-                            runtime_config,
-                            prepared_character_turn=prepared_character_turn,
-                            model_manager=model_manager,
+                    async def adapter(*, messages, **kwargs):
+                        text, _cost = await model_manager.async_generate(
+                            prompt=messages[-1]["content"],
+                            session_history=messages[:-1],
+                            rag_docs=None,
+                            max_tokens=kwargs["max_tokens"],
                         )
-                    return await model_manager.async_generate(
-                        prompt=request.message, session_history=request.history or [], rag_docs=None
+                        return text
+
+                    reply, fallback_used_rag, fallback_rag_meta = await _generate_with_retrieval(
+                        request,
+                        lora_name,
+                        runtime_config=runtime_config,
+                        enable_rag=enable_rag,
+                        prepared_character_turn=prepared_character_turn,
+                        message_db=message_db,
+                        model_generate=adapter,
                     )
+                    return reply, round(time.time() - start_time, 2)
 
                 if circuit_breaker_registry:
                     cb = await circuit_breaker_registry.get_or_create("model_generate")
@@ -630,8 +649,9 @@ async def _generate_reply_impl(
                 model_name,
                 lora_name,
                 cost_time,
-                used_rag=False,
+                used_rag=fallback_used_rag,
                 completion_text=reply,
+                error_type=fallback_rag_meta.get("generationError", ""),
                 database=message_db,
             )
         message_saved = False
@@ -645,14 +665,18 @@ async def _generate_reply_impl(
                 database=message_db,
             )
         # 同 vLLM 路径：消息保存成功才回写人物状态，persist_message=False 不回写
-        if prepared_character_turn is not None and persist_message and message_saved:
+        if delivery_context is not None:
+            delivery_context.update(message_saved=message_saved, character_id=mapped_character_id)
+        if prepared_character_turn is not None and persist_message and message_saved and delivery_context is None:
             await _complete_character_turn(
                 prepared_character_turn,
                 request,
                 reply,
                 character_service=character_service,
             )
-        set_consecutive("model_failure", True)
+        set_consecutive("model_failure", not bool(fallback_rag_meta.get("generationError")))
+        if fallback_rag_meta.get("generationError"):
+            increment("model_failures")
         log_event(
             "message_generated",
             traceId=request.traceId,
@@ -662,10 +686,20 @@ async def _generate_reply_impl(
             model=model_name,
             costTime=cost_time,
             errorType="",
-            usedRag=False,
+            usedRag=fallback_used_rag,
         )
 
-        result = GenerateResponse(reply=reply, model=f"{model_name} ({current_provider})", costTime=cost_time)
+        result = GenerateResponse(
+            reply=reply,
+            model=f"{model_name} ({current_provider})",
+            costTime=cost_time,
+            citations=fallback_rag_meta.get("citations"),
+            confidence=fallback_rag_meta.get("confidence"),
+            abstained=fallback_rag_meta.get("abstained", False),
+            answerMode=fallback_rag_meta.get("answerMode"),
+            warnings=fallback_rag_meta.get("warnings"),
+            domainId=fallback_rag_meta.get("domainId"),
+        )
 
         if use_response_cache:
             try:
@@ -857,6 +891,7 @@ async def generate_reply_core(
     record_invocation: bool = True,
     character_service=None,
     message_db=None,
+    delivery_context: dict | None = None,
 ):
     """Compatibility entry point used by integrations and existing callers.
 
@@ -873,6 +908,7 @@ async def generate_reply_core(
         record_invocation=record_invocation,
         character_service=character_service,
         message_db=message_db,
+        delivery_context=delivery_context,
     )
 
 
@@ -901,17 +937,19 @@ async def _retrieve_rag_bundle(query: str, top_k: int, filters: dict[str, Any] |
     """Retrieve curated character knowledge, then use the generic KB fallback."""
 
     def retrieve() -> dict[str, Any]:
-        try:
+        if not filters:
             from knowledge.multiscale_rag.runtime import get_multiscale_rag_service
+            from knowledge.retrieval_core.query import QueryAnalyzer
 
             character_rag = get_multiscale_rag_service()
+            matched = QueryAnalyzer([character_rag.config]).analyze(query).matched_domains
             # retrieve_with_citations 内部完成惰性加载和域门控。不能先用
             # is_available() 短路，否则冷启动首条请求无法触发索引加载。
             bundle = character_rag.retrieve_with_citations(query, top_k=top_k, filters=filters)
             if bundle is not None:
                 return bundle
-        except Exception as e:  # noqa: BLE001 - character RAG failure uses generic KB fallback
-            logger.warning("Character knowledge retrieval failed; using generic KB fallback: %s", e)
+            if matched:
+                raise RuntimeError("Requested character knowledge domain is unavailable")
 
         from knowledge.rag_helper import get_rag_helper
 
@@ -937,7 +975,12 @@ def _rag_retrieval_timeout() -> float:
     return _RAG_TIMEOUT
 
 
-async def _generate_with_vllm(
+async def _generate_with_vllm(*args, **kwargs):
+    """Compatibility entry point for the vLLM transport."""
+    return await _generate_with_retrieval(*args, **kwargs)
+
+
+async def _generate_with_retrieval(
     request: MessageRequest,
     lora_name: str | None,
     prompt_lora_name: str | None = None,
@@ -946,8 +989,9 @@ async def _generate_with_vllm(
     enable_rag: bool = True,
     prepared_character_turn=None,
     message_db=None,
+    model_generate=None,
 ) -> tuple[str, bool, dict[str, Any]]:
-    """使用 vLLM 客户端生成回复，返回 (reply, used_rag, rag_meta)。"""
+    """Shared retrieval, abstention and character policy for either transport."""
     # 使用请求开始时读取的配置快照，避免同一次生成多次同步访问数据库。
     _cfg = runtime_config or {}
     _temperature = float(_cfg.get("temperature", os.getenv("VLLM_TEMPERATURE", "0.7")))
@@ -995,27 +1039,32 @@ async def _generate_with_vllm(
                     "modelInvoked": True,
                 }
                 if bundle.get("abstained", False):
-                    # A low-confidence retrieval must not fall through to an
-                    # evidence-free model answer while reporting abstained=true.
-                    rag_meta["modelInvoked"] = False
-                    return _RAG_ABSTENTION_REPLY, True, rag_meta
+                    # Generate only the character's expression of uncertainty.
+                    # Unreliable candidates and their citations never reach it.
+                    rag_meta["citations"] = []
+                    retrieval = RetrievalResult(
+                        status="character_abstention",
+                        confidence=bundle.get("confidence"),
+                        reason="insufficient_retrieval_evidence",
+                    )
 
                 # 角色知识检索结果自带按粒度组装的 context_text；
                 # 通用知识库结果继续使用 RAGHelper 的格式化器。
-                character_knowledge_context = bundle.get("context_text") or ""
-                if character_knowledge_context:
-                    rag_context = character_knowledge_context
                 else:
-                    from knowledge.rag_helper import get_rag_helper
+                    character_knowledge_context = bundle.get("context_text") or ""
+                    if character_knowledge_context:
+                        rag_context = character_knowledge_context
+                    else:
+                        from knowledge.rag_helper import get_rag_helper
 
-                    rag_context = get_rag_helper().format_context_results(bundle.get("results", []))
-                retrieval = RetrievalResult(
-                    status="ok",
-                    evidence=rag_context,
-                    documents=tuple(bundle.get("results", [])),
-                    citations=tuple(rag_meta.get("citations", [])),
-                    confidence=bundle.get("confidence"),
-                )
+                        rag_context = get_rag_helper().format_context_results(bundle.get("results", []))
+                    retrieval = RetrievalResult(
+                        status="ok",
+                        evidence=rag_context,
+                        documents=tuple(bundle.get("results", [])),
+                        citations=tuple(rag_meta.get("citations", [])),
+                        confidence=bundle.get("confidence"),
+                    )
         except Exception as e:
             increment("rag_failures")
             log_event(
@@ -1030,7 +1079,31 @@ async def _generate_with_vllm(
                 errorType=type(e).__name__,
             )
             logger.warning("RAG retrieval failed: %s", e)
-            rag_meta = {}
+            retrieval = RetrievalResult(status="character_abstention", reason="retrieval_unavailable")
+            rag_meta = {
+                "citations": [],
+                "confidence": None,
+                "abstained": True,
+                "answerMode": "abstention",
+                "modelInvoked": True,
+                "warnings": ["retrieval_unavailable"],
+            }
+
+    model_generate = model_generate or _vllm_client.generate
+
+    async def generate_reply(**kwargs):
+        if retrieval.status != "character_abstention":
+            return await model_generate(**kwargs)
+        try:
+            reply = await model_generate(**kwargs)
+            if isinstance(reply, str) and reply.strip():
+                return reply
+            rag_meta["generationError"] = "EmptyModelReply"
+        except Exception as exc:
+            rag_meta["generationError"] = type(exc).__name__
+            logger.warning("Character abstention generation failed; using fallback", exc_info=True)
+        rag_meta["warnings"] = [*(rag_meta.get("warnings") or []), "character_abstention_fallback"]
+        return _RAG_ABSTENTION_REPLY
 
     generation = await generate_character_response(
         CharacterGenerationRequest(
@@ -1054,10 +1127,10 @@ async def _generate_with_vllm(
             max_tokens=_max_tokens,
             top_p=_top_p,
         ),
-        _vllm_client.generate,
+        generate_reply,
     )
 
-    return generation.reply, generation.plan.retrieval.has_evidence, rag_meta
+    return generation.reply, generation.plan.retrieval.has_evidence or bool(rag_meta.get("abstained")), rag_meta
 
 
 async def _generate_with_model_manager_character(

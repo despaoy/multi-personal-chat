@@ -415,22 +415,29 @@ async def test_vllm_generation_omits_rag_policy_without_evidence(monkeypatch):
     assert "【检索证据】" not in last_content
 
 @pytest.mark.asyncio
-async def test_vllm_rag_abstention_skips_model_generation(monkeypatch):
+@pytest.mark.parametrize("outcome", ["character reply", "", "error"])
+async def test_vllm_rag_abstention_generates_character_uncertainty(monkeypatch, outcome):
     from api import generate
     from db.schemas import MessageRequest
     from knowledge import intent_detector
 
+    captured = {}
+
     async def retrieve(query, top_k, filters):
         return {
-            "results": [],
-            "citations": [],
+            "results": [{"content": "UNRELIABLE_FACT"}],
+            "context_text": "UNRELIABLE_FACT",
+            "citations": [{"id": "unreliable-source"}],
             "confidence": 0.1,
             "abstained": True,
         }
 
     class Client:
         async def generate(self, **kwargs):
-            raise AssertionError("abstained RAG requests must not call the model")
+            captured.update(kwargs)
+            if outcome == "error":
+                raise RuntimeError("model unavailable")
+            return outcome
 
     monkeypatch.setattr(intent_detector, "needs_rag", lambda _: (True, "test", None))
     monkeypatch.setattr(generate, "_retrieve_rag_bundle", retrieve)
@@ -440,14 +447,27 @@ async def test_vllm_rag_abstention_skips_model_generation(monkeypatch):
 
     reply, used_rag, meta = await generate._generate_with_vllm(
         MessageRequest(message="unknown question", sessionId="session"),
-        None,
+        "character-adapter",
         runtime_config={"useKnowledgeBase": True},
     )
 
-    assert reply == "insufficient evidence"
+    assert reply == ("character reply" if outcome == "character reply" else "insufficient evidence")
     assert used_rag is True
     assert meta["abstained"] is True
-    assert meta["modelInvoked"] is False
+    assert meta["modelInvoked"] is True
+    assert meta["answerMode"] == "abstention"
+    assert meta["citations"] == []
+    assert captured["lora_name"] == "character-adapter"
+    assert "system" in captured["messages"][0]["content"]
+    assert "【本轮证据不足】" in captured["messages"][0]["content"]
+    assert "不得猜测或补编" in captured["messages"][0]["content"]
+    assert "UNRELIABLE_FACT" not in str(captured["messages"])
+    assert "unknown question" in captured["messages"][-1]["content"]
+    if outcome != "character reply":
+        assert "character_abstention_fallback" in meta["warnings"]
+        assert meta["generationError"] == ("RuntimeError" if outcome == "error" else "EmptyModelReply")
+    else:
+        assert "generationError" not in meta
 
 @pytest.mark.asyncio
 async def test_inference_timeout_cancels_model_task_without_killing_worker(monkeypatch):
@@ -495,7 +515,6 @@ async def test_duplicate_integration_message_does_not_emit_rate_limit_reply(monk
             raise AssertionError("duplicates must be resolved before chat rate limiting")
 
     db = SQLiteDB(tmp_path / "integration.db")
-    assert db.mark_integration_message_processed("qq", "napcat", "duplicate-1")
     monkeypatch.setenv("ENVIRONMENT", "development")
     monkeypatch.setenv("ASTRBOT_ENABLED", "true")
     monkeypatch.setenv("ASTRBOT_INTEGRATION_TOKEN", "test-token")
@@ -512,6 +531,14 @@ async def test_duplicate_integration_message_does_not_emit_rate_limit_reply(monk
         senderId="sender",
         text="hello",
     )
+    import hashlib
+    import json
+    key = hashlib.sha256(json.dumps([
+        "qq", "napcat", "private", "room", "sender", "duplicate-1",
+    ], ensure_ascii=False).encode()).hexdigest()
+    db.integration_receipt("claim", key=key, owner="owner", now=0, expires_at=1)
+    db.integration_receipt("finish", key=key, owner="owner", status="generated", response="{}")
+    db.integration_receipt("delivery", key=key, owner="owner", status="delivered")
     response = await integrations.receive_astrbot_message(
         payload,
         Request(),

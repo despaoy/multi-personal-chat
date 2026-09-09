@@ -45,7 +45,7 @@ for _tbl_name in [
     "api_keys_table", "claw_tools_table",
     "audit_logs_table", "intent_samples_table",
     "intent_active_kbs_table", "training_tasks_table",
-    "integration_message_dedup_table", "conversations_table",
+    "integration_message_dedup_table", "integration_receipts_table", "conversations_table",
     "integration_events_table", "model_invocations_table",
     "gold_eval_runs_table", "experiment_runs_table",
     "retrieval_eval_questions_table", "preference_pairs_table",

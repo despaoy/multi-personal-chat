@@ -46,6 +46,11 @@ _VALID_MEMORY_STATUSES: tuple[str, ...] = (
 )
 
 
+def relationship_from_record(row) -> RelationshipState:
+    """Reuse one loaded relationship row for state and interaction metadata."""
+    return _row_to_relationship(row)
+
+
 class CharacterMemoryRepository(Protocol):
     """角色关系与长期记忆的持久化接口。"""
 

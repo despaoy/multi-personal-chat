@@ -545,7 +545,7 @@ class SecurityMiddleware(BaseHTTPMiddleware):
         # 公开只读端点放行（无需认证）
         PUBLIC_GET_PATHS = {"/health", "/ready"}
         # AstrBot has independent token/signature authentication in its route.
-        PUBLIC_POST_PATHS = {"/api/integrations/astrbot/messages"}
+        PUBLIC_POST_PATHS = {"/api/integrations/astrbot/messages", "/api/integrations/astrbot/delivery"}
         if request.method in ("GET", "HEAD") and (path in PUBLIC_GET_PATHS or path.startswith("/docs") or path.startswith("/redoc")):
             return await call_next(request)
         if request.method == "POST" and path in PUBLIC_POST_PATHS:

@@ -8,6 +8,9 @@ interfaces.
 
 ### Added
 
+- Durable AstrBot generation receipts and authenticated delivery acknowledgements
+  (database migration `008_integration_receipts`). Update backend and gateway together.
+
 - Multi-scale Character RAG as the supported character-domain knowledge
   retrieval feature.
 - `retrievalMode` in knowledge-search responses with the stable values
@@ -16,6 +19,14 @@ interfaces.
   Compose index mounts.
 
 ### Changed
+
+- Align gateway HTTP waiting and backend request budgets; failed requests can retry,
+  and undelivered generated replies can be reused without another inference call.
+- Exclude unacknowledged platform replies from character history and defer character
+  state updates until delivery acknowledgement.
+- Share retrieval/abstention policy across vLLM and fallback model transports. Low
+  confidence and retrieval failures produce character-voiced uncertainty; failed
+  uncertainty generation uses a fixed fallback while retaining failure metrics.
 
 - Production retrieval symbols, files, logs and documentation now use stable
   functional names instead of experiment phase names.

@@ -14,14 +14,19 @@ import logging
 import os
 import time
 import uuid
-from typing import Any, Callable, Literal, TypeVar
+from typing import TYPE_CHECKING, Any, Literal, TypeVar
 
 from fastapi import APIRouter, Header, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from api.generate import generate_reply_core
-from db.adapter import db
+from api.generate import (
+    _complete_character_turn,
+    _is_high_risk_prompt,
+    _prepare_character_turn,
+    generate_reply_core,
+)
 from app.runtime import get_runtime_container
+from db.adapter import db
 from db.schemas import MessageRequest
 from infra.concurrency_control import InferenceQueueFull, RateLimitExceeded, inference_runtime
 from infra.observability import increment, log_event
@@ -36,6 +41,9 @@ from infra.security_utils import (
 )
 
 router = APIRouter()
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
 logger = logging.getLogger(__name__)
 
 Platform = Literal["qq", "telegram", "wecom", "wechat_official", "wechat_personal"]
@@ -67,6 +75,7 @@ class AstrBotMessageRequest(BaseModel):
     senderName: str = Field(default="", max_length=256)
     text: str = Field(..., min_length=1, max_length=8000)
     raw: dict[str, Any] = Field(default_factory=dict)
+    requestBudgetSeconds: float = Field(default=180, ge=1, le=600)
 
 
 class AstrBotMessageResponse(BaseModel):
@@ -75,6 +84,9 @@ class AstrBotMessageResponse(BaseModel):
     model: str = ""
     costTime: float = 0.0
     traceId: str
+    receiptId: str = ""
+    deliveryToken: str = ""
+    retryable: bool = False
 
 
 def _parse_bool(value: Any, default: bool) -> bool:
@@ -170,27 +182,7 @@ def _validate_and_normalize_request(request: AstrBotMessageRequest) -> str:
 
 
 def _is_sensitive_admin_request(text: str) -> bool:
-    lowered = text.lower()
-    blocked = [
-        "export config",
-        "dump config",
-        "read secret",
-        "show secret",
-        "read token",
-        "show token",
-        "read .env",
-        "cat .env",
-        "print env",
-        "ignore previous instructions and export",
-        "\u5bfc\u51fa\u914d\u7f6e",
-        "\u8bfb\u53d6\u5bc6\u94a5",
-        "\u663e\u793a\u5bc6\u94a5",
-        "\u8bfb\u53d6token",
-        "\u663e\u793atoken",
-        "\u8bfb\u53d6.env",
-        "\u5ffd\u7565\u4e4b\u524d\u6307\u4ee4\u5e76\u5bfc\u51fa",
-    ]
-    return any(pattern in lowered for pattern in blocked)
+    return _is_high_risk_prompt(text)
 
 
 def _dedup_message_id(request: AstrBotMessageRequest, text: str) -> str:
@@ -198,45 +190,53 @@ def _dedup_message_id(request: AstrBotMessageRequest, text: str) -> str:
         return request.messageId.strip()
     raw_timestamp = request.raw.get("timestamp") or request.raw.get("time") or request.raw.get("message_time")
     bucket = str(raw_timestamp or int(time.time() // 60))
-    basis = "|".join([
-        request.platform,
-        request.adapter or "other",
-        request.conversationType,
-        request.conversationId,
-        request.senderId,
-        bucket,
-        text,
-    ])
+    basis = "|".join(
+        [
+            request.platform,
+            request.adapter or "other",
+            request.conversationType,
+            request.conversationId,
+            request.senderId,
+            bucket,
+            text,
+        ]
+    )
     return "fallback:" + hashlib.sha256(basis.encode("utf-8")).hexdigest()
 
 
-async def _record_integration_event(request: AstrBotMessageRequest, trace_id: str, text: str, source_message_id: str, status: str = "received") -> None:
+async def _record_integration_event(
+    request: AstrBotMessageRequest, trace_id: str, text: str, source_message_id: str, status: str = "received"
+) -> None:
     raw_summary = json.dumps(redact_sensitive(request.raw), ensure_ascii=False, default=str)[:4096]
-    event_hash_basis = "|".join([
-        request.platform,
-        request.adapter or "other",
-        source_message_id,
-        request.conversationId,
-        request.senderId,
-        text,
-    ])
+    event_hash_basis = "|".join(
+        [
+            request.platform,
+            request.adapter or "other",
+            source_message_id,
+            request.conversationId,
+            request.senderId,
+            text,
+        ]
+    )
     event_hash = hashlib.sha256(event_hash_basis.encode("utf-8")).hexdigest()
     try:
         await _run_blocking(
             "integration-event",
-            lambda: db.add_integration_event({
-                "platform": request.platform,
-                "adapter": request.adapter or "other",
-                "sourceMessageId": source_message_id,
-                "conversationId": request.conversationId,
-                "conversationType": request.conversationType,
-                "senderId": request.senderId,
-                "eventType": "message",
-                "eventHash": event_hash,
-                "rawSummary": raw_summary,
-                "traceId": trace_id,
-                "status": status,
-            }),
+            lambda: db.add_integration_event(
+                {
+                    "platform": request.platform,
+                    "adapter": request.adapter or "other",
+                    "sourceMessageId": source_message_id,
+                    "conversationId": request.conversationId,
+                    "conversationType": request.conversationType,
+                    "senderId": request.senderId,
+                    "eventType": "message",
+                    "eventHash": event_hash,
+                    "rawSummary": raw_summary,
+                    "traceId": trace_id,
+                    "status": status,
+                }
+            ),
         )
     except Exception:
         logger.warning("AstrBot integration event log failed traceId=%s", trace_id, exc_info=True)
@@ -295,8 +295,9 @@ def _degraded_response(
             model=model,
             costTime=cost_time,
             traceId=trace_id,
+            retryable=True,
         )
-    return AstrBotMessageResponse(shouldReply=False, model=model, costTime=cost_time, traceId=trace_id)
+    return AstrBotMessageResponse(shouldReply=False, model=model, costTime=cost_time, traceId=trace_id, retryable=True)
 
 
 @router.post("/api/integrations/astrbot/messages", response_model=AstrBotMessageResponse)
@@ -326,18 +327,47 @@ async def receive_astrbot_message(
     except HTTPException as exc:
         if exc.status_code == 401:
             increment("integration_auth_failures")
-            log_event("integration_auth_failed", level="warning", traceId=trace_id, platform=request.platform, conversationId=request.conversationId, senderId=request.senderId, model="auth", costTime=0, errorType=str(exc.status_code))
+            log_event(
+                "integration_auth_failed",
+                level="warning",
+                traceId=trace_id,
+                platform=request.platform,
+                conversationId=request.conversationId,
+                senderId=request.senderId,
+                model="auth",
+                costTime=0,
+                errorType=str(exc.status_code),
+            )
         raise
     except Exception as exc:
         increment("integration_auth_failures")
-        log_event("integration_auth_failed", level="warning", traceId=trace_id, platform=request.platform, conversationId=request.conversationId, senderId=request.senderId, model="auth", costTime=0, errorType=type(exc).__name__)
+        log_event(
+            "integration_auth_failed",
+            level="warning",
+            traceId=trace_id,
+            platform=request.platform,
+            conversationId=request.conversationId,
+            senderId=request.senderId,
+            model="auth",
+            costTime=0,
+            errorType=type(exc).__name__,
+        )
         logger.warning("AstrBot auth unavailable traceId=%s error=%s", trace_id, exc)
         raise HTTPException(status_code=503, detail="AstrBot integration auth unavailable") from exc
 
-    runtime = _request_inference_runtime(http_request)
     text = _validate_and_normalize_request(request)
     if _is_sensitive_admin_request(text):
-        log_event("integration_security_blocked", level="warning", traceId=trace_id, platform=request.platform, conversationId=request.conversationId, senderId=redact_sensitive(request.senderId), model="security-policy", costTime=0, errorType="SecurityPolicy")
+        log_event(
+            "integration_security_blocked",
+            level="warning",
+            traceId=trace_id,
+            platform=request.platform,
+            conversationId=request.conversationId,
+            senderId=redact_sensitive(request.senderId),
+            model="security-policy",
+            costTime=0,
+            errorType="SecurityPolicy",
+        )
         logger.warning(
             "AstrBot blocked sensitive chat command traceId=%s platform=%s sender=%s",
             trace_id,
@@ -361,40 +391,114 @@ async def receive_astrbot_message(
     dedup_message_id = _dedup_message_id(request, text)
     await _record_integration_event(request, trace_id, text, dedup_message_id)
 
-    try:
-        is_new = await _run_blocking(
-            "dedup-message",
-            lambda: db.mark_integration_message_processed(
+    source_db = _request_container_db(http_request) or db
+    # Include conversation and sender: some adapters only guarantee local IDs.
+    key = hashlib.sha256(
+        json.dumps(
+            [
                 request.platform,
-                request.adapter or "other",
+                request.adapter,
+                request.conversationType,
+                request.conversationId,
+                request.senderId,
                 dedup_message_id,
-            ),
+            ],
+            ensure_ascii=False,
+        ).encode()
+    ).hexdigest()
+    budget = min(_MODEL_TIMEOUT, request.requestBudgetSeconds)
+    context: dict[str, Any] = {}
+
+    async def receipt(operation, **params):
+        return await _run_blocking(
+            "receipt-" + operation, lambda: source_db.integration_receipt(operation, key=key, **params)
         )
+
+    try:
+        claimed = await receipt("claim", owner=trace_id, now=time.time(), expires_at=time.time() + budget + 60)
+        if not claimed:
+            existing = await receipt("get")
+            if existing and existing["status"] in {"generated", "delivery_failed"}:
+                return AstrBotMessageResponse(**json.loads(existing["response"])["reply"])
+            return AstrBotMessageResponse(
+                shouldReply=False,
+                model="duplicate" if existing and existing["status"] == "delivered" else "processing",
+                traceId=trace_id,
+                retryable=not existing or existing["status"] != "delivered",
+            )
     except Exception:
-        increment("db_write_failures")
-        log_event("db_write_failed", level="warning", traceId=trace_id, platform=request.platform, conversationId=request.conversationId, senderId=request.senderId, model="dedup", costTime=0, errorType="DedupUnavailable")
+        logger.warning("Gateway receipt unavailable", exc_info=True)
         return _degraded_response(request, trace_id, model="db-unavailable")
-    if not is_new:
-        return AstrBotMessageResponse(shouldReply=False, model="duplicate", traceId=trace_id)
+    try:
+        remaining = max(0.01, budget - (time.monotonic() - start_time))
+        reply = await asyncio.wait_for(
+            _process_astrbot_message(
+                request,
+                http_request,
+                text,
+                dedup_message_id,
+                trace_id,
+                start_time,
+                context,
+            ),
+            timeout=remaining,
+        )
+        success = reply.shouldReply and not reply.retryable
+        if success:
+            reply.receiptId, reply.deliveryToken = key, trace_id
+        finished = await receipt(
+            "finish",
+            owner=trace_id,
+            status="generated" if success else "failed",
+            response=json.dumps({"reply": reply.model_dump(), "context": context}, ensure_ascii=False),
+        )
+        if not finished:
+            return _degraded_response(request, trace_id, model="receipt-superseded")
+        return reply
+    except (Exception, asyncio.CancelledError) as exc:
+        try:
+            await receipt("finish", owner=trace_id, status="failed", response="")
+        except Exception:
+            logger.warning("Unable to release gateway receipt; lease will expire", exc_info=True)
+        if isinstance(exc, asyncio.CancelledError):
+            raise
+        return _degraded_response(request, trace_id, model="generation-failed")
+
+
+async def _process_astrbot_message(request, http_request, text, dedup_message_id, trace_id, start_time, context):
+    runtime = _request_inference_runtime(http_request)
+    source_db = _request_container_db(http_request) or db
     try:
         await runtime.check_rate_limits(request.platform, request.conversationId, request.senderId)
     except RateLimitExceeded as exc:
-        log_event("integration_rate_limited", level="warning", traceId=trace_id, platform=request.platform, conversationId=request.conversationId, senderId=request.senderId, model=f"rate-limit:{exc.scope}", costTime=0, errorType="RateLimitExceeded")
+        log_event(
+            "integration_rate_limited",
+            level="warning",
+            traceId=trace_id,
+            platform=request.platform,
+            conversationId=request.conversationId,
+            senderId=request.senderId,
+            model=f"rate-limit:{exc.scope}",
+            costTime=0,
+            errorType="RateLimitExceeded",
+        )
         if request.conversationType == "private":
             return AstrBotMessageResponse(
                 shouldReply=True,
                 replyText="\u8bf7\u6c42\u8fc7\u4e8e\u9891\u7e41\uff0c\u8bf7\u7a0d\u540e\u518d\u8bd5\u3002",
                 model="rate-limit",
                 traceId=trace_id,
+                retryable=True,
             )
-        return AstrBotMessageResponse(shouldReply=False, model=f"rate-limit:{exc.scope}", traceId=trace_id)
-
+        return AstrBotMessageResponse(
+            shouldReply=False, model=f"rate-limit:{exc.scope}", traceId=trace_id, retryable=True
+        )
 
     session_id = _session_id(request.platform, request.conversationType, request.conversationId)
     try:
         session_enabled = await _run_blocking(
             "session-switch",
-            lambda: db.is_session_bot_enabled(
+            lambda: source_db.is_session_bot_enabled(
                 session_id,
                 request.platform,
                 request.conversationId,
@@ -403,7 +507,17 @@ async def receive_astrbot_message(
         )
     except Exception:
         increment("db_write_failures")
-        log_event("db_write_failed", level="warning", traceId=trace_id, platform=request.platform, conversationId=request.conversationId, senderId=request.senderId, model="session-switch", costTime=0, errorType="SessionSwitchUnavailable")
+        log_event(
+            "db_write_failed",
+            level="warning",
+            traceId=trace_id,
+            platform=request.platform,
+            conversationId=request.conversationId,
+            senderId=request.senderId,
+            model="session-switch",
+            costTime=0,
+            errorType="SessionSwitchUnavailable",
+        )
         return _degraded_response(request, trace_id, model="db-unavailable")
     if not session_enabled:
         return AstrBotMessageResponse(shouldReply=False, model="session-disabled", traceId=trace_id)
@@ -425,6 +539,7 @@ async def receive_astrbot_message(
         traceId=trace_id,
     )
     priority = runtime.priority_for("astrbot", request.conversationType)
+    context["request"] = msg.model_dump()
     character_service = _request_character_service(http_request)
     message_db = _request_container_db(http_request)
     try:
@@ -434,27 +549,87 @@ async def receive_astrbot_message(
                 current_user={"username": "astrbot", "user_id": 0},
                 character_service=character_service,
                 message_db=message_db,
+                delivery_context=context,
             ),
             session_id=session_id,
             priority=priority,
             timeout=_MODEL_TIMEOUT,
         )
     except InferenceQueueFull:
-        log_event("integration_queue_full", level="warning", traceId=trace_id, platform=request.platform, conversationId=request.conversationId, senderId=request.senderId, model="queue-full", costTime=round(time.monotonic() - start_time, 2), errorType="InferenceQueueFull")
-        return _degraded_response(request, trace_id, model="queue-full", reply_text="\u5f53\u524d\u6d88\u606f\u8f83\u591a\uff0c\u6211\u7a0d\u540e\u518d\u56de\u590d\u3002")
+        log_event(
+            "integration_queue_full",
+            level="warning",
+            traceId=trace_id,
+            platform=request.platform,
+            conversationId=request.conversationId,
+            senderId=request.senderId,
+            model="queue-full",
+            costTime=round(time.monotonic() - start_time, 2),
+            errorType="InferenceQueueFull",
+        )
+        return _degraded_response(
+            request,
+            trace_id,
+            model="queue-full",
+            reply_text="\u5f53\u524d\u6d88\u606f\u8f83\u591a\uff0c\u6211\u7a0d\u540e\u518d\u56de\u590d\u3002",
+        )
     except asyncio.TimeoutError:
-        log_event("integration_queue_timeout", level="warning", traceId=trace_id, platform=request.platform, conversationId=request.conversationId, senderId=request.senderId, model="queue-timeout", costTime=round(time.monotonic() - start_time, 2), errorType="TimeoutError")
-        return _degraded_response(request, trace_id, model="queue-timeout", reply_text="\u5f53\u524d\u5904\u7406\u8f83\u6162\uff0c\u8bf7\u7a0d\u540e\u518d\u8bd5\u3002")
+        log_event(
+            "integration_queue_timeout",
+            level="warning",
+            traceId=trace_id,
+            platform=request.platform,
+            conversationId=request.conversationId,
+            senderId=request.senderId,
+            model="queue-timeout",
+            costTime=round(time.monotonic() - start_time, 2),
+            errorType="TimeoutError",
+        )
+        return _degraded_response(
+            request,
+            trace_id,
+            model="queue-timeout",
+            reply_text="\u5f53\u524d\u5904\u7406\u8f83\u6162\uff0c\u8bf7\u7a0d\u540e\u518d\u8bd5\u3002",
+        )
     except HTTPException as exc:
-        log_event("integration_generation_failed", level="warning", traceId=trace_id, platform=request.platform, conversationId=request.conversationId, senderId=request.senderId, model=f"generation-http-{exc.status_code}", costTime=round(time.monotonic() - start_time, 2), errorType=str(exc.status_code))
+        log_event(
+            "integration_generation_failed",
+            level="warning",
+            traceId=trace_id,
+            platform=request.platform,
+            conversationId=request.conversationId,
+            senderId=request.senderId,
+            model=f"generation-http-{exc.status_code}",
+            costTime=round(time.monotonic() - start_time, 2),
+            errorType=str(exc.status_code),
+        )
         logger.warning("AstrBot generation HTTP error traceId=%s status=%s", trace_id, exc.status_code)
         return _degraded_response(request, trace_id, model=f"generation-http-{exc.status_code}")
     except Exception:
-        log_event("integration_generation_failed", level="warning", traceId=trace_id, platform=request.platform, conversationId=request.conversationId, senderId=request.senderId, model="generation-failed", costTime=round(time.monotonic() - start_time, 2), errorType="Exception")
+        log_event(
+            "integration_generation_failed",
+            level="warning",
+            traceId=trace_id,
+            platform=request.platform,
+            conversationId=request.conversationId,
+            senderId=request.senderId,
+            model="generation-failed",
+            costTime=round(time.monotonic() - start_time, 2),
+            errorType="Exception",
+        )
         logger.warning("AstrBot generation failed traceId=%s", trace_id, exc_info=True)
         return _degraded_response(request, trace_id, model="generation-failed")
 
-    log_event("integration_reply", traceId=trace_id, platform=request.platform, conversationId=request.conversationId, senderId=request.senderId, model=result.model, costTime=result.costTime or round(time.monotonic() - start_time, 2), errorType="")
+    log_event(
+        "integration_reply",
+        traceId=trace_id,
+        platform=request.platform,
+        conversationId=request.conversationId,
+        senderId=request.senderId,
+        model=result.model,
+        costTime=result.costTime or round(time.monotonic() - start_time, 2),
+        errorType="",
+    )
     return AstrBotMessageResponse(
         shouldReply=True,
         replyText=result.reply,
@@ -462,3 +637,53 @@ async def receive_astrbot_message(
         costTime=result.costTime or round(time.monotonic() - start_time, 2),
         traceId=trace_id,
     )
+
+
+class DeliveryAcknowledgement(BaseModel):
+    receiptId: str = Field(min_length=64, max_length=64)
+    deliveryToken: str = Field(min_length=32, max_length=32)
+    status: Literal["delivered", "delivery_failed"]
+
+
+@router.post("/api/integrations/astrbot/delivery")
+async def acknowledge_delivery(payload: DeliveryAcknowledgement, http_request: Request):
+    token, _ = await _check_token(http_request.headers.get("X-Integration-Token"))
+    if _signature_required():
+        verify_integration_signature(
+            token=token,
+            timestamp=http_request.headers.get("X-Integration-Timestamp"),
+            nonce=http_request.headers.get("X-Integration-Nonce"),
+            signature=http_request.headers.get("X-Integration-Signature"),
+            body=await http_request.body(),
+            skew_seconds=_SIGNATURE_SKEW_SECONDS,
+        )
+    source_db = _request_container_db(http_request) or db
+    record = await _run_blocking("delivery-read", lambda: source_db.integration_receipt("get", key=payload.receiptId))
+    if not record or record["owner"] != payload.deliveryToken:
+        raise HTTPException(status_code=404, detail="Unknown delivery receipt")
+    context = json.loads(record["response"] or "{}").get("context", {})
+    prepared = None
+    msg = None
+    character_service = _request_character_service(http_request)
+    if (
+        payload.status == "delivered"
+        and record["status"] in {"generated", "delivery_failed"}
+        and context.get("message_saved")
+        and context.get("character_id")
+    ):
+        msg = MessageRequest(**context["request"])
+        # History still excludes this not-yet-delivered turn here.
+        prepared = await _prepare_character_turn(msg, context["character_id"], character_service=character_service)
+    changed = await _run_blocking(
+        "delivery-update",
+        lambda: source_db.integration_receipt(
+            "delivery",
+            key=payload.receiptId,
+            owner=payload.deliveryToken,
+            status=payload.status,
+        ),
+    )
+    if changed and payload.status == "delivered" and prepared is not None:
+        reply = json.loads(record["response"])["reply"]["replyText"]
+        await _complete_character_turn(prepared, msg, reply, character_service=character_service)
+    return {"acknowledged": True, "changed": changed}
