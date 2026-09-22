@@ -695,7 +695,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
     def _is_generate_endpoint(self, path: str) -> bool:
         """判断是否为推理 API 路径。"""
-        return path == "/api/generate"
+        return path in {"/api/generate", "/api/narrative-branches/canonical/generate"}
 
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         path = request.url.path
@@ -781,7 +781,7 @@ class InputValidationMiddleware(BaseHTTPMiddleware):
         # 安全：BaseHTTPMiddleware 消费 body 后下游端点（Pydantic）无法再读取。
         # 仅对 /api/generate 等需要 Prompt 注入检测的端点预先读取 body 并缓存回 request。
         # 其他 POST 端点（知识库/训练/LoRA等）有独立 Pydantic 校验，跳过此处 body 读取。
-        _body_guard_paths = ("/api/generate",)
+        _body_guard_paths = ("/api/generate", "/api/narrative-branches/canonical/generate")
         if not request.url.path.startswith(_body_guard_paths):
             return await call_next(request)
 

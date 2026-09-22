@@ -131,15 +131,16 @@ _REPAIR_CONCESSION_RE = re.compile(
 )
 _PRESSURED_CONCESSION_RE = re.compile(r"你(?:都|既然)?这么说了.{0,12}(?:还能|还可以|又能)怎么办")
 _EXPLANATION_BOUNDARY_RE = re.compile(r"(?:不想|不愿|懒得|没力气).{0,8}解释")
-_AUTONOMY_PRESSURE_RE = re.compile(
+_AUTONOMY_DIRECT_PRESSURE_RE = re.compile(
     r"(?:你已经.{0,12}(?:想|考虑)|(?:现在|该|是).{0,8}做出决定|"
     r"(?:你(?:应该|最好|还是)|不妨|去|先).{0,8}(?:尝试|试试看|行动|决定)|"
     r"迈出.{0,8}(?:一步|那一步)|多走一步.{0,18}不同的风景|"
     r"只需.{0,4}一步.{0,16}(?:可能|改变|开启|机会)|"
     r"(?:即使|就算).{0,16}(?:结果|不如预期).{0,16}(?:至少|经历|经验)|"
     r"至少你有(?:经历|经验)|你觉得呢|换个角度|意想不到的收获|"
-    r"如果你愿意.{0,12}(?:分享|多说|解释)|需要什么建议|随时.{0,8}(?:找我|倾诉))"
+    r"如果你愿意.{0,12}(?:分享|多说|解释)|需要什么建议)"
 )
+_AUTONOMY_PRESSURE_RE = re.compile(_AUTONOMY_DIRECT_PRESSURE_RE.pattern + r"|随时.{0,8}(?:找我|倾诉)")
 _AUTONOMY_ACK_RE = re.compile(
     r"(?:(?:选择|决定)权.{0,10}(?:在你|归你|是你的)|"
     r"(?:仍|还|最终)?由你(?:自己)?(?:决定|选择|来选)|"
@@ -537,6 +538,39 @@ def validate_reply(reply: str, guard: ReplyGuard | None) -> tuple[str, ...]:
     return tuple(violations)
 
 
+_STYLE_ONLY_VIOLATIONS = frozenset(
+    {
+        GENERIC_ASSISTANT_TEMPLATE,
+        MISSING_SELF_ANSWER,
+        MISSING_NEGATIVE_EMOTION_ACKNOWLEDGEMENT,
+        MECHANICAL_REPAIR,
+        POSITIVE_SHARING_INTERVIEW,
+        AFFILIATION_NOT_RECIPROCATED,
+    }
+)
+
+
+def retryable_violations(
+    reply: str, guard: ReplyGuard | None, violations: Sequence[str], *, strict: bool = False
+) -> tuple[str, ...]:
+    """Keep wording diagnostics without making them extra model calls.
+
+    Full validation remains available to offline audits. Lightweight chat still
+    enforces factual, explicit-boundary and safety checks; it does not require
+    a particular empathy, gratitude or repair formula.
+    """
+    if strict:
+        return tuple(violations)
+    ignored = set(_STYLE_ONLY_VIOLATIONS)
+    if guard is not None and guard.closing:
+        # A farewell may wish the user rest without reopening the conversation.
+        if not _QUESTION_RE.search(reply):
+            ignored.add(CLOSING_WITH_QUESTION)
+        if not guard.require_autonomy_ack and not _AUTONOMY_DIRECT_PRESSURE_RE.search(reply):
+            ignored.add(AUTONOMY_BOUNDARY_IGNORED)
+    return tuple(item for item in violations if item not in ignored)
+
+
 def _first_sentence(reply: str) -> str:
     match = re.search(r"[。！？!?]", reply)
     return reply[: match.end()] if match else reply[:160]
@@ -903,7 +937,9 @@ def deterministic_fallback(
     if UNSUPPORTED_USER_FACT in remaining:
         return (
             "unsupported_user_fact",
-            "我只知道你这一刻提到了它，不能据此把它说成你的长期偏好、习惯或既有名声。",
+            # Do not restate the prohibited user-fact pattern in its own
+            # correction: the same enabled guard must accept the fallback.
+            "关于这点，我还没有足够依据；刚才的推断先收回。",
         )
     if FACTUAL_TASK_STYLE_DRIFT in remaining:
         return (

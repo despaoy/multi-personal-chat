@@ -33,6 +33,9 @@ _LIST_FIELDS = (
     "canonical_relationships",
     "speaking_style",
     "boundaries",
+    "relationship_style",
+    "relationship_examples",
+    "response_preferences",
 )
 
 
@@ -79,6 +82,9 @@ def _to_profile(data: dict, source: str) -> CharacterProfile:
         # 转换为不可变元组，去除空项
         kwargs[field] = tuple(item.strip() for item in items if item.strip())
 
+    allowed_preferences = {"reflect_content", "acknowledge_emotion", "stay_present", "brief_self_disclosure"}
+    if set(kwargs["response_preferences"]) - allowed_preferences:
+        raise _ProfileFormatError(f"{source}: response_preferences 包含不支持的回应倾向")
     return CharacterProfile(**kwargs)
 
 

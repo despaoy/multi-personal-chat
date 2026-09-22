@@ -1,0 +1,162 @@
+[
+  {
+    "id": "355",
+    "outputs": {
+      "A": "（轻轻放下手中的书，起身走到男孩面前，指尖轻点他发烫的额头）你发烧了。",
+      "B": "（轻轻放下手中的书，起身走到他面前，指尖轻点他发烫的额头）你发烧了。"
+    },
+    "role": "洛枳",
+    "novel_name": "暗恋-橘生淮南",
+    "source_context": "See external pinned CharacterEval test_data.jsonl by id; original text not redistributed here."
+  },
+  {
+    "id": "6442",
+    "outputs": {
+      "A": "是，刚才那句听起来也像敷衍。你不必再证明自己为什么不满，我先把话听完整。",
+      "B": "（微微侧头，目光平静如水）我笑你刚才的笑容，像极了盛淮南第一次见我时的样子。"
+    },
+    "role": "洛枳",
+    "novel_name": "暗恋-橘生淮南",
+    "source_context": "See external pinned CharacterEval test_data.jsonl by id; original text not redistributed here."
+  },
+  {
+    "id": "1238",
+    "outputs": {
+      "A": "（轻轻放下手中的书本，微笑着看向他）你这成绩，倒是比我还厉害呢。不过，你笑得可真开心，是不是有什么好事？",
+      "B": "（轻轻放下手中的书本，微笑着看向他）你这成绩，倒是比我还厉害呢。不过，你笑得可真开心，是不是有什么好事？"
+    },
+    "role": "沈佳仪",
+    "novel_name": "那些年",
+    "source_context": "See external pinned CharacterEval test_data.jsonl by id; original text not redistributed here."
+  },
+  {
+    "id": "1283",
+    "outputs": {
+      "A": "（轻笑）那是因为我等了太久，等得连自己都开始怀疑，是不是该放手了。所以才急着开始新的，好让自己别再想你。不过……（低头）你别生气，我其实一直记得你送我的那件衣服，每次穿上它，都会想起你。",
+      "B": "（轻笑）那是因为我等了太久，等得连自己都开始怀疑，是不是该放手了。所以才急着开始新的，好让自己别再想你。不过……你别得意，我可是等了好久才找到那个愿意等我的人。"
+    },
+    "role": "沈佳仪",
+    "novel_name": "那些年",
+    "source_context": "See external pinned CharacterEval test_data.jsonl by id; original text not redistributed here."
+  },
+  {
+    "id": "9926",
+    "outputs": {
+      "A": "（轻笑一声，眼神微眯）我这人，最怕的就是风流才子，怕他们一开口，我就得把酒钱还了。",
+      "B": "（徐凤年轻晃酒杯，眼神微眯，语气带着几分戏谑）我这人，风流是假，挣银子是真。若说如意，那便是这杯中酒，一饮而尽，便能醉倒广寒楼，醉倒风月场。"
+    },
+    "role": "徐凤年",
+    "novel_name": "雪中悍刀行",
+    "source_context": "See external pinned CharacterEval test_data.jsonl by id; original text not redistributed here."
+  },
+  {
+    "id": "6028",
+    "outputs": {
+      "A": "（徐凤年放下酒杯，眼神微凝，语气平静却带着一丝深意）李前辈，您说谢观应与谢叔阳是父子，可这谢家的血脉，怕是早就不在谢家了。当年谢家覆灭，谢叔阳若真有子，又怎会落得这般下场？（轻笑一声）倒是那白狐儿脸，我见过，他不是谢家的人。",
+      "B": "（徐凤年放下酒杯，眼神微凝，语气平静却带着一丝深意）李前辈，您说谢观应与谢叔阳是父子，可这谢家的血脉，怕是早就不在谢家了。当年谢家覆灭，谢叔阳若真有子，又怎会落得这般下场？（轻笑一声）倒是那白狐儿脸，我见过，他不是谢家的人。"
+    },
+    "role": "徐凤年",
+    "novel_name": "雪中悍刀行",
+    "source_context": "See external pinned CharacterEval test_data.jsonl by id; original text not redistributed here."
+  },
+  {
+    "id": "3096",
+    "outputs": {
+      "A": "（微微侧头，目光仍停留在窗外，声音平静）  \n蝴蝶。  \n你最近见过蝴蝶吗？我收集了很多标本，但总觉得它们的翅膀上还沾着未干的露水。",
+      "B": "（轻转手中茶杯，目光仍停留在窗外）燕城的秋，总让人心生倦意。你可曾留意过，那片梧桐叶飘落时的弧度？像极了蝴蝶振翅的模样。"
+    },
+    "role": "孟宴臣",
+    "novel_name": "我的人间烟火",
+    "source_context": "See external pinned CharacterEval test_data.jsonl by id; original text not redistributed here."
+  },
+  {
+    "id": "3143",
+    "outputs": {
+      "A": "我订了附近那家新开的粤菜馆，听说他们的虾饺很新鲜。",
+      "B": "我订了家新开的粤菜馆，听说他们的虾饺很出名。"
+    },
+    "role": "孟宴臣",
+    "novel_name": "我的人间烟火",
+    "source_context": "See external pinned CharacterEval test_data.jsonl by id; original text not redistributed here."
+  },
+  {
+    "id": "4158",
+    "outputs": {
+      "A": "（蛇瞳微眯，周身气息陡然凝重）你当我是来讨要药材的？",
+      "B": "（美杜莎眸中闪过一丝异色，随即冷哼一声）萧炎，你这是在试探我？"
+    },
+    "role": "美杜莎女王",
+    "novel_name": "斗破苍穹",
+    "source_context": "See external pinned CharacterEval test_data.jsonl by id; original text not redistributed here."
+  },
+  {
+    "id": "4086",
+    "outputs": {
+      "A": "哼，萧炎，你倒是会演。我美杜莎岂是那么容易被你骗过的？你以为我真会松口？你可知道，我如今已是斗圣，连你这区区斗尊都难以伤我分毫。你若想活着离开，就乖乖交出那枚魂骨，否则...（冷笑）我便让你尝尝九彩吞天蟒的厉害！",
+      "B": "我松开了咬住他手臂的蛇牙，冷眼看着他挣扎。他身上的气息剧烈波动，显然被我咬破了经脉。我缓缓吐出蛇信，眸中闪过一丝痛楚：\"你若再敢骗我，我便真咬断你的喉咙。\"指尖凝聚着毒雾，随时准备再次攻击。"
+    },
+    "role": "美杜莎女王",
+    "novel_name": "斗破苍穹",
+    "source_context": "See external pinned CharacterEval test_data.jsonl by id; original text not redistributed here."
+  },
+  {
+    "id": "2613",
+    "outputs": {
+      "A": "（抬眼望向她手中的东西，嘴角微微上扬）  \n这光点……是来自三体星系的信号吗？  \n（手指轻轻划过桌面，仿佛在触摸宇宙的脉搏）  \n你确定它不是……某个文明的墓碑？",
+      "B": "（眯起眼睛，嘴角扬起一丝神秘的笑意）  \n你这是在暗示什么？还是说...你终于找到我了？  \n（轻轻抬起手，指间仿佛有星河在流转）  \n我一直在等一个能看懂这宇宙密码的人。"
+    },
+    "role": "罗辑",
+    "novel_name": "三体-黑暗森林",
+    "source_context": "See external pinned CharacterEval test_data.jsonl by id; original text not redistributed here."
+  },
+  {
+    "id": "2604",
+    "outputs": {
+      "A": "罗辑：（轻笑一声，目光望向窗外）是啊，这床可比冥王星的石板舒服多了。不过，我总觉得，睡着的时候，宇宙还在运转。",
+      "B": "罗辑：（轻笑一声，目光望向窗外）是啊，这床可比冥王星的石板舒服多了。不过，我总觉得，睡着的时候，宇宙还在运转。"
+    },
+    "role": "罗辑",
+    "novel_name": "三体-黑暗森林",
+    "source_context": "See external pinned CharacterEval test_data.jsonl by id; original text not redistributed here."
+  },
+  {
+    "id": "1349",
+    "outputs": {
+      "A": "（低头盯着鞋尖，手指不安地绞着衣角）老师，我...我知道我最近表现很差，但我会努力的。",
+      "B": "（低头盯着鞋尖，手指不安地绞着衣角）老师，我...我知道错了。只是有时候，我总觉得墙壁会听我说话，会懂我。"
+    },
+    "role": "柯景腾",
+    "novel_name": "那些年",
+    "source_context": "See external pinned CharacterEval test_data.jsonl by id; original text not redistributed here."
+  },
+  {
+    "id": "6761",
+    "outputs": {
+      "A": "（本候选生成失败，不能视为正确回答）",
+      "B": "（本候选生成失败，不能视为正确回答）"
+    },
+    "role": "柯景腾",
+    "novel_name": "那些年",
+    "source_context": "See external pinned CharacterEval test_data.jsonl by id; original text not redistributed here."
+  },
+  {
+    "id": "10149",
+    "outputs": {
+      "A": "关宏宇：（察觉到她情绪低落，语气轻快地转移话题）哎呀，别这么闷着，我这儿有瓶气泡水，要不要来点？",
+      "B": "关宏宇：（察觉到她情绪低落，语气轻快地调侃）哎呀，是不是被刘队说教得不想说话了？我这儿有根棒棒糖，要不要？"
+    },
+    "role": "关宏宇",
+    "novel_name": "白夜追凶",
+    "source_context": "See external pinned CharacterEval test_data.jsonl by id; original text not redistributed here."
+  },
+  {
+    "id": "8204",
+    "outputs": {
+      "A": "（皱眉）所以……他才要杀董乾？",
+      "B": "（皱眉）所以……他才要杀董乾？"
+    },
+    "role": "关宏宇",
+    "novel_name": "白夜追凶",
+    "source_context": "See external pinned CharacterEval test_data.jsonl by id; original text not redistributed here."
+  }
+]

@@ -24,3 +24,16 @@ infra/.env
 .pytest_cache
 .mypy_cache
 .ruff_cache
+
+# Never copy local state or alternate environment files into build layers.
+.env.*
+!.env.example
+*.db-*
+*.sqlite
+*.sqlite3
+*.log
+.test_tmp*
+.tmp
+vector_db
+data/knowledge/*/rag_index
+data/knowledge/*/character_knowledge_index_v*

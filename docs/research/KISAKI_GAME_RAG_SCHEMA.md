@@ -1,5 +1,7 @@
 # 月社妃游戏 RAG 数据模型 Schema（P1）
 
+> 历史阶段记录：保留本文当时的设计、统计、命令与验收结论。文中的“当前”“尚未”仅指所记阶段；2026-09-11 起请从[现行实现说明](../architecture/CHARACTER_KNOWLEDGE_RETRIEVAL.md)查看当前运行链路。本文不作为重新执行历史脚本或重新批准数据的依据。
+
 - 阶段：P1 统一数据模型
 - 日期：2026-08-24
 - 代码位置：`backend/knowledge/game_rag/models.py`

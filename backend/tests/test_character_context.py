@@ -569,8 +569,9 @@ def test_stage_action_modifies_decision():
 
     # 陌生阶段：行动包含"点到为止"的约束
     assert "不主动打听对方私事" in stranger.action
-    # 亲近阶段：行动包含主动关心与使用记忆
-    assert "主动关心近况" in close.action
+    # 亲近不强迫关心、追问或回忆；仅使用相关记忆。
+    assert "仅在相关时" in close.action
+    assert "主动关心近况" not in close.action
     # 不同阶段的行动策略不同（策略表真正生效）
     assert stranger.action != close.action
     # 情景基础行动保留

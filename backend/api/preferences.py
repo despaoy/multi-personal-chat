@@ -179,12 +179,12 @@ async def sample_from_history(req: SampleFromHistoryRequest,
     try:
         if req.session_id:
             rows = await _execute_sql(
-                "SELECT message, reply, loraName, traceId FROM messages WHERE sessionId=:sid AND reply != '' AND LENGTH(reply) >= :min_len ORDER BY RANDOM() LIMIT :lim",
+                'SELECT message, reply, "loraName", "traceId" FROM messages WHERE "branchId" IS NULL AND "sessionId"=:sid AND reply != \'\' AND LENGTH(reply) >= :min_len ORDER BY RANDOM() LIMIT :lim',
                 {"sid": req.session_id, "min_len": req.min_length, "lim": req.limit},
             )
         else:
             rows = await _execute_sql(
-                "SELECT message, reply, loraName, traceId FROM messages WHERE reply != '' AND LENGTH(reply) >= :min_len ORDER BY RANDOM() LIMIT :lim",
+                'SELECT message, reply, "loraName", "traceId" FROM messages WHERE "branchId" IS NULL AND reply != \'\' AND LENGTH(reply) >= :min_len ORDER BY RANDOM() LIMIT :lim',
                 {"min_len": req.min_length, "lim": req.limit},
             )
         candidates = []

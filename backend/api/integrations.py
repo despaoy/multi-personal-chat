@@ -66,6 +66,8 @@ _PLATFORM_SETTINGS: dict[str, tuple[str, str, bool]] = {
 
 
 class AstrBotMessageRequest(BaseModel):
+    # Explicitly reject unsupported branch requests instead of silently discarding them.
+    branchId: None = None
     platform: Platform
     adapter: str = Field(default="other", max_length=64)
     messageId: str = Field(default="", max_length=256)

@@ -1,151 +1,80 @@
 'use client';
 
-import { Home, MessageSquare, Settings, BrainCircuit, Activity, Database, Bot, Zap, User, LogIn, Terminal, Brain, Cable, ClipboardCheck, FlaskConical, Shuffle, Scale, Users } from 'lucide-react';
+import { useId, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { cn } from '@/lib/utils';
-import { useState, useEffect, memo } from 'react';
+import { Bot, ChevronDown, Search, X } from 'lucide-react';
 import { useSettings } from '@/contexts/SettingsContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { cn } from '@/lib/utils';
+import { navigationGroups, visibleNavigation, isNavigationActive, type NavigationItem } from '@/lib/navigation';
+import { Input } from '@/components/ui/input';
 
-// 时钟独立组件 - 避免每秒重渲染导致导航 Link 的 RSC 预取被中断
-const StatusBar = memo(function StatusBar() {
-  const { t, formatTime } = useSettings();
-  const [currentTime, setCurrentTime] = useState<string>('');
-
-  useEffect(() => {
-    const updateTime = () => setCurrentTime(formatTime(new Date()));
-    updateTime();
-    const interval = setInterval(updateTime, 1000);
-    return () => clearInterval(interval);
-  }, [formatTime]);
-
+function NavigationLink({ item, pathname, onNavigate }: { item: NavigationItem; pathname: string; onNavigate?: () => void }) {
+  const { t } = useSettings();
+  const active = isNavigationActive(pathname, item.href);
   return (
-    <div className="border-t p-4">
-      <div className="rounded-lg bg-muted/50 p-4">
-        <div className="flex items-center gap-2 text-sm font-medium">
-          <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
-          <span>{t('sidebar.status')}</span>
-        </div>
-        <p className="mt-1 text-xs text-muted-foreground">
-          {t('sidebar.lastCheck')}: {currentTime || '--:--:--'}
-        </p>
-      </div>
-    </div>
+    <Link href={item.href} prefetch={false} onClick={onNavigate} aria-current={active ? 'page' : undefined}
+      className={cn('flex min-h-10 items-center rounded-lg px-3 py-2 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        active ? 'bg-primary/10 font-medium text-primary' : 'text-muted-foreground hover:bg-sidebar-accent hover:text-foreground')}>
+      {t(item.translationKey, item.label)}
+    </Link>
   );
-});
+}
 
-// 导航项独立组件 - 结合 memo 避免时钟引起的级联重渲染
-const NavItem = memo(function NavItem({
-  href, icon: Icon, name, isActive,
-}: {
-  href: string;
-  icon: React.ComponentType<{ className?: string }>;
-  name: string;
-  isActive: boolean;
+function NavigationGroup({ label, items, pathname, searching, onNavigate }: {
+  label: string; items: NavigationItem[]; pathname: string; searching: boolean; onNavigate?: () => void;
 }) {
+  const [expanded, setExpanded] = useState(items.some(item => isNavigationActive(pathname, item.href)));
+  const open = searching || expanded;
+  const id = useId();
   return (
-    <Link
-      href={href}
-      prefetch={false}
-      className={cn(
-        'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
-        isActive
-          ? 'bg-sidebar-accent text-sidebar-accent-foreground'
-          : 'text-sidebar-foreground hover:bg-sidebar-accent/50'
-      )}
-    >
-      <Icon className="h-5 w-5" />
-      {name}
-    </Link>
+    <section>
+      <button type="button" onClick={() => setExpanded(value => !value)} aria-expanded={open} aria-controls={id}
+        className="flex min-h-11 w-full items-center justify-between rounded-lg px-3 text-sm font-medium hover:bg-sidebar-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+        {label}<ChevronDown aria-hidden="true" className={cn('h-4 w-4 text-muted-foreground transition-transform', open && 'rotate-180')} />
+      </button>
+      <div id={id} hidden={!open} className="ml-3 space-y-0.5 border-l pl-2">
+        {items.map(item => <NavigationLink key={item.href} item={item} pathname={pathname} onNavigate={onNavigate} />)}
+      </div>
+    </section>
   );
-});
+}
 
-// 认证状态区域 - 独立组件，仅在客户端挂载后渲染，避免hydration不匹配
-const AuthSection = memo(function AuthSection() {
-  const { user } = useAuth();
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => { setMounted(true); }, []);
-
-  if (!mounted) return null;
-
-  return user ? (
-    <div className="mt-auto px-3 py-2 text-xs text-muted-foreground flex items-center gap-2">
-      <User className="h-3 w-3" />
-      <span>{user.username}</span>
-    </div>
-  ) : (
-    <Link
-      href="/login"
-      prefetch={false}
-      className="mt-auto flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-    >
-      <LogIn className="h-4 w-4" />
-      <span>登录</span>
-    </Link>
-  );
-});
-
-export function Sidebar() {
+export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
   const { t } = useSettings();
   const { user } = useAuth();
-
-  // M3 fix: 为涉及模型/配置/实验管理的敏感页面标记 adminOnly，
-  // 非管理员用户在侧栏看不到这些入口。注意：后端已对这些端点强制 admin 校验，
-  // 此处仅为 UX 层过滤 + 纵深防御，并非唯一鉴权手段。
-  const isAdmin = user?.role === 'admin';
-
-  const navigation: Array<{
-    name: string;
-    href: string;
-    icon: React.ComponentType<{ className?: string }>;
-    adminOnly?: boolean;
-  }> = [
-    { name: t('nav.dashboard'), href: '/', icon: Home, adminOnly: true },
-    { name: t('nav.history'), href: '/history', icon: MessageSquare, adminOnly: true },
-    { name: t('nav.training'), href: '/training', icon: Zap, adminOnly: true },
-    { name: t('nav.lora'), href: '/lora', icon: BrainCircuit, adminOnly: true },
-    { name: '角色与记忆', href: '/characters', icon: Users, adminOnly: true },
-    { name: t('nav.intentTraining'), href: '/intent-training', icon: Brain, adminOnly: true },
-    { name: t('nav.monitor'), href: '/monitor', icon: Activity, adminOnly: true },
-    { name: '平台连接', href: '/integrations', icon: Cable, adminOnly: true },
-    { name: t('nav.knowledge'), href: '/knowledge', icon: Database, adminOnly: true },
-    { name: t('nav.evaluation'), href: '/evaluation', icon: ClipboardCheck, adminOnly: true },
-    { name: t('nav.experiments'), href: '/experiments', icon: FlaskConical, adminOnly: true },
-    { name: t('nav.router'), href: '/router', icon: Shuffle, adminOnly: true },
-    { name: t('nav.preferences'), href: '/preferences', icon: Scale, adminOnly: true },
-    { name: t('nav.claw'), href: '/claw', icon: Terminal, adminOnly: true },
-    { name: t('nav.settings'), href: '/settings', icon: Settings, adminOnly: true },
-  ];
-
-  // 非管理员过滤掉 adminOnly 项
-  const visibleNavigation = isAdmin ? navigation : navigation.filter((item) => !item.adminOnly);
-
+  const [query, setQuery] = useState('');
+  const items = visibleNavigation(user?.role === 'admin', query, t);
   return (
-    <div className="flex h-full w-64 flex-col border-r bg-sidebar">
-      <div className="flex h-16 items-center border-b px-6">
-        <div className="flex items-center gap-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-            <Bot className="h-5 w-5 text-primary-foreground" />
-          </div>
-          <span className="text-lg font-semibold">{t('sidebar.title')}</span>
+    <aside className="flex h-full w-full flex-col bg-sidebar text-sidebar-foreground">
+      <div className="flex h-16 shrink-0 items-center gap-3 px-5">
+        <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary text-primary-foreground"><Bot className="h-5 w-5" aria-hidden="true" /></div>
+        <span className="text-sm font-semibold tracking-tight">{t('sidebar.title')}</span>
+      </div>
+      <div className="px-3 pb-3">
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-muted-foreground" aria-hidden="true" />
+          <Input value={query} onChange={event => setQuery(event.target.value)}
+            placeholder={t('navigation.search', '查找功能…')} aria-label={t('navigation.search', '查找功能…')}
+            className="h-10 border-transparent bg-muted/60 pl-9 pr-9 shadow-none focus-visible:border-input" />
+          {query && <button type="button" aria-label={t('navigation.clear', '清空搜索')} onClick={() => setQuery('')} className="absolute right-1 top-1 rounded-md p-2 hover:bg-accent"><X className="h-4 w-4" /></button>}
         </div>
       </div>
-      <nav className="flex-1 space-y-1 px-3 py-4">
-        {visibleNavigation.map((item) => (
-          <NavItem
-            key={item.href}
-            href={item.href}
-            icon={item.icon}
-            name={item.name}
-            isActive={pathname === item.href}
-          />
-        ))}
-        <AuthSection />
+      <nav aria-label={t('navigation.main', '主导航')} className="min-h-0 flex-1 space-y-4 overflow-y-auto px-3 pb-6">
+        {navigationGroups.map(group => {
+          const entries = items.filter(item => item.group === group.id);
+          if (!entries.length) return null;
+          if (group.id === 'workspace') return <section key={group.id} className="space-y-1">
+            <p className="px-3 pb-1 text-xs text-muted-foreground">{t(group.translationKey, group.label)}</p>
+            {entries.map(item => <NavigationLink key={item.href} item={item} pathname={pathname} onNavigate={onNavigate} />)}
+          </section>;
+          return <NavigationGroup key={`${group.id}:${pathname}`} label={t(group.translationKey, group.label)} items={entries} pathname={pathname} searching={!!query.trim()} onNavigate={onNavigate} />;
+        })}
+        {!items.length && <p role="status" className="px-3 py-6 text-sm text-muted-foreground">{t('navigation.noResults', '没有匹配的功能，试试“记忆”或“训练”。')}</p>}
       </nav>
-      <StatusBar />
-    </div>
+      <div className="border-t px-6 py-4 text-xs text-muted-foreground">{t('navigation.hint', '常用功能在上方，其余按需展开。')}</div>
+    </aside>
   );
 }

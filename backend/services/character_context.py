@@ -15,21 +15,27 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
 from character.context_builder import (
     build_user_scope,
-    compile_character_context,
+    compile_dynamic_context,
+    compile_profile_context,
+    compile_reference_context,
+    compile_relationship_style,
 )
+from character.contextual_policy import ContextualDecisionPolicy, PolicyOutcome, create_contextual_policy
+from character.conversation_flow import compile_continuity, compile_rhythm
 from character.decision_policy import DecisionPolicy
+from character.evidence_selector import ContextualEvidenceSelector, SelectionOutcome, create_evidence_selector
 from character.memory_extractor import (
     extract_memories,
     extract_preferred_address,
-    next_relationship_stage,
+    memory_write_allowed,
 )
 from character.memory_service import CharacterMemoryService
 from character.models import (
-    CharacterContext,
     CompiledCharacterContext,
     DecisionPlan,
     InteractionState,
@@ -38,7 +44,15 @@ from character.models import (
     SituationState,
     UserScope,
 )
+from character.natural_relationship import (
+    compile_notes,
+    load_notes,
+    parse_command,
+    relationship_write_blocked,
+    save_note,
+)
 from character.output_guard import ReplyGuard, build_reply_guard
+from character.rule_memory_writer import write_rule_memory
 from character.semantic_state_estimator import SemanticReviewOutcome, SemanticStateEstimator
 from character.situation_analyzer import (
     RESPONSE_GOALS,
@@ -105,6 +119,13 @@ class PreparedCharacterTurn:
     semantic_review_rule_confidence: float = 0.0
     semantic_review_confidence: float | None = None
     semantic_review_fallback_reason: str = ""
+    memory_selection_status: str = "disabled"
+    memory_selection_reason: str = ""
+    memory_selection_candidate_count: int = 0
+    memory_selection_latency_ms: float = 0.0
+    contextual_policy_status: str = "disabled"
+    contextual_policy_reason: str = ""
+    contextual_policy_latency_ms: float = 0.0
 
 
 @dataclass
@@ -133,6 +154,8 @@ class CharacterContextService:
         situation_analyzer: SituationAnalyzer | None = None,
         decision_policy: DecisionPolicy | None = None,
         semantic_estimator: SemanticStateEstimator | None = None,
+        memory_selector: ContextualEvidenceSelector | None = None,
+        contextual_policy: ContextualDecisionPolicy | None = None,
     ) -> None:
         self._profiles = profile_registry
         self._memory_repo = memory_repository
@@ -141,6 +164,8 @@ class CharacterContextService:
         self._situation_analyzer = situation_analyzer or SituationAnalyzer()
         self._decision_policy = decision_policy or DecisionPolicy()
         self._semantic_estimator = semantic_estimator
+        self._memory_selector = memory_selector or create_evidence_selector()
+        self._contextual_policy = contextual_policy or create_contextual_policy()
 
     async def prepare_turn(self, turn: TurnInput, character_id: str) -> PreparedCharacterTurn:
         """加载本轮全部上下文并编译成模型输入。
@@ -148,6 +173,7 @@ class CharacterContextService:
         任何用户范围字段非法都会抛 ValueError（调用方应降级为
         无角色上下文的旧行为，而不是让整条消息失败）。
         """
+        received_at = datetime.now(timezone.utc)
         user_scope = build_user_scope(
             platform=turn.platform,
             adapter=turn.adapter,
@@ -156,12 +182,31 @@ class CharacterContextService:
             conversation_type=turn.conversation_type,
         )
 
-        profile, relationship_record, memories, history = await asyncio.gather(
-            asyncio.to_thread(self._profiles.get_profile, character_id),
-            self._memory_repo.get_relationship_record(character_id, user_scope),
-            self._memory_service.load_relevant_memories(character_id, user_scope, turn.message),
-            self._load_history(turn, user_scope),
-        )
+        if self._memory_selector is not None:
+            profile, relationship_record, history, relationship_notes = await asyncio.gather(
+                asyncio.to_thread(self._profiles.get_profile, character_id),
+                self._memory_repo.get_relationship_record(character_id, user_scope),
+                self._load_history(turn, user_scope),
+                self._load_relationship_notes(character_id, user_scope),
+            )
+            # Context is needed before recall, not only after an arbitrary top-k.
+            # Assistant guesses are excluded from query expansion; both speakers
+            # remain available to the final semantic selector as untrusted data.
+            recent_user_text = "\n".join(
+                item.get("content", "")[-600:] for item in history[-6:]
+                if item.get("role") == "user" and isinstance(item.get("content"), str)
+            )[-1200:]
+            memories = await self._load_memory_candidates(
+                character_id, user_scope, turn.message, retrieval_context=recent_user_text, reference_time=received_at,
+            )
+        else:
+            profile, relationship_record, memories, history, relationship_notes = await asyncio.gather(
+                asyncio.to_thread(self._profiles.get_profile, character_id),
+                self._memory_repo.get_relationship_record(character_id, user_scope),
+                self._load_memory_candidates(character_id, user_scope, turn.message),
+                self._load_history(turn, user_scope),
+                self._load_relationship_notes(character_id, user_scope),
+            )
         memories_items, memory_candidates = memories
         from repositories.character_memory import relationship_from_record
 
@@ -219,9 +264,37 @@ class CharacterContextService:
                 semantic_review_confidence = semantic_outcome.review_confidence
                 semantic_review_fallback_reason = semantic_outcome.fallback_reason
                 _observe_semantic_review(semantic_outcome)
+        memory_selection = SelectionOutcome()
+        if self._memory_selector is not None:
+            memory_selection = await self._memory_selector.select(
+                turn.message, memories_items, history=effective_history,
+                profile=profile, interaction=interaction,
+                reference_time=received_at,
+            )
+            memories_items = memory_selection.memories
+            logger.info(
+                "Contextual memory selection status=%s reason=%s candidates=%d selected=%d latency_ms=%.1f",
+                memory_selection.status, memory_selection.reason, memory_selection.candidate_count,
+                len(memories_items), memory_selection.latency_ms,
+            )
         situation_type = (
             interaction.primary_situation if interaction.primary_situation in SITUATION_LABELS else SITUATION_DAILY
         )
+
+        # Budget the evidence before selecting a recall action. Selection is
+        # not injection: complete packets can be too large for the final prompt.
+        # Compile once so policy and generation see exactly the same evidence.
+        reference_context, injected_memory_ids = compile_reference_context(
+            tuple(memories_items), preferred_address=relationship.preferred_address,
+            complete_evidence=self._memory_selector is not None,
+        )
+
+        note_context = compile_notes(relationship_notes, turn.message, received_at)
+        if note_context:
+            reference_context = "\n\n".join(filter(None, (reference_context, note_context)))
+        continuity = compile_continuity(effective_history, turn.message)
+        if continuity:
+            reference_context = "\n\n".join(filter(None, (reference_context, continuity)))
 
         situation = SituationState(
             # 系统提示词中只放固定分类标签，用户消息原文绝不进入
@@ -242,22 +315,33 @@ class CharacterContextService:
                 relationship,
                 situation_type,
                 interaction=interaction if interaction.has_soft_context else None,
-                has_relevant_memory=bool(memories_items),
+                has_relevant_memory=bool(injected_memory_ids),
             )
         except Exception:
             logger.warning("互动策略评分失败，按旧版角色策略继续", exc_info=True)
             decision = self._decision_policy.decide(profile, relationship, situation_type)
 
-        context = CharacterContext(
-            profile=profile,
-            user_scope=user_scope,
-            relationship=relationship,
-            situation=situation,
-            interaction=interaction,
-            memories=memories_items,
-            decision=decision,
+        policy_outcome = PolicyOutcome(decision)
+        if self._contextual_policy is not None:
+            policy_outcome = await self._contextual_policy.refine(
+                decision, query=turn.message, history=effective_history, profile=profile,
+                relationship=relationship, interaction=interaction, has_relevant_memory=bool(injected_memory_ids),
+            )
+            decision = policy_outcome.plan
+            logger.info(
+                "Contextual policy status=%s reason=%s latency_ms=%.1f",
+                policy_outcome.status, policy_outcome.reason, policy_outcome.latency_ms,
+            )
+        compiled = CompiledCharacterContext(
+            profile_context=compile_profile_context(profile),
+            dynamic_context="\n\n".join(filter(None, (
+                compile_dynamic_context(relationship, situation, decision, interaction),
+                compile_relationship_style(profile),
+                compile_rhythm(effective_history, turn.message, interaction),
+            ))),
+            reference_context=reference_context,
+            used_memory_ids=injected_memory_ids,
         )
-        compiled = compile_character_context(context)
 
         interaction_count = int((relationship_record or {}).get("interaction_count") or 0)
 
@@ -268,6 +352,13 @@ class CharacterContextService:
             history=effective_history,
             relationship=relationship,
             memory_candidates=memory_candidates,
+            memory_selection_status=memory_selection.status,
+            memory_selection_reason=memory_selection.reason,
+            memory_selection_candidate_count=memory_selection.candidate_count,
+            memory_selection_latency_ms=memory_selection.latency_ms,
+            contextual_policy_status=policy_outcome.status,
+            contextual_policy_reason=policy_outcome.reason,
+            contextual_policy_latency_ms=policy_outcome.latency_ms,
             interaction_count=interaction_count,
             reply_guard=build_reply_guard(
                 profile,
@@ -275,7 +366,7 @@ class CharacterContextService:
                 effective_history,
                 interaction,
                 decision,
-                has_relevant_memory=bool(memories_items),
+                has_relevant_memory=bool(injected_memory_ids),
             ),
             interaction=interaction,
             decision=decision,
@@ -318,14 +409,21 @@ class CharacterContextService:
         # 2. 提取记忆候选。启用 LLM 时只提交后台复核任务；未启用时
         # 保留原规则写入，方便离线开发和向后兼容。
         try:
-            extracted = extract_memories(turn.message)
+            note_command = parse_command(turn.message)
+            extracted = () if note_command else extract_memories(turn.message)
             from character.memory_llm import (
                 classify_memory_write_mode,
                 get_memory_enrichment_scheduler,
             )
 
             scheduler = get_memory_enrichment_scheduler()
-            if scheduler.enabled:
+            if note_command:
+                saved = await save_note(self._memory_repo, prepared.character_id, prepared.user_scope,
+                                        note_command, source_message_id or None)
+                outcome.memory_enrichment_status = "relationship_note_saved" if saved else "no_change"
+            elif relationship_write_blocked(turn.message):
+                outcome.memory_enrichment_status = "skipped_fiction_or_note"
+            elif scheduler.enabled:
                 outcome.memory_enrichment_mode = classify_memory_write_mode(turn.message)
                 outcome.memory_enrichment_scheduled = scheduler.schedule(
                     repository=self._memory_repo,
@@ -350,19 +448,11 @@ class CharacterContextService:
             else:
                 outcome.memory_enrichment_mode = "rules"
                 for item in extracted[:4]:
-                    await self._memory_repo.add_or_update_memory(
-                        prepared.character_id,
-                        prepared.user_scope,
-                        MemoryItem(
-                            memory_id="",
-                            memory_type=item.memory_type,  # type: ignore[arg-type]
-                            content=item.content,
-                            importance=item.importance,
-                        ),
-                        memory_key=item.memory_key,
-                        source_message_id=source_message_id or None,
+                    saved = await write_rule_memory(
+                        self._memory_repo, prepared.character_id, prepared.user_scope,
+                        item, source_message_id or None,
                     )
-                    outcome.new_memories += 1
+                    outcome.new_memories += int(saved)
                 outcome.memory_enrichment_status = "saved" if outcome.new_memories else "no_change"
         except Exception:
             logger.warning(
@@ -371,18 +461,25 @@ class CharacterContextService:
                 exc_info=True,
             )
 
-        # 3. 关系阶段推进与称呼偏好
+        # 3. 关系起点仅手动设置；次数只是统计，不自动升温。
         try:
-            stage = next_relationship_stage(prepared.relationship.stage, outcome.interaction_count)
-            address = extract_preferred_address(turn.message)
-            if stage != prepared.relationship.stage or address:
+            stage = prepared.relationship.stage
+            address = (extract_preferred_address(turn.message)
+                       if memory_write_allowed(turn.message) and not relationship_write_blocked(turn.message) else None)
+            if address:
+                from repositories.character_memory import relationship_from_record
+
+                current = relationship_from_record(await self._memory_repo.get_relationship_record(
+                    prepared.character_id, prepared.user_scope,
+                ))
+                stage = current.stage
                 await self._memory_repo.upsert_relationship(
                     prepared.character_id,
                     prepared.user_scope,
                     RelationshipState(
                         stage=stage,  # type: ignore[arg-type]
                         preferred_address=address or prepared.relationship.preferred_address,
-                        summary=prepared.relationship.summary,
+                        summary=current.summary,
                     ),
                 )
             outcome.stage = stage
@@ -395,6 +492,24 @@ class CharacterContextService:
             )
 
         return outcome
+
+    async def _load_relationship_notes(self, character_id, user_scope):
+        try:
+            return await load_notes(self._memory_repo, character_id, user_scope)
+        except Exception:
+            logger.warning("关系备忘录读取失败", exc_info=True)
+            return []
+
+    async def _load_memory_candidates(
+        self, character_id: str, user_scope: UserScope, query: str,
+        *, retrieval_context: str = "", reference_time: datetime | None = None,
+    ) -> tuple[tuple[MemoryItem, ...], int]:
+        if self._memory_selector is not None:
+            return await self._memory_service.load_relevant_memories(
+                character_id, user_scope, query, for_contextual_selection=True, retrieval_context=retrieval_context,
+                reference_time=reference_time,
+            )
+        return await self._memory_service.load_relevant_memories(character_id, user_scope, query)
 
     async def _load_history(self, turn: TurnInput, user_scope: UserScope) -> list[dict[str, str]]:
         """调用方带现场历史时直接使用，否则从数据库读取。"""

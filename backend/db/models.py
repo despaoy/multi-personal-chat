@@ -92,6 +92,7 @@ class Message(Base):
         Index("idx_messages_platform_conversation", "platform", "conversationId", "createdAt"),
         Index("idx_messages_source_dedup", "platform", "adapter", "sourceMessageId"),
         Index("idx_messages_created_at", "createdAt"),
+        Index("idx_messages_branch", "branchId", "createdAt"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -114,6 +115,9 @@ class Message(Base):
     loraName: Mapped[Optional[str]] = mapped_column(Text)
     costTime: Mapped[Optional[float]] = mapped_column(Float)
     createdAt: Mapped[str] = mapped_column(Text, nullable=False)
+    # 可空叙事分支作用域：NULL 表示正史消息；非空为 narrative_branches.id。
+    # 正史读取必须过滤 branchId IS NULL，分支读取必须按具体 branchId 过滤。
+    branchId: Mapped[Optional[str]] = mapped_column(Text)
 
 
 # ============================================
@@ -704,5 +708,93 @@ class CharacterMemory(Base):
     valid_from: Mapped[Optional[str]] = mapped_column(Text)
     valid_to: Mapped[Optional[str]] = mapped_column(Text)
     observed_at: Mapped[Optional[str]] = mapped_column(Text)
+    created_at: Mapped[str] = mapped_column(Text, nullable=False)
+    updated_at: Mapped[str] = mapped_column(Text, nullable=False)
+
+
+# ============================================
+# 29. 叙事分支表（正史/反事实分支隔离）
+# ============================================
+
+
+class NarrativeBranch(Base):
+    """用户创建的"假如某事没有发生"式剧情分支。
+
+    分支归属 Web 登录用户（owner_user_id），绑定一个角色
+    （character_id，即 LoRA 显式映射的人物画像 ID）。正史（canonical）
+    不对应任何分支行；分支状态与正史、与其他分支完全隔离。
+
+    revision 是乐观并发版本：归档、确认事实等状态变更必须携带
+    读取时的 revision 做 CAS，防止并发生成/确认/归档互相覆盖。
+    """
+
+    __tablename__ = "narrative_branches"
+    __table_args__ = (
+        Index("idx_narrative_branches_owner", "owner_user_id", "status", "updated_at"),
+        Index("idx_narrative_branches_character", "character_id"),
+    )
+
+    id: Mapped[str] = mapped_column(Text, primary_key=True)
+    owner_user_id: Mapped[str] = mapped_column(Text, nullable=False)
+    character_id: Mapped[str] = mapped_column(Text, nullable=False)
+    title: Mapped[str] = mapped_column(Text, nullable=False)
+    initial_hypothesis: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(Text, nullable=False, server_default="active")
+    revision: Mapped[int] = mapped_column(Integer, nullable=False, server_default="1")
+    created_at: Mapped[str] = mapped_column(Text, nullable=False)
+    updated_at: Mapped[str] = mapped_column(Text, nullable=False)
+
+
+class BranchAssertion(Base):
+    """分支事实断言：作用域/来源/生命周期三个维度分离。
+
+    - 作用域：branch_id（正史事实不进入本表，仍由只读原作索引提供）；
+    - 来源：source_type ∈ user_hypothesis / user_confirmation /
+      model_proposal（模型自报的 confidence 不作为生效依据）；
+    - 生命周期：status ∈ pending / active / rejected / retracted。
+
+    assertion_kind 至少区分 premise（初始假设，保留原文，不强行拆成
+    可靠三元组，无法可靠解析时标记为未结构化前提）/ event / relation /
+    derived_claim。subject/predicate/object 允许为空串以承载未结构化
+    前提原文（此时 object 保存原文）。
+    """
+
+    __tablename__ = "branch_assertions"
+    __table_args__ = (
+        Index("idx_branch_assertions_branch_status", "branch_id", "status", "updated_at"),
+    )
+
+    id: Mapped[str] = mapped_column(Text, primary_key=True)
+    branch_id: Mapped[str] = mapped_column(
+        Text, ForeignKey("narrative_branches.id", ondelete="CASCADE"), nullable=False
+    )
+    subject: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
+    predicate: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
+    object: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
+    source_type: Mapped[str] = mapped_column(Text, nullable=False)
+    assertion_kind: Mapped[str] = mapped_column(Text, nullable=False, server_default="event")
+    source_message_id: Mapped[Optional[str]] = mapped_column(Text)
+    source_assertion_ids: Mapped[str] = mapped_column(Text, nullable=False, server_default="[]")
+    status: Mapped[str] = mapped_column(Text, nullable=False, server_default="pending")
+    created_at: Mapped[str] = mapped_column(Text, nullable=False)
+    updated_at: Mapped[str] = mapped_column(Text, nullable=False)
+
+
+class BranchState(Base):
+    """分支内会话状态：关系阶段、互动计数、分支摘要。
+
+    角色稳定画像跨正史/分支共享；互动次数、关系变化和剧情摘要必须
+    分支隔离，因此不写入 character_relationships（正史链路保持不变）。
+    """
+
+    __tablename__ = "branch_states"
+
+    branch_id: Mapped[str] = mapped_column(
+        Text, ForeignKey("narrative_branches.id", ondelete="CASCADE"), primary_key=True
+    )
+    relationship_stage: Mapped[str] = mapped_column(Text, nullable=False, server_default="stranger")
+    preferred_address: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
+    summary: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
+    interaction_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     created_at: Mapped[str] = mapped_column(Text, nullable=False)
     updated_at: Mapped[str] = mapped_column(Text, nullable=False)

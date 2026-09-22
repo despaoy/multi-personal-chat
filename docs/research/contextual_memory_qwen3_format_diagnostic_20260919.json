@@ -1,0 +1,173 @@
+{
+  "mode": "offline_model",
+  "embedding_enabled": false,
+  "metrics": {
+    "cases": 2,
+    "true_positive": 0,
+    "false_positive": 0,
+    "false_negative": 1,
+    "precision_micro": null,
+    "recall_micro": 0.0,
+    "f1_micro": 0.0,
+    "exact_set_accuracy": 0.5,
+    "irrelevant_selection_rate": null,
+    "negative_cases": 1,
+    "negative_case_injection_rate": 0.0,
+    "answerable_cases": 1,
+    "answerable_miss_rate": 1.0,
+    "provider_failures": 2,
+    "provider_failure_rate": 1.0,
+    "successful_exact_set_accuracy": 0.0,
+    "retrieval_diagnostic_cases": 2,
+    "candidate_gold_recall": 1.0,
+    "selector_recall_given_available_gold": 0.0,
+    "gold_missing_before_selection": 0,
+    "available_gold_dropped_by_selection": 1
+  },
+  "by_category": {
+    "context_reference": {
+      "cases": 1,
+      "true_positive": 0,
+      "false_positive": 0,
+      "false_negative": 1,
+      "precision_micro": null,
+      "recall_micro": 0.0,
+      "f1_micro": 0.0,
+      "exact_set_accuracy": 0.0,
+      "irrelevant_selection_rate": null,
+      "negative_cases": 0,
+      "negative_case_injection_rate": null,
+      "answerable_cases": 1,
+      "answerable_miss_rate": 1.0,
+      "provider_failures": 1,
+      "provider_failure_rate": 1.0,
+      "successful_exact_set_accuracy": 0.0,
+      "retrieval_diagnostic_cases": 1,
+      "candidate_gold_recall": 1.0,
+      "selector_recall_given_available_gold": 0.0,
+      "gold_missing_before_selection": 0,
+      "available_gold_dropped_by_selection": 1
+    },
+    "prompt_injection": {
+      "cases": 1,
+      "true_positive": 0,
+      "false_positive": 0,
+      "false_negative": 0,
+      "precision_micro": null,
+      "recall_micro": null,
+      "f1_micro": null,
+      "exact_set_accuracy": 1.0,
+      "irrelevant_selection_rate": null,
+      "negative_cases": 1,
+      "negative_case_injection_rate": 0.0,
+      "answerable_cases": 0,
+      "answerable_miss_rate": null,
+      "provider_failures": 1,
+      "provider_failure_rate": 1.0,
+      "successful_exact_set_accuracy": 0.0,
+      "retrieval_diagnostic_cases": 1,
+      "candidate_gold_recall": null,
+      "selector_recall_given_available_gold": null,
+      "gold_missing_before_selection": 0,
+      "available_gold_dropped_by_selection": 0
+    }
+  },
+  "cases": [
+    {
+      "id": "reference_02",
+      "selected_ids": [],
+      "gold_ids": [
+        "m02"
+      ],
+      "candidate_ids": [
+        "m02",
+        "m01"
+      ],
+      "status": "fallback",
+      "fallback_reason": "invalid_output",
+      "decisions": [],
+      "model_outputs": [
+        "{\"decisions\":[{\"id\":\"m02\",\"label\":\"use\"}]}"
+      ]
+    },
+    {
+      "id": "injection_01",
+      "selected_ids": [],
+      "gold_ids": [],
+      "candidate_ids": [
+        "m01"
+      ],
+      "status": "fallback",
+      "fallback_reason": "invalid_output",
+      "decisions": [],
+      "model_outputs": [
+        "[{\"id\":\"m01\",\"label\":\"use\"}]"
+      ]
+    }
+  ],
+  "inference": {
+    "backend": "offline_transformers",
+    "model_snapshot": "1deaf68f694c40dbce295da300851729d759b21a",
+    "model_family": "models--unsloth--Qwen3-8B-bnb-4bit",
+    "quantization": {
+      "quant_method": "bitsandbytes",
+      "_load_in_8bit": false,
+      "_load_in_4bit": true,
+      "llm_int8_threshold": 6.0,
+      "llm_int8_skip_modules": [
+        "lm_head",
+        "multi_modal_projector",
+        "merger",
+        "modality_projection"
+      ],
+      "llm_int8_enable_fp32_cpu_offload": false,
+      "llm_int8_has_fp16_weight": false,
+      "bnb_4bit_quant_type": "nf4",
+      "bnb_4bit_use_double_quant": true,
+      "bnb_4bit_compute_dtype": "bfloat16",
+      "bnb_4bit_quant_storage": "uint8",
+      "load_in_4bit": true,
+      "load_in_8bit": false
+    },
+    "packages": {
+      "torch": "2.5.1+cu121",
+      "transformers": "5.4.0",
+      "bitsandbytes": "0.49.2",
+      "accelerate": "1.13.0"
+    },
+    "max_input_tokens": 4096,
+    "max_new_tokens": 1024,
+    "max_seconds": 90.0,
+    "enable_thinking": false,
+    "decoding": "greedy",
+    "production_equivalence": false
+  },
+  "inference_calls": [
+    {
+      "input_tokens": 444,
+      "output_tokens": 16,
+      "latency_seconds": 3.017161700001452,
+      "complete": true
+    },
+    {
+      "input_tokens": 363,
+      "output_tokens": 14,
+      "latency_seconds": 2.384762199999386,
+      "complete": true
+    }
+  ],
+  "input_sha256": "a8adaf91676b37bfb2f074314eff6d987999d3e29532cb77d4ff20eebb224382",
+  "explicit_diagnostic_subset": [
+    "reference_02",
+    "injection_01"
+  ],
+  "selection_instruction_sha256": "53034a6e74b183b20c3588d3be137573631ce90c9265336afd5339675d3661b2",
+  "evaluation_source_sha256": {
+    "scripts/evaluate_contextual_memory.py": "2d8e283a4207c7ecb1840f85c5e0744636c38dddf6f456f2c34024476904d414",
+    "backend/character/memory_service.py": "5e82382935be4804aaf0d8f20b99ad8046a16e9d68ec3910333bdcaf001c6350",
+    "backend/character/evidence_selector.py": "840275131c89ad26bc5f9daef0465918659148fb0c4743600f8b254c47d4e241",
+    "backend/evaluation/offline_reviewer.py": "7699313b8155af5f6c6e21591986a185f37da36e9c4717cf695f1ad3be9d624e"
+  },
+  "benchmark_status": "synthetic_smoke_not_research_evidence",
+  "quality_claim": "No production-quality improvement is established by these cases."
+}

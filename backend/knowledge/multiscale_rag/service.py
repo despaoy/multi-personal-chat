@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import os
 import re
 from typing import TYPE_CHECKING, Any
 
 from knowledge.retrieval_core.query import QueryAnalysis, QueryAnalyzer
 from knowledge.retrieval_core.rerank import PipelineReranker
 from knowledge.retrieval_core.retrieval import HybridRetriever, RetrievalCandidate
+
+from .visibility import KnowledgeBoundary, visible_to
 
 if TYPE_CHECKING:
     from .source_text import OriginalTextExtractor
@@ -70,8 +73,10 @@ def rerank_with_title_frames(
     top_k: int,
     reranker: PipelineReranker,
 ) -> list[RetrievalCandidate]:
-    """Shared deterministic rerank plus generic quoted-title alignment."""
+    """Preserve semantic ordering; title bonuses apply only to rule fallback."""
     ranked = reranker.rerank(analysis, candidates, top_k=max(top_k * 4, 20))
+    if ranked and all(candidate.rerank_method == "cross_encoder" for candidate in ranked):
+        return ranked[:top_k]
     quoted = [match.strip() for match in re.findall(r"《([^》]{1,80})》", analysis.original_query) if match.strip()]
     query_cn = "".join(re.findall(r"[\u4e00-\u9fff]", analysis.normalized_query or analysis.original_query))
     query_bigrams = {query_cn[index : index + 2] for index in range(max(0, len(query_cn) - 1))}
@@ -98,12 +103,19 @@ class RoutedMultiScaleService:
         *,
         all_documents: list,
         source_extractor: OriginalTextExtractor | None = None,
+        reranker: PipelineReranker | None = None,
     ) -> None:
         self.config = config
         self.indexes = indexes
         self.analyzer = QueryAnalyzer([config])
         self.retrievers = {key: HybridRetriever(config, index, embedding_provider) for key, index in indexes.items()}
-        self.reranker = PipelineReranker(cross_encoder_enabled=False)
+        # Independent opt-in: the generic KB switch must not silently change
+        # character retrieval. The first real dev ablation regressed on raw text.
+        enabled = os.getenv("CHARACTER_RAG_RERANKER_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}
+        self.reranker = reranker or PipelineReranker(
+            cross_encoder_enabled=enabled,
+            text_view=os.getenv("CHARACTER_RAG_RERANK_TEXT_VIEW", "content"),
+        )
         self.extractor = source_extractor
         self.by_id = {doc.id: doc for doc in all_documents}
         self.evidence_by_parent = {
@@ -112,13 +124,24 @@ class RoutedMultiScaleService:
             if doc.document_type == "evidence" and doc.metadata.get("parent_id")
         }
 
-    def retrieve(self, query: str, *, top_k: int = 5, raw_text: bool = False) -> dict[str, Any]:
+    def retrieve(
+        self, query: str, *, top_k: int = 5, raw_text: bool = False,
+        knowledge_boundary: KnowledgeBoundary | None = None,
+    ) -> dict[str, Any]:
+        if isinstance(top_k, bool) or not isinstance(top_k, int) or top_k < 1:
+            raise ValueError("top_k must be a positive integer")
         analysis = analyze_explicit_domain(self.analyzer, self.config.domain_id, query)
         broad = any(word in query for word in _BROAD_WORDS)
         route = frozenset({"story", "scene"}) if broad else choose_card_types(analysis, query)
         retriever = self.retrievers.get(route) or self.retrievers[CARD_TYPES]
         recall_k = max(top_k * 12, 60)
+        if knowledge_boundary is not None:
+            # Until visibility-aware ANN indexes are built, recall the complete
+            # route so hidden documents cannot exhaust the pre-filter top-k.
+            # This opt-in correctness path is deliberately not a latency claim.
+            recall_k = max(recall_k, retriever.index.count())
         recalled = retriever.search(analysis, top_k=recall_k, recall_k=recall_k, mode="hybrid")
+        recalled = [candidate for candidate in recalled if visible_to(candidate.document, knowledge_boundary)]
         selected = rerank_with_title_frames(
             analysis,
             recalled,
@@ -133,13 +156,16 @@ class RoutedMultiScaleService:
             context_blocks.append(f"【{doc.document_type}】{doc.title}\n{doc.summary}")
             citations.append({"id": doc.id, **doc.source.to_dict()})
             scene = self.by_id.get(str(doc.metadata.get("scene_id") or ""))
-            if scene is not None:
+            if scene is not None and visible_to(scene, knowledge_boundary):
                 context_blocks.append(f"【父场景】{scene.title}\n{scene.summary}")
 
         timeline: list[dict[str, Any]] = []
-        if route == frozenset({"relation"}) and len(analysis.entities) >= 2:
+        if route == frozenset({"relation"}) and route in self.indexes and len(analysis.entities) >= 2:
             wanted = set(analysis.entities)
-            relation_docs = [doc for doc in self.indexes[route].documents if wanted <= set(doc.entities)]
+            relation_docs = [
+                doc for doc in self.indexes[route].documents
+                if wanted <= set(doc.entities) and visible_to(doc, knowledge_boundary)
+            ]
             relation_docs.sort(
                 key=lambda doc: (
                     int(doc.metadata.get("volume_number") or 0),
@@ -162,7 +188,7 @@ class RoutedMultiScaleService:
         if wants_raw and self.extractor is not None:
             for candidate in selected:
                 evidence = self.evidence_by_parent.get(candidate.document.id)
-                if evidence is None:
+                if evidence is None or not visible_to(evidence, knowledge_boundary):
                     continue
                 try:
                     raw_excerpt = self.extractor.extract(evidence.source).to_dict()
@@ -180,4 +206,6 @@ class RoutedMultiScaleService:
             "citations": citations,
             "raw_excerpt": raw_excerpt,
             "context_trust": "untrusted_retrieved_evidence",
+            "knowledge_boundary_applied": knowledge_boundary is not None,
+            "rerank_text_view": getattr(self.reranker, "text_view", "content"),
         }

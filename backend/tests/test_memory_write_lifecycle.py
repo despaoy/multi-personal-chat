@@ -490,6 +490,9 @@ async def test_merge_promotes_one_canonical_claim_without_losing_old_pet(tmp_pat
             idle_seconds=360,
         ),
         completion=completion,
+        # This is a lifecycle/merge contract, not a model benchmark. A cold
+        # local embedding load otherwise races the two-second flush deadline.
+        embedding_provider=SimpleNamespace(embed_texts=lambda texts: [[1.0, 0.0] for _ in texts]),
     )
 
     assert scheduler.schedule(
@@ -534,6 +537,8 @@ async def test_explicit_erase_uses_hot_path_and_physical_delete():
     scheduler = MemoryEnrichmentScheduler(
         config=MemoryLlmConfig(enabled=True, base_url="http://127.0.0.1", model="test"),
         completion=completion,
+        # Keep the hot-path deadline independent of model cold-start latency.
+        embedding_provider=SimpleNamespace(embed_texts=lambda texts: [[1.0, 0.0] for _ in texts]),
     )
 
     assert scheduler.schedule(

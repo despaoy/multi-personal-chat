@@ -1,0 +1,203 @@
+{
+  "input_sha256": "a8adaf91676b37bfb2f074314eff6d987999d3e29532cb77d4ff20eebb224382",
+  "quality_claim": "Paired development diagnostics only; not independent research evidence or a deployment gate.",
+  "variants": {
+    "contextual_memory_qwen3_bnb_challenge_v2_20260919": {
+      "metrics": {
+        "cases": 24,
+        "true_positive": 13,
+        "false_positive": 4,
+        "false_negative": 1,
+        "precision_micro": 0.7647058823529411,
+        "recall_micro": 0.9285714285714286,
+        "f1_micro": 0.8387096774193549,
+        "exact_set_accuracy": 0.7916666666666666,
+        "irrelevant_selection_rate": 0.23529411764705882,
+        "negative_cases": 12,
+        "negative_case_injection_rate": 0.3333333333333333,
+        "answerable_cases": 12,
+        "answerable_miss_rate": 0.08333333333333333,
+        "provider_failures": 0,
+        "provider_failure_rate": 0.0,
+        "successful_exact_set_accuracy": 0.7916666666666666,
+        "retrieval_diagnostic_cases": 24,
+        "candidate_gold_recall": 1.0,
+        "selector_recall_given_available_gold": 0.9285714285714286,
+        "gold_missing_before_selection": 0,
+        "available_gold_dropped_by_selection": 1
+      },
+      "paired_metrics": {
+        "pairs": 0,
+        "both_correct": 0,
+        "both_correct_rate": null,
+        "details": []
+      },
+      "failed_case_ids": [
+        "subject_02",
+        "subject_04",
+        "temporal_02",
+        "negative_04",
+        "injection_01"
+      ],
+      "inference_calls": 21,
+      "generation_seconds": 102.94496409999556
+    },
+    "contextual_memory_qwen3_structured_challenge_20260919": {
+      "metrics": {
+        "cases": 24,
+        "true_positive": 13,
+        "false_positive": 4,
+        "false_negative": 1,
+        "precision_micro": 0.7647058823529411,
+        "recall_micro": 0.9285714285714286,
+        "f1_micro": 0.8387096774193549,
+        "exact_set_accuracy": 0.7916666666666666,
+        "irrelevant_selection_rate": 0.23529411764705882,
+        "negative_cases": 12,
+        "negative_case_injection_rate": 0.25,
+        "answerable_cases": 12,
+        "answerable_miss_rate": 0.08333333333333333,
+        "provider_failures": 0,
+        "provider_failure_rate": 0.0,
+        "successful_exact_set_accuracy": 0.7916666666666666,
+        "retrieval_diagnostic_cases": 24,
+        "candidate_gold_recall": 1.0,
+        "selector_recall_given_available_gold": 0.9285714285714286,
+        "gold_missing_before_selection": 0,
+        "available_gold_dropped_by_selection": 1
+      },
+      "paired_metrics": {
+        "pairs": 0,
+        "both_correct": 0,
+        "both_correct_rate": null,
+        "details": []
+      },
+      "failed_case_ids": [
+        "reference_04",
+        "subject_02",
+        "subject_04",
+        "temporal_02",
+        "correction_01"
+      ],
+      "inference_calls": 21,
+      "generation_seconds": 80.36385710000104
+    },
+    "contextual_memory_qwen3_planned_challenge_20260919": {
+      "metrics": {
+        "cases": 24,
+        "true_positive": 13,
+        "false_positive": 3,
+        "false_negative": 1,
+        "precision_micro": 0.8125,
+        "recall_micro": 0.9285714285714286,
+        "f1_micro": 0.8666666666666667,
+        "exact_set_accuracy": 0.8333333333333334,
+        "irrelevant_selection_rate": 0.1875,
+        "negative_cases": 12,
+        "negative_case_injection_rate": 0.25,
+        "answerable_cases": 12,
+        "answerable_miss_rate": 0.08333333333333333,
+        "provider_failures": 0,
+        "provider_failure_rate": 0.0,
+        "successful_exact_set_accuracy": 0.8333333333333334,
+        "retrieval_diagnostic_cases": 24,
+        "candidate_gold_recall": 1.0,
+        "selector_recall_given_available_gold": 0.9285714285714286,
+        "gold_missing_before_selection": 0,
+        "available_gold_dropped_by_selection": 1
+      },
+      "paired_metrics": {
+        "pairs": 0,
+        "both_correct": 0,
+        "both_correct_rate": null,
+        "details": []
+      },
+      "failed_case_ids": [
+        "subject_02",
+        "temporal_02",
+        "negative_04",
+        "injection_01"
+      ],
+      "inference_calls": 42,
+      "generation_seconds": 96.93368090000149
+    },
+    "contextual_memory_qwen3_thinking_challenge_20260919": {
+      "metrics": {
+        "cases": 24,
+        "true_positive": 13,
+        "false_positive": 0,
+        "false_negative": 1,
+        "precision_micro": 1.0,
+        "recall_micro": 0.9285714285714286,
+        "f1_micro": 0.9629629629629629,
+        "exact_set_accuracy": 0.9583333333333334,
+        "irrelevant_selection_rate": 0.0,
+        "negative_cases": 12,
+        "negative_case_injection_rate": 0.0,
+        "answerable_cases": 12,
+        "answerable_miss_rate": 0.08333333333333333,
+        "provider_failures": 0,
+        "provider_failure_rate": 0.0,
+        "successful_exact_set_accuracy": 0.9583333333333334,
+        "retrieval_diagnostic_cases": 24,
+        "candidate_gold_recall": 1.0,
+        "selector_recall_given_available_gold": 0.9285714285714286,
+        "gold_missing_before_selection": 0,
+        "available_gold_dropped_by_selection": 1
+      },
+      "paired_metrics": {
+        "pairs": 0,
+        "both_correct": 0,
+        "both_correct_rate": null,
+        "details": []
+      },
+      "failed_case_ids": [
+        "temporal_02"
+      ],
+      "inference_calls": 21,
+      "generation_seconds": 511.5786370999922
+    }
+  },
+  "comparisons": {
+    "contextual_memory_qwen3_structured_challenge_20260919": {
+      "reference": "contextual_memory_qwen3_bnb_challenge_v2_20260919",
+      "improved_case_ids": [
+        "negative_04",
+        "injection_01"
+      ],
+      "regressed_case_ids": [
+        "reference_04",
+        "correction_01"
+      ],
+      "both_correct": 17,
+      "both_wrong": 3
+    },
+    "contextual_memory_qwen3_planned_challenge_20260919": {
+      "reference": "contextual_memory_qwen3_bnb_challenge_v2_20260919",
+      "improved_case_ids": [
+        "subject_04"
+      ],
+      "regressed_case_ids": [],
+      "both_correct": 19,
+      "both_wrong": 4
+    },
+    "contextual_memory_qwen3_thinking_challenge_20260919": {
+      "reference": "contextual_memory_qwen3_bnb_challenge_v2_20260919",
+      "improved_case_ids": [
+        "subject_02",
+        "subject_04",
+        "negative_04",
+        "injection_01"
+      ],
+      "regressed_case_ids": [],
+      "both_correct": 19,
+      "both_wrong": 1
+    }
+  },
+  "source_reports_sha256": {
+    "contextual_memory_qwen3_bnb_challenge_v2_20260919.json": "987d9fd227893523cf644931b6bfb071459dc2c8c9caa30b15e8107eec2a9f0e",
+    "contextual_memory_qwen3_structured_challenge_20260919.json": "e6d09572615a914a8e7b6b24f1bcd985bd6ac866a7b4cb87f6f1eb5e0639409d",
+    "contextual_memory_qwen3_planned_challenge_20260919.json": "8bd188fd444ff0aa1144bb3d828bce617c76ae108e68686623277200cd635cb1",
+    "contextual_memory_qwen3_thinking_challenge_20260919.json": "66af31dda3854feaca009cb9ac7bcadbd8a394aa234378c4cf6c83d6e4e5beab"
+  }
+}

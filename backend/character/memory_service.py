@@ -11,6 +11,7 @@ import asyncio
 import hashlib
 import json
 import logging
+import math
 import os
 import re
 import threading
@@ -21,6 +22,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 
 from character.context_builder import MAX_MEMORY_ITEMS
+from character.event_memory import event_reference_content
 from character.models import MemoryItem, UserScope
 
 if TYPE_CHECKING:
@@ -257,8 +259,11 @@ def _historical_query_window(query: str, now: datetime) -> _HistoricalWindow | N
     explicit_year = re.search(r"(?P<year>\d{4})年", text)
     if explicit_year:
         year = int(explicit_year.group("year"))
-        start = datetime(year, 1, 1, tzinfo=now.tzinfo or timezone.utc)
-        return _HistoricalWindow(start=start, end=start.replace(year=year + 1))
+        try:
+            start = datetime(year, 1, 1, tzinfo=now.tzinfo or timezone.utc)
+            return _HistoricalWindow(start=start, end=start.replace(year=year + 1))
+        except ValueError:
+            return _HistoricalWindow()
     if "去年" in text:
         start = datetime(now.year - 1, 1, 1, tzinfo=now.tzinfo or timezone.utc)
         return _HistoricalWindow(start=start, end=start.replace(year=now.year))
@@ -511,7 +516,10 @@ def _recency(updated_at: Any, now: datetime) -> float:
 
 def _safe_float(value: Any, default: float) -> float:
     try:
-        return float(value)
+        number = float(value)
+        # NaN must not become 1.0 through min/max clamping; that would promote
+        # a corrupt confidence/importance value to the strongest possible one.
+        return number if math.isfinite(number) else 0.0
     except (TypeError, ValueError):
         return default
 
@@ -549,7 +557,7 @@ def _json_value(value: Any) -> Any:
     if not isinstance(value, str):
         return value
     text = value.strip()
-    if not text or text[0] not in "[{\"":
+    if not text or text[0] not in '[{"':
         return value
     try:
         return json.loads(text)
@@ -592,7 +600,9 @@ def _source_ids(row: dict[str, Any]) -> tuple[str, ...]:
     return tuple(dict.fromkeys(values))
 
 
-def _row_evidence(row: dict[str, Any], rows_by_id: dict[str, dict[str, Any]]) -> tuple[str, ...]:
+def _row_evidence(
+    row: dict[str, Any], rows_by_id: dict[str, dict[str, Any]], *, complete: bool = False
+) -> tuple[str, ...]:
     """提取 claim 自带 evidence，并按显式 source event ID 附一跳事件。"""
 
     values: list[str] = []
@@ -612,12 +622,17 @@ def _row_evidence(row: dict[str, Any], rows_by_id: dict[str, dict[str, Any]]) ->
             related = rows_by_id.get(str(event_id))
             if related is None:
                 continue
+            # A provenance link cannot resurrect erased/retracted/pending facts.
+            if _memory_status(related) not in {*_CURRENT_MEMORY_STATUSES, "superseded", "archived"}:
+                continue
             content = str(related.get("content") or "").strip()
             if content:
                 values.append(content)
 
-    # 最多携带四条紧邻证据；完整原始记录仍可通过 source IDs 追溯。
-    return tuple(dict.fromkeys(value for value in values if value))[:4]
+    # Legacy compilation carries four snippets. A semantic reviewer must see
+    # every snippet (including late corrections), or reject the whole budget.
+    evidence = tuple(dict.fromkeys(value for value in values if value))
+    return evidence if complete else evidence[:4]
 
 
 def _rank_route(values: dict[int, float], eligible: set[int]) -> dict[int, float]:
@@ -670,9 +685,7 @@ class CharacterMemoryService:
         self._embedding_provider = embedding_provider
         self._gate_enabled = bool(gate_enabled)
         self._min_hybrid_score = (
-            MIN_HYBRID_MEMORY_SCORE
-            if min_hybrid_score is None
-            else max(0.0, min(1.0, float(min_hybrid_score)))
+            MIN_HYBRID_MEMORY_SCORE if min_hybrid_score is None else max(0.0, min(1.0, float(min_hybrid_score)))
         )
         self._candidate_limit = max(
             1,
@@ -698,9 +711,7 @@ class CharacterMemoryService:
             else bool(version_filter_enabled)
         )
         self._evidence_enabled = (
-            _env_bool("CAHM_EVIDENCE_ENABLED", True)
-            if evidence_enabled is None
-            else bool(evidence_enabled)
+            _env_bool("CAHM_EVIDENCE_ENABLED", True) if evidence_enabled is None else bool(evidence_enabled)
         )
 
     async def load_relevant_memories(
@@ -710,6 +721,9 @@ class CharacterMemoryService:
         query: str,
         *,
         include_historical: bool | None = None,
+        for_contextual_selection: bool = False,
+        retrieval_context: str = "",
+        reference_time: datetime | None = None,
     ) -> tuple[tuple[MemoryItem, ...], int]:
         """选出与当前消息最相关的记忆。
 
@@ -731,8 +745,26 @@ class CharacterMemoryService:
         ``include_historical=None`` 时自动识别明确过去表达；具体年/月
         按 claim 有效期重叠筛选，泛指过去读取完整版本链。显式 False
         可强制保持当前版本模式，True 可强制读取历史候选。
+
+        ``for_contextual_selection=True`` 只供语义选择器前置召回使用：
+        在授权范围内全量读取，强制生命周期/证据校验，融合相关性通道，
+        最多返回 24 个候选。这些候选不能未经选择直接编译进回答。
+        ``retrieval_context`` 只影响该实验路径的检索，不改变事实或主体。
         """
-        now = datetime.now(timezone.utc)
+        if reference_time is not None and (
+            not isinstance(reference_time, datetime) or reference_time.utcoffset() is None
+        ):
+            raise ValueError("reference_time must be a timezone-aware datetime")
+        now = reference_time or datetime.now(timezone.utc)
+        version_filter_enabled = self._version_filter_enabled or for_contextual_selection
+        evidence_enabled = self._evidence_enabled or for_contextual_selection
+        include_pending = self._include_pending and not for_contextual_selection
+        # The contextual path must not silently discard older claims before
+        # semantic ranking. The repository still enforces the authorized scope.
+        read_limit = None if for_contextual_selection else self._candidate_limit
+        retrieval_query = query
+        if for_contextual_selection and retrieval_context.strip():
+            retrieval_query = f"{query}\n最近用户话题参考：{retrieval_context[-1200:]}"
         historical_window = _historical_query_window(query, now)
         historical_requested = historical_window is not None
         if include_historical is not None:
@@ -746,7 +778,7 @@ class CharacterMemoryService:
             records = await self._repo.list_memory_records(
                 character_id,
                 user_scope,
-                limit=self._candidate_limit,
+                limit=read_limit,
                 include_inactive=historical_requested,
             )
         except TypeError as exc:
@@ -757,8 +789,9 @@ class CharacterMemoryService:
             records = await self._repo.list_memory_records(
                 character_id,
                 user_scope,
-                limit=self._candidate_limit,
+                limit=read_limit,
             )
+        records = [r for r in records if not str(r.get("memory_key") or "").startswith("relationship:")]
         if not records:
             return (), 0
 
@@ -767,22 +800,26 @@ class CharacterMemoryService:
             # goal 类别路由属于平衡版 query expansion，不污染关闭该开关
             # 的 legacy 消融路径；姓名/偏好/promise 的既有安全意图不变。
             intents = replace(intents, goal=False)
+        # Goal-category routing is a relevance heuristic, not an authorization
+        # or subject boundary. A contextual reviewer must still see resources
+        # needed by compound tasks (e.g. research topic + available hardware).
+        suppression_intents = replace(intents, goal=False) if for_contextual_selection else intents
         usable_records = [
             row
             for row in records
             if (
-                not self._version_filter_enabled
+                not version_filter_enabled
                 or (
                     _is_historical_record(
                         row,
                         historical_window,
-                        include_pending=self._include_pending,
+                        include_pending=include_pending,
                     )
                     if historical_window is not None
-                    else _is_current_record(row, now, include_pending=self._include_pending)
+                    else _is_current_record(row, now, include_pending=include_pending)
                 )
             )
-            and not _is_suppressed(row, intents)
+            and not _is_suppressed(row, suppression_intents)
             and str(row.get("content") or "").strip()
         ]
         if not usable_records:
@@ -791,13 +828,17 @@ class CharacterMemoryService:
         semantic_scores: dict[int, float] | None = None
         if self._semantic_enabled:
             try:
-                semantic_scores = await asyncio.to_thread(self._semantic_similarities, query, usable_records)
+                semantic_scores = await asyncio.to_thread(self._semantic_similarities, retrieval_query, usable_records)
             except Exception as exc:  # 记忆增强失败不得影响回复
                 if not self._semantic_failure_logged:
                     logger.warning("CAHM 语义检索不可用，降级到 bigram baseline: %s", exc)
                     self._semantic_failure_logged = True
 
-        query_views = _expand_memory_query(query, intents) if self._query_expansion_enabled else ((query or "").strip(),)
+        query_views = (
+            _expand_memory_query(query, intents) if self._query_expansion_enabled else ((query or "").strip(),)
+        )
+        if for_contextual_selection and retrieval_query != query:
+            query_views = (*query_views, retrieval_query)
         query_views = tuple(view for view in query_views if view)
         lexical_routes: list[dict[int, float]] = [dict() for _view in query_views]
         lexical_max_scores: dict[int, float] = {}
@@ -810,9 +851,14 @@ class CharacterMemoryService:
         for index, row in enumerate(usable_records):
             content = str(row.get("content") or "").strip()
             retrieval_text = _retrieval_text(content)
+            event = (row.get("metadata") or {}).get("event")
+            event_subject = str(event.get("subject") or "") if isinstance(event, dict) else ""
             relevances: list[float] = []
             for route, view in zip(lexical_routes, query_views, strict=True):
                 relevance = _relevance(_bigrams(view), retrieval_text)
+                if event_subject:
+                    # Status/date labels must not dilute an exact event-topic match.
+                    relevance = max(relevance, _relevance(_bigrams(view), event_subject))
                 route[index] = relevance
                 relevances.append(relevance)
             max_relevance = max(relevances, default=0.0)
@@ -821,10 +867,10 @@ class CharacterMemoryService:
             if intent_match:
                 intent_scores[index] = INTENT_RELEVANCE_FLOOR
 
-            importance = _clamp01(float(row.get("importance") or 0.0))
+            importance = _clamp01(_safe_float(row.get("importance"), 0.0))
             recency = _recency(row.get("updated_at"), now)
             confidence = _clamp01(_safe_float(row.get("confidence"), 1.0))
-            if self._version_filter_enabled and confidence < MIN_CLAIM_CONFIDENCE:
+            if version_filter_enabled and confidence < MIN_CLAIM_CONFIDENCE:
                 # 证据不足的 claim 不因重要度或新近度进入上下文。
                 continue
 
@@ -844,7 +890,7 @@ class CharacterMemoryService:
             else:
                 # legacy hybrid 会在固定加权分计算后应用原门槛。
                 is_eligible = True
-            if not is_eligible:
+            if not is_eligible and not for_contextual_selection:
                 continue
 
             eligible.add(index)
@@ -855,7 +901,19 @@ class CharacterMemoryService:
         if not eligible:
             return (), len(records)
 
-        if self._rrf_enabled:
+        if for_contextual_selection:
+            # Recall for the learned selector uses relevance channels only.
+            # Importance/recency must not crowd out the only matching old fact.
+            # Fuse each independent modality once; query expansion count must
+            # not dilute the contextual lexical signal.
+            contextual_routes = [
+                (1.0, _rank_route(lexical_max_scores, eligible)),
+                (1.0, _rank_route(intent_scores, eligible)),
+            ]
+            if semantic_scores is not None:
+                contextual_routes.append((1.0, _rank_route(semantic_scores, eligible)))
+            fused_scores = _reciprocal_rank_fusion(eligible, contextual_routes)
+        elif self._rrf_enabled:
             routes: list[tuple[float, dict[int, float]]] = []
             if semantic_scores is None:
                 lexical_weight = WEIGHT_RELEVANCE
@@ -906,7 +964,7 @@ class CharacterMemoryService:
                     )
                     if intent_match:
                         score = max(score, INTENT_HYBRID_SCORE_FLOOR)
-                    if self._gate_enabled and score < self._min_hybrid_score:
+                    if self._gate_enabled and score < self._min_hybrid_score and not for_contextual_selection:
                         continue
                 fused_scores[index] = score
             eligible = set(fused_scores)
@@ -917,14 +975,14 @@ class CharacterMemoryService:
         scored: list[tuple[float, MemoryItem]] = []
         for index in sorted(eligible):
             row = usable_records[index]
-            content = str(row.get("content") or "").strip()
+            content = event_reference_content(row, now).strip()
             memory_type = row.get("memory_type", "user_fact")
             if memory_type not in _VALID_MEMORY_TYPES:
                 memory_type = "user_fact"
             importance = importance_scores[index]
-            status = _memory_status(row) if self._version_filter_enabled else "active"
+            status = _memory_status(row) if version_filter_enabled else "active"
             relation_type = str(row.get("relation_type") or row.get("relation") or "ADD").upper()
-            if not self._evidence_enabled:
+            if not evidence_enabled:
                 relation_type = "ADD"
             scored.append(
                 (
@@ -934,21 +992,21 @@ class CharacterMemoryService:
                         memory_type=memory_type,  # type: ignore[arg-type]
                         content=content,
                         importance=importance,
-                        evidence=_row_evidence(row, rows_by_id) if self._evidence_enabled else (),
+                        evidence=(
+                            _row_evidence(row, rows_by_id, complete=for_contextual_selection)
+                            if evidence_enabled
+                            else ()
+                        ),
                         valid_from=(
-                            str(row.get("valid_from") or row.get("valid_at") or "")
-                            if self._version_filter_enabled
-                            else ""
+                            str(row.get("valid_from") or row.get("valid_at") or "") if version_filter_enabled else ""
                         ),
                         valid_to=(
-                            str(row.get("valid_to") or row.get("invalid_at") or "")
-                            if self._version_filter_enabled
-                            else ""
+                            str(row.get("valid_to") or row.get("invalid_at") or "") if version_filter_enabled else ""
                         ),
-                        confidence=confidence_scores[index] if self._version_filter_enabled else 1.0,
+                        confidence=confidence_scores[index] if version_filter_enabled else 1.0,
                         status=status,  # type: ignore[arg-type]
                         relation_type=relation_type,
-                        source_message_ids=_source_ids(row) if self._evidence_enabled else (),
+                        source_message_ids=_source_ids(row) if evidence_enabled else (),
                         historical=historical_window is not None,
                     ),
                 )
@@ -956,7 +1014,16 @@ class CharacterMemoryService:
 
         # RRF 得分降序；得分相同保持仓储返回的“最近优先”顺序。
         scored.sort(key=lambda pair: pair[0], reverse=True)
-        selected = tuple(item for _score, item in scored[:MAX_MEMORY_ITEMS])
+        # Widen only for a downstream validated selector. These candidates must
+        # never be compiled directly: relevance gates were intentionally relaxed
+        # to recover conversational ellipsis that a standalone query misses.
+        if for_contextual_selection:
+            from character.evidence_selector import MAX_CANDIDATES
+
+            limit = MAX_CANDIDATES
+        else:
+            limit = MAX_MEMORY_ITEMS
+        selected = tuple(item for _score, item in scored[:limit])
         return selected, len(records)
 
     def _semantic_similarities(self, query: str, records: list[dict[str, Any]]) -> dict[int, float]:
@@ -1012,5 +1079,10 @@ def _env_bool(name: str, default: bool) -> bool:
 
 def _normalized_vector(vector: np.ndarray) -> np.ndarray:
     value = np.asarray(vector, dtype=np.float32).reshape(-1)
-    norm = float(np.linalg.norm(value))
+    if not np.isfinite(value).all():
+        raise ValueError("embedding vector contains nonfinite values")
+    with np.errstate(over="ignore", invalid="ignore"):
+        norm = float(np.linalg.norm(value))
+    if not math.isfinite(norm):
+        raise ValueError("embedding vector norm is nonfinite")
     return value if norm <= 0.0 else value / norm

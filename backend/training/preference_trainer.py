@@ -115,8 +115,15 @@ class PreferenceTrainer:
             from peft import (PeftModel, LoraConfig, get_peft_model,
                               prepare_model_for_kbit_training, TaskType)
             from datasets import Dataset
-            from trl import DPOTrainer, DPOConfig
             from training.trainer import GpuTemperatureCallback
+            from training.evidence_dataset import validate_preference_contexts
+            from training.preference_compat import resolve_preference_backend, preference_length_kwargs
+
+            trainer_class, config_class = resolve_preference_backend(self.config.method)
+            length_kwargs = preference_length_kwargs(
+                config_class, max_length=self.config.max_length,
+                max_prompt_length=self.config.max_prompt_length,
+            )
 
             logger.info(f"加载基础模型: {self.config.base_model_path}")
             quant_config = None
@@ -127,17 +134,26 @@ class PreferenceTrainer:
                     bnb_4bit_compute_dtype=torch.bfloat16,
                     bnb_4bit_use_double_quant=True,
                 )
+            tokenizer = AutoTokenizer.from_pretrained(self.config.base_model_path)
+            if tokenizer.pad_token is None:
+                tokenizer.pad_token = tokenizer.eos_token
+            validate_preference_contexts(
+                pairs, tokenizer, max_length=self.config.max_length,
+                max_prompt_length=self.config.max_prompt_length,
+            )
             model = AutoModelForCausalLM.from_pretrained(
                 self.config.base_model_path,
                 quantization_config=quant_config,
                 device_map="auto",
             )
-            tokenizer = AutoTokenizer.from_pretrained(self.config.base_model_path)
-            if tokenizer.pad_token is None:
-                tokenizer.pad_token = tokenizer.eos_token
 
             # Quantized parameters must be prepared before loading a trainable adapter.
-            if self.config.load_in_4bit:
+            is_quantized = (
+                self.config.load_in_4bit
+                or getattr(model, "is_loaded_in_4bit", False)
+                or getattr(model, "is_loaded_in_8bit", False)
+            )
+            if is_quantized:
                 model = prepare_model_for_kbit_training(model)
 
             # 加载 SFT adapter 作为起点（若指定）
@@ -146,7 +162,7 @@ class PreferenceTrainer:
                 model = PeftModel.from_pretrained(
                     model, self.config.adapter_path, is_trainable=True
                 )
-            elif self.config.load_in_4bit:
+            elif is_quantized:
                 lora_config = LoraConfig(
                     r=self.config.lora_r,
                     lora_alpha=self.config.lora_alpha,
@@ -170,15 +186,14 @@ class PreferenceTrainer:
 
             # 配置训练
             if self.config.method == "orpo":
-                from trl import ORPOTrainer, ORPOConfig
-                train_config = ORPOConfig(
+                train_config = config_class(
                     output_dir=str(output_dir),
                     beta=self.config.beta,
                     learning_rate=self.config.learning_rate,
                     num_train_epochs=self.config.num_train_epochs,
                     per_device_train_batch_size=self.config.per_device_train_batch_size,
                     gradient_accumulation_steps=self.config.gradient_accumulation_steps,
-                    max_length=self.config.max_length,
+                    **length_kwargs,
                     warmup_ratio=self.config.warmup_ratio,
                     lr_scheduler_type=self.config.lr_scheduler_type,
                     seed=self.config.seed,
@@ -187,21 +202,21 @@ class PreferenceTrainer:
                     report_to="none",
                     gradient_checkpointing=self.config.gradient_checkpointing,
                 )
-                trainer = ORPOTrainer(
+                trainer = trainer_class(
                     model=model,
                     args=train_config,
                     train_dataset=dataset,
                     processing_class=tokenizer,
                 )
             else:
-                train_config = DPOConfig(
+                train_config = config_class(
                     output_dir=str(output_dir),
                     beta=self.config.beta,
                     learning_rate=self.config.learning_rate,
                     num_train_epochs=self.config.num_train_epochs,
                     per_device_train_batch_size=self.config.per_device_train_batch_size,
                     gradient_accumulation_steps=self.config.gradient_accumulation_steps,
-                    max_length=self.config.max_length,
+                    **length_kwargs,
                     warmup_ratio=self.config.warmup_ratio,
                     lr_scheduler_type=self.config.lr_scheduler_type,
                     seed=self.config.seed,
@@ -210,7 +225,7 @@ class PreferenceTrainer:
                     report_to="none",
                     gradient_checkpointing=self.config.gradient_checkpointing,
                 )
-                trainer = DPOTrainer(
+                trainer = trainer_class(
                     model=model,
                     args=train_config,
                     train_dataset=dataset,
@@ -289,16 +304,20 @@ def main():
     parser.add_argument("--epochs", type=int, default=1, help="训练轮数")
     parser.add_argument("--beta", type=float, default=0.1, help="DPO/ORPO beta")
     parser.add_argument("--learning-rate", type=float, default=5e-7)
+    parser.add_argument("--max-length", type=int, default=512)
+    parser.add_argument("--max-prompt-length", type=int, default=256)
     args = parser.parse_args()
+    if not 0 < args.max_prompt_length < args.max_length:
+        parser.error("require 0 < max-prompt-length < max-length")
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
-    from training.preference_data_schema import load_jsonl, PreferencePair
+    from training.preference_data_schema import PreferencePair
+    from training.evidence_dataset import load_preference_training_rows
 
     pairs = []
     if args.data and Path(args.data).exists():
-        pairs_raw = load_jsonl(Path(args.data))
-        pairs = [p.to_jsonl_dict() for p in pairs_raw if p.review_status == "approved"]
+        pairs = load_preference_training_rows(Path(args.data))
         logger.info(f"加载 {len(pairs)} 条偏好对")
         if not pairs:
             logger.error("No approved preference pairs are available for training")
@@ -324,6 +343,8 @@ def main():
         num_train_epochs=args.epochs,
         beta=args.beta,
         learning_rate=args.learning_rate,
+        max_length=args.max_length,
+        max_prompt_length=args.max_prompt_length,
     )
     config.save(Path(args.output_dir) / "preference_config.json")
 

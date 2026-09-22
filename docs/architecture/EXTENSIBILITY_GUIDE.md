@@ -92,9 +92,9 @@ py -3.12 -m py_compile backend/app/main.py backend/app/runtime.py
 前端：
 
 ```powershell
-npm run ts-check
-npm run lint
-npm run build
+pnpm ts-check
+pnpm lint
+pnpm build
 ```
 
 提交前还应运行：

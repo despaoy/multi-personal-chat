@@ -1,7 +1,7 @@
 # 发布前检查清单
 
 > 本文定义仓库进入“可发布”状态时需要满足的最低事实和命令验证结果。
-> 最新一次完整验证：见文末。
+> 历史完整验证按各节日期保留；不能视为当前工作区再次通过。2026-09-11 文档核对范围见 [维护记录](maintainer/DOCUMENTATION_REVIEW_2026-09-11.md)。
 
 ## 发布边界
 
@@ -20,6 +20,8 @@
 7. 生产文档只使用“多粒度角色知识检索”功能名；P6/P7 和实验 V3 不出现在活动 API、类名或部署入口中。
 8. 生成的 `character_knowledge_index_v*/` 不进入 Git；发布部署能够按文档重建并只读挂载索引。
 9. `python scripts/check_repository_integrity.py` 通过：冻结哈希/计数、API 挂载、前端导航、脚本索引、README 链接、归档和生成物边界一致。
+10. 第三方游戏文本、衍生语料和素材具有再分发许可，或不包含在公开发行物中；MIT代码许可不能替代数据授权。
+11. `python scripts/check_release_hygiene.py`通过；完成联网依赖审计及实际部署验收。
 
 ## 验证命令
 
@@ -30,6 +32,7 @@ python -m ruff format --check backend/api/ask.py backend/api/generate.py backend
 python -m pytest backend/tests -q
 python -m compileall -q backend scripts astrbot_plugins
 python scripts/check_repository_integrity.py
+python scripts/check_release_hygiene.py
 
 # 前端
 pnpm ts-check
@@ -45,12 +48,28 @@ powershell -ExecutionPolicy Bypass -File scripts/local-verify.ps1 -Frontend
 
 ## 当前发布状态
 
-- 源码、文档、冻结数据和归档索引已完成 2026-08-28 收尾审计，可作为源码封存候选。
-- V4 canonical manifest 状态为 `frozen`：926 train / 70 validation；训练门禁 `passed=true`、无 blocker。
+最新全仓库审查见[2026-09-11发布审查](maintainer/RELEASE_AUDIT_2026-09-11.md)。
+尚存在数据授权、全库规范债务、联网依赖审计及真实部署验收待办，不得标记为全面验收通过。
+
+### 本地源码验证（2026-09-11）
+
+后续本地学习逻辑修正后重新运行全量后端回归：**1802 passed、12 skipped、4 warnings**。
+包含训练参数/JSONL识别/取消/任务清理与缺失关系索引降级测试；下列1794项结果为此前发布审查基线。
+
+- 后端最终全量回归：**1794 passed、12 skipped、4 warnings**；警告为第三方弃用提示。跳过项不视为验收通过。
+- 前端TypeScript、ESLint、Next.js生产构建通过。
+- 发布文件扫描：1424个文件，语法及产物检查无错误；27组完全相同文件保留其审核/包结构用途。
+- 仓库完整性、文档本地链接、JSON/JSONL、迁移head、已安装Python依赖相容性、RAG范围规范检查通过。
+- 在线依赖审计因fetch失败未完成；没有Docker及真实外部服务验收，不提供生产就绪保证。
+
+2026-09-11源码文档核对：迁移head已演进到`008_integration_receipts`；AstrBot应同时更新插件和后端并验证发送确认。下方8月验证中的`006_character_memory`是当时结果，不作为当前迁移目标。本次未重新进行服务器验收。
+
+- 2026-08-28/29 审计属于历史基线。当前工作区还有后续变更，发布前必须在拟发布提交上重新验证。
+- V4 canonical manifest 状态为 `frozen`：926 train / 70 validation；历史数据门禁曾通过，本次运行结果单独记录。数据门禁不等同于模型生成质量门禁。
 - R1V4 现有 E1 与 recovery checkpoint 均未通过生成/语义门禁，当前无正式 adapter，E2-E5 暂停。
 - 本地环境未提供真实 Redis、vLLM、GPU、PostgreSQL 或 AstrBot 账号；这些属于部署环境验收，不得从本次源码验证推断为已通过。
 
-## 最新验证记录（2026-08-28）
+## 历史验证记录（2026-08-28）
 
 - 远端基线：收尾提交已合入 `main`；验证时本地工作区与 `origin/main` 一致。
 - 仓库完整性：通过；全部 README 本地链接有效，20 个 FastAPI 路由模块均挂载，15 个管理页均进入导航，31 个归档源文件均有大小和 SHA-256（生成的 `pyc` 不归档）。

@@ -4,9 +4,11 @@ import json
 
 import pytest
 
+from character.memory_extractor import ExtractedMemory
 from character.memory_llm import (
     MemoryEnrichmentScheduler,
     MemoryLlmConfig,
+    _search_existing_memories,
     parse_llm_memories,
 )
 from character.models import UserScope
@@ -116,6 +118,59 @@ class _Repository:
         source_message_id=None,
     ):
         self.writes.append((character_id, user_scope, memory, memory_key, source_message_id))
+
+
+def test_write_search_recalls_old_fact_beyond_recent_window():
+    records = tuple(
+        {"id": str(index), "content": "用户参加了周末的登山活动", "memory_key": f"event_{index}"}
+        for index in range(600)
+    ) + ({"id": "old", "content": "用户喜欢咖啡", "memory_key": "preference_咖啡"},)
+    selected = _search_existing_memories(records, "我现在不喝咖啡了", (), ())
+    assert [record["id"] for record in selected] == ["old"]
+
+
+def test_write_search_uses_key_for_changed_value_and_keeps_feedback_first():
+    records = (
+        {"id": "name", "content": "小明", "memory_key": "user_name"},
+        {"id": "feedback", "content": "用户喜欢红茶", "memory_key": "preference_红茶"},
+        {"id": "inactive", "content": "用户叫小宇", "status": "superseded"},
+    )
+    hints = (ExtractedMemory("user_fact", "user_name", "用户叫小宇", 0.9),)
+    selected = _search_existing_memories(records, "以后我叫小宇", hints, ("feedback",))
+    assert [record["id"] for record in selected] == ["feedback", "name"]
+
+
+def test_write_search_limits_topk_and_does_not_fill_with_unrelated_records():
+    records = tuple({"id": str(index), "content": "用户喜欢咖啡"} for index in range(30))
+    assert len(_search_existing_memories(records, "咖啡", (), ())) == 10
+    assert _search_existing_memories(records, "明天去看展", (), ()) == ()
+
+
+@pytest.mark.asyncio
+async def test_scheduler_passes_old_relevant_memory_to_llm():
+    class Repository(_Repository):
+        async def list_memory_records(self, character_id, user_scope, limit=30):
+            records = [{"id": str(index), "content": "用户参加周末登山活动"} for index in range(600)] + [
+                {"id": "old", "content": "用户喜欢咖啡", "memory_key": "preference_咖啡"}
+            ]
+            return records[:limit]
+
+    completion = _Completion(_response())
+    scheduler = MemoryEnrichmentScheduler(
+        config=MemoryLlmConfig(enabled=True, base_url="http://127.0.0.1", model="test"),
+        completion=completion,
+    )
+    scheduler.schedule(
+        repository=Repository(),
+        character_id="kisaki",
+        user_scope=UserScope("qq", "astrbot", "user-1", "user-1", "private"),
+        message="请记住我现在不喝咖啡了",
+        rule_hints=[],
+    )
+    await scheduler.shutdown(timeout=2.0)
+    assert len(completion.calls) == 1
+    payload = json.loads(completion.calls[0][1]["content"])
+    assert [record["memory_id"] for record in payload["existing_memories"]] == ["old"]
 
 
 @pytest.mark.asyncio

@@ -64,6 +64,26 @@ def test_runtime_keeps_unrelated_chat_out_of_game_domain():
     assert runtime.retrieve_with_citations("今天天气怎么样", top_k=3) is None
 
 
+def test_missing_relation_index_falls_back_without_timeline(monkeypatch):
+    from types import SimpleNamespace
+
+    from knowledge.multiscale_rag import service
+
+    instance = object.__new__(service.RoutedMultiScaleService)
+    instance.config = SimpleNamespace(domain_id="test")
+    instance.analyzer = None
+    instance.indexes = {service.CARD_TYPES: SimpleNamespace(documents=[])}
+    instance.retrievers = {service.CARD_TYPES: SimpleNamespace(search=lambda *args, **kwargs: [])}
+    instance.reranker = None
+    instance.extractor = None
+    monkeypatch.setattr(service, "analyze_explicit_domain", lambda *args: SimpleNamespace(entities=["a", "b"]))
+    monkeypatch.setattr(service, "choose_card_types", lambda *args: frozenset({"relation"}))
+    monkeypatch.setattr(service, "rerank_with_title_frames", lambda *args, **kwargs: [])
+    result = instance.retrieve("两个人是什么关系？")
+    assert result["relation_timeline"] == []
+    assert result["results"] == []
+
+
 def test_runtime_does_not_ignore_generic_kb_filter():
     runtime = MultiScaleRagRuntime()
     runtime._provider = FakeQueryEmbeddingProvider()

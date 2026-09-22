@@ -1,5 +1,7 @@
 # 月社妃游戏 RAG 场景元数据候选生成（P4B 设计文档）
 
+> 历史阶段记录：保留本文当时的设计、统计、命令与验收结论。文中的“当前”“尚未”仅指所记阶段；2026-09-11 起请从[现行实现说明](../architecture/CHARACTER_KNOWLEDGE_RETRIEVAL.md)查看当前运行链路。本文不作为重新执行历史脚本或重新批准数据的依据。
+
 - 阶段：P4B 场景元数据候选生成与断点续审基础设施
 - 日期：2026-08-26
 - 代码位置：`backend/knowledge/game_rag/scene_metadata_candidate.py`

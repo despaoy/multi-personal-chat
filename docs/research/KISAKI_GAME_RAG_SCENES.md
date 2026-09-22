@@ -1,5 +1,7 @@
 # 月社妃游戏文本场景切分（P3/P3.1/P3.2）
 
+> 历史阶段记录：保留本文当时的设计、统计、命令与验收结论。文中的“当前”“尚未”仅指所记阶段；2026-09-11 起请从[现行实现说明](../architecture/CHARACTER_KNOWLEDGE_RETRIEVAL.md)查看当前运行链路。本文不作为重新执行历史脚本或重新批准数据的依据。
+
 - 阶段：P3 保守场景切分与来源目录构建（P3.1：完整场景原文、temporal 语义、显式决定门禁、状态区分；P3.2：冻结事务原子性、low 审核包互斥重构、schema 门禁；P3.5：冻结前风险抽查，见 KISAKI_GAME_RAG_FREEZE_READINESS.md）
 - 日期：2026-08-24
 - 代码：`backend/knowledge/game_rag/story_units.py`（单元登记）、`backend/knowledge/game_rag/scene_segmenter.py`（检测/解析/验证/冻结/审核材料）

@@ -1,0 +1,938 @@
+{
+  "mode": "offline_model",
+  "embedding_enabled": false,
+  "metrics": {
+    "cases": 24,
+    "true_positive": 13,
+    "false_positive": 4,
+    "false_negative": 1,
+    "precision_micro": 0.7647058823529411,
+    "recall_micro": 0.9285714285714286,
+    "f1_micro": 0.8387096774193549,
+    "exact_set_accuracy": 0.7916666666666666,
+    "irrelevant_selection_rate": 0.23529411764705882,
+    "negative_cases": 12,
+    "negative_case_injection_rate": 0.3333333333333333,
+    "answerable_cases": 12,
+    "answerable_miss_rate": 0.08333333333333333,
+    "provider_failures": 0,
+    "provider_failure_rate": 0.0,
+    "successful_exact_set_accuracy": 0.7916666666666666,
+    "retrieval_diagnostic_cases": 24,
+    "candidate_gold_recall": 1.0,
+    "selector_recall_given_available_gold": 0.9285714285714286,
+    "gold_missing_before_selection": 0,
+    "available_gold_dropped_by_selection": 1
+  },
+  "by_category": {
+    "context_reference": {
+      "cases": 4,
+      "true_positive": 4,
+      "false_positive": 0,
+      "false_negative": 0,
+      "precision_micro": 1.0,
+      "recall_micro": 1.0,
+      "f1_micro": 1.0,
+      "exact_set_accuracy": 1.0,
+      "irrelevant_selection_rate": 0.0,
+      "negative_cases": 0,
+      "negative_case_injection_rate": null,
+      "answerable_cases": 4,
+      "answerable_miss_rate": 0.0,
+      "provider_failures": 0,
+      "provider_failure_rate": 0.0,
+      "successful_exact_set_accuracy": 1.0,
+      "retrieval_diagnostic_cases": 4,
+      "candidate_gold_recall": 1.0,
+      "selector_recall_given_available_gold": 1.0,
+      "gold_missing_before_selection": 0,
+      "available_gold_dropped_by_selection": 0
+    },
+    "current_correction": {
+      "cases": 2,
+      "true_positive": 1,
+      "false_positive": 0,
+      "false_negative": 0,
+      "precision_micro": 1.0,
+      "recall_micro": 1.0,
+      "f1_micro": 1.0,
+      "exact_set_accuracy": 1.0,
+      "irrelevant_selection_rate": 0.0,
+      "negative_cases": 1,
+      "negative_case_injection_rate": 0.0,
+      "answerable_cases": 1,
+      "answerable_miss_rate": 0.0,
+      "provider_failures": 0,
+      "provider_failure_rate": 0.0,
+      "successful_exact_set_accuracy": 1.0,
+      "retrieval_diagnostic_cases": 2,
+      "candidate_gold_recall": 1.0,
+      "selector_recall_given_available_gold": 1.0,
+      "gold_missing_before_selection": 0,
+      "available_gold_dropped_by_selection": 0
+    },
+    "hard_negative": {
+      "cases": 4,
+      "true_positive": 0,
+      "false_positive": 1,
+      "false_negative": 0,
+      "precision_micro": 0.0,
+      "recall_micro": null,
+      "f1_micro": 0.0,
+      "exact_set_accuracy": 0.75,
+      "irrelevant_selection_rate": 1.0,
+      "negative_cases": 4,
+      "negative_case_injection_rate": 0.25,
+      "answerable_cases": 0,
+      "answerable_miss_rate": null,
+      "provider_failures": 0,
+      "provider_failure_rate": 0.0,
+      "successful_exact_set_accuracy": 0.75,
+      "retrieval_diagnostic_cases": 4,
+      "candidate_gold_recall": null,
+      "selector_recall_given_available_gold": null,
+      "gold_missing_before_selection": 0,
+      "available_gold_dropped_by_selection": 0
+    },
+    "multi_evidence": {
+      "cases": 2,
+      "true_positive": 4,
+      "false_positive": 0,
+      "false_negative": 0,
+      "precision_micro": 1.0,
+      "recall_micro": 1.0,
+      "f1_micro": 1.0,
+      "exact_set_accuracy": 1.0,
+      "irrelevant_selection_rate": 0.0,
+      "negative_cases": 0,
+      "negative_case_injection_rate": null,
+      "answerable_cases": 2,
+      "answerable_miss_rate": 0.0,
+      "provider_failures": 0,
+      "provider_failure_rate": 0.0,
+      "successful_exact_set_accuracy": 1.0,
+      "retrieval_diagnostic_cases": 2,
+      "candidate_gold_recall": 1.0,
+      "selector_recall_given_available_gold": 1.0,
+      "gold_missing_before_selection": 0,
+      "available_gold_dropped_by_selection": 0
+    },
+    "prompt_injection": {
+      "cases": 2,
+      "true_positive": 1,
+      "false_positive": 1,
+      "false_negative": 0,
+      "precision_micro": 0.5,
+      "recall_micro": 1.0,
+      "f1_micro": 0.6666666666666666,
+      "exact_set_accuracy": 0.5,
+      "irrelevant_selection_rate": 0.5,
+      "negative_cases": 1,
+      "negative_case_injection_rate": 1.0,
+      "answerable_cases": 1,
+      "answerable_miss_rate": 0.0,
+      "provider_failures": 0,
+      "provider_failure_rate": 0.0,
+      "successful_exact_set_accuracy": 0.5,
+      "retrieval_diagnostic_cases": 2,
+      "candidate_gold_recall": 1.0,
+      "selector_recall_given_available_gold": 1.0,
+      "gold_missing_before_selection": 0,
+      "available_gold_dropped_by_selection": 0
+    },
+    "subject": {
+      "cases": 4,
+      "true_positive": 2,
+      "false_positive": 2,
+      "false_negative": 0,
+      "precision_micro": 0.5,
+      "recall_micro": 1.0,
+      "f1_micro": 0.6666666666666666,
+      "exact_set_accuracy": 0.5,
+      "irrelevant_selection_rate": 0.5,
+      "negative_cases": 2,
+      "negative_case_injection_rate": 1.0,
+      "answerable_cases": 2,
+      "answerable_miss_rate": 0.0,
+      "provider_failures": 0,
+      "provider_failure_rate": 0.0,
+      "successful_exact_set_accuracy": 0.5,
+      "retrieval_diagnostic_cases": 4,
+      "candidate_gold_recall": 1.0,
+      "selector_recall_given_available_gold": 1.0,
+      "gold_missing_before_selection": 0,
+      "available_gold_dropped_by_selection": 0
+    },
+    "temporal": {
+      "cases": 4,
+      "true_positive": 1,
+      "false_positive": 0,
+      "false_negative": 1,
+      "precision_micro": 1.0,
+      "recall_micro": 0.5,
+      "f1_micro": 0.6666666666666666,
+      "exact_set_accuracy": 0.75,
+      "irrelevant_selection_rate": 0.0,
+      "negative_cases": 2,
+      "negative_case_injection_rate": 0.0,
+      "answerable_cases": 2,
+      "answerable_miss_rate": 0.5,
+      "provider_failures": 0,
+      "provider_failure_rate": 0.0,
+      "successful_exact_set_accuracy": 0.75,
+      "retrieval_diagnostic_cases": 4,
+      "candidate_gold_recall": 1.0,
+      "selector_recall_given_available_gold": 0.5,
+      "gold_missing_before_selection": 0,
+      "available_gold_dropped_by_selection": 1
+    },
+    "unsupported": {
+      "cases": 2,
+      "true_positive": 0,
+      "false_positive": 0,
+      "false_negative": 0,
+      "precision_micro": null,
+      "recall_micro": null,
+      "f1_micro": null,
+      "exact_set_accuracy": 1.0,
+      "irrelevant_selection_rate": null,
+      "negative_cases": 2,
+      "negative_case_injection_rate": 0.0,
+      "answerable_cases": 0,
+      "answerable_miss_rate": null,
+      "provider_failures": 0,
+      "provider_failure_rate": 0.0,
+      "successful_exact_set_accuracy": 1.0,
+      "retrieval_diagnostic_cases": 2,
+      "candidate_gold_recall": null,
+      "selector_recall_given_available_gold": null,
+      "gold_missing_before_selection": 0,
+      "available_gold_dropped_by_selection": 0
+    }
+  },
+  "cases": [
+    {
+      "id": "reference_01",
+      "selected_ids": [
+        "m01"
+      ],
+      "gold_ids": [
+        "m01"
+      ],
+      "candidate_ids": [
+        "m02",
+        "m01"
+      ],
+      "status": "selected",
+      "fallback_reason": "",
+      "decisions": [
+        [
+          "m02",
+          "irrelevant"
+        ],
+        [
+          "m01",
+          "use"
+        ]
+      ],
+      "model_outputs": [
+        "{\"decisions\": [{\"id\": \"m02\", \"label\": \"irrelevant\"}, {\"id\": \"m01\", \"label\": \"use\"}]}"
+      ]
+    },
+    {
+      "id": "reference_02",
+      "selected_ids": [
+        "m02"
+      ],
+      "gold_ids": [
+        "m02"
+      ],
+      "candidate_ids": [
+        "m02",
+        "m01"
+      ],
+      "status": "selected",
+      "fallback_reason": "",
+      "decisions": [
+        [
+          "m02",
+          "use"
+        ],
+        [
+          "m01",
+          "irrelevant"
+        ]
+      ],
+      "model_outputs": [
+        "{\"decisions\": [{\"id\": \"m02\", \"label\": \"use\"}, {\"id\": \"m01\", \"label\": \"irrelevant\"}]}"
+      ]
+    },
+    {
+      "id": "reference_03",
+      "selected_ids": [
+        "m01"
+      ],
+      "gold_ids": [
+        "m01"
+      ],
+      "candidate_ids": [
+        "m01",
+        "m02"
+      ],
+      "status": "selected",
+      "fallback_reason": "",
+      "decisions": [
+        [
+          "m01",
+          "use"
+        ],
+        [
+          "m02",
+          "irrelevant"
+        ]
+      ],
+      "model_outputs": [
+        "{\"decisions\": [{\"id\": \"m01\", \"label\": \"use\"}, {\"id\": \"m02\", \"label\": \"irrelevant\"}]}"
+      ]
+    },
+    {
+      "id": "reference_04",
+      "selected_ids": [
+        "m02"
+      ],
+      "gold_ids": [
+        "m02"
+      ],
+      "candidate_ids": [
+        "m02",
+        "m01"
+      ],
+      "status": "selected",
+      "fallback_reason": "",
+      "decisions": [
+        [
+          "m02",
+          "use"
+        ],
+        [
+          "m01",
+          "irrelevant"
+        ]
+      ],
+      "model_outputs": [
+        "{\"decisions\": [{\"id\": \"m02\", \"label\": \"use\"}, {\"id\": \"m01\", \"label\": \"irrelevant\"}]}"
+      ]
+    },
+    {
+      "id": "subject_01",
+      "selected_ids": [
+        "m02"
+      ],
+      "gold_ids": [
+        "m02"
+      ],
+      "candidate_ids": [
+        "m02",
+        "m01"
+      ],
+      "status": "selected",
+      "fallback_reason": "",
+      "decisions": [
+        [
+          "m02",
+          "use"
+        ],
+        [
+          "m01",
+          "wrong_subject"
+        ]
+      ],
+      "model_outputs": [
+        "{\"decisions\": [{\"id\": \"m02\", \"label\": \"use\"}, {\"id\": \"m01\", \"label\": \"wrong_subject\"}]}"
+      ]
+    },
+    {
+      "id": "subject_02",
+      "selected_ids": [
+        "m01"
+      ],
+      "gold_ids": [],
+      "candidate_ids": [
+        "m01"
+      ],
+      "status": "selected",
+      "fallback_reason": "",
+      "decisions": [
+        [
+          "m01",
+          "use"
+        ]
+      ],
+      "model_outputs": [
+        "{\"decisions\": [{\"id\": \"m01\", \"label\": \"use\"}]}"
+      ]
+    },
+    {
+      "id": "subject_03",
+      "selected_ids": [
+        "m01"
+      ],
+      "gold_ids": [
+        "m01"
+      ],
+      "candidate_ids": [
+        "m01",
+        "m02"
+      ],
+      "status": "selected",
+      "fallback_reason": "",
+      "decisions": [
+        [
+          "m01",
+          "use"
+        ],
+        [
+          "m02",
+          "irrelevant"
+        ]
+      ],
+      "model_outputs": [
+        "{\"decisions\": [{\"id\": \"m01\", \"label\": \"use\"}, {\"id\": \"m02\", \"label\": \"irrelevant\"}]}"
+      ]
+    },
+    {
+      "id": "subject_04",
+      "selected_ids": [
+        "m01"
+      ],
+      "gold_ids": [],
+      "candidate_ids": [
+        "m01"
+      ],
+      "status": "selected",
+      "fallback_reason": "",
+      "decisions": [
+        [
+          "m01",
+          "use"
+        ]
+      ],
+      "model_outputs": [
+        "{\"decisions\": [{\"id\": \"m01\", \"label\": \"use\"}]}"
+      ]
+    },
+    {
+      "id": "temporal_01",
+      "selected_ids": [
+        "m01"
+      ],
+      "gold_ids": [
+        "m01"
+      ],
+      "candidate_ids": [
+        "m01"
+      ],
+      "status": "selected",
+      "fallback_reason": "",
+      "decisions": [
+        [
+          "m01",
+          "use"
+        ]
+      ],
+      "model_outputs": [
+        "{\"decisions\": [{\"id\": \"m01\", \"label\": \"use\"}]}"
+      ]
+    },
+    {
+      "id": "temporal_02",
+      "selected_ids": [],
+      "gold_ids": [
+        "m02"
+      ],
+      "candidate_ids": [
+        "m02"
+      ],
+      "status": "selected",
+      "fallback_reason": "",
+      "decisions": [
+        [
+          "m02",
+          "stale"
+        ]
+      ],
+      "model_outputs": [
+        "{\"decisions\": [{\"id\": \"m02\", \"label\": \"stale\"}]}"
+      ]
+    },
+    {
+      "id": "temporal_03",
+      "selected_ids": [],
+      "gold_ids": [],
+      "candidate_ids": [],
+      "status": "empty",
+      "fallback_reason": "",
+      "decisions": [],
+      "model_outputs": []
+    },
+    {
+      "id": "temporal_04",
+      "selected_ids": [],
+      "gold_ids": [],
+      "candidate_ids": [],
+      "status": "empty",
+      "fallback_reason": "",
+      "decisions": [],
+      "model_outputs": []
+    },
+    {
+      "id": "negative_01",
+      "selected_ids": [],
+      "gold_ids": [],
+      "candidate_ids": [
+        "m01"
+      ],
+      "status": "selected",
+      "fallback_reason": "",
+      "decisions": [
+        [
+          "m01",
+          "irrelevant"
+        ]
+      ],
+      "model_outputs": [
+        "{\"decisions\": [{\"id\": \"m01\", \"label\": \"irrelevant\"}]}"
+      ]
+    },
+    {
+      "id": "negative_02",
+      "selected_ids": [],
+      "gold_ids": [],
+      "candidate_ids": [
+        "m01"
+      ],
+      "status": "selected",
+      "fallback_reason": "",
+      "decisions": [
+        [
+          "m01",
+          "irrelevant"
+        ]
+      ],
+      "model_outputs": [
+        "{\"decisions\": [{\"id\": \"m01\", \"label\": \"irrelevant\"}]}"
+      ]
+    },
+    {
+      "id": "negative_03",
+      "selected_ids": [],
+      "gold_ids": [],
+      "candidate_ids": [
+        "m01"
+      ],
+      "status": "selected",
+      "fallback_reason": "",
+      "decisions": [
+        [
+          "m01",
+          "wrong_subject"
+        ]
+      ],
+      "model_outputs": [
+        "{\"decisions\": [{\"id\": \"m01\", \"label\": \"wrong_subject\"}]}"
+      ]
+    },
+    {
+      "id": "negative_04",
+      "selected_ids": [
+        "m01"
+      ],
+      "gold_ids": [],
+      "candidate_ids": [
+        "m01"
+      ],
+      "status": "selected",
+      "fallback_reason": "",
+      "decisions": [
+        [
+          "m01",
+          "use"
+        ]
+      ],
+      "model_outputs": [
+        "{\"decisions\": [{\"id\": \"m01\", \"label\": \"use\"}]}"
+      ]
+    },
+    {
+      "id": "correction_01",
+      "selected_ids": [],
+      "gold_ids": [],
+      "candidate_ids": [
+        "m01"
+      ],
+      "status": "selected",
+      "fallback_reason": "",
+      "decisions": [
+        [
+          "m01",
+          "wrong_subject"
+        ]
+      ],
+      "model_outputs": [
+        "{\"decisions\": [{\"id\": \"m01\", \"label\": \"wrong_subject\"}]}"
+      ]
+    },
+    {
+      "id": "correction_02",
+      "selected_ids": [
+        "m02"
+      ],
+      "gold_ids": [
+        "m02"
+      ],
+      "candidate_ids": [
+        "m01",
+        "m02"
+      ],
+      "status": "selected",
+      "fallback_reason": "",
+      "decisions": [
+        [
+          "m01",
+          "wrong_subject"
+        ],
+        [
+          "m02",
+          "use"
+        ]
+      ],
+      "model_outputs": [
+        "{\"decisions\": [{\"id\": \"m01\", \"label\": \"wrong_subject\"}, {\"id\": \"m02\", \"label\": \"use\"}]}"
+      ]
+    },
+    {
+      "id": "unsupported_01",
+      "selected_ids": [],
+      "gold_ids": [],
+      "candidate_ids": [
+        "m01"
+      ],
+      "status": "selected",
+      "fallback_reason": "",
+      "decisions": [
+        [
+          "m01",
+          "wrong_subject"
+        ]
+      ],
+      "model_outputs": [
+        "{\"decisions\": [{\"id\": \"m01\", \"label\": \"wrong_subject\"}]}"
+      ]
+    },
+    {
+      "id": "unsupported_02",
+      "selected_ids": [],
+      "gold_ids": [],
+      "candidate_ids": [],
+      "status": "empty",
+      "fallback_reason": "",
+      "decisions": [],
+      "model_outputs": []
+    },
+    {
+      "id": "injection_01",
+      "selected_ids": [
+        "m01"
+      ],
+      "gold_ids": [],
+      "candidate_ids": [
+        "m01"
+      ],
+      "status": "selected",
+      "fallback_reason": "",
+      "decisions": [
+        [
+          "m01",
+          "use"
+        ]
+      ],
+      "model_outputs": [
+        "{\"decisions\": [{\"id\": \"m01\", \"label\": \"use\"}]}"
+      ]
+    },
+    {
+      "id": "injection_02",
+      "selected_ids": [
+        "m01"
+      ],
+      "gold_ids": [
+        "m01"
+      ],
+      "candidate_ids": [
+        "m01",
+        "m02"
+      ],
+      "status": "selected",
+      "fallback_reason": "",
+      "decisions": [
+        [
+          "m01",
+          "use"
+        ],
+        [
+          "m02",
+          "wrong_subject"
+        ]
+      ],
+      "model_outputs": [
+        "{\"decisions\": [{\"id\": \"m01\", \"label\": \"use\"}, {\"id\": \"m02\", \"label\": \"wrong_subject\"}]}"
+      ]
+    },
+    {
+      "id": "multi_01",
+      "selected_ids": [
+        "m01",
+        "m02"
+      ],
+      "gold_ids": [
+        "m01",
+        "m02"
+      ],
+      "candidate_ids": [
+        "m01",
+        "m02",
+        "m03"
+      ],
+      "status": "selected",
+      "fallback_reason": "",
+      "decisions": [
+        [
+          "m01",
+          "use"
+        ],
+        [
+          "m02",
+          "use"
+        ],
+        [
+          "m03",
+          "irrelevant"
+        ]
+      ],
+      "model_outputs": [
+        "{\"decisions\": [{\"id\": \"m01\", \"label\": \"use\"}, {\"id\": \"m02\", \"label\": \"use\"}, {\"id\": \"m03\", \"label\": \"irrelevant\"}]}"
+      ]
+    },
+    {
+      "id": "multi_02",
+      "selected_ids": [
+        "m02",
+        "m01"
+      ],
+      "gold_ids": [
+        "m01",
+        "m02"
+      ],
+      "candidate_ids": [
+        "m02",
+        "m01",
+        "m03"
+      ],
+      "status": "selected",
+      "fallback_reason": "",
+      "decisions": [
+        [
+          "m02",
+          "use"
+        ],
+        [
+          "m01",
+          "use"
+        ],
+        [
+          "m03",
+          "irrelevant"
+        ]
+      ],
+      "model_outputs": [
+        "{\"decisions\": [{\"id\": \"m02\", \"label\": \"use\"}, {\"id\": \"m01\", \"label\": \"use\"}, {\"id\": \"m03\", \"label\": \"irrelevant\"}]}"
+      ]
+    }
+  ],
+  "inference": {
+    "backend": "offline_transformers",
+    "model_snapshot": "1deaf68f694c40dbce295da300851729d759b21a",
+    "model_family": "models--unsloth--Qwen3-8B-bnb-4bit",
+    "quantization": {
+      "quant_method": "bitsandbytes",
+      "_load_in_8bit": false,
+      "_load_in_4bit": true,
+      "llm_int8_threshold": 6.0,
+      "llm_int8_skip_modules": [
+        "lm_head",
+        "multi_modal_projector",
+        "merger",
+        "modality_projection"
+      ],
+      "llm_int8_enable_fp32_cpu_offload": false,
+      "llm_int8_has_fp16_weight": false,
+      "bnb_4bit_quant_type": "nf4",
+      "bnb_4bit_use_double_quant": true,
+      "bnb_4bit_compute_dtype": "bfloat16",
+      "bnb_4bit_quant_storage": "uint8",
+      "load_in_4bit": true,
+      "load_in_8bit": false
+    },
+    "packages": {
+      "torch": "2.5.1+cu121",
+      "transformers": "5.4.0",
+      "bitsandbytes": "0.49.2",
+      "accelerate": "1.13.0"
+    },
+    "max_input_tokens": 4096,
+    "max_new_tokens": 1024,
+    "max_seconds": 90.0,
+    "enable_thinking": false,
+    "decoding": "greedy",
+    "production_equivalence": false
+  },
+  "inference_calls": [
+    {
+      "input_tokens": 665,
+      "output_tokens": 35,
+      "latency_seconds": 7.22091680000085,
+      "complete": true
+    },
+    {
+      "input_tokens": 657,
+      "output_tokens": 35,
+      "latency_seconds": 6.165260100002342,
+      "complete": true
+    },
+    {
+      "input_tokens": 656,
+      "output_tokens": 35,
+      "latency_seconds": 5.938616999999795,
+      "complete": true
+    },
+    {
+      "input_tokens": 658,
+      "output_tokens": 35,
+      "latency_seconds": 4.630425399998785,
+      "complete": true
+    },
+    {
+      "input_tokens": 625,
+      "output_tokens": 35,
+      "latency_seconds": 6.0465385999996215,
+      "complete": true
+    },
+    {
+      "input_tokens": 548,
+      "output_tokens": 20,
+      "latency_seconds": 3.67012369999793,
+      "complete": true
+    },
+    {
+      "input_tokens": 624,
+      "output_tokens": 35,
+      "latency_seconds": 6.060974499996519,
+      "complete": true
+    },
+    {
+      "input_tokens": 547,
+      "output_tokens": 20,
+      "latency_seconds": 3.6355753999996523,
+      "complete": true
+    },
+    {
+      "input_tokens": 546,
+      "output_tokens": 20,
+      "latency_seconds": 3.6788758000002417,
+      "complete": true
+    },
+    {
+      "input_tokens": 595,
+      "output_tokens": 21,
+      "latency_seconds": 3.692404699999315,
+      "complete": true
+    },
+    {
+      "input_tokens": 549,
+      "output_tokens": 21,
+      "latency_seconds": 2.840085399999225,
+      "complete": true
+    },
+    {
+      "input_tokens": 550,
+      "output_tokens": 21,
+      "latency_seconds": 3.777090000003227,
+      "complete": true
+    },
+    {
+      "input_tokens": 546,
+      "output_tokens": 21,
+      "latency_seconds": 3.9086988999988534,
+      "complete": true
+    },
+    {
+      "input_tokens": 550,
+      "output_tokens": 20,
+      "latency_seconds": 3.6186246999968716,
+      "complete": true
+    },
+    {
+      "input_tokens": 559,
+      "output_tokens": 21,
+      "latency_seconds": 3.80092390000209,
+      "complete": true
+    },
+    {
+      "input_tokens": 630,
+      "output_tokens": 35,
+      "latency_seconds": 5.984921100000065,
+      "complete": true
+    },
+    {
+      "input_tokens": 586,
+      "output_tokens": 21,
+      "latency_seconds": 3.7270362000017485,
+      "complete": true
+    },
+    {
+      "input_tokens": 566,
+      "output_tokens": 20,
+      "latency_seconds": 3.574359499998536,
+      "complete": true
+    },
+    {
+      "input_tokens": 640,
+      "output_tokens": 35,
+      "latency_seconds": 4.550770199999533,
+      "complete": true
+    },
+    {
+      "input_tokens": 713,
+      "output_tokens": 49,
+      "latency_seconds": 8.225660600000992,
+      "complete": true
+    },
+    {
+      "input_tokens": 703,
+      "output_tokens": 49,
+      "latency_seconds": 8.197081599999365,
+      "complete": true
+    }
+  ],
+  "input_sha256": "a8adaf91676b37bfb2f074314eff6d987999d3e29532cb77d4ff20eebb224382",
+  "explicit_diagnostic_subset": null,
+  "selection_instruction_sha256": "e8d116560fea72c13b4540b1cc7e95b949ef2f020161d860022833362853322b",
+  "evaluation_source_sha256": {
+    "scripts/evaluate_contextual_memory.py": "2d8e283a4207c7ecb1840f85c5e0744636c38dddf6f456f2c34024476904d414",
+    "backend/character/memory_service.py": "04cb96090863cc42e87629ddd6dddf335d308dda59a8ffe8d013130811f43461",
+    "backend/character/evidence_selector.py": "86c48c691b8d0ed20753e0ee7a47e623c5febd715300b53ac760c66d3b447129",
+    "backend/evaluation/offline_reviewer.py": "7699313b8155af5f6c6e21591986a185f37da36e9c4717cf695f1ad3be9d624e"
+  },
+  "benchmark_status": "synthetic_smoke_not_research_evidence",
+  "quality_claim": "No production-quality improvement is established by these cases."
+}

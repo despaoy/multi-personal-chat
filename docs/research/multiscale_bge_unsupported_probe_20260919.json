@@ -1,0 +1,518 @@
+{
+  "evaluation_status": "real_model_development_ablation_not_held_out_test",
+  "dataset_sha256": "0aeee8bbbf54fef959327dc27ea5653690609968f2d240c0b0c3b372e9737f9d",
+  "model_path": "C:\\Users\\13474\\.cache\\huggingface\\hub\\models--BAAI--bge-reranker-v2-m3\\snapshots\\953dc6f6f85a1b2dbfca4c34a2796e7dde08d41e",
+  "max_length": 512,
+  "batch_size": 2,
+  "text_view": "embedding_text",
+  "annotation_statuses": [
+    "ai_curated_index_absence_probe_not_human_gold"
+  ],
+  "index": {
+    "available": true,
+    "domain_id": "tsukiyashiro_kisaki",
+    "index_root": "C:\\Users\\13474\\Desktop\\multipersonal chat system\\backend\\data\\knowledge\\tsukiyashiro_kisaki\\character_knowledge_index_v3",
+    "documents": 1098,
+    "document_type_counts": {
+      "fact": 218,
+      "relation": 32,
+      "event": 159,
+      "story": 18,
+      "scene": 262,
+      "evidence": 409
+    },
+    "embedding_model": "paraphrase-multilingual-MiniLM-L12-v2"
+  },
+  "variants": {
+    "deterministic": {
+      "summary": {
+        "queries": 8,
+        "answerable_scored": 0,
+        "unresolved_annotations": 0,
+        "hit_at_1": null,
+        "hit_at_5": null,
+        "mrr_at_5": null,
+        "recall_at_5": null,
+        "ndcg_at_5": null,
+        "negative_queries": 8,
+        "negative_domain_hit_rate": 1,
+        "negative_nonabstention_rate": 1,
+        "negative_abstention_decisions_scored": 8,
+        "median_latency_ms": 58.93,
+        "semantic_queries": 0,
+        "notes": "Ranking metrics use results before abstention; logits need separate validation calibration."
+      },
+      "per_query": [
+        {
+          "id": "unsupported_passport",
+          "category": "no_answer",
+          "gold_status": "negative",
+          "gold_ids": [],
+          "retrieved_ids": [
+            "fact_15e63b1a24ceb8a5",
+            "fact_ca3dcf16ed06835c",
+            "fact_73a9d588f38b101b",
+            "fact_2fb7dc98c9fd5fdc",
+            "fact_0b1c9ae52407ee42"
+          ],
+          "hit_at_1": 0,
+          "hit_at_5": 0,
+          "rr": 0.0,
+          "recall": 0.0,
+          "ndcg": 0.0,
+          "actual_rerank_method": "deterministic",
+          "abstained": false,
+          "scores": [
+            0.625,
+            0.625,
+            0.625,
+            0.625,
+            0.625
+          ],
+          "latency_ms": 55.59
+        },
+        {
+          "id": "unsupported_balance",
+          "category": "no_answer",
+          "gold_status": "negative",
+          "gold_ids": [],
+          "retrieved_ids": [
+            "fact_0bcef7e7b6845675",
+            "fact_0547665fd2d685fa",
+            "fact_a35c8fe6a7db3ae5",
+            "fact_5b5ae20ecfb0d532",
+            "fact_11baa081d9dec78d"
+          ],
+          "hit_at_1": 0,
+          "hit_at_5": 0,
+          "rr": 0.0,
+          "recall": 0.0,
+          "ndcg": 0.0,
+          "actual_rerank_method": "deterministic",
+          "abstained": false,
+          "scores": [
+            0.4685,
+            0.4685,
+            0.4685,
+            0.4685,
+            0.4685
+          ],
+          "latency_ms": 59.46
+        },
+        {
+          "id": "unsupported_email",
+          "category": "no_answer",
+          "gold_status": "negative",
+          "gold_ids": [],
+          "retrieved_ids": [
+            "fact_73a9d588f38b101b",
+            "fact_11cefd3384257338",
+            "fact_2fb7dc98c9fd5fdc",
+            "fact_5bafc8f7278ccffc",
+            "fact_eceb24a40f8b4f90"
+          ],
+          "hit_at_1": 0,
+          "hit_at_5": 0,
+          "rr": 0.0,
+          "recall": 0.0,
+          "ndcg": 0.0,
+          "actual_rerank_method": "deterministic",
+          "abstained": false,
+          "scores": [
+            0.6192,
+            0.6192,
+            0.6192,
+            0.6192,
+            0.6192
+          ],
+          "latency_ms": 84.16
+        },
+        {
+          "id": "unsupported_license",
+          "category": "no_answer",
+          "gold_status": "negative",
+          "gold_ids": [],
+          "retrieved_ids": [
+            "fact_a593586cb5a4eb78",
+            "fact_138156ecc9a8a247",
+            "fact_c4459f31a65553cb",
+            "fact_11cefd3384257338",
+            "fact_5bafc8f7278ccffc"
+          ],
+          "hit_at_1": 0,
+          "hit_at_5": 0,
+          "rr": 0.0,
+          "recall": 0.0,
+          "ndcg": 0.0,
+          "actual_rerank_method": "deterministic",
+          "abstained": false,
+          "scores": [
+            0.634,
+            0.634,
+            0.622,
+            0.622,
+            0.622
+          ],
+          "latency_ms": 69.64
+        },
+        {
+          "id": "unsupported_id_number",
+          "category": "no_answer",
+          "gold_status": "negative",
+          "gold_ids": [],
+          "retrieved_ids": [
+            "fact_a35c8fe6a7db3ae5",
+            "fact_0547665fd2d685fa",
+            "fact_5b5ae20ecfb0d532",
+            "fact_cf3399398e29864c",
+            "fact_78a3027670e9eae1"
+          ],
+          "hit_at_1": 0,
+          "hit_at_5": 0,
+          "rr": 0.0,
+          "recall": 0.0,
+          "ndcg": 0.0,
+          "actual_rerank_method": "deterministic",
+          "abstained": false,
+          "scores": [
+            0.6633,
+            0.6633,
+            0.6633,
+            0.6633,
+            0.65
+          ],
+          "latency_ms": 56.66
+        },
+        {
+          "id": "unsupported_wifi",
+          "category": "no_answer",
+          "gold_status": "negative",
+          "gold_ids": [],
+          "retrieved_ids": [
+            "fact_15e63b1a24ceb8a5",
+            "fact_255678c1749e1112",
+            "fact_ca3dcf16ed06835c",
+            "fact_73a9d588f38b101b",
+            "fact_2fb7dc98c9fd5fdc"
+          ],
+          "hit_at_1": 0,
+          "hit_at_5": 0,
+          "rr": 0.0,
+          "recall": 0.0,
+          "ndcg": 0.0,
+          "actual_rerank_method": "deterministic",
+          "abstained": false,
+          "scores": [
+            0.61,
+            0.61,
+            0.61,
+            0.61,
+            0.61
+          ],
+          "latency_ms": 58.4
+        },
+        {
+          "id": "unsupported_mobile",
+          "category": "no_answer",
+          "gold_status": "negative",
+          "gold_ids": [],
+          "retrieved_ids": [
+            "fact_bb0b2c32d4215f9e",
+            "fact_06d046d41b06f184",
+            "fact_8fd89a9a8b2012c8",
+            "fact_64e8751d5062032e",
+            "fact_fe8cddff964fa923"
+          ],
+          "hit_at_1": 0,
+          "hit_at_5": 0,
+          "rr": 0.0,
+          "recall": 0.0,
+          "ndcg": 0.0,
+          "actual_rerank_method": "deterministic",
+          "abstained": false,
+          "scores": [
+            0.6304,
+            0.6304,
+            0.6304,
+            0.6304,
+            0.6304
+          ],
+          "latency_ms": 49.1
+        },
+        {
+          "id": "unsupported_address",
+          "category": "no_answer",
+          "gold_status": "negative",
+          "gold_ids": [],
+          "retrieved_ids": [
+            "fact_15e63b1a24ceb8a5",
+            "fact_ca3dcf16ed06835c",
+            "fact_73a9d588f38b101b",
+            "fact_2fb7dc98c9fd5fdc",
+            "fact_0b1c9ae52407ee42"
+          ],
+          "hit_at_1": 0,
+          "hit_at_5": 0,
+          "rr": 0.0,
+          "recall": 0.0,
+          "ndcg": 0.0,
+          "actual_rerank_method": "deterministic",
+          "abstained": false,
+          "scores": [
+            0.6192,
+            0.6192,
+            0.6192,
+            0.6192,
+            0.6192
+          ],
+          "latency_ms": 69.88
+        }
+      ]
+    },
+    "cross_encoder": {
+      "summary": {
+        "queries": 8,
+        "answerable_scored": 0,
+        "unresolved_annotations": 0,
+        "hit_at_1": null,
+        "hit_at_5": null,
+        "mrr_at_5": null,
+        "recall_at_5": null,
+        "ndcg_at_5": null,
+        "negative_queries": 8,
+        "negative_domain_hit_rate": 1,
+        "negative_nonabstention_rate": 0,
+        "negative_abstention_decisions_scored": 8,
+        "median_latency_ms": 868.315,
+        "semantic_queries": 8,
+        "notes": "Ranking metrics use results before abstention; logits need separate validation calibration."
+      },
+      "per_query": [
+        {
+          "id": "unsupported_passport",
+          "category": "no_answer",
+          "gold_status": "negative",
+          "gold_ids": [],
+          "retrieved_ids": [
+            "fact_73a9d588f38b101b",
+            "fact_ca3dcf16ed06835c",
+            "fact_15e63b1a24ceb8a5",
+            "fact_85a6a25fcf3faf65",
+            "fact_7db86b5070ca24b4"
+          ],
+          "hit_at_1": 0,
+          "hit_at_5": 0,
+          "rr": 0.0,
+          "recall": 0.0,
+          "ndcg": 0.0,
+          "actual_rerank_method": "cross_encoder",
+          "abstained": true,
+          "scores": [
+            -6.6328,
+            -6.9102,
+            -7.207,
+            -8.1094,
+            -8.1484
+          ],
+          "latency_ms": 1667.05
+        },
+        {
+          "id": "unsupported_balance",
+          "category": "no_answer",
+          "gold_status": "negative",
+          "gold_ids": [],
+          "retrieved_ids": [
+            "fact_0547665fd2d685fa",
+            "fact_5b5ae20ecfb0d532",
+            "fact_a35c8fe6a7db3ae5",
+            "fact_01a25a79a4570c82",
+            "fact_cadb675195c036c9"
+          ],
+          "hit_at_1": 0,
+          "hit_at_5": 0,
+          "rr": 0.0,
+          "recall": 0.0,
+          "ndcg": 0.0,
+          "actual_rerank_method": "cross_encoder",
+          "abstained": true,
+          "scores": [
+            -5.1758,
+            -5.4023,
+            -5.4609,
+            -5.9805,
+            -5.9961
+          ],
+          "latency_ms": 915.32
+        },
+        {
+          "id": "unsupported_email",
+          "category": "no_answer",
+          "gold_status": "negative",
+          "gold_ids": [],
+          "retrieved_ids": [
+            "fact_89b295ffd2023324",
+            "fact_20b421311ae04ba9",
+            "fact_5bafc8f7278ccffc",
+            "fact_83f737894534e1d7",
+            "fact_3187f54d64b7b8bb"
+          ],
+          "hit_at_1": 0,
+          "hit_at_5": 0,
+          "rr": 0.0,
+          "recall": 0.0,
+          "ndcg": 0.0,
+          "actual_rerank_method": "cross_encoder",
+          "abstained": true,
+          "scores": [
+            -7.8359,
+            -8.1562,
+            -8.2344,
+            -8.3672,
+            -8.4609
+          ],
+          "latency_ms": 889.27
+        },
+        {
+          "id": "unsupported_license",
+          "category": "no_answer",
+          "gold_status": "negative",
+          "gold_ids": [],
+          "retrieved_ids": [
+            "fact_85a6a25fcf3faf65",
+            "fact_c4459f31a65553cb",
+            "fact_5bafc8f7278ccffc",
+            "fact_e24c31ade87d5499",
+            "fact_138156ecc9a8a247"
+          ],
+          "hit_at_1": 0,
+          "hit_at_5": 0,
+          "rr": 0.0,
+          "recall": 0.0,
+          "ndcg": 0.0,
+          "actual_rerank_method": "cross_encoder",
+          "abstained": true,
+          "scores": [
+            -6.1172,
+            -6.3945,
+            -6.6797,
+            -7.2656,
+            -7.293
+          ],
+          "latency_ms": 917.95
+        },
+        {
+          "id": "unsupported_id_number",
+          "category": "no_answer",
+          "gold_status": "negative",
+          "gold_ids": [],
+          "retrieved_ids": [
+            "fact_a35c8fe6a7db3ae5",
+            "fact_0547665fd2d685fa",
+            "fact_5b5ae20ecfb0d532",
+            "fact_2fd6fec58c3bd4f7",
+            "fact_1fd21628049f0ede"
+          ],
+          "hit_at_1": 0,
+          "hit_at_5": 0,
+          "rr": 0.0,
+          "recall": 0.0,
+          "ndcg": 0.0,
+          "actual_rerank_method": "cross_encoder",
+          "abstained": true,
+          "scores": [
+            -0.4197,
+            -0.5928,
+            -0.8174,
+            -2.6465,
+            -2.7695
+          ],
+          "latency_ms": 847.36
+        },
+        {
+          "id": "unsupported_wifi",
+          "category": "no_answer",
+          "gold_status": "negative",
+          "gold_ids": [],
+          "retrieved_ids": [
+            "fact_ca3dcf16ed06835c",
+            "fact_73a9d588f38b101b",
+            "fact_15e63b1a24ceb8a5",
+            "fact_b130ca676e3c3fdd",
+            "fact_7db86b5070ca24b4"
+          ],
+          "hit_at_1": 0,
+          "hit_at_5": 0,
+          "rr": 0.0,
+          "recall": 0.0,
+          "ndcg": 0.0,
+          "actual_rerank_method": "cross_encoder",
+          "abstained": true,
+          "scores": [
+            -6.8008,
+            -7.2969,
+            -7.4414,
+            -7.8203,
+            -8.1562
+          ],
+          "latency_ms": 754.23
+        },
+        {
+          "id": "unsupported_mobile",
+          "category": "no_answer",
+          "gold_status": "negative",
+          "gold_ids": [],
+          "retrieved_ids": [
+            "fact_691dede16db82d78",
+            "fact_da10fd7017af80ed",
+            "fact_0d7d38d6d06c0ffa",
+            "fact_aa05b42c0c08dff1",
+            "fact_251809a384ececda"
+          ],
+          "hit_at_1": 0,
+          "hit_at_5": 0,
+          "rr": 0.0,
+          "recall": 0.0,
+          "ndcg": 0.0,
+          "actual_rerank_method": "cross_encoder",
+          "abstained": true,
+          "scores": [
+            -5.2422,
+            -5.5,
+            -5.75,
+            -6.0234,
+            -6.0898
+          ],
+          "latency_ms": 533.39
+        },
+        {
+          "id": "unsupported_address",
+          "category": "no_answer",
+          "gold_status": "negative",
+          "gold_ids": [],
+          "retrieved_ids": [
+            "fact_15e63b1a24ceb8a5",
+            "fact_73a9d588f38b101b",
+            "fact_ca3dcf16ed06835c",
+            "fact_b130ca676e3c3fdd",
+            "manual_fact_a04480f939e30208"
+          ],
+          "hit_at_1": 0,
+          "hit_at_5": 0,
+          "rr": 0.0,
+          "recall": 0.0,
+          "ndcg": 0.0,
+          "actual_rerank_method": "cross_encoder",
+          "abstained": true,
+          "scores": [
+            -5.4648,
+            -5.5195,
+            -5.5469,
+            -7.1992,
+            -7.6641
+          ],
+          "latency_ms": 509.13
+        }
+      ]
+    }
+  }
+}

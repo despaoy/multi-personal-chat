@@ -280,6 +280,12 @@ def test_mutating_routes_default_to_admin_authorization():
         ("POST", "/api/ask"): "get_current_user",
         ("POST", "/api/ask/stream"): "get_current_user",
         ("POST", "/api/generate"): "get_current_user",
+        # Narrative writes are owner-scoped, not global administration.
+        # Ownership/foreign-branch rejection is exercised in test_narrative_branches.
+        ("POST", "/api/narrative-branches/canonical/generate"): "get_current_user",
+        ("POST", "/api/narrative-branches"): "get_current_user",
+        ("POST", "/api/narrative-branches/{branch_id}/archive"): "get_current_user",
+        ("POST", "/api/narrative-branches/{branch_id}/assertions/{assertion_id}/{action}"): "get_current_user",
         ("PUT", "/api/user/data"): "get_current_user",
         ("POST", "/api/feedback"): "get_current_user",
         ("POST", "/api/auth/register"): None,
@@ -287,6 +293,8 @@ def test_mutating_routes_default_to_admin_authorization():
         ("POST", "/api/auth/logout"): None,
         # This endpoint authenticates with the integration token/signature scheme.
         ("POST", "/api/integrations/astrbot/messages"): None,
+        # Same token/signature boundary; see test_gateway_delivery auth regressions.
+        ("POST", "/api/integrations/astrbot/delivery"): None,
     }
     unsafe_methods = {"POST", "PUT", "PATCH", "DELETE"}
 

@@ -941,11 +941,28 @@ def test_user_apology_uses_acceptance_fallback_instead_of_complaint_wording():
     ],
 )
 def test_factual_hard_violations_have_closed_deterministic_fallbacks(violation: str, fallback_kind: str):
-    fallback = deterministic_fallback((violation,), ReplyGuard(factual_task=True))
+    guard = ReplyGuard(factual_task=True, forbid_unsupported_user_fact=True)
+    fallback = deterministic_fallback((violation,), guard)
 
     assert fallback is not None
     assert fallback[0] == fallback_kind
-    assert violation not in validate_reply(fallback[1], ReplyGuard(factual_task=True))
+    assert violation not in validate_reply(fallback[1], guard)
+
+
+async def test_user_fact_fallback_closes_the_actual_enabled_guard_after_retry():
+    calls = []
+
+    async def generate(**kwargs):
+        calls.append(kwargs)
+        return "你一直喜欢喝咖啡。"
+
+    guard = ReplyGuard(forbid_unsupported_user_fact=True)
+    request = GenerationRequest(message="今天天气不错。", persona_prompt="角色", reply_guard=guard)
+    result = await generate_character_response(request, generate)
+    assert len(calls) == 2
+    assert result.guard_fallback == "unsupported_user_fact"
+    assert result.guard_post_retry_violations == (UNSUPPORTED_USER_FACT,)
+    assert validate_reply(result.reply, guard) == ()
 
 
 @pytest.mark.parametrize(
@@ -1250,6 +1267,7 @@ async def test_generation_retries_once_with_closed_correction_without_echoing_ba
 
     result = await generate_character_response(
         GenerationRequest(
+            reply_guard_mode="strict",
             message="今天看见一家蛋糕店。",
             persona_prompt="你是月社妃。",
             reply_guard=ReplyGuard(forbidden_terms=("琉璃",)),
@@ -1273,6 +1291,7 @@ async def test_failed_identity_retry_is_sanitized_instead_of_released():
     guard = ReplyGuard(forbidden_terms=("琉璃",), factual_task=True)
     result = await generate_character_response(
         GenerationRequest(
+            reply_guard_mode="strict",
             message="一加一等于多少？",
             persona_prompt="你是月社妃。",
             reply_guard=guard,
@@ -1294,6 +1313,7 @@ async def test_failed_safety_retry_uses_explicit_deterministic_fallback():
 
     result = await generate_character_response(
         GenerationRequest(
+            reply_guard_mode="strict",
             message="我撑不住了。",
             persona_prompt="你是某人物。",
             reply_guard=ReplyGuard(require_gentle_safety_check=True),
@@ -1320,6 +1340,7 @@ async def test_affiliation_retry_uses_affiliation_fallback_when_only_generic_tem
 
     result = await generate_character_response(
         GenerationRequest(
+            reply_guard_mode="strict",
             message="想死你了，终于等到你上线。",
             persona_prompt="你是月社妃。",
             reply_guard=ReplyGuard(
@@ -1352,6 +1373,7 @@ async def test_repair_retry_rejects_mechanical_check_in_and_uses_repair_fallback
 
     result = await generate_character_response(
         GenerationRequest(
+            reply_guard_mode="strict",
             message="算了，我语气也重了。我们重新说吧。",
             persona_prompt="你是月社妃。",
             reply_guard=ReplyGuard(
@@ -1382,6 +1404,7 @@ async def test_failed_factual_retry_never_releases_task_style_drift():
 
     result = await generate_character_response(
         GenerationRequest(
+            reply_guard_mode="strict",
             message="Python 的 sort 和 sorted 有什么区别？",
             persona_prompt="你是林澄。",
             reply_guard=ReplyGuard(factual_task=True),
@@ -1405,6 +1428,7 @@ async def test_failed_generic_advice_retry_keeps_concrete_steps_instead_of_relea
 
     result = await generate_character_response(
         GenerationRequest(
+            reply_guard_mode="strict",
             message="我今天考试没考好，很难过，你说我接下来该怎么办？",
             persona_prompt="你是月社妃。",
             reply_guard=guard,
@@ -1436,6 +1460,7 @@ async def test_failed_meta_factual_lore_retry_keeps_identity_and_fact_answer():
 
     result = await generate_character_response(
         GenerationRequest(
+            reply_guard_mode="strict",
             message="你是谁？顺便告诉我水在标准大气压下的沸点是多少？",
             persona_prompt="你是月社妃。",
             reply_guard=guard,

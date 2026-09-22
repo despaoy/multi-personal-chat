@@ -1,0 +1,147 @@
+{
+  "status": "public_chinese_subset_frozen_no_generation_or_scores",
+  "subset_seed": "charactereval-contextual-pilot-v1",
+  "requested_roles": 8,
+  "per_role": 2,
+  "cases": [
+    {
+      "id": "355",
+      "role": "洛枳",
+      "novel_name": "暗恋-橘生淮南",
+      "status": "invalid",
+      "reason": "missing textual role profile"
+    },
+    {
+      "id": "6442",
+      "role": "洛枳",
+      "novel_name": "暗恋-橘生淮南",
+      "status": "invalid",
+      "reason": "missing textual role profile"
+    },
+    {
+      "id": "1238",
+      "role": "沈佳仪",
+      "novel_name": "那些年",
+      "status": "invalid",
+      "reason": "missing textual role profile"
+    },
+    {
+      "id": "1283",
+      "role": "沈佳仪",
+      "novel_name": "那些年",
+      "status": "invalid",
+      "reason": "missing textual role profile"
+    },
+    {
+      "id": "9926",
+      "role": "徐凤年",
+      "novel_name": "雪中悍刀行",
+      "status": "invalid",
+      "reason": "missing textual role profile"
+    },
+    {
+      "id": "6028",
+      "role": "徐凤年",
+      "novel_name": "雪中悍刀行",
+      "status": "invalid",
+      "reason": "missing textual role profile"
+    },
+    {
+      "id": "3096",
+      "role": "孟宴臣",
+      "novel_name": "我的人间烟火",
+      "status": "invalid",
+      "reason": "missing textual role profile"
+    },
+    {
+      "id": "3143",
+      "role": "孟宴臣",
+      "novel_name": "我的人间烟火",
+      "status": "invalid",
+      "reason": "missing textual role profile"
+    },
+    {
+      "id": "4158",
+      "role": "美杜莎女王",
+      "novel_name": "斗破苍穹",
+      "status": "invalid",
+      "reason": "missing textual role profile"
+    },
+    {
+      "id": "4086",
+      "role": "美杜莎女王",
+      "novel_name": "斗破苍穹",
+      "status": "invalid",
+      "reason": "missing textual role profile"
+    },
+    {
+      "id": "2613",
+      "role": "罗辑",
+      "novel_name": "三体-黑暗森林",
+      "status": "invalid",
+      "reason": "missing textual role profile"
+    },
+    {
+      "id": "2604",
+      "role": "罗辑",
+      "novel_name": "三体-黑暗森林",
+      "status": "invalid",
+      "reason": "missing textual role profile"
+    },
+    {
+      "id": "1349",
+      "role": "柯景腾",
+      "novel_name": "那些年",
+      "status": "invalid",
+      "reason": "missing textual role profile"
+    },
+    {
+      "id": "6761",
+      "role": "柯景腾",
+      "novel_name": "那些年",
+      "status": "invalid",
+      "reason": "missing textual role profile"
+    },
+    {
+      "id": "10149",
+      "role": "关宏宇",
+      "novel_name": "白夜追凶",
+      "status": "invalid",
+      "reason": "missing textual role profile"
+    },
+    {
+      "id": "8204",
+      "role": "关宏宇",
+      "novel_name": "白夜追凶",
+      "status": "invalid",
+      "reason": "missing textual role profile"
+    }
+  ],
+  "summary": {
+    "corpus_cases": 4564,
+    "selected_cases": 16,
+    "invalid_selected_cases": 16,
+    "novel_case_counts": {
+      "暗恋-橘生淮南": 2,
+      "那些年": 4,
+      "雪中悍刀行": 2,
+      "我的人间烟火": 2,
+      "斗破苍穹": 2,
+      "三体-黑暗森林": 2,
+      "白夜追凶": 2
+    },
+    "selected_cases_without_metric_annotations": 0
+  },
+  "limitations": [
+    "Public data provenance is independent of this project's synthetic tests; pretrained-model contamination is not ruled out.",
+    "Roles/novels differ from the project's target character. This cannot replace target-canon evaluation.",
+    "No copyrighted source dialogue/profile text is copied into this audit report. Consult the external cache or upstream corpus by ID.",
+    "No gold reply, human rating, training approval, CharacterRM inference or model-quality score is manufactured."
+  ],
+  "source_sha256": {
+    "data/test_data.jsonl": "6d9723a1484f1d2739bcf388c7960abe1933b7a5a1fddae0170cc9ea7c66dcd8",
+    "data/character_profiles.json": "d9b4c9f7ab63b89b3c348ae88b43c87872f0f6a5cb06d7f31cbe64a630e6434e",
+    "data/id2metric.jsonl": "df80ee716124a7deacc6f24ee372a4600b719cdaa79f01cefcdfb286359f1801"
+  },
+  "adapter_sha256": "3a66e622219de03cdeaddbcd410ae2b7a1706f9265df9bc5871229b737cb81a6"
+}

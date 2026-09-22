@@ -1,0 +1,843 @@
+{
+  "input_sha256": "92e6047938f8d39770e2bbd3ae9d6ae452096451e684b3c76d9354061c737c8b",
+  "recipe": {
+    "inference": {
+      "backend": "offline_transformers",
+      "model_snapshot": "1deaf68f694c40dbce295da300851729d759b21a",
+      "model_family": "models--unsloth--Qwen3-8B-bnb-4bit",
+      "quantization": {
+        "quant_method": "bitsandbytes",
+        "_load_in_8bit": false,
+        "_load_in_4bit": true,
+        "llm_int8_threshold": 6.0,
+        "llm_int8_skip_modules": [
+          "lm_head",
+          "multi_modal_projector",
+          "merger",
+          "modality_projection"
+        ],
+        "llm_int8_enable_fp32_cpu_offload": false,
+        "llm_int8_has_fp16_weight": false,
+        "bnb_4bit_quant_type": "nf4",
+        "bnb_4bit_use_double_quant": true,
+        "bnb_4bit_compute_dtype": "bfloat16",
+        "bnb_4bit_quant_storage": "uint8",
+        "load_in_4bit": true,
+        "load_in_8bit": false
+      },
+      "packages": {
+        "torch": "2.5.1+cu121",
+        "transformers": "5.4.0",
+        "bitsandbytes": "0.49.2",
+        "accelerate": "1.13.0"
+      },
+      "max_input_tokens": 4096,
+      "max_new_tokens": 2048,
+      "max_seconds": 120,
+      "enable_thinking": true,
+      "decoding": "sampled",
+      "sampling_parameters": {
+        "temperature": 0.6,
+        "top_p": 0.95,
+        "top_k": 20,
+        "min_p": 0.0
+      },
+      "seed_strategy": "sha256(initial_seed,formatted_prompt); forked RNG; order-independent",
+      "production_equivalence": false
+    },
+    "selection_protocol": "direct",
+    "candidate_view": "original",
+    "candidate_view_sha256": null,
+    "selection_instruction_sha256": "e8d116560fea72c13b4540b1cc7e95b949ef2f020161d860022833362853322b",
+    "planning_instruction_sha256": null,
+    "embedding_enabled": false,
+    "embedding_model": null
+  },
+  "expected_seeds": [
+    42,
+    43,
+    44
+  ],
+  "distinct_cases": 16,
+  "repeated_case_evaluations": 48,
+  "successful_exact_counts_by_seed": {
+    "42": 15,
+    "43": 16,
+    "44": 15
+  },
+  "mean_successful_exact_accuracy": 0.9583333333333334,
+  "min_successful_exact_accuracy": 0.9375,
+  "max_successful_exact_accuracy": 1.0,
+  "correct_all_seeds": 14,
+  "wrong_all_seeds": [],
+  "varying_case_ids": [
+    "history_old",
+    "task_translate"
+  ],
+  "cases": [
+    {
+      "id": "owner_user",
+      "successful_exact_by_seed": {
+        "42": true,
+        "43": true,
+        "44": true
+      },
+      "correct_all_seeds": true,
+      "wrong_all_seeds": false,
+      "selection_or_status_varies": false
+    },
+    {
+      "id": "owner_character",
+      "successful_exact_by_seed": {
+        "42": true,
+        "43": true,
+        "44": true
+      },
+      "correct_all_seeds": true,
+      "wrong_all_seeds": false,
+      "selection_or_status_varies": false
+    },
+    {
+      "id": "hobby_user",
+      "successful_exact_by_seed": {
+        "42": true,
+        "43": true,
+        "44": true
+      },
+      "correct_all_seeds": true,
+      "wrong_all_seeds": false,
+      "selection_or_status_varies": false
+    },
+    {
+      "id": "hobby_character",
+      "successful_exact_by_seed": {
+        "42": true,
+        "43": true,
+        "44": true
+      },
+      "correct_all_seeds": true,
+      "wrong_all_seeds": false,
+      "selection_or_status_varies": false
+    },
+    {
+      "id": "history_old",
+      "successful_exact_by_seed": {
+        "42": false,
+        "43": true,
+        "44": true
+      },
+      "correct_all_seeds": false,
+      "wrong_all_seeds": false,
+      "selection_or_status_varies": true
+    },
+    {
+      "id": "history_now",
+      "successful_exact_by_seed": {
+        "42": true,
+        "43": true,
+        "44": true
+      },
+      "correct_all_seeds": true,
+      "wrong_all_seeds": false,
+      "selection_or_status_varies": false
+    },
+    {
+      "id": "task_recall",
+      "successful_exact_by_seed": {
+        "42": true,
+        "43": true,
+        "44": true
+      },
+      "correct_all_seeds": true,
+      "wrong_all_seeds": false,
+      "selection_or_status_varies": false
+    },
+    {
+      "id": "task_translate",
+      "successful_exact_by_seed": {
+        "42": true,
+        "43": true,
+        "44": false
+      },
+      "correct_all_seeds": false,
+      "wrong_all_seeds": false,
+      "selection_or_status_varies": true
+    },
+    {
+      "id": "constraint_personal",
+      "successful_exact_by_seed": {
+        "42": true,
+        "43": true,
+        "44": true
+      },
+      "correct_all_seeds": true,
+      "wrong_all_seeds": false,
+      "selection_or_status_varies": false
+    },
+    {
+      "id": "constraint_general",
+      "successful_exact_by_seed": {
+        "42": true,
+        "43": true,
+        "44": true
+      },
+      "correct_all_seeds": true,
+      "wrong_all_seeds": false,
+      "selection_or_status_varies": false
+    },
+    {
+      "id": "attack_clean",
+      "successful_exact_by_seed": {
+        "42": true,
+        "43": true,
+        "44": true
+      },
+      "correct_all_seeds": true,
+      "wrong_all_seeds": false,
+      "selection_or_status_varies": false
+    },
+    {
+      "id": "attack_dirty",
+      "successful_exact_by_seed": {
+        "42": true,
+        "43": true,
+        "44": true
+      },
+      "correct_all_seeds": true,
+      "wrong_all_seeds": false,
+      "selection_or_status_varies": false
+    },
+    {
+      "id": "correction_before",
+      "successful_exact_by_seed": {
+        "42": true,
+        "43": true,
+        "44": true
+      },
+      "correct_all_seeds": true,
+      "wrong_all_seeds": false,
+      "selection_or_status_varies": false
+    },
+    {
+      "id": "correction_after",
+      "successful_exact_by_seed": {
+        "42": true,
+        "43": true,
+        "44": true
+      },
+      "correct_all_seeds": true,
+      "wrong_all_seeds": false,
+      "selection_or_status_varies": false
+    },
+    {
+      "id": "reference_clear",
+      "successful_exact_by_seed": {
+        "42": true,
+        "43": true,
+        "44": true
+      },
+      "correct_all_seeds": true,
+      "wrong_all_seeds": false,
+      "selection_or_status_varies": false
+    },
+    {
+      "id": "reference_changed",
+      "successful_exact_by_seed": {
+        "42": true,
+        "43": true,
+        "44": true
+      },
+      "correct_all_seeds": true,
+      "wrong_all_seeds": false,
+      "selection_or_status_varies": false
+    }
+  ],
+  "posthoc_majority_vote": {
+    "model_calls_across_all_seeds": 48,
+    "summed_generation_seconds": 1603.5445914000084,
+    "metrics": {
+      "cases": 16,
+      "true_positive": 9,
+      "false_positive": 0,
+      "false_negative": 0,
+      "precision_micro": 1.0,
+      "recall_micro": 1.0,
+      "f1_micro": 1.0,
+      "exact_set_accuracy": 1.0,
+      "irrelevant_selection_rate": 0.0,
+      "negative_cases": 7,
+      "negative_case_injection_rate": 0.0,
+      "answerable_cases": 9,
+      "answerable_miss_rate": 0.0,
+      "provider_failures": 0,
+      "provider_failure_rate": 0.0,
+      "successful_exact_set_accuracy": 1.0,
+      "retrieval_diagnostic_cases": 16,
+      "candidate_gold_recall": 1.0,
+      "selector_recall_given_available_gold": 1.0,
+      "gold_missing_before_selection": 0,
+      "available_gold_dropped_by_selection": 0
+    },
+    "paired_metrics": {
+      "pairs": 8,
+      "both_correct": 8,
+      "both_correct_rate": 1.0,
+      "details": [
+        {
+          "pair_id": "attack",
+          "case_ids": [
+            "attack_clean",
+            "attack_dirty"
+          ],
+          "expected_change": false,
+          "observed_change": false,
+          "both_successfully_correct": true
+        },
+        {
+          "pair_id": "constraint",
+          "case_ids": [
+            "constraint_personal",
+            "constraint_general"
+          ],
+          "expected_change": true,
+          "observed_change": true,
+          "both_successfully_correct": true
+        },
+        {
+          "pair_id": "correction",
+          "case_ids": [
+            "correction_before",
+            "correction_after"
+          ],
+          "expected_change": true,
+          "observed_change": true,
+          "both_successfully_correct": true
+        },
+        {
+          "pair_id": "history",
+          "case_ids": [
+            "history_old",
+            "history_now"
+          ],
+          "expected_change": true,
+          "observed_change": true,
+          "both_successfully_correct": true
+        },
+        {
+          "pair_id": "hobby",
+          "case_ids": [
+            "hobby_user",
+            "hobby_character"
+          ],
+          "expected_change": true,
+          "observed_change": true,
+          "both_successfully_correct": true
+        },
+        {
+          "pair_id": "owner",
+          "case_ids": [
+            "owner_user",
+            "owner_character"
+          ],
+          "expected_change": true,
+          "observed_change": true,
+          "both_successfully_correct": true
+        },
+        {
+          "pair_id": "reference",
+          "case_ids": [
+            "reference_clear",
+            "reference_changed"
+          ],
+          "expected_change": true,
+          "observed_change": true,
+          "both_successfully_correct": true
+        },
+        {
+          "pair_id": "translation",
+          "case_ids": [
+            "task_recall",
+            "task_translate"
+          ],
+          "expected_change": true,
+          "observed_change": true,
+          "both_successfully_correct": true
+        }
+      ]
+    },
+    "cases": [
+      {
+        "id": "owner_user",
+        "completed_runs": 3,
+        "required_votes": 2,
+        "votes": {
+          "f01": 3
+        },
+        "selected_ids": [
+          "f01"
+        ],
+        "status": "selected"
+      },
+      {
+        "id": "owner_character",
+        "completed_runs": 3,
+        "required_votes": 2,
+        "votes": {},
+        "selected_ids": [],
+        "status": "selected"
+      },
+      {
+        "id": "hobby_user",
+        "completed_runs": 3,
+        "required_votes": 2,
+        "votes": {
+          "f02": 3
+        },
+        "selected_ids": [
+          "f02"
+        ],
+        "status": "selected"
+      },
+      {
+        "id": "hobby_character",
+        "completed_runs": 3,
+        "required_votes": 2,
+        "votes": {},
+        "selected_ids": [],
+        "status": "selected"
+      },
+      {
+        "id": "history_old",
+        "completed_runs": 3,
+        "required_votes": 2,
+        "votes": {
+          "old": 2
+        },
+        "selected_ids": [
+          "old"
+        ],
+        "status": "selected"
+      },
+      {
+        "id": "history_now",
+        "completed_runs": 3,
+        "required_votes": 2,
+        "votes": {
+          "new": 3
+        },
+        "selected_ids": [
+          "new"
+        ],
+        "status": "selected"
+      },
+      {
+        "id": "task_recall",
+        "completed_runs": 3,
+        "required_votes": 2,
+        "votes": {
+          "flower": 3
+        },
+        "selected_ids": [
+          "flower"
+        ],
+        "status": "selected"
+      },
+      {
+        "id": "task_translate",
+        "completed_runs": 3,
+        "required_votes": 2,
+        "votes": {
+          "flower": 1
+        },
+        "selected_ids": [],
+        "status": "selected"
+      },
+      {
+        "id": "constraint_personal",
+        "completed_runs": 3,
+        "required_votes": 2,
+        "votes": {
+          "diet": 3
+        },
+        "selected_ids": [
+          "diet"
+        ],
+        "status": "selected"
+      },
+      {
+        "id": "constraint_general",
+        "completed_runs": 3,
+        "required_votes": 2,
+        "votes": {},
+        "selected_ids": [],
+        "status": "selected"
+      },
+      {
+        "id": "attack_clean",
+        "completed_runs": 3,
+        "required_votes": 2,
+        "votes": {},
+        "selected_ids": [],
+        "status": "selected"
+      },
+      {
+        "id": "attack_dirty",
+        "completed_runs": 3,
+        "required_votes": 2,
+        "votes": {},
+        "selected_ids": [],
+        "status": "selected"
+      },
+      {
+        "id": "correction_before",
+        "completed_runs": 3,
+        "required_votes": 2,
+        "votes": {
+          "pet": 3
+        },
+        "selected_ids": [
+          "pet"
+        ],
+        "status": "selected"
+      },
+      {
+        "id": "correction_after",
+        "completed_runs": 3,
+        "required_votes": 2,
+        "votes": {},
+        "selected_ids": [],
+        "status": "selected"
+      },
+      {
+        "id": "reference_clear",
+        "completed_runs": 3,
+        "required_votes": 2,
+        "votes": {
+          "knee": 3
+        },
+        "selected_ids": [
+          "knee"
+        ],
+        "status": "selected"
+      },
+      {
+        "id": "reference_changed",
+        "completed_runs": 3,
+        "required_votes": 2,
+        "votes": {
+          "device": 3
+        },
+        "selected_ids": [
+          "device"
+        ],
+        "status": "selected"
+      }
+    ],
+    "quality_claim": "Replay of all declared seeds; added inference cost, correlated same-model votes, no held-out validation or calibrated probability."
+  },
+  "posthoc_exact_set_vote": {
+    "metrics": {
+      "cases": 16,
+      "true_positive": 9,
+      "false_positive": 0,
+      "false_negative": 0,
+      "precision_micro": 1.0,
+      "recall_micro": 1.0,
+      "f1_micro": 1.0,
+      "exact_set_accuracy": 1.0,
+      "irrelevant_selection_rate": 0.0,
+      "negative_cases": 7,
+      "negative_case_injection_rate": 0.0,
+      "answerable_cases": 9,
+      "answerable_miss_rate": 0.0,
+      "successful_exact_set_accuracy": 1.0,
+      "retrieval_diagnostic_cases": 16,
+      "candidate_gold_recall": 1.0,
+      "selector_recall_given_available_gold": 1.0,
+      "gold_missing_before_selection": 0,
+      "available_gold_dropped_by_selection": 0,
+      "consensus_failures": 0,
+      "consensus_failure_rate": 0.0
+    },
+    "cases": [
+      {
+        "id": "owner_user",
+        "completed_runs": 3,
+        "required_votes": 2,
+        "set_votes": [
+          {
+            "selected_ids": [
+              "f01"
+            ],
+            "count": 3
+          }
+        ],
+        "selected_ids": [
+          "f01"
+        ],
+        "status": "selected",
+        "fallback_reason": ""
+      },
+      {
+        "id": "owner_character",
+        "completed_runs": 3,
+        "required_votes": 2,
+        "set_votes": [
+          {
+            "selected_ids": [],
+            "count": 3
+          }
+        ],
+        "selected_ids": [],
+        "status": "selected",
+        "fallback_reason": ""
+      },
+      {
+        "id": "hobby_user",
+        "completed_runs": 3,
+        "required_votes": 2,
+        "set_votes": [
+          {
+            "selected_ids": [
+              "f02"
+            ],
+            "count": 3
+          }
+        ],
+        "selected_ids": [
+          "f02"
+        ],
+        "status": "selected",
+        "fallback_reason": ""
+      },
+      {
+        "id": "hobby_character",
+        "completed_runs": 3,
+        "required_votes": 2,
+        "set_votes": [
+          {
+            "selected_ids": [],
+            "count": 3
+          }
+        ],
+        "selected_ids": [],
+        "status": "selected",
+        "fallback_reason": ""
+      },
+      {
+        "id": "history_old",
+        "completed_runs": 3,
+        "required_votes": 2,
+        "set_votes": [
+          {
+            "selected_ids": [],
+            "count": 1
+          },
+          {
+            "selected_ids": [
+              "old"
+            ],
+            "count": 2
+          }
+        ],
+        "selected_ids": [
+          "old"
+        ],
+        "status": "selected",
+        "fallback_reason": ""
+      },
+      {
+        "id": "history_now",
+        "completed_runs": 3,
+        "required_votes": 2,
+        "set_votes": [
+          {
+            "selected_ids": [
+              "new"
+            ],
+            "count": 3
+          }
+        ],
+        "selected_ids": [
+          "new"
+        ],
+        "status": "selected",
+        "fallback_reason": ""
+      },
+      {
+        "id": "task_recall",
+        "completed_runs": 3,
+        "required_votes": 2,
+        "set_votes": [
+          {
+            "selected_ids": [
+              "flower"
+            ],
+            "count": 3
+          }
+        ],
+        "selected_ids": [
+          "flower"
+        ],
+        "status": "selected",
+        "fallback_reason": ""
+      },
+      {
+        "id": "task_translate",
+        "completed_runs": 3,
+        "required_votes": 2,
+        "set_votes": [
+          {
+            "selected_ids": [],
+            "count": 2
+          },
+          {
+            "selected_ids": [
+              "flower"
+            ],
+            "count": 1
+          }
+        ],
+        "selected_ids": [],
+        "status": "selected",
+        "fallback_reason": ""
+      },
+      {
+        "id": "constraint_personal",
+        "completed_runs": 3,
+        "required_votes": 2,
+        "set_votes": [
+          {
+            "selected_ids": [
+              "diet"
+            ],
+            "count": 3
+          }
+        ],
+        "selected_ids": [
+          "diet"
+        ],
+        "status": "selected",
+        "fallback_reason": ""
+      },
+      {
+        "id": "constraint_general",
+        "completed_runs": 3,
+        "required_votes": 2,
+        "set_votes": [
+          {
+            "selected_ids": [],
+            "count": 3
+          }
+        ],
+        "selected_ids": [],
+        "status": "selected",
+        "fallback_reason": ""
+      },
+      {
+        "id": "attack_clean",
+        "completed_runs": 3,
+        "required_votes": 2,
+        "set_votes": [
+          {
+            "selected_ids": [],
+            "count": 3
+          }
+        ],
+        "selected_ids": [],
+        "status": "selected",
+        "fallback_reason": ""
+      },
+      {
+        "id": "attack_dirty",
+        "completed_runs": 3,
+        "required_votes": 2,
+        "set_votes": [
+          {
+            "selected_ids": [],
+            "count": 3
+          }
+        ],
+        "selected_ids": [],
+        "status": "selected",
+        "fallback_reason": ""
+      },
+      {
+        "id": "correction_before",
+        "completed_runs": 3,
+        "required_votes": 2,
+        "set_votes": [
+          {
+            "selected_ids": [
+              "pet"
+            ],
+            "count": 3
+          }
+        ],
+        "selected_ids": [
+          "pet"
+        ],
+        "status": "selected",
+        "fallback_reason": ""
+      },
+      {
+        "id": "correction_after",
+        "completed_runs": 3,
+        "required_votes": 2,
+        "set_votes": [
+          {
+            "selected_ids": [],
+            "count": 3
+          }
+        ],
+        "selected_ids": [],
+        "status": "selected",
+        "fallback_reason": ""
+      },
+      {
+        "id": "reference_clear",
+        "completed_runs": 3,
+        "required_votes": 2,
+        "set_votes": [
+          {
+            "selected_ids": [
+              "knee"
+            ],
+            "count": 3
+          }
+        ],
+        "selected_ids": [
+          "knee"
+        ],
+        "status": "selected",
+        "fallback_reason": ""
+      },
+      {
+        "id": "reference_changed",
+        "completed_runs": 3,
+        "required_votes": 2,
+        "set_votes": [
+          {
+            "selected_ids": [
+              "device"
+            ],
+            "count": 3
+          }
+        ],
+        "selected_ids": [
+          "device"
+        ],
+        "status": "selected",
+        "fallback_reason": ""
+      }
+    ],
+    "additional_model_calls_beyond_itemwise_replay": 0,
+    "quality_claim": "Same source runs, strict majority of complete sets; disagreement is failure, not successful abstention. Still post-hoc and not independently validated."
+  },
+  "quality_claim": "Seed stability on the same correlated development cases, not independent test examples or a confidence interval.",
+  "source_reports_sha256": {
+    "docs\\research\\contextual_memory_qwen3_thinking_transfer_20260919.json": "ae2874be65ae449cfea88d36f52badeaf32dc88b6cb4ab025ec39add90da0bd9",
+    "docs\\research\\contextual_memory_qwen3_thinking_transfer_seed43_20260919.json": "f86b832398633cc090dc3694ef407d99326e95b754c2a303c68a81b6700ce6c0",
+    "docs\\research\\contextual_memory_qwen3_thinking_transfer_seed44_20260919.json": "714c4e770ee1c737d8fbcee24beb7f717847a3d9af0e9122256cf5fed0b36b23"
+  }
+}

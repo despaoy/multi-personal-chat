@@ -86,6 +86,7 @@ from api.knowledge import router as knowledge_router
 from api.loras import router as loras_router
 from api.messages import router as messages_router
 from api.models import router as models_router
+from api.narrative import router as narrative_router
 from api.preferences import router as preferences_router
 from api.retrieval_eval import router as retrieval_eval_router
 from api.router import router as lora_router_router
@@ -382,6 +383,7 @@ def _install_middleware(
 _ROUTERS = (
     stats_router,
     messages_router,
+    narrative_router,
     generate_router,
     loras_router,
     training_router,

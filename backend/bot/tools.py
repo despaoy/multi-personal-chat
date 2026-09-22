@@ -59,7 +59,7 @@ async def _send_file_handler(filename: str,bot: Bot, event: MessageEvent) -> str
     if not matchs:
         return f"未找到匹配的文件"
     if(len(matchs)==1):
-        file_path=str(desktop/matchs[0])
+        file_path=str(send_dir/matchs[0])
         file_name=matchs[0]
         await bot.upload_private_file(user_id=event.user_id,
         file=file_path,name=file_name)

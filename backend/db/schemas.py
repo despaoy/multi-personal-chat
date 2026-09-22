@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field, StringConstraints, field_validator
 
 
 class MessageRequest(BaseModel):
+    branchId: str | None = Field(default=None, min_length=1, max_length=64)
     message: str = Field(..., min_length=1, max_length=8000)
     sessionType: str = "private"
     conversationType: str = ""
@@ -30,7 +31,7 @@ class MessageRequest(BaseModel):
     conversationId: str = ""
     senderId: str = ""
     sourceMessageId: str = ""
-    traceId: str = ""
+    traceId: str = Field(default="", max_length=128)
     history: list[dict[str, str]] = Field(default_factory=list, max_length=40)
 
     @field_validator("history")
@@ -54,6 +55,9 @@ class MessageRequest(BaseModel):
 
 
 class GenerateResponse(BaseModel):
+    branchId: str | None = None
+    branchRevision: int | None = None
+    evidenceSources: list[dict[str, Any]] = Field(default_factory=list)
     reply: str
     model: str = "Qwen/Qwen3-8B"
     costTime: float

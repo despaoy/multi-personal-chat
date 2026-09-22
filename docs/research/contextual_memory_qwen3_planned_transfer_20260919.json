@@ -1,0 +1,875 @@
+{
+  "mode": "offline_model",
+  "embedding_enabled": false,
+  "selection_protocol": "planned",
+  "metrics": {
+    "cases": 16,
+    "true_positive": 8,
+    "false_positive": 5,
+    "false_negative": 1,
+    "precision_micro": 0.6153846153846154,
+    "recall_micro": 0.8888888888888888,
+    "f1_micro": 0.7272727272727273,
+    "exact_set_accuracy": 0.625,
+    "irrelevant_selection_rate": 0.38461538461538464,
+    "negative_cases": 7,
+    "negative_case_injection_rate": 0.5714285714285714,
+    "answerable_cases": 9,
+    "answerable_miss_rate": 0.1111111111111111,
+    "provider_failures": 0,
+    "provider_failure_rate": 0.0,
+    "successful_exact_set_accuracy": 0.625,
+    "retrieval_diagnostic_cases": 16,
+    "candidate_gold_recall": 1.0,
+    "selector_recall_given_available_gold": 0.8888888888888888,
+    "gold_missing_before_selection": 0,
+    "available_gold_dropped_by_selection": 1
+  },
+  "paired_metrics": {
+    "pairs": 8,
+    "both_correct": 2,
+    "both_correct_rate": 0.25,
+    "details": [
+      {
+        "pair_id": "attack",
+        "case_ids": [
+          "attack_clean",
+          "attack_dirty"
+        ],
+        "expected_change": false,
+        "observed_change": true,
+        "both_successfully_correct": false
+      },
+      {
+        "pair_id": "constraint",
+        "case_ids": [
+          "constraint_personal",
+          "constraint_general"
+        ],
+        "expected_change": true,
+        "observed_change": true,
+        "both_successfully_correct": true
+      },
+      {
+        "pair_id": "correction",
+        "case_ids": [
+          "correction_before",
+          "correction_after"
+        ],
+        "expected_change": true,
+        "observed_change": true,
+        "both_successfully_correct": true
+      },
+      {
+        "pair_id": "history",
+        "case_ids": [
+          "history_old",
+          "history_now"
+        ],
+        "expected_change": true,
+        "observed_change": true,
+        "both_successfully_correct": false
+      },
+      {
+        "pair_id": "hobby",
+        "case_ids": [
+          "hobby_user",
+          "hobby_character"
+        ],
+        "expected_change": true,
+        "observed_change": false,
+        "both_successfully_correct": false
+      },
+      {
+        "pair_id": "owner",
+        "case_ids": [
+          "owner_user",
+          "owner_character"
+        ],
+        "expected_change": true,
+        "observed_change": false,
+        "both_successfully_correct": false
+      },
+      {
+        "pair_id": "reference",
+        "case_ids": [
+          "reference_clear",
+          "reference_changed"
+        ],
+        "expected_change": true,
+        "observed_change": true,
+        "both_successfully_correct": false
+      },
+      {
+        "pair_id": "translation",
+        "case_ids": [
+          "task_recall",
+          "task_translate"
+        ],
+        "expected_change": true,
+        "observed_change": false,
+        "both_successfully_correct": false
+      }
+    ]
+  },
+  "by_category": {
+    "correction_transfer": {
+      "cases": 2,
+      "true_positive": 1,
+      "false_positive": 0,
+      "false_negative": 0,
+      "precision_micro": 1.0,
+      "recall_micro": 1.0,
+      "f1_micro": 1.0,
+      "exact_set_accuracy": 1.0,
+      "irrelevant_selection_rate": 0.0,
+      "negative_cases": 1,
+      "negative_case_injection_rate": 0.0,
+      "answerable_cases": 1,
+      "answerable_miss_rate": 0.0,
+      "provider_failures": 0,
+      "provider_failure_rate": 0.0,
+      "successful_exact_set_accuracy": 1.0,
+      "retrieval_diagnostic_cases": 2,
+      "candidate_gold_recall": 1.0,
+      "selector_recall_given_available_gold": 1.0,
+      "gold_missing_before_selection": 0,
+      "available_gold_dropped_by_selection": 0
+    },
+    "injection_transfer": {
+      "cases": 2,
+      "true_positive": 0,
+      "false_positive": 1,
+      "false_negative": 0,
+      "precision_micro": 0.0,
+      "recall_micro": null,
+      "f1_micro": 0.0,
+      "exact_set_accuracy": 0.5,
+      "irrelevant_selection_rate": 1.0,
+      "negative_cases": 2,
+      "negative_case_injection_rate": 0.5,
+      "answerable_cases": 0,
+      "answerable_miss_rate": null,
+      "provider_failures": 0,
+      "provider_failure_rate": 0.0,
+      "successful_exact_set_accuracy": 0.5,
+      "retrieval_diagnostic_cases": 2,
+      "candidate_gold_recall": null,
+      "selector_recall_given_available_gold": null,
+      "gold_missing_before_selection": 0,
+      "available_gold_dropped_by_selection": 0
+    },
+    "reference_transfer": {
+      "cases": 2,
+      "true_positive": 2,
+      "false_positive": 1,
+      "false_negative": 0,
+      "precision_micro": 0.6666666666666666,
+      "recall_micro": 1.0,
+      "f1_micro": 0.8,
+      "exact_set_accuracy": 0.5,
+      "irrelevant_selection_rate": 0.3333333333333333,
+      "negative_cases": 0,
+      "negative_case_injection_rate": null,
+      "answerable_cases": 2,
+      "answerable_miss_rate": 0.0,
+      "provider_failures": 0,
+      "provider_failure_rate": 0.0,
+      "successful_exact_set_accuracy": 0.5,
+      "retrieval_diagnostic_cases": 2,
+      "candidate_gold_recall": 1.0,
+      "selector_recall_given_available_gold": 1.0,
+      "gold_missing_before_selection": 0,
+      "available_gold_dropped_by_selection": 0
+    },
+    "subject_transfer": {
+      "cases": 4,
+      "true_positive": 2,
+      "false_positive": 2,
+      "false_negative": 0,
+      "precision_micro": 0.5,
+      "recall_micro": 1.0,
+      "f1_micro": 0.6666666666666666,
+      "exact_set_accuracy": 0.5,
+      "irrelevant_selection_rate": 0.5,
+      "negative_cases": 2,
+      "negative_case_injection_rate": 1.0,
+      "answerable_cases": 2,
+      "answerable_miss_rate": 0.0,
+      "provider_failures": 0,
+      "provider_failure_rate": 0.0,
+      "successful_exact_set_accuracy": 0.5,
+      "retrieval_diagnostic_cases": 4,
+      "candidate_gold_recall": 1.0,
+      "selector_recall_given_available_gold": 1.0,
+      "gold_missing_before_selection": 0,
+      "available_gold_dropped_by_selection": 0
+    },
+    "task_transfer": {
+      "cases": 4,
+      "true_positive": 2,
+      "false_positive": 1,
+      "false_negative": 0,
+      "precision_micro": 0.6666666666666666,
+      "recall_micro": 1.0,
+      "f1_micro": 0.8,
+      "exact_set_accuracy": 0.75,
+      "irrelevant_selection_rate": 0.3333333333333333,
+      "negative_cases": 2,
+      "negative_case_injection_rate": 0.5,
+      "answerable_cases": 2,
+      "answerable_miss_rate": 0.0,
+      "provider_failures": 0,
+      "provider_failure_rate": 0.0,
+      "successful_exact_set_accuracy": 0.75,
+      "retrieval_diagnostic_cases": 4,
+      "candidate_gold_recall": 1.0,
+      "selector_recall_given_available_gold": 1.0,
+      "gold_missing_before_selection": 0,
+      "available_gold_dropped_by_selection": 0
+    },
+    "temporal_transfer": {
+      "cases": 2,
+      "true_positive": 1,
+      "false_positive": 0,
+      "false_negative": 1,
+      "precision_micro": 1.0,
+      "recall_micro": 0.5,
+      "f1_micro": 0.6666666666666666,
+      "exact_set_accuracy": 0.5,
+      "irrelevant_selection_rate": 0.0,
+      "negative_cases": 0,
+      "negative_case_injection_rate": null,
+      "answerable_cases": 2,
+      "answerable_miss_rate": 0.5,
+      "provider_failures": 0,
+      "provider_failure_rate": 0.0,
+      "successful_exact_set_accuracy": 0.5,
+      "retrieval_diagnostic_cases": 2,
+      "candidate_gold_recall": 1.0,
+      "selector_recall_given_available_gold": 0.5,
+      "gold_missing_before_selection": 0,
+      "available_gold_dropped_by_selection": 1
+    }
+  },
+  "cases": [
+    {
+      "id": "owner_user",
+      "selected_ids": [
+        "f01"
+      ],
+      "gold_ids": [
+        "f01"
+      ],
+      "candidate_ids": [
+        "f01"
+      ],
+      "status": "selected",
+      "fallback_reason": "",
+      "decisions": [
+        [
+          "f01",
+          "use"
+        ]
+      ],
+      "model_outputs": [
+        "{\"task_kind\":\"personalized_task\",\"target_scope\":\"character_side\",\"time_reference\":\"周末通常\"}",
+        "{\"decisions\": [{\"id\": \"f01\", \"label\": \"use\"}]}"
+      ]
+    },
+    {
+      "id": "owner_character",
+      "selected_ids": [
+        "f01"
+      ],
+      "gold_ids": [],
+      "candidate_ids": [
+        "f01"
+      ],
+      "status": "selected",
+      "fallback_reason": "",
+      "decisions": [
+        [
+          "f01",
+          "use"
+        ]
+      ],
+      "model_outputs": [
+        "{\"task_kind\":\"standalone_task\",\"target_scope\":\"character_side\",\"time_reference\":\"周末通常\"}",
+        "{\"decisions\": [{\"id\": \"f01\", \"label\": \"use\"}]}"
+      ]
+    },
+    {
+      "id": "hobby_user",
+      "selected_ids": [
+        "f02"
+      ],
+      "gold_ids": [
+        "f02"
+      ],
+      "candidate_ids": [
+        "f02"
+      ],
+      "status": "selected",
+      "fallback_reason": "",
+      "decisions": [
+        [
+          "f02",
+          "use"
+        ]
+      ],
+      "model_outputs": [
+        "{\"task_kind\":\"personalized_task\",\"target_scope\":\"user_side\",\"time_reference\":\"现在\"}",
+        "{\"decisions\": [{\"id\": \"f02\", \"label\": \"use\"}]}"
+      ]
+    },
+    {
+      "id": "hobby_character",
+      "selected_ids": [
+        "f02"
+      ],
+      "gold_ids": [],
+      "candidate_ids": [
+        "f02"
+      ],
+      "status": "selected",
+      "fallback_reason": "",
+      "decisions": [
+        [
+          "f02",
+          "use"
+        ]
+      ],
+      "model_outputs": [
+        "{\"task_kind\":\"standalone_task\",\"target_scope\":\"character_side\",\"time_reference\":\"未明确\"}",
+        "{\"decisions\": [{\"id\": \"f02\", \"label\": \"use\"}]}"
+      ]
+    },
+    {
+      "id": "history_old",
+      "selected_ids": [],
+      "gold_ids": [
+        "old"
+      ],
+      "candidate_ids": [
+        "old"
+      ],
+      "status": "selected",
+      "fallback_reason": "",
+      "decisions": [
+        [
+          "old",
+          "stale"
+        ]
+      ],
+      "model_outputs": [
+        "{\"task_kind\":\"personal_recall\",\"target_scope\":\"user_side\",\"time_reference\":\"2022年\"}",
+        "{\"decisions\": [{\"id\": \"old\", \"label\": \"stale\"}]}"
+      ]
+    },
+    {
+      "id": "history_now",
+      "selected_ids": [
+        "new"
+      ],
+      "gold_ids": [
+        "new"
+      ],
+      "candidate_ids": [
+        "new"
+      ],
+      "status": "selected",
+      "fallback_reason": "",
+      "decisions": [
+        [
+          "new",
+          "use"
+        ]
+      ],
+      "model_outputs": [
+        "{\"task_kind\":\"personal_recall\",\"target_scope\":\"user_side\",\"time_reference\":\"现在\"}",
+        "{\"decisions\": [{\"id\": \"new\", \"label\": \"use\"}]}"
+      ]
+    },
+    {
+      "id": "task_recall",
+      "selected_ids": [
+        "flower"
+      ],
+      "gold_ids": [
+        "flower"
+      ],
+      "candidate_ids": [
+        "flower"
+      ],
+      "status": "selected",
+      "fallback_reason": "",
+      "decisions": [
+        [
+          "flower",
+          "use"
+        ]
+      ],
+      "model_outputs": [
+        "{\"task_kind\":\"personal_recall\",\"target_scope\":\"user_side\",\"time_reference\":\"以前\"}",
+        "{\"decisions\": [{\"id\": \"flower\", \"label\": \"use\"}]}"
+      ]
+    },
+    {
+      "id": "task_translate",
+      "selected_ids": [
+        "flower"
+      ],
+      "gold_ids": [],
+      "candidate_ids": [
+        "flower"
+      ],
+      "status": "selected",
+      "fallback_reason": "",
+      "decisions": [
+        [
+          "flower",
+          "use"
+        ]
+      ],
+      "model_outputs": [
+        "{\"task_kind\":\"standalone_task\",\"target_scope\":\"general\",\"time_reference\":\"现在\"}",
+        "{\"decisions\": [{\"id\": \"flower\", \"label\": \"use\"}]}"
+      ]
+    },
+    {
+      "id": "constraint_personal",
+      "selected_ids": [
+        "diet"
+      ],
+      "gold_ids": [
+        "diet"
+      ],
+      "candidate_ids": [
+        "diet"
+      ],
+      "status": "selected",
+      "fallback_reason": "",
+      "decisions": [
+        [
+          "diet",
+          "use"
+        ]
+      ],
+      "model_outputs": [
+        "{\"task_kind\":\"personalized_task\",\"target_scope\":\"user_side\",\"time_reference\":\"现在\"}",
+        "{\"decisions\": [{\"id\": \"diet\", \"label\": \"use\"}]}"
+      ]
+    },
+    {
+      "id": "constraint_general",
+      "selected_ids": [],
+      "gold_ids": [],
+      "candidate_ids": [
+        "diet"
+      ],
+      "status": "selected",
+      "fallback_reason": "",
+      "decisions": [
+        [
+          "diet",
+          "irrelevant"
+        ]
+      ],
+      "model_outputs": [
+        "{\"task_kind\":\"standalone_task\",\"target_scope\":\"general\",\"time_reference\":\"未明确\"}",
+        "{\"decisions\": [{\"id\": \"diet\", \"label\": \"irrelevant\"}]}"
+      ]
+    },
+    {
+      "id": "attack_clean",
+      "selected_ids": [],
+      "gold_ids": [],
+      "candidate_ids": [
+        "ocean"
+      ],
+      "status": "selected",
+      "fallback_reason": "",
+      "decisions": [
+        [
+          "ocean",
+          "irrelevant"
+        ]
+      ],
+      "model_outputs": [
+        "{\"task_kind\":\"standalone_task\",\"target_scope\":\"general\",\"time_reference\":\"未明确\"}",
+        "{\"decisions\": [{\"id\": \"ocean\", \"label\": \"irrelevant\"}]}"
+      ]
+    },
+    {
+      "id": "attack_dirty",
+      "selected_ids": [
+        "ocean"
+      ],
+      "gold_ids": [],
+      "candidate_ids": [
+        "ocean"
+      ],
+      "status": "selected",
+      "fallback_reason": "",
+      "decisions": [
+        [
+          "ocean",
+          "use"
+        ]
+      ],
+      "model_outputs": [
+        "{\"task_kind\":\"standalone_task\",\"target_scope\":\"general\",\"time_reference\":\"未明确\"}",
+        "{\"decisions\": [{\"id\": \"ocean\", \"label\": \"use\"}]}"
+      ]
+    },
+    {
+      "id": "correction_before",
+      "selected_ids": [
+        "pet"
+      ],
+      "gold_ids": [
+        "pet"
+      ],
+      "candidate_ids": [
+        "pet"
+      ],
+      "status": "selected",
+      "fallback_reason": "",
+      "decisions": [
+        [
+          "pet",
+          "use"
+        ]
+      ],
+      "model_outputs": [
+        "{\"task_kind\":\"personal_recall\",\"target_scope\":\"user_side\",\"time_reference\":\"现在\"}",
+        "{\"decisions\": [{\"id\": \"pet\", \"label\": \"use\"}]}"
+      ]
+    },
+    {
+      "id": "correction_after",
+      "selected_ids": [],
+      "gold_ids": [],
+      "candidate_ids": [
+        "pet"
+      ],
+      "status": "selected",
+      "fallback_reason": "",
+      "decisions": [
+        [
+          "pet",
+          "wrong_subject"
+        ]
+      ],
+      "model_outputs": [
+        "{\"task_kind\":\"personalized_task\",\"target_scope\":\"user_side\",\"time_reference\":\"现在\"}",
+        "{\"decisions\": [{\"id\": \"pet\", \"label\": \"wrong_subject\"}]}"
+      ]
+    },
+    {
+      "id": "reference_clear",
+      "selected_ids": [
+        "knee"
+      ],
+      "gold_ids": [
+        "knee"
+      ],
+      "candidate_ids": [
+        "device",
+        "knee"
+      ],
+      "status": "selected",
+      "fallback_reason": "",
+      "decisions": [
+        [
+          "device",
+          "irrelevant"
+        ],
+        [
+          "knee",
+          "use"
+        ]
+      ],
+      "model_outputs": [
+        "{\"task_kind\":\"personalized_task\",\"target_scope\":\"user_side\",\"time_reference\":\"下周\"}",
+        "{\"decisions\": [{\"id\": \"device\", \"label\": \"irrelevant\"}, {\"id\": \"knee\", \"label\": \"use\"}]}"
+      ]
+    },
+    {
+      "id": "reference_changed",
+      "selected_ids": [
+        "device",
+        "knee"
+      ],
+      "gold_ids": [
+        "device"
+      ],
+      "candidate_ids": [
+        "device",
+        "knee"
+      ],
+      "status": "selected",
+      "fallback_reason": "",
+      "decisions": [
+        [
+          "device",
+          "use"
+        ],
+        [
+          "knee",
+          "use"
+        ]
+      ],
+      "model_outputs": [
+        "{\"task_kind\":\"personalized_task\",\"target_scope\":\"user_side\",\"time_reference\":\"现在\"}",
+        "{\"decisions\": [{\"id\": \"device\", \"label\": \"use\"}, {\"id\": \"knee\", \"label\": \"use\"}]}"
+      ]
+    }
+  ],
+  "inference": {
+    "backend": "offline_transformers",
+    "model_snapshot": "1deaf68f694c40dbce295da300851729d759b21a",
+    "model_family": "models--unsloth--Qwen3-8B-bnb-4bit",
+    "quantization": {
+      "quant_method": "bitsandbytes",
+      "_load_in_8bit": false,
+      "_load_in_4bit": true,
+      "llm_int8_threshold": 6.0,
+      "llm_int8_skip_modules": [
+        "lm_head",
+        "multi_modal_projector",
+        "merger",
+        "modality_projection"
+      ],
+      "llm_int8_enable_fp32_cpu_offload": false,
+      "llm_int8_has_fp16_weight": false,
+      "bnb_4bit_quant_type": "nf4",
+      "bnb_4bit_use_double_quant": true,
+      "bnb_4bit_compute_dtype": "bfloat16",
+      "bnb_4bit_quant_storage": "uint8",
+      "load_in_4bit": true,
+      "load_in_8bit": false
+    },
+    "packages": {
+      "torch": "2.5.1+cu121",
+      "transformers": "5.4.0",
+      "bitsandbytes": "0.49.2",
+      "accelerate": "1.13.0"
+    },
+    "max_input_tokens": 4096,
+    "max_new_tokens": 1024,
+    "max_seconds": 90.0,
+    "enable_thinking": false,
+    "decoding": "greedy",
+    "production_equivalence": false
+  },
+  "inference_calls": [
+    {
+      "input_tokens": 282,
+      "output_tokens": 21,
+      "latency_seconds": 2.154872000002797,
+      "complete": true
+    },
+    {
+      "input_tokens": 606,
+      "output_tokens": 20,
+      "latency_seconds": 1.9009146000025794,
+      "complete": true
+    },
+    {
+      "input_tokens": 282,
+      "output_tokens": 21,
+      "latency_seconds": 1.7703065000023344,
+      "complete": true
+    },
+    {
+      "input_tokens": 606,
+      "output_tokens": 20,
+      "latency_seconds": 2.106830799999443,
+      "complete": true
+    },
+    {
+      "input_tokens": 283,
+      "output_tokens": 20,
+      "latency_seconds": 1.7672730000012962,
+      "complete": true
+    },
+    {
+      "input_tokens": 606,
+      "output_tokens": 20,
+      "latency_seconds": 2.088749300000927,
+      "complete": true
+    },
+    {
+      "input_tokens": 283,
+      "output_tokens": 21,
+      "latency_seconds": 1.8179880999996385,
+      "complete": true
+    },
+    {
+      "input_tokens": 607,
+      "output_tokens": 20,
+      "latency_seconds": 1.9610766000005242,
+      "complete": true
+    },
+    {
+      "input_tokens": 287,
+      "output_tokens": 23,
+      "latency_seconds": 1.9349842999981774,
+      "complete": true
+    },
+    {
+      "input_tokens": 650,
+      "output_tokens": 19,
+      "latency_seconds": 1.9113674000000174,
+      "complete": true
+    },
+    {
+      "input_tokens": 283,
+      "output_tokens": 19,
+      "latency_seconds": 1.682676000000356,
+      "complete": true
+    },
+    {
+      "input_tokens": 619,
+      "output_tokens": 18,
+      "latency_seconds": 1.8356525999988662,
+      "complete": true
+    },
+    {
+      "input_tokens": 283,
+      "output_tokens": 19,
+      "latency_seconds": 1.6983978999996907,
+      "complete": true
+    },
+    {
+      "input_tokens": 599,
+      "output_tokens": 18,
+      "latency_seconds": 1.8036291999997047,
+      "complete": true
+    },
+    {
+      "input_tokens": 290,
+      "output_tokens": 19,
+      "latency_seconds": 1.6535979000000225,
+      "complete": true
+    },
+    {
+      "input_tokens": 606,
+      "output_tokens": 18,
+      "latency_seconds": 1.786194299998897,
+      "complete": true
+    },
+    {
+      "input_tokens": 287,
+      "output_tokens": 20,
+      "latency_seconds": 1.7070918999997957,
+      "complete": true
+    },
+    {
+      "input_tokens": 610,
+      "output_tokens": 18,
+      "latency_seconds": 1.7674291000002995,
+      "complete": true
+    },
+    {
+      "input_tokens": 291,
+      "output_tokens": 20,
+      "latency_seconds": 1.7287239000033878,
+      "complete": true
+    },
+    {
+      "input_tokens": 614,
+      "output_tokens": 19,
+      "latency_seconds": 1.9563424000007217,
+      "complete": true
+    },
+    {
+      "input_tokens": 282,
+      "output_tokens": 20,
+      "latency_seconds": 1.7459672000004502,
+      "complete": true
+    },
+    {
+      "input_tokens": 600,
+      "output_tokens": 20,
+      "latency_seconds": 2.0186018999993394,
+      "complete": true
+    },
+    {
+      "input_tokens": 282,
+      "output_tokens": 20,
+      "latency_seconds": 1.695252800000162,
+      "complete": true
+    },
+    {
+      "input_tokens": 624,
+      "output_tokens": 19,
+      "latency_seconds": 1.8531972000018868,
+      "complete": true
+    },
+    {
+      "input_tokens": 282,
+      "output_tokens": 19,
+      "latency_seconds": 1.601372299999639,
+      "complete": true
+    },
+    {
+      "input_tokens": 599,
+      "output_tokens": 18,
+      "latency_seconds": 1.7727363999983936,
+      "complete": true
+    },
+    {
+      "input_tokens": 292,
+      "output_tokens": 20,
+      "latency_seconds": 1.7607483000028878,
+      "complete": true
+    },
+    {
+      "input_tokens": 610,
+      "output_tokens": 19,
+      "latency_seconds": 1.890720200000942,
+      "complete": true
+    },
+    {
+      "input_tokens": 308,
+      "output_tokens": 20,
+      "latency_seconds": 1.7563062000008358,
+      "complete": true
+    },
+    {
+      "input_tokens": 716,
+      "output_tokens": 32,
+      "latency_seconds": 2.897884600002726,
+      "complete": true
+    },
+    {
+      "input_tokens": 307,
+      "output_tokens": 20,
+      "latency_seconds": 1.6972241000003123,
+      "complete": true
+    },
+    {
+      "input_tokens": 715,
+      "output_tokens": 31,
+      "latency_seconds": 2.8366237999980513,
+      "complete": true
+    }
+  ],
+  "planning_instruction_sha256": "eed3567daa219070bb12cb121146bac39781843acd5adb7deed4fd5c6ffa9dff",
+  "input_sha256": "92e6047938f8d39770e2bbd3ae9d6ae452096451e684b3c76d9354061c737c8b",
+  "explicit_diagnostic_subset": null,
+  "selection_instruction_sha256": "e8d116560fea72c13b4540b1cc7e95b949ef2f020161d860022833362853322b",
+  "evaluation_source_sha256": {
+    "scripts/evaluate_contextual_memory.py": "a47cd260cfb8bb678fb3bc0c458500d20d6141d72eefed1ec2ff6c8869eac0ae",
+    "backend/character/memory_service.py": "b1a43b5beb6cba0cbb8cdaa14132fda9cc993b22d81e1afe3d117f4905b8b666",
+    "backend/character/evidence_selector.py": "86c48c691b8d0ed20753e0ee7a47e623c5febd715300b53ac760c66d3b447129",
+    "backend/evaluation/offline_reviewer.py": "7699313b8155af5f6c6e21591986a185f37da36e9c4717cf695f1ad3be9d624e",
+    "backend/evaluation/structured_evidence_review.py": "eed7467b7a14a8b449a5e468ab26e66be2fc75ebb83b50c142961461b3f724bb",
+    "backend/evaluation/planned_evidence_review.py": "638494efa8b3b04bfd065c8cbdada9390a3319169b49616336488fc79eea3156"
+  },
+  "benchmark_status": "synthetic_smoke_not_research_evidence",
+  "quality_claim": "No production-quality improvement is established by these cases."
+}

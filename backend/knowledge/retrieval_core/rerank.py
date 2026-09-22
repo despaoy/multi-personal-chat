@@ -16,8 +16,10 @@ RERANKER_ENABLED 控制）；本地模型不可用时走确定性特征降级
 from __future__ import annotations
 
 import logging
+import math
 import os
 import re
+from dataclasses import replace
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -210,7 +212,13 @@ class DeterministicReranker:
 class PipelineReranker:
     """重排门面：CrossEncoder 可用则用之，否则确定性降级。"""
 
-    def __init__(self, cross_encoder: Any | None = None, cross_encoder_enabled: bool | None = None):
+    def __init__(
+        self, cross_encoder: Any | None = None, cross_encoder_enabled: bool | None = None,
+        *, text_view: str = "content",
+    ):
+        if text_view not in {"content", "summary", "embedding_text"}:
+            raise ValueError("unknown reranker text view")
+        self.text_view = text_view
         # cross_encoder 可注入（测试）；None 时按环境变量惰性获取现有单例
         self._cross_encoder = cross_encoder
         self._cross_encoder_enabled = cross_encoder_enabled
@@ -265,8 +273,13 @@ class PipelineReranker:
         top_k: int,
     ) -> list[RetrievalCandidate]:
         """重排候选：输出稳定排序，保留原始分数与来源，不修改文档内容。"""
-        if len(candidates) <= 1:
-            return list(candidates)[:top_k]
+        if not candidates or top_k <= 0:
+            self._last_used_cross_encoder = False
+            return []
+
+        # Scores and method diagnostics are request-local; never mutate recalled
+        # objects that an index/test/parallel caller may reuse.
+        candidates = [replace(candidate) for candidate in candidates]
 
         encoder = self._resolve_cross_encoder()
         if encoder is not None:
@@ -282,6 +295,7 @@ class PipelineReranker:
         reranked: list[RetrievalCandidate] = []
         for candidate, rerank_score in scored[:top_k]:
             candidate.rerank_score = rerank_score
+            candidate.rerank_method = "deterministic"
             reranked.append(candidate)
         return reranked
 
@@ -292,7 +306,14 @@ class PipelineReranker:
         top_k: int,
         encoder: Any,
     ) -> list[RetrievalCandidate]:
-        payload = [candidate.to_dict() for candidate in candidates]
+        payload = []
+        for candidate in candidates:
+            item = candidate.to_dict()
+            if self.text_view == "summary":
+                item["content"] = f"{candidate.document.title}\n{candidate.document.summary}"
+            elif self.text_view == "embedding_text":
+                item["content"] = candidate.document.embedding_text
+            payload.append(item)
         reranked_dicts: list[dict[str, Any]] = encoder.rerank(
             analysis.original_query, payload, top_k=max(top_k, len(candidates))
         )
@@ -303,10 +324,18 @@ class PipelineReranker:
             raise RuntimeError("CrossEncoder 未加载模型（原始顺序回退）")
         by_id = {candidate.document.id: candidate for candidate in candidates}
         ordered: list[RetrievalCandidate] = []
-        for item in reranked_dicts[:top_k]:
+        seen: set[str] = set()
+        for item in reranked_dicts:
             candidate = by_id.get(str(item.get("id")))
-            if candidate is None:
-                continue
-            candidate.rerank_score = float(item.get("rerank_score", 0.0))
+            if candidate is None or candidate.document.id in seen:
+                raise RuntimeError("CrossEncoder returned unknown or duplicate IDs")
+            score = float(item["rerank_score"])
+            if not math.isfinite(score):
+                raise RuntimeError("CrossEncoder returned non-finite score")
+            seen.add(candidate.document.id)
+            candidate.rerank_score = score
+            candidate.rerank_method = "cross_encoder"
             ordered.append(candidate)
-        return ordered
+        if len(ordered) != len(candidates):
+            raise RuntimeError("CrossEncoder returned incomplete candidate set")
+        return ordered[:top_k]

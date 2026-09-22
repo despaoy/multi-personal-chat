@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { AuthGuard } from '@/components/layout/AuthGuard';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -27,6 +27,18 @@ const MEMORY_TYPE_LABELS: Record<string, string> = {
   promise: '承诺约定',
   conversation_summary: '对话摘要',
 };
+
+const NOTE_LABELS: Record<string, string> = {
+  preference: '交流偏好', boundary: '话题边界', shared_event: '共同事件',
+  promise: '约定', repair: '修复记录', transient: '短期状态（12 小时）',
+};
+
+function memoryLabel(memory: CharacterMemoryRecord) {
+  const category = memory.metadata?.category;
+  const label = category ? `关系备忘录 · ${NOTE_LABELS[category] || category}` : MEMORY_TYPE_LABELS[memory.memory_type] || memory.memory_type;
+  const expired = memory.valid_to && Date.parse(memory.valid_to) <= Date.now();
+  return `${label}${memory.metadata?.resolved ? ' · 已结束' : expired ? ' · 已过期' : ''}${memory.status && memory.status !== 'active' ? ' · 历史版本' : ''}`;
+}
 
 const DEFAULT_SCOPE: CharacterMemoryScope = {
   platform: 'qq',
@@ -60,6 +72,10 @@ function CharactersContent() {
   const [memoryContentDraft, setMemoryContentDraft] = useState('');
   const [memoryImportanceDraft, setMemoryImportanceDraft] = useState('0.5');
   const [savingMemory, setSavingMemory] = useState(false);
+  const [noteCategory, setNoteCategory] = useState('preference');
+  const [noteContent, setNoteContent] = useState('');
+  const [savingNote, setSavingNote] = useState(false);
+  const loadVersion = useRef(0);
 
   const loadCharacters = useCallback(async () => {
     try {
@@ -79,29 +95,65 @@ function CharactersContent() {
   }, [loadCharacters]);
 
   const loadScopeData = useCallback(async () => {
+    const version = ++loadVersion.current;
     if (!selectedCharacter || !scopeApplied) return;
     // 先清空上一个范围的数据：新范围加载失败时绝不能继续展示
     // 旧用户的关系与记忆（数据串号风险）
     setRelationship(null);
     setStageEdit('stranger');
     setMemories([]);
+    setNoteContent('');
     // 同步放弃编辑中的草稿，避免保存到新范围的记忆上
     setEditingMemoryId(null);
     setMemoryContentDraft('');
     setMemoryImportanceDraft('0.5');
     try {
-      const [relRes, memRes] = await Promise.all([
+      const [relRes, memRes, noteRes] = await Promise.all([
         api.getCharacterRelationship(selectedCharacter, scopeApplied),
         api.listCharacterMemories(selectedCharacter, scopeApplied),
+        api.listRelationshipNotes(selectedCharacter, scopeApplied),
       ]);
+      if (version !== loadVersion.current) return;
       setRelationship(relRes.relationship);
       setStageEdit(relRes.relationship?.relationship_stage || 'stranger');
-      setMemories(memRes.memories);
+      setMemories([...new Map([...noteRes.memories, ...memRes.memories].map(memory => [memory.id, memory])).values()]);
     } catch (error) {
+      if (version !== loadVersion.current) return;
       toast.error('加载角色数据失败');
       console.error(error);
     }
   }, [selectedCharacter, scopeApplied]);
+
+  const handleCreateNote = async () => {
+    if (!scopeApplied || !selectedCharacter || !noteContent.trim()) return;
+    const version = loadVersion.current;
+    setSavingNote(true);
+    try {
+      await api.createRelationshipNote(selectedCharacter, scopeApplied, { category: noteCategory, content: noteContent.trim() });
+      if (version === loadVersion.current) await loadScopeData();
+      toast.success('关系备忘录已保存');
+    } catch {
+      toast.error('保存备忘录失败');
+    } finally {
+      setSavingNote(false);
+    }
+  };
+
+  const handleResolveNote = async (memory: CharacterMemoryRecord) => {
+    if (!scopeApplied || savingMemory) return;
+    const version = loadVersion.current;
+    setSavingMemory(true);
+    try {
+      await api.updateCharacterMemory(selectedCharacter, memory.id, scopeApplied, {
+        content: memory.content, importance: memory.importance, resolved: true,
+      });
+      if (version === loadVersion.current) await loadScopeData();
+    } catch {
+      toast.error('结束备忘录失败');
+    } finally {
+      setSavingMemory(false);
+    }
+  };
 
   useEffect(() => {
     loadScopeData();
@@ -129,6 +181,7 @@ function CharactersContent() {
 
   const handleSaveStage = async () => {
     if (!selectedCharacter || !scopeApplied) return;
+    const version = loadVersion.current;
     setSavingStage(true);
     try {
       await api.updateCharacterRelationship(selectedCharacter, scopeApplied, {
@@ -136,8 +189,8 @@ function CharactersContent() {
         preferred_address: relationship?.preferred_address || '',
         summary: relationship?.summary || '',
       });
-      toast.success('关系阶段已更新');
-      await loadScopeData();
+      toast.success('关系起点已更新');
+      if (version === loadVersion.current) await loadScopeData();
     } catch (error) {
       toast.error('更新关系失败');
       console.error(error);
@@ -160,6 +213,7 @@ function CharactersContent() {
 
   const handleSaveMemory = async () => {
     if (!selectedCharacter || !scopeApplied || editingMemoryId === null) return;
+    const version = loadVersion.current;
     const content = memoryContentDraft.trim();
     const importance = Number.parseFloat(memoryImportanceDraft);
     if (!content) {
@@ -181,8 +235,10 @@ function CharactersContent() {
         importance,
       });
       toast.success('记忆已更新');
-      handleCancelEditMemory();
-      await loadScopeData();
+      if (version === loadVersion.current) {
+        handleCancelEditMemory();
+        await loadScopeData();
+      }
     } catch (error) {
       toast.error('更新记忆失败');
       console.error(error);
@@ -193,11 +249,12 @@ function CharactersContent() {
 
   const handleDeleteMemory = async (memoryId: number) => {
     if (!selectedCharacter || !scopeApplied) return;
-    if (!confirm('确定要删除这条记忆吗？')) return;
+    if (!confirm('确定要删除这条记忆吗？关系备忘录会连同所有旧版本永久删除，无法恢复。')) return;
+    const version = loadVersion.current;
     try {
       await api.deleteCharacterMemory(selectedCharacter, memoryId, scopeApplied);
       toast.success('记忆已删除');
-      await loadScopeData();
+      if (version === loadVersion.current) await loadScopeData();
     } catch (error) {
       toast.error('删除记忆失败');
       console.error(error);
@@ -207,10 +264,11 @@ function CharactersContent() {
   const handleClearMemories = async () => {
     if (!selectedCharacter || !scopeApplied) return;
     if (!confirm('确定要清空该用户在此角色下的全部记忆吗？此操作不可恢复。')) return;
+    const version = loadVersion.current;
     try {
       const result = await api.clearCharacterMemories(selectedCharacter, scopeApplied);
       toast.success(result.message);
-      await loadScopeData();
+      if (version === loadVersion.current) await loadScopeData();
     } catch (error) {
       toast.error('清空记忆失败');
       console.error(error);
@@ -346,7 +404,7 @@ function CharactersContent() {
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <Heart className="h-5 w-5" />
-                    关系状态
+                    关系起点（手动）
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -357,7 +415,7 @@ function CharactersContent() {
                           {STAGE_LABELS[relationship.relationship_stage] || relationship.relationship_stage}
                         </Badge>
                         <span className="text-muted-foreground">
-                          交互轮数：{relationship.interaction_count}
+                          交流次数：{relationship.interaction_count}（仅统计，不自动升温）
                         </span>
                         {relationship.preferred_address && (
                           <span className="text-muted-foreground">
@@ -382,7 +440,7 @@ function CharactersContent() {
                           </SelectContent>
                         </Select>
                         <Button onClick={handleSaveStage} disabled={savingStage}>
-                          {savingStage ? '保存中…' : '手动覆盖关系阶段'}
+                          {savingStage ? '保存中…' : '保存关系起点'}
                         </Button>
                       </div>
                     </div>
@@ -390,17 +448,35 @@ function CharactersContent() {
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
                       <AlertCircle className="h-4 w-4" />
                       该范围尚无关系记录（用户未与此角色对话过）
+                      <Button onClick={handleSaveStage} disabled={savingStage}>建立关系起点</Button>
                     </div>
                   )}
                 </CardContent>
               </Card>
 
               <Card>
+                <CardHeader>
+                  <CardTitle>添加关系备忘录</CardTitle>
+                  <CardDescription>管理员管理当前用户与角色的明确偏好、边界和共同事件，不计算好感度。下方列表可修改、结束或删除。</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <Select value={noteCategory} onValueChange={setNoteCategory}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>{Object.entries(NOTE_LABELS).map(([key, label]) => <SelectItem key={key} value={key}>{label}</SelectItem>)}</SelectContent>
+                  </Select>
+                  <Input aria-label="关系备忘录内容" value={noteContent} onChange={e => setNoteContent(e.target.value)} maxLength={300} placeholder="例如：不主动追问工作压力；约定仅记录明确提出的事项" />
+                  <Button onClick={handleCreateNote} disabled={savingNote || !noteContent.trim()}>保存备忘录</Button>
+                  <p className="text-sm text-muted-foreground">聊天中也可说“交流偏好：回答简短些”“今天不想被追问”“解除短期状态”。不确定的表达不会自动记入关系备忘录。</p>
+                  <p className="text-sm text-muted-foreground">更正用“更正备忘录：原内容 =&gt; 新内容”，结束用“结束备忘录：原内容”；仅匹配当前范围内唯一且有效的条目。</p>
+                </CardContent>
+              </Card>
+
+              <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0">
                   <div>
-                    <CardTitle>长期记忆（{memories.length} 条）</CardTitle>
+                    <CardTitle>记忆与关系备忘录（{memories.length} 条）</CardTitle>
                     <CardDescription>
-                      仅展示最近 100 条。记忆在生成时按相关度 + 重要性 + 新近度选取前 5 条注入参考区。
+                      展示全部当前版本备忘录和最近 100 条记忆（含历史版本）。普通记忆按相关度检索；已结束或过期的备忘录不再注入。
                     </CardDescription>
                   </div>
                   {memories.length > 0 && (
@@ -426,7 +502,7 @@ function CharactersContent() {
                             <div className="space-y-3">
                               <div className="flex flex-wrap items-center gap-2">
                                 <Badge variant="outline">
-                                  {MEMORY_TYPE_LABELS[memory.memory_type] || memory.memory_type}
+                                  {memoryLabel(memory)}
                                 </Badge>
                                 <span className="text-xs text-muted-foreground">
                                   {memory.memory_key}
@@ -479,7 +555,7 @@ function CharactersContent() {
                               <div className="min-w-0 space-y-1">
                                 <div className="flex flex-wrap items-center gap-2">
                                   <Badge variant="outline">
-                                    {MEMORY_TYPE_LABELS[memory.memory_type] || memory.memory_type}
+                                    {memoryLabel(memory)}
                                   </Badge>
                                   <span className="text-xs text-muted-foreground">
                                     {memory.memory_key}
@@ -492,6 +568,9 @@ function CharactersContent() {
                                 </p>
                               </div>
                               <div className="flex shrink-0 gap-1">
+                                {memory.metadata?.category && !memory.metadata.resolved && memory.status === 'active' && (
+                                  <Button variant="ghost" size="sm" disabled={savingMemory} onClick={() => handleResolveNote(memory)}>结束</Button>
+                                )}
                                 <Button
                                   variant="ghost"
                                   size="sm"

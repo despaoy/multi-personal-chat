@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import os
 import threading
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
@@ -27,6 +28,9 @@ from .service import CARD_TYPES, RoutedMultiScaleService
 from .source_text import OriginalTextExtractor
 from .vector_runtime import LocalMeanPoolingEmbeddingProvider, attach_vectors
 
+if TYPE_CHECKING:
+    from .visibility import KnowledgeBoundary
+
 logger = logging.getLogger(__name__)
 
 _BACKEND_ROOT = Path(__file__).resolve().parents[2]
@@ -36,7 +40,8 @@ _DEFAULT_INDEX_ROOT = _BACKEND_ROOT / "data" / "knowledge" / "tsukiyashiro_kisak
 
 def _env_float(name: str, default: float) -> float:
     try:
-        return float(os.getenv(name, str(default)))
+        value = float(os.getenv(name, str(default)))
+        return value if math.isfinite(value) else default
     except ValueError:
         return default
 
@@ -221,6 +226,8 @@ class MultiScaleRagRuntime:
         top_k: int = 5,
         filters: dict[str, Any] | None = None,
         domain_id: str | None = None,
+        *,
+        knowledge_boundary: KnowledgeBoundary | None = None,
     ) -> dict[str, Any] | None:
         if not query.strip() or not self._ensure_loaded() or self._service is None:
             return None
@@ -234,22 +241,37 @@ class MultiScaleRagRuntime:
         gate = self._gate.analyze(query)
         if not domain_id and not gate.matched_domains:
             return None
-        result = self._service.retrieve(query, top_k=top_k)
+        if knowledge_boundary is None:
+            result = self._service.retrieve(query, top_k=top_k)
+        else:
+            result = self._service.retrieve(query, top_k=top_k, knowledge_boundary=knowledge_boundary)
         results = result.get("results", [])
         top = results[0] if results else {}
-        confidence = float(top.get("rerank_score") or 0.0)
-        if confidence <= 0:
-            confidence = min(1.0, float(top.get("fused_score") or 0.0) * 8.0)
-        threshold_name = (
-            "CHARACTER_RAG_ABSTAIN_THRESHOLD"
-            if os.getenv("CHARACTER_RAG_ABSTAIN_THRESHOLD") is not None
-            else "MULTISCALE_RAG_ABSTAIN_THRESHOLD"
-        )
-        threshold = _env_float(threshold_name, 0.25)
-        abstained = not results or confidence < threshold
+        score = float(top.get("rerank_score") or 0.0)
+        semantic = top.get("rerank_method") == "cross_encoder"
+        if semantic:
+            # Raw logits can be negative. Never replace them with recall scores
+            # or reuse the deterministic threshold. Sigmoid is presentation only,
+            # NOT an empirically calibrated probability of answer correctness.
+            confidence = 1.0 / (1.0 + math.exp(-max(-700.0, min(700.0, score))))
+            threshold = _env_float("CHARACTER_RAG_CROSS_ENCODER_MIN_LOGIT", 0.0)
+            abstained = not results or not math.isfinite(score) or score < threshold
+        else:
+            confidence = score
+            if confidence <= 0:
+                confidence = min(1.0, float(top.get("fused_score") or 0.0) * 8.0)
+            threshold_name = (
+                "CHARACTER_RAG_ABSTAIN_THRESHOLD"
+                if os.getenv("CHARACTER_RAG_ABSTAIN_THRESHOLD") is not None
+                else "MULTISCALE_RAG_ABSTAIN_THRESHOLD"
+            )
+            threshold = _env_float(threshold_name, 0.25)
+            abstained = not results or not math.isfinite(confidence) or confidence < threshold
         return {
             **result,
             "confidence": round(confidence, 4),
+            "confidence_kind": "uncalibrated_sigmoid" if semantic else "heuristic",
+            "rerank_method": top.get("rerank_method", "none"),
             "abstained": abstained,
             "domains": [self._base_config.domain_id],
             "query_analysis": {
@@ -257,7 +279,7 @@ class MultiScaleRagRuntime:
                 "matched_domains": gate.matched_domains,
                 "route_types": result.get("route_types", []),
             },
-            "warnings": [],
+            "warnings": ["cross_encoder_threshold_requires_domain_calibration"] if semantic else [],
         }
 
 

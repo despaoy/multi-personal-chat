@@ -1,6 +1,6 @@
 """
-LoRA训练器兼容层
-桥接main.py的API调用到优化版train_lora.py，提供与旧版SimpleLoRATrainer相同的接口。
+LoRA训练任务管理层
+将训练API请求转换为training.trainer配置，并保留旧版SimpleLoRATrainer接口。
 负责任务队列管理、异步训练调度和状态跟踪。
 """
 
@@ -12,10 +12,13 @@ import threading
 import time
 import uuid
 from pathlib import Path
-from typing import Dict, Any, Optional, List
+from typing import TYPE_CHECKING, Dict, Any, Optional, List
 from dataclasses import dataclass, field, asdict
 
 from fastapi import HTTPException
+
+if TYPE_CHECKING:
+    from training.trainer import LoRATrainingConfig
 
 logger = logging.getLogger(__name__)
 
@@ -131,7 +134,7 @@ ALL_GPU_CONFIGS = {**RTX_4060_CONFIGS, **RTX_3090_CONFIGS}
 class SimpleLoRATrainer:
     """LoRA训练器兼容层，负责训练任务的创建、调度和状态管理。
 
-    内部桥接到train_lora.py的LoRATrainer执行实际训练，通过线程池实现异步训练。
+    内部桥接到training.trainer.LoRATrainer执行实际训练，通过线程池实现异步训练。
     """
 
     def __init__(self, base_dir: Optional[Path] = None, db=None):
@@ -167,6 +170,15 @@ class SimpleLoRATrainer:
         Returns:
             str: 训练任务ID，用于后续状态查询
         """
+        # A cancelled worker can still be finishing a GPU step: do not let a
+        # new task write the same adapter directory until that worker exits.
+        with self._lock:
+            if any(
+                self.tasks.get(tid, {}).get("lora_name") == lora_name and not runner.done()
+                for tid, runner in self._runner_tasks.items()
+            ):
+                raise HTTPException(status_code=409, detail="同名LoRA训练线程尚未退出，请稍后重试")
+
         # 幂等性检查：是否已有同名lora_name的运行中任务
         if self.db:
             active_tasks = self.db.get_active_training_by_lora_name(lora_name)
@@ -223,7 +235,7 @@ class SimpleLoRATrainer:
         cancel_event = self._cancel_events.get(task_id)
 
         with self._lock:
-            if self.tasks[task_id].get("status") == "interrupted":
+            if self.tasks[task_id].get("status") in ("cancelled", "interrupted"):
                 return
             self.tasks[task_id]["status"] = "training"
             self.tasks[task_id]["started_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
@@ -391,20 +403,20 @@ class SimpleLoRATrainer:
 
         # 已知字段从 config dict 提取（前端 TrainingParamsEditor 发送 + 预设兜底）
         kwargs: Dict[str, Any] = {
-            "base_model_path": config.get("model_name_or_path", _resolve_model_path("BASE_MODEL_PATH", "models/Qwen3-8B-Instruct")),
+            "base_model_path": config.get("model_name_or_path", config.get("base_model_path", _resolve_model_path("BASE_MODEL_PATH", "models/Qwen3-8B-Instruct"))),
             "train_data_path": str(dataset_file),
             "output_dir": str(self.loras_dir / lora_name),
-            "lora_r": config.get("lora_rank", 16),
+            "lora_r": config.get("lora_rank", config.get("lora_r", 16)),
             "lora_alpha": config.get("lora_alpha", 32),
             "lora_dropout": config.get("lora_dropout", 0.1),
             "learning_rate": config.get("learning_rate", 3e-4),
-            "num_train_epochs": int(config.get("num_train_epochs", 3)),
+            "num_train_epochs": float(config.get("num_train_epochs", 3)),
             "per_device_train_batch_size": config.get("per_device_train_batch_size", 2),
             "gradient_accumulation_steps": config.get("gradient_accumulation_steps", 4),
             "max_seq_length": config.get("max_seq_length", 512),
             "fp16": config.get("fp16", True),
             "bf16": config.get("bf16", False),
-            "gradient_checkpointing": config.get("use_gradient_checkpointing", True),
+            "gradient_checkpointing": config.get("use_gradient_checkpointing", config.get("gradient_checkpointing", True)),
             # 以下字段前端可能发送，后端读取时兜底默认值
             "warmup_ratio": float(config.get("warmup_ratio", 0.05)),
             "weight_decay": float(config.get("weight_decay", 0.01)),
@@ -439,12 +451,17 @@ class SimpleLoRATrainer:
             if key not in known and key not in kwargs:
                 kwargs[key] = value
 
+        # Canonical and legacy names must select the same actual adapter layers.
+        legacy_targets = kwargs.pop("lora_target_modules", None)
+        if "target_modules" not in kwargs and legacy_targets is not None:
+            kwargs["target_modules"] = legacy_targets
+
         # 处理 target_modules：前端可能传字符串 "all-linear" 或 "q_proj,v_proj"
         if "target_modules" in kwargs:
             tm = kwargs["target_modules"]
             if isinstance(tm, str):
-                if tm.lower() == "all-linear":
-                    kwargs["target_modules"] = None  # PEFT 的 inference_mode=False 时会自动推导
+                if tm.strip().lower() == "all-linear":
+                    kwargs["target_modules"] = None  # LoRATrainer maps None to PEFT's all-linear.
                 else:
                     kwargs["target_modules"] = [m.strip() for m in tm.split(",") if m.strip()]
 
@@ -464,16 +481,21 @@ class SimpleLoRATrainer:
         if dataset_path.is_file():
             return dataset_path
 
-        for name in ["train.json", "data.json", "dataset.json"]:
+        for name in ["train.jsonl", "train.json", "data.jsonl", "data.json", "dataset.jsonl", "dataset.json"]:
             candidate = dataset_path / name
-            if candidate.exists():
+            if candidate.is_file():
                 return candidate
 
-        json_files = list(dataset_path.glob("*.json"))
-        if json_files:
+        json_files = sorted(
+            path for path in dataset_path.iterdir()
+            if path.is_file() and path.suffix.lower() in {".json", ".jsonl"}
+        ) if dataset_path.is_dir() else []
+        if len(json_files) == 1:
             return json_files[0]
+        if len(json_files) > 1:
+            raise ValueError(f"数据集目录包含多个JSON/JSONL文件，请明确指定训练文件: {dataset_path}")
 
-        raise FileNotFoundError(f"数据集目录中没有找到JSON文件: {dataset_path}")
+        raise FileNotFoundError(f"数据集目录中没有找到JSON/JSONL文件: {dataset_path}")
 
     async def get_task_status(self, task_id: str) -> Optional[Dict[str, Any]]:
         """查询单个训练任务的状态。
@@ -518,10 +540,11 @@ class SimpleLoRATrainer:
         completed = [
             tid for tid, t in self.tasks.items()
             if t.get("status") in ("completed", "failed", "cancelled", "interrupted")
+            and tid not in self._runner_tasks
         ]
         if len(completed) > max_completed:
             # 按创建时间排序，删除最旧的
-            completed.sort(key=lambda tid: self.tasks[tid].get("created_at", ""))
+            completed.sort(key=lambda tid: self.tasks[tid].get("created_at", ""), reverse=True)
             for tid in completed[max_completed:]:
                 del self.tasks[tid]
                 self._cancel_events.pop(tid, None)

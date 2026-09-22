@@ -1,7 +1,7 @@
 # 初学者真实 LLM 实验操作指南
 
 > 当前基线：官方 `Qwen/Qwen3-8B`、Python 3.12、PyTorch 2.8、vLLM 0.10.2、RTX 3090。本地目录为兼容旧部署可继续命名 `Qwen3-8B-Instruct`。
-> Qwen2.5 的既有结果属于历史对照，见 `archive/REAL_VLLM_BENCHMARK_REPORT.md`。
+> Qwen2.5 的既有结果属于历史对照；已归档资产见各 archive 索引，未保留的文件通过 Git 历史追溯。当前 E1 及 recovery 未通过生成门禁，E2-E5 暂停，详见 [实验总览](KISAKI_EXPERIMENT_INDEX.md)。
 
 ## 1. 这套实验在证明什么
 
@@ -51,7 +51,6 @@ git status -sb
 
 ```bash
 python scripts/validate_kisaki_v4_training_gate.py
-python scripts/validate_kisaki_v4_training_gate.py
 python -m pytest backend/tests/test_character_benchmark.py -q
 ```
 
@@ -70,7 +69,7 @@ python -m pytest backend/tests/test_character_benchmark.py -q
 python scripts/validate_kisaki_v4_training_gate.py
 ```
 
-当前应看到阻塞项，这是为了防止未审核数据进入训练。全部审核并冻结后，使用：
+根据命令实际输出处理数据或审核阻塞项，不预设通过或失败。V4 数据已冻结，但 E1 模型质量门禁未通过；下面仅是经批准恢复实验后的入口，不应直接展开 E2-E5：
 
 ```bash
 python scripts/run_kisaki_experiment.py --experiment e1 --seed 42
@@ -190,7 +189,7 @@ conclusion and limitation
 
 ## 12. 常见错误
 
-- **CUDA OOM**：停止其他 GPU 任务，降低 batch、序列长度或显存利用率。
+- **CUDA OOM**：降低自己的 batch、序列长度或显存利用率；如需停服，只停止自己管理且已确认可暂停的任务，共享 GPU 上等待其他用户任务释放资源。
 - **LoRA 扫描不到**：检查 `LORA_PATH`，并确认 adapter 目录含 `adapter_config.json` 和权重。
 - **LoRA 不兼容**：Qwen2.5 adapter 不能直接挂载到 Qwen3。
 - **vLLM 模型不存在**：请求中的 model 名必须与 `/v1/models` 一致。

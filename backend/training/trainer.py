@@ -159,10 +159,16 @@ class GpuTemperatureCallback(TrainerCallback):
 class ProgressCallback(TrainerCallback):
     """训练进度报告回调，将训练进度实时更新到任务管理器（基于 global_step/max_steps 计算 0-100 百分比）。"""
 
-    def __init__(self, progress_fn=None):
+    def __init__(self, progress_fn=None, cancel_event=None):
         self.progress_fn = progress_fn
+        self.cancel_event = cancel_event
 
     def on_step_end(self, args, state, control, **kwargs):
+        if self.cancel_event is not None and self.cancel_event.is_set():
+            control.should_training_stop = True
+            control.should_save = False
+            control.should_evaluate = False
+            return control
         if self.progress_fn and state.max_steps > 0:
             progress = min(100, int(state.global_step / state.max_steps * 100))
             self.progress_fn(progress, state.global_step, state.max_steps)
@@ -194,7 +200,7 @@ class LoRATrainingConfig:
     packing: bool = True
 
     learning_rate: float = 2e-4
-    num_train_epochs: int = 12
+    num_train_epochs: float = 12
     per_device_train_batch_size: int = 2
     per_device_eval_batch_size: int = 2
     gradient_accumulation_steps: int = 4
@@ -315,6 +321,11 @@ class LoRATrainer:
         self._tokenizer = None
         self._model = None
         self.progress_fn = progress_fn
+        self.cancel_event = None
+
+    def _check_cancelled(self):
+        if self.cancel_event is not None and self.cancel_event.is_set():
+            raise RuntimeError("Training cancelled")
 
     def print_gpu_memory(self, stage: str = ""):
         if torch.cuda.is_available():
@@ -349,6 +360,14 @@ class LoRATrainer:
         dataset = load_dataset("json", data_files=str(self.config.train_data_path))["train"]
         logger.info(f"训练数据加载完成，样本数: {len(dataset)}")
 
+        from training.evidence_dataset import is_evidence_record, validate_training_partitions
+
+        eval_raw = (
+            load_dataset("json", data_files=str(self.config.eval_data_path))["train"]
+            if self.config.eval_data_path else []
+        )
+        validate_training_partitions(dataset, eval_raw, packing=self.config.packing)
+
         def format_and_tokenize(record):
             messages = normalize_chat_record(
                 record,
@@ -368,6 +387,7 @@ class LoRATrainer:
                 truncation_direction=self.config.truncation_direction,
                 use_chat_template=self.config.chat_template,
                 assistant_supervision=assistant_supervision,
+                require_full_context=is_evidence_record(record),
             )
 
         tokenized_dataset = dataset.map(
@@ -378,9 +398,6 @@ class LoRATrainer:
         )
 
         if self.config.eval_data_path:
-            eval_raw = load_dataset(
-                "json", data_files=str(self.config.eval_data_path)
-            )["train"]
             eval_dataset = eval_raw.map(
                 format_and_tokenize,
                 batched=False,
@@ -435,7 +452,7 @@ class LoRATrainer:
 
         torch_dtype = torch.bfloat16 if self.config.bf16 else torch.float16
         quant_method = self._detect_quantization_type()
-        is_quantized = quant_method in ("awq", "gptq") or self.config.load_in_4bit or self.config.load_in_8bit
+        is_quantized = quant_method in ("awq", "gptq", "bitsandbytes") or self.config.load_in_4bit or self.config.load_in_8bit
         load_kwargs: Dict[str, Any] = {
             "device_map": "auto",
             "low_cpu_mem_usage": True,
@@ -508,6 +525,10 @@ class LoRATrainer:
                 disable_exllama=False,
             )
             load_kwargs.pop("torch_dtype", None)
+        elif quant_method == "bitsandbytes":
+            # A saved NF4/INT8 checkpoint already owns its quantization config.
+            # Do not re-quantize it or mistake load_in_4bit=False for FP weights.
+            load_kwargs["torch_dtype"] = torch_dtype
         elif self.config.load_in_4bit:
             logger.info("启用 4-bit 量化加载 (NF4)")
             load_kwargs["torch_dtype"] = torch_dtype
@@ -530,7 +551,7 @@ class LoRATrainer:
             str(self.config.base_model_path),
             **load_kwargs,
         )
-        if is_quantized:
+        if is_quantized or getattr(model, "is_loaded_in_4bit", False) or getattr(model, "is_loaded_in_8bit", False):
             model = prepare_model_for_kbit_training(model)
         self.print_gpu_memory("基础模型加载后")
         self._model = model
@@ -584,9 +605,13 @@ class LoRATrainer:
         try:
             self.cleanup_gpu()
 
+            self._check_cancelled()
             tokenizer = self._load_tokenizer()
+            self._check_cancelled()
             datasets = self._load_and_preprocess_data(tokenizer)
+            self._check_cancelled()
             model = self._load_model()
+            self._check_cancelled()
 
             logger.info("配置LoRA...")
             model = self._configure_lora_model(model)
@@ -623,9 +648,8 @@ class LoRATrainer:
             callbacks.append(gpu_temp_callback)
             logger.info("已启用GPU温度保护: max=82°C, cooldown=72°C, interval=20步")
 
-            if self.progress_fn:
-                callbacks.append(ProgressCallback(self.progress_fn))
-                logger.info("已启用训练进度报告回调")
+            callbacks.append(ProgressCallback(self.progress_fn, self.cancel_event))
+            logger.info("已启用训练进度与取消回调")
 
             # trl 1.8+ 将 max_seq_length 改名为 max_length，做版本兼容
             sft_config_kwargs = dict(
@@ -693,6 +717,7 @@ class LoRATrainer:
             logger.info("=" * 60)
             self.print_gpu_memory("训练前")
 
+            self._check_cancelled()
             checkpoint = self.config.resume_from_checkpoint
             if checkpoint and Path(checkpoint).exists():
                 logger.info(f"从检查点恢复训练: {checkpoint}")
@@ -700,6 +725,7 @@ class LoRATrainer:
             else:
                 trainer.train()
 
+            self._check_cancelled()
             final_output = output_dir / "final"
             trainer.model.save_pretrained(str(final_output))
             tokenizer.save_pretrained(str(final_output))

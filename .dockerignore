@@ -44,3 +44,24 @@ backend/**/__pycache__
 .codex_ppt_review/
 .trae/
 .codex/
+
+# Local-only environments, caches, private notes and runtime state.
+.codex-*/
+.pnpm-store/
+.ruff_cache/
+.tmp/
+.test_tmp*/
+local-notes/
+archive/
+runtime/
+tmp/
+**/__pycache__/
+**/.venv/
+**/venv/
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+*.log
+.env.*
+!.env.example

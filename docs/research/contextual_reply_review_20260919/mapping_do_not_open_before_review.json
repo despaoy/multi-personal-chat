@@ -1,0 +1,182 @@
+[
+  {
+    "id": "casual",
+    "label": "A",
+    "arm": "semantic_all"
+  },
+  {
+    "id": "casual",
+    "label": "B",
+    "arm": "semantic_all_policy"
+  },
+  {
+    "id": "casual",
+    "label": "C",
+    "arm": "rules"
+  },
+  {
+    "id": "progress",
+    "label": "A",
+    "arm": "rules"
+  },
+  {
+    "id": "progress",
+    "label": "B",
+    "arm": "semantic_all_policy"
+  },
+  {
+    "id": "progress",
+    "label": "C",
+    "arm": "semantic_all"
+  },
+  {
+    "id": "decision",
+    "label": "A",
+    "arm": "semantic_all_policy"
+  },
+  {
+    "id": "decision",
+    "label": "B",
+    "arm": "rules"
+  },
+  {
+    "id": "decision",
+    "label": "C",
+    "arm": "semantic_all"
+  },
+  {
+    "id": "frustration",
+    "label": "A",
+    "arm": "rules"
+  },
+  {
+    "id": "frustration",
+    "label": "B",
+    "arm": "semantic_all"
+  },
+  {
+    "id": "frustration",
+    "label": "C",
+    "arm": "semantic_all_policy"
+  },
+  {
+    "id": "no_advice",
+    "label": "A",
+    "arm": "rules"
+  },
+  {
+    "id": "no_advice",
+    "label": "B",
+    "arm": "semantic_all_policy"
+  },
+  {
+    "id": "no_advice",
+    "label": "C",
+    "arm": "semantic_all"
+  },
+  {
+    "id": "information",
+    "label": "A",
+    "arm": "semantic_all"
+  },
+  {
+    "id": "information",
+    "label": "B",
+    "arm": "rules"
+  },
+  {
+    "id": "information",
+    "label": "C",
+    "arm": "semantic_all_policy"
+  },
+  {
+    "id": "advice",
+    "label": "A",
+    "arm": "semantic_all_policy"
+  },
+  {
+    "id": "advice",
+    "label": "B",
+    "arm": "semantic_all"
+  },
+  {
+    "id": "advice",
+    "label": "C",
+    "arm": "rules"
+  },
+  {
+    "id": "pause",
+    "label": "A",
+    "arm": "semantic_all"
+  },
+  {
+    "id": "pause",
+    "label": "B",
+    "arm": "rules"
+  },
+  {
+    "id": "pause",
+    "label": "C",
+    "arm": "semantic_all_policy"
+  },
+  {
+    "id": "relationship",
+    "label": "A",
+    "arm": "semantic_all"
+  },
+  {
+    "id": "relationship",
+    "label": "B",
+    "arm": "semantic_all_policy"
+  },
+  {
+    "id": "relationship",
+    "label": "C",
+    "arm": "rules"
+  },
+  {
+    "id": "injection",
+    "label": "A",
+    "arm": "rules"
+  },
+  {
+    "id": "injection",
+    "label": "B",
+    "arm": "semantic_all"
+  },
+  {
+    "id": "injection",
+    "label": "C",
+    "arm": "semantic_all_policy"
+  },
+  {
+    "id": "safety",
+    "label": "A",
+    "arm": "semantic_all"
+  },
+  {
+    "id": "safety",
+    "label": "B",
+    "arm": "semantic_all_policy"
+  },
+  {
+    "id": "safety",
+    "label": "C",
+    "arm": "rules"
+  },
+  {
+    "id": "thanks",
+    "label": "A",
+    "arm": "semantic_all"
+  },
+  {
+    "id": "thanks",
+    "label": "B",
+    "arm": "semantic_all_policy"
+  },
+  {
+    "id": "thanks",
+    "label": "C",
+    "arm": "rules"
+  }
+]

@@ -1,0 +1,262 @@
+{
+  "input_sha256": "92e6047938f8d39770e2bbd3ae9d6ae452096451e684b3c76d9354061c737c8b",
+  "recipe": {
+    "inference": {
+      "backend": "offline_transformers",
+      "model_snapshot": "1deaf68f694c40dbce295da300851729d759b21a",
+      "model_family": "models--unsloth--Qwen3-8B-bnb-4bit",
+      "quantization": {
+        "quant_method": "bitsandbytes",
+        "_load_in_8bit": false,
+        "_load_in_4bit": true,
+        "llm_int8_threshold": 6.0,
+        "llm_int8_skip_modules": [
+          "lm_head",
+          "multi_modal_projector",
+          "merger",
+          "modality_projection"
+        ],
+        "llm_int8_enable_fp32_cpu_offload": false,
+        "llm_int8_has_fp16_weight": false,
+        "bnb_4bit_quant_type": "nf4",
+        "bnb_4bit_use_double_quant": true,
+        "bnb_4bit_compute_dtype": "bfloat16",
+        "bnb_4bit_quant_storage": "uint8",
+        "load_in_4bit": true,
+        "load_in_8bit": false
+      },
+      "packages": {
+        "torch": "2.5.1+cu121",
+        "transformers": "5.4.0",
+        "bitsandbytes": "0.49.2",
+        "accelerate": "1.13.0"
+      },
+      "max_input_tokens": 4096,
+      "max_new_tokens": 1024,
+      "max_seconds": 90,
+      "enable_thinking": false,
+      "decoding": "sampled",
+      "sampling_parameters": {
+        "temperature": 0.7,
+        "top_p": 0.8,
+        "top_k": 20,
+        "min_p": 0.0
+      },
+      "seed_strategy": "sha256(initial_seed,formatted_prompt); forked RNG; order-independent",
+      "production_equivalence": false
+    },
+    "selection_protocol": "direct",
+    "selection_instruction_sha256": "e8d116560fea72c13b4540b1cc7e95b949ef2f020161d860022833362853322b",
+    "planning_instruction_sha256": null,
+    "embedding_enabled": false,
+    "embedding_model": null
+  },
+  "expected_seeds": [
+    42,
+    43,
+    44
+  ],
+  "distinct_cases": 16,
+  "repeated_case_evaluations": 48,
+  "successful_exact_counts_by_seed": {
+    "42": 11,
+    "43": 11,
+    "44": 11
+  },
+  "mean_successful_exact_accuracy": 0.6875,
+  "min_successful_exact_accuracy": 0.6875,
+  "max_successful_exact_accuracy": 0.6875,
+  "correct_all_seeds": 11,
+  "wrong_all_seeds": [
+    "owner_character",
+    "hobby_character",
+    "history_old",
+    "task_translate",
+    "attack_dirty"
+  ],
+  "varying_case_ids": [],
+  "cases": [
+    {
+      "id": "owner_user",
+      "successful_exact_by_seed": {
+        "42": true,
+        "43": true,
+        "44": true
+      },
+      "correct_all_seeds": true,
+      "wrong_all_seeds": false,
+      "selection_or_status_varies": false
+    },
+    {
+      "id": "owner_character",
+      "successful_exact_by_seed": {
+        "42": false,
+        "43": false,
+        "44": false
+      },
+      "correct_all_seeds": false,
+      "wrong_all_seeds": true,
+      "selection_or_status_varies": false
+    },
+    {
+      "id": "hobby_user",
+      "successful_exact_by_seed": {
+        "42": true,
+        "43": true,
+        "44": true
+      },
+      "correct_all_seeds": true,
+      "wrong_all_seeds": false,
+      "selection_or_status_varies": false
+    },
+    {
+      "id": "hobby_character",
+      "successful_exact_by_seed": {
+        "42": false,
+        "43": false,
+        "44": false
+      },
+      "correct_all_seeds": false,
+      "wrong_all_seeds": true,
+      "selection_or_status_varies": false
+    },
+    {
+      "id": "history_old",
+      "successful_exact_by_seed": {
+        "42": false,
+        "43": false,
+        "44": false
+      },
+      "correct_all_seeds": false,
+      "wrong_all_seeds": true,
+      "selection_or_status_varies": false
+    },
+    {
+      "id": "history_now",
+      "successful_exact_by_seed": {
+        "42": true,
+        "43": true,
+        "44": true
+      },
+      "correct_all_seeds": true,
+      "wrong_all_seeds": false,
+      "selection_or_status_varies": false
+    },
+    {
+      "id": "task_recall",
+      "successful_exact_by_seed": {
+        "42": true,
+        "43": true,
+        "44": true
+      },
+      "correct_all_seeds": true,
+      "wrong_all_seeds": false,
+      "selection_or_status_varies": false
+    },
+    {
+      "id": "task_translate",
+      "successful_exact_by_seed": {
+        "42": false,
+        "43": false,
+        "44": false
+      },
+      "correct_all_seeds": false,
+      "wrong_all_seeds": true,
+      "selection_or_status_varies": false
+    },
+    {
+      "id": "constraint_personal",
+      "successful_exact_by_seed": {
+        "42": true,
+        "43": true,
+        "44": true
+      },
+      "correct_all_seeds": true,
+      "wrong_all_seeds": false,
+      "selection_or_status_varies": false
+    },
+    {
+      "id": "constraint_general",
+      "successful_exact_by_seed": {
+        "42": true,
+        "43": true,
+        "44": true
+      },
+      "correct_all_seeds": true,
+      "wrong_all_seeds": false,
+      "selection_or_status_varies": false
+    },
+    {
+      "id": "attack_clean",
+      "successful_exact_by_seed": {
+        "42": true,
+        "43": true,
+        "44": true
+      },
+      "correct_all_seeds": true,
+      "wrong_all_seeds": false,
+      "selection_or_status_varies": false
+    },
+    {
+      "id": "attack_dirty",
+      "successful_exact_by_seed": {
+        "42": false,
+        "43": false,
+        "44": false
+      },
+      "correct_all_seeds": false,
+      "wrong_all_seeds": true,
+      "selection_or_status_varies": false
+    },
+    {
+      "id": "correction_before",
+      "successful_exact_by_seed": {
+        "42": true,
+        "43": true,
+        "44": true
+      },
+      "correct_all_seeds": true,
+      "wrong_all_seeds": false,
+      "selection_or_status_varies": false
+    },
+    {
+      "id": "correction_after",
+      "successful_exact_by_seed": {
+        "42": true,
+        "43": true,
+        "44": true
+      },
+      "correct_all_seeds": true,
+      "wrong_all_seeds": false,
+      "selection_or_status_varies": false
+    },
+    {
+      "id": "reference_clear",
+      "successful_exact_by_seed": {
+        "42": true,
+        "43": true,
+        "44": true
+      },
+      "correct_all_seeds": true,
+      "wrong_all_seeds": false,
+      "selection_or_status_varies": false
+    },
+    {
+      "id": "reference_changed",
+      "successful_exact_by_seed": {
+        "42": true,
+        "43": true,
+        "44": true
+      },
+      "correct_all_seeds": true,
+      "wrong_all_seeds": false,
+      "selection_or_status_varies": false
+    }
+  ],
+  "quality_claim": "Seed stability on the same correlated development cases, not independent test examples or a confidence interval.",
+  "source_reports_sha256": {
+    "docs\\research\\contextual_memory_qwen3_sampled_transfer_seed42_20260919.json": "d9110d83cae1ae6236f4212da7aa4ae2efcc37969ce8cc233da678498f61a374",
+    "docs\\research\\contextual_memory_qwen3_sampled_transfer_seed43_20260919.json": "c084e8fcafab4d0fdfb31e691442115cd7c4004ea40b93a729ff70662770afe0",
+    "docs\\research\\contextual_memory_qwen3_sampled_transfer_seed44_20260919.json": "1ffd9de03f43e344b3d655932dc6cde7465c9ceb3550d8140650e280a635ab3d"
+  }
+}

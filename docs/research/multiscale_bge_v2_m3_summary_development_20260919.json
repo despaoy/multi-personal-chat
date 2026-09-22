@@ -1,0 +1,4385 @@
+{
+  "evaluation_status": "real_model_development_ablation_not_held_out_test",
+  "dataset_sha256": "0a0c200c9abc8d889f06af0e71536727a70e138807a5a9d8c383c7dea0358d9f",
+  "model_path": "C:\\Users\\13474\\.cache\\huggingface\\hub\\models--BAAI--bge-reranker-v2-m3\\snapshots\\953dc6f6f85a1b2dbfca4c34a2796e7dde08d41e",
+  "max_length": 512,
+  "batch_size": 2,
+  "text_view": "summary",
+  "index": {
+    "available": true,
+    "domain_id": "tsukiyashiro_kisaki",
+    "index_root": "C:\\Users\\13474\\Desktop\\multipersonal chat system\\backend\\data\\knowledge\\tsukiyashiro_kisaki\\character_knowledge_index_v3",
+    "documents": 1098,
+    "document_type_counts": {
+      "fact": 218,
+      "relation": 32,
+      "event": 159,
+      "story": 18,
+      "scene": 262,
+      "evidence": 409
+    },
+    "embedding_model": "paraphrase-multilingual-MiniLM-L12-v2"
+  },
+  "variants": {
+    "deterministic": {
+      "summary": {
+        "queries": 68,
+        "answerable_scored": 64,
+        "unresolved_annotations": 0,
+        "hit_at_1": 0.90625,
+        "hit_at_5": 0.984375,
+        "mrr_at_5": 0.9380208333333333,
+        "recall_at_5": 0.7887963383922436,
+        "ndcg_at_5": 0.847688765337055,
+        "negative_queries": 4,
+        "negative_domain_hit_rate": 0,
+        "median_latency_ms": 38.709999999999994,
+        "semantic_queries": 0,
+        "notes": "Ranking metrics use results before abstention; logits need separate validation calibration."
+      },
+      "per_query": [
+        {
+          "id": "ev_exact_fact_01",
+          "category": "exact_fact",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "fact_0bcef7e7b6845675",
+            "fact_22719796c8bfefad",
+            "fact_da4d0bda6d2eec8b",
+            "fact_e4049017e43973b0"
+          ],
+          "retrieved_ids": [
+            "fact_0bcef7e7b6845675",
+            "fact_22719796c8bfefad",
+            "fact_ed3b4d237f92b2b2",
+            "fact_da4d0bda6d2eec8b",
+            "fact_e4049017e43973b0"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 1.0,
+          "ndcg": 0.9558295932317544,
+          "actual_rerank_method": "deterministic",
+          "scores": [
+            0.9457,
+            0.9286,
+            0.8943,
+            0.8771,
+            0.8771
+          ],
+          "latency_ms": 43.26
+        },
+        {
+          "id": "ev_exact_fact_02",
+          "category": "exact_fact",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "fact_1fd21628049f0ede",
+            "fact_ced6a01e12e614d1"
+          ],
+          "retrieved_ids": [
+            "fact_ced6a01e12e614d1",
+            "fact_1fd21628049f0ede",
+            "fact_20b421311ae04ba9",
+            "fact_bb0b2c32d4215f9e",
+            "fact_0547665fd2d685fa"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 1.0,
+          "ndcg": 1.0,
+          "actual_rerank_method": "deterministic",
+          "scores": [
+            0.9286,
+            0.9286,
+            0.7686,
+            0.5943,
+            0.5943
+          ],
+          "latency_ms": 28.15
+        },
+        {
+          "id": "ev_exact_fact_03",
+          "category": "exact_fact",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "fact_0fcb48d2b7dcfd6f",
+            "fact_55c79b273a377f2a",
+            "fact_600f9343198db251",
+            "fact_78a3027670e9eae1",
+            "fact_e24c31ade87d5499"
+          ],
+          "retrieved_ids": [
+            "fact_600f9343198db251",
+            "fact_e24c31ade87d5499",
+            "fact_55c79b273a377f2a",
+            "fact_78a3027670e9eae1",
+            "fact_0fcb48d2b7dcfd6f"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 1.0,
+          "ndcg": 1.0,
+          "actual_rerank_method": "deterministic",
+          "scores": [
+            0.9286,
+            0.9286,
+            0.9114,
+            0.8943,
+            0.8771
+          ],
+          "latency_ms": 27.83
+        },
+        {
+          "id": "ev_exact_fact_04",
+          "category": "exact_fact",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "fact_3bb07b32573634eb"
+          ],
+          "retrieved_ids": [
+            "fact_3bb07b32573634eb",
+            "fact_0bcef7e7b6845675",
+            "fact_10eec469b56b21d8",
+            "fact_613a55ee54631a7e",
+            "fact_22719796c8bfefad"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 1.0,
+          "ndcg": 1.0,
+          "actual_rerank_method": "deterministic",
+          "scores": [
+            0.92,
+            0.62,
+            0.62,
+            0.6,
+            0.6
+          ],
+          "latency_ms": 29.86
+        },
+        {
+          "id": "ev_identity_01",
+          "category": "identity",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "fact_0547665fd2d685fa",
+            "fact_5b5ae20ecfb0d532",
+            "fact_a35c8fe6a7db3ae5",
+            "fact_cf3399398e29864c"
+          ],
+          "retrieved_ids": [
+            "rel_51728c8d78f7b5cf",
+            "rel_5e7800a566fc9792",
+            "manual_relation_29ced62dcc8d4f4d",
+            "rel_15678d327e6fde5b",
+            "rel_7f97b8bd6854b893"
+          ],
+          "hit_at_1": 0,
+          "hit_at_5": 0,
+          "rr": 0.0,
+          "recall": 0.0,
+          "ndcg": 0.0,
+          "actual_rerank_method": "deterministic",
+          "scores": [
+            0.5693,
+            0.5573,
+            0.5573,
+            0.5573,
+            0.5573
+          ],
+          "latency_ms": 33.36
+        },
+        {
+          "id": "ev_identity_02",
+          "category": "identity",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "fact_06d046d41b06f184",
+            "fact_251809a384ececda",
+            "fact_2a4167abd736bcdc",
+            "fact_2c7fc90234c8eebd",
+            "fact_576ea3b185bf074f",
+            "fact_64e8751d5062032e",
+            "fact_94b9200459faa6da",
+            "fact_bb0b2c32d4215f9e",
+            "fact_fe8cddff964fa923"
+          ],
+          "retrieved_ids": [
+            "fact_bb0b2c32d4215f9e",
+            "fact_94b9200459faa6da",
+            "fact_2c7fc90234c8eebd",
+            "fact_576ea3b185bf074f",
+            "fact_64e8751d5062032e"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 0.5555555555555556,
+          "ndcg": 1.0,
+          "actual_rerank_method": "deterministic",
+          "scores": [
+            0.9367,
+            0.9367,
+            0.9367,
+            0.9367,
+            0.9234
+          ],
+          "latency_ms": 30.25
+        },
+        {
+          "id": "ev_identity_03",
+          "category": "identity",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "fact_0fcb48d2b7dcfd6f",
+            "fact_55c79b273a377f2a",
+            "fact_600f9343198db251",
+            "fact_78a3027670e9eae1",
+            "fact_e24c31ade87d5499"
+          ],
+          "retrieved_ids": [
+            "fact_0fcb48d2b7dcfd6f",
+            "event_8558a07d30b69bb3",
+            "fact_55c79b273a377f2a",
+            "fact_85a6a25fcf3faf65",
+            "fact_4d44cc225aed7796"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 0.4,
+          "ndcg": 0.5087403079104241,
+          "actual_rerank_method": "deterministic",
+          "scores": [
+            0.635,
+            0.4875,
+            0.485,
+            0.475,
+            0.475
+          ],
+          "latency_ms": 63.76
+        },
+        {
+          "id": "ev_identity_04",
+          "category": "identity",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "fact_520638d5f7f93dcf",
+            "fact_5e394da377e1d988",
+            "fact_8c91d0b037cc8526"
+          ],
+          "retrieved_ids": [
+            "fact_8c91d0b037cc8526",
+            "fact_520638d5f7f93dcf",
+            "fact_5e394da377e1d988",
+            "fact_a8530c7f365a1949",
+            "fact_0547665fd2d685fa"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 1.0,
+          "ndcg": 1.0,
+          "actual_rerank_method": "deterministic",
+          "scores": [
+            0.988,
+            0.988,
+            0.94,
+            0.664,
+            0.664
+          ],
+          "latency_ms": 33.02
+        },
+        {
+          "id": "ev_kinship_01",
+          "category": "kinship",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "rel_51728c8d78f7b5cf"
+          ],
+          "retrieved_ids": [
+            "rel_51728c8d78f7b5cf",
+            "rel_5e7800a566fc9792",
+            "rel_15678d327e6fde5b",
+            "rel_160632234a507562",
+            "manual_relation_31c17bd9be427a43"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 1.0,
+          "ndcg": 1.0,
+          "actual_rerank_method": "deterministic",
+          "scores": [
+            0.8533,
+            0.59,
+            0.59,
+            0.5767,
+            0.5767
+          ],
+          "latency_ms": 17.7
+        },
+        {
+          "id": "ev_kinship_02",
+          "category": "kinship",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "rel_5f4279ab2663d517",
+            "rel_99b2edf6334ca3e5"
+          ],
+          "retrieved_ids": [
+            "rel_5f4279ab2663d517",
+            "rel_99b2edf6334ca3e5",
+            "manual_relation_ac6b34aaba6bcd8c",
+            "manual_relation_21cd33c1cf656ca1",
+            "rel_ababbb6a60f249cd"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 1.0,
+          "ndcg": 1.0,
+          "actual_rerank_method": "deterministic",
+          "scores": [
+            0.7264,
+            0.5671,
+            0.5671,
+            0.4671,
+            0.3343
+          ],
+          "latency_ms": 18.11
+        },
+        {
+          "id": "ev_kinship_03",
+          "category": "kinship",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "manual_relation_29ced62dcc8d4f4d",
+            "manual_relation_417ac8c5e66f95e5"
+          ],
+          "retrieved_ids": [
+            "manual_relation_417ac8c5e66f95e5",
+            "manual_relation_29ced62dcc8d4f4d",
+            "manual_relation_31c17bd9be427a43",
+            "rel_51728c8d78f7b5cf",
+            "rel_160632234a507562"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 1.0,
+          "ndcg": 1.0,
+          "actual_rerank_method": "deterministic",
+          "scores": [
+            0.83,
+            0.815,
+            0.58,
+            0.58,
+            0.58
+          ],
+          "latency_ms": 63.7
+        },
+        {
+          "id": "ev_kinship_04",
+          "category": "kinship",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "rel_f814639e13d0faf8"
+          ],
+          "retrieved_ids": [
+            "rel_f814639e13d0faf8",
+            "rel_51728c8d78f7b5cf",
+            "rel_5f4279ab2663d517",
+            "rel_81e13ce00c3597c5",
+            "rel_b077601df5d3d129"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 1.0,
+          "ndcg": 1.0,
+          "actual_rerank_method": "deterministic",
+          "scores": [
+            0.8343,
+            0.5843,
+            0.5843,
+            0.5671,
+            0.5671
+          ],
+          "latency_ms": 29.6
+        },
+        {
+          "id": "ev_dyn_relation_01",
+          "category": "dynamic_relation",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "rel_1c74cfb1f43dab51",
+            "rel_7f97b8bd6854b893"
+          ],
+          "retrieved_ids": [
+            "rel_7f97b8bd6854b893",
+            "rel_1c74cfb1f43dab51",
+            "fact_c4459f31a65553cb",
+            "rel_51728c8d78f7b5cf",
+            "fact_6a1ac262b3f5d7d9"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 1.0,
+          "ndcg": 1.0,
+          "actual_rerank_method": "deterministic",
+          "scores": [
+            0.836,
+            0.824,
+            0.634,
+            0.598,
+            0.586
+          ],
+          "latency_ms": 30.21
+        },
+        {
+          "id": "ev_dyn_relation_02",
+          "category": "dynamic_relation",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "rel_aa91c18b46927932"
+          ],
+          "retrieved_ids": [
+            "rel_aa91c18b46927932",
+            "manual_relation_e5b8b24f7400fceb",
+            "rel_6a24070d0e62b551",
+            "rel_7752f8266cd83200",
+            "rel_ababbb6a60f249cd"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 1.0,
+          "ndcg": 1.0,
+          "actual_rerank_method": "deterministic",
+          "scores": [
+            0.6518,
+            0.6518,
+            0.4018,
+            0.4018,
+            0.4018
+          ],
+          "latency_ms": 17.77
+        },
+        {
+          "id": "ev_dyn_relation_03",
+          "category": "dynamic_relation",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "manual_relation_31c17bd9be427a43",
+            "rel_52d054b748c1cb0c"
+          ],
+          "retrieved_ids": [
+            "fact_6a1ac262b3f5d7d9",
+            "fact_cded898792a16e03",
+            "event_09b4fc490dfb1a54",
+            "event_19f2963d4b96e3b5",
+            "manual_relation_31c17bd9be427a43"
+          ],
+          "hit_at_1": 0,
+          "hit_at_5": 1,
+          "rr": 0.2,
+          "recall": 0.5,
+          "ndcg": 0.23719771276929622,
+          "actual_rerank_method": "deterministic",
+          "scores": [
+            0.4877,
+            0.4387,
+            0.4295,
+            0.4295,
+            0.4185
+          ],
+          "latency_ms": 49.32
+        },
+        {
+          "id": "ev_dyn_relation_04",
+          "category": "dynamic_relation",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "rel_8cb732fd3d4cd7b1"
+          ],
+          "retrieved_ids": [
+            "rel_8cb732fd3d4cd7b1",
+            "rel_a6c737dae1e287de",
+            "rel_a69051a5e800a9b3",
+            "rel_307306f509bb0c50",
+            "rel_7752f8266cd83200"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 1.0,
+          "ndcg": 1.0,
+          "actual_rerank_method": "deterministic",
+          "scores": [
+            0.8554,
+            0.6054,
+            0.5962,
+            0.4202,
+            0.411
+          ],
+          "latency_ms": 18.8
+        },
+        {
+          "id": "ev_event_01",
+          "category": "event_query",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "event_8558a07d30b69bb3",
+            "event_fc4692df8d6ec563"
+          ],
+          "retrieved_ids": [
+            "event_fc4692df8d6ec563",
+            "event_19a0928eb2eae95c",
+            "event_7dba818a04d0021b",
+            "event_2257567bb5e834f5",
+            "event_38b57bdcdc636e94"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 0.5,
+          "ndcg": 0.6131471927654584,
+          "actual_rerank_method": "deterministic",
+          "scores": [
+            0.6212,
+            0.6027,
+            0.4685,
+            0.4685,
+            0.4685
+          ],
+          "latency_ms": 49.23
+        },
+        {
+          "id": "ev_event_02",
+          "category": "event_query",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "event_949fa55178d062d3"
+          ],
+          "retrieved_ids": [
+            "event_949fa55178d062d3",
+            "fact_b8378345458a257d",
+            "fact_7db86b5070ca24b4",
+            "event_af4a672926909cb6",
+            "event_11fd138133c76b0c"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 1.0,
+          "ndcg": 1.0,
+          "actual_rerank_method": "deterministic",
+          "scores": [
+            0.5854,
+            0.4679,
+            0.409,
+            0.3833,
+            0.3833
+          ],
+          "latency_ms": 58.51
+        },
+        {
+          "id": "ev_event_03",
+          "category": "event_query",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "event_909f9c6316a330b1",
+            "event_f778677c80228971"
+          ],
+          "retrieved_ids": [
+            "event_909f9c6316a330b1",
+            "event_7f715df67539c41b",
+            "event_a0cefe662c4fc718",
+            "event_af4a672926909cb6",
+            "fact_e07d1540a07b4b9f"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 0.5,
+          "ndcg": 0.6131471927654584,
+          "actual_rerank_method": "deterministic",
+          "scores": [
+            0.52,
+            0.3966,
+            0.3966,
+            0.3833,
+            0.3133
+          ],
+          "latency_ms": 49.48
+        },
+        {
+          "id": "ev_event_04",
+          "category": "event_query",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "event_7f715df67539c41b",
+            "event_a0cefe662c4fc718",
+            "event_e21d1ca17c160cbe"
+          ],
+          "retrieved_ids": [
+            "event_e21d1ca17c160cbe",
+            "event_af4a672926909cb6",
+            "event_cb14c98fc6218ca8",
+            "event_36c2443bbdf7d73c",
+            "event_19a0928eb2eae95c"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 0.3333333333333333,
+          "ndcg": 0.46927872602275644,
+          "actual_rerank_method": "deterministic",
+          "scores": [
+            0.351,
+            0.351,
+            0.2504,
+            0.2504,
+            0.2504
+          ],
+          "latency_ms": 43.07
+        },
+        {
+          "id": "ev_causality_01",
+          "category": "causality",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "event_59a8b0d5b2571dca",
+            "fact_01a25a79a4570c82",
+            "fact_8448da7bb9f56ab0",
+            "fact_8bc825dfa1d7f808",
+            "fact_a0c9b8b66ab6aa8a",
+            "fact_ec5bee2f728e8617"
+          ],
+          "retrieved_ids": [
+            "fact_8bc825dfa1d7f808",
+            "fact_8448da7bb9f56ab0",
+            "fact_a0c9b8b66ab6aa8a",
+            "fact_01a25a79a4570c82",
+            "fact_94de5ced0bc39df0"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 0.6666666666666666,
+          "ndcg": 0.8687949224876582,
+          "actual_rerank_method": "deterministic",
+          "scores": [
+            0.76,
+            0.76,
+            0.76,
+            0.76,
+            0.76
+          ],
+          "latency_ms": 57.8
+        },
+        {
+          "id": "ev_causality_02",
+          "category": "causality",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "fact_ce2bbbd157cb7cbf",
+            "fact_e507b324fa99dd86"
+          ],
+          "retrieved_ids": [
+            "fact_e507b324fa99dd86",
+            "fact_ce2bbbd157cb7cbf",
+            "event_137fee5dbe99475c",
+            "event_de762c10172ed43d",
+            "fact_f363b9de05654a58"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 1.0,
+          "ndcg": 1.0,
+          "actual_rerank_method": "deterministic",
+          "scores": [
+            0.775,
+            0.775,
+            0.7533,
+            0.7133,
+            0.6233
+          ],
+          "latency_ms": 55.37
+        },
+        {
+          "id": "ev_causality_03",
+          "category": "causality",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "fact_fa9faf5ccb3e3f3b"
+          ],
+          "retrieved_ids": [
+            "fact_fa9faf5ccb3e3f3b",
+            "event_2257567bb5e834f5",
+            "event_36c2443bbdf7d73c",
+            "event_b13d61d758007995",
+            "event_73790814401ae604"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 1.0,
+          "ndcg": 1.0,
+          "actual_rerank_method": "deterministic",
+          "scores": [
+            0.76,
+            0.585,
+            0.585,
+            0.585,
+            0.585
+          ],
+          "latency_ms": 46.23
+        },
+        {
+          "id": "ev_causality_04",
+          "category": "causality",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "event_38b57bdcdc636e94",
+            "event_664d03dcc5265843",
+            "event_d4f55808492989d5",
+            "fact_1bac5f280734df13",
+            "fact_67d23b31cd02b302"
+          ],
+          "retrieved_ids": [
+            "fact_67d23b31cd02b302",
+            "fact_1bac5f280734df13",
+            "fact_02df79ac92c5a95d",
+            "fact_4945b68cd06c49d5",
+            "fact_5e895c141f53c622"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 0.4,
+          "ndcg": 0.5531464700081437,
+          "actual_rerank_method": "deterministic",
+          "scores": [
+            0.83,
+            0.72,
+            0.6233,
+            0.6233,
+            0.6233
+          ],
+          "latency_ms": 70.05
+        },
+        {
+          "id": "ev_setting_01",
+          "category": "world_setting",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "fact_10308892848c1073",
+            "fact_10f1159e758a2af0",
+            "fact_138156ecc9a8a247",
+            "fact_15e63b1a24ceb8a5",
+            "fact_168b93604efe3f94",
+            "fact_1e71d0d0478f5aed",
+            "fact_384ed2478fafd24d",
+            "fact_3bb07b32573634eb",
+            "fact_3e2a3e7b0828d5d1",
+            "fact_40a102e73d85ad79",
+            "fact_5bafc8f7278ccffc",
+            "fact_600f9343198db251",
+            "fact_6a302d1557087e48",
+            "fact_6bab6e47522f879d",
+            "fact_6db6d41573aa7d4f",
+            "fact_7388302d366f6b33",
+            "fact_73f6c028a0d721b9",
+            "fact_82d126bb0e0826d6",
+            "fact_83f737894534e1d7",
+            "fact_84badddc7c865ab9",
+            "fact_88c34bb49bc49676",
+            "fact_94b9200459faa6da",
+            "fact_9cae8b5b73c97db2",
+            "fact_9caf1e99b86fa2b4",
+            "fact_a5876004b20aab9b",
+            "fact_ab833dfd22ecd818",
+            "fact_c2619e53d9a76fad",
+            "fact_c60b5a0e5cee967c",
+            "fact_ca43b46fadff7527",
+            "fact_cc231bff34e87dd6",
+            "fact_cf3399398e29864c",
+            "fact_d8c87af492566032",
+            "fact_da8a078a7e9a6bc2",
+            "fact_dadf97db1b7d8ecc",
+            "fact_ef30959e777c455e",
+            "fact_f363b9de05654a58",
+            "fact_fc403cd981c3ee5b"
+          ],
+          "retrieved_ids": [
+            "fact_dadf97db1b7d8ecc",
+            "fact_84badddc7c865ab9",
+            "fact_da8a078a7e9a6bc2",
+            "fact_384ed2478fafd24d",
+            "fact_6a302d1557087e48"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 0.13513513513513514,
+          "ndcg": 1.0,
+          "actual_rerank_method": "deterministic",
+          "scores": [
+            0.92,
+            0.92,
+            0.92,
+            0.92,
+            0.92
+          ],
+          "latency_ms": 35.07
+        },
+        {
+          "id": "ev_setting_02",
+          "category": "world_setting",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "event_0fcde8c99a5d15c4",
+            "event_205fd3ec31d921e0",
+            "event_252c88367499904e",
+            "event_8558a07d30b69bb3",
+            "event_9a363337c39bfb83",
+            "event_b840235fc99df6ca",
+            "evidence:event_0fcde8c99a5d15c4",
+            "evidence:event_205fd3ec31d921e0",
+            "evidence:event_252c88367499904e",
+            "evidence:event_8558a07d30b69bb3",
+            "evidence:event_9a363337c39bfb83",
+            "evidence:event_b840235fc99df6ca",
+            "evidence:fact_0fcb48d2b7dcfd6f",
+            "evidence:fact_10eec469b56b21d8",
+            "evidence:fact_4d44cc225aed7796",
+            "evidence:fact_85a6a25fcf3faf65",
+            "evidence:fact_af218e0d2f5cccaf",
+            "evidence:fact_ec5bee2f728e8617",
+            "fact_0fcb48d2b7dcfd6f",
+            "fact_10eec469b56b21d8",
+            "fact_4d44cc225aed7796",
+            "fact_85a6a25fcf3faf65",
+            "fact_af218e0d2f5cccaf",
+            "fact_ec5bee2f728e8617",
+            "scene_0a1b8e0bd7773bcb",
+            "scene_14acd8b5b0ccea1e",
+            "scene_14be648270599be9",
+            "scene_1d5a64b254f21370",
+            "scene_247f2bdec34bbd2f",
+            "scene_2781a377b3b788ac",
+            "scene_29a3faf20644e0a7",
+            "scene_3836aa9c1e80e781",
+            "scene_384b9ccb5288ef74",
+            "scene_38c3285749070248",
+            "scene_45c0a06694d8fcfa",
+            "scene_48a8471fec93c385",
+            "scene_49d8a626fd917340",
+            "scene_4c12797b28638d2b",
+            "scene_4c3f8382dfb56d02",
+            "scene_4fce1c2889d164e6",
+            "scene_504131e9df789cb9",
+            "scene_56480f79d4ea203b",
+            "scene_5c69747083bea3ba",
+            "scene_5df1b207252c417a",
+            "scene_61b49b2be7197107",
+            "scene_67d75f430b8e5e04",
+            "scene_6a7035787e0e3353",
+            "scene_6d7f74124bb1d663",
+            "scene_6ff0257384e9403d",
+            "scene_9a7bed8874bf8ae5",
+            "scene_9f78319482859f83",
+            "scene_a8ffbe3e1e4bc266",
+            "scene_a99965da589e4e56",
+            "scene_b4cbb3c86add661f",
+            "scene_b876c94fe61c7915",
+            "scene_cb83a63c51df2e79",
+            "scene_cca1256fbf01a2f2",
+            "scene_ccdbe360780915b9",
+            "scene_d30ea490766bf2ed",
+            "scene_dfcb7026f6d5a069",
+            "scene_e50222d351084f96",
+            "scene_e57a2206bff98204",
+            "scene_e7b6679be17b71e9",
+            "scene_f4025404dc9d1dd7",
+            "scene_f6f825b9e6756f71",
+            "story:vol01_1翡翠的排挤原理",
+            "story:vol03_3蓝宝石的存在证明",
+            "story:vol04_4紫水晶的怪异传说",
+            "story:vol05_5磷灰石的怠惰现象",
+            "story:vol06_6芙蓉石的长年隔绝",
+            "story:vol07_7黑珍珠的求爱信号",
+            "story:vol08_8萤石的时空残影",
+            "story:vol09_9白珍珠的泡沫爱慕",
+            "story:vol10_10黑曜石的因果目录",
+            "story:vol11_11黑玛瑙的不在证明",
+            "story:vol12_12青金石的幻想图书馆",
+            "story:vol13_13璀璨的紫翠玉"
+          ],
+          "retrieved_ids": [
+            "fact_af218e0d2f5cccaf",
+            "fact_ec5bee2f728e8617",
+            "fact_4d44cc225aed7796",
+            "fact_0fcb48d2b7dcfd6f",
+            "fact_85a6a25fcf3faf65"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 0.06493506493506493,
+          "ndcg": 1.0,
+          "actual_rerank_method": "deterministic",
+          "scores": [
+            0.77,
+            0.77,
+            0.67,
+            0.67,
+            0.67
+          ],
+          "latency_ms": 52.48
+        },
+        {
+          "id": "ev_setting_03",
+          "category": "world_setting",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "event_0c0f2eb50efb30c0",
+            "evidence:event_0c0f2eb50efb30c0",
+            "evidence:fact_bb0b2c32d4215f9e",
+            "fact_bb0b2c32d4215f9e",
+            "scene_2781a377b3b788ac",
+            "scene_365ca64bbd6f6946",
+            "scene_3836aa9c1e80e781",
+            "scene_49d8a626fd917340",
+            "scene_61b49b2be7197107",
+            "scene_7f600854773073b0",
+            "scene_9a7bed8874bf8ae5",
+            "scene_a9aa59257ae8e3e9",
+            "scene_aa7f0adce8e1cfb6",
+            "scene_b33f3adaf98b715d",
+            "scene_b4cbb3c86add661f",
+            "scene_cc6a73c7c868182e",
+            "scene_cd692664bcab4315",
+            "scene_d213e27b18ef359d",
+            "scene_e40b2d835c9c6778",
+            "scene_fddf170c33e9a90e",
+            "scene_fe19b451cccfa06b",
+            "story:epilogue_bonus",
+            "story:epilogue_meta",
+            "story:vol06_6芙蓉石的终焉轮回",
+            "story:vol07_7黑珍珠的求爱信号",
+            "story:vol09_9白珍珠的泡沫爱慕",
+            "story:vol10_10黑曜石的因果目录",
+            "story:vol12_12青金石的幻想图书馆",
+            "story:vol13_13璀璨的紫翠玉"
+          ],
+          "retrieved_ids": [
+            "fact_bb0b2c32d4215f9e",
+            "fact_c924ca23ea5fc9eb",
+            "fact_d0f4015a9afdb6b0",
+            "fact_40a102e73d85ad79",
+            "fact_73f6c028a0d721b9"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 0.034482758620689655,
+          "ndcg": 0.3391602052736161,
+          "actual_rerank_method": "deterministic",
+          "scores": [
+            0.6908,
+            0.4617,
+            0.4617,
+            0.4483,
+            0.4483
+          ],
+          "latency_ms": 37.94
+        },
+        {
+          "id": "ev_setting_04",
+          "category": "world_setting",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "fact_15e63b1a24ceb8a5",
+            "fact_73a9d588f38b101b",
+            "fact_ca3dcf16ed06835c"
+          ],
+          "retrieved_ids": [
+            "fact_73a9d588f38b101b",
+            "fact_15e63b1a24ceb8a5",
+            "fact_ca3dcf16ed06835c",
+            "fact_255678c1749e1112",
+            "fact_eceb24a40f8b4f90"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 1.0,
+          "ndcg": 1.0,
+          "actual_rerank_method": "deterministic",
+          "scores": [
+            1.015,
+            1.0017,
+            0.975,
+            0.735,
+            0.735
+          ],
+          "latency_ms": 36.83
+        },
+        {
+          "id": "ev_alias_01",
+          "category": "alias",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "fact_0bcef7e7b6845675",
+            "fact_22719796c8bfefad",
+            "fact_da4d0bda6d2eec8b",
+            "fact_e4049017e43973b0"
+          ],
+          "retrieved_ids": [
+            "fact_0bcef7e7b6845675",
+            "fact_22719796c8bfefad",
+            "fact_ed3b4d237f92b2b2",
+            "fact_da4d0bda6d2eec8b",
+            "fact_e4049017e43973b0"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 1.0,
+          "ndcg": 0.9558295932317544,
+          "actual_rerank_method": "deterministic",
+          "scores": [
+            0.9457,
+            0.9286,
+            0.8943,
+            0.8771,
+            0.8771
+          ],
+          "latency_ms": 34.0
+        },
+        {
+          "id": "ev_alias_02",
+          "category": "alias",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "rel_5f4279ab2663d517",
+            "rel_99b2edf6334ca3e5"
+          ],
+          "retrieved_ids": [
+            "rel_99b2edf6334ca3e5",
+            "rel_5f4279ab2663d517",
+            "manual_relation_ac6b34aaba6bcd8c",
+            "manual_relation_21cd33c1cf656ca1",
+            "fact_9c1bdada30fcce05"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 1.0,
+          "ndcg": 1.0,
+          "actual_rerank_method": "deterministic",
+          "scores": [
+            0.8686,
+            0.8171,
+            0.8171,
+            0.7514,
+            0.5843
+          ],
+          "latency_ms": 39.48
+        },
+        {
+          "id": "ev_alias_03",
+          "category": "alias",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "fact_0fcb48d2b7dcfd6f",
+            "fact_55c79b273a377f2a",
+            "fact_600f9343198db251",
+            "fact_78a3027670e9eae1",
+            "fact_e24c31ade87d5499"
+          ],
+          "retrieved_ids": [
+            "fact_e24c31ade87d5499",
+            "fact_78a3027670e9eae1",
+            "fact_0fcb48d2b7dcfd6f",
+            "fact_600f9343198db251",
+            "fact_55c79b273a377f2a"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 1.0,
+          "ndcg": 1.0,
+          "actual_rerank_method": "deterministic",
+          "scores": [
+            0.77,
+            0.77,
+            0.77,
+            0.77,
+            0.73
+          ],
+          "latency_ms": 33.52
+        },
+        {
+          "id": "ev_alias_04",
+          "category": "alias",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "fact_1fd21628049f0ede",
+            "fact_ced6a01e12e614d1"
+          ],
+          "retrieved_ids": [
+            "fact_1fd21628049f0ede",
+            "fact_ced6a01e12e614d1",
+            "fact_20b421311ae04ba9",
+            "fact_0547665fd2d685fa",
+            "fact_a35c8fe6a7db3ae5"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 1.0,
+          "ndcg": 1.0,
+          "actual_rerank_method": "deterministic",
+          "scores": [
+            1.0,
+            1.0,
+            0.84,
+            0.66,
+            0.66
+          ],
+          "latency_ms": 42.33
+        },
+        {
+          "id": "ev_cross_volume_01",
+          "category": "cross_volume",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "manual_relation_31c17bd9be427a43",
+            "rel_52d054b748c1cb0c",
+            "rel_e941e64d3a762f31"
+          ],
+          "retrieved_ids": [
+            "manual_relation_31c17bd9be427a43",
+            "rel_6d1005bd66fb56fd",
+            "rel_52d054b748c1cb0c",
+            "rel_e941e64d3a762f31",
+            "rel_15678d327e6fde5b"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 1.0,
+          "ndcg": 0.9060254355346823,
+          "actual_rerank_method": "deterministic",
+          "scores": [
+            0.6382,
+            0.6296,
+            0.6296,
+            0.6296,
+            0.6296
+          ],
+          "latency_ms": 17.15
+        },
+        {
+          "id": "ev_cross_volume_02",
+          "category": "cross_volume",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "fact_06d046d41b06f184",
+            "fact_251809a384ececda",
+            "fact_2a4167abd736bcdc",
+            "fact_2c7fc90234c8eebd",
+            "fact_576ea3b185bf074f",
+            "fact_64e8751d5062032e",
+            "fact_94b9200459faa6da",
+            "fact_bb0b2c32d4215f9e",
+            "fact_fe8cddff964fa923"
+          ],
+          "retrieved_ids": [
+            "fact_8fd89a9a8b2012c8",
+            "fact_bb0b2c32d4215f9e",
+            "fact_fe8cddff964fa923",
+            "fact_06d046d41b06f184",
+            "fact_576ea3b185bf074f"
+          ],
+          "hit_at_1": 0,
+          "hit_at_5": 1,
+          "rr": 0.5,
+          "recall": 0.4444444444444444,
+          "ndcg": 0.6608397947263839,
+          "actual_rerank_method": "deterministic",
+          "scores": [
+            0.8422,
+            0.6931,
+            0.6931,
+            0.6931,
+            0.6931
+          ],
+          "latency_ms": 31.79
+        },
+        {
+          "id": "ev_cross_volume_03",
+          "category": "cross_volume",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "fact_5a876eb3f9220e0a",
+            "fact_5e895c141f53c622"
+          ],
+          "retrieved_ids": [
+            "event_eed61ef843e1217c",
+            "fact_5e895c141f53c622",
+            "fact_59be1050b8922df7",
+            "event_cfaf5ba63b91eb2e",
+            "fact_5a876eb3f9220e0a"
+          ],
+          "hit_at_1": 0,
+          "hit_at_5": 1,
+          "rr": 0.5,
+          "recall": 1.0,
+          "ndcg": 0.6240505200038379,
+          "actual_rerank_method": "deterministic",
+          "scores": [
+            0.4383,
+            0.4158,
+            0.4025,
+            0.3892,
+            0.3892
+          ],
+          "latency_ms": 47.18
+        },
+        {
+          "id": "ev_cross_volume_04",
+          "category": "cross_volume",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "manual_relation_e5b8b24f7400fceb"
+          ],
+          "retrieved_ids": [
+            "manual_relation_e5b8b24f7400fceb",
+            "rel_aa91c18b46927932",
+            "rel_15678d327e6fde5b",
+            "manual_relation_21cd33c1cf656ca1",
+            "rel_6a24070d0e62b551"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 1.0,
+          "ndcg": 1.0,
+          "actual_rerank_method": "deterministic",
+          "scores": [
+            0.695,
+            0.695,
+            0.445,
+            0.445,
+            0.445
+          ],
+          "latency_ms": 18.17
+        },
+        {
+          "id": "ev_narrative_01",
+          "category": "narrative_layer",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "event_949fa55178d062d3",
+            "evidence:event_949fa55178d062d3",
+            "evidence:fact_b8378345458a257d",
+            "fact_7a9619f69f733976",
+            "fact_b8378345458a257d"
+          ],
+          "retrieved_ids": [
+            "fact_b8378345458a257d",
+            "fact_7a9619f69f733976",
+            "fact_7db86b5070ca24b4",
+            "fact_15e63b1a24ceb8a5",
+            "event_43846149f519ade7"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 0.4,
+          "ndcg": 0.5531464700081437,
+          "actual_rerank_method": "deterministic",
+          "scores": [
+            0.99,
+            0.78,
+            0.69,
+            0.575,
+            0.555
+          ],
+          "latency_ms": 68.48
+        },
+        {
+          "id": "ev_narrative_02",
+          "category": "narrative_layer",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "event_1558f0f7f636b88d",
+            "event_15e083233c265fa8",
+            "event_19a0928eb2eae95c",
+            "event_59a195c97e37c1a9",
+            "event_83414aa28ee99f4f",
+            "event_abe21a4e7a573b9e",
+            "event_b16c4d673e8307fe",
+            "event_b38910c781a05d95",
+            "event_bbb33630d098aa01",
+            "event_c950313b73102e4c"
+          ],
+          "retrieved_ids": [
+            "event_b38910c781a05d95",
+            "event_b16c4d673e8307fe",
+            "rel_15678d327e6fde5b",
+            "manual_relation_31c17bd9be427a43",
+            "rel_6d1005bd66fb56fd"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 0.2,
+          "ndcg": 0.5531464700081437,
+          "actual_rerank_method": "deterministic",
+          "scores": [
+            0.5633,
+            0.5191,
+            0.5126,
+            0.5126,
+            0.5126
+          ],
+          "latency_ms": 49.89
+        },
+        {
+          "id": "ev_narrative_03",
+          "category": "narrative_layer",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "fact_600f9343198db251",
+            "fact_e24c31ade87d5499",
+            "fact_f363b9de05654a58"
+          ],
+          "retrieved_ids": [
+            "fact_f363b9de05654a58",
+            "event_ca9bdbf45259223a",
+            "fact_138156ecc9a8a247",
+            "event_eed61ef843e1217c",
+            "fact_c4c57423ed9d28f3"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 0.3333333333333333,
+          "ndcg": 0.46927872602275644,
+          "actual_rerank_method": "deterministic",
+          "scores": [
+            0.5679,
+            0.4336,
+            0.4171,
+            0.4086,
+            0.4086
+          ],
+          "latency_ms": 54.06
+        },
+        {
+          "id": "ev_narrative_04",
+          "category": "narrative_layer",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "fact_d0c86d8a82dcbcad"
+          ],
+          "retrieved_ids": [
+            "fact_d0c86d8a82dcbcad",
+            "fact_90c45f30a08733bf",
+            "fact_7e8b2a19ee362f4d",
+            "fact_691dede16db82d78",
+            "event_f4ff49ab38492444"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 1.0,
+          "ndcg": 1.0,
+          "actual_rerank_method": "deterministic",
+          "scores": [
+            0.8786,
+            0.6834,
+            0.6834,
+            0.6561,
+            0.642
+          ],
+          "latency_ms": 62.65
+        },
+        {
+          "id": "ev_negation_01",
+          "category": "negation_correction",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "manual_relation_ac6b34aaba6bcd8c",
+            "rel_5f4279ab2663d517",
+            "rel_99b2edf6334ca3e5"
+          ],
+          "retrieved_ids": [
+            "manual_relation_ac6b34aaba6bcd8c",
+            "rel_aa91c18b46927932",
+            "manual_relation_053b93e2e9fc6a81",
+            "manual_relation_31c17bd9be427a43",
+            "rel_99b2edf6334ca3e5"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 0.6666666666666666,
+          "ndcg": 0.6508205185601091,
+          "actual_rerank_method": "deterministic",
+          "scores": [
+            0.8693,
+            0.6193,
+            0.6193,
+            0.6193,
+            0.5843
+          ],
+          "latency_ms": 17.44
+        },
+        {
+          "id": "ev_negation_02",
+          "category": "negation_correction",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "rel_52d054b748c1cb0c",
+            "rel_e941e64d3a762f31"
+          ],
+          "retrieved_ids": [
+            "rel_e941e64d3a762f31",
+            "fact_f9d44d64ea9c443e",
+            "event_09b4fc490dfb1a54",
+            "fact_acad4753325925a0",
+            "event_962b225fa8c578ae"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 0.5,
+          "ndcg": 0.6131471927654584,
+          "actual_rerank_method": "deterministic",
+          "scores": [
+            0.585,
+            0.525,
+            0.525,
+            0.525,
+            0.485
+          ],
+          "latency_ms": 63.13
+        },
+        {
+          "id": "ev_negation_03",
+          "category": "negation_correction",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "rel_7f97b8bd6854b893"
+          ],
+          "retrieved_ids": [
+            "rel_7f97b8bd6854b893",
+            "rel_1c74cfb1f43dab51",
+            "rel_51728c8d78f7b5cf",
+            "rel_5e7800a566fc9792",
+            "manual_relation_417ac8c5e66f95e5"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 1.0,
+          "ndcg": 1.0,
+          "actual_rerank_method": "deterministic",
+          "scores": [
+            0.8175,
+            0.705,
+            0.47,
+            0.47,
+            0.47
+          ],
+          "latency_ms": 17.69
+        },
+        {
+          "id": "ev_negation_04",
+          "category": "negation_correction",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "rel_307306f509bb0c50",
+            "rel_453e9fab98e91f60"
+          ],
+          "retrieved_ids": [
+            "rel_307306f509bb0c50",
+            "rel_453e9fab98e91f60",
+            "rel_7752f8266cd83200",
+            "rel_5e7800a566fc9792",
+            "rel_160632234a507562"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 1.0,
+          "ndcg": 1.0,
+          "actual_rerank_method": "deterministic",
+          "scores": [
+            0.8683,
+            0.8383,
+            0.5883,
+            0.5733,
+            0.5583
+          ],
+          "latency_ms": 17.27
+        },
+        {
+          "id": "ev_no_answer_01",
+          "category": "no_answer",
+          "gold_status": "negative",
+          "gold_ids": [],
+          "retrieved_ids": [],
+          "hit_at_1": 0,
+          "hit_at_5": 0,
+          "rr": 0.0,
+          "recall": 0.0,
+          "ndcg": 0.0,
+          "actual_rerank_method": "none",
+          "scores": [],
+          "latency_ms": 0.06
+        },
+        {
+          "id": "ev_no_answer_02",
+          "category": "no_answer",
+          "gold_status": "negative",
+          "gold_ids": [],
+          "retrieved_ids": [],
+          "hit_at_1": 0,
+          "hit_at_5": 0,
+          "rr": 0.0,
+          "recall": 0.0,
+          "ndcg": 0.0,
+          "actual_rerank_method": "none",
+          "scores": [],
+          "latency_ms": 0.03
+        },
+        {
+          "id": "ev_no_answer_03",
+          "category": "no_answer",
+          "gold_status": "negative",
+          "gold_ids": [],
+          "retrieved_ids": [],
+          "hit_at_1": 0,
+          "hit_at_5": 0,
+          "rr": 0.0,
+          "recall": 0.0,
+          "ndcg": 0.0,
+          "actual_rerank_method": "none",
+          "scores": [],
+          "latency_ms": 0.03
+        },
+        {
+          "id": "ev_no_answer_04",
+          "category": "no_answer",
+          "gold_status": "negative",
+          "gold_ids": [],
+          "retrieved_ids": [],
+          "hit_at_1": 0,
+          "hit_at_5": 0,
+          "rr": 0.0,
+          "recall": 0.0,
+          "ndcg": 0.0,
+          "actual_rerank_method": "none",
+          "scores": [],
+          "latency_ms": 0.03
+        },
+        {
+          "id": "ev_final_truth_01",
+          "category": "final_truth",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "fact_b8378345458a257d"
+          ],
+          "retrieved_ids": [
+            "fact_b8378345458a257d",
+            "fact_7a9619f69f733976",
+            "fact_7db86b5070ca24b4",
+            "fact_b130ca676e3c3fdd",
+            "fact_255678c1749e1112"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 1.0,
+          "ndcg": 1.0,
+          "actual_rerank_method": "deterministic",
+          "scores": [
+            0.835,
+            0.735,
+            0.675,
+            0.55,
+            0.55
+          ],
+          "latency_ms": 50.3
+        },
+        {
+          "id": "ev_final_truth_02",
+          "category": "final_truth",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "fact_89b295ffd2023324"
+          ],
+          "retrieved_ids": [
+            "fact_89b295ffd2023324",
+            "fact_7a9619f69f733976",
+            "fact_7db86b5070ca24b4",
+            "fact_eceb24a40f8b4f90",
+            "fact_70125a878641d672"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 1.0,
+          "ndcg": 1.0,
+          "actual_rerank_method": "deterministic",
+          "scores": [
+            0.8617,
+            0.775,
+            0.715,
+            0.5633,
+            0.5633
+          ],
+          "latency_ms": 67.92
+        },
+        {
+          "id": "ev_final_truth_03",
+          "category": "final_truth",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "fact_b8378345458a257d"
+          ],
+          "retrieved_ids": [
+            "fact_b8378345458a257d",
+            "fact_eceb24a40f8b4f90",
+            "fact_7a9619f69f733976",
+            "fact_d79ba3ef24af5d6d",
+            "fact_3e2a3e7b0828d5d1"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 1.0,
+          "ndcg": 1.0,
+          "actual_rerank_method": "deterministic",
+          "scores": [
+            0.71,
+            0.6333,
+            0.61,
+            0.55,
+            0.55
+          ],
+          "latency_ms": 45.07
+        },
+        {
+          "id": "ev_final_truth_04",
+          "category": "final_truth",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "fact_89b295ffd2023324"
+          ],
+          "retrieved_ids": [
+            "fact_89b295ffd2023324",
+            "fact_8aba8568e725b5da",
+            "event_d4f55808492989d5",
+            "event_040698d28cccbab0",
+            "event_36c2443bbdf7d73c"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 1.0,
+          "ndcg": 1.0,
+          "actual_rerank_method": "deterministic",
+          "scores": [
+            0.41,
+            0.3333,
+            0.33,
+            0.33,
+            0.25
+          ],
+          "latency_ms": 54.01
+        },
+        {
+          "id": "ev_predicate_01",
+          "category": "predicate_alignment",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "fact_3bb07b32573634eb"
+          ],
+          "retrieved_ids": [
+            "fact_3bb07b32573634eb",
+            "fact_e4049017e43973b0",
+            "fact_a0d1f482511ea52f",
+            "fact_a8530c7f365a1949",
+            "fact_9c15f1d55fc9261a"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 1.0,
+          "ndcg": 1.0,
+          "actual_rerank_method": "deterministic",
+          "scores": [
+            0.7083,
+            0.4917,
+            0.4917,
+            0.45,
+            0.45
+          ],
+          "latency_ms": 26.97
+        },
+        {
+          "id": "ev_predicate_02",
+          "category": "predicate_alignment",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "fact_2e268144f181ede1",
+            "fact_54ce4dd3e2f48b91",
+            "fact_7572e1d6fc27857b",
+            "fact_af644ea8e0276a6d"
+          ],
+          "retrieved_ids": [
+            "fact_7572e1d6fc27857b",
+            "fact_a11ecbd2568cfee3",
+            "fact_2e268144f181ede1",
+            "fact_54ce4dd3e2f48b91",
+            "fact_bf5c98fe9f9ea665"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 0.75,
+          "ndcg": 0.75369761125927,
+          "actual_rerank_method": "deterministic",
+          "scores": [
+            0.6271,
+            0.6271,
+            0.6271,
+            0.6271,
+            0.6114
+          ],
+          "latency_ms": 26.39
+        },
+        {
+          "id": "ev_predicate_03",
+          "category": "predicate_alignment",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "fact_084ebb54616c1411",
+            "fact_4d44cc225aed7796",
+            "fact_59b7c078ee500cb9",
+            "fact_5a876eb3f9220e0a",
+            "fact_5e895c141f53c622",
+            "fact_ce2bbbd157cb7cbf",
+            "fact_e507b324fa99dd86",
+            "fact_f2696a3259631f6e",
+            "fact_f363b9de05654a58"
+          ],
+          "retrieved_ids": [
+            "fact_ce2bbbd157cb7cbf",
+            "fact_4d44cc225aed7796",
+            "fact_5a876eb3f9220e0a",
+            "fact_f2696a3259631f6e",
+            "fact_5e895c141f53c622"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 0.5555555555555556,
+          "ndcg": 1.0,
+          "actual_rerank_method": "deterministic",
+          "scores": [
+            0.765,
+            0.75,
+            0.75,
+            0.75,
+            0.75
+          ],
+          "latency_ms": 26.59
+        },
+        {
+          "id": "ev_predicate_04",
+          "category": "predicate_alignment",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "fact_a2f0b69444685985"
+          ],
+          "retrieved_ids": [
+            "fact_a2f0b69444685985",
+            "fact_7d114e69ccf5f814",
+            "fact_9c15f1d55fc9261a",
+            "fact_ed24b8f577b42975",
+            "event_252c88367499904e"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 1.0,
+          "ndcg": 1.0,
+          "actual_rerank_method": "deterministic",
+          "scores": [
+            0.4838,
+            0.4004,
+            0.4004,
+            0.4004,
+            0.4004
+          ],
+          "latency_ms": 43.5
+        },
+        {
+          "id": "ev_direction_01",
+          "category": "relation_direction",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "rel_5f4279ab2663d517"
+          ],
+          "retrieved_ids": [
+            "rel_5f4279ab2663d517",
+            "manual_relation_ac6b34aaba6bcd8c",
+            "manual_relation_417ac8c5e66f95e5",
+            "rel_b077601df5d3d129",
+            "rel_f814639e13d0faf8"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 1.0,
+          "ndcg": 1.0,
+          "actual_rerank_method": "deterministic",
+          "scores": [
+            0.932,
+            0.724,
+            0.632,
+            0.474,
+            0.474
+          ],
+          "latency_ms": 17.01
+        },
+        {
+          "id": "ev_direction_02",
+          "category": "relation_direction",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "rel_99b2edf6334ca3e5"
+          ],
+          "retrieved_ids": [
+            "rel_99b2edf6334ca3e5",
+            "manual_relation_29ced62dcc8d4f4d",
+            "rel_81e13ce00c3597c5",
+            "manual_relation_21cd33c1cf656ca1",
+            "rel_ababbb6a60f249cd"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 1.0,
+          "ndcg": 1.0,
+          "actual_rerank_method": "deterministic",
+          "scores": [
+            0.94,
+            0.62,
+            0.49,
+            0.49,
+            0.47
+          ],
+          "latency_ms": 15.53
+        },
+        {
+          "id": "ev_direction_03",
+          "category": "relation_direction",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "rel_7f97b8bd6854b893"
+          ],
+          "retrieved_ids": [
+            "rel_7f97b8bd6854b893",
+            "manual_relation_e13c84153fc5e6c1",
+            "rel_aa91c18b46927932",
+            "rel_1c74cfb1f43dab51",
+            "manual_relation_e5b8b24f7400fceb"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 1.0,
+          "ndcg": 1.0,
+          "actual_rerank_method": "deterministic",
+          "scores": [
+            0.94,
+            0.62,
+            0.49,
+            0.49,
+            0.47
+          ],
+          "latency_ms": 15.52
+        },
+        {
+          "id": "ev_direction_04",
+          "category": "relation_direction",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "rel_51728c8d78f7b5cf"
+          ],
+          "retrieved_ids": [
+            "rel_51728c8d78f7b5cf",
+            "manual_relation_417ac8c5e66f95e5",
+            "rel_7f97b8bd6854b893",
+            "rel_5e7800a566fc9792",
+            "rel_b077601df5d3d129"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 1.0,
+          "ndcg": 1.0,
+          "actual_rerank_method": "deterministic",
+          "scores": [
+            0.94,
+            0.49,
+            0.49,
+            0.49,
+            0.47
+          ],
+          "latency_ms": 15.61
+        },
+        {
+          "id": "ev_claim_01",
+          "category": "claim_vs_fact",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "fact_7a9619f69f733976"
+          ],
+          "retrieved_ids": [
+            "fact_7a9619f69f733976",
+            "fact_2fb7dc98c9fd5fdc",
+            "fact_89b295ffd2023324",
+            "fact_7db86b5070ca24b4",
+            "fact_b8378345458a257d"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 1.0,
+          "ndcg": 1.0,
+          "actual_rerank_method": "deterministic",
+          "scores": [
+            0.8067,
+            0.56,
+            0.5533,
+            0.5433,
+            0.5433
+          ],
+          "latency_ms": 45.87
+        },
+        {
+          "id": "ev_claim_02",
+          "category": "claim_vs_fact",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "fact_82d126bb0e0826d6"
+          ],
+          "retrieved_ids": [
+            "event_3db7b11a2f23b116",
+            "fact_82d126bb0e0826d6",
+            "event_a1833753fba819d7",
+            "event_abe21a4e7a573b9e",
+            "event_32382b8bbbfef2d1"
+          ],
+          "hit_at_1": 0,
+          "hit_at_5": 1,
+          "rr": 0.5,
+          "recall": 1.0,
+          "ndcg": 0.6309297535714575,
+          "actual_rerank_method": "deterministic",
+          "scores": [
+            0.6449,
+            0.6161,
+            0.5708,
+            0.5365,
+            0.4738
+          ],
+          "latency_ms": 47.9
+        },
+        {
+          "id": "ev_claim_03",
+          "category": "claim_vs_fact",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "event_f4ff49ab38492444"
+          ],
+          "retrieved_ids": [
+            "event_f4ff49ab38492444",
+            "fact_691dede16db82d78",
+            "rel_15678d327e6fde5b",
+            "fact_cded898792a16e03",
+            "event_9a363337c39bfb83"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 1.0,
+          "ndcg": 1.0,
+          "actual_rerank_method": "deterministic",
+          "scores": [
+            0.6054,
+            0.4962,
+            0.4777,
+            0.4369,
+            0.4185
+          ],
+          "latency_ms": 47.37
+        },
+        {
+          "id": "ev_claim_04",
+          "category": "claim_vs_fact",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "fact_73a9d588f38b101b"
+          ],
+          "retrieved_ids": [
+            "fact_73a9d588f38b101b",
+            "fact_15e63b1a24ceb8a5",
+            "fact_ca3dcf16ed06835c",
+            "event_af4a672926909cb6",
+            "event_1558f0f7f636b88d"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 1.0,
+          "ndcg": 1.0,
+          "actual_rerank_method": "deterministic",
+          "scores": [
+            0.7755,
+            0.665,
+            0.665,
+            0.6025,
+            0.54
+          ],
+          "latency_ms": 70.54
+        },
+        {
+          "id": "ev_causal_chain_01",
+          "category": "causal_chain",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "fact_7db86b5070ca24b4"
+          ],
+          "retrieved_ids": [
+            "fact_7db86b5070ca24b4",
+            "event_f4d187ab60c084bb",
+            "event_c7529864c255d0c4",
+            "event_aec0433e81ccc2a2",
+            "event_8a844be24a5d5f03"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 1.0,
+          "ndcg": 1.0,
+          "actual_rerank_method": "deterministic",
+          "scores": [
+            0.7686,
+            0.7686,
+            0.5921,
+            0.57,
+            0.57
+          ],
+          "latency_ms": 62.65
+        },
+        {
+          "id": "ev_causal_chain_02",
+          "category": "causal_chain",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "event_59a195c97e37c1a9"
+          ],
+          "retrieved_ids": [
+            "event_59a195c97e37c1a9",
+            "event_b840235fc99df6ca",
+            "event_aae37a9b033f7b4f",
+            "event_481cb285ae6bd8f8",
+            "event_3c2afa00b8b2d3de"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 1.0,
+          "ndcg": 1.0,
+          "actual_rerank_method": "deterministic",
+          "scores": [
+            0.7655,
+            0.7436,
+            0.6077,
+            0.6077,
+            0.6077
+          ],
+          "latency_ms": 48.8
+        },
+        {
+          "id": "ev_causal_chain_03",
+          "category": "causal_chain",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "event_cfaf5ba63b91eb2e",
+            "event_fb9d65a1094da8c2",
+            "event_fd449de27918cffc",
+            "fact_084ebb54616c1411",
+            "fact_59b7c078ee500cb9",
+            "fact_cb9bd576622b23ab",
+            "fact_f2696a3259631f6e"
+          ],
+          "retrieved_ids": [
+            "event_b13d61d758007995",
+            "event_ea7df28f5f9756b3",
+            "event_fb9d65a1094da8c2",
+            "event_c6f5d5931d4394a4",
+            "event_aec0433e81ccc2a2"
+          ],
+          "hit_at_1": 0,
+          "hit_at_5": 1,
+          "rr": 0.3333333333333333,
+          "recall": 0.14285714285714285,
+          "ndcg": 0.16958010263680806,
+          "actual_rerank_method": "deterministic",
+          "scores": [
+            0.7168,
+            0.6543,
+            0.6484,
+            0.5809,
+            0.57
+          ],
+          "latency_ms": 44.4
+        },
+        {
+          "id": "ev_causal_chain_04",
+          "category": "causal_chain",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "event_a1833753fba819d7",
+            "fact_2a4167abd736bcdc",
+            "fact_691dede16db82d78",
+            "fact_aa05b42c0c08dff1",
+            "fact_da10fd7017af80ed"
+          ],
+          "retrieved_ids": [
+            "fact_da10fd7017af80ed",
+            "fact_691dede16db82d78",
+            "event_01ed8971e21b4f39",
+            "fact_ed3b4d237f92b2b2",
+            "event_816b7e056fb624ce"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 0.4,
+          "ndcg": 0.5531464700081437,
+          "actual_rerank_method": "deterministic",
+          "scores": [
+            0.7999,
+            0.7374,
+            0.694,
+            0.6869,
+            0.6799
+          ],
+          "latency_ms": 46.85
+        }
+      ]
+    },
+    "cross_encoder": {
+      "summary": {
+        "queries": 68,
+        "answerable_scored": 64,
+        "unresolved_annotations": 0,
+        "hit_at_1": 0.84375,
+        "hit_at_5": 1,
+        "mrr_at_5": 0.9166666666666666,
+        "recall_at_5": 0.8200835407731959,
+        "ndcg_at_5": 0.8421697989541178,
+        "negative_queries": 4,
+        "negative_domain_hit_rate": 0,
+        "median_latency_ms": 487.295,
+        "semantic_queries": 64,
+        "notes": "Ranking metrics use results before abstention; logits need separate validation calibration."
+      },
+      "per_query": [
+        {
+          "id": "ev_exact_fact_01",
+          "category": "exact_fact",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "fact_0bcef7e7b6845675",
+            "fact_22719796c8bfefad",
+            "fact_da4d0bda6d2eec8b",
+            "fact_e4049017e43973b0"
+          ],
+          "retrieved_ids": [
+            "fact_0bcef7e7b6845675",
+            "fact_22719796c8bfefad",
+            "fact_e4049017e43973b0",
+            "fact_da4d0bda6d2eec8b",
+            "fact_cadb675195c036c9"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 1.0,
+          "ndcg": 1.0,
+          "actual_rerank_method": "cross_encoder",
+          "scores": [
+            7.625,
+            6.3906,
+            2.2383,
+            1.9883,
+            0.8945
+          ],
+          "latency_ms": 1037.79
+        },
+        {
+          "id": "ev_exact_fact_02",
+          "category": "exact_fact",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "fact_1fd21628049f0ede",
+            "fact_ced6a01e12e614d1"
+          ],
+          "retrieved_ids": [
+            "fact_ced6a01e12e614d1",
+            "fact_20b421311ae04ba9",
+            "fact_1fd21628049f0ede",
+            "fact_b2b43ddf6d205057",
+            "fact_c97c0da9542e2976"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 1.0,
+          "ndcg": 0.9197207891481876,
+          "actual_rerank_method": "cross_encoder",
+          "scores": [
+            6.0391,
+            5.4688,
+            5.2305,
+            2.002,
+            1.3682
+          ],
+          "latency_ms": 562.27
+        },
+        {
+          "id": "ev_exact_fact_03",
+          "category": "exact_fact",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "fact_0fcb48d2b7dcfd6f",
+            "fact_55c79b273a377f2a",
+            "fact_600f9343198db251",
+            "fact_78a3027670e9eae1",
+            "fact_e24c31ade87d5499"
+          ],
+          "retrieved_ids": [
+            "fact_78a3027670e9eae1",
+            "fact_600f9343198db251",
+            "fact_f363b9de05654a58",
+            "fact_e24c31ade87d5499",
+            "fact_55c79b273a377f2a"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 0.8,
+          "ndcg": 0.830419897363192,
+          "actual_rerank_method": "cross_encoder",
+          "scores": [
+            6.125,
+            6.0859,
+            5.2344,
+            4.9258,
+            4.0938
+          ],
+          "latency_ms": 647.97
+        },
+        {
+          "id": "ev_exact_fact_04",
+          "category": "exact_fact",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "fact_3bb07b32573634eb"
+          ],
+          "retrieved_ids": [
+            "fact_3bb07b32573634eb",
+            "fact_0bcef7e7b6845675",
+            "fact_a8530c7f365a1949",
+            "fact_613a55ee54631a7e",
+            "fact_63b57409185adf1d"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 1.0,
+          "ndcg": 1.0,
+          "actual_rerank_method": "cross_encoder",
+          "scores": [
+            4.5898,
+            -0.7881,
+            -1.3633,
+            -2.5859,
+            -2.623
+          ],
+          "latency_ms": 659.58
+        },
+        {
+          "id": "ev_identity_01",
+          "category": "identity",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "fact_0547665fd2d685fa",
+            "fact_5b5ae20ecfb0d532",
+            "fact_a35c8fe6a7db3ae5",
+            "fact_cf3399398e29864c"
+          ],
+          "retrieved_ids": [
+            "fact_5b5ae20ecfb0d532",
+            "fact_a35c8fe6a7db3ae5",
+            "fact_0547665fd2d685fa",
+            "rel_7f97b8bd6854b893",
+            "rel_51728c8d78f7b5cf"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 0.75,
+          "ndcg": 0.8318724637288826,
+          "actual_rerank_method": "cross_encoder",
+          "scores": [
+            6.0664,
+            6.0195,
+            5.1328,
+            2.7188,
+            2.6797
+          ],
+          "latency_ms": 533.58
+        },
+        {
+          "id": "ev_identity_02",
+          "category": "identity",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "fact_06d046d41b06f184",
+            "fact_251809a384ececda",
+            "fact_2a4167abd736bcdc",
+            "fact_2c7fc90234c8eebd",
+            "fact_576ea3b185bf074f",
+            "fact_64e8751d5062032e",
+            "fact_94b9200459faa6da",
+            "fact_bb0b2c32d4215f9e",
+            "fact_fe8cddff964fa923"
+          ],
+          "retrieved_ids": [
+            "fact_576ea3b185bf074f",
+            "fact_bb0b2c32d4215f9e",
+            "fact_94b9200459faa6da",
+            "fact_2c7fc90234c8eebd",
+            "fact_06d046d41b06f184"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 0.5555555555555556,
+          "ndcg": 1.0,
+          "actual_rerank_method": "cross_encoder",
+          "scores": [
+            5.4609,
+            5.3242,
+            5.2578,
+            5.2148,
+            3.7246
+          ],
+          "latency_ms": 447.99
+        },
+        {
+          "id": "ev_identity_03",
+          "category": "identity",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "fact_0fcb48d2b7dcfd6f",
+            "fact_55c79b273a377f2a",
+            "fact_600f9343198db251",
+            "fact_78a3027670e9eae1",
+            "fact_e24c31ade87d5499"
+          ],
+          "retrieved_ids": [
+            "fact_0fcb48d2b7dcfd6f",
+            "fact_55c79b273a377f2a",
+            "fact_4d44cc225aed7796",
+            "fact_85a6a25fcf3faf65",
+            "fact_78a3027670e9eae1"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 0.6,
+          "ndcg": 0.6843515475204855,
+          "actual_rerank_method": "cross_encoder",
+          "scores": [
+            7.4922,
+            4.4141,
+            4.2344,
+            4.2266,
+            2.3633
+          ],
+          "latency_ms": 485.68
+        },
+        {
+          "id": "ev_identity_04",
+          "category": "identity",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "fact_520638d5f7f93dcf",
+            "fact_5e394da377e1d988",
+            "fact_8c91d0b037cc8526"
+          ],
+          "retrieved_ids": [
+            "fact_8c91d0b037cc8526",
+            "fact_520638d5f7f93dcf",
+            "fact_5e394da377e1d988",
+            "fact_35e62b39d69d5479",
+            "fact_a8530c7f365a1949"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 1.0,
+          "ndcg": 1.0,
+          "actual_rerank_method": "cross_encoder",
+          "scores": [
+            6.3125,
+            6.0547,
+            2.0723,
+            0.0434,
+            -0.2139
+          ],
+          "latency_ms": 457.75
+        },
+        {
+          "id": "ev_kinship_01",
+          "category": "kinship",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "rel_51728c8d78f7b5cf"
+          ],
+          "retrieved_ids": [
+            "rel_51728c8d78f7b5cf",
+            "rel_7f97b8bd6854b893",
+            "manual_relation_31c17bd9be427a43",
+            "rel_f1574840ad25abe3",
+            "rel_5e7800a566fc9792"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 1.0,
+          "ndcg": 1.0,
+          "actual_rerank_method": "cross_encoder",
+          "scores": [
+            6.0391,
+            3.6406,
+            3.4375,
+            2.6465,
+            2.6406
+          ],
+          "latency_ms": 257.77
+        },
+        {
+          "id": "ev_kinship_02",
+          "category": "kinship",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "rel_5f4279ab2663d517",
+            "rel_99b2edf6334ca3e5"
+          ],
+          "retrieved_ids": [
+            "rel_5f4279ab2663d517",
+            "rel_99b2edf6334ca3e5",
+            "manual_relation_ac6b34aaba6bcd8c",
+            "rel_5e7800a566fc9792",
+            "rel_7752f8266cd83200"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 1.0,
+          "ndcg": 1.0,
+          "actual_rerank_method": "cross_encoder",
+          "scores": [
+            7.0664,
+            6.0703,
+            3.793,
+            0.7114,
+            0.6895
+          ],
+          "latency_ms": 249.93
+        },
+        {
+          "id": "ev_kinship_03",
+          "category": "kinship",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "manual_relation_29ced62dcc8d4f4d",
+            "manual_relation_417ac8c5e66f95e5"
+          ],
+          "retrieved_ids": [
+            "manual_relation_417ac8c5e66f95e5",
+            "manual_relation_29ced62dcc8d4f4d",
+            "manual_relation_21cd33c1cf656ca1",
+            "rel_f1574840ad25abe3",
+            "rel_7f97b8bd6854b893"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 1.0,
+          "ndcg": 1.0,
+          "actual_rerank_method": "cross_encoder",
+          "scores": [
+            5.2773,
+            5.1484,
+            2.1895,
+            1.998,
+            0.9941
+          ],
+          "latency_ms": 279.66
+        },
+        {
+          "id": "ev_kinship_04",
+          "category": "kinship",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "rel_f814639e13d0faf8"
+          ],
+          "retrieved_ids": [
+            "rel_f814639e13d0faf8",
+            "fact_e45e722400064f29",
+            "rel_5e7800a566fc9792",
+            "rel_b077601df5d3d129",
+            "rel_99b2edf6334ca3e5"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 1.0,
+          "ndcg": 1.0,
+          "actual_rerank_method": "cross_encoder",
+          "scores": [
+            4.0859,
+            2.3281,
+            2.0078,
+            1.2344,
+            1.1299
+          ],
+          "latency_ms": 533.68
+        },
+        {
+          "id": "ev_dyn_relation_01",
+          "category": "dynamic_relation",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "rel_1c74cfb1f43dab51",
+            "rel_7f97b8bd6854b893"
+          ],
+          "retrieved_ids": [
+            "rel_7f97b8bd6854b893",
+            "rel_1c74cfb1f43dab51",
+            "fact_78a3027670e9eae1",
+            "fact_7cd643ea69281e1b",
+            "fact_cadb675195c036c9"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 1.0,
+          "ndcg": 1.0,
+          "actual_rerank_method": "cross_encoder",
+          "scores": [
+            4.875,
+            4.1914,
+            3.748,
+            3.1992,
+            2.2734
+          ],
+          "latency_ms": 566.64
+        },
+        {
+          "id": "ev_dyn_relation_02",
+          "category": "dynamic_relation",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "rel_aa91c18b46927932"
+          ],
+          "retrieved_ids": [
+            "rel_aa91c18b46927932",
+            "manual_relation_e5b8b24f7400fceb",
+            "rel_5f4279ab2663d517",
+            "rel_7752f8266cd83200",
+            "rel_ababbb6a60f249cd"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 1.0,
+          "ndcg": 1.0,
+          "actual_rerank_method": "cross_encoder",
+          "scores": [
+            2.5488,
+            2.4473,
+            2.043,
+            0.7539,
+            0.4871
+          ],
+          "latency_ms": 264.84
+        },
+        {
+          "id": "ev_dyn_relation_03",
+          "category": "dynamic_relation",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "manual_relation_31c17bd9be427a43",
+            "rel_52d054b748c1cb0c"
+          ],
+          "retrieved_ids": [
+            "event_3db7b11a2f23b116",
+            "manual_relation_31c17bd9be427a43",
+            "fact_8c3b1e48df214638",
+            "event_09b4fc490dfb1a54",
+            "event_19f2963d4b96e3b5"
+          ],
+          "hit_at_1": 0,
+          "hit_at_5": 1,
+          "rr": 0.5,
+          "recall": 0.5,
+          "ndcg": 0.38685280723454163,
+          "actual_rerank_method": "cross_encoder",
+          "scores": [
+            4.1719,
+            3.043,
+            3.0078,
+            2.8711,
+            2.6934
+          ],
+          "latency_ms": 530.1
+        },
+        {
+          "id": "ev_dyn_relation_04",
+          "category": "dynamic_relation",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "rel_8cb732fd3d4cd7b1"
+          ],
+          "retrieved_ids": [
+            "rel_8cb732fd3d4cd7b1",
+            "rel_7752f8266cd83200",
+            "rel_453e9fab98e91f60",
+            "rel_307306f509bb0c50",
+            "rel_160632234a507562"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 1.0,
+          "ndcg": 1.0,
+          "actual_rerank_method": "cross_encoder",
+          "scores": [
+            3.2891,
+            2.7734,
+            2.2441,
+            2.1367,
+            0.7305
+          ],
+          "latency_ms": 267.6
+        },
+        {
+          "id": "ev_event_01",
+          "category": "event_query",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "event_8558a07d30b69bb3",
+            "event_fc4692df8d6ec563"
+          ],
+          "retrieved_ids": [
+            "event_fc4692df8d6ec563",
+            "event_8558a07d30b69bb3",
+            "event_962b225fa8c578ae",
+            "event_19a0928eb2eae95c",
+            "event_2257567bb5e834f5"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 1.0,
+          "ndcg": 1.0,
+          "actual_rerank_method": "cross_encoder",
+          "scores": [
+            5.6797,
+            2.584,
+            1.9434,
+            1.8154,
+            1.125
+          ],
+          "latency_ms": 520.93
+        },
+        {
+          "id": "ev_event_02",
+          "category": "event_query",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "event_949fa55178d062d3"
+          ],
+          "retrieved_ids": [
+            "event_949fa55178d062d3",
+            "fact_b8378345458a257d",
+            "fact_7db86b5070ca24b4",
+            "fact_7a9619f69f733976",
+            "event_f4d187ab60c084bb"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 1.0,
+          "ndcg": 1.0,
+          "actual_rerank_method": "cross_encoder",
+          "scores": [
+            3.8828,
+            3.4941,
+            2.3672,
+            2.1953,
+            -1.1328
+          ],
+          "latency_ms": 541.47
+        },
+        {
+          "id": "ev_event_03",
+          "category": "event_query",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "event_909f9c6316a330b1",
+            "event_f778677c80228971"
+          ],
+          "retrieved_ids": [
+            "event_909f9c6316a330b1",
+            "event_7d2acd32556fed1f",
+            "event_7f715df67539c41b",
+            "event_652c7eb1bbbb3b88",
+            "event_2d50dbd01dd9a292"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 0.5,
+          "ndcg": 0.6131471927654584,
+          "actual_rerank_method": "cross_encoder",
+          "scores": [
+            1.8574,
+            -1.8145,
+            -1.9795,
+            -2.4531,
+            -2.4766
+          ],
+          "latency_ms": 543.69
+        },
+        {
+          "id": "ev_event_04",
+          "category": "event_query",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "event_7f715df67539c41b",
+            "event_a0cefe662c4fc718",
+            "event_e21d1ca17c160cbe"
+          ],
+          "retrieved_ids": [
+            "event_e21d1ca17c160cbe",
+            "event_36c2443bbdf7d73c",
+            "fact_89b295ffd2023324",
+            "fact_fad734ec0019ceb7",
+            "event_cb14c98fc6218ca8"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 0.3333333333333333,
+          "ndcg": 0.46927872602275644,
+          "actual_rerank_method": "cross_encoder",
+          "scores": [
+            2.2871,
+            1.8027,
+            1.6895,
+            0.8125,
+            0.6191
+          ],
+          "latency_ms": 522.59
+        },
+        {
+          "id": "ev_causality_01",
+          "category": "causality",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "event_59a8b0d5b2571dca",
+            "fact_01a25a79a4570c82",
+            "fact_8448da7bb9f56ab0",
+            "fact_8bc825dfa1d7f808",
+            "fact_a0c9b8b66ab6aa8a",
+            "fact_ec5bee2f728e8617"
+          ],
+          "retrieved_ids": [
+            "fact_8bc825dfa1d7f808",
+            "fact_01a25a79a4570c82",
+            "fact_8448da7bb9f56ab0",
+            "fact_ec5bee2f728e8617",
+            "fact_94de5ced0bc39df0"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 0.6666666666666666,
+          "ndcg": 0.8687949224876582,
+          "actual_rerank_method": "cross_encoder",
+          "scores": [
+            6.1172,
+            5.8828,
+            5.4375,
+            4.082,
+            2.5938
+          ],
+          "latency_ms": 540.23
+        },
+        {
+          "id": "ev_causality_02",
+          "category": "causality",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "fact_ce2bbbd157cb7cbf",
+            "fact_e507b324fa99dd86"
+          ],
+          "retrieved_ids": [
+            "fact_e507b324fa99dd86",
+            "event_7f6b49373024938c",
+            "fact_ce2bbbd157cb7cbf",
+            "event_137fee5dbe99475c",
+            "fact_c4c57423ed9d28f3"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 1.0,
+          "ndcg": 0.9197207891481876,
+          "actual_rerank_method": "cross_encoder",
+          "scores": [
+            3.9277,
+            3.8008,
+            0.0799,
+            0.0602,
+            -0.8647
+          ],
+          "latency_ms": 562.01
+        },
+        {
+          "id": "ev_causality_03",
+          "category": "causality",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "fact_fa9faf5ccb3e3f3b"
+          ],
+          "retrieved_ids": [
+            "fact_fa9faf5ccb3e3f3b",
+            "event_6f1369e76e75f136",
+            "event_cb14c98fc6218ca8",
+            "fact_9683dd529682f83a",
+            "event_2257567bb5e834f5"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 1.0,
+          "ndcg": 1.0,
+          "actual_rerank_method": "cross_encoder",
+          "scores": [
+            3.8926,
+            1.0146,
+            0.5029,
+            0.4451,
+            0.416
+          ],
+          "latency_ms": 499.61
+        },
+        {
+          "id": "ev_causality_04",
+          "category": "causality",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "event_38b57bdcdc636e94",
+            "event_664d03dcc5265843",
+            "event_d4f55808492989d5",
+            "fact_1bac5f280734df13",
+            "fact_67d23b31cd02b302"
+          ],
+          "retrieved_ids": [
+            "fact_67d23b31cd02b302",
+            "fact_1bac5f280734df13",
+            "event_d4f55808492989d5",
+            "fact_d43eb42724ed23e5",
+            "event_198ea34b2be6efc5"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 0.6,
+          "ndcg": 0.7227265726449519,
+          "actual_rerank_method": "cross_encoder",
+          "scores": [
+            6.6914,
+            3.3184,
+            1.5068,
+            0.4766,
+            0.1851
+          ],
+          "latency_ms": 508.72
+        },
+        {
+          "id": "ev_setting_01",
+          "category": "world_setting",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "fact_10308892848c1073",
+            "fact_10f1159e758a2af0",
+            "fact_138156ecc9a8a247",
+            "fact_15e63b1a24ceb8a5",
+            "fact_168b93604efe3f94",
+            "fact_1e71d0d0478f5aed",
+            "fact_384ed2478fafd24d",
+            "fact_3bb07b32573634eb",
+            "fact_3e2a3e7b0828d5d1",
+            "fact_40a102e73d85ad79",
+            "fact_5bafc8f7278ccffc",
+            "fact_600f9343198db251",
+            "fact_6a302d1557087e48",
+            "fact_6bab6e47522f879d",
+            "fact_6db6d41573aa7d4f",
+            "fact_7388302d366f6b33",
+            "fact_73f6c028a0d721b9",
+            "fact_82d126bb0e0826d6",
+            "fact_83f737894534e1d7",
+            "fact_84badddc7c865ab9",
+            "fact_88c34bb49bc49676",
+            "fact_94b9200459faa6da",
+            "fact_9cae8b5b73c97db2",
+            "fact_9caf1e99b86fa2b4",
+            "fact_a5876004b20aab9b",
+            "fact_ab833dfd22ecd818",
+            "fact_c2619e53d9a76fad",
+            "fact_c60b5a0e5cee967c",
+            "fact_ca43b46fadff7527",
+            "fact_cc231bff34e87dd6",
+            "fact_cf3399398e29864c",
+            "fact_d8c87af492566032",
+            "fact_da8a078a7e9a6bc2",
+            "fact_dadf97db1b7d8ecc",
+            "fact_ef30959e777c455e",
+            "fact_f363b9de05654a58",
+            "fact_fc403cd981c3ee5b"
+          ],
+          "retrieved_ids": [
+            "fact_6bab6e47522f879d",
+            "fact_dadf97db1b7d8ecc",
+            "fact_168b93604efe3f94",
+            "fact_6a302d1557087e48",
+            "fact_fc403cd981c3ee5b"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 0.13513513513513514,
+          "ndcg": 1.0,
+          "actual_rerank_method": "cross_encoder",
+          "scores": [
+            3.2363,
+            3.1816,
+            2.9824,
+            2.5195,
+            2.4707
+          ],
+          "latency_ms": 447.74
+        },
+        {
+          "id": "ev_setting_02",
+          "category": "world_setting",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "event_0fcde8c99a5d15c4",
+            "event_205fd3ec31d921e0",
+            "event_252c88367499904e",
+            "event_8558a07d30b69bb3",
+            "event_9a363337c39bfb83",
+            "event_b840235fc99df6ca",
+            "evidence:event_0fcde8c99a5d15c4",
+            "evidence:event_205fd3ec31d921e0",
+            "evidence:event_252c88367499904e",
+            "evidence:event_8558a07d30b69bb3",
+            "evidence:event_9a363337c39bfb83",
+            "evidence:event_b840235fc99df6ca",
+            "evidence:fact_0fcb48d2b7dcfd6f",
+            "evidence:fact_10eec469b56b21d8",
+            "evidence:fact_4d44cc225aed7796",
+            "evidence:fact_85a6a25fcf3faf65",
+            "evidence:fact_af218e0d2f5cccaf",
+            "evidence:fact_ec5bee2f728e8617",
+            "fact_0fcb48d2b7dcfd6f",
+            "fact_10eec469b56b21d8",
+            "fact_4d44cc225aed7796",
+            "fact_85a6a25fcf3faf65",
+            "fact_af218e0d2f5cccaf",
+            "fact_ec5bee2f728e8617",
+            "scene_0a1b8e0bd7773bcb",
+            "scene_14acd8b5b0ccea1e",
+            "scene_14be648270599be9",
+            "scene_1d5a64b254f21370",
+            "scene_247f2bdec34bbd2f",
+            "scene_2781a377b3b788ac",
+            "scene_29a3faf20644e0a7",
+            "scene_3836aa9c1e80e781",
+            "scene_384b9ccb5288ef74",
+            "scene_38c3285749070248",
+            "scene_45c0a06694d8fcfa",
+            "scene_48a8471fec93c385",
+            "scene_49d8a626fd917340",
+            "scene_4c12797b28638d2b",
+            "scene_4c3f8382dfb56d02",
+            "scene_4fce1c2889d164e6",
+            "scene_504131e9df789cb9",
+            "scene_56480f79d4ea203b",
+            "scene_5c69747083bea3ba",
+            "scene_5df1b207252c417a",
+            "scene_61b49b2be7197107",
+            "scene_67d75f430b8e5e04",
+            "scene_6a7035787e0e3353",
+            "scene_6d7f74124bb1d663",
+            "scene_6ff0257384e9403d",
+            "scene_9a7bed8874bf8ae5",
+            "scene_9f78319482859f83",
+            "scene_a8ffbe3e1e4bc266",
+            "scene_a99965da589e4e56",
+            "scene_b4cbb3c86add661f",
+            "scene_b876c94fe61c7915",
+            "scene_cb83a63c51df2e79",
+            "scene_cca1256fbf01a2f2",
+            "scene_ccdbe360780915b9",
+            "scene_d30ea490766bf2ed",
+            "scene_dfcb7026f6d5a069",
+            "scene_e50222d351084f96",
+            "scene_e57a2206bff98204",
+            "scene_e7b6679be17b71e9",
+            "scene_f4025404dc9d1dd7",
+            "scene_f6f825b9e6756f71",
+            "story:vol01_1翡翠的排挤原理",
+            "story:vol03_3蓝宝石的存在证明",
+            "story:vol04_4紫水晶的怪异传说",
+            "story:vol05_5磷灰石的怠惰现象",
+            "story:vol06_6芙蓉石的长年隔绝",
+            "story:vol07_7黑珍珠的求爱信号",
+            "story:vol08_8萤石的时空残影",
+            "story:vol09_9白珍珠的泡沫爱慕",
+            "story:vol10_10黑曜石的因果目录",
+            "story:vol11_11黑玛瑙的不在证明",
+            "story:vol12_12青金石的幻想图书馆",
+            "story:vol13_13璀璨的紫翠玉"
+          ],
+          "retrieved_ids": [
+            "event_0fcde8c99a5d15c4",
+            "fact_4d44cc225aed7796",
+            "fact_ec5bee2f728e8617",
+            "fact_af218e0d2f5cccaf",
+            "fact_85a6a25fcf3faf65"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 0.06493506493506493,
+          "ndcg": 1.0,
+          "actual_rerank_method": "cross_encoder",
+          "scores": [
+            0.7788,
+            -1.1631,
+            -1.417,
+            -1.6377,
+            -1.874
+          ],
+          "latency_ms": 468.74
+        },
+        {
+          "id": "ev_setting_03",
+          "category": "world_setting",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "event_0c0f2eb50efb30c0",
+            "evidence:event_0c0f2eb50efb30c0",
+            "evidence:fact_bb0b2c32d4215f9e",
+            "fact_bb0b2c32d4215f9e",
+            "scene_2781a377b3b788ac",
+            "scene_365ca64bbd6f6946",
+            "scene_3836aa9c1e80e781",
+            "scene_49d8a626fd917340",
+            "scene_61b49b2be7197107",
+            "scene_7f600854773073b0",
+            "scene_9a7bed8874bf8ae5",
+            "scene_a9aa59257ae8e3e9",
+            "scene_aa7f0adce8e1cfb6",
+            "scene_b33f3adaf98b715d",
+            "scene_b4cbb3c86add661f",
+            "scene_cc6a73c7c868182e",
+            "scene_cd692664bcab4315",
+            "scene_d213e27b18ef359d",
+            "scene_e40b2d835c9c6778",
+            "scene_fddf170c33e9a90e",
+            "scene_fe19b451cccfa06b",
+            "story:epilogue_bonus",
+            "story:epilogue_meta",
+            "story:vol06_6芙蓉石的终焉轮回",
+            "story:vol07_7黑珍珠的求爱信号",
+            "story:vol09_9白珍珠的泡沫爱慕",
+            "story:vol10_10黑曜石的因果目录",
+            "story:vol12_12青金石的幻想图书馆",
+            "story:vol13_13璀璨的紫翠玉"
+          ],
+          "retrieved_ids": [
+            "fact_e24c31ade87d5499",
+            "fact_bb0b2c32d4215f9e",
+            "fact_e07d1540a07b4b9f",
+            "fact_20b421311ae04ba9",
+            "fact_600f9343198db251"
+          ],
+          "hit_at_1": 0,
+          "hit_at_5": 1,
+          "rr": 0.5,
+          "recall": 0.034482758620689655,
+          "ndcg": 0.21398626473452756,
+          "actual_rerank_method": "cross_encoder",
+          "scores": [
+            -1.1934,
+            -1.3818,
+            -1.6865,
+            -1.7295,
+            -2.3984
+          ],
+          "latency_ms": 466.34
+        },
+        {
+          "id": "ev_setting_04",
+          "category": "world_setting",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "fact_15e63b1a24ceb8a5",
+            "fact_73a9d588f38b101b",
+            "fact_ca3dcf16ed06835c"
+          ],
+          "retrieved_ids": [
+            "fact_15e63b1a24ceb8a5",
+            "fact_73a9d588f38b101b",
+            "fact_6f4d7e64458562ce",
+            "fact_0b1c9ae52407ee42",
+            "fact_ca3dcf16ed06835c"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 1.0,
+          "ndcg": 0.9469024295259745,
+          "actual_rerank_method": "cross_encoder",
+          "scores": [
+            5.6406,
+            3.8145,
+            -0.0417,
+            -0.3899,
+            -0.3911
+          ],
+          "latency_ms": 494.22
+        },
+        {
+          "id": "ev_alias_01",
+          "category": "alias",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "fact_0bcef7e7b6845675",
+            "fact_22719796c8bfefad",
+            "fact_da4d0bda6d2eec8b",
+            "fact_e4049017e43973b0"
+          ],
+          "retrieved_ids": [
+            "fact_0bcef7e7b6845675",
+            "fact_22719796c8bfefad",
+            "fact_da4d0bda6d2eec8b",
+            "fact_0547665fd2d685fa",
+            "fact_cadb675195c036c9"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 0.75,
+          "ndcg": 0.8318724637288826,
+          "actual_rerank_method": "cross_encoder",
+          "scores": [
+            5.9688,
+            5.1289,
+            1.9629,
+            1.4639,
+            1.0156
+          ],
+          "latency_ms": 500.47
+        },
+        {
+          "id": "ev_alias_02",
+          "category": "alias",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "rel_5f4279ab2663d517",
+            "rel_99b2edf6334ca3e5"
+          ],
+          "retrieved_ids": [
+            "rel_99b2edf6334ca3e5",
+            "rel_5f4279ab2663d517",
+            "manual_relation_ac6b34aaba6bcd8c",
+            "fact_36eac7e7b1f87642",
+            "rel_5e7800a566fc9792"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 1.0,
+          "ndcg": 1.0,
+          "actual_rerank_method": "cross_encoder",
+          "scores": [
+            3.2598,
+            3.1855,
+            1.082,
+            0.6963,
+            0.2986
+          ],
+          "latency_ms": 468.65
+        },
+        {
+          "id": "ev_alias_03",
+          "category": "alias",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "fact_0fcb48d2b7dcfd6f",
+            "fact_55c79b273a377f2a",
+            "fact_600f9343198db251",
+            "fact_78a3027670e9eae1",
+            "fact_e24c31ade87d5499"
+          ],
+          "retrieved_ids": [
+            "fact_78a3027670e9eae1",
+            "fact_600f9343198db251",
+            "fact_f363b9de05654a58",
+            "fact_0fcb48d2b7dcfd6f",
+            "fact_e24c31ade87d5499"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 0.8,
+          "ndcg": 0.830419897363192,
+          "actual_rerank_method": "cross_encoder",
+          "scores": [
+            3.2441,
+            3.1816,
+            2.5371,
+            2.1875,
+            1.7295
+          ],
+          "latency_ms": 446.38
+        },
+        {
+          "id": "ev_alias_04",
+          "category": "alias",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "fact_1fd21628049f0ede",
+            "fact_ced6a01e12e614d1"
+          ],
+          "retrieved_ids": [
+            "fact_ced6a01e12e614d1",
+            "fact_20b421311ae04ba9",
+            "fact_1fd21628049f0ede",
+            "rel_5f4279ab2663d517",
+            "rel_aa91c18b46927932"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 1.0,
+          "ndcg": 0.9197207891481876,
+          "actual_rerank_method": "cross_encoder",
+          "scores": [
+            3.9941,
+            3.502,
+            3.2793,
+            2.7461,
+            1.5439
+          ],
+          "latency_ms": 458.87
+        },
+        {
+          "id": "ev_cross_volume_01",
+          "category": "cross_volume",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "manual_relation_31c17bd9be427a43",
+            "rel_52d054b748c1cb0c",
+            "rel_e941e64d3a762f31"
+          ],
+          "retrieved_ids": [
+            "manual_relation_31c17bd9be427a43",
+            "rel_52d054b748c1cb0c",
+            "rel_15678d327e6fde5b",
+            "rel_e941e64d3a762f31",
+            "rel_6d1005bd66fb56fd"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 1.0,
+          "ndcg": 0.9674679834891693,
+          "actual_rerank_method": "cross_encoder",
+          "scores": [
+            2.5625,
+            2.2266,
+            1.5771,
+            0.8315,
+            0.521
+          ],
+          "latency_ms": 237.65
+        },
+        {
+          "id": "ev_cross_volume_02",
+          "category": "cross_volume",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "fact_06d046d41b06f184",
+            "fact_251809a384ececda",
+            "fact_2a4167abd736bcdc",
+            "fact_2c7fc90234c8eebd",
+            "fact_576ea3b185bf074f",
+            "fact_64e8751d5062032e",
+            "fact_94b9200459faa6da",
+            "fact_bb0b2c32d4215f9e",
+            "fact_fe8cddff964fa923"
+          ],
+          "retrieved_ids": [
+            "fact_576ea3b185bf074f",
+            "fact_bb0b2c32d4215f9e",
+            "fact_06d046d41b06f184",
+            "fact_fe8cddff964fa923",
+            "fact_2c7fc90234c8eebd"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 0.5555555555555556,
+          "ndcg": 1.0,
+          "actual_rerank_method": "cross_encoder",
+          "scores": [
+            6.207,
+            6.0391,
+            4.8398,
+            4.3242,
+            4.207
+          ],
+          "latency_ms": 439.59
+        },
+        {
+          "id": "ev_cross_volume_03",
+          "category": "cross_volume",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "fact_5a876eb3f9220e0a",
+            "fact_5e895c141f53c622"
+          ],
+          "retrieved_ids": [
+            "fact_59b7c078ee500cb9",
+            "fact_f2696a3259631f6e",
+            "fact_5a876eb3f9220e0a",
+            "fact_4f88227f769becfc",
+            "fact_cb9bd576622b23ab"
+          ],
+          "hit_at_1": 0,
+          "hit_at_5": 1,
+          "rr": 0.3333333333333333,
+          "recall": 0.5,
+          "ndcg": 0.3065735963827292,
+          "actual_rerank_method": "cross_encoder",
+          "scores": [
+            2.1777,
+            1.6914,
+            1.4795,
+            1.0488,
+            0.9097
+          ],
+          "latency_ms": 503.81
+        },
+        {
+          "id": "ev_cross_volume_04",
+          "category": "cross_volume",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "manual_relation_e5b8b24f7400fceb"
+          ],
+          "retrieved_ids": [
+            "manual_relation_e5b8b24f7400fceb",
+            "rel_5f4279ab2663d517",
+            "rel_aa91c18b46927932",
+            "rel_7752f8266cd83200",
+            "rel_15678d327e6fde5b"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 1.0,
+          "ndcg": 1.0,
+          "actual_rerank_method": "cross_encoder",
+          "scores": [
+            5.1406,
+            3.3828,
+            2.6426,
+            2.0527,
+            1.9678
+          ],
+          "latency_ms": 247.56
+        },
+        {
+          "id": "ev_narrative_01",
+          "category": "narrative_layer",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "event_949fa55178d062d3",
+            "evidence:event_949fa55178d062d3",
+            "evidence:fact_b8378345458a257d",
+            "fact_7a9619f69f733976",
+            "fact_b8378345458a257d"
+          ],
+          "retrieved_ids": [
+            "fact_b8378345458a257d",
+            "fact_7db86b5070ca24b4",
+            "event_949fa55178d062d3",
+            "fact_7a9619f69f733976",
+            "event_f4d187ab60c084bb"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 0.6,
+          "ndcg": 0.6548086577531307,
+          "actual_rerank_method": "cross_encoder",
+          "scores": [
+            4.9805,
+            3.5801,
+            3.2637,
+            2.4668,
+            2.1934
+          ],
+          "latency_ms": 463.41
+        },
+        {
+          "id": "ev_narrative_02",
+          "category": "narrative_layer",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "event_1558f0f7f636b88d",
+            "event_15e083233c265fa8",
+            "event_19a0928eb2eae95c",
+            "event_59a195c97e37c1a9",
+            "event_83414aa28ee99f4f",
+            "event_abe21a4e7a573b9e",
+            "event_b16c4d673e8307fe",
+            "event_b38910c781a05d95",
+            "event_bbb33630d098aa01",
+            "event_c950313b73102e4c"
+          ],
+          "retrieved_ids": [
+            "event_b38910c781a05d95",
+            "event_f591112616cffc42",
+            "manual_relation_31c17bd9be427a43",
+            "event_8558a07d30b69bb3",
+            "event_f4ff49ab38492444"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 0.1,
+          "ndcg": 0.3391602052736161,
+          "actual_rerank_method": "cross_encoder",
+          "scores": [
+            7.8711,
+            6.1289,
+            3.8516,
+            3.7246,
+            3.1855
+          ],
+          "latency_ms": 512.57
+        },
+        {
+          "id": "ev_narrative_03",
+          "category": "narrative_layer",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "fact_600f9343198db251",
+            "fact_e24c31ade87d5499",
+            "fact_f363b9de05654a58"
+          ],
+          "retrieved_ids": [
+            "fact_f363b9de05654a58",
+            "fact_e24c31ade87d5499",
+            "fact_600f9343198db251",
+            "fact_0fcb48d2b7dcfd6f",
+            "fact_084ebb54616c1411"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 1.0,
+          "ndcg": 1.0,
+          "actual_rerank_method": "cross_encoder",
+          "scores": [
+            3.168,
+            1.5078,
+            1.3359,
+            0.2167,
+            0.0478
+          ],
+          "latency_ms": 538.34
+        },
+        {
+          "id": "ev_narrative_04",
+          "category": "narrative_layer",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "fact_d0c86d8a82dcbcad"
+          ],
+          "retrieved_ids": [
+            "fact_d0c86d8a82dcbcad",
+            "fact_5b5ae20ecfb0d532",
+            "fact_a35c8fe6a7db3ae5",
+            "fact_94de5ced0bc39df0",
+            "fact_691dede16db82d78"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 1.0,
+          "ndcg": 1.0,
+          "actual_rerank_method": "cross_encoder",
+          "scores": [
+            4.2656,
+            3.0664,
+            3.0566,
+            2.4648,
+            2.082
+          ],
+          "latency_ms": 539.68
+        },
+        {
+          "id": "ev_negation_01",
+          "category": "negation_correction",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "manual_relation_ac6b34aaba6bcd8c",
+            "rel_5f4279ab2663d517",
+            "rel_99b2edf6334ca3e5"
+          ],
+          "retrieved_ids": [
+            "manual_relation_ac6b34aaba6bcd8c",
+            "rel_aa91c18b46927932",
+            "rel_99b2edf6334ca3e5",
+            "manual_relation_31c17bd9be427a43",
+            "rel_5f4279ab2663d517"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 1.0,
+          "ndcg": 0.8854598815714874,
+          "actual_rerank_method": "cross_encoder",
+          "scores": [
+            6.9648,
+            4.8008,
+            3.793,
+            3.0781,
+            2.9648
+          ],
+          "latency_ms": 273.34
+        },
+        {
+          "id": "ev_negation_02",
+          "category": "negation_correction",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "rel_52d054b748c1cb0c",
+            "rel_e941e64d3a762f31"
+          ],
+          "retrieved_ids": [
+            "fact_f9d44d64ea9c443e",
+            "fact_acad4753325925a0",
+            "rel_e941e64d3a762f31",
+            "event_962b225fa8c578ae",
+            "event_09b4fc490dfb1a54"
+          ],
+          "hit_at_1": 0,
+          "hit_at_5": 1,
+          "rr": 0.3333333333333333,
+          "recall": 0.5,
+          "ndcg": 0.3065735963827292,
+          "actual_rerank_method": "cross_encoder",
+          "scores": [
+            8.9688,
+            7.6328,
+            7.6055,
+            7.0742,
+            6.7812
+          ],
+          "latency_ms": 538.52
+        },
+        {
+          "id": "ev_negation_03",
+          "category": "negation_correction",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "rel_7f97b8bd6854b893"
+          ],
+          "retrieved_ids": [
+            "rel_7f97b8bd6854b893",
+            "rel_1c74cfb1f43dab51",
+            "rel_160632234a507562",
+            "rel_5e7800a566fc9792",
+            "rel_15678d327e6fde5b"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 1.0,
+          "ndcg": 1.0,
+          "actual_rerank_method": "cross_encoder",
+          "scores": [
+            4.625,
+            3.9785,
+            0.8491,
+            0.6133,
+            -0.5957
+          ],
+          "latency_ms": 280.59
+        },
+        {
+          "id": "ev_negation_04",
+          "category": "negation_correction",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "rel_307306f509bb0c50",
+            "rel_453e9fab98e91f60"
+          ],
+          "retrieved_ids": [
+            "rel_307306f509bb0c50",
+            "rel_453e9fab98e91f60",
+            "rel_5e7800a566fc9792",
+            "rel_7752f8266cd83200",
+            "manual_relation_e13c84153fc5e6c1"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 1.0,
+          "ndcg": 1.0,
+          "actual_rerank_method": "cross_encoder",
+          "scores": [
+            6.3516,
+            6.1758,
+            4.0195,
+            3.6523,
+            1.998
+          ],
+          "latency_ms": 275.36
+        },
+        {
+          "id": "ev_no_answer_01",
+          "category": "no_answer",
+          "gold_status": "negative",
+          "gold_ids": [],
+          "retrieved_ids": [],
+          "hit_at_1": 0,
+          "hit_at_5": 0,
+          "rr": 0.0,
+          "recall": 0.0,
+          "ndcg": 0.0,
+          "actual_rerank_method": "none",
+          "scores": [],
+          "latency_ms": 0.06
+        },
+        {
+          "id": "ev_no_answer_02",
+          "category": "no_answer",
+          "gold_status": "negative",
+          "gold_ids": [],
+          "retrieved_ids": [],
+          "hit_at_1": 0,
+          "hit_at_5": 0,
+          "rr": 0.0,
+          "recall": 0.0,
+          "ndcg": 0.0,
+          "actual_rerank_method": "none",
+          "scores": [],
+          "latency_ms": 0.03
+        },
+        {
+          "id": "ev_no_answer_03",
+          "category": "no_answer",
+          "gold_status": "negative",
+          "gold_ids": [],
+          "retrieved_ids": [],
+          "hit_at_1": 0,
+          "hit_at_5": 0,
+          "rr": 0.0,
+          "recall": 0.0,
+          "ndcg": 0.0,
+          "actual_rerank_method": "none",
+          "scores": [],
+          "latency_ms": 0.03
+        },
+        {
+          "id": "ev_no_answer_04",
+          "category": "no_answer",
+          "gold_status": "negative",
+          "gold_ids": [],
+          "retrieved_ids": [],
+          "hit_at_1": 0,
+          "hit_at_5": 0,
+          "rr": 0.0,
+          "recall": 0.0,
+          "ndcg": 0.0,
+          "actual_rerank_method": "none",
+          "scores": [],
+          "latency_ms": 0.03
+        },
+        {
+          "id": "ev_final_truth_01",
+          "category": "final_truth",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "fact_b8378345458a257d"
+          ],
+          "retrieved_ids": [
+            "fact_b8378345458a257d",
+            "event_949fa55178d062d3",
+            "fact_7db86b5070ca24b4",
+            "event_f4d187ab60c084bb",
+            "event_db42b757a808b9ce"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 1.0,
+          "ndcg": 1.0,
+          "actual_rerank_method": "cross_encoder",
+          "scores": [
+            5.3945,
+            4.7461,
+            4.2383,
+            3.9238,
+            3.7637
+          ],
+          "latency_ms": 518.93
+        },
+        {
+          "id": "ev_final_truth_02",
+          "category": "final_truth",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "fact_89b295ffd2023324"
+          ],
+          "retrieved_ids": [
+            "event_36c2443bbdf7d73c",
+            "fact_89b295ffd2023324",
+            "event_db42b757a808b9ce",
+            "fact_7db86b5070ca24b4",
+            "fact_7a9619f69f733976"
+          ],
+          "hit_at_1": 0,
+          "hit_at_5": 1,
+          "rr": 0.5,
+          "recall": 1.0,
+          "ndcg": 0.6309297535714575,
+          "actual_rerank_method": "cross_encoder",
+          "scores": [
+            3.1191,
+            2.6328,
+            2.4434,
+            1.8154,
+            1.5146
+          ],
+          "latency_ms": 530.37
+        },
+        {
+          "id": "ev_final_truth_03",
+          "category": "final_truth",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "fact_b8378345458a257d"
+          ],
+          "retrieved_ids": [
+            "fact_7db86b5070ca24b4",
+            "fact_b8378345458a257d",
+            "fact_73a9d588f38b101b",
+            "fact_7a9619f69f733976",
+            "event_db42b757a808b9ce"
+          ],
+          "hit_at_1": 0,
+          "hit_at_5": 1,
+          "rr": 0.5,
+          "recall": 1.0,
+          "ndcg": 0.6309297535714575,
+          "actual_rerank_method": "cross_encoder",
+          "scores": [
+            2.918,
+            1.9121,
+            1.6514,
+            1.333,
+            0.792
+          ],
+          "latency_ms": 579.98
+        },
+        {
+          "id": "ev_final_truth_04",
+          "category": "final_truth",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "fact_89b295ffd2023324"
+          ],
+          "retrieved_ids": [
+            "event_cb14c98fc6218ca8",
+            "fact_89b295ffd2023324",
+            "event_481cb285ae6bd8f8",
+            "fact_1ae77a59eaa4b67c",
+            "event_f4d187ab60c084bb"
+          ],
+          "hit_at_1": 0,
+          "hit_at_5": 1,
+          "rr": 0.5,
+          "recall": 1.0,
+          "ndcg": 0.6309297535714575,
+          "actual_rerank_method": "cross_encoder",
+          "scores": [
+            -2.0801,
+            -2.1621,
+            -2.4023,
+            -2.4141,
+            -2.6348
+          ],
+          "latency_ms": 532.04
+        },
+        {
+          "id": "ev_predicate_01",
+          "category": "predicate_alignment",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "fact_3bb07b32573634eb"
+          ],
+          "retrieved_ids": [
+            "fact_3bb07b32573634eb",
+            "fact_63b57409185adf1d",
+            "fact_0bcef7e7b6845675",
+            "fact_22719796c8bfefad",
+            "fact_614f6a3cf96c98c3"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 1.0,
+          "ndcg": 1.0,
+          "actual_rerank_method": "cross_encoder",
+          "scores": [
+            3.0918,
+            -1.2412,
+            -1.5117,
+            -2.0547,
+            -2.0723
+          ],
+          "latency_ms": 518.47
+        },
+        {
+          "id": "ev_predicate_02",
+          "category": "predicate_alignment",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "fact_2e268144f181ede1",
+            "fact_54ce4dd3e2f48b91",
+            "fact_7572e1d6fc27857b",
+            "fact_af644ea8e0276a6d"
+          ],
+          "retrieved_ids": [
+            "fact_7572e1d6fc27857b",
+            "fact_54ce4dd3e2f48b91",
+            "fact_2e268144f181ede1",
+            "fact_af644ea8e0276a6d",
+            "fact_a4a5ccaba9f24dd5"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 1.0,
+          "ndcg": 1.0,
+          "actual_rerank_method": "cross_encoder",
+          "scores": [
+            5.0078,
+            3.9746,
+            3.9609,
+            3.6816,
+            1.6416
+          ],
+          "latency_ms": 528.06
+        },
+        {
+          "id": "ev_predicate_03",
+          "category": "predicate_alignment",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "fact_084ebb54616c1411",
+            "fact_4d44cc225aed7796",
+            "fact_59b7c078ee500cb9",
+            "fact_5a876eb3f9220e0a",
+            "fact_5e895c141f53c622",
+            "fact_ce2bbbd157cb7cbf",
+            "fact_e507b324fa99dd86",
+            "fact_f2696a3259631f6e",
+            "fact_f363b9de05654a58"
+          ],
+          "retrieved_ids": [
+            "fact_ce2bbbd157cb7cbf",
+            "fact_192b18c00cc8c497",
+            "fact_78a3027670e9eae1",
+            "fact_55c79b273a377f2a",
+            "fact_e24c31ade87d5499"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 0.1111111111111111,
+          "ndcg": 0.3391602052736161,
+          "actual_rerank_method": "cross_encoder",
+          "scores": [
+            4.5391,
+            3.7773,
+            1.6582,
+            1.3242,
+            1.2334
+          ],
+          "latency_ms": 510.08
+        },
+        {
+          "id": "ev_predicate_04",
+          "category": "predicate_alignment",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "fact_a2f0b69444685985"
+          ],
+          "retrieved_ids": [
+            "fact_a2f0b69444685985",
+            "manual_fact_a04480f939e30208",
+            "fact_3fb33acb68cddb54",
+            "fact_af644ea8e0276a6d",
+            "event_67f70407b8889eea"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 1.0,
+          "ndcg": 1.0,
+          "actual_rerank_method": "cross_encoder",
+          "scores": [
+            4.8828,
+            -0.6782,
+            -1.0576,
+            -1.6816,
+            -1.6855
+          ],
+          "latency_ms": 475.42
+        },
+        {
+          "id": "ev_direction_01",
+          "category": "relation_direction",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "rel_5f4279ab2663d517"
+          ],
+          "retrieved_ids": [
+            "rel_5f4279ab2663d517",
+            "manual_relation_ac6b34aaba6bcd8c",
+            "rel_99b2edf6334ca3e5",
+            "manual_relation_417ac8c5e66f95e5",
+            "manual_relation_21cd33c1cf656ca1"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 1.0,
+          "ndcg": 1.0,
+          "actual_rerank_method": "cross_encoder",
+          "scores": [
+            5.7383,
+            3.5586,
+            1.5527,
+            0.4158,
+            -1.252
+          ],
+          "latency_ms": 247.17
+        },
+        {
+          "id": "ev_direction_02",
+          "category": "relation_direction",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "rel_99b2edf6334ca3e5"
+          ],
+          "retrieved_ids": [
+            "rel_99b2edf6334ca3e5",
+            "rel_5f4279ab2663d517",
+            "manual_relation_ac6b34aaba6bcd8c",
+            "manual_relation_e5b8b24f7400fceb",
+            "rel_52d054b748c1cb0c"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 1.0,
+          "ndcg": 1.0,
+          "actual_rerank_method": "cross_encoder",
+          "scores": [
+            6.6289,
+            1.2617,
+            0.2146,
+            -0.2194,
+            -0.5708
+          ],
+          "latency_ms": 259.91
+        },
+        {
+          "id": "ev_direction_03",
+          "category": "relation_direction",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "rel_7f97b8bd6854b893"
+          ],
+          "retrieved_ids": [
+            "rel_7f97b8bd6854b893",
+            "manual_relation_e5b8b24f7400fceb",
+            "rel_1c74cfb1f43dab51",
+            "rel_aa91c18b46927932",
+            "manual_relation_e13c84153fc5e6c1"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 1.0,
+          "ndcg": 1.0,
+          "actual_rerank_method": "cross_encoder",
+          "scores": [
+            7.0703,
+            -1.21,
+            -1.3672,
+            -1.7188,
+            -2.2031
+          ],
+          "latency_ms": 238.17
+        },
+        {
+          "id": "ev_direction_04",
+          "category": "relation_direction",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "rel_51728c8d78f7b5cf"
+          ],
+          "retrieved_ids": [
+            "rel_51728c8d78f7b5cf",
+            "rel_1c74cfb1f43dab51",
+            "rel_7f97b8bd6854b893",
+            "manual_relation_29ced62dcc8d4f4d",
+            "manual_relation_417ac8c5e66f95e5"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 1.0,
+          "ndcg": 1.0,
+          "actual_rerank_method": "cross_encoder",
+          "scores": [
+            5.2617,
+            1.6895,
+            0.9004,
+            0.8276,
+            0.0136
+          ],
+          "latency_ms": 234.32
+        },
+        {
+          "id": "ev_claim_01",
+          "category": "claim_vs_fact",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "fact_7a9619f69f733976"
+          ],
+          "retrieved_ids": [
+            "event_949fa55178d062d3",
+            "fact_7a9619f69f733976",
+            "fact_b8378345458a257d",
+            "event_d951abf5358b3f0c",
+            "fact_7db86b5070ca24b4"
+          ],
+          "hit_at_1": 0,
+          "hit_at_5": 1,
+          "rr": 0.5,
+          "recall": 1.0,
+          "ndcg": 0.6309297535714575,
+          "actual_rerank_method": "cross_encoder",
+          "scores": [
+            5.1445,
+            5.0625,
+            2.6426,
+            2.2012,
+            1.7617
+          ],
+          "latency_ms": 491.79
+        },
+        {
+          "id": "ev_claim_02",
+          "category": "claim_vs_fact",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "fact_82d126bb0e0826d6"
+          ],
+          "retrieved_ids": [
+            "fact_82d126bb0e0826d6",
+            "event_7dba818a04d0021b",
+            "fact_c60b5a0e5cee967c",
+            "fact_83f737894534e1d7",
+            "fact_02df79ac92c5a95d"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 1.0,
+          "ndcg": 1.0,
+          "actual_rerank_method": "cross_encoder",
+          "scores": [
+            6.5977,
+            -0.427,
+            -0.4487,
+            -0.4741,
+            -0.9722
+          ],
+          "latency_ms": 486.98
+        },
+        {
+          "id": "ev_claim_03",
+          "category": "claim_vs_fact",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "event_f4ff49ab38492444"
+          ],
+          "retrieved_ids": [
+            "event_f4ff49ab38492444",
+            "event_ca803d2b61772384",
+            "fact_8c3b1e48df214638",
+            "fact_cded898792a16e03",
+            "event_b38910c781a05d95"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 1.0,
+          "ndcg": 1.0,
+          "actual_rerank_method": "cross_encoder",
+          "scores": [
+            6.1211,
+            5.1719,
+            5.1172,
+            4.5469,
+            3.5723
+          ],
+          "latency_ms": 487.61
+        },
+        {
+          "id": "ev_claim_04",
+          "category": "claim_vs_fact",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "fact_73a9d588f38b101b"
+          ],
+          "retrieved_ids": [
+            "fact_73a9d588f38b101b",
+            "event_db42b757a808b9ce",
+            "event_1558f0f7f636b88d",
+            "event_f4d187ab60c084bb",
+            "fact_7db86b5070ca24b4"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 1.0,
+          "ndcg": 1.0,
+          "actual_rerank_method": "cross_encoder",
+          "scores": [
+            5.4961,
+            3.3008,
+            1.7744,
+            1.4316,
+            1.0879
+          ],
+          "latency_ms": 517.25
+        },
+        {
+          "id": "ev_causal_chain_01",
+          "category": "causal_chain",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "fact_7db86b5070ca24b4"
+          ],
+          "retrieved_ids": [
+            "event_f4d187ab60c084bb",
+            "fact_7db86b5070ca24b4",
+            "fact_b8378345458a257d",
+            "fact_7a9619f69f733976",
+            "event_2d50dbd01dd9a292"
+          ],
+          "hit_at_1": 0,
+          "hit_at_5": 1,
+          "rr": 0.5,
+          "recall": 1.0,
+          "ndcg": 0.6309297535714575,
+          "actual_rerank_method": "cross_encoder",
+          "scores": [
+            6.7031,
+            6.0781,
+            0.1631,
+            -0.1813,
+            -0.5586
+          ],
+          "latency_ms": 464.33
+        },
+        {
+          "id": "ev_causal_chain_02",
+          "category": "causal_chain",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "event_59a195c97e37c1a9"
+          ],
+          "retrieved_ids": [
+            "event_aae37a9b033f7b4f",
+            "event_59a195c97e37c1a9",
+            "event_b840235fc99df6ca",
+            "event_713dc90111a4eab5",
+            "event_cd0852e55f8566ad"
+          ],
+          "hit_at_1": 0,
+          "hit_at_5": 1,
+          "rr": 0.5,
+          "recall": 1.0,
+          "ndcg": 0.6309297535714575,
+          "actual_rerank_method": "cross_encoder",
+          "scores": [
+            2.7637,
+            2.4453,
+            2.2324,
+            1.8779,
+            1.5889
+          ],
+          "latency_ms": 478.81
+        },
+        {
+          "id": "ev_causal_chain_03",
+          "category": "causal_chain",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "event_cfaf5ba63b91eb2e",
+            "event_fb9d65a1094da8c2",
+            "event_fd449de27918cffc",
+            "fact_084ebb54616c1411",
+            "fact_59b7c078ee500cb9",
+            "fact_cb9bd576622b23ab",
+            "fact_f2696a3259631f6e"
+          ],
+          "retrieved_ids": [
+            "fact_59b7c078ee500cb9",
+            "fact_f2696a3259631f6e",
+            "fact_5e895c141f53c622",
+            "fact_5a876eb3f9220e0a",
+            "event_fd449de27918cffc"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 0.42857142857142855,
+          "ndcg": 0.6843515475204855,
+          "actual_rerank_method": "cross_encoder",
+          "scores": [
+            3.4824,
+            2.8496,
+            2.3359,
+            2.2812,
+            2.2324
+          ],
+          "latency_ms": 495.99
+        },
+        {
+          "id": "ev_causal_chain_04",
+          "category": "causal_chain",
+          "gold_status": "resolved",
+          "gold_ids": [
+            "event_a1833753fba819d7",
+            "fact_2a4167abd736bcdc",
+            "fact_691dede16db82d78",
+            "fact_aa05b42c0c08dff1",
+            "fact_da10fd7017af80ed"
+          ],
+          "retrieved_ids": [
+            "fact_aa05b42c0c08dff1",
+            "event_01ed8971e21b4f39",
+            "fact_2a4167abd736bcdc",
+            "event_816b7e056fb624ce",
+            "fact_da10fd7017af80ed"
+          ],
+          "hit_at_1": 1,
+          "hit_at_5": 1,
+          "rr": 1.0,
+          "recall": 0.6,
+          "ndcg": 0.639945385422766,
+          "actual_rerank_method": "cross_encoder",
+          "scores": [
+            3.1367,
+            1.8398,
+            1.4092,
+            1.0303,
+            0.9272
+          ],
+          "latency_ms": 477.69
+        }
+      ]
+    }
+  }
+}

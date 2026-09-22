@@ -1,0 +1,103 @@
+diff --git a/backend/character/semantic_state_estimator.py b/backend/character/semantic_state_estimator.py
+index 897aa48..f83be51 100644
+--- a/backend/character/semantic_state_estimator.py
++++ b/backend/character/semantic_state_estimator.py
+@@ -37,6 +37,7 @@ REVIEW_COMPLEX_NEGATION = "complex_negation"
+ REVIEW_REFERENCE = "context_reference"
+ REVIEW_LOW_CONFIDENCE = "low_confidence"
+ REVIEW_CLOSE_SCORES = "close_scores"
++REVIEW_FULL_ABLATION = "full_non_safety_ablation"
+ 
+ REVIEW_REASON_IDS = frozenset(
+     {
+@@ -46,6 +47,7 @@ REVIEW_REASON_IDS = frozenset(
+         REVIEW_REFERENCE,
+         REVIEW_LOW_CONFIDENCE,
+         REVIEW_CLOSE_SCORES,
++        REVIEW_FULL_ABLATION,
+     }
+ )
+ 
+@@ -135,10 +137,13 @@ _PROTECTED_MULTI_INTENT_ACTS = frozenset(
+     {"seek_support", "self_disclosure", "affiliation_bid", "apology", "repair_bid", "disagreement"}
+ )
+ _PROTECTED_MULTI_INTENT_NEEDS = frozenset({"validation", "recognition", "companionship", "repair"})
+-_TASK_REINTERPRETATION_REASONS = frozenset({REVIEW_SARCASM, REVIEW_COMPLEX_NEGATION, REVIEW_REFERENCE})
++_TASK_REINTERPRETATION_REASONS = frozenset(
++    {REVIEW_SARCASM, REVIEW_COMPLEX_NEGATION, REVIEW_REFERENCE, REVIEW_FULL_ABLATION}
++)
+ _SEMANTIC_REVIEW_ACTIVE: ContextVar[bool] = ContextVar("semantic_state_review_active", default=False)
+ 
+ _REVIEW_REASON_GUIDE = {
++    REVIEW_FULL_ABLATION: "本次是全量非安全状态对照，不代表原句含混；独立理解语义，不为复核而改动正确判断",
+     REVIEW_MULTI_INTENT: "同一轮存在两个需要分别回应的意图；不要只保留先出现或分数最高的一个",
+     REVIEW_SARCASM: "字面态度可能与真实态度相反；结合事件结果判断真实情绪",
+     REVIEW_COMPLEX_NEGATION: "存在多重否定或‘不是……只是……’结构；判断每个否定的作用域",
+@@ -216,14 +221,21 @@ class SemanticStateEstimator:
+         reviewer: SemanticReviewer | None,
+         *,
+         timeout_seconds: float = DEFAULT_REVIEW_TIMEOUT_SECONDS,
++        review_mode: Literal["selective", "all_non_safety"] = "selective",
+     ) -> None:
++        if review_mode not in {"selective", "all_non_safety"}:
++            raise ValueError("unknown semantic review mode")
+         self._reviewer = reviewer
+         self._timeout_seconds = _valid_timeout(timeout_seconds)
++        self._review_mode = review_mode
+ 
+     def review_reasons(self, message: str, state: InteractionState) -> tuple[str, ...]:
+         """Return closed reason IDs explaining why semantic review is useful."""
+ 
+-        return semantic_review_reasons(message, state)
++        reasons = semantic_review_reasons(message, state)
++        if self._review_mode == "all_non_safety" and (message or "").strip() and not _is_safety_state(state):
++            return (*reasons, REVIEW_FULL_ABLATION)
++        return reasons
+ 
+     def needs_review(self, message: str, state: InteractionState) -> bool:
+         """Whether this non-safety, non-empty turn should use the reviewer."""
+@@ -281,7 +293,7 @@ class SemanticStateEstimator:
+                 rule_confidence=rule_confidence,
+             )
+ 
+-        messages = build_semantic_review_messages(message, history, state)
++        messages = build_semantic_review_messages(message, history, state, reasons=reasons)
+         active_token = _SEMANTIC_REVIEW_ACTIVE.set(True)
+         started_at = time.perf_counter()
+         try:
+@@ -380,9 +392,14 @@ def build_semantic_review_messages(
+     message: str,
+     history: Sequence[Mapping[str, Any]],
+     state: InteractionState,
++    *,
++    reasons: Sequence[str] | None = None,
+ ) -> tuple[dict[str, str], dict[str, str]]:
+     """Build the bounded provider input, retaining at most six dialogue turns."""
+ 
++    selected_reasons = tuple(semantic_review_reasons(message, state) if reasons is None else reasons)
++    if not set(selected_reasons) <= REVIEW_REASON_IDS:
++        raise ValueError("unknown semantic review reason")
+     payload = {
+         "current_message": (message or "")[:MAX_REVIEW_MESSAGE_CHARS],
+         "recent_history": _recent_dialogue(history),
+@@ -395,10 +412,8 @@ def build_semantic_review_messages(
+             "needs": {key: NEED_LABELS[key] for key in sorted(_ALLOWED_NEEDS)},
+             "phases": {key: PHASE_LABELS[key] for key in sorted(_ALLOWED_PHASES)},
+         },
+-        "review_reasons": list(semantic_review_reasons(message, state)),
+-        "review_reason_guide": {
+-            reason: _REVIEW_REASON_GUIDE[reason] for reason in semantic_review_reasons(message, state)
+-        },
++        "review_reasons": list(selected_reasons),
++        "review_reason_guide": {reason: _REVIEW_REASON_GUIDE[reason] for reason in selected_reasons},
+         "output_shape_example_only": _OUTPUT_SHAPE_EXAMPLE,
+         "output_shape_warning": "示例只说明 JSON 结构，与当前语义无关；必须重新判断全部标签和分数。",
+     }
+@@ -763,6 +778,7 @@ __all__ = [
+     "MAX_REVIEW_HISTORY_MESSAGES",
+     "MAX_REVIEW_HISTORY_TOTAL_CHARS",
+     "REVIEW_CLOSE_SCORES",
++    "REVIEW_FULL_ABLATION",
+     "REVIEW_COMPLEX_NEGATION",
+     "REVIEW_LOW_CONFIDENCE",
+     "REVIEW_MULTI_INTENT",

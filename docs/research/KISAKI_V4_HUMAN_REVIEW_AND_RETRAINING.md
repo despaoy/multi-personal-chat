@@ -37,4 +37,6 @@ canonical train / validation / Gold v3 已冻结
 → run_kisaki_experiment.py
 ```
 
-历史候选和逐批复审包已在批准晋升后删除，最终决定以 canonical manifest 与 `game_train_context_review_approval.json` 为准。
+历史候选、逐批复审包和 V5 候选工作区仍有保留。正式输入与最终批准决定以 canonical manifest 和 `game_train_context_review_approval.json` 为准，目录存在不表示已晋升。
+
+数据冻结门禁与模型生成质量门禁是两项独立检查：数据门禁通过不代表现有 adapter 可发布。恢复训练前应先落实 E1 失败分析与候选数据审核，不能把下面的操作顺序视为已批准重跑所有实验。

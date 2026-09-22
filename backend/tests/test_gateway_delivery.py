@@ -165,6 +165,33 @@ async def test_ack_requires_matching_delivery_token(gateway):
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("headers", [{}, {"X-Integration-Token": "wrong-token"}])
+async def test_ack_rejects_missing_or_invalid_integration_token(gateway, headers):
+    payload = integrations.DeliveryAcknowledgement(
+        receiptId="a" * 64, deliveryToken="b" * 32, status="delivered"
+    )
+    with pytest.raises(integrations.HTTPException) as error:
+        await integrations.acknowledge_delivery(payload, SimpleNamespace(headers=headers))
+    assert error.value.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_ack_rejects_missing_required_signature(gateway, monkeypatch):
+    monkeypatch.setenv("INTEGRATION_SIGNATURE_REQUIRED", "true")
+
+    async def body():
+        return b"{}"
+
+    request = SimpleNamespace(headers={"X-Integration-Token": "test-token"}, body=body)
+    payload = integrations.DeliveryAcknowledgement(
+        receiptId="a" * 64, deliveryToken="b" * 32, status="delivered"
+    )
+    with pytest.raises(integrations.HTTPException) as error:
+        await integrations.acknowledge_delivery(payload, request)
+    assert error.value.status_code == 401
+
+
+@pytest.mark.asyncio
 async def test_character_completion_waits_for_ack_and_runs_once(gateway, monkeypatch):
     _, _, payload = gateway
     original = integrations.generate_reply_core

@@ -24,7 +24,7 @@ def test_extracts_stable_profile_facts_and_current_goal():
 
     assert memories["user_major"].content == "用户说自己的专业是计算机科学"
     assert memories["user_study_stage"].content == "用户说自己是大三"
-    assert memories["user_location"].content == "用户说自己来自或居住在南京"
+    assert memories["user_residence"].content == "用户说自己居住在南京"
     assert any(item.memory_type == "shared_event" for item in memories.values())
 
 

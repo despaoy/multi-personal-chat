@@ -4,6 +4,10 @@
 worker 按入队顺序处理，避免同一用户连续修正事实时旧任务后完成并覆盖
 新事实。LLM 只负责提出候选；用户拒绝、敏感信息、原文证据、类型、长度
 和数量仍由本地代码最终决定。
+
+写入判断先搜索当前作用域的全部 active 旧记忆，再取相关 Top-10，
+显式反馈目标优先。当前同时使用词面相关性与语义相似度；语义模型
+不可用时降级为词面检索。不再按最近更新时间预先截断候选。
 """
 
 from __future__ import annotations
@@ -11,9 +15,10 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import math
 import os
 import re
-from collections import deque
+from collections import Counter, deque
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 from typing import TYPE_CHECKING, Any, Protocol
@@ -31,6 +36,7 @@ from character.memory_extractor import (
 from character.models import MemoryItem, UserScope
 
 if TYPE_CHECKING:
+    from knowledge.retrieval_core.embedding import EmbeddingProvider
     from repositories.character_memory import CharacterMemoryRepository
 
 logger = logging.getLogger(__name__)
@@ -56,6 +62,8 @@ _MAX_VALUE_CHARS = 48
 _MAX_EVIDENCE_CHARS = 120
 _MAX_QUALIFIERS = 6
 _MAX_QUALIFIER_CHARS = 48
+_MEMORY_WRITE_SEMANTIC_THRESHOLD = max(0.0, min(1.0, float(os.getenv("MEMORY_WRITE_SEMANTIC_THRESHOLD", "0.35"))))
+_MEMORY_WRITE_RRF_K = 60
 
 _SEMANTIC_OPERATIONS = {
     "ADD",
@@ -383,6 +391,122 @@ def _select_existing_memories(
     return tuple(selected)
 
 
+def _search_existing_memories(
+    records: tuple[dict[str, Any], ...],
+    message: str,
+    rule_hints: tuple[ExtractedMemory, ...],
+    feedback_target_ids: tuple[str, ...],
+    embedding_provider: EmbeddingProvider | None = None,
+) -> tuple[dict[str, Any], ...]:
+    """Search all visible active records before applying the LLM Top-K limit.
+
+    Character bigrams and lower-weight single Chinese characters cover Chinese
+    text without a tokenizer dependency (including single-character objects).
+    Inverse document frequency downweights boilerplate shared by memories.
+    Semantic cosine similarity recalls paraphrases. Exact rule keys and
+    explicit feedback targets also recall changed facts. The two ranked lists
+    are fused with RRF so their score scales are not added directly.
+    """
+
+    def terms(text: str) -> set[str]:
+        chunks = re.findall(r"[\w]+", text.casefold())
+        characters = set(re.findall(r"[\u4e00-\u9fff]", text)) - set("的了是在我你他她它们用户有和与就都也把被这那很说")
+        return characters | {
+            chunk[index : index + 2] if len(chunk) > 1 else chunk
+            for chunk in chunks
+            for index in range(max(1, len(chunk) - 1))
+        }
+
+    active = tuple(record for record in records if record.get("status", "active") == "active")
+    if not active:
+        return ()
+    documents = [terms(str(record.get("content") or "")) for record in active]
+    frequencies = Counter(term for document in documents for term in document)
+    query = terms(message)
+    keys = {hint.memory_key for hint in rule_hints if hint.memory_key}
+    targets = set(feedback_target_ids)
+    lexical_scores: dict[int, float] = {}
+    key_matches: set[int] = set()
+    target_matches: set[int] = set()
+    for record, document in zip(active, documents, strict=True):
+        index = len(lexical_scores)
+        overlap = query & document
+        score = sum(
+            (0.2 if len(term) == 1 else 1.0) * math.log(1 + len(active) / frequencies[term]) for term in overlap
+        )
+        score /= math.sqrt(max(1, len(document)))
+        key_match = str(record.get("memory_key") or "") in keys
+        target_match = _record_id(record) in targets
+        lexical_scores[index] = score
+        if key_match:
+            key_matches.add(index)
+        if target_match:
+            target_matches.add(index)
+
+    semantic_scores: dict[int, float] = {}
+    try:
+        import numpy as np
+
+        if embedding_provider is None:
+            from knowledge.retrieval_core.embedding import get_default_embedding_provider
+
+            embedding_provider = get_default_embedding_provider()
+        matrix = np.asarray(
+            embedding_provider.embed_texts([message, *[str(record.get("content") or "") for record in active]]),
+            dtype=np.float32,
+        )
+        if matrix.ndim != 2 or matrix.shape[0] != len(active) + 1:
+            raise ValueError("embedding provider 返回形状不正确")
+        query_vector = matrix[0]
+        query_norm = float(np.linalg.norm(query_vector))
+        if query_norm > 0.0:
+            query_vector = query_vector / query_norm
+        for index, vector in enumerate(matrix[1:]):
+            norm = float(np.linalg.norm(vector))
+            semantic_scores[index] = max(
+                0.0,
+                min(1.0, float(np.dot(query_vector, vector / norm))) if norm > 0.0 else 0.0,
+            )
+    except Exception as exc:  # noqa: BLE001 - semantic retrieval must not block memory writes
+        logger.warning("后台记忆语义检索不可用，降级为词面检索: %s", exc)
+
+    def rank_scores(scores: dict[int, float]) -> dict[int, int]:
+        ordered = sorted(scores, key=lambda index: scores[index], reverse=True)
+        return {index: rank for rank, index in enumerate(ordered, start=1)}
+
+    lexical_ranks = rank_scores(lexical_scores)
+    semantic_ranks = rank_scores(semantic_scores)
+    candidates: list[tuple[bool, bool, float, float, float, dict[str, Any]]] = []
+    for index, record in enumerate(active):
+        lexical_score = lexical_scores[index]
+        semantic_score = semantic_scores.get(index, 0.0)
+        relevant = (
+            index in key_matches
+            or index in target_matches
+            or lexical_score > 0.0
+            or semantic_score >= _MEMORY_WRITE_SEMANTIC_THRESHOLD
+        )
+        if not relevant:
+            continue
+        fused_score = 0.0
+        if index in lexical_ranks:
+            fused_score += 1.0 / (_MEMORY_WRITE_RRF_K + lexical_ranks[index])
+        if index in semantic_ranks:
+            fused_score += 1.0 / (_MEMORY_WRITE_RRF_K + semantic_ranks[index])
+        candidates.append(
+            (
+                index in target_matches,
+                index in key_matches,
+                fused_score,
+                semantic_score,
+                lexical_score,
+                record,
+            )
+        )
+    candidates.sort(key=lambda item: item[:5], reverse=True)
+    return _select_existing_memories(tuple(item[5] for item in candidates), feedback_target_ids)
+
+
 def _normalize_attributed_to(value: Any) -> str:
     normalized = str(value or "user").strip().lower()
     return "user" if normalized in {"user", "self", "用户", "本人"} else ""
@@ -475,11 +599,7 @@ def _infer_add_relation_target(
 ) -> tuple[str, dict[str, Any]] | None:
     """只对两个高精度 ADD 误判场景关联同槽旧记忆。"""
 
-    active = [
-        item
-        for item in existing_memories
-        if str(item.get("status") or "active") in {"active", "pending"}
-    ]
+    active = [item for item in existing_memories if str(item.get("status") or "active") in {"active", "pending"}]
     if kind == "location" and _TEMPORARY_LOCATION_PATTERN.search(evidence):
         target = next(
             (item for item in active if str(item.get("memory_key") or "") == "user_location"),
@@ -525,12 +645,8 @@ def _grounded_value(
     # “推荐饮料时避开含咖啡因的”→“含咖啡因的饮料”。要求至少 75%
     # 的 value bigram 逐字存在于当前证据，允许重排但不允许补造实体。
     if len(normalized_value) >= 4:
-        value_bigrams = {
-            normalized_value[index : index + 2] for index in range(len(normalized_value) - 1)
-        }
-        evidence_bigrams = {
-            normalized_evidence[index : index + 2] for index in range(len(normalized_evidence) - 1)
-        }
+        value_bigrams = {normalized_value[index : index + 2] for index in range(len(normalized_value) - 1)}
+        evidence_bigrams = {normalized_evidence[index : index + 2] for index in range(len(normalized_evidence) - 1)}
         if value_bigrams and len(value_bigrams & evidence_bigrams) / len(value_bigrams) >= 0.75:
             return True
     if not _ELLIPSIS_REFERENCE_PATTERN.search(evidence):
@@ -806,9 +922,7 @@ def _candidate_to_proposal(
         history=history,
         existing_memories=existing_memories,
     ):
-        grounded_negative = (
-            _negative_object_from_evidence(evidence) if kind in {"like", "dislike"} else ""
-        )
+        grounded_negative = _negative_object_from_evidence(evidence) if kind in {"like", "dislike"} else ""
         if not grounded_negative:
             return None
         kind = "dislike"
@@ -830,21 +944,22 @@ def _candidate_to_proposal(
 
     raw_qualifiers = raw.get("qualifiers")
     misplaced_validity: dict[str, Any] = {}
-    if isinstance(raw_qualifiers, dict) and raw_qualifiers and set(raw_qualifiers) <= {
-        "valid_from",
-        "valid_to",
-    }:
+    if (
+        isinstance(raw_qualifiers, dict)
+        and raw_qualifiers
+        and set(raw_qualifiers)
+        <= {
+            "valid_from",
+            "valid_to",
+        }
+    ):
         misplaced_validity = raw_qualifiers
         raw_qualifiers = {}
     qualifiers = _sanitize_qualifiers(raw_qualifiers, evidence=evidence)
     if qualifiers is None:
         return None
-    valid_from = _normalize_iso_time(
-        raw.get("valid_from", raw.get("valid_at")) or misplaced_validity.get("valid_from")
-    )
-    valid_to = _normalize_iso_time(
-        raw.get("valid_to", raw.get("invalid_at")) or misplaced_validity.get("valid_to")
-    )
+    valid_from = _normalize_iso_time(raw.get("valid_from", raw.get("valid_at")) or misplaced_validity.get("valid_from"))
+    valid_to = _normalize_iso_time(raw.get("valid_to", raw.get("invalid_at")) or misplaced_validity.get("valid_to"))
     observed_at = _normalize_iso_time(raw.get("observed_at"))
     if valid_from is None or valid_to is None or observed_at is None:
         return None
@@ -1025,9 +1140,11 @@ class MemoryEnrichmentScheduler:
         *,
         config: MemoryLlmConfig,
         completion: MemoryCompletion,
+        embedding_provider: EmbeddingProvider | None = None,
     ) -> None:
         self.enabled = config.enabled
         self._completion = completion
+        self._embedding_provider = embedding_provider
         self._max_input_chars = config.max_input_chars
         self._confidence_threshold = config.confidence_threshold
         self._idle_seconds = config.idle_seconds
@@ -1235,17 +1352,23 @@ class MemoryEnrichmentScheduler:
             "persisted": 0,
         }
         try:
-            # 实际注入 ID 可能不在默认最新 10 条中；先读一个有界大窗口，
-            # 再由 _select_existing_memories 压回提示词预算。
-            fetch_limit = 100 if job.feedback_target_ids else MAX_EXISTING_MEMORIES
+            # Search the entire visible active collection; apply Top-K only
+            # after relevance ranking so older facts are not silently excluded.
             records = tuple(
                 await job.repository.list_memory_records(
                     job.character_id,
                     job.user_scope,
-                    limit=fetch_limit,
+                    limit=None,
                 )
             )
-            existing_memories = _select_existing_memories(records, job.feedback_target_ids)
+            existing_memories = await asyncio.to_thread(
+                _search_existing_memories,
+                records,
+                job.message,
+                job.rule_hints,
+                job.feedback_target_ids,
+                self._embedding_provider,
+            )
             response = await self._completion.complete(
                 build_memory_llm_messages(
                     job.message,

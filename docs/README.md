@@ -1,6 +1,12 @@
 # MultiPersonal Chat System 文档中心
 
-本文档目录只保存可维护的项目说明和可复现研究记录。模型权重、LoRA 产物、数据库、日志与生成的向量索引不进入 Git。最近一次结构与链接核对：2026-08-29。
+本文档目录只保存可维护的项目说明和可复现研究记录。模型权重、LoRA 产物、数据库、日志与生成的向量索引不进入 Git。文档状态以 [当前实现与阅读入口](CURRENT_STATE.md) 为准；文档核对日期：2026-09-11。
+
+## 当前说明与历史记录
+
+先阅读 [当前实现与阅读入口](CURRENT_STATE.md)。`research/review_packets/` 内的 Markdown、JSON 和 HTML 是当时的样本、批准决定与实验记录；不因文档更新重新批准、改写分数或修改哈希。`KISAKI_GAME_RAG_*` 保留各阶段设计与验收记录，部署检索请使用现行架构文档。
+
+本次文档核对范围与未重新运行的验证见 [文档维护记录](maintainer/DOCUMENTATION_REVIEW_2026-09-11.md)。
 
 ## 阅读顺序
 
@@ -20,6 +26,8 @@
 
 ### `architecture/`
 
+- `NARRATIVE_BRANCHES.md`：正史/反事实隔离 Web MVP、启用方法、事务边界与开发评测。
+
 - `CODE_WIKI.md`：代码结构与关键调用链。
 - `CHARACTER_KNOWLEDGE_RETRIEVAL.md`：角色知识检索与通用用户知识库的边界、索引结构和运维方式。
 - `EXTENSIBILITY_GUIDE.md`：分层边界、新增后端/前端功能的最短路径与兼容性规则。
@@ -33,6 +41,10 @@
 - `CLEANUP_POLICY.md`：本地和服务器清理规则。
 
 ### `research/`
+
+- `CONTEXTUAL_EVIDENCE_USAGE.md`：情境记忆选择、人设条件策略、语义精排与证据条件化训练的实验入口。
+- `CONTEXTUAL_EVIDENCE_IMPLEMENTATION.md`：2026-09-19 实现过程、验证记录及尚未证实的模型质量收益。
+- `CONTEXTUAL_EVIDENCE_RESEARCH_MAP.md`：论文与官方实现核对、项目适配差异及正式实验路线。
 
 - `KISAKI_V4_HUMAN_REVIEW_AND_RETRAINING.md`：当前月社妃数据审核、训练门禁和重训练入口。
 - `review_packets/kisaki_v4/00_GUIDE.md`：V4 数据和 Gold 审核入口。

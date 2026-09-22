@@ -27,3 +27,8 @@ contact the repository owner privately.
 - LoRA root and symlink targets stay inside `LORA_PATH` / `LORA_ALLOWED_REAL_ROOTS`.
 - The built-in integration token (`ASTRBOT_INTEGRATION_TOKEN`) is for the
   AstrBot gateway, not for public clients.
+- Legacy NoneBot tools can read local files and execute code as the service
+  account. Do not enable Claw for untrusted users or expose it as a public
+  execution service. The HTTP execution flag does not sandbox the legacy bot.
+- A subprocess and Python AST checks are not an OS security sandbox. Keep tool
+  execution disabled in production unless separately isolated and reviewed.

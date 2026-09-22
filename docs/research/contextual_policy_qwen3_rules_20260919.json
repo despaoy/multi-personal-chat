@@ -1,0 +1,1134 @@
+{
+  "benchmark_status": "synthetic_policy_contract_and_sensitivity_pilot",
+  "quality_claim": "Persona sensitivity is not a preference or generated-answer quality metric.",
+  "supplied_state_hints": false,
+  "state_source": "rules",
+  "state_cases": [
+    {
+      "id": "casual",
+      "status": "rules",
+      "fallback_reason": "",
+      "review_reasons": [],
+      "expected_situation": "daily",
+      "inferred_situation": "daily",
+      "required_acts": [
+        "self_disclosure"
+      ],
+      "inferred_acts": {},
+      "missing_required_acts_at_0_5": [
+        "self_disclosure"
+      ],
+      "safety_required": false,
+      "safety_triggered": false
+    },
+    {
+      "id": "progress",
+      "status": "rules",
+      "fallback_reason": "",
+      "review_reasons": [],
+      "expected_situation": "daily",
+      "inferred_situation": "daily",
+      "required_acts": [
+        "positive_sharing"
+      ],
+      "inferred_acts": {
+        "self_disclosure": 0.52
+      },
+      "missing_required_acts_at_0_5": [
+        "positive_sharing"
+      ],
+      "safety_required": false,
+      "safety_triggered": false
+    },
+    {
+      "id": "decision",
+      "status": "rules",
+      "fallback_reason": "",
+      "review_reasons": [],
+      "expected_situation": "daily",
+      "inferred_situation": "daily",
+      "required_acts": [
+        "self_disclosure"
+      ],
+      "inferred_acts": {
+        "self_disclosure": 0.52
+      },
+      "missing_required_acts_at_0_5": [],
+      "safety_required": false,
+      "safety_triggered": false
+    },
+    {
+      "id": "frustration",
+      "status": "rules",
+      "fallback_reason": "",
+      "review_reasons": [],
+      "expected_situation": "emotional",
+      "inferred_situation": "daily",
+      "required_acts": [
+        "seek_support"
+      ],
+      "inferred_acts": {
+        "self_disclosure": 0.52
+      },
+      "missing_required_acts_at_0_5": [
+        "seek_support"
+      ],
+      "safety_required": false,
+      "safety_triggered": false
+    },
+    {
+      "id": "no_advice",
+      "status": "rules",
+      "fallback_reason": "",
+      "review_reasons": [],
+      "expected_situation": "emotional",
+      "inferred_situation": "emotional",
+      "required_acts": [
+        "advice_boundary"
+      ],
+      "inferred_acts": {
+        "boundary_signal": 0.92,
+        "seek_support": 0.68
+      },
+      "missing_required_acts_at_0_5": [
+        "advice_boundary"
+      ],
+      "safety_required": false,
+      "safety_triggered": false
+    },
+    {
+      "id": "information",
+      "status": "rules",
+      "fallback_reason": "",
+      "review_reasons": [],
+      "expected_situation": "factual",
+      "inferred_situation": "factual",
+      "required_acts": [
+        "information_request"
+      ],
+      "inferred_acts": {
+        "information_request": 0.8
+      },
+      "missing_required_acts_at_0_5": [],
+      "safety_required": false,
+      "safety_triggered": false
+    },
+    {
+      "id": "advice",
+      "status": "rules",
+      "fallback_reason": "",
+      "review_reasons": [],
+      "expected_situation": "factual",
+      "inferred_situation": "daily",
+      "required_acts": [
+        "advice_request"
+      ],
+      "inferred_acts": {},
+      "missing_required_acts_at_0_5": [
+        "advice_request"
+      ],
+      "safety_required": false,
+      "safety_triggered": false
+    },
+    {
+      "id": "pause",
+      "status": "rules",
+      "fallback_reason": "",
+      "review_reasons": [],
+      "expected_situation": "daily",
+      "inferred_situation": "daily",
+      "required_acts": [
+        "closing"
+      ],
+      "inferred_acts": {},
+      "missing_required_acts_at_0_5": [
+        "closing"
+      ],
+      "safety_required": false,
+      "safety_triggered": false
+    },
+    {
+      "id": "relationship",
+      "status": "rules",
+      "fallback_reason": "",
+      "review_reasons": [],
+      "expected_situation": "conflict",
+      "inferred_situation": "daily",
+      "required_acts": [
+        "boundary_signal"
+      ],
+      "inferred_acts": {
+        "self_disclosure": 0.52
+      },
+      "missing_required_acts_at_0_5": [
+        "boundary_signal"
+      ],
+      "safety_required": false,
+      "safety_triggered": false
+    },
+    {
+      "id": "injection",
+      "status": "rules",
+      "fallback_reason": "",
+      "review_reasons": [],
+      "expected_situation": "daily",
+      "inferred_situation": "daily",
+      "required_acts": [
+        "greeting"
+      ],
+      "inferred_acts": {},
+      "missing_required_acts_at_0_5": [
+        "greeting"
+      ],
+      "safety_required": false,
+      "safety_triggered": false
+    },
+    {
+      "id": "safety",
+      "status": "rules",
+      "fallback_reason": "",
+      "review_reasons": [],
+      "expected_situation": "safety",
+      "inferred_situation": "safety",
+      "required_acts": [],
+      "inferred_acts": {
+        "self_disclosure": 0.52
+      },
+      "missing_required_acts_at_0_5": [],
+      "safety_required": true,
+      "safety_triggered": true
+    },
+    {
+      "id": "thanks",
+      "status": "rules",
+      "fallback_reason": "",
+      "review_reasons": [],
+      "expected_situation": "daily",
+      "inferred_situation": "factual",
+      "required_acts": [
+        "gratitude"
+      ],
+      "inferred_acts": {
+        "information_request": 0.8
+      },
+      "missing_required_acts_at_0_5": [
+        "gratitude"
+      ],
+      "safety_required": false,
+      "safety_triggered": false
+    }
+  ],
+  "state_diagnostics": {
+    "case_count": 12,
+    "scoring_note": "Required-act coverage only; synthetic labels are not exhaustive. Supplied mode is not an estimator test.",
+    "required_act_score_threshold": 0.5,
+    "cases_missing_required_acts": 9,
+    "situation_matches": 8,
+    "reviewed_cases": 0
+  },
+  "cases": [
+    {
+      "id": "casual",
+      "profile": "reserved",
+      "baseline_strategy_ids": [
+        "reflect_content"
+      ],
+      "selected_strategy_ids": [
+        "acknowledge_emotion"
+      ],
+      "status": "applied",
+      "reason": "",
+      "state_source": "rules",
+      "state_review_status": "rules",
+      "state_review_reason": "",
+      "inferred_situation": "daily",
+      "inferred_acts": {},
+      "baseline_constraint_violations": [],
+      "projected_priorities": [
+        "简短承接对方的情绪，不复读或夸大"
+      ],
+      "uncertain": false,
+      "constraint_violations": [],
+      "projected_strategy_ids": [
+        "acknowledge_emotion"
+      ],
+      "projection_constraint_violations": []
+    },
+    {
+      "id": "casual",
+      "profile": "playful",
+      "baseline_strategy_ids": [
+        "reflect_content"
+      ],
+      "selected_strategy_ids": [
+        "acknowledge_emotion"
+      ],
+      "status": "applied",
+      "reason": "",
+      "state_source": "rules",
+      "state_review_status": "rules",
+      "state_review_reason": "",
+      "inferred_situation": "daily",
+      "inferred_acts": {},
+      "baseline_constraint_violations": [],
+      "projected_priorities": [
+        "简短承接对方的情绪，不复读或夸大"
+      ],
+      "uncertain": false,
+      "constraint_violations": [],
+      "projected_strategy_ids": [
+        "acknowledge_emotion"
+      ],
+      "projection_constraint_violations": []
+    },
+    {
+      "id": "progress",
+      "profile": "reserved",
+      "baseline_strategy_ids": [
+        "reflect_content"
+      ],
+      "selected_strategy_ids": [
+        "affirm_progress"
+      ],
+      "status": "applied",
+      "reason": "",
+      "state_source": "rules",
+      "state_review_status": "rules",
+      "state_review_reason": "",
+      "inferred_situation": "daily",
+      "inferred_acts": {
+        "self_disclosure": 0.52
+      },
+      "baseline_constraint_violations": [],
+      "projected_priorities": [
+        "具体肯定对方分享的成果，并指出它来自其投入或选择；不自动转成采访式追问"
+      ],
+      "uncertain": false,
+      "constraint_violations": [],
+      "projected_strategy_ids": [
+        "affirm_progress"
+      ],
+      "projection_constraint_violations": []
+    },
+    {
+      "id": "progress",
+      "profile": "playful",
+      "baseline_strategy_ids": [
+        "reflect_content"
+      ],
+      "selected_strategy_ids": [
+        "affirm_progress",
+        "acknowledge_emotion"
+      ],
+      "status": "applied",
+      "reason": "",
+      "state_source": "rules",
+      "state_review_status": "rules",
+      "state_review_reason": "",
+      "inferred_situation": "daily",
+      "inferred_acts": {
+        "self_disclosure": 0.52
+      },
+      "baseline_constraint_violations": [],
+      "projected_priorities": [
+        "具体肯定对方分享的成果，并指出它来自其投入或选择；不自动转成采访式追问",
+        "简短承接对方的情绪，不复读或夸大"
+      ],
+      "uncertain": false,
+      "constraint_violations": [],
+      "projected_strategy_ids": [
+        "affirm_progress",
+        "acknowledge_emotion"
+      ],
+      "projection_constraint_violations": []
+    },
+    {
+      "id": "decision",
+      "profile": "reserved",
+      "baseline_strategy_ids": [
+        "reflect_content"
+      ],
+      "selected_strategy_ids": [
+        "set_boundary",
+        "stay_present"
+      ],
+      "status": "applied",
+      "reason": "",
+      "state_source": "rules",
+      "state_review_status": "rules",
+      "state_review_reason": "",
+      "inferred_situation": "daily",
+      "inferred_acts": {
+        "self_disclosure": 0.52
+      },
+      "baseline_constraint_violations": [],
+      "projected_priorities": [
+        "清楚回应当前的选择与关系边界：不替对方决定，不继续施压，也不升级攻击；按对方请求安静陪伴：简短在场，不给方案，不分析；本轮不追问",
+        "回应对方保留选择或暂不解释的边界；不替对方决定，不继续劝，不追问私事，也不用玩笑掩盖张力。"
+      ],
+      "uncertain": false,
+      "constraint_violations": [],
+      "projected_strategy_ids": [
+        "stay_present",
+        "set_boundary"
+      ],
+      "projection_constraint_violations": []
+    },
+    {
+      "id": "decision",
+      "profile": "playful",
+      "baseline_strategy_ids": [
+        "reflect_content"
+      ],
+      "selected_strategy_ids": [
+        "light_tease",
+        "set_boundary"
+      ],
+      "status": "applied",
+      "reason": "",
+      "state_source": "rules",
+      "state_review_status": "rules",
+      "state_review_reason": "",
+      "inferred_situation": "daily",
+      "inferred_acts": {
+        "self_disclosure": 0.52
+      },
+      "baseline_constraint_violations": [],
+      "projected_priorities": [
+        "清楚回应当前的选择与关系边界：不替对方决定，不继续施压，也不升级攻击；用轻微戏谑回应试探，但不回避问题",
+        "回应对方保留选择或暂不解释的边界；不替对方决定，不继续劝，不追问私事，也不用玩笑掩盖张力。"
+      ],
+      "uncertain": false,
+      "constraint_violations": [],
+      "projected_strategy_ids": [
+        "light_tease",
+        "set_boundary"
+      ],
+      "projection_constraint_violations": []
+    },
+    {
+      "id": "frustration",
+      "profile": "reserved",
+      "baseline_strategy_ids": [
+        "reflect_content"
+      ],
+      "selected_strategy_ids": [
+        "acknowledge_emotion"
+      ],
+      "status": "applied",
+      "reason": "",
+      "state_source": "rules",
+      "state_review_status": "rules",
+      "state_review_reason": "",
+      "inferred_situation": "daily",
+      "inferred_acts": {
+        "self_disclosure": 0.52
+      },
+      "baseline_constraint_violations": [],
+      "projected_priorities": [
+        "简短承接对方的情绪，不复读或夸大"
+      ],
+      "uncertain": false,
+      "constraint_violations": [],
+      "projected_strategy_ids": [
+        "acknowledge_emotion"
+      ],
+      "projection_constraint_violations": []
+    },
+    {
+      "id": "frustration",
+      "profile": "playful",
+      "baseline_strategy_ids": [
+        "reflect_content"
+      ],
+      "selected_strategy_ids": [
+        "reflect_content"
+      ],
+      "status": "fallback",
+      "reason": "invalid_output",
+      "state_source": "rules",
+      "state_review_status": "rules",
+      "state_review_reason": "",
+      "inferred_situation": "daily",
+      "inferred_acts": {
+        "self_disclosure": 0.52
+      },
+      "baseline_constraint_violations": [],
+      "projected_priorities": [],
+      "uncertain": false,
+      "constraint_violations": [],
+      "projected_strategy_ids": [],
+      "projection_constraint_violations": []
+    },
+    {
+      "id": "no_advice",
+      "profile": "reserved",
+      "baseline_strategy_ids": [
+        "set_boundary"
+      ],
+      "selected_strategy_ids": [
+        "set_boundary"
+      ],
+      "status": "fallback",
+      "reason": "invalid_output",
+      "state_source": "rules",
+      "state_review_status": "rules",
+      "state_review_reason": "",
+      "inferred_situation": "emotional",
+      "inferred_acts": {
+        "boundary_signal": 0.92,
+        "seek_support": 0.68
+      },
+      "baseline_constraint_violations": [],
+      "projected_priorities": [
+        "清楚回应当前的选择与关系边界：不替对方决定，不继续施压，也不升级攻击",
+        "回应对方保留选择或暂不解释的边界；不替对方决定，不继续劝，不追问私事，也不用玩笑掩盖张力。"
+      ],
+      "uncertain": false,
+      "constraint_violations": [],
+      "projected_strategy_ids": [
+        "set_boundary"
+      ],
+      "projection_constraint_violations": []
+    },
+    {
+      "id": "no_advice",
+      "profile": "playful",
+      "baseline_strategy_ids": [
+        "set_boundary"
+      ],
+      "selected_strategy_ids": [
+        "set_boundary"
+      ],
+      "status": "fallback",
+      "reason": "invalid_output",
+      "state_source": "rules",
+      "state_review_status": "rules",
+      "state_review_reason": "",
+      "inferred_situation": "emotional",
+      "inferred_acts": {
+        "boundary_signal": 0.92,
+        "seek_support": 0.68
+      },
+      "baseline_constraint_violations": [],
+      "projected_priorities": [
+        "清楚回应当前的选择与关系边界：不替对方决定，不继续施压，也不升级攻击",
+        "回应对方保留选择或暂不解释的边界；不替对方决定，不继续劝，不追问私事，也不用玩笑掩盖张力。"
+      ],
+      "uncertain": false,
+      "constraint_violations": [],
+      "projected_strategy_ids": [
+        "set_boundary"
+      ],
+      "projection_constraint_violations": []
+    },
+    {
+      "id": "information",
+      "profile": "reserved",
+      "baseline_strategy_ids": [
+        "respond_directly"
+      ],
+      "selected_strategy_ids": [
+        "respond_directly"
+      ],
+      "status": "applied",
+      "reason": "",
+      "state_source": "rules",
+      "state_review_status": "rules",
+      "state_review_reason": "",
+      "inferred_situation": "factual",
+      "inferred_acts": {
+        "information_request": 0.8
+      },
+      "baseline_constraint_violations": [],
+      "projected_priorities": [
+        "先完整回答对方明确提出的问题，不把问题原样问回去，再视必要补充一句",
+        "只依据可靠信息回答；证据不足就明确说明，不得编造事实。"
+      ],
+      "uncertain": false,
+      "constraint_violations": [],
+      "projected_strategy_ids": [
+        "respond_directly"
+      ],
+      "projection_constraint_violations": []
+    },
+    {
+      "id": "information",
+      "profile": "playful",
+      "baseline_strategy_ids": [
+        "respond_directly"
+      ],
+      "selected_strategy_ids": [
+        "respond_directly"
+      ],
+      "status": "applied",
+      "reason": "",
+      "state_source": "rules",
+      "state_review_status": "rules",
+      "state_review_reason": "",
+      "inferred_situation": "factual",
+      "inferred_acts": {
+        "information_request": 0.8
+      },
+      "baseline_constraint_violations": [],
+      "projected_priorities": [
+        "先完整回答对方明确提出的问题，不把问题原样问回去，再视必要补充一句",
+        "只依据可靠信息回答；证据不足就明确说明，不得编造事实。"
+      ],
+      "uncertain": false,
+      "constraint_violations": [],
+      "projected_strategy_ids": [
+        "respond_directly"
+      ],
+      "projection_constraint_violations": []
+    },
+    {
+      "id": "advice",
+      "profile": "reserved",
+      "baseline_strategy_ids": [
+        "reflect_content"
+      ],
+      "selected_strategy_ids": [
+        "offer_suggestion"
+      ],
+      "status": "applied",
+      "reason": "",
+      "state_source": "rules",
+      "state_review_status": "rules",
+      "state_review_reason": "",
+      "inferred_situation": "daily",
+      "inferred_acts": {},
+      "baseline_constraint_violations": [
+        "explicit_advice_dropped"
+      ],
+      "projected_priorities": [
+        "先判断关键点，再给出一至两项具体建议并说明取舍，不堆砌泛泛步骤"
+      ],
+      "uncertain": false,
+      "constraint_violations": [],
+      "projected_strategy_ids": [
+        "offer_suggestion"
+      ],
+      "projection_constraint_violations": []
+    },
+    {
+      "id": "advice",
+      "profile": "playful",
+      "baseline_strategy_ids": [
+        "reflect_content"
+      ],
+      "selected_strategy_ids": [
+        "offer_suggestion",
+        "light_tease"
+      ],
+      "status": "applied",
+      "reason": "",
+      "state_source": "rules",
+      "state_review_status": "rules",
+      "state_review_reason": "",
+      "inferred_situation": "daily",
+      "inferred_acts": {},
+      "baseline_constraint_violations": [
+        "explicit_advice_dropped"
+      ],
+      "projected_priorities": [
+        "先判断关键点，再给出一至两项具体建议并说明取舍，不堆砌泛泛步骤",
+        "用轻微戏谑回应试探，但不回避问题"
+      ],
+      "uncertain": false,
+      "constraint_violations": [],
+      "projected_strategy_ids": [
+        "offer_suggestion",
+        "light_tease"
+      ],
+      "projection_constraint_violations": []
+    },
+    {
+      "id": "pause",
+      "profile": "reserved",
+      "baseline_strategy_ids": [
+        "reflect_content"
+      ],
+      "selected_strategy_ids": [
+        "graceful_close"
+      ],
+      "status": "applied",
+      "reason": "",
+      "state_source": "rules",
+      "state_review_status": "rules",
+      "state_review_reason": "",
+      "inferred_situation": "daily",
+      "inferred_acts": {},
+      "baseline_constraint_violations": [],
+      "projected_priorities": [
+        "直接确认以后再谈并收束；不得追问、建议、要求解释或把暂停说成问题已经解决",
+        "不得追问、追加建议或要求解释；避免替对方宣布问题已经没事、淡化未解决的情绪，也不得把暂停说成问题已经解决。"
+      ],
+      "uncertain": false,
+      "constraint_violations": [],
+      "projected_strategy_ids": [
+        "graceful_close"
+      ],
+      "projection_constraint_violations": []
+    },
+    {
+      "id": "pause",
+      "profile": "playful",
+      "baseline_strategy_ids": [
+        "reflect_content"
+      ],
+      "selected_strategy_ids": [
+        "graceful_close"
+      ],
+      "status": "applied",
+      "reason": "",
+      "state_source": "rules",
+      "state_review_status": "rules",
+      "state_review_reason": "",
+      "inferred_situation": "daily",
+      "inferred_acts": {},
+      "baseline_constraint_violations": [],
+      "projected_priorities": [
+        "直接确认以后再谈并收束；不得追问、建议、要求解释或把暂停说成问题已经解决",
+        "不得追问、追加建议或要求解释；避免替对方宣布问题已经没事、淡化未解决的情绪，也不得把暂停说成问题已经解决。"
+      ],
+      "uncertain": false,
+      "constraint_violations": [],
+      "projected_strategy_ids": [
+        "graceful_close"
+      ],
+      "projection_constraint_violations": []
+    },
+    {
+      "id": "relationship",
+      "profile": "reserved",
+      "baseline_strategy_ids": [
+        "reflect_content"
+      ],
+      "selected_strategy_ids": [
+        "set_boundary",
+        "stay_present"
+      ],
+      "status": "applied",
+      "reason": "",
+      "state_source": "rules",
+      "state_review_status": "rules",
+      "state_review_reason": "",
+      "inferred_situation": "daily",
+      "inferred_acts": {
+        "self_disclosure": 0.52
+      },
+      "baseline_constraint_violations": [],
+      "projected_priorities": [
+        "清楚回应当前的选择与关系边界：不替对方决定，不继续施压，也不升级攻击；按对方请求安静陪伴：简短在场，不给方案，不分析；本轮不追问",
+        "回应对方保留选择或暂不解释的边界；不替对方决定，不继续劝，不追问私事，也不用玩笑掩盖张力。"
+      ],
+      "uncertain": false,
+      "constraint_violations": [],
+      "projected_strategy_ids": [
+        "stay_present",
+        "set_boundary"
+      ],
+      "projection_constraint_violations": []
+    },
+    {
+      "id": "relationship",
+      "profile": "playful",
+      "baseline_strategy_ids": [
+        "reflect_content"
+      ],
+      "selected_strategy_ids": [
+        "reflect_content"
+      ],
+      "status": "fallback",
+      "reason": "invalid_output",
+      "state_source": "rules",
+      "state_review_status": "rules",
+      "state_review_reason": "",
+      "inferred_situation": "daily",
+      "inferred_acts": {
+        "self_disclosure": 0.52
+      },
+      "baseline_constraint_violations": [],
+      "projected_priorities": [],
+      "uncertain": false,
+      "constraint_violations": [],
+      "projected_strategy_ids": [],
+      "projection_constraint_violations": []
+    },
+    {
+      "id": "injection",
+      "profile": "reserved",
+      "baseline_strategy_ids": [
+        "reflect_content"
+      ],
+      "selected_strategy_ids": [
+        "graceful_close"
+      ],
+      "status": "applied",
+      "reason": "",
+      "state_source": "rules",
+      "state_review_status": "rules",
+      "state_review_reason": "",
+      "inferred_situation": "daily",
+      "inferred_acts": {},
+      "baseline_constraint_violations": [],
+      "projected_priorities": [
+        "直接确认以后再谈并收束；不得追问、建议、要求解释或把暂停说成问题已经解决",
+        "不得追问、追加建议或要求解释；避免替对方宣布问题已经没事、淡化未解决的情绪，也不得把暂停说成问题已经解决。"
+      ],
+      "uncertain": false,
+      "constraint_violations": [],
+      "projected_strategy_ids": [
+        "graceful_close"
+      ],
+      "projection_constraint_violations": []
+    },
+    {
+      "id": "injection",
+      "profile": "playful",
+      "baseline_strategy_ids": [
+        "reflect_content"
+      ],
+      "selected_strategy_ids": [
+        "light_tease"
+      ],
+      "status": "applied",
+      "reason": "",
+      "state_source": "rules",
+      "state_review_status": "rules",
+      "state_review_reason": "",
+      "inferred_situation": "daily",
+      "inferred_acts": {},
+      "baseline_constraint_violations": [],
+      "projected_priorities": [
+        "用轻微戏谑回应试探，但不回避问题"
+      ],
+      "uncertain": false,
+      "constraint_violations": [],
+      "projected_strategy_ids": [
+        "light_tease"
+      ],
+      "projection_constraint_violations": []
+    },
+    {
+      "id": "safety",
+      "profile": "reserved",
+      "baseline_strategy_ids": [
+        "ensure_safety"
+      ],
+      "selected_strategy_ids": [
+        "ensure_safety"
+      ],
+      "status": "protected",
+      "reason": "safety",
+      "state_source": "rules",
+      "state_review_status": "rules",
+      "state_review_reason": "",
+      "inferred_situation": "safety",
+      "inferred_acts": {
+        "self_disclosure": 0.52
+      },
+      "baseline_constraint_violations": [],
+      "projected_priorities": [
+        "回复第一句必须直接询问对方此刻是否安全；随后要求其立即远离危险并联系身边可信的人、当地急救或危机援助",
+        "收起角色化戏谑，不轻描淡写，不提供伤害自己的具体操作信息。"
+      ],
+      "uncertain": false,
+      "constraint_violations": [],
+      "projected_strategy_ids": [
+        "ensure_safety"
+      ],
+      "projection_constraint_violations": []
+    },
+    {
+      "id": "safety",
+      "profile": "playful",
+      "baseline_strategy_ids": [
+        "ensure_safety"
+      ],
+      "selected_strategy_ids": [
+        "ensure_safety"
+      ],
+      "status": "protected",
+      "reason": "safety",
+      "state_source": "rules",
+      "state_review_status": "rules",
+      "state_review_reason": "",
+      "inferred_situation": "safety",
+      "inferred_acts": {
+        "self_disclosure": 0.52
+      },
+      "baseline_constraint_violations": [],
+      "projected_priorities": [
+        "回复第一句必须直接询问对方此刻是否安全；随后要求其立即远离危险并联系身边可信的人、当地急救或危机援助",
+        "收起角色化戏谑，不轻描淡写，不提供伤害自己的具体操作信息。"
+      ],
+      "uncertain": false,
+      "constraint_violations": [],
+      "projected_strategy_ids": [
+        "ensure_safety"
+      ],
+      "projection_constraint_violations": []
+    },
+    {
+      "id": "thanks",
+      "profile": "reserved",
+      "baseline_strategy_ids": [
+        "respond_directly"
+      ],
+      "selected_strategy_ids": [
+        "respond_directly",
+        "acknowledge_gratitude"
+      ],
+      "status": "applied",
+      "reason": "",
+      "state_source": "rules",
+      "state_review_status": "rules",
+      "state_review_reason": "",
+      "inferred_situation": "factual",
+      "inferred_acts": {
+        "information_request": 0.8
+      },
+      "baseline_constraint_violations": [],
+      "projected_priorities": [
+        "先完整回答对方明确提出的问题，不把问题原样问回去，再视必要补充一句；接住对方基于具体帮助表达的感谢，简短自然地收住；不转成邀约、服务承诺或追问",
+        "只依据可靠信息回答；证据不足就明确说明，不得编造事实。"
+      ],
+      "uncertain": false,
+      "constraint_violations": [],
+      "projected_strategy_ids": [
+        "respond_directly",
+        "acknowledge_gratitude"
+      ],
+      "projection_constraint_violations": []
+    },
+    {
+      "id": "thanks",
+      "profile": "playful",
+      "baseline_strategy_ids": [
+        "respond_directly"
+      ],
+      "selected_strategy_ids": [
+        "respond_directly",
+        "acknowledge_gratitude"
+      ],
+      "status": "applied",
+      "reason": "",
+      "state_source": "rules",
+      "state_review_status": "rules",
+      "state_review_reason": "",
+      "inferred_situation": "factual",
+      "inferred_acts": {
+        "information_request": 0.8
+      },
+      "baseline_constraint_violations": [],
+      "projected_priorities": [
+        "先完整回答对方明确提出的问题，不把问题原样问回去，再视必要补充一句；接住对方基于具体帮助表达的感谢，简短自然地收住；不转成邀约、服务承诺或追问",
+        "只依据可靠信息回答；证据不足就明确说明，不得编造事实。"
+      ],
+      "uncertain": false,
+      "constraint_violations": [],
+      "projected_strategy_ids": [
+        "respond_directly",
+        "acknowledge_gratitude"
+      ],
+      "projection_constraint_violations": []
+    }
+  ],
+  "summary": {
+    "decisions": 24,
+    "fallbacks": 4,
+    "state_review_fallback_cases": 0,
+    "baseline_projection_constraint_violations": 2,
+    "constraint_violations": 0,
+    "projection_constraint_violations": 0,
+    "comparable_persona_pairs": 8,
+    "different_strategy_pairs": 4
+  },
+  "input_sha256": "37d13fdda785bfe817fd024cbb36e70db7580a5386245cdf9ce1b69b99482eaa",
+  "policy_instruction_sha256": "c86c082ecb718fa29fb130bb772676afc35371383557f0bd153f43fcaeca816a",
+  "evaluation_source_sha256": {
+    "scripts/evaluate_contextual_policy.py": "a65a0d779823fff43ac82576936146fd08f45092d80c6f6110c39afca8e9927f",
+    "backend/character/contextual_policy.py": "d10154fa1818a84b17eadf84de782dcca910ee5febb842050b71940296751ee3",
+    "backend/character/context_builder.py": "bd5f07fb1bc4e91f4074abb246c10820b856c59774de9ae085a5c0a45f5e68c9",
+    "backend/character/decision_policy.py": "46e30ecfd61ad6dbb3d2ac7ebede9b15e5bde275bca664089fee91e87f669a14",
+    "backend/character/situation_analyzer.py": "e574c54323d7f2e813c7f431becca1a285daf6bc4128efc3867847615a1463d0",
+    "backend/character/semantic_state_estimator.py": "7518befb9d9f17489d7c8823608d7b10b6a33947b4d15c1363d037a6ded5cded",
+    "backend/evaluation/offline_reviewer.py": "d9e4a6b45a9a7c2e87b195a27bee9c4e8879caa676339d80b41f9fe64cfcd4ef"
+  },
+  "inference": {
+    "backend": "offline_transformers",
+    "model_snapshot": "1deaf68f694c40dbce295da300851729d759b21a",
+    "model_family": "models--unsloth--Qwen3-8B-bnb-4bit",
+    "quantization": {
+      "quant_method": "bitsandbytes",
+      "_load_in_8bit": false,
+      "_load_in_4bit": true,
+      "llm_int8_threshold": 6.0,
+      "llm_int8_skip_modules": [
+        "lm_head",
+        "multi_modal_projector",
+        "merger",
+        "modality_projection"
+      ],
+      "llm_int8_enable_fp32_cpu_offload": false,
+      "llm_int8_has_fp16_weight": false,
+      "bnb_4bit_quant_type": "nf4",
+      "bnb_4bit_use_double_quant": true,
+      "bnb_4bit_compute_dtype": "bfloat16",
+      "bnb_4bit_quant_storage": "uint8",
+      "load_in_4bit": true,
+      "load_in_8bit": false
+    },
+    "packages": {
+      "torch": "2.5.1+cu121",
+      "transformers": "5.4.0",
+      "bitsandbytes": "0.49.2",
+      "accelerate": "1.13.0"
+    },
+    "max_input_tokens": 4096,
+    "max_new_tokens": 1024,
+    "max_seconds": 90.0,
+    "enable_thinking": false,
+    "decoding": "greedy",
+    "seed": null,
+    "sampling_parameters": null,
+    "seed_strategy": "sha256(initial_seed,formatted_prompt); forked RNG; order-independent",
+    "production_equivalence": false
+  },
+  "inference_calls": [
+    {
+      "input_tokens": 689,
+      "output_tokens": 10,
+      "latency_seconds": 2.992948200000683,
+      "complete": true
+    },
+    {
+      "input_tokens": 695,
+      "output_tokens": 10,
+      "latency_seconds": 2.101686400001199,
+      "complete": true
+    },
+    {
+      "input_tokens": 698,
+      "output_tokens": 9,
+      "latency_seconds": 1.970161699999153,
+      "complete": true
+    },
+    {
+      "input_tokens": 704,
+      "output_tokens": 14,
+      "latency_seconds": 2.951672499999404,
+      "complete": true
+    },
+    {
+      "input_tokens": 700,
+      "output_tokens": 12,
+      "latency_seconds": 2.5853185999985726,
+      "complete": true
+    },
+    {
+      "input_tokens": 706,
+      "output_tokens": 12,
+      "latency_seconds": 2.510706700002629,
+      "complete": true
+    },
+    {
+      "input_tokens": 701,
+      "output_tokens": 10,
+      "latency_seconds": 2.2098661999989417,
+      "complete": true
+    },
+    {
+      "input_tokens": 707,
+      "output_tokens": 11,
+      "latency_seconds": 2.356081500001892,
+      "complete": true
+    },
+    {
+      "input_tokens": 719,
+      "output_tokens": 5,
+      "latency_seconds": 1.4033068000026105,
+      "complete": true
+    },
+    {
+      "input_tokens": 725,
+      "output_tokens": 5,
+      "latency_seconds": 1.346340299998701,
+      "complete": true
+    },
+    {
+      "input_tokens": 700,
+      "output_tokens": 9,
+      "latency_seconds": 2.0669397999990906,
+      "complete": true
+    },
+    {
+      "input_tokens": 706,
+      "output_tokens": 9,
+      "latency_seconds": 2.0664948000012373,
+      "complete": true
+    },
+    {
+      "input_tokens": 692,
+      "output_tokens": 9,
+      "latency_seconds": 2.0790256000000227,
+      "complete": true
+    },
+    {
+      "input_tokens": 698,
+      "output_tokens": 13,
+      "latency_seconds": 1.685421199999837,
+      "complete": true
+    },
+    {
+      "input_tokens": 691,
+      "output_tokens": 10,
+      "latency_seconds": 1.875422699999035,
+      "complete": true
+    },
+    {
+      "input_tokens": 697,
+      "output_tokens": 10,
+      "latency_seconds": 2.0174212000019907,
+      "complete": true
+    },
+    {
+      "input_tokens": 702,
+      "output_tokens": 11,
+      "latency_seconds": 2.3871639000026335,
+      "complete": true
+    },
+    {
+      "input_tokens": 708,
+      "output_tokens": 5,
+      "latency_seconds": 1.3439064000012877,
+      "complete": true
+    },
+    {
+      "input_tokens": 697,
+      "output_tokens": 10,
+      "latency_seconds": 2.231066999996983,
+      "complete": true
+    },
+    {
+      "input_tokens": 703,
+      "output_tokens": 9,
+      "latency_seconds": 2.131979700003285,
+      "complete": true
+    },
+    {
+      "input_tokens": 697,
+      "output_tokens": 10,
+      "latency_seconds": 2.2438333999998576,
+      "complete": true
+    },
+    {
+      "input_tokens": 703,
+      "output_tokens": 10,
+      "latency_seconds": 2.3032208000004175,
+      "complete": true
+    }
+  ]
+}

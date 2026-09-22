@@ -5,6 +5,7 @@
 ## 仓库与本地验证
 
 - `check_repository_integrity.py`：核对冻结数据、API 挂载、前端导航、脚本索引、README 链接和归档完整性。
+- `check_release_hygiene.py`：只读扫描拟发布文件，检查Python/JSON/JSONL语法和私有运行产物，列出字节相同的文件供人工判断；不自动删除历史证据。
 - `local-verify.ps1`：Windows 完整验证流水线。
 - `start-local-backend.ps1`：以 mock 推理模式启动本地后端。
 - `restore_sqlite_backup.py`：在路径和目标检查后恢复 SQLite 备份。
@@ -58,6 +59,14 @@ V5 仍是候选工作区，不覆盖已冻结的 V4，也不是生产训练入�
 实验室脚本优先使用 `MULTIPERSONAL_LAB_ROOT`、`MULTIPERSONAL_LAB_PYTHON`、`MULTIPERSONAL_REMOTE_ROOT`、`MULTIPERSONAL_REMOTE_PYTHON` 和 `MULTIPERSONAL_REMOTE_MODEL`。旧 `QQCHAT_*` 名称仅作迁移兼容。
 
 ## 维护规则
+
+新增的离线研究与评估入口：
+
+- 记忆：`evaluate_contextual_memory.py`、`evaluate_longmemeval_retrieval.py`、`evaluate_memory_metadata_view.py`、`aggregate_memory_seeds.py`、`compare_memory_reports.py`。
+- 情境与策略：`evaluate_contextual_policy.py`、`evaluate_contextual_replies.py`、`evaluate_semantic_state.py`、`evaluate_narrative_branches.py`。
+- 公开角色评估：`audit_charactereval.py`、`cache_charactereval.py`、`evaluate_public_character_replies.py`、`render_public_character_review.py`。
+- RAG 与证据训练：`evaluate_multiscale_semantic_rerank.py`、`audit_rag_ranking_disagreements.py`、`export_evidence_training.py`。
+- 下载校验：`download_verified_model.py`。
 
 1. 新活动脚本必须加入本索引并接入相应测试或验证链。
 2. 一次性、旧数据或个人机器专用工具移入 `archive/`，同时登记来源和哈希。

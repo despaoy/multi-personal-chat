@@ -201,6 +201,7 @@ def tokenize_assistant_turns(
     truncation_direction: str = "left",
     use_chat_template: bool = True,
     assistant_supervision: str = "all",
+    require_full_context: bool = False,
 ) -> dict[str, list[int]]:
     """Tokenize once and supervise selected assistant bodies and end markers."""
 
@@ -221,6 +222,10 @@ def tokenize_assistant_turns(
         return_offsets_mapping=True,
     )
     input_ids = list(encoded["input_ids"])
+    if require_full_context and len(input_ids) > max_length:
+        raise ValueError(
+            "evidence-conditioned sample exceeds max_length; truncation would detach the answer from its evidence"
+        )
     offsets = [tuple(offset) for offset in encoded["offset_mapping"]]
     labels = [-100] * len(input_ids)
     spans = _content_spans(rendered, messages)

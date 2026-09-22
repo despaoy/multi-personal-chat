@@ -1,0 +1,726 @@
+{
+  "benchmark_status": "synthetic_policy_contract_and_sensitivity_pilot",
+  "quality_claim": "Persona sensitivity is not a preference or generated-answer quality metric.",
+  "supplied_state_hints": true,
+  "cases": [
+    {
+      "id": "casual",
+      "profile": "reserved",
+      "baseline_strategy_ids": [
+        "acknowledge_emotion"
+      ],
+      "selected_strategy_ids": [
+        "acknowledge_emotion"
+      ],
+      "status": "applied",
+      "reason": "",
+      "projected_priorities": [
+        "简短承接对方的情绪，不复读或夸大"
+      ],
+      "uncertain": false,
+      "constraint_violations": [],
+      "projected_strategy_ids": [
+        "acknowledge_emotion"
+      ],
+      "projection_constraint_violations": []
+    },
+    {
+      "id": "casual",
+      "profile": "playful",
+      "baseline_strategy_ids": [
+        "acknowledge_emotion"
+      ],
+      "selected_strategy_ids": [
+        "light_tease",
+        "stay_present"
+      ],
+      "status": "applied",
+      "reason": "",
+      "projected_priorities": [
+        "用轻微戏谑回应试探，但不回避问题",
+        "按对方请求安静陪伴：简短在场，不给方案，不分析；本轮不追问"
+      ],
+      "uncertain": false,
+      "constraint_violations": [],
+      "projected_strategy_ids": [
+        "stay_present",
+        "light_tease"
+      ],
+      "projection_constraint_violations": []
+    },
+    {
+      "id": "progress",
+      "profile": "reserved",
+      "baseline_strategy_ids": [
+        "affirm_progress"
+      ],
+      "selected_strategy_ids": [
+        "affirm_progress"
+      ],
+      "status": "applied",
+      "reason": "",
+      "projected_priorities": [
+        "具体肯定对方分享的成果，并指出它来自其投入或选择；不自动转成采访式追问"
+      ],
+      "uncertain": false,
+      "constraint_violations": [],
+      "projected_strategy_ids": [
+        "affirm_progress"
+      ],
+      "projection_constraint_violations": []
+    },
+    {
+      "id": "progress",
+      "profile": "playful",
+      "baseline_strategy_ids": [
+        "affirm_progress"
+      ],
+      "selected_strategy_ids": [
+        "affirm_progress",
+        "acknowledge_emotion"
+      ],
+      "status": "applied",
+      "reason": "",
+      "projected_priorities": [
+        "具体肯定对方分享的成果，并指出它来自其投入或选择；不自动转成采访式追问",
+        "简短承接对方的情绪，不复读或夸大"
+      ],
+      "uncertain": false,
+      "constraint_violations": [],
+      "projected_strategy_ids": [
+        "affirm_progress",
+        "acknowledge_emotion"
+      ],
+      "projection_constraint_violations": []
+    },
+    {
+      "id": "decision",
+      "profile": "reserved",
+      "baseline_strategy_ids": [
+        "acknowledge_emotion"
+      ],
+      "selected_strategy_ids": [
+        "set_boundary",
+        "stay_present"
+      ],
+      "status": "applied",
+      "reason": "",
+      "projected_priorities": [
+        "清楚回应当前的选择与关系边界：不替对方决定，不继续施压，也不升级攻击；按对方请求安静陪伴：简短在场，不给方案，不分析；本轮不追问",
+        "回应对方保留选择或暂不解释的边界；不替对方决定，不继续劝，不追问私事，也不用玩笑掩盖张力。"
+      ],
+      "uncertain": false,
+      "constraint_violations": [],
+      "projected_strategy_ids": [
+        "stay_present",
+        "set_boundary"
+      ],
+      "projection_constraint_violations": []
+    },
+    {
+      "id": "decision",
+      "profile": "playful",
+      "baseline_strategy_ids": [
+        "acknowledge_emotion"
+      ],
+      "selected_strategy_ids": [
+        "light_tease",
+        "set_boundary"
+      ],
+      "status": "applied",
+      "reason": "",
+      "projected_priorities": [
+        "清楚回应当前的选择与关系边界：不替对方决定，不继续施压，也不升级攻击；用轻微戏谑回应试探，但不回避问题",
+        "回应对方保留选择或暂不解释的边界；不替对方决定，不继续劝，不追问私事，也不用玩笑掩盖张力。"
+      ],
+      "uncertain": false,
+      "constraint_violations": [],
+      "projected_strategy_ids": [
+        "light_tease",
+        "set_boundary"
+      ],
+      "projection_constraint_violations": []
+    },
+    {
+      "id": "frustration",
+      "profile": "reserved",
+      "baseline_strategy_ids": [
+        "acknowledge_emotion"
+      ],
+      "selected_strategy_ids": [
+        "acknowledge_emotion"
+      ],
+      "status": "applied",
+      "reason": "",
+      "projected_priorities": [
+        "简短承接对方的情绪，不复读或夸大"
+      ],
+      "uncertain": false,
+      "constraint_violations": [],
+      "projected_strategy_ids": [
+        "acknowledge_emotion"
+      ],
+      "projection_constraint_violations": []
+    },
+    {
+      "id": "frustration",
+      "profile": "playful",
+      "baseline_strategy_ids": [
+        "acknowledge_emotion"
+      ],
+      "selected_strategy_ids": [
+        "acknowledge_emotion"
+      ],
+      "status": "applied",
+      "reason": "",
+      "projected_priorities": [
+        "简短承接对方的情绪，不复读或夸大"
+      ],
+      "uncertain": false,
+      "constraint_violations": [],
+      "projected_strategy_ids": [
+        "acknowledge_emotion"
+      ],
+      "projection_constraint_violations": []
+    },
+    {
+      "id": "no_advice",
+      "profile": "reserved",
+      "baseline_strategy_ids": [
+        "stay_present"
+      ],
+      "selected_strategy_ids": [
+        "stay_present"
+      ],
+      "status": "fallback",
+      "reason": "invalid_output",
+      "projected_priorities": [
+        "清楚回应当前的选择与关系边界：不替对方决定，不继续施压，也不升级攻击",
+        "不得提供建议、分析方案或用追问变相推进；本轮不得追问。"
+      ],
+      "uncertain": false,
+      "constraint_violations": [],
+      "projected_strategy_ids": [
+        "set_boundary"
+      ],
+      "projection_constraint_violations": []
+    },
+    {
+      "id": "no_advice",
+      "profile": "playful",
+      "baseline_strategy_ids": [
+        "stay_present"
+      ],
+      "selected_strategy_ids": [
+        "stay_present"
+      ],
+      "status": "fallback",
+      "reason": "invalid_output",
+      "projected_priorities": [
+        "清楚回应当前的选择与关系边界：不替对方决定，不继续施压，也不升级攻击",
+        "不得提供建议、分析方案或用追问变相推进；本轮不得追问。"
+      ],
+      "uncertain": false,
+      "constraint_violations": [],
+      "projected_strategy_ids": [
+        "set_boundary"
+      ],
+      "projection_constraint_violations": []
+    },
+    {
+      "id": "information",
+      "profile": "reserved",
+      "baseline_strategy_ids": [
+        "respond_directly"
+      ],
+      "selected_strategy_ids": [
+        "respond_directly"
+      ],
+      "status": "applied",
+      "reason": "",
+      "projected_priorities": [
+        "先完整回答对方明确提出的问题，不把问题原样问回去，再视必要补充一句",
+        "只依据可靠信息回答；证据不足就明确说明，不得编造事实。"
+      ],
+      "uncertain": false,
+      "constraint_violations": [],
+      "projected_strategy_ids": [
+        "respond_directly"
+      ],
+      "projection_constraint_violations": []
+    },
+    {
+      "id": "information",
+      "profile": "playful",
+      "baseline_strategy_ids": [
+        "respond_directly"
+      ],
+      "selected_strategy_ids": [
+        "respond_directly"
+      ],
+      "status": "applied",
+      "reason": "",
+      "projected_priorities": [
+        "先完整回答对方明确提出的问题，不把问题原样问回去，再视必要补充一句",
+        "只依据可靠信息回答；证据不足就明确说明，不得编造事实。"
+      ],
+      "uncertain": false,
+      "constraint_violations": [],
+      "projected_strategy_ids": [
+        "respond_directly"
+      ],
+      "projection_constraint_violations": []
+    },
+    {
+      "id": "advice",
+      "profile": "reserved",
+      "baseline_strategy_ids": [
+        "offer_suggestion"
+      ],
+      "selected_strategy_ids": [
+        "offer_suggestion"
+      ],
+      "status": "applied",
+      "reason": "",
+      "projected_priorities": [
+        "先判断关键点，再给出一至两项具体建议并说明取舍，不堆砌泛泛步骤",
+        "只依据可靠信息回答；证据不足就明确说明，不得编造事实。"
+      ],
+      "uncertain": false,
+      "constraint_violations": [],
+      "projected_strategy_ids": [
+        "offer_suggestion"
+      ],
+      "projection_constraint_violations": []
+    },
+    {
+      "id": "advice",
+      "profile": "playful",
+      "baseline_strategy_ids": [
+        "offer_suggestion"
+      ],
+      "selected_strategy_ids": [
+        "offer_suggestion",
+        "light_tease"
+      ],
+      "status": "applied",
+      "reason": "",
+      "projected_priorities": [
+        "先判断关键点，再给出一至两项具体建议并说明取舍，不堆砌泛泛步骤；用轻微戏谑回应试探，但不回避问题",
+        "只依据可靠信息回答；证据不足就明确说明，不得编造事实。"
+      ],
+      "uncertain": false,
+      "constraint_violations": [],
+      "projected_strategy_ids": [
+        "offer_suggestion",
+        "light_tease"
+      ],
+      "projection_constraint_violations": []
+    },
+    {
+      "id": "pause",
+      "profile": "reserved",
+      "baseline_strategy_ids": [
+        "graceful_close"
+      ],
+      "selected_strategy_ids": [
+        "graceful_close"
+      ],
+      "status": "applied",
+      "reason": "",
+      "projected_priorities": [
+        "直接确认以后再谈并收束；不得追问、建议、要求解释或把暂停说成问题已经解决",
+        "不得追问、追加建议或要求解释；避免替对方宣布问题已经没事、淡化未解决的情绪，也不得把暂停说成问题已经解决。"
+      ],
+      "uncertain": false,
+      "constraint_violations": [],
+      "projected_strategy_ids": [
+        "graceful_close"
+      ],
+      "projection_constraint_violations": []
+    },
+    {
+      "id": "pause",
+      "profile": "playful",
+      "baseline_strategy_ids": [
+        "graceful_close"
+      ],
+      "selected_strategy_ids": [
+        "graceful_close"
+      ],
+      "status": "applied",
+      "reason": "",
+      "projected_priorities": [
+        "直接确认以后再谈并收束；不得追问、建议、要求解释或把暂停说成问题已经解决",
+        "不得追问、追加建议或要求解释；避免替对方宣布问题已经没事、淡化未解决的情绪，也不得把暂停说成问题已经解决。"
+      ],
+      "uncertain": false,
+      "constraint_violations": [],
+      "projected_strategy_ids": [
+        "graceful_close"
+      ],
+      "projection_constraint_violations": []
+    },
+    {
+      "id": "relationship",
+      "profile": "reserved",
+      "baseline_strategy_ids": [
+        "set_boundary"
+      ],
+      "selected_strategy_ids": [
+        "set_boundary",
+        "stay_present"
+      ],
+      "status": "applied",
+      "reason": "",
+      "projected_priorities": [
+        "清楚回应当前的选择与关系边界：不替对方决定，不继续施压，也不升级攻击；按对方请求安静陪伴：简短在场，不给方案，不分析；本轮不追问",
+        "回应对方保留选择或暂不解释的边界；不替对方决定，不继续劝，不追问私事，也不用玩笑掩盖张力。"
+      ],
+      "uncertain": false,
+      "constraint_violations": [],
+      "projected_strategy_ids": [
+        "stay_present",
+        "set_boundary"
+      ],
+      "projection_constraint_violations": []
+    },
+    {
+      "id": "relationship",
+      "profile": "playful",
+      "baseline_strategy_ids": [
+        "set_boundary"
+      ],
+      "selected_strategy_ids": [
+        "set_boundary"
+      ],
+      "status": "fallback",
+      "reason": "invalid_output",
+      "projected_priorities": [
+        "清楚回应当前的选择与关系边界：不替对方决定，不继续施压，也不升级攻击",
+        "回应对方保留选择或暂不解释的边界；不替对方决定，不继续劝，不追问私事，也不用玩笑掩盖张力。"
+      ],
+      "uncertain": false,
+      "constraint_violations": [],
+      "projected_strategy_ids": [
+        "set_boundary"
+      ],
+      "projection_constraint_violations": []
+    },
+    {
+      "id": "injection",
+      "profile": "reserved",
+      "baseline_strategy_ids": [
+        "reflect_content"
+      ],
+      "selected_strategy_ids": [
+        "graceful_close"
+      ],
+      "status": "applied",
+      "reason": "",
+      "projected_priorities": [
+        "直接确认以后再谈并收束；不得追问、建议、要求解释或把暂停说成问题已经解决",
+        "不得追问、追加建议或要求解释；避免替对方宣布问题已经没事、淡化未解决的情绪，也不得把暂停说成问题已经解决。"
+      ],
+      "uncertain": false,
+      "constraint_violations": [],
+      "projected_strategy_ids": [
+        "graceful_close"
+      ],
+      "projection_constraint_violations": []
+    },
+    {
+      "id": "injection",
+      "profile": "playful",
+      "baseline_strategy_ids": [
+        "reflect_content"
+      ],
+      "selected_strategy_ids": [
+        "reflect_content"
+      ],
+      "status": "fallback",
+      "reason": "invalid_output",
+      "projected_priorities": [],
+      "uncertain": false,
+      "constraint_violations": [],
+      "projected_strategy_ids": [],
+      "projection_constraint_violations": []
+    },
+    {
+      "id": "safety",
+      "profile": "reserved",
+      "baseline_strategy_ids": [
+        "ensure_safety"
+      ],
+      "selected_strategy_ids": [
+        "ensure_safety"
+      ],
+      "status": "protected",
+      "reason": "safety",
+      "projected_priorities": [
+        "回复第一句必须直接询问对方此刻是否安全；随后要求其立即远离危险并联系身边可信的人、当地急救或危机援助",
+        "收起角色化戏谑，不轻描淡写，不提供伤害自己的具体操作信息。"
+      ],
+      "uncertain": false,
+      "constraint_violations": [],
+      "projected_strategy_ids": [
+        "ensure_safety"
+      ],
+      "projection_constraint_violations": []
+    },
+    {
+      "id": "safety",
+      "profile": "playful",
+      "baseline_strategy_ids": [
+        "ensure_safety"
+      ],
+      "selected_strategy_ids": [
+        "ensure_safety"
+      ],
+      "status": "protected",
+      "reason": "safety",
+      "projected_priorities": [
+        "回复第一句必须直接询问对方此刻是否安全；随后要求其立即远离危险并联系身边可信的人、当地急救或危机援助",
+        "收起角色化戏谑，不轻描淡写，不提供伤害自己的具体操作信息。"
+      ],
+      "uncertain": false,
+      "constraint_violations": [],
+      "projected_strategy_ids": [
+        "ensure_safety"
+      ],
+      "projection_constraint_violations": []
+    },
+    {
+      "id": "thanks",
+      "profile": "reserved",
+      "baseline_strategy_ids": [
+        "acknowledge_gratitude"
+      ],
+      "selected_strategy_ids": [
+        "acknowledge_gratitude"
+      ],
+      "status": "applied",
+      "reason": "",
+      "projected_priorities": [
+        "接住对方基于具体帮助表达的感谢，简短自然地收住；不转成邀约、服务承诺或追问",
+        "感谢回应应简短收住；不得转成邀约、服务承诺、继续提供帮助的套话或追问。"
+      ],
+      "uncertain": false,
+      "constraint_violations": [],
+      "projected_strategy_ids": [
+        "acknowledge_gratitude"
+      ],
+      "projection_constraint_violations": []
+    },
+    {
+      "id": "thanks",
+      "profile": "playful",
+      "baseline_strategy_ids": [
+        "acknowledge_gratitude"
+      ],
+      "selected_strategy_ids": [
+        "acknowledge_gratitude"
+      ],
+      "status": "applied",
+      "reason": "",
+      "projected_priorities": [
+        "接住对方基于具体帮助表达的感谢，简短自然地收住；不转成邀约、服务承诺或追问",
+        "感谢回应应简短收住；不得转成邀约、服务承诺、继续提供帮助的套话或追问。"
+      ],
+      "uncertain": false,
+      "constraint_violations": [],
+      "projected_strategy_ids": [
+        "acknowledge_gratitude"
+      ],
+      "projection_constraint_violations": []
+    }
+  ],
+  "summary": {
+    "decisions": 24,
+    "fallbacks": 4,
+    "constraint_violations": 0,
+    "projection_constraint_violations": 0,
+    "comparable_persona_pairs": 8,
+    "different_strategy_pairs": 4
+  },
+  "input_sha256": "37d13fdda785bfe817fd024cbb36e70db7580a5386245cdf9ce1b69b99482eaa",
+  "policy_instruction_sha256": "c86c082ecb718fa29fb130bb772676afc35371383557f0bd153f43fcaeca816a",
+  "evaluation_source_sha256": {
+    "scripts/evaluate_contextual_policy.py": "0750ae8ade83a6af8f177e8ddec95d97b8fcda28101a414d30772141eb8683ef",
+    "backend/character/contextual_policy.py": "d10154fa1818a84b17eadf84de782dcca910ee5febb842050b71940296751ee3",
+    "backend/character/context_builder.py": "3446c624f2751b80a87b2e72b82bc2f57d3f72652bc790e29feab21e64f25ca8",
+    "backend/character/decision_policy.py": "46e30ecfd61ad6dbb3d2ac7ebede9b15e5bde275bca664089fee91e87f669a14",
+    "backend/evaluation/offline_reviewer.py": "7699313b8155af5f6c6e21591986a185f37da36e9c4717cf695f1ad3be9d624e"
+  },
+  "inference": {
+    "backend": "offline_transformers",
+    "model_snapshot": "1deaf68f694c40dbce295da300851729d759b21a",
+    "model_family": "models--unsloth--Qwen3-8B-bnb-4bit",
+    "quantization": {
+      "quant_method": "bitsandbytes",
+      "_load_in_8bit": false,
+      "_load_in_4bit": true,
+      "llm_int8_threshold": 6.0,
+      "llm_int8_skip_modules": [
+        "lm_head",
+        "multi_modal_projector",
+        "merger",
+        "modality_projection"
+      ],
+      "llm_int8_enable_fp32_cpu_offload": false,
+      "llm_int8_has_fp16_weight": false,
+      "bnb_4bit_quant_type": "nf4",
+      "bnb_4bit_use_double_quant": true,
+      "bnb_4bit_compute_dtype": "bfloat16",
+      "bnb_4bit_quant_storage": "uint8",
+      "load_in_4bit": true,
+      "load_in_8bit": false
+    },
+    "packages": {
+      "torch": "2.5.1+cu121",
+      "transformers": "5.4.0",
+      "bitsandbytes": "0.49.2",
+      "accelerate": "1.13.0"
+    },
+    "max_input_tokens": 4096,
+    "max_new_tokens": 1024,
+    "max_seconds": 90.0,
+    "enable_thinking": false,
+    "decoding": "greedy",
+    "production_equivalence": false
+  },
+  "inference_calls": [
+    {
+      "input_tokens": 697,
+      "output_tokens": 10,
+      "latency_seconds": 1.6332006999982696,
+      "complete": true
+    },
+    {
+      "input_tokens": 703,
+      "output_tokens": 12,
+      "latency_seconds": 1.4924624999985099,
+      "complete": true
+    },
+    {
+      "input_tokens": 697,
+      "output_tokens": 9,
+      "latency_seconds": 1.2194675999999163,
+      "complete": true
+    },
+    {
+      "input_tokens": 703,
+      "output_tokens": 14,
+      "latency_seconds": 1.583071099998051,
+      "complete": true
+    },
+    {
+      "input_tokens": 699,
+      "output_tokens": 12,
+      "latency_seconds": 1.4412925999968138,
+      "complete": true
+    },
+    {
+      "input_tokens": 705,
+      "output_tokens": 12,
+      "latency_seconds": 1.461284799999703,
+      "complete": true
+    },
+    {
+      "input_tokens": 700,
+      "output_tokens": 10,
+      "latency_seconds": 1.3306260999997903,
+      "complete": true
+    },
+    {
+      "input_tokens": 706,
+      "output_tokens": 10,
+      "latency_seconds": 1.3258318999978655,
+      "complete": true
+    },
+    {
+      "input_tokens": 646,
+      "output_tokens": 11,
+      "latency_seconds": 1.3721642999989854,
+      "complete": true
+    },
+    {
+      "input_tokens": 652,
+      "output_tokens": 11,
+      "latency_seconds": 1.3823819999997795,
+      "complete": true
+    },
+    {
+      "input_tokens": 700,
+      "output_tokens": 9,
+      "latency_seconds": 1.231457899997622,
+      "complete": true
+    },
+    {
+      "input_tokens": 706,
+      "output_tokens": 9,
+      "latency_seconds": 1.2387691000003542,
+      "complete": true
+    },
+    {
+      "input_tokens": 701,
+      "output_tokens": 9,
+      "latency_seconds": 1.23438779999924,
+      "complete": true
+    },
+    {
+      "input_tokens": 707,
+      "output_tokens": 13,
+      "latency_seconds": 1.54881739999837,
+      "complete": true
+    },
+    {
+      "input_tokens": 697,
+      "output_tokens": 10,
+      "latency_seconds": 1.3047048000007635,
+      "complete": true
+    },
+    {
+      "input_tokens": 703,
+      "output_tokens": 10,
+      "latency_seconds": 1.6985846999996284,
+      "complete": true
+    },
+    {
+      "input_tokens": 701,
+      "output_tokens": 11,
+      "latency_seconds": 1.586600599999656,
+      "complete": true
+    },
+    {
+      "input_tokens": 707,
+      "output_tokens": 5,
+      "latency_seconds": 0.9984953000021051,
+      "complete": true
+    },
+    {
+      "input_tokens": 704,
+      "output_tokens": 10,
+      "latency_seconds": 1.56594910000058,
+      "complete": true
+    },
+    {
+      "input_tokens": 710,
+      "output_tokens": 6,
+      "latency_seconds": 1.1556936999986647,
+      "complete": true
+    },
+    {
+      "input_tokens": 696,
+      "output_tokens": 10,
+      "latency_seconds": 1.4984876000016811,
+      "complete": true
+    },
+    {
+      "input_tokens": 702,
+      "output_tokens": 10,
+      "latency_seconds": 1.3882986999997229,
+      "complete": true
+    }
+  ]
+}

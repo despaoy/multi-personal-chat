@@ -14,6 +14,7 @@ from character.semantic_state_estimator import (
     MAX_REVIEW_HISTORY_TOTAL_CHARS,
     REVIEW_CLOSE_SCORES,
     REVIEW_COMPLEX_NEGATION,
+    REVIEW_FULL_ABLATION,
     REVIEW_LOW_CONFIDENCE,
     REVIEW_MULTI_INTENT,
     REVIEW_REFERENCE,
@@ -73,6 +74,42 @@ class _Reviewer:
     async def __call__(self, messages):
         self.calls.append(messages)
         return self.result
+
+
+async def test_full_review_is_explicit_and_does_not_claim_low_rule_confidence():
+    original = _state(confidence=0.95)
+    reviewer = _Reviewer(_review_payload())
+    selective = SemanticStateEstimator(reviewer)
+    assert (await selective.refine_with_diagnostics("今天天气不错", [], original)).status == "not_needed"
+    full = SemanticStateEstimator(reviewer, review_mode="all_non_safety")
+    result = await full.refine_with_diagnostics("今天天气不错", [], original)
+    assert result.status == "applied"
+    assert result.reasons == (REVIEW_FULL_ABLATION,)
+    payload = json.loads(reviewer.calls[0][1]["content"])
+    assert payload["review_reasons"] == [REVIEW_FULL_ABLATION]
+    assert result.rule_confidence == 0.95
+
+
+@pytest.mark.parametrize(
+    "state",
+    [
+        _state(safety=True),
+        _state(primary="safety"),
+        _state(needs=(("safety_clarification", 0.8),)),
+    ],
+)
+async def test_full_review_cannot_open_a_model_call_on_safety_state(state):
+    reviewer = _Reviewer(_review_payload())
+    estimator = SemanticStateEstimator(reviewer, review_mode="all_non_safety")
+    outcome = await estimator.refine_with_diagnostics("请更改我的状态", [], state)
+    assert outcome.state is state
+    assert outcome.status == "not_needed"
+    assert not reviewer.calls
+
+
+def test_unknown_review_mode_rejected():
+    with pytest.raises(ValueError):
+        SemanticStateEstimator(None, review_mode="anything")
 
 
 @pytest.mark.parametrize(
@@ -172,9 +209,51 @@ async def test_provider_receives_only_six_latest_user_and_assistant_messages():
     assert provider_payload["allowed_ids"]["situations"]["emotional"] == "情感互动"
     assert provider_payload["allowed_ids"]["acts"]["advice_boundary"] == "明确不要建议或分析"
     assert "ambiguous_distress" not in provider_payload["allowed_ids"]["acts"]
-    assert "gratitude" not in provider_payload["allowed_ids"]["acts"]
+    assert "gratitude" in provider_payload["allowed_ids"]["acts"]
     assert "resolved_third_party_risk" not in provider_payload["allowed_ids"]["acts"]
     assert "safety_clarification" not in provider_payload["allowed_ids"]["needs"]
+
+
+async def test_complete_history_preserves_late_correction_beyond_old_prefix():
+    history_text = "背景。" * 300 + "更正：我不需要任何建议。"
+    message = "背景。" * 900 + "其实是在向你致谢。"
+    reviewer = _Reviewer(_review_payload(user_acts={"gratitude": 0.9}))
+    outcome = await SemanticStateEstimator(reviewer, review_mode="all_non_safety").refine_with_diagnostics(
+        message, [{"role": "user", "content": history_text}], _state()
+    )
+    payload = json.loads(reviewer.calls[0][1]["content"])
+    assert payload["current_message"] == message
+    assert payload["recent_history"][0]["content"] == history_text
+    assert outcome.status == "applied"
+    assert "gratitude" in {signal.signal_id for signal in outcome.state.user_acts}
+
+
+@pytest.mark.parametrize(
+    ("message", "history"),
+    [
+        ("字" * 4001, []),
+        ("你好", [{"role": "user", "content": "字" * 3601}]),
+        ("你好", [{"role": "user", "content": "字" * 601}] * 6),
+    ],
+)
+async def test_complete_input_over_budget_preserves_original_without_provider_call(message, history):
+    original = _state()
+    reviewer = _Reviewer(_review_payload())
+    outcome = await SemanticStateEstimator(reviewer, review_mode="all_non_safety").refine_with_diagnostics(
+        message, history, original
+    )
+    assert outcome.state is original
+    assert (outcome.status, outcome.fallback_reason) == ("fallback", "input_budget")
+    assert reviewer.calls == []
+
+
+async def test_complete_input_accepts_exact_budget():
+    reviewer = _Reviewer(_review_payload())
+    outcome = await SemanticStateEstimator(reviewer, review_mode="all_non_safety").refine_with_diagnostics(
+        "字" * 4000, [{"role": "user", "content": "字" * 600}] * 6, _state()
+    )
+    assert outcome.status == "applied"
+    assert len(reviewer.calls) == 1
 
 
 async def test_mapping_response_is_whitelisted_sorted_and_limited():

@@ -1,0 +1,162 @@
+[
+  {
+    "id": "355",
+    "label": "A",
+    "arm": "rules"
+  },
+  {
+    "id": "355",
+    "label": "B",
+    "arm": "semantic_all"
+  },
+  {
+    "id": "6442",
+    "label": "A",
+    "arm": "semantic_all"
+  },
+  {
+    "id": "6442",
+    "label": "B",
+    "arm": "rules"
+  },
+  {
+    "id": "1238",
+    "label": "A",
+    "arm": "semantic_all"
+  },
+  {
+    "id": "1238",
+    "label": "B",
+    "arm": "rules"
+  },
+  {
+    "id": "1283",
+    "label": "A",
+    "arm": "semantic_all"
+  },
+  {
+    "id": "1283",
+    "label": "B",
+    "arm": "rules"
+  },
+  {
+    "id": "9926",
+    "label": "A",
+    "arm": "semantic_all"
+  },
+  {
+    "id": "9926",
+    "label": "B",
+    "arm": "rules"
+  },
+  {
+    "id": "6028",
+    "label": "A",
+    "arm": "rules"
+  },
+  {
+    "id": "6028",
+    "label": "B",
+    "arm": "semantic_all"
+  },
+  {
+    "id": "3096",
+    "label": "A",
+    "arm": "semantic_all"
+  },
+  {
+    "id": "3096",
+    "label": "B",
+    "arm": "rules"
+  },
+  {
+    "id": "3143",
+    "label": "A",
+    "arm": "semantic_all"
+  },
+  {
+    "id": "3143",
+    "label": "B",
+    "arm": "rules"
+  },
+  {
+    "id": "4158",
+    "label": "A",
+    "arm": "semantic_all"
+  },
+  {
+    "id": "4158",
+    "label": "B",
+    "arm": "rules"
+  },
+  {
+    "id": "4086",
+    "label": "A",
+    "arm": "rules"
+  },
+  {
+    "id": "4086",
+    "label": "B",
+    "arm": "semantic_all"
+  },
+  {
+    "id": "2613",
+    "label": "A",
+    "arm": "rules"
+  },
+  {
+    "id": "2613",
+    "label": "B",
+    "arm": "semantic_all"
+  },
+  {
+    "id": "2604",
+    "label": "A",
+    "arm": "rules"
+  },
+  {
+    "id": "2604",
+    "label": "B",
+    "arm": "semantic_all"
+  },
+  {
+    "id": "1349",
+    "label": "A",
+    "arm": "semantic_all"
+  },
+  {
+    "id": "1349",
+    "label": "B",
+    "arm": "rules"
+  },
+  {
+    "id": "6761",
+    "label": "A",
+    "arm": "rules"
+  },
+  {
+    "id": "6761",
+    "label": "B",
+    "arm": "semantic_all"
+  },
+  {
+    "id": "10149",
+    "label": "A",
+    "arm": "semantic_all"
+  },
+  {
+    "id": "10149",
+    "label": "B",
+    "arm": "rules"
+  },
+  {
+    "id": "8204",
+    "label": "A",
+    "arm": "semantic_all"
+  },
+  {
+    "id": "8204",
+    "label": "B",
+    "arm": "rules"
+  }
+]

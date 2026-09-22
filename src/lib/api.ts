@@ -152,6 +152,9 @@ export interface HealthResponse {
 
 /** 消息生成请求参数 */
 export interface GenerateRequest {
+  branchId?: string;
+  platform?: string;
+  traceId?: string;
   message: string;
   sessionType?: string;
   sessionId?: string;
@@ -162,6 +165,10 @@ export interface GenerateRequest {
 
 /** 消息生成响应 */
 export interface GenerateResponse {
+  branchId?: string;
+  branchRevision?: number;
+  evidenceSources?: Array<{id?: string; type: string; scope?: string; usage: string; citation?: Record<string, unknown>}>;
+  warnings?: string[];
   reply: string;
   model: string;
   costTime: number;
@@ -610,6 +617,9 @@ export interface CharacterRelationshipRecord {
 
 /** 角色长期记忆记录 */
 export interface CharacterMemoryRecord {
+  metadata?: { category?: string; resolved?: boolean };
+  status?: string;
+  valid_to?: string | null;
   id: number;
   character_id: string;
   memory_type: string;
@@ -687,7 +697,8 @@ class ApiClient {
       let detail = '';
       try {
         const errBody = await response.json();
-        detail = errBody?.detail || errBody?.message || JSON.stringify(errBody);
+        const rawDetail = errBody?.detail || errBody?.message || errBody;
+        detail = typeof rawDetail === 'string' ? rawDetail : JSON.stringify(rawDetail);
       } catch {
         detail = response.statusText;
       }
@@ -872,6 +883,12 @@ class ApiClient {
     return this.request<GenerateResponse>('/generate', {
       method: 'POST',
       body: JSON.stringify(request),
+    });
+  }
+
+  async narrative<T>(path = '', body?: unknown): Promise<T> {
+    return this.request<T>(`/narrative-branches${path}`, body === undefined ? {} : {
+      method: 'POST', body: JSON.stringify(body),
     });
   }
 
@@ -1581,11 +1598,21 @@ class ApiClient {
     return this.request(`/characters/${encodeURIComponent(characterId)}/memories?${buildScopeQuery(scope)}`);
   }
 
+  async createRelationshipNote(characterId: string, scope: CharacterMemoryScope, data: { category: string; content: string }): Promise<{ success: boolean }> {
+    return this.request(`/characters/${encodeURIComponent(characterId)}/relationship-notes?${buildScopeQuery(scope)}`, {
+      method: 'POST', body: JSON.stringify(data),
+    });
+  }
+
+  async listRelationshipNotes(characterId: string, scope: CharacterMemoryScope): Promise<{ success: boolean; memories: CharacterMemoryRecord[] }> {
+    return this.request(`/characters/${encodeURIComponent(characterId)}/relationship-notes?${buildScopeQuery(scope)}`);
+  }
+
   async updateCharacterMemory(
     characterId: string,
     memoryId: number,
     scope: CharacterMemoryScope,
-    data: { content: string; importance: number },
+    data: { content: string; importance: number; resolved?: boolean },
   ): Promise<{ success: boolean }> {
     return this.request(`/characters/${encodeURIComponent(characterId)}/memories/${memoryId}?${buildScopeQuery(scope)}`, {
       method: 'PUT',

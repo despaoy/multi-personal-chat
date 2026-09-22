@@ -55,7 +55,8 @@ def test_kisaki_profile_loads(registry: CharacterProfileRegistry):
     profile = registry.get_profile(KISAKI_ID)
     assert profile.character_id == KISAKI_ID
     assert profile.display_name == "月社妃"
-    assert profile.version == "v1"
+    assert profile.version == "v3-conversation-flow"
+    assert profile.relationship_style and profile.relationship_examples
 
 
 def test_kisaki_profile_contains_required_sections(registry: CharacterProfileRegistry):
@@ -151,7 +152,7 @@ def test_list_profiles_returns_brief_info(registry: CharacterProfileRegistry):
     assert entries
     kisaki = next(e for e in entries if e["character_id"] == KISAKI_ID)
     assert kisaki["display_name"] == "月社妃"
-    assert kisaki["version"] == "v1"
+    assert kisaki["version"] == "v3-conversation-flow"
     # 简要列表只含三个字段，不泄漏完整画像
     assert set(kisaki.keys()) == {"character_id", "display_name", "version"}
 

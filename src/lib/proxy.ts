@@ -24,6 +24,7 @@ interface ProxyRoutePolicy {
 // 超时等级也在同一份清单中声明，新增接口不需要同步维护第二个数组。
 const PROXY_ROUTE_POLICIES: readonly ProxyRoutePolicy[] = [
   { prefix: '/api/generate', timeout: 'long' },
+  { prefix: '/api/narrative-branches', timeout: 'long' },
   { prefix: '/api/training/start', timeout: 'long' },
   { prefix: '/api/training/generate-dialogues', timeout: 'long' },
   { prefix: '/api/knowledge/bases/', timeout: 'long' },

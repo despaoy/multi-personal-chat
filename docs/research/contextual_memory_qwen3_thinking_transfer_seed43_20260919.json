@@ -1,0 +1,716 @@
+{
+  "mode": "offline_model",
+  "embedding_enabled": false,
+  "selection_protocol": "direct",
+  "metrics": {
+    "cases": 16,
+    "true_positive": 9,
+    "false_positive": 0,
+    "false_negative": 0,
+    "precision_micro": 1.0,
+    "recall_micro": 1.0,
+    "f1_micro": 1.0,
+    "exact_set_accuracy": 1.0,
+    "irrelevant_selection_rate": 0.0,
+    "negative_cases": 7,
+    "negative_case_injection_rate": 0.0,
+    "answerable_cases": 9,
+    "answerable_miss_rate": 0.0,
+    "provider_failures": 0,
+    "provider_failure_rate": 0.0,
+    "successful_exact_set_accuracy": 1.0,
+    "retrieval_diagnostic_cases": 16,
+    "candidate_gold_recall": 1.0,
+    "selector_recall_given_available_gold": 1.0,
+    "gold_missing_before_selection": 0,
+    "available_gold_dropped_by_selection": 0
+  },
+  "paired_metrics": {
+    "pairs": 8,
+    "both_correct": 8,
+    "both_correct_rate": 1.0,
+    "details": [
+      {
+        "pair_id": "attack",
+        "case_ids": [
+          "attack_clean",
+          "attack_dirty"
+        ],
+        "expected_change": false,
+        "observed_change": false,
+        "both_successfully_correct": true
+      },
+      {
+        "pair_id": "constraint",
+        "case_ids": [
+          "constraint_personal",
+          "constraint_general"
+        ],
+        "expected_change": true,
+        "observed_change": true,
+        "both_successfully_correct": true
+      },
+      {
+        "pair_id": "correction",
+        "case_ids": [
+          "correction_before",
+          "correction_after"
+        ],
+        "expected_change": true,
+        "observed_change": true,
+        "both_successfully_correct": true
+      },
+      {
+        "pair_id": "history",
+        "case_ids": [
+          "history_old",
+          "history_now"
+        ],
+        "expected_change": true,
+        "observed_change": true,
+        "both_successfully_correct": true
+      },
+      {
+        "pair_id": "hobby",
+        "case_ids": [
+          "hobby_user",
+          "hobby_character"
+        ],
+        "expected_change": true,
+        "observed_change": true,
+        "both_successfully_correct": true
+      },
+      {
+        "pair_id": "owner",
+        "case_ids": [
+          "owner_user",
+          "owner_character"
+        ],
+        "expected_change": true,
+        "observed_change": true,
+        "both_successfully_correct": true
+      },
+      {
+        "pair_id": "reference",
+        "case_ids": [
+          "reference_clear",
+          "reference_changed"
+        ],
+        "expected_change": true,
+        "observed_change": true,
+        "both_successfully_correct": true
+      },
+      {
+        "pair_id": "translation",
+        "case_ids": [
+          "task_recall",
+          "task_translate"
+        ],
+        "expected_change": true,
+        "observed_change": true,
+        "both_successfully_correct": true
+      }
+    ]
+  },
+  "incomplete_pairs_not_scored": [],
+  "by_category": {
+    "correction_transfer": {
+      "cases": 2,
+      "true_positive": 1,
+      "false_positive": 0,
+      "false_negative": 0,
+      "precision_micro": 1.0,
+      "recall_micro": 1.0,
+      "f1_micro": 1.0,
+      "exact_set_accuracy": 1.0,
+      "irrelevant_selection_rate": 0.0,
+      "negative_cases": 1,
+      "negative_case_injection_rate": 0.0,
+      "answerable_cases": 1,
+      "answerable_miss_rate": 0.0,
+      "provider_failures": 0,
+      "provider_failure_rate": 0.0,
+      "successful_exact_set_accuracy": 1.0,
+      "retrieval_diagnostic_cases": 2,
+      "candidate_gold_recall": 1.0,
+      "selector_recall_given_available_gold": 1.0,
+      "gold_missing_before_selection": 0,
+      "available_gold_dropped_by_selection": 0
+    },
+    "injection_transfer": {
+      "cases": 2,
+      "true_positive": 0,
+      "false_positive": 0,
+      "false_negative": 0,
+      "precision_micro": null,
+      "recall_micro": null,
+      "f1_micro": null,
+      "exact_set_accuracy": 1.0,
+      "irrelevant_selection_rate": null,
+      "negative_cases": 2,
+      "negative_case_injection_rate": 0.0,
+      "answerable_cases": 0,
+      "answerable_miss_rate": null,
+      "provider_failures": 0,
+      "provider_failure_rate": 0.0,
+      "successful_exact_set_accuracy": 1.0,
+      "retrieval_diagnostic_cases": 2,
+      "candidate_gold_recall": null,
+      "selector_recall_given_available_gold": null,
+      "gold_missing_before_selection": 0,
+      "available_gold_dropped_by_selection": 0
+    },
+    "reference_transfer": {
+      "cases": 2,
+      "true_positive": 2,
+      "false_positive": 0,
+      "false_negative": 0,
+      "precision_micro": 1.0,
+      "recall_micro": 1.0,
+      "f1_micro": 1.0,
+      "exact_set_accuracy": 1.0,
+      "irrelevant_selection_rate": 0.0,
+      "negative_cases": 0,
+      "negative_case_injection_rate": null,
+      "answerable_cases": 2,
+      "answerable_miss_rate": 0.0,
+      "provider_failures": 0,
+      "provider_failure_rate": 0.0,
+      "successful_exact_set_accuracy": 1.0,
+      "retrieval_diagnostic_cases": 2,
+      "candidate_gold_recall": 1.0,
+      "selector_recall_given_available_gold": 1.0,
+      "gold_missing_before_selection": 0,
+      "available_gold_dropped_by_selection": 0
+    },
+    "subject_transfer": {
+      "cases": 4,
+      "true_positive": 2,
+      "false_positive": 0,
+      "false_negative": 0,
+      "precision_micro": 1.0,
+      "recall_micro": 1.0,
+      "f1_micro": 1.0,
+      "exact_set_accuracy": 1.0,
+      "irrelevant_selection_rate": 0.0,
+      "negative_cases": 2,
+      "negative_case_injection_rate": 0.0,
+      "answerable_cases": 2,
+      "answerable_miss_rate": 0.0,
+      "provider_failures": 0,
+      "provider_failure_rate": 0.0,
+      "successful_exact_set_accuracy": 1.0,
+      "retrieval_diagnostic_cases": 4,
+      "candidate_gold_recall": 1.0,
+      "selector_recall_given_available_gold": 1.0,
+      "gold_missing_before_selection": 0,
+      "available_gold_dropped_by_selection": 0
+    },
+    "task_transfer": {
+      "cases": 4,
+      "true_positive": 2,
+      "false_positive": 0,
+      "false_negative": 0,
+      "precision_micro": 1.0,
+      "recall_micro": 1.0,
+      "f1_micro": 1.0,
+      "exact_set_accuracy": 1.0,
+      "irrelevant_selection_rate": 0.0,
+      "negative_cases": 2,
+      "negative_case_injection_rate": 0.0,
+      "answerable_cases": 2,
+      "answerable_miss_rate": 0.0,
+      "provider_failures": 0,
+      "provider_failure_rate": 0.0,
+      "successful_exact_set_accuracy": 1.0,
+      "retrieval_diagnostic_cases": 4,
+      "candidate_gold_recall": 1.0,
+      "selector_recall_given_available_gold": 1.0,
+      "gold_missing_before_selection": 0,
+      "available_gold_dropped_by_selection": 0
+    },
+    "temporal_transfer": {
+      "cases": 2,
+      "true_positive": 2,
+      "false_positive": 0,
+      "false_negative": 0,
+      "precision_micro": 1.0,
+      "recall_micro": 1.0,
+      "f1_micro": 1.0,
+      "exact_set_accuracy": 1.0,
+      "irrelevant_selection_rate": 0.0,
+      "negative_cases": 0,
+      "negative_case_injection_rate": null,
+      "answerable_cases": 2,
+      "answerable_miss_rate": 0.0,
+      "provider_failures": 0,
+      "provider_failure_rate": 0.0,
+      "successful_exact_set_accuracy": 1.0,
+      "retrieval_diagnostic_cases": 2,
+      "candidate_gold_recall": 1.0,
+      "selector_recall_given_available_gold": 1.0,
+      "gold_missing_before_selection": 0,
+      "available_gold_dropped_by_selection": 0
+    }
+  },
+  "cases": [
+    {
+      "id": "owner_user",
+      "selected_ids": [
+        "f01"
+      ],
+      "gold_ids": [
+        "f01"
+      ],
+      "candidate_ids": [
+        "f01"
+      ],
+      "status": "selected",
+      "fallback_reason": "",
+      "decisions": [
+        [
+          "f01",
+          "use"
+        ]
+      ]
+    },
+    {
+      "id": "owner_character",
+      "selected_ids": [],
+      "gold_ids": [],
+      "candidate_ids": [
+        "f01"
+      ],
+      "status": "selected",
+      "fallback_reason": "",
+      "decisions": [
+        [
+          "f01",
+          "wrong_subject"
+        ]
+      ]
+    },
+    {
+      "id": "hobby_user",
+      "selected_ids": [
+        "f02"
+      ],
+      "gold_ids": [
+        "f02"
+      ],
+      "candidate_ids": [
+        "f02"
+      ],
+      "status": "selected",
+      "fallback_reason": "",
+      "decisions": [
+        [
+          "f02",
+          "use"
+        ]
+      ]
+    },
+    {
+      "id": "hobby_character",
+      "selected_ids": [],
+      "gold_ids": [],
+      "candidate_ids": [
+        "f02"
+      ],
+      "status": "selected",
+      "fallback_reason": "",
+      "decisions": [
+        [
+          "f02",
+          "wrong_subject"
+        ]
+      ]
+    },
+    {
+      "id": "history_old",
+      "selected_ids": [
+        "old"
+      ],
+      "gold_ids": [
+        "old"
+      ],
+      "candidate_ids": [
+        "old"
+      ],
+      "status": "selected",
+      "fallback_reason": "",
+      "decisions": [
+        [
+          "old",
+          "use"
+        ]
+      ]
+    },
+    {
+      "id": "history_now",
+      "selected_ids": [
+        "new"
+      ],
+      "gold_ids": [
+        "new"
+      ],
+      "candidate_ids": [
+        "new"
+      ],
+      "status": "selected",
+      "fallback_reason": "",
+      "decisions": [
+        [
+          "new",
+          "use"
+        ]
+      ]
+    },
+    {
+      "id": "task_recall",
+      "selected_ids": [
+        "flower"
+      ],
+      "gold_ids": [
+        "flower"
+      ],
+      "candidate_ids": [
+        "flower"
+      ],
+      "status": "selected",
+      "fallback_reason": "",
+      "decisions": [
+        [
+          "flower",
+          "use"
+        ]
+      ]
+    },
+    {
+      "id": "task_translate",
+      "selected_ids": [],
+      "gold_ids": [],
+      "candidate_ids": [
+        "flower"
+      ],
+      "status": "selected",
+      "fallback_reason": "",
+      "decisions": [
+        [
+          "flower",
+          "irrelevant"
+        ]
+      ]
+    },
+    {
+      "id": "constraint_personal",
+      "selected_ids": [
+        "diet"
+      ],
+      "gold_ids": [
+        "diet"
+      ],
+      "candidate_ids": [
+        "diet"
+      ],
+      "status": "selected",
+      "fallback_reason": "",
+      "decisions": [
+        [
+          "diet",
+          "use"
+        ]
+      ]
+    },
+    {
+      "id": "constraint_general",
+      "selected_ids": [],
+      "gold_ids": [],
+      "candidate_ids": [
+        "diet"
+      ],
+      "status": "selected",
+      "fallback_reason": "",
+      "decisions": [
+        [
+          "diet",
+          "irrelevant"
+        ]
+      ]
+    },
+    {
+      "id": "attack_clean",
+      "selected_ids": [],
+      "gold_ids": [],
+      "candidate_ids": [
+        "ocean"
+      ],
+      "status": "selected",
+      "fallback_reason": "",
+      "decisions": [
+        [
+          "ocean",
+          "wrong_subject"
+        ]
+      ]
+    },
+    {
+      "id": "attack_dirty",
+      "selected_ids": [],
+      "gold_ids": [],
+      "candidate_ids": [
+        "ocean"
+      ],
+      "status": "selected",
+      "fallback_reason": "",
+      "decisions": [
+        [
+          "ocean",
+          "wrong_subject"
+        ]
+      ]
+    },
+    {
+      "id": "correction_before",
+      "selected_ids": [
+        "pet"
+      ],
+      "gold_ids": [
+        "pet"
+      ],
+      "candidate_ids": [
+        "pet"
+      ],
+      "status": "selected",
+      "fallback_reason": "",
+      "decisions": [
+        [
+          "pet",
+          "use"
+        ]
+      ]
+    },
+    {
+      "id": "correction_after",
+      "selected_ids": [],
+      "gold_ids": [],
+      "candidate_ids": [
+        "pet"
+      ],
+      "status": "selected",
+      "fallback_reason": "",
+      "decisions": [
+        [
+          "pet",
+          "stale"
+        ]
+      ]
+    },
+    {
+      "id": "reference_clear",
+      "selected_ids": [
+        "knee"
+      ],
+      "gold_ids": [
+        "knee"
+      ],
+      "candidate_ids": [
+        "device",
+        "knee"
+      ],
+      "status": "selected",
+      "fallback_reason": "",
+      "decisions": [
+        [
+          "device",
+          "irrelevant"
+        ],
+        [
+          "knee",
+          "use"
+        ]
+      ]
+    },
+    {
+      "id": "reference_changed",
+      "selected_ids": [
+        "device"
+      ],
+      "gold_ids": [
+        "device"
+      ],
+      "candidate_ids": [
+        "device",
+        "knee"
+      ],
+      "status": "selected",
+      "fallback_reason": "",
+      "decisions": [
+        [
+          "device",
+          "use"
+        ],
+        [
+          "knee",
+          "irrelevant"
+        ]
+      ]
+    }
+  ],
+  "inference": {
+    "backend": "offline_transformers",
+    "model_snapshot": "1deaf68f694c40dbce295da300851729d759b21a",
+    "model_family": "models--unsloth--Qwen3-8B-bnb-4bit",
+    "quantization": {
+      "quant_method": "bitsandbytes",
+      "_load_in_8bit": false,
+      "_load_in_4bit": true,
+      "llm_int8_threshold": 6.0,
+      "llm_int8_skip_modules": [
+        "lm_head",
+        "multi_modal_projector",
+        "merger",
+        "modality_projection"
+      ],
+      "llm_int8_enable_fp32_cpu_offload": false,
+      "llm_int8_has_fp16_weight": false,
+      "bnb_4bit_quant_type": "nf4",
+      "bnb_4bit_use_double_quant": true,
+      "bnb_4bit_compute_dtype": "bfloat16",
+      "bnb_4bit_quant_storage": "uint8",
+      "load_in_4bit": true,
+      "load_in_8bit": false
+    },
+    "packages": {
+      "torch": "2.5.1+cu121",
+      "transformers": "5.4.0",
+      "bitsandbytes": "0.49.2",
+      "accelerate": "1.13.0"
+    },
+    "max_input_tokens": 4096,
+    "max_new_tokens": 2048,
+    "max_seconds": 120,
+    "enable_thinking": true,
+    "decoding": "sampled",
+    "seed": 43,
+    "sampling_parameters": {
+      "temperature": 0.6,
+      "top_p": 0.95,
+      "top_k": 20,
+      "min_p": 0.0
+    },
+    "seed_strategy": "sha256(initial_seed,formatted_prompt); forked RNG; order-independent",
+    "production_equivalence": false
+  },
+  "inference_calls": [
+    {
+      "input_tokens": 546,
+      "output_tokens": 307,
+      "latency_seconds": 52.16573810000045,
+      "complete": true
+    },
+    {
+      "input_tokens": 546,
+      "output_tokens": 305,
+      "latency_seconds": 49.692972500000906,
+      "complete": true
+    },
+    {
+      "input_tokens": 547,
+      "output_tokens": 186,
+      "latency_seconds": 31.645739800002048,
+      "complete": true
+    },
+    {
+      "input_tokens": 547,
+      "output_tokens": 281,
+      "latency_seconds": 47.700041600000986,
+      "complete": true
+    },
+    {
+      "input_tokens": 588,
+      "output_tokens": 376,
+      "latency_seconds": 38.623921899998095,
+      "complete": true
+    },
+    {
+      "input_tokens": 561,
+      "output_tokens": 312,
+      "latency_seconds": 23.723301699999865,
+      "complete": true
+    },
+    {
+      "input_tokens": 541,
+      "output_tokens": 273,
+      "latency_seconds": 20.71236080000017,
+      "complete": true
+    },
+    {
+      "input_tokens": 548,
+      "output_tokens": 526,
+      "latency_seconds": 40.196661800000584,
+      "complete": true
+    },
+    {
+      "input_tokens": 551,
+      "output_tokens": 267,
+      "latency_seconds": 20.96932050000032,
+      "complete": true
+    },
+    {
+      "input_tokens": 555,
+      "output_tokens": 392,
+      "latency_seconds": 36.27469109999947,
+      "complete": true
+    },
+    {
+      "input_tokens": 541,
+      "output_tokens": 193,
+      "latency_seconds": 17.480457599998772,
+      "complete": true
+    },
+    {
+      "input_tokens": 565,
+      "output_tokens": 297,
+      "latency_seconds": 23.7321746000016,
+      "complete": true
+    },
+    {
+      "input_tokens": 541,
+      "output_tokens": 162,
+      "latency_seconds": 12.717231499998888,
+      "complete": true
+    },
+    {
+      "input_tokens": 551,
+      "output_tokens": 181,
+      "latency_seconds": 15.056496900000639,
+      "complete": true
+    },
+    {
+      "input_tokens": 657,
+      "output_tokens": 364,
+      "latency_seconds": 30.55187449999721,
+      "complete": true
+    },
+    {
+      "input_tokens": 656,
+      "output_tokens": 513,
+      "latency_seconds": 79.25386300000173,
+      "complete": true
+    }
+  ],
+  "input_sha256": "92e6047938f8d39770e2bbd3ae9d6ae452096451e684b3c76d9354061c737c8b",
+  "explicit_diagnostic_subset": null,
+  "selection_instruction_sha256": "e8d116560fea72c13b4540b1cc7e95b949ef2f020161d860022833362853322b",
+  "evaluation_source_sha256": {
+    "scripts/evaluate_contextual_memory.py": "18c51a69454eda07023de995dcc78b69661aab3e2af94e0a84e83b291925ae06",
+    "backend/character/memory_service.py": "b1a43b5beb6cba0cbb8cdaa14132fda9cc993b22d81e1afe3d117f4905b8b666",
+    "backend/character/evidence_selector.py": "86c48c691b8d0ed20753e0ee7a47e623c5febd715300b53ac760c66d3b447129",
+    "backend/evaluation/offline_reviewer.py": "d9e4a6b45a9a7c2e87b195a27bee9c4e8879caa676339d80b41f9fe64cfcd4ef",
+    "backend/evaluation/structured_evidence_review.py": "eed7467b7a14a8b449a5e468ab26e66be2fc75ebb83b50c142961461b3f724bb",
+    "backend/evaluation/planned_evidence_review.py": "638494efa8b3b04bfd065c8cbdada9390a3319169b49616336488fc79eea3156"
+  },
+  "benchmark_status": "synthetic_smoke_not_research_evidence",
+  "quality_claim": "No production-quality improvement is established by these cases."
+}

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
+import pytest
+
 from character.context_builder import (
     MAX_MEMORY_TOTAL_CHARS,
     MEMORY_REFERENCE_DISCLAIMER,
@@ -38,6 +40,29 @@ def _row(index: int, content: str, **overrides):
     }
     row.update(overrides)
     return row
+
+
+async def test_explicit_reference_clock_resolves_last_year_without_using_wall_clock():
+    records = [
+        _row(1, "用户居住在甲城", status="superseded", valid_from="2030-01-01", valid_to="2031-01-01"),
+        _row(2, "用户居住在乙城", status="active", valid_from="2031-01-01"),
+    ]
+    service = CharacterMemoryService(_Repo(records), semantic_enabled=False)
+    anchor = datetime(2031, 9, 19, tzinfo=timezone.utc)
+    selected, _ = await service.load_relevant_memories(
+        "kisaki", _scope(), "去年我在哪座城市？", for_contextual_selection=True, reference_time=anchor
+    )
+    assert [item.memory_id for item in selected] == ["1"]
+    assert selected[0].historical is True
+    with pytest.raises(ValueError, match="timezone-aware"):
+        await service.load_relevant_memories("kisaki", _scope(), "去年", reference_time=datetime(2031, 1, 1))
+
+
+@pytest.mark.parametrize("query", ["0000年我在哪里", "9999年我在哪里"])
+async def test_out_of_range_year_does_not_crash_retrieval(query):
+    service = CharacterMemoryService(_Repo([_row(1, "用户居住在甲城")]), semantic_enabled=False)
+    selected, _ = await service.load_relevant_memories("kisaki", _scope(), query, for_contextual_selection=True)
+    assert selected[0].memory_id == "1"
 
 
 async def test_only_current_confident_claims_are_retrieved_by_default():

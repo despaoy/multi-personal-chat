@@ -81,6 +81,9 @@ class CharacterProfile:
     canonical_relationships: tuple[str, ...] = ()
     speaking_style: tuple[str, ...] = ()
     boundaries: tuple[str, ...] = ()
+    relationship_style: tuple[str, ...] = ()
+    relationship_examples: tuple[str, ...] = ()
+    response_preferences: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -200,6 +203,7 @@ class DecisionPlan:
     avoid: str = ""
     strategy_ids: tuple[str, ...] = ()
     confidence: float = 0.0
+    selection_source: str = "rule"
 
 
 @dataclass(frozen=True)
@@ -232,3 +236,4 @@ class CompiledCharacterContext:
     dynamic_context: str
     reference_context: str
     used_memory_ids: tuple[str, ...] = ()
+    branch_context: str = ""

@@ -751,7 +751,6 @@ def init_bot():
     """初始化机器人"""
     import nonebot
     from nonebot.adapters.onebot.v11 import Adapter as OneBotV11Adapter
-    from nonebot import on_command, on_message
 
     logger.info("=" * 50)
     logger.info(f"QQ自动回复机器人 - 当前角色: {_current_lora}")

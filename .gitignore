@@ -183,7 +183,7 @@ backend/benchmarks/test_public.py
 # === Trae IDE ===
 .trae/
 
-# === 项目内部文档（仅保留 README.md）===
+# === 本地工作说明（公开文档保留在 docs/）===
 AGENTS.md
 FILE_AUDIT.md
 PROJECT_OVERVIEW.md
@@ -248,3 +248,8 @@ scripts/qwen3_tokenizer/
 # === Local lab runtime / non-project presentation files ===
 /runtime/
 /*.pptx
+
+# Local test runtimes, lint cache and personal comparison notes.
+/.codex-test-runtime-*/
+.ruff_cache/
+/legacy_vs_multiscale_review.md

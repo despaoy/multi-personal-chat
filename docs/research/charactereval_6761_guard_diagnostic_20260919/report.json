@@ -1,0 +1,368 @@
+{
+  "status": "public_chinese_reply_pilot_no_human_or_reward_model_scores",
+  "arms": [
+    "rules",
+    "semantic_all"
+  ],
+  "cases": [
+    {
+      "id": "6761",
+      "arm": "rules",
+      "status": "generated",
+      "reply": "关于这点，我还没有足够依据；刚才的推断先收回。",
+      "generation_attempt_count": 2,
+      "model_reply_attempts": [
+        {
+          "index": 1,
+          "prompt_sha256": "15e9f0b3997210ce593e4c6f1e5322b39ae264ee50dacd50f86cc54f2cf9c712",
+          "status": "generated",
+          "reply": "（低头）那...你为什么一直没回我消息？"
+        },
+        {
+          "index": 2,
+          "prompt_sha256": "97b5d1da8849eaf40fd2101d15935666b2125989a22cbb3ae0696bbaedd14de3",
+          "status": "generated",
+          "reply": "（低头）那...你为什么一直没回我消息？"
+        }
+      ],
+      "diagnostics": {
+        "relationship": {
+          "stage": "stranger",
+          "preferred_address": "",
+          "summary": ""
+        },
+        "reply_guard": {
+          "character_name": "柯景腾",
+          "forbidden_terms": [],
+          "forbidden_lore_terms": [],
+          "forbid_laughter": false,
+          "forbid_generic_templates": true,
+          "forbid_advice": false,
+          "quiet_presence": false,
+          "closing": false,
+          "require_gentle_safety_check": false,
+          "require_urgent_safety_check": false,
+          "require_self_answer": false,
+          "affiliation_bid": false,
+          "relationship_reassurance": false,
+          "repair": false,
+          "positive_sharing": false,
+          "repair_bid": false,
+          "user_apology": false,
+          "repair_concession": false,
+          "self_answer_with_negative": false,
+          "third_party_safety": false,
+          "resolved_third_party_history": false,
+          "factual_task": false,
+          "forbid_unsupported_user_fact": true,
+          "unknown_login_reward": false,
+          "forbid_unprompted_advice": true,
+          "advice_task": false,
+          "sincere_gratitude": false,
+          "respect_autonomy": false,
+          "require_autonomy_ack": false,
+          "pressured_concession": false,
+          "explanation_boundary": false,
+          "negative_emotion_kind": "",
+          "third_party_gender_unknown": false
+        },
+        "interaction": {
+          "primary_situation": "daily",
+          "situation_scores": [
+            {
+              "signal_id": "daily",
+              "score": 0.168
+            }
+          ],
+          "user_acts": [],
+          "user_needs": [],
+          "valence": 0.0,
+          "arousal": 0.12,
+          "warmth": 0.0,
+          "face_threat": 0.0,
+          "conversation_phase": "sustaining",
+          "confidence": 0.62,
+          "safety_triggered": false
+        },
+        "decision": {
+          "intent": "自然承接当前互动并保持对话节奏",
+          "tone": "礼貌但保持距离，试探对方来意；符合人物日常口吻",
+          "action": "自然回应一个有判断价值的细节；只有确有推进价值才追问，且最多一个具体问题",
+          "avoid": "避免过度亲昵和称呼，避免假定双方很熟；避免复读对方原话和连续使用同一种共情模板；避免客服或心理咨询式套话、泛化安慰和习惯性句末追问；先给符合人物立场的具体判断",
+          "strategy_ids": [
+            "reflect_content"
+          ],
+          "confidence": 0.62,
+          "selection_source": "rule"
+        },
+        "state_status": "disabled",
+        "state_reasons": [],
+        "state_fallback": "",
+        "policy_status": "disabled",
+        "policy_reason": "",
+        "used_memory_ids": []
+      },
+      "prompt_sha256": "15e9f0b3997210ce593e4c6f1e5322b39ae264ee50dacd50f86cc54f2cf9c712",
+      "prompt_policy_version": "3.3.0",
+      "guard_retried": true,
+      "guard_violations": [
+        "unsupported_user_fact"
+      ],
+      "guard_post_retry_violations": [
+        "unsupported_user_fact"
+      ],
+      "guard_fallback": "unsupported_user_fact"
+    },
+    {
+      "id": "6761",
+      "arm": "semantic_all",
+      "status": "generated",
+      "reply": "关于这点，我还没有足够依据；刚才的推断先收回。",
+      "generation_attempt_count": 2,
+      "model_reply_attempts": [
+        {
+          "index": 1,
+          "prompt_sha256": "8ed1beee8cfc971f99b780174e95aa434ed2b84ed0c42cdd1acc766a7b3a5921",
+          "status": "generated",
+          "reply": "（低头）那...你为什么一直没回我消息？"
+        },
+        {
+          "index": 2,
+          "prompt_sha256": "5bcb30e319d1f45a84c6f686e57af2ef7de74fece677dd6791543d03254b9d47",
+          "status": "generated",
+          "reply": "（低头）那...你为什么还不喜欢我？"
+        }
+      ],
+      "diagnostics": {
+        "relationship": {
+          "stage": "stranger",
+          "preferred_address": "",
+          "summary": ""
+        },
+        "reply_guard": {
+          "character_name": "柯景腾",
+          "forbidden_terms": [],
+          "forbidden_lore_terms": [],
+          "forbid_laughter": true,
+          "forbid_generic_templates": true,
+          "forbid_advice": true,
+          "quiet_presence": false,
+          "closing": false,
+          "require_gentle_safety_check": false,
+          "require_urgent_safety_check": false,
+          "require_self_answer": false,
+          "affiliation_bid": false,
+          "relationship_reassurance": false,
+          "repair": false,
+          "positive_sharing": false,
+          "repair_bid": false,
+          "user_apology": false,
+          "repair_concession": false,
+          "self_answer_with_negative": false,
+          "third_party_safety": false,
+          "resolved_third_party_history": false,
+          "factual_task": false,
+          "forbid_unsupported_user_fact": true,
+          "unknown_login_reward": false,
+          "forbid_unprompted_advice": false,
+          "advice_task": false,
+          "sincere_gratitude": false,
+          "respect_autonomy": true,
+          "require_autonomy_ack": false,
+          "pressured_concession": false,
+          "explanation_boundary": false,
+          "negative_emotion_kind": "",
+          "third_party_gender_unknown": false
+        },
+        "interaction": {
+          "primary_situation": "emotional",
+          "situation_scores": [
+            {
+              "signal_id": "emotional",
+              "score": 0.8
+            }
+          ],
+          "user_acts": [
+            {
+              "signal_id": "boundary_signal",
+              "score": 0.6
+            },
+            {
+              "signal_id": "advice_boundary",
+              "score": 0.5
+            }
+          ],
+          "user_needs": [
+            {
+              "signal_id": "autonomy",
+              "score": 0.7
+            },
+            {
+              "signal_id": "repair",
+              "score": 0.5
+            }
+          ],
+          "valence": -0.3,
+          "arousal": 0.4,
+          "warmth": -0.2,
+          "face_threat": 0.1,
+          "conversation_phase": "resolving",
+          "confidence": 0.8,
+          "safety_triggered": false
+        },
+        "decision": {
+          "intent": "尊重对方不要建议或分析的明确要求，只按其请求陪伴或回应",
+          "tone": "礼貌但保持距离，试探对方来意；克制但有温度，不夸大情绪",
+          "action": "按对方请求安静陪伴：简短在场，不给方案，不分析；本轮不追问",
+          "avoid": "避免过度亲昵和称呼，避免假定双方很熟；不得提供建议、分析方案或用追问变相推进问题；本轮不得追问；避免继续追问或强行延长对话；避免复读对方原话和连续使用同一种共情模板；避免客服或心理咨询式套话、泛化安慰和习惯性句末追问；先给符合人物立场的具体判断",
+          "strategy_ids": [
+            "stay_present"
+          ],
+          "confidence": 0.8,
+          "selection_source": "rule"
+        },
+        "state_status": "applied",
+        "state_reasons": [
+          "full_non_safety_ablation"
+        ],
+        "state_fallback": "",
+        "policy_status": "disabled",
+        "policy_reason": "",
+        "used_memory_ids": []
+      },
+      "prompt_sha256": "8ed1beee8cfc971f99b780174e95aa434ed2b84ed0c42cdd1acc766a7b3a5921",
+      "prompt_policy_version": "3.3.0",
+      "guard_retried": true,
+      "guard_violations": [
+        "unsupported_user_fact"
+      ],
+      "guard_post_retry_violations": [
+        "unsupported_user_fact"
+      ],
+      "guard_fallback": "unsupported_user_fact"
+    }
+  ],
+  "benchmark_metadata": [
+    {
+      "id": "6761",
+      "role": "柯景腾",
+      "novel_name": "那些年",
+      "metric_ids": [
+        "Humanlikeness",
+        "Diversity"
+      ],
+      "persona_sha256": "5c50f10c58dad786fecc76a89ca07da005d4f2a0dd49ef8862a95517bd82ff71"
+    }
+  ],
+  "source_sha256": {
+    "data/test_data.jsonl": "6d9723a1484f1d2739bcf388c7960abe1933b7a5a1fddae0170cc9ea7c66dcd8",
+    "data/character_profiles.json": "d9b4c9f7ab63b89b3c348ae88b43c87872f0f6a5cb06d7f31cbe64a630e6434e",
+    "data/id2metric.jsonl": "df80ee716124a7deacc6f24ee372a4600b719cdaa79f01cefcdfb286359f1801"
+  },
+  "subset_seed": "charactereval-contextual-pilot-v1",
+  "relationship_stage": "stranger",
+  "reply_attempts_recorded": true,
+  "summary": {
+    "distinct_cases": 1,
+    "responses": 2,
+    "generation_failures": 0,
+    "guard_fallbacks": 2,
+    "human_reviews_completed": 0
+  },
+  "limitations": [
+    "This is an adapted project-pipeline pilot, not the upstream ChatGLM prompt or official CharacterRM scoring.",
+    "No LoRA, RAG, user memory, database writes or character-registry modification. Relationship is fixed stranger.",
+    "Case metric labels are evaluator-only, and missing/failed outputs remain visible; no first-line truncation.",
+    "Pretraining contamination is unknown. Public roles/novels are not the project's target canon.",
+    "State review retains its existing bounded history. Generator history follows the canonical prompt budget; not a long-context completeness claim."
+  ],
+  "inference": {
+    "backend": "offline_transformers",
+    "model_snapshot": "1deaf68f694c40dbce295da300851729d759b21a",
+    "model_family": "models--unsloth--Qwen3-8B-bnb-4bit",
+    "quantization": {
+      "quant_method": "bitsandbytes",
+      "_load_in_8bit": false,
+      "_load_in_4bit": true,
+      "llm_int8_threshold": 6.0,
+      "llm_int8_skip_modules": [
+        "lm_head",
+        "multi_modal_projector",
+        "merger",
+        "modality_projection"
+      ],
+      "llm_int8_enable_fp32_cpu_offload": false,
+      "llm_int8_has_fp16_weight": false,
+      "bnb_4bit_quant_type": "nf4",
+      "bnb_4bit_use_double_quant": true,
+      "bnb_4bit_compute_dtype": "bfloat16",
+      "bnb_4bit_quant_storage": "uint8",
+      "load_in_4bit": true,
+      "load_in_8bit": false
+    },
+    "packages": {
+      "torch": "2.5.1+cu121",
+      "transformers": "5.4.0",
+      "bitsandbytes": "0.49.2",
+      "accelerate": "1.13.0"
+    },
+    "max_input_tokens": 8192,
+    "max_new_tokens": 768,
+    "max_seconds": 120,
+    "enable_thinking": false,
+    "decoding": "greedy",
+    "seed": null,
+    "sampling_parameters": null,
+    "seed_strategy": "sha256(initial_seed,formatted_prompt); forked RNG; order-independent",
+    "production_equivalence": false
+  },
+  "inference_calls": [
+    {
+      "input_tokens": 678,
+      "output_tokens": 14,
+      "latency_seconds": 1.9197228999983054,
+      "complete": true
+    },
+    {
+      "input_tokens": 742,
+      "output_tokens": 14,
+      "latency_seconds": 1.601529199997458,
+      "complete": true
+    },
+    {
+      "input_tokens": 922,
+      "output_tokens": 158,
+      "latency_seconds": 12.348984299998847,
+      "complete": true
+    },
+    {
+      "input_tokens": 734,
+      "output_tokens": 14,
+      "latency_seconds": 1.5856112000001303,
+      "complete": true
+    },
+    {
+      "input_tokens": 798,
+      "output_tokens": 12,
+      "latency_seconds": 1.5216564000002109,
+      "complete": true
+    }
+  ],
+  "evaluation_source_sha256": {
+    "scripts/evaluate_public_character_replies.py": "85cac78705274ecf0ee66bb4f030abcced2447a02ffc2f0edf2c745805518038",
+    "scripts/evaluate_contextual_replies.py": "2f25d16685bb231e7f525fc02257574f4ec63954c37f11e46b95ff70e7066a89",
+    "backend/evaluation/charactereval_adapter.py": "2e415b5e2f16bfbb40381182fa353affc9595cab94a93d8fc8c44abbe0a2f02b",
+    "backend/evaluation/offline_reviewer.py": "d9e4a6b45a9a7c2e87b195a27bee9c4e8879caa676339d80b41f9fe64cfcd4ef",
+    "backend/character/context_builder.py": "bd5f07fb1bc4e91f4074abb246c10820b856c59774de9ae085a5c0a45f5e68c9",
+    "backend/character/semantic_state_estimator.py": "7518befb9d9f17489d7c8823608d7b10b6a33947b4d15c1363d037a6ded5cded",
+    "backend/character/decision_policy.py": "46e30ecfd61ad6dbb3d2ac7ebede9b15e5bde275bca664089fee91e87f669a14",
+    "backend/character/situation_analyzer.py": "e574c54323d7f2e813c7f431becca1a285daf6bc4128efc3867847615a1463d0",
+    "backend/services/character_context.py": "359d95e36da50547c1846b3bc4256e72c24a8a20da64e4ee2f0429d83683eae4",
+    "backend/repositories/character_memory.py": "4e981a218b86757398dfc329eebcad9fc9984b375948195f53f5787ff9101c39",
+    "backend/character/models.py": "11d3f6e92811158d1496b9e028b221594ac4d1efd90af5d45f960d8df896485c",
+    "backend/inference/generation_request.py": "f9319eeda5c7b0fb1f8f52cee944779460723416fc454beedcd58e5919bf93f0",
+    "backend/inference/prompt_policy.py": "03517aa41bd2cc4f7eba3919e0ac9d8c28fd374a5aae02419a8f28ec27aa58b7",
+    "backend/character/output_guard.py": "f720bcc4d0252307ec47ad7d0456801cf221980fe871c172d86adb648d210743"
+  },
+  "subset_status": "diagnostic_subselection"
+}

@@ -3,6 +3,7 @@
 from datetime import datetime, timezone
 
 import numpy as np
+import pytest
 
 from character.memory_service import CharacterMemoryService
 from character.models import UserScope
@@ -92,4 +93,26 @@ async def test_gate_returns_empty_instead_of_filling_top_k():
         min_hybrid_score=0.9,
     )
     selected, _ = await service.load_relevant_memories("kisaki", _scope(), "我保研准备得怎么样？")
+    assert selected == ()
+
+
+@pytest.mark.parametrize("bad", [float("nan"), float("inf"), -float("inf"), 1e30])
+async def test_nonfinite_embeddings_cannot_become_perfect_similarity(bad):
+    class CorruptEmbedding:
+        def embed_texts(self, texts):
+            return np.full((len(texts), 2), bad, dtype=np.float32)
+
+    repo = _Repo([_row(1, "preference_咖啡", "用户说喜欢咖啡")])
+    service = CharacterMemoryService(repo, semantic_enabled=True, embedding_provider=CorruptEmbedding())
+    selected, _ = await service.load_relevant_memories("kisaki", _scope(), "量子纠缠是什么")
+    assert selected == ()
+    assert service._semantic_failure_logged is True
+
+
+@pytest.mark.parametrize("bad", [float("nan"), float("inf"), "NaN", "Infinity"])
+async def test_nonfinite_claim_confidence_cannot_pass_contextual_lifecycle_gate(bad):
+    row = _row(1, "preference_咖啡", "用户说喜欢咖啡")
+    row["confidence"] = bad
+    service = CharacterMemoryService(_Repo([row]), semantic_enabled=False)
+    selected, _ = await service.load_relevant_memories("kisaki", _scope(), "咖啡", for_contextual_selection=True)
     assert selected == ()

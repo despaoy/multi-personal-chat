@@ -19,6 +19,7 @@ from app.dependencies import get_current_admin
 from app.providers import get_character_memory_repository
 from character.context_builder import build_user_scope
 from character.models import MemoryItem, RelationshipState
+from character.natural_relationship import CATEGORIES, NoteCommand, is_note, save_note
 from character.profile_registry import get_default_profile_registry
 from repositories.character_memory import DatabaseCharacterMemoryRepository
 
@@ -39,6 +40,35 @@ class MemoryUpdateRequest(BaseModel):
 
     content: str = Field(..., min_length=1, max_length=500)
     importance: float = Field(default=0.0, ge=0.0, le=1.0)
+    resolved: bool | None = None
+
+
+class RelationshipNoteRequest(BaseModel):
+    category: str = Field(pattern="^(preference|boundary|shared_event|promise|repair|transient)$")
+    content: str = Field(min_length=1, max_length=300)
+
+
+@router.get("/api/characters/{character_id}/relationship-notes", dependencies=[Depends(get_current_admin)])
+async def list_relationship_notes(
+    character_id: str, platform: str, adapter: str, sender_id: str,
+    conversation_type: str, conversation_id: str,
+    repo: DatabaseCharacterMemoryRepository = Depends(get_character_memory_repository),
+):
+    scope = _build_scope(platform, adapter, sender_id, conversation_type, conversation_id)
+    return {"success": True, "memories": await repo.list_relationship_notes(character_id, scope)}
+
+
+@router.post("/api/characters/{character_id}/relationship-notes", dependencies=[Depends(get_current_admin)])
+async def create_relationship_note(
+    character_id: str, request: RelationshipNoteRequest,
+    platform: str, adapter: str, sender_id: str, conversation_type: str, conversation_id: str,
+    repo: DatabaseCharacterMemoryRepository = Depends(get_character_memory_repository),
+):
+    scope = _build_scope(platform, adapter, sender_id, conversation_type, conversation_id)
+    if request.category not in CATEGORIES or not request.content.strip():
+        raise HTTPException(status_code=400, detail="备忘录类别或内容无效")
+    record = await save_note(repo, character_id, scope, NoteCommand(request.category, request.content.strip()))
+    return {"success": True, "memory": record}
 
 
 def _build_scope(
@@ -195,6 +225,12 @@ async def update_character_memory(
         target = await repo.get_memory_record(memory_id, character_id, user_scope)
         if target is None:
             raise HTTPException(status_code=404, detail="记忆不存在")
+        if not request.content.strip():
+            raise HTTPException(status_code=400, detail="内容不能为空")
+        if is_note(target) and target.get("status") not in {"active", "current"}:
+            raise HTTPException(status_code=409, detail="该备忘录已被更正，请刷新后编辑当前版本")
+        if request.resolved is not None and not is_note(target):
+            raise HTTPException(status_code=400, detail="只有关系备忘录支持结束状态")
         record = await repo.append_claim(
             character_id,
             user_scope,
@@ -213,12 +249,14 @@ async def update_character_memory(
             confidence=float(target.get("confidence") or 1.0),
             attributed_to=str(target.get("attributed_to") or "user"),
             valid_from=target.get("valid_from"),
+            valid_to=target.get("valid_to"),
             source_message_id=target.get("source_message_id"),
             source_message_ids=tuple(target.get("source_message_ids") or ()),
             metadata={
                 **dict(target.get("metadata") or {}),
                 "manual_correction": True,
                 "corrected_memory_id": memory_id,
+                **({"resolved": request.resolved} if request.resolved is not None else {}),
             },
         )
     except HTTPException:
@@ -248,9 +286,16 @@ async def delete_character_memory(
         platform, adapter, sender_id, conversation_type, conversation_id
     )
     try:
-        deleted = await repo.erase_memory(
-            character_id, user_scope, memory_id=memory_id
-        )
+        target = await repo.get_memory_record(memory_id, character_id, user_scope)
+        if target is not None and is_note(target):
+            deleted = await repo.erase_memory(
+                character_id, user_scope, memory_key=target["memory_key"],
+                scope_level=target.get("scope_level") or "conversation",
+            )
+        else:
+            deleted = await repo.erase_memory(
+                character_id, user_scope, memory_id=memory_id
+            )
     except Exception:
         logger.error("删除角色记忆失败 character=%s memory=%s", character_id, memory_id, exc_info=True)
         raise HTTPException(status_code=500, detail="删除记忆失败") from None

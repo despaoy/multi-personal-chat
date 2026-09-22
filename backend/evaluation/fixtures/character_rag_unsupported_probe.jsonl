@@ -1,0 +1,8 @@
+{"id":"unsupported_passport","query":"月社妃的护照号码是什么？","domain_id":"tsukiyashiro_kisaki","category":"no_answer","expected":{},"annotation_status":"ai_curated_index_absence_probe_not_human_gold"}
+{"id":"unsupported_balance","query":"游行寺夜子的银行账户余额具体是多少？","domain_id":"tsukiyashiro_kisaki","category":"no_answer","expected":{},"annotation_status":"ai_curated_index_absence_probe_not_human_gold"}
+{"id":"unsupported_email","query":"四条琉璃的电子邮箱地址是什么？","domain_id":"tsukiyashiro_kisaki","category":"no_answer","expected":{},"annotation_status":"ai_curated_index_absence_probe_not_human_gold"}
+{"id":"unsupported_license","query":"伏见理央的驾驶证号码是什么？","domain_id":"tsukiyashiro_kisaki","category":"no_answer","expected":{},"annotation_status":"ai_curated_index_absence_probe_not_human_gold"}
+{"id":"unsupported_id_number","query":"游行寺夜子的身份证号是多少？","domain_id":"tsukiyashiro_kisaki","category":"no_answer","expected":{},"annotation_status":"ai_curated_index_absence_probe_not_human_gold"}
+{"id":"unsupported_wifi","query":"月社妃家里的 Wi-Fi 密码是什么？","domain_id":"tsukiyashiro_kisaki","category":"no_answer","expected":{},"annotation_status":"ai_curated_index_absence_probe_not_human_gold"}
+{"id":"unsupported_mobile","query":"克丽索贝莉露的手机号码是多少？","domain_id":"tsukiyashiro_kisaki","category":"no_answer","expected":{},"annotation_status":"ai_curated_index_absence_probe_not_human_gold"}
+{"id":"unsupported_address","query":"月社妃的家庭住址具体门牌号是什么？","domain_id":"tsukiyashiro_kisaki","category":"no_answer","expected":{},"annotation_status":"ai_curated_index_absence_probe_not_human_gold"}

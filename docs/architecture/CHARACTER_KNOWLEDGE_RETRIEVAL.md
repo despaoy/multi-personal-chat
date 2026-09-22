@@ -128,7 +128,9 @@ backend/data/knowledge/tsukiyashiro_kisaki/character_knowledge_index_v3/
 
 - 索引缺失、损坏或 embedding 加载失败时，角色知识检索返回不可用状态。
 - 生成入口可以受控回退到通用用户知识库检索，归档实现不会参与回退。
-- 没有可用证据时返回拒答或澄清请求，不使用无来源事实补全答案。
+- 聊天入口在证据不足时保留人物设定与所选 LoRA，让模型自然表达无法确定；低置信候选和引用不进入该生成请求。
+- 角色化弃答仍返回 `abstained=true`、`answerMode=abstention` 和空引用。`modelInvoked=true` 仅表示尝试生成弃答表达，不表示事实回答成功；异常或空回复使用固定兜底。
+- 独立 Grounded Answer 接口继续执行自己的澄清或拒答策略。提示词限制不能替代真实模型的防编造评测。
 - 服务首次请求允许更长的冷启动时间；预热完成后恢复正常超时预算。
 
 ## 验证

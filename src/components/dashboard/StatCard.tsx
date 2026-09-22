@@ -23,17 +23,18 @@ interface StatCardProps {
   change?: string;
   trend?: 'up' | 'down';
   icon: LucideIcon;
+  compact?: boolean;
 }
 
-export function StatCard({ title, value, change, trend, icon: Icon }: StatCardProps) {
+export function StatCard({ title, value, change, trend, icon: Icon, compact = false }: StatCardProps) {
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between pb-2">
-        <CardTitle className="text-sm font-medium text-muted-foreground">{title}</CardTitle>
-        <Icon className="h-4 w-4 text-muted-foreground" />
+    <Card className={compact ? 'min-w-0 gap-3 py-4 sm:gap-6 sm:py-6' : undefined}>
+      <CardHeader className={`flex flex-row items-center justify-between pb-2 ${compact ? 'px-3 sm:px-6' : ''}`}>
+        <CardTitle className={`${compact ? 'text-xs sm:text-sm' : 'text-sm'} font-medium text-muted-foreground`}>{title}</CardTitle>
+        <Icon className={`h-4 w-4 text-muted-foreground ${compact ? 'hidden sm:block' : ''}`} aria-hidden="true" />
       </CardHeader>
-      <CardContent>
-        <div className="text-2xl font-bold">{value}</div>
+      <CardContent className={compact ? 'px-3 sm:px-6' : undefined}>
+        <div className={`${compact ? 'break-all text-xl sm:text-2xl' : 'text-2xl'} font-bold`}>{value}</div>
         {change && (
           <p className={`text-xs ${trend === 'up' ? 'text-green-500' : 'text-red-500'}`}>
             {trend === 'up' ? '↑' : '↓'} {change}

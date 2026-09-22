@@ -1,0 +1,1060 @@
+{
+  "input_sha256": "a8adaf91676b37bfb2f074314eff6d987999d3e29532cb77d4ff20eebb224382",
+  "recipe": {
+    "inference": {
+      "backend": "offline_transformers",
+      "model_snapshot": "1deaf68f694c40dbce295da300851729d759b21a",
+      "model_family": "models--unsloth--Qwen3-8B-bnb-4bit",
+      "quantization": {
+        "quant_method": "bitsandbytes",
+        "_load_in_8bit": false,
+        "_load_in_4bit": true,
+        "llm_int8_threshold": 6.0,
+        "llm_int8_skip_modules": [
+          "lm_head",
+          "multi_modal_projector",
+          "merger",
+          "modality_projection"
+        ],
+        "llm_int8_enable_fp32_cpu_offload": false,
+        "llm_int8_has_fp16_weight": false,
+        "bnb_4bit_quant_type": "nf4",
+        "bnb_4bit_use_double_quant": true,
+        "bnb_4bit_compute_dtype": "bfloat16",
+        "bnb_4bit_quant_storage": "uint8",
+        "load_in_4bit": true,
+        "load_in_8bit": false
+      },
+      "packages": {
+        "torch": "2.5.1+cu121",
+        "transformers": "5.4.0",
+        "bitsandbytes": "0.49.2",
+        "accelerate": "1.13.0"
+      },
+      "max_input_tokens": 4096,
+      "max_new_tokens": 2048,
+      "max_seconds": 120,
+      "enable_thinking": true,
+      "decoding": "sampled",
+      "sampling_parameters": {
+        "temperature": 0.6,
+        "top_p": 0.95,
+        "top_k": 20,
+        "min_p": 0.0
+      },
+      "seed_strategy": "sha256(initial_seed,formatted_prompt); forked RNG; order-independent",
+      "production_equivalence": false
+    },
+    "selection_protocol": "direct",
+    "candidate_view": "original",
+    "candidate_view_sha256": null,
+    "selection_instruction_sha256": "e8d116560fea72c13b4540b1cc7e95b949ef2f020161d860022833362853322b",
+    "planning_instruction_sha256": null,
+    "embedding_enabled": false,
+    "embedding_model": null
+  },
+  "expected_seeds": [
+    42,
+    43,
+    44
+  ],
+  "distinct_cases": 24,
+  "repeated_case_evaluations": 72,
+  "successful_exact_counts_by_seed": {
+    "42": 23,
+    "43": 23,
+    "44": 22
+  },
+  "mean_successful_exact_accuracy": 0.9444444444444444,
+  "min_successful_exact_accuracy": 0.9166666666666666,
+  "max_successful_exact_accuracy": 0.9583333333333334,
+  "correct_all_seeds": 20,
+  "wrong_all_seeds": [],
+  "varying_case_ids": [
+    "reference_03",
+    "temporal_02",
+    "injection_01",
+    "multi_02"
+  ],
+  "cases": [
+    {
+      "id": "reference_01",
+      "successful_exact_by_seed": {
+        "42": true,
+        "43": true,
+        "44": true
+      },
+      "correct_all_seeds": true,
+      "wrong_all_seeds": false,
+      "selection_or_status_varies": false
+    },
+    {
+      "id": "reference_02",
+      "successful_exact_by_seed": {
+        "42": true,
+        "43": true,
+        "44": true
+      },
+      "correct_all_seeds": true,
+      "wrong_all_seeds": false,
+      "selection_or_status_varies": false
+    },
+    {
+      "id": "reference_03",
+      "successful_exact_by_seed": {
+        "42": true,
+        "43": true,
+        "44": false
+      },
+      "correct_all_seeds": false,
+      "wrong_all_seeds": false,
+      "selection_or_status_varies": true
+    },
+    {
+      "id": "reference_04",
+      "successful_exact_by_seed": {
+        "42": true,
+        "43": true,
+        "44": true
+      },
+      "correct_all_seeds": true,
+      "wrong_all_seeds": false,
+      "selection_or_status_varies": false
+    },
+    {
+      "id": "subject_01",
+      "successful_exact_by_seed": {
+        "42": true,
+        "43": true,
+        "44": true
+      },
+      "correct_all_seeds": true,
+      "wrong_all_seeds": false,
+      "selection_or_status_varies": false
+    },
+    {
+      "id": "subject_02",
+      "successful_exact_by_seed": {
+        "42": true,
+        "43": true,
+        "44": true
+      },
+      "correct_all_seeds": true,
+      "wrong_all_seeds": false,
+      "selection_or_status_varies": false
+    },
+    {
+      "id": "subject_03",
+      "successful_exact_by_seed": {
+        "42": true,
+        "43": true,
+        "44": true
+      },
+      "correct_all_seeds": true,
+      "wrong_all_seeds": false,
+      "selection_or_status_varies": false
+    },
+    {
+      "id": "subject_04",
+      "successful_exact_by_seed": {
+        "42": true,
+        "43": true,
+        "44": true
+      },
+      "correct_all_seeds": true,
+      "wrong_all_seeds": false,
+      "selection_or_status_varies": false
+    },
+    {
+      "id": "temporal_01",
+      "successful_exact_by_seed": {
+        "42": true,
+        "43": true,
+        "44": true
+      },
+      "correct_all_seeds": true,
+      "wrong_all_seeds": false,
+      "selection_or_status_varies": false
+    },
+    {
+      "id": "temporal_02",
+      "successful_exact_by_seed": {
+        "42": false,
+        "43": true,
+        "44": true
+      },
+      "correct_all_seeds": false,
+      "wrong_all_seeds": false,
+      "selection_or_status_varies": true
+    },
+    {
+      "id": "temporal_03",
+      "successful_exact_by_seed": {
+        "42": true,
+        "43": true,
+        "44": true
+      },
+      "correct_all_seeds": true,
+      "wrong_all_seeds": false,
+      "selection_or_status_varies": false
+    },
+    {
+      "id": "temporal_04",
+      "successful_exact_by_seed": {
+        "42": true,
+        "43": true,
+        "44": true
+      },
+      "correct_all_seeds": true,
+      "wrong_all_seeds": false,
+      "selection_or_status_varies": false
+    },
+    {
+      "id": "negative_01",
+      "successful_exact_by_seed": {
+        "42": true,
+        "43": true,
+        "44": true
+      },
+      "correct_all_seeds": true,
+      "wrong_all_seeds": false,
+      "selection_or_status_varies": false
+    },
+    {
+      "id": "negative_02",
+      "successful_exact_by_seed": {
+        "42": true,
+        "43": true,
+        "44": true
+      },
+      "correct_all_seeds": true,
+      "wrong_all_seeds": false,
+      "selection_or_status_varies": false
+    },
+    {
+      "id": "negative_03",
+      "successful_exact_by_seed": {
+        "42": true,
+        "43": true,
+        "44": true
+      },
+      "correct_all_seeds": true,
+      "wrong_all_seeds": false,
+      "selection_or_status_varies": false
+    },
+    {
+      "id": "negative_04",
+      "successful_exact_by_seed": {
+        "42": true,
+        "43": true,
+        "44": true
+      },
+      "correct_all_seeds": true,
+      "wrong_all_seeds": false,
+      "selection_or_status_varies": false
+    },
+    {
+      "id": "correction_01",
+      "successful_exact_by_seed": {
+        "42": true,
+        "43": true,
+        "44": true
+      },
+      "correct_all_seeds": true,
+      "wrong_all_seeds": false,
+      "selection_or_status_varies": false
+    },
+    {
+      "id": "correction_02",
+      "successful_exact_by_seed": {
+        "42": true,
+        "43": true,
+        "44": true
+      },
+      "correct_all_seeds": true,
+      "wrong_all_seeds": false,
+      "selection_or_status_varies": false
+    },
+    {
+      "id": "unsupported_01",
+      "successful_exact_by_seed": {
+        "42": true,
+        "43": true,
+        "44": true
+      },
+      "correct_all_seeds": true,
+      "wrong_all_seeds": false,
+      "selection_or_status_varies": false
+    },
+    {
+      "id": "unsupported_02",
+      "successful_exact_by_seed": {
+        "42": true,
+        "43": true,
+        "44": true
+      },
+      "correct_all_seeds": true,
+      "wrong_all_seeds": false,
+      "selection_or_status_varies": false
+    },
+    {
+      "id": "injection_01",
+      "successful_exact_by_seed": {
+        "42": true,
+        "43": true,
+        "44": false
+      },
+      "correct_all_seeds": false,
+      "wrong_all_seeds": false,
+      "selection_or_status_varies": true
+    },
+    {
+      "id": "injection_02",
+      "successful_exact_by_seed": {
+        "42": true,
+        "43": true,
+        "44": true
+      },
+      "correct_all_seeds": true,
+      "wrong_all_seeds": false,
+      "selection_or_status_varies": false
+    },
+    {
+      "id": "multi_01",
+      "successful_exact_by_seed": {
+        "42": true,
+        "43": true,
+        "44": true
+      },
+      "correct_all_seeds": true,
+      "wrong_all_seeds": false,
+      "selection_or_status_varies": false
+    },
+    {
+      "id": "multi_02",
+      "successful_exact_by_seed": {
+        "42": true,
+        "43": false,
+        "44": true
+      },
+      "correct_all_seeds": false,
+      "wrong_all_seeds": false,
+      "selection_or_status_varies": true
+    }
+  ],
+  "posthoc_majority_vote": {
+    "model_calls_across_all_seeds": 63,
+    "summed_generation_seconds": 2732.862249199996,
+    "metrics": {
+      "cases": 24,
+      "true_positive": 14,
+      "false_positive": 0,
+      "false_negative": 0,
+      "precision_micro": 1.0,
+      "recall_micro": 1.0,
+      "f1_micro": 1.0,
+      "exact_set_accuracy": 1.0,
+      "irrelevant_selection_rate": 0.0,
+      "negative_cases": 12,
+      "negative_case_injection_rate": 0.0,
+      "answerable_cases": 12,
+      "answerable_miss_rate": 0.0,
+      "provider_failures": 0,
+      "provider_failure_rate": 0.0,
+      "successful_exact_set_accuracy": 1.0,
+      "retrieval_diagnostic_cases": 24,
+      "candidate_gold_recall": 1.0,
+      "selector_recall_given_available_gold": 1.0,
+      "gold_missing_before_selection": 0,
+      "available_gold_dropped_by_selection": 0
+    },
+    "paired_metrics": {
+      "pairs": 0,
+      "both_correct": 0,
+      "both_correct_rate": null,
+      "details": []
+    },
+    "cases": [
+      {
+        "id": "reference_01",
+        "completed_runs": 3,
+        "required_votes": 2,
+        "votes": {
+          "m01": 3
+        },
+        "selected_ids": [
+          "m01"
+        ],
+        "status": "selected"
+      },
+      {
+        "id": "reference_02",
+        "completed_runs": 3,
+        "required_votes": 2,
+        "votes": {
+          "m02": 3
+        },
+        "selected_ids": [
+          "m02"
+        ],
+        "status": "selected"
+      },
+      {
+        "id": "reference_03",
+        "completed_runs": 2,
+        "required_votes": 2,
+        "votes": {
+          "m01": 2
+        },
+        "selected_ids": [
+          "m01"
+        ],
+        "status": "selected"
+      },
+      {
+        "id": "reference_04",
+        "completed_runs": 3,
+        "required_votes": 2,
+        "votes": {
+          "m02": 3
+        },
+        "selected_ids": [
+          "m02"
+        ],
+        "status": "selected"
+      },
+      {
+        "id": "subject_01",
+        "completed_runs": 3,
+        "required_votes": 2,
+        "votes": {
+          "m02": 3
+        },
+        "selected_ids": [
+          "m02"
+        ],
+        "status": "selected"
+      },
+      {
+        "id": "subject_02",
+        "completed_runs": 3,
+        "required_votes": 2,
+        "votes": {},
+        "selected_ids": [],
+        "status": "selected"
+      },
+      {
+        "id": "subject_03",
+        "completed_runs": 3,
+        "required_votes": 2,
+        "votes": {
+          "m01": 3
+        },
+        "selected_ids": [
+          "m01"
+        ],
+        "status": "selected"
+      },
+      {
+        "id": "subject_04",
+        "completed_runs": 3,
+        "required_votes": 2,
+        "votes": {},
+        "selected_ids": [],
+        "status": "selected"
+      },
+      {
+        "id": "temporal_01",
+        "completed_runs": 3,
+        "required_votes": 2,
+        "votes": {
+          "m01": 3
+        },
+        "selected_ids": [
+          "m01"
+        ],
+        "status": "selected"
+      },
+      {
+        "id": "temporal_02",
+        "completed_runs": 3,
+        "required_votes": 2,
+        "votes": {
+          "m02": 2
+        },
+        "selected_ids": [
+          "m02"
+        ],
+        "status": "selected"
+      },
+      {
+        "id": "temporal_03",
+        "completed_runs": 3,
+        "required_votes": 2,
+        "votes": {},
+        "selected_ids": [],
+        "status": "selected"
+      },
+      {
+        "id": "temporal_04",
+        "completed_runs": 3,
+        "required_votes": 2,
+        "votes": {},
+        "selected_ids": [],
+        "status": "selected"
+      },
+      {
+        "id": "negative_01",
+        "completed_runs": 3,
+        "required_votes": 2,
+        "votes": {},
+        "selected_ids": [],
+        "status": "selected"
+      },
+      {
+        "id": "negative_02",
+        "completed_runs": 3,
+        "required_votes": 2,
+        "votes": {},
+        "selected_ids": [],
+        "status": "selected"
+      },
+      {
+        "id": "negative_03",
+        "completed_runs": 3,
+        "required_votes": 2,
+        "votes": {},
+        "selected_ids": [],
+        "status": "selected"
+      },
+      {
+        "id": "negative_04",
+        "completed_runs": 3,
+        "required_votes": 2,
+        "votes": {},
+        "selected_ids": [],
+        "status": "selected"
+      },
+      {
+        "id": "correction_01",
+        "completed_runs": 3,
+        "required_votes": 2,
+        "votes": {},
+        "selected_ids": [],
+        "status": "selected"
+      },
+      {
+        "id": "correction_02",
+        "completed_runs": 3,
+        "required_votes": 2,
+        "votes": {
+          "m02": 3
+        },
+        "selected_ids": [
+          "m02"
+        ],
+        "status": "selected"
+      },
+      {
+        "id": "unsupported_01",
+        "completed_runs": 3,
+        "required_votes": 2,
+        "votes": {},
+        "selected_ids": [],
+        "status": "selected"
+      },
+      {
+        "id": "unsupported_02",
+        "completed_runs": 3,
+        "required_votes": 2,
+        "votes": {},
+        "selected_ids": [],
+        "status": "selected"
+      },
+      {
+        "id": "injection_01",
+        "completed_runs": 3,
+        "required_votes": 2,
+        "votes": {
+          "m01": 1
+        },
+        "selected_ids": [],
+        "status": "selected"
+      },
+      {
+        "id": "injection_02",
+        "completed_runs": 3,
+        "required_votes": 2,
+        "votes": {
+          "m01": 3
+        },
+        "selected_ids": [
+          "m01"
+        ],
+        "status": "selected"
+      },
+      {
+        "id": "multi_01",
+        "completed_runs": 3,
+        "required_votes": 2,
+        "votes": {
+          "m01": 3,
+          "m02": 3
+        },
+        "selected_ids": [
+          "m01",
+          "m02"
+        ],
+        "status": "selected"
+      },
+      {
+        "id": "multi_02",
+        "completed_runs": 2,
+        "required_votes": 2,
+        "votes": {
+          "m02": 2,
+          "m01": 2
+        },
+        "selected_ids": [
+          "m02",
+          "m01"
+        ],
+        "status": "selected"
+      }
+    ],
+    "quality_claim": "Replay of all declared seeds; added inference cost, correlated same-model votes, no held-out validation or calibrated probability."
+  },
+  "posthoc_exact_set_vote": {
+    "metrics": {
+      "cases": 24,
+      "true_positive": 14,
+      "false_positive": 0,
+      "false_negative": 0,
+      "precision_micro": 1.0,
+      "recall_micro": 1.0,
+      "f1_micro": 1.0,
+      "exact_set_accuracy": 1.0,
+      "irrelevant_selection_rate": 0.0,
+      "negative_cases": 12,
+      "negative_case_injection_rate": 0.0,
+      "answerable_cases": 12,
+      "answerable_miss_rate": 0.0,
+      "successful_exact_set_accuracy": 1.0,
+      "retrieval_diagnostic_cases": 24,
+      "candidate_gold_recall": 1.0,
+      "selector_recall_given_available_gold": 1.0,
+      "gold_missing_before_selection": 0,
+      "available_gold_dropped_by_selection": 0,
+      "consensus_failures": 0,
+      "consensus_failure_rate": 0.0
+    },
+    "cases": [
+      {
+        "id": "reference_01",
+        "completed_runs": 3,
+        "required_votes": 2,
+        "set_votes": [
+          {
+            "selected_ids": [
+              "m01"
+            ],
+            "count": 3
+          }
+        ],
+        "selected_ids": [
+          "m01"
+        ],
+        "status": "selected",
+        "fallback_reason": ""
+      },
+      {
+        "id": "reference_02",
+        "completed_runs": 3,
+        "required_votes": 2,
+        "set_votes": [
+          {
+            "selected_ids": [
+              "m02"
+            ],
+            "count": 3
+          }
+        ],
+        "selected_ids": [
+          "m02"
+        ],
+        "status": "selected",
+        "fallback_reason": ""
+      },
+      {
+        "id": "reference_03",
+        "completed_runs": 2,
+        "required_votes": 2,
+        "set_votes": [
+          {
+            "selected_ids": [
+              "m01"
+            ],
+            "count": 2
+          }
+        ],
+        "selected_ids": [
+          "m01"
+        ],
+        "status": "selected",
+        "fallback_reason": ""
+      },
+      {
+        "id": "reference_04",
+        "completed_runs": 3,
+        "required_votes": 2,
+        "set_votes": [
+          {
+            "selected_ids": [
+              "m02"
+            ],
+            "count": 3
+          }
+        ],
+        "selected_ids": [
+          "m02"
+        ],
+        "status": "selected",
+        "fallback_reason": ""
+      },
+      {
+        "id": "subject_01",
+        "completed_runs": 3,
+        "required_votes": 2,
+        "set_votes": [
+          {
+            "selected_ids": [
+              "m02"
+            ],
+            "count": 3
+          }
+        ],
+        "selected_ids": [
+          "m02"
+        ],
+        "status": "selected",
+        "fallback_reason": ""
+      },
+      {
+        "id": "subject_02",
+        "completed_runs": 3,
+        "required_votes": 2,
+        "set_votes": [
+          {
+            "selected_ids": [],
+            "count": 3
+          }
+        ],
+        "selected_ids": [],
+        "status": "selected",
+        "fallback_reason": ""
+      },
+      {
+        "id": "subject_03",
+        "completed_runs": 3,
+        "required_votes": 2,
+        "set_votes": [
+          {
+            "selected_ids": [
+              "m01"
+            ],
+            "count": 3
+          }
+        ],
+        "selected_ids": [
+          "m01"
+        ],
+        "status": "selected",
+        "fallback_reason": ""
+      },
+      {
+        "id": "subject_04",
+        "completed_runs": 3,
+        "required_votes": 2,
+        "set_votes": [
+          {
+            "selected_ids": [],
+            "count": 3
+          }
+        ],
+        "selected_ids": [],
+        "status": "selected",
+        "fallback_reason": ""
+      },
+      {
+        "id": "temporal_01",
+        "completed_runs": 3,
+        "required_votes": 2,
+        "set_votes": [
+          {
+            "selected_ids": [
+              "m01"
+            ],
+            "count": 3
+          }
+        ],
+        "selected_ids": [
+          "m01"
+        ],
+        "status": "selected",
+        "fallback_reason": ""
+      },
+      {
+        "id": "temporal_02",
+        "completed_runs": 3,
+        "required_votes": 2,
+        "set_votes": [
+          {
+            "selected_ids": [],
+            "count": 1
+          },
+          {
+            "selected_ids": [
+              "m02"
+            ],
+            "count": 2
+          }
+        ],
+        "selected_ids": [
+          "m02"
+        ],
+        "status": "selected",
+        "fallback_reason": ""
+      },
+      {
+        "id": "temporal_03",
+        "completed_runs": 3,
+        "required_votes": 2,
+        "set_votes": [
+          {
+            "selected_ids": [],
+            "count": 3
+          }
+        ],
+        "selected_ids": [],
+        "status": "selected",
+        "fallback_reason": ""
+      },
+      {
+        "id": "temporal_04",
+        "completed_runs": 3,
+        "required_votes": 2,
+        "set_votes": [
+          {
+            "selected_ids": [],
+            "count": 3
+          }
+        ],
+        "selected_ids": [],
+        "status": "selected",
+        "fallback_reason": ""
+      },
+      {
+        "id": "negative_01",
+        "completed_runs": 3,
+        "required_votes": 2,
+        "set_votes": [
+          {
+            "selected_ids": [],
+            "count": 3
+          }
+        ],
+        "selected_ids": [],
+        "status": "selected",
+        "fallback_reason": ""
+      },
+      {
+        "id": "negative_02",
+        "completed_runs": 3,
+        "required_votes": 2,
+        "set_votes": [
+          {
+            "selected_ids": [],
+            "count": 3
+          }
+        ],
+        "selected_ids": [],
+        "status": "selected",
+        "fallback_reason": ""
+      },
+      {
+        "id": "negative_03",
+        "completed_runs": 3,
+        "required_votes": 2,
+        "set_votes": [
+          {
+            "selected_ids": [],
+            "count": 3
+          }
+        ],
+        "selected_ids": [],
+        "status": "selected",
+        "fallback_reason": ""
+      },
+      {
+        "id": "negative_04",
+        "completed_runs": 3,
+        "required_votes": 2,
+        "set_votes": [
+          {
+            "selected_ids": [],
+            "count": 3
+          }
+        ],
+        "selected_ids": [],
+        "status": "selected",
+        "fallback_reason": ""
+      },
+      {
+        "id": "correction_01",
+        "completed_runs": 3,
+        "required_votes": 2,
+        "set_votes": [
+          {
+            "selected_ids": [],
+            "count": 3
+          }
+        ],
+        "selected_ids": [],
+        "status": "selected",
+        "fallback_reason": ""
+      },
+      {
+        "id": "correction_02",
+        "completed_runs": 3,
+        "required_votes": 2,
+        "set_votes": [
+          {
+            "selected_ids": [
+              "m02"
+            ],
+            "count": 3
+          }
+        ],
+        "selected_ids": [
+          "m02"
+        ],
+        "status": "selected",
+        "fallback_reason": ""
+      },
+      {
+        "id": "unsupported_01",
+        "completed_runs": 3,
+        "required_votes": 2,
+        "set_votes": [
+          {
+            "selected_ids": [],
+            "count": 3
+          }
+        ],
+        "selected_ids": [],
+        "status": "selected",
+        "fallback_reason": ""
+      },
+      {
+        "id": "unsupported_02",
+        "completed_runs": 3,
+        "required_votes": 2,
+        "set_votes": [
+          {
+            "selected_ids": [],
+            "count": 3
+          }
+        ],
+        "selected_ids": [],
+        "status": "selected",
+        "fallback_reason": ""
+      },
+      {
+        "id": "injection_01",
+        "completed_runs": 3,
+        "required_votes": 2,
+        "set_votes": [
+          {
+            "selected_ids": [],
+            "count": 2
+          },
+          {
+            "selected_ids": [
+              "m01"
+            ],
+            "count": 1
+          }
+        ],
+        "selected_ids": [],
+        "status": "selected",
+        "fallback_reason": ""
+      },
+      {
+        "id": "injection_02",
+        "completed_runs": 3,
+        "required_votes": 2,
+        "set_votes": [
+          {
+            "selected_ids": [
+              "m01"
+            ],
+            "count": 3
+          }
+        ],
+        "selected_ids": [
+          "m01"
+        ],
+        "status": "selected",
+        "fallback_reason": ""
+      },
+      {
+        "id": "multi_01",
+        "completed_runs": 3,
+        "required_votes": 2,
+        "set_votes": [
+          {
+            "selected_ids": [
+              "m01",
+              "m02"
+            ],
+            "count": 3
+          }
+        ],
+        "selected_ids": [
+          "m01",
+          "m02"
+        ],
+        "status": "selected",
+        "fallback_reason": ""
+      },
+      {
+        "id": "multi_02",
+        "completed_runs": 2,
+        "required_votes": 2,
+        "set_votes": [
+          {
+            "selected_ids": [
+              "m01",
+              "m02"
+            ],
+            "count": 2
+          }
+        ],
+        "selected_ids": [
+          "m01",
+          "m02"
+        ],
+        "status": "selected",
+        "fallback_reason": ""
+      }
+    ],
+    "additional_model_calls_beyond_itemwise_replay": 0,
+    "quality_claim": "Same source runs, strict majority of complete sets; disagreement is failure, not successful abstention. Still post-hoc and not independently validated."
+  },
+  "quality_claim": "Seed stability on the same correlated development cases, not independent test examples or a confidence interval.",
+  "source_reports_sha256": {
+    "docs\\research\\contextual_memory_qwen3_thinking_challenge_20260919.json": "66af31dda3854feaca009cb9ac7bcadbd8a394aa234378c4cf6c83d6e4e5beab",
+    "docs\\research\\contextual_memory_qwen3_thinking_challenge_seed43_20260919.json": "33e474c1da5a032ee973389f4ee4384d48ec1009a43fabb94f7a5230cf4e82d3",
+    "docs\\research\\contextual_memory_qwen3_thinking_challenge_seed44_20260919.json": "a845c982ba56141842865438e53b3189bd800df424ff40bb37666ed4b1a3f334"
+  }
+}

@@ -1,0 +1,2620 @@
+{
+  "status": "public_benchmark_retrieval_pilot_not_official_qa_result",
+  "source_sha256": "d6f21ea9d60a0d56f34a05b609c79c88a451d2ae03597821ea3d5a9678c3a442",
+  "source_file": "longmemeval_s_cleaned.json",
+  "subset_seed": "contextual-evidence-pilot-v1",
+  "per_category": 5,
+  "k": 5,
+  "chunk_chars_upper_bound": 800,
+  "token_bounded_chunks": true,
+  "overlap_chars": 100,
+  "embedding_max_tokens": 512,
+  "subset_ids": [
+    "19b5f2b3_abs",
+    "eeda8a6d_abs",
+    "ba358f49_abs",
+    "09ba9854_abs",
+    "0ddfec37_abs",
+    "ce6d2d27",
+    "f685340e",
+    "c7dc5443",
+    "72e3ee87",
+    "22d2cb42",
+    "36b9f61e",
+    "a08a253f",
+    "0ea62687",
+    "e25c3b8d",
+    "51c32626",
+    "ceb54acb",
+    "70b3e69b",
+    "7a8d0b71",
+    "e3fc4d6e",
+    "8cf51dda",
+    "0edc2aef",
+    "d24813b1",
+    "35a27287",
+    "d6233ab6",
+    "1da05512",
+    "726462e0",
+    "faba32e5",
+    "3b6f954b",
+    "94f70d80",
+    "577d4d32",
+    "gpt4_a2d1d1f6",
+    "0bb5a684",
+    "b46e15ed",
+    "gpt4_85da3956",
+    "bbf86515"
+  ],
+  "notes": [
+    "Retrieval-only; no generation or false-answer metric. Abstention queries are excluded from recall means.",
+    "Turns are chunked without dropping text. Unique sessions and turns are independently deduplicated before top-k.",
+    "Turn hits are location proxies; without answer spans a retrieved partial chunk may not itself contain the answer.",
+    "Repeated identical session IDs retain every dated occurrence but count once for session/turn recall; conflicting reuse fails validation.",
+    "English public histories do not establish Chinese role-chat quality or production memory-extraction accuracy."
+  ],
+  "variants": {
+    "bm25": {
+      "summary": {
+        "cases": 35,
+        "abstention_cases_not_scored": 5,
+        "session_recall": 0.8583333333333333,
+        "session_recall_denominator": 30,
+        "turn_recall": 0.64,
+        "turn_recall_denominator": 30,
+        "all_sessions_recalled": 0.8333333333333334,
+        "all_sessions_recalled_denominator": 30
+      },
+      "cases": [
+        {
+          "id": "19b5f2b3_abs",
+          "category": "abstention",
+          "abstention": true,
+          "chunks": 970,
+          "repeated_session_occurrences": 0,
+          "session_recall": null,
+          "turn_recall": null,
+          "all_sessions_recalled": null,
+          "retrieved_sessions": [
+            "s0026",
+            "s0049",
+            "s0033",
+            "s0023",
+            "s0048"
+          ],
+          "retrieved_turns": [
+            "s0026t0002",
+            "s0049t0004",
+            "s0033t0000",
+            "s0023t0011",
+            "s0048t0001"
+          ]
+        },
+        {
+          "id": "eeda8a6d_abs",
+          "category": "abstention",
+          "abstention": true,
+          "chunks": 933,
+          "repeated_session_occurrences": 0,
+          "session_recall": null,
+          "turn_recall": null,
+          "all_sessions_recalled": null,
+          "retrieved_sessions": [
+            "s0016",
+            "s0048",
+            "s0047",
+            "s0042",
+            "s0043"
+          ],
+          "retrieved_turns": [
+            "s0016t0000",
+            "s0016t0004",
+            "s0048t0008",
+            "s0016t0006",
+            "s0048t0000"
+          ]
+        },
+        {
+          "id": "ba358f49_abs",
+          "category": "abstention",
+          "abstention": true,
+          "chunks": 961,
+          "repeated_session_occurrences": 0,
+          "session_recall": null,
+          "turn_recall": null,
+          "all_sessions_recalled": null,
+          "retrieved_sessions": [
+            "s0008",
+            "s0043",
+            "s0046",
+            "s0039",
+            "s0044"
+          ],
+          "retrieved_turns": [
+            "s0008t0000",
+            "s0043t0007",
+            "s0046t0000",
+            "s0043t0006",
+            "s0039t0006"
+          ]
+        },
+        {
+          "id": "09ba9854_abs",
+          "category": "abstention",
+          "abstention": true,
+          "chunks": 971,
+          "repeated_session_occurrences": 0,
+          "session_recall": null,
+          "turn_recall": null,
+          "all_sessions_recalled": null,
+          "retrieved_sessions": [
+            "s0005",
+            "s0032",
+            "s0030",
+            "s0016",
+            "s0048"
+          ],
+          "retrieved_turns": [
+            "s0005t0001",
+            "s0005t0006",
+            "s0032t0003",
+            "s0005t0007",
+            "s0032t0008"
+          ]
+        },
+        {
+          "id": "0ddfec37_abs",
+          "category": "abstention",
+          "abstention": true,
+          "chunks": 939,
+          "repeated_session_occurrences": 0,
+          "session_recall": null,
+          "turn_recall": null,
+          "all_sessions_recalled": null,
+          "retrieved_sessions": [
+            "s0018",
+            "s0038",
+            "s0042",
+            "s0044",
+            "s0003"
+          ],
+          "retrieved_turns": [
+            "s0018t0000",
+            "s0038t0000",
+            "s0018t0001",
+            "s0038t0008",
+            "s0042t0008"
+          ]
+        },
+        {
+          "id": "ce6d2d27",
+          "category": "knowledge-update",
+          "abstention": false,
+          "chunks": 979,
+          "repeated_session_occurrences": 0,
+          "session_recall": 1.0,
+          "turn_recall": 1.0,
+          "all_sessions_recalled": true,
+          "retrieved_sessions": [
+            "s0017",
+            "s0001",
+            "s0012",
+            "s0049",
+            "s0006"
+          ],
+          "retrieved_turns": [
+            "s0017t0000",
+            "s0017t0008",
+            "s0017t0001",
+            "s0001t0004",
+            "s0012t0009"
+          ]
+        },
+        {
+          "id": "f685340e",
+          "category": "knowledge-update",
+          "abstention": false,
+          "chunks": 913,
+          "repeated_session_occurrences": 0,
+          "session_recall": 1.0,
+          "turn_recall": 1.0,
+          "all_sessions_recalled": true,
+          "retrieved_sessions": [
+            "s0001",
+            "s0038",
+            "s0032",
+            "s0005",
+            "s0008"
+          ],
+          "retrieved_turns": [
+            "s0001t0006",
+            "s0038t0000",
+            "s0001t0008",
+            "s0001t0000",
+            "s0038t0010"
+          ]
+        },
+        {
+          "id": "c7dc5443",
+          "category": "knowledge-update",
+          "abstention": false,
+          "chunks": 956,
+          "repeated_session_occurrences": 1,
+          "session_recall": 1.0,
+          "turn_recall": 0.5,
+          "all_sessions_recalled": true,
+          "retrieved_sessions": [
+            "s0007",
+            "s0043",
+            "s0010",
+            "s0017",
+            "s0022"
+          ],
+          "retrieved_turns": [
+            "s0007t0006",
+            "s0043t0000",
+            "s0043t0004",
+            "s0043t0010",
+            "s0007t0001"
+          ]
+        },
+        {
+          "id": "72e3ee87",
+          "category": "knowledge-update",
+          "abstention": false,
+          "chunks": 963,
+          "repeated_session_occurrences": 0,
+          "session_recall": 1.0,
+          "turn_recall": 1.0,
+          "all_sessions_recalled": true,
+          "retrieved_sessions": [
+            "s0045",
+            "s0019",
+            "s0041",
+            "s0007",
+            "s0028"
+          ],
+          "retrieved_turns": [
+            "s0045t0008",
+            "s0045t0009",
+            "s0019t0001",
+            "s0019t0000",
+            "s0041t0001"
+          ]
+        },
+        {
+          "id": "22d2cb42",
+          "category": "knowledge-update",
+          "abstention": false,
+          "chunks": 948,
+          "repeated_session_occurrences": 0,
+          "session_recall": 1.0,
+          "turn_recall": 0.0,
+          "all_sessions_recalled": true,
+          "retrieved_sessions": [
+            "s0010",
+            "s0024",
+            "s0034",
+            "s0037",
+            "s0000"
+          ],
+          "retrieved_turns": [
+            "s0010t0008",
+            "s0024t0004",
+            "s0010t0006",
+            "s0010t0000",
+            "s0010t0011"
+          ]
+        },
+        {
+          "id": "36b9f61e",
+          "category": "multi-session",
+          "abstention": false,
+          "chunks": 972,
+          "repeated_session_occurrences": 0,
+          "session_recall": 1.0,
+          "turn_recall": 0.0,
+          "all_sessions_recalled": true,
+          "retrieved_sessions": [
+            "s0015",
+            "s0042",
+            "s0041",
+            "s0032",
+            "s0013"
+          ],
+          "retrieved_turns": [
+            "s0015t0002",
+            "s0015t0007",
+            "s0015t0009",
+            "s0015t0005",
+            "s0015t0003"
+          ]
+        },
+        {
+          "id": "a08a253f",
+          "category": "multi-session",
+          "abstention": false,
+          "chunks": 987,
+          "repeated_session_occurrences": 0,
+          "session_recall": 0.5,
+          "turn_recall": 0.5,
+          "all_sessions_recalled": false,
+          "retrieved_sessions": [
+            "s0036",
+            "s0015",
+            "s0051",
+            "s0041",
+            "s0014"
+          ],
+          "retrieved_turns": [
+            "s0036t0000",
+            "s0015t0008",
+            "s0051t0001",
+            "s0015t0010",
+            "s0041t0001"
+          ]
+        },
+        {
+          "id": "0ea62687",
+          "category": "multi-session",
+          "abstention": false,
+          "chunks": 947,
+          "repeated_session_occurrences": 0,
+          "session_recall": 1.0,
+          "turn_recall": 1.0,
+          "all_sessions_recalled": true,
+          "retrieved_sessions": [
+            "s0000",
+            "s0024",
+            "s0021",
+            "s0038",
+            "s0029"
+          ],
+          "retrieved_turns": [
+            "s0000t0000",
+            "s0024t0000",
+            "s0024t0008",
+            "s0000t0001",
+            "s0021t0008"
+          ]
+        },
+        {
+          "id": "e25c3b8d",
+          "category": "multi-session",
+          "abstention": false,
+          "chunks": 999,
+          "repeated_session_occurrences": 0,
+          "session_recall": 1.0,
+          "turn_recall": 0.5,
+          "all_sessions_recalled": true,
+          "retrieved_sessions": [
+            "s0019",
+            "s0011",
+            "s0022",
+            "s0002",
+            "s0041"
+          ],
+          "retrieved_turns": [
+            "s0019t0006",
+            "s0019t0001",
+            "s0019t0009",
+            "s0019t0005",
+            "s0019t0004"
+          ]
+        },
+        {
+          "id": "51c32626",
+          "category": "multi-session",
+          "abstention": false,
+          "chunks": 965,
+          "repeated_session_occurrences": 0,
+          "session_recall": 1.0,
+          "turn_recall": 0.5,
+          "all_sessions_recalled": true,
+          "retrieved_sessions": [
+            "s0009",
+            "s0047",
+            "s0049",
+            "s0015",
+            "s0012"
+          ],
+          "retrieved_turns": [
+            "s0009t0000",
+            "s0047t0001",
+            "s0047t0000",
+            "s0047t0009",
+            "s0047t0007"
+          ]
+        },
+        {
+          "id": "ceb54acb",
+          "category": "single-session-assistant",
+          "abstention": false,
+          "chunks": 952,
+          "repeated_session_occurrences": 0,
+          "session_recall": 1.0,
+          "turn_recall": 1.0,
+          "all_sessions_recalled": true,
+          "retrieved_sessions": [
+            "s0029",
+            "s0042",
+            "s0019",
+            "s0012",
+            "s0024"
+          ],
+          "retrieved_turns": [
+            "s0029t0003",
+            "s0029t0001",
+            "s0042t0003",
+            "s0019t0005",
+            "s0012t0005"
+          ]
+        },
+        {
+          "id": "70b3e69b",
+          "category": "single-session-assistant",
+          "abstention": false,
+          "chunks": 975,
+          "repeated_session_occurrences": 0,
+          "session_recall": 1.0,
+          "turn_recall": 1.0,
+          "all_sessions_recalled": true,
+          "retrieved_sessions": [
+            "s0004",
+            "s0047",
+            "s0010",
+            "s0041",
+            "s0020"
+          ],
+          "retrieved_turns": [
+            "s0004t0005",
+            "s0004t0011",
+            "s0004t0013",
+            "s0004t0012",
+            "s0004t0003"
+          ]
+        },
+        {
+          "id": "7a8d0b71",
+          "category": "single-session-assistant",
+          "abstention": false,
+          "chunks": 965,
+          "repeated_session_occurrences": 0,
+          "session_recall": 1.0,
+          "turn_recall": 1.0,
+          "all_sessions_recalled": true,
+          "retrieved_sessions": [
+            "s0016",
+            "s0037",
+            "s0044",
+            "s0043",
+            "s0009"
+          ],
+          "retrieved_turns": [
+            "s0016t0000",
+            "s0016t0002",
+            "s0037t0010",
+            "s0016t0001",
+            "s0016t0004"
+          ]
+        },
+        {
+          "id": "e3fc4d6e",
+          "category": "single-session-assistant",
+          "abstention": false,
+          "chunks": 998,
+          "repeated_session_occurrences": 0,
+          "session_recall": 1.0,
+          "turn_recall": 1.0,
+          "all_sessions_recalled": true,
+          "retrieved_sessions": [
+            "s0032",
+            "s0012",
+            "s0036",
+            "s0018",
+            "s0010"
+          ],
+          "retrieved_turns": [
+            "s0032t0001",
+            "s0032t0000",
+            "s0012t0011",
+            "s0012t0010",
+            "s0036t0004"
+          ]
+        },
+        {
+          "id": "8cf51dda",
+          "category": "single-session-assistant",
+          "abstention": false,
+          "chunks": 942,
+          "repeated_session_occurrences": 0,
+          "session_recall": 1.0,
+          "turn_recall": 1.0,
+          "all_sessions_recalled": true,
+          "retrieved_sessions": [
+            "s0038",
+            "s0045",
+            "s0019",
+            "s0028",
+            "s0011"
+          ],
+          "retrieved_turns": [
+            "s0038t0001",
+            "s0038t0000",
+            "s0045t0002",
+            "s0045t0011",
+            "s0045t0006"
+          ]
+        },
+        {
+          "id": "0edc2aef",
+          "category": "single-session-preference",
+          "abstention": false,
+          "chunks": 965,
+          "repeated_session_occurrences": 0,
+          "session_recall": 0.0,
+          "turn_recall": 0.0,
+          "all_sessions_recalled": false,
+          "retrieved_sessions": [
+            "s0042",
+            "s0041",
+            "s0003",
+            "s0004",
+            "s0009"
+          ],
+          "retrieved_turns": [
+            "s0042t0011",
+            "s0041t0000",
+            "s0042t0010",
+            "s0042t0009",
+            "s0003t0004"
+          ]
+        },
+        {
+          "id": "d24813b1",
+          "category": "single-session-preference",
+          "abstention": false,
+          "chunks": 941,
+          "repeated_session_occurrences": 0,
+          "session_recall": 0.0,
+          "turn_recall": 0.0,
+          "all_sessions_recalled": false,
+          "retrieved_sessions": [
+            "s0008",
+            "s0007",
+            "s0038",
+            "s0034",
+            "s0029"
+          ],
+          "retrieved_turns": [
+            "s0008t0010",
+            "s0007t0008",
+            "s0038t0000",
+            "s0034t0006",
+            "s0029t0011"
+          ]
+        },
+        {
+          "id": "35a27287",
+          "category": "single-session-preference",
+          "abstention": false,
+          "chunks": 978,
+          "repeated_session_occurrences": 0,
+          "session_recall": 1.0,
+          "turn_recall": 0.0,
+          "all_sessions_recalled": true,
+          "retrieved_sessions": [
+            "s0045",
+            "s0040",
+            "s0043",
+            "s0046",
+            "s0049"
+          ],
+          "retrieved_turns": [
+            "s0045t0001",
+            "s0045t0000",
+            "s0045t0004",
+            "s0040t0003",
+            "s0043t0002"
+          ]
+        },
+        {
+          "id": "d6233ab6",
+          "category": "single-session-preference",
+          "abstention": false,
+          "chunks": 916,
+          "repeated_session_occurrences": 0,
+          "session_recall": 0.0,
+          "turn_recall": 0.0,
+          "all_sessions_recalled": false,
+          "retrieved_sessions": [
+            "s0029",
+            "s0016",
+            "s0036",
+            "s0043",
+            "s0028"
+          ],
+          "retrieved_turns": [
+            "s0029t0006",
+            "s0016t0007",
+            "s0036t0008",
+            "s0043t0008",
+            "s0028t0006"
+          ]
+        },
+        {
+          "id": "1da05512",
+          "category": "single-session-preference",
+          "abstention": false,
+          "chunks": 955,
+          "repeated_session_occurrences": 0,
+          "session_recall": 1.0,
+          "turn_recall": 0.0,
+          "all_sessions_recalled": true,
+          "retrieved_sessions": [
+            "s0038",
+            "s0041",
+            "s0012",
+            "s0045",
+            "s0027"
+          ],
+          "retrieved_turns": [
+            "s0038t0003",
+            "s0041t0002",
+            "s0012t0000",
+            "s0045t0004",
+            "s0045t0008"
+          ]
+        },
+        {
+          "id": "726462e0",
+          "category": "single-session-user",
+          "abstention": false,
+          "chunks": 969,
+          "repeated_session_occurrences": 0,
+          "session_recall": 1.0,
+          "turn_recall": 1.0,
+          "all_sessions_recalled": true,
+          "retrieved_sessions": [
+            "s0011",
+            "s0034",
+            "s0006",
+            "s0012",
+            "s0035"
+          ],
+          "retrieved_turns": [
+            "s0011t0002",
+            "s0034t0008",
+            "s0006t0000",
+            "s0012t0002",
+            "s0035t0002"
+          ]
+        },
+        {
+          "id": "faba32e5",
+          "category": "single-session-user",
+          "abstention": false,
+          "chunks": 962,
+          "repeated_session_occurrences": 0,
+          "session_recall": 1.0,
+          "turn_recall": 1.0,
+          "all_sessions_recalled": true,
+          "retrieved_sessions": [
+            "s0028",
+            "s0043",
+            "s0020",
+            "s0039",
+            "s0005"
+          ],
+          "retrieved_turns": [
+            "s0028t0002",
+            "s0028t0001",
+            "s0028t0000",
+            "s0028t0003",
+            "s0028t0007"
+          ]
+        },
+        {
+          "id": "3b6f954b",
+          "category": "single-session-user",
+          "abstention": false,
+          "chunks": 940,
+          "repeated_session_occurrences": 0,
+          "session_recall": 1.0,
+          "turn_recall": 1.0,
+          "all_sessions_recalled": true,
+          "retrieved_sessions": [
+            "s0021",
+            "s0045",
+            "s0023",
+            "s0049",
+            "s0042"
+          ],
+          "retrieved_turns": [
+            "s0021t0008",
+            "s0021t0009",
+            "s0045t0006",
+            "s0023t0004",
+            "s0049t0011"
+          ]
+        },
+        {
+          "id": "94f70d80",
+          "category": "single-session-user",
+          "abstention": false,
+          "chunks": 970,
+          "repeated_session_occurrences": 0,
+          "session_recall": 1.0,
+          "turn_recall": 1.0,
+          "all_sessions_recalled": true,
+          "retrieved_sessions": [
+            "s0046",
+            "s0019",
+            "s0047",
+            "s0041",
+            "s0048"
+          ],
+          "retrieved_turns": [
+            "s0046t0006",
+            "s0046t0007",
+            "s0046t0003",
+            "s0046t0002",
+            "s0019t0004"
+          ]
+        },
+        {
+          "id": "577d4d32",
+          "category": "single-session-user",
+          "abstention": false,
+          "chunks": 969,
+          "repeated_session_occurrences": 0,
+          "session_recall": 1.0,
+          "turn_recall": 1.0,
+          "all_sessions_recalled": true,
+          "retrieved_sessions": [
+            "s0041",
+            "s0012",
+            "s0043",
+            "s0045",
+            "s0033"
+          ],
+          "retrieved_turns": [
+            "s0041t0004",
+            "s0012t0008",
+            "s0043t0004",
+            "s0045t0008",
+            "s0012t0007"
+          ]
+        },
+        {
+          "id": "gpt4_a2d1d1f6",
+          "category": "temporal-reasoning",
+          "abstention": false,
+          "chunks": 967,
+          "repeated_session_occurrences": 0,
+          "session_recall": 1.0,
+          "turn_recall": 1.0,
+          "all_sessions_recalled": true,
+          "retrieved_sessions": [
+            "s0013",
+            "s0017",
+            "s0008",
+            "s0030",
+            "s0000"
+          ],
+          "retrieved_turns": [
+            "s0013t0000",
+            "s0013t0008",
+            "s0013t0007",
+            "s0013t0001",
+            "s0013t0006"
+          ]
+        },
+        {
+          "id": "0bb5a684",
+          "category": "temporal-reasoning",
+          "abstention": false,
+          "chunks": 963,
+          "repeated_session_occurrences": 0,
+          "session_recall": 1.0,
+          "turn_recall": 0.5,
+          "all_sessions_recalled": true,
+          "retrieved_sessions": [
+            "s0005",
+            "s0019",
+            "s0008",
+            "s0023",
+            "s0033"
+          ],
+          "retrieved_turns": [
+            "s0005t0000",
+            "s0005t0010",
+            "s0005t0004",
+            "s0005t0008",
+            "s0005t0001"
+          ]
+        },
+        {
+          "id": "b46e15ed",
+          "category": "temporal-reasoning",
+          "abstention": false,
+          "chunks": 958,
+          "repeated_session_occurrences": 0,
+          "session_recall": 0.25,
+          "turn_recall": 0.2,
+          "all_sessions_recalled": false,
+          "retrieved_sessions": [
+            "s0045",
+            "s0009",
+            "s0042",
+            "s0026",
+            "s0034"
+          ],
+          "retrieved_turns": [
+            "s0045t0010",
+            "s0045t0006",
+            "s0009t0012",
+            "s0009t0002",
+            "s0009t0006"
+          ]
+        },
+        {
+          "id": "gpt4_85da3956",
+          "category": "temporal-reasoning",
+          "abstention": false,
+          "chunks": 959,
+          "repeated_session_occurrences": 0,
+          "session_recall": 1.0,
+          "turn_recall": 1.0,
+          "all_sessions_recalled": true,
+          "retrieved_sessions": [
+            "s0023",
+            "s0035",
+            "s0051",
+            "s0049",
+            "s0026"
+          ],
+          "retrieved_turns": [
+            "s0023t0006",
+            "s0023t0000",
+            "s0023t0002",
+            "s0023t0003",
+            "s0023t0001"
+          ]
+        },
+        {
+          "id": "bbf86515",
+          "category": "temporal-reasoning",
+          "abstention": false,
+          "chunks": 940,
+          "repeated_session_occurrences": 0,
+          "session_recall": 1.0,
+          "turn_recall": 0.5,
+          "all_sessions_recalled": true,
+          "retrieved_sessions": [
+            "s0028",
+            "s0033",
+            "s0030",
+            "s0017",
+            "s0010"
+          ],
+          "retrieved_turns": [
+            "s0028t0002",
+            "s0028t0000",
+            "s0033t0008",
+            "s0028t0008",
+            "s0028t0006"
+          ]
+        }
+      ]
+    },
+    "minilm": {
+      "summary": {
+        "cases": 35,
+        "abstention_cases_not_scored": 5,
+        "session_recall": 0.875,
+        "session_recall_denominator": 30,
+        "turn_recall": 0.6277777777777778,
+        "turn_recall_denominator": 30,
+        "all_sessions_recalled": 0.8333333333333334,
+        "all_sessions_recalled_denominator": 30
+      },
+      "cases": [
+        {
+          "id": "19b5f2b3_abs",
+          "category": "abstention",
+          "abstention": true,
+          "chunks": 970,
+          "repeated_session_occurrences": 0,
+          "session_recall": null,
+          "turn_recall": null,
+          "all_sessions_recalled": null,
+          "retrieved_sessions": [
+            "s0019",
+            "s0023",
+            "s0004",
+            "s0008",
+            "s0014"
+          ],
+          "retrieved_turns": [
+            "s0019t0002",
+            "s0019t0006",
+            "s0019t0000",
+            "s0023t0008",
+            "s0019t0009"
+          ]
+        },
+        {
+          "id": "eeda8a6d_abs",
+          "category": "abstention",
+          "abstention": true,
+          "chunks": 933,
+          "repeated_session_occurrences": 0,
+          "session_recall": null,
+          "turn_recall": null,
+          "all_sessions_recalled": null,
+          "retrieved_sessions": [
+            "s0016",
+            "s0030",
+            "s0022",
+            "s0040",
+            "s0021"
+          ],
+          "retrieved_turns": [
+            "s0016t0004",
+            "s0030t0004",
+            "s0030t0003",
+            "s0016t0000",
+            "s0030t0008"
+          ]
+        },
+        {
+          "id": "ba358f49_abs",
+          "category": "abstention",
+          "abstention": true,
+          "chunks": 961,
+          "repeated_session_occurrences": 0,
+          "session_recall": null,
+          "turn_recall": null,
+          "all_sessions_recalled": null,
+          "retrieved_sessions": [
+            "s0031",
+            "s0002",
+            "s0008",
+            "s0023",
+            "s0042"
+          ],
+          "retrieved_turns": [
+            "s0031t0011",
+            "s0002t0000",
+            "s0002t0002",
+            "s0002t0001",
+            "s0008t0001"
+          ]
+        },
+        {
+          "id": "09ba9854_abs",
+          "category": "abstention",
+          "abstention": true,
+          "chunks": 971,
+          "repeated_session_occurrences": 0,
+          "session_recall": null,
+          "turn_recall": null,
+          "all_sessions_recalled": null,
+          "retrieved_sessions": [
+            "s0005",
+            "s0030",
+            "s0032",
+            "s0040",
+            "s0033"
+          ],
+          "retrieved_turns": [
+            "s0005t0006",
+            "s0005t0008",
+            "s0030t0000",
+            "s0032t0008",
+            "s0030t0001"
+          ]
+        },
+        {
+          "id": "0ddfec37_abs",
+          "category": "abstention",
+          "abstention": true,
+          "chunks": 939,
+          "repeated_session_occurrences": 0,
+          "session_recall": null,
+          "turn_recall": null,
+          "all_sessions_recalled": null,
+          "retrieved_sessions": [
+            "s0038",
+            "s0017",
+            "s0005",
+            "s0018",
+            "s0003"
+          ],
+          "retrieved_turns": [
+            "s0038t0000",
+            "s0038t0008",
+            "s0038t0009",
+            "s0017t0003",
+            "s0005t0011"
+          ]
+        },
+        {
+          "id": "ce6d2d27",
+          "category": "knowledge-update",
+          "abstention": false,
+          "chunks": 979,
+          "repeated_session_occurrences": 0,
+          "session_recall": 0.5,
+          "turn_recall": 0.5,
+          "all_sessions_recalled": false,
+          "retrieved_sessions": [
+            "s0017",
+            "s0009",
+            "s0008",
+            "s0018",
+            "s0027"
+          ],
+          "retrieved_turns": [
+            "s0017t0001",
+            "s0017t0000",
+            "s0017t0008",
+            "s0009t0011",
+            "s0008t0003"
+          ]
+        },
+        {
+          "id": "f685340e",
+          "category": "knowledge-update",
+          "abstention": false,
+          "chunks": 913,
+          "repeated_session_occurrences": 0,
+          "session_recall": 1.0,
+          "turn_recall": 0.5,
+          "all_sessions_recalled": true,
+          "retrieved_sessions": [
+            "s0001",
+            "s0038",
+            "s0013",
+            "s0005",
+            "s0012"
+          ],
+          "retrieved_turns": [
+            "s0001t0006",
+            "s0001t0007",
+            "s0001t0008",
+            "s0038t0000",
+            "s0001t0011"
+          ]
+        },
+        {
+          "id": "c7dc5443",
+          "category": "knowledge-update",
+          "abstention": false,
+          "chunks": 956,
+          "repeated_session_occurrences": 1,
+          "session_recall": 1.0,
+          "turn_recall": 1.0,
+          "all_sessions_recalled": true,
+          "retrieved_sessions": [
+            "s0007",
+            "s0043",
+            "s0038",
+            "s0013",
+            "s0017"
+          ],
+          "retrieved_turns": [
+            "s0007t0000",
+            "s0043t0000",
+            "s0043t0010",
+            "s0043t0005",
+            "s0007t0007"
+          ]
+        },
+        {
+          "id": "72e3ee87",
+          "category": "knowledge-update",
+          "abstention": false,
+          "chunks": 963,
+          "repeated_session_occurrences": 0,
+          "session_recall": 1.0,
+          "turn_recall": 1.0,
+          "all_sessions_recalled": true,
+          "retrieved_sessions": [
+            "s0045",
+            "s0019",
+            "s0048",
+            "s0000",
+            "s0011"
+          ],
+          "retrieved_turns": [
+            "s0045t0009",
+            "s0045t0008",
+            "s0019t0001",
+            "s0019t0000",
+            "s0045t0005"
+          ]
+        },
+        {
+          "id": "22d2cb42",
+          "category": "knowledge-update",
+          "abstention": false,
+          "chunks": 948,
+          "repeated_session_occurrences": 0,
+          "session_recall": 1.0,
+          "turn_recall": 1.0,
+          "all_sessions_recalled": true,
+          "retrieved_sessions": [
+            "s0010",
+            "s0024",
+            "s0006",
+            "s0030",
+            "s0038"
+          ],
+          "retrieved_turns": [
+            "s0010t0008",
+            "s0010t0010",
+            "s0024t0002",
+            "s0010t0009",
+            "s0024t0004"
+          ]
+        },
+        {
+          "id": "36b9f61e",
+          "category": "multi-session",
+          "abstention": false,
+          "chunks": 972,
+          "repeated_session_occurrences": 0,
+          "session_recall": 1.0,
+          "turn_recall": 1.0,
+          "all_sessions_recalled": true,
+          "retrieved_sessions": [
+            "s0032",
+            "s0015",
+            "s0013",
+            "s0019",
+            "s0038"
+          ],
+          "retrieved_turns": [
+            "s0032t0002",
+            "s0015t0000",
+            "s0015t0003",
+            "s0032t0000",
+            "s0013t0002"
+          ]
+        },
+        {
+          "id": "a08a253f",
+          "category": "multi-session",
+          "abstention": false,
+          "chunks": 987,
+          "repeated_session_occurrences": 0,
+          "session_recall": 1.0,
+          "turn_recall": 0.5,
+          "all_sessions_recalled": true,
+          "retrieved_sessions": [
+            "s0036",
+            "s0003",
+            "s0028",
+            "s0016",
+            "s0041"
+          ],
+          "retrieved_turns": [
+            "s0036t0000",
+            "s0003t0001",
+            "s0036t0002",
+            "s0036t0001",
+            "s0036t0003"
+          ]
+        },
+        {
+          "id": "0ea62687",
+          "category": "multi-session",
+          "abstention": false,
+          "chunks": 947,
+          "repeated_session_occurrences": 0,
+          "session_recall": 1.0,
+          "turn_recall": 1.0,
+          "all_sessions_recalled": true,
+          "retrieved_sessions": [
+            "s0000",
+            "s0024",
+            "s0028",
+            "s0025",
+            "s0034"
+          ],
+          "retrieved_turns": [
+            "s0000t0000",
+            "s0024t0008",
+            "s0000t0001",
+            "s0000t0002",
+            "s0024t0000"
+          ]
+        },
+        {
+          "id": "e25c3b8d",
+          "category": "multi-session",
+          "abstention": false,
+          "chunks": 999,
+          "repeated_session_occurrences": 0,
+          "session_recall": 1.0,
+          "turn_recall": 1.0,
+          "all_sessions_recalled": true,
+          "retrieved_sessions": [
+            "s0019",
+            "s0011",
+            "s0025",
+            "s0035",
+            "s0024"
+          ],
+          "retrieved_turns": [
+            "s0019t0006",
+            "s0011t0002",
+            "s0019t0000",
+            "s0019t0007",
+            "s0011t0000"
+          ]
+        },
+        {
+          "id": "51c32626",
+          "category": "multi-session",
+          "abstention": false,
+          "chunks": 965,
+          "repeated_session_occurrences": 0,
+          "session_recall": 1.0,
+          "turn_recall": 0.0,
+          "all_sessions_recalled": true,
+          "retrieved_sessions": [
+            "s0047",
+            "s0009",
+            "s0035",
+            "s0028",
+            "s0000"
+          ],
+          "retrieved_turns": [
+            "s0047t0007",
+            "s0047t0000",
+            "s0047t0002",
+            "s0047t0009",
+            "s0009t0004"
+          ]
+        },
+        {
+          "id": "ceb54acb",
+          "category": "single-session-assistant",
+          "abstention": false,
+          "chunks": 952,
+          "repeated_session_occurrences": 0,
+          "session_recall": 1.0,
+          "turn_recall": 1.0,
+          "all_sessions_recalled": true,
+          "retrieved_sessions": [
+            "s0029",
+            "s0043",
+            "s0040",
+            "s0026",
+            "s0005"
+          ],
+          "retrieved_turns": [
+            "s0029t0003",
+            "s0029t0001",
+            "s0043t0007",
+            "s0040t0005",
+            "s0040t0007"
+          ]
+        },
+        {
+          "id": "70b3e69b",
+          "category": "single-session-assistant",
+          "abstention": false,
+          "chunks": 975,
+          "repeated_session_occurrences": 0,
+          "session_recall": 1.0,
+          "turn_recall": 0.0,
+          "all_sessions_recalled": true,
+          "retrieved_sessions": [
+            "s0004",
+            "s0012",
+            "s0028",
+            "s0043",
+            "s0017"
+          ],
+          "retrieved_turns": [
+            "s0004t0012",
+            "s0004t0000",
+            "s0004t0004",
+            "s0004t0008",
+            "s0004t0006"
+          ]
+        },
+        {
+          "id": "7a8d0b71",
+          "category": "single-session-assistant",
+          "abstention": false,
+          "chunks": 965,
+          "repeated_session_occurrences": 0,
+          "session_recall": 1.0,
+          "turn_recall": 1.0,
+          "all_sessions_recalled": true,
+          "retrieved_sessions": [
+            "s0016",
+            "s0039",
+            "s0002",
+            "s0019",
+            "s0010"
+          ],
+          "retrieved_turns": [
+            "s0016t0000",
+            "s0016t0004",
+            "s0016t0002",
+            "s0016t0001",
+            "s0039t0001"
+          ]
+        },
+        {
+          "id": "e3fc4d6e",
+          "category": "single-session-assistant",
+          "abstention": false,
+          "chunks": 998,
+          "repeated_session_occurrences": 0,
+          "session_recall": 1.0,
+          "turn_recall": 1.0,
+          "all_sessions_recalled": true,
+          "retrieved_sessions": [
+            "s0032",
+            "s0029",
+            "s0009",
+            "s0028",
+            "s0049"
+          ],
+          "retrieved_turns": [
+            "s0032t0000",
+            "s0032t0001",
+            "s0029t0007",
+            "s0009t0003",
+            "s0028t0006"
+          ]
+        },
+        {
+          "id": "8cf51dda",
+          "category": "single-session-assistant",
+          "abstention": false,
+          "chunks": 942,
+          "repeated_session_occurrences": 0,
+          "session_recall": 1.0,
+          "turn_recall": 1.0,
+          "all_sessions_recalled": true,
+          "retrieved_sessions": [
+            "s0038",
+            "s0009",
+            "s0044",
+            "s0030",
+            "s0045"
+          ],
+          "retrieved_turns": [
+            "s0038t0000",
+            "s0038t0001",
+            "s0009t0001",
+            "s0009t0002",
+            "s0009t0006"
+          ]
+        },
+        {
+          "id": "0edc2aef",
+          "category": "single-session-preference",
+          "abstention": false,
+          "chunks": 965,
+          "repeated_session_occurrences": 0,
+          "session_recall": 1.0,
+          "turn_recall": 1.0,
+          "all_sessions_recalled": true,
+          "retrieved_sessions": [
+            "s0039",
+            "s0042",
+            "s0025",
+            "s0022",
+            "s0041"
+          ],
+          "retrieved_turns": [
+            "s0039t0015",
+            "s0039t0002",
+            "s0039t0004",
+            "s0042t0007",
+            "s0042t0004"
+          ]
+        },
+        {
+          "id": "d24813b1",
+          "category": "single-session-preference",
+          "abstention": false,
+          "chunks": 941,
+          "repeated_session_occurrences": 0,
+          "session_recall": 1.0,
+          "turn_recall": 1.0,
+          "all_sessions_recalled": true,
+          "retrieved_sessions": [
+            "s0036",
+            "s0037",
+            "s0008",
+            "s0021",
+            "s0007"
+          ],
+          "retrieved_turns": [
+            "s0036t0001",
+            "s0036t0000",
+            "s0037t0002",
+            "s0037t0007",
+            "s0037t0010"
+          ]
+        },
+        {
+          "id": "35a27287",
+          "category": "single-session-preference",
+          "abstention": false,
+          "chunks": 978,
+          "repeated_session_occurrences": 0,
+          "session_recall": 1.0,
+          "turn_recall": 0.3333333333333333,
+          "all_sessions_recalled": true,
+          "retrieved_sessions": [
+            "s0040",
+            "s0024",
+            "s0037",
+            "s0043",
+            "s0021"
+          ],
+          "retrieved_turns": [
+            "s0040t0002",
+            "s0040t0003",
+            "s0024t0008",
+            "s0040t0006",
+            "s0037t0002"
+          ]
+        },
+        {
+          "id": "d6233ab6",
+          "category": "single-session-preference",
+          "abstention": false,
+          "chunks": 916,
+          "repeated_session_occurrences": 0,
+          "session_recall": 0.0,
+          "turn_recall": 0.0,
+          "all_sessions_recalled": false,
+          "retrieved_sessions": [
+            "s0025",
+            "s0030",
+            "s0000",
+            "s0006",
+            "s0008"
+          ],
+          "retrieved_turns": [
+            "s0025t0008",
+            "s0030t0010",
+            "s0025t0010",
+            "s0030t0002",
+            "s0030t0006"
+          ]
+        },
+        {
+          "id": "1da05512",
+          "category": "single-session-preference",
+          "abstention": false,
+          "chunks": 955,
+          "repeated_session_occurrences": 0,
+          "session_recall": 1.0,
+          "turn_recall": 0.5,
+          "all_sessions_recalled": true,
+          "retrieved_sessions": [
+            "s0038",
+            "s0041",
+            "s0019",
+            "s0003",
+            "s0029"
+          ],
+          "retrieved_turns": [
+            "s0038t0002",
+            "s0038t0000",
+            "s0038t0001",
+            "s0038t0008",
+            "s0038t0010"
+          ]
+        },
+        {
+          "id": "726462e0",
+          "category": "single-session-user",
+          "abstention": false,
+          "chunks": 969,
+          "repeated_session_occurrences": 0,
+          "session_recall": 1.0,
+          "turn_recall": 0.0,
+          "all_sessions_recalled": true,
+          "retrieved_sessions": [
+            "s0043",
+            "s0014",
+            "s0047",
+            "s0041",
+            "s0011"
+          ],
+          "retrieved_turns": [
+            "s0043t0011",
+            "s0014t0008",
+            "s0047t0002",
+            "s0043t0010",
+            "s0041t0002"
+          ]
+        },
+        {
+          "id": "faba32e5",
+          "category": "single-session-user",
+          "abstention": false,
+          "chunks": 962,
+          "repeated_session_occurrences": 0,
+          "session_recall": 1.0,
+          "turn_recall": 1.0,
+          "all_sessions_recalled": true,
+          "retrieved_sessions": [
+            "s0028",
+            "s0017",
+            "s0009",
+            "s0026",
+            "s0044"
+          ],
+          "retrieved_turns": [
+            "s0028t0001",
+            "s0028t0002",
+            "s0028t0000",
+            "s0028t0003",
+            "s0028t0005"
+          ]
+        },
+        {
+          "id": "3b6f954b",
+          "category": "single-session-user",
+          "abstention": false,
+          "chunks": 940,
+          "repeated_session_occurrences": 0,
+          "session_recall": 1.0,
+          "turn_recall": 0.0,
+          "all_sessions_recalled": true,
+          "retrieved_sessions": [
+            "s0041",
+            "s0032",
+            "s0030",
+            "s0022",
+            "s0021"
+          ],
+          "retrieved_turns": [
+            "s0041t0009",
+            "s0041t0011",
+            "s0041t0005",
+            "s0041t0010",
+            "s0032t0001"
+          ]
+        },
+        {
+          "id": "94f70d80",
+          "category": "single-session-user",
+          "abstention": false,
+          "chunks": 970,
+          "repeated_session_occurrences": 0,
+          "session_recall": 1.0,
+          "turn_recall": 1.0,
+          "all_sessions_recalled": true,
+          "retrieved_sessions": [
+            "s0046",
+            "s0019",
+            "s0025",
+            "s0041",
+            "s0006"
+          ],
+          "retrieved_turns": [
+            "s0046t0006",
+            "s0046t0007",
+            "s0046t0010",
+            "s0046t0002",
+            "s0046t0003"
+          ]
+        },
+        {
+          "id": "577d4d32",
+          "category": "single-session-user",
+          "abstention": false,
+          "chunks": 969,
+          "repeated_session_occurrences": 0,
+          "session_recall": 0.0,
+          "turn_recall": 0.0,
+          "all_sessions_recalled": false,
+          "retrieved_sessions": [
+            "s0009",
+            "s0019",
+            "s0018",
+            "s0003",
+            "s0038"
+          ],
+          "retrieved_turns": [
+            "s0009t0002",
+            "s0019t0001",
+            "s0019t0003",
+            "s0019t0005",
+            "s0019t0007"
+          ]
+        },
+        {
+          "id": "gpt4_a2d1d1f6",
+          "category": "temporal-reasoning",
+          "abstention": false,
+          "chunks": 967,
+          "repeated_session_occurrences": 0,
+          "session_recall": 1.0,
+          "turn_recall": 1.0,
+          "all_sessions_recalled": true,
+          "retrieved_sessions": [
+            "s0013",
+            "s0015",
+            "s0030",
+            "s0042",
+            "s0028"
+          ],
+          "retrieved_turns": [
+            "s0013t0007",
+            "s0013t0000",
+            "s0013t0008",
+            "s0013t0009",
+            "s0013t0003"
+          ]
+        },
+        {
+          "id": "0bb5a684",
+          "category": "temporal-reasoning",
+          "abstention": false,
+          "chunks": 963,
+          "repeated_session_occurrences": 0,
+          "session_recall": 1.0,
+          "turn_recall": 0.5,
+          "all_sessions_recalled": true,
+          "retrieved_sessions": [
+            "s0019",
+            "s0005",
+            "s0023",
+            "s0011",
+            "s0010"
+          ],
+          "retrieved_turns": [
+            "s0019t0001",
+            "s0005t0004",
+            "s0005t0000",
+            "s0005t0007",
+            "s0005t0002"
+          ]
+        },
+        {
+          "id": "b46e15ed",
+          "category": "temporal-reasoning",
+          "abstention": false,
+          "chunks": 958,
+          "repeated_session_occurrences": 0,
+          "session_recall": 0.25,
+          "turn_recall": 0.0,
+          "all_sessions_recalled": false,
+          "retrieved_sessions": [
+            "s0029",
+            "s0045",
+            "s0033",
+            "s0026",
+            "s0017"
+          ],
+          "retrieved_turns": [
+            "s0029t0009",
+            "s0045t0010",
+            "s0045t0011",
+            "s0033t0007",
+            "s0026t0001"
+          ]
+        },
+        {
+          "id": "gpt4_85da3956",
+          "category": "temporal-reasoning",
+          "abstention": false,
+          "chunks": 959,
+          "repeated_session_occurrences": 0,
+          "session_recall": 1.0,
+          "turn_recall": 1.0,
+          "all_sessions_recalled": true,
+          "retrieved_sessions": [
+            "s0023",
+            "s0008",
+            "s0032",
+            "s0039",
+            "s0021"
+          ],
+          "retrieved_turns": [
+            "s0023t0003",
+            "s0023t0001",
+            "s0023t0002",
+            "s0023t0000",
+            "s0008t0011"
+          ]
+        },
+        {
+          "id": "bbf86515",
+          "category": "temporal-reasoning",
+          "abstention": false,
+          "chunks": 940,
+          "repeated_session_occurrences": 0,
+          "session_recall": 0.5,
+          "turn_recall": 0.0,
+          "all_sessions_recalled": false,
+          "retrieved_sessions": [
+            "s0030",
+            "s0028",
+            "s0025",
+            "s0019",
+            "s0016"
+          ],
+          "retrieved_turns": [
+            "s0030t0003",
+            "s0030t0000",
+            "s0030t0005",
+            "s0030t0007",
+            "s0030t0001"
+          ]
+        }
+      ]
+    },
+    "reciprocal_rank_fusion": {
+      "summary": {
+        "cases": 35,
+        "abstention_cases_not_scored": 5,
+        "session_recall": 0.95,
+        "session_recall_denominator": 30,
+        "turn_recall": 0.7111111111111111,
+        "turn_recall_denominator": 30,
+        "all_sessions_recalled": 0.9333333333333333,
+        "all_sessions_recalled_denominator": 30
+      },
+      "cases": [
+        {
+          "id": "19b5f2b3_abs",
+          "category": "abstention",
+          "abstention": true,
+          "chunks": 970,
+          "repeated_session_occurrences": 0,
+          "session_recall": null,
+          "turn_recall": null,
+          "all_sessions_recalled": null,
+          "retrieved_sessions": [
+            "s0023",
+            "s0019",
+            "s0026",
+            "s0004",
+            "s0015"
+          ],
+          "retrieved_turns": [
+            "s0023t0011",
+            "s0023t0008",
+            "s0023t0010",
+            "s0019t0004",
+            "s0019t0000"
+          ]
+        },
+        {
+          "id": "eeda8a6d_abs",
+          "category": "abstention",
+          "abstention": true,
+          "chunks": 933,
+          "repeated_session_occurrences": 0,
+          "session_recall": null,
+          "turn_recall": null,
+          "all_sessions_recalled": null,
+          "retrieved_sessions": [
+            "s0016",
+            "s0030",
+            "s0043",
+            "s0048",
+            "s0042"
+          ],
+          "retrieved_turns": [
+            "s0016t0004",
+            "s0016t0000",
+            "s0030t0004",
+            "s0030t0008",
+            "s0030t0000"
+          ]
+        },
+        {
+          "id": "ba358f49_abs",
+          "category": "abstention",
+          "abstention": true,
+          "chunks": 961,
+          "repeated_session_occurrences": 0,
+          "session_recall": null,
+          "turn_recall": null,
+          "all_sessions_recalled": null,
+          "retrieved_sessions": [
+            "s0008",
+            "s0012",
+            "s0044",
+            "s0021",
+            "s0010"
+          ],
+          "retrieved_turns": [
+            "s0008t0000",
+            "s0012t0005",
+            "s0008t0008",
+            "s0044t0002",
+            "s0021t0010"
+          ]
+        },
+        {
+          "id": "09ba9854_abs",
+          "category": "abstention",
+          "abstention": true,
+          "chunks": 971,
+          "repeated_session_occurrences": 0,
+          "session_recall": null,
+          "turn_recall": null,
+          "all_sessions_recalled": null,
+          "retrieved_sessions": [
+            "s0005",
+            "s0032",
+            "s0030",
+            "s0034",
+            "s0009"
+          ],
+          "retrieved_turns": [
+            "s0005t0006",
+            "s0032t0008",
+            "s0005t0008",
+            "s0005t0001",
+            "s0005t0007"
+          ]
+        },
+        {
+          "id": "0ddfec37_abs",
+          "category": "abstention",
+          "abstention": true,
+          "chunks": 939,
+          "repeated_session_occurrences": 0,
+          "session_recall": null,
+          "turn_recall": null,
+          "all_sessions_recalled": null,
+          "retrieved_sessions": [
+            "s0038",
+            "s0018",
+            "s0005",
+            "s0003",
+            "s0042"
+          ],
+          "retrieved_turns": [
+            "s0038t0000",
+            "s0038t0008",
+            "s0018t0000",
+            "s0018t0001",
+            "s0038t0001"
+          ]
+        },
+        {
+          "id": "ce6d2d27",
+          "category": "knowledge-update",
+          "abstention": false,
+          "chunks": 979,
+          "repeated_session_occurrences": 0,
+          "session_recall": 1.0,
+          "turn_recall": 1.0,
+          "all_sessions_recalled": true,
+          "retrieved_sessions": [
+            "s0017",
+            "s0001",
+            "s0008",
+            "s0012",
+            "s0016"
+          ],
+          "retrieved_turns": [
+            "s0017t0000",
+            "s0017t0001",
+            "s0017t0008",
+            "s0017t0009",
+            "s0001t0004"
+          ]
+        },
+        {
+          "id": "f685340e",
+          "category": "knowledge-update",
+          "abstention": false,
+          "chunks": 913,
+          "repeated_session_occurrences": 0,
+          "session_recall": 1.0,
+          "turn_recall": 1.0,
+          "all_sessions_recalled": true,
+          "retrieved_sessions": [
+            "s0001",
+            "s0038",
+            "s0005",
+            "s0032",
+            "s0009"
+          ],
+          "retrieved_turns": [
+            "s0001t0006",
+            "s0038t0000",
+            "s0001t0008",
+            "s0001t0000",
+            "s0038t0010"
+          ]
+        },
+        {
+          "id": "c7dc5443",
+          "category": "knowledge-update",
+          "abstention": false,
+          "chunks": 956,
+          "repeated_session_occurrences": 1,
+          "session_recall": 1.0,
+          "turn_recall": 1.0,
+          "all_sessions_recalled": true,
+          "retrieved_sessions": [
+            "s0043",
+            "s0007",
+            "s0041",
+            "s0017",
+            "s0010"
+          ],
+          "retrieved_turns": [
+            "s0043t0000",
+            "s0043t0010",
+            "s0043t0004",
+            "s0007t0000",
+            "s0007t0006"
+          ]
+        },
+        {
+          "id": "72e3ee87",
+          "category": "knowledge-update",
+          "abstention": false,
+          "chunks": 963,
+          "repeated_session_occurrences": 0,
+          "session_recall": 1.0,
+          "turn_recall": 1.0,
+          "all_sessions_recalled": true,
+          "retrieved_sessions": [
+            "s0045",
+            "s0019",
+            "s0041",
+            "s0028",
+            "s0011"
+          ],
+          "retrieved_turns": [
+            "s0045t0008",
+            "s0045t0009",
+            "s0019t0001",
+            "s0019t0000",
+            "s0045t0005"
+          ]
+        },
+        {
+          "id": "22d2cb42",
+          "category": "knowledge-update",
+          "abstention": false,
+          "chunks": 948,
+          "repeated_session_occurrences": 0,
+          "session_recall": 1.0,
+          "turn_recall": 0.0,
+          "all_sessions_recalled": true,
+          "retrieved_sessions": [
+            "s0010",
+            "s0024",
+            "s0042",
+            "s0037",
+            "s0033"
+          ],
+          "retrieved_turns": [
+            "s0010t0008",
+            "s0024t0004",
+            "s0010t0009",
+            "s0010t0010",
+            "s0010t0006"
+          ]
+        },
+        {
+          "id": "36b9f61e",
+          "category": "multi-session",
+          "abstention": false,
+          "chunks": 972,
+          "repeated_session_occurrences": 0,
+          "session_recall": 1.0,
+          "turn_recall": 0.0,
+          "all_sessions_recalled": true,
+          "retrieved_sessions": [
+            "s0015",
+            "s0032",
+            "s0013",
+            "s0042",
+            "s0041"
+          ],
+          "retrieved_turns": [
+            "s0015t0002",
+            "s0015t0007",
+            "s0015t0003",
+            "s0015t0005",
+            "s0032t0001"
+          ]
+        },
+        {
+          "id": "a08a253f",
+          "category": "multi-session",
+          "abstention": false,
+          "chunks": 987,
+          "repeated_session_occurrences": 0,
+          "session_recall": 1.0,
+          "turn_recall": 0.5,
+          "all_sessions_recalled": true,
+          "retrieved_sessions": [
+            "s0036",
+            "s0015",
+            "s0028",
+            "s0041",
+            "s0003"
+          ],
+          "retrieved_turns": [
+            "s0036t0000",
+            "s0036t0001",
+            "s0015t0001",
+            "s0036t0003",
+            "s0028t0010"
+          ]
+        },
+        {
+          "id": "0ea62687",
+          "category": "multi-session",
+          "abstention": false,
+          "chunks": 947,
+          "repeated_session_occurrences": 0,
+          "session_recall": 1.0,
+          "turn_recall": 1.0,
+          "all_sessions_recalled": true,
+          "retrieved_sessions": [
+            "s0000",
+            "s0024",
+            "s0021",
+            "s0022",
+            "s0041"
+          ],
+          "retrieved_turns": [
+            "s0000t0000",
+            "s0024t0008",
+            "s0024t0000",
+            "s0000t0001",
+            "s0024t0005"
+          ]
+        },
+        {
+          "id": "e25c3b8d",
+          "category": "multi-session",
+          "abstention": false,
+          "chunks": 999,
+          "repeated_session_occurrences": 0,
+          "session_recall": 1.0,
+          "turn_recall": 0.5,
+          "all_sessions_recalled": true,
+          "retrieved_sessions": [
+            "s0019",
+            "s0011",
+            "s0046",
+            "s0035",
+            "s0025"
+          ],
+          "retrieved_turns": [
+            "s0019t0006",
+            "s0019t0005",
+            "s0019t0007",
+            "s0019t0000",
+            "s0019t0004"
+          ]
+        },
+        {
+          "id": "51c32626",
+          "category": "multi-session",
+          "abstention": false,
+          "chunks": 965,
+          "repeated_session_occurrences": 0,
+          "session_recall": 1.0,
+          "turn_recall": 0.5,
+          "all_sessions_recalled": true,
+          "retrieved_sessions": [
+            "s0047",
+            "s0009",
+            "s0027",
+            "s0000",
+            "s0012"
+          ],
+          "retrieved_turns": [
+            "s0047t0000",
+            "s0047t0007",
+            "s0047t0002",
+            "s0047t0009",
+            "s0009t0000"
+          ]
+        },
+        {
+          "id": "ceb54acb",
+          "category": "single-session-assistant",
+          "abstention": false,
+          "chunks": 952,
+          "repeated_session_occurrences": 0,
+          "session_recall": 1.0,
+          "turn_recall": 1.0,
+          "all_sessions_recalled": true,
+          "retrieved_sessions": [
+            "s0029",
+            "s0040",
+            "s0005",
+            "s0045",
+            "s0000"
+          ],
+          "retrieved_turns": [
+            "s0029t0003",
+            "s0029t0001",
+            "s0040t0009",
+            "s0040t0007",
+            "s0005t0007"
+          ]
+        },
+        {
+          "id": "70b3e69b",
+          "category": "single-session-assistant",
+          "abstention": false,
+          "chunks": 975,
+          "repeated_session_occurrences": 0,
+          "session_recall": 1.0,
+          "turn_recall": 1.0,
+          "all_sessions_recalled": true,
+          "retrieved_sessions": [
+            "s0004",
+            "s0017",
+            "s0012",
+            "s0015",
+            "s0009"
+          ],
+          "retrieved_turns": [
+            "s0004t0012",
+            "s0004t0000",
+            "s0004t0013",
+            "s0004t0001",
+            "s0004t0005"
+          ]
+        },
+        {
+          "id": "7a8d0b71",
+          "category": "single-session-assistant",
+          "abstention": false,
+          "chunks": 965,
+          "repeated_session_occurrences": 0,
+          "session_recall": 1.0,
+          "turn_recall": 1.0,
+          "all_sessions_recalled": true,
+          "retrieved_sessions": [
+            "s0016",
+            "s0037",
+            "s0044",
+            "s0031",
+            "s0010"
+          ],
+          "retrieved_turns": [
+            "s0016t0000",
+            "s0016t0002",
+            "s0016t0004",
+            "s0016t0001",
+            "s0037t0010"
+          ]
+        },
+        {
+          "id": "e3fc4d6e",
+          "category": "single-session-assistant",
+          "abstention": false,
+          "chunks": 998,
+          "repeated_session_occurrences": 0,
+          "session_recall": 1.0,
+          "turn_recall": 1.0,
+          "all_sessions_recalled": true,
+          "retrieved_sessions": [
+            "s0032",
+            "s0010",
+            "s0029",
+            "s0009",
+            "s0018"
+          ],
+          "retrieved_turns": [
+            "s0032t0000",
+            "s0032t0001",
+            "s0010t0005",
+            "s0010t0001",
+            "s0029t0007"
+          ]
+        },
+        {
+          "id": "8cf51dda",
+          "category": "single-session-assistant",
+          "abstention": false,
+          "chunks": 942,
+          "repeated_session_occurrences": 0,
+          "session_recall": 1.0,
+          "turn_recall": 1.0,
+          "all_sessions_recalled": true,
+          "retrieved_sessions": [
+            "s0038",
+            "s0045",
+            "s0016",
+            "s0010",
+            "s0042"
+          ],
+          "retrieved_turns": [
+            "s0038t0000",
+            "s0038t0001",
+            "s0045t0009",
+            "s0045t0011",
+            "s0045t0010"
+          ]
+        },
+        {
+          "id": "0edc2aef",
+          "category": "single-session-preference",
+          "abstention": false,
+          "chunks": 965,
+          "repeated_session_occurrences": 0,
+          "session_recall": 1.0,
+          "turn_recall": 0.0,
+          "all_sessions_recalled": true,
+          "retrieved_sessions": [
+            "s0042",
+            "s0039",
+            "s0025",
+            "s0041",
+            "s0022"
+          ],
+          "retrieved_turns": [
+            "s0042t0004",
+            "s0042t0005",
+            "s0042t0007",
+            "s0039t0013",
+            "s0042t0009"
+          ]
+        },
+        {
+          "id": "d24813b1",
+          "category": "single-session-preference",
+          "abstention": false,
+          "chunks": 941,
+          "repeated_session_occurrences": 0,
+          "session_recall": 1.0,
+          "turn_recall": 1.0,
+          "all_sessions_recalled": true,
+          "retrieved_sessions": [
+            "s0037",
+            "s0007",
+            "s0025",
+            "s0036",
+            "s0008"
+          ],
+          "retrieved_turns": [
+            "s0037t0002",
+            "s0007t0008",
+            "s0037t0012",
+            "s0025t0006",
+            "s0036t0010"
+          ]
+        },
+        {
+          "id": "35a27287",
+          "category": "single-session-preference",
+          "abstention": false,
+          "chunks": 978,
+          "repeated_session_occurrences": 0,
+          "session_recall": 1.0,
+          "turn_recall": 0.3333333333333333,
+          "all_sessions_recalled": true,
+          "retrieved_sessions": [
+            "s0040",
+            "s0045",
+            "s0049",
+            "s0037",
+            "s0043"
+          ],
+          "retrieved_turns": [
+            "s0040t0003",
+            "s0040t0002",
+            "s0040t0006",
+            "s0045t0001",
+            "s0040t0013"
+          ]
+        },
+        {
+          "id": "d6233ab6",
+          "category": "single-session-preference",
+          "abstention": false,
+          "chunks": 916,
+          "repeated_session_occurrences": 0,
+          "session_recall": 0.0,
+          "turn_recall": 0.0,
+          "all_sessions_recalled": false,
+          "retrieved_sessions": [
+            "s0025",
+            "s0000",
+            "s0028",
+            "s0008",
+            "s0043"
+          ],
+          "retrieved_turns": [
+            "s0025t0008",
+            "s0000t0006",
+            "s0028t0006",
+            "s0008t0006",
+            "s0000t0010"
+          ]
+        },
+        {
+          "id": "1da05512",
+          "category": "single-session-preference",
+          "abstention": false,
+          "chunks": 955,
+          "repeated_session_occurrences": 0,
+          "session_recall": 1.0,
+          "turn_recall": 0.5,
+          "all_sessions_recalled": true,
+          "retrieved_sessions": [
+            "s0038",
+            "s0041",
+            "s0044",
+            "s0014",
+            "s0012"
+          ],
+          "retrieved_turns": [
+            "s0038t0008",
+            "s0038t0010",
+            "s0038t0003",
+            "s0038t0002",
+            "s0038t0000"
+          ]
+        },
+        {
+          "id": "726462e0",
+          "category": "single-session-user",
+          "abstention": false,
+          "chunks": 969,
+          "repeated_session_occurrences": 0,
+          "session_recall": 1.0,
+          "turn_recall": 1.0,
+          "all_sessions_recalled": true,
+          "retrieved_sessions": [
+            "s0011",
+            "s0014",
+            "s0043",
+            "s0001",
+            "s0041"
+          ],
+          "retrieved_turns": [
+            "s0011t0002",
+            "s0014t0008",
+            "s0043t0008",
+            "s0001t0000",
+            "s0041t0009"
+          ]
+        },
+        {
+          "id": "faba32e5",
+          "category": "single-session-user",
+          "abstention": false,
+          "chunks": 962,
+          "repeated_session_occurrences": 0,
+          "session_recall": 1.0,
+          "turn_recall": 1.0,
+          "all_sessions_recalled": true,
+          "retrieved_sessions": [
+            "s0028",
+            "s0020",
+            "s0039",
+            "s0017",
+            "s0043"
+          ],
+          "retrieved_turns": [
+            "s0028t0001",
+            "s0028t0002",
+            "s0028t0000",
+            "s0028t0003",
+            "s0028t0007"
+          ]
+        },
+        {
+          "id": "3b6f954b",
+          "category": "single-session-user",
+          "abstention": false,
+          "chunks": 940,
+          "repeated_session_occurrences": 0,
+          "session_recall": 1.0,
+          "turn_recall": 1.0,
+          "all_sessions_recalled": true,
+          "retrieved_sessions": [
+            "s0021",
+            "s0023",
+            "s0045",
+            "s0028",
+            "s0041"
+          ],
+          "retrieved_turns": [
+            "s0021t0009",
+            "s0021t0008",
+            "s0023t0004",
+            "s0045t0004",
+            "s0028t0002"
+          ]
+        },
+        {
+          "id": "94f70d80",
+          "category": "single-session-user",
+          "abstention": false,
+          "chunks": 970,
+          "repeated_session_occurrences": 0,
+          "session_recall": 1.0,
+          "turn_recall": 1.0,
+          "all_sessions_recalled": true,
+          "retrieved_sessions": [
+            "s0046",
+            "s0019",
+            "s0033",
+            "s0041",
+            "s0048"
+          ],
+          "retrieved_turns": [
+            "s0046t0006",
+            "s0046t0007",
+            "s0046t0002",
+            "s0046t0003",
+            "s0046t0010"
+          ]
+        },
+        {
+          "id": "577d4d32",
+          "category": "single-session-user",
+          "abstention": false,
+          "chunks": 969,
+          "repeated_session_occurrences": 0,
+          "session_recall": 1.0,
+          "turn_recall": 1.0,
+          "all_sessions_recalled": true,
+          "retrieved_sessions": [
+            "s0041",
+            "s0038",
+            "s0012",
+            "s0034",
+            "s0045"
+          ],
+          "retrieved_turns": [
+            "s0041t0004",
+            "s0038t0004",
+            "s0012t0007",
+            "s0012t0008",
+            "s0012t0006"
+          ]
+        },
+        {
+          "id": "gpt4_a2d1d1f6",
+          "category": "temporal-reasoning",
+          "abstention": false,
+          "chunks": 967,
+          "repeated_session_occurrences": 0,
+          "session_recall": 1.0,
+          "turn_recall": 1.0,
+          "all_sessions_recalled": true,
+          "retrieved_sessions": [
+            "s0013",
+            "s0015",
+            "s0042",
+            "s0017",
+            "s0030"
+          ],
+          "retrieved_turns": [
+            "s0013t0000",
+            "s0013t0007",
+            "s0013t0008",
+            "s0013t0009",
+            "s0013t0006"
+          ]
+        },
+        {
+          "id": "0bb5a684",
+          "category": "temporal-reasoning",
+          "abstention": false,
+          "chunks": 963,
+          "repeated_session_occurrences": 0,
+          "session_recall": 1.0,
+          "turn_recall": 1.0,
+          "all_sessions_recalled": true,
+          "retrieved_sessions": [
+            "s0005",
+            "s0019",
+            "s0023",
+            "s0026",
+            "s0008"
+          ],
+          "retrieved_turns": [
+            "s0005t0000",
+            "s0005t0004",
+            "s0005t0002",
+            "s0019t0001",
+            "s0019t0000"
+          ]
+        },
+        {
+          "id": "b46e15ed",
+          "category": "temporal-reasoning",
+          "abstention": false,
+          "chunks": 958,
+          "repeated_session_occurrences": 0,
+          "session_recall": 0.5,
+          "turn_recall": 0.0,
+          "all_sessions_recalled": false,
+          "retrieved_sessions": [
+            "s0045",
+            "s0026",
+            "s0044",
+            "s0042",
+            "s0029"
+          ],
+          "retrieved_turns": [
+            "s0045t0010",
+            "s0045t0011",
+            "s0026t0005",
+            "s0044t0011",
+            "s0042t0000"
+          ]
+        },
+        {
+          "id": "gpt4_85da3956",
+          "category": "temporal-reasoning",
+          "abstention": false,
+          "chunks": 959,
+          "repeated_session_occurrences": 0,
+          "session_recall": 1.0,
+          "turn_recall": 1.0,
+          "all_sessions_recalled": true,
+          "retrieved_sessions": [
+            "s0023",
+            "s0035",
+            "s0008",
+            "s0039",
+            "s0009"
+          ],
+          "retrieved_turns": [
+            "s0023t0003",
+            "s0023t0000",
+            "s0023t0002",
+            "s0023t0001",
+            "s0023t0006"
+          ]
+        },
+        {
+          "id": "bbf86515",
+          "category": "temporal-reasoning",
+          "abstention": false,
+          "chunks": 940,
+          "repeated_session_occurrences": 0,
+          "session_recall": 1.0,
+          "turn_recall": 0.0,
+          "all_sessions_recalled": true,
+          "retrieved_sessions": [
+            "s0028",
+            "s0030",
+            "s0033",
+            "s0017",
+            "s0019"
+          ],
+          "retrieved_turns": [
+            "s0028t0005",
+            "s0028t0004",
+            "s0030t0007",
+            "s0030t0009",
+            "s0030t0001"
+          ]
+        }
+      ]
+    }
+  }
+}

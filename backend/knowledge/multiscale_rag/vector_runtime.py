@@ -38,14 +38,14 @@ class LocalMeanPoolingEmbeddingProvider:
         with self._runtime_lock:
             if self._model is not None:
                 return self._tokenizer, self._model
-            import torch
             from transformers import AutoModel, AutoTokenizer
 
             self._tokenizer = AutoTokenizer.from_pretrained(self.model_path, local_files_only=True)
             self._model = AutoModel.from_pretrained(self.model_path, local_files_only=True)
             self._model.eval()
             self._model.to("cpu")
-            torch.set_grad_enabled(False)
+            # Inference mode is scoped in embed_texts. Do not disable gradients
+            # for the caller's thread: the same process may later train LoRA.
             return self._tokenizer, self._model
 
     def embed_texts(self, texts: list[str]) -> np.ndarray:

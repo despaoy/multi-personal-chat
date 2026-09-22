@@ -178,6 +178,20 @@ async def test_rule_analyzer_failure_skips_semantic_review_and_preserves_legacy_
     assert "日常互动" in prepared.compiled.dynamic_context
 
 
+async def test_input_budget_fallback_remains_distinct_at_service_boundary():
+    reviewer = _Reviewer(_review_payload())
+    service = _service(SemanticStateEstimator(reviewer, review_mode="all_non_safety"))
+    message = "背景。" * 1400 + "我只想安静待一会。"
+    original = service._situation_analyzer.estimate(message, ())
+    prepared = await service.prepare_turn(_turn(message), "tsukiyashiro_kisaki")
+
+    assert prepared.semantic_review_status == "fallback"
+    assert prepared.semantic_review_fallback_reason == "input_budget"
+    assert prepared.interaction == original
+    assert prepared.compiled.profile_context
+    assert reviewer.calls == []
+
+
 async def test_unexpected_custom_estimator_failure_keeps_the_rule_state():
     service = _service(_BrokenSemanticEstimator())
     rule_state = service._situation_analyzer.estimate("我当然开心，毕竟又被放鸽子了", ())

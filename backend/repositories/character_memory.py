@@ -76,7 +76,7 @@ class CharacterMemoryRepository(Protocol):
         self,
         character_id: str,
         user_scope: UserScope,
-        limit: int = 30,
+        limit: int | None = 30,
         *,
         include_inactive: bool = False,
         scope_levels: Optional[tuple[str, ...]] = None,
@@ -190,6 +190,29 @@ class DatabaseCharacterMemoryRepository:
     def __init__(self, database: Any) -> None:
         self._database = database
 
+    async def find_rule_memory_records(self, character_id: str, user_scope: UserScope, keys: tuple[str, ...]) -> list[dict[str, Any]]:
+        rows = await asyncio.to_thread(
+            self._database.list_character_memory_claims,
+            character_id, user_scope.platform, user_scope.adapter, user_scope.sender_id,
+            user_scope.conversation_type, user_scope.conversation_id, None,
+            scope_levels=("conversation",), memory_keys=keys, include_inactive=True,
+        )
+        return [_decode_memory_record(dict(row)) for row in rows]
+
+    async def list_relationship_notes(self, character_id: str, user_scope: UserScope) -> list[dict[str, Any]]:
+        from character.natural_relationship import is_note
+
+        reader = getattr(self._database, "list_character_memory_claims", None)
+        if reader is None:
+            return []  # Legacy adapters cannot safely retain temporary metadata.
+        rows = await asyncio.to_thread(
+            reader, character_id, user_scope.platform, user_scope.adapter,
+            user_scope.sender_id, user_scope.conversation_type, user_scope.conversation_id,
+            None, relationship_notes_only=True,
+        )
+        rows = [_decode_memory_record(dict(row)) for row in rows]
+        return [row for row in rows if is_note(row)]
+
     async def get_relationship(
         self, character_id: str, user_scope: UserScope
     ) -> RelationshipState:
@@ -272,12 +295,12 @@ class DatabaseCharacterMemoryRepository:
         self,
         character_id: str,
         user_scope: UserScope,
-        limit: int = 30,
+        limit: int | None = 30,
         *,
         include_inactive: bool = False,
         scope_levels: Optional[tuple[str, ...]] = None,
     ) -> list[dict[str, Any]]:
-        """Return decoded claims visible through the requested memory layers."""
+        """Return visible claims; limit=None scans all for contextual/write recall."""
         invalid_levels = set(scope_levels or ()) - set(_VALID_SCOPE_LEVELS)
         if invalid_levels:
             raise ValueError(f"未知的记忆作用域: {sorted(invalid_levels)!r}")
@@ -406,6 +429,8 @@ class DatabaseCharacterMemoryRepository:
             source_ids.insert(0, source_message_id)
         appender = getattr(self._database, "append_character_memory_claim", None)
         if appender is None:
+            if metadata_payload.get("origin") in {"rule_v2", "rule_candidate"}:
+                raise RuntimeError("规则记忆写入需要支持版本与证据的数据库适配器")
             # Compatibility for custom/older adapters. This path cannot retain
             # history, but keeps deployment functional while capability probes
             # make the limitation observable to the caller.

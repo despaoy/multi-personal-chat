@@ -50,6 +50,17 @@ class TinyChatTokenizer:
         )
 
 
+def test_evidence_conditioned_supervision_refuses_to_truncate_its_context():
+    messages = [
+        {"role": "user", "content": "evidence " * 40},
+        {"role": "assistant", "content": "answer"},
+    ]
+    with pytest.raises(ValueError, match="detach the answer"):
+        tokenize_assistant_turns(TinyChatTokenizer(), messages, max_length=50, require_full_context=True)
+    # Ordinary legacy datasets keep their existing truncation behavior.
+    assert tokenize_assistant_turns(TinyChatTokenizer(), messages, max_length=50)["input_ids"]
+
+
 def test_normalize_supports_messages_sharegpt_and_legacy_records():
     messages = normalize_chat_record(
         {

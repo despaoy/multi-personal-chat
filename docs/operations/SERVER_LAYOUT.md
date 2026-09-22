@@ -43,7 +43,7 @@
 | 实验报告 JSON | `runtime/results/`；经筛选的报告可复制进仓库 | 视用途 |
 | 日志/PID/临时文件 | `runtime/logs/`、`runtime/tmp/` | 否 |
 
-## 当前推荐环境
+## 已记录的环境组合（版本参考，未重新核验服务器）
 
 ```text
 Python       3.12.13

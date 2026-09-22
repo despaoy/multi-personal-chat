@@ -18,9 +18,7 @@
 - "可能/也许/好像"等不确定陈述；
 - 无明确结构的临时情绪和模型推测。
 
-关系阶段只按交互轮数单向推进（stranger → acquaintance → familiar），
-永不自动回退；close 属于高亲密阶段，仅凭消息数量不足以判定，
-只能由管理员通过管理接口手动设置；回退同样只能由管理员手动修改。
+关系起点仅手动设置，交互轮数只作为统计，不能推断亲密程度。
 
 本模块本身不调用 LLM：全部为正则/关键词规则，可独立测试。运行时可将
 这里产生的高置信候选交给后台 LLM 复核，相关编排位于
@@ -30,16 +28,14 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from typing import TYPE_CHECKING
 
-from character.models import RelationshipStage
+if TYPE_CHECKING:
+    from datetime import datetime
 
-# 关系自动推进阈值（交互轮数，含边界）。
-# close 不设自动阈值：亲密阶段由管理员手动确认。
-_STAGE_THRESHOLDS: tuple[tuple[int, RelationshipStage], ...] = (
-    (50, "familiar"),
-    (10, "acquaintance"),
-)
+    from character.event_memory import EventChange
+    from character.models import RelationshipStage
 
 _STAGE_ORDER: tuple[RelationshipStage, ...] = (
     "stranger",
@@ -89,7 +85,7 @@ _DISLIKE_PATTERNS = (
 )
 
 # 稳定身份信息。每个类别使用固定 memory_key，用户后续修正时通过
-# UPSERT 覆盖旧值，而不是留下相互冲突的多条事实。
+# 版本化替代旧值，保留证据与历史，而不是留下冲突的当前事实。
 _MAJOR_PATTERNS = (
     re.compile(r"我的专业(?:是|为)(?P<subject>[^，。！？,!?]{1,30})"),
     re.compile(r"我(?:读|学)的是(?P<subject>[^，。！？,!?]{1,30})(?:专业)?"),
@@ -100,10 +96,8 @@ _STUDY_STAGE_PATTERNS = (
         r"(?:学生)?"
     ),
 )
-_LOCATION_PATTERNS = (
-    re.compile(r"我(?:现在)?住在(?P<subject>[^，。！？,!?]{1,30})"),
-    re.compile(r"我来自(?P<subject>[^，。！？,!?]{1,30})"),
-)
+_RESIDENCE_PATTERNS = (re.compile(r"我(?:现在)?住在(?P<subject>[^，。！？,!?]{1,30})"),)
+_ORIGIN_PATTERNS = (re.compile(r"我来自(?P<subject>[^，。！？,!?]{1,30})"),)
 _WORK_PATTERNS = (re.compile(r"我(?:目前|现在)?在(?P<subject>[^，。！？,!?]{1,30})(?:工作|上班)"),)
 
 # 持续目标不与永久身份混为一类；goal_* 允许并存多个目标。
@@ -149,6 +143,46 @@ class ExtractedMemory:
     memory_key: str
     content: str
     importance: float
+    evidence: str = ""
+    qualifiers: tuple[tuple[str, str], ...] = ()
+    aliases: tuple[str, ...] = ()
+    polarity: str = ""
+    event: EventChange | None = None
+
+
+_FICTION_CONTEXT = re.compile(
+    r"角色扮演|(?:假设|假如|假装|扮演|例如|比如)[：:\s]|^(?:假设|假如|假装|如果|要是|例如|比如)|"
+    r"(?:小说|剧本|故事)(?:里|中|台词|设定|人物)|(?:台词|人设|设定)[：:]|[“”\"「」『』]"
+)
+_NON_ASSERTION = re.compile(
+    r"不是|并非|不代表|不是真的|不是真名|以前|曾经|过去|"
+    r"(?:我(?:妈妈?|爸爸?|朋友|同事)|他|她|别人|朋友)(?:说|觉得|以为)"
+)
+_CONDITION = re.compile(r"但是|不过|但|只有|除非|除了|仅限|晚上|白天|周末|有时|偶尔")
+
+
+def fictional_memory_context(message: str) -> bool:
+    """Context markers, not topic words: liking novels is not roleplay."""
+    return bool(_FICTION_CONTEXT.search(message.strip()))
+
+
+def canonical_preference(subject: str) -> tuple[str, tuple[str, ...]]:
+    """A deliberately small allowlist; never strip verbs from arbitrary objects."""
+    for obj in ("咖啡", "红茶", "绿茶", "奶茶", "牛奶", "茶"):
+        if subject in {obj, "喝" + obj}:
+            return obj, ("preference_" + obj, "preference_喝" + obj)
+    return subject, ("preference_" + subject,)
+
+
+def _asserted_sentences(message: str) -> list[str]:
+    if not memory_write_allowed(message) or fictional_memory_context(message):
+        return []
+    return [
+        part.strip() for part in re.findall(r"[^。！？!?；;\n]+[。！？!?；;]?", message)
+        if part.strip() and not part.rstrip().endswith(("?", "？"))
+        and not _UNCERTAINTY_PATTERN.search(part) and not _NON_ASSERTION.search(part)
+        and not _contains_question_marker(part)
+    ]
 
 
 def _clean(text: str) -> str:
@@ -183,7 +217,54 @@ def memory_name_allowed(value: str) -> bool:
     return _looks_like_name(_clean(value or ""))
 
 
-def extract_memories(message: str) -> list[ExtractedMemory]:
+def extract_memories(message: str, *, reference_time: datetime | None = None) -> list[ExtractedMemory]:
+    """Preserve evidence and qualifications before applying small slot rules."""
+    found: dict[str, ExtractedMemory] = {}
+    from character.event_memory import event_content, parse_event
+
+    for sentence in _asserted_sentences(message):
+        # Do not clip off a qualification to make a claim fit the old budget.
+        if len(sentence) > MAX_MEMORY_CONTENT_CHARS - 6:
+            continue
+        event = parse_event(sentence, reference_time)
+        if event:
+            key = f"event:{event.subject}:{event.scheduled_date or 'undated'}"
+            # Keep sequential updates in one message in source order.
+            found[f"{key}:{len(found)}"] = ExtractedMemory(
+                "shared_event", key, event_content(event), 0.7, evidence=sentence, event=event,
+            )
+            continue
+        for item in _extract_simple_memories(sentence):
+            if item.memory_key.startswith("user_name") and _CONDITION.search(sentence):
+                continue
+            if item.memory_key.startswith("preference_"):
+                if re.search(r"今天|此刻|现在心情|暂时", sentence):
+                    continue
+                subject = item.memory_key.removeprefix("preference_")
+                # Accept omitted commas only for the same narrow beverage vocabulary.
+                beverage = re.fullmatch(r"(喝?(?:咖啡|红茶|绿茶|奶茶|牛奶|茶))(?:但是|不过|但).+", subject)
+                if beverage:
+                    subject = beverage.group(1)
+                canonical, aliases = canonical_preference(subject)
+                polarity = "dislike" if item.content.startswith("用户说不喜欢") else "like"
+                item = replace(item, memory_key="preference_" + canonical, aliases=aliases, polarity=polarity,
+                               content=f"用户说{'不喜欢' if polarity == 'dislike' else '喜欢'}{canonical}")
+            qualifiers = (("context", sentence),) if _CONDITION.search(sentence) else ()
+            content = "用户自述：" + sentence if qualifiers else item.content
+            # Preserve temporal words in plans/promises without claiming an event lifecycle.
+            if item.memory_type == "promise":
+                content = "用户提到：" + sentence
+            item = replace(item, content=content, evidence=sentence, qualifiers=qualifiers)
+            previous = found.get(item.memory_key)
+            if (previous and previous.qualifiers and not item.qualifiers
+                    and item.polarity and previous.polarity == item.polarity):
+                continue
+            found.pop(item.memory_key, None)
+            found[item.memory_key] = item
+    return sorted(found.values(), key=lambda item: item.importance, reverse=True)[:MAX_EXTRACTED_MEMORIES]
+
+
+def _extract_simple_memories(message: str) -> list[ExtractedMemory]:
     """从用户消息中提取长期记忆，无命中时返回空列表。
 
     同一条消息最多产出：1 条名字 + 2 条偏好 + 1 条承诺，防止刷屏。
@@ -249,7 +330,8 @@ def extract_memories(message: str) -> list[ExtractedMemory]:
     stable_facts = (
         (_MAJOR_PATTERNS, "user_major", "用户说自己的专业是", 0.8),
         (_STUDY_STAGE_PATTERNS, "user_study_stage", "用户说自己是", 0.7),
-        (_LOCATION_PATTERNS, "user_location", "用户说自己来自或居住在", 0.6),
+        (_RESIDENCE_PATTERNS, "user_residence", "用户说自己居住在", 0.6),
+        (_ORIGIN_PATTERNS, "user_origin", "用户说自己来自", 0.6),
         (_WORK_PATTERNS, "user_workplace", "用户说自己在", 0.7),
     )
     for patterns, key, prefix, importance in stable_facts:
@@ -309,7 +391,7 @@ def extract_memories(message: str) -> list[ExtractedMemory]:
 
 def extract_preferred_address(message: str) -> str | None:
     """从"叫我X"类表达中提取用户偏好的称呼。"""
-    address = _first_match(_ADDRESS_PATTERNS, (message or "").strip())
+    address = _first_match(_ADDRESS_PATTERNS, "。".join(_asserted_sentences(message or "")))
     if not address:
         return None
     cleaned = _clean(address)
@@ -319,24 +401,8 @@ def extract_preferred_address(message: str) -> str | None:
 
 
 def next_relationship_stage(current_stage: RelationshipStage, interaction_count: int) -> RelationshipStage:
-    """按交互轮数计算目标关系阶段（只前进不后退）。
-
-    自动推进上限为 familiar：close 仅凭消息数量不足以判定亲密程度，
-    只能由管理员通过管理接口手动设置；已处于 close 的关系也不会
-    因计数回落而自动降级。
-    """
-    target: RelationshipStage = "stranger"
-    for threshold, stage in _STAGE_THRESHOLDS:
-        if interaction_count >= threshold:
-            target = stage
-            break
-    try:
-        current_index = _STAGE_ORDER.index(current_stage)
-    except ValueError:
-        current_index = 0
-    target_index = _STAGE_ORDER.index(target)
-    # 只允许前进：计数回落（测试/重置）不自动降级
-    return _STAGE_ORDER[max(current_index, target_index)]
+    """Compatibility helper: counts never change a manually chosen starting point."""
+    return current_stage if current_stage in _STAGE_ORDER else "stranger"
 
 
 def _first_match(patterns: tuple[re.Pattern[str], ...], text: str) -> str | None:

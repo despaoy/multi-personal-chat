@@ -358,7 +358,7 @@ def test_history_tension_with_deferred_talk_closes_without_minimizing_conflict()
     assert "light_tease" not in plan.strategy_ids
 
 
-def test_relationship_changes_memory_use_without_changing_user_signal():
+def test_relevant_memory_does_not_require_a_relationship_stage():
     analyzer = SituationAnalyzer()
     state = analyzer.estimate("我最近压力很大。")
     policy = DecisionPolicy()
@@ -378,11 +378,17 @@ def test_relationship_changes_memory_use_without_changing_user_signal():
         has_relevant_memory=True,
     )
 
-    assert "recall_shared_context" not in stranger.strategy_ids
+    assert "recall_shared_context" in stranger.strategy_ids
     assert "recall_shared_context" in familiar.strategy_ids
     assert stranger.tone != familiar.tone
-    assert "保持距离" in stranger.tone
-    assert "放松直接" in familiar.tone
+    assert "不假定熟悉" in stranger.tone
+    assert "不刻意拉近或拉远距离" in familiar.tone
+
+    without_memory = policy.decide(
+        _profile(), RelationshipState(stage="familiar"), state.primary_situation,
+        interaction=state, has_relevant_memory=False,
+    )
+    assert "recall_shared_context" not in without_memory.strategy_ids
 
 
 def test_no_history_keeps_full_current_signal_and_old_safety_is_not_smoothed_forward():

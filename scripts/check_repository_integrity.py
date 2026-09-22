@@ -76,8 +76,9 @@ def _check_frontend_navigation(errors: list[str]) -> None:
         route = "/" if relative == "." else f"/{relative}"
         if route != "/login" and "[" not in route:
             page_routes.add(route)
-    sidebar = (ROOT / "src/components/layout/Sidebar.tsx").read_text(encoding="utf-8")
-    linked = set(re.findall(r"href:\s*['\"]([^'\"]+)['\"]", sidebar))
+    # Navigation declarations moved out of the rendering component.
+    navigation = (ROOT / "src/lib/navigation.ts").read_text(encoding="utf-8")
+    linked = set(re.findall(r"href:\s*['\"]([^'\"]+)['\"]", navigation))
     if missing := sorted(page_routes - linked):
         errors.append(f"frontend pages missing from navigation: {', '.join(missing)}")
 

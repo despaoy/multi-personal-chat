@@ -41,6 +41,29 @@ def _memory(content: str, memory_type: str = "user_fact") -> MemoryItem:
     )
 
 
+@pytest.mark.asyncio
+async def test_unbounded_write_candidates_preserve_scope_and_active_filter(tmp_path):
+    db = _db(tmp_path)
+    for index in range(505):
+        db.add_or_update_character_memory(
+            **SCOPE, memory_type="user_fact", memory_key=f"fact_{index}", content=f"用户记录{index}"
+        )
+    db.add_or_update_character_memory(
+        **{**SCOPE, "sender_id": "other"},
+        memory_type="user_fact",
+        memory_key="private",
+        content="其他用户的记忆",
+    )
+    conn = db._get_connection()
+    conn.execute("UPDATE character_memories SET status = 'superseded' WHERE memory_key = 'fact_0'")
+    conn.commit()
+    repo = DatabaseCharacterMemoryRepository(db)
+    records = await repo.list_memory_records("kisaki", _scope(), limit=None)
+    assert len(records) == 504
+    assert all(record["sender_id"] == SCOPE["sender_id"] and record["status"] == "active" for record in records)
+    assert len(await repo.list_memory_records("kisaki", _scope(), limit=10)) == 10
+
+
 def test_schema_and_legacy_upsert_keep_revision_zero(tmp_path):
     db = _db(tmp_path)
     first = db.add_or_update_character_memory(

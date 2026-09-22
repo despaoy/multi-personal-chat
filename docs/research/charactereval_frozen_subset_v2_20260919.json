@@ -1,0 +1,300 @@
+{
+  "status": "public_chinese_subset_frozen_no_generation_or_scores",
+  "subset_seed": "charactereval-contextual-pilot-v1",
+  "requested_roles": 8,
+  "per_role": 2,
+  "cases": [
+    {
+      "id": "355",
+      "role": "洛枳",
+      "novel_name": "暗恋-橘生淮南",
+      "status": "adapted",
+      "history_messages": 7,
+      "context_sha256": "7708eb22e85c0c38ff75b290d66a480491e9484c4acaacd7aafe6b108adc5035",
+      "profile_sha256": "f9a5928feb1224c6f950679b7729a4d0ab9fbe55fbcc4cd05b992343d533775c",
+      "profile_chars": 836,
+      "context_chars": 234,
+      "metric_ids": [
+        "Exposure",
+        "Coherence",
+        "Humanlikeness"
+      ]
+    },
+    {
+      "id": "6442",
+      "role": "洛枳",
+      "novel_name": "暗恋-橘生淮南",
+      "status": "adapted",
+      "history_messages": 5,
+      "context_sha256": "d418731291b7f0e698e43c62ca706718b2bd00cff23ef070f8b17e55e40be551",
+      "profile_sha256": "f9a5928feb1224c6f950679b7729a4d0ab9fbe55fbcc4cd05b992343d533775c",
+      "profile_chars": 836,
+      "context_chars": 123,
+      "metric_ids": [
+        "Behavior",
+        "Consistency",
+        "Communication_skills"
+      ]
+    },
+    {
+      "id": "1238",
+      "role": "沈佳仪",
+      "novel_name": "那些年",
+      "status": "adapted",
+      "history_messages": 0,
+      "context_sha256": "04f5e8811119a0658c8ed356641cf90abbd20cf1c5763aa4088164370d4327fd",
+      "profile_sha256": "75678676c967e5a1b9e0778fd511afccbb39c9441427088bd2dbef2f30e4c53b",
+      "profile_chars": 409,
+      "context_chars": 37,
+      "metric_ids": [
+        "Accuracy",
+        "Behavior",
+        "Coherence",
+        "Consistency",
+        "Humanlikeness",
+        "Communication_skills"
+      ]
+    },
+    {
+      "id": "1283",
+      "role": "沈佳仪",
+      "novel_name": "那些年",
+      "status": "adapted",
+      "history_messages": 5,
+      "context_sha256": "8b0ee38347f5de833e22e16fc012dfb3aeef8cecf7e5774b89d002f0772ce67f",
+      "profile_sha256": "75678676c967e5a1b9e0778fd511afccbb39c9441427088bd2dbef2f30e4c53b",
+      "profile_chars": 409,
+      "context_chars": 425,
+      "metric_ids": [
+        "Accuracy",
+        "Behavior",
+        "Utterance",
+        "Coherence",
+        "Consistency",
+        "Communication_skills",
+        "Diversity"
+      ]
+    },
+    {
+      "id": "9926",
+      "role": "徐凤年",
+      "novel_name": "雪中悍刀行",
+      "status": "adapted",
+      "history_messages": 12,
+      "context_sha256": "97d732284511451f06987f1e6e089edd1e7113c950695771476b4ec7d8dfdd81",
+      "profile_sha256": "cfbfae3e4577bf650f502ea862e0869e081edfe38cbadb017ddfcdddf8e9e543",
+      "profile_chars": 2579,
+      "context_chars": 824,
+      "metric_ids": [
+        "Exposure"
+      ]
+    },
+    {
+      "id": "6028",
+      "role": "徐凤年",
+      "novel_name": "雪中悍刀行",
+      "status": "adapted",
+      "history_messages": 4,
+      "context_sha256": "14445c3dc509f291b9856f479a12652fbbf64b96abffcdd57c3dfd959fb25d6f",
+      "profile_sha256": "cfbfae3e4577bf650f502ea862e0869e081edfe38cbadb017ddfcdddf8e9e543",
+      "profile_chars": 2579,
+      "context_chars": 288,
+      "metric_ids": [
+        "Hallucination",
+        "Fluency"
+      ]
+    },
+    {
+      "id": "3096",
+      "role": "孟宴臣",
+      "novel_name": "我的人间烟火",
+      "status": "adapted",
+      "history_messages": 0,
+      "context_sha256": "97387394579665b23c8ad8ec6d6e794d85c9f0043f8ec66ccc464934b5b520a4",
+      "profile_sha256": "1795176e4a15cb30d8f3969d30426b57d27531d0aae6bdaccb6746f01ca205ca",
+      "profile_chars": 445,
+      "context_chars": 13,
+      "metric_ids": [
+        "Exposure",
+        "Behavior",
+        "Consistency"
+      ]
+    },
+    {
+      "id": "3143",
+      "role": "孟宴臣",
+      "novel_name": "我的人间烟火",
+      "status": "adapted",
+      "history_messages": 9,
+      "context_sha256": "66ffe38b2441af6b977f7ce9ac5264a486c975c09241ede1c64cf8766f6e41d6",
+      "profile_sha256": "1795176e4a15cb30d8f3969d30426b57d27531d0aae6bdaccb6746f01ca205ca",
+      "profile_chars": 445,
+      "context_chars": 112,
+      "metric_ids": [
+        "Utterance",
+        "Communication_skills",
+        "Diversity"
+      ]
+    },
+    {
+      "id": "4158",
+      "role": "美杜莎女王",
+      "novel_name": "斗破苍穹",
+      "status": "adapted",
+      "history_messages": 2,
+      "context_sha256": "ce4778fef32ebbc6f4e83b0ffb3b1774454385bc2dc35576edeff43c9ea12086",
+      "profile_sha256": "2ebe4dc342d6a4efda82d5b395421d3708b7c45a1a2ed9ab9c4ae2a4f81deaf6",
+      "profile_chars": 758,
+      "context_chars": 80,
+      "metric_ids": [
+        "Accuracy",
+        "Exposure",
+        "Behavior",
+        "Utterance",
+        "Coherence",
+        "Consistency",
+        "Humanlikeness",
+        "Communication_skills",
+        "Diversity"
+      ]
+    },
+    {
+      "id": "4086",
+      "role": "美杜莎女王",
+      "novel_name": "斗破苍穹",
+      "status": "adapted",
+      "history_messages": 0,
+      "context_sha256": "fc855a2e864dae49119508648ee8b020349fef57d195041d768c814bf7f0d4c1",
+      "profile_sha256": "2ebe4dc342d6a4efda82d5b395421d3708b7c45a1a2ed9ab9c4ae2a4f81deaf6",
+      "profile_chars": 758,
+      "context_chars": 15,
+      "metric_ids": [
+        "Accuracy",
+        "Exposure",
+        "Behavior",
+        "Utterance",
+        "Coherence",
+        "Consistency",
+        "Humanlikeness",
+        "Communication_skills",
+        "Diversity",
+        "Empathy"
+      ]
+    },
+    {
+      "id": "2613",
+      "role": "罗辑",
+      "novel_name": "三体-黑暗森林",
+      "status": "adapted",
+      "history_messages": 0,
+      "context_sha256": "031055fdf99ca81996bd4fe14f7fb2fb0bdc504b6802750d2bc2dbff6a55d420",
+      "profile_sha256": "00219760a496cf9c24dececed676370c09290b0e4d63b6e2687e1088e76e8fba",
+      "profile_chars": 1150,
+      "context_chars": 19,
+      "metric_ids": [
+        "Communication_skills"
+      ]
+    },
+    {
+      "id": "2604",
+      "role": "罗辑",
+      "novel_name": "三体-黑暗森林",
+      "status": "adapted",
+      "history_messages": 2,
+      "context_sha256": "715f251a2bc1b84a8a63dd75baac20bc622b6304cc227c5adf54f19073a255f7",
+      "profile_sha256": "00219760a496cf9c24dececed676370c09290b0e4d63b6e2687e1088e76e8fba",
+      "profile_chars": 1150,
+      "context_chars": 108,
+      "metric_ids": [
+        "Diversity"
+      ]
+    },
+    {
+      "id": "1349",
+      "role": "柯景腾",
+      "novel_name": "那些年",
+      "status": "adapted",
+      "history_messages": 2,
+      "context_sha256": "4df161a98aa107574cdc56c4e8f197a1118475bc9e6f1244b50b04bc4c0f15d9",
+      "profile_sha256": "c53b7ea64169b2605f953093303c91921ae430e194c9534d3925f9cb9c4183e3",
+      "profile_chars": 344,
+      "context_chars": 103,
+      "metric_ids": [
+        "Accuracy",
+        "Exposure",
+        "Empathy"
+      ]
+    },
+    {
+      "id": "6761",
+      "role": "柯景腾",
+      "novel_name": "那些年",
+      "status": "adapted",
+      "history_messages": 3,
+      "context_sha256": "cea317730fb29410752a482a8c5387124b5fa7d84ebdc8c7784cb00017ea8dce",
+      "profile_sha256": "c53b7ea64169b2605f953093303c91921ae430e194c9534d3925f9cb9c4183e3",
+      "profile_chars": 344,
+      "context_chars": 50,
+      "metric_ids": [
+        "Humanlikeness",
+        "Diversity"
+      ]
+    },
+    {
+      "id": "10149",
+      "role": "关宏宇",
+      "novel_name": "白夜追凶",
+      "status": "adapted",
+      "history_messages": 3,
+      "context_sha256": "babae2e1ae0f6d84d5a470bf780767df653cd770578a356c542f7a4b05cab76e",
+      "profile_sha256": "e4833b50d350a86dad871a9370ec8e71237766e7e8284f1ef85d7a2f0328098d",
+      "profile_chars": 1204,
+      "context_chars": 113,
+      "metric_ids": [
+        "Behavior",
+        "Diversity"
+      ]
+    },
+    {
+      "id": "8204",
+      "role": "关宏宇",
+      "novel_name": "白夜追凶",
+      "status": "adapted",
+      "history_messages": 11,
+      "context_sha256": "80ad0b5cbc196b8fadf8064d0cb964390c05f7cfbf124cc3ae8878cee66148bb",
+      "profile_sha256": "e4833b50d350a86dad871a9370ec8e71237766e7e8284f1ef85d7a2f0328098d",
+      "profile_chars": 1204,
+      "context_chars": 604,
+      "metric_ids": [
+        "Humanlikeness"
+      ]
+    }
+  ],
+  "summary": {
+    "corpus_cases": 4564,
+    "selected_cases": 16,
+    "invalid_selected_cases": 0,
+    "novel_case_counts": {
+      "暗恋-橘生淮南": 2,
+      "那些年": 4,
+      "雪中悍刀行": 2,
+      "我的人间烟火": 2,
+      "斗破苍穹": 2,
+      "三体-黑暗森林": 2,
+      "白夜追凶": 2
+    },
+    "selected_cases_without_metric_annotations": 0
+  },
+  "limitations": [
+    "Public data provenance is independent of this project's synthetic tests; pretrained-model contamination is not ruled out.",
+    "Roles/novels differ from the project's target character. This cannot replace target-canon evaluation.",
+    "No copyrighted source dialogue/profile text is copied into this audit report. Consult the external cache or upstream corpus by ID.",
+    "No gold reply, human rating, training approval, CharacterRM inference or model-quality score is manufactured."
+  ],
+  "source_sha256": {
+    "data/test_data.jsonl": "6d9723a1484f1d2739bcf388c7960abe1933b7a5a1fddae0170cc9ea7c66dcd8",
+    "data/character_profiles.json": "d9b4c9f7ab63b89b3c348ae88b43c87872f0f6a5cb06d7f31cbe64a630e6434e",
+    "data/id2metric.jsonl": "df80ee716124a7deacc6f24ee372a4600b719cdaa79f01cefcdfb286359f1801"
+  },
+  "adapter_sha256": "2e415b5e2f16bfbb40381182fa353affc9595cab94a93d8fc8c44abbe0a2f02b"
+}

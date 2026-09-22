@@ -58,6 +58,10 @@ jobs:
           python -m alembic heads
           python -m pip check
           python ../scripts/check_repository_integrity.py
+          python ../scripts/check_release_hygiene.py
+      - name: Undefined and duplicate Python names
+        working-directory: .
+        run: python -m ruff check backend scripts astrbot_plugins --select F821,F822,F811 --exclude scripts/archive
       - name: Run tests
         run: |
           set -o pipefail

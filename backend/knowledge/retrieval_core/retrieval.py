@@ -43,6 +43,7 @@ class RetrievalCandidate:
     type_multiplier: float = 1.0
     fused_score: float = 0.0
     rerank_score: float | None = None
+    rerank_method: str = "none"
 
     def to_dict(self) -> dict[str, Any]:
         doc = self.document
@@ -70,6 +71,7 @@ class RetrievalCandidate:
             "type_multiplier": round(self.type_multiplier, 4),
             "fused_score": round(self.fused_score, 6),
             "rerank_score": round(self.rerank_score, 4) if self.rerank_score is not None else None,
+            "rerank_method": self.rerank_method,
             "retrieval_rank": 0,
         }
 

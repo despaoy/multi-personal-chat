@@ -714,6 +714,51 @@ class SQLiteDB:
         self._create_character_memories_table(cursor)
         self._ensure_character_memory_claim_schema(cursor)
 
+        # 叙事分支隔离：分支元数据、分支事实断言、分支会话状态。
+        # 与 alembic 009_narrative_branches 保持一致；此处为开发库幂等兜底。
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS narrative_branches (
+                id TEXT PRIMARY KEY,
+                owner_user_id TEXT NOT NULL,
+                character_id TEXT NOT NULL,
+                title TEXT NOT NULL,
+                initial_hypothesis TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'active',
+                revision INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+        ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS branch_assertions (
+                id TEXT PRIMARY KEY,
+                branch_id TEXT NOT NULL,
+                subject TEXT NOT NULL DEFAULT '',
+                predicate TEXT NOT NULL DEFAULT '',
+                object TEXT NOT NULL DEFAULT '',
+                source_type TEXT NOT NULL,
+                assertion_kind TEXT NOT NULL DEFAULT 'event',
+                source_message_id TEXT,
+                source_assertion_ids TEXT NOT NULL DEFAULT '[]',
+                status TEXT NOT NULL DEFAULT 'pending',
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                FOREIGN KEY (branch_id) REFERENCES narrative_branches(id) ON DELETE CASCADE
+            )
+        ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS branch_states (
+                branch_id TEXT PRIMARY KEY,
+                relationship_stage TEXT NOT NULL DEFAULT 'stranger',
+                preferred_address TEXT NOT NULL DEFAULT '',
+                summary TEXT NOT NULL DEFAULT '',
+                interaction_count INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                FOREIGN KEY (branch_id) REFERENCES narrative_branches(id) ON DELETE CASCADE
+            )
+        ''')
+
         self._ensure_column(cursor, "messages", "platform", "TEXT NOT NULL DEFAULT 'qq'")
         self._ensure_column(cursor, "messages", "adapter", "TEXT NOT NULL DEFAULT 'nonebot'")
         self._ensure_column(cursor, "messages", "conversationId", "TEXT")
@@ -722,6 +767,8 @@ class SQLiteDB:
         self._ensure_column(cursor, "messages", "traceId", "TEXT")
         self._ensure_column(cursor, "messages", "conversationType", "TEXT")
         self._ensure_column(cursor, "messages", "senderName", "TEXT")
+        # 可空分支作用域：NULL=正史。正史读取过滤 branchId IS NULL。
+        self._ensure_column(cursor, "messages", "branchId", "TEXT")
         # One-way compatibility migration: legacy session_settings is folded into
         # conversations and then removed. Fresh databases never create this table.
         try:
@@ -834,6 +881,10 @@ class SQLiteDB:
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_character_memories_active_lookup ON character_memories(platform, adapter, sender_id, scope_level, status, updated_at)')
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_character_memories_parent ON character_memories(parent_memory_id)')
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_character_memories_supersedes ON character_memories(supersedes_memory_id)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_narrative_branches_owner ON narrative_branches(owner_user_id, status, updated_at)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_narrative_branches_character ON narrative_branches(character_id)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_branch_assertions_branch_status ON branch_assertions(branch_id, status, updated_at)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_messages_branch ON messages(branchId, createdAt)')
         except Exception:
             pass  # 索引已存在或 SQLite 版本不支，不影响功能
 
@@ -1389,9 +1440,10 @@ class SQLiteDB:
             INSERT INTO messages (
                 sessionType, sessionId, sessionName, platform, adapter, conversationId,
                 conversationType, senderId, senderName, sourceMessageId, traceId,
-                userId, userName, message, reply, modelName, loraName, costTime, createdAt
+                userId, userName, message, reply, modelName, loraName, costTime, createdAt,
+                branchId
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
             message.get("sessionType", conversation_type),
             message.get("sessionId", ""),
@@ -1412,6 +1464,8 @@ class SQLiteDB:
             message.get("loraName", ""),
             message.get("costTime", 0.0),
             created_at,
+            # None → NULL → 正史；非空 → 该条消息属于对应分支。
+            message.get("branchId") or None,
         ))
 
         message_id = cursor.lastrowid
@@ -2375,6 +2429,21 @@ class SQLiteDB:
     # ============================================
     # 通用 SQL 执行（兼容 PostgreSQL 模式）
     # ============================================
+    def narrative_transaction(self, statements):
+        """Commit narrative revision, message and state changes together."""
+        from repositories.narrative import NarrativeConflict
+
+        conn = self._get_connection()
+        try:
+            for sql, params, expected in statements:
+                cursor = conn.execute(sql, params)
+                if expected is not None and cursor.rowcount != expected:
+                    raise NarrativeConflict()
+            conn.commit()
+        except BaseException:
+            conn.rollback()
+            raise
+
     def execute_sql(self, query: str, params: Optional[dict] = None):
         """执行原始 SQL 语句，返回结果。
 
@@ -2861,10 +2930,12 @@ class SQLiteDB:
         sender_id: str,
         conversation_type: str,
         conversation_id: str,
-        limit: int = 30,
+        limit: Optional[int] = 30,
         *,
         include_inactive: bool = False,
         scope_levels: Optional[tuple[str, ...]] = None,
+        relationship_notes_only: bool = False,
+        memory_keys: Optional[tuple[str, ...]] = None,
     ) -> list:
         """Read the three visible claim layers for one user and character.
 
@@ -2884,13 +2955,20 @@ class SQLiteDB:
             scope_levels,
         )
         status_sql = "" if include_inactive else " AND status = 'active'"
+        if relationship_notes_only:
+            status_sql += " AND memory_key LIKE 'relationship:%'"
+        if memory_keys is not None:
+            if not memory_keys:
+                return []
+            status_sql += " AND memory_key IN (" + ",".join("?" for _ in memory_keys) + ")"
+            params.extend(memory_keys)
         cursor.execute(
             "SELECT * FROM character_memories WHERE "
             + where
             + status_sql
             + " ORDER BY CASE scope_level WHEN 'conversation' THEN 0 "
             "WHEN 'user_character' THEN 1 ELSE 2 END, updated_at DESC, revision DESC LIMIT ?",
-            [*params, max(1, min(int(limit), 500))],
+            [*params, -1 if limit is None else max(1, min(int(limit), 500))],
         )
         return [dict(row) for row in cursor.fetchall()]
 
@@ -3037,6 +3115,19 @@ class SQLiteDB:
         try:
             cursor.execute("BEGIN IMMEDIATE")
             target_id = supersedes_memory_id
+            rule_metadata = json.loads(metadata_json)
+            if isinstance(rule_metadata, dict) and rule_metadata.get("origin") == "rule_v2":
+                cursor.execute(
+                    "SELECT id FROM character_memories WHERE character_id = ? AND platform = ? "
+                    "AND adapter = ? AND sender_id = ? AND conversation_type = ? AND conversation_id = ? "
+                    "AND scope_level = ? AND memory_key = ? AND status = 'active'",
+                    (storage_character, platform, adapter, sender_id, storage_type,
+                     storage_conversation, scope_level, memory_key),
+                )
+                active_ids = {int(row["id"]) for row in cursor.fetchall()}
+                expected = {int(target_id)} if target_id is not None else set()
+                if active_ids != expected:
+                    raise ValueError("rule memory changed concurrently")
             if relation == "RETRACT" and target_id is None:
                 target_id = parent_memory_id
             if target_id is not None:
@@ -3245,9 +3336,9 @@ class SQLiteDB:
         cursor = conn.cursor()
         from db.integration_receipts import HISTORY_DELIVERY_FILTER
 
-        conditions = ["platform = ?", "adapter = ?", 'senderId = ?', HISTORY_DELIVERY_FILTER]
+        conditions = ["platform = ?", "adapter = ?", 'senderId = ?', 'branchId IS NULL', HISTORY_DELIVERY_FILTER]
         params: list = [platform, adapter, sender_id]
-        if conversation_type in ("group", "channel"):
+        if conversation_type in ("group", "channel") or adapter == "narrative":
             conditions.append('"conversationId" = ?')
             params.append(conversation_id)
         else:

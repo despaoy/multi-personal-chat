@@ -1,0 +1,538 @@
+{
+  "mode": "hybrid_recall_baseline",
+  "embedding_enabled": true,
+  "metrics": {
+    "cases": 24,
+    "true_positive": 9,
+    "false_positive": 12,
+    "false_negative": 5,
+    "precision_micro": 0.42857142857142855,
+    "recall_micro": 0.6428571428571429,
+    "f1_micro": 0.5142857142857142,
+    "exact_set_accuracy": 0.2916666666666667,
+    "irrelevant_selection_rate": 0.5714285714285714,
+    "negative_cases": 12,
+    "negative_case_injection_rate": 0.6666666666666666,
+    "answerable_cases": 12,
+    "answerable_miss_rate": 0.3333333333333333,
+    "provider_failures": 0,
+    "provider_failure_rate": 0.0,
+    "successful_exact_set_accuracy": 0.2916666666666667,
+    "retrieval_diagnostic_cases": 24,
+    "candidate_gold_recall": 0.6428571428571429,
+    "selector_recall_given_available_gold": 1.0,
+    "gold_missing_before_selection": 5,
+    "available_gold_dropped_by_selection": 0
+  },
+  "by_category": {
+    "context_reference": {
+      "cases": 4,
+      "true_positive": 0,
+      "false_positive": 0,
+      "false_negative": 4,
+      "precision_micro": null,
+      "recall_micro": 0.0,
+      "f1_micro": 0.0,
+      "exact_set_accuracy": 0.0,
+      "irrelevant_selection_rate": null,
+      "negative_cases": 0,
+      "negative_case_injection_rate": null,
+      "answerable_cases": 4,
+      "answerable_miss_rate": 1.0,
+      "provider_failures": 0,
+      "provider_failure_rate": 0.0,
+      "successful_exact_set_accuracy": 0.0,
+      "retrieval_diagnostic_cases": 4,
+      "candidate_gold_recall": 0.0,
+      "selector_recall_given_available_gold": null,
+      "gold_missing_before_selection": 4,
+      "available_gold_dropped_by_selection": 0
+    },
+    "current_correction": {
+      "cases": 2,
+      "true_positive": 1,
+      "false_positive": 2,
+      "false_negative": 0,
+      "precision_micro": 0.3333333333333333,
+      "recall_micro": 1.0,
+      "f1_micro": 0.5,
+      "exact_set_accuracy": 0.0,
+      "irrelevant_selection_rate": 0.6666666666666666,
+      "negative_cases": 1,
+      "negative_case_injection_rate": 1.0,
+      "answerable_cases": 1,
+      "answerable_miss_rate": 0.0,
+      "provider_failures": 0,
+      "provider_failure_rate": 0.0,
+      "successful_exact_set_accuracy": 0.0,
+      "retrieval_diagnostic_cases": 2,
+      "candidate_gold_recall": 1.0,
+      "selector_recall_given_available_gold": 1.0,
+      "gold_missing_before_selection": 0,
+      "available_gold_dropped_by_selection": 0
+    },
+    "hard_negative": {
+      "cases": 4,
+      "true_positive": 0,
+      "false_positive": 4,
+      "false_negative": 0,
+      "precision_micro": 0.0,
+      "recall_micro": null,
+      "f1_micro": 0.0,
+      "exact_set_accuracy": 0.0,
+      "irrelevant_selection_rate": 1.0,
+      "negative_cases": 4,
+      "negative_case_injection_rate": 1.0,
+      "answerable_cases": 0,
+      "answerable_miss_rate": null,
+      "provider_failures": 0,
+      "provider_failure_rate": 0.0,
+      "successful_exact_set_accuracy": 0.0,
+      "retrieval_diagnostic_cases": 4,
+      "candidate_gold_recall": null,
+      "selector_recall_given_available_gold": null,
+      "gold_missing_before_selection": 0,
+      "available_gold_dropped_by_selection": 0
+    },
+    "multi_evidence": {
+      "cases": 2,
+      "true_positive": 3,
+      "false_positive": 1,
+      "false_negative": 1,
+      "precision_micro": 0.75,
+      "recall_micro": 0.75,
+      "f1_micro": 0.75,
+      "exact_set_accuracy": 0.0,
+      "irrelevant_selection_rate": 0.25,
+      "negative_cases": 0,
+      "negative_case_injection_rate": null,
+      "answerable_cases": 2,
+      "answerable_miss_rate": 0.0,
+      "provider_failures": 0,
+      "provider_failure_rate": 0.0,
+      "successful_exact_set_accuracy": 0.0,
+      "retrieval_diagnostic_cases": 2,
+      "candidate_gold_recall": 0.75,
+      "selector_recall_given_available_gold": 1.0,
+      "gold_missing_before_selection": 1,
+      "available_gold_dropped_by_selection": 0
+    },
+    "prompt_injection": {
+      "cases": 2,
+      "true_positive": 1,
+      "false_positive": 0,
+      "false_negative": 0,
+      "precision_micro": 1.0,
+      "recall_micro": 1.0,
+      "f1_micro": 1.0,
+      "exact_set_accuracy": 1.0,
+      "irrelevant_selection_rate": 0.0,
+      "negative_cases": 1,
+      "negative_case_injection_rate": 0.0,
+      "answerable_cases": 1,
+      "answerable_miss_rate": 0.0,
+      "provider_failures": 0,
+      "provider_failure_rate": 0.0,
+      "successful_exact_set_accuracy": 1.0,
+      "retrieval_diagnostic_cases": 2,
+      "candidate_gold_recall": 1.0,
+      "selector_recall_given_available_gold": 1.0,
+      "gold_missing_before_selection": 0,
+      "available_gold_dropped_by_selection": 0
+    },
+    "subject": {
+      "cases": 4,
+      "true_positive": 2,
+      "false_positive": 4,
+      "false_negative": 0,
+      "precision_micro": 0.3333333333333333,
+      "recall_micro": 1.0,
+      "f1_micro": 0.5,
+      "exact_set_accuracy": 0.0,
+      "irrelevant_selection_rate": 0.6666666666666666,
+      "negative_cases": 2,
+      "negative_case_injection_rate": 1.0,
+      "answerable_cases": 2,
+      "answerable_miss_rate": 0.0,
+      "provider_failures": 0,
+      "provider_failure_rate": 0.0,
+      "successful_exact_set_accuracy": 0.0,
+      "retrieval_diagnostic_cases": 4,
+      "candidate_gold_recall": 1.0,
+      "selector_recall_given_available_gold": 1.0,
+      "gold_missing_before_selection": 0,
+      "available_gold_dropped_by_selection": 0
+    },
+    "temporal": {
+      "cases": 4,
+      "true_positive": 2,
+      "false_positive": 0,
+      "false_negative": 0,
+      "precision_micro": 1.0,
+      "recall_micro": 1.0,
+      "f1_micro": 1.0,
+      "exact_set_accuracy": 1.0,
+      "irrelevant_selection_rate": 0.0,
+      "negative_cases": 2,
+      "negative_case_injection_rate": 0.0,
+      "answerable_cases": 2,
+      "answerable_miss_rate": 0.0,
+      "provider_failures": 0,
+      "provider_failure_rate": 0.0,
+      "successful_exact_set_accuracy": 1.0,
+      "retrieval_diagnostic_cases": 4,
+      "candidate_gold_recall": 1.0,
+      "selector_recall_given_available_gold": 1.0,
+      "gold_missing_before_selection": 0,
+      "available_gold_dropped_by_selection": 0
+    },
+    "unsupported": {
+      "cases": 2,
+      "true_positive": 0,
+      "false_positive": 1,
+      "false_negative": 0,
+      "precision_micro": 0.0,
+      "recall_micro": null,
+      "f1_micro": 0.0,
+      "exact_set_accuracy": 0.5,
+      "irrelevant_selection_rate": 1.0,
+      "negative_cases": 2,
+      "negative_case_injection_rate": 0.5,
+      "answerable_cases": 0,
+      "answerable_miss_rate": null,
+      "provider_failures": 0,
+      "provider_failure_rate": 0.0,
+      "successful_exact_set_accuracy": 0.5,
+      "retrieval_diagnostic_cases": 2,
+      "candidate_gold_recall": null,
+      "selector_recall_given_available_gold": null,
+      "gold_missing_before_selection": 0,
+      "available_gold_dropped_by_selection": 0
+    }
+  },
+  "cases": [
+    {
+      "id": "reference_01",
+      "selected_ids": [],
+      "gold_ids": [
+        "m01"
+      ],
+      "candidate_ids": [],
+      "status": "selected",
+      "fallback_reason": "",
+      "decisions": []
+    },
+    {
+      "id": "reference_02",
+      "selected_ids": [],
+      "gold_ids": [
+        "m02"
+      ],
+      "candidate_ids": [],
+      "status": "selected",
+      "fallback_reason": "",
+      "decisions": []
+    },
+    {
+      "id": "reference_03",
+      "selected_ids": [],
+      "gold_ids": [
+        "m01"
+      ],
+      "candidate_ids": [],
+      "status": "selected",
+      "fallback_reason": "",
+      "decisions": []
+    },
+    {
+      "id": "reference_04",
+      "selected_ids": [],
+      "gold_ids": [
+        "m02"
+      ],
+      "candidate_ids": [],
+      "status": "selected",
+      "fallback_reason": "",
+      "decisions": []
+    },
+    {
+      "id": "subject_01",
+      "selected_ids": [
+        "m02",
+        "m01"
+      ],
+      "gold_ids": [
+        "m02"
+      ],
+      "candidate_ids": [
+        "m02",
+        "m01"
+      ],
+      "status": "selected",
+      "fallback_reason": "",
+      "decisions": []
+    },
+    {
+      "id": "subject_02",
+      "selected_ids": [
+        "m01"
+      ],
+      "gold_ids": [],
+      "candidate_ids": [
+        "m01"
+      ],
+      "status": "selected",
+      "fallback_reason": "",
+      "decisions": []
+    },
+    {
+      "id": "subject_03",
+      "selected_ids": [
+        "m01",
+        "m02"
+      ],
+      "gold_ids": [
+        "m01"
+      ],
+      "candidate_ids": [
+        "m01",
+        "m02"
+      ],
+      "status": "selected",
+      "fallback_reason": "",
+      "decisions": []
+    },
+    {
+      "id": "subject_04",
+      "selected_ids": [
+        "m01"
+      ],
+      "gold_ids": [],
+      "candidate_ids": [
+        "m01"
+      ],
+      "status": "selected",
+      "fallback_reason": "",
+      "decisions": []
+    },
+    {
+      "id": "temporal_01",
+      "selected_ids": [
+        "m01"
+      ],
+      "gold_ids": [
+        "m01"
+      ],
+      "candidate_ids": [
+        "m01"
+      ],
+      "status": "selected",
+      "fallback_reason": "",
+      "decisions": []
+    },
+    {
+      "id": "temporal_02",
+      "selected_ids": [
+        "m02"
+      ],
+      "gold_ids": [
+        "m02"
+      ],
+      "candidate_ids": [
+        "m02"
+      ],
+      "status": "selected",
+      "fallback_reason": "",
+      "decisions": []
+    },
+    {
+      "id": "temporal_03",
+      "selected_ids": [],
+      "gold_ids": [],
+      "candidate_ids": [],
+      "status": "selected",
+      "fallback_reason": "",
+      "decisions": []
+    },
+    {
+      "id": "temporal_04",
+      "selected_ids": [],
+      "gold_ids": [],
+      "candidate_ids": [],
+      "status": "selected",
+      "fallback_reason": "",
+      "decisions": []
+    },
+    {
+      "id": "negative_01",
+      "selected_ids": [
+        "m01"
+      ],
+      "gold_ids": [],
+      "candidate_ids": [
+        "m01"
+      ],
+      "status": "selected",
+      "fallback_reason": "",
+      "decisions": []
+    },
+    {
+      "id": "negative_02",
+      "selected_ids": [
+        "m01"
+      ],
+      "gold_ids": [],
+      "candidate_ids": [
+        "m01"
+      ],
+      "status": "selected",
+      "fallback_reason": "",
+      "decisions": []
+    },
+    {
+      "id": "negative_03",
+      "selected_ids": [
+        "m01"
+      ],
+      "gold_ids": [],
+      "candidate_ids": [
+        "m01"
+      ],
+      "status": "selected",
+      "fallback_reason": "",
+      "decisions": []
+    },
+    {
+      "id": "negative_04",
+      "selected_ids": [
+        "m01"
+      ],
+      "gold_ids": [],
+      "candidate_ids": [
+        "m01"
+      ],
+      "status": "selected",
+      "fallback_reason": "",
+      "decisions": []
+    },
+    {
+      "id": "correction_01",
+      "selected_ids": [
+        "m01"
+      ],
+      "gold_ids": [],
+      "candidate_ids": [
+        "m01"
+      ],
+      "status": "selected",
+      "fallback_reason": "",
+      "decisions": []
+    },
+    {
+      "id": "correction_02",
+      "selected_ids": [
+        "m01",
+        "m02"
+      ],
+      "gold_ids": [
+        "m02"
+      ],
+      "candidate_ids": [
+        "m01",
+        "m02"
+      ],
+      "status": "selected",
+      "fallback_reason": "",
+      "decisions": []
+    },
+    {
+      "id": "unsupported_01",
+      "selected_ids": [
+        "m01"
+      ],
+      "gold_ids": [],
+      "candidate_ids": [
+        "m01"
+      ],
+      "status": "selected",
+      "fallback_reason": "",
+      "decisions": []
+    },
+    {
+      "id": "unsupported_02",
+      "selected_ids": [],
+      "gold_ids": [],
+      "candidate_ids": [],
+      "status": "selected",
+      "fallback_reason": "",
+      "decisions": []
+    },
+    {
+      "id": "injection_01",
+      "selected_ids": [],
+      "gold_ids": [],
+      "candidate_ids": [],
+      "status": "selected",
+      "fallback_reason": "",
+      "decisions": []
+    },
+    {
+      "id": "injection_02",
+      "selected_ids": [
+        "m01"
+      ],
+      "gold_ids": [
+        "m01"
+      ],
+      "candidate_ids": [
+        "m01"
+      ],
+      "status": "selected",
+      "fallback_reason": "",
+      "decisions": []
+    },
+    {
+      "id": "multi_01",
+      "selected_ids": [
+        "m01"
+      ],
+      "gold_ids": [
+        "m01",
+        "m02"
+      ],
+      "candidate_ids": [
+        "m01"
+      ],
+      "status": "selected",
+      "fallback_reason": "",
+      "decisions": []
+    },
+    {
+      "id": "multi_02",
+      "selected_ids": [
+        "m02",
+        "m01",
+        "m03"
+      ],
+      "gold_ids": [
+        "m01",
+        "m02"
+      ],
+      "candidate_ids": [
+        "m02",
+        "m01",
+        "m03"
+      ],
+      "status": "selected",
+      "fallback_reason": "",
+      "decisions": []
+    }
+  ],
+  "embedding_model": {
+    "id": "paraphrase-multilingual-MiniLM-L12-v2",
+    "fingerprint": "74b4ceb073b9d730"
+  },
+  "input_sha256": "a8adaf91676b37bfb2f074314eff6d987999d3e29532cb77d4ff20eebb224382",
+  "benchmark_status": "synthetic_smoke_not_research_evidence",
+  "quality_claim": "No production-quality improvement is established by these cases."
+}

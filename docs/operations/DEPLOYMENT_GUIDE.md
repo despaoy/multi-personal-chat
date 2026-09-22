@@ -144,11 +144,12 @@ CUDA_VISIBLE_DEVICES=0 vllm serve \
 后端：
 
 ```bash
-cd "$MULTIPERSONAL_LAB_ROOT/multi-personal-chat"
-uvicorn backend.app.main:app --host 127.0.0.1 --port 8000 --workers 1
+cd "$MULTIPERSONAL_LAB_ROOT/multi-personal-chat/backend"
+python -m alembic upgrade head
+python run.py --host 127.0.0.1 --port 8000 --workers 1
 ```
 
-SQLite 只使用一个 worker。切换 PostgreSQL并确认共享限流、队列和缓存后，才考虑增加 worker。
+SQLite 和 PostgreSQL 模式均要求 `BACKEND_WORKERS=1`。会话锁和 nonce 等状态仍包含进程内实现，切换数据库或启用 Redis 不会自动解除该限制。当前迁移 head 为 `008_integration_receipts`；升级前备份数据库，并同时更新 AstrBot 插件和后端。
 
 前端：
 
@@ -188,6 +189,10 @@ VERIFY_BASE_URL=https://chat.example.com VERIFY_USERNAME=admin VERIFY_PASSWORD='
 
 真实验收还应覆盖：登录、生成、历史入库、LoRA 扫描/切换、角色知识检索、通用知识库导入/检索、AstrBot 鉴权与幂等、监控指标。
 
+AstrBot 发送成功后调用 `/api/integrations/astrbot/delivery`；首次确认后才提交角色历史、记忆与关系更新。验证发送失败重试、已生成回复复用和重复确认。平台发送成功不代表用户已读，跨平台发送和数据库确认不构成原子事务，不能承诺严格恰好一次。
+
+角色知识检索低置信时，聊天入口会让模型按人物口吻表达不知道，仍标记 `abstained=true`、`answerMode=abstention` 且引用为空。固定弃答是表达生成失败时的兜底；独立证据问答接口有自己的弃答策略。
+
 ## 8. SSH 映射
 
 在个人电脑执行：
@@ -208,7 +213,7 @@ SQLite 模式下，`BACKUP_DIR` 的相对路径以 `DATABASE_PATH` 所在目录�
 离线恢复步骤：
 
 ```bash
-# 1. 停止 FastAPI、NoneBot 和其他所有 SQLite 写入进程。
+# 1. 停止 FastAPI 和其他所有 SQLite 写入进程，并暂停 AstrBot 转发。
 # 2. 执行带完整性检查和旧库安全副本的原子恢复。
 python scripts/restore_sqlite_backup.py \
   --backup /path/to/qq_assistant_YYYYMMDD_HHMMSS_full.bak.gz \

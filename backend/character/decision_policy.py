@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from character.conversation_flow import ordinary_conversation
 from character.models import (
     CharacterProfile,
     DecisionPlan,
@@ -29,24 +30,24 @@ from character.situation_analyzer import (
 )
 
 _STAGE_TONE = {
-    "stranger": "礼貌但保持距离，试探对方来意",
-    "acquaintance": "自然随和，可以开轻度玩笑",
-    "familiar": "放松直接，主动接话",
-    "close": "亲近直接，可以调侃对方",
+    "stranger": "符合人物性格，礼貌而不假定熟悉",
+    "acquaintance": "符合人物性格，自然回应",
+    "familiar": "符合人物性格，不刻意拉近或拉远距离",
+    "close": "符合人物性格和已有默契，不自动调侃或追问",
 }
 
 _STAGE_ACTION = {
     "stranger": "回应要点到为止，不主动打听对方私事",
     "acquaintance": "可以适当延伸话题",
-    "familiar": "主动延续话题，可引用共同记忆",
-    "close": "主动关心近况，自然使用既往记忆",
+    "familiar": "仅在相关时引用共同记忆，尊重当前意愿",
+    "close": "仅在相关时使用既往记忆，关心不等于追问",
 }
 
 _STAGE_AVOID = {
     "stranger": "避免过度亲昵和称呼，避免假定双方很熟",
-    "acquaintance": "避免过度热情，避免使用昵称",
-    "familiar": "避免客套和疏远感",
-    "close": "避免生硬客套，避免推翻已建立的默契",
+    "acquaintance": "避免擅自使用昵称或升级亲密",
+    "familiar": "避免把熟悉当作越过边界的许可",
+    "close": "避免以亲近为由施压或要求用户陪伴",
 }
 
 _BASE_PLANS: dict[SituationType, DecisionPlan] = {
@@ -203,7 +204,6 @@ class DecisionPolicy:
         *,
         has_relevant_memory: bool,
     ) -> DecisionPlan:
-        del profile  # Persona wording remains the responsibility of the profile/prompt layer.
         stage = relationship.stage if relationship.stage in _STAGE_TONE else "stranger"
         acts = _signal_map(interaction.user_acts)
         needs = _signal_map(interaction.user_needs)
@@ -326,28 +326,10 @@ class DecisionPolicy:
                 if strategy_id != "graceful_close":
                     scores[strategy_id] -= 0.55
 
-        # Relationship fit. A stranger should not be interrogated or teased;
-        # familiar users allow warmer, more context-aware actions.
+        # A starting point constrains unfamiliarity, never rewards intimacy.
         if stage == "stranger":
             scores["gentle_probe"] -= 0.18
-            scores["brief_self_disclosure"] -= 0.24
-            scores["reciprocate_affiliation"] -= 0.30
             scores["light_tease"] -= 0.24
-            scores["recall_shared_context"] -= 0.45
-        elif stage == "acquaintance":
-            add("gentle_probe", 0.06)
-            scores["recall_shared_context"] -= 0.12
-        elif stage == "familiar":
-            add("gentle_probe", 0.10)
-            add("light_tease", 0.10)
-            add("recall_shared_context", 0.16)
-            add("reciprocate_affiliation", 0.08)
-        else:
-            add("gentle_probe", 0.12)
-            add("light_tease", 0.16)
-            add("brief_self_disclosure", 0.12)
-            add("recall_shared_context", 0.24)
-            add("reciprocate_affiliation", 0.16)
 
         if has_relevant_memory:
             add("recall_shared_context", 0.58)
@@ -366,6 +348,19 @@ class DecisionPolicy:
             (_Candidate(strategy_id, score) for strategy_id, score in scores.items()),
             key=lambda item: (-item.score, item.strategy_id),
         )
+        persona_selected = False
+        # Resolve genuinely close optional alternatives using author preferences;
+        # never introduce another score system or override an explicit request.
+        if ordinary_conversation(interaction) and candidates:
+            allowed = {"reflect_content", "acknowledge_emotion", "stay_present", "brief_self_disclosure"}
+            for preference in profile.response_preferences:
+                if preference not in allowed:
+                    continue
+                preferred = next((item for item in candidates if item.strategy_id == preference), None)
+                if preferred and preferred.score >= 0.3 and candidates[0].score - preferred.score <= 0.2:
+                    candidates = [preferred, *(item for item in candidates if item is not preferred)]
+                    persona_selected = True
+                    break
         chosen = _choose_compatible(candidates, interaction)
         strategy_ids = tuple(item.strategy_id for item in chosen)
 
@@ -376,6 +371,7 @@ class DecisionPolicy:
             avoid=_avoid(stage, interaction, acts, needs),
             strategy_ids=strategy_ids,
             confidence=interaction.confidence,
+            selection_source="persona" if persona_selected else "rule",
         )
 
 

@@ -24,7 +24,6 @@ _MEMORY_RELATION_TYPES = ("ADD", "MERGE", "SUPERSEDE", "COEXIST", "PENDING", "RE
 _MEMORY_STATUSES = ("active", "pending", "superseded", "retracted", "archived")
 
 
-
 # ============================================
 # SQLAlchemy Core 表定义
 # ============================================
@@ -92,7 +91,9 @@ class PgDatabase:
             pool_pre_ping=True,
         )
         self.async_session = async_sessionmaker(
-            self.engine, class_=AsyncSession, expire_on_commit=False,
+            self.engine,
+            class_=AsyncSession,
+            expire_on_commit=False,
         )
         self._bot_enabled_cache: BoundedTTLCache[tuple[str, str, str], bool] = BoundedTTLCache(
             ttl=float(os.getenv("SESSION_SWITCH_CACHE_TTL", "60")),
@@ -114,6 +115,8 @@ class PgDatabase:
             await self._ensure_column(conn, "messages", "traceId", "TEXT")
             await self._ensure_column(conn, "messages", "conversationType", "TEXT")
             await self._ensure_column(conn, "messages", "senderName", "TEXT")
+            await self._ensure_column(conn, "messages", "branchId", "TEXT")
+            await conn.execute(text('CREATE INDEX IF NOT EXISTS idx_messages_branch ON messages ("branchId", "createdAt")'))
             # Existing deployments may predate versioned memory claims. Keep
             # runtime initialization compatible even before Alembic 007 runs.
             memory_claim_columns = {
@@ -133,21 +136,22 @@ class PgDatabase:
             }
             for column, definition in memory_claim_columns.items():
                 await self._ensure_column(conn, "character_memories", column, definition)
-            await conn.execute(text(
-                "ALTER TABLE character_memories DROP CONSTRAINT IF EXISTS uq_character_memory_key"
-            ))
-            await conn.execute(text(
-                "CREATE UNIQUE INDEX IF NOT EXISTS uq_character_memory_revision ON character_memories ("
-                "character_id, platform, adapter, sender_id, conversation_type, conversation_id, "
-                "scope_level, memory_key, revision)"
-            ))
+            await conn.execute(text("ALTER TABLE character_memories DROP CONSTRAINT IF EXISTS uq_character_memory_key"))
+            await conn.execute(
+                text(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS uq_character_memory_revision ON character_memories ("
+                    "character_id, platform, adapter, sender_id, conversation_type, conversation_id, "
+                    "scope_level, memory_key, revision)"
+                )
+            )
             # One-way compatibility migration: legacy session_settings is folded into
             # conversations and then removed. Fresh databases never create this table.
             try:
                 result = await conn.execute(text("SELECT to_regclass('public.session_settings')"))
                 if result.scalar():
                     migrated_at = datetime.now().isoformat()
-                    await conn.execute(text('''
+                    await conn.execute(
+                        text("""
                         INSERT INTO conversations (
                             platform, "conversationId", "conversationType", "displayName",
                             "botEnabled", "replyPolicy", "createdAt", "updatedAt"
@@ -167,8 +171,10 @@ class PgDatabase:
                             "botEnabled" = EXCLUDED."botEnabled",
                             "displayName" = EXCLUDED."displayName",
                             "updatedAt" = EXCLUDED."updatedAt"
-                    '''), {"migrated_at": migrated_at})
-                    await conn.execute(text('DROP TABLE IF EXISTS session_settings'))
+                    """),
+                        {"migrated_at": migrated_at},
+                    )
+                    await conn.execute(text("DROP TABLE IF EXISTS session_settings"))
             except Exception:
                 logger.warning("session_settings migration skipped", exc_info=True)
             await self._ensure_column(conn, "training_tasks", "task_id", "TEXT")
@@ -179,41 +185,87 @@ class PgDatabase:
             await self._ensure_column(conn, "training_tasks", "updated_at", "TEXT DEFAULT ''")
             # C4 fix: 为已有 PG 数据库添加 users.role 列（新数据库由 create_all 创建）
             await self._ensure_column(conn, "users", "role", "TEXT NOT NULL DEFAULT 'user'")
-            await conn.execute(text('CREATE UNIQUE INDEX IF NOT EXISTS idx_training_tasks_task_id ON training_tasks (task_id)'))
-            await conn.execute(text('CREATE INDEX IF NOT EXISTS idx_messages_platform_conversation ON messages (platform, "conversationId", "createdAt")'))
-            await conn.execute(text('CREATE INDEX IF NOT EXISTS idx_messages_source_dedup ON messages (platform, adapter, "sourceMessageId")'))
-            await conn.execute(text('CREATE INDEX IF NOT EXISTS idx_messages_session_created ON messages ("sessionId", "createdAt")'))
+            await conn.execute(
+                text("CREATE UNIQUE INDEX IF NOT EXISTS idx_training_tasks_task_id ON training_tasks (task_id)")
+            )
+            await conn.execute(
+                text(
+                    'CREATE INDEX IF NOT EXISTS idx_messages_platform_conversation ON messages (platform, "conversationId", "createdAt")'
+                )
+            )
+            await conn.execute(
+                text(
+                    'CREATE INDEX IF NOT EXISTS idx_messages_source_dedup ON messages (platform, adapter, "sourceMessageId")'
+                )
+            )
+            await conn.execute(
+                text('CREATE INDEX IF NOT EXISTS idx_messages_session_created ON messages ("sessionId", "createdAt")')
+            )
             await conn.execute(text('CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages ("createdAt")'))
-            await conn.execute(text('DROP INDEX IF EXISTS idx_conversations_platform_conversation'))
+            await conn.execute(text("DROP INDEX IF EXISTS idx_conversations_platform_conversation"))
             # UNIQUE(platform, conversationId, conversationType) 已自动创建索引。
-            await conn.execute(text('CREATE INDEX IF NOT EXISTS idx_integration_events_trace ON integration_events ("traceId")'))
-            await conn.execute(text('CREATE INDEX IF NOT EXISTS idx_integration_events_platform_created ON integration_events (platform, "createdAt")'))
-            await conn.execute(text('CREATE INDEX IF NOT EXISTS idx_model_invocations_trace ON model_invocations ("traceId")'))
-            await conn.execute(text('CREATE INDEX IF NOT EXISTS idx_model_invocations_created ON model_invocations ("createdAt")'))
-            await conn.execute(text('CREATE INDEX IF NOT EXISTS idx_experiment_runs_type ON experiment_runs (experiment_type)'))
-            await conn.execute(text('CREATE INDEX IF NOT EXISTS idx_preference_pairs_status ON preference_pairs (review_status)'))
-            await conn.execute(text('CREATE INDEX IF NOT EXISTS idx_feedback_created ON feedback (created_at)'))
-            await conn.execute(text('CREATE INDEX IF NOT EXISTS idx_adapter_compat_name ON adapter_compatibility (adapter_name)'))
+            await conn.execute(
+                text('CREATE INDEX IF NOT EXISTS idx_integration_events_trace ON integration_events ("traceId")')
+            )
+            await conn.execute(
+                text(
+                    'CREATE INDEX IF NOT EXISTS idx_integration_events_platform_created ON integration_events (platform, "createdAt")'
+                )
+            )
+            await conn.execute(
+                text('CREATE INDEX IF NOT EXISTS idx_model_invocations_trace ON model_invocations ("traceId")')
+            )
+            await conn.execute(
+                text('CREATE INDEX IF NOT EXISTS idx_model_invocations_created ON model_invocations ("createdAt")')
+            )
+            await conn.execute(
+                text("CREATE INDEX IF NOT EXISTS idx_experiment_runs_type ON experiment_runs (experiment_type)")
+            )
+            await conn.execute(
+                text("CREATE INDEX IF NOT EXISTS idx_preference_pairs_status ON preference_pairs (review_status)")
+            )
+            await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_feedback_created ON feedback (created_at)"))
+            await conn.execute(
+                text("CREATE INDEX IF NOT EXISTS idx_adapter_compat_name ON adapter_compatibility (adapter_name)")
+            )
             # 补充此前缺失的高频外键/过滤列索引（与 SQLite 一致）
-            await conn.execute(text('CREATE INDEX IF NOT EXISTS idx_knowledge_chunks_documentId ON knowledge_chunks ("documentId")'))
-            await conn.execute(text('CREATE INDEX IF NOT EXISTS idx_knowledge_documents_kb_id ON knowledge_documents (knowledge_base_id)'))
-            await conn.execute(text('CREATE INDEX IF NOT EXISTS idx_knowledge_documents_folder_id ON knowledge_documents (folder_id)'))
-            await conn.execute(text('CREATE INDEX IF NOT EXISTS idx_training_tasks_lora_name ON training_tasks (lora_name)'))
-            await conn.execute(text('CREATE INDEX IF NOT EXISTS idx_training_tasks_status ON training_tasks (status)'))
-            await conn.execute(text('CREATE INDEX IF NOT EXISTS idx_intent_samples_kbName ON intent_samples ("kbName")'))
-            await conn.execute(text('CREATE INDEX IF NOT EXISTS idx_feedback_trace_id ON feedback (trace_id)'))
-            await conn.execute(text('CREATE INDEX IF NOT EXISTS idx_feedback_message_id ON feedback (message_id)'))
-            await conn.execute(text('CREATE INDEX IF NOT EXISTS idx_audit_logs_timestamp ON audit_logs (timestamp)'))
-            await conn.execute(text(
-                "CREATE INDEX IF NOT EXISTS idx_character_memories_active_lookup ON character_memories "
-                "(platform, adapter, sender_id, scope_level, status, updated_at)"
-            ))
-            await conn.execute(text(
-                "CREATE INDEX IF NOT EXISTS idx_character_memories_parent ON character_memories (parent_memory_id)"
-            ))
-            await conn.execute(text(
-                "CREATE INDEX IF NOT EXISTS idx_character_memories_supersedes ON character_memories (supersedes_memory_id)"
-            ))
+            await conn.execute(
+                text('CREATE INDEX IF NOT EXISTS idx_knowledge_chunks_documentId ON knowledge_chunks ("documentId")')
+            )
+            await conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS idx_knowledge_documents_kb_id ON knowledge_documents (knowledge_base_id)"
+                )
+            )
+            await conn.execute(
+                text("CREATE INDEX IF NOT EXISTS idx_knowledge_documents_folder_id ON knowledge_documents (folder_id)")
+            )
+            await conn.execute(
+                text("CREATE INDEX IF NOT EXISTS idx_training_tasks_lora_name ON training_tasks (lora_name)")
+            )
+            await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_training_tasks_status ON training_tasks (status)"))
+            await conn.execute(
+                text('CREATE INDEX IF NOT EXISTS idx_intent_samples_kbName ON intent_samples ("kbName")')
+            )
+            await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_feedback_trace_id ON feedback (trace_id)"))
+            await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_feedback_message_id ON feedback (message_id)"))
+            await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_audit_logs_timestamp ON audit_logs (timestamp)"))
+            await conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS idx_character_memories_active_lookup ON character_memories "
+                    "(platform, adapter, sender_id, scope_level, status, updated_at)"
+                )
+            )
+            await conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS idx_character_memories_parent ON character_memories (parent_memory_id)"
+                )
+            )
+            await conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS idx_character_memories_supersedes ON character_memories (supersedes_memory_id)"
+                )
+            )
         self._initialized = True
         logger.info(f"✅ PostgreSQL 数据库初始化完成: {self.database_url.split('@')[-1]}")
 
@@ -266,7 +318,13 @@ class PgDatabase:
             result = await session.execute(stmt)
             await session.commit()
             message_id = result.inserted_primary_key[0]
-            return {**message, "id": str(message_id), "conversationType": conversation_type, "senderName": sender_name, "createdAt": created_at}
+            return {
+                **message,
+                "id": str(message_id),
+                "conversationType": conversation_type,
+                "senderName": sender_name,
+                "createdAt": created_at,
+            }
 
     async def get_messages(self, limit: int = 100, offset: int = 0, session_id: Optional[str] = None) -> List[Dict]:
         """获取消息记录，支持按会话 ID 筛选。
@@ -277,11 +335,7 @@ class PgDatabase:
             session_id: 可选，指定会话 ID 时在 SQL 层过滤（与 SQLite 实现对齐）
         """
         async with self.async_session() as session:
-            stmt = (
-                messages_table.select()
-                .order_by(messages_table.c.createdAt.desc())
-                .limit(limit).offset(offset)
-            )
+            stmt = messages_table.select().order_by(messages_table.c.createdAt.desc()).limit(limit).offset(offset)
             if session_id:
                 stmt = stmt.where(messages_table.c.sessionId == session_id)
             result = await session.execute(stmt)
@@ -293,7 +347,6 @@ class PgDatabase:
             stmt = text("SELECT COUNT(*) FROM messages")
             result = await session.execute(stmt)
             return result.scalar()
-
 
     def _message_filter_conditions(
         self,
@@ -373,11 +426,7 @@ class PgDatabase:
             stmt = messages_table.select()
             if conditions:
                 stmt = stmt.where(and_(*conditions))
-            stmt = (
-                stmt.order_by(messages_table.c.createdAt.desc())
-                .limit(min(limit, 1000))
-                .offset(offset)
-            )
+            stmt = stmt.order_by(messages_table.c.createdAt.desc()).limit(min(limit, 1000)).offset(offset)
             result = await session.execute(stmt)
             return [_row_to_dict(row) for row in result.fetchall()]
 
@@ -418,6 +467,7 @@ class PgDatabase:
             stmt = messages_table.delete()
             if conditions:
                 from sqlalchemy import and_
+
                 stmt = stmt.where(and_(*conditions))
 
             result = await session.execute(stmt)
@@ -427,11 +477,7 @@ class PgDatabase:
     async def get_recent_messages(self, limit: int = 10) -> List[Dict]:
         """获取最近消息"""
         async with self.async_session() as session:
-            stmt = (
-                messages_table.select()
-                .order_by(messages_table.c.createdAt.desc())
-                .limit(limit)
-            )
+            stmt = messages_table.select().order_by(messages_table.c.createdAt.desc()).limit(limit)
             result = await session.execute(stmt)
             return [_row_to_dict(row) for row in result.fetchall()]
 
@@ -447,6 +493,7 @@ class PgDatabase:
                 d = _row_to_dict(row)
                 key, value = d["key"], d["value"]
                 from db.config_utils import coerce_config_value
+
                 config_dict[key] = coerce_config_value(value)
             return config_dict
 
@@ -511,12 +558,8 @@ class PgDatabase:
         async with self.async_session() as session:
             if status == "active":
                 # 先将所有其他 LoRA 设为 inactive
-                await session.execute(
-                    loras_table.update().where(loras_table.c.id != lora_id).values(status="inactive")
-                )
-            await session.execute(
-                loras_table.update().where(loras_table.c.id == lora_id).values(status=status)
-            )
+                await session.execute(loras_table.update().where(loras_table.c.id != lora_id).values(status="inactive"))
+            await session.execute(loras_table.update().where(loras_table.c.id == lora_id).values(status=status))
             await session.commit()
 
             # 获取更新后的记录
@@ -542,7 +585,10 @@ class PgDatabase:
         async with self.async_session() as session:
             try:
                 stmt = knowledge_bases_table.insert().values(
-                    name=name, description=description, created_at=now, updated_at=now,
+                    name=name,
+                    description=description,
+                    created_at=now,
+                    updated_at=now,
                 )
                 result = await session.execute(stmt)
                 await session.commit()
@@ -600,11 +646,7 @@ class PgDatabase:
         if "description" in data and data["description"] is not None:
             values["description"] = data["description"]
         async with self.async_session() as session:
-            stmt = (
-                knowledge_bases_table.update()
-                .where(knowledge_bases_table.c.id == kb_id)
-                .values(**values)
-            )
+            stmt = knowledge_bases_table.update().where(knowledge_bases_table.c.id == kb_id).values(**values)
             await session.execute(stmt)
             await session.commit()
             # 获取更新后的记录
@@ -619,7 +661,7 @@ class PgDatabase:
             # 先删除关联文档的 chunks
             await session.execute(
                 text(
-                    "DELETE FROM knowledge_chunks WHERE \"documentId\" IN "
+                    'DELETE FROM knowledge_chunks WHERE "documentId" IN '
                     "(SELECT id FROM knowledge_documents WHERE knowledge_base_id = :kb_id)"
                 ),
                 {"kb_id": kb_id},
@@ -630,9 +672,7 @@ class PgDatabase:
             await session.execute(
                 knowledge_folders_table.delete().where(knowledge_folders_table.c.knowledge_base_id == kb_id)
             )
-            await session.execute(
-                knowledge_bases_table.delete().where(knowledge_bases_table.c.id == kb_id)
-            )
+            await session.execute(knowledge_bases_table.delete().where(knowledge_bases_table.c.id == kb_id))
             await session.commit()
             return True
 
@@ -645,14 +685,22 @@ class PgDatabase:
         async with self.async_session() as session:
             try:
                 stmt = knowledge_folders_table.insert().values(
-                    knowledge_base_id=kb_id, name=name, description=description, created_at=now, updated_at=now,
+                    knowledge_base_id=kb_id,
+                    name=name,
+                    description=description,
+                    created_at=now,
+                    updated_at=now,
                 )
                 result = await session.execute(stmt)
                 await session.commit()
                 folder_id = result.inserted_primary_key[0]
                 return {
-                    "id": folder_id, "knowledge_base_id": kb_id,
-                    "name": name, "description": description, "created_at": now, "updated_at": now,
+                    "id": folder_id,
+                    "knowledge_base_id": kb_id,
+                    "name": name,
+                    "description": description,
+                    "created_at": now,
+                    "updated_at": now,
                 }
             except Exception as e:
                 await session.rollback()
@@ -699,9 +747,7 @@ class PgDatabase:
                 .where(knowledge_documents_table.c.folder_id == folder_id)
                 .values(folder_id=None)
             )
-            await session.execute(
-                knowledge_folders_table.delete().where(knowledge_folders_table.c.id == folder_id)
-            )
+            await session.execute(knowledge_folders_table.delete().where(knowledge_folders_table.c.id == folder_id))
             await session.commit()
             return True
 
@@ -752,6 +798,7 @@ class PgDatabase:
             stmt = knowledge_documents_table.select()
             if conditions:
                 from sqlalchemy import and_
+
                 stmt = stmt.where(and_(*conditions))
             stmt = stmt.order_by(knowledge_documents_table.c.updatedAt.desc()).limit(limit).offset(offset)
 
@@ -767,9 +814,17 @@ class PgDatabase:
             return _row_to_dict(row) if row else None
 
     KNOWLEDGE_DOC_UPDATABLE_COLUMNS = {
-        "title", "content", "category", "knowledge_base_id", "folder_id",
-        "sourceType", "sourceUrl", "fileType", "fileSize",
-        "chunkCount", "updatedAt",
+        "title",
+        "content",
+        "category",
+        "knowledge_base_id",
+        "folder_id",
+        "sourceType",
+        "sourceUrl",
+        "fileType",
+        "fileSize",
+        "chunkCount",
+        "updatedAt",
     }
 
     async def update_knowledge_document(self, doc_id: int, document: Dict) -> Optional[Dict]:
@@ -786,11 +841,7 @@ class PgDatabase:
                 if value is not None:
                     values[key] = value
 
-            stmt = (
-                knowledge_documents_table.update()
-                .where(knowledge_documents_table.c.id == doc_id)
-                .values(**values)
-            )
+            stmt = knowledge_documents_table.update().where(knowledge_documents_table.c.id == doc_id).values(**values)
             await session.execute(stmt)
             await session.commit()
 
@@ -803,12 +854,8 @@ class PgDatabase:
     async def delete_knowledge_document(self, doc_id: int) -> bool:
         """删除知识库文档"""
         async with self.async_session() as session:
-            await session.execute(
-                knowledge_chunks_table.delete().where(knowledge_chunks_table.c.documentId == doc_id)
-            )
-            await session.execute(
-                knowledge_documents_table.delete().where(knowledge_documents_table.c.id == doc_id)
-            )
+            await session.execute(knowledge_chunks_table.delete().where(knowledge_chunks_table.c.documentId == doc_id))
+            await session.execute(knowledge_documents_table.delete().where(knowledge_documents_table.c.id == doc_id))
             await session.commit()
             return True
 
@@ -850,7 +897,9 @@ class PgDatabase:
             offset: 跳过前 N 条
         """
         async with self.async_session() as session:
-            stmt = knowledge_chunks_table.select().order_by(knowledge_chunks_table.c.documentId, knowledge_chunks_table.c.chunkIndex)
+            stmt = knowledge_chunks_table.select().order_by(
+                knowledge_chunks_table.c.documentId, knowledge_chunks_table.c.chunkIndex
+            )
             if limit is not None:
                 stmt = stmt.limit(limit).offset(offset)
             result = await session.execute(stmt)
@@ -904,6 +953,7 @@ class PgDatabase:
         供 SyncPgAdapter 同步包装使用（async generator 无法直接 _run）。
         """
         from sqlalchemy import select
+
         async with self.async_session() as session:
             stmt = (
                 select(
@@ -957,9 +1007,7 @@ class PgDatabase:
         async with self.async_session() as session:
             # Serialize the first-admin decision across API workers. The lock is
             # transaction-scoped and is released automatically on commit/rollback.
-            await session.execute(
-                text("SELECT pg_advisory_xact_lock(hashtext('qqchat:first-admin'))")
-            )
+            await session.execute(text("SELECT pg_advisory_xact_lock(hashtext('qqchat:first-admin'))"))
             count_stmt = users_table.select().order_by(users_table.c.id).limit(1)
             existing = await session.execute(count_stmt)
             has_users = existing.fetchone() is not None
@@ -967,12 +1015,16 @@ class PgDatabase:
                 raise RegistrationClosedError("bootstrap administrator already exists")
             role = "user" if has_users else "admin"
             stmt = users_table.insert().values(
-                username=username, password_hash=password_hash, created_at=now, role=role,
+                username=username,
+                password_hash=password_hash,
+                created_at=now,
+                role=role,
             )
             result = await session.execute(stmt)
             await session.commit()
             user_id = result.inserted_primary_key[0]
             return {"id": user_id, "username": username, "created_at": now, "role": role}
+
     async def get_user(self, user_id: int) -> Optional[Dict]:
         """获取用户 by ID"""
         async with self.async_session() as session:
@@ -1071,10 +1123,7 @@ class PgDatabase:
     ) -> Optional[dict]:
         """读取指定角色+用户范围的关系状态，不存在时返回 None。"""
         async with self.async_session() as session:
-            stmt = text(
-                "SELECT * FROM character_relationships WHERE "
-                + self._CHARACTER_SCOPE_SQL
-            )
+            stmt = text("SELECT * FROM character_relationships WHERE " + self._CHARACTER_SCOPE_SQL)
             result = await session.execute(
                 stmt,
                 self._character_scope_params(
@@ -1126,13 +1175,16 @@ class PgDatabase:
             "RETURNING *"
         )
         params = self._character_scope_params(
-            character_id, platform, adapter, sender_id, conversation_type, conversation_id,
+            character_id,
+            platform,
+            adapter,
+            sender_id,
+            conversation_type,
+            conversation_id,
             relationship_stage=relationship_stage,
             preferred_address=preferred_address,
             summary=summary,
-            interaction_count=(
-                int(interaction_count) if interaction_count is not None else 0
-            ),
+            interaction_count=(int(interaction_count) if interaction_count is not None else 0),
             now=now,
         )
         async with self.async_session() as session:
@@ -1200,7 +1252,12 @@ class PgDatabase:
             result = await session.execute(
                 stmt,
                 self._character_scope_params(
-                    character_id, platform, adapter, sender_id, conversation_type, conversation_id,
+                    character_id,
+                    platform,
+                    adapter,
+                    sender_id,
+                    conversation_type,
+                    conversation_id,
                     limit=max(1, min(int(limit), 200)),
                 ),
             )
@@ -1264,22 +1321,31 @@ class PgDatabase:
         sender_id: str,
         conversation_type: str,
         conversation_id: str,
-        limit: int = 30,
+        limit: Optional[int] = 30,
         *,
         include_inactive: bool = False,
         scope_levels: Optional[tuple[str, ...]] = None,
+        relationship_notes_only: bool = False,
+        memory_keys: Optional[tuple[str, ...]] = None,
     ) -> List[dict]:
         access_sql = self._character_claim_access_sql(scope_levels)
         status_sql = "" if include_inactive else " AND status = 'active'"
+        if relationship_notes_only:
+            status_sql += " AND memory_key LIKE 'relationship:%'"
+        key_params = {}
+        if memory_keys is not None:
+            if not memory_keys:
+                return []
+            key_params = {f"memory_key_{index}": key for index, key in enumerate(memory_keys)}
+            status_sql += " AND memory_key IN (" + ",".join(":" + key for key in key_params) + ")"
+        limit_sql = "" if limit is None else " LIMIT :limit"
+        order_sql = (
+            " ORDER BY CASE scope_level WHEN 'conversation' THEN 0 "
+            "WHEN 'user_character' THEN 1 ELSE 2 END, updated_at DESC, revision DESC" + limit_sql
+        )
         async with self.async_session() as session:
             result = await session.execute(
-                text(
-                    "SELECT * FROM character_memories WHERE "
-                    + access_sql
-                    + status_sql
-                    + " ORDER BY CASE scope_level WHEN 'conversation' THEN 0 "
-                    "WHEN 'user_character' THEN 1 ELSE 2 END, updated_at DESC, revision DESC LIMIT :limit"
-                ),
+                text("SELECT * FROM character_memories WHERE " + access_sql + status_sql + order_sql),
                 self._character_scope_params(
                     character_id,
                     platform,
@@ -1287,7 +1353,8 @@ class PgDatabase:
                     sender_id,
                     conversation_type,
                     conversation_id,
-                    limit=max(1, min(int(limit), 500)),
+                    **({} if limit is None else {"limit": max(1, min(int(limit), 500))}),
+                    **key_params,
                 ),
             )
             return [_row_to_dict(row) for row in result.fetchall()]
@@ -1305,8 +1372,7 @@ class PgDatabase:
         async with self.async_session() as session:
             result = await session.execute(
                 text(
-                    "SELECT * FROM character_memories WHERE id = :memory_id AND "
-                    + self._character_claim_access_sql()
+                    "SELECT * FROM character_memories WHERE id = :memory_id AND " + self._character_claim_access_sql()
                 ),
                 self._character_scope_params(
                     character_id,
@@ -1357,7 +1423,12 @@ class PgDatabase:
             result = await session.execute(
                 stmt,
                 self._character_scope_params(
-                    character_id, platform, adapter, sender_id, conversation_type, conversation_id,
+                    character_id,
+                    platform,
+                    adapter,
+                    sender_id,
+                    conversation_type,
+                    conversation_id,
                     memory_type=memory_type,
                     memory_key=memory_key,
                     content=content,
@@ -1451,13 +1522,34 @@ class PgDatabase:
             # Serialize revision allocation per logical key without locking the
             # full table. Hash collisions only reduce concurrency, not safety.
             lock_key = "\x1f".join(
-                [storage_character, platform, adapter, sender_id, storage_type,
-                 storage_conversation, scope_level, memory_key]
+                [
+                    storage_character,
+                    platform,
+                    adapter,
+                    sender_id,
+                    storage_type,
+                    storage_conversation,
+                    scope_level,
+                    memory_key,
+                ]
             )
             await session.execute(
                 text("SELECT pg_advisory_xact_lock(hashtext(:lock_key))"),
                 {"lock_key": lock_key},
             )
+            rule_metadata = json.loads(metadata_json)
+            if isinstance(rule_metadata, dict) and rule_metadata.get("origin") == "rule_v2":
+                active_result = await session.execute(
+                    text("SELECT id FROM character_memories WHERE character_id = :storage_character "
+                         "AND platform = :platform AND adapter = :adapter AND sender_id = :sender_id "
+                         "AND conversation_type = :storage_type AND conversation_id = :storage_conversation "
+                         "AND scope_level = :scope_level AND memory_key = :memory_key AND status = 'active'"),
+                    params,
+                )
+                active_ids = {int(row[0]) for row in active_result.fetchall()}
+                expected = {int(target_id)} if target_id is not None else set()
+                if active_ids != expected:
+                    raise ValueError("rule memory changed concurrently")
             if target_id is not None:
                 target = await session.execute(
                     text(
@@ -1522,15 +1614,17 @@ class PgDatabase:
         conversation_id: str,
     ) -> bool:
         """Physically erase one visible claim (privacy/legacy DELETE semantics)."""
-        return bool(await self.erase_character_memories(
-            character_id,
-            platform,
-            adapter,
-            sender_id,
-            conversation_type,
-            conversation_id,
-            memory_id=int(memory_id),
-        ))
+        return bool(
+            await self.erase_character_memories(
+                character_id,
+                platform,
+                adapter,
+                sender_id,
+                conversation_type,
+                conversation_id,
+                memory_id=int(memory_id),
+            )
+        )
 
     async def erase_character_memories(
         self,
@@ -1571,9 +1665,7 @@ class PgDatabase:
                     + access_sql
                     + " UNION SELECT child.id FROM character_memories child "
                     "JOIN lineage parent ON (child.parent_memory_id = parent.id "
-                    "OR child.supersedes_memory_id = parent.id) WHERE "
-                    + child_access_sql
-                    + ") "
+                    "OR child.supersedes_memory_id = parent.id) WHERE " + child_access_sql + ") "
                     "DELETE FROM character_memories WHERE id IN (SELECT id FROM lineage) RETURNING id"
                 ),
                 params,
@@ -1594,7 +1686,8 @@ class PgDatabase:
         """Physically clear all conversation-scope versions for one exact scope."""
         async with self.async_session() as session:
             stmt = text(
-                "DELETE FROM character_memories WHERE " + self._CHARACTER_SCOPE_SQL
+                "DELETE FROM character_memories WHERE "
+                + self._CHARACTER_SCOPE_SQL
                 + " AND scope_level = 'conversation'"
             )
             result = await session.execute(
@@ -1624,13 +1717,13 @@ class PgDatabase:
         - 返回按时间正序的 [{"role", "content"}]，超预算从最旧一侧截断。
         """
         async with self.async_session() as session:
-            if conversation_type in ("group", "channel"):
+            if conversation_type in ("group", "channel") or adapter == "narrative":
                 stmt = text(
-                    'SELECT message, reply FROM messages WHERE platform = :platform '
+                    "SELECT message, reply FROM messages WHERE platform = :platform "
                     'AND adapter = :adapter AND "senderId" = :sender_id '
-                    'AND "conversationId" = :conversation_id '
-                    'AND NOT EXISTS (SELECT 1 FROM integration_receipts r '
-                    'WHERE r.owner = messages."traceId" AND r.status <> \'delivered\') '
+                    'AND "conversationId" = :conversation_id AND "branchId" IS NULL '
+                    "AND NOT EXISTS (SELECT 1 FROM integration_receipts r "
+                    "WHERE r.owner = messages.\"traceId\" AND r.status <> 'delivered') "
                     'ORDER BY "createdAt" DESC LIMIT :limit'
                 )
                 params: dict = {
@@ -1642,11 +1735,11 @@ class PgDatabase:
                 }
             else:
                 stmt = text(
-                    'SELECT message, reply FROM messages WHERE platform = :platform '
+                    "SELECT message, reply FROM messages WHERE platform = :platform "
                     'AND adapter = :adapter AND "senderId" = :sender_id '
-                    'AND ("conversationType" = :private OR "conversationType" = :empty) '
-                    'AND NOT EXISTS (SELECT 1 FROM integration_receipts r '
-                    'WHERE r.owner = messages."traceId" AND r.status <> \'delivered\') '
+                    'AND ("conversationType" = :private OR "conversationType" = :empty) AND "branchId" IS NULL '
+                    "AND NOT EXISTS (SELECT 1 FROM integration_receipts r "
+                    "WHERE r.owner = messages.\"traceId\" AND r.status <> 'delivered') "
                     'ORDER BY "createdAt" DESC LIMIT :limit'
                 )
                 params = {
@@ -1697,7 +1790,8 @@ class PgDatabase:
         if not conversation_id:
             return
         now = datetime.now().isoformat()
-        await session.execute(text('''
+        await session.execute(
+            text("""
             INSERT INTO conversations (platform, "conversationId", "conversationType", "displayName", "botEnabled", "replyPolicy", "createdAt", "updatedAt")
             VALUES (:platform, :conversation_id, :conversation_type, :display_name, :bot_enabled, :reply_policy, :created_at, :updated_at)
             ON CONFLICT (platform, "conversationId", "conversationType") DO UPDATE SET
@@ -1705,18 +1799,20 @@ class PgDatabase:
                 "botEnabled" = CASE WHEN :bot_enabled_is_null THEN conversations."botEnabled" ELSE EXCLUDED."botEnabled" END,
                 "replyPolicy" = CASE WHEN :reply_policy_is_null THEN conversations."replyPolicy" ELSE EXCLUDED."replyPolicy" END,
                 "updatedAt" = EXCLUDED."updatedAt"
-        '''), {
-            "platform": platform,
-            "conversation_id": conversation_id,
-            "conversation_type": conversation_type,
-            "display_name": display_name,
-            "bot_enabled": 1 if bot_enabled is None else int(bot_enabled),
-            "reply_policy": reply_policy or "default",
-            "created_at": now,
-            "updated_at": now,
-            "bot_enabled_is_null": bot_enabled is None,
-            "reply_policy_is_null": reply_policy is None,
-        })
+        """),
+            {
+                "platform": platform,
+                "conversation_id": conversation_id,
+                "conversation_type": conversation_type,
+                "display_name": display_name,
+                "bot_enabled": 1 if bot_enabled is None else int(bot_enabled),
+                "reply_policy": reply_policy or "default",
+                "created_at": now,
+                "updated_at": now,
+                "bot_enabled_is_null": bot_enabled is None,
+                "reply_policy_is_null": reply_policy is None,
+            },
+        )
 
     async def upsert_conversation(self, data: Dict) -> None:
         async with self.async_session() as session:
@@ -1731,13 +1827,22 @@ class PgDatabase:
             )
             await session.commit()
 
-    async def get_conversation(self, platform: str, conversation_id: str, conversation_type: Optional[str] = None) -> Optional[Dict]:
+    async def get_conversation(
+        self, platform: str, conversation_id: str, conversation_type: Optional[str] = None
+    ) -> Optional[Dict]:
         async with self.async_session() as session:
             if conversation_type:
-                stmt = text('SELECT * FROM conversations WHERE platform = :platform AND "conversationId" = :conversation_id AND "conversationType" = :conversation_type LIMIT 1')
-                result = await session.execute(stmt, {"platform": platform, "conversation_id": conversation_id, "conversation_type": conversation_type})
+                stmt = text(
+                    'SELECT * FROM conversations WHERE platform = :platform AND "conversationId" = :conversation_id AND "conversationType" = :conversation_type LIMIT 1'
+                )
+                result = await session.execute(
+                    stmt,
+                    {"platform": platform, "conversation_id": conversation_id, "conversation_type": conversation_type},
+                )
             else:
-                stmt = text('SELECT * FROM conversations WHERE platform = :platform AND "conversationId" = :conversation_id ORDER BY "updatedAt" DESC LIMIT 1')
+                stmt = text(
+                    'SELECT * FROM conversations WHERE platform = :platform AND "conversationId" = :conversation_id ORDER BY "updatedAt" DESC LIMIT 1'
+                )
                 result = await session.execute(stmt, {"platform": platform, "conversation_id": conversation_id})
             row = result.fetchone()
             return _row_to_dict(row) if row else None
@@ -1748,25 +1853,28 @@ class PgDatabase:
             raw_summary = json.dumps(raw_summary, ensure_ascii=False, default=str)
         event_hash = event.get("eventHash") or f"{event.get('sourceMessageId', '')}:{event.get('traceId', '')}"
         async with self.async_session() as session:
-            await session.execute(text('''
+            await session.execute(
+                text("""
                 INSERT INTO integration_events (platform, adapter, "sourceMessageId", "conversationId", "conversationType", "senderId", "eventType", "eventHash", "rawSummary", "traceId", status, "createdAt")
                 VALUES (:platform, :adapter, :source_message_id, :conversation_id, :conversation_type, :sender_id, :event_type, :event_hash, :raw_summary, :trace_id, :status, :created_at)
                 ON CONFLICT (platform, adapter, "eventHash") DO UPDATE SET
                     "traceId" = EXCLUDED."traceId", status = EXCLUDED.status, "rawSummary" = EXCLUDED."rawSummary"
-            '''), {
-                "platform": event.get("platform", "qq"),
-                "adapter": event.get("adapter", "other"),
-                "source_message_id": event.get("sourceMessageId", ""),
-                "conversation_id": event.get("conversationId", ""),
-                "conversation_type": event.get("conversationType", "private"),
-                "sender_id": event.get("senderId", ""),
-                "event_type": event.get("eventType", "message"),
-                "event_hash": event_hash,
-                "raw_summary": raw_summary[:4096],
-                "trace_id": event.get("traceId", ""),
-                "status": event.get("status", "received"),
-                "created_at": event.get("createdAt", datetime.now().isoformat()),
-            })
+            """),
+                {
+                    "platform": event.get("platform", "qq"),
+                    "adapter": event.get("adapter", "other"),
+                    "source_message_id": event.get("sourceMessageId", ""),
+                    "conversation_id": event.get("conversationId", ""),
+                    "conversation_type": event.get("conversationType", "private"),
+                    "sender_id": event.get("senderId", ""),
+                    "event_type": event.get("eventType", "message"),
+                    "event_hash": event_hash,
+                    "raw_summary": raw_summary[:4096],
+                    "trace_id": event.get("traceId", ""),
+                    "status": event.get("status", "received"),
+                    "created_at": event.get("createdAt", datetime.now().isoformat()),
+                },
+            )
             await session.commit()
 
     async def add_model_invocation(self, invocation: Dict) -> None:
@@ -1774,25 +1882,28 @@ class PgDatabase:
         completion_tokens = int(invocation.get("completionTokens", 0) or 0)
         total_tokens = int(invocation.get("totalTokens", prompt_tokens + completion_tokens) or 0)
         async with self.async_session() as session:
-            await session.execute(text('''
+            await session.execute(
+                text("""
                 INSERT INTO model_invocations ("traceId", platform, "conversationId", "sessionId", "modelName", "loraName", "costTime", "promptTokens", "completionTokens", "totalTokens", "usedRag", "usedLora", "errorType", "createdAt")
                 VALUES (:trace_id, :platform, :conversation_id, :session_id, :model_name, :lora_name, :cost_time, :prompt_tokens, :completion_tokens, :total_tokens, :used_rag, :used_lora, :error_type, :created_at)
-            '''), {
-                "trace_id": invocation.get("traceId", ""),
-                "platform": invocation.get("platform", "qq"),
-                "conversation_id": invocation.get("conversationId", ""),
-                "session_id": invocation.get("sessionId", ""),
-                "model_name": invocation.get("modelName", ""),
-                "lora_name": invocation.get("loraName", ""),
-                "cost_time": float(invocation.get("costTime", 0.0) or 0.0),
-                "prompt_tokens": prompt_tokens,
-                "completion_tokens": completion_tokens,
-                "total_tokens": total_tokens,
-                "used_rag": int(bool(invocation.get("usedRag", False))),
-                "used_lora": int(bool(invocation.get("usedLora", False))),
-                "error_type": invocation.get("errorType", ""),
-                "created_at": invocation.get("createdAt", datetime.now().isoformat()),
-            })
+            """),
+                {
+                    "trace_id": invocation.get("traceId", ""),
+                    "platform": invocation.get("platform", "qq"),
+                    "conversation_id": invocation.get("conversationId", ""),
+                    "session_id": invocation.get("sessionId", ""),
+                    "model_name": invocation.get("modelName", ""),
+                    "lora_name": invocation.get("loraName", ""),
+                    "cost_time": float(invocation.get("costTime", 0.0) or 0.0),
+                    "prompt_tokens": prompt_tokens,
+                    "completion_tokens": completion_tokens,
+                    "total_tokens": total_tokens,
+                    "used_rag": int(bool(invocation.get("usedRag", False))),
+                    "used_lora": int(bool(invocation.get("usedLora", False))),
+                    "error_type": invocation.get("errorType", ""),
+                    "created_at": invocation.get("createdAt", datetime.now().isoformat()),
+                },
+            )
             await session.commit()
 
     async def get_session_summaries(self) -> List[Dict]:
@@ -1857,21 +1968,30 @@ class PgDatabase:
                 if len(summary) > 100:
                     summary = summary[:100] + "..."
 
-                sessions.append({
-                    "sessionId": session_id,
-                    "sessionType": session_type,
-                    "sessionName": session_name,
-                    "platform": platform,
-                    "adapter": adapter,
-                    "conversationId": conversation_id,
-                    "messageCount": message_count,
-                    "lastActive": last_active,
-                    "summary": summary,
-                    "botEnabled": bool(d.get("bot_enabled", 1)),
-                })
+                sessions.append(
+                    {
+                        "sessionId": session_id,
+                        "sessionType": session_type,
+                        "sessionName": session_name,
+                        "platform": platform,
+                        "adapter": adapter,
+                        "conversationId": conversation_id,
+                        "messageCount": message_count,
+                        "lastActive": last_active,
+                        "summary": summary,
+                        "botEnabled": bool(d.get("bot_enabled", 1)),
+                    }
+                )
             return sessions
 
-    async def set_session_bot_enabled(self, session_id: str, enabled: bool, platform: str = "qq", conversation_id: Optional[str] = None, conversation_type: str = "private") -> None:
+    async def set_session_bot_enabled(
+        self,
+        session_id: str,
+        enabled: bool,
+        platform: str = "qq",
+        conversation_id: Optional[str] = None,
+        conversation_type: str = "private",
+    ) -> None:
         """设置某个会话的机器人开关。
 
         统一写入 conversations 表（此前同时写 session_settings + conversations 双表，
@@ -1890,7 +2010,13 @@ class PgDatabase:
             await session.commit()
         self._bot_enabled_cache.invalidate((platform, resolved_conversation_id, conversation_type))
 
-    async def is_session_bot_enabled(self, session_id: str, platform: str = "qq", conversation_id: Optional[str] = None, conversation_type: str = "private") -> bool:
+    async def is_session_bot_enabled(
+        self,
+        session_id: str,
+        platform: str = "qq",
+        conversation_id: Optional[str] = None,
+        conversation_type: str = "private",
+    ) -> bool:
         """检查某个会话的机器人是否启用（默认启用）。
 
         统一从 conversations 表查询（此前先查 session_settings 失败再查 conversations，
@@ -1906,7 +2032,9 @@ class PgDatabase:
             stmt = text(
                 'SELECT "botEnabled" FROM conversations WHERE platform = :platform AND "conversationId" = :cid AND "conversationType" = :ctype LIMIT 1'
             )
-            result = await session.execute(stmt, {"platform": platform, "cid": resolved_conversation_id, "ctype": conversation_type})
+            result = await session.execute(
+                stmt, {"platform": platform, "cid": resolved_conversation_id, "ctype": conversation_type}
+            )
             row = result.fetchone()
             value = True if row is None else bool(_row_to_dict(row)["botEnabled"])
             self._bot_enabled_cache.set(cache_key, value)
@@ -1935,16 +2063,19 @@ class PgDatabase:
         async with self.async_session() as session:
             stmt = text(
                 'INSERT INTO integration_message_dedup ("dedupKey", platform, adapter, "messageId", "createdAt") '
-                'VALUES (:key, :platform, :adapter, :message_id, :created_at) '
+                "VALUES (:key, :platform, :adapter, :message_id, :created_at) "
                 'ON CONFLICT ("dedupKey") DO NOTHING'
             )
-            result = await session.execute(stmt, {
-                "key": key,
-                "platform": platform,
-                "adapter": adapter,
-                "message_id": message_id,
-                "created_at": datetime.now().isoformat(),
-            })
+            result = await session.execute(
+                stmt,
+                {
+                    "key": key,
+                    "platform": platform,
+                    "adapter": adapter,
+                    "message_id": message_id,
+                    "created_at": datetime.now().isoformat(),
+                },
+            )
             await session.commit()
             return result.rowcount > 0
 
@@ -1974,9 +2105,17 @@ class PgDatabase:
                 "description = EXCLUDED.description, code = EXCLUDED.code, "
                 "enabled = EXCLUDED.enabled, updated_at = EXCLUDED.updated_at"
             )
-            result = await session.execute(stmt, {
-                "n": name, "d": description, "c": code, "e": int(enabled), "ca": now, "ua": now,
-            })
+            result = await session.execute(
+                stmt,
+                {
+                    "n": name,
+                    "d": description,
+                    "c": code,
+                    "e": int(enabled),
+                    "ca": now,
+                    "ua": now,
+                },
+            )
             await session.commit()
             # 获取 upsert 后的 id
             sel_stmt = claw_tools_table.select().where(claw_tools_table.c.name == name)
@@ -1998,9 +2137,14 @@ class PgDatabase:
     # ============================================
     # API Key 管理（统一访问控制）
     # ============================================
-    async def create_api_key_record(self, key_hash: str, key_prefix: str, role: str,
-                                    description: Optional[str] = None,
-                                    rate_limit: Optional[int] = None) -> Dict:
+    async def create_api_key_record(
+        self,
+        key_hash: str,
+        key_prefix: str,
+        role: str,
+        description: Optional[str] = None,
+        rate_limit: Optional[int] = None,
+    ) -> Dict:
         """Create a managed API key row in the main database."""
         async with self.async_session() as session:
             created_at = time.time()
@@ -2028,18 +2172,14 @@ class PgDatabase:
     async def get_api_key_by_hash(self, key_hash: str) -> Optional[Dict]:
         """Return one managed API key row by stored hash."""
         async with self.async_session() as session:
-            result = await session.execute(
-                api_keys_table.select().where(api_keys_table.c.key_hash == key_hash)
-            )
+            result = await session.execute(api_keys_table.select().where(api_keys_table.c.key_hash == key_hash))
             row = result.fetchone()
             return _row_to_dict(row) if row else None
 
     async def get_api_key_by_id(self, key_id: int) -> Optional[Dict]:
         """Return one managed API key row by database id."""
         async with self.async_session() as session:
-            result = await session.execute(
-                api_keys_table.select().where(api_keys_table.c.id == key_id)
-            )
+            result = await session.execute(api_keys_table.select().where(api_keys_table.c.id == key_id))
             row = result.fetchone()
             return _row_to_dict(row) if row else None
 
@@ -2088,9 +2228,7 @@ class PgDatabase:
         """Update last_used_at for a managed API key."""
         async with self.async_session() as session:
             await session.execute(
-                api_keys_table.update()
-                .where(api_keys_table.c.key_hash == key_hash)
-                .values(last_used_at=time.time())
+                api_keys_table.update().where(api_keys_table.c.key_hash == key_hash).values(last_used_at=time.time())
             )
             await session.commit()
 
@@ -2105,6 +2243,7 @@ class PgDatabase:
     ) -> None:
         """记录审计日志"""
         import time
+
         async with self.async_session() as session:
             stmt = audit_logs_table.insert().values(
                 timestamp=time.time(),
@@ -2136,6 +2275,7 @@ class PgDatabase:
             stmt = audit_logs_table.select()
             if conditions:
                 from sqlalchemy import and_
+
                 stmt = stmt.where(and_(*conditions))
             stmt = stmt.order_by(audit_logs_table.c.id.desc()).limit(limit).offset(offset)
 
@@ -2150,7 +2290,10 @@ class PgDatabase:
         now = datetime.now().isoformat()
         async with self.async_session() as session:
             stmt = intent_samples_table.insert().values(
-                kbName=kb_name, text=text, label=label, createdAt=now,
+                kbName=kb_name,
+                text=text,
+                label=label,
+                createdAt=now,
             )
             result = await session.execute(stmt)
             await session.commit()
@@ -2177,9 +2320,7 @@ class PgDatabase:
         """设置知识库活跃状态"""
         async with self.async_session() as session:
             stmt = text(
-                "INSERT INTO intent_active_kbs (\"kbName\", \"isActive\") "
-                "VALUES (:kbn, :ia) "
-                "ON CONFLICT DO NOTHING"
+                'INSERT INTO intent_active_kbs ("kbName", "isActive") VALUES (:kbn, :ia) ON CONFLICT DO NOTHING'
             )
             await session.execute(stmt, {"kbn": kb_name, "ia": int(is_active)})
             # Update if exists
@@ -2222,7 +2363,8 @@ class PgDatabase:
         updated_at = task_data.get("updated_at", "")
         config_json = json.dumps(task_data.get("config", {}), ensure_ascii=False)
         async with self.async_session() as session:
-            await session.execute(text('''
+            await session.execute(
+                text("""
                 INSERT INTO training_tasks (
                     id, task_id, lora_name, status, progress, error_message,
                     config_json, created_at, updated_at
@@ -2238,17 +2380,19 @@ class PgDatabase:
                     error_message = EXCLUDED.error_message,
                     config_json = EXCLUDED.config_json,
                     updated_at = EXCLUDED.updated_at
-            '''), {
-                "id": task_id,
-                "task_id": task_id,
-                "lora_name": task_data.get("lora_name", ""),
-                "status": task_data.get("status", "pending"),
-                "progress": float(task_data.get("progress", 0) or 0),
-                "error_message": task_data.get("error_message") or "",
-                "config_json": config_json,
-                "created_at": created_at,
-                "updated_at": updated_at,
-            })
+            """),
+                {
+                    "id": task_id,
+                    "task_id": task_id,
+                    "lora_name": task_data.get("lora_name", ""),
+                    "status": task_data.get("status", "pending"),
+                    "progress": float(task_data.get("progress", 0) or 0),
+                    "error_message": task_data.get("error_message") or "",
+                    "config_json": config_json,
+                    "created_at": created_at,
+                    "updated_at": updated_at,
+                },
+            )
             await session.commit()
 
     async def get_all_training_tasks(self) -> List[Dict]:
@@ -2331,11 +2475,7 @@ class PgDatabase:
         if "config_json" in data:
             values["config_json"] = data["config_json"]
         async with self.async_session() as session:
-            stmt = (
-                training_tasks_table.update()
-                .where(training_tasks_table.c.id == task_id)
-                .values(**values)
-            )
+            stmt = training_tasks_table.update().where(training_tasks_table.c.id == task_id).values(**values)
             await session.execute(stmt)
             await session.commit()
 
@@ -2354,6 +2494,16 @@ class PgDatabase:
     # ============================================
     # 通用 SQL 执行（兼容 SQLite 直接 SQL 调用）
     # ============================================
+    async def narrative_transaction(self, statements):
+        from repositories.narrative import NarrativeConflict
+
+        async with self.async_session() as session:
+            async with session.begin():
+                for sql, params, expected in statements:
+                    result = await session.execute(text(sql), params)
+                    if expected is not None and result.rowcount != expected:
+                        raise NarrativeConflict()
+
     async def execute_sql(self, query: str, params: Optional[dict] = None) -> Any:
         """执行原始 SQL 语句，返回结果。
 
@@ -2444,13 +2594,9 @@ class SyncPgAdapter:
         self._pending: set[concurrent.futures.Future] = set()
         self._closed = False
         self._init_timeout = self._validate_timeout("init_timeout", init_timeout)
-        self._operation_timeout = self._validate_timeout(
-            "operation_timeout", operation_timeout
-        )
+        self._operation_timeout = self._validate_timeout("operation_timeout", operation_timeout)
         self._close_timeout = self._validate_timeout("close_timeout", close_timeout)
-        self._thread_join_timeout = self._validate_timeout(
-            "thread_join_timeout", thread_join_timeout
-        )
+        self._thread_join_timeout = self._validate_timeout("thread_join_timeout", thread_join_timeout)
 
     @staticmethod
     def _validate_timeout(name: str, value: float) -> float:
@@ -2474,11 +2620,7 @@ class SyncPgAdapter:
     async def _shutdown_backend(self) -> None:
         """Cancel adapter-owned tasks before disposing the async engine."""
         current = asyncio.current_task()
-        tasks = [
-            task
-            for task in asyncio.all_tasks()
-            if task is not current and not task.done()
-        ]
+        tasks = [task for task in asyncio.all_tasks() if task is not current and not task.done()]
         for task in tasks:
             task.cancel()
         if tasks:
@@ -2493,9 +2635,7 @@ class SyncPgAdapter:
             return
 
         if close_backend and loop.is_running():
-            shutdown_future = asyncio.run_coroutine_threadsafe(
-                self._shutdown_backend(), loop
-            )
+            shutdown_future = asyncio.run_coroutine_threadsafe(self._shutdown_backend(), loop)
             try:
                 shutdown_future.result(timeout=self._close_timeout)
             except concurrent.futures.TimeoutError:
@@ -2754,69 +2894,196 @@ class SyncPgAdapter:
         return self._run(self._pg.save_user_data(user_id, page_key, data_json))
 
     # 角色关系与长期记忆（委托 PgDatabase 异步实现）
-    def get_character_relationship(self, character_id, platform, adapter, sender_id, conversation_type, conversation_id):
-        return self._run(self._pg.get_character_relationship(
-            character_id, platform, adapter, sender_id, conversation_type, conversation_id
-        ))
+    def get_character_relationship(
+        self, character_id, platform, adapter, sender_id, conversation_type, conversation_id
+    ):
+        return self._run(
+            self._pg.get_character_relationship(
+                character_id, platform, adapter, sender_id, conversation_type, conversation_id
+            )
+        )
 
-    def upsert_character_relationship(self, character_id, platform, adapter, sender_id, conversation_type, conversation_id, relationship_stage, preferred_address="", summary="", interaction_count=None):
-        return self._run(self._pg.upsert_character_relationship(
-            character_id, platform, adapter, sender_id, conversation_type, conversation_id,
-            relationship_stage, preferred_address, summary, interaction_count
-        ))
+    def upsert_character_relationship(
+        self,
+        character_id,
+        platform,
+        adapter,
+        sender_id,
+        conversation_type,
+        conversation_id,
+        relationship_stage,
+        preferred_address="",
+        summary="",
+        interaction_count=None,
+    ):
+        return self._run(
+            self._pg.upsert_character_relationship(
+                character_id,
+                platform,
+                adapter,
+                sender_id,
+                conversation_type,
+                conversation_id,
+                relationship_stage,
+                preferred_address,
+                summary,
+                interaction_count,
+            )
+        )
 
-    def increment_character_interaction(self, character_id, platform, adapter, sender_id, conversation_type, conversation_id):
-        return self._run(self._pg.increment_character_interaction(
-            character_id, platform, adapter, sender_id, conversation_type, conversation_id
-        ))
+    def increment_character_interaction(
+        self, character_id, platform, adapter, sender_id, conversation_type, conversation_id
+    ):
+        return self._run(
+            self._pg.increment_character_interaction(
+                character_id, platform, adapter, sender_id, conversation_type, conversation_id
+            )
+        )
 
-    def list_character_memories(self, character_id, platform, adapter, sender_id, conversation_type, conversation_id, limit=30):
-        return self._run(self._pg.list_character_memories(
-            character_id, platform, adapter, sender_id, conversation_type, conversation_id, limit
-        ))
+    def list_character_memories(
+        self, character_id, platform, adapter, sender_id, conversation_type, conversation_id, limit=30
+    ):
+        return self._run(
+            self._pg.list_character_memories(
+                character_id, platform, adapter, sender_id, conversation_type, conversation_id, limit
+            )
+        )
 
-    def list_character_memory_claims(self, character_id, platform, adapter, sender_id, conversation_type, conversation_id, limit=30, *, include_inactive=False, scope_levels=None):
-        return self._run(self._pg.list_character_memory_claims(
-            character_id, platform, adapter, sender_id, conversation_type, conversation_id, limit,
-            include_inactive=include_inactive, scope_levels=scope_levels,
-        ))
+    def list_character_memory_claims(
+        self,
+        character_id,
+        platform,
+        adapter,
+        sender_id,
+        conversation_type,
+        conversation_id,
+        limit=30,
+        *,
+        include_inactive=False,
+        scope_levels=None,
+        relationship_notes_only=False,
+        memory_keys=None,
+    ):
+        return self._run(
+            self._pg.list_character_memory_claims(
+                character_id,
+                platform,
+                adapter,
+                sender_id,
+                conversation_type,
+                conversation_id,
+                limit,
+                include_inactive=include_inactive,
+                scope_levels=scope_levels,
+                relationship_notes_only=relationship_notes_only,
+                memory_keys=memory_keys,
+            )
+        )
 
-    def get_character_memory_claim(self, memory_id, character_id, platform, adapter, sender_id, conversation_type, conversation_id):
-        return self._run(self._pg.get_character_memory_claim(
-            memory_id, character_id, platform, adapter, sender_id, conversation_type, conversation_id
-        ))
+    def get_character_memory_claim(
+        self, memory_id, character_id, platform, adapter, sender_id, conversation_type, conversation_id
+    ):
+        return self._run(
+            self._pg.get_character_memory_claim(
+                memory_id, character_id, platform, adapter, sender_id, conversation_type, conversation_id
+            )
+        )
 
-    def add_or_update_character_memory(self, character_id, platform, adapter, sender_id, conversation_type, conversation_id, memory_type, memory_key, content, importance=0.0, source_message_id=None):
-        return self._run(self._pg.add_or_update_character_memory(
-            character_id, platform, adapter, sender_id, conversation_type, conversation_id,
-            memory_type, memory_key, content, importance, source_message_id
-        ))
+    def add_or_update_character_memory(
+        self,
+        character_id,
+        platform,
+        adapter,
+        sender_id,
+        conversation_type,
+        conversation_id,
+        memory_type,
+        memory_key,
+        content,
+        importance=0.0,
+        source_message_id=None,
+    ):
+        return self._run(
+            self._pg.add_or_update_character_memory(
+                character_id,
+                platform,
+                adapter,
+                sender_id,
+                conversation_type,
+                conversation_id,
+                memory_type,
+                memory_key,
+                content,
+                importance,
+                source_message_id,
+            )
+        )
 
-    def append_character_memory_claim(self, character_id, platform, adapter, sender_id, conversation_type, conversation_id, memory_type, memory_key, content, importance=0.0, source_message_id=None, **kwargs):
-        return self._run(self._pg.append_character_memory_claim(
-            character_id, platform, adapter, sender_id, conversation_type, conversation_id,
-            memory_type, memory_key, content, importance, source_message_id, **kwargs
-        ))
+    def append_character_memory_claim(
+        self,
+        character_id,
+        platform,
+        adapter,
+        sender_id,
+        conversation_type,
+        conversation_id,
+        memory_type,
+        memory_key,
+        content,
+        importance=0.0,
+        source_message_id=None,
+        **kwargs,
+    ):
+        return self._run(
+            self._pg.append_character_memory_claim(
+                character_id,
+                platform,
+                adapter,
+                sender_id,
+                conversation_type,
+                conversation_id,
+                memory_type,
+                memory_key,
+                content,
+                importance,
+                source_message_id,
+                **kwargs,
+            )
+        )
 
-    def delete_character_memory(self, memory_id, character_id, platform, adapter, sender_id, conversation_type, conversation_id):
-        return self._run(self._pg.delete_character_memory(
-            memory_id, character_id, platform, adapter, sender_id, conversation_type, conversation_id
-        ))
+    def delete_character_memory(
+        self, memory_id, character_id, platform, adapter, sender_id, conversation_type, conversation_id
+    ):
+        return self._run(
+            self._pg.delete_character_memory(
+                memory_id, character_id, platform, adapter, sender_id, conversation_type, conversation_id
+            )
+        )
 
-    def erase_character_memories(self, character_id, platform, adapter, sender_id, conversation_type, conversation_id, **kwargs):
-        return self._run(self._pg.erase_character_memories(
-            character_id, platform, adapter, sender_id, conversation_type, conversation_id, **kwargs
-        ))
+    def erase_character_memories(
+        self, character_id, platform, adapter, sender_id, conversation_type, conversation_id, **kwargs
+    ):
+        return self._run(
+            self._pg.erase_character_memories(
+                character_id, platform, adapter, sender_id, conversation_type, conversation_id, **kwargs
+            )
+        )
 
     def clear_character_memories(self, character_id, platform, adapter, sender_id, conversation_type, conversation_id):
-        return self._run(self._pg.clear_character_memories(
-            character_id, platform, adapter, sender_id, conversation_type, conversation_id
-        ))
+        return self._run(
+            self._pg.clear_character_memories(
+                character_id, platform, adapter, sender_id, conversation_type, conversation_id
+            )
+        )
 
-    def list_conversation_history(self, platform, adapter, sender_id, conversation_type, conversation_id, limit=8, max_chars=6000):
-        return self._run(self._pg.list_conversation_history(
-            platform, adapter, sender_id, conversation_type, conversation_id, limit, max_chars
-        ))
+    def list_conversation_history(
+        self, platform, adapter, sender_id, conversation_type, conversation_id, limit=8, max_chars=6000
+    ):
+        return self._run(
+            self._pg.list_conversation_history(
+                platform, adapter, sender_id, conversation_type, conversation_id, limit, max_chars
+            )
+        )
 
     def create_api_key_record(self, key_hash, key_prefix, role, description=None, rate_limit=None):
         return self._run(self._pg.create_api_key_record(key_hash, key_prefix, role, description, rate_limit))
@@ -2845,8 +3112,12 @@ class SyncPgAdapter:
     def get_session_summaries(self):
         return self._run(self._pg.get_session_summaries())
 
-    def set_session_bot_enabled(self, session_id, enabled, platform="qq", conversation_id=None, conversation_type="private"):
-        return self._run(self._pg.set_session_bot_enabled(session_id, enabled, platform, conversation_id, conversation_type))
+    def set_session_bot_enabled(
+        self, session_id, enabled, platform="qq", conversation_id=None, conversation_type="private"
+    ):
+        return self._run(
+            self._pg.set_session_bot_enabled(session_id, enabled, platform, conversation_id, conversation_type)
+        )
 
     def is_session_bot_enabled(self, session_id, platform="qq", conversation_id=None, conversation_type="private"):
         return self._run(self._pg.is_session_bot_enabled(session_id, platform, conversation_id, conversation_type))
@@ -2951,6 +3222,9 @@ class SyncPgAdapter:
     def update_config(self, new_config):
         """兼容 SQLite 的 update_config 方法"""
         return self.set_config(new_config)
+
+    def narrative_transaction(self, statements):
+        return self._run(self._pg.narrative_transaction(statements))
 
     def execute_sql(self, query, params=None):
         """兼容 SQLite 的直接 SQL 执行"""

@@ -296,6 +296,7 @@ async def _generate_reply_impl(
     character_service=None,
     message_db=None,
     delivery_context: dict | None = None,
+    prepared_override=None,
 ):
     """默认聊天生成实现：优先使用 vLLM，回退到模型管理器。
 
@@ -306,6 +307,25 @@ async def _generate_reply_impl(
     行为。必须保证消息写入与人物历史读取使用同一数据库，否则上一
     轮消息写入全局库、下一轮从容器库读不到，历史会断裂。
     """
+    if prepared_override is None and not request.branchId and (
+        request.adapter == "narrative" or request.adapter.startswith("narrative:")
+    ):
+        # This namespace is owned by authenticated workspace routes. Letting
+        # generic callers choose its senderId would poison another owner's history.
+        raise HTTPException(422, "请通过假想分支工作区访问该会话")
+    if request.branchId and prepared_override is None:
+        from api.narrative import require_enabled
+
+        require_enabled()
+        if delivery_context is not None or not persist_message or request.platform != "web":
+            raise HTTPException(422, "假想分支第一版仅支持 Web 交互")
+        from services.narrative import generate_branch_reply
+
+        return await generate_branch_reply(
+            request, current_user, message_db if message_db is not None else db,
+            generate=_generate_reply_impl,
+        )
+
     # C11 fix: 主聊天端点 mock provider 防护
     # 此前仅 training/generate-dialogues 有此检查，主聊天端点遗漏，
     # 导致生产环境默认 mock 时静默返回罐头回复。现统一拦截。
@@ -338,8 +358,10 @@ async def _generate_reply_impl(
     # 获取LoRA：始终计算 active_lora，优先使用前端指定的，否则使用当前激活的
     active_lora = next((item for item in loras if item["status"] == "active"), None)
     selected_lora = active_lora
+    if prepared_override is not None:
+        selected_lora = None  # Explicit adapter or base model; never auto-route to another persona.
 
-    if not request.loraName:
+    if not request.loraName and prepared_override is None:
         try:
             raw_router_config = runtime_config.get("lora_router_config", {"enabled": False})
             router_config = json.loads(raw_router_config) if isinstance(raw_router_config, str) else raw_router_config
@@ -380,9 +402,11 @@ async def _generate_reply_impl(
 
     # ── 角色上下文准备（仅当 LoRA 显式映射了人物画像时启用） ──
     # 未映射的 LoRA（如 hutao/minamo）与 default 保持原有生成行为。
-    prepared_character_turn = None
+    prepared_character_turn = prepared_override
     mapped_character_id = get_lora_character_id(lora_name) if lora_name != "default" else None
-    if mapped_character_id:
+    if prepared_override is not None and request.loraName and mapped_character_id != prepared_override.character_id:
+        raise HTTPException(422, "LoRA 与分支角色不匹配")
+    if mapped_character_id and prepared_override is None:
         prepared_character_turn = await _prepare_character_turn(
             request, mapped_character_id, character_service=character_service
         )

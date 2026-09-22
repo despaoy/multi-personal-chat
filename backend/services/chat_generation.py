@@ -7,7 +7,6 @@ from typing import Any, Protocol
 
 from db.schemas import GenerateResponse, MessageRequest
 
-
 GenerateHandler = Callable[
     ...,
     Awaitable[GenerateResponse],
@@ -76,6 +75,8 @@ class ChatGenerationService:
         # Public callers may supply history. Apply the same sanitation and
         # high-risk policy to every historical user message before it reaches
         # the model.
+        if request.branchId:
+            request.history = []  # Server-owned branch history only.
         sanitized_history: list[dict[str, str]] = []
         for item in request.history or []:
             entry = dict(item)
@@ -102,6 +103,8 @@ class ChatGenerationService:
             )
         )
         session_id = request.sessionId or f"manual:{identity}"
+        if request.branchId:
+            session_id = f"narrative:{identity}:{request.branchId}"
         priority = self._inference_runtime.priority_for("admin", request.sessionType)
         await self._inference_runtime.check_rate_limits(
             "admin",

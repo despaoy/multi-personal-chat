@@ -1,0 +1,275 @@
+{
+  "mode": "lexical_baseline",
+  "embedding_enabled": false,
+  "metrics": {
+    "cases": 12,
+    "true_positive": 4,
+    "false_positive": 2,
+    "false_negative": 1,
+    "precision_micro": 0.6666666666666666,
+    "recall_micro": 0.8,
+    "f1_micro": 0.7272727272727273,
+    "exact_set_accuracy": 0.75,
+    "irrelevant_selection_rate": 0.3333333333333333,
+    "negative_cases": 7,
+    "negative_case_injection_rate": 0.14285714285714285,
+    "answerable_cases": 5,
+    "answerable_miss_rate": 0.2,
+    "provider_failures": 0,
+    "provider_failure_rate": 0.0
+  },
+  "by_category": {
+    "abstention": {
+      "cases": 1,
+      "true_positive": 0,
+      "false_positive": 0,
+      "false_negative": 0,
+      "precision_micro": null,
+      "recall_micro": null,
+      "f1_micro": null,
+      "exact_set_accuracy": 1.0,
+      "irrelevant_selection_rate": null,
+      "negative_cases": 1,
+      "negative_case_injection_rate": 0.0,
+      "answerable_cases": 0,
+      "answerable_miss_rate": null,
+      "provider_failures": 0,
+      "provider_failure_rate": 0.0
+    },
+    "context_reference": {
+      "cases": 1,
+      "true_positive": 0,
+      "false_positive": 0,
+      "false_negative": 1,
+      "precision_micro": null,
+      "recall_micro": 0.0,
+      "f1_micro": 0.0,
+      "exact_set_accuracy": 0.0,
+      "irrelevant_selection_rate": null,
+      "negative_cases": 0,
+      "negative_case_injection_rate": null,
+      "answerable_cases": 1,
+      "answerable_miss_rate": 1.0,
+      "provider_failures": 0,
+      "provider_failure_rate": 0.0
+    },
+    "hard_negative": {
+      "cases": 2,
+      "true_positive": 1,
+      "false_positive": 2,
+      "false_negative": 0,
+      "precision_micro": 0.3333333333333333,
+      "recall_micro": 1.0,
+      "f1_micro": 0.5,
+      "exact_set_accuracy": 0.0,
+      "irrelevant_selection_rate": 0.6666666666666666,
+      "negative_cases": 1,
+      "negative_case_injection_rate": 1.0,
+      "answerable_cases": 1,
+      "answerable_miss_rate": 0.0,
+      "provider_failures": 0,
+      "provider_failure_rate": 0.0
+    },
+    "subject": {
+      "cases": 3,
+      "true_positive": 1,
+      "false_positive": 0,
+      "false_negative": 0,
+      "precision_micro": 1.0,
+      "recall_micro": 1.0,
+      "f1_micro": 1.0,
+      "exact_set_accuracy": 1.0,
+      "irrelevant_selection_rate": 0.0,
+      "negative_cases": 2,
+      "negative_case_injection_rate": 0.0,
+      "answerable_cases": 1,
+      "answerable_miss_rate": 0.0,
+      "provider_failures": 0,
+      "provider_failure_rate": 0.0
+    },
+    "task": {
+      "cases": 1,
+      "true_positive": 1,
+      "false_positive": 0,
+      "false_negative": 0,
+      "precision_micro": 1.0,
+      "recall_micro": 1.0,
+      "f1_micro": 1.0,
+      "exact_set_accuracy": 1.0,
+      "irrelevant_selection_rate": 0.0,
+      "negative_cases": 0,
+      "negative_case_injection_rate": null,
+      "answerable_cases": 1,
+      "answerable_miss_rate": 0.0,
+      "provider_failures": 0,
+      "provider_failure_rate": 0.0
+    },
+    "temporal": {
+      "cases": 2,
+      "true_positive": 1,
+      "false_positive": 0,
+      "false_negative": 0,
+      "precision_micro": 1.0,
+      "recall_micro": 1.0,
+      "f1_micro": 1.0,
+      "exact_set_accuracy": 1.0,
+      "irrelevant_selection_rate": 0.0,
+      "negative_cases": 1,
+      "negative_case_injection_rate": 0.0,
+      "answerable_cases": 1,
+      "answerable_miss_rate": 0.0,
+      "provider_failures": 0,
+      "provider_failure_rate": 0.0
+    },
+    "unsupported": {
+      "cases": 2,
+      "true_positive": 0,
+      "false_positive": 0,
+      "false_negative": 0,
+      "precision_micro": null,
+      "recall_micro": null,
+      "f1_micro": null,
+      "exact_set_accuracy": 1.0,
+      "irrelevant_selection_rate": null,
+      "negative_cases": 2,
+      "negative_case_injection_rate": 0.0,
+      "answerable_cases": 0,
+      "answerable_miss_rate": null,
+      "provider_failures": 0,
+      "provider_failure_rate": 0.0
+    }
+  },
+  "cases": [
+    {
+      "id": "ellipsis_research",
+      "selected_ids": [],
+      "gold_ids": [
+        "research"
+      ],
+      "candidate_ids": [],
+      "status": "selected",
+      "fallback_reason": ""
+    },
+    {
+      "id": "irrelevant_weather",
+      "selected_ids": [],
+      "gold_ids": [],
+      "candidate_ids": [],
+      "status": "selected",
+      "fallback_reason": ""
+    },
+    {
+      "id": "character_name",
+      "selected_ids": [],
+      "gold_ids": [],
+      "candidate_ids": [],
+      "status": "selected",
+      "fallback_reason": ""
+    },
+    {
+      "id": "user_name",
+      "selected_ids": [
+        "name"
+      ],
+      "gold_ids": [
+        "name"
+      ],
+      "candidate_ids": [
+        "name"
+      ],
+      "status": "selected",
+      "fallback_reason": ""
+    },
+    {
+      "id": "character_preference",
+      "selected_ids": [],
+      "gold_ids": [],
+      "candidate_ids": [],
+      "status": "selected",
+      "fallback_reason": ""
+    },
+    {
+      "id": "updated_research",
+      "selected_ids": [
+        "new"
+      ],
+      "gold_ids": [
+        "new"
+      ],
+      "candidate_ids": [
+        "new"
+      ],
+      "status": "selected",
+      "fallback_reason": ""
+    },
+    {
+      "id": "retracted_fact",
+      "selected_ids": [],
+      "gold_ids": [],
+      "candidate_ids": [],
+      "status": "selected",
+      "fallback_reason": ""
+    },
+    {
+      "id": "uncertain_claim",
+      "selected_ids": [],
+      "gold_ids": [],
+      "candidate_ids": [],
+      "status": "selected",
+      "fallback_reason": ""
+    },
+    {
+      "id": "shared_promise",
+      "selected_ids": [
+        "promise"
+      ],
+      "gold_ids": [
+        "promise"
+      ],
+      "candidate_ids": [
+        "promise"
+      ],
+      "status": "selected",
+      "fallback_reason": ""
+    },
+    {
+      "id": "coffee_definition",
+      "selected_ids": [
+        "coffee"
+      ],
+      "gold_ids": [],
+      "candidate_ids": [
+        "coffee"
+      ],
+      "status": "selected",
+      "fallback_reason": ""
+    },
+    {
+      "id": "recognition_vs_completion",
+      "selected_ids": [
+        "completion",
+        "recognition"
+      ],
+      "gold_ids": [
+        "completion"
+      ],
+      "candidate_ids": [
+        "completion",
+        "recognition"
+      ],
+      "status": "selected",
+      "fallback_reason": ""
+    },
+    {
+      "id": "assistant_assertion_not_user_fact",
+      "selected_ids": [],
+      "gold_ids": [],
+      "candidate_ids": [],
+      "status": "selected",
+      "fallback_reason": ""
+    }
+  ],
+  "input_sha256": "408550bb1a79550db4132248e16b79731a0f2130b07a72d67f3eaf94ad0a4aee",
+  "benchmark_status": "synthetic_smoke_not_research_evidence",
+  "quality_claim": "No production-quality improvement is established by these cases."
+}

@@ -6,7 +6,22 @@
 >
 > **发布状态**：工程收尾中。已保留可复现的负实验结果，但当前没有通过门禁的正式 LoRA adapter；发布结论以 [`docs/RELEASE_CHECKLIST.md`](docs/RELEASE_CHECKLIST.md) 的本次验证记录为准。
 
+## 发布与数据许可边界
+
+本仓库仍为研究原型，不能将历史测试通过理解为当前版本已完成生产验收。
+当前源码、依赖、构建和外部服务的验收范围见[发布检查表](docs/RELEASE_CHECKLIST.md)。
+MIT 许可适用于项目原创代码，不自动授予第三方游戏文本、人物素材、模型权重及其衍生语料的再分发权。
+公开发布包含这些资料的仓库或数据包前，必须确认权利人许可；未确认时应提供不含相关资料的代码包，
+并由使用者自行取得合法数据。当前保留研究证据不代表已完成数据授权审查。
+
 ## 核心能力
+
+### 实验性假想分支
+
+Web 页面 `/narrative` 支持基于原作创建独立假设、分支对话、事实提议确认及返回正史。
+历史、关系和事实按分支隔离，原作索引保持只读，分支不写入普通长期记忆。
+默认关闭，启用与科研开发评测见 [假想分支架构](docs/architecture/NARRATIVE_BRANCHES.md)。
+当前完成机制原型，不代表真实模型已通过反事实一致性评测。
 
 ### 角色训练与推理
 
@@ -182,7 +197,7 @@ powershell -ExecutionPolicy Bypass -File scripts/local-verify.ps1 -Frontend
 - [代码知识库](docs/architecture/CODE_WIKI.md)
 - [多粒度角色知识检索](docs/architecture/CHARACTER_KNOWLEDGE_RETRIEVAL.md)
 - [可扩展性开发指南](docs/architecture/EXTENSIBILITY_GUIDE.md)
-- [生产准备审查](docs/architecture/PRODUCTION_READINESS_REVIEW_2026-07-18.md)
+- [历史生产准备审查（2026-07-18）](docs/architecture/PRODUCTION_READINESS_REVIEW_2026-07-18.md)
 - [发布前检查清单](docs/RELEASE_CHECKLIST.md)
 - [后端目录与入口](backend/README.md)
 - [人工评分标准](docs/data/human-scoring-rubric.md)
@@ -192,7 +207,7 @@ powershell -ExecutionPolicy Bypass -File scripts/local-verify.ps1 -Frontend
 ## 研究诚信
 
 - mock 输出不能作为真实实验结果。
-- 旧版本结果仅从 Git 历史追溯，不与当前结果混算。
+- 旧版本结果保留于明确标记的历史记录、归档或 Git 历史中，不与当前结果混算。
 - 偏好数据必须保留审核状态；DPO/ORPO 不表述为 RLHF。
 - 每次实验记录代码提交、数据哈希、模型版本、随机种子、硬件、命令和原始结果。
 - Gold Set 不得进入训练集，任何重叠都必须在报告中披露。

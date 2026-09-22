@@ -9,6 +9,22 @@ export type Locale = 'zh-CN' | 'zh-TW' | 'en';
 
 const translations: Record<Locale, Record<string, string>> = {
   'zh-CN': {
+    'navigation.workspace': '日常工作',
+    'navigation.models': '模型与训练',
+    'navigation.research': '评测与实验',
+    'navigation.system': '系统管理',
+    'navigation.home': '工作台',
+    'navigation.characters': '角色与记忆',
+    'navigation.narrative': '假想分支',
+    'navigation.integrations': '平台连接',
+    'navigation.search': '查找功能…',
+    'navigation.clear': '清空搜索',
+    'navigation.main': '主导航',
+    'navigation.noResults': '没有匹配的功能，试试“记忆”或“训练”。',
+    'navigation.hint': '常用功能在上方，其余按需展开。',
+    'navigation.open': '打开导航',
+    'navigation.skip': '跳到页面内容',
+    'navigation.logout': '退出登录',
     // 侧边栏
     'sidebar.title': 'QQ 智能助手',
     'nav.dashboard': '仪表盘',
@@ -140,6 +156,22 @@ const translations: Record<Locale, Record<string, string>> = {
   },
 
   'zh-TW': {
+    'navigation.workspace': '日常工作',
+    'navigation.models': '模型與訓練',
+    'navigation.research': '評測與實驗',
+    'navigation.system': '系統管理',
+    'navigation.home': '工作台',
+    'navigation.characters': '角色與記憶',
+    'navigation.narrative': '假想分支',
+    'navigation.integrations': '平台連接',
+    'navigation.search': '尋找功能…',
+    'navigation.clear': '清除搜尋',
+    'navigation.main': '主導覽',
+    'navigation.noResults': '沒有符合的功能，試試「記憶」或「訓練」。',
+    'navigation.hint': '常用功能在上方，其餘按需展開。',
+    'navigation.open': '開啟導覽',
+    'navigation.skip': '跳到頁面內容',
+    'navigation.logout': '登出',
     // 側邊欄
     'sidebar.title': 'QQ 智慧助手',
     'nav.dashboard': '儀表盤',
@@ -271,6 +303,22 @@ const translations: Record<Locale, Record<string, string>> = {
   },
 
   'en': {
+    'navigation.workspace': 'Workspace',
+    'navigation.models': 'Models & training',
+    'navigation.research': 'Evaluation & experiments',
+    'navigation.system': 'Administration',
+    'navigation.home': 'Overview',
+    'navigation.characters': 'Characters & memory',
+    'navigation.narrative': 'Narrative branches',
+    'navigation.integrations': 'Integrations',
+    'navigation.search': 'Find a feature…',
+    'navigation.clear': 'Clear search',
+    'navigation.main': 'Main navigation',
+    'navigation.noResults': 'No matching features. Try “memory” or “training”.',
+    'navigation.hint': 'Everyday tools first. Expand other groups as needed.',
+    'navigation.open': 'Open navigation',
+    'navigation.skip': 'Skip to content',
+    'navigation.logout': 'Sign out',
     // Sidebar
     'sidebar.title': 'QQ Smart Assistant',
     'nav.dashboard': 'Dashboard',

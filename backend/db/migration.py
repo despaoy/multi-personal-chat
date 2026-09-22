@@ -330,6 +330,12 @@ async def migrate(sqlite_path: str | Path = SQLITE_DB_PATH):
         ("adapter_compatibility", adapter_compatibility_table, None, None),
         ("feedback", feedback_table, None, None),
     ]
+    from db.models import metadata
+
+    migration_plan.extend(
+        (name, metadata.tables[name], None, None)
+        for name in ("narrative_branches", "branch_assertions", "branch_states")
+    )
 
     for table_name, pg_table, conflict_cols, col_mapping in migration_plan:
         logger.info(f"\n📦 迁移表: {table_name}")
