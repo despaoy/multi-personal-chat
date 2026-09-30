@@ -1,0 +1,105 @@
+{
+  "execution": "Sequential authenticated native APIs; complete independent source documents; history-only ablation on the final mixed question.",
+  "knowledge_base": "青苔工坊验证资料",
+  "documents": [
+    {
+      "title": "青苔工坊周日木刻课程说明",
+      "content": "青苔工坊周日木刻课程说明：课程地点为城东青苔工坊二楼松影教室。每周日上午十点半开课，中午十二点结束。联系人是陶岚，预约编号为MT-629-Z。学员必须带木刻刀和防滑手套，报名截止时间为周六下午四点。工坊提供木板。阴雨天课程照常举办，只有橙色暴雨预警才停课。这是虚构知识库课程规则，不是用户本人的行程或事实。",
+      "category": "课程"
+    },
+    {
+      "title": "青苔工坊设备借用规定",
+      "content": "青苔工坊设备借用规定：借用烫印机需要预约编号EP-314，联系人为沈禾。设备借用时间为周二下午三点到五点，押金为七十元。归还地点是西门工具柜，不是二楼松影教室。普通木刻课程学员不用缴纳烫印机押金。这是虚构知识库设备规则。",
+      "category": "设备"
+    },
+    {
+      "title": "河岸工坊周日绘画课程说明",
+      "content": "河岸工坊周日绘画课程说明：课程地点为城西河岸工坊一楼云帆画室，上午九点开课。联系人为苏弦，编号为HB-812。学员带颜料和画笔。这不是青苔工坊的木刻课程，不能把此处信息当作青苔工坊木刻课程规则。",
+      "category": "绘画"
+    }
+  ],
+  "search_queries": [
+    "青苔工坊周日木刻课程几点开课、联系人和预约编号是什么？",
+    "青苔工坊木刻课程需要带什么、报名截止时间和下雨停课规则是什么？"
+  ],
+  "cases": [
+    {
+      "id": "personal_identity",
+      "message": "我的昵称是清沅。这是我的真实昵称，请记住。",
+      "expected": [
+        "清沅"
+      ],
+      "requires_previous_cases": []
+    },
+    {
+      "id": "personal_schedule",
+      "message": "我计划每周日上午九点半到城东青苔工坊练习木刻。当天下雨我就取消这次出行。我还没有开始实施这个计划。这是我的个人计划，请记住。",
+      "expected": [],
+      "requires_previous_cases": [
+        "personal_identity"
+      ]
+    },
+    {
+      "id": "knowledge_course",
+      "message": "请查知识库：青苔工坊周日木刻课程在哪里、几点开课，联系人和预约编号分别是什么？请只回答课程规则，不要混入我的个人计划。",
+      "expected": [
+        "松影教室",
+        "十点半",
+        "陶岚",
+        "MT-629-Z"
+      ],
+      "knowledge_expected": [
+        "松影教室",
+        "十点半",
+        "陶岚",
+        "MT-629-Z"
+      ],
+      "requires_previous_cases": [
+        "personal_schedule"
+      ]
+    },
+    {
+      "id": "knowledge_followup",
+      "message": "那青苔工坊这门周日木刻课程需要带什么、什么时候截止报名，下雨是否停课？请查知识库回答课程规则。",
+      "expected": [
+        "木刻刀",
+        "防滑手套",
+        "周六",
+        "四点",
+        "橙色暴雨预警"
+      ],
+      "knowledge_expected": [
+        "木刻刀",
+        "防滑手套",
+        "周六下午四点",
+        "橙色暴雨预警"
+      ],
+      "requires_previous_cases": [
+        "knowledge_course"
+      ]
+    },
+    {
+      "id": "mixed_cold_memory_knowledge",
+      "message": "请同时回答两项：第一项，我的昵称和我之前个人计划的木刻出行时间、取消条件；第二项，查知识库回答青苔工坊周日木刻课程实际开课时间、联系人和预约编号。个人计划与工坊课程规则请分开，不能互相替代。",
+      "expected": [
+        "清沅",
+        "九点半",
+        "下雨",
+        "十点半",
+        "陶岚",
+        "MT-629-Z"
+      ],
+      "knowledge_expected": [
+        "十点半",
+        "陶岚",
+        "MT-629-Z"
+      ],
+      "requires_previous_cases": [
+        "personal_identity",
+        "personal_schedule",
+        "knowledge_course",
+        "knowledge_followup"
+      ]
+    }
+  ]
+}

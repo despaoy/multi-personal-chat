@@ -1060,7 +1060,7 @@ def _get_expected_chunk_count() -> int:
     避免"预期数量含孤儿但遍历跳过孤儿"导致永久不匹配、每次搜索都重建。
     """
     rows = db.execute_sql(
-        "SELECT COUNT(*) AS cnt FROM knowledge_chunks c INNER JOIN knowledge_documents d ON c.documentId = d.id",
+        'SELECT COUNT(*) AS cnt FROM knowledge_chunks c INNER JOIN knowledge_documents d ON c."documentId" = d.id',
         {},
     )
     return rows[0]["cnt"] if rows else 0
