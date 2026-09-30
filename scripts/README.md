@@ -27,6 +27,20 @@
 - 过拟合链路：`build_kisaki_v4_overfit_test.py`、`run_kisaki_v4_overfit_test.py`、`generate_kisaki_v4_overfit_results.py`、`render_kisaki_v4_overfit_review.py`。
 - chat smoke：`build_kisaki_v4_chat_smoke.py`、`generate_kisaki_v4_chat_smoke.py`、`render_kisaki_v4_chat_smoke_review.py`。
 
+## 角色偏好训练候选与审核
+
+- 候选盘点与扩展：`expand_kisaki_dpo_inventory.py`、`extend_kisaki_dpo_inventory.py`、`expand_kisaki_dpo_sample.py`。
+- 候选生成：`generate_kisaki_interactive_dpo.py`、`generate_source_dpo_candidates.py`。
+- 基线与复核后采样：`sample_kisaki_general_baseline.py`、`sample_kisaki_reviewed_initial.py`。
+- 扩展候选复核：`review_kisaki_expansion_candidates.py`、`review_kisaki_expansion_candidates_tail.py`、`review_kisaki_expansion_last.py`、`review_kisaki_expansion_sources_tail.py`。
+- 基线与重采样复核：`review_kisaki_general_baseline.py`、`review_kisaki_hard_resamples.py`、`review_kisaki_initial_resamples.py`。
+- 审核材料构建与展示：`build_kisaki_interactive_review.py`、`build_source_dpo_full_review.py`、`render_kisaki_dpo100_review.py`、`render_kisaki_interactive_dpo.py`、`render_source_dpo_review.py`。
+- 审核裁决与数据晋升：`export_source_dpo_adjudication.py`、`promote_kisaki_dpo_expansion.py`、`promote_kisaki_interactive_training.py`。
+- DPO100 预检、训练、排队与评测：`kisaki_dpo100_preflight.py`、`kisaki_dpo100_train_stage.py`、`kisaki_dpo100_queue.py`、`kisaki_dpo100_evaluate.py`。
+- DPO100 远程入口：`remote_kisaki_dpo100.py`。
+
+候选生成、自动复核和训练任务记录不代表已通过人工审核或正式发布门禁；实验结论以对应的数据清单、审核决定和真实评测结果为准。
+
 ## RAG 与系统路由
 
 - `build_character_rag_eval.py`、`build_kisaki_rag_v2.py`、`freeze_kisaki_rag_v2.py`。
