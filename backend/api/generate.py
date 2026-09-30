@@ -36,6 +36,7 @@ from inference.generation_request import (
 )
 from inference.lora_registry import get_lora_character_id
 from inference.lora_utils import resolve_lora_served_name
+from inference.provider_context import get_provider_context_budget
 from infra.concurrency_control import InferenceQueueFull, RateLimitExceeded, inference_runtime
 from infra.observability import increment, log_event, set_consecutive
 from infra.security_utils import strip_control_chars
@@ -1293,6 +1294,7 @@ async def _generate_with_retrieval(
             temperature=_temperature,
             max_tokens=_max_tokens,
             top_p=_top_p,
+            context_window_tokens=get_provider_context_budget().window_tokens,
         ),
         generate_reply,
     )
@@ -1340,6 +1342,7 @@ async def _generate_with_model_manager_character(
         temperature=float(_cfg.get("temperature", os.getenv("VLLM_TEMPERATURE", "0.7"))),
         max_tokens=int(_cfg.get("maxTokens", os.getenv("VLLM_MAX_TOKENS", "2048"))),
         top_p=float(_cfg.get("topP", os.getenv("VLLM_TOP_P", "0.9"))),
+        context_window_tokens=get_provider_context_budget(model_manager).window_tokens,
     )
     total_cost = 0.0
 

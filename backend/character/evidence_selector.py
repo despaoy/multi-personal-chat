@@ -280,11 +280,11 @@ async def _local_reviewer(messages: Sequence[Mapping[str, str]]) -> object:
     )
 
 
-def create_evidence_selector() -> ContextualEvidenceSelector | None:
+def create_evidence_selector(*, context_budget: ReviewContextBudget | None = None) -> ContextualEvidenceSelector | None:
     if os.getenv("CONTEXTUAL_MEMORY_SELECTION_ENABLED", "false").lower().strip() not in {"true", "1", "yes", "on"}:
         return None
     try:
         timeout = float(os.getenv("CONTEXTUAL_MEMORY_SELECTION_TIMEOUT_SECONDS", "30"))
-        return ContextualEvidenceSelector(_local_reviewer, timeout_seconds=timeout)
+        return ContextualEvidenceSelector(_local_reviewer, timeout_seconds=timeout, context_budget=context_budget)
     except ValueError:
-        return ContextualEvidenceSelector(_local_reviewer)
+        return ContextualEvidenceSelector(_local_reviewer, context_budget=context_budget)

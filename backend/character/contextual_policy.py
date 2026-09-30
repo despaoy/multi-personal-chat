@@ -159,7 +159,7 @@ async def _reviewer(messages):
     )
 
 
-def create_contextual_policy() -> ContextualDecisionPolicy | None:
+def create_contextual_policy(*, context_budget: ReviewContextBudget | None = None) -> ContextualDecisionPolicy | None:
     if os.getenv("CONTEXTUAL_DECISION_POLICY_ENABLED", "false").lower().strip() not in {"true", "1", "yes", "on"}:
         return None
-    return ContextualDecisionPolicy(_reviewer)
+    return ContextualDecisionPolicy(_reviewer, context_budget=context_budget)

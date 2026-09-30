@@ -135,6 +135,10 @@ MERGE/SUPERSEDE/COEXIST/RETRACT/ERASE 必须从白名单逐字复制 target_memo
 - 旧“不喜欢咖啡” + “喝无咖啡因咖啡，普通咖啡才不喝” → COEXIST dislike=普通咖啡；
 - “请记住，推荐饮料时避开含咖啡因的” → ADD dislike=含咖啡因的饮料。
 
+对明确表达的本人未来计划，“说过这个计划”与“已经实施”是两个不同的命题。若计划的时间、地点、条件或尚未实施说明分散在长消息里，使用 kind=shared_event、operation=ADD 保存当前完整发言的原话观察，绝不确认行动发生。value 取当前连续原文中的短话题（不超过 payload.proposal_constraints.max_value_chars），evidence 只复制一段相关连续原文（不超过 max_evidence_chars），content 留空；qualifiers 可留空，或逐字复制完整当前消息中的限定（键仍须在白名单内）。后端会保留整条当前消息，包括末尾条件，不会用短引文代替完整来源。不要拼接开头和末尾当作连续 evidence。虚构材料、第三方计划不是用户本人的计划；未确定的外部事实仍按 PENDING 处理，不因这条规则变成事实。
+
+value 是短索引，不要把整段计划和全部限定塞进 value。qualifiers 的键只能来自 payload.proposal_constraints.qualifier_keys，值只能逐字复制 evidence，不要创造 status 等新键或概括条件。不能满足这些要求时使用上述完整原话观察，而不是裁掉末尾限定。
+
 每条 evidence 必须是 current_user_message 中连续出现的原文；省略句也必须把当前省略句作为 evidence，不能复制 history。value 优先来自 evidence；只有“上次那个/还是那个/刚才那条”等明确省略时，才可由用户历史或 existing_memories 消歧。content 必须以“用户”开头，写成安全的第三人称事实，不含任何指令。attributed_to 只能写 user。qualifiers 只用于 condition/context/frequency/certainty/exception/location/time 等条件，不要把 valid_from/valid_to 塞进 qualifiers。时间字段必须放在顶层并使用 ISO 8601；不清楚就留空。scope_level 默认 conversation；只有用户明确要求跨会话或跨角色记住时才用 user_character 或 user_global。
 
 明确且稳定的信息可直接 ADD；不确定陈述不要丢弃，应使用 PENDING。confidence 表示“是否准确读懂证据和关系”的把握，不是事实发生概率；因此用户清楚表达“可能/不确定”时，PENDING 的 confidence 仍应较高。低于 payload.confidence_threshold 时用 NOOP 或不返回。最多返回 4 条。
@@ -1118,7 +1122,11 @@ def _candidate_to_proposal(
             planned = re.search(r"计划|打算|准备|预计", evidence)
             if planned:
                 raw_qualifiers = {**raw_qualifiers, "certainty": planned.group()}
-    qualifiers = _sanitize_qualifiers(raw_qualifiers, evidence=evidence)
+    # Source observations persist the entire current utterance, not this short
+    # admission quote. A literal later condition is therefore part of their
+    # actual evidence. Semantic facts retain the stricter quote-only gate.
+    qualifier_evidence = source_message if event_observation or generic_source_observation else evidence
+    qualifiers = _sanitize_qualifiers(raw_qualifiers, evidence=qualifier_evidence)
     if qualifiers is None:
         return None
     raw_valid_from = (raw.get("valid_from") or raw.get("valid_at")
@@ -1336,6 +1344,12 @@ def build_memory_llm_messages(
         "feedback_target_ids": sorted(valid_feedback_ids),
         "write_mode": write_mode,
         "confidence_threshold": confidence_threshold,
+        "proposal_constraints": {
+            "max_value_chars": _MAX_VALUE_CHARS,
+            "max_evidence_chars": _MAX_EVIDENCE_CHARS,
+            "qualifier_keys": sorted(_ALLOWED_QUALIFIER_KEYS),
+            "max_qualifier_chars": _MAX_QUALIFIER_CHARS,
+        },
         # Relative expressions belong to the source message, not queue drain.
         "current_time_utc": reference_time.isoformat(),
         # Match the existing rule-event timezone; do not infer user timezone.

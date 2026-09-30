@@ -700,6 +700,7 @@ def _select_memory_lines(
     complete_evidence: bool = False,
     diagnostics: dict[str, int] | None = None,
     observation_semantics: bool = False,
+    max_chars: int | None = None,
 ) -> tuple[list[str], list[str]]:
     """按调用方提供的相关度顺序挑选记忆，并施加效率限制。
 
@@ -710,7 +711,11 @@ def _select_memory_lines(
     # 第一步：候选 evidence packet。即使调用方绕过检索服务直接构造
     # MemoryItem，过期、撤回、冲突或低置信 claim 也不会进入 prompt。
     now = datetime.now(timezone.utc)
-    cap = MAX_COMPLETE_MEMORY_TOTAL_CHARS if complete_evidence else MAX_MEMORY_TOTAL_CHARS
+    if max_chars is not None and (type(max_chars) is not int or max_chars <= 0):
+        raise ValueError("Reference context budget must be a positive integer")
+    cap = max_chars if max_chars is not None else (
+        MAX_COMPLETE_MEMORY_TOTAL_CHARS if complete_evidence else MAX_MEMORY_TOTAL_CHARS
+    )
     stats = dict(input_count=len(memories), filtered_count=0, invalid_count=0,
                  budget_skipped=0, count_skipped=0, selected_count=0, used_chars=reserved_chars,
                  budget_chars=cap)
@@ -754,6 +759,7 @@ def compile_reference_context(
     complete_evidence: bool = False,
     diagnostics: dict[str, int] | None = None,
     observation_semantics: bool = False,
+    max_chars: int | None = None,
 ) -> tuple[str, tuple[str, ...]]:
     """编译长期记忆参考区（不可信用户区域）。
 
@@ -766,6 +772,7 @@ def compile_reference_context(
       记忆，参考区不会因额外插入称呼而突破上限。
     - complete_evidence=True 时改为 6000 字符的原子证据包预算，
       不裁剪任何 claim 或附属证据，放不下的包不会出现在 used_memory_ids。
+      调用方可用 max_chars 明确传入提供方工作预算；None 保留已有默认值。
     """
     address = preferred_address.strip()
     address_line = ""
@@ -777,7 +784,7 @@ def compile_reference_context(
     reserved = len(address_line) + 1 if address_line else 0
     memory_lines, used_ids = _select_memory_lines(
         memories, reserved_chars=reserved, complete_evidence=complete_evidence, diagnostics=diagnostics,
-        observation_semantics=observation_semantics,
+        observation_semantics=observation_semantics, max_chars=max_chars,
     )
 
     if address_line:
