@@ -15,7 +15,11 @@ os.environ.setdefault("USE_POSTGRESQL", "false")
 os.environ.setdefault("DATABASE_PATH", str(_TEST_RUNTIME_ROOT / "qq_assistant.db"))
 # Importing app.config otherwise rotates backend/.env's development secret.
 # Ephemeral process-local test credentials must never write application config.
-os.environ.setdefault("JWT_SECRET", secrets.token_urlsafe(48))
+# A caller-supplied short/deprecated test value also triggers auto-rotation.
+# Replace only invalid test credentials before any app configuration imports.
+_test_jwt_secret = os.environ.get("JWT_SECRET", "")
+if len(_test_jwt_secret) < 32 or _test_jwt_secret == "multipersonal-jwt-secret-change-in-production":
+    os.environ["JWT_SECRET"] = secrets.token_urlsafe(48)
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 BACKEND_ROOT = PROJECT_ROOT / "backend"
 for path in (PROJECT_ROOT, BACKEND_ROOT):
