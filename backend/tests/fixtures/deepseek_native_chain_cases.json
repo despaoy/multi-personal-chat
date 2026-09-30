@@ -1,0 +1,62 @@
+{
+  "description": "Complete synthetic inputs for native DeepSeek provider, real PostgreSQL, authentication and inference queue. Expectations are checked by the driver and never sent as model instructions.",
+  "provider": "openai_compat",
+  "actual_model_required": "deepseek-v4-pro",
+  "cases": [
+    {
+      "id": "seed_four_fields",
+      "message": "请跨会话记住，我叫岚舟，我的老家在宣城，目前住在丽水，大学专业是环境工程。这四项资料都是我本人的。",
+      "expected_active_keys": [
+        "user_name",
+        "user_origin",
+        "user_residence",
+        "user_major"
+      ]
+    },
+    {
+      "id": "read_four_fields",
+      "message": "我叫啥？我的老家、目前居住地和大学专业分别是什么？请逐项回答。",
+      "expected_values": [
+        "岚舟",
+        "宣城",
+        "丽水",
+        "环境工程"
+      ]
+    },
+    {
+      "id": "controlled_cold_read",
+      "message": "这是新会话，我的名字、老家、目前居住地和大学专业分别是什么？请按已保存资料逐项回答。",
+      "conditions": {
+        "history_read_override": [],
+        "raw_source_recall": false,
+        "real_provider_auth_queue_postgres": true
+      },
+      "expected_values": [
+        "岚舟",
+        "宣城",
+        "丽水",
+        "环境工程"
+      ]
+    },
+    {
+      "id": "concurrent_update",
+      "message": "请记住，我目前住在舟山，已经不住丽水了。老家仍是宣城，大学专业仍是环境工程。只更新目前居住地。",
+      "expected_residence": "舟山",
+      "expected_previous_residence_status": "superseded"
+    },
+    {
+      "id": "concurrent_read_after_admission",
+      "message": "我目前住哪？老家在哪里？大学专业是什么？请按最新资料逐项回答。",
+      "conditions": {
+        "same_session_as_update": true,
+        "sent_after_update_admitted_before_update_completed": true,
+        "history_read_unmodified": true
+      },
+      "expected_values": [
+        "舟山",
+        "宣城",
+        "环境工程"
+      ]
+    }
+  ]
+}

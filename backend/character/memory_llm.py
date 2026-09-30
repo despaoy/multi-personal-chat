@@ -48,6 +48,7 @@ from character.temporal_provenance import model_temporal_provenance
 from db.memory_claim_guard import MemoryClaimConflict
 from db.memory_source import ClaimSourceRevokedError
 from inference.context_budget import CONTEXT_SAFETY_MARGIN_TOKENS, estimated_tokens
+from inference.openai_protocol import completed_chat_content, nonthinking_parameters
 
 if TYPE_CHECKING:
     from knowledge.retrieval_core.embedding import EmbeddingProvider
@@ -208,6 +209,7 @@ class OpenAICompatibleMemoryCompletion:
         base = config.base_url.rstrip("/")
         self._endpoint = f"{base}/chat/completions" if base.endswith("/v1") else f"{base}/v1/chat/completions"
         self._model = config.model
+        self._nonthinking_parameters = nonthinking_parameters(config.base_url)
         self._api_key = config.api_key
         self._timeout = config.timeout_seconds
         self._client: httpx.AsyncClient | None = None
@@ -227,12 +229,12 @@ class OpenAICompatibleMemoryCompletion:
                 "temperature": 0.0,
                 "max_tokens": 768,
                 "stream": False,
-                "chat_template_kwargs": {"enable_thinking": False},
+                **self._nonthinking_parameters,
             },
         )
         response.raise_for_status()
         payload = response.json()
-        return str(payload["choices"][0]["message"]["content"])
+        return completed_chat_content(payload)
 
     async def close(self) -> None:
         if self._client is not None:

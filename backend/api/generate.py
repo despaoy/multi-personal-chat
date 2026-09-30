@@ -446,7 +446,7 @@ async def _generate_reply_impl(
 
     # 检查vLLM是否实际支持该LoRA，避免404触发熔断
     vllm_effective_lora = vllm_lora_name if lora_name != "default" else None
-    if vllm_effective_lora and await _ensure_vllm() and _vllm_client:
+    if _mgr._current_provider.value == "vllm" and vllm_effective_lora and await _ensure_vllm() and _vllm_client:
         try:
             available_loras = await _vllm_client.list_loras()
             if available_loras is not None and vllm_effective_lora not in available_loras:
@@ -495,8 +495,8 @@ async def _generate_reply_impl(
         except Exception as e:
             logger.warning("response cache read failed: %s", e)
 
-    # ── 优先使用 vLLM 高并发推理 ──
-    if await _ensure_vllm() and _vllm_client:
+    # ── 按当前提供方选择 vLLM 高并发推理 ──
+    if _mgr._current_provider.value == "vllm" and await _ensure_vllm() and _vllm_client:
         try:
             reply, used_rag, rag_meta = await _generate_with_vllm(
                 request,
@@ -668,7 +668,7 @@ async def _generate_reply_impl(
                             prompt=messages[-1]["content"],
                             session_history=messages[:-1],
                             rag_docs=None,
-                            max_tokens=kwargs["max_tokens"],
+                            max_tokens_override=kwargs["max_tokens"],
                         )
                         return text
 

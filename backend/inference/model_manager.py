@@ -15,6 +15,9 @@ from enum import Enum
 from datetime import datetime
 from pathlib import Path
 
+from inference.openai_protocol import completed_chat_content, nonthinking_parameters
+
+
 logger = logging.getLogger(__name__)
 
 # DB 配置缓存统一委托给 cache.config_cache（60s TTL + jitter + Redis 共享），
@@ -297,12 +300,13 @@ class OpenAICompatProvider(BaseProvider):
                         "messages": messages,
                         "temperature": float(_db_cfg.get('temperature', 0.8)),
                         "max_tokens": max_tokens,
+                        **nonthinking_parameters(self.base_url, local_template=False),
                     },
                     timeout=120.0,
                 )
             if response.status_code == 200:
                 data = response.json()
-                reply = data["choices"][0]["message"]["content"].strip()
+                reply = completed_chat_content(data)
                 cost = round(time.time() - start, 2)
                 return reply, cost
             else:
