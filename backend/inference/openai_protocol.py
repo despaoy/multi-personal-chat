@@ -25,3 +25,9 @@ def completed_chat_content(payload: object) -> str:
     if not isinstance(content, str) or not content.strip():
         raise ValueError("chat completion has no usable content")
     return content.strip()
+
+
+def chat_completions_endpoint(base_url: str) -> str:
+    """Accept either a service root or an already-versioned API base."""
+    base = base_url.rstrip("/")
+    return base + ("/chat/completions" if base.endswith("/v1") else "/v1/chat/completions")

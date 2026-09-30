@@ -15,7 +15,7 @@ from enum import Enum
 from datetime import datetime
 from pathlib import Path
 
-from inference.openai_protocol import completed_chat_content, nonthinking_parameters
+from inference.openai_protocol import chat_completions_endpoint, completed_chat_content, nonthinking_parameters
 
 
 logger = logging.getLogger(__name__)
@@ -269,7 +269,6 @@ class OpenAICompatProvider(BaseProvider):
         if not self.api_key:
             raise RuntimeError("未配置 API Key，请在设置页面配置 OpenAI 兼容 API Key")
 
-        start = time.time()
         messages = []
 
         if rag_docs:
@@ -286,11 +285,23 @@ class OpenAICompatProvider(BaseProvider):
 
         max_tokens = max_tokens_override if max_tokens_override else int(_db_cfg.get('maxTokens', 512))
 
+        return await self._complete_messages(
+            messages, temperature=float(_db_cfg.get('temperature', 0.8)), max_tokens=max_tokens)
+
+    async def async_complete(self, messages, *, temperature, max_tokens):
+        """Complete already-compiled reviewer messages without re-entering chat."""
+        self._refresh_db_config()
+        return await self._complete_messages(messages, temperature=temperature, max_tokens=max_tokens)
+
+    async def _complete_messages(self, messages, *, temperature, max_tokens):
+        if not self.api_key:
+            raise RuntimeError("未配置 API Key，请在设置页面配置 OpenAI 兼容 API Key")
+        start = time.time()
         try:
             async with self._acquire_http_client(timeout=120.0) as client:
                 # P1-M4 fix: 请求级 timeout 覆盖 pool 默认值，确保生效
                 response = await client.post(
-                    f"{self.base_url}/v1/chat/completions",
+                    chat_completions_endpoint(self.base_url),
                     headers={
                         "Authorization": f"Bearer {self.api_key}",
                         "Content-Type": "application/json"
@@ -298,7 +309,7 @@ class OpenAICompatProvider(BaseProvider):
                     json={
                         "model": self.model,
                         "messages": messages,
-                        "temperature": float(_db_cfg.get('temperature', 0.8)),
+                        "temperature": temperature,
                         "max_tokens": max_tokens,
                         **nonthinking_parameters(self.base_url, local_template=False),
                     },

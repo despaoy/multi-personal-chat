@@ -66,9 +66,10 @@ async def main(args):
         MEMORY_LLM_API_KEY=key,
         MEMORY_LLM_CONTEXT_WINDOW_TOKENS="65536",
         MEMORY_SOURCE_RECALL_ENABLED="false",
-        DYNAMIC_CONTEXT_SEMANTIC_REVIEW_ENABLED="false",
-        CONTEXTUAL_MEMORY_SELECTION_ENABLED="false",
-        CONTEXTUAL_DECISION_POLICY_ENABLED="false",
+        DYNAMIC_CONTEXT_SEMANTIC_REVIEW_ENABLED=str(args.reviewers).lower(),
+        DYNAMIC_CONTEXT_SEMANTIC_REVIEW_TIMEOUT_SECONDS="5",
+        CONTEXTUAL_MEMORY_SELECTION_ENABLED=str(args.reviewers).lower(),
+        CONTEXTUAL_DECISION_POLICY_ENABLED=str(args.reviewers).lower(),
         REDIS_URL="redis://127.0.0.1:1/0",
         EMBEDDING_MODEL_PATH="/home/boot/lhm/multipersonal-runtime/models/paraphrase-multilingual-MiniLM-L12-v2",
         HF_HUB_OFFLINE="1",
@@ -92,10 +93,17 @@ async def main(args):
     import httpx
 
     cloud_calls = []
+    local_review_calls = []
     original_send = httpx.AsyncClient.send
 
     async def observed_send(client, request, **kwargs):
         if request.url.host != "api.deepseek.com":
+            if request.url.host == "127.0.0.1" and request.url.path.endswith("/chat/completions"):
+                local_body = json.loads(request.content)
+                local_review_calls.append(
+                    dict(url=str(request.url), model=local_body.get("model"), max_tokens=local_body.get("max_tokens"))
+                )
+                (OUT / "local-review-calls.json").write_text(json.dumps(local_review_calls, indent=2))
             return await original_send(client, request, **kwargs)
         body = json.loads(request.content)
         response = await original_send(client, request, **kwargs)
@@ -128,6 +136,17 @@ async def main(args):
         prepared = await original_prepare(service, turn, character_id)
         prepared_diagnostics.append(
             dict(
+                user_acts=[dict(id=s.signal_id, score=s.score) for s in prepared.interaction.user_acts],
+                semantic_status=prepared.semantic_review_status,
+                semantic_reason=prepared.semantic_review_fallback_reason,
+                semantic_triggers=prepared.semantic_review_reasons,
+                selection_status=prepared.memory_selection_status,
+                selection_reason=prepared.memory_selection_reason,
+                selection_candidates=prepared.memory_selection_candidate_count,
+                policy_status=prepared.contextual_policy_status,
+                policy_reason=prepared.contextual_policy_reason,
+                decision_strategies=prepared.decision.strategy_ids,
+                dynamic_context=prepared.compiled.dynamic_context,
                 cold=evaluation_state["cold"],
                 history_count=len(prepared.history),
                 used_memory_ids=prepared.compiled.used_memory_ids,
@@ -200,6 +219,31 @@ async def main(args):
                     include_inactive=True,
                 )
             evaluation_state["cold"] = False
+            if args.reviewers:
+                dynamic_cases = [
+                    item["message"]
+                    for item in json.loads(
+                        (
+                            Path(__file__).resolve().parents[1] / "tests/fixtures/deepseek_native_review_cases.json"
+                        ).read_text()
+                    )["cases"]
+                ]
+                for message in dynamic_cases:
+                    response = await client.post(
+                        "/api/generate",
+                        json=dict(
+                            message=message,
+                            characterId="tsukiyashiro_kisaki",
+                            loraId="default",
+                            sessionId=args.run_label + "-dynamic",
+                            sessionType="private",
+                        ),
+                    )
+                    proof["generation"].append(
+                        dict(http_status=response.status_code, response=response.json(), dynamic_case=True)
+                    )
+                    assert await get_memory_enrichment_scheduler().flush_memory(timeout=90)
+            proof["local_review_calls"] = local_review_calls
             queue_before = inference_runtime.stats()["submitted"]
             session = args.run_label + "-cold"
             first = asyncio.create_task(
@@ -278,7 +322,7 @@ async def main(args):
                     for c in cloud_calls
                 ),
                 "cold_answer_has_all_four_fields": all(
-                    value in proof["generation"][-1]["response"].get("reply", "")
+                    value in proof["generation"][2]["response"].get("reply", "")
                     for value in ["岚舟", "宣城", "丽水", "环境工程"]
                 ),
                 "cold_compilation_history_is_zero": prepared_diagnostics[2]["history_count"] == 0,
@@ -296,12 +340,42 @@ async def main(args):
                     c["response"].get("model") == "deepseek-v4-pro" for c in cloud_calls
                 ),
                 "native_queue_has_no_failures": proof["queue_stats"]["failed"] == 0
-                and proof["queue_stats"]["completed"] == 5,
+                and proof["queue_stats"]["completed"] == (8 if args.reviewers else 5),
                 "current_residence_persisted": any(
                     c["memory_key"] == "user_residence" and c["status"] == "active" and "舟山" in c["content"]
                     for c in proof["claims_after_concurrency"]
                 ),
             }
+            (OUT / "result.json").write_text(json.dumps(proof, ensure_ascii=False, indent=2))
+            if args.reviewers:
+                boundary = prepared_diagnostics[3:6]
+                proof["checks"].update(
+                    optional_reviewers_never_use_local_provider=not local_review_calls,
+                    all_triggered_semantic_reviews_applied=all(p["semantic_status"] == "applied" for p in boundary),
+                    all_memory_selections_completed=all(
+                        p["selection_status"] in {"empty", "selected"} for p in prepared_diagnostics
+                    ),
+                    all_native_policies_applied=all(p["policy_status"] == "applied" for p in prepared_diagnostics),
+                    current_explicit_advice_boundaries_preserved=all(
+                        any(a["id"] == "advice_boundary" and a["score"] >= 0.5 for a in p["user_acts"])
+                        for p in boundary[:2]
+                    ),
+                    effective_advice_boundaries_preserved=all(
+                        ("不得提供建议" in p["dynamic_context"] or "未请求建议时，不自动给方案" in p["dynamic_context"])
+                        and ("本轮不得追问" in p["dynamic_context"] or "任何追问" in p["dynamic_context"])
+                        for p in boundary
+                    ),
+                    boundary_strategies_exclude_advice_and_probes=all(
+                        not set(p["decision_strategies"]) & {"offer_suggestion", "gentle_probe", "clarify_need"}
+                        for p in boundary
+                    ),
+                    boundary_answers_do_not_question_user=all(
+                        "？" not in g["response"].get("reply", "") and "?" not in g["response"].get("reply", "")
+                        for g in proof["generation"][3:6]
+                    ),
+                )
+            proof["native_optional_reviewers_enabled"] = args.reviewers
+            proof["semantic_review_timeout_seconds"] = 5
             (OUT / "result.json").write_text(json.dumps(proof, ensure_ascii=False, indent=2))
             assert all(proof["checks"].values()), proof["checks"]
             print(
@@ -319,6 +393,7 @@ async def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--reviewers", action="store_true")
     parser.add_argument("--root", required=True, type=Path)
     parser.add_argument("--run-label", required=True)
     parser.add_argument("--api-key-file", required=True, type=Path)

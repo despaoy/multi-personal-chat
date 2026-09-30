@@ -48,7 +48,7 @@ from character.temporal_provenance import model_temporal_provenance
 from db.memory_claim_guard import MemoryClaimConflict
 from db.memory_source import ClaimSourceRevokedError
 from inference.context_budget import CONTEXT_SAFETY_MARGIN_TOKENS, estimated_tokens
-from inference.openai_protocol import completed_chat_content, nonthinking_parameters
+from inference.openai_protocol import chat_completions_endpoint, completed_chat_content, nonthinking_parameters
 
 if TYPE_CHECKING:
     from knowledge.retrieval_core.embedding import EmbeddingProvider
@@ -206,8 +206,7 @@ class OpenAICompatibleMemoryCompletion:
     """仅用于记忆判断的 OpenAI 兼容客户端。"""
 
     def __init__(self, config: MemoryLlmConfig) -> None:
-        base = config.base_url.rstrip("/")
-        self._endpoint = f"{base}/chat/completions" if base.endswith("/v1") else f"{base}/v1/chat/completions"
+        self._endpoint = chat_completions_endpoint(config.base_url)
         self._model = config.model
         self._nonthinking_parameters = nonthinking_parameters(config.base_url)
         self._api_key = config.api_key

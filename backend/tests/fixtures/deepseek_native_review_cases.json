@@ -1,0 +1,56 @@
+{
+  "description": "Complete boundary and reference cases; inputs alone are sent to the model. All native optional reviewers use the selected provider.",
+  "cases": [
+    {
+      "id": "boundary_1",
+      "message": "今天练习木刻时我把一块板刻坏了，那块板是准备做玄关装饰的。现在只想说这件事，不要建议，不要追问。",
+      "expected_semantic_status": "applied",
+      "forbidden_strategies": [
+        "offer_suggestion",
+        "gentle_probe",
+        "clarify_need"
+      ],
+      "requires_previous_cases": [],
+      "expected_effective_constraints": [
+        "no_unsolicited_advice",
+        "no_followup_questions"
+      ]
+    },
+    {
+      "id": "boundary_2",
+      "message": "不是不想聊，是不想再被教该怎么做；刚才说的只听我吐槽、不建议也不追问的要求继续有效。",
+      "expected_semantic_status": "applied",
+      "forbidden_strategies": [
+        "offer_suggestion",
+        "gentle_probe",
+        "clarify_need"
+      ],
+      "requires_previous_cases": [
+        "boundary_1"
+      ],
+      "expected_effective_constraints": [
+        "no_unsolicited_advice",
+        "no_followup_questions"
+      ]
+    },
+    {
+      "id": "boundary_3",
+      "message": "刚才那块木刻板的事，我还是觉得很烦。",
+      "expected_semantic_status": "applied",
+      "forbidden_strategies": [
+        "offer_suggestion",
+        "gentle_probe",
+        "clarify_need"
+      ],
+      "requires_previous_cases": [
+        "boundary_1",
+        "boundary_2"
+      ],
+      "expected_effective_constraints": [
+        "no_unsolicited_advice",
+        "no_followup_questions"
+      ]
+    }
+  ],
+  "execution": "Run in listed order within one authenticated private-user scope. Previous cases remain persisted history; these are not independent single-turn prompts."
+}

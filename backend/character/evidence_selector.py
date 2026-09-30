@@ -267,9 +267,9 @@ class ContextualEvidenceSelector:
 
 
 async def _local_reviewer(messages: Sequence[Mapping[str, str]]) -> object:
-    from inference.vllm_client import get_vllm_client
+    from inference.review_client import get_context_review_client
 
-    client = await get_vllm_client()
+    client = await get_context_review_client()
     return await client.generate(
         messages=[dict(message) for message in messages],
         lora_name=None,

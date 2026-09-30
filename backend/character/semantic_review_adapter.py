@@ -1,7 +1,7 @@
 """Default provider adapter for selective semantic state review.
 
 This module intentionally knows nothing about the character generation
-pipeline.  It calls the shared vLLM client directly so a semantic review can
+pipeline.  It calls the selected low-level provider directly so a semantic review can
 never re-enter reply generation, RAG, memory, or persona assembly.  Parsing
 and fail-closed recovery remain the responsibility of
 ``SemanticStateEstimator``.
@@ -33,7 +33,7 @@ _TRUE_VALUES = frozenset({"1", "true", "yes", "on"})
 
 
 class SemanticReviewClient(Protocol):
-    """Small structural contract implemented by :class:`VLLMClient`."""
+    """Small structural contract for local and cloud review clients."""
 
     async def generate(
         self,
@@ -66,7 +66,7 @@ class SemanticReviewSettings:
 
 
 class VLLMSemanticReviewer:
-    """Callable reviewer that uses only the shared low-level vLLM client."""
+    """Legacy public name for a reviewer using the selected low-level provider."""
 
     def __init__(self, client_factory: SemanticReviewClientFactory | None = None) -> None:
         self._client_factory = client_factory or _default_vllm_client_factory
@@ -77,7 +77,7 @@ class VLLMSemanticReviewer:
         if client is None:
             # Do not convert this into a semantic answer.  The estimator owns
             # the fail-closed fallback to the original deterministic state.
-            raise RuntimeError("semantic review vLLM client is unavailable")
+            raise RuntimeError("semantic review client is unavailable")
         return await client.generate(
             messages=request_messages,
             lora_name=None,
@@ -125,12 +125,11 @@ def create_default_semantic_review_runtime(
 
 
 async def _default_vllm_client_factory() -> SemanticReviewClient:
-    # Keep the dependency lazy: vllm_client imports application configuration
-    # and infrastructure modules, while this adapter is imported by character
-    # services during startup.
-    from inference.vllm_client import get_vllm_client
+    # Keep provider resolution lazy: this adapter is imported during character
+    # service startup, before a reviewer request needs its selected client.
+    from inference.review_client import get_context_review_client
 
-    return await get_vllm_client()
+    return await get_context_review_client()
 
 
 def _copy_messages(messages: Sequence[Mapping[str, str]]) -> list[dict[str, str]]:
