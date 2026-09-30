@@ -34,6 +34,7 @@ from character.memory_extractor import (
     ExtractedMemory,
     assertion_before_lookup,
     extract_memories,
+    fictional_memory_context,
     memory_evidence_allowed,
     memory_name_allowed,
     memory_write_allowed,
@@ -330,7 +331,7 @@ _THIRD_PARTY_FACT_PATTERN = re.compile(
     r"(?:他|她|他们|她们|朋友|同学|室友|同事))[^，。！？,!?]{0,12}(?:喜欢|讨厌|叫|是|在|准备|工作)"
 )
 _NAMED_THIRD_PARTY_PATTERN = re.compile(
-    r"(?:^|[，。；;])(?:小[\u4e00-\u9fff]|老[\u4e00-\u9fff]|[A-Za-z]{2,16})"
+    r"(?:^|[，。；;])(?:小[\u4e00-\u9fff]|老(?!家(?:在|是))[\u4e00-\u9fff]|[A-Za-z]{2,16})"
     r"[^，。！？,!?]{0,12}(?:喜欢|讨厌|叫|是|在|准备|工作)"
 )
 _ELLIPSIS_REFERENCE_PATTERN = re.compile(r"(?:还是|上次|之前|原来|刚才|那条|这条|那个|这件事|照旧|继续)")
@@ -776,6 +777,19 @@ def _scope_level_for_message(raw: Any, source_message: str) -> str:
     return "conversation"
 
 
+def _explicit_location_field(value: str, evidence: str) -> str:
+    """Resolve only an explicit source predicate, never a model's field label."""
+    place = re.escape(value)
+    boundary = r"(?=$|[，。！？,!?；;])"
+    origin = re.search(
+        rf"(?:我来自|(?:我(?:的)?)?(?:老家|故乡|家乡)(?:在|是)){place}{boundary}", evidence)
+    residence = re.search(
+        rf"(?:我(?:目前|现在)?|目前|现在)住在{place}{boundary}", evidence)
+    if bool(origin) == bool(residence):
+        return ""
+    return "user_origin" if origin else "user_residence"
+
+
 def _canonical_memory_fields(kind: str, value: str, evidence: str) -> tuple[str, str, str, float] | None:
     if kind == "location":
         # Reuse the same evidence interpretation as rule writes and field
@@ -787,6 +801,9 @@ def _canonical_memory_fields(kind: str, value: str, evidence: str) -> tuple[str,
         if len(matches) == 1:
             item = matches[0]
             return item.memory_type, item.memory_key, item.content, item.importance
+        explicit_key = _explicit_location_field(value, evidence)
+        if not matches and explicit_key:
+            return "user_fact", explicit_key, prefixes[explicit_key] + value, 0.6
     if kind == "name":
         if not memory_name_allowed(value):
             return None
@@ -926,6 +943,23 @@ def _candidate_to_proposal(
                 normalized_evidence = _normalize(evidence)
                 proposed_content = item.content
                 evidence_allowed = memory_evidence_allowed(evidence)
+    if evidence_allowed and kind == "location" and semantic_operation in {"ADD", "SUPERSEDE", "COEXIST", "MERGE"}:
+        # A clipped quote must not turn a hypothetical source clause into
+        # an asserted residence/origin. Check each original overlapping
+        # clause; independent assertions elsewhere retain their own scope.
+        occurrences = list(re.finditer(re.escape(evidence), source_message))
+        if occurrences:
+            evidence_allowed = any(
+                all(memory_evidence_allowed(clause.group())
+                    and not fictional_memory_context(clause.group())
+                    and not _NAMED_THIRD_PARTY_PATTERN.search(clause.group())
+                    and not _THIRD_PARTY_FACT_PATTERN.search(clause.group())
+                    for clause in re.finditer(r"[^，,。！？!?；;\n]+[。！？!?；;]?", source_message)
+                    if clause.start() < occurrence.end() and clause.end() > occurrence.start())
+                and all(not fictional_memory_context(sentence.group())
+                        for sentence in re.finditer(r"[^。！？!?；;\n]+[。！？!?；;]?", source_message)
+                        if sentence.start() < occurrence.end() and sentence.end() > occurrence.start())
+                for occurrence in occurrences)
     if not evidence_allowed:
         return None
 
@@ -1055,6 +1089,20 @@ def _candidate_to_proposal(
         temporal_fields = {"valid_from", "valid_to", "valid_at", "invalid_at", "observed_at"}
         misplaced_validity = {key: value for key, value in raw_qualifiers.items() if key in temporal_fields}
         raw_qualifiers = {key: value for key, value in raw_qualifiers.items() if key not in temporal_fields}
+        # A known model schema label is redundant only when the ordinary
+        # source predicate independently proves the same location field.
+        if kind == "location" and "type" in raw_qualifiers:
+            field_labels = {"hometown": "user_origin", "current_residence": "user_residence"}
+            expected_field = field_labels.get(str(raw_qualifiers["type"]))
+            canonical = _canonical_memory_fields(kind, value, evidence)
+            if expected_field and canonical and canonical[1] == expected_field:
+                raw_qualifiers = {key: value for key, value in raw_qualifiers.items() if key != "type"}
+        # Keep the actual Chinese qualifier, not an unsupported English enum.
+        # PENDING still controls lifecycle; labels cannot supply missing facts.
+        if semantic_operation == "PENDING" and raw_qualifiers.get("certainty") == "planned":
+            planned = re.search(r"计划|打算|准备|预计", evidence)
+            if planned:
+                raw_qualifiers = {**raw_qualifiers, "certainty": planned.group()}
     qualifiers = _sanitize_qualifiers(raw_qualifiers, evidence=evidence)
     if qualifiers is None:
         return None

@@ -1,0 +1,144 @@
+[
+  {
+    "case": "phase1_complete_profile",
+    "source_message": "请记住我的真实信息：我叫叶澄，老家在宣城，目前住在丽水，大学专业是环境工程。宣城是故乡，丽水是现在的居住地。",
+    "writer_output": {
+      "memories": [
+        {
+          "kind": "name",
+          "value": "叶澄",
+          "content": "用户叫叶澄",
+          "evidence": "我叫叶澄",
+          "confidence": 1.0,
+          "operation": "ADD",
+          "target_memory_id": "",
+          "target_memory_key": "",
+          "attributed_to": "user",
+          "qualifiers": {},
+          "valid_from": "",
+          "valid_to": "",
+          "observed_at": "2026-10-01T01:30:43.692860+08:00",
+          "scope_level": "conversation"
+        },
+        {
+          "kind": "location",
+          "value": "宣城",
+          "content": "用户的老家在宣城",
+          "evidence": "老家在宣城",
+          "confidence": 1.0,
+          "operation": "ADD",
+          "target_memory_id": "",
+          "target_memory_key": "",
+          "attributed_to": "user",
+          "qualifiers": {
+            "type": "hometown"
+          },
+          "valid_from": "",
+          "valid_to": "",
+          "observed_at": "2026-10-01T01:30:43.692860+08:00",
+          "scope_level": "conversation"
+        },
+        {
+          "kind": "location",
+          "value": "丽水",
+          "content": "用户目前住在丽水",
+          "evidence": "目前住在丽水",
+          "confidence": 1.0,
+          "operation": "ADD",
+          "target_memory_id": "",
+          "target_memory_key": "",
+          "attributed_to": "user",
+          "qualifiers": {
+            "type": "current_residence"
+          },
+          "valid_from": "",
+          "valid_to": "",
+          "observed_at": "2026-10-01T01:30:43.692860+08:00",
+          "scope_level": "conversation"
+        },
+        {
+          "kind": "major",
+          "value": "环境工程",
+          "content": "用户的大学专业是环境工程",
+          "evidence": "大学专业是环境工程",
+          "confidence": 1.0,
+          "operation": "ADD",
+          "target_memory_id": "",
+          "target_memory_key": "",
+          "attributed_to": "user",
+          "qualifiers": {},
+          "valid_from": "",
+          "valid_to": "",
+          "observed_at": "2026-10-01T01:30:43.692860+08:00",
+          "scope_level": "conversation"
+        }
+      ]
+    },
+    "before_accepted": 2,
+    "after_expected": 4,
+    "after_keys": [
+      "user_name",
+      "user_major",
+      "user_origin",
+      "user_residence"
+    ],
+    "after_operations": [
+      "ADD",
+      "ADD",
+      "ADD",
+      "ADD"
+    ]
+  },
+  {
+    "case": "phase1_future_not_present",
+    "source_message": "请记住，我现在住在宜兴，计划2026年11月搬到安庆。搬家还没有发生，当前住处仍是宜兴。",
+    "writer_output": {
+      "memories": [
+        {
+          "kind": "location",
+          "value": "宜兴",
+          "content": "用户目前住在宜兴",
+          "evidence": "我现在住在宜兴",
+          "confidence": 0.98,
+          "operation": "ADD",
+          "target_memory_id": "",
+          "target_memory_key": "",
+          "attributed_to": "user",
+          "qualifiers": {},
+          "valid_from": "",
+          "valid_to": "",
+          "observed_at": "2026-10-01T01:31:28.946849+08:00",
+          "scope_level": "conversation"
+        },
+        {
+          "kind": "other_user_fact",
+          "value": "计划2026年11月搬到安庆",
+          "content": "用户计划2026年11月搬到安庆，搬家尚未发生",
+          "evidence": "计划2026年11月搬到安庆。搬家还没有发生",
+          "confidence": 0.95,
+          "operation": "PENDING",
+          "target_memory_id": "",
+          "target_memory_key": "",
+          "attributed_to": "user",
+          "qualifiers": {
+            "certainty": "planned"
+          },
+          "valid_from": "",
+          "valid_to": "",
+          "observed_at": "2026-10-01T01:31:28.946849+08:00",
+          "scope_level": "conversation"
+        }
+      ]
+    },
+    "before_accepted": 1,
+    "after_expected": 2,
+    "after_keys": [
+      "user_residence",
+      "fact_计划2026年11月搬到安庆"
+    ],
+    "after_operations": [
+      "ADD",
+      "PENDING"
+    ]
+  }
+]
