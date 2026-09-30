@@ -65,12 +65,14 @@ _RAG_ABSTENTION_REPLY = (
     os.getenv("RAG_ABSTENTION_REPLY", "").strip() or "我没有找到足够可靠的信息，暂时无法回答这个问题。"
 )
 _DETERMINISTIC_MODEL_LABELS = {
-    'current_constraint': 'statement/constraint', 'memory_lookup': 'memory/lookup',
-    'memory_storage_status': 'memory/storage_status', 'memory_mentions': 'memory/mentions',
-    'memory_field_result': 'memory/field_result',
-    'memory_operation': 'memory/operation',
-    'task_composite': 'tasks/composite',
-    'source_excerpt': 'rag/source_excerpt',
+    "current_constraint": "statement/constraint",
+    "memory_lookup": "memory/lookup",
+    "memory_storage_status": "memory/storage_status",
+    "memory_mentions": "memory/mentions",
+    "memory_field_result": "memory/field_result",
+    "memory_operation": "memory/operation",
+    "task_composite": "tasks/composite",
+    "source_excerpt": "rag/source_excerpt",
 }
 _local_model_lock: asyncio.Lock | None = None
 _local_model_lock_loop: asyncio.AbstractEventLoop | None = None
@@ -315,8 +317,10 @@ async def _generate_reply_impl(
     行为。必须保证消息写入与人物历史读取使用同一数据库，否则上一
     轮消息写入全局库、下一轮从容器库读不到，历史会断裂。
     """
-    if prepared_override is None and not request.branchId and (
-        request.adapter == "narrative" or request.adapter.startswith("narrative:")
+    if (
+        prepared_override is None
+        and not request.branchId
+        and (request.adapter == "narrative" or request.adapter.startswith("narrative:"))
     ):
         # This namespace is owned by authenticated workspace routes. Letting
         # generic callers choose its senderId would poison another owner's history.
@@ -330,7 +334,9 @@ async def _generate_reply_impl(
         from services.narrative import generate_branch_reply
 
         return await generate_branch_reply(
-            request, current_user, message_db if message_db is not None else db,
+            request,
+            current_user,
+            message_db if message_db is not None else db,
             generate=_generate_reply_impl,
         )
 
@@ -428,7 +434,9 @@ async def _generate_reply_impl(
         raise HTTPException(422, "LoRA 与分支角色不匹配")
     if mapped_character_id and prepared_override is None:
         prepared_character_turn = await _prepare_character_turn(
-            request, mapped_character_id, character_service=character_service,
+            request,
+            mapped_character_id,
+            character_service=character_service,
             execute_memory_operations=persist_message and delivery_context is None,
         )
         if request.characterId and prepared_character_turn is None:
@@ -502,8 +510,11 @@ async def _generate_reply_impl(
             cost_time = round(time.time() - start_time, 2)
 
             model_invoked = rag_meta.get("modelInvoked", True) is not False
-            model_label = (f"vllm/{get_vllm_served_model_name()}" if model_invoked else
-                           _DETERMINISTIC_MODEL_LABELS.get(rag_meta.get('answerMode'), 'rag/abstained'))
+            model_label = (
+                f"vllm/{get_vllm_served_model_name()}"
+                if model_invoked
+                else _DETERMINISTIC_MODEL_LABELS.get(rag_meta.get("answerMode"), "rag/abstained")
+            )
             stored_model_name = "vllm" if model_invoked else model_label
             stored_lora_name = lora_name if model_invoked else "default"
             generation_error = rag_meta.get("generationError", "")
@@ -694,9 +705,9 @@ async def _generate_reply_impl(
         current_provider = status.get("currentProvider", "unknown")
         provider_status = status.get("providers", {}).get(current_provider, {})
         model_name = provider_status.get("modelName", "Unknown")
-        model_invoked = fallback_rag_meta.get('modelInvoked', True) is not False
+        model_invoked = fallback_rag_meta.get("modelInvoked", True) is not False
         if not model_invoked:
-            model_name = _DETERMINISTIC_MODEL_LABELS.get(fallback_rag_meta.get('answerMode'), 'rag/abstained')
+            model_name = _DETERMINISTIC_MODEL_LABELS.get(fallback_rag_meta.get("answerMode"), "rag/abstained")
 
         if record_invocation and model_invoked:
             await _record_model_invocation(
@@ -715,7 +726,7 @@ async def _generate_reply_impl(
                 request,
                 reply,
                 model_name,
-                lora_name if model_invoked else 'default',
+                lora_name if model_invoked else "default",
                 cost_time,
                 database=message_db,
                 character_id=mapped_character_id,
@@ -813,8 +824,9 @@ async def _generate_reply_impl(
 # ═══════════════════════════════════════════
 
 
-async def _prepare_character_turn(request: MessageRequest, character_id: str, *, character_service=None,
-                                  execute_memory_operations: bool = False):
+async def _prepare_character_turn(
+    request: MessageRequest, character_id: str, *, character_service=None, execute_memory_operations: bool = False
+):
     """准备角色上下文；任何失败都降级为无角色上下文的旧行为。
 
     返回 prepared_turn | None。
@@ -845,7 +857,8 @@ async def _prepare_character_turn(request: MessageRequest, character_id: str, *,
 
             if is_memory_erasure_request(request.message):
                 return await service.prepare_interactive_turn(
-                    turn_input, character_id, source_message_id=request.sourceMessageId)
+                    turn_input, character_id, source_message_id=request.sourceMessageId
+                )
         return await service.prepare_turn(turn_input, character_id)
     except Exception as e:
         logger.warning("角色上下文准备失败，按无角色上下文继续 character=%s: %s", character_id, e)
@@ -1085,7 +1098,10 @@ async def _generate_with_retrieval(
     rag_context = ""
     rag_meta: dict[str, Any] = {}
     citations_enabled = os.getenv("RAG_CITATIONS_ENABLED", "true").strip().lower() in {
-        "1", "true", "yes", "on",
+        "1",
+        "true",
+        "yes",
+        "on",
     }
     retrieval = RetrievalResult()
     filters = None
@@ -1100,21 +1116,34 @@ async def _generate_with_retrieval(
         from inference.current_constraint_response import render_current_constraint_response
         from inference.memory_response import render_complete_memory_read, render_memory_response
 
-        operation_response_ready = render_operation_response(request.message,
-            getattr(prepared_character_turn.compiled, 'memory_operation_receipt', None)) is not None
+        operation_response_ready = (
+            render_operation_response(
+                request.message, getattr(prepared_character_turn.compiled, "memory_operation_receipt", None)
+            )
+            is not None
+        )
 
         # Dependency routing is independent of whether a saved answer exists.
         # A personal lookup can still need generation over visible history;
         # external story knowledge cannot resolve missing private user data.
         personal_lookup_only = bool(lookup_fields(request.message) or storage_fields(request.message)) and not (
-            prepared_character_turn.compiled.branch_context)
+            prepared_character_turn.compiled.branch_context
+        )
         memory_lookup_ready = (
             render_current_constraint_response(request.message, prepared_character_turn.compiled) is not None
-            or render_memory_response(request.message, prepared_character_turn.compiled,
-                history=tuple(request.history or []) or prepared_character_turn.history) is not None
+            or render_memory_response(
+                request.message,
+                prepared_character_turn.compiled,
+                history=tuple(request.history or []) or prepared_character_turn.history,
+            )
+            is not None
             or render_complete_memory_read(
-                request.message, prepared_character_turn.compiled,
-                tuple(request.history or []) or prepared_character_turn.history) is not None)
+                request.message,
+                prepared_character_turn.compiled,
+                tuple(request.history or []) or prepared_character_turn.history,
+            )
+            is not None
+        )
     if _use_kb and not (memory_lookup_ready or personal_lookup_only or operation_response_ready):
         try:
             from knowledge.dialogue_query import contextual_retrieval_query
@@ -1126,9 +1155,12 @@ async def _generate_with_retrieval(
             )
             from character.memory_operation import split_operation_request
 
-            operation_tasks = (split_operation_request(request.message)
+            operation_tasks = (
+                split_operation_request(request.message)
                 if prepared_character_turn is not None
-                and getattr(prepared_character_turn, 'memory_operation_receipt', None) is not None else None)
+                and getattr(prepared_character_turn, "memory_operation_receipt", None) is not None
+                else None
+            )
             rag_message = operation_tasks[1] if operation_tasks else request.message
             retrieval_query = contextual_retrieval_query(
                 rag_message, effective_history, get_default_registry().list_domains()
@@ -1160,8 +1192,9 @@ async def _generate_with_retrieval(
                 }
                 from knowledge.query_tasks import requests_only_source_excerpt
 
-                source_lookup = (bundle.get('retrieval_strategy') == 'multi_scale_character'
-                                 and requests_only_source_excerpt(rag_message))
+                source_lookup = bundle.get(
+                    "retrieval_strategy"
+                ) == "multi_scale_character" and requests_only_source_excerpt(rag_message)
                 if bundle.get("abstained", False):
                     # Generate only the character's expression of uncertainty.
                     # Unreliable candidates and their citations never reach it.
@@ -1177,7 +1210,7 @@ async def _generate_with_retrieval(
                 # 通用知识库结果继续使用 RAGHelper 的格式化器。
                 else:
                     character_knowledge_context = bundle.get("context_text") or ""
-                    if character_knowledge_context or bundle.get('retrieval_strategy') == 'multi_scale_character':
+                    if character_knowledge_context or bundle.get("retrieval_strategy") == "multi_scale_character":
                         rag_context = character_knowledge_context
                     else:
                         from knowledge.rag_helper import get_rag_helper
@@ -1187,14 +1220,16 @@ async def _generate_with_retrieval(
                         status="ok" if rag_context else "character_abstention",
                         reason="" if rag_context else "evidence_budget_exhausted",
                         evidence=rag_context,
-                        evidence_packets=tuple(bundle.get('evidence_packets', ())),
-                        identity_task=bundle.get('identity_task') or {},
-                        identity_subtask=bundle.get('identity_subtask') or {},
+                        evidence_packets=tuple(bundle.get("evidence_packets", ())),
+                        identity_task=bundle.get("identity_task") or {},
+                        identity_subtask=bundle.get("identity_subtask") or {},
                         documents=tuple(bundle.get("results", [])),
                         citations=tuple(rag_meta.get("citations", [])),
                         confidence=bundle.get("confidence"),
                         source_lookup=source_lookup,
-                        source_excerpts=((bundle['raw_excerpt'],) if isinstance(bundle.get('raw_excerpt'), dict) else ()),
+                        source_excerpts=(
+                            (bundle["raw_excerpt"],) if isinstance(bundle.get("raw_excerpt"), dict) else ()
+                        ),
                     )
         except Exception as e:
             increment("rag_failures")
@@ -1249,7 +1284,7 @@ async def _generate_with_retrieval(
             persona_prompt=_get_system_prompt(prompt_lora_name or lora_name),
             interlocutor=request.senderName or request.userName or "普通用户",
             retrieval=retrieval,
-            independent_tasks_enabled=os.getenv('CHARACTER_INDEPENDENT_TASKS_ENABLED', 'false').lower() == 'true',
+            independent_tasks_enabled=os.getenv("CHARACTER_INDEPENDENT_TASKS_ENABLED", "false").lower() == "true",
             # 编译后的角色上下文：画像/关系/情景/决策进系统提示词，
             # 长期记忆只进用户消息的不可信参考区。
             character_context=(prepared_character_turn.compiled if prepared_character_turn else None),
@@ -1263,16 +1298,16 @@ async def _generate_with_retrieval(
     )
 
     if retrieval.evidence_packets:
-        rag_meta['citations'] = list(generation.plan.retrieval.citations) if citations_enabled else []
-        rag_meta['abstained'] = generation.plan.retrieval.status == 'character_abstention'
-        rag_meta['answerMode'] = 'abstention' if rag_meta['abstained'] else 'grounded_answer'
-    if not getattr(generation, 'model_invoked', True):
-        rag_meta['modelInvoked'] = False
-        rag_meta['answerMode'] = generation.response_mode
-        rag_meta['abstained'] = generation.response_mode == 'source_unavailable'
-        rag_meta['citations'] = list(generation.response_citations) if citations_enabled else []
-    elif generation.response_mode == 'task_composite':
-        rag_meta['answerMode'] = 'task_composite'
+        rag_meta["citations"] = list(generation.plan.retrieval.citations) if citations_enabled else []
+        rag_meta["abstained"] = generation.plan.retrieval.status == "character_abstention"
+        rag_meta["answerMode"] = "abstention" if rag_meta["abstained"] else "grounded_answer"
+    if not getattr(generation, "model_invoked", True):
+        rag_meta["modelInvoked"] = False
+        rag_meta["answerMode"] = generation.response_mode
+        rag_meta["abstained"] = generation.response_mode == "source_unavailable"
+        rag_meta["citations"] = list(generation.response_citations) if citations_enabled else []
+    elif generation.response_mode == "task_composite":
+        rag_meta["answerMode"] = "task_composite"
     return generation.reply, generation.plan.retrieval.has_evidence or bool(rag_meta.get("abstained")), rag_meta
 
 

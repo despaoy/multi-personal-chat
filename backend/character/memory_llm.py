@@ -13,6 +13,7 @@ worker 按入队顺序处理，避免同一用户连续修正事实时旧任务�
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import logging
 import math
@@ -915,6 +916,7 @@ def _candidate_to_proposal(
     if not evidence or len(evidence) > _MAX_EVIDENCE_CHARS:
         return None
     event_observation = kind == "shared_event" and semantic_operation not in {"NOOP", "RETRACT", "ERASE"}
+    generic_source_observation = False
     if (not event_observation
             and (_THIRD_PARTY_FACT_PATTERN.search(evidence) or _NAMED_THIRD_PARTY_PATTERN.search(evidence))):
         return None
@@ -1059,14 +1061,26 @@ def _candidate_to_proposal(
         history=history,
         existing_memories=existing_memories,
     ):
-        grounded_negative = _negative_object_from_evidence(evidence) if kind in {"like", "dislike"} else ""
-        if not grounded_negative:
-            return None
-        kind = "dislike"
-        value = grounded_negative
-        # 模型的抽象 content 可能不再对应证据中更精确的对象；回退到
-        # 本地 canonical 模板，避免保留未经证据支持的泛化。
-        proposed_content = ""
+        if (kind == "other_user_fact" and (
+                semantic_operation == "ADD" and target_record is None
+                or semantic_operation == "MERGE" and target_record is not None
+                and target_memory_key.startswith("fact_"))):
+            # A generic summary's surface form is not its source. Retain a
+            # complete, explicitly labelled utterance observation instead of
+            # certifying the model's value/content as a semantic fact.
+            generic_source_observation = True
+            if target_record is not None:
+                operation = semantic_operation = "COEXIST"
+            proposed_content = ""
+        else:
+            grounded_negative = _negative_object_from_evidence(evidence) if kind in {"like", "dislike"} else ""
+            if not grounded_negative:
+                return None
+            kind = "dislike"
+            value = grounded_negative
+            # 模型的抽象 content 可能不再对应证据中更精确的对象；回退到
+            # 本地 canonical 模板，避免保留未经证据支持的泛化。
+            proposed_content = ""
 
     kind, value = _normalize_kind_and_value(kind, value, evidence)
     if not value:
@@ -1132,6 +1146,9 @@ def _candidate_to_proposal(
         if canonical is None:
             return None
         memory_type, key, canonical_content, importance = canonical
+        if generic_source_observation and target_record is None:
+            # A new observation's key must not encode an unverified summary.
+            key = "fact_source_" + hashlib.sha256(source_message.encode("utf-8")).hexdigest()[:24]
         if (kind == "location" and target_record is not None
                 and target_memory_key in {"user_origin", "user_residence"}
                 and key != target_memory_key):
@@ -1161,14 +1178,15 @@ def _candidate_to_proposal(
     else:
         content = canonical_content
 
-    if kind == "shared_event" and semantic_operation not in {"RETRACT", "ERASE"}:
+    if (kind == "shared_event" or generic_source_observation) and semantic_operation not in {"RETRACT", "ERASE"}:
         # A selected event topic is not proof of its actor. Keep the complete
         # utterance (including later qualifications) instead of promoting the
         # model's free-form summary to an event owned by the speaker.
         # Long quotations stay in evidence; never truncate a quotation into a
         # stronger assertion merely to fit the short display-content column.
         evidence = source_message
-        quoted = "用户原话事件记录：" + json.dumps(source_message, ensure_ascii=False)
+        label = "用户原话记录：" if generic_source_observation else "用户原话事件记录："
+        quoted = label + json.dumps(source_message, ensure_ascii=False)
         prefix_size = len("待确认：") if semantic_operation == "PENDING" else 0
         content = quoted if len(quoted) + prefix_size <= MAX_MEMORY_CONTENT_CHARS else "用户原话事件记录（完整内容见证据）"
         if semantic_operation == "MERGE":
@@ -1209,7 +1227,8 @@ def _candidate_to_proposal(
         scope_level=_scope_level_for_message(raw.get("scope_level"), source_message),
         proposed_valid_from=str(raw_valid_from or "").strip(),
         proposed_valid_to=str(raw_valid_to or "").strip(),
-        source_observation=kind == "shared_event" and semantic_operation not in {"RETRACT", "ERASE"},
+        source_observation=(kind == "shared_event" or generic_source_observation)
+            and semantic_operation not in {"RETRACT", "ERASE"},
     )
 
 
@@ -1803,7 +1822,11 @@ class MemoryEnrichmentScheduler:
                 deleted = await eraser(
                     job.character_id,
                     job.user_scope,
-                    memory_id=target_id,
+                    # The validated key names the logical memory being
+                    # forgotten. Selecting only its latest ID would leave
+                    # earlier superseded versions and their source text.
+                    # ID-only/legacy adapters retain their original behavior.
+                    memory_id=None if proposal.target_memory_key else target_id,
                     memory_key=proposal.target_memory_key or None,
                     scope_level=proposal.scope_level,
                 )

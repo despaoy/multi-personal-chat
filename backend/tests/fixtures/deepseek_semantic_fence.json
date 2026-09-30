@@ -1,0 +1,25 @@
+{
+  "source_message": "刚才说的那块木刻板又让我觉得很烦。",
+  "review_reasons": [
+    "context_reference"
+  ],
+  "history": [
+    {
+      "role": "user",
+      "content": "我今天练习木刻时刻坏了一块板，正在为这件事烦心。"
+    },
+    {
+      "role": "assistant",
+      "content": "刻坏一块板确实让人烦。是刻到哪一步出的问题？"
+    },
+    {
+      "role": "user",
+      "content": "这一轮我只想让你听我吐槽，不要给建议，也不要追问原因。这项表达要求仍然有效。"
+    },
+    {
+      "role": "assistant",
+      "content": "好，我不插嘴，也不追问。你继续说。"
+    }
+  ],
+  "review_output": "```json\n{\n  \"state\": {\n    \"primary_situation\": \"emotional\",\n    \"situation_scores\": {\n      \"emotional\": 0.8,\n      \"daily\": 0.3,\n      \"conflict\": 0.1,\n      \"factual\": 0.0,\n      \"meta\": 0.0\n    },\n    \"user_acts\": {\n      \"self_disclosure\": 0.7,\n      \"seek_support\": 0.6,\n      \"boundary_signal\": 0.5,\n      \"advice_boundary\": 0.4\n    },\n    \"user_needs\": {\n      \"validation\": 0.7,\n      \"companionship\": 0.5,\n      \"autonomy\": 0.4\n    },\n    \"valence\": -0.4,\n    \"arousal\": 0.4,\n    \"warmth\": 0.3,\n    \"face_threat\": 0.1,\n    \"conversation_phase\": \"sustaining\",\n    \"confidence\": 0.75\n  }\n}\n```"
+}

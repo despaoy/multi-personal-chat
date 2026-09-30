@@ -213,8 +213,11 @@ class PipelineReranker:
     """重排门面：CrossEncoder 可用则用之，否则确定性降级。"""
 
     def __init__(
-        self, cross_encoder: Any | None = None, cross_encoder_enabled: bool | None = None,
-        *, text_view: str = "content",
+        self,
+        cross_encoder: Any | None = None,
+        cross_encoder_enabled: bool | None = None,
+        *,
+        text_view: str = "content",
     ):
         if text_view not in {"content", "summary", "embedding_text"}:
             raise ValueError("unknown reranker text view")

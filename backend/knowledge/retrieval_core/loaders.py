@@ -139,7 +139,7 @@ class AliasEntityNormalizer:
             parts.extend((text[cursor:start], canonical))
             cursor = end
         parts.append(text[cursor:])
-        return ''.join(parts)
+        return "".join(parts)
 
 
 class ApprovedCardsLoader:

@@ -1,0 +1,47 @@
+{
+  "source_message": "补充一件事：我又养了一只猫，名叫芝麻。麦芽仍然在，两只猫都由我养，没有送走任何一只。",
+  "writer_output": {
+    "memories": [
+      {
+        "kind": "other_user_fact",
+        "value": "养了两只猫：麦芽和芝麻",
+        "content": "用户养了两只猫，一只叫麦芽，另一只叫芝麻，两只猫都由用户养，没有送走任何一只。",
+        "evidence": "我又养了一只猫，名叫芝麻。麦芽仍然在，两只猫都由我养，没有送走任何一只。",
+        "confidence": 0.98,
+        "operation": "MERGE",
+        "target_memory_id": "13",
+        "target_memory_key": "fact_养了一只猫，名叫麦芽",
+        "attributed_to": "user",
+        "qualifiers": {},
+        "valid_from": "",
+        "valid_to": "",
+        "observed_at": "2026-09-30T17:46:59.937971+00:00",
+        "scope_level": "conversation"
+      }
+    ]
+  },
+  "existing_memories": [
+    {
+      "memory_id": "13",
+      "memory_key": "fact_养了一只猫，名叫麦芽",
+      "memory_type": "user_fact",
+      "content": "用户养了一只猫，名叫麦芽。",
+      "status": "active",
+      "valid_from": "",
+      "valid_to": "",
+      "was_injected_in_last_reply": true
+    }
+  ],
+  "history": [
+    {
+      "role": "user",
+      "content": "请记住，我养了一只猫，名叫麦芽。",
+      "eligible_as_memory_evidence": false
+    },
+    {
+      "role": "assistant",
+      "content": "嗯，麦芽。我记住了。",
+      "eligible_as_memory_evidence": false
+    }
+  ]
+}

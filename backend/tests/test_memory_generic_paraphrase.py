@@ -37,7 +37,6 @@ def test_fallback_does_not_preserve_unverified_summary_additions():
 
 
 @pytest.mark.parametrize("changes", [
-    {"value": "自行车是红色"},
     {"evidence": "我的自行车是红色的。"},
     {"attributed_to": "assistant"},
     {"confidence": 0.1},
@@ -45,3 +44,12 @@ def test_fallback_does_not_preserve_unverified_summary_additions():
 def test_fallback_does_not_bypass_grounding_or_admission(changes):
     assert not _parse("我的自行车是蓝色的。", "自行车是蓝色",
                       "用户有一辆蓝色自行车", **changes)
+
+
+def test_unverified_generic_value_is_an_observation_not_a_fabricated_fact():
+    source = "我的自行车是蓝色的。"
+    proposal, = _parse(source, "自行车是红色", "用户有一辆红色自行车")
+    assert proposal.source_observation
+    assert proposal.evidence == source
+    assert "蓝色" in proposal.memory.content and "红色" not in proposal.memory.content
+    assert "红色" not in proposal.memory.memory_key

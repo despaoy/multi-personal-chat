@@ -55,6 +55,15 @@ def configured_context_window() -> int:
     """Use the serving limit, not a model's theoretical maximum window."""
     return max(1024, int(os.getenv("VLLM_MAX_MODEL_LEN", str(DEFAULT_CONTEXT_WINDOW_TOKENS))))
 
+MEMORY_VISIBILITY_POLICY = (
+    "【用户历史依据范围】本轮可见或检索到的记忆只说明本轮取得了哪些依据。"
+    "没有找到某项记录，不能推断用户从未说过，也不能推断系统从未保存过；"
+    "已有其他记忆同样不能证明缺失字段的历史。"
+    "未取得可信的对应操作回执时，也不能编造删除、过期或遗漏等缺失原因。"
+    "关于缺失信息，应说明当前没有找到可核对的记录，保留有依据的独立信息。"
+)
+
+
 MEMORY_ATTRIBUTION_POLICY = (
     "长期记忆参考中的‘用户’始终指当前对话者，不是角色自身。"
     "当对话者用第一人称询问自己的历史信息时，回答必须用第二人称‘你’归属这些事实，"
@@ -229,6 +238,8 @@ def _system_prompt(request: GenerationRequest) -> str:
             if not persona:
                 persona = context.profile_context
             dynamic_context = context.dynamic_context
+            if getattr(context, "memory_status", "not_checked") in {"available", "no_match", "retrieval_error"}:
+                dynamic_context = "\n\n".join(filter(None, (dynamic_context, MEMORY_VISIBILITY_POLICY)))
             has_memory_reference = bool(context.reference_context or getattr(context, "episodic_reference_context", ""))
             # Sharing an admitted observation's exact source changes its
             # transport, not the policy that applied before deduplication.

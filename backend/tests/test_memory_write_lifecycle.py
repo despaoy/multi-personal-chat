@@ -551,7 +551,7 @@ async def test_explicit_erase_uses_hot_path_and_physical_delete():
     )
     assert scheduler.status.last_outcome == "queued_hot"
     assert await scheduler.flush_memory(timeout=1.0)
-    assert repository.erases == [{"memory_id": 7, "memory_key": "goal_代码补全", "scope_level": "conversation"}]
+    assert repository.erases == [{"memory_id": None, "memory_key": "goal_代码补全", "scope_level": "conversation"}]
     assert scheduler.status.erased == 1
     await scheduler.shutdown(timeout=1.0)
 

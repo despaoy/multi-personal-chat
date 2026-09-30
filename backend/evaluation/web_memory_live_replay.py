@@ -94,7 +94,8 @@ async def run(args):
     if cloud is not None:
         from evaluation.deepseek_live_adapter import cloud_context_budgets
         context_budgets = cloud_context_budgets(cloud_window)
-    context = ObservedContext(registry, repo, ObservedHistory(database), source_recall_enabled=True,
+    source_recall = not getattr(args, "no_source_recall", False)
+    context = ObservedContext(registry, repo, ObservedHistory(database), source_recall_enabled=source_recall,
                               **context_budgets, **components)
     config = replace(MemoryLlmConfig.from_env(), enabled=True,
         base_url="http://127.0.0.1:8001", model="qwen3-8b-instruct-awq")
@@ -149,7 +150,7 @@ async def run(args):
 
     manifest = dict(asgi_http=True, authentication="fixed_test_identity", admission="inline_test_adapter",
                     actual_chat_service=True, application_completion_tested=True, source_ids="omitted_by_client",
-                    real_model=True, lora=False, rag=args.rag, database="isolated_sqlite", source_recall=True,
+                    real_model=True, lora=False, rag=args.rag, database="isolated_sqlite", source_recall=source_recall,
                     source_window_radius=0, optional_model_reviewers=bool(components), production_modified=False)
     manifest["cold_questions"] = args.cold_questions
     manifest['echo_client_history'] = bool(getattr(args, 'echo_client_history', False))
@@ -254,6 +255,8 @@ def main():
     parser.add_argument("--case", action="append")
     parser.add_argument("--recorded-writer", type=Path, help="Replay independent ADD/NOOP proposals; no fresh writer")
     parser.add_argument("--cold-questions", action="store_true", help="Suppress recent history only during question phase")
+    parser.add_argument("--no-source-recall", action="store_true",
+                        help="Disable independent utterance recall to audit the stored claim/observation lane")
     parser.add_argument('--echo-client-history', action='store_true',
                         help='Resend browser transcript including deleted turns to audit server history authority')
     parser.add_argument("--rag", action="store_true", help="Use the actual configured knowledge retrieval service")

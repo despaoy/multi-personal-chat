@@ -476,7 +476,11 @@ def _parse_reviewed_state(
     if isinstance(raw, str):
         if len(raw) > 20000:
             raise ValueError("semantic review is oversized")
-        payload = json.loads(raw)
+        text = raw.strip()
+        fence = re.fullmatch(r"```(?:json)?[ \t]*\r?\n([\s\S]*?)\r?\n```", text)
+        if fence is not None:
+            text = fence.group(1)
+        payload = json.loads(text)
     if not isinstance(payload, Mapping):
         raise ValueError("semantic review must be an object")
 

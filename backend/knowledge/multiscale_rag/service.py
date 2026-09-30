@@ -82,12 +82,13 @@ def rerank_with_title_frames(
     identity_coverage: bool = False,
 ) -> list[RetrievalCandidate]:
     """Preserve semantic ordering; title bonuses apply only to rule fallback."""
-    subject = identity_evidence_subject(analysis) if identity_coverage and top_k >= 2 else ''
+    subject = identity_evidence_subject(analysis) if identity_coverage and top_k >= 2 else ""
     quoted = [match.strip() for match in re.findall(r"《([^》]{1,80})》", analysis.original_query) if match.strip()]
     # Scope alignment must see recalled candidates before intermediate top-k
     # drops them. The deterministic reranker already scores the same pool.
-    ranked = reranker.rerank(analysis, candidates,
-                            top_k=max(top_k * 4, 20, len(candidates) if subject or quoted else 0))
+    ranked = reranker.rerank(
+        analysis, candidates, top_k=max(top_k * 4, 20, len(candidates) if subject or quoted else 0)
+    )
     if ranked and all(candidate.rerank_method == "cross_encoder" for candidate in ranked):
         return select_identity_coverage(ranked, top_k, subject)
     query_cn = "".join(re.findall(r"[\u4e00-\u9fff]", analysis.normalized_query or analysis.original_query))
@@ -98,8 +99,8 @@ def rerank_with_title_frames(
         # Card titles name events, not necessarily their containing story.
         # Use the indexed story title too; keep this a preference so explicit
         # comparisons and retrospective evidence are not hard-filtered out.
-        story_title = candidate.document.metadata.get('story_title')
-        title_scope = text + '\n' + (story_title if isinstance(story_title, str) else '')
+        story_title = candidate.document.metadata.get("story_title")
+        title_scope = text + "\n" + (story_title if isinstance(story_title, str) else "")
         quote_bonus = 0.24 if quoted and any(title in title_scope for title in quoted) else 0.0
         text_cn = "".join(re.findall(r"[\u4e00-\u9fff]", text))
         text_bigrams = {text_cn[index : index + 2] for index in range(max(0, len(text_cn) - 1))}
@@ -143,7 +144,7 @@ class RoutedMultiScaleService:
         context_max_chars: int = 6000,
     ) -> None:
         if type(context_max_chars) is not int or context_max_chars < 1:
-            raise ValueError('context_max_chars must be a positive integer')
+            raise ValueError("context_max_chars must be a positive integer")
         self.context_max_chars = context_max_chars
         self.config = config
         self.identity_coverage = identity_coverage
@@ -166,7 +167,11 @@ class RoutedMultiScaleService:
         }
 
     def retrieve(
-        self, query: str, *, top_k: int = 5, raw_text: bool = False,
+        self,
+        query: str,
+        *,
+        top_k: int = 5,
+        raw_text: bool = False,
         knowledge_boundary: KnowledgeBoundary | None = None,
     ) -> dict[str, Any]:
         if isinstance(top_k, bool) or not isinstance(top_k, int) or top_k < 1:
@@ -183,7 +188,7 @@ class RoutedMultiScaleService:
             recall_k = max(recall_k, retriever.index.count())
         recalled = retriever.search(analysis, top_k=recall_k, recall_k=recall_k, mode="hybrid")
         recalled = [candidate for candidate in recalled if visible_to(candidate.document, knowledge_boundary)]
-        pair = explicit_relation_pair(analysis) if route == frozenset({'relation'}) else frozenset()
+        pair = explicit_relation_pair(analysis) if route == frozenset({"relation"}) else frozenset()
         before_scope = len(recalled)
         recalled = [candidate for candidate in recalled if in_relation_scope(candidate.document, pair)]
         identity_subject = identity_evidence_subject(analysis)
@@ -206,15 +211,25 @@ class RoutedMultiScaleService:
         for candidate in selected:
             doc = candidate.document
             evidence = self.evidence_by_parent.get(doc.id)
-            evidence_text = getattr(evidence, 'content', '') if evidence is not None else ''
+            evidence_text = getattr(evidence, "content", "") if evidence is not None else ""
             if evidence_text and visible_to(evidence, knowledge_boundary):
                 # Stored claim-specific evidence is already in the index. Do
                 # not replace it with the beginning of a much broader scene.
                 # This is not a fresh exact-source verification or quotation.
-                context_blocks.append(render_card_evidence({
-                    'title': doc.title, 'metadata': doc.metadata, 'source': doc.source.to_dict(),
-                    **{key: getattr(doc, key, '') for key in ('reality_status', 'temporal_scope', 'content_scope')},
-                }, evidence_text))
+                context_blocks.append(
+                    render_card_evidence(
+                        {
+                            "title": doc.title,
+                            "metadata": doc.metadata,
+                            "source": doc.source.to_dict(),
+                            **{
+                                key: getattr(doc, key, "")
+                                for key in ("reality_status", "temporal_scope", "content_scope")
+                            },
+                        },
+                        evidence_text,
+                    )
+                )
             else:
                 context_blocks.append(f"【{doc.document_type}摘要】{doc.title}\n{doc.summary}")
             block_ids.setdefault(context_blocks[-1], []).append(doc.id)
@@ -231,9 +246,9 @@ class RoutedMultiScaleService:
         if route == frozenset({"relation"}) and route in self.indexes and len(analysis.entities) >= 2:
             wanted = set(analysis.entities)
             relation_docs = [
-                doc for doc in self.indexes[route].documents
-                if wanted <= set(doc.entities) and visible_to(doc, knowledge_boundary)
-                and in_relation_scope(doc, pair)
+                doc
+                for doc in self.indexes[route].documents
+                if wanted <= set(doc.entities) and visible_to(doc, knowledge_boundary) and in_relation_scope(doc, pair)
             ]
             relation_docs.sort(
                 key=lambda doc: (
@@ -254,9 +269,9 @@ class RoutedMultiScaleService:
 
         wants_raw = raw_text or requests_source_text(query)
         raw_excerpt = None
-        raw_status = 'not_requested' if not wants_raw else 'extractor_unavailable'
+        raw_status = "not_requested" if not wants_raw else "extractor_unavailable"
         if wants_raw and self.extractor is not None:
-            raw_status = 'no_visible_source'
+            raw_status = "no_visible_source"
             for candidate in selected:
                 evidence = self.evidence_by_parent.get(candidate.document.id)
                 if evidence is None or not visible_to(evidence, knowledge_boundary):
@@ -264,20 +279,23 @@ class RoutedMultiScaleService:
                 try:
                     raw_excerpt = self.extractor.extract(evidence.source).to_dict()
                     raw_excerpt.update({"evidence_id": evidence.id, "parent_id": candidate.document.id})
-                    raw_status = 'truncated' if raw_excerpt.get('truncated') else 'available'
+                    raw_status = "truncated" if raw_excerpt.get("truncated") else "available"
                     break
                 except (ValueError, FileNotFoundError, UnicodeError):
-                    raw_status = 'source_unavailable'
+                    raw_status = "source_unavailable"
                     continue
 
-        if raw_excerpt and raw_excerpt.get('text'):
+        if raw_excerpt and raw_excerpt.get("text"):
             # Put exact source first so a long background cannot crowd it out
             # of the generation evidence budget. It remains untrusted data.
-            context_blocks.insert(0, (
-                f"【原文摘录】{raw_excerpt['source_path']} "
-                f"L{raw_excerpt['line_start']}-{raw_excerpt['line_end']}\n{raw_excerpt['text']}"
-            ))
-            block_ids.setdefault(context_blocks[0], []).append(raw_excerpt['parent_id'])
+            context_blocks.insert(
+                0,
+                (
+                    f"【原文摘录】{raw_excerpt['source_path']} "
+                    f"L{raw_excerpt['line_start']}-{raw_excerpt['line_end']}\n{raw_excerpt['text']}"
+                ),
+            )
+            block_ids.setdefault(context_blocks[0], []).append(raw_excerpt["parent_id"])
 
         # Use the instance's generation evidence budget. Admit complete packets,
         # then background, so a late negation/qualification is never clipped.
@@ -299,24 +317,40 @@ class RoutedMultiScaleService:
             "retrieval_strategy": "multi_scale_character",
             "identity_coverage": self.identity_coverage,
             "route_types": sorted(route),
-            "relation_scope": {'pair': sorted(pair), 'excluded_candidates': before_scope - before_identity_scope},
-            "identity_scope": {'subject': identity_subject,
-                               'excluded_candidates': before_identity_scope - len(recalled)},
+            "relation_scope": {"pair": sorted(pair), "excluded_candidates": before_scope - before_identity_scope},
+            "identity_scope": {
+                "subject": identity_subject,
+                "excluded_candidates": before_identity_scope - len(recalled),
+            },
             # Bind the dependency decision to the actual retrieval input, not
             # an entity label that might have been resolved from a follow-up.
-            "identity_task": {'query': query, 'subject': identity_subject} if explicit_identity_subject(analysis) else {},
-            "identity_subtask": ({'query': query, 'subject': identity_subject}
-                                 if identity_subject and not explicit_identity_subject(analysis) else {}),
+            "identity_task": {"query": query, "subject": identity_subject}
+            if explicit_identity_subject(analysis)
+            else {},
+            "identity_subtask": (
+                {"query": query, "subject": identity_subject}
+                if identity_subject and not explicit_identity_subject(analysis)
+                else {}
+            ),
             "results": [candidate.to_dict() for candidate in selected],
             "relation_timeline": timeline,
             "context_text": "\n\n".join(admitted),
-            "evidence_packets": [{"text": block, "document_ids": block_ids.get(block, []),
-                                  "supporting_document_ids": background_support.get(block, []),
-                                  "kind": "evidence" if block in block_ids else "background"}
-                                 for block in admitted],
-            "context_budget": {"used_chars": used_chars, "skipped_blocks": skipped_blocks,
-                               "max_chars": self.context_max_chars, "admitted_ids": sorted(admitted_ids)},
-            "citations": [item for item in citations if item['id'] in admitted_ids],
+            "evidence_packets": [
+                {
+                    "text": block,
+                    "document_ids": block_ids.get(block, []),
+                    "supporting_document_ids": background_support.get(block, []),
+                    "kind": "evidence" if block in block_ids else "background",
+                }
+                for block in admitted
+            ],
+            "context_budget": {
+                "used_chars": used_chars,
+                "skipped_blocks": skipped_blocks,
+                "max_chars": self.context_max_chars,
+                "admitted_ids": sorted(admitted_ids),
+            },
+            "citations": [item for item in citations if item["id"] in admitted_ids],
             "raw_excerpt": raw_excerpt,
             "raw_source_status": raw_status,
             "context_trust": "untrusted_retrieved_evidence",
