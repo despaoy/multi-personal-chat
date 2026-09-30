@@ -86,7 +86,12 @@ class EvidencePacketBuilder:
         truncated = False
 
         for citation in citations:
-            doc_id = str(citation.get("source_id") or "")
+            native_id = citation.get("id")
+            legacy_id = citation.get("source_id")
+            if native_id and legacy_id and str(native_id) != str(legacy_id):
+                packet_warnings.append("citation_conflicting_document_id")
+                continue
+            doc_id = str(legacy_id or native_id or "")
             if not doc_id:
                 continue
             item = result_by_id.get(doc_id)
@@ -130,6 +135,18 @@ class EvidencePacketBuilder:
             citation_meta["key"] = key
             citation_meta["document_id"] = doc_id
             citation_meta["summary"] = str(item.get("summary") or "")
+            # Canonical API provenance comes from the matched retrieved card,
+            # never from a guessed ID, generated filename or another result.
+            citation_meta.update(
+                source_id=doc_id,
+                source_title=evidence_item.title,
+                source_path=evidence_item.source_path,
+                source_line=evidence_item.line_start,
+                source_line_end=evidence_item.line_end,
+                domain_id=evidence_item.domain_id,
+                index_version=evidence_item.index_version,
+                document_type=evidence_item.document_type,
+            )
 
             documents.append(evidence_item)
             bound_citations.append(citation_meta)

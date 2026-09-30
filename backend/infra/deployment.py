@@ -69,14 +69,18 @@ def validate_deployment_environment(env: Mapping[str, str] | None = None) -> Dep
 
     token_values = [_value(env, "ASTRBOT_INTEGRATION_TOKEN"), _value(env, "ASTRBOT_INTEGRATION_TOKENS")]
     if not any(token_values):
-        (errors if production else warnings).append("ASTRBOT_INTEGRATION_TOKEN or ASTRBOT_INTEGRATION_TOKENS is required")
+        (errors if production else warnings).append(
+            "ASTRBOT_INTEGRATION_TOKEN or ASTRBOT_INTEGRATION_TOKENS is required"
+        )
     elif any(_is_placeholder(token) for token in token_values if token):
         (errors if production else warnings).append("ASTRBOT integration token still uses a placeholder value")
     elif production and any(len(token) < 32 for token in token_values if token):
         errors.append("ASTRBOT integration tokens must contain at least 32 characters")
 
     if not _has_any(env, "MULTIPERSONAL_BACKEND_URL", "QQCHAT_BACKEND_URL", "BACKEND_URL"):
-        (errors if production else warnings).append("MULTIPERSONAL_BACKEND_URL is required for AstrBot callback configuration")
+        (errors if production else warnings).append(
+            "MULTIPERSONAL_BACKEND_URL is required for AstrBot callback configuration"
+        )
 
     database_url = _value(env, "DATABASE_URL")
     has_database_url = bool(database_url)
@@ -87,8 +91,10 @@ def validate_deployment_environment(env: Mapping[str, str] | None = None) -> Dep
             "DATABASE_URL or complete PG_HOST/PG_USER/PG_PASSWORD/PG_DATABASE values "
             "are required for the PostgreSQL application database"
         )
-    elif production and has_database_url and not database_url.startswith(
-        ("postgresql://", "postgresql+asyncpg://", "postgres://")
+    elif (
+        production
+        and has_database_url
+        and not database_url.startswith(("postgresql://", "postgresql+asyncpg://", "postgres://"))
     ):
         errors.append("DATABASE_URL must use a PostgreSQL URL")
     elif not production and not (has_database_url or has_pg_components):
@@ -105,7 +111,12 @@ def validate_deployment_environment(env: Mapping[str, str] | None = None) -> Dep
     if production and _value(env, "USE_POSTGRESQL").lower() in {"0", "false", "no", "off"}:
         errors.append("USE_POSTGRESQL=false is not allowed in production")
 
-    if not _has_any(env, "VLLM_BASE_URL", "VLLM_BASE_URLS"):
+    provider = _value(env, "MODEL_PROVIDER").lower() or "vllm"
+    if provider == "openai_compat":
+        for key in ("OPENAI_COMPAT_BASE_URL", "OPENAI_COMPAT_MODEL", "OPENAI_COMPAT_API_KEY"):
+            if not _value(env, key):
+                (errors if production else warnings).append(f"{key} is required for openai_compat model inference")
+    elif not _has_any(env, "VLLM_BASE_URL", "VLLM_BASE_URLS"):
         (errors if production else warnings).append("VLLM_BASE_URL or VLLM_BASE_URLS is required for model inference")
 
     jwt_secret = _value(env, "JWT_SECRET")

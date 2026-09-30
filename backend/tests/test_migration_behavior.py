@@ -357,7 +357,7 @@ async def test_sync_pg_sequences_counts_failures():
 
 
 # ============================================
-# C1: uses pg_get_serial_sequence (not pg_get_serial_identifier)
+# Sequence SQL contract (transaction and column mapping are tested by behavior above)
 # ============================================
 
 def test_sync_pg_sequences_uses_correct_function():
@@ -367,17 +367,8 @@ def test_sync_pg_sequences_uses_correct_function():
     assert "pg_get_serial_identifier" not in source
 
 
-def test_migrate_table_uses_begin_nested():
-    """源码中 _migrate_table 应使用 session.begin_nested()。"""
-    source = (BACKEND_ROOT / "db" / "migration.py").read_text(encoding="utf-8")
-    assert "begin_nested" in source
 
 
-def test_migrate_table_column_mapping_is_copy_semantics():
-    """源码中 column_mapping 应保留原始列（复制而非替换）。"""
-    source = (BACKEND_ROOT / "db" / "migration.py").read_text(encoding="utf-8")
-    assert "if key in valid_columns" in source
-    assert "values[key] = value" in source
 
 
 # ============================================

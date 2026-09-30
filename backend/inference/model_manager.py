@@ -288,12 +288,12 @@ class OpenAICompatProvider(BaseProvider):
         return await self._complete_messages(
             messages, temperature=float(_db_cfg.get('temperature', 0.8)), max_tokens=max_tokens)
 
-    async def async_complete(self, messages, *, temperature, max_tokens):
-        """Complete already-compiled reviewer messages without re-entering chat."""
+    async def async_complete(self, messages, *, temperature, max_tokens, top_p=None):
+        """Complete compiled review or grounded-answer messages without re-entering chat."""
         self._refresh_db_config()
-        return await self._complete_messages(messages, temperature=temperature, max_tokens=max_tokens)
+        return await self._complete_messages(messages, temperature=temperature, max_tokens=max_tokens, top_p=top_p)
 
-    async def _complete_messages(self, messages, *, temperature, max_tokens):
+    async def _complete_messages(self, messages, *, temperature, max_tokens, top_p=None):
         if not self.api_key:
             raise RuntimeError("未配置 API Key，请在设置页面配置 OpenAI 兼容 API Key")
         start = time.time()
@@ -311,6 +311,7 @@ class OpenAICompatProvider(BaseProvider):
                         "messages": messages,
                         "temperature": temperature,
                         "max_tokens": max_tokens,
+                        **({"top_p": top_p} if top_p is not None else {}),
                         **nonthinking_parameters(self.base_url, local_template=False),
                     },
                     timeout=120.0,

@@ -4,8 +4,8 @@
 - POST /api/ask/stream 流式（SSE）：meta → delta* → citations → done/error
 
 设计：
-- 不绕过现有 Provider 抽象：生成函数优先复用共享 vLLM 客户端，
-  不可用时回退 ModelManager（与 /api/generate 相同的优先级）
+- 不绕过现有 Provider 抽象：生成函数使用当前选中的提供方；
+  云端保持原始消息契约，本地选择才复用共享 vLLM 客户端
 - 域门控：未命中知识域时返回 abstention（no_domain）
 - 客户端断开：SSE 生成器随请求取消而终止，不继续模型工作
 - 用户可见错误简洁；内部日志不含密钥/完整系统提示词
@@ -36,7 +36,7 @@ router = APIRouter()
 
 
 async def _resolve_generate_adapters() -> tuple[Any, Any, str]:
-    """返回惰性生成适配器：vLLM 优先，ModelManager 回退。
+    """返回所选提供方的惰性生成适配器，保留编排好的消息与参数。
 
     这里只构造闭包，不连接或初始化生成后端。证据不足、未命中域等
     不需要模型的请求因此不会被模型服务状态拖垮。
@@ -44,9 +44,17 @@ async def _resolve_generate_adapters() -> tuple[Any, Any, str]:
     Returns:
         (generate, generate_stream | None, model_id)
     """
-    from app.config import get_vllm_served_model_name, is_vllm_enabled
+    from inference.model_manager import get_model_manager
 
-    model_id = f"vllm/{get_vllm_served_model_name()}" if is_vllm_enabled() else "auto"
+    manager = get_model_manager()
+    selected = manager._current_provider.value
+    provider = manager.get_current_provider()
+    if selected == "openai_compat":
+        refresh = getattr(provider, "_refresh_db_config", None)
+        if refresh is not None:
+            refresh()
+    model_name = provider.get_status().get("modelName") or selected
+    model_id = f"{selected}/{model_name}"
     resolved: tuple[Any, Any | None] | None = None
     resolve_lock = asyncio.Lock()
 
@@ -60,7 +68,18 @@ async def _resolve_generate_adapters() -> tuple[Any, Any, str]:
 
             from api.generate import get_vllm_client
 
-            client = await get_vllm_client()
+            if selected == "openai_compat":
+
+                async def cloud_generate(*, messages, temperature, max_tokens, top_p):
+                    reply, _cost = await provider.async_complete(
+                        messages, temperature=temperature, max_tokens=max_tokens, top_p=top_p
+                    )
+                    return reply
+
+                resolved = (cloud_generate, None)
+                return resolved
+
+            client = await get_vllm_client() if selected == "vllm" else None
             if client is not None:
 
                 async def vllm_generate(**kwargs: Any) -> str:

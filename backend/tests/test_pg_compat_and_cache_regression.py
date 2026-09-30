@@ -6,7 +6,7 @@ Covers the three gaps flagged in the review:
 2. SemanticCache per-key lock must use reference counting to prevent the same
    key from acquiring two different locks during capacity-driven cleanup.
 3. List endpoints must return the real ``COUNT(*)`` total, not a placeholder.
-   Verified both at SQL layer and through FastAPI TestClient response payload.
+   Verified through actual FastAPI TestClient response payloads.
 """
 
 from __future__ import annotations
@@ -44,42 +44,24 @@ def _extract_sql_strings_from_execute_calls(source: str, filepath: str):
                 yield node.args[0].value
 
 
-@pytest.mark.parametrize("module_name", sorted(p.name for p in API_DIR.glob("*.py") if p.suffix == ".py"))
-def test_no_question_mark_placeholders_in_api_sql(module_name):
-    """Every raw SQL string in api/ must use :name named params, not ?.
-
-    PostgreSQL (asyncpg) raises when encountering ``?`` placeholders;
-    SQLite accepts both ``?`` and ``:name``.  Using named params everywhere
-    keeps both backends working.
-    """
-    filepath = API_DIR / module_name
-    source = filepath.read_text(encoding="utf-8")
-    if "execute_sql" not in source:
-        pytest.skip(f"{module_name} has no execute_sql calls")
-
+def test_no_question_mark_placeholders_in_api_sql():
+    """Audit every API SQL literal in one check, with filenames on failure."""
     offenders = []
-    for sql in _extract_sql_strings_from_execute_calls(source, filepath):
-        # A literal '?' inside a string constant that is part of execute_sql
-        # is the PostgreSQL-incompatible placeholder pattern.
-        if "?" in sql:
-            offenders.append(sql[:120])
-    assert not offenders, (
-        f"{module_name} still uses '?' placeholders in execute_sql: {offenders}"
-    )
+    for filepath in sorted(API_DIR.glob("*.py")):
+        for sql in _extract_sql_strings_from_execute_calls(filepath.read_text(encoding="utf-8"), filepath):
+            if "?" in sql:
+                offenders.append((filepath.name, sql[:120]))
+    assert not offenders, f"API SQL still uses PostgreSQL-incompatible placeholders: {offenders}"
 
 
 # ============================================================
 # 3. Pagination total-count regression
 # ============================================================
 #
-# Two layers of verification:
-#  (a) SQL layer: COUNT(*) returns correct total at the db adapter level.
-#  (b) API layer: list endpoints actually return that total in the response
-#      payload (catches the case where the code computes COUNT(*) but then
-#      returns ``len(rows)`` instead of the count).
-#
-# Both layers use pytest's ``tmp_path`` fixture so the temp DB is cleaned up
-# automatically by the pytest harness.
+# Verify pagination and filtering through endpoint responses rather than
+# duplicating SQLite COUNT(*) checks. The preference storage check remains
+# because its approved/pending filter is not covered by these list endpoints.
+# All cases use isolated tmp_path databases.
 
 class TestPaginationTotalCount:
     """Verify that list endpoints return the real COUNT(*) total."""
@@ -110,71 +92,9 @@ class TestPaginationTotalCount:
 
     # --- (a) SQL layer ---
 
-    def test_experiment_total_matches_count(self, tmp_path):
-        db = self._make_temp_db(tmp_path)
-        self._insert_experiment_runs(db, 25)
-        rows = db.execute_sql("SELECT COUNT(*) AS cnt FROM experiment_runs", {})
-        assert rows[0]["cnt"] == 25
 
-    def test_experiment_total_with_type_filter(self, tmp_path):
-        db = self._make_temp_db(tmp_path)
-        self._insert_experiment_runs(db, 10)
-        # Insert a different type
-        db.execute_sql_insert(
-            "INSERT INTO experiment_runs (id, experiment_type, hypothesis, status, started_at, results, config_path, report_path) "
-            "VALUES (:id, :et, :hyp, 'completed', :ts, :r, '', '')",
-            {"id": "rag_1", "et": "rag_ablation", "hyp": "rag", "ts": "2026-01-01", "r": "{}"},
-        )
-        total_all = db.execute_sql("SELECT COUNT(*) AS cnt FROM experiment_runs", {})[0]["cnt"]
-        assert total_all == 11
-        total_lora = db.execute_sql(
-            "SELECT COUNT(*) AS cnt FROM experiment_runs WHERE experiment_type=:et",
-            {"et": "lora_ablation"},
-        )[0]["cnt"]
-        assert total_lora == 10
 
-    def test_feedback_total_matches_count(self, tmp_path):
-        db = self._make_temp_db(tmp_path)
-        for i in range(15):
-            db.execute_sql_insert(
-                "INSERT INTO feedback (trace_id, message_id, rating, reason, adapter_name, kb_revision, prompt_version, detail, created_at) "
-                "VALUES (:trace_id, :message_id, :rating, :reason, :adapter_name, :kb_revision, :prompt_version, :detail, :created_at)",
-                {
-                    "trace_id": f"t{i}", "message_id": f"m{i}",
-                    "rating": "thumbs_up" if i % 2 == 0 else "thumbs_down",
-                    "reason": None, "adapter_name": None,
-                    "kb_revision": None, "prompt_version": None,
-                    "detail": None, "created_at": f"2026-01-{i+1:02d}",
-                },
-            )
-        total = db.execute_sql("SELECT COUNT(*) AS cnt FROM feedback", {})[0]["cnt"]
-        assert total == 15
-        total_up = db.execute_sql(
-            "SELECT COUNT(*) AS cnt FROM feedback WHERE rating=:rating",
-            {"rating": "thumbs_up"},
-        )[0]["cnt"]
-        assert total_up == 8  # 0,2,4,6,8,10,12,14 → 8 thumbs_up
 
-    def test_retrieval_eval_total_matches_count(self, tmp_path):
-        db = self._make_temp_db(tmp_path)
-        for i in range(8):
-            db.execute_sql_insert(
-                "INSERT INTO retrieval_eval_questions (id, question, expected_doc_ids, expected_doc_titles, gold_answer, category, created_at) "
-                "VALUES (:id, :q, :dids, :dtitles, :ga, :cat, :ts)",
-                {
-                    "id": f"rq_{i}", "q": f"question {i}",
-                    "dids": "[]", "dtitles": "[]", "ga": None,
-                    "cat": "factual" if i < 5 else "persona",
-                    "ts": f"2026-01-{i+1:02d}",
-                },
-            )
-        total = db.execute_sql("SELECT COUNT(*) AS cnt FROM retrieval_eval_questions", {})[0]["cnt"]
-        assert total == 8
-        total_factual = db.execute_sql(
-            "SELECT COUNT(*) AS cnt FROM retrieval_eval_questions WHERE category=:cat",
-            {"cat": "factual"},
-        )[0]["cnt"]
-        assert total_factual == 5
 
     def test_preference_total_matches_count(self, tmp_path):
         db = self._make_temp_db(tmp_path)
