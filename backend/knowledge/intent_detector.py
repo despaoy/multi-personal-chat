@@ -124,14 +124,6 @@ class RAGIntentDetector:
             re.IGNORECASE
         )
 
-        # 个人上下文/长期记忆问句应由角色记忆链路回答，不是外部知识查询。
-        # 放在知识关键词之前，避免“我叫什么”里的“什么”误触发 RAG。
-        self.personal_context_pattern = re.compile(
-            r'(?:你(?:还)?记得我|我叫什么|我喜欢什么|我不喜欢什么|'
-            r'我最近要|我之前说过|我说过什么|以后叫我|我不叫)',
-            re.IGNORECASE,
-        )
-
         logger.info("RAG意图检测器初始化完成")
     
     def needs_rag(self, message: str, context: Optional[Dict[str, Any]] = None) -> Tuple[bool, str]:
@@ -151,8 +143,10 @@ class RAGIntentDetector:
         if self.chitchat_pattern.search(message):
             return False, "匹配闲聊白名单，不需要RAG"
 
-        if self.personal_context_pattern.search(message):
-            return False, "匹配个人上下文/长期记忆询问，不需要RAG"
+        from knowledge.task_dependency import has_question_form, local_context_only
+
+        if local_context_only(message):
+            return False, "完整请求仅依赖个人上下文或为个人陈述，不需要RAG"
 
         # 1. 检查消息长度
         if len(message) < self.min_length_for_rag:
@@ -161,6 +155,9 @@ class RAGIntentDetector:
         # 2. 检查是否纯特殊字符或表情
         if self._is_mostly_special_chars(message):
             return False, "消息主要为特殊字符或表情，不需要RAG"
+
+        if has_question_form(message):
+            return True, "非纯个人任务的明确问句，需要检索判断"
 
         # 3. 检查社交关键词和知识关键词的组合
         social_match = self.social_pattern.search(message)
@@ -403,6 +400,13 @@ def needs_rag(message: str, context: Optional[Dict[str, Any]] = None) -> Tuple[b
         KB名称可用于RAG检索时按知识库过滤，提升检索精度
     """
     global _ML_AVAILABLE, _ml_config
+
+    # A topic classifier cannot turn an established self-report into an
+    # external task. This also avoids loading a classifier for local-only turns.
+    from knowledge.task_dependency import local_context_only
+
+    if local_context_only(message):
+        return False, "完整请求仅依赖个人上下文或为个人陈述，不需要RAG", None
 
     if not _ML_AVAILABLE:
         _load_ml_model()

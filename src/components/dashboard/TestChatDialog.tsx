@@ -29,9 +29,21 @@ export function TestChatDialog({ loras }: { loras: LoraModel[] }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
-  const [selectedLora, setSelectedLora] = useState('');
+  const [selectedLora, setSelectedLora] = useState('default');
+  const [selectedCharacter, setSelectedCharacter] = useState('none');
+  const [characters, setCharacters] = useState<Array<{ character_id: string; display_name: string }>>([]);
+  const [characterError, setCharacterError] = useState('');
   const [sessionType, setSessionType] = useState<'private' | 'group'>('private');
   const endRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    let active = true;
+    api.listCharacters().then(result => {
+      if (active) { setCharacters(result.characters); setCharacterError(''); }
+    }).catch(() => { if (active) setCharacterError('人物列表加载失败，请重新打开重试'); });
+    return () => { active = false; };
+  }, [open]);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -46,16 +58,15 @@ export function TestChatDialog({ loras }: { loras: LoraModel[] }) {
     setLoading(true);
 
     try {
-      const requestedLora = selectedLora && selectedLora !== 'default'
-        ? selectedLora
-        : undefined;
+      const requestedLora = selectedLora || 'default';
       const response = await api.generateReply({
         message: input,
         sessionType,
-        sessionId: sessionType === 'group' ? 'test-group' : 'test-private',
+        sessionId: `test-${sessionType}-${selectedCharacter}`,
         userId: 'dashboard-user',
         userName: sessionType === 'group' ? '群成员' : '测试用户',
         loraName: requestedLora,
+        characterId: selectedCharacter === 'none' ? undefined : selectedCharacter,
       });
       setMessages(prev => [...prev, {
         role: 'assistant',
@@ -65,7 +76,7 @@ export function TestChatDialog({ loras }: { loras: LoraModel[] }) {
       }]);
     } catch (err) {
       console.error('Failed to generate reply:', err);
-      setMessages(prev => [...prev, { role: 'assistant', content: '生成失败，请稍后重试' }]);
+      setMessages(prev => [...prev, { role: 'assistant', content: err instanceof Error ? `生成失败：${err.message}` : '生成失败，请稍后重试' }]);
     } finally {
       setLoading(false);
     }
@@ -83,13 +94,23 @@ export function TestChatDialog({ loras }: { loras: LoraModel[] }) {
         <DialogHeader>
           <DialogTitle>测试机器人回复</DialogTitle>
           <DialogDescription>
-            模拟私聊或群聊场景，测试不同LoRA的回复效果
+            人物决定记忆与对话风格；LoRA 可选，基础模型也能使用人物记忆。
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3 overflow-y-auto flex-1 min-h-0">
           {/* 配置栏 */}
+          <Select disabled={loading} value={selectedCharacter} onValueChange={(value) => {
+            setSelectedCharacter(value); setSelectedLora('default'); setMessages([]);
+          }}>
+            <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="选择人物" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">普通聊天（不启用人物记忆）</SelectItem>
+              {characters.map(character => <SelectItem key={character.character_id} value={character.character_id}>{character.display_name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          {characterError && <p className="text-xs text-destructive">{characterError}</p>}
           <div className="flex gap-2">
-            <Select value={sessionType} onValueChange={(v) => setSessionType(v as 'private' | 'group')}>
+            <Select disabled={loading} value={sessionType} onValueChange={(v) => { setSessionType(v as 'private' | 'group'); setMessages([]); }}>
               <SelectTrigger className="w-[100px] h-8 text-xs">
                 <SelectValue />
               </SelectTrigger>
@@ -98,7 +119,7 @@ export function TestChatDialog({ loras }: { loras: LoraModel[] }) {
                 <SelectItem value="group">群聊</SelectItem>
               </SelectContent>
             </Select>
-            <Select value={selectedLora} onValueChange={setSelectedLora}>
+            <Select disabled={loading} value={selectedLora} onValueChange={setSelectedLora}>
               <SelectTrigger className="flex-1 h-8 text-xs">
                 <SelectValue placeholder="选择LoRA模型" />
               </SelectTrigger>
@@ -116,7 +137,7 @@ export function TestChatDialog({ loras }: { loras: LoraModel[] }) {
               size="icon"
               className="h-8 w-8 shrink-0"
               onClick={() => setMessages([])}
-              title="清空对话"
+              title="清空显示（不删除历史与记忆）"
             >
               <Trash2 className="h-3.5 w-3.5" />
             </Button>

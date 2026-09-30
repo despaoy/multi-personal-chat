@@ -18,7 +18,6 @@ if TYPE_CHECKING:
 
 _CAUSAL_MARKERS = ("因为", "由于", "为了", "为反抗", "为抵抗", "因此", "所以", "导致", "以此")
 _SETTING_MARKERS = ("设定", "安排", "职责", "结局", "真相", "意味着", "那就是")
-_FLASHBACK_MARKERS = ("儿时", "小时候", "童年", "当年")
 
 
 def _clean(text: str) -> str:
@@ -170,13 +169,11 @@ class CharacterKnowledgeIndexBuilder:
                 vector_text = _story_vector_text(document, cards_by_story.get(unit_id, []))
                 profile = "story_card_digest"
             data["embedding_text"] = vector_text
+            # A childhood relation or a quoted past word does not establish
+            # that this assertion belongs to a flashback. Preserve the source
+            # annotation (including unknown) instead of promoting lexical
+            # retrieval cues into authoritative temporal metadata.
             semantic_temporal = document.temporal_scope
-            if scale == "card" and any(
-                marker in f"{document.title} {document.summary} {document.metadata.get('relation', '')}"
-                for marker in _FLASHBACK_MARKERS
-            ):
-                semantic_temporal = "flashback"
-                data["temporal_scope"] = semantic_temporal
             data["metadata"] = {
                 **data["metadata"],
                 "embedding_text_version": EMBEDDING_TEXT_VERSION,

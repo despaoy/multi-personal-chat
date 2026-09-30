@@ -1,0 +1,40 @@
+{
+  "schema": "kisaki-interactive-v2-pending",
+  "selected": 38,
+  "human_approved": false,
+  "old_length": {
+    "min": 4,
+    "median": 23,
+    "max": 245,
+    "mean": 31.7
+  },
+  "new_length": {
+    "min": 8,
+    "median": 16.5,
+    "max": 37,
+    "mean": 17.8
+  },
+  "old_merged": 43,
+  "new_outside_old_105": 5,
+  "categories": {
+    "观察与反问": 2,
+    "自主与行动": 5,
+    "调侃与反驳": 9,
+    "追问与信息边界": 3,
+    "掩饰与讽刺": 5,
+    "日常生活": 5,
+    "理解与关心": 5,
+    "边界与回避": 4
+  },
+  "status_counts": {
+    "pending": 37,
+    "needs_copyedit": 1
+  },
+  "source_scene_count": 16,
+  "selection_sha256": "c57802e44d56c4560f5e0c9127d3e632f3d08cad79792eb1b9818f3010dc59a7",
+  "validation_sha256": "ddb723f38e80f918063708b6977b5d4af787b282c421c56229e5d25b8e245e9a",
+  "gold_sha256": "ed096bb5899745a920841dc503a97ba147db0c851fcff78d8c0ee0ea1f252739",
+  "generation_performed": false,
+  "dpo_pairs_created": 0,
+  "policy": "single literal event, curated incoming turn, no automatic truncation, no historical negatives"
+}

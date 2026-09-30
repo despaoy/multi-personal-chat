@@ -1,0 +1,9 @@
+{
+  "09d2c389a1d2": [
+    {"role": "user", "content": "我的专业是海洋科学。"},
+    {"role": "assistant", "content": "知道了。"}
+  ],
+  "aa94f48322c6": [
+    {"role": "assistant", "content": "我猜你现在住在杭州。"}
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "source_checked": 105,
+  "source_excluded": 52,
+  "completed": 105,
+  "counts": {
+    "excluded_by_ai_review": 102,
+    "error": 1,
+    "ai_selected": 2
+  },
+  "selected_pairs": 2,
+  "remaining": 0,
+  "human_approved": false
+}

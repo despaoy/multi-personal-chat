@@ -1,0 +1,8 @@
+# Separate environment for the explicit dual-adapter DPO contract.
+# Install an appropriate torch build first (CUDA for lab training, CPU for tests).
+trl==0.23.1
+peft==0.17.1
+transformers==4.56.2
+accelerate==1.10.1
+datasets==4.1.1
+# For 4-bit lab training only: install a bitsandbytes build compatible with CUDA.

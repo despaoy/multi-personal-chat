@@ -92,6 +92,24 @@ async def test_origin_and_residence_do_not_overwrite_each_other(repo):
 
 
 @pytest.mark.asyncio
+async def test_scoped_evidence_survives_write_recall_and_compilation(repo):
+    from character.context_builder import compile_reference_context
+    from character.memory_service import CharacterMemoryService
+
+    await save(repo, "我喜欢陶艺，小林来了，不喜欢游泳。", source="original-message")
+    rows = await repo.list_memory_records("kisaki", scope())
+    assert len(rows) == 1
+    assert rows[0]['evidence'] == ['我喜欢陶艺']
+    assert rows[0]['source_message_ids'] == ['original-message']
+    service = CharacterMemoryService(repo, semantic_enabled=False)
+    items, _ = await service.load_relevant_memories('kisaki', scope(), '我喜欢什么？')
+    context, ids = compile_reference_context(items)
+    assert ids and '陶艺' in context
+    assert '游泳' not in context and '小林' not in context
+    assert 'original-message' in context
+
+
+@pytest.mark.asyncio
 async def test_preference_changes_are_versioned_not_appended_as_two_current_facts(repo):
     await save(repo, "我喜欢喝咖啡。")
     await save(repo, "我不喜欢咖啡。", source="m2")
@@ -111,6 +129,12 @@ async def test_conditions_survive_repetition_and_uncertain_changes_are_pending(r
     await save(repo, "我喜欢咖啡，但不加糖。", source="m3")
     rows = await repo.list_memory_records("kisaki", scope(), include_inactive=True)
     assert len(rows) == 2
+    active = next(r for r in rows if r["status"] == "active")
+    assert "晚上不喝" in active["content"] and "不加糖" in active["content"]
+    assert len(active["evidence"]) == 2
+    # Unknown/contradictory condition changes still require confirmation.
+    await save(repo, "我喜欢咖啡，但晚上也喝。", source="m3-conflict")
+    rows = await repo.list_memory_records("kisaki", scope(), include_inactive=True)
     assert (
         next(r for r in rows if r["status"] == "pending")["metadata"]["review_reason"]
         == "conditional_change_requires_review"
@@ -140,6 +164,58 @@ async def test_concurrent_rules_leave_one_current_version(repo):
     await asyncio.gather(save(repo, "我喜欢咖啡。", source="a"), save(repo, "我不喜欢咖啡。", source="b"))
     assert len(await repo.list_memory_records("kisaki", scope())) == 1
     assert len(await repo.list_memory_records("kisaki", scope(), include_inactive=True)) == 2
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('old_text,new_text', [
+    ('我喜欢咖啡。', '我不喜欢咖啡。'),
+    ('我住在桂林。', '我住在洛阳。'),
+    ('我叫青禾。', '我叫星野。'),
+])
+async def test_older_observation_arriving_late_is_history_not_current(repo, old_text, new_text):
+    from datetime import datetime, timezone
+
+    old_time = datetime(2026, 8, 1, tzinfo=timezone.utc)
+    new_time = datetime(2026, 8, 2, tzinfo=timezone.utc)
+    new_item = extract_memories(new_text)[0]
+    old_item = extract_memories(old_text)[0]
+    await write_rule_memory(repo, 'kisaki', scope(), new_item, 'new', observed_at=new_time)
+    assert await write_rule_memory(repo, 'kisaki', scope(), old_item, 'old', observed_at=old_time)
+    current = await repo.list_memory_records('kisaki', scope())
+    assert len(current) == 1 and current[0]['content'] == new_item.content
+    rows = await repo.list_memory_records('kisaki', scope(), include_inactive=True)
+    archived = next(row for row in rows if row['source_message_id'] == 'old')
+    assert archived['status'] == 'archived'
+    assert archived['evidence'] == [old_item.evidence]
+    assert archived['observed_at'] == old_time.isoformat()
+    assert not await write_rule_memory(repo, 'kisaki', scope(), old_item, 'old', observed_at=old_time)
+    assert len(await repo.list_memory_records('kisaki', scope(), include_inactive=True)) == 2
+
+
+@pytest.mark.asyncio
+async def test_rule_writer_reloads_when_newer_write_wins_after_read(repo, monkeypatch):
+    from datetime import datetime, timezone
+
+    older = extract_memories('我喜欢咖啡。')[0]
+    newer = extract_memories('我不喜欢咖啡。')[0]
+    original_append = repo.append_claim
+    injected = False
+
+    async def interleaved_append(*args, **kwargs):
+        nonlocal injected
+        if not injected:
+            injected = True
+            await write_rule_memory(repo, 'kisaki', scope(), newer, 'new',
+                                    observed_at=datetime(2026, 8, 2, tzinfo=timezone.utc))
+        return await original_append(*args, **kwargs)
+
+    monkeypatch.setattr(repo, 'append_claim', interleaved_append)
+    assert await write_rule_memory(repo, 'kisaki', scope(), older, 'old',
+                                   observed_at=datetime(2026, 8, 1, tzinfo=timezone.utc))
+    rows = await repo.list_memory_records('kisaki', scope(), include_inactive=True)
+    assert len(rows) == 2
+    assert [(row['content'], row['status']) for row in rows if row['status'] == 'active'] == [(newer.content, 'active')]
+    assert next(row for row in rows if row['source_message_id'] == 'old')['status'] == 'archived'
 
 
 @pytest.mark.asyncio

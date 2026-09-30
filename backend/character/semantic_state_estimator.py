@@ -22,10 +22,14 @@ import time
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from contextvars import ContextVar
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
+from character.evidence_selector import InputBudgetError, _history_view
 from character.models import InteractionState, WeightedSignal
 from character.situation_analyzer import ACT_LABELS, NEED_LABELS, PHASE_LABELS, SITUATION_LABELS
+
+if TYPE_CHECKING:
+    from inference.context_budget import ReviewContextBudget
 
 SemanticReviewer = Callable[[Sequence[Mapping[str, str]]], Awaitable[object]]
 SemanticReviewStatus = Literal["disabled", "not_needed", "applied", "fallback", "recursive_skip"]
@@ -225,10 +229,12 @@ class SemanticStateEstimator:
         *,
         timeout_seconds: float = DEFAULT_REVIEW_TIMEOUT_SECONDS,
         review_mode: Literal["selective", "all_non_safety"] = "selective",
+        context_budget: ReviewContextBudget | None = None,
     ) -> None:
         if review_mode not in {"selective", "all_non_safety"}:
             raise ValueError("unknown semantic review mode")
         self._reviewer = reviewer
+        self._context_budget = context_budget
         self._timeout_seconds = _valid_timeout(timeout_seconds)
         self._review_mode = review_mode
 
@@ -269,7 +275,10 @@ class SemanticStateEstimator:
         """
 
         reasons = self.review_reasons(message, state)
-        history_count = len(_recent_dialogue(history))
+        try:
+            history_count = len(_recent_dialogue(history, context_budget=self._context_budget))
+        except SemanticInputBudgetError:
+            history_count = 0
         rule_confidence = _diagnostic_confidence(state.confidence)
         if self._reviewer is None:
             return _outcome(
@@ -297,7 +306,8 @@ class SemanticStateEstimator:
             )
 
         try:
-            messages = build_semantic_review_messages(message, history, state, reasons=reasons)
+            messages = build_semantic_review_messages(message, history, state, reasons=reasons,
+                                                      context_budget=self._context_budget)
         except SemanticInputBudgetError:
             return _outcome(
                 state,
@@ -407,16 +417,17 @@ def build_semantic_review_messages(
     state: InteractionState,
     *,
     reasons: Sequence[str] | None = None,
+    context_budget: ReviewContextBudget | None = None,
 ) -> tuple[dict[str, str], dict[str, str]]:
-    """Build the bounded provider input, retaining at most six dialogue turns."""
+    """Build complete-turn provider input under the selected serving budget."""
 
     selected_reasons = tuple(semantic_review_reasons(message, state) if reasons is None else reasons)
     if not set(selected_reasons) <= REVIEW_REASON_IDS:
         raise ValueError("unknown semantic review reason")
-    recent_history = _recent_dialogue(history)
-    if len(message or "") > MAX_REVIEW_MESSAGE_CHARS or sum(
+    recent_history = _recent_dialogue(history, context_budget=context_budget)
+    if context_budget is None and (len(message or "") > MAX_REVIEW_MESSAGE_CHARS or sum(
         len(item["content"]) for item in recent_history
-    ) > MAX_REVIEW_HISTORY_TOTAL_CHARS:
+    ) > MAX_REVIEW_HISTORY_TOTAL_CHARS):
         raise SemanticInputBudgetError("complete semantic evidence exceeds input budget")
     payload = {
         "current_message": message or "",
@@ -435,26 +446,23 @@ def build_semantic_review_messages(
         "output_shape_example_only": _OUTPUT_SHAPE_EXAMPLE,
         "output_shape_warning": "示例只说明 JSON 结构，与当前语义无关；必须重新判断全部标签和分数。",
     }
-    return (
+    messages = (
         {"role": "system", "content": _SYSTEM_PROMPT},
         {"role": "user", "content": json.dumps(payload, ensure_ascii=False, separators=(",", ":"))},
     )
+    if context_budget and not context_budget.fits(messages, 768):
+        raise SemanticInputBudgetError('complete semantic evidence exceeds serving context budget')
+    return messages
 
 
-def _recent_dialogue(history: Sequence[Mapping[str, Any]]) -> list[dict[str, str]]:
-    recent: list[dict[str, str]] = []
-    for item in reversed(tuple(history)):
-        if not isinstance(item, Mapping):
-            continue
-        role = item.get("role")
-        content = item.get("content")
-        if role not in {"user", "assistant"} or not isinstance(content, str) or not content.strip():
-            continue
-        recent.append({"role": role, "content": content})
-        if len(recent) >= MAX_REVIEW_HISTORY_MESSAGES:
-            break
-    recent.reverse()
-    return recent
+def _recent_dialogue(history: Sequence[Mapping[str, Any]], *,
+                     context_budget: ReviewContextBudget | None = None) -> list[dict[str, str]]:
+    try:
+        return _history_view(history,
+            max_messages=context_budget.history_messages if context_budget else MAX_REVIEW_HISTORY_MESSAGES,
+            max_chars=4 * context_budget.window_tokens if context_budget else MAX_REVIEW_HISTORY_TOTAL_CHARS)
+    except InputBudgetError as exc:
+        raise SemanticInputBudgetError(str(exc)) from exc
 
 
 def _parse_reviewed_state(

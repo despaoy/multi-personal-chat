@@ -12,7 +12,7 @@ from db.schemas import MessageRequest
 @pytest.mark.asyncio
 async def test_vllm_generation_receives_request_history(monkeypatch):
     import api.generate as gen
-    from inference.generation_request import GenerationRequest
+    from inference.generation_request import GenerationRequest, GenerationResult, build_generation_request
 
     history = [
         {"role": "user", "content": "first"},
@@ -34,10 +34,7 @@ async def test_vllm_generation_receives_request_history(monkeypatch):
 
     async def fake_character_response(req, generate):
         captured["request"] = req
-        return SimpleNamespace(
-            reply="second-reply",
-            plan=SimpleNamespace(retrieval=SimpleNamespace(has_evidence=False)),
-        )
+        return GenerationResult(reply="second-reply", plan=build_generation_request(req))
 
     monkeypatch.setattr(gen, "_vllm_client", SimpleNamespace(generate=fake_generate))
     monkeypatch.setattr(gen, "generate_character_response", fake_character_response)

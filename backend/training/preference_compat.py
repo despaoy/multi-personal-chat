@@ -6,6 +6,16 @@ import importlib
 import inspect
 
 
+def render_preference_record(row, tokenizer):
+    """Use the same non-thinking chat template as SFT and persona inference."""
+    values = {key: row[key] for key in ("prompt", "chosen", "rejected")}
+    if isinstance(values["prompt"], str):
+        return values
+    from trl.data_utils import maybe_apply_chat_template
+
+    return maybe_apply_chat_template(values, tokenizer, enable_thinking=False)
+
+
 def resolve_preference_backend(method: str):
     if method not in {"dpo", "orpo"}:
         raise ValueError("preference method must be dpo or orpo")
@@ -31,3 +41,16 @@ def preference_length_kwargs(config_class, *, max_length: int, max_prompt_length
     if "max_prompt_length" in parameters:
         result["max_prompt_length"] = max_prompt_length
     return result
+
+
+def reference_adapter_kwargs(config_class, *, method: str, adapter_path: str) -> dict:
+    """Never depend on a TRL version's implicit PEFT reference behavior."""
+    if method != "dpo" or not adapter_path:
+        return {}
+    parameters = inspect.signature(config_class).parameters
+    if not {"model_adapter_name", "ref_adapter_name"} <= parameters.keys():
+        raise RuntimeError(
+            "installed TRL does not support explicit SFT reference adapters; "
+            "use the documented preference training environment"
+        )
+    return {"model_adapter_name": "default", "ref_adapter_name": "reference"}

@@ -957,7 +957,8 @@ async def test_user_fact_fallback_closes_the_actual_enabled_guard_after_retry():
         return "你一直喜欢喝咖啡。"
 
     guard = ReplyGuard(forbid_unsupported_user_fact=True)
-    request = GenerationRequest(message="今天天气不错。", persona_prompt="角色", reply_guard=guard)
+    request = GenerationRequest(message="今天天气不错。", persona_prompt="角色", reply_guard=guard,
+                                reply_guard_mode="strict")
     result = await generate_character_response(request, generate)
     assert len(calls) == 2
     assert result.guard_fallback == "unsupported_user_fact"

@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
-from typing import Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
-from character.models import UserScope
+if TYPE_CHECKING:
+    from character.models import UserScope
+    from db.conversation_source import ScopedTurnPage, TurnCursor
 
 
 @dataclass(frozen=True, slots=True)
@@ -37,6 +39,11 @@ class MessageRepository(Protocol):
 
     async def list_session_summaries(self) -> list[dict[str, Any]]: ...
 
+    async def list_scoped_turns(
+        self, user_scope: UserScope, character_id: str, *, limit: int = 200,
+        before: TurnCursor | None = None,
+    ) -> ScopedTurnPage: ...
+
     async def set_session_bot_enabled(
         self,
         session_id: str,
@@ -53,6 +60,7 @@ class MessageRepository(Protocol):
         *,
         limit: int = 8,
         max_chars: int = 6000,
+        character_id: str | None = None,
     ) -> list[dict[str, str]]: ...
 
     async def delete_filtered(self, query: MessageQuery) -> int: ...
@@ -89,14 +97,23 @@ class DatabaseMessageRepository:
     async def list_session_summaries(self) -> list[dict[str, Any]]:
         return list(await asyncio.to_thread(self._database.get_session_summaries))
 
+    async def list_scoped_turns(
+        self, user_scope: UserScope, character_id: str, *, limit: int = 200,
+        before: TurnCursor | None = None,
+    ) -> ScopedTurnPage:
+        # No admin-search fallback and no silent empty-success on unsupported DB.
+        return await asyncio.to_thread(self._database.list_scoped_conversation_turns,
+            user_scope, character_id, limit=limit, before=before)
+
     async def list_recent_conversation_history(
         self,
         user_scope: UserScope,
         *,
         limit: int = 8,
         max_chars: int = 6000,
+        character_id: str | None = None,
     ) -> list[dict[str, str]]:
-        """按用户范围读取最近对话历史（时间正序，超预算从最旧一侧截断）。
+        """按用户范围读取最近对话历史（时间正序，按完整问答轮预算）。
 
         私聊读取该用户全部私聊记录；群聊/频道只读取该用户在该会话内的
         记录，与长期记忆的隔离范围保持一致。
@@ -113,6 +130,7 @@ class DatabaseMessageRepository:
                 user_scope.conversation_id,
                 limit,
                 max_chars,
+                character_id=character_id,
             )
         )
 

@@ -57,6 +57,22 @@ def test_runtime_loads_all_four_scales_and_returns_bundle():
     assert isinstance(bundle["abstained"], bool)
 
 
+def test_runtime_passes_cloud_budget_to_loaded_retriever():
+    runtime = MultiScaleRagRuntime(context_max_chars=16384)
+    runtime._provider = FakeQueryEmbeddingProvider()
+    assert runtime.is_available()
+    assert runtime._service.context_max_chars == 16384
+    bundle = runtime.retrieve_with_citations('妃和琉璃是什么关系？', top_k=3)
+    assert bundle['context_budget']['max_chars'] == 16384
+    assert MultiScaleRagRuntime().context_max_chars == 6000
+
+
+@pytest.mark.parametrize('value', [0, -1, True, 1.5])
+def test_runtime_rejects_invalid_evidence_budget(value):
+    with pytest.raises(ValueError, match='context_max_chars'):
+        MultiScaleRagRuntime(context_max_chars=value)
+
+
 def test_runtime_keeps_unrelated_chat_out_of_game_domain():
     runtime = MultiScaleRagRuntime()
     runtime._provider = FakeQueryEmbeddingProvider()
@@ -70,6 +86,7 @@ def test_missing_relation_index_falls_back_without_timeline(monkeypatch):
     from knowledge.multiscale_rag import service
 
     instance = object.__new__(service.RoutedMultiScaleService)
+    instance.identity_coverage = False
     instance.config = SimpleNamespace(domain_id="test")
     instance.analyzer = None
     instance.indexes = {service.CARD_TYPES: SimpleNamespace(documents=[])}

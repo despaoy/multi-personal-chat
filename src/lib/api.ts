@@ -152,6 +152,7 @@ export interface HealthResponse {
 
 /** 消息生成请求参数 */
 export interface GenerateRequest {
+  characterId?: string;
   branchId?: string;
   platform?: string;
   traceId?: string;

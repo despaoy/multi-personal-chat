@@ -1,0 +1,128 @@
+[
+  {
+    "id": "owner_revised_user",
+    "query": "我周日最后决定做什么？",
+    "rubric": "应回忆用户最后在家修自行车，以用户为主体；不回答旧还书安排。",
+    "scenario": "revised",
+    "query_owner": "user",
+    "episodes": [
+      {
+        "session": "s1",
+        "message": "我周日原本打算去图书馆还书。",
+        "reply": "收到。",
+        "timestamp": "2026-09-20T10:00:00"
+      },
+      {
+        "session": "s2",
+        "message": "上次那个安排改了，那天留在家里修自行车。",
+        "reply": "收到。",
+        "timestamp": "2026-09-21T10:00:00"
+      }
+    ]
+  },
+  {
+    "id": "owner_revised_character",
+    "query": "你周日打算做什么？",
+    "rubric": "不能把用户修自行车或还书安排当成角色自身已确定安排；允许自然表达角色想法，但不伪称历史依据。",
+    "scenario": "revised",
+    "query_owner": "character",
+    "episodes": [
+      {
+        "session": "s1",
+        "message": "我周日原本打算去图书馆还书。",
+        "reply": "收到。",
+        "timestamp": "2026-09-20T10:00:00"
+      },
+      {
+        "session": "s2",
+        "message": "上次那个安排改了，那天留在家里修自行车。",
+        "reply": "收到。",
+        "timestamp": "2026-09-21T10:00:00"
+      }
+    ]
+  },
+  {
+    "id": "owner_revised_implicit",
+    "query": "周日最后决定做什么？",
+    "rubric": "可承接用户最新安排或澄清主体，不能把用户计划认领为角色自身历史。",
+    "scenario": "revised",
+    "query_owner": "implicit",
+    "episodes": [
+      {
+        "session": "s1",
+        "message": "我周日原本打算去图书馆还书。",
+        "reply": "收到。",
+        "timestamp": "2026-09-20T10:00:00"
+      },
+      {
+        "session": "s2",
+        "message": "上次那个安排改了，那天留在家里修自行车。",
+        "reply": "收到。",
+        "timestamp": "2026-09-21T10:00:00"
+      }
+    ]
+  },
+  {
+    "id": "owner_ambiguous_user",
+    "query": "我周日还保留了哪个安排？",
+    "rubric": "取消指代不明确，不能断言任一个已取消或仍有效；应说明不确定并问清取消哪项。",
+    "scenario": "ambiguous",
+    "query_owner": "user",
+    "episodes": [
+      {
+        "session": "s1",
+        "message": "我周日上午去取打印材料，下午去花店。",
+        "reply": "收到。",
+        "timestamp": "2026-09-20T10:00:00"
+      },
+      {
+        "session": "s2",
+        "message": "那两个安排取消了一个，另一个仍然保留。",
+        "reply": "收到。",
+        "timestamp": "2026-09-21T10:00:00"
+      }
+    ]
+  },
+  {
+    "id": "owner_ambiguous_character",
+    "query": "你周日还保留了哪个安排？",
+    "rubric": "用户历史不能证明角色自身的安排；应避免冒领或编造角色已确定安排。",
+    "scenario": "ambiguous",
+    "query_owner": "character",
+    "episodes": [
+      {
+        "session": "s1",
+        "message": "我周日上午去取打印材料，下午去花店。",
+        "reply": "收到。",
+        "timestamp": "2026-09-20T10:00:00"
+      },
+      {
+        "session": "s2",
+        "message": "那两个安排取消了一个，另一个仍然保留。",
+        "reply": "收到。",
+        "timestamp": "2026-09-21T10:00:00"
+      }
+    ]
+  },
+  {
+    "id": "owner_ambiguous_implicit",
+    "query": "周日还保留了哪个安排？",
+    "rubric": "应保留取消歧义并澄清，不把两项均当有效，也不冒领用户安排。",
+    "scenario": "ambiguous",
+    "query_owner": "implicit",
+    "episodes": [
+      {
+        "session": "s1",
+        "message": "我周日上午去取打印材料，下午去花店。",
+        "reply": "收到。",
+        "timestamp": "2026-09-20T10:00:00"
+      },
+      {
+        "session": "s2",
+        "message": "那两个安排取消了一个，另一个仍然保留。",
+        "reply": "收到。",
+        "timestamp": "2026-09-21T10:00:00"
+      }
+    ]
+  }
+]

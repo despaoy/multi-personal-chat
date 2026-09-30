@@ -18,6 +18,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
 from character.models import InteractionState, WeightedSignal
+from knowledge.query_tasks import requests_explicit_information
 
 SituationType = str
 
@@ -327,13 +328,6 @@ _INFORMATION_PATTERNS = (
     "where",
     "who is",
 )
-_DIRECT_INFORMATION_REQUEST_RE = re.compile(
-    r"(?:^|[，。！？,!?；;\s])"
-    r"(?:(?:但(?:是)?|不过|可(?:是)?)[，,\s]*)?"
-    r"(?:(?:请你?|麻烦你?|只|就|直接|顺便|现在|快|你能不能|你可不可以|"
-    r"你(?:能|可以)?|能不能|可不可以|能|可以)\s*){0,3}"
-    r"(?:告诉我|回答(?:一下)?|说清(?:楚)?|列出)"
-)
 _AFFILIATION_PATTERNS = (
     "喜欢你",
     "爱你",
@@ -375,21 +369,10 @@ _REPAIR_CONCESSION_RE = re.compile(
     r"(?:^|[，。！？,!?；;\s])(?:行吧|好吧)[，,\s]*"
     r"(?:算你(?:说得|讲得)?(?:有道理|对)|你(?:说得|讲得)(?:有道理|对))"
 )
-_ADVICE_BOUNDARY_PATTERNS = (
-    "先别建议",
-    "别给建议",
-    "别给我建议",
-    "不要建议",
-    "不用建议",
-    "不需要建议",
-    "不想听建议",
-    "不想要建议",
-    "别分析",
-    "不要分析",
-)
-_ADVICE_BOUNDARY_EXCEPTION_RE = re.compile(
-    r"(?:不是|并非).{0,3}(?:不要|不想|不用|不需要).{0,4}(?:建议|分析)"
-    r"|别给(?:我)?(?:空泛|泛泛|笼统|没用)的?建议"
+_ADVICE_BOUNDARY_RE = re.compile(
+    r'(?:^|[，,。！？!?；;\n])\s*(?:但|不过)?(?:我)?(?:现在)?(?:请)?(?:你)?(?:先|暂时)?'
+    r'(?:不要|不用|不需要|无需|不必|别|不想听|不想要)'
+    r'(?:再)?(?:给(?:我)?)?(?:建议|分析)'
 )
 _BOUNDARY_PATTERNS = (
     "别问了",
@@ -463,7 +446,10 @@ _DIRECT_AFFILIATION_RE = re.compile(r"喜欢你|爱你|想你|在乎你")
 _AFFILIATION_OBJECT_CONTINUATION_RE = re.compile(r"^(?:推荐|写|做|买|选|发|分享|介绍|告诉|解释|帮|给)")
 _RELATIONAL_BID_RE = re.compile(
     r"你.{0,8}(?:在乎|喜欢|想|爱)我吗"
-    r"|你.{0,24}(?:想起|记得|忘掉|忘了)我(?:吗|吧|呢|[？?])?"
+    r"|你.{0,24}(?:想起|记得|忘掉|忘了)我(?:吗|吧|呢)?(?=$|[，。！？!?；;\s])"
+)
+_MEMORY_INFORMATION_RE = re.compile(
+    r"(?:记得|记不记得)我(?:的|喜欢|讨厌|来自|住|叫|晚上|白天|明天|上次|之前|最近|准备|面试)"
 )
 _DISTRESS_CUE_RE = re.compile(r"撑不住|撑不下去|想结束这一切")
 _NON_PERSON_DISTRESS_RE = re.compile(
@@ -649,9 +635,25 @@ def _score_message(message: str) -> _Features:
 
     # Explicit refusals such as “别给我建议” describe the desired response
     # mode; they are not advice requests merely because they contain “建议”.
-    advice_hits = _non_negated_hit_count(text, _ADVICE_PATTERNS)
+    advice_hits = _non_negated_hit_count(_ADVICE_BOUNDARY_RE.sub('。', text), _ADVICE_PATTERNS)
     information_hits = _hit_count(text, _INFORMATION_PATTERNS)
-    if _DIRECT_INFORMATION_REQUEST_RE.search(text):
+    # Speech-act scope comes before affect keywords: asking whether a fact
+    # holds is not disclosing that fact or celebrating it. Separate sentences
+    # preserve a real celebration followed by an independent question.
+    clauses = re.findall(r'[^，,。！？!?；;\n]+[，,。！？!?；;]?', text)
+    question_clauses = [part for part in clauses if part.rstrip().endswith(('？', '?', '吗'))]
+    assertion_text = '。'.join(part for part in clauses if part not in question_clauses)
+    for part in question_clauses:
+        explicit_form = re.search(r'吗[？?]?$|什么|哪(?:个|种|里|位|些)|是否|为什么|如何|怎么|多少', part)
+        if (explicit_form and not _affiliation_features(part)[0]
+                and not _non_negated_hit_count(part, _ADVICE_PATTERNS)
+                and not _hit_count(part, _SUPPORT_PATTERNS)
+                and not _matches(part, _GREETING_PATTERNS)
+                and not _matches(part, _META_PATTERNS)):
+            information_hits += 1
+    if requests_explicit_information(text):
+        information_hits += 1
+    if _MEMORY_INFORMATION_RE.search(text):
         information_hits += 1
     has_question = "?" in text or "？" in text
     if advice_hits:
@@ -669,7 +671,7 @@ def _score_message(message: str) -> _Features:
     ambiguous_distress = _is_ambiguous_distress(text) and not situations[SITUATION_SAFETY]
     low_hits = _non_negated_hit_count(text, _NEGATIVE_LOW)
     high_hits = _non_negated_hit_count(text, _NEGATIVE_HIGH)
-    positive_hits = _non_negated_hit_count(text, _POSITIVE)
+    positive_hits = _non_negated_hit_count(assertion_text, _POSITIVE)
     sarcasm = bool(_SARCASM_RE.search(text))
     if sarcasm:
         positive_hits = 0
@@ -686,7 +688,8 @@ def _score_message(message: str) -> _Features:
     if support_hits:
         add(needs, "companionship", 0.72 + 0.05 * min(support_hits - 1, 2))
 
-    if resolved_third_party_risk or _SELF_DISCLOSURE_RE.search(text) or (text.startswith("我") and len(text) >= 5):
+    if (resolved_third_party_risk or _SELF_DISCLOSURE_RE.search(assertion_text)
+            or (assertion_text.startswith("我") and len(assertion_text) >= 5)):
         # A resolved third-party episode is still a personally relevant
         # disclosure, even though the risk owner is someone else.
         disclosure_score = 0.68 if resolved_third_party_risk else 0.66 if affect_present else 0.52
@@ -964,8 +967,12 @@ def _hit_count(text: str, patterns: tuple[str, ...]) -> int:
 
 
 def _has_advice_boundary(text: str) -> bool:
-    """Detect a request for no advice, excluding contrastive refinements."""
-    return _matches(text, _ADVICE_BOUNDARY_PATTERNS) and not _ADVICE_BOUNDARY_EXCEPTION_RE.search(text)
+    """Recognize direct clause-local refusals, not quoted/topic mentions.
+
+    Optional response verbs compose with negation; qualified requests such as
+    no *generic* advice and double negation do not match a direct refusal.
+    """
+    return bool(_ADVICE_BOUNDARY_RE.search(text))
 
 
 def _non_negated_hit_count(text: str, patterns: tuple[str, ...]) -> int:

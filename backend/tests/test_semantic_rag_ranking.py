@@ -44,6 +44,38 @@ def test_semantic_order_not_overridden_by_title_bonus_and_inputs_not_mutated():
     assert all(item.rerank_score is None and item.rerank_method == "none" for item in candidates)
 
 
+def test_quoted_story_uses_source_metadata_before_intermediate_candidate_cutoff():
+    candidates = [_candidate(str(i), '事件') for i in range(1, 26)]
+    candidates[-1].document.metadata['story_title'] = '第三卷 标题的延续'
+
+    class RankedPool:
+        def rerank(self, analysis, pool, *, top_k):
+            assert top_k >= len(pool)
+            for candidate in pool:
+                candidate.rerank_score = .2
+                candidate.rerank_method = 'deterministic'
+            return pool[:top_k]
+
+    result = rerank_with_title_frames(_analysis(), candidates, top_k=3, reranker=RankedPool())
+    assert result[0].document.id == '25'
+    assert result[0].document.content == '事件'
+    assert len(result) == 3  # not a hard story filter
+
+
+@pytest.mark.parametrize('query', ['比较《晨星》和《暮雨》的结局', '解释人物经历'])
+def test_story_metadata_preference_keeps_comparisons_and_unscoped_order(query):
+    candidates = [_candidate('1', '事件'), _candidate('2', '事件'), _candidate('3', '事件')]
+    candidates[1].document.metadata['story_title'] = '暮雨'
+    candidates[2].document.metadata['story_title'] = '晨星'
+    analysis = _analysis()
+    analysis.original_query = query
+    analysis.normalized_query = query
+    reranker = SimpleNamespace(rerank=lambda analysis, candidates, top_k: candidates)
+    result = rerank_with_title_frames(analysis, candidates, top_k=3, reranker=reranker)
+    expected = ['2', '3', '1'] if '《' in query else ['1', '2', '3']
+    assert [candidate.document.id for candidate in result] == expected
+
+
 def test_embedding_text_view_changes_only_model_input_not_returned_evidence():
     class InspectEncoder:
         def rerank(self, query, candidates, top_k):

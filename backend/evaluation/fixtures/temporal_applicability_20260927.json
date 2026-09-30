@@ -1,0 +1,8 @@
+[
+  {"id":"current_residence","turns":["我现在住在绍兴。"],"questions":["我现在住哪里？"],"criteria":"当前住在绍兴，不能因为模型日期缺失或猜测而拒绝。"},
+  {"id":"historical_residence","turns":["我去年住在嘉兴，现在已经离开了，还没告诉你新住址。"],"questions":["我现在住哪里？"],"criteria":"不能把历史嘉兴当当前住址，也不能虚构新住址。"},
+  {"id":"conditional_residence","turns":["如果我调岗成功，我就住在湖州，现在还没有确定。"],"questions":["我现在住在湖州吗？"],"criteria":"湖州是尚未确定条件的后果，不是已成立的当前住址。"},
+  {"id":"preference_current","turns":["我不喜欢茄子。"],"questions":["给我推荐菜时，你会避开茄子吗？"],"criteria":"应避开茄子，不要鼓励尝试或杜撰原因。"},
+  {"id":"behavior_not_affect","turns":["我喜欢花生的味道，但医生让我不吃花生。"],"questions":["你会给我推荐花生吗？我是不喜欢它的味道吗？"],"criteria":"不推荐花生，但不吃不代表不喜欢；不得编造诊断。"},
+  {"id":"compound_current","turns":["我的专业是天文学，我读研二。"],"questions":["我的专业和年级分别是什么？"],"criteria":"专业天文学、年级研二，不能因为复合陈述而丢失明确自述。"}
+]

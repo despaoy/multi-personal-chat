@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from character.models import CharacterProfile, InteractionState, MemoryItem
+    from inference.context_budget import ReviewContextBudget
 
 MAX_CANDIDATES = 24
 MAX_HISTORY_MESSAGES = 12
@@ -66,24 +67,38 @@ class SelectionOutcome:
     latency_ms: float = 0.0
 
 
-def _history_view(history: Sequence[Mapping[str, str]]) -> list[dict[str, str]]:
-    """Keep complete recent messages or reject the bounded review.
+def _history_view(history: Sequence[Mapping[str, str]], *,
+                  max_messages: int = MAX_HISTORY_MESSAGES,
+                  max_chars: int = MAX_HISTORY_CHARS) -> list[dict[str, str]]:
+    """Keep a suffix of complete user-led turns or reject the review.
 
     A tail slice can detach a quotation or negation from its subject. The
-    message-count window remains explicit, but messages inside it are atomic.
+    Message-count cuts must not leave an assistant claim without the user
+    premise that qualified it. Legacy leading assistant-only history remains
+    unchanged when it fits; this view cannot reconstruct missing upstream data.
     """
-    kept: list[dict[str, str]] = []
-    total = 0
-    for entry in history[-MAX_HISTORY_MESSAGES:]:
+    turns: list[list[dict[str, str]]] = []
+    for entry in history:
         if not isinstance(entry, Mapping) or entry.get("role") not in {"user", "assistant"}:
             continue
         content = entry.get("content")
         if not isinstance(content, str) or not content.strip():
             continue
-        total += len(content)
-        if total > MAX_HISTORY_CHARS:
-            raise InputBudgetError("recent history must not be partially sliced")
-        kept.append({"role": str(entry["role"]), "content": content})
+        if entry['role'] == 'user' or not turns:
+            turns.append([])
+        turns[-1].append({"role": str(entry["role"]), "content": content})
+    selected: list[list[dict[str, str]]] = []
+    count = 0
+    for turn in reversed(turns):
+        if count + len(turn) > max_messages:
+            if not selected:
+                raise InputBudgetError("latest turn exceeds history message budget")
+            break
+        selected.append(turn)
+        count += len(turn)
+    kept = [entry for turn in reversed(selected) for entry in turn]
+    if sum(len(entry['content']) for entry in kept) > max_chars:
+        raise InputBudgetError("recent history exceeds budget; must not be partially sliced")
     return kept
 
 
@@ -95,14 +110,16 @@ def selection_messages(
     profile: CharacterProfile | None = None,
     interaction: InteractionState | None = None,
     reference_time: datetime | None = None,
+    context_budget: ReviewContextBudget | None = None,
 ) -> list[dict[str, str]]:
-    if len(query) > 4000:
+    if context_budget is None and len(query) > 4000:
         raise InputBudgetError("current query must not be silently truncated")
     payload = {
         "query": query,
         "required_ids": [item.memory_id for item in candidates],
         "decision_count": len(candidates),
-        "history": _history_view(history),
+        "history": _history_view(history, **(dict(max_messages=context_budget.history_messages,
+            max_chars=4 * context_budget.window_tokens) if context_budget else {})),
         "character": {
             "name": profile.display_name[:100],
             "values": [value[:150] for value in profile.values[:8]],
@@ -129,6 +146,8 @@ def selection_messages(
                 "valid_from": item.valid_from,
                 "valid_to": item.valid_to,
                 "historical": item.historical,
+                "temporal_mode": item.temporal_mode,
+                "observed_at": item.observed_at,
                 "status": item.status,
             }
             for item in candidates
@@ -140,12 +159,15 @@ def selection_messages(
         payload["reference_time"] = reference_time.isoformat()
         payload["reference_time_note"] = "本轮接收时间，用于理解‘去年/现在’等相对时间；不是候选事实的有效时间。"
     encoded = json.dumps(payload, ensure_ascii=False)
-    if len(encoded) > MAX_INPUT_CHARS:
+    if context_budget is None and len(encoded) > MAX_INPUT_CHARS:
         raise InputBudgetError("selection input exceeds bounded context budget")
-    return [
+    messages = [
         {"role": "system", "content": SELECTION_INSTRUCTION},
         {"role": "user", "content": encoded},
     ]
+    if context_budget and not context_budget.fits(messages, 2048):
+        raise InputBudgetError('selection input exceeds serving context budget')
+    return messages
 
 
 def _unique_object(pairs):
@@ -182,10 +204,12 @@ def parse_decisions(raw: object, candidate_ids: set[str]) -> tuple[tuple[str, st
 
 
 class ContextualEvidenceSelector:
-    def __init__(self, reviewer: Reviewer, *, timeout_seconds: float = 30.0) -> None:
+    def __init__(self, reviewer: Reviewer, *, timeout_seconds: float = 30.0,
+                 context_budget: ReviewContextBudget | None = None) -> None:
         if not math.isfinite(timeout_seconds) or timeout_seconds <= 0:
             raise ValueError("timeout must be finite and positive")
         self.reviewer = reviewer
+        self.context_budget = context_budget
         self.timeout_seconds = min(timeout_seconds, 120.0)
 
     async def select(
@@ -208,7 +232,8 @@ class ContextualEvidenceSelector:
             return SelectionOutcome(status="fallback", reason="invalid_candidates", candidate_count=len(bounded))
         try:
             messages = selection_messages(
-                query, bounded, history=history, profile=profile, interaction=interaction, reference_time=reference_time
+                query, bounded, history=history, profile=profile, interaction=interaction, reference_time=reference_time,
+                context_budget=self.context_budget
             )
             raw = await asyncio.wait_for(self.reviewer(messages), timeout=self.timeout_seconds)
             decisions = parse_decisions(raw, ids)

@@ -1,0 +1,21 @@
+{
+  "status": "admitted",
+  "sft_count": 35,
+  "dpo_count": 4,
+  "merged_train_count": 928,
+  "replaced": 33,
+  "dpo_numbers": [
+    10,
+    18,
+    23,
+    27
+  ],
+  "dataset": "backend/data/character_dialogues/experiments/v4_interactive_20260926",
+  "authorization": {
+    "method": "project_owner_authorized_assistant_final_review",
+    "scope": "将这些内容分别加入普通训练集和DPO训练集，先从人物关系、语气、情景整体复核。",
+    "user_correction": "010：妃对父亲印象很差，模型回答明显不好。",
+    "not_individual_human_clicks": true,
+    "training_run_authorized": false
+  }
+}

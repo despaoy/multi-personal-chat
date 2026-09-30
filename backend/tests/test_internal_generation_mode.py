@@ -15,6 +15,41 @@ def _request():
     return MessageRequest(message="tool-json", sessionType="private", sessionId="claw")
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize('mode,label', [('current_constraint', 'statement/constraint'),
+    ('memory_lookup', 'memory/lookup'), ('source_excerpt', 'rag/source_excerpt'),
+    ('memory_operation', 'memory/operation'), ('task_composite', 'tasks/composite')])
+async def test_fallback_deterministic_response_has_no_model_invocation(monkeypatch, mode, label):
+    import api.generate as gen
+    from inference import model_manager as mm
+
+    saved, recorded = _install_common(monkeypatch, gen)
+
+    class Manager:
+        _current_provider = SimpleNamespace(value='vllm')
+
+        def set_lora_adapter(self, value):
+            pass
+
+        def get_status(self):
+            return {'currentProvider': 'vllm', 'providers': {'vllm': {'modelName': 'not-called'}}}
+
+        async def async_generate(self, **kwargs):
+            pytest.fail('No model invocation expected')
+
+    async def deterministic(*args, **kwargs):
+        return '当前声明的回应', False, {'modelInvoked': False, 'answerMode': mode}
+
+    monkeypatch.setattr(mm, 'get_model_manager', lambda: Manager())
+    monkeypatch.setattr(gen, '_ensure_vllm', _async_return(False))
+    monkeypatch.setattr(gen, '_generate_with_retrieval', deterministic)
+    monkeypatch.setattr(gen, 'get_llm_semaphore', lambda: asyncio.Semaphore(2))
+    result = await gen._generate_reply_impl(_request(), persist_message=True, enable_rag=False,
+                                           record_invocation=True)
+    assert result.model == label and recorded == []
+    assert len(saved) == 1 and saved[0][2] == label and saved[0][3] == 'default'
+
+
 def _install_common(monkeypatch, gen):
     monkeypatch.setattr(gen, "INPUT_VALIDATOR_AVAILABLE", False)
     monkeypatch.setattr(gen, "response_cache", None)
@@ -156,6 +191,34 @@ def _async_return(value):
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize('persist,delivery,allowed', [(False, None, False), (True, {}, False), (True, None, True)])
+async def test_explicit_memory_operations_respect_internal_and_delivery_modes(monkeypatch, persist, delivery, allowed):
+    import api.generate as gen
+    from inference import model_manager as mm
+
+    _install_common(monkeypatch, gen)
+    monkeypatch.setattr(gen, 'db', SimpleNamespace(config={}, loras=[{'name': 'kisaki', 'status': 'active', 'id': 1}]))
+    seen = []
+
+    async def prepare(request, character_id, *, character_service=None, execute_memory_operations=False):
+        seen.append(execute_memory_operations)
+        return SimpleNamespace(character_id=character_id)
+
+    async def generate(*args, **kwargs):
+        return 'reply', False, {}
+
+    monkeypatch.setattr(gen, '_prepare_character_turn', prepare)
+    monkeypatch.setattr(gen, '_generate_with_vllm', generate)
+    monkeypatch.setattr(gen, '_ensure_vllm', _async_return(True))
+    monkeypatch.setattr(gen, '_vllm_client', object())
+    monkeypatch.setattr(mm, 'get_model_manager', lambda: SimpleNamespace(_current_provider=SimpleNamespace(value='vllm')))
+    request = MessageRequest(message='忘掉我的住址。', sessionType='private', sessionId='s1')
+    await gen._generate_reply_impl(request, persist_message=persist, delivery_context=delivery,
+                                  enable_rag=False, record_invocation=False)
+    assert seen == [allowed]
+
+
+@pytest.mark.asyncio
 async def test_message_db_reaches_save_and_invocation_record(monkeypatch):
     """容器注入的数据库必须贯穿消息保存与模型调用记录。
 
@@ -181,7 +244,7 @@ async def test_message_db_reaches_save_and_invocation_record(monkeypatch):
 
     captured = {}
 
-    async def fake_save(request, reply, model_name, lora_name, cost_time, *, database=None):
+    async def fake_save(request, reply, model_name, lora_name, cost_time, *, database=None, character_id=None):
         captured["save_db"] = database
         return True
 
@@ -345,7 +408,7 @@ async def test_model_manager_fallback_uses_character_context(monkeypatch):
         history=({"role": "user", "content": "数据库历史消息"},),
     )
 
-    async def fake_prepare(request, character_id, *, character_service=None):
+    async def fake_prepare(request, character_id, *, character_service=None, execute_memory_operations=False):
         assert character_id == "tsukiyashiro_kisaki"
         return fake_prepared
 
@@ -442,7 +505,7 @@ async def test_injected_character_service_reaches_prepare_and_complete(monkeypat
         history=(),
     )
 
-    async def fake_prepare(request, character_id, *, character_service=None):
+    async def fake_prepare(request, character_id, *, character_service=None, execute_memory_operations=False):
         seen["prepare_service"] = character_service
         return fake_prepared
 

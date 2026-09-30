@@ -1,0 +1,137 @@
+[
+  {
+    "number": 18,
+    "candidate_id": "kisaki_interactive_v2_529a06c1e1071f82_sample_3",
+    "reason": "每个交互最多4个负例，避免过度加权"
+  },
+  {
+    "number": 18,
+    "candidate_id": "kisaki_interactive_v2_529a06c1e1071f82_sample_4",
+    "reason": "每个交互最多4个负例，避免过度加权"
+  },
+  {
+    "number": 18,
+    "candidate_id": "kisaki_interactive_v2_529a06c1e1071f82_sample_5",
+    "reason": "每个交互最多4个负例，避免过度加权"
+  },
+  {
+    "number": 18,
+    "candidate_id": "kisaki_interactive_v2_529a06c1e1071f82_sample_6",
+    "reason": "每个交互最多4个负例，避免过度加权"
+  },
+  {
+    "number": 18,
+    "candidate_id": "kisaki_interactive_v2_529a06c1e1071f82_sample_7",
+    "reason": "每个交互最多4个负例，避免过度加权"
+  },
+  {
+    "number": 23,
+    "candidate_id": "kisaki_interactive_v2_548618c9fcc71e74_sample_3",
+    "reason": "每个交互最多4个负例，避免过度加权"
+  },
+  {
+    "number": 23,
+    "candidate_id": "kisaki_interactive_v2_548618c9fcc71e74_sample_4",
+    "reason": "每个交互最多4个负例，避免过度加权"
+  },
+  {
+    "number": 23,
+    "candidate_id": "kisaki_interactive_v2_548618c9fcc71e74_sample_5",
+    "reason": "每个交互最多4个负例，避免过度加权"
+  },
+  {
+    "number": 23,
+    "candidate_id": "kisaki_interactive_v2_548618c9fcc71e74_sample_6",
+    "reason": "每个交互最多4个负例，避免过度加权"
+  },
+  {
+    "number": 67,
+    "candidate_id": "kisaki_expand_067_8236ad82b293_general_0",
+    "reason": "每个交互最多4个负例，避免过度加权"
+  },
+  {
+    "number": 67,
+    "candidate_id": "kisaki_expand_067_8236ad82b293_general_1",
+    "reason": "每个交互最多4个负例，避免过度加权"
+  },
+  {
+    "number": 67,
+    "candidate_id": "kisaki_expand_067_8236ad82b293_general_2",
+    "reason": "每个交互最多4个负例，避免过度加权"
+  },
+  {
+    "number": 67,
+    "candidate_id": "kisaki_expand_067_8236ad82b293_general_3",
+    "reason": "每个交互最多4个负例，避免过度加权"
+  },
+  {
+    "number": 69,
+    "candidate_id": "kisaki_expand_069_ca64a35c4cab_sample_9",
+    "reason": "每个交互最多4个负例，避免过度加权"
+  },
+  {
+    "number": 72,
+    "candidate_id": "kisaki_expand_072_8854ae414521_sample_9",
+    "reason": "每个交互最多4个负例，避免过度加权"
+  },
+  {
+    "number": 73,
+    "candidate_id": "kisaki_expand_073_d4a8f8285dfe_sample_5",
+    "reason": "每个交互最多4个负例，避免过度加权"
+  },
+  {
+    "number": 73,
+    "candidate_id": "kisaki_expand_073_d4a8f8285dfe_sample_11",
+    "reason": "每个交互最多4个负例，避免过度加权"
+  },
+  {
+    "number": 101,
+    "candidate_id": "kisaki_expand_101_0e273bd60207_general_1",
+    "reason": "每个交互最多4个负例，避免过度加权"
+  },
+  {
+    "number": 118,
+    "candidate_id": "kisaki_expand_118_0e607c0f1ad2_sample_10",
+    "reason": "每个交互最多4个负例，避免过度加权"
+  },
+  {
+    "number": 118,
+    "candidate_id": "kisaki_expand_118_0e607c0f1ad2_sample_11",
+    "reason": "每个交互最多4个负例，避免过度加权"
+  },
+  {
+    "number": 118,
+    "candidate_id": "kisaki_expand_118_0e607c0f1ad2_general_0",
+    "reason": "每个交互最多4个负例，避免过度加权"
+  },
+  {
+    "number": 118,
+    "candidate_id": "kisaki_expand_118_0e607c0f1ad2_general_1",
+    "reason": "每个交互最多4个负例，避免过度加权"
+  },
+  {
+    "number": 118,
+    "candidate_id": "kisaki_expand_118_0e607c0f1ad2_general_2",
+    "reason": "每个交互最多4个负例，避免过度加权"
+  },
+  {
+    "number": 118,
+    "candidate_id": "kisaki_expand_118_0e607c0f1ad2_general_3",
+    "reason": "每个交互最多4个负例，避免过度加权"
+  },
+  {
+    "number": 130,
+    "candidate_id": "kisaki_expand_130_cda88c7ad7ff_sample_9",
+    "reason": "每个交互最多4个负例，避免过度加权"
+  },
+  {
+    "number": 131,
+    "candidate_id": "kisaki_expand_131_b57670d1744f_general_2",
+    "reason": "每个交互最多4个负例，避免过度加权"
+  },
+  {
+    "number": 143,
+    "candidate_id": "kisaki_expand_143_2253738de0f3_sample_11",
+    "reason": "每个交互最多4个负例，避免过度加权"
+  }
+]

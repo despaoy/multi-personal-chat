@@ -1,0 +1,22 @@
+{
+  "total": 38,
+  "generated": 37,
+  "counts": {
+    "tie": 18,
+    "resample": 8,
+    "weak": 8,
+    "candidate": 3,
+    "blocked": 1
+  },
+  "proposed_pairs": 3,
+  "human_preference_approved": false,
+  "source_confirmation": "用户：我看来是可以的，继续；认可继续生成，不等于批准未见过的偏好对。",
+  "model": {
+    "name": "deepseek_general",
+    "model": "deepseek-chat",
+    "revision": "deepseek-chat-unpinned-api-alias",
+    "base_url": "https://api.deepseek.com/v1",
+    "api_key_env": "DEEPSEEK_API_KEY"
+  },
+  "independent_reviewer": "assistant; no DeepSeek self-judgment used"
+}

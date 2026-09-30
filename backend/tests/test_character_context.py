@@ -483,11 +483,11 @@ def test_memory_total_length_is_limited():
 
     memory_body = compiled.reference_context[len(MEMORY_REFERENCE_DISCLAIMER) + 1 :]
     assert len(memory_body) <= MAX_MEMORY_TOTAL_CHARS
-    # 超预算导致部分记忆被放弃或截断
+    # 超预算跳过整条证据，不把残片算作已注入。
     assert len(compiled.used_memory_ids) < 5
 
 
-def test_single_memory_is_truncated():
+def test_single_memory_is_preserved_when_total_budget_allows():
     memories = (_memory(1, "超长记忆" * 100),)  # 400字符，超过单条上限
     context = dataclasses.replace(
         _context(memories=memories),
@@ -496,8 +496,7 @@ def test_single_memory_is_truncated():
     compiled = compile_character_context(context)
     assert len(compiled.used_memory_ids) == 1
     memory_body = compiled.reference_context[len(MEMORY_REFERENCE_DISCLAIMER) + 1 :]
-    # "- "前缀 + 截断内容 + 省略号
-    assert len(memory_body) <= 301
+    assert memory_body == '- ' + '超长记忆' * 100
 
 
 # ============================================

@@ -10,7 +10,7 @@ template.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
 
 from character.situation_analyzer import has_third_party_risk, is_resolved_third_party_risk
@@ -209,7 +209,11 @@ _URGENT_REAL_WORLD_HELP_RE = re.compile(
     r"(?:拨打|前往).{0,10}(?:急救|医院|热线|报警)|危机(?:援助|干预|热线))"
 )
 _USER_SELF_FACT_RE = re.compile(r"我.{0,14}(?:喜欢|喜爱|爱吃|讨厌|不喜欢|偏好|习惯|擅长|经常|总是|一直|从来)")
-_REPLY_USER_FACT_RE = re.compile(r"你.{0,18}(?:喜欢|喜好|喜爱|偏好|习惯|擅长|经常|总是|一直|从来|出了名)")
+_REPLY_USER_FACT_RE = re.compile(r"你[^，。！？,!?；;\n]{0,18}?(?:喜欢|喜好|喜爱|偏好|习惯|擅长|经常|总是|一直|从来|出了名)")
+_POLAR_PERSON_HEAD_RE = re.compile(
+    r'你(?:的?(?:朋友|同事|同学|室友|老师|学生|家人|父亲|母亲|爸爸|妈妈|哥哥|姐姐|弟弟|妹妹|伴侣))?'
+    r'(?:(?:现在|最近|平时|目前|通常|也|还))*(?:是否|是不是|有没有|会不会)'
+)
 _UNPROMPTED_ADVICE_RE = re.compile(
     r"(?:你(?:可以|应该|最好|不妨)|建议你|不妨|最好|试试|"
     r"(?<!我)记得.{0,8}(?:先|要|别|查看|了解|保持)|继续保持|"
@@ -355,6 +359,14 @@ def build_reply_guard(
             message,
         ]
     )
+    from character.memory_extractor import extract_memories
+
+    # A question or hypothetical mentioning a preference is not evidence of it.
+    asserted_preference = any(
+        item.memory_key.startswith("preference_")
+        for text in [*(str(h.get("content", "")) for h in history if h.get("role") == "user"), message]
+        for item in extract_memories(text)
+    )
     canonical_names: list[str] = []
     for relationship in profile.canonical_relationships:
         name = relationship.split("：", 1)[0].split(":", 1)[0].strip()
@@ -425,7 +437,7 @@ def build_reply_guard(
         third_party_safety=third_party_safety,
         resolved_third_party_history=resolved_third_party_history,
         factual_task="respond_directly" in strategies,
-        forbid_unsupported_user_fact=(not has_relevant_memory and not _USER_SELF_FACT_RE.search(user_text)),
+        forbid_unsupported_user_fact=(not has_relevant_memory and not asserted_preference),
         unknown_login_reward=bool(_UNKNOWN_LOGIN_REWARD_RE.search(message)),
         forbid_unprompted_advice=(
             not advice_boundary and not information_task and not advice_task and not safety_response
@@ -443,6 +455,13 @@ def build_reply_guard(
         negative_emotion_kind=negative_emotion_kind,
         third_party_gender_unknown=(third_party_risk and not _EXPLICIT_THIRD_PARTY_GENDER_RE.search(user_text)),
     )
+
+
+def ground_reply_guard(guard: ReplyGuard, evidence: str) -> ReplyGuard:
+    """Retrieved names are permitted references; other checks are unchanged."""
+    return replace(guard,
+                   forbidden_terms=tuple(term for term in guard.forbidden_terms if term not in evidence),
+                   forbidden_lore_terms=tuple(term for term in guard.forbidden_lore_terms if term not in evidence))
 
 
 def validate_reply(reply: str, guard: ReplyGuard | None) -> tuple[str, ...]:
@@ -519,7 +538,7 @@ def validate_reply(reply: str, guard: ReplyGuard | None) -> tuple[str, ...]:
         violations.append(UNSUPPORTED_THIRD_PARTY_GENDER)
     if guard.factual_task and _TASK_STYLE_DRIFT_RE.search(reply):
         violations.append(FACTUAL_TASK_STYLE_DRIFT)
-    if guard.forbid_unsupported_user_fact and _REPLY_USER_FACT_RE.search(reply):
+    if guard.forbid_unsupported_user_fact and _asserts_user_preference(reply):
         violations.append(UNSUPPORTED_USER_FACT)
     if guard.unknown_login_reward and (
         _UNSUPPORTED_LOGIN_REWARD_CLAIM_RE.search(reply) or _UNSUPPORTED_EIGHTH_DAY_REWARD_RE.search(reply)
@@ -538,6 +557,59 @@ def validate_reply(reply: str, guard: ReplyGuard | None) -> tuple[str, ...]:
     return tuple(violations)
 
 
+def _asserts_user_preference(reply: str) -> bool:
+    """Do not mistake an explicit lack of recall for a fabricated memory."""
+    for match in _REPLY_USER_FACT_RE.finditer(reply):
+        prefix = re.split(r'[，,。！？!?；;\n]', reply[:match.start()])[-1]
+        if re.search(r"(?:不记得|不清楚|不知道|记不清|不能确定|无法确定)\s*$", prefix):
+            continue
+        # Asking an open preference question does not assert an answer.
+        suffix = re.split(r"[，,。！？!?；;\n]", reply[match.end():], maxsplit=1)[0]
+        # An interrogative or conditional clause is not a factual assertion.
+        # Stay clause-local: a preceding "I don't know" must not license a
+        # later independent claim, and a later question must not hide one.
+        ending = reply[match.end()+len(suffix):][:1]
+        # The regex match may already contain the polar operator, e.g.
+        # "你是不是觉得...总是". Inspect that span too, not just its suffix.
+        # Do not let a prior question swallow another subject or a causal
+        # presupposition. Independent following matches are still checked.
+        head = match.group()
+        # Possessive references ("你的习惯/喜好/偏好") do not state a
+        # concrete preference by themselves. Require a clause-local value or
+        # predicate before treating them as fabricated facts. A later clause
+        # must still be checked independently.
+        if (re.search(r'的(?:习惯|喜好|偏好)$', head)
+                and re.fullmatch(r'\s*[吧呢啊呀哦嘛…\.]*\s*', suffix)):
+            continue
+        if (ending in {'？', '?'}
+                and re.fullmatch(r'\s*(?:请问|那|那么|不过|我想知道|我想问一下)?\s*', prefix)
+                # A possessive person phrase is one subject, not an assertion
+                # about the addressee. Only exempt an actual polar question;
+                # unsupported statements about that person remain checked.
+                and _POLAR_PERSON_HEAD_RE.match(head)
+                and not re.search(r'你|但|却|不过|可是|然而|而且|另外|因为|由于|既然|明明|毕竟', head[1:])):
+            continue
+        if re.search(r'(?:如果|假如|假设|倘若|要是)', prefix):
+            continue
+        # A comma may separate alternatives within one question. Only an
+        # immediate alternative connector inherits this predicate; a later
+        # independent question cannot turn the preceding claim into a query.
+        tail = reply[match.end()+len(suffix):]
+        if ending in {'，', ','} and re.match(r'[，,]\s*还是[^，,。！？!?；;\n]+[？?]', tail):
+            continue
+        if ending in {'？', '?'} and ('还是' in suffix or suffix.rstrip().endswith(('吗', '呢'))):
+            continue
+        # Bounded object-question grammar: action + unknown object. Do not
+        # exempt every sentence containing '什么': '喜欢咖啡到什么程度'
+        # presupposes a concrete preference and still requires support.
+        if (re.match(r"(?:喝|吃|看|玩|读|听|写|画|做|学|练|研究|收藏|参加|使用)?"
+                     r"(?:什么|哪种|哪一|哪些|哪类|哪款)", suffix)
+                and ending in {'？', '?'}):
+            continue
+        return True
+    return False
+
+
 _STYLE_ONLY_VIOLATIONS = frozenset(
     {
         GENERIC_ASSISTANT_TEMPLATE,
@@ -546,6 +618,7 @@ _STYLE_ONLY_VIOLATIONS = frozenset(
         MECHANICAL_REPAIR,
         POSITIVE_SHARING_INTERVIEW,
         AFFILIATION_NOT_RECIPROCATED,
+        UNPROMPTED_ADVICE,
     }
 )
 
@@ -555,13 +628,22 @@ def retryable_violations(
 ) -> tuple[str, ...]:
     """Keep wording diagnostics without making them extra model calls.
 
-    Full validation remains available to offline audits. Lightweight chat still
-    enforces factual, explicit-boundary and safety checks; it does not require
-    a particular empathy, gratitude or repair formula.
+    Full validation remains available to offline audits and strict mode.
+    The preference detector is a wording heuristic, not an evidence entailment
+    check: a missing structured claim does not disprove original user speech.
+    In lightweight chat it is diagnostic only; never replace an entire answer
+    or spend another model call solely because that heuristic matched.
+    Other factual, explicit-boundary and safety checks remain enforced.
     """
     if strict:
         return tuple(violations)
     ignored = set(_STYLE_ONLY_VIOLATIONS)
+    ignored.add(UNSUPPORTED_USER_FACT)
+    # Name occurrence alone proves neither unsolicited topic drift nor user
+    # identity substitution. In particular, asking a relationship by role
+    # ("your sibling") legitimately requires a name absent from the question.
+    # Keep this lexical signal for audits/strict mode, not destructive editing.
+    ignored.add(UNPROMPTED_CANONICAL_IDENTITY)
     if guard is not None and guard.closing:
         # A farewell may wish the user rest without reopening the conversation.
         if not _QUESTION_RE.search(reply):
@@ -939,7 +1021,7 @@ def deterministic_fallback(
             "unsupported_user_fact",
             # Do not restate the prohibited user-fact pattern in its own
             # correction: the same enabled guard must accept the fallback.
-            "关于这点，我还没有足够依据；刚才的推断先收回。",
+            "这点我暂时记不清，不能凭空猜。",
         )
     if FACTUAL_TASK_STYLE_DRIFT in remaining:
         return (

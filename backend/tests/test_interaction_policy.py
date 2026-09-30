@@ -510,6 +510,78 @@ def test_pure_affiliation_does_not_select_quiet_presence_mode():
     assert "stay_present" not in plan.strategy_ids
 
 
+@pytest.mark.parametrize('message', [
+    '不用给我建议，我只是想说说今天的事。',
+    '无需给我建议，我今天有点累。',
+    '不需要再给我建议。',
+    '请不要给我建议。',
+    '不必再分析，我想自己待一会儿。',
+    '我不想听建议。',
+    '不是不要建议。但现在先别分析。',
+    '不用给我建议我想知道月社妃和琉璃的关系',
+])
+def test_compositional_advice_refusals_reach_policy(message):
+    state, plan = _soft_plan(message)
+    acts = _signal_map(state.user_acts)
+    assert acts.get('advice_boundary', 0) >= .9
+    assert 'advice_request' not in acts
+    assert 'offer_suggestion' not in plan.strategy_ids
+
+
+@pytest.mark.parametrize('message', [
+    '不是不用给我建议，我想听具体办法。',
+    '别给我空泛的建议，告诉我具体步骤。',
+    '朋友说不用给我建议。',
+    '请翻译“不要给我建议”。',
+])
+def test_non_boundary_advice_mentions_do_not_create_refusal(message):
+    state, _ = _soft_plan(message)
+    assert 'advice_boundary' not in _signal_map(state.user_acts)
+
+
+def test_no_advice_boundary_preserves_information_task():
+    state, plan = _soft_plan('不用给我建议，请解释什么是贝叶斯定理。')
+    assert _signal_map(state.user_acts).get('information_request', 0) >= .5
+    assert 'respond_directly' in plan.strategy_ids
+    assert 'offer_suggestion' not in plan.strategy_ids
+
+
+@pytest.mark.parametrize('message', [
+    '不用给我建议我想知道月社妃和琉璃的关系',
+    '我想知道地球的年龄',
+    '我希望了解数据库索引',
+    '不需要建议，我需要弄明白这个实验的原理',
+    '我对气候变化很好奇',
+    '不要分析，先说我的专业，再告诉我月社妃是谁。',
+    '接着告诉我实验步骤。',
+    '最后列出材料清单。',
+])
+def test_explicit_information_act_is_shared_by_routing_and_policy(message):
+    from knowledge.task_dependency import has_question_form
+
+    state, plan = _soft_plan(message)
+    assert has_question_form(message)
+    assert _signal_map(state.user_acts).get('information_request', 0) >= .5
+    assert 'respond_directly' in plan.strategy_ids
+
+
+def test_no_advice_boundary_cannot_disable_immediate_safety():
+    state, plan = _soft_plan('不要给我建议。我现在准备自杀。')
+    assert state.primary_situation == 'safety'
+    assert 'ensure_safety' in plan.strategy_ids
+
+
+def test_final_projection_removes_quiet_company_from_explicit_information_task():
+    from character.context_builder import _compact_dynamic_projection
+
+    state, plan = _soft_plan('不要分析，先说我的专业，再告诉我月社妃是谁。')
+    priorities, _ = _compact_dynamic_projection(state, plan)
+    rendered = '\n'.join(priorities)
+    assert STRATEGY_INSTRUCTIONS['respond_directly'] in rendered
+    assert STRATEGY_INSTRUCTIONS['stay_present'] not in rendered
+    assert '不得提供建议' in rendered
+
+
 def test_reflect_content_limits_questions_without_forcing_one():
     assert STRATEGY_INSTRUCTIONS["reflect_content"] == (
         "自然回应一个有判断价值的细节；只有确有推进价值才追问，且最多一个具体问题"
@@ -904,7 +976,7 @@ class _MemoryService:
 
 
 class _Messages:
-    async def list_recent_conversation_history(self, user_scope, *, limit, max_chars):
+    async def list_recent_conversation_history(self, user_scope, *, limit, max_chars, character_id=None):
         raise AssertionError("explicit turn history should be reused")
 
 

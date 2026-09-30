@@ -23,6 +23,7 @@ if TYPE_CHECKING:
 
     from character.evidence_selector import Reviewer
     from character.models import CharacterProfile, DecisionPlan, InteractionState, RelationshipState
+    from inference.context_budget import ReviewContextBudget
 
 INSTRUCTION = """根据角色价值观、性格、当前关系边界和最近对话，选择本轮最适切的回应行为。
 这不是措辞模仿：相同情境下，不同角色可能选择不同的行为。先满足用户明确任务和边界，
@@ -41,10 +42,12 @@ class PolicyOutcome:
 
 
 class ContextualDecisionPolicy:
-    def __init__(self, reviewer: Reviewer, *, timeout_seconds: float = 30.0):
+    def __init__(self, reviewer: Reviewer, *, timeout_seconds: float = 30.0,
+                 context_budget: ReviewContextBudget | None = None):
         if not math.isfinite(timeout_seconds) or timeout_seconds <= 0:
             raise ValueError("timeout must be finite and positive")
         self.reviewer = reviewer
+        self.context_budget = context_budget
         self.timeout_seconds = min(120.0, timeout_seconds)
 
     async def refine(
@@ -64,10 +67,11 @@ class ContextualDecisionPolicy:
         ):
             return PolicyOutcome(baseline, "protected", "safety")
         started = time.perf_counter()
-        if len(query) > 4000:
+        if self.context_budget is None and len(query) > 4000:
             return PolicyOutcome(baseline, "fallback", "input_budget")
         try:
-            bounded_history = _history_view(history)
+            bounded_history = _history_view(history, **(dict(max_messages=self.context_budget.history_messages,
+                max_chars=4 * self.context_budget.window_tokens) if self.context_budget else {}))
         except InputBudgetError:
             return PolicyOutcome(baseline, "fallback", "input_budget", (time.perf_counter() - started) * 1000)
         allowed = set(STRATEGY_INSTRUCTIONS) - {"ensure_safety", "check_safety_gently"}
@@ -92,14 +96,13 @@ class ContextualDecisionPolicy:
             "state_hint": {"situation": interaction.primary_situation, "acts": acts},
             "allowed_strategies": {key: STRATEGY_INSTRUCTIONS[key] for key in sorted(allowed)},
         }
+        messages = [{"role": "system", "content": INSTRUCTION},
+                    {"role": "user", "content": json.dumps(payload, ensure_ascii=False)}]
+        if self.context_budget and not self.context_budget.fits(messages, 160):
+            return PolicyOutcome(baseline, 'fallback', 'input_budget', (time.perf_counter() - started) * 1000)
         try:
             raw = await asyncio.wait_for(
-                self.reviewer(
-                    [
-                        {"role": "system", "content": INSTRUCTION},
-                        {"role": "user", "content": json.dumps(payload, ensure_ascii=False)},
-                    ]
-                ),
+                self.reviewer(messages),
                 timeout=self.timeout_seconds,
             )
             if not isinstance(raw, str) or len(raw) > 2000:

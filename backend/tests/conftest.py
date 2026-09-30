@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import secrets
 import sys
 import tempfile
 from pathlib import Path
@@ -12,6 +13,9 @@ from pathlib import Path
 _TEST_RUNTIME_ROOT = Path(tempfile.mkdtemp(prefix="qqchat-pytest-"))
 os.environ.setdefault("USE_POSTGRESQL", "false")
 os.environ.setdefault("DATABASE_PATH", str(_TEST_RUNTIME_ROOT / "qq_assistant.db"))
+# Importing app.config otherwise rotates backend/.env's development secret.
+# Ephemeral process-local test credentials must never write application config.
+os.environ.setdefault("JWT_SECRET", secrets.token_urlsafe(48))
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 BACKEND_ROOT = PROJECT_ROOT / "backend"
 for path in (PROJECT_ROOT, BACKEND_ROOT):

@@ -84,9 +84,9 @@ def test_invalid_nonfinite_metadata_is_not_emitted_as_json(complete, confidence)
     assert ids == ()
 
 
-def test_legacy_default_remains_compact():
+def test_default_preserves_tail_inside_compact_budget():
     memory = item(content="x" * 350 + "尾部")
     reference, ids = compile_reference_context((memory,))
     assert ids == ("a",)
-    assert "尾部" not in reference
+    assert "尾部" in reference
     assert '"subject_scope"' not in reference

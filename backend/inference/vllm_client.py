@@ -11,7 +11,6 @@ import asyncio
 import json
 import logging
 import os
-import re
 import time
 from dataclasses import dataclass, field
 from enum import Enum
@@ -23,22 +22,17 @@ from infra.circuit_breaker import (
     CircuitBreaker, CircuitOpenError, CircuitState, DegradationMode,
 )
 from interfaces import InferenceInterface
+from inference.reasoning_text import ReasoningTextFilter, strip_reasoning_text
 
 logger = logging.getLogger(__name__)
 
 
 # Qwen3 等模型默认开启 thinking 模式，会输出 <think>...</think> 消耗额外 token。
 # 1) 通过 chat_template_kwargs 在请求层关闭（根治）
-# 2) 用正则兜底过滤已生成的 think 段（防御，避免 think 内容发到 QQ/微信）
-_THINK_TAG_RE = re.compile(r"<think>.*?</think>", re.DOTALL | re.IGNORECASE)
-
-
+# 2) 流式/非流式统一过滤内嵌 think 段，包括分片标签和中途截断。
 def _strip_think_tags(text: str) -> str:
-    """移除 <think>...</think> 段并清理多余空白。"""
-    if "<think>" not in text.lower():
-        return text
-    cleaned = _THINK_TAG_RE.sub("", text)
-    return cleaned.strip()
+    """只返回最终文本；截断且未闭合的推理段也不能作为回复。"""
+    return strip_reasoning_text(text)
 
 
 # ---------------------------------------------------------------------------
@@ -637,6 +631,7 @@ class VLLMClient:
                         f"{error_body.decode('utf-8', errors='replace')[:200]}"
                     )
 
+                reasoning_filter = ReasoningTextFilter()
                 async for line in resp.aiter_lines():
                     if not line.startswith("data: "):
                         continue
@@ -648,9 +643,14 @@ class VLLMClient:
                         delta = chunk.get("choices", [{}])[0].get("delta", {})
                         content = delta.get("content", "")
                         if content:
-                            yield content
+                            visible = reasoning_filter.feed(content)
+                            if visible:
+                                yield visible
                     except (json.JSONDecodeError, IndexError, KeyError):
                         continue
+                tail = reasoning_filter.finish()
+                if tail:
+                    yield tail
 
             elapsed = time.monotonic() - start_time
             async with self._instance_lock:

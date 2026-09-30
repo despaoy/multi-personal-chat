@@ -15,6 +15,7 @@ import math
 import os
 import re
 import threading
+import time
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
@@ -23,7 +24,10 @@ import numpy as np
 
 from character.context_builder import MAX_MEMORY_ITEMS
 from character.event_memory import event_reference_content
+from character.memory_query import AMBIGUOUS_MEMORY_KEYS, PERSONAL_MEMORY_KEYS, plan_memory_query
+from character.memory_subject import is_source_observation
 from character.models import MemoryItem, UserScope
+from character.temporal_projection import project_temporal_record
 
 if TYPE_CHECKING:
     from knowledge.retrieval_core.embedding import EmbeddingProvider
@@ -291,6 +295,12 @@ def _is_historical_record(
     relation_type = str(row.get("relation_type") or row.get("relation") or "ADD").strip().upper()
     if relation_type in _NON_RETRIEVABLE_RELATIONS:
         return False
+
+    if row.get('temporal_mode') == 'observation':
+        observed = _parse_timestamp(row.get('temporal_observed_at'))
+        return (observed is not None
+                and (window.start is None or observed >= window.start)
+                and (window.end is None or observed < window.end))
 
     valid_from = _parse_timestamp(row.get("valid_from") or row.get("valid_at"))
     valid_to = _parse_timestamp(row.get("valid_to") or row.get("invalid_at"))
@@ -586,6 +596,18 @@ def _evidence_texts(value: Any) -> tuple[str, ...]:
     return (text,) if text else ()
 
 
+def _row_qualifiers(row: dict[str, Any]) -> tuple[tuple[str, str], ...]:
+    """Preserve an entire valid qualifier map as data, never repair partial logic."""
+    metadata = row.get('metadata')
+    values = metadata.get('qualifiers') if isinstance(metadata, dict) else None
+    if not isinstance(values, dict) or not all(
+        isinstance(key, str) and key and isinstance(value, str) and value.strip()
+        for key, value in values.items()
+    ):
+        return ()
+    return tuple(sorted(values.items()))
+
+
 def _source_ids(row: dict[str, Any]) -> tuple[str, ...]:
     values: list[str] = []
     for key in ("source_message_ids", "source_message_ids_json", "source_event_ids"):
@@ -687,14 +709,10 @@ class CharacterMemoryService:
         self._min_hybrid_score = (
             MIN_HYBRID_MEMORY_SCORE if min_hybrid_score is None else max(0.0, min(1.0, float(min_hybrid_score)))
         )
-        self._candidate_limit = max(
-            1,
-            int(
-                candidate_limit
-                if candidate_limit is not None
-                else (SEMANTIC_MEMORY_CANDIDATE_LIMIT if self._semantic_enabled else CANDIDATE_LIMIT)
-            ),
-        )
+        # Recency is a ranking signal, not a pre-retrieval exclusion rule.
+        # Keep an explicit limit only for callers running legacy ablations.
+        # Prompt and final selection budgets below remain unchanged.
+        self._candidate_limit = max(1, int(candidate_limit)) if candidate_limit is not None else None
         self._embedding_cache: dict[tuple[str, str, str], np.ndarray] = {}
         self._embedding_lock = threading.Lock()
         self._semantic_failure_logged = False
@@ -714,6 +732,19 @@ class CharacterMemoryService:
             _env_bool("CAHM_EVIDENCE_ENABLED", True) if evidence_enabled is None else bool(evidence_enabled)
         )
 
+    async def recall_with_diagnostics(self, character_id: str, user_scope: UserScope, query: str, **kwargs):
+        trace: dict[str, Any] = {}
+        started = time.monotonic()
+        try:
+            items, count = await self.load_relevant_memories(character_id, user_scope, query,
+                                                            diagnostics=trace, **kwargs)
+        except Exception as exc:
+            logger.warning('Memory retrieval failed at stage=%s type=%s', trace.get('stage'), type(exc).__name__)
+            trace.update(status='retrieval_error', error_type=type(exc).__name__)
+            items, count = (), trace.get('records_read', 0)
+        trace['elapsed_ms'] = (time.monotonic() - started) * 1000
+        return items, count, trace
+
     async def load_relevant_memories(
         self,
         character_id: str,
@@ -724,6 +755,7 @@ class CharacterMemoryService:
         for_contextual_selection: bool = False,
         retrieval_context: str = "",
         reference_time: datetime | None = None,
+        diagnostics: dict[str, Any] | None = None,
     ) -> tuple[tuple[MemoryItem, ...], int]:
         """选出与当前消息最相关的记忆。
 
@@ -774,12 +806,22 @@ class CharacterMemoryService:
             elif not historical_requested:
                 historical_window = None
 
+        trace = diagnostics if diagnostics is not None else {}
+        from character.memory_mentions import mention_query, review_mentions
+
+        mentions_requested = mention_query(query) is not None
+        if mentions_requested:
+            read_limit = None
+        query_plan = plan_memory_query(query)
+        trace.update(stage='read', status='not_completed', fields=list(query_plan.fields),
+                     excluded_fields=list(query_plan.excluded_fields), records_read=0, usable_records=0,
+                     eligible_records=0, selected_count=0, semantic_status='disabled')
         try:
             records = await self._repo.list_memory_records(
                 character_id,
                 user_scope,
                 limit=read_limit,
-                include_inactive=historical_requested,
+                include_inactive=historical_requested or mentions_requested,
             )
         except TypeError as exc:
             # 兼容旧仓储与轻量测试替身；仓储内部自身抛出的 TypeError 不吞掉。
@@ -792,7 +834,47 @@ class CharacterMemoryService:
                 limit=read_limit,
             )
         records = [r for r in records if not str(r.get("memory_key") or "").startswith("relationship:")]
+        # A read view never rewrites stored endpoints or source evidence. This
+        # must run before time filters; otherwise a guessed zero-width interval
+        # has already erased the only retrievable observation.
+        records = [project_temporal_record(row) for row in records]
+        trace['temporal_views'] = {
+            mode: sum(row.get('temporal_mode', 'fact') == mode for row in records)
+            for mode in ('fact', 'asserted_state', 'observation')
+        }
+        if mentions_requested:
+            trace['mention_review'] = review_mentions(query, records, complete_read=read_limit is None)
+            trace['mention_query'] = query
+        # Storage presence is not semantic relevance. Only a complete scoped
+        # read can prove absence; never infer it from top-k or budget exclusions.
+        if read_limit is None:
+            current_keys = {str(row.get('memory_key') or '') for row in records
+                            if _is_current_record(row, now, include_pending=False)
+                            and row.get('temporal_mode') != 'observation'
+                            and str(row.get('content') or '').strip()}
+            trace['field_presence'] = {field: key in current_keys
+                                       for field, key in PERSONAL_MEMORY_KEYS.items()}
+            ambiguous_fields = {field for key in current_keys for field in AMBIGUOUS_MEMORY_KEYS.get(key, ())
+                                if PERSONAL_MEMORY_KEYS[field] not in current_keys}
+            observation_keys = {str(row.get('memory_key') or '') for row in records
+                                if row.get('temporal_mode') == 'observation'
+                                and _is_current_record(row, now, include_pending=False)}
+            ambiguous_fields.update(
+                field for field, key in PERSONAL_MEMORY_KEYS.items()
+                if key not in current_keys and (key in observation_keys or any(
+                    field in AMBIGUOUS_MEMORY_KEYS.get(source_key, ()) for source_key in observation_keys)))
+            trace['ambiguous_fields'] = sorted(ambiguous_fields)
+            for field in ambiguous_fields:
+                trace['field_presence'][field] = None
+        trace.update(records_read=len(records), stage='filter')
+        if mentions_requested:
+            # Provenance display has its own bounded response, not a fact
+            # selection task. Ranking/reviewing candidates would add cost and
+            # risk turning pending statements into current assertions.
+            trace.update(stage='source_review', status='mentions_reviewed')
+            return (), len(records)
         if not records:
+            trace['status'] = 'no_records_returned'
             return (), 0
 
         intents = _detect_memory_intents(query)
@@ -804,6 +886,12 @@ class CharacterMemoryService:
         # or subject boundary. A contextual reviewer must still see resources
         # needed by compound tasks (e.g. research topic + available hardware).
         suppression_intents = replace(intents, goal=False) if for_contextual_selection else intents
+        from character.current_turn_memory import shadowed_memory_ids
+
+        # Keep the repository snapshot and storage-presence diagnostics intact.
+        # Only the current-fact view is masked; source/history review is not.
+        shadowed_ids = shadowed_memory_ids(query, records) if historical_window is None else set()
+        trace['current_turn_shadowed_ids'] = sorted(shadowed_ids)
         usable_records = [
             row
             for row in records
@@ -820,16 +908,23 @@ class CharacterMemoryService:
                 )
             )
             and not _is_suppressed(row, suppression_intents)
+            and str(row.get('id')) not in shadowed_ids
+            and not query_plan.suppresses(row)
             and str(row.get("content") or "").strip()
         ]
+        trace['usable_records'] = len(usable_records)
         if not usable_records:
+            trace['status'] = 'all_filtered'
             return (), len(records)
 
         semantic_scores: dict[int, float] | None = None
+        trace['stage'] = 'rank'
         if self._semantic_enabled:
             try:
                 semantic_scores = await asyncio.to_thread(self._semantic_similarities, retrieval_query, usable_records)
+                trace['semantic_status'] = 'available'
             except Exception as exc:  # 记忆增强失败不得影响回复
+                trace['semantic_status'] = 'fallback'
                 if not self._semantic_failure_logged:
                     logger.warning("CAHM 语义检索不可用，降级到 bigram baseline: %s", exc)
                     self._semantic_failure_logged = True
@@ -849,7 +944,7 @@ class CharacterMemoryService:
         eligible: set[int] = set()
 
         for index, row in enumerate(usable_records):
-            content = str(row.get("content") or "").strip()
+            content = str(row.get("retrieval_content") or row.get("content") or "").strip()
             retrieval_text = _retrieval_text(content)
             event = (row.get("metadata") or {}).get("event")
             event_subject = str(event.get("subject") or "") if isinstance(event, dict) else ""
@@ -863,7 +958,7 @@ class CharacterMemoryService:
                 relevances.append(relevance)
             max_relevance = max(relevances, default=0.0)
             lexical_max_scores[index] = max_relevance
-            intent_match = _matches_intent(row, intents)
+            intent_match = _matches_intent(row, intents) or bool(query_plan.matched_fields(row))
             if intent_match:
                 intent_scores[index] = INTENT_RELEVANCE_FLOOR
 
@@ -899,6 +994,7 @@ class CharacterMemoryService:
             confidence_scores[index] = confidence
 
         if not eligible:
+            trace['status'] = 'no_relevant_candidates'
             return (), len(records)
 
         if for_contextual_selection:
@@ -969,6 +1065,7 @@ class CharacterMemoryService:
                 fused_scores[index] = score
             eligible = set(fused_scores)
             if not eligible:
+                trace['status'] = 'no_relevant_candidates'
                 return (), len(records)
 
         rows_by_id = {str(row.get("id")): row for row in records if row.get("id") is not None}
@@ -993,12 +1090,13 @@ class CharacterMemoryService:
                         content=content,
                         importance=importance,
                         evidence=(
-                            _row_evidence(row, rows_by_id, complete=for_contextual_selection)
+                            _row_evidence(row, rows_by_id, complete=True)
                             if evidence_enabled
                             else ()
                         ),
                         valid_from=(
-                            str(row.get("valid_from") or row.get("valid_at") or "") if version_filter_enabled else ""
+                            str(row.get("valid_from") or row.get("valid_at") or "")
+                            if version_filter_enabled and row.get('temporal_mode') != 'observation' else ""
                         ),
                         valid_to=(
                             str(row.get("valid_to") or row.get("invalid_at") or "") if version_filter_enabled else ""
@@ -1008,6 +1106,11 @@ class CharacterMemoryService:
                         relation_type=relation_type,
                         source_message_ids=_source_ids(row) if evidence_enabled else (),
                         historical=historical_window is not None,
+                        memory_key=str(row.get("memory_key") or ""),
+                        qualifiers=_row_qualifiers(row),
+                        temporal_mode=str(row.get('temporal_mode') or 'fact'),
+                        observed_at=str(row.get('temporal_observed_at') or ''),
+                        source_observation=is_source_observation(row),
                     ),
                 )
             )
@@ -1023,7 +1126,21 @@ class CharacterMemoryService:
             limit = MAX_CANDIDATES
         else:
             limit = MAX_MEMORY_ITEMS
-        selected = tuple(item for _score, item in scored[:limit])
+        # Cover explicit fields before filling the remaining relevance slots.
+        preferred: list[MemoryItem] = []
+        for requested_field in query_plan.fields if len(query_plan.fields) > 1 else ():
+            for _score, item in scored:
+                if query_plan.matches(rows_by_id.get(item.memory_id, {}), requested_field):
+                    if item not in preferred:
+                        preferred.append(item)
+                    break
+        ordered = [*preferred, *(item for _score, item in scored if item not in preferred)]
+        selected = tuple(ordered[:limit])
+        covered = [field for field in query_plan.fields
+                   if any(query_plan.matches(rows_by_id.get(item.memory_id, {}), field) for item in selected)]
+        trace.update(stage='selected', status='selected' if selected else 'no_relevant_candidates',
+                     eligible_records=len(eligible), selected_count=len(selected), covered_fields=covered,
+                     missing_fields=[field for field in query_plan.fields if field not in covered])
         return selected, len(records)
 
     def _semantic_similarities(self, query: str, records: list[dict[str, Any]]) -> dict[int, float]:
@@ -1039,7 +1156,7 @@ class CharacterMemoryService:
             vectors: dict[int, np.ndarray] = {}
             keys: dict[int, tuple[str, str, str]] = {}
             for index, row in enumerate(records):
-                content = str(row.get("content") or "").strip()
+                content = str(row.get("retrieval_content") or row.get("content") or "").strip()
                 content_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()[:16]
                 key = (str(row.get("id") or ""), str(row.get("updated_at") or ""), content_hash)
                 keys[index] = key

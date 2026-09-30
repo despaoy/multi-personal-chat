@@ -44,7 +44,14 @@ def test_preference_prepares_auto_quantized_weights_and_attaches_adapter(monkeyp
 
     calls = []
     model = SimpleNamespace(is_loaded_in_4bit=True, is_loaded_in_8bit=False)
-    tokenizer = SimpleNamespace(pad_token="pad", eos_token="eos")
+    class Tokenizer:
+        pad_token = "pad"
+        eos_token = "eos"
+
+        def __call__(self, text, **kwargs):
+            return {"input_ids": list(range(len(text)))}
+
+    tokenizer = Tokenizer()
 
     def prepare(value):
         assert value is model
@@ -66,6 +73,7 @@ def test_preference_prepares_auto_quantized_weights_and_attaches_adapter(monkeyp
             AutoTokenizer=SimpleNamespace(from_pretrained=lambda *a, **kw: tokenizer),
             AutoModelForCausalLM=SimpleNamespace(from_pretrained=lambda *a, **kw: model),
             BitsAndBytesConfig=lambda **kw: kw,
+            set_seed=lambda seed: None,
         ),
     )
     monkeypatch.setitem(
@@ -91,7 +99,7 @@ def test_preference_prepares_auto_quantized_weights_and_attaches_adapter(monkeyp
             output_dir=str(tmp_path / "out"),
             load_in_4bit=False,
         )
-    ).train([{"prompt": "q", "chosen": "a", "rejected": "b"}])
+    ).train([{"prompt": "q", "chosen": "a", "rejected": "b", "review_status": "approved"}])
     assert result.error == "mock stop before training"
     assert calls == ["prepare", "adapter"]
     assert not (tmp_path / "out").exists()

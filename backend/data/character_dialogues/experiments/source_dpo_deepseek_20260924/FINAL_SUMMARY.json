@@ -1,0 +1,23 @@
+{
+  "source_checked": 105,
+  "source_excluded": 52,
+  "completed": 105,
+  "counts": {
+    "excluded_by_ai_review": 102,
+    "error": 1,
+    "ai_selected": 2
+  },
+  "selected_pairs": 2,
+  "remaining": 0,
+  "human_approved": false,
+  "assistant_adjudication": {
+    "reviewed": 11,
+    "keep": 9,
+    "exclude": 1,
+    "hold_for_source_correction": 1,
+    "source_groups": 8,
+    "feedback_source": "ai"
+  },
+  "generation_completed": 105,
+  "judgments_completed": 104
+}

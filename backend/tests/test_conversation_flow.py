@@ -178,7 +178,13 @@ async def test_service_integrates_all_cues_without_new_reads_or_writes():
     )
     result = await service.prepare_turn(turn, "a")
     assert repo.reads == 1
-    assert "测试大楼" in result.compiled.reference_context
+    assert "测试大楼" in result.compiled.conversation_reference_context
+    assert "测试大楼" not in result.compiled.reference_context
+    from inference.generation_request import GenerationRequest, build_generation_request
+    plan = build_generation_request(GenerationRequest(message=turn.message, character_context=result.compiled))
+    assert '不必再要求确认或追问' not in plan.messages[0]['content']
+    assert '<memory_response_contract' not in plan.messages[-1]['content']
+    assert '测试大楼' in plan.messages[-1]['content']
     assert "测试大楼" not in result.compiled.dynamic_context
     assert "人物回应倾向" in result.compiled.dynamic_context
     assert "连续以问题收尾" in result.compiled.dynamic_context
@@ -186,4 +192,4 @@ async def test_service_integrates_all_cues_without_new_reads_or_writes():
     other = await service.prepare_turn(
         replace(turn, sender_id="bob", conversation_id="bob", history=(user("独立话题"),)), "b"
     )
-    assert "测试大楼" not in other.compiled.reference_context
+    assert "测试大楼" not in other.compiled.conversation_reference_context

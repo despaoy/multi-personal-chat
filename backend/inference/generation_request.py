@@ -7,9 +7,12 @@ generation-parameter contract seen by the model.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+import os
+from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Any, Literal
 
+from inference.context_budget import CONTEXT_SAFETY_MARGIN_TOKENS as CONTEXT_SAFETY_MARGIN_TOKENS
+from inference.context_budget import estimated_tokens as _estimated_tokens
 from inference.prompt_policy import (
     PROMPT_POLICY_VERSION,
     build_grounded_user_message,
@@ -28,21 +31,38 @@ Message = dict[str, str]
 RetrievalStatus = Literal["not_requested", "ok", "abstained", "character_abstention", "error"]
 
 CHARACTER_ABSTENTION_POLICY = (
-    "【本轮证据不足】当前问题没有足够可靠的检索依据。"
-    "请保留当前人物的语气、表达习惯和行为边界，自然、简短地说明自己不知道或无法确定。"
+    "【本轮证据不足】本次外部资料检索没有足够可靠的依据。"
+    "这只限制需要外部资料的事实，不否定可见对话及个人记忆；个人回忆、写作、推理和日常回应仍应正常完成。"
+    "对确实缺少依据的外部事实，保留人物语气，自然说明无法确定。"
     "不得猜测或补编所问的剧情、人物关系、事实、原句及出处；"
     "不得把用户问题中的假设、历史对话或长期记忆当作本轮原作事实的证据。"
     "不要编造自己不知道的原因，不要声称事实不存在，也不要用‘可能’包装具体猜测。"
     "必要时可以请用户提供章节或原文片段；无需提及置信度、向量库等系统术语。"
 )
 
-DEFAULT_CONTEXT_WINDOW_TOKENS = 24576
-CONTEXT_SAFETY_MARGIN_TOKENS = 512
+DEFAULT_CONTEXT_WINDOW_TOKENS = 8192
+
+# Runtime capabilities are separate from the frozen training prompt contract.
+RUNTIME_CAPABILITY_POLICY = (
+    "【当前聊天能力边界】未收到工具执行成功的结果，不得声称已经完成现实操作、设置通知、保存或删除资料；"
+    "不能虚构线下行动或主动联系能力。可提供用户能自行执行的方法。"
+    "出现现实中的急性严重身体症状或正在发生的危险时，优先明确建议立即联系当地急救或现场帮助，"
+    "不以角色化陪伴代替现实求助，也不承诺亲自到场。"
+)
+
+
+def configured_context_window() -> int:
+    """Use the serving limit, not a model's theoretical maximum window."""
+    return max(1024, int(os.getenv("VLLM_MAX_MODEL_LEN", str(DEFAULT_CONTEXT_WINDOW_TOKENS))))
 
 MEMORY_ATTRIBUTION_POLICY = (
     "长期记忆参考中的‘用户’始终指当前对话者，不是角色自身。"
     "当对话者用第一人称询问自己的历史信息时，回答必须用第二人称‘你’归属这些事实，"
     "不得把用户的姓名、偏好、目标或经历说成角色的第一人称事实。"
+    "每项回忆都必须由可见历史或对应记忆支持；有一条相关记忆不代表其他细节也已知。"
+    "不得把用户的提问、假设或助手先前的猜测当作用户已确认的事实。"
+    "记忆中的条件和否定也必须保留；用户未明确提出例外时，按已知限制回答或建议，"
+    "不要主动劝其破例，也不要补造限制的原因。直接回答回忆问题即可，不必再要求确认或追问。"
 )
 
 
@@ -56,6 +76,11 @@ class RetrievalResult:
     citations: tuple[Mapping[str, Any], ...] = ()
     confidence: float | None = None
     reason: str = ""
+    source_lookup: bool = False
+    source_excerpts: tuple[Mapping[str, Any], ...] = ()
+    evidence_packets: tuple[Mapping[str, Any], ...] = ()
+    identity_task: Mapping[str, str] = field(default_factory=dict)
+    identity_subtask: Mapping[str, str] = field(default_factory=dict)
 
     @property
     def has_evidence(self) -> bool:
@@ -79,7 +104,7 @@ class GenerationRequest:
     frequency_penalty: float = 0.0
     enable_thinking: bool = False
     evidence_max_chars: int = 6000
-    context_window_tokens: int = DEFAULT_CONTEXT_WINDOW_TOKENS
+    context_window_tokens: int = field(default_factory=configured_context_window)
     apply_prompt_policy: bool = True
     # 可选的角色上下文：None 时生成行为与旧链路完全一致。
     character_context: CompiledCharacterContext | None = None
@@ -89,6 +114,10 @@ class GenerationRequest:
     # Normal chat does not regenerate for style-only diagnostics. Strict mode
     # is an explicit opt-in for legacy/offline guard experiments.
     reply_guard_mode: Literal["lightweight", "strict"] = "lightweight"
+    # Experimental: task isolation improved slot coverage but regressed factual
+    # expansion and latency in paired real-model replays. Keep full queries by
+    # default until those tradeoffs pass broader quality evaluation.
+    independent_tasks_enabled: bool = False
 
 
 @dataclass(frozen=True)
@@ -100,6 +129,8 @@ class GenerationPlan:
     prompt_policy_version: str
     lora_name: str | None
     retrieval: RetrievalResult
+    history_policy: str = "conversation"
+    excluded_assistant_messages: int = 0
 
     @property
     def should_generate(self) -> bool:
@@ -114,6 +145,10 @@ class GenerationResult:
     guard_retried: bool = False
     guard_post_retry_violations: tuple[str, ...] = ()
     guard_fallback: str = ""
+    response_mode: str = "generated"
+    response_citations: tuple[Mapping[str, Any], ...] = ()
+    model_invoked: bool = True
+    task_results: tuple[Mapping[str, Any], ...] = ()
 
 
 def _conversation_history(history: Sequence[Mapping[str, str]]) -> list[Message]:
@@ -126,11 +161,26 @@ def _conversation_history(history: Sequence[Mapping[str, str]]) -> list[Message]
     return messages
 
 
-def _estimated_tokens(text: str) -> int:
-    """Conservative tokenizer-free estimate for mixed Chinese/ASCII text."""
-    non_ascii = sum(1 for char in text if ord(char) > 127)
-    ascii_chars = len(text) - non_ascii
-    return non_ascii + (ascii_chars + 3) // 4
+def _task_history(request: GenerationRequest) -> tuple[list[Message], str, int]:
+    """Prior assistant answers are not dependencies of a standalone identity read.
+
+    A retrieval-expanded follow-up must never inherit this policy. Keep user
+    messages (including preferences), without asserting that they are true.
+    Branches and evidence-free/legacy paths keep their original conversation.
+    This is a model-input view only; it does not mutate stored history.
+    """
+    from collections.abc import Mapping
+
+    history = _conversation_history(request.history)
+    task = request.retrieval.identity_task
+    if (not request.retrieval.has_evidence or request.retrieval.source_lookup
+            or getattr(request.character_context, "branch_context", "")
+            or not isinstance(task, Mapping)
+            or task.get('query') != request.message
+            or not isinstance(task.get('subject'), str) or not task['subject'].strip()):
+        return history, 'conversation', 0
+    retained = [item for item in history if item['role'] != 'assistant']
+    return retained, 'independent_identity', len(history) - len(retained)
 
 
 def _trim_history_to_budget(
@@ -140,22 +190,31 @@ def _trim_history_to_budget(
     context_window_tokens: int,
     max_output_tokens: int,
 ) -> list[Message]:
-    """Keep the newest complete history messages within the input budget."""
+    """Keep a recent suffix of complete user-led turns within the budget.
+
+    An assistant answer must not survive the truncation of its user premise.
+    A legacy leading assistant-only group remains unchanged if it fits; this
+    is a budget boundary, not a global assistant-history deletion policy.
+    """
     fixed_tokens = sum(_estimated_tokens(item["content"]) + 4 for item in fixed_messages)
     available = max(
         0,
         int(context_window_tokens) - int(max_output_tokens) - CONTEXT_SAFETY_MARGIN_TOKENS - fixed_tokens,
     )
-    kept: list[Message] = []
+    turns: list[list[Message]] = []
+    for item in history:
+        if item['role'] == 'user' or not turns:
+            turns.append([])
+        turns[-1].append(item)
+    kept: list[list[Message]] = []
     used = 0
-    for item in reversed(history):
-        cost = _estimated_tokens(item["content"]) + 4
+    for turn in reversed(turns):
+        cost = sum(_estimated_tokens(item["content"]) + 4 for item in turn)
         if used + cost > available:
             break
-        kept.append(item)
+        kept.append(turn)
         used += cost
-    kept.reverse()
-    return kept
+    return [item for turn in reversed(kept) for item in turn]
 
 
 def _system_prompt(request: GenerationRequest) -> str:
@@ -170,8 +229,22 @@ def _system_prompt(request: GenerationRequest) -> str:
             if not persona:
                 persona = context.profile_context
             dynamic_context = context.dynamic_context
-            if context.reference_context:
+            has_memory_reference = bool(context.reference_context or getattr(context, "episodic_reference_context", ""))
+            # Sharing an admitted observation's exact source changes its
+            # transport, not the policy that applied before deduplication.
+            # Unadmitted source-only retrieval still does not activate it.
+            if context.reference_context or getattr(context, "source_shared_memory_ids", ()):
                 dynamic_context = "\n\n".join(part for part in (dynamic_context, MEMORY_ATTRIBUTION_POLICY) if part)
+            # Fact-lane absence is not evidence-lane absence. Original speech
+            # remains unclassified evidence: do not attach the active-fact
+            # policy (which also discourages necessary clarification) to it.
+            if getattr(context, "memory_status", "not_checked") == "no_match" and not has_memory_reference:
+                dynamic_context += (
+                    "\n【用户历史依据】本轮已查询记忆，但没有找到可用于回答的相关记录。"
+                    "若用户询问自己的过往信息，只能依据本轮明确陈述或可见历史回答；"
+                    "没有依据就简短说明暂时记不清，不得虚构‘我记得你……’。"
+                    "没找到不代表用户从未说过。普通闲聊无需提及记忆状态。"
+                )
         prompt = compose_system_prompt(
             persona,
             include_rag=request.retrieval.has_evidence,
@@ -179,6 +252,8 @@ def _system_prompt(request: GenerationRequest) -> str:
         )
     else:
         prompt = request.persona_prompt.strip()
+    if request.apply_prompt_policy:
+        prompt = '\n\n'.join(filter(None, (prompt, RUNTIME_CAPABILITY_POLICY)))
     # 对话者昵称（senderName，用户可控）不进入系统提示词：
     # 净化只能删除结构字符，语义级注入内容仍会以系统区权威出现。
     # 3.3.0 起改由 build_grounded_user_message 放入用户消息的
@@ -204,6 +279,10 @@ def _system_prompt(request: GenerationRequest) -> str:
 def build_generation_request(request: GenerationRequest) -> GenerationPlan:
     """Build the one canonical model-facing message and parameter contract."""
 
+    if request.retrieval.has_evidence and request.retrieval.evidence_packets:
+        return _build_packet_budgeted_request(request)
+    from inference.memory_response import memory_query_result
+
     system_prompt = _system_prompt(request)
     messages: list[Message] = []
     if system_prompt:
@@ -214,10 +293,13 @@ def build_generation_request(request: GenerationRequest) -> GenerationPlan:
             request.message,
             request.retrieval.evidence if request.retrieval.has_evidence else "",
             max_chars=request.evidence_max_chars,
+            episodic_context=getattr(request.character_context, 'episodic_reference_context', ''),
+            conversation_context=getattr(request.character_context, 'conversation_reference_context', ''),
             # 长期记忆只进入用户消息的不可信参考区，绝不进入系统提示词。
             memory_context=(
                 request.character_context.reference_context if request.character_context is not None else ""
             ),
+            memory_query_result=memory_query_result(request.message, request.character_context),
             # 对话者昵称（用户可控）同样只进不可信参考区。
             speaker=sanitize_speaker_label(request.interlocutor),
         ),
@@ -230,8 +312,12 @@ def build_generation_request(request: GenerationRequest) -> GenerationPlan:
         fixed_cost = sum(_estimated_tokens(m["content"]) + 4 for m in (*messages, current_user_message))
         if fixed_cost + request.max_tokens + CONTEXT_SAFETY_MARGIN_TOKENS > request.context_window_tokens:
             raise ValueError("Branch evidence exceeds context budget; no facts were silently dropped")
+    fixed_cost = sum(_estimated_tokens(m["content"]) + 4 for m in (*messages, current_user_message))
+    if fixed_cost + request.max_tokens + CONTEXT_SAFETY_MARGIN_TOKENS > request.context_window_tokens:
+        raise ValueError("Current message and evidence exceed the serving context budget; shorten the message or evidence")
+    task_history, history_policy, excluded_assistant_messages = _task_history(request)
     history = _trim_history_to_budget(
-        _conversation_history(request.history),
+        task_history,
         fixed_messages=(*messages, current_user_message),
         context_window_tokens=request.context_window_tokens,
         max_output_tokens=request.max_tokens,
@@ -254,7 +340,54 @@ def build_generation_request(request: GenerationRequest) -> GenerationPlan:
         prompt_policy_version=PROMPT_POLICY_VERSION if request.apply_prompt_policy else "",
         lora_name=request.lora_name,
         retrieval=request.retrieval,
+        history_policy=history_policy,
+        excluded_assistant_messages=excluded_assistant_messages,
     )
+
+
+def _build_packet_budgeted_request(request: GenerationRequest) -> GenerationPlan:
+    """Use the actual fixed input/output budget, never split a source packet."""
+    accepted = []
+    accepted_ids: set[str] = set()
+    best = None
+    for packet in request.retrieval.evidence_packets:
+        text = packet.get('text')
+        ids = packet.get('document_ids', ())
+        if not isinstance(text, str) or not text.strip() or not isinstance(ids, (list, tuple)):
+            continue
+        if packet.get('kind') == 'background':
+            # Recheck dependencies after token-budget pruning, not just the
+            # earlier retrieval character budget. Legacy packets have no links.
+            support = packet.get('supporting_document_ids')
+            if not accepted_ids or (support is not None and (
+                not isinstance(support, (list, tuple))
+                or not accepted_ids.intersection(str(i) for i in support)
+            )):
+                continue
+        evidence = '\n\n'.join([*(p['text'] for p in accepted), text])
+        if request.evidence_max_chars > 0 and len(evidence) > request.evidence_max_chars:
+            continue
+        candidate_ids = accepted_ids | {str(i) for i in ids}
+        retrieval = replace(request.retrieval, evidence=evidence, evidence_packets=(),
+                            citations=tuple(c for c in request.retrieval.citations if str(c.get('id')) in candidate_ids))
+        try:
+            plan = build_generation_request(replace(request, retrieval=retrieval))
+        except ValueError as exc:
+            if str(exc) not in {
+                'Current message and evidence exceed the serving context budget; shorten the message or evidence',
+                'Branch evidence exceeds context budget; no facts were silently dropped',
+            }:
+                raise
+            continue
+        accepted.append(packet)
+        accepted_ids = candidate_ids
+        best = plan
+    if best is not None:
+        return replace(best, retrieval=replace(best.retrieval, evidence_packets=tuple(accepted)))
+    # Unknown evidence is not a license to generate from rejected summaries.
+    retrieval = replace(request.retrieval, status='character_abstention', evidence='', evidence_packets=(),
+                        citations=(), reason='evidence_budget_exhausted')
+    return build_generation_request(replace(request, retrieval=retrieval))
 
 
 async def generate_character_response(
@@ -265,9 +398,86 @@ async def generate_character_response(
 
     if request.reply_guard_mode not in {"lightweight", "strict"}:
         raise ValueError("unknown reply guard mode")
+    from character.memory_operation import operation_receipt_context, render_operation_response, split_operation_request
+
+    operation_response = render_operation_response(
+        request.message, getattr(request.character_context, 'memory_operation_receipt', None))
+    if operation_response is not None:
+        # Execution status has no model-input dependency. In particular, a
+        # committed operation must not lose its receipt to a context overflow.
+        plan = GenerationPlan(messages=(), generation={}, prompt_policy_version=PROMPT_POLICY_VERSION,
+                              lora_name=None, retrieval=RetrievalResult(), history_policy='not_used')
+        return GenerationResult(reply=operation_response, plan=plan, response_mode='memory_operation',
+                                model_invoked=False)
+    receipt = getattr(request.character_context, 'memory_operation_receipt', None)
+    split_operation = split_operation_request(request.message) if isinstance(receipt, dict) else None
+    if split_operation is not None:
+        operation, remaining = split_operation
+        confirmation = render_operation_response(operation, receipt)
+        if confirmation is not None:
+            # Only the remaining task reaches generation. The operation already
+            # ran once; neither its instruction nor its result is re-inferred.
+            context = replace(request.character_context, memory_operation_receipt=None,
+                dynamic_context=request.character_context.dynamic_context.removesuffix(
+                    operation_receipt_context(receipt)).rstrip())
+            result = await generate_character_response(replace(request, message=remaining, character_context=context), generate)
+            return replace(result, reply=confirmation + '\n\n' + result.reply, response_mode='task_composite',
+                task_results=({'kind': 'memory_operation', 'query': operation, 'mode': 'memory_operation'},
+                              {'kind': 'content', 'query': remaining, 'mode': result.response_mode}))
     plan = build_generation_request(request)
+    request = replace(request, retrieval=plan.retrieval)
+    if request.reply_guard is not None and request.retrieval.has_evidence:
+        # Retrieved names are grounded references, not unprompted identity
+        # leakage. Keep all other subject, safety and style checks unchanged.
+        from character.output_guard import ground_reply_guard
+
+        request = replace(request, reply_guard=ground_reply_guard(request.reply_guard, request.retrieval.evidence))
+    from inference.source_response import render_source_response
+
+    source_response = render_source_response(request.retrieval)
+    if source_response is not None:
+        reply, mode, citations = source_response
+        return GenerationResult(reply=reply, plan=plan, response_mode=mode,
+                                response_citations=citations, model_invoked=False)
     if not plan.should_generate:
         raise RuntimeError(plan.retrieval.reason or f"retrieval status is {plan.retrieval.status}")
+    from inference.current_constraint_response import render_current_constraint_response
+
+    current_response = render_current_constraint_response(request.message, request.character_context)
+    if current_response is not None:
+        return GenerationResult(reply=current_response, plan=plan, response_mode='current_constraint',
+                                model_invoked=False)
+    from inference.memory_response import render_memory_response, storage_fields
+
+    memory_response = render_memory_response(request.message, request.character_context, history=request.history)
+    if memory_response is not None:
+        from character.memory_mentions import mention_query
+
+        mode = ('memory_mentions' if mention_query(request.message) is not None else
+                'memory_storage_status' if storage_fields(request.message) else 'memory_lookup')
+        return GenerationResult(reply=memory_response, plan=plan, response_mode=mode,
+                                model_invoked=False)
+    from inference.memory_response import render_complete_memory_read
+
+    complete_read = render_complete_memory_read(request.message, request.character_context, request.history)
+    if complete_read is not None:
+        return GenerationResult(reply=complete_read, plan=plan, response_mode='memory_field_result',
+                                model_invoked=False)
+    from inference.task_execution import prepare_independent_tasks
+
+    execution = prepare_independent_tasks(request)
+    if execution is not None:
+        subrequest, tasks, completed = execution
+        result = await generate_character_response(subrequest, generate)
+        if result.guard_fallback:
+            return result
+        replies = [completed[index][0] if index in completed else result.reply for index in range(len(tasks))
+                   if tasks[index].kind != 'control']
+        outcomes = tuple({'kind': task.kind, 'query': task.original,
+                          'mode': completed[index][1] if index in completed else result.response_mode}
+                         for index, task in enumerate(tasks) if task.kind != 'control')
+        return replace(result, reply='\n\n'.join(replies), response_mode='task_composite', task_results=outcomes,
+                       response_citations=result.response_citations or result.plan.retrieval.citations)
     messages = [dict(message) for message in plan.messages]
     reply = await generate(
         messages=messages,
@@ -279,6 +489,7 @@ async def generate_character_response(
         FORBIDDEN_LAUGHTER,
         UNPROMPTED_CANONICAL_IDENTITY,
         UNPROMPTED_LORE_FLOURISH,
+        UNSUPPORTED_USER_FACT,
         apply_retry_instruction,
         deterministic_fallback,
         retry_instruction,
@@ -292,6 +503,16 @@ async def generate_character_response(
     )
     if not blocking:
         return GenerationResult(reply=reply, plan=plan, guard_violations=violations)
+
+    if (getattr(request.character_context, "memory_status", "") == "no_match"
+            and set(blocking) == {UNSUPPORTED_USER_FACT}):
+        # Source availability alone did not make generic repair reliable in
+        # r119 real-model replays. Keep the cheap fallback pending a supported
+        # claim-level mechanism; no_match is not proof that all sources lack facts.
+        fallback = deterministic_fallback(blocking, request.reply_guard, candidate_reply=reply)
+        if fallback is not None:
+            return GenerationResult(reply=fallback[1], plan=plan, guard_violations=violations,
+                                    guard_fallback=fallback[0])
 
     corrected_messages = apply_retry_instruction(messages, retry_instruction(blocking))
     reply = await generate(
@@ -310,11 +531,16 @@ async def generate_character_response(
     closed_hard_violation_ids = FACTUAL_HARD_VIOLATIONS | frozenset(
         {UNPROMPTED_CANONICAL_IDENTITY, UNPROMPTED_LORE_FLOURISH, FORBIDDEN_LAUGHTER}
     )
-    closed_hard_failures = closed_hard_violation_ids.intersection(remaining)
+    # Diagnostics intentionally tolerated by the selected policy must not
+    # become hard failures again after a retry for an independent violation.
+    closed_hard_failures = closed_hard_violation_ids.intersection(blocking_remaining)
     if closed_hard_failures:
         if fallback is None:
             raise RuntimeError("deterministic closed guard fallback is missing")
-        fallback_violations = validate_reply(fallback[1], request.reply_guard)
+        fallback_violations = retryable_violations(
+            fallback[1], request.reply_guard, validate_reply(fallback[1], request.reply_guard),
+            strict=request.reply_guard_mode == "strict",
+        )
         if closed_hard_violation_ids.intersection(fallback_violations):
             raise RuntimeError("deterministic closed guard fallback did not close the violation")
     fallback_kind = ""

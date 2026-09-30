@@ -107,9 +107,13 @@ class AliasEntityNormalizer:
         for token in self._sorted_tokens:
             yield token, self._aliases[token]
 
-    def scan_text(self, text: str) -> list[str]:
-        """返回文本中出现的规范实体（长词优先，互不重叠）。"""
-        result: list[str] = []
+    def match_spans(self, text: str) -> list[tuple[int, int, str, str]]:
+        """Match original text once, longest tokens first, without overlaps.
+
+        Both query normalization and index ownership must use these same spans.
+        Replacement strings are never scanned as new user mentions.
+        """
+        result: list[tuple[int, int, str, str]] = []
         consumed: list[tuple[int, int]] = []
         for token, canonical in self.tokens():
             start = 0
@@ -118,12 +122,24 @@ class AliasEntityNormalizer:
                 if idx < 0:
                     break
                 span = (idx, idx + len(token))
-                if not any(s <= span[0] < e or s < span[1] <= e for s, e in consumed):
+                if not any(s < span[1] and span[0] < e for s, e in consumed):
                     consumed.append(span)
-                    if canonical not in result:
-                        result.append(canonical)
+                    result.append((span[0], span[1], token, canonical))
                 start = idx + 1
         return result
+
+    def scan_text(self, text: str) -> list[str]:
+        """返回文本中出现的规范实体（长词优先，互不重叠）。"""
+        return list(dict.fromkeys(canonical for _, _, _, canonical in self.match_spans(text)))
+
+    def normalize_text(self, text: str) -> str:
+        parts: list[str] = []
+        cursor = 0
+        for start, end, _, canonical in sorted(self.match_spans(text)):
+            parts.extend((text[cursor:start], canonical))
+            cursor = end
+        parts.append(text[cursor:])
+        return ''.join(parts)
 
 
 class ApprovedCardsLoader:

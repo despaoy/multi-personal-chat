@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field, StringConstraints, field_validator
 
 
 class MessageRequest(BaseModel):
+    characterId: str | None = Field(default=None, min_length=1, max_length=100, pattern=r"^[A-Za-z0-9_-]+$")
     branchId: str | None = Field(default=None, min_length=1, max_length=64)
     message: str = Field(..., min_length=1, max_length=8000)
     sessionType: str = "private"

@@ -5,6 +5,7 @@ import pytest
 from character.output_guard import (
     AUTONOMY_BOUNDARY_IGNORED,
     GENERIC_ASSISTANT_TEMPLATE,
+    UNPROMPTED_CANONICAL_IDENTITY,
     ReplyGuard,
     retryable_violations,
     validate_reply,
@@ -20,6 +21,8 @@ from inference.generation_request import GenerationRequest, generate_character_r
         ("晚安，好好休息。", ReplyGuard(closing=True)),
         ("真不错，你怎么做到的？", ReplyGuard(positive_sharing=True)),
         ("我是个很认真的人。", ReplyGuard(repair=True)),
+        ("你一直喜欢咖啡。", ReplyGuard(forbid_unsupported_user_fact=True)),
+        ("你的导师叫陈老师，我的导师叫林老师。", ReplyGuard(forbidden_terms=("林老师",), factual_task=True)),
     ],
 )
 async def test_style_or_normal_farewell_uses_one_call_without_template_fallback(reply, guard):
@@ -45,7 +48,7 @@ async def test_style_or_normal_farewell_uses_one_call_without_template_fallback(
         ("建议你去散步。", ReplyGuard(forbid_advice=True)),
         ("晚安，你应该先做出决定。", ReplyGuard(closing=True, respect_autonomy=True)),
         ("先休息一下。", ReplyGuard(require_urgent_safety_check=True)),
-        ("你一直喜欢咖啡。", ReplyGuard(forbid_unsupported_user_fact=True)),
+        ("七天通常会发放奖励。", ReplyGuard(unknown_login_reward=True)),
     ],
 )
 async def test_explicit_boundaries_safety_and_facts_still_get_bounded_retry(reply, guard):
@@ -61,14 +64,14 @@ async def test_explicit_boundaries_safety_and_facts_still_get_bounded_retry(repl
 
 
 async def test_successful_hard_retry_with_soft_style_issue_is_not_replaced_by_fallback():
-    outputs = iter(["你一直喜欢咖啡。", "祝你好运！"])
+    outputs = iter(["建议你去散步。", "祝你好运！"])
 
     async def generate(**kwargs):
         return next(outputs)
 
     result = await generate_character_response(
         GenerationRequest(
-            message="你好", reply_guard=ReplyGuard(forbid_unsupported_user_fact=True, forbid_generic_templates=True)
+            message="你好", reply_guard=ReplyGuard(forbid_advice=True, forbid_generic_templates=True)
         ),
         generate,
     )
@@ -76,6 +79,30 @@ async def test_successful_hard_retry_with_soft_style_issue_is_not_replaced_by_fa
     assert result.reply == "祝你好运！"
     assert result.guard_post_retry_violations == (GENERIC_ASSISTANT_TEMPLATE,)
     assert not result.guard_fallback
+
+
+async def test_name_diagnostic_does_not_reactivate_after_boundary_retry():
+    outputs = iter(['建议你去散步。', '我的同事叫赵宁。'])
+
+    async def generate(**kwargs):
+        return next(outputs)
+
+    result = await generate_character_response(
+        GenerationRequest(message='你的同事是谁？不要建议。',
+            reply_guard=ReplyGuard(forbid_advice=True, forbidden_terms=('赵宁',))), generate)
+    assert result.guard_retried
+    assert result.reply == '我的同事叫赵宁。'
+    assert result.guard_post_retry_violations == (UNPROMPTED_CANONICAL_IDENTITY,)
+    assert not result.guard_fallback
+
+
+def test_name_diagnostic_is_not_a_factual_correctness_certificate():
+    guard = ReplyGuard(forbidden_terms=('赵宁',))
+    reply = '赵宁昨天替你买了房子。'  # Unsupported; permissive does not mean grounded.
+    violations = validate_reply(reply, guard)
+    assert UNPROMPTED_CANONICAL_IDENTITY in violations
+    assert retryable_violations(reply, guard, violations) == ()
+    assert retryable_violations(reply, guard, violations, strict=True) == violations
 
 
 def test_explicit_autonomy_ack_is_not_removed_by_lightweight_farewell():

@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timezone
 
+from character.memory_clock import DEFAULT_MEMORY_TIMEZONE, observation_clock
 from character.models import MemoryItem
+from character.temporal_expression import resolve_temporal_expression
 
-EVENT_TZ = timezone(timedelta(hours=8))
+EVENT_TZ = DEFAULT_MEMORY_TIMEZONE
 _TIME = r"今天|明天|后天|\d{4}-\d{2}-\d{2}"
 _SUBJECT = r"[\w\u4e00-\u9fff-]{0,24}(?:面试|考试|答辩|会议|体检|旅行|项目|论文|申请|保研)"
 _LABELS = {
@@ -56,15 +58,10 @@ def parse_event(sentence: str, reference_time: datetime | None = None) -> EventC
             now = reference_time or datetime.now(timezone.utc)
             if now.utcoffset() is None:
                 raise ValueError("reference_time must be timezone-aware")
-            if raw_time in {"今天", "明天", "后天"}:
-                scheduled = (
-                    now.astimezone(EVENT_TZ).date() + timedelta(days={"今天": 0, "明天": 1, "后天": 2}[raw_time])
-                ).isoformat()
-            else:
-                try:
-                    scheduled = date.fromisoformat(raw_time).isoformat()
-                except ValueError:
-                    return None
+            resolved = resolve_temporal_expression(raw_time, observed_at=now, zone=EVENT_TZ)
+            if resolved is None or resolved.precision != "day":
+                return None
+            scheduled = resolved.lower.date().isoformat()
         return EventChange(subject, state, scheduled, raw_time)
     return None
 
@@ -95,10 +92,12 @@ def event_reference_content(row: dict, now: datetime) -> str:
     return content
 
 
-async def write_event_memory(repo, character_id, scope, item, source_message_id=None) -> bool:
+async def write_event_memory(repo, character_id, scope, item, source_message_id=None,
+                             *, observed_at: datetime | None = None) -> bool:
     event = item.event
     if event is None or not item.evidence:
         return False
+    observation = observation_clock(observed_at)
     for attempt in range(3):
         rows = await repo.list_memory_records(
             character_id,
@@ -157,7 +156,7 @@ async def write_event_memory(repo, character_id, scope, item, source_message_id=
         }
         if previous and all(old_event.get(k) == info[k] for k in ("subject", "state", "scheduled_date")):
             return False
-        now = datetime.now(timezone.utc).isoformat()
+        now = observation.isoformat()
         try:
             await repo.append_claim(
                 character_id,

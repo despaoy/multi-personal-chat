@@ -1,0 +1,908 @@
+[
+  {
+    "old_number": 1,
+    "old_id": "tsukiyashiro_kisaki_sft_f7cc315376cf0a13",
+    "old_record_sha256": "a6cae5f1a6ffc7b66669a501990eda024e537a00f328b62a3cc4fdbf4fb63773",
+    "new_ids": [],
+    "disposition": "本轮不选；保留历史，非断言原文错误",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 2,
+    "old_id": "tsukiyashiro_kisaki_sft_e73299fab403212a",
+    "old_record_sha256": "39e66e2bfefdb9e50bb5d497ae46ce9809a969e13e270555b15f0d9b41eeee02",
+    "new_ids": [],
+    "disposition": "本轮不选；保留历史，非断言原文错误",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 3,
+    "old_id": "tsukiyashiro_kisaki_sft_f4bf72d40561062f",
+    "old_record_sha256": "24190c6166a7031b693b095f3319362534a85eff9c060f91f964a2dc1e1cabb9",
+    "new_ids": [],
+    "disposition": "本轮不选；保留历史，非断言原文错误",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 4,
+    "old_id": "tsukiyashiro_kisaki_sft_9a767e515be060d3",
+    "old_record_sha256": "acaa85d539705a3254071ef9b0bcc78e91e843c91e24c286d0154cc426165fba",
+    "new_ids": [],
+    "disposition": "本轮不选；保留历史，非断言原文错误",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 5,
+    "old_id": "tsukiyashiro_kisaki_sft_6b8200d369b31df1",
+    "old_record_sha256": "494dfadf52b84422eb0ece2d09342bb83127c82ad4731ec56a267164a084437f",
+    "new_ids": [],
+    "disposition": "本轮不选；保留历史，非断言原文错误",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 6,
+    "old_id": "tsukiyashiro_kisaki_sft_58a39e58ee5bfc67",
+    "old_record_sha256": "66d78948e830d95ee3db6af7a77a53a7ecb555d2ad3ce67ee4603314556c2616",
+    "new_ids": [],
+    "disposition": "本轮不选；保留历史，非断言原文错误",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 7,
+    "old_id": "tsukiyashiro_kisaki_sft_46b17d041cad2c81",
+    "old_record_sha256": "d56d6a682c6436b1999081d0b19bb785737f332cfdaecaa787d4f3f40ce93949",
+    "new_ids": [
+      "kisaki_interactive_v2_d9bba88586f53c9a"
+    ],
+    "disposition": "用新单次交互替代；旧偏好失效",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 8,
+    "old_id": "tsukiyashiro_kisaki_sft_91a1474ac2bed517",
+    "old_record_sha256": "eecb4c9a8121bb00a7992d6d384947115e170f8a6a4a1cbaa7884c9fe355e731",
+    "new_ids": [
+      "kisaki_interactive_v2_85989f60eeedb91a"
+    ],
+    "disposition": "用新单次交互替代；旧偏好失效",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 9,
+    "old_id": "tsukiyashiro_kisaki_sft_e67437c50ef7dc13",
+    "old_record_sha256": "4aa2275fa289b160474bac475231adb3b20856d63dfff0b30378218a8d622696",
+    "new_ids": [
+      "kisaki_interactive_v2_4b6e92798a437cf2"
+    ],
+    "disposition": "用新单次交互替代；旧偏好失效",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 10,
+    "old_id": "tsukiyashiro_kisaki_sft_852545247d5c8061",
+    "old_record_sha256": "b34122a3de221c075186d448974637b12b1fe5a0bc99bd70db21ce4108756533",
+    "new_ids": [],
+    "disposition": "本轮不选；保留历史，非断言原文错误",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 11,
+    "old_id": "tsukiyashiro_kisaki_sft_f573b7137d801c50",
+    "old_record_sha256": "fb9e7028f6b13b530731c70a11189ffededed64234ce0a5ffee515b650f26bd1",
+    "new_ids": [],
+    "disposition": "本轮不选；保留历史，非断言原文错误",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 12,
+    "old_id": "tsukiyashiro_kisaki_sft_fa7bcec2b107e178",
+    "old_record_sha256": "cf8cc7c58ba13e89f86b0591e2a00f4934fc87f040372fa01ce990521f116dae",
+    "new_ids": [],
+    "disposition": "本轮不选；保留历史，非断言原文错误",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 13,
+    "old_id": "tsukiyashiro_kisaki_sft_c00fb5c8ace60020",
+    "old_record_sha256": "dbd83d5db19cf6360407a51143ab0b42563ee94f586d6e2760d76ed24b170450",
+    "new_ids": [],
+    "disposition": "本轮不选；保留历史，非断言原文错误",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 14,
+    "old_id": "tsukiyashiro_kisaki_sft_9f25bf432a47e2c8",
+    "old_record_sha256": "5f13d19e60efda1456073a78dee353c7d8cd8fbad9162c53cb2d25a4eee1a0fb",
+    "new_ids": [],
+    "disposition": "本轮不选；保留历史，非断言原文错误",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 15,
+    "old_id": "tsukiyashiro_kisaki_sft_f88db44df20ef04a",
+    "old_record_sha256": "49cc08588bbb90450ce3e1d1929d7a483437481cfdf53801744318f55bc66d00",
+    "new_ids": [],
+    "disposition": "本轮不选；保留历史，非断言原文错误",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 16,
+    "old_id": "tsukiyashiro_kisaki_sft_7f62147a301907f1",
+    "old_record_sha256": "880d40dc1b2c7b9a113a7b3412c06686d05f885f9b0f4016cedebcde54f585c0",
+    "new_ids": [],
+    "disposition": "本轮不选；保留历史，非断言原文错误",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 17,
+    "old_id": "tsukiyashiro_kisaki_sft_38a21f368c7aab0c",
+    "old_record_sha256": "0b2caa98632f83e6f1dfb6978738c04a80bb26f8d42ef94443f4335dd0337e51",
+    "new_ids": [
+      "kisaki_interactive_v2_dcf04c1caef3a861"
+    ],
+    "disposition": "用新单次交互替代；旧偏好失效",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 18,
+    "old_id": "tsukiyashiro_kisaki_sft_acd5d69883675bea",
+    "old_record_sha256": "834522eaab8c2e9c97e36cf98dc66b1801cbe4c76b279679d277cf6aad9c3c5d",
+    "new_ids": [
+      "kisaki_interactive_v2_ea40491ec159ce91"
+    ],
+    "disposition": "用新单次交互替代；旧偏好失效",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 19,
+    "old_id": "tsukiyashiro_kisaki_sft_f90f92f28c12dbd4",
+    "old_record_sha256": "c0eed45a2e10b11e3dd9c5a962d75d543b65fe146c93c32489e5d013d1165909",
+    "new_ids": [
+      "kisaki_interactive_v2_d628fbd2c2e17ebb"
+    ],
+    "disposition": "用新单次交互替代；旧偏好失效",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 20,
+    "old_id": "tsukiyashiro_kisaki_sft_7e5b0f4646f520b6",
+    "old_record_sha256": "e94140f15b400eecb9fc7d858d03e658cccfa61ab91d6400e100899f6cdd9a49",
+    "new_ids": [],
+    "disposition": "本轮不选；保留历史，非断言原文错误",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 21,
+    "old_id": "tsukiyashiro_kisaki_sft_e64bd5f8f82eb23e",
+    "old_record_sha256": "b7a7ef275a13170c1ffbce01636d2dc0c4ab11c41c0c20db1eb6703c45972cf8",
+    "new_ids": [],
+    "disposition": "本轮不选；保留历史，非断言原文错误",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 22,
+    "old_id": "tsukiyashiro_kisaki_sft_1ec5d933a3bf910e",
+    "old_record_sha256": "285107f12e58a6c3b06fe1e738de8a796365aa6fcc13ddd20865ed92f80f10a7",
+    "new_ids": [],
+    "disposition": "本轮不选；保留历史，非断言原文错误",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 23,
+    "old_id": "tsukiyashiro_kisaki_sft_73d2b45db4ad45f4",
+    "old_record_sha256": "6e59c37dc8d3cd05522d6338d4683229075bc3223f6d74e27b861c0a449556b4",
+    "new_ids": [],
+    "disposition": "本轮不选；保留历史，非断言原文错误",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 24,
+    "old_id": "tsukiyashiro_kisaki_sft_77bd9a2e72e77d47",
+    "old_record_sha256": "c869febd8d6ae72ab483c51cb3795e52a1de5ebe88e2b83b7e1c05fea8d2565d",
+    "new_ids": [
+      "kisaki_interactive_v2_78f0a0d4220018e6"
+    ],
+    "disposition": "用新单次交互替代；旧偏好失效",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 25,
+    "old_id": "tsukiyashiro_kisaki_sft_77a7de5cdd5c9b2f",
+    "old_record_sha256": "bfc1a22d732920f444dcb9bddf128e35fb3f351481ea5ff23cfb3805dbd9a2dd",
+    "new_ids": [],
+    "disposition": "本轮不选；保留历史，非断言原文错误",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 26,
+    "old_id": "tsukiyashiro_kisaki_sft_375116df3bed2352",
+    "old_record_sha256": "086ab9309fca8b945a2443dd6fb2200a095c8fe773827a9146f2f36b169abf34",
+    "new_ids": [],
+    "disposition": "本轮不选；保留历史，非断言原文错误",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 27,
+    "old_id": "tsukiyashiro_kisaki_sft_c0eca29aa21c5b4b",
+    "old_record_sha256": "d997e1c75867b985eb53eb3cb94bb06ff6a7477f05efbef248888195a457f79e",
+    "new_ids": [],
+    "disposition": "本轮不选；保留历史，非断言原文错误",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 28,
+    "old_id": "tsukiyashiro_kisaki_sft_5cb8422179367516",
+    "old_record_sha256": "11b9c5f2b48b7ade43621ad796454e8541bfc7782ebe685f835ceba22d4809d4",
+    "new_ids": [],
+    "disposition": "本轮不选；保留历史，非断言原文错误",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 29,
+    "old_id": "tsukiyashiro_kisaki_sft_1e90fae15a46fcff",
+    "old_record_sha256": "ba741fe34677e3f28f56fd3cb2f8fd5663f66c23f3a94fb0c71a87cabcff1761",
+    "new_ids": [],
+    "disposition": "本轮不选；保留历史，非断言原文错误",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 30,
+    "old_id": "tsukiyashiro_kisaki_sft_f45b924935825750",
+    "old_record_sha256": "8956a48077e4cdec3cec825e83c673edb55815bfcb75003d5eb32465188aec64",
+    "new_ids": [],
+    "disposition": "本轮不选；保留历史，非断言原文错误",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 31,
+    "old_id": "tsukiyashiro_kisaki_sft_dff7a40935e995b7",
+    "old_record_sha256": "1b9446fbf693dcfb69bbdaebb8a49b37c0428cdd88f2afc80afd7e697e15bbdb",
+    "new_ids": [],
+    "disposition": "本轮不选；保留历史，非断言原文错误",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 32,
+    "old_id": "tsukiyashiro_kisaki_sft_3a4deefb7f8874db",
+    "old_record_sha256": "d4676dbbcc79ee49d8cfb31e7d847f110aeea8a87ffcd30599b9b08fb444f441",
+    "new_ids": [],
+    "disposition": "本轮不选；保留历史，非断言原文错误",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 33,
+    "old_id": "tsukiyashiro_kisaki_sft_ff899d2031999ea0",
+    "old_record_sha256": "0099851c16fe4231fff2f096973db2975f6a0eb4074c90ebf9ba6e3372046477",
+    "new_ids": [],
+    "disposition": "本轮不选；保留历史，非断言原文错误",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 34,
+    "old_id": "tsukiyashiro_kisaki_sft_b84c79a9e9631df1",
+    "old_record_sha256": "8c5f74b5263012c8f69b904e6b6ec949db8be6bf5fa138e3c4b50e2b0ce78a70",
+    "new_ids": [],
+    "disposition": "本轮不选；保留历史，非断言原文错误",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 35,
+    "old_id": "tsukiyashiro_kisaki_sft_1d9c236930253444",
+    "old_record_sha256": "9b985b9835cb16bf385b3388406ffaf0cdc97b843222217f88ec0b9fece4966e",
+    "new_ids": [],
+    "disposition": "本轮不选；保留历史，非断言原文错误",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 36,
+    "old_id": "tsukiyashiro_kisaki_sft_fbd14963c3c8220a",
+    "old_record_sha256": "cf98cb41bfbf41c773290a3b860359d9ec8e731d26f9c5b49858a2a4034118c8",
+    "new_ids": [],
+    "disposition": "本轮不选；保留历史，非断言原文错误",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 37,
+    "old_id": "tsukiyashiro_kisaki_sft_ab3acf3bef213cb3",
+    "old_record_sha256": "bf64d2f6af59ce73178a88949e6cbb3fbc8b8a2d66b3487a3297e409b6a66c46",
+    "new_ids": [],
+    "disposition": "本轮不选；保留历史，非断言原文错误",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 38,
+    "old_id": "tsukiyashiro_kisaki_sft_a268cc49925b1171",
+    "old_record_sha256": "f7cf11570419f26e7fccee40ba47d8b2624d7092bf37b2d13ce9c576060e2d73",
+    "new_ids": [],
+    "disposition": "本轮不选；保留历史，非断言原文错误",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 39,
+    "old_id": "tsukiyashiro_kisaki_sft_b5d120a7e2152e31",
+    "old_record_sha256": "ffbff784053871626bc6ab8cd4797ec9f7cc0008a9b7bbc279a27bd8a8e6003a",
+    "new_ids": [],
+    "disposition": "本轮不选；保留历史，非断言原文错误",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 40,
+    "old_id": "tsukiyashiro_kisaki_sft_7b2776a0b43e6c53",
+    "old_record_sha256": "0c05f4e92904b940348ea6926bc955c7d6e3cdea363ff50cead82f6f6004b3c0",
+    "new_ids": [],
+    "disposition": "本轮不选；保留历史，非断言原文错误",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 41,
+    "old_id": "tsukiyashiro_kisaki_sft_50a72c5309964f02",
+    "old_record_sha256": "4723a4910e105e94c5db56ab1722454800aff4ded500a101d02ed2e44295a05c",
+    "new_ids": [
+      "kisaki_interactive_v2_645dfd8f293d7389"
+    ],
+    "disposition": "用新单次交互替代；旧偏好失效",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 42,
+    "old_id": "tsukiyashiro_kisaki_sft_26dcde18830f7f11",
+    "old_record_sha256": "5cf6238d99403dd311ba5e606fc9591bf042d4a419d904cc8d9e71b3ead1d760",
+    "new_ids": [],
+    "disposition": "本轮不选；保留历史，非断言原文错误",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 43,
+    "old_id": "tsukiyashiro_kisaki_sft_33fae1fa7eb95d92",
+    "old_record_sha256": "b38f340293c508ce5f7a3e22660a1428a73d4786b04c50caf7e208025ad1342a",
+    "new_ids": [
+      "kisaki_interactive_v2_642501a5bdcfdb39"
+    ],
+    "disposition": "用新单次交互替代；旧偏好失效",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 44,
+    "old_id": "tsukiyashiro_kisaki_sft_43077d838c602563",
+    "old_record_sha256": "a47f45dc79b6d30c12cf217f2b6cedb02e6abd7d1c23f25d3936d47fdbcf88b5",
+    "new_ids": [],
+    "disposition": "本轮不选；保留历史，非断言原文错误",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 45,
+    "old_id": "tsukiyashiro_kisaki_sft_7e388fc7fb81906b",
+    "old_record_sha256": "6fdb5a66b6a4a51bad0f693946ade8b670cb0c47498281961fb4a0852dd53f2c",
+    "new_ids": [],
+    "disposition": "本轮不选；保留历史，非断言原文错误",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 46,
+    "old_id": "tsukiyashiro_kisaki_sft_54661ed115473e2e",
+    "old_record_sha256": "da0dc4a642b500ae1ca18f87de1e0d81991cff6a88b4c834d41ace6bff37492f",
+    "new_ids": [
+      "kisaki_interactive_v2_2dc304247e753f7d"
+    ],
+    "disposition": "用新单次交互替代；旧偏好失效",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 47,
+    "old_id": "tsukiyashiro_kisaki_sft_9c8486b7d2fdb108",
+    "old_record_sha256": "eef38e709cbdfb41a37376c673b3a4d57d450aebea3e8b0f8e70ccc6b5d3ad2b",
+    "new_ids": [
+      "kisaki_interactive_v2_f3b0338d435cb6e4"
+    ],
+    "disposition": "用新单次交互替代；旧偏好失效",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 48,
+    "old_id": "tsukiyashiro_kisaki_sft_be3131f40f26afd7",
+    "old_record_sha256": "5323790a9065c48bf7e25654b6b2bda82d81469860cabf4d34229b19f39ebebb",
+    "new_ids": [
+      "kisaki_interactive_v2_00d14395e40d0209"
+    ],
+    "disposition": "用新单次交互替代；旧偏好失效",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 49,
+    "old_id": "tsukiyashiro_kisaki_sft_d72a0ed3d38b25a6",
+    "old_record_sha256": "5529fe240adc14d81f1e769823bbe5d5f571525668dacab6e68521265838f1d9",
+    "new_ids": [],
+    "disposition": "本轮不选；保留历史，非断言原文错误",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 50,
+    "old_id": "tsukiyashiro_kisaki_sft_f5159e331f6e6157",
+    "old_record_sha256": "384d4dc759c6d04d0bd1d58ae9e11af861276734dd09a567627f9729d926a7df",
+    "new_ids": [
+      "kisaki_interactive_v2_529a06c1e1071f82"
+    ],
+    "disposition": "用新单次交互替代；旧偏好失效",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 51,
+    "old_id": "tsukiyashiro_kisaki_sft_0d3db6c5fa7ed220",
+    "old_record_sha256": "6641a6817e01fc39cd6e0044e361b0a7a9e51ad68d946030c025f52f5abd593a",
+    "new_ids": [],
+    "disposition": "本轮不选；保留历史，非断言原文错误",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 52,
+    "old_id": "tsukiyashiro_kisaki_sft_9b52294d3782f055",
+    "old_record_sha256": "7e08048357018f2cdb9e9f22fba38fb8430fc192c859847b2a8c3f04818c7bab",
+    "new_ids": [
+      "kisaki_interactive_v2_1b359de5b25779d4"
+    ],
+    "disposition": "用新单次交互替代；旧偏好失效",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 53,
+    "old_id": "tsukiyashiro_kisaki_sft_52f03bb9aa2baaf5",
+    "old_record_sha256": "c807f3df180be17d6432f8dd314f13c8a1a36c68ea629f879922f0e3acf150e6",
+    "new_ids": [],
+    "disposition": "本轮不选；保留历史，非断言原文错误",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 54,
+    "old_id": "tsukiyashiro_kisaki_sft_ff6be62b032ef12f",
+    "old_record_sha256": "1e3601eca584a41508da3b566c7d42c764fc9d69d705c59ece98cac2f8f6532a",
+    "new_ids": [
+      "kisaki_interactive_v2_1ea2a9bccaef42c9"
+    ],
+    "disposition": "用新单次交互替代；旧偏好失效",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 55,
+    "old_id": "tsukiyashiro_kisaki_sft_8b0589946971c72e",
+    "old_record_sha256": "2f8384d0826372d3724be2ac961d7e34c61c3284fc161fcef3ac363359049dd0",
+    "new_ids": [],
+    "disposition": "本轮不选；保留历史，非断言原文错误",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 56,
+    "old_id": "tsukiyashiro_kisaki_sft_3c6d32f6b9b563d6",
+    "old_record_sha256": "eaf5aaa21b3dfb3ed31626bc465653830ffcaad1579a44cd2102c6e2e8d098a6",
+    "new_ids": [
+      "kisaki_interactive_v2_25bc113bae0fe6b5"
+    ],
+    "disposition": "用新单次交互替代；旧偏好失效",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 57,
+    "old_id": "tsukiyashiro_kisaki_sft_3179d71236046485",
+    "old_record_sha256": "2a3d68b9370a27ce4b5e4b3d2f2dd3a1e6f51fff2d124b438de2306b3cc05056",
+    "new_ids": [],
+    "disposition": "本轮不选；保留历史，非断言原文错误",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 58,
+    "old_id": "tsukiyashiro_kisaki_sft_1c6d6c1951532498",
+    "old_record_sha256": "2b014c4d7151873280a649305ccacd8ef7110ea3620c7298b77173912ef668ca",
+    "new_ids": [
+      "kisaki_interactive_v2_b2b418f3be29cf34"
+    ],
+    "disposition": "用新单次交互替代；旧偏好失效",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 59,
+    "old_id": "tsukiyashiro_kisaki_sft_a242cd94e3cc471e",
+    "old_record_sha256": "65685882b7fa1d2594f316bae9054db060fd02121479253ac22bcc76177aa0b0",
+    "new_ids": [],
+    "disposition": "本轮不选；保留历史，非断言原文错误",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 60,
+    "old_id": "tsukiyashiro_kisaki_sft_88c2622f5e5f5581",
+    "old_record_sha256": "5e6da2d332696d0d9f05e39ff6ab231e807bca4bb9c8664d44490cbed96ad2cb",
+    "new_ids": [
+      "kisaki_interactive_v2_548618c9fcc71e74"
+    ],
+    "disposition": "用新单次交互替代；旧偏好失效",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 61,
+    "old_id": "tsukiyashiro_kisaki_sft_8748245e83cddeee",
+    "old_record_sha256": "439b07986a1960b33ca8d80ca7988b0cdb9da4a2e859b1661cedf62180f25887",
+    "new_ids": [],
+    "disposition": "本轮不选；保留历史，非断言原文错误",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 62,
+    "old_id": "tsukiyashiro_kisaki_sft_d16f2e4db9b02ec0",
+    "old_record_sha256": "ba003c8eb57ca6c77617c41eef8ffb29f6fe56a97e1a75c29bb3c0239ed45ba9",
+    "new_ids": [
+      "kisaki_interactive_v2_42c010f1c9f6d8da"
+    ],
+    "disposition": "用新单次交互替代；旧偏好失效",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 63,
+    "old_id": "tsukiyashiro_kisaki_sft_94c8ff3f821f7074",
+    "old_record_sha256": "12103662a741327b6993ac9476f4b36376a7e9173fc8092ef2963e5981acab2a",
+    "new_ids": [
+      "kisaki_interactive_v2_bb6dcef3e4a1b528"
+    ],
+    "disposition": "用新单次交互替代；旧偏好失效",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 64,
+    "old_id": "tsukiyashiro_kisaki_sft_e85b770aaacf105a",
+    "old_record_sha256": "be7296a5351b776217e3069e99a111313cc49ea785e1090811d37e92668b0d01",
+    "new_ids": [],
+    "disposition": "本轮不选；保留历史，非断言原文错误",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 65,
+    "old_id": "tsukiyashiro_kisaki_sft_ba553de00c0690ff",
+    "old_record_sha256": "7c61d49acec8c86b665281b2a0c50f34f79773680322f15c6515e0a3ac96f3e2",
+    "new_ids": [
+      "kisaki_interactive_v2_a83a2eeeaeddc35a"
+    ],
+    "disposition": "用新单次交互替代；旧偏好失效",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 66,
+    "old_id": "tsukiyashiro_kisaki_sft_1ef62dada494e2b0",
+    "old_record_sha256": "a48acd5d0c45c284e4545e414f31953f77138be7eec8c1f71f713abf37ac5119",
+    "new_ids": [],
+    "disposition": "本轮不选；保留历史，非断言原文错误",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 67,
+    "old_id": "tsukiyashiro_kisaki_sft_a318d98f271c1f57",
+    "old_record_sha256": "f7790f321292ef865c9743494b18dc55a1ebdc3a2bf44d9ac65c24aa5fbeb5a7",
+    "new_ids": [],
+    "disposition": "本轮不选；保留历史，非断言原文错误",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 68,
+    "old_id": "tsukiyashiro_kisaki_sft_969e611440f9dc88",
+    "old_record_sha256": "932a7cd5ae8b21e449bfadb98a5d187ad7d9bf0e8ac25dc47ac433debba87431",
+    "new_ids": [],
+    "disposition": "本轮不选；保留历史，非断言原文错误",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 69,
+    "old_id": "tsukiyashiro_kisaki_sft_931937232559e20d",
+    "old_record_sha256": "be8adcf3e73a8db04b5ff81450eb09243212f83cf8ab00318ffa10dbd1470b42",
+    "new_ids": [],
+    "disposition": "本轮不选；保留历史，非断言原文错误",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 70,
+    "old_id": "tsukiyashiro_kisaki_sft_f8cfdc5b41a7e9d3",
+    "old_record_sha256": "6637a4c7fae0539c21b96627efafc3772849553370de4e1aceff5c160a957f15",
+    "new_ids": [],
+    "disposition": "本轮不选；保留历史，非断言原文错误",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 71,
+    "old_id": "tsukiyashiro_kisaki_sft_5e9862f042701532",
+    "old_record_sha256": "d5559712452be553a68742e910e706f63e9db32791e1652939b21b12ecf3cbb3",
+    "new_ids": [],
+    "disposition": "本轮不选；保留历史，非断言原文错误",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 72,
+    "old_id": "tsukiyashiro_kisaki_sft_8126fff0d804a23e",
+    "old_record_sha256": "2a4083a8fec04c396ff1aca3713ef28aeeb8f2aa0dd1356bc3ac8b6a65a3562e",
+    "new_ids": [],
+    "disposition": "本轮不选；保留历史，非断言原文错误",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 73,
+    "old_id": "tsukiyashiro_kisaki_sft_7cc599b07a988c02",
+    "old_record_sha256": "724db7212f83b61459d3aec8a14a2711c167aa3c628fd94460e65ccda8a78db1",
+    "new_ids": [
+      "kisaki_interactive_v2_8ff80a83b4f5a70e"
+    ],
+    "disposition": "用新单次交互替代；旧偏好失效",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 74,
+    "old_id": "tsukiyashiro_kisaki_sft_4b10c7a043f6ca62",
+    "old_record_sha256": "7dff1813624748584912ff07d5283b076b08eb746de698ae2ae9817c9d85bdc2",
+    "new_ids": [],
+    "disposition": "本轮不选；保留历史，非断言原文错误",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 75,
+    "old_id": "tsukiyashiro_kisaki_sft_375ed9226058c7d3",
+    "old_record_sha256": "2a7a77aaf042da90ad6dda5c55e43de108517df4046b68f84141abd968cea11b",
+    "new_ids": [],
+    "disposition": "本轮不选；保留历史，非断言原文错误",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 76,
+    "old_id": "tsukiyashiro_kisaki_sft_627029cb7e9b244b",
+    "old_record_sha256": "88f0ff4f77afc17847a054b1d464221d8a1e23c8f1572144e1dca201b1f51319",
+    "new_ids": [],
+    "disposition": "本轮不选；保留历史，非断言原文错误",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 77,
+    "old_id": "tsukiyashiro_kisaki_sft_59c6e922658ae2ef",
+    "old_record_sha256": "60a13b33a89d5374e7719668ed66841a989ba11d51c7685341c8d809beb4620a",
+    "new_ids": [],
+    "disposition": "本轮不选；保留历史，非断言原文错误",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 78,
+    "old_id": "tsukiyashiro_kisaki_sft_e7fb9dc26cf49c45",
+    "old_record_sha256": "89ebf53ae599e8de44a383ce1712f3fa7c30885a11accdb3fd80990c598ccd83",
+    "new_ids": [],
+    "disposition": "本轮不选；保留历史，非断言原文错误",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 79,
+    "old_id": "tsukiyashiro_kisaki_sft_fb5fc2f94edd44e8",
+    "old_record_sha256": "c4563fabf828085edac287ac69b0127ce3ea6dd1b67905ab4e707858b2377d2b",
+    "new_ids": [],
+    "disposition": "本轮不选；保留历史，非断言原文错误",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 80,
+    "old_id": "tsukiyashiro_kisaki_sft_16eef6a9ac958051",
+    "old_record_sha256": "06a797376a78907adae978cd9214fe703853cacd15a32a4f763ddc0269d06b4b",
+    "new_ids": [],
+    "disposition": "本轮不选；保留历史，非断言原文错误",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 81,
+    "old_id": "tsukiyashiro_kisaki_sft_cbfaf338095ff008",
+    "old_record_sha256": "a92d3da0b69196576ed9a600a75f9385519f2126c2ad4c319a5661ae791017e0",
+    "new_ids": [],
+    "disposition": "本轮不选；保留历史，非断言原文错误",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 82,
+    "old_id": "tsukiyashiro_kisaki_sft_35768e864eece57b",
+    "old_record_sha256": "505bd39f1cf825f02a34831810147f5187862514081326151b77ec2e638beca3",
+    "new_ids": [],
+    "disposition": "本轮不选；保留历史，非断言原文错误",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 83,
+    "old_id": "tsukiyashiro_kisaki_sft_caa2b64609118412",
+    "old_record_sha256": "569e8bcd2ecf70ab2eb17dc2e2e36c809806a8a24390b79cc84af840a5ff0ed1",
+    "new_ids": [
+      "kisaki_interactive_v2_ee9f4cf67a076381"
+    ],
+    "disposition": "用新单次交互替代；旧偏好失效",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 84,
+    "old_id": "tsukiyashiro_kisaki_sft_3dfe0f04f9f8c8d1",
+    "old_record_sha256": "20e75134adee7a53ff833e027e89499987187ef686c537da9d63deedb89e9935",
+    "new_ids": [],
+    "disposition": "本轮不选；保留历史，非断言原文错误",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 85,
+    "old_id": "tsukiyashiro_kisaki_sft_99cdffdfdb1d4590",
+    "old_record_sha256": "e9a292e7059b13e3d75389fd679122bc8e32499f3eecec3df30257faa8be1833",
+    "new_ids": [
+      "kisaki_interactive_v2_73d84a561ac7e6ca"
+    ],
+    "disposition": "用新单次交互替代；旧偏好失效",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 86,
+    "old_id": "tsukiyashiro_kisaki_sft_00e6d63069e349e0",
+    "old_record_sha256": "884ccc6a28e10bc3c247f83279d997efd2f8f9d46b3f026a55aac258cc1e10d0",
+    "new_ids": [],
+    "disposition": "本轮不选；保留历史，非断言原文错误",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 87,
+    "old_id": "tsukiyashiro_kisaki_sft_14142664f3021fb1",
+    "old_record_sha256": "0d7686e49c5cb50e44bfc736dfb9fa08fd57154df2e58cc0632b5daaa3420812",
+    "new_ids": [
+      "kisaki_interactive_v2_5ba4a09186a8b3a7"
+    ],
+    "disposition": "用新单次交互替代；旧偏好失效",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 88,
+    "old_id": "tsukiyashiro_kisaki_sft_0ba225d34cdb7b37",
+    "old_record_sha256": "66e5413db88087b23cd09697b71657d575662fac3f4f57fab7f33c3f74bad3f5",
+    "new_ids": [
+      "kisaki_interactive_v2_9ccaa79d99c6ef1c"
+    ],
+    "disposition": "用新单次交互替代；旧偏好失效",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 89,
+    "old_id": "tsukiyashiro_kisaki_sft_ab1f09c78b1e94f0",
+    "old_record_sha256": "795aa42b32dd03d29f9927ede47c1f07915ba30c429a221192ec2d2e7cbcc98f",
+    "new_ids": [],
+    "disposition": "本轮不选；保留历史，非断言原文错误",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 90,
+    "old_id": "tsukiyashiro_kisaki_sft_111dc1cfcf4f47a8",
+    "old_record_sha256": "2bdb8ef1c54bb2654d827e08632961143b1ebb0548207e28ad3a225902b3b1e6",
+    "new_ids": [
+      "kisaki_interactive_v2_c78b866fe6781f1c"
+    ],
+    "disposition": "用新单次交互替代；旧偏好失效",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 91,
+    "old_id": "tsukiyashiro_kisaki_sft_47e2eb03c5053023",
+    "old_record_sha256": "248d8a621aa2d172c72402489f4d752a5c99841f6410bab51becadc66c981577",
+    "new_ids": [],
+    "disposition": "本轮不选；保留历史，非断言原文错误",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 92,
+    "old_id": "tsukiyashiro_kisaki_sft_34be180ba843824f",
+    "old_record_sha256": "08623796d841c2016dd94eef73c62c4c4a8f6a6d81fd81e7270166c99cf45472",
+    "new_ids": [],
+    "disposition": "本轮不选；保留历史，非断言原文错误",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 93,
+    "old_id": "tsukiyashiro_kisaki_sft_3c1523b72716a300",
+    "old_record_sha256": "1703504ad105447be808e2608be85de644819c378e76fb8b8fca2151c0465868",
+    "new_ids": [],
+    "disposition": "本轮不选；保留历史，非断言原文错误",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 94,
+    "old_id": "tsukiyashiro_kisaki_sft_b2a685ec1e86e434",
+    "old_record_sha256": "ed63b41ac6e4693b67d0b236e221a4bccc5cae22fd4482810b923ea752e1fbdf",
+    "new_ids": [],
+    "disposition": "本轮不选；保留历史，非断言原文错误",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 95,
+    "old_id": "tsukiyashiro_kisaki_sft_69e7bf8f95e247e6",
+    "old_record_sha256": "d9eef095a857e4a9560873cf313a72c7525ee69962caf6efbe780af009e39bfd",
+    "new_ids": [],
+    "disposition": "本轮不选；保留历史，非断言原文错误",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 96,
+    "old_id": "tsukiyashiro_kisaki_sft_01ab3d8a6c654965",
+    "old_record_sha256": "cac66afeb68cdc4a77bef31e9e8f73f2a27076356694dc568d3d5bcfb10300bc",
+    "new_ids": [],
+    "disposition": "本轮不选；保留历史，非断言原文错误",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 97,
+    "old_id": "tsukiyashiro_kisaki_sft_1342c210700a7aaa",
+    "old_record_sha256": "bccc16a9418eefeef5f9301deb1b1673f194036ada77ff02260003e1c588b745",
+    "new_ids": [
+      "kisaki_interactive_v2_88b8ec6b0457960e"
+    ],
+    "disposition": "用新单次交互替代；旧偏好失效",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 98,
+    "old_id": "tsukiyashiro_kisaki_sft_716725b52646103a",
+    "old_record_sha256": "4d450c737d01da545ebfe79879eca14d3fcad7a4f32ede69b5855224935a6937",
+    "new_ids": [
+      "kisaki_interactive_v2_38bc47bddf053f91"
+    ],
+    "disposition": "用新单次交互替代；旧偏好失效",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 99,
+    "old_id": "tsukiyashiro_kisaki_sft_6c60d4768dd3e182",
+    "old_record_sha256": "bbacb22131040632df76ba4635e9bb93a77fcc26471966a0b4097f265b253e5a",
+    "new_ids": [],
+    "disposition": "本轮不选；保留历史，非断言原文错误",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 100,
+    "old_id": "tsukiyashiro_kisaki_sft_d000011a986c92ac",
+    "old_record_sha256": "db5b44145e30f430a48f34c206db81bf9421431fa20df08cdfc0a84269fa0945",
+    "new_ids": [],
+    "disposition": "本轮不选；保留历史，非断言原文错误",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 101,
+    "old_id": "tsukiyashiro_kisaki_sft_b3c1b50414755b9d",
+    "old_record_sha256": "569500a3f2bafcff99989836d3be58c994337aa0fadf269c63a9f82780ed7913",
+    "new_ids": [
+      "kisaki_interactive_v2_53ce2df898205d46"
+    ],
+    "disposition": "用新单次交互替代；旧偏好失效",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 102,
+    "old_id": "tsukiyashiro_kisaki_sft_91aea59beb8b845a",
+    "old_record_sha256": "0e8b56d247874a7898ecdd574d00dcb1c0b00337e66561e9d016a81547d439cb",
+    "new_ids": [
+      "kisaki_interactive_v2_3627e97386600fcd"
+    ],
+    "disposition": "用新单次交互替代；旧偏好失效",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 103,
+    "old_id": "tsukiyashiro_kisaki_sft_b6ba117c6da2a30f",
+    "old_record_sha256": "bc8da79f5943054bd8b5f762804ad1ac18a94b4230eeb838974f273fba658499",
+    "new_ids": [
+      "kisaki_interactive_v2_b322aeb2f1f6d80b"
+    ],
+    "disposition": "用新单次交互替代；旧偏好失效",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 104,
+    "old_id": "tsukiyashiro_kisaki_sft_04245474c58040a0",
+    "old_record_sha256": "5f654408c45e7bd0c2c5184850610cbc14de20bea81c1c6233fc36534199e8d2",
+    "new_ids": [],
+    "disposition": "本轮不选；保留历史，非断言原文错误",
+    "old_generated_reusable": false
+  },
+  {
+    "old_number": 105,
+    "old_id": "tsukiyashiro_kisaki_sft_bcbaf2300fa3b1cb",
+    "old_record_sha256": "d7a02cb64acdb7a5c669934ab6fbd8cf65ee46ca057839cbb7617bbfcc0ddc98",
+    "new_ids": [
+      "kisaki_interactive_v2_dcbc0079dabc5492"
+    ],
+    "disposition": "用新单次交互替代；旧偏好失效",
+    "old_generated_reusable": false
+  }
+]

@@ -83,6 +83,11 @@ def generate_pairs(
     output_path: Path,
     mock: bool = False,
 ) -> int:
+    if not mock:
+        raise ValueError(
+            "Legacy Gold/template preference generation is disabled for real training; "
+            "use python -m training.persona_alignment sample with reviewed train scenes"
+        )
     from training.preference_data_schema import PreferencePair, save_jsonl
 
     with open(gold_prompts_path, "r", encoding="utf-8") as f:
@@ -118,6 +123,7 @@ def generate_pairs(
                 "source": "gold_prompts",
                 "category": category,
                 "gold_prompt_id": prompt_id,
+                "mock": True,
             },
             review_status="pending",
         )

@@ -68,7 +68,7 @@ async def test_synonym_retrieval_and_irrelevant_gate():
 
     assert total == 2
     assert [item.content for item in selected] == ["用户正在进行或准备：推免准备"]
-    assert repo.limits == [100]
+    assert repo.limits == [None]
 
 
 async def test_memory_embedding_cache_reuses_unchanged_vectors():

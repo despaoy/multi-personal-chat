@@ -1,0 +1,16 @@
+{
+  "base_model_path": "/home/boot/lhm/kisaki-dpo100-20260926/models/Qwen3-8B",
+  "adapter_path": "/home/boot/lhm/kisaki-dpo100-20260926/outputs/sft_r1/final",
+  "output_dir": "/home/boot/lhm/kisaki-dpo100-20260926/outputs/dpo_r1",
+  "method": "dpo",
+  "beta": 0.1,
+  "learning_rate": 2e-06,
+  "num_train_epochs": 1,
+  "per_device_train_batch_size": 1,
+  "gradient_accumulation_steps": 4,
+  "max_length": 1664,
+  "max_prompt_length": 1536,
+  "load_in_4bit": true,
+  "gradient_checkpointing": true,
+  "seed": 42
+}

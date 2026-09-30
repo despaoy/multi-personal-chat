@@ -19,7 +19,9 @@ from sqlalchemy import (
     String,
     ForeignKey,
     UniqueConstraint,
+    CheckConstraint,
     Index,
+    text,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -93,6 +95,13 @@ class Message(Base):
         Index("idx_messages_source_dedup", "platform", "adapter", "sourceMessageId"),
         Index("idx_messages_created_at", "createdAt"),
         Index("idx_messages_branch", "branchId", "createdAt"),
+        Index("idx_messages_private_source", "platform", "adapter", "senderId", "characterId",
+              text('"createdAt" DESC'), text('id DESC'),
+              sqlite_where=text('"branchId" IS NULL AND "conversationType" IN (\'private\', \'\')'),
+              postgresql_where=text('"branchId" IS NULL AND "conversationType" IN (\'private\', \'\')')),
+        Index("idx_messages_local_source", "platform", "adapter", "senderId", "characterId",
+              "conversationType", "conversationId", text('"createdAt" DESC'), text('id DESC'),
+              sqlite_where=text('"branchId" IS NULL'), postgresql_where=text('"branchId" IS NULL')),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -113,6 +122,7 @@ class Message(Base):
     reply: Mapped[str] = mapped_column(Text, nullable=False)
     modelName: Mapped[Optional[str]] = mapped_column(Text)
     loraName: Mapped[Optional[str]] = mapped_column(Text)
+    characterId: Mapped[Optional[str]] = mapped_column(Text)
     costTime: Mapped[Optional[float]] = mapped_column(Float)
     createdAt: Mapped[str] = mapped_column(Text, nullable=False)
     # 可空叙事分支作用域：NULL 表示正史消息；非空为 narrative_branches.id。
@@ -715,6 +725,44 @@ class CharacterMemory(Base):
 # ============================================
 # 29. 叙事分支表（正史/反事实分支隔离）
 # ============================================
+
+
+class MemorySourceFence(Base):
+    __tablename__ = "memory_source_fences"
+    owner_key: Mapped[str] = mapped_column(Text, primary_key=True)
+    revoked_before: Mapped[str] = mapped_column(Text, nullable=False)
+
+
+class MemorySource(Base):
+    __tablename__ = "memory_sources"
+    __table_args__ = (
+        Index("idx_memory_sources_scope", "scope_key", "state", "observed_at", "source_key"),
+        CheckConstraint("state IN ('pending', 'recorded', 'revoked')"),
+        CheckConstraint("(state = 'recorded' AND body IS NOT NULL AND observed_at IS NOT NULL) "
+                        "OR (state <> 'recorded' AND body IS NULL)"),
+    )
+    source_key: Mapped[str] = mapped_column(Text, primary_key=True)
+    owner_key: Mapped[str] = mapped_column(Text, nullable=False)
+    scope_key: Mapped[str] = mapped_column(Text, nullable=False)
+    source_message_id: Mapped[str] = mapped_column(Text, nullable=False)
+    observed_at: Mapped[Optional[str]] = mapped_column(Text)
+    body: Mapped[Optional[str]] = mapped_column(Text)
+    state: Mapped[str] = mapped_column(Text, nullable=False)
+
+
+class MemorySourceLink(Base):
+    __tablename__ = "memory_source_links"
+    __table_args__ = (Index("idx_memory_source_links_source", "source_key"),)
+    memory_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=False)
+    source_key: Mapped[str] = mapped_column(Text, primary_key=True)
+
+
+class MemorySourceTerm(Base):
+    __tablename__ = "memory_source_terms"
+    __table_args__ = (Index("idx_memory_source_terms_source", "source_key"),)
+    scope_key: Mapped[str] = mapped_column(Text, primary_key=True)
+    term: Mapped[str] = mapped_column(Text, primary_key=True)
+    source_key: Mapped[str] = mapped_column(Text, primary_key=True)
 
 
 class NarrativeBranch(Base):

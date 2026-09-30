@@ -162,6 +162,8 @@ class MemoryItem:
     - ``relation_type`` 保留本次 claim 与历史版本的关系；
     - ``evidence`` 与 ``source_message_ids`` 让回答能够追溯到原始事件，
       但其中的文本仍是用户控制内容，不能提升为系统指令。
+    - ``qualifiers`` 保留原有限定元数据供后续读取使用；条件本身并不证明
+      条件当前成立，也不能把必要条件当作行动发生的充分依据。
     """
 
     memory_id: str
@@ -176,6 +178,13 @@ class MemoryItem:
     relation_type: str = "ADD"
     source_message_ids: tuple[str, ...] = ()
     historical: bool = False
+    memory_key: str = ""
+    qualifiers: tuple[tuple[str, str], ...] = ()
+
+    # Observation references must never be consumed as current-field values.
+    temporal_mode: str = "fact"
+    observed_at: str = ""
+    source_observation: bool = False
 
     @property
     def relation(self) -> str:
@@ -229,6 +238,8 @@ class CompiledCharacterContext:
     - dynamic_context：当前关系、情景和行为决策（每轮变化）。
     - reference_context：长期记忆，单独保存且只进入用户消息的
       不可信参考区，防止记忆中的恶意内容被当成系统指令。
+    - conversation_reference_context：关系备忘录与对话便签，不升级为用户事实。
+    - episodic_reference_context：检索到的原始对话证据，受控开关默认关闭。
     - used_memory_ids：实际选中的记忆ID。
     """
 
@@ -237,3 +248,25 @@ class CompiledCharacterContext:
     reference_context: str
     used_memory_ids: tuple[str, ...] = ()
     branch_context: str = ""
+    memory_status: str = "not_checked"
+    # Exactly the budget-admitted packets, not the wider retrieval candidates.
+    memory_packets: tuple[MemoryItem, ...] = ()
+    # Scoped snapshot: True/False means typed present/absent, None means an
+    # unresolved legacy mapping. Missing fields have no complete read proof.
+    memory_field_presence: tuple[tuple[str, bool | None], ...] = ()
+    # Source coverage is distinct from the scoped structured-claim snapshot.
+    # An omitted/failed raw-source read cannot establish absence of speech.
+    memory_source_status: str = "not_checked"
+    # Provenance display, never injected into the current-fact memory packets.
+    memory_review_query: str = ""
+    memory_review_text: str = ""
+    # Raw dialogue evidence is not an active user fact; opt-in source producer.
+    episodic_reference_context: str = ""
+    # Conversation notes/preferences are contextual cues, not user fact packets.
+    conversation_reference_context: str = ""
+    # These selected observation IDs remain represented by complete source
+    # packets, not repeated in reference_context. No stored record is removed.
+    source_shared_memory_ids: tuple[str, ...] = ()
+    # Transient backup for replacing/clearing an attached source packet safely.
+    source_reference_backup: str = ""
+    memory_operation_receipt: dict[str, object] | None = None

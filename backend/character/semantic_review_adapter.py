@@ -23,7 +23,11 @@ SEMANTIC_REVIEW_TIMEOUT_ENV = "DYNAMIC_CONTEXT_SEMANTIC_REVIEW_TIMEOUT_SECONDS"
 DEFAULT_SEMANTIC_REVIEW_TIMEOUT_SECONDS = 5.0
 MIN_SEMANTIC_REVIEW_TIMEOUT_SECONDS = 0.1
 MAX_SEMANTIC_REVIEW_TIMEOUT_SECONDS = 30.0
-SEMANTIC_REVIEW_MAX_TOKENS = 384
+# A complete state includes three signal maps plus scalar fields. Providers
+# may serialize all allowed zero-score signals with whitespace; 384 tokens
+# truncated an otherwise valid real response before conversation_phase.
+# This is an output ceiling, not a minimum or an extra inference pass.
+SEMANTIC_REVIEW_MAX_TOKENS = 768
 
 _TRUE_VALUES = frozenset({"1", "true", "yes", "on"})
 

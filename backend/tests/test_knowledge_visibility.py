@@ -52,7 +52,8 @@ def test_pending_annotation_is_not_authority():
     assert not visible_to(doc, KnowledgeBoundary("kisaki", 10))
 
 
-def test_boundary_filters_parents_timelines_and_raw_evidence_before_exposure(monkeypatch):
+@pytest.mark.parametrize('query', ['请提供关系的原著段落', '两个人是什么关系？'])
+def test_boundary_filters_parents_timelines_and_raw_evidence_before_exposure(monkeypatch, query):
     known, future = _doc("known"), _doc("future", start=50)
     scene = _doc("secret-scene", start=50, kind="scene")
     evidence = _doc("secret-evidence", start=50, kind="evidence")
@@ -65,6 +66,7 @@ def test_boundary_filters_parents_timelines_and_raw_evidence_before_exposure(mon
         return [RetrievalCandidate(0, future), RetrievalCandidate(1, known)]
 
     instance = object.__new__(service.RoutedMultiScaleService)
+    instance.identity_coverage = False
     instance.config = SimpleNamespace(domain_id="test")
     instance.analyzer = None
     instance.indexes = {frozenset({"relation"}): index}
@@ -81,11 +83,12 @@ def test_boundary_filters_parents_timelines_and_raw_evidence_before_exposure(mon
         return candidates
 
     monkeypatch.setattr(service, "rerank_with_title_frames", rerank)
-    result = instance.retrieve("关系和原文", top_k=1, knowledge_boundary=KnowledgeBoundary("kisaki", 10))
+    result = instance.retrieve(query, top_k=1, knowledge_boundary=KnowledgeBoundary("kisaki", 10))
     assert recalls == [100]
     assert "secret" not in result["context_text"]
     assert "future" not in str(result)
     assert result["raw_excerpt"] is None
+    assert result['raw_source_status'] == ('no_visible_source' if '原著' in query else 'not_requested')
     assert [item["id"] for item in result["relation_timeline"]] == ["known"]
     assert result["knowledge_boundary_applied"]
 

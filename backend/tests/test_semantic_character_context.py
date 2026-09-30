@@ -35,8 +35,34 @@ class _MemoryService:
         return (), 0
 
 
+async def test_retrieval_failure_is_visible_through_preparation():
+    class FailedRecall:
+        async def recall_with_diagnostics(self, *args, **kwargs):
+            return (), 0, {'status': 'retrieval_error', 'stage': 'read', 'error_type': 'RuntimeError'}
+
+    service = _service()
+    service._memory_service = FailedRecall()
+    prepared = await service.prepare_turn(_turn('我的专业是什么？'), 'tsukiyashiro_kisaki')
+    assert prepared.memory_recall['status'] == 'retrieval_error'
+    assert prepared.compiled.memory_status == 'retrieval_error'
+    assert prepared.compiled.used_memory_ids == ()
+
+
+async def test_storage_snapshot_reaches_generation_without_selected_memory():
+    class RecallSnapshot:
+        async def recall_with_diagnostics(self, *args, **kwargs):
+            return (), 1, {'status': 'no_relevant_candidates',
+                           'field_presence': {'name': False, 'major': True, 'workplace': 'false', 'residence': None}}
+
+    service = _service()
+    service._memory_service = RecallSnapshot()
+    prepared = await service.prepare_turn(_turn('你保存了我的姓名和专业吗？'), 'tsukiyashiro_kisaki')
+    assert dict(prepared.compiled.memory_field_presence) == {'name': False, 'major': True, 'residence': None}
+    assert prepared.compiled.used_memory_ids == ()
+
+
 class _Messages:
-    async def list_recent_conversation_history(self, _user_scope, *, limit, max_chars):
+    async def list_recent_conversation_history(self, _user_scope, *, limit, max_chars, character_id=None):
         del limit, max_chars
         return ()
 

@@ -98,6 +98,7 @@ services:
       VLLM_BASE_URL: http://vllm:8001
       VLLM_BASE_URLS: http://vllm:8001
       VLLM_SERVED_MODEL_NAME: qwen3-8b-instruct-awq
+      VLLM_MAX_MODEL_LEN: "${VLLM_MAX_MODEL_LEN:-24576}"
       # Both roots map ./data/loras below, but each value is in its own
       # container namespace. The backend translates adapter names to /loras
       # before asking vLLM to load them.

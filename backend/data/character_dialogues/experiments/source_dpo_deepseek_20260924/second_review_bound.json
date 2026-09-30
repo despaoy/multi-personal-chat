@@ -1,0 +1,145 @@
+{
+  "feedback_source": "ai",
+  "human_final_approved": false,
+  "decisions": [
+    {
+      "decision": "keep",
+      "evidence_lines": [
+        2214,
+        2216,
+        2217
+      ],
+      "reason": "原文延续面对真实感情和告白恐惧的劝说；候选把不告白说成必然永远失去琉璃，加入前文没有给出的确定后果。作为不凭空升级后果的偏好对保留。",
+      "id": "tsukiyashiro_kisaki_sft_6b8200d369b31df1",
+      "audit_record_sha256": "494dfadf52b84422eb0ece2d09342bb83127c82ad4731ec56a267164a084437f"
+    },
+    {
+      "decision": "keep",
+      "evidence_lines": [
+        1439,
+        1440,
+        1443,
+        1445,
+        1447,
+        1449
+      ],
+      "reason": "妃刚到饭厅，不知道此前关于夜子曲奇的秘密谈话。候选直接把小包与夜子关联，并自行添加旁白；原文根据眼前的愉快语气提问，保持知识边界。",
+      "id": "tsukiyashiro_kisaki_sft_acd5d69883675bea",
+      "audit_record_sha256": "834522eaab8c2e9c97e36cf98dc66b1801cbe4c76b279679d277cf6aad9c3c5d"
+    },
+    {
+      "decision": "keep",
+      "evidence_lines": [
+        1964,
+        1966,
+        1967,
+        1970
+      ],
+      "reason": "母亲询问来电者身份，原文以女儿身份反问并延续盘问语气；候选额外断言自己是琉璃的姐姐。原作其他已核验片段明确妃为妹妹，此输入也没有支持姐姐的资料，不应擅自补充年龄关系。",
+      "id": "tsukiyashiro_kisaki_sft_77a7de5cdd5c9b2f",
+      "audit_record_sha256": "bfc1a22d732920f444dcb9bddf128e35fb3f351481ea5ff23cfb3805dbd9a2dd"
+    },
+    {
+      "decision": "keep",
+      "evidence_lines": [
+        2735,
+        2737,
+        2738
+      ],
+      "reason": "面对夜子可能知道却没有说明的间接消息，原文保留不确定性并表达遗憾；候选把可能升级为明确知道，另添加从小不擅长撒谎的无依据人物经历。",
+      "id": "tsukiyashiro_kisaki_sft_dff7a40935e995b7",
+      "audit_record_sha256": "1b9446fbf693dcfb69bbdaebb8a49b37c0428cdd88f2afc80afd7e697e15bbdb"
+    },
+    {
+      "decision": "keep",
+      "evidence_lines": [
+        2736,
+        2739,
+        2740,
+        2741,
+        2748
+      ],
+      "reason": "前文明确藏书、严峻和沮丧的表现；候选自行补写把书合上放在膝头、坏心眼笑容以及故事停滞原因，含与既有动作不一致的旁白。原文用反问维持当前未知状态。",
+      "id": "tsukiyashiro_kisaki_sft_3a4deefb7f8874db",
+      "audit_record_sha256": "d4676dbbcc79ee49d8cfb31e7d847f110aeea8a87ffcd30599b9b08fb444f441"
+    },
+    {
+      "decision": "keep",
+      "evidence_lines": [
+        250,
+        268,
+        291,
+        293,
+        294,
+        298
+      ],
+      "reason": "妃已反复拒绝汀追问，并在露出心事后遮脸敷衍。原文继续否认并用反话掩饰；候选立刻向同一对话者承认喜欢的人及单相思，破坏正在维持的关系边界。",
+      "id": "tsukiyashiro_kisaki_sft_3c6d32f6b9b563d6",
+      "audit_record_sha256": "eaf5aaa21b3dfb3ed31626bc465653830ffcaad1579a44cd2102c6e2e8d098a6"
+    },
+    {
+      "decision": "keep",
+      "evidence_lines": [
+        854,
+        859,
+        868,
+        874,
+        879,
+        882
+      ],
+      "reason": "已知约束是不能违抗夜子，并未给出无法幸福或没有追求幸福权利的设定。候选把消极态度变成新增世界观规则；原文以冰棒和自嘲转移话题，不擅自扩张规则。",
+      "id": "tsukiyashiro_kisaki_sft_3dfe0f04f9f8c8d1",
+      "audit_record_sha256": "20e75134adee7a53ff833e027e89499987187ef686c537da9d63deedb89e9935"
+    },
+    {
+      "decision": "keep",
+      "evidence_lines": [
+        1059,
+        1065,
+        1067,
+        1068,
+        1069
+      ],
+      "reason": "夜子已经在场，争议是琉璃是否参加茶话会。候选把问题转成夜子自己想参加，误解对话指向；原文围绕是否允许琉璃加入作回应。",
+      "id": "tsukiyashiro_kisaki_sft_00e6d63069e349e0",
+      "audit_record_sha256": "884ccc6a28e10bc3c247f83279d997efd2f8f9d46b3f026a55aac258cc1e10d0"
+    },
+    {
+      "decision": "keep",
+      "evidence_lines": [
+        1639,
+        1641,
+        1643,
+        1645,
+        1648
+      ],
+      "reason": "前文明确汀只是把妃当作妹妹，并要结束这种看待方式。原文强调自身始终是独立的人；候选重新要求其保持哥哥立场，且擅自添加僵住和摇头的旁白，偏离已给出的边界。",
+      "id": "tsukiyashiro_kisaki_sft_b6ba117c6da2a30f",
+      "audit_record_sha256": "bc8da79f5943054bd8b5f762804ad1ac18a94b4230eeb838974f273fba658499"
+    },
+    {
+      "decision": "exclude",
+      "evidence_lines": [
+        2752,
+        2758,
+        2759
+      ],
+      "reason": "不接受初筛所称那就好没有承接对象的硬错误。它可以回应琉璃否认想忘记妃，不能仅因原文有更明确的后续立场就把短回复判为错误；此对暂不保留。",
+      "id": "tsukiyashiro_kisaki_sft_b84c79a9e9631df1",
+      "audit_record_sha256": "8c5f74b5263012c8f69b904e6b6ec949db8be6bf5fa138e3c4b50e2b0ce78a70"
+    },
+    {
+      "decision": "hold",
+      "evidence_lines": [
+        3549,
+        3551,
+        3558,
+        3562,
+        3563
+      ],
+      "reason": "候选确有编造公园和首次哭泣经历的问题；但原文提取文本存在能我提供的疑似缺字，本轮不悄悄修正文稿，暂存用于后续校勘。",
+      "id": "tsukiyashiro_kisaki_sft_7e388fc7fb81906b",
+      "audit_record_sha256": "6fdb5a66b6a4a51bad0f693946ade8b670cb0c47498281961fb4a0852dd53f2c"
+    }
+  ]
+}

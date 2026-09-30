@@ -180,7 +180,8 @@ async def test_current_turn_overlay_then_successful_persistence(repo, monkeypatc
         history=({"role": "user", "content": "你好"},),
     )
     prepared = await service.prepare_turn(turn, "kisaki")
-    assert "不要追问我的收入" in prepared.compiled.reference_context
+    assert "不要追问我的收入" in prepared.compiled.conversation_reference_context
+    assert "不要追问我的收入" not in prepared.compiled.reference_context
     assert "不要追问我的收入" not in prepared.compiled.dynamic_context
     assert "不以亲近为由追问" in prepared.compiled.dynamic_context
     assert not await repo.list_relationship_notes("kisaki", SCOPE)  # prepare never writes
@@ -190,7 +191,7 @@ async def test_current_turn_overlay_then_successful_persistence(repo, monkeypatc
     assert (await repo.get_relationship("kisaki", SCOPE)).stage == "close"  # no stale override
     plain = TurnInput("你好", "qq", "nonebot", "alice", "group1", "group", history=turn.history)
     prepared = await service.prepare_turn(plain, "kisaki")
-    assert "不要追问我的收入" in prepared.compiled.reference_context
+    assert "不要追问我的收入" in prepared.compiled.conversation_reference_context
 
 
 @pytest.mark.asyncio

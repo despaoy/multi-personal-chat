@@ -9,7 +9,9 @@ from datetime import datetime
 from typing import Optional, Dict
 
 from cache.ttl_value_cache import BoundedTTLCache
+from db.conversation_indexes import SOURCE_INDEX_STATEMENTS
 from db.errors import RegistrationClosedError
+from db import memory_source
 
 logger = logging.getLogger(__name__)
 
@@ -713,6 +715,8 @@ class SQLiteDB:
         # 聊天消息是不可变 event；角色长期记忆表保存可版本化 claim。
         self._create_character_memories_table(cursor)
         self._ensure_character_memory_claim_schema(cursor)
+        for statement in memory_source.SCHEMA:
+            cursor.execute(statement)
 
         # 叙事分支隔离：分支元数据、分支事实断言、分支会话状态。
         # 与 alembic 009_narrative_branches 保持一致；此处为开发库幂等兜底。
@@ -769,6 +773,7 @@ class SQLiteDB:
         self._ensure_column(cursor, "messages", "senderName", "TEXT")
         # 可空分支作用域：NULL=正史。正史读取过滤 branchId IS NULL。
         self._ensure_column(cursor, "messages", "branchId", "TEXT")
+        self._ensure_column(cursor, "messages", "characterId", "TEXT")
         # One-way compatibility migration: legacy session_settings is folded into
         # conversations and then removed. Fresh databases never create this table.
         try:
@@ -887,6 +892,10 @@ class SQLiteDB:
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_messages_branch ON messages(branchId, createdAt)')
         except Exception:
             pass  # 索引已存在或 SQLite 版本不支，不影响功能
+
+        # Do not silently leave source reads without their scope-first indexes.
+        for statement in SOURCE_INDEX_STATEMENTS:
+            cursor.execute(statement)
 
         # 初始化LoRA数据（如果表为空）
         cursor.execute('SELECT COUNT(*) FROM loras')
@@ -1441,9 +1450,9 @@ class SQLiteDB:
                 sessionType, sessionId, sessionName, platform, adapter, conversationId,
                 conversationType, senderId, senderName, sourceMessageId, traceId,
                 userId, userName, message, reply, modelName, loraName, costTime, createdAt,
-                branchId
+                branchId, characterId
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
             message.get("sessionType", conversation_type),
             message.get("sessionId", ""),
@@ -1466,6 +1475,7 @@ class SQLiteDB:
             created_at,
             # None → NULL → 正史；非空 → 该条消息属于对应分支。
             message.get("branchId") or None,
+            message.get("characterId") or None,
         ))
 
         message_id = cursor.lastrowid
@@ -3021,40 +3031,50 @@ class SQLiteDB:
         where, params = self._character_scope_where(
             character_id, platform, adapter, sender_id, conversation_type, conversation_id
         )
-        cursor.execute('''
-            INSERT INTO character_memories (
+        source_fields = (character_id, platform, adapter, sender_id, conversation_type, conversation_id)
+        try:
+            cursor.execute('BEGIN IMMEDIATE')
+            memory_source.run_sqlite(cursor, memory_source.lock_owner(memory_source.owner_scope(*source_fields)))
+            cursor.execute('''
+                INSERT INTO character_memories (
+                    character_id, platform, adapter, sender_id, conversation_type,
+                    conversation_id, scope_level, memory_type, memory_key, revision,
+                    relation_type, status, content, importance, confidence,
+                    source_message_id, source_message_ids_json, evidence_json,
+                    metadata_json, observed_at, created_at, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, 'conversation', ?, ?, 0, 'ADD', 'active',
+                        ?, ?, 1.0, ?, '[]', '[]', '{}', ?, ?, ?)
+                ON CONFLICT(character_id, platform, adapter, sender_id, conversation_type,
+                            conversation_id, scope_level, memory_key, revision)
+                DO UPDATE SET
+                    memory_type = excluded.memory_type,
+                    content = excluded.content,
+                    importance = excluded.importance,
+                    source_message_id = excluded.source_message_id,
+                    updated_at = excluded.updated_at
+            ''', (
                 character_id, platform, adapter, sender_id, conversation_type,
-                conversation_id, scope_level, memory_type, memory_key, revision,
-                relation_type, status, content, importance, confidence,
-                source_message_id, source_message_ids_json, evidence_json,
-                metadata_json, observed_at, created_at, updated_at
+                conversation_id, memory_type, memory_key, content, float(importance),
+                source_message_id, now, now, now,
+            ))
+            # 写入后回读真实记录（id 与 created_at 以数据库为准）
+            cursor.execute(
+                f"SELECT * FROM character_memories WHERE {where} AND scope_level = 'conversation' "
+                "AND memory_key = ? AND revision = 0",
+                [*params, memory_key],
             )
-            VALUES (?, ?, ?, ?, ?, ?, 'conversation', ?, ?, 0, 'ADD', 'active',
-                    ?, ?, 1.0, ?, '[]', '[]', '{}', ?, ?, ?)
-            ON CONFLICT(character_id, platform, adapter, sender_id, conversation_type,
-                        conversation_id, scope_level, memory_key, revision)
-            DO UPDATE SET
-                memory_type = excluded.memory_type,
-                content = excluded.content,
-                importance = excluded.importance,
-                source_message_id = excluded.source_message_id,
-                updated_at = excluded.updated_at
-        ''', (
-            character_id, platform, adapter, sender_id, conversation_type,
-            conversation_id, memory_type, memory_key, content, float(importance),
-            source_message_id, now, now, now,
-        ))
-        conn.commit()
-        # 写入后回读真实记录（id 与 created_at 以数据库为准）
-        cursor.execute(
-            f"SELECT * FROM character_memories WHERE {where} AND scope_level = 'conversation' "
-            "AND memory_key = ? AND revision = 0",
-            [*params, memory_key],
-        )
-        row = cursor.fetchone()
-        if row is None:  # pragma: no cover - 提交成功后行必存在
-            raise RuntimeError("add_or_update_character_memory 提交后读取失败")
-        return dict(row)
+            row = cursor.fetchone()
+            if row is None:  # pragma: no cover - 提交成功后行必存在
+                raise RuntimeError("add_or_update_character_memory 提交后读取失败")
+            identity = memory_source.claim_source_identity(source_fields, source_message_id)
+            if identity is not None:
+                memory_source.run_sqlite(cursor, memory_source.link_plan(identity, row['id']))
+            conn.commit()
+            return dict(row)
+        except Exception:
+            conn.rollback()
+            raise
 
     def append_character_memory_claim(
         self,
@@ -3114,8 +3134,25 @@ class SQLiteDB:
         observed = observed_at or now
         try:
             cursor.execute("BEGIN IMMEDIATE")
+            source_fields = (character_id, platform, adapter, sender_id, conversation_type, conversation_id)
+            source_fence = memory_source.run_sqlite(
+                cursor, memory_source.lock_owner(memory_source.owner_scope(*source_fields)))
+            memory_source.validate_claim_receipt(source_fence, observed_at)
             target_id = supersedes_memory_id
             rule_metadata = json.loads(metadata_json)
+            from db.pending_resolution import pending_resolution_ids
+
+            resolved_ids = pending_resolution_ids(rule_metadata, relation, resolved_status)
+            for candidate_id in resolved_ids:
+                cursor.execute(
+                    "SELECT id FROM character_memories WHERE id = ? AND character_id = ? AND platform = ? "
+                    "AND adapter = ? AND sender_id = ? AND conversation_type = ? AND conversation_id = ? "
+                    "AND scope_level = ? AND memory_key = ? AND status = 'pending'",
+                    (candidate_id, storage_character, platform, adapter, sender_id, storage_type,
+                     storage_conversation, scope_level, memory_key),
+                )
+                if cursor.fetchone() is None:
+                    raise ValueError('pending memory is not available in the exact rule scope')
             if isinstance(rule_metadata, dict) and rule_metadata.get("origin") == "rule_v2":
                 cursor.execute(
                     "SELECT id FROM character_memories WHERE character_id = ? AND platform = ? "
@@ -3135,11 +3172,15 @@ class SQLiteDB:
                     character_id, platform, adapter, sender_id, conversation_type, conversation_id
                 )
                 cursor.execute(
-                    f"SELECT id FROM character_memories WHERE id = ? AND {target_where}",
+                    f"SELECT id, status, observed_at FROM character_memories WHERE id = ? AND {target_where}",
                     [int(target_id), *target_params],
                 )
-                if cursor.fetchone() is None:
+                target_record = cursor.fetchone()
+                if target_record is None:
                     raise ValueError("target memory is not visible in the requested user scope")
+                from db.memory_claim_guard import validate_memory_target
+
+                validate_memory_target(relation, target_record["status"], target_record["observed_at"], observed)
 
             cursor.execute(
                 "SELECT COALESCE(MAX(revision), 0) + 1 FROM character_memories WHERE "
@@ -3170,6 +3211,9 @@ class SQLiteDB:
                 valid_from, valid_to, observed, now, now,
             ))
             memory_id = int(cursor.lastrowid)
+            source_identity = memory_source.claim_source_identity(source_fields, source_message_id)
+            if source_identity is not None:
+                memory_source.run_sqlite(cursor, memory_source.link_plan(source_identity, memory_id))
 
             if target_id is not None and relation in {"SUPERSEDE", "MERGE", "RETRACT"}:
                 target_status = "retracted" if relation == "RETRACT" else "superseded"
@@ -3177,6 +3221,11 @@ class SQLiteDB:
                     "UPDATE character_memories SET status = ?, valid_to = COALESCE(valid_to, ?), "
                     "updated_at = ? WHERE id = ?",
                     (target_status, observed, now, int(target_id)),
+                )
+            for candidate_id in resolved_ids:
+                cursor.execute(
+                    "UPDATE character_memories SET status = 'archived', valid_to = COALESCE(valid_to, ?), "
+                    "updated_at = ? WHERE id = ?", (observed, now, candidate_id),
                 )
             conn.commit()
         except Exception:
@@ -3227,8 +3276,8 @@ class SQLiteDB:
     ) -> int:
         """Physically erase a claim/key and every derived descendant.
 
-        No tombstone, reason, or evidence is retained: ERASE is deliberately a
-        privacy operation, unlike RETRACT which keeps an auditable version row.
+        No claim text/reason/evidence is retained. Source identity-only revocation
+        anchors prevent delayed tasks from restoring full source quotes.
         """
         if memory_id is None and not str(memory_key or "").strip():
             raise ValueError("ERASE requires memory_id or memory_key")
@@ -3246,6 +3295,9 @@ class SQLiteDB:
         cursor = conn.cursor()
         try:
             cursor.execute("BEGIN IMMEDIATE")
+            source_scope = memory_source.owner_scope(
+                character_id, platform, adapter, sender_id, conversation_type, conversation_id)
+            memory_source.run_sqlite(cursor, memory_source.lock_owner(source_scope))
             if memory_id is not None:
                 cursor.execute(
                     f"SELECT id FROM character_memories WHERE id = ? AND {where}",
@@ -3281,6 +3333,7 @@ class SQLiteDB:
                 erase_ids.update(found)
                 frontier = found
             if erase_ids:
+                memory_source.run_sqlite(cursor, memory_source.revoke_plan(source_scope, erase_ids))
                 placeholders = ",".join("?" for _ in erase_ids)
                 cursor.execute(
                     f"DELETE FROM character_memories WHERE id IN ({placeholders})",
@@ -3307,13 +3360,93 @@ class SQLiteDB:
         where, params = self._character_scope_where(
             character_id, platform, adapter, sender_id, conversation_type, conversation_id
         )
-        cursor.execute(
-            f"DELETE FROM character_memories WHERE {where} AND scope_level = 'conversation'",
-            params,
-        )
-        deleted = cursor.rowcount
-        conn.commit()
-        return deleted
+        try:
+            cursor.execute("BEGIN IMMEDIATE")
+            source_scope = memory_source.owner_scope(
+                character_id, platform, adapter, sender_id, conversation_type, conversation_id)
+            memory_source.run_sqlite(cursor, memory_source.lock_owner(source_scope))
+            cursor.execute(f"SELECT id FROM character_memories WHERE {where} AND scope_level = 'conversation'", params)
+            ids = [row[0] for row in cursor.fetchall()]
+            memory_source.run_sqlite(cursor, memory_source.revoke_plan(source_scope, ids, clear=True))
+            cursor.execute(
+                f"DELETE FROM character_memories WHERE {where} AND scope_level = 'conversation'", params)
+            deleted = cursor.rowcount
+            conn.commit()
+            return deleted
+        except Exception:
+            conn.rollback()
+            raise
+
+    def erase_unlinked_memory_sources(self, character_id, platform, adapter, sender_id,
+                                      conversation_type, conversation_id, *, source_message_ids):
+        from db.source_erasure import erase_unlinked_plan
+
+        scope = memory_source.source_scope(
+            character_id, platform, adapter, sender_id, conversation_type, conversation_id)
+        conn = self._get_connection()
+        try:
+            cursor = conn.cursor()
+            cursor.execute('BEGIN IMMEDIATE')
+            result = memory_source.run_sqlite(cursor, erase_unlinked_plan(scope, source_message_ids))
+            conn.commit()
+            return result
+        except Exception:
+            conn.rollback()
+            raise
+
+    def capture_memory_source(self, character_id, platform, adapter, sender_id,
+                              conversation_type, conversation_id, *, source_message_id, body, observed_at):
+        scope = memory_source.source_scope(
+            character_id, platform, adapter, sender_id, conversation_type, conversation_id)
+        identity = memory_source.source_identity(scope, source_message_id)
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute("BEGIN IMMEDIATE")
+            result = memory_source.run_sqlite(cursor, memory_source.capture_plan(identity, body, observed_at))
+            conn.commit()
+            return result
+        except Exception:
+            conn.rollback()
+            raise
+
+    def list_memory_sources(self, character_id, platform, adapter, sender_id,
+                            conversation_type, conversation_id, *, source_message_ids=None, limit=100):
+        scope = memory_source.source_scope(
+            character_id, platform, adapter, sender_id, conversation_type, conversation_id)
+        return memory_source.run_sqlite(self._get_connection().cursor(), memory_source.read_plan(
+            scope, source_message_ids=source_message_ids, limit=limit))
+
+    def linked_memory_sources(self, character_id, platform, adapter, sender_id,
+                              conversation_type, conversation_id, *, memory_ids, limit=100):
+        scope = memory_source.source_scope(
+            character_id, platform, adapter, sender_id, conversation_type, conversation_id)
+        return memory_source.run_sqlite(self._get_connection().cursor(),
+                                        memory_source.linked_read_plan(scope, memory_ids, limit=limit))
+
+    def memory_source_windows(self, character_id, platform, adapter, sender_id,
+                              conversation_type, conversation_id, *, source_message_ids, radius=1):
+        from db.memory_source_window import window_plan
+
+        scope = memory_source.source_scope(
+            character_id, platform, adapter, sender_id, conversation_type, conversation_id)
+        return memory_source.run_sqlite(self._get_connection().cursor(),
+                                        window_plan(scope, source_message_ids, radius=radius))
+
+    def search_memory_sources(self, character_id, platform, adapter, sender_id,
+                              conversation_type, conversation_id, *, query, limit=32):
+        from db.memory_source_search import search_plan
+
+        scope = memory_source.source_scope(
+            character_id, platform, adapter, sender_id, conversation_type, conversation_id)
+        return memory_source.run_sqlite(self._get_connection().cursor(), search_plan(scope, query, limit=limit))
+
+    def list_scoped_conversation_turns(self, user_scope, character_id, *, limit=200, before=None):
+        from db.conversation_source import assemble_turn_page, turn_source_query
+
+        query, params = turn_source_query(user_scope, character_id, limit=limit, before=before)
+        rows = self._get_connection().execute(query, params).fetchall()
+        return assemble_turn_page(rows, user_scope, character_id, limit=limit)
 
     def list_conversation_history(
         self,
@@ -3324,13 +3457,14 @@ class SQLiteDB:
         conversation_id: str,
         limit: int = 8,
         max_chars: int = 6000,
+        character_id: str | None = None,
     ) -> list:
         """按用户范围读取最近对话历史，组装成角色生成用的消息列表。
 
         - 私聊：platform+adapter+senderId 下全部私聊记录；
         - 群聊/频道：再加 conversationId（群/频道）过滤，只看该用户在该群的消息；
         - 返回按时间正序的 [{"role": "user"|"assistant", "content": ...}]，
-          总字符数超过 max_chars 时从最旧一侧截断。
+          按完整数据库问答轮保留最近连续后缀，正数 max_chars 为硬上限。
         """
         conn = self._get_connection()
         cursor = conn.cursor()
@@ -3338,39 +3472,33 @@ class SQLiteDB:
 
         conditions = ["platform = ?", "adapter = ?", 'senderId = ?', 'branchId IS NULL', HISTORY_DELIVERY_FILTER]
         params: list = [platform, adapter, sender_id]
+        # Unknown legacy identities are not evidence for any named character.
+        if character_id is not None:
+            conditions.append('characterId = ?')
+            params.append(character_id)
         if conversation_type in ("group", "channel") or adapter == "narrative":
             conditions.append('"conversationId" = ?')
             params.append(conversation_id)
+            conditions.append('conversationType = ?')
+            params.append(conversation_type)
         else:
             conditions.append('(conversationType = ? OR conversationType = ?)')
             params.extend(["private", ""])
+        from db.history_budget import history_turn_limit
+
         cursor.execute(
-            f'SELECT message, reply, createdAt FROM messages WHERE {" AND ".join(conditions)} '
-            "ORDER BY createdAt DESC LIMIT ?",
-            [*params, max(1, min(int(limit), 50))],
+            f'SELECT message, reply, createdAt, sourceMessageId, characterId, conversationType, conversationId '
+            f'FROM messages WHERE {" AND ".join(conditions)} '
+            "ORDER BY createdAt DESC, id DESC LIMIT ?",
+            [*params, history_turn_limit(limit)],
         )
         rows = cursor.fetchall()
-        # 倒序取出后翻转为时间正序
-        turns: list = []
-        for row in reversed(rows):
-            message = (row["message"] or "").strip()
-            reply = (row["reply"] or "").strip()
-            if message:
-                turns.append({"role": "user", "content": message})
-            if reply:
-                turns.append({"role": "assistant", "content": reply})
-        # 总长度预算：超限时从最旧一侧丢弃整条消息
-        if max_chars > 0:
-            kept: list = []
-            total = 0
-            for item in reversed(turns):
-                total += len(item["content"])
-                if total > max_chars and kept:
-                    break
-                kept.append(item)
-            kept.reverse()
-            turns = kept
-        return turns
+        from db.history_budget import assemble_history
+        from db.history_source_grants import filter_plan
+
+        rows = memory_source.run_sqlite(cursor, filter_plan([dict(row) for row in rows], platform, adapter, sender_id))
+
+        return assemble_history(((row['message'], row['reply']) for row in rows), max_chars)
 
     # ============================================
     # LoRA 管理（高层方法）

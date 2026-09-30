@@ -1,0 +1,737 @@
+[
+  {
+    "number": 1,
+    "id": "tsukiyashiro_kisaki_sft_f7cc315376cf0a13",
+    "audit_record_sha256": "a6cae5f1a6ffc7b66669a501990eda024e537a00f328b62a3cc4fdbf4fb63773",
+    "suggestion": "弱偏好，暂不直接入训",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 2,
+    "id": "tsukiyashiro_kisaki_sft_e73299fab403212a",
+    "audit_record_sha256": "39e66e2bfefdb9e50bb5d497ae46ce9809a969e13e270555b15f0d9b41eeee02",
+    "suggestion": "不构成可靠偏好对",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 3,
+    "id": "tsukiyashiro_kisaki_sft_f4bf72d40561062f",
+    "audit_record_sha256": "24190c6166a7031b693b095f3319362534a85eff9c060f91f964a2dc1e1cabb9",
+    "suggestion": "弱偏好，暂不直接入训",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 4,
+    "id": "tsukiyashiro_kisaki_sft_9a767e515be060d3",
+    "audit_record_sha256": "acaa85d539705a3254071ef9b0bcc78e91e843c91e24c286d0154cc426165fba",
+    "suggestion": "建议保留候选",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 5,
+    "id": "tsukiyashiro_kisaki_sft_6b8200d369b31df1",
+    "audit_record_sha256": "494dfadf52b84422eb0ece2d09342bb83127c82ad4731ec56a267164a084437f",
+    "suggestion": "弱偏好，需确认劝告方式",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 6,
+    "id": "tsukiyashiro_kisaki_sft_58a39e58ee5bfc67",
+    "audit_record_sha256": "66d78948e830d95ee3db6af7a77a53a7ecb555d2ad3ce67ee4603314556c2616",
+    "suggestion": "不构成可靠偏好对",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 7,
+    "id": "tsukiyashiro_kisaki_sft_46b17d041cad2c81",
+    "audit_record_sha256": "d56d6a682c6436b1999081d0b19bb785737f332cfdaecaa787d4f3f40ce93949",
+    "suggestion": "不构成可靠偏好对",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 8,
+    "id": "tsukiyashiro_kisaki_sft_91a1474ac2bed517",
+    "audit_record_sha256": "eecb4c9a8121bb00a7992d6d384947115e170f8a6a4a1cbaa7884c9fe355e731",
+    "suggestion": "不构成可靠偏好对",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 9,
+    "id": "tsukiyashiro_kisaki_sft_e67437c50ef7dc13",
+    "audit_record_sha256": "4aa2275fa289b160474bac475231adb3b20856d63dfff0b30378218a8d622696",
+    "suggestion": "不构成可靠偏好对",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 10,
+    "id": "tsukiyashiro_kisaki_sft_852545247d5c8061",
+    "audit_record_sha256": "b34122a3de221c075186d448974637b12b1fe5a0bc99bd70db21ce4108756533",
+    "suggestion": "建议保留候选",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 11,
+    "id": "tsukiyashiro_kisaki_sft_f573b7137d801c50",
+    "audit_record_sha256": "fb9e7028f6b13b530731c70a11189ffededed64234ce0a5ffee515b650f26bd1",
+    "suggestion": "不构成可靠偏好对",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 12,
+    "id": "tsukiyashiro_kisaki_sft_fa7bcec2b107e178",
+    "audit_record_sha256": "cf8cc7c58ba13e89f86b0591e2a00f4934fc87f040372fa01ce990521f116dae",
+    "suggestion": "不构成可靠偏好对",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 13,
+    "id": "tsukiyashiro_kisaki_sft_c00fb5c8ace60020",
+    "audit_record_sha256": "dbd83d5db19cf6360407a51143ab0b42563ee94f586d6e2760d76ed24b170450",
+    "suggestion": "弱偏好，需识别夸张",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 14,
+    "id": "tsukiyashiro_kisaki_sft_9f25bf432a47e2c8",
+    "audit_record_sha256": "5f13d19e60efda1456073a78dee353c7d8cd8fbad9162c53cb2d25a4eee1a0fb",
+    "suggestion": "不构成可靠偏好对",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 15,
+    "id": "tsukiyashiro_kisaki_sft_f88db44df20ef04a",
+    "audit_record_sha256": "49cc08588bbb90450ce3e1d1929d7a483437481cfdf53801744318f55bc66d00",
+    "suggestion": "补上下文后再判断",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 16,
+    "id": "tsukiyashiro_kisaki_sft_7f62147a301907f1",
+    "audit_record_sha256": "880d40dc1b2c7b9a113a7b3412c06686d05f885f9b0f4016cedebcde54f585c0",
+    "suggestion": "不构成可靠偏好对",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 17,
+    "id": "tsukiyashiro_kisaki_sft_38a21f368c7aab0c",
+    "audit_record_sha256": "0b2caa98632f83e6f1dfb6978738c04a80bb26f8d42ef94443f4335dd0337e51",
+    "suggestion": "不构成可靠偏好对",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 18,
+    "id": "tsukiyashiro_kisaki_sft_acd5d69883675bea",
+    "audit_record_sha256": "834522eaab8c2e9c97e36cf98dc66b1801cbe4c76b279679d277cf6aad9c3c5d",
+    "suggestion": "暂缓，建议重采样",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 19,
+    "id": "tsukiyashiro_kisaki_sft_f90f92f28c12dbd4",
+    "audit_record_sha256": "c0eed45a2e10b11e3dd9c5a962d75d543b65fe146c93c32489e5d013d1165909",
+    "suggestion": "不构成可靠偏好对",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 20,
+    "id": "tsukiyashiro_kisaki_sft_7e5b0f4646f520b6",
+    "audit_record_sha256": "e94140f15b400eecb9fc7d858d03e658cccfa61ab91d6400e100899f6cdd9a49",
+    "suggestion": "弱偏好，暂不直接入训",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 21,
+    "id": "tsukiyashiro_kisaki_sft_e64bd5f8f82eb23e",
+    "audit_record_sha256": "b7a7ef275a13170c1ffbce01636d2dc0c4ab11c41c0c20db1eb6703c45972cf8",
+    "suggestion": "先拆分原文目标",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 22,
+    "id": "tsukiyashiro_kisaki_sft_1ec5d933a3bf910e",
+    "audit_record_sha256": "285107f12e58a6c3b06fe1e738de8a796365aa6fcc13ddd20865ed92f80f10a7",
+    "suggestion": "补上下文后再判断",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 23,
+    "id": "tsukiyashiro_kisaki_sft_73d2b45db4ad45f4",
+    "audit_record_sha256": "6e59c37dc8d3cd05522d6338d4683229075bc3223f6d74e27b861c0a449556b4",
+    "suggestion": "不构成可靠偏好对",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 24,
+    "id": "tsukiyashiro_kisaki_sft_77bd9a2e72e77d47",
+    "audit_record_sha256": "c869febd8d6ae72ab483c51cb3795e52a1de5ebe88e2b83b7e1c05fea8d2565d",
+    "suggestion": "弱偏好，需判断指代",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 25,
+    "id": "tsukiyashiro_kisaki_sft_77a7de5cdd5c9b2f",
+    "audit_record_sha256": "bfc1a22d732920f444dcb9bddf128e35fb3f351481ea5ff23cfb3805dbd9a2dd",
+    "suggestion": "建议保留，补充身份依据",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 26,
+    "id": "tsukiyashiro_kisaki_sft_375116df3bed2352",
+    "audit_record_sha256": "086ab9309fca8b945a2443dd6fb2200a095c8fe773827a9146f2f36b169abf34",
+    "suggestion": "不构成可靠偏好对",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 27,
+    "id": "tsukiyashiro_kisaki_sft_c0eca29aa21c5b4b",
+    "audit_record_sha256": "d997e1c75867b985eb53eb3cb94bb06ff6a7477f05efbef248888195a457f79e",
+    "suggestion": "先拆分原文目标",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 28,
+    "id": "tsukiyashiro_kisaki_sft_5cb8422179367516",
+    "audit_record_sha256": "11b9c5f2b48b7ade43621ad796454e8541bfc7782ebe685f835ceba22d4809d4",
+    "suggestion": "弱偏好，暂不直接入训",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 29,
+    "id": "tsukiyashiro_kisaki_sft_1e90fae15a46fcff",
+    "audit_record_sha256": "ba741fe34677e3f28f56fd3cb2f8fd5663f66c23f3a94fb0c71a87cabcff1761",
+    "suggestion": "弱偏好，需复核意图",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 30,
+    "id": "tsukiyashiro_kisaki_sft_f45b924935825750",
+    "audit_record_sha256": "8956a48077e4cdec3cec825e83c673edb55815bfcb75003d5eb32465188aec64",
+    "suggestion": "弱偏好，暂不直接入训",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 31,
+    "id": "tsukiyashiro_kisaki_sft_dff7a40935e995b7",
+    "audit_record_sha256": "1b9446fbf693dcfb69bbdaebb8a49b37c0428cdd88f2afc80afd7e697e15bbdb",
+    "suggestion": "建议保留候选",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 32,
+    "id": "tsukiyashiro_kisaki_sft_3a4deefb7f8874db",
+    "audit_record_sha256": "d4676dbbcc79ee49d8cfb31e7d847f110aeea8a87ffcd30599b9b08fb444f441",
+    "suggestion": "重采样，保留为错误分析样本",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 33,
+    "id": "tsukiyashiro_kisaki_sft_ff899d2031999ea0",
+    "audit_record_sha256": "0099851c16fe4231fff2f096973db2975f6a0eb4074c90ebf9ba6e3372046477",
+    "suggestion": "不构成人物偏好对；清理输出格式",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 34,
+    "id": "tsukiyashiro_kisaki_sft_b84c79a9e9631df1",
+    "audit_record_sha256": "8c5f74b5263012c8f69b904e6b6ec949db8be6bf5fa138e3c4b50e2b0ce78a70",
+    "suggestion": "不构成可靠偏好对",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 35,
+    "id": "tsukiyashiro_kisaki_sft_1d9c236930253444",
+    "audit_record_sha256": "9b985b9835cb16bf385b3388406ffaf0cdc97b843222217f88ec0b9fece4966e",
+    "suggestion": "建议保留候选",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 36,
+    "id": "tsukiyashiro_kisaki_sft_fbd14963c3c8220a",
+    "audit_record_sha256": "cf98cb41bfbf41c773290a3b860359d9ec8e731d26f9c5b49858a2a4034118c8",
+    "suggestion": "弱偏好，暂不直接入训",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 37,
+    "id": "tsukiyashiro_kisaki_sft_ab3acf3bef213cb3",
+    "audit_record_sha256": "bf64d2f6af59ce73178a88949e6cbb3fbc8b8a2d66b3487a3297e409b6a66c46",
+    "suggestion": "建议重采样",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 38,
+    "id": "tsukiyashiro_kisaki_sft_a268cc49925b1171",
+    "audit_record_sha256": "f7cf11570419f26e7fccee40ba47d8b2624d7092bf37b2d13ce9c576060e2d73",
+    "suggestion": "不构成可靠偏好对",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 39,
+    "id": "tsukiyashiro_kisaki_sft_b5d120a7e2152e31",
+    "audit_record_sha256": "ffbff784053871626bc6ab8cd4797ec9f7cc0008a9b7bbc279a27bd8a8e6003a",
+    "suggestion": "不构成可靠偏好对",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 40,
+    "id": "tsukiyashiro_kisaki_sft_7b2776a0b43e6c53",
+    "audit_record_sha256": "0c05f4e92904b940348ea6926bc955c7d6e3cdea363ff50cead82f6f6004b3c0",
+    "suggestion": "不构成可靠偏好对",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 41,
+    "id": "tsukiyashiro_kisaki_sft_50a72c5309964f02",
+    "audit_record_sha256": "4723a4910e105e94c5db56ab1722454800aff4ded500a101d02ed2e44295a05c",
+    "suggestion": "不构成可靠偏好对",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 42,
+    "id": "tsukiyashiro_kisaki_sft_26dcde18830f7f11",
+    "audit_record_sha256": "5cf6238d99403dd311ba5e606fc9591bf042d4a419d904cc8d9e71b3ead1d760",
+    "suggestion": "补人物时间线后再判断",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 43,
+    "id": "tsukiyashiro_kisaki_sft_33fae1fa7eb95d92",
+    "audit_record_sha256": "b38f340293c508ce5f7a3e22660a1428a73d4786b04c50caf7e208025ad1342a",
+    "suggestion": "补人物时间线后再判断",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 44,
+    "id": "tsukiyashiro_kisaki_sft_43077d838c602563",
+    "audit_record_sha256": "a47f45dc79b6d30c12cf217f2b6cedb02e6abd7d1c23f25d3936d47fdbcf88b5",
+    "suggestion": "不构成偏好对：语义近似",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 45,
+    "id": "tsukiyashiro_kisaki_sft_7e388fc7fb81906b",
+    "audit_record_sha256": "6fdb5a66b6a4a51bad0f693946ade8b670cb0c47498281961fb4a0852dd53f2c",
+    "suggestion": "先校勘原文，再考虑保留",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 46,
+    "id": "tsukiyashiro_kisaki_sft_54661ed115473e2e",
+    "audit_record_sha256": "da0dc4a642b500ae1ca18f87de1e0d81991cff6a88b4c834d41ace6bff37492f",
+    "suggestion": "整理上下文，不直接配对",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 47,
+    "id": "tsukiyashiro_kisaki_sft_9c8486b7d2fdb108",
+    "audit_record_sha256": "eef38e709cbdfb41a37376c673b3a4d57d450aebea3e8b0f8e70ccc6b5d3ad2b",
+    "suggestion": "弱偏好，需确认关心方式",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 48,
+    "id": "tsukiyashiro_kisaki_sft_be3131f40f26afd7",
+    "audit_record_sha256": "5323790a9065c48bf7e25654b6b2bda82d81469860cabf4d34229b19f39ebebb",
+    "suggestion": "不构成可靠偏好对",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 49,
+    "id": "tsukiyashiro_kisaki_sft_d72a0ed3d38b25a6",
+    "audit_record_sha256": "5529fe240adc14d81f1e769823bbe5d5f571525668dacab6e68521265838f1d9",
+    "suggestion": "建议保留候选",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 50,
+    "id": "tsukiyashiro_kisaki_sft_f5159e331f6e6157",
+    "audit_record_sha256": "384d4dc759c6d04d0bd1d58ae9e11af861276734dd09a567627f9729d926a7df",
+    "suggestion": "建议保留候选；先清理前情",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 51,
+    "id": "tsukiyashiro_kisaki_sft_0d3db6c5fa7ed220",
+    "audit_record_sha256": "6641a6817e01fc39cd6e0044e361b0a7a9e51ad68d946030c025f52f5abd593a",
+    "suggestion": "补上下文后再判断",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 52,
+    "id": "tsukiyashiro_kisaki_sft_9b52294d3782f055",
+    "audit_record_sha256": "7e08048357018f2cdb9e9f22fba38fb8430fc192c859847b2a8c3f04818c7bab",
+    "suggestion": "弱偏好，暂不直接入训",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 53,
+    "id": "tsukiyashiro_kisaki_sft_52f03bb9aa2baaf5",
+    "audit_record_sha256": "c807f3df180be17d6432f8dd314f13c8a1a36c68ea629f879922f0e3acf150e6",
+    "suggestion": "不构成可靠偏好对",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 54,
+    "id": "tsukiyashiro_kisaki_sft_ff6be62b032ef12f",
+    "audit_record_sha256": "1e3601eca584a41508da3b566c7d42c764fc9d69d705c59ece98cac2f8f6532a",
+    "suggestion": "弱偏好，暂不直接入训",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 55,
+    "id": "tsukiyashiro_kisaki_sft_8b0589946971c72e",
+    "audit_record_sha256": "2f8384d0826372d3724be2ac961d7e34c61c3284fc161fcef3ac363359049dd0",
+    "suggestion": "先拆分原文目标，再比较",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 56,
+    "id": "tsukiyashiro_kisaki_sft_3c6d32f6b9b563d6",
+    "audit_record_sha256": "eaf5aaa21b3dfb3ed31626bc465653830ffcaad1579a44cd2102c6e2e8d098a6",
+    "suggestion": "建议保留候选",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 57,
+    "id": "tsukiyashiro_kisaki_sft_3179d71236046485",
+    "audit_record_sha256": "2a3d68b9370a27ce4b5e4b3d2f2dd3a1e6f51fff2d124b438de2306b3cc05056",
+    "suggestion": "不构成可靠偏好对",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 58,
+    "id": "tsukiyashiro_kisaki_sft_1c6d6c1951532498",
+    "audit_record_sha256": "2b014c4d7151873280a649305ccacd8ef7110ea3620c7298b77173912ef668ca",
+    "suggestion": "不构成可靠偏好对",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 59,
+    "id": "tsukiyashiro_kisaki_sft_a242cd94e3cc471e",
+    "audit_record_sha256": "65685882b7fa1d2594f316bae9054db060fd02121479253ac22bcc76177aa0b0",
+    "suggestion": "补情境后再判断",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 60,
+    "id": "tsukiyashiro_kisaki_sft_88c2622f5e5f5581",
+    "audit_record_sha256": "5e6da2d332696d0d9f05e39ff6ab231e807bca4bb9c8664d44490cbed96ad2cb",
+    "suggestion": "不构成可靠偏好对",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 61,
+    "id": "tsukiyashiro_kisaki_sft_8748245e83cddeee",
+    "audit_record_sha256": "439b07986a1960b33ca8d80ca7988b0cdb9da4a2e859b1661cedf62180f25887",
+    "suggestion": "不构成明确偏好对",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 62,
+    "id": "tsukiyashiro_kisaki_sft_d16f2e4db9b02ec0",
+    "audit_record_sha256": "ba003c8eb57ca6c77617c41eef8ffb29f6fe56a97e1a75c29bb3c0239ed45ba9",
+    "suggestion": "不构成明确偏好对",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 63,
+    "id": "tsukiyashiro_kisaki_sft_94c8ff3f821f7074",
+    "audit_record_sha256": "12103662a741327b6993ac9476f4b36376a7e9173fc8092ef2963e5981acab2a",
+    "suggestion": "弱偏好，暂不直接入训",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 64,
+    "id": "tsukiyashiro_kisaki_sft_e85b770aaacf105a",
+    "audit_record_sha256": "be7296a5351b776217e3069e99a111313cc49ea785e1090811d37e92668b0d01",
+    "suggestion": "不构成明确偏好对",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 65,
+    "id": "tsukiyashiro_kisaki_sft_ba553de00c0690ff",
+    "audit_record_sha256": "7c61d49acec8c86b665281b2a0c50f34f79773680322f15c6515e0a3ac96f3e2",
+    "suggestion": "暂缓；候选事实需核实",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 66,
+    "id": "tsukiyashiro_kisaki_sft_1ef62dada494e2b0",
+    "audit_record_sha256": "a48acd5d0c45c284e4545e414f31953f77138be7eec8c1f71f713abf37ac5119",
+    "suggestion": "弱偏好，暂不直接入训",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 67,
+    "id": "tsukiyashiro_kisaki_sft_a318d98f271c1f57",
+    "audit_record_sha256": "f7790f321292ef865c9743494b18dc55a1ebdc3a2bf44d9ac65c24aa5fbeb5a7",
+    "suggestion": "不构成明确偏好对",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 68,
+    "id": "tsukiyashiro_kisaki_sft_969e611440f9dc88",
+    "audit_record_sha256": "932a7cd5ae8b21e449bfadb98a5d187ad7d9bf0e8ac25dc47ac433debba87431",
+    "suggestion": "弱偏好，暂不直接入训",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 69,
+    "id": "tsukiyashiro_kisaki_sft_931937232559e20d",
+    "audit_record_sha256": "be8adcf3e73a8db04b5ff81450eb09243212f83cf8ab00318ffa10dbd1470b42",
+    "suggestion": "不构成明确偏好对",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 70,
+    "id": "tsukiyashiro_kisaki_sft_f8cfdc5b41a7e9d3",
+    "audit_record_sha256": "6637a4c7fae0539c21b96627efafc3772849553370de4e1aceff5c160a957f15",
+    "suggestion": "建议重采样；命运态度偏移",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 71,
+    "id": "tsukiyashiro_kisaki_sft_5e9862f042701532",
+    "audit_record_sha256": "d5559712452be553a68742e910e706f63e9db32791e1652939b21b12ecf3cbb3",
+    "suggestion": "不构成明确偏好对",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 72,
+    "id": "tsukiyashiro_kisaki_sft_8126fff0d804a23e",
+    "audit_record_sha256": "2a4083a8fec04c396ff1aca3713ef28aeeb8f2aa0dd1356bc3ac8b6a65a3562e",
+    "suggestion": "不构成明确偏好对",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 73,
+    "id": "tsukiyashiro_kisaki_sft_7cc599b07a988c02",
+    "audit_record_sha256": "724db7212f83b61459d3aec8a14a2711c167aa3c628fd94460e65ccda8a78db1",
+    "suggestion": "弱偏好，暂不直接入训",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 74,
+    "id": "tsukiyashiro_kisaki_sft_4b10c7a043f6ca62",
+    "audit_record_sha256": "7dff1813624748584912ff07d5283b076b08eb746de698ae2ae9817c9d85bdc2",
+    "suggestion": "不构成明确偏好对",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 75,
+    "id": "tsukiyashiro_kisaki_sft_375ed9226058c7d3",
+    "audit_record_sha256": "2a7a77aaf042da90ad6dda5c55e43de108517df4046b68f84141abd968cea11b",
+    "suggestion": "弱偏好，暂不直接入训",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 76,
+    "id": "tsukiyashiro_kisaki_sft_627029cb7e9b244b",
+    "audit_record_sha256": "88f0ff4f77afc17847a054b1d464221d8a1e23c8f1572144e1dca201b1f51319",
+    "suggestion": "弱偏好，暂不直接入训",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 77,
+    "id": "tsukiyashiro_kisaki_sft_59c6e922658ae2ef",
+    "audit_record_sha256": "60a13b33a89d5374e7719668ed66841a989ba11d51c7685341c8d809beb4620a",
+    "suggestion": "不构成明确偏好对",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 78,
+    "id": "tsukiyashiro_kisaki_sft_e7fb9dc26cf49c45",
+    "audit_record_sha256": "89ebf53ae599e8de44a383ce1712f3fa7c30885a11accdb3fd80990c598ccd83",
+    "suggestion": "暂缓；必须补上下文",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 79,
+    "id": "tsukiyashiro_kisaki_sft_fb5fc2f94edd44e8",
+    "audit_record_sha256": "c4563fabf828085edac287ac69b0127ce3ea6dd1b67905ab4e707858b2377d2b",
+    "suggestion": "不构成明确偏好对",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 80,
+    "id": "tsukiyashiro_kisaki_sft_16eef6a9ac958051",
+    "audit_record_sha256": "06a797376a78907adae978cd9214fe703853cacd15a32a4f763ddc0269d06b4b",
+    "suggestion": "不构成明确偏好对",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 81,
+    "id": "tsukiyashiro_kisaki_sft_cbfaf338095ff008",
+    "audit_record_sha256": "a92d3da0b69196576ed9a600a75f9385519f2126c2ad4c319a5661ae791017e0",
+    "suggestion": "弱偏好，暂不直接入训",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 82,
+    "id": "tsukiyashiro_kisaki_sft_35768e864eece57b",
+    "audit_record_sha256": "505bd39f1cf825f02a34831810147f5187862514081326151b77ec2e638beca3",
+    "suggestion": "不构成明确偏好对",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 83,
+    "id": "tsukiyashiro_kisaki_sft_caa2b64609118412",
+    "audit_record_sha256": "569e8bcd2ecf70ab2eb17dc2e2e36c809806a8a24390b79cc84af840a5ff0ed1",
+    "suggestion": "弱偏好，暂不直接入训",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 84,
+    "id": "tsukiyashiro_kisaki_sft_3dfe0f04f9f8c8d1",
+    "audit_record_sha256": "20e75134adee7a53ff833e027e89499987187ef686c537da9d63deedb89e9935",
+    "suggestion": "暂缓；修辞与设定混杂",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 85,
+    "id": "tsukiyashiro_kisaki_sft_99cdffdfdb1d4590",
+    "audit_record_sha256": "e9a292e7059b13e3d75389fd679122bc8e32499f3eecec3df30257faa8be1833",
+    "suggestion": "建议重采样；格式与篇幅混杂",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 86,
+    "id": "tsukiyashiro_kisaki_sft_00e6d63069e349e0",
+    "audit_record_sha256": "884ccc6a28e10bc3c247f83279d997efd2f8f9d46b3f026a55aac258cc1e10d0",
+    "suggestion": "建议保留；指代对象错误",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 87,
+    "id": "tsukiyashiro_kisaki_sft_14142664f3021fb1",
+    "audit_record_sha256": "0d7686e49c5cb50e44bfc736dfb9fa08fd57154df2e58cc0632b5daaa3420812",
+    "suggestion": "弱偏好，建议重采样",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 88,
+    "id": "tsukiyashiro_kisaki_sft_0ba225d34cdb7b37",
+    "audit_record_sha256": "66e5413db88087b23cd09697b71657d575662fac3f4f57fab7f33c3f74bad3f5",
+    "suggestion": "弱偏好，暂不直接入训",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 89,
+    "id": "tsukiyashiro_kisaki_sft_ab1f09c78b1e94f0",
+    "audit_record_sha256": "795aa42b32dd03d29f9927ede47c1f07915ba30c429a221192ec2d2e7cbcc98f",
+    "suggestion": "不构成明确偏好对",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 90,
+    "id": "tsukiyashiro_kisaki_sft_111dc1cfcf4f47a8",
+    "audit_record_sha256": "2bdb8ef1c54bb2654d827e08632961143b1ebb0548207e28ad3a225902b3b1e6",
+    "suggestion": "不构成明确偏好对",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 91,
+    "id": "tsukiyashiro_kisaki_sft_47e2eb03c5053023",
+    "audit_record_sha256": "248d8a621aa2d172c72402489f4d752a5c99841f6410bab51becadc66c981577",
+    "suggestion": "弱偏好，暂不直接入训",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 92,
+    "id": "tsukiyashiro_kisaki_sft_34be180ba843824f",
+    "audit_record_sha256": "08623796d841c2016dd94eef73c62c4c4a8f6a6d81fd81e7270166c99cf45472",
+    "suggestion": "不构成明确偏好对",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 93,
+    "id": "tsukiyashiro_kisaki_sft_3c1523b72716a300",
+    "audit_record_sha256": "1703504ad105447be808e2608be85de644819c378e76fb8b8fca2151c0465868",
+    "suggestion": "暂缓；时态倾向需人工判断",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 94,
+    "id": "tsukiyashiro_kisaki_sft_b2a685ec1e86e434",
+    "audit_record_sha256": "ed63b41ac6e4693b67d0b236e221a4bccc5cae22fd4482810b923ea752e1fbdf",
+    "suggestion": "弱偏好，暂不直接入训",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 95,
+    "id": "tsukiyashiro_kisaki_sft_69e7bf8f95e247e6",
+    "audit_record_sha256": "d9eef095a857e4a9560873cf313a72c7525ee69962caf6efbe780af009e39bfd",
+    "suggestion": "不构成明确偏好对",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 96,
+    "id": "tsukiyashiro_kisaki_sft_01ab3d8a6c654965",
+    "audit_record_sha256": "cac66afeb68cdc4a77bef31e9e8f73f2a27076356694dc568d3d5bcfb10300bc",
+    "suggestion": "不构成明确偏好对",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 97,
+    "id": "tsukiyashiro_kisaki_sft_1342c210700a7aaa",
+    "audit_record_sha256": "bccc16a9418eefeef5f9301deb1b1673f194036ada77ff02260003e1c588b745",
+    "suggestion": "不构成明确偏好对",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 98,
+    "id": "tsukiyashiro_kisaki_sft_716725b52646103a",
+    "audit_record_sha256": "4d450c737d01da545ebfe79879eca14d3fcad7a4f32ede69b5855224935a6937",
+    "suggestion": "不构成明确偏好对",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 99,
+    "id": "tsukiyashiro_kisaki_sft_6c60d4768dd3e182",
+    "audit_record_sha256": "bbacb22131040632df76ba4635e9bb93a77fcc26471966a0b4097f265b253e5a",
+    "suggestion": "弱偏好，暂不直接入训",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 100,
+    "id": "tsukiyashiro_kisaki_sft_d000011a986c92ac",
+    "audit_record_sha256": "db5b44145e30f430a48f34c206db81bf9421431fa20df08cdfc0a84269fa0945",
+    "suggestion": "暂缓；必须补上下文",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 101,
+    "id": "tsukiyashiro_kisaki_sft_b3c1b50414755b9d",
+    "audit_record_sha256": "569500a3f2bafcff99989836d3be58c994337aa0fadf269c63a9f82780ed7913",
+    "suggestion": "不构成明确偏好对",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 102,
+    "id": "tsukiyashiro_kisaki_sft_91aea59beb8b845a",
+    "audit_record_sha256": "0e8b56d247874a7898ecdd574d00dcb1c0b00337e66561e9d016a81547d439cb",
+    "suggestion": "不构成明确偏好对",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 103,
+    "id": "tsukiyashiro_kisaki_sft_b6ba117c6da2a30f",
+    "audit_record_sha256": "bc8da79f5943054bd8b5f762804ad1ac18a94b4230eeb838974f273fba658499",
+    "suggestion": "建议重采样；关系立场有偏移",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 104,
+    "id": "tsukiyashiro_kisaki_sft_04245474c58040a0",
+    "audit_record_sha256": "5f654408c45e7bd0c2c5184850610cbc14de20bea81c1c6233fc36534199e8d2",
+    "suggestion": "暂缓；必须补上下文",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  },
+  {
+    "number": 105,
+    "id": "tsukiyashiro_kisaki_sft_bcbaf2300fa3b1cb",
+    "audit_record_sha256": "d7a02cb64acdb7a5c669934ab6fbd8cf65ee46ca057839cbb7617bbfcc0ddc98",
+    "suggestion": "不构成明确偏好对；需重分场景",
+    "judgment_source": "助手逐条独立审核；待用户审核，未批准入训"
+  }
+]

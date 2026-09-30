@@ -88,6 +88,32 @@ def test_invalid_dates_and_naive_time_are_not_interpreted():
         parse_event("我明天要面试。", datetime(2026, 9, 22))
 
 
+@pytest.mark.parametrize(
+    ("anchor", "expression", "expected"),
+    [
+        ("2026-12-31T16:30:00+00:00", "今天", "2027-01-01"),
+        ("2026-12-31T15:30:00+00:00", "明天", "2027-01-01"),
+        ("2028-02-28T04:00:00+00:00", "明天", "2028-02-29"),
+        ("2100-02-28T04:00:00+00:00", "明天", "2100-03-01"),
+        ("2026-04-30T04:00:00+00:00", "后天", "2026-05-02"),
+        ("2026-09-23T04:00:00+00:00", "2000-02-29", "2000-02-29"),
+    ],
+)
+def test_shared_calendar_resolution_for_plan_and_reschedule(anchor, expression, expected):
+    reference = datetime.fromisoformat(anchor)
+    for text in (f"我{expression}要面试。", f"面试推迟到{expression}了。"):
+        event = parse_event(text, reference)
+        assert event is not None
+        assert event.scheduled_date == expected
+        assert event.time_text == expression
+
+
+@pytest.mark.parametrize("expression", ["下周", "下个月", "明年", "昨天", "2026年10月3日", "2100-02-29"])
+def test_shared_resolver_does_not_expand_event_sentence_grammar(expression):
+    assert parse_event(f"我{expression}要面试。", NOW) is None
+    assert parse_event(f"面试推迟到{expression}了。", NOW) is None
+
+
 @pytest.mark.asyncio
 async def test_completed_event_replaces_plan_with_evidence_and_history(repo):
     assert await save(repo, "我明天要面试。") == 1

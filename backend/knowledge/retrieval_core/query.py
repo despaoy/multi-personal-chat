@@ -80,6 +80,8 @@ EVENT_QUERY_WORDS = [
 ]
 
 FACT_QUERY_WORDS = [
+    "哪本",
+    "主人公",
     "是什么",
     "是什么人",
     "是谁",
@@ -200,7 +202,9 @@ class QueryAnalysis:
 
 
 def _contains_any(query: str, words: Sequence[str]) -> list[str]:
-    return [w for w in words if w in query]
+    # 主人公 is a narrative role, not a master/servant relation. Preserve a
+    # separate occurrence of 主人 in mixed queries rather than masking all of it.
+    return [w for w in words if (bool(re.search(r"主人(?!公)", query)) if w == "主人" else w in query)]
 
 
 def _has_intent_words(query: str) -> bool:
@@ -228,22 +232,16 @@ class QueryAnalyzer:
         normalizer = self._normalizers[domain_id]
         entities: list[str] = []
         matched_tokens: list[str] = []
-        for token, canonical in normalizer.tokens():
-            if token and token in query:
-                if canonical not in entities:
-                    entities.append(canonical)
-                if token not in matched_tokens:
-                    matched_tokens.append(token)
+        for _, _, token, canonical in normalizer.match_spans(query):
+            if canonical not in entities:
+                entities.append(canonical)
+            if token not in matched_tokens:
+                matched_tokens.append(token)
         return entities, matched_tokens
 
     def _normalize_query(self, domain_id: str, query: str) -> str:
         """把查询中的别名替换为规范名（长词优先）。"""
-        normalizer = self._normalizers[domain_id]
-        text = query
-        for token, canonical in normalizer.tokens():
-            if token in text:
-                text = text.replace(token, canonical)
-        return text
+        return self._normalizers[domain_id].normalize_text(query)
 
     # -- 域自动选择 ---------------------------------------------------------
     def _match_domain(

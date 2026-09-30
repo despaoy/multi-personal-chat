@@ -60,14 +60,16 @@ def validate_training_partitions(train, validation, *, packing: bool = False) ->
                     raise ValueError("cross-split evidence provenance leakage at training entry")
 
 
-def validate_preference_contexts(pairs, tokenizer, *, max_length: int, max_prompt_length: int) -> None:
+def validate_preference_contexts(pairs, tokenizer, *, max_length: int, max_prompt_length: int, split: str = "train") -> None:
     """Evidence preferences may not silently lose prompt facts in DPO/ORPO."""
+    if split not in {"train", "validation"}:
+        raise ValueError("only train/validation preference partitions are supported")
     for pair in pairs:
         if not is_evidence_record(pair):
             continue
         metadata = pair["metadata"]
-        if metadata.get("split") != "train" or metadata.get("review_status") != "approved":
-            raise ValueError("only the approved train partition may enter preference optimization")
+        if metadata.get("split") != split or metadata.get("review_status") != "approved":
+            raise ValueError(f"only the approved {split} partition may enter preference optimization")
         prompt, chosen, rejected = pair.get("prompt"), pair.get("chosen"), pair.get("rejected")
         if (
             not isinstance(prompt, list)
@@ -105,7 +107,7 @@ def validate_preference_contexts(pairs, tokenizer, *, max_length: int, max_promp
             raise ValueError("evidence preference exceeds max_prompt_length; evidence truncation is forbidden")
 
 
-def load_preference_training_rows(path: Path) -> list[dict[str, Any]]:
+def load_preference_training_rows(path: Path, *, split: str = "train") -> list[dict[str, Any]]:
     """Accept conversational evidence exports without coercing them to strings.
 
     The legacy review-tool schema remains unchanged. Mixing conversational and
@@ -113,6 +115,8 @@ def load_preference_training_rows(path: Path) -> list[dict[str, Any]]:
     """
     from training.preference_data_schema import PreferencePair
 
+    if split not in {"train", "validation"}:
+        raise ValueError("only train/validation preference partitions are supported")
     records = []
     formats = set()
     for line in path.read_text(encoding="utf-8-sig").splitlines():
@@ -121,14 +125,29 @@ def load_preference_training_rows(path: Path) -> list[dict[str, Any]]:
         row = json.loads(line)
         if not isinstance(row, Mapping):
             raise ValueError("preference row must be an object")
+        metadata = row.get("metadata") or {}
+        if isinstance(metadata, Mapping) and metadata.get("schema_version") == "persona-preference-v1":
+            from training.preference_validation import validate_pairs
+
+            validate_pairs([row], split=split)
+            if metadata.get("human_final_approved") is not True or not metadata.get("review_sha256"):
+                raise ValueError("persona preferences require bound human review")
+            if not all(isinstance(row.get(field), list) for field in ("prompt", "chosen", "rejected")):
+                raise ValueError("persona preferences require conversational messages")
+            records.append(dict(row))
+            formats.add("conversational")
+            continue
         if is_evidence_record(row):
-            if row["metadata"].get("review_status") != "approved" or row["metadata"].get("split") != "train":
-                raise ValueError("only approved contextual train preferences may be loaded")
+            if row["metadata"].get("review_status") != "approved" or row["metadata"].get("split") != split:
+                raise ValueError(f"only approved contextual {split} preferences may be loaded")
             if not all(isinstance(row.get(field), list) for field in ("prompt", "chosen", "rejected")):
                 raise ValueError("contextual preferences must retain conversational messages")
             records.append(dict(row))
             formats.add("conversational")
         else:
+            declared = row.get("split", (row.get("metadata") or {}).get("split"))
+            if declared is not None and declared != split:
+                raise ValueError(f"incorrect preference partition: expected {split}")
             pair = PreferencePair(**row)
             if pair.review_status == "approved":
                 records.append(pair.to_jsonl_dict())

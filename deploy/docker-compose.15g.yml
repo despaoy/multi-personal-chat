@@ -95,6 +95,7 @@ services:
       - VLLM_ENABLED=true
       - MODEL_PROVIDER=vllm
       - VLLM_BASE_URLS=http://vllm:8000
+      - VLLM_MAX_MODEL_LEN=${VLLM_MAX_MODEL_LEN:-24576}
       - VLLM_SERVED_MODEL_NAME=qwen3-8b-instruct-awq
       # The shared loras volume is /app/loras here and /loras in vLLM.
       - VLLM_LORA_ROOT=/loras

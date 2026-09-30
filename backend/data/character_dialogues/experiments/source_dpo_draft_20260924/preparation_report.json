@@ -1,0 +1,3090 @@
+{
+  "included_pending_review": 157,
+  "excluded": [
+    {
+      "id": "tsukiyashiro_kisaki_sft_2c5366beabc9f46f",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_395b78cdde617383",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_e09edda67586e573",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_4ea3a0f16ff992ab",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_dd3113aad930c597",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_a08e720d6dc24847",
+      "reason": "source_verification_failed"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_96dd19890c2258bf",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_9851b8fd118c76e5",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_f99af094599b9d2c",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_d441cbc571e007ca",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_f219e84e632aca19",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_096096316caf4471",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_ef84af9fd1ab6b2c",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_e3f0ea9ddd89df48",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_a1e3a931a8f5cbb3",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_38e7bea05a404067",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_2f8810975f933a71",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_f898856c33ef668b",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_98595294b83f71f4",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_8e30cbc1dbacf0d2",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_4aa285285fe4501d",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_288b1c833c7a61df",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_afdca07033cdd8f4",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_f615151d33b28ad9",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_8fc856e17a118013",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_a4d08d7ff82971dd",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_b86abf6a7076a31a",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_01bcc431a281e6fb",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_804ee27d54f28497",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_2843f408a9f81d73",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_e3d1bb1c1c7d67c6",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_4576c8654765b7c6",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_d4571aacd44e509e",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_4538c55e60e3336a",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_766b555b4b963a3d",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_d3b3588dbaed4b66",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_8a7008115fb715c9",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_d2d51e9fae707039",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_7bae62b3f87b5093",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_98f43902ff8bddd5",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_02a063bc0fdf4ffb",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_dfa0343d04b1fa99",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_24f8faf82f667305",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_e61bf5d82631bbc3",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_ded7e9004f854a2a",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_ae8100f80c4322c0",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_ebbac830a44b5e5b",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_20baef0762b109f6",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_0e1b73703ca3b05a",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_c26127de0b6fe6b1",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_71605311447c6f8a",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_1c835e993b50714e",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_8acdeee13d46e700",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_27129b67fe7cb69f",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_431bf6f8fbe92b0d",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_d83152b486554ca0",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_692700307ce71b2f",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_af591df565723e96",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_b573ae4fc89fb792",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_3f7327a944477a6f",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_96846853cfe1616f",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_c2736921251ae597",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_0996c699d608e551",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_ad27fa8591be0508",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_ba0a0adaf9e2fa35",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_a3e2bc219655a493",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_29a9a046a32cb1d1",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_7ae9b17e80c56d77",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_51a4eadf0b107449",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_2bf63c83fe32ad87",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_5834d97ee36affa6",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_20b293049b38addf",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_ee9a4af866ccd10e",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_5cf43f38fc7230de",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_d7194d896d68c0e3",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_0af7b97360b57cc8",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_29e6feb3d7cbcfa9",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_11eefbd5d0e4870d",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_20f4896fe058c339",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_c3683ced9bb063eb",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_704f1def7238f45d",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_060f44336feb4998",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_83f9b0137ded59ec",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_76161306811e8f53",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_556e164250f53cd6",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_82fcb8d8340cb66d",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_1cd479a94d887b37",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_a01d35330eab13d3",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_061eccc2222c44de",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_0e6d752e550e8e60",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_173320d9352498cf",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_3d6192d0190589a6",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_1a30de58baace6da",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_2734e97b49381142",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_aa481079c608ca0b",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_11853c82cc84a0ba",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_37050a2927ec1dcb",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_8bb5007377a216e9",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_9c4f3ddf44c532e8",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_168200d1615cab3d",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_8f0c73071224c301",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_4084aab49d1bac00",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_3ce42b7db916e9a6",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_0496d21cb2cf6383",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_46e46e871d432d58",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_1c7d5b8f67cc6eb8",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_1631fe0c5075ebe5",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_bc167ec4b19487b0",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_8eaaed6b40c70d9d",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_07c2487aed61915a",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_6cb8a677ae1ca329",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_e8fedf38b509a129",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_49c1ef754c980499",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_676300446e7d959a",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_d60c96dbb59a436c",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_363eb1c808a20775",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_5a34a28032b9e361",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_a723b6c8090ed48f",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_4d1b11ca0f231849",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_d2b4c6d625cf04cd",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_d26f77a3f69ab5ed",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_9f74e47a1973bf39",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_9efe0ae2580b23b2",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_b5cb37aac165f639",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_719a4a638b6d9b81",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_9a6753e7f71254e7",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_c43de1895e4ea5f3",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_f6a741a4c492db5d",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_b11aa6835b2b7465",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_dc6efe315f17bd9a",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_f4af9575a39d9461",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_ff5241228c33d952",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_ecf18739d3c6e73e",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_164b75c4a181eadb",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_73c0fb0b25484d02",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_74f4b676e1e7596d",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_7ad07fa421b9e87e",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_6ef5eb2e46d5ba7a",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_983743a1c44be095",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_7622825d0f5df9ce",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_294fdec743506806",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_63869594fb7f1be6",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_af72d8df087875b3",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_c916f70fb8dd1c4c",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_250e3ecc5602e122",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_44e04c070a47fe03",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_ee2488af7dbf307a",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_9cad8e7a5ddebcab",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_efdcf73b81fac436",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_c9bb8538a3712434",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_5f5e5087fa2781b7",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_682252bfd5ceffac",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_93f7ac583842f9e1",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_f12b47f147b9f0f5",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_5875c216d8a61b02",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_f564e72e2a8e1a88",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_7a14dd63826cdf91",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_b9d3a978fd7ac681",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_260a2b565ee69dbe",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_922f7cdaf3f7edc0",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_b4791984b590c10d",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_121bea8ee1a3ccd5",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_bd2cf644273dada1",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_03e3de2203bfe938",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_e53153e4e632ded1",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_2ac0dfba9dbc4db6",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_301ed456c1185f16",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_6cf781882843e28b",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_82bee4979f4fa626",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_015958c10491e2bc",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_d37db3959eff7cf5",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_de08bb5ef0922db4",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_3a537848f9beba61",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_b15003f9dede7999",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_1fd373d3334a582c",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_b8557c48e24672ab",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_aed7b0a77b7df1fb",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_2fc7a76c57a399f9",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_61b69ee46ae1577e",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_fddab00543837089",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_d10fba7ee366a209",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_96d8eda841ffebd4",
+      "reason": "source_verification_failed"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_9a4c624ebb076e3f",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_bf6bf52f55aedde6",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_30f748f22d4d1efc",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_0049ca27c5c4d4de",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_a078ab5001f07081",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_c121fb59877a6b7f",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_a0f3d95c9c578884",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_696c49ddca9b8fd7",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_c04a3587b9c26061",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_2339fdbca4ec0b40",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_ad4b6ff66cdf275a",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_4d18c1810f6c3716",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_c494e7f87ec25712",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_11d381357889dfb7",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_a753063f5537ef23",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_fc0aedff303bb22a",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_abe90adad0db3f66",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_ab1bb7de86b3226b",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_0479b880283546a5",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_7d1f08ac1f654b0d",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_9b963fd82fcc879f",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_318cc23e4d31b96e",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_745b43ab63c84b25",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_013f3bda4cdf12ce",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_2a3071460458ac41",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_bc7d3dd37aaf1a69",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_6b5d45a6b36adc8c",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_fcc8aec40284b251",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_7f5d48a18c5f92b3",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_0593559153c809a7",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_0c2ab079160cf94f",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_ac0fe612ef2504db",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_9e0d66aaff7e1444",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_1ce450d2fed2a786",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_dc2e1e99ebd17371",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_663a447811d82c8d",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_3394e14dbde69868",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_269efe2eb6a6c550",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_6ab59e5e96886d63",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_1efaeb6545016f92",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_b5debf8ef07c37a6",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_9ba4964469273a66",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_12b293d2cc3385a9",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_e0452e3c25850e62",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_fc2651b70e00bf88",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_36da32b23d24f0cf",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_0aa05d549c4775d3",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_c634dd197d3259a1",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_554483449171665f",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_f93cd72f3eb9a1bb",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_5d8bf8231ab5a504",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_241ae38c3e48e546",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_875d7e787c28ab27",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_e5040a9b71f73eaf",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_b471146664c79c6a",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_62c248d40759dcc4",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_6939c3c310374d26",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_3e0959f18a30c912",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_ed9211df5d2d2b52",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_ad9d8598c76f7a50",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_37a4acb45d565711",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_fe2fc989e25093cd",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_0e32eafa4201e586",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_76273ed3ae3b10b0",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_f1a47ec3900cc5bf",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_aa55412e50601ca5",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_aa431fb52514899c",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_37067ece9df59c76",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_1f11534267d2b576",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_cf5fe2b82d26c55b",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_28819725460b8533",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_eb5e08bbdb60fe65",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_10a06d55d9811dd9",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_64b8a65552924d13",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_3f79ff715940948a",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_c6194da64ea550f2",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_b3156b832200d515",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_1fbc974fc822ea05",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_6dbce644ccfc8a27",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_d693ede8abf48d80",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_925eda25fda5f67f",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_adf444768925f77d",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_6c44e8f1baf9f0bc",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_2771db2aa6ae255a",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_c7d967e16b20e89c",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_62ddfbd8667728a4",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_3411ea5db01e0ad5",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_8a90b7568c6ab57b",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_05ec05e835d548d7",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_db3508cf45013d3c",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_022350cdc3a9fdcf",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_6063376874037193",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_71470b7e5c33dd21",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_bff7cf8490e857fb",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_ff84ea6bf87eddc8",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_a4d921741811baca",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_78341de484b2d840",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_eddb0b9cc75e3c47",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_f50bfbd842146a3d",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_c5d95e287b450edf",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_672d8271f4659bf2",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_2a6d6ac7edd37ed1",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_439c9fad56a3d584",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_644f95f829e4d2f6",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_c6dfa3f74092bd7e",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_9960e9266d22dad0",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_785971e743a92391",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_e2eac0a35741c47b",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_4b9b5f9e55bb4c08",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_444e1a5191a25409",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_4e718769d6b2a123",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_ef3fe45eadc62c81",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_f515aff90a8b2163",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_a54a87eb6a0f2b98",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_bb87a4c0fb18e0a6",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_d94499289654612c",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_14ece5d537830be8",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_c2cd3e64c1265535",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_e5a1cd4047714b94",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_f17cf716e528de88",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_fdc70bb107ebe02f",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_850ea6a46d94d475",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_c6889595e2dd363c",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_809a231d3f73439a",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_7f2ae2dfa116ba15",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_395c75d2f1d01cbe",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_567c3a1bd1dcfe45",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_ae573aa2ae7f41fa",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_f8667ea7c821564e",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_ee62893ea8a68471",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_a1aaa4c43cc635b0",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_4efe9befbfae4986",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_81f359a5dc055f73",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_7248037dc4b2f354",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_19853cefb8912422",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_f65682995f8a9046",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_a65830323fe4e138",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_87509ea053ce4111",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_a570c178b66bcdf9",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_75dc0bfbd8d82779",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_33835fcb7fb6d58e",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_6d9627e5a1741fc7",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_ed78cd2607702035",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_103b2220e22d39fb",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_2e6f6452ef5be0ba",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_e730c0bfe67e6731",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_1844d39e560c6faa",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_81bbaf54c15a0e6f",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_40fc12a79b7142e3",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_3d501aebc631e135",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_f4bdbbcd0328e3eb",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_3e09d300b618fad6",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_02b3d865b6567629",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_50f0d60ed44afecf",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_ac4d137f45272aca",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_ebd18c408b5e5884",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_ceadf3b7b6633eac",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_9fad75c49f753570",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_f47d988e75a98c23",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_98c0aec6970ad4ca",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_e92a04dcc88ef24f",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_35b06e707eb001ad",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_99522f28be0c8261",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_7bd053ce61da2fdf",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_46c1d2b885d864ff",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_360c258674cd8961",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_7db17cb5d62cff7c",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_b32595b3b0f50bba",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_55091918905ae426",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_fc44605ae32b723b",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_1798f4617d04d009",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_5625e4d52bfdc387",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_f7c8b42b8e123063",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_ed1023ae0898c9e0",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_3e733826c6fdc228",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_c22fd8bd733fb0eb",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_37e7c443f3ed462b",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_f01adc2a4756d19b",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_3fa8f03a9e6dbc8d",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_20be69079043a87d",
+      "reason": "requires_manual_context_conversion"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_6cb527553b3a826f",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_a34b0b1f5fc9021e",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "tsukiyashiro_kisaki_sft_3466a10439a4b8e4",
+      "reason": "heldout_overlap"
+    },
+    {
+      "id": "kisaki_llm_v4_blindfix_0001",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_blindfix_0006",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_blindfix_0007",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_blindfix_0008",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_blindfix_0012",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_blindfix_0014",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_blindfix_0015",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_blindfix_0016",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_blindfix_0020",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_blindfix_0021",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_blindfix_0022",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_blindfix_0023",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_blindfix_0025",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_blindfix_0026",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_blindfix_0027",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_blindfix_0028",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_blindfix_0029",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_blindfix_0032",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_blindfix_0033",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_blindfix_0034",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_blindfix_0037",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_blindfix_0038",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_blindfix_0040",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_blindfix_0043",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_blindfix_0044",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_blindfix_0045",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_blindfix_0046",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_blindfix_0047",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_blindfix_0048",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_blindfix_0050",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_blindfix_0051",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_blindfix_0052",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_blindfix_0053",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_blindfix_0054",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_life_0002",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_life_0004",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_life_0005",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_life_0006",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_life_0011",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_life_0013",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_life_0014",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_life_0015",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_life_0016",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_life_0017",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_life_0018",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_life_0022",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_life_0025",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_life_0029",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_life_0030",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_yoruko_0001",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_yoruko_0002",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_yoruko_0003",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_yoruko_0006",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_yoruko_0007",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_yoruko_0008",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_yoruko_0009",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_yoruko_0010",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_yoruko_0011",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_yoruko_0012",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_yoruko_0013",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_yoruko_0014",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_yoruko_0015",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_yoruko_0016",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_yoruko_0017",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_yoruko_0018",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_yoruko_0019",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_yoruko_0020",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_yoruko_0021",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_yoruko_0022",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_yoruko_0023",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_yoruko_0024",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_yoruko_0025",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_yoruko_0027",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_yoruko_0028",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_yoruko_0030",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_0001",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_0004",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_0005",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_0006",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_0008",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_0010",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_0017",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_0025",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_0031",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_0032",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_0034",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_0039",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_0046",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_0052",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_0056",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_0057",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_0058",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_0061",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_0064",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_0065",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_0069",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_0070",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_0075",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_0076",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_0082",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_0085",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_0102",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_0105",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_0106",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_0108",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_0110",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_0111",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_0113",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_0114",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_0115",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_0118",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_0120",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_0123",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_0124",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_0128",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_0133",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_0136",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_0137",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_0139",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_0140",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_0143",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_0145",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_0146",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_0147",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_0148",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_0149",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_0151",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_0153",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_0157",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_0159",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_0188",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_0202",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_0204",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_0207",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_0208",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_0214",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_0216",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_0217",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_riou_0001",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_riou_0002",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_riou_0003",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_riou_0004",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_riou_0005",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_riou_0006",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_riou_0007",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_riou_0008",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_riou_0009",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_riou_0010",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_riou_0011",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_llm_v4_riou_0012",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_round06_daily_chat",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_round06_research_learning",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_round06_project_safety",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b001_rainy_weekend",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b001_friend_reply_anxiety",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b001_git_merge_rebase",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b001_defense_slide_scope",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b002_headphone_purchase",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b002_sibling_borrowing_boundary",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b002_spreadsheet_email_cleanup",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b003_restless_after_overtime",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b003_team_credit_boundary",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b003_paper_reproduction_gap",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b003_public_issue_log_redaction",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b004_weekday_dinner_choice",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b004_distant_classmate_wedding",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b004_git_bisect_regression",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b005_one_day_trip_packing",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b005_asking_advisor_for_help",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b005_sse_websocket_choice",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b005_multiplatform_release_gate",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b006_dropping_popular_novel",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b006_friend_repeated_cancellations",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b006_message_api_idempotency",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b007_weekend_room_cleanup",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b007_harsh_code_review_feedback",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b007_ci_flaky_async_test",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b007_compose_unhealthy_service",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b008_hybrid_retrieval_reranker",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b008_seed_result_uncertainty",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b008_issue_priority_planning",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b009_postgres_online_not_null",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b009_cross_queue_trace_context",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b009_rag_document_prompt_injection",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b009_sqlalchemy_conversation_n_plus_one",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b010_streaming_ui_error_recovery",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b010_redis_cache_stale_race",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b010_vllm_throughput_ttft_tradeoff",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b010_knowledge_file_upload_safety",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b011_going_to_cinema_alone",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b011_friend_borrowing_money",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b011_unified_api_error_contract",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b011_queue_dead_letter_recovery",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b012_hesitating_over_short_hair",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b012_coworker_repeated_shift_swaps",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b012_openapi_backward_compatible_evolution",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b013_yellowing_pothos_leaves",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b013_friend_jokes_in_group_chat",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b013_confidence_interval_interpretation",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b014_rainy_weekend_outing",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b014_sister_failed_exam_support",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b014_feature_retention_causality",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b015_neighbor_renovation_noise",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b015_late_night_emotional_support_boundary",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b015_remote_support_screen_privacy",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b015_blameless_incident_postmortem",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b016_choosing_photos_to_post",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b016_envy_over_friend_job_offer",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b016_spreadsheet_csv_identifier_import",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b017_neighborhood_cat_follows_home",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b017_repairing_trust_after_private_disclosure",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b017_http_cache_etag_304",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b017_verifiable_notification_acceptance_criteria",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b018_returning_to_hobby_class_after_absences",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b018_feeling_overindebted_to_supportive_friend",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b018_password_hashing_salt_encryption_migration",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b018_diagnosing_slow_page_with_network_panel",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b019_leaving_neighborhood_group_after_losing_interest",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b019_friend_checks_phone_during_conversations",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b019_interpreting_frequentist_confidence_intervals",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b020_declining_constant_friend_mediation",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b020_safe_git_bisect_reproducible_regression",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b020_triaging_vague_bug_report",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b020_refusing_private_dashboard_cookie_scraping",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b021_replacing_uncomfortable_shoes_before_trip",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b021_addressing_roommate_unfinished_shared_chores",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b021_recursive_dns_resolution_and_stale_cache",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b022_checking_in_after_close_friend_curt_reply",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b022_multiple_comparisons_preregistration_reporting",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b022_reproducible_csv_export_comparison",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b022_refusing_public_upload_of_production_database_dump",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b023_pausing_underused_recurring_hobbies",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b023_setting_boundary_for_late_returned_belongings",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b023_oauth_redirect_state_and_local_client_secrets",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b023_webhook_retry_idempotency_and_signature_tests",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b024_conflicting_family_promise_and_friend_celebration",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b024_risky_mobile_release_staged_rollout_plan",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b024_refusing_disabled_audit_logs_for_shared_load_test",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b025_trial_window_desk_layout_before_rearranging_room",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b025_responding_after_friend_shared_private_interview_news",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b025_designing_interrater_reliability_with_cohens_kappa",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b025_handling_mid_sprint_requests_through_change_intake",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b026_starting_to_use_saved_favorite_notebook",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b026_responding_to_friend_repeated_last_minute_cancellations",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b026_understanding_dew_point_window_condensation",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b026_organizing_reference_manager_library_without_losing_metadata",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b027_using_surplus_limes_without_turning_it_into_a_project",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b027_addressing_a_friends_hurtful_group_joke",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b027_separating_pilot_results_from_preregistered_confirmation",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b027_refusing_customer_csv_upload_to_personal_cloud_tools",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b028_drying_laundry_during_a_week_of_rain",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b028_learning_to_listen_before_offering_solutions_to_a_friend",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b028_migrating_calendars_without_duplicates_or_lost_sharing",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b029_going_to_an_early_movie_screening_alone",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b029_talking_to_a_friend_who_disappears_into_a_new_relationship",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b029_understanding_why_metal_feels_colder_than_wood",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b029_preparing_project_handoff_before_key_member_leave",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b030_figuring_out_why_new_sneakers_squeak_indoors",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b030_declining_to_be_the_judge_between_two_conflicting_friends",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b030_refusing_a_cracked_plugin_that_requires_disabling_endpoint_protection",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b030_building_email_rules_without_hiding_important_messages",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b031_deciding_whether_to_join_a_weekend_ceramics_workshop",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b031_setting_boundaries_with_a_friend_who_only_calls_for_favors",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b031_avoiding_pseudoreplication_in_repeated_measurement_experiments",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b032_sorting_old_ticket_stubs_without_discarding_every_memory",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b032_addressing_a_borrowed_book_returned_with_water_damage",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b032_turning_a_blame_focused_retrospective_into_actionable_learning",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b032_refusing_to_share_a_one_time_code_with_unverified_it_support",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b033_deciding_whether_to_repot_an_overgrown_houseplant_this_weekend",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b033_responding_when_a_parent_volunteers_your_time_to_relatives",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b033_understanding_why_storage_capacity_looks_smaller_after_formatting",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b033_cleaning_a_browser_bookmark_library_without_losing_useful_pages",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b034_deciding_what_to_do_with_a_favorite_mug_that_has_a_hairline_crack",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b034_coping_when_two_close_friends_develop_a_shared_hobby_without_you",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b034_handling_missing_followup_data_in_a_longitudinal_study",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b034_refusing_an_overprivileged_browser_extension_for_caption_downloads",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b035_deciding_whether_to_use_a_nice_notebook_for_ordinary_notes",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b035_addressing_a_friend_who_repeatedly_cancels_at_the_last_minute",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b035_keeping_project_decisions_from_disappearing_after_meetings",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b036_packing_away_an_unfinished_puzzle_without_treating_it_as_failure",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b036_maintaining_a_friendship_after_moving_to_different_time_zones",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b036_understanding_why_a_mirror_seems_to_reverse_left_and_right",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b036_correcting_photo_capture_times_without_losing_original_metadata",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b037_getting_a_song_out_of_your_head_after_hearing_the_same_piano_phrase",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b037_responding_when_a_friend_announces_your_private_news_first",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b037_analyzing_student_outcomes_in_a_cluster_randomized_school_trial",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b037_refusing_to_disable_tls_verification_to_fix_package_downloads",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b038_rearranging_a_desk_to_avoid_afternoon_screen_glare",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b038_asking_a_roommate_to_stop_using_shared_food_without_checking",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b038_merging_duplicate_contacts_without_losing_contact_details",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b039_making_weekday_breakfast_less_repetitive_without_extra_morning_work",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b039_repairing_trust_after_forgetting_a_friends_important_presentation",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b039_planning_analysis_for_multiple_outcomes_and_timepoints_in_a_pilot_study",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b039_preventing_a_senior_opinion_from_anchoring_project_design_reviews",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b040_changing_an_alarm_sound_that_now_feels_stressful",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b040_refusing_to_upload_a_raw_crash_dump_to_a_public_analyzer",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b040_understanding_why_microwaved_food_heats_unevenly",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b041_remembering_to_bring_a_reusable_tote_without_collecting_more_bags",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b041_responding_when_a_friend_turns_your_good_news_into_a_comparison",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b041_distinguishing_regression_to_the_mean_from_an_intervention_effect",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b041_migrating_password_manager_data_without_losing_special_fields",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b042_breaking_the_after_work_entryway_scrolling_habit",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b042_setting_limits_with_a_friend_who_only_reaches_out_during_crises",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b042_making_cross_timezone_project_handoffs_explicit",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b043_removing_freezer_odors_from_reusable_ice_trays",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b043_asking_a_friend_to_stop_answering_on_your_behalf",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b043_understanding_why_warm_sparkling_water_goes_flat_faster",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b043_refusing_to_open_an_unknown_found_usb_drive",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b044_letting_an_expiring_loyalty_card_go_without_forcing_an_extra_purchase",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b044_asking_a_friend_to_stop_relaying_updates_about_an_ex",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b044_introducing_evidence_based_defect_severity_before_backlog_prioritization",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b045_restoring_a_flattened_down_jacket_after_washing",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b045_accepting_the_end_of_a_friendship_without_a_clear_conflict",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b045_testing_measurement_invariance_before_comparing_translated_scale_scores",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b045_recovering_access_after_losing_a_hardware_security_key",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b046_removing_candle_wax_from_a_tablecloth_without_spreading_the_stain",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b046_asking_a_friend_not_to_treat_work_from_home_as_constant_availability",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b046_understanding_why_shadows_have_soft_edges_and_change_with_distance",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b047_fixing_a_wooden_drawer_that_sticks_only_in_humid_weather",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b047_responding_when_a_friend_keeps_downplaying_their_own_good_news",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b047_defining_done_before_handing_a_feature_to_another_team",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b047_refusing_to_upload_customer_records_to_an_unapproved_public_ai_service",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b048_removing_a_musty_smell_from_an_umbrella_before_storing_it",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b048_setting_expectations_with_a_friend_who_often_cancels_at_the_last_minute",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b048_interpreting_an_interaction_when_the_main_effect_is_not_significant",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b048_exporting_and_verifying_browser_bookmarks_before_cleanup",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b049_cleaning_a_reusable_water_bottle_lid_with_a_hidden_gasket",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b049_asking_a_sibling_to_stop_borrowing_things_without_permission",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b049_refusing_to_post_employee_medical_details_in_a_team_spreadsheet",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b050_removing_stubborn_label_adhesive_from_a_glass_jar",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b050_responding_when_a_friend_is_active_in_group_chat_but_silent_in_private",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b050_understanding_why_condensation_appears_on_different_sides_of_windows",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b050_preventing_project_decisions_from_being_reopened_without_new_evidence",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b051_keeping_cut_fresh_herbs_from_wilting_too_quickly",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b051_setting_limits_when_a_friend_uses_expensive_gifts_to_create_obligation",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b051_verifying_an_external_drive_copy_before_deleting_the_source",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b051_refusing_to_install_an_untrusted_browser_extension_for_work",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b052_stopping_a_fitted_sheet_from_twisting_other_laundry_in_the_dryer",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b052_coping_when_two_close_friends_become_closer_to_each_other",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b052_distinguishing_mcar_mar_and_mnar_in_missing_data",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b052_understanding_why_metal_feels_colder_than_wood_at_the_same_temperature",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b053_reducing_static_cling_in_laundry_without_fabric_softener",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b053_responding_to_a_friend_who_repeatedly_asks_if_you_are_angry",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b053_interpreting_a_confidence_interval_that_crosses_the_null_value",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b053_moving_an_authenticator_app_to_a_new_phone_without_lockout",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b054_removing_mineral_cloudiness_from_a_glass_vase",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b054_setting_boundaries_when_a_friend_turns_shared_goals_into_supervision",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b054_understanding_why_sealed_snack_bags_puff_up_at_high_altitude",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b054_refusing_to_share_a_photo_of_an_access_badge_for_convenience",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b055_stabilizing_a_wobbly_cutting_board_without_trapping_moisture",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b055_asking_a_friend_to_address_a_conflict_instead_of_only_sending_memes",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b055_communicating_schedule_estimates_with_explicit_uncertainty",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b055_understanding_how_salt_changes_ice_melting",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b056_softening_hardened_brown_sugar_without_spoiling_it",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b056_clarifying_whether_an_invitation_includes_a_friends_partner",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b056_previewing_a_bulk_photo_rename_before_applying_changes",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b056_rejecting_an_unexpected_mfa_push_instead_of_approving_to_stop_notifications",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b057_diagnosing_new_shoes_that_squeak_on_smooth_floors",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b057_setting_a_norm_when_a_friend_over_apologizes_for_slow_replies",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b057_understanding_collider_bias_from_conditioning_on_selection",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b057_avoiding_a_tampered_qr_code_on_a_parking_meter",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b058_removing_a_burnt_food_smell_from_a_microwave_safely",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b058_responding_when_a_friend_keeps_you_tentative_until_a_better_plan_appears",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b058_handling_cluster_robust_inference_with_few_clusters",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b058_recovering_an_unsaved_spreadsheet_without_overwriting_newer_versions",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b059_flattening_a_rolled_paper_poster_without_damaging_the_print",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b059_declining_pressure_to_take_sides_in_a_friends_private_conflict",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b059_understanding_the_rainbow_colors_on_soap_bubbles",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b059_handling_scope_change_requests_after_a_project_freeze",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b060_separating_two_drinking_glasses_stuck_inside_each_other",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b060_giving_feedback_to_a_friend_who_requests_honesty_but_argues_every_point",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b060_separating_mediation_from_post_treatment_confounding",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b060_scanning_receipts_with_ocr_before_discarding_the_originals",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b061_drying_and_storing_a_bicycle_helmet_after_riding_in_rain",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b061_asking_a_friend_not_to_forward_private_voice_messages",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b061_understanding_why_cutting_onions_makes_eyes_water",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b061_handing_off_incident_command_during_a_long_running_outage",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b062_cleaning_a_reusable_straw_with_an_opaque_bend",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b062_setting_limits_when_a_friend_expects_reactions_to_every_shared_video",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b062_understanding_why_the_moon_looks_larger_near_the_horizon",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b062_interpreting_a_noninferiority_margin_without_claiming_equivalence",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b063_slowing_banana_ripening_without_trapping_condensation",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b063_asking_a_friend_not_to_edit_your_appearance_before_posting_photos",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b063_checking_email_forwarding_rules_after_an_account_compromise",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b063_refusing_unsolicited_remote_desktop_support",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b064_removing_pills_from_a_sweater_without_thinning_the_fabric",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b064_asking_a_friend_not_to_share_your_live_location_without_permission",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b064_checking_identification_assumptions_in_a_regression_discontinuity_design",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b064_redacting_sensitive_text_from_a_pdf_instead_of_covering_it_visually",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b065_removing_food_odors_from_a_wooden_spoon_without_soaking_it",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b065_asking_a_friend_to_make_requests_directly_instead_of_relying_on_hints",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b065_distinguishing_model_discrimination_from_probability_calibration",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b065_auditing_calendar_sharing_after_private_events_become_visible",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b066_reducing_screen_glare_from_a_desk_lamp_without_working_in_the_dark",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b066_setting_limits_with_a_friend_who_only_uses_you_to_vent",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b066_creating_a_decision_log_when_project_meetings_keep_being_reinterpreted",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b066_explaining_why_metal_feels_colder_than_wood_at_the_same_temperature",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b067_drying_a_wet_umbrella_at_work_without_blocking_the_walkway",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b067_responding_when_group_chat_jokes_keep_targeting_your_accent",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b067_refusing_to_keep_using_a_cracked_power_strip_with_tape",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b067_debugging_javascript_sort_mutating_state_shared_with_a_ui",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b068_going_to_a_movie_alone_without_turning_it_into_a_social_test",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b068_asking_family_not_to_volunteer_your_time_to_relatives",
+      "reason": "not_game_extraction"
+    },
+    {
+      "id": "kisaki_v41_auto_b068_choosing_between_family_wise_error_and_false_discovery_rate_control",
+      "reason": "not_game_extraction"
+    }
+  ],
+  "exclusion_counts": {
+    "requires_manual_context_conversion": 107,
+    "source_verification_failed": 2,
+    "heldout_overlap": 256,
+    "not_game_extraction": 404
+  },
+  "heldout_sha256": "550b8586336713bafc6287e9db0f5f6c06a5aeaa6cfbfce09c13c4b82aaf2c8f",
+  "raw_sha256": "517b632b719886e80a4fe784656c68bcbba45edbe20a25202810bbfc3d2fe803",
+  "note": "Drafts only; original-source status does not approve context or preference."
+}

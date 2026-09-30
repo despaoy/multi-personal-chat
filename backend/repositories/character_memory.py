@@ -12,8 +12,12 @@ from __future__ import annotations
 
 import asyncio
 import json
-from typing import Any, Optional, Protocol
+from typing import TYPE_CHECKING, Any, Optional, Protocol
 
+if TYPE_CHECKING:
+    from datetime import datetime
+
+from character.memory_subject import is_source_observation
 from character.models import (
     MemoryItem,
     RelationshipState,
@@ -53,6 +57,25 @@ def relationship_from_record(row) -> RelationshipState:
 
 class CharacterMemoryRepository(Protocol):
     """角色关系与长期记忆的持久化接口。"""
+
+    async def erase_unlinked_sources(self, character_id: str, user_scope: UserScope, *,
+                                     source_message_ids: tuple[str, ...]) -> int: ...
+
+    async def capture_source(self, character_id: str, user_scope: UserScope, *,
+                             source_message_id: str, body: str, observed_at: datetime) -> str: ...
+
+    async def source_windows(self, character_id: str, user_scope: UserScope, *,
+                             source_message_ids: tuple[str, ...], radius: int = 1) -> list[dict[str, Any]]: ...
+
+    async def search_sources(self, character_id: str, user_scope: UserScope, *, query: str,
+                             limit: int = 32) -> list[dict[str, Any]]: ...
+
+    async def linked_sources(self, character_id: str, user_scope: UserScope, *,
+                             memory_ids: tuple[int, ...]) -> list[dict[str, Any]]: ...
+
+    async def list_sources(self, character_id: str, user_scope: UserScope, *,
+                           source_message_ids: tuple[str, ...] | None = None,
+                           limit: int = 100) -> list[dict[str, Any]]: ...
 
     async def get_relationship(
         self, character_id: str, user_scope: UserScope
@@ -190,6 +213,72 @@ class DatabaseCharacterMemoryRepository:
     def __init__(self, database: Any) -> None:
         self._database = database
 
+    async def source_windows(self, character_id: str, user_scope: UserScope, *,
+                             source_message_ids: tuple[str, ...], radius: int = 1) -> list[dict[str, Any]]:
+        reader = getattr(self._database, "memory_source_windows", None)
+        if reader is None:
+            raise NotImplementedError("Source windows unavailable on this database adapter")
+        return await asyncio.to_thread(
+            reader, character_id, user_scope.platform, user_scope.adapter, user_scope.sender_id,
+            user_scope.conversation_type, user_scope.conversation_id,
+            source_message_ids=source_message_ids, radius=radius)
+
+    async def linked_sources(self, character_id: str, user_scope: UserScope, *,
+                             memory_ids: tuple[int, ...]) -> list[dict[str, Any]]:
+        reader = getattr(self._database, "linked_memory_sources", None)
+        if reader is None:
+            return []
+        return await asyncio.to_thread(
+            reader, character_id, user_scope.platform, user_scope.adapter, user_scope.sender_id,
+            user_scope.conversation_type, user_scope.conversation_id, memory_ids=memory_ids)
+
+    async def search_sources(self, character_id: str, user_scope: UserScope, *, query: str,
+                             limit: int = 32) -> list[dict[str, Any]]:
+        reader = getattr(self._database, "search_memory_sources", None)
+        if reader is None:
+            return []
+        return await asyncio.to_thread(
+            reader, character_id, user_scope.platform, user_scope.adapter, user_scope.sender_id,
+            user_scope.conversation_type, user_scope.conversation_id, query=query, limit=limit)
+
+    async def capture_source(self, character_id: str, user_scope: UserScope, *,
+                             source_message_id: str, body: str, observed_at: datetime) -> str:
+        from db.memory_source import source_scope
+
+        writer = getattr(self._database, "capture_memory_source", None)
+        if writer is None:
+            return "unsupported_adapter"
+        fields = (character_id, user_scope.platform, user_scope.adapter, user_scope.sender_id,
+                  user_scope.conversation_type, user_scope.conversation_id)
+        try:
+            source_scope(*fields)
+        except ValueError:
+            # Branch/legacy claims retain their old path; never invent an
+            # authority for an independent full-source copy.
+            return "unsupported_scope"
+        return await asyncio.to_thread(writer, *fields, source_message_id=source_message_id,
+                                       body=body, observed_at=observed_at)
+
+    async def list_sources(self, character_id: str, user_scope: UserScope, *,
+                           source_message_ids: tuple[str, ...] | None = None,
+                           limit: int = 100) -> list[dict[str, Any]]:
+        reader = getattr(self._database, "list_memory_sources", None)
+        if reader is None:
+            return []
+        return await asyncio.to_thread(
+            reader, character_id, user_scope.platform, user_scope.adapter, user_scope.sender_id,
+            user_scope.conversation_type, user_scope.conversation_id,
+            source_message_ids=source_message_ids, limit=limit)
+
+    async def erase_unlinked_sources(self, character_id: str, user_scope: UserScope, *,
+                                     source_message_ids: tuple[str, ...]) -> int:
+        eraser = getattr(self._database, 'erase_unlinked_memory_sources', None)
+        if eraser is None:
+            raise RuntimeError('Database adapter does not support source erasure')
+        return int(await asyncio.to_thread(eraser, character_id, user_scope.platform, user_scope.adapter,
+            user_scope.sender_id, user_scope.conversation_type, user_scope.conversation_id,
+            source_message_ids=source_message_ids))
+
     async def find_rule_memory_records(self, character_id: str, user_scope: UserScope, keys: tuple[str, ...]) -> list[dict[str, Any]]:
         rows = await asyncio.to_thread(
             self._database.list_character_memory_claims,
@@ -287,6 +376,9 @@ class DatabaseCharacterMemoryRepository:
                     memory_type=memory_type,  # type: ignore[arg-type]
                     content=content,
                     importance=float(row.get("importance") or 0.0),
+                    source_observation=is_source_observation(row),
+                    evidence=tuple(row.get("evidence") or ()) if is_source_observation(row) else (),
+                    source_message_ids=tuple(row.get("source_message_ids") or ()) if is_source_observation(row) else (),
                 )
             )
         return items
@@ -431,9 +523,14 @@ class DatabaseCharacterMemoryRepository:
         if appender is None:
             if metadata_payload.get("origin") in {"rule_v2", "rule_candidate"}:
                 raise RuntimeError("规则记忆写入需要支持版本与证据的数据库适配器")
-            # Compatibility for custom/older adapters. This path cannot retain
-            # history, but keeps deployment functional while capability probes
-            # make the limitation observable to the caller.
+            if (relation != 'ADD' or status not in {None, 'active'}
+                    or scope_level != 'conversation' or parent_memory_id is not None
+                    or supersedes_memory_id is not None or valid_from or valid_to):
+                # A legacy upsert cannot implement retraction, pending state,
+                # version links, validity windows or wider scope. Reporting a
+                # successful semantic mutation would leave active false facts.
+                raise RuntimeError("此记忆操作需要支持版本与生命周期的数据库适配器")
+            # Only plain active conversation records retain legacy compatibility.
             memory_id = await self.add_or_update_memory(
                 character_id,
                 user_scope,

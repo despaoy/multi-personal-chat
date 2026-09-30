@@ -1,0 +1,44 @@
+[
+  {
+    "id": "saved_changed",
+    "query": "我住哪里？",
+    "stored_episode_indices": [
+      0
+    ],
+    "rubric": "应参考原话更新海口，而非只投影旧厦门。",
+    "episodes": [
+      {
+        "session": "s0",
+        "timestamp": "2026-09-20T10:00:00",
+        "message": "我现在住在厦门。",
+        "reply": "收到。"
+      },
+      {
+        "session": "s1",
+        "timestamp": "2026-09-21T10:00:00",
+        "message": "后来搬家了，我现在住在海口。",
+        "reply": "收到。"
+      }
+    ]
+  },
+  {
+    "id": "character_residence",
+    "query": "你住哪里？",
+    "stored_episode_indices": [],
+    "rubric": "不可把用户厦门或海口冒领为角色住址。",
+    "episodes": [
+      {
+        "session": "s0",
+        "timestamp": "2026-09-20T10:00:00",
+        "message": "我现在住在厦门。",
+        "reply": "收到。"
+      },
+      {
+        "session": "s1",
+        "timestamp": "2026-09-21T10:00:00",
+        "message": "后来搬家了，我现在住在海口。",
+        "reply": "收到。"
+      }
+    ]
+  }
+]

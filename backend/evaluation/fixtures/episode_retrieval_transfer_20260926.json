@@ -1,0 +1,119 @@
+{
+  "synthetic": true,
+  "scope": "single-user-character-offline",
+  "records": [
+    {
+      "id": "1",
+      "message": "我现在住在厦门。"
+    },
+    {
+      "id": "2",
+      "message": "后来搬家了，我现在住在海口。"
+    },
+    {
+      "id": "3",
+      "message": "朋友现在住在厦门。"
+    },
+    {
+      "id": "4",
+      "message": "我把文件保存到了新的文件夹。"
+    },
+    {
+      "id": "5",
+      "message": "快住手，这只是故事里的一句台词。"
+    },
+    {
+      "id": "6",
+      "message": "早餐我通常喝豆浆。"
+    },
+    {
+      "id": "7",
+      "message": "最近那个饮料不喝了，改成牛奶。"
+    },
+    {
+      "id": "8",
+      "message": "我哥哥在医院当医生。"
+    },
+    {
+      "id": "9",
+      "message": "我的工作是给图书排版。"
+    },
+    {
+      "id": "10",
+      "message": "我星期五打算去植物园。"
+    },
+    {
+      "id": "11",
+      "message": "之前说的那次出行取消了。"
+    },
+    {
+      "id": "12",
+      "message": "这一页的段落编号是十二。"
+    }
+  ],
+  "queries": [
+    {
+      "id": "q0",
+      "text": "我住哪里？",
+      "required_evidence": [
+        "1",
+        "2"
+      ]
+    },
+    {
+      "id": "q1",
+      "text": "现在居住在哪座城市？",
+      "required_evidence": [
+        "1",
+        "2"
+      ]
+    },
+    {
+      "id": "q2",
+      "text": "我早餐喝什么？",
+      "required_evidence": [
+        "6",
+        "7"
+      ]
+    },
+    {
+      "id": "q3",
+      "text": "我的职业是什么？",
+      "required_evidence": [
+        "9"
+      ]
+    },
+    {
+      "id": "q4",
+      "text": "我哥哥做什么工作？",
+      "required_evidence": [
+        "8"
+      ]
+    },
+    {
+      "id": "q5",
+      "text": "星期五还出门吗？",
+      "required_evidence": [
+        "10",
+        "11"
+      ]
+    },
+    {
+      "id": "q6",
+      "text": "我的宠物叫什么名字？",
+      "required_evidence": []
+    },
+    {
+      "id": "q7",
+      "text": "你住哪里？",
+      "required_evidence": []
+    },
+    {
+      "id": "q8",
+      "text": "文件放到哪儿了？",
+      "required_evidence": [
+        "4"
+      ]
+    }
+  ]
+}

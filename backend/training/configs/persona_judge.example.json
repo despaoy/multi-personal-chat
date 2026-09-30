@@ -1,0 +1,7 @@
+{
+  "name": "persona-judge",
+  "model": "replace-with-served-model-id",
+  "revision": "replace-with-actual-model-version",
+  "base_url": "http://127.0.0.1:8000/v1",
+  "api_key_env": "PERSONA_JUDGE_API_KEY"
+}

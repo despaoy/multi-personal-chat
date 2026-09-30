@@ -108,7 +108,10 @@ def _route_indexes(
 class MultiScaleRagRuntime:
     """Lazy production facade with the same bundle contract used by generation."""
 
-    def __init__(self, index_root: Path | None = None) -> None:
+    def __init__(self, index_root: Path | None = None, *, context_max_chars: int = 6000) -> None:
+        if type(context_max_chars) is not int or context_max_chars < 1:
+            raise ValueError('context_max_chars must be a positive integer')
+        self.context_max_chars = context_max_chars
         configured = (
             os.getenv("CHARACTER_RAG_INDEX_ROOT", "").strip() or os.getenv("MULTISCALE_RAG_INDEX_ROOT", "").strip()
         )
@@ -173,6 +176,7 @@ class MultiScaleRagRuntime:
                     self._provider,
                     all_documents=documents,
                     source_extractor=OriginalTextExtractor(_REPO_ROOT),
+                    context_max_chars=self.context_max_chars,
                 )
                 counts: dict[str, int] = {}
                 for document in documents:

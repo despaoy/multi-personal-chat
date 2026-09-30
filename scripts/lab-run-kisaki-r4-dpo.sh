@@ -9,7 +9,7 @@ BEST_ADAPTER=${2:?usage: lab-run-kisaki-r4-dpo.sh GPU BEST_R1_ADAPTER PREFERENCE
 PREFERENCE_SOURCE=${3:?usage: lab-run-kisaki-r4-dpo.sh GPU BEST_R1_ADAPTER PREFERENCE_SOURCE}
 BASE_MODEL=$ROOT/runtime/models/Qwen3-8B-Instruct
 OUTPUT=$ROOT/runtime/experiments/kisaki/r4
-FROZEN=$OUTPUT/frozen_preference_v1
+FROZEN=$OUTPUT/frozen_preference_v2
 ADAPTER_OUTPUT=$OUTPUT/kisaki-dpo-pilot
 LOCK=$ROOT/runtime/locks/kisaki-r4-dpo.lock
 LOG=$ROOT/runtime/logs/kisaki-r4-dpo.log
@@ -29,20 +29,24 @@ if [[ ! -f "$FROZEN/manifest.json" ]]; then
   "$PYTHON" "$PROJECT/scripts/prepare_kisaki_dpo_v3.py" \
     --input "$PREFERENCE_SOURCE" --output-dir "$FROZEN" --minimum 100 --seed 42
 fi
-"$PYTHON" - "$FROZEN/manifest.json" "$FROZEN/kisaki_dpo_train.jsonl" <<'PY'
+"$PYTHON" - "$FROZEN/manifest.json" "$FROZEN/kisaki_dpo_train.jsonl" "$FROZEN/kisaki_dpo_heldout.jsonl" <<'PY'
 import hashlib, json, pathlib, sys
 manifest = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
 train = pathlib.Path(sys.argv[2])
 actual = hashlib.sha256(train.read_bytes()).hexdigest()
 assert manifest["status"] == "frozen", "preference manifest is not frozen"
+assert manifest["schema_version"] == 2, "grouped preference split is required"
 assert manifest["human_approved_count"] >= 100, "fewer than 100 approved pairs"
 assert manifest["train"]["sha256"] == actual, "frozen train hash mismatch"
+assert manifest["heldout"]["sha256"] == hashlib.sha256(pathlib.Path(sys.argv[3]).read_bytes()).hexdigest(), "validation hash mismatch"
 PY
 
 if [[ -e "$ADAPTER_OUTPUT" ]]; then echo "refusing_to_overwrite=$ADAPTER_OUTPUT" >&2; exit 2; fi
 CUDA_VISIBLE_DEVICES=$GPU PYTHONPATH="$PROJECT/backend" "$PYTHON" -m training.preference_trainer \
   --data "$FROZEN/kisaki_dpo_train.jsonl" --base-model "$BASE_MODEL" \
+  --eval-data "$FROZEN/kisaki_dpo_heldout.jsonl" \
   --adapter "$BEST_ADAPTER" --method dpo --epochs 1 --beta 0.1 --learning-rate 5e-7 \
+  --max-length "${DPO_MAX_LENGTH:-4096}" --max-prompt-length "${DPO_MAX_PROMPT_LENGTH:-3072}" \
   --output-dir "$ADAPTER_OUTPUT" 2>&1 | tee "$LOG"
 
 echo "r4_dpo_training_complete=$ADAPTER_OUTPUT"

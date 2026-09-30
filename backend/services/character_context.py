@@ -14,7 +14,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from dataclasses import dataclass, field
+import os
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
@@ -126,6 +127,12 @@ class PreparedCharacterTurn:
     contextual_policy_status: str = "disabled"
     contextual_policy_reason: str = ""
     contextual_policy_latency_ms: float = 0.0
+    memory_budget: dict[str, int] = field(default_factory=dict)
+    memory_recall: dict[str, object] = field(default_factory=dict)
+    # Server preparation time, retained across generation and background writes.
+    received_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    # Only explicit interactive operations populate this; prepare_turn stays read-only.
+    memory_operation_receipt: dict[str, object] | None = None
 
 
 @dataclass
@@ -156,7 +163,16 @@ class CharacterContextService:
         semantic_estimator: SemanticStateEstimator | None = None,
         memory_selector: ContextualEvidenceSelector | None = None,
         contextual_policy: ContextualDecisionPolicy | None = None,
+        source_recall_enabled: bool | None = None,
+        source_window_radius: int = 0,
+        history_limit: int = HISTORY_LIMIT,
+        history_max_chars: int = HISTORY_MAX_CHARS,
+        source_max_chars: int = 2400,
     ) -> None:
+        if min(history_limit, history_max_chars, source_max_chars) <= 0:
+            raise ValueError('Context budgets must be positive')
+        self._history_limit = history_limit
+        self._history_max_chars = history_max_chars
         self._profiles = profile_registry
         self._memory_repo = memory_repository
         self._message_repo = message_repository
@@ -166,6 +182,47 @@ class CharacterContextService:
         self._semantic_estimator = semantic_estimator
         self._memory_selector = memory_selector or create_evidence_selector()
         self._contextual_policy = contextual_policy or create_contextual_policy()
+        from character.source_memory import SourceMemoryService
+
+        self._source_memory = SourceMemoryService(memory_repository, window_radius=source_window_radius,
+                                                 max_chars=source_max_chars)
+        self._source_recall_enabled = (source_recall_enabled if source_recall_enabled is not None else
+            os.getenv("MEMORY_SOURCE_RECALL_ENABLED", "false").lower() in {"true", "1", "yes", "on"})
+
+    async def prepare_interactive_turn(
+        self, turn: TurnInput, character_id: str, *, source_message_id: str = '',
+    ) -> PreparedCharacterTurn:
+        """Execute explicit erasure before the response snapshot, once per turn.
+
+        Callers must opt in only for an accepted interactive request, never for
+        internal inference, hypothetical branches or delivery-gated previews.
+        Ordinary fact writes remain asynchronous in complete_turn.
+        """
+        from character.memory_llm import get_memory_enrichment_scheduler, is_memory_erasure_request
+        from character.memory_operation import operation_receipt_context
+
+        if not is_memory_erasure_request(turn.message):
+            return await self.prepare_turn(turn, character_id)
+        # Validate identity and profile before any mutation.
+        user_scope = build_user_scope(platform=turn.platform, adapter=turn.adapter,
+            sender_id=turn.sender_id, conversation_id=turn.conversation_id,
+            conversation_type=turn.conversation_type)
+        await asyncio.to_thread(self._profiles.get_profile, character_id)
+        received_at = datetime.now(timezone.utc)
+        history = tuple(turn.history) or tuple(await self._load_history(turn, user_scope, character_id))
+        receipt = await get_memory_enrichment_scheduler().schedule_and_wait(
+            repository=self._memory_repo, character_id=character_id, user_scope=user_scope,
+            message=turn.message, rule_hints=(), history=history,
+            source_message_id=source_message_id or None, observed_at=received_at,
+        )
+        # Retrieve after execution, not from the stale pre-deletion snapshot.
+        prepared = await self.prepare_turn(turn, character_id)
+        return replace(prepared, memory_operation_receipt=receipt,
+            compiled=replace(prepared.compiled,
+                memory_operation_receipt={key: receipt[key] for key in ('status', 'persisted', 'source_erased') if key in receipt},
+                dynamic_context='\n\n'.join(filter(None, (
+                prepared.compiled.dynamic_context, operation_receipt_context(receipt),
+            )))))
 
     async def prepare_turn(self, turn: TurnInput, character_id: str) -> PreparedCharacterTurn:
         """加载本轮全部上下文并编译成模型输入。
@@ -186,7 +243,7 @@ class CharacterContextService:
             profile, relationship_record, history, relationship_notes = await asyncio.gather(
                 asyncio.to_thread(self._profiles.get_profile, character_id),
                 self._memory_repo.get_relationship_record(character_id, user_scope),
-                self._load_history(turn, user_scope),
+                self._load_history(turn, user_scope, character_id),
                 self._load_relationship_notes(character_id, user_scope),
             )
             # Context is needed before recall, not only after an arbitrary top-k.
@@ -204,10 +261,10 @@ class CharacterContextService:
                 asyncio.to_thread(self._profiles.get_profile, character_id),
                 self._memory_repo.get_relationship_record(character_id, user_scope),
                 self._load_memory_candidates(character_id, user_scope, turn.message),
-                self._load_history(turn, user_scope),
+                self._load_history(turn, user_scope, character_id),
                 self._load_relationship_notes(character_id, user_scope),
             )
-        memories_items, memory_candidates = memories
+        memories_items, memory_candidates, memory_recall = memories
         from repositories.character_memory import relationship_from_record
 
         relationship = relationship_from_record(relationship_record)
@@ -284,17 +341,16 @@ class CharacterContextService:
         # Budget the evidence before selecting a recall action. Selection is
         # not injection: complete packets can be too large for the final prompt.
         # Compile once so policy and generation see exactly the same evidence.
+        memory_budget: dict[str, int] = {}
         reference_context, injected_memory_ids = compile_reference_context(
             tuple(memories_items), preferred_address=relationship.preferred_address,
             complete_evidence=self._memory_selector is not None,
+            diagnostics=memory_budget,
         )
 
         note_context = compile_notes(relationship_notes, turn.message, received_at)
-        if note_context:
-            reference_context = "\n\n".join(filter(None, (reference_context, note_context)))
         continuity = compile_continuity(effective_history, turn.message)
-        if continuity:
-            reference_context = "\n\n".join(filter(None, (reference_context, continuity)))
+        conversation_reference = "\n\n".join(filter(None, (note_context, continuity)))
 
         situation = SituationState(
             # 系统提示词中只放固定分类标签，用户消息原文绝不进入
@@ -340,18 +396,39 @@ class CharacterContextService:
                 compile_rhythm(effective_history, turn.message, interaction),
             ))),
             reference_context=reference_context,
+            conversation_reference_context=conversation_reference,
             used_memory_ids=injected_memory_ids,
+            memory_packets=tuple(item for item in memories_items if item.memory_id in injected_memory_ids),
+            memory_review_query=str(memory_recall.get('mention_query') or ''),
+            memory_review_text=str(memory_recall.get('mention_review') or ''),
+            memory_field_presence=tuple((key, value) for key, value in
+                                        (memory_recall.get('field_presence') or {}).items()
+                                        if value is None or isinstance(value, bool)),
+            memory_status=("available" if injected_memory_ids else
+                           "retrieval_error" if memory_recall.get('status') == 'retrieval_error' else "no_match"),
         )
+
+        if self._source_recall_enabled:
+            from character.source_memory import attach_sources
+
+            sources = await self._source_memory.recall(character_id, user_scope, turn.message,
+                                                       memories=compiled.memory_packets)
+            compiled = attach_sources(compiled, sources, preferred_address=relationship.preferred_address,
+                                      complete_evidence=self._memory_selector is not None)
+            memory_recall["sources"] = sources.diagnostics
 
         interaction_count = int((relationship_record or {}).get("interaction_count") or 0)
 
         return PreparedCharacterTurn(
+            received_at=received_at,
             character_id=character_id,
             user_scope=user_scope,
             compiled=compiled,
             history=effective_history,
             relationship=relationship,
             memory_candidates=memory_candidates,
+            memory_budget=memory_budget,
+            memory_recall=memory_recall,
             memory_selection_status=memory_selection.status,
             memory_selection_reason=memory_selection.reason,
             memory_selection_candidate_count=memory_selection.candidate_count,
@@ -410,18 +487,26 @@ class CharacterContextService:
         # 保留原规则写入，方便离线开发和向后兼容。
         try:
             note_command = parse_command(turn.message)
-            extracted = () if note_command else extract_memories(turn.message)
+            extracted = () if note_command else extract_memories(turn.message, reference_time=prepared.received_at)
             from character.memory_llm import (
                 classify_memory_write_mode,
                 get_memory_enrichment_scheduler,
             )
 
             scheduler = get_memory_enrichment_scheduler()
-            if note_command:
+            from character.natural_relationship import hypothetical_source_only
+
+            source_only = hypothetical_source_only(turn.message) and not extracted
+            if prepared.memory_operation_receipt is not None:
+                # Already submitted before generation, including pending and
+                # failed results. Never duplicate it after saving the reply.
+                outcome.memory_enrichment_mode = 'explicit_operation'
+                outcome.memory_enrichment_status = str(prepared.memory_operation_receipt.get('status', 'unknown'))
+            elif note_command:
                 saved = await save_note(self._memory_repo, prepared.character_id, prepared.user_scope,
                                         note_command, source_message_id or None)
                 outcome.memory_enrichment_status = "relationship_note_saved" if saved else "no_change"
-            elif relationship_write_blocked(turn.message):
+            elif relationship_write_blocked(turn.message) and not extracted and not source_only:
                 outcome.memory_enrichment_status = "skipped_fiction_or_note"
             elif scheduler.enabled:
                 outcome.memory_enrichment_mode = classify_memory_write_mode(turn.message)
@@ -431,12 +516,14 @@ class CharacterContextService:
                     user_scope=prepared.user_scope,
                     message=turn.message,
                     rule_hints=extracted,
-                    history=prepared.history[-4:],
+                    history=prepared.history,
                     source_message_id=source_message_id or None,
                     # 只传递本轮真正注入回复上下文的 IDs。“刚才那条说错了”
                     # 可据此定向纠错；reply 本身绝不进入记忆证据。
                     feedback_target_ids=prepared.compiled.used_memory_ids,
                     source_type="user",
+                    observed_at=prepared.received_at,
+                    source_only=source_only,
                 )
                 outcome.memory_enrichment_status = (
                     "queued_hot"
@@ -451,6 +538,7 @@ class CharacterContextService:
                     saved = await write_rule_memory(
                         self._memory_repo, prepared.character_id, prepared.user_scope,
                         item, source_message_id or None,
+                        observed_at=prepared.received_at,
                     )
                     outcome.new_memories += int(saved)
                 outcome.memory_enrichment_status = "saved" if outcome.new_memories else "no_change"
@@ -503,28 +591,32 @@ class CharacterContextService:
     async def _load_memory_candidates(
         self, character_id: str, user_scope: UserScope, query: str,
         *, retrieval_context: str = "", reference_time: datetime | None = None,
-    ) -> tuple[tuple[MemoryItem, ...], int]:
+    ) -> tuple[tuple[MemoryItem, ...], int, dict[str, object]]:
+        recall = getattr(self._memory_service, 'recall_with_diagnostics', None)
+        kwargs = {}
         if self._memory_selector is not None:
-            return await self._memory_service.load_relevant_memories(
-                character_id, user_scope, query, for_contextual_selection=True, retrieval_context=retrieval_context,
+            kwargs = dict(for_contextual_selection=True, retrieval_context=retrieval_context,
                 reference_time=reference_time,
             )
-        return await self._memory_service.load_relevant_memories(character_id, user_scope, query)
+        if recall is not None:
+            return await recall(character_id, user_scope, query, **kwargs)
+        items, count = await self._memory_service.load_relevant_memories(character_id, user_scope, query, **kwargs)
+        return items, count, {'status': 'unavailable'}
 
-    async def _load_history(self, turn: TurnInput, user_scope: UserScope) -> list[dict[str, str]]:
+    async def _load_history(self, turn: TurnInput, user_scope: UserScope, character_id: str) -> list[dict[str, str]]:
         """调用方带现场历史时直接使用，否则从数据库读取。"""
         if turn.history:
             return list(turn.history)
         try:
             return await self._message_repo.list_recent_conversation_history(
-                user_scope, limit=HISTORY_LIMIT, max_chars=HISTORY_MAX_CHARS
+                user_scope, limit=self._history_limit, max_chars=self._history_max_chars, character_id=character_id
             )
         except Exception:
             logger.warning("角色历史读取失败，按空历史继续", exc_info=True)
             return []
 
 
-def build_character_context_service(database) -> CharacterContextService:
+def build_character_context_service(database, *, source_recall_enabled: bool | None = None) -> CharacterContextService:
     """基于指定数据库构建编排服务。
 
     create_app(custom_container) 的应用实例必须用容器数据库构建服务，
@@ -541,6 +633,7 @@ def build_character_context_service(database) -> CharacterContextService:
         profile_registry=get_default_profile_registry(),
         memory_repository=DatabaseCharacterMemoryRepository(database),
         message_repository=DatabaseMessageRepository(database),
+        source_recall_enabled=source_recall_enabled,
         semantic_estimator=SemanticStateEstimator(
             semantic_runtime.reviewer,
             timeout_seconds=semantic_runtime.timeout_seconds,

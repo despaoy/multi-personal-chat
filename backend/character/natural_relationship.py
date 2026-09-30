@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
-from character.memory_extractor import fictional_memory_context, memory_write_allowed
+from character.memory_extractor import fictional_memory_context, hypothetical_source_context, memory_write_allowed
 from character.models import MemoryItem
 
 PREFIX = "relationship:"
@@ -67,6 +67,13 @@ def relationship_write_blocked(message: str) -> bool:
     """Rejected memo/fiction must not fall through into generic fact extraction."""
     labels = (*_LABELS, "更正备忘录", "结束备忘录")
     return bool(fictional_memory_context(message) or any(label + sep in message for label in labels for sep in (":", "：")))
+
+
+def hypothetical_source_only(message: str) -> bool:
+    """Allow source retention without generic facts or relationship mutation."""
+    labels = (*_LABELS, "更正备忘录", "结束备忘录")
+    return hypothetical_source_context(message) and not any(
+        label + sep in message for label in labels for sep in (":", "："))
 
 
 def active_note(record: dict, now: datetime | None = None) -> bool:

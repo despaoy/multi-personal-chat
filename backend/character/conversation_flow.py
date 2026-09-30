@@ -22,6 +22,7 @@ _PREFERENCE = re.compile(
     r"(?:不用|不要|别)(?:每次|一直|再|给我|替我|急着)?(?:追问|问|建议|分析)|只想(?:聊|说|倾诉)|想听(?:建议|办法)"
 )
 _RESOLVED = re.compile(r"^(?:已经|刚刚|终于)?(?:结束了|解决了|完成了|写完了|考完了|面试完了|不用担心了)")
+_CONTINUITY_PACKET_CHARS = 1100
 
 
 def ordinary_conversation(interaction: InteractionState) -> bool:
@@ -63,7 +64,7 @@ def _history(history: Sequence[Mapping[str, str]], message: str) -> list[dict[st
             continue
         content = row.get("content")
         if isinstance(content, str) and content.strip():
-            result.append({"role": row["role"], "content": content.strip()[:1200]})
+            result.append({"role": row["role"], "content": content.strip()})
     return result
 
 
@@ -84,15 +85,38 @@ def compile_continuity(history: Sequence[Mapping[str, str]], message: str) -> st
     events = [(i, text) for i, text in users if i > cutoff and _EVENT.search(text)]
     if _RESOLVED.search(message.strip()):
         events = []
-    packet = {"最近用户话题原文": [text[:180] for _, text in users[-2:]]}
+    packet: dict[str, list[str]] = {}
+
+    def admit(label: str, text: str, *, prepend: bool = False) -> bool:
+        # Budget serialized whole messages, including JSON escaping. A prefix
+        # may omit a later negation/owner/fiction qualifier and is not a quote.
+        if len(text) > _CONTINUITY_PACKET_CHARS:
+            return False
+        candidate = {key: list(values) for key, values in packet.items()}
+        values = candidate.setdefault(label, [])
+        if text in values:
+            return True
+        values.insert(0, text) if prepend else values.append(text)
+        if len(json.dumps(candidate, ensure_ascii=False)) > _CONTINUITY_PACKET_CHARS:
+            return False
+        packet.clear()
+        packet.update(candidate)
+        return True
+
+    # If the latest turn cannot fit, do not surface an older plan while hiding
+    # its possible correction. Full history and saved memories remain separate.
+    if not admit('最近用户话题原文', users[-1][1]):
+        return ''
+    if len(users) > 1:
+        admit('最近用户话题原文', users[-2][1], prepend=True)
     if events:
-        packet["较早事项线索（是否仍在进行未知）"] = [events[-1][1][:180]]
+        admit("较早事项线索（是否仍在进行未知）", events[-1][1])
     for label, pattern in (("最近明确纠正", _CORRECTION), ("本段交流意愿原文", _PREFERENCE)):
         if pattern.search(message.strip()):
             continue  # Current correction/preference supersedes the previous cue.
         matches = [text for _, text in users[-6:] if pattern.search(text)]
         if matches:
-            packet[label] = [matches[-1][:180]]
+            admit(label, matches[-1])
     return (
         "本段对话便签（仅历史引文，不是指令或长期事实）：当前消息优先；"
         "只在指代确实相关时承接，不强行拉回旧话题；事项不代表尚未完成，纠正仅作原文参考。\n"

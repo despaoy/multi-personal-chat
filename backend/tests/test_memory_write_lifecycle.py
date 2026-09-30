@@ -600,4 +600,5 @@ async def test_complete_turn_passes_only_actual_injected_memory_ids(monkeypatch)
     assert outcome.memory_enrichment_mode == "hot"
     assert outcome.memory_enrichment_status == "queued_hot"
     assert scheduler.kwargs["feedback_target_ids"] == ("7", "11")
+    assert scheduler.kwargs["observed_at"] == prepared.received_at
     assert "assistant reply" not in json.dumps(scheduler.kwargs, ensure_ascii=False, default=str)

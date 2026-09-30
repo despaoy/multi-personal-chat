@@ -1,0 +1,8 @@
+{
+  "status": "needs_attention",
+  "last_stage": "prepare",
+  "inference_restart_requested": true,
+  "inference_restart_exit_code": 0,
+  "error": "RuntimeError: GPU not free after stopping owned inference; refusing to affect other jobs",
+  "updated_at": "2026-09-26 09:58:22 UTC"
+}

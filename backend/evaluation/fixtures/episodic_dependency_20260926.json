@@ -1,0 +1,52 @@
+[
+  {
+    "id": "saved_changed",
+    "query": "我住哪里？",
+    "rubric": "旧值厦门不可覆盖原话更正海口；原话不自动变成已保存事实。",
+    "stored_episode_indices": [
+      0
+    ],
+    "episodes": [
+      {
+        "session": "s0",
+        "timestamp": "2026-09-20T10:00:00",
+        "message": "我现在住在厦门。",
+        "reply": "收到。"
+      },
+      {
+        "session": "s1",
+        "timestamp": "2026-09-21T10:00:00",
+        "message": "后来搬家了，我现在住在海口。",
+        "reply": "收到。"
+      }
+    ]
+  },
+  {
+    "id": "unsaved_origin",
+    "query": "我来自哪里？",
+    "rubric": "原始对话可提供昆明；不能因无结构化记录就直接宣称不知道。",
+    "stored_episode_indices": [],
+    "episodes": [
+      {
+        "session": "s0",
+        "timestamp": "2026-09-20T10:00:00",
+        "message": "我来自昆明。",
+        "reply": "收到。"
+      }
+    ]
+  },
+  {
+    "id": "storage_only",
+    "query": "你保存了我的籍贯吗？",
+    "rubric": "结构化存储为空，应如实说明没有保存；原始聊天记录不等于已保存事实。",
+    "stored_episode_indices": [],
+    "episodes": [
+      {
+        "session": "s0",
+        "timestamp": "2026-09-20T10:00:00",
+        "message": "我的籍贯是昆明。",
+        "reply": "收到。"
+      }
+    ]
+  }
+]

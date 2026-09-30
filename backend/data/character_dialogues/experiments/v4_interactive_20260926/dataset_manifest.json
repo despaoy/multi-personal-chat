@@ -1,0 +1,307 @@
+{
+  "schema_version": 1,
+  "dataset_id": "KISAKI-V4-INTERACTIVE-20260926",
+  "status": "approved_data_not_run",
+  "parent": {
+    "path": "backend/data/character_dialogues/experiments/v4/canonical_dataset_manifest.json",
+    "sha256": "72070a79769c6c3ce5ebc8102b7c4a7da6c21e2326e1320f267a851f633805cb"
+  },
+  "train": {
+    "path": "backend/data/character_dialogues/experiments/v4_interactive_20260926/train.jsonl",
+    "count": 928,
+    "sha256": "eefde27b7023624d5f216b4af449dfc2633fe84db8f720a2a19bf5e9cce1af21"
+  },
+  "validation": {
+    "status": "frozen",
+    "count": 70,
+    "path": "backend/data/character_dialogues/experiments/v4/validation.jsonl",
+    "sha256": "fb5cd5d93027b37be53327cda4e7c6137a7bae97201830fc8aa726727b9777b8",
+    "source_distribution": {
+      "game_extraction_current_sft": 70
+    },
+    "human_review_status": "approved",
+    "suggested_exclusion_count": 1,
+    "suggested_exclusions_path": "backend/data/character_dialogues/experiments/v4/validation_exclusions.json",
+    "applied_exclusions": [
+      "tsukiyashiro_kisaki_sft_489de2e0300a0877",
+      "tsukiyashiro_kisaki_sft_6412f83c95ad1c75",
+      "tsukiyashiro_kisaki_sft_7f72d2dfcd4ea7cb",
+      "tsukiyashiro_kisaki_sft_93ce4029746e7c78",
+      "tsukiyashiro_kisaki_sft_9498df2d95dadf8a",
+      "tsukiyashiro_kisaki_sft_d01b52414354eea0",
+      "tsukiyashiro_kisaki_sft_da21e4c8d09b7af1"
+    ]
+  },
+  "rag_holdout": {
+    "documents_path": "backend/data/character_dialogues/experiments/research/character_rag_seed_documents.json",
+    "document_count": 33,
+    "source_event_count": 59,
+    "withheld_sft_record_count": 34,
+    "withheld_sft_records": [
+      {
+        "id": "tsukiyashiro_kisaki_sft_4d3c9926f50f47ac",
+        "event_ids": [
+          "tsukiyashiro_kisaki_raw_0ea27270d6425822",
+          "tsukiyashiro_kisaki_raw_4a1778d23c9aa8a4"
+        ]
+      },
+      {
+        "id": "tsukiyashiro_kisaki_sft_f9bdfd510f0f315d",
+        "event_ids": [
+          "tsukiyashiro_kisaki_raw_521ab5726d61306f",
+          "tsukiyashiro_kisaki_raw_7598238cd979c6c0"
+        ]
+      },
+      {
+        "id": "tsukiyashiro_kisaki_sft_95b941c2dbf75b83",
+        "event_ids": [
+          "tsukiyashiro_kisaki_raw_0c44ec062ce565e4",
+          "tsukiyashiro_kisaki_raw_497915ba721964e1"
+        ]
+      },
+      {
+        "id": "tsukiyashiro_kisaki_sft_057e6fbe101ab69c",
+        "event_ids": [
+          "tsukiyashiro_kisaki_raw_9fda41a3d912dda5"
+        ]
+      },
+      {
+        "id": "tsukiyashiro_kisaki_sft_0a244db1faafd9b7",
+        "event_ids": [
+          "tsukiyashiro_kisaki_raw_d1401e0739567ff8"
+        ]
+      },
+      {
+        "id": "tsukiyashiro_kisaki_sft_9088b38c7b409246",
+        "event_ids": [
+          "tsukiyashiro_kisaki_raw_3c7335a104d3949a",
+          "tsukiyashiro_kisaki_raw_b4ee7d969a6eea2c",
+          "tsukiyashiro_kisaki_raw_e44f2a678149c0b0"
+        ]
+      },
+      {
+        "id": "tsukiyashiro_kisaki_sft_f6bed9d41cc9eadd",
+        "event_ids": [
+          "tsukiyashiro_kisaki_raw_0973a60410dc048e",
+          "tsukiyashiro_kisaki_raw_22802b227e92f5f7"
+        ]
+      },
+      {
+        "id": "tsukiyashiro_kisaki_sft_87691e335d6c78bf",
+        "event_ids": [
+          "tsukiyashiro_kisaki_raw_4456070c080460e4",
+          "tsukiyashiro_kisaki_raw_92259bc1b933999d"
+        ]
+      },
+      {
+        "id": "tsukiyashiro_kisaki_sft_b74fcd05f75c6dd1",
+        "event_ids": [
+          "tsukiyashiro_kisaki_raw_945a0d7d01a3c4cf"
+        ]
+      },
+      {
+        "id": "tsukiyashiro_kisaki_sft_6ae61ff3b282a390",
+        "event_ids": [
+          "tsukiyashiro_kisaki_raw_99aeda0620f15f76"
+        ]
+      },
+      {
+        "id": "tsukiyashiro_kisaki_sft_43c75242a8fc5414",
+        "event_ids": [
+          "tsukiyashiro_kisaki_raw_01d38473bb6a7d4f",
+          "tsukiyashiro_kisaki_raw_20da58d44a3e0e8c"
+        ]
+      },
+      {
+        "id": "tsukiyashiro_kisaki_sft_950057c5fe6136c9",
+        "event_ids": [
+          "tsukiyashiro_kisaki_raw_e108059aaf78dc5e",
+          "tsukiyashiro_kisaki_raw_fbe48c8bc7f64fe1"
+        ]
+      },
+      {
+        "id": "tsukiyashiro_kisaki_sft_9786a8ad52e86dbf",
+        "event_ids": [
+          "tsukiyashiro_kisaki_raw_286ed06479f898b4",
+          "tsukiyashiro_kisaki_raw_ea9e0cc0bf675fe7"
+        ]
+      },
+      {
+        "id": "tsukiyashiro_kisaki_sft_313dec85ac5baaf0",
+        "event_ids": [
+          "tsukiyashiro_kisaki_raw_f0aa58e279b6da16"
+        ]
+      },
+      {
+        "id": "tsukiyashiro_kisaki_sft_a0bcd54a415d4097",
+        "event_ids": [
+          "tsukiyashiro_kisaki_raw_3e11330dca211048"
+        ]
+      },
+      {
+        "id": "tsukiyashiro_kisaki_sft_7c25a87dc9f9779a",
+        "event_ids": [
+          "tsukiyashiro_kisaki_raw_f783b5ed6248be3c"
+        ]
+      },
+      {
+        "id": "tsukiyashiro_kisaki_sft_4bd8ec9c4894bbae",
+        "event_ids": [
+          "tsukiyashiro_kisaki_raw_6494a09d18f343c3",
+          "tsukiyashiro_kisaki_raw_a3427357ce324799",
+          "tsukiyashiro_kisaki_raw_db32b3059445ad42"
+        ]
+      },
+      {
+        "id": "tsukiyashiro_kisaki_sft_86b7bb17999e5057",
+        "event_ids": [
+          "tsukiyashiro_kisaki_raw_23f1f7f3d9b4196d",
+          "tsukiyashiro_kisaki_raw_89204ec6d05726fc",
+          "tsukiyashiro_kisaki_raw_e09e819ce1d9804d"
+        ]
+      },
+      {
+        "id": "tsukiyashiro_kisaki_sft_a9f2b7e2a21dfd69",
+        "event_ids": [
+          "tsukiyashiro_kisaki_raw_23c53bed6ec72dde",
+          "tsukiyashiro_kisaki_raw_d3cd0fa088859f20"
+        ]
+      },
+      {
+        "id": "tsukiyashiro_kisaki_sft_034d70abeb6f0d61",
+        "event_ids": [
+          "tsukiyashiro_kisaki_raw_94244b1dfe290e23",
+          "tsukiyashiro_kisaki_raw_f52944998bf61ae6"
+        ]
+      },
+      {
+        "id": "tsukiyashiro_kisaki_sft_eafe6b0238bca3c5",
+        "event_ids": [
+          "tsukiyashiro_kisaki_raw_eb13220634dd2f4c"
+        ]
+      },
+      {
+        "id": "tsukiyashiro_kisaki_sft_4e0957d8ca7c1430",
+        "event_ids": [
+          "tsukiyashiro_kisaki_raw_1f9ac34b6fa8137e"
+        ]
+      },
+      {
+        "id": "tsukiyashiro_kisaki_sft_a5e853f0ea44ab41",
+        "event_ids": [
+          "tsukiyashiro_kisaki_raw_31b43d3abad11e3c",
+          "tsukiyashiro_kisaki_raw_ad83d85df0f167fc"
+        ]
+      },
+      {
+        "id": "tsukiyashiro_kisaki_sft_97119803e64efdb5",
+        "event_ids": [
+          "tsukiyashiro_kisaki_raw_10f4d41e2d6d7ef7"
+        ]
+      },
+      {
+        "id": "tsukiyashiro_kisaki_sft_4bd3503805af1cbd",
+        "event_ids": [
+          "tsukiyashiro_kisaki_raw_031f467497e6233d",
+          "tsukiyashiro_kisaki_raw_b07407540de6f083",
+          "tsukiyashiro_kisaki_raw_fa49f1ee3e4550b1"
+        ]
+      },
+      {
+        "id": "tsukiyashiro_kisaki_sft_41afa1baab466fc3",
+        "event_ids": [
+          "tsukiyashiro_kisaki_raw_83b66c5115807a9c",
+          "tsukiyashiro_kisaki_raw_c4e6593e8383f732"
+        ]
+      },
+      {
+        "id": "tsukiyashiro_kisaki_sft_3adad56a92aea8b8",
+        "event_ids": [
+          "tsukiyashiro_kisaki_raw_7997722426da34e1"
+        ]
+      },
+      {
+        "id": "tsukiyashiro_kisaki_sft_6b62fab7526df125",
+        "event_ids": [
+          "tsukiyashiro_kisaki_raw_ed53463802bdaad0"
+        ]
+      },
+      {
+        "id": "tsukiyashiro_kisaki_sft_28e858f7aa4833cb",
+        "event_ids": [
+          "tsukiyashiro_kisaki_raw_2496370d7f040cd4",
+          "tsukiyashiro_kisaki_raw_e3f941758c2b3bef"
+        ]
+      },
+      {
+        "id": "tsukiyashiro_kisaki_sft_b732342bf71c1812",
+        "event_ids": [
+          "tsukiyashiro_kisaki_raw_45f7f70ebcd2b8e5",
+          "tsukiyashiro_kisaki_raw_f7ddd6b15ae2f9ae"
+        ]
+      },
+      {
+        "id": "tsukiyashiro_kisaki_sft_39bc50e4d6df5de6",
+        "event_ids": [
+          "tsukiyashiro_kisaki_raw_b691556545fd0906",
+          "tsukiyashiro_kisaki_raw_f4dec31f35739589"
+        ]
+      },
+      {
+        "id": "tsukiyashiro_kisaki_sft_e695b3eff6413d3c",
+        "event_ids": [
+          "tsukiyashiro_kisaki_raw_195accf25ce72c43",
+          "tsukiyashiro_kisaki_raw_25248e5dc3cb1bc6",
+          "tsukiyashiro_kisaki_raw_fbccca8142a2ad67"
+        ]
+      },
+      {
+        "id": "tsukiyashiro_kisaki_sft_741b8bb56cb5eb7e",
+        "event_ids": [
+          "tsukiyashiro_kisaki_raw_82357df2c51427b3"
+        ]
+      },
+      {
+        "id": "tsukiyashiro_kisaki_sft_db83ecba66d32dc3",
+        "event_ids": [
+          "tsukiyashiro_kisaki_raw_8ea1ea2633181819"
+        ]
+      }
+    ]
+  },
+  "sft_additions": 35,
+  "replaced_baseline_count": 33,
+  "dpo": {
+    "path": "backend/data/character_dialogues/experiments/v4_interactive_20260926/dpo.train.jsonl",
+    "count": 4,
+    "sha256": "59e1aff02dbba9eff37cc858d168506c76ebdea40a6b905cceca5ee2e81ef152",
+    "review_numbers": [
+      10,
+      18,
+      23,
+      27
+    ]
+  },
+  "excluded_new_review_numbers": [
+    6,
+    7,
+    32
+  ],
+  "approval": {
+    "method": "project_owner_authorized_assistant_final_review",
+    "scope": "将这些内容分别加入普通训练集和DPO训练集，先从人物关系、语气、情景整体复核。",
+    "user_correction": "010：妃对父亲印象很差，模型回答明显不好。",
+    "not_individual_human_clicks": true,
+    "training_run_authorized": false
+  },
+  "production_dpo_minimum_unchanged": 100,
+  "negative_sampling_note": "Existing real responses reassessed under explicit canonical training context; no claim of resampling under enriched prompts.",
+  "verification": {
+    "source_integrity": "pass",
+    "speaker_contract": "pass",
+    "heldout_scene_and_window": "pass",
+    "gold_audit": "clean",
+    "baseline_unchanged": true,
+    "preference_trainer_schema": "pass"
+  }
+}

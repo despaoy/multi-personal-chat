@@ -1,0 +1,27 @@
+[
+  {
+    "id":"same_session_revision","scope":["web","audit","user-a","role-a","private"],
+    "query":"周六做什么？","budgets":[350,1500],"required_evidence":["1","2"],
+    "episodes":[
+      {"source_id":"1","scope":["web","audit","user-a","role-a","private"],"session":"s1","timestamp":"2026-09-20T10:00:00","message":"我周六打算去美术馆看展。","reply":"知道了。"},
+      {"source_id":"2","scope":["web","audit","user-a","role-a","private"],"session":"s1","timestamp":"2026-09-20T10:01:00","message":"改了，那天留在家里修书架。","reply":"安排变了。"}
+    ]
+  },
+  {
+    "id":"cross_session_revision","scope":["web","audit","user-a","role-a","private"],
+    "query":"周六做什么？","budgets":[350,1500],"required_evidence":["1","2"],
+    "episodes":[
+      {"source_id":"1","scope":["web","audit","user-a","role-a","private"],"session":"s1","timestamp":"2026-09-20T10:00:00","message":"我周六打算去美术馆看展。","reply":"知道了。"},
+      {"source_id":"2","scope":["web","audit","user-a","role-a","private"],"session":"s2","timestamp":"2026-09-21T10:00:00","message":"上次说的那个安排取消了，我改成整理相册。","reply":"明白。"}
+    ]
+  },
+  {
+    "id":"two_events_ambiguous_reference","scope":["web","audit","user-a","role-a","private"],
+    "query":"周六做什么？","budgets":[350,1500],"required_evidence":["1","2","3"],
+    "episodes":[
+      {"source_id":"1","scope":["web","audit","user-a","role-a","private"],"session":"s1","timestamp":"2026-09-20T10:00:00","message":"我周六上午去美术馆。","reply":"好。"},
+      {"source_id":"2","scope":["web","audit","user-a","role-a","private"],"session":"s1","timestamp":"2026-09-20T10:01:00","message":"我周六下午去看朋友。","reply":"好。"},
+      {"source_id":"3","scope":["web","audit","user-a","role-a","private"],"session":"s1","timestamp":"2026-09-20T10:02:00","message":"其中一个安排取消了，另一个照旧。","reply":"取消的是哪个？"}
+    ]
+  }
+]

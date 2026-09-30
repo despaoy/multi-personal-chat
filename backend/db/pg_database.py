@@ -14,7 +14,9 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 
 from cache.ttl_value_cache import BoundedTTLCache
+from db.conversation_indexes import SOURCE_INDEX_STATEMENTS
 from db.errors import RegistrationClosedError
+from db import memory_source
 from db.urls import resolve_runtime_database_url
 
 logger = logging.getLogger(__name__)
@@ -116,6 +118,9 @@ class PgDatabase:
             await self._ensure_column(conn, "messages", "conversationType", "TEXT")
             await self._ensure_column(conn, "messages", "senderName", "TEXT")
             await self._ensure_column(conn, "messages", "branchId", "TEXT")
+            await self._ensure_column(conn, "messages", "characterId", "TEXT")
+            for statement in SOURCE_INDEX_STATEMENTS:
+                await conn.execute(text(statement))
             await conn.execute(text('CREATE INDEX IF NOT EXISTS idx_messages_branch ON messages ("branchId", "createdAt")'))
             # Existing deployments may predate versioned memory claims. Keep
             # runtime initialization compatible even before Alembic 007 runs.
@@ -312,6 +317,8 @@ class PgDatabase:
                 reply=message.get("reply", ""),
                 modelName=message.get("modelName", ""),
                 loraName=message.get("loraName", ""),
+                characterId=message.get("characterId") or None,
+                branchId=message.get("branchId") or None,
                 costTime=message.get("costTime", 0.0),
                 createdAt=created_at,
             )
@@ -1403,6 +1410,9 @@ class PgDatabase:
         """Legacy in-place UPSERT using reserved revision 0."""
         now = datetime.now().isoformat()
         async with self.async_session() as session:
+            source_fields = (character_id, platform, adapter, sender_id, conversation_type, conversation_id)
+            await memory_source.run_postgres(session, memory_source.lock_owner(
+                memory_source.owner_scope(*source_fields), postgres=True))
             stmt = text(
                 "INSERT INTO character_memories ("
                 "character_id, platform, adapter, sender_id, conversation_type, "
@@ -1438,6 +1448,9 @@ class PgDatabase:
                 ),
             )
             row = result.fetchone()
+            identity = memory_source.claim_source_identity(source_fields, source_message_id)
+            if row is not None and identity is not None:
+                await memory_source.run_postgres(session, memory_source.link_plan(identity, row._mapping['id']))
             await session.commit()
             return _row_to_dict(row) if row else {}
 
@@ -1521,6 +1534,10 @@ class PgDatabase:
         async with self.async_session() as session:
             # Serialize revision allocation per logical key without locking the
             # full table. Hash collisions only reduce concurrency, not safety.
+            source_fields = (character_id, platform, adapter, sender_id, conversation_type, conversation_id)
+            source_fence = await memory_source.run_postgres(session, memory_source.lock_owner(
+                memory_source.owner_scope(*source_fields), postgres=True))
+            memory_source.validate_claim_receipt(source_fence, observed_at)
             lock_key = "\x1f".join(
                 [
                     storage_character,
@@ -1538,6 +1555,21 @@ class PgDatabase:
                 {"lock_key": lock_key},
             )
             rule_metadata = json.loads(metadata_json)
+            from db.pending_resolution import pending_resolution_ids
+
+            resolved_ids = pending_resolution_ids(rule_metadata, relation, resolved_status)
+            for candidate_id in resolved_ids:
+                candidate = await session.execute(
+                    text("SELECT id FROM character_memories WHERE id = :candidate_id "
+                         "AND character_id = :storage_character AND platform = :platform "
+                         "AND adapter = :adapter AND sender_id = :sender_id "
+                         "AND conversation_type = :storage_type AND conversation_id = :storage_conversation "
+                         "AND scope_level = :scope_level AND memory_key = :memory_key "
+                         "AND status = 'pending' FOR UPDATE"),
+                    {**params, 'candidate_id': candidate_id},
+                )
+                if candidate.fetchone() is None:
+                    raise ValueError('pending memory is not available in the exact rule scope')
             if isinstance(rule_metadata, dict) and rule_metadata.get("origin") == "rule_v2":
                 active_result = await session.execute(
                     text("SELECT id FROM character_memories WHERE character_id = :storage_character "
@@ -1553,13 +1585,18 @@ class PgDatabase:
             if target_id is not None:
                 target = await session.execute(
                     text(
-                        "SELECT id FROM character_memories WHERE id = :target_id AND "
+                        "SELECT id, status, observed_at FROM character_memories WHERE id = :target_id AND "
                         + self._character_claim_access_sql()
+                        + " FOR UPDATE"
                     ),
                     params,
                 )
-                if target.fetchone() is None:
+                target_record = target.fetchone()
+                if target_record is None:
                     raise ValueError("target memory is not visible in the requested user scope")
+                from db.memory_claim_guard import validate_memory_target
+
+                validate_memory_target(relation, target_record[1], target_record[2], observed)
             revision_result = await session.execute(
                 text(
                     "SELECT COALESCE(MAX(revision), 0) + 1 FROM character_memories WHERE "
@@ -1589,6 +1626,9 @@ class PgDatabase:
                 params,
             )
             row = inserted.fetchone()
+            source_identity = memory_source.claim_source_identity(source_fields, source_message_id)
+            if row is not None and source_identity is not None:
+                await memory_source.run_postgres(session, memory_source.link_plan(source_identity, row._mapping["id"]))
             if target_id is not None and relation in {"SUPERSEDE", "MERGE", "RETRACT"}:
                 await session.execute(
                     text(
@@ -1597,6 +1637,12 @@ class PgDatabase:
                         "WHERE id = :target_id"
                     ),
                     {**params, "target_status": "retracted" if relation == "RETRACT" else "superseded"},
+                )
+            for candidate_id in resolved_ids:
+                await session.execute(
+                    text("UPDATE character_memories SET status = 'archived', "
+                         "valid_to = COALESCE(valid_to, :observed_at), updated_at = :now WHERE id = :candidate_id"),
+                    {**params, 'candidate_id': candidate_id},
                 )
             await session.commit()
             record = _row_to_dict(row) if row else {}
@@ -1656,6 +1702,9 @@ class PgDatabase:
             memory_key=str(memory_key or "").strip(),
         )
         async with self.async_session() as session:
+            source_scope = memory_source.owner_scope(
+                character_id, platform, adapter, sender_id, conversation_type, conversation_id)
+            await memory_source.run_postgres(session, memory_source.lock_owner(source_scope, postgres=True))
             result = await session.execute(
                 text(
                     "WITH RECURSIVE lineage(id) AS ("
@@ -1670,7 +1719,10 @@ class PgDatabase:
                 ),
                 params,
             )
-            deleted = len(result.fetchall())
+            ids = [row[0] for row in result.fetchall()]
+            if ids:
+                await memory_source.run_postgres(session, memory_source.revoke_plan(source_scope, ids))
+            deleted = len(ids)
             await session.commit()
             return deleted
 
@@ -1685,10 +1737,13 @@ class PgDatabase:
     ) -> int:
         """Physically clear all conversation-scope versions for one exact scope."""
         async with self.async_session() as session:
+            source_scope = memory_source.owner_scope(
+                character_id, platform, adapter, sender_id, conversation_type, conversation_id)
+            await memory_source.run_postgres(session, memory_source.lock_owner(source_scope, postgres=True))
             stmt = text(
                 "DELETE FROM character_memories WHERE "
                 + self._CHARACTER_SCOPE_SQL
-                + " AND scope_level = 'conversation'"
+                + " AND scope_level = 'conversation' RETURNING id"
             )
             result = await session.execute(
                 stmt,
@@ -1696,8 +1751,75 @@ class PgDatabase:
                     character_id, platform, adapter, sender_id, conversation_type, conversation_id
                 ),
             )
+            ids = [row[0] for row in result.fetchall()]
+            await memory_source.run_postgres(session, memory_source.revoke_plan(source_scope, ids, clear=True))
             await session.commit()
-            return int(result.rowcount)
+            return len(ids)
+
+    async def erase_unlinked_memory_sources(self, character_id, platform, adapter, sender_id,
+                                            conversation_type, conversation_id, *, source_message_ids):
+        from db.source_erasure import erase_unlinked_plan
+
+        scope = memory_source.source_scope(
+            character_id, platform, adapter, sender_id, conversation_type, conversation_id)
+        async with self.async_session() as session:
+            result = await memory_source.run_postgres(session,
+                erase_unlinked_plan(scope, source_message_ids, postgres=True))
+            await session.commit()
+            return result
+
+    async def capture_memory_source(self, character_id, platform, adapter, sender_id,
+                                    conversation_type, conversation_id, *, source_message_id, body, observed_at):
+        scope = memory_source.source_scope(
+            character_id, platform, adapter, sender_id, conversation_type, conversation_id)
+        identity = memory_source.source_identity(scope, source_message_id)
+        async with self.async_session() as session:
+            result = await memory_source.run_postgres(session, memory_source.capture_plan(
+                identity, body, observed_at, postgres=True))
+            await session.commit()
+            return result
+
+    async def list_memory_sources(self, character_id, platform, adapter, sender_id,
+                                  conversation_type, conversation_id, *, source_message_ids=None, limit=100):
+        scope = memory_source.source_scope(
+            character_id, platform, adapter, sender_id, conversation_type, conversation_id)
+        async with self.async_session() as session:
+            return await memory_source.run_postgres(session, memory_source.read_plan(
+                scope, source_message_ids=source_message_ids, limit=limit))
+
+    async def linked_memory_sources(self, character_id, platform, adapter, sender_id,
+                                    conversation_type, conversation_id, *, memory_ids, limit=100):
+        scope = memory_source.source_scope(
+            character_id, platform, adapter, sender_id, conversation_type, conversation_id)
+        async with self.async_session() as session:
+            return await memory_source.run_postgres(session, memory_source.linked_read_plan(scope, memory_ids, limit=limit))
+
+    async def memory_source_windows(self, character_id, platform, adapter, sender_id,
+                                    conversation_type, conversation_id, *, source_message_ids, radius=1):
+        from db.memory_source_window import window_plan
+
+        scope = memory_source.source_scope(
+            character_id, platform, adapter, sender_id, conversation_type, conversation_id)
+        async with self.async_session() as session:
+            return await memory_source.run_postgres(session, window_plan(scope, source_message_ids, radius=radius))
+
+    async def search_memory_sources(self, character_id, platform, adapter, sender_id,
+                                    conversation_type, conversation_id, *, query, limit=32):
+        from db.memory_source_search import search_plan
+
+        scope = memory_source.source_scope(
+            character_id, platform, adapter, sender_id, conversation_type, conversation_id)
+        async with self.async_session() as session:
+            return await memory_source.run_postgres(session, search_plan(scope, query, limit=limit, dialect='postgres'))
+
+    async def list_scoped_conversation_turns(self, user_scope, character_id, *, limit=200, before=None):
+        from db.conversation_source import assemble_turn_page, turn_source_query
+
+        query, params = turn_source_query(user_scope, character_id, limit=limit, before=before)
+        async with self.async_session() as session:
+            result = await session.execute(text(query), params)
+            rows = result.mappings().all()
+        return assemble_turn_page(rows, user_scope, character_id, limit=limit)
 
     async def list_conversation_history(
         self,
@@ -1708,39 +1830,47 @@ class PgDatabase:
         conversation_id: str,
         limit: int = 8,
         max_chars: int = 6000,
+        character_id: str | None = None,
     ) -> List[dict]:
         """按用户范围读取最近对话历史，组装成角色生成用的消息列表。
 
         语义与 SQLite 侧 list_conversation_history 一致：
         - 私聊：platform+adapter+senderId 下全部私聊记录；
         - 群聊/频道：再加 conversationId（群/频道）过滤；
-        - 返回按时间正序的 [{"role", "content"}]，超预算从最旧一侧截断。
+        - 返回时间正序的完整问答轮后缀，正数 max_chars 为硬上限。
         """
+        from db.history_budget import history_turn_limit
+
         async with self.async_session() as session:
             if conversation_type in ("group", "channel") or adapter == "narrative":
                 stmt = text(
-                    "SELECT message, reply FROM messages WHERE platform = :platform "
+                    'SELECT message, reply, "sourceMessageId", "characterId", "conversationType", "conversationId" '
+                    'FROM messages WHERE platform = :platform '
                     'AND adapter = :adapter AND "senderId" = :sender_id '
-                    'AND "conversationId" = :conversation_id AND "branchId" IS NULL '
+                    'AND "conversationId" = :conversation_id AND "conversationType" = :conversation_type AND "branchId" IS NULL '
                     "AND NOT EXISTS (SELECT 1 FROM integration_receipts r "
                     "WHERE r.owner = messages.\"traceId\" AND r.status <> 'delivered') "
-                    'ORDER BY "createdAt" DESC LIMIT :limit'
+                    + ('AND "characterId" = :character_id ' if character_id is not None else '')
+                    + 'ORDER BY "createdAt" DESC, id DESC LIMIT :limit'
                 )
                 params: dict = {
                     "platform": platform,
                     "adapter": adapter,
                     "sender_id": sender_id,
                     "conversation_id": conversation_id,
-                    "limit": max(1, min(int(limit), 50)),
+                    "conversation_type": conversation_type,
+                    "limit": history_turn_limit(limit),
                 }
             else:
                 stmt = text(
-                    "SELECT message, reply FROM messages WHERE platform = :platform "
+                    'SELECT message, reply, "sourceMessageId", "characterId", "conversationType", "conversationId" '
+                    'FROM messages WHERE platform = :platform '
                     'AND adapter = :adapter AND "senderId" = :sender_id '
                     'AND ("conversationType" = :private OR "conversationType" = :empty) AND "branchId" IS NULL '
                     "AND NOT EXISTS (SELECT 1 FROM integration_receipts r "
                     "WHERE r.owner = messages.\"traceId\" AND r.status <> 'delivered') "
-                    'ORDER BY "createdAt" DESC LIMIT :limit'
+                    + ('AND "characterId" = :character_id ' if character_id is not None else '')
+                    + 'ORDER BY "createdAt" DESC, id DESC LIMIT :limit'
                 )
                 params = {
                     "platform": platform,
@@ -1748,30 +1878,19 @@ class PgDatabase:
                     "sender_id": sender_id,
                     "private": "private",
                     "empty": "",
-                    "limit": max(1, min(int(limit), 50)),
+                    "limit": history_turn_limit(limit),
                 }
+            if character_id is not None:
+                params['character_id'] = character_id
             result = await session.execute(stmt, params)
             rows = result.fetchall()
-        turns: List[dict] = []
-        for row in reversed(rows):
-            d = _row_to_dict(row)
-            message = (d.get("message") or "").strip()
-            reply = (d.get("reply") or "").strip()
-            if message:
-                turns.append({"role": "user", "content": message})
-            if reply:
-                turns.append({"role": "assistant", "content": reply})
-        if max_chars > 0:
-            kept: List[dict] = []
-            total = 0
-            for item in reversed(turns):
-                total += len(item["content"])
-                if total > max_chars and kept:
-                    break
-                kept.append(item)
-            kept.reverse()
-            turns = kept
-        return turns
+            from db.history_source_grants import filter_plan
+
+            values = await memory_source.run_postgres(session, filter_plan(
+                [_row_to_dict(row) for row in rows], platform, adapter, sender_id))
+        from db.history_budget import assemble_history
+
+        return assemble_history(((row.get('message'), row.get('reply')) for row in values), max_chars)
 
     # ============================================
     # 会话管理
@@ -3076,12 +3195,47 @@ class SyncPgAdapter:
             )
         )
 
+    def erase_unlinked_memory_sources(self, character_id, platform, adapter, sender_id,
+                                      conversation_type, conversation_id, **kwargs):
+        return self._run(self._pg.erase_unlinked_memory_sources(
+            character_id, platform, adapter, sender_id, conversation_type, conversation_id, **kwargs))
+
+    def capture_memory_source(self, character_id, platform, adapter, sender_id,
+                              conversation_type, conversation_id, **kwargs):
+        return self._run(self._pg.capture_memory_source(
+            character_id, platform, adapter, sender_id, conversation_type, conversation_id, **kwargs))
+
+    def list_memory_sources(self, character_id, platform, adapter, sender_id,
+                            conversation_type, conversation_id, **kwargs):
+        return self._run(self._pg.list_memory_sources(
+            character_id, platform, adapter, sender_id, conversation_type, conversation_id, **kwargs))
+
+    def linked_memory_sources(self, character_id, platform, adapter, sender_id,
+                              conversation_type, conversation_id, **kwargs):
+        return self._run(self._pg.linked_memory_sources(
+            character_id, platform, adapter, sender_id, conversation_type, conversation_id, **kwargs))
+
+    def memory_source_windows(self, character_id, platform, adapter, sender_id,
+                              conversation_type, conversation_id, **kwargs):
+        return self._run(self._pg.memory_source_windows(
+            character_id, platform, adapter, sender_id, conversation_type, conversation_id, **kwargs))
+
+    def search_memory_sources(self, character_id, platform, adapter, sender_id,
+                              conversation_type, conversation_id, **kwargs):
+        return self._run(self._pg.search_memory_sources(
+            character_id, platform, adapter, sender_id, conversation_type, conversation_id, **kwargs))
+
+    def list_scoped_conversation_turns(self, user_scope, character_id, *, limit=200, before=None):
+        return self._run(self._pg.list_scoped_conversation_turns(
+            user_scope, character_id, limit=limit, before=before))
+
     def list_conversation_history(
-        self, platform, adapter, sender_id, conversation_type, conversation_id, limit=8, max_chars=6000
+        self, platform, adapter, sender_id, conversation_type, conversation_id, limit=8, max_chars=6000,
+        character_id=None,
     ):
         return self._run(
             self._pg.list_conversation_history(
-                platform, adapter, sender_id, conversation_type, conversation_id, limit, max_chars
+                platform, adapter, sender_id, conversation_type, conversation_id, limit, max_chars, character_id
             )
         )
 

@@ -25,15 +25,27 @@ from typing import TYPE_CHECKING, Any, Protocol
 
 import httpx
 
+from character.event_memory import EVENT_TZ
+from character.evidence_selector import InputBudgetError, _history_view
+from character.memory_clock import observation_clock
 from character.memory_extractor import (
     MAX_EXTRACTED_MEMORIES,
     MAX_MEMORY_CONTENT_CHARS,
     ExtractedMemory,
+    assertion_before_lookup,
+    extract_memories,
     memory_evidence_allowed,
     memory_name_allowed,
     memory_write_allowed,
+    unretracted_memory_source,
 )
+from character.memory_query import lookup_fields
+from character.memory_subject import explicitly_other_subject
 from character.models import MemoryItem, UserScope
+from character.temporal_provenance import model_temporal_provenance
+from db.memory_claim_guard import MemoryClaimConflict
+from db.memory_source import ClaimSourceRevokedError
+from inference.context_budget import CONTEXT_SAFETY_MARGIN_TOKENS, estimated_tokens
 
 if TYPE_CHECKING:
     from knowledge.retrieval_core.embedding import EmbeddingProvider
@@ -147,6 +159,8 @@ class MemoryLlmConfig:
     confidence_threshold: float = DEFAULT_CONFIDENCE_THRESHOLD
     idle_seconds: float = 2.0
     batch_size: int = 4
+    # Direct constructors keep legacy char budgets unless a window is supplied.
+    context_window_tokens: int = 0
 
     @classmethod
     def from_env(cls) -> MemoryLlmConfig:
@@ -174,6 +188,8 @@ class MemoryLlmConfig:
             timeout_seconds=max(1.0, float(os.getenv("MEMORY_LLM_TIMEOUT", "30"))),
             queue_size=max(1, int(os.getenv("MEMORY_LLM_QUEUE_SIZE", "64"))),
             max_input_chars=max(256, int(os.getenv("MEMORY_LLM_MAX_INPUT_CHARS", "2000"))),
+            context_window_tokens=max(0, int(os.getenv("MEMORY_LLM_CONTEXT_WINDOW_TOKENS",
+                os.getenv("VLLM_MAX_MODEL_LEN", "8192")))),
             confidence_threshold=max(
                 0.0,
                 min(1.0, float(os.getenv("MEMORY_LLM_CONFIDENCE_THRESHOLD", str(DEFAULT_CONFIDENCE_THRESHOLD)))),
@@ -233,6 +249,9 @@ class _MemoryJob:
     source_message_id: str | None
     feedback_target_ids: tuple[str, ...] = ()
     write_mode: str = "idle"
+    observed_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    source_only: bool = False
+    receipt: asyncio.Future[dict[str, Any]] | None = field(default=None, repr=False, compare=False)
 
 
 @dataclass(frozen=True)
@@ -251,6 +270,10 @@ class ValidatedMemoryProposal:
     valid_to: str = ""
     observed_at: str = ""
     scope_level: str = "conversation"
+    # Preserve the model's date-only precision before legacy ISO normalization.
+    proposed_valid_from: str = ""
+    proposed_valid_to: str = ""
+    source_observation: bool = False
 
 
 @dataclass(frozen=True)
@@ -286,12 +309,19 @@ def _extract_json(text: str) -> dict[str, Any]:
     if cleaned.startswith("```"):
         cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned, flags=re.IGNORECASE)
         cleaned = re.sub(r"\s*```$", "", cleaned)
-    start = cleaned.find("{")
-    if start < 0:
-        raise ValueError("记忆 LLM 未返回 JSON 对象")
+    starts = [index for token in ("{", "[") if (index := cleaned.find(token)) >= 0]
+    if not starts:
+        raise ValueError("记忆 LLM 未返回 JSON 对象或数组")
+    start = min(starts)
     value, _end = json.JSONDecoder().raw_decode(cleaned[start:])
+    if isinstance(value, list):
+        # Normalize only the container. Every candidate still goes through
+        # the same evidence, ownership, target and lifecycle validation.
+        return {"memories": value}
     if not isinstance(value, dict):
         raise ValueError("记忆 LLM 顶层结果必须是对象")
+    if "memories" not in value:
+        raise ValueError("记忆 LLM 缺少 memories 集合")
     return value
 
 
@@ -310,9 +340,24 @@ _CORRECTION_PATTERN = re.compile(
 )
 _DEICTIC_CORRECTION_PATTERN = re.compile(r"(?:刚才|那条|这条|上条|上一条|之前).{0,12}(?:错|不对|撤回|忘掉|删除)")
 _ERASE_REQUEST_PATTERN = re.compile(
-    r"(?:忘掉|彻底忘记|从(?:长期)?记忆中(?:删除|清除)|删除(?:掉)?(?:这|那|上)?条记忆|"
+    r"(?:忘掉|彻底忘记|从(?:长期)?记忆(?:里面|中|里)?(?:彻底)?(?:删除|清除|删掉|移除)|删除(?:掉)?(?:这|那|上)?条记忆|"
     r"清除(?:掉)?(?:这|那|上)?条记忆|把.{0,24}(?:记住|记得).{0,16}(?:彻底)?(?:删掉|删除|清除))"
 )
+
+
+def is_memory_erasure_request(message: str) -> bool:
+    """Recognize user authorization separately from the model's ERASE proposal.
+
+    Negated, hypothetical and quoted commands cannot authorize a deletion.
+    This is only an intent gate; scoped target resolution still happens later.
+    """
+    text = re.sub(r'“[^”]*”|「[^」]*」|『[^』]*』|"[^"\n]*"', '', message or '').strip()
+    if re.search(r'^(?:如果|假如|假设|要是)|(?:他说|她说|朋友说|你说过)', text):
+        return False
+    if re.search(r'(?:不要|别|不许|不能|不用|无需|不必|不想|不希望).{0,16}'
+                 r'(?:删掉|删除|清除|移除|忘掉|忘记)', text):
+        return False
+    return bool(_ERASE_REQUEST_PATTERN.search(text))
 _CONDITIONAL_COEXIST_PATTERN = re.compile(
     r"(?:不是完全.{0,24}(?:只是|只)|准确地说.{0,48}(?:才不|只是|而是)|(?:只是|才)不)"
 )
@@ -335,7 +380,7 @@ def classify_memory_write_mode(message: str) -> str:
     if not text:
         return "skip"
     if (
-        _ERASE_REQUEST_PATTERN.search(text)
+        is_memory_erasure_request(text)
         or _CORRECTION_PATTERN.search(text)
         or _EXPLICIT_REMEMBER_PATTERN.search(text)
     ):
@@ -356,18 +401,18 @@ def _record_id(record: dict[str, Any]) -> str:
     return str(record.get("id") or record.get("memory_id") or "").strip()
 
 
-def _sanitize_history(history: tuple[dict[str, str], ...]) -> tuple[dict[str, str], ...]:
+def _sanitize_history(history: tuple[dict[str, str], ...], *, max_chars: int = 2000) -> tuple[dict[str, str], ...]:
     """只保留真实对话角色；system/tool/RAG/external 内容不进入记忆判断。"""
 
     cleaned: list[dict[str, str]] = []
-    for item in history[-MAX_HISTORY_MESSAGES:]:
+    for item in history:
         role = str(item.get("role") or "").strip().lower()
         if role not in {"user", "assistant"}:
             continue
         content = str(item.get("content") or "").strip()
         if content:
-            cleaned.append({"role": role, "content": content[:500]})
-    return tuple(cleaned)
+            cleaned.append({"role": role, "content": content})
+    return tuple(_history_view(cleaned, max_messages=MAX_HISTORY_MESSAGES, max_chars=max_chars))
 
 
 def _select_existing_memories(
@@ -660,6 +705,8 @@ def _grounded_value(
 
 
 def _target_key_matches_kind(kind: str, target_memory_key: str) -> bool:
+    if kind == "location":
+        return target_memory_key in {"user_location", "user_origin", "user_residence"}
     expected_prefix = {
         "name": "user_name",
         "like": "preference_",
@@ -700,7 +747,7 @@ def _infer_kind_from_target(record: dict[str, Any]) -> str:
         return "major"
     if key == "user_study_stage":
         return "study_stage"
-    if key == "user_location":
+    if key in {"user_location", "user_origin", "user_residence"}:
         return "location"
     if key == "user_workplace":
         return "workplace"
@@ -730,6 +777,16 @@ def _scope_level_for_message(raw: Any, source_message: str) -> str:
 
 
 def _canonical_memory_fields(kind: str, value: str, evidence: str) -> tuple[str, str, str, float] | None:
+    if kind == "location":
+        # Reuse the same evidence interpretation as rule writes and field
+        # reads; never promote the ambiguous legacy location slot to both.
+        prefixes = {"user_origin": "用户说自己来自", "user_residence": "用户说自己居住在"}
+        matches = [item for item in extract_memories(evidence)
+                   if item.memory_key in prefixes and not item.qualifiers
+                   and item.content == prefixes[item.memory_key] + value]
+        if len(matches) == 1:
+            item = matches[0]
+            return item.memory_type, item.memory_key, item.content, item.importance
     if kind == "name":
         if not memory_name_allowed(value):
             return None
@@ -759,6 +816,23 @@ def _canonical_memory_fields(kind: str, value: str, evidence: str) -> tuple[str,
     if kind == "other_user_fact":
         return "user_fact", f"fact_{value[:24]}", f"用户明确提到：{evidence}", 0.6
     return None
+
+
+def _supported_generic_fact(value: str, evidence: str) -> tuple[str, ExtractedMemory] | None:
+    """Recover a field from the known storage-type/kind schema collision.
+
+    Never infer from the model's prose: the existing independent extractor
+    must produce exactly one matching unqualified field/value assertion.
+    """
+    matches = []
+    for item in extract_memories(evidence):
+        if item.memory_type != "user_fact" or item.qualifiers:
+            continue
+        kind = _infer_kind_from_target({"memory_key": item.memory_key, "content": item.content})
+        canonical = _canonical_memory_fields(kind, value, evidence)
+        if canonical is not None and canonical[:3] == (item.memory_type, item.memory_key, item.content):
+            matches.append((kind, item))
+    return matches[0] if len(matches) == 1 else None
 
 
 def _candidate_to_proposal(
@@ -802,6 +876,12 @@ def _candidate_to_proposal(
         # 提议的 value，但 evidence 必须改回当前明确省略句。
         evidence = re.sub(r"\s+", " ", source_message).strip()
         normalized_evidence = normalized_source
+    unretracted_source = unretracted_memory_source(source_message)
+    if (semantic_operation not in {"NOOP", "RETRACT", "ERASE"}
+            and unretracted_source != source_message
+            and normalized_evidence
+            and normalized_evidence not in _normalize(unretracted_source)):
+        return None
     try:
         confidence = float(raw.get("confidence") or 0.0)
     except (TypeError, ValueError):
@@ -817,15 +897,35 @@ def _candidate_to_proposal(
         return None
     if not evidence or len(evidence) > _MAX_EVIDENCE_CHARS:
         return None
-    if _THIRD_PARTY_FACT_PATTERN.search(evidence) or _NAMED_THIRD_PARTY_PATTERN.search(evidence):
+    event_observation = kind == "shared_event" and semantic_operation not in {"NOOP", "RETRACT", "ERASE"}
+    if (not event_observation
+            and (_THIRD_PARTY_FACT_PATTERN.search(evidence) or _NAMED_THIRD_PARTY_PATTERN.search(evidence))):
         return None
-    if not _normalize_attributed_to(raw.get("attributed_to")):
+    if (kind in {'name', 'like', 'dislike', 'major', 'study_stage', 'location', 'workplace'}
+            and semantic_operation not in {'NOOP', 'RETRACT', 'ERASE'}
+            and explicitly_other_subject(source=source_message, evidence=evidence, value=value)):
+        return None
+    if not event_observation and not _normalize_attributed_to(raw.get("attributed_to")):
         return None
 
     if semantic_operation in {"PENDING", "RETRACT", "ERASE"}:
         evidence_allowed = memory_write_allowed(evidence) and "?" not in evidence and "？" not in evidence
     else:
         evidence_allowed = memory_evidence_allowed(evidence)
+    if (not evidence_allowed and semantic_operation in {"ADD", "SUPERSEDE"}
+            and normalized_evidence == normalized_source
+            and assertion_before_lookup(source_message)):
+        # Recover a model's over-wide quote only from an independently parsed
+        # unqualified assertion. Values in the question cannot support a fact;
+        # unknown kinds/operations keep their original admission behavior.
+        supported = _supported_generic_fact(value, source_message)
+        if supported is not None and (supported[0] == kind or kind == "user_fact"):
+            item = supported[1]
+            if item.evidence and _normalize(item.evidence) in normalized_evidence:
+                evidence = item.evidence
+                normalized_evidence = _normalize(evidence)
+                proposed_content = item.content
+                evidence_allowed = memory_evidence_allowed(evidence)
     if not evidence_allowed:
         return None
 
@@ -885,10 +985,9 @@ def _candidate_to_proposal(
             target_memory_key=target_memory_key,
             evidence=evidence,
             confidence=confidence,
-            observed_at=_normalize_iso_time(raw.get("observed_at")) or "",
         )
 
-    if semantic_operation == "ERASE" and not _ERASE_REQUEST_PATTERN.search(source_message):
+    if semantic_operation == "ERASE" and not is_memory_erasure_request(source_message):
         return None
     if semantic_operation == "RETRACT" and not _CORRECTION_PATTERN.search(source_message):
         return None
@@ -905,13 +1004,17 @@ def _candidate_to_proposal(
             operation="NOOP",
             evidence=evidence,
             confidence=confidence,
-            observed_at=_normalize_iso_time(raw.get("observed_at")) or "",
         )
 
     if kind not in _ALLOWED_KINDS:
         if target_record is None:
-            return None
-        kind = _infer_kind_from_target(target_record)
+            supported = _supported_generic_fact(value, evidence) if kind == "user_fact" else None
+            if supported is None:
+                return None
+            kind, supported_memory = supported
+            proposed_content = supported_memory.content
+        else:
+            kind = _infer_kind_from_target(target_record)
     if not value and target_record is not None and semantic_operation in {"RETRACT", "ERASE"}:
         value = target_memory_key or "target"
     if not value or (len(value) > _MAX_VALUE_CHARS and semantic_operation not in {"RETRACT", "ERASE"}):
@@ -944,24 +1047,27 @@ def _candidate_to_proposal(
 
     raw_qualifiers = raw.get("qualifiers")
     misplaced_validity: dict[str, Any] = {}
-    if (
-        isinstance(raw_qualifiers, dict)
-        and raw_qualifiers
-        and set(raw_qualifiers)
-        <= {
-            "valid_from",
-            "valid_to",
-        }
-    ):
-        misplaced_validity = raw_qualifiers
-        raw_qualifiers = {}
+    if isinstance(raw_qualifiers, dict):
+        # Known envelope fields sometimes occur alongside real qualifiers.
+        # Split only those fields; retain all other entries for the ordinary
+        # grounding/allowlist checks. Model observation time is ignored in
+        # either location, never used as source provenance.
+        temporal_fields = {"valid_from", "valid_to", "valid_at", "invalid_at", "observed_at"}
+        misplaced_validity = {key: value for key, value in raw_qualifiers.items() if key in temporal_fields}
+        raw_qualifiers = {key: value for key, value in raw_qualifiers.items() if key not in temporal_fields}
     qualifiers = _sanitize_qualifiers(raw_qualifiers, evidence=evidence)
     if qualifiers is None:
         return None
-    valid_from = _normalize_iso_time(raw.get("valid_from", raw.get("valid_at")) or misplaced_validity.get("valid_from"))
-    valid_to = _normalize_iso_time(raw.get("valid_to", raw.get("invalid_at")) or misplaced_validity.get("valid_to"))
-    observed_at = _normalize_iso_time(raw.get("observed_at"))
-    if valid_from is None or valid_to is None or observed_at is None:
+    raw_valid_from = (raw.get("valid_from") or raw.get("valid_at")
+                      or misplaced_validity.get("valid_from") or misplaced_validity.get("valid_at"))
+    raw_valid_to = (raw.get("valid_to") or raw.get("invalid_at")
+                    or misplaced_validity.get("valid_to") or misplaced_validity.get("invalid_at"))
+    valid_from = _normalize_iso_time(raw_valid_from)
+    valid_to = _normalize_iso_time(raw_valid_to)
+    # Observation time belongs to server provenance, not semantic extraction.
+    # Keep accepting legacy model payloads, but ignore their observed_at field.
+    observed_at = ""
+    if valid_from is None or valid_to is None:
         return None
     if valid_from and valid_to and datetime.fromisoformat(valid_from) > datetime.fromisoformat(valid_to):
         return None
@@ -978,29 +1084,57 @@ def _candidate_to_proposal(
         if canonical is None:
             return None
         memory_type, key, canonical_content, importance = canonical
+        if (kind == "location" and target_record is not None
+                and target_memory_key in {"user_origin", "user_residence"}
+                and key != target_memory_key):
+            return None  # Same value type does not mean the same predicate.
 
     # 旧 UPDATE 入口一直承诺由本地模板生成 content；新关系操作才允许
     # 使用已通过主体/证据硬校验的 LLM 自包含表述。
-    if proposed_content and operation != "UPDATE":
+    if proposed_content and operation != "UPDATE" and kind != "shared_event":
         if (
             len(proposed_content) > MAX_MEMORY_CONTENT_CHARS
             or not proposed_content.startswith("用户")
             or _UNSAFE_CONTENT_PATTERN.search(proposed_content)
-            or (
-                _normalize(value) not in _normalize(proposed_content) and semantic_operation not in {"RETRACT", "ERASE"}
-            )
         ):
             return None
-        content = proposed_content
+        if (_normalize(value) not in _normalize(proposed_content)
+                and semantic_operation not in {"RETRACT", "ERASE"}):
+            if kind != "other_user_fact":
+                return None
+            # Generic values can encode a predicate whose word order differs
+            # from a natural summary. Grounding/admission already validated
+            # the source and value above. Keep the source-backed canonical
+            # view, not an unverified paraphrase or its additional claims.
+            proposed_content = ""
+            content = canonical_content
+        else:
+            content = proposed_content
     else:
         content = canonical_content
 
-    if qualifiers and (not proposed_content or operation == "UPDATE"):
+    if kind == "shared_event" and semantic_operation not in {"RETRACT", "ERASE"}:
+        # A selected event topic is not proof of its actor. Keep the complete
+        # utterance (including later qualifications) instead of promoting the
+        # model's free-form summary to an event owned by the speaker.
+        # Long quotations stay in evidence; never truncate a quotation into a
+        # stronger assertion merely to fit the short display-content column.
+        evidence = source_message
+        quoted = "用户原话事件记录：" + json.dumps(source_message, ensure_ascii=False)
+        prefix_size = len("待确认：") if semantic_operation == "PENDING" else 0
+        content = quoted if len(quoted) + prefix_size <= MAX_MEMORY_CONTENT_CHARS else "用户原话事件记录（完整内容见证据）"
+        if semantic_operation == "MERGE":
+            # A new utterance is not a complete replacement for the older
+            # event evidence. Retain both linked observations instead of
+            # superseding the old one with a non-cumulative quotation.
+            operation = semantic_operation = "COEXIST"
+
+    if qualifiers and kind != "shared_event" and (not proposed_content or operation == "UPDATE"):
         qualifier_text = "；".join(f"{key_name}={item_value}" for key_name, item_value in qualifiers)
         content = f"{content}（{qualifier_text}）"
     if semantic_operation == "PENDING" and not content.startswith("待确认："):
         content = f"待确认：{content}"
-    if semantic_operation == "MERGE" and target_record is not None:
+    if semantic_operation == "MERGE" and target_record is not None and kind != "shared_event":
         previous = str(target_record.get("content") or "").strip()
         if previous and _normalize(previous) != _normalize(content):
             content = f"{previous}；补充：{content}"
@@ -1025,6 +1159,9 @@ def _candidate_to_proposal(
         valid_to=valid_to,
         observed_at=observed_at,
         scope_level=_scope_level_for_message(raw.get("scope_level"), source_message),
+        proposed_valid_from=str(raw_valid_from or "").strip(),
+        proposed_valid_to=str(raw_valid_to or "").strip(),
+        source_observation=kind == "shared_event" and semantic_operation not in {"RETRACT", "ERASE"},
     )
 
 
@@ -1044,7 +1181,7 @@ def parse_llm_proposals(
     raw_memories = _extract_json(text).get("memories", [])
     if not isinstance(raw_memories, list):
         raise ValueError("记忆 LLM 的 memories 必须是数组")
-    by_key: dict[tuple[str, str, str], ValidatedMemoryProposal] = {}
+    proposals: list[ValidatedMemoryProposal] = []
     for raw in raw_memories[: MAX_EXTRACTED_MEMORIES * 2]:
         proposal = _candidate_to_proposal(
             raw,
@@ -1054,11 +1191,12 @@ def parse_llm_proposals(
             confidence_threshold=confidence_threshold,
             feedback_target_ids=feedback_target_ids,
         )
-        if proposal is not None:
-            memory_key = proposal.memory.memory_key if proposal.memory is not None else ""
-            by_key[(proposal.operation, proposal.target_memory_id, memory_key)] = proposal
+        if proposal is not None and proposal not in proposals:
+            # A field may contain distinct values, scopes, conditions or source
+            # statements. Only an identical validated proposal is a duplicate.
+            proposals.append(proposal)
     return sorted(
-        by_key.values(),
+        proposals,
         key=lambda item: item.memory.importance if item.memory is not None else 0.0,
         reverse=True,
     )[:MAX_EXTRACTED_MEMORIES]
@@ -1082,8 +1220,14 @@ def build_memory_llm_messages(
     confidence_threshold: float,
     feedback_target_ids: tuple[str, ...] = (),
     write_mode: str = "idle",
+    observed_at: datetime | None = None,
+    context_window_tokens: int = 0,
+    source_erasure_candidates: tuple[dict[str, Any], ...] = (),
 ) -> list[dict[str, str]]:
-    safe_history = _sanitize_history(history)
+    reference_time = observation_clock(observed_at)
+    if not context_window_tokens and len(message) > max_input_chars:
+        raise InputBudgetError("current memory message exceeds input budget")
+    safe_history = _sanitize_history(history, max_chars=4 * context_window_tokens if context_window_tokens else 2000)
     selected_memories = _select_existing_memories(existing_memories, feedback_target_ids)
     valid_feedback_ids = {
         item
@@ -1091,11 +1235,11 @@ def build_memory_llm_messages(
         if any(_record_id(record) == item for record in selected_memories)
     }
     payload = {
-        "current_user_message": message[:max_input_chars],
+        "current_user_message": message,
         "recent_history": [
             {
                 "role": str(item.get("role") or "")[:16],
-                "content": str(item.get("content") or "")[:500],
+                "content": str(item.get("content") or ""),
                 "eligible_as_memory_evidence": False,
             }
             for item in safe_history
@@ -1124,12 +1268,27 @@ def build_memory_llm_messages(
         "feedback_target_ids": sorted(valid_feedback_ids),
         "write_mode": write_mode,
         "confidence_threshold": confidence_threshold,
-        "current_time_utc": datetime.now(timezone.utc).isoformat(),
+        # Relative expressions belong to the source message, not queue drain.
+        "current_time_utc": reference_time.isoformat(),
+        # Match the existing rule-event timezone; do not infer user timezone.
+        "current_time_local": reference_time.astimezone(EVENT_TZ).isoformat(),
     }
-    return [
-        {"role": "system", "content": _SYSTEM_PROMPT},
+    instruction = _SYSTEM_PROMPT
+    if source_erasure_candidates:
+        from character.source_erasure_selection import INSTRUCTION
+
+        payload['source_erasure_candidates'] = list(source_erasure_candidates)
+        payload['source_candidates_complete'] = False
+        instruction += INSTRUCTION
+    messages = [
+        {"role": "system", "content": instruction},
         {"role": "user", "content": json.dumps(payload, ensure_ascii=False)},
     ]
+    if context_window_tokens:
+        required = sum(estimated_tokens(item['content']) + 4 for item in messages)
+        if required + 768 + CONTEXT_SAFETY_MARGIN_TOKENS > context_window_tokens:
+            raise InputBudgetError("complete memory request exceeds serving context budget")
+    return messages
 
 
 class MemoryEnrichmentScheduler:
@@ -1146,6 +1305,7 @@ class MemoryEnrichmentScheduler:
         self._completion = completion
         self._embedding_provider = embedding_provider
         self._max_input_chars = config.max_input_chars
+        self._context_window_tokens = config.context_window_tokens
         self._confidence_threshold = config.confidence_threshold
         self._idle_seconds = config.idle_seconds
         self._batch_size = config.batch_size
@@ -1215,6 +1375,9 @@ class MemoryEnrichmentScheduler:
         feedback_target_ids: tuple[str, ...] = (),
         source_type: str = "user",
         immediate: bool | None = None,
+        observed_at: datetime | None = None,
+        source_only: bool = False,
+        receipt: asyncio.Future[dict[str, Any]] | None = None,
     ) -> bool:
         if self._closed:
             self._remember_schedule_skip("closed")
@@ -1225,7 +1388,8 @@ class MemoryEnrichmentScheduler:
         if source_type.strip().lower() != "user":
             self._remember_schedule_skip("non_user_source")
             return False
-        mode = "hot" if immediate is True else classify_memory_write_mode(message)
+        classified_mode = classify_memory_write_mode(message)
+        mode = "hot" if immediate is True else classified_mode
         if immediate is False and mode != "skip":
             mode = "idle"
         if mode == "skip" or not _source_message_allowed(message):
@@ -1236,16 +1400,27 @@ class MemoryEnrichmentScheduler:
             self._remember_schedule_skip("capacity")
             return False
 
+        observation = observation_clock(observed_at)
         job = _MemoryJob(
             repository=repository,
             character_id=character_id,
             user_scope=user_scope,
             message=message,
             rule_hints=tuple(rule_hints),
-            history=_sanitize_history(history),
+            history=tuple(dict(item) for item in history),
             source_message_id=source_message_id,
             feedback_target_ids=tuple(str(item) for item in feedback_target_ids if str(item)),
             write_mode=mode,
+            observed_at=observation.astimezone(timezone.utc),
+            # Reuse the read executor's whole-message contract, not the
+            # presence of a question mark. Mixed assertions and unknown
+            # questions still need semantic interpretation. Preserve the
+            # original utterance for later dialogue/ellipsis resolution.
+            source_only=source_only or (
+                classified_mode == "idle" and mode == "idle"
+                and not rule_hints and bool(lookup_fields(message))
+            ),
+            receipt=receipt,
         )
         self._inflight += 1
         scope_key = self._scope_key(repository, character_id, user_scope)
@@ -1274,6 +1449,24 @@ class MemoryEnrichmentScheduler:
             )
             self._last_outcome = "buffered_idle"
         return True
+
+    async def schedule_and_wait(self, *, timeout_seconds: float = 15.0, **kwargs) -> dict[str, Any]:
+        """Await this exact job, not a global queue flush or last_outcome.
+
+        A timeout means pending, never successful. The submitted operation keeps
+        its normal ordered worker execution; cancelling the waiter cannot cancel
+        another user's job or discard an already accepted operation.
+        """
+        if not math.isfinite(timeout_seconds) or timeout_seconds <= 0:
+            raise ValueError('timeout_seconds must be finite and positive')
+        receipt = asyncio.get_running_loop().create_future()
+        if not self.schedule(**{**kwargs, 'immediate': True, 'receipt': receipt}):
+            receipt.cancel()
+            return {'status': 'not_scheduled', 'accepted': 0, 'persisted': 0}
+        try:
+            return await asyncio.wait_for(asyncio.shield(receipt), timeout_seconds)
+        except asyncio.TimeoutError:
+            return {'status': 'pending', 'accepted': 0, 'persisted': 0}
 
     def _enqueue(self, jobs: tuple[_MemoryJob, ...]) -> bool:
         if not jobs:
@@ -1337,11 +1530,19 @@ class MemoryEnrichmentScheduler:
                 for job in jobs:
                     await self._process_job(job)
             except asyncio.CancelledError:
+                self._cancel_job_receipts(jobs)
                 raise
             finally:
                 self._processing = max(0, self._processing - len(jobs))
                 self._inflight = max(0, self._inflight - len(jobs))
                 self._queue.task_done()
+
+    @staticmethod
+    def _cancel_job_receipts(jobs: tuple[_MemoryJob, ...]) -> None:
+        for job in jobs:
+            if job.receipt is not None and not job.receipt.done():
+                job.receipt.set_result({'status': 'cancelled', 'accepted': 0, 'persisted': 0,
+                                       'source_message_id': job.source_message_id or ''})
 
     async def _process_job(self, job: _MemoryJob) -> None:
         result = {
@@ -1350,8 +1551,40 @@ class MemoryEnrichmentScheduler:
             "status": "no_change",
             "accepted": 0,
             "persisted": 0,
+            "conflicts": 0,
+            "operation_outcomes": (),
         }
         try:
+            # Preserve complete admitted speech before interpretation. Empty or
+            # invalid model proposals must not erase source-only observations.
+            # Erasure instructions themselves are never added to the quote pool.
+            capture = getattr(job.repository, "capture_source", None)
+            if is_memory_erasure_request(job.message):
+                result["source_capture"] = "erase_request"
+            elif not job.source_message_id:
+                result["source_capture"] = "missing_identity"
+            elif callable(capture):
+                result["source_capture"] = await capture(
+                    job.character_id, job.user_scope, source_message_id=job.source_message_id,
+                    body=job.message, observed_at=job.observed_at)
+                if result["source_capture"] in {"stale", "revoked", "conflict"}:
+                    # No model call and no fact mutation for revoked old work or
+                    # a source ID reused with different text/time.
+                    result["status"] = "skipped"
+                    result["reason"] = "source_" + result["source_capture"]
+                    self._skipped += 1
+                    self._last_outcome = "skipped"
+                    return
+            else:
+                result["source_capture"] = "unsupported_adapter"
+            if job.source_only:
+                # Original speech is retained without asking a model to turn
+                # a hypothetical into a fact. Existing capture/privacy fences
+                # above still apply, including missing identities and erasure.
+                result["status"] = "source_only"
+                self._no_change += 1
+                self._last_outcome = "source_only"
+                return
             # Search the entire visible active collection; apply Top-K only
             # after relevance ranking so older facts are not silently excluded.
             records = tuple(
@@ -1369,6 +1602,19 @@ class MemoryEnrichmentScheduler:
                 job.feedback_target_ids,
                 self._embedding_provider,
             )
+            from character.source_erasure_selection import candidates, selected_ids
+
+            source_candidates = ()
+            if is_memory_erasure_request(job.message):
+                try:
+                    source_candidates, result['source_candidate_coverage'] = await candidates(
+                        job.repository, job.character_id, job.user_scope, job.message, records,
+                        context_window_tokens=self._context_window_tokens)
+                except Exception as exc:
+                    # Failure of optional raw-source recall must not disable an
+                    # otherwise valid claim-target deletion. Never infer absence.
+                    result['source_candidate_coverage'] = dict(status='retrieval_error', complete=False,
+                                                               error_type=type(exc).__name__)
             response = await self._completion.complete(
                 build_memory_llm_messages(
                     job.message,
@@ -1379,6 +1625,9 @@ class MemoryEnrichmentScheduler:
                     self._confidence_threshold,
                     feedback_target_ids=job.feedback_target_ids,
                     write_mode=job.write_mode,
+                    observed_at=job.observed_at,
+                    context_window_tokens=self._context_window_tokens,
+                    source_erasure_candidates=source_candidates,
                 )
             )
             proposals = parse_llm_proposals(
@@ -1390,11 +1639,35 @@ class MemoryEnrichmentScheduler:
                 feedback_target_ids=job.feedback_target_ids,
                 source_type="user",
             )
-            result["accepted"] = len(proposals)
+            source_ids = (selected_ids(_extract_json(response),
+                {row['source_id'] for row in source_candidates}, authorized=is_memory_erasure_request(job.message))
+                if source_candidates else ())
+            result["accepted"] = len(proposals) + bool(source_ids)
             outcomes: list[str] = []
+            if source_ids:
+                from db.source_erasure import SourceClaimConflict
+
+                try:
+                    count = await job.repository.erase_unlinked_sources(job.character_id, job.user_scope,
+                                                                        source_message_ids=source_ids)
+                    result['source_erased'] = count
+                    if count:
+                        self._erased += 1
+                    outcomes.append('erased' if count else 'no_change')
+                except SourceClaimConflict:
+                    outcomes.append('conflict')
+                result['persisted'] = outcomes.count('erased')
+                result['operation_outcomes'] = tuple(outcomes)
             for proposal in proposals:
                 try:
                     outcomes.append(await self._persist_proposal(job, proposal))
+                except ClaimSourceRevokedError:
+                    outcomes.append("skipped")
+                except MemoryClaimConflict:
+                    # The model reasoned over an obsolete version. Do not
+                    # replay its merged content against a different target or
+                    # misreport this as a storage outage.
+                    outcomes.append("conflict")
                 except Exception as exc:
                     self._failed += 1
                     outcomes.append("failed")
@@ -1405,14 +1678,24 @@ class MemoryEnrichmentScheduler:
                         proposal.operation,
                         exc_info=True,
                     )
+                finally:
+                    # Preserve confirmed earlier commits even if cancellation
+                    # interrupts a later operation in this same job.
+                    result['persisted'] = outcomes.count('saved') + outcomes.count('erased')
+                    result['conflicts'] = outcomes.count('conflict')
+                    result['operation_outcomes'] = tuple(outcomes)
 
             saved = outcomes.count("saved")
             erased = outcomes.count("erased")
             result["persisted"] = saved + erased
-            if "failed" in outcomes and saved + erased:
+            result["conflicts"] = outcomes.count("conflict")
+            result["operation_outcomes"] = tuple(outcomes)
+            if any(value in outcomes for value in ("failed", "conflict", "skipped")) and saved + erased:
                 status = "partial"
             elif "failed" in outcomes:
                 status = "failed"
+            elif "conflict" in outcomes:
+                status = "conflict"
             elif erased:
                 status = "erased"
             elif saved:
@@ -1432,7 +1715,16 @@ class MemoryEnrichmentScheduler:
                 saved + erased,
                 status,
             )
+        except InputBudgetError:
+            # Capture above retained the full admitted source. No model has
+            # seen a partial utterance and no semantic operation was applied.
+            result['status'] = 'skipped'
+            result['reason'] = 'input_budget'
+            self._skipped += 1
+            self._last_outcome = 'skipped'
         except asyncio.CancelledError:
+            result['status'] = 'cancelled'
+            self._last_outcome = 'cancelled'
             raise
         except Exception as exc:
             self._failed += 1
@@ -1443,6 +1735,8 @@ class MemoryEnrichmentScheduler:
             logger.warning("后台记忆判断失败，本轮跳过写入", exc_info=True)
         finally:
             self._recent_results.append(result)
+            if job.receipt is not None and not job.receipt.done():
+                job.receipt.set_result(dict(result))
 
     async def _persist_proposal(self, job: _MemoryJob, proposal: ValidatedMemoryProposal) -> str:
         semantic_operation = "SUPERSEDE" if proposal.operation == "UPDATE" else proposal.operation
@@ -1478,7 +1772,7 @@ class MemoryEnrichmentScheduler:
         item = proposal.memory
         if item is None:
             return "no_change"
-        observed_at = proposal.observed_at or datetime.now(timezone.utc).isoformat()
+        observed_at = job.observed_at.isoformat()
         memory = MemoryItem(
             memory_id="",
             memory_type=item.memory_type,  # type: ignore[arg-type]
@@ -1505,7 +1799,16 @@ class MemoryEnrichmentScheduler:
                 "target_memory_key": proposal.target_memory_key,
                 "write_mode": job.write_mode,
                 "feedback_target_ids": list(job.feedback_target_ids),
+                "temporal_provenance": model_temporal_provenance(
+                    evidence=proposal.evidence, observed_at=job.observed_at,
+                    proposed_from=proposal.proposed_valid_from or proposal.valid_from,
+                    proposed_to=proposal.proposed_valid_to or proposal.valid_to,
+                    time_expression=dict(proposal.qualifiers).get("time", ""),
+                ),
             }
+            if proposal.source_observation:
+                metadata.update(content_semantics="quoted_source", speaker_role="user",
+                                described_subject="not_resolved")
             record = await append_claim(
                 job.character_id,
                 job.user_scope,
@@ -1568,6 +1871,15 @@ class MemoryEnrichmentScheduler:
             self._worker.cancel()
             await asyncio.gather(self._worker, return_exceptions=True)
         self._worker = None
+        # A bounded shutdown can leave accepted jobs queued but never started.
+        # Resolve their receipts and queue accounting instead of leaving them
+        # indefinitely pending after there is no worker to execute them.
+        while not self._queue.empty():
+            jobs = self._queue.get_nowait()
+            self._cancel_job_receipts(jobs)
+            self._queued_jobs = max(0, self._queued_jobs - len(jobs))
+            self._inflight = max(0, self._inflight - len(jobs))
+            self._queue.task_done()
         await self._completion.close()
 
 

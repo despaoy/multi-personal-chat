@@ -42,6 +42,18 @@ def _row(index: int, content: str, **overrides):
     return row
 
 
+@pytest.mark.parametrize('depth', [31, 101, 501])
+async def test_old_relevant_fact_is_ranked_before_any_recency_cutoff(depth):
+    # Distinct content avoids a preference/name intent shortcut masking recall.
+    records = [_row(i, f'用户整理票据编号{i}') for i in range(depth)]
+    records.append(_row(depth, '用户的望远镜口径是八十毫米',
+                        updated_at='2020-01-01T00:00:00+00:00'))
+    selected, total = await CharacterMemoryService(_Repo(records), semantic_enabled=False).load_relevant_memories(
+        'kisaki', _scope(), '望远镜口径是多少？')
+    assert total == depth + 1
+    assert str(depth) in [item.memory_id for item in selected]
+
+
 async def test_explicit_reference_clock_resolves_last_year_without_using_wall_clock():
     records = [
         _row(1, "用户居住在甲城", status="superseded", valid_from="2030-01-01", valid_to="2031-01-01"),

@@ -95,6 +95,9 @@ def build_grounded_user_message(
     *,
     max_chars: int,
     memory_context: str = "",
+    episodic_context: str = "",
+    conversation_context: str = "",
+    memory_query_result: str = "",
     speaker: str = "",
 ) -> str:
     """Attach escaped speaker, memory and retrieval data with explicit trust boundaries.
@@ -108,7 +111,7 @@ def build_grounded_user_message(
     结构字符，语义级注入内容（如"忽略以上规则"）仍会以系统区权威
     出现。因此 3.3.0 起整体迁入用户消息的不可信参考区。
     """
-    if not evidence and not memory_context and not speaker:
+    if not any((evidence, memory_context, episodic_context, conversation_context, memory_query_result, speaker)):
         return message
     parts: list[str] = []
     if speaker:
@@ -129,6 +132,26 @@ def build_grounded_user_message(
             "请用‘你’回答；例如‘我最近要完成什么’应回答‘你最近要完成……’，"
             "不得回答‘我最近要完成……’。\n"
             "</memory_response_contract>"
+        )
+    if conversation_context:
+        parts.append(
+            '<conversation_reference trust="untrusted" purpose="contextual_cues">\n'
+            f'{escape(conversation_context, quote=False)}\n'
+            '</conversation_reference>'
+        )
+    if episodic_context:
+        # Historical speech has a speaker, not necessarily that speaker as its
+        # factual subject. Never apply the active-user-memory contract here.
+        parts.append(
+            '<dialogue_evidence trust="untrusted" purpose="historical_utterances">\n'
+            f'{escape(episodic_context, quote=False)}\n'
+            '</dialogue_evidence>'
+        )
+    if memory_query_result:
+        parts.append(
+            '<memory_query_result source="application" scope="saved_memory">\n'
+            f'{escape(memory_query_result, quote=False)}\n'
+            '</memory_query_result>'
         )
     if evidence:
         bounded_evidence = escape(_truncate_evidence(evidence, max_chars), quote=False)
