@@ -1779,6 +1779,14 @@ class PgDatabase:
             await session.commit()
             return result
 
+    async def memory_source_admission(self, character_id, platform, adapter, sender_id,
+                                      conversation_type, conversation_id, *, source_message_id, body):
+        scope = memory_source.source_scope(
+            character_id, platform, adapter, sender_id, conversation_type, conversation_id)
+        identity = memory_source.source_identity(scope, source_message_id)
+        async with self.async_session() as session:
+            return await memory_source.run_postgres(session, memory_source.admission_plan(identity, body))
+
     async def list_memory_sources(self, character_id, platform, adapter, sender_id,
                                   conversation_type, conversation_id, *, source_message_ids=None, limit=100):
         scope = memory_source.source_scope(
@@ -3203,6 +3211,11 @@ class SyncPgAdapter:
     def capture_memory_source(self, character_id, platform, adapter, sender_id,
                               conversation_type, conversation_id, **kwargs):
         return self._run(self._pg.capture_memory_source(
+            character_id, platform, adapter, sender_id, conversation_type, conversation_id, **kwargs))
+
+    def memory_source_admission(self, character_id, platform, adapter, sender_id,
+                                conversation_type, conversation_id, **kwargs):
+        return self._run(self._pg.memory_source_admission(
             character_id, platform, adapter, sender_id, conversation_type, conversation_id, **kwargs))
 
     def list_memory_sources(self, character_id, platform, adapter, sender_id,

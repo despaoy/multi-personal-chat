@@ -3410,6 +3410,13 @@ class SQLiteDB:
             conn.rollback()
             raise
 
+    def memory_source_admission(self, character_id, platform, adapter, sender_id,
+                                conversation_type, conversation_id, *, source_message_id, body):
+        scope = memory_source.source_scope(
+            character_id, platform, adapter, sender_id, conversation_type, conversation_id)
+        identity = memory_source.source_identity(scope, source_message_id)
+        return memory_source.run_sqlite(self._get_connection().cursor(), memory_source.admission_plan(identity, body))
+
     def list_memory_sources(self, character_id, platform, adapter, sender_id,
                             conversation_type, conversation_id, *, source_message_ids=None, limit=100):
         scope = memory_source.source_scope(

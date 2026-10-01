@@ -96,6 +96,30 @@ def source_identity(scope, source_message_id):
                 source_key=json.dumps((scope["scope_key"], source_message_id)))
 
 
+def admission_plan(identity, body):
+    """Read one authenticated source identity without returning its body.
+
+    A recorded source and its owner fence are compared in one SQL snapshot.
+    This is read-only admission; final capture still enforces write rights.
+    """
+    if not isinstance(body, str) or not body.strip():
+        raise ValueError("Complete source text is required")
+    rows = yield ("SELECT state, observed_at, body = :body AS body_matches, "
+                  "(SELECT revoked_before FROM memory_source_fences WHERE owner_key = :owner_key) AS revoked_before "
+                  "FROM memory_sources WHERE source_key = :source_key AND scope_key = :scope_key AND owner_key = :owner_key",
+                  dict(identity, body=body))
+    if not rows:
+        return "new"
+    row = rows[0]
+    if row["state"] in {"revoked", "pending"}:
+        return row["state"]
+    if row["state"] != "recorded":
+        raise ValueError("Unsupported source state")
+    if row["observed_at"] <= (row["revoked_before"] or ""):
+        return "stale"
+    return "recorded" if row["body_matches"] else "conflict"
+
+
 def lock_owner(scope, *, postgres=False):
     yield ("INSERT INTO memory_source_fences (owner_key, revoked_before) "
            "VALUES (:owner_key, '') ON CONFLICT (owner_key) DO NOTHING", scope)

@@ -233,8 +233,11 @@ def isolated_probe_paths(root, run_label, api_key_file):
 async def main(args):
     from evaluation.conversation_source_probe import verify_cluster
 
-    if sum((args.window_boundary, args.citation_precision, args.private_public_citations, args.literal_citations, args.memory_correction, args.memory_history, args.memory_owner, args.memory_friend, args.memory_erasure, args.memory_scope, args.memory_collision)) > 1:
+    if sum((args.window_boundary, args.citation_precision, args.private_public_citations, args.literal_citations, args.memory_correction, args.memory_history, args.memory_owner, args.memory_friend, args.memory_erasure, args.memory_scope, args.memory_collision, args.memory_replay)) > 1:
         raise ValueError("Choose one specific probe scenario")
+
+    if args.memory_replay:
+        args.memory_collision = True
 
     if args.enable_source_recall and not (args.memory_friend or args.memory_erasure):
         raise ValueError("The explicit source-recall variant requires the friend-only scenario")
@@ -247,16 +250,20 @@ async def main(args):
     bootstrap_url = "postgresql+asyncpg://boot@/postgres?host=" + str(ROOT / "socket") + "&port=25433"
     await verify_cluster(bootstrap_url, ROOT / "data")
     database_name = "stage3_" + args.run_label.replace("-", "_")
-    source_label = "stage22-owner-only" if args.memory_friend or args.memory_erasure or args.memory_scope or args.memory_collision else "stage20-cold-fixed"
+    source_label = "stage24-source-erasure" if args.memory_replay else "stage22-owner-only" if args.memory_friend or args.memory_erasure or args.memory_scope or args.memory_collision else "stage20-cold-fixed"
     source_account_username = "stage20-cold-fixed"
     source_database = "stage3_" + source_label.replace("-", "_")
     if reuse_native_fixture:
         source_proof = json.loads((ROOT / source_label / "result.json").read_text())
-        if not all(source_proof["checks"].values()):
+        if args.memory_replay:
+            erasure_gate = json.loads(Path("/home/boot/lhm/multipersonal-runtime/backups/backend-chain-20261001/stage24/native-audit.json").read_text())
+            if not (erasure_gate["source_erasure_gate_passed"] == erasure_gate["source_erasure_gate_total"] == 43 and all(erasure_gate["source_erasure_gate_checks"].values())):
+                raise ValueError("Replay reuse requires independently verified native source erasure state")
+        elif not all(source_proof["checks"].values()):
             raise ValueError("Historical reuse requires the verified native source fixture")
     OUT.mkdir(exist_ok=False)
     fixture = json.loads(
-        (Path(__file__).resolve().parents[1] / "tests/fixtures" / ("deepseek_memory_collision_cases.json" if args.memory_collision else "deepseek_memory_scope_cases.json" if args.memory_scope else "deepseek_memory_erasure_cases.json" if args.memory_erasure else "deepseek_memory_friend_cases.json" if args.memory_friend else "deepseek_memory_owner_cases.json" if args.memory_owner else "deepseek_memory_history_cases.json" if args.memory_history else "deepseek_memory_correction_cases.json" if args.memory_correction else "deepseek_literal_citation_cases.json" if args.literal_citations else "deepseek_private_public_citation_cases.json" if args.private_public_citations else "deepseek_citation_precision_cases.json" if args.citation_precision else "deepseek_mixed_window_boundary.json" if args.window_boundary else "deepseek_mixed_long_context_cases.json")).read_text()
+        (Path(__file__).resolve().parents[1] / "tests/fixtures" / ("deepseek_memory_replay_cases.json" if args.memory_replay else "deepseek_memory_collision_cases.json" if args.memory_collision else "deepseek_memory_scope_cases.json" if args.memory_scope else "deepseek_memory_erasure_cases.json" if args.memory_erasure else "deepseek_memory_friend_cases.json" if args.memory_friend else "deepseek_memory_owner_cases.json" if args.memory_owner else "deepseek_memory_history_cases.json" if args.memory_history else "deepseek_memory_correction_cases.json" if args.memory_correction else "deepseek_literal_citation_cases.json" if args.literal_citations else "deepseek_private_public_citation_cases.json" if args.private_public_citations else "deepseek_citation_precision_cases.json" if args.citation_precision else "deepseek_mixed_window_boundary.json" if args.window_boundary else "deepseek_mixed_long_context_cases.json")).read_text()
     )
     fixture["history_turns"] = expand_history(fixture)
     cases = fixture["cases"]
@@ -265,7 +272,7 @@ async def main(args):
     if reuse_native_fixture and source_proof["cases"][:prerequisite_count] != cases[:prerequisite_count]:
         raise ValueError("Historical reuse requires the same complete original source statements")
     if (args.memory_friend or args.memory_erasure or args.memory_scope or args.memory_collision) and not any(
-            row["body"] == cases[2]["message"] for row in source_proof.get("sources_before_question", [])):
+            row["body"] == cases[2]["message"] for row in source_proof.get("sources_before_erasure" if args.memory_replay else "sources_before_question", [])):
         raise ValueError("Friend reuse requires the complete native persisted source")
     key = key_path.read_text().strip()
     os.environ.update(
@@ -531,6 +538,12 @@ async def main(args):
             identity = str(me.json()["user"]["id"])
             if args.memory_scope or args.memory_collision:
                 proof["scope_owner_identity"] = identity
+                if args.memory_replay:
+                    old = [row for row in source_proof["sources_before_erasure"] if row["body"] == cases[2]["message"]]
+                    assert len(old) == 1
+                    proof["reused_erased_source"] = dict(source_message_id=old[0]["source_message_id"])
+                    proof["reused_native_fixture"]["verified_erasure_state"] = True
+
                 proof["scope_owner_sources_before"] = db.list_memory_sources(
                     "tsukiyashiro_kisaki", "web", "web-character", identity, "private", identity, limit=100)
                 proof["scope_owner_claims_before"] = db.list_character_memory_claims(
@@ -558,6 +571,16 @@ async def main(args):
                     assert await connection.fetchval("SHOW data_directory") == str(ROOT / "data")
                     rows = await connection.fetch('SELECT * FROM messages WHERE platform=$1 AND adapter=$2 AND "senderId"=$3 AND "characterId"=$4 ORDER BY id', "web", "web-character", proof["scope_owner_identity"], "tsukiyashiro_kisaki")
                     proof["scope_sql"] = dict(owner_message_count_before=len(rows), owner_message_max_id_before=max(row["id"] for row in rows), owner_messages_sha256_before=hashlib.sha256(json.dumps([dict(row) for row in rows],sort_keys=True,default=str).encode()).hexdigest())
+                    if args.memory_replay:
+                        from db.memory_source import source_identity, source_scope
+                        key = source_identity(source_scope("tsukiyashiro_kisaki","web","web-character",identity,"private",identity),proof["reused_erased_source"]["source_message_id"])["source_key"]
+                        row = await connection.fetchrow("SELECT state, body IS NULL AS body_is_null, observed_at IS NULL AS observed_at_is_null FROM memory_sources WHERE source_key=$1",key)
+                        before = dict(row)
+                        before["terms"] = await connection.fetchval("SELECT count(*) FROM memory_source_terms WHERE source_key=$1",key)
+                        before["links"] = await connection.fetchval("SELECT count(*) FROM memory_source_links WHERE source_key=$1",key)
+                        assert before == dict(state="revoked",body_is_null=True,observed_at_is_null=True,terms=0,links=0)
+                        proof["scope_sql"]["replay_anchor_before"] = before
+
                 finally:
                     await connection.close()
                 source_connection = await asyncpg.connect(user="boot", database=source_database, host=str(ROOT / "socket"), port=25433)
@@ -614,7 +637,8 @@ async def main(args):
                 extra_request = {}
                 if args.memory_scope or args.memory_collision:
                     owner = proof["scope_owner_identity"]
-                    friend = [row for row in proof["scope_owner_sources_before"] if row["body"] == cases[2]["message"]]
+                    friend = ([dict(source_message_id=proof["reused_erased_source"]["source_message_id"])] if args.memory_replay
+                              else [row for row in proof["scope_owner_sources_before"] if row["body"] == cases[2]["message"]])
                     assert len(friend) == 1
                     extra_request = dict(senderId=owner, userId=owner, conversationId=owner, sourceMessageId=friend[0]["source_message_id"])
                     proof["scope_forged_request"] = dict(**extra_request, sessionId=owner)
@@ -697,8 +721,16 @@ async def main(args):
                     keys = [source_identity(source_scope("tsukiyashiro_kisaki", "web", "web-character", account, "private", account),source_id)["source_key"] for account in [owner, identity]]
                     row = await connection.fetchrow("SELECT state, body FROM memory_sources WHERE source_key=$1",keys[0])
                     proof["scope_sql"].update(owner_friend_state=row["state"],owner_friend_body_preserved=row["body"]==cases[2]["message"],source_keys_distinct=keys[0]!=keys[1])
+                    if args.memory_replay:
+                        tombstone = await connection.fetchrow("SELECT state, body IS NULL AS body_is_null, observed_at IS NULL AS observed_at_is_null FROM memory_sources WHERE source_key=$1",keys[0])
+                        after = dict(tombstone)
+                        after["terms"] = await connection.fetchval("SELECT count(*) FROM memory_source_terms WHERE source_key=$1",keys[0])
+                        after["links"] = await connection.fetchval("SELECT count(*) FROM memory_source_links WHERE source_key=$1",keys[0])
+                        proof["scope_sql"]["replay_anchor_after"] = after
+
                     for label,account,text in [("owner_friend",owner,cases[2]["message"]),("current_request",identity,cases[-1]["message"])]:
-                        proof["scope_sql"][label+"_archive_count"] = await connection.fetchval('SELECT count(*) FROM messages WHERE platform=$1 AND adapter=$2 AND "senderId"=$3 AND "characterId"=$4 AND "sourceMessageId"=$5 AND message=$6',"web","web-character",account,"tsukiyashiro_kisaki",source_id,text)
+                        relation = "<=" if label == "owner_friend" else ">"
+                        proof["scope_sql"][label+"_archive_count"] = await connection.fetchval('SELECT count(*) FROM messages WHERE platform=$1 AND adapter=$2 AND "senderId"=$3 AND "characterId"=$4 AND "sourceMessageId"=$5 AND message=$6 AND id '+relation+' $7',"web","web-character",account,"tsukiyashiro_kisaki",source_id,text,proof["scope_sql"]["owner_message_max_id_before"])
                 finally:
                     await connection.close()
                 source_connection = await asyncpg.connect(user="boot", database=source_database, host=str(ROOT / "socket"), port=25433)
@@ -715,7 +747,12 @@ async def main(args):
             proof["memory_status"] = asdict(get_memory_enrichment_scheduler().status)
             capture_storage_proof(proof, OUT)
         if args.memory_collision and proof["generation"][-1]["http_status"] == 409:
-            from evaluation.memory_scope_audit import audit_memory_collision_rejected
+            if args.memory_replay:
+                from evaluation.memory_replay_audit import (
+                    audit_memory_replay_rejected as audit_memory_collision_rejected,
+                )
+            else:
+                from evaluation.memory_scope_audit import audit_memory_collision_rejected
 
             proof["configured_model"] = os.environ["OPENAI_COMPAT_MODEL"]
             proof["configured_context_window"] = int(os.environ["OPENAI_COMPAT_CONTEXT_WINDOW_TOKENS"])
@@ -778,7 +815,10 @@ async def main(args):
             )
         if cold_memory:
             if args.memory_collision:
-                from evaluation.memory_scope_audit import audit_memory_collision_wire as audit_wire
+                if args.memory_replay:
+                    from evaluation.memory_replay_audit import audit_memory_replay_wire as audit_wire
+                else:
+                    from evaluation.memory_scope_audit import audit_memory_collision_wire as audit_wire
             elif args.memory_scope:
                 from evaluation.memory_scope_audit import audit_memory_scope_wire as audit_wire
             elif args.memory_erasure:
@@ -854,6 +894,7 @@ if __name__ == "__main__":
     parser.add_argument("--memory-erasure", action="store_true")
     parser.add_argument("--memory-scope", action="store_true")
     parser.add_argument("--memory-collision", action="store_true")
+    parser.add_argument("--memory-replay", action="store_true")
     parser.add_argument("--enable-source-recall", action="store_true")
     parser.add_argument("--root", required=True, type=Path)
     parser.add_argument("--run-label", required=True)

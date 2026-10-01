@@ -910,7 +910,8 @@ async def _validate_web_source_identity(request, current_user, *, database=None)
     """Reject known immutable source collisions before any model or write.
 
     The writer's transactional capture guard remains authoritative. This
-    admission check uses only the authenticated owner's visible source scope.
+    admission check uses only the authenticated owner's exact source scope and
+    returns state without exposing revoked source text.
     """
     if request.branchId or not request.characterId or request.platform != "web" or request.adapter != "web-character" or not request.sourceMessageId:
         return
@@ -925,18 +926,22 @@ async def _validate_web_source_identity(request, current_user, *, database=None)
                                  conversation_type=request.conversationType or request.sessionType)
     except ValueError as exc:
         raise HTTPException(422, "无法确认消息来源范围") from exc
+    if not request.message:
+        raise HTTPException(422, "消息不能为空")
     target_db = db if database is None else database
     try:
-        sources = await asyncio.wait_for(asyncio.to_thread(
-            target_db.list_memory_sources, request.characterId, scope.platform, scope.adapter,
+        status = await asyncio.wait_for(asyncio.to_thread(
+            target_db.memory_source_admission, request.characterId, scope.platform, scope.adapter,
             scope.sender_id, scope.conversation_type, scope.conversation_id,
-            source_message_ids=(request.sourceMessageId,), limit=1,
+            source_message_id=request.sourceMessageId, body=request.message,
         ), timeout=_DB_WRITE_TIMEOUT)
     except Exception as exc:
         raise HTTPException(503, "暂时无法核对消息来源，请稍后重试") from exc
-    if sources and sources[0]["body"] != request.message:
-        raise HTTPException(409, detail={"code": "source_identity_conflict",
-                                        "message": "该来源标识已用于另一条消息，请为新消息使用新的标识。"})
+    if status in {"revoked", "stale", "conflict"}:
+        message = "该来源标识已用于另一条消息，请为新消息使用新的标识。" if status == "conflict" else "该消息来源已失效，不能重放；重新发送消息时请使用新的标识。"
+        raise HTTPException(409, detail={"code": "source_identity_" + status, "message": message})
+    if status not in {"new", "pending", "recorded"}:
+        raise HTTPException(503, "暂时无法核对消息来源，请稍后重试")
 
 
 def _build_chat_generation_service(runtime, character_service=None, message_db=None) -> ChatGenerationService:
