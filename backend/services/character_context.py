@@ -580,7 +580,7 @@ class CharacterContextService:
                 exc_info=True,
             )
 
-        if memory_retry_only:
+        if memory_retry_only or outcome.source_capture in {"stale", "revoked", "conflict"}:
             return outcome
 
         # 3. 关系起点仅手动设置；次数只是统计，不自动升温。
@@ -589,21 +589,33 @@ class CharacterContextService:
             address = (extract_preferred_address(turn.message)
                        if memory_write_allowed(turn.message) and not relationship_write_blocked(turn.message) else None)
             if address:
-                from repositories.character_memory import relationship_from_record
+                guarded = getattr(self._memory_repo, "set_address_from_turn", None)
+                if source_message_id and callable(guarded):
+                    result = await guarded(
+                        prepared.character_id, prepared.user_scope,
+                        source_message_id=source_message_id, observed_at=prepared.received_at,
+                        address=address,
+                    )
+                    if result["status"] in {"stale", "revoked", "conflict"}:
+                        outcome.source_capture = result["status"]
+                        return outcome
+                    stage = result["relationship"]["relationship_stage"]
+                else:
+                    from repositories.character_memory import relationship_from_record
 
-                current = relationship_from_record(await self._memory_repo.get_relationship_record(
-                    prepared.character_id, prepared.user_scope,
-                ))
-                stage = current.stage
-                await self._memory_repo.upsert_relationship(
-                    prepared.character_id,
-                    prepared.user_scope,
-                    RelationshipState(
-                        stage=stage,  # type: ignore[arg-type]
-                        preferred_address=address or prepared.relationship.preferred_address,
-                        summary=current.summary,
-                    ),
-                )
+                    current = relationship_from_record(await self._memory_repo.get_relationship_record(
+                        prepared.character_id, prepared.user_scope,
+                    ))
+                    stage = current.stage
+                    await self._memory_repo.upsert_relationship(
+                        prepared.character_id,
+                        prepared.user_scope,
+                        RelationshipState(
+                            stage=stage,  # type: ignore[arg-type]
+                            preferred_address=address or prepared.relationship.preferred_address,
+                            summary=current.summary,
+                        ),
+                    )
             outcome.stage = stage
             outcome.preferred_address = address or prepared.relationship.preferred_address
         except Exception:

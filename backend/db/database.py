@@ -2821,6 +2821,24 @@ class SQLiteDB:
             raise RuntimeError("upsert_character_relationship 提交后读取失败")
         return dict(row)
 
+    def set_character_address_from_turn(self, character_id, platform, adapter, sender_id,
+                                        conversation_type, conversation_id, *, source_message_id,
+                                        observed_at, address):
+        from db.turn_address import address_plan
+
+        fields = (character_id, platform, adapter, sender_id, conversation_type, conversation_id)
+        conn = self._get_connection()
+        try:
+            cursor = conn.cursor()
+            cursor.execute("BEGIN IMMEDIATE")
+            result = memory_source.run_sqlite(cursor, address_plan(
+                fields, source_message_id=source_message_id, observed_at=observed_at, address=address))
+            conn.commit()
+            return result
+        except BaseException:
+            conn.rollback()
+            raise
+
     def increment_character_interaction(
         self,
         character_id: str,

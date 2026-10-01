@@ -345,6 +345,15 @@ class DatabaseCharacterMemoryRepository:
             )
         )
 
+    async def set_address_from_turn(self, character_id: str, user_scope: UserScope, *,
+                                    source_message_id: str, observed_at: datetime, address: str) -> dict[str, Any]:
+        """Turn writes use original receipt authority, unlike manual updates."""
+        return await asyncio.to_thread(
+            self._database.set_character_address_from_turn, character_id,
+            user_scope.platform, user_scope.adapter, user_scope.sender_id,
+            user_scope.conversation_type, user_scope.conversation_id,
+            source_message_id=source_message_id, observed_at=observed_at, address=address)
+
     async def increment_interaction(self, character_id: str, user_scope: UserScope) -> int:
         return int(
             await asyncio.to_thread(

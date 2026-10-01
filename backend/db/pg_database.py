@@ -1212,6 +1212,19 @@ class PgDatabase:
                 raise RuntimeError("upsert_character_relationship RETURNING 未返回行")
             return _row_to_dict(row)
 
+    async def set_character_address_from_turn(self, character_id, platform, adapter, sender_id,
+                                              conversation_type, conversation_id, *, source_message_id,
+                                              observed_at, address):
+        from db.turn_address import address_plan
+
+        fields = (character_id, platform, adapter, sender_id, conversation_type, conversation_id)
+        async with self.async_session() as session:
+            result = await memory_source.run_postgres(session, address_plan(
+                fields, source_message_id=source_message_id, observed_at=observed_at,
+                address=address, postgres=True))
+            await session.commit()
+            return result
+
     async def increment_character_interaction(
         self,
         character_id: str,
@@ -3083,6 +3096,13 @@ class SyncPgAdapter:
                 interaction_count,
             )
         )
+
+    def set_character_address_from_turn(self, character_id, platform, adapter, sender_id,
+                                        conversation_type, conversation_id, *, source_message_id,
+                                        observed_at, address):
+        return self._run(self._pg.set_character_address_from_turn(
+            character_id, platform, adapter, sender_id, conversation_type, conversation_id,
+            source_message_id=source_message_id, observed_at=observed_at, address=address))
 
     def increment_character_interaction(
         self, character_id, platform, adapter, sender_id, conversation_type, conversation_id

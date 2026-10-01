@@ -253,7 +253,13 @@ class DeliveryMemoryWorker:
             )
             if lost.is_set():
                 raise RuntimeError("Completion lease superseded")
-            capture = result.get("source_capture") or outcome.source_capture
+            # A later transactional relationship rejection overrides an
+            # earlier semantic job result from before the erasure fence.
+            capture = (
+                outcome.source_capture
+                if outcome.source_capture in {"stale", "revoked", "conflict"}
+                else result.get("source_capture") or outcome.source_capture
+            )
             status = result.get("status", "unknown")
             if capture in {"stale", "revoked", "conflict"}:
                 state = "blocked"
