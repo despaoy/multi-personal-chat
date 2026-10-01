@@ -233,8 +233,11 @@ def isolated_probe_paths(root, run_label, api_key_file):
 async def main(args):
     from evaluation.conversation_source_probe import verify_cluster
 
-    if sum((args.window_boundary, args.citation_precision, args.private_public_citations, args.literal_citations, args.memory_correction, args.memory_history)) > 1:
+    if sum((args.window_boundary, args.citation_precision, args.private_public_citations, args.literal_citations, args.memory_correction, args.memory_history, args.memory_owner)) > 1:
         raise ValueError("Choose one specific probe scenario")
+
+    reuse_native_fixture = args.memory_history or args.memory_owner
+    cold_memory = args.memory_correction or reuse_native_fixture
 
     ROOT, OUT, key_path = isolated_probe_paths(args.root, args.run_label, args.api_key_file)
     bootstrap_url = "postgresql+asyncpg://boot@/postgres?host=" + str(ROOT / "socket") + "&port=25433"
@@ -242,18 +245,18 @@ async def main(args):
     database_name = "stage3_" + args.run_label.replace("-", "_")
     source_label = "stage20-cold-fixed"
     source_database = "stage3_stage20_cold_fixed"
-    if args.memory_history:
+    if reuse_native_fixture:
         source_proof = json.loads((ROOT / source_label / "result.json").read_text())
         if not all(source_proof["checks"].values()):
             raise ValueError("Historical reuse requires the verified native source fixture")
     OUT.mkdir(exist_ok=False)
     fixture = json.loads(
-        (Path(__file__).resolve().parents[1] / "tests/fixtures" / ("deepseek_memory_history_cases.json" if args.memory_history else "deepseek_memory_correction_cases.json" if args.memory_correction else "deepseek_literal_citation_cases.json" if args.literal_citations else "deepseek_private_public_citation_cases.json" if args.private_public_citations else "deepseek_citation_precision_cases.json" if args.citation_precision else "deepseek_mixed_window_boundary.json" if args.window_boundary else "deepseek_mixed_long_context_cases.json")).read_text()
+        (Path(__file__).resolve().parents[1] / "tests/fixtures" / ("deepseek_memory_owner_cases.json" if args.memory_owner else "deepseek_memory_history_cases.json" if args.memory_history else "deepseek_memory_correction_cases.json" if args.memory_correction else "deepseek_literal_citation_cases.json" if args.literal_citations else "deepseek_private_public_citation_cases.json" if args.private_public_citations else "deepseek_citation_precision_cases.json" if args.citation_precision else "deepseek_mixed_window_boundary.json" if args.window_boundary else "deepseek_mixed_long_context_cases.json")).read_text()
     )
     fixture["history_turns"] = expand_history(fixture)
     cases = fixture["cases"]
-    executed_cases = cases[-1:] if args.memory_history else cases
-    if args.memory_history and source_proof["cases"][:2] != cases[:2]:
+    executed_cases = cases[-(2 if args.memory_owner else 1):] if reuse_native_fixture else cases
+    if reuse_native_fixture and source_proof["cases"][:2] != cases[:2]:
         raise ValueError("Historical reuse requires the same complete original source statements")
     key = key_path.read_text().strip()
     os.environ.update(
@@ -285,7 +288,7 @@ async def main(args):
         MEMORY_LLM_MODEL="deepseek-v4-pro",
         MEMORY_LLM_API_KEY=key,
         MEMORY_LLM_CONTEXT_WINDOW_TOKENS="65536",
-        MEMORY_SOURCE_RECALL_ENABLED="false",
+        MEMORY_SOURCE_RECALL_ENABLED="true" if args.memory_owner else "false",
         DYNAMIC_CONTEXT_SEMANTIC_REVIEW_ENABLED="true",
         DYNAMIC_CONTEXT_SEMANTIC_REVIEW_TIMEOUT_SECONDS="30",
         CONTEXTUAL_MEMORY_SELECTION_ENABLED="true",
@@ -311,7 +314,7 @@ async def main(args):
     connection = await asyncpg.connect(user="boot", database="postgres", host=str(ROOT / "socket"), port=25433)
     try:
         assert await connection.fetchval("SHOW data_directory") == str(ROOT / "data")
-        if args.memory_history:
+        if reuse_native_fixture:
             assert await connection.fetchval("SELECT EXISTS(SELECT 1 FROM pg_database WHERE datname=$1)", source_database)
             await connection.execute("CREATE DATABASE " + database_name + " TEMPLATE " + source_database)
         else:
@@ -319,7 +322,7 @@ async def main(args):
     finally:
         await connection.close()
     await verify_cluster(os.environ["DATABASE_URL"], ROOT / "data")
-    if args.memory_history:
+    if reuse_native_fixture:
         import hashlib
         import shutil
 
@@ -381,7 +384,7 @@ async def main(args):
                                          candidate_count=result[1], recall=result[2]))
         return result
 
-    if args.memory_correction or args.memory_history:
+    if cold_memory:
         CharacterContextService._load_history = cold_history
         CharacterContextService._load_memory_candidates = observed_candidates
 
@@ -414,6 +417,9 @@ async def main(args):
                 policy_status=prepared.contextual_policy_status,
                 policy_reason=prepared.contextual_policy_reason,
                 used_memory_ids=list(prepared.compiled.used_memory_ids),
+                raw_source_status=prepared.compiled.memory_source_status,
+                raw_source_diagnostics=prepared.memory_recall.get("sources", {}),
+                episodic_context=prepared.compiled.episodic_reference_context,
             )
         )
         return prepared
@@ -448,16 +454,17 @@ async def main(args):
         provider="native_openai_compat",
         transport="authenticated_ASGI",
         source_ablation=False,
+        source_mode=dict(test_setting=args.memory_owner, controlled_variant=args.memory_owner, production_setting_not_changed=True),
         rag_enabled=True,
         documents=[],
         searches=[],
         retrieval_diagnostics=retrieval_diagnostics,
         cold_history_diagnostics=cold_history_diagnostics,
         candidate_diagnostics=candidate_diagnostics,
-        controlled_ablation=dict(history_ablation_enabled=args.memory_correction or args.memory_history, raw_source_recall_enabled=False),
+        controlled_ablation=dict(history_ablation_enabled=cold_memory, raw_source_recall_enabled=args.memory_owner),
     )
     password = secrets.token_urlsafe(24)
-    if args.memory_history:
+    if reuse_native_fixture:
         # Reset only the disposable cloned fixture account to a new random
         # credential; authenticate through the real login endpoint afterwards.
         from api.auth import _hash_password
@@ -485,7 +492,7 @@ async def main(args):
                 timeout=180,
             ) as client,
         ):
-            if args.memory_history:
+            if reuse_native_fixture:
                 login = await client.post("/api/auth/login", json=dict(username=source_label, password=password))
                 me = await client.get("/api/auth/me")
                 proof["auth_statuses"] = [login.status_code, me.status_code]
@@ -500,7 +507,7 @@ async def main(args):
             identity = str(me.json()["user"]["id"])
             from knowledge.vector_db import get_vector_db
 
-            if args.memory_history:
+            if reuse_native_fixture:
                 proof["documents"] = json.loads((ROOT / source_label / "result.json").read_text())["documents"]
                 proof["document_imports_replayed"] = 0
             else:
@@ -525,10 +532,13 @@ async def main(args):
                 )
                 proof["searches"].append(dict(query=query, http_status=response.status_code, response=response.json()))
             for case in executed_cases:
-                if (args.memory_correction or args.memory_history) and case["id"] == cases[-1]["id"]:
+                if (cold_memory) and case["id"] == cases[-1]["id"]:
                     proof["claims_before_question"] = db.list_character_memory_claims(
                         "tsukiyashiro_kisaki", "web", "web-character", identity, "private", identity,
                         limit=None, include_inactive=True)
+                    if args.memory_owner:
+                        proof["sources_before_question"] = db.list_memory_sources(
+                            "tsukiyashiro_kisaki", "web", "web-character", identity, "private", identity, limit=100)
                     (OUT / "pre-question.json").write_text(json.dumps(proof, ensure_ascii=False, indent=2))
                 before = len(cloud_calls)
                 response = await client.post(
@@ -595,7 +605,7 @@ async def main(args):
             long_history_loaded=len(prepared_diagnostics[-1]["history"]) >= 26
             and sum(len(h["content"]) for h in prepared_diagnostics[-1]["history"]) >= 18000,
         )
-        if args.citation_precision or args.private_public_citations or args.literal_citations or args.memory_correction or args.memory_history:
+        if args.citation_precision or args.private_public_citations or args.literal_citations or cold_memory:
             checks.pop("long_history_loaded")
             checks["no_long_history_replay"] = all(len(d["history"]) < 10 for d in prepared_diagnostics)
         for case, generation in zip(executed_cases, proof["generation"]):
@@ -615,8 +625,10 @@ async def main(args):
             checks[case["id"] + "_knowledge_on_wire"] = bool(wires) and any(
                 all(v in wire for v in case["knowledge_expected"]) for wire in wires
             )
-        if args.memory_correction or args.memory_history:
-            if args.memory_history:
+        if cold_memory:
+            if args.memory_owner:
+                from evaluation.memory_owner_audit import audit_memory_owner_wire as audit_wire
+            elif args.memory_history:
                 from evaluation.memory_history_audit import audit_memory_history_wire as audit_wire
             else:
                 from evaluation.memory_correction_audit import audit_memory_correction_wire as audit_wire
@@ -641,10 +653,10 @@ async def main(args):
         proof["persisted_vector_stats"] = reopened
         proof["checks"] = checks
         proof["controlled_ablation"] = dict(
-            history_ablation_enabled=args.memory_correction or args.memory_history,
-            raw_source_recall_enabled=False,
+            history_ablation_enabled=cold_memory,
+            raw_source_recall_enabled=args.memory_owner,
             loaded_history_count=len(prepared_diagnostics[-1]["history"]),
-            scope="only " + cases[-1]["id"] + "; stored history observed unchanged; no model messages reconstructed" if args.memory_correction or args.memory_history else "none",
+            scope="only " + cases[-1]["id"] + "; stored history observed unchanged; no model messages reconstructed" if cold_memory else "none",
         )
         proof["cloud_summary"] = [
             dict(
@@ -677,6 +689,7 @@ if __name__ == "__main__":
     parser.add_argument("--literal-citations", action="store_true")
     parser.add_argument("--memory-correction", action="store_true")
     parser.add_argument("--memory-history", action="store_true")
+    parser.add_argument("--memory-owner", action="store_true")
     parser.add_argument("--root", required=True, type=Path)
     parser.add_argument("--run-label", required=True)
     parser.add_argument("--api-key-file", required=True, type=Path)
