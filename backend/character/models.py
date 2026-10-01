@@ -270,3 +270,5 @@ class CompiledCharacterContext:
     # Transient backup for replacing/clearing an attached source packet safely.
     source_reference_backup: str = ""
     memory_operation_receipt: dict[str, object] | None = None
+    # Generation-only delivery state; never an executed receipt or frozen job.
+    memory_operation_deferred: bool = False

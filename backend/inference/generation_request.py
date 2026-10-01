@@ -55,6 +55,17 @@ def configured_context_window() -> int:
     """Use the serving limit, not a model's theoretical maximum window."""
     return max(1024, int(os.getenv("VLLM_MAX_MODEL_LEN", str(DEFAULT_CONTEXT_WINDOW_TOKENS))))
 
+DEFERRED_MEMORY_OPERATION_POLICY = (
+    "【本轮本人长期记忆删除的处理状态】后端支持处理当前已鉴权对话者在当前角色范围内的个人长期记忆删除请求；"
+    "这项个人数据处理能力不同于管理员命令。当前仅准备生成回复，尚未执行删除："
+    "收到本条回复成功交付的确认后，后端才会核对用户授权和目标，并尝试删除相应的长期记忆及可召回原话。"
+    "回复应确认收到删除请求，说明会在回复交付确认后处理，完成结果仍须实际执行回执确认。"
+    "不得声称已经删掉或一定会成功，也不得把当前没有执行回执解释为不支持删除、没有记忆管理能力，"
+    "或宣布仍会长期保留用户要求删除的内容。聊天历史和现实预约状态不因这项长期记忆操作而被删除或取消。"
+    "删除以外的当前问题仍须依据完整输入正常回答，不得忽略。"
+)
+
+
 MEMORY_VISIBILITY_POLICY = (
     "【用户历史依据范围】本轮可见或检索到的记忆只说明本轮取得了哪些依据。"
     "没有找到某项记录，不能推断用户从未说过，也不能推断系统从未保存过；"
@@ -267,6 +278,8 @@ def _system_prompt(request: GenerationRequest) -> str:
         prompt = request.persona_prompt.strip()
     if request.apply_prompt_policy:
         prompt = '\n\n'.join(filter(None, (prompt, RUNTIME_CAPABILITY_POLICY)))
+        if getattr(request.character_context, "memory_operation_deferred", False):
+            prompt += '\n\n' + DEFERRED_MEMORY_OPERATION_POLICY
     # 对话者昵称（senderName，用户可控）不进入系统提示词：
     # 净化只能删除结构字符，语义级注入内容仍会以系统区权威出现。
     # 3.3.0 起改由 build_grounded_user_message 放入用户消息的

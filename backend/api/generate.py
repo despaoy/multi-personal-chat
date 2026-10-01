@@ -479,6 +479,7 @@ async def _generate_reply_body(
             mapped_character_id,
             character_service=character_service,
             execute_memory_operations=persist_message and delivery_context is None,
+            defer_memory_operations=persist_message and delivery_context is not None and not request.branchId,
         )
         if request.characterId and prepared_character_turn is None:
             raise HTTPException(503, "人物上下文暂时不可用，请稍后重试；本轮未降级为普通聊天")
@@ -895,7 +896,8 @@ async def _generate_reply_body(
 
 
 async def _prepare_character_turn(
-    request: MessageRequest, character_id: str, *, character_service=None, execute_memory_operations: bool = False
+    request: MessageRequest, character_id: str, *, character_service=None, execute_memory_operations: bool = False,
+    defer_memory_operations: bool = False
 ):
     """准备角色上下文；任何失败都降级为无角色上下文的旧行为。
 
@@ -930,7 +932,20 @@ async def _prepare_character_turn(
                 return await service.prepare_interactive_turn(
                     turn_input, character_id, source_message_id=request.sourceMessageId
                 )
-        return await service.prepare_turn(turn_input, character_id)
+        prepared = await service.prepare_turn(turn_input, character_id)
+        if defer_memory_operations and not execute_memory_operations:
+            from dataclasses import replace
+
+            from character.memory_extractor import memory_write_allowed
+            from character.memory_llm import is_memory_erasure_request
+
+            if memory_write_allowed(request.message) and is_memory_erasure_request(request.message):
+                # A server-owned delivery plan is not an execution receipt.
+                # Keep the latter empty so the actual post-delivery writer runs.
+                prepared = replace(prepared, compiled=replace(
+                    prepared.compiled, memory_operation_deferred=True,
+                ))
+        return prepared
     except Exception as e:
         logger.warning("角色上下文准备失败，按无角色上下文继续 character=%s: %s", character_id, e)
         return None
