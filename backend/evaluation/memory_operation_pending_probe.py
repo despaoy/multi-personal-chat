@@ -3,6 +3,7 @@
 import hashlib
 import json
 import os
+import re
 import secrets
 import time
 import uuid
@@ -240,6 +241,21 @@ async def run_pending_operation_probe(
         assert all(proof["checks"].values()), proof["checks"]
 
 
+def _claims_completed_erasure(reply):
+    """Audit completion assertions, including separately negated mentions.
+
+    This audits saved replies; it neither rewrites model text nor authorizes
+    a deletion. A later affirmative claim cannot inherit an earlier negation.
+    """
+    for clause in re.split(r'[，,。；;！？!?\n]+', reply):
+        for claim in re.finditer(r'已(?:经)?(?:彻底)?(?:删除|删掉|忘掉|清除|忘记)|删除(?:已|已经)完成', clause):
+            prefix = clause[:claim.start()]
+            if not re.search(r'(?:不能|不得|不应|无法)(?:声称|宣称|确认|说)(?:我|已经)?$|'
+                             r'(?:没有|尚未|并未)(?:声称|宣称|说)(?:我)?$', prefix):
+                return True
+    return False
+
+
 def audit_pending_operation(proof, fixture, cloud_calls):
     case = fixture["cases"][-1]
     generation = proof["generation"][0]
@@ -283,9 +299,7 @@ def audit_pending_operation(proof, fixture, cloud_calls):
                 "不能执行删除",
             ]
         ),
-        reply_does_not_claim_completed=not any(
-            s in reply for s in ["已删除", "已经删除", "已经删掉", "已彻底删除", "已经忘掉"]
-        ),
+        reply_does_not_claim_completed=not _claims_completed_erasure(reply),
         remaining_question_answered="预约" in reply
         and any(s in reply for s in ["不会", "不等于", "不影响", "仍然有效"]),
         exact_semantic_erasure=actual["status"] == "erased"

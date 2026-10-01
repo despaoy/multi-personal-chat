@@ -352,19 +352,38 @@ _ERASE_REQUEST_PATTERN = re.compile(
 )
 
 
-def is_memory_erasure_request(message: str) -> bool:
-    """Recognize user authorization separately from the model's ERASE proposal.
+_ARCHIVE_ONLY_ERASURE_NEGATION = re.compile(
+    r"(?:(?:也|并且|同时|但是|但|而|另外|请)\s*)*"
+    r"(?:不要求|不要|别|不许|不能|不用|无需|不必|不想|不希望)"
+    r"(?:你|软件|系统)?(?:把|将)?"
+    r"(?:删除|清除|删掉|移除)(?:掉)?"
+    r"(?:聊天历史|聊天记录|对话历史|对话记录)(?:本身)?"
+)
 
-    Negated, hypothetical and quoted commands cannot authorize a deletion.
-    This is only an intent gate; scoped target resolution still happens later.
+
+def is_memory_erasure_request(message: str) -> bool:
+    """Recognize explicit authorization, separately from target resolution.
+
+    Retaining the chat archive does not negate deletion of personal memory.
+    Only complete, archive-only negative clauses are excluded from this
+    intent check. Memory-target negatives, ambiguity, quotes and hypothetical
+    or third-party instructions keep the existing conservative rejection.
+    The original message, never this check's text, reaches the target writer.
     """
     text = re.sub(r'“[^”]*”|「[^」]*」|『[^』]*』|"[^"\n]*"', '', message or '').strip()
     if re.search(r'^(?:如果|假如|假设|要是)|(?:他说|她说|朋友说|你说过)', text):
         return False
+    clauses = re.split(r'[，,。；;！？!?\n]+', text)
+    intent_text = '。'.join(
+        clause for clause in clauses
+        if not _ARCHIVE_ONLY_ERASURE_NEGATION.fullmatch(clause.strip())
+    )
     if re.search(r'(?:不要|别|不许|不能|不用|无需|不必|不想|不希望).{0,16}'
-                 r'(?:删掉|删除|清除|移除|忘掉|忘记)', text):
+                 r'(?:删掉|删除|清除|移除|忘掉|忘记)', intent_text):
         return False
-    return bool(_ERASE_REQUEST_PATTERN.search(text))
+    return bool(_ERASE_REQUEST_PATTERN.search(intent_text))
+
+
 _CONDITIONAL_COEXIST_PATTERN = re.compile(
     r"(?:不是完全.{0,24}(?:只是|只)|准确地说.{0,48}(?:才不|只是|而是)|(?:只是|才)不)"
 )
