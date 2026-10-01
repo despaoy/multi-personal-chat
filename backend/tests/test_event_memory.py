@@ -32,7 +32,7 @@ def repo(tmp_path):
 async def save(repo, text, sender="alice", source="m1"):
     count = 0
     for item in extract_memories(text, reference_time=NOW):
-        count += await write_rule_memory(repo, "kisaki", scope(sender), item, source)
+        count += await write_rule_memory(repo, "kisaki", scope(sender), item, source, observed_at=NOW)
     return count
 
 

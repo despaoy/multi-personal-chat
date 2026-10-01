@@ -10,17 +10,12 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any
+from collections.abc import Mapping
+from typing import Any
 
 from .models import AnswerMode, EvidenceItem, EvidencePacket
 
-if TYPE_CHECKING:
-    from collections.abc import Mapping
-
 logger = logging.getLogger(__name__)
-
-# 检索上下文里证据摘录的截断长度
-_EVIDENCE_CHARS = 360
 
 
 def _layer_label(doc: Mapping[str, Any]) -> str:
@@ -40,23 +35,34 @@ def _layer_label(doc: Mapping[str, Any]) -> str:
     return "·".join(parts)
 
 
-def _extract_evidence_text(content: str, limit: int = _EVIDENCE_CHARS) -> str:
-    """从 canonical 文档 content 提取「证据：」段（引用原文形式）。"""
-    if not content or "\n证据：" not in content:
-        return ""
-    raw = content.split("\n证据：", 1)[1].strip()
-    if not raw:
-        return ""
-    shown = raw[:limit]
-    if len(raw) > limit:
-        shown = shown.rstrip() + "…"
-    return shown
+def _extract_evidence_text(content: str) -> str:
+    """Keep a complete canonical source; admission owns the size budget."""
+    marker = "\n证据："
+    return (content.split(marker, 1)[1] if marker in content else content).strip()
+
+
+def _admitted_evidence_by_document(bundle: Mapping[str, Any]) -> dict[str, list[str]]:
+    evidence: dict[str, list[str]] = {}
+    for packet in bundle.get("evidence_packets") or []:
+        if not isinstance(packet, Mapping) or packet.get("kind") != "evidence":
+            continue
+        text = packet.get("text")
+        ids = packet.get("document_ids")
+        if not isinstance(text, str) or not text.strip() or not isinstance(ids, (list, tuple)):
+            continue
+        for document_id in ids:
+            if not isinstance(document_id, str) or not document_id:
+                continue
+            blocks = evidence.setdefault(document_id, [])
+            if text not in blocks:
+                blocks.append(text)
+    return evidence
 
 
 class EvidencePacketBuilder:
     """Retrieval bundle → EvidencePacket。"""
 
-    def __init__(self, evidence_budget_chars: int = 2400):
+    def __init__(self, evidence_budget_chars: int = 6000):
         # 上游已做一次预算裁剪，
         # 此处防止异常超大 bundle 直接塞满 prompt
         self.evidence_budget = max(600, int(evidence_budget_chars))
@@ -71,6 +77,7 @@ class EvidencePacketBuilder:
     ) -> EvidencePacket:
         """bundle 契约见角色知识检索 runtime 返回值。"""
         packet_warnings = list(warnings or [])
+        admitted_evidence = _admitted_evidence_by_document(bundle)
         results = list(bundle.get("results") or [])
         citations = list(bundle.get("citations") or [])
         domains = [str(d) for d in (bundle.get("domains") or [])]
@@ -110,7 +117,11 @@ class EvidencePacketBuilder:
                 document_type=str(item.get("document_type") or "unknown"),
                 title=str(item.get("title") or ""),
                 summary=str(item.get("summary") or ""),
-                evidence_text=_extract_evidence_text(str(item.get("content") or "")),
+                evidence_text=(
+                    "\n\n".join(admitted_evidence[doc_id])
+                    if doc_id in admitted_evidence
+                    else _extract_evidence_text(str(item.get("content") or ""))
+                ),
                 source_path=str(source.get("source_path") or ""),
                 line_start=source.get("line_start"),
                 line_end=source.get("line_end"),
@@ -125,9 +136,10 @@ class EvidencePacketBuilder:
                 layer_label=_layer_label(item),
             )
             block = evidence_item.to_block()
-            if used + len(block) + 1 > self.evidence_budget:
+            size = len(block) + (2 if blocks else 0)
+            if used + size > self.evidence_budget:
                 truncated = True
-                break
+                continue
 
             # 服务端权威 citation metadata（key 绑定；API 输出由
             # public_citation_view 再做安全视图转换）
@@ -146,12 +158,17 @@ class EvidencePacketBuilder:
                 domain_id=evidence_item.domain_id,
                 index_version=evidence_item.index_version,
                 document_type=evidence_item.document_type,
+                reality_status=evidence_item.reality_status,
+                temporal_scope=evidence_item.temporal_scope,
+                content_scope=evidence_item.content_scope,
+                story_unit_id=evidence_item.story_unit_id,
+                evidence_excerpt=evidence_item.evidence_text,
             )
 
             documents.append(evidence_item)
             bound_citations.append(citation_meta)
             blocks.append(block)
-            used += len(block) + 1
+            used += size
 
         if truncated:
             packet_warnings.append("evidence_budget_truncated")

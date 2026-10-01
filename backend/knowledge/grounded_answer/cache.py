@@ -8,6 +8,7 @@
 - prompt 契约版本
 - 生成模型 ID 与关键生成参数
 - answer_mode / persona 指纹
+- 输入对话历史指纹（同一句追问在不同上下文下不能复用答案）
 
 缓存值：完整 GroundedAnswerResult.to_api_payload 的内部形态
 （服务端直接复用，不再检索与生成）。
@@ -54,6 +55,7 @@ def answer_cache_key(
     persona_prompt: str,
     speaker: str,
     want_citations: bool,
+    history: list[dict[str, str]] | None = None,
 ) -> str:
     payload = {
         "domains": sorted(domains) if domains else [str(domain_id or "auto")],
@@ -69,6 +71,9 @@ def answer_cache_key(
         "persona": hashlib.sha256((persona_prompt or "").encode("utf-8")).hexdigest()[:16],
         "speaker": normalize_query(speaker)[:48],
         "want_citations": bool(want_citations),
+        "history": hashlib.sha256(
+            json.dumps(history or [], ensure_ascii=False, sort_keys=True).encode("utf-8")
+        ).hexdigest(),
     }
     serialized = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(serialized.encode("utf-8")).hexdigest()

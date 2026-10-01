@@ -142,6 +142,7 @@ class GroundedAnswerService:
                 persona_prompt=persona_prompt,
                 speaker=speaker,
                 want_citations=want_citations,
+                history=history,
             )
             cached = self.cache.get(key)
             if cached is not None:
@@ -153,7 +154,10 @@ class GroundedAnswerService:
         retrieval_start = time.perf_counter()
         try:
             bundle, corrective_info = await self._retrieve_with_optional_correction(
-                query, domain_id=domain_id, top_k=top_k, filters=filters
+                self._contextual_retrieval_query(query, history, domain_id),
+                domain_id=domain_id,
+                top_k=top_k,
+                filters=filters,
             )
         except asyncio.CancelledError:
             raise
@@ -253,7 +257,10 @@ class GroundedAnswerService:
         retrieval_start = time.perf_counter()
         try:
             bundle, corrective_info = await self._retrieve_with_optional_correction(
-                query, domain_id=domain_id, top_k=top_k, filters=filters
+                self._contextual_retrieval_query(query, history, domain_id),
+                domain_id=domain_id,
+                top_k=top_k,
+                filters=filters,
             )
         except asyncio.CancelledError:
             raise
@@ -517,6 +524,18 @@ class GroundedAnswerService:
     # ------------------------------------------------------------------
     # 内部编排
     # ------------------------------------------------------------------
+    @staticmethod
+    def _contextual_retrieval_query(query, history, domain_id):
+        if not history:
+            return query
+        from knowledge.dialogue_query import contextual_retrieval_query
+        from knowledge.retrieval_core.registry import get_default_registry
+
+        configs = get_default_registry().list_domains()
+        if domain_id:
+            configs = [config for config in configs if config.domain_id == domain_id]
+        return contextual_retrieval_query(query, history, configs) if configs else query
+
     async def _retrieve_with_optional_correction(
         self,
         query: str,

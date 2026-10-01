@@ -22,7 +22,7 @@ from .models import AnswerMode, EvidencePacket
 
 logger = logging.getLogger(__name__)
 
-GROUNDED_PROMPT_VERSION = "grounded-answer-v1"
+GROUNDED_PROMPT_VERSION = "grounded-answer-v2"
 
 # 复用项目既有全局安全边界（与聊天链路同源，避免两套规则漂移）
 from inference.prompt_policy import (  # noqa: E402
@@ -72,7 +72,7 @@ def _strip_control(text: str) -> str:
 class GroundedPromptBuilder:
     """构建 grounded-answer 的 system + user 消息。"""
 
-    def __init__(self, evidence_max_chars: int = 2400):
+    def __init__(self, evidence_max_chars: int = 6000):
         self.evidence_max_chars = max(600, int(evidence_max_chars))
 
     # -- system -------------------------------------------------------------
@@ -131,7 +131,11 @@ class GroundedPromptBuilder:
                 "</retrieved_evidence>"
             )
         blocks: list[str] = []
-        per_doc_budget = self.evidence_max_chars // max(1, len(packet.documents))
+        # EvidencePacket is already an atomic admission decision. Re-slicing
+        # each document would lose late negations and invalidate its citation.
+        source_chars = sum(len(item.to_block()) for item in packet.documents) + 2 * (len(packet.documents) - 1)
+        if source_chars > self.evidence_max_chars:
+            raise ValueError("Complete evidence packet exceeds grounded prompt budget")
         for item in packet.documents:
             attrs = [f'id="{item.citation_key}"']
             if item.document_type:
@@ -139,7 +143,7 @@ class GroundedPromptBuilder:
             if item.layer_label:
                 attrs.append(f'layer="{_escape_data(item.layer_label)}"')
             attrs.append('trust="untrusted"')
-            bounded = _truncate_to_budget(item.to_block(), per_doc_budget)
+            bounded = item.to_block()
             blocks.append("<evidence {}>\n{}\n</evidence>".format(" ".join(attrs), _escape_data(bounded)))
         header = '<retrieved_evidence trust="untrusted" purpose="factual_grounding">'
         return header + "\n" + "\n".join(blocks) + "\n</retrieved_evidence>"
@@ -163,9 +167,3 @@ class GroundedPromptBuilder:
                 messages.append({"role": role, "content": content[:_MAX_HISTORY_ITEM_CHARS]})
         messages.append({"role": "user", "content": self.build_user_message(packet, speaker=speaker)})
         return messages
-
-
-def _truncate_to_budget(text: str, max_chars: int) -> str:
-    if max_chars <= 0 or len(text) <= max_chars:
-        return text
-    return text[: max_chars - 1].rstrip() + "…"

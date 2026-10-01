@@ -1,0 +1,92 @@
+{
+  "fixture_version": 1,
+  "purpose": "Complete synthetic sources for native evidence-tail, citation-scope and follow-up cache audits.",
+  "sources": [
+    {
+      "id": "stage8-kisaki-permit",
+      "source_file": "permit-log.txt",
+      "title": "月社妃的天文观测室许可训练日志",
+      "summary": "月社妃的训练日志记录许可台词和末尾现实进展说明。",
+      "subject": "月社妃",
+      "predicate": "天文观测室许可进展",
+      "value": "见训练日志末尾说明",
+      "entities": [
+        "月社妃"
+      ]
+    },
+    {
+      "id": "stage8-permit-rules",
+      "source_file": "permit-rules.txt",
+      "title": "天文观测室入场许可规定",
+      "summary": "入场必须检查通过、提交申请并收到书面批准。",
+      "subject": "天文观测室",
+      "predicate": "入场许可规定",
+      "value": "检查通过并收到书面批准",
+      "entities": [
+        "月社妃",
+        "琉璃"
+      ]
+    },
+    {
+      "id": "stage8-ruri-permit",
+      "source_file": "ruri-permit.txt",
+      "title": "琉璃的天文观测室入场许可",
+      "summary": "琉璃在周三已取得书面许可，周五晚上八点至九点有效。",
+      "subject": "琉璃",
+      "predicate": "天文观测室许可进展",
+      "value": "已取得书面许可",
+      "entities": [
+        "琉璃"
+      ]
+    }
+  ],
+  "late_qualifier": "记录末尾明确注明：上面的许可和入场都是月社妃梦中的预演，不是已经发生的现实事件。现实中月社妃尚未提交许可申请，许可未获批，也没有进入天文观测室。只有检查通过并收到书面批准才允许入场；检查通过本身不代表已经批准。",
+  "cases": [
+    {
+      "id": "complete-long-source",
+      "message": "月社妃的天文观测室入场许可已经获批了吗？请依据训练日志说明她当前实际进展和入场条件，并附上来源。",
+      "history": [],
+      "expected_subject": "月社妃",
+      "expected_approved": false
+    },
+    {
+      "id": "multiple-evidence-sizes",
+      "message": "请查月社妃天文观测室许可的资料，分别说明训练日志和入场规定的结论，给出对应来源。",
+      "history": [],
+      "expected_subject": "月社妃",
+      "expected_approved": false
+    },
+    {
+      "id": "kisaki-followup",
+      "message": "她的天文观测室入场许可已经获批了吗？请依据资料说明实际进展，并附上来源。",
+      "history": [
+        {
+          "role": "user",
+          "content": "接下来我们只讨论月社妃的天文观测室入场许可。"
+        },
+        {
+          "role": "assistant",
+          "content": "好的，当前讨论对象是月社妃。"
+        }
+      ],
+      "expected_subject": "月社妃",
+      "expected_approved": false
+    },
+    {
+      "id": "ruri-followup-same-question",
+      "message": "她的天文观测室入场许可已经获批了吗？请依据资料说明实际进展，并附上来源。",
+      "history": [
+        {
+          "role": "user",
+          "content": "接下来我们只讨论琉璃的天文观测室入场许可。"
+        },
+        {
+          "role": "assistant",
+          "content": "好的，当前讨论对象是琉璃。"
+        }
+      ],
+      "expected_subject": "琉璃",
+      "expected_approved": true
+    }
+  ]
+}
