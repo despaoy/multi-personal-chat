@@ -464,6 +464,7 @@ async def _generate_reply_impl(
             # A failed capability probe should not make the model unavailable.
             logger.warning("failed to query vLLM LoRA inventory: %s", e)
 
+    completion_warning = None
     start_time = time.time()
     prompt_hash = cache_key = ""
     cache_ttl = 300
@@ -551,7 +552,7 @@ async def _generate_reply_impl(
             if delivery_context is not None:
                 delivery_context.update(message_saved=message_saved, character_id=mapped_character_id)
             if prepared_character_turn is not None and persist_message and message_saved and delivery_context is None:
-                await _complete_character_turn(
+                completion_warning = await _complete_character_turn(
                     prepared_character_turn,
                     request,
                     reply,
@@ -570,7 +571,7 @@ async def _generate_reply_impl(
             )
 
             result = GenerateResponse(
-                reply=reply,
+                reply=_reply_with_memory_warning(reply, completion_warning),
                 model=model_label,
                 costTime=cost_time,
                 citations=rag_meta.get("citations"),
@@ -578,7 +579,8 @@ async def _generate_reply_impl(
                 abstained=rag_meta.get("abstained", False),
                 answerMode=rag_meta.get("answerMode"),
                 domainId=rag_meta.get("domainId"),
-                warnings=rag_meta.get("warnings"),
+                warnings=([*(rag_meta.get("warnings") or []), completion_warning]
+                          if completion_warning else rag_meta.get("warnings")),
             )
             if use_response_cache:
                 try:
@@ -737,7 +739,7 @@ async def _generate_reply_impl(
         if delivery_context is not None:
             delivery_context.update(message_saved=message_saved, character_id=mapped_character_id)
         if prepared_character_turn is not None and persist_message and message_saved and delivery_context is None:
-            await _complete_character_turn(
+            completion_warning = await _complete_character_turn(
                 prepared_character_turn,
                 request,
                 reply,
@@ -759,14 +761,15 @@ async def _generate_reply_impl(
         )
 
         result = GenerateResponse(
-            reply=reply,
+            reply=_reply_with_memory_warning(reply, completion_warning),
             model=f"{model_name} ({current_provider})" if model_invoked else model_name,
             costTime=cost_time,
             citations=fallback_rag_meta.get("citations"),
             confidence=fallback_rag_meta.get("confidence"),
             abstained=fallback_rag_meta.get("abstained", False),
             answerMode=fallback_rag_meta.get("answerMode"),
-            warnings=fallback_rag_meta.get("warnings"),
+            warnings=([*(fallback_rag_meta.get("warnings") or []), completion_warning]
+                      if completion_warning else fallback_rag_meta.get("warnings")),
             domainId=fallback_rag_meta.get("domainId"),
         )
 
@@ -868,8 +871,13 @@ async def _prepare_character_turn(
         return None
 
 
-async def _complete_character_turn(prepared, request: MessageRequest, reply: str, *, character_service=None) -> None:
-    """生成成功后回写角色记忆与关系；失败只记日志，不影响返回结果。
+def _reply_with_memory_warning(reply: str, warning: str | None) -> str:
+    """Keep model content and make persistence feedback visible to reply-only clients."""
+    return f"{reply}\n\n保存提示：{warning}" if warning else reply
+
+
+async def _complete_character_turn(prepared, request: MessageRequest, reply: str, *, character_service=None) -> str | None:
+    """生成成功后回写；保留已生成内容，向调用方返回独立的保存提示。
 
     character_service 语义同 _prepare_character_turn：必须与准备阶段
     使用同一服务实例，保证读写同一（容器）数据库。
@@ -891,7 +899,7 @@ async def _complete_character_turn(prepared, request: MessageRequest, reply: str
             received_at=request._source_received_at,
         )
         service = character_service or get_default_character_context_service()
-        await asyncio.wait_for(
+        outcome = await asyncio.wait_for(
             service.complete_turn(
                 prepared,
                 turn_input,
@@ -900,8 +908,19 @@ async def _complete_character_turn(prepared, request: MessageRequest, reply: str
             ),
             timeout=_DB_WRITE_TIMEOUT,
         )
+        capture = getattr(outcome, "source_capture", "")
+        if capture == "failed":
+            return "这条信息的长期记忆保存失败；本次回复不代表已保存，请稍后重试。"
+        if capture in {"revoked", "stale"}:
+            return "这条信息未保存到长期记忆：相关记忆已删除，本次回复不会恢复它。"
+        if capture == "conflict":
+            return "这条信息未保存到长期记忆：同一条消息已绑定其他内容，请重新发送。"
+        return None
     except Exception as e:
         logger.warning("角色记忆回写失败 character=%s: %s", prepared.character_id, e)
+        # Cancelling a to_thread write does not prove its transaction rolled
+        # back. Never claim failure or successful storage on timeout/unknown.
+        return "这条信息的长期记忆保存状态尚未确认；本次回复不代表已保存，请稍后检查。"
 
 
 # ═══════════════════════════════════════════
