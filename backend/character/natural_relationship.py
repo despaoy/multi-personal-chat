@@ -69,6 +69,44 @@ def relationship_write_blocked(message: str) -> bool:
     return bool(fictional_memory_context(message) or any(label + sep in message for label in labels for sep in (":", "：")))
 
 
+def quoted_source_only(message: str) -> bool:
+    """Retain ordinary quoted speech without granting a fact or memo write.
+
+    Quotes are context boundaries, not proof of fiction. Only use a masked
+    view for admission; callers capture the exact original complete message.
+    Explicit fiction, malformed scopes, notes and normal write gates remain.
+    """
+    text = message.strip()
+    if not memory_write_allowed(text):
+        return False
+    labels = (*_LABELS, "更正备忘录", "结束备忘录")
+    if any(label + sep in text for label in labels for sep in (":", "：")):
+        return False
+    pairs = {"“": "”", "‘": "’", "「": "」", "『": "』", '"': '"'}
+    stack, outside = [], []
+    quoted = False
+    escaped = False
+    for char in text:
+        if escaped:
+            outside.append(" " if stack else char)
+            escaped = False
+            continue
+        if char == "\\" and stack:
+            escaped = True
+        elif stack and char == stack[-1]:
+            stack.pop()
+            quoted = True
+        elif char in pairs:
+            stack.append(pairs[char])
+        elif char in pairs.values():
+            return False
+        else:
+            outside.append(" " if stack else char)
+    view = "".join(outside)
+    return bool(quoted and not stack and not escaped and view.strip(" ，,。！？!?；;：:\n\t")
+                and not fictional_memory_context(view))
+
+
 def hypothetical_source_only(message: str) -> bool:
     """Allow source retention without generic facts or relationship mutation."""
     labels = (*_LABELS, "更正备忘录", "结束备忘录")

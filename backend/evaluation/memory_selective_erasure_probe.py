@@ -42,7 +42,7 @@ async def run_selective_erasure_probe(
     fields = ("tsukiyashiro_kisaki", "qq", "stage34-gateway", sender, "private", sender)
     assert len(case["message"]) > 200
     proof["actual_intent_gate"] = is_memory_erasure_request(case["message"])
-    assert proof["actual_intent_gate"] is True
+    assert proof["actual_intent_gate"] is (not fixture.get("source_capture_only", False))
     proof["actual_fields"] = list(fields)
     active = [r for r in database.loras if r["status"] == "active"]
     assert len(active) == 1 and get_lora_character_id(active[0]["name"]) == fields[0]
@@ -76,12 +76,16 @@ async def run_selective_erasure_probe(
                 fields[0],
             )
             return dict(
+                source_links=[dict(r) for r in await c.fetch(
+                    "SELECT s.source_message_id,l.memory_id FROM memory_sources s JOIN memory_source_links l ON l.source_key=s.source_key "
+                    "WHERE s.owner_key=$1 ORDER BY s.source_message_id,l.memory_id",
+                    __import__('db.memory_source',fromlist=['source_scope']).source_scope(*fields)['owner_key'])],
                 claims=database.list_character_memory_claims(*fields, limit=None, include_inactive=True),
                 sources=database.list_memory_sources(*fields, limit=100),
                 relationship=database.get_character_relationship(*fields),
                 original_archive_sha256=hashlib.sha256(
                     json.dumps(
-                        [dict(r) for r in rows if r["sourceMessageId"] == fixture.get("native_source_message_id", "stage34-delivery-memory-fixed-target")],
+                        [dict(r) for r in rows if r["sourceMessageId"] == fixture.get("initial_native_source_message_id", fixture.get("native_source_message_id", "stage34-delivery-memory-fixed-target"))],
                         sort_keys=True,
                         default=str,
                     ).encode()
@@ -133,6 +137,7 @@ async def run_selective_erasure_probe(
         text=case["message"],
         requestBudgetSeconds=180,
     )
+    proof["primary_source_message_id"] = payload["messageId"]
     proof["primary_erasure_source_message_id"] = payload["messageId"]
     bad = await client.post("/api/integrations/astrbot/messages", json=payload)
     proof["unauthorized_status"] = bad.status_code
@@ -199,6 +204,12 @@ async def run_selective_erasure_probe(
         and _retained_claim_preserved(before, after, fixture)
         and semantic["status"] == "erased" and semantic["persisted"] == 1
     )
+    if fixture.get("source_capture_only"):
+        deletion_succeeded = (
+            any(r['source_message_id'] == proof['primary_source_message_id'] and r['body'] == fixture['new_native_source'] for r in after['sources'])
+            and semantic.get('status') == 'source_only'
+            and after['claims'] == before['claims']
+        )
     proof["retained_read_executed"] = deletion_succeeded
     if deletion_succeeded:
         read_message = fixture["retained_read_message"]
@@ -208,7 +219,7 @@ async def run_selective_erasure_probe(
         read_private = read_response.json()
         proof["generation"].append(
             dict(
-                id="read_retained_preference",
+                id=fixture.get("retained_read_case_id", "read_retained_preference"),
                 message=read_message,
                 http_status=read_response.status_code,
                 response={k: v for k, v in read_private.items() if k not in {"deliveryToken", "traceId"}},
@@ -271,6 +282,9 @@ async def run_selective_erasure_probe(
         proof["scope_sql"]["source_database_snapshot_after"] = snapshot_after
     finally:
         await c.close()
+    if fixture.get("source_capture_only"):
+        proof["original_qq_archive_preserved"] = proof["owner_before"]["original_archive_sha256"] == proof["owner_after_ack"]["original_archive_sha256"]
+    proof["scope_owner_sources_after"] = database.list_memory_sources(fields[0], "web", "web-character", identity, "private", identity, limit=100)
     capture_storage_proof(proof, output)
     proof["checks"] = audit_selective_erasure(proof, fixture, cloud_calls)
     (output / "result.json").write_text(json.dumps(proof, ensure_ascii=False, indent=2))
@@ -286,6 +300,10 @@ async def run_selective_erasure_probe(
 
 
 def audit_selective_erasure(proof, fixture, cloud_calls):
+    if fixture.get("source_capture_only"):
+        from evaluation.memory_quoted_source_audit import audit_quoted_source
+
+        return audit_quoted_source(proof, fixture, cloud_calls)
     generation = proof["generation"][0]
     selected = cloud_calls[slice(*generation["cloud_call_range"])]
     answers = [c for c in selected if c["request"].get("max_tokens") == 1024]

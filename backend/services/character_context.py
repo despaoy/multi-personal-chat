@@ -509,9 +509,9 @@ class CharacterContextService:
             )
 
             scheduler = get_memory_enrichment_scheduler()
-            from character.natural_relationship import hypothetical_source_only
+            from character.natural_relationship import hypothetical_source_only, quoted_source_only
 
-            source_only = hypothetical_source_only(turn.message) and not extracted
+            source_only = (hypothetical_source_only(turn.message) or quoted_source_only(turn.message)) and not extracted
             if prepared.memory_operation_receipt is not None:
                 # Already submitted before generation, including pending and
                 # failed results. Never duplicate it after saving the reply.
