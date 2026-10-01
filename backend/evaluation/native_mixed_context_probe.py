@@ -233,10 +233,10 @@ def isolated_probe_paths(root, run_label, api_key_file):
 async def main(args):
     from evaluation.conversation_source_probe import verify_cluster
 
-    if sum((args.window_boundary, args.citation_precision, args.private_public_citations, args.literal_citations, args.memory_correction, args.memory_history, args.memory_owner, args.memory_friend, args.memory_erasure, args.memory_scope, args.memory_collision, args.memory_replay, args.memory_race, args.memory_capacity, args.memory_capture_failure, args.memory_history_feedback, args.memory_late_capture, args.memory_turn_capacity, args.memory_delivery, args.memory_delivery_erasure, args.memory_operation_pending, args.memory_archive_retention)) > 1:
+    if sum((args.window_boundary, args.citation_precision, args.private_public_citations, args.literal_citations, args.memory_correction, args.memory_history, args.memory_owner, args.memory_friend, args.memory_erasure, args.memory_scope, args.memory_collision, args.memory_replay, args.memory_race, args.memory_capacity, args.memory_capture_failure, args.memory_history_feedback, args.memory_late_capture, args.memory_turn_capacity, args.memory_delivery, args.memory_delivery_erasure, args.memory_operation_pending, args.memory_archive_retention, args.memory_selective_erasure)) > 1:
         raise ValueError("Choose one specific probe scenario")
 
-    if args.memory_archive_retention:
+    if args.memory_archive_retention or args.memory_selective_erasure:
         args.memory_operation_pending = True
 
     if args.memory_replay or args.memory_race or args.memory_capacity or args.memory_capture_failure or args.memory_history_feedback or args.memory_late_capture or args.memory_turn_capacity or args.memory_delivery or args.memory_delivery_erasure or args.memory_operation_pending:
@@ -278,7 +278,7 @@ async def main(args):
             raise ValueError("Historical reuse requires the verified native source fixture")
     OUT.mkdir(exist_ok=False)
     fixture = json.loads(
-        (Path(__file__).resolve().parents[1] / "tests/fixtures" / ("deepseek_memory_archive_retention_cases.json" if args.memory_archive_retention else "deepseek_memory_operation_pending_cases.json" if args.memory_operation_pending else "deepseek_memory_delivery_erasure_cases.json" if args.memory_delivery_erasure else "deepseek_memory_delivery_cases.json" if args.memory_delivery else "deepseek_memory_turn_capacity_cases.json" if args.memory_turn_capacity else "deepseek_memory_late_capture_cases.json" if args.memory_late_capture else "deepseek_memory_history_feedback_cases.json" if args.memory_history_feedback else "deepseek_memory_capture_failure_cases.json" if args.memory_capture_failure else "deepseek_memory_capacity_cases.json" if args.memory_capacity else "deepseek_memory_race_cases.json" if args.memory_race else "deepseek_memory_replay_cases.json" if args.memory_replay else "deepseek_memory_collision_cases.json" if args.memory_collision else "deepseek_memory_scope_cases.json" if args.memory_scope else "deepseek_memory_erasure_cases.json" if args.memory_erasure else "deepseek_memory_friend_cases.json" if args.memory_friend else "deepseek_memory_owner_cases.json" if args.memory_owner else "deepseek_memory_history_cases.json" if args.memory_history else "deepseek_memory_correction_cases.json" if args.memory_correction else "deepseek_literal_citation_cases.json" if args.literal_citations else "deepseek_private_public_citation_cases.json" if args.private_public_citations else "deepseek_citation_precision_cases.json" if args.citation_precision else "deepseek_mixed_window_boundary.json" if args.window_boundary else "deepseek_mixed_long_context_cases.json")).read_text()
+        (Path(__file__).resolve().parents[1] / "tests/fixtures" / ("deepseek_memory_selective_erasure_cases.json" if args.memory_selective_erasure else "deepseek_memory_archive_retention_cases.json" if args.memory_archive_retention else "deepseek_memory_operation_pending_cases.json" if args.memory_operation_pending else "deepseek_memory_delivery_erasure_cases.json" if args.memory_delivery_erasure else "deepseek_memory_delivery_cases.json" if args.memory_delivery else "deepseek_memory_turn_capacity_cases.json" if args.memory_turn_capacity else "deepseek_memory_late_capture_cases.json" if args.memory_late_capture else "deepseek_memory_history_feedback_cases.json" if args.memory_history_feedback else "deepseek_memory_capture_failure_cases.json" if args.memory_capture_failure else "deepseek_memory_capacity_cases.json" if args.memory_capacity else "deepseek_memory_race_cases.json" if args.memory_race else "deepseek_memory_replay_cases.json" if args.memory_replay else "deepseek_memory_collision_cases.json" if args.memory_collision else "deepseek_memory_scope_cases.json" if args.memory_scope else "deepseek_memory_erasure_cases.json" if args.memory_erasure else "deepseek_memory_friend_cases.json" if args.memory_friend else "deepseek_memory_owner_cases.json" if args.memory_owner else "deepseek_memory_history_cases.json" if args.memory_history else "deepseek_memory_correction_cases.json" if args.memory_correction else "deepseek_literal_citation_cases.json" if args.literal_citations else "deepseek_private_public_citation_cases.json" if args.private_public_citations else "deepseek_citation_precision_cases.json" if args.citation_precision else "deepseek_mixed_window_boundary.json" if args.window_boundary else "deepseek_mixed_long_context_cases.json")).read_text()
     )
     fixture["history_turns"] = expand_history(fixture)
     cases = fixture["cases"]
@@ -641,6 +641,14 @@ async def main(args):
                 proof["claims_before_erasure"] = db.list_character_memory_claims(
                     "tsukiyashiro_kisaki", "web", "web-character", identity, "private", identity,
                     limit=None, include_inactive=True)
+            if args.memory_selective_erasure:
+                from evaluation.memory_selective_erasure_probe import run_selective_erasure_probe
+
+                await run_selective_erasure_probe(client,args,proof,fixture,cloud_calls,
+                    database_name=database_name,source_database=source_database,root=ROOT,
+                    output=OUT,identity=identity,database=db,runtime=inference_runtime,
+                    capture_storage_proof=capture_storage_proof)
+                return
             if args.memory_operation_pending:
                 from evaluation.memory_operation_pending_probe import run_pending_operation_probe
 
@@ -996,6 +1004,7 @@ if __name__ == "__main__":
     parser.add_argument("--memory-delivery-erasure", action="store_true")
     parser.add_argument("--memory-operation-pending", action="store_true")
     parser.add_argument("--memory-archive-retention", action="store_true")
+    parser.add_argument("--memory-selective-erasure", action="store_true")
     parser.add_argument("--memory-delivery", action="store_true")
     parser.add_argument("--memory-turn-capacity", action="store_true")
     parser.add_argument("--turn-capacity-retry", action="store_true")

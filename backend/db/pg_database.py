@@ -1707,7 +1707,11 @@ class PgDatabase:
         memory_id: Optional[int] = None,
         memory_key: Optional[str] = None,
         scope_level: Optional[str] = None,
+        protected_memory_keys: tuple[str, ...] = (),
     ) -> int:
+        from db.erasure_protection import protected_keys
+
+        retained_keys = protected_keys(protected_memory_keys)
         if memory_id is None and not str(memory_key or "").strip():
             raise ValueError("ERASE requires memory_id or memory_key")
         levels = (scope_level,) if scope_level else None
@@ -1738,11 +1742,16 @@ class PgDatabase:
                     + " UNION SELECT child.id FROM character_memories child "
                     "JOIN lineage parent ON (child.parent_memory_id = parent.id "
                     "OR child.supersedes_memory_id = parent.id) WHERE " + child_access_sql + ") "
-                    "DELETE FROM character_memories WHERE id IN (SELECT id FROM lineage) RETURNING id"
+                    "DELETE FROM character_memories WHERE id IN (SELECT id FROM lineage) RETURNING id, memory_key"
                 ),
                 params,
             )
-            ids = [row[0] for row in result.fetchall()]
+            rows = result.fetchall()
+            if retained_keys and any(row[1] in retained_keys for row in rows):
+                from db.memory_claim_guard import MemoryClaimConflict
+
+                raise MemoryClaimConflict('erasure would remove a retained logical memory')
+            ids = [row[0] for row in rows]
             if ids:
                 await memory_source.run_postgres(session, memory_source.revoke_plan(source_scope, ids))
             deleted = len(ids)

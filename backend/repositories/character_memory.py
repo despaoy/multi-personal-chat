@@ -156,6 +156,7 @@ class CharacterMemoryRepository(Protocol):
         memory_id: Optional[int] = None,
         memory_key: Optional[str] = None,
         scope_level: Optional[str] = None,
+        protected_memory_keys: tuple[str, ...] = (),
     ) -> int: ...
 
 
@@ -621,6 +622,7 @@ class DatabaseCharacterMemoryRepository:
         memory_id: Optional[int] = None,
         memory_key: Optional[str] = None,
         scope_level: Optional[str] = None,
+        protected_memory_keys: tuple[str, ...] = (),
     ) -> int:
         """Physically erase a claim or complete logical key version chain."""
         if scope_level is not None and scope_level not in _VALID_SCOPE_LEVELS:
@@ -639,8 +641,11 @@ class DatabaseCharacterMemoryRepository:
                     memory_id=memory_id,
                     memory_key=memory_key,
                     scope_level=scope_level,
+                    **({"protected_memory_keys": protected_memory_keys} if protected_memory_keys else {}),
                 )
             )
+        if protected_memory_keys:
+            raise RuntimeError("当前数据库适配器无法保护保留条目")
         if memory_id is None:
             raise RuntimeError("当前数据库适配器不支持按 memory_key 物理删除")
         return int(await self.delete_memory(int(memory_id), character_id, user_scope))

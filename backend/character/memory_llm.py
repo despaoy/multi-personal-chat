@@ -281,6 +281,8 @@ class ValidatedMemoryProposal:
     proposed_valid_from: str = ""
     proposed_valid_to: str = ""
     source_observation: bool = False
+    # Server-derived retention constraints; never copied from model JSON.
+    protected_memory_keys: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -380,7 +382,10 @@ def is_memory_erasure_request(message: str) -> bool:
     )
     if re.search(r'(?:不要|别|不许|不能|不用|无需|不必|不想|不希望).{0,16}'
                  r'(?:删掉|删除|清除|移除|忘掉|忘记)', intent_text):
-        return False
+        from character.erasure_authority import partial_erasure_plan
+
+        plan = partial_erasure_plan(message)
+        return plan is not None and plan.valid
     return bool(_ERASE_REQUEST_PATTERN.search(intent_text))
 
 
@@ -1300,6 +1305,11 @@ def parse_llm_proposals(
     raw_memories = _extract_json(text).get("memories", [])
     if not isinstance(raw_memories, list):
         raise ValueError("记忆 LLM 的 memories 必须是数组")
+    from dataclasses import replace
+
+    from character.erasure_authority import partial_erasure_plan
+
+    partial = partial_erasure_plan(source_message, existing_memories)
     proposals: list[ValidatedMemoryProposal] = []
     for raw in raw_memories[: MAX_EXTRACTED_MEMORIES * 2]:
         proposal = _candidate_to_proposal(
@@ -1310,6 +1320,15 @@ def parse_llm_proposals(
             confidence_threshold=confidence_threshold,
             feedback_target_ids=feedback_target_ids,
         )
+        if proposal is not None and partial is not None:
+            if not partial.valid or partial.unresolved_protection:
+                continue
+            if proposal.operation == "ERASE" and not partial.accepts_erasure(proposal):
+                continue
+            if proposal.operation != "NOOP" and partial.protects_mutation(proposal):
+                continue
+            if proposal.operation == "ERASE":
+                proposal = replace(proposal, protected_memory_keys=partial.protected_keys)
         if proposal is not None and proposal not in proposals:
             # A field may contain distinct values, scopes, conditions or source
             # statements. Only an identical validated proposal is a duplicate.
@@ -1398,7 +1417,20 @@ def build_memory_llm_messages(
         # Match the existing rule-event timezone; do not infer user timezone.
         "current_time_local": reference_time.astimezone(EVENT_TZ).isoformat(),
     }
+    from character.erasure_authority import partial_erasure_plan
+
+    partial = partial_erasure_plan(message, selected_memories)
+    if partial is not None:
+        payload['partial_erasure_authorization'] = partial.model_constraints()
     instruction = _SYSTEM_PROMPT
+    if partial is not None:
+        instruction += (
+            "\npartial_erasure_authorization 是后端对本轮明确删除/保留范围的限制，不是执行结果。"
+            "ERASE 只能选择 allowed_erase_memory_ids 中的白名单条目，并以当前明确删除句为 evidence。"
+            "protected_memory_ids 必须保持原状，不得 ERASE、RETRACT、修改或重复 ADD 保留条目。"
+            "unresolved_protection=true 时不得改变记忆，NOOP。"
+            "此类混合保留请求不允许 erase_source_ids；完整原文仍须阅读，不得把限制当作已完成删除。"
+        )
     if source_erasure_candidates:
         from character.source_erasure_selection import INSTRUCTION
 
@@ -1764,9 +1796,19 @@ class MemoryEnrichmentScheduler:
                 feedback_target_ids=job.feedback_target_ids,
                 source_type="user",
             )
-            source_ids = (selected_ids(_extract_json(response),
-                {row['source_id'] for row in source_candidates}, authorized=is_memory_erasure_request(job.message))
-                if source_candidates else ())
+            from character.erasure_authority import partial_erasure_plan
+
+            partial = partial_erasure_plan(job.message, existing_memories)
+            if partial is not None:
+                # Full raw speech cannot be selected independently while a
+                # personal item must survive. Validated claim erasure still
+                # revokes linked full sources under the existing privacy fence.
+                source_ids = ()
+                result['source_erasure_policy'] = 'claim_targets_only_for_partial_retention'
+            else:
+                source_ids = (selected_ids(_extract_json(response),
+                    {row['source_id'] for row in source_candidates}, authorized=is_memory_erasure_request(job.message))
+                    if source_candidates else ())
             result["accepted"] = len(proposals) + bool(source_ids)
             outcomes: list[str] = []
             if source_ids:
@@ -1887,8 +1929,12 @@ class MemoryEnrichmentScheduler:
                     memory_id=None if proposal.target_memory_key else target_id,
                     memory_key=proposal.target_memory_key or None,
                     scope_level=proposal.scope_level,
+                    **({"protected_memory_keys": proposal.protected_memory_keys}
+                       if proposal.protected_memory_keys else {}),
                 )
             else:
+                if proposal.protected_memory_keys:
+                    return "skipped"  # A legacy delete cannot enforce retained descendants.
                 legacy_delete = getattr(job.repository, "delete_memory", None)
                 if not callable(legacy_delete) or not isinstance(target_id, int):
                     return "skipped"

@@ -3308,12 +3308,16 @@ class SQLiteDB:
         memory_id: Optional[int] = None,
         memory_key: Optional[str] = None,
         scope_level: Optional[str] = None,
+        protected_memory_keys: tuple[str, ...] = (),
     ) -> int:
         """Physically erase a claim/key and every derived descendant.
 
         No claim text/reason/evidence is retained. Source identity-only revocation
         anchors prevent delayed tasks from restoring full source quotes.
         """
+        from db.erasure_protection import protected_keys
+
+        retained_keys = protected_keys(protected_memory_keys)
         if memory_id is None and not str(memory_key or "").strip():
             raise ValueError("ERASE requires memory_id or memory_key")
         levels = (scope_level,) if scope_level else None
@@ -3367,6 +3371,18 @@ class SQLiteDB:
                 found = {int(row[0]) for row in cursor.fetchall()} - erase_ids
                 erase_ids.update(found)
                 frontier = found
+            if erase_ids and retained_keys:
+                id_bound = ",".join("?" for _ in erase_ids)
+                key_bound = ",".join("?" for _ in retained_keys)
+                cursor.execute(
+                    f"SELECT id FROM character_memories WHERE id IN ({id_bound}) "
+                    f"AND memory_key IN ({key_bound}) LIMIT 1",
+                    [*erase_ids, *retained_keys],
+                )
+                if cursor.fetchone():
+                    from db.memory_claim_guard import MemoryClaimConflict
+
+                    raise MemoryClaimConflict('erasure would remove a retained logical memory')
             if erase_ids:
                 memory_source.run_sqlite(cursor, memory_source.revoke_plan(source_scope, erase_ids))
                 placeholders = ",".join("?" for _ in erase_ids)

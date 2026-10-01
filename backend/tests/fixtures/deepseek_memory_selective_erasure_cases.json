@@ -1,0 +1,93 @@
+{
+  "execution": {
+    "stage": "38",
+    "new_boundary": "specific affirmative erase target plus explicit retained personal memory sharing one original source",
+    "source_parent": "stage34-delivery-memory-fixed",
+    "replay_old_writes": false,
+    "replay_old_answers": false,
+    "replay_imports": false,
+    "production_fault": false
+  },
+  "knowledge_base": "榆影纸雕完整链路资料",
+  "documents": [
+    {
+      "title": "榆影工坊周日纸雕课程规则",
+      "content": "榆影工坊周日纸雕课程规则：上课地点是北岸榆影工坊三楼竹露教室，每周日下午两点四十分开始，四点十分结束。课程联系人是许苒，预约编号为YY-573-R。参加者须带护目镜和刻纸刀。普通雨天课程照常举办，只有红色暴雨预警时才停课。报名截止时间为周六上午十一点，必须收到书面确认才算预约成功。课程照常举办不代表任何具体用户已经报名或必须出门。这是合成工坊的规则。",
+      "category": "课程"
+    },
+    {
+      "title": "榆影工坊工具维修预约规则",
+      "content": "榆影工坊工具维修在周三上午进行，维修联系人是程溪，编号为WX-204，不是周日纸雕课程报名编号。护目镜镜片破损应更换，维修预约不能自动完成课程预约。这里只是合成维修说明，不是用户预约成功的回执。",
+      "category": "维修"
+    },
+    {
+      "title": "南岸竹影工坊绘画课规则",
+      "content": "南岸竹影工坊周日绘画课在一楼杏影画室上午十点开课，联系人是叶澄，编号ZY-882。它不是北岸榆影工坊，不是纸雕课程，不能将其编号和时间替代榆影纸雕课程规则。",
+      "category": "绘画"
+    }
+  ],
+  "search_queries": [],
+  "cases": [
+    {
+      "id": "initial_booking",
+      "message": "我本人今天先收到了北岸榆影工坊周日纸雕课的书面预约确认。我这一份确认书的私人回执编号是PB-681-Q，它只标识我的私人预约，不是公开课程编号。当时我的预约已经确认成功，但我还没有参加过这门课程，也没有出发。这是我本人的完整记录，请记住我的私人回执和当时已经确认、尚未参加、尚未出发的状态。",
+      "expected": []
+    },
+    {
+      "id": "booking_cancelled",
+      "message": "更新我本人的北岸榆影工坊周日纸雕课预约记录：我先前确实收到过私人回执PB-681-Q的书面预约确认。现在工坊已正式撤销我的这一次预约，私人回执PB-681-Q已经作废，我目前没有任何有效的书面预约确认。我至今仍没有参加过这门课程，也没有出发。撤销的只是我这一次私人预约，并不代表公开课程停课。这是在明确更正当前预约状态，请保留先前确认与后来撤销的发生顺序；我不是要求删除记忆。",
+      "expected": []
+    },
+    {
+      "id": "friend_confirmation",
+      "message": "我的朋友季澄本人刚收到北岸榆影工坊周日纸雕课的书面预约确认。季澄这一份确认书的私人回执编号是FJ-394-L，他的这次预约现在仍然有效。他尚未参加过这门课程，也没有出发。这是我转述朋友季澄本人那份预约的完整记录，只描述季澄，不是我本人的预约；我只是说话的人，不是这条记录中收到确认的人。请始终区分说话者与被描述的人。",
+      "expected": []
+    },
+    {
+      "id": "delete_course_keep_ink",
+      "message": "请从长期记忆中彻底删除我本人的海庭鹤林工坊纸版压印课预约确认。这份确认对应2026年12月5日周六的课程，私人回执编号MB-764-C，都是我本人此前提供的记录。我现在明确授权忘掉这份课程预约记录及它对应的可召回原话。另一方面，不要忘掉我对深蓝色油墨进行纸版压印的长期个人偏好。请保留深蓝色油墨进行纸版压印这项偏好，它是我以前明确提供并希望继续保留的个人记忆。两项信息以前出现在同一条原话中；请只删除课程的长期记忆，保留这项油墨偏好。聊天历史请完整保留，现实课程预约仍然有效，我还没有参加，也没有出发，没有联系工坊取消。同时请告诉我：删除课程的长期记忆，会取消现实预约吗？",
+      "expected": [
+        "交付",
+        "预约"
+      ]
+    }
+  ],
+  "history_template": {
+    "turn_count": 0,
+    "records_per_turn": 0,
+    "heading": "",
+    "line": "",
+    "reply": "",
+    "expanded_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+  },
+  "data_origin": {
+    "kind": "entirely_synthetic",
+    "author": "new Codex test fixture, not an imported user conversation",
+    "private_receipt": "PB-681-Q is an invented test identifier carried forward from the existing synthetic fixture",
+    "personal_statements": "invented role-play inputs for a new random authenticated account in a disposable database",
+    "public_documents": "three synthetic workshop documents; no real business records",
+    "real_user_data_used": false,
+    "credentials_in_model_payload": false,
+    "new_friend_record": "Newly invented synthetic friend 季澄 and receipt FJ-394-L; no real person or conversation imported."
+  },
+  "reuse_from": "stage34-delivery-memory-fixed",
+  "own_receipt": "PB-681-Q",
+  "friend_receipt": "FJ-394-L",
+  "attack_fields": [
+    "sourceMessageId"
+  ],
+  "baseline_current_intent_gate": false,
+  "course_memory_key": "event_海庭鹤林工坊纸版压印课预约确认",
+  "retained_memory_key": "preference_深蓝色油墨进行纸版压印",
+  "retained_read_message": "请用两句话概括我当前长期记忆中的纸版压印油墨个人偏好，并据此写一句下次做纸版压印时挑选油墨的提醒。请只依据我当前保留的长期记忆；本轮没有提供任何新的偏好。",
+  "qq_owner_prerequisite": {
+    "source_message_id": "stage34-delivery-memory-fixed-target",
+    "full_original_message": "我本人刚收到海庭鹤林工坊2026年12月5日周六纸版压印课的正式书面预约确认。这份确认书的私人回执编号是MB-764-C，我的这次预约现在仍然有效，尚未参加课程，也没有出发。这是我本人收到确认的完整记录，只描述我，不是朋友或其他人的预约。我喜欢深蓝色油墨进行纸版压印，这是我明确且长期的个人偏好。请准确保留课程、日期、本人、有效确认、回执编号、未参加未出发以及这项个人偏好。",
+    "memory_claim_keys": [
+      "preference_深蓝色油墨进行纸版压印",
+      "event_海庭鹤林工坊纸版压印课预约确认"
+    ],
+    "native_source_run": "stage34-delivery-memory-fixed",
+    "replay_source_calls": false
+  }
+}
