@@ -1,0 +1,102 @@
+{
+  "conditions": {
+    "storage_format": "legacy fact_ keys; trusted scoped original source IDs",
+    "history": "ablated after actual history loader",
+    "source_pool_recall": false,
+    "memory_writer": false,
+    "knowledge_base": false,
+    "provider": "openai_compat/deepseek-v4-pro",
+    "expected_values_are_not_in_model_input": true
+  },
+  "cases": [
+    {
+      "id": "profile",
+      "records": [
+        {
+          "id": "name",
+          "key": "fact_岚舟",
+          "source": "我叫岚舟。",
+          "quote": "我叫岚舟。"
+        },
+        {
+          "id": "origin",
+          "key": "fact_宣城",
+          "source": "我来自宣城。",
+          "quote": "我来自宣城。"
+        },
+        {
+          "id": "residence",
+          "key": "fact_丽水",
+          "source": "我目前住在丽水。",
+          "quote": "我目前住在丽水。"
+        }
+      ],
+      "query": "请用一句话核对我的个人资料：姓名、籍贯和居住地各是什么？只写当前个人资料，不做建议。",
+      "expected": {
+        "name": "岚舟",
+        "origin": "宣城",
+        "residence": "丽水"
+      }
+    },
+    {
+      "id": "revised",
+      "records": [
+        {
+          "id": "name",
+          "key": "fact_岚舟",
+          "source": "我叫岚舟。",
+          "quote": "我叫岚舟。"
+        },
+        {
+          "id": "origin",
+          "key": "fact_宣城",
+          "source": "我来自宣城。",
+          "quote": "我来自宣城。"
+        },
+        {
+          "id": "residence",
+          "key": "fact_丽水",
+          "source": "我目前住在丽水。",
+          "quote": "我目前住在丽水。"
+        },
+        {
+          "id": "updated",
+          "key": "fact_丽水",
+          "source": "我现在住在舟山。",
+          "quote": "我现在住在舟山。",
+          "supersedes": "residence"
+        }
+      ],
+      "query": "请用一句话核对我的个人资料：姓名、籍贯和居住地各是什么？只写当前个人资料，不做建议。",
+      "expected": {
+        "name": "岚舟",
+        "origin": "宣城",
+        "residence": "舟山",
+        "old_residence_not_current": "丽水"
+      }
+    },
+    {
+      "id": "hypothesis",
+      "records": [
+        {
+          "id": "name",
+          "key": "fact_岚舟",
+          "source": "我叫岚舟。",
+          "quote": "我叫岚舟。"
+        },
+        {
+          "id": "fiction",
+          "key": "fact_丽水",
+          "source": "假设我目前住在丽水，这是小说背景设定。场景是在讨论虚构人物，并不是在讲我的现实个人经历。场景是在讨论虚构人物，并不是在讲我的现实个人经历。场景是在讨论虚构人物，并不是在讲我的现实个人经历。场景是在讨论虚构人物，并不是在讲我的现实个人经历。场景是在讨论虚构人物，并不是在讲我的现实个人经历。场景是在讨论虚构人物，并不是在讲我的现实个人经历。场景是在讨论虚构人物，并不是在讲我的现实个人经历。场景是在讨论虚构人物，并不是在讲我的现实个人经历。场景是在讨论虚构人物，并不是在讲我的现实个人经历。场景是在讨论虚构人物，并不是在讲我的现实个人经历。场景是在讨论虚构人物，并不是在讲我的现实个人经历。场景是在讨论虚构人物，并不是在讲我的现实个人经历。场景是在讨论虚构人物，并不是在讲我的现实个人经历。场景是在讨论虚构人物，并不是在讲我的现实个人经历。场景是在讨论虚构人物，并不是在讲我的现实个人经历。场景是在讨论虚构人物，并不是在讲我的现实个人经历。场景是在讨论虚构人物，并不是在讲我的现实个人经历。场景是在讨论虚构人物，并不是在讲我的现实个人经历。场景是在讨论虚构人物，并不是在讲我的现实个人经历。场景是在讨论虚构人物，并不是在讲我的现实个人经历。场景是在讨论虚构人物，并不是在讲我的现实个人经历。场景是在讨论虚构人物，并不是在讲我的现实个人经历。场景是在讨论虚构人物，并不是在讲我的现实个人经历。场景是在讨论虚构人物，并不是在讲我的现实个人经历。场景是在讨论虚构人物，并不是在讲我的现实个人经历。这只是设想，并非我的真实住址。",
+          "quote": "我目前住在丽水"
+        }
+      ],
+      "query": "根据已保存的原话，说明我的姓名，以及能否确认我的实际居住地。请明确区分小说设想与本人真实信息。",
+      "expected": {
+        "name": "岚舟",
+        "residence": null,
+        "explanation": "Only a fictional hypothesis names 丽水; actual residence remains unknown."
+      }
+    }
+  ]
+}

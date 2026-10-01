@@ -834,6 +834,31 @@ class CharacterMemoryService:
                 limit=read_limit,
             )
         records = [r for r in records if not str(r.get("memory_key") or "").startswith("relationship:")]
+        # Resolve generic field labels only through authorized linked complete
+        # sources. A missing/capped source remains uncertain, never absent.
+        legacy_rows = [row for row in records
+                       if str(row.get("memory_key") or "").startswith("fact_")]
+        sources = {}
+        linked_reader = getattr(self._repo, "linked_sources", None)
+        trace['legacy_source_status'] = 'not_needed'
+        if legacy_rows and callable(linked_reader):
+            trace['legacy_source_status'] = 'available'
+            try:
+                ids = [int(row['id']) for row in legacy_rows if str(row.get('id', '')).isdigit()]
+                for start in range(0, len(ids), 100):
+                    linked = await linked_reader(character_id, user_scope, memory_ids=tuple(ids[start:start + 100]))
+                    for source in linked:
+                        if isinstance(source.get('body'), str):
+                            sources[str(source['source_message_id'])] = source
+            except Exception:
+                sources = {}
+                trace['legacy_source_status'] = 'retrieval_error'
+        elif legacy_rows:
+            trace['legacy_source_status'] = 'unsupported'
+        from character.legacy_field_projection import project_legacy_personal_record
+
+        records = [project_legacy_personal_record(row, sources) for row in records]
+        trace['legacy_projected_ids'] = [str(row['id']) for row in records if row.get('legacy_memory_key')]
         # A read view never rewrites stored endpoints or source evidence. This
         # must run before time filters; otherwise a guessed zero-width interval
         # has already erased the only retrievable observation.
@@ -863,6 +888,12 @@ class CharacterMemoryService:
                 field for field, key in PERSONAL_MEMORY_KEYS.items()
                 if key not in current_keys and (key in observation_keys or any(
                     field in AMBIGUOUS_MEMORY_KEYS.get(source_key, ()) for source_key in observation_keys)))
+            ambiguous_fields.update(
+                field for row in records
+                if row.get('temporal_mode') == 'observation'
+                and _is_current_record(row, now, include_pending=False)
+                for field, key in PERSONAL_MEMORY_KEYS.items()
+                if key not in current_keys and key in (row.get('legacy_field_keys') or ()))
             trace['ambiguous_fields'] = sorted(ambiguous_fields)
             for field in ambiguous_fields:
                 trace['field_presence'][field] = None

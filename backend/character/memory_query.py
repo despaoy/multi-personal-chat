@@ -93,7 +93,8 @@ class MemoryQueryPlan:
         if field == 'constraints':
             metadata = row.get('metadata') or {}
             return isinstance(metadata, dict) and bool(metadata.get('qualifiers'))
-        return str(row.get('memory_key') or '') in _FIELDS[field][1]
+        return (str(row.get('memory_key') or '') in _FIELDS[field][1]
+                or bool(set(row.get('legacy_field_keys') or ()) & set(_FIELDS[field][1])))
 
     def matched_fields(self, row: dict[str, Any]) -> tuple[str, ...]:
         return tuple(field for field in self.fields if self.matches(row, field))
