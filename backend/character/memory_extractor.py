@@ -90,7 +90,7 @@ _DISLIKE_PATTERNS = (
 # 稳定身份信息。每个类别使用固定 memory_key，用户后续修正时通过
 # 版本化替代旧值，保留证据与历史，而不是留下冲突的当前事实。
 _MAJOR_PATTERNS = (
-    re.compile(r"我的专业(?:是|为)(?P<subject>[^，。！？,!?]{1,30})"),
+    re.compile(r"我的(?:大学)?专业(?:是|为)(?P<subject>[^，。！？,!?]{1,30})"),
     re.compile(r"我(?:读|学)的是(?P<subject>[^，。！？,!?]{1,30})(?:专业)?"),
 )
 _STUDY_STAGE_PATTERNS = (
@@ -106,7 +106,10 @@ _RESIDENCE_PATTERNS = (
     # prevents discarding a trailing question/qualification.
     re.compile(r"^我(?:已经|刚刚|刚)?搬(?:家)?到(?P<subject>[^，。！？,!?]{1,30})了$"),
 )
-_ORIGIN_PATTERNS = (re.compile(r"我来自(?P<subject>[^，。！？,!?]{1,30})"),)
+_ORIGIN_PATTERNS = (
+    re.compile(r"我来自(?P<subject>[^，。！？,!?]{1,30})"),
+    re.compile(r"我(?:的)?(?:老家|故乡|家乡)(?:在|是)(?P<subject>[^，。！？,!?]{1,30})"),
+)
 _WORK_PATTERNS = (re.compile(r"我(?:目前|现在)?在(?P<subject>[^，。！？,!?]{1,30})(?:工作|上班)"),)
 
 # 持续目标不与永久身份混为一类；goal_* 允许并存多个目标。
@@ -761,3 +764,67 @@ def _truncate(text: str, max_chars: int) -> str:
     if len(text) <= max_chars:
         return text
     return text[: max_chars - 1].rstrip() + "…"
+
+
+
+def complete_self_assertions(message: str, *, reference_time: datetime | None = None) -> tuple[ExtractedMemory, ...]:
+    """Understand every source clause; do not borrow authority from a label.
+
+    This read parser has no four-item write cap. Inherited subjects are valid
+    only inside the existing coordinated self grammar; unparsed suffixes,
+    discarded sentences and qualifications invalidate complete-source proof.
+    Original clause evidence remains available to bind a clipped claim quote.
+    """
+    from character.memory_request import memory_statement_body
+    from character.temporal_expression import source_temporal_spans
+
+    statement = memory_statement_body(message)
+    if source_temporal_spans(statement):
+        return ()
+    sentences = _asserted_sentences(statement)
+    def surface(text):
+        return re.sub(r'[\s，,。；;！!]', '', text)
+
+    if not sentences or surface(''.join(sentences)) != surface(statement):
+        return ()
+    grammar = (*_NAME_PATTERNS, *_MAJOR_PATTERNS, *_STUDY_STAGE_PATTERNS,
+               *_RESIDENCE_PATTERNS, *_ORIGIN_PATTERNS, *_WORK_PATTERNS,
+               *_PREFERENCE_PATTERNS, *_DISLIKE_PATTERNS)
+    results = []
+    for sentence in sentences:
+        if re.fullmatch(r'(?:这些|这[一二三四五六七八九十\d]+项)(?:个人)?(?:资料|信息)'
+                        r'(?:都)?(?:是|属于)我(?:本人|自己)?(?:的)?', sentence.strip().rstrip('。；;！!')):
+            continue  # A scope confirmation supplies no new field/value.
+        control = re.fullmatch(r'只更新(?:目前|现在|当前)?(居住地|现居地|住址|专业|姓名|名字|籍贯|老家|工作单位|年级)(?:记录)?',
+                               sentence.strip().rstrip('。；;！!'))
+        if control:
+            fields = {'居住地':'user_residence','现居地':'user_residence','住址':'user_residence',
+                      '专业':'user_major','姓名':'user_name','名字':'user_name','籍贯':'user_origin',
+                      '老家':'user_origin','工作单位':'user_workplace','年级':'user_study_stage'}
+            if not any(item.memory_key == fields[control[1]] for item in results):
+                return ()
+            continue  # Fully parsed update scope, never a field/value.
+        correction = _contrastive_slot_memory(sentence)
+        if correction is not None:
+            results.append(correction)
+            continue
+        view = _resolve_coordinated_self_subjects(sentence)
+        parts = re.split(r'([，,])', view)
+        carry_self = bool(results)
+        for index in range(0, len(parts), 2):
+            clause = parts[index].strip().rstrip('。；;！!')
+            unchanged = re.fullmatch(r'(老家|故乡|家乡|(?:大学)?专业)仍(在|是|为)([\w· -]{1,30})', clause)
+            if carry_self and unchanged:
+                parts[index] = '我的' + unchanged[1] + unchanged[2] + unchanged[3]
+                clause = parts[index]
+            carry_self = clause.startswith('我') and any(pattern.fullmatch(clause) for pattern in grammar)
+        view = _resolve_coordinated_self_subjects(''.join(parts))
+        for raw, normalized in zip(re.split(r'[，,]', sentence), re.split(r'[，,]', view), strict=True):
+            clause = normalized.strip().rstrip('。；;！!')
+            if not clause.startswith('我') or not any(pattern.fullmatch(clause) for pattern in grammar):
+                return ()
+            items = extract_memories(clause, reference_time=reference_time)
+            if len(items) != 1 or items[0].qualifiers or items[0].memory_type != 'user_fact':
+                return ()
+            results.append(replace(items[0], evidence=raw.strip()))
+    return tuple(results)

@@ -834,35 +834,52 @@ class CharacterMemoryService:
                 limit=read_limit,
             )
         records = [r for r in records if not str(r.get("memory_key") or "").startswith("relationship:")]
-        # Resolve generic field labels only through authorized linked complete
-        # sources. A missing/capped source remains uncertain, never absent.
+        # Read source authority through actual claim links, in bounded batches.
+        # Keep associations: a citation on a different row cannot grant proof.
         legacy_rows = [row for row in records
                        if str(row.get("memory_key") or "").startswith("fact_")]
-        sources = {}
+        semantic_rows = [row for row in records
+                         if isinstance(row.get('metadata'), dict)
+                         and isinstance(row['metadata'].get('temporal_provenance'), dict)
+                         and row['metadata']['temporal_provenance'].get('producer') == 'semantic_memory'
+                         and str(row.get('id', '')).isdigit()]
+        semantic_ids = {str(row['id']) for row in semantic_rows}
+        claim_sources = {}
         linked_reader = getattr(self._repo, "linked_sources", None)
         trace['legacy_source_status'] = 'not_needed'
-        if legacy_rows and callable(linked_reader):
-            trace['legacy_source_status'] = 'available'
+        trace['temporal_source_status'] = 'not_needed'
+        if (legacy_rows or semantic_rows) and callable(linked_reader):
+            for name, rows in (('legacy_source_status', legacy_rows), ('temporal_source_status', semantic_rows)):
+                if rows:
+                    trace[name] = 'available'
             try:
-                ids = [int(row['id']) for row in legacy_rows if str(row.get('id', '')).isdigit()]
+                ids = list(dict.fromkeys(int(row['id']) for row in (*legacy_rows, *semantic_rows)
+                                         if str(row.get('id', '')).isdigit()))
                 for start in range(0, len(ids), 100):
                     linked = await linked_reader(character_id, user_scope, memory_ids=tuple(ids[start:start + 100]))
                     for source in linked:
-                        if isinstance(source.get('body'), str):
-                            sources[str(source['source_message_id'])] = source
+                        if isinstance(source.get('body'), str) and str(source.get('memory_id', '')).isdigit():
+                            claim_sources.setdefault(str(source['memory_id']), {})[str(source['source_message_id'])] = source
             except Exception:
-                sources = {}
-                trace['legacy_source_status'] = 'retrieval_error'
-        elif legacy_rows:
-            trace['legacy_source_status'] = 'unsupported'
+                claim_sources = {}
+                if legacy_rows:
+                    trace['legacy_source_status'] = 'retrieval_error'
+                if semantic_rows:
+                    trace['temporal_source_status'] = 'retrieval_error'
+        elif legacy_rows or semantic_rows:
+            if legacy_rows:
+                trace['legacy_source_status'] = 'unsupported'
+            if semantic_rows:
+                trace['temporal_source_status'] = 'unsupported'
         from character.legacy_field_projection import project_legacy_personal_record
 
-        records = [project_legacy_personal_record(row, sources) for row in records]
+        records = [project_legacy_personal_record(row, claim_sources.get(str(row['id']), {})) for row in records]
         trace['legacy_projected_ids'] = [str(row['id']) for row in records if row.get('legacy_memory_key')]
         # A read view never rewrites stored endpoints or source evidence. This
         # must run before time filters; otherwise a guessed zero-width interval
         # has already erased the only retrievable observation.
-        records = [project_temporal_record(row) for row in records]
+        records = [project_temporal_record(row, claim_sources.get(str(row['id']), {})
+                                           if str(row.get('id')) in semantic_ids else None) for row in records]
         trace['temporal_views'] = {
             mode: sum(row.get('temporal_mode', 'fact') == mode for row in records)
             for mode in ('fact', 'asserted_state', 'observation')

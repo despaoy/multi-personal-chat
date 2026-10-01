@@ -2,7 +2,7 @@
 
 import re
 
-_LEADING_REMEMBER = re.compile(r'^(?:请)?(?:记住|记下)(?:一下)?[，,：:\s]*')
+_LEADING_REMEMBER = re.compile(r'^(?:请)?(?:跨会话)?(?:记住|记下)(?:一下)?[，,：:\s]*')
 _LEADING_CORRECTION = re.compile(r'^(?:更正|纠正)(?:一下)?[，,：:]\s*')
 
 

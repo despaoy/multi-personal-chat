@@ -1,0 +1,189 @@
+{
+  "conditions": {
+    "history": "ablated after actual history loader",
+    "source_pool_recall": false,
+    "memory_writer": false,
+    "knowledge_base": false,
+    "provider": "openai_compat/deepseek-v4-pro",
+    "same_trusted_source_shared_by_original_profile_claims": true,
+    "expected_values_are_not_in_model_input": true
+  },
+  "cases": [
+    {
+      "id": "complete-profile",
+      "records": [
+        {
+          "id": "name",
+          "source_id": "shared-profile",
+          "key": "user_name",
+          "source": "请跨会话记住，我叫岚舟，我的老家在宣城，目前住在丽水，大学专业是环境工程。这四项资料都是我本人的。",
+          "quote": "我叫岚舟",
+          "metadata": {
+            "temporal_provenance": {
+              "version": 1,
+              "producer": "semantic_memory",
+              "validity_authority": "unverified"
+            }
+          },
+          "proposed_zero_width": true
+        },
+        {
+          "id": "origin",
+          "source_id": "shared-profile",
+          "key": "user_origin",
+          "source": "请跨会话记住，我叫岚舟，我的老家在宣城，目前住在丽水，大学专业是环境工程。这四项资料都是我本人的。",
+          "quote": "我的老家在宣城",
+          "metadata": {
+            "temporal_provenance": {
+              "version": 1,
+              "producer": "semantic_memory",
+              "validity_authority": "unverified"
+            }
+          },
+          "proposed_zero_width": true
+        },
+        {
+          "id": "major",
+          "source_id": "shared-profile",
+          "key": "user_major",
+          "source": "请跨会话记住，我叫岚舟，我的老家在宣城，目前住在丽水，大学专业是环境工程。这四项资料都是我本人的。",
+          "quote": "大学专业是环境工程",
+          "metadata": {
+            "temporal_provenance": {
+              "version": 1,
+              "producer": "semantic_memory",
+              "validity_authority": "unverified"
+            }
+          },
+          "proposed_zero_width": true
+        },
+        {
+          "id": "old-residence",
+          "source_id": "shared-profile",
+          "key": "user_residence",
+          "source": "请跨会话记住，我叫岚舟，我的老家在宣城，目前住在丽水，大学专业是环境工程。这四项资料都是我本人的。",
+          "quote": "目前住在丽水",
+          "metadata": {
+            "temporal_provenance": {
+              "version": 1,
+              "producer": "semantic_memory",
+              "validity_authority": "unverified"
+            }
+          },
+          "proposed_zero_width": true
+        },
+        {
+          "id": "residence",
+          "key": "user_residence",
+          "source": "我目前住在舟山，已经不住丽水了。",
+          "quote": "我目前住在舟山，已经不住丽水了。",
+          "metadata": {
+            "temporal_provenance": {
+              "version": 1,
+              "producer": "semantic_memory",
+              "validity_authority": "unverified"
+            }
+          },
+          "proposed_zero_width": true,
+          "supersedes": "old-residence"
+        }
+      ],
+      "status_query": "你保存了我的姓名、籍贯、现居地和专业吗？",
+      "query": "请用一句话核对我的当前个人资料：姓名、籍贯、现居地和大学专业各是什么？只写当前本人资料，不做建议。",
+      "expected": {
+        "name": "岚舟",
+        "origin": "宣城",
+        "residence": "舟山",
+        "major": "环境工程"
+      }
+    },
+    {
+      "id": "complete-profile-with-controls",
+      "records": [
+        {
+          "id": "name",
+          "source_id": "shared-profile",
+          "key": "user_name",
+          "source": "请跨会话记住，我叫岚舟，我的老家在宣城，目前住在丽水，大学专业是环境工程。这四项资料都是我本人的。",
+          "quote": "我叫岚舟",
+          "metadata": {
+            "temporal_provenance": {
+              "version": 1,
+              "producer": "semantic_memory",
+              "validity_authority": "unverified"
+            }
+          },
+          "proposed_zero_width": true
+        },
+        {
+          "id": "origin",
+          "source_id": "shared-profile",
+          "key": "user_origin",
+          "source": "请跨会话记住，我叫岚舟，我的老家在宣城，目前住在丽水，大学专业是环境工程。这四项资料都是我本人的。",
+          "quote": "我的老家在宣城",
+          "metadata": {
+            "temporal_provenance": {
+              "version": 1,
+              "producer": "semantic_memory",
+              "validity_authority": "unverified"
+            }
+          },
+          "proposed_zero_width": true
+        },
+        {
+          "id": "major",
+          "source_id": "shared-profile",
+          "key": "user_major",
+          "source": "请跨会话记住，我叫岚舟，我的老家在宣城，目前住在丽水，大学专业是环境工程。这四项资料都是我本人的。",
+          "quote": "大学专业是环境工程",
+          "metadata": {
+            "temporal_provenance": {
+              "version": 1,
+              "producer": "semantic_memory",
+              "validity_authority": "unverified"
+            }
+          },
+          "proposed_zero_width": true
+        },
+        {
+          "id": "old-residence",
+          "source_id": "shared-profile",
+          "key": "user_residence",
+          "source": "请跨会话记住，我叫岚舟，我的老家在宣城，目前住在丽水，大学专业是环境工程。这四项资料都是我本人的。",
+          "quote": "目前住在丽水",
+          "metadata": {
+            "temporal_provenance": {
+              "version": 1,
+              "producer": "semantic_memory",
+              "validity_authority": "unverified"
+            }
+          },
+          "proposed_zero_width": true
+        },
+        {
+          "id": "residence",
+          "key": "user_residence",
+          "source": "请跨会话记住，我目前住在舟山，已经不住丽水了。老家仍是宣城，大学专业仍是环境工程。只更新目前居住地。",
+          "quote": "我目前住在舟山，已经不住丽水了",
+          "metadata": {
+            "temporal_provenance": {
+              "version": 1,
+              "producer": "semantic_memory",
+              "validity_authority": "unverified"
+            }
+          },
+          "proposed_zero_width": true,
+          "supersedes": "old-residence"
+        }
+      ],
+      "status_query": "你保存了我的姓名、籍贯、现居地和专业吗？",
+      "query": "请用一句话核对我的当前个人资料：姓名、籍贯、现居地和大学专业各是什么？只写当前本人资料，不做建议。",
+      "expected": {
+        "name": "岚舟",
+        "origin": "宣城",
+        "residence": "舟山",
+        "major": "环境工程"
+      }
+    }
+  ]
+}

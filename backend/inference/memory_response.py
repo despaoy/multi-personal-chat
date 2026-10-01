@@ -12,7 +12,7 @@ import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from character.memory_extractor import extract_memories
+from character.memory_extractor import complete_self_assertions, extract_memories
 from character.memory_query import lookup_fields as lookup_fields
 from character.memory_query import storage_fields as storage_fields
 
@@ -46,8 +46,10 @@ def _value(item: MemoryItem, field: str) -> str | None:
     for evidence in item.evidence:
         if re.fullmatch(r'(?:现在|目前)(?:住在[\w· -]{1,30}|在[\w· -]{1,30}工作)[。]?', evidence):
             evidence = '我' + evidence
-        if any(f.memory_key == key and f.content == item.content and not f.qualifiers
-               for f in extract_memories(evidence)):
+        facts = (complete_self_assertions(evidence) if item.temporal_mode == 'asserted_state'
+                 else extract_memories(evidence))
+        values = {f.content for f in facts if f.memory_key == key and not f.qualifiers}
+        if values == {item.content}:
             return match.group(1)
     return None
 

@@ -188,7 +188,7 @@ async def main(args):
                 await repo.capture_source(
                     "tsukiyashiro_kisaki",
                     scope,
-                    source_message_id=case["id"] + "-" + record["id"],
+                    source_message_id=case["id"] + "-" + record.get("source_id", record["id"]),
                     body=source,
                     observed_at=at,
                 )
@@ -200,7 +200,7 @@ async def main(args):
                     memory_key=record["key"],
                     evidence=(record["quote"],),
                     confidence=0.98,
-                    source_message_id=case["id"] + "-" + record["id"],
+                    source_message_id=case["id"] + "-" + record.get("source_id", record["id"]),
                     relation_type="SUPERSEDE" if previous else "ADD",
                     supersedes_memory_id=previous,
                     valid_from=(at + timedelta(microseconds=len(ids))).isoformat(),
@@ -216,7 +216,7 @@ async def main(args):
             status_response = await client.post(
                 "/api/generate",
                 json=dict(
-                    message="你保存了我的姓名和居住地吗？",
+                    message=case.get("status_query", "你保存了我的姓名和居住地吗？"),
                     characterId="tsukiyashiro_kisaki",
                     loraId="default",
                     sessionId=args.run_label + "-" + case["id"] + "-status",
@@ -282,7 +282,7 @@ async def main(args):
             checks[case["id"] + "_expected_values"] = all(
                 value in record["response"]["reply"]
                 for field, value in expected.items()
-                if field in {"name", "origin", "residence"} and value is not None
+                if field in {"name", "origin", "residence", "major", "workplace", "study_stage"} and value is not None
             )
             if expected["residence"] is None:
                 source = case["records"][1]["source"]
@@ -296,7 +296,9 @@ async def main(args):
                     re.search("无法确认|不能确认|无法确定|不能确定", record["response"]["reply"])
                 )
             else:
-                checks[case["id"] + "_field_presence"] = all(fields[f] is True for f in ("name", "origin", "residence"))
+                checks[case["id"] + "_field_presence"] = all(
+                    fields[f] is True for f, value in expected.items() if f in fields and value is not None
+                )
     final = dict(
         baseline_reader=args.baseline_reader,
         cases=results,

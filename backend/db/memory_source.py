@@ -222,11 +222,11 @@ def linked_read_plan(scope, memory_ids, *, limit=100):
         return []
     bound = {f"memory{i}": item for i, item in enumerate(ids)}
     placeholders = ",".join(":" + key for key in bound)
-    rows = yield ("SELECT DISTINCT s.source_message_id, s.observed_at, s.body FROM memory_source_links l "
+    rows = yield ("SELECT DISTINCT l.memory_id, s.source_message_id, s.observed_at, s.body FROM memory_source_links l "
                   "JOIN memory_sources s ON s.source_key = l.source_key "
                   f"WHERE l.memory_id IN ({placeholders}) AND s.scope_key = :scope_key AND s.state = 'recorded' "
                   "AND s.observed_at > COALESCE((SELECT revoked_before FROM memory_source_fences "
-                  "WHERE owner_key = :owner_key), '') ORDER BY s.observed_at DESC, s.source_message_id LIMIT :limit",
+                  "WHERE owner_key = :owner_key), '') ORDER BY s.observed_at DESC, s.source_message_id, l.memory_id LIMIT :limit",
                   dict(scope, **bound, limit=limit))
     return rows
 
