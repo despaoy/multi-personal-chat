@@ -233,31 +233,39 @@ def isolated_probe_paths(root, run_label, api_key_file):
 async def main(args):
     from evaluation.conversation_source_probe import verify_cluster
 
-    if sum((args.window_boundary, args.citation_precision, args.private_public_citations, args.literal_citations, args.memory_correction, args.memory_history, args.memory_owner)) > 1:
+    if sum((args.window_boundary, args.citation_precision, args.private_public_citations, args.literal_citations, args.memory_correction, args.memory_history, args.memory_owner, args.memory_friend)) > 1:
         raise ValueError("Choose one specific probe scenario")
 
-    reuse_native_fixture = args.memory_history or args.memory_owner
+    if args.enable_source_recall and not args.memory_friend:
+        raise ValueError("The explicit source-recall variant requires the friend-only scenario")
+    source_recall_enabled = args.memory_owner or (args.memory_friend and args.enable_source_recall)
+    reuse_native_fixture = args.memory_history or args.memory_owner or args.memory_friend
     cold_memory = args.memory_correction or reuse_native_fixture
 
     ROOT, OUT, key_path = isolated_probe_paths(args.root, args.run_label, args.api_key_file)
     bootstrap_url = "postgresql+asyncpg://boot@/postgres?host=" + str(ROOT / "socket") + "&port=25433"
     await verify_cluster(bootstrap_url, ROOT / "data")
     database_name = "stage3_" + args.run_label.replace("-", "_")
-    source_label = "stage20-cold-fixed"
-    source_database = "stage3_stage20_cold_fixed"
+    source_label = "stage22-owner-only" if args.memory_friend else "stage20-cold-fixed"
+    source_account_username = "stage20-cold-fixed"
+    source_database = "stage3_" + source_label.replace("-", "_")
     if reuse_native_fixture:
         source_proof = json.loads((ROOT / source_label / "result.json").read_text())
         if not all(source_proof["checks"].values()):
             raise ValueError("Historical reuse requires the verified native source fixture")
     OUT.mkdir(exist_ok=False)
     fixture = json.loads(
-        (Path(__file__).resolve().parents[1] / "tests/fixtures" / ("deepseek_memory_owner_cases.json" if args.memory_owner else "deepseek_memory_history_cases.json" if args.memory_history else "deepseek_memory_correction_cases.json" if args.memory_correction else "deepseek_literal_citation_cases.json" if args.literal_citations else "deepseek_private_public_citation_cases.json" if args.private_public_citations else "deepseek_citation_precision_cases.json" if args.citation_precision else "deepseek_mixed_window_boundary.json" if args.window_boundary else "deepseek_mixed_long_context_cases.json")).read_text()
+        (Path(__file__).resolve().parents[1] / "tests/fixtures" / ("deepseek_memory_friend_cases.json" if args.memory_friend else "deepseek_memory_owner_cases.json" if args.memory_owner else "deepseek_memory_history_cases.json" if args.memory_history else "deepseek_memory_correction_cases.json" if args.memory_correction else "deepseek_literal_citation_cases.json" if args.literal_citations else "deepseek_private_public_citation_cases.json" if args.private_public_citations else "deepseek_citation_precision_cases.json" if args.citation_precision else "deepseek_mixed_window_boundary.json" if args.window_boundary else "deepseek_mixed_long_context_cases.json")).read_text()
     )
     fixture["history_turns"] = expand_history(fixture)
     cases = fixture["cases"]
     executed_cases = cases[-(2 if args.memory_owner else 1):] if reuse_native_fixture else cases
-    if reuse_native_fixture and source_proof["cases"][:2] != cases[:2]:
+    prerequisite_count = 3 if args.memory_friend else 2
+    if reuse_native_fixture and source_proof["cases"][:prerequisite_count] != cases[:prerequisite_count]:
         raise ValueError("Historical reuse requires the same complete original source statements")
+    if args.memory_friend and not any(
+            row["body"] == cases[-2]["message"] for row in source_proof.get("sources_before_question", [])):
+        raise ValueError("Friend reuse requires the complete native persisted source")
     key = key_path.read_text().strip()
     os.environ.update(
         DATABASE_URL="postgresql+asyncpg://boot@/" + database_name + "?host=" + str(ROOT / "socket") + "&port=25433",
@@ -288,7 +296,7 @@ async def main(args):
         MEMORY_LLM_MODEL="deepseek-v4-pro",
         MEMORY_LLM_API_KEY=key,
         MEMORY_LLM_CONTEXT_WINDOW_TOKENS="65536",
-        MEMORY_SOURCE_RECALL_ENABLED="true" if args.memory_owner else "false",
+        MEMORY_SOURCE_RECALL_ENABLED="true" if source_recall_enabled else "false",
         DYNAMIC_CONTEXT_SEMANTIC_REVIEW_ENABLED="true",
         DYNAMIC_CONTEXT_SEMANTIC_REVIEW_TIMEOUT_SECONDS="30",
         CONTEXTUAL_MEMORY_SELECTION_ENABLED="true",
@@ -454,14 +462,14 @@ async def main(args):
         provider="native_openai_compat",
         transport="authenticated_ASGI",
         source_ablation=False,
-        source_mode=dict(test_setting=args.memory_owner, controlled_variant=args.memory_owner, production_setting_not_changed=True),
+        source_mode=dict(test_setting=source_recall_enabled, controlled_variant=source_recall_enabled, production_setting_not_changed=True),
         rag_enabled=True,
         documents=[],
         searches=[],
         retrieval_diagnostics=retrieval_diagnostics,
         cold_history_diagnostics=cold_history_diagnostics,
         candidate_diagnostics=candidate_diagnostics,
-        controlled_ablation=dict(history_ablation_enabled=cold_memory, raw_source_recall_enabled=args.memory_owner),
+        controlled_ablation=dict(history_ablation_enabled=cold_memory, raw_source_recall_enabled=source_recall_enabled),
     )
     password = secrets.token_urlsafe(24)
     if reuse_native_fixture:
@@ -473,9 +481,9 @@ async def main(args):
         try:
             assert await connection.fetchval("SHOW data_directory") == str(ROOT / "data")
             row = await connection.fetchrow("SELECT id, username FROM users WHERE id=1")
-            assert row["username"] == source_label
+            assert row["username"] == source_account_username
             password_hash = await asyncio.to_thread(_hash_password, password)
-            changed = await connection.fetchval("UPDATE users SET password_hash=$1 WHERE id=1 AND username=$2 RETURNING id", password_hash, source_label)
+            changed = await connection.fetchval("UPDATE users SET password_hash=$1 WHERE id=1 AND username=$2 RETURNING id", password_hash, source_account_username)
             assert changed == 1
         finally:
             await connection.close()
@@ -493,7 +501,7 @@ async def main(args):
             ) as client,
         ):
             if reuse_native_fixture:
-                login = await client.post("/api/auth/login", json=dict(username=source_label, password=password))
+                login = await client.post("/api/auth/login", json=dict(username=source_account_username, password=password))
                 me = await client.get("/api/auth/me")
                 proof["auth_statuses"] = [login.status_code, me.status_code]
                 assert proof["auth_statuses"] == [200, 200]
@@ -536,7 +544,7 @@ async def main(args):
                     proof["claims_before_question"] = db.list_character_memory_claims(
                         "tsukiyashiro_kisaki", "web", "web-character", identity, "private", identity,
                         limit=None, include_inactive=True)
-                    if args.memory_owner:
+                    if args.memory_owner or args.memory_friend:
                         proof["sources_before_question"] = db.list_memory_sources(
                             "tsukiyashiro_kisaki", "web", "web-character", identity, "private", identity, limit=100)
                     (OUT / "pre-question.json").write_text(json.dumps(proof, ensure_ascii=False, indent=2))
@@ -626,7 +634,9 @@ async def main(args):
                 all(v in wire for v in case["knowledge_expected"]) for wire in wires
             )
         if cold_memory:
-            if args.memory_owner:
+            if args.memory_friend:
+                from evaluation.memory_friend_audit import audit_memory_friend_wire as audit_wire
+            elif args.memory_owner:
                 from evaluation.memory_owner_audit import audit_memory_owner_wire as audit_wire
             elif args.memory_history:
                 from evaluation.memory_history_audit import audit_memory_history_wire as audit_wire
@@ -654,7 +664,7 @@ async def main(args):
         proof["checks"] = checks
         proof["controlled_ablation"] = dict(
             history_ablation_enabled=cold_memory,
-            raw_source_recall_enabled=args.memory_owner,
+            raw_source_recall_enabled=source_recall_enabled,
             loaded_history_count=len(prepared_diagnostics[-1]["history"]),
             scope="only " + cases[-1]["id"] + "; stored history observed unchanged; no model messages reconstructed" if cold_memory else "none",
         )
@@ -690,6 +700,8 @@ if __name__ == "__main__":
     parser.add_argument("--memory-correction", action="store_true")
     parser.add_argument("--memory-history", action="store_true")
     parser.add_argument("--memory-owner", action="store_true")
+    parser.add_argument("--memory-friend", action="store_true")
+    parser.add_argument("--enable-source-recall", action="store_true")
     parser.add_argument("--root", required=True, type=Path)
     parser.add_argument("--run-label", required=True)
     parser.add_argument("--api-key-file", required=True, type=Path)
