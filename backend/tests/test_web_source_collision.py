@@ -18,7 +18,7 @@ def service(monkeypatch, status="new", *, read_error=None):
     handler = AsyncMock(return_value='allowed')
     monkeypatch.setattr(generate, '_generate_reply_impl', handler)
     reader = Mock(return_value=status, side_effect=read_error)
-    database = SimpleNamespace(memory_source_admission=reader)
+    database = SimpleNamespace(memory_source_admission=reader, reserve_memory_source=Mock(return_value={"status": "pending", "observed_at": "2026-10-01T00:00:00+00:00"}))
     return generate._build_chat_generation_service(None, message_db=database), handler, reader
 
 

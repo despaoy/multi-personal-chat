@@ -88,6 +88,7 @@ class TurnInput:
     conversation_type: str
     # 调用方（bot/前端）自带的现场历史；非空时优先于数据库历史
     history: tuple[dict[str, str], ...] = ()
+    received_at: datetime | None = None
 
 
 @dataclass(frozen=True)
@@ -214,7 +215,7 @@ class CharacterContextService:
             sender_id=turn.sender_id, conversation_id=turn.conversation_id,
             conversation_type=turn.conversation_type)
         await asyncio.to_thread(self._profiles.get_profile, character_id)
-        received_at = datetime.now(timezone.utc)
+        received_at = turn.received_at or datetime.now(timezone.utc)
         history = tuple(turn.history) or tuple(await self._load_history(turn, user_scope, character_id))
         receipt = await get_memory_enrichment_scheduler().schedule_and_wait(
             repository=self._memory_repo, character_id=character_id, user_scope=user_scope,
@@ -236,7 +237,7 @@ class CharacterContextService:
         任何用户范围字段非法都会抛 ValueError（调用方应降级为
         无角色上下文的旧行为，而不是让整条消息失败）。
         """
-        received_at = datetime.now(timezone.utc)
+        received_at = turn.received_at or datetime.now(timezone.utc)
         user_scope = build_user_scope(
             platform=turn.platform,
             adapter=turn.adapter,

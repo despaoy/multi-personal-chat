@@ -717,6 +717,7 @@ class SQLiteDB:
         self._ensure_character_memory_claim_schema(cursor)
         for statement in memory_source.SCHEMA:
             cursor.execute(statement)
+        self._ensure_column(cursor, "memory_sources", "body_digest", "TEXT")
 
         # 叙事分支隔离：分支元数据、分支事实断言、分支会话状态。
         # 与 alembic 009_narrative_branches 保持一致；此处为开发库幂等兜底。
@@ -3404,6 +3405,22 @@ class SQLiteDB:
         try:
             cursor.execute("BEGIN IMMEDIATE")
             result = memory_source.run_sqlite(cursor, memory_source.capture_plan(identity, body, observed_at))
+            conn.commit()
+            return result
+        except Exception:
+            conn.rollback()
+            raise
+
+    def reserve_memory_source(self, character_id, platform, adapter, sender_id,
+                              conversation_type, conversation_id, *, source_message_id, body, observed_at):
+        scope = memory_source.source_scope(
+            character_id, platform, adapter, sender_id, conversation_type, conversation_id)
+        identity = memory_source.source_identity(scope, source_message_id)
+        conn = self._get_connection()
+        try:
+            cursor = conn.cursor()
+            cursor.execute("BEGIN IMMEDIATE")
+            result = memory_source.run_sqlite(cursor, memory_source.reserve_plan(identity, body, observed_at))
             conn.commit()
             return result
         except Exception:

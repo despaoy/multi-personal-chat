@@ -7,6 +7,7 @@ No text is duplicated on claims, and no chat-history fallback is provided.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 from datetime import datetime, timezone
 
@@ -19,7 +20,7 @@ SCHEMA = (
     """CREATE TABLE IF NOT EXISTS memory_sources (
         source_key TEXT PRIMARY KEY, owner_key TEXT NOT NULL, scope_key TEXT NOT NULL,
         source_message_id TEXT NOT NULL, observed_at TEXT, body TEXT,
-        state TEXT NOT NULL CHECK (state IN ('pending', 'recorded', 'revoked')),
+        body_digest TEXT, state TEXT NOT NULL CHECK (state IN ('pending', 'recorded', 'revoked')),
         CHECK ((state = 'recorded' AND body IS NOT NULL AND observed_at IS NOT NULL)
             OR (state <> 'recorded' AND body IS NULL)))""",
     """CREATE INDEX IF NOT EXISTS idx_memory_sources_scope
@@ -104,15 +105,21 @@ def admission_plan(identity, body):
     """
     if not isinstance(body, str) or not body.strip():
         raise ValueError("Complete source text is required")
-    rows = yield ("SELECT state, observed_at, body = :body AS body_matches, "
+    rows = yield ("SELECT state, observed_at, body_digest, body = :body AS body_matches, "
                   "(SELECT revoked_before FROM memory_source_fences WHERE owner_key = :owner_key) AS revoked_before "
                   "FROM memory_sources WHERE source_key = :source_key AND scope_key = :scope_key AND owner_key = :owner_key",
                   dict(identity, body=body))
     if not rows:
         return "new"
     row = rows[0]
-    if row["state"] in {"revoked", "pending"}:
-        return row["state"]
+    if row["state"] == "revoked":
+        return "revoked"
+    if row["state"] == "pending":
+        if row["observed_at"] and row["observed_at"] <= (row["revoked_before"] or ""):
+            return "stale"
+        if row["body_digest"] and row["body_digest"] != hashlib.sha256(body.encode()).hexdigest():
+            return "conflict"
+        return "pending"
     if row["state"] != "recorded":
         raise ValueError("Unsupported source state")
     if row["observed_at"] <= (row["revoked_before"] or ""):
@@ -128,6 +135,30 @@ def lock_owner(scope, *, postgres=False):
     return rows[0]["revoked_before"]
 
 
+def reserve_plan(identity, body, observed_at, *, postgres=False):
+    """Atomically bind a current message identity before model admission.
+
+    Pending bindings contain a digest and trusted receipt, never speech.
+    Same-body retries reuse the first receipt; capture and erasure share locks.
+    """
+    stamp = utc_stamp(observed_at)
+    fence = yield from lock_owner(identity, postgres=postgres)
+    if stamp <= fence:
+        return dict(status="stale", observed_at=None)
+    status = yield from admission_plan(identity, body)
+    if status not in {"new", "pending"}:
+        return dict(status=status, observed_at=None)
+    params = dict(identity, body_digest=hashlib.sha256(body.encode()).hexdigest(), observed_at=stamp)
+    yield ("INSERT INTO memory_sources "
+           "(source_key, owner_key, scope_key, source_message_id, body_digest, observed_at, state) "
+           "VALUES (:source_key, :owner_key, :scope_key, :source_message_id, :body_digest, :observed_at, 'pending') "
+           "ON CONFLICT (source_key) DO UPDATE SET body_digest = excluded.body_digest, "
+           "observed_at = excluded.observed_at WHERE memory_sources.state = 'pending' "
+           "AND memory_sources.body_digest IS NULL", params)
+    rows = yield ("SELECT observed_at FROM memory_sources WHERE source_key = :source_key", identity)
+    return dict(status="pending", observed_at=rows[0]["observed_at"])
+
+
 def capture_plan(identity, body, observed_at, *, postgres=False):
     if not isinstance(body, str) or not body.strip():
         raise ValueError("Complete source text is required")
@@ -135,6 +166,13 @@ def capture_plan(identity, body, observed_at, *, postgres=False):
     fence = yield from lock_owner(identity, postgres=postgres)
     if stamp <= fence:
         return "stale"
+    rows = yield ("SELECT state, body_digest, observed_at FROM memory_sources WHERE source_key = :source_key", identity)
+    if rows and rows[0]["state"] == "pending" and rows[0]["body_digest"]:
+        row = rows[0]
+        if row["observed_at"] <= fence:
+            return "stale"
+        if row["body_digest"] != hashlib.sha256(body.encode()).hexdigest() or row["observed_at"] != stamp:
+            return "conflict"
     params = dict(identity, body=body, observed_at=stamp)
     # Only pending anchors can be filled. Replays cannot overwrite text or undo
     # revocation, even when a caller retries with a newer observation timestamp.
@@ -142,7 +180,7 @@ def capture_plan(identity, body, observed_at, *, postgres=False):
            "(source_key, owner_key, scope_key, source_message_id, observed_at, body, state) "
            "VALUES (:source_key, :owner_key, :scope_key, :source_message_id, :observed_at, :body, 'recorded') "
            "ON CONFLICT (source_key) DO UPDATE SET body = excluded.body, "
-           "observed_at = excluded.observed_at, state = 'recorded' "
+           "observed_at = excluded.observed_at, body_digest = NULL, state = 'recorded' "
            "WHERE memory_sources.state = 'pending'", params)
     rows = yield ("SELECT state, body, observed_at FROM memory_sources WHERE source_key = :source_key", params)
     row = rows[0]
@@ -189,7 +227,7 @@ def revoke_plan(scope, memory_ids, *, clear=False):
            "WHERE owner_key = :owner_key", params)
     if clear:
         yield ("DELETE FROM memory_source_terms WHERE scope_key = :scope_key", scope)
-        yield ("UPDATE memory_sources SET body = NULL, observed_at = NULL, state = 'revoked' "
+        yield ("UPDATE memory_sources SET body = NULL, body_digest = NULL, observed_at = NULL, state = 'revoked' "
                "WHERE scope_key = :scope_key", scope)
     # Chunk statements keep SQLite bind counts bounded for bulk erasure.
     ids = tuple(memory_ids)
@@ -198,7 +236,7 @@ def revoke_plan(scope, memory_ids, *, clear=False):
         placeholders = ",".join(":" + key for key in bound)
         yield ("DELETE FROM memory_source_terms WHERE source_key IN (SELECT source_key "
                f"FROM memory_source_links WHERE memory_id IN ({placeholders}))", bound)
-        yield ("UPDATE memory_sources SET body = NULL, observed_at = NULL, state = 'revoked' "
+        yield ("UPDATE memory_sources SET body = NULL, body_digest = NULL, observed_at = NULL, state = 'revoked' "
                "WHERE owner_key = :owner_key AND source_key IN (SELECT source_key "
                f"FROM memory_source_links WHERE memory_id IN ({placeholders}))", dict(scope, **bound))
         yield (f"DELETE FROM memory_source_links WHERE memory_id IN ({placeholders})", bound)

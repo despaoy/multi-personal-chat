@@ -26,7 +26,7 @@ def erase_unlinked_plan(scope, source_message_ids, *, postgres=False):
     if not rows:
         return 0
     yield (f'DELETE FROM memory_source_terms WHERE source_key IN ({bound})', params)
-    yield ("UPDATE memory_sources SET body = NULL, observed_at = NULL, state = 'revoked' "
+    yield ("UPDATE memory_sources SET body = NULL, body_digest = NULL, observed_at = NULL, state = 'revoked' "
            f'WHERE source_key IN ({bound})', params)
     # No owner-wide watermark: unrelated historical speech remains available.
     # Revoked identity anchors reject later capture and claim-link retries.

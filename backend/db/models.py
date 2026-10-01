@@ -748,6 +748,7 @@ class MemorySource(Base):
     observed_at: Mapped[Optional[str]] = mapped_column(Text)
     body: Mapped[Optional[str]] = mapped_column(Text)
     state: Mapped[str] = mapped_column(Text, nullable=False)
+    body_digest: Mapped[str | None] = mapped_column(Text)
 
 
 class MemorySourceLink(Base):

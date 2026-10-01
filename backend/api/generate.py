@@ -8,6 +8,7 @@ import logging
 import os
 import time
 import uuid
+from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -851,6 +852,7 @@ async def _prepare_character_turn(
             conversation_id=request.conversationId or request.sessionId,
             conversation_type=request.conversationType or request.sessionType,
             history=tuple(request.history or []),
+            received_at=request._source_received_at,
         )
         service = character_service or get_default_character_context_service()
         if execute_memory_operations:
@@ -886,6 +888,7 @@ async def _complete_character_turn(prepared, request: MessageRequest, reply: str
             conversation_id=request.conversationId or request.sessionId,
             conversation_type=request.conversationType or request.sessionType,
             history=tuple(request.history or []),
+            received_at=request._source_received_at,
         )
         service = character_service or get_default_character_context_service()
         await asyncio.wait_for(
@@ -937,6 +940,27 @@ async def _validate_web_source_identity(request, current_user, *, database=None)
         ), timeout=_DB_WRITE_TIMEOUT)
     except Exception as exc:
         raise HTTPException(503, "暂时无法核对消息来源，请稍后重试") from exc
+    if status in {"new", "pending"}:
+        from character.memory_extractor import memory_write_allowed
+        from character.memory_llm import is_memory_erasure_request
+
+        # Opt-out, credential and explicit erasure messages create no binding.
+        if memory_write_allowed(request.message) and not is_memory_erasure_request(request.message):
+            try:
+                receipt = await asyncio.wait_for(asyncio.to_thread(
+                    target_db.reserve_memory_source, request.characterId, scope.platform, scope.adapter,
+                    scope.sender_id, scope.conversation_type, scope.conversation_id,
+                    source_message_id=request.sourceMessageId, body=request.message,
+                    observed_at=datetime.now(timezone.utc),
+                ), timeout=_DB_WRITE_TIMEOUT)
+                status = receipt["status"]
+                if status == "pending":
+                    observed = datetime.fromisoformat(receipt["observed_at"])
+                    if observed.tzinfo is None or observed.utcoffset() is None:
+                        raise ValueError("Untrusted source receipt")
+                    request._source_received_at = observed
+            except Exception as exc:
+                raise HTTPException(503, "暂时无法核对消息来源，请稍后重试") from exc
     if status in {"revoked", "stale", "conflict"}:
         message = "该来源标识已用于另一条消息，请为新消息使用新的标识。" if status == "conflict" else "该消息来源已失效，不能重放；重新发送消息时请使用新的标识。"
         raise HTTPException(409, detail={"code": "source_identity_" + status, "message": message})

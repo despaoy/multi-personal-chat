@@ -6,9 +6,10 @@ Pydantic 请求/响应模型
 SQLAlchemy ORM 模型（数据库 schema）定义在 db/models.py。
 """
 
+from datetime import datetime
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, Field, StringConstraints, field_validator
+from pydantic import BaseModel, Field, PrivateAttr, StringConstraints, field_validator
 
 # ============================================
 # 核心消息模型
@@ -16,6 +17,7 @@ from pydantic import BaseModel, Field, StringConstraints, field_validator
 
 
 class MessageRequest(BaseModel):
+    _source_received_at: datetime | None = PrivateAttr(default=None)
     characterId: str | None = Field(default=None, min_length=1, max_length=100, pattern=r"^[A-Za-z0-9_-]+$")
     branchId: str | None = Field(default=None, min_length=1, max_length=64)
     message: str = Field(..., min_length=1, max_length=8000)

@@ -109,6 +109,7 @@ class PgDatabase:
             return
         async with self.engine.begin() as conn:
             await conn.run_sync(metadata.create_all)
+            await self._ensure_column(conn, "memory_sources", "body_digest", "TEXT")
             await self._ensure_column(conn, "messages", "platform", "TEXT NOT NULL DEFAULT 'qq'")
             await self._ensure_column(conn, "messages", "adapter", "TEXT NOT NULL DEFAULT 'nonebot'")
             await self._ensure_column(conn, "messages", "conversationId", "TEXT")
@@ -1779,6 +1780,17 @@ class PgDatabase:
             await session.commit()
             return result
 
+    async def reserve_memory_source(self, character_id, platform, adapter, sender_id,
+                                    conversation_type, conversation_id, *, source_message_id, body, observed_at):
+        scope = memory_source.source_scope(
+            character_id, platform, adapter, sender_id, conversation_type, conversation_id)
+        identity = memory_source.source_identity(scope, source_message_id)
+        async with self.async_session() as session:
+            result = await memory_source.run_postgres(session,
+                memory_source.reserve_plan(identity, body, observed_at, postgres=True))
+            await session.commit()
+            return result
+
     async def memory_source_admission(self, character_id, platform, adapter, sender_id,
                                       conversation_type, conversation_id, *, source_message_id, body):
         scope = memory_source.source_scope(
@@ -3211,6 +3223,11 @@ class SyncPgAdapter:
     def capture_memory_source(self, character_id, platform, adapter, sender_id,
                               conversation_type, conversation_id, **kwargs):
         return self._run(self._pg.capture_memory_source(
+            character_id, platform, adapter, sender_id, conversation_type, conversation_id, **kwargs))
+
+    def reserve_memory_source(self, character_id, platform, adapter, sender_id,
+                              conversation_type, conversation_id, **kwargs):
+        return self._run(self._pg.reserve_memory_source(
             character_id, platform, adapter, sender_id, conversation_type, conversation_id, **kwargs))
 
     def memory_source_admission(self, character_id, platform, adapter, sender_id,
