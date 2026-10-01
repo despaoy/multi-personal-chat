@@ -233,19 +233,28 @@ def isolated_probe_paths(root, run_label, api_key_file):
 async def main(args):
     from evaluation.conversation_source_probe import verify_cluster
 
-    if sum((args.window_boundary, args.citation_precision, args.private_public_citations, args.literal_citations, args.memory_correction)) > 1:
+    if sum((args.window_boundary, args.citation_precision, args.private_public_citations, args.literal_citations, args.memory_correction, args.memory_history)) > 1:
         raise ValueError("Choose one specific probe scenario")
 
     ROOT, OUT, key_path = isolated_probe_paths(args.root, args.run_label, args.api_key_file)
     bootstrap_url = "postgresql+asyncpg://boot@/postgres?host=" + str(ROOT / "socket") + "&port=25433"
     await verify_cluster(bootstrap_url, ROOT / "data")
     database_name = "stage3_" + args.run_label.replace("-", "_")
+    source_label = "stage20-cold-fixed"
+    source_database = "stage3_stage20_cold_fixed"
+    if args.memory_history:
+        source_proof = json.loads((ROOT / source_label / "result.json").read_text())
+        if not all(source_proof["checks"].values()):
+            raise ValueError("Historical reuse requires the verified native source fixture")
     OUT.mkdir(exist_ok=False)
     fixture = json.loads(
-        (Path(__file__).resolve().parents[1] / "tests/fixtures" / ("deepseek_memory_correction_cases.json" if args.memory_correction else "deepseek_literal_citation_cases.json" if args.literal_citations else "deepseek_private_public_citation_cases.json" if args.private_public_citations else "deepseek_citation_precision_cases.json" if args.citation_precision else "deepseek_mixed_window_boundary.json" if args.window_boundary else "deepseek_mixed_long_context_cases.json")).read_text()
+        (Path(__file__).resolve().parents[1] / "tests/fixtures" / ("deepseek_memory_history_cases.json" if args.memory_history else "deepseek_memory_correction_cases.json" if args.memory_correction else "deepseek_literal_citation_cases.json" if args.literal_citations else "deepseek_private_public_citation_cases.json" if args.private_public_citations else "deepseek_citation_precision_cases.json" if args.citation_precision else "deepseek_mixed_window_boundary.json" if args.window_boundary else "deepseek_mixed_long_context_cases.json")).read_text()
     )
     fixture["history_turns"] = expand_history(fixture)
     cases = fixture["cases"]
+    executed_cases = cases[-1:] if args.memory_history else cases
+    if args.memory_history and source_proof["cases"][:2] != cases[:2]:
+        raise ValueError("Historical reuse requires the same complete original source statements")
     key = key_path.read_text().strip()
     os.environ.update(
         DATABASE_URL="postgresql+asyncpg://boot@/" + database_name + "?host=" + str(ROOT / "socket") + "&port=25433",
@@ -302,10 +311,28 @@ async def main(args):
     connection = await asyncpg.connect(user="boot", database="postgres", host=str(ROOT / "socket"), port=25433)
     try:
         assert await connection.fetchval("SHOW data_directory") == str(ROOT / "data")
-        await connection.execute("CREATE DATABASE " + database_name)
+        if args.memory_history:
+            assert await connection.fetchval("SELECT EXISTS(SELECT 1 FROM pg_database WHERE datname=$1)", source_database)
+            await connection.execute("CREATE DATABASE " + database_name + " TEMPLATE " + source_database)
+        else:
+            await connection.execute("CREATE DATABASE " + database_name)
     finally:
         await connection.close()
     await verify_cluster(os.environ["DATABASE_URL"], ROOT / "data")
+    if args.memory_history:
+        import hashlib
+        import shutil
+
+        source_vectors = ROOT / source_label / "vectors"
+        assert source_vectors.resolve().parent == (ROOT / source_label).resolve()
+        source_hashes = {str(p.relative_to(source_vectors)): hashlib.sha256(p.read_bytes()).hexdigest()
+                         for p in source_vectors.rglob("*") if p.is_file()}
+        assert source_hashes and all(not p.is_symlink() for p in source_vectors.rglob("*"))
+        shutil.copytree(source_vectors, OUT / "vectors")
+        copied_hashes = {str(p.relative_to(OUT / "vectors")): hashlib.sha256(p.read_bytes()).hexdigest()
+                         for p in (OUT / "vectors").rglob("*") if p.is_file()}
+        assert copied_hashes == source_hashes
+
     import httpx
 
     cloud_calls = []
@@ -354,7 +381,7 @@ async def main(args):
                                          candidate_count=result[1], recall=result[2]))
         return result
 
-    if args.memory_correction:
+    if args.memory_correction or args.memory_history:
         CharacterContextService._load_history = cold_history
         CharacterContextService._load_memory_candidates = observed_candidates
 
@@ -427,9 +454,28 @@ async def main(args):
         retrieval_diagnostics=retrieval_diagnostics,
         cold_history_diagnostics=cold_history_diagnostics,
         candidate_diagnostics=candidate_diagnostics,
-        controlled_ablation=dict(history_ablation_enabled=args.memory_correction, raw_source_recall_enabled=False),
+        controlled_ablation=dict(history_ablation_enabled=args.memory_correction or args.memory_history, raw_source_recall_enabled=False),
     )
     password = secrets.token_urlsafe(24)
+    if args.memory_history:
+        # Reset only the disposable cloned fixture account to a new random
+        # credential; authenticate through the real login endpoint afterwards.
+        from api.auth import _hash_password
+
+        connection = await asyncpg.connect(user="boot", database=database_name, host=str(ROOT / "socket"), port=25433)
+        try:
+            assert await connection.fetchval("SHOW data_directory") == str(ROOT / "data")
+            row = await connection.fetchrow("SELECT id, username FROM users WHERE id=1")
+            assert row["username"] == source_label
+            password_hash = await asyncio.to_thread(_hash_password, password)
+            changed = await connection.fetchval("UPDATE users SET password_hash=$1 WHERE id=1 AND username=$2 RETURNING id", password_hash, source_label)
+            assert changed == 1
+        finally:
+            await connection.close()
+        proof["reused_native_fixture"] = dict(source_run=source_label, source_database=source_database,
+            cloned_database=database_name, source_vectors_sha256=source_hashes,
+            source_writing_generations_replayed=0, prior_answer_generations_replayed=0,
+            cloned_account_password_reset=True, native_login_required=True)
     try:
         async with (
             app.router.lifespan_context(app),
@@ -439,28 +485,38 @@ async def main(args):
                 timeout=180,
             ) as client,
         ):
-            register = await client.post("/api/auth/register", json=dict(username=args.run_label, password=password))
-            client.cookies.clear()
-            login = await client.post("/api/auth/login", json=dict(username=args.run_label, password=password))
-            me = await client.get("/api/auth/me")
-            proof["auth_statuses"] = [register.status_code, login.status_code, me.status_code]
-            assert proof["auth_statuses"] == [200, 200, 200]
+            if args.memory_history:
+                login = await client.post("/api/auth/login", json=dict(username=source_label, password=password))
+                me = await client.get("/api/auth/me")
+                proof["auth_statuses"] = [login.status_code, me.status_code]
+                assert proof["auth_statuses"] == [200, 200]
+            else:
+                register = await client.post("/api/auth/register", json=dict(username=args.run_label, password=password))
+                client.cookies.clear()
+                login = await client.post("/api/auth/login", json=dict(username=args.run_label, password=password))
+                me = await client.get("/api/auth/me")
+                proof["auth_statuses"] = [register.status_code, login.status_code, me.status_code]
+                assert proof["auth_statuses"] == [200, 200, 200]
             identity = str(me.json()["user"]["id"])
             from knowledge.vector_db import get_vector_db
 
-            base = await client.post(
-                "/api/knowledge/bases",
-                json=dict(name=fixture["knowledge_base"], description="Complete synthetic chain fixtures"),
-            )
-            assert base.status_code == 200, base.text
-            proof["base"] = base.json()
-            base_id = base.json()["base"]["id"]
-            for document in fixture["documents"]:
-                response = await client.post(
-                    "/api/knowledge/documents", json=dict(**document, knowledge_base_id=base_id)
+            if args.memory_history:
+                proof["documents"] = json.loads((ROOT / source_label / "result.json").read_text())["documents"]
+                proof["document_imports_replayed"] = 0
+            else:
+                base = await client.post(
+                    "/api/knowledge/bases",
+                    json=dict(name=fixture["knowledge_base"], description="Complete synthetic chain fixtures"),
                 )
-                proof["documents"].append(dict(http_status=response.status_code, response=response.json()))
-                assert response.status_code == 200, response.text
+                assert base.status_code == 200, base.text
+                proof["base"] = base.json()
+                base_id = base.json()["base"]["id"]
+                for document in fixture["documents"]:
+                    response = await client.post(
+                        "/api/knowledge/documents", json=dict(**document, knowledge_base_id=base_id)
+                    )
+                    proof["documents"].append(dict(http_status=response.status_code, response=response.json()))
+                    assert response.status_code == 200, response.text
             vector_db = get_vector_db()
             proof["indexed_count"] = len(vector_db.metadata)
             for query in fixture["search_queries"]:
@@ -468,8 +524,8 @@ async def main(args):
                     "/api/knowledge/search", json=dict(query=query, topK=3, knowledgeBaseName=fixture["knowledge_base"])
                 )
                 proof["searches"].append(dict(query=query, http_status=response.status_code, response=response.json()))
-            for case in cases:
-                if args.memory_correction and case["id"] == "current_booking_status":
+            for case in executed_cases:
+                if (args.memory_correction or args.memory_history) and case["id"] == cases[-1]["id"]:
                     proof["claims_before_question"] = db.list_character_memory_claims(
                         "tsukiyashiro_kisaki", "web", "web-character", identity, "private", identity,
                         limit=None, include_inactive=True)
@@ -539,10 +595,10 @@ async def main(args):
             long_history_loaded=len(prepared_diagnostics[-1]["history"]) >= 26
             and sum(len(h["content"]) for h in prepared_diagnostics[-1]["history"]) >= 18000,
         )
-        if args.citation_precision or args.private_public_citations or args.literal_citations or args.memory_correction:
+        if args.citation_precision or args.private_public_citations or args.literal_citations or args.memory_correction or args.memory_history:
             checks.pop("long_history_loaded")
             checks["no_long_history_replay"] = all(len(d["history"]) < 10 for d in prepared_diagnostics)
-        for case, generation in zip(cases, proof["generation"]):
+        for case, generation in zip(executed_cases, proof["generation"]):
             if not case.get("knowledge_expected"):
                 continue
             reply = generation["response"].get("reply", "")
@@ -559,11 +615,14 @@ async def main(args):
             checks[case["id"] + "_knowledge_on_wire"] = bool(wires) and any(
                 all(v in wire for v in case["knowledge_expected"]) for wire in wires
             )
-        if args.memory_correction:
-            from evaluation.memory_correction_audit import audit_memory_correction_wire
+        if args.memory_correction or args.memory_history:
+            if args.memory_history:
+                from evaluation.memory_history_audit import audit_memory_history_wire as audit_wire
+            else:
+                from evaluation.memory_correction_audit import audit_memory_correction_wire as audit_wire
 
             checks["final_question_cold_history"] = prepared_diagnostics[-1]["history"] == []
-            checks.update(audit_memory_correction_wire(proof, cloud_calls, fixture))
+            checks.update(audit_wire(proof, cloud_calls, fixture))
         else:
             checks.update(audit_literal_citation_wire(proof, cloud_calls, fixture) if args.literal_citations
                           else audit_private_public_citation_wire(proof, cloud_calls, fixture) if args.private_public_citations
@@ -582,10 +641,10 @@ async def main(args):
         proof["persisted_vector_stats"] = reopened
         proof["checks"] = checks
         proof["controlled_ablation"] = dict(
-            history_ablation_enabled=args.memory_correction,
+            history_ablation_enabled=args.memory_correction or args.memory_history,
             raw_source_recall_enabled=False,
             loaded_history_count=len(prepared_diagnostics[-1]["history"]),
-            scope="only current_booking_status; stored history observed unchanged; no model messages reconstructed" if args.memory_correction else "none",
+            scope="only " + cases[-1]["id"] + "; stored history observed unchanged; no model messages reconstructed" if args.memory_correction or args.memory_history else "none",
         )
         proof["cloud_summary"] = [
             dict(
@@ -617,6 +676,7 @@ if __name__ == "__main__":
     parser.add_argument("--private-public-citations", action="store_true")
     parser.add_argument("--literal-citations", action="store_true")
     parser.add_argument("--memory-correction", action="store_true")
+    parser.add_argument("--memory-history", action="store_true")
     parser.add_argument("--root", required=True, type=Path)
     parser.add_argument("--run-label", required=True)
     parser.add_argument("--api-key-file", required=True, type=Path)
