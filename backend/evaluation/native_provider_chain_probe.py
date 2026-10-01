@@ -7,6 +7,7 @@ import json
 import os
 import re
 import secrets
+import time
 from dataclasses import asdict
 from pathlib import Path
 
@@ -29,6 +30,8 @@ def isolated_probe_paths(root, run_label, api_key_file):
 async def main(args):
     from evaluation.conversation_source_probe import verify_cluster
 
+    if not 0 < args.semantic_review_timeout <= 120:
+        raise ValueError("Semantic review timeout must be within (0, 120]")
     ROOT, OUT, key_path = isolated_probe_paths(args.root, args.run_label, args.api_key_file)
     bootstrap_url = "postgresql+asyncpg://boot@/postgres?host=" + str(ROOT / "socket") + "&port=25433"
     await verify_cluster(bootstrap_url, ROOT / "data")
@@ -67,7 +70,7 @@ async def main(args):
         MEMORY_LLM_CONTEXT_WINDOW_TOKENS="65536",
         MEMORY_SOURCE_RECALL_ENABLED="false",
         DYNAMIC_CONTEXT_SEMANTIC_REVIEW_ENABLED=str(args.reviewers).lower(),
-        DYNAMIC_CONTEXT_SEMANTIC_REVIEW_TIMEOUT_SECONDS="5",
+        DYNAMIC_CONTEXT_SEMANTIC_REVIEW_TIMEOUT_SECONDS=str(args.semantic_review_timeout),
         CONTEXTUAL_MEMORY_SELECTION_ENABLED=str(args.reviewers).lower(),
         CONTEXTUAL_DECISION_POLICY_ENABLED=str(args.reviewers).lower(),
         REDIS_URL="redis://127.0.0.1:1/0",
@@ -106,10 +109,19 @@ async def main(args):
                 (OUT / "local-review-calls.json").write_text(json.dumps(local_review_calls, indent=2))
             return await original_send(client, request, **kwargs)
         body = json.loads(request.content)
+        started = time.monotonic()
         response = await original_send(client, request, **kwargs)
         await response.aread()
         data = response.json()
-        cloud_calls.append(dict(url=str(request.url), request=body, http_status=response.status_code, response=data))
+        cloud_calls.append(
+            dict(
+                url=str(request.url),
+                request=body,
+                http_status=response.status_code,
+                response=data,
+                elapsed_seconds=time.monotonic() - started,
+            )
+        )
         (OUT / "cloud-calls.json").write_text(json.dumps(cloud_calls, ensure_ascii=False, indent=2))
         return response
 
@@ -349,6 +361,18 @@ async def main(args):
             (OUT / "result.json").write_text(json.dumps(proof, ensure_ascii=False, indent=2))
             if args.reviewers:
                 boundary = prepared_diagnostics[3:6]
+
+                def compiled_boundary(p, *, explicit=False):
+                    # Assert the independent behavioral contract, not the
+                    # compiler constant: a renamed template cannot make
+                    # advice or questions silently acceptable.
+                    advice = r"不得提供建议|不给方案"
+                    if not explicit:
+                        advice += r"|未请求建议时，不自动给方案"
+                    questions = r"本轮不得追问|本轮不追问|本轮不得使用心理咨询式追问或任何追问"
+                    text = p["dynamic_context"]
+                    return bool(re.search(advice, text) and re.search(questions, text))
+
                 proof["checks"].update(
                     optional_reviewers_never_use_local_provider=not local_review_calls,
                     all_triggered_semantic_reviews_applied=all(p["semantic_status"] == "applied" for p in boundary),
@@ -357,12 +381,15 @@ async def main(args):
                     ),
                     all_native_policies_applied=all(p["policy_status"] == "applied" for p in prepared_diagnostics),
                     current_explicit_advice_boundaries_preserved=all(
-                        any(a["id"] == "advice_boundary" and a["score"] >= 0.5 for a in p["user_acts"])
-                        for p in boundary[:2]
+                        compiled_boundary(p, explicit=True) for p in boundary[:2]
                     ),
-                    effective_advice_boundaries_preserved=all(
-                        ("不得提供建议" in p["dynamic_context"] or "未请求建议时，不自动给方案" in p["dynamic_context"])
-                        and ("本轮不得追问" in p["dynamic_context"] or "任何追问" in p["dynamic_context"])
+                    effective_advice_boundaries_preserved=all(compiled_boundary(p) for p in boundary),
+                    complete_dynamic_context_reaches_model=all(
+                        any(
+                            p["dynamic_context"] in m.get("content", "")
+                            for c in cloud_calls
+                            for m in c["request"].get("messages", [])
+                        )
                         for p in boundary
                     ),
                     boundary_strategies_exclude_advice_and_probes=all(
@@ -375,7 +402,7 @@ async def main(args):
                     ),
                 )
             proof["native_optional_reviewers_enabled"] = args.reviewers
-            proof["semantic_review_timeout_seconds"] = 5
+            proof["semantic_review_timeout_seconds"] = args.semantic_review_timeout
             (OUT / "result.json").write_text(json.dumps(proof, ensure_ascii=False, indent=2))
             assert all(proof["checks"].values()), proof["checks"]
             print(
@@ -394,6 +421,7 @@ async def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--reviewers", action="store_true")
+    parser.add_argument("--semantic-review-timeout", type=float, default=5.0)
     parser.add_argument("--root", required=True, type=Path)
     parser.add_argument("--run-label", required=True)
     parser.add_argument("--api-key-file", required=True, type=Path)

@@ -1,0 +1,102 @@
+{
+  "description": "Complete synthetic two-owner production chat replay. Expected values are verifier-only; only message is sent. Use dedicated provisioned non-admin accounts and empty initial test-owner data.",
+  "execution": {
+    "endpoint": "/api/generate",
+    "characterId": "tsukiyashiro_kisaki",
+    "loraName": "default",
+    "sessionType": "private",
+    "history": [],
+    "fresh_ui_session_each_request": true,
+    "private_conversation_scope": "authenticated_owner_not_UI_session",
+    "public_registration_policy_unchanged": true
+  },
+  "cases": [
+    {
+      "id": "complete_identity",
+      "account": 0,
+      "message": "请跨会话记住，我叫岚舟，我的老家在宣城，目前住在丽水，大学专业是环境工程。这四项资料都是我本人的。",
+      "required_active": [
+        "user_name",
+        "user_origin",
+        "user_residence",
+        "user_major"
+      ]
+    },
+    {
+      "id": "complete_condition",
+      "account": 0,
+      "message": "请跨会话记住我的个人饮品规则：我喜欢红茶，但只有白天才喝红茶，晚上不喝红茶。这是我本人的习惯，不是别人的。"
+    },
+    {
+      "id": "cross_session_read",
+      "account": 0,
+      "message": "我的名字、老家、目前居住地和大学专业分别是什么？请按我已经告诉你的资料逐项回答。",
+      "expected": [
+        "岚舟",
+        "宣城",
+        "丽水",
+        "环境工程"
+      ]
+    },
+    {
+      "id": "source_correction",
+      "account": 0,
+      "message": "请跨会话记住，我目前住在舟山，已经不住丽水了。老家仍是宣城，大学专业仍是环境工程。只更新目前居住地。"
+    },
+    {
+      "id": "read_latest",
+      "account": 0,
+      "message": "我目前住哪里？老家在哪里？大学专业是什么？请按最新资料逐项回答。",
+      "expected": [
+        "舟山",
+        "宣城",
+        "环境工程"
+      ]
+    },
+    {
+      "id": "subject_boundary",
+      "account": 0,
+      "message": "再说明一下：我的朋友若澄住在台州，她大学读的是会计学。我本人仍住在舟山，我的专业仍是环境工程。朋友的两项资料不要变成我的资料。"
+    },
+    {
+      "id": "night_rule_application",
+      "account": 0,
+      "message": "今天晚上我想安排喝茶和整理笔记。结合我之前告诉你的个人饮品规则，建议我今晚喝红茶吗？请明确说明建议和理由。"
+    },
+    {
+      "id": "dynamic_complete_stress",
+      "account": 0,
+      "message": "我因为明天的汇报很紧张，怕准备不完。我今晚要在当前住的城市整理环境工程汇报材料。别假定我已经完成，请给我一个很短的下一步，并记住晚上饮品限制。"
+    },
+    {
+      "id": "other_user_has_no_identity",
+      "account": 1,
+      "message": "我没有告诉过你我的个人资料。请根据你实际知道的内容回答：我叫什么名字、住在哪里、大学学什么？不知道就明确说不知道，不要猜。"
+    },
+    {
+      "id": "second_user_source",
+      "account": 1,
+      "message": "请跨会话记住，我叫若澄，我目前住在台州，大学专业是会计学。这些都是我本人的资料。"
+    },
+    {
+      "id": "second_user_read",
+      "account": 1,
+      "message": "请按我本人的已保存资料，回答我的名字、目前居住地和大学专业。",
+      "expected": [
+        "若澄",
+        "台州",
+        "会计学"
+      ]
+    },
+    {
+      "id": "first_user_final_read",
+      "account": 0,
+      "message": "请按我的最新资料回答：名字、目前居住地和大学专业分别是什么？朋友的资料不要混进来。",
+      "expected": [
+        "岚舟",
+        "舟山",
+        "环境工程"
+      ]
+    }
+  ]
+}

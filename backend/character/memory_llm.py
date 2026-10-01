@@ -1047,6 +1047,19 @@ def _candidate_to_proposal(
             confidence=confidence,
         )
 
+    # Generic labels must not hide independently proven personal fields.
+    # Preserve qualified/ambiguous observations and existing generic targets.
+    if (kind == "other_user_fact" and target_record is None
+            and semantic_operation == "ADD" and not raw.get("qualifiers")):
+        supported = _supported_generic_fact(value, evidence)
+        complete_support = _supported_generic_fact(value, source_message)
+        if (supported is not None and complete_support is not None
+                and supported[0] == complete_support[0]
+                and supported[1].memory_key == complete_support[1].memory_key
+                and supported[1].content == complete_support[1].content):
+            kind, supported_memory = supported
+            proposed_content = supported_memory.content
+
     if kind not in _ALLOWED_KINDS:
         if target_record is None:
             supported = _supported_generic_fact(value, evidence) if kind == "user_fact" else None

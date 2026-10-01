@@ -100,7 +100,7 @@ _STUDY_STAGE_PATTERNS = (
     ),
 )
 _RESIDENCE_PATTERNS = (
-    re.compile(r"我(?:现在)?住在(?P<subject>[^，。！？,!?]{1,30})"),
+    re.compile(r"我(?:目前|现在)?住在(?P<subject>[^，。！？,!?]{1,30})"),
     # Completed self relocation, not a future move, object transfer or a
     # predicate embedded in another person's speech. Whole-clause matching
     # prevents discarding a trailing question/qualification.
