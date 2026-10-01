@@ -9,7 +9,7 @@ from __future__ import annotations
 import re
 
 from character.conditional_memory import parse_necessary_condition
-from character.memory_query import storage_fields
+from character.memory_query import profile_lookup_fields, storage_fields
 from character.memory_request import memory_statement_body
 from knowledge.query_tasks import is_dialogue_control_clause, requests_explicit_information, requests_source_text
 
@@ -59,6 +59,8 @@ def local_context_only(message: str) -> bool:
         if not statement:
             return False
         message = statement
+    if profile_lookup_fields(message):
+        return True
     if storage_fields(message):
         return True
     clauses = [part.strip() for part in re.split(r'[，,。！？!?；;\n]', message) if part.strip()]

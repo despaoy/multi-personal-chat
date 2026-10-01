@@ -109,7 +109,18 @@ async def main(args):
         return response
 
     httpx.AsyncClient.send = observed_send
+    from api import generate as generate_api
     from app.main import create_app
+
+    retrieval_requests = []
+    original_retrieval = generate_api._retrieve_rag_bundle
+
+    async def observed_retrieval(query, top_k, filters):
+        bundle = await original_retrieval(query, top_k, filters)
+        retrieval_requests.append(dict(query=query, abstained=bundle.get("abstained"), domains=bundle.get("domains")))
+        return bundle
+
+    generate_api._retrieve_rag_bundle = observed_retrieval
     from character.models import MemoryItem, UserScope
     from db.adapter import db, is_pg_mode
     from repositories.character_memory import DatabaseCharacterMemoryRepository
@@ -145,7 +156,7 @@ async def main(args):
 
     CharacterContextService._load_history = cold_history
     CharacterContextService.prepare_turn = observed_prepare
-    db.update_config(dict(useKnowledgeBase=False, temperature=0.2, maxTokens=800, topP=0.9))
+    db.update_config(dict(useKnowledgeBase=getattr(args, "knowledge_base", False), temperature=0.2, maxTokens=800, topP=0.9))
     if Path(args.fixture).name != args.fixture or not args.fixture.endswith("_cases.json"):
         raise ValueError("Use a named repository fixture, without path traversal")
     fixture = Path(__file__).resolve().parents[1] / "tests/fixtures" / args.fixture
@@ -256,12 +267,14 @@ async def main(args):
                         cases=results,
                         cloud_calls=len(calls),
                         underlying_history=underlying,
+                        retrieval_requests=retrieval_requests,
                     ),
                     ensure_ascii=False,
                     indent=2,
                 )
             )
     httpx.AsyncClient.send = original_send
+    generate_api._retrieve_rag_bundle = original_retrieval
     assert all(result["http_status"] == 200 for result in results)
     assert all(result["storage_unchanged"] and result["diagnostics"]["history_count"] == 0 for result in results)
     checks = {
@@ -304,6 +317,7 @@ async def main(args):
         cases=results,
         cloud_calls=len(calls),
         underlying_history=underlying,
+        retrieval_requests=retrieval_requests,
         checks=checks,
     )
     (out / "result.json").write_text(json.dumps(final, ensure_ascii=False, indent=2))
@@ -326,6 +340,7 @@ if __name__ == "__main__":
     parser.add_argument("--run-label", required=True)
     parser.add_argument("--api-key-file", required=True)
     parser.add_argument("--baseline-reader", action="store_true")
+    parser.add_argument("--knowledge-base", action="store_true", help="Exercise actual external retrieval routing")
     parser.add_argument("--fixture", default="deepseek_legacy_field_cases.json")
     parser.add_argument("--case-id", action="append", help="Run only a selected case; repeat for additional IDs")
     asyncio.run(main(parser.parse_args()))

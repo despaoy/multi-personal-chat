@@ -84,6 +84,40 @@ def lookup_fields(message: str) -> tuple[str, ...]:
     return tuple(dict.fromkeys(fields))
 
 
+def profile_lookup_fields(message: str) -> tuple[str, ...]:
+    """A complete self-profile task, including only parsed output controls.
+
+    This is a dependency/read plan, not a deterministic response. Any unknown
+    field, other owner or additional content task defers to ordinary routing.
+    """
+    text = ''.join(message.split())
+    clauses = [part for part in re.split(r'[。！？!?；;\n]', text) if part]
+    if not clauses:
+        return ()
+    match = re.fullmatch(
+        r'(?:请)?(?:用(?:一句话|一段话|列表|表格))?'
+        r'(?:核对|回忆|列出|整理|介绍|说明)(?:一下)?我的(?:当前)?'
+        r'(?:个人资料|个人信息|基本资料|基本信息)'
+        r'(?:[：:](.+?)(?:各|分别)?是什么)?', clauses[0])
+    if match is None:
+        return ()
+    for control in clauses[1:]:
+        for part in re.split(r'[，,]', control):
+            if not re.fullmatch(
+                r'(?:不做建议|不要建议|不提供建议|不要提供建议|'
+                r'(?:只写|只列|只回答)(?:我本人|本人|我)(?:的)?(?:当前)?(?:资料|信息)|'
+                r'(?:只写|只列|只回答)当前本人(?:资料|信息))', part):
+                return ()
+    if match[1] is None:
+        return tuple(PERSONAL_MEMORY_KEYS)
+    nouns = {**MEMORY_FIELD_NAMES, '大学专业': 'major'}
+    parts = re.split(r'和|与|、', match[1])
+    if not parts or any(part not in nouns for part in parts):
+        return ()
+    fields = {nouns[part] for part in parts}
+    return tuple(field for field in PERSONAL_MEMORY_KEYS if field in fields)
+
+
 @dataclass(frozen=True)
 class MemoryQueryPlan:
     fields: tuple[str, ...] = ()
@@ -104,6 +138,9 @@ class MemoryQueryPlan:
 
 
 def plan_memory_query(query: str) -> MemoryQueryPlan:
+    profile_fields = profile_lookup_fields(query)
+    if profile_fields:
+        return MemoryQueryPlan(profile_fields)
     requested: set[str] = set()
     excluded: set[str] = set()
     for clause in re.split(r'[，,。！？!?；;\n]', query):
