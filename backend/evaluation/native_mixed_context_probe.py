@@ -49,6 +49,27 @@ def audit_mixed_wire(proof, calls, fixture):
     )
 
 
+def audit_window_boundary_wire(proof, calls, fixture):
+    """At the serving boundary, full memory must survive whole-turn pruning."""
+    from inference.context_budget import ReviewContextBudget
+
+    checks = audit_mixed_wire(proof, calls, fixture)
+    # This case deliberately reaches the budget boundary: older history may
+    # yield, but the full authorized private source must remain in memory.
+    checks.pop("complete_private_source_in_actual_history", None)
+    checks.pop("all_twelve_complete_history_sources_in_actual_wire", None)
+    source = fixture["cases"][0]["message"]
+    final = [c for c in calls[slice(*proof["generation"][-1]["cloud_call_range"])]
+             if c["request"].get("max_tokens") == 1024]
+    checks["actual_answer_fits_serving_budget"] = len(final) == 1 and ReviewContextBudget(65536).fits(final[0]["request"]["messages"], 1024)
+    checks["history_really_trimmed_at_boundary"] = len(final) == 1 and not any(m.get("content") == source for m in final[0]["request"]["messages"])
+    reply = proof["generation"][-1]["response"].get("reply", "")
+    checks["private_no_rain_condition_recovered"] = bool(re.search(r"不下雨|无雨|没有下雨|未下雨", reply))
+    checks["historical_no_appointment_recovered"] = bool(re.search(r"(?:尚未|没有|还没|未曾|未).{0,10}(?:提交预约|预约|报名)", reply))
+    checks["historical_no_attendance_recovered"] = bool(re.search(r"(?:尚未|没有|还没|未曾|未).{0,10}(?:参加|上课)", reply))
+    return checks
+
+
 def expand_history(fixture):
     """Expand fully specified synthetic history without storing repeated text."""
     import hashlib
@@ -100,7 +121,7 @@ async def main(args):
     database_name = "stage3_" + args.run_label.replace("-", "_")
     OUT.mkdir(exist_ok=False)
     fixture = json.loads(
-        (Path(__file__).resolve().parents[1] / "tests/fixtures/deepseek_mixed_long_context_cases.json").read_text()
+        (Path(__file__).resolve().parents[1] / "tests/fixtures" / ("deepseek_mixed_window_boundary.json" if args.window_boundary else "deepseek_mixed_long_context_cases.json")).read_text()
     )
     fixture["history_turns"] = expand_history(fixture)
     cases = fixture["cases"]
@@ -383,7 +404,8 @@ async def main(args):
             checks[case["id"] + "_knowledge_on_wire"] = bool(wires) and any(
                 all(v in wire for v in case["knowledge_expected"]) for wire in wires
             )
-        checks.update(audit_mixed_wire(proof, cloud_calls, fixture))
+        checks.update(audit_window_boundary_wire(proof, cloud_calls, fixture) if args.window_boundary
+                      else audit_mixed_wire(proof, cloud_calls, fixture))
         reopened = proof["persisted_vector_stats"]
         checks.update(
             persisted_index_reopens_with_all_three_documents=reopened["total_documents"]
@@ -424,6 +446,7 @@ async def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--require-success", action="store_true")
+    parser.add_argument("--window-boundary", action="store_true")
     parser.add_argument("--root", required=True, type=Path)
     parser.add_argument("--run-label", required=True)
     parser.add_argument("--api-key-file", required=True, type=Path)

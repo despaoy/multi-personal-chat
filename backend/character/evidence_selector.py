@@ -165,8 +165,22 @@ def selection_messages(
         {"role": "system", "content": SELECTION_INSTRUCTION},
         {"role": "user", "content": encoded},
     ]
-    if context_budget and not context_budget.fits(messages, 2048):
-        raise InputBudgetError('selection input exceeds serving context budget')
+    if context_budget:
+        # Reserve space for the complete query, candidates and review output.
+        # Only older complete turns may yield space; keep the newest premise
+        # with its assistant response, including any late correction. If that
+        # turn or the mandatory evidence cannot fit, continue to fail closed.
+        omitted = 0
+        while not context_budget.fits(messages, 2048):
+            history_view = payload['history']
+            next_turn = next((i for i in range(1, len(history_view))
+                              if history_view[i]['role'] == 'user'), None)
+            if next_turn is None:
+                raise InputBudgetError('selection input exceeds serving context budget')
+            omitted += next_turn
+            payload['history'] = history_view[next_turn:]
+            payload['history_omitted_messages'] = omitted
+            messages[1]['content'] = json.dumps(payload, ensure_ascii=False)
     return messages
 
 
