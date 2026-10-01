@@ -87,6 +87,7 @@ class RetrievalResult:
     reason: str = ""
     source_lookup: bool = False
     answer_citations_bound: bool = False
+    citation_namespace: str = ""
     source_excerpts: tuple[Mapping[str, Any], ...] = ()
     evidence_packets: tuple[Mapping[str, Any], ...] = ()
     identity_task: Mapping[str, str] = field(default_factory=dict)
@@ -286,9 +287,9 @@ def _system_prompt(request: GenerationRequest) -> str:
         if request.retrieval.reason == "retrieval_unavailable":
             prompt += "\n本轮依据暂时无法核实；这不代表知识库中不存在答案。请自然表达暂时不能确认。"
     if request.retrieval.has_evidence and request.retrieval.answer_citations_bound:
-        from inference.answer_citations import CITATION_OUTPUT_POLICY
+        from inference.answer_citations import citation_output_policy
 
-        prompt += '\n\n' + CITATION_OUTPUT_POLICY
+        prompt += '\n\n' + citation_output_policy(request.retrieval.citation_namespace)
     return prompt
 
 

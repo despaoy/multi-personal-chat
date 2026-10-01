@@ -1,10 +1,11 @@
 """Citations follow answer use and whole-source admission, never rank alone."""
 
+import re
 from dataclasses import replace
 
 import pytest
 
-from inference.answer_citations import finalize_answer_citations, prepare_answer_citations
+from inference.answer_citations import citation_marker, finalize_answer_citations, prepare_answer_citations
 from inference.generation_request import (
     GenerationRequest,
     GenerationResult,
@@ -12,6 +13,11 @@ from inference.generation_request import (
     build_generation_request,
     generate_character_response,
 )
+
+
+def owned_template(raw, kwargs):
+    namespace = re.search(r"\[\[cite:([0-9a-f]{12}):S1\]\]", kwargs["messages"][0]["content"]).group(1)
+    return re.sub(r"\[S(\d{1,2})\]", lambda m: citation_marker(namespace, "S" + m.group(1)), raw)
 
 
 def bundle():
@@ -48,7 +54,7 @@ async def test_actual_generated_answer_binds_only_valid_used_keys_in_first_use_o
     async def generate(**kwargs):
         assert "来源标记" in kwargs["messages"][0]["content"]
         assert all(d["content"] in kwargs["messages"][-1]["content"] for d in bundle().documents)
-        return raw
+        return owned_template(raw, kwargs)
 
     result = await generate_character_response(GenerationRequest(message="查课程或维修编号", retrieval=bundle(), max_tokens=128), generate)
     assert [c["source_id"] for c in result.response_citations] == expected
@@ -62,7 +68,7 @@ async def test_budget_rejected_source_cannot_be_restored_by_a_model_marker():
 
     async def generate(**kwargs):
         assert "WX-204" not in kwargs["messages"][-1]["content"]
-        return "课程YY-573-R[S1]，伪造维修[S2]"
+        return owned_template("课程YY-573-R[S1]，伪造维修[S2]", kwargs)
 
     result = await generate_character_response(GenerationRequest(message="查编号", retrieval=original, max_tokens=100, context_window_tokens=2400), generate)
     assert [c["source_id"] for c in result.plan.retrieval.citations] == ["course"]
@@ -84,7 +90,7 @@ def test_native_packet_background_dependency_is_preserved():
 def test_guard_fallback_cannot_claim_any_retrieved_source():
     prepared = prepare_answer_citations(bundle())
     plan = build_generation_request(GenerationRequest(message="课程号", retrieval=prepared))
-    result = finalize_answer_citations(GenerationResult(reply="保守回应[S1]", plan=plan, guard_fallback="unsupported_user_fact"))
+    result = finalize_answer_citations(GenerationResult(reply="保守回应" + citation_marker(prepared.citation_namespace, "S1"), plan=plan, guard_fallback="unsupported_user_fact"))
     assert result.response_citations == ()
     assert result.reply == "保守回应"
 

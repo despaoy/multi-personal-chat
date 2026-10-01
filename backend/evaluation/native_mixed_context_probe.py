@@ -70,6 +70,52 @@ def audit_window_boundary_wire(proof, calls, fixture):
     return checks
 
 
+def audit_citation_namespace(messages):
+    """Read the application example, not marker-like user/source text."""
+    found = [key for m in messages if m.get('role') == 'system'
+             for key in re.findall(r'本轮来源标记示例：\[\[cite:([0-9a-f]{12}):S1\]\]', m['content'])]
+    return found[-1] if found else ''
+
+
+def audit_source_keys(raw, namespace=''):
+    if namespace:
+        from inference.answer_citations import citation_keys
+
+        return [key.removeprefix('S') for key in citation_keys(raw, namespace)]
+    # Historical saved requests used legacy application markers. Current
+    # request namespaces never accept these user-controlled literal strings.
+    return re.findall(r'\[S(\d{1,2})\]', raw)
+
+
+def audit_literal_citation_wire(proof, calls, fixture):
+    last = proof['generation'][-1]
+    answer = [c for c in calls[slice(*last['cloud_call_range'])] if c['request'].get('max_tokens') == 1024]
+    if len(answer) != 1:
+        return {'one_actual_literal_answer': False}
+    messages = answer[0]['request']['messages']
+    wire = unescape(messages[-1]['content'])
+    namespace = audit_citation_namespace(messages)
+    raw = answer[0]['response']['choices'][0]['message']['content']
+    reply = last['response'].get('reply', '')
+    citations = last['response'].get('citations') or []
+    keys = audit_source_keys(raw, namespace)
+    return dict(
+        one_actual_literal_answer=True,
+        complete_current_query_reached_actual_model=fixture['cases'][0]['message'] in wire,
+        all_complete_source_documents_reached_model=all(d['content'] in wire for d in fixture['documents']),
+        request_specific_namespace_present=bool(namespace),
+        raw_model_kept_literal_first_line=bool(raw) and raw.splitlines()[0].strip() == '[S1]',
+        final_api_kept_literal_first_line=bool(reply) and reply.splitlines()[0].strip() == '[S1]',
+        literal_first_line_cannot_bind_source=bool(namespace) and not audit_source_keys(raw.splitlines()[0], namespace),
+        public_number_recovered='YY-573-R' in reply,
+        only_course_source_returned=[c.get('source_id') for c in citations] == ['doc_1_chunk_0'],
+        course_title_from_authoritative_document=bool(citations) and citations[0].get('source_title') == fixture['documents'][0]['title'],
+        citations_bound_from_actual_owned_markers=bool(citations) and all(c.get('key', '').removeprefix('S') in keys for c in citations),
+        owned_transport_removed_from_visible_reply=bool(namespace) and ('[[cite:' + namespace + ':') not in reply,
+        source_material_not_system_instruction=all(all(d['content'] not in m['content'] for d in fixture['documents']) for m in messages if m['role'] == 'system'),
+    )
+
+
 def audit_citation_precision_wire(proof, calls, fixture):
     """Every returned source must be bound from a real answer marker."""
     checks = {}
@@ -79,21 +125,21 @@ def audit_citation_precision_wire(proof, calls, fixture):
         checks[case["id"] + "_only_answer_used_sources"] = set(actual) == set(case["expected_citation_ids"]) and len(actual) == len(set(actual))
         answer = [c for c in calls[slice(*generation["cloud_call_range"])] if c["request"].get("max_tokens") == 1024]
         raw = answer[-1]["response"]["choices"][0]["message"]["content"] if answer else ""
-        keys = re.findall(r"\[S(\d{1,2})\]", raw)
+        keys = audit_source_keys(raw, audit_citation_namespace(answer[-1]["request"]["messages"]) if answer else "")
         checks[case["id"] + "_returned_keys_from_actual_model"] = bool(citations) and all(c.get("key", "")[1:] in keys for c in citations)
         wire = unescape(answer[-1]["request"]["messages"][-1]["content"]) if answer else ""
         checks[case["id"] + "_all_complete_sources_still_offered"] = all(d["content"] in wire for d in fixture["documents"])
     return checks
 
 
-def private_public_marker_checks(raw, private_code, public_code, public_keys):
+def private_public_marker_checks(raw, private_code, public_code, public_keys, namespace=""):
     """Separate explicit clauses; a semicolon can change the source subject."""
     clauses = re.split(r"[。！？\n；;]", raw)
     private = [c for c in clauses if private_code in c or
                ("你" in c and re.search(r"收到|参加|出发|私人", c))]
     public = [c for c in clauses if public_code in c]
     def markers(clause):
-        return set(re.findall(r"\[S(\d{1,2})\]", clause))
+        return set(audit_source_keys(clause, namespace))
     allowed = {key.removeprefix('S') for key in public_keys}
     return dict(
         private_receipt_present=any(private_code in c for c in private),
@@ -136,9 +182,9 @@ def audit_private_public_citation_wire(proof, calls, fixture):
         received_confirmation_preserved=bool(re.search(r'你.{0,20}(?:已经|已|刚).{0,6}收到.{0,6}(?:书面|确认)', reply)),
         no_attendance_promoted_from_confirmation=bool(re.search(r'(?:尚未|还没|没有|未曾|未).{0,10}(?:参加|上课)', reply)),
         only_authoritative_course_cited=len(citations) == len(course) == 1,
-        visible_reply_has_no_internal_citation_marker=not re.search(r'\[S\d{1,2}\]', reply),
+        visible_reply_has_no_internal_citation_marker=('[[cite:' + audit_citation_namespace(messages) + ':') not in reply if audit_citation_namespace(messages) else not re.search(r'\[S\d{1,2}\]', reply),
     )
-    checks.update(private_public_marker_checks(raw, private_code, public_code, {c.get('key', '') for c in course}))
+    checks.update(private_public_marker_checks(raw, private_code, public_code, {c.get('key', '') for c in course}, audit_citation_namespace(messages)))
     return checks
 
 
@@ -187,7 +233,7 @@ def isolated_probe_paths(root, run_label, api_key_file):
 async def main(args):
     from evaluation.conversation_source_probe import verify_cluster
 
-    if sum((args.window_boundary, args.citation_precision, args.private_public_citations)) > 1:
+    if sum((args.window_boundary, args.citation_precision, args.private_public_citations, args.literal_citations)) > 1:
         raise ValueError("Choose one specific probe scenario")
 
     ROOT, OUT, key_path = isolated_probe_paths(args.root, args.run_label, args.api_key_file)
@@ -196,7 +242,7 @@ async def main(args):
     database_name = "stage3_" + args.run_label.replace("-", "_")
     OUT.mkdir(exist_ok=False)
     fixture = json.loads(
-        (Path(__file__).resolve().parents[1] / "tests/fixtures" / ("deepseek_private_public_citation_cases.json" if args.private_public_citations else "deepseek_citation_precision_cases.json" if args.citation_precision else "deepseek_mixed_window_boundary.json" if args.window_boundary else "deepseek_mixed_long_context_cases.json")).read_text()
+        (Path(__file__).resolve().parents[1] / "tests/fixtures" / ("deepseek_literal_citation_cases.json" if args.literal_citations else "deepseek_private_public_citation_cases.json" if args.private_public_citations else "deepseek_citation_precision_cases.json" if args.citation_precision else "deepseek_mixed_window_boundary.json" if args.window_boundary else "deepseek_mixed_long_context_cases.json")).read_text()
     )
     fixture["history_turns"] = expand_history(fixture)
     cases = fixture["cases"]
@@ -333,6 +379,7 @@ async def main(args):
         try:
             result = await original_generation(request, generate)
             row["model_messages"] = list(result.plan.messages)
+            row["citation_namespace"] = result.plan.retrieval.citation_namespace
             return result
         except Exception as exc:
             row["error_type"] = type(exc).__name__
@@ -462,7 +509,7 @@ async def main(args):
             long_history_loaded=len(prepared_diagnostics[-1]["history"]) >= 26
             and sum(len(h["content"]) for h in prepared_diagnostics[-1]["history"]) >= 18000,
         )
-        if args.citation_precision or args.private_public_citations:
+        if args.citation_precision or args.private_public_citations or args.literal_citations:
             checks.pop("long_history_loaded")
             checks["no_long_history_replay"] = all(len(d["history"]) < 10 for d in prepared_diagnostics)
         for case, generation in zip(cases, proof["generation"]):
@@ -482,7 +529,8 @@ async def main(args):
             checks[case["id"] + "_knowledge_on_wire"] = bool(wires) and any(
                 all(v in wire for v in case["knowledge_expected"]) for wire in wires
             )
-        checks.update(audit_private_public_citation_wire(proof, cloud_calls, fixture) if args.private_public_citations
+        checks.update(audit_literal_citation_wire(proof, cloud_calls, fixture) if args.literal_citations
+                      else audit_private_public_citation_wire(proof, cloud_calls, fixture) if args.private_public_citations
                       else audit_citation_precision_wire(proof, cloud_calls, fixture) if args.citation_precision
                       else audit_window_boundary_wire(proof, cloud_calls, fixture) if args.window_boundary
                       else audit_mixed_wire(proof, cloud_calls, fixture))
@@ -529,6 +577,7 @@ if __name__ == "__main__":
     parser.add_argument("--window-boundary", action="store_true")
     parser.add_argument("--citation-precision", action="store_true")
     parser.add_argument("--private-public-citations", action="store_true")
+    parser.add_argument("--literal-citations", action="store_true")
     parser.add_argument("--root", required=True, type=Path)
     parser.add_argument("--run-label", required=True)
     parser.add_argument("--api-key-file", required=True, type=Path)

@@ -165,16 +165,20 @@ async def test_production_and_character_benchmark_share_model_request(monkeypatc
 
 @pytest.mark.asyncio
 async def test_production_rag_uses_shared_grounded_request(monkeypatch):
+    import re
+
     from api import generate
+    from inference import answer_citations
     from inference.answer_citations import prepare_answer_citations
     from knowledge import intent_detector, rag_helper
 
+    monkeypatch.setattr(answer_citations.secrets, "token_hex", lambda _size: "123456abcdef")
     captured = {}
 
     class Client:
         async def generate(self, **kwargs):
             captured.update(kwargs)
-            return "answer[S1]"
+            return "answer" + re.search(r"\[\[cite:[0-9a-f]{12}:S1\]\]", kwargs["messages"][0]["content"]).group(0)
 
     async def retrieve(query, top_k, filters):
         return {

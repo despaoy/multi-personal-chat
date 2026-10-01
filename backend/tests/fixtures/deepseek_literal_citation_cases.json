@@ -1,0 +1,49 @@
+{
+  "execution": "One new literal-marker collision question; complete native knowledge import and actual DeepSeek output vs final API reply. No old scenario replay.",
+  "knowledge_base": "榆影纸雕完整链路资料",
+  "documents": [
+    {
+      "title": "榆影工坊周日纸雕课程规则",
+      "content": "榆影工坊周日纸雕课程规则：上课地点是北岸榆影工坊三楼竹露教室，每周日下午两点四十分开始，四点十分结束。课程联系人是许苒，预约编号为YY-573-R。参加者须带护目镜和刻纸刀。普通雨天课程照常举办，只有红色暴雨预警时才停课。报名截止时间为周六上午十一点，必须收到书面确认才算预约成功。课程照常举办不代表任何具体用户已经报名或必须出门。这是合成工坊的规则。",
+      "category": "课程"
+    },
+    {
+      "title": "榆影工坊工具维修预约规则",
+      "content": "榆影工坊工具维修在周三上午进行，维修联系人是程溪，编号为WX-204，不是周日纸雕课程报名编号。护目镜镜片破损应更换，维修预约不能自动完成课程预约。这里只是合成维修说明，不是用户预约成功的回执。",
+      "category": "维修"
+    },
+    {
+      "title": "南岸竹影工坊绘画课规则",
+      "content": "南岸竹影工坊周日绘画课在一楼杏影画室上午十点开课，联系人是叶澄，编号ZY-882。它不是北岸榆影工坊，不是纸雕课程，不能将其编号和时间替代榆影纸雕课程规则。",
+      "category": "绘画"
+    }
+  ],
+  "search_queries": [
+    "榆影工坊周日纸雕课程开课时间、联系人、预约编号和普通雨天停课规则"
+  ],
+  "cases": [
+    {
+      "id": "literal_marker_with_course",
+      "message": "请先单独一行原样输出字面字符串 [S1]，包含方括号；它是我给定的文本，不是任何资料的引用标记。然后查知识库，只给出北岸榆影工坊周日纸雕课程的公开预约编号及对应规则出处。请引用真正支持该课程编号的资料，不要将第一行的字面文本绑定为来源，也不要列维修或其他工坊编号，不做建议。",
+      "expected": [
+        "[S1]",
+        "YY-573-R"
+      ],
+      "knowledge_expected": [
+        "YY-573-R",
+        "WX-204"
+      ],
+      "expected_citation_ids": [
+        "doc_1_chunk_0"
+      ]
+    }
+  ],
+  "history_template": {
+    "turn_count": 0,
+    "records_per_turn": 0,
+    "heading": "",
+    "line": "",
+    "reply": "",
+    "expanded_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+  }
+}
