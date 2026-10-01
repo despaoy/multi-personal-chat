@@ -142,6 +142,7 @@ class _TurnOutcome:
 
     new_memories: int = 0
     memory_enrichment_scheduled: bool = False
+    source_capture: str = ""
     memory_enrichment_status: str = "skipped"
     memory_enrichment_mode: str = "none"
     interaction_count: int = 0
@@ -500,6 +501,7 @@ class CharacterContextService:
             from character.memory_llm import (
                 classify_memory_write_mode,
                 get_memory_enrichment_scheduler,
+                is_memory_erasure_request,
             )
 
             scheduler = get_memory_enrichment_scheduler()
@@ -519,28 +521,43 @@ class CharacterContextService:
                 outcome.memory_enrichment_status = "skipped_fiction_or_note"
             elif scheduler.enabled:
                 outcome.memory_enrichment_mode = classify_memory_write_mode(turn.message)
-                outcome.memory_enrichment_scheduled = scheduler.schedule(
-                    repository=self._memory_repo,
-                    character_id=prepared.character_id,
-                    user_scope=prepared.user_scope,
-                    message=turn.message,
-                    rule_hints=extracted,
-                    history=prepared.history,
-                    source_message_id=source_message_id or None,
-                    # 只传递本轮真正注入回复上下文的 IDs。“刚才那条说错了”
-                    # 可据此定向纠错；reply 本身绝不进入记忆证据。
-                    feedback_target_ids=prepared.compiled.used_memory_ids,
-                    source_type="user",
-                    observed_at=prepared.received_at,
-                    source_only=source_only,
-                )
-                outcome.memory_enrichment_status = (
-                    "queued_hot"
-                    if outcome.memory_enrichment_scheduled and outcome.memory_enrichment_mode == "hot"
-                    else "buffered_idle"
-                    if outcome.memory_enrichment_scheduled
-                    else scheduler.status.last_outcome
-                )
+                # Keep authorized complete speech durable even when semantic
+                # enrichment is full. Pending identity metadata is not speech.
+                capture = getattr(self._memory_repo, "capture_source", None)
+                if (source_message_id and callable(capture) and memory_write_allowed(turn.message)
+                        and not is_memory_erasure_request(turn.message)):
+                    outcome.source_capture = "failed"
+                    outcome.memory_enrichment_status = "source_capture_failed"
+                    outcome.source_capture = await capture(
+                        prepared.character_id, prepared.user_scope,
+                        source_message_id=source_message_id, body=turn.message,
+                        observed_at=prepared.received_at,
+                    )
+                if outcome.source_capture in {"stale", "revoked", "conflict"}:
+                    outcome.memory_enrichment_status = "source_" + outcome.source_capture
+                else:
+                    outcome.memory_enrichment_scheduled = scheduler.schedule(
+                        repository=self._memory_repo,
+                        character_id=prepared.character_id,
+                        user_scope=prepared.user_scope,
+                        message=turn.message,
+                        rule_hints=extracted,
+                        history=prepared.history,
+                        source_message_id=source_message_id or None,
+                        # 只传递本轮真正注入回复上下文的 IDs。“刚才那条说错了”
+                        # 可据此定向纠错；reply 本身绝不进入记忆证据。
+                        feedback_target_ids=prepared.compiled.used_memory_ids,
+                        source_type="user",
+                        observed_at=prepared.received_at,
+                        source_only=source_only,
+                    )
+                    outcome.memory_enrichment_status = (
+                        "queued_hot"
+                        if outcome.memory_enrichment_scheduled and outcome.memory_enrichment_mode == "hot"
+                        else "buffered_idle"
+                        if outcome.memory_enrichment_scheduled
+                        else scheduler.status.last_outcome
+                    )
             else:
                 outcome.memory_enrichment_mode = "rules"
                 for item in extracted[:4]:
@@ -553,7 +570,7 @@ class CharacterContextService:
                 outcome.memory_enrichment_status = "saved" if outcome.new_memories else "no_change"
         except Exception:
             logger.warning(
-                "角色长期记忆写入失败 character=%s error=%s",
+                "角色长期记忆写入失败 character=%s",
                 prepared.character_id,
                 exc_info=True,
             )

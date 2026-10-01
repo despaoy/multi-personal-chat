@@ -233,11 +233,14 @@ def isolated_probe_paths(root, run_label, api_key_file):
 async def main(args):
     from evaluation.conversation_source_probe import verify_cluster
 
-    if sum((args.window_boundary, args.citation_precision, args.private_public_citations, args.literal_citations, args.memory_correction, args.memory_history, args.memory_owner, args.memory_friend, args.memory_erasure, args.memory_scope, args.memory_collision, args.memory_replay, args.memory_race)) > 1:
+    if sum((args.window_boundary, args.citation_precision, args.private_public_citations, args.literal_citations, args.memory_correction, args.memory_history, args.memory_owner, args.memory_friend, args.memory_erasure, args.memory_scope, args.memory_collision, args.memory_replay, args.memory_race, args.memory_capacity)) > 1:
         raise ValueError("Choose one specific probe scenario")
 
-    if args.memory_replay or args.memory_race:
+    if args.memory_replay or args.memory_race or args.memory_capacity:
         args.memory_collision = True
+
+    if args.capacity_cold_query and not args.memory_capacity:
+        raise ValueError("The new cold recall is scoped to the capacity probe")
 
     if args.enable_source_recall and not (args.memory_friend or args.memory_erasure):
         raise ValueError("The explicit source-recall variant requires the friend-only scenario")
@@ -263,7 +266,7 @@ async def main(args):
             raise ValueError("Historical reuse requires the verified native source fixture")
     OUT.mkdir(exist_ok=False)
     fixture = json.loads(
-        (Path(__file__).resolve().parents[1] / "tests/fixtures" / ("deepseek_memory_race_cases.json" if args.memory_race else "deepseek_memory_replay_cases.json" if args.memory_replay else "deepseek_memory_collision_cases.json" if args.memory_collision else "deepseek_memory_scope_cases.json" if args.memory_scope else "deepseek_memory_erasure_cases.json" if args.memory_erasure else "deepseek_memory_friend_cases.json" if args.memory_friend else "deepseek_memory_owner_cases.json" if args.memory_owner else "deepseek_memory_history_cases.json" if args.memory_history else "deepseek_memory_correction_cases.json" if args.memory_correction else "deepseek_literal_citation_cases.json" if args.literal_citations else "deepseek_private_public_citation_cases.json" if args.private_public_citations else "deepseek_citation_precision_cases.json" if args.citation_precision else "deepseek_mixed_window_boundary.json" if args.window_boundary else "deepseek_mixed_long_context_cases.json")).read_text()
+        (Path(__file__).resolve().parents[1] / "tests/fixtures" / ("deepseek_memory_capacity_cases.json" if args.memory_capacity else "deepseek_memory_race_cases.json" if args.memory_race else "deepseek_memory_replay_cases.json" if args.memory_replay else "deepseek_memory_collision_cases.json" if args.memory_collision else "deepseek_memory_scope_cases.json" if args.memory_scope else "deepseek_memory_erasure_cases.json" if args.memory_erasure else "deepseek_memory_friend_cases.json" if args.memory_friend else "deepseek_memory_owner_cases.json" if args.memory_owner else "deepseek_memory_history_cases.json" if args.memory_history else "deepseek_memory_correction_cases.json" if args.memory_correction else "deepseek_literal_citation_cases.json" if args.literal_citations else "deepseek_private_public_citation_cases.json" if args.private_public_citations else "deepseek_citation_precision_cases.json" if args.citation_precision else "deepseek_mixed_window_boundary.json" if args.window_boundary else "deepseek_mixed_long_context_cases.json")).read_text()
     )
     fixture["history_turns"] = expand_history(fixture)
     cases = fixture["cases"]
@@ -300,6 +303,7 @@ async def main(args):
         OPENAI_COMPAT_API_KEY=key,
         OPENAI_COMPAT_MODEL="deepseek-v4-pro",
         MEMORY_LLM_ENABLED="true",
+        **(dict(MEMORY_LLM_QUEUE_SIZE="1", MEMORY_LLM_IDLE_SECONDS="0") if args.memory_capacity else {}),
         MEMORY_LLM_BASE_URL="https://api.deepseek.com",
         MEMORY_LLM_MODEL="deepseek-v4-pro",
         MEMORY_LLM_API_KEY=key,
@@ -625,6 +629,14 @@ async def main(args):
                 proof["claims_before_erasure"] = db.list_character_memory_claims(
                     "tsukiyashiro_kisaki", "web", "web-character", identity, "private", identity,
                     limit=None, include_inactive=True)
+            if args.memory_capacity:
+                from evaluation.memory_capacity_probe import run_capacity_probe
+
+                await run_capacity_probe(client,args,proof,fixture,cloud_calls,
+                    database_name=database_name,source_database=source_database,root=ROOT,
+                    output=OUT,identity=identity,database=db,runtime=inference_runtime,
+                    capture_storage_proof=capture_storage_proof)
+                return
             if args.memory_race:
                 from evaluation.memory_race_probe import run_memory_race
 
@@ -904,6 +916,8 @@ if __name__ == "__main__":
     parser.add_argument("--memory-collision", action="store_true")
     parser.add_argument("--memory-replay", action="store_true")
     parser.add_argument("--memory-race", action="store_true")
+    parser.add_argument("--memory-capacity", action="store_true")
+    parser.add_argument("--capacity-cold-query", action="store_true")
     parser.add_argument("--enable-source-recall", action="store_true")
     parser.add_argument("--root", required=True, type=Path)
     parser.add_argument("--run-label", required=True)
