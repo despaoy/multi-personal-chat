@@ -1299,10 +1299,12 @@ async def _generate_with_retrieval(
         generate_reply,
     )
 
-    if retrieval.evidence_packets:
+    if retrieval.evidence_packets or generation.plan.retrieval.answer_citations_bound:
         rag_meta["citations"] = list(generation.plan.retrieval.citations) if citations_enabled else []
         rag_meta["abstained"] = generation.plan.retrieval.status == "character_abstention"
         rag_meta["answerMode"] = "abstention" if rag_meta["abstained"] else "grounded_answer"
+    if generation.plan.retrieval.answer_citations_bound:
+        rag_meta["citations"] = list(generation.response_citations) if citations_enabled else []
     if not getattr(generation, "model_invoked", True):
         rag_meta["modelInvoked"] = False
         rag_meta["answerMode"] = generation.response_mode

@@ -166,6 +166,7 @@ async def test_production_and_character_benchmark_share_model_request(monkeypatc
 @pytest.mark.asyncio
 async def test_production_rag_uses_shared_grounded_request(monkeypatch):
     from api import generate
+    from inference.answer_citations import prepare_answer_citations
     from knowledge import intent_detector, rag_helper
 
     captured = {}
@@ -173,7 +174,7 @@ async def test_production_rag_uses_shared_grounded_request(monkeypatch):
     class Client:
         async def generate(self, **kwargs):
             captured.update(kwargs)
-            return "answer"
+            return "answer[S1]"
 
     async def retrieve(query, top_k, filters):
         return {
@@ -193,7 +194,7 @@ async def test_production_rag_uses_shared_grounded_request(monkeypatch):
         lambda: SimpleNamespace(format_context_results=lambda _: "evidence"),
     )
 
-    await generate._generate_with_vllm(
+    reply, _, meta = await generate._generate_with_vllm(
         MessageRequest(message="question", senderName="琉璃"),
         None,
         runtime_config={"useKnowledgeBase": True, "temperature": 0.7},
@@ -203,11 +204,14 @@ async def test_production_rag_uses_shared_grounded_request(monkeypatch):
             message="question",
             persona_prompt="persona",
             interlocutor="琉璃",
-            retrieval=generate.RetrievalResult(status="ok", evidence="evidence"),
+            retrieval=prepare_answer_citations(generate.RetrievalResult(status="ok", evidence="evidence",
+                documents=({"id": "doc-1", "content": "evidence"},), citations=({"source_id": "doc-1"},))),
             temperature=0.7,
         )
     )
 
+    assert reply == "answer"
+    assert [c["source_id"] for c in meta["citations"]] == ["doc-1"]
     assert captured["messages"] == [dict(message) for message in expected.messages]
     assert captured["temperature"] == expected.generation["temperature"] == 0.5
     assert expected.prompt_policy_version

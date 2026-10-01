@@ -70,6 +70,22 @@ def audit_window_boundary_wire(proof, calls, fixture):
     return checks
 
 
+def audit_citation_precision_wire(proof, calls, fixture):
+    """Every returned source must be bound from a real answer marker."""
+    checks = {}
+    for case, generation in zip(fixture["cases"], proof["generation"]):
+        citations = generation["response"].get("citations") or []
+        actual = [c.get("source_id") for c in citations]
+        checks[case["id"] + "_only_answer_used_sources"] = set(actual) == set(case["expected_citation_ids"]) and len(actual) == len(set(actual))
+        answer = [c for c in calls[slice(*generation["cloud_call_range"])] if c["request"].get("max_tokens") == 1024]
+        raw = answer[-1]["response"]["choices"][0]["message"]["content"] if answer else ""
+        keys = re.findall(r"\[S(\d{1,2})\]", raw)
+        checks[case["id"] + "_returned_keys_from_actual_model"] = bool(citations) and all(c.get("key", "")[1:] in keys for c in citations)
+        wire = unescape(answer[-1]["request"]["messages"][-1]["content"]) if answer else ""
+        checks[case["id"] + "_all_complete_sources_still_offered"] = all(d["content"] in wire for d in fixture["documents"])
+    return checks
+
+
 def expand_history(fixture):
     """Expand fully specified synthetic history without storing repeated text."""
     import hashlib
@@ -115,13 +131,16 @@ def isolated_probe_paths(root, run_label, api_key_file):
 async def main(args):
     from evaluation.conversation_source_probe import verify_cluster
 
+    if args.window_boundary and args.citation_precision:
+        raise ValueError("Choose one specific probe scenario")
+
     ROOT, OUT, key_path = isolated_probe_paths(args.root, args.run_label, args.api_key_file)
     bootstrap_url = "postgresql+asyncpg://boot@/postgres?host=" + str(ROOT / "socket") + "&port=25433"
     await verify_cluster(bootstrap_url, ROOT / "data")
     database_name = "stage3_" + args.run_label.replace("-", "_")
     OUT.mkdir(exist_ok=False)
     fixture = json.loads(
-        (Path(__file__).resolve().parents[1] / "tests/fixtures" / ("deepseek_mixed_window_boundary.json" if args.window_boundary else "deepseek_mixed_long_context_cases.json")).read_text()
+        (Path(__file__).resolve().parents[1] / "tests/fixtures" / ("deepseek_citation_precision_cases.json" if args.citation_precision else "deepseek_mixed_window_boundary.json" if args.window_boundary else "deepseek_mixed_long_context_cases.json")).read_text()
     )
     fixture["history_turns"] = expand_history(fixture)
     cases = fixture["cases"]
@@ -387,6 +406,9 @@ async def main(args):
             long_history_loaded=len(prepared_diagnostics[-1]["history"]) >= 26
             and sum(len(h["content"]) for h in prepared_diagnostics[-1]["history"]) >= 18000,
         )
+        if args.citation_precision:
+            checks.pop("long_history_loaded")
+            checks["no_long_history_replay"] = all(len(d["history"]) < 10 for d in prepared_diagnostics)
         for case, generation in zip(cases, proof["generation"]):
             if not case.get("knowledge_expected"):
                 continue
@@ -404,7 +426,8 @@ async def main(args):
             checks[case["id"] + "_knowledge_on_wire"] = bool(wires) and any(
                 all(v in wire for v in case["knowledge_expected"]) for wire in wires
             )
-        checks.update(audit_window_boundary_wire(proof, cloud_calls, fixture) if args.window_boundary
+        checks.update(audit_citation_precision_wire(proof, cloud_calls, fixture) if args.citation_precision
+                      else audit_window_boundary_wire(proof, cloud_calls, fixture) if args.window_boundary
                       else audit_mixed_wire(proof, cloud_calls, fixture))
         reopened = proof["persisted_vector_stats"]
         checks.update(
@@ -447,6 +470,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--require-success", action="store_true")
     parser.add_argument("--window-boundary", action="store_true")
+    parser.add_argument("--citation-precision", action="store_true")
     parser.add_argument("--root", required=True, type=Path)
     parser.add_argument("--run-label", required=True)
     parser.add_argument("--api-key-file", required=True, type=Path)

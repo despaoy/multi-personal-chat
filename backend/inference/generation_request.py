@@ -86,6 +86,7 @@ class RetrievalResult:
     confidence: float | None = None
     reason: str = ""
     source_lookup: bool = False
+    answer_citations_bound: bool = False
     source_excerpts: tuple[Mapping[str, Any], ...] = ()
     evidence_packets: tuple[Mapping[str, Any], ...] = ()
     identity_task: Mapping[str, str] = field(default_factory=dict)
@@ -284,6 +285,10 @@ def _system_prompt(request: GenerationRequest) -> str:
         prompt = "\n\n".join(part for part in (prompt, CHARACTER_ABSTENTION_POLICY) if part)
         if request.retrieval.reason == "retrieval_unavailable":
             prompt += "\n本轮依据暂时无法核实；这不代表知识库中不存在答案。请自然表达暂时不能确认。"
+    if request.retrieval.has_evidence and request.retrieval.answer_citations_bound:
+        from inference.answer_citations import CITATION_OUTPUT_POLICY
+
+        prompt += '\n\n' + CITATION_OUTPUT_POLICY
     return prompt
 
 
@@ -435,6 +440,9 @@ async def generate_character_response(
             return replace(result, reply=confirmation + '\n\n' + result.reply, response_mode='task_composite',
                 task_results=({'kind': 'memory_operation', 'query': operation, 'mode': 'memory_operation'},
                               {'kind': 'content', 'query': remaining, 'mode': result.response_mode}))
+    from inference.answer_citations import finalize_answer_citations, prepare_answer_citations
+
+    request = replace(request, retrieval=prepare_answer_citations(request.retrieval))
     plan = build_generation_request(request)
     request = replace(request, retrieval=plan.retrieval)
     if request.reply_guard is not None and request.retrieval.has_evidence:
@@ -488,7 +496,7 @@ async def generate_character_response(
                           'mode': completed[index][1] if index in completed else result.response_mode}
                          for index, task in enumerate(tasks) if task.kind != 'control')
         return replace(result, reply='\n\n'.join(replies), response_mode='task_composite', task_results=outcomes,
-                       response_citations=result.response_citations or result.plan.retrieval.citations)
+                       response_citations=result.response_citations)
     messages = [dict(message) for message in plan.messages]
     reply = await generate(
         messages=messages,
@@ -513,7 +521,7 @@ async def generate_character_response(
         reply, request.reply_guard, violations, strict=request.reply_guard_mode == "strict"
     )
     if not blocking:
-        return GenerationResult(reply=reply, plan=plan, guard_violations=violations)
+        return finalize_answer_citations(GenerationResult(reply=reply, plan=plan, guard_violations=violations))
 
     if (getattr(request.character_context, "memory_status", "") == "no_match"
             and set(blocking) == {UNSUPPORTED_USER_FACT}):
@@ -522,8 +530,8 @@ async def generate_character_response(
         # claim-level mechanism; no_match is not proof that all sources lack facts.
         fallback = deterministic_fallback(blocking, request.reply_guard, candidate_reply=reply)
         if fallback is not None:
-            return GenerationResult(reply=fallback[1], plan=plan, guard_violations=violations,
-                                    guard_fallback=fallback[0])
+            return finalize_answer_citations(GenerationResult(reply=fallback[1], plan=plan, guard_violations=violations,
+                                    guard_fallback=fallback[0]))
 
     corrected_messages = apply_retry_instruction(messages, retry_instruction(blocking))
     reply = await generate(
@@ -557,11 +565,11 @@ async def generate_character_response(
     fallback_kind = ""
     if fallback is not None:
         fallback_kind, reply = fallback
-    return GenerationResult(
+    return finalize_answer_citations(GenerationResult(
         reply=reply,
         plan=plan,
         guard_violations=violations,
         guard_retried=True,
         guard_post_retry_violations=remaining,
         guard_fallback=fallback_kind,
-    )
+    ))
