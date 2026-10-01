@@ -1,0 +1,52 @@
+{
+  "data_origin": "Actual saved DeepSeek proposal for the explicitly authorized entirely synthetic booking correction fixture; no credentials or real personal data",
+  "source_message": "更新我本人的北岸榆影工坊周日纸雕课预约记录：我先前确实收到过私人回执PB-681-Q的书面预约确认。现在工坊已正式撤销我的这一次预约，私人回执PB-681-Q已经作废，我目前没有任何有效的书面预约确认。我至今仍没有参加过这门课程，也没有出发。撤销的只是我这一次私人预约，并不代表公开课程停课。这是在明确更正当前预约状态，请保留先前确认与后来撤销的发生顺序；我不是要求删除记忆。",
+  "history": [
+    {
+      "role": "user",
+      "content": "我本人今天先收到了北岸榆影工坊周日纸雕课的书面预约确认。我这一份确认书的私人回执编号是PB-681-Q，它只标识我的私人预约，不是公开课程编号。当时我的预约已经确认成功，但我还没有参加过这门课程，也没有出发。这是我本人的完整记录，请记住我的私人回执和当时已经确认、尚未参加、尚未出发的状态。",
+      "eligible_as_memory_evidence": false
+    },
+    {
+      "role": "assistant",
+      "content": "我记下了：你的私人回执编号是 PB-681-Q，只对应你本人的预约；当时预约已确认成功，但你尚未参加课程，也尚未出发。",
+      "eligible_as_memory_evidence": false
+    }
+  ],
+  "existing_memories": [
+    {
+      "memory_id": "1",
+      "memory_key": "event_北岸榆影工坊周日纸雕课预约确认",
+      "memory_type": "shared_event",
+      "content": "用户原话事件记录（完整内容见证据）",
+      "status": "active",
+      "valid_from": "",
+      "valid_to": "",
+      "was_injected_in_last_reply": true
+    }
+  ],
+  "feedback_target_ids": [
+    "1"
+  ],
+  "confidence_threshold": 0.85,
+  "model_output": {
+    "memories": [
+      {
+        "kind": "shared_event",
+        "value": "北岸榆影工坊周日纸雕课预约已撤销",
+        "content": "用户此前收到过私人回执PB-681-Q的书面预约确认，现工坊已正式撤销该预约，回执作废，用户目前没有任何有效的书面预约确认，且仍未参加过课程、未出发；撤销仅针对其私人预约，不代表公开课程停课。",
+        "evidence": "现在工坊已正式撤销我的这一次预约，私人回执PB-681-Q已经作废，我目前没有任何有效的书面预约确认。我至今仍没有参加过这门课程，也没有出发。撤销的只是我这一次私人预约，并不代表公开课程停课。",
+        "confidence": 0.97,
+        "operation": "SUPERSEDE",
+        "target_memory_id": "1",
+        "target_memory_key": "event_北岸榆影工坊周日纸雕课预约确认",
+        "attributed_to": "user",
+        "qualifiers": {},
+        "valid_from": "",
+        "valid_to": "",
+        "observed_at": "2026-10-01T09:45:49.177427+00:00",
+        "scope_level": "conversation"
+      }
+    ]
+  }
+}

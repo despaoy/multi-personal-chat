@@ -233,7 +233,7 @@ def isolated_probe_paths(root, run_label, api_key_file):
 async def main(args):
     from evaluation.conversation_source_probe import verify_cluster
 
-    if sum((args.window_boundary, args.citation_precision, args.private_public_citations, args.literal_citations)) > 1:
+    if sum((args.window_boundary, args.citation_precision, args.private_public_citations, args.literal_citations, args.memory_correction)) > 1:
         raise ValueError("Choose one specific probe scenario")
 
     ROOT, OUT, key_path = isolated_probe_paths(args.root, args.run_label, args.api_key_file)
@@ -242,7 +242,7 @@ async def main(args):
     database_name = "stage3_" + args.run_label.replace("-", "_")
     OUT.mkdir(exist_ok=False)
     fixture = json.loads(
-        (Path(__file__).resolve().parents[1] / "tests/fixtures" / ("deepseek_literal_citation_cases.json" if args.literal_citations else "deepseek_private_public_citation_cases.json" if args.private_public_citations else "deepseek_citation_precision_cases.json" if args.citation_precision else "deepseek_mixed_window_boundary.json" if args.window_boundary else "deepseek_mixed_long_context_cases.json")).read_text()
+        (Path(__file__).resolve().parents[1] / "tests/fixtures" / ("deepseek_memory_correction_cases.json" if args.memory_correction else "deepseek_literal_citation_cases.json" if args.literal_citations else "deepseek_private_public_citation_cases.json" if args.private_public_citations else "deepseek_citation_precision_cases.json" if args.citation_precision else "deepseek_mixed_window_boundary.json" if args.window_boundary else "deepseek_mixed_long_context_cases.json")).read_text()
     )
     fixture["history_turns"] = expand_history(fixture)
     cases = fixture["cases"]
@@ -336,6 +336,28 @@ async def main(args):
     from infra.concurrency_control import inference_runtime
     from services.character_context import CharacterContextService
 
+    cold_history_diagnostics = []
+    candidate_diagnostics = []
+    original_history = CharacterContextService._load_history
+    original_candidates = CharacterContextService._load_memory_candidates
+
+    async def cold_history(service, turn, user_scope, character_id):
+        history = await original_history(service, turn, user_scope, character_id)
+        if turn.message == cases[-1]["message"]:
+            cold_history_diagnostics.append(dict(query=turn.message, original_history=history, returned_history=[]))
+            return []
+        return history
+
+    async def observed_candidates(service, character_id, user_scope, query, **kwargs):
+        result = await original_candidates(service, character_id, user_scope, query, **kwargs)
+        candidate_diagnostics.append(dict(query=query, items=[asdict(item) for item in result[0]],
+                                         candidate_count=result[1], recall=result[2]))
+        return result
+
+    if args.memory_correction:
+        CharacterContextService._load_history = cold_history
+        CharacterContextService._load_memory_candidates = observed_candidates
+
     prepared_diagnostics = []
     generation_diagnostics = []
     original_prepare = CharacterContextService.prepare_turn
@@ -403,6 +425,9 @@ async def main(args):
         documents=[],
         searches=[],
         retrieval_diagnostics=retrieval_diagnostics,
+        cold_history_diagnostics=cold_history_diagnostics,
+        candidate_diagnostics=candidate_diagnostics,
+        controlled_ablation=dict(history_ablation_enabled=args.memory_correction, raw_source_recall_enabled=False),
     )
     password = secrets.token_urlsafe(24)
     try:
@@ -444,6 +469,11 @@ async def main(args):
                 )
                 proof["searches"].append(dict(query=query, http_status=response.status_code, response=response.json()))
             for case in cases:
+                if args.memory_correction and case["id"] == "current_booking_status":
+                    proof["claims_before_question"] = db.list_character_memory_claims(
+                        "tsukiyashiro_kisaki", "web", "web-character", identity, "private", identity,
+                        limit=None, include_inactive=True)
+                    (OUT / "pre-question.json").write_text(json.dumps(proof, ensure_ascii=False, indent=2))
                 before = len(cloud_calls)
                 response = await client.post(
                     "/api/generate",
@@ -509,7 +539,7 @@ async def main(args):
             long_history_loaded=len(prepared_diagnostics[-1]["history"]) >= 26
             and sum(len(h["content"]) for h in prepared_diagnostics[-1]["history"]) >= 18000,
         )
-        if args.citation_precision or args.private_public_citations or args.literal_citations:
+        if args.citation_precision or args.private_public_citations or args.literal_citations or args.memory_correction:
             checks.pop("long_history_loaded")
             checks["no_long_history_replay"] = all(len(d["history"]) < 10 for d in prepared_diagnostics)
         for case, generation in zip(cases, proof["generation"]):
@@ -529,11 +559,18 @@ async def main(args):
             checks[case["id"] + "_knowledge_on_wire"] = bool(wires) and any(
                 all(v in wire for v in case["knowledge_expected"]) for wire in wires
             )
-        checks.update(audit_literal_citation_wire(proof, cloud_calls, fixture) if args.literal_citations
-                      else audit_private_public_citation_wire(proof, cloud_calls, fixture) if args.private_public_citations
-                      else audit_citation_precision_wire(proof, cloud_calls, fixture) if args.citation_precision
-                      else audit_window_boundary_wire(proof, cloud_calls, fixture) if args.window_boundary
-                      else audit_mixed_wire(proof, cloud_calls, fixture))
+        if args.memory_correction:
+            from evaluation.memory_correction_audit import audit_memory_correction_wire
+
+            checks["final_question_cold_history"] = prepared_diagnostics[-1]["history"] == []
+            checks.update(audit_memory_correction_wire(proof, cloud_calls, fixture))
+        else:
+            checks.update(audit_literal_citation_wire(proof, cloud_calls, fixture) if args.literal_citations
+                          else audit_private_public_citation_wire(proof, cloud_calls, fixture) if args.private_public_citations
+                          else audit_citation_precision_wire(proof, cloud_calls, fixture) if args.citation_precision
+                          else audit_window_boundary_wire(proof, cloud_calls, fixture) if args.window_boundary
+                          else audit_mixed_wire(proof, cloud_calls, fixture))
+
         reopened = proof["persisted_vector_stats"]
         checks.update(
             persisted_index_reopens_with_all_three_documents=reopened["total_documents"]
@@ -545,9 +582,10 @@ async def main(args):
         proof["persisted_vector_stats"] = reopened
         proof["checks"] = checks
         proof["controlled_ablation"] = dict(
-            history_ablation_enabled=False,
+            history_ablation_enabled=args.memory_correction,
             raw_source_recall_enabled=False,
             loaded_history_count=len(prepared_diagnostics[-1]["history"]),
+            scope="only current_booking_status; stored history observed unchanged; no model messages reconstructed" if args.memory_correction else "none",
         )
         proof["cloud_summary"] = [
             dict(
@@ -578,6 +616,7 @@ if __name__ == "__main__":
     parser.add_argument("--citation-precision", action="store_true")
     parser.add_argument("--private-public-citations", action="store_true")
     parser.add_argument("--literal-citations", action="store_true")
+    parser.add_argument("--memory-correction", action="store_true")
     parser.add_argument("--root", required=True, type=Path)
     parser.add_argument("--run-label", required=True)
     parser.add_argument("--api-key-file", required=True, type=Path)

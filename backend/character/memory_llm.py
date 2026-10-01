@@ -1079,7 +1079,17 @@ def _candidate_to_proposal(
         history=history,
         existing_memories=existing_memories,
     ):
-        if (kind == "other_user_fact" and (
+        if event_observation:
+            # A model's short event topic is an index, not a proven predicate.
+            # Keep the independently grounded complete utterance as a quoted
+            # observation instead of discarding a real later correction.
+            generic_source_observation = True
+            proposed_content = ""
+            if target_record is not None and semantic_operation in {"MERGE", "SUPERSEDE"}:
+                # Earlier utterances remain valid observations of what was
+                # said. Link the new source without erasing that chronology.
+                operation = semantic_operation = "COEXIST"
+        elif (kind == "other_user_fact" and (
                 semantic_operation == "ADD" and target_record is None
                 or semantic_operation == "MERGE" and target_record is not None
                 and target_memory_key.startswith("fact_"))):
@@ -1170,7 +1180,8 @@ def _candidate_to_proposal(
         memory_type, key, canonical_content, importance = canonical
         if generic_source_observation and target_record is None:
             # A new observation's key must not encode an unverified summary.
-            key = "fact_source_" + hashlib.sha256(source_message.encode("utf-8")).hexdigest()[:24]
+            prefix = "event_source_" if kind == "shared_event" else "fact_source_"
+            key = prefix + hashlib.sha256(source_message.encode("utf-8")).hexdigest()[:24]
         if (kind == "location" and target_record is not None
                 and target_memory_key in {"user_origin", "user_residence"}
                 and key != target_memory_key):
