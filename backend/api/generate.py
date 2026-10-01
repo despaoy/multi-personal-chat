@@ -934,8 +934,10 @@ async def _complete_character_turn(prepared, request: MessageRequest, reply: str
             received_at=request._source_received_at,
         )
         service = character_service or get_default_character_context_service()
-        outcome = await asyncio.wait_for(
-            service.complete_turn(
+        from services.turn_completion import get_turn_completion_runtime
+
+        outcome = await get_turn_completion_runtime().run(
+            lambda: service.complete_turn(
                 prepared,
                 turn_input,
                 reply,

@@ -49,26 +49,27 @@ async def test_capture_outcome_is_not_discarded(capture, expected):
 @pytest.mark.asyncio
 async def test_real_coroutine_timeout_is_unknown_not_failed(monkeypatch):
     from api import generate as gen
+    from services import turn_completion
 
+    runtime = turn_completion.TurnCompletionRuntime()
+    monkeypatch.setattr(turn_completion, "get_turn_completion_runtime", lambda: runtime)
     monkeypatch.setattr(gen, "_DB_WRITE_TIMEOUT", 0.01)
-    started = asyncio.Event()
-    cancelled = asyncio.Event()
+    started, release, finished = asyncio.Event(), asyncio.Event(), asyncio.Event()
 
     async def slow(*args, **kwargs):
         started.set()
-        try:
-            await asyncio.Event().wait()
-        finally:
-            cancelled.set()
+        await release.wait()
+        finished.set()
 
     warning = await gen._complete_character_turn(
-        SimpleNamespace(character_id="tsukiyashiro_kisaki"),
-        request(),
-        "原文",
+        SimpleNamespace(character_id="tsukiyashiro_kisaki"), request(), "原文",
         character_service=SimpleNamespace(complete_turn=slow),
     )
-    assert started.is_set() and cancelled.is_set()
+    assert started.is_set() and not finished.is_set() and runtime.active == 1
     assert "尚未确认" in warning and "保存失败" not in warning and "稍后检查" in warning
+    release.set()
+    await runtime.shutdown(timeout=1)
+    assert finished.is_set() and runtime.cancelled == runtime.active == 0
 
 
 @pytest.mark.asyncio

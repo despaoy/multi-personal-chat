@@ -226,6 +226,9 @@ async def lifespan(app: FastAPI):
     # 延迟重建向量索引（首次搜索时自动触发，避免启动时阻塞）
     # 见 api/knowledge.py search_knowledge 中的 _ensure_vector_index()
 
+    from services.turn_completion import start_turn_completions
+
+    start_turn_completions()
     logger.info("✅ 增强版服务启动完成！")
     try:
         yield
@@ -249,6 +252,14 @@ async def lifespan(app: FastAPI):
             await shutdown_intent_tasks()
         except Exception as e:
             logger.warning("关闭 RAG 意图任务失败: %s", e)
+        try:
+            from services.turn_completion import shutdown_turn_completions
+
+            # Accepted completions may still enqueue semantic jobs. Drain them
+            # while their scheduler and database dependencies remain available.
+            await shutdown_turn_completions()
+        except Exception as e:
+            logger.warning("关闭角色回写任务失败: %s", e)
         try:
             from character.memory_llm import shutdown_memory_enrichment
 
