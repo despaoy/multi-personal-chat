@@ -438,6 +438,15 @@ class PgDatabase:
             result = await session.execute(stmt)
             return [_row_to_dict(row) for row in result.fetchall()]
 
+    async def update_message_feedback(self, receipt: dict, *, warning: str) -> bool:
+        from db.message_feedback import feedback_update_plan
+
+        query, params = feedback_update_plan(receipt, warning)
+        async with self.async_session() as session:
+            result = await session.execute(text(query), params)
+            await session.commit()
+            return result.rowcount == 1
+
     async def delete_message(self, msg_id: int) -> bool:
         """删除单条消息记录"""
         async with self.async_session() as session:
@@ -2897,6 +2906,9 @@ class SyncPgAdapter:
 
     def get_message_count(self, **kwargs):
         return self._run(self._pg.get_message_count(**kwargs))
+
+    def update_message_feedback(self, receipt, *, warning):
+        return self._run(self._pg.update_message_feedback(receipt, warning=warning))
 
     def delete_message(self, msg_id):
         return self._run(self._pg.delete_message(msg_id))

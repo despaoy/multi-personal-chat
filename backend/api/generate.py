@@ -536,6 +536,7 @@ async def _generate_reply_impl(
                 if generation_error:
                     increment("model_failures")
             message_saved = False
+            archive_receipt = {}
             if persist_message:
                 message_saved = await _save_message(
                     request,
@@ -545,6 +546,7 @@ async def _generate_reply_impl(
                     cost_time,
                     database=message_db,
                     character_id=mapped_character_id,
+                    saved_receipt=archive_receipt,
                 )
             # 仅当本轮消息确实要持久化且保存成功时才回写人物状态：
             # persist_message=False（如 Claw 内部推理）不得污染人物记忆；
@@ -558,6 +560,12 @@ async def _generate_reply_impl(
                     reply,
                     character_service=character_service,
                 )
+                if completion_warning:
+                    stored = await _persist_completion_feedback(
+                        archive_receipt, completion_warning, database=message_db,
+                    )
+                    if not stored:
+                        completion_warning += " 保存提示未能写入聊天历史，刷新后可能看不到本次保存状态。"
             log_event(
                 "message_generated",
                 traceId=request.traceId,
@@ -725,6 +733,7 @@ async def _generate_reply_impl(
                 database=message_db,
             )
         message_saved = False
+        archive_receipt = {}
         if persist_message:
             message_saved = await _save_message(
                 request,
@@ -734,6 +743,7 @@ async def _generate_reply_impl(
                 cost_time,
                 database=message_db,
                 character_id=mapped_character_id,
+                saved_receipt=archive_receipt,
             )
         # 同 vLLM 路径：消息保存成功才回写人物状态，persist_message=False 不回写
         if delivery_context is not None:
@@ -745,6 +755,12 @@ async def _generate_reply_impl(
                 reply,
                 character_service=character_service,
             )
+            if completion_warning:
+                stored = await _persist_completion_feedback(
+                    archive_receipt, completion_warning, database=message_db,
+                )
+                if not stored:
+                    completion_warning += " 保存提示未能写入聊天历史，刷新后可能看不到本次保存状态。"
         set_consecutive("model_failure", not bool(fallback_rag_meta.get("generationError")))
         if fallback_rag_meta.get("generationError"):
             increment("model_failures")
@@ -873,7 +889,26 @@ async def _prepare_character_turn(
 
 def _reply_with_memory_warning(reply: str, warning: str | None) -> str:
     """Keep model content and make persistence feedback visible to reply-only clients."""
-    return f"{reply}\n\n保存提示：{warning}" if warning else reply
+    from db.message_feedback import reply_with_warning
+
+    return reply_with_warning(reply, warning)
+
+
+async def _persist_completion_feedback(receipt: dict, warning: str, *, database=None) -> bool:
+    """Finalize only the exact row returned by successful message storage."""
+    target_db = database if database is not None else db
+    writer = getattr(target_db, "update_message_feedback", None)
+    if not receipt or not callable(writer):
+        return False
+    try:
+        return bool(await asyncio.wait_for(
+            asyncio.to_thread(writer, receipt, warning=warning), timeout=_DB_WRITE_TIMEOUT,
+        ))
+    except Exception:
+        # Preserve visible current feedback even when history storage is
+        # unknown; never regenerate the model or replace an unrelated row.
+        logger.warning("保存提示存档未能确认", exc_info=True)
+        return False
 
 
 async def _complete_character_turn(prepared, request: MessageRequest, reply: str, *, character_service=None) -> str | None:
@@ -1529,6 +1564,7 @@ async def _save_message(
     *,
     database=None,
     character_id: str | None = None,
+    saved_receipt: dict | None = None,
 ) -> bool:
     """Save generated replies with platform-aware metadata.
 
@@ -1538,8 +1574,10 @@ async def _save_message(
     None 时用全局单例。
     """
     target_db = database if database is not None else db
+    if saved_receipt is not None:
+        saved_receipt.clear()
     try:
-        await asyncio.wait_for(
+        stored = await asyncio.wait_for(
             asyncio.to_thread(
                 target_db.add_message,
                 {
@@ -1566,6 +1604,8 @@ async def _save_message(
             ),
             timeout=_DB_WRITE_TIMEOUT,
         )
+        if saved_receipt is not None and isinstance(stored, dict) and stored.get("id"):
+            saved_receipt.update(stored)
         return True
     except Exception as e:
         increment("db_write_failures")

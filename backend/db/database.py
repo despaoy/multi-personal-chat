@@ -1489,6 +1489,20 @@ class SQLiteDB:
             "createdAt": created_at,
         }
 
+    def update_message_feedback(self, receipt: dict, *, warning: str) -> bool:
+        from db.message_feedback import feedback_update_plan
+
+        query, params = feedback_update_plan(receipt, warning)
+        conn = self._get_connection()
+        try:
+            cursor = conn.execute(query, params)
+            updated = cursor.rowcount == 1
+            conn.commit()
+            return updated
+        except Exception:
+            conn.rollback()
+            raise
+
     def delete_message(self, msg_id: int) -> bool:
         """删除单条消息记录"""
         conn = self._get_connection()
