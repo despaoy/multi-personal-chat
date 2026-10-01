@@ -1,0 +1,57 @@
+{
+  "conditions": {
+    "history": "ablated after actual history loader",
+    "source_pool_recall": false,
+    "memory_writer": false,
+    "knowledge_base": false,
+    "provider": "openai_compat/deepseek-v4-pro",
+    "storage_format": "typed semantic current correction with complete authorized source and actual supersession edge",
+    "expected_values_are_not_in_model_input": true
+  },
+  "cases": [
+    {
+      "id": "residence-correction",
+      "records": [
+        {
+          "id": "name",
+          "key": "user_name",
+          "source": "我叫岚舟。",
+          "quote": "我叫岚舟。"
+        },
+        {
+          "id": "origin",
+          "key": "user_origin",
+          "source": "我来自宣城。",
+          "quote": "我来自宣城。"
+        },
+        {
+          "id": "old-residence",
+          "key": "user_residence",
+          "source": "我目前住在丽水。",
+          "quote": "我目前住在丽水。"
+        },
+        {
+          "id": "correction",
+          "key": "user_residence",
+          "source": "我目前住在舟山，已经不住丽水了。",
+          "quote": "我目前住在舟山，已经不住丽水了。",
+          "supersedes": "old-residence",
+          "proposed_zero_width": true,
+          "metadata": {
+            "temporal_provenance": {
+              "version": 1,
+              "producer": "semantic_memory",
+              "validity_authority": "unverified"
+            }
+          }
+        }
+      ],
+      "query": "请用一句话核对我的当前个人资料：姓名、籍贯和居住地各是什么？只写当前个人资料，不做建议。",
+      "expected": {
+        "name": "岚舟",
+        "origin": "宣城",
+        "residence": "舟山"
+      }
+    }
+  ]
+}

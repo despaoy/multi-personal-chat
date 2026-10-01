@@ -167,6 +167,7 @@ _FICTION_CONTEXT = re.compile(
 _NON_ASSERTION = re.compile(
     r"不是|并非|不代表|不是真的|不是真名|以前|曾经|过去|"
     r"(?:我(?:妈妈?|爸爸?|朋友|同事)|他|她|别人|朋友)(?:说|觉得|以为)"
+    r"|(?:^|[，,])\s*(?:我)?(?:已经)?不(?:再)?(?:住(?:在)?|在[^，。！？,!?]{1,30}(?:工作|上班))"
 )
 _CONDITION = re.compile(r"但是|不过|但|只有|除非|除了|仅限|晚上|白天|周末|有时|偶尔")
 
@@ -357,6 +358,33 @@ def _contrastive_slot_memory(sentence: str) -> ExtractedMemory | None:
         items = _extract_simple_memories(left)
         if len(items) == 1 and items[0].memory_key == expected_key and not items[0].qualifiers:
             return replace(items[0], evidence=sentence)
+        return None
+
+    # Completed place denial must instantiate the same slot with a distinct
+    # value. Keep the whole correction, including the denied old place; never
+    # resolve pronouns, contradictory values or a different speaker/predicate.
+    denied = re.fullmatch(
+        r'(?:我)?(?:已经)?不(?:再)?住(?:在)?(?P<subject>[\w· -]{1,30}?)(?:了)?', right)
+    old_clause = '我住在' + denied['subject'] if denied else ''
+    if denied is None:
+        denied = re.fullmatch(
+            r'(?:我)?(?:已经)?不(?:再)?在(?P<subject>[\w· -]{1,30}?)(?:工作|上班)(?:了)?', right)
+        if denied:
+            old_clause = '我在' + denied['subject'] + '工作'
+    if old_clause:
+        if slot(left) is None or slot(old_clause) is None:
+            return None
+        # A terminal change particle belongs to the residence predicate, not
+        # the place value. Normalize only this complete correction grammar;
+        # otherwise identical affirmative/denied places evade conflict checks.
+        affirmed = re.sub(r'^(我(?:目前|现在)?住在[\w· -]{1,30})了$', r'\1', left)
+        new_items = _extract_simple_memories(affirmed)
+        old_items = _extract_simple_memories(old_clause)
+        if (len(new_items) == len(old_items) == 1
+                and new_items[0].memory_key == old_items[0].memory_key
+                and new_items[0].content != old_items[0].content
+                and not new_items[0].qualifiers):
+            return replace(new_items[0], evidence=sentence)
         return None
 
     positive = left

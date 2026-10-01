@@ -146,9 +146,18 @@ async def main(args):
     CharacterContextService._load_history = cold_history
     CharacterContextService.prepare_turn = observed_prepare
     db.update_config(dict(useKnowledgeBase=False, temperature=0.2, maxTokens=800, topP=0.9))
-    inputs = json.loads(
-        (Path(__file__).resolve().parents[1] / "tests/fixtures/deepseek_legacy_field_cases.json").read_text()
-    )
+    if Path(args.fixture).name != args.fixture or not args.fixture.endswith("_cases.json"):
+        raise ValueError("Use a named repository fixture, without path traversal")
+    fixture = Path(__file__).resolve().parents[1] / "tests/fixtures" / args.fixture
+    inputs = json.loads(fixture.read_text())
+    if args.case_id:
+        requested = set(args.case_id)
+        available = {case["id"] for case in inputs["cases"]}
+        if not requested <= available:
+            raise ValueError("Unknown case IDs: " + ", ".join(sorted(requested - available)))
+        inputs["cases"] = [case for case in inputs["cases"] if case["id"] in requested]
+    if not inputs["cases"]:
+        raise ValueError("At least one complete case is required")
     results = []
     repo = DatabaseCharacterMemoryRepository(db)
     app = create_app()
@@ -195,6 +204,13 @@ async def main(args):
                     relation_type="SUPERSEDE" if previous else "ADD",
                     supersedes_memory_id=previous,
                     valid_from=(at + timedelta(microseconds=len(ids))).isoformat(),
+                    valid_to=(at + timedelta(microseconds=len(ids))).isoformat()
+                    if record.get("proposed_zero_width")
+                    else None,
+                    observed_at=(at + timedelta(microseconds=len(ids))).isoformat()
+                    if record.get("metadata", {}).get("temporal_provenance")
+                    else None,
+                    metadata=record.get("metadata"),
                 )
                 ids[record["id"]] = row["id"]
             status_response = await client.post(
@@ -308,4 +324,6 @@ if __name__ == "__main__":
     parser.add_argument("--run-label", required=True)
     parser.add_argument("--api-key-file", required=True)
     parser.add_argument("--baseline-reader", action="store_true")
+    parser.add_argument("--fixture", default="deepseek_legacy_field_cases.json")
+    parser.add_argument("--case-id", action="append", help="Run only a selected case; repeat for additional IDs")
     asyncio.run(main(parser.parse_args()))
