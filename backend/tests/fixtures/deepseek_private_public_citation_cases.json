@@ -1,0 +1,54 @@
+{
+  "execution": "One new mixed private/public citation attribution scenario with prerequisite actual private confirmation writing, complete knowledge import, native retrieval and real DeepSeek generation. No long-history, profile or old citation replay.",
+  "knowledge_base": "榆影纸雕完整链路资料",
+  "documents": [
+    {
+      "title": "榆影工坊周日纸雕课程规则",
+      "content": "榆影工坊周日纸雕课程规则：上课地点是北岸榆影工坊三楼竹露教室，每周日下午两点四十分开始，四点十分结束。课程联系人是许苒，预约编号为YY-573-R。参加者须带护目镜和刻纸刀。普通雨天课程照常举办，只有红色暴雨预警时才停课。报名截止时间为周六上午十一点，必须收到书面确认才算预约成功。课程照常举办不代表任何具体用户已经报名或必须出门。这是合成工坊的规则。",
+      "category": "课程"
+    },
+    {
+      "title": "榆影工坊工具维修预约规则",
+      "content": "榆影工坊工具维修在周三上午进行，维修联系人是程溪，编号为WX-204，不是周日纸雕课程报名编号。护目镜镜片破损应更换，维修预约不能自动完成课程预约。这里只是合成维修说明，不是用户预约成功的回执。",
+      "category": "维修"
+    },
+    {
+      "title": "南岸竹影工坊绘画课规则",
+      "content": "南岸竹影工坊周日绘画课在一楼杏影画室上午十点开课，联系人是叶澄，编号ZY-882。它不是北岸榆影工坊，不是纸雕课程，不能将其编号和时间替代榆影纸雕课程规则。",
+      "category": "绘画"
+    }
+  ],
+  "search_queries": [
+    "榆影工坊周日纸雕课程开课时间、联系人、预约编号和普通雨天停课规则"
+  ],
+  "cases": [
+    {
+      "id": "private_confirmation",
+      "message": "我本人刚收到北岸榆影工坊周日纸雕课的书面预约确认。确认书上属于我这一份的私人回执编号是PB-681-Q。这是我的真实本人记录，私人回执编号只标识我收到的确认书，不是工坊公开课程预约编号。我已经收到书面确认，但还没有参加过这门课程，也还没有出发。请在后续问答中区分我的私人回执、公开课程编号以及尚未参加的状态。",
+      "expected": []
+    },
+    {
+      "id": "private_public_citations",
+      "message": "请同时核对我本人那份书面确认的私人回执编号是什么、我是否已经收到确认和参加过课程；查知识库给出北岸榆影工坊周日纸雕课程的公开预约编号及对应规则出处。两个编号各自代表什么，请分开说明。个人记录只能归于我此前的本人陈述，课程规则才归于知识库资料。不要把私人回执编号当成公开编号，也不要把已确认预约当成已参加，不做建议。",
+      "expected": [
+        "PB-681-Q",
+        "YY-573-R"
+      ],
+      "knowledge_expected": [
+        "YY-573-R",
+        "WX-204"
+      ],
+      "expected_citation_ids": [
+        "doc_1_chunk_0"
+      ]
+    }
+  ],
+  "history_template": {
+    "turn_count": 0,
+    "records_per_turn": 0,
+    "heading": "",
+    "line": "",
+    "reply": "",
+    "expanded_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+  }
+}

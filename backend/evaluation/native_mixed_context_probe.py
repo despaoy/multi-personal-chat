@@ -86,6 +86,62 @@ def audit_citation_precision_wire(proof, calls, fixture):
     return checks
 
 
+def private_public_marker_checks(raw, private_code, public_code, public_keys):
+    """Separate explicit clauses; a semicolon can change the source subject."""
+    clauses = re.split(r"[。！？\n；;]", raw)
+    private = [c for c in clauses if private_code in c or
+               ("你" in c and re.search(r"收到|参加|出发|私人", c))]
+    public = [c for c in clauses if public_code in c]
+    def markers(clause):
+        return set(re.findall(r"\[S(\d{1,2})\]", clause))
+    allowed = {key.removeprefix('S') for key in public_keys}
+    return dict(
+        private_receipt_present=any(private_code in c for c in private),
+        private_claims_not_cited_as_public=bool(private) and all(not markers(c) for c in private),
+        public_code_has_own_authorized_citation=bool(public) and any(markers(c) & allowed for c in public),
+    )
+
+
+def audit_private_public_citation_wire(proof, calls, fixture):
+    source = fixture['cases'][0]['message']
+    last = proof['generation'][-1]
+    answer = [c for c in calls[slice(*last['cloud_call_range'])] if c['request'].get('max_tokens') == 1024]
+    if len(answer) != 1:
+        return {'one_actual_mixed_answer': False}
+    messages = answer[0]['request']['messages']
+    wire = unescape(messages[-1]['content'])
+    memory = re.search(r'<character_memory[^>]*>\n(.*?)\n</character_memory>', wire, re.S)
+    knowledge = re.search(r'<retrieved_evidence[^>]*>\n(.*?)\n</retrieved_evidence>', wire, re.S)
+    packets = [json.loads(line[2:]) for line in memory[1].splitlines() if line.startswith('- {')] if memory else []
+    private_code, public_code = fixture['cases'][-1]['expected']
+    doc = fixture['documents'][0]
+    citations = last['response'].get('citations') or []
+    course = [c for c in citations if c.get('source_id') == 'doc_1_chunk_0' and c.get('source_title') == doc['title']]
+    raw = answer[0]['response']['choices'][0]['message']['content']
+    diag = proof['prepared_diagnostics'][-1]
+    reply = last['response'].get('reply', '')
+    checks = dict(
+        one_actual_mixed_answer=True,
+        complete_private_source_persisted=any(source in json.loads(row.get('evidence_json') or '[]') for row in proof['claims']),
+        complete_private_source_in_selected_memory=any(source in p.get('evidence', []) for p in packets),
+        complete_private_source_in_actual_history=any(m.get('role') == 'user' and m.get('content') == source for m in messages),
+        complete_public_course_in_actual_evidence=bool(knowledge) and doc['content'] in knowledge[1],
+        private_receipt_outside_public_evidence=bool(knowledge) and private_code not in knowledge[1] and source not in knowledge[1],
+        public_course_outside_private_memory=bool(memory) and public_code not in memory[1] and doc['content'] not in memory[1],
+        materials_not_system_rules=all(source not in m['content'] and doc['content'] not in m['content'] for m in messages if m['role'] == 'system'),
+        selected_actual_private_memories=diag['selection_status'] == 'selected' and bool(diag['used_memory_ids']),
+        semantic_review_applied=diag['semantic_status'] == 'applied',
+        decision_policy_applied=diag['policy_status'] == 'applied',
+        both_distinct_codes_answered=private_code in reply and public_code in reply,
+        received_confirmation_preserved=bool(re.search(r'你.{0,20}(?:已经|已|刚).{0,6}收到.{0,6}(?:书面|确认)', reply)),
+        no_attendance_promoted_from_confirmation=bool(re.search(r'(?:尚未|还没|没有|未曾|未).{0,10}(?:参加|上课)', reply)),
+        only_authoritative_course_cited=len(citations) == len(course) == 1,
+        visible_reply_has_no_internal_citation_marker=not re.search(r'\[S\d{1,2}\]', reply),
+    )
+    checks.update(private_public_marker_checks(raw, private_code, public_code, {c.get('key', '') for c in course}))
+    return checks
+
+
 def expand_history(fixture):
     """Expand fully specified synthetic history without storing repeated text."""
     import hashlib
@@ -131,7 +187,7 @@ def isolated_probe_paths(root, run_label, api_key_file):
 async def main(args):
     from evaluation.conversation_source_probe import verify_cluster
 
-    if args.window_boundary and args.citation_precision:
+    if sum((args.window_boundary, args.citation_precision, args.private_public_citations)) > 1:
         raise ValueError("Choose one specific probe scenario")
 
     ROOT, OUT, key_path = isolated_probe_paths(args.root, args.run_label, args.api_key_file)
@@ -140,7 +196,7 @@ async def main(args):
     database_name = "stage3_" + args.run_label.replace("-", "_")
     OUT.mkdir(exist_ok=False)
     fixture = json.loads(
-        (Path(__file__).resolve().parents[1] / "tests/fixtures" / ("deepseek_citation_precision_cases.json" if args.citation_precision else "deepseek_mixed_window_boundary.json" if args.window_boundary else "deepseek_mixed_long_context_cases.json")).read_text()
+        (Path(__file__).resolve().parents[1] / "tests/fixtures" / ("deepseek_private_public_citation_cases.json" if args.private_public_citations else "deepseek_citation_precision_cases.json" if args.citation_precision else "deepseek_mixed_window_boundary.json" if args.window_boundary else "deepseek_mixed_long_context_cases.json")).read_text()
     )
     fixture["history_turns"] = expand_history(fixture)
     cases = fixture["cases"]
@@ -406,7 +462,7 @@ async def main(args):
             long_history_loaded=len(prepared_diagnostics[-1]["history"]) >= 26
             and sum(len(h["content"]) for h in prepared_diagnostics[-1]["history"]) >= 18000,
         )
-        if args.citation_precision:
+        if args.citation_precision or args.private_public_citations:
             checks.pop("long_history_loaded")
             checks["no_long_history_replay"] = all(len(d["history"]) < 10 for d in prepared_diagnostics)
         for case, generation in zip(cases, proof["generation"]):
@@ -426,7 +482,8 @@ async def main(args):
             checks[case["id"] + "_knowledge_on_wire"] = bool(wires) and any(
                 all(v in wire for v in case["knowledge_expected"]) for wire in wires
             )
-        checks.update(audit_citation_precision_wire(proof, cloud_calls, fixture) if args.citation_precision
+        checks.update(audit_private_public_citation_wire(proof, cloud_calls, fixture) if args.private_public_citations
+                      else audit_citation_precision_wire(proof, cloud_calls, fixture) if args.citation_precision
                       else audit_window_boundary_wire(proof, cloud_calls, fixture) if args.window_boundary
                       else audit_mixed_wire(proof, cloud_calls, fixture))
         reopened = proof["persisted_vector_stats"]
@@ -471,6 +528,7 @@ if __name__ == "__main__":
     parser.add_argument("--require-success", action="store_true")
     parser.add_argument("--window-boundary", action="store_true")
     parser.add_argument("--citation-precision", action="store_true")
+    parser.add_argument("--private-public-citations", action="store_true")
     parser.add_argument("--root", required=True, type=Path)
     parser.add_argument("--run-label", required=True)
     parser.add_argument("--api-key-file", required=True, type=Path)
