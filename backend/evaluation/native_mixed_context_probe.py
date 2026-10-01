@@ -233,20 +233,20 @@ def isolated_probe_paths(root, run_label, api_key_file):
 async def main(args):
     from evaluation.conversation_source_probe import verify_cluster
 
-    if sum((args.window_boundary, args.citation_precision, args.private_public_citations, args.literal_citations, args.memory_correction, args.memory_history, args.memory_owner, args.memory_friend)) > 1:
+    if sum((args.window_boundary, args.citation_precision, args.private_public_citations, args.literal_citations, args.memory_correction, args.memory_history, args.memory_owner, args.memory_friend, args.memory_erasure)) > 1:
         raise ValueError("Choose one specific probe scenario")
 
-    if args.enable_source_recall and not args.memory_friend:
+    if args.enable_source_recall and not (args.memory_friend or args.memory_erasure):
         raise ValueError("The explicit source-recall variant requires the friend-only scenario")
-    source_recall_enabled = args.memory_owner or (args.memory_friend and args.enable_source_recall)
-    reuse_native_fixture = args.memory_history or args.memory_owner or args.memory_friend
+    source_recall_enabled = args.memory_owner or args.memory_erasure or (args.memory_friend and args.enable_source_recall)
+    reuse_native_fixture = args.memory_history or args.memory_owner or args.memory_friend or args.memory_erasure
     cold_memory = args.memory_correction or reuse_native_fixture
 
     ROOT, OUT, key_path = isolated_probe_paths(args.root, args.run_label, args.api_key_file)
     bootstrap_url = "postgresql+asyncpg://boot@/postgres?host=" + str(ROOT / "socket") + "&port=25433"
     await verify_cluster(bootstrap_url, ROOT / "data")
     database_name = "stage3_" + args.run_label.replace("-", "_")
-    source_label = "stage22-owner-only" if args.memory_friend else "stage20-cold-fixed"
+    source_label = "stage22-owner-only" if args.memory_friend or args.memory_erasure else "stage20-cold-fixed"
     source_account_username = "stage20-cold-fixed"
     source_database = "stage3_" + source_label.replace("-", "_")
     if reuse_native_fixture:
@@ -255,16 +255,16 @@ async def main(args):
             raise ValueError("Historical reuse requires the verified native source fixture")
     OUT.mkdir(exist_ok=False)
     fixture = json.loads(
-        (Path(__file__).resolve().parents[1] / "tests/fixtures" / ("deepseek_memory_friend_cases.json" if args.memory_friend else "deepseek_memory_owner_cases.json" if args.memory_owner else "deepseek_memory_history_cases.json" if args.memory_history else "deepseek_memory_correction_cases.json" if args.memory_correction else "deepseek_literal_citation_cases.json" if args.literal_citations else "deepseek_private_public_citation_cases.json" if args.private_public_citations else "deepseek_citation_precision_cases.json" if args.citation_precision else "deepseek_mixed_window_boundary.json" if args.window_boundary else "deepseek_mixed_long_context_cases.json")).read_text()
+        (Path(__file__).resolve().parents[1] / "tests/fixtures" / ("deepseek_memory_erasure_cases.json" if args.memory_erasure else "deepseek_memory_friend_cases.json" if args.memory_friend else "deepseek_memory_owner_cases.json" if args.memory_owner else "deepseek_memory_history_cases.json" if args.memory_history else "deepseek_memory_correction_cases.json" if args.memory_correction else "deepseek_literal_citation_cases.json" if args.literal_citations else "deepseek_private_public_citation_cases.json" if args.private_public_citations else "deepseek_citation_precision_cases.json" if args.citation_precision else "deepseek_mixed_window_boundary.json" if args.window_boundary else "deepseek_mixed_long_context_cases.json")).read_text()
     )
     fixture["history_turns"] = expand_history(fixture)
     cases = fixture["cases"]
-    executed_cases = cases[-(2 if args.memory_owner else 1):] if reuse_native_fixture else cases
-    prerequisite_count = 3 if args.memory_friend else 2
+    executed_cases = cases[-(2 if args.memory_owner or args.memory_erasure else 1):] if reuse_native_fixture else cases
+    prerequisite_count = 3 if args.memory_friend or args.memory_erasure else 2
     if reuse_native_fixture and source_proof["cases"][:prerequisite_count] != cases[:prerequisite_count]:
         raise ValueError("Historical reuse requires the same complete original source statements")
-    if args.memory_friend and not any(
-            row["body"] == cases[-2]["message"] for row in source_proof.get("sources_before_question", [])):
+    if (args.memory_friend or args.memory_erasure) and not any(
+            row["body"] == cases[2]["message"] for row in source_proof.get("sources_before_question", [])):
         raise ValueError("Friend reuse requires the complete native persisted source")
     key = key_path.read_text().strip()
     os.environ.update(
@@ -399,6 +399,18 @@ async def main(args):
     prepared_diagnostics = []
     generation_diagnostics = []
     original_prepare = CharacterContextService.prepare_turn
+    operation_diagnostics = []
+    original_interactive = CharacterContextService.prepare_interactive_turn
+
+    async def observed_interactive(service, turn, character_id, **kwargs):
+        result = await original_interactive(service, turn, character_id, **kwargs)
+        operation_diagnostics.append(dict(query=turn.message, receipt=result.memory_operation_receipt,
+                                          compiled_receipt=result.compiled.memory_operation_receipt))
+        return result
+
+    if args.memory_erasure:
+        CharacterContextService.prepare_interactive_turn = observed_interactive
+
     from api import generate as generation_api
 
     retrieval_diagnostics = []
@@ -459,6 +471,7 @@ async def main(args):
         generation=[],
         prepared_diagnostics=prepared_diagnostics,
         generation_diagnostics=generation_diagnostics,
+        operation_diagnostics=operation_diagnostics,
         provider="native_openai_compat",
         transport="authenticated_ASGI",
         source_ablation=False,
@@ -539,12 +552,18 @@ async def main(args):
                     "/api/knowledge/search", json=dict(query=query, topK=3, knowledgeBaseName=fixture["knowledge_base"])
                 )
                 proof["searches"].append(dict(query=query, http_status=response.status_code, response=response.json()))
+            if args.memory_erasure:
+                proof["sources_before_erasure"] = db.list_memory_sources(
+                    "tsukiyashiro_kisaki", "web", "web-character", identity, "private", identity, limit=100)
+                proof["claims_before_erasure"] = db.list_character_memory_claims(
+                    "tsukiyashiro_kisaki", "web", "web-character", identity, "private", identity,
+                    limit=None, include_inactive=True)
             for case in executed_cases:
                 if (cold_memory) and case["id"] == cases[-1]["id"]:
                     proof["claims_before_question"] = db.list_character_memory_claims(
                         "tsukiyashiro_kisaki", "web", "web-character", identity, "private", identity,
                         limit=None, include_inactive=True)
-                    if args.memory_owner or args.memory_friend:
+                    if args.memory_owner or args.memory_friend or args.memory_erasure:
                         proof["sources_before_question"] = db.list_memory_sources(
                             "tsukiyashiro_kisaki", "web", "web-character", identity, "private", identity, limit=100)
                     (OUT / "pre-question.json").write_text(json.dumps(proof, ensure_ascii=False, indent=2))
@@ -587,6 +606,25 @@ async def main(args):
                 limit=None,
                 include_inactive=True,
             )
+            if args.memory_erasure:
+                from db.memory_source import source_identity, source_scope
+
+                friends = [row for row in proof["sources_before_erasure"] if row["body"] == cases[2]["message"]]
+                assert len(friends) == 1
+                scoped_source = source_identity(source_scope("tsukiyashiro_kisaki", "web", "web-character",
+                                                            identity, "private", identity), friends[0]["source_message_id"])
+                connection = await asyncpg.connect(user="boot", database=database_name, host=str(ROOT / "socket"), port=25433)
+                try:
+                    assert await connection.fetchval("SHOW data_directory") == str(ROOT / "data")
+                    row = await connection.fetchrow("SELECT state, body IS NULL AS body_is_null, observed_at IS NULL AS observed_at_is_null FROM memory_sources WHERE source_key=$1", scoped_source["source_key"])
+                    proof["source_erasure_sql"] = dict(row) if row else {}
+                    proof["source_erasure_sql"].update(
+                        term_count=await connection.fetchval("SELECT count(*) FROM memory_source_terms WHERE source_key=$1", scoped_source["source_key"]),
+                        link_count=await connection.fetchval("SELECT count(*) FROM memory_source_links WHERE source_key=$1", scoped_source["source_key"]),
+                        archive_quote_row_count=await connection.fetchval('SELECT count(*) FROM messages WHERE platform=$1 AND adapter=$2 AND "senderId"=$3 AND "characterId"=$4 AND "sourceMessageId"=$5 AND message=$6',
+                            "web", "web-character", identity, "tsukiyashiro_kisaki", friends[0]["source_message_id"], cases[2]["message"]))
+                finally:
+                    await connection.close()
             proof["queue_stats"] = inference_runtime.stats()
             proof["memory_status"] = asdict(get_memory_enrichment_scheduler().status)
             capture_storage_proof(proof, OUT)
@@ -615,7 +653,10 @@ async def main(args):
         )
         if args.citation_precision or args.private_public_citations or args.literal_citations or cold_memory:
             checks.pop("long_history_loaded")
-            checks["no_long_history_replay"] = all(len(d["history"]) < 10 for d in prepared_diagnostics)
+            if args.memory_erasure:
+                checks["no_synthetic_long_history_injected"] = not fixture["history_turns"]
+            else:
+                checks["no_long_history_replay"] = all(len(d["history"]) < 10 for d in prepared_diagnostics)
         for case, generation in zip(executed_cases, proof["generation"]):
             if not case.get("knowledge_expected"):
                 continue
@@ -634,7 +675,9 @@ async def main(args):
                 all(v in wire for v in case["knowledge_expected"]) for wire in wires
             )
         if cold_memory:
-            if args.memory_friend:
+            if args.memory_erasure:
+                from evaluation.memory_erasure_audit import audit_memory_erasure_wire as audit_wire
+            elif args.memory_friend:
                 from evaluation.memory_friend_audit import audit_memory_friend_wire as audit_wire
             elif args.memory_owner:
                 from evaluation.memory_owner_audit import audit_memory_owner_wire as audit_wire
@@ -701,6 +744,7 @@ if __name__ == "__main__":
     parser.add_argument("--memory-history", action="store_true")
     parser.add_argument("--memory-owner", action="store_true")
     parser.add_argument("--memory-friend", action="store_true")
+    parser.add_argument("--memory-erasure", action="store_true")
     parser.add_argument("--enable-source-recall", action="store_true")
     parser.add_argument("--root", required=True, type=Path)
     parser.add_argument("--run-label", required=True)
