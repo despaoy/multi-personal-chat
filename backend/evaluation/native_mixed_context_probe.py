@@ -233,20 +233,21 @@ def isolated_probe_paths(root, run_label, api_key_file):
 async def main(args):
     from evaluation.conversation_source_probe import verify_cluster
 
-    if sum((args.window_boundary, args.citation_precision, args.private_public_citations, args.literal_citations, args.memory_correction, args.memory_history, args.memory_owner, args.memory_friend, args.memory_erasure)) > 1:
+    if sum((args.window_boundary, args.citation_precision, args.private_public_citations, args.literal_citations, args.memory_correction, args.memory_history, args.memory_owner, args.memory_friend, args.memory_erasure, args.memory_scope)) > 1:
         raise ValueError("Choose one specific probe scenario")
 
     if args.enable_source_recall and not (args.memory_friend or args.memory_erasure):
         raise ValueError("The explicit source-recall variant requires the friend-only scenario")
-    source_recall_enabled = args.memory_owner or args.memory_erasure or (args.memory_friend and args.enable_source_recall)
-    reuse_native_fixture = args.memory_history or args.memory_owner or args.memory_friend or args.memory_erasure
+    source_recall_enabled = args.memory_owner or args.memory_erasure or args.memory_scope or (args.memory_friend and args.enable_source_recall)
+    reuse_native_fixture = args.memory_history or args.memory_owner or args.memory_friend or args.memory_erasure or args.memory_scope
     cold_memory = args.memory_correction or reuse_native_fixture
+    history_ablation = cold_memory and not args.memory_scope
 
     ROOT, OUT, key_path = isolated_probe_paths(args.root, args.run_label, args.api_key_file)
     bootstrap_url = "postgresql+asyncpg://boot@/postgres?host=" + str(ROOT / "socket") + "&port=25433"
     await verify_cluster(bootstrap_url, ROOT / "data")
     database_name = "stage3_" + args.run_label.replace("-", "_")
-    source_label = "stage22-owner-only" if args.memory_friend or args.memory_erasure else "stage20-cold-fixed"
+    source_label = "stage22-owner-only" if args.memory_friend or args.memory_erasure or args.memory_scope else "stage20-cold-fixed"
     source_account_username = "stage20-cold-fixed"
     source_database = "stage3_" + source_label.replace("-", "_")
     if reuse_native_fixture:
@@ -255,15 +256,15 @@ async def main(args):
             raise ValueError("Historical reuse requires the verified native source fixture")
     OUT.mkdir(exist_ok=False)
     fixture = json.loads(
-        (Path(__file__).resolve().parents[1] / "tests/fixtures" / ("deepseek_memory_erasure_cases.json" if args.memory_erasure else "deepseek_memory_friend_cases.json" if args.memory_friend else "deepseek_memory_owner_cases.json" if args.memory_owner else "deepseek_memory_history_cases.json" if args.memory_history else "deepseek_memory_correction_cases.json" if args.memory_correction else "deepseek_literal_citation_cases.json" if args.literal_citations else "deepseek_private_public_citation_cases.json" if args.private_public_citations else "deepseek_citation_precision_cases.json" if args.citation_precision else "deepseek_mixed_window_boundary.json" if args.window_boundary else "deepseek_mixed_long_context_cases.json")).read_text()
+        (Path(__file__).resolve().parents[1] / "tests/fixtures" / ("deepseek_memory_scope_cases.json" if args.memory_scope else "deepseek_memory_erasure_cases.json" if args.memory_erasure else "deepseek_memory_friend_cases.json" if args.memory_friend else "deepseek_memory_owner_cases.json" if args.memory_owner else "deepseek_memory_history_cases.json" if args.memory_history else "deepseek_memory_correction_cases.json" if args.memory_correction else "deepseek_literal_citation_cases.json" if args.literal_citations else "deepseek_private_public_citation_cases.json" if args.private_public_citations else "deepseek_citation_precision_cases.json" if args.citation_precision else "deepseek_mixed_window_boundary.json" if args.window_boundary else "deepseek_mixed_long_context_cases.json")).read_text()
     )
     fixture["history_turns"] = expand_history(fixture)
     cases = fixture["cases"]
     executed_cases = cases[-(2 if args.memory_owner or args.memory_erasure else 1):] if reuse_native_fixture else cases
-    prerequisite_count = 3 if args.memory_friend or args.memory_erasure else 2
+    prerequisite_count = 3 if args.memory_friend or args.memory_erasure or args.memory_scope else 2
     if reuse_native_fixture and source_proof["cases"][:prerequisite_count] != cases[:prerequisite_count]:
         raise ValueError("Historical reuse requires the same complete original source statements")
-    if (args.memory_friend or args.memory_erasure) and not any(
+    if (args.memory_friend or args.memory_erasure or args.memory_scope) and not any(
             row["body"] == cases[2]["message"] for row in source_proof.get("sources_before_question", [])):
         raise ValueError("Friend reuse requires the complete native persisted source")
     key = key_path.read_text().strip()
@@ -276,7 +277,7 @@ async def main(args):
         ASTRBOT_INTEGRATION_TOKEN=secrets.token_urlsafe(48),
         MULTIPERSONAL_BACKEND_URL="https://stage3-evaluation.invalid",
         ALLOWED_ORIGINS="https://stage3-evaluation.invalid",
-        ALLOW_PUBLIC_REGISTRATION="false",
+        ALLOW_PUBLIC_REGISTRATION="true" if args.memory_scope else "false",
         SECURITY_MIDDLEWARE_ENABLED="true",
         LOG_LEVEL="INFO",
         BACKEND_WORKERS="1",
@@ -393,7 +394,8 @@ async def main(args):
         return result
 
     if cold_memory:
-        CharacterContextService._load_history = cold_history
+        if history_ablation:
+            CharacterContextService._load_history = cold_history
         CharacterContextService._load_memory_candidates = observed_candidates
 
     prepared_diagnostics = []
@@ -440,6 +442,7 @@ async def main(args):
                 raw_source_status=prepared.compiled.memory_source_status,
                 raw_source_diagnostics=prepared.memory_recall.get("sources", {}),
                 episodic_context=prepared.compiled.episodic_reference_context,
+                **(dict(user_scope=asdict(prepared.user_scope), memory_scope_key=list(prepared.user_scope.memory_scope_key)) if args.memory_scope else {}),
             )
         )
         return prepared
@@ -482,7 +485,7 @@ async def main(args):
         retrieval_diagnostics=retrieval_diagnostics,
         cold_history_diagnostics=cold_history_diagnostics,
         candidate_diagnostics=candidate_diagnostics,
-        controlled_ablation=dict(history_ablation_enabled=cold_memory, raw_source_recall_enabled=source_recall_enabled),
+        controlled_ablation=dict(history_ablation_enabled=history_ablation, raw_source_recall_enabled=source_recall_enabled),
     )
     password = secrets.token_urlsafe(24)
     if reuse_native_fixture:
@@ -526,6 +529,41 @@ async def main(args):
                 proof["auth_statuses"] = [register.status_code, login.status_code, me.status_code]
                 assert proof["auth_statuses"] == [200, 200, 200]
             identity = str(me.json()["user"]["id"])
+            if args.memory_scope:
+                proof["scope_owner_identity"] = identity
+                proof["scope_owner_sources_before"] = db.list_memory_sources(
+                    "tsukiyashiro_kisaki", "web", "web-character", identity, "private", identity, limit=100)
+                proof["scope_owner_claims_before"] = db.list_character_memory_claims(
+                    "tsukiyashiro_kisaki", "web", "web-character", identity, "private", identity, limit=None, include_inactive=True)
+                client.cookies.clear()
+                second_password = secrets.token_urlsafe(24)
+                register = await client.post("/api/auth/register", json=dict(username=args.run_label, password=second_password))
+                client.cookies.clear()
+                second_login = await client.post("/api/auth/login", json=dict(username=args.run_label, password=second_password))
+                second_me = await client.get("/api/auth/me")
+                proof["scope_secondary_auth_statuses"] = [register.status_code, second_login.status_code, second_me.status_code]
+                assert proof["scope_secondary_auth_statuses"] == [200, 200, 200]
+                identity = str(second_me.json()["user"]["id"])
+                proof["scope_current_identity"] = identity
+                proof["scope_secondary_role"] = second_me.json()["user"]["role"]
+                assert identity != proof["scope_owner_identity"] and proof["scope_secondary_role"] == "user"
+                connection = await asyncpg.connect(user="boot", database=database_name, host=str(ROOT / "socket"), port=25433)
+                try:
+                    assert await connection.fetchval("SHOW data_directory") == str(ROOT / "data")
+                    rows = await connection.fetch('SELECT * FROM messages WHERE platform=$1 AND adapter=$2 AND "senderId"=$3 AND "characterId"=$4 ORDER BY id', "web", "web-character", proof["scope_owner_identity"], "tsukiyashiro_kisaki")
+                    proof["scope_sql"] = dict(owner_messages_sha256_before=hashlib.sha256(json.dumps([dict(row) for row in rows],sort_keys=True,default=str).encode()).hexdigest())
+                finally:
+                    await connection.close()
+                source_connection = await asyncpg.connect(user="boot", database=source_database, host=str(ROOT / "socket"), port=25433)
+                try:
+                    assert await source_connection.fetchval("SHOW data_directory") == str(ROOT / "data")
+                    snapshots = {}
+                    for table in ["memory_sources", "memory_source_terms", "character_memories", "messages"]:
+                        rows = await source_connection.fetch("SELECT * FROM " + table)
+                        snapshots[table] = hashlib.sha256(json.dumps(sorted([dict(row) for row in rows],key=lambda row:json.dumps(row,sort_keys=True,default=str)),sort_keys=True,default=str).encode()).hexdigest()
+                    proof["scope_sql"]["source_database_snapshot_before"] = snapshots
+                finally:
+                    await source_connection.close()
             from knowledge.vector_db import get_vector_db
 
             if reuse_native_fixture:
@@ -567,6 +605,13 @@ async def main(args):
                         proof["sources_before_question"] = db.list_memory_sources(
                             "tsukiyashiro_kisaki", "web", "web-character", identity, "private", identity, limit=100)
                     (OUT / "pre-question.json").write_text(json.dumps(proof, ensure_ascii=False, indent=2))
+                extra_request = {}
+                if args.memory_scope:
+                    owner = proof["scope_owner_identity"]
+                    friend = [row for row in proof["scope_owner_sources_before"] if row["body"] == cases[2]["message"]]
+                    assert len(friend) == 1
+                    extra_request = dict(senderId=owner, userId=owner, conversationId=owner, sourceMessageId=friend[0]["source_message_id"])
+                    proof["scope_forged_request"] = dict(**extra_request, sessionId=owner)
                 before = len(cloud_calls)
                 response = await client.post(
                     "/api/generate",
@@ -574,8 +619,9 @@ async def main(args):
                         message=case["message"],
                         characterId="tsukiyashiro_kisaki",
                         loraId="default",
-                        sessionId=args.run_label,
+                        sessionId=proof["scope_owner_identity"] if args.memory_scope else args.run_label,
                         sessionType="private",
+                        **extra_request,
                     ),
                 )
                 assert await get_memory_enrichment_scheduler().flush_memory(timeout=90)
@@ -625,6 +671,35 @@ async def main(args):
                             "web", "web-character", identity, "tsukiyashiro_kisaki", friends[0]["source_message_id"], cases[2]["message"]))
                 finally:
                     await connection.close()
+            if args.memory_scope:
+                owner = proof["scope_owner_identity"]
+                proof["scope_owner_sources_after"] = db.list_memory_sources("tsukiyashiro_kisaki", "web", "web-character", owner, "private", owner, limit=100)
+                proof["scope_owner_claims_after"] = db.list_character_memory_claims("tsukiyashiro_kisaki", "web", "web-character", owner, "private", owner, limit=None, include_inactive=True)
+                proof["scope_current_sources_after"] = db.list_memory_sources("tsukiyashiro_kisaki", "web", "web-character", identity, "private", identity, limit=100)
+                connection = await asyncpg.connect(user="boot", database=database_name, host=str(ROOT / "socket"), port=25433)
+                try:
+                    assert await connection.fetchval("SHOW data_directory") == str(ROOT / "data")
+                    rows = await connection.fetch('SELECT * FROM messages WHERE platform=$1 AND adapter=$2 AND "senderId"=$3 AND "characterId"=$4 ORDER BY id', "web", "web-character", owner, "tsukiyashiro_kisaki")
+                    proof["scope_sql"]["owner_messages_sha256_after"] = hashlib.sha256(json.dumps([dict(row) for row in rows],sort_keys=True,default=str).encode()).hexdigest()
+                    source_id = proof["scope_forged_request"]["sourceMessageId"]
+                    from db.memory_source import source_identity, source_scope
+                    keys = [source_identity(source_scope("tsukiyashiro_kisaki", "web", "web-character", account, "private", account),source_id)["source_key"] for account in [owner, identity]]
+                    row = await connection.fetchrow("SELECT state, body FROM memory_sources WHERE source_key=$1",keys[0])
+                    proof["scope_sql"].update(owner_friend_state=row["state"],owner_friend_body_preserved=row["body"]==cases[2]["message"],source_keys_distinct=keys[0]!=keys[1])
+                    for label,account,text in [("owner_friend",owner,cases[2]["message"]),("current_request",identity,cases[-1]["message"])]:
+                        proof["scope_sql"][label+"_archive_count"] = await connection.fetchval('SELECT count(*) FROM messages WHERE platform=$1 AND adapter=$2 AND "senderId"=$3 AND "characterId"=$4 AND "sourceMessageId"=$5 AND message=$6',"web","web-character",account,"tsukiyashiro_kisaki",source_id,text)
+                finally:
+                    await connection.close()
+                source_connection = await asyncpg.connect(user="boot", database=source_database, host=str(ROOT / "socket"), port=25433)
+                try:
+                    assert await source_connection.fetchval("SHOW data_directory") == str(ROOT / "data")
+                    snapshots = {}
+                    for table in ["memory_sources", "memory_source_terms", "character_memories", "messages"]:
+                        rows = await source_connection.fetch("SELECT * FROM " + table)
+                        snapshots[table] = hashlib.sha256(json.dumps(sorted([dict(row) for row in rows],key=lambda row:json.dumps(row,sort_keys=True,default=str)),sort_keys=True,default=str).encode()).hexdigest()
+                    proof["scope_sql"]["source_database_snapshot_after"] = snapshots
+                finally:
+                    await source_connection.close()
             proof["queue_stats"] = inference_runtime.stats()
             proof["memory_status"] = asdict(get_memory_enrichment_scheduler().status)
             capture_storage_proof(proof, OUT)
@@ -651,6 +726,9 @@ async def main(args):
             long_history_loaded=len(prepared_diagnostics[-1]["history"]) >= 26
             and sum(len(h["content"]) for h in prepared_diagnostics[-1]["history"]) >= 18000,
         )
+        if args.memory_scope:
+            checks.pop("native_searches_success")
+            checks["no_native_searches_replayed"] = proof["searches"] == []
         if args.citation_precision or args.private_public_citations or args.literal_citations or cold_memory:
             checks.pop("long_history_loaded")
             if args.memory_erasure:
@@ -675,7 +753,9 @@ async def main(args):
                 all(v in wire for v in case["knowledge_expected"]) for wire in wires
             )
         if cold_memory:
-            if args.memory_erasure:
+            if args.memory_scope:
+                from evaluation.memory_scope_audit import audit_memory_scope_wire as audit_wire
+            elif args.memory_erasure:
                 from evaluation.memory_erasure_audit import audit_memory_erasure_wire as audit_wire
             elif args.memory_friend:
                 from evaluation.memory_friend_audit import audit_memory_friend_wire as audit_wire
@@ -686,7 +766,8 @@ async def main(args):
             else:
                 from evaluation.memory_correction_audit import audit_memory_correction_wire as audit_wire
 
-            checks["final_question_cold_history"] = prepared_diagnostics[-1]["history"] == []
+            if history_ablation:
+                checks["final_question_cold_history"] = prepared_diagnostics[-1]["history"] == []
             checks.update(audit_wire(proof, cloud_calls, fixture))
         else:
             checks.update(audit_literal_citation_wire(proof, cloud_calls, fixture) if args.literal_citations
@@ -706,10 +787,10 @@ async def main(args):
         proof["persisted_vector_stats"] = reopened
         proof["checks"] = checks
         proof["controlled_ablation"] = dict(
-            history_ablation_enabled=cold_memory,
+            history_ablation_enabled=history_ablation,
             raw_source_recall_enabled=source_recall_enabled,
             loaded_history_count=len(prepared_diagnostics[-1]["history"]),
-            scope="only " + cases[-1]["id"] + "; stored history observed unchanged; no model messages reconstructed" if cold_memory else "none",
+            scope="only " + cases[-1]["id"] + "; stored history observed unchanged; no model messages reconstructed" if history_ablation else "none",
         )
         proof["cloud_summary"] = [
             dict(
@@ -745,6 +826,7 @@ if __name__ == "__main__":
     parser.add_argument("--memory-owner", action="store_true")
     parser.add_argument("--memory-friend", action="store_true")
     parser.add_argument("--memory-erasure", action="store_true")
+    parser.add_argument("--memory-scope", action="store_true")
     parser.add_argument("--enable-source-recall", action="store_true")
     parser.add_argument("--root", required=True, type=Path)
     parser.add_argument("--run-label", required=True)
