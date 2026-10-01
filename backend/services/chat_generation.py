@@ -51,6 +51,7 @@ class ChatGenerationService:
         is_high_risk_prompt: Callable[[str], bool],
         security_response_factory: Callable[[], GenerateResponse],
         trace_id_factory: Callable[[], str],
+        validate_request: Callable[[MessageRequest, dict[str, Any] | None], Awaitable[None]] | None = None,
     ) -> None:
         self._generate_handler = generate_handler
         self._inference_runtime = inference_runtime
@@ -58,6 +59,7 @@ class ChatGenerationService:
         self._is_high_risk_prompt = is_high_risk_prompt
         self._security_response_factory = security_response_factory
         self._trace_id_factory = trace_id_factory
+        self._validate_request = validate_request
 
     async def generate(
         self,
@@ -87,6 +89,8 @@ class ChatGenerationService:
                 entry["content"] = content
             sanitized_history.append(entry)
         request.history = sanitized_history
+        if self._validate_request is not None:
+            await self._validate_request(request, current_user)
         return await self._generate_handler(request, current_user, **kwargs)
 
     async def generate_queued(

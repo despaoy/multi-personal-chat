@@ -2,7 +2,7 @@
 
 import pytest
 
-from evaluation.memory_scope_audit import forbidden_private_payloads
+from evaluation.memory_scope_audit import collision_receipt_is_safe, forbidden_private_payloads, no_writer_results
 
 
 def call(*messages):
@@ -30,3 +30,39 @@ def test_html_escaped_model_input_is_checked_after_unescaping():
 def test_complete_other_owner_quote_is_rejected_without_a_receipt():
     source = '朋友预约有效，尚未参加，未出发。'
     assert not forbidden_private_payloads([call({'role': 'user', 'content': source})], [source])
+
+
+def collision_receipt():
+    return {'source_message_id': 'old-source', 'source_capture': 'conflict', 'status': 'skipped', 'reason': 'source_conflict', 'accepted': 0, 'persisted': 0}
+
+
+def test_collision_explicit_skip_receipt_has_no_mutation():
+    assert collision_receipt_is_safe(collision_receipt(), 'old-source')
+
+
+def test_collision_receipt_with_different_identity_does_not_prove_this_job():
+    assert not collision_receipt_is_safe(collision_receipt(), 'other-source')
+
+
+def test_collision_receipt_cannot_hide_an_accepted_fact():
+    assert not collision_receipt_is_safe({**collision_receipt(), 'accepted': 1}, 'old-source')
+
+
+def test_collision_receipt_cannot_hide_a_persisted_fact():
+    assert not collision_receipt_is_safe({**collision_receipt(), 'persisted': 1}, 'old-source')
+
+
+def test_collision_other_skip_reason_is_not_a_source_conflict():
+    assert not collision_receipt_is_safe({**collision_receipt(), 'reason': 'queue_full'}, 'old-source')
+
+
+def test_collision_missing_receipt_is_not_proof_of_safe_skip():
+    assert not collision_receipt_is_safe({}, 'old-source')
+
+
+def test_collision_empty_tuple_and_json_list_both_prove_no_writer_job():
+    assert no_writer_results(()) and no_writer_results([])
+
+
+def test_collision_missing_result_collection_does_not_prove_no_writer_job():
+    assert not no_writer_results(None) and not no_writer_results({})

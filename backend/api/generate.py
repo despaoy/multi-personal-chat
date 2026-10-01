@@ -906,6 +906,39 @@ async def _complete_character_turn(prepared, request: MessageRequest, reply: str
 # ═══════════════════════════════════════════
 
 
+async def _validate_web_source_identity(request, current_user, *, database=None):
+    """Reject known immutable source collisions before any model or write.
+
+    The writer's transactional capture guard remains authoritative. This
+    admission check uses only the authenticated owner's visible source scope.
+    """
+    if request.branchId or not request.characterId or request.platform != "web" or request.adapter != "web-character" or not request.sourceMessageId:
+        return
+    from character.context_builder import build_user_scope
+
+    identity = str((current_user or {}).get("id") or (current_user or {}).get("user_id") or (current_user or {}).get("username") or "")
+    if not identity:
+        raise HTTPException(401, "无法确认当前登录用户")
+    try:
+        scope = build_user_scope(platform="web", adapter="web-character", sender_id=identity,
+                                 conversation_id=request.conversationId or request.sessionId,
+                                 conversation_type=request.conversationType or request.sessionType)
+    except ValueError as exc:
+        raise HTTPException(422, "无法确认消息来源范围") from exc
+    target_db = db if database is None else database
+    try:
+        sources = await asyncio.wait_for(asyncio.to_thread(
+            target_db.list_memory_sources, request.characterId, scope.platform, scope.adapter,
+            scope.sender_id, scope.conversation_type, scope.conversation_id,
+            source_message_ids=(request.sourceMessageId,), limit=1,
+        ), timeout=_DB_WRITE_TIMEOUT)
+    except Exception as exc:
+        raise HTTPException(503, "暂时无法核对消息来源，请稍后重试") from exc
+    if sources and sources[0]["body"] != request.message:
+        raise HTTPException(409, detail={"code": "source_identity_conflict",
+                                        "message": "该来源标识已用于另一条消息，请为新消息使用新的标识。"})
+
+
 def _build_chat_generation_service(runtime, character_service=None, message_db=None) -> ChatGenerationService:
     handler = _generate_reply_impl
     if character_service is not None or message_db is not None:
@@ -916,6 +949,9 @@ def _build_chat_generation_service(runtime, character_service=None, message_db=N
             character_service=character_service,
             message_db=message_db,
         )
+    async def validate_request(request, current_user):
+        await _validate_web_source_identity(request, current_user, database=message_db)
+
     return ChatGenerationService(
         generate_handler=handler,
         inference_runtime=runtime,
@@ -923,6 +959,7 @@ def _build_chat_generation_service(runtime, character_service=None, message_db=N
         is_high_risk_prompt=_is_high_risk_prompt,
         security_response_factory=_security_policy_response,
         trace_id_factory=lambda: uuid.uuid4().hex,
+        validate_request=validate_request,
     )
 
 
