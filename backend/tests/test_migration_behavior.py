@@ -318,8 +318,10 @@ async def test_sync_pg_sequences_returns_synced_failed_counts():
         ("public", "messages_id_seq", "messages", "id"),
     ]
     session = FakeSession(execute_side_effects=[None, None])
+    statements = []
     call_idx = [0]
     async def fake_execute(stmt, params=None):
+        statements.append((str(stmt), params))
         if call_idx[0] == 0:
             call_idx[0] += 1
             return seq_result
@@ -331,6 +333,12 @@ async def test_sync_pg_sequences_returns_synced_failed_counts():
     synced, failed = await _sync_pg_sequences(pg_db)
     assert synced == 2
     assert failed == 0
+    assert len(statements) == 3
+    for (sql, params), table in zip(statements[1:], ("users", "messages")):
+        assert "pg_get_serial_sequence(:tbl, :col)" in sql
+        assert "pg_get_serial_identifier" not in sql
+        assert params == {"tbl": table, "col": "id"}
+
 
 
 @pytest.mark.asyncio
@@ -357,14 +365,9 @@ async def test_sync_pg_sequences_counts_failures():
 
 
 # ============================================
-# Sequence SQL contract (transaction and column mapping are tested by behavior above)
+# Sequence SQL is checked through executed statements above
 # ============================================
 
-def test_sync_pg_sequences_uses_correct_function():
-    """源码中应使用 pg_get_serial_sequence，不使用 pg_get_serial_identifier。"""
-    source = (BACKEND_ROOT / "db" / "migration.py").read_text(encoding="utf-8")
-    assert "pg_get_serial_sequence" in source
-    assert "pg_get_serial_identifier" not in source
 
 
 

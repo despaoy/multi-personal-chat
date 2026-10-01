@@ -3,15 +3,24 @@
 from __future__ import annotations
 
 import ast
-import sqlite3
 from pathlib import Path
-
-import pytest
 
 from db.models import metadata
 
 
 BACKEND = Path(__file__).resolve().parents[1]
+
+SCHEMA_COLUMN_CONTRACTS = (
+    ("claw_tools", "description"),
+    ("claw_tools", "code"),
+    ("claw_tools", "enabled"),
+    ("intent_active_kbs", "isActive"),
+    ("model_invocations", "platform"),
+    ("model_invocations", "usedRag"),
+    ("model_invocations", "usedLora"),
+    ("saved_dialogues", "dialogue_count"),
+    ("training_tasks", "lora_name"),
+)
 
 
 def _norm_default(value):
@@ -20,43 +29,32 @@ def _norm_default(value):
     return str(value).replace("'", "")
 
 
-@pytest.mark.parametrize(
-    "table,column",
-    [
-        ("claw_tools", "description"),
-        ("claw_tools", "code"),
-        ("claw_tools", "enabled"),
-        ("intent_active_kbs", "isActive"),
-        ("model_invocations", "platform"),
-        ("model_invocations", "usedRag"),
-        ("model_invocations", "usedLora"),
-        ("saved_dialogues", "dialogue_count"),
-        ("training_tasks", "lora_name"),
-    ],
-)
-def test_sqlite_runtime_matches_orm_nullable_default(tmp_path, table, column):
+def test_sqlite_runtime_matches_orm_schema(tmp_path):
+    """Check every table and the established nullable/default contracts once."""
     from db.database import SQLiteDB
 
-    path = tmp_path / "schema.db"
-    db = SQLiteDB(path)
-
-    conn = sqlite3.connect(path)
+    db = SQLiteDB(tmp_path / "schema.db")
     try:
-        info = {
-            row[1]: row
-            for row in conn.execute(f"PRAGMA table_info({table})")
-        }
+        connection = db.get_connection()
+        for table_name, table in metadata.tables.items():
+            info = {
+                row["name"]: row
+                for row in connection.execute(f'PRAGMA table_info("{table_name}")')
+            }
+            assert set(info) == set(table.columns.keys()), table_name
+            for contract_table, column in SCHEMA_COLUMN_CONTRACTS:
+                if contract_table != table_name:
+                    continue
+                col = table.columns[column]
+                assert bool(info[column]["notnull"]) == (not col.nullable), (
+                    f"{table_name}.{column} NOT NULL mismatch"
+                )
+                orm_default = col.server_default.arg if col.server_default is not None else None
+                assert _norm_default(info[column]["dflt_value"]) == _norm_default(orm_default), (
+                    f"{table_name}.{column} default mismatch"
+                )
     finally:
-        conn.close()
-
-    col = metadata.tables[table].columns[column]
-    sqlite_notnull = bool(info[column][3])
-    sqlite_default = _norm_default(info[column][4])
-    orm_notnull = not col.nullable
-    orm_default = _norm_default(col.server_default.arg if col.server_default is not None else None)
-
-    assert sqlite_notnull == orm_notnull, f"{table}.{column} NOT NULL mismatch"
-    assert sqlite_default == orm_default, f"{table}.{column} default mismatch"
+        db.close_connection()
 
 
 def test_session_settings_not_in_orm():
@@ -150,8 +148,8 @@ def _migration_alter_nullable(path):
     return result
 
 
-def test_alembic_head_matches_orm_for_key_columns():
-    """Check the final Alembic migration set (001+005) for the known contract columns."""
+def test_migration_005_matches_orm_for_key_columns():
+    """Check migration 005 against its original ORM column contract."""
     migration_005 = next((BACKEND / "alembic" / "versions").glob("005_*.py"))
     alters = _migration_alter_nullable(migration_005)
 

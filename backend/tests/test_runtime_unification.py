@@ -167,21 +167,6 @@ def test_orm_metadata_declares_runtime_indexes():
         assert index_names <= declared
 
 
-def test_sqlite_runtime_schema_matches_orm_metadata(tmp_path):
-    from db.database import SQLiteDB
-    from db.models import metadata
-
-    database = SQLiteDB(tmp_path / "schema-contract.db")
-    connection = database.get_connection()
-
-    for table_name, table in metadata.tables.items():
-        actual_columns = {
-            row["name"]
-            for row in connection.execute(f'PRAGMA table_info("{table_name}")')
-        }
-        assert actual_columns == set(table.columns.keys()), table_name
-
-    database.close_connection()
 
 
 def test_sqlite_assigns_exactly_one_admin_under_concurrent_registration(tmp_path):

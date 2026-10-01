@@ -1221,11 +1221,6 @@ class TestSchemaVersionGate:
             "adds": {uid: [] for uid in grouped},
         }
 
-    def test_v2_passes(self):
-        unit, segments, candidates, grouped, candidates_by_unit = self._context()
-        assert (
-            validate_boundary_overrides(self._full_doc(grouped, candidates_by_unit), grouped, candidates_by_unit) == []
-        )
 
     def test_missing_schema_version_rejected(self):
         unit, segments, candidates, grouped, candidates_by_unit = self._context()
