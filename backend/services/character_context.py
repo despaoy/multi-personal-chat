@@ -67,6 +67,7 @@ if TYPE_CHECKING:
     from character.profile_registry import CharacterProfileRegistry
     from repositories.character_memory import CharacterMemoryRepository
     from repositories.messages import MessageRepository
+    from services.delivery_memory import CompletionSnapshot
 
 logger = logging.getLogger(__name__)
 
@@ -468,11 +469,13 @@ class CharacterContextService:
 
     async def complete_turn(
         self,
-        prepared: PreparedCharacterTurn,
+        prepared: PreparedCharacterTurn | CompletionSnapshot,
         turn: TurnInput,
         reply: str,
         *,
         source_message_id: str = "",
+        memory_receipt: asyncio.Future | None = None,
+        memory_retry_only: bool = False,
     ) -> _TurnOutcome:
         """生成成功后回写：交互计数、新记忆、关系推进。
 
@@ -483,9 +486,10 @@ class CharacterContextService:
 
         # 1. 交互计数 +1
         try:
-            outcome.interaction_count = await self._memory_repo.increment_interaction(
-                prepared.character_id, prepared.user_scope
-            )
+            if not memory_retry_only:
+                outcome.interaction_count = await self._memory_repo.increment_interaction(
+                    prepared.character_id, prepared.user_scope
+                )
         except Exception:
             logger.warning(
                 "角色交互计数更新失败 character=%s error=%s",
@@ -550,6 +554,7 @@ class CharacterContextService:
                         source_type="user",
                         observed_at=prepared.received_at,
                         source_only=source_only,
+                        **({"receipt": memory_receipt} if memory_receipt is not None else {}),
                     )
                     outcome.memory_enrichment_status = (
                         "queued_hot"
@@ -574,6 +579,9 @@ class CharacterContextService:
                 prepared.character_id,
                 exc_info=True,
             )
+
+        if memory_retry_only:
+            return outcome
 
         # 3. 关系起点仅手动设置；次数只是统计，不自动升温。
         try:

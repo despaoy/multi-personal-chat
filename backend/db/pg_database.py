@@ -2198,6 +2198,8 @@ class PgDatabase:
             if operation == "claim":
                 await session.execute(text(STATEMENTS["archive"]), params)
             result = await session.execute(text(STATEMENTS[operation]), params)
+            if operation == "memory_pending":
+                return [_row_to_dict(row) for row in result.fetchall()]
             if operation == "get":
                 row = result.fetchone()
                 return _row_to_dict(row) if row else None

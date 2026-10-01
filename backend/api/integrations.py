@@ -20,9 +20,7 @@ from fastapi import APIRouter, Header, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from api.generate import (
-    _complete_character_turn,
     _is_high_risk_prompt,
-    _prepare_character_turn,
     generate_reply_core,
 )
 from app.runtime import get_runtime_container
@@ -663,29 +661,29 @@ async def acknowledge_delivery(payload: DeliveryAcknowledgement, http_request: R
     record = await _run_blocking("delivery-read", lambda: source_db.integration_receipt("get", key=payload.receiptId))
     if not record or record["owner"] != payload.deliveryToken:
         raise HTTPException(status_code=404, detail="Unknown delivery receipt")
-    context = json.loads(record["response"] or "{}").get("context", {})
-    prepared = None
-    msg = None
-    character_service = _request_character_service(http_request)
-    if (
-        payload.status == "delivered"
-        and record["status"] in {"generated", "delivery_failed"}
-        and context.get("message_saved")
-        and context.get("character_id")
-    ):
-        msg = MessageRequest(**context["request"])
-        # History still excludes this not-yet-delivered turn here.
-        prepared = await _prepare_character_turn(msg, context["character_id"], character_service=character_service)
-    changed = await _run_blocking(
-        "delivery-update",
-        lambda: source_db.integration_receipt(
-            "delivery",
-            key=payload.receiptId,
-            owner=payload.deliveryToken,
-            status=payload.status,
-        ),
-    )
-    if changed and payload.status == "delivered" and prepared is not None:
-        reply = json.loads(record["response"])["reply"]["replyText"]
-        await _complete_character_turn(prepared, msg, reply, character_service=character_service)
-    return {"acknowledged": True, "changed": changed}
+    from services.delivery_memory import delivery_envelope, ensure_delivery_memory_worker
+
+    stored = json.loads(record["response"] or "{}")
+    if payload.status == "delivered":
+        response, state = delivery_envelope(stored)
+        changed = await _run_blocking(
+            "delivery-update",
+            lambda: source_db.integration_receipt(
+                "delivery_memory", key=payload.receiptId, owner=payload.deliveryToken,
+                response=response, expected=record["response"], expires_at=time.time(),
+            ),
+        )
+    else:
+        changed = await _run_blocking(
+            "delivery-update",
+            lambda: source_db.integration_receipt(
+                "delivery", key=payload.receiptId, owner=payload.deliveryToken, status=payload.status,
+            ),
+        )
+        state = "not_delivered"
+    latest = await _run_blocking("delivery-read", lambda: source_db.integration_receipt("get", key=payload.receiptId))
+    if latest and latest["status"] == "delivered":
+        state = json.loads(latest["response"] or "{}").get("memory_completion_state", "legacy_unknown")
+        if state in {"pending", "running"}:
+            ensure_delivery_memory_worker(source_db, _request_character_service(http_request))
+    return {"acknowledged": True, "changed": changed, "memoryStatus": "pending" if state == "running" else state}

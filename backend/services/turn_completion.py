@@ -73,7 +73,7 @@ class TurnCompletionRuntime:
         self,
         work: Callable[[], Coroutine[Any, Any, Any]],
         *,
-        timeout: float,
+        timeout: float | None,
         reservation: CompletionReservation | None = None,
     ) -> Any:
         if asyncio.get_running_loop() is not self.loop:

@@ -2387,6 +2387,8 @@ class SQLiteDB:
         if operation == "claim":
             conn.execute(STATEMENTS["archive"], params)
         cursor = conn.execute(STATEMENTS[operation], params)
+        if operation == "memory_pending":
+            return [dict(row) for row in cursor.fetchall()]
         if operation == "get":
             row = cursor.fetchone()
             return dict(row) if row else None

@@ -229,6 +229,9 @@ async def lifespan(app: FastAPI):
     from services.turn_completion import start_turn_completions
 
     start_turn_completions()
+    from services.delivery_memory import ensure_delivery_memory_worker
+
+    ensure_delivery_memory_worker(database)
     logger.info("✅ 增强版服务启动完成！")
     try:
         yield
@@ -252,6 +255,12 @@ async def lifespan(app: FastAPI):
             await shutdown_intent_tasks()
         except Exception as e:
             logger.warning("关闭 RAG 意图任务失败: %s", e)
+        try:
+            from services.delivery_memory import shutdown_delivery_memory
+
+            await shutdown_delivery_memory()
+        except Exception as e:
+            logger.warning("关闭交付记忆任务失败: %s", type(e).__name__)
         try:
             from services.turn_completion import shutdown_turn_completions
 

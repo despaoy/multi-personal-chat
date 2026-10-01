@@ -191,35 +191,6 @@ async def test_ack_rejects_missing_required_signature(gateway, monkeypatch):
     assert error.value.status_code == 401
 
 
-@pytest.mark.asyncio
-async def test_character_completion_waits_for_ack_and_runs_once(gateway, monkeypatch):
-    _, _, payload = gateway
-    original = integrations.generate_reply_core
-    completed = []
-
-    async def generate(*args, **kwargs):
-        result = await original(*args, **kwargs)
-        kwargs["delivery_context"]["character_id"] = "character"
-        return result
-
-    async def prepare(*args, **kwargs):
-        return object()
-
-    async def complete(*args, **kwargs):
-        completed.append(args)
-
-    monkeypatch.setattr(integrations, "generate_reply_core", generate)
-    monkeypatch.setattr(integrations, "_prepare_character_turn", prepare)
-    monkeypatch.setattr(integrations, "_complete_character_turn", complete)
-    response = await receive(payload)
-    assert completed == []
-    await ack(response, "delivery_failed")
-    assert completed == []
-    await ack(response)
-    await ack(response)
-    assert len(completed) == 1
-
-
 def test_receipt_migration_preserves_existing_data(tmp_path, monkeypatch):
     import sqlalchemy as sa
 

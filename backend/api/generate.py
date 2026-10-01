@@ -592,6 +592,10 @@ async def _generate_reply_body(
             # 消息保存失败时跳过回写，保持消息记录与人物状态一致。
             if delivery_context is not None:
                 delivery_context.update(message_saved=message_saved, character_id=mapped_character_id)
+                if prepared_character_turn is not None and message_saved:
+                    from services.delivery_memory import freeze_completion
+
+                    delivery_context["completion_snapshot"] = freeze_completion(prepared_character_turn)
             if prepared_character_turn is not None and persist_message and message_saved and delivery_context is None:
                 completion_warning = await _complete_character_turn(
                     prepared_character_turn,
@@ -788,6 +792,10 @@ async def _generate_reply_body(
         # 同 vLLM 路径：消息保存成功才回写人物状态，persist_message=False 不回写
         if delivery_context is not None:
             delivery_context.update(message_saved=message_saved, character_id=mapped_character_id)
+            if prepared_character_turn is not None and message_saved:
+                from services.delivery_memory import freeze_completion
+
+                delivery_context["completion_snapshot"] = freeze_completion(prepared_character_turn)
         if prepared_character_turn is not None and persist_message and message_saved and delivery_context is None:
             completion_warning = await _complete_character_turn(
                 prepared_character_turn,
