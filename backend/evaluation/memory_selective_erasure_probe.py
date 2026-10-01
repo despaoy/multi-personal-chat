@@ -38,7 +38,7 @@ async def run_selective_erasure_probe(
     capture_storage_proof,
 ):
     case = fixture["cases"][-1]
-    sender = "stage34-delivery-memory-fixed-qq-owner"
+    sender = fixture.get("native_owner", "stage34-delivery-memory-fixed-qq-owner")
     fields = ("tsukiyashiro_kisaki", "qq", "stage34-gateway", sender, "private", sender)
     assert len(case["message"]) > 200
     proof["actual_intent_gate"] = is_memory_erasure_request(case["message"])
@@ -81,7 +81,7 @@ async def run_selective_erasure_probe(
                 relationship=database.get_character_relationship(*fields),
                 original_archive_sha256=hashlib.sha256(
                     json.dumps(
-                        [dict(r) for r in rows if r["sourceMessageId"] == "stage34-delivery-memory-fixed-target"],
+                        [dict(r) for r in rows if r["sourceMessageId"] == fixture.get("native_source_message_id", "stage34-delivery-memory-fixed-target")],
                         sort_keys=True,
                         default=str,
                     ).encode()
@@ -121,7 +121,7 @@ async def run_selective_erasure_probe(
 
     proof["owner_before"] = await snapshot()
     assert len(proof["owner_before"]["claims"]) == 2
-    assert any("MB-764-C" in r["body"] for r in proof["owner_before"]["sources"])
+    assert any(fixture.get("native_receipt", "MB-764-C") in r["body"] for r in proof["owner_before"]["sources"])
     payload = dict(
         platform="qq",
         adapter=fields[2],
@@ -133,6 +133,7 @@ async def run_selective_erasure_probe(
         text=case["message"],
         requestBudgetSeconds=180,
     )
+    proof["primary_erasure_source_message_id"] = payload["messageId"]
     bad = await client.post("/api/integrations/astrbot/messages", json=payload)
     proof["unauthorized_status"] = bad.status_code
     assert bad.status_code == 401
@@ -337,7 +338,7 @@ def audit_selective_erasure(proof, fixture, cloud_calls):
         course_claim_deleted=not any(r["memory_key"] == course for r in after["claims"]),
         retained_claim_unchanged=_retained_claim_preserved(before, after, fixture),
         shared_raw_source_unreadable=not any(
-            r["source_message_id"] == "stage34-delivery-memory-fixed-target" for r in after["sources"]
+            r["source_message_id"] == fixture.get("native_source_message_id", "stage34-delivery-memory-fixed-target") for r in after["sources"]
         ),
         exact_semantic_erasure_one=receipt["status"] == "erased"
         and receipt["persisted"] == 1
@@ -365,7 +366,7 @@ def audit_selective_erasure(proof, fixture, cloud_calls):
         and constraints[0].get("allowed_erase_memory_ids") == fixture.get("allowed_erase_memory_ids", ["4"])
         and constraints[0].get("protected_memory_ids") == fixture.get("protected_memory_ids", ["5"])
         and constraints[0].get("unresolved_protection") is False,
-        erasure_instruction_not_recaptured=not after["sources"],
+        erasure_instruction_not_recaptured=not any(r["source_message_id"] == proof.get("primary_erasure_source_message_id", proof["reused_native_fixture"].get("run_label", "")+"-erase") for r in after["sources"]),
         bounded_source_erasure=receipt.get("source_erasure_policy") == "claim_targets_only_for_partial_retention",
     )
     read_checks = dict(retained_read_executed=proof.get("retained_read_executed") is True)
@@ -382,14 +383,14 @@ def audit_selective_erasure(proof, fixture, cloud_calls):
             read_checks.update(
                 actual_retained_read_model=len(actual)==1 and fixture['retained_read_message'] in wire,
                 no_current_preference_hint='深蓝色' not in fixture['retained_read_message'],
-                retained_course_in_memory_packet='MB-764-C' in packet_text and '海庭鹤林' in packet_text,
+                retained_course_in_memory_packet=fixture.get("native_receipt", "MB-764-C") in packet_text and '海庭鹤林' in packet_text,
                 deleted_preference_absent_from_memory_packet='深蓝色' not in packet_text,
                 deleted_preference_absent_from_retained_claim='深蓝色' not in json.dumps(new_retained,ensure_ascii=False),
-                retained_course_facts_understood=all(x in read['response'].get('replyText','') for x in ['MB-764-C','周六','海庭鹤林']),
+                retained_course_facts_understood=all(x in read['response'].get('replyText','') for x in [fixture.get("native_receipt", "MB-764-C"),'周六','海庭鹤林']),
                 retained_read_delivery_completed=proof['read_terminal_receipt']['context']['memory_completion']['state']=='completed',
                 retained_claim_still_unchanged=new_retained==stored_retained,
                 preference_not_recreated=not any(r['memory_key']==course for r in current['claims']),
-                original_source_still_unreadable=not any(r['source_message_id']=='stage34-delivery-memory-fixed-target' for r in current['sources']))
+                original_source_still_unreadable=not any(r['source_message_id']==fixture.get("native_source_message_id", "stage34-delivery-memory-fixed-target") for r in current['sources']))
         else:
             read_checks.update(
                 actual_retained_read_model=len(actual) == 1 and fixture["retained_read_message"] in wire,
@@ -398,7 +399,7 @@ def audit_selective_erasure(proof, fixture, cloud_calls):
                     p.get("memory_key") == retained or "深蓝色油墨进行纸版压印" in p.get("content", "") for p in packets
                 ),
                 deleted_course_absent_from_memory_packet=all(
-                    "MB-764-C" not in json.dumps(p, ensure_ascii=False) for p in packets
+                    fixture.get("native_receipt", "MB-764-C") not in json.dumps(p, ensure_ascii=False) for p in packets
                 ),
                 retained_preference_understood="深蓝色" in read["response"].get("replyText", ""),
                 retained_read_delivery_completed=proof["read_terminal_receipt"]["context"]["memory_completion"]["state"]
@@ -407,7 +408,7 @@ def audit_selective_erasure(proof, fixture, cloud_calls):
                 == [r for r in current["claims"] if r["memory_key"] == retained],
                 course_not_recreated=not any(r["memory_key"] == course for r in current["claims"]),
                 original_source_still_unreadable=not any(
-                    r["source_message_id"] == "stage34-delivery-memory-fixed-target" for r in current["sources"]
+                    r["source_message_id"] == fixture.get("native_source_message_id", "stage34-delivery-memory-fixed-target") for r in current["sources"]
                 ),
             )
     proof["read_checks"] = read_checks

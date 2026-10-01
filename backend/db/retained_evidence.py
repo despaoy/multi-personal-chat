@@ -85,6 +85,82 @@ def _contains(value, needles):
     return False
 
 
+def _preference_cuts(body, record):
+    """Locate one literal normalized preference predicate, not its broad evidence.
+
+    The original writer may cite an entire multi-fact sentence. Evidence is
+    still required, but its breadth never grants deletion of other predicates.
+    Unknown clauses/roles remain conflicts; this does not infer event actors.
+    """
+    key = str(record.get("memory_key") or "")
+    value = key.removeprefix("preference_")
+    metadata = _metadata(record)
+    content = str(record.get("content") or "")
+    if (
+        not value
+        or any(character in "，,。！？!?；;\n" for character in value)
+        or metadata.get("attributed_to", "user") != "user"
+        or metadata.get("content_semantics") == "quoted_source"
+        or not any(content.startswith("用户" + verb + value) for verb in ("喜欢", "偏好", "偏爱"))
+    ):
+        raise MemoryClaimConflict("erased evidence is not a complete source statement or focused preference")
+    evidence = _evidence(record)
+    if not any(value in snippet and snippet in body for snippet in evidence):
+        raise MemoryClaimConflict("erased evidence is not a complete source statement or grounded preference")
+    boundary = r"(?:(?<=[，,。！？!?；;\n])|^)"
+    connectors = r"(?:(?:并且|而且|同时|另外|此外|也)\s*)?"
+    pattern = re.compile(boundary + r"\s*" + connectors + r"我(?:本人)?(?:喜欢|偏好|偏爱)" + re.escape(value))
+    qualifier = re.compile(r"[，,]\s*这是我(?:本人)?(?:明确(?:且|而且))?(?:长期)?的(?:个人)?偏好")
+    intervals = []
+    for match in pattern.finditer(body):
+        start, end = match.span()
+        if not _outside_quotes(body, start):
+            continue
+        if end < len(body) and body[end] not in "，,。！？!?；;\n":
+            continue  # A conjunction/qualification is not a literal value edge.
+        qualification = qualifier.match(body, end)
+        if qualification is not None:
+            candidate = qualification.end()
+            if candidate < len(body) and body[candidate] not in "，,。！？!?；;\n":
+                continue
+            end = candidate
+        # A comma may introduce a retained predicate; keep it and everything
+        # after it. Only a completed terminal punctuation belongs to the cut.
+        if end < len(body) and body[end] in "。！？!?；;\n":
+            end += 1
+        if _outside_quotes(body, end):
+            intervals.append((start, end))
+    if not intervals:
+        raise MemoryClaimConflict("erased evidence is not a complete source statement or separable preference")
+    return intervals
+
+
+def _source_cuts(body, erased_records):
+    cuts = set()
+    needles = []
+    for record in erased_records:
+        if str(record.get("memory_key") or "").startswith("preference_"):
+            intervals = _preference_cuts(body, record)
+            cuts.update(intervals)
+            needles.append(str(record["memory_key"]).removeprefix("preference_"))
+        else:
+            snippets = [snippet for snippet in _evidence(record) if snippet != body]
+            if not snippets:
+                raise MemoryClaimConflict("cannot separate retained source evidence")
+            for snippet in snippets:
+                positions = _positions(body, snippet)
+                if not positions or any(not _statement_span(body, snippet, start) for start in positions):
+                    raise MemoryClaimConflict("erased evidence is not a complete source statement")
+                cuts.update((start, start + len(snippet)) for start in positions)
+                needles.append(snippet)
+    intervals = []
+    for start, end in sorted(cuts):
+        if intervals and start < intervals[-1][1]:
+            raise MemoryClaimConflict("overlapping erased source statements")
+        intervals.append((start, end))
+    return intervals, tuple(needles)
+
+
 def project_retained(record, source, erased_records):
     """Return a precise evidence patch, or None; never choose deleted targets."""
     body = source.get("body")
@@ -112,30 +188,20 @@ def project_retained(record, source, erased_records):
             raise MemoryClaimConflict("copied retained text has no separable evidence")
         return None
     affected = copied_content or any(
-        (isinstance(body, str) and body in item) or _contains(item, narrow) for item in evidence
+        (isinstance(body, str) and body in item) or _contains(item, (*narrow, *objects)) for item in evidence
     )
     if not affected:
         if not isinstance(body, str) and (_contains(evidence, erased_evidence) or _contains(content, erased_evidence)):
             raise MemoryClaimConflict("shared source unavailable for retained evidence")
         return None
-    if not isinstance(body, str) or source.get("state") != "recorded" or not narrow:
+    if not isinstance(body, str) or source.get("state") != "recorded":
         raise MemoryClaimConflict("cannot separate retained source evidence")
-    cuts = set()
-    for snippet in narrow:
-        positions = _positions(body, snippet)
-        if not positions or any(not _statement_span(body, snippet, start) for start in positions):
-            raise MemoryClaimConflict("erased evidence is not a complete source statement")
-        cuts.update((start, start + len(snippet)) for start in positions)
-    intervals = []
-    for start, end in sorted(cuts):
-        if intervals and start < intervals[-1][1]:
-            raise MemoryClaimConflict("overlapping erased source statements")
-        intervals.append((start, end))
+    intervals, needles = _source_cuts(body, erased_records)
     projected = []
     spans = []
     changed = bool(copied_content)
     for item in evidence:
-        if not _contains(item, narrow):
+        if not _contains(item, needles):
             projected.append(item)
             continue
         starts = _positions(body, item)

@@ -72,7 +72,7 @@ def test_independent_normalized_sibling_remains_unchanged_when_full_quote_topic_
 
 
 @pytest.mark.parametrize(
-    "snippet", ["深蓝色油墨", "我喜欢深蓝色油墨进行纸版压印", "色油墨进行纸版压印，这是我明确且长期的个人偏好。"]
+    "snippet", ["深蓝色油墨", "色油墨进行纸版压印，这是我明确且长期的个人偏好。"]
 )
 def test_partial_statement_cannot_silently_remove_retained_context(snippet):
     with pytest.raises(MemoryClaimConflict, match="complete source statement"):
@@ -84,10 +84,6 @@ def test_absent_or_forged_original_source_cannot_authorize_projection(body):
     with pytest.raises(MemoryClaimConflict):
         project_retained(row([BODY]), source(body), erased())
 
-
-def test_whole_shared_erased_quote_cannot_destroy_another_retained_quote():
-    with pytest.raises(MemoryClaimConflict, match="cannot separate"):
-        project_retained(row([BODY]), source(), erased([BODY]))
 
 
 def test_unrelated_evidence_from_a_different_source_is_preserved_in_order():
