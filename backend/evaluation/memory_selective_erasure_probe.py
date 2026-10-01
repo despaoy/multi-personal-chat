@@ -191,15 +191,12 @@ async def run_selective_erasure_probe(
     # A new comprehension case, only after actual selective deletion succeeded.
     before = proof["owner_before"]
     after = proof["owner_after_ack"]
-    course = fixture["course_memory_key"]
-    retained = fixture["retained_memory_key"]
+    course = fixture.get("erased_memory_key", fixture["course_memory_key"])
     semantic = proof["terminal_receipt"]["context"]["memory_completion"]["semantic_receipt"]
     deletion_succeeded = (
         not any(r["memory_key"] == course for r in after["claims"])
-        and [r for r in before["claims"] if r["memory_key"] == retained]
-        == [r for r in after["claims"] if r["memory_key"] == retained]
-        and semantic["status"] == "erased"
-        and semantic["persisted"] == 1
+        and _retained_claim_preserved(before, after, fixture)
+        and semantic["status"] == "erased" and semantic["persisted"] == 1
     )
     proof["retained_read_executed"] = deletion_succeeded
     if deletion_succeeded:
@@ -295,7 +292,7 @@ def audit_selective_erasure(proof, fixture, cloud_calls):
     after = proof["owner_after_ack"]
     done = proof["terminal_receipt"]
     receipt = done["context"]["memory_completion"]["semantic_receipt"]
-    course = fixture["course_memory_key"]
+    course = fixture.get("erased_memory_key", fixture["course_memory_key"])
     retained = fixture["retained_memory_key"]
     guards = dict(
         normal_owner_auth=proof["auth_statuses"] == [200, 200],
@@ -335,11 +332,10 @@ def audit_selective_erasure(proof, fixture, cloud_calls):
         == proof["completion_runtime_terminal"]["reserved"]
         == 0,
     )
-    old_retained = [r for r in before["claims"] if r["memory_key"] == retained]
     new_retained = [r for r in after["claims"] if r["memory_key"] == retained]
     business = dict(
         course_claim_deleted=not any(r["memory_key"] == course for r in after["claims"]),
-        retained_claim_unchanged=old_retained == new_retained and len(new_retained) == 1,
+        retained_claim_unchanged=_retained_claim_preserved(before, after, fixture),
         shared_raw_source_unreadable=not any(
             r["source_message_id"] == "stage34-delivery-memory-fixed-target" for r in after["sources"]
         ),
@@ -366,8 +362,8 @@ def audit_selective_erasure(proof, fixture, cloud_calls):
         no_premature_completion=not _claims_completed_erasure(generation["response"]["replyText"]),
         no_execution_before_ack=proof["generated_receipt"]["context"].get("memory_completion") is None,
         actual_partial_writer_constraint=len(constraints) == 1
-        and constraints[0].get("allowed_erase_memory_ids") == ["4"]
-        and constraints[0].get("protected_memory_ids") == ["5"]
+        and constraints[0].get("allowed_erase_memory_ids") == fixture.get("allowed_erase_memory_ids", ["4"])
+        and constraints[0].get("protected_memory_ids") == fixture.get("protected_memory_ids", ["5"])
         and constraints[0].get("unresolved_protection") is False,
         erasure_instruction_not_recaptured=not after["sources"],
         bounded_source_erasure=receipt.get("source_erasure_policy") == "claim_targets_only_for_partial_retention",
@@ -380,26 +376,76 @@ def audit_selective_erasure(proof, fixture, cloud_calls):
         block = re.search(r"<character_memory[^>]*>\n(.*?)\n</character_memory>", wire, re.S)
         packets = [json.loads(line[2:]) for line in block[1].splitlines() if line.startswith("- {")] if block else []
         current = proof["owner_after_read"]
-        read_checks.update(
-            actual_retained_read_model=len(actual) == 1 and fixture["retained_read_message"] in wire,
-            no_current_preference_hint="深蓝色" not in fixture["retained_read_message"],
-            retained_record_in_memory_packet=any(
-                p.get("memory_key") == retained or "深蓝色油墨进行纸版压印" in p.get("content", "") for p in packets
-            ),
-            deleted_course_absent_from_memory_packet=all(
-                "MB-764-C" not in json.dumps(p, ensure_ascii=False) for p in packets
-            ),
-            retained_preference_understood="深蓝色" in read["response"].get("replyText", ""),
-            retained_read_delivery_completed=proof["read_terminal_receipt"]["context"]["memory_completion"]["state"]
-            == "completed",
-            retained_claim_still_unchanged=new_retained
-            == [r for r in current["claims"] if r["memory_key"] == retained],
-            course_not_recreated=not any(r["memory_key"] == course for r in current["claims"]),
-            original_source_still_unreadable=not any(
-                r["source_message_id"] == "stage34-delivery-memory-fixed-target" for r in current["sources"]
-            ),
-        )
+        if fixture.get("retained_read_kind") == "course_after_ink_erasure":
+            packet_text=json.dumps(packets,ensure_ascii=False)
+            stored_retained=[r for r in current['claims'] if r['memory_key']==retained]
+            read_checks.update(
+                actual_retained_read_model=len(actual)==1 and fixture['retained_read_message'] in wire,
+                no_current_preference_hint='深蓝色' not in fixture['retained_read_message'],
+                retained_course_in_memory_packet='MB-764-C' in packet_text and '海庭鹤林' in packet_text,
+                deleted_preference_absent_from_memory_packet='深蓝色' not in packet_text,
+                deleted_preference_absent_from_retained_claim='深蓝色' not in json.dumps(new_retained,ensure_ascii=False),
+                retained_course_facts_understood=all(x in read['response'].get('replyText','') for x in ['MB-764-C','周六','海庭鹤林']),
+                retained_read_delivery_completed=proof['read_terminal_receipt']['context']['memory_completion']['state']=='completed',
+                retained_claim_still_unchanged=new_retained==stored_retained,
+                preference_not_recreated=not any(r['memory_key']==course for r in current['claims']),
+                original_source_still_unreadable=not any(r['source_message_id']=='stage34-delivery-memory-fixed-target' for r in current['sources']))
+        else:
+            read_checks.update(
+                actual_retained_read_model=len(actual) == 1 and fixture["retained_read_message"] in wire,
+                no_current_preference_hint="深蓝色" not in fixture["retained_read_message"],
+                retained_record_in_memory_packet=any(
+                    p.get("memory_key") == retained or "深蓝色油墨进行纸版压印" in p.get("content", "") for p in packets
+                ),
+                deleted_course_absent_from_memory_packet=all(
+                    "MB-764-C" not in json.dumps(p, ensure_ascii=False) for p in packets
+                ),
+                retained_preference_understood="深蓝色" in read["response"].get("replyText", ""),
+                retained_read_delivery_completed=proof["read_terminal_receipt"]["context"]["memory_completion"]["state"]
+                == "completed",
+                retained_claim_still_unchanged=new_retained
+                == [r for r in current["claims"] if r["memory_key"] == retained],
+                course_not_recreated=not any(r["memory_key"] == course for r in current["claims"]),
+                original_source_still_unreadable=not any(
+                    r["source_message_id"] == "stage34-delivery-memory-fixed-target" for r in current["sources"]
+                ),
+            )
     proof["read_checks"] = read_checks
     proof["authority_guards"] = guards
     proof["business_checks"] = business
     return {**guards, **business, **read_checks}
+
+
+def _retained_claim_preserved(before, after, fixture):
+    key = fixture["retained_memory_key"]
+    old = [r for r in before["claims"] if r["memory_key"] == key]
+    new = [r for r in after["claims"] if r["memory_key"] == key]
+    if len(old) != 1 or len(new) != 1:
+        return False
+    if not fixture.get("erasure_evidence_projection_expected"):
+        return old == new
+    previous, current = old[0], new[0]
+    if any(previous.get(k) != current.get(k) for k in previous
+           if k not in {"content", "evidence_json", "metadata_json", "metadata"}):
+        return False
+    metadata = json.loads(current["metadata_json"])
+    projection = metadata.pop("erasure_evidence_projection", {})
+    if metadata != json.loads(previous["metadata_json"]):
+        return False
+    sources = [s for s in before["sources"]
+               if s["source_message_id"] == fixture["qq_owner_prerequisite"]["source_message_id"]]
+    if len(sources) != 1:
+        return False
+    source = sources[0]
+    body = source["body"]
+    deleted = fixture["erased_original_statement"]
+    if body.count(deleted) != 1 or json.loads(previous["evidence_json"]) != [body]:
+        return False
+    start = body.index(deleted)
+    spans = [[0, start], [start + len(deleted), len(body)]]
+    expected_projection = dict(version=1, kind="original_source_fragments",
+        sources=[dict(source_message_id=source["source_message_id"], spans=spans)],
+        complete_original_source=False)
+    return (projection == expected_projection
+            and json.loads(current["evidence_json"]) == body.split(deleted)
+            and current["content"] == "用户原话保留片段（仅保留内容见证据）")

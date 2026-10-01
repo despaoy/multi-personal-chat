@@ -1742,7 +1742,7 @@ class PgDatabase:
                     + " UNION SELECT child.id FROM character_memories child "
                     "JOIN lineage parent ON (child.parent_memory_id = parent.id "
                     "OR child.supersedes_memory_id = parent.id) WHERE " + child_access_sql + ") "
-                    "DELETE FROM character_memories WHERE id IN (SELECT id FROM lineage) RETURNING id, memory_key"
+                    "DELETE FROM character_memories WHERE id IN (SELECT id FROM lineage) RETURNING id, memory_key, content, evidence_json, metadata_json"
                 ),
                 params,
             )
@@ -1753,6 +1753,10 @@ class PgDatabase:
                 raise MemoryClaimConflict('erasure would remove a retained logical memory')
             ids = [row[0] for row in rows]
             if ids:
+                from db.retained_evidence import purge_plan
+
+                erased_records = [dict(row._mapping) for row in rows]
+                await memory_source.run_postgres(session, purge_plan(source_scope, erased_records))
                 await memory_source.run_postgres(session, memory_source.revoke_plan(source_scope, ids))
             deleted = len(ids)
             await session.commit()

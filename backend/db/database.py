@@ -3384,6 +3384,16 @@ class SQLiteDB:
 
                     raise MemoryClaimConflict('erasure would remove a retained logical memory')
             if erase_ids:
+                from db.retained_evidence import purge_plan
+
+                erased_records = []
+                ordered_ids = sorted(erase_ids)
+                for offset in range(0, len(ordered_ids), 200):
+                    batch = ordered_ids[offset:offset + 200]
+                    placeholders = ",".join("?" for _ in batch)
+                    cursor.execute(f"SELECT * FROM character_memories WHERE id IN ({placeholders})", batch)
+                    erased_records.extend(dict(row) for row in cursor.fetchall())
+                memory_source.run_sqlite(cursor, purge_plan(source_scope, erased_records))
                 memory_source.run_sqlite(cursor, memory_source.revoke_plan(source_scope, erase_ids))
                 placeholders = ",".join("?" for _ in erase_ids)
                 cursor.execute(
