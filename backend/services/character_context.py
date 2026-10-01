@@ -600,7 +600,7 @@ class CharacterContextService:
             outcome.preferred_address = address or prepared.relationship.preferred_address
         except Exception:
             logger.warning(
-                "角色关系更新失败 character=%s error=%s",
+                "角色关系更新失败 character=%s",
                 prepared.character_id,
                 exc_info=True,
             )

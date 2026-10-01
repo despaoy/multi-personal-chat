@@ -310,6 +310,32 @@ async def _generate_reply_impl(
     delivery_context: dict | None = None,
     prepared_override=None,
 ):
+    slots = []
+    try:
+        return await _generate_reply_body(
+            request, current_user, persist_message=persist_message, enable_rag=enable_rag,
+            record_invocation=record_invocation, character_service=character_service,
+            message_db=message_db, delivery_context=delivery_context,
+            prepared_override=prepared_override, _completion_slots=slots,
+        )
+    finally:
+        for slot in slots:
+            slot.release()
+
+
+async def _generate_reply_body(
+    request: MessageRequest,
+    current_user: dict | None = None,
+    *,
+    persist_message: bool = True,
+    enable_rag: bool = True,
+    record_invocation: bool = True,
+    character_service=None,
+    message_db=None,
+    delivery_context: dict | None = None,
+    prepared_override=None,
+    _completion_slots=None,
+):
     """默认聊天生成实现：优先使用 vLLM，回退到模型管理器。
 
     character_service / message_db 由 HTTP 层经容器注入（绑定当前
@@ -434,6 +460,19 @@ async def _generate_reply_impl(
         mapped_character_id = request.characterId
     if prepared_override is not None and request.loraName and mapped_character_id != prepared_override.character_id:
         raise HTTPException(422, "LoRA 与分支角色不匹配")
+    completion_slot = None
+    if (mapped_character_id or prepared_override is not None) and persist_message and delivery_context is None and not request.branchId:
+        from services.turn_completion import CompletionUnavailable, get_turn_completion_runtime
+
+        try:
+            completion_slot = get_turn_completion_runtime().reserve()
+        except CompletionUnavailable:
+            raise HTTPException(503, detail={
+                "code": "turn_completion_busy",
+                "message": "长期记忆回写繁忙，本轮尚未生成，请稍后重试。",
+            }) from None
+        _completion_slots.append(completion_slot)
+
     if mapped_character_id and prepared_override is None:
         prepared_character_turn = await _prepare_character_turn(
             request,
@@ -559,6 +598,7 @@ async def _generate_reply_impl(
                     request,
                     reply,
                     character_service=character_service,
+                    completion_slot=completion_slot,
                 )
                 if completion_warning:
                     stored = await _persist_completion_feedback(
@@ -754,6 +794,7 @@ async def _generate_reply_impl(
                 request,
                 reply,
                 character_service=character_service,
+                completion_slot=completion_slot,
             )
             if completion_warning:
                 stored = await _persist_completion_feedback(
@@ -911,7 +952,7 @@ async def _persist_completion_feedback(receipt: dict, warning: str, *, database=
         return False
 
 
-async def _complete_character_turn(prepared, request: MessageRequest, reply: str, *, character_service=None) -> str | None:
+async def _complete_character_turn(prepared, request: MessageRequest, reply: str, *, character_service=None, completion_slot=None) -> str | None:
     """生成成功后回写；保留已生成内容，向调用方返回独立的保存提示。
 
     character_service 语义同 _prepare_character_turn：必须与准备阶段
@@ -944,6 +985,7 @@ async def _complete_character_turn(prepared, request: MessageRequest, reply: str
                 source_message_id=request.sourceMessageId,
             ),
             timeout=_DB_WRITE_TIMEOUT,
+            reservation=completion_slot,
         )
         capture = getattr(outcome, "source_capture", "")
         if capture == "failed":
