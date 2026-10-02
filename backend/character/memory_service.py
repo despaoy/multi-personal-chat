@@ -80,9 +80,17 @@ _CLAUSE_SPLIT_PATTERN = re.compile(r"[，。！？；、,.!?;：:]+")
 _PRONOUN_PATTERN = re.compile(r"我们|咱们|你们|她们|他们|它们|咱|您|你|她|他|它|我")
 _USER_SUBJECTS = frozenset(("我", "我们", "咱", "咱们"))
 _SELF_REPORT_RECIPIENT = re.compile(
-    r"^(?:按|根据|关于|(?:请)?(?:列出|核对|回忆)|你(?:还)?记得)?"
-    r"(?:我们|咱们|我|咱)(?:目前|现在|之前|以前|先前|当时|刚才|刚刚|曾经|曾|已经|明确|亲口|多次)*"
+    r"^(?:按|根据|关于|(?:并)?结合|(?:请)?(?:列出|核对|回忆)|你(?:还)?记得)?"
+    r"(?:我们|咱们|我|咱)(?:目前|现在|之前|以前|先前|当时|刚才|刚刚|曾经|曾|已经|已|明确|亲口|多次)*"
     r"(?:告诉|告知|说给|讲给)(?:过)?(?:你们|他们|她们|您|你|他|她)$"
+)
+
+# Explicit personal topic modifiers may vary by domain. A report recipient
+# still supplies no ownership verdict; another possessor or named third-party
+# relation is deliberately excluded from this closed relative-clause form.
+_PERSONAL_REPORT_TOPIC = re.compile(
+    r"的(?:本人|个人)(?!.*(?:的|朋友|同学|室友|同事|老师|家人|父母|父亲|母亲|爸爸|妈妈|哥哥|姐姐|弟弟|妹妹))"
+    r"[^的我咱你您他她它们\W]{0,24}"
 )
 
 _NAME_TOPIC_PATTERN = re.compile(r"名字|叫什么|叫啥|是谁")
@@ -474,9 +482,10 @@ def _topic_subjects(clause: str, topic_pattern: re.Pattern[str]) -> list[str]:
         # A recipient of the current user's report is not the topic owner.
         # Defer to scoped retrieval; reporting itself does not prove ownership.
         # Later explicit self/other possessors still use the normal rule.
+        report_topic = clause[last.end():match.start()]
         if (_SELF_REPORT_RECIPIENT.fullmatch(clause[:last.end()])
-                and re.fullmatch(r"的(?:本人|个人|饮料|饮品|饮食|食物|音乐|电影|生活)*",
-                                 clause[last.end():match.start()])):
+                and (re.fullmatch(r"的(?:本人|个人|饮料|饮品|饮食|食物|音乐|电影|生活)*", report_topic)
+                     or _PERSONAL_REPORT_TOPIC.fullmatch(report_topic))):
             continue
         subjects.append("user" if last.group() in _USER_SUBJECTS else "non_user")
     return subjects
