@@ -1,0 +1,325 @@
+"""Audit saved complete-source requests and independently read the test database."""
+
+import asyncio
+import base64
+import hashlib
+import json
+import os
+import re
+import secrets
+from dataclasses import asdict
+from datetime import datetime
+from html import unescape
+from pathlib import Path
+
+b = Path("/home/boot/lhm/multipersonal-runtime/backups/backend-chain-20261001/stage68")
+r = Path("/home/boot/lhm/multipersonal-runtime")
+fixture = json.loads((b / "fixture.json").read_text())
+old = json.loads((b / "baseline.json").read_text())
+native = json.loads((b / "native-pg-fixed/result.json").read_text())
+baseline_native = json.loads((b / "native-pg-baseline/result.json").read_text())
+calls = json.loads((b / "native-pg-fixed/cloud-calls.json").read_text())
+baseline_calls = json.loads((b / "native-pg-baseline/cloud-calls.json").read_text())
+os.environ.update(
+    ENVIRONMENT="production",
+    JWT_SECRET=secrets.token_urlsafe(48),
+    ENCRYPTION_KEY=base64.urlsafe_b64encode(secrets.token_bytes(32)).decode(),
+    DATABASE_PATH=str(b / "retrieval-baseline/database.sqlite"),
+    DATABASE_URL="",
+    USE_POSTGRESQL="false",
+    PYTHONDONTWRITEBYTECODE="1",
+)
+checks = {}
+
+
+def check(name, condition):
+    checks[name] = bool(condition)
+    assert checks[name], name
+
+
+async def main():
+    import asyncpg
+
+    from character.models import CompiledCharacterContext, UserScope
+    from character.source_memory import SourceMemoryService, attach_sources
+    from db.database import SQLiteDB
+    from inference.generation_request import GenerationRequest, build_generation_request
+    from inference.lora_registry import get_lora_system_prompt
+    from repositories.character_memory import DatabaseCharacterMemoryRepository
+
+    db = SQLiteDB(b / "retrieval-baseline/database.sqlite")
+    repo = DatabaseCharacterMemoryRepository(db)
+    scope = UserScope("web", "stage68-memory", "synthetic-owner", "synthetic-owner", "private")
+
+    def digest():
+        conn = db._get_connection()
+        return {
+            table: hashlib.sha256(
+                json.dumps(
+                    [dict(row) for row in conn.execute("SELECT * FROM " + table)], sort_keys=True, default=str
+                ).encode()
+            ).hexdigest()
+            for table in ["character_memories", "memory_sources", "memory_source_links", "memory_source_terms"]
+        }
+
+    before = digest()
+    found = await repo.search_sources("tsukiyashiro_kisaki", scope, query=fixture["question"], limit=32)
+    check("original_sqlite_found_rows_unchanged", found == old["found"])
+    sources = await SourceMemoryService(repo, max_chars=32768, defer_budget=True).recall(
+        "tsukiyashiro_kisaki", scope, fixture["question"]
+    )
+    packet = json.loads(sources.context)
+    check(
+        "fixed_sqlite_keeps_six_complete_sources",
+        len(packet["records"]) == 6
+        and {(row["source_id"], row["text"]) for row in packet["records"]}
+        == {(s["id"], s["body"]) for s in fixture["sources"]},
+    )
+    check(
+        "fixed_source_selection_omits_none",
+        sources.diagnostics["selection_omitted"] == sources.diagnostics["fresh_recheck_omitted"] == 0,
+    )
+    check(
+        "sources_remain_unresolved_historical_speech",
+        packet["speaker_role"] == "user"
+        and packet["described_subject"] == packet["current_validity"] == "not_resolved",
+    )
+    context = attach_sources(CompiledCharacterContext("角色", "", "", memory_status="no_match"), sources)
+    plan = build_generation_request(
+        GenerationRequest(
+            message=fixture["question"],
+            persona_prompt=get_lora_system_prompt("kisaki"),
+            character_context=context,
+            context_window_tokens=65536,
+            max_tokens=2048,
+        )
+    )
+    wire = unescape(plan.messages[-1]["content"])
+    check("same_original_sqlite_sources_reach_canonical_input", all(s["body"] in wire for s in fixture["sources"]))
+    check(
+        "source_only_creates_no_fact_packets",
+        not context.memory_packets
+        and not await repo.list_memory_records("tsukiyashiro_kisaki", scope, limit=None, include_inactive=True),
+    )
+    other = await SourceMemoryService(repo, max_chars=32768, defer_budget=True).recall(
+        "tsukiyashiro_kisaki", UserScope("web", "stage68-memory", "other", "other", "private"), fixture["question"]
+    )
+    check("fixed_cross_owner_rejected", not other.context and not other.candidate_context)
+    check("same_sqlite_storage_four_tables_unchanged", before == digest())
+    (b / "fixed.json").write_text(
+        json.dumps(
+            {
+                "cloud_calls": 0,
+                "sources": asdict(sources),
+                "canonical_messages": plan.messages,
+                "stored_claim_count": 0,
+                "storage_unchanged": True,
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n"
+    )
+    check("original_complete_fixture_preserved", fixture == old["fixture"])
+    check(
+        "baseline_native_has_six_durable_sources",
+        baseline_native["durable_seed_verified_before_question"]
+        and baseline_native["durable_declared_source_times_verified"]
+        and baseline_native["seed_sources"] == fixture["sources"],
+    )
+    original_source_trace = baseline_native["prepared"][0]["recall"]["sources"]
+    check(
+        "baseline_native_six_found_but_four_selected",
+        original_source_trace["indexed_read_count"] == 6
+        and len(original_source_trace["selected_ids"]) == 4
+        and original_source_trace["selection_omitted"] == 2,
+    )
+    check(
+        "baseline_primary_blocked_not_model_failure",
+        baseline_native["primary_calls"] == 0 and baseline_native["http_status"] == 500,
+    )
+    check(
+        "baseline_auxiliary_calls_retained",
+        len(baseline_calls) == 2
+        and all(
+            c["http_status"] == 200
+            and c["request"]["model"] == c["response"]["model"] == "deepseek-v4-pro"
+            and c["response"]["choices"][0]["finish_reason"] == "stop"
+            for c in baseline_calls
+        ),
+    )
+    check(
+        "native_authentication_and_ordinary_owner",
+        native["auth_statuses"] == native["chat_auth_statuses"] == [200, 200] and native["seed_scope"]["owner"] != "1",
+    )
+    check("native_synthetic_pg", native["database_mode"] == "PostgreSQL" and native["synthetic_only"])
+    check("native_original_sources_and_observed_times", native["seed_sources"] == fixture["sources"])
+    check(
+        "native_durable_sources_before_question",
+        native["durable_seed_verified_before_question"] and native["durable_declared_source_times_verified"],
+    )
+    check("native_successful_primary", native["http_status"] == 200 and native["primary_calls"] == 1)
+    check(
+        "native_four_completed_pro_calls",
+        len(calls) == 4
+        and all(
+            c["http_status"] == 200
+            and c["request"]["model"] == c["response"]["model"] == "deepseek-v4-pro"
+            and c["response"]["choices"][0]["finish_reason"] == "stop"
+            for c in calls
+        ),
+    )
+    check(
+        "native_no_fact_promotion",
+        native["seed_records"] == native["user_fact_records_after"] == []
+        and all(not p["memory_packets"] for p in native["prepared"]),
+    )
+    prepared = native["prepared"][0]
+    trace = prepared["recall"]["sources"]
+    check("native_all_six_source_ids", set(trace["selected_ids"]) == {s["id"] for s in fixture["sources"]})
+    check(
+        "native_no_source_omission_or_pending",
+        trace["selection_omitted"] == trace["fresh_recheck_omitted"] == 0 and not prepared["source_candidate_context"],
+    )
+    check(
+        "native_complete_episodic_packet",
+        {(row["source_id"], row["text"]) for row in json.loads(prepared["episodic_context"])["records"]}
+        == {(s["id"], s["body"]) for s in fixture["sources"]},
+    )
+    primary = [
+        c
+        for c in calls
+        if c["request"].get("max_tokens") == 2048
+        and any("<user_query>" in m["content"] for m in c["request"]["messages"])
+    ]
+    check("actual_primary_unique", len(primary) == 1)
+    wire = unescape(primary[0]["request"]["messages"][-1]["content"])
+    match = re.search(r"<dialogue_evidence[^>]*>\n(.*?)\n</dialogue_evidence>", wire, re.S)
+    check("actual_primary_original_whole_question", fixture["question"] in wire)
+    check(
+        "actual_primary_six_whole_sources",
+        bool(match)
+        and {(row["source_id"], row["text"]) for row in json.loads(match[1])["records"]}
+        == {(s["id"], s["body"]) for s in fixture["sources"]},
+    )
+    check(
+        "actual_sources_not_in_system",
+        all(
+            s["body"] not in m["content"]
+            for s in fixture["sources"]
+            for m in primary[0]["request"]["messages"]
+            if m["role"] == "system"
+        ),
+    )
+    cluster = r / "evaluations/r148pg.s3"
+    owner = native["seed_scope"]["owner"]
+    conn = await asyncpg.connect(user="boot", database=native["database"], host=str(cluster / "socket"), port=25433)
+    try:
+        async with conn.transaction(readonly=True):
+            check("independent_exact_cluster", await conn.fetchval("SHOW data_directory") == str(cluster / "data"))
+            check("independent_exact_database", await conn.fetchval("SELECT current_database()") == native["database"])
+            check(
+                "independent_actual_owner",
+                str(await conn.fetchval("SELECT id FROM users WHERE id=$1", int(owner))) == owner and owner != "1",
+            )
+            owner_key = json.dumps(("web", "web-character", owner))
+            scope_key = json.dumps(("tsukiyashiro_kisaki", "web", "web-character", owner, "private", owner))
+            rows = await conn.fetch(
+                "SELECT source_message_id,body,observed_at,state FROM memory_sources WHERE owner_key=$1 AND scope_key=$2",
+                owner_key,
+                scope_key,
+            )
+            check(
+                "independent_seed_sources_match_exact_body_and_time",
+                all(
+                    any(
+                        row["source_message_id"] == s["id"]
+                        and row["body"] == s["body"]
+                        and row["state"] == "recorded"
+                        and datetime.fromisoformat(row["observed_at"]) == datetime.fromisoformat(s["observed_at"])
+                        for row in rows
+                    )
+                    for s in fixture["sources"]
+                ),
+            )
+            check(
+                "independent_question_receipt_one",
+                sum(row["body"] == fixture["question"] and row["state"] == "recorded" for row in rows) == 1,
+            )
+            check("independent_only_six_seed_plus_question", len(rows) == 7)
+            check(
+                "independent_no_scoped_user_facts",
+                await conn.fetchval(
+                    "SELECT count(*) FROM character_memories WHERE character_id=$1 AND platform=$2 AND adapter=$3 AND sender_id=$4 AND conversation_id=$5 AND conversation_type=$6",
+                    "tsukiyashiro_kisaki",
+                    "web",
+                    "web-character",
+                    owner,
+                    owner,
+                    "private",
+                )
+                == 0,
+            )
+            source_keys = await conn.fetch(
+                "SELECT source_key FROM memory_sources WHERE owner_key=$1 AND scope_key=$2", owner_key, scope_key
+            )
+            check(
+                "independent_no_claim_links_for_source_only",
+                await conn.fetchval(
+                    "SELECT count(*) FROM memory_source_links WHERE source_key=ANY($1::text[])",
+                    [row["source_key"] for row in source_keys],
+                )
+                == 0,
+            )
+            (b / "storage-read.json").write_text(
+                json.dumps(
+                    {
+                        "database": native["database"],
+                        "owner": owner,
+                        "sources": [dict(row) for row in rows],
+                        "readonly": True,
+                        "scoped_claim_count": 0,
+                        "seed_source_link_count": 0,
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                )
+                + "\n"
+            )
+    finally:
+        await conn.close()
+    check("pending_writes_zero", native["sync_pending_final"] == 0)
+    answer = native["response"]["reply"]
+    check("raw_primary_matches_api_answer", answer == primary[0]["response"]["choices"][0]["message"]["content"])
+    check(
+        "answer_exact_original_six_in_order_no_additions", answer == "\n\n".join(s["body"] for s in fixture["sources"])
+    )
+    answer_checks = {s["id"]: s["body"] in answer for s in fixture["sources"]}
+    assert all(answer_checks.values())
+    audit = {
+        "checks": checks,
+        "chain_passed": sum(checks.values()),
+        "chain_total": len(checks),
+        "answer_checks": answer_checks,
+        "answer_passed": sum(answer_checks.values()),
+        "answer_total": len(answer_checks),
+        "answer": answer,
+        "qualified_cloud_calls": 4,
+        "baseline_auxiliary_calls": 2,
+        "phase_cloud_calls": 6,
+        "qualified_answers": 1,
+        "phase_primary_calls": 1,
+        "targeted_new_cases": 10,
+        "targeted_affected_cases": 4,
+        "targeted_unique_passed": 14,
+        "targeted_executions": 14,
+        "all_calls_pro": True,
+        "no_full_suite": True,
+        "no_passing_model_replay": True,
+        "no_production_chat_writes": True,
+    }
+    (b / "native-audit.json").write_text(json.dumps(audit, ensure_ascii=False, indent=2) + "\n")
+    print(json.dumps({k: v for k, v in audit.items() if k not in ["checks", "answer_checks", "answer"]}))
+
+
+asyncio.run(main())

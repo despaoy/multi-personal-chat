@@ -31,7 +31,9 @@ def select_sources(linked, found, *, contextual=(), limit=4):
     # every slot and suppress the top source-only correction/condition.
     required = list(dict.fromkeys(lane[0]["source_message_id"] for lane in (linked, found, contextual) if lane))
     ranking = sorted(rows, key=lambda key: (scores[key], rows[key]["observed_at"], key), reverse=True)
-    selected = list(dict.fromkeys([*required, *ranking]))[:limit]
+    selected = list(dict.fromkeys([*required, *ranking]))
+    if limit is not None:
+        selected = selected[:limit]
     return [rows[key] for key in selected], len(rows)
 
 
@@ -59,7 +61,7 @@ def compile_sources(rows, *, max_chars=2400, max_items=4):
     records = []
     omitted = []
     for row in rows:
-        if len(records) == max_items:
+        if max_items is not None and len(records) == max_items:
             omitted.append(dict(source_id=row["source_message_id"], reason="item_budget"))
             continue
         record = dict(source_id=row["source_message_id"], observed_at=row["observed_at"], text=row["body"])
@@ -117,12 +119,18 @@ class SourceMemoryService:
                 contextual = [row for row in contextual if row["source_message_id"] not in covered]
             # Linked sources were selected by fact recall; lexical candidates
             # cover utterances whose model produced no usable claim at all.
-            selected, candidate_count = select_sources(linked, found, contextual=contextual)
+            # Cloud serving budgets admit complete sources by actual size.
+            # Legacy compact callers retain their existing four-source cap.
+            selected, candidate_count = select_sources(linked, found, contextual=contextual,
+                limit=None if self._defer_budget else 4)
             window_ids = []
             anchor_ids = [row["source_message_id"] for row in selected]
             if self._window_radius and selected:
-                windows = await self._repo.source_windows(character_id, scope,
-                    source_message_ids=tuple(anchor_ids), radius=self._window_radius)
+                windows = []
+                # The repository keeps its bounded four-anchor read contract.
+                for offset in range(0, len(anchor_ids), 4):
+                    windows.extend(await self._repo.source_windows(character_id, scope,
+                        source_message_ids=tuple(anchor_ids[offset:offset + 4]), radius=self._window_radius))
                 rows_by_id = {}
                 for window in windows:
                     rows = window["rows"]
@@ -136,13 +144,18 @@ class SourceMemoryService:
                 selected = sorted(rows_by_id.values(), key=lambda row: (row["observed_at"], row["source_message_id"]))
             # Re-read only chosen identities after ranking. Erased sources must
             # not be restored from cached candidate text; use current SQL grant.
-            fresh = await reader(character_id, scope, source_message_ids=tuple(
-                row["source_message_id"] for row in selected))
+            fresh = []
+            chosen_ids = tuple(row["source_message_id"] for row in selected)
+            # Keep exact scoped fresh reads below the repository's row limit;
+            # a larger union/window must not silently lose rows in SQL LIMIT.
+            for offset in range(0, len(chosen_ids), 100):
+                fresh.extend(await reader(character_id, scope,
+                    source_message_ids=chosen_ids[offset:offset + 100]))
             fresh_by_id = {row["source_message_id"]: row for row in fresh}
             selected = [fresh_by_id[row["source_message_id"]] for row in selected
                         if row["source_message_id"] in fresh_by_id]
             result = compile_sources(selected, max_chars=self._max_chars,
-                                     max_items=4 * (1 + 2 * self._window_radius))
+                                     max_items=None if self._defer_budget else 4 * (1 + 2 * self._window_radius))
             trace = dict(result.diagnostics, linked_count=len(linked), indexed_count=len(found),
                          linked_read_count=linked_read_count, indexed_read_count=indexed_read_count,
                          contextual_count=len(contextual), contextual_read_count=contextual_read_count,
@@ -150,7 +163,8 @@ class SourceMemoryService:
                          covered_by_fact_count=len(covered),
                          window_radius=self._window_radius, windows=window_ids,
                          window_semantic_relation="not_inferred", anchor_ids=anchor_ids,
-                         selection_omitted=max(0, candidate_count - 4),
+                         selection_omitted=max(0, candidate_count - len(anchor_ids)),
+                         fresh_recheck_omitted=max(0, len(chosen_ids) - len(selected)),
                          candidate_limit_reached=indexed_read_count == 32 or contextual_read_count == 32,
                          ranking=("covered_rrf_linked_sparse_history" if contextual_results
                                   else "covered_rrf_linked_sparse"),
@@ -158,7 +172,7 @@ class SourceMemoryService:
             candidate_context = ""
             if self._defer_budget and result.diagnostics["status"] == "budget_omitted":
                 candidate_context = compile_sources(selected, max_chars=None,
-                    max_items=4 * (1 + 2 * self._window_radius)).context
+                    max_items=None if self._defer_budget else 4 * (1 + 2 * self._window_radius)).context
             trace["candidate_budget_pending"] = bool(candidate_context)
             return SourceRecall(result.context, trace, candidate_context)
         except Exception as exc:

@@ -1,0 +1,86 @@
+{
+  "schema": 1,
+  "synthetic": true,
+  "case": {
+    "schema": 1,
+    "synthetic": true,
+    "reference_time": "2026-10-02T17:14:14.103200+00:00",
+    "question": "请逐字列出我之前提供的 DL752 项目的六段交接记录（DL752-R1、DL752-R2、DL752-R3、DL752-R4、DL752-R5、DL752-R6），每段保持完整，包括最后的限制条件；不要改写或补充。",
+    "sources": [
+      {
+        "id": "stage68-source-1",
+        "body": "DL752-R1：交接记录一，压力标定基准为 18.6 千帕，复核码为 KQ19。限制条件：湿度高于 72% 时暂停标定，不能拿干燥环境的结果代替。",
+        "expected": "DL752-R1：交接记录一，压力标定基准为 18.6 千帕，复核码为 KQ19。限制条件：湿度高于 72% 时暂停标定，不能拿干燥环境的结果代替。",
+        "observed_at": "2026-10-02T17:04:14.103200+00:00"
+      },
+      {
+        "id": "stage68-source-2",
+        "body": "DL752-R2：交接记录二，测温探头编号为 TP408，采样周期为 14 秒。限制条件：更换探头后必须重新核对偏移量，旧偏移量不得沿用。",
+        "expected": "DL752-R2：交接记录二，测温探头编号为 TP408，采样周期为 14 秒。限制条件：更换探头后必须重新核对偏移量，旧偏移量不得沿用。",
+        "observed_at": "2026-10-02T17:04:15.103200+00:00"
+      },
+      {
+        "id": "stage68-source-3",
+        "body": "DL752-R3：交接记录三，阀门初始开度为 23%，机械行程为 61 毫米。限制条件：回零信号未出现时不得开始自动调节，人工观察不能替代该信号。",
+        "expected": "DL752-R3：交接记录三，阀门初始开度为 23%，机械行程为 61 毫米。限制条件：回零信号未出现时不得开始自动调节，人工观察不能替代该信号。",
+        "observed_at": "2026-10-02T17:04:16.103200+00:00"
+      },
+      {
+        "id": "stage68-source-4",
+        "body": "DL752-R4：交接记录四，缓存保留 96 条原始读数，批次编号为 BN537。限制条件：异常值也必须保留原始位置，不能先删除再重新排序。",
+        "expected": "DL752-R4：交接记录四，缓存保留 96 条原始读数，批次编号为 BN537。限制条件：异常值也必须保留原始位置，不能先删除再重新排序。",
+        "observed_at": "2026-10-02T17:04:17.103200+00:00"
+      },
+      {
+        "id": "stage68-source-5",
+        "body": "DL752-R5：交接记录五，验收样品编号为 SP862，封存温度为 7 摄氏度。限制条件：封条断裂后只能标记待复检，不得使用原验收结论。",
+        "expected": "DL752-R5：交接记录五，验收样品编号为 SP862，封存温度为 7 摄氏度。限制条件：封条断裂后只能标记待复检，不得使用原验收结论。",
+        "observed_at": "2026-10-02T17:04:18.103200+00:00"
+      },
+      {
+        "id": "stage68-source-6",
+        "body": "DL752-R6：交接记录六，切换观察窗口为 43 分钟，值班组为丙组。限制条件：跨组交接必须同时记录开始和结束时间，不能只记最终成功状态。",
+        "expected": "DL752-R6：交接记录六，切换观察窗口为 43 分钟，值班组为丙组。限制条件：跨组交接必须同时记录开始和结束时间，不能只记最终成功状态。",
+        "observed_at": "2026-10-02T17:04:19.103200+00:00"
+      }
+    ],
+    "seed_method": "actual complete source capture, no inferred user fact projection"
+  },
+  "baseline_summary": {
+    "real_sources": 6,
+    "indexed_found": 6,
+    "source_selected": 4,
+    "selection_omitted": 2,
+    "full_packet_chars": 1124,
+    "canonical_estimated_total": 4837,
+    "window": 65536,
+    "cloud_calls": 0
+  },
+  "actual_primary_estimated_total": 5088,
+  "fixed_summary": {
+    "chain_passed": 38,
+    "chain_total": 38,
+    "answer_passed": 6,
+    "answer_total": 6,
+    "answer": "DL752-R1：交接记录一，压力标定基准为 18.6 千帕，复核码为 KQ19。限制条件：湿度高于 72% 时暂停标定，不能拿干燥环境的结果代替。\n\nDL752-R2：交接记录二，测温探头编号为 TP408，采样周期为 14 秒。限制条件：更换探头后必须重新核对偏移量，旧偏移量不得沿用。\n\nDL752-R3：交接记录三，阀门初始开度为 23%，机械行程为 61 毫米。限制条件：回零信号未出现时不得开始自动调节，人工观察不能替代该信号。\n\nDL752-R4：交接记录四，缓存保留 96 条原始读数，批次编号为 BN537。限制条件：异常值也必须保留原始位置，不能先删除再重新排序。\n\nDL752-R5：交接记录五，验收样品编号为 SP862，封存温度为 7 摄氏度。限制条件：封条断裂后只能标记待复检，不得使用原验收结论。\n\nDL752-R6：交接记录六，切换观察窗口为 43 分钟，值班组为丙组。限制条件：跨组交接必须同时记录开始和结束时间，不能只记最终成功状态。",
+    "qualified_cloud_calls": 4,
+    "baseline_auxiliary_calls": 2,
+    "phase_cloud_calls": 6,
+    "qualified_answers": 1,
+    "phase_primary_calls": 1,
+    "targeted_new_cases": 10,
+    "targeted_affected_cases": 4,
+    "targeted_unique_passed": 14,
+    "targeted_executions": 14,
+    "all_calls_pro": true,
+    "no_full_suite": true,
+    "no_passing_model_replay": true,
+    "no_production_chat_writes": true
+  },
+  "seed_method": "actual complete source capture; no current user facts manufactured",
+  "scope": {
+    "character_id": "tsukiyashiro_kisaki",
+    "native_adapter": "web-character",
+    "conversation_type": "private"
+  }
+}
