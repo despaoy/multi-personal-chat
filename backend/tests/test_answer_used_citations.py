@@ -104,11 +104,10 @@ def test_explicit_source_lookup_and_non_rag_literal_markers_stay_unchanged():
 
 
 async def test_api_propagates_budget_abstention_instead_of_claiming_grounded_answer(monkeypatch):
-    from types import SimpleNamespace
-
     from api import generate
     from db.schemas import MessageRequest
-    from knowledge import intent_detector, rag_helper
+    from inference.provider_context import ProviderContextBudget
+    from knowledge import intent_detector
 
     class Client:
         async def generate(self, **kwargs):
@@ -123,7 +122,7 @@ async def test_api_propagates_budget_abstention_instead_of_claiming_grounded_ans
     monkeypatch.setattr(generate, "_retrieve_rag_bundle", retrieve)
     monkeypatch.setattr(generate, "_get_system_prompt", lambda _: "persona")
     monkeypatch.setattr(generate, "_vllm_client", Client())
-    monkeypatch.setattr(rag_helper, "get_rag_helper", lambda: SimpleNamespace(format_context_results=lambda _: "候选原始格式"))
+    monkeypatch.setattr(generate, "get_provider_context_budget", lambda: ProviderContextBudget(8192))
     _, _, meta = await generate._generate_with_vllm(MessageRequest(message="课程编号"), None,
         runtime_config={"useKnowledgeBase": True, "maxTokens": 128})
     assert meta["abstained"] is True

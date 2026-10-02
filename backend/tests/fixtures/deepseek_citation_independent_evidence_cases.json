@@ -1,0 +1,26 @@
+{
+  "schema": 1,
+  "synthetic": true,
+  "knowledge_base": "锦岚阶段59合成知识库",
+  "document": {
+    "title": "锦岚离线验收规程 XL-936-N",
+    "content": "《锦岚离线验收规程全文，编号 XL-936-N，最终限制、设备、模型资源、数据划分和报告要求以末尾有效条件为准，撤销草案曾允许联网训练，库存记录不构成实验许可；Inventory receipt 00, sealed cache package inspected, no experiment permission or enrollment granted, all resource checks complete; Inventory receipt 01, sealed cache package inspected, no experiment permission or enrollment granted, all resource checks complete; Inventory receipt 02, sealed cache package inspected, no experiment permission or enrollment granted, all resource checks complete; Inventory receipt 03, sealed cache package inspected, no experiment permission or enrollment granted, all resource checks complete; Inventory receipt 04, sealed cache package inspected, no experiment permission or enrollment granted, all resource checks complete; Inventory receipt 05, sealed cache package inspected, no experiment permission or enrollment granted, all resource checks complete; Inventory receipt 06, sealed cache package inspected, no experiment permission or enrollment granted, all resource checks complete; Inventory receipt 07, sealed cache package inspected, no experiment permission or enrollment granted, all resource checks complete; Inventory receipt 08, sealed cache package inspected, no experiment permission or enrollment granted, all resource checks complete; Inventory receipt 09, sealed cache package inspected, no experiment permission or enrollment granted, all resource checks complete; Inventory receipt 10, sealed cache package inspected, no experiment permission or enrollment granted, all resource checks complete; Inventory receipt 11, sealed cache package inspected, no experiment permission or enrollment granted, all resource checks complete; Inventory receipt 12, sealed cache package inspected, no experiment permission or enrollment granted, all resource checks complete; Inventory receipt 13, sealed cache package inspected, no experiment permission or enrollment granted, all resource checks complete; Inventory receipt 14, sealed cache package inspected, no experiment permission or enrollment granted, all resource checks complete; Inventory receipt 15, sealed cache package inspected, no experiment permission or enrollment granted, all resource checks complete; Inventory receipt 16, sealed cache package inspected, no experiment permission or enrollment granted, all resource checks complete; Inventory receipt 17, sealed cache package inspected, no experiment permission or enrollment granted, all resource checks complete; Inventory receipt 18, sealed cache package inspected, no experiment permission or enrollment granted, all resource checks complete; Inventory receipt 19, sealed cache package inspected, no experiment permission or enrollment granted, all resource checks complete; Inventory receipt 20, sealed cache package inspected, no experiment permission or enrollment granted, all resource checks complete; Inventory receipt 21, sealed cache package inspected, no experiment permission or enrollment granted, all resource checks complete; Inventory receipt 22, sealed cache package inspected, no experiment permission or enrollment granted, all resource checks complete; Inventory receipt 23, sealed cache package inspected, no experiment permission or enrollment granted, all resource checks complete; 最终有效条件：仅用 RTX 3060 12GB 离线验收，Mini-0.6B 权重、分词器和依赖已完整缓存；数据为 1800 条三分类，固定训练 1440、验证 360；禁止联网、下载、调用云 API、训练、微调和使用验证集调参；报告须列出固定划分、显存峰值、准确率与复现日志，公开规程不证明个人获准联网或训练》",
+    "category": "完整合成规程"
+  },
+  "question": "根据锦岚离线验收规程 XL-936-N 的最终有效条件，验收设备、已备齐模型资源、完整数据划分、全部禁止事项和报告要求有哪些？",
+  "expected": {
+    "code": "XL-936-N",
+    "device": "RTX3060",
+    "vram": "12GB",
+    "model": "Mini-0.6B",
+    "total": 1800,
+    "train": 1440,
+    "validation": 360,
+    "classes": 3,
+    "online": false,
+    "cloud": false,
+    "training": false,
+    "finetuning": false,
+    "validation_tuning": false
+  }
+}

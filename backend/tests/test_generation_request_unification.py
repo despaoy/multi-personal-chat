@@ -170,7 +170,7 @@ async def test_production_rag_uses_shared_grounded_request(monkeypatch):
     from api import generate
     from inference import answer_citations
     from inference.answer_citations import prepare_answer_citations
-    from knowledge import intent_detector, rag_helper
+    from knowledge import intent_detector
 
     monkeypatch.setattr(answer_citations.secrets, "token_hex", lambda _size: "123456abcdef")
     captured = {}
@@ -192,11 +192,6 @@ async def test_production_rag_uses_shared_grounded_request(monkeypatch):
     monkeypatch.setattr(generate, "_retrieve_rag_bundle", retrieve)
     monkeypatch.setattr(generate, "_get_system_prompt", lambda _: "persona")
     monkeypatch.setattr(generate, "_vllm_client", Client())
-    monkeypatch.setattr(
-        rag_helper,
-        "get_rag_helper",
-        lambda: SimpleNamespace(format_context_results=lambda _: "evidence"),
-    )
 
     reply, _, meta = await generate._generate_with_vllm(
         MessageRequest(message="question", senderName="琉璃"),
@@ -209,7 +204,9 @@ async def test_production_rag_uses_shared_grounded_request(monkeypatch):
             persona_prompt="persona",
             interlocutor="琉璃",
             retrieval=prepare_answer_citations(generate.RetrievalResult(status="ok", evidence="evidence",
-                documents=({"id": "doc-1", "content": "evidence"},), citations=({"source_id": "doc-1"},))),
+                documents=({"id": "doc-1", "content": "evidence"},), citations=({"source_id": "doc-1"},),
+                evidence_packets=({"kind": "evidence", "document_ids": ["doc-1"],
+                    "text": "【检索资料片段: 未命名资料】\nevidence"},))),
             temperature=0.7,
         )
     )

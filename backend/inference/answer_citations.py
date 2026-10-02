@@ -51,6 +51,9 @@ def prepare_answer_citations(retrieval):
                     key=f'S{len(citations) + 1}')
         citations.append(meta)
         by_id[source_id] = meta
+    if not by_id:
+        # Uncited evidence stays whole without a namespace policy or repair call.
+        return replace(retrieval, citations=())
     if retrieval.evidence_packets:
         packets = []
         for packet in retrieval.evidence_packets:

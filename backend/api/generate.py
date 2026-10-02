@@ -1402,20 +1402,23 @@ async def _generate_with_retrieval(
                     )
 
                 # 角色知识检索结果自带按粒度组装的 context_text；
-                # 通用知识库结果继续使用 RAGHelper 的格式化器。
+                # 通用知识库结果保留整份检索片段，交给最终请求预算裁决。
                 else:
                     character_knowledge_context = bundle.get("context_text") or ""
+                    evidence_packets = tuple(bundle.get("evidence_packets") or ())
                     if character_knowledge_context or bundle.get("retrieval_strategy") == "multi_scale_character":
                         rag_context = character_knowledge_context
                     else:
-                        from knowledge.rag_helper import get_rag_helper
+                        from knowledge.evidence_packets import document_evidence_packets
 
-                        rag_context = get_rag_helper().format_context_results(bundle.get("results", []))
+                        # Citation display cannot decide which source text reaches the model.
+                        evidence_packets = document_evidence_packets(bundle.get("results", []))
+                        rag_context = "\n\n".join(packet["text"] for packet in evidence_packets)
                     retrieval = RetrievalResult(
                         status="ok" if rag_context else "character_abstention",
                         reason="" if rag_context else "evidence_budget_exhausted",
                         evidence=rag_context,
-                        evidence_packets=tuple(bundle.get("evidence_packets", ())),
+                        evidence_packets=evidence_packets,
                         identity_task=bundle.get("identity_task") or {},
                         identity_subtask=bundle.get("identity_subtask") or {},
                         documents=tuple(bundle.get("results", [])),

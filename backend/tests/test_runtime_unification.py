@@ -312,7 +312,7 @@ async def test_composite_rate_limit_refunds_earlier_scopes(monkeypatch):
 async def test_vllm_generation_reuses_one_rag_result(monkeypatch):
     from api import generate
     from db.schemas import MessageRequest
-    from knowledge import intent_detector, rag_helper
+    from knowledge import intent_detector
 
     calls = 0
     captured = {}
@@ -337,13 +337,6 @@ async def test_vllm_generation_reuses_one_rag_result(monkeypatch):
     monkeypatch.setattr(generate, "_retrieve_rag_bundle", retrieve)
     monkeypatch.setattr(generate, "_get_system_prompt", lambda _: "system")
     monkeypatch.setattr(generate, "_vllm_client", Client())
-    monkeypatch.setattr(
-        rag_helper,
-        "get_rag_helper",
-        lambda: SimpleNamespace(
-            format_context_results=lambda results: results[0]["content"]
-        ),
-    )
 
     request = MessageRequest(message="question", sessionId="session")
     reply, used_rag, meta = await generate._generate_with_vllm(
@@ -355,7 +348,8 @@ async def test_vllm_generation_reuses_one_rag_result(monkeypatch):
     assert reply == "answer"
     assert used_rag is True
     assert calls == 1
-    assert meta["citations"] == [{"source_title": "source"}]
+    # A title without a stable admitted source ID cannot authorize a citation.
+    assert meta["citations"] == []
     assert meta["answerMode"] == "grounded_answer"
     assert meta["domainId"] == "tsukiyashiro_kisaki"
     assert "evidence" in captured["messages"][-1]["content"]
