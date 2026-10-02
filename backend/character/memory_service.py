@@ -239,10 +239,31 @@ def _next_month(value: datetime) -> datetime:
     return value.replace(month=value.month + 1)
 
 
+def _historical_query_text(query: str) -> str:
+    """A complete birth-date assertion dates birth, not the requested claim.
+
+    Keep unknown grammar and interrogative birth clauses unchanged. This only
+    masks the calendar expression for time-window routing; the complete user
+    text remains available to ranking, reviewers, provenance and generation.
+    """
+    date = r"\d{4}年(?:[一二三四五六七八九十\d]{1,3}月(?:\d{1,2}日)?)?"
+    assertion = re.compile(
+        rf"(?:我(?:是)?(?:在)?{date}出生(?:的)?|我出生于{date}|"
+        rf"我的出生(?:日期|年月|年份|时间)(?:是|为){date})"
+    )
+    parts = re.split(r"([，,。！？!?；;\n])", query)
+    for index in range(0, len(parts), 2):
+        clause = "".join(parts[index].split())
+        delimiter = parts[index + 1] if index + 1 < len(parts) else ""
+        if delimiter not in {"？", "?"} and assertion.fullmatch(clause):
+            parts[index] = ""
+    return "".join(parts)
+
+
 def _historical_query_window(query: str, now: datetime) -> _HistoricalWindow | None:
     """识别中文历史表达，并尽可能收窄到年/月时间窗。"""
 
-    text = "".join((query or "").split())
+    text = "".join(_historical_query_text(query or "").split())
     if not text or not _HISTORICAL_QUERY_PATTERN.search(text):
         return None
 
