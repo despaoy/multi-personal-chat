@@ -539,18 +539,25 @@ class PgDatabase:
         """设置单个配置项"""
         await self.set_config({key: value})
 
-    async def mark_knowledge_index_dirty(self) -> int:
-        """Serialize all worker invalidations on the persisted revision row."""
+    async def _lock_knowledge_index_revision(self, session):
         from db import knowledge_index_state as state
 
-        async with self.async_session() as session:
-            async with session.begin():
-                await session.execute(text("INSERT INTO config (key, value) VALUES (:key, '0') ON CONFLICT(key) DO NOTHING"), {"key": state.REVISION_KEY})
-                raw = (await session.execute(text("SELECT value FROM config WHERE key = :key FOR UPDATE"), {"key": state.REVISION_KEY})).scalar_one()
-                revision = state.parse_revision(raw) + 1
-                await session.execute(text("UPDATE config SET value = :value WHERE key = :key"), {"key": state.REVISION_KEY, "value": str(revision)})
-                await session.execute(text("INSERT INTO config (key, value) VALUES (:key, 'dirty') ON CONFLICT(key) DO UPDATE SET value = EXCLUDED.value"), {"key": state.STATUS_KEY})
-            return revision
+        await session.execute(text("INSERT INTO config (key, value) VALUES (:key, '0') ON CONFLICT(key) DO NOTHING"), {"key": state.REVISION_KEY})
+        return (await session.execute(text("SELECT value FROM config WHERE key = :key FOR UPDATE"), {"key": state.REVISION_KEY})).scalar_one()
+
+    async def _mark_knowledge_index_dirty_in_transaction(self, session) -> int:
+        from db import knowledge_index_state as state
+
+        raw = await self._lock_knowledge_index_revision(session)
+        revision = state.parse_revision(raw) + 1
+        await session.execute(text("UPDATE config SET value = :value WHERE key = :key"), {"key": state.REVISION_KEY, "value": str(revision)})
+        await session.execute(text("INSERT INTO config (key, value) VALUES (:key, 'dirty') ON CONFLICT(key) DO UPDATE SET value = EXCLUDED.value"), {"key": state.STATUS_KEY})
+        return revision
+
+    async def mark_knowledge_index_dirty(self) -> int:
+        """Serialize all worker invalidations on the persisted revision row."""
+        async with self.async_session() as session, session.begin():
+            return await self._mark_knowledge_index_dirty_in_transaction(session)
 
     async def commit_knowledge_index_revision(self, expected_revision: int, count: int, fingerprint: str) -> bool:
         """Compare revision and commit completion under the same DB row lock."""
@@ -799,6 +806,34 @@ class PgDatabase:
     # ============================================
     # 知识库文档管理
     # ============================================
+    async def save_knowledge_document(self, document: dict, doc_id: int | None = None, chunks: list[str] | None = None) -> dict | None:
+        """Publish complete source data and its revision in one transaction."""
+        from db.knowledge_document_state import prepare_document_change
+
+        async with self.async_session() as session, session.begin():
+            # Use the same first lock as completion and invalidation, before document locks.
+            await self._lock_knowledge_index_revision(session)
+            existing = None
+            if doc_id is not None:
+                row = (await session.execute(knowledge_documents_table.select().where(knowledge_documents_table.c.id == doc_id).with_for_update())).fetchone()
+                if row is None:
+                    return None
+                existing = _row_to_dict(row)
+            values, replacement, dirty = prepare_document_change(existing, document, chunks, datetime.now().isoformat())
+            if existing is None:
+                result = await session.execute(knowledge_documents_table.insert().values(**values))
+                doc_id = result.inserted_primary_key[0]
+            else:
+                await session.execute(knowledge_documents_table.update().where(knowledge_documents_table.c.id == doc_id).values(**values))
+            if replacement is not None:
+                await session.execute(knowledge_chunks_table.delete().where(knowledge_chunks_table.c.documentId == doc_id))
+                if replacement:
+                    await session.execute(knowledge_chunks_table.insert(), [{'documentId':doc_id,'chunkIndex':index,'content':content,'embedding':None,'createdAt':values['updatedAt']} for index,content in enumerate(replacement)])
+            if dirty:
+                await self._mark_knowledge_index_dirty_in_transaction(session)
+            row = (await session.execute(knowledge_documents_table.select().where(knowledge_documents_table.c.id == doc_id))).fetchone()
+            return _row_to_dict(row)
+
     async def add_knowledge_document(self, document: Dict) -> Dict:
         """添加知识库文档"""
         now = datetime.now().isoformat()
@@ -897,11 +932,15 @@ class PgDatabase:
             return _row_to_dict(row) if row else None
 
     async def delete_knowledge_document(self, doc_id: int) -> bool:
-        """删除知识库文档"""
-        async with self.async_session() as session:
+        """Delete source and publish dirty authority in the same transaction."""
+        async with self.async_session() as session, session.begin():
+            await self._lock_knowledge_index_revision(session)
+            row = (await session.execute(knowledge_documents_table.select().where(knowledge_documents_table.c.id == doc_id).with_for_update())).fetchone()
+            if row is None:
+                return False
             await session.execute(knowledge_chunks_table.delete().where(knowledge_chunks_table.c.documentId == doc_id))
             await session.execute(knowledge_documents_table.delete().where(knowledge_documents_table.c.id == doc_id))
-            await session.commit()
+            await self._mark_knowledge_index_dirty_in_transaction(session)
             return True
 
     # ============================================
@@ -3031,6 +3070,9 @@ class SyncPgAdapter:
 
     def get_knowledge_documents(self, **kwargs):
         return self._run(self._pg.get_knowledge_documents(**kwargs))
+
+    def save_knowledge_document(self, document, doc_id=None, chunks=None):
+        return self._run(self._pg.save_knowledge_document(document, doc_id=doc_id, chunks=chunks))
 
     def add_knowledge_document(self, doc_data):
         return self._run(self._pg.add_knowledge_document(doc_data))

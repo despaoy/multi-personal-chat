@@ -1633,18 +1633,22 @@ class SQLiteDB:
         """
         self.update_config({key: value})
 
-    def mark_knowledge_index_dirty(self) -> int:
-        """Increment revision and mark dirty in one cross-process transaction."""
+    def _mark_knowledge_index_dirty_in_transaction(self, conn) -> int:
         from db import knowledge_index_state as state
 
+        conn.execute("INSERT INTO config (key, value) VALUES (?, '0') ON CONFLICT(key) DO NOTHING", (state.REVISION_KEY,))
+        raw = conn.execute("SELECT value FROM config WHERE key = ?", (state.REVISION_KEY,)).fetchone()[0]
+        revision = state.parse_revision(raw) + 1
+        conn.execute("UPDATE config SET value = ? WHERE key = ?", (str(revision), state.REVISION_KEY))
+        conn.execute("INSERT INTO config (key, value) VALUES (?, 'dirty') ON CONFLICT(key) DO UPDATE SET value = excluded.value", (state.STATUS_KEY,))
+        return revision
+
+    def mark_knowledge_index_dirty(self) -> int:
+        """Increment revision and mark dirty in one cross-process transaction."""
         conn = self._get_connection()
         try:
             conn.execute("BEGIN IMMEDIATE")
-            conn.execute("INSERT INTO config (key, value) VALUES (?, '0') ON CONFLICT(key) DO NOTHING", (state.REVISION_KEY,))
-            raw = conn.execute("SELECT value FROM config WHERE key = ?", (state.REVISION_KEY,)).fetchone()[0]
-            revision = state.parse_revision(raw) + 1
-            conn.execute("UPDATE config SET value = ? WHERE key = ?", (str(revision), state.REVISION_KEY))
-            conn.execute("INSERT INTO config (key, value) VALUES (?, 'dirty') ON CONFLICT(key) DO UPDATE SET value = excluded.value", (state.STATUS_KEY,))
+            revision = self._mark_knowledge_index_dirty_in_transaction(conn)
             conn.commit()
             return revision
         except BaseException:
@@ -1902,6 +1906,38 @@ class SQLiteDB:
     # ============================================
     # 知识库文档管理
     # ============================================
+    def save_knowledge_document(self, document: dict, doc_id: int | None = None, chunks: list[str] | None = None):
+        """Publish document, complete chunks and index authority together."""
+        from db.knowledge_document_state import prepare_document_change
+
+        conn = self._get_connection()
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+            existing = None
+            if doc_id is not None:
+                row = conn.execute("SELECT * FROM knowledge_documents WHERE id = ?", (doc_id,)).fetchone()
+                if row is None:
+                    conn.rollback()
+                    return None
+                existing = dict(row)
+            values, replacement, dirty = prepare_document_change(existing, document, chunks, datetime.now().isoformat())
+            if existing is None:
+                columns = list(values)
+                cursor = conn.execute(f'INSERT INTO knowledge_documents ({", ".join(columns)}) VALUES ({", ".join("?" for _ in columns)})', list(values.values()))
+                doc_id = cursor.lastrowid
+            else:
+                conn.execute(f'UPDATE knowledge_documents SET {", ".join(key+" = ?" for key in values)} WHERE id = ?', [*values.values(),doc_id])
+            if replacement is not None:
+                conn.execute('DELETE FROM knowledge_chunks WHERE documentId = ?', (doc_id,))
+                conn.executemany('INSERT INTO knowledge_chunks (documentId, chunkIndex, content, embedding, createdAt) VALUES (?, ?, ?, NULL, ?)', [(doc_id,index,content,values['updatedAt']) for index,content in enumerate(replacement)])
+            if dirty:
+                self._mark_knowledge_index_dirty_in_transaction(conn)
+            row = conn.execute('SELECT * FROM knowledge_documents WHERE id = ?', (doc_id,)).fetchone()
+            conn.commit()
+            return dict(row)
+        except BaseException:
+            conn.rollback()
+            raise
     def add_knowledge_document(self, document: Dict):
         """添加知识库文档"""
         conn = self._get_connection()
@@ -2018,15 +2054,21 @@ class SQLiteDB:
         return None
 
     def delete_knowledge_document(self, doc_id: int):
-        """删除知识库文档"""
+        """Delete source and invalidate its index in one transaction."""
         conn = self._get_connection()
-        cursor = conn.cursor()
-
-        cursor.execute('DELETE FROM knowledge_chunks WHERE documentId = ?', (doc_id,))
-        cursor.execute('DELETE FROM knowledge_documents WHERE id = ?', (doc_id,))
-        conn.commit()
-
-        return True
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+            if conn.execute('SELECT id FROM knowledge_documents WHERE id = ?', (doc_id,)).fetchone() is None:
+                conn.rollback()
+                return False
+            conn.execute('DELETE FROM knowledge_chunks WHERE documentId = ?', (doc_id,))
+            conn.execute('DELETE FROM knowledge_documents WHERE id = ?', (doc_id,))
+            self._mark_knowledge_index_dirty_in_transaction(conn)
+            conn.commit()
+            return True
+        except BaseException:
+            conn.rollback()
+            raise
 
     def add_knowledge_chunk(self, chunk: Dict):
         """添加知识库文档片段"""

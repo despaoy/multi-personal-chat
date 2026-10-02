@@ -368,20 +368,15 @@ async def upload_zip(kb_id: int, file: UploadFile = File(...), current_user: dic
             "fileSize": len(file_content.encode("utf-8")),
             "chunkCount": 0,
         }
-        document = await run_db(db.add_knowledge_document, document_data)
 
         # 分块处理
         from knowledge.text_splitter import simple_text_split
 
         chunks = simple_text_split(file_content)
-        chunk_count = 0
+        document = await run_db(db.save_knowledge_document, document_data, chunks=chunks)
         vector_docs = []
 
         for i, chunk_content in enumerate(chunks):
-            chunk = {"documentId": document["id"], "chunkIndex": i, "content": chunk_content, "embedding": None}
-            await run_db(db.add_knowledge_chunk, chunk)
-            chunk_count += 1
-
             # 注入文件夹路径到检索文本：知识库名/文件夹名/文档名 + 内容
             enriched_content = f"[{kb_name}/{folder_name}] {doc_title}: {chunk_content}"
 
@@ -398,9 +393,6 @@ async def upload_zip(kb_id: int, file: UploadFile = File(...), current_user: dic
                 }
             )
 
-        # 更新文档的chunkCount
-        await run_db(db.update_knowledge_document, document["id"], {"chunkCount": chunk_count})
-
         # 添加到向量数据库
         if VECTOR_DB_AVAILABLE and vector_docs:
             try:
@@ -411,8 +403,8 @@ async def upload_zip(kb_id: int, file: UploadFile = File(...), current_user: dic
             except Exception as ve:
                 logger.error("添加到向量数据库失败: %s", ve)
 
-        # 标记向量索引为 dirty，确保下次搜索时重建状态与数据库一致
-        await run_db(_mark_rebuild_dirty)
+        # 数据与 dirty 修订已原子提交；此处仅清除当前进程的加速状态
+        await run_db(_invalidate_local_knowledge_index)
         created_docs += 1
 
     zf.close()
@@ -576,20 +568,15 @@ async def import_scanned_directory(
                     "fileSize": file_size,
                     "chunkCount": 0,
                 }
-                document = await run_db(db.add_knowledge_document, document_data)
 
                 # 分块 + 路径注入
                 from knowledge.text_splitter import simple_text_split
 
                 chunks = simple_text_split(content)
-                chunk_count = 0
+                document = await run_db(db.save_knowledge_document, document_data, chunks=chunks)
                 vector_docs = []
 
                 for i, chunk_content in enumerate(chunks):
-                    chunk = {"documentId": document["id"], "chunkIndex": i, "content": chunk_content, "embedding": None}
-                    await run_db(db.add_knowledge_chunk, chunk)
-                    chunk_count += 1
-
                     enriched_content = f"[{kb_name}/{folder_name}] {doc_title}: {chunk_content}"
                     vector_docs.append(
                         {
@@ -604,8 +591,6 @@ async def import_scanned_directory(
                         }
                     )
 
-                await run_db(db.update_knowledge_document, document["id"], {"chunkCount": chunk_count})
-
                 if VECTOR_DB_AVAILABLE and vector_docs:
                     try:
                         from app.config import get_vector_db
@@ -615,8 +600,8 @@ async def import_scanned_directory(
                     except Exception as ve:
                         logger.error("添加到向量数据库失败: %s", ve)
 
-                # 标记向量索引为 dirty，确保下次搜索时重建状态与数据库一致
-                await run_db(_mark_rebuild_dirty)
+                # 数据与 dirty 修订已原子提交；此处仅清除当前进程的加速状态
+                await run_db(_invalidate_local_knowledge_index)
 
                 created_docs += 1
 
@@ -652,19 +637,14 @@ async def import_scanned_directory(
                 "fileSize": file_path.stat().st_size,
                 "chunkCount": 0,
             }
-            document = await run_db(db.add_knowledge_document, document_data)
 
             from knowledge.text_splitter import simple_text_split
 
             chunks = simple_text_split(content)
-            chunk_count = 0
+            document = await run_db(db.save_knowledge_document, document_data, chunks=chunks)
             vector_docs = []
 
             for i, chunk_content in enumerate(chunks):
-                chunk = {"documentId": document["id"], "chunkIndex": i, "content": chunk_content, "embedding": None}
-                await run_db(db.add_knowledge_chunk, chunk)
-                chunk_count += 1
-
                 enriched_content = f"[{kb_name}] {doc_title}: {chunk_content}"
                 vector_docs.append(
                     {
@@ -679,8 +659,6 @@ async def import_scanned_directory(
                     }
                 )
 
-            await run_db(db.update_knowledge_document, document["id"], {"chunkCount": chunk_count})
-
             if VECTOR_DB_AVAILABLE and vector_docs:
                 try:
                     from app.config import get_vector_db
@@ -690,8 +668,8 @@ async def import_scanned_directory(
                 except Exception as ve:
                     logger.error("添加到向量数据库失败: %s", ve)
 
-            # 标记向量索引为 dirty，确保下次搜索时重建状态与数据库一致
-            await run_db(_mark_rebuild_dirty)
+            # 数据与 dirty 修订已原子提交；此处仅清除当前进程的加速状态
+            await run_db(_invalidate_local_knowledge_index)
             created_docs += 1
         except Exception as e:
             errors.append(f"处理根目录文件 {file_path.name} 失败: {str(e)}")
@@ -781,20 +759,16 @@ async def create_knowledge_document(request: KnowledgeDocumentCreate, current_us
             "fileSize": request.fileSize,
             "chunkCount": 0,
         }
-        document = await run_db(db.add_knowledge_document, document_data)
 
         # 分块处理 - 注入路径到检索文本
         from knowledge.text_splitter import simple_text_split
 
         chunks = simple_text_split(request.content)
-        chunk_count = 0
+        document = await run_db(db.save_knowledge_document, document_data, chunks=chunks)
+        chunk_count = len(chunks)
         vector_docs = []
 
         for i, chunk_content in enumerate(chunks):
-            chunk = {"documentId": document["id"], "chunkIndex": i, "content": chunk_content, "embedding": None}
-            await run_db(db.add_knowledge_chunk, chunk)
-            chunk_count += 1
-
             # 注入文件夹路径到检索文本
             path_prefix = f"[{kb_name}/{folder_name}]" if kb_name else f"[{folder_name}]"
             enriched_content = f"{path_prefix} {request.title}: {chunk_content}"
@@ -812,9 +786,6 @@ async def create_knowledge_document(request: KnowledgeDocumentCreate, current_us
                 }
             )
 
-        # 更新文档的chunkCount
-        await run_db(db.update_knowledge_document, document["id"], {"chunkCount": chunk_count})
-
         # 添加到向量数据库
         if VECTOR_DB_AVAILABLE and vector_docs:
             try:
@@ -826,8 +797,8 @@ async def create_knowledge_document(request: KnowledgeDocumentCreate, current_us
             except Exception as ve:
                 logger.error("添加到向量数据库失败: %s", ve)
 
-        # 标记向量索引为 dirty，确保下次搜索时重建状态与数据库一致
-        await run_db(_mark_rebuild_dirty)
+        # 数据与 dirty 修订已原子提交；此处仅清除当前进程的加速状态
+        await run_db(_invalidate_local_knowledge_index)
         logger.info("创建知识库文档: %s, 分块数: %d", document["title"], chunk_count)
         return {"success": True, "message": "文档创建成功", "document": document, "chunkCount": chunk_count}
     except HTTPException:
@@ -868,11 +839,15 @@ async def update_knowledge_document(
         if request.fileSize is not None:
             update_data["fileSize"] = request.fileSize
 
-        updated_doc = await run_db(db.update_knowledge_document, doc_id, update_data)
+        from knowledge.text_splitter import simple_text_split
+
+        replacement_chunks = simple_text_split(update_data["content"]) if "content" in update_data else None
+        updated_doc = await run_db(db.save_knowledge_document, update_data, doc_id=doc_id, chunks=replacement_chunks)
+        if updated_doc is None:
+            raise HTTPException(status_code=404, detail="文档不存在")
 
         # 如果内容更新了，重新分块
         if "content" in update_data:
-            await run_db(db.execute_sql, "DELETE FROM knowledge_chunks WHERE documentId = :doc_id", {"doc_id": doc_id})
 
             # 获取路径信息用于注入
             kb_name = ""
@@ -891,14 +866,9 @@ async def update_knowledge_document(
             from knowledge.text_splitter import simple_text_split
 
             chunks = simple_text_split(update_data["content"])
-            chunk_count = 0
             vector_docs = []
 
             for i, chunk_content in enumerate(chunks):
-                chunk = {"documentId": doc_id, "chunkIndex": i, "content": chunk_content, "embedding": None}
-                await run_db(db.add_knowledge_chunk, chunk)
-                chunk_count += 1
-
                 path_prefix = f"[{kb_name}/{folder_name}]" if kb_name else f"[{folder_name}]"
                 doc_title = update_data.get("title", existing_doc.get("title", ""))
                 enriched_content = f"{path_prefix} {doc_title}: {chunk_content}"
@@ -916,8 +886,6 @@ async def update_knowledge_document(
                     }
                 )
 
-            await run_db(db.update_knowledge_document, doc_id, {"chunkCount": chunk_count})
-
             if VECTOR_DB_AVAILABLE and vector_docs:
                 try:
                     old_chunk_ids = []
@@ -933,14 +901,7 @@ async def update_knowledge_document(
                 except Exception as ve:
                     logger.warning("更新向量数据库失败: %s", ve)
 
-        # Indexed metadata is part of the evidence identity and KB filter.
-        # Invalidate after a successful update even when chunks are unchanged;
-        # unchanged fields and unrelated file metadata need no rebuild.
-        indexed_metadata = ("title", "category", "knowledge_base_id")
-        if "content" in update_data or any(
-            update_data[key] != existing_doc.get(key) for key in indexed_metadata if key in update_data
-        ):
-            await run_db(_mark_rebuild_dirty)
+        await run_db(_invalidate_local_knowledge_index)
 
         logger.info("更新知识库文档: %s", doc_id)
         return {"success": True, "message": "文档更新成功", "document": updated_doc}
@@ -962,13 +923,17 @@ async def delete_knowledge_document(doc_id: int, current_user: dict = Depends(ge
         if not existing_doc:
             raise HTTPException(status_code=404, detail="文档不存在")
 
+        chunks = await run_db(db.get_knowledge_chunks, doc_id)
+        if not await run_db(db.delete_knowledge_document, doc_id):
+            raise HTTPException(status_code=404, detail="文档不存在")
+        await run_db(_invalidate_local_knowledge_index)
+
         if VECTOR_DB_AVAILABLE:
             try:
                 from app.config import get_vector_db
 
                 vector_db = get_vector_db()
                 chunk_ids = []
-                chunks = await run_db(db.get_knowledge_chunks, doc_id)
                 for chunk in chunks:
                     chunk_id = f"doc_{doc_id}_chunk_{chunk.get('chunkIndex', chunk.get('id', 0))}"
                     chunk_ids.append(chunk_id)
@@ -977,9 +942,6 @@ async def delete_knowledge_document(doc_id: int, current_user: dict = Depends(ge
             except Exception as ve:
                 logger.warning("从向量数据库删除文档失败: %s", ve)
 
-        await run_db(db.delete_knowledge_document, doc_id)
-        # 删除后标记 dirty，防止向量删除失败时旧内容仍可被检索
-        await run_db(_mark_rebuild_dirty)
         logger.info("删除知识库文档: %s", doc_id)
         return {"success": True, "message": "文档删除成功"}
     except HTTPException:
@@ -1112,6 +1074,14 @@ def _write_rebuild_status(status: str, count: int, fingerprint: str = "", revisi
     else:
         db.set_config_value(_VECTOR_REBUILD_STATUS_KEY, f"{status}:{count}")
     return True
+
+
+def _invalidate_local_knowledge_index() -> None:
+    """Reset local acceleration only after the durable document transaction."""
+    global _vector_index_built, _vector_index_revision
+    with _revision_lock:
+        _vector_index_built = False
+        _vector_index_revision = None
 
 
 def _mark_rebuild_dirty() -> None:
