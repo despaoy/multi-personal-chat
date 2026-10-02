@@ -38,17 +38,24 @@ def original_source_answer_fidelity(answer: str, bodies: list[str]) -> dict:
 
 
 async def main():
+    from evaluation.complete_source_role_probe import required_fixture_sources
+
     r = Path("/home/boot/lhm/multipersonal-runtime")
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--phase", default=str(r / "backups/backend-chain-20261001/stage68"))
     parser.add_argument("--variant", default="native-pg-fixed")
     parser.add_argument("--test-new-count", type=int, default=10)
     parser.add_argument("--test-affected-count", type=int, default=4)
+    parser.add_argument("--test-executions", type=int)
     args = parser.parse_args()
+    unique_tests = args.test_new_count + args.test_affected_count
+    test_executions = args.test_executions if args.test_executions is not None else unique_tests
+    assert args.test_new_count >= 0 and args.test_affected_count >= 0 and test_executions >= unique_tests
     b = Path(args.phase).resolve()
     assert b.parent == r / "backups/backend-chain-20261001" and re.fullmatch(r"stage[1-9]\d*", b.name)
     assert re.fullmatch(r"native-pg(?:-[a-z]{1,12})*", args.variant)
     fixture = json.loads((b / "fixture.json").read_text())
+    required_sources = required_fixture_sources(fixture)
     old = json.loads((b / "baseline.json").read_text())
     native = json.loads((b / args.variant / "result.json").read_text())
     baseline_native = json.loads((b / "native-pg-baseline/result.json").read_text())
@@ -89,16 +96,23 @@ async def main():
 
     before = digest()
     found = await repo.search_sources("tsukiyashiro_kisaki", scope, query=fixture["question"], limit=None)
-    check("original_sqlite_found_rows_unchanged", found == old["found"])
+
+    def authority(rows):
+        return {(row["source_message_id"], row["body"], row["observed_at"]) for row in rows}
+
+    original_needed = [
+        row for row in old["found"] if row["source_message_id"] in {item["id"] for item in required_sources}
+    ]
+    check("fixed_sqlite_required_original_authority_unchanged", authority(found) == authority(original_needed))
     sources = await SourceMemoryService(repo, max_chars=32768, defer_budget=True).recall(
         "tsukiyashiro_kisaki", scope, fixture["question"]
     )
     packet = json.loads(sources.context)
     check(
         "fixed_sqlite_keeps_all_original_sources",
-        len(packet["records"]) == len(fixture["sources"])
+        len(packet["records"]) == len(required_sources)
         and {(row["source_id"], row["text"]) for row in packet["records"]}
-        == {(s["id"], s["body"]) for s in fixture["sources"]},
+        == {(s["id"], s["body"]) for s in required_sources},
     )
     check(
         "fixed_source_selection_omits_none",
@@ -120,7 +134,7 @@ async def main():
         )
     )
     wire = unescape(plan.messages[-1]["content"])
-    check("same_original_sqlite_sources_reach_canonical_input", all(s["body"] in wire for s in fixture["sources"]))
+    check("same_original_sqlite_sources_reach_canonical_input", all(s["body"] in wire for s in required_sources))
     check(
         "source_only_creates_no_fact_packets",
         not context.memory_packets
@@ -156,7 +170,7 @@ async def main():
     check(
         "baseline_native_reproduces_original_candidate_cut",
         original_source_trace["indexed_read_count"] == old["recall"]["diagnostics"]["indexed_read_count"]
-        and len(original_source_trace["selected_ids"]) == len(json.loads(old["recall"]["context"])["records"])
+        and len(original_source_trace["selected_ids"]) == len(old["recall"]["diagnostics"]["selected_ids"])
         and original_source_trace["selection_omitted"] == old["recall"]["diagnostics"]["selection_omitted"],
     )
     check(
@@ -201,7 +215,7 @@ async def main():
     )
     prepared = native["prepared"][0]
     trace = prepared["recall"]["sources"]
-    check("native_all_original_source_ids", set(trace["selected_ids"]) == {s["id"] for s in fixture["sources"]})
+    check("native_all_original_source_ids", set(trace["selected_ids"]) == {s["id"] for s in required_sources})
     check(
         "native_no_source_omission_or_pending",
         trace["selection_omitted"] == trace["fresh_recheck_omitted"] == 0 and not prepared["source_candidate_context"],
@@ -209,12 +223,12 @@ async def main():
     check(
         "native_complete_episodic_packet",
         {(row["source_id"], row["text"]) for row in json.loads(prepared["episodic_context"])["records"]}
-        == {(s["id"], s["body"]) for s in fixture["sources"]},
+        == {(s["id"], s["body"]) for s in required_sources},
     )
     primary = [
         c
         for c in calls
-        if c["request"].get("max_tokens") == 2048
+        if c["request"].get("max_tokens") == native["primary_output_tokens"]
         and any("<user_query>" in m["content"] for m in c["request"]["messages"])
     ]
     check("actual_primary_unique", len(primary) == 1)
@@ -225,7 +239,7 @@ async def main():
         "actual_primary_all_whole_sources",
         bool(match)
         and {(row["source_id"], row["text"]) for row in json.loads(match[1])["records"]}
-        == {(s["id"], s["body"]) for s in fixture["sources"]},
+        == {(s["id"], s["body"]) for s in required_sources},
     )
     check(
         "actual_sources_not_in_system",
@@ -316,7 +330,7 @@ async def main():
     check("pending_writes_zero", native["sync_pending_final"] == 0)
     answer = native["response"]["reply"]
     check("raw_primary_matches_api_answer", answer == primary[0]["response"]["choices"][0]["message"]["content"])
-    answer_fidelity = original_source_answer_fidelity(answer, [s["body"] for s in fixture["sources"]])
+    answer_fidelity = original_source_answer_fidelity(answer, [s["body"] for s in required_sources])
     check(
         "answer_exact_original_bodies_in_order_no_content_additions",
         answer_fidelity["exact_bodies_in_order_no_content_additions"],
@@ -365,7 +379,45 @@ async def main():
         first_system = chr(10).join(m["content"] for m in first_primary["request"]["messages"] if m["role"] == "system")
         check("actual_final_source_receipt_policy_present", SOURCE_SPEECH_PROVENANCE_POLICY in final_system)
         check("intermediate_source_receipt_policy_was_absent", SOURCE_SPEECH_PROVENANCE_POLICY not in first_system)
-    answer_checks = {s["id"]: s["body"] in answer for s in fixture["sources"]}
+    if "required_source_ids" in fixture:
+        from db.memory_source_search import literal_project_source_terms
+
+        check("task_sources_distinct_from_fully_stored_distractors", len(required_sources) < len(fixture["sources"]))
+        check(
+            "baseline_noise_exhausts_provider_budget_before_primary",
+            old["all_match_packet_token_estimate"] > 65536
+            and old["actual_final_source_status"] == "budget_omitted"
+            and old["actual_target_ids_in_wire"] == [],
+        )
+        check(
+            "required_originals_and_expected_output_fit_actual_budgets",
+            old["needed_packet_chars"] < 16384
+            and old["needed_canonical_estimated_total"] < 65536
+            and old["expected_answer_estimate"] < native["primary_output_tokens"],
+        )
+        check(
+            "actual_explicit_project_source_scope",
+            trace["literal_project_terms"] == list(literal_project_source_terms(fixture["question"]))
+            and trace["literal_project_terms"]
+            and trace["indexed_read_count"] == len(required_sources),
+        )
+        proof = json.loads((b / "query-equivalence-readonly.json").read_text())
+        check(
+            "sql_membership_rewrite_preserves_rows_scores_order_in_both_databases",
+            proof["readonly"]
+            and proof["sqlite_exact_rows_scores_order"]
+            and proof["pg_exact_rows_scores_order"]
+            and proof["sqlite_source_count"] == len(required_sources)
+            and proof["pg_post_question_source_count"] == len(required_sources) + 1,
+        )
+        check(
+            "query_equivalence_tied_to_current_source_hash",
+            proof["final_source_sha256"]
+            == hashlib.sha256(Path("backend/db/memory_source_search.py").read_bytes()).hexdigest()
+            and proof["intermediate_source_sha256"]
+            == hashlib.sha256((b / "intermediate-exists-memory_source_search.py").read_bytes()).hexdigest(),
+        )
+    answer_checks = {s["id"]: s["body"] in answer for s in required_sources}
     assert all(answer_checks.values())
     audit = {
         "checks": checks,
@@ -384,7 +436,7 @@ async def main():
         "targeted_new_cases": args.test_new_count,
         "targeted_affected_cases": args.test_affected_count,
         "targeted_unique_passed": args.test_new_count + args.test_affected_count,
-        "targeted_executions": args.test_new_count + args.test_affected_count,
+        "targeted_executions": test_executions,
         "all_calls_pro": True,
         "no_full_suite": True,
         "no_passing_model_replay": True,

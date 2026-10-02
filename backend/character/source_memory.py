@@ -12,6 +12,8 @@ from dataclasses import dataclass, field, replace
 from datetime import datetime
 from html import escape
 
+from db.memory_source_search import literal_project_source_terms, terms
+
 
 @dataclass(frozen=True)
 class SourceRecall:
@@ -106,13 +108,22 @@ class SourceMemoryService:
             # Complete source packets are admitted by the actual serving budget;
             # a count-only SQL candidate cut cannot prove an exhaustive read.
             search_limit = None if self._defer_budget else 32
+            project_tags = literal_project_source_terms(query)
+            contextual_deferred = bool(project_tags and retrieval_context.strip())
             lanes = [linker(character_id, scope, memory_ids=ids),
                      search(character_id, scope, query=query, limit=search_limit)]
-            if retrieval_context.strip():
+            if retrieval_context.strip() and not project_tags:
                 lanes.append(search(character_id, scope, query=retrieval_context, limit=search_limit))
             linked, found, *contextual_results = await asyncio.gather(*lanes)
             contextual = contextual_results[0] if contextual_results else []
-            linked_read_count, indexed_read_count = len(linked), len(found)
+            original_linked_read_count = len(linked)
+            linked_project_omitted = 0
+            if project_tags:
+                scoped_linked = [row for row in linked if set(project_tags).intersection(terms(row['body']))]
+                linked_project_omitted = len(linked) - len(scoped_linked)
+                linked = scoped_linked
+
+            linked_read_count, indexed_read_count = original_linked_read_count, len(found)
             contextual_read_count = len(contextual)
             covered = {row["source_message_id"] for row in [*linked, *found, *contextual]
                        if covered_by_fact(row, memories)}
@@ -163,6 +174,9 @@ class SourceMemoryService:
                          linked_read_count=linked_read_count, indexed_read_count=indexed_read_count,
                          contextual_count=len(contextual), contextual_read_count=contextual_read_count,
                          contextual_search_enabled=bool(contextual_results),
+                         literal_project_terms=list(project_tags),
+                         contextual_scope_deferred_to_explicit_task=contextual_deferred,
+                         linked_project_scope_omitted=linked_project_omitted,
                          covered_by_fact_count=len(covered),
                          window_radius=self._window_radius, windows=window_ids,
                          window_semantic_relation="not_inferred", anchor_ids=anchor_ids,

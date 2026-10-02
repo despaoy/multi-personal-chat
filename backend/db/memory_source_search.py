@@ -34,6 +34,32 @@ def index_plan(identity, body):
                + ",".join(values) + " ON CONFLICT DO NOTHING", params)
 
 
+def literal_project_source_terms(query):
+    """Return unambiguous literal project tags for an explicit source read.
+
+    This is a lexical task scope, not a claim about semantic relevance or
+    completeness. Mixed tasks, excluded named projects and detached references
+    defer unchanged to the existing unrestricted sparse query.
+    """
+    if (not isinstance(query, str)
+            or not re.search(r"列出|读取|查看|查找|复述|还原", query)
+            or not re.search(r"原话|原始.{0,6}(?:记录|资料)|交接记录", query)
+            or re.search(r"以及|同时|另外|还要|顺便|并且", query)):
+        return ()
+    code = r"[A-Za-z]+[0-9][A-Za-z0-9]*"
+    matches = list(re.finditer(rf"(?<![A-Za-z0-9_-])({code})\s*项目", query))
+    if not matches:
+        return ()
+    if any(re.search(r"不含|不包括|排除|不要|别查|除去|不是", query[max(0, m.start()-8):m.start()]) for m in matches):
+        return ()
+    tags = tuple(sorted({m.group(1).lower() for m in matches}))
+    identifiers = re.findall(rf"(?<![A-Za-z0-9_-])({code}(?:[-_][A-Za-z0-9]+)*)(?![A-Za-z0-9_-])", query)
+    if any(not any(identity.lower() == tag or identity.lower().startswith((tag+'-', tag+'_')) for tag in tags)
+           for identity in identifiers):
+        return ()
+    return tags
+
+
 def search_plan(scope, query, *, limit=32, dialect='sqlite'):
     # None is the internal complete-search contract for serving-budget callers.
     # Explicit bounded callers keep their existing validation and SQL limit.
@@ -54,10 +80,21 @@ def search_plan(scope, query, *, limit=32, dialect='sqlite'):
     params['query_terms'] = json.dumps(tokens, ensure_ascii=False)
     bound = ('SELECT value FROM json_each(:query_terms)' if dialect == 'sqlite' else
              'SELECT value FROM jsonb_array_elements_text(CAST(:query_terms AS JSONB)) AS q(value)')
+    project_tags = literal_project_source_terms(query)
+    project_filter = ""
+    if project_tags:
+        params['project_terms'] = json.dumps(project_tags)
+        project_bound = ('SELECT value FROM json_each(:project_terms)' if dialect == 'sqlite' else
+                         'SELECT value FROM jsonb_array_elements_text(CAST(:project_terms AS JSONB)) AS p(value)')
+        project_filter = ("JOIN (SELECT DISTINCT anchor.source_key FROM memory_source_terms anchor "
+                          "WHERE anchor.scope_key = :scope_key "
+                          f"AND anchor.term IN ({project_bound})) project_scope "
+                          "ON project_scope.source_key = t.source_key ")
     # Inverse posting frequency is a retrieval weight, not semantic confidence.
     # Full source rows are reached through scoped postings, not latest-N scans.
     # Erasure watermark is checked in this same SQL snapshot; no text cache.
     rows = yield ("WITH hits AS (SELECT t.source_key, t.term FROM memory_source_terms t "
+                  f"{project_filter}"
                   "JOIN memory_sources eligible ON eligible.source_key = t.source_key "
                   f"WHERE t.scope_key = :scope_key AND t.term IN ({bound}) "
                   "AND eligible.state = 'recorded' AND eligible.observed_at > "

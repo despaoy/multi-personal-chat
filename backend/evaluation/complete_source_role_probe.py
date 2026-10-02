@@ -14,6 +14,23 @@ from html import unescape
 from pathlib import Path
 
 
+def required_fixture_sources(fixture):
+    """Declare task-required sources separately from fully stored distractors."""
+    sources = fixture["sources"]
+    lookup = {item["id"]: item for item in sources}
+    if len(lookup) != len(sources):
+        raise ValueError("Duplicate fixture source identity")
+    required = fixture.get("required_source_ids", list(lookup))
+    if (
+        not isinstance(required, list)
+        or not required
+        or len(set(required)) != len(required)
+        or any(identity not in lookup for identity in required)
+    ):
+        raise ValueError("Invalid required fixture sources")
+    return [lookup[identity] for identity in required]
+
+
 async def run(args):
     phase = Path(args.phase).resolve()
     runtime = Path("/home/boot/lhm/multipersonal-runtime")
@@ -25,6 +42,7 @@ async def run(args):
     label = "stage3_" + phase.name + "_" + args.variant.replace("-", "_")
     source = "stage3_stage57_budget_fixed"
     fixture = json.loads((phase / "fixture.json").read_text())
+    required_sources = required_fixture_sources(fixture)
     parent = json.loads((runtime / "backups/backend-chain-20261001/stage57/saved-audited-result.json").read_text())
     assert fixture["synthetic"] and all(parent["checks"].values())
     key = Path(args.api_key_file).read_text().strip()
@@ -115,10 +133,14 @@ async def run(args):
             match = re.search(r"<dialogue_evidence[^>]*>\n(.*?)\n</dialogue_evidence>", wire, re.S)
             assert fixture["question"] in wire and match, "Full original source question lost"
             records = json.loads(match[1])["records"]
-            assert len(records) == len(fixture["sources"]), "Requested complete source lost before actual model"
-            assert {(row["source_id"], row["text"]) for row in records} == {
-                (item["id"], item["body"]) for item in fixture["sources"]
-            }
+            actual = {(row["source_id"], row["text"]) for row in records}
+            assert len(actual) == len(records), "Duplicate actual source identity"
+            assert {(item["id"], item["body"]) for item in required_sources}.issubset(actual), (
+                "Requested complete source lost before actual model"
+            )
+            assert actual.issubset({(item["id"], item["body"]) for item in fixture["sources"]}), (
+                "Actual source differs from its stored fixture authority"
+            )
             assert not proof["prepared"][-1]["memory_packets"], (
                 "Original project speech must not become active personal fact"
             )
