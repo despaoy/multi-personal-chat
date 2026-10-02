@@ -256,7 +256,7 @@ class ContextualEvidenceSelector:
         profile: CharacterProfile | None = None,
         interaction: InteractionState | None = None,
         reference_time: datetime | None = None,
-        max_items: int = 5,
+        max_items: int | None = None,
     ) -> SelectionOutcome:
         started = time.perf_counter()
         bounded = tuple(candidates[:MAX_CANDIDATES])
@@ -283,7 +283,12 @@ class ContextualEvidenceSelector:
             reason = "provider_error"
         else:
             by_id = {item.memory_id: item for item in bounded}
-            selected = tuple(by_id[key] for key, label in decisions if label == "use")[: max(0, max_items)]
+            # Validated use decisions remain whole within MAX_CANDIDATES.
+            # Final packet and serving budgets decide admission, not a second
+            # implicit top-five cut. Explicit caller caps retain their contract.
+            selected = tuple(by_id[key] for key, label in decisions if label == "use")
+            if max_items is not None:
+                selected = selected[: max(0, max_items)]
             return SelectionOutcome(
                 selected,
                 "selected",

@@ -1,0 +1,151 @@
+{
+  "schema": 1,
+  "synthetic": true,
+  "case": {
+    "schema": 1,
+    "synthetic": true,
+    "reference_time": "2026-10-02T16:43:19.625376+00:00",
+    "question": "请核对我的当前个人资料：姓名、籍贯、现居地、专业、工作单位、年级各是什么。只写我本人的当前资料，不做建议。",
+    "sources": [
+      {
+        "id": "stage67-user_name",
+        "body": "我叫晏禾。",
+        "field": "user_name",
+        "expected": "晏禾",
+        "observed_at": "2026-10-02T16:33:19.625376+00:00"
+      },
+      {
+        "id": "stage67-user_origin",
+        "body": "我来自宣城。",
+        "field": "user_origin",
+        "expected": "宣城",
+        "observed_at": "2026-10-02T16:33:20.625376+00:00"
+      },
+      {
+        "id": "stage67-user_residence",
+        "body": "我现在住在焦作。",
+        "field": "user_residence",
+        "expected": "焦作",
+        "observed_at": "2026-10-02T16:33:21.625376+00:00"
+      },
+      {
+        "id": "stage67-user_major",
+        "body": "我的专业是材料科学。",
+        "field": "user_major",
+        "expected": "材料科学",
+        "observed_at": "2026-10-02T16:33:22.625376+00:00"
+      },
+      {
+        "id": "stage67-user_workplace",
+        "body": "我在澄川研究院工作。",
+        "field": "user_workplace",
+        "expected": "澄川研究院",
+        "observed_at": "2026-10-02T16:33:23.625376+00:00"
+      },
+      {
+        "id": "stage67-user_study_stage",
+        "body": "我是大二学生。",
+        "field": "user_study_stage",
+        "expected": "大二",
+        "observed_at": "2026-10-02T16:33:24.625376+00:00"
+      }
+    ]
+  },
+  "expected_all_fields": {
+    "user_name": "晏禾",
+    "user_origin": "宣城",
+    "user_residence": "焦作",
+    "user_major": "材料科学",
+    "user_workplace": "澄川研究院",
+    "user_study_stage": "大二"
+  },
+  "baseline_summary": {
+    "saved_evidence_verified": true,
+    "collector_print_error": "wrong SelectionOutcome.selected attribute after successful saved evidence; no replay",
+    "stored": 6,
+    "recalled": 6,
+    "selector_default": 5,
+    "model_mock_use_decisions": 6,
+    "compiler_default": 5,
+    "compiler_ablation": 6,
+    "complete_packet_chars": 3198,
+    "budget_chars": 6000,
+    "canonical_estimated_total": 5842,
+    "window": 65536,
+    "cloud_calls": 0,
+    "storage_unchanged": true,
+    "cross_owner_rejected": true
+  },
+  "native_baseline_summary": {
+    "genuine_six_model_use_decisions": true,
+    "reviews": [
+      {
+        "candidate_count": 6,
+        "decisions": [
+          {
+            "id": "40",
+            "label": "use"
+          },
+          {
+            "id": "41",
+            "label": "use"
+          },
+          {
+            "id": "42",
+            "label": "use"
+          },
+          {
+            "id": "43",
+            "label": "use"
+          },
+          {
+            "id": "44",
+            "label": "use"
+          },
+          {
+            "id": "45",
+            "label": "use"
+          }
+        ],
+        "request_model": "deepseek-v4-pro",
+        "response_model": "deepseek-v4-pro",
+        "finish_reason": "stop"
+      }
+    ],
+    "prepared_packets": 5,
+    "missing_fields": [
+      "user_study_stage"
+    ],
+    "primary_calls": 0,
+    "http_status": 500,
+    "cloud_calls": 2,
+    "durable_six_complete_sources_verified": true,
+    "original_declared_intervals_verified": true,
+    "synthetic_database": "stage3_stage67_native_pg_baseline"
+  },
+  "fixed_summary": {
+    "chain_passed": 37,
+    "chain_total": 37,
+    "answer_passed": 6,
+    "answer_total": 6,
+    "answer": "按你提供过的信息，你本人的当前资料是：\n\n- 姓名：晏禾\n- 籍贯：宣城\n- 现居地：焦作\n- 专业：材料科学\n- 工作单位：澄川研究院\n- 年级：大二",
+    "qualified_cloud_calls": 4,
+    "phase_cloud_calls": 6,
+    "qualified_answers": 1,
+    "phase_primary_calls": 1,
+    "targeted_unique_passed": 17,
+    "targeted_executions": 18,
+    "old_stale_test_failures": 1,
+    "all_call_models": "deepseek-v4-pro",
+    "no_full_suite": true,
+    "no_passing_model_case_replay": true,
+    "no_production_chat_writes": true
+  },
+  "isolated_scope": {
+    "character_id": "tsukiyashiro_kisaki",
+    "sqlite_adapter": "stage67-memory",
+    "native_adapter": "web-character",
+    "conversation_type": "private"
+  },
+  "seed_method": "actual_capture/extract/rule_write; not model seed extraction proof"
+}

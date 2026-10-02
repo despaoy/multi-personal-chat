@@ -49,18 +49,20 @@ def test_oversized_packet_is_skipped_not_cut_and_next_complete_packet_fits():
 def test_total_budget_drops_whole_packets_and_preserves_order():
     memories = tuple(item(str(i), evidence=("x" * 1600,)) for i in range(5))
     reference, ids = compile_reference_context(memories, preferred_address="小明", complete_evidence=True)
-    assert ids == ("0", "1", "2")
+    assert ids == ("0", "1")
     body = reference.removeprefix(MEMORY_REFERENCE_DISCLAIMER + "\n")
     assert len(body) <= MAX_COMPLETE_MEMORY_TOTAL_CHARS
+    # Each equal-size packet is whole; admitting the next would exceed budget.
+    assert len(body) + 1 + len(body.splitlines()[-1]) > MAX_COMPLETE_MEMORY_TOTAL_CHARS
     for line in body.splitlines()[1:]:
         assert json.loads(line[2:])["evidence"] == ["x" * 1600]
 
 
-def test_lifecycle_filter_and_item_count_still_apply():
+def test_complete_mode_keeps_all_fitting_lifecycle_eligible_items():
     memories = (item("erased", status="erased"), item("low", confidence=0.1))
     memories += tuple(item(str(i)) for i in range(8))
     _, ids = compile_reference_context(memories, complete_evidence=True)
-    assert ids == ("0", "1", "2", "3", "4")
+    assert ids == tuple(str(i) for i in range(8))
 
 
 def test_complete_packets_remain_escaped_user_data_in_final_generation_plan():

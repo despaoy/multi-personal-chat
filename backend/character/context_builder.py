@@ -730,7 +730,7 @@ def _select_memory_lines(
     used_ids: list[str] = []
     total = reserved_chars
     for index, item in enumerate(memories):
-        if len(memory_lines) >= MAX_MEMORY_ITEMS:
+        if not complete_evidence and len(memory_lines) >= MAX_MEMORY_ITEMS:
             stats['count_skipped'] = len(memories) - index
             break
         if not _memory_is_injectable(item, now):
@@ -777,7 +777,8 @@ def compile_reference_context(
     - 效率限制：最多 5 条、总长约 1000 字符（含称呼行）、证据整条加入、
       保留调用方提供的相关度顺序。称呼行先占用总预算，再分配给
       记忆，参考区不会因额外插入称呼而突破上限。
-    - complete_evidence=True 时改为 6000 字符的原子证据包预算，
+    - complete_evidence=True 时由 6000 字符的原子证据包预算决定条目数，
+      不再额外截断为五条；
       不裁剪任何 claim 或附属证据，放不下的包不会出现在 used_memory_ids。
       调用方可用 max_chars 明确传入提供方工作预算；None 保留已有默认值。
     """
