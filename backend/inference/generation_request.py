@@ -153,6 +153,7 @@ class GenerationPlan:
     retrieval: RetrievalResult
     history_policy: str = "conversation"
     excluded_assistant_messages: int = 0
+    character_context: CompiledCharacterContext | None = None
 
     @property
     def should_generate(self) -> bool:
@@ -310,7 +311,13 @@ def _system_prompt(request: GenerationRequest) -> str:
 
 def build_generation_request(request: GenerationRequest) -> GenerationPlan:
     """Build the one canonical model-facing message and parameter contract."""
+    from inference.source_context_budget import admit_deferred_sources
 
+    request = admit_deferred_sources(request, _build_generation_request_core)
+    return _build_generation_request_core(request)
+
+
+def _build_generation_request_core(request: GenerationRequest) -> GenerationPlan:
     if request.retrieval.has_evidence and request.retrieval.evidence_packets:
         return _build_packet_budgeted_request(request)
     from inference.memory_response import memory_query_result
@@ -374,6 +381,7 @@ def build_generation_request(request: GenerationRequest) -> GenerationPlan:
         retrieval=request.retrieval,
         history_policy=history_policy,
         excluded_assistant_messages=excluded_assistant_messages,
+        character_context=request.character_context,
     )
 
 
@@ -403,7 +411,7 @@ def _build_packet_budgeted_request(request: GenerationRequest) -> GenerationPlan
         retrieval = replace(request.retrieval, evidence=evidence, evidence_packets=(),
                             citations=tuple(c for c in request.retrieval.citations if str(c.get('id')) in candidate_ids))
         try:
-            plan = build_generation_request(replace(request, retrieval=retrieval))
+            plan = _build_generation_request_core(replace(request, retrieval=retrieval))
         except ValueError as exc:
             if str(exc) not in {
                 'Current message and evidence exceed the serving context budget; shorten the message or evidence',
@@ -419,7 +427,7 @@ def _build_packet_budgeted_request(request: GenerationRequest) -> GenerationPlan
     # Unknown evidence is not a license to generate from rejected summaries.
     retrieval = replace(request.retrieval, status='character_abstention', evidence='', evidence_packets=(),
                         citations=(), reason='evidence_budget_exhausted')
-    return build_generation_request(replace(request, retrieval=retrieval))
+    return _build_generation_request_core(replace(request, retrieval=retrieval))
 
 
 async def generate_character_response(
@@ -467,7 +475,8 @@ async def generate_character_response(
 
     request = replace(request, retrieval=prepare_answer_citations(request.retrieval))
     plan = build_generation_request(request)
-    request = replace(request, retrieval=plan.retrieval)
+    request = replace(request, retrieval=plan.retrieval,
+                      character_context=plan.character_context or request.character_context)
     if request.reply_guard is not None and request.retrieval.has_evidence:
         # Retrieved names are grounded references, not unprompted identity
         # leakage. Keep all other subject, safety and style checks unchanged.

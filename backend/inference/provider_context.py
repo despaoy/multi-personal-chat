@@ -15,6 +15,7 @@ class ProviderContextBudget:
     review: ReviewContextBudget | None = None
     reference_max_chars: int | None = None
     reference_observation_semantics: bool = False
+    defer_source_budget: bool = False
 
 
 def get_provider_context_budget(manager=None, *, env=None):
@@ -38,6 +39,7 @@ def get_provider_context_budget(manager=None, *, env=None):
             history_limit=history_limit,
             history_max_chars=window,
             source_max_chars=window // 4,
+            defer_source_budget=True,
             reference_max_chars=window // 2,
             reference_observation_semantics=True,
             review=ReviewContextBudget(window, history_messages=2 * history_limit),

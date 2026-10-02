@@ -177,6 +177,7 @@ class CharacterContextService:
         history_limit: int = HISTORY_LIMIT,
         history_max_chars: int = HISTORY_MAX_CHARS,
         source_max_chars: int = 2400,
+        defer_source_budget: bool = False,
         reference_max_chars: int | None = None,
         reference_observation_semantics: bool = False,
     ) -> None:
@@ -200,7 +201,7 @@ class CharacterContextService:
         from character.source_memory import SourceMemoryService
 
         self._source_memory = SourceMemoryService(memory_repository, window_radius=source_window_radius,
-                                                 max_chars=source_max_chars)
+                                                 max_chars=source_max_chars, defer_budget=defer_source_budget)
         self._source_recall_enabled = (source_recall_enabled if source_recall_enabled is not None else
             os.getenv("MEMORY_SOURCE_RECALL_ENABLED", "false").lower() in {"true", "1", "yes", "on"})
 
@@ -692,6 +693,7 @@ def build_character_context_service(database, *, source_recall_enabled: bool | N
         history_limit=budget.history_limit,
         history_max_chars=budget.history_max_chars,
         source_max_chars=budget.source_max_chars,
+        defer_source_budget=budget.defer_source_budget,
         reference_max_chars=budget.reference_max_chars,
         reference_observation_semantics=budget.reference_observation_semantics,
         memory_selector=create_evidence_selector(context_budget=budget.review),

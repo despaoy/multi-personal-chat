@@ -17,6 +17,7 @@ from html import escape
 class SourceRecall:
     context: str = ""
     diagnostics: dict = field(default_factory=dict)
+    candidate_context: str = ""
 
 
 def select_sources(linked, found, *, contextual=(), limit=4):
@@ -53,6 +54,8 @@ def covered_by_fact(row, memories):
 
 
 def compile_sources(rows, *, max_chars=2400, max_items=4):
+    if max_chars is not None and (type(max_chars) is not int or max_chars <= 0):
+        raise ValueError("Source character budget must be positive or deferred")
     records = []
     omitted = []
     for row in rows:
@@ -63,7 +66,7 @@ def compile_sources(rows, *, max_chars=2400, max_items=4):
         candidate = json.dumps(dict(source_kind="historical_user_utterances", speaker_role="user",
             described_subject="not_resolved", current_validity="not_resolved", records=[*records, record]),
             ensure_ascii=False, separators=(",", ":"))
-        if len(escape(candidate, quote=False)) > max_chars:
+        if max_chars is not None and len(escape(candidate, quote=False)) > max_chars:
             # Do not substitute older/lower-ranked excerpts when the best
             # complete source (possibly a correction) cannot fit.
             omitted.append(dict(source_id=row["source_message_id"], reason="whole_source_budget"))
@@ -77,12 +80,13 @@ def compile_sources(rows, *, max_chars=2400, max_items=4):
 
 
 class SourceMemoryService:
-    def __init__(self, repository, *, max_chars=2400, window_radius=0):
+    def __init__(self, repository, *, max_chars=2400, window_radius=0, defer_budget=False):
         if type(window_radius) is not int or not 0 <= window_radius <= 2:
             raise ValueError("Source window radius must be 0..2")
         self._repo = repository
         self._max_chars = max_chars
         self._window_radius = window_radius
+        self._defer_budget = defer_budget
 
     async def recall(self, character_id, scope, query, *, memories=(), retrieval_context=""):
         """Keep current-query and loaded user-history search as separate scoped lanes."""
@@ -151,7 +155,12 @@ class SourceMemoryService:
                          ranking=("covered_rrf_linked_sparse_history" if contextual_results
                                   else "covered_rrf_linked_sparse"),
                          query_terms_semantic=False, elapsed_ms=(time.monotonic() - started) * 1000)
-            return SourceRecall(result.context, trace)
+            candidate_context = ""
+            if self._defer_budget and result.diagnostics["status"] == "budget_omitted":
+                candidate_context = compile_sources(selected, max_chars=None,
+                    max_items=4 * (1 + 2 * self._window_radius)).context
+            trace["candidate_budget_pending"] = bool(candidate_context)
+            return SourceRecall(result.context, trace, candidate_context)
         except Exception as exc:
             return SourceRecall(diagnostics=dict(status="retrieval_error", error_type=type(exc).__name__,
                                                  elapsed_ms=(time.monotonic() - started) * 1000))
@@ -203,7 +212,8 @@ def attach_sources(context, result, *, preferred_address="", complete_evidence=F
         context = replace(context, reference_context=context.source_reference_backup,
                           source_shared_memory_ids=(), source_reference_backup="", episodic_reference_context="")
     status = str(result.diagnostics.get('status') or 'not_checked')
-    context = replace(context, memory_source_status=status, episodic_reference_context='')
+    context = replace(context, memory_source_status=status, episodic_reference_context='',
+                      source_candidate_context=result.candidate_context)
     if not result.context:
         if status in {'budget_omitted', 'retrieval_error'}:
             return replace(context, memory_field_presence=tuple(

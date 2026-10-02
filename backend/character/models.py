@@ -275,3 +275,6 @@ class CompiledCharacterContext:
     memory_operation_receipt: dict[str, object] | None = None
     # Generation-only delivery state; never an executed receipt or frozen job.
     memory_operation_deferred: bool = False
+    # Whole freshly granted source packet awaiting the actual generation budget.
+    # Not a fact, cache, or an already admitted model input.
+    source_candidate_context: str = ""
