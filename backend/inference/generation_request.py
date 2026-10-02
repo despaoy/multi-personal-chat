@@ -434,7 +434,7 @@ def _build_packet_budgeted_request(request: GenerationRequest) -> GenerationPlan
             continue
         candidate_ids = accepted_ids | {str(i) for i in ids}
         retrieval = replace(request.retrieval, evidence=evidence, evidence_packets=(),
-                            source_coverage=settle_source_coverage(request.retrieval.source_coverage, candidate_ids),
+                            source_coverage=settle_source_coverage(request.retrieval.source_coverage, candidate_ids, admitted_packets=(*accepted, packet)),
                             packet_coverage=packet_coverage(len(request.retrieval.evidence_packets), len(accepted) + 1),
                             citations=tuple(c for c in request.retrieval.citations if str(c.get('id')) in candidate_ids))
         try:

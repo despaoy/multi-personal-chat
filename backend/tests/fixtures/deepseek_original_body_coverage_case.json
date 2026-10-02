@@ -1,0 +1,685 @@
+{
+  "synthetic": true,
+  "case_kind": "verified_original_body_completeness_with_personal_constraints",
+  "knowledge_base": "岚河登记验证资料",
+  "documents": [
+    {
+      "title": "岚河自助登记",
+      "category": "登记",
+      "content": "完整登记说明正文起点。方案名称岚河自助登记，编号LH-961。费用3元，办理时限20小时。办理条件：申请已填好即可登记。全部例外条款：缺少身份页须暂停，补齐身份页后才能继续。本正文只描述本方案公共办理规则，不代表用户喜欢或已经选择。没有授予任何未列出的豁免，必要条件不能推导用户一定办理。完整登记说明正文终点。"
+    },
+    {
+      "title": "岚河人工登记",
+      "category": "登记",
+      "content": "完整登记说明正文起点。方案名称岚河人工登记，编号LH-962。费用7元，办理时限35小时。办理条件：申请与身份页须齐全。全部例外条款：午间12:00至13:00暂停，预约登记也不能绕过暂停时段。本正文只描述本方案公共办理规则，不代表用户喜欢或已经选择。没有授予任何未列出的豁免，必要条件不能推导用户一定办理。完整登记说明正文终点。"
+    },
+    {
+      "title": "岚河快速登记",
+      "category": "登记",
+      "content": "完整登记说明正文起点。方案名称岚河快速登记，编号LH-963。费用9元，办理时限8小时。办理条件：完整申请与附件核验通过同时必要。全部例外条款：附件核验失败必须退回普通流程，费用支付不构成核验通过。本正文只描述本方案公共办理规则，不代表用户喜欢或已经选择。没有授予任何未列出的豁免，必要条件不能推导用户一定办理。完整登记说明正文终点。"
+    },
+    {
+      "title": "岚河邮寄登记",
+      "category": "登记",
+      "content": "完整登记说明正文起点。方案名称岚河邮寄登记，编号LH-964。费用5元，办理时限72小时。办理条件：完整申请与可回寄地址同时必要。全部例外条款：地址无法投递须暂停，附件核验失败须补件后再递交。本正文只描述本方案公共办理规则，不代表用户喜欢或已经选择。没有授予任何未列出的豁免，必要条件不能推导用户一定办理。完整登记说明正文终点。"
+    }
+  ],
+  "source_message": "请记住我的本人登记偏好：我喜欢自助登记。我不喜欢人工登记。我喜欢快速登记，但我只有已经提交完整申请且附件核验通过才使用快速登记。",
+  "question": "请查知识库，逐项比较《岚河自助登记》《岚河人工登记》《岚河快速登记》《岚河邮寄登记》这四份完整说明。逐项列出编号、费用、办理时限、全部办理条件和全部例外条款，并结合我已告诉你的本人登记偏好判断本轮是否符合我的偏好条件及原因。本轮我已经提交完整申请，身份页齐全，附件核验失败，回寄地址可投递，现在是10:00。每份资料都要根据本轮实际核对到的正文范围，分别说明已核对完整正文还是只取得部分片段；不能把仅索引片段齐全冒充完整原文。没有明确喜好依据的方案保留未知；满足必要条件不能推出我一定办理；公共规则不得归成我的个人事实。",
+  "expected_records": [
+    {
+      "title": "岚河自助登记",
+      "code": "LH-961",
+      "fee_yuan": 3,
+      "processing_hours": 20,
+      "all_conditions": "申请已填好即可登记",
+      "all_exceptions": "缺少身份页须暂停，补齐身份页后才能继续"
+    },
+    {
+      "title": "岚河人工登记",
+      "code": "LH-962",
+      "fee_yuan": 7,
+      "processing_hours": 35,
+      "all_conditions": "申请与身份页须齐全",
+      "all_exceptions": "午间12:00至13:00暂停，预约登记也不能绕过暂停时段"
+    },
+    {
+      "title": "岚河快速登记",
+      "code": "LH-963",
+      "fee_yuan": 9,
+      "processing_hours": 8,
+      "all_conditions": "完整申请与附件核验通过同时必要",
+      "all_exceptions": "附件核验失败必须退回普通流程，费用支付不构成核验通过"
+    },
+    {
+      "title": "岚河邮寄登记",
+      "code": "LH-964",
+      "fee_yuan": 5,
+      "processing_hours": 72,
+      "all_conditions": "完整申请与可回寄地址同时必要",
+      "all_exceptions": "地址无法投递须暂停，附件核验失败须补件后再递交"
+    }
+  ],
+  "required_complete_document_count": 4,
+  "proposal_fixture": null,
+  "no_rule_seeded_memories": true,
+  "primary_output_tokens": 2048,
+  "history_excluded": false,
+  "completeness_expected": "An original-body receipt needs a fresh authoritative DB read plus exact full raw body in the final admitted request; all-indexed counts alone remain unverified.",
+  "observed": {
+    "audit": {
+      "checks": {
+        "complete_synthetic_four_docs_and_private_source": true,
+        "same_full_query_at_both_actual_wire_gates": true,
+        "same_auth_ordinary_owner_and_scope": true,
+        "four_actual_native_imports_once": true,
+        "successful_real_writer_seed_not_replayed": true,
+        "eight_baseline_five_fixed_actual_calls": true,
+        "all_actual_calls_pro_200_stop": true,
+        "baseline_primary_answer_exists_but_no_original_grant": true,
+        "fixed_original_query_actual_primary_once": true,
+        "whole_private_source_at_both_gates": true,
+        "baseline_all_four_texts_present_not_a_missing_input_failure": true,
+        "fixed_all_four_complete_bodies": true,
+        "all_four_ranked_and_requested_results_unchanged": true,
+        "confidence_and_abstention_not_boosted": true,
+        "explicit_scope_and_no_unresolved_titles": true,
+        "four_indexed_scope_counts_complete": true,
+        "same_three_real_seed_claims_and_no_rag_promotion": true,
+        "independent_exact_same_three_claims": true,
+        "independent_three_own_live_full_source_links": true,
+        "independent_full_four_db_document_bodies": true,
+        "independent_four_single_chunks_and_authorized_base": true,
+        "native_final_indexed_metadata_matches_db_content": true,
+        "all_three_memories_selected_before_and_after": true,
+        "no_unqualified_current_temporal_promotion": true,
+        "whole_conjunctive_private_condition_packet": true,
+        "one_actual_full_wire_primary": true,
+        "raw_primary_reply_equals_api": true,
+        "actual_full_wire_fits_pro65536_with_output_reserve": true,
+        "four_complete_parameter_condition_exception_rows_preserved": true,
+        "conjunction_failure_and_no_sufficiency_inference": true,
+        "public_rules_not_personal_claims_in_reply": true,
+        "baseline_actual_wire_only_indexed_scope_no_original_receipt": true,
+        "fixed_actual_wire_four_verified_raw_original_grants": true,
+        "four_indexed_plus_four_raw_packets_all_actually_admitted": true,
+        "independent_DB_hashes_exact_raw_packets_and_actual_wire_match": true,
+        "raw_originals_do_not_enter_system_prompt": true,
+        "conditional_application_scope_policy_actual_pro_wire": true,
+        "baseline_content_correct_is_not_a_missing_receipt_pass": true,
+        "retry_history_contains_prior_baseline_answer_honestly_retained": true,
+        "new_optional_unavailable_originals_keep_indexed_information": true,
+        "pending_zero_saved": true,
+        "new31_affected14_only": true
+      },
+      "passed": 42,
+      "total": 42,
+      "phase_calls": 13,
+      "baseline_calls": 8,
+      "fixed_calls": 5,
+      "primary_calls": 3,
+      "qualified_complete_chain_input_queries": 1,
+      "strict_semantic_answer_qualified": 0,
+      "raw_fixed_reply": "按四份资料逐项列出，并说明核对范围。\n\n**岚河自助登记（LH-961）**\n- 费用：3元\n- 办理时限：20小时\n- 办理条件：申请已填好即可登记\n- 例外条款：缺少身份页须暂停，补齐身份页后才能继续\n- 核对范围：已核对完整正文\n\n**岚河人工登记（LH-962）**\n- 费用：7元\n- 办理时限：35小时\n- 办理条件：申请与身份页须齐全\n- 例外条款：午间12:00至13:00暂停，预约登记也不能绕过暂停时段\n- 核对范围：已核对完整正文\n\n**岚河快速登记（LH-963）**\n- 费用：9元\n- 办理时限：8小时\n- 办理条件：完整申请与附件核验通过同时必要\n- 例外条款：附件核验失败必须退回普通流程，费用支付不构成核验通过\n- 核对范围：已核对完整正文\n\n**岚河邮寄登记（LH-964）**\n- 费用：5元\n- 办理时限：72小时\n- 办理条件：完整申请与可回寄地址同时必要\n- 例外条款：地址无法投递须暂停，附件核验失败须补件后再递交\n- 核对范围：已核对完整正文\n\n关于你的偏好判断：\n\n你告诉过我，你喜欢自助登记，不喜欢人工登记；快速登记只有在你已经提交完整申请且附件核验通过时才使用。\n\n本轮你的情况是：已提交完整申请，身份页齐全，附件核验失败，回寄地址可投递，时间是10:00。\n\n- 自助登记：符合你“喜欢自助登记”的偏好。按资料，申请已填好即可登记；你身份页齐全，不触发“缺少身份页须暂停”的例外。所以自助登记符合你的偏好条件。\n- 人工登记：不符合。你明确说过不喜欢人工登记。\n- 快速登记：不符合。你使用快速登记的前提是附件核验通过，但本轮附件核验失败；资料也写明附件核验失败必须退回普通流程。所以快速登记不符合你的偏好条件。\n- 邮寄登记：你没有告诉过我你对邮寄登记的喜好，所以无法依据你的偏好判断是否符合，保留未知。\n\n另外说明：满足必要条件不等于你一定办理；公共规则只是方案本身的办理规则，不是你的个人事实。",
+      "actual_prompt_tokens": 5765,
+      "runtime_files_changed": 4,
+      "new_unique": 34,
+      "affected_unique": 14,
+      "test_unique": 48,
+      "test_executions": 48,
+      "full_suite": false,
+      "strict_stage71_failure_still_open": true,
+      "limits": [
+        "Full original grants require a fresh document read and exact whole raw-body plus packet fingerprints in the final admitted request; indexed counts alone do not grant original completeness.",
+        "Large whole originals can be skipped by producer/final budgets while independent indexed information remains; original status then stays not admitted. Indexed partial and raw-original completeness remain separate dimensions, aggregate partial packet diagnostics stay conservative.",
+        "Native retry preserves prior successful baseline content reply in the terminal cloned database: history2 baseline versus4 fixed, reply identical. This proves actual new raw receipts on the pro wire, not independent model understanding, fact-only or distant-history sufficiency.",
+        "Raw reply still says postal preference was never told, which cannot prove absence from all history. Strict semantic qualification0; no answer text was changed or style-forced.",
+        "Stage75 indexed-only scope finding now has a backend grant path, but its old model case was not replayed or retroactively regraded; Stage74 unrestricted scope and Stage71 strict no-additions findings remain open."
+      ]
+    },
+    "original_writer_admission": [
+      {
+        "raw_response": "{\n  \"memories\": [\n    {\n      \"kind\": \"like\",\n      \"value\": \"自助登记\",\n      \"content\": \"用户喜欢自助登记。\",\n      \"evidence\": \"我喜欢自助登记\",\n      \"confidence\": 0.98,\n      \"operation\": \"ADD\",\n      \"target_memory_id\": \"\",\n      \"target_memory_key\": \"\",\n      \"attributed_to\": \"user\",\n      \"qualifiers\": {},\n      \"valid_from\": \"\",\n      \"valid_to\": \"\",\n      \"observed_at\": \"2026-10-03T04:49:32.571876+08:00\",\n      \"scope_level\": \"conversation\"\n    },\n    {\n      \"kind\": \"dislike\",\n      \"value\": \"人工登记\",\n      \"content\": \"用户不喜欢人工登记。\",\n      \"evidence\": \"我不喜欢人工登记\",\n      \"confidence\": 0.98,\n      \"operation\": \"ADD\",\n      \"target_memory_id\": \"\",\n      \"target_memory_key\": \"\",\n      \"attributed_to\": \"user\",\n      \"qualifiers\": {},\n      \"valid_from\": \"\",\n      \"valid_to\": \"\",\n      \"observed_at\": \"2026-10-03T04:49:32.571876+08:00\",\n      \"scope_level\": \"conversation\"\n    },\n    {\n      \"kind\": \"like\",\n      \"value\": \"快速登记\",\n      \"content\": \"用户喜欢快速登记，但只有在已经提交完整申请且附件核验通过时才使用快速登记。\",\n      \"evidence\": \"我喜欢快速登记，但我只有已经提交完整申请且附件核验通过才使用快速登记\",\n      \"confidence\": 0.97,\n      \"operation\": \"ADD\",\n      \"target_memory_id\": \"\",\n      \"target_memory_key\": \"\",\n      \"attributed_to\": \"user\",\n      \"qualifiers\": {\n        \"condition\": \"已经提交完整申请且附件核验通过\"\n      },\n      \"valid_from\": \"\",\n      \"valid_to\": \"\",\n      \"observed_at\": \"2026-10-03T04:49:32.571876+08:00\",\n      \"scope_level\": \"conversation\"\n    }\n  ]\n}",
+        "input": {
+          "source_message": "请记住我的本人登记偏好：我喜欢自助登记。我不喜欢人工登记。我喜欢快速登记，但我只有已经提交完整申请且附件核验通过才使用快速登记。",
+          "history": [],
+          "existing_memories": [],
+          "confidence_threshold": 0.85,
+          "feedback_target_ids": [],
+          "source_type": "user"
+        },
+        "accepted": [
+          {
+            "operation": "ADD",
+            "memory": {
+              "memory_type": "user_fact",
+              "memory_key": "preference_自助登记",
+              "content": "用户喜欢自助登记。",
+              "importance": 0.6,
+              "evidence": "",
+              "qualifiers": [],
+              "aliases": [],
+              "polarity": "",
+              "event": null,
+              "operation": "assert"
+            },
+            "target_memory_id": "",
+            "target_memory_key": "",
+            "evidence": "我喜欢自助登记",
+            "confidence": 0.98,
+            "attributed_to": "user",
+            "qualifiers": [],
+            "valid_from": "",
+            "valid_to": "",
+            "observed_at": "",
+            "scope_level": "conversation",
+            "proposed_valid_from": "",
+            "proposed_valid_to": "",
+            "source_observation": false,
+            "protected_memory_keys": []
+          },
+          {
+            "operation": "ADD",
+            "memory": {
+              "memory_type": "user_fact",
+              "memory_key": "preference_快速登记",
+              "content": "用户喜欢快速登记，但只有在已经提交完整申请且附件核验通过时才使用快速登记。",
+              "importance": 0.6,
+              "evidence": "",
+              "qualifiers": [],
+              "aliases": [],
+              "polarity": "",
+              "event": null,
+              "operation": "assert"
+            },
+            "target_memory_id": "",
+            "target_memory_key": "",
+            "evidence": "我喜欢快速登记，但我只有已经提交完整申请且附件核验通过才使用快速登记",
+            "confidence": 0.97,
+            "attributed_to": "user",
+            "qualifiers": [
+              [
+                "condition",
+                "已经提交完整申请且附件核验通过"
+              ]
+            ],
+            "valid_from": "",
+            "valid_to": "",
+            "observed_at": "",
+            "scope_level": "conversation",
+            "proposed_valid_from": "",
+            "proposed_valid_to": "",
+            "source_observation": false,
+            "protected_memory_keys": []
+          },
+          {
+            "operation": "ADD",
+            "memory": {
+              "memory_type": "user_fact",
+              "memory_key": "preference_人工登记",
+              "content": "用户不喜欢人工登记。",
+              "importance": 0.5,
+              "evidence": "",
+              "qualifiers": [],
+              "aliases": [],
+              "polarity": "",
+              "event": null,
+              "operation": "assert"
+            },
+            "target_memory_id": "",
+            "target_memory_key": "",
+            "evidence": "我不喜欢人工登记",
+            "confidence": 0.98,
+            "attributed_to": "user",
+            "qualifiers": [],
+            "valid_from": "",
+            "valid_to": "",
+            "observed_at": "",
+            "scope_level": "conversation",
+            "proposed_valid_from": "",
+            "proposed_valid_to": "",
+            "source_observation": false,
+            "protected_memory_keys": []
+          }
+        ]
+      },
+      {
+        "raw_response": "{\"memories\": []}",
+        "input": {
+          "source_message": "请查知识库，逐项比较《岚河自助登记》《岚河人工登记》《岚河快速登记》《岚河邮寄登记》这四份完整说明。逐项列出编号、费用、办理时限、全部办理条件和全部例外条款，并结合我已告诉你的本人登记偏好判断本轮是否符合我的偏好条件及原因。本轮我已经提交完整申请，身份页齐全，附件核验失败，回寄地址可投递，现在是10:00。每份资料都要根据本轮实际核对到的正文范围，分别说明已核对完整正文还是只取得部分片段；不能把仅索引片段齐全冒充完整原文。没有明确喜好依据的方案保留未知；满足必要条件不能推出我一定办理；公共规则不得归成我的个人事实。",
+          "history": [
+            {
+              "role": "user",
+              "content": "请记住我的本人登记偏好：我喜欢自助登记。我不喜欢人工登记。我喜欢快速登记，但我只有已经提交完整申请且附件核验通过才使用快速登记。"
+            },
+            {
+              "role": "assistant",
+              "content": "我记住了。你喜欢自助登记，不喜欢人工登记；快速登记只在已提交完整申请且附件核验通过时使用。"
+            }
+          ],
+          "existing_memories": [
+            {
+              "id": 41,
+              "character_id": "tsukiyashiro_kisaki",
+              "platform": "web",
+              "adapter": "web-character",
+              "sender_id": "6",
+              "conversation_type": "private",
+              "conversation_id": "6",
+              "scope_level": "conversation",
+              "memory_type": "user_fact",
+              "memory_key": "preference_快速登记",
+              "revision": 1,
+              "relation_type": "ADD",
+              "status": "active",
+              "parent_memory_id": null,
+              "supersedes_memory_id": null,
+              "content": "用户喜欢快速登记，但只有在已经提交完整申请且附件核验通过时才使用快速登记。",
+              "importance": 0.6,
+              "confidence": 0.97,
+              "source_message_id": "web:3a121d7f01b04501b17c93b68a3212c9",
+              "source_message_ids_json": "[\"web:3a121d7f01b04501b17c93b68a3212c9\"]",
+              "evidence_json": "[\"我喜欢快速登记，但我只有已经提交完整申请且附件核验通过才使用快速登记\"]",
+              "metadata_json": "{\"qualifiers\": {\"condition\": \"已经提交完整申请且附件核验通过\"}, \"target_memory_key\": \"\", \"write_mode\": \"hot\", \"feedback_target_ids\": [], \"temporal_provenance\": {\"version\": 1, \"producer\": \"semantic_memory\", \"observed_at\": \"2026-10-02T20:49:32.571876+00:00\", \"validity_authority\": \"unspecified\", \"proposed_bounds\": {}, \"interval_shape\": \"unspecified\", \"expression\": null}, \"attributed_to\": \"user\"}",
+              "valid_from": null,
+              "valid_to": null,
+              "observed_at": "2026-10-02T20:49:32.571876+00:00",
+              "created_at": "2026-10-03T04:49:37.682514",
+              "updated_at": "2026-10-03T04:49:37.682514",
+              "source_message_ids": [
+                "web:3a121d7f01b04501b17c93b68a3212c9"
+              ],
+              "evidence": [
+                "我喜欢快速登记，但我只有已经提交完整申请且附件核验通过才使用快速登记"
+              ],
+              "metadata": {
+                "qualifiers": {
+                  "condition": "已经提交完整申请且附件核验通过"
+                },
+                "target_memory_key": "",
+                "write_mode": "hot",
+                "feedback_target_ids": [],
+                "temporal_provenance": {
+                  "version": 1,
+                  "producer": "semantic_memory",
+                  "observed_at": "2026-10-02T20:49:32.571876+00:00",
+                  "validity_authority": "unspecified",
+                  "proposed_bounds": {},
+                  "interval_shape": "unspecified",
+                  "expression": null
+                },
+                "attributed_to": "user"
+              },
+              "attributed_to": "user",
+              "qualifiers": {
+                "condition": "已经提交完整申请且附件核验通过"
+              }
+            },
+            {
+              "id": 40,
+              "character_id": "tsukiyashiro_kisaki",
+              "platform": "web",
+              "adapter": "web-character",
+              "sender_id": "6",
+              "conversation_type": "private",
+              "conversation_id": "6",
+              "scope_level": "conversation",
+              "memory_type": "user_fact",
+              "memory_key": "preference_自助登记",
+              "revision": 1,
+              "relation_type": "ADD",
+              "status": "active",
+              "parent_memory_id": null,
+              "supersedes_memory_id": null,
+              "content": "用户喜欢自助登记。",
+              "importance": 0.6,
+              "confidence": 0.98,
+              "source_message_id": "web:3a121d7f01b04501b17c93b68a3212c9",
+              "source_message_ids_json": "[\"web:3a121d7f01b04501b17c93b68a3212c9\"]",
+              "evidence_json": "[\"我喜欢自助登记\"]",
+              "metadata_json": "{\"qualifiers\": {}, \"target_memory_key\": \"\", \"write_mode\": \"hot\", \"feedback_target_ids\": [], \"temporal_provenance\": {\"version\": 1, \"producer\": \"semantic_memory\", \"observed_at\": \"2026-10-02T20:49:32.571876+00:00\", \"validity_authority\": \"unspecified\", \"proposed_bounds\": {}, \"interval_shape\": \"unspecified\", \"expression\": null}, \"attributed_to\": \"user\"}",
+              "valid_from": null,
+              "valid_to": null,
+              "observed_at": "2026-10-02T20:49:32.571876+00:00",
+              "created_at": "2026-10-03T04:49:37.662274",
+              "updated_at": "2026-10-03T04:49:37.662274",
+              "source_message_ids": [
+                "web:3a121d7f01b04501b17c93b68a3212c9"
+              ],
+              "evidence": [
+                "我喜欢自助登记"
+              ],
+              "metadata": {
+                "qualifiers": {},
+                "target_memory_key": "",
+                "write_mode": "hot",
+                "feedback_target_ids": [],
+                "temporal_provenance": {
+                  "version": 1,
+                  "producer": "semantic_memory",
+                  "observed_at": "2026-10-02T20:49:32.571876+00:00",
+                  "validity_authority": "unspecified",
+                  "proposed_bounds": {},
+                  "interval_shape": "unspecified",
+                  "expression": null
+                },
+                "attributed_to": "user"
+              },
+              "attributed_to": "user",
+              "qualifiers": {}
+            },
+            {
+              "id": 42,
+              "character_id": "tsukiyashiro_kisaki",
+              "platform": "web",
+              "adapter": "web-character",
+              "sender_id": "6",
+              "conversation_type": "private",
+              "conversation_id": "6",
+              "scope_level": "conversation",
+              "memory_type": "user_fact",
+              "memory_key": "preference_人工登记",
+              "revision": 1,
+              "relation_type": "ADD",
+              "status": "active",
+              "parent_memory_id": null,
+              "supersedes_memory_id": null,
+              "content": "用户不喜欢人工登记。",
+              "importance": 0.5,
+              "confidence": 0.98,
+              "source_message_id": "web:3a121d7f01b04501b17c93b68a3212c9",
+              "source_message_ids_json": "[\"web:3a121d7f01b04501b17c93b68a3212c9\"]",
+              "evidence_json": "[\"我不喜欢人工登记\"]",
+              "metadata_json": "{\"qualifiers\": {}, \"target_memory_key\": \"\", \"write_mode\": \"hot\", \"feedback_target_ids\": [], \"temporal_provenance\": {\"version\": 1, \"producer\": \"semantic_memory\", \"observed_at\": \"2026-10-02T20:49:32.571876+00:00\", \"validity_authority\": \"unspecified\", \"proposed_bounds\": {}, \"interval_shape\": \"unspecified\", \"expression\": null}, \"attributed_to\": \"user\"}",
+              "valid_from": null,
+              "valid_to": null,
+              "observed_at": "2026-10-02T20:49:32.571876+00:00",
+              "created_at": "2026-10-03T04:49:37.697580",
+              "updated_at": "2026-10-03T04:49:37.697580",
+              "source_message_ids": [
+                "web:3a121d7f01b04501b17c93b68a3212c9"
+              ],
+              "evidence": [
+                "我不喜欢人工登记"
+              ],
+              "metadata": {
+                "qualifiers": {},
+                "target_memory_key": "",
+                "write_mode": "hot",
+                "feedback_target_ids": [],
+                "temporal_provenance": {
+                  "version": 1,
+                  "producer": "semantic_memory",
+                  "observed_at": "2026-10-02T20:49:32.571876+00:00",
+                  "validity_authority": "unspecified",
+                  "proposed_bounds": {},
+                  "interval_shape": "unspecified",
+                  "expression": null
+                },
+                "attributed_to": "user"
+              },
+              "attributed_to": "user",
+              "qualifiers": {}
+            }
+          ],
+          "confidence_threshold": 0.85,
+          "feedback_target_ids": [
+            "42",
+            "41",
+            "40"
+          ],
+          "source_type": "user"
+        },
+        "accepted": []
+      }
+    ],
+    "baseline_gate": {
+      "0:岚河自助登记": true,
+      "1:岚河人工登记": true,
+      "2:岚河快速登记": true,
+      "3:岚河邮寄登记": true
+    },
+    "fixed_gate": {
+      "0:岚河自助登记": true,
+      "1:岚河人工登记": true,
+      "2:岚河快速登记": true,
+      "3:岚河邮寄登记": true
+    },
+    "baseline_recall": {
+      "stage": "selected",
+      "status": "selected",
+      "fields": [],
+      "excluded_fields": [],
+      "records_read": 3,
+      "usable_records": 3,
+      "eligible_records": 3,
+      "selected_count": 3,
+      "semantic_status": "available",
+      "legacy_source_status": "not_needed",
+      "temporal_source_status": "available",
+      "source_receipt_pairs_requested": 3,
+      "source_receipt_pairs_returned": 3,
+      "source_authority_reader": "exact_claim_source_pairs",
+      "legacy_projected_ids": [],
+      "temporal_views": {
+        "fact": 0,
+        "asserted_state": 0,
+        "observation": 3
+      },
+      "field_presence": {
+        "name": false,
+        "origin": false,
+        "residence": false,
+        "major": false,
+        "workplace": false,
+        "study_stage": false
+      },
+      "ambiguous_fields": [],
+      "current_turn_shadowed_ids": [],
+      "personal_time_tasks": [],
+      "covered_fields": [],
+      "missing_fields": [],
+      "elapsed_ms": 1584.6668742597103,
+      "sources": {
+        "status": "available",
+        "omitted": [],
+        "selected_ids": [
+          "web:3a121d7f01b04501b17c93b68a3212c9"
+        ],
+        "linked_count": 3,
+        "indexed_count": 1,
+        "linked_read_count": 3,
+        "indexed_read_count": 1,
+        "contextual_count": 1,
+        "contextual_read_count": 1,
+        "contextual_search_enabled": true,
+        "literal_project_terms": [],
+        "contextual_scope_deferred_to_explicit_task": false,
+        "linked_project_scope_omitted": 0,
+        "covered_by_fact_count": 0,
+        "window_radius": 0,
+        "effective_window_radius": 0,
+        "requested_source_order": "not_resolved",
+        "requested_following": [],
+        "following_missing_for_anchors": [],
+        "following_anchor_dependency_omitted": 0,
+        "windows": [],
+        "window_semantic_relation": "not_inferred",
+        "anchor_ids": [
+          "web:3a121d7f01b04501b17c93b68a3212c9"
+        ],
+        "selection_omitted": 0,
+        "fresh_recheck_omitted": 0,
+        "source_search_limit": null,
+        "candidate_limit_reached": false,
+        "ranking": "covered_rrf_linked_sparse_history",
+        "query_terms_semantic": false,
+        "elapsed_ms": 17.771356739103794,
+        "candidate_budget_pending": false
+      }
+    },
+    "fixed_recall": {
+      "stage": "selected",
+      "status": "selected",
+      "fields": [],
+      "excluded_fields": [],
+      "records_read": 3,
+      "usable_records": 3,
+      "eligible_records": 3,
+      "selected_count": 3,
+      "semantic_status": "available",
+      "legacy_source_status": "not_needed",
+      "temporal_source_status": "available",
+      "source_receipt_pairs_requested": 3,
+      "source_receipt_pairs_returned": 3,
+      "source_authority_reader": "exact_claim_source_pairs",
+      "legacy_projected_ids": [],
+      "temporal_views": {
+        "fact": 0,
+        "asserted_state": 0,
+        "observation": 3
+      },
+      "field_presence": {
+        "name": false,
+        "origin": false,
+        "residence": false,
+        "major": false,
+        "workplace": false,
+        "study_stage": false
+      },
+      "ambiguous_fields": [],
+      "current_turn_shadowed_ids": [],
+      "personal_time_tasks": [],
+      "covered_fields": [],
+      "missing_fields": [],
+      "elapsed_ms": 10413.536287844181,
+      "sources": {
+        "status": "available",
+        "omitted": [],
+        "selected_ids": [
+          "web:3a121d7f01b04501b17c93b68a3212c9",
+          "web:efeb22c974934f6c9ebfa3890f2fdbe2"
+        ],
+        "linked_count": 3,
+        "indexed_count": 2,
+        "linked_read_count": 3,
+        "indexed_read_count": 2,
+        "contextual_count": 2,
+        "contextual_read_count": 2,
+        "contextual_search_enabled": true,
+        "literal_project_terms": [],
+        "contextual_scope_deferred_to_explicit_task": false,
+        "linked_project_scope_omitted": 0,
+        "covered_by_fact_count": 0,
+        "window_radius": 0,
+        "effective_window_radius": 0,
+        "requested_source_order": "not_resolved",
+        "requested_following": [],
+        "following_missing_for_anchors": [],
+        "following_anchor_dependency_omitted": 0,
+        "windows": [],
+        "window_semantic_relation": "not_inferred",
+        "anchor_ids": [
+          "web:3a121d7f01b04501b17c93b68a3212c9",
+          "web:efeb22c974934f6c9ebfa3890f2fdbe2"
+        ],
+        "selection_omitted": 0,
+        "fresh_recheck_omitted": 0,
+        "source_search_limit": null,
+        "candidate_limit_reached": false,
+        "ranking": "covered_rrf_linked_sparse_history",
+        "query_terms_semantic": false,
+        "elapsed_ms": 35.77192220836878,
+        "candidate_budget_pending": false
+      }
+    },
+    "fixed_memory_packets": [
+      {
+        "memory_id": "42",
+        "memory_type": "user_fact",
+        "content": "用户原话记录（时效未核实，不代表当前状态；记录于2026-10-02T20:49:32.571876+00:00）：[\"请记住我的本人登记偏好：我喜欢自助登记。我不喜欢人工登记。我喜欢快速登记，但我只有已经提交完整申请且附件核验通过才使用快速登记。\", \"我不喜欢人工登记\"]",
+        "importance": 0.5,
+        "evidence": [
+          "请记住我的本人登记偏好：我喜欢自助登记。我不喜欢人工登记。我喜欢快速登记，但我只有已经提交完整申请且附件核验通过才使用快速登记。",
+          "我不喜欢人工登记"
+        ],
+        "valid_from": "",
+        "valid_to": "",
+        "confidence": 0.98,
+        "status": "active",
+        "relation_type": "ADD",
+        "source_message_ids": [
+          "web:3a121d7f01b04501b17c93b68a3212c9"
+        ],
+        "historical": false,
+        "memory_key": "preference_人工登记",
+        "qualifiers": [],
+        "temporal_mode": "observation",
+        "observed_at": "2026-10-02T20:49:32.571876+00:00",
+        "source_observation": false,
+        "complete_original_source": null,
+        "source_fragments": []
+      },
+      {
+        "memory_id": "41",
+        "memory_type": "user_fact",
+        "content": "用户原话记录（时效未核实，不代表当前状态；记录于2026-10-02T20:49:32.571876+00:00）：[\"请记住我的本人登记偏好：我喜欢自助登记。我不喜欢人工登记。我喜欢快速登记，但我只有已经提交完整申请且附件核验通过才使用快速登记。\", \"我喜欢快速登记，但我只有已经提交完整申请且附件核验通过才使用快速登记\"]",
+        "importance": 0.6,
+        "evidence": [
+          "请记住我的本人登记偏好：我喜欢自助登记。我不喜欢人工登记。我喜欢快速登记，但我只有已经提交完整申请且附件核验通过才使用快速登记。",
+          "我喜欢快速登记，但我只有已经提交完整申请且附件核验通过才使用快速登记"
+        ],
+        "valid_from": "",
+        "valid_to": "",
+        "confidence": 0.97,
+        "status": "active",
+        "relation_type": "ADD",
+        "source_message_ids": [
+          "web:3a121d7f01b04501b17c93b68a3212c9"
+        ],
+        "historical": false,
+        "memory_key": "preference_快速登记",
+        "qualifiers": [
+          [
+            "condition",
+            "已经提交完整申请且附件核验通过"
+          ]
+        ],
+        "temporal_mode": "observation",
+        "observed_at": "2026-10-02T20:49:32.571876+00:00",
+        "source_observation": false,
+        "complete_original_source": null,
+        "source_fragments": []
+      },
+      {
+        "memory_id": "40",
+        "memory_type": "user_fact",
+        "content": "用户原话记录（时效未核实，不代表当前状态；记录于2026-10-02T20:49:32.571876+00:00）：[\"请记住我的本人登记偏好：我喜欢自助登记。我不喜欢人工登记。我喜欢快速登记，但我只有已经提交完整申请且附件核验通过才使用快速登记。\", \"我喜欢自助登记\"]",
+        "importance": 0.6,
+        "evidence": [
+          "请记住我的本人登记偏好：我喜欢自助登记。我不喜欢人工登记。我喜欢快速登记，但我只有已经提交完整申请且附件核验通过才使用快速登记。",
+          "我喜欢自助登记"
+        ],
+        "valid_from": "",
+        "valid_to": "",
+        "confidence": 0.98,
+        "status": "active",
+        "relation_type": "ADD",
+        "source_message_ids": [
+          "web:3a121d7f01b04501b17c93b68a3212c9"
+        ],
+        "historical": false,
+        "memory_key": "preference_自助登记",
+        "qualifiers": [],
+        "temporal_mode": "observation",
+        "observed_at": "2026-10-02T20:49:32.571876+00:00",
+        "source_observation": false,
+        "complete_original_source": null,
+        "source_fragments": []
+      }
+    ],
+    "history_count": 4,
+    "raw_fixed_reply": "按四份资料逐项列出，并说明核对范围。\n\n**岚河自助登记（LH-961）**\n- 费用：3元\n- 办理时限：20小时\n- 办理条件：申请已填好即可登记\n- 例外条款：缺少身份页须暂停，补齐身份页后才能继续\n- 核对范围：已核对完整正文\n\n**岚河人工登记（LH-962）**\n- 费用：7元\n- 办理时限：35小时\n- 办理条件：申请与身份页须齐全\n- 例外条款：午间12:00至13:00暂停，预约登记也不能绕过暂停时段\n- 核对范围：已核对完整正文\n\n**岚河快速登记（LH-963）**\n- 费用：9元\n- 办理时限：8小时\n- 办理条件：完整申请与附件核验通过同时必要\n- 例外条款：附件核验失败必须退回普通流程，费用支付不构成核验通过\n- 核对范围：已核对完整正文\n\n**岚河邮寄登记（LH-964）**\n- 费用：5元\n- 办理时限：72小时\n- 办理条件：完整申请与可回寄地址同时必要\n- 例外条款：地址无法投递须暂停，附件核验失败须补件后再递交\n- 核对范围：已核对完整正文\n\n关于你的偏好判断：\n\n你告诉过我，你喜欢自助登记，不喜欢人工登记；快速登记只有在你已经提交完整申请且附件核验通过时才使用。\n\n本轮你的情况是：已提交完整申请，身份页齐全，附件核验失败，回寄地址可投递，时间是10:00。\n\n- 自助登记：符合你“喜欢自助登记”的偏好。按资料，申请已填好即可登记；你身份页齐全，不触发“缺少身份页须暂停”的例外。所以自助登记符合你的偏好条件。\n- 人工登记：不符合。你明确说过不喜欢人工登记。\n- 快速登记：不符合。你使用快速登记的前提是附件核验通过，但本轮附件核验失败；资料也写明附件核验失败必须退回普通流程。所以快速登记不符合你的偏好条件。\n- 邮寄登记：你没有告诉过我你对邮寄登记的喜好，所以无法依据你的偏好判断是否符合，保留未知。\n\n另外说明：满足必要条件不等于你一定办理；公共规则只是方案本身的办理规则，不是你的个人事实。",
+    "optional_unavailable_body_new_tests": 3
+  }
+}

@@ -1260,6 +1260,15 @@ async def _retrieve_rag_bundle(query: str, top_k: int, filters: dict[str, Any] |
         )
         if knowledge_api._get_rebuild_revision() != revision:
             raise RuntimeError("Knowledge authority changed during retrieval")
+        from knowledge.original_sources import attach_original_sources
+
+        expanded = attach_original_sources(
+            expanded, db.get_knowledge_document,
+            source_budget_tokens=get_provider_context_budget().window_tokens,
+            authority_revision=revision,
+        )
+        if knowledge_api._get_rebuild_revision() != revision:
+            raise RuntimeError("Knowledge authority changed during retrieval")
         if expanded is not bundle:
             expanded["citations"] = get_rag_helper().build_citations(expanded["results"])
         return expanded
@@ -1427,7 +1436,10 @@ async def _generate_with_retrieval(
                         from knowledge.evidence_packets import document_evidence_packets
 
                         # Citation display cannot decide which source text reaches the model.
-                        evidence_packets = document_evidence_packets(bundle.get("results", []))
+                        evidence_packets = (
+                            document_evidence_packets(bundle.get("results", []))
+                            + tuple(bundle.get("original_source_packets") or ())
+                        )
                         rag_context = "\n\n".join(packet["text"] for packet in evidence_packets)
                     retrieval = RetrievalResult(
                         status="ok" if rag_context else "character_abstention",
