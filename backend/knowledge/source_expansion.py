@@ -1,5 +1,7 @@
 """Add bounded context from the same verified source as generic RAG anchors."""
 
+import re
+
 from inference.context_budget import estimated_tokens
 
 _AUTHORITY_FIELDS = ("id", "document_id", "chunk_index", "knowledge_base_id", "title", "category", "content")
@@ -47,25 +49,56 @@ def expand_source_context(bundle, vector_db, *, expected_generation, source_budg
             group = (parent, stored.get("knowledge_base_id"), stored.get("title"), stored.get("category"))
             parents.setdefault(group, []).append((identity, index))
             selected_ids.add(identity)
+        # Resolve explicit document-title references as source data, never as
+        # instructions. Only exact, unambiguous titles in the referring source's
+        # knowledge base and the original filter scope can add context.
+        groups = {}
+        for record in metadata.values():
+            group = (record.get("document_id"), record.get("knowledge_base_id"),
+                     record.get("title"), record.get("category"))
+            if filters and not vector_db._match_filters(record, filters):
+                continue
+            groups.setdefault(group, []).append(record)
+        original_groups = set(parents)
+        queue = list(parents)
+        for source_group in queue:
+            for referring in groups.get(source_group, []):
+                text = referring.get("content")
+                if not isinstance(text, str) or not text.strip():
+                    raise RuntimeError("Invalid indexed reference text")
+                for title in re.findall(r"《([^《》\n]{1,200})》", text):
+                    targets = [group for group in groups
+                               if group[1] == source_group[1] and group[2] == title]
+                    if len(targets) > 1:
+                        raise RuntimeError("Ambiguous indexed document reference")
+                    if not targets:
+                        continue
+                    target = targets[0]
+                    if target in original_groups or target == source_group:
+                        continue
+                    support = (referring["id"], referring.get("chunk_index"))
+                    if target not in parents:
+                        parents[target] = [support]
+                        queue.append(target)
+                    elif queue.index(source_group) < queue.index(target) and support not in parents[target]:
+                        parents[target].append(support)
         candidates = []
         for record in metadata.values():
-            group = (
-                record.get("document_id"),
-                record.get("knowledge_base_id"),
-                record.get("title"),
-                record.get("category"),
-            )
+            group = (record.get("document_id"), record.get("knowledge_base_id"),
+                     record.get("title"), record.get("category"))
             if group not in parents or record["id"] in selected_ids:
                 continue
             if filters and not vector_db._match_filters(record, filters):
                 continue
-            index = record.get("chunk_index")
-            if not isinstance(index, int) or isinstance(index, bool) or index < 0:
+            parent, index = record.get("document_id"), record.get("chunk_index")
+            if (not isinstance(parent, int) or isinstance(parent, bool) or parent <= 0
+                    or not isinstance(index, int) or isinstance(index, bool) or index < 0):
                 raise RuntimeError("Invalid indexed sibling position")
-            if record["id"] != f"doc_{group[0]}_chunk_{index}":
+            if record["id"] != f"doc_{parent}_chunk_{index}":
                 raise RuntimeError("Invalid indexed sibling identity")
-            distance = min(abs(index - selected_index) for _, selected_index in parents[group])
-            candidates.append((list(parents).index(group), distance, index, record, group))
+            distance = (min(abs(index - selected_index) for _, selected_index in parents[group])
+                        if group in original_groups else 0)
+            candidates.append((queue.index(group), distance, index, record, group))
         candidates.sort(key=lambda item: item[:3])
         remaining = max(0, source_budget_tokens - sum(estimated_tokens(a["content"]) + 4 for a in anchors))
         added = []
@@ -88,10 +121,10 @@ def expand_source_context(bundle, vector_db, *, expected_generation, source_budg
             )
         results = [*anchors, *added]
         coverage = []
-        for group, supporting in parents.items():
-            indexed_ids = [identity for identity, _ in supporting]
-            indexed_ids.extend(record["id"] for _, _, _, record, candidate_group in candidates if candidate_group == group)
-            retrieved_ids = [r["id"] for r in results if r["id"] in set(indexed_ids)]
+        for group, _supporting in parents.items():
+            indexed_ids = [record["id"] for record in groups[group]]
+            indexed_set = set(indexed_ids)
+            retrieved_ids = [r["id"] for r in results if r["id"] in indexed_set]
             coverage.append({"source_id": f"doc_{group[0]}", "source_title": group[2],
                              "indexed_document_ids": indexed_ids, "retrieved_document_ids": retrieved_ids})
         return {**bundle, "results": results, "source_context_added": len(added), "source_coverage": tuple(coverage)}
