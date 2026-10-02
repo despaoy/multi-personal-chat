@@ -834,6 +834,25 @@ class CharacterMemoryService:
             elif not historical_requested:
                 historical_window = None
 
+        from character.memory_query_time import personal_time_tasks
+
+        # An explicit caller override keeps its existing single-window contract.
+        tasks = personal_time_tasks(query) if include_historical is None else ()
+        task_windows = tuple((task, _historical_query_window(task.query, now)) for task in tasks)
+        historical_requested = historical_requested or any(window is not None for _, window in task_windows)
+
+        def row_windows(row):
+            applicable = [window for task, window in task_windows if task.matches(row)]
+            return applicable if applicable else [historical_window]
+
+        def temporal_eligible(row, window):
+            return (_is_historical_record(row, window, include_pending=include_pending)
+                    if window is not None else _is_current_record(row, now, include_pending=include_pending))
+
+        def row_is_historical(row):
+            windows = row_windows(row)
+            return not any(window is None and temporal_eligible(row, window) for window in windows)
+
         trace = diagnostics if diagnostics is not None else {}
         from character.memory_mentions import mention_query, review_mentions
 
@@ -989,13 +1008,7 @@ class CharacterMemoryService:
             if (
                 not version_filter_enabled
                 or (
-                    _is_historical_record(
-                        row,
-                        historical_window,
-                        include_pending=include_pending,
-                    )
-                    if historical_window is not None
-                    else _is_current_record(row, now, include_pending=include_pending)
+                    any(temporal_eligible(row, window) for window in row_windows(row))
                 )
             )
             and not _is_suppressed(row, suppression_intents)
@@ -1196,7 +1209,7 @@ class CharacterMemoryService:
                         status=status,  # type: ignore[arg-type]
                         relation_type=relation_type,
                         source_message_ids=_source_ids(row) if evidence_enabled else (),
-                        historical=historical_window is not None,
+                        historical=(row_is_historical(row) if tasks else historical_window is not None),
                         memory_key=str(row.get("memory_key") or ""),
                         qualifiers=_row_qualifiers(row),
                         temporal_mode=str(row.get('temporal_mode') or 'fact'),
@@ -1226,10 +1239,28 @@ class CharacterMemoryService:
                     if item not in preferred:
                         preferred.append(item)
                     break
+        # Reserve a relevant candidate for each requested field/time pair before
+        # filling spare ranking slots. This does not expand the candidate cap.
+        for task, window in task_windows:
+            for field in task.fields:
+                for _score, item in scored:
+                    row = rows_by_id.get(item.memory_id, {})
+                    if task.matches(row, field) and temporal_eligible(row, window):
+                        if item not in preferred:
+                            preferred.append(item)
+                        break
         ordered = [*preferred, *(item for _score, item in scored if item not in preferred)]
         selected = tuple(ordered[:limit])
         covered = [field for field in query_plan.fields
                    if any(query_plan.matches(rows_by_id.get(item.memory_id, {}), field) for item in selected)]
+        trace['personal_time_tasks'] = [
+            {'query': task.query, 'fields': list(task.fields), 'historical': window is not None,
+             'start': window.start.isoformat() if window is not None and window.start else None,
+             'end': window.end.isoformat() if window is not None and window.end else None,
+             'covered_fields': [field for field in task.fields if any(
+                 task.matches(rows_by_id.get(item.memory_id, {}), field)
+                 and temporal_eligible(rows_by_id.get(item.memory_id, {}), window) for item in selected)]}
+            for task, window in task_windows]
         trace.update(stage='selected', status='selected' if selected else 'no_relevant_candidates',
                      eligible_records=len(eligible), selected_count=len(selected), covered_fields=covered,
                      missing_fields=[field for field in query_plan.fields if field not in covered])

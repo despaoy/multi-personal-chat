@@ -116,6 +116,13 @@ async def run(args):
             assert fixture["question"] in wire and match and fixture["expected"]["current_residence"] in match[1], (
                 "Current residence lost before actual model"
             )
+            if fixture["expected"].get("query_time_mode") == "compound":
+                assert fixture["expected"]["superseded_residence"] in match[1], (
+                    "Historical evidence lost before actual model"
+                )
+                packets = proof["prepared"][-1]["memory_packets"]
+                assert any(p["status"] == "superseded" and p["historical"] for p in packets)
+                assert any(p["status"] == "active" and not p["historical"] for p in packets)
             assert all(
                 fixture["correction"]["body"] not in m["content"] for m in payload["messages"] if m["role"] == "system"
             )
@@ -259,7 +266,18 @@ async def run(args):
             repo = DatabaseCharacterMemoryRepository(db)
             anchor = datetime.now(timezone.utc)
             seed_sources = []
-            for field, stamp in [("initial", anchor - timedelta(days=1)), ("correction", anchor - timedelta(hours=1))]:
+            for field, stamp in [
+                (
+                    field,
+                    datetime.fromisoformat(fixture[field]["observed_at"])
+                    if fixture.get("seed_clock") == "declared_observed_at"
+                    else anchor - timedelta(days=1)
+                    if field == "initial"
+                    else anchor - timedelta(hours=1),
+                )
+                for field in ["initial", "correction"]
+            ]:
+                assert stamp <= anchor, "A declared synthetic observation cannot be in the future"
                 item = fixture[field]
                 assert (
                     await repo.capture_source(
@@ -296,7 +314,7 @@ async def run(args):
                 async with connection.transaction(readonly=True):
                     assert await connection.fetchval("SHOW data_directory") == str(cluster / "data")
                     durable = await connection.fetch(
-                        "SELECT id,status,content FROM character_memories WHERE character_id=$1 AND platform=$2 AND adapter=$3 AND sender_id=$4 AND memory_key=$5",
+                        "SELECT id,status,content,valid_from,valid_to FROM character_memories WHERE character_id=$1 AND platform=$2 AND adapter=$3 AND sender_id=$4 AND memory_key=$5",
                         "tsukiyashiro_kisaki",
                         "web",
                         "web-character",
@@ -307,6 +325,18 @@ async def run(args):
                         row["status"] == "active" and fixture["expected"]["current_residence"] in row["content"]
                         for row in durable
                     )
+                    if fixture.get("seed_clock") == "declared_observed_at":
+                        active = next(row for row in durable if row["status"] == "active")
+                        old = next(row for row in durable if row["status"] == "superseded")
+                        assert datetime.fromisoformat(old["valid_from"]) == datetime.fromisoformat(
+                            fixture["initial"]["observed_at"]
+                        )
+                        assert (
+                            datetime.fromisoformat(old["valid_to"])
+                            == datetime.fromisoformat(active["valid_from"])
+                            == datetime.fromisoformat(fixture["correction"]["observed_at"])
+                        )
+                        proof["durable_declared_intervals_verified"] = True
                     proof["durable_seed_verified_before_question"] = True
             finally:
                 await connection.close()

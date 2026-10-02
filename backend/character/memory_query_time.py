@@ -5,8 +5,9 @@ reach ranking, evidence reviewers, source attribution and generation.
 """
 
 import re
+from dataclasses import dataclass
 
-from character.memory_query import lookup_fields, profile_lookup_fields
+from character.memory_query import MemoryQueryPlan, lookup_fields, profile_lookup_fields
 
 
 def current_lookup_time_text(message: str) -> str | None:
@@ -47,3 +48,55 @@ def current_lookup_time_text(message: str) -> str | None:
         ):
             return None
     return original
+
+
+@dataclass(frozen=True)
+class PersonalTimeTask:
+    """An original closed lookup clause and the personal fields it requests."""
+
+    query: str
+    fields: tuple[str, ...]
+
+    @property
+    def time_expression(self) -> str:
+        text = "".join(self.query.split())
+        text = re.sub(r"^(?:请告诉我|你还记得|你记得)[，,]?", "", text)
+        match = _TASK_TIME_PREFIX.match(text)
+        return match.group() if match else ""
+
+    def matches(self, row: dict, field: str | None = None) -> bool:
+        plan = MemoryQueryPlan(self.fields)
+        return plan.matches(row, field) if field is not None else bool(plan.matched_fields(row))
+
+
+_TASK_TIME_PREFIX = re.compile(
+    r"^(?:在|于)?(?:\d{4}年(?:[一二三四五六七八九十\d]{1,3}月)?|"
+    r"今年[一二三四五六七八九十\d]{1,3}月|去年(?:[一二三四五六七八九十\d]{1,3}月)?|"
+    r"前年(?:[一二三四五六七八九十\d]{1,3}月)?|以前|之前|过去|当时|曾经|上次|原来)"
+)
+
+
+def personal_time_tasks(message: str) -> tuple[PersonalTimeTask, ...]:
+    """Parse every clause, or defer the entire compound query unchanged.
+
+    Only independent complete self-lookups have task-local constraints. Unknown
+    background/assertion, detached dates, foreign owners and unresolved time
+    reference cannot be partially dropped to manufacture a simpler query.
+    Temporal expressions stay in original query text for the existing resolver.
+    """
+    clauses = [part for part in re.split(r"[。！？!?；;\n]", message) if part.strip()]
+    if len(clauses) < 2:
+        return ()
+    tasks = []
+    for original in clauses:
+        text = "".join(original.split())
+        text = re.sub(r"^(?:请告诉我|你还记得|你记得)[，,]?", "", text)
+        prefix = _TASK_TIME_PREFIX.match(text)
+        if prefix:
+            text = text[prefix.end() :]
+        text = re.sub(r"^我的(?:当前|目前|现在)", "我的", text)
+        fields = lookup_fields(text) or profile_lookup_fields(text)
+        if not fields:
+            return ()
+        tasks.append(PersonalTimeTask(original, fields))
+    return tuple(tasks)

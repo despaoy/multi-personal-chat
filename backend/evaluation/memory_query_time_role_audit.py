@@ -18,6 +18,7 @@ def audit_query_time_role(proof, fixture, calls, storage):
     wire = unescape(messages[-1]["content"]) if messages else ""
     memory = re.search(r"<character_memory[^>]*>\n(.*?)\n</character_memory>", wire, re.S)
     expected = fixture["expected"]
+    compound = expected.get("query_time_mode") == "compound"
     prepared = (proof.get("prepared") or [{}])[-1]
     recall = prepared.get("recall", {})
     current = [
@@ -70,13 +71,17 @@ def audit_query_time_role(proof, fixture, calls, storage):
             for c in calls
         ),
         "current_recall_not_filtered_by_background_year": recall.get("status") == "selected"
-        and recall.get("selected_count") == 1
-        and recall.get("usable_records") == 1,
+        and recall.get("selected_count") == (2 if compound else 1)
+        and recall.get("usable_records") == (2 if compound else 1),
         "current_field_presence_known": recall.get("field_presence", {}).get("residence") is True,
         "semantic_memory_selection_success": prepared.get("selection_status") == "selected",
         "current_memory_id_used": bool(current_id)
         and current_id in prepared.get("used_memory_ids", [])
-        and old_id not in prepared.get("used_memory_ids", []),
+        and (
+            (old_id in prepared.get("used_memory_ids", []))
+            if compound
+            else (old_id not in prepared.get("used_memory_ids", []))
+        ),
         "active_current_packet_preserved": len(active) == 1
         and active[0].get("status") == "active"
         and not active[0].get("historical")
@@ -110,7 +115,13 @@ def audit_query_time_role(proof, fixture, calls, storage):
     answer = {
         "current_residence_correct": expected["current_residence"] in reply,
         "not_superseded_residence_as_current": not re.search(
-            r"(?:目前|现在|当前|现居地|住址)[^。！？\n]{0,15}" + expected["superseded_residence"], reply
+            (
+                r"(?:目前|现在|当前|现居地)[^，,；;。！？\n]{0,15}"
+                if compound
+                else r"(?:目前|现在|当前|现居地|住址)[^。！？\n]{0,15}"
+            )
+            + expected["superseded_residence"],
+            reply,
         ),
         "answers_user_not_character": bool(re.search(r"你[^。！？\n]{0,20}" + expected["current_residence"], reply)),
         "no_background_year_residence_claim": not re.search(
@@ -122,4 +133,48 @@ def audit_query_time_role(proof, fixture, calls, storage):
             r"(?:不知道|不清楚|没有记录|无法确认)[^。！？\n]{0,15}(?:住|居住|现居)", reply
         ),
     }
+    if compound:
+        del answer["no_background_year_residence_claim"]
+        answer["current_not_reported_as_september_residence"] = not re.search(
+            r"(?:9月|九月)[^，,；;。！？\n]{0,20}" + expected["current_residence"], reply
+        )
+        import json
+
+        selector_calls = [c for c in calls if c["request"].get("max_tokens") == 2048 and not actual_primary(c)]
+        selector = (
+            json.loads(selector_calls[0]["request"]["messages"][-1]["content"]) if len(selector_calls) == 1 else {}
+        )
+        transmitted = selector.get("query_tasks", [])
+        historical = [p for p in packets if p.get("memory_id") == old_id]
+        tasks = recall.get("personal_time_tasks", [])
+        chain.update(
+            separate_task_windows_preserved=len(tasks) == 2
+            and tasks[0].get("historical") is True
+            and tasks[1].get("historical") is False
+            and tasks[0].get("start", "").startswith("2026-09-01"),
+            selector_receives_both_original_time_tasks=len(transmitted) == 2
+            and [t.get("time_mode") for t in transmitted] == ["historical", "current"]
+            and all(t.get("query") in fixture["question"] for t in transmitted),
+            selector_receives_exact_typed_candidates=len(selector.get("candidates", [])) == 2
+            and {r.get("id") for r in selector["candidates"]} == {old_id, current_id}
+            and all(r.get("memory_key") == "user_residence" for r in selector["candidates"]),
+            both_time_tasks_covered=len(tasks) == 2 and all(t.get("covered_fields") == ["residence"] for t in tasks),
+            historical_packet_preserved=len(historical) == 1
+            and historical[0].get("historical") is True
+            and historical[0].get("status") == "superseded"
+            and expected["superseded_residence"] in historical[0].get("content", ""),
+            historical_packet_exact_source=len(historical) == 1
+            and fixture["initial"]["id"] in historical[0].get("source_message_ids", []),
+            historical_value_in_actual_wire=bool(memory) and expected["superseded_residence"] in memory[1],
+            actual_declared_intervals_durable=proof.get("durable_declared_intervals_verified") is True
+            and storage.get("declared_source_intervals_unchanged") is True,
+        )
+        answer.update(
+            historical_residence_answered=expected["superseded_residence"] in reply
+            and bool(
+                re.search(
+                    r"(?:9月|九月|当时|那时|以前|之前)[^。！？\n]{0,30}" + expected["superseded_residence"], reply
+                )
+            )
+        )
     return {"chain": chain, "answer": answer}
