@@ -1,0 +1,37 @@
+{
+  "execution": {
+    "stage": 54,
+    "synthetic": true,
+    "source_pair_associations": 101,
+    "two_claims": true,
+    "purpose": "complete requested claim receipts must not be truncated by unrelated linked source fanout"
+  },
+  "target": {
+    "id": "major-original",
+    "body": "我的专业是信息管理与信息系统。",
+    "memory_key": "fact_信息管理与信息系统",
+    "observed_at": "2026-09-20T01:00:00+00:00"
+  },
+  "inventory": {
+    "count": 100,
+    "id_template": "inventory-{index:03d}",
+    "body_template": "合成库存 NM-{index:03d} 完整登记：材质木片；数量三；存放架七；盘点日期2026年10月2日；状态已核对。",
+    "observed_at": "2026-10-01T01:00:00+00:00"
+  },
+  "question": "请根据我的长期记忆，核对我本人目前的专业是什么，明确当前有效信息，不把无关库存记录当成专业。",
+  "expected_major": "信息管理与信息系统",
+  "history_template": {
+    "turn_count": 0,
+    "records_per_turn": 0,
+    "heading": "",
+    "line": "",
+    "reply": "",
+    "expanded_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+  },
+  "cases": [
+    {
+      "id": "old_complete_major_after_unrelated_receipt_fanout",
+      "message": "请根据我的长期记忆，核对我本人目前的专业是什么，明确当前有效信息，不把无关库存记录当成专业。"
+    }
+  ]
+}

@@ -1937,6 +1937,14 @@ class PgDatabase:
         async with self.async_session() as session:
             return await memory_source.run_postgres(session, memory_source.linked_read_plan(scope, memory_ids, limit=limit))
 
+    async def linked_memory_source_receipts(self, character_id, platform, adapter, sender_id,
+                                            conversation_type, conversation_id, *, claim_sources):
+        from db.memory_source_receipts import linked_receipt_plan
+
+        scope=memory_source.source_scope(character_id,platform,adapter,sender_id,conversation_type,conversation_id)
+        async with self.async_session() as session:
+            return await memory_source.run_postgres(session,linked_receipt_plan(scope,claim_sources))
+
     async def memory_source_windows(self, character_id, platform, adapter, sender_id,
                                     conversation_type, conversation_id, *, source_message_ids, radius=1):
         from db.memory_source_window import window_plan
@@ -3399,6 +3407,11 @@ class SyncPgAdapter:
                               conversation_type, conversation_id, **kwargs):
         return self._run(self._pg.linked_memory_sources(
             character_id, platform, adapter, sender_id, conversation_type, conversation_id, **kwargs))
+
+    def linked_memory_source_receipts(self, character_id, platform, adapter, sender_id,
+                                      conversation_type, conversation_id, **kwargs):
+        return self._run(self._pg.linked_memory_source_receipts(
+            character_id,platform,adapter,sender_id,conversation_type,conversation_id,**kwargs))
 
     def memory_source_windows(self, character_id, platform, adapter, sender_id,
                               conversation_type, conversation_id, **kwargs):

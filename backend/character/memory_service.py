@@ -849,18 +849,33 @@ class CharacterMemoryService:
         linked_reader = getattr(self._repo, "linked_sources", None)
         trace['legacy_source_status'] = 'not_needed'
         trace['temporal_source_status'] = 'not_needed'
-        if (legacy_rows or semantic_rows) and callable(linked_reader):
+        receipt_reader = getattr(self._repo, "linked_source_receipts", None)
+        if (legacy_rows or semantic_rows) and (callable(receipt_reader) or callable(linked_reader)):
             for name, rows in (('legacy_source_status', legacy_rows), ('temporal_source_status', semantic_rows)):
                 if rows:
                     trace[name] = 'available'
             try:
-                ids = list(dict.fromkeys(int(row['id']) for row in (*legacy_rows, *semantic_rows)
-                                         if str(row.get('id', '')).isdigit()))
-                for start in range(0, len(ids), 100):
-                    linked = await linked_reader(character_id, user_scope, memory_ids=tuple(ids[start:start + 100]))
-                    for source in linked:
-                        if isinstance(source.get('body'), str) and str(source.get('memory_id', '')).isdigit():
-                            claim_sources.setdefault(str(source['memory_id']), {})[str(source['source_message_id'])] = source
+                if callable(receipt_reader):
+                    pairs = tuple(dict.fromkeys((int(row['id']),str(source_id))
+                        for row in (*legacy_rows,*semantic_rows) if str(row.get('id','')).isdigit()
+                        for source_id in row.get('source_message_ids') or ()))
+                    trace['source_receipt_pairs_requested']=len(pairs)
+                    for start in range(0,len(pairs),200):
+                        linked=await receipt_reader(character_id,user_scope,claim_sources=pairs[start:start+200])
+                        for source in linked:
+                            if isinstance(source.get('body'),str) and str(source.get('memory_id','')).isdigit():
+                                claim_sources.setdefault(str(source['memory_id']),{})[str(source['source_message_id'])]=source
+                    trace['source_receipt_pairs_returned']=sum(len(sources) for sources in claim_sources.values())
+                    trace['source_authority_reader']='exact_claim_source_pairs'
+                else:
+                    # Compatibility for external legacy repositories only.
+                    ids = list(dict.fromkeys(int(row['id']) for row in (*legacy_rows, *semantic_rows)
+                                             if str(row.get('id', '')).isdigit()))
+                    for start in range(0, len(ids), 100):
+                        linked = await linked_reader(character_id, user_scope, memory_ids=tuple(ids[start:start + 100]))
+                        for source in linked:
+                            if isinstance(source.get('body'), str) and str(source.get('memory_id', '')).isdigit():
+                                claim_sources.setdefault(str(source['memory_id']), {})[str(source['source_message_id'])] = source
             except Exception:
                 claim_sources = {}
                 if legacy_rows:
