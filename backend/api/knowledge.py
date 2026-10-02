@@ -994,6 +994,7 @@ async def delete_knowledge_document(doc_id: int, current_user: dict = Depends(ge
 # ============================================
 
 _vector_index_built = False
+_vector_index_revision: int | None = None
 _vector_index_lock = threading.Lock()
 # 独立的 revision 锁：保护 revision 自增、dirty 写入和 _vector_index_built 重置
 # 的 read-modify-write 原子性。_ensure_vector_index 的 commit 临界区（revision
@@ -1021,10 +1022,10 @@ _EMPTY_FINGERPRINT = "empty"
 def _get_rebuild_revision() -> int:
     """读取当前重建修订号（单调递增）。默认 0。"""
     raw = db.get_config_value(_VECTOR_REBUILD_REVISION_KEY, "0")
-    try:
-        return int(raw)
-    except (ValueError, TypeError):
-        return 0
+    revision = int(raw)
+    if revision < 0 or str(revision) != str(raw):
+        raise ValueError("Invalid knowledge index revision")
+    return revision
 
 
 def _compute_chunk_fingerprint() -> str:
@@ -1124,10 +1125,11 @@ def _mark_rebuild_dirty() -> None:
     _revision_lock 临界区内完成。否则重建线程可能在 CRUD 设置 False 后、
     等待锁期间把 _vector_index_built 重新设为 True，覆盖 CRUD 的 dirty 信号。
     """
-    global _vector_index_built
+    global _vector_index_built, _vector_index_revision
     with _revision_lock:
         # 在锁内完成所有状态变更，确保与 _ensure_vector_index 的 commit 临界区互斥
         _vector_index_built = False
+        _vector_index_revision = None
         try:
             current = _get_rebuild_revision()
             new_rev = current + 1
@@ -1135,6 +1137,41 @@ def _mark_rebuild_dirty() -> None:
             db.set_config_value(_VECTOR_REBUILD_STATUS_KEY, "dirty")
         except Exception as e:
             logger.warning("标记重建 dirty 持久化失败（内存标志已重置）: %s", e)
+
+
+def _vector_chunk_document(row: dict, kb_name_map: dict) -> dict:
+    """Use the same authoritative fields for build and loaded-index validation."""
+    folder_name = row.get("doc_category") or ""
+    kb_id = row.get("doc_kb_id")
+    kb_name = kb_name_map.get(kb_id, "") if kb_id else ""
+    path_prefix = f"[{kb_name}/{folder_name}]" if kb_name else f"[{folder_name}]"
+    return {
+        "id": f"doc_{row['documentId']}_chunk_{row['chunkIndex']}",
+        "chunk_index": row["chunkIndex"],
+        "title": row["doc_title"],
+        "content": f"{path_prefix} {row['doc_title']}: {row['content']}",
+        "document_id": row["documentId"],
+        "category": folder_name,
+        "knowledge_base_id": kb_id,
+    }
+
+
+def _loaded_metadata_matches_database(vector_db) -> bool:
+    # A global complete marker may belong to another worker/index directory.
+    # Check this process's loaded evidence rather than authorizing it by count.
+    with vector_db._lock:
+        actual = {record.get("id"): record for record in vector_db.metadata}
+        if len(actual) != len(vector_db.metadata):
+            return False
+        kb_names = {kb["id"]: kb["name"] for kb in db.get_knowledge_bases()}
+        for row in db.iter_chunks_with_document(batch_size=500):
+            if row.get("doc_title") is None:
+                continue
+            expected = _vector_chunk_document(row, kb_names)
+            loaded = actual.pop(expected["id"], None)
+            if loaded is None or any(loaded.get(key) != value for key, value in expected.items()):
+                return False
+        return not actual
 
 
 def _ensure_vector_index():
@@ -1154,20 +1191,26 @@ def _ensure_vector_index():
       start_revision 才写入 complete，避免重建期间并发 CRUD 被旧重建任务覆盖
     - 落盘失败（clear_all/add_documents 抛异常）不会标记 complete，状态保持 building
     """
-    global _vector_index_built
-    # 双重检查：已构建时直接返回，避免每次搜索都获取锁
-    if _vector_index_built:
-        return True
+    global _vector_index_built, _vector_index_revision
+    # The boolean belongs to this process; the revision belongs to the DB.
+    # A failed authority read must not authorize old cached evidence.
+    try:
+        if _vector_index_built and _vector_index_revision == _get_rebuild_revision():
+            return True
+    except Exception as exc:
+        logger.warning("读取知识索引修订号失败: %s", exc)
+        return False
 
     with _vector_index_lock:
-        # 再次检查：可能已被其他线程构建
-        if _vector_index_built:
-            return True
-
         try:
+            if _vector_index_built and _vector_index_revision == _get_rebuild_revision():
+                return True
+            _vector_index_built = False
+            _vector_index_revision = None
             from app.config import VECTOR_DB_AVAILABLE
 
             if not VECTOR_DB_AVAILABLE:
+                _vector_index_revision = _get_rebuild_revision()
                 _vector_index_built = True
                 return True
 
@@ -1200,6 +1243,7 @@ def _ensure_vector_index():
                         return False
                     _write_rebuild_status("complete", 0, _EMPTY_FINGERPRINT, current_revision)
                     logger.info("向量索引已清空并标记 complete:0:empty:%s", current_revision)
+                    _vector_index_revision = current_revision
                     _vector_index_built = True
                 return True
 
@@ -1215,7 +1259,7 @@ def _ensure_vector_index():
                 and stats["bm25_corpus_size"] == expected_count
             ):
                 current_fp = _compute_chunk_fingerprint()
-                if status_fp and status_fp == current_fp:
+                if status_fp and status_fp == current_fp and _loaded_metadata_matches_database(vector_db):
                     # commit 临界区：指纹计算期间可能发生 CRUD（已自增 revision），
                     # 必须在锁内重新校验 revision 才能设置 _vector_index_built
                     with _revision_lock:
@@ -1227,6 +1271,8 @@ def _ensure_vector_index():
                                 "向量索引已完整: %d 个文档（complete，数量+指纹+revision 匹配），跳过重建",
                                 stats["total_documents"],
                             )
+                            vector_db.clear_cache()
+                            _vector_index_revision = current_revision
                             _vector_index_built = True
                             return True
                 else:
@@ -1276,22 +1322,7 @@ def _ensure_vector_index():
                 if doc_title is None:
                     continue  # 孤儿 chunk（文档已删除），跳过
 
-                folder_name = row.get("doc_category", "") or ""
-                kb_id = row.get("doc_kb_id")
-                kb_name = kb_name_map.get(kb_id, "") if kb_id else ""
-                path_prefix = f"[{kb_name}/{folder_name}]" if kb_name else f"[{folder_name}]"
-                enriched = f"{path_prefix} {doc_title}: {row['content']}"
-                batch_vector_docs.append(
-                    {
-                        "id": f"doc_{row['documentId']}_chunk_{row['chunkIndex']}",
-                        "chunk_index": row["chunkIndex"],
-                        "title": doc_title,
-                        "content": enriched,
-                        "document_id": row["documentId"],
-                        "category": folder_name,
-                        "knowledge_base_id": kb_id,
-                    }
-                )
+                batch_vector_docs.append(_vector_chunk_document(row, kb_name_map))
 
                 # 同步累积指纹（与 _compute_chunk_fingerprint 一致，均跳过孤儿）
                 parts = (
@@ -1349,6 +1380,7 @@ def _ensure_vector_index():
                     total_chunks_indexed,
                     start_revision,
                 )
+                _vector_index_revision = start_revision
                 _vector_index_built = True
             return True
         except Exception as e:
