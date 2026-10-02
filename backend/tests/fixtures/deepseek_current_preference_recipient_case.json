@@ -1,0 +1,680 @@
+{
+  "synthetic": true,
+  "case_kind": "native_current_preferences_with_necessary_condition",
+  "seed_messages": [
+    "请记住，我喜欢桂花乌龙茶。",
+    "请记住，我不喜欢高糖可可饮料。",
+    "请记住，我喜欢低咖啡因咖啡，但我只有吃过早餐且当天没有胃痛才喝低咖啡因咖啡。"
+  ],
+  "question": "按我目前明确告诉你的饮料偏好，列出喜欢的两种饮料、不喜欢的一种饮料，并完整说明喝低咖啡因咖啡的必要条件；条件满足也不能推断我一定会喝。",
+  "expected_requirements": [
+    "喜欢桂花乌龙茶",
+    "喜欢低咖啡因咖啡",
+    "不喜欢高糖可可饮料",
+    "吃过早餐",
+    "当天没有胃痛",
+    "两项条件同时必要",
+    "条件满足不能推出一定喝"
+  ],
+  "no_fabricated_memory_seed": true,
+  "writer_config_unchanged": true,
+  "expected_native_primary_turns": 4,
+  "source_authority": "three separate complete ordinary authenticated user assertions, each native API submitted and real scheduler flushed before next turn",
+  "required_complete_sources": 3,
+  "history_excluded": false,
+  "observed": {
+    "audit": {
+      "checks": {
+        "fully_informative_three_complete_native_assertions": true,
+        "same_unchanged_query": true,
+        "two_native_ordinary_same_owners": true,
+        "baseline14_fixed4_actual_calls": true,
+        "all_requests_and_responses_pro": true,
+        "all_actual_calls200_stop": true,
+        "baseline4_fixed1_actual_primary": true,
+        "successfully_written_seeds_not_replayed": true,
+        "three_original_real_writer_admissions": true,
+        "raw_writer_not_manufactured": true,
+        "conditional_raw_admitted_and_stored": true,
+        "original_scheduler_three_commits": true,
+        "same_three_claims_before_and_after": true,
+        "independent_same_actual_three_durable_claims": true,
+        "three_exact_own_current_source_links": true,
+        "independent_full_seed_bodies_unchanged": true,
+        "no_new_fact_from_repeated_query": true,
+        "source_grants_read_exact_pairs": true,
+        "old_recipient_false_other_suppression": true,
+        "new_recipient_unknown_not_claimed_self": true,
+        "actual_baseline_filters_all_three": true,
+        "same_original_rows_time_eligible_before_fix": true,
+        "suppression_causal_view_all_three": true,
+        "fixed_three_actual_usable_selected": true,
+        "temporal_modes_not_promoted": true,
+        "three_whole_compiled_packets": true,
+        "condition_remains_observation_with_complete_original": true,
+        "original_query_complete_on_real_wire": true,
+        "both_fact_and_conditional_evidence_in_real_wire": true,
+        "source_not_in_system_message": true,
+        "real_pro_selector_covers_all_three": true,
+        "raw_reply_equals_api": true,
+        "all_preference_values_and_both_conditions_in_answer": true,
+        "necessary_conjunction_not_sufficient": true,
+        "pending_zero_at_both_probe_saves": true,
+        "targeted_tests_honest_failure_and_repair": true
+      },
+      "passed": 36,
+      "total": 36,
+      "phase_calls": 18,
+      "baseline_calls": 14,
+      "fixed_calls": 4,
+      "primary_calls": 5,
+      "qualified_complete_chain_lookup_replies": 1,
+      "runtime_files_changed": 1,
+      "test_accounting": {
+        "new_unique": 25,
+        "old_affected_unique": 1,
+        "unique": 26,
+        "executions": 35,
+        "successful_executions": 34,
+        "initial_failed_executions": 1,
+        "repair_executions": 11,
+        "full_suite": false,
+        "initial_failure_retained": true
+      },
+      "old_intents": {
+        "name": false,
+        "preference": false,
+        "promise": false,
+        "goal": false,
+        "suppress_name": false,
+        "suppress_preference": true
+      },
+      "new_intents": {
+        "name": false,
+        "preference": false,
+        "promise": false,
+        "goal": false,
+        "suppress_name": false,
+        "suppress_preference": false
+      },
+      "raw_baseline_reply": "按你明确告诉我的：\n\n喜欢的两种饮料：桂花乌龙茶、低咖啡因咖啡。  \n不喜欢的一种饮料：高糖可可饮料。\n\n喝低咖啡因咖啡的必要条件：吃过早餐，且当天没有胃痛。  \n即使这两个条件都满足，也不能推断你一定会喝。",
+      "raw_fixed_reply": "按你明确告诉我的：\n\n喜欢的两种饮料：桂花乌龙茶、低咖啡因咖啡。  \n不喜欢的一种饮料：高糖可可饮料。\n\n喝低咖啡因咖啡的必要条件：吃过早餐，且当天没有胃痛。  \n即使这两个条件都满足，也不能推断你一定会喝。",
+      "baseline_claim_candidate_ids": [],
+      "fixed_claim_candidate_ids": [
+        "42",
+        "41",
+        "40"
+      ],
+      "temporal_views": {
+        "fact": 0,
+        "asserted_state": 2,
+        "observation": 1
+      },
+      "strict_stage71_failure_still_open": true,
+      "limits": [
+        "Only closed self-report relative clauses defer recipient ownership; no inferred self ownership and unknown grammar retains prior behavior.",
+        "Native fixed query still includes actual recent history and original source references; final reply correctness does not establish fact-only/distant-history sufficiency.",
+        "Conditional claim remains observation; no unqualified promotion or calendar expiry invention."
+      ]
+    },
+    "original_writer_admission": [
+      {
+        "raw_response": "{\"memories\":[{\"kind\":\"like\",\"value\":\"桂花乌龙茶\",\"content\":\"用户喜欢桂花乌龙茶。\",\"evidence\":\"请记住，我喜欢桂花乌龙茶。\",\"confidence\":0.98,\"operation\":\"ADD\",\"target_memory_id\":\"\",\"target_memory_key\":\"\",\"attributed_to\":\"user\",\"qualifiers\":{},\"valid_from\":\"\",\"valid_to\":\"\",\"observed_at\":\"2026-10-02T19:39:56.523950+00:00\",\"scope_level\":\"conversation\"}]}",
+        "input": {
+          "source_message": "请记住，我喜欢桂花乌龙茶。",
+          "history": [],
+          "existing_memories": [],
+          "confidence_threshold": 0.85,
+          "feedback_target_ids": [],
+          "source_type": "user"
+        },
+        "accepted": [
+          {
+            "operation": "ADD",
+            "memory": {
+              "memory_type": "user_fact",
+              "memory_key": "preference_桂花乌龙茶",
+              "content": "用户喜欢桂花乌龙茶。",
+              "importance": 0.6,
+              "evidence": "",
+              "qualifiers": [],
+              "aliases": [],
+              "polarity": "",
+              "event": null,
+              "operation": "assert"
+            },
+            "target_memory_id": "",
+            "target_memory_key": "",
+            "evidence": "请记住，我喜欢桂花乌龙茶。",
+            "confidence": 0.98,
+            "attributed_to": "user",
+            "qualifiers": [],
+            "valid_from": "",
+            "valid_to": "",
+            "observed_at": "",
+            "scope_level": "conversation",
+            "proposed_valid_from": "",
+            "proposed_valid_to": "",
+            "source_observation": false,
+            "protected_memory_keys": []
+          }
+        ]
+      },
+      {
+        "raw_response": "{\"memories\":[{\"kind\":\"dislike\",\"value\":\"高糖可可饮料\",\"content\":\"用户不喜欢高糖可可饮料。\",\"evidence\":\"请记住，我不喜欢高糖可可饮料。\",\"confidence\":0.98,\"operation\":\"ADD\",\"target_memory_id\":\"\",\"target_memory_key\":\"\",\"attributed_to\":\"user\",\"qualifiers\":{},\"valid_from\":\"\",\"valid_to\":\"\",\"observed_at\":\"2026-10-02T19:40:00.333747+00:00\",\"scope_level\":\"conversation\"}]}",
+        "input": {
+          "source_message": "请记住，我不喜欢高糖可可饮料。",
+          "history": [
+            {
+              "role": "user",
+              "content": "请记住，我喜欢桂花乌龙茶。"
+            },
+            {
+              "role": "assistant",
+              "content": "嗯，桂花乌龙茶。我记下了。"
+            }
+          ],
+          "existing_memories": [
+            {
+              "id": 40,
+              "character_id": "tsukiyashiro_kisaki",
+              "platform": "web",
+              "adapter": "web-character",
+              "sender_id": "6",
+              "conversation_type": "private",
+              "conversation_id": "6",
+              "scope_level": "conversation",
+              "memory_type": "user_fact",
+              "memory_key": "preference_桂花乌龙茶",
+              "revision": 1,
+              "relation_type": "ADD",
+              "status": "active",
+              "parent_memory_id": null,
+              "supersedes_memory_id": null,
+              "content": "用户喜欢桂花乌龙茶。",
+              "importance": 0.6,
+              "confidence": 0.98,
+              "source_message_id": "web:5a22d00bb3624a41bcc6b2bf4fd69111",
+              "source_message_ids_json": "[\"web:5a22d00bb3624a41bcc6b2bf4fd69111\"]",
+              "evidence_json": "[\"请记住，我喜欢桂花乌龙茶。\"]",
+              "metadata_json": "{\"qualifiers\": {}, \"target_memory_key\": \"\", \"write_mode\": \"hot\", \"feedback_target_ids\": [], \"temporal_provenance\": {\"version\": 1, \"producer\": \"semantic_memory\", \"observed_at\": \"2026-10-02T19:39:56.523950+00:00\", \"validity_authority\": \"unspecified\", \"proposed_bounds\": {}, \"interval_shape\": \"unspecified\", \"expression\": null}, \"attributed_to\": \"user\"}",
+              "valid_from": null,
+              "valid_to": null,
+              "observed_at": "2026-10-02T19:39:56.523950+00:00",
+              "created_at": "2026-10-03T03:40:00.298738",
+              "updated_at": "2026-10-03T03:40:00.298738",
+              "source_message_ids": [
+                "web:5a22d00bb3624a41bcc6b2bf4fd69111"
+              ],
+              "evidence": [
+                "请记住，我喜欢桂花乌龙茶。"
+              ],
+              "metadata": {
+                "qualifiers": {},
+                "target_memory_key": "",
+                "write_mode": "hot",
+                "feedback_target_ids": [],
+                "temporal_provenance": {
+                  "version": 1,
+                  "producer": "semantic_memory",
+                  "observed_at": "2026-10-02T19:39:56.523950+00:00",
+                  "validity_authority": "unspecified",
+                  "proposed_bounds": {},
+                  "interval_shape": "unspecified",
+                  "expression": null
+                },
+                "attributed_to": "user"
+              },
+              "attributed_to": "user",
+              "qualifiers": {}
+            }
+          ],
+          "confidence_threshold": 0.85,
+          "feedback_target_ids": [],
+          "source_type": "user"
+        },
+        "accepted": [
+          {
+            "operation": "ADD",
+            "memory": {
+              "memory_type": "user_fact",
+              "memory_key": "preference_高糖可可饮料",
+              "content": "用户不喜欢高糖可可饮料。",
+              "importance": 0.5,
+              "evidence": "",
+              "qualifiers": [],
+              "aliases": [],
+              "polarity": "",
+              "event": null,
+              "operation": "assert"
+            },
+            "target_memory_id": "",
+            "target_memory_key": "",
+            "evidence": "请记住，我不喜欢高糖可可饮料。",
+            "confidence": 0.98,
+            "attributed_to": "user",
+            "qualifiers": [],
+            "valid_from": "",
+            "valid_to": "",
+            "observed_at": "",
+            "scope_level": "conversation",
+            "proposed_valid_from": "",
+            "proposed_valid_to": "",
+            "source_observation": false,
+            "protected_memory_keys": []
+          }
+        ]
+      },
+      {
+        "raw_response": "{\n  \"memories\": [\n    {\n      \"kind\": \"like\",\n      \"value\": \"低咖啡因咖啡\",\n      \"content\": \"用户喜欢低咖啡因咖啡，但只有吃过早餐且当天没有胃痛才喝。\",\n      \"evidence\": \"请记住，我喜欢低咖啡因咖啡，但我只有吃过早餐且当天没有胃痛才喝低咖啡因咖啡。\",\n      \"confidence\": 0.98,\n      \"operation\": \"ADD\",\n      \"target_memory_id\": \"\",\n      \"target_memory_key\": \"\",\n      \"attributed_to\": \"user\",\n      \"qualifiers\": {\n        \"condition\": \"吃过早餐且当天没有胃痛\"\n      },\n      \"valid_from\": \"\",\n      \"valid_to\": \"\",\n      \"observed_at\": \"2026-10-02T19:40:16.966823+00:00\",\n      \"scope_level\": \"conversation\"\n    }\n  ]\n}",
+        "input": {
+          "source_message": "请记住，我喜欢低咖啡因咖啡，但我只有吃过早餐且当天没有胃痛才喝低咖啡因咖啡。",
+          "history": [
+            {
+              "role": "user",
+              "content": "请记住，我喜欢桂花乌龙茶。"
+            },
+            {
+              "role": "assistant",
+              "content": "嗯，桂花乌龙茶。我记下了。"
+            },
+            {
+              "role": "user",
+              "content": "请记住，我不喜欢高糖可可饮料。"
+            },
+            {
+              "role": "assistant",
+              "content": "好，不喜欢高糖可可饮料。和桂花乌龙茶一起记下了。"
+            }
+          ],
+          "existing_memories": [
+            {
+              "id": 41,
+              "character_id": "tsukiyashiro_kisaki",
+              "platform": "web",
+              "adapter": "web-character",
+              "sender_id": "6",
+              "conversation_type": "private",
+              "conversation_id": "6",
+              "scope_level": "conversation",
+              "memory_type": "user_fact",
+              "memory_key": "preference_高糖可可饮料",
+              "revision": 1,
+              "relation_type": "ADD",
+              "status": "active",
+              "parent_memory_id": null,
+              "supersedes_memory_id": null,
+              "content": "用户不喜欢高糖可可饮料。",
+              "importance": 0.5,
+              "confidence": 0.98,
+              "source_message_id": "web:7635ba46d60f4aa595e49a3796aad6c3",
+              "source_message_ids_json": "[\"web:7635ba46d60f4aa595e49a3796aad6c3\"]",
+              "evidence_json": "[\"请记住，我不喜欢高糖可可饮料。\"]",
+              "metadata_json": "{\"qualifiers\": {}, \"target_memory_key\": \"\", \"write_mode\": \"hot\", \"feedback_target_ids\": [], \"temporal_provenance\": {\"version\": 1, \"producer\": \"semantic_memory\", \"observed_at\": \"2026-10-02T19:40:00.333747+00:00\", \"validity_authority\": \"unspecified\", \"proposed_bounds\": {}, \"interval_shape\": \"unspecified\", \"expression\": null}, \"attributed_to\": \"user\"}",
+              "valid_from": null,
+              "valid_to": null,
+              "observed_at": "2026-10-02T19:40:00.333747+00:00",
+              "created_at": "2026-10-03T03:40:16.931665",
+              "updated_at": "2026-10-03T03:40:16.931665",
+              "source_message_ids": [
+                "web:7635ba46d60f4aa595e49a3796aad6c3"
+              ],
+              "evidence": [
+                "请记住，我不喜欢高糖可可饮料。"
+              ],
+              "metadata": {
+                "qualifiers": {},
+                "target_memory_key": "",
+                "write_mode": "hot",
+                "feedback_target_ids": [],
+                "temporal_provenance": {
+                  "version": 1,
+                  "producer": "semantic_memory",
+                  "observed_at": "2026-10-02T19:40:00.333747+00:00",
+                  "validity_authority": "unspecified",
+                  "proposed_bounds": {},
+                  "interval_shape": "unspecified",
+                  "expression": null
+                },
+                "attributed_to": "user"
+              },
+              "attributed_to": "user",
+              "qualifiers": {}
+            },
+            {
+              "id": 40,
+              "character_id": "tsukiyashiro_kisaki",
+              "platform": "web",
+              "adapter": "web-character",
+              "sender_id": "6",
+              "conversation_type": "private",
+              "conversation_id": "6",
+              "scope_level": "conversation",
+              "memory_type": "user_fact",
+              "memory_key": "preference_桂花乌龙茶",
+              "revision": 1,
+              "relation_type": "ADD",
+              "status": "active",
+              "parent_memory_id": null,
+              "supersedes_memory_id": null,
+              "content": "用户喜欢桂花乌龙茶。",
+              "importance": 0.6,
+              "confidence": 0.98,
+              "source_message_id": "web:5a22d00bb3624a41bcc6b2bf4fd69111",
+              "source_message_ids_json": "[\"web:5a22d00bb3624a41bcc6b2bf4fd69111\"]",
+              "evidence_json": "[\"请记住，我喜欢桂花乌龙茶。\"]",
+              "metadata_json": "{\"qualifiers\": {}, \"target_memory_key\": \"\", \"write_mode\": \"hot\", \"feedback_target_ids\": [], \"temporal_provenance\": {\"version\": 1, \"producer\": \"semantic_memory\", \"observed_at\": \"2026-10-02T19:39:56.523950+00:00\", \"validity_authority\": \"unspecified\", \"proposed_bounds\": {}, \"interval_shape\": \"unspecified\", \"expression\": null}, \"attributed_to\": \"user\"}",
+              "valid_from": null,
+              "valid_to": null,
+              "observed_at": "2026-10-02T19:39:56.523950+00:00",
+              "created_at": "2026-10-03T03:40:00.298738",
+              "updated_at": "2026-10-03T03:40:00.298738",
+              "source_message_ids": [
+                "web:5a22d00bb3624a41bcc6b2bf4fd69111"
+              ],
+              "evidence": [
+                "请记住，我喜欢桂花乌龙茶。"
+              ],
+              "metadata": {
+                "qualifiers": {},
+                "target_memory_key": "",
+                "write_mode": "hot",
+                "feedback_target_ids": [],
+                "temporal_provenance": {
+                  "version": 1,
+                  "producer": "semantic_memory",
+                  "observed_at": "2026-10-02T19:39:56.523950+00:00",
+                  "validity_authority": "unspecified",
+                  "proposed_bounds": {},
+                  "interval_shape": "unspecified",
+                  "expression": null
+                },
+                "attributed_to": "user"
+              },
+              "attributed_to": "user",
+              "qualifiers": {}
+            }
+          ],
+          "confidence_threshold": 0.85,
+          "feedback_target_ids": [],
+          "source_type": "user"
+        },
+        "accepted": [
+          {
+            "operation": "ADD",
+            "memory": {
+              "memory_type": "user_fact",
+              "memory_key": "preference_低咖啡因咖啡",
+              "content": "用户喜欢低咖啡因咖啡，但只有吃过早餐且当天没有胃痛才喝。",
+              "importance": 0.6,
+              "evidence": "",
+              "qualifiers": [],
+              "aliases": [],
+              "polarity": "",
+              "event": null,
+              "operation": "assert"
+            },
+            "target_memory_id": "",
+            "target_memory_key": "",
+            "evidence": "请记住，我喜欢低咖啡因咖啡，但我只有吃过早餐且当天没有胃痛才喝低咖啡因咖啡。",
+            "confidence": 0.98,
+            "attributed_to": "user",
+            "qualifiers": [
+              [
+                "condition",
+                "吃过早餐且当天没有胃痛"
+              ]
+            ],
+            "valid_from": "",
+            "valid_to": "",
+            "observed_at": "",
+            "scope_level": "conversation",
+            "proposed_valid_from": "",
+            "proposed_valid_to": "",
+            "source_observation": false,
+            "protected_memory_keys": []
+          }
+        ]
+      }
+    ],
+    "baseline_recall": {
+      "stage": "filter",
+      "status": "all_filtered",
+      "fields": [],
+      "excluded_fields": [],
+      "records_read": 3,
+      "usable_records": 0,
+      "eligible_records": 0,
+      "selected_count": 0,
+      "semantic_status": "disabled",
+      "legacy_source_status": "not_needed",
+      "temporal_source_status": "available",
+      "source_receipt_pairs_requested": 3,
+      "source_receipt_pairs_returned": 3,
+      "source_authority_reader": "exact_claim_source_pairs",
+      "legacy_projected_ids": [],
+      "temporal_views": {
+        "fact": 0,
+        "asserted_state": 2,
+        "observation": 1
+      },
+      "field_presence": {
+        "name": false,
+        "origin": false,
+        "residence": false,
+        "major": false,
+        "workplace": false,
+        "study_stage": false
+      },
+      "ambiguous_fields": [],
+      "current_turn_shadowed_ids": [],
+      "elapsed_ms": 12.338363565504551,
+      "sources": {
+        "status": "available",
+        "omitted": [],
+        "selected_ids": [
+          "web:72067911739342ff85080d759f401fde",
+          "web:7635ba46d60f4aa595e49a3796aad6c3",
+          "web:5a22d00bb3624a41bcc6b2bf4fd69111"
+        ],
+        "linked_count": 0,
+        "indexed_count": 3,
+        "linked_read_count": 0,
+        "indexed_read_count": 3,
+        "contextual_count": 3,
+        "contextual_read_count": 3,
+        "contextual_search_enabled": true,
+        "literal_project_terms": [],
+        "contextual_scope_deferred_to_explicit_task": false,
+        "linked_project_scope_omitted": 0,
+        "covered_by_fact_count": 0,
+        "window_radius": 0,
+        "effective_window_radius": 0,
+        "requested_source_order": "not_resolved",
+        "requested_following": [],
+        "following_missing_for_anchors": [],
+        "following_anchor_dependency_omitted": 0,
+        "windows": [],
+        "window_semantic_relation": "not_inferred",
+        "anchor_ids": [
+          "web:72067911739342ff85080d759f401fde",
+          "web:7635ba46d60f4aa595e49a3796aad6c3",
+          "web:5a22d00bb3624a41bcc6b2bf4fd69111"
+        ],
+        "selection_omitted": 0,
+        "fresh_recheck_omitted": 0,
+        "source_search_limit": null,
+        "candidate_limit_reached": false,
+        "ranking": "covered_rrf_linked_sparse_history",
+        "query_terms_semantic": false,
+        "elapsed_ms": 14.10677656531334,
+        "candidate_budget_pending": false
+      }
+    },
+    "fixed_recall": {
+      "stage": "selected",
+      "status": "selected",
+      "fields": [],
+      "excluded_fields": [],
+      "records_read": 3,
+      "usable_records": 3,
+      "eligible_records": 3,
+      "selected_count": 3,
+      "semantic_status": "available",
+      "legacy_source_status": "not_needed",
+      "temporal_source_status": "available",
+      "source_receipt_pairs_requested": 3,
+      "source_receipt_pairs_returned": 3,
+      "source_authority_reader": "exact_claim_source_pairs",
+      "legacy_projected_ids": [],
+      "temporal_views": {
+        "fact": 0,
+        "asserted_state": 2,
+        "observation": 1
+      },
+      "field_presence": {
+        "name": false,
+        "origin": false,
+        "residence": false,
+        "major": false,
+        "workplace": false,
+        "study_stage": false
+      },
+      "ambiguous_fields": [],
+      "current_turn_shadowed_ids": [],
+      "personal_time_tasks": [],
+      "covered_fields": [],
+      "missing_fields": [],
+      "elapsed_ms": 10081.91582094878,
+      "sources": {
+        "status": "available",
+        "omitted": [],
+        "selected_ids": [
+          "web:72067911739342ff85080d759f401fde",
+          "web:4bd7c00d4ce94af781aa1413dad85016"
+        ],
+        "linked_count": 1,
+        "indexed_count": 2,
+        "linked_read_count": 3,
+        "indexed_read_count": 4,
+        "contextual_count": 2,
+        "contextual_read_count": 4,
+        "contextual_search_enabled": true,
+        "literal_project_terms": [],
+        "contextual_scope_deferred_to_explicit_task": false,
+        "linked_project_scope_omitted": 0,
+        "covered_by_fact_count": 2,
+        "window_radius": 0,
+        "effective_window_radius": 0,
+        "requested_source_order": "not_resolved",
+        "requested_following": [],
+        "following_missing_for_anchors": [],
+        "following_anchor_dependency_omitted": 0,
+        "windows": [],
+        "window_semantic_relation": "not_inferred",
+        "anchor_ids": [
+          "web:72067911739342ff85080d759f401fde",
+          "web:4bd7c00d4ce94af781aa1413dad85016"
+        ],
+        "selection_omitted": 0,
+        "fresh_recheck_omitted": 0,
+        "source_search_limit": null,
+        "candidate_limit_reached": false,
+        "ranking": "covered_rrf_linked_sparse_history",
+        "query_terms_semantic": false,
+        "elapsed_ms": 28.377109207212925,
+        "candidate_budget_pending": false
+      }
+    },
+    "fixed_memory_packets": [
+      {
+        "memory_id": "42",
+        "memory_type": "user_fact",
+        "content": "用户原话记录（时效未核实，不代表当前状态；记录于2026-10-02T19:40:16.966823+00:00）：[\"请记住，我喜欢低咖啡因咖啡，但我只有吃过早餐且当天没有胃痛才喝低咖啡因咖啡。\"]",
+        "importance": 0.6,
+        "evidence": [
+          "请记住，我喜欢低咖啡因咖啡，但我只有吃过早餐且当天没有胃痛才喝低咖啡因咖啡。"
+        ],
+        "valid_from": "",
+        "valid_to": "",
+        "confidence": 0.98,
+        "status": "active",
+        "relation_type": "ADD",
+        "source_message_ids": [
+          "web:72067911739342ff85080d759f401fde"
+        ],
+        "historical": false,
+        "memory_key": "preference_低咖啡因咖啡",
+        "qualifiers": [
+          [
+            "condition",
+            "吃过早餐且当天没有胃痛"
+          ]
+        ],
+        "temporal_mode": "observation",
+        "observed_at": "2026-10-02T19:40:16.966823+00:00",
+        "source_observation": false,
+        "complete_original_source": null,
+        "source_fragments": []
+      },
+      {
+        "memory_id": "41",
+        "memory_type": "user_fact",
+        "content": "用户说不喜欢高糖可可饮料",
+        "importance": 0.5,
+        "evidence": [
+          "请记住，我不喜欢高糖可可饮料。"
+        ],
+        "valid_from": "2026-10-02T19:40:00.333747+00:00",
+        "valid_to": "",
+        "confidence": 0.98,
+        "status": "active",
+        "relation_type": "ADD",
+        "source_message_ids": [
+          "web:7635ba46d60f4aa595e49a3796aad6c3"
+        ],
+        "historical": false,
+        "memory_key": "preference_高糖可可饮料",
+        "qualifiers": [],
+        "temporal_mode": "asserted_state",
+        "observed_at": "2026-10-02T19:40:00.333747+00:00",
+        "source_observation": false,
+        "complete_original_source": null,
+        "source_fragments": []
+      },
+      {
+        "memory_id": "40",
+        "memory_type": "user_fact",
+        "content": "用户说喜欢桂花乌龙茶",
+        "importance": 0.6,
+        "evidence": [
+          "请记住，我喜欢桂花乌龙茶。"
+        ],
+        "valid_from": "2026-10-02T19:39:56.523950+00:00",
+        "valid_to": "",
+        "confidence": 0.98,
+        "status": "active",
+        "relation_type": "ADD",
+        "source_message_ids": [
+          "web:5a22d00bb3624a41bcc6b2bf4fd69111"
+        ],
+        "historical": false,
+        "memory_key": "preference_桂花乌龙茶",
+        "qualifiers": [],
+        "temporal_mode": "asserted_state",
+        "observed_at": "2026-10-02T19:39:56.523950+00:00",
+        "source_observation": false,
+        "complete_original_source": null,
+        "source_fragments": []
+      }
+    ],
+    "history_count": 8,
+    "fixed_seed_replay_count": 0,
+    "case_count": 1,
+    "baseline_primary_turns": 4,
+    "retry_primary_turns": 1,
+    "calls_total": 18,
+    "old_passing_cases_replayed": 0,
+    "full_suite": false
+  }
+}

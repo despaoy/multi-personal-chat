@@ -79,6 +79,12 @@ _CLAUSE_SPLIT_PATTERN = re.compile(r"[，。！？；、,.!?;：:]+")
 # 多字代词在前，避免"你们"被截断成"你"
 _PRONOUN_PATTERN = re.compile(r"我们|咱们|你们|她们|他们|它们|咱|您|你|她|他|它|我")
 _USER_SUBJECTS = frozenset(("我", "我们", "咱", "咱们"))
+_SELF_REPORT_RECIPIENT = re.compile(
+    r"^(?:按|根据|关于|(?:请)?(?:列出|核对|回忆)|你(?:还)?记得)?"
+    r"(?:我们|咱们|我|咱)(?:目前|现在|之前|以前|先前|当时|刚才|刚刚|曾经|曾|已经|明确|亲口|多次)*"
+    r"(?:告诉|告知|说给|讲给)(?:过)?(?:你们|他们|她们|您|你|他|她)$"
+)
+
 _NAME_TOPIC_PATTERN = re.compile(r"名字|叫什么|叫啥|是谁")
 _PREFERENCE_TOPIC_PATTERN = re.compile(r"喜欢|讨厌|钟意|爱好|偏好|爱")
 _GOAL_INTENT_PATTERN = re.compile(
@@ -460,12 +466,19 @@ def _topic_subjects(clause: str, topic_pattern: re.Pattern[str]) -> list[str]:
     """
     subjects: list[str] = []
     for match in topic_pattern.finditer(clause):
-        last_pronoun = None
+        last = None
         for found in _PRONOUN_PATTERN.finditer(clause[: match.start()]):
-            last_pronoun = found.group()
-        if last_pronoun is None:
+            last = found
+        if last is None:
             continue
-        subjects.append("user" if last_pronoun in _USER_SUBJECTS else "non_user")
+        # A recipient of the current user's report is not the topic owner.
+        # Defer to scoped retrieval; reporting itself does not prove ownership.
+        # Later explicit self/other possessors still use the normal rule.
+        if (_SELF_REPORT_RECIPIENT.fullmatch(clause[:last.end()])
+                and re.fullmatch(r"的(?:本人|个人|饮料|饮品|饮食|食物|音乐|电影|生活)*",
+                                 clause[last.end():match.start()])):
+            continue
+        subjects.append("user" if last.group() in _USER_SUBJECTS else "non_user")
     return subjects
 
 
