@@ -103,13 +103,21 @@ async def test_missing_document_does_not_change_index_authority(saved_document):
 
 @pytest.mark.parametrize("corrective", [False, True])
 async def test_generic_generation_checks_freshness_before_cache_or_correction(monkeypatch, corrective):
+    from threading import RLock
+
     import knowledge.corrective_rag as corrective_module
     import knowledge.rag_helper as rag_module
+    from knowledge import vector_db
 
     calls = []
-    bundle = dict(
-        results=[dict(id="s", title="新标题", content="末尾纠正。")], citations=[], confidence=0.8, abstained=False
-    )
+    record = dict(id="doc_1_chunk_0", document_id=1, chunk_index=0, knowledge_base_id=7,
+                  title="新标题", category="规程", content="末尾纠正。")
+    bundle = dict(results=[record], citations=[], confidence=0.8, abstained=False)
+    indexed = SimpleNamespace(_lock=RLock(), cache_generation=11, snapshot_validated=True, metadata=[record],
+                              _match_filters=lambda row, filters: all(row.get(k) == v for k, v in filters.items()))
+    monkeypatch.setattr(vector_db, "get_vector_db", lambda: indexed)
+    monkeypatch.setattr(knowledge, "_vector_index_revision", 77)
+    monkeypatch.setattr(knowledge, "_get_rebuild_revision", lambda: 77)
     monkeypatch.setenv("CORRECTIVE_RAG_ENABLED", "true" if corrective else "false")
 
     def ready():

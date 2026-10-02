@@ -17,5 +17,11 @@ def document_evidence_packets(results: Sequence[Mapping[str, Any]]) -> tuple[dic
             else []
         )
         title = document.get("title") or document.get("original_title") or "未命名资料"
-        packets.append({"kind": "evidence", "document_ids": ids, "text": f"【检索资料片段: {title}】\n{body}"})
+        packet = {"kind": "evidence", "document_ids": ids, "text": f"【检索资料片段: {title}】\n{body}"}
+        if document.get("retrieval_role") == "source_context":
+            support = document.get("supporting_document_ids")
+            if not isinstance(support, (list, tuple)) or not support:
+                continue
+            packet.update(kind="background", supporting_document_ids=list(support))
+        packets.append(packet)
     return tuple(packets)

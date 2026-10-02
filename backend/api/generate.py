@@ -1234,20 +1234,35 @@ async def _retrieve_rag_bundle(query: str, top_k: int, filters: dict[str, Any] |
             if matched:
                 raise RuntimeError("Requested character knowledge domain is unavailable")
 
-        from api.knowledge import _ensure_vector_index
+        from api import knowledge as knowledge_api
         from knowledge.rag_helper import get_rag_helper
+        from knowledge.source_expansion import expand_source_context
+        from knowledge.vector_db import get_vector_db
 
         # A normal generation does not necessarily follow the search API.
         # Resolve dirty metadata/content before consulting either cached RAG
         # path; an incomplete rebuild cannot authorize stale source evidence.
-        if not _ensure_vector_index():
+        if not knowledge_api._ensure_vector_index():
             raise RuntimeError("Generic knowledge index is not ready")
 
+        vector_db = get_vector_db()
+        generation = vector_db.cache_generation
+        revision = knowledge_api._vector_index_revision
         if os.getenv("CORRECTIVE_RAG_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}:
             from knowledge.corrective_rag import get_corrective_rag
 
-            return get_corrective_rag().retrieve_with_correction(query, top_k=top_k, filters=filters)
-        return get_rag_helper().retrieve_with_citations(query, top_k=top_k, filters=filters)
+            bundle = get_corrective_rag().retrieve_with_correction(query, top_k=top_k, filters=filters)
+        else:
+            bundle = get_rag_helper().retrieve_with_citations(query, top_k=top_k, filters=filters)
+        expanded = expand_source_context(
+            bundle, vector_db, expected_generation=generation,
+            source_budget_tokens=get_provider_context_budget().window_tokens, filters=filters,
+        )
+        if knowledge_api._get_rebuild_revision() != revision:
+            raise RuntimeError("Knowledge authority changed during retrieval")
+        if expanded is not bundle:
+            expanded["citations"] = get_rag_helper().build_citations(expanded["results"])
+        return expanded
 
     return await asyncio.to_thread(retrieve)
 
