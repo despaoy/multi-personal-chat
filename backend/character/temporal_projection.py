@@ -27,7 +27,8 @@ def project_temporal_record(row: dict, sources: dict | None = None) -> dict:
         return row
     # Neither guessed endpoints nor their omission establishes applicability.
     # Classify the proposition from its source identically in both cases.
-    if provenance.get("producer") != "semantic_memory" or provenance.get("validity_authority") not in (
+    fragment_only = provenance.get("producer") == "source_erasure_projection"
+    if provenance.get("producer") not in {"semantic_memory", "source_erasure_projection"} or provenance.get("validity_authority") not in (
         "unverified",
         "unspecified",
     ):
@@ -52,14 +53,15 @@ def project_temporal_record(row: dict, sources: dict | None = None) -> dict:
     # the remainder. Do not use model confidence as proof of temporal meaning.
     supported_contents: set[str] = set()
     bodies = ()
-    if sources is not None:
+    if sources is not None and not fragment_only:
         bodies = tuple(
             sources[str(source_id)]["body"]
             for source_id in sources
             if isinstance(sources[str(source_id)].get("body"), str)
         )
     if (
-        not metadata.get("qualifiers")
+        not fragment_only
+        and not metadata.get("qualifiers")
         and row.get("memory_type") == "user_fact"
         and row.get("status", "active") in {"active", "current"}
     ):

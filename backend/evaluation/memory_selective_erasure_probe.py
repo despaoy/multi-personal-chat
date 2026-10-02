@@ -85,7 +85,7 @@ async def run_selective_erasure_probe(
                 relationship=database.get_character_relationship(*fields),
                 original_archive_sha256=hashlib.sha256(
                     json.dumps(
-                        [dict(r) for r in rows if r["sourceMessageId"] == fixture.get("initial_native_source_message_id", fixture.get("native_source_message_id", "stage34-delivery-memory-fixed-target"))],
+                        [dict(r) for r in rows if r["sourceMessageId"] in fixture.get("all_prior_source_ids", [fixture.get("initial_native_source_message_id", fixture.get("native_source_message_id", "stage34-delivery-memory-fixed-target"))])],
                         sort_keys=True,
                         default=str,
                     ).encode()
@@ -404,7 +404,7 @@ def audit_selective_erasure(proof, fixture, cloud_calls):
                 retained_course_in_memory_packet=fixture.get("native_receipt", "MB-764-C") in packet_text and '海庭鹤林' in packet_text,
                 deleted_preference_absent_from_memory_packet='深蓝色' not in packet_text,
                 deleted_preference_absent_from_retained_claim='深蓝色' not in json.dumps(new_retained,ensure_ascii=False),
-                retained_course_facts_understood=all(x in read['response'].get('replyText','') for x in [fixture.get("native_receipt", "MB-764-C"),'周六','海庭鹤林']),
+                retained_course_facts_understood=all(x in read['response'].get('replyText','') for x in [fixture.get("native_receipt", "MB-764-C"),'海庭鹤林']) and any(day in read['response'].get('replyText','') for day in ('周六','星期六','礼拜六')),
                 retained_read_delivery_completed=proof['read_terminal_receipt']['context']['memory_completion']['state']=='completed',
                 retained_claim_still_unchanged=new_retained==stored_retained,
                 preference_not_recreated=not any(r['memory_key']==course for r in current['claims']),
@@ -432,7 +432,12 @@ def audit_selective_erasure(proof, fixture, cloud_calls):
     proof["read_checks"] = read_checks
     proof["authority_guards"] = guards
     proof["business_checks"] = business
-    return {**guards, **business, **read_checks}
+    checks = {**guards, **business, **read_checks}
+    if fixture.get("cross_source_erasure"):
+        from evaluation.memory_cross_source_erasure_audit import augment_cross_source_erasure
+
+        return augment_cross_source_erasure(proof, fixture, cloud_calls, checks)
+    return checks
 
 
 def _retained_claim_preserved(before, after, fixture):

@@ -282,6 +282,10 @@ def purge_plan(scope, erased_records):
             patch = project_retained(current, entry["source"], [erased[i] for i in entry["erased_ids"]])
             if patch is not None:
                 patches[identity] = patch
+    from db.retained_source_observation import apply_observations, observation_plan
+
+    observations = yield from observation_plan(scope, erased, sources, _preference_cuts, _outside_quotes)
+    yield from apply_observations(observations)
     # Compute every projection before any update. The outer transaction rolls
     # back a later source/fence failure as well; no partial deletion receipt.
     for identity, patch in patches.items():
