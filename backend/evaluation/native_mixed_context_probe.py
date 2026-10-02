@@ -233,7 +233,7 @@ def isolated_probe_paths(root, run_label, api_key_file):
 async def main(args):
     from evaluation.conversation_source_probe import verify_cluster
 
-    if sum((args.window_boundary, args.citation_precision, args.private_public_citations, args.literal_citations, args.memory_correction, args.memory_history, args.memory_owner, args.memory_friend, args.memory_erasure, args.memory_scope, args.memory_collision, args.memory_replay, args.memory_race, args.memory_capacity, args.memory_capture_failure, args.memory_history_feedback, args.memory_late_capture, args.memory_turn_capacity, args.memory_delivery, args.memory_delivery_erasure, args.memory_operation_pending, args.memory_archive_retention, args.memory_selective_erasure, args.memory_evidence_erasure, args.memory_coupled_erasure, args.memory_quoted_source, args.memory_cross_source_erasure, args.memory_fragment_lifecycle, args.memory_source_completeness, args.knowledge_metadata_scope, args.knowledge_cross_process, args.knowledge_concurrency)) > 1:
+    if sum((args.window_boundary, args.citation_precision, args.private_public_citations, args.literal_citations, args.memory_correction, args.memory_history, args.memory_owner, args.memory_friend, args.memory_erasure, args.memory_scope, args.memory_collision, args.memory_replay, args.memory_race, args.memory_capacity, args.memory_capture_failure, args.memory_history_feedback, args.memory_late_capture, args.memory_turn_capacity, args.memory_delivery, args.memory_delivery_erasure, args.memory_operation_pending, args.memory_archive_retention, args.memory_selective_erasure, args.memory_evidence_erasure, args.memory_coupled_erasure, args.memory_quoted_source, args.memory_cross_source_erasure, args.memory_fragment_lifecycle, args.memory_source_completeness, args.knowledge_metadata_scope, args.knowledge_cross_process, args.knowledge_concurrency, args.citation_policy_consistency)) > 1:
         raise ValueError("Choose one specific probe scenario")
 
     if args.memory_source_completeness:
@@ -262,17 +262,17 @@ async def main(args):
 
     if args.enable_source_recall and not (args.memory_friend or args.memory_erasure):
         raise ValueError("The explicit source-recall variant requires the friend-only scenario")
-    source_recall_enabled = args.knowledge_concurrency or args.knowledge_cross_process or args.knowledge_metadata_scope or args.memory_owner or args.memory_erasure or args.memory_scope or args.memory_collision or (args.memory_friend and args.enable_source_recall)
-    reuse_native_fixture = args.knowledge_concurrency or args.knowledge_cross_process or args.memory_history or args.memory_owner or args.memory_friend or args.memory_erasure or args.memory_scope or args.memory_collision
-    cold_memory = args.memory_correction or (reuse_native_fixture and not (args.knowledge_cross_process or args.knowledge_concurrency))
+    source_recall_enabled = args.citation_policy_consistency or args.knowledge_concurrency or args.knowledge_cross_process or args.knowledge_metadata_scope or args.memory_owner or args.memory_erasure or args.memory_scope or args.memory_collision or (args.memory_friend and args.enable_source_recall)
+    reuse_native_fixture = args.citation_policy_consistency or args.knowledge_concurrency or args.knowledge_cross_process or args.memory_history or args.memory_owner or args.memory_friend or args.memory_erasure or args.memory_scope or args.memory_collision
+    cold_memory = args.memory_correction or (reuse_native_fixture and not (args.knowledge_cross_process or args.knowledge_concurrency or args.citation_policy_consistency))
     history_ablation = cold_memory and not (args.memory_scope or args.memory_collision)
 
     ROOT, OUT, key_path = isolated_probe_paths(args.root, args.run_label, args.api_key_file)
     bootstrap_url = "postgresql+asyncpg://boot@/postgres?host=" + str(ROOT / "socket") + "&port=25433"
     await verify_cluster(bootstrap_url, ROOT / "data")
     database_name = "stage3_" + args.run_label.replace("-", "_")
-    source_label = "stage46-workers-fixed" if args.knowledge_concurrency else "stage45-scope-fixed" if args.knowledge_cross_process else "stage43-fragment-fixed" if args.memory_source_completeness else "stage42-cross-source-fixed" if args.memory_fragment_lifecycle else "stage41-historical-fixed" if args.memory_cross_source_erasure else "stage40-coupled-source" if args.memory_coupled_erasure or args.memory_quoted_source else "stage34-delivery-memory-fixed" if args.memory_delivery_erasure or args.memory_operation_pending else "stage24-source-erasure" if args.memory_replay else "stage22-owner-only" if args.memory_friend or args.memory_erasure or args.memory_scope or args.memory_collision else "stage20-cold-fixed"
-    source_account_username = "stage45-scope-fixed" if args.knowledge_cross_process or args.knowledge_concurrency else "stage20-cold-fixed"
+    source_label = "stage47-revision-fixed" if args.citation_policy_consistency else "stage46-workers-fixed" if args.knowledge_concurrency else "stage45-scope-fixed" if args.knowledge_cross_process else "stage43-fragment-fixed" if args.memory_source_completeness else "stage42-cross-source-fixed" if args.memory_fragment_lifecycle else "stage41-historical-fixed" if args.memory_cross_source_erasure else "stage40-coupled-source" if args.memory_coupled_erasure or args.memory_quoted_source else "stage34-delivery-memory-fixed" if args.memory_delivery_erasure or args.memory_operation_pending else "stage24-source-erasure" if args.memory_replay else "stage22-owner-only" if args.memory_friend or args.memory_erasure or args.memory_scope or args.memory_collision else "stage20-cold-fixed"
+    source_account_username = "stage45-scope-fixed" if args.knowledge_cross_process or args.knowledge_concurrency or args.citation_policy_consistency else "stage20-cold-fixed"
     source_database = "stage3_" + source_label.replace("-", "_")
     if reuse_native_fixture:
         source_proof = json.loads((Path("/home/boot/lhm/multipersonal-runtime/backups/backend-chain-20261001/stage46/stage46-workers-fixed-audited-result.json") if args.knowledge_concurrency else ROOT / source_label / "result.json").read_text())
@@ -280,17 +280,23 @@ async def main(args):
             erasure_gate = json.loads(Path("/home/boot/lhm/multipersonal-runtime/backups/backend-chain-20261001/stage24/native-audit.json").read_text())
             if not (erasure_gate["source_erasure_gate_passed"] == erasure_gate["source_erasure_gate_total"] == 43 and all(erasure_gate["source_erasure_gate_checks"].values())):
                 raise ValueError("Replay reuse requires independently verified native source erasure state")
+        elif args.citation_policy_consistency:
+            parent_audit = json.loads(Path("/home/boot/lhm/multipersonal-runtime/backups/backend-chain-20261001/stage47/native-audit.json").read_text())
+            if not (parent_audit["all_targeted_revision_checks"] and parent_audit["fixed_passed"] == 31 and parent_audit["fixed_total"] == 32
+                    and parent_audit["unresolved_checks"] == ["current_citation_title"]
+                    and [key for key,value in source_proof["checks"].items() if not value] == ["current_citation_title"]):
+                raise ValueError("Citation probe requires the exact verified parent and its known citation omission")
         elif not all(source_proof["checks"].values()):
             raise ValueError("Historical reuse requires the verified native source fixture")
     OUT.mkdir(exist_ok=False)
     fixture = json.loads(
-        (Path(__file__).resolve().parents[1] / "tests/fixtures" / ("deepseek_knowledge_concurrency_cases.json" if args.knowledge_concurrency else "deepseek_knowledge_cross_process_cases.json" if args.knowledge_cross_process else "deepseek_knowledge_metadata_scope_cases.json" if args.knowledge_metadata_scope else "deepseek_partial_source_context_cases.json" if args.memory_source_completeness else "deepseek_memory_fragment_lifecycle_cases.json" if args.memory_fragment_lifecycle else "deepseek_memory_cross_source_erasure_cases.json" if args.memory_cross_source_erasure else "deepseek_memory_quoted_source_cases.json" if args.memory_quoted_source else "deepseek_memory_coupled_erasure_cases.json" if args.memory_coupled_erasure else "deepseek_memory_evidence_erasure_cases.json" if args.memory_evidence_erasure else "deepseek_memory_selective_erasure_cases.json" if args.memory_selective_erasure else "deepseek_memory_archive_retention_cases.json" if args.memory_archive_retention else "deepseek_memory_operation_pending_cases.json" if args.memory_operation_pending else "deepseek_memory_delivery_erasure_cases.json" if args.memory_delivery_erasure else "deepseek_memory_delivery_cases.json" if args.memory_delivery else "deepseek_memory_turn_capacity_cases.json" if args.memory_turn_capacity else "deepseek_memory_late_capture_cases.json" if args.memory_late_capture else "deepseek_memory_history_feedback_cases.json" if args.memory_history_feedback else "deepseek_memory_capture_failure_cases.json" if args.memory_capture_failure else "deepseek_memory_capacity_cases.json" if args.memory_capacity else "deepseek_memory_race_cases.json" if args.memory_race else "deepseek_memory_replay_cases.json" if args.memory_replay else "deepseek_memory_collision_cases.json" if args.memory_collision else "deepseek_memory_scope_cases.json" if args.memory_scope else "deepseek_memory_erasure_cases.json" if args.memory_erasure else "deepseek_memory_friend_cases.json" if args.memory_friend else "deepseek_memory_owner_cases.json" if args.memory_owner else "deepseek_memory_history_cases.json" if args.memory_history else "deepseek_memory_correction_cases.json" if args.memory_correction else "deepseek_literal_citation_cases.json" if args.literal_citations else "deepseek_private_public_citation_cases.json" if args.private_public_citations else "deepseek_citation_precision_cases.json" if args.citation_precision else "deepseek_mixed_window_boundary.json" if args.window_boundary else "deepseek_mixed_long_context_cases.json")).read_text()
+        (Path(__file__).resolve().parents[1] / "tests/fixtures" / ("deepseek_citation_policy_consistency_cases.json" if args.citation_policy_consistency else "deepseek_knowledge_concurrency_cases.json" if args.knowledge_concurrency else "deepseek_knowledge_cross_process_cases.json" if args.knowledge_cross_process else "deepseek_knowledge_metadata_scope_cases.json" if args.knowledge_metadata_scope else "deepseek_partial_source_context_cases.json" if args.memory_source_completeness else "deepseek_memory_fragment_lifecycle_cases.json" if args.memory_fragment_lifecycle else "deepseek_memory_cross_source_erasure_cases.json" if args.memory_cross_source_erasure else "deepseek_memory_quoted_source_cases.json" if args.memory_quoted_source else "deepseek_memory_coupled_erasure_cases.json" if args.memory_coupled_erasure else "deepseek_memory_evidence_erasure_cases.json" if args.memory_evidence_erasure else "deepseek_memory_selective_erasure_cases.json" if args.memory_selective_erasure else "deepseek_memory_archive_retention_cases.json" if args.memory_archive_retention else "deepseek_memory_operation_pending_cases.json" if args.memory_operation_pending else "deepseek_memory_delivery_erasure_cases.json" if args.memory_delivery_erasure else "deepseek_memory_delivery_cases.json" if args.memory_delivery else "deepseek_memory_turn_capacity_cases.json" if args.memory_turn_capacity else "deepseek_memory_late_capture_cases.json" if args.memory_late_capture else "deepseek_memory_history_feedback_cases.json" if args.memory_history_feedback else "deepseek_memory_capture_failure_cases.json" if args.memory_capture_failure else "deepseek_memory_capacity_cases.json" if args.memory_capacity else "deepseek_memory_race_cases.json" if args.memory_race else "deepseek_memory_replay_cases.json" if args.memory_replay else "deepseek_memory_collision_cases.json" if args.memory_collision else "deepseek_memory_scope_cases.json" if args.memory_scope else "deepseek_memory_erasure_cases.json" if args.memory_erasure else "deepseek_memory_friend_cases.json" if args.memory_friend else "deepseek_memory_owner_cases.json" if args.memory_owner else "deepseek_memory_history_cases.json" if args.memory_history else "deepseek_memory_correction_cases.json" if args.memory_correction else "deepseek_literal_citation_cases.json" if args.literal_citations else "deepseek_private_public_citation_cases.json" if args.private_public_citations else "deepseek_citation_precision_cases.json" if args.citation_precision else "deepseek_mixed_window_boundary.json" if args.window_boundary else "deepseek_mixed_long_context_cases.json")).read_text()
     )
     fixture["history_turns"] = expand_history(fixture)
     cases = fixture["cases"]
     executed_cases = cases[-(2 if args.memory_owner or args.memory_erasure else 1):] if reuse_native_fixture else cases
     prerequisite_count = 3 if args.memory_friend or args.memory_erasure or args.memory_scope or args.memory_collision else 2
-    if reuse_native_fixture and not (args.knowledge_cross_process or args.knowledge_concurrency) and source_proof["cases"][:prerequisite_count] != cases[:prerequisite_count]:
+    if reuse_native_fixture and not (args.knowledge_cross_process or args.knowledge_concurrency or args.citation_policy_consistency) and source_proof["cases"][:prerequisite_count] != cases[:prerequisite_count]:
         raise ValueError("Historical reuse requires the same complete original source statements")
     if (args.memory_friend or args.memory_erasure or args.memory_scope or args.memory_collision) and not any(
             row["body"] == cases[2]["message"] for row in (source_proof["scope_owner_sources_after"] if args.memory_delivery_erasure or args.memory_operation_pending else source_proof.get("sources_before_erasure" if args.memory_replay else "sources_before_question", []))):
@@ -619,6 +625,13 @@ async def main(args):
                 finally:
                     await source_connection.close()
             from knowledge.vector_db import get_vector_db
+
+            if args.citation_policy_consistency:
+                from evaluation.citation_policy_consistency_probe import run_citation_policy_probe
+
+                await run_citation_policy_probe(client,args,proof,fixture,cloud_calls,database=db,runtime=inference_runtime,
+                    output=OUT,capture_storage_proof=capture_storage_proof,source_proof=source_proof)
+                return
 
             if args.knowledge_concurrency:
                 from evaluation.knowledge_concurrency_probe import run_concurrency_probe
@@ -1019,6 +1032,7 @@ if __name__ == "__main__":
     parser.add_argument("--knowledge-metadata-scope", action="store_true")
     parser.add_argument("--knowledge-cross-process", action="store_true")
     parser.add_argument("--knowledge-concurrency", action="store_true")
+    parser.add_argument("--citation-policy-consistency", action="store_true")
     parser.add_argument("--private-public-citations", action="store_true")
     parser.add_argument("--literal-citations", action="store_true")
     parser.add_argument("--memory-correction", action="store_true")

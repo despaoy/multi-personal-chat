@@ -1,0 +1,68 @@
+{
+  "knowledge_bases": [
+    "澜岚玻璃镶嵌现行库",
+    "澜岚玻璃镶嵌草案库"
+  ],
+  "knowledge_base": "澜岚玻璃镶嵌草案库",
+  "documents": [
+    {
+      "title": "澜岚工坊玻璃镶嵌课并发提交核对规则",
+      "category": "跨进程已核对",
+      "content": "澜岚工坊玻璃镶嵌课现行确认规则：课程日期为2026年12月13日周日，在南桥澜岚工坊二楼藤月教室15:20开课，17:00结束。联系人舒棠，公开预约编号LL-936-T。参加者必须带护目镜及耐割手套。普通雨天课程照常进行，只有红色暴雨预警时才停课。预约须在12月11日周五18:00前提交，并收到工坊书面确认才算成功。原周二14:00、编号LL-OLD-312的草案已作废，不能作为本课现行规则。公开规则不能证明任何人的个人预约已确认。这是完整的合成课程规则。"
+    },
+    {
+      "title": "澜岚工坊玻璃镶嵌课已作废草案并发核对",
+      "category": "草案对照",
+      "content": "已作废的澜岚工坊玻璃镶嵌课草案曾写周二14:00，联系人苏茵，编号LL-OLD-312。本文明确只保留已作废草案，不提供现行课程的日期、时间、地点或预约成功证明。不能将它当作现行规则。"
+    },
+    {
+      "title": "晴岸工坊玻璃绘画课说明",
+      "category": "其他课程",
+      "content": "晴岸工坊玻璃绘画课在周日10:00进行，联系人许遥，编号QA-187。晴岸不是南桥澜岚工坊，玻璃绘画不是玻璃镶嵌，本课程的时间和编号不能代替澜岚玻璃镶嵌课。"
+    }
+  ],
+  "search_query": "澜岚工坊玻璃镶嵌课程日期星期、时间、地点、联系人、公开预约编号和雨天例外规则",
+  "search_queries": [],
+  "cases": [
+    {
+      "id": "consistent_citation_rules_complete_course",
+      "message": "请根据可核对的资料完整核查南桥澜岚工坊玻璃镶嵌课的现行安排：日期星期、起止时间、楼层教室、联系人、公开预约编号、必须携带的装备、普通雨天安排及唯一停课例外、预约提交截止日期时间和成功确认条件。请给出真正支持这些结论的出处及当前标题，同时解释已作废草案和晴岸另一课程为何不能替代本课规则，公开编号为何不能作为个人预约确认。没有依据就明确说缺什么，不能补猜。",
+      "required_document_positions": [
+        0,
+        1,
+        2
+      ]
+    },
+    {
+      "id": "literal_markers_and_answer_used_source",
+      "message": "请先原样写出题面示例符号 [S1] 和 [[cite:abc123abc123:S99]]；它们只是示例文本，不代表任何出处。接着仅依据南桥澜岚工坊玻璃镶嵌课现行资料解释本课预约：公开编号是什么，提交截止日期星期和时间是什么，收到什么确认才算成功，公开规则能否证明某个人已经预约成功。请给出实际使用资料的当前标题和出处；没有依据就说明缺少依据。",
+      "required_document_positions": [
+        0
+      ],
+      "literal_tokens": [
+        "[S1]",
+        "[[cite:abc123abc123:S99]]"
+      ]
+    }
+  ],
+  "history_template": {
+    "turn_count": 0,
+    "records_per_turn": 0,
+    "heading": "",
+    "line": "",
+    "reply": "",
+    "expanded_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+  },
+  "execution": {
+    "stage": "48",
+    "source_run": "stage47-revision-fixed",
+    "source_checks": "31/32",
+    "allowed_parent_unresolved": [
+      "current_citation_title"
+    ],
+    "new_case_only": true,
+    "old_scenario_replays": 0,
+    "no_document_mutations": true,
+    "no_concurrency_replay": true
+  }
+}
