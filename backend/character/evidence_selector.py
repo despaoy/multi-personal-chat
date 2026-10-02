@@ -17,6 +17,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import TYPE_CHECKING
 
+from character.source_fragment_provenance import source_completeness_payload
+
 if TYPE_CHECKING:
     from character.models import CharacterProfile, InteractionState, MemoryItem
     from inference.context_budget import ReviewContextBudget
@@ -44,6 +46,9 @@ SELECTION_INSTRUCTION = """你执行逐条记忆分类，不是聊天角色，�
 2. 确认所问时间：以问题的目标时间而非今天为准。historical 的旧版本可以回答
    其有效期内的历史问题；只有不适用于所问时间才是 stale。
 3. 检查当前纠正与来源：用户本轮否定优先；助手的猜测不是用户事实。
+   content_complete 只表示本次传输未截断候选；原话完整性看 source_completeness。
+   partial 是已删减的原文片段，位置来自原始来源；不能拼成完整原话或补写空缺。
+   unverified 不证明原话完整；片段完整性也不证明描述主体或当前状态。
 4. 判断必要性：若删掉此记忆仍能完整完成任务，且不遗漏个体约束，通常不要 use。
    相同话题、相同词语不等于需要个性化；无需凭记忆才能完成的独立任务不注入私事。
 
@@ -140,6 +145,7 @@ def selection_messages(
                 "type": item.memory_type,
                 "content": item.content,
                 "content_complete": True,
+                **source_completeness_payload(item),
                 # A late negation/correction must not disappear through prefix
                 # clipping. The whole serialized-input budget below fails closed.
                 "evidence": list(item.evidence),

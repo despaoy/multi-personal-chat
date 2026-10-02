@@ -124,8 +124,14 @@ async def run_selective_erasure_probe(
         )
 
     proof["owner_before"] = await snapshot()
-    assert len(proof["owner_before"]["claims"]) == 2
-    if fixture.get("fragment_lifecycle"):
+    if fixture.get("source_completeness_read"):
+        assert proof["owner_before"]["claims"] == fixture["actual_prior_records"]
+        assert len(proof["owner_before"]["claims"]) == 1 and proof["owner_before"]["claims"][0]["id"] == 6
+    else:
+        assert len(proof["owner_before"]["claims"]) == 2
+    if fixture.get("source_completeness_read"):
+        pass  # The exact persisted partial record was checked above.
+    elif fixture.get("fragment_lifecycle"):
         assert {r["id"] for r in proof["owner_before"]["claims"]} == {6,8}
         assert next(r for r in proof["owner_before"]["claims"] if r["id"]==8)["memory_key"] == fixture["erased_memory_key"]
         assert any(fixture["native_receipt"] in r["evidence_json"] for r in proof["owner_before"]["claims"])
@@ -134,7 +140,7 @@ async def run_selective_erasure_probe(
     payload = dict(
         platform="qq",
         adapter=fields[2],
-        messageId=args.run_label + "-erase",
+        messageId=args.run_label + ("-read" if fixture.get("source_completeness_read") else "-erase"),
         conversationId=sender,
         conversationType="private",
         senderId=sender,
@@ -204,12 +210,12 @@ async def run_selective_erasure_probe(
     after = proof["owner_after_ack"]
     course = fixture.get("erased_memory_key", fixture["course_memory_key"])
     semantic = proof["terminal_receipt"]["context"]["memory_completion"]["semantic_receipt"]
-    deletion_succeeded = (
+    deletion_succeeded = not fixture.get("source_completeness_read") and (
         not any(r["memory_key"] == course for r in after["claims"])
         and _retained_claim_preserved(before, after, fixture)
         and semantic["status"] == "erased" and semantic["persisted"] == 1
     )
-    if fixture.get("source_capture_only"):
+    if fixture.get("source_capture_only") and not fixture.get("source_completeness_read"):
         deletion_succeeded = (
             any(r['source_message_id'] == proof['primary_source_message_id'] and r['body'] == fixture['new_native_source'] for r in after['sources'])
             and semantic.get('status') == 'source_only'
@@ -291,7 +297,12 @@ async def run_selective_erasure_probe(
         proof["original_qq_archive_preserved"] = proof["owner_before"]["original_archive_sha256"] == proof["owner_after_ack"]["original_archive_sha256"]
     proof["scope_owner_sources_after"] = database.list_memory_sources(fields[0], "web", "web-character", identity, "private", identity, limit=100)
     capture_storage_proof(proof, output)
-    proof["checks"] = audit_selective_erasure(proof, fixture, cloud_calls)
+    if fixture.get("source_completeness_read"):
+        from evaluation.partial_source_context_audit import audit_source_completeness
+
+        proof["checks"] = audit_source_completeness(proof, fixture, cloud_calls)
+    else:
+        proof["checks"] = audit_selective_erasure(proof, fixture, cloud_calls)
     (output / "result.json").write_text(json.dumps(proof, ensure_ascii=False, indent=2))
     (output / "cloud-calls.json").write_text(json.dumps(cloud_calls, ensure_ascii=False, indent=2))
     print(

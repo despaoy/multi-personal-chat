@@ -27,6 +27,7 @@ from character.event_memory import event_reference_content
 from character.memory_query import AMBIGUOUS_MEMORY_KEYS, PERSONAL_MEMORY_KEYS, plan_memory_query
 from character.memory_subject import is_source_observation
 from character.models import MemoryItem, UserScope
+from character.source_fragment_provenance import source_fragment_fields
 from character.temporal_projection import project_temporal_record
 
 if TYPE_CHECKING:
@@ -1159,6 +1160,7 @@ class CharacterMemoryService:
                         temporal_mode=str(row.get('temporal_mode') or 'fact'),
                         observed_at=str(row.get('temporal_observed_at') or ''),
                         source_observation=is_source_observation(row),
+                        **source_fragment_fields(row),
                     ),
                 )
             )

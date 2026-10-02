@@ -185,6 +185,9 @@ class MemoryItem:
     temporal_mode: str = "fact"
     observed_at: str = ""
     source_observation: bool = False
+    # None means unverified, never an inference of a complete original source.
+    complete_original_source: bool | None = None
+    source_fragments: tuple[tuple[str, tuple[tuple[int, int], ...]], ...] = ()
 
     @property
     def relation(self) -> str:

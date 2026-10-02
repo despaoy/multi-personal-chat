@@ -8,6 +8,7 @@ from datetime import datetime
 
 from character.memory_extractor import complete_self_assertions, extract_memories
 from character.memory_request import memory_statement_body
+from character.source_fragment_provenance import source_fragment_fields
 from character.temporal_expression import source_temporal_spans
 
 
@@ -27,7 +28,8 @@ def project_temporal_record(row: dict, sources: dict | None = None) -> dict:
         return row
     # Neither guessed endpoints nor their omission establishes applicability.
     # Classify the proposition from its source identically in both cases.
-    fragment_only = provenance.get("producer") == "source_erasure_projection"
+    fragment_only = (provenance.get("producer") == "source_erasure_projection"
+                     or source_fragment_fields(row)["complete_original_source"] is False)
     if provenance.get("producer") not in {"semantic_memory", "source_erasure_projection"} or provenance.get("validity_authority") not in (
         "unverified",
         "unspecified",

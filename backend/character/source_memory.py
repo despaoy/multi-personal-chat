@@ -161,6 +161,7 @@ def _share_observation_sources(context, source_context, *, preferred_address, co
         for item in context.memory_packets:
             if (not item.source_observation or item.temporal_mode != 'observation'
                     or item.status != 'active' or item.relation_type != 'ADD'
+                    or item.complete_original_source is False
                     or item.historical or item.qualifiers or len(item.evidence) != 1
                     or len(item.source_message_ids) != 1):
                 continue

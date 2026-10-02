@@ -14,6 +14,8 @@ import asyncio
 import json
 from typing import TYPE_CHECKING, Any, Optional, Protocol
 
+from character.source_fragment_provenance import source_fragment_fields
+
 if TYPE_CHECKING:
     from datetime import datetime
 
@@ -387,6 +389,7 @@ class DatabaseCharacterMemoryRepository:
                     content=content,
                     importance=float(row.get("importance") or 0.0),
                     source_observation=is_source_observation(row),
+                    **source_fragment_fields(row),
                     evidence=tuple(row.get("evidence") or ()) if is_source_observation(row) else (),
                     source_message_ids=tuple(row.get("source_message_ids") or ()) if is_source_observation(row) else (),
                 )

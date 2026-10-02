@@ -233,8 +233,11 @@ def isolated_probe_paths(root, run_label, api_key_file):
 async def main(args):
     from evaluation.conversation_source_probe import verify_cluster
 
-    if sum((args.window_boundary, args.citation_precision, args.private_public_citations, args.literal_citations, args.memory_correction, args.memory_history, args.memory_owner, args.memory_friend, args.memory_erasure, args.memory_scope, args.memory_collision, args.memory_replay, args.memory_race, args.memory_capacity, args.memory_capture_failure, args.memory_history_feedback, args.memory_late_capture, args.memory_turn_capacity, args.memory_delivery, args.memory_delivery_erasure, args.memory_operation_pending, args.memory_archive_retention, args.memory_selective_erasure, args.memory_evidence_erasure, args.memory_coupled_erasure, args.memory_quoted_source, args.memory_cross_source_erasure, args.memory_fragment_lifecycle)) > 1:
+    if sum((args.window_boundary, args.citation_precision, args.private_public_citations, args.literal_citations, args.memory_correction, args.memory_history, args.memory_owner, args.memory_friend, args.memory_erasure, args.memory_scope, args.memory_collision, args.memory_replay, args.memory_race, args.memory_capacity, args.memory_capture_failure, args.memory_history_feedback, args.memory_late_capture, args.memory_turn_capacity, args.memory_delivery, args.memory_delivery_erasure, args.memory_operation_pending, args.memory_archive_retention, args.memory_selective_erasure, args.memory_evidence_erasure, args.memory_coupled_erasure, args.memory_quoted_source, args.memory_cross_source_erasure, args.memory_fragment_lifecycle, args.memory_source_completeness)) > 1:
         raise ValueError("Choose one specific probe scenario")
+
+    if args.memory_source_completeness:
+        args.memory_fragment_lifecycle = True
 
     if args.memory_evidence_erasure or args.memory_coupled_erasure or args.memory_quoted_source or args.memory_cross_source_erasure or args.memory_fragment_lifecycle:
         args.memory_selective_erasure = True
@@ -268,7 +271,7 @@ async def main(args):
     bootstrap_url = "postgresql+asyncpg://boot@/postgres?host=" + str(ROOT / "socket") + "&port=25433"
     await verify_cluster(bootstrap_url, ROOT / "data")
     database_name = "stage3_" + args.run_label.replace("-", "_")
-    source_label = "stage42-cross-source-fixed" if args.memory_fragment_lifecycle else "stage41-historical-fixed" if args.memory_cross_source_erasure else "stage40-coupled-source" if args.memory_coupled_erasure or args.memory_quoted_source else "stage34-delivery-memory-fixed" if args.memory_delivery_erasure or args.memory_operation_pending else "stage24-source-erasure" if args.memory_replay else "stage22-owner-only" if args.memory_friend or args.memory_erasure or args.memory_scope or args.memory_collision else "stage20-cold-fixed"
+    source_label = "stage43-fragment-fixed" if args.memory_source_completeness else "stage42-cross-source-fixed" if args.memory_fragment_lifecycle else "stage41-historical-fixed" if args.memory_cross_source_erasure else "stage40-coupled-source" if args.memory_coupled_erasure or args.memory_quoted_source else "stage34-delivery-memory-fixed" if args.memory_delivery_erasure or args.memory_operation_pending else "stage24-source-erasure" if args.memory_replay else "stage22-owner-only" if args.memory_friend or args.memory_erasure or args.memory_scope or args.memory_collision else "stage20-cold-fixed"
     source_account_username = "stage20-cold-fixed"
     source_database = "stage3_" + source_label.replace("-", "_")
     if reuse_native_fixture:
@@ -281,7 +284,7 @@ async def main(args):
             raise ValueError("Historical reuse requires the verified native source fixture")
     OUT.mkdir(exist_ok=False)
     fixture = json.loads(
-        (Path(__file__).resolve().parents[1] / "tests/fixtures" / ("deepseek_memory_fragment_lifecycle_cases.json" if args.memory_fragment_lifecycle else "deepseek_memory_cross_source_erasure_cases.json" if args.memory_cross_source_erasure else "deepseek_memory_quoted_source_cases.json" if args.memory_quoted_source else "deepseek_memory_coupled_erasure_cases.json" if args.memory_coupled_erasure else "deepseek_memory_evidence_erasure_cases.json" if args.memory_evidence_erasure else "deepseek_memory_selective_erasure_cases.json" if args.memory_selective_erasure else "deepseek_memory_archive_retention_cases.json" if args.memory_archive_retention else "deepseek_memory_operation_pending_cases.json" if args.memory_operation_pending else "deepseek_memory_delivery_erasure_cases.json" if args.memory_delivery_erasure else "deepseek_memory_delivery_cases.json" if args.memory_delivery else "deepseek_memory_turn_capacity_cases.json" if args.memory_turn_capacity else "deepseek_memory_late_capture_cases.json" if args.memory_late_capture else "deepseek_memory_history_feedback_cases.json" if args.memory_history_feedback else "deepseek_memory_capture_failure_cases.json" if args.memory_capture_failure else "deepseek_memory_capacity_cases.json" if args.memory_capacity else "deepseek_memory_race_cases.json" if args.memory_race else "deepseek_memory_replay_cases.json" if args.memory_replay else "deepseek_memory_collision_cases.json" if args.memory_collision else "deepseek_memory_scope_cases.json" if args.memory_scope else "deepseek_memory_erasure_cases.json" if args.memory_erasure else "deepseek_memory_friend_cases.json" if args.memory_friend else "deepseek_memory_owner_cases.json" if args.memory_owner else "deepseek_memory_history_cases.json" if args.memory_history else "deepseek_memory_correction_cases.json" if args.memory_correction else "deepseek_literal_citation_cases.json" if args.literal_citations else "deepseek_private_public_citation_cases.json" if args.private_public_citations else "deepseek_citation_precision_cases.json" if args.citation_precision else "deepseek_mixed_window_boundary.json" if args.window_boundary else "deepseek_mixed_long_context_cases.json")).read_text()
+        (Path(__file__).resolve().parents[1] / "tests/fixtures" / ("deepseek_partial_source_context_cases.json" if args.memory_source_completeness else "deepseek_memory_fragment_lifecycle_cases.json" if args.memory_fragment_lifecycle else "deepseek_memory_cross_source_erasure_cases.json" if args.memory_cross_source_erasure else "deepseek_memory_quoted_source_cases.json" if args.memory_quoted_source else "deepseek_memory_coupled_erasure_cases.json" if args.memory_coupled_erasure else "deepseek_memory_evidence_erasure_cases.json" if args.memory_evidence_erasure else "deepseek_memory_selective_erasure_cases.json" if args.memory_selective_erasure else "deepseek_memory_archive_retention_cases.json" if args.memory_archive_retention else "deepseek_memory_operation_pending_cases.json" if args.memory_operation_pending else "deepseek_memory_delivery_erasure_cases.json" if args.memory_delivery_erasure else "deepseek_memory_delivery_cases.json" if args.memory_delivery else "deepseek_memory_turn_capacity_cases.json" if args.memory_turn_capacity else "deepseek_memory_late_capture_cases.json" if args.memory_late_capture else "deepseek_memory_history_feedback_cases.json" if args.memory_history_feedback else "deepseek_memory_capture_failure_cases.json" if args.memory_capture_failure else "deepseek_memory_capacity_cases.json" if args.memory_capacity else "deepseek_memory_race_cases.json" if args.memory_race else "deepseek_memory_replay_cases.json" if args.memory_replay else "deepseek_memory_collision_cases.json" if args.memory_collision else "deepseek_memory_scope_cases.json" if args.memory_scope else "deepseek_memory_erasure_cases.json" if args.memory_erasure else "deepseek_memory_friend_cases.json" if args.memory_friend else "deepseek_memory_owner_cases.json" if args.memory_owner else "deepseek_memory_history_cases.json" if args.memory_history else "deepseek_memory_correction_cases.json" if args.memory_correction else "deepseek_literal_citation_cases.json" if args.literal_citations else "deepseek_private_public_citation_cases.json" if args.private_public_citations else "deepseek_citation_precision_cases.json" if args.citation_precision else "deepseek_mixed_window_boundary.json" if args.window_boundary else "deepseek_mixed_long_context_cases.json")).read_text()
     )
     fixture["history_turns"] = expand_history(fixture)
     cases = fixture["cases"]
@@ -408,7 +411,7 @@ async def main(args):
 
     async def cold_history(service, turn, user_scope, character_id):
         history = await original_history(service, turn, user_scope, character_id)
-        if turn.message == (fixture["retained_read_message"] if args.memory_quoted_source or args.memory_cross_source_erasure or args.memory_fragment_lifecycle else cases[-1]["message"]):
+        if turn.message == (fixture["retained_read_message"] if (args.memory_quoted_source or args.memory_cross_source_erasure or args.memory_fragment_lifecycle) and not args.memory_source_completeness else cases[-1]["message"]):
             cold_history_diagnostics.append(dict(query=turn.message, original_history=history, returned_history=[]))
             return []
         return history
@@ -584,7 +587,10 @@ async def main(args):
                     proof["scope_current_identity"] = identity
                     from character.memory_llm import is_memory_erasure_request
                     proof["collision_query_is_erasure"] = is_memory_erasure_request(cases[-1]["message"])
-                    assert proof["collision_query_is_erasure"] if args.memory_operation_pending else not proof["collision_query_is_erasure"]
+                    if args.memory_source_completeness:
+                        assert proof["collision_query_is_erasure"] is False
+                    else:
+                        assert proof["collision_query_is_erasure"] if args.memory_operation_pending else not proof["collision_query_is_erasure"]
                 connection = await asyncpg.connect(user="boot", database=database_name, host=str(ROOT / "socket"), port=25433)
                 try:
                     assert await connection.fetchval("SHOW data_directory") == str(ROOT / "data")
@@ -1013,6 +1019,7 @@ if __name__ == "__main__":
     parser.add_argument("--memory-quoted-source", action="store_true")
     parser.add_argument("--memory-cross-source-erasure", action="store_true")
     parser.add_argument("--memory-fragment-lifecycle", action="store_true")
+    parser.add_argument("--memory-source-completeness", action="store_true")
     parser.add_argument("--memory-delivery", action="store_true")
     parser.add_argument("--memory-turn-capacity", action="store_true")
     parser.add_argument("--turn-capacity-retry", action="store_true")

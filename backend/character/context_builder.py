@@ -60,6 +60,7 @@ from character.situation_analyzer import (
     SITUATION_META,
     SITUATION_SAFETY,
 )
+from character.source_fragment_provenance import source_completeness_payload
 
 # 记忆区效率限制（第一版）
 MAX_MEMORY_ITEMS = 5
@@ -271,6 +272,11 @@ def _memory_evidence_packet(item: MemoryItem) -> str:
     if item.source_observation:
         content = "【原话观察：发言者=用户，描述主体=未解析】" + content
     metadata: list[str] = []
+    if item.complete_original_source is False:
+        metadata.append("仅为原文保留片段，不是完整原话；空缺内容未知，不得补写")
+        metadata.append("原始来源片段位置" + json.dumps(source_completeness_payload(item)["source_fragments"], ensure_ascii=False))
+    elif item.source_observation:
+        metadata.append("原话完整性未核实")
     if item.historical:
         metadata.append("历史版本，仅用于所问时间")
     relation = str(item.relation_type or "ADD").strip().upper()
@@ -311,6 +317,7 @@ def _complete_memory_evidence_packet(item: MemoryItem) -> str:
             **({"speaker_role": "user", "content_semantics": "quoted_source"} if item.source_observation else {}),
             "content": item.content,
             "evidence": list(item.evidence),
+            **source_completeness_payload(item),
             "source_message_ids": list(item.source_message_ids),
             "valid_from": item.valid_from,
             "valid_to": item.valid_to,
