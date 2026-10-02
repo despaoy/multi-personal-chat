@@ -170,6 +170,8 @@ class GenerationResult:
     response_mode: str = "generated"
     response_citations: tuple[Mapping[str, Any], ...] = ()
     model_invoked: bool = True
+    citation_repair_attempted: bool = False
+    citation_repair_status: str = ""
     task_results: tuple[Mapping[str, Any], ...] = ()
 
 
@@ -455,6 +457,13 @@ async def generate_character_response(
                 task_results=({'kind': 'memory_operation', 'query': operation, 'mode': 'memory_operation'},
                               {'kind': 'content', 'query': remaining, 'mode': result.response_mode}))
     from inference.answer_citations import finalize_answer_citations, prepare_answer_citations
+    from inference.citation_recovery import recover_missing_citations
+
+    async def finalize_citations(result):
+        result = finalize_answer_citations(result)
+        return await recover_missing_citations(result, generate,
+            context_window_tokens=request.context_window_tokens)
+
 
     request = replace(request, retrieval=prepare_answer_citations(request.retrieval))
     plan = build_generation_request(request)
@@ -535,7 +544,7 @@ async def generate_character_response(
         reply, request.reply_guard, violations, strict=request.reply_guard_mode == "strict"
     )
     if not blocking:
-        return finalize_answer_citations(GenerationResult(reply=reply, plan=plan, guard_violations=violations))
+        return await finalize_citations(GenerationResult(reply=reply, plan=plan, guard_violations=violations))
 
     if (getattr(request.character_context, "memory_status", "") == "no_match"
             and set(blocking) == {UNSUPPORTED_USER_FACT}):
@@ -544,7 +553,7 @@ async def generate_character_response(
         # claim-level mechanism; no_match is not proof that all sources lack facts.
         fallback = deterministic_fallback(blocking, request.reply_guard, candidate_reply=reply)
         if fallback is not None:
-            return finalize_answer_citations(GenerationResult(reply=fallback[1], plan=plan, guard_violations=violations,
+            return await finalize_citations(GenerationResult(reply=fallback[1], plan=plan, guard_violations=violations,
                                     guard_fallback=fallback[0]))
 
     corrected_messages = apply_retry_instruction(messages, retry_instruction(blocking))
@@ -579,7 +588,7 @@ async def generate_character_response(
     fallback_kind = ""
     if fallback is not None:
         fallback_kind, reply = fallback
-    return finalize_answer_citations(GenerationResult(
+    return await finalize_citations(GenerationResult(
         reply=reply,
         plan=plan,
         guard_violations=violations,
