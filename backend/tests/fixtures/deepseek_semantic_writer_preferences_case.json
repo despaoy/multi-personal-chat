@@ -1,0 +1,392 @@
+{
+  "synthetic": true,
+  "case_kind": "native_semantic_writer_conditional_preferences",
+  "source_message": "请记住我的饮料偏好：工作日晚上我只喝不含咖啡因的麦茶；周末上午我喜欢淡拿铁，但只在已经吃过早餐且当天没有胃痛时喝；我不喜欢浓缩咖啡。这些是我本人现在的习惯，不是朋友的喜好，也不是假设。",
+  "question": "根据我之前明确告诉你的本人饮料偏好，分别列出工作日晚上喝什么、周末上午喝什么及全部条件、明确不喜欢什么。保留时间、咖啡因、早餐和胃痛限制，不要把条件性喜欢推广成无条件喜欢或把一种咖啡的厌恶推广到全部咖啡。",
+  "expected_requirements": [
+    "工作日晚上",
+    "不含咖啡因的麦茶",
+    "周末上午",
+    "淡拿铁",
+    "已经吃过早餐",
+    "当天没有胃痛",
+    "不喜欢浓缩咖啡"
+  ],
+  "source_authority": "ordinary authenticated user current assertion",
+  "proposal_fixture": null,
+  "rule_seeded_memories": 0,
+  "primary_output_tokens": 2048,
+  "writer_configuration": "unchanged current MemoryLlmConfig / max_tokens 768",
+  "observed": {
+    "audit": {
+      "checks": {
+        "fully_informative_original_fixture": true,
+        "native_authenticated_ordinary_user": true,
+        "two_actual_successful_primary_turns": true,
+        "seven_real_calls_no_replay": true,
+        "request_and_response_pro": true,
+        "all_responses_complete": true,
+        "two_real_writer_calls": true,
+        "complete_seed_current_input": true,
+        "no_manufactured_old_whitelist": true,
+        "unchanged_writer_limits_fit": true,
+        "three_raw_grounded_proposals": true,
+        "raw_time_and_both_conditions": true,
+        "parser_raw_response_unchanged": true,
+        "parser_admits_three": true,
+        "source_only_not_substituted_for_writer": true,
+        "scheduler_reports_actual_three_commits": true,
+        "no_writer_failure_or_queued_job": true,
+        "lookup_not_added_as_new_fact": true,
+        "independent_three_durable_claims": true,
+        "durable_content_evidence_match_admitted_proposals": true,
+        "all_durable_claims_active_user_ADD": true,
+        "durable_qualifiers_unchanged": true,
+        "server_observation_time_authority": true,
+        "no_invented_calendar_validity": true,
+        "durable_original_source_and_lookup_source": true,
+        "all_three_exact_claim_source_links": true,
+        "before_question_independent_original_source": true,
+        "final_wire_full_original_source": true,
+        "final_wire_original_question": true,
+        "source_in_untrusted_reference_not_system": true,
+        "historical_task_observation_filter_explicit": true,
+        "history_contribution_not_hidden": true,
+        "raw_model_reply_equals_API": true,
+        "all_seven_answer_constraints": true,
+        "question_fixture_remains_complete": true,
+        "pending_observation_retained": true
+      },
+      "passed": 36,
+      "total": 36,
+      "phase_calls": 7,
+      "actual_primary_replies": 2,
+      "qualified_lookup_replies": 1,
+      "semantic_proposals": 3,
+      "durable_claims": 3,
+      "claim_source_links": 3,
+      "runtime_fix_needed": false,
+      "pending_at_probe_save": 1,
+      "terminal_storage_verified": true,
+      "limits": [
+        "Historical question uses original source and two-message history; all three fact records are observation-filtered. This is not a fact-only or distant-history recall proof.",
+        "Pending adapter count was 1 when result was saved; independent read after process exit verifies final three claims, their three links and both source bodies. Do not relabel saved count as zero.",
+        "Stage71 strict no-additions failure remains open."
+      ],
+      "raw_writer_response": "{\n  \"memories\": [\n    {\n      \"kind\": \"like\",\n      \"value\": \"不含咖啡因的麦茶\",\n      \"content\": \"用户工作日晚上只喝不含咖啡因的麦茶\",\n      \"evidence\": \"工作日晚上我只喝不含咖啡因的麦茶\",\n      \"confidence\": 0.98,\n      \"operation\": \"ADD\",\n      \"target_memory_id\": \"\",\n      \"target_memory_key\": \"\",\n      \"attributed_to\": \"user\",\n      \"qualifiers\": {\n        \"time\": \"工作日晚上\"\n      },\n      \"valid_from\": \"\",\n      \"valid_to\": \"\",\n      \"observed_at\": \"2026-10-03T03:22:00.367390+08:00\",\n      \"scope_level\": \"conversation\"\n    },\n    {\n      \"kind\": \"like\",\n      \"value\": \"淡拿铁\",\n      \"content\": \"用户周末上午喜欢淡拿铁，但只在已经吃过早餐且当天没有胃痛时喝\",\n      \"evidence\": \"周末上午我喜欢淡拿铁，但只在已经吃过早餐且当天没有胃痛时喝\",\n      \"confidence\": 0.98,\n      \"operation\": \"ADD\",\n      \"target_memory_id\": \"\",\n      \"target_memory_key\": \"\",\n      \"attributed_to\": \"user\",\n      \"qualifiers\": {\n        \"time\": \"周末上午\",\n        \"condition\": \"已经吃过早餐且当天没有胃痛\"\n      },\n      \"valid_from\": \"\",\n      \"valid_to\": \"\",\n      \"observed_at\": \"2026-10-03T03:22:00.367390+08:00\",\n      \"scope_level\": \"conversation\"\n    },\n    {\n      \"kind\": \"dislike\",\n      \"value\": \"浓缩咖啡\",\n      \"content\": \"用户不喜欢浓缩咖啡\",\n      \"evidence\": \"我不喜欢浓缩咖啡\",\n      \"confidence\": 0.98,\n      \"operation\": \"ADD\",\n      \"target_memory_id\": \"\",\n      \"target_memory_key\": \"\",\n      \"attributed_to\": \"user\",\n      \"qualifiers\": {},\n      \"valid_from\": \"\",\n      \"valid_to\": \"\",\n      \"observed_at\": \"2026-10-03T03:22:00.367390+08:00\",\n      \"scope_level\": \"conversation\"\n    }\n  ]\n}",
+      "raw_lookup_reply": "按你之前说的，你的饮料偏好是：\n\n- 工作日晚上：只喝不含咖啡因的麦茶。\n- 周末上午：喝淡拿铁，但必须同时满足两个条件——已经吃过早餐，且当天没有胃痛。\n- 明确不喜欢：浓缩咖啡。\n\n没有把淡拿铁说成无条件喜欢，也没有把对浓缩咖啡的厌恶扩大到所有咖啡。"
+    },
+    "durable_claims": [
+      {
+        "id": 40,
+        "content": "用户工作日晚上只喝不含咖啡因的麦茶",
+        "evidence": [
+          "工作日晚上我只喝不含咖啡因的麦茶"
+        ],
+        "metadata": {
+          "qualifiers": {
+            "time": "工作日晚上"
+          },
+          "target_memory_key": "",
+          "write_mode": "hot",
+          "feedback_target_ids": [],
+          "temporal_provenance": {
+            "version": 1,
+            "producer": "semantic_memory",
+            "observed_at": "2026-10-02T19:22:00.367390+00:00",
+            "validity_authority": "unspecified",
+            "proposed_bounds": {},
+            "interval_shape": "unspecified",
+            "expression": {
+              "text": "工作日晚上",
+              "role": "unspecified",
+              "authority": "source_span",
+              "kind": "unresolved",
+              "precision": null
+            }
+          },
+          "attributed_to": "user"
+        },
+        "observed_at": "2026-10-02T19:22:00.367390+00:00",
+        "status": "active",
+        "relation_type": "ADD",
+        "source_message_id": "web:ec57719c920d4e0e9670ea530515ae79"
+      },
+      {
+        "id": 41,
+        "content": "用户周末上午喜欢淡拿铁，但只在已经吃过早餐且当天没有胃痛时喝",
+        "evidence": [
+          "周末上午我喜欢淡拿铁，但只在已经吃过早餐且当天没有胃痛时喝"
+        ],
+        "metadata": {
+          "qualifiers": {
+            "time": "周末上午",
+            "condition": "已经吃过早餐且当天没有胃痛"
+          },
+          "target_memory_key": "",
+          "write_mode": "hot",
+          "feedback_target_ids": [],
+          "temporal_provenance": {
+            "version": 1,
+            "producer": "semantic_memory",
+            "observed_at": "2026-10-02T19:22:00.367390+00:00",
+            "validity_authority": "unspecified",
+            "proposed_bounds": {},
+            "interval_shape": "unspecified",
+            "expression": {
+              "text": "周末上午",
+              "role": "unspecified",
+              "authority": "source_span",
+              "kind": "unresolved",
+              "precision": null
+            }
+          },
+          "attributed_to": "user"
+        },
+        "observed_at": "2026-10-02T19:22:00.367390+00:00",
+        "status": "active",
+        "relation_type": "ADD",
+        "source_message_id": "web:ec57719c920d4e0e9670ea530515ae79"
+      },
+      {
+        "id": 42,
+        "content": "用户不喜欢浓缩咖啡",
+        "evidence": [
+          "我不喜欢浓缩咖啡"
+        ],
+        "metadata": {
+          "qualifiers": {},
+          "target_memory_key": "",
+          "write_mode": "hot",
+          "feedback_target_ids": [],
+          "temporal_provenance": {
+            "version": 1,
+            "producer": "semantic_memory",
+            "observed_at": "2026-10-02T19:22:00.367390+00:00",
+            "validity_authority": "unspecified",
+            "proposed_bounds": {},
+            "interval_shape": "unspecified",
+            "expression": null
+          },
+          "attributed_to": "user"
+        },
+        "observed_at": "2026-10-02T19:22:00.367390+00:00",
+        "status": "active",
+        "relation_type": "ADD",
+        "source_message_id": "web:ec57719c920d4e0e9670ea530515ae79"
+      }
+    ],
+    "durable_source_bodies": [
+      "请记住我的饮料偏好：工作日晚上我只喝不含咖啡因的麦茶；周末上午我喜欢淡拿铁，但只在已经吃过早餐且当天没有胃痛时喝；我不喜欢浓缩咖啡。这些是我本人现在的习惯，不是朋友的喜好，也不是假设。",
+      "根据我之前明确告诉你的本人饮料偏好，分别列出工作日晚上喝什么、周末上午喝什么及全部条件、明确不喜欢什么。保留时间、咖啡因、早餐和胃痛限制，不要把条件性喜欢推广成无条件喜欢或把一种咖啡的厌恶推广到全部咖啡。"
+    ],
+    "calls": [
+      {
+        "index": 0,
+        "request_model": "deepseek-v4-pro",
+        "response_model": "deepseek-v4-pro",
+        "http_status": 200,
+        "max_tokens": 768,
+        "finish_reason": "stop",
+        "usage": {
+          "prompt_tokens": 995,
+          "completion_tokens": 411,
+          "total_tokens": 1406,
+          "prompt_tokens_details": {
+            "cached_tokens": 384
+          },
+          "prompt_cache_hit_tokens": 384,
+          "prompt_cache_miss_tokens": 611
+        }
+      },
+      {
+        "index": 1,
+        "request_model": "deepseek-v4-pro",
+        "response_model": "deepseek-v4-pro",
+        "http_status": 200,
+        "max_tokens": 160,
+        "finish_reason": "stop",
+        "usage": {
+          "prompt_tokens": 870,
+          "completion_tokens": 14,
+          "total_tokens": 884,
+          "prompt_tokens_details": {
+            "cached_tokens": 0
+          },
+          "prompt_cache_hit_tokens": 0,
+          "prompt_cache_miss_tokens": 870
+        }
+      },
+      {
+        "index": 2,
+        "request_model": "deepseek-v4-pro",
+        "response_model": "deepseek-v4-pro",
+        "http_status": 200,
+        "max_tokens": 2048,
+        "finish_reason": "stop",
+        "usage": {
+          "prompt_tokens": 1384,
+          "completion_tokens": 35,
+          "total_tokens": 1419,
+          "prompt_tokens_details": {
+            "cached_tokens": 1280
+          },
+          "prompt_cache_hit_tokens": 1280,
+          "prompt_cache_miss_tokens": 104
+        }
+      },
+      {
+        "index": 3,
+        "request_model": "deepseek-v4-pro",
+        "response_model": "deepseek-v4-pro",
+        "http_status": 200,
+        "max_tokens": 768,
+        "finish_reason": "stop",
+        "usage": {
+          "prompt_tokens": 1680,
+          "completion_tokens": 496,
+          "total_tokens": 2176,
+          "prompt_tokens_details": {
+            "cached_tokens": 1280
+          },
+          "prompt_cache_hit_tokens": 1280,
+          "prompt_cache_miss_tokens": 400
+        }
+      },
+      {
+        "index": 4,
+        "request_model": "deepseek-v4-pro",
+        "response_model": "deepseek-v4-pro",
+        "http_status": 200,
+        "max_tokens": 160,
+        "finish_reason": "stop",
+        "usage": {
+          "prompt_tokens": 988,
+          "completion_tokens": 12,
+          "total_tokens": 1000,
+          "prompt_tokens_details": {
+            "cached_tokens": 0
+          },
+          "prompt_cache_hit_tokens": 0,
+          "prompt_cache_miss_tokens": 988
+        }
+      },
+      {
+        "index": 5,
+        "request_model": "deepseek-v4-pro",
+        "response_model": "deepseek-v4-pro",
+        "http_status": 200,
+        "max_tokens": 2048,
+        "finish_reason": "stop",
+        "usage": {
+          "prompt_tokens": 1846,
+          "completion_tokens": 80,
+          "total_tokens": 1926,
+          "prompt_tokens_details": {
+            "cached_tokens": 896
+          },
+          "prompt_cache_hit_tokens": 896,
+          "prompt_cache_miss_tokens": 950
+        }
+      },
+      {
+        "index": 6,
+        "request_model": "deepseek-v4-pro",
+        "response_model": "deepseek-v4-pro",
+        "http_status": 200,
+        "max_tokens": 768,
+        "finish_reason": "stop",
+        "usage": {
+          "prompt_tokens": 1956,
+          "completion_tokens": 6,
+          "total_tokens": 1962,
+          "prompt_tokens_details": {
+            "cached_tokens": 1280
+          },
+          "prompt_cache_hit_tokens": 1280,
+          "prompt_cache_miss_tokens": 676
+        }
+      }
+    ],
+    "historical_fact_recall": {
+      "stage": "filter",
+      "status": "all_filtered",
+      "fields": [],
+      "excluded_fields": [],
+      "records_read": 3,
+      "usable_records": 0,
+      "eligible_records": 0,
+      "selected_count": 0,
+      "semantic_status": "disabled",
+      "legacy_source_status": "not_needed",
+      "temporal_source_status": "available",
+      "source_receipt_pairs_requested": 3,
+      "source_receipt_pairs_returned": 3,
+      "source_authority_reader": "exact_claim_source_pairs",
+      "legacy_projected_ids": [],
+      "temporal_views": {
+        "fact": 0,
+        "asserted_state": 0,
+        "observation": 3
+      },
+      "field_presence": {
+        "name": false,
+        "origin": false,
+        "residence": false,
+        "major": false,
+        "workplace": false,
+        "study_stage": false
+      },
+      "ambiguous_fields": [],
+      "current_turn_shadowed_ids": [],
+      "elapsed_ms": 15.558329410851002,
+      "sources": {
+        "status": "available",
+        "omitted": [],
+        "selected_ids": [
+          "web:ec57719c920d4e0e9670ea530515ae79"
+        ],
+        "linked_count": 0,
+        "indexed_count": 1,
+        "linked_read_count": 0,
+        "indexed_read_count": 1,
+        "contextual_count": 1,
+        "contextual_read_count": 1,
+        "contextual_search_enabled": true,
+        "literal_project_terms": [],
+        "contextual_scope_deferred_to_explicit_task": false,
+        "linked_project_scope_omitted": 0,
+        "covered_by_fact_count": 0,
+        "window_radius": 0,
+        "effective_window_radius": 0,
+        "requested_source_order": "not_resolved",
+        "requested_following": [],
+        "following_missing_for_anchors": [],
+        "following_anchor_dependency_omitted": 0,
+        "windows": [],
+        "window_semantic_relation": "not_inferred",
+        "anchor_ids": [
+          "web:ec57719c920d4e0e9670ea530515ae79"
+        ],
+        "selection_omitted": 0,
+        "fresh_recheck_omitted": 0,
+        "source_search_limit": null,
+        "candidate_limit_reached": false,
+        "ranking": "covered_rrf_linked_sparse_history",
+        "query_terms_semantic": false,
+        "elapsed_ms": 18.489030189812183,
+        "candidate_budget_pending": false
+      }
+    },
+    "used_memory_ids": [],
+    "history_count": 2,
+    "primary_raw_equals_API": true,
+    "ordinary_owner": "6",
+    "runtime_code_modified": false,
+    "production_restarted": false,
+    "full_suite_run": false,
+    "prior_passing_cases_replayed": 0,
+    "case_count": 1,
+    "actual_job_pid": 2449642
+  }
+}
