@@ -1,0 +1,484 @@
+{
+  "synthetic": true,
+  "case_kind": "explicit_four_document_comparison_with_memory",
+  "knowledge_base": "雾桥菜单验证资料",
+  "documents": [
+    {
+      "title": "雾桥菜单燕麦麦茶",
+      "content": "雾桥菜单产品完整说明：编号FJ-841，名称燕麦麦茶；每杯咖啡因0毫克，糖量0克，价格17元，供应温度40摄氏度。这是虚构知识库产品参数，不是用户本人的偏好，也不证明用户已经购买或饮用。各项参数只适用于本编号，不能与其他产品混用。",
+      "category": "菜单"
+    },
+    {
+      "title": "雾桥菜单低咖啡因咖啡",
+      "content": "雾桥菜单产品完整说明：编号FJ-842，名称低咖啡因咖啡；每杯咖啡因22毫克，糖量0克，价格23元，供应温度45摄氏度。这是虚构知识库产品参数，不是用户本人的偏好，也不证明用户已经购买或饮用。各项参数只适用于本编号，不能与其他产品混用。",
+      "category": "菜单"
+    },
+    {
+      "title": "雾桥菜单高糖可可",
+      "content": "雾桥菜单产品完整说明：编号FJ-843，名称高糖可可；每杯咖啡因6毫克，糖量28克，价格21元，供应温度42摄氏度。这是虚构知识库产品参数，不是用户本人的偏好，也不证明用户已经购买或饮用。各项参数只适用于本编号，不能与其他产品混用。",
+      "category": "菜单"
+    },
+    {
+      "title": "雾桥菜单桂圆草本茶",
+      "content": "雾桥菜单产品完整说明：编号FJ-844，名称桂圆草本茶；每杯咖啡因0毫克，糖量0克，价格19元，供应温度43摄氏度。这是虚构知识库产品参数，不是用户本人的偏好，也不证明用户已经购买或饮用。各项参数只适用于本编号，不能与其他产品混用。",
+      "category": "菜单"
+    }
+  ],
+  "source_message": "请记住我的本人饮料偏好：我喜欢燕麦麦茶。我不喜欢高糖可可。我喜欢低咖啡因咖啡，但我只有已经吃过早餐且当天没有胃痛才喝低咖啡因咖啡。",
+  "question": "请查知识库，逐项比较《雾桥菜单燕麦麦茶》《雾桥菜单低咖啡因咖啡》《雾桥菜单高糖可可》《雾桥菜单桂圆草本茶》这四份说明中的四种饮品。结合我已告诉你的本人偏好和全部饮用必要条件，逐项列出编号、咖啡因、糖量、价格、供应温度及本轮是否符合我的偏好条件和原因。本轮我已经吃过早餐，但当天有胃痛。没有明确喜好依据的选项要保留未知；满足必要条件不能推出我一定饮用；不要把知识库产品说明归成我的个人事实。",
+  "expected_records": [
+    {
+      "code": "FJ-841",
+      "name": "燕麦麦茶",
+      "caffeine_mg": 0,
+      "sugar_g": 0,
+      "price_yuan": 17,
+      "temperature_c": 40
+    },
+    {
+      "code": "FJ-842",
+      "name": "低咖啡因咖啡",
+      "caffeine_mg": 22,
+      "sugar_g": 0,
+      "price_yuan": 23,
+      "temperature_c": 45
+    },
+    {
+      "code": "FJ-843",
+      "name": "高糖可可",
+      "caffeine_mg": 6,
+      "sugar_g": 28,
+      "price_yuan": 21,
+      "temperature_c": 42
+    },
+    {
+      "code": "FJ-844",
+      "name": "桂圆草本茶",
+      "caffeine_mg": 0,
+      "sugar_g": 0,
+      "price_yuan": 19,
+      "temperature_c": 43
+    }
+  ],
+  "required_complete_document_count": 4,
+  "proposal_fixture": null,
+  "no_rule_seeded_memories": true,
+  "primary_output_tokens": 2048,
+  "history_excluded": false,
+  "observed": {
+    "audit": {
+      "checks": {
+        "complete_synthetic_four_docs_and_private_source": true,
+        "same_full_query_at_both_actual_wire_gates": true,
+        "same_auth_ordinary_owner_and_scope": true,
+        "four_actual_native_imports_once": true,
+        "successful_real_writer_seed_not_replayed": true,
+        "six_baseline_five_fixed_actual_calls": true,
+        "all_actual_calls_pro_200_stop": true,
+        "baseline_query_blocked_before_model": true,
+        "fixed_original_query_actual_primary_once": true,
+        "whole_private_source_at_both_gates": true,
+        "baseline_missing_oat_only": true,
+        "fixed_all_four_complete_bodies": true,
+        "actual_ranked_three_unchanged_plus_requested_root": true,
+        "confidence_and_abstention_not_boosted": true,
+        "explicit_scope_and_no_unresolved_titles": true,
+        "four_indexed_scope_counts_complete": true,
+        "same_three_real_seed_claims_and_no_rag_promotion": true,
+        "independent_exact_same_three_claims": true,
+        "independent_three_own_live_full_source_links": true,
+        "independent_full_four_db_document_bodies": true,
+        "independent_four_single_chunks_and_authorized_base": true,
+        "native_final_indexed_metadata_matches_db_content": true,
+        "all_three_memories_selected_before_and_after": true,
+        "no_unqualified_current_temporal_promotion": true,
+        "whole_conjunctive_private_condition_packet": true,
+        "one_actual_full_wire_primary": true,
+        "raw_primary_reply_equals_api": true,
+        "actual_full_wire_fits_pro65536_with_output_reserve": true,
+        "all_six_fields_match_each_document_separately": true,
+        "coffee_conjunctive_necessary_condition_not_met": true,
+        "cocoa_excluded_from_explicit_dislike": true,
+        "unknown_like_and_no_sufficient_inference": true,
+        "pending_zero_saved": true,
+        "new24_affected10_only": true
+      },
+      "passed": 34,
+      "total": 34,
+      "phase_calls": 11,
+      "baseline_calls": 6,
+      "fixed_calls": 5,
+      "primary_calls": 2,
+      "qualified_complete_chain_input_queries": 1,
+      "strict_semantic_answer_qualified": 0,
+      "raw_fixed_reply": "按你给的条件——已吃早餐、当天有胃痛——逐项比较如下：\n\n**FJ-841 燕麦麦茶**\n- 咖啡因：0 毫克\n- 糖量：0 克\n- 价格：17 元\n- 供应温度：40 摄氏度\n- 是否符合：符合。你喜欢燕麦麦茶，且它无咖啡因、无糖，不受胃痛条件限制。\n\n**FJ-842 低咖啡因咖啡**\n- 咖啡因：22 毫克\n- 糖量：0 克\n- 价格：23 元\n- 供应温度：45 摄氏度\n- 是否符合：不符合。你只在已吃早餐且当天没有胃痛时喝低咖啡因咖啡；本轮当天有胃痛，必要条件未满足。\n\n**FJ-843 高糖可可**\n- 咖啡因：6 毫克\n- 糖量：28 克\n- 价格：21 元\n- 供应温度：42 摄氏度\n- 是否符合：不符合。你不喜欢高糖可可。\n\n**FJ-844 桂圆草本茶**\n- 咖啡因：0 毫克\n- 糖量：0 克\n- 价格：19 元\n- 供应温度：43 摄氏度\n- 是否符合：未知。你没有提供对桂圆草本茶的喜好依据，不能据此判断是否符合你的偏好。\n\n补充一点：燕麦麦茶符合必要条件，不代表你本轮一定会饮用；低咖啡因咖啡和高糖可可是按你已说明的偏好与条件排除，桂圆草本茶则因缺少你的明确喜好依据而保留未知。",
+      "actual_prompt_tokens": 4141,
+      "runtime_files_changed": 2,
+      "new_unique": 24,
+      "affected_unique": 10,
+      "test_unique": 34,
+      "test_executions": 34,
+      "full_suite": false,
+      "strict_stage71_failure_still_open": true,
+      "limits": [
+        "Closed leading explicit exact-title task only; abstained/no-anchor retrieval retains prior behavior, unresolved titles stay unknown, original scope filters and base boundary apply.",
+        "Indexed full scope is not automatically raw original completeness; this synthetic case independently verifies all four native single-chunk originals.",
+        "Recent history and original speech still assist; no distant-history or fact-only sufficiency claim.",
+        "Raw answer says oat is not restricted by stomach pain; no source supplies general medical safety, so strict semantic correctness is not certified. Absence of a retrieved herbal preference does not prove absence from all history.",
+        "Stage71 strict no-additions output failure remains open."
+      ]
+    },
+    "original_writer_admission": [
+      {
+        "raw_response": "{\n  \"memories\": [\n    {\n      \"kind\": \"like\",\n      \"value\": \"燕麦麦茶\",\n      \"content\": \"用户喜欢燕麦麦茶。\",\n      \"evidence\": \"我喜欢燕麦麦茶\",\n      \"confidence\": 0.98,\n      \"operation\": \"ADD\",\n      \"target_memory_id\": \"\",\n      \"target_memory_key\": \"\",\n      \"attributed_to\": \"user\",\n      \"qualifiers\": {},\n      \"valid_from\": \"\",\n      \"valid_to\": \"\",\n      \"observed_at\": \"2026-10-02T20:01:32.716680+00:00\",\n      \"scope_level\": \"conversation\"\n    },\n    {\n      \"kind\": \"dislike\",\n      \"value\": \"高糖可可\",\n      \"content\": \"用户不喜欢高糖可可。\",\n      \"evidence\": \"我不喜欢高糖可可\",\n      \"confidence\": 0.98,\n      \"operation\": \"ADD\",\n      \"target_memory_id\": \"\",\n      \"target_memory_key\": \"\",\n      \"attributed_to\": \"user\",\n      \"qualifiers\": {},\n      \"valid_from\": \"\",\n      \"valid_to\": \"\",\n      \"observed_at\": \"2026-10-02T20:01:32.716680+00:00\",\n      \"scope_level\": \"conversation\"\n    },\n    {\n      \"kind\": \"like\",\n      \"value\": \"低咖啡因咖啡\",\n      \"content\": \"用户喜欢低咖啡因咖啡，但只有在已经吃过早餐且当天没有胃痛时才喝。\",\n      \"evidence\": \"我喜欢低咖啡因咖啡，但我只有已经吃过早餐且当天没有胃痛才喝低咖啡因咖啡\",\n      \"confidence\": 0.97,\n      \"operation\": \"ADD\",\n      \"target_memory_id\": \"\",\n      \"target_memory_key\": \"\",\n      \"attributed_to\": \"user\",\n      \"qualifiers\": {\n        \"condition\": \"已经吃过早餐且当天没有胃痛\"\n      },\n      \"valid_from\": \"\",\n      \"valid_to\": \"\",\n      \"observed_at\": \"2026-10-02T20:01:32.716680+00:00\",\n      \"scope_level\": \"conversation\"\n    }\n  ]\n}",
+        "input": {
+          "source_message": "请记住我的本人饮料偏好：我喜欢燕麦麦茶。我不喜欢高糖可可。我喜欢低咖啡因咖啡，但我只有已经吃过早餐且当天没有胃痛才喝低咖啡因咖啡。",
+          "history": [],
+          "existing_memories": [],
+          "confidence_threshold": 0.85,
+          "feedback_target_ids": [],
+          "source_type": "user"
+        },
+        "accepted": [
+          {
+            "operation": "ADD",
+            "memory": {
+              "memory_type": "user_fact",
+              "memory_key": "preference_燕麦麦茶",
+              "content": "用户喜欢燕麦麦茶。",
+              "importance": 0.6,
+              "evidence": "",
+              "qualifiers": [],
+              "aliases": [],
+              "polarity": "",
+              "event": null,
+              "operation": "assert"
+            },
+            "target_memory_id": "",
+            "target_memory_key": "",
+            "evidence": "我喜欢燕麦麦茶",
+            "confidence": 0.98,
+            "attributed_to": "user",
+            "qualifiers": [],
+            "valid_from": "",
+            "valid_to": "",
+            "observed_at": "",
+            "scope_level": "conversation",
+            "proposed_valid_from": "",
+            "proposed_valid_to": "",
+            "source_observation": false,
+            "protected_memory_keys": []
+          },
+          {
+            "operation": "ADD",
+            "memory": {
+              "memory_type": "user_fact",
+              "memory_key": "preference_低咖啡因咖啡",
+              "content": "用户喜欢低咖啡因咖啡，但只有在已经吃过早餐且当天没有胃痛时才喝。",
+              "importance": 0.6,
+              "evidence": "",
+              "qualifiers": [],
+              "aliases": [],
+              "polarity": "",
+              "event": null,
+              "operation": "assert"
+            },
+            "target_memory_id": "",
+            "target_memory_key": "",
+            "evidence": "我喜欢低咖啡因咖啡，但我只有已经吃过早餐且当天没有胃痛才喝低咖啡因咖啡",
+            "confidence": 0.97,
+            "attributed_to": "user",
+            "qualifiers": [
+              [
+                "condition",
+                "已经吃过早餐且当天没有胃痛"
+              ]
+            ],
+            "valid_from": "",
+            "valid_to": "",
+            "observed_at": "",
+            "scope_level": "conversation",
+            "proposed_valid_from": "",
+            "proposed_valid_to": "",
+            "source_observation": false,
+            "protected_memory_keys": []
+          },
+          {
+            "operation": "ADD",
+            "memory": {
+              "memory_type": "user_fact",
+              "memory_key": "preference_高糖可可",
+              "content": "用户不喜欢高糖可可。",
+              "importance": 0.5,
+              "evidence": "",
+              "qualifiers": [],
+              "aliases": [],
+              "polarity": "",
+              "event": null,
+              "operation": "assert"
+            },
+            "target_memory_id": "",
+            "target_memory_key": "",
+            "evidence": "我不喜欢高糖可可",
+            "confidence": 0.98,
+            "attributed_to": "user",
+            "qualifiers": [],
+            "valid_from": "",
+            "valid_to": "",
+            "observed_at": "",
+            "scope_level": "conversation",
+            "proposed_valid_from": "",
+            "proposed_valid_to": "",
+            "source_observation": false,
+            "protected_memory_keys": []
+          }
+        ]
+      }
+    ],
+    "baseline_gate": {
+      "雾桥菜单燕麦麦茶": false,
+      "雾桥菜单低咖啡因咖啡": true,
+      "雾桥菜单高糖可可": true,
+      "雾桥菜单桂圆草本茶": true
+    },
+    "fixed_gate": {
+      "雾桥菜单燕麦麦茶": true,
+      "雾桥菜单低咖啡因咖啡": true,
+      "雾桥菜单高糖可可": true,
+      "雾桥菜单桂圆草本茶": true
+    },
+    "baseline_recall": {
+      "stage": "selected",
+      "status": "selected",
+      "fields": [],
+      "excluded_fields": [],
+      "records_read": 3,
+      "usable_records": 3,
+      "eligible_records": 3,
+      "selected_count": 3,
+      "semantic_status": "available",
+      "legacy_source_status": "not_needed",
+      "temporal_source_status": "available",
+      "source_receipt_pairs_requested": 3,
+      "source_receipt_pairs_returned": 3,
+      "source_authority_reader": "exact_claim_source_pairs",
+      "legacy_projected_ids": [],
+      "temporal_views": {
+        "fact": 0,
+        "asserted_state": 0,
+        "observation": 3
+      },
+      "field_presence": {
+        "name": false,
+        "origin": false,
+        "residence": false,
+        "major": false,
+        "workplace": false,
+        "study_stage": false
+      },
+      "ambiguous_fields": [],
+      "current_turn_shadowed_ids": [],
+      "personal_time_tasks": [],
+      "covered_fields": [],
+      "missing_fields": [],
+      "elapsed_ms": 1598.8899003714323,
+      "sources": {
+        "status": "available",
+        "omitted": [],
+        "selected_ids": [
+          "web:255ea8ba48374662a57715de924a12e9"
+        ],
+        "linked_count": 3,
+        "indexed_count": 1,
+        "linked_read_count": 3,
+        "indexed_read_count": 1,
+        "contextual_count": 1,
+        "contextual_read_count": 1,
+        "contextual_search_enabled": true,
+        "literal_project_terms": [],
+        "contextual_scope_deferred_to_explicit_task": false,
+        "linked_project_scope_omitted": 0,
+        "covered_by_fact_count": 0,
+        "window_radius": 0,
+        "effective_window_radius": 0,
+        "requested_source_order": "not_resolved",
+        "requested_following": [],
+        "following_missing_for_anchors": [],
+        "following_anchor_dependency_omitted": 0,
+        "windows": [],
+        "window_semantic_relation": "not_inferred",
+        "anchor_ids": [
+          "web:255ea8ba48374662a57715de924a12e9"
+        ],
+        "selection_omitted": 0,
+        "fresh_recheck_omitted": 0,
+        "source_search_limit": null,
+        "candidate_limit_reached": false,
+        "ranking": "covered_rrf_linked_sparse_history",
+        "query_terms_semantic": false,
+        "elapsed_ms": 17.336739227175713,
+        "candidate_budget_pending": false
+      }
+    },
+    "fixed_recall": {
+      "stage": "selected",
+      "status": "selected",
+      "fields": [],
+      "excluded_fields": [],
+      "records_read": 3,
+      "usable_records": 3,
+      "eligible_records": 3,
+      "selected_count": 3,
+      "semantic_status": "available",
+      "legacy_source_status": "not_needed",
+      "temporal_source_status": "available",
+      "source_receipt_pairs_requested": 3,
+      "source_receipt_pairs_returned": 3,
+      "source_authority_reader": "exact_claim_source_pairs",
+      "legacy_projected_ids": [],
+      "temporal_views": {
+        "fact": 0,
+        "asserted_state": 0,
+        "observation": 3
+      },
+      "field_presence": {
+        "name": false,
+        "origin": false,
+        "residence": false,
+        "major": false,
+        "workplace": false,
+        "study_stage": false
+      },
+      "ambiguous_fields": [],
+      "current_turn_shadowed_ids": [],
+      "personal_time_tasks": [],
+      "covered_fields": [],
+      "missing_fields": [],
+      "elapsed_ms": 10332.098914310336,
+      "sources": {
+        "status": "available",
+        "omitted": [],
+        "selected_ids": [
+          "web:255ea8ba48374662a57715de924a12e9"
+        ],
+        "linked_count": 3,
+        "indexed_count": 1,
+        "linked_read_count": 3,
+        "indexed_read_count": 1,
+        "contextual_count": 1,
+        "contextual_read_count": 1,
+        "contextual_search_enabled": true,
+        "literal_project_terms": [],
+        "contextual_scope_deferred_to_explicit_task": false,
+        "linked_project_scope_omitted": 0,
+        "covered_by_fact_count": 0,
+        "window_radius": 0,
+        "effective_window_radius": 0,
+        "requested_source_order": "not_resolved",
+        "requested_following": [],
+        "following_missing_for_anchors": [],
+        "following_anchor_dependency_omitted": 0,
+        "windows": [],
+        "window_semantic_relation": "not_inferred",
+        "anchor_ids": [
+          "web:255ea8ba48374662a57715de924a12e9"
+        ],
+        "selection_omitted": 0,
+        "fresh_recheck_omitted": 0,
+        "source_search_limit": null,
+        "candidate_limit_reached": false,
+        "ranking": "covered_rrf_linked_sparse_history",
+        "query_terms_semantic": false,
+        "elapsed_ms": 28.087399899959564,
+        "candidate_budget_pending": false
+      }
+    },
+    "fixed_memory_packets": [
+      {
+        "memory_id": "42",
+        "memory_type": "user_fact",
+        "content": "用户原话记录（时效未核实，不代表当前状态；记录于2026-10-02T20:01:32.716680+00:00）：[\"请记住我的本人饮料偏好：我喜欢燕麦麦茶。我不喜欢高糖可可。我喜欢低咖啡因咖啡，但我只有已经吃过早餐且当天没有胃痛才喝低咖啡因咖啡。\", \"我不喜欢高糖可可\"]",
+        "importance": 0.5,
+        "evidence": [
+          "请记住我的本人饮料偏好：我喜欢燕麦麦茶。我不喜欢高糖可可。我喜欢低咖啡因咖啡，但我只有已经吃过早餐且当天没有胃痛才喝低咖啡因咖啡。",
+          "我不喜欢高糖可可"
+        ],
+        "valid_from": "",
+        "valid_to": "",
+        "confidence": 0.98,
+        "status": "active",
+        "relation_type": "ADD",
+        "source_message_ids": [
+          "web:255ea8ba48374662a57715de924a12e9"
+        ],
+        "historical": false,
+        "memory_key": "preference_高糖可可",
+        "qualifiers": [],
+        "temporal_mode": "observation",
+        "observed_at": "2026-10-02T20:01:32.716680+00:00",
+        "source_observation": false,
+        "complete_original_source": null,
+        "source_fragments": []
+      },
+      {
+        "memory_id": "41",
+        "memory_type": "user_fact",
+        "content": "用户原话记录（时效未核实，不代表当前状态；记录于2026-10-02T20:01:32.716680+00:00）：[\"请记住我的本人饮料偏好：我喜欢燕麦麦茶。我不喜欢高糖可可。我喜欢低咖啡因咖啡，但我只有已经吃过早餐且当天没有胃痛才喝低咖啡因咖啡。\", \"我喜欢低咖啡因咖啡，但我只有已经吃过早餐且当天没有胃痛才喝低咖啡因咖啡\"]",
+        "importance": 0.6,
+        "evidence": [
+          "请记住我的本人饮料偏好：我喜欢燕麦麦茶。我不喜欢高糖可可。我喜欢低咖啡因咖啡，但我只有已经吃过早餐且当天没有胃痛才喝低咖啡因咖啡。",
+          "我喜欢低咖啡因咖啡，但我只有已经吃过早餐且当天没有胃痛才喝低咖啡因咖啡"
+        ],
+        "valid_from": "",
+        "valid_to": "",
+        "confidence": 0.97,
+        "status": "active",
+        "relation_type": "ADD",
+        "source_message_ids": [
+          "web:255ea8ba48374662a57715de924a12e9"
+        ],
+        "historical": false,
+        "memory_key": "preference_低咖啡因咖啡",
+        "qualifiers": [
+          [
+            "condition",
+            "已经吃过早餐且当天没有胃痛"
+          ]
+        ],
+        "temporal_mode": "observation",
+        "observed_at": "2026-10-02T20:01:32.716680+00:00",
+        "source_observation": false,
+        "complete_original_source": null,
+        "source_fragments": []
+      },
+      {
+        "memory_id": "40",
+        "memory_type": "user_fact",
+        "content": "用户原话记录（时效未核实，不代表当前状态；记录于2026-10-02T20:01:32.716680+00:00）：[\"请记住我的本人饮料偏好：我喜欢燕麦麦茶。我不喜欢高糖可可。我喜欢低咖啡因咖啡，但我只有已经吃过早餐且当天没有胃痛才喝低咖啡因咖啡。\", \"我喜欢燕麦麦茶\"]",
+        "importance": 0.6,
+        "evidence": [
+          "请记住我的本人饮料偏好：我喜欢燕麦麦茶。我不喜欢高糖可可。我喜欢低咖啡因咖啡，但我只有已经吃过早餐且当天没有胃痛才喝低咖啡因咖啡。",
+          "我喜欢燕麦麦茶"
+        ],
+        "valid_from": "",
+        "valid_to": "",
+        "confidence": 0.98,
+        "status": "active",
+        "relation_type": "ADD",
+        "source_message_ids": [
+          "web:255ea8ba48374662a57715de924a12e9"
+        ],
+        "historical": false,
+        "memory_key": "preference_燕麦麦茶",
+        "qualifiers": [],
+        "temporal_mode": "observation",
+        "observed_at": "2026-10-02T20:01:32.716680+00:00",
+        "source_observation": false,
+        "complete_original_source": null,
+        "source_fragments": []
+      }
+    ],
+    "history_count": 2,
+    "raw_fixed_reply": "按你给的条件——已吃早餐、当天有胃痛——逐项比较如下：\n\n**FJ-841 燕麦麦茶**\n- 咖啡因：0 毫克\n- 糖量：0 克\n- 价格：17 元\n- 供应温度：40 摄氏度\n- 是否符合：符合。你喜欢燕麦麦茶，且它无咖啡因、无糖，不受胃痛条件限制。\n\n**FJ-842 低咖啡因咖啡**\n- 咖啡因：22 毫克\n- 糖量：0 克\n- 价格：23 元\n- 供应温度：45 摄氏度\n- 是否符合：不符合。你只在已吃早餐且当天没有胃痛时喝低咖啡因咖啡；本轮当天有胃痛，必要条件未满足。\n\n**FJ-843 高糖可可**\n- 咖啡因：6 毫克\n- 糖量：28 克\n- 价格：21 元\n- 供应温度：42 摄氏度\n- 是否符合：不符合。你不喜欢高糖可可。\n\n**FJ-844 桂圆草本茶**\n- 咖啡因：0 毫克\n- 糖量：0 克\n- 价格：19 元\n- 供应温度：43 摄氏度\n- 是否符合：未知。你没有提供对桂圆草本茶的喜好依据，不能据此判断是否符合你的偏好。\n\n补充一点：燕麦麦茶符合必要条件，不代表你本轮一定会饮用；低咖啡因咖啡和高糖可可是按你已说明的偏好与条件排除，桂圆草本茶则因缺少你的明确喜好依据而保留未知。"
+  }
+}

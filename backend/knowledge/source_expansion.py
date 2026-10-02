@@ -7,7 +7,48 @@ from inference.context_budget import estimated_tokens
 _AUTHORITY_FIELDS = ("id", "document_id", "chunk_index", "knowledge_base_id", "title", "category", "content")
 
 
-def expand_source_context(bundle, vector_db, *, expected_generation, source_budget_tokens, filters=None):
+def requested_document_titles(query):
+    """Explicit multi-document reads; quoted background does not grant a read.
+
+    Resolve only the leading complete read operator and its contiguous titles.
+    Keep the original query untouched for ranking, selection and generation.
+    Unknown later title tasks or exclusions defer the entire request.
+    """
+    match = re.match(
+        r"^(?:请)?(?:(?:查|查询|检索)知识库[，,：:]?\s*)?"
+        r"(?:逐项比较|逐一比较|逐项核对|分别读取|分别列出)\s*"
+        r"(?P<titles>《[^《》\n]{1,200}》(?:\s*(?:[、，,]|和|与|及)?\s*《[^《》\n]{1,200}》)*)",
+        str(query or "").strip(),
+    )
+    if not match:
+        return ()
+    remainder = str(query or "").strip()[match.end():]
+    if ("《" in remainder or "》" in remainder
+            or re.search(r"(?:不要|不必|不用|无需|别|排除|仅|只)(?:再)?"
+                         r"(?:读|阅读|读取|查询|检索|比较|核对|列出|提供|查看)", remainder)):
+        return ()
+    titles = tuple(dict.fromkeys(re.findall(r"《([^《》\n]{1,200})》", match['titles'])))
+    declared = re.match(r"这([一二三四五六七八九十\d]+)份(?:说明|资料|文档|文件)", remainder)
+    if declared:
+        value = declared[1]
+        digits = {char: number for number, char in enumerate("零一二三四五六七八九")}
+        if value.isdecimal():
+            count = int(value)
+        elif value in digits:
+            count = digits[value]
+        elif value.count('十') == 1:
+            left, right = value.split('十')
+            if (left and left not in digits) or (right and right not in digits):
+                return ()
+            count = (digits[left] if left else 1) * 10 + (digits[right] if right else 0)
+        else:
+            return ()
+        if count != len(titles):
+            return ()
+    return titles
+
+
+def expand_source_context(bundle, vector_db, *, expected_generation, source_budget_tokens, filters=None, query=""):
     """Preserve ranked anchors; siblings are context, not additional rank votes.
 
     This is an indexed-chunk expansion, not certification of a complete raw
@@ -61,6 +102,22 @@ def expand_source_context(bundle, vector_db, *, expected_generation, source_budg
             groups.setdefault(group, []).append(record)
         original_groups = set(parents)
         queue = list(parents)
+        requested_titles = requested_document_titles(query)
+        requested_groups = set()
+        unresolved_titles = []
+        anchor_bases = {group[1] for group in original_groups}
+        for title in requested_titles:
+            targets = [group for group in groups if group[1] in anchor_bases and group[2] == title]
+            if len(targets) > 1:
+                raise RuntimeError("Ambiguous requested document title")
+            if not targets:
+                unresolved_titles.append(title)
+                continue
+            target = targets[0]
+            requested_groups.add(target)
+            if target not in parents:
+                parents[target] = []
+                queue.append(target)
         for source_group in queue:
             for referring in groups.get(source_group, []):
                 text = referring.get("content")
@@ -110,15 +167,15 @@ def expand_source_context(bundle, vector_db, *, expected_generation, source_budg
             if cost > remaining:
                 continue
             remaining -= cost
-            added.append(
-                {
-                    **record,
-                    "retrieval_role": "source_context",
-                    "supporting_document_ids": [identity for identity, _ in parents[group]],
-                    "score": 0.0,
-                    "normalized_score": 0.0,
-                }
-            )
+            extra = {**record, "score": 0.0, "normalized_score": 0.0}
+            if group in requested_groups:
+                # A directly requested authorized source is an independent
+                # task root, not support for a random ranked neighbor.
+                extra["retrieval_role"] = "requested_source"
+            else:
+                extra.update(retrieval_role="source_context",
+                             supporting_document_ids=[identity for identity, _ in parents[group]])
+            added.append(extra)
         results = [*anchors, *added]
         coverage = []
         for group, _supporting in parents.items():
@@ -127,4 +184,9 @@ def expand_source_context(bundle, vector_db, *, expected_generation, source_budg
             retrieved_ids = [r["id"] for r in results if r["id"] in indexed_set]
             coverage.append({"source_id": f"doc_{group[0]}", "source_title": group[2],
                              "indexed_document_ids": indexed_ids, "retrieved_document_ids": retrieved_ids})
-        return {**bundle, "results": results, "source_context_added": len(added), "source_coverage": tuple(coverage)}
+        result = {**bundle, "results": results, "source_context_added": len(added), "source_coverage": tuple(coverage)}
+        if requested_titles:
+            result.update(requested_source_titles=list(requested_titles),
+                          unresolved_requested_titles=unresolved_titles,
+                          requested_source_scope="same_anchor_knowledge_base_and_original_filter")
+        return result

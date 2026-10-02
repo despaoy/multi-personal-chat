@@ -1256,7 +1256,7 @@ async def _retrieve_rag_bundle(query: str, top_k: int, filters: dict[str, Any] |
             bundle = get_rag_helper().retrieve_with_citations(query, top_k=top_k, filters=filters)
         expanded = expand_source_context(
             bundle, vector_db, expected_generation=generation,
-            source_budget_tokens=get_provider_context_budget().window_tokens, filters=filters,
+            source_budget_tokens=get_provider_context_budget().window_tokens, filters=filters, query=query,
         )
         if knowledge_api._get_rebuild_revision() != revision:
             raise RuntimeError("Knowledge authority changed during retrieval")
