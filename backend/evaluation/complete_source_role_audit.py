@@ -47,6 +47,11 @@ async def main():
     parser.add_argument("--test-new-count", type=int, default=10)
     parser.add_argument("--test-affected-count", type=int, default=4)
     parser.add_argument("--test-executions", type=int)
+    parser.add_argument(
+        "--record-answer-contract-failure",
+        action="store_true",
+        help="Retain a failed model answer contract; never qualify that answer.",
+    )
     args = parser.parse_args()
     unique_tests = args.test_new_count + args.test_affected_count
     test_executions = args.test_executions if args.test_executions is not None else unique_tests
@@ -331,10 +336,11 @@ async def main():
     answer = native["response"]["reply"]
     check("raw_primary_matches_api_answer", answer == primary[0]["response"]["choices"][0]["message"]["content"])
     answer_fidelity = original_source_answer_fidelity(answer, [s["body"] for s in required_sources])
-    check(
-        "answer_exact_original_bodies_in_order_no_content_additions",
-        answer_fidelity["exact_bodies_in_order_no_content_additions"],
-    )
+    strict_answer_passed = answer_fidelity["exact_bodies_in_order_no_content_additions"]
+    if args.record_answer_contract_failure and not strict_answer_passed:
+        checks["answer_exact_original_bodies_in_order_no_content_additions"] = False
+    else:
+        check("answer_exact_original_bodies_in_order_no_content_additions", strict_answer_passed)
     # Count every completed variant, including failed primary answers.
     phase_calls = []
     for path in sorted(b.glob("native-pg*/cloud-calls.json")):
@@ -379,7 +385,7 @@ async def main():
         first_system = chr(10).join(m["content"] for m in first_primary["request"]["messages"] if m["role"] == "system")
         check("actual_final_source_receipt_policy_present", SOURCE_SPEECH_PROVENANCE_POLICY in final_system)
         check("intermediate_source_receipt_policy_was_absent", SOURCE_SPEECH_PROVENANCE_POLICY not in first_system)
-    if "required_source_ids" in fixture:
+    if "required_source_ids" in fixture and "all_match_packet_token_estimate" in old:
         from db.memory_source_search import literal_project_source_terms
 
         check("task_sources_distinct_from_fully_stored_distractors", len(required_sources) < len(fixture["sources"]))
@@ -417,6 +423,62 @@ async def main():
             and proof["intermediate_source_sha256"]
             == hashlib.sha256((b / "intermediate-exists-memory_source_search.py").read_bytes()).hexdigest(),
         )
+    elif fixture.get("case_kind") == "requested_visible_source_successor":
+        relation = fixture["declared_order_relation"]
+        check(
+            "complete_requested_pair_and_output_fit_actual_budget",
+            old["needed_packet_chars"] < 16384
+            and old["needed_canonical_estimated_total"] < 65536
+            and old["expected_answer_estimate"] < native["primary_output_tokens"],
+        )
+        check(
+            "original_unlabeled_following_source_durable_and_window_readable",
+            len(old["needed_sources"]) == len(required_sources)
+            and any(row["source_message_id"] == relation["following_id"] for row in old["source_windows"][0]["rows"]),
+        )
+        check(
+            "native_requested_order_and_complete_pair",
+            trace["requested_source_order"] == "next_visible_after_each_anchor"
+            and trace["effective_window_radius"] == 1
+            and trace["requested_following"]
+            == [{"anchor_id": relation["anchor_id"], "source_ids": [relation["following_id"]]}]
+            and trace["following_missing_for_anchors"] == []
+            and trace["following_anchor_dependency_omitted"] == 0,
+        )
+        check(
+            "record_order_is_not_semantic_project_or_fact_inference",
+            trace["window_semantic_relation"] == "not_inferred",
+        )
+        ordered = sorted(rows, key=lambda row: (row["observed_at"], row["source_message_id"]))
+        positions = [i for i, row in enumerate(ordered) if row["source_message_id"] == relation["anchor_id"]]
+        check(
+            "independent_current_scoped_source_order_matches_requested_pair",
+            len(positions) == 1
+            and ordered[positions[0] + 1]["source_message_id"] == relation["following_id"]
+            and len({row["observed_at"] for row in rows}) == len(rows),
+        )
+        proof = json.loads((b / "window-plan-equivalence.json").read_text())
+        check(
+            "existing_window_queries_bindings_and_rows_unchanged",
+            proof["sql_and_bindings_identical"]
+            and proof["legacy_rows_identical"]
+            and proof["following_source_ids"] == [relation["following_id"]],
+        )
+        check(
+            "direction_metadata_proof_tied_to_current_source_hash",
+            proof["source_sha256"]
+            == hashlib.sha256(Path("backend/db/memory_source_window.py").read_bytes()).hexdigest(),
+        )
+        cursor = 0
+        ordered_body_offsets = []
+        for item in required_sources:
+            position = answer.find(item["body"], cursor)
+            ordered_body_offsets.append(position)
+            cursor = position + len(item["body"]) if position >= 0 else cursor
+        check(
+            "model_retains_every_full_original_body_in_requested_order",
+            all(position >= 0 for position in ordered_body_offsets),
+        )
     answer_checks = {s["id"]: s["body"] in answer for s in required_sources}
     assert all(answer_checks.values())
     audit = {
@@ -431,7 +493,17 @@ async def main():
         "qualified_cloud_calls": 4,
         "baseline_auxiliary_calls": 2,
         "phase_cloud_calls": len(phase_calls),
-        "qualified_answers": 1,
+        "qualified_answers": int(strict_answer_passed),
+        "strict_answer_contract_passed": strict_answer_passed,
+        "answer_contract_failures": int(not strict_answer_passed),
+        "backend_chain_passed": sum(
+            value
+            for key, value in checks.items()
+            if key != "answer_exact_original_bodies_in_order_no_content_additions"
+        ),
+        "backend_chain_total": sum(
+            key != "answer_exact_original_bodies_in_order_no_content_additions" for key in checks
+        ),
         "phase_primary_calls": actual_primary_count,
         "targeted_new_cases": args.test_new_count,
         "targeted_affected_cases": args.test_affected_count,

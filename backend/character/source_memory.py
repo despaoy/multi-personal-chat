@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 import time
 from dataclasses import dataclass, field, replace
 from datetime import datetime
@@ -20,6 +21,24 @@ class SourceRecall:
     context: str = ""
     diagnostics: dict = field(default_factory=dict)
     candidate_context: str = ""
+
+
+def requested_source_successors(query):
+    """A closed request for each anchor's next currently visible raw record.
+
+    This resolves user-requested record order, never semantic project ownership
+    or the original physical message sequence before erasure.
+    """
+    if len(literal_project_source_terms(query)) != 1:
+        return False
+    compact = "".join(query.split())
+    if not re.search(r"每条(?:原始)?(?:交接)?记录", compact):
+        return False
+    match = re.search(r"(?:紧随其后的|紧接其后的|紧随各条记录的)下一条(?:仍可见)?(?:用户)?原话记录", compact)
+    if not match:
+        return False
+    return not re.search(r"(?:不要|不需要|无需|禁止|别|不含|排除|不包括)(?:列出|读取|查看|包括)?$",
+                         compact[max(0, match.start()-12):match.start()])
 
 
 def select_sources(linked, found, *, contextual=(), limit=4):
@@ -109,6 +128,8 @@ class SourceMemoryService:
             # a count-only SQL candidate cut cannot prove an exhaustive read.
             search_limit = None if self._defer_budget else 32
             project_tags = literal_project_source_terms(query)
+            requested_order = requested_source_successors(query)
+            effective_radius = 1 if requested_order else self._window_radius
             contextual_deferred = bool(project_tags and retrieval_context.strip())
             lanes = [linker(character_id, scope, memory_ids=ids),
                      search(character_id, scope, query=query, limit=search_limit)]
@@ -127,7 +148,7 @@ class SourceMemoryService:
             contextual_read_count = len(contextual)
             covered = {row["source_message_id"] for row in [*linked, *found, *contextual]
                        if covered_by_fact(row, memories)}
-            if not self._window_radius:
+            if not effective_radius:
                 linked = [row for row in linked if row["source_message_id"] not in covered]
                 found = [row for row in found if row["source_message_id"] not in covered]
                 contextual = [row for row in contextual if row["source_message_id"] not in covered]
@@ -138,24 +159,32 @@ class SourceMemoryService:
             selected, candidate_count = select_sources(linked, found, contextual=contextual,
                 limit=None if self._defer_budget else 4)
             window_ids = []
+            requested_followers = {}
             anchor_ids = [row["source_message_id"] for row in selected]
-            if self._window_radius and selected:
+            if effective_radius and selected:
                 windows = []
                 # The repository keeps its bounded four-anchor read contract.
                 for offset in range(0, len(anchor_ids), 4):
                     windows.extend(await self._repo.source_windows(character_id, scope,
-                        source_message_ids=tuple(anchor_ids[offset:offset + 4]), radius=self._window_radius))
+                        source_message_ids=tuple(anchor_ids[offset:offset + 4]), radius=effective_radius))
                 rows_by_id = {}
                 for window in windows:
                     rows = window["rows"]
+                    if requested_order:
+                        anchors = [row for row in rows if row['source_message_id'] == window['anchor_id']]
+                        if len(anchors) != 1:
+                            raise ValueError("Requested source-order anchor unavailable")
+                        rows = [anchors[0], *window['following_rows'][:1]]
+                        requested_followers[window['anchor_id']] = tuple(row['source_message_id'] for row in rows[1:])
+
                     # Exact fact dedup must not suppress the anchor needed to
                     # retrieve a source-only later correction.
-                    if len(rows) == 1 and window["anchor_id"] in covered:
+                    if len(rows) == 1 and window["anchor_id"] in covered and not requested_order:
                         continue
                     window_ids.append(dict(anchor_id=window["anchor_id"],
                                            source_ids=[row["source_message_id"] for row in rows]))
                     rows_by_id.update((row["source_message_id"], row) for row in rows)
-                selected = sorted(rows_by_id.values(), key=lambda row: (row["observed_at"], row["source_message_id"]))
+                selected = sorted(rows_by_id.values(), key=lambda row: (row["observed_at"], json.dumps(row["source_message_id"]) if requested_order else row["source_message_id"]))
             # Re-read only chosen identities after ranking. Erased sources must
             # not be restored from cached candidate text; use current SQL grant.
             fresh = []
@@ -168,6 +197,13 @@ class SourceMemoryService:
             fresh_by_id = {row["source_message_id"]: row for row in fresh}
             selected = [fresh_by_id[row["source_message_id"]] for row in selected
                         if row["source_message_id"] in fresh_by_id]
+            dependency_omitted = 0
+            if requested_order:
+                valid_ids = set(anchor_ids) | {child for parent, children in requested_followers.items()
+                                                if parent in fresh_by_id for child in children}
+                with_authorized_anchor = [row for row in selected if row['source_message_id'] in valid_ids]
+                dependency_omitted = len(selected) - len(with_authorized_anchor)
+                selected = with_authorized_anchor
             result = compile_sources(selected, max_chars=self._max_chars,
                                      max_items=None if self._defer_budget else 4 * (1 + 2 * self._window_radius))
             trace = dict(result.diagnostics, linked_count=len(linked), indexed_count=len(found),
@@ -178,7 +214,12 @@ class SourceMemoryService:
                          contextual_scope_deferred_to_explicit_task=contextual_deferred,
                          linked_project_scope_omitted=linked_project_omitted,
                          covered_by_fact_count=len(covered),
-                         window_radius=self._window_radius, windows=window_ids,
+                         window_radius=self._window_radius, effective_window_radius=effective_radius,
+                         requested_source_order="next_visible_after_each_anchor" if requested_order else "not_resolved",
+                         requested_following=[dict(anchor_id=key, source_ids=list(value)) for key,value in requested_followers.items()],
+                         following_missing_for_anchors=[key for key in anchor_ids if requested_order and not requested_followers.get(key)],
+                         following_anchor_dependency_omitted=dependency_omitted,
+                         windows=window_ids,
                          window_semantic_relation="not_inferred", anchor_ids=anchor_ids,
                          selection_omitted=max(0, candidate_count - len(anchor_ids)),
                          fresh_recheck_omitted=max(0, len(chosen_ids) - len(selected)),

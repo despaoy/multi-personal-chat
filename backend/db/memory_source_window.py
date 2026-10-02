@@ -16,6 +16,7 @@ def window_plan(scope, source_message_ids, *, radius=1):
         params = dict(scope, at=anchor["observed_at"],
                       anchor_key=source_identity(scope, anchor["source_message_id"])["source_key"], limit=radius)
         sides = []
+        directional_rows = {}
         for operator, direction in (("<", "DESC"), (">", "ASC")):
             base = ("SELECT source_message_id, observed_at, body, source_key FROM memory_sources "
                     "WHERE scope_key = :scope_key AND state = 'recorded' "
@@ -30,5 +31,7 @@ def window_plan(scope, source_message_ids, *, radius=1):
                           + same + ") AS same_time UNION ALL SELECT * FROM (" + other
                           + ") AS other_time) AS candidates" + order, params)
             sides.extend(rows)
-        windows.append(dict(anchor_id=anchor["source_message_id"], rows=[anchor, *sides]))
+            directional_rows[direction] = rows
+        windows.append(dict(anchor_id=anchor["source_message_id"], rows=[anchor, *sides],
+                            preceding_rows=directional_rows["DESC"], following_rows=directional_rows["ASC"]))
     return windows

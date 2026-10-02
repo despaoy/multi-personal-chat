@@ -1,0 +1,115 @@
+{
+  "schema": 3,
+  "synthetic": true,
+  "phase_status": "backend_verified_model_contract_open",
+  "case": {
+    "schema": 3,
+    "synthetic": true,
+    "case_kind": "requested_visible_source_successor",
+    "reference_time": "2026-10-02T18:45:28.905976+00:00",
+    "question": "请逐字列出我之前提供的 VX642 项目每条原始交接记录及紧随其后的下一条仍可见用户原话记录，按记录先后排列；保留各自完整数值与末尾限制，不改写、不补充。",
+    "sources": [
+      {
+        "id": "stage71-source-01",
+        "body": "NT480：独立项目记录，数值29，限制：仅供该项目复核。",
+        "observed_at": "2026-10-02T18:35:28.905976+00:00"
+      },
+      {
+        "id": "stage71-source-02",
+        "body": "VX642-R1：数值119，限制：批次Q8复核前禁用。",
+        "observed_at": "2026-10-02T18:35:29.905976+00:00"
+      },
+      {
+        "id": "stage71-source-03",
+        "body": "上一条原始交接记录的完整补充：额外数值37，限制：签字复核前不得转交。",
+        "observed_at": "2026-10-02T18:35:30.905976+00:00"
+      },
+      {
+        "id": "stage71-source-04",
+        "body": "NT481：独立项目记录，数值42，限制：不得代替其他项目记录。",
+        "observed_at": "2026-10-02T18:35:31.905976+00:00"
+      },
+      {
+        "id": "stage71-source-05",
+        "body": "NT482：独立项目记录，数值55，限制：复核后才可登记。",
+        "observed_at": "2026-10-02T18:35:32.905976+00:00"
+      }
+    ],
+    "required_source_ids": [
+      "stage71-source-02",
+      "stage71-source-03"
+    ],
+    "expected_bodies": [
+      "VX642-R1：数值119，限制：批次Q8复核前禁用。",
+      "上一条原始交接记录的完整补充：额外数值37，限制：签字复核前不得转交。"
+    ],
+    "declared_order_relation": {
+      "anchor_id": "stage71-source-02",
+      "following_id": "stage71-source-03",
+      "kind": "next_currently_visible_scoped_user_source"
+    },
+    "seed_method": "actual full source capture; no inferred current user facts"
+  },
+  "baseline_commit": "ecdd52d85e3ed575155f211f23a1679670a4bf8d",
+  "expected_strict_answer": "VX642-R1：数值119，限制：批次Q8复核前禁用。\n\n上一条原始交接记录的完整补充：额外数值37，限制：签字复核前不得转交。",
+  "baseline_summary": {
+    "needed_packet_chars": 396,
+    "needed_canonical_estimated_total": 4657,
+    "expected_answer_estimate": 53,
+    "missing_source_ids": [
+      "stage71-source-03"
+    ],
+    "storage_unchanged": true,
+    "cross_owner_rejected": true
+  },
+  "actual_primary_estimated_total": 4908,
+  "fixed_summary": {
+    "chain_passed": 46,
+    "chain_total": 47,
+    "answer_passed": 2,
+    "answer_total": 2,
+    "answer": "当前可见的历史用户原话记录中，与 VX642 相关的只有一条：\n\n1. “VX642-R1：数值119，限制：批次Q8复核前禁用。”\n\n紧随其后仍可见的下一条用户原话记录是：\n\n2. “上一条原始交接记录的完整补充：额外数值37，限制：签字复核前不得转交。”\n\n按记录先后排列如上。没有找到其他 VX642 项目的原始交接记录。",
+    "answer_fidelity": {
+      "exact_bodies_in_order_no_content_additions": false,
+      "byte_identical_to_blank_line_join": false,
+      "markdown_hard_line_breaks": 0,
+      "expected_body_count": 2
+    },
+    "qualified_cloud_calls": 4,
+    "baseline_auxiliary_calls": 2,
+    "phase_cloud_calls": 6,
+    "qualified_answers": 0,
+    "strict_answer_contract_passed": false,
+    "answer_contract_failures": 1,
+    "backend_chain_passed": 46,
+    "backend_chain_total": 46,
+    "phase_primary_calls": 1,
+    "targeted_new_cases": 21,
+    "targeted_affected_cases": 8,
+    "targeted_unique_passed": 29,
+    "targeted_executions": 29,
+    "all_calls_pro": true,
+    "no_full_suite": true,
+    "no_passing_model_replay": true,
+    "no_production_chat_writes": true
+  },
+  "window_query_equivalence": {
+    "sql_and_bindings_identical": true,
+    "legacy_rows_identical": true,
+    "following_source_ids": [
+      "stage71-source-03"
+    ],
+    "preceding_source_ids": [
+      "stage71-source-01"
+    ],
+    "source_sha256": "30879c52fcf0f827ca8130e2afdde1c570b7a9081c6aa0afafe28234582c876c",
+    "original_source_sha256": "6c6f706df1b77661b5e5f7b295e4332f12ee61612002ea4afa89fd56680ec22c",
+    "readonly": true
+  },
+  "strict_original_question_and_expected_answer_unchanged": true,
+  "raw_reply_retained_without_trimming": true,
+  "no_model_retry_for_extra_answer_words": true,
+  "qualified_strict_answers": 0,
+  "actual_completed_primary_replies": 1,
+  "seed_method": "actual complete source capture; no current facts manufactured"
+}
