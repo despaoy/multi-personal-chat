@@ -797,7 +797,7 @@ class CharacterMemoryService:
         read_limit = None if for_contextual_selection else self._candidate_limit
         retrieval_query = query
         if for_contextual_selection and retrieval_context.strip():
-            retrieval_query = f"{query}\n最近用户话题参考：{retrieval_context[-1200:]}"
+            retrieval_query = f"{query}\n最近用户话题参考：{retrieval_context}"
         historical_window = _historical_query_window(query, now)
         historical_requested = historical_window is not None
         if include_historical is not None:

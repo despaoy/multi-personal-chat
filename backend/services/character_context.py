@@ -69,6 +69,12 @@ if TYPE_CHECKING:
     from repositories.messages import MessageRepository
     from services.delivery_memory import CompletionSnapshot
 
+def compile_user_recall_context(history):
+    """Use complete available user history; assistant guesses are not query facts."""
+    return "\n".join(item["content"] for item in history
+                     if item.get("role")=="user" and isinstance(item.get("content"),str))
+
+
 logger = logging.getLogger(__name__)
 
 # prepare_turn 并发加载时历史读取的参数
@@ -258,12 +264,9 @@ class CharacterContextService:
             # Context is needed before recall, not only after an arbitrary top-k.
             # Assistant guesses are excluded from query expansion; both speakers
             # remain available to the final semantic selector as untrusted data.
-            recent_user_text = "\n".join(
-                item.get("content", "")[-600:] for item in history[-6:]
-                if item.get("role") == "user" and isinstance(item.get("content"), str)
-            )[-1200:]
+            user_topic_context = compile_user_recall_context(history)
             memories = await self._load_memory_candidates(
-                character_id, user_scope, turn.message, retrieval_context=recent_user_text, reference_time=received_at,
+                character_id, user_scope, turn.message, retrieval_context=user_topic_context, reference_time=received_at,
             )
         else:
             profile, relationship_record, memories, history, relationship_notes = await asyncio.gather(
