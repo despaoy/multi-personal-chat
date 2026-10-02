@@ -1234,7 +1234,14 @@ async def _retrieve_rag_bundle(query: str, top_k: int, filters: dict[str, Any] |
             if matched:
                 raise RuntimeError("Requested character knowledge domain is unavailable")
 
+        from api.knowledge import _ensure_vector_index
         from knowledge.rag_helper import get_rag_helper
+
+        # A normal generation does not necessarily follow the search API.
+        # Resolve dirty metadata/content before consulting either cached RAG
+        # path; an incomplete rebuild cannot authorize stale source evidence.
+        if not _ensure_vector_index():
+            raise RuntimeError("Generic knowledge index is not ready")
 
         if os.getenv("CORRECTIVE_RAG_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}:
             from knowledge.corrective_rag import get_corrective_rag

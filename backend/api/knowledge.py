@@ -933,8 +933,13 @@ async def update_knowledge_document(
                 except Exception as ve:
                     logger.warning("更新向量数据库失败: %s", ve)
 
-            # 内容变更后必须标记 dirty：即使 chunk 数量不变，内容指纹也会不同，
-            # 下次搜索会触发重建，避免旧向量被检索
+        # Indexed metadata is part of the evidence identity and KB filter.
+        # Invalidate after a successful update even when chunks are unchanged;
+        # unchanged fields and unrelated file metadata need no rebuild.
+        indexed_metadata = ("title", "category", "knowledge_base_id")
+        if "content" in update_data or any(
+            update_data[key] != existing_doc.get(key) for key in indexed_metadata if key in update_data
+        ):
             await run_db(_mark_rebuild_dirty)
 
         logger.info("更新知识库文档: %s", doc_id)
