@@ -4,22 +4,25 @@
 提供多种索引类型（Flat/IVF/HNSW）、BM25关键词检索、混合搜索、元数据过滤、批量操作等功能。
 """
 
-import os
-import re
-import math
-import json
 import hashlib
-import numpy as np
-import faiss
-import pickle
+import json
 import logging
+import math
+import os
+import pickle
+import re
 import time
+from collections import Counter, OrderedDict, defaultdict
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import List, Dict, Any, Tuple, Optional, Set
 from threading import RLock
-from collections import Counter, defaultdict, OrderedDict
-from dataclasses import dataclass, field
+from typing import Any, Dict, List, Optional, Set, Tuple
+
+import faiss
+import numpy as np
+
+from knowledge.snapshot_store import SNAPSHOT_NAME, load_snapshot, save_snapshot
 
 logger = logging.getLogger(__name__)
 
@@ -203,6 +206,9 @@ class VectorDatabase:
         self.metadata_path = self.db_path / "metadata.pkl"
         self.bm25_path = self.db_path / "bm25_state.pkl"
         self.config_path = self.db_path / "db_config.json"
+        self.snapshot_path = self.db_path / SNAPSHOT_NAME
+        self.snapshot_validated = False
+        self._snapshot_bm25 = None
 
         self.config = index_config or IndexConfig()
         self.index: Optional[faiss.Index] = None
@@ -279,7 +285,7 @@ class VectorDatabase:
 
     def _ensure_index(self):
         if self.index is None:
-            if self.index_path.exists():
+            if self.snapshot_path.exists() or self.index_path.exists():
                 self._load_index()
             else:
                 self._create_index()
@@ -315,34 +321,50 @@ class VectorDatabase:
 
     def _load_index(self):
         try:
-            self.index = faiss.read_index(str(self.index_path))
-            if self.metadata_path.exists():
-                with open(self.metadata_path, 'rb') as f:
-                    self.metadata = pickle.load(f)
+            if self.snapshot_path.exists():
+                self.index, self.metadata, self._snapshot_bm25 = load_snapshot(
+                    self.db_path, self.EMBEDDING_DIM, self._to_faiss_id
+                )
+                self.snapshot_validated = True
+            else:
+                # Legacy triples remain readable but cannot authorize API reuse.
+                self.index = faiss.read_index(str(self.index_path))
+                if self.metadata_path.exists():
+                    with open(self.metadata_path, 'rb') as f:
+                        self.metadata = pickle.load(f)
             logger.info(f"加载FAISS索引完成，共 {len(self.metadata)} 条记录")
         except Exception as e:
             logger.error(f"加载索引失败: {e}")
+            self.metadata = []
+            self._snapshot_bm25 = None
+            self.snapshot_validated = False
             self._create_index("flat")
 
     def _load_bm25(self):
-        if self.bm25_path.exists():
-            try:
+        try:
+            if self.snapshot_path.exists():
+                bm25_data = self._snapshot_bm25
+                if bm25_data is None:
+                    return  # Invalid snapshots never fall back to legacy files.
+            elif self.bm25_path.exists():
                 with open(self.bm25_path, 'rb') as f:
                     bm25_data = pickle.load(f)
-                self.bm25.corpus = bm25_data.get("corpus", [])
-                self.bm25.doc_freqs = defaultdict(int, bm25_data.get("doc_freqs", {}))
-                self.bm25.doc_lens = bm25_data.get("doc_lens", [])
-                self.bm25.avgdl = bm25_data.get("avgdl", 0.0)
-                self.bm25.idf = bm25_data.get("idf", {})
-                self.bm25.tokenized_corpus = bm25_data.get("tokenized_corpus", [])
-                self.bm25._built = bm25_data.get("built", False)
-                logger.info(f"BM25状态加载完成，{len(self.bm25.corpus)} 个文档")
-            except Exception as e:
-                logger.warning(f"BM25状态加载失败: {e}")
+            else:
+                return
+            self.bm25.corpus = bm25_data["corpus"]
+            self.bm25.doc_freqs = defaultdict(int, bm25_data["doc_freqs"])
+            self.bm25.doc_lens = bm25_data["doc_lens"]
+            self.bm25.avgdl = bm25_data["avgdl"]
+            self.bm25.idf = bm25_data["idf"]
+            self.bm25.tokenized_corpus = bm25_data["tokenized_corpus"]
+            self.bm25._built = bm25_data["built"]
+        except Exception as e:
+            self.snapshot_validated = False
+            self.bm25 = BM25Retriever()
+            logger.warning("BM25状态加载失败: %s", e)
 
-    def _save_bm25(self):
-        """持久化 BM25 状态，使用原子替换。失败时抛出异常，不吞错。"""
-        bm25_data = {
+    def _bm25_state(self):
+        return {
             "corpus": self.bm25.corpus,
             "doc_freqs": dict(self.bm25.doc_freqs),
             "doc_lens": self.bm25.doc_lens,
@@ -351,10 +373,10 @@ class VectorDatabase:
             "tokenized_corpus": self.bm25.tokenized_corpus,
             "built": self.bm25._built,
         }
-        tmp_path = str(self.bm25_path) + ".tmp"
-        with open(tmp_path, 'wb') as f:
-            pickle.dump(bm25_data, f)
-        os.replace(tmp_path, str(self.bm25_path))
+
+    def _save_bm25(self):
+        # A keyword-only publication would break snapshot coherence.
+        self._save_index()
 
     def _rebuild_id_mapping(self):
         self._id_to_index = {}
@@ -366,25 +388,14 @@ class VectorDatabase:
                     self._id_to_index[faiss_id] = i
 
     def _save_index(self):
-        """持久化 FAISS 索引、metadata 和 BM25 状态，使用原子替换。
-
-        失败时抛出异常（不吞错），确保调用方（如 _ensure_vector_index）
-        不会在落盘失败时误标记 complete。
-        """
+        """Publish the complete triple together; failures remain dirty."""
         with self._lock:
-            # FAISS: 写入临时文件后原子替换
-            tmp_index = str(self.index_path) + ".tmp"
-            faiss.write_index(self.index, tmp_index)
-            os.replace(tmp_index, str(self.index_path))
-            # metadata: 同样原子替换
-            tmp_meta = str(self.metadata_path) + ".tmp"
-            with open(tmp_meta, 'wb') as f:
-                pickle.dump(self.metadata, f)
-            os.replace(tmp_meta, str(self.metadata_path))
-            # BM25
-            self._save_bm25()
+            self._dirty = True
+            save_snapshot(self.db_path, self.index, self.metadata, self._bm25_state(),
+                          self.EMBEDDING_DIM, self._to_faiss_id)
+            self.snapshot_validated = True
             self._dirty = False
-            logger.info("FAISS索引和BM25状态保存完成")
+            logger.info("FAISS、来源与BM25完整快照保存完成")
 
     def _to_faiss_id(self, id_value: Any) -> Optional[int]:
         try:

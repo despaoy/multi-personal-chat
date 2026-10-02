@@ -1,0 +1,43 @@
+{
+  "history_template": {
+    "turn_count": 0,
+    "records_per_turn": 0,
+    "heading": "",
+    "line": "",
+    "reply": "",
+    "expanded_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+  },
+  "documents": [
+    {
+      "title": "澜岚工坊玻璃镶嵌课事务更新确认规则",
+      "content": "澜岚工坊玻璃镶嵌课现行完整确认规则：课程改为2026年12月20日周日，在南桥澜岚工坊三楼竹影教室16:10开课，17:50结束。联系人舒棠，公开预约编号LL-842-Q。参加者必须带护目镜及耐割手套。普通雨天课程照常进行，只有红色暴雨预警时才停课。预约须在12月18日周五19:00前提交，并收到工坊书面确认才算成功。原12月13日二楼藤月教室15:20和LL-936-T规则已作废；更早的周二14:00草案及晴岸课程也不能替代本课。公开规则不能证明任何人的个人预约已确认。这是完整的合成课程规则。",
+      "category": "未分类"
+    },
+    {
+      "title": "澜岚工坊玻璃镶嵌课已作废草案并发核对",
+      "content": "已作废的澜岚工坊玻璃镶嵌课草案曾写周二14:00，联系人苏茵，编号LL-OLD-312。本文明确只保留已作废草案，不提供现行课程的日期、时间、地点或预约成功证明。不能将它当作现行规则。",
+      "category": "草案对照"
+    },
+    {
+      "title": "晴岸工坊玻璃绘画课说明",
+      "content": "晴岸工坊玻璃绘画课在周日10:00进行，联系人许遥，编号QA-187。晴岸不是南桥澜岚工坊，玻璃绘画不是玻璃镶嵌，本课程的时间和编号不能代替澜岚玻璃镶嵌课。",
+      "category": "其他课程"
+    }
+  ],
+  "knowledge_base": "澜岚玻璃镶嵌已确认资料库",
+  "cases": [
+    {
+      "id": "coherent_snapshot_keyword_source",
+      "message": "请以公开编号LL-842-Q检索它所属课程的现行完整安排：课程名称、2026年日期及星期、楼层教室、开始与结束时间、联系人、公开编号、必带装备、普通雨天安排和唯一停课例外、提交截止日期星期与时间、预约成功所需的确认条件。请依据当前资料区分已作废规则与晴岸玻璃绘画课，说明编号本身能否证明我的个人预约已经成功，并给出实际使用的可靠出处；没有依据不要推测。"
+    }
+  ],
+  "execution": {
+    "stage": 51,
+    "source_run": "stage50-container-fixed",
+    "source_checks": "34/34",
+    "new_case_only": true,
+    "old_scenario_replays": 0,
+    "no_document_mutations": true,
+    "new_storage_window": "two independent writers, equal counts, real reader between A metadata and keyword writes"
+  }
+}

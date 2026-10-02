@@ -1127,6 +1127,8 @@ def _loaded_metadata_matches_database(vector_db) -> bool:
     # A global complete marker may belong to another worker/index directory.
     # Check this process's loaded evidence rather than authorizing it by count.
     with vector_db._lock:
+        if not getattr(vector_db, "snapshot_validated", False):
+            return False
         actual = {record.get("id"): record for record in vector_db.metadata}
         if len(actual) != len(vector_db.metadata):
             return False
@@ -1192,7 +1194,8 @@ def _ensure_vector_index():
             # expected_count == 0：必须清空并持久化空索引，防止旧磁盘文件残留
             if expected_count == 0:
                 needs_clear = (
-                    stats["total_documents"] != 0
+                    not getattr(vector_db, "snapshot_validated", False)
+                    or stats["total_documents"] != 0
                     or stats["index_size"] != 0
                     or stats["bm25_corpus_size"] != 0
                     or status != "complete"
