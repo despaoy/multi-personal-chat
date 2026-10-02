@@ -1008,23 +1008,49 @@ class PgDatabase:
                 if len(rows) < batch_size:
                     break
 
-    async def iter_chunks_with_document(self, batch_size: int = 500):
-        """分页迭代 chunk 及其所属文档（LEFT JOIN），避免 N+1 查询。
+    async def iter_chunk_document_batches(self, batch_size: int = 500):
+        """Read all pages from one read-only repeatable database snapshot."""
+        from sqlalchemy import select
 
-        与 SQLiteDB.iter_chunks_with_document 行为一致：每次 yield 一条 dict，
-        包含 chunk 字段和文档字段（doc_title / doc_category / doc_kb_id）。
-        孤儿 chunk（文档已删除）的 doc_title 为 None，调用方可跳过。
-        """
-        offset = 0
-        while True:
-            batch = await self.get_chunks_with_document(limit=batch_size, offset=offset)
-            if not batch:
-                break
-            for row in batch:
-                yield row
-            offset += len(batch)
-            if len(batch) < batch_size:
-                break
+        if not isinstance(batch_size, int) or isinstance(batch_size, bool) or batch_size <= 0:
+            raise ValueError("batch_size must be a positive integer")
+        statement = (
+            select(
+                knowledge_chunks_table,
+                knowledge_documents_table.c.title.label("doc_title"),
+                knowledge_documents_table.c.category.label("doc_category"),
+                knowledge_documents_table.c.knowledge_base_id.label("doc_kb_id"),
+            )
+            .select_from(knowledge_chunks_table.outerjoin(
+                knowledge_documents_table,
+                knowledge_chunks_table.c.documentId == knowledge_documents_table.c.id,
+            ))
+            .order_by(knowledge_chunks_table.c.documentId, knowledge_chunks_table.c.chunkIndex,
+                      knowledge_chunks_table.c.id)
+        )
+        async with self.engine.connect() as connection:
+            await connection.execution_options(isolation_level="REPEATABLE READ")
+            async with connection.begin():
+                await connection.execute(text("SET TRANSACTION READ ONLY"))
+                offset = 0
+                while True:
+                    result = await connection.execute(statement.limit(batch_size).offset(offset))
+                    batch = [_row_to_dict(row) for row in result.fetchall()]
+                    if not batch:
+                        return
+                    yield batch
+                    offset += len(batch)
+                    if len(batch) < batch_size:
+                        return
+
+    async def iter_chunks_with_document(self, batch_size: int = 500):
+        batches = self.iter_chunk_document_batches(batch_size=batch_size)
+        try:
+            async for batch in batches:
+                for row in batch:
+                    yield row
+        finally:
+            await batches.aclose()
 
     async def get_chunks_with_document(self, limit: int = 500, offset: int = 0) -> List[Dict]:
         """单页查询 chunk + document（LEFT JOIN），返回 dict 列表。
@@ -2830,6 +2856,7 @@ class SyncPgAdapter:
         self._thread = None
         self._state_lock = threading.RLock()
         self._pending: set[concurrent.futures.Future] = set()
+        self._knowledge_readers: set = set()
         self._closed = False
         self._init_timeout = self._validate_timeout("init_timeout", init_timeout)
         self._operation_timeout = self._validate_timeout("operation_timeout", operation_timeout)
@@ -2863,6 +2890,10 @@ class SyncPgAdapter:
             task.cancel()
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
+        # Idle async generators also own checked-out read transactions.
+        for reader in tuple(self._knowledge_readers):
+            await reader.aclose()
+        self._knowledge_readers.clear()
         await self._pg.close()
 
     def _stop_loop_locked(self, *, close_backend: bool) -> None:
@@ -3104,23 +3135,29 @@ class SyncPgAdapter:
                 break
 
     def iter_chunks_with_document(self, batch_size: int = 500):
-        """同步生成器版本：分页迭代 chunk + document（LEFT JOIN）。
+        """Bridge whole snapshot batches, keeping memory bounded to one page."""
+        batches = self._pg.iter_chunk_document_batches(batch_size=batch_size)
+        self._knowledge_readers.add(batches)
 
-        与 iter_all_knowledge_chunks 同样回退到分页批量拉取，每条 dict 包含
-        chunk 字段及 doc_title / doc_category / doc_kb_id。
-        """
-        # PgDatabase.iter_chunks_with_document 是 async generator，无法直接 _run。
-        # 改为分页调用底层 SQL，与 SQLite 实现保持语义一致。
-        offset = 0
-        while True:
-            batch = self._run(self._pg.get_chunks_with_document(limit=batch_size, offset=offset))
-            if not batch:
-                break
-            for row in batch:
-                yield row
-            offset += len(batch)
-            if len(batch) < batch_size:
-                break
+        async def next_batch():
+            return await anext(batches)
+
+        async def close_batches():
+            await batches.aclose()
+
+        try:
+            while True:
+                try:
+                    batch = self._run(next_batch())
+                except StopAsyncIteration:
+                    return
+                yield from batch
+        finally:
+            try:
+                if not self._closed:
+                    self._run(close_batches())
+            finally:
+                self._knowledge_readers.discard(batches)
 
     def add_knowledge_chunk(self, chunk_data):
         return self._run(self._pg.add_knowledge_chunk(chunk_data))

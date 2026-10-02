@@ -2168,32 +2168,35 @@ class SQLiteDB:
                 break
 
     def iter_chunks_with_document(self, batch_size: int = 500):
-        """分页迭代 chunk 及其所属文档（LEFT JOIN），避免 N+1 查询。
-
-        每次 yield 一条 dict，包含 chunk 字段和 document 字段（以 doc_ 前缀）。
-        孤儿 chunk（文档已删除）的 doc_title 为 None，调用方可跳过。
-        """
-        conn = self._get_connection()
-        cursor = conn.cursor()
-        offset = 0
-        while True:
-            cursor.execute(
-                '''SELECT c.*, d.title AS doc_title, d.category AS doc_category,
-                          d.knowledge_base_id AS doc_kb_id
-                   FROM knowledge_chunks c
-                   LEFT JOIN knowledge_documents d ON c.documentId = d.id
-                   ORDER BY c.documentId, c.chunkIndex
-                   LIMIT ? OFFSET ?''',
-                (batch_size, offset)
-            )
-            rows = cursor.fetchall()
-            if not rows:
-                break
-            for row in rows:
-                yield dict(row)
-            offset += len(rows)
-            if len(rows) < batch_size:
-                break
+        """Keep every page in one dedicated read-only SQLite transaction."""
+        if not isinstance(batch_size, int) or isinstance(batch_size, bool) or batch_size <= 0:
+            raise ValueError("batch_size must be a positive integer")
+        connection = sqlite3.connect(str(self.db_path), isolation_level=None, timeout=5)
+        connection.row_factory = sqlite3.Row
+        try:
+            connection.execute("PRAGMA query_only=ON")
+            connection.execute("BEGIN")
+            offset = 0
+            while True:
+                rows = connection.execute(
+                    """SELECT c.*, d.title AS doc_title, d.category AS doc_category,
+                              d.knowledge_base_id AS doc_kb_id
+                       FROM knowledge_chunks c
+                       LEFT JOIN knowledge_documents d ON c.documentId = d.id
+                       ORDER BY c.documentId, c.chunkIndex, c.id
+                       LIMIT ? OFFSET ?""",
+                    (batch_size, offset),
+                ).fetchall()
+                if not rows:
+                    return
+                for row in rows:
+                    yield dict(row)
+                offset += len(rows)
+                if len(rows) < batch_size:
+                    return
+        finally:
+            connection.rollback()
+            connection.close()
 
     def get_knowledge_stats(self):
         """获取知识库统计数据"""

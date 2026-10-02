@@ -1,0 +1,66 @@
+{
+  "history_template": {
+    "turn_count": 0,
+    "records_per_turn": 0,
+    "heading": "",
+    "line": "",
+    "reply": "",
+    "expanded_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+  },
+  "documents": [
+    {
+      "title": "澜岚工坊玻璃镶嵌课事务更新确认规则",
+      "content": "澜岚工坊玻璃镶嵌课现行完整确认规则：课程改为2026年12月20日周日，在南桥澜岚工坊三楼竹影教室16:10开课，17:50结束。联系人舒棠，公开预约编号LL-842-Q。参加者必须带护目镜及耐割手套。普通雨天课程照常进行，只有红色暴雨预警时才停课。预约须在12月18日周五19:00前提交，并收到工坊书面确认才算成功。原12月13日二楼藤月教室15:20和LL-936-T规则已作废；更早的周二14:00草案及晴岸课程也不能替代本课。公开规则不能证明任何人的个人预约已确认。这是完整的合成课程规则。",
+      "category": "未分类"
+    },
+    {
+      "title": "澜岚工坊玻璃镶嵌课已作废草案并发核对",
+      "content": "已作废的澜岚工坊玻璃镶嵌课草案曾写周二14:00，联系人苏茵，编号LL-OLD-312。本文明确只保留已作废草案，不提供现行课程的日期、时间、地点或预约成功证明。不能将它当作现行规则。",
+      "category": "草案对照"
+    },
+    {
+      "title": "晴岸工坊玻璃绘画课说明",
+      "content": "晴岸工坊玻璃绘画课在周日10:00进行，联系人许遥，编号QA-187。晴岸不是南桥澜岚工坊，玻璃绘画不是玻璃镶嵌，本课程的时间和编号不能代替澜岚玻璃镶嵌课。",
+      "category": "其他课程"
+    }
+  ],
+  "knowledge_base": "澜岚玻璃镶嵌已确认资料库",
+  "cases": [
+    {
+      "id": "matching_current_versions_after_page_updates",
+      "message": "请按公开编号LL-842-Q核对南桥澜岚工坊玻璃镶嵌课当前配套版本的完整规则。请结合完整课程安排和同版本完整预约确认规则，说明版本、2026年日期星期、楼层教室、开始结束时间、联系人、必带装备、普通雨天及唯一停课例外、预约截止日期星期时间和成功所需的确认条件。区别已作废版本，说明编号是否证明我的个人预约已成功，给出实际使用的可靠出处；不能把不同配套版本拼成一个安排，也不要根据历史答案猜测。"
+    }
+  ],
+  "execution": {
+    "stage": 52,
+    "source_run": "stage51-snapshot-fixed",
+    "source_checks": "23/23",
+    "new_case_only": true,
+    "old_scenario_replays": 0,
+    "actual_page_size": 500,
+    "actual_document_count": 503,
+    "actual_distinct_writer": "A changes then B changes; old A plus new B never existed"
+  },
+  "initial_arrangement": {
+    "title": "澜岚玻璃镶嵌课分页核对完整安排",
+    "content": "澜岚工坊玻璃镶嵌课完整安排，公开编号LL-842-Q，资料配套版本CR-20。课程于2026年12月20日周日，在南桥澜岚工坊三楼竹影教室16:10开课、17:50结束，联系人舒棠。参加者必须带护目镜及耐割手套。普通雨天照常，唯一停课例外为红色暴雨预警。预约截止和成功条件必须读取同版本CR-20的独立完整预约确认规则，不得将不同版本拼接；公开编号不能证明个人预约已成功。这是完整合成规则。"
+  },
+  "initial_confirmation": {
+    "title": "澜岚玻璃镶嵌课分页核对完整预约确认规则",
+    "content": "澜岚工坊玻璃镶嵌课公开编号LL-842-Q的完整预约确认规则，资料配套版本CR-20。预约须在2026年12月18日周五19:00前提交，且收到工坊书面确认才算成功。课程安排须读取同版本CR-20的完整安排，不得拼接另一版本；公开编号和提交申请都不能证明个人预约已成功。这是完整合成规则。"
+  },
+  "final_arrangement": {
+    "title": "澜岚玻璃镶嵌课分页核对完整安排",
+    "content": "澜岚工坊玻璃镶嵌课现行完整安排，公开编号LL-842-Q，资料配套版本CR-26。课程改为2026年12月26日周六，在南桥澜岚工坊四楼兰亭教室14:50开课、16:30结束，联系人禾音。参加者必须带护目镜及耐割手套。普通雨天照常，唯一停课例外仍为红色暴雨预警。预约截止和成功条件必须读取同版本CR-26的独立完整预约确认规则，不得将不同版本拼接。原CR-20版本12月20日三楼竹影教室16:10及舒棠安排已作废。公开编号不能证明个人预约已成功。这是完整合成规则。"
+  },
+  "final_confirmation": {
+    "title": "澜岚玻璃镶嵌课分页核对完整预约确认规则",
+    "content": "澜岚工坊玻璃镶嵌课公开编号LL-842-Q的现行完整预约确认规则，资料配套版本CR-26。预约须在2026年12月24日周四18:30前提交，且收到工坊书面邮件确认才算成功。课程安排须读取同版本CR-26的完整安排，不得拼接另一版本。原CR-20版本12月18日周五19:00截止条件已作废。公开编号和提交申请都不能证明个人预约已成功。这是完整合成规则。"
+  },
+  "distractors": {
+    "count": 499,
+    "title_template": "Synthetic inventory record NM-{index:03d}",
+    "content_template": "Complete synthetic inventory NM-{index:03d}: item river stone; quantity three; storage shelf seven; audit date 2026-10-02; status counted. This record defines inventory only and contains no course, appointment or attendance rules."
+  },
+  "search_query": "澜岚玻璃镶嵌 LL-842-Q 完整安排预约确认规则"
+}
