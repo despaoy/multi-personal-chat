@@ -1,0 +1,33 @@
+{
+  "schema": 1,
+  "synthetic": true,
+  "initial": {
+    "id": "stage65-initial",
+    "body": "我现在住在仙桃。",
+    "observed_at": "2026-09-30T01:00:00+00:00"
+  },
+  "correction": {
+    "id": "stage65-correction",
+    "body": "更正，我现在住在丽水。",
+    "observed_at": "2026-10-01T01:00:00+00:00"
+  },
+  "reference_time": "2026-10-02T02:00:00+00:00",
+  "question": "我在2017年参加过一次摄影培训。请告诉我，我的现居地是什么？",
+  "control_question": "请告诉我，我的现居地是什么？",
+  "expected": {
+    "current_residence": "丽水",
+    "superseded_residence": "仙桃",
+    "background_event_year": 2017,
+    "query_time_mode": "current",
+    "source_historical_fact_not_requested": true
+  },
+  "additional_queries": {
+    "dated_self_event": "我在2017年参加过一次摄影培训。请告诉我，我的现居地是什么？",
+    "dated_other_owner": "我的室友在2019年参加过一次摄影培训。请告诉我，我的现居地是什么？",
+    "dated_publication": "我读过一本2020年出版的摄影教材。请告诉我，我的现居地是什么？",
+    "current_control": "请告诉我，我的现居地是什么？",
+    "historical_september": "2026年9月我的居住地是什么？",
+    "historical_year_missing": "2017年我的居住地是什么？",
+    "historical_reference": "我在2017年参加过一次摄影培训。那时我的居住地是什么？"
+  }
+}

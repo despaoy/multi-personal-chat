@@ -1,4 +1,4 @@
-"""Saved evidence of current memory recall with an unrelated birth assertion."""
+"""Saved evidence of current memory recall with a complete dated background."""
 
 import re
 from html import unescape
@@ -69,7 +69,7 @@ def audit_query_time_role(proof, fixture, calls, storage):
             and "candidates" in c["request"]["messages"][-1]["content"]
             for c in calls
         ),
-        "current_recall_not_filtered_by_birth_year": recall.get("status") == "selected"
+        "current_recall_not_filtered_by_background_year": recall.get("status") == "selected"
         and recall.get("selected_count") == 1
         and recall.get("usable_records") == 1,
         "current_field_presence_known": recall.get("field_presence", {}).get("residence") is True,
@@ -84,7 +84,7 @@ def audit_query_time_role(proof, fixture, calls, storage):
         "current_packet_has_exact_correction_source": len(active) == 1
         and fixture["correction"]["id"] in active[0].get("source_message_ids", []),
         "current_residence_in_actual_private_wire": bool(memory) and expected["current_residence"] in memory[1],
-        "birth_assertion_and_complete_question_still_in_wire": fixture["question"] in wire,
+        "background_and_complete_question_still_in_wire": fixture["question"] in wire,
         "private_data_not_system_instruction": bool(messages)
         and all(
             fixture["correction"]["body"] not in m["content"]
@@ -113,7 +113,11 @@ def audit_query_time_role(proof, fixture, calls, storage):
             r"(?:目前|现在|当前|现居地|住址)[^。！？\n]{0,15}" + expected["superseded_residence"], reply
         ),
         "answers_user_not_character": bool(re.search(r"你[^。！？\n]{0,20}" + expected["current_residence"], reply)),
-        "no_1998_residence_claim": not re.search(r"1998年[^。！？\n]{0,15}(?:住|居住|现居)", reply),
+        "no_background_year_residence_claim": not re.search(
+            str(expected.get("background_event_year", expected.get("birth_year", "")))
+            + r"年[^。！？\n]{0,15}(?:住|居住|现居)",
+            reply,
+        ),
         "does_not_falsely_claim_missing_residence": not re.search(
             r"(?:不知道|不清楚|没有记录|无法确认)[^。！？\n]{0,15}(?:住|居住|现居)", reply
         ),

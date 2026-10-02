@@ -240,12 +240,18 @@ def _next_month(value: datetime) -> datetime:
 
 
 def _historical_query_text(query: str) -> str:
-    """A complete birth-date assertion dates birth, not the requested claim.
+    """Resolve a closed current task before masking independent birth assertions.
 
     Keep unknown grammar and interrogative birth clauses unchanged. This only
     masks the calendar expression for time-window routing; the complete user
     text remains available to ranking, reviewers, provenance and generation.
     """
+    from character.memory_query_time import current_lookup_time_text
+
+    task_text = current_lookup_time_text(query)
+    if task_text is not None:
+        return task_text
+
     date = r"\d{4}年(?:[一二三四五六七八九十\d]{1,3}月(?:\d{1,2}日)?)?"
     assertion = re.compile(
         rf"(?:我(?:是)?(?:在)?{date}出生(?:的)?|我出生于{date}|"

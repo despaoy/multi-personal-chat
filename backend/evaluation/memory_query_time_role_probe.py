@@ -1,4 +1,4 @@
-"""Authenticated personal-memory read with an unrelated declared birth year."""
+"""Authenticated current personal-memory lookup with complete dated background."""
 
 import argparse
 import asyncio
@@ -17,12 +17,12 @@ from pathlib import Path
 async def run(args):
     phase = Path(args.phase).resolve()
     runtime = Path("/home/boot/lhm/multipersonal-runtime")
-    assert phase == runtime / "backups/backend-chain-20261001/stage64"
+    assert phase.parent == runtime / "backups/backend-chain-20261001" and re.fullmatch(r"stage[1-9]\d*", phase.name)
     assert re.fullmatch(r"native-pg(?:-[a-z]{1,12})*", args.variant)
     root = phase / args.variant
     root.mkdir(mode=0o700, exist_ok=False)
     cluster = runtime / "evaluations/r148pg.s3"
-    label = "stage3_stage64_" + args.variant.replace("-", "_")
+    label = "stage3_" + phase.name + "_" + args.variant.replace("-", "_")
     source = "stage3_stage57_budget_fixed"
     fixture = json.loads((phase / "fixture.json").read_text())
     parent = json.loads((runtime / "backups/backend-chain-20261001/stage57/saved-audited-result.json").read_text())
