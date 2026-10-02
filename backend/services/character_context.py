@@ -426,7 +426,8 @@ class CharacterContextService:
             from character.source_memory import attach_sources
 
             sources = await self._source_memory.recall(character_id, user_scope, turn.message,
-                                                       memories=compiled.memory_packets)
+                                                       memories=compiled.memory_packets,
+                                                       retrieval_context=compile_user_recall_context(effective_history))
             compiled = attach_sources(compiled, sources, preferred_address=relationship.preferred_address,
                                       complete_evidence=self._memory_selector is not None)
             memory_recall["sources"] = sources.diagnostics

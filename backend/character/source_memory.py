@@ -19,16 +19,16 @@ class SourceRecall:
     diagnostics: dict = field(default_factory=dict)
 
 
-def select_sources(linked, found, *, limit=4):
+def select_sources(linked, found, *, contextual=(), limit=4):
     rows, scores = {}, {}
-    for lane in (linked, found):
+    for lane in (linked, found, contextual):
         for rank, row in enumerate(lane, 1):
             key = row["source_message_id"]
             rows.setdefault(key, row)
             scores[key] = scores.get(key, 0.0) + 1.0 / (60 + rank)
     # Preserve both retrieval routes. Four old accepted facts must not occupy
     # every slot and suppress the top source-only correction/condition.
-    required = list(dict.fromkeys(lane[0]["source_message_id"] for lane in (linked, found) if lane))
+    required = list(dict.fromkeys(lane[0]["source_message_id"] for lane in (linked, found, contextual) if lane))
     ranking = sorted(rows, key=lambda key: (scores[key], rows[key]["observed_at"], key), reverse=True)
     selected = list(dict.fromkeys([*required, *ranking]))[:limit]
     return [rows[key] for key in selected], len(rows)
@@ -84,7 +84,8 @@ class SourceMemoryService:
         self._max_chars = max_chars
         self._window_radius = window_radius
 
-    async def recall(self, character_id, scope, query, *, memories=()):
+    async def recall(self, character_id, scope, query, *, memories=(), retrieval_context=""):
+        """Keep current-query and loaded user-history search as separate scoped lanes."""
         started = time.monotonic()
         if scope.adapter == "narrative":
             return SourceRecall(diagnostics=dict(status="unsupported_branch"))
@@ -96,17 +97,23 @@ class SourceMemoryService:
         ids = tuple(dict.fromkeys(int(memory.memory_id) for memory in memories
                                    if str(memory.memory_id).isdigit() and int(memory.memory_id) > 0))[:200]
         try:
-            linked, found = await asyncio.gather(
-                linker(character_id, scope, memory_ids=ids),
-                search(character_id, scope, query=query, limit=32))
+            lanes = [linker(character_id, scope, memory_ids=ids),
+                     search(character_id, scope, query=query, limit=32)]
+            if retrieval_context.strip():
+                lanes.append(search(character_id, scope, query=retrieval_context, limit=32))
+            linked, found, *contextual_results = await asyncio.gather(*lanes)
+            contextual = contextual_results[0] if contextual_results else []
             linked_read_count, indexed_read_count = len(linked), len(found)
-            covered = {row["source_message_id"] for row in [*linked, *found] if covered_by_fact(row, memories)}
+            contextual_read_count = len(contextual)
+            covered = {row["source_message_id"] for row in [*linked, *found, *contextual]
+                       if covered_by_fact(row, memories)}
             if not self._window_radius:
                 linked = [row for row in linked if row["source_message_id"] not in covered]
                 found = [row for row in found if row["source_message_id"] not in covered]
+                contextual = [row for row in contextual if row["source_message_id"] not in covered]
             # Linked sources were selected by fact recall; lexical candidates
             # cover utterances whose model produced no usable claim at all.
-            selected, candidate_count = select_sources(linked, found)
+            selected, candidate_count = select_sources(linked, found, contextual=contextual)
             window_ids = []
             anchor_ids = [row["source_message_id"] for row in selected]
             if self._window_radius and selected:
@@ -134,11 +141,15 @@ class SourceMemoryService:
                                      max_items=4 * (1 + 2 * self._window_radius))
             trace = dict(result.diagnostics, linked_count=len(linked), indexed_count=len(found),
                          linked_read_count=linked_read_count, indexed_read_count=indexed_read_count,
+                         contextual_count=len(contextual), contextual_read_count=contextual_read_count,
+                         contextual_search_enabled=bool(contextual_results),
                          covered_by_fact_count=len(covered),
                          window_radius=self._window_radius, windows=window_ids,
                          window_semantic_relation="not_inferred", anchor_ids=anchor_ids,
                          selection_omitted=max(0, candidate_count - 4),
-                         candidate_limit_reached=indexed_read_count == 32, ranking="covered_rrf_linked_sparse",
+                         candidate_limit_reached=indexed_read_count == 32 or contextual_read_count == 32,
+                         ranking=("covered_rrf_linked_sparse_history" if contextual_results
+                                  else "covered_rrf_linked_sparse"),
                          query_terms_semantic=False, elapsed_ms=(time.monotonic() - started) * 1000)
             return SourceRecall(result.context, trace)
         except Exception as exc:

@@ -37,8 +37,10 @@ def index_plan(identity, body):
 def search_plan(scope, query, *, limit=32, dialect='sqlite'):
     if type(limit) is not int or not 1 <= limit <= 100:
         raise ValueError("Source search limit must be 1..100")
-    if not isinstance(query, str) or len(query) > 8000:
-        raise ValueError("Source query must be text of at most 8000 characters")
+    if not isinstance(query, str):
+        raise ValueError("Source query must be text")
+    # Loaded user history can exceed the request-message limit. All terms use
+    # one JSON binding below; do not truncate a complete available topic.
     if dialect not in {'sqlite', 'postgres'}:
         raise ValueError('Unsupported source search dialect')
     tokens = terms(query)

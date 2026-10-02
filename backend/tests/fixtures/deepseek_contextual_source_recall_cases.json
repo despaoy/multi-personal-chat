@@ -1,0 +1,44 @@
+{
+  "target": {
+    "id": "qinglan-original",
+    "observed_at": "2026-10-01T01:00:00+00:00",
+    "body": "青岚项目条件记录，2026年10月1日有效：硬件为 RTX 3060 与 12GB 显存；网络必须全程离线，不允许调用云端接口或下载资源。禁止训练或微调，只运行已缓存的青岚 Mini 0.6B 分类模型并验证推理。该模型完整权重、分词器和全部依赖已经缓存，能够离线启动。已有 1500 条本地有标签文本，分为四类，既定训练划分 1200 条、独立验证划分 300 条；验证数据不得用于调参。评估目标是复现离线分类结果，记录显存峰值和验证准确率。上述限制仅属于青岚项目，其他库存记录无权改动这些条件。"
+  },
+  "history": [
+    {
+      "role": "user",
+      "content": "接下来只谈青岚；请依据我保存的该项目原始条件作答。"
+    }
+  ],
+  "question": "按刚才那个继续，给我七天的执行安排。",
+  "noise": {
+    "count": 40,
+    "observed_at": "2026-10-01T02:00:00+00:00",
+    "body_template": "Synthetic stock JL{index:03d}: copper nut, quantity nine, shelf twenty, checked October first; unrelated to projects, devices and networks."
+  },
+  "cases": [
+    {
+      "id": "complete-source-only-contextual-ellipsis",
+      "message": "按刚才那个继续，给我七天的执行安排。"
+    }
+  ],
+  "synthetic": true,
+  "claims_before_generation": 0,
+  "expected": {
+    "device": "RTX 3060",
+    "vram": "12GB",
+    "network": "offline",
+    "training": "forbidden",
+    "model": "cached Mini 0.6B",
+    "validation": 300,
+    "all_original_conditions_must_be_transported": true
+  },
+  "history_template": {
+    "turn_count": 0,
+    "heading": "",
+    "line": "",
+    "records_per_turn": 0,
+    "reply": "",
+    "expanded_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+  }
+}
