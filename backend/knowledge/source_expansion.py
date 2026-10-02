@@ -24,8 +24,9 @@ def requested_document_titles(query):
         return ()
     remainder = str(query or "").strip()[match.end():]
     if ("《" in remainder or "》" in remainder
-            or re.search(r"(?:不要|不必|不用|无需|别|排除|仅|只)(?:再)?"
-                         r"(?:读|阅读|读取|查询|检索|比较|核对|列出|提供|查看)", remainder)):
+            or re.search(r"(?:不要|不必|不用|无需|排除|仅|只|"
+                         r"(?:^|[，,。；;：:\n]|请|也|还|另外|同时|并且|但是|但|千万)别)"
+                         r"(?:再|逐项|逐一|分别)?(?:读|阅读|读取|查询|检索|比较|核对|列出|提供|查看)", remainder)):
         return ()
     titles = tuple(dict.fromkeys(re.findall(r"《([^《》\n]{1,200})》", match['titles'])))
     declared = re.match(r"这([一二三四五六七八九十\d]+)份(?:说明|资料|文档|文件)", remainder)
@@ -105,19 +106,23 @@ def expand_source_context(bundle, vector_db, *, expected_generation, source_budg
         requested_titles = requested_document_titles(query)
         requested_groups = set()
         unresolved_titles = []
+        ambiguous_titles = []
         anchor_bases = {group[1] for group in original_groups}
         for title in requested_titles:
             targets = [group for group in groups if group[1] in anchor_bases and group[2] == title]
             if len(targets) > 1:
-                raise RuntimeError("Ambiguous requested document title")
+                # A direct read requests these authorized originals. Retain
+                # each source identity rather than arbitrarily picking a
+                # version or discarding independent requested documents.
+                ambiguous_titles.append(title)
             if not targets:
                 unresolved_titles.append(title)
                 continue
-            target = targets[0]
-            requested_groups.add(target)
-            if target not in parents:
-                parents[target] = []
-                queue.append(target)
+            for target in targets:
+                requested_groups.add(target)
+                if target not in parents:
+                    parents[target] = []
+                    queue.append(target)
         for source_group in queue:
             for referring in groups.get(source_group, []):
                 text = referring.get("content")
@@ -188,5 +193,6 @@ def expand_source_context(bundle, vector_db, *, expected_generation, source_budg
         if requested_titles:
             result.update(requested_source_titles=list(requested_titles),
                           unresolved_requested_titles=unresolved_titles,
+                          ambiguous_requested_titles=ambiguous_titles,
                           requested_source_scope="same_anchor_knowledge_base_and_original_filter")
         return result

@@ -1,0 +1,487 @@
+{
+  "synthetic": true,
+  "case_kind": "explicit_read_multiple_same_title_versions_and_memory",
+  "knowledge_base": "松桥配送验证资料",
+  "documents": [
+    {
+      "title": "云杉取件方案",
+      "content": "虚构配送方案完整参数：方案名称云杉取件方案，正文版本2025，独立编号YS-951；配送费用8元，保留时限24小时，营业时段09:00至18:00。以上参数仅属于本编号与本版本，不可合并不同版本。云杉取件方案的2025与2026版本是两个独立版本，本材料没有声明任何一个覆盖或废止另一个。这些是公共方案参数，不证明用户喜欢、已选择、购买或付款。",
+      "category": "配送"
+    },
+    {
+      "title": "云杉取件方案",
+      "content": "虚构配送方案完整参数：方案名称云杉取件方案，正文版本2026，独立编号YS-952；配送费用11元，保留时限48小时，营业时段10:00至20:00。以上参数仅属于本编号与本版本，不可合并不同版本。云杉取件方案的2025与2026版本是两个独立版本，本材料没有声明任何一个覆盖或废止另一个。这些是公共方案参数，不证明用户喜欢、已选择、购买或付款。",
+      "category": "配送"
+    },
+    {
+      "title": "夜间配送方案",
+      "content": "虚构配送方案完整参数：方案名称夜间配送方案，正文版本2026，独立编号YS-953；配送费用14元，保留时限12小时，营业时段18:00至23:00。以上参数仅属于本编号与本版本，不可合并不同版本。云杉取件方案的2025与2026版本是两个独立版本，本材料没有声明任何一个覆盖或废止另一个。这些是公共方案参数，不证明用户喜欢、已选择、购买或付款。",
+      "category": "配送"
+    },
+    {
+      "title": "高优先配送方案",
+      "content": "虚构配送方案完整参数：方案名称高优先配送方案，正文版本2026，独立编号YS-954；配送费用20元，保留时限6小时，营业时段08:00至22:00。以上参数仅属于本编号与本版本，不可合并不同版本。云杉取件方案的2025与2026版本是两个独立版本，本材料没有声明任何一个覆盖或废止另一个。这些是公共方案参数，不证明用户喜欢、已选择、购买或付款。",
+      "category": "配送"
+    }
+  ],
+  "source_message": "请记住我的本人配送偏好：我喜欢云杉取件方案。我不喜欢夜间配送方案。我喜欢高优先配送方案，但我只有订单已经付款且送达地址在城区才选择高优先配送方案。",
+  "question": "请查知识库，逐项比较《云杉取件方案》《夜间配送方案》《高优先配送方案》的完整说明。同名云杉取件方案的2025与2026两个版本都须读取，按正文版本分别列出，不要合并或擅自选最新。结合我已告诉你的本人配送偏好和全部选择必要条件，逐项列出编号、正文版本、配送费用、保留时限、营业时段及本轮是否符合我的偏好条件和原因。本轮订单已经付款，但送达地址在城外。没有明确喜好依据的项目保留未知；满足必要条件不能推出我一定选择；公共方案参数不得归成我的个人事实。",
+  "expected_records": [
+    {
+      "title": "云杉取件方案",
+      "version": "2025",
+      "code": "YS-951",
+      "fee_yuan": 8,
+      "retention_hours": 24,
+      "open_hours": "09:00至18:00"
+    },
+    {
+      "title": "云杉取件方案",
+      "version": "2026",
+      "code": "YS-952",
+      "fee_yuan": 11,
+      "retention_hours": 48,
+      "open_hours": "10:00至20:00"
+    },
+    {
+      "title": "夜间配送方案",
+      "version": "2026",
+      "code": "YS-953",
+      "fee_yuan": 14,
+      "retention_hours": 12,
+      "open_hours": "18:00至23:00"
+    },
+    {
+      "title": "高优先配送方案",
+      "version": "2026",
+      "code": "YS-954",
+      "fee_yuan": 20,
+      "retention_hours": 6,
+      "open_hours": "08:00至22:00"
+    }
+  ],
+  "required_complete_document_count": 4,
+  "proposal_fixture": null,
+  "no_rule_seeded_memories": true,
+  "primary_output_tokens": 2048,
+  "history_excluded": false,
+  "observed": {
+    "audit": {
+      "checks": {
+        "complete_synthetic_four_docs_and_private_source": true,
+        "same_full_query_at_both_actual_wire_gates": true,
+        "same_auth_ordinary_owner_and_scope": true,
+        "four_actual_native_imports_once": true,
+        "successful_real_writer_seed_not_replayed": true,
+        "six_baseline_five_fixed_actual_calls": true,
+        "all_actual_calls_pro_200_stop": true,
+        "baseline_query_blocked_before_model": true,
+        "fixed_original_query_actual_primary_once": true,
+        "whole_private_source_at_both_gates": true,
+        "baseline_missing_independent_night_only": true,
+        "fixed_all_four_complete_bodies": true,
+        "actual_ranked_three_unchanged_plus_requested_root": true,
+        "confidence_and_abstention_not_boosted": true,
+        "explicit_scope_and_no_unresolved_titles": true,
+        "four_indexed_scope_counts_complete": true,
+        "same_three_real_seed_claims_and_no_rag_promotion": true,
+        "independent_exact_same_three_claims": true,
+        "independent_three_own_live_full_source_links": true,
+        "independent_full_four_db_document_bodies": true,
+        "independent_four_single_chunks_and_authorized_base": true,
+        "native_final_indexed_metadata_matches_db_content": true,
+        "all_three_memories_selected_before_and_after": true,
+        "no_unqualified_current_temporal_promotion": true,
+        "whole_conjunctive_private_condition_packet": true,
+        "one_actual_full_wire_primary": true,
+        "raw_primary_reply_equals_api": true,
+        "actual_full_wire_fits_pro65536_with_output_reserve": true,
+        "all_four_separate_version_parameter_rows_correct": true,
+        "priority_conjunctive_necessary_condition_not_met": true,
+        "night_excluded_from_explicit_dislike": true,
+        "no_sufficient_or_version_replacement_inference": true,
+        "ambiguous_title_retains_both_actual_source_identities": true,
+        "actual_snapshot_causal_second_block_proven_without_cloud_replay": true,
+        "raw_missing_complete_original_scope_claim_retained": true,
+        "pending_zero_saved": true,
+        "new19_changed1_affected16_only": true
+      },
+      "passed": 37,
+      "total": 37,
+      "phase_calls": 11,
+      "baseline_calls": 6,
+      "fixed_calls": 5,
+      "primary_calls": 2,
+      "qualified_complete_chain_input_queries": 1,
+      "strict_semantic_answer_qualified": 0,
+      "raw_fixed_reply": "按你的要求，逐项列出。先说明：检索到的资料只覆盖了这些方案的参数片段，没有“完整说明”全文；以下只依据实际可见内容，不补造缺失部分。\n\n**云杉取件方案**\n\n- 编号：YS-951\n- 正文版本：2025\n- 配送费用：8元\n- 保留时限：24小时\n- 营业时段：09:00至18:00\n- 是否符合你的偏好：符合。你明确喜欢云杉取件方案，且该方案没有与你的排除条件冲突。\n\n- 编号：YS-952\n- 正文版本：2026\n- 配送费用：11元\n- 保留时限：48小时\n- 营业时段：10:00至20:00\n- 是否符合你的偏好：符合。理由同上，你明确喜欢云杉取件方案。\n\n两个版本是独立版本，资料没有声明任何一个覆盖或废止另一个，所以分别列出，不合并。\n\n**夜间配送方案**\n\n- 编号：YS-953\n- 正文版本：2026\n- 配送费用：14元\n- 保留时限：12小时\n- 营业时段：18:00至23:00\n- 是否符合你的偏好：不符合。你明确不喜欢夜间配送方案。\n\n**高优先配送方案**\n\n- 编号：YS-954\n- 正文版本：2026\n- 配送费用：20元\n- 保留时限：6小时\n- 营业时段：08:00至22:00\n- 是否符合你的偏好：不符合。你选择高优先配送方案的必要条件是“订单已付款且送达地址在城区”。本轮订单已付款，但送达地址在城外，因此不满足你的全部选择必要条件。\n\n补充两点：满足必要条件不能推出你一定会选择高优先配送方案；公共方案参数只是方案本身的说明，不构成你的个人事实。另外，资料中没有出现云杉取件方案2025或2026版本之外的更多版本信息，也没有这些方案的完整说明全文，所以无法核对是否存在其他未列出的条件或例外。",
+      "actual_prompt_tokens": 4228,
+      "runtime_files_changed": 1,
+      "new_unique": 19,
+      "affected_unique": 17,
+      "test_unique": 36,
+      "test_executions": 36,
+      "full_suite": false,
+      "strict_stage71_failure_still_open": true,
+      "limits": [
+        "Direct exact-title reads preserve all authorized source identities and mark same-title ambiguity; no arbitrary choice or inference of latest/effective authority. Source-data reference ambiguity still rejects arbitrary authority.",
+        "Positive separate-read grammar and closed negative clauses tested; unknown syntax/no-anchor/abstained still preserve existing retrieval.",
+        "Indexed coverage alone does not give the model a verified original-body completeness grant, even though this independent native case verifies all four single-chunk originals. Raw reply denies full originals; strict semantic correctness remains unqualified.",
+        "Recent history and original speech still assist; no distant-history or fact-only proof. All three personal records remain observation.",
+        "Stage74 unsupported unrestricted scope and Stage71 strict no-additions failures remain open."
+      ]
+    },
+    "original_writer_admission": [
+      {
+        "raw_response": "{\n  \"memories\": [\n    {\n      \"kind\": \"like\",\n      \"value\": \"云杉取件方案\",\n      \"content\": \"用户喜欢云杉取件方案。\",\n      \"evidence\": \"我喜欢云杉取件方案\",\n      \"confidence\": 0.98,\n      \"operation\": \"ADD\",\n      \"target_memory_id\": \"\",\n      \"target_memory_key\": \"\",\n      \"attributed_to\": \"user\",\n      \"qualifiers\": {},\n      \"valid_from\": \"\",\n      \"valid_to\": \"\",\n      \"observed_at\": \"2026-10-03T04:28:53.145503+08:00\",\n      \"scope_level\": \"conversation\"\n    },\n    {\n      \"kind\": \"dislike\",\n      \"value\": \"夜间配送方案\",\n      \"content\": \"用户不喜欢夜间配送方案。\",\n      \"evidence\": \"我不喜欢夜间配送方案\",\n      \"confidence\": 0.98,\n      \"operation\": \"ADD\",\n      \"target_memory_id\": \"\",\n      \"target_memory_key\": \"\",\n      \"attributed_to\": \"user\",\n      \"qualifiers\": {},\n      \"valid_from\": \"\",\n      \"valid_to\": \"\",\n      \"observed_at\": \"2026-10-03T04:28:53.145503+08:00\",\n      \"scope_level\": \"conversation\"\n    },\n    {\n      \"kind\": \"like\",\n      \"value\": \"高优先配送方案\",\n      \"content\": \"用户喜欢高优先配送方案，但只有在订单已付款且送达地址在城区时才选择。\",\n      \"evidence\": \"我喜欢高优先配送方案，但我只有订单已经付款且送达地址在城区才选择高优先配送方案\",\n      \"confidence\": 0.97,\n      \"operation\": \"ADD\",\n      \"target_memory_id\": \"\",\n      \"target_memory_key\": \"\",\n      \"attributed_to\": \"user\",\n      \"qualifiers\": {\n        \"condition\": \"订单已经付款且送达地址在城区\"\n      },\n      \"valid_from\": \"\",\n      \"valid_to\": \"\",\n      \"observed_at\": \"2026-10-03T04:28:53.145503+08:00\",\n      \"scope_level\": \"conversation\"\n    }\n  ]\n}",
+        "input": {
+          "source_message": "请记住我的本人配送偏好：我喜欢云杉取件方案。我不喜欢夜间配送方案。我喜欢高优先配送方案，但我只有订单已经付款且送达地址在城区才选择高优先配送方案。",
+          "history": [],
+          "existing_memories": [],
+          "confidence_threshold": 0.85,
+          "feedback_target_ids": [],
+          "source_type": "user"
+        },
+        "accepted": [
+          {
+            "operation": "ADD",
+            "memory": {
+              "memory_type": "user_fact",
+              "memory_key": "preference_云杉取件方案",
+              "content": "用户喜欢云杉取件方案。",
+              "importance": 0.6,
+              "evidence": "",
+              "qualifiers": [],
+              "aliases": [],
+              "polarity": "",
+              "event": null,
+              "operation": "assert"
+            },
+            "target_memory_id": "",
+            "target_memory_key": "",
+            "evidence": "我喜欢云杉取件方案",
+            "confidence": 0.98,
+            "attributed_to": "user",
+            "qualifiers": [],
+            "valid_from": "",
+            "valid_to": "",
+            "observed_at": "",
+            "scope_level": "conversation",
+            "proposed_valid_from": "",
+            "proposed_valid_to": "",
+            "source_observation": false,
+            "protected_memory_keys": []
+          },
+          {
+            "operation": "ADD",
+            "memory": {
+              "memory_type": "user_fact",
+              "memory_key": "preference_高优先配送方案",
+              "content": "用户喜欢高优先配送方案，但只有在订单已付款且送达地址在城区时才选择。",
+              "importance": 0.6,
+              "evidence": "",
+              "qualifiers": [],
+              "aliases": [],
+              "polarity": "",
+              "event": null,
+              "operation": "assert"
+            },
+            "target_memory_id": "",
+            "target_memory_key": "",
+            "evidence": "我喜欢高优先配送方案，但我只有订单已经付款且送达地址在城区才选择高优先配送方案",
+            "confidence": 0.97,
+            "attributed_to": "user",
+            "qualifiers": [
+              [
+                "condition",
+                "订单已经付款且送达地址在城区"
+              ]
+            ],
+            "valid_from": "",
+            "valid_to": "",
+            "observed_at": "",
+            "scope_level": "conversation",
+            "proposed_valid_from": "",
+            "proposed_valid_to": "",
+            "source_observation": false,
+            "protected_memory_keys": []
+          },
+          {
+            "operation": "ADD",
+            "memory": {
+              "memory_type": "user_fact",
+              "memory_key": "preference_夜间配送方案",
+              "content": "用户不喜欢夜间配送方案。",
+              "importance": 0.5,
+              "evidence": "",
+              "qualifiers": [],
+              "aliases": [],
+              "polarity": "",
+              "event": null,
+              "operation": "assert"
+            },
+            "target_memory_id": "",
+            "target_memory_key": "",
+            "evidence": "我不喜欢夜间配送方案",
+            "confidence": 0.98,
+            "attributed_to": "user",
+            "qualifiers": [],
+            "valid_from": "",
+            "valid_to": "",
+            "observed_at": "",
+            "scope_level": "conversation",
+            "proposed_valid_from": "",
+            "proposed_valid_to": "",
+            "source_observation": false,
+            "protected_memory_keys": []
+          }
+        ]
+      }
+    ],
+    "baseline_gate": {
+      "0:云杉取件方案": true,
+      "1:云杉取件方案": true,
+      "2:夜间配送方案": false,
+      "3:高优先配送方案": true
+    },
+    "fixed_gate": {
+      "0:云杉取件方案": true,
+      "1:云杉取件方案": true,
+      "2:夜间配送方案": true,
+      "3:高优先配送方案": true
+    },
+    "baseline_recall": {
+      "stage": "selected",
+      "status": "selected",
+      "fields": [],
+      "excluded_fields": [],
+      "records_read": 3,
+      "usable_records": 3,
+      "eligible_records": 3,
+      "selected_count": 3,
+      "semantic_status": "available",
+      "legacy_source_status": "not_needed",
+      "temporal_source_status": "available",
+      "source_receipt_pairs_requested": 3,
+      "source_receipt_pairs_returned": 3,
+      "source_authority_reader": "exact_claim_source_pairs",
+      "legacy_projected_ids": [],
+      "temporal_views": {
+        "fact": 0,
+        "asserted_state": 0,
+        "observation": 3
+      },
+      "field_presence": {
+        "name": false,
+        "origin": false,
+        "residence": false,
+        "major": false,
+        "workplace": false,
+        "study_stage": false
+      },
+      "ambiguous_fields": [],
+      "current_turn_shadowed_ids": [],
+      "personal_time_tasks": [],
+      "covered_fields": [],
+      "missing_fields": [],
+      "elapsed_ms": 1491.1259869113564,
+      "sources": {
+        "status": "available",
+        "omitted": [],
+        "selected_ids": [
+          "web:b83239ef94da46bcaf161219d8fdc697"
+        ],
+        "linked_count": 3,
+        "indexed_count": 1,
+        "linked_read_count": 3,
+        "indexed_read_count": 1,
+        "contextual_count": 1,
+        "contextual_read_count": 1,
+        "contextual_search_enabled": true,
+        "literal_project_terms": [],
+        "contextual_scope_deferred_to_explicit_task": false,
+        "linked_project_scope_omitted": 0,
+        "covered_by_fact_count": 0,
+        "window_radius": 0,
+        "effective_window_radius": 0,
+        "requested_source_order": "not_resolved",
+        "requested_following": [],
+        "following_missing_for_anchors": [],
+        "following_anchor_dependency_omitted": 0,
+        "windows": [],
+        "window_semantic_relation": "not_inferred",
+        "anchor_ids": [
+          "web:b83239ef94da46bcaf161219d8fdc697"
+        ],
+        "selection_omitted": 0,
+        "fresh_recheck_omitted": 0,
+        "source_search_limit": null,
+        "candidate_limit_reached": false,
+        "ranking": "covered_rrf_linked_sparse_history",
+        "query_terms_semantic": false,
+        "elapsed_ms": 17.738740891218185,
+        "candidate_budget_pending": false
+      }
+    },
+    "fixed_recall": {
+      "stage": "selected",
+      "status": "selected",
+      "fields": [],
+      "excluded_fields": [],
+      "records_read": 3,
+      "usable_records": 3,
+      "eligible_records": 3,
+      "selected_count": 3,
+      "semantic_status": "available",
+      "legacy_source_status": "not_needed",
+      "temporal_source_status": "available",
+      "source_receipt_pairs_requested": 3,
+      "source_receipt_pairs_returned": 3,
+      "source_authority_reader": "exact_claim_source_pairs",
+      "legacy_projected_ids": [],
+      "temporal_views": {
+        "fact": 0,
+        "asserted_state": 0,
+        "observation": 3
+      },
+      "field_presence": {
+        "name": false,
+        "origin": false,
+        "residence": false,
+        "major": false,
+        "workplace": false,
+        "study_stage": false
+      },
+      "ambiguous_fields": [],
+      "current_turn_shadowed_ids": [],
+      "personal_time_tasks": [],
+      "covered_fields": [],
+      "missing_fields": [],
+      "elapsed_ms": 10095.842465758324,
+      "sources": {
+        "status": "available",
+        "omitted": [],
+        "selected_ids": [
+          "web:b83239ef94da46bcaf161219d8fdc697"
+        ],
+        "linked_count": 3,
+        "indexed_count": 1,
+        "linked_read_count": 3,
+        "indexed_read_count": 1,
+        "contextual_count": 1,
+        "contextual_read_count": 1,
+        "contextual_search_enabled": true,
+        "literal_project_terms": [],
+        "contextual_scope_deferred_to_explicit_task": false,
+        "linked_project_scope_omitted": 0,
+        "covered_by_fact_count": 0,
+        "window_radius": 0,
+        "effective_window_radius": 0,
+        "requested_source_order": "not_resolved",
+        "requested_following": [],
+        "following_missing_for_anchors": [],
+        "following_anchor_dependency_omitted": 0,
+        "windows": [],
+        "window_semantic_relation": "not_inferred",
+        "anchor_ids": [
+          "web:b83239ef94da46bcaf161219d8fdc697"
+        ],
+        "selection_omitted": 0,
+        "fresh_recheck_omitted": 0,
+        "source_search_limit": null,
+        "candidate_limit_reached": false,
+        "ranking": "covered_rrf_linked_sparse_history",
+        "query_terms_semantic": false,
+        "elapsed_ms": 18.573401495814323,
+        "candidate_budget_pending": false
+      }
+    },
+    "fixed_memory_packets": [
+      {
+        "memory_id": "42",
+        "memory_type": "user_fact",
+        "content": "用户原话记录（时效未核实，不代表当前状态；记录于2026-10-02T20:28:53.145503+00:00）：[\"请记住我的本人配送偏好：我喜欢云杉取件方案。我不喜欢夜间配送方案。我喜欢高优先配送方案，但我只有订单已经付款且送达地址在城区才选择高优先配送方案。\", \"我不喜欢夜间配送方案\"]",
+        "importance": 0.5,
+        "evidence": [
+          "请记住我的本人配送偏好：我喜欢云杉取件方案。我不喜欢夜间配送方案。我喜欢高优先配送方案，但我只有订单已经付款且送达地址在城区才选择高优先配送方案。",
+          "我不喜欢夜间配送方案"
+        ],
+        "valid_from": "",
+        "valid_to": "",
+        "confidence": 0.98,
+        "status": "active",
+        "relation_type": "ADD",
+        "source_message_ids": [
+          "web:b83239ef94da46bcaf161219d8fdc697"
+        ],
+        "historical": false,
+        "memory_key": "preference_夜间配送方案",
+        "qualifiers": [],
+        "temporal_mode": "observation",
+        "observed_at": "2026-10-02T20:28:53.145503+00:00",
+        "source_observation": false,
+        "complete_original_source": null,
+        "source_fragments": []
+      },
+      {
+        "memory_id": "41",
+        "memory_type": "user_fact",
+        "content": "用户原话记录（时效未核实，不代表当前状态；记录于2026-10-02T20:28:53.145503+00:00）：[\"请记住我的本人配送偏好：我喜欢云杉取件方案。我不喜欢夜间配送方案。我喜欢高优先配送方案，但我只有订单已经付款且送达地址在城区才选择高优先配送方案。\", \"我喜欢高优先配送方案，但我只有订单已经付款且送达地址在城区才选择高优先配送方案\"]",
+        "importance": 0.6,
+        "evidence": [
+          "请记住我的本人配送偏好：我喜欢云杉取件方案。我不喜欢夜间配送方案。我喜欢高优先配送方案，但我只有订单已经付款且送达地址在城区才选择高优先配送方案。",
+          "我喜欢高优先配送方案，但我只有订单已经付款且送达地址在城区才选择高优先配送方案"
+        ],
+        "valid_from": "",
+        "valid_to": "",
+        "confidence": 0.97,
+        "status": "active",
+        "relation_type": "ADD",
+        "source_message_ids": [
+          "web:b83239ef94da46bcaf161219d8fdc697"
+        ],
+        "historical": false,
+        "memory_key": "preference_高优先配送方案",
+        "qualifiers": [
+          [
+            "condition",
+            "订单已经付款且送达地址在城区"
+          ]
+        ],
+        "temporal_mode": "observation",
+        "observed_at": "2026-10-02T20:28:53.145503+00:00",
+        "source_observation": false,
+        "complete_original_source": null,
+        "source_fragments": []
+      },
+      {
+        "memory_id": "40",
+        "memory_type": "user_fact",
+        "content": "用户原话记录（时效未核实，不代表当前状态；记录于2026-10-02T20:28:53.145503+00:00）：[\"请记住我的本人配送偏好：我喜欢云杉取件方案。我不喜欢夜间配送方案。我喜欢高优先配送方案，但我只有订单已经付款且送达地址在城区才选择高优先配送方案。\", \"我喜欢云杉取件方案\"]",
+        "importance": 0.6,
+        "evidence": [
+          "请记住我的本人配送偏好：我喜欢云杉取件方案。我不喜欢夜间配送方案。我喜欢高优先配送方案，但我只有订单已经付款且送达地址在城区才选择高优先配送方案。",
+          "我喜欢云杉取件方案"
+        ],
+        "valid_from": "",
+        "valid_to": "",
+        "confidence": 0.98,
+        "status": "active",
+        "relation_type": "ADD",
+        "source_message_ids": [
+          "web:b83239ef94da46bcaf161219d8fdc697"
+        ],
+        "historical": false,
+        "memory_key": "preference_云杉取件方案",
+        "qualifiers": [],
+        "temporal_mode": "observation",
+        "observed_at": "2026-10-02T20:28:53.145503+00:00",
+        "source_observation": false,
+        "complete_original_source": null,
+        "source_fragments": []
+      }
+    ],
+    "history_count": 2,
+    "raw_fixed_reply": "按你的要求，逐项列出。先说明：检索到的资料只覆盖了这些方案的参数片段，没有“完整说明”全文；以下只依据实际可见内容，不补造缺失部分。\n\n**云杉取件方案**\n\n- 编号：YS-951\n- 正文版本：2025\n- 配送费用：8元\n- 保留时限：24小时\n- 营业时段：09:00至18:00\n- 是否符合你的偏好：符合。你明确喜欢云杉取件方案，且该方案没有与你的排除条件冲突。\n\n- 编号：YS-952\n- 正文版本：2026\n- 配送费用：11元\n- 保留时限：48小时\n- 营业时段：10:00至20:00\n- 是否符合你的偏好：符合。理由同上，你明确喜欢云杉取件方案。\n\n两个版本是独立版本，资料没有声明任何一个覆盖或废止另一个，所以分别列出，不合并。\n\n**夜间配送方案**\n\n- 编号：YS-953\n- 正文版本：2026\n- 配送费用：14元\n- 保留时限：12小时\n- 营业时段：18:00至23:00\n- 是否符合你的偏好：不符合。你明确不喜欢夜间配送方案。\n\n**高优先配送方案**\n\n- 编号：YS-954\n- 正文版本：2026\n- 配送费用：20元\n- 保留时限：6小时\n- 营业时段：08:00至22:00\n- 是否符合你的偏好：不符合。你选择高优先配送方案的必要条件是“订单已付款且送达地址在城区”。本轮订单已付款，但送达地址在城外，因此不满足你的全部选择必要条件。\n\n补充两点：满足必要条件不能推出你一定会选择高优先配送方案；公共方案参数只是方案本身的说明，不构成你的个人事实。另外，资料中没有出现云杉取件方案2025或2026版本之外的更多版本信息，也没有这些方案的完整说明全文，所以无法核对是否存在其他未列出的条件或例外。"
+  }
+}

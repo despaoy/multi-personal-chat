@@ -116,9 +116,11 @@ def test_explicit_titles_respect_anchor_knowledge_base_and_original_filter(scope
     assert result["results"] == [anchor] and result["unresolved_requested_titles"] == ["B"]
 
 
-def test_ambiguous_exact_title_fails_instead_of_picking_a_version():
-    with pytest.raises(RuntimeError, match="Ambiguous requested document title"):
-        expand([row(1, "A"), row(2, "B"), row(3, "B")], [row(1, "A")], "逐项比较《A》《B》")
+def test_ambiguous_exact_title_preserves_each_source_instead_of_picking_a_version():
+    result = expand([row(1, "A"), row(2, "B", "2025版"), row(3, "B", "2026版")], [row(1, "A")], "逐项比较《A》《B》")
+    assert [r["document_id"] for r in result["results"]] == [1, 2, 3]
+    assert result["ambiguous_requested_titles"] == ["B"]
+    assert all(term in compile_result(result).messages[-1]["content"] for term in ["2025版", "2026版"])
 
 
 def test_requested_multi_chunk_budget_and_missing_title_are_truthful():
