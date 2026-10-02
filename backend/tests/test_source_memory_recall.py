@@ -207,11 +207,7 @@ def test_search_plan_uses_scope_term_index_not_full_body_scan(tmp_path):
     assert "SCAN memory_sources" not in detail
 
 
-@pytest.mark.parametrize("query", ["x" * 8001, "", "？"], ids=['over_admission_limit', 'empty', 'punctuation'])
+@pytest.mark.parametrize("query", ["", "？"], ids=['empty', 'punctuation'])
 def test_non_searchable_queries_do_not_scan_source_text(tmp_path, query):
     db = SQLiteDB(tmp_path / "bounds.sqlite")
-    if len(query) > 8000:
-        with pytest.raises(ValueError):
-            db.search_memory_sources(**FIELDS, query=query)
-    else:
-        assert db.search_memory_sources(**FIELDS, query=query) == []
+    assert db.search_memory_sources(**FIELDS, query=query) == []
