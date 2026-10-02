@@ -1,0 +1,313 @@
+{
+  "schema": 1,
+  "synthetic": true,
+  "case": {
+    "schema": 1,
+    "synthetic": true,
+    "reference_time": "2026-10-02T17:34:39.087662+00:00",
+    "question": "请逐字列出我之前提供的 XR493 项目全部 40 条原始交接记录，按编号 XR493-01 至 XR493-40 排列；保留每条数值和末尾限制，不改写、不补充。",
+    "sources": [
+      {
+        "id": "stage69-source-01",
+        "body": "XR493-01：数值21，限制：未复核禁用。",
+        "expected": "XR493-01：数值21，限制：未复核禁用。",
+        "observed_at": "2026-10-02T17:24:39.087662+00:00"
+      },
+      {
+        "id": "stage69-source-02",
+        "body": "XR493-02：数值22，限制：未复核禁用。",
+        "expected": "XR493-02：数值22，限制：未复核禁用。",
+        "observed_at": "2026-10-02T17:24:40.087662+00:00"
+      },
+      {
+        "id": "stage69-source-03",
+        "body": "XR493-03：数值23，限制：未复核禁用。",
+        "expected": "XR493-03：数值23，限制：未复核禁用。",
+        "observed_at": "2026-10-02T17:24:41.087662+00:00"
+      },
+      {
+        "id": "stage69-source-04",
+        "body": "XR493-04：数值24，限制：未复核禁用。",
+        "expected": "XR493-04：数值24，限制：未复核禁用。",
+        "observed_at": "2026-10-02T17:24:42.087662+00:00"
+      },
+      {
+        "id": "stage69-source-05",
+        "body": "XR493-05：数值25，限制：未复核禁用。",
+        "expected": "XR493-05：数值25，限制：未复核禁用。",
+        "observed_at": "2026-10-02T17:24:43.087662+00:00"
+      },
+      {
+        "id": "stage69-source-06",
+        "body": "XR493-06：数值26，限制：未复核禁用。",
+        "expected": "XR493-06：数值26，限制：未复核禁用。",
+        "observed_at": "2026-10-02T17:24:44.087662+00:00"
+      },
+      {
+        "id": "stage69-source-07",
+        "body": "XR493-07：数值27，限制：未复核禁用。",
+        "expected": "XR493-07：数值27，限制：未复核禁用。",
+        "observed_at": "2026-10-02T17:24:45.087662+00:00"
+      },
+      {
+        "id": "stage69-source-08",
+        "body": "XR493-08：数值28，限制：未复核禁用。",
+        "expected": "XR493-08：数值28，限制：未复核禁用。",
+        "observed_at": "2026-10-02T17:24:46.087662+00:00"
+      },
+      {
+        "id": "stage69-source-09",
+        "body": "XR493-09：数值29，限制：未复核禁用。",
+        "expected": "XR493-09：数值29，限制：未复核禁用。",
+        "observed_at": "2026-10-02T17:24:47.087662+00:00"
+      },
+      {
+        "id": "stage69-source-10",
+        "body": "XR493-10：数值30，限制：未复核禁用。",
+        "expected": "XR493-10：数值30，限制：未复核禁用。",
+        "observed_at": "2026-10-02T17:24:48.087662+00:00"
+      },
+      {
+        "id": "stage69-source-11",
+        "body": "XR493-11：数值31，限制：未复核禁用。",
+        "expected": "XR493-11：数值31，限制：未复核禁用。",
+        "observed_at": "2026-10-02T17:24:49.087662+00:00"
+      },
+      {
+        "id": "stage69-source-12",
+        "body": "XR493-12：数值32，限制：未复核禁用。",
+        "expected": "XR493-12：数值32，限制：未复核禁用。",
+        "observed_at": "2026-10-02T17:24:50.087662+00:00"
+      },
+      {
+        "id": "stage69-source-13",
+        "body": "XR493-13：数值33，限制：未复核禁用。",
+        "expected": "XR493-13：数值33，限制：未复核禁用。",
+        "observed_at": "2026-10-02T17:24:51.087662+00:00"
+      },
+      {
+        "id": "stage69-source-14",
+        "body": "XR493-14：数值34，限制：未复核禁用。",
+        "expected": "XR493-14：数值34，限制：未复核禁用。",
+        "observed_at": "2026-10-02T17:24:52.087662+00:00"
+      },
+      {
+        "id": "stage69-source-15",
+        "body": "XR493-15：数值35，限制：未复核禁用。",
+        "expected": "XR493-15：数值35，限制：未复核禁用。",
+        "observed_at": "2026-10-02T17:24:53.087662+00:00"
+      },
+      {
+        "id": "stage69-source-16",
+        "body": "XR493-16：数值36，限制：未复核禁用。",
+        "expected": "XR493-16：数值36，限制：未复核禁用。",
+        "observed_at": "2026-10-02T17:24:54.087662+00:00"
+      },
+      {
+        "id": "stage69-source-17",
+        "body": "XR493-17：数值37，限制：未复核禁用。",
+        "expected": "XR493-17：数值37，限制：未复核禁用。",
+        "observed_at": "2026-10-02T17:24:55.087662+00:00"
+      },
+      {
+        "id": "stage69-source-18",
+        "body": "XR493-18：数值38，限制：未复核禁用。",
+        "expected": "XR493-18：数值38，限制：未复核禁用。",
+        "observed_at": "2026-10-02T17:24:56.087662+00:00"
+      },
+      {
+        "id": "stage69-source-19",
+        "body": "XR493-19：数值39，限制：未复核禁用。",
+        "expected": "XR493-19：数值39，限制：未复核禁用。",
+        "observed_at": "2026-10-02T17:24:57.087662+00:00"
+      },
+      {
+        "id": "stage69-source-20",
+        "body": "XR493-20：数值40，限制：未复核禁用。",
+        "expected": "XR493-20：数值40，限制：未复核禁用。",
+        "observed_at": "2026-10-02T17:24:58.087662+00:00"
+      },
+      {
+        "id": "stage69-source-21",
+        "body": "XR493-21：数值41，限制：未复核禁用。",
+        "expected": "XR493-21：数值41，限制：未复核禁用。",
+        "observed_at": "2026-10-02T17:24:59.087662+00:00"
+      },
+      {
+        "id": "stage69-source-22",
+        "body": "XR493-22：数值42，限制：未复核禁用。",
+        "expected": "XR493-22：数值42，限制：未复核禁用。",
+        "observed_at": "2026-10-02T17:25:00.087662+00:00"
+      },
+      {
+        "id": "stage69-source-23",
+        "body": "XR493-23：数值43，限制：未复核禁用。",
+        "expected": "XR493-23：数值43，限制：未复核禁用。",
+        "observed_at": "2026-10-02T17:25:01.087662+00:00"
+      },
+      {
+        "id": "stage69-source-24",
+        "body": "XR493-24：数值44，限制：未复核禁用。",
+        "expected": "XR493-24：数值44，限制：未复核禁用。",
+        "observed_at": "2026-10-02T17:25:02.087662+00:00"
+      },
+      {
+        "id": "stage69-source-25",
+        "body": "XR493-25：数值45，限制：未复核禁用。",
+        "expected": "XR493-25：数值45，限制：未复核禁用。",
+        "observed_at": "2026-10-02T17:25:03.087662+00:00"
+      },
+      {
+        "id": "stage69-source-26",
+        "body": "XR493-26：数值46，限制：未复核禁用。",
+        "expected": "XR493-26：数值46，限制：未复核禁用。",
+        "observed_at": "2026-10-02T17:25:04.087662+00:00"
+      },
+      {
+        "id": "stage69-source-27",
+        "body": "XR493-27：数值47，限制：未复核禁用。",
+        "expected": "XR493-27：数值47，限制：未复核禁用。",
+        "observed_at": "2026-10-02T17:25:05.087662+00:00"
+      },
+      {
+        "id": "stage69-source-28",
+        "body": "XR493-28：数值48，限制：未复核禁用。",
+        "expected": "XR493-28：数值48，限制：未复核禁用。",
+        "observed_at": "2026-10-02T17:25:06.087662+00:00"
+      },
+      {
+        "id": "stage69-source-29",
+        "body": "XR493-29：数值49，限制：未复核禁用。",
+        "expected": "XR493-29：数值49，限制：未复核禁用。",
+        "observed_at": "2026-10-02T17:25:07.087662+00:00"
+      },
+      {
+        "id": "stage69-source-30",
+        "body": "XR493-30：数值50，限制：未复核禁用。",
+        "expected": "XR493-30：数值50，限制：未复核禁用。",
+        "observed_at": "2026-10-02T17:25:08.087662+00:00"
+      },
+      {
+        "id": "stage69-source-31",
+        "body": "XR493-31：数值51，限制：未复核禁用。",
+        "expected": "XR493-31：数值51，限制：未复核禁用。",
+        "observed_at": "2026-10-02T17:25:09.087662+00:00"
+      },
+      {
+        "id": "stage69-source-32",
+        "body": "XR493-32：数值52，限制：未复核禁用。",
+        "expected": "XR493-32：数值52，限制：未复核禁用。",
+        "observed_at": "2026-10-02T17:25:10.087662+00:00"
+      },
+      {
+        "id": "stage69-source-33",
+        "body": "XR493-33：数值53，限制：未复核禁用。",
+        "expected": "XR493-33：数值53，限制：未复核禁用。",
+        "observed_at": "2026-10-02T17:25:11.087662+00:00"
+      },
+      {
+        "id": "stage69-source-34",
+        "body": "XR493-34：数值54，限制：未复核禁用。",
+        "expected": "XR493-34：数值54，限制：未复核禁用。",
+        "observed_at": "2026-10-02T17:25:12.087662+00:00"
+      },
+      {
+        "id": "stage69-source-35",
+        "body": "XR493-35：数值55，限制：未复核禁用。",
+        "expected": "XR493-35：数值55，限制：未复核禁用。",
+        "observed_at": "2026-10-02T17:25:13.087662+00:00"
+      },
+      {
+        "id": "stage69-source-36",
+        "body": "XR493-36：数值56，限制：未复核禁用。",
+        "expected": "XR493-36：数值56，限制：未复核禁用。",
+        "observed_at": "2026-10-02T17:25:14.087662+00:00"
+      },
+      {
+        "id": "stage69-source-37",
+        "body": "XR493-37：数值57，限制：未复核禁用。",
+        "expected": "XR493-37：数值57，限制：未复核禁用。",
+        "observed_at": "2026-10-02T17:25:15.087662+00:00"
+      },
+      {
+        "id": "stage69-source-38",
+        "body": "XR493-38：数值58，限制：未复核禁用。",
+        "expected": "XR493-38：数值58，限制：未复核禁用。",
+        "observed_at": "2026-10-02T17:25:16.087662+00:00"
+      },
+      {
+        "id": "stage69-source-39",
+        "body": "XR493-39：数值59，限制：未复核禁用。",
+        "expected": "XR493-39：数值59，限制：未复核禁用。",
+        "observed_at": "2026-10-02T17:25:17.087662+00:00"
+      },
+      {
+        "id": "stage69-source-40",
+        "body": "XR493-40：数值60，限制：未复核禁用。",
+        "expected": "XR493-40：数值60，限制：未复核禁用。",
+        "observed_at": "2026-10-02T17:25:18.087662+00:00"
+      }
+    ],
+    "seed_method": "actual complete source capture, no inferred user fact projection"
+  },
+  "baseline_commit": "bcf3a6589d57fb890068d445edfdf288dfdcf41c",
+  "baseline_summary": {
+    "captured_sources": 40,
+    "explicit_bounded_search_found": 40,
+    "actual_service_sql_found": 32,
+    "selected": 32,
+    "missing_source_ids": [
+      "stage69-source-02",
+      "stage69-source-03",
+      "stage69-source-04",
+      "stage69-source-05",
+      "stage69-source-06",
+      "stage69-source-07",
+      "stage69-source-08",
+      "stage69-source-09"
+    ],
+    "full_packet_chars": 4787,
+    "canonical_estimated_total": 5894,
+    "expected_answer_estimate": 640,
+    "window": 65536,
+    "primary_calls": 0,
+    "auxiliary_calls": 2
+  },
+  "first_full_input_reply": "抱歉，我无法逐字列出这些记录。当前对话中我没有找到可核对的、由你提供的 XR493 项目全部 40 条原始交接记录，因此不能凭记忆或推测复现内容。",
+  "first_full_input_answer_checks": 0,
+  "actual_primary_estimated_total": 6346,
+  "fixed_summary": {
+    "chain_passed": 43,
+    "chain_total": 43,
+    "answer_passed": 40,
+    "answer_total": 40,
+    "answer": "XR493-01：数值21，限制：未复核禁用。  \nXR493-02：数值22，限制：未复核禁用。  \nXR493-03：数值23，限制：未复核禁用。  \nXR493-04：数值24，限制：未复核禁用。  \nXR493-05：数值25，限制：未复核禁用。  \nXR493-06：数值26，限制：未复核禁用。  \nXR493-07：数值27，限制：未复核禁用。  \nXR493-08：数值28，限制：未复核禁用。  \nXR493-09：数值29，限制：未复核禁用。  \nXR493-10：数值30，限制：未复核禁用。  \nXR493-11：数值31，限制：未复核禁用。  \nXR493-12：数值32，限制：未复核禁用。  \nXR493-13：数值33，限制：未复核禁用。  \nXR493-14：数值34，限制：未复核禁用。  \nXR493-15：数值35，限制：未复核禁用。  \nXR493-16：数值36，限制：未复核禁用。  \nXR493-17：数值37，限制：未复核禁用。  \nXR493-18：数值38，限制：未复核禁用。  \nXR493-19：数值39，限制：未复核禁用。  \nXR493-20：数值40，限制：未复核禁用。  \nXR493-21：数值41，限制：未复核禁用。  \nXR493-22：数值42，限制：未复核禁用。  \nXR493-23：数值43，限制：未复核禁用。  \nXR493-24：数值44，限制：未复核禁用。  \nXR493-25：数值45，限制：未复核禁用。  \nXR493-26：数值46，限制：未复核禁用。  \nXR493-27：数值47，限制：未复核禁用。  \nXR493-28：数值48，限制：未复核禁用。  \nXR493-29：数值49，限制：未复核禁用。  \nXR493-30：数值50，限制：未复核禁用。  \nXR493-31：数值51，限制：未复核禁用。  \nXR493-32：数值52，限制：未复核禁用。  \nXR493-33：数值53，限制：未复核禁用。  \nXR493-34：数值54，限制：未复核禁用。  \nXR493-35：数值55，限制：未复核禁用。  \nXR493-36：数值56，限制：未复核禁用。  \nXR493-37：数值57，限制：未复核禁用。  \nXR493-38：数值58，限制：未复核禁用。  \nXR493-39：数值59，限制：未复核禁用。  \nXR493-40：数值60，限制：未复核禁用。",
+    "answer_fidelity": {
+      "exact_bodies_in_order_no_content_additions": true,
+      "byte_identical_to_blank_line_join": false,
+      "markdown_hard_line_breaks": 39,
+      "expected_body_count": 40
+    },
+    "qualified_cloud_calls": 4,
+    "baseline_auxiliary_calls": 2,
+    "phase_cloud_calls": 10,
+    "qualified_answers": 1,
+    "phase_primary_calls": 2,
+    "targeted_new_cases": 34,
+    "targeted_affected_cases": 12,
+    "targeted_unique_passed": 46,
+    "targeted_executions": 46,
+    "all_calls_pro": true,
+    "no_full_suite": true,
+    "no_passing_model_replay": true,
+    "no_production_chat_writes": true
+  },
+  "actual_completed_primary_replies": 2,
+  "qualified_complete_answers": 1,
+  "seed_method": "actual complete source capture; no current user facts manufactured",
+  "scope": {
+    "character_id": "tsukiyashiro_kisaki",
+    "native_adapter": "web-character",
+    "conversation_type": "private"
+  }
+}

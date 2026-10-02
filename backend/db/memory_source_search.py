@@ -35,7 +35,9 @@ def index_plan(identity, body):
 
 
 def search_plan(scope, query, *, limit=32, dialect='sqlite'):
-    if type(limit) is not int or not 1 <= limit <= 100:
+    # None is the internal complete-search contract for serving-budget callers.
+    # Explicit bounded callers keep their existing validation and SQL limit.
+    if limit is not None and (type(limit) is not int or not 1 <= limit <= 100):
         raise ValueError("Source search limit must be 1..100")
     if not isinstance(query, str):
         raise ValueError("Source query must be text")
@@ -67,5 +69,6 @@ def search_plan(scope, query, *, limit=32, dialect='sqlite'):
                   "FROM ranked r JOIN memory_sources s ON s.source_key = r.source_key "
                   "WHERE s.scope_key = :scope_key AND s.state = 'recorded' AND s.observed_at > "
                   "COALESCE((SELECT revoked_before FROM memory_source_fences WHERE owner_key = :owner_key), '') "
-                  "ORDER BY r.score DESC, s.observed_at DESC, s.source_key DESC LIMIT :limit", params)
+                  "ORDER BY r.score DESC, s.observed_at DESC, s.source_key DESC"
+                  + (" LIMIT :limit" if limit is not None else ""), params)
     return rows

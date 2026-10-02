@@ -1,5 +1,6 @@
 """Audit saved complete-source requests and independently read the test database."""
 
+import argparse
 import asyncio
 import base64
 import hashlib
@@ -12,23 +13,6 @@ from datetime import datetime
 from html import unescape
 from pathlib import Path
 
-b = Path("/home/boot/lhm/multipersonal-runtime/backups/backend-chain-20261001/stage68")
-r = Path("/home/boot/lhm/multipersonal-runtime")
-fixture = json.loads((b / "fixture.json").read_text())
-old = json.loads((b / "baseline.json").read_text())
-native = json.loads((b / "native-pg-fixed/result.json").read_text())
-baseline_native = json.loads((b / "native-pg-baseline/result.json").read_text())
-calls = json.loads((b / "native-pg-fixed/cloud-calls.json").read_text())
-baseline_calls = json.loads((b / "native-pg-baseline/cloud-calls.json").read_text())
-os.environ.update(
-    ENVIRONMENT="production",
-    JWT_SECRET=secrets.token_urlsafe(48),
-    ENCRYPTION_KEY=base64.urlsafe_b64encode(secrets.token_bytes(32)).decode(),
-    DATABASE_PATH=str(b / "retrieval-baseline/database.sqlite"),
-    DATABASE_URL="",
-    USE_POSTGRESQL="false",
-    PYTHONDONTWRITEBYTECODE="1",
-)
 checks = {}
 
 
@@ -37,7 +21,48 @@ def check(name, condition):
     assert checks[name], name
 
 
+def original_source_answer_fidelity(answer: str, bodies: list[str]) -> dict:
+    """Compare exact bodies, allowing only explicit Markdown line separators.
+
+    Two spaces before a newline are Markdown presentation, not source text.
+    No stripping of source whitespace, prefixes, values or punctuation occurs.
+    """
+    separator = r"(?:\n\n|\n| {2}\n)"
+    pattern = separator.join(re.escape(body) for body in bodies)
+    return {
+        "exact_bodies_in_order_no_content_additions": bool(bodies) and re.fullmatch(pattern, answer) is not None,
+        "byte_identical_to_blank_line_join": bool(bodies) and answer == "\n\n".join(bodies),
+        "markdown_hard_line_breaks": answer.count("  \n"),
+        "expected_body_count": len(bodies),
+    }
+
+
 async def main():
+    r = Path("/home/boot/lhm/multipersonal-runtime")
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--phase", default=str(r / "backups/backend-chain-20261001/stage68"))
+    parser.add_argument("--variant", default="native-pg-fixed")
+    parser.add_argument("--test-new-count", type=int, default=10)
+    parser.add_argument("--test-affected-count", type=int, default=4)
+    args = parser.parse_args()
+    b = Path(args.phase).resolve()
+    assert b.parent == r / "backups/backend-chain-20261001" and re.fullmatch(r"stage[1-9]\d*", b.name)
+    assert re.fullmatch(r"native-pg(?:-[a-z]{1,12})*", args.variant)
+    fixture = json.loads((b / "fixture.json").read_text())
+    old = json.loads((b / "baseline.json").read_text())
+    native = json.loads((b / args.variant / "result.json").read_text())
+    baseline_native = json.loads((b / "native-pg-baseline/result.json").read_text())
+    calls = json.loads((b / args.variant / "cloud-calls.json").read_text())
+    baseline_calls = json.loads((b / "native-pg-baseline/cloud-calls.json").read_text())
+    os.environ.update(
+        ENVIRONMENT="production",
+        JWT_SECRET=secrets.token_urlsafe(48),
+        ENCRYPTION_KEY=base64.urlsafe_b64encode(secrets.token_bytes(32)).decode(),
+        DATABASE_PATH=str(b / "retrieval-baseline/database.sqlite"),
+        DATABASE_URL="",
+        USE_POSTGRESQL="false",
+        PYTHONDONTWRITEBYTECODE="1",
+    )
     import asyncpg
 
     from character.models import CompiledCharacterContext, UserScope
@@ -49,7 +74,7 @@ async def main():
 
     db = SQLiteDB(b / "retrieval-baseline/database.sqlite")
     repo = DatabaseCharacterMemoryRepository(db)
-    scope = UserScope("web", "stage68-memory", "synthetic-owner", "synthetic-owner", "private")
+    scope = UserScope("web", b.name + "-memory", "synthetic-owner", "synthetic-owner", "private")
 
     def digest():
         conn = db._get_connection()
@@ -63,15 +88,15 @@ async def main():
         }
 
     before = digest()
-    found = await repo.search_sources("tsukiyashiro_kisaki", scope, query=fixture["question"], limit=32)
+    found = await repo.search_sources("tsukiyashiro_kisaki", scope, query=fixture["question"], limit=None)
     check("original_sqlite_found_rows_unchanged", found == old["found"])
     sources = await SourceMemoryService(repo, max_chars=32768, defer_budget=True).recall(
         "tsukiyashiro_kisaki", scope, fixture["question"]
     )
     packet = json.loads(sources.context)
     check(
-        "fixed_sqlite_keeps_six_complete_sources",
-        len(packet["records"]) == 6
+        "fixed_sqlite_keeps_all_original_sources",
+        len(packet["records"]) == len(fixture["sources"])
         and {(row["source_id"], row["text"]) for row in packet["records"]}
         == {(s["id"], s["body"]) for s in fixture["sources"]},
     )
@@ -102,7 +127,7 @@ async def main():
         and not await repo.list_memory_records("tsukiyashiro_kisaki", scope, limit=None, include_inactive=True),
     )
     other = await SourceMemoryService(repo, max_chars=32768, defer_budget=True).recall(
-        "tsukiyashiro_kisaki", UserScope("web", "stage68-memory", "other", "other", "private"), fixture["question"]
+        "tsukiyashiro_kisaki", UserScope("web", b.name + "-memory", "other", "other", "private"), fixture["question"]
     )
     check("fixed_cross_owner_rejected", not other.context and not other.candidate_context)
     check("same_sqlite_storage_four_tables_unchanged", before == digest())
@@ -122,17 +147,17 @@ async def main():
     )
     check("original_complete_fixture_preserved", fixture == old["fixture"])
     check(
-        "baseline_native_has_six_durable_sources",
+        "baseline_native_has_original_durable_sources",
         baseline_native["durable_seed_verified_before_question"]
         and baseline_native["durable_declared_source_times_verified"]
         and baseline_native["seed_sources"] == fixture["sources"],
     )
     original_source_trace = baseline_native["prepared"][0]["recall"]["sources"]
     check(
-        "baseline_native_six_found_but_four_selected",
-        original_source_trace["indexed_read_count"] == 6
-        and len(original_source_trace["selected_ids"]) == 4
-        and original_source_trace["selection_omitted"] == 2,
+        "baseline_native_reproduces_original_candidate_cut",
+        original_source_trace["indexed_read_count"] == old["recall"]["diagnostics"]["indexed_read_count"]
+        and len(original_source_trace["selected_ids"]) == len(json.loads(old["recall"]["context"])["records"])
+        and original_source_trace["selection_omitted"] == old["recall"]["diagnostics"]["selection_omitted"],
     )
     check(
         "baseline_primary_blocked_not_model_failure",
@@ -176,7 +201,7 @@ async def main():
     )
     prepared = native["prepared"][0]
     trace = prepared["recall"]["sources"]
-    check("native_all_six_source_ids", set(trace["selected_ids"]) == {s["id"] for s in fixture["sources"]})
+    check("native_all_original_source_ids", set(trace["selected_ids"]) == {s["id"] for s in fixture["sources"]})
     check(
         "native_no_source_omission_or_pending",
         trace["selection_omitted"] == trace["fresh_recheck_omitted"] == 0 and not prepared["source_candidate_context"],
@@ -197,7 +222,7 @@ async def main():
     match = re.search(r"<dialogue_evidence[^>]*>\n(.*?)\n</dialogue_evidence>", wire, re.S)
     check("actual_primary_original_whole_question", fixture["question"] in wire)
     check(
-        "actual_primary_six_whole_sources",
+        "actual_primary_all_whole_sources",
         bool(match)
         and {(row["source_id"], row["text"]) for row in json.loads(match[1])["records"]}
         == {(s["id"], s["body"]) for s in fixture["sources"]},
@@ -246,7 +271,7 @@ async def main():
                 "independent_question_receipt_one",
                 sum(row["body"] == fixture["question"] and row["state"] == "recorded" for row in rows) == 1,
             )
-            check("independent_only_six_seed_plus_question", len(rows) == 7)
+            check("independent_only_original_seeds_plus_question", len(rows) == len(fixture["sources"]) + 1)
             check(
                 "independent_no_scoped_user_facts",
                 await conn.fetchval(
@@ -291,9 +316,55 @@ async def main():
     check("pending_writes_zero", native["sync_pending_final"] == 0)
     answer = native["response"]["reply"]
     check("raw_primary_matches_api_answer", answer == primary[0]["response"]["choices"][0]["message"]["content"])
+    answer_fidelity = original_source_answer_fidelity(answer, [s["body"] for s in fixture["sources"]])
     check(
-        "answer_exact_original_six_in_order_no_additions", answer == "\n\n".join(s["body"] for s in fixture["sources"])
+        "answer_exact_original_bodies_in_order_no_content_additions",
+        answer_fidelity["exact_bodies_in_order_no_content_additions"],
     )
+    # Count every completed variant, including failed primary answers.
+    phase_calls = []
+    for path in sorted(b.glob("native-pg*/cloud-calls.json")):
+        phase_calls.extend(json.loads(path.read_text()))
+    check(
+        "all_phase_calls_request_response_pro",
+        all(
+            c["http_status"] == 200
+            and c["request"]["model"] == c["response"]["model"] == "deepseek-v4-pro"
+            and c["response"]["choices"][0]["finish_reason"] == "stop"
+            for c in phase_calls
+        ),
+    )
+    actual_primary_count = sum(
+        c["request"].get("max_tokens") == native["primary_output_tokens"]
+        and any("<user_query>" in m["content"] for m in c["request"]["messages"])
+        for c in phase_calls
+    )
+    if args.variant != "native-pg-fixed":
+        first = json.loads((b / "native-pg-fixed/result.json").read_text())
+        first_calls = json.loads((b / "native-pg-fixed/cloud-calls.json").read_text())
+        first_primary = next(
+            c
+            for c in first_calls
+            if c["request"].get("max_tokens") == first["primary_output_tokens"]
+            and any("<user_query>" in m["content"] for m in c["request"]["messages"])
+        )
+        check(
+            "intermediate_original_case_complete_input_but_zero_matching_answers",
+            first["seed_sources"] == fixture["sources"]
+            and first["primary_calls"] == 1
+            and len(first["prepared"][0]["recall"]["sources"]["selected_ids"]) == len(fixture["sources"])
+            and not any(s["body"] in first["response"]["reply"] for s in fixture["sources"]),
+        )
+        check(
+            "intermediate_refusal_is_raw_model_not_postprocessing",
+            first["response"]["reply"] == first_primary["response"]["choices"][0]["message"]["content"],
+        )
+        from inference.generation_request import SOURCE_SPEECH_PROVENANCE_POLICY
+
+        final_system = chr(10).join(m["content"] for m in primary[0]["request"]["messages"] if m["role"] == "system")
+        first_system = chr(10).join(m["content"] for m in first_primary["request"]["messages"] if m["role"] == "system")
+        check("actual_final_source_receipt_policy_present", SOURCE_SPEECH_PROVENANCE_POLICY in final_system)
+        check("intermediate_source_receipt_policy_was_absent", SOURCE_SPEECH_PROVENANCE_POLICY not in first_system)
     answer_checks = {s["id"]: s["body"] in answer for s in fixture["sources"]}
     assert all(answer_checks.values())
     audit = {
@@ -304,15 +375,16 @@ async def main():
         "answer_passed": sum(answer_checks.values()),
         "answer_total": len(answer_checks),
         "answer": answer,
+        "answer_fidelity": answer_fidelity,
         "qualified_cloud_calls": 4,
         "baseline_auxiliary_calls": 2,
-        "phase_cloud_calls": 6,
+        "phase_cloud_calls": len(phase_calls),
         "qualified_answers": 1,
-        "phase_primary_calls": 1,
-        "targeted_new_cases": 10,
-        "targeted_affected_cases": 4,
-        "targeted_unique_passed": 14,
-        "targeted_executions": 14,
+        "phase_primary_calls": actual_primary_count,
+        "targeted_new_cases": args.test_new_count,
+        "targeted_affected_cases": args.test_affected_count,
+        "targeted_unique_passed": args.test_new_count + args.test_affected_count,
+        "targeted_executions": args.test_new_count + args.test_affected_count,
         "all_calls_pro": True,
         "no_full_suite": True,
         "no_passing_model_replay": True,
@@ -322,4 +394,5 @@ async def main():
     print(json.dumps({k: v for k, v in audit.items() if k not in ["checks", "answer_checks", "answer"]}))
 
 
-asyncio.run(main())
+if __name__ == "__main__":
+    asyncio.run(main())

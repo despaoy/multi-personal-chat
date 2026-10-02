@@ -70,7 +70,7 @@ class CharacterMemoryRepository(Protocol):
                              source_message_ids: tuple[str, ...], radius: int = 1) -> list[dict[str, Any]]: ...
 
     async def search_sources(self, character_id: str, user_scope: UserScope, *, query: str,
-                             limit: int = 32) -> list[dict[str, Any]]: ...
+                             limit: int | None = 32) -> list[dict[str, Any]]: ...
 
     async def linked_source_receipts(self, character_id: str, user_scope: UserScope, *,
                                      claim_sources: tuple[tuple[int,str],...]) -> list[dict[str,Any]]: ...
@@ -247,7 +247,7 @@ class DatabaseCharacterMemoryRepository:
             user_scope.conversation_type, user_scope.conversation_id, memory_ids=memory_ids)
 
     async def search_sources(self, character_id: str, user_scope: UserScope, *, query: str,
-                             limit: int = 32) -> list[dict[str, Any]]:
+                             limit: int | None = 32) -> list[dict[str, Any]]:
         reader = getattr(self._database, "search_memory_sources", None)
         if reader is None:
             return []

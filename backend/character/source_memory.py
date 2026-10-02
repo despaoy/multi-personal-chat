@@ -103,10 +103,13 @@ class SourceMemoryService:
         ids = tuple(dict.fromkeys(int(memory.memory_id) for memory in memories
                                    if str(memory.memory_id).isdigit() and int(memory.memory_id) > 0))[:200]
         try:
+            # Complete source packets are admitted by the actual serving budget;
+            # a count-only SQL candidate cut cannot prove an exhaustive read.
+            search_limit = None if self._defer_budget else 32
             lanes = [linker(character_id, scope, memory_ids=ids),
-                     search(character_id, scope, query=query, limit=32)]
+                     search(character_id, scope, query=query, limit=search_limit)]
             if retrieval_context.strip():
-                lanes.append(search(character_id, scope, query=retrieval_context, limit=32))
+                lanes.append(search(character_id, scope, query=retrieval_context, limit=search_limit))
             linked, found, *contextual_results = await asyncio.gather(*lanes)
             contextual = contextual_results[0] if contextual_results else []
             linked_read_count, indexed_read_count = len(linked), len(found)
@@ -165,7 +168,9 @@ class SourceMemoryService:
                          window_semantic_relation="not_inferred", anchor_ids=anchor_ids,
                          selection_omitted=max(0, candidate_count - len(anchor_ids)),
                          fresh_recheck_omitted=max(0, len(chosen_ids) - len(selected)),
-                         candidate_limit_reached=indexed_read_count == 32 or contextual_read_count == 32,
+                         source_search_limit=search_limit,
+                         candidate_limit_reached=search_limit is not None and (
+                             indexed_read_count == search_limit or contextual_read_count == search_limit),
                          ranking=("covered_rrf_linked_sparse_history" if contextual_results
                                   else "covered_rrf_linked_sparse"),
                          query_terms_semantic=False, elapsed_ms=(time.monotonic() - started) * 1000)
