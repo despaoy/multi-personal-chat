@@ -87,7 +87,11 @@ def partial_erasure_plan(message, records=None):
     The caller retains the entire original message for semantic interpretation.
     """
     from character.memory_llm import _ARCHIVE_ONLY_ERASURE_NEGATION, _ERASE_REQUEST_PATTERN
+    from character.quoted_erasure_authority import quoted_erasure_plan
 
+    quoted = quoted_erasure_plan(message, records)
+    if quoted is not None:
+        return quoted
     text = re.sub(r'“[^”]*”|「[^」]*」|『[^』]*』|"[^"\n]*"', "", message or "").strip()
     if re.search(r"^(?:如果|假如|假设|要是)|(?:他说|她说|朋友说|你说过)", text):
         return None

@@ -125,7 +125,12 @@ async def run_selective_erasure_probe(
 
     proof["owner_before"] = await snapshot()
     assert len(proof["owner_before"]["claims"]) == 2
-    assert any(fixture.get("native_receipt", "MB-764-C") in r["body"] for r in proof["owner_before"]["sources"])
+    if fixture.get("fragment_lifecycle"):
+        assert {r["id"] for r in proof["owner_before"]["claims"]} == {6,8}
+        assert next(r for r in proof["owner_before"]["claims"] if r["id"]==8)["memory_key"] == fixture["erased_memory_key"]
+        assert any(fixture["native_receipt"] in r["evidence_json"] for r in proof["owner_before"]["claims"])
+    else:
+        assert any(fixture.get("native_receipt", "MB-764-C") in r["body"] for r in proof["owner_before"]["sources"])
     payload = dict(
         platform="qq",
         adapter=fields[2],
@@ -433,6 +438,10 @@ def audit_selective_erasure(proof, fixture, cloud_calls):
     proof["authority_guards"] = guards
     proof["business_checks"] = business
     checks = {**guards, **business, **read_checks}
+    if fixture.get("fragment_lifecycle"):
+        from evaluation.memory_fragment_lifecycle_audit import augment_fragment_lifecycle
+
+        return augment_fragment_lifecycle(proof, fixture, cloud_calls, checks)
     if fixture.get("cross_source_erasure"):
         from evaluation.memory_cross_source_erasure_audit import augment_cross_source_erasure
 

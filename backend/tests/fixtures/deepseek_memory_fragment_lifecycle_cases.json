@@ -1,0 +1,187 @@
+{
+  "execution": {
+    "stage": "43",
+    "new_boundary": "selectively erase an actual quoted partial-source observation while retaining original course confirmation",
+    "source_parent": "stage42-cross-source-fixed",
+    "replay_old_writes": false,
+    "replay_old_answers": false,
+    "replay_imports": false,
+    "production_fault": false
+  },
+  "knowledge_base": "榆影纸雕完整链路资料",
+  "documents": [
+    {
+      "title": "榆影工坊周日纸雕课程规则",
+      "content": "榆影工坊周日纸雕课程规则：上课地点是北岸榆影工坊三楼竹露教室，每周日下午两点四十分开始，四点十分结束。课程联系人是许苒，预约编号为YY-573-R。参加者须带护目镜和刻纸刀。普通雨天课程照常举办，只有红色暴雨预警时才停课。报名截止时间为周六上午十一点，必须收到书面确认才算预约成功。课程照常举办不代表任何具体用户已经报名或必须出门。这是合成工坊的规则。",
+      "category": "课程"
+    },
+    {
+      "title": "榆影工坊工具维修预约规则",
+      "content": "榆影工坊工具维修在周三上午进行，维修联系人是程溪，编号为WX-204，不是周日纸雕课程报名编号。护目镜镜片破损应更换，维修预约不能自动完成课程预约。这里只是合成维修说明，不是用户预约成功的回执。",
+      "category": "维修"
+    },
+    {
+      "title": "南岸竹影工坊绘画课规则",
+      "content": "南岸竹影工坊周日绘画课在一楼杏影画室上午十点开课，联系人是叶澄，编号ZY-882。它不是北岸榆影工坊，不是纸雕课程，不能将其编号和时间替代榆影纸雕课程规则。",
+      "category": "绘画"
+    }
+  ],
+  "search_queries": [],
+  "cases": [
+    {
+      "id": "initial_booking",
+      "message": "我本人今天先收到了北岸榆影工坊周日纸雕课的书面预约确认。我这一份确认书的私人回执编号是PB-681-Q，它只标识我的私人预约，不是公开课程编号。当时我的预约已经确认成功，但我还没有参加过这门课程，也没有出发。这是我本人的完整记录，请记住我的私人回执和当时已经确认、尚未参加、尚未出发的状态。",
+      "expected": []
+    },
+    {
+      "id": "booking_cancelled",
+      "message": "更新我本人的北岸榆影工坊周日纸雕课预约记录：我先前确实收到过私人回执PB-681-Q的书面预约确认。现在工坊已正式撤销我的这一次预约，私人回执PB-681-Q已经作废，我目前没有任何有效的书面预约确认。我至今仍没有参加过这门课程，也没有出发。撤销的只是我这一次私人预约，并不代表公开课程停课。这是在明确更正当前预约状态，请保留先前确认与后来撤销的发生顺序；我不是要求删除记忆。",
+      "expected": []
+    },
+    {
+      "id": "friend_confirmation",
+      "message": "我的朋友季澄本人刚收到北岸榆影工坊周日纸雕课的书面预约确认。季澄这一份确认书的私人回执编号是FJ-394-L，他的这次预约现在仍然有效。他尚未参加过这门课程，也没有出发。这是我转述朋友季澄本人那份预约的完整记录，只描述季澄，不是我本人的预约；我只是说话的人，不是这条记录中收到确认的人。请始终区分说话者与被描述的人。",
+      "expected": []
+    },
+    {
+      "id": "erase_later_source_fragments_keep_original_course",
+      "message": "请从长期记忆中删除原话以“我本人今天再次核对了海庭鹤林工坊2026年12月5日周六纸版压印课的正式书面预约确认，私人回执编号仍为MC-845-D。”开头的后来课程核对记录。我要忘掉的是我本人后来再次核对预约的这一条来源记录，包括上次删除油墨偏好后保留下来的原话片段；本次明确授权删除后来核对记录，不重新写入任何油墨偏好。请保留我本人最初收到的海庭鹤林工坊纸版压印课预约确认记录，原话以“我本人刚收到海庭鹤林工坊2026年12月5日周六纸版压印课的正式书面预约确认，私人回执编号为MC-845-D，我的这次预约仍然有效，我尚未参加课程也没有出发，我没有联系工坊取消预约，”开头。最初的课程确认对应海庭鹤林工坊2026年12月5日周六纸版压印课，私人回执编号MC-845-D，预约仍有效，我尚未参加，也没有出发，没有联系工坊取消。请完整保留最初收到确认的这些事实，不把忘掉后来核对记录当成取消现实预约。不要删除聊天历史。",
+      "expected": [
+        "MC-845-D",
+        "预约"
+      ]
+    }
+  ],
+  "history_template": {
+    "turn_count": 0,
+    "records_per_turn": 0,
+    "heading": "",
+    "line": "",
+    "reply": "",
+    "expanded_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+  },
+  "data_origin": {
+    "kind": "entirely_synthetic",
+    "author": "new Codex test fixture, not an imported user conversation",
+    "private_receipt": "PB-681-Q is an invented test identifier carried forward from the existing synthetic fixture",
+    "personal_statements": "invented role-play inputs for a new random authenticated account in a disposable database",
+    "public_documents": "three synthetic workshop documents; no real business records",
+    "real_user_data_used": false,
+    "credentials_in_model_payload": false,
+    "new_friend_record": "Newly invented synthetic friend 季澄 and receipt FJ-394-L; no real person or conversation imported."
+  },
+  "reuse_from": "stage42-cross-source-fixed",
+  "own_receipt": "PB-681-Q",
+  "friend_receipt": "FJ-394-L",
+  "attack_fields": [
+    "sourceMessageId"
+  ],
+  "baseline_current_intent_gate": false,
+  "course_memory_key": "event_海庭鹤林工坊纸版压印课预约确认",
+  "retained_memory_key": "event_海庭鹤林工坊纸版压印课预约确认",
+  "retained_read_message": "请只依据当前保留的长期记忆和有来源的原话，说明我本人最初收到的纸版压印课预约确认的工坊、日期和星期、私人回执、是否有效，以及是否参加、出发或联系工坊取消。再核对后来再次核对预约的那一条原话片段是否仍在长期记忆中。本轮不提供新的课程或偏好信息，不把普通聊天历史当作长期记忆替代。",
+  "qq_owner_prerequisite": {
+    "source_message_id": "stage40-coupled-source-erase",
+    "full_original_message": "我本人刚收到海庭鹤林工坊2026年12月5日周六纸版压印课的正式书面预约确认，私人回执编号为MC-845-D，我的这次预约仍然有效，我尚未参加课程也没有出发，我没有联系工坊取消预约，并且我喜欢深蓝色油墨进行纸版压印，这是我明确且长期的个人偏好。这是我本人收到确认及个人偏好的完整记录，只描述我，不是朋友或其他人的预约或偏好。请记住课程、日期、本人、有效确认、回执编号、未参加未出发、未联系工坊取消，以及这个明确长期的油墨偏好。",
+    "memory_claim_keys": [
+      "preference_深蓝色油墨进行纸版压印",
+      "event_海庭鹤林工坊纸版压印课预约确认"
+    ],
+    "native_source_run": "stage40-coupled-source",
+    "replay_source_calls": false
+  },
+  "erased_memory_key": "source_fragment_1f57e9a7142b83a7a26e1fe626d71a6b7ded2e92ea90f824b9a1b17422cf9704",
+  "allowed_erase_memory_ids": [
+    "8"
+  ],
+  "protected_memory_ids": [
+    "6"
+  ],
+  "retained_read_kind": "course_after_ink_erasure",
+  "erasure_evidence_projection_expected": false,
+  "erased_original_statement": "并且我喜欢深蓝色油墨进行纸版压印，这是我明确且长期的个人偏好。",
+  "native_owner": "stage40-coupled-native-owner",
+  "native_source_message_id": "stage40-coupled-source-erase",
+  "new_native_source": "我本人刚收到海庭鹤林工坊2026年12月5日周六纸版压印课的正式书面预约确认，私人回执编号为MC-845-D，我的这次预约仍然有效，我尚未参加课程也没有出发，我没有联系工坊取消预约，并且我喜欢深蓝色油墨进行纸版压印，这是我明确且长期的个人偏好。这是我本人收到确认及个人偏好的完整记录，只描述我，不是朋友或其他人的预约或偏好。请记住课程、日期、本人、有效确认、回执编号、未参加未出发、未联系工坊取消，以及这个明确长期的油墨偏好。",
+  "actual_native_preference_evidence": [
+    "我喜欢深蓝色油墨进行纸版压印，这是我明确且长期的个人偏好"
+  ],
+  "native_receipt": "MC-845-D",
+  "unlinked_historical_source_id": "stage41-historical-fixed-erase",
+  "unlinked_historical_source": "我本人今天再次核对了海庭鹤林工坊2026年12月5日周六纸版压印课的正式书面预约确认，私人回执编号仍为MC-845-D。我的这次预约仍然有效，我尚未参加课程，也没有出发，没有联系工坊取消预约。为核对以前的发言，我在这条课程核对记录中逐字引用我本人以前的一句话：“我喜欢深蓝色油墨进行纸版压印，这是我明确且长期的个人偏好。”这处引号内的文字只是我本人历史发言的引用，不是本次新增或更新任何油墨偏好；本次要新增的长期记录是我本人对同一课程、同一日期、同一回执和有效状态的再次核对。请记住本次课程核对记录及它的来源，保留本人、日期、周六、回执、有效状态、未参加、未出发、未联系工坊取消这些完整事实；不要把历史引用当成本次重新声明的偏好。",
+  "retained_recheck_prefix": "我本人今天再次核对了海庭鹤林工坊2026年12月5日周六纸版压印课的正式书面预约确认，私人回执编号仍为MC-845-D。我的这次预约仍然有效，我尚未参加课程，也没有出发，没有联系工坊取消预约。",
+  "all_prior_source_ids": [
+    "stage41-historical-fixed-read",
+    "stage41-historical-fixed-erase",
+    "stage40-coupled-source-erase",
+    "stage42-cross-source-fixed-erase",
+    "stage42-cross-source-fixed-read"
+  ],
+  "cross_source_erasure": false,
+  "historical_erased_quote": "“我喜欢深蓝色油墨进行纸版压印，这是我明确且长期的个人偏好。”",
+  "fragment_lifecycle": true,
+  "actual_erased_source_id": "stage41-historical-fixed-erase",
+  "erase_anchor": "我本人今天再次核对了海庭鹤林工坊2026年12月5日周六纸版压印课的正式书面预约确认，私人回执编号仍为MC-845-D。",
+  "keep_anchor": "我本人刚收到海庭鹤林工坊2026年12月5日周六纸版压印课的正式书面预约确认，私人回执编号为MC-845-D，我的这次预约仍然有效，我尚未参加课程也没有出发，我没有联系工坊取消预约，",
+  "affirmative_erase_clause": "请从长期记忆中删除原话以“我本人今天再次核对了海庭鹤林工坊2026年12月5日周六纸版压印课的正式书面预约确认，私人回执编号仍为MC-845-D。”开头的后来课程核对记录。",
+  "actual_prior_records": [
+    {
+      "id": 6,
+      "character_id": "tsukiyashiro_kisaki",
+      "platform": "qq",
+      "adapter": "stage34-gateway",
+      "sender_id": "stage40-coupled-native-owner",
+      "conversation_type": "private",
+      "conversation_id": "stage40-coupled-native-owner",
+      "scope_level": "conversation",
+      "memory_type": "shared_event",
+      "memory_key": "event_海庭鹤林工坊纸版压印课预约确认",
+      "revision": 1,
+      "relation_type": "ADD",
+      "status": "active",
+      "parent_memory_id": null,
+      "supersedes_memory_id": null,
+      "content": "用户原话保留片段（仅保留内容见证据）",
+      "importance": 0.7,
+      "confidence": 0.98,
+      "source_message_id": "stage40-coupled-source-erase",
+      "source_message_ids_json": "[\"stage40-coupled-source-erase\"]",
+      "evidence_json": "[\"我本人刚收到海庭鹤林工坊2026年12月5日周六纸版压印课的正式书面预约确认，私人回执编号为MC-845-D，我的这次预约仍然有效，我尚未参加课程也没有出发，我没有联系工坊取消预约，\", \"这是我本人收到确认及个人偏好的完整记录，只描述我，不是朋友或其他人的预约或偏好。请记住课程、日期、本人、有效确认、回执编号、未参加未出发、未联系工坊取消，以及这个明确长期的油墨偏好。\"]",
+      "metadata_json": "{\"qualifiers\": {}, \"target_memory_key\": \"\", \"write_mode\": \"hot\", \"feedback_target_ids\": [], \"temporal_provenance\": {\"version\": 1, \"producer\": \"semantic_memory\", \"observed_at\": \"2026-10-01T22:43:39.998513+00:00\", \"validity_authority\": \"unspecified\", \"proposed_bounds\": {}, \"interval_shape\": \"unspecified\", \"expression\": null}, \"content_semantics\": \"quoted_source\", \"speaker_role\": \"user\", \"described_subject\": \"not_resolved\", \"attributed_to\": \"user\", \"erasure_evidence_projection\": {\"version\": 1, \"kind\": \"original_source_fragments\", \"sources\": [{\"source_message_id\": \"stage40-coupled-source-erase\", \"spans\": [[0, 91], [122, 213]]}], \"complete_original_source\": false}}",
+      "valid_from": null,
+      "valid_to": null,
+      "observed_at": "2026-10-01T22:43:39.998513+00:00",
+      "created_at": "2026-10-02T06:43:48.092230",
+      "updated_at": "2026-10-02T06:43:48.092230"
+    },
+    {
+      "id": 8,
+      "character_id": "tsukiyashiro_kisaki",
+      "platform": "qq",
+      "adapter": "stage34-gateway",
+      "sender_id": "stage40-coupled-native-owner",
+      "conversation_type": "private",
+      "conversation_id": "stage40-coupled-native-owner",
+      "scope_level": "conversation",
+      "memory_type": "shared_event",
+      "memory_key": "source_fragment_1f57e9a7142b83a7a26e1fe626d71a6b7ded2e92ea90f824b9a1b17422cf9704",
+      "revision": 1,
+      "relation_type": "ADD",
+      "status": "active",
+      "parent_memory_id": null,
+      "supersedes_memory_id": null,
+      "content": "用户原话保留片段（仅保留内容见证据）",
+      "importance": 0.0,
+      "confidence": 1.0,
+      "source_message_id": "stage41-historical-fixed-erase",
+      "source_message_ids_json": "[\"stage41-historical-fixed-erase\"]",
+      "evidence_json": "[\"我本人今天再次核对了海庭鹤林工坊2026年12月5日周六纸版压印课的正式书面预约确认，私人回执编号仍为MC-845-D。我的这次预约仍然有效，我尚未参加课程，也没有出发，没有联系工坊取消预约。为核对以前的发言，我在这条课程核对记录中逐字引用我本人以前的一句话：\", \"这处引号内的文字只是我本人历史发言的引用，不是本次新增或更新任何油墨偏好；本次要新增的长期记录是我本人对同一课程、同一日期、同一回执和有效状态的再次核对。请记住本次课程核对记录及它的来源，保留本人、日期、周六、回执、有效状态、未参加、未出发、未联系工坊取消这些完整事实；不要把历史引用当成本次重新声明的偏好。\"]",
+      "metadata_json": "{\"content_semantics\": \"quoted_source\", \"speaker_role\": \"user\", \"described_subject\": \"not_resolved\", \"attributed_to\": \"user\", \"qualifiers\": {}, \"temporal_provenance\": {\"version\": 1, \"producer\": \"source_erasure_projection\", \"validity_authority\": \"unspecified\"}, \"erasure_evidence_projection\": {\"version\": 1, \"kind\": \"original_source_fragments\", \"sources\": [{\"source_message_id\": \"stage41-historical-fixed-erase\", \"spans\": [[0, 130], [161, 315]]}], \"complete_original_source\": false}}",
+      "valid_from": null,
+      "valid_to": null,
+      "observed_at": "2026-10-01T23:44:31.721166+00:00",
+      "created_at": "2026-10-02T00:25:09.600023+00:00",
+      "updated_at": "2026-10-02T00:25:09.600023+00:00"
+    }
+  ]
+}

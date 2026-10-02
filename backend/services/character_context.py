@@ -511,7 +511,9 @@ class CharacterContextService:
             scheduler = get_memory_enrichment_scheduler()
             from character.natural_relationship import hypothetical_source_only, quoted_source_only
 
-            source_only = (hypothetical_source_only(turn.message) or quoted_source_only(turn.message)) and not extracted
+            ordinary_quote = quoted_source_only(turn.message)
+            erasure_request = is_memory_erasure_request(turn.message)
+            source_only = (hypothetical_source_only(turn.message) or ordinary_quote) and not extracted and not erasure_request
             if prepared.memory_operation_receipt is not None:
                 # Already submitted before generation, including pending and
                 # failed results. Never duplicate it after saving the reply.
@@ -521,7 +523,7 @@ class CharacterContextService:
                 saved = await save_note(self._memory_repo, prepared.character_id, prepared.user_scope,
                                         note_command, source_message_id or None)
                 outcome.memory_enrichment_status = "relationship_note_saved" if saved else "no_change"
-            elif relationship_write_blocked(turn.message) and not extracted and not source_only:
+            elif relationship_write_blocked(turn.message) and not extracted and not source_only and not (ordinary_quote and erasure_request):
                 outcome.memory_enrichment_status = "skipped_fiction_or_note"
             elif scheduler.enabled:
                 outcome.memory_enrichment_mode = classify_memory_write_mode(turn.message)
