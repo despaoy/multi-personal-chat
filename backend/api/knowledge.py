@@ -204,6 +204,10 @@ async def update_knowledge_base(
     if request.description is not None:
         data["description"] = request.description
     result = await run_db(db.update_knowledge_base, kb_id, data)
+    if result is None:
+        raise HTTPException(status_code=404, detail="知识库不存在")
+    if result['name'] != existing['name']:
+        await run_db(_invalidate_local_knowledge_index)
     return {"success": True, "base": result}
 
 
@@ -216,9 +220,9 @@ async def delete_knowledge_base(kb_id: int, current_user: dict = Depends(get_cur
     existing = await run_db(db.get_knowledge_base, kb_id)
     if not existing:
         raise HTTPException(status_code=404, detail="知识库不存在")
-    await run_db(db.delete_knowledge_base, kb_id)
-    # 级联删除后标记 dirty，防止向量删除失败时旧内容仍可被检索
-    await run_db(_mark_rebuild_dirty)
+    if not await run_db(db.delete_knowledge_base, kb_id):
+        raise HTTPException(status_code=404, detail="知识库不存在")
+    await run_db(_invalidate_local_knowledge_index)
     return {"success": True, "message": "知识库已删除"}
 
 
@@ -253,16 +257,13 @@ async def create_knowledge_folder(
 
 @router.delete("/api/knowledge/folders/{folder_id}")
 async def delete_knowledge_folder(folder_id: int, current_user: dict = Depends(get_current_admin)):
-    """删除文件夹
-
-    s2 fix: 级联删除文件夹下所有文档与向量索引，限定 admin。
-    """
+    """删除文件夹并将保留的文档移至未分类，限定 admin。"""
     existing = await run_db(db.get_knowledge_folder, folder_id)
     if not existing:
         raise HTTPException(status_code=404, detail="文件夹不存在")
-    await run_db(db.delete_knowledge_folder, folder_id)
-    # 级联删除后标记 dirty，防止向量删除失败时旧内容仍可被检索
-    await run_db(_mark_rebuild_dirty)
+    if not await run_db(db.delete_knowledge_folder, folder_id):
+        raise HTTPException(status_code=404, detail="文件夹不存在")
+    await run_db(_invalidate_local_knowledge_index)
     return {"success": True, "message": "文件夹已删除"}
 
 

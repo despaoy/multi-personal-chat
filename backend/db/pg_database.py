@@ -690,42 +690,36 @@ class PgDatabase:
             return _row_to_dict(row) if row else None
 
     async def update_knowledge_base(self, kb_id: int, data: Dict) -> Optional[Dict]:
-        """更新知识库"""
-        now = datetime.now().isoformat()
-        values = {"updated_at": now}
-        if "name" in data and data["name"] is not None:
-            values["name"] = data["name"]
-        if "description" in data and data["description"] is not None:
-            values["description"] = data["description"]
-        async with self.async_session() as session:
-            stmt = knowledge_bases_table.update().where(knowledge_bases_table.c.id == kb_id).values(**values)
-            await session.execute(stmt)
-            await session.commit()
-            # 获取更新后的记录
-            sel_stmt = knowledge_bases_table.select().where(knowledge_bases_table.c.id == kb_id)
-            result = await session.execute(sel_stmt)
-            row = result.fetchone()
-            return _row_to_dict(row) if row else None
+        """Publish a renamed evidence path with its index revision."""
+        async with self.async_session() as session, session.begin():
+            await self._lock_knowledge_index_revision(session)
+            row = (await session.execute(knowledge_bases_table.select().where(knowledge_bases_table.c.id == kb_id).with_for_update())).fetchone()
+            if row is None:
+                await session.rollback()
+                return None
+            existing = _row_to_dict(row)
+            values = {key:value for key,value in data.items() if key in {'name','description'} and value is not None}
+            values['updated_at'] = datetime.now().isoformat()
+            await session.execute(knowledge_bases_table.update().where(knowledge_bases_table.c.id == kb_id).values(**values))
+            if values.get('name',existing['name']) != existing['name']:
+                await self._mark_knowledge_index_dirty_in_transaction(session)
+            row = (await session.execute(knowledge_bases_table.select().where(knowledge_bases_table.c.id == kb_id))).fetchone()
+            return _row_to_dict(row)
 
     async def delete_knowledge_base(self, kb_id: int) -> bool:
-        """删除知识库（级联删除文件夹和文档）"""
-        async with self.async_session() as session:
-            # 先删除关联文档的 chunks
-            await session.execute(
-                text(
-                    'DELETE FROM knowledge_chunks WHERE "documentId" IN '
-                    "(SELECT id FROM knowledge_documents WHERE knowledge_base_id = :kb_id)"
-                ),
-                {"kb_id": kb_id},
-            )
-            await session.execute(
-                knowledge_documents_table.delete().where(knowledge_documents_table.c.knowledge_base_id == kb_id)
-            )
-            await session.execute(
-                knowledge_folders_table.delete().where(knowledge_folders_table.c.knowledge_base_id == kb_id)
-            )
+        """Commit all source deletions and dirty authority together."""
+        async with self.async_session() as session, session.begin():
+            await self._lock_knowledge_index_revision(session)
+            row = (await session.execute(knowledge_bases_table.select().where(knowledge_bases_table.c.id == kb_id).with_for_update())).fetchone()
+            if row is None:
+                await session.rollback()
+                return False
+            document_ids = knowledge_documents_table.select().with_only_columns(knowledge_documents_table.c.id).where(knowledge_documents_table.c.knowledge_base_id == kb_id)
+            await session.execute(knowledge_chunks_table.delete().where(knowledge_chunks_table.c.documentId.in_(document_ids)))
+            await session.execute(knowledge_documents_table.delete().where(knowledge_documents_table.c.knowledge_base_id == kb_id))
+            await session.execute(knowledge_folders_table.delete().where(knowledge_folders_table.c.knowledge_base_id == kb_id))
             await session.execute(knowledge_bases_table.delete().where(knowledge_bases_table.c.id == kb_id))
-            await session.commit()
+            await self._mark_knowledge_index_dirty_in_transaction(session)
             return True
 
     # ============================================
@@ -792,15 +786,16 @@ class PgDatabase:
             return _row_to_dict(row) if row else None
 
     async def delete_knowledge_folder(self, folder_id: int) -> bool:
-        """删除文件夹（文档的 folder_id 置空）"""
-        async with self.async_session() as session:
-            await session.execute(
-                knowledge_documents_table.update()
-                .where(knowledge_documents_table.c.folder_id == folder_id)
-                .values(folder_id=None)
-            )
+        """Keep source text while moving it to uncategorized in one transaction."""
+        async with self.async_session() as session, session.begin():
+            await self._lock_knowledge_index_revision(session)
+            row = (await session.execute(knowledge_folders_table.select().where(knowledge_folders_table.c.id == folder_id).with_for_update())).fetchone()
+            if row is None:
+                await session.rollback()
+                return False
+            await session.execute(knowledge_documents_table.update().where(knowledge_documents_table.c.folder_id == folder_id).values(folder_id=None,category='未分类',updatedAt=datetime.now().isoformat()))
             await session.execute(knowledge_folders_table.delete().where(knowledge_folders_table.c.id == folder_id))
-            await session.commit()
+            await self._mark_knowledge_index_dirty_in_transaction(session)
             return True
 
     # ============================================

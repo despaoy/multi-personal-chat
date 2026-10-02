@@ -1815,43 +1815,45 @@ class SQLiteDB:
         return dict(row) if row else None
 
     def update_knowledge_base(self, kb_id: int, data: Dict):
-        """更新知识库"""
+        """Rename an evidence path and invalidate it in the same transaction."""
         conn = self._get_connection()
-        cursor = conn.cursor()
-        now = datetime.now().isoformat()
-        cursor.execute(
-            'UPDATE knowledge_bases SET name = ?, description = ?, updated_at = ? WHERE id = ?',
-            (data.get("name"), data.get("description", ""), now, kb_id)
-        )
-        conn.commit()
-        cursor.execute('SELECT * FROM knowledge_bases WHERE id = ?', (kb_id,))
-        row = cursor.fetchone()
-        return dict(row) if row else None
-
-    def delete_knowledge_base(self, kb_id: int):
-        """删除知识库（级联删除文件夹和文档）"""
-        conn = self._get_connection()
-        cursor = conn.cursor()
-        # knowledge_folders 有 ON DELETE CASCADE，会自动级联
-        # knowledge_documents 的外键是 ON DELETE SET NULL，需手动删除
-        # knowledge_chunks 有 ON DELETE CASCADE（引用 documents），删除文档后自动级联
-        # 用 BEGIN IMMEDIATE 包裹确保原子性，防止部分删除
-        cursor.execute('BEGIN IMMEDIATE')
         try:
-            # 先删除关联文档的chunks（通过子查询）
-            cursor.execute(
-                'DELETE FROM knowledge_chunks WHERE documentId IN (SELECT id FROM knowledge_documents WHERE knowledge_base_id = ?)',
-                (kb_id,)
-            )
-            cursor.execute('DELETE FROM knowledge_documents WHERE knowledge_base_id = ?', (kb_id,))
-            # knowledge_folders 有 ON DELETE CASCADE，但显式删除更安全
-            cursor.execute('DELETE FROM knowledge_folders WHERE knowledge_base_id = ?', (kb_id,))
-            cursor.execute('DELETE FROM knowledge_bases WHERE id = ?', (kb_id,))
+            conn.execute('BEGIN IMMEDIATE')
+            row = conn.execute('SELECT * FROM knowledge_bases WHERE id = ?', (kb_id,)).fetchone()
+            if row is None:
+                conn.rollback()
+                return None
+            existing = dict(row)
+            values = {key:value for key,value in data.items() if key in {'name','description'} and value is not None}
+            values['updated_at'] = datetime.now().isoformat()
+            conn.execute(f'UPDATE knowledge_bases SET {", ".join(key+" = ?" for key in values)} WHERE id = ?', [*values.values(),kb_id])
+            if values.get('name',existing['name']) != existing['name']:
+                self._mark_knowledge_index_dirty_in_transaction(conn)
+            row = conn.execute('SELECT * FROM knowledge_bases WHERE id = ?', (kb_id,)).fetchone()
             conn.commit()
-        except Exception:
+            return dict(row)
+        except BaseException:
             conn.rollback()
             raise
-        return True
+
+    def delete_knowledge_base(self, kb_id: int):
+        """Commit the base cascade and dirty authority atomically."""
+        conn = self._get_connection()
+        try:
+            conn.execute('BEGIN IMMEDIATE')
+            if conn.execute('SELECT id FROM knowledge_bases WHERE id = ?', (kb_id,)).fetchone() is None:
+                conn.rollback()
+                return False
+            conn.execute('DELETE FROM knowledge_chunks WHERE documentId IN (SELECT id FROM knowledge_documents WHERE knowledge_base_id = ?)', (kb_id,))
+            conn.execute('DELETE FROM knowledge_documents WHERE knowledge_base_id = ?', (kb_id,))
+            conn.execute('DELETE FROM knowledge_folders WHERE knowledge_base_id = ?', (kb_id,))
+            conn.execute('DELETE FROM knowledge_bases WHERE id = ?', (kb_id,))
+            self._mark_knowledge_index_dirty_in_transaction(conn)
+            conn.commit()
+            return True
+        except BaseException:
+            conn.rollback()
+            raise
 
     # ============================================
     # 知识库文件夹管理
@@ -1895,13 +1897,21 @@ class SQLiteDB:
         return dict(row) if row else None
 
     def delete_knowledge_folder(self, folder_id: int):
-        """删除文件夹（文档的folder_id置空）"""
+        """Move retained documents to uncategorized and invalidate atomically."""
         conn = self._get_connection()
-        cursor = conn.cursor()
-        cursor.execute('UPDATE knowledge_documents SET folder_id = NULL WHERE folder_id = ?', (folder_id,))
-        cursor.execute('DELETE FROM knowledge_folders WHERE id = ?', (folder_id,))
-        conn.commit()
-        return True
+        try:
+            conn.execute('BEGIN IMMEDIATE')
+            if conn.execute('SELECT id FROM knowledge_folders WHERE id = ?', (folder_id,)).fetchone() is None:
+                conn.rollback()
+                return False
+            conn.execute("UPDATE knowledge_documents SET folder_id = NULL, category = '未分类', updatedAt = ? WHERE folder_id = ?", (datetime.now().isoformat(),folder_id))
+            conn.execute('DELETE FROM knowledge_folders WHERE id = ?', (folder_id,))
+            self._mark_knowledge_index_dirty_in_transaction(conn)
+            conn.commit()
+            return True
+        except BaseException:
+            conn.rollback()
+            raise
 
     # ============================================
     # 知识库文档管理
