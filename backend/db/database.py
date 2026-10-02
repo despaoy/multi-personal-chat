@@ -1633,6 +1633,45 @@ class SQLiteDB:
         """
         self.update_config({key: value})
 
+    def mark_knowledge_index_dirty(self) -> int:
+        """Increment revision and mark dirty in one cross-process transaction."""
+        from db import knowledge_index_state as state
+
+        conn = self._get_connection()
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+            conn.execute("INSERT INTO config (key, value) VALUES (?, '0') ON CONFLICT(key) DO NOTHING", (state.REVISION_KEY,))
+            raw = conn.execute("SELECT value FROM config WHERE key = ?", (state.REVISION_KEY,)).fetchone()[0]
+            revision = state.parse_revision(raw) + 1
+            conn.execute("UPDATE config SET value = ? WHERE key = ?", (str(revision), state.REVISION_KEY))
+            conn.execute("INSERT INTO config (key, value) VALUES (?, 'dirty') ON CONFLICT(key) DO UPDATE SET value = excluded.value", (state.STATUS_KEY,))
+            conn.commit()
+            return revision
+        except BaseException:
+            conn.rollback()
+            raise
+
+    def commit_knowledge_index_revision(self, expected_revision: int, count: int, fingerprint: str) -> bool:
+        """An old builder cannot overwrite a writer's newer dirty signal."""
+        from db import knowledge_index_state as state
+
+        status = state.complete_status(count, fingerprint, expected_revision)
+        conn = self._get_connection()
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+            conn.execute("INSERT INTO config (key, value) VALUES (?, '0') ON CONFLICT(key) DO NOTHING", (state.REVISION_KEY,))
+            raw = conn.execute("SELECT value FROM config WHERE key = ?", (state.REVISION_KEY,)).fetchone()[0]
+            if state.parse_revision(raw) != expected_revision:
+                conn.rollback()
+                return False
+            conn.execute("INSERT INTO config (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", (state.STATUS_KEY, status))
+            conn.commit()
+            return True
+        except BaseException:
+            conn.rollback()
+            raise
+
+
     # ============================================
     # 审计日志（与 pg_database.py 对齐，此前 SQLite 缺失）
     # ============================================

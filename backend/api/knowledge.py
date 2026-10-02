@@ -1021,11 +1021,9 @@ _EMPTY_FINGERPRINT = "empty"
 
 def _get_rebuild_revision() -> int:
     """读取当前重建修订号（单调递增）。默认 0。"""
-    raw = db.get_config_value(_VECTOR_REBUILD_REVISION_KEY, "0")
-    revision = int(raw)
-    if revision < 0 or str(revision) != str(raw):
-        raise ValueError("Invalid knowledge index revision")
-    return revision
+    from db.knowledge_index_state import parse_revision
+
+    return parse_revision(db.get_config_value(_VECTOR_REBUILD_REVISION_KEY, "0"))
 
 
 def _compute_chunk_fingerprint() -> str:
@@ -1102,17 +1100,18 @@ def _read_rebuild_status() -> tuple[str, int, str, int]:
     return (status, count, fingerprint, revision)
 
 
-def _write_rebuild_status(status: str, count: int, fingerprint: str = "", revision: int = -1) -> None:
+def _write_rebuild_status(status: str, count: int, fingerprint: str = "", revision: int = -1) -> bool:
     """写入重建状态到 config 表。
 
     fingerprint 和 revision 仅在 status='complete' 时有意义。
     """
     if status == "complete" and fingerprint:
-        db.set_config_value(_VECTOR_REBUILD_STATUS_KEY, f"{status}:{count}:{fingerprint}:{revision}")
+        return db.commit_knowledge_index_revision(revision, count, fingerprint)
     elif fingerprint:
         db.set_config_value(_VECTOR_REBUILD_STATUS_KEY, f"{status}:{count}:{fingerprint}")
     else:
         db.set_config_value(_VECTOR_REBUILD_STATUS_KEY, f"{status}:{count}")
+    return True
 
 
 def _mark_rebuild_dirty() -> None:
@@ -1131,10 +1130,7 @@ def _mark_rebuild_dirty() -> None:
         _vector_index_built = False
         _vector_index_revision = None
         try:
-            current = _get_rebuild_revision()
-            new_rev = current + 1
-            db.set_config_value(_VECTOR_REBUILD_REVISION_KEY, str(new_rev))
-            db.set_config_value(_VECTOR_REBUILD_STATUS_KEY, "dirty")
+            db.mark_knowledge_index_dirty()
         except Exception as e:
             logger.warning("标记重建 dirty 持久化失败（内存标志已重置）: %s", e)
 
@@ -1241,7 +1237,8 @@ def _ensure_vector_index():
                     if _get_rebuild_revision() != current_revision:
                         logger.warning("空库清理期间检测到并发 CRUD，不标记 complete，等待下次重建")
                         return False
-                    _write_rebuild_status("complete", 0, _EMPTY_FINGERPRINT, current_revision)
+                    if not _write_rebuild_status("complete", 0, _EMPTY_FINGERPRINT, current_revision):
+                        return False
                     logger.info("向量索引已清空并标记 complete:0:empty:%s", current_revision)
                     _vector_index_revision = current_revision
                     _vector_index_built = True
@@ -1267,6 +1264,8 @@ def _ensure_vector_index():
                             logger.info("跳过检查期间检测到并发 CRUD，放弃跳过，进入重建")
                             # 落入下方重建分支：重新读取最新 revision
                         else:
+                            if not _write_rebuild_status("complete", expected_count, current_fp, current_revision):
+                                return False
                             logger.info(
                                 "向量索引已完整: %d 个文档（complete，数量+指纹+revision 匹配），跳过重建",
                                 stats["total_documents"],
@@ -1374,7 +1373,8 @@ def _ensure_vector_index():
                         final_revision,
                     )
                     return False
-                _write_rebuild_status("complete", total_chunks_indexed, final_fp, start_revision)
+                if not _write_rebuild_status("complete", total_chunks_indexed, final_fp, start_revision):
+                    return False
                 logger.info(
                     "向量索引重建完成: %s 个 chunks（数量+指纹+revision CAS 校验通过，revision=%s）",
                     total_chunks_indexed,

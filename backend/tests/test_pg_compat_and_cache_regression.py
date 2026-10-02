@@ -506,8 +506,9 @@ class TestVectorRebuildStatus:
             status, count, fp, rev = _read_rebuild_status()
             assert (status, count, fp, rev) == ("building", 500, "", -1)
 
-            # Write complete with fingerprint + revision
-            _write_rebuild_status("complete", 500, "abc123def456", 7)
+            # Completion must match actual persisted revision authority.
+            db.set_config_value(kmod._VECTOR_REBUILD_REVISION_KEY, "7")
+            assert _write_rebuild_status("complete", 500, "abc123def456", 7)
             status, count, fp, rev = _read_rebuild_status()
             assert (status, count, fp, rev) == ("complete", 500, "abc123def456", 7)
 

@@ -539,6 +539,34 @@ class PgDatabase:
         """设置单个配置项"""
         await self.set_config({key: value})
 
+    async def mark_knowledge_index_dirty(self) -> int:
+        """Serialize all worker invalidations on the persisted revision row."""
+        from db import knowledge_index_state as state
+
+        async with self.async_session() as session:
+            async with session.begin():
+                await session.execute(text("INSERT INTO config (key, value) VALUES (:key, '0') ON CONFLICT(key) DO NOTHING"), {"key": state.REVISION_KEY})
+                raw = (await session.execute(text("SELECT value FROM config WHERE key = :key FOR UPDATE"), {"key": state.REVISION_KEY})).scalar_one()
+                revision = state.parse_revision(raw) + 1
+                await session.execute(text("UPDATE config SET value = :value WHERE key = :key"), {"key": state.REVISION_KEY, "value": str(revision)})
+                await session.execute(text("INSERT INTO config (key, value) VALUES (:key, 'dirty') ON CONFLICT(key) DO UPDATE SET value = EXCLUDED.value"), {"key": state.STATUS_KEY})
+            return revision
+
+    async def commit_knowledge_index_revision(self, expected_revision: int, count: int, fingerprint: str) -> bool:
+        """Compare revision and commit completion under the same DB row lock."""
+        from db import knowledge_index_state as state
+
+        status = state.complete_status(count, fingerprint, expected_revision)
+        async with self.async_session() as session:
+            async with session.begin():
+                await session.execute(text("INSERT INTO config (key, value) VALUES (:key, '0') ON CONFLICT(key) DO NOTHING"), {"key": state.REVISION_KEY})
+                raw = (await session.execute(text("SELECT value FROM config WHERE key = :key FOR UPDATE"), {"key": state.REVISION_KEY})).scalar_one()
+                if state.parse_revision(raw) != expected_revision:
+                    return False
+                await session.execute(text("INSERT INTO config (key, value) VALUES (:key, :value) ON CONFLICT(key) DO UPDATE SET value = EXCLUDED.value"), {"key": state.STATUS_KEY, "value": status})
+            return True
+
+
     # ============================================
     # LoRA 管理
     # ============================================
@@ -2919,6 +2947,12 @@ class SyncPgAdapter:
 
     def set_config_value(self, key, value):
         return self._run(self._pg.set_config_value(key, value))
+
+    def mark_knowledge_index_dirty(self):
+        return self._run(self._pg.mark_knowledge_index_dirty())
+
+    def commit_knowledge_index_revision(self, expected_revision, count, fingerprint):
+        return self._run(self._pg.commit_knowledge_index_revision(expected_revision, count, fingerprint))
 
     def add_message(self, message):
         return self._run(self._pg.add_message(message))
