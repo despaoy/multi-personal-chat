@@ -108,9 +108,9 @@ def _route_indexes(
 class MultiScaleRagRuntime:
     """Lazy production facade with the same bundle contract used by generation."""
 
-    def __init__(self, index_root: Path | None = None, *, context_max_chars: int = 6000) -> None:
-        if type(context_max_chars) is not int or context_max_chars < 1:
-            raise ValueError("context_max_chars must be a positive integer")
+    def __init__(self, index_root: Path | None = None, *, context_max_chars: int | None = 6000) -> None:
+        if context_max_chars is not None and (type(context_max_chars) is not int or context_max_chars < 1):
+            raise ValueError("context_max_chars must be a positive integer or None")
         self.context_max_chars = context_max_chars
         configured = (
             os.getenv("CHARACTER_RAG_INDEX_ROOT", "").strip() or os.getenv("MULTISCALE_RAG_INDEX_ROOT", "").strip()
@@ -293,10 +293,13 @@ _runtime_lock = threading.Lock()
 
 def get_multiscale_rag_service() -> MultiScaleRagRuntime:
     global _runtime
-    if _runtime is None:
+    from inference.provider_context import get_provider_context_budget
+
+    max_chars = get_provider_context_budget().rag_max_chars
+    if _runtime is None or _runtime.context_max_chars != max_chars:
         with _runtime_lock:
-            if _runtime is None:
-                _runtime = MultiScaleRagRuntime()
+            if _runtime is None or _runtime.context_max_chars != max_chars:
+                _runtime = MultiScaleRagRuntime(context_max_chars=max_chars)
                 _runtime.warmup_async()
     return _runtime
 

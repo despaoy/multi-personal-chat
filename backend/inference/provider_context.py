@@ -16,6 +16,8 @@ class ProviderContextBudget:
     reference_max_chars: int | None = None
     reference_observation_semantics: bool = False
     defer_source_budget: bool = False
+    rag_max_chars: int | None = 6000
+    evidence_max_chars: int = 6000
 
 
 def get_provider_context_budget(manager=None, *, env=None):
@@ -40,6 +42,9 @@ def get_provider_context_budget(manager=None, *, env=None):
             history_max_chars=window,
             source_max_chars=window // 4,
             defer_source_budget=True,
+            # Atomic public packets are admitted by the canonical token budget.
+            rag_max_chars=None,
+            evidence_max_chars=0,
             reference_max_chars=window // 2,
             reference_observation_semantics=True,
             review=ReviewContextBudget(window, history_messages=2 * history_limit),

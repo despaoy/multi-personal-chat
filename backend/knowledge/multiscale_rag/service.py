@@ -141,10 +141,10 @@ class RoutedMultiScaleService:
         source_extractor: OriginalTextExtractor | None = None,
         reranker: PipelineReranker | None = None,
         identity_coverage: bool = False,
-        context_max_chars: int = 6000,
+        context_max_chars: int | None = 6000,
     ) -> None:
-        if type(context_max_chars) is not int or context_max_chars < 1:
-            raise ValueError("context_max_chars must be a positive integer")
+        if context_max_chars is not None and (type(context_max_chars) is not int or context_max_chars < 1):
+            raise ValueError("context_max_chars must be a positive integer or None")
         self.context_max_chars = context_max_chars
         self.config = config
         self.identity_coverage = identity_coverage
@@ -306,7 +306,8 @@ class RoutedMultiScaleService:
         for block in [*context_blocks, *background_blocks]:
             size = len(block) + (2 if admitted else 0)
             supported_background = bool(admitted_ids.intersection(background_support.get(block, ())))
-            if used_chars + size > self.context_max_chars or (block not in block_ids and not supported_background):
+            over_budget = self.context_max_chars is not None and used_chars + size > self.context_max_chars
+            if over_budget or (block not in block_ids and not supported_background):
                 skipped_blocks += 1
                 continue
             admitted.append(block)

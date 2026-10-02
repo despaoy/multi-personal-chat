@@ -1489,6 +1489,7 @@ async def _generate_with_retrieval(
             max_tokens=_max_tokens,
             top_p=_top_p,
             context_window_tokens=get_provider_context_budget().window_tokens,
+            evidence_max_chars=get_provider_context_budget().evidence_max_chars,
         ),
         generate_reply,
     )
