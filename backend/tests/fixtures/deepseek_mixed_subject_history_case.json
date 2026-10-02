@@ -1,0 +1,1568 @@
+{
+  "synthetic": true,
+  "case_kind": "mixed_user_report_and_character_topic_after_seed_leaves_real_recent_history",
+  "knowledge_base": "绿泽公共办理说明",
+  "documents": [
+    {
+      "title": "绿泽窗口受理",
+      "category": "办理",
+      "content": "完整公共办理说明正文起点。方案绿泽窗口受理，编号LZ-781。费用6元，办理时限16小时。全部办理条件：完整表格与身份页齐全。全部例外：身份页缺失须暂停，预约不豁免身份核验。此资料不代表任何人的喜好或选择，满足必要条件不等于实际办理。完整公共办理说明正文终点。"
+    },
+    {
+      "title": "绿泽代办受理",
+      "category": "办理",
+      "content": "完整公共办理说明正文起点。方案绿泽代办受理，编号LZ-782。费用12元，办理时限30小时。全部办理条件：完整表格与代办授权齐全。全部例外：授权过期须重新取得有效授权，费用支付不能替代授权。此资料不代表任何人的喜好或选择，满足必要条件不等于实际办理。完整公共办理说明正文终点。"
+    },
+    {
+      "title": "绿泽加速受理",
+      "category": "办理",
+      "content": "完整公共办理说明正文起点。方案绿泽加速受理，编号LZ-783。费用18元，办理时限5小时。全部办理条件：完整表格且身份核验通过。全部例外：核验失败须退回普通流程，预约不豁免核验。此资料不代表任何人的喜好或选择，满足必要条件不等于实际办理。完整公共办理说明正文终点。"
+    },
+    {
+      "title": "绿泽寄件受理",
+      "category": "办理",
+      "content": "完整公共办理说明正文起点。方案绿泽寄件受理，编号LZ-784。费用9元，办理时限48小时。全部办理条件：完整表格与可投递回寄地址齐全。全部例外：地址无法投递须暂停，附件不全须补件。此资料不代表任何人的喜好或选择，满足必要条件不等于实际办理。完整公共办理说明正文终点。"
+    }
+  ],
+  "source_message": "请记住我的本人办理偏好：我喜欢窗口受理。我不喜欢代办受理。我喜欢加速受理，但我只有完整表格已提交且身份核验通过才使用加速受理。",
+  "question": "请查知识库，逐项比较《绿泽窗口受理》《绿泽代办受理》《绿泽加速受理》《绿泽寄件受理》这四份完整说明。分别列出编号、费用、办理时限、全部办理条件和全部例外，结合我已告诉你的本人办理偏好判断本轮各项偏好条件。本轮完整表格已提交，身份页齐全，代办授权有效，身份核验失败，回寄地址可投递，附件齐全。每份说明分别说明本轮核对的原文范围，未取得喜好证据的方案保留未知，必要条件不等于实际选择。另回答你最喜欢哪个受理方案；依据不足时保留未知，不能混用不同主体的证据。",
+  "bridges": [
+    {
+      "message": "换一个独立话题。下面是纯虚构的归档目录第1批，文件条目只是合成样例，不描述现实人物，不是本人的身份或经历，也不用于修改长期记忆。请仅列出这批目录的第一条编号与最后一条编号，以及条目总数。不要推断样例的现实归属。每条均为完整记录，列分别是record_id、folder、pages、state、checksum。\nARCH-01-0001|box-01-01|pages=02|state=sealed|checksum=0100001Z\nARCH-01-0002|box-01-02|pages=03|state=sealed|checksum=0100002Z\nARCH-01-0003|box-01-03|pages=04|state=sealed|checksum=0100003Z\nARCH-01-0004|box-01-04|pages=05|state=sealed|checksum=0100004Z\nARCH-01-0005|box-01-05|pages=06|state=sealed|checksum=0100005Z\nARCH-01-0006|box-01-06|pages=07|state=sealed|checksum=0100006Z\nARCH-01-0007|box-01-07|pages=08|state=sealed|checksum=0100007Z\nARCH-01-0008|box-01-08|pages=09|state=sealed|checksum=0100008Z\nARCH-01-0009|box-01-09|pages=10|state=sealed|checksum=0100009Z\nARCH-01-0010|box-01-10|pages=11|state=sealed|checksum=0100010Z\nARCH-01-0011|box-01-11|pages=12|state=sealed|checksum=0100011Z\nARCH-01-0012|box-01-12|pages=13|state=sealed|checksum=0100012Z\nARCH-01-0013|box-01-13|pages=14|state=sealed|checksum=0100013Z\nARCH-01-0014|box-01-14|pages=15|state=sealed|checksum=0100014Z\nARCH-01-0015|box-01-15|pages=16|state=sealed|checksum=0100015Z\nARCH-01-0016|box-01-16|pages=17|state=sealed|checksum=0100016Z\nARCH-01-0017|box-01-00|pages=18|state=sealed|checksum=0100017Z\nARCH-01-0018|box-01-01|pages=19|state=sealed|checksum=0100018Z\nARCH-01-0019|box-01-02|pages=20|state=sealed|checksum=0100019Z\nARCH-01-0020|box-01-03|pages=21|state=sealed|checksum=0100020Z\nARCH-01-0021|box-01-04|pages=22|state=sealed|checksum=0100021Z\nARCH-01-0022|box-01-05|pages=23|state=sealed|checksum=0100022Z\nARCH-01-0023|box-01-06|pages=24|state=sealed|checksum=0100023Z\nARCH-01-0024|box-01-07|pages=25|state=sealed|checksum=0100024Z\nARCH-01-0025|box-01-08|pages=26|state=sealed|checksum=0100025Z\nARCH-01-0026|box-01-09|pages=27|state=sealed|checksum=0100026Z\nARCH-01-0027|box-01-10|pages=28|state=sealed|checksum=0100027Z\nARCH-01-0028|box-01-11|pages=29|state=sealed|checksum=0100028Z\nARCH-01-0029|box-01-12|pages=30|state=sealed|checksum=0100029Z\nARCH-01-0030|box-01-13|pages=31|state=sealed|checksum=0100030Z\nARCH-01-0031|box-01-14|pages=01|state=sealed|checksum=0100031Z\nARCH-01-0032|box-01-15|pages=02|state=sealed|checksum=0100032Z\nARCH-01-0033|box-01-16|pages=03|state=sealed|checksum=0100033Z\nARCH-01-0034|box-01-00|pages=04|state=sealed|checksum=0100034Z\nARCH-01-0035|box-01-01|pages=05|state=sealed|checksum=0100035Z\nARCH-01-0036|box-01-02|pages=06|state=sealed|checksum=0100036Z\nARCH-01-0037|box-01-03|pages=07|state=sealed|checksum=0100037Z\nARCH-01-0038|box-01-04|pages=08|state=sealed|checksum=0100038Z\nARCH-01-0039|box-01-05|pages=09|state=sealed|checksum=0100039Z\nARCH-01-0040|box-01-06|pages=10|state=sealed|checksum=0100040Z\nARCH-01-0041|box-01-07|pages=11|state=sealed|checksum=0100041Z\nARCH-01-0042|box-01-08|pages=12|state=sealed|checksum=0100042Z\nARCH-01-0043|box-01-09|pages=13|state=sealed|checksum=0100043Z\nARCH-01-0044|box-01-10|pages=14|state=sealed|checksum=0100044Z\nARCH-01-0045|box-01-11|pages=15|state=sealed|checksum=0100045Z\nARCH-01-0046|box-01-12|pages=16|state=sealed|checksum=0100046Z\nARCH-01-0047|box-01-13|pages=17|state=sealed|checksum=0100047Z\nARCH-01-0048|box-01-14|pages=18|state=sealed|checksum=0100048Z\nARCH-01-0049|box-01-15|pages=19|state=sealed|checksum=0100049Z\nARCH-01-0050|box-01-16|pages=20|state=sealed|checksum=0100050Z\nARCH-01-0051|box-01-00|pages=21|state=sealed|checksum=0100051Z\nARCH-01-0052|box-01-01|pages=22|state=sealed|checksum=0100052Z\nARCH-01-0053|box-01-02|pages=23|state=sealed|checksum=0100053Z\nARCH-01-0054|box-01-03|pages=24|state=sealed|checksum=0100054Z\nARCH-01-0055|box-01-04|pages=25|state=sealed|checksum=0100055Z\nARCH-01-0056|box-01-05|pages=26|state=sealed|checksum=0100056Z\nARCH-01-0057|box-01-06|pages=27|state=sealed|checksum=0100057Z\nARCH-01-0058|box-01-07|pages=28|state=sealed|checksum=0100058Z\nARCH-01-0059|box-01-08|pages=29|state=sealed|checksum=0100059Z\nARCH-01-0060|box-01-09|pages=30|state=sealed|checksum=0100060Z\nARCH-01-0061|box-01-10|pages=31|state=sealed|checksum=0100061Z\nARCH-01-0062|box-01-11|pages=01|state=sealed|checksum=0100062Z\nARCH-01-0063|box-01-12|pages=02|state=sealed|checksum=0100063Z\nARCH-01-0064|box-01-13|pages=03|state=sealed|checksum=0100064Z\nARCH-01-0065|box-01-14|pages=04|state=sealed|checksum=0100065Z\nARCH-01-0066|box-01-15|pages=05|state=sealed|checksum=0100066Z\nARCH-01-0067|box-01-16|pages=06|state=sealed|checksum=0100067Z\nARCH-01-0068|box-01-00|pages=07|state=sealed|checksum=0100068Z\nARCH-01-0069|box-01-01|pages=08|state=sealed|checksum=0100069Z\nARCH-01-0070|box-01-02|pages=09|state=sealed|checksum=0100070Z\nARCH-01-0071|box-01-03|pages=10|state=sealed|checksum=0100071Z\nARCH-01-0072|box-01-04|pages=11|state=sealed|checksum=0100072Z\nARCH-01-0073|box-01-05|pages=12|state=sealed|checksum=0100073Z\nARCH-01-0074|box-01-06|pages=13|state=sealed|checksum=0100074Z\nARCH-01-0075|box-01-07|pages=14|state=sealed|checksum=0100075Z\nARCH-01-0076|box-01-08|pages=15|state=sealed|checksum=0100076Z\nARCH-01-0077|box-01-09|pages=16|state=sealed|checksum=0100077Z\nARCH-01-0078|box-01-10|pages=17|state=sealed|checksum=0100078Z\nARCH-01-0079|box-01-11|pages=18|state=sealed|checksum=0100079Z\nARCH-01-0080|box-01-12|pages=19|state=sealed|checksum=0100080Z\nARCH-01-0081|box-01-13|pages=20|state=sealed|checksum=0100081Z\nARCH-01-0082|box-01-14|pages=21|state=sealed|checksum=0100082Z\nARCH-01-0083|box-01-15|pages=22|state=sealed|checksum=0100083Z\nARCH-01-0084|box-01-16|pages=23|state=sealed|checksum=0100084Z\nARCH-01-0085|box-01-00|pages=24|state=sealed|checksum=0100085Z\nARCH-01-0086|box-01-01|pages=25|state=sealed|checksum=0100086Z\nARCH-01-0087|box-01-02|pages=26|state=sealed|checksum=0100087Z\nARCH-01-0088|box-01-03|pages=27|state=sealed|checksum=0100088Z\nARCH-01-0089|box-01-04|pages=28|state=sealed|checksum=0100089Z\nARCH-01-0090|box-01-05|pages=29|state=sealed|checksum=0100090Z\nARCH-01-0091|box-01-06|pages=30|state=sealed|checksum=0100091Z\nARCH-01-0092|box-01-07|pages=31|state=sealed|checksum=0100092Z\nARCH-01-0093|box-01-08|pages=01|state=sealed|checksum=0100093Z\nARCH-01-0094|box-01-09|pages=02|state=sealed|checksum=0100094Z\nARCH-01-0095|box-01-10|pages=03|state=sealed|checksum=0100095Z\nARCH-01-0096|box-01-11|pages=04|state=sealed|checksum=0100096Z\nARCH-01-0097|box-01-12|pages=05|state=sealed|checksum=0100097Z\nARCH-01-0098|box-01-13|pages=06|state=sealed|checksum=0100098Z\nARCH-01-0099|box-01-14|pages=07|state=sealed|checksum=0100099Z\nARCH-01-0100|box-01-15|pages=08|state=sealed|checksum=0100100Z\nARCH-01-0101|box-01-16|pages=09|state=sealed|checksum=0100101Z\nARCH-01-0102|box-01-00|pages=10|state=sealed|checksum=0100102Z\nARCH-01-0103|box-01-01|pages=11|state=sealed|checksum=0100103Z\nARCH-01-0104|box-01-02|pages=12|state=sealed|checksum=0100104Z\nARCH-01-0105|box-01-03|pages=13|state=sealed|checksum=0100105Z\nARCH-01-0106|box-01-04|pages=14|state=sealed|checksum=0100106Z\nARCH-01-0107|box-01-05|pages=15|state=sealed|checksum=0100107Z\nARCH-01-0108|box-01-06|pages=16|state=sealed|checksum=0100108Z\nARCH-01-0109|box-01-07|pages=17|state=sealed|checksum=0100109Z\nARCH-01-0110|box-01-08|pages=18|state=sealed|checksum=0100110Z\nARCH-01-0111|box-01-09|pages=19|state=sealed|checksum=0100111Z\nARCH-01-0112|box-01-10|pages=20|state=sealed|checksum=0100112Z\nARCH-01-0113|box-01-11|pages=21|state=sealed|checksum=0100113Z\nARCH-01-0114|box-01-12|pages=22|state=sealed|checksum=0100114Z\nARCH-01-0115|box-01-13|pages=23|state=sealed|checksum=0100115Z\nARCH-01-0116|box-01-14|pages=24|state=sealed|checksum=0100116Z\nARCH-01-0117|box-01-15|pages=25|state=sealed|checksum=0100117Z\nARCH-01-0118|box-01-16|pages=26|state=sealed|checksum=0100118Z\nARCH-01-0119|box-01-00|pages=27|state=sealed|checksum=0100119Z\nARCH-01-0120|box-01-01|pages=28|state=sealed|checksum=0100120Z\nARCH-01-0121|box-01-02|pages=29|state=sealed|checksum=0100121Z\n",
+      "record_count": 121,
+      "first_id": "ARCH-01-0001",
+      "last_id": "ARCH-01-0121",
+      "synthetic": true,
+      "purpose": "A complete distinct native unrelated task, not generated history injection; cumulative real turns naturally exceed current cloud65536-character recent history allowance."
+    },
+    {
+      "message": "换一个独立话题。下面是纯虚构的归档目录第2批，文件条目只是合成样例，不描述现实人物，不是本人的身份或经历，也不用于修改长期记忆。请仅列出这批目录的第一条编号与最后一条编号，以及条目总数。不要推断样例的现实归属。每条均为完整记录，列分别是record_id、folder、pages、state、checksum。\nARCH-02-0001|box-02-01|pages=02|state=sealed|checksum=0200001Z\nARCH-02-0002|box-02-02|pages=03|state=sealed|checksum=0200002Z\nARCH-02-0003|box-02-03|pages=04|state=sealed|checksum=0200003Z\nARCH-02-0004|box-02-04|pages=05|state=sealed|checksum=0200004Z\nARCH-02-0005|box-02-05|pages=06|state=sealed|checksum=0200005Z\nARCH-02-0006|box-02-06|pages=07|state=sealed|checksum=0200006Z\nARCH-02-0007|box-02-07|pages=08|state=sealed|checksum=0200007Z\nARCH-02-0008|box-02-08|pages=09|state=sealed|checksum=0200008Z\nARCH-02-0009|box-02-09|pages=10|state=sealed|checksum=0200009Z\nARCH-02-0010|box-02-10|pages=11|state=sealed|checksum=0200010Z\nARCH-02-0011|box-02-11|pages=12|state=sealed|checksum=0200011Z\nARCH-02-0012|box-02-12|pages=13|state=sealed|checksum=0200012Z\nARCH-02-0013|box-02-13|pages=14|state=sealed|checksum=0200013Z\nARCH-02-0014|box-02-14|pages=15|state=sealed|checksum=0200014Z\nARCH-02-0015|box-02-15|pages=16|state=sealed|checksum=0200015Z\nARCH-02-0016|box-02-16|pages=17|state=sealed|checksum=0200016Z\nARCH-02-0017|box-02-00|pages=18|state=sealed|checksum=0200017Z\nARCH-02-0018|box-02-01|pages=19|state=sealed|checksum=0200018Z\nARCH-02-0019|box-02-02|pages=20|state=sealed|checksum=0200019Z\nARCH-02-0020|box-02-03|pages=21|state=sealed|checksum=0200020Z\nARCH-02-0021|box-02-04|pages=22|state=sealed|checksum=0200021Z\nARCH-02-0022|box-02-05|pages=23|state=sealed|checksum=0200022Z\nARCH-02-0023|box-02-06|pages=24|state=sealed|checksum=0200023Z\nARCH-02-0024|box-02-07|pages=25|state=sealed|checksum=0200024Z\nARCH-02-0025|box-02-08|pages=26|state=sealed|checksum=0200025Z\nARCH-02-0026|box-02-09|pages=27|state=sealed|checksum=0200026Z\nARCH-02-0027|box-02-10|pages=28|state=sealed|checksum=0200027Z\nARCH-02-0028|box-02-11|pages=29|state=sealed|checksum=0200028Z\nARCH-02-0029|box-02-12|pages=30|state=sealed|checksum=0200029Z\nARCH-02-0030|box-02-13|pages=31|state=sealed|checksum=0200030Z\nARCH-02-0031|box-02-14|pages=01|state=sealed|checksum=0200031Z\nARCH-02-0032|box-02-15|pages=02|state=sealed|checksum=0200032Z\nARCH-02-0033|box-02-16|pages=03|state=sealed|checksum=0200033Z\nARCH-02-0034|box-02-00|pages=04|state=sealed|checksum=0200034Z\nARCH-02-0035|box-02-01|pages=05|state=sealed|checksum=0200035Z\nARCH-02-0036|box-02-02|pages=06|state=sealed|checksum=0200036Z\nARCH-02-0037|box-02-03|pages=07|state=sealed|checksum=0200037Z\nARCH-02-0038|box-02-04|pages=08|state=sealed|checksum=0200038Z\nARCH-02-0039|box-02-05|pages=09|state=sealed|checksum=0200039Z\nARCH-02-0040|box-02-06|pages=10|state=sealed|checksum=0200040Z\nARCH-02-0041|box-02-07|pages=11|state=sealed|checksum=0200041Z\nARCH-02-0042|box-02-08|pages=12|state=sealed|checksum=0200042Z\nARCH-02-0043|box-02-09|pages=13|state=sealed|checksum=0200043Z\nARCH-02-0044|box-02-10|pages=14|state=sealed|checksum=0200044Z\nARCH-02-0045|box-02-11|pages=15|state=sealed|checksum=0200045Z\nARCH-02-0046|box-02-12|pages=16|state=sealed|checksum=0200046Z\nARCH-02-0047|box-02-13|pages=17|state=sealed|checksum=0200047Z\nARCH-02-0048|box-02-14|pages=18|state=sealed|checksum=0200048Z\nARCH-02-0049|box-02-15|pages=19|state=sealed|checksum=0200049Z\nARCH-02-0050|box-02-16|pages=20|state=sealed|checksum=0200050Z\nARCH-02-0051|box-02-00|pages=21|state=sealed|checksum=0200051Z\nARCH-02-0052|box-02-01|pages=22|state=sealed|checksum=0200052Z\nARCH-02-0053|box-02-02|pages=23|state=sealed|checksum=0200053Z\nARCH-02-0054|box-02-03|pages=24|state=sealed|checksum=0200054Z\nARCH-02-0055|box-02-04|pages=25|state=sealed|checksum=0200055Z\nARCH-02-0056|box-02-05|pages=26|state=sealed|checksum=0200056Z\nARCH-02-0057|box-02-06|pages=27|state=sealed|checksum=0200057Z\nARCH-02-0058|box-02-07|pages=28|state=sealed|checksum=0200058Z\nARCH-02-0059|box-02-08|pages=29|state=sealed|checksum=0200059Z\nARCH-02-0060|box-02-09|pages=30|state=sealed|checksum=0200060Z\nARCH-02-0061|box-02-10|pages=31|state=sealed|checksum=0200061Z\nARCH-02-0062|box-02-11|pages=01|state=sealed|checksum=0200062Z\nARCH-02-0063|box-02-12|pages=02|state=sealed|checksum=0200063Z\nARCH-02-0064|box-02-13|pages=03|state=sealed|checksum=0200064Z\nARCH-02-0065|box-02-14|pages=04|state=sealed|checksum=0200065Z\nARCH-02-0066|box-02-15|pages=05|state=sealed|checksum=0200066Z\nARCH-02-0067|box-02-16|pages=06|state=sealed|checksum=0200067Z\nARCH-02-0068|box-02-00|pages=07|state=sealed|checksum=0200068Z\nARCH-02-0069|box-02-01|pages=08|state=sealed|checksum=0200069Z\nARCH-02-0070|box-02-02|pages=09|state=sealed|checksum=0200070Z\nARCH-02-0071|box-02-03|pages=10|state=sealed|checksum=0200071Z\nARCH-02-0072|box-02-04|pages=11|state=sealed|checksum=0200072Z\nARCH-02-0073|box-02-05|pages=12|state=sealed|checksum=0200073Z\nARCH-02-0074|box-02-06|pages=13|state=sealed|checksum=0200074Z\nARCH-02-0075|box-02-07|pages=14|state=sealed|checksum=0200075Z\nARCH-02-0076|box-02-08|pages=15|state=sealed|checksum=0200076Z\nARCH-02-0077|box-02-09|pages=16|state=sealed|checksum=0200077Z\nARCH-02-0078|box-02-10|pages=17|state=sealed|checksum=0200078Z\nARCH-02-0079|box-02-11|pages=18|state=sealed|checksum=0200079Z\nARCH-02-0080|box-02-12|pages=19|state=sealed|checksum=0200080Z\nARCH-02-0081|box-02-13|pages=20|state=sealed|checksum=0200081Z\nARCH-02-0082|box-02-14|pages=21|state=sealed|checksum=0200082Z\nARCH-02-0083|box-02-15|pages=22|state=sealed|checksum=0200083Z\nARCH-02-0084|box-02-16|pages=23|state=sealed|checksum=0200084Z\nARCH-02-0085|box-02-00|pages=24|state=sealed|checksum=0200085Z\nARCH-02-0086|box-02-01|pages=25|state=sealed|checksum=0200086Z\nARCH-02-0087|box-02-02|pages=26|state=sealed|checksum=0200087Z\nARCH-02-0088|box-02-03|pages=27|state=sealed|checksum=0200088Z\nARCH-02-0089|box-02-04|pages=28|state=sealed|checksum=0200089Z\nARCH-02-0090|box-02-05|pages=29|state=sealed|checksum=0200090Z\nARCH-02-0091|box-02-06|pages=30|state=sealed|checksum=0200091Z\nARCH-02-0092|box-02-07|pages=31|state=sealed|checksum=0200092Z\nARCH-02-0093|box-02-08|pages=01|state=sealed|checksum=0200093Z\nARCH-02-0094|box-02-09|pages=02|state=sealed|checksum=0200094Z\nARCH-02-0095|box-02-10|pages=03|state=sealed|checksum=0200095Z\nARCH-02-0096|box-02-11|pages=04|state=sealed|checksum=0200096Z\nARCH-02-0097|box-02-12|pages=05|state=sealed|checksum=0200097Z\nARCH-02-0098|box-02-13|pages=06|state=sealed|checksum=0200098Z\nARCH-02-0099|box-02-14|pages=07|state=sealed|checksum=0200099Z\nARCH-02-0100|box-02-15|pages=08|state=sealed|checksum=0200100Z\nARCH-02-0101|box-02-16|pages=09|state=sealed|checksum=0200101Z\nARCH-02-0102|box-02-00|pages=10|state=sealed|checksum=0200102Z\nARCH-02-0103|box-02-01|pages=11|state=sealed|checksum=0200103Z\nARCH-02-0104|box-02-02|pages=12|state=sealed|checksum=0200104Z\nARCH-02-0105|box-02-03|pages=13|state=sealed|checksum=0200105Z\nARCH-02-0106|box-02-04|pages=14|state=sealed|checksum=0200106Z\nARCH-02-0107|box-02-05|pages=15|state=sealed|checksum=0200107Z\nARCH-02-0108|box-02-06|pages=16|state=sealed|checksum=0200108Z\nARCH-02-0109|box-02-07|pages=17|state=sealed|checksum=0200109Z\nARCH-02-0110|box-02-08|pages=18|state=sealed|checksum=0200110Z\nARCH-02-0111|box-02-09|pages=19|state=sealed|checksum=0200111Z\nARCH-02-0112|box-02-10|pages=20|state=sealed|checksum=0200112Z\nARCH-02-0113|box-02-11|pages=21|state=sealed|checksum=0200113Z\nARCH-02-0114|box-02-12|pages=22|state=sealed|checksum=0200114Z\nARCH-02-0115|box-02-13|pages=23|state=sealed|checksum=0200115Z\nARCH-02-0116|box-02-14|pages=24|state=sealed|checksum=0200116Z\nARCH-02-0117|box-02-15|pages=25|state=sealed|checksum=0200117Z\nARCH-02-0118|box-02-16|pages=26|state=sealed|checksum=0200118Z\nARCH-02-0119|box-02-00|pages=27|state=sealed|checksum=0200119Z\nARCH-02-0120|box-02-01|pages=28|state=sealed|checksum=0200120Z\nARCH-02-0121|box-02-02|pages=29|state=sealed|checksum=0200121Z\n",
+      "record_count": 121,
+      "first_id": "ARCH-02-0001",
+      "last_id": "ARCH-02-0121",
+      "synthetic": true,
+      "purpose": "A complete distinct native unrelated task, not generated history injection; cumulative real turns naturally exceed current cloud65536-character recent history allowance."
+    },
+    {
+      "message": "换一个独立话题。下面是纯虚构的归档目录第3批，文件条目只是合成样例，不描述现实人物，不是本人的身份或经历，也不用于修改长期记忆。请仅列出这批目录的第一条编号与最后一条编号，以及条目总数。不要推断样例的现实归属。每条均为完整记录，列分别是record_id、folder、pages、state、checksum。\nARCH-03-0001|box-03-01|pages=02|state=sealed|checksum=0300001Z\nARCH-03-0002|box-03-02|pages=03|state=sealed|checksum=0300002Z\nARCH-03-0003|box-03-03|pages=04|state=sealed|checksum=0300003Z\nARCH-03-0004|box-03-04|pages=05|state=sealed|checksum=0300004Z\nARCH-03-0005|box-03-05|pages=06|state=sealed|checksum=0300005Z\nARCH-03-0006|box-03-06|pages=07|state=sealed|checksum=0300006Z\nARCH-03-0007|box-03-07|pages=08|state=sealed|checksum=0300007Z\nARCH-03-0008|box-03-08|pages=09|state=sealed|checksum=0300008Z\nARCH-03-0009|box-03-09|pages=10|state=sealed|checksum=0300009Z\nARCH-03-0010|box-03-10|pages=11|state=sealed|checksum=0300010Z\nARCH-03-0011|box-03-11|pages=12|state=sealed|checksum=0300011Z\nARCH-03-0012|box-03-12|pages=13|state=sealed|checksum=0300012Z\nARCH-03-0013|box-03-13|pages=14|state=sealed|checksum=0300013Z\nARCH-03-0014|box-03-14|pages=15|state=sealed|checksum=0300014Z\nARCH-03-0015|box-03-15|pages=16|state=sealed|checksum=0300015Z\nARCH-03-0016|box-03-16|pages=17|state=sealed|checksum=0300016Z\nARCH-03-0017|box-03-00|pages=18|state=sealed|checksum=0300017Z\nARCH-03-0018|box-03-01|pages=19|state=sealed|checksum=0300018Z\nARCH-03-0019|box-03-02|pages=20|state=sealed|checksum=0300019Z\nARCH-03-0020|box-03-03|pages=21|state=sealed|checksum=0300020Z\nARCH-03-0021|box-03-04|pages=22|state=sealed|checksum=0300021Z\nARCH-03-0022|box-03-05|pages=23|state=sealed|checksum=0300022Z\nARCH-03-0023|box-03-06|pages=24|state=sealed|checksum=0300023Z\nARCH-03-0024|box-03-07|pages=25|state=sealed|checksum=0300024Z\nARCH-03-0025|box-03-08|pages=26|state=sealed|checksum=0300025Z\nARCH-03-0026|box-03-09|pages=27|state=sealed|checksum=0300026Z\nARCH-03-0027|box-03-10|pages=28|state=sealed|checksum=0300027Z\nARCH-03-0028|box-03-11|pages=29|state=sealed|checksum=0300028Z\nARCH-03-0029|box-03-12|pages=30|state=sealed|checksum=0300029Z\nARCH-03-0030|box-03-13|pages=31|state=sealed|checksum=0300030Z\nARCH-03-0031|box-03-14|pages=01|state=sealed|checksum=0300031Z\nARCH-03-0032|box-03-15|pages=02|state=sealed|checksum=0300032Z\nARCH-03-0033|box-03-16|pages=03|state=sealed|checksum=0300033Z\nARCH-03-0034|box-03-00|pages=04|state=sealed|checksum=0300034Z\nARCH-03-0035|box-03-01|pages=05|state=sealed|checksum=0300035Z\nARCH-03-0036|box-03-02|pages=06|state=sealed|checksum=0300036Z\nARCH-03-0037|box-03-03|pages=07|state=sealed|checksum=0300037Z\nARCH-03-0038|box-03-04|pages=08|state=sealed|checksum=0300038Z\nARCH-03-0039|box-03-05|pages=09|state=sealed|checksum=0300039Z\nARCH-03-0040|box-03-06|pages=10|state=sealed|checksum=0300040Z\nARCH-03-0041|box-03-07|pages=11|state=sealed|checksum=0300041Z\nARCH-03-0042|box-03-08|pages=12|state=sealed|checksum=0300042Z\nARCH-03-0043|box-03-09|pages=13|state=sealed|checksum=0300043Z\nARCH-03-0044|box-03-10|pages=14|state=sealed|checksum=0300044Z\nARCH-03-0045|box-03-11|pages=15|state=sealed|checksum=0300045Z\nARCH-03-0046|box-03-12|pages=16|state=sealed|checksum=0300046Z\nARCH-03-0047|box-03-13|pages=17|state=sealed|checksum=0300047Z\nARCH-03-0048|box-03-14|pages=18|state=sealed|checksum=0300048Z\nARCH-03-0049|box-03-15|pages=19|state=sealed|checksum=0300049Z\nARCH-03-0050|box-03-16|pages=20|state=sealed|checksum=0300050Z\nARCH-03-0051|box-03-00|pages=21|state=sealed|checksum=0300051Z\nARCH-03-0052|box-03-01|pages=22|state=sealed|checksum=0300052Z\nARCH-03-0053|box-03-02|pages=23|state=sealed|checksum=0300053Z\nARCH-03-0054|box-03-03|pages=24|state=sealed|checksum=0300054Z\nARCH-03-0055|box-03-04|pages=25|state=sealed|checksum=0300055Z\nARCH-03-0056|box-03-05|pages=26|state=sealed|checksum=0300056Z\nARCH-03-0057|box-03-06|pages=27|state=sealed|checksum=0300057Z\nARCH-03-0058|box-03-07|pages=28|state=sealed|checksum=0300058Z\nARCH-03-0059|box-03-08|pages=29|state=sealed|checksum=0300059Z\nARCH-03-0060|box-03-09|pages=30|state=sealed|checksum=0300060Z\nARCH-03-0061|box-03-10|pages=31|state=sealed|checksum=0300061Z\nARCH-03-0062|box-03-11|pages=01|state=sealed|checksum=0300062Z\nARCH-03-0063|box-03-12|pages=02|state=sealed|checksum=0300063Z\nARCH-03-0064|box-03-13|pages=03|state=sealed|checksum=0300064Z\nARCH-03-0065|box-03-14|pages=04|state=sealed|checksum=0300065Z\nARCH-03-0066|box-03-15|pages=05|state=sealed|checksum=0300066Z\nARCH-03-0067|box-03-16|pages=06|state=sealed|checksum=0300067Z\nARCH-03-0068|box-03-00|pages=07|state=sealed|checksum=0300068Z\nARCH-03-0069|box-03-01|pages=08|state=sealed|checksum=0300069Z\nARCH-03-0070|box-03-02|pages=09|state=sealed|checksum=0300070Z\nARCH-03-0071|box-03-03|pages=10|state=sealed|checksum=0300071Z\nARCH-03-0072|box-03-04|pages=11|state=sealed|checksum=0300072Z\nARCH-03-0073|box-03-05|pages=12|state=sealed|checksum=0300073Z\nARCH-03-0074|box-03-06|pages=13|state=sealed|checksum=0300074Z\nARCH-03-0075|box-03-07|pages=14|state=sealed|checksum=0300075Z\nARCH-03-0076|box-03-08|pages=15|state=sealed|checksum=0300076Z\nARCH-03-0077|box-03-09|pages=16|state=sealed|checksum=0300077Z\nARCH-03-0078|box-03-10|pages=17|state=sealed|checksum=0300078Z\nARCH-03-0079|box-03-11|pages=18|state=sealed|checksum=0300079Z\nARCH-03-0080|box-03-12|pages=19|state=sealed|checksum=0300080Z\nARCH-03-0081|box-03-13|pages=20|state=sealed|checksum=0300081Z\nARCH-03-0082|box-03-14|pages=21|state=sealed|checksum=0300082Z\nARCH-03-0083|box-03-15|pages=22|state=sealed|checksum=0300083Z\nARCH-03-0084|box-03-16|pages=23|state=sealed|checksum=0300084Z\nARCH-03-0085|box-03-00|pages=24|state=sealed|checksum=0300085Z\nARCH-03-0086|box-03-01|pages=25|state=sealed|checksum=0300086Z\nARCH-03-0087|box-03-02|pages=26|state=sealed|checksum=0300087Z\nARCH-03-0088|box-03-03|pages=27|state=sealed|checksum=0300088Z\nARCH-03-0089|box-03-04|pages=28|state=sealed|checksum=0300089Z\nARCH-03-0090|box-03-05|pages=29|state=sealed|checksum=0300090Z\nARCH-03-0091|box-03-06|pages=30|state=sealed|checksum=0300091Z\nARCH-03-0092|box-03-07|pages=31|state=sealed|checksum=0300092Z\nARCH-03-0093|box-03-08|pages=01|state=sealed|checksum=0300093Z\nARCH-03-0094|box-03-09|pages=02|state=sealed|checksum=0300094Z\nARCH-03-0095|box-03-10|pages=03|state=sealed|checksum=0300095Z\nARCH-03-0096|box-03-11|pages=04|state=sealed|checksum=0300096Z\nARCH-03-0097|box-03-12|pages=05|state=sealed|checksum=0300097Z\nARCH-03-0098|box-03-13|pages=06|state=sealed|checksum=0300098Z\nARCH-03-0099|box-03-14|pages=07|state=sealed|checksum=0300099Z\nARCH-03-0100|box-03-15|pages=08|state=sealed|checksum=0300100Z\nARCH-03-0101|box-03-16|pages=09|state=sealed|checksum=0300101Z\nARCH-03-0102|box-03-00|pages=10|state=sealed|checksum=0300102Z\nARCH-03-0103|box-03-01|pages=11|state=sealed|checksum=0300103Z\nARCH-03-0104|box-03-02|pages=12|state=sealed|checksum=0300104Z\nARCH-03-0105|box-03-03|pages=13|state=sealed|checksum=0300105Z\nARCH-03-0106|box-03-04|pages=14|state=sealed|checksum=0300106Z\nARCH-03-0107|box-03-05|pages=15|state=sealed|checksum=0300107Z\nARCH-03-0108|box-03-06|pages=16|state=sealed|checksum=0300108Z\nARCH-03-0109|box-03-07|pages=17|state=sealed|checksum=0300109Z\nARCH-03-0110|box-03-08|pages=18|state=sealed|checksum=0300110Z\nARCH-03-0111|box-03-09|pages=19|state=sealed|checksum=0300111Z\nARCH-03-0112|box-03-10|pages=20|state=sealed|checksum=0300112Z\nARCH-03-0113|box-03-11|pages=21|state=sealed|checksum=0300113Z\nARCH-03-0114|box-03-12|pages=22|state=sealed|checksum=0300114Z\nARCH-03-0115|box-03-13|pages=23|state=sealed|checksum=0300115Z\nARCH-03-0116|box-03-14|pages=24|state=sealed|checksum=0300116Z\nARCH-03-0117|box-03-15|pages=25|state=sealed|checksum=0300117Z\nARCH-03-0118|box-03-16|pages=26|state=sealed|checksum=0300118Z\nARCH-03-0119|box-03-00|pages=27|state=sealed|checksum=0300119Z\nARCH-03-0120|box-03-01|pages=28|state=sealed|checksum=0300120Z\nARCH-03-0121|box-03-02|pages=29|state=sealed|checksum=0300121Z\n",
+      "record_count": 121,
+      "first_id": "ARCH-03-0001",
+      "last_id": "ARCH-03-0121",
+      "synthetic": true,
+      "purpose": "A complete distinct native unrelated task, not generated history injection; cumulative real turns naturally exceed current cloud65536-character recent history allowance."
+    },
+    {
+      "message": "换一个独立话题。下面是纯虚构的归档目录第4批，文件条目只是合成样例，不描述现实人物，不是本人的身份或经历，也不用于修改长期记忆。请仅列出这批目录的第一条编号与最后一条编号，以及条目总数。不要推断样例的现实归属。每条均为完整记录，列分别是record_id、folder、pages、state、checksum。\nARCH-04-0001|box-04-01|pages=02|state=sealed|checksum=0400001Z\nARCH-04-0002|box-04-02|pages=03|state=sealed|checksum=0400002Z\nARCH-04-0003|box-04-03|pages=04|state=sealed|checksum=0400003Z\nARCH-04-0004|box-04-04|pages=05|state=sealed|checksum=0400004Z\nARCH-04-0005|box-04-05|pages=06|state=sealed|checksum=0400005Z\nARCH-04-0006|box-04-06|pages=07|state=sealed|checksum=0400006Z\nARCH-04-0007|box-04-07|pages=08|state=sealed|checksum=0400007Z\nARCH-04-0008|box-04-08|pages=09|state=sealed|checksum=0400008Z\nARCH-04-0009|box-04-09|pages=10|state=sealed|checksum=0400009Z\nARCH-04-0010|box-04-10|pages=11|state=sealed|checksum=0400010Z\nARCH-04-0011|box-04-11|pages=12|state=sealed|checksum=0400011Z\nARCH-04-0012|box-04-12|pages=13|state=sealed|checksum=0400012Z\nARCH-04-0013|box-04-13|pages=14|state=sealed|checksum=0400013Z\nARCH-04-0014|box-04-14|pages=15|state=sealed|checksum=0400014Z\nARCH-04-0015|box-04-15|pages=16|state=sealed|checksum=0400015Z\nARCH-04-0016|box-04-16|pages=17|state=sealed|checksum=0400016Z\nARCH-04-0017|box-04-00|pages=18|state=sealed|checksum=0400017Z\nARCH-04-0018|box-04-01|pages=19|state=sealed|checksum=0400018Z\nARCH-04-0019|box-04-02|pages=20|state=sealed|checksum=0400019Z\nARCH-04-0020|box-04-03|pages=21|state=sealed|checksum=0400020Z\nARCH-04-0021|box-04-04|pages=22|state=sealed|checksum=0400021Z\nARCH-04-0022|box-04-05|pages=23|state=sealed|checksum=0400022Z\nARCH-04-0023|box-04-06|pages=24|state=sealed|checksum=0400023Z\nARCH-04-0024|box-04-07|pages=25|state=sealed|checksum=0400024Z\nARCH-04-0025|box-04-08|pages=26|state=sealed|checksum=0400025Z\nARCH-04-0026|box-04-09|pages=27|state=sealed|checksum=0400026Z\nARCH-04-0027|box-04-10|pages=28|state=sealed|checksum=0400027Z\nARCH-04-0028|box-04-11|pages=29|state=sealed|checksum=0400028Z\nARCH-04-0029|box-04-12|pages=30|state=sealed|checksum=0400029Z\nARCH-04-0030|box-04-13|pages=31|state=sealed|checksum=0400030Z\nARCH-04-0031|box-04-14|pages=01|state=sealed|checksum=0400031Z\nARCH-04-0032|box-04-15|pages=02|state=sealed|checksum=0400032Z\nARCH-04-0033|box-04-16|pages=03|state=sealed|checksum=0400033Z\nARCH-04-0034|box-04-00|pages=04|state=sealed|checksum=0400034Z\nARCH-04-0035|box-04-01|pages=05|state=sealed|checksum=0400035Z\nARCH-04-0036|box-04-02|pages=06|state=sealed|checksum=0400036Z\nARCH-04-0037|box-04-03|pages=07|state=sealed|checksum=0400037Z\nARCH-04-0038|box-04-04|pages=08|state=sealed|checksum=0400038Z\nARCH-04-0039|box-04-05|pages=09|state=sealed|checksum=0400039Z\nARCH-04-0040|box-04-06|pages=10|state=sealed|checksum=0400040Z\nARCH-04-0041|box-04-07|pages=11|state=sealed|checksum=0400041Z\nARCH-04-0042|box-04-08|pages=12|state=sealed|checksum=0400042Z\nARCH-04-0043|box-04-09|pages=13|state=sealed|checksum=0400043Z\nARCH-04-0044|box-04-10|pages=14|state=sealed|checksum=0400044Z\nARCH-04-0045|box-04-11|pages=15|state=sealed|checksum=0400045Z\nARCH-04-0046|box-04-12|pages=16|state=sealed|checksum=0400046Z\nARCH-04-0047|box-04-13|pages=17|state=sealed|checksum=0400047Z\nARCH-04-0048|box-04-14|pages=18|state=sealed|checksum=0400048Z\nARCH-04-0049|box-04-15|pages=19|state=sealed|checksum=0400049Z\nARCH-04-0050|box-04-16|pages=20|state=sealed|checksum=0400050Z\nARCH-04-0051|box-04-00|pages=21|state=sealed|checksum=0400051Z\nARCH-04-0052|box-04-01|pages=22|state=sealed|checksum=0400052Z\nARCH-04-0053|box-04-02|pages=23|state=sealed|checksum=0400053Z\nARCH-04-0054|box-04-03|pages=24|state=sealed|checksum=0400054Z\nARCH-04-0055|box-04-04|pages=25|state=sealed|checksum=0400055Z\nARCH-04-0056|box-04-05|pages=26|state=sealed|checksum=0400056Z\nARCH-04-0057|box-04-06|pages=27|state=sealed|checksum=0400057Z\nARCH-04-0058|box-04-07|pages=28|state=sealed|checksum=0400058Z\nARCH-04-0059|box-04-08|pages=29|state=sealed|checksum=0400059Z\nARCH-04-0060|box-04-09|pages=30|state=sealed|checksum=0400060Z\nARCH-04-0061|box-04-10|pages=31|state=sealed|checksum=0400061Z\nARCH-04-0062|box-04-11|pages=01|state=sealed|checksum=0400062Z\nARCH-04-0063|box-04-12|pages=02|state=sealed|checksum=0400063Z\nARCH-04-0064|box-04-13|pages=03|state=sealed|checksum=0400064Z\nARCH-04-0065|box-04-14|pages=04|state=sealed|checksum=0400065Z\nARCH-04-0066|box-04-15|pages=05|state=sealed|checksum=0400066Z\nARCH-04-0067|box-04-16|pages=06|state=sealed|checksum=0400067Z\nARCH-04-0068|box-04-00|pages=07|state=sealed|checksum=0400068Z\nARCH-04-0069|box-04-01|pages=08|state=sealed|checksum=0400069Z\nARCH-04-0070|box-04-02|pages=09|state=sealed|checksum=0400070Z\nARCH-04-0071|box-04-03|pages=10|state=sealed|checksum=0400071Z\nARCH-04-0072|box-04-04|pages=11|state=sealed|checksum=0400072Z\nARCH-04-0073|box-04-05|pages=12|state=sealed|checksum=0400073Z\nARCH-04-0074|box-04-06|pages=13|state=sealed|checksum=0400074Z\nARCH-04-0075|box-04-07|pages=14|state=sealed|checksum=0400075Z\nARCH-04-0076|box-04-08|pages=15|state=sealed|checksum=0400076Z\nARCH-04-0077|box-04-09|pages=16|state=sealed|checksum=0400077Z\nARCH-04-0078|box-04-10|pages=17|state=sealed|checksum=0400078Z\nARCH-04-0079|box-04-11|pages=18|state=sealed|checksum=0400079Z\nARCH-04-0080|box-04-12|pages=19|state=sealed|checksum=0400080Z\nARCH-04-0081|box-04-13|pages=20|state=sealed|checksum=0400081Z\nARCH-04-0082|box-04-14|pages=21|state=sealed|checksum=0400082Z\nARCH-04-0083|box-04-15|pages=22|state=sealed|checksum=0400083Z\nARCH-04-0084|box-04-16|pages=23|state=sealed|checksum=0400084Z\nARCH-04-0085|box-04-00|pages=24|state=sealed|checksum=0400085Z\nARCH-04-0086|box-04-01|pages=25|state=sealed|checksum=0400086Z\nARCH-04-0087|box-04-02|pages=26|state=sealed|checksum=0400087Z\nARCH-04-0088|box-04-03|pages=27|state=sealed|checksum=0400088Z\nARCH-04-0089|box-04-04|pages=28|state=sealed|checksum=0400089Z\nARCH-04-0090|box-04-05|pages=29|state=sealed|checksum=0400090Z\nARCH-04-0091|box-04-06|pages=30|state=sealed|checksum=0400091Z\nARCH-04-0092|box-04-07|pages=31|state=sealed|checksum=0400092Z\nARCH-04-0093|box-04-08|pages=01|state=sealed|checksum=0400093Z\nARCH-04-0094|box-04-09|pages=02|state=sealed|checksum=0400094Z\nARCH-04-0095|box-04-10|pages=03|state=sealed|checksum=0400095Z\nARCH-04-0096|box-04-11|pages=04|state=sealed|checksum=0400096Z\nARCH-04-0097|box-04-12|pages=05|state=sealed|checksum=0400097Z\nARCH-04-0098|box-04-13|pages=06|state=sealed|checksum=0400098Z\nARCH-04-0099|box-04-14|pages=07|state=sealed|checksum=0400099Z\nARCH-04-0100|box-04-15|pages=08|state=sealed|checksum=0400100Z\nARCH-04-0101|box-04-16|pages=09|state=sealed|checksum=0400101Z\nARCH-04-0102|box-04-00|pages=10|state=sealed|checksum=0400102Z\nARCH-04-0103|box-04-01|pages=11|state=sealed|checksum=0400103Z\nARCH-04-0104|box-04-02|pages=12|state=sealed|checksum=0400104Z\nARCH-04-0105|box-04-03|pages=13|state=sealed|checksum=0400105Z\nARCH-04-0106|box-04-04|pages=14|state=sealed|checksum=0400106Z\nARCH-04-0107|box-04-05|pages=15|state=sealed|checksum=0400107Z\nARCH-04-0108|box-04-06|pages=16|state=sealed|checksum=0400108Z\nARCH-04-0109|box-04-07|pages=17|state=sealed|checksum=0400109Z\nARCH-04-0110|box-04-08|pages=18|state=sealed|checksum=0400110Z\nARCH-04-0111|box-04-09|pages=19|state=sealed|checksum=0400111Z\nARCH-04-0112|box-04-10|pages=20|state=sealed|checksum=0400112Z\nARCH-04-0113|box-04-11|pages=21|state=sealed|checksum=0400113Z\nARCH-04-0114|box-04-12|pages=22|state=sealed|checksum=0400114Z\nARCH-04-0115|box-04-13|pages=23|state=sealed|checksum=0400115Z\nARCH-04-0116|box-04-14|pages=24|state=sealed|checksum=0400116Z\nARCH-04-0117|box-04-15|pages=25|state=sealed|checksum=0400117Z\nARCH-04-0118|box-04-16|pages=26|state=sealed|checksum=0400118Z\nARCH-04-0119|box-04-00|pages=27|state=sealed|checksum=0400119Z\nARCH-04-0120|box-04-01|pages=28|state=sealed|checksum=0400120Z\nARCH-04-0121|box-04-02|pages=29|state=sealed|checksum=0400121Z\n",
+      "record_count": 121,
+      "first_id": "ARCH-04-0001",
+      "last_id": "ARCH-04-0121",
+      "synthetic": true,
+      "purpose": "A complete distinct native unrelated task, not generated history injection; cumulative real turns naturally exceed current cloud65536-character recent history allowance."
+    },
+    {
+      "message": "换一个独立话题。下面是纯虚构的归档目录第5批，文件条目只是合成样例，不描述现实人物，不是本人的身份或经历，也不用于修改长期记忆。请仅列出这批目录的第一条编号与最后一条编号，以及条目总数。不要推断样例的现实归属。每条均为完整记录，列分别是record_id、folder、pages、state、checksum。\nARCH-05-0001|box-05-01|pages=02|state=sealed|checksum=0500001Z\nARCH-05-0002|box-05-02|pages=03|state=sealed|checksum=0500002Z\nARCH-05-0003|box-05-03|pages=04|state=sealed|checksum=0500003Z\nARCH-05-0004|box-05-04|pages=05|state=sealed|checksum=0500004Z\nARCH-05-0005|box-05-05|pages=06|state=sealed|checksum=0500005Z\nARCH-05-0006|box-05-06|pages=07|state=sealed|checksum=0500006Z\nARCH-05-0007|box-05-07|pages=08|state=sealed|checksum=0500007Z\nARCH-05-0008|box-05-08|pages=09|state=sealed|checksum=0500008Z\nARCH-05-0009|box-05-09|pages=10|state=sealed|checksum=0500009Z\nARCH-05-0010|box-05-10|pages=11|state=sealed|checksum=0500010Z\nARCH-05-0011|box-05-11|pages=12|state=sealed|checksum=0500011Z\nARCH-05-0012|box-05-12|pages=13|state=sealed|checksum=0500012Z\nARCH-05-0013|box-05-13|pages=14|state=sealed|checksum=0500013Z\nARCH-05-0014|box-05-14|pages=15|state=sealed|checksum=0500014Z\nARCH-05-0015|box-05-15|pages=16|state=sealed|checksum=0500015Z\nARCH-05-0016|box-05-16|pages=17|state=sealed|checksum=0500016Z\nARCH-05-0017|box-05-00|pages=18|state=sealed|checksum=0500017Z\nARCH-05-0018|box-05-01|pages=19|state=sealed|checksum=0500018Z\nARCH-05-0019|box-05-02|pages=20|state=sealed|checksum=0500019Z\nARCH-05-0020|box-05-03|pages=21|state=sealed|checksum=0500020Z\nARCH-05-0021|box-05-04|pages=22|state=sealed|checksum=0500021Z\nARCH-05-0022|box-05-05|pages=23|state=sealed|checksum=0500022Z\nARCH-05-0023|box-05-06|pages=24|state=sealed|checksum=0500023Z\nARCH-05-0024|box-05-07|pages=25|state=sealed|checksum=0500024Z\nARCH-05-0025|box-05-08|pages=26|state=sealed|checksum=0500025Z\nARCH-05-0026|box-05-09|pages=27|state=sealed|checksum=0500026Z\nARCH-05-0027|box-05-10|pages=28|state=sealed|checksum=0500027Z\nARCH-05-0028|box-05-11|pages=29|state=sealed|checksum=0500028Z\nARCH-05-0029|box-05-12|pages=30|state=sealed|checksum=0500029Z\nARCH-05-0030|box-05-13|pages=31|state=sealed|checksum=0500030Z\nARCH-05-0031|box-05-14|pages=01|state=sealed|checksum=0500031Z\nARCH-05-0032|box-05-15|pages=02|state=sealed|checksum=0500032Z\nARCH-05-0033|box-05-16|pages=03|state=sealed|checksum=0500033Z\nARCH-05-0034|box-05-00|pages=04|state=sealed|checksum=0500034Z\nARCH-05-0035|box-05-01|pages=05|state=sealed|checksum=0500035Z\nARCH-05-0036|box-05-02|pages=06|state=sealed|checksum=0500036Z\nARCH-05-0037|box-05-03|pages=07|state=sealed|checksum=0500037Z\nARCH-05-0038|box-05-04|pages=08|state=sealed|checksum=0500038Z\nARCH-05-0039|box-05-05|pages=09|state=sealed|checksum=0500039Z\nARCH-05-0040|box-05-06|pages=10|state=sealed|checksum=0500040Z\nARCH-05-0041|box-05-07|pages=11|state=sealed|checksum=0500041Z\nARCH-05-0042|box-05-08|pages=12|state=sealed|checksum=0500042Z\nARCH-05-0043|box-05-09|pages=13|state=sealed|checksum=0500043Z\nARCH-05-0044|box-05-10|pages=14|state=sealed|checksum=0500044Z\nARCH-05-0045|box-05-11|pages=15|state=sealed|checksum=0500045Z\nARCH-05-0046|box-05-12|pages=16|state=sealed|checksum=0500046Z\nARCH-05-0047|box-05-13|pages=17|state=sealed|checksum=0500047Z\nARCH-05-0048|box-05-14|pages=18|state=sealed|checksum=0500048Z\nARCH-05-0049|box-05-15|pages=19|state=sealed|checksum=0500049Z\nARCH-05-0050|box-05-16|pages=20|state=sealed|checksum=0500050Z\nARCH-05-0051|box-05-00|pages=21|state=sealed|checksum=0500051Z\nARCH-05-0052|box-05-01|pages=22|state=sealed|checksum=0500052Z\nARCH-05-0053|box-05-02|pages=23|state=sealed|checksum=0500053Z\nARCH-05-0054|box-05-03|pages=24|state=sealed|checksum=0500054Z\nARCH-05-0055|box-05-04|pages=25|state=sealed|checksum=0500055Z\nARCH-05-0056|box-05-05|pages=26|state=sealed|checksum=0500056Z\nARCH-05-0057|box-05-06|pages=27|state=sealed|checksum=0500057Z\nARCH-05-0058|box-05-07|pages=28|state=sealed|checksum=0500058Z\nARCH-05-0059|box-05-08|pages=29|state=sealed|checksum=0500059Z\nARCH-05-0060|box-05-09|pages=30|state=sealed|checksum=0500060Z\nARCH-05-0061|box-05-10|pages=31|state=sealed|checksum=0500061Z\nARCH-05-0062|box-05-11|pages=01|state=sealed|checksum=0500062Z\nARCH-05-0063|box-05-12|pages=02|state=sealed|checksum=0500063Z\nARCH-05-0064|box-05-13|pages=03|state=sealed|checksum=0500064Z\nARCH-05-0065|box-05-14|pages=04|state=sealed|checksum=0500065Z\nARCH-05-0066|box-05-15|pages=05|state=sealed|checksum=0500066Z\nARCH-05-0067|box-05-16|pages=06|state=sealed|checksum=0500067Z\nARCH-05-0068|box-05-00|pages=07|state=sealed|checksum=0500068Z\nARCH-05-0069|box-05-01|pages=08|state=sealed|checksum=0500069Z\nARCH-05-0070|box-05-02|pages=09|state=sealed|checksum=0500070Z\nARCH-05-0071|box-05-03|pages=10|state=sealed|checksum=0500071Z\nARCH-05-0072|box-05-04|pages=11|state=sealed|checksum=0500072Z\nARCH-05-0073|box-05-05|pages=12|state=sealed|checksum=0500073Z\nARCH-05-0074|box-05-06|pages=13|state=sealed|checksum=0500074Z\nARCH-05-0075|box-05-07|pages=14|state=sealed|checksum=0500075Z\nARCH-05-0076|box-05-08|pages=15|state=sealed|checksum=0500076Z\nARCH-05-0077|box-05-09|pages=16|state=sealed|checksum=0500077Z\nARCH-05-0078|box-05-10|pages=17|state=sealed|checksum=0500078Z\nARCH-05-0079|box-05-11|pages=18|state=sealed|checksum=0500079Z\nARCH-05-0080|box-05-12|pages=19|state=sealed|checksum=0500080Z\nARCH-05-0081|box-05-13|pages=20|state=sealed|checksum=0500081Z\nARCH-05-0082|box-05-14|pages=21|state=sealed|checksum=0500082Z\nARCH-05-0083|box-05-15|pages=22|state=sealed|checksum=0500083Z\nARCH-05-0084|box-05-16|pages=23|state=sealed|checksum=0500084Z\nARCH-05-0085|box-05-00|pages=24|state=sealed|checksum=0500085Z\nARCH-05-0086|box-05-01|pages=25|state=sealed|checksum=0500086Z\nARCH-05-0087|box-05-02|pages=26|state=sealed|checksum=0500087Z\nARCH-05-0088|box-05-03|pages=27|state=sealed|checksum=0500088Z\nARCH-05-0089|box-05-04|pages=28|state=sealed|checksum=0500089Z\nARCH-05-0090|box-05-05|pages=29|state=sealed|checksum=0500090Z\nARCH-05-0091|box-05-06|pages=30|state=sealed|checksum=0500091Z\nARCH-05-0092|box-05-07|pages=31|state=sealed|checksum=0500092Z\nARCH-05-0093|box-05-08|pages=01|state=sealed|checksum=0500093Z\nARCH-05-0094|box-05-09|pages=02|state=sealed|checksum=0500094Z\nARCH-05-0095|box-05-10|pages=03|state=sealed|checksum=0500095Z\nARCH-05-0096|box-05-11|pages=04|state=sealed|checksum=0500096Z\nARCH-05-0097|box-05-12|pages=05|state=sealed|checksum=0500097Z\nARCH-05-0098|box-05-13|pages=06|state=sealed|checksum=0500098Z\nARCH-05-0099|box-05-14|pages=07|state=sealed|checksum=0500099Z\nARCH-05-0100|box-05-15|pages=08|state=sealed|checksum=0500100Z\nARCH-05-0101|box-05-16|pages=09|state=sealed|checksum=0500101Z\nARCH-05-0102|box-05-00|pages=10|state=sealed|checksum=0500102Z\nARCH-05-0103|box-05-01|pages=11|state=sealed|checksum=0500103Z\nARCH-05-0104|box-05-02|pages=12|state=sealed|checksum=0500104Z\nARCH-05-0105|box-05-03|pages=13|state=sealed|checksum=0500105Z\nARCH-05-0106|box-05-04|pages=14|state=sealed|checksum=0500106Z\nARCH-05-0107|box-05-05|pages=15|state=sealed|checksum=0500107Z\nARCH-05-0108|box-05-06|pages=16|state=sealed|checksum=0500108Z\nARCH-05-0109|box-05-07|pages=17|state=sealed|checksum=0500109Z\nARCH-05-0110|box-05-08|pages=18|state=sealed|checksum=0500110Z\nARCH-05-0111|box-05-09|pages=19|state=sealed|checksum=0500111Z\nARCH-05-0112|box-05-10|pages=20|state=sealed|checksum=0500112Z\nARCH-05-0113|box-05-11|pages=21|state=sealed|checksum=0500113Z\nARCH-05-0114|box-05-12|pages=22|state=sealed|checksum=0500114Z\nARCH-05-0115|box-05-13|pages=23|state=sealed|checksum=0500115Z\nARCH-05-0116|box-05-14|pages=24|state=sealed|checksum=0500116Z\nARCH-05-0117|box-05-15|pages=25|state=sealed|checksum=0500117Z\nARCH-05-0118|box-05-16|pages=26|state=sealed|checksum=0500118Z\nARCH-05-0119|box-05-00|pages=27|state=sealed|checksum=0500119Z\nARCH-05-0120|box-05-01|pages=28|state=sealed|checksum=0500120Z\nARCH-05-0121|box-05-02|pages=29|state=sealed|checksum=0500121Z\n",
+      "record_count": 121,
+      "first_id": "ARCH-05-0001",
+      "last_id": "ARCH-05-0121",
+      "synthetic": true,
+      "purpose": "A complete distinct native unrelated task, not generated history injection; cumulative real turns naturally exceed current cloud65536-character recent history allowance."
+    },
+    {
+      "message": "换一个独立话题。下面是纯虚构的归档目录第6批，文件条目只是合成样例，不描述现实人物，不是本人的身份或经历，也不用于修改长期记忆。请仅列出这批目录的第一条编号与最后一条编号，以及条目总数。不要推断样例的现实归属。每条均为完整记录，列分别是record_id、folder、pages、state、checksum。\nARCH-06-0001|box-06-01|pages=02|state=sealed|checksum=0600001Z\nARCH-06-0002|box-06-02|pages=03|state=sealed|checksum=0600002Z\nARCH-06-0003|box-06-03|pages=04|state=sealed|checksum=0600003Z\nARCH-06-0004|box-06-04|pages=05|state=sealed|checksum=0600004Z\nARCH-06-0005|box-06-05|pages=06|state=sealed|checksum=0600005Z\nARCH-06-0006|box-06-06|pages=07|state=sealed|checksum=0600006Z\nARCH-06-0007|box-06-07|pages=08|state=sealed|checksum=0600007Z\nARCH-06-0008|box-06-08|pages=09|state=sealed|checksum=0600008Z\nARCH-06-0009|box-06-09|pages=10|state=sealed|checksum=0600009Z\nARCH-06-0010|box-06-10|pages=11|state=sealed|checksum=0600010Z\nARCH-06-0011|box-06-11|pages=12|state=sealed|checksum=0600011Z\nARCH-06-0012|box-06-12|pages=13|state=sealed|checksum=0600012Z\nARCH-06-0013|box-06-13|pages=14|state=sealed|checksum=0600013Z\nARCH-06-0014|box-06-14|pages=15|state=sealed|checksum=0600014Z\nARCH-06-0015|box-06-15|pages=16|state=sealed|checksum=0600015Z\nARCH-06-0016|box-06-16|pages=17|state=sealed|checksum=0600016Z\nARCH-06-0017|box-06-00|pages=18|state=sealed|checksum=0600017Z\nARCH-06-0018|box-06-01|pages=19|state=sealed|checksum=0600018Z\nARCH-06-0019|box-06-02|pages=20|state=sealed|checksum=0600019Z\nARCH-06-0020|box-06-03|pages=21|state=sealed|checksum=0600020Z\nARCH-06-0021|box-06-04|pages=22|state=sealed|checksum=0600021Z\nARCH-06-0022|box-06-05|pages=23|state=sealed|checksum=0600022Z\nARCH-06-0023|box-06-06|pages=24|state=sealed|checksum=0600023Z\nARCH-06-0024|box-06-07|pages=25|state=sealed|checksum=0600024Z\nARCH-06-0025|box-06-08|pages=26|state=sealed|checksum=0600025Z\nARCH-06-0026|box-06-09|pages=27|state=sealed|checksum=0600026Z\nARCH-06-0027|box-06-10|pages=28|state=sealed|checksum=0600027Z\nARCH-06-0028|box-06-11|pages=29|state=sealed|checksum=0600028Z\nARCH-06-0029|box-06-12|pages=30|state=sealed|checksum=0600029Z\nARCH-06-0030|box-06-13|pages=31|state=sealed|checksum=0600030Z\nARCH-06-0031|box-06-14|pages=01|state=sealed|checksum=0600031Z\nARCH-06-0032|box-06-15|pages=02|state=sealed|checksum=0600032Z\nARCH-06-0033|box-06-16|pages=03|state=sealed|checksum=0600033Z\nARCH-06-0034|box-06-00|pages=04|state=sealed|checksum=0600034Z\nARCH-06-0035|box-06-01|pages=05|state=sealed|checksum=0600035Z\nARCH-06-0036|box-06-02|pages=06|state=sealed|checksum=0600036Z\nARCH-06-0037|box-06-03|pages=07|state=sealed|checksum=0600037Z\nARCH-06-0038|box-06-04|pages=08|state=sealed|checksum=0600038Z\nARCH-06-0039|box-06-05|pages=09|state=sealed|checksum=0600039Z\nARCH-06-0040|box-06-06|pages=10|state=sealed|checksum=0600040Z\nARCH-06-0041|box-06-07|pages=11|state=sealed|checksum=0600041Z\nARCH-06-0042|box-06-08|pages=12|state=sealed|checksum=0600042Z\nARCH-06-0043|box-06-09|pages=13|state=sealed|checksum=0600043Z\nARCH-06-0044|box-06-10|pages=14|state=sealed|checksum=0600044Z\nARCH-06-0045|box-06-11|pages=15|state=sealed|checksum=0600045Z\nARCH-06-0046|box-06-12|pages=16|state=sealed|checksum=0600046Z\nARCH-06-0047|box-06-13|pages=17|state=sealed|checksum=0600047Z\nARCH-06-0048|box-06-14|pages=18|state=sealed|checksum=0600048Z\nARCH-06-0049|box-06-15|pages=19|state=sealed|checksum=0600049Z\nARCH-06-0050|box-06-16|pages=20|state=sealed|checksum=0600050Z\nARCH-06-0051|box-06-00|pages=21|state=sealed|checksum=0600051Z\nARCH-06-0052|box-06-01|pages=22|state=sealed|checksum=0600052Z\nARCH-06-0053|box-06-02|pages=23|state=sealed|checksum=0600053Z\nARCH-06-0054|box-06-03|pages=24|state=sealed|checksum=0600054Z\nARCH-06-0055|box-06-04|pages=25|state=sealed|checksum=0600055Z\nARCH-06-0056|box-06-05|pages=26|state=sealed|checksum=0600056Z\nARCH-06-0057|box-06-06|pages=27|state=sealed|checksum=0600057Z\nARCH-06-0058|box-06-07|pages=28|state=sealed|checksum=0600058Z\nARCH-06-0059|box-06-08|pages=29|state=sealed|checksum=0600059Z\nARCH-06-0060|box-06-09|pages=30|state=sealed|checksum=0600060Z\nARCH-06-0061|box-06-10|pages=31|state=sealed|checksum=0600061Z\nARCH-06-0062|box-06-11|pages=01|state=sealed|checksum=0600062Z\nARCH-06-0063|box-06-12|pages=02|state=sealed|checksum=0600063Z\nARCH-06-0064|box-06-13|pages=03|state=sealed|checksum=0600064Z\nARCH-06-0065|box-06-14|pages=04|state=sealed|checksum=0600065Z\nARCH-06-0066|box-06-15|pages=05|state=sealed|checksum=0600066Z\nARCH-06-0067|box-06-16|pages=06|state=sealed|checksum=0600067Z\nARCH-06-0068|box-06-00|pages=07|state=sealed|checksum=0600068Z\nARCH-06-0069|box-06-01|pages=08|state=sealed|checksum=0600069Z\nARCH-06-0070|box-06-02|pages=09|state=sealed|checksum=0600070Z\nARCH-06-0071|box-06-03|pages=10|state=sealed|checksum=0600071Z\nARCH-06-0072|box-06-04|pages=11|state=sealed|checksum=0600072Z\nARCH-06-0073|box-06-05|pages=12|state=sealed|checksum=0600073Z\nARCH-06-0074|box-06-06|pages=13|state=sealed|checksum=0600074Z\nARCH-06-0075|box-06-07|pages=14|state=sealed|checksum=0600075Z\nARCH-06-0076|box-06-08|pages=15|state=sealed|checksum=0600076Z\nARCH-06-0077|box-06-09|pages=16|state=sealed|checksum=0600077Z\nARCH-06-0078|box-06-10|pages=17|state=sealed|checksum=0600078Z\nARCH-06-0079|box-06-11|pages=18|state=sealed|checksum=0600079Z\nARCH-06-0080|box-06-12|pages=19|state=sealed|checksum=0600080Z\nARCH-06-0081|box-06-13|pages=20|state=sealed|checksum=0600081Z\nARCH-06-0082|box-06-14|pages=21|state=sealed|checksum=0600082Z\nARCH-06-0083|box-06-15|pages=22|state=sealed|checksum=0600083Z\nARCH-06-0084|box-06-16|pages=23|state=sealed|checksum=0600084Z\nARCH-06-0085|box-06-00|pages=24|state=sealed|checksum=0600085Z\nARCH-06-0086|box-06-01|pages=25|state=sealed|checksum=0600086Z\nARCH-06-0087|box-06-02|pages=26|state=sealed|checksum=0600087Z\nARCH-06-0088|box-06-03|pages=27|state=sealed|checksum=0600088Z\nARCH-06-0089|box-06-04|pages=28|state=sealed|checksum=0600089Z\nARCH-06-0090|box-06-05|pages=29|state=sealed|checksum=0600090Z\nARCH-06-0091|box-06-06|pages=30|state=sealed|checksum=0600091Z\nARCH-06-0092|box-06-07|pages=31|state=sealed|checksum=0600092Z\nARCH-06-0093|box-06-08|pages=01|state=sealed|checksum=0600093Z\nARCH-06-0094|box-06-09|pages=02|state=sealed|checksum=0600094Z\nARCH-06-0095|box-06-10|pages=03|state=sealed|checksum=0600095Z\nARCH-06-0096|box-06-11|pages=04|state=sealed|checksum=0600096Z\nARCH-06-0097|box-06-12|pages=05|state=sealed|checksum=0600097Z\nARCH-06-0098|box-06-13|pages=06|state=sealed|checksum=0600098Z\nARCH-06-0099|box-06-14|pages=07|state=sealed|checksum=0600099Z\nARCH-06-0100|box-06-15|pages=08|state=sealed|checksum=0600100Z\nARCH-06-0101|box-06-16|pages=09|state=sealed|checksum=0600101Z\nARCH-06-0102|box-06-00|pages=10|state=sealed|checksum=0600102Z\nARCH-06-0103|box-06-01|pages=11|state=sealed|checksum=0600103Z\nARCH-06-0104|box-06-02|pages=12|state=sealed|checksum=0600104Z\nARCH-06-0105|box-06-03|pages=13|state=sealed|checksum=0600105Z\nARCH-06-0106|box-06-04|pages=14|state=sealed|checksum=0600106Z\nARCH-06-0107|box-06-05|pages=15|state=sealed|checksum=0600107Z\nARCH-06-0108|box-06-06|pages=16|state=sealed|checksum=0600108Z\nARCH-06-0109|box-06-07|pages=17|state=sealed|checksum=0600109Z\nARCH-06-0110|box-06-08|pages=18|state=sealed|checksum=0600110Z\nARCH-06-0111|box-06-09|pages=19|state=sealed|checksum=0600111Z\nARCH-06-0112|box-06-10|pages=20|state=sealed|checksum=0600112Z\nARCH-06-0113|box-06-11|pages=21|state=sealed|checksum=0600113Z\nARCH-06-0114|box-06-12|pages=22|state=sealed|checksum=0600114Z\nARCH-06-0115|box-06-13|pages=23|state=sealed|checksum=0600115Z\nARCH-06-0116|box-06-14|pages=24|state=sealed|checksum=0600116Z\nARCH-06-0117|box-06-15|pages=25|state=sealed|checksum=0600117Z\nARCH-06-0118|box-06-16|pages=26|state=sealed|checksum=0600118Z\nARCH-06-0119|box-06-00|pages=27|state=sealed|checksum=0600119Z\nARCH-06-0120|box-06-01|pages=28|state=sealed|checksum=0600120Z\nARCH-06-0121|box-06-02|pages=29|state=sealed|checksum=0600121Z\n",
+      "record_count": 121,
+      "first_id": "ARCH-06-0001",
+      "last_id": "ARCH-06-0121",
+      "synthetic": true,
+      "purpose": "A complete distinct native unrelated task, not generated history injection; cumulative real turns naturally exceed current cloud65536-character recent history allowance."
+    },
+    {
+      "message": "换一个独立话题。下面是纯虚构的归档目录第7批，文件条目只是合成样例，不描述现实人物，不是本人的身份或经历，也不用于修改长期记忆。请仅列出这批目录的第一条编号与最后一条编号，以及条目总数。不要推断样例的现实归属。每条均为完整记录，列分别是record_id、folder、pages、state、checksum。\nARCH-07-0001|box-07-01|pages=02|state=sealed|checksum=0700001Z\nARCH-07-0002|box-07-02|pages=03|state=sealed|checksum=0700002Z\nARCH-07-0003|box-07-03|pages=04|state=sealed|checksum=0700003Z\nARCH-07-0004|box-07-04|pages=05|state=sealed|checksum=0700004Z\nARCH-07-0005|box-07-05|pages=06|state=sealed|checksum=0700005Z\nARCH-07-0006|box-07-06|pages=07|state=sealed|checksum=0700006Z\nARCH-07-0007|box-07-07|pages=08|state=sealed|checksum=0700007Z\nARCH-07-0008|box-07-08|pages=09|state=sealed|checksum=0700008Z\nARCH-07-0009|box-07-09|pages=10|state=sealed|checksum=0700009Z\nARCH-07-0010|box-07-10|pages=11|state=sealed|checksum=0700010Z\nARCH-07-0011|box-07-11|pages=12|state=sealed|checksum=0700011Z\nARCH-07-0012|box-07-12|pages=13|state=sealed|checksum=0700012Z\nARCH-07-0013|box-07-13|pages=14|state=sealed|checksum=0700013Z\nARCH-07-0014|box-07-14|pages=15|state=sealed|checksum=0700014Z\nARCH-07-0015|box-07-15|pages=16|state=sealed|checksum=0700015Z\nARCH-07-0016|box-07-16|pages=17|state=sealed|checksum=0700016Z\nARCH-07-0017|box-07-00|pages=18|state=sealed|checksum=0700017Z\nARCH-07-0018|box-07-01|pages=19|state=sealed|checksum=0700018Z\nARCH-07-0019|box-07-02|pages=20|state=sealed|checksum=0700019Z\nARCH-07-0020|box-07-03|pages=21|state=sealed|checksum=0700020Z\nARCH-07-0021|box-07-04|pages=22|state=sealed|checksum=0700021Z\nARCH-07-0022|box-07-05|pages=23|state=sealed|checksum=0700022Z\nARCH-07-0023|box-07-06|pages=24|state=sealed|checksum=0700023Z\nARCH-07-0024|box-07-07|pages=25|state=sealed|checksum=0700024Z\nARCH-07-0025|box-07-08|pages=26|state=sealed|checksum=0700025Z\nARCH-07-0026|box-07-09|pages=27|state=sealed|checksum=0700026Z\nARCH-07-0027|box-07-10|pages=28|state=sealed|checksum=0700027Z\nARCH-07-0028|box-07-11|pages=29|state=sealed|checksum=0700028Z\nARCH-07-0029|box-07-12|pages=30|state=sealed|checksum=0700029Z\nARCH-07-0030|box-07-13|pages=31|state=sealed|checksum=0700030Z\nARCH-07-0031|box-07-14|pages=01|state=sealed|checksum=0700031Z\nARCH-07-0032|box-07-15|pages=02|state=sealed|checksum=0700032Z\nARCH-07-0033|box-07-16|pages=03|state=sealed|checksum=0700033Z\nARCH-07-0034|box-07-00|pages=04|state=sealed|checksum=0700034Z\nARCH-07-0035|box-07-01|pages=05|state=sealed|checksum=0700035Z\nARCH-07-0036|box-07-02|pages=06|state=sealed|checksum=0700036Z\nARCH-07-0037|box-07-03|pages=07|state=sealed|checksum=0700037Z\nARCH-07-0038|box-07-04|pages=08|state=sealed|checksum=0700038Z\nARCH-07-0039|box-07-05|pages=09|state=sealed|checksum=0700039Z\nARCH-07-0040|box-07-06|pages=10|state=sealed|checksum=0700040Z\nARCH-07-0041|box-07-07|pages=11|state=sealed|checksum=0700041Z\nARCH-07-0042|box-07-08|pages=12|state=sealed|checksum=0700042Z\nARCH-07-0043|box-07-09|pages=13|state=sealed|checksum=0700043Z\nARCH-07-0044|box-07-10|pages=14|state=sealed|checksum=0700044Z\nARCH-07-0045|box-07-11|pages=15|state=sealed|checksum=0700045Z\nARCH-07-0046|box-07-12|pages=16|state=sealed|checksum=0700046Z\nARCH-07-0047|box-07-13|pages=17|state=sealed|checksum=0700047Z\nARCH-07-0048|box-07-14|pages=18|state=sealed|checksum=0700048Z\nARCH-07-0049|box-07-15|pages=19|state=sealed|checksum=0700049Z\nARCH-07-0050|box-07-16|pages=20|state=sealed|checksum=0700050Z\nARCH-07-0051|box-07-00|pages=21|state=sealed|checksum=0700051Z\nARCH-07-0052|box-07-01|pages=22|state=sealed|checksum=0700052Z\nARCH-07-0053|box-07-02|pages=23|state=sealed|checksum=0700053Z\nARCH-07-0054|box-07-03|pages=24|state=sealed|checksum=0700054Z\nARCH-07-0055|box-07-04|pages=25|state=sealed|checksum=0700055Z\nARCH-07-0056|box-07-05|pages=26|state=sealed|checksum=0700056Z\nARCH-07-0057|box-07-06|pages=27|state=sealed|checksum=0700057Z\nARCH-07-0058|box-07-07|pages=28|state=sealed|checksum=0700058Z\nARCH-07-0059|box-07-08|pages=29|state=sealed|checksum=0700059Z\nARCH-07-0060|box-07-09|pages=30|state=sealed|checksum=0700060Z\nARCH-07-0061|box-07-10|pages=31|state=sealed|checksum=0700061Z\nARCH-07-0062|box-07-11|pages=01|state=sealed|checksum=0700062Z\nARCH-07-0063|box-07-12|pages=02|state=sealed|checksum=0700063Z\nARCH-07-0064|box-07-13|pages=03|state=sealed|checksum=0700064Z\nARCH-07-0065|box-07-14|pages=04|state=sealed|checksum=0700065Z\nARCH-07-0066|box-07-15|pages=05|state=sealed|checksum=0700066Z\nARCH-07-0067|box-07-16|pages=06|state=sealed|checksum=0700067Z\nARCH-07-0068|box-07-00|pages=07|state=sealed|checksum=0700068Z\nARCH-07-0069|box-07-01|pages=08|state=sealed|checksum=0700069Z\nARCH-07-0070|box-07-02|pages=09|state=sealed|checksum=0700070Z\nARCH-07-0071|box-07-03|pages=10|state=sealed|checksum=0700071Z\nARCH-07-0072|box-07-04|pages=11|state=sealed|checksum=0700072Z\nARCH-07-0073|box-07-05|pages=12|state=sealed|checksum=0700073Z\nARCH-07-0074|box-07-06|pages=13|state=sealed|checksum=0700074Z\nARCH-07-0075|box-07-07|pages=14|state=sealed|checksum=0700075Z\nARCH-07-0076|box-07-08|pages=15|state=sealed|checksum=0700076Z\nARCH-07-0077|box-07-09|pages=16|state=sealed|checksum=0700077Z\nARCH-07-0078|box-07-10|pages=17|state=sealed|checksum=0700078Z\nARCH-07-0079|box-07-11|pages=18|state=sealed|checksum=0700079Z\nARCH-07-0080|box-07-12|pages=19|state=sealed|checksum=0700080Z\nARCH-07-0081|box-07-13|pages=20|state=sealed|checksum=0700081Z\nARCH-07-0082|box-07-14|pages=21|state=sealed|checksum=0700082Z\nARCH-07-0083|box-07-15|pages=22|state=sealed|checksum=0700083Z\nARCH-07-0084|box-07-16|pages=23|state=sealed|checksum=0700084Z\nARCH-07-0085|box-07-00|pages=24|state=sealed|checksum=0700085Z\nARCH-07-0086|box-07-01|pages=25|state=sealed|checksum=0700086Z\nARCH-07-0087|box-07-02|pages=26|state=sealed|checksum=0700087Z\nARCH-07-0088|box-07-03|pages=27|state=sealed|checksum=0700088Z\nARCH-07-0089|box-07-04|pages=28|state=sealed|checksum=0700089Z\nARCH-07-0090|box-07-05|pages=29|state=sealed|checksum=0700090Z\nARCH-07-0091|box-07-06|pages=30|state=sealed|checksum=0700091Z\nARCH-07-0092|box-07-07|pages=31|state=sealed|checksum=0700092Z\nARCH-07-0093|box-07-08|pages=01|state=sealed|checksum=0700093Z\nARCH-07-0094|box-07-09|pages=02|state=sealed|checksum=0700094Z\nARCH-07-0095|box-07-10|pages=03|state=sealed|checksum=0700095Z\nARCH-07-0096|box-07-11|pages=04|state=sealed|checksum=0700096Z\nARCH-07-0097|box-07-12|pages=05|state=sealed|checksum=0700097Z\nARCH-07-0098|box-07-13|pages=06|state=sealed|checksum=0700098Z\nARCH-07-0099|box-07-14|pages=07|state=sealed|checksum=0700099Z\nARCH-07-0100|box-07-15|pages=08|state=sealed|checksum=0700100Z\nARCH-07-0101|box-07-16|pages=09|state=sealed|checksum=0700101Z\nARCH-07-0102|box-07-00|pages=10|state=sealed|checksum=0700102Z\nARCH-07-0103|box-07-01|pages=11|state=sealed|checksum=0700103Z\nARCH-07-0104|box-07-02|pages=12|state=sealed|checksum=0700104Z\nARCH-07-0105|box-07-03|pages=13|state=sealed|checksum=0700105Z\nARCH-07-0106|box-07-04|pages=14|state=sealed|checksum=0700106Z\nARCH-07-0107|box-07-05|pages=15|state=sealed|checksum=0700107Z\nARCH-07-0108|box-07-06|pages=16|state=sealed|checksum=0700108Z\nARCH-07-0109|box-07-07|pages=17|state=sealed|checksum=0700109Z\nARCH-07-0110|box-07-08|pages=18|state=sealed|checksum=0700110Z\nARCH-07-0111|box-07-09|pages=19|state=sealed|checksum=0700111Z\nARCH-07-0112|box-07-10|pages=20|state=sealed|checksum=0700112Z\nARCH-07-0113|box-07-11|pages=21|state=sealed|checksum=0700113Z\nARCH-07-0114|box-07-12|pages=22|state=sealed|checksum=0700114Z\nARCH-07-0115|box-07-13|pages=23|state=sealed|checksum=0700115Z\nARCH-07-0116|box-07-14|pages=24|state=sealed|checksum=0700116Z\nARCH-07-0117|box-07-15|pages=25|state=sealed|checksum=0700117Z\nARCH-07-0118|box-07-16|pages=26|state=sealed|checksum=0700118Z\nARCH-07-0119|box-07-00|pages=27|state=sealed|checksum=0700119Z\nARCH-07-0120|box-07-01|pages=28|state=sealed|checksum=0700120Z\nARCH-07-0121|box-07-02|pages=29|state=sealed|checksum=0700121Z\n",
+      "record_count": 121,
+      "first_id": "ARCH-07-0001",
+      "last_id": "ARCH-07-0121",
+      "synthetic": true,
+      "purpose": "A complete distinct native unrelated task, not generated history injection; cumulative real turns naturally exceed current cloud65536-character recent history allowance."
+    },
+    {
+      "message": "换一个独立话题。下面是纯虚构的归档目录第8批，文件条目只是合成样例，不描述现实人物，不是本人的身份或经历，也不用于修改长期记忆。请仅列出这批目录的第一条编号与最后一条编号，以及条目总数。不要推断样例的现实归属。每条均为完整记录，列分别是record_id、folder、pages、state、checksum。\nARCH-08-0001|box-08-01|pages=02|state=sealed|checksum=0800001Z\nARCH-08-0002|box-08-02|pages=03|state=sealed|checksum=0800002Z\nARCH-08-0003|box-08-03|pages=04|state=sealed|checksum=0800003Z\nARCH-08-0004|box-08-04|pages=05|state=sealed|checksum=0800004Z\nARCH-08-0005|box-08-05|pages=06|state=sealed|checksum=0800005Z\nARCH-08-0006|box-08-06|pages=07|state=sealed|checksum=0800006Z\nARCH-08-0007|box-08-07|pages=08|state=sealed|checksum=0800007Z\nARCH-08-0008|box-08-08|pages=09|state=sealed|checksum=0800008Z\nARCH-08-0009|box-08-09|pages=10|state=sealed|checksum=0800009Z\nARCH-08-0010|box-08-10|pages=11|state=sealed|checksum=0800010Z\nARCH-08-0011|box-08-11|pages=12|state=sealed|checksum=0800011Z\nARCH-08-0012|box-08-12|pages=13|state=sealed|checksum=0800012Z\nARCH-08-0013|box-08-13|pages=14|state=sealed|checksum=0800013Z\nARCH-08-0014|box-08-14|pages=15|state=sealed|checksum=0800014Z\nARCH-08-0015|box-08-15|pages=16|state=sealed|checksum=0800015Z\nARCH-08-0016|box-08-16|pages=17|state=sealed|checksum=0800016Z\nARCH-08-0017|box-08-00|pages=18|state=sealed|checksum=0800017Z\nARCH-08-0018|box-08-01|pages=19|state=sealed|checksum=0800018Z\nARCH-08-0019|box-08-02|pages=20|state=sealed|checksum=0800019Z\nARCH-08-0020|box-08-03|pages=21|state=sealed|checksum=0800020Z\nARCH-08-0021|box-08-04|pages=22|state=sealed|checksum=0800021Z\nARCH-08-0022|box-08-05|pages=23|state=sealed|checksum=0800022Z\nARCH-08-0023|box-08-06|pages=24|state=sealed|checksum=0800023Z\nARCH-08-0024|box-08-07|pages=25|state=sealed|checksum=0800024Z\nARCH-08-0025|box-08-08|pages=26|state=sealed|checksum=0800025Z\nARCH-08-0026|box-08-09|pages=27|state=sealed|checksum=0800026Z\nARCH-08-0027|box-08-10|pages=28|state=sealed|checksum=0800027Z\nARCH-08-0028|box-08-11|pages=29|state=sealed|checksum=0800028Z\nARCH-08-0029|box-08-12|pages=30|state=sealed|checksum=0800029Z\nARCH-08-0030|box-08-13|pages=31|state=sealed|checksum=0800030Z\nARCH-08-0031|box-08-14|pages=01|state=sealed|checksum=0800031Z\nARCH-08-0032|box-08-15|pages=02|state=sealed|checksum=0800032Z\nARCH-08-0033|box-08-16|pages=03|state=sealed|checksum=0800033Z\nARCH-08-0034|box-08-00|pages=04|state=sealed|checksum=0800034Z\nARCH-08-0035|box-08-01|pages=05|state=sealed|checksum=0800035Z\nARCH-08-0036|box-08-02|pages=06|state=sealed|checksum=0800036Z\nARCH-08-0037|box-08-03|pages=07|state=sealed|checksum=0800037Z\nARCH-08-0038|box-08-04|pages=08|state=sealed|checksum=0800038Z\nARCH-08-0039|box-08-05|pages=09|state=sealed|checksum=0800039Z\nARCH-08-0040|box-08-06|pages=10|state=sealed|checksum=0800040Z\nARCH-08-0041|box-08-07|pages=11|state=sealed|checksum=0800041Z\nARCH-08-0042|box-08-08|pages=12|state=sealed|checksum=0800042Z\nARCH-08-0043|box-08-09|pages=13|state=sealed|checksum=0800043Z\nARCH-08-0044|box-08-10|pages=14|state=sealed|checksum=0800044Z\nARCH-08-0045|box-08-11|pages=15|state=sealed|checksum=0800045Z\nARCH-08-0046|box-08-12|pages=16|state=sealed|checksum=0800046Z\nARCH-08-0047|box-08-13|pages=17|state=sealed|checksum=0800047Z\nARCH-08-0048|box-08-14|pages=18|state=sealed|checksum=0800048Z\nARCH-08-0049|box-08-15|pages=19|state=sealed|checksum=0800049Z\nARCH-08-0050|box-08-16|pages=20|state=sealed|checksum=0800050Z\nARCH-08-0051|box-08-00|pages=21|state=sealed|checksum=0800051Z\nARCH-08-0052|box-08-01|pages=22|state=sealed|checksum=0800052Z\nARCH-08-0053|box-08-02|pages=23|state=sealed|checksum=0800053Z\nARCH-08-0054|box-08-03|pages=24|state=sealed|checksum=0800054Z\nARCH-08-0055|box-08-04|pages=25|state=sealed|checksum=0800055Z\nARCH-08-0056|box-08-05|pages=26|state=sealed|checksum=0800056Z\nARCH-08-0057|box-08-06|pages=27|state=sealed|checksum=0800057Z\nARCH-08-0058|box-08-07|pages=28|state=sealed|checksum=0800058Z\nARCH-08-0059|box-08-08|pages=29|state=sealed|checksum=0800059Z\nARCH-08-0060|box-08-09|pages=30|state=sealed|checksum=0800060Z\nARCH-08-0061|box-08-10|pages=31|state=sealed|checksum=0800061Z\nARCH-08-0062|box-08-11|pages=01|state=sealed|checksum=0800062Z\nARCH-08-0063|box-08-12|pages=02|state=sealed|checksum=0800063Z\nARCH-08-0064|box-08-13|pages=03|state=sealed|checksum=0800064Z\nARCH-08-0065|box-08-14|pages=04|state=sealed|checksum=0800065Z\nARCH-08-0066|box-08-15|pages=05|state=sealed|checksum=0800066Z\nARCH-08-0067|box-08-16|pages=06|state=sealed|checksum=0800067Z\nARCH-08-0068|box-08-00|pages=07|state=sealed|checksum=0800068Z\nARCH-08-0069|box-08-01|pages=08|state=sealed|checksum=0800069Z\nARCH-08-0070|box-08-02|pages=09|state=sealed|checksum=0800070Z\nARCH-08-0071|box-08-03|pages=10|state=sealed|checksum=0800071Z\nARCH-08-0072|box-08-04|pages=11|state=sealed|checksum=0800072Z\nARCH-08-0073|box-08-05|pages=12|state=sealed|checksum=0800073Z\nARCH-08-0074|box-08-06|pages=13|state=sealed|checksum=0800074Z\nARCH-08-0075|box-08-07|pages=14|state=sealed|checksum=0800075Z\nARCH-08-0076|box-08-08|pages=15|state=sealed|checksum=0800076Z\nARCH-08-0077|box-08-09|pages=16|state=sealed|checksum=0800077Z\nARCH-08-0078|box-08-10|pages=17|state=sealed|checksum=0800078Z\nARCH-08-0079|box-08-11|pages=18|state=sealed|checksum=0800079Z\nARCH-08-0080|box-08-12|pages=19|state=sealed|checksum=0800080Z\nARCH-08-0081|box-08-13|pages=20|state=sealed|checksum=0800081Z\nARCH-08-0082|box-08-14|pages=21|state=sealed|checksum=0800082Z\nARCH-08-0083|box-08-15|pages=22|state=sealed|checksum=0800083Z\nARCH-08-0084|box-08-16|pages=23|state=sealed|checksum=0800084Z\nARCH-08-0085|box-08-00|pages=24|state=sealed|checksum=0800085Z\nARCH-08-0086|box-08-01|pages=25|state=sealed|checksum=0800086Z\nARCH-08-0087|box-08-02|pages=26|state=sealed|checksum=0800087Z\nARCH-08-0088|box-08-03|pages=27|state=sealed|checksum=0800088Z\nARCH-08-0089|box-08-04|pages=28|state=sealed|checksum=0800089Z\nARCH-08-0090|box-08-05|pages=29|state=sealed|checksum=0800090Z\nARCH-08-0091|box-08-06|pages=30|state=sealed|checksum=0800091Z\nARCH-08-0092|box-08-07|pages=31|state=sealed|checksum=0800092Z\nARCH-08-0093|box-08-08|pages=01|state=sealed|checksum=0800093Z\nARCH-08-0094|box-08-09|pages=02|state=sealed|checksum=0800094Z\nARCH-08-0095|box-08-10|pages=03|state=sealed|checksum=0800095Z\nARCH-08-0096|box-08-11|pages=04|state=sealed|checksum=0800096Z\nARCH-08-0097|box-08-12|pages=05|state=sealed|checksum=0800097Z\nARCH-08-0098|box-08-13|pages=06|state=sealed|checksum=0800098Z\nARCH-08-0099|box-08-14|pages=07|state=sealed|checksum=0800099Z\nARCH-08-0100|box-08-15|pages=08|state=sealed|checksum=0800100Z\nARCH-08-0101|box-08-16|pages=09|state=sealed|checksum=0800101Z\nARCH-08-0102|box-08-00|pages=10|state=sealed|checksum=0800102Z\nARCH-08-0103|box-08-01|pages=11|state=sealed|checksum=0800103Z\nARCH-08-0104|box-08-02|pages=12|state=sealed|checksum=0800104Z\nARCH-08-0105|box-08-03|pages=13|state=sealed|checksum=0800105Z\nARCH-08-0106|box-08-04|pages=14|state=sealed|checksum=0800106Z\nARCH-08-0107|box-08-05|pages=15|state=sealed|checksum=0800107Z\nARCH-08-0108|box-08-06|pages=16|state=sealed|checksum=0800108Z\nARCH-08-0109|box-08-07|pages=17|state=sealed|checksum=0800109Z\nARCH-08-0110|box-08-08|pages=18|state=sealed|checksum=0800110Z\nARCH-08-0111|box-08-09|pages=19|state=sealed|checksum=0800111Z\nARCH-08-0112|box-08-10|pages=20|state=sealed|checksum=0800112Z\nARCH-08-0113|box-08-11|pages=21|state=sealed|checksum=0800113Z\nARCH-08-0114|box-08-12|pages=22|state=sealed|checksum=0800114Z\nARCH-08-0115|box-08-13|pages=23|state=sealed|checksum=0800115Z\nARCH-08-0116|box-08-14|pages=24|state=sealed|checksum=0800116Z\nARCH-08-0117|box-08-15|pages=25|state=sealed|checksum=0800117Z\nARCH-08-0118|box-08-16|pages=26|state=sealed|checksum=0800118Z\nARCH-08-0119|box-08-00|pages=27|state=sealed|checksum=0800119Z\nARCH-08-0120|box-08-01|pages=28|state=sealed|checksum=0800120Z\nARCH-08-0121|box-08-02|pages=29|state=sealed|checksum=0800121Z\n",
+      "record_count": 121,
+      "first_id": "ARCH-08-0001",
+      "last_id": "ARCH-08-0121",
+      "synthetic": true,
+      "purpose": "A complete distinct native unrelated task, not generated history injection; cumulative real turns naturally exceed current cloud65536-character recent history allowance."
+    },
+    {
+      "message": "换一个独立话题。下面是纯虚构的归档目录第9批，文件条目只是合成样例，不描述现实人物，不是本人的身份或经历，也不用于修改长期记忆。请仅列出这批目录的第一条编号与最后一条编号，以及条目总数。不要推断样例的现实归属。每条均为完整记录，列分别是record_id、folder、pages、state、checksum。\nARCH-09-0001|box-09-01|pages=02|state=sealed|checksum=0900001Z\nARCH-09-0002|box-09-02|pages=03|state=sealed|checksum=0900002Z\nARCH-09-0003|box-09-03|pages=04|state=sealed|checksum=0900003Z\nARCH-09-0004|box-09-04|pages=05|state=sealed|checksum=0900004Z\nARCH-09-0005|box-09-05|pages=06|state=sealed|checksum=0900005Z\nARCH-09-0006|box-09-06|pages=07|state=sealed|checksum=0900006Z\nARCH-09-0007|box-09-07|pages=08|state=sealed|checksum=0900007Z\nARCH-09-0008|box-09-08|pages=09|state=sealed|checksum=0900008Z\nARCH-09-0009|box-09-09|pages=10|state=sealed|checksum=0900009Z\nARCH-09-0010|box-09-10|pages=11|state=sealed|checksum=0900010Z\nARCH-09-0011|box-09-11|pages=12|state=sealed|checksum=0900011Z\nARCH-09-0012|box-09-12|pages=13|state=sealed|checksum=0900012Z\nARCH-09-0013|box-09-13|pages=14|state=sealed|checksum=0900013Z\nARCH-09-0014|box-09-14|pages=15|state=sealed|checksum=0900014Z\nARCH-09-0015|box-09-15|pages=16|state=sealed|checksum=0900015Z\nARCH-09-0016|box-09-16|pages=17|state=sealed|checksum=0900016Z\nARCH-09-0017|box-09-00|pages=18|state=sealed|checksum=0900017Z\nARCH-09-0018|box-09-01|pages=19|state=sealed|checksum=0900018Z\nARCH-09-0019|box-09-02|pages=20|state=sealed|checksum=0900019Z\nARCH-09-0020|box-09-03|pages=21|state=sealed|checksum=0900020Z\nARCH-09-0021|box-09-04|pages=22|state=sealed|checksum=0900021Z\nARCH-09-0022|box-09-05|pages=23|state=sealed|checksum=0900022Z\nARCH-09-0023|box-09-06|pages=24|state=sealed|checksum=0900023Z\nARCH-09-0024|box-09-07|pages=25|state=sealed|checksum=0900024Z\nARCH-09-0025|box-09-08|pages=26|state=sealed|checksum=0900025Z\nARCH-09-0026|box-09-09|pages=27|state=sealed|checksum=0900026Z\nARCH-09-0027|box-09-10|pages=28|state=sealed|checksum=0900027Z\nARCH-09-0028|box-09-11|pages=29|state=sealed|checksum=0900028Z\nARCH-09-0029|box-09-12|pages=30|state=sealed|checksum=0900029Z\nARCH-09-0030|box-09-13|pages=31|state=sealed|checksum=0900030Z\nARCH-09-0031|box-09-14|pages=01|state=sealed|checksum=0900031Z\nARCH-09-0032|box-09-15|pages=02|state=sealed|checksum=0900032Z\nARCH-09-0033|box-09-16|pages=03|state=sealed|checksum=0900033Z\nARCH-09-0034|box-09-00|pages=04|state=sealed|checksum=0900034Z\nARCH-09-0035|box-09-01|pages=05|state=sealed|checksum=0900035Z\nARCH-09-0036|box-09-02|pages=06|state=sealed|checksum=0900036Z\nARCH-09-0037|box-09-03|pages=07|state=sealed|checksum=0900037Z\nARCH-09-0038|box-09-04|pages=08|state=sealed|checksum=0900038Z\nARCH-09-0039|box-09-05|pages=09|state=sealed|checksum=0900039Z\nARCH-09-0040|box-09-06|pages=10|state=sealed|checksum=0900040Z\nARCH-09-0041|box-09-07|pages=11|state=sealed|checksum=0900041Z\nARCH-09-0042|box-09-08|pages=12|state=sealed|checksum=0900042Z\nARCH-09-0043|box-09-09|pages=13|state=sealed|checksum=0900043Z\nARCH-09-0044|box-09-10|pages=14|state=sealed|checksum=0900044Z\nARCH-09-0045|box-09-11|pages=15|state=sealed|checksum=0900045Z\nARCH-09-0046|box-09-12|pages=16|state=sealed|checksum=0900046Z\nARCH-09-0047|box-09-13|pages=17|state=sealed|checksum=0900047Z\nARCH-09-0048|box-09-14|pages=18|state=sealed|checksum=0900048Z\nARCH-09-0049|box-09-15|pages=19|state=sealed|checksum=0900049Z\nARCH-09-0050|box-09-16|pages=20|state=sealed|checksum=0900050Z\nARCH-09-0051|box-09-00|pages=21|state=sealed|checksum=0900051Z\nARCH-09-0052|box-09-01|pages=22|state=sealed|checksum=0900052Z\nARCH-09-0053|box-09-02|pages=23|state=sealed|checksum=0900053Z\nARCH-09-0054|box-09-03|pages=24|state=sealed|checksum=0900054Z\nARCH-09-0055|box-09-04|pages=25|state=sealed|checksum=0900055Z\nARCH-09-0056|box-09-05|pages=26|state=sealed|checksum=0900056Z\nARCH-09-0057|box-09-06|pages=27|state=sealed|checksum=0900057Z\nARCH-09-0058|box-09-07|pages=28|state=sealed|checksum=0900058Z\nARCH-09-0059|box-09-08|pages=29|state=sealed|checksum=0900059Z\nARCH-09-0060|box-09-09|pages=30|state=sealed|checksum=0900060Z\nARCH-09-0061|box-09-10|pages=31|state=sealed|checksum=0900061Z\nARCH-09-0062|box-09-11|pages=01|state=sealed|checksum=0900062Z\nARCH-09-0063|box-09-12|pages=02|state=sealed|checksum=0900063Z\nARCH-09-0064|box-09-13|pages=03|state=sealed|checksum=0900064Z\nARCH-09-0065|box-09-14|pages=04|state=sealed|checksum=0900065Z\nARCH-09-0066|box-09-15|pages=05|state=sealed|checksum=0900066Z\nARCH-09-0067|box-09-16|pages=06|state=sealed|checksum=0900067Z\nARCH-09-0068|box-09-00|pages=07|state=sealed|checksum=0900068Z\nARCH-09-0069|box-09-01|pages=08|state=sealed|checksum=0900069Z\nARCH-09-0070|box-09-02|pages=09|state=sealed|checksum=0900070Z\nARCH-09-0071|box-09-03|pages=10|state=sealed|checksum=0900071Z\nARCH-09-0072|box-09-04|pages=11|state=sealed|checksum=0900072Z\nARCH-09-0073|box-09-05|pages=12|state=sealed|checksum=0900073Z\nARCH-09-0074|box-09-06|pages=13|state=sealed|checksum=0900074Z\nARCH-09-0075|box-09-07|pages=14|state=sealed|checksum=0900075Z\nARCH-09-0076|box-09-08|pages=15|state=sealed|checksum=0900076Z\nARCH-09-0077|box-09-09|pages=16|state=sealed|checksum=0900077Z\nARCH-09-0078|box-09-10|pages=17|state=sealed|checksum=0900078Z\nARCH-09-0079|box-09-11|pages=18|state=sealed|checksum=0900079Z\nARCH-09-0080|box-09-12|pages=19|state=sealed|checksum=0900080Z\nARCH-09-0081|box-09-13|pages=20|state=sealed|checksum=0900081Z\nARCH-09-0082|box-09-14|pages=21|state=sealed|checksum=0900082Z\nARCH-09-0083|box-09-15|pages=22|state=sealed|checksum=0900083Z\nARCH-09-0084|box-09-16|pages=23|state=sealed|checksum=0900084Z\nARCH-09-0085|box-09-00|pages=24|state=sealed|checksum=0900085Z\nARCH-09-0086|box-09-01|pages=25|state=sealed|checksum=0900086Z\nARCH-09-0087|box-09-02|pages=26|state=sealed|checksum=0900087Z\nARCH-09-0088|box-09-03|pages=27|state=sealed|checksum=0900088Z\nARCH-09-0089|box-09-04|pages=28|state=sealed|checksum=0900089Z\nARCH-09-0090|box-09-05|pages=29|state=sealed|checksum=0900090Z\nARCH-09-0091|box-09-06|pages=30|state=sealed|checksum=0900091Z\nARCH-09-0092|box-09-07|pages=31|state=sealed|checksum=0900092Z\nARCH-09-0093|box-09-08|pages=01|state=sealed|checksum=0900093Z\nARCH-09-0094|box-09-09|pages=02|state=sealed|checksum=0900094Z\nARCH-09-0095|box-09-10|pages=03|state=sealed|checksum=0900095Z\nARCH-09-0096|box-09-11|pages=04|state=sealed|checksum=0900096Z\nARCH-09-0097|box-09-12|pages=05|state=sealed|checksum=0900097Z\nARCH-09-0098|box-09-13|pages=06|state=sealed|checksum=0900098Z\nARCH-09-0099|box-09-14|pages=07|state=sealed|checksum=0900099Z\nARCH-09-0100|box-09-15|pages=08|state=sealed|checksum=0900100Z\nARCH-09-0101|box-09-16|pages=09|state=sealed|checksum=0900101Z\nARCH-09-0102|box-09-00|pages=10|state=sealed|checksum=0900102Z\nARCH-09-0103|box-09-01|pages=11|state=sealed|checksum=0900103Z\nARCH-09-0104|box-09-02|pages=12|state=sealed|checksum=0900104Z\nARCH-09-0105|box-09-03|pages=13|state=sealed|checksum=0900105Z\nARCH-09-0106|box-09-04|pages=14|state=sealed|checksum=0900106Z\nARCH-09-0107|box-09-05|pages=15|state=sealed|checksum=0900107Z\nARCH-09-0108|box-09-06|pages=16|state=sealed|checksum=0900108Z\nARCH-09-0109|box-09-07|pages=17|state=sealed|checksum=0900109Z\nARCH-09-0110|box-09-08|pages=18|state=sealed|checksum=0900110Z\nARCH-09-0111|box-09-09|pages=19|state=sealed|checksum=0900111Z\nARCH-09-0112|box-09-10|pages=20|state=sealed|checksum=0900112Z\nARCH-09-0113|box-09-11|pages=21|state=sealed|checksum=0900113Z\nARCH-09-0114|box-09-12|pages=22|state=sealed|checksum=0900114Z\nARCH-09-0115|box-09-13|pages=23|state=sealed|checksum=0900115Z\nARCH-09-0116|box-09-14|pages=24|state=sealed|checksum=0900116Z\nARCH-09-0117|box-09-15|pages=25|state=sealed|checksum=0900117Z\nARCH-09-0118|box-09-16|pages=26|state=sealed|checksum=0900118Z\nARCH-09-0119|box-09-00|pages=27|state=sealed|checksum=0900119Z\nARCH-09-0120|box-09-01|pages=28|state=sealed|checksum=0900120Z\nARCH-09-0121|box-09-02|pages=29|state=sealed|checksum=0900121Z\n",
+      "record_count": 121,
+      "first_id": "ARCH-09-0001",
+      "last_id": "ARCH-09-0121",
+      "synthetic": true,
+      "purpose": "A complete distinct native unrelated task, not generated history injection; cumulative real turns naturally exceed current cloud65536-character recent history allowance."
+    }
+  ],
+  "expected_records": [
+    {
+      "title": "绿泽窗口受理",
+      "code": "LZ-781",
+      "fee_yuan": 6,
+      "processing_hours": 16,
+      "all_conditions": "完整表格与身份页齐全",
+      "all_exceptions": "身份页缺失须暂停，预约不豁免身份核验"
+    },
+    {
+      "title": "绿泽代办受理",
+      "code": "LZ-782",
+      "fee_yuan": 12,
+      "processing_hours": 30,
+      "all_conditions": "完整表格与代办授权齐全",
+      "all_exceptions": "授权过期须重新取得有效授权，费用支付不能替代授权"
+    },
+    {
+      "title": "绿泽加速受理",
+      "code": "LZ-783",
+      "fee_yuan": 18,
+      "processing_hours": 5,
+      "all_conditions": "完整表格且身份核验通过",
+      "all_exceptions": "核验失败须退回普通流程，预约不豁免核验"
+    },
+    {
+      "title": "绿泽寄件受理",
+      "code": "LZ-784",
+      "fee_yuan": 9,
+      "processing_hours": 48,
+      "all_conditions": "完整表格与可投递回寄地址齐全",
+      "all_exceptions": "地址无法投递须暂停，附件不全须补件"
+    }
+  ],
+  "required_gate_document_indices": [
+    0,
+    1,
+    2,
+    3
+  ],
+  "required_complete_document_count": 4,
+  "no_rule_seeded_memories": true,
+  "primary_output_tokens": 2048,
+  "history_excluded": false,
+  "recent_history_expected": "Real authenticated nine distinct complete new-topic turns naturally exceed unchanged cloud history_max_chars65536. Verify actual prepared history and model wire; do not manually delete/rewrite history or narrow budgets.",
+  "retry_state": "real_before_question_pg_dump_and_vectors_after_successful_import_writer_and_all_distinct_bridge_tasks; zero prior_same_task_answers",
+  "subject_boundary_expected": "Personal report task remains retrievable despite later separate character-preference task. Reporter/recipient clause does not by itself certify topic ownership; real scoped source and semantic reviewer decide. Synthetic KB has no role preference facts.",
+  "observed_partial": {
+    "native_case_status": "incomplete_provider_balance_required",
+    "original_backend_changed": false,
+    "candidate_deployed": false,
+    "real_seed_claims": [
+      {
+        "id": 42,
+        "character_id": "tsukiyashiro_kisaki",
+        "platform": "web",
+        "adapter": "web-character",
+        "sender_id": "6",
+        "conversation_type": "private",
+        "conversation_id": "6",
+        "scope_level": "conversation",
+        "memory_type": "user_fact",
+        "memory_key": "preference_代办受理",
+        "revision": 1,
+        "relation_type": "ADD",
+        "status": "active",
+        "parent_memory_id": null,
+        "supersedes_memory_id": null,
+        "content": "用户不喜欢代办受理。",
+        "importance": 0.5,
+        "confidence": 0.98,
+        "source_message_id": "web:dfcce02142534d089a67711d6bcc69c6",
+        "source_message_ids_json": "[\"web:dfcce02142534d089a67711d6bcc69c6\"]",
+        "evidence_json": "[\"我不喜欢代办受理\"]",
+        "metadata_json": "{\"qualifiers\": {}, \"target_memory_key\": \"\", \"write_mode\": \"hot\", \"feedback_target_ids\": [], \"temporal_provenance\": {\"version\": 1, \"producer\": \"semantic_memory\", \"observed_at\": \"2026-10-02T21:59:37.672495+00:00\", \"validity_authority\": \"unspecified\", \"proposed_bounds\": {}, \"interval_shape\": \"unspecified\", \"expression\": null}, \"attributed_to\": \"user\"}",
+        "valid_from": null,
+        "valid_to": null,
+        "observed_at": "2026-10-02T21:59:37.672495+00:00",
+        "created_at": "2026-10-03T05:59:42.347936",
+        "updated_at": "2026-10-03T05:59:42.347936",
+        "source_message_ids": [
+          "web:dfcce02142534d089a67711d6bcc69c6"
+        ],
+        "evidence": [
+          "我不喜欢代办受理"
+        ],
+        "metadata": {
+          "qualifiers": {},
+          "target_memory_key": "",
+          "write_mode": "hot",
+          "feedback_target_ids": [],
+          "temporal_provenance": {
+            "version": 1,
+            "producer": "semantic_memory",
+            "observed_at": "2026-10-02T21:59:37.672495+00:00",
+            "validity_authority": "unspecified",
+            "proposed_bounds": {},
+            "interval_shape": "unspecified",
+            "expression": null
+          },
+          "attributed_to": "user"
+        },
+        "attributed_to": "user",
+        "qualifiers": {}
+      },
+      {
+        "id": 41,
+        "character_id": "tsukiyashiro_kisaki",
+        "platform": "web",
+        "adapter": "web-character",
+        "sender_id": "6",
+        "conversation_type": "private",
+        "conversation_id": "6",
+        "scope_level": "conversation",
+        "memory_type": "user_fact",
+        "memory_key": "preference_加速受理",
+        "revision": 1,
+        "relation_type": "ADD",
+        "status": "active",
+        "parent_memory_id": null,
+        "supersedes_memory_id": null,
+        "content": "用户喜欢加速受理，但只有在完整表格已提交且身份核验通过时才使用加速受理。",
+        "importance": 0.6,
+        "confidence": 0.97,
+        "source_message_id": "web:dfcce02142534d089a67711d6bcc69c6",
+        "source_message_ids_json": "[\"web:dfcce02142534d089a67711d6bcc69c6\"]",
+        "evidence_json": "[\"我喜欢加速受理，但我只有完整表格已提交且身份核验通过才使用加速受理\"]",
+        "metadata_json": "{\"qualifiers\": {\"condition\": \"完整表格已提交且身份核验通过\"}, \"target_memory_key\": \"\", \"write_mode\": \"hot\", \"feedback_target_ids\": [], \"temporal_provenance\": {\"version\": 1, \"producer\": \"semantic_memory\", \"observed_at\": \"2026-10-02T21:59:37.672495+00:00\", \"validity_authority\": \"unspecified\", \"proposed_bounds\": {}, \"interval_shape\": \"unspecified\", \"expression\": null}, \"attributed_to\": \"user\"}",
+        "valid_from": null,
+        "valid_to": null,
+        "observed_at": "2026-10-02T21:59:37.672495+00:00",
+        "created_at": "2026-10-03T05:59:42.333465",
+        "updated_at": "2026-10-03T05:59:42.333465",
+        "source_message_ids": [
+          "web:dfcce02142534d089a67711d6bcc69c6"
+        ],
+        "evidence": [
+          "我喜欢加速受理，但我只有完整表格已提交且身份核验通过才使用加速受理"
+        ],
+        "metadata": {
+          "qualifiers": {
+            "condition": "完整表格已提交且身份核验通过"
+          },
+          "target_memory_key": "",
+          "write_mode": "hot",
+          "feedback_target_ids": [],
+          "temporal_provenance": {
+            "version": 1,
+            "producer": "semantic_memory",
+            "observed_at": "2026-10-02T21:59:37.672495+00:00",
+            "validity_authority": "unspecified",
+            "proposed_bounds": {},
+            "interval_shape": "unspecified",
+            "expression": null
+          },
+          "attributed_to": "user"
+        },
+        "attributed_to": "user",
+        "qualifiers": {
+          "condition": "完整表格已提交且身份核验通过"
+        }
+      },
+      {
+        "id": 40,
+        "character_id": "tsukiyashiro_kisaki",
+        "platform": "web",
+        "adapter": "web-character",
+        "sender_id": "6",
+        "conversation_type": "private",
+        "conversation_id": "6",
+        "scope_level": "conversation",
+        "memory_type": "user_fact",
+        "memory_key": "preference_窗口受理",
+        "revision": 1,
+        "relation_type": "ADD",
+        "status": "active",
+        "parent_memory_id": null,
+        "supersedes_memory_id": null,
+        "content": "用户喜欢窗口受理。",
+        "importance": 0.6,
+        "confidence": 0.98,
+        "source_message_id": "web:dfcce02142534d089a67711d6bcc69c6",
+        "source_message_ids_json": "[\"web:dfcce02142534d089a67711d6bcc69c6\"]",
+        "evidence_json": "[\"我喜欢窗口受理\"]",
+        "metadata_json": "{\"qualifiers\": {}, \"target_memory_key\": \"\", \"write_mode\": \"hot\", \"feedback_target_ids\": [], \"temporal_provenance\": {\"version\": 1, \"producer\": \"semantic_memory\", \"observed_at\": \"2026-10-02T21:59:37.672495+00:00\", \"validity_authority\": \"unspecified\", \"proposed_bounds\": {}, \"interval_shape\": \"unspecified\", \"expression\": null}, \"attributed_to\": \"user\"}",
+        "valid_from": null,
+        "valid_to": null,
+        "observed_at": "2026-10-02T21:59:37.672495+00:00",
+        "created_at": "2026-10-03T05:59:42.314056",
+        "updated_at": "2026-10-03T05:59:42.314056",
+        "source_message_ids": [
+          "web:dfcce02142534d089a67711d6bcc69c6"
+        ],
+        "evidence": [
+          "我喜欢窗口受理"
+        ],
+        "metadata": {
+          "qualifiers": {},
+          "target_memory_key": "",
+          "write_mode": "hot",
+          "feedback_target_ids": [],
+          "temporal_provenance": {
+            "version": 1,
+            "producer": "semantic_memory",
+            "observed_at": "2026-10-02T21:59:37.672495+00:00",
+            "validity_authority": "unspecified",
+            "proposed_bounds": {},
+            "interval_shape": "unspecified",
+            "expression": null
+          },
+          "attributed_to": "user"
+        },
+        "attributed_to": "user",
+        "qualifiers": {}
+      }
+    ],
+    "successful_bridge_turns": [
+      {
+        "index": 0,
+        "status": 200,
+        "response": {
+          "branchId": null,
+          "branchRevision": null,
+          "evidenceSources": [],
+          "reply": "第一条编号：ARCH-01-0001  \n最后一条编号：ARCH-01-0121  \n条目总数：121",
+          "model": "deepseek-v4-pro (openai_compat)",
+          "costTime": 1.35,
+          "citations": null,
+          "confidence": null,
+          "abstained": false,
+          "answerMode": null,
+          "domainId": null,
+          "warnings": null
+        },
+        "input_chars": 7780
+      },
+      {
+        "index": 1,
+        "status": 200,
+        "response": {
+          "branchId": null,
+          "branchRevision": null,
+          "evidenceSources": [],
+          "reply": "第一条编号：ARCH-02-0001  \n最后一条编号：ARCH-02-0121  \n条目总数：121",
+          "model": "deepseek-v4-pro (openai_compat)",
+          "costTime": 2.26,
+          "citations": null,
+          "confidence": null,
+          "abstained": false,
+          "answerMode": null,
+          "domainId": null,
+          "warnings": null
+        },
+        "input_chars": 7780
+      },
+      {
+        "index": 2,
+        "status": 200,
+        "response": {
+          "branchId": null,
+          "branchRevision": null,
+          "evidenceSources": [],
+          "reply": "第一条编号：ARCH-03-0001  \n最后一条编号：ARCH-03-0121  \n条目总数：121",
+          "model": "deepseek-v4-pro (openai_compat)",
+          "costTime": 3.64,
+          "citations": null,
+          "confidence": null,
+          "abstained": false,
+          "answerMode": null,
+          "domainId": null,
+          "warnings": null
+        },
+        "input_chars": 7780
+      },
+      {
+        "index": 3,
+        "status": 200,
+        "response": {
+          "branchId": null,
+          "branchRevision": null,
+          "evidenceSources": [],
+          "reply": "第一条编号：ARCH-04-0001  \n最后一条编号：ARCH-04-0121  \n条目总数：121",
+          "model": "deepseek-v4-pro (openai_compat)",
+          "costTime": 4.17,
+          "citations": null,
+          "confidence": null,
+          "abstained": false,
+          "answerMode": null,
+          "domainId": null,
+          "warnings": null
+        },
+        "input_chars": 7780
+      },
+      {
+        "index": 4,
+        "status": 200,
+        "response": {
+          "branchId": null,
+          "branchRevision": null,
+          "evidenceSources": [],
+          "reply": "第一条编号：ARCH-05-0001  \n最后一条编号：ARCH-05-0121  \n条目总数：121",
+          "model": "deepseek-v4-pro (openai_compat)",
+          "costTime": 3.06,
+          "citations": null,
+          "confidence": null,
+          "abstained": false,
+          "answerMode": null,
+          "domainId": null,
+          "warnings": null
+        },
+        "input_chars": 7780
+      },
+      {
+        "index": 5,
+        "status": 200,
+        "response": {
+          "branchId": null,
+          "branchRevision": null,
+          "evidenceSources": [],
+          "reply": "第一条编号：ARCH-06-0001  \n最后一条编号：ARCH-06-0121  \n条目总数：121",
+          "model": "deepseek-v4-pro (openai_compat)",
+          "costTime": 4.81,
+          "citations": null,
+          "confidence": null,
+          "abstained": false,
+          "answerMode": null,
+          "domainId": null,
+          "warnings": null
+        },
+        "input_chars": 7780
+      },
+      {
+        "index": 6,
+        "status": 200,
+        "response": {
+          "branchId": null,
+          "branchRevision": null,
+          "evidenceSources": [],
+          "reply": "第一条编号：ARCH-07-0001  \n最后一条编号：ARCH-07-0121  \n条目总数：121",
+          "model": "deepseek-v4-pro (openai_compat)",
+          "costTime": 5.78,
+          "citations": null,
+          "confidence": null,
+          "abstained": false,
+          "answerMode": null,
+          "domainId": null,
+          "warnings": null
+        },
+        "input_chars": 7780
+      }
+    ],
+    "failed_bridge_observations": [
+      {
+        "index": 7,
+        "status": 500,
+        "response": {
+          "detail": "生成回复失败，请稍后重试"
+        },
+        "input_chars": 7780
+      }
+    ],
+    "remaining_bridge_indices": [
+      7,
+      8
+    ],
+    "actual_final_question_attempted": false,
+    "full_native_qualification": 0,
+    "actual_cloud_calls": 42,
+    "http200": 38,
+    "http402": 4,
+    "completed_primary_replies": 8,
+    "actual_call_metadata": [
+      {
+        "http_status": 200,
+        "request_model": "deepseek-v4-pro",
+        "response_model": "deepseek-v4-pro",
+        "finish_reason": "stop",
+        "error_message": null,
+        "usage": {
+          "prompt_tokens": 861,
+          "completion_tokens": 12,
+          "total_tokens": 873,
+          "prompt_tokens_details": {
+            "cached_tokens": 0
+          },
+          "prompt_cache_hit_tokens": 0,
+          "prompt_cache_miss_tokens": 861
+        }
+      },
+      {
+        "http_status": 200,
+        "request_model": "deepseek-v4-pro",
+        "response_model": "deepseek-v4-pro",
+        "finish_reason": "stop",
+        "error_message": null,
+        "usage": {
+          "prompt_tokens": 1377,
+          "completion_tokens": 32,
+          "total_tokens": 1409,
+          "prompt_tokens_details": {
+            "cached_tokens": 1280
+          },
+          "prompt_cache_hit_tokens": 1280,
+          "prompt_cache_miss_tokens": 97
+        }
+      },
+      {
+        "http_status": 200,
+        "request_model": "deepseek-v4-pro",
+        "response_model": "deepseek-v4-pro",
+        "finish_reason": "stop",
+        "error_message": null,
+        "usage": {
+          "prompt_tokens": 1690,
+          "completion_tokens": 463,
+          "total_tokens": 2153,
+          "prompt_tokens_details": {
+            "cached_tokens": 1280
+          },
+          "prompt_cache_hit_tokens": 1280,
+          "prompt_cache_miss_tokens": 410
+        }
+      },
+      {
+        "http_status": 200,
+        "request_model": "deepseek-v4-pro",
+        "response_model": "deepseek-v4-pro",
+        "finish_reason": "stop",
+        "error_message": null,
+        "usage": {
+          "prompt_tokens": 4734,
+          "completion_tokens": 198,
+          "total_tokens": 4932,
+          "prompt_tokens_details": {
+            "cached_tokens": 384
+          },
+          "prompt_cache_hit_tokens": 384,
+          "prompt_cache_miss_tokens": 4350
+        }
+      },
+      {
+        "http_status": 200,
+        "request_model": "deepseek-v4-pro",
+        "response_model": "deepseek-v4-pro",
+        "finish_reason": "stop",
+        "error_message": null,
+        "usage": {
+          "prompt_tokens": 5473,
+          "completion_tokens": 52,
+          "total_tokens": 5525,
+          "prompt_tokens_details": {
+            "cached_tokens": 512
+          },
+          "prompt_cache_hit_tokens": 512,
+          "prompt_cache_miss_tokens": 4961
+        }
+      },
+      {
+        "http_status": 200,
+        "request_model": "deepseek-v4-pro",
+        "response_model": "deepseek-v4-pro",
+        "finish_reason": "stop",
+        "error_message": null,
+        "usage": {
+          "prompt_tokens": 4629,
+          "completion_tokens": 12,
+          "total_tokens": 4641,
+          "prompt_tokens_details": {
+            "cached_tokens": 0
+          },
+          "prompt_cache_hit_tokens": 0,
+          "prompt_cache_miss_tokens": 4629
+        }
+      },
+      {
+        "http_status": 200,
+        "request_model": "deepseek-v4-pro",
+        "response_model": "deepseek-v4-pro",
+        "finish_reason": "stop",
+        "error_message": null,
+        "usage": {
+          "prompt_tokens": 5438,
+          "completion_tokens": 25,
+          "total_tokens": 5463,
+          "prompt_tokens_details": {
+            "cached_tokens": 1280
+          },
+          "prompt_cache_hit_tokens": 1280,
+          "prompt_cache_miss_tokens": 4158
+        }
+      },
+      {
+        "http_status": 200,
+        "request_model": "deepseek-v4-pro",
+        "response_model": "deepseek-v4-pro",
+        "finish_reason": "stop",
+        "error_message": null,
+        "usage": {
+          "prompt_tokens": 5513,
+          "completion_tokens": 6,
+          "total_tokens": 5519,
+          "prompt_tokens_details": {
+            "cached_tokens": 1280
+          },
+          "prompt_cache_hit_tokens": 1280,
+          "prompt_cache_miss_tokens": 4233
+        }
+      },
+      {
+        "http_status": 200,
+        "request_model": "deepseek-v4-pro",
+        "response_model": "deepseek-v4-pro",
+        "finish_reason": "stop",
+        "error_message": null,
+        "usage": {
+          "prompt_tokens": 8490,
+          "completion_tokens": 402,
+          "total_tokens": 8892,
+          "prompt_tokens_details": {
+            "cached_tokens": 384
+          },
+          "prompt_cache_hit_tokens": 384,
+          "prompt_cache_miss_tokens": 8106
+        }
+      },
+      {
+        "http_status": 200,
+        "request_model": "deepseek-v4-pro",
+        "response_model": "deepseek-v4-pro",
+        "finish_reason": "stop",
+        "error_message": null,
+        "usage": {
+          "prompt_tokens": 9236,
+          "completion_tokens": 67,
+          "total_tokens": 9303,
+          "prompt_tokens_details": {
+            "cached_tokens": 512
+          },
+          "prompt_cache_hit_tokens": 512,
+          "prompt_cache_miss_tokens": 8724
+        }
+      },
+      {
+        "http_status": 200,
+        "request_model": "deepseek-v4-pro",
+        "response_model": "deepseek-v4-pro",
+        "finish_reason": "stop",
+        "error_message": null,
+        "usage": {
+          "prompt_tokens": 8392,
+          "completion_tokens": 12,
+          "total_tokens": 8404,
+          "prompt_tokens_details": {
+            "cached_tokens": 0
+          },
+          "prompt_cache_hit_tokens": 0,
+          "prompt_cache_miss_tokens": 8392
+        }
+      },
+      {
+        "http_status": 200,
+        "request_model": "deepseek-v4-pro",
+        "response_model": "deepseek-v4-pro",
+        "finish_reason": "stop",
+        "error_message": null,
+        "usage": {
+          "prompt_tokens": 12804,
+          "completion_tokens": 25,
+          "total_tokens": 12829,
+          "prompt_tokens_details": {
+            "cached_tokens": 1280
+          },
+          "prompt_cache_hit_tokens": 1280,
+          "prompt_cache_miss_tokens": 11524
+        }
+      },
+      {
+        "http_status": 200,
+        "request_model": "deepseek-v4-pro",
+        "response_model": "deepseek-v4-pro",
+        "finish_reason": "stop",
+        "error_message": null,
+        "usage": {
+          "prompt_tokens": 9296,
+          "completion_tokens": 6,
+          "total_tokens": 9302,
+          "prompt_tokens_details": {
+            "cached_tokens": 1280
+          },
+          "prompt_cache_hit_tokens": 1280,
+          "prompt_cache_miss_tokens": 8016
+        }
+      },
+      {
+        "http_status": 200,
+        "request_model": "deepseek-v4-pro",
+        "response_model": "deepseek-v4-pro",
+        "finish_reason": "stop",
+        "error_message": null,
+        "usage": {
+          "prompt_tokens": 12247,
+          "completion_tokens": 411,
+          "total_tokens": 12658,
+          "prompt_tokens_details": {
+            "cached_tokens": 512
+          },
+          "prompt_cache_hit_tokens": 512,
+          "prompt_cache_miss_tokens": 11735
+        }
+      },
+      {
+        "http_status": 200,
+        "request_model": "deepseek-v4-pro",
+        "response_model": "deepseek-v4-pro",
+        "finish_reason": "stop",
+        "error_message": null,
+        "usage": {
+          "prompt_tokens": 12989,
+          "completion_tokens": 52,
+          "total_tokens": 13041,
+          "prompt_tokens_details": {
+            "cached_tokens": 512
+          },
+          "prompt_cache_hit_tokens": 512,
+          "prompt_cache_miss_tokens": 12477
+        }
+      },
+      {
+        "http_status": 200,
+        "request_model": "deepseek-v4-pro",
+        "response_model": "deepseek-v4-pro",
+        "finish_reason": "stop",
+        "error_message": null,
+        "usage": {
+          "prompt_tokens": 12136,
+          "completion_tokens": 12,
+          "total_tokens": 12148,
+          "prompt_tokens_details": {
+            "cached_tokens": 0
+          },
+          "prompt_cache_hit_tokens": 0,
+          "prompt_cache_miss_tokens": 12136
+        }
+      },
+      {
+        "http_status": 200,
+        "request_model": "deepseek-v4-pro",
+        "response_model": "deepseek-v4-pro",
+        "finish_reason": "stop",
+        "error_message": null,
+        "usage": {
+          "prompt_tokens": 20358,
+          "completion_tokens": 25,
+          "total_tokens": 20383,
+          "prompt_tokens_details": {
+            "cached_tokens": 768
+          },
+          "prompt_cache_hit_tokens": 768,
+          "prompt_cache_miss_tokens": 19590
+        }
+      },
+      {
+        "http_status": 200,
+        "request_model": "deepseek-v4-pro",
+        "response_model": "deepseek-v4-pro",
+        "finish_reason": "stop",
+        "error_message": null,
+        "usage": {
+          "prompt_tokens": 12968,
+          "completion_tokens": 6,
+          "total_tokens": 12974,
+          "prompt_tokens_details": {
+            "cached_tokens": 1280
+          },
+          "prompt_cache_hit_tokens": 1280,
+          "prompt_cache_miss_tokens": 11688
+        }
+      },
+      {
+        "http_status": 200,
+        "request_model": "deepseek-v4-pro",
+        "response_model": "deepseek-v4-pro",
+        "finish_reason": "stop",
+        "error_message": null,
+        "usage": {
+          "prompt_tokens": 16004,
+          "completion_tokens": 209,
+          "total_tokens": 16213,
+          "prompt_tokens_details": {
+            "cached_tokens": 512
+          },
+          "prompt_cache_hit_tokens": 512,
+          "prompt_cache_miss_tokens": 15492
+        }
+      },
+      {
+        "http_status": 200,
+        "request_model": "deepseek-v4-pro",
+        "response_model": "deepseek-v4-pro",
+        "finish_reason": "stop",
+        "error_message": null,
+        "usage": {
+          "prompt_tokens": 16762,
+          "completion_tokens": 36,
+          "total_tokens": 16798,
+          "prompt_tokens_details": {
+            "cached_tokens": 512
+          },
+          "prompt_cache_hit_tokens": 512,
+          "prompt_cache_miss_tokens": 16250
+        }
+      },
+      {
+        "http_status": 200,
+        "request_model": "deepseek-v4-pro",
+        "response_model": "deepseek-v4-pro",
+        "finish_reason": "stop",
+        "error_message": null,
+        "usage": {
+          "prompt_tokens": 15918,
+          "completion_tokens": 12,
+          "total_tokens": 15930,
+          "prompt_tokens_details": {
+            "cached_tokens": 0
+          },
+          "prompt_cache_hit_tokens": 0,
+          "prompt_cache_miss_tokens": 15918
+        }
+      },
+      {
+        "http_status": 200,
+        "request_model": "deepseek-v4-pro",
+        "response_model": "deepseek-v4-pro",
+        "finish_reason": "stop",
+        "error_message": null,
+        "usage": {
+          "prompt_tokens": 27807,
+          "completion_tokens": 25,
+          "total_tokens": 27832,
+          "prompt_tokens_details": {
+            "cached_tokens": 1408
+          },
+          "prompt_cache_hit_tokens": 1408,
+          "prompt_cache_miss_tokens": 26399
+        }
+      },
+      {
+        "http_status": 200,
+        "request_model": "deepseek-v4-pro",
+        "response_model": "deepseek-v4-pro",
+        "finish_reason": "stop",
+        "error_message": null,
+        "usage": {
+          "prompt_tokens": 12968,
+          "completion_tokens": 6,
+          "total_tokens": 12974,
+          "prompt_tokens_details": {
+            "cached_tokens": 1280
+          },
+          "prompt_cache_hit_tokens": 1280,
+          "prompt_cache_miss_tokens": 11688
+        }
+      },
+      {
+        "http_status": 200,
+        "request_model": "deepseek-v4-pro",
+        "response_model": "deepseek-v4-pro",
+        "finish_reason": "stop",
+        "error_message": null,
+        "usage": {
+          "prompt_tokens": 19761,
+          "completion_tokens": 402,
+          "total_tokens": 20163,
+          "prompt_tokens_details": {
+            "cached_tokens": 512
+          },
+          "prompt_cache_hit_tokens": 512,
+          "prompt_cache_miss_tokens": 19249
+        }
+      },
+      {
+        "http_status": 200,
+        "request_model": "deepseek-v4-pro",
+        "response_model": "deepseek-v4-pro",
+        "finish_reason": "stop",
+        "error_message": null,
+        "usage": {
+          "prompt_tokens": 20519,
+          "completion_tokens": 36,
+          "total_tokens": 20555,
+          "prompt_tokens_details": {
+            "cached_tokens": 512
+          },
+          "prompt_cache_hit_tokens": 512,
+          "prompt_cache_miss_tokens": 20007
+        }
+      },
+      {
+        "http_status": 200,
+        "request_model": "deepseek-v4-pro",
+        "response_model": "deepseek-v4-pro",
+        "finish_reason": "stop",
+        "error_message": null,
+        "usage": {
+          "prompt_tokens": 19670,
+          "completion_tokens": 12,
+          "total_tokens": 19682,
+          "prompt_tokens_details": {
+            "cached_tokens": 0
+          },
+          "prompt_cache_hit_tokens": 0,
+          "prompt_cache_miss_tokens": 19670
+        }
+      },
+      {
+        "http_status": 200,
+        "request_model": "deepseek-v4-pro",
+        "response_model": "deepseek-v4-pro",
+        "finish_reason": "stop",
+        "error_message": null,
+        "usage": {
+          "prompt_tokens": 35309,
+          "completion_tokens": 25,
+          "total_tokens": 35334,
+          "prompt_tokens_details": {
+            "cached_tokens": 5120
+          },
+          "prompt_cache_hit_tokens": 5120,
+          "prompt_cache_miss_tokens": 30189
+        }
+      },
+      {
+        "http_status": 200,
+        "request_model": "deepseek-v4-pro",
+        "response_model": "deepseek-v4-pro",
+        "finish_reason": "stop",
+        "error_message": null,
+        "usage": {
+          "prompt_tokens": 12968,
+          "completion_tokens": 6,
+          "total_tokens": 12974,
+          "prompt_tokens_details": {
+            "cached_tokens": 1280
+          },
+          "prompt_cache_hit_tokens": 1280,
+          "prompt_cache_miss_tokens": 11688
+        }
+      },
+      {
+        "http_status": 200,
+        "request_model": "deepseek-v4-pro",
+        "response_model": "deepseek-v4-pro",
+        "finish_reason": "stop",
+        "error_message": null,
+        "usage": {
+          "prompt_tokens": 23518,
+          "completion_tokens": 402,
+          "total_tokens": 23920,
+          "prompt_tokens_details": {
+            "cached_tokens": 512
+          },
+          "prompt_cache_hit_tokens": 512,
+          "prompt_cache_miss_tokens": 23006
+        }
+      },
+      {
+        "http_status": 200,
+        "request_model": "deepseek-v4-pro",
+        "response_model": "deepseek-v4-pro",
+        "finish_reason": "stop",
+        "error_message": null,
+        "usage": {
+          "prompt_tokens": 24282,
+          "completion_tokens": 36,
+          "total_tokens": 24318,
+          "prompt_tokens_details": {
+            "cached_tokens": 512
+          },
+          "prompt_cache_hit_tokens": 512,
+          "prompt_cache_miss_tokens": 23770
+        }
+      },
+      {
+        "http_status": 200,
+        "request_model": "deepseek-v4-pro",
+        "response_model": "deepseek-v4-pro",
+        "finish_reason": "stop",
+        "error_message": null,
+        "usage": {
+          "prompt_tokens": 23433,
+          "completion_tokens": 12,
+          "total_tokens": 23445,
+          "prompt_tokens_details": {
+            "cached_tokens": 0
+          },
+          "prompt_cache_hit_tokens": 0,
+          "prompt_cache_miss_tokens": 23433
+        }
+      },
+      {
+        "http_status": 200,
+        "request_model": "deepseek-v4-pro",
+        "response_model": "deepseek-v4-pro",
+        "finish_reason": "stop",
+        "error_message": null,
+        "usage": {
+          "prompt_tokens": 42811,
+          "completion_tokens": 25,
+          "total_tokens": 42836,
+          "prompt_tokens_details": {
+            "cached_tokens": 12544
+          },
+          "prompt_cache_hit_tokens": 12544,
+          "prompt_cache_miss_tokens": 30267
+        }
+      },
+      {
+        "http_status": 200,
+        "request_model": "deepseek-v4-pro",
+        "response_model": "deepseek-v4-pro",
+        "finish_reason": "stop",
+        "error_message": null,
+        "usage": {
+          "prompt_tokens": 12968,
+          "completion_tokens": 6,
+          "total_tokens": 12974,
+          "prompt_tokens_details": {
+            "cached_tokens": 1280
+          },
+          "prompt_cache_hit_tokens": 1280,
+          "prompt_cache_miss_tokens": 11688
+        }
+      },
+      {
+        "http_status": 200,
+        "request_model": "deepseek-v4-pro",
+        "response_model": "deepseek-v4-pro",
+        "finish_reason": "stop",
+        "error_message": null,
+        "usage": {
+          "prompt_tokens": 27275,
+          "completion_tokens": 402,
+          "total_tokens": 27677,
+          "prompt_tokens_details": {
+            "cached_tokens": 512
+          },
+          "prompt_cache_hit_tokens": 512,
+          "prompt_cache_miss_tokens": 26763
+        }
+      },
+      {
+        "http_status": 200,
+        "request_model": "deepseek-v4-pro",
+        "response_model": "deepseek-v4-pro",
+        "finish_reason": "stop",
+        "error_message": null,
+        "usage": {
+          "prompt_tokens": 28045,
+          "completion_tokens": 67,
+          "total_tokens": 28112,
+          "prompt_tokens_details": {
+            "cached_tokens": 512
+          },
+          "prompt_cache_hit_tokens": 512,
+          "prompt_cache_miss_tokens": 27533
+        }
+      },
+      {
+        "http_status": 200,
+        "request_model": "deepseek-v4-pro",
+        "response_model": "deepseek-v4-pro",
+        "finish_reason": "stop",
+        "error_message": null,
+        "usage": {
+          "prompt_tokens": 27196,
+          "completion_tokens": 12,
+          "total_tokens": 27208,
+          "prompt_tokens_details": {
+            "cached_tokens": 0
+          },
+          "prompt_cache_hit_tokens": 0,
+          "prompt_cache_miss_tokens": 27196
+        }
+      },
+      {
+        "http_status": 200,
+        "request_model": "deepseek-v4-pro",
+        "response_model": "deepseek-v4-pro",
+        "finish_reason": "stop",
+        "error_message": null,
+        "usage": {
+          "prompt_tokens": 50305,
+          "completion_tokens": 25,
+          "total_tokens": 50330,
+          "prompt_tokens_details": {
+            "cached_tokens": 16256
+          },
+          "prompt_cache_hit_tokens": 16256,
+          "prompt_cache_miss_tokens": 34049
+        }
+      },
+      {
+        "http_status": 200,
+        "request_model": "deepseek-v4-pro",
+        "response_model": "deepseek-v4-pro",
+        "finish_reason": "stop",
+        "error_message": null,
+        "usage": {
+          "prompt_tokens": 12968,
+          "completion_tokens": 6,
+          "total_tokens": 12974,
+          "prompt_tokens_details": {
+            "cached_tokens": 1280
+          },
+          "prompt_cache_hit_tokens": 1280,
+          "prompt_cache_miss_tokens": 11688
+        }
+      },
+      {
+        "http_status": 402,
+        "request_model": "deepseek-v4-pro",
+        "response_model": null,
+        "finish_reason": null,
+        "error_message": "Insufficient Balance (request_id: 82269847-96ff-4180-9636-43d7aec78482)",
+        "usage": null
+      },
+      {
+        "http_status": 402,
+        "request_model": "deepseek-v4-pro",
+        "response_model": null,
+        "finish_reason": null,
+        "error_message": "Insufficient Balance (request_id: 97a84ef6-88c5-4e43-9856-f2edd4259525)",
+        "usage": null
+      },
+      {
+        "http_status": 402,
+        "request_model": "deepseek-v4-pro",
+        "response_model": null,
+        "finish_reason": null,
+        "error_message": "Insufficient Balance (request_id: 786d2da7-4a5c-4dc9-aeda-f0facb492bbc)",
+        "usage": null
+      },
+      {
+        "http_status": 402,
+        "request_model": "deepseek-v4-pro",
+        "response_model": null,
+        "finish_reason": null,
+        "error_message": "Insufficient Balance (request_id: fb496eb3-8761-4172-ace4-3d7d449ae501)",
+        "usage": null
+      }
+    ],
+    "offline_pg_diagnostic": {
+      "mechanism_only": true,
+      "real_pro_written_claims_read": true,
+      "actual_native_final_task_attempted": false,
+      "actual_semantic_reviewer_run": false,
+      "cloud_requests": 0,
+      "candidate_deployed": false,
+      "raw_original_source_bytes_unchanged": true,
+      "full_native_qualification": 0,
+      "outputs": [
+        {
+          "kind": "current_unmodified_backend",
+          "diagnostics": {
+            "stage": "filter",
+            "status": "all_filtered",
+            "fields": [],
+            "excluded_fields": [],
+            "records_read": 3,
+            "usable_records": 0,
+            "eligible_records": 0,
+            "selected_count": 0,
+            "semantic_status": "disabled",
+            "legacy_source_status": "not_needed",
+            "temporal_source_status": "available",
+            "source_receipt_pairs_requested": 3,
+            "source_receipt_pairs_returned": 3,
+            "source_authority_reader": "exact_claim_source_pairs",
+            "legacy_projected_ids": [],
+            "temporal_views": {
+              "fact": 0,
+              "asserted_state": 0,
+              "observation": 3
+            },
+            "field_presence": {
+              "name": false,
+              "origin": false,
+              "residence": false,
+              "major": false,
+              "workplace": false,
+              "study_stage": false
+            },
+            "ambiguous_fields": [],
+            "current_turn_shadowed_ids": []
+          },
+          "total": 3,
+          "items": []
+        },
+        {
+          "kind": "isolated_candidate",
+          "diagnostics": {
+            "stage": "selected",
+            "status": "selected",
+            "fields": [],
+            "excluded_fields": [],
+            "records_read": 3,
+            "usable_records": 3,
+            "eligible_records": 3,
+            "selected_count": 3,
+            "semantic_status": "disabled",
+            "legacy_source_status": "not_needed",
+            "temporal_source_status": "available",
+            "source_receipt_pairs_requested": 3,
+            "source_receipt_pairs_returned": 3,
+            "source_authority_reader": "exact_claim_source_pairs",
+            "legacy_projected_ids": [],
+            "temporal_views": {
+              "fact": 0,
+              "asserted_state": 0,
+              "observation": 3
+            },
+            "field_presence": {
+              "name": false,
+              "origin": false,
+              "residence": false,
+              "major": false,
+              "workplace": false,
+              "study_stage": false
+            },
+            "ambiguous_fields": [],
+            "current_turn_shadowed_ids": [],
+            "personal_time_tasks": [],
+            "covered_fields": [],
+            "missing_fields": []
+          },
+          "total": 3,
+          "items": [
+            {
+              "memory_id": "42",
+              "memory_type": "user_fact",
+              "content": "用户原话记录（时效未核实，不代表当前状态；记录于2026-10-02T21:59:37.672495+00:00）：[\"请记住我的本人办理偏好：我喜欢窗口受理。我不喜欢代办受理。我喜欢加速受理，但我只有完整表格已提交且身份核验通过才使用加速受理。\", \"我不喜欢代办受理\"]",
+              "importance": 0.5,
+              "evidence": [
+                "请记住我的本人办理偏好：我喜欢窗口受理。我不喜欢代办受理。我喜欢加速受理，但我只有完整表格已提交且身份核验通过才使用加速受理。",
+                "我不喜欢代办受理"
+              ],
+              "valid_from": "",
+              "valid_to": "",
+              "confidence": 0.98,
+              "status": "active",
+              "relation_type": "ADD",
+              "source_message_ids": [
+                "web:dfcce02142534d089a67711d6bcc69c6"
+              ],
+              "historical": false,
+              "memory_key": "preference_代办受理",
+              "qualifiers": [],
+              "temporal_mode": "observation",
+              "observed_at": "2026-10-02T21:59:37.672495+00:00",
+              "source_observation": false,
+              "complete_original_source": null,
+              "source_fragments": []
+            },
+            {
+              "memory_id": "41",
+              "memory_type": "user_fact",
+              "content": "用户原话记录（时效未核实，不代表当前状态；记录于2026-10-02T21:59:37.672495+00:00）：[\"请记住我的本人办理偏好：我喜欢窗口受理。我不喜欢代办受理。我喜欢加速受理，但我只有完整表格已提交且身份核验通过才使用加速受理。\", \"我喜欢加速受理，但我只有完整表格已提交且身份核验通过才使用加速受理\"]",
+              "importance": 0.6,
+              "evidence": [
+                "请记住我的本人办理偏好：我喜欢窗口受理。我不喜欢代办受理。我喜欢加速受理，但我只有完整表格已提交且身份核验通过才使用加速受理。",
+                "我喜欢加速受理，但我只有完整表格已提交且身份核验通过才使用加速受理"
+              ],
+              "valid_from": "",
+              "valid_to": "",
+              "confidence": 0.97,
+              "status": "active",
+              "relation_type": "ADD",
+              "source_message_ids": [
+                "web:dfcce02142534d089a67711d6bcc69c6"
+              ],
+              "historical": false,
+              "memory_key": "preference_加速受理",
+              "qualifiers": [
+                [
+                  "condition",
+                  "完整表格已提交且身份核验通过"
+                ]
+              ],
+              "temporal_mode": "observation",
+              "observed_at": "2026-10-02T21:59:37.672495+00:00",
+              "source_observation": false,
+              "complete_original_source": null,
+              "source_fragments": []
+            },
+            {
+              "memory_id": "40",
+              "memory_type": "user_fact",
+              "content": "用户原话记录（时效未核实，不代表当前状态；记录于2026-10-02T21:59:37.672495+00:00）：[\"请记住我的本人办理偏好：我喜欢窗口受理。我不喜欢代办受理。我喜欢加速受理，但我只有完整表格已提交且身份核验通过才使用加速受理。\", \"我喜欢窗口受理\"]",
+              "importance": 0.6,
+              "evidence": [
+                "请记住我的本人办理偏好：我喜欢窗口受理。我不喜欢代办受理。我喜欢加速受理，但我只有完整表格已提交且身份核验通过才使用加速受理。",
+                "我喜欢窗口受理"
+              ],
+              "valid_from": "",
+              "valid_to": "",
+              "confidence": 0.98,
+              "status": "active",
+              "relation_type": "ADD",
+              "source_message_ids": [
+                "web:dfcce02142534d089a67711d6bcc69c6"
+              ],
+              "historical": false,
+              "memory_key": "preference_窗口受理",
+              "qualifiers": [],
+              "temporal_mode": "observation",
+              "observed_at": "2026-10-02T21:59:37.672495+00:00",
+              "source_observation": false,
+              "complete_original_source": null,
+              "source_fragments": []
+            }
+          ]
+        }
+      ],
+      "records": [
+        {
+          "id": 42,
+          "character_id": "tsukiyashiro_kisaki",
+          "platform": "web",
+          "adapter": "web-character",
+          "sender_id": "6",
+          "conversation_type": "private",
+          "conversation_id": "6",
+          "scope_level": "conversation",
+          "memory_type": "user_fact",
+          "memory_key": "preference_代办受理",
+          "revision": 1,
+          "relation_type": "ADD",
+          "status": "active",
+          "parent_memory_id": null,
+          "supersedes_memory_id": null,
+          "content": "用户不喜欢代办受理。",
+          "importance": 0.5,
+          "confidence": 0.98,
+          "source_message_id": "web:dfcce02142534d089a67711d6bcc69c6",
+          "source_message_ids_json": "[\"web:dfcce02142534d089a67711d6bcc69c6\"]",
+          "evidence_json": "[\"我不喜欢代办受理\"]",
+          "metadata_json": "{\"qualifiers\": {}, \"target_memory_key\": \"\", \"write_mode\": \"hot\", \"feedback_target_ids\": [], \"temporal_provenance\": {\"version\": 1, \"producer\": \"semantic_memory\", \"observed_at\": \"2026-10-02T21:59:37.672495+00:00\", \"validity_authority\": \"unspecified\", \"proposed_bounds\": {}, \"interval_shape\": \"unspecified\", \"expression\": null}, \"attributed_to\": \"user\"}",
+          "valid_from": null,
+          "valid_to": null,
+          "observed_at": "2026-10-02T21:59:37.672495+00:00",
+          "created_at": "2026-10-03T05:59:42.347936",
+          "updated_at": "2026-10-03T05:59:42.347936",
+          "source_message_ids": [
+            "web:dfcce02142534d089a67711d6bcc69c6"
+          ],
+          "evidence": [
+            "我不喜欢代办受理"
+          ],
+          "metadata": {
+            "qualifiers": {},
+            "target_memory_key": "",
+            "write_mode": "hot",
+            "feedback_target_ids": [],
+            "temporal_provenance": {
+              "version": 1,
+              "producer": "semantic_memory",
+              "observed_at": "2026-10-02T21:59:37.672495+00:00",
+              "validity_authority": "unspecified",
+              "proposed_bounds": {},
+              "interval_shape": "unspecified",
+              "expression": null
+            },
+            "attributed_to": "user"
+          },
+          "attributed_to": "user",
+          "qualifiers": {}
+        },
+        {
+          "id": 41,
+          "character_id": "tsukiyashiro_kisaki",
+          "platform": "web",
+          "adapter": "web-character",
+          "sender_id": "6",
+          "conversation_type": "private",
+          "conversation_id": "6",
+          "scope_level": "conversation",
+          "memory_type": "user_fact",
+          "memory_key": "preference_加速受理",
+          "revision": 1,
+          "relation_type": "ADD",
+          "status": "active",
+          "parent_memory_id": null,
+          "supersedes_memory_id": null,
+          "content": "用户喜欢加速受理，但只有在完整表格已提交且身份核验通过时才使用加速受理。",
+          "importance": 0.6,
+          "confidence": 0.97,
+          "source_message_id": "web:dfcce02142534d089a67711d6bcc69c6",
+          "source_message_ids_json": "[\"web:dfcce02142534d089a67711d6bcc69c6\"]",
+          "evidence_json": "[\"我喜欢加速受理，但我只有完整表格已提交且身份核验通过才使用加速受理\"]",
+          "metadata_json": "{\"qualifiers\": {\"condition\": \"完整表格已提交且身份核验通过\"}, \"target_memory_key\": \"\", \"write_mode\": \"hot\", \"feedback_target_ids\": [], \"temporal_provenance\": {\"version\": 1, \"producer\": \"semantic_memory\", \"observed_at\": \"2026-10-02T21:59:37.672495+00:00\", \"validity_authority\": \"unspecified\", \"proposed_bounds\": {}, \"interval_shape\": \"unspecified\", \"expression\": null}, \"attributed_to\": \"user\"}",
+          "valid_from": null,
+          "valid_to": null,
+          "observed_at": "2026-10-02T21:59:37.672495+00:00",
+          "created_at": "2026-10-03T05:59:42.333465",
+          "updated_at": "2026-10-03T05:59:42.333465",
+          "source_message_ids": [
+            "web:dfcce02142534d089a67711d6bcc69c6"
+          ],
+          "evidence": [
+            "我喜欢加速受理，但我只有完整表格已提交且身份核验通过才使用加速受理"
+          ],
+          "metadata": {
+            "qualifiers": {
+              "condition": "完整表格已提交且身份核验通过"
+            },
+            "target_memory_key": "",
+            "write_mode": "hot",
+            "feedback_target_ids": [],
+            "temporal_provenance": {
+              "version": 1,
+              "producer": "semantic_memory",
+              "observed_at": "2026-10-02T21:59:37.672495+00:00",
+              "validity_authority": "unspecified",
+              "proposed_bounds": {},
+              "interval_shape": "unspecified",
+              "expression": null
+            },
+            "attributed_to": "user"
+          },
+          "attributed_to": "user",
+          "qualifiers": {
+            "condition": "完整表格已提交且身份核验通过"
+          }
+        },
+        {
+          "id": 40,
+          "character_id": "tsukiyashiro_kisaki",
+          "platform": "web",
+          "adapter": "web-character",
+          "sender_id": "6",
+          "conversation_type": "private",
+          "conversation_id": "6",
+          "scope_level": "conversation",
+          "memory_type": "user_fact",
+          "memory_key": "preference_窗口受理",
+          "revision": 1,
+          "relation_type": "ADD",
+          "status": "active",
+          "parent_memory_id": null,
+          "supersedes_memory_id": null,
+          "content": "用户喜欢窗口受理。",
+          "importance": 0.6,
+          "confidence": 0.98,
+          "source_message_id": "web:dfcce02142534d089a67711d6bcc69c6",
+          "source_message_ids_json": "[\"web:dfcce02142534d089a67711d6bcc69c6\"]",
+          "evidence_json": "[\"我喜欢窗口受理\"]",
+          "metadata_json": "{\"qualifiers\": {}, \"target_memory_key\": \"\", \"write_mode\": \"hot\", \"feedback_target_ids\": [], \"temporal_provenance\": {\"version\": 1, \"producer\": \"semantic_memory\", \"observed_at\": \"2026-10-02T21:59:37.672495+00:00\", \"validity_authority\": \"unspecified\", \"proposed_bounds\": {}, \"interval_shape\": \"unspecified\", \"expression\": null}, \"attributed_to\": \"user\"}",
+          "valid_from": null,
+          "valid_to": null,
+          "observed_at": "2026-10-02T21:59:37.672495+00:00",
+          "created_at": "2026-10-03T05:59:42.314056",
+          "updated_at": "2026-10-03T05:59:42.314056",
+          "source_message_ids": [
+            "web:dfcce02142534d089a67711d6bcc69c6"
+          ],
+          "evidence": [
+            "我喜欢窗口受理"
+          ],
+          "metadata": {
+            "qualifiers": {},
+            "target_memory_key": "",
+            "write_mode": "hot",
+            "feedback_target_ids": [],
+            "temporal_provenance": {
+              "version": 1,
+              "producer": "semantic_memory",
+              "observed_at": "2026-10-02T21:59:37.672495+00:00",
+              "validity_authority": "unspecified",
+              "proposed_bounds": {},
+              "interval_shape": "unspecified",
+              "expression": null
+            },
+            "attributed_to": "user"
+          },
+          "attributed_to": "user",
+          "qualifiers": {}
+        }
+      ],
+      "candidate_sha256": "b1835b8bf4774f97cede24a1ee7d319ee2aa46457387a75b5ba79f8dbd695d16"
+    },
+    "resume_plan": {
+      "checks": {
+        "original_task_terminal": true,
+        "actual_provider_balance_error_preserved": true,
+        "successful_native_seed_and_seven_distinct_bridge_turns": true,
+        "only_two_unfinished_bridge_indices": true,
+        "main_query_not_yet_attempted_or_answered": true,
+        "actual_snapshot_hash_bound": true,
+        "real_private_claims_and_full_own_source_retained": true,
+        "eight_actual_completed_native_messages_retained": true,
+        "current_completed_rows_still_exact_snapshot_rows": true,
+        "official_vector_snapshot_present": true
+      },
+      "passed": 10,
+      "total": 10,
+      "cloud_requests": 0,
+      "provider_access_restored": false,
+      "automatic_start": false,
+      "candidate_deployed": false,
+      "start_bridge_index": 7,
+      "remaining_bridge_indices": [
+        7,
+        8
+      ],
+      "actual_main_query_pending": true,
+      "successful_steps_to_replay": 0,
+      "full_native_case_qualified": 0,
+      "resume_command_after_external_resource_restored": "PYTHONPATH=backend <runtime>/venv/bin/python backend/evaluation/mixed_subject_history_probe.py --phase /home/boot/lhm/multipersonal-runtime/backups/backend-chain-20261001/stage78 --variant native-pg-resumed --resume-provider-block --provider-access-restored --api-key-file <runtime>/config/deepseek-evaluation-api-key.txt",
+      "failed_path_seed_after_resumed_main": "Use --reuse-verified-seed --seed-variant native-pg-resumed, from its actual before-question dump, never from a terminal answered state."
+    },
+    "candidate_unit_test_summary": {
+      "new": 19,
+      "directly_affected_old": 1,
+      "unique": 20,
+      "executions": 20,
+      "passed": 20,
+      "scope": "isolated_candidate_mechanism_only_not_running_backend_or_model_qualification"
+    },
+    "candidate_patch_only_in_ignored_server_phase": [
+      [
+        "'user' / 'non_user' 列表",
+        "'user' / 'non_user' / 'deferred' 列表"
+      ],
+      [
+        "                     or _PERSONAL_REPORT_TOPIC.fullmatch(report_topic))):\n            continue",
+        "                     or _PERSONAL_REPORT_TOPIC.fullmatch(report_topic))):\n            # Retain this independent scoped read when another subtask asks\n            # about a different owner. It still grants no self-ownership or\n            # positive intent; the authorized evidence reviewer decides use.\n            subjects.append(\"deferred\")\n            continue"
+      ],
+      [
+        "name_user = name_other = False",
+        "name_user = name_other = name_deferred = False"
+      ],
+      [
+        "pref_user = pref_other = False",
+        "pref_user = pref_other = pref_deferred = False"
+      ],
+      [
+        "            if subject == \"user\":\n                name_user = True\n            else:\n                name_other = True",
+        "            if subject == \"user\":\n                name_user = True\n            elif subject == \"deferred\":\n                name_deferred = True\n            else:\n                name_other = True"
+      ],
+      [
+        "            if subject == \"user\":\n                pref_user = True\n            else:\n                pref_other = True",
+        "            if subject == \"user\":\n                pref_user = True\n            elif subject == \"deferred\":\n                pref_deferred = True\n            else:\n                pref_other = True"
+      ],
+      [
+        "suppress_name=name_other and not name_user,",
+        "suppress_name=name_other and not name_user and not name_deferred,"
+      ],
+      [
+        "suppress_preference=pref_other and not pref_user,",
+        "suppress_preference=pref_other and not pref_user and not pref_deferred,"
+      ]
+    ],
+    "provider_block_snapshot_sha256": "e2f5fe9896eae0d3dd08ccb75e2aafba3db9ef4ea6d06e5a90ca46c0bd6251bc",
+    "input_normalization": "Only terminal outer newline stripped by normal authenticated API; all seven directory messages otherwise byte-identical and complete."
+  }
+}
