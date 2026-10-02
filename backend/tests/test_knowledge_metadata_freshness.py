@@ -133,12 +133,12 @@ async def test_generic_generation_checks_freshness_before_cache_or_correction(mo
         return bundle
 
     monkeypatch.setattr(knowledge, "_ensure_vector_index", ready)
-    monkeypatch.setattr(rag_module, "get_rag_helper", lambda: SimpleNamespace(retrieve_with_citations=generic))
+    monkeypatch.setattr(rag_module, "get_rag_helper", lambda: SimpleNamespace(retrieve_with_citations=generic, build_citations=lambda rows: rag_module.RAGHelper.build_citations(None, rows)))
     monkeypatch.setattr(
         corrective_module, "get_corrective_rag", lambda: SimpleNamespace(retrieve_with_correction=correction)
     )
     actual = await generate._retrieve_rag_bundle("核对规则", 3, {"knowledge_base_id": 7})
-    assert actual is bundle and calls == ["ensure", "corrective" if corrective else "generic"]
+    assert actual["results"] == bundle["results"] and actual["source_coverage"] and calls == ["ensure", "corrective" if corrective else "generic"]
 
 
 async def test_unready_index_never_returns_stale_cached_sources(monkeypatch):

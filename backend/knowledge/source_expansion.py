@@ -86,6 +86,12 @@ def expand_source_context(bundle, vector_db, *, expected_generation, source_budg
                     "normalized_score": 0.0,
                 }
             )
-        if not added:
-            return bundle
-        return {**bundle, "results": [*anchors, *added], "source_context_added": len(added)}
+        results = [*anchors, *added]
+        coverage = []
+        for group, supporting in parents.items():
+            indexed_ids = [identity for identity, _ in supporting]
+            indexed_ids.extend(record["id"] for _, _, _, record, candidate_group in candidates if candidate_group == group)
+            retrieved_ids = [r["id"] for r in results if r["id"] in set(indexed_ids)]
+            coverage.append({"source_id": f"doc_{group[0]}", "source_title": group[2],
+                             "indexed_document_ids": indexed_ids, "retrieved_document_ids": retrieved_ids})
+        return {**bundle, "results": results, "source_context_added": len(added), "source_coverage": tuple(coverage)}

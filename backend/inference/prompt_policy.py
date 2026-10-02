@@ -4,7 +4,7 @@ import re
 import unicodedata
 from html import escape
 
-PROMPT_POLICY_VERSION = "3.3.1"
+PROMPT_POLICY_VERSION = "3.3.2"
 
 GLOBAL_FACTUAL_SAFETY_PROMPT = """【事实与安全边界】
 - 涉及人物关系、既有经历、剧情事件、作品设定或其他可核验事实时，以可靠依据为准；证据不足应明确保留。日常闲聊和不改变核心事实的假设场景可以自然回应。
@@ -99,6 +99,7 @@ def build_grounded_user_message(
     conversation_context: str = "",
     memory_query_result: str = "",
     speaker: str = "",
+    retrieval_coverage: str = "",
 ) -> str:
     """Attach escaped speaker, memory and retrieval data with explicit trust boundaries.
 
@@ -111,7 +112,7 @@ def build_grounded_user_message(
     结构字符，语义级注入内容（如"忽略以上规则"）仍会以系统区权威
     出现。因此 3.3.0 起整体迁入用户消息的不可信参考区。
     """
-    if not any((evidence, memory_context, episodic_context, conversation_context, memory_query_result, speaker)):
+    if not any((evidence, memory_context, episodic_context, conversation_context, memory_query_result, speaker, retrieval_coverage)):
         return message
     parts: list[str] = []
     if speaker:
@@ -159,6 +160,12 @@ def build_grounded_user_message(
             '<retrieved_evidence trust="untrusted" purpose="factual_grounding">\n'
             f"{bounded_evidence}\n"
             "</retrieved_evidence>"
+        )
+    if retrieval_coverage:
+        parts.append(
+            '<retrieval_coverage source="application" scope="retrieved_material">\n'
+            f"{escape(retrieval_coverage, quote=False)}\n"
+            "</retrieval_coverage>"
         )
     escaped_message = escape(message, quote=False)
     parts.append("<user_query>\n" f"{escaped_message}\n" "</user_query>")

@@ -103,6 +103,8 @@ class RetrievalResult:
     evidence_packets: tuple[Mapping[str, Any], ...] = ()
     identity_task: Mapping[str, str] = field(default_factory=dict)
     identity_subtask: Mapping[str, str] = field(default_factory=dict)
+    source_coverage: tuple[Mapping[str, Any], ...] = ()
+    packet_coverage: Mapping[str, Any] = field(default_factory=dict)
 
     @property
     def has_evidence(self) -> bool:
@@ -302,6 +304,10 @@ def _system_prompt(request: GenerationRequest) -> str:
         prompt = "\n\n".join(part for part in (prompt, CHARACTER_ABSTENTION_POLICY) if part)
         if request.retrieval.reason == "retrieval_unavailable":
             prompt += "\n本轮依据暂时无法核实；这不代表知识库中不存在答案。请自然表达暂时不能确认。"
+    if request.apply_prompt_policy and (request.retrieval.source_coverage or request.retrieval.packet_coverage):
+        from inference.evidence_coverage import SOURCE_COVERAGE_POLICY
+
+        prompt += '\n\n' + SOURCE_COVERAGE_POLICY
     if request.retrieval.has_evidence and request.retrieval.answer_citations_bound:
         from inference.answer_citations import citation_output_policy
 
@@ -320,6 +326,7 @@ def build_generation_request(request: GenerationRequest) -> GenerationPlan:
 def _build_generation_request_core(request: GenerationRequest) -> GenerationPlan:
     if request.retrieval.has_evidence and request.retrieval.evidence_packets:
         return _build_packet_budgeted_request(request)
+    from inference.evidence_coverage import render_coverage
     from inference.memory_response import memory_query_result
 
     system_prompt = _system_prompt(request)
@@ -332,6 +339,7 @@ def _build_generation_request_core(request: GenerationRequest) -> GenerationPlan
             request.message,
             request.retrieval.evidence if request.retrieval.has_evidence else "",
             max_chars=request.evidence_max_chars,
+            retrieval_coverage=render_coverage(request.retrieval),
             episodic_context=getattr(request.character_context, 'episodic_reference_context', ''),
             conversation_context=getattr(request.character_context, 'conversation_reference_context', ''),
             # 长期记忆只进入用户消息的不可信参考区，绝不进入系统提示词。
@@ -387,6 +395,8 @@ def _build_generation_request_core(request: GenerationRequest) -> GenerationPlan
 
 def _build_packet_budgeted_request(request: GenerationRequest) -> GenerationPlan:
     """Use the actual fixed input/output budget, never split a source packet."""
+    from inference.evidence_coverage import packet_coverage, settle_source_coverage
+
     accepted = []
     accepted_ids: set[str] = set()
     best = None
@@ -409,6 +419,8 @@ def _build_packet_budgeted_request(request: GenerationRequest) -> GenerationPlan
             continue
         candidate_ids = accepted_ids | {str(i) for i in ids}
         retrieval = replace(request.retrieval, evidence=evidence, evidence_packets=(),
+                            source_coverage=settle_source_coverage(request.retrieval.source_coverage, candidate_ids),
+                            packet_coverage=packet_coverage(len(request.retrieval.evidence_packets), len(accepted) + 1),
                             citations=tuple(c for c in request.retrieval.citations if str(c.get('id')) in candidate_ids))
         try:
             plan = _build_generation_request_core(replace(request, retrieval=retrieval))
@@ -426,6 +438,8 @@ def _build_packet_budgeted_request(request: GenerationRequest) -> GenerationPlan
         return replace(best, retrieval=replace(best.retrieval, evidence_packets=tuple(accepted)))
     # Unknown evidence is not a license to generate from rejected summaries.
     retrieval = replace(request.retrieval, status='character_abstention', evidence='', evidence_packets=(),
+                        source_coverage=settle_source_coverage(request.retrieval.source_coverage, set()),
+                        packet_coverage=packet_coverage(len(request.retrieval.evidence_packets), 0),
                         citations=(), reason='evidence_budget_exhausted')
     return _build_generation_request_core(replace(request, retrieval=retrieval))
 

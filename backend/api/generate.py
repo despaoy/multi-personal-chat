@@ -1434,6 +1434,7 @@ async def _generate_with_retrieval(
                         reason="" if rag_context else "evidence_budget_exhausted",
                         evidence=rag_context,
                         evidence_packets=evidence_packets,
+                        source_coverage=tuple(bundle.get("source_coverage") or ()),
                         identity_task=bundle.get("identity_task") or {},
                         identity_subtask=bundle.get("identity_subtask") or {},
                         documents=tuple(bundle.get("results", [])),
@@ -1516,6 +1517,10 @@ async def _generate_with_retrieval(
         rag_meta["citations"] = list(generation.plan.retrieval.citations) if citations_enabled else []
         rag_meta["abstained"] = generation.plan.retrieval.status == "character_abstention"
         rag_meta["answerMode"] = "abstention" if rag_meta["abstained"] else "grounded_answer"
+    from inference.evidence_coverage import is_partial_coverage
+
+    if is_partial_coverage(generation.plan.retrieval):
+        rag_meta["warnings"] = list(dict.fromkeys([*(rag_meta.get("warnings") or []), "partial_source_context"]))
     if generation.plan.retrieval.answer_citations_bound:
         rag_meta["citations"] = list(generation.response_citations) if citations_enabled else []
     if not getattr(generation, "model_invoked", True):
