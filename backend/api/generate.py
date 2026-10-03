@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from services.chat_generation import ChatGenerationService
 
 # C-F1 fix: failover_mgr 在 lifespan 中通过 app.config.failover_mgr = ...
 # 赋值，导入时绑定到 None 会永远看不到实例。改为动态访问模块属性。
@@ -41,7 +42,6 @@ from inference.provider_context import get_provider_context_budget
 from infra.concurrency_control import InferenceQueueFull, RateLimitExceeded, inference_runtime
 from infra.observability import increment, log_event, set_consecutive
 from infra.security_utils import strip_control_chars
-from services.chat_generation import ChatGenerationService
 
 
 def _failover_mgr():
@@ -1220,7 +1220,12 @@ async def _retrieve_rag_bundle(query: str, top_k: int, filters: dict[str, Any] |
     """Retrieve curated character knowledge, then use the generic KB fallback."""
 
     def retrieve() -> dict[str, Any]:
-        if not filters:
+        from knowledge.source_expansion import requested_document_titles
+
+        # An explicit named-document read owns its evidence targets. Incidental
+        # character names must not replace those sources with curated lore.
+        # Ordinary character questions retain the strict domain availability gate.
+        if not filters and not requested_document_titles(query):
             from knowledge.multiscale_rag.runtime import get_multiscale_rag_service
             from knowledge.retrieval_core.query import QueryAnalyzer
 
