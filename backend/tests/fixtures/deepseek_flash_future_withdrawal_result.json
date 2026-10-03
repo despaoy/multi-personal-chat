@@ -1,0 +1,373 @@
+{
+  "synthetic_only": true,
+  "baseline": "1335946c9cc7a7c37057ac9607c0ca2288a9b88f",
+  "model": "deepseek-flash",
+  "case_kind": "source_dated_future_withdrawal_and_erasure_preserve_current_claim_and_complete_source",
+  "public_documents": [
+    {
+      "title": "绿泽窗口受理",
+      "category": "办理",
+      "content": "完整公共办理说明正文起点。方案绿泽窗口受理，编号LZ-781。费用6元，办理时限16小时。全部办理条件：完整表格与身份页齐全。全部例外：身份页缺失须暂停，预约不豁免身份核验。此资料不代表任何人的喜好或选择，满足必要条件不等于实际办理。完整公共办理说明正文终点。"
+    },
+    {
+      "title": "绿泽代办受理",
+      "category": "办理",
+      "content": "完整公共办理说明正文起点。方案绿泽代办受理，编号LZ-782。费用12元，办理时限30小时。全部办理条件：完整表格与代办授权齐全。全部例外：授权过期须重新取得有效授权，费用支付不能替代授权。此资料不代表任何人的喜好或选择，满足必要条件不等于实际办理。完整公共办理说明正文终点。"
+    },
+    {
+      "title": "绿泽加速受理",
+      "category": "办理",
+      "content": "完整公共办理说明正文起点。方案绿泽加速受理，编号LZ-783。费用18元，办理时限5小时。全部办理条件：完整表格且身份核验通过。全部例外：核验失败须退回普通流程，预约不豁免核验。此资料不代表任何人的喜好或选择，满足必要条件不等于实际办理。完整公共办理说明正文终点。"
+    },
+    {
+      "title": "绿泽寄件受理",
+      "category": "办理",
+      "content": "完整公共办理说明正文起点。方案绿泽寄件受理，编号LZ-784。费用9元，办理时限48小时。全部办理条件：完整表格与可投递回寄地址齐全。全部例外：地址无法投递须暂停，附件不全须补件。此资料不代表任何人的喜好或选择，满足必要条件不等于实际办理。完整公共办理说明正文终点。"
+    },
+    {
+      "title": "绿泽角色本人偏好",
+      "category": "办理",
+      "content": "绿泽合成办理场景的角色本人偏好记录。记录编号LZ-RP-785。事实主体：角色月社妃，角色标识tsukiyashiro_kisaki；不是当前用户，也不是对所有现实或原作情境的偏好结论。本记录适用范围仅为本次绿泽合成办理场景，在该场景内当前有效。修订范围：上一版本记录角色月社妃最喜欢寄件受理，这现在仅是历史偏好，不是当前结论。本次修订后的当前记录明确：角色月社妃在四个绿泽受理方案中最喜欢加速受理，窗口、代办和寄件不是她在本场景的最喜欢方案。这项当前喜好不是她已实际选择或使用加速的证明；本记录没有提供角色实际操作事实。本记录没有提供当前用户对寄件的喜好，不能证明用户喜欢或不喜欢寄件，也不能证明用户历史上从未表达过。这是完整的场景事实记录，不含缺页或外部引用。"
+    }
+  ],
+  "private_inputs_kept_complete_in_restricted_server_artifacts": true,
+  "required_private_source_indices": [
+    2
+  ],
+  "all_three_private_originals_retained": true,
+  "expected": {
+    "present_claim_not_retracted_or_physically_deleted_early": true,
+    "future_only_erasure_full_source_retained": true,
+    "future_source_only_deletion_not_authorized_now": true,
+    "whole_request_future_authority_survives_omitted_date_in_proposal_evidence": true,
+    "independent_current_erasure_not_postponed": true,
+    "quoted_or_unresolved_future_start_not_authority": true,
+    "source_time_not_model_time": true,
+    "no_automatic_future_execution_claim": true
+  },
+  "result": {
+    "checks": {
+      "withdraw:native_http200": true,
+      "withdraw:one_primary_and_five_cloud": true,
+      "withdraw:original_five_claims_exact": true,
+      "withdraw:current44_active_without_end": true,
+      "withdraw:all_original_sources_exact": true,
+      "withdraw:private_three_outside_actual_history": true,
+      "withdraw:required_current_original_complete": true,
+      "withdraw:requested_public_originals_complete": true,
+      "withdraw:natural_writer_add_not_coerced": true,
+      "withdraw:new_intent_only_no_target_retirement": true,
+      "withdraw:model_lifetime_unverified": true,
+      "withdraw:source_fence_not_advanced": true,
+      "withdraw:writer_saved_once_no_erasure": true,
+      "withdraw:reply_current_condition_complete": true,
+      "withdraw:reply_public_and_exceptions": true,
+      "withdraw:actual_full_source_and_read_view": true,
+      "forget:native_http200": true,
+      "forget:one_primary_and_five_cloud": true,
+      "forget:original_five_claims_exact": true,
+      "forget:current44_active_without_end": true,
+      "forget:all_original_sources_exact": true,
+      "forget:private_three_outside_actual_history": true,
+      "forget:required_current_original_complete": true,
+      "forget:requested_public_originals_complete": true,
+      "forget:natural_writer_add_not_coerced": true,
+      "forget:new_intent_only_no_target_retirement": true,
+      "forget:model_lifetime_unverified": true,
+      "forget:source_fence_not_advanced": true,
+      "forget:writer_saved_once_no_erasure": true,
+      "forget:reply_current_condition_complete": true,
+      "forget:reply_public_and_exceptions": true,
+      "initial_erasure_http200_but_complete_source_failed": true,
+      "forget-next:native_http200": true,
+      "forget-next:one_primary_and_five_cloud": true,
+      "forget-next:original_five_claims_exact": true,
+      "forget-next:current44_active_without_end": true,
+      "forget-next:all_original_sources_exact": true,
+      "forget-next:private_three_outside_actual_history": true,
+      "forget-next:required_current_original_complete": true,
+      "forget-next:requested_public_originals_complete": true,
+      "forget-next:natural_writer_add_not_coerced": true,
+      "forget-next:new_intent_only_no_target_retirement": true,
+      "forget-next:model_lifetime_unverified": true,
+      "forget-next:source_fence_not_advanced": true,
+      "forget-next:writer_saved_once_no_erasure": true,
+      "forget-next:reply_current_condition_complete": true,
+      "forget-next:reply_public_and_exceptions": true,
+      "forget-next:actual_full_source_and_read_view": true,
+      "fixed_future_source_policy_and_receipt": true,
+      "fixed_reply_does_not_claim_deletion_completed": true,
+      "initial_four_mutation_nodes_failed": true,
+      "source_entry_four_new_nodes_failed": true,
+      "first_nine_new_nodes_passed_once": true,
+      "fifteen_source_nodes_passed_once": true,
+      "static_zero": true,
+      "failed_source_case_only_retried": true,
+      "same_complete_failed_question": true,
+      "no_native_guard_branch_claimed": true,
+      "all_actual_calls_accounted": true
+    },
+    "passed": 59,
+    "total": 59,
+    "cases": [
+      {
+        "case": "withdraw",
+        "actual_calls": 5,
+        "http_status": 200,
+        "primary_calls": 1,
+        "natural_proposal_operation": "ADD",
+        "persisted_relation": "ADD",
+        "seed_records": 5,
+        "new_observation_id": 45,
+        "source_capture": "recorded",
+        "full_source_retained": true,
+        "source_state": "recorded",
+        "source_chars": 182,
+        "question_chars": 182,
+        "question_sha256": "45ff234ff4072ee0b867be4e4535491c8ddcc77b36ff7000af7ca5cb82b9ae3a",
+        "reply_sha256": "992e9a73f802c0e8e26b6e2fceed49e84933cbc9e029a5c993e7f2cf3b9af870",
+        "actual_recent_messages": 20,
+        "observed_private_presence": [
+          true,
+          false,
+          true
+        ],
+        "current_claim_unchanged": true
+      },
+      {
+        "case": "forget",
+        "actual_calls": 5,
+        "http_status": 200,
+        "primary_calls": 1,
+        "natural_proposal_operation": "ADD",
+        "persisted_relation": "ADD",
+        "seed_records": 5,
+        "new_observation_id": 45,
+        "source_capture": "erase_request",
+        "full_source_retained": false,
+        "source_state": "pending",
+        "source_chars": 0,
+        "question_chars": 196,
+        "question_sha256": "bd0dd11c72afa4dc6ee3f06b4e09014d276013c25785a317213142c93ba8d8e0",
+        "reply_sha256": "f2f98b65c96c3a3098fc0cea83865fb7354c04639bcefca543571db3b77035cf",
+        "actual_recent_messages": 20,
+        "observed_private_presence": [
+          false,
+          false,
+          true
+        ],
+        "current_claim_unchanged": true
+      },
+      {
+        "case": "forget-next",
+        "actual_calls": 5,
+        "http_status": 200,
+        "primary_calls": 1,
+        "natural_proposal_operation": "ADD",
+        "persisted_relation": "ADD",
+        "seed_records": 5,
+        "new_observation_id": 45,
+        "source_capture": "recorded",
+        "full_source_retained": true,
+        "source_state": "recorded",
+        "source_chars": 196,
+        "question_chars": 196,
+        "question_sha256": "bd0dd11c72afa4dc6ee3f06b4e09014d276013c25785a317213142c93ba8d8e0",
+        "reply_sha256": "307557868fd04d989fe2fe29aa121473016418dc8bf14a8a530810c2effb351f",
+        "actual_recent_messages": 20,
+        "observed_private_presence": [
+          false,
+          false,
+          true
+        ],
+        "current_claim_unchanged": true
+      }
+    ],
+    "actual_calls": 15,
+    "http200": 15,
+    "native_receipts_success": 3,
+    "actual_primary_calls": 3,
+    "business_source_failure_retained": 1,
+    "affected_unique_test_nodes": 24,
+    "mutation_nodes": 9,
+    "source_nodes": 15,
+    "passed_nodes_repeated": 0,
+    "passed_paid_cases_replayed": 0,
+    "estimated_cost_cny": "0.36486880",
+    "variant_costs": {
+      "withdraw": "0.13661616",
+      "forget": "0.20839464",
+      "forget-next": "0.01985800"
+    },
+    "receipts": [
+      {
+        "variant": "native-pg-withdraw",
+        "index": 0,
+        "http_status": 200,
+        "model": "deepseek-flash",
+        "prompt_tokens": 40013,
+        "completion_tokens": 117,
+        "cached_tokens": 384,
+        "estimated_cny": "0.04010468"
+      },
+      {
+        "variant": "native-pg-withdraw",
+        "index": 1,
+        "http_status": 200,
+        "model": "deepseek-flash",
+        "prompt_tokens": 41717,
+        "completion_tokens": 51,
+        "cached_tokens": 384,
+        "estimated_cny": "0.04154468"
+      },
+      {
+        "variant": "native-pg-withdraw",
+        "index": 2,
+        "http_status": 200,
+        "model": "deepseek-flash",
+        "prompt_tokens": 39999,
+        "completion_tokens": 15,
+        "cached_tokens": 0,
+        "estimated_cny": "0.040059"
+      },
+      {
+        "variant": "native-pg-withdraw",
+        "index": 3,
+        "http_status": 200,
+        "model": "deepseek-flash",
+        "prompt_tokens": 42797,
+        "completion_tokens": 194,
+        "cached_tokens": 40832,
+        "estimated_cny": "0.00355764"
+      },
+      {
+        "variant": "native-pg-withdraw",
+        "index": 4,
+        "http_status": 200,
+        "model": "deepseek-flash",
+        "prompt_tokens": 11830,
+        "completion_tokens": 225,
+        "cached_tokens": 1408,
+        "estimated_cny": "0.01135016"
+      },
+      {
+        "variant": "native-pg-forget",
+        "index": 0,
+        "http_status": 200,
+        "model": "deepseek-flash",
+        "prompt_tokens": 43365,
+        "completion_tokens": 214,
+        "cached_tokens": 1408,
+        "estimated_cny": "0.04284116"
+      },
+      {
+        "variant": "native-pg-forget",
+        "index": 1,
+        "http_status": 200,
+        "model": "deepseek-flash",
+        "prompt_tokens": 40023,
+        "completion_tokens": 132,
+        "cached_tokens": 384,
+        "estimated_cny": "0.04017468"
+      },
+      {
+        "variant": "native-pg-forget",
+        "index": 2,
+        "http_status": 200,
+        "model": "deepseek-flash",
+        "prompt_tokens": 42026,
+        "completion_tokens": 61,
+        "cached_tokens": 384,
+        "estimated_cny": "0.04189368"
+      },
+      {
+        "variant": "native-pg-forget",
+        "index": 3,
+        "http_status": 200,
+        "model": "deepseek-flash",
+        "prompt_tokens": 40057,
+        "completion_tokens": 16,
+        "cached_tokens": 0,
+        "estimated_cny": "0.040121"
+      },
+      {
+        "variant": "native-pg-forget",
+        "index": 4,
+        "http_status": 200,
+        "model": "deepseek-flash",
+        "prompt_tokens": 42847,
+        "completion_tokens": 192,
+        "cached_tokens": 256,
+        "estimated_cny": "0.04336412"
+      },
+      {
+        "variant": "native-pg-forget-next",
+        "index": 0,
+        "http_status": 200,
+        "model": "deepseek-flash",
+        "prompt_tokens": 11838,
+        "completion_tokens": 208,
+        "cached_tokens": 1408,
+        "estimated_cny": "0.01129016"
+      },
+      {
+        "variant": "native-pg-forget-next",
+        "index": 1,
+        "http_status": 200,
+        "model": "deepseek-flash",
+        "prompt_tokens": 40023,
+        "completion_tokens": 132,
+        "cached_tokens": 39808,
+        "estimated_cny": "0.00153916"
+      },
+      {
+        "variant": "native-pg-forget-next",
+        "index": 2,
+        "http_status": 200,
+        "model": "deepseek-flash",
+        "prompt_tokens": 42268,
+        "completion_tokens": 61,
+        "cached_tokens": 41600,
+        "estimated_cny": "0.001744"
+      },
+      {
+        "variant": "native-pg-forget-next",
+        "index": 3,
+        "http_status": 200,
+        "model": "deepseek-flash",
+        "prompt_tokens": 40057,
+        "completion_tokens": 16,
+        "cached_tokens": 39808,
+        "estimated_cny": "0.00110916"
+      },
+      {
+        "variant": "native-pg-forget-next",
+        "index": 4,
+        "http_status": 200,
+        "model": "deepseek-flash",
+        "prompt_tokens": 43084,
+        "completion_tokens": 214,
+        "cached_tokens": 40576,
+        "estimated_cny": "0.00417552"
+      }
+    ],
+    "required_private_indices": [
+      2
+    ],
+    "all_private_originals_retained": true,
+    "limitations": {
+      "native_models_naturally_added_future_arrangements": true,
+      "retract_erase_guard_branches_proven_by_synthetic_unit_tests_not_natural_native_proposals": true,
+      "first_withdrawal_reply_overstates_automatic_future_removal": true,
+      "final_reply_added_unrequested_role_paragraph": true,
+      "final_already_handled_reference_resolved_to_deletion_request_not_public_service": true,
+      "no_automatic_future_execution_verified": true,
+      "full_goal_accuracy_not_claimed": true
+    },
+    "whole_goal_complete": false
+  },
+  "source_snapshot_sha256": "33286d2b1f821418d630f014591af49ed39889fb15812d1c29b1cfac03218ea8",
+  "reviewer": "assistant",
+  "human_review": false,
+  "provider_usage_estimate_not_invoice": true
+}

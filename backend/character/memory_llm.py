@@ -397,6 +397,38 @@ def is_memory_erasure_request(message: str) -> bool:
     return bool(_ERASE_REQUEST_PATTERN.search(intent_text))
 
 
+def _future_only_erasure_request(message: str, *, observed_at) -> bool:
+    """Every real erasure clause must have its own closed future self-start.
+
+    A future date elsewhere cannot postpone an independent current command.
+    This permits source retention and withholds immediate source erasure only;
+    it does not schedule future deletion. Unknown starts keep normal policy.
+    """
+    if not is_memory_erasure_request(message):
+        return False
+    from character.deferred_memory_mutation import deferred_source_start
+    from character.quoted_erasure_authority import masked_quotes
+
+    text = masked_quotes(message)[0]
+    pieces = re.split(r"[，,。；;！？!?\n]+", text)
+    commands = []
+    index = 0
+    while index < len(pieces):
+        clause = pieces[index].strip()
+        # Keep the actual optional comma between a standalone start prefix
+        # and its first-person command; other comma clauses stay independent.
+        if (re.fullmatch(r"从[^，,。；;！？!?\n]{1,64}(?:起|开始)", clause)
+                and index + 1 < len(pieces) and pieces[index + 1].lstrip().startswith("我")):
+            index += 1
+            clause += "，" + pieces[index].strip()
+        if _ERASE_REQUEST_PATTERN.search(clause):
+            commands.append(clause)
+        index += 1
+    return bool(commands) and all(
+        deferred_source_start(clause, observed_at=observed_at) is not None for clause in commands
+    )
+
+
 _CONDITIONAL_COEXIST_PATTERN = re.compile(
     r"(?:不是完全.{0,24}(?:只是|只)|准确地说.{0,48}(?:才不|只是|而是)|(?:只是|才)不)"
 )
@@ -1741,7 +1773,11 @@ class MemoryEnrichmentScheduler:
             # invalid model proposals must not erase source-only observations.
             # Erasure instructions themselves are never added to the quote pool.
             capture = getattr(job.repository, "capture_source", None)
-            if is_memory_erasure_request(job.message):
+            deferred_erasure = _future_only_erasure_request(job.message, observed_at=job.observed_at)
+            erasure_now = is_memory_erasure_request(job.message) and not deferred_erasure
+            if deferred_erasure:
+                result["source_erasure_policy"] = "deferred_until_source_start"
+            if erasure_now:
                 result["source_capture"] = "erase_request"
             elif not job.source_message_id:
                 result["source_capture"] = "missing_identity"
@@ -1787,7 +1823,7 @@ class MemoryEnrichmentScheduler:
             from character.source_erasure_selection import candidates, selected_ids
 
             source_candidates = ()
-            if is_memory_erasure_request(job.message):
+            if erasure_now:
                 try:
                     source_candidates, result['source_candidate_coverage'] = await candidates(
                         job.repository, job.character_id, job.user_scope, job.message, records,
@@ -1824,7 +1860,10 @@ class MemoryEnrichmentScheduler:
             from character.erasure_authority import partial_erasure_plan
 
             partial = partial_erasure_plan(job.message, existing_memories)
-            if partial is not None:
+            if deferred_erasure:
+                # No source-only deletion is authorized at this observation.
+                source_ids = ()
+            elif partial is not None:
                 # Full raw speech cannot be selected independently while a
                 # personal item must survive. Validated claim erasure still
                 # revokes linked full sources under the existing privacy fence.
@@ -1832,7 +1871,7 @@ class MemoryEnrichmentScheduler:
                 result['source_erasure_policy'] = 'claim_targets_only_for_partial_retention'
             else:
                 source_ids = (selected_ids(_extract_json(response),
-                    {row['source_id'] for row in source_candidates}, authorized=is_memory_erasure_request(job.message))
+                    {row['source_id'] for row in source_candidates}, authorized=erasure_now)
                     if source_candidates else ())
             result["accepted"] = len(proposals) + bool(source_ids)
             outcomes: list[str] = []
@@ -1942,10 +1981,15 @@ class MemoryEnrichmentScheduler:
             )
 
         deferred = None
-        if semantic_operation in {"MERGE", "SUPERSEDE"}:
+        if semantic_operation in {"MERGE", "SUPERSEDE", "RETRACT", "ERASE"}:
             from character.deferred_memory_mutation import deferred_source_start
 
             deferred = deferred_source_start(proposal.evidence, observed_at=job.observed_at)
+            if (deferred is None and semantic_operation == "ERASE"
+                    and _future_only_erasure_request(getattr(job, "message", ""), observed_at=job.observed_at)):
+                # A contiguous quoted command can omit its preceding date.
+                # Whole-message future authority still forbids deleting now.
+                deferred = deferred_source_start(job.message, observed_at=job.observed_at)
             if deferred is not None:
                 # The source explicitly starts later. Preserve today's target;
                 # this quote does not authorize executing a future lifetime.
