@@ -93,11 +93,11 @@ async def run(args):
         OPENAI_COMPAT_CONTEXT_WINDOW_TOKENS="65536",
         OPENAI_COMPAT_BASE_URL="https://api.deepseek.com",
         OPENAI_COMPAT_API_KEY=key,
-        OPENAI_COMPAT_MODEL="deepseek-v4-pro",
+        OPENAI_COMPAT_MODEL=args.model,
         MEMORY_LLM_ENABLED="true",
         MEMORY_LLM_BASE_URL="https://api.deepseek.com",
         MEMORY_LLM_API_KEY=key,
-        MEMORY_LLM_MODEL="deepseek-v4-pro",
+        MEMORY_LLM_MODEL=args.model,
         MEMORY_LLM_CONTEXT_WINDOW_TOKENS="65536",
         MEMORY_SOURCE_RECALL_ENABLED="true",
         DYNAMIC_CONTEXT_SEMANTIC_REVIEW_ENABLED="true",
@@ -186,7 +186,7 @@ async def run(args):
         if request.url.host != "api.deepseek.com":
             return await original_send(client, request, **kwargs)
         payload = json.loads(request.content)
-        assert payload.get("model") == "deepseek-v4-pro", "Isolated provider configuration must use pro"
+        assert payload.get("model") == args.model, "Every evaluator cloud caller must use the selected model"
         (root / "last-sent-request.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2) + chr(10))
         if any("<user_query>" in m.get("content", "") for m in payload.get("messages", [])):
             (root / ("primary-request-" + str(len(calls)) + ".json")).write_text(
@@ -246,9 +246,26 @@ async def run(args):
             safety_margin=CONTEXT_SAFETY_MARGIN_TOKENS,
             configured_window=65536,
         )
-        assert budget["counter"]["mode"] == "deepseek_v4_pro_bpe"
+        assert budget["counter"]["mode"] == (
+            "deepseek_v41_flash_bpe" if args.model == "deepseek-flash" else "deepseek_v4_pro_bpe"
+        )
         assert input_bound + output_reserved + CONTEXT_SAFETY_MARGIN_TOKENS <= 65536
         (root / ("budget-before-send-" + str(len(calls)) + ".json")).write_text(json.dumps(budget, indent=2) + chr(10))
+        from evaluation.provider_budget import EvaluationBudgetExceeded, admitted_request_budget
+
+        try:
+            admission_budget = admitted_request_budget(
+                calls, model=args.model, input_tokens=input_bound, output_tokens=output_reserved,
+                max_calls=args.max_cloud_calls, max_cost_cny=args.max_estimated_cost_cny,
+            )
+        except EvaluationBudgetExceeded as error:
+            (root / "evaluation-budget-stop.json").write_text(
+                json.dumps({"reason": str(error), "actual_calls": len(calls), "next_send_blocked": True}) + "\n"
+            )
+            raise
+        (root / ("cost-before-send-" + str(len(calls)) + ".json")).write_text(
+            json.dumps(admission_budget, indent=2) + "\n"
+        )
         try:
             response = await send_with_balance_stop(client, request, original_send, provider_access_state, **kwargs)
         finally:
@@ -433,7 +450,7 @@ async def run(args):
                 db.update_config,
                 {
                     "modelProvider": "openai_compat",
-                    "openaiCompatModel": "deepseek-v4-pro",
+                    "openaiCompatModel": args.model,
                     "openaiCompatBaseUrl": "https://api.deepseek.com",
                     "useKnowledgeBase": False,
                     "maxTokens": args.answer_tokens,
@@ -829,6 +846,9 @@ async def run(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--max-cloud-calls", type=int)
+    parser.add_argument("--max-estimated-cost-cny", type=str)
+    parser.add_argument("--model", choices=["deepseek-v4-pro", "deepseek-flash"], default="deepseek-v4-pro")
     parser.add_argument("--expect-primary-blocked", action="store_true")
     parser.add_argument("--reuse-verified-seed", action="store_true")
     parser.add_argument("--author-additional-source", action="store_true")

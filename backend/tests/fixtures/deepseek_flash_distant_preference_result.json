@@ -1,0 +1,229 @@
+{
+  "synthetic": true,
+  "parent_fixture": "deepseek_distant_user_favorite_case.json",
+  "parent_fixture_sha256": "c7b5fc8c57763bd7879e65f832fac3279386783a352e33dabc0f2d5d6b06026b",
+  "model": "deepseek-flash",
+  "api_reported_model": "DeepSeek-V4.1-Flash",
+  "configured_context_window": 65536,
+  "thinking_mode": "disabled (unchanged)",
+  "seed_parent_phase": 89,
+  "seed_snapshot_sha256": "725a0010526a2842b8fb56061bd91b87c69695e61458cb69f2ca7816ae33438d",
+  "before_question_snapshot_sha256": "f51a83dbe7027827906b68204f47593a23ee598217b6f16b674021eb1d2137c2",
+  "new_case_question": "请回忆我以前说过的办理偏好：在绿泽合成办理场景里，我最喜欢哪种方案？我对窗口、代办、加速分别是什么态度，加速使用有什么前提？仅凭最喜欢能否证明已经实际使用？",
+  "inherited_completed_native_tasks": 16,
+  "replayed_completed_tasks": 0,
+  "new_native_turns": 2,
+  "new_cloud_calls": 9,
+  "http200": 9,
+  "semantic_checks": {
+    "favorite_mail": true,
+    "ranking_only": true,
+    "user_window_like": true,
+    "user_agency_dislike": true,
+    "user_accelerated_like": true,
+    "accelerated_requires_both": true,
+    "favorite_does_not_prove_actual_use": true,
+    "no_unproved_independent_scene_explanation": true
+  },
+  "offline_integrity_checks": {
+    "tested_source_unchanged": true,
+    "actual_all_cloud_calls_flash_http200": true,
+    "actual_all_finish_stop": true,
+    "native_api_completed_without_abstention": true,
+    "new_native_turns_only_two": true,
+    "prior16_tasks_inherited_no_replay": true,
+    "imports_writer_old_nine_archives_not_replayed": true,
+    "original_four_claims_unchanged": true,
+    "authenticated_native_user": true,
+    "real_recent_history_excludes_private_sources_and_values": true,
+    "recent_history_only_actual_new_tasks": true,
+    "actual_wire_recent_history_independent": true,
+    "both_complete_private_originals_at_actual_wire": true,
+    "all_four_real_memories_selected": true,
+    "question_full_and_not_answer_injected": true,
+    "last_table_full_at_actual_wire": true,
+    "last_table_actual_json_matches_expected": true,
+    "native_replies_equal_actual_provider_content": true,
+    "every_request_uses_flash_pinned_counter_and_safe_budget": true,
+    "original_seed_snapshot_unchanged": true,
+    "new_before_question_snapshot_intact_no_prior_answer": true,
+    "new_claims_not_manufactured_by_third_party_inputs": true,
+    "paid_budget_stops_not_triggered": true,
+    "only_affected_tests_passed": true
+  },
+  "semantic_answer": "你在绿泽合成办理场景里说过最喜欢寄件受理——不过要说明，这是你当时明确标注为“仅描述喜好排序”的记录，不代表你实际使用或选择过寄件受理。\n\n你对三种方案的态度，按你之前说的：\n- 窗口受理：喜欢。\n- 代办受理：不喜欢。\n- 加速受理：喜欢，但只有完整表格已提交且身份核验通过才使用。\n\n仅凭“最喜欢”不能证明已经实际使用。你自己的原话里也特意强调过，那只是四个受理方案中的喜好排序，不表示已实际使用或选择。",
+  "actual_last_data_expected": [
+    0,
+    17,
+    5
+  ],
+  "actual_last_data_reply": [
+    0,
+    17,
+    5
+  ],
+  "recent_history_messages": 16,
+  "real_memory_ids": [
+    "43",
+    "42",
+    "41",
+    "40"
+  ],
+  "independent_long_term_recall_qualified": true,
+  "complete_case_qualified": 1,
+  "old_data_tasks_passed": 11,
+  "old_data_tasks_total": 16,
+  "new_data_tasks_passed": 1,
+  "prior_failed_data_tasks_preserved": 5,
+  "estimated_trial_cost_cny": "0.35984020",
+  "cost_basis": "Saturday off-peak current official RMB prices and API usage; not billing invoice",
+  "request_receipts": [
+    {
+      "index": 0,
+      "model": "deepseek-flash",
+      "primary": false,
+      "http_status": 200,
+      "prompt_tokens": 49131,
+      "cache_hit_tokens": 0,
+      "output_tokens": 116,
+      "estimated_offpeak_cny": "0.049595",
+      "input_bound": 49134,
+      "reserved_output": 768,
+      "thinking": {
+        "type": "disabled"
+      },
+      "payload_sha256": "25d87980c17076c1ef8c52e3a4dba7002f89ab93e004f673dc18f48fff7aff94"
+    },
+    {
+      "index": 1,
+      "model": "deepseek-flash",
+      "primary": false,
+      "http_status": 200,
+      "prompt_tokens": 50380,
+      "cache_hit_tokens": 0,
+      "output_tokens": 46,
+      "estimated_offpeak_cny": "0.050564",
+      "input_bound": 50383,
+      "reserved_output": 2048,
+      "thinking": {
+        "type": "disabled"
+      },
+      "payload_sha256": "775d91237915dab2c0fac33be1d7ae680399128926f89b7fb900c1b9efea90de"
+    },
+    {
+      "index": 2,
+      "model": "deepseek-flash",
+      "primary": false,
+      "http_status": 200,
+      "prompt_tokens": 49135,
+      "cache_hit_tokens": 0,
+      "output_tokens": 12,
+      "estimated_offpeak_cny": "0.049183",
+      "input_bound": 49138,
+      "reserved_output": 160,
+      "thinking": {
+        "type": "disabled"
+      },
+      "payload_sha256": "5a1dd5dba53f854267150a79a509f3f1b532023c854b7c4d510c7b6dc63e2e5c"
+    },
+    {
+      "index": 3,
+      "model": "deepseek-flash",
+      "primary": true,
+      "http_status": 200,
+      "prompt_tokens": 49230,
+      "cache_hit_tokens": 768,
+      "output_tokens": 7,
+      "estimated_offpeak_cny": "0.04850536",
+      "input_bound": 49301,
+      "reserved_output": 2048,
+      "thinking": {
+        "type": "disabled"
+      },
+      "payload_sha256": "9ed99e840026a7073f59cd7bf2c8c16f68dbbd218ded3ae4d7eaa12e9bd494a7"
+    },
+    {
+      "index": 4,
+      "model": "deepseek-flash",
+      "primary": false,
+      "http_status": 200,
+      "prompt_tokens": 17576,
+      "cache_hit_tokens": 0,
+      "output_tokens": 6,
+      "estimated_offpeak_cny": "0.0176",
+      "input_bound": 17579,
+      "reserved_output": 768,
+      "thinking": {
+        "type": "disabled"
+      },
+      "payload_sha256": "05dd431cf746f51d069f86569b2a29260f376705fb33b45432e7fc5d3683becf"
+    },
+    {
+      "index": 5,
+      "model": "deepseek-flash",
+      "primary": false,
+      "http_status": 200,
+      "prompt_tokens": 44045,
+      "cache_hit_tokens": 384,
+      "output_tokens": 42,
+      "estimated_offpeak_cny": "0.04383668",
+      "input_bound": 44048,
+      "reserved_output": 2048,
+      "thinking": {
+        "type": "disabled"
+      },
+      "payload_sha256": "b32ddb41a7a1a890ccf45faad62b36fb7ff2ae40ef07fc1c39945205b02093d8"
+    },
+    {
+      "index": 6,
+      "model": "deepseek-flash",
+      "primary": false,
+      "http_status": 200,
+      "prompt_tokens": 42820,
+      "cache_hit_tokens": 0,
+      "output_tokens": 15,
+      "estimated_offpeak_cny": "0.04288",
+      "input_bound": 42823,
+      "reserved_output": 160,
+      "thinking": {
+        "type": "disabled"
+      },
+      "payload_sha256": "70100e67672ec6059a115e53195ce4575619164efef2020ed6d1c74cae3dd282"
+    },
+    {
+      "index": 7,
+      "model": "deepseek-flash",
+      "primary": true,
+      "http_status": 200,
+      "prompt_tokens": 46105,
+      "cache_hit_tokens": 256,
+      "output_tokens": 124,
+      "estimated_offpeak_cny": "0.04635012",
+      "input_bound": 46140,
+      "reserved_output": 2048,
+      "thinking": {
+        "type": "disabled"
+      },
+      "payload_sha256": "1261a0e0aeba896cd994c453a34014ed106d9f0406675c6fbfe072f83eb53ec0"
+    },
+    {
+      "index": 8,
+      "model": "deepseek-flash",
+      "primary": false,
+      "http_status": 200,
+      "prompt_tokens": 12431,
+      "cache_hit_tokens": 1152,
+      "output_tokens": 6,
+      "estimated_offpeak_cny": "0.01132604",
+      "input_bound": 12434,
+      "reserved_output": 768,
+      "thinking": {
+        "type": "disabled"
+      },
+      "payload_sha256": "0304bbd454779d3e71d99ebc6ed0789b355348a25648df1a87055a6df8a110c4"
+    }
+  ],
+  "assessor": "assistant",
+  "human_review_performed": false,
+  "not_a_controlled_pro_vs_flash_comparison": true
+}

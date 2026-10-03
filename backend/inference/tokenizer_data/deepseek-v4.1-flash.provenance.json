@@ -1,0 +1,28 @@
+{
+  "repository": "deepseek-ai/DeepSeek-V4.1-Flash",
+  "revision": "2cba9e42aa026125f3ed06c6d98c1db82f7ca027",
+  "files": {
+    "tokenizer.json": {
+      "sha256": "c90dfa01249db1be4245780a052ede752e1361c612ac6d08e2bdada7d599476b",
+      "bytes": 6367257,
+      "source": "https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash/resolve/2cba9e42aa026125f3ed06c6d98c1db82f7ca027/tokenizer.json"
+    },
+    "tokenizer_config.json": {
+      "sha256": "6ac8c8dc065ed118161d02dd532749ae3f52c243deac27872134fae2f50d8547",
+      "bytes": 801,
+      "source": "https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash/resolve/2cba9e42aa026125f3ed06c6d98c1db82f7ca027/tokenizer_config.json"
+    },
+    "LICENSE": {
+      "sha256": "f2c6c602815669d292889e5be8c802f2ed950653b77999b1584e8e6aed25d040",
+      "bytes": 1084,
+      "source": "https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash/resolve/2cba9e42aa026125f3ed06c6d98c1db82f7ca027/LICENSE"
+    }
+  },
+  "downloaded_data_only": true,
+  "remote_python_executed": false,
+  "normalizer": {
+    "type": "Sequence",
+    "normalizers": []
+  },
+  "model_type": "BPE"
+}
