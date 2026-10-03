@@ -1,4 +1,4 @@
-"""Shared tokenizer-free serving-budget estimate (not an exact token count)."""
+"""Shared serving-budget text counting with provider-specific offline data."""
 
 from dataclasses import dataclass
 
@@ -6,9 +6,9 @@ CONTEXT_SAFETY_MARGIN_TOKENS = 512
 
 
 def estimated_tokens(text: str) -> int:
-    non_ascii = sum(1 for char in text if ord(char) > 127)
-    ascii_chars = len(text) - non_ascii
-    return non_ascii + (ascii_chars + 3) // 4
+    from inference.token_counting import serving_text_tokens
+
+    return serving_text_tokens(text)
 
 
 @dataclass(frozen=True)

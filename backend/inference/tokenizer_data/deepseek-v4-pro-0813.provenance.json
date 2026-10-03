@@ -1,0 +1,43 @@
+{
+  "repository": "deepseek-ai/DeepSeek-V4-Pro-0813",
+  "revision": "3c6b30435c8590933c489be0c5200691559e0576",
+  "files": {
+    "tokenizer.json": {
+      "sha256": "8f9f37ca37fdc4f5fd36d5cf4d3b0e8392edb4e894fd10cc0d70b4957c8633cf",
+      "bytes": 6367146,
+      "source": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro-0813/resolve/3c6b30435c8590933c489be0c5200691559e0576/tokenizer.json"
+    },
+    "LICENSE": {
+      "sha256": "f2c6c602815669d292889e5be8c802f2ed950653b77999b1584e8e6aed25d040",
+      "bytes": 1084,
+      "source": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro-0813/resolve/3c6b30435c8590933c489be0c5200691559e0576/LICENSE"
+    }
+  },
+  "offline_data_only": true,
+  "actual_api_request_calibration": {
+    "requests": 20,
+    "full_chat_encoding_differences": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "content_plus_four_per_message_covers_all": true
+  }
+}

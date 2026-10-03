@@ -1781,5 +1781,113 @@
       "other_services_unchanged": true,
       "production_generate_requests_during_deployment": 0
     }
+  },
+  "observed_stage79": {
+    "phase_calls": 5,
+    "http200": 5,
+    "completed_native_api_replies": 1,
+    "native_memory_selection_qualified": 1,
+    "native_public_original_grants_qualified": 1,
+    "configured_token_budget_qualified": true,
+    "full_native_case_qualified": 0,
+    "strict_semantic_answer_qualified": 0,
+    "observed_role_preference_unknown_preserved": true,
+    "actual_call_budgets": [
+      {
+        "index": 0,
+        "message_count": 2,
+        "official_full_chat": 31133,
+        "input_bound": 31137,
+        "actual_prompt_tokens": 31133,
+        "output_limit": 768,
+        "safety_margin": 512,
+        "configured_window": 65536,
+        "actual_fits": true
+      },
+      {
+        "index": 1,
+        "message_count": 2,
+        "official_full_chat": 31923,
+        "input_bound": 31927,
+        "actual_prompt_tokens": 31923,
+        "output_limit": 2048,
+        "safety_margin": 512,
+        "configured_window": 65536,
+        "actual_fits": true
+      },
+      {
+        "index": 2,
+        "message_count": 2,
+        "official_full_chat": 31109,
+        "input_bound": 31113,
+        "actual_prompt_tokens": 31109,
+        "output_limit": 160,
+        "safety_margin": 512,
+        "configured_window": 65536,
+        "actual_fits": true
+      },
+      {
+        "index": 3,
+        "message_count": 14,
+        "official_full_chat": 60640,
+        "input_bound": 60668,
+        "actual_prompt_tokens": 60640,
+        "output_limit": 2048,
+        "safety_margin": 512,
+        "configured_window": 65536,
+        "actual_fits": true
+      },
+      {
+        "index": 4,
+        "message_count": 2,
+        "official_full_chat": 9467,
+        "input_bound": 9471,
+        "actual_prompt_tokens": 9467,
+        "output_limit": 768,
+        "safety_margin": 512,
+        "configured_window": 65536,
+        "actual_fits": true
+      }
+    ],
+    "prepared_history_messages": 16,
+    "canonical_history_messages": 12,
+    "raw_api_reply": "四份说明逐项如下：\n\n**绿泽窗口受理**  \n编号：LZ-781  \n费用：6元  \n办理时限：16小时  \n全部办理条件：完整表格与身份页齐全  \n全部例外：身份页缺失须暂停，预约不豁免身份核验  \n本轮核对原文范围：已核对完整正文。\n\n**绿泽代办受理**  \n编号：LZ-782  \n费用：12元  \n办理时限：30小时  \n全部办理条件：完整表格与代办授权齐全  \n全部例外：授权过期须重新取得有效授权，费用支付不能替代授权  \n本轮核对原文范围：已核对完整正文。\n\n**绿泽加速受理**  \n编号：LZ-783  \n费用：18元  \n办理时限：5小时  \n全部办理条件：完整表格且身份核验通过  \n全部例外：核验失败须退回普通流程，预约不豁免核验  \n本轮核对原文范围：已核对完整正文。\n\n**绿泽寄件受理**  \n编号：LZ-784  \n费用：9元  \n办理时限：48小时  \n全部办理条件：完整表格与可投递回寄地址齐全  \n全部例外：地址无法投递须暂停，附件不全须补件  \n本轮核对原文范围：已核对完整正文。\n\n关于你的本人办理偏好，目前能找到的记录只有：你喜欢窗口受理，不喜欢代办受理；你喜欢加速受理，但只在完整表格已提交且身份核验通过时才使用加速受理。寄件受理没有取得你的喜好证据，所以偏好未知。\n\n本轮条件核对：  \n- 完整表格已提交：满足。  \n- 身份页齐全：满足。  \n- 代办授权有效：满足。  \n- 身份核验失败：不满足加速受理的“身份核验通过”。  \n- 回寄地址可投递：满足。  \n- 附件齐全：满足。\n\n因此，按你已说明的偏好：窗口受理符合“喜欢窗口受理”；代办受理不符合“不喜欢代办受理”；加速受理虽然你喜欢，但本轮身份核验失败，不满足你设定的使用条件；寄件受理没有你的喜好证据，保留未知。必要条件满足不等于实际选择。\n\n至于我最喜欢哪个受理方案——我没有属于“月社妃”这个角色之外的独立喜好证据，也没有依据能推出我本人对这四个方案的偏好，所以这一点保留未知。",
+    "candidate_tests": {
+      "new": 15,
+      "directly_affected_old": 9,
+      "unique": 24,
+      "executions": 24
+    },
+    "strict_open_findings": [
+      "Raw reply first correctly states dislike of agency handling, then says 代办受理不符合“不喜欢代办受理”. This wording makes the application of negative preference ambiguous. Keep strict complete semantic qualification open; do not force phrasing, rewrite the actual reply, rerun successful requests or blame model size. The independent role task is unknown in this single observation; this is not proof that budget repair universally fixes ownership. Previous strict findings remain recorded."
+    ],
+    "evidence_checks": "28/28",
+    "model": "deepseek-v4-pro",
+    "successful_seed_import_bridge_steps_replayed": 0,
+    "prior_same_task_answers": 0,
+    "before_question_database_sha256": "094c6543c291fef26307210937a23d23f7b48aea16ffd20028f1ed99b2d5627e",
+    "actual_primary_cloud_requests": 1,
+    "guard_retried": false,
+    "guard_fallback": "",
+    "previous_twenty_call_calibration_reused_without_cloud_calls": true,
+    "configured_window_changed": false,
+    "history_storage_limits_changed": false,
+    "production_deployment": {
+      "backend_group": 2542629,
+      "backend_pid": 2542633,
+      "ready": 200,
+      "core_sha256": {
+        "backend/inference/context_budget.py": "afab0931b1d88ecf7acd7a5f13bd3e57155091cf5110f84bcfac7726e13892a2",
+        "backend/inference/generation_request.py": "bc7bb54eb08d8f1918d338af3cca8b4ef601822968c7810bb7f69d0ceb4373e0",
+        "backend/inference/token_counting.py": "4d38679b8efc15a6cfabf7d3bd11f9b53081f254770ccb21d79e67984c9a84ee",
+        "backend/inference/tokenizer_data/deepseek-v4-pro-0813.json": "8f9f37ca37fdc4f5fd36d5cf4d3b0e8392edb4e894fd10cc0d70b4957c8633cf",
+        "backend/inference/tokenizer_data/LICENSE.deepseek-v4-pro-0813": "f2c6c602815669d292889e5be8c802f2ed950653b77999b1584e8e6aed25d040",
+        "backend/inference/tokenizer_data/deepseek-v4-pro-0813.provenance.json": "76a1292b4098013b604adba17e062f0e79db66d2e3833b48e871522858d31bc7",
+        "backend/requirements.txt": "ad85f6240481f2b953706b6219d51bc72804c404f26f8b81c4606f3f50b3b7ec"
+      },
+      "configurations_unchanged": true,
+      "other_services_unchanged": true,
+      "production_generate_requests_during_deployment": 0
+    }
   }
 }

@@ -31,6 +31,8 @@ vllm==0.10.2
 
 # Transformers 4.56.x：与 vLLM 0.10.2 实测兼容；不要升级到 5.x。
 transformers>=4.56.0,<5.0
+# Offline DeepSeek BPE working-budget counter; no model weights or remote code.
+tokenizers>=0.22.0,<0.23.0
 
 # 训练框架
 peft>=0.14.0,<1.0

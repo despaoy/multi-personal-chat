@@ -194,9 +194,24 @@ async def run(args):
                 )
                 and fixture["source_message"] in whole
             ), "Complete requested public/private source missing before actual model"
+        from inference.context_budget import CONTEXT_SAFETY_MARGIN_TOKENS, estimated_tokens
+        from inference.token_counting import token_counter_info
+
+        input_bound = sum(estimated_tokens(m["content"]) + 4 for m in payload["messages"])
+        output_reserved = payload["max_tokens"]
+        budget = dict(
+            counter=token_counter_info(),
+            input_bound=input_bound,
+            output_reserved=output_reserved,
+            safety_margin=CONTEXT_SAFETY_MARGIN_TOKENS,
+            configured_window=65536,
+        )
+        assert budget["counter"]["mode"] == "deepseek_v4_pro_bpe"
+        assert input_bound + output_reserved + CONTEXT_SAFETY_MARGIN_TOKENS <= 65536
+        (root / ("budget-before-send-" + str(len(calls)) + ".json")).write_text(json.dumps(budget, indent=2) + chr(10))
         response = await original_send(client, request, **kwargs)
         await response.aread()
-        calls.append(dict(request=payload, http_status=response.status_code, response=response.json()))
+        calls.append(dict(request=payload, http_status=response.status_code, response=response.json(), budget=budget))
         (root / "cloud-calls.json").write_text(json.dumps(calls, ensure_ascii=False, indent=2) + "\n")
         return response
 

@@ -595,6 +595,20 @@ async def generate_character_response(
                                     guard_fallback=fallback[0]))
 
     corrected_messages = apply_retry_instruction(messages, retry_instruction(blocking))
+    # The trusted correction changes fixed input size. Reuse the same complete
+    # turn pruning with the actual corrected system and unchanged current query
+    # and evidence; never send a retry against the initial plan's old budget.
+    fixed_retry = [m for m in corrected_messages[:-1] if m["role"] == "system"]
+    fixed_retry.append(corrected_messages[-1])
+    retry_history = [m for m in corrected_messages[:-1] if m["role"] in {"user", "assistant"}]
+    fixed_cost = sum(_estimated_tokens(m["content"]) + 4 for m in fixed_retry)
+    if fixed_cost + request.max_tokens + CONTEXT_SAFETY_MARGIN_TOKENS > request.context_window_tokens:
+        raise ValueError("Current message and evidence exceed the serving context budget; shorten the message or evidence")
+    retry_history = _trim_history_to_budget(
+        retry_history, fixed_messages=fixed_retry,
+        context_window_tokens=request.context_window_tokens, max_output_tokens=request.max_tokens,
+    )
+    corrected_messages = [*fixed_retry[:-1], *retry_history, fixed_retry[-1]]
     reply = await generate(
         messages=corrected_messages,
         lora_name=plan.lora_name,
