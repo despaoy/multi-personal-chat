@@ -179,7 +179,9 @@ _RESOLVED_THIRD_PARTY_CRISIS_RE = re.compile(
 _TASK_STYLE_DRIFT_RE = re.compile(
     r"(?:与我的世界不符|和我的世界无关|虚拟世界|我所在的世界|作为虚拟人物|与我的身份不太相关|和我的身份不太相关|"
     r"不是我(?:所)?擅长的领域|我不擅长(?:这个|这类|这方面)|"
-    r"超出.{0,10}我.{0,10}(?:能力|范围)|我(?:当前)?(?:无法|不能).{0,10}(?:回答|处理)|"
+    # An inability statement alone is not evidence of role/world evasion.
+    # Unsupported subquestions must retain an honest lack-of-evidence answer.
+    r"超出.{0,10}我.{0,10}(?:能力|范围)|"
     r"按(?:照)?我所了解的情节)"
 )
 _UNKNOWN_LOGIN_REWARD_RE = re.compile(r"(?:累积|累计|连续)登录.{0,16}(?:第七天|七天)")

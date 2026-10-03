@@ -253,6 +253,43 @@ async def run(args):
         "generation": [],
         "auth_statuses": [],
     }
+    original_guard_validation = None
+    if args.compare_original_guard:
+        import importlib.util
+        import sys
+
+        from character import output_guard
+
+        prior_path = phase / "original-backend_character_output_guard.py"
+        preflight = json.loads((phase / "preflight.json").read_text())
+        assert hashlib.sha256(prior_path.read_bytes()).hexdigest() == preflight["original_guard_sha256"]
+        module_name = "_native_original_output_guard"
+        spec = importlib.util.spec_from_file_location(module_name, prior_path)
+        previous = importlib.util.module_from_spec(spec)
+        sys.modules[module_name] = previous
+        spec.loader.exec_module(previous)
+        original_guard_validation = output_guard.validate_reply
+        proof["guard_validation_comparisons"] = []
+
+        def observed_guard_validation(reply, guard):
+            current = original_guard_validation(reply, guard)
+            prior = previous.validate_reply(reply, guard)
+            proof["guard_validation_comparisons"].append(
+                dict(
+                    actual_reply=reply,
+                    actual_guard=asdict(guard) if guard is not None else None,
+                    current_violations=list(current),
+                    previous_violations=list(prior),
+                    actual_cloud_calls_so_far=len(calls),
+                    comparison_model_calls=0,
+                )
+            )
+            (root / "guard-validation-observed.json").write_text(
+                json.dumps(proof["guard_validation_comparisons"], ensure_ascii=False, indent=2) + chr(10)
+            )
+            return current
+
+        output_guard.validate_reply = observed_guard_validation
     original_retrieve = api._retrieve_rag_bundle
 
     async def observed_retrieve(*pos, **kwargs):
@@ -276,6 +313,9 @@ async def run(args):
             {
                 "semantic_status": result.semantic_review_status,
                 "policy_status": result.contextual_policy_status,
+                "actual_interaction": asdict(result.interaction),
+                "actual_decision": asdict(result.decision),
+                "prepared_reply_guard": asdict(result.reply_guard),
                 "history": list(result.history),
                 "recall": result.memory_recall,
                 "reference_context": result.compiled.reference_context,
@@ -307,6 +347,7 @@ async def run(args):
                 "response_mode": result.response_mode,
                 "model_invoked": result.model_invoked,
                 "citation_repair_status": result.citation_repair_status,
+                "reply_guard_mode": request.reply_guard_mode,
                 "guard_retried": result.guard_retried,
                 "guard_violations": list(result.guard_violations),
                 "guard_post_retry_violations": list(result.guard_post_retry_violations),
@@ -654,12 +695,15 @@ async def run(args):
     finally:
         await shutdown_memory_enrichment()
         httpx.AsyncClient.send = original_send
+        if original_guard_validation is not None:
+            output_guard.validate_reply = original_guard_validation
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--expect-primary-blocked", action="store_true")
     parser.add_argument("--reuse-verified-seed", action="store_true")
+    parser.add_argument("--compare-original-guard", action="store_true")
     parser.add_argument("--resume-provider-block", action="store_true")
     parser.add_argument("--provider-access-restored", action="store_true")
     parser.add_argument("--seed-variant", default="native-pg-baseline")

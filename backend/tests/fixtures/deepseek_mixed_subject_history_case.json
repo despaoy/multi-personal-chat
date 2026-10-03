@@ -1889,5 +1889,178 @@
       "other_services_unchanged": true,
       "production_generate_requests_during_deployment": 0
     }
+  },
+  "observed_stage80": {
+    "phase_calls": 5,
+    "http200": 5,
+    "completed_native_api_replies": 1,
+    "native_memory_selection_qualified": 1,
+    "native_public_original_grants_qualified": 1,
+    "configured_token_budget_qualified": true,
+    "full_native_case_qualified": 0,
+    "strict_semantic_answer_qualified": 0,
+    "recorded_native_guard_counterexample_fixed": true,
+    "fresh_native_chain_verified": true,
+    "native_guard_counterexample_trigger_observed": false,
+    "observed_role_preference_unknown_preserved": false,
+    "actual_call_budgets": [
+      {
+        "index": 0,
+        "message_count": 2,
+        "official_full_chat": 31133,
+        "input_bound": 31137,
+        "actual_prompt_tokens": 31133,
+        "output_limit": 768,
+        "safety_margin": 512,
+        "configured_window": 65536,
+        "actual_fits": true
+      },
+      {
+        "index": 1,
+        "message_count": 2,
+        "official_full_chat": 31923,
+        "input_bound": 31927,
+        "actual_prompt_tokens": 31923,
+        "output_limit": 2048,
+        "safety_margin": 512,
+        "configured_window": 65536,
+        "actual_fits": true
+      },
+      {
+        "index": 2,
+        "message_count": 2,
+        "official_full_chat": 31109,
+        "input_bound": 31113,
+        "actual_prompt_tokens": 31109,
+        "output_limit": 160,
+        "safety_margin": 512,
+        "configured_window": 65536,
+        "actual_fits": true
+      },
+      {
+        "index": 3,
+        "message_count": 14,
+        "official_full_chat": 60640,
+        "input_bound": 60668,
+        "actual_prompt_tokens": 60640,
+        "output_limit": 2048,
+        "safety_margin": 512,
+        "configured_window": 65536,
+        "actual_fits": true
+      },
+      {
+        "index": 4,
+        "message_count": 2,
+        "official_full_chat": 9467,
+        "input_bound": 9471,
+        "actual_prompt_tokens": 9467,
+        "output_limit": 768,
+        "safety_margin": 512,
+        "configured_window": 65536,
+        "actual_fits": true
+      }
+    ],
+    "prepared_history_messages": 16,
+    "canonical_history_messages": 12,
+    "raw_api_reply": "四份说明逐项如下：\n\n**《绿泽窗口受理》**  \n编号：LZ-781  \n费用：6元  \n办理时限：16小时  \n全部办理条件：完整表格与身份页齐全  \n全部例外：身份页缺失须暂停，预约不豁免身份核验  \n本轮核对原文范围：已核对完整正文。  \n本轮偏好条件：窗口受理是你明确表示喜欢的；完整表格已提交、身份页齐全，满足办理条件。身份核验失败不属于该方案的例外条件，但该方案本身不要求身份核验通过。\n\n**《绿泽代办受理》**  \n编号：LZ-782  \n费用：12元  \n办理时限：30小时  \n全部办理条件：完整表格与代办授权齐全  \n全部例外：授权过期须重新取得有效授权，费用支付不能替代授权  \n本轮核对原文范围：已核对完整正文。  \n本轮偏好条件：代办受理是你明确表示不喜欢的；完整表格已提交、代办授权有效，满足办理条件。\n\n**《绿泽加速受理》**  \n编号：LZ-783  \n费用：18元  \n办理时限：5小时  \n全部办理条件：完整表格且身份核验通过  \n全部例外：核验失败须退回普通流程，预约不豁免核验  \n本轮核对原文范围：已核对完整正文。  \n本轮偏好条件：加速受理是你有条件喜欢的，但条件为“完整表格已提交且身份核验通过”。本轮身份核验失败，不满足该条件，因此不能按你的偏好使用加速受理。\n\n**《绿泽寄件受理》**  \n编号：LZ-784  \n费用：9元  \n办理时限：48小时  \n全部办理条件：完整表格与可投递回寄地址齐全  \n全部例外：地址无法投递须暂停，附件不全须补件  \n本轮核对原文范围：已核对完整正文。  \n本轮偏好条件：未取得你对寄件受理的喜好证据，保留未知。完整表格已提交、回寄地址可投递、附件齐全，满足办理条件。\n\n关于“最喜欢哪个受理方案”：我没有自己的喜好，也不会把说明资料或你的偏好当成我的选择。依据不足，保留未知。",
+    "candidate_tests": {
+      "new": 13,
+      "directly_affected_old": 4,
+      "unique": 17,
+      "executions": 17
+    },
+    "actual_guard_comparisons": [
+      {
+        "actual_reply": "四份说明逐项如下：\n\n**《绿泽窗口受理》**  \n编号：LZ-781  \n费用：6元  \n办理时限：16小时  \n全部办理条件：完整表格与身份页齐全  \n全部例外：身份页缺失须暂停，预约不豁免身份核验  \n本轮核对原文范围：已核对完整正文。  \n本轮偏好条件：窗口受理是你明确表示喜欢的；完整表格已提交、身份页齐全，满足办理条件。身份核验失败不属于该方案的例外条件，但该方案本身不要求身份核验通过。\n\n**《绿泽代办受理》**  \n编号：LZ-782  \n费用：12元  \n办理时限：30小时  \n全部办理条件：完整表格与代办授权齐全  \n全部例外：授权过期须重新取得有效授权，费用支付不能替代授权  \n本轮核对原文范围：已核对完整正文。  \n本轮偏好条件：代办受理是你明确表示不喜欢的；完整表格已提交、代办授权有效，满足办理条件。\n\n**《绿泽加速受理》**  \n编号：LZ-783  \n费用：18元  \n办理时限：5小时  \n全部办理条件：完整表格且身份核验通过  \n全部例外：核验失败须退回普通流程，预约不豁免核验  \n本轮核对原文范围：已核对完整正文。  \n本轮偏好条件：加速受理是你有条件喜欢的，但条件为“完整表格已提交且身份核验通过”。本轮身份核验失败，不满足该条件，因此不能按你的偏好使用加速受理。\n\n**《绿泽寄件受理》**  \n编号：LZ-784  \n费用：9元  \n办理时限：48小时  \n全部办理条件：完整表格与可投递回寄地址齐全  \n全部例外：地址无法投递须暂停，附件不全须补件  \n本轮核对原文范围：已核对完整正文。  \n本轮偏好条件：未取得你对寄件受理的喜好证据，保留未知。完整表格已提交、回寄地址可投递、附件齐全，满足办理条件。\n\n关于“最喜欢哪个受理方案”：我没有自己的喜好，也不会把说明资料或你的偏好当成我的选择。依据不足，保留未知。",
+        "actual_guard": {
+          "character_name": "月社妃",
+          "forbidden_terms": [
+            "琉璃",
+            "彼方",
+            "夜子",
+            "理央"
+          ],
+          "forbidden_lore_terms": [
+            "魔法",
+            "纸页",
+            "命运"
+          ],
+          "forbid_laughter": false,
+          "forbid_generic_templates": true,
+          "forbid_advice": false,
+          "quiet_presence": false,
+          "closing": false,
+          "require_gentle_safety_check": false,
+          "require_urgent_safety_check": false,
+          "require_self_answer": false,
+          "affiliation_bid": false,
+          "relationship_reassurance": false,
+          "repair": false,
+          "positive_sharing": false,
+          "repair_bid": false,
+          "user_apology": false,
+          "repair_concession": false,
+          "self_answer_with_negative": false,
+          "third_party_safety": false,
+          "resolved_third_party_history": false,
+          "factual_task": true,
+          "forbid_unsupported_user_fact": false,
+          "unknown_login_reward": false,
+          "forbid_unprompted_advice": false,
+          "advice_task": false,
+          "sincere_gratitude": false,
+          "respect_autonomy": false,
+          "require_autonomy_ack": false,
+          "pressured_concession": false,
+          "explanation_boundary": false,
+          "negative_emotion_kind": "",
+          "third_party_gender_unknown": false
+        },
+        "current_violations": [],
+        "previous_violations": [],
+        "actual_cloud_calls_so_far": 4,
+        "comparison_model_calls": 0
+      }
+    ],
+    "actual_decision": {
+      "intent": "清楚回答问题，同时保留人物口吻",
+      "tone": "符合人物性格，礼貌而不假定熟悉；符合人物日常口吻",
+      "action": "先完整回答对方明确提出的问题，不把问题原样问回去，再视必要补充一句",
+      "avoid": "避免过度亲昵和称呼，避免假定双方很熟；避免把对方的问题原样问回去或在回答完成前转去追问；避免复读对方原话和连续使用同一种共情模板；避免客服或心理咨询式套话、泛化安慰和习惯性句末追问；先给符合人物立场的具体判断",
+      "strategy_ids": [
+        "respond_directly"
+      ],
+      "confidence": 0.8,
+      "selection_source": "semantic"
+    },
+    "strict_open_findings": [
+      "Fresh raw reply asserts 我没有自己的喜好 instead of reporting no retrieved evidence of role preference, then says unknown. Absence of visible evidence is not evidence that the character has no preferences. Strict semantic/full-case qualification stays0. This model output did not trigger the old generic inability branch; report fresh native counterexample trigger coverage0, not proof that this semantic finding is fixed. Preserve raw reply and previous stage71/77/78/79 findings without style forcing or resampling."
+    ],
+    "evidence_checks": "33/33",
+    "model": "deepseek-v4-pro",
+    "successful_seed_import_bridge_steps_replayed": 0,
+    "prior_same_task_answers": 0,
+    "before_question_database_sha256": "094c6543c291fef26307210937a23d23f7b48aea16ffd20028f1ed99b2d5627e",
+    "actual_primary_cloud_requests": 1,
+    "guard_retried": false,
+    "guard_fallback": "",
+    "legacy_recorded_guard_fields_absent": true,
+    "diagnostic_captured_generator_calls": 2,
+    "diagnostic_actual_model_calls": 0,
+    "complete_original_guard_fixture_sha256": "4098fd3e820b0ad2edd7f9d7dc517f13463be3fcadcc23f746ff91cfba1186a4",
+    "fresh_primary_request_identical_to_stage79": true,
+    "configured_window_changed": false,
+    "history_storage_limits_changed": false,
+    "production_deployment": {
+      "backend_group": 2551582,
+      "backend_pid": 2551586,
+      "ready": 200,
+      "core_sha256": {
+        "backend/character/output_guard.py": "60feaf258f510f66c1101097aecd0c76bccee16af0dc3a146187b89fa2b55959"
+      },
+      "configurations_unchanged": true,
+      "other_services_unchanged": true,
+      "production_generate_requests_during_deployment": 0
+    }
   }
 }
