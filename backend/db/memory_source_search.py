@@ -103,6 +103,61 @@ def literal_source_fragment(query):
 
 
 
+def literal_source_read_groups(query):
+    """Closed literal read declarations, as a union of same-record groups.
+
+    A conjunction requires every fragment in one original speech record.
+    Disjunctions and separately closed reads are unions. Mixed operators have
+    no guessed precedence; unresolved or quoted commands retain sparse recall.
+    """
+    from character.quoted_erasure_authority import masked_quotes
+
+    if not isinstance(query, str):
+        return ()
+    try:
+        view, quotes = masked_quotes(query)
+    except ValueError:
+        return ()
+    groups, position, index = [], 0, 0
+    prefix = (r"\s*(?:(?:再|另|同时|另外)?(?:请)?|请(?:再|另|同时|另外)?)"
+              r"(?:查找|检索|读取|查看)\s*(?:包含|含有)\s*")
+    suffix = r"\s*的\s*(?:完整|全部)?(?:用户)?(?:原话|原始发言)(?:记录)?\s*(?:[。；;\n]|$)"
+    while index < len(quotes):
+        a, _, _ = quotes[index]
+        if not re.fullmatch(prefix, view[position:a]):
+            break
+        members, operator = [], None
+        while index < len(quotes):
+            _, z, fragment = quotes[index]
+            if (not fragment.strip() or "\n" in fragment or not terms(fragment)
+                    or any(char in fragment for char in '“”‘’「」『』"')):
+                return ()
+            members.append(fragment)
+            index += 1
+            read = re.match(suffix, view[z:])
+            if read:
+                position = z + read.end()
+                members = tuple(dict.fromkeys(members))
+                groups.extend((member,) for member in members) if operator == 'or' else groups.append(members)
+                break
+            if index >= len(quotes):
+                return ()
+            connector = view[z:quotes[index][0]].strip()
+            next_operator = ('and' if connector in {'和', '与', '及', '并且'} else
+                             'or' if connector in {'或', '或者'} else None)
+            if next_operator is None or (operator is not None and next_operator != operator):
+                return ()
+            operator = next_operator
+        else:
+            return ()
+    remainder = view[position:]
+    if (not groups or re.search(r"另外|同时|以及|还要|并且|顺便", remainder)
+            or re.search(r"(?:查找|检索|读取|查看|复述|还原)[^。；;\n]*(?:原话|原始|记录)", remainder)):
+        return ()
+    return tuple(dict.fromkeys(groups))
+
+
+
 def search_plan(scope, query, *, limit=32, dialect='sqlite'):
     # None is the internal complete-search contract for serving-budget callers.
     # Explicit bounded callers keep their existing validation and SQL limit.
@@ -123,8 +178,8 @@ def search_plan(scope, query, *, limit=32, dialect='sqlite'):
     params['query_terms'] = json.dumps(tokens, ensure_ascii=False)
     bound = ('SELECT value FROM json_each(:query_terms)' if dialect == 'sqlite' else
              'SELECT value FROM jsonb_array_elements_text(CAST(:query_terms AS JSONB)) AS q(value)')
-    fragments = literal_source_fragments(query)
-    project_tags = () if fragments else literal_project_source_terms(query)
+    groups = literal_source_read_groups(query)
+    project_tags = () if groups else literal_project_source_terms(query)
     project_filter = ""
     if project_tags:
         params['project_terms'] = json.dumps(project_tags)
@@ -135,14 +190,17 @@ def search_plan(scope, query, *, limit=32, dialect='sqlite'):
                           f"AND anchor.term IN ({project_bound})) project_scope "
                           "ON project_scope.source_key = t.source_key ")
     fragment_filter = ""
-    if fragments:
-        expressions = []
-        for index, fragment in enumerate(fragments):
-            name = f"source_fragment{index}"
-            params[name] = fragment
-            expressions.append(f"instr(eligible.body, :{name}) > 0" if dialect == "sqlite" else
-                               f"POSITION(:{name} IN eligible.body) > 0")
-        fragment_filter = "AND (" + " OR ".join(expressions) + ") "
+    if groups:
+        fragments = tuple(dict.fromkeys(fragment for group in groups for fragment in group))
+        names = {fragment: f"source_fragment{index}" for index, fragment in enumerate(fragments)}
+        params.update({names[fragment]: fragment for fragment in fragments})
+        def expression(fragment):
+            name = names[fragment]
+            return (f"instr(eligible.body, :{name}) > 0" if dialect == "sqlite" else
+                    f"POSITION(:{name} IN eligible.body) > 0")
+        fragment_filter = "AND (" + " OR ".join(
+            "(" + " AND ".join(expression(fragment) for fragment in group) + ")"
+            for group in groups) + ") "
     # Inverse posting frequency is a retrieval weight, not semantic confidence.
     # Full source rows are reached through scoped postings, not latest-N scans.
     # Erasure watermark is checked in this same SQL snapshot; no text cache.

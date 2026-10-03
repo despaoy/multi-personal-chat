@@ -13,7 +13,7 @@ from dataclasses import dataclass, field, replace
 from datetime import datetime
 from html import escape
 
-from db.memory_source_search import literal_project_source_terms, literal_source_fragments, terms
+from db.memory_source_search import literal_project_source_terms, literal_source_read_groups, terms
 
 
 @dataclass(frozen=True)
@@ -127,7 +127,8 @@ class SourceMemoryService:
             # Complete source packets are admitted by the actual serving budget;
             # a count-only SQL candidate cut cannot prove an exhaustive read.
             search_limit = None if self._defer_budget else 32
-            source_fragments = literal_source_fragments(query)
+            source_groups = literal_source_read_groups(query)
+            source_fragments = tuple(dict.fromkeys(fragment for group in source_groups for fragment in group))
             project_tags = () if source_fragments else literal_project_source_terms(query)
             explicit_source_scope = bool(project_tags or source_fragments)
             requested_order = requested_source_successors(query)
@@ -148,7 +149,8 @@ class SourceMemoryService:
 
             linked_fragment_omitted = 0
             if source_fragments:
-                scoped_linked = [row for row in linked if any(fragment in row["body"] for fragment in source_fragments)]
+                scoped_linked = [row for row in linked if any(all(fragment in row["body"] for fragment in group)
+                                        for group in source_groups)]
                 linked_fragment_omitted = len(linked) - len(scoped_linked)
                 linked = scoped_linked
 
@@ -205,8 +207,8 @@ class SourceMemoryService:
             fresh_by_id = {row["source_message_id"]: row for row in fresh}
             selected = [fresh_by_id[row["source_message_id"]] for row in selected
                         if row["source_message_id"] in fresh_by_id
-                        and (not source_fragments or any(fragment in fresh_by_id[row["source_message_id"]]["body"]
-                                                    for fragment in source_fragments))]
+                        and (not source_groups or any(all(fragment in fresh_by_id[row["source_message_id"]]["body"]
+                                                          for fragment in group) for group in source_groups))]
             dependency_omitted = 0
             if requested_order:
                 valid_ids = set(anchor_ids) | {child for parent, children in requested_followers.items()
@@ -225,6 +227,9 @@ class SourceMemoryService:
                          linked_project_scope_omitted=linked_project_omitted,
                          literal_fragment_scope=bool(source_fragments),
                          literal_fragment_count=len(source_fragments),
+                         literal_read_group_sizes=[len(group) for group in source_groups],
+                         literal_read_group_match_counts=[sum(all(fragment in row["body"] for fragment in group)
+                                                              for row in selected) for group in source_groups],
                          literal_fragment_match_counts=[sum(fragment in row["body"] for row in selected)
                                                         for fragment in source_fragments],
                          linked_fragment_scope_omitted=linked_fragment_omitted,
