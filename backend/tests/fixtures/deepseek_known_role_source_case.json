@@ -1,0 +1,181 @@
+{
+  "synthetic": true,
+  "base_fixture": "deepseek_cross_kb_named_source_case.json",
+  "base_fixture_sha256": "eaf9e71db89f8173d203f3aa0ad0162d0f6de93a5ce0a7cd321591e75248c506",
+  "case_overrides": {
+    "case_kind": "independent_known_role_mail_preference_user_mail_unknown",
+    "documents": [
+      {
+        "title": "绿泽窗口受理",
+        "category": "办理",
+        "content": "完整公共办理说明正文起点。方案绿泽窗口受理，编号LZ-781。费用6元，办理时限16小时。全部办理条件：完整表格与身份页齐全。全部例外：身份页缺失须暂停，预约不豁免身份核验。此资料不代表任何人的喜好或选择，满足必要条件不等于实际办理。完整公共办理说明正文终点。"
+      },
+      {
+        "title": "绿泽代办受理",
+        "category": "办理",
+        "content": "完整公共办理说明正文起点。方案绿泽代办受理，编号LZ-782。费用12元，办理时限30小时。全部办理条件：完整表格与代办授权齐全。全部例外：授权过期须重新取得有效授权，费用支付不能替代授权。此资料不代表任何人的喜好或选择，满足必要条件不等于实际办理。完整公共办理说明正文终点。"
+      },
+      {
+        "title": "绿泽加速受理",
+        "category": "办理",
+        "content": "完整公共办理说明正文起点。方案绿泽加速受理，编号LZ-783。费用18元，办理时限5小时。全部办理条件：完整表格且身份核验通过。全部例外：核验失败须退回普通流程，预约不豁免核验。此资料不代表任何人的喜好或选择，满足必要条件不等于实际办理。完整公共办理说明正文终点。"
+      },
+      {
+        "title": "绿泽寄件受理",
+        "category": "办理",
+        "content": "完整公共办理说明正文起点。方案绿泽寄件受理，编号LZ-784。费用9元，办理时限48小时。全部办理条件：完整表格与可投递回寄地址齐全。全部例外：地址无法投递须暂停，附件不全须补件。此资料不代表任何人的喜好或选择，满足必要条件不等于实际办理。完整公共办理说明正文终点。"
+      },
+      {
+        "title": "绿泽角色本人偏好",
+        "category": "办理",
+        "content": "绿泽合成办理场景的角色本人偏好记录。记录编号LZ-RP-785。事实主体：角色月社妃，角色标识tsukiyashiro_kisaki；不是当前用户，也不是对所有现实或原作情境的偏好结论。本记录适用范围仅为本次绿泽合成办理场景，在该场景内当前有效。角色月社妃在四个绿泽受理方案中最喜欢寄件受理，窗口、代办和加速不是她在本场景的最喜欢方案。这项喜好不是她已实际选择或使用寄件的证明；本记录没有提供角色实际操作事实。本记录没有提供当前用户对寄件的喜好，不能证明用户喜欢或不喜欢寄件，也不能证明用户历史上从未表达过。这是完整的场景事实记录，不含缺页或外部引用。"
+      }
+    ],
+    "question": "请查知识库，读取《绿泽窗口受理》《绿泽代办受理》《绿泽加速受理》《绿泽寄件受理》《绿泽角色本人偏好》这五份完整资料，逐项比较其中四份受理说明。分别列出编号、费用、办理时限、全部办理条件和全部例外，结合我已告诉你的本人办理偏好判断本轮各项偏好条件。本轮完整表格已提交，身份页齐全，代办授权有效，身份核验通过，回寄地址可投递，附件齐全。每份说明分别说明本轮核对的原文范围，未取得喜好证据的方案保留未知，必要条件不等于实际选择。另回答你最喜欢哪个受理方案；依据不足时保留未知，不能混用不同主体的证据。\n另把原话中的“喜欢加速受理”与“使用加速受理”分开核对：哪些是已保存的本人偏好表述，哪些是使用动作的必要条件？在本轮核验通过时，这两个问题分别如何判断？条件满足是否足以证明已经使用？同时分别说明用户偏好证据和角色自身偏好证据的归属与本轮取得范围。\n四份说明分别存放在四个不同的公共知识库，均属于本轮可查询范围。请分别按资料身份核对原文，不以候选排名替代读取范围。\n补充本轮本人操作报告：我已经实际选择并使用了代办受理；没有实际使用窗口受理、加速受理或寄件受理。这是我本轮对自己操作的报告，不是系统工具执行回执。\n请将我本轮报告的实际使用情况与已保存的本人喜好分别列明，说明两者是否冲突，以及现有资料是否足以确定角色本人的最喜欢方案。对寄件喜好，请区分本轮未取得证据与用户从未表达过。\n角色喜好只问这些资料定义的绿泽合成办理场景。请依据《绿泽角色本人偏好》分别说明本场景中角色最喜欢的方案与用户寄件喜好，不能把其中一方的证据分给另一方。",
+    "required_gate_document_indices": [
+      0,
+      1,
+      2,
+      3,
+      4
+    ],
+    "original_question": "请查知识库，读取《绿泽窗口受理》《绿泽代办受理》《绿泽加速受理》《绿泽寄件受理》《绿泽角色本人偏好》这五份完整资料，逐项比较其中四份受理说明。分别列出编号、费用、办理时限、全部办理条件和全部例外，结合我已告诉你的本人办理偏好判断本轮各项偏好条件。本轮完整表格已提交，身份页齐全，代办授权有效，身份核验通过，回寄地址可投递，附件齐全。每份说明分别说明本轮核对的原文范围，未取得喜好证据的方案保留未知，必要条件不等于实际选择。另回答你最喜欢哪个受理方案；依据不足时保留未知，不能混用不同主体的证据。\n另把原话中的“喜欢加速受理”与“使用加速受理”分开核对：哪些是已保存的本人偏好表述，哪些是使用动作的必要条件？在本轮核验通过时，这两个问题分别如何判断？条件满足是否足以证明已经使用？同时分别说明用户偏好证据和角色自身偏好证据的归属与本轮取得范围。\n四份说明分别存放在四个不同的公共知识库，均属于本轮可查询范围。请分别按资料身份核对原文，不以候选排名替代读取范围。",
+    "parent_case_path": "backend/tests/fixtures/deepseek_satisfied_condition_no_use_case.json",
+    "runtime_baseline": "e135f534f362fefcaabfa94695bee446cdc7a979",
+    "new_dimension": "One new complete authenticated public scenario source states role-favorite mail, independently of user mail liking unknown and user-reported agency use.",
+    "current_user_action_report": "补充本轮本人操作报告：我已经实际选择并使用了代办受理；没有实际使用窗口受理、加速受理或寄件受理。这是我本轮对自己操作的报告，不是系统工具执行回执。",
+    "comparison_request": "请将我本轮报告的实际使用情况与已保存的本人喜好分别列明，说明两者是否冲突，以及现有资料是否足以确定角色本人的最喜欢方案。对寄件喜好，请区分本轮未取得证据与用户从未表达过。",
+    "current_user_reported_used": [
+      "绿泽代办受理"
+    ],
+    "current_user_reported_not_used": [
+      "绿泽窗口受理",
+      "绿泽加速受理",
+      "绿泽寄件受理"
+    ],
+    "role_preference_evidence": [
+      "绿泽角色本人偏好"
+    ],
+    "reported_action_verified_by_tool": false,
+    "prior_question": "请查知识库，逐项比较《绿泽窗口受理》《绿泽代办受理》《绿泽加速受理》《绿泽寄件受理》这四份完整说明。分别列出编号、费用、办理时限、全部办理条件和全部例外，结合我已告诉你的本人办理偏好判断本轮各项偏好条件。本轮完整表格已提交，身份页齐全，代办授权有效，身份核验通过，回寄地址可投递，附件齐全。每份说明分别说明本轮核对的原文范围，未取得喜好证据的方案保留未知，必要条件不等于实际选择。另回答你最喜欢哪个受理方案；依据不足时保留未知，不能混用不同主体的证据。\n另把原话中的“喜欢加速受理”与“使用加速受理”分开核对：哪些是已保存的本人偏好表述，哪些是使用动作的必要条件？在本轮核验通过时，这两个问题分别如何判断？条件满足是否足以证明已经使用？同时分别说明用户偏好证据和角色自身偏好证据的归属与本轮取得范围。\n四份说明分别存放在四个不同的公共知识库，均属于本轮可查询范围。请分别按资料身份核对原文，不以候选排名替代读取范围。\n补充本轮本人操作报告：我已经实际选择并使用了代办受理；没有实际使用窗口受理、加速受理或寄件受理。这是我本轮对自己操作的报告，不是系统工具执行回执。\n请将我本轮报告的实际使用情况与已保存的本人喜好分别列明，说明两者是否冲突，以及现有资料是否足以确定角色本人的最喜欢方案。对寄件喜好，请区分本轮未取得证据与用户从未表达过。",
+    "current_state": {
+      "form_submitted": true,
+      "identity_page_complete": true,
+      "agency_authorization_valid": true,
+      "identity_verification_passed": true,
+      "return_address_deliverable": true,
+      "attachments_complete": true
+    },
+    "expected_accelerated_use_condition_satisfied": true,
+    "expected_actual_accelerated_use_from_user_report": false,
+    "changed_current_state_only": "identity verification failed -> passed; the matching current-state question is updated consistently",
+    "role_preference_source": {
+      "title": "绿泽角色本人偏好",
+      "category": "办理",
+      "content": "绿泽合成办理场景的角色本人偏好记录。记录编号LZ-RP-785。事实主体：角色月社妃，角色标识tsukiyashiro_kisaki；不是当前用户，也不是对所有现实或原作情境的偏好结论。本记录适用范围仅为本次绿泽合成办理场景，在该场景内当前有效。角色月社妃在四个绿泽受理方案中最喜欢寄件受理，窗口、代办和加速不是她在本场景的最喜欢方案。这项喜好不是她已实际选择或使用寄件的证明；本记录没有提供角色实际操作事实。本记录没有提供当前用户对寄件的喜好，不能证明用户喜欢或不喜欢寄件，也不能证明用户历史上从未表达过。这是完整的场景事实记录，不含缺页或外部引用。"
+    },
+    "expected_role_favorite": "绿泽寄件受理",
+    "expected_user_mail_preference": "unknown"
+  },
+  "observed_semantic_review": {
+    "case_kind": "independent_known_role_mail_preference_user_mail_unknown",
+    "method": "assistant_manual_semantic_review_of_saved_actual_reply",
+    "assessor": "assistant",
+    "human_review_performed": false,
+    "raw_reply_sha256": "9982ed2bfeb0fef868d7051eb60c0d31003ddbb48f3a8c2b98e8c1645ef16a78",
+    "case_question_sha256": "8d5002bb2c53417a0ef0bddd6f4155074c834b45e8ccf9289e5c08618f396b5c",
+    "prior_phase82_case_retested": false,
+    "prior_phase83_case_retested": false,
+    "criteria": [
+      {
+        "id": "full_rules",
+        "passed": true,
+        "quotes": [
+          "全部办理条件：完整表格与身份页齐全",
+          "全部例外：身份页缺失须暂停，预约不豁免身份核验",
+          "全部办理条件：完整表格与代办授权齐全",
+          "全部例外：授权过期须重新取得有效授权，费用支付不能替代授权",
+          "全部办理条件：完整表格且身份核验通过",
+          "全部例外：核验失败须退回普通流程，预约不豁免核验",
+          "全部办理条件：完整表格与可投递回寄地址齐全",
+          "全部例外：地址无法投递须暂停，附件不全须补件"
+        ]
+      },
+      {
+        "id": "user_preference_and_negation",
+        "passed": true,
+        "quotes": [
+          "喜欢窗口受理，不喜欢代办受理，喜欢加速受理"
+        ]
+      },
+      {
+        "id": "and_necessary_condition_and_liking_separate",
+        "passed": true,
+        "quotes": [
+          "“喜欢加速受理”是偏好；“使用加速受理”是动作，其必要条件在本轮已满足"
+        ]
+      },
+      {
+        "id": "necessary_not_actual_use",
+        "passed": true,
+        "quotes": [
+          "条件满足不等于已经使用"
+        ]
+      },
+      {
+        "id": "reported_action_does_not_erase_preference",
+        "passed": true,
+        "quotes": [
+          "两者可以同时存在",
+          "没有实际使用窗口受理、加速受理或寄件受理"
+        ]
+      },
+      {
+        "id": "independent_known_role_preference",
+        "passed": true,
+        "quotes": [
+          "本场景中我最喜欢寄件受理",
+          "这项证据归属于角色月社妃，不能用来推断你的寄件喜好"
+        ]
+      },
+      {
+        "id": "user_mail_unknown_is_not_never_expressed",
+        "passed": true,
+        "quotes": [
+          "你对寄件受理的喜好，本轮没有取得证据，应保留未知",
+          "不能据此推断你从未说过"
+        ]
+      },
+      {
+        "id": "user_report_not_tool_execution",
+        "passed": true,
+        "quotes": [
+          "不是系统工具执行回执",
+          "不把它当作系统已完成操作的证明"
+        ]
+      },
+      {
+        "id": "per_source_complete_read_scope",
+        "passed": true,
+        "quotes": [
+          "《绿泽窗口受理》《绿泽代办受理》《绿泽加速受理》《绿泽寄件受理》《绿泽角色本人偏好》五份原文均已完整进入本轮请求"
+        ]
+      }
+    ],
+    "limitations": [
+      "This one new complete synthetic role-source case only; earlier cases are neither rerun nor relabelled.",
+      "The role preference is restricted to the authored synthetic scenario, not an assertion of canonical or real-world preference.",
+      "User action is testimony, not independent execution verification.",
+      "The answer uses conflict to describe behavioral divergence but retains both facts explicitly."
+    ]
+  },
+  "actual_results": {
+    "phase_calls": 4,
+    "http200": 4,
+    "actual_primary_calls": 1,
+    "main_actual_prompt_tokens": 61346,
+    "main_input_bound": 61374,
+    "new_case_semantic_criteria": "9/9",
+    "full_native_case_qualified": 1
+  }
+}

@@ -16,20 +16,22 @@ def requested_document_titles(query):
     """
     match = re.match(
         r"^(?:请)?(?:(?:查|查询|检索)知识库[，,：:]?\s*)?"
-        r"(?:逐项比较|逐一比较|逐项核对|分别读取|分别列出)\s*"
+        r"(?:逐项比较|逐一比较|逐项核对|分别读取|分别列出|读取)\s*"
         r"(?P<titles>《[^《》\n]{1,200}》(?:\s*(?:[、，,]|和|与|及)?\s*《[^《》\n]{1,200}》)*)",
         str(query or "").strip(),
     )
     if not match:
         return ()
     remainder = str(query or "").strip()[match.end():]
-    if ("《" in remainder or "》" in remainder
+    titles = tuple(dict.fromkeys(re.findall(r"《([^《》\n]{1,200})》", match["titles"])))
+    later = re.findall(r"《([^《》\n]{1,200})》", remainder)
+    unmatched = re.sub(r"《[^《》\n]{1,200}》", "", remainder)
+    if (any(title not in titles for title in later) or "《" in unmatched or "》" in unmatched
             or re.search(r"(?:不要|不必|不用|无需|排除|仅|只|"
                          r"(?:^|[，,。；;：:\n]|请|也|还|另外|同时|并且|但是|但|千万)别)"
                          r"(?:再|逐项|逐一|分别)?(?:读|阅读|读取|查询|检索|比较|核对|列出|提供|查看)", remainder)):
         return ()
-    titles = tuple(dict.fromkeys(re.findall(r"《([^《》\n]{1,200})》", match['titles'])))
-    declared = re.match(r"这([一二三四五六七八九十\d]+)份(?:说明|资料|文档|文件)", remainder)
+    declared = re.match(r"这([一二三四五六七八九十\d]+)份(?:完整)?(?:说明|资料|文档|文件)", remainder)
     if declared:
         value = declared[1]
         digits = {char: number for number, char in enumerate("零一二三四五六七八九")}

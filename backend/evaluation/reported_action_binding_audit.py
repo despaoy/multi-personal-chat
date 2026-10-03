@@ -13,7 +13,7 @@ from pathlib import Path
 async def run(phase):
     runtime = Path("/home/boot/lhm/multipersonal-runtime")
     assert phase.parent == runtime / "backups/backend-chain-20261001"
-    assert phase.name in {"stage83", "stage84"}
+    assert phase.name in {"stage83", "stage84", "stage85"}
     cluster = runtime / "evaluations/r148pg.s3"
     os.environ.update(
         MODEL_PROVIDER="openai_compat",
@@ -36,6 +36,7 @@ async def run(phase):
     pre = read("preflight.json")
     review = read("semantic-review.json")
     checks = {}
+    document_count = 5 if phase.name == "stage85" else 4
 
     def check(name, value):
         checks[name] = bool(value)
@@ -43,7 +44,7 @@ async def run(phase):
     check(
         "new_complete_case_preserves_original_question_and_all_full_sources",
         case["question"].startswith(case["original_question"] + "\n")
-        and len(case["documents"]) == 4
+        and len(case["documents"]) == document_count
         and len(case["bridges"]) == 9
         and not case["input_information_reduced"]
         and case["current_user_action_report"] in case["question"]
@@ -53,7 +54,8 @@ async def run(phase):
         "actual_before_question_dump_and_zero_prior_answers",
         hashlib.sha256((phase / "native-pg-seed/before-question.dump").read_bytes()).hexdigest()
         == seed["before_question_backup"]["database_sha256"]
-        == "00416458b561625a1db2be7ebae265ea4dffdfa5b8efee9c312479a71b6317c6"
+        and (phase.name == "stage85" or seed["before_question_backup"]["database_sha256"]
+             == "00416458b561625a1db2be7ebae265ea4dffdfa5b8efee9c312479a71b6317c6")
         and seed["before_question_backup"]["prior_same_task_answers"] == 0
         and result["before_question_backup"] == seed["before_question_backup"],
     )
@@ -214,7 +216,7 @@ async def run(phase):
                 for x in await con.fetch(
                     "SELECT id,title,content,category,knowledge_base_id FROM knowledge_documents "
                     "WHERE id=ANY($1) ORDER BY id",
-                    [504, 505, 506, 507],
+                    ([504, 505, 506, 507, 508] if phase.name == "stage85" else [504, 505, 506, 507]),
                 )
             ]
             links = [
@@ -239,7 +241,7 @@ async def run(phase):
         await con.close()
     check(
         "actual_database_four_complete_distinct_public_kb_originals",
-        len(docs) == 4
+        len(docs) == document_count
         and {x["knowledge_base_id"] for x in docs} == {3, 4, 5, 6}
         and all(
             any(x["title"] == d["title"] and x["content"] == d["content"] for x in docs) for d in case["documents"]
@@ -279,12 +281,13 @@ async def run(phase):
             and packet["original_body"] == doc["content"]
             and packet["text"] in final_user
         )
-    check("four_database_verified_original_grants_at_actual_primary_wire", len(grants) == 4 and all(grants))
+    check("four_database_verified_original_grants_at_actual_primary_wire", len(grants) == document_count and all(grants))
     check(
-        "all_seventeen_runtime_source_hashes_and_three_configs_unchanged",
+        "runtime_hashes_match_tested_candidate_and_original_configs",
         all(
             hashlib.sha256(Path(name).read_bytes()).hexdigest() == sha
-            for name, sha in {**pre["original_hashes"], **pre["config_hashes"]}.items()
+            for name, sha in {**pre["original_hashes"], **pre["config_hashes"],
+                             **({name: (read("targeted-test-summary.json")["published_fixture_observation_only_sha256"] if name.endswith("deepseek_known_role_source_case.json") else sha) for name, sha in read("targeted-test-summary.json")["tested_hashes"].items()} if phase.name == "stage85" else {})}.items()
         ),
     )
     pid = read("native-report-job.json")["pid"]
@@ -302,7 +305,7 @@ async def run(phase):
         and all(x["quotes"] and all(q in raw for q in x["quotes"]) for x in review["criteria"])
         and review["prior_phase82_case_retested"] is False,
     )
-    if phase.name == "stage84":
+    if phase.name in {"stage84", "stage85"}:
         check(
             "new_current_and_condition_satisfied_while_actual_use_explicitly_denied",
             case["current_state"]["form_submitted"] is True
@@ -319,6 +322,24 @@ async def run(phase):
             and review["human_review_performed"] is False
             and review["prior_phase83_case_retested"] is False,
         )
+    if phase.name == "stage85":
+        public_case = json.loads(Path("backend/tests/fixtures/deepseek_known_role_source_case.json").read_text())
+        public_case.pop("observed_semantic_review")
+        public_case.pop("actual_results")
+        check("published_observations_do_not_change_executed_case_input",
+              hashlib.sha256((json.dumps(public_case, ensure_ascii=False, indent=2) + "\n").encode()).hexdigest()
+              == read("targeted-test-summary.json")["tested_hashes"]["backend/tests/fixtures/deepseek_known_role_source_case.json"])
+        diagnostic = read("role-seed-diagnostic.json")
+        check("new_role_source_authenticated_without_provider_or_user_memory_injection",
+              diagnostic["login_status"] == diagnostic["new_import_status"] == 200
+              and diagnostic["new_document_id"] == 508
+              and diagnostic["cloud_attempts"] == diagnostic["model_calls"] == 0
+              and len(diagnostic["claims"]) == len(result["user_fact_records_after"]) == 3
+              and seed["source_layout_parent_backup_sha256"]
+              == "00416458b561625a1db2be7ebae265ea4dffdfa5b8efee9c312479a71b6317c6")
+        check("actual_same_index_baseline_zero_originals_fixed_all_five",
+              diagnostic["whole_originals_present"] == [False] * 5
+              and read("actual-api-retrieval-after.json")["whole_originals_present"] == [True] * 5)
     review_passed = all(x["passed"] for x in review["criteria"])
     report = dict(
         checks=checks,
@@ -336,9 +357,9 @@ async def run(phase):
         full_native_case_qualified=int(all(checks.values()) and review_passed),
         prior_phase82_full_native_case_qualified=0,
         prior_phase81_full_native_case_qualified=1,
-        prior_phase83_full_native_case_qualified=(1 if phase.name == "stage84" else None),
+        prior_phase83_full_native_case_qualified=(1 if phase.name in {"stage84", "stage85"} else None),
         semantic_review_assessor=review.get("assessor", "assistant"),
-        runtime_code_changed=False,
+        runtime_code_changed=(phase.name == "stage85"),
         production_restarted=False,
         audit_provider_calls=0,
         unproven_prior_semantic_root_cause="unattributed",
