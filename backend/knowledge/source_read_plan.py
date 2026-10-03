@@ -17,6 +17,7 @@ class SourceReadPlan:
     groups: tuple[tuple[str, ...], ...] = ()
     match_mode: str = 'not_resolved'
     group_modes: tuple[tuple[str, ...], ...] = ()
+    document_titles: tuple[str, ...] = ()
 
     @property
     def atom_groups(self):
@@ -88,7 +89,7 @@ def identifier_read_plan(query, unresolved_tail):
     later = re.findall(rf'(?<![A-Za-z0-9_-]){_IDENTIFIER}(?![A-Za-z0-9_-])', remainder)
     if (any(any(char.isdigit() for char in value) and value not in identifiers for value in later)
             or unresolved_tail(remainder)
-            or re.search(r'(?:不要|别|禁止|不必|无需|排除|不包括)\s*(?:再|分别|逐项)?'
+            or re.search(r'(?:不要|(?<!分)别|禁止|不必|无需|排除|不包括)\s*(?:再|分别|逐项)?'
                          r'(?:核对|核查|读取|查看|比较|资料|原话|原始|记录|编号)', remainder)
             or re.search(r'(?:核对|核查|比较|对照)[^。；;\n]*(?:其他|另一|新的|不同)'
                          r'[^。；;\n]*(?:原话|原始|记录|资料|目录|版本)', remainder)):
@@ -139,6 +140,28 @@ def _literal_at(view, quotes, position, valid_fragment):
     raise ValueError('Unclosed literal dependency')
 
 
+
+_DOCUMENT_PREFIX = (rf'{_PREFIX}(?:(?:查|查询|检索)知识库[，,：:]?\s*)?'
+                    r'(?:逐项比较|逐一比较|逐项核对|分别读取|分别列出|读取|核对|核查|查看|查阅)\s*')
+_DOCUMENT_TITLES = r'(?P<titles>《[^《》\n]{1,200}》(?:\s*(?:[、，,]|和|与|及)?\s*《[^《》\n]{1,200}》)*)'
+_DOCUMENT_FRAME = re.compile(_DOCUMENT_PREFIX + _DOCUMENT_TITLES +
+                             r'\s*的\s*(?:完整|全部)?(?:原始正文|原始资料|原始文档|原始全文|原文|正文)'
+                             r'\s*(?:[。；;\n]|$)')
+
+
+def _document_at(view, query, position):
+    """A closed public read owns document roots, never private-speech roots."""
+    match = _DOCUMENT_FRAME.match(view, position)
+    if match is None:
+        if re.match(_DOCUMENT_PREFIX + r'(?=《)', view[position:]):
+            raise ValueError('Unclosed public document dependency')
+        return None
+    literal = query[match.start('titles'):match.end('titles')]
+    titles = tuple(dict.fromkeys(re.findall(r'《([^《》\n]{1,200})》', literal)))
+    if not titles or any(not title.strip() or any(char in title for char in '“”‘’「」『』"') for title in titles):
+        raise ValueError('Ambiguous public document dependency')
+    return titles, match.end()
+
 def source_read_plan(query, valid_fragment, unresolved_tail):
     """Union fully closed reads while preserving every member's own matcher.
 
@@ -152,8 +175,13 @@ def source_read_plan(query, valid_fragment, unresolved_tail):
         return SourceReadPlan()
     try:
         view, quotes = masked_quotes(query)
-        position, groups, identifiers = 0, [], []
+        position, groups, identifiers, document_titles = 0, [], [], []
         while position < len(view):
+            document = _document_at(view, query, position)
+            if document is not None:
+                titles, position = document
+                document_titles.extend(titles)
+                continue
             literal = _literal_at(view, quotes, position, valid_fragment)
             if literal is not None:
                 added, position = literal
@@ -170,21 +198,29 @@ def source_read_plan(query, valid_fragment, unresolved_tail):
             position = match.end()
     except ValueError:
         return SourceReadPlan()
-    if not groups:
+    if not groups and not document_titles:
         return SourceReadPlan()
     remainder = view[position:]
-    declared = {atom.value for group in groups for atom in group}
+    declared = {atom.value for group in groups for atom in group} | set(document_titles)
     later = re.findall(rf'(?<![A-Za-z0-9_-]){_IDENTIFIER}(?![A-Za-z0-9_-])', remainder)
     if (unresolved_tail(remainder)
             or re.search(rf'{_ACTION}{_SELECTOR}|按{_SELECTOR}', remainder)
             or (identifiers and any(any(char.isdigit() for char in value) and value not in declared for value in later))
-            or re.search(r'(?:不要|别|禁止|不必|无需|排除|不包括)\s*(?:再|分别|逐项)?'
+            or re.search(r'(?:不要|(?<!分)别|禁止|不必|无需|排除|不包括)\s*(?:再|分别|逐项)?'
                          r'(?:核对|核查|读取|查看|比较|资料|原话|原始|记录|编号)', remainder)
             or re.search(r'(?:核对|核查|比较|对照)[^。；;\n]*(?:其他|另一|新的|不同)'
                          r'[^。；;\n]*(?:原话|原始|记录|资料|目录|版本)', remainder)):
         return SourceReadPlan()
+    document_titles = tuple(dict.fromkeys(document_titles))
+    if document_titles:
+        if '`' in query:
+            return SourceReadPlan()
+        from knowledge.source_expansion import _checked_document_titles
+
+        if not _checked_document_titles(document_titles, query[position:]):
+            return SourceReadPlan()
     groups = tuple(dict.fromkeys(groups))
     modes = {atom.match_mode for group in groups for atom in group}
     return SourceReadPlan(tuple(tuple(atom.value for atom in group) for group in groups),
-                          next(iter(modes)) if len(modes) == 1 else 'mixed',
-                          tuple(tuple(atom.match_mode for atom in group) for group in groups))
+                          next(iter(modes)) if len(modes) == 1 else 'mixed' if modes else 'not_resolved',
+                          tuple(tuple(atom.match_mode for atom in group) for group in groups), document_titles)

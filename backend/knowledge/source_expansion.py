@@ -8,15 +8,20 @@ _AUTHORITY_FIELDS = ("id", "document_id", "chunk_index", "knowledge_base_id", "t
 
 
 def requested_document_titles(query):
-    """Resolve one independent author read after complete preceding statements.
+    """Resolve independently closed document roots alongside private reads.
 
-    Keep the whole original query for retrieval and generation. Quoted or code
-    examples do not acquire read authority. Conflicting or separate title tasks
-    retain the conservative leading parser's ambiguity and exclusion checks.
+    The complete original question still reaches retrieval and generation.
+    Legacy single declarations retain their existing scope checks; quoted,
+    code, excluded and unresolved requests cannot become partial read grants.
     """
     text = str(query or "").strip()
     if "`" in text:
         return ()
+    from db.memory_source_search import resolve_source_read_plan
+
+    plan = resolve_source_read_plan(text)
+    if plan.document_titles:
+        return plan.document_titles
     from character.quoted_erasure_authority import masked_quotes
 
     try:
@@ -59,6 +64,11 @@ def _leading_document_titles(query):
         return ()
     remainder = str(query or "").strip()[match.end() :]
     titles = tuple(dict.fromkeys(re.findall(r"《([^《》\n]{1,200})》", match["titles"])))
+    return _checked_document_titles(titles, remainder)
+
+
+def _checked_document_titles(titles, remainder):
+    """Validate the unresolved suffix without changing the actual question."""
     later = re.findall(r"《([^《》\n]{1,200})》", remainder)
     unmatched = re.sub(r"《[^《》\n]{1,200}》", "", remainder)
     exclusion_text = remainder
