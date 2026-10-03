@@ -51,9 +51,8 @@ from inference.context_budget import CONTEXT_SAFETY_MARGIN_TOKENS, estimated_tok
 from inference.openai_protocol import chat_completions_endpoint, completed_chat_content, nonthinking_parameters
 
 if TYPE_CHECKING:
-    from repositories.character_memory import CharacterMemoryRepository
-
     from knowledge.retrieval_core.embedding import EmbeddingProvider
+    from repositories.character_memory import CharacterMemoryRepository
 
 logger = logging.getLogger(__name__)
 
@@ -1942,6 +1941,16 @@ class MemoryEnrichmentScheduler:
                 int(proposal.target_memory_id) if proposal.target_memory_id.isdigit() else proposal.target_memory_id
             )
 
+        deferred = None
+        if semantic_operation in {"MERGE", "SUPERSEDE"}:
+            from character.deferred_memory_mutation import deferred_source_start
+
+            deferred = deferred_source_start(proposal.evidence, observed_at=job.observed_at)
+            if deferred is not None:
+                # The source explicitly starts later. Preserve today's target;
+                # this quote does not authorize executing a future lifetime.
+                semantic_operation = "COEXIST"
+
         if semantic_operation == "ERASE":
             eraser = getattr(job.repository, "erase_memory", None)
             if callable(eraser):
@@ -2007,6 +2016,15 @@ class MemoryEnrichmentScheduler:
                     time_expression=dict(proposal.qualifiers).get("time", ""),
                 ),
             }
+            if deferred is not None:
+                metadata["deferred_mutation"] = dict(
+                    original_operation=proposal.operation,
+                    reason="source_start_after_observation",
+                    expression=deferred.text,
+                    source_observed_at=deferred.observed_at.isoformat(),
+                    earliest_possible_start=deferred.lower.isoformat(),
+                    not_a_scheduled_replacement=True,
+                )
             if proposal.source_observation:
                 metadata.update(content_semantics="quoted_source", speaker_role="user",
                                 described_subject="not_resolved")
@@ -2034,6 +2052,11 @@ class MemoryEnrichmentScheduler:
                 return "no_change"
             self._saved += 1
             return "saved"
+
+        if deferred is not None:
+            # A legacy overwrite cannot represent two temporal observations.
+            # Keep the current target rather than invent a successful deferral.
+            return "skipped"
 
         # 旧仓储兼容：确定事实仍可工作；PENDING 不降级成 active，避免把
         # “可能”错误注入。RETRACT 在无版本能力时删除旧 active 记录。

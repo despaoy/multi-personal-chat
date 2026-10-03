@@ -29,6 +29,17 @@ async def send_with_balance_stop(client, request, sender, state, **kwargs):
     return response
 
 
+def required_private_sources(fixture):
+    """Explicit case requirements, never a post-hoc automatic absence waiver."""
+    sources = (fixture["source_message"], *fixture.get("additional_private_source_messages", []))
+    indices = fixture.get("required_private_source_indices", list(range(len(sources))))
+    if (not isinstance(indices, (list, tuple)) or not indices
+            or any(type(i) is not int or not 0 <= i < len(sources) for i in indices)
+            or len(set(indices)) != len(indices)):
+        raise ValueError("Invalid required private source indices")
+    return tuple(sources[i] for i in indices)
+
+
 async def run(args):
     phase = Path(args.phase).resolve()
     runtime = Path("/home/boot/lhm/multipersonal-runtime")
@@ -76,6 +87,7 @@ async def run(args):
         assert args.reuse_verified_seed and not resume_provider_block
         assert fixture.get("additional_source_message")
     private_sources = [fixture["source_message"], *fixture.get("additional_private_source_messages", [])]
+    required_private = required_private_sources(fixture)
     if args.advance_history:
         assert args.reuse_verified_seed and not args.author_additional_source and not resume_provider_block
         assert len(fixture["history_advancement_tasks"]) == fixture.get("history_advancement_target_count", 8)
@@ -234,7 +246,7 @@ async def run(args):
                     seen[str(i) + ":" + fixture["documents"][i]["title"]]
                     for i in fixture["required_gate_document_indices"]
                 )
-                and all(source in whole for source in private_sources)
+                and all(source in whole for source in required_private)
             ), "Complete requested public/private source missing before actual model"
         from inference.context_budget import CONTEXT_SAFETY_MARGIN_TOKENS, estimated_tokens
         from inference.token_counting import token_counter_info
