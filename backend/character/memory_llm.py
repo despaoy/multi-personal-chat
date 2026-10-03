@@ -1149,6 +1149,20 @@ def _candidate_to_proposal(
         value = target_memory_key or "target"
     if not value or (len(value) > _MAX_VALUE_CHARS and semantic_operation not in {"RETRACT", "ERASE"}):
         return None
+    if kind in {"like", "dislike"} and semantic_operation not in {"RETRACT", "ERASE"}:
+        from character.preference_index import conditional_preference_label, grounded_preference_index
+
+        if conditional_preference_label(value) and _normalize(value) not in normalized_evidence:
+            index = grounded_preference_index(
+                value, kind=kind, evidence=evidence, source_message=source_message,
+                qualifiers=raw.get("qualifiers"), target_key=target_memory_key,
+            )
+            if index is None:
+                return None
+            value = index
+            # Rebuild the display from the literal short object and all ordinary
+            # source-checked qualifiers, never the model's decorated paraphrase.
+            proposed_content = ""
     if semantic_operation not in {"RETRACT", "ERASE"} and not _grounded_value(
         value,
         evidence=evidence,

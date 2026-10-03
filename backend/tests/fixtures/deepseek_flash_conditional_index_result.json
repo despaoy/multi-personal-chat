@@ -1,0 +1,295 @@
+{
+  "synthetic_only": true,
+  "baseline": "680e251d82f498a9e93e562e36a50beac3bf1d8c",
+  "model": "deepseek-flash",
+  "case_kind": "failed_structured_preference_extraction_retry_with_full_source",
+  "public_documents": [
+    {
+      "title": "绿泽窗口受理",
+      "category": "办理",
+      "content": "完整公共办理说明正文起点。方案绿泽窗口受理，编号LZ-781。费用6元，办理时限16小时。全部办理条件：完整表格与身份页齐全。全部例外：身份页缺失须暂停，预约不豁免身份核验。此资料不代表任何人的喜好或选择，满足必要条件不等于实际办理。完整公共办理说明正文终点。"
+    },
+    {
+      "title": "绿泽代办受理",
+      "category": "办理",
+      "content": "完整公共办理说明正文起点。方案绿泽代办受理，编号LZ-782。费用12元，办理时限30小时。全部办理条件：完整表格与代办授权齐全。全部例外：授权过期须重新取得有效授权，费用支付不能替代授权。此资料不代表任何人的喜好或选择，满足必要条件不等于实际办理。完整公共办理说明正文终点。"
+    },
+    {
+      "title": "绿泽加速受理",
+      "category": "办理",
+      "content": "完整公共办理说明正文起点。方案绿泽加速受理，编号LZ-783。费用18元，办理时限5小时。全部办理条件：完整表格且身份核验通过。全部例外：核验失败须退回普通流程，预约不豁免核验。此资料不代表任何人的喜好或选择，满足必要条件不等于实际办理。完整公共办理说明正文终点。"
+    },
+    {
+      "title": "绿泽寄件受理",
+      "category": "办理",
+      "content": "完整公共办理说明正文起点。方案绿泽寄件受理，编号LZ-784。费用9元，办理时限48小时。全部办理条件：完整表格与可投递回寄地址齐全。全部例外：地址无法投递须暂停，附件不全须补件。此资料不代表任何人的喜好或选择，满足必要条件不等于实际办理。完整公共办理说明正文终点。"
+    },
+    {
+      "title": "绿泽角色本人偏好",
+      "category": "办理",
+      "content": "绿泽合成办理场景的角色本人偏好记录。记录编号LZ-RP-785。事实主体：角色月社妃，角色标识tsukiyashiro_kisaki；不是当前用户，也不是对所有现实或原作情境的偏好结论。本记录适用范围仅为本次绿泽合成办理场景，在该场景内当前有效。修订范围：上一版本记录角色月社妃最喜欢寄件受理，这现在仅是历史偏好，不是当前结论。本次修订后的当前记录明确：角色月社妃在四个绿泽受理方案中最喜欢加速受理，窗口、代办和寄件不是她在本场景的最喜欢方案。这项当前喜好不是她已实际选择或使用加速的证明；本记录没有提供角色实际操作事实。本记录没有提供当前用户对寄件的喜好，不能证明用户喜欢或不喜欢寄件，也不能证明用户历史上从未表达过。这是完整的场景事实记录，不含缺页或外部引用。"
+    }
+  ],
+  "private_inputs_kept_complete_in_restricted_server_artifacts": true,
+  "required_private_source_indices": [
+    2
+  ],
+  "all_three_private_originals_retained": true,
+  "result": {
+    "checks": {
+      "full_synthetic_question_unchanged": true,
+      "actual_seed_five": true,
+      "native_and_main_http200": true,
+      "all_five_cloud_calls_counted": true,
+      "original_five_every_field_exact": true,
+      "one_new_claim_only": true,
+      "current_target44_active_unclosed": true,
+      "all_prior_source_fields_exact": true,
+      "source_fence_unchanged": true,
+      "all_three_private_originals_outside_recent_history": true,
+      "current_required_private_original_on_wire": true,
+      "two_required_public_originals_on_wire": true,
+      "full_question_on_wire": true,
+      "actual_natural_conditional_index_label": true,
+      "natural_raw_index_failed_old_grounding": true,
+      "official_raw_response_continuous_receipt": true,
+      "native_normalization_branch_exercised": true,
+      "natural_super_and_typed_target_retained": true,
+      "all_raw_qualifiers_kept": true,
+      "all_persisted_qualifiers_kept": true,
+      "full_condition_in_rebuilt_content": true,
+      "model_observation_clock_ignored": true,
+      "full_admitted_evidence_preserved": true,
+      "actual_real_pg_coexist": true,
+      "actual_full_original206_recorded": true,
+      "actual_source_claim_deferral_clock_match": true,
+      "actual_quote_observation_view_full": true,
+      "future_bucket_after_actual_clock": true,
+      "no_model_lifetime_or_future_execution_authority": true,
+      "writer_saved_once_no_delete_failure": true,
+      "three_causal_baseline_rejections": true,
+      "first_eighteen_new_nodes_passed": true,
+      "only_four_extra_new_nodes": true,
+      "static_zero": true,
+      "failed_component_only_retry": true,
+      "no_model_or_memory_injection": true,
+      "actual_old_receipts_recovered_offline_no_paid_replay": true,
+      "additional_merge_persistence_node": true
+    },
+    "passed": 38,
+    "total": 38,
+    "semantic_checks": {
+      "current_complete_and_condition": true,
+      "future_complete_and_condition": true,
+      "future_start": true,
+      "public_identity_condition": true,
+      "public_failure_exception": true,
+      "appointment_not_exemption": true,
+      "no_scheduled_execution_claim": true,
+      "no_current_replacement_claim": true,
+      "no_actual_service_claim": true
+    },
+    "semantic_passed": 9,
+    "semantic_total": 9,
+    "actual_calls": 5,
+    "http200": 5,
+    "native_receipts_success": 1,
+    "actual_primary_calls": 1,
+    "affected_unique_test_nodes": 23,
+    "passed_nodes_repeated": 0,
+    "passed_paid_cases_replayed": 0,
+    "estimated_cost_cny": "0.00831962",
+    "receipts": [
+      {
+        "index": 0,
+        "http_status": 200,
+        "prompt_tokens": 40035,
+        "completion_tokens": 131,
+        "cached_tokens": 39808,
+        "estimated_cny": "0.00154716"
+      },
+      {
+        "index": 1,
+        "http_status": 200,
+        "prompt_tokens": 41744,
+        "completion_tokens": 52,
+        "cached_tokens": 41472,
+        "estimated_cny": "0.00130944"
+      },
+      {
+        "index": 2,
+        "http_status": 200,
+        "prompt_tokens": 40069,
+        "completion_tokens": 16,
+        "cached_tokens": 39935,
+        "estimated_cny": "0.0009967"
+      },
+      {
+        "index": 3,
+        "http_status": 200,
+        "prompt_tokens": 42506,
+        "completion_tokens": 509,
+        "cached_tokens": 42368,
+        "estimated_cny": "0.00302136"
+      },
+      {
+        "index": 4,
+        "http_status": 200,
+        "prompt_tokens": 11912,
+        "completion_tokens": 237,
+        "cached_tokens": 11648,
+        "estimated_cny": "0.00144496"
+      }
+    ],
+    "question_chars": 206,
+    "question_sha256": "542bc7af5784cbd04dcdc5ff84b87fcdfb7d311095636132fe702c302f73d8b5",
+    "reply_sha256": "906fe9eab2a2beb2cf127868375bbf630abf7ba59c31c3a1cf56d1eb4ce1fab6",
+    "source_snapshot_sha256": "33286d2b1f821418d630f014591af49ed39889fb15812d1c29b1cfac03218ea8",
+    "proposal_sha256": "260672a351ab764d22eba8dcfa2910a25bab3d1b527680eb0c717ef88d9deb15",
+    "actual_natural_operation": "SUPERSEDE",
+    "actual_persisted_relation": "COEXIST",
+    "native_conditional_index_branch_exercised": true,
+    "all_private_originals_retained": true,
+    "actual_recent_messages": 20,
+    "limitations": {
+      "additional_agency_source_on_wire": true,
+      "automated_semantic_checks_not_human_review": true,
+      "closed_condition_grammar_not_all_natural_language": true,
+      "unknown_future_automatic_execution": true,
+      "whole_goal_accuracy_not_claimed": true
+    },
+    "whole_goal_complete": false,
+    "review_correction": {
+      "initial_strict_check_missed_quotation_marks": true,
+      "actual_atoms_and_conjunction_unchanged": true,
+      "only_failed_semantic_check_rechecked": true,
+      "model_calls": 0,
+      "private_text_exported": false
+    }
+  },
+  "prior_actual_rejection_diagnostics": [
+    {
+      "variant": "native-pg-spaces",
+      "trace": [
+        {
+          "function": "memory_evidence_allowed",
+          "line": 439,
+          "returned_none": false,
+          "returned_false": false
+        },
+        {
+          "function": "_grounded_value",
+          "line": 787,
+          "returned_none": false,
+          "returned_false": true
+        },
+        {
+          "function": "_candidate_to_proposal",
+          "line": 1182,
+          "returned_none": true,
+          "returned_false": false
+        }
+      ],
+      "actual_accepted_count": 0,
+      "replay_accepted_count": 0,
+      "replay_only_no_model_or_database_write": true,
+      "source_sha256": "542bc7af5784cbd04dcdc5ff84b87fcdfb7d311095636132fe702c302f73d8b5",
+      "proposal_sha256": "5fcabe53f87270485261f8c8ab9b2d95011601c1f0e58654e54d93fa95657880",
+      "value_literal_in_evidence": false,
+      "value_passes_existing_grounding": false,
+      "head_literal_in_evidence": true,
+      "proposed_content_contains_full_value": false,
+      "qualifier_grounding": {
+        "time": true,
+        "condition": true,
+        "certainty": true
+      },
+      "actual_operation": "SUPERSEDE"
+    },
+    {
+      "variant": "native-pg-spaces-next",
+      "trace": [
+        {
+          "function": "memory_evidence_allowed",
+          "line": 439,
+          "returned_none": false,
+          "returned_false": false
+        },
+        {
+          "function": "_grounded_value",
+          "line": 787,
+          "returned_none": false,
+          "returned_false": true
+        },
+        {
+          "function": "_candidate_to_proposal",
+          "line": 1182,
+          "returned_none": true,
+          "returned_false": false
+        }
+      ],
+      "actual_accepted_count": 0,
+      "replay_accepted_count": 0,
+      "replay_only_no_model_or_database_write": true,
+      "source_sha256": "542bc7af5784cbd04dcdc5ff84b87fcdfb7d311095636132fe702c302f73d8b5",
+      "proposal_sha256": "b5b8334610e5be01728b31111a9563d90ca8e61f6b4a59abfa08f99886f49ade",
+      "value_literal_in_evidence": false,
+      "value_passes_existing_grounding": false,
+      "head_literal_in_evidence": true,
+      "proposed_content_contains_full_value": false,
+      "qualifier_grounding": {
+        "time": true,
+        "condition": true,
+        "certainty": true
+      },
+      "actual_operation": "SUPERSEDE"
+    }
+  ],
+  "prior_receipt_offline_replay": {
+    "runs": [
+      {
+        "variant": "native-pg-spaces",
+        "checks": {
+          "original_rejected_count_zero": true,
+          "actual_raw_receipt_unchanged": true,
+          "new_parser_accepts_same_receipt_once": true,
+          "short_index_matches_typed_target": true,
+          "full_literal_condition_preserved": true,
+          "all_qualifiers_preserved": true,
+          "full_admitted_evidence_retained": true,
+          "operation_and_target_unchanged": true,
+          "model_observation_clock_ignored": true,
+          "content_rebuilt_not_decorated_label": true
+        },
+        "proposal_sha256": "5fcabe53f87270485261f8c8ab9b2d95011601c1f0e58654e54d93fa95657880",
+        "source_sha256": "542bc7af5784cbd04dcdc5ff84b87fcdfb7d311095636132fe702c302f73d8b5",
+        "offline_replay_not_new_native_result": true
+      },
+      {
+        "variant": "native-pg-spaces-next",
+        "checks": {
+          "original_rejected_count_zero": true,
+          "actual_raw_receipt_unchanged": true,
+          "new_parser_accepts_same_receipt_once": true,
+          "short_index_matches_typed_target": true,
+          "full_literal_condition_preserved": true,
+          "all_qualifiers_preserved": true,
+          "full_admitted_evidence_retained": true,
+          "operation_and_target_unchanged": true,
+          "model_observation_clock_ignored": true,
+          "content_rebuilt_not_decorated_label": true
+        },
+        "proposal_sha256": "b5b8334610e5be01728b31111a9563d90ca8e61f6b4a59abfa08f99886f49ade",
+        "source_sha256": "542bc7af5784cbd04dcdc5ff84b87fcdfb7d311095636132fe702c302f73d8b5",
+        "offline_replay_not_new_native_result": true
+      }
+    ],
+    "model_calls": 0,
+    "database_writes": 0,
+    "raw_responses_unchanged": true,
+    "not_claimed_new_native_success": true
+  },
+  "reviewer": "assistant_automated_checks",
+  "human_review": false,
+  "provider_usage_estimate_not_invoice": true
+}
