@@ -155,6 +155,29 @@ def expand_source_context(bundle, vector_db, *, expected_generation, source_budg
             group = (parent, stored.get("knowledge_base_id"), stored.get("title"), stored.get("category"))
             parents.setdefault(group, []).append((identity, index))
             selected_ids.add(identity)
+        scope_excluded = []
+        if requested_titles:
+            # Only declared named originals are independent task roots. Validate
+            # every ranked anchor before filtering; source corruption cannot be
+            # hidden by an unrelated title. Literal references may still recover
+            # a ranked neighbor as dependent, zero-vote source context below.
+            parents = {group: support for group, support in parents.items() if group[2] in requested_titles}
+            scoped = []
+            for anchor in anchors:
+                group = (
+                    anchor.get("document_id"),
+                    anchor.get("knowledge_base_id"),
+                    anchor.get("title"),
+                    anchor.get("category"),
+                )
+                if group in parents:
+                    scoped.append(anchor)
+                else:
+                    scope_excluded.append(anchor["id"])
+            anchors = scoped
+            selected_ids = {anchor["id"] for anchor in anchors}
+            if not anchors:
+                discard_candidates = True
         # Resolve explicit document-title references as source data, never as
         # instructions. Only exact, unambiguous titles in the referring source's
         # knowledge base and the original filter scope can add context.
@@ -306,6 +329,18 @@ def expand_source_context(bundle, vector_db, *, expected_generation, source_budg
                 }
             )
         result = {**bundle, "results": results, "source_context_added": len(added), "source_coverage": tuple(coverage)}
+        if scope_excluded:
+            from knowledge.rag_helper import get_rag_helper
+
+            # Strong unrelated votes cannot certify the remaining semantic
+            # roots. Exact title lookup retains its separate source authority.
+            confidence = get_rag_helper().compute_confidence(anchors)
+            result.update(
+                confidence=min(float(bundle.get("confidence", 0.0)), confidence),
+                original_semantic_confidence=bundle.get("confidence", 0.0),
+                scope_excluded_semantic_document_ids=scope_excluded,
+                citations=[],
+            )
         if references:
             result["source_references"] = tuple(references.values())
         if discard_candidates:

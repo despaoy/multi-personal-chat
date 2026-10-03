@@ -1,0 +1,199 @@
+{
+  "synthetic_only": true,
+  "baseline": "25979d3594bb1ad51ac034e6343e7463aac88838",
+  "model": "deepseek-flash",
+  "case_kind": "declared_document_roots_with_separate_private_and_role_conditions",
+  "public_documents": [
+    {
+      "title": "绿泽窗口受理",
+      "category": "办理",
+      "content": "完整公共办理说明正文起点。方案绿泽窗口受理，编号LZ-781。费用6元，办理时限16小时。全部办理条件：完整表格与身份页齐全。全部例外：身份页缺失须暂停，预约不豁免身份核验。此资料不代表任何人的喜好或选择，满足必要条件不等于实际办理。完整公共办理说明正文终点。"
+    },
+    {
+      "title": "绿泽代办受理",
+      "category": "办理",
+      "content": "完整公共办理说明正文起点。方案绿泽代办受理，编号LZ-782。费用12元，办理时限30小时。全部办理条件：完整表格与代办授权齐全。全部例外：授权过期须重新取得有效授权，费用支付不能替代授权。此资料不代表任何人的喜好或选择，满足必要条件不等于实际办理。完整公共办理说明正文终点。"
+    },
+    {
+      "title": "绿泽加速受理",
+      "category": "办理",
+      "content": "完整公共办理说明正文起点。方案绿泽加速受理，编号LZ-783。费用18元，办理时限5小时。全部办理条件：完整表格且身份核验通过。全部例外：核验失败须退回普通流程，预约不豁免核验。此资料不代表任何人的喜好或选择，满足必要条件不等于实际办理。完整公共办理说明正文终点。"
+    },
+    {
+      "title": "绿泽寄件受理",
+      "category": "办理",
+      "content": "完整公共办理说明正文起点。方案绿泽寄件受理，编号LZ-784。费用9元，办理时限48小时。全部办理条件：完整表格与可投递回寄地址齐全。全部例外：地址无法投递须暂停，附件不全须补件。此资料不代表任何人的喜好或选择，满足必要条件不等于实际办理。完整公共办理说明正文终点。"
+    },
+    {
+      "title": "绿泽角色本人偏好",
+      "category": "办理",
+      "content": "绿泽合成办理场景的角色本人偏好记录。记录编号LZ-RP-785。事实主体：角色月社妃，角色标识tsukiyashiro_kisaki；不是当前用户，也不是对所有现实或原作情境的偏好结论。本记录适用范围仅为本次绿泽合成办理场景，在该场景内当前有效。修订范围：上一版本记录角色月社妃最喜欢寄件受理，这现在仅是历史偏好，不是当前结论。本次修订后的当前记录明确：角色月社妃在四个绿泽受理方案中最喜欢加速受理，窗口、代办和寄件不是她在本场景的最喜欢方案。这项当前喜好不是她已实际选择或使用加速的证明；本记录没有提供角色实际操作事实。本记录没有提供当前用户对寄件的喜好，不能证明用户喜欢或不喜欢寄件，也不能证明用户历史上从未表达过。这是完整的场景事实记录，不含缺页或外部引用。"
+    }
+  ],
+  "private_inputs_kept_complete_in_restricted_server_artifacts": true,
+  "required_private_source_indices": [
+    2
+  ],
+  "all_three_private_originals_retained": true,
+  "result": {
+    "checks": {
+      "new_complete_synthetic_question": true,
+      "actual_seed_five": true,
+      "native_and_main_http200": true,
+      "all_four_cloud_counted": true,
+      "all_original_five_every_field_exact": true,
+      "all_prior_source_fields_exact": true,
+      "source_fence_unchanged": true,
+      "current_private44_active_unclosed": true,
+      "all_three_private_sources_outside_actual_recent_history": true,
+      "current_private_original_on_real_wire": true,
+      "private_answer_not_resupplied_in_question": true,
+      "required_two_public_originals_on_real_wire": true,
+      "unrequested_three_public_bodies_absent": true,
+      "actual_bundle_two_declared_roots": true,
+      "actual_coverage_only_requested_sources": true,
+      "actual_scope_filter_naturally_exercised": true,
+      "confidence_not_inflated": true,
+      "no_spurious_reference": true,
+      "full_question_on_wire": true,
+      "all_five_public_originals_still_durable": true,
+      "excluded_agency_still_in_corpus": true,
+      "new_source_question_full_recorded": true,
+      "writer_no_new_fact_or_delete": true,
+      "three_causal_scope_baseline_failures": true,
+      "all_eighteen_new_nodes": true,
+      "static_zero": true,
+      "no_old_paid_tasks_or_injected_results": true,
+      "original_actual6_not_falsely_reused": true
+    },
+    "passed": 28,
+    "total": 28,
+    "semantic_checks": {
+      "public_price": true,
+      "public_duration": true,
+      "private_current_full_and": true,
+      "public_identity_required": true,
+      "public_failure_exception": true,
+      "appointment_not_exemption": true,
+      "role_current_and_past_separate": true,
+      "private_and_public_attribution": true,
+      "personal_condition_not_identity_exemption": true,
+      "actual_service_not_inferred": true
+    },
+    "semantic_passed": 10,
+    "semantic_total": 10,
+    "actual_calls": 4,
+    "http200": 4,
+    "native_receipts_success": 1,
+    "actual_primary_calls": 1,
+    "affected_unique_test_nodes": 18,
+    "passed_nodes_repeated": 0,
+    "passed_paid_cases_replayed": 0,
+    "estimated_cost_cny": "0.09602980",
+    "receipts": [
+      {
+        "index": 0,
+        "http_status": 200,
+        "prompt_tokens": 41728,
+        "completion_tokens": 52,
+        "cached_tokens": 384,
+        "estimated_cny": "0.04155968"
+      },
+      {
+        "index": 1,
+        "http_status": 200,
+        "prompt_tokens": 40005,
+        "completion_tokens": 16,
+        "cached_tokens": 0,
+        "estimated_cny": "0.040069"
+      },
+      {
+        "index": 2,
+        "http_status": 200,
+        "prompt_tokens": 42242,
+        "completion_tokens": 326,
+        "cached_tokens": 40448,
+        "estimated_cny": "0.00390696"
+      },
+      {
+        "index": 3,
+        "http_status": 200,
+        "prompt_tokens": 11850,
+        "completion_tokens": 6,
+        "cached_tokens": 1408,
+        "estimated_cny": "0.01049416"
+      }
+    ],
+    "question_chars": 207,
+    "question_sha256": "0cc95422e3689ce73f607944edfe3eaf4aeb43fd85c548355ad0940128af7a88",
+    "reply_sha256": "519b27ec681de3feeca5fcd1df9d0e2013135b4507fe07b1449a800c36a24763",
+    "actual_recent_messages": 20,
+    "required_private_source_indices": [
+      2
+    ],
+    "all_private_originals_retained": true,
+    "observed_private_presence": [
+      false,
+      true,
+      true
+    ],
+    "all_public_corpus_documents_retained": true,
+    "native_scope_branch_exercised": true,
+    "excluded_semantic_document_ids": [
+      "doc_505_chunk_0"
+    ],
+    "actual_semantic_confidence": 0.4553,
+    "original_semantic_confidence": 0.4553,
+    "limitations": {
+      "extra_old_private_mail_source_present": true,
+      "new_future45_delayed_recall_not_verified": true,
+      "actual6_snapshot_requires_authenticated_chained_origin": true,
+      "automated_checks_not_human_semantic_review": true,
+      "unknown_read_grammar_keeps_generic_route": true,
+      "whole_goal_accuracy_not_claimed": true
+    },
+    "whole_goal_complete": false
+  },
+  "prior_actual_ranked_scope": {
+    "bundles": [
+      {
+        "requested_titles": [
+          "绿泽加速受理",
+          "绿泽角色本人偏好"
+        ],
+        "documents": [
+          {
+            "document_id": 506,
+            "title": "绿泽加速受理",
+            "role": "ranked_anchor",
+            "directly_requested": true
+          },
+          {
+            "document_id": 505,
+            "title": "绿泽代办受理",
+            "role": "ranked_anchor",
+            "directly_requested": false
+          },
+          {
+            "document_id": 508,
+            "title": "绿泽角色本人偏好",
+            "role": "requested_source",
+            "directly_requested": true
+          }
+        ],
+        "confidence": 0.6063,
+        "reference_count": 0
+      }
+    ],
+    "unrequested_agency_actual_wire": true,
+    "prior_real_update_seed_records": 5,
+    "prior_real_update_final_records": 6,
+    "current_seed_verifier_only_accepts_single_original_supersede": true,
+    "result_sha256": "95bad95ab0a24eb79c049bb2f87f91c4b795f21ab3cde9e084e29d6faf775128",
+    "model_calls": 0,
+    "private_text_exported": false
+  },
+  "reviewer": "assistant_automated_checks",
+  "human_review": false,
+  "provider_usage_estimate_not_invoice": true
+}
