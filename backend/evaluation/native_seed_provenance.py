@@ -6,8 +6,19 @@ import re
 from pathlib import Path
 
 
-def expected_seed_record_count(proof, phase):
+def expected_seed_record_count(proof, phase, *, _visited=frozenset()):
     provenance = proof.get("native_update_seed_origin")
+    history = proof.get("native_history_seed_origin")
+    if history is not None:
+        try:
+            assert provenance is None
+            identity = (history["phase"], history["variant"])
+            assert identity not in _visited
+            from evaluation.native_history_snapshot import validate_history_restore
+
+            return validate_history_restore(proof, phase, _visited | {identity})
+        except (AssertionError, KeyError, TypeError, AttributeError, OSError, ValueError) as error:
+            raise ValueError("Invalid native history seed provenance") from error
     if provenance is None:
         return 4 if proof.get("additional_source_written_by_real_native_turn") else 3
     try:
@@ -32,6 +43,11 @@ def expected_seed_record_count(proof, phase):
             c["http_status"] == 200 and c["request"]["model"] in {"deepseek-flash", "deepseek-v4-pro"} for c in calls
         )
         old, new = origin["seed_records"], origin["user_fact_records_after"]
+        if provenance.get("transition") == "deferred_coexist":
+            from evaluation.native_successor_snapshot import validate_deferred_successor
+
+            return validate_deferred_successor(proof, phase, origin, calls, old, new, provenance)
+        assert provenance.get("transition") is None
         assert len(old) in {3, 4} and len(new) == len(old) + 1
         assert proof["seed_records"] == new
         assert all(isinstance(r["id"], int) and not isinstance(r["id"], bool) and r["id"] > 0 for r in [*old, *new])

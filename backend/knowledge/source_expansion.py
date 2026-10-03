@@ -74,6 +74,25 @@ def _leading_document_titles(query):
             # This names the questions to answer after reading all originals.
             # Literal titles or document selectors still defer the whole task.
             exclusion_text = exclusion_text.replace(task[0], task[0].replace("只核对", "核对", 1), 1)
+    # A closed nonmutating-memory scope declares no document exclusion.
+    # Locate it in the unquoted view and edit only this exclusion-check view;
+    # ranking and generation still receive the complete original question.
+    from character.quoted_erasure_authority import masked_quotes
+
+    try:
+        scope_view = masked_quotes(exclusion_text)[0]
+    except ValueError:
+        return ()
+    for task in reversed(
+        list(
+            re.finditer(
+                r"(?:^|[。！？!?；;\n])\s*本轮只读取[，,]\s*不新增或删除记忆(?=[。！？!?；;\n]|$)",
+                scope_view,
+            )
+        )
+    ):
+        a, z = task.span()
+        exclusion_text = exclusion_text[:a] + exclusion_text[a:z].replace("只读取", "读取", 1) + exclusion_text[z:]
     if (
         any(title not in titles for title in later)
         or "《" in unmatched

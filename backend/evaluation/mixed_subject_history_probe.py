@@ -88,6 +88,7 @@ async def run(args):
         assert fixture.get("additional_source_message")
     private_sources = [fixture["source_message"], *fixture.get("additional_private_source_messages", [])]
     required_private = required_private_sources(fixture)
+    from evaluation.source_transport import complete_source_in_transport
     if args.advance_history:
         assert args.reuse_verified_seed and not args.author_additional_source and not resume_provider_block
         assert len(fixture["history_advancement_tasks"]) == fixture.get("history_advancement_target_count", 8)
@@ -218,10 +219,10 @@ async def run(args):
                 assert all(message["role"] != "user" or message["content"] in
                            {task["message"] for task in fixture["history_advancement_tasks"]}
                            for message in recent)
-                assert all(source not in message["content"] for source in private_sources for message in recent)
+                assert all(not complete_source_in_transport(message["content"], source) for source in private_sources for message in recent)
                 assert all(value not in message["content"]
                            for value in fixture["recent_history_forbidden_values"] for message in recent)
-                assert all(source not in message["content"] for source in private_sources
+                assert all(not complete_source_in_transport(message["content"], source) for source in private_sources
                            for message in payload["messages"][1:-1])
             whole = chr(10).join(unescape(m["content"]) for m in payload["messages"])
             seen = {str(i) + ":" + doc["title"]: doc["content"] in whole for i, doc in enumerate(fixture["documents"])}
@@ -230,8 +231,8 @@ async def run(args):
                     {
                         "request": payload,
                         "document_bodies_present": seen,
-                        "private_source_present": fixture["source_message"] in whole,
-                        "private_sources_present": [source in whole for source in private_sources],
+                        "private_source_present": complete_source_in_transport(whole, fixture["source_message"]),
+                        "private_sources_present": [complete_source_in_transport(whole, source) for source in private_sources],
                         "prepared": proof["prepared"],
                         "retrieval": proof["retrieval"],
                     },
@@ -246,7 +247,7 @@ async def run(args):
                     seen[str(i) + ":" + fixture["documents"][i]["title"]]
                     for i in fixture["required_gate_document_indices"]
                 )
-                and all(source in whole for source in required_private)
+                and all(complete_source_in_transport(whole, source) for source in required_private)
             ), "Complete requested public/private source missing before actual model"
         from inference.context_budget import CONTEXT_SAFETY_MARGIN_TOKENS, estimated_tokens
         from inference.token_counting import token_counter_info
@@ -306,14 +307,13 @@ async def run(args):
         return proposals
 
     ml.parse_llm_proposals = observed_parser
-    from services.character_context import CharacterContextService
-
     from api import generate as api
     from api.auth import _hash_password
     from app.main import create_app
     from cache.config_cache import invalidate_config_cache
     from character.memory_llm import get_memory_enrichment_scheduler, shutdown_memory_enrichment
     from db.adapter import db, is_pg_mode
+    from services.character_context import CharacterContextService
 
     assert is_pg_mode()
     proof = {
@@ -537,9 +537,8 @@ async def run(args):
                 and str(me.json()["user"]["id"]) == str(user["id"])
                 and str(user["id"]) != "1"
             )
-            from repositories.character_memory import DatabaseCharacterMemoryRepository
-
             from character.models import UserScope
+            from repositories.character_memory import DatabaseCharacterMemoryRepository
 
             owner = str(user["id"])
             scope = UserScope("web", "web-character", owner, owner, "private")
@@ -553,6 +552,9 @@ async def run(args):
                     seed_template_verified=True,
                     seed_model_calls_replayed=0,
                 )
+                for provenance_key in ("native_update_seed_origin", "native_history_seed_origin"):
+                    if provenance_key in seed_proof:
+                        proof[provenance_key] = seed_proof[provenance_key]
             else:
                 seed_response = await client.post(
                     "/api/generate",
