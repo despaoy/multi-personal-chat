@@ -133,6 +133,7 @@ def expand_source_context(bundle, vector_db, *, expected_generation, source_budg
                 if target not in parents:
                     parents[target] = []
                     queue.append(target)
+        references = {}
         for source_group in queue:
             for referring in groups.get(source_group, []):
                 text = referring.get("content")
@@ -141,9 +142,24 @@ def expand_source_context(bundle, vector_db, *, expected_generation, source_budg
                 for title in re.findall(r"《([^《》\n]{1,200})》", text):
                     targets = [group for group in groups
                                if group[1] == source_group[1] and group[2] == title]
-                    if len(targets) > 1:
-                        raise RuntimeError("Ambiguous indexed document reference")
-                    if not targets:
+                    for target in targets:
+                        for linked in groups[target]:
+                            parent, index = linked.get("document_id"), linked.get("chunk_index")
+                            if (not isinstance(parent, int) or isinstance(parent, bool) or parent <= 0
+                                    or not isinstance(index, int) or isinstance(index, bool) or index < 0):
+                                raise RuntimeError("Invalid indexed sibling position")
+                            if linked["id"] != f"doc_{parent}_chunk_{index}":
+                                raise RuntimeError("Invalid indexed sibling identity")
+                    references[(source_group[0], title)] = dict(
+                        referring_source_id=f"doc_{source_group[0]}",
+                        referring_source_title=source_group[2], referenced_title=title,
+                        lookup_status=("ambiguous_in_referring_scope" if len(targets) > 1 else
+                                       "matched_in_referring_scope" if targets else "not_found_in_referring_scope"),
+                        source_ids=sorted({f"doc_{target[0]}" for target in targets}),
+                    )
+                    if len(targets) != 1:
+                        # A title collision cannot choose a referenced version,
+                        # but does not invalidate independently verified roots.
                         continue
                     target = targets[0]
                     if target in original_groups or target == source_group:
@@ -200,6 +216,8 @@ def expand_source_context(bundle, vector_db, *, expected_generation, source_budg
             coverage.append({"source_id": f"doc_{group[0]}", "source_title": group[2],
                              "indexed_document_ids": indexed_ids, "retrieved_document_ids": retrieved_ids})
         result = {**bundle, "results": results, "source_context_added": len(added), "source_coverage": tuple(coverage)}
+        if references:
+            result["source_references"] = tuple(references.values())
         if discard_candidates:
             result.update(abstained=not bool(results), citations=[],
                           semantic_candidates_discarded=True)

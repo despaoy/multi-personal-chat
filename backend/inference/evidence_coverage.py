@@ -14,6 +14,9 @@ SOURCE_COVERAGE_POLICY = (
     "requested_sources 是指定标题在本次索引范围的查找结果：not_found_in_index_scope 只表示本次范围未找到，不能证明任何范围都不存在；"
     "not_resolved 表示未取得可核验查找结果，不能说已查无。matched_in_index_scope 只定位到资料，完整可见仍看对应正文覆盖。"
     "缺少指定资料时，保留其他独立依据可以回答的部分；不得拿相似标题、其他正文或私人记忆替代这份资料，不能编造其条件或例外。"
+    "source_references 只表示引用标题在引用资料同知识库及本次过滤范围的查找状态，不证明原文可见或引用版本已确定。"
+    "ambiguous_in_referring_scope 表示多个来源同名，不能凭排序、时间或已取得某份就认定引用选中它；"
+    "not_found_in_referring_scope 只表示该范围未找到。保留主体中可见的独立条款，依赖不确定引用的结论须说明尚不能确认。"
     "不展示内部编号或计数。"
 )
 
@@ -101,14 +104,15 @@ def packet_coverage(total, admitted):
 
 
 def is_partial_coverage(retrieval):
-    return any(row["lookup_status"] != "matched_in_index_scope"
+    return any(row["lookup_status"] != "matched_in_referring_scope"
+               for row in _reference_source_rows(retrieval.source_references)) or any(row["lookup_status"] != "matched_in_index_scope"
                for row in _source_request_rows(retrieval.requested_sources)) or retrieval.packet_coverage.get("status") == "partial" or any(
         row.get("status") == "partial" for row in retrieval.source_coverage
     )
 
 
 def render_coverage(retrieval):
-    if not retrieval.source_coverage and not retrieval.packet_coverage and not retrieval.requested_sources:
+    if not retrieval.source_coverage and not retrieval.packet_coverage and not retrieval.requested_sources and not retrieval.source_references:
         return ""
     public_rows = [
         {
@@ -130,6 +134,8 @@ def render_coverage(retrieval):
     payload = {"packets": dict(retrieval.packet_coverage), "sources": public_rows}
     if retrieval.requested_sources:
         payload["requested_sources"] = _source_request_rows(retrieval.requested_sources)
+    if retrieval.source_references:
+        payload["source_references"] = _reference_source_rows(retrieval.source_references)
     return json.dumps(payload, ensure_ascii=False)
 
 
@@ -181,3 +187,30 @@ def requested_source_lookups(bundle, query):
             status = "matched_in_index_scope" if ids else "not_resolved"
         rows.append(dict(title=title, lookup_status=status, source_ids=ids))
     return tuple(_source_request_rows(rows))
+
+
+def _reference_source_rows(records):
+    rows = []
+    seen = set()
+    counts = {"matched_in_referring_scope": 1, "not_found_in_referring_scope": 0,
+              "ambiguous_in_referring_scope": 2}
+    for record in records:
+        if not isinstance(record, Mapping):
+            raise ValueError("Invalid source reference lookup")
+        origin = record.get("referring_source_id")
+        origin_title = record.get("referring_source_title")
+        title = record.get("referenced_title")
+        status = record.get("lookup_status")
+        ids = record.get("source_ids")
+        if (not isinstance(origin, str) or not re.fullmatch(r"doc_[1-9]\d*", origin)
+                or not isinstance(origin_title, str) or not origin_title.strip()
+                or not isinstance(title, str) or not title.strip() or len(title) > 200
+                or status not in counts or not isinstance(ids, (list, tuple))
+                or not all(isinstance(i, str) and re.fullmatch(r"doc_[1-9]\d*", i) for i in ids)
+                or len(set(ids)) != len(ids) or (origin, title) in seen
+                or (len(ids) != counts[status] if status != "ambiguous_in_referring_scope" else len(ids) < 2)):
+            raise ValueError("Invalid source reference lookup")
+        seen.add((origin, title))
+        rows.append(dict(referring_source_id=origin, referring_source_title=origin_title,
+                         referenced_title=title, lookup_status=status, source_ids=list(ids)))
+    return rows

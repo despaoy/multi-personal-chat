@@ -88,8 +88,12 @@ def test_reference_never_crosses_knowledge_base_or_original_filter(scope):
 
 def test_duplicate_exact_titles_do_not_choose_arbitrary_authority():
     main = row(1, "主规程", "关联《修订》。")
-    with pytest.raises(RuntimeError, match="Ambiguous indexed document reference"):
-        expand([main, row(2, "修订", "值10"), row(3, "修订", "值20")])
+    result = expand([main, row(2, "修订", "值10"), row(3, "修订", "值20")])
+    assert result["results"] == [main] and result["confidence"] == 0.8
+    assert result["source_references"] == (dict(
+        referring_source_id="doc_1", referring_source_title="主规程", referenced_title="修订",
+        lookup_status="ambiguous_in_referring_scope", source_ids=["doc_2", "doc_3"],
+    ),)
 
 
 def test_nested_reference_cycle_terminates_and_keeps_actual_referring_packet_dependencies():

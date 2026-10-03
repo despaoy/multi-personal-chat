@@ -1431,6 +1431,7 @@ async def _generate_with_retrieval(
                         confidence=bundle.get("confidence"),
                         reason="insufficient_retrieval_evidence",
                         requested_sources=source_requests,
+                        source_references=tuple(bundle.get("source_references") or ()),
                         source_lookup=source_lookup,
                     )
 
@@ -1462,6 +1463,7 @@ async def _generate_with_retrieval(
                         citations=tuple(rag_meta.get("citations", [])),
                         confidence=bundle.get("confidence"),
                         requested_sources=source_requests,
+                        source_references=tuple(bundle.get("source_references") or ()),
                         source_lookup=source_lookup,
                         source_excerpts=(
                             (bundle["raw_excerpt"],) if isinstance(bundle.get("raw_excerpt"), dict) else ()

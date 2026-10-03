@@ -115,6 +115,7 @@ class RetrievalResult:
     source_coverage: tuple[Mapping[str, Any], ...] = ()
     packet_coverage: Mapping[str, Any] = field(default_factory=dict)
     requested_sources: tuple[Mapping[str, Any], ...] = ()
+    source_references: tuple[Mapping[str, Any], ...] = ()
 
     @property
     def has_evidence(self) -> bool:
@@ -321,7 +322,7 @@ def _system_prompt(request: GenerationRequest) -> str:
         if request.retrieval.reason == "retrieval_unavailable":
             prompt += "\n本轮依据暂时无法核实；这不代表知识库中不存在答案。请自然表达暂时不能确认。"
     if request.apply_prompt_policy and (request.retrieval.source_coverage or request.retrieval.packet_coverage
-                                       or request.retrieval.requested_sources):
+                                       or request.retrieval.requested_sources or request.retrieval.source_references):
         from inference.evidence_coverage import SOURCE_COVERAGE_POLICY
 
         prompt += '\n\n' + SOURCE_COVERAGE_POLICY
