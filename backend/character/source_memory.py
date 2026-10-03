@@ -128,8 +128,8 @@ class SourceMemoryService:
             # a count-only SQL candidate cut cannot prove an exhaustive read.
             search_limit = None if self._defer_budget else 32
             read_plan = resolve_source_read_plan(query)
-            source_groups = read_plan.groups
-            source_fragments = tuple(dict.fromkeys(fragment for group in source_groups for fragment in group))
+            source_groups = read_plan.atom_groups
+            source_fragments = read_plan.selectors
             project_tags = () if source_fragments else literal_project_source_terms(query)
             explicit_source_scope = bool(project_tags or source_fragments)
             requested_order = requested_source_successors(query)
@@ -225,12 +225,13 @@ class SourceMemoryService:
                          contextual_scope_deferred_to_explicit_task=contextual_deferred,
                          linked_project_scope_omitted=linked_project_omitted,
                          source_read_scope_kind=read_plan.match_mode,
+                         source_read_selector_modes=[fragment.match_mode for fragment in source_fragments],
                          literal_fragment_scope=bool(source_fragments),
                          literal_fragment_count=len(source_fragments),
                          literal_read_group_sizes=[len(group) for group in source_groups],
-                         literal_read_group_match_counts=[sum(all(read_plan.matches_fragment(fragment, row["body"]) for fragment in group)
+                         literal_read_group_match_counts=[sum(all(fragment.matches(row["body"]) for fragment in group)
                                                               for row in selected) for group in source_groups],
-                         literal_fragment_match_counts=[sum(read_plan.matches_fragment(fragment, row["body"]) for row in selected)
+                         literal_fragment_match_counts=[sum(fragment.matches(row["body"]) for row in selected)
                                                         for fragment in source_fragments],
                          linked_fragment_scope_omitted=linked_fragment_omitted,
                          covered_by_fact_count=len(covered),

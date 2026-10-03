@@ -67,12 +67,10 @@ def test_complete_id_dependencies_use_independent_token_roots(query):
     '核对编号QZ11-A01的原始资料。另比较QZ11-B01的条件。',
     '核对编号QZ11-A01的原始资料。再核对其他完整原始记录。',
     '核对编号QZ11-A01的原始资料。核对另一份目录。',
-    '核对编号QZ11-A01的原始资料。读取包含「QZ11-B01」的原话。',
-    '读取包含「QZ11-A01」的原话。核对编号QZ11-B01的原始资料。',
     '核对编号Alpha和Beta的原始资料。',
     '核对编号QZ11-A01的原始资料。朋友说：“未闭合',
 ])
-def test_incomplete_quoted_negative_or_mixed_dependencies_do_not_authorize_a_partial_plan(query):
+def test_incomplete_quoted_or_negative_dependencies_do_not_authorize_a_partial_plan(query):
     from db.memory_source_search import resolve_source_read_plan
     assert resolve_source_read_plan(query).groups == ()
 
