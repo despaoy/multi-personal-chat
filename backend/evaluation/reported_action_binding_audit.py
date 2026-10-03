@@ -13,7 +13,7 @@ from pathlib import Path
 async def run(phase):
     runtime = Path("/home/boot/lhm/multipersonal-runtime")
     assert phase.parent == runtime / "backups/backend-chain-20261001"
-    assert phase.name in {"stage83", "stage84", "stage85"}
+    assert phase.name in {"stage83", "stage84", "stage85", "stage86"}
     cluster = runtime / "evaluations/r148pg.s3"
     os.environ.update(
         MODEL_PROVIDER="openai_compat",
@@ -36,7 +36,7 @@ async def run(phase):
     pre = read("preflight.json")
     review = read("semantic-review.json")
     checks = {}
-    document_count = 5 if phase.name == "stage85" else 4
+    document_count = 5 if phase.name in {"stage85", "stage86"} else 4
 
     def check(name, value):
         checks[name] = bool(value)
@@ -54,7 +54,7 @@ async def run(phase):
         "actual_before_question_dump_and_zero_prior_answers",
         hashlib.sha256((phase / "native-pg-seed/before-question.dump").read_bytes()).hexdigest()
         == seed["before_question_backup"]["database_sha256"]
-        and (phase.name == "stage85" or seed["before_question_backup"]["database_sha256"]
+        and (phase.name in {"stage85", "stage86"} or seed["before_question_backup"]["database_sha256"]
              == "00416458b561625a1db2be7ebae265ea4dffdfa5b8efee9c312479a71b6317c6")
         and seed["before_question_backup"]["prior_same_task_answers"] == 0
         and result["before_question_backup"] == seed["before_question_backup"],
@@ -216,7 +216,7 @@ async def run(phase):
                 for x in await con.fetch(
                     "SELECT id,title,content,category,knowledge_base_id FROM knowledge_documents "
                     "WHERE id=ANY($1) ORDER BY id",
-                    ([504, 505, 506, 507, 508] if phase.name == "stage85" else [504, 505, 506, 507]),
+                    ([504, 505, 506, 507, 508] if phase.name in {"stage85", "stage86"} else [504, 505, 506, 507]),
                 )
             ]
             links = [
@@ -305,7 +305,7 @@ async def run(phase):
         and all(x["quotes"] and all(q in raw for q in x["quotes"]) for x in review["criteria"])
         and review["prior_phase82_case_retested"] is False,
     )
-    if phase.name in {"stage84", "stage85"}:
+    if phase.name in {"stage84", "stage85", "stage86"}:
         check(
             "new_current_and_condition_satisfied_while_actual_use_explicitly_denied",
             case["current_state"]["form_submitted"] is True
@@ -340,6 +340,28 @@ async def run(phase):
         check("actual_same_index_baseline_zero_originals_fixed_all_five",
               diagnostic["whole_originals_present"] == [False] * 5
               and read("actual-api-retrieval-after.json")["whole_originals_present"] == [True] * 5)
+    if phase.name == "stage86":
+        diagnostic = read("role-seed-diagnostic.json")
+        before = read("before-revision-retrieval.json")
+        after = read("seed-retrieval.json")
+        old_body = case["previous_role_preference_source"]["content"]
+        new_body = case["role_preference_source"]["content"]
+        check("real_authenticated_same_document_revision_after_old_cache_warm",
+              diagnostic["login_status"] == diagnostic["new_import_status"] == 200
+              and diagnostic["mutation_kind"] == "actual_authenticated_same_doc_content_update"
+              and diagnostic["new_document_id"] == 508
+              and diagnostic["old_retrieval_warmed"] is True
+              and any(x.get("original_body") == old_body for x in before["original_source_packets"]))
+        check("actual_after_revision_retrieval_and_wire_admit_only_new_whole_role_body",
+              diagnostic["whole_originals_present"] == [True] * 5
+              and any(x.get("original_body") == new_body for x in after["original_source_packets"])
+              and new_body in whole and old_body not in whole
+              and diagnostic["previous_role_body_sha256"] != diagnostic["current_role_body_sha256"])
+        check("same_role_revision_setup_no_provider_or_user_memory_injection",
+              diagnostic["cloud_attempts"] == diagnostic["model_calls"] == 0
+              and len(diagnostic["claims"]) == len(result["user_fact_records_after"]) == 3
+              and seed["source_layout_parent_backup_sha256"]
+              == "811c457bf9479250479da8e1afc580ce0ae5abd743e20265d5a8722b113e9f55")
     review_passed = all(x["passed"] for x in review["criteria"])
     report = dict(
         checks=checks,
@@ -357,8 +379,10 @@ async def run(phase):
         full_native_case_qualified=int(all(checks.values()) and review_passed),
         prior_phase82_full_native_case_qualified=0,
         prior_phase81_full_native_case_qualified=1,
-        prior_phase83_full_native_case_qualified=(1 if phase.name in {"stage84", "stage85"} else None),
+        prior_phase83_full_native_case_qualified=(1 if phase.name in {"stage84", "stage85", "stage86"} else None),
         semantic_review_assessor=review.get("assessor", "assistant"),
+        prior_phase85_full_native_case_qualified=(1 if phase.name == "stage86" else None),
+        current_role_revision_receipts_qualified=(all(checks.values()) if phase.name == "stage86" else None),
         runtime_code_changed=(phase.name == "stage85"),
         production_restarted=False,
         audit_provider_calls=0,
