@@ -196,6 +196,20 @@ def literal_source_read_groups(query):
 
 
 
+def resolve_source_read_plan(query):
+    from knowledge.source_read_plan import SourceReadPlan, has_identifier_read_selector, identifier_read_plan
+
+    if not isinstance(query, str):
+        return SourceReadPlan()
+    groups = literal_source_read_groups(query)
+    if groups:
+        # A mixed selector namespace must not silently authorize just its
+        # leading literal member. Keep unresolved requests intact.
+        return (SourceReadPlan() if has_identifier_read_selector(query) else
+                SourceReadPlan(groups, 'literal_substring'))
+    return identifier_read_plan(query, unresolved_source_read_tail)
+
+
 def search_plan(scope, query, *, limit=32, dialect='sqlite'):
     # None is the internal complete-search contract for serving-budget callers.
     # Explicit bounded callers keep their existing validation and SQL limit.
@@ -216,7 +230,8 @@ def search_plan(scope, query, *, limit=32, dialect='sqlite'):
     params['query_terms'] = json.dumps(tokens, ensure_ascii=False)
     bound = ('SELECT value FROM json_each(:query_terms)' if dialect == 'sqlite' else
              'SELECT value FROM jsonb_array_elements_text(CAST(:query_terms AS JSONB)) AS q(value)')
-    groups = literal_source_read_groups(query)
+    read_plan = resolve_source_read_plan(query)
+    groups = read_plan.groups
     project_tags = () if groups else literal_project_source_terms(query)
     project_filter = ""
     if project_tags:
@@ -234,6 +249,13 @@ def search_plan(scope, query, *, limit=32, dialect='sqlite'):
         params.update({names[fragment]: fragment for fragment in fragments})
         def expression(fragment):
             name = names[fragment]
+            if read_plan.match_mode == 'identifier_token':
+                if dialect == 'sqlite':
+                    return f"source_identifier_match(:{name}, eligible.body) = 1"
+                from knowledge.source_read_plan import identifier_pattern
+                pattern_name = name + '_pattern'
+                params[pattern_name] = identifier_pattern(fragment)
+                return f"eligible.body ~ :{pattern_name}"
             return (f"instr(eligible.body, :{name}) > 0" if dialect == "sqlite" else
                     f"POSITION(:{name} IN eligible.body) > 0")
         fragment_filter = "AND (" + " OR ".join(

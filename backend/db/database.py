@@ -134,6 +134,9 @@ class SQLiteDB:
         if not hasattr(self._local, 'conn') or self._local.conn is None:
             conn = sqlite3.connect(str(self.db_path), check_same_thread=False)
             conn.row_factory = sqlite3.Row
+            from knowledge.source_read_plan import identifier_match
+
+            conn.create_function('source_identifier_match', 2, identifier_match, deterministic=True)
             conn.execute('PRAGMA journal_mode=WAL')
             conn.execute('PRAGMA busy_timeout=5000')
             conn.execute('PRAGMA synchronous=NORMAL')
