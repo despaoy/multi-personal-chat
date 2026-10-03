@@ -283,6 +283,7 @@ async def run(args):
     original_generation = api.generate_character_response
 
     async def observed_generation(request, generate):
+        call_start = len(calls)
         result = await original_generation(request, generate)
         proof["generation"].append(
             {
@@ -291,6 +292,15 @@ async def run(args):
                 "response_mode": result.response_mode,
                 "model_invoked": result.model_invoked,
                 "citation_repair_status": result.citation_repair_status,
+                "guard_retried": result.guard_retried,
+                "guard_violations": list(result.guard_violations),
+                "guard_post_retry_violations": list(result.guard_post_retry_violations),
+                "guard_fallback": result.guard_fallback,
+                "observed_primary_calls": sum(
+                    c["request"].get("max_tokens") == args.answer_tokens
+                    and any("<user_query>" in m.get("content", "") for m in c["request"].get("messages", []))
+                    for c in calls[call_start:]
+                ),
             }
         )
         return result
@@ -602,11 +612,20 @@ async def run(args):
                     for i in fixture["required_gate_document_indices"]
                 )
             else:
-                assert proof["http_status"] == 200 and proof["primary_calls"] == (
+                expected_api_turns = (
                     (1 + len(fixture["bridges"]) - len(seed_proof["successful_bridge_turns"]))
                     if resume_provider_block
                     else (1 if args.reuse_verified_seed else 11)
                 )
+                assert proof["http_status"] == 200 and len(proof["generation"]) == expected_api_turns
+                # Existing guard retry is an additional actual provider request,
+                # not another successful native API turn. Bind the measurement
+                # to each actual generation receipt instead of assuming one call.
+                for generation in proof["generation"]:
+                    assert generation["response_mode"] != "task_composite"
+                    expected_requests = int(generation["model_invoked"]) * (1 + int(generation["guard_retried"]))
+                    assert generation["observed_primary_calls"] == expected_requests
+                assert proof["primary_calls"] == sum(g["observed_primary_calls"] for g in proof["generation"])
             print(
                 json.dumps(
                     {

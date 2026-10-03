@@ -1564,5 +1564,222 @@
     ],
     "provider_block_snapshot_sha256": "e2f5fe9896eae0d3dd08ccb75e2aafba3db9ef4ea6d06e5a90ca46c0bd6251bc",
     "input_normalization": "Only terminal outer newline stripped by normal authenticated API; all seven directory messages otherwise byte-identical and complete."
+  },
+  "observed_native": {
+    "phase_status": "mixed_report_memory_suppression_fixed_budget_and_owner_understanding_open",
+    "evidence_audit_checks": "29/29",
+    "native_memory_selection_qualified": 1,
+    "native_public_original_grants_qualified": 1,
+    "full_native_case_qualified": 0,
+    "strict_semantic_answer_qualified": 0,
+    "configured_token_budget_qualified": false,
+    "initial_cloud_calls": 42,
+    "resumed_cloud_calls": 15,
+    "fixed_cloud_calls": 5,
+    "total_cloud_calls": 62,
+    "http200": 58,
+    "http402": 4,
+    "completed_native_api_replies": 12,
+    "new_completed_native_api_replies_after_resource_restored": 4,
+    "actual_final_primary_requests": [
+      2,
+      1
+    ],
+    "successful_imports_writer_and_bridge_tasks_replayed": 0,
+    "actual_recent_history_messages": 16,
+    "actual_recent_history_chars": 62640,
+    "seed_original_in_recent_history": false,
+    "same_final_question_previous_answer_in_history": false,
+    "actual_same_claim_ids": [
+      42,
+      41,
+      40
+    ],
+    "actual_baseline_recall_summary": {
+      "status": "all_filtered",
+      "records_read": 3,
+      "usable_records": 0,
+      "selected_count": 0,
+      "temporal_views": {
+        "fact": 0,
+        "asserted_state": 0,
+        "observation": 3
+      }
+    },
+    "actual_fixed_recall_summary": {
+      "status": "selected",
+      "records_read": 3,
+      "usable_records": 3,
+      "selected_count": 3,
+      "temporal_views": {
+        "fact": 0,
+        "asserted_state": 0,
+        "observation": 3
+      }
+    },
+    "real_before_question_database_sha256": "094c6543c291fef26307210937a23d23f7b48aea16ffd20028f1ed99b2d5627e",
+    "primary_budgets": [
+      {
+        "variant": "native-pg-resumed",
+        "request_index": 0,
+        "estimated_prompt_tokens": 39916,
+        "actual_prompt_tokens": 66907,
+        "output_limit": 2048,
+        "safety_margin": 512,
+        "configured_window": 65536,
+        "actual_fits": false
+      },
+      {
+        "variant": "native-pg-resumed",
+        "request_index": 1,
+        "estimated_prompt_tokens": 40009,
+        "actual_prompt_tokens": 66964,
+        "output_limit": 2048,
+        "safety_margin": 512,
+        "configured_window": 65536,
+        "actual_fits": false
+      },
+      {
+        "variant": "native-pg-fixed",
+        "request_index": 0,
+        "estimated_prompt_tokens": 41478,
+        "actual_prompt_tokens": 68116,
+        "output_limit": 2048,
+        "safety_margin": 512,
+        "configured_window": 65536,
+        "actual_fits": false
+      }
+    ],
+    "actual_public_original_scopes": [
+      {
+        "packets": {
+          "candidate_packet_count": 8,
+          "admitted_packet_count": 8,
+          "status": "selected_packets_admitted"
+        },
+        "sources": [
+          {
+            "source_id": "doc_506",
+            "source_title": "绿泽加速受理",
+            "indexed_chunk_count": 1,
+            "retrieved_chunk_count": 1,
+            "admitted_chunk_count": 1,
+            "status": "all_indexed_chunks_admitted",
+            "omission_reasons": [],
+            "original_status": "verified_original_body_admitted"
+          },
+          {
+            "source_id": "doc_504",
+            "source_title": "绿泽窗口受理",
+            "indexed_chunk_count": 1,
+            "retrieved_chunk_count": 1,
+            "admitted_chunk_count": 1,
+            "status": "all_indexed_chunks_admitted",
+            "omission_reasons": [],
+            "original_status": "verified_original_body_admitted"
+          },
+          {
+            "source_id": "doc_505",
+            "source_title": "绿泽代办受理",
+            "indexed_chunk_count": 1,
+            "retrieved_chunk_count": 1,
+            "admitted_chunk_count": 1,
+            "status": "all_indexed_chunks_admitted",
+            "omission_reasons": [],
+            "original_status": "verified_original_body_admitted"
+          },
+          {
+            "source_id": "doc_507",
+            "source_title": "绿泽寄件受理",
+            "indexed_chunk_count": 1,
+            "retrieved_chunk_count": 1,
+            "admitted_chunk_count": 1,
+            "status": "all_indexed_chunks_admitted",
+            "omission_reasons": [],
+            "original_status": "verified_original_body_admitted"
+          }
+        ]
+      },
+      {
+        "packets": {
+          "candidate_packet_count": 8,
+          "admitted_packet_count": 8,
+          "status": "selected_packets_admitted"
+        },
+        "sources": [
+          {
+            "source_id": "doc_506",
+            "source_title": "绿泽加速受理",
+            "indexed_chunk_count": 1,
+            "retrieved_chunk_count": 1,
+            "admitted_chunk_count": 1,
+            "status": "all_indexed_chunks_admitted",
+            "omission_reasons": [],
+            "original_status": "verified_original_body_admitted"
+          },
+          {
+            "source_id": "doc_504",
+            "source_title": "绿泽窗口受理",
+            "indexed_chunk_count": 1,
+            "retrieved_chunk_count": 1,
+            "admitted_chunk_count": 1,
+            "status": "all_indexed_chunks_admitted",
+            "omission_reasons": [],
+            "original_status": "verified_original_body_admitted"
+          },
+          {
+            "source_id": "doc_505",
+            "source_title": "绿泽代办受理",
+            "indexed_chunk_count": 1,
+            "retrieved_chunk_count": 1,
+            "admitted_chunk_count": 1,
+            "status": "all_indexed_chunks_admitted",
+            "omission_reasons": [],
+            "original_status": "verified_original_body_admitted"
+          },
+          {
+            "source_id": "doc_507",
+            "source_title": "绿泽寄件受理",
+            "indexed_chunk_count": 1,
+            "retrieved_chunk_count": 1,
+            "admitted_chunk_count": 1,
+            "status": "all_indexed_chunks_admitted",
+            "omission_reasons": [],
+            "original_status": "verified_original_body_admitted"
+          }
+        ]
+      }
+    ],
+    "raw_baseline_first_and_retry_replies": [
+      "四份说明逐项如下。\n\n**绿泽窗口受理**  \n编号：LZ-781  \n费用：6元  \n办理时限：16小时  \n全部办理条件：完整表格与身份页齐全  \n全部例外：身份页缺失须暂停，预约不豁免身份核验  \n本轮核对范围：已取得完整原文。  \n本轮偏好条件：完整表格已提交，身份页齐全，条件满足。身份核验失败不构成窗口受理的例外，因为窗口受理的例外只涉及身份页缺失与预约核验豁免。\n\n**绿泽代办受理**  \n编号：LZ-782  \n费用：12元  \n办理时限：30小时  \n全部办理条件：完整表格与代办授权齐全  \n全部例外：授权过期须重新取得有效授权，费用支付不能替代授权  \n本轮核对范围：已取得完整原文。  \n本轮偏好条件：完整表格已提交，代办授权有效，条件满足。身份核验失败未列入代办受理的例外。\n\n**绿泽加速受理**  \n编号：LZ-783  \n费用：18元  \n办理时限：5小时  \n全部办理条件：完整表格且身份核验通过  \n全部例外：核验失败须退回普通流程，预约不豁免核验  \n本轮核对范围：已取得完整原文。  \n本轮偏好条件：完整表格已提交，但身份核验失败，不满足“身份核验通过”的必要条件。因此本轮不满足加速受理条件。\n\n**绿泽寄件受理**  \n编号：LZ-784  \n费用：9元  \n办理时限：48小时  \n全部办理条件：完整表格与可投递回寄地址齐全  \n全部例外：地址无法投递须暂停，附件不全须补件  \n本轮核对范围：已取得完整原文。  \n本轮偏好条件：完整表格已提交，回寄地址可投递，附件齐全，条件满足。\n\n关于你告诉我的本人办理偏好：历史原话显示你喜欢窗口受理，不喜欢代办受理，并且只有完整表格已提交且身份核验通过才使用加速受理。本轮身份核验失败，所以加速受理不适用。窗口受理条件满足，也与你的偏好一致。\n\n你问我最喜欢哪个受理方案——这我无法回答。我没有关于自己偏好的依据，也不会把公共说明或你的偏好当成我的选择。依据不足，保留未知。",
+      "四份说明逐项如下：\n\n**绿泽窗口受理**\n- 编号：LZ-781\n- 费用：6元\n- 办理时限：16小时\n- 全部办理条件：完整表格与身份页齐全\n- 全部例外：身份页缺失须暂停，预约不豁免身份核验\n- 本轮核对原文范围：已核对完整正文\n- 本轮条件判断：完整表格已提交、身份页齐全，满足办理条件；未触发身份页缺失例外。你的偏好是窗口受理，因此这项符合你的偏好。\n\n**绿泽代办受理**\n- 编号：LZ-782\n- 费用：12元\n- 办理时限：30小时\n- 全部办理条件：完整表格与代办授权齐全\n- 全部例外：授权过期须重新取得有效授权，费用支付不能替代授权\n- 本轮核对原文范围：已核对完整正文\n- 本轮条件判断：完整表格已提交、代办授权有效，满足办理条件；未触发授权过期例外。但你不喜欢代办受理，因此这项不符合你的偏好。\n\n**绿泽加速受理**\n- 编号：LZ-783\n- 费用：18元\n- 办理时限：5小时\n- 全部办理条件：完整表格且身份核验通过\n- 全部例外：核验失败须退回普通流程，预约不豁免核验\n- 本轮核对原文范围：已核对完整正文\n- 本轮条件判断：完整表格已提交，但身份核验失败，不满足办理条件，并触发核验失败例外。即使你偏好加速受理，本轮也不能使用。\n\n**绿泽寄件受理**\n- 编号：LZ-784\n- 费用：9元\n- 办理时限：48小时\n- 全部办理条件：完整表格与可投递回寄地址齐全\n- 全部例外：地址无法投递须暂停，附件不全须补件\n- 本轮核对原文范围：已核对完整正文\n- 本轮条件判断：完整表格已提交、回寄地址可投递、附件齐全，满足办理条件；未触发地址无法投递或附件不全例外。你的历史原话没有提到寄件受理的喜好，因此这项的偏好结论保留未知。\n\n关于“最喜欢哪个受理方案”：我没有取得你本人对各方案喜好程度的完整证据，只有你明确说过喜欢窗口受理、不喜欢代办受理、有条件地喜欢加速受理。依据不足，不能替你判定“最喜欢”哪一个，所以这项保留未知。"
+    ],
+    "raw_baseline_api_reply": "四份说明逐项如下：\n\n**绿泽窗口受理**\n- 编号：LZ-781\n- 费用：6元\n- 办理时限：16小时\n- 全部办理条件：完整表格与身份页齐全\n- 全部例外：身份页缺失须暂停，预约不豁免身份核验\n- 本轮核对原文范围：已核对完整正文\n- 本轮条件判断：完整表格已提交、身份页齐全，满足办理条件；未触发身份页缺失例外。你的偏好是窗口受理，因此这项符合你的偏好。\n\n**绿泽代办受理**\n- 编号：LZ-782\n- 费用：12元\n- 办理时限：30小时\n- 全部办理条件：完整表格与代办授权齐全\n- 全部例外：授权过期须重新取得有效授权，费用支付不能替代授权\n- 本轮核对原文范围：已核对完整正文\n- 本轮条件判断：完整表格已提交、代办授权有效，满足办理条件；未触发授权过期例外。但你不喜欢代办受理，因此这项不符合你的偏好。\n\n**绿泽加速受理**\n- 编号：LZ-783\n- 费用：18元\n- 办理时限：5小时\n- 全部办理条件：完整表格且身份核验通过\n- 全部例外：核验失败须退回普通流程，预约不豁免核验\n- 本轮核对原文范围：已核对完整正文\n- 本轮条件判断：完整表格已提交，但身份核验失败，不满足办理条件，并触发核验失败例外。即使你偏好加速受理，本轮也不能使用。\n\n**绿泽寄件受理**\n- 编号：LZ-784\n- 费用：9元\n- 办理时限：48小时\n- 全部办理条件：完整表格与可投递回寄地址齐全\n- 全部例外：地址无法投递须暂停，附件不全须补件\n- 本轮核对原文范围：已核对完整正文\n- 本轮条件判断：完整表格已提交、回寄地址可投递、附件齐全，满足办理条件；未触发地址无法投递或附件不全例外。你的历史原话没有提到寄件受理的喜好，因此这项的偏好结论保留未知。\n\n关于“最喜欢哪个受理方案”：我没有取得你本人对各方案喜好程度的完整证据，只有你明确说过喜欢窗口受理、不喜欢代办受理、有条件地喜欢加速受理。依据不足，不能替你判定“最喜欢”哪一个，所以这项保留未知。",
+    "raw_fixed_api_reply": "按四份完整说明逐项列出：\n\n**绿泽窗口受理**\n- 编号：LZ-781\n- 费用：6元\n- 办理时限：16小时\n- 全部办理条件：完整表格与身份页齐全\n- 全部例外：身份页缺失须暂停，预约不豁免身份核验\n\n**绿泽代办受理**\n- 编号：LZ-782\n- 费用：12元\n- 办理时限：30小时\n- 全部办理条件：完整表格与代办授权齐全\n- 全部例外：授权过期须重新取得有效授权，费用支付不能替代授权\n\n**绿泽加速受理**\n- 编号：LZ-783\n- 费用：18元\n- 办理时限：5小时\n- 全部办理条件：完整表格且身份核验通过\n- 全部例外：核验失败须退回普通流程，预约不豁免核验\n\n**绿泽寄件受理**\n- 编号：LZ-784\n- 费用：9元\n- 办理时限：48小时\n- 全部办理条件：完整表格与可投递回寄地址齐全\n- 全部例外：地址无法投递须暂停，附件不全须补件\n\n本轮条件核对：完整表格已提交，身份页齐全，代办授权有效，身份核验失败，回寄地址可投递，附件齐全。\n\n偏好条件判断：\n- 窗口受理：你明确说过喜欢窗口受理。本轮完整表格与身份页齐全，满足其全部办理条件。偏好条件成立。\n- 代办受理：你明确说过不喜欢代办受理。即使代办授权有效，也不改变你的偏好。偏好条件不成立。\n- 加速受理：你明确说过喜欢加速受理，但附加了“只有完整表格已提交且身份核验通过才使用”。本轮身份核验失败，不满足你设定的使用条件。偏好条件不成立。\n- 寄件受理：没有找到你关于寄件受理的喜好证据，保留未知。\n\n原文范围：四份说明的核对原始正文均已完整进入本轮请求，分别覆盖各方案的全部办理条件与全部例外。未取得喜好证据的方案只有寄件受理，其偏好保持未知；必要条件满足不等于实际选择。\n\n你最喜欢哪个受理方案：依据不足，保留未知。我能确认的是，在已有偏好证据中，窗口受理符合你的喜好且本轮条件满足；加速受理虽被你喜欢，但本轮不满足你设定的核验通过前提；代办受理你不喜欢。至于“最喜欢”这一排序，没有足够证据判断。",
+    "open_findings": [
+      "The configured65536 serving estimate undercounts these numeric ASCII archive histories: actual final primary prompt66907/66964/68116, while estimates39916/40009/41478. Provider200 is not proof of configured-budget correctness. Preserve full fixtures and investigate estimator; do not arbitrarily shrink configured history or claim memory repair fixes this.",
+      "Fixed raw response reinterprets the independent character preference task as the user preference ranking. Baseline first raw primary correctly distinguishes character ownership, but existing output guard retries and returned second response reinterprets ownership. Full semantic understanding remains unqualified. No style-forcing patch, resampling, source omission or model-size attribution."
+    ],
+    "original_probe_assertion_failure_preserved": "Original resumed probe assumes one primary request per successful API turn; actual existing output_guard retry adds second final primary request, yielding4 not3. Original assertion failure occurs after all actual result/calls saved; do not replay successful turns. Fix future observation count against each real GenerationResult.guard_retried receipt.",
+    "targeted_tests": {
+      "new": 19,
+      "directly_affected_old": 1,
+      "unique": 20,
+      "executions": 20
+    },
+    "all_phase_jobs_terminal": true,
+    "server_runtime_source_sha256": "b1835b8bf4774f97cede24a1ee7d319ee2aa46457387a75b5ba79f8dbd695d16",
+    "note": "The earlier observed_partial section is historical evidence before resource restoration, not current phase state. No full-chain or semantic qualification is claimed.",
+    "production_deployment": {
+      "backend_group": 2531282,
+      "backend_pid": 2531286,
+      "ready": 200,
+      "core_sha256": {
+        "backend/character/memory_service.py": "b1835b8bf4774f97cede24a1ee7d319ee2aa46457387a75b5ba79f8dbd695d16"
+      },
+      "configurations_unchanged": true,
+      "other_services_unchanged": true,
+      "production_generate_requests_during_deployment": 0
+    }
   }
 }

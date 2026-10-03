@@ -462,7 +462,7 @@ class _MemoryIntents:
 
 
 def _topic_subjects(clause: str, topic_pattern: re.Pattern[str]) -> list[str]:
-    """判断子句中每个话题词的提问主体：'user' / 'non_user' 列表。
+    """判断子句中每个话题词的提问主体：'user' / 'non_user' / 'deferred' 列表。
 
     遍历子句内全部话题词（search 只取首个会漏掉
     "你叫什么名字以及我叫什么名字"中第二个话题的用户主体），
@@ -486,6 +486,10 @@ def _topic_subjects(clause: str, topic_pattern: re.Pattern[str]) -> list[str]:
         if (_SELF_REPORT_RECIPIENT.fullmatch(clause[:last.end()])
                 and (re.fullmatch(r"的(?:本人|个人|饮料|饮品|饮食|食物|音乐|电影|生活)*", report_topic)
                      or _PERSONAL_REPORT_TOPIC.fullmatch(report_topic))):
+            # Retain this independent scoped read when another subtask asks
+            # about a different owner. It still grants no self-ownership or
+            # positive intent; the authorized evidence reviewer decides use.
+            subjects.append("deferred")
             continue
         subjects.append("user" if last.group() in _USER_SUBJECTS else "non_user")
     return subjects
@@ -505,8 +509,8 @@ def _detect_memory_intents(query: str) -> _MemoryIntents:
     text = (query or "").strip()
     if not text:
         return _MemoryIntents()
-    name_user = name_other = False
-    pref_user = pref_other = False
+    name_user = name_other = name_deferred = False
+    pref_user = pref_other = pref_deferred = False
     for clause in _CLAUSE_SPLIT_PATTERN.split(text):
         # 子句内部空白归一化：空白不是子句边界，留在原位会割裂
         # 主体与话题词（"你知道我 叫什么名字吗"）
@@ -516,11 +520,15 @@ def _detect_memory_intents(query: str) -> _MemoryIntents:
         for subject in _topic_subjects(clause, _NAME_TOPIC_PATTERN):
             if subject == "user":
                 name_user = True
+            elif subject == "deferred":
+                name_deferred = True
             else:
                 name_other = True
         for subject in _topic_subjects(clause, _PREFERENCE_TOPIC_PATTERN):
             if subject == "user":
                 pref_user = True
+            elif subject == "deferred":
+                pref_deferred = True
             else:
                 pref_other = True
     return _MemoryIntents(
@@ -530,8 +538,8 @@ def _detect_memory_intents(query: str) -> _MemoryIntents:
         goal=bool(_GOAL_INTENT_PATTERN.search(text)),
         # 同类问题里存在任一用户主体话题时不抑制
         # （"你叫什么名字？我叫什么名字？"仍可召回名字记忆）
-        suppress_name=name_other and not name_user,
-        suppress_preference=pref_other and not pref_user,
+        suppress_name=name_other and not name_user and not name_deferred,
+        suppress_preference=pref_other and not pref_user and not pref_deferred,
     )
 
 
