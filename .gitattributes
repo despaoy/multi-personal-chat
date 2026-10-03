@@ -9,3 +9,6 @@
 *.md text eol=lf
 *.py text eol=lf
 *.sh text eol=lf
+
+# Preserve the pinned upstream MIT license byte-for-byte, including CRLF.
+backend/inference/tokenizer_data/LICENSE.deepseek-v4-pro-0813 -text

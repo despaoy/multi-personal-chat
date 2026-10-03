@@ -48,3 +48,5 @@
 服务器阶段证据目录 `/home/boot/lhm/multipersonal-runtime/backups/backend-chain-20261001/stage79`；本阶段离线审计入口 `backend/evaluation/deepseek_token_budget_audit.py`，原生入口复用 `backend/evaluation/mixed_subject_history_probe.py` 并新增每次实际请求发送前预算记录。凭据与生产业务数据未纳入公开材料。
 
 生产交付：仅后端重启，group2542629/uvicorn2542633，ready200；与已验证版本一致的7个运行/依赖/数据文件已安装。三项配置及其他服务进程不变。部署验证没有新增模型调用或业务数据写入，24个已通过测试未重跑。
+
+打包核对：Windows Git 默认规范化会把官方MIT许可证的CRLF改为LF，造成原始许可哈希不符。首次本地提交尚未上传，检查及时发现；新增精确路径的 -text 属性保留官方许可原始1084字节及SHA256，不修改许可内容或校准来源。运行源码、分词数据和已验证结果不变，未重跑测试或模型调用。
