@@ -60,6 +60,41 @@ def literal_project_source_terms(query):
     return tags
 
 
+def literal_source_fragment(query):
+    """A closed literal-containing source read; never a subject/truth inference.
+
+    Only the unquoted leading read and one quoted locator resolve scope.
+    Unknown/mixed/excluded reads retain unrestricted retrieval. The locator
+    stays byte-exact; it is not a normalized excerpt or an SQL wildcard.
+    """
+    from character.quoted_erasure_authority import masked_quotes
+
+    if not isinstance(query, str):
+        return ""
+    try:
+        view, quotes = masked_quotes(query)
+    except ValueError:
+        return ""
+    if not quotes:
+        return ""
+    a, z, fragment = quotes[0]
+    if (
+        not re.fullmatch(r"\s*(?:请)?(?:查找|检索|读取|查看)\s*(?:包含|含有)\s*", view[:a])
+        or not fragment.strip() or "\n" in fragment or not terms(fragment)
+        or any(char in fragment for char in '“”‘’「」『』"')
+    ):
+        return ""
+    read = re.match(r"\s*的\s*(?:完整|全部)?(?:用户)?(?:原话|原始发言)(?:记录)?\s*(?:[。；;\n]|$)", view[z:])
+    if not read:
+        return ""
+    remainder = view[z + read.end():]
+    if re.search(r"另外|同时|以及|还要|并且|顺便", remainder) or re.search(
+        r"(?:查找|检索|读取|查看|复述|还原)[^。；;\n]*(?:原话|原始|记录)", remainder
+    ):
+        return ""
+    return fragment
+
+
 def search_plan(scope, query, *, limit=32, dialect='sqlite'):
     # None is the internal complete-search contract for serving-budget callers.
     # Explicit bounded callers keep their existing validation and SQL limit.
@@ -80,7 +115,8 @@ def search_plan(scope, query, *, limit=32, dialect='sqlite'):
     params['query_terms'] = json.dumps(tokens, ensure_ascii=False)
     bound = ('SELECT value FROM json_each(:query_terms)' if dialect == 'sqlite' else
              'SELECT value FROM jsonb_array_elements_text(CAST(:query_terms AS JSONB)) AS q(value)')
-    project_tags = literal_project_source_terms(query)
+    fragment = literal_source_fragment(query)
+    project_tags = () if fragment else literal_project_source_terms(query)
     project_filter = ""
     if project_tags:
         params['project_terms'] = json.dumps(project_tags)
@@ -90,6 +126,11 @@ def search_plan(scope, query, *, limit=32, dialect='sqlite'):
                           "WHERE anchor.scope_key = :scope_key "
                           f"AND anchor.term IN ({project_bound})) project_scope "
                           "ON project_scope.source_key = t.source_key ")
+    fragment_filter = ""
+    if fragment:
+        params["source_fragment"] = fragment
+        fragment_filter = ("AND instr(eligible.body, :source_fragment) > 0 " if dialect == "sqlite" else
+                           "AND POSITION(:source_fragment IN eligible.body) > 0 ")
     # Inverse posting frequency is a retrieval weight, not semantic confidence.
     # Full source rows are reached through scoped postings, not latest-N scans.
     # Erasure watermark is checked in this same SQL snapshot; no text cache.
@@ -97,6 +138,7 @@ def search_plan(scope, query, *, limit=32, dialect='sqlite'):
                   f"{project_filter}"
                   "JOIN memory_sources eligible ON eligible.source_key = t.source_key "
                   f"WHERE t.scope_key = :scope_key AND t.term IN ({bound}) "
+                  f"{fragment_filter}"
                   "AND eligible.state = 'recorded' AND eligible.observed_at > "
                   "COALESCE((SELECT revoked_before FROM memory_source_fences WHERE owner_key = :owner_key), '')), "
                   "df AS (SELECT term, COUNT(*) AS n FROM hits GROUP BY term), "

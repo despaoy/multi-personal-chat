@@ -13,7 +13,7 @@ from dataclasses import dataclass, field, replace
 from datetime import datetime
 from html import escape
 
-from db.memory_source_search import literal_project_source_terms, terms
+from db.memory_source_search import literal_project_source_terms, literal_source_fragment, terms
 
 
 @dataclass(frozen=True)
@@ -127,13 +127,15 @@ class SourceMemoryService:
             # Complete source packets are admitted by the actual serving budget;
             # a count-only SQL candidate cut cannot prove an exhaustive read.
             search_limit = None if self._defer_budget else 32
-            project_tags = literal_project_source_terms(query)
+            source_fragment = literal_source_fragment(query)
+            project_tags = () if source_fragment else literal_project_source_terms(query)
+            explicit_source_scope = bool(project_tags or source_fragment)
             requested_order = requested_source_successors(query)
             effective_radius = 1 if requested_order else self._window_radius
-            contextual_deferred = bool(project_tags and retrieval_context.strip())
+            contextual_deferred = bool(explicit_source_scope and retrieval_context.strip())
             lanes = [linker(character_id, scope, memory_ids=ids),
                      search(character_id, scope, query=query, limit=search_limit)]
-            if retrieval_context.strip() and not project_tags:
+            if retrieval_context.strip() and not explicit_source_scope:
                 lanes.append(search(character_id, scope, query=retrieval_context, limit=search_limit))
             linked, found, *contextual_results = await asyncio.gather(*lanes)
             contextual = contextual_results[0] if contextual_results else []
@@ -142,6 +144,12 @@ class SourceMemoryService:
             if project_tags:
                 scoped_linked = [row for row in linked if set(project_tags).intersection(terms(row['body']))]
                 linked_project_omitted = len(linked) - len(scoped_linked)
+                linked = scoped_linked
+
+            linked_fragment_omitted = 0
+            if source_fragment:
+                scoped_linked = [row for row in linked if source_fragment in row["body"]]
+                linked_fragment_omitted = len(linked) - len(scoped_linked)
                 linked = scoped_linked
 
             linked_read_count, indexed_read_count = original_linked_read_count, len(found)
@@ -196,7 +204,8 @@ class SourceMemoryService:
                     source_message_ids=chosen_ids[offset:offset + 100]))
             fresh_by_id = {row["source_message_id"]: row for row in fresh}
             selected = [fresh_by_id[row["source_message_id"]] for row in selected
-                        if row["source_message_id"] in fresh_by_id]
+                        if row["source_message_id"] in fresh_by_id
+                        and (not source_fragment or source_fragment in fresh_by_id[row["source_message_id"]]["body"])]
             dependency_omitted = 0
             if requested_order:
                 valid_ids = set(anchor_ids) | {child for parent, children in requested_followers.items()
@@ -213,6 +222,8 @@ class SourceMemoryService:
                          literal_project_terms=list(project_tags),
                          contextual_scope_deferred_to_explicit_task=contextual_deferred,
                          linked_project_scope_omitted=linked_project_omitted,
+                         literal_fragment_scope=bool(source_fragment),
+                         linked_fragment_scope_omitted=linked_fragment_omitted,
                          covered_by_fact_count=len(covered),
                          window_radius=self._window_radius, effective_window_radius=effective_radius,
                          requested_source_order="next_visible_after_each_anchor" if requested_order else "not_resolved",

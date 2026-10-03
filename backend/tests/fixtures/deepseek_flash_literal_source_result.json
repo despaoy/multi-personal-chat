@@ -1,0 +1,1282 @@
+{
+  "synthetic": true,
+  "stage": 105,
+  "model": "deepseek-flash",
+  "private_inputs_kept_complete_in_restricted_server_artifacts": true,
+  "documents": [
+    {
+      "title": "绿泽窗口受理",
+      "category": "办理",
+      "content": "完整公共办理说明正文起点。方案绿泽窗口受理，编号LZ-781。费用6元，办理时限16小时。全部办理条件：完整表格与身份页齐全。全部例外：身份页缺失须暂停，预约不豁免身份核验。此资料不代表任何人的喜好或选择，满足必要条件不等于实际办理。完整公共办理说明正文终点。"
+    },
+    {
+      "title": "绿泽代办受理",
+      "category": "办理",
+      "content": "完整公共办理说明正文起点。方案绿泽代办受理，编号LZ-782。费用12元，办理时限30小时。全部办理条件：完整表格与代办授权齐全。全部例外：授权过期须重新取得有效授权，费用支付不能替代授权。此资料不代表任何人的喜好或选择，满足必要条件不等于实际办理。完整公共办理说明正文终点。"
+    },
+    {
+      "title": "绿泽加速受理",
+      "category": "办理",
+      "content": "完整公共办理说明正文起点。方案绿泽加速受理，编号LZ-783。费用18元，办理时限5小时。全部办理条件：完整表格且身份核验通过。全部例外：核验失败须退回普通流程，预约不豁免核验。此资料不代表任何人的喜好或选择，满足必要条件不等于实际办理。完整公共办理说明正文终点。"
+    },
+    {
+      "title": "绿泽寄件受理",
+      "category": "办理",
+      "content": "完整公共办理说明正文起点。方案绿泽寄件受理，编号LZ-784。费用9元，办理时限48小时。全部办理条件：完整表格与可投递回寄地址齐全。全部例外：地址无法投递须暂停，附件不全须补件。此资料不代表任何人的喜好或选择，满足必要条件不等于实际办理。完整公共办理说明正文终点。"
+    },
+    {
+      "title": "绿泽角色本人偏好",
+      "category": "办理",
+      "content": "绿泽合成办理场景的角色本人偏好记录。记录编号LZ-RP-785。事实主体：角色月社妃，角色标识tsukiyashiro_kisaki；不是当前用户，也不是对所有现实或原作情境的偏好结论。本记录适用范围仅为本次绿泽合成办理场景，在该场景内当前有效。修订范围：上一版本记录角色月社妃最喜欢寄件受理，这现在仅是历史偏好，不是当前结论。本次修订后的当前记录明确：角色月社妃在四个绿泽受理方案中最喜欢加速受理，窗口、代办和寄件不是她在本场景的最喜欢方案。这项当前喜好不是她已实际选择或使用加速的证明；本记录没有提供角色实际操作事实。本记录没有提供当前用户对寄件的喜好，不能证明用户喜欢或不喜欢寄件，也不能证明用户历史上从未表达过。这是完整的场景事实记录，不含缺页或外部引用。"
+    }
+  ],
+  "complete_source_catalogues": [
+    {
+      "source": {
+        "id": "VQ104-NEW-11",
+        "message": "这是第三方紫航合成配送目录核对，不是本人或角色的经历、偏好或未来计划。以下40条是本轮全部数据；核验布尔值true表示已核验，false表示待核验。每条前提及例外均已给全，编号唯一：[{\"id\":\"VQ104-11-001\",\"route\":\"东区\",\"fee\":11,\"hours\":2,\"capacity\":4,\"verified\":false,\"required\":\"VQ104-11-001登记页和封签页齐全\",\"exception\":\"VQ104-11-001封签缺失须暂停，费用支付不能替代本条核验\"},{\"id\":\"VQ104-11-002\",\"route\":\"西区\",\"fee\":18,\"hours\":7,\"capacity\":5,\"verified\":true,\"required\":\"VQ104-11-002登记页和封签页齐全\",\"exception\":\"VQ104-11-002封签缺失须暂停，费用支付不能替代本条核验\"},{\"id\":\"VQ104-11-003\",\"route\":\"北区\",\"fee\":25,\"hours\":12,\"capacity\":6,\"verified\":true,\"required\":\"VQ104-11-003登记页和封签页齐全\",\"exception\":\"VQ104-11-003封签缺失须暂停，费用支付不能替代本条核验\"},{\"id\":\"VQ104-11-004\",\"route\":\"东区\",\"fee\":32,\"hours\":17,\"capacity\":7,\"verified\":true,\"required\":\"VQ104-11-004登记页和封签页齐全\",\"exception\":\"VQ104-11-004封签缺失须暂停，费用支付不能替代本条核验\"},{\"id\":\"VQ104-11-005\",\"route\":\"西区\",\"fee\":39,\"hours\":22,\"capacity\":8,\"verified\":false,\"required\":\"VQ104-11-005登记页和封签页齐全\",\"exception\":\"VQ104-11-005封签缺失须暂停，费用支付不能替代本条核验\"},{\"id\":\"VQ104-11-006\",\"route\":\"北区\",\"fee\":46,\"hours\":27,\"capacity\":9,\"verified\":true,\"required\":\"VQ104-11-006登记页和封签页齐全\",\"exception\":\"VQ104-11-006封签缺失须暂停，费用支付不能替代本条核验\"},{\"id\":\"VQ104-11-007\",\"route\":\"东区\",\"fee\":53,\"hours\":3,\"capacity\":10,\"verified\":true,\"required\":\"VQ104-11-007登记页和封签页齐全\",\"exception\":\"VQ104-11-007封签缺失须暂停，费用支付不能替代本条核验\"},{\"id\":\"VQ104-11-008\",\"route\":\"西区\",\"fee\":60,\"hours\":8,\"capacity\":11,\"verified\":true,\"required\":\"VQ104-11-008登记页和封签页齐全\",\"exception\":\"VQ104-11-008封签缺失须暂停，费用支付不能替代本条核验\"},{\"id\":\"VQ104-11-009\",\"route\":\"北区\",\"fee\":67,\"hours\":13,\"capacity\":12,\"verified\":false,\"required\":\"VQ104-11-009登记页和封签页齐全\",\"exception\":\"VQ104-11-009封签缺失须暂停，费用支付不能替代本条核验\"},{\"id\":\"VQ104-11-010\",\"route\":\"东区\",\"fee\":13,\"hours\":18,\"capacity\":4,\"verified\":true,\"required\":\"VQ104-11-010登记页和封签页齐全\",\"exception\":\"VQ104-11-010封签缺失须暂停，费用支付不能替代本条核验\"},{\"id\":\"VQ104-11-011\",\"route\":\"西区\",\"fee\":20,\"hours\":23,\"capacity\":5,\"verified\":true,\"required\":\"VQ104-11-011登记页和封签页齐全\",\"exception\":\"VQ104-11-011封签缺失须暂停，费用支付不能替代本条核验\"},{\"id\":\"VQ104-11-012\",\"route\":\"北区\",\"fee\":27,\"hours\":28,\"capacity\":6,\"verified\":true,\"required\":\"VQ104-11-012登记页和封签页齐全\",\"exception\":\"VQ104-11-012封签缺失须暂停，费用支付不能替代本条核验\"},{\"id\":\"VQ104-11-013\",\"route\":\"东区\",\"fee\":34,\"hours\":4,\"capacity\":7,\"verified\":false,\"required\":\"VQ104-11-013登记页和封签页齐全\",\"exception\":\"VQ104-11-013封签缺失须暂停，费用支付不能替代本条核验\"},{\"id\":\"VQ104-11-014\",\"route\":\"西区\",\"fee\":41,\"hours\":9,\"capacity\":8,\"verified\":true,\"required\":\"VQ104-11-014登记页和封签页齐全\",\"exception\":\"VQ104-11-014封签缺失须暂停，费用支付不能替代本条核验\"},{\"id\":\"VQ104-11-015\",\"route\":\"北区\",\"fee\":48,\"hours\":14,\"capacity\":9,\"verified\":true,\"required\":\"VQ104-11-015登记页和封签页齐全\",\"exception\":\"VQ104-11-015封签缺失须暂停，费用支付不能替代本条核验\"},{\"id\":\"VQ104-11-016\",\"route\":\"东区\",\"fee\":55,\"hours\":19,\"capacity\":10,\"verified\":true,\"required\":\"VQ104-11-016登记页和封签页齐全\",\"exception\":\"VQ104-11-016封签缺失须暂停，费用支付不能替代本条核验\"},{\"id\":\"VQ104-11-017\",\"route\":\"西区\",\"fee\":62,\"hours\":24,\"capacity\":11,\"verified\":false,\"required\":\"VQ104-11-017登记页和封签页齐全\",\"exception\":\"VQ104-11-017封签缺失须暂停，费用支付不能替代本条核验\"},{\"id\":\"VQ104-11-018\",\"route\":\"北区\",\"fee\":69,\"hours\":29,\"capacity\":12,\"verified\":true,\"required\":\"VQ104-11-018登记页和封签页齐全\",\"exception\":\"VQ104-11-018封签缺失须暂停，费用支付不能替代本条核验\"},{\"id\":\"VQ104-11-019\",\"route\":\"东区\",\"fee\":15,\"hours\":5,\"capacity\":4,\"verified\":true,\"required\":\"VQ104-11-019登记页和封签页齐全\",\"exception\":\"VQ104-11-019封签缺失须暂停，费用支付不能替代本条核验\"},{\"id\":\"VQ104-11-020\",\"route\":\"西区\",\"fee\":22,\"hours\":10,\"capacity\":5,\"verified\":true,\"required\":\"VQ104-11-020登记页和封签页齐全\",\"exception\":\"VQ104-11-020封签缺失须暂停，费用支付不能替代本条核验\"},{\"id\":\"VQ104-11-021\",\"route\":\"北区\",\"fee\":29,\"hours\":15,\"capacity\":6,\"verified\":false,\"required\":\"VQ104-11-021登记页和封签页齐全\",\"exception\":\"VQ104-11-021封签缺失须暂停，费用支付不能替代本条核验\"},{\"id\":\"VQ104-11-022\",\"route\":\"东区\",\"fee\":36,\"hours\":20,\"capacity\":7,\"verified\":true,\"required\":\"VQ104-11-022登记页和封签页齐全\",\"exception\":\"VQ104-11-022封签缺失须暂停，费用支付不能替代本条核验\"},{\"id\":\"VQ104-11-023\",\"route\":\"西区\",\"fee\":43,\"hours\":25,\"capacity\":8,\"verified\":true,\"required\":\"VQ104-11-023登记页和封签页齐全\",\"exception\":\"VQ104-11-023封签缺失须暂停，费用支付不能替代本条核验\"},{\"id\":\"VQ104-11-024\",\"route\":\"北区\",\"fee\":50,\"hours\":30,\"capacity\":9,\"verified\":true,\"required\":\"VQ104-11-024登记页和封签页齐全\",\"exception\":\"VQ104-11-024封签缺失须暂停，费用支付不能替代本条核验\"},{\"id\":\"VQ104-11-025\",\"route\":\"东区\",\"fee\":57,\"hours\":6,\"capacity\":10,\"verified\":false,\"required\":\"VQ104-11-025登记页和封签页齐全\",\"exception\":\"VQ104-11-025封签缺失须暂停，费用支付不能替代本条核验\"},{\"id\":\"VQ104-11-026\",\"route\":\"西区\",\"fee\":64,\"hours\":11,\"capacity\":11,\"verified\":true,\"required\":\"VQ104-11-026登记页和封签页齐全\",\"exception\":\"VQ104-11-026封签缺失须暂停，费用支付不能替代本条核验\"},{\"id\":\"VQ104-11-027\",\"route\":\"北区\",\"fee\":71,\"hours\":16,\"capacity\":12,\"verified\":true,\"required\":\"VQ104-11-027登记页和封签页齐全\",\"exception\":\"VQ104-11-027封签缺失须暂停，费用支付不能替代本条核验\"},{\"id\":\"VQ104-11-028\",\"route\":\"东区\",\"fee\":17,\"hours\":21,\"capacity\":4,\"verified\":true,\"required\":\"VQ104-11-028登记页和封签页齐全\",\"exception\":\"VQ104-11-028封签缺失须暂停，费用支付不能替代本条核验\"},{\"id\":\"VQ104-11-029\",\"route\":\"西区\",\"fee\":24,\"hours\":26,\"capacity\":5,\"verified\":false,\"required\":\"VQ104-11-029登记页和封签页齐全\",\"exception\":\"VQ104-11-029封签缺失须暂停，费用支付不能替代本条核验\"},{\"id\":\"VQ104-11-030\",\"route\":\"北区\",\"fee\":31,\"hours\":2,\"capacity\":6,\"verified\":true,\"required\":\"VQ104-11-030登记页和封签页齐全\",\"exception\":\"VQ104-11-030封签缺失须暂停，费用支付不能替代本条核验\"},{\"id\":\"VQ104-11-031\",\"route\":\"东区\",\"fee\":38,\"hours\":7,\"capacity\":7,\"verified\":true,\"required\":\"VQ104-11-031登记页和封签页齐全\",\"exception\":\"VQ104-11-031封签缺失须暂停，费用支付不能替代本条核验\"},{\"id\":\"VQ104-11-032\",\"route\":\"西区\",\"fee\":45,\"hours\":12,\"capacity\":8,\"verified\":true,\"required\":\"VQ104-11-032登记页和封签页齐全\",\"exception\":\"VQ104-11-032封签缺失须暂停，费用支付不能替代本条核验\"},{\"id\":\"VQ104-11-033\",\"route\":\"北区\",\"fee\":52,\"hours\":17,\"capacity\":9,\"verified\":false,\"required\":\"VQ104-11-033登记页和封签页齐全\",\"exception\":\"VQ104-11-033封签缺失须暂停，费用支付不能替代本条核验\"},{\"id\":\"VQ104-11-034\",\"route\":\"东区\",\"fee\":59,\"hours\":22,\"capacity\":10,\"verified\":true,\"required\":\"VQ104-11-034登记页和封签页齐全\",\"exception\":\"VQ104-11-034封签缺失须暂停，费用支付不能替代本条核验\"},{\"id\":\"VQ104-11-035\",\"route\":\"西区\",\"fee\":66,\"hours\":27,\"capacity\":11,\"verified\":true,\"required\":\"VQ104-11-035登记页和封签页齐全\",\"exception\":\"VQ104-11-035封签缺失须暂停，费用支付不能替代本条核验\"},{\"id\":\"VQ104-11-036\",\"route\":\"北区\",\"fee\":12,\"hours\":3,\"capacity\":12,\"verified\":true,\"required\":\"VQ104-11-036登记页和封签页齐全\",\"exception\":\"VQ104-11-036封签缺失须暂停，费用支付不能替代本条核验\"},{\"id\":\"VQ104-11-037\",\"route\":\"东区\",\"fee\":19,\"hours\":8,\"capacity\":4,\"verified\":false,\"required\":\"VQ104-11-037登记页和封签页齐全\",\"exception\":\"VQ104-11-037封签缺失须暂停，费用支付不能替代本条核验\"},{\"id\":\"VQ104-11-038\",\"route\":\"西区\",\"fee\":26,\"hours\":13,\"capacity\":5,\"verified\":true,\"required\":\"VQ104-11-038登记页和封签页齐全\",\"exception\":\"VQ104-11-038封签缺失须暂停，费用支付不能替代本条核验\"},{\"id\":\"VQ104-11-039\",\"route\":\"北区\",\"fee\":33,\"hours\":18,\"capacity\":6,\"verified\":true,\"required\":\"VQ104-11-039登记页和封签页齐全\",\"exception\":\"VQ104-11-039封签缺失须暂停，费用支付不能替代本条核验\"},{\"id\":\"VQ104-11-040\",\"route\":\"东区\",\"fee\":40,\"hours\":23,\"capacity\":7,\"verified\":true,\"required\":\"VQ104-11-040登记页和封签页齐全\",\"exception\":\"VQ104-11-040封签缺失须暂停，费用支付不能替代本条核验\"}]。任务：筛选路线为西区、容量至少7且已核验的全部条目，按费用升序、同费用按时限升序、再按编号字典序排列，给出全部符合项编号。随后给最低的3项逐一列出全部字段、完整前提和例外。只依据本轮完整目录，不把第三方资料写成本人事实，不引入未给出的条件。",
+        "complete_rows": [
+          {
+            "id": "VQ104-11-001",
+            "route": "东区",
+            "fee": 11,
+            "hours": 2,
+            "capacity": 4,
+            "verified": false,
+            "required": "VQ104-11-001登记页和封签页齐全",
+            "exception": "VQ104-11-001封签缺失须暂停，费用支付不能替代本条核验"
+          },
+          {
+            "id": "VQ104-11-002",
+            "route": "西区",
+            "fee": 18,
+            "hours": 7,
+            "capacity": 5,
+            "verified": true,
+            "required": "VQ104-11-002登记页和封签页齐全",
+            "exception": "VQ104-11-002封签缺失须暂停，费用支付不能替代本条核验"
+          },
+          {
+            "id": "VQ104-11-003",
+            "route": "北区",
+            "fee": 25,
+            "hours": 12,
+            "capacity": 6,
+            "verified": true,
+            "required": "VQ104-11-003登记页和封签页齐全",
+            "exception": "VQ104-11-003封签缺失须暂停，费用支付不能替代本条核验"
+          },
+          {
+            "id": "VQ104-11-004",
+            "route": "东区",
+            "fee": 32,
+            "hours": 17,
+            "capacity": 7,
+            "verified": true,
+            "required": "VQ104-11-004登记页和封签页齐全",
+            "exception": "VQ104-11-004封签缺失须暂停，费用支付不能替代本条核验"
+          },
+          {
+            "id": "VQ104-11-005",
+            "route": "西区",
+            "fee": 39,
+            "hours": 22,
+            "capacity": 8,
+            "verified": false,
+            "required": "VQ104-11-005登记页和封签页齐全",
+            "exception": "VQ104-11-005封签缺失须暂停，费用支付不能替代本条核验"
+          },
+          {
+            "id": "VQ104-11-006",
+            "route": "北区",
+            "fee": 46,
+            "hours": 27,
+            "capacity": 9,
+            "verified": true,
+            "required": "VQ104-11-006登记页和封签页齐全",
+            "exception": "VQ104-11-006封签缺失须暂停，费用支付不能替代本条核验"
+          },
+          {
+            "id": "VQ104-11-007",
+            "route": "东区",
+            "fee": 53,
+            "hours": 3,
+            "capacity": 10,
+            "verified": true,
+            "required": "VQ104-11-007登记页和封签页齐全",
+            "exception": "VQ104-11-007封签缺失须暂停，费用支付不能替代本条核验"
+          },
+          {
+            "id": "VQ104-11-008",
+            "route": "西区",
+            "fee": 60,
+            "hours": 8,
+            "capacity": 11,
+            "verified": true,
+            "required": "VQ104-11-008登记页和封签页齐全",
+            "exception": "VQ104-11-008封签缺失须暂停，费用支付不能替代本条核验"
+          },
+          {
+            "id": "VQ104-11-009",
+            "route": "北区",
+            "fee": 67,
+            "hours": 13,
+            "capacity": 12,
+            "verified": false,
+            "required": "VQ104-11-009登记页和封签页齐全",
+            "exception": "VQ104-11-009封签缺失须暂停，费用支付不能替代本条核验"
+          },
+          {
+            "id": "VQ104-11-010",
+            "route": "东区",
+            "fee": 13,
+            "hours": 18,
+            "capacity": 4,
+            "verified": true,
+            "required": "VQ104-11-010登记页和封签页齐全",
+            "exception": "VQ104-11-010封签缺失须暂停，费用支付不能替代本条核验"
+          },
+          {
+            "id": "VQ104-11-011",
+            "route": "西区",
+            "fee": 20,
+            "hours": 23,
+            "capacity": 5,
+            "verified": true,
+            "required": "VQ104-11-011登记页和封签页齐全",
+            "exception": "VQ104-11-011封签缺失须暂停，费用支付不能替代本条核验"
+          },
+          {
+            "id": "VQ104-11-012",
+            "route": "北区",
+            "fee": 27,
+            "hours": 28,
+            "capacity": 6,
+            "verified": true,
+            "required": "VQ104-11-012登记页和封签页齐全",
+            "exception": "VQ104-11-012封签缺失须暂停，费用支付不能替代本条核验"
+          },
+          {
+            "id": "VQ104-11-013",
+            "route": "东区",
+            "fee": 34,
+            "hours": 4,
+            "capacity": 7,
+            "verified": false,
+            "required": "VQ104-11-013登记页和封签页齐全",
+            "exception": "VQ104-11-013封签缺失须暂停，费用支付不能替代本条核验"
+          },
+          {
+            "id": "VQ104-11-014",
+            "route": "西区",
+            "fee": 41,
+            "hours": 9,
+            "capacity": 8,
+            "verified": true,
+            "required": "VQ104-11-014登记页和封签页齐全",
+            "exception": "VQ104-11-014封签缺失须暂停，费用支付不能替代本条核验"
+          },
+          {
+            "id": "VQ104-11-015",
+            "route": "北区",
+            "fee": 48,
+            "hours": 14,
+            "capacity": 9,
+            "verified": true,
+            "required": "VQ104-11-015登记页和封签页齐全",
+            "exception": "VQ104-11-015封签缺失须暂停，费用支付不能替代本条核验"
+          },
+          {
+            "id": "VQ104-11-016",
+            "route": "东区",
+            "fee": 55,
+            "hours": 19,
+            "capacity": 10,
+            "verified": true,
+            "required": "VQ104-11-016登记页和封签页齐全",
+            "exception": "VQ104-11-016封签缺失须暂停，费用支付不能替代本条核验"
+          },
+          {
+            "id": "VQ104-11-017",
+            "route": "西区",
+            "fee": 62,
+            "hours": 24,
+            "capacity": 11,
+            "verified": false,
+            "required": "VQ104-11-017登记页和封签页齐全",
+            "exception": "VQ104-11-017封签缺失须暂停，费用支付不能替代本条核验"
+          },
+          {
+            "id": "VQ104-11-018",
+            "route": "北区",
+            "fee": 69,
+            "hours": 29,
+            "capacity": 12,
+            "verified": true,
+            "required": "VQ104-11-018登记页和封签页齐全",
+            "exception": "VQ104-11-018封签缺失须暂停，费用支付不能替代本条核验"
+          },
+          {
+            "id": "VQ104-11-019",
+            "route": "东区",
+            "fee": 15,
+            "hours": 5,
+            "capacity": 4,
+            "verified": true,
+            "required": "VQ104-11-019登记页和封签页齐全",
+            "exception": "VQ104-11-019封签缺失须暂停，费用支付不能替代本条核验"
+          },
+          {
+            "id": "VQ104-11-020",
+            "route": "西区",
+            "fee": 22,
+            "hours": 10,
+            "capacity": 5,
+            "verified": true,
+            "required": "VQ104-11-020登记页和封签页齐全",
+            "exception": "VQ104-11-020封签缺失须暂停，费用支付不能替代本条核验"
+          },
+          {
+            "id": "VQ104-11-021",
+            "route": "北区",
+            "fee": 29,
+            "hours": 15,
+            "capacity": 6,
+            "verified": false,
+            "required": "VQ104-11-021登记页和封签页齐全",
+            "exception": "VQ104-11-021封签缺失须暂停，费用支付不能替代本条核验"
+          },
+          {
+            "id": "VQ104-11-022",
+            "route": "东区",
+            "fee": 36,
+            "hours": 20,
+            "capacity": 7,
+            "verified": true,
+            "required": "VQ104-11-022登记页和封签页齐全",
+            "exception": "VQ104-11-022封签缺失须暂停，费用支付不能替代本条核验"
+          },
+          {
+            "id": "VQ104-11-023",
+            "route": "西区",
+            "fee": 43,
+            "hours": 25,
+            "capacity": 8,
+            "verified": true,
+            "required": "VQ104-11-023登记页和封签页齐全",
+            "exception": "VQ104-11-023封签缺失须暂停，费用支付不能替代本条核验"
+          },
+          {
+            "id": "VQ104-11-024",
+            "route": "北区",
+            "fee": 50,
+            "hours": 30,
+            "capacity": 9,
+            "verified": true,
+            "required": "VQ104-11-024登记页和封签页齐全",
+            "exception": "VQ104-11-024封签缺失须暂停，费用支付不能替代本条核验"
+          },
+          {
+            "id": "VQ104-11-025",
+            "route": "东区",
+            "fee": 57,
+            "hours": 6,
+            "capacity": 10,
+            "verified": false,
+            "required": "VQ104-11-025登记页和封签页齐全",
+            "exception": "VQ104-11-025封签缺失须暂停，费用支付不能替代本条核验"
+          },
+          {
+            "id": "VQ104-11-026",
+            "route": "西区",
+            "fee": 64,
+            "hours": 11,
+            "capacity": 11,
+            "verified": true,
+            "required": "VQ104-11-026登记页和封签页齐全",
+            "exception": "VQ104-11-026封签缺失须暂停，费用支付不能替代本条核验"
+          },
+          {
+            "id": "VQ104-11-027",
+            "route": "北区",
+            "fee": 71,
+            "hours": 16,
+            "capacity": 12,
+            "verified": true,
+            "required": "VQ104-11-027登记页和封签页齐全",
+            "exception": "VQ104-11-027封签缺失须暂停，费用支付不能替代本条核验"
+          },
+          {
+            "id": "VQ104-11-028",
+            "route": "东区",
+            "fee": 17,
+            "hours": 21,
+            "capacity": 4,
+            "verified": true,
+            "required": "VQ104-11-028登记页和封签页齐全",
+            "exception": "VQ104-11-028封签缺失须暂停，费用支付不能替代本条核验"
+          },
+          {
+            "id": "VQ104-11-029",
+            "route": "西区",
+            "fee": 24,
+            "hours": 26,
+            "capacity": 5,
+            "verified": false,
+            "required": "VQ104-11-029登记页和封签页齐全",
+            "exception": "VQ104-11-029封签缺失须暂停，费用支付不能替代本条核验"
+          },
+          {
+            "id": "VQ104-11-030",
+            "route": "北区",
+            "fee": 31,
+            "hours": 2,
+            "capacity": 6,
+            "verified": true,
+            "required": "VQ104-11-030登记页和封签页齐全",
+            "exception": "VQ104-11-030封签缺失须暂停，费用支付不能替代本条核验"
+          },
+          {
+            "id": "VQ104-11-031",
+            "route": "东区",
+            "fee": 38,
+            "hours": 7,
+            "capacity": 7,
+            "verified": true,
+            "required": "VQ104-11-031登记页和封签页齐全",
+            "exception": "VQ104-11-031封签缺失须暂停，费用支付不能替代本条核验"
+          },
+          {
+            "id": "VQ104-11-032",
+            "route": "西区",
+            "fee": 45,
+            "hours": 12,
+            "capacity": 8,
+            "verified": true,
+            "required": "VQ104-11-032登记页和封签页齐全",
+            "exception": "VQ104-11-032封签缺失须暂停，费用支付不能替代本条核验"
+          },
+          {
+            "id": "VQ104-11-033",
+            "route": "北区",
+            "fee": 52,
+            "hours": 17,
+            "capacity": 9,
+            "verified": false,
+            "required": "VQ104-11-033登记页和封签页齐全",
+            "exception": "VQ104-11-033封签缺失须暂停，费用支付不能替代本条核验"
+          },
+          {
+            "id": "VQ104-11-034",
+            "route": "东区",
+            "fee": 59,
+            "hours": 22,
+            "capacity": 10,
+            "verified": true,
+            "required": "VQ104-11-034登记页和封签页齐全",
+            "exception": "VQ104-11-034封签缺失须暂停，费用支付不能替代本条核验"
+          },
+          {
+            "id": "VQ104-11-035",
+            "route": "西区",
+            "fee": 66,
+            "hours": 27,
+            "capacity": 11,
+            "verified": true,
+            "required": "VQ104-11-035登记页和封签页齐全",
+            "exception": "VQ104-11-035封签缺失须暂停，费用支付不能替代本条核验"
+          },
+          {
+            "id": "VQ104-11-036",
+            "route": "北区",
+            "fee": 12,
+            "hours": 3,
+            "capacity": 12,
+            "verified": true,
+            "required": "VQ104-11-036登记页和封签页齐全",
+            "exception": "VQ104-11-036封签缺失须暂停，费用支付不能替代本条核验"
+          },
+          {
+            "id": "VQ104-11-037",
+            "route": "东区",
+            "fee": 19,
+            "hours": 8,
+            "capacity": 4,
+            "verified": false,
+            "required": "VQ104-11-037登记页和封签页齐全",
+            "exception": "VQ104-11-037封签缺失须暂停，费用支付不能替代本条核验"
+          },
+          {
+            "id": "VQ104-11-038",
+            "route": "西区",
+            "fee": 26,
+            "hours": 13,
+            "capacity": 5,
+            "verified": true,
+            "required": "VQ104-11-038登记页和封签页齐全",
+            "exception": "VQ104-11-038封签缺失须暂停，费用支付不能替代本条核验"
+          },
+          {
+            "id": "VQ104-11-039",
+            "route": "北区",
+            "fee": 33,
+            "hours": 18,
+            "capacity": 6,
+            "verified": true,
+            "required": "VQ104-11-039登记页和封签页齐全",
+            "exception": "VQ104-11-039封签缺失须暂停，费用支付不能替代本条核验"
+          },
+          {
+            "id": "VQ104-11-040",
+            "route": "东区",
+            "fee": 40,
+            "hours": 23,
+            "capacity": 7,
+            "verified": true,
+            "required": "VQ104-11-040登记页和封签页齐全",
+            "exception": "VQ104-11-040封签缺失须暂停，费用支付不能替代本条核验"
+          }
+        ],
+        "expected_eligible_ids": [
+          "VQ104-11-014",
+          "VQ104-11-023",
+          "VQ104-11-032",
+          "VQ104-11-008",
+          "VQ104-11-026",
+          "VQ104-11-035"
+        ],
+        "expected_lowest_three": [
+          {
+            "id": "VQ104-11-014",
+            "route": "西区",
+            "fee": 41,
+            "hours": 9,
+            "capacity": 8,
+            "verified": true,
+            "required": "VQ104-11-014登记页和封签页齐全",
+            "exception": "VQ104-11-014封签缺失须暂停，费用支付不能替代本条核验"
+          },
+          {
+            "id": "VQ104-11-023",
+            "route": "西区",
+            "fee": 43,
+            "hours": 25,
+            "capacity": 8,
+            "verified": true,
+            "required": "VQ104-11-023登记页和封签页齐全",
+            "exception": "VQ104-11-023封签缺失须暂停，费用支付不能替代本条核验"
+          },
+          {
+            "id": "VQ104-11-032",
+            "route": "西区",
+            "fee": 45,
+            "hours": 12,
+            "capacity": 8,
+            "verified": true,
+            "required": "VQ104-11-032登记页和封签页齐全",
+            "exception": "VQ104-11-032封签缺失须暂停，费用支付不能替代本条核验"
+          }
+        ]
+      },
+      "current_read_criteria": {
+        "route": "西区",
+        "minimum_capacity": 7,
+        "verified": true
+      }
+    },
+    {
+      "source": {
+        "id": "VQ104-NEW-12",
+        "message": "这是第三方紫航合成配送目录核对，不是本人或角色的经历、偏好或未来计划。以下40条是本轮全部数据；核验布尔值true表示已核验，false表示待核验。每条前提及例外均已给全，编号唯一：[{\"id\":\"VQ104-12-001\",\"route\":\"东区\",\"fee\":12,\"hours\":2,\"capacity\":4,\"verified\":false,\"required\":\"VQ104-12-001登记页和封签页齐全\",\"exception\":\"VQ104-12-001封签缺失须暂停，费用支付不能替代本条核验\"},{\"id\":\"VQ104-12-002\",\"route\":\"西区\",\"fee\":19,\"hours\":7,\"capacity\":5,\"verified\":true,\"required\":\"VQ104-12-002登记页和封签页齐全\",\"exception\":\"VQ104-12-002封签缺失须暂停，费用支付不能替代本条核验\"},{\"id\":\"VQ104-12-003\",\"route\":\"北区\",\"fee\":26,\"hours\":12,\"capacity\":6,\"verified\":true,\"required\":\"VQ104-12-003登记页和封签页齐全\",\"exception\":\"VQ104-12-003封签缺失须暂停，费用支付不能替代本条核验\"},{\"id\":\"VQ104-12-004\",\"route\":\"东区\",\"fee\":33,\"hours\":17,\"capacity\":7,\"verified\":true,\"required\":\"VQ104-12-004登记页和封签页齐全\",\"exception\":\"VQ104-12-004封签缺失须暂停，费用支付不能替代本条核验\"},{\"id\":\"VQ104-12-005\",\"route\":\"西区\",\"fee\":40,\"hours\":22,\"capacity\":8,\"verified\":false,\"required\":\"VQ104-12-005登记页和封签页齐全\",\"exception\":\"VQ104-12-005封签缺失须暂停，费用支付不能替代本条核验\"},{\"id\":\"VQ104-12-006\",\"route\":\"北区\",\"fee\":47,\"hours\":27,\"capacity\":9,\"verified\":true,\"required\":\"VQ104-12-006登记页和封签页齐全\",\"exception\":\"VQ104-12-006封签缺失须暂停，费用支付不能替代本条核验\"},{\"id\":\"VQ104-12-007\",\"route\":\"东区\",\"fee\":54,\"hours\":3,\"capacity\":10,\"verified\":true,\"required\":\"VQ104-12-007登记页和封签页齐全\",\"exception\":\"VQ104-12-007封签缺失须暂停，费用支付不能替代本条核验\"},{\"id\":\"VQ104-12-008\",\"route\":\"西区\",\"fee\":61,\"hours\":8,\"capacity\":11,\"verified\":true,\"required\":\"VQ104-12-008登记页和封签页齐全\",\"exception\":\"VQ104-12-008封签缺失须暂停，费用支付不能替代本条核验\"},{\"id\":\"VQ104-12-009\",\"route\":\"北区\",\"fee\":68,\"hours\":13,\"capacity\":12,\"verified\":false,\"required\":\"VQ104-12-009登记页和封签页齐全\",\"exception\":\"VQ104-12-009封签缺失须暂停，费用支付不能替代本条核验\"},{\"id\":\"VQ104-12-010\",\"route\":\"东区\",\"fee\":14,\"hours\":18,\"capacity\":4,\"verified\":true,\"required\":\"VQ104-12-010登记页和封签页齐全\",\"exception\":\"VQ104-12-010封签缺失须暂停，费用支付不能替代本条核验\"},{\"id\":\"VQ104-12-011\",\"route\":\"西区\",\"fee\":21,\"hours\":23,\"capacity\":5,\"verified\":true,\"required\":\"VQ104-12-011登记页和封签页齐全\",\"exception\":\"VQ104-12-011封签缺失须暂停，费用支付不能替代本条核验\"},{\"id\":\"VQ104-12-012\",\"route\":\"北区\",\"fee\":28,\"hours\":28,\"capacity\":6,\"verified\":true,\"required\":\"VQ104-12-012登记页和封签页齐全\",\"exception\":\"VQ104-12-012封签缺失须暂停，费用支付不能替代本条核验\"},{\"id\":\"VQ104-12-013\",\"route\":\"东区\",\"fee\":35,\"hours\":4,\"capacity\":7,\"verified\":false,\"required\":\"VQ104-12-013登记页和封签页齐全\",\"exception\":\"VQ104-12-013封签缺失须暂停，费用支付不能替代本条核验\"},{\"id\":\"VQ104-12-014\",\"route\":\"西区\",\"fee\":42,\"hours\":9,\"capacity\":8,\"verified\":true,\"required\":\"VQ104-12-014登记页和封签页齐全\",\"exception\":\"VQ104-12-014封签缺失须暂停，费用支付不能替代本条核验\"},{\"id\":\"VQ104-12-015\",\"route\":\"北区\",\"fee\":49,\"hours\":14,\"capacity\":9,\"verified\":true,\"required\":\"VQ104-12-015登记页和封签页齐全\",\"exception\":\"VQ104-12-015封签缺失须暂停，费用支付不能替代本条核验\"},{\"id\":\"VQ104-12-016\",\"route\":\"东区\",\"fee\":56,\"hours\":19,\"capacity\":10,\"verified\":true,\"required\":\"VQ104-12-016登记页和封签页齐全\",\"exception\":\"VQ104-12-016封签缺失须暂停，费用支付不能替代本条核验\"},{\"id\":\"VQ104-12-017\",\"route\":\"西区\",\"fee\":63,\"hours\":24,\"capacity\":11,\"verified\":false,\"required\":\"VQ104-12-017登记页和封签页齐全\",\"exception\":\"VQ104-12-017封签缺失须暂停，费用支付不能替代本条核验\"},{\"id\":\"VQ104-12-018\",\"route\":\"北区\",\"fee\":70,\"hours\":29,\"capacity\":12,\"verified\":true,\"required\":\"VQ104-12-018登记页和封签页齐全\",\"exception\":\"VQ104-12-018封签缺失须暂停，费用支付不能替代本条核验\"},{\"id\":\"VQ104-12-019\",\"route\":\"东区\",\"fee\":16,\"hours\":5,\"capacity\":4,\"verified\":true,\"required\":\"VQ104-12-019登记页和封签页齐全\",\"exception\":\"VQ104-12-019封签缺失须暂停，费用支付不能替代本条核验\"},{\"id\":\"VQ104-12-020\",\"route\":\"西区\",\"fee\":23,\"hours\":10,\"capacity\":5,\"verified\":true,\"required\":\"VQ104-12-020登记页和封签页齐全\",\"exception\":\"VQ104-12-020封签缺失须暂停，费用支付不能替代本条核验\"},{\"id\":\"VQ104-12-021\",\"route\":\"北区\",\"fee\":30,\"hours\":15,\"capacity\":6,\"verified\":false,\"required\":\"VQ104-12-021登记页和封签页齐全\",\"exception\":\"VQ104-12-021封签缺失须暂停，费用支付不能替代本条核验\"},{\"id\":\"VQ104-12-022\",\"route\":\"东区\",\"fee\":37,\"hours\":20,\"capacity\":7,\"verified\":true,\"required\":\"VQ104-12-022登记页和封签页齐全\",\"exception\":\"VQ104-12-022封签缺失须暂停，费用支付不能替代本条核验\"},{\"id\":\"VQ104-12-023\",\"route\":\"西区\",\"fee\":44,\"hours\":25,\"capacity\":8,\"verified\":true,\"required\":\"VQ104-12-023登记页和封签页齐全\",\"exception\":\"VQ104-12-023封签缺失须暂停，费用支付不能替代本条核验\"},{\"id\":\"VQ104-12-024\",\"route\":\"北区\",\"fee\":51,\"hours\":30,\"capacity\":9,\"verified\":true,\"required\":\"VQ104-12-024登记页和封签页齐全\",\"exception\":\"VQ104-12-024封签缺失须暂停，费用支付不能替代本条核验\"},{\"id\":\"VQ104-12-025\",\"route\":\"东区\",\"fee\":58,\"hours\":6,\"capacity\":10,\"verified\":false,\"required\":\"VQ104-12-025登记页和封签页齐全\",\"exception\":\"VQ104-12-025封签缺失须暂停，费用支付不能替代本条核验\"},{\"id\":\"VQ104-12-026\",\"route\":\"西区\",\"fee\":65,\"hours\":11,\"capacity\":11,\"verified\":true,\"required\":\"VQ104-12-026登记页和封签页齐全\",\"exception\":\"VQ104-12-026封签缺失须暂停，费用支付不能替代本条核验\"},{\"id\":\"VQ104-12-027\",\"route\":\"北区\",\"fee\":72,\"hours\":16,\"capacity\":12,\"verified\":true,\"required\":\"VQ104-12-027登记页和封签页齐全\",\"exception\":\"VQ104-12-027封签缺失须暂停，费用支付不能替代本条核验\"},{\"id\":\"VQ104-12-028\",\"route\":\"东区\",\"fee\":18,\"hours\":21,\"capacity\":4,\"verified\":true,\"required\":\"VQ104-12-028登记页和封签页齐全\",\"exception\":\"VQ104-12-028封签缺失须暂停，费用支付不能替代本条核验\"},{\"id\":\"VQ104-12-029\",\"route\":\"西区\",\"fee\":25,\"hours\":26,\"capacity\":5,\"verified\":false,\"required\":\"VQ104-12-029登记页和封签页齐全\",\"exception\":\"VQ104-12-029封签缺失须暂停，费用支付不能替代本条核验\"},{\"id\":\"VQ104-12-030\",\"route\":\"北区\",\"fee\":32,\"hours\":2,\"capacity\":6,\"verified\":true,\"required\":\"VQ104-12-030登记页和封签页齐全\",\"exception\":\"VQ104-12-030封签缺失须暂停，费用支付不能替代本条核验\"},{\"id\":\"VQ104-12-031\",\"route\":\"东区\",\"fee\":39,\"hours\":7,\"capacity\":7,\"verified\":true,\"required\":\"VQ104-12-031登记页和封签页齐全\",\"exception\":\"VQ104-12-031封签缺失须暂停，费用支付不能替代本条核验\"},{\"id\":\"VQ104-12-032\",\"route\":\"西区\",\"fee\":46,\"hours\":12,\"capacity\":8,\"verified\":true,\"required\":\"VQ104-12-032登记页和封签页齐全\",\"exception\":\"VQ104-12-032封签缺失须暂停，费用支付不能替代本条核验\"},{\"id\":\"VQ104-12-033\",\"route\":\"北区\",\"fee\":53,\"hours\":17,\"capacity\":9,\"verified\":false,\"required\":\"VQ104-12-033登记页和封签页齐全\",\"exception\":\"VQ104-12-033封签缺失须暂停，费用支付不能替代本条核验\"},{\"id\":\"VQ104-12-034\",\"route\":\"东区\",\"fee\":60,\"hours\":22,\"capacity\":10,\"verified\":true,\"required\":\"VQ104-12-034登记页和封签页齐全\",\"exception\":\"VQ104-12-034封签缺失须暂停，费用支付不能替代本条核验\"},{\"id\":\"VQ104-12-035\",\"route\":\"西区\",\"fee\":67,\"hours\":27,\"capacity\":11,\"verified\":true,\"required\":\"VQ104-12-035登记页和封签页齐全\",\"exception\":\"VQ104-12-035封签缺失须暂停，费用支付不能替代本条核验\"},{\"id\":\"VQ104-12-036\",\"route\":\"北区\",\"fee\":13,\"hours\":3,\"capacity\":12,\"verified\":true,\"required\":\"VQ104-12-036登记页和封签页齐全\",\"exception\":\"VQ104-12-036封签缺失须暂停，费用支付不能替代本条核验\"},{\"id\":\"VQ104-12-037\",\"route\":\"东区\",\"fee\":20,\"hours\":8,\"capacity\":4,\"verified\":false,\"required\":\"VQ104-12-037登记页和封签页齐全\",\"exception\":\"VQ104-12-037封签缺失须暂停，费用支付不能替代本条核验\"},{\"id\":\"VQ104-12-038\",\"route\":\"西区\",\"fee\":27,\"hours\":13,\"capacity\":5,\"verified\":true,\"required\":\"VQ104-12-038登记页和封签页齐全\",\"exception\":\"VQ104-12-038封签缺失须暂停，费用支付不能替代本条核验\"},{\"id\":\"VQ104-12-039\",\"route\":\"北区\",\"fee\":34,\"hours\":18,\"capacity\":6,\"verified\":true,\"required\":\"VQ104-12-039登记页和封签页齐全\",\"exception\":\"VQ104-12-039封签缺失须暂停，费用支付不能替代本条核验\"},{\"id\":\"VQ104-12-040\",\"route\":\"东区\",\"fee\":41,\"hours\":23,\"capacity\":7,\"verified\":true,\"required\":\"VQ104-12-040登记页和封签页齐全\",\"exception\":\"VQ104-12-040封签缺失须暂停，费用支付不能替代本条核验\"}]。任务：筛选路线为西区、容量至少7且已核验的全部条目，按费用升序、同费用按时限升序、再按编号字典序排列，给出全部符合项编号。随后给最低的3项逐一列出全部字段、完整前提和例外。只依据本轮完整目录，不把第三方资料写成本人事实，不引入未给出的条件。",
+        "complete_rows": [
+          {
+            "id": "VQ104-12-001",
+            "route": "东区",
+            "fee": 12,
+            "hours": 2,
+            "capacity": 4,
+            "verified": false,
+            "required": "VQ104-12-001登记页和封签页齐全",
+            "exception": "VQ104-12-001封签缺失须暂停，费用支付不能替代本条核验"
+          },
+          {
+            "id": "VQ104-12-002",
+            "route": "西区",
+            "fee": 19,
+            "hours": 7,
+            "capacity": 5,
+            "verified": true,
+            "required": "VQ104-12-002登记页和封签页齐全",
+            "exception": "VQ104-12-002封签缺失须暂停，费用支付不能替代本条核验"
+          },
+          {
+            "id": "VQ104-12-003",
+            "route": "北区",
+            "fee": 26,
+            "hours": 12,
+            "capacity": 6,
+            "verified": true,
+            "required": "VQ104-12-003登记页和封签页齐全",
+            "exception": "VQ104-12-003封签缺失须暂停，费用支付不能替代本条核验"
+          },
+          {
+            "id": "VQ104-12-004",
+            "route": "东区",
+            "fee": 33,
+            "hours": 17,
+            "capacity": 7,
+            "verified": true,
+            "required": "VQ104-12-004登记页和封签页齐全",
+            "exception": "VQ104-12-004封签缺失须暂停，费用支付不能替代本条核验"
+          },
+          {
+            "id": "VQ104-12-005",
+            "route": "西区",
+            "fee": 40,
+            "hours": 22,
+            "capacity": 8,
+            "verified": false,
+            "required": "VQ104-12-005登记页和封签页齐全",
+            "exception": "VQ104-12-005封签缺失须暂停，费用支付不能替代本条核验"
+          },
+          {
+            "id": "VQ104-12-006",
+            "route": "北区",
+            "fee": 47,
+            "hours": 27,
+            "capacity": 9,
+            "verified": true,
+            "required": "VQ104-12-006登记页和封签页齐全",
+            "exception": "VQ104-12-006封签缺失须暂停，费用支付不能替代本条核验"
+          },
+          {
+            "id": "VQ104-12-007",
+            "route": "东区",
+            "fee": 54,
+            "hours": 3,
+            "capacity": 10,
+            "verified": true,
+            "required": "VQ104-12-007登记页和封签页齐全",
+            "exception": "VQ104-12-007封签缺失须暂停，费用支付不能替代本条核验"
+          },
+          {
+            "id": "VQ104-12-008",
+            "route": "西区",
+            "fee": 61,
+            "hours": 8,
+            "capacity": 11,
+            "verified": true,
+            "required": "VQ104-12-008登记页和封签页齐全",
+            "exception": "VQ104-12-008封签缺失须暂停，费用支付不能替代本条核验"
+          },
+          {
+            "id": "VQ104-12-009",
+            "route": "北区",
+            "fee": 68,
+            "hours": 13,
+            "capacity": 12,
+            "verified": false,
+            "required": "VQ104-12-009登记页和封签页齐全",
+            "exception": "VQ104-12-009封签缺失须暂停，费用支付不能替代本条核验"
+          },
+          {
+            "id": "VQ104-12-010",
+            "route": "东区",
+            "fee": 14,
+            "hours": 18,
+            "capacity": 4,
+            "verified": true,
+            "required": "VQ104-12-010登记页和封签页齐全",
+            "exception": "VQ104-12-010封签缺失须暂停，费用支付不能替代本条核验"
+          },
+          {
+            "id": "VQ104-12-011",
+            "route": "西区",
+            "fee": 21,
+            "hours": 23,
+            "capacity": 5,
+            "verified": true,
+            "required": "VQ104-12-011登记页和封签页齐全",
+            "exception": "VQ104-12-011封签缺失须暂停，费用支付不能替代本条核验"
+          },
+          {
+            "id": "VQ104-12-012",
+            "route": "北区",
+            "fee": 28,
+            "hours": 28,
+            "capacity": 6,
+            "verified": true,
+            "required": "VQ104-12-012登记页和封签页齐全",
+            "exception": "VQ104-12-012封签缺失须暂停，费用支付不能替代本条核验"
+          },
+          {
+            "id": "VQ104-12-013",
+            "route": "东区",
+            "fee": 35,
+            "hours": 4,
+            "capacity": 7,
+            "verified": false,
+            "required": "VQ104-12-013登记页和封签页齐全",
+            "exception": "VQ104-12-013封签缺失须暂停，费用支付不能替代本条核验"
+          },
+          {
+            "id": "VQ104-12-014",
+            "route": "西区",
+            "fee": 42,
+            "hours": 9,
+            "capacity": 8,
+            "verified": true,
+            "required": "VQ104-12-014登记页和封签页齐全",
+            "exception": "VQ104-12-014封签缺失须暂停，费用支付不能替代本条核验"
+          },
+          {
+            "id": "VQ104-12-015",
+            "route": "北区",
+            "fee": 49,
+            "hours": 14,
+            "capacity": 9,
+            "verified": true,
+            "required": "VQ104-12-015登记页和封签页齐全",
+            "exception": "VQ104-12-015封签缺失须暂停，费用支付不能替代本条核验"
+          },
+          {
+            "id": "VQ104-12-016",
+            "route": "东区",
+            "fee": 56,
+            "hours": 19,
+            "capacity": 10,
+            "verified": true,
+            "required": "VQ104-12-016登记页和封签页齐全",
+            "exception": "VQ104-12-016封签缺失须暂停，费用支付不能替代本条核验"
+          },
+          {
+            "id": "VQ104-12-017",
+            "route": "西区",
+            "fee": 63,
+            "hours": 24,
+            "capacity": 11,
+            "verified": false,
+            "required": "VQ104-12-017登记页和封签页齐全",
+            "exception": "VQ104-12-017封签缺失须暂停，费用支付不能替代本条核验"
+          },
+          {
+            "id": "VQ104-12-018",
+            "route": "北区",
+            "fee": 70,
+            "hours": 29,
+            "capacity": 12,
+            "verified": true,
+            "required": "VQ104-12-018登记页和封签页齐全",
+            "exception": "VQ104-12-018封签缺失须暂停，费用支付不能替代本条核验"
+          },
+          {
+            "id": "VQ104-12-019",
+            "route": "东区",
+            "fee": 16,
+            "hours": 5,
+            "capacity": 4,
+            "verified": true,
+            "required": "VQ104-12-019登记页和封签页齐全",
+            "exception": "VQ104-12-019封签缺失须暂停，费用支付不能替代本条核验"
+          },
+          {
+            "id": "VQ104-12-020",
+            "route": "西区",
+            "fee": 23,
+            "hours": 10,
+            "capacity": 5,
+            "verified": true,
+            "required": "VQ104-12-020登记页和封签页齐全",
+            "exception": "VQ104-12-020封签缺失须暂停，费用支付不能替代本条核验"
+          },
+          {
+            "id": "VQ104-12-021",
+            "route": "北区",
+            "fee": 30,
+            "hours": 15,
+            "capacity": 6,
+            "verified": false,
+            "required": "VQ104-12-021登记页和封签页齐全",
+            "exception": "VQ104-12-021封签缺失须暂停，费用支付不能替代本条核验"
+          },
+          {
+            "id": "VQ104-12-022",
+            "route": "东区",
+            "fee": 37,
+            "hours": 20,
+            "capacity": 7,
+            "verified": true,
+            "required": "VQ104-12-022登记页和封签页齐全",
+            "exception": "VQ104-12-022封签缺失须暂停，费用支付不能替代本条核验"
+          },
+          {
+            "id": "VQ104-12-023",
+            "route": "西区",
+            "fee": 44,
+            "hours": 25,
+            "capacity": 8,
+            "verified": true,
+            "required": "VQ104-12-023登记页和封签页齐全",
+            "exception": "VQ104-12-023封签缺失须暂停，费用支付不能替代本条核验"
+          },
+          {
+            "id": "VQ104-12-024",
+            "route": "北区",
+            "fee": 51,
+            "hours": 30,
+            "capacity": 9,
+            "verified": true,
+            "required": "VQ104-12-024登记页和封签页齐全",
+            "exception": "VQ104-12-024封签缺失须暂停，费用支付不能替代本条核验"
+          },
+          {
+            "id": "VQ104-12-025",
+            "route": "东区",
+            "fee": 58,
+            "hours": 6,
+            "capacity": 10,
+            "verified": false,
+            "required": "VQ104-12-025登记页和封签页齐全",
+            "exception": "VQ104-12-025封签缺失须暂停，费用支付不能替代本条核验"
+          },
+          {
+            "id": "VQ104-12-026",
+            "route": "西区",
+            "fee": 65,
+            "hours": 11,
+            "capacity": 11,
+            "verified": true,
+            "required": "VQ104-12-026登记页和封签页齐全",
+            "exception": "VQ104-12-026封签缺失须暂停，费用支付不能替代本条核验"
+          },
+          {
+            "id": "VQ104-12-027",
+            "route": "北区",
+            "fee": 72,
+            "hours": 16,
+            "capacity": 12,
+            "verified": true,
+            "required": "VQ104-12-027登记页和封签页齐全",
+            "exception": "VQ104-12-027封签缺失须暂停，费用支付不能替代本条核验"
+          },
+          {
+            "id": "VQ104-12-028",
+            "route": "东区",
+            "fee": 18,
+            "hours": 21,
+            "capacity": 4,
+            "verified": true,
+            "required": "VQ104-12-028登记页和封签页齐全",
+            "exception": "VQ104-12-028封签缺失须暂停，费用支付不能替代本条核验"
+          },
+          {
+            "id": "VQ104-12-029",
+            "route": "西区",
+            "fee": 25,
+            "hours": 26,
+            "capacity": 5,
+            "verified": false,
+            "required": "VQ104-12-029登记页和封签页齐全",
+            "exception": "VQ104-12-029封签缺失须暂停，费用支付不能替代本条核验"
+          },
+          {
+            "id": "VQ104-12-030",
+            "route": "北区",
+            "fee": 32,
+            "hours": 2,
+            "capacity": 6,
+            "verified": true,
+            "required": "VQ104-12-030登记页和封签页齐全",
+            "exception": "VQ104-12-030封签缺失须暂停，费用支付不能替代本条核验"
+          },
+          {
+            "id": "VQ104-12-031",
+            "route": "东区",
+            "fee": 39,
+            "hours": 7,
+            "capacity": 7,
+            "verified": true,
+            "required": "VQ104-12-031登记页和封签页齐全",
+            "exception": "VQ104-12-031封签缺失须暂停，费用支付不能替代本条核验"
+          },
+          {
+            "id": "VQ104-12-032",
+            "route": "西区",
+            "fee": 46,
+            "hours": 12,
+            "capacity": 8,
+            "verified": true,
+            "required": "VQ104-12-032登记页和封签页齐全",
+            "exception": "VQ104-12-032封签缺失须暂停，费用支付不能替代本条核验"
+          },
+          {
+            "id": "VQ104-12-033",
+            "route": "北区",
+            "fee": 53,
+            "hours": 17,
+            "capacity": 9,
+            "verified": false,
+            "required": "VQ104-12-033登记页和封签页齐全",
+            "exception": "VQ104-12-033封签缺失须暂停，费用支付不能替代本条核验"
+          },
+          {
+            "id": "VQ104-12-034",
+            "route": "东区",
+            "fee": 60,
+            "hours": 22,
+            "capacity": 10,
+            "verified": true,
+            "required": "VQ104-12-034登记页和封签页齐全",
+            "exception": "VQ104-12-034封签缺失须暂停，费用支付不能替代本条核验"
+          },
+          {
+            "id": "VQ104-12-035",
+            "route": "西区",
+            "fee": 67,
+            "hours": 27,
+            "capacity": 11,
+            "verified": true,
+            "required": "VQ104-12-035登记页和封签页齐全",
+            "exception": "VQ104-12-035封签缺失须暂停，费用支付不能替代本条核验"
+          },
+          {
+            "id": "VQ104-12-036",
+            "route": "北区",
+            "fee": 13,
+            "hours": 3,
+            "capacity": 12,
+            "verified": true,
+            "required": "VQ104-12-036登记页和封签页齐全",
+            "exception": "VQ104-12-036封签缺失须暂停，费用支付不能替代本条核验"
+          },
+          {
+            "id": "VQ104-12-037",
+            "route": "东区",
+            "fee": 20,
+            "hours": 8,
+            "capacity": 4,
+            "verified": false,
+            "required": "VQ104-12-037登记页和封签页齐全",
+            "exception": "VQ104-12-037封签缺失须暂停，费用支付不能替代本条核验"
+          },
+          {
+            "id": "VQ104-12-038",
+            "route": "西区",
+            "fee": 27,
+            "hours": 13,
+            "capacity": 5,
+            "verified": true,
+            "required": "VQ104-12-038登记页和封签页齐全",
+            "exception": "VQ104-12-038封签缺失须暂停，费用支付不能替代本条核验"
+          },
+          {
+            "id": "VQ104-12-039",
+            "route": "北区",
+            "fee": 34,
+            "hours": 18,
+            "capacity": 6,
+            "verified": true,
+            "required": "VQ104-12-039登记页和封签页齐全",
+            "exception": "VQ104-12-039封签缺失须暂停，费用支付不能替代本条核验"
+          },
+          {
+            "id": "VQ104-12-040",
+            "route": "东区",
+            "fee": 41,
+            "hours": 23,
+            "capacity": 7,
+            "verified": true,
+            "required": "VQ104-12-040登记页和封签页齐全",
+            "exception": "VQ104-12-040封签缺失须暂停，费用支付不能替代本条核验"
+          }
+        ],
+        "expected_eligible_ids": [
+          "VQ104-12-036",
+          "VQ104-12-006",
+          "VQ104-12-015",
+          "VQ104-12-024",
+          "VQ104-12-018",
+          "VQ104-12-027"
+        ],
+        "expected_lowest_three": [
+          {
+            "id": "VQ104-12-036",
+            "route": "北区",
+            "fee": 13,
+            "hours": 3,
+            "capacity": 12,
+            "verified": true,
+            "required": "VQ104-12-036登记页和封签页齐全",
+            "exception": "VQ104-12-036封签缺失须暂停，费用支付不能替代本条核验"
+          },
+          {
+            "id": "VQ104-12-006",
+            "route": "北区",
+            "fee": 47,
+            "hours": 27,
+            "capacity": 9,
+            "verified": true,
+            "required": "VQ104-12-006登记页和封签页齐全",
+            "exception": "VQ104-12-006封签缺失须暂停，费用支付不能替代本条核验"
+          },
+          {
+            "id": "VQ104-12-015",
+            "route": "北区",
+            "fee": 49,
+            "hours": 14,
+            "capacity": 9,
+            "verified": true,
+            "required": "VQ104-12-015登记页和封签页齐全",
+            "exception": "VQ104-12-015封签缺失须暂停，费用支付不能替代本条核验"
+          }
+        ]
+      },
+      "current_read_criteria": {
+        "route": "北区",
+        "minimum_capacity": 9,
+        "verified": true
+      }
+    }
+  ],
+  "readonly_before": {
+    "target_body_chars": 6863,
+    "target_sha256": "b04285383b97294413728d54237d25c972a9170d64369c058714d407bbb6b36a",
+    "source_link_count": 0,
+    "target_is_source_only": true,
+    "target_in_loaded_history": false,
+    "loaded_history_messages": 16,
+    "current_query_candidates": 62,
+    "contextual_candidates": 62,
+    "union_candidates": 62,
+    "target_rank_current_query": 10,
+    "candidate_packet_chars": 306712,
+    "producer_status": "budget_omitted",
+    "final_source_status": "budget_omitted",
+    "final_source_present": false,
+    "model_calls": 0,
+    "readonly_actual_pg": true,
+    "expected_seed_records": 6,
+    "target_identity_sha256": "7086cc80542a38391fabcb31f7d28a191bde0bb1cd78c1cc83ad5ed0a1bd1d7f"
+  },
+  "result": {
+    "checks": {
+      "native-pg-literal:job_terminal": true,
+      "native-pg-literal:authenticated_low_privilege_scope": true,
+      "native-pg-literal:native_http200": true,
+      "native-pg-literal:actual_primary_invoked": true,
+      "native-pg-literal:official_cloud200_stop": true,
+      "native-pg-literal:all_six_records_everyfield_exact": true,
+      "native-pg-literal:all_prior_full_source_fields_exact": true,
+      "native-pg-literal:all_before_question_source_fields_exact": true,
+      "native-pg-literal:source_only_no_memory_link": true,
+      "native-pg-literal:full_source_outside_actual_dynamic_history": true,
+      "native-pg-literal:full_source_outside_actual_model_history": true,
+      "native-pg-literal:whole_source_on_actual_primary_wire": true,
+      "native-pg-literal:source_data_not_resupplied_in_question": true,
+      "native-pg-literal:whole_query_on_actual_wire": true,
+      "native-pg-literal:literal_scope_actual_one_source": true,
+      "native-pg-literal:unrelated_history_not_a_source_read_scope": true,
+      "native-pg-literal:all_five_complete_public_documents_durable": true,
+      "native-pg-literal:erasure_fence_unchanged": true,
+      "native-pg-literal:no_claim_or_erase_or_failure": true,
+      "native-pg-literal:no_passed_history_task_replayed": true,
+      "native-pg-literal:full65k_window_retained": true,
+      "native-pg-second:job_terminal": true,
+      "native-pg-second:authenticated_low_privilege_scope": true,
+      "native-pg-second:native_http200": true,
+      "native-pg-second:actual_primary_invoked": true,
+      "native-pg-second:official_cloud200_stop": true,
+      "native-pg-second:all_six_records_everyfield_exact": true,
+      "native-pg-second:all_prior_full_source_fields_exact": true,
+      "native-pg-second:all_before_question_source_fields_exact": true,
+      "native-pg-second:source_only_no_memory_link": true,
+      "native-pg-second:full_source_outside_actual_dynamic_history": true,
+      "native-pg-second:full_source_outside_actual_model_history": true,
+      "native-pg-second:whole_source_on_actual_primary_wire": true,
+      "native-pg-second:source_data_not_resupplied_in_question": true,
+      "native-pg-second:whole_query_on_actual_wire": true,
+      "native-pg-second:literal_scope_actual_one_source": true,
+      "native-pg-second:unrelated_history_not_a_source_read_scope": true,
+      "native-pg-second:all_five_complete_public_documents_durable": true,
+      "native-pg-second:erasure_fence_unchanged": true,
+      "native-pg-second:no_claim_or_erase_or_failure": true,
+      "native-pg-second:no_passed_history_task_replayed": true,
+      "native-pg-second:full65k_window_retained": true
+    },
+    "passed": 42,
+    "total": 42,
+    "semantic_checks": {
+      "native-pg-literal:all_eligible_ids_in_order": true,
+      "native-pg-literal:no_unrequested_row_ids": true,
+      "native-pg-literal:lowest_three_ids_present": true,
+      "native-pg-literal:lowest_three_numeric_fields": true,
+      "native-pg-literal:all_required_literals": true,
+      "native-pg-literal:all_exception_literals": true,
+      "native-pg-literal:required_and_condition_preserved": true,
+      "native-pg-literal:exception_payment_does_not_exempt": true,
+      "native-pg-second:all_eligible_ids_in_order": false,
+      "native-pg-second:no_unrequested_row_ids": true,
+      "native-pg-second:lowest_three_ids_present": false,
+      "native-pg-second:lowest_three_numeric_fields": false,
+      "native-pg-second:all_required_literals": false,
+      "native-pg-second:all_exception_literals": false,
+      "native-pg-second:required_and_condition_preserved": true,
+      "native-pg-second:exception_payment_does_not_exempt": true
+    },
+    "semantic_passed": 11,
+    "semantic_total": 16,
+    "cases": [
+      {
+        "variant": "native-pg-literal",
+        "source_sha256": "b04285383b97294413728d54237d25c972a9170d64369c058714d407bbb6b36a",
+        "source_chars": 6863,
+        "query_sha256": "b7df3c345e16bfe17e33b3479219249b87db5b1fe7346e42448b1aafc04a30d8",
+        "reply_sha256": "355350786956c498541b76650d2a5be31fec33dcfb5fe7c8ca185c528104b87d",
+        "history_messages": 16,
+        "source_only": true,
+        "calls": 4,
+        "primary_calls": 1,
+        "response_metadata_abstained": true,
+        "generation_response_mode": "generated",
+        "external_rag_confidence": 0.0,
+        "checks": {
+          "job_terminal": true,
+          "authenticated_low_privilege_scope": true,
+          "native_http200": true,
+          "actual_primary_invoked": true,
+          "official_cloud200_stop": true,
+          "all_six_records_everyfield_exact": true,
+          "all_prior_full_source_fields_exact": true,
+          "all_before_question_source_fields_exact": true,
+          "source_only_no_memory_link": true,
+          "full_source_outside_actual_dynamic_history": true,
+          "full_source_outside_actual_model_history": true,
+          "whole_source_on_actual_primary_wire": true,
+          "source_data_not_resupplied_in_question": true,
+          "whole_query_on_actual_wire": true,
+          "literal_scope_actual_one_source": true,
+          "unrelated_history_not_a_source_read_scope": true,
+          "all_five_complete_public_documents_durable": true,
+          "erasure_fence_unchanged": true,
+          "no_claim_or_erase_or_failure": true,
+          "no_passed_history_task_replayed": true,
+          "full65k_window_retained": true
+        },
+        "semantic": {
+          "all_eligible_ids_in_order": true,
+          "no_unrequested_row_ids": true,
+          "lowest_three_ids_present": true,
+          "lowest_three_numeric_fields": true,
+          "all_required_literals": true,
+          "all_exception_literals": true,
+          "required_and_condition_preserved": true,
+          "exception_payment_does_not_exempt": true
+        },
+        "selected_rows": [
+          {
+            "id": "VQ104-11-014",
+            "all_numeric_fields_same_row": true,
+            "route_same_row": true,
+            "complete_required_literal": true,
+            "complete_exception_literal": true
+          },
+          {
+            "id": "VQ104-11-023",
+            "all_numeric_fields_same_row": true,
+            "route_same_row": true,
+            "complete_required_literal": true,
+            "complete_exception_literal": true
+          },
+          {
+            "id": "VQ104-11-032",
+            "all_numeric_fields_same_row": true,
+            "route_same_row": true,
+            "complete_required_literal": true,
+            "complete_exception_literal": true
+          }
+        ],
+        "expected_eligible_ids": [
+          "VQ104-11-014",
+          "VQ104-11-023",
+          "VQ104-11-032",
+          "VQ104-11-008",
+          "VQ104-11-026",
+          "VQ104-11-035"
+        ]
+      },
+      {
+        "variant": "native-pg-second",
+        "source_sha256": "9eab1b5dce045e84f30645a63316b6f5a7ca7f6c40403c0a23c348f319a6a8a0",
+        "source_chars": 6863,
+        "query_sha256": "a4f77d2744db012dd0cb1168c46d39818cc8180d7e7c94894885bc77d975c75c",
+        "reply_sha256": "42a9afee52085284c3f01acbdb613252aa00a82515ea52de100c64004c040ed9",
+        "history_messages": 16,
+        "source_only": true,
+        "calls": 4,
+        "primary_calls": 1,
+        "response_metadata_abstained": true,
+        "generation_response_mode": "generated",
+        "external_rag_confidence": 0.0,
+        "checks": {
+          "job_terminal": true,
+          "authenticated_low_privilege_scope": true,
+          "native_http200": true,
+          "actual_primary_invoked": true,
+          "official_cloud200_stop": true,
+          "all_six_records_everyfield_exact": true,
+          "all_prior_full_source_fields_exact": true,
+          "all_before_question_source_fields_exact": true,
+          "source_only_no_memory_link": true,
+          "full_source_outside_actual_dynamic_history": true,
+          "full_source_outside_actual_model_history": true,
+          "whole_source_on_actual_primary_wire": true,
+          "source_data_not_resupplied_in_question": true,
+          "whole_query_on_actual_wire": true,
+          "literal_scope_actual_one_source": true,
+          "unrelated_history_not_a_source_read_scope": true,
+          "all_five_complete_public_documents_durable": true,
+          "erasure_fence_unchanged": true,
+          "no_claim_or_erase_or_failure": true,
+          "no_passed_history_task_replayed": true,
+          "full65k_window_retained": true
+        },
+        "semantic": {
+          "all_eligible_ids_in_order": false,
+          "no_unrequested_row_ids": true,
+          "lowest_three_ids_present": false,
+          "lowest_three_numeric_fields": false,
+          "all_required_literals": false,
+          "all_exception_literals": false,
+          "required_and_condition_preserved": true,
+          "exception_payment_does_not_exempt": true
+        },
+        "selected_rows": [
+          {
+            "id": "VQ104-12-036",
+            "all_numeric_fields_same_row": false,
+            "route_same_row": false,
+            "complete_required_literal": false,
+            "complete_exception_literal": false
+          },
+          {
+            "id": "VQ104-12-006",
+            "all_numeric_fields_same_row": true,
+            "route_same_row": true,
+            "complete_required_literal": true,
+            "complete_exception_literal": true
+          },
+          {
+            "id": "VQ104-12-015",
+            "all_numeric_fields_same_row": true,
+            "route_same_row": true,
+            "complete_required_literal": true,
+            "complete_exception_literal": true
+          }
+        ],
+        "expected_eligible_ids": [
+          "VQ104-12-036",
+          "VQ104-12-006",
+          "VQ104-12-015",
+          "VQ104-12-024",
+          "VQ104-12-018",
+          "VQ104-12-027"
+        ]
+      }
+    ],
+    "receipts": [
+      {
+        "variant": "native-pg-literal",
+        "index": 0,
+        "http_status": 200,
+        "prompt_tokens": 33511,
+        "completion_tokens": 103,
+        "cached_tokens": 256,
+        "estimated_cny": "0.03367212"
+      },
+      {
+        "variant": "native-pg-literal",
+        "index": 1,
+        "http_status": 200,
+        "prompt_tokens": 35425,
+        "completion_tokens": 56,
+        "cached_tokens": 384,
+        "estimated_cny": "0.03527268"
+      },
+      {
+        "variant": "native-pg-literal",
+        "index": 2,
+        "http_status": 200,
+        "prompt_tokens": 33451,
+        "completion_tokens": 12,
+        "cached_tokens": 0,
+        "estimated_cny": "0.033499"
+      },
+      {
+        "variant": "native-pg-literal",
+        "index": 3,
+        "http_status": 200,
+        "prompt_tokens": 33248,
+        "completion_tokens": 539,
+        "cached_tokens": 768,
+        "estimated_cny": "0.03465136"
+      },
+      {
+        "variant": "native-pg-second",
+        "index": 0,
+        "http_status": 200,
+        "prompt_tokens": 33513,
+        "completion_tokens": 103,
+        "cached_tokens": 256,
+        "estimated_cny": "0.03367412"
+      },
+      {
+        "variant": "native-pg-second",
+        "index": 1,
+        "http_status": 200,
+        "prompt_tokens": 35427,
+        "completion_tokens": 56,
+        "cached_tokens": 384,
+        "estimated_cny": "0.03527468"
+      },
+      {
+        "variant": "native-pg-second",
+        "index": 2,
+        "http_status": 200,
+        "prompt_tokens": 33453,
+        "completion_tokens": 12,
+        "cached_tokens": 0,
+        "estimated_cny": "0.033501"
+      },
+      {
+        "variant": "native-pg-second",
+        "index": 3,
+        "http_status": 200,
+        "prompt_tokens": 33247,
+        "completion_tokens": 544,
+        "cached_tokens": 29312,
+        "estimated_cny": "0.00669724"
+      }
+    ],
+    "actual_calls": 8,
+    "http200": 8,
+    "actual_native200": 2,
+    "actual_primary_calls": 2,
+    "estimated_cost_cny": "0.24624220",
+    "affected_unique_test_nodes": 24,
+    "old_paid_cases_repeated": 0,
+    "full_suite_repeated": false,
+    "raw_replies_protected": true,
+    "answer_locator_echo_is_not_an_eligible_list_row": true,
+    "semantic_failure_retained_not_model_capacity_claim": true,
+    "whole_goal_complete": false
+  },
+  "limitations": {
+    "exact_literal_source_read_scope_only": true,
+    "unresolved_or_mixed_queries_keep_unrestricted_sparse_retrieval": true,
+    "second_answer_omitted_one_eligible_row": true,
+    "backend_missing_input_not_observed": true,
+    "semantic_failure_root_cause_unproven": true,
+    "external_rag_abstention_metadata_separate_from_primary_generation": true,
+    "whole_goal_accuracy_not_claimed": true
+  }
+}
