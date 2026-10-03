@@ -17,15 +17,24 @@ def run(phase):
         return json.loads((phase / name).read_text())
 
     case = read("fixture.json")
-    author = phase / "native-pg-report"
+    authoring_this_phase = case.get("writer_or_imports_required") is not False
+    author_phase = phase
+    if not authoring_this_phase:
+        assert re.fullmatch(r"stage[1-9]\d*", case["seed_parent_phase"])
+        author_phase = phase.parent / case["seed_parent_phase"]
+
+    def author_read(name):
+        return json.loads((author_phase / name).read_text())
+
+    author = author_phase / "native-pg-report"
     lookup = phase / "native-pg-read"
     seed = read("native-pg-favorite-seed/before-question.json")
-    old = read("native-pg-seed/before-question.json")
+    old = author_read("native-pg-seed/before-question.json")
     result = read("native-pg-read/result.json")
-    author_calls = read("native-pg-report/cloud-calls.json")
+    author_calls = author_read("native-pg-report/cloud-calls.json")
     read_calls = read("native-pg-read/cloud-calls.json")
-    calls = author_calls + read_calls
-    diagnostic = read("additional-authoring-diagnostic.json")
+    calls = author_calls + read_calls if authoring_this_phase else read_calls
+    diagnostic = author_read("additional-authoring-diagnostic.json")
     gate = read("native-pg-read/primary-input-observed.json")
     review = read("semantic-review.json")
     checks = {}
@@ -37,7 +46,8 @@ def run(phase):
           and len(case["documents"]) == 5 and len(case["bridges"]) == 9
           and not case["input_information_reduced"]
           and case["additional_source_message"] not in case["question"]
-          and case["current_user_action_report"] in case["question"])
+          and (case.get("previous_action_report_not_provided_in_this_question")
+               or case["current_user_action_report"] in case["question"]))
     check("new_authoring_receipt_and_old_claims_intact", seed["additional_source_status"] == 200
           and seed["additional_source_written_by_real_native_turn"]
           and len(seed["seed_records"]) == 4
@@ -61,7 +71,7 @@ def run(phase):
     check("authoring_harness_failure_retained_and_correctly_classified",
           seed["authoring_harness_assertion_failed"]
           and "Actual favorite authoring produced no source-grounded stored claim" in
-          (phase / "native-report.log").read_text()
+          (author_phase / "native-report.log").read_text()
           and not (author / "result.json").exists()
           and seed["additional_writer_actual_calls"] == len(author_calls) == 4)
     check("real_authenticated_postgresql_lookup", result["transport"] == "authenticated_ASGI"
@@ -73,7 +83,7 @@ def run(phase):
           == result["successful_bridge_turns_replayed"] == 0
           and result["bridge_turns_completed"] == 9
           and result["seed_records"] == seed["seed_records"])
-    check("eight_official_pro_successful_provider_calls", len(calls) == 8
+    check("actual_official_pro_successful_provider_calls", len(calls) == (8 if authoring_this_phase else 4)
           and all(c["http_status"] == 200
                   and c["request"]["model"] == c["response"]["model"] == "deepseek-v4-pro"
                   and c["response"]["choices"][0]["finish_reason"] == "stop" for c in calls))
@@ -88,16 +98,32 @@ def run(phase):
     whole = "\n".join(unescape(m["content"]) for m in wire)
     check("actual_raw_reply_never_rewritten", raw == result["response"]["reply"]
           and hashlib.sha256(raw.encode()).hexdigest() == review["raw_reply_sha256"])
-    check("all_five_whole_public_sources_and_both_private_sources_on_wire",
-          all(gate["document_bodies_present"].values())
+    check("all_requested_whole_public_sources_and_both_private_sources_on_wire",
+          all(gate["document_bodies_present"][str(i) + ":" + case["documents"][i]["title"]]
+              and case["documents"][i]["content"] in whole for i in case["required_gate_document_indices"])
           and gate["private_sources_present"] == [True, True]
-          and all(doc["content"] in whole for doc in case["documents"])
           and all(source in whole for source in [case["source_message"], case["additional_source_message"]]))
     prepared = result["prepared"][-1]
     check("all_four_real_user_observations_selected",
           set(prepared["used_memory_ids"]) == {str(row["id"]) for row in seed["seed_records"]}
           and prepared["recall"]["selected_count"] == 4
           and prepared["recall"]["temporal_views"] == {"fact": 0, "asserted_state": 0, "observation": 4})
+    records = {str(row["id"]): row for row in seed["seed_records"]}
+    observation_integrity = []
+    for packet in prepared["memory_packets"]:
+        row = records[packet["memory_id"]]
+        observed_source = (case["additional_source_message"]
+                           if "最喜欢寄件受理" in row["content"] else case["source_message"])
+        match = re.fullmatch(r"用户原话记录（时效未核实，不代表当前状态；记录于(.+?)）：(.+)",
+                             packet["content"], re.S)
+        originals = json.loads(match[2]) if match else []
+        observation_integrity.append(bool(
+            match and match[1] == row["observed_at"] and observed_source in originals
+            and all(evidence in originals for evidence in row["evidence"])
+            and dict(packet["qualifiers"]) == row["qualifiers"]
+            and packet["temporal_mode"] == "observation"))
+    check("observation_render_keeps_whole_sources_excerpts_qualifiers_and_clock",
+          len(observation_integrity) == 4 and all(observation_integrity))
     check("old_and_necessary_condition_not_lost",
           any(dict(packet["qualifiers"]).get("condition") == "完整表格已提交且身份核验通过"
               for packet in prepared["memory_packets"]))
@@ -133,7 +159,11 @@ def run(phase):
               if name != "backend/evaluation/mixed_subject_history_probe.py"))
     outcome = dict(checks=checks, passed=sum(checks.values()), total=len(checks),
                    actual_calls=len(calls), actual_http200=sum(c["http_status"] == 200 for c in calls),
-                   actual_native_api_replies=2, actual_primary_calls=2,
+                   actual_native_api_replies=(2 if authoring_this_phase else 1),
+                   actual_primary_calls=(2 if authoring_this_phase else 1),
+                   historical_authoring_calls_verified=(0 if authoring_this_phase else len(author_calls)),
+                   authoring_this_phase=authoring_this_phase,
+                   public_source_reads_requested=len(case["required_gate_document_indices"]),
                    main_prompt_tokens=primary[0]["response"]["usage"]["prompt_tokens"],
                    main_input_bound=bound, complete_private_originals=len(speech["records"]),
                    semantic_criteria_passed=sum(item["passed"] for item in review["criteria"]),
