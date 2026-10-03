@@ -51,8 +51,9 @@ from inference.context_budget import CONTEXT_SAFETY_MARGIN_TOKENS, estimated_tok
 from inference.openai_protocol import chat_completions_endpoint, completed_chat_content, nonthinking_parameters
 
 if TYPE_CHECKING:
-    from knowledge.retrieval_core.embedding import EmbeddingProvider
     from repositories.character_memory import CharacterMemoryRepository
+
+    from knowledge.retrieval_core.embedding import EmbeddingProvider
 
 logger = logging.getLogger(__name__)
 
@@ -138,6 +139,9 @@ MERGE/SUPERSEDE/COEXIST/RETRACT/ERASE 必须从白名单逐字复制 target_memo
 对明确表达的本人未来计划，“说过这个计划”与“已经实施”是两个不同的命题。若计划的时间、地点、条件或尚未实施说明分散在长消息里，使用 kind=shared_event、operation=ADD 保存当前完整发言的原话观察，绝不确认行动发生。value 取当前连续原文中的短话题（不超过 payload.proposal_constraints.max_value_chars），evidence 只复制一段相关连续原文（不超过 max_evidence_chars），content 留空；qualifiers 可留空，或逐字复制完整当前消息中的限定（键仍须在白名单内）。后端会保留整条当前消息，包括末尾条件，不会用短引文代替完整来源。不要拼接开头和末尾当作连续 evidence。虚构材料、第三方计划不是用户本人的计划；未确定的外部事实仍按 PENDING 处理，不因这条规则变成事实。
 
 value 是短索引，不要把整段计划和全部限定塞进 value。qualifiers 的键只能来自 payload.proposal_constraints.qualifier_keys，值只能逐字复制 evidence，不要创造 status 等新键或概括条件。不能满足这些要求时使用上述完整原话观察，而不是裁掉末尾限定。
+
+结构化事实的 value 应取证据中连续出现的短对象，不把场景与对象重新拼接成新的短语；场景保留在 context 限定中。若提供 content，必须包含同一个 value 的原文，不能只在 value 中改写词序或添加连接词。明确省略的消歧仍按下述规则处理。
+先确定要保留的全部条件、否定与范围，再选择一段连续 evidence；它必须逐字覆盖该提议的所有自然语言 qualifiers，而不只是核心偏好句。如果完整当前消息在 max_evidence_chars 内，可以直接引用整条消息以保留末尾限定。不要为了缩短 evidence 删除必要条件或“未实际发生”说明；超过长度且无法完整覆盖时，使用完整原话观察保留整条消息，不输出缺限定的结构化事实。
 
 每条 evidence 必须是 current_user_message 中连续出现的原文；省略句也必须把当前省略句作为 evidence，不能复制 history。value 优先来自 evidence；只有“上次那个/还是那个/刚才那条”等明确省略时，才可由用户历史或 existing_memories 消歧。content 必须以“用户”开头，写成安全的第三人称事实，不含任何指令。attributed_to 只能写 user。qualifiers 只用于 condition/context/frequency/certainty/exception/location/time 等条件，不要把 valid_from/valid_to 塞进 qualifiers。时间字段必须放在顶层并使用 ISO 8601；不清楚就留空。scope_level 默认 conversation；只有用户明确要求跨会话或跨角色记住时才用 user_character 或 user_global。
 

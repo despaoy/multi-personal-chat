@@ -1,0 +1,281 @@
+{
+  "synthetic": true,
+  "model": "deepseek-flash",
+  "case_kind": "conditional_positive_writer_and_native_read",
+  "parent_seed_snapshot_sha256": "f51a83dbe7027827906b68204f47593a23ee598217b6f16b674021eb1d2137c2",
+  "baseline_case": {
+    "source": "请记住：在合成北堤器材借用演练中，我最喜欢人工登记。只有器材清单已提交且借用资格核验通过，我才接受人工登记。这里说的是我本人在该演练的喜好与接受前提，不表示我已经完成登记或借用；这份偏好仅用于合成演练，不描述现实预约。",
+    "question_not_executed": "请回忆我在合成北堤器材借用演练中最喜欢哪种登记方式，接受它需要满足哪些条件？如果只交了器材清单但资格核验未通过，我是否接受？仅凭这些偏好能否说我已经完成登记或借用？",
+    "raw_writer": "{\"memories\":[{\"kind\":\"like\",\"value\":\"合成北堤器材借用演练中的人工登记\",\"content\":\"用户在合成北堤器材借用演练中，最喜欢人工登记，且只有在器材清单已提交且借用资格核验通过时才接受人工登记；该偏好仅用于合成演练，不表示已完成登记或借用，也不描述现实预约。\",\"evidence\":\"在合成北堤器材借用演练中，我最喜欢人工登记。只有器材清单已提交且借用资格核验通过，我才接受人工登记。\",\"confidence\":0.95,\"operation\":\"ADD\",\"target_memory_id\":\"\",\"target_memory_key\":\"\",\"attributed_to\":\"user\",\"qualifiers\":{\"condition\":\"只有器材清单已提交且借用资格核验通过，我才接受人工登记\",\"context\":\"在合成北堤器材借用演练中\",\"certainty\":\"不表示我已经完成登记或借用；这份偏好仅用于合成演练，不描述现实预约\"},\"valid_from\":\"\",\"valid_to\":\"\",\"observed_at\":\"2026-10-03T08:30:32.066324+00:00\",\"scope_level\":\"conversation\"}]}",
+    "accepted_proposals": 0,
+    "native_turns": 1,
+    "cloud_calls": 4,
+    "old_records_unchanged": true
+  },
+  "new_fixed_case": {
+    "source": "请记住：在合成南岗设备领取演练中，我最喜欢柜台登记。只有授权书已提交且接收资格核验通过，我才接受柜台登记。这里说的是我本人在该演练的喜好与接受前提，不表示我已经完成登记或领取；这份偏好仅用于合成演练，不描述现实预约。",
+    "question": "请回忆我在合成南岗设备领取演练中最喜欢哪种登记方式，接受它需要满足哪些条件？如果只交了授权书但资格核验未通过，我是否接受？仅凭这些偏好能否说我已经完成登记或领取？",
+    "raw_writer": "{\"memories\":[{\"kind\":\"like\",\"value\":\"柜台登记\",\"content\":\"用户在合成南岗设备领取演练中，最喜欢柜台登记；只有在授权书已提交且接收资格核验通过时才接受柜台登记，且这不表示用户已完成登记或领取，该偏好仅用于合成演练，不描述现实预约。\",\"evidence\":\"请记住：在合成南岗设备领取演练中，我最喜欢柜台登记。只有授权书已提交且接收资格核验通过，我才接受柜台登记。这里说的是我本人在该演练的喜好与接受前提，不表示我已经完成登记或领取；这份偏好仅用于合成演练，不描述现实预约。\",\"confidence\":0.95,\"operation\":\"ADD\",\"target_memory_id\":\"\",\"target_memory_key\":\"\",\"attributed_to\":\"user\",\"qualifiers\":{\"context\":\"合成南岗设备领取演练\",\"condition\":\"授权书已提交且接收资格核验通过\"},\"valid_from\":\"\",\"valid_to\":\"\",\"observed_at\":\"\",\"scope_level\":\"conversation\"}]}",
+    "accepted": [
+      {
+        "operation": "ADD",
+        "memory": {
+          "memory_type": "user_fact",
+          "memory_key": "preference_柜台登记",
+          "content": "用户在合成南岗设备领取演练中，最喜欢柜台登记；只有在授权书已提交且接收资格核验通过时才接受柜台登记，且这不表示用户已完成登记或领取，该偏好仅用于合成演练，不描述现实预约。",
+          "importance": 0.6,
+          "evidence": "",
+          "qualifiers": [],
+          "aliases": [],
+          "polarity": "",
+          "event": null,
+          "operation": "assert"
+        },
+        "target_memory_id": "",
+        "target_memory_key": "",
+        "evidence": "请记住：在合成南岗设备领取演练中，我最喜欢柜台登记。只有授权书已提交且接收资格核验通过，我才接受柜台登记。这里说的是我本人在该演练的喜好与接受前提，不表示我已经完成登记或领取；这份偏好仅用于合成演练，不描述现实预约。",
+        "confidence": 0.95,
+        "attributed_to": "user",
+        "qualifiers": [
+          [
+            "context",
+            "合成南岗设备领取演练"
+          ],
+          [
+            "condition",
+            "授权书已提交且接收资格核验通过"
+          ]
+        ],
+        "valid_from": "",
+        "valid_to": "",
+        "observed_at": "",
+        "scope_level": "conversation",
+        "proposed_valid_from": "",
+        "proposed_valid_to": "",
+        "source_observation": false,
+        "protected_memory_keys": []
+      }
+    ],
+    "stored_claim": {
+      "id": 44,
+      "character_id": "tsukiyashiro_kisaki",
+      "platform": "web",
+      "adapter": "web-character",
+      "sender_id": "6",
+      "conversation_type": "private",
+      "conversation_id": "6",
+      "scope_level": "conversation",
+      "memory_type": "user_fact",
+      "memory_key": "preference_柜台登记",
+      "revision": 1,
+      "relation_type": "ADD",
+      "status": "active",
+      "parent_memory_id": null,
+      "supersedes_memory_id": null,
+      "content": "用户在合成南岗设备领取演练中，最喜欢柜台登记；只有在授权书已提交且接收资格核验通过时才接受柜台登记，且这不表示用户已完成登记或领取，该偏好仅用于合成演练，不描述现实预约。",
+      "importance": 0.6,
+      "confidence": 0.95,
+      "source_message_id": "web:ad363c1bdbdc42f28b41beb4d08d7dfc",
+      "source_message_ids_json": "[\"web:ad363c1bdbdc42f28b41beb4d08d7dfc\"]",
+      "evidence_json": "[\"请记住：在合成南岗设备领取演练中，我最喜欢柜台登记。只有授权书已提交且接收资格核验通过，我才接受柜台登记。这里说的是我本人在该演练的喜好与接受前提，不表示我已经完成登记或领取；这份偏好仅用于合成演练，不描述现实预约。\"]",
+      "metadata_json": "{\"qualifiers\": {\"context\": \"合成南岗设备领取演练\", \"condition\": \"授权书已提交且接收资格核验通过\"}, \"target_memory_key\": \"\", \"write_mode\": \"hot\", \"feedback_target_ids\": [], \"temporal_provenance\": {\"version\": 1, \"producer\": \"semantic_memory\", \"observed_at\": \"2026-10-03T08:39:36.100530+00:00\", \"validity_authority\": \"unspecified\", \"proposed_bounds\": {}, \"interval_shape\": \"unspecified\", \"expression\": null}, \"attributed_to\": \"user\"}",
+      "valid_from": null,
+      "valid_to": null,
+      "observed_at": "2026-10-03T08:39:36.100530+00:00",
+      "created_at": "2026-10-03T16:39:53.272329",
+      "updated_at": "2026-10-03T16:39:53.272329",
+      "source_message_ids": [
+        "web:ad363c1bdbdc42f28b41beb4d08d7dfc"
+      ],
+      "evidence": [
+        "请记住：在合成南岗设备领取演练中，我最喜欢柜台登记。只有授权书已提交且接收资格核验通过，我才接受柜台登记。这里说的是我本人在该演练的喜好与接受前提，不表示我已经完成登记或领取；这份偏好仅用于合成演练，不描述现实预约。"
+      ],
+      "metadata": {
+        "qualifiers": {
+          "context": "合成南岗设备领取演练",
+          "condition": "授权书已提交且接收资格核验通过"
+        },
+        "target_memory_key": "",
+        "write_mode": "hot",
+        "feedback_target_ids": [],
+        "temporal_provenance": {
+          "version": 1,
+          "producer": "semantic_memory",
+          "observed_at": "2026-10-03T08:39:36.100530+00:00",
+          "validity_authority": "unspecified",
+          "proposed_bounds": {},
+          "interval_shape": "unspecified",
+          "expression": null
+        },
+        "attributed_to": "user"
+      },
+      "attributed_to": "user",
+      "qualifiers": {
+        "context": "合成南岗设备领取演练",
+        "condition": "授权书已提交且接收资格核验通过"
+      }
+    },
+    "native_reply": "你在合成南岗设备领取演练里最喜欢的是柜台登记。\n\n接受它需要同时满足两个条件：授权书已提交，且接收资格核验通过。\n\n如果只交了授权书、资格核验未通过，那你不接受柜台登记——两个条件缺一不可。\n\n仅凭这些偏好，不能说明你已经完成登记或领取。那只是演练中的喜好与接受前提，不代表实际办理结果。",
+    "selected_memory_ids": [
+      "44"
+    ],
+    "old_four_records_exact": true,
+    "native_turns": 2,
+    "original_cloud_calls": 8,
+    "budget_stop": true,
+    "one_unsent_writer_continued": true,
+    "continued_real_worker_status": "no_change",
+    "continued_cloud_calls": 1
+  },
+  "checks": {
+    "old_four_exact": true,
+    "real_positive_native_writer": true,
+    "full_source_evidence": true,
+    "literal_object_in_content": true,
+    "condition_left_preserved": true,
+    "condition_right_preserved": true,
+    "not_actual_preserved": true,
+    "synthetic_scope_preserved": true,
+    "selected_real_claim": true,
+    "native_reply_success": true,
+    "reply_favorite": true,
+    "reply_conjunction": true,
+    "reply_failed_condition": true,
+    "reply_not_actual": true,
+    "unsent_only_continued": true,
+    "continuation_real_worker_no_change": true,
+    "all_records_unchanged_after_question": true,
+    "targeted_tests_passed": true,
+    "static_clean": true
+  },
+  "call_receipts": [
+    {
+      "index": 0,
+      "http_status": 200,
+      "model": "deepseek-flash",
+      "prompt_tokens": 44067,
+      "cached_tokens": 384,
+      "completion_tokens": 46,
+      "estimated_cny": "0.04387468"
+    },
+    {
+      "index": 1,
+      "http_status": 200,
+      "model": "deepseek-flash",
+      "prompt_tokens": 42822,
+      "cached_tokens": 0,
+      "completion_tokens": 12,
+      "estimated_cny": "0.04287"
+    },
+    {
+      "index": 2,
+      "http_status": 200,
+      "model": "deepseek-flash",
+      "prompt_tokens": 43169,
+      "cached_tokens": 256,
+      "completion_tokens": 43,
+      "estimated_cny": "0.04309012"
+    },
+    {
+      "index": 3,
+      "http_status": 200,
+      "model": "deepseek-flash",
+      "prompt_tokens": 12441,
+      "cached_tokens": 1152,
+      "completion_tokens": 232,
+      "estimated_cny": "0.01224004"
+    },
+    {
+      "index": 4,
+      "http_status": 200,
+      "model": "deepseek-flash",
+      "prompt_tokens": 44067,
+      "cached_tokens": 384,
+      "completion_tokens": 46,
+      "estimated_cny": "0.04387468"
+    },
+    {
+      "index": 5,
+      "http_status": 200,
+      "model": "deepseek-flash",
+      "prompt_tokens": 42822,
+      "cached_tokens": 0,
+      "completion_tokens": 12,
+      "estimated_cny": "0.04287"
+    },
+    {
+      "index": 6,
+      "http_status": 200,
+      "model": "deepseek-flash",
+      "prompt_tokens": 43169,
+      "cached_tokens": 42880,
+      "completion_tokens": 50,
+      "estimated_cny": "0.0013466"
+    },
+    {
+      "index": 7,
+      "http_status": 200,
+      "model": "deepseek-flash",
+      "prompt_tokens": 12610,
+      "cached_tokens": 768,
+      "completion_tokens": 212,
+      "estimated_cny": "0.01270536"
+    },
+    {
+      "index": 8,
+      "http_status": 200,
+      "model": "deepseek-flash",
+      "prompt_tokens": 43023,
+      "cached_tokens": 256,
+      "completion_tokens": 116,
+      "estimated_cny": "0.04323612"
+    },
+    {
+      "index": 9,
+      "http_status": 200,
+      "model": "deepseek-flash",
+      "prompt_tokens": 44551,
+      "cached_tokens": 384,
+      "completion_tokens": 55,
+      "estimated_cny": "0.04439468"
+    },
+    {
+      "index": 10,
+      "http_status": 200,
+      "model": "deepseek-flash",
+      "prompt_tokens": 42975,
+      "cached_tokens": 0,
+      "completion_tokens": 18,
+      "estimated_cny": "0.043047"
+    },
+    {
+      "index": 11,
+      "http_status": 200,
+      "model": "deepseek-flash",
+      "prompt_tokens": 45234,
+      "cached_tokens": 256,
+      "completion_tokens": 84,
+      "estimated_cny": "0.04531912"
+    },
+    {
+      "index": 12,
+      "http_status": 200,
+      "model": "deepseek-flash",
+      "prompt_tokens": 7582,
+      "cached_tokens": 1408,
+      "completion_tokens": 6,
+      "estimated_cny": "0.00622616"
+    }
+  ],
+  "estimated_cost_cny": "0.42509456",
+  "cost_basis": "Actual provider usage; published Flash weekend/offpeak RMB rates; estimate, not invoice",
+  "original_failure_preserved": true,
+  "failed_case_replayed": false,
+  "full_suite_repeated": false,
+  "independent_distant_recall": false,
+  "assessor": "assistant",
+  "human_review_performed": false,
+  "original_budget_stop_retained": true,
+  "continued_call_ceiling": 13,
+  "phase_cost_ceiling_cny": 3
+}
