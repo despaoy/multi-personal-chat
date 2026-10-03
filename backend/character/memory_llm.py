@@ -1982,9 +1982,13 @@ class MemoryEnrichmentScheduler:
 
         deferred = None
         if semantic_operation in {"MERGE", "SUPERSEDE", "RETRACT", "ERASE"}:
-            from character.deferred_memory_mutation import deferred_source_start
+            from character.deferred_memory_mutation import deferred_evidence_start, deferred_source_start
 
             deferred = deferred_source_start(proposal.evidence, observed_at=job.observed_at)
+            if deferred is None:
+                deferred = deferred_evidence_start(
+                    proposal.evidence, getattr(job, "message", ""), observed_at=job.observed_at
+                )
             if (deferred is None and semantic_operation == "ERASE"
                     and _future_only_erasure_request(getattr(job, "message", ""), observed_at=job.observed_at)):
                 # A contiguous quoted command can omit its preceding date.

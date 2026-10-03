@@ -1,0 +1,175 @@
+{
+  "synthetic_only": true,
+  "baseline": "9affb6e419272e220ca9e4760f9ee7e5a4a8f185",
+  "model": "deepseek-flash",
+  "case_kind": "future_condition_with_full_source_and_actual_operation_authority",
+  "public_documents": [
+    {
+      "title": "绿泽窗口受理",
+      "category": "办理",
+      "content": "完整公共办理说明正文起点。方案绿泽窗口受理，编号LZ-781。费用6元，办理时限16小时。全部办理条件：完整表格与身份页齐全。全部例外：身份页缺失须暂停，预约不豁免身份核验。此资料不代表任何人的喜好或选择，满足必要条件不等于实际办理。完整公共办理说明正文终点。"
+    },
+    {
+      "title": "绿泽代办受理",
+      "category": "办理",
+      "content": "完整公共办理说明正文起点。方案绿泽代办受理，编号LZ-782。费用12元，办理时限30小时。全部办理条件：完整表格与代办授权齐全。全部例外：授权过期须重新取得有效授权，费用支付不能替代授权。此资料不代表任何人的喜好或选择，满足必要条件不等于实际办理。完整公共办理说明正文终点。"
+    },
+    {
+      "title": "绿泽加速受理",
+      "category": "办理",
+      "content": "完整公共办理说明正文起点。方案绿泽加速受理，编号LZ-783。费用18元，办理时限5小时。全部办理条件：完整表格且身份核验通过。全部例外：核验失败须退回普通流程，预约不豁免核验。此资料不代表任何人的喜好或选择，满足必要条件不等于实际办理。完整公共办理说明正文终点。"
+    },
+    {
+      "title": "绿泽寄件受理",
+      "category": "办理",
+      "content": "完整公共办理说明正文起点。方案绿泽寄件受理，编号LZ-784。费用9元，办理时限48小时。全部办理条件：完整表格与可投递回寄地址齐全。全部例外：地址无法投递须暂停，附件不全须补件。此资料不代表任何人的喜好或选择，满足必要条件不等于实际办理。完整公共办理说明正文终点。"
+    },
+    {
+      "title": "绿泽角色本人偏好",
+      "category": "办理",
+      "content": "绿泽合成办理场景的角色本人偏好记录。记录编号LZ-RP-785。事实主体：角色月社妃，角色标识tsukiyashiro_kisaki；不是当前用户，也不是对所有现实或原作情境的偏好结论。本记录适用范围仅为本次绿泽合成办理场景，在该场景内当前有效。修订范围：上一版本记录角色月社妃最喜欢寄件受理，这现在仅是历史偏好，不是当前结论。本次修订后的当前记录明确：角色月社妃在四个绿泽受理方案中最喜欢加速受理，窗口、代办和寄件不是她在本场景的最喜欢方案。这项当前喜好不是她已实际选择或使用加速的证明；本记录没有提供角色实际操作事实。本记录没有提供当前用户对寄件的喜好，不能证明用户喜欢或不喜欢寄件，也不能证明用户历史上从未表达过。这是完整的场景事实记录，不含缺页或外部引用。"
+    }
+  ],
+  "private_inputs_kept_complete_in_restricted_server_artifacts": true,
+  "required_private_source_indices": [
+    2
+  ],
+  "all_three_private_originals_retained": true,
+  "expected": {
+    "unique_admitted_quote_bound_to_its_own_literal_source_start": true,
+    "present_target_preserved_when_future_prefix_omitted": true,
+    "independent_current_commands_not_dated_by_other_future_clauses": true,
+    "repeated_evidence_not_assigned_a_guessed_future_occurrence": true,
+    "quoted_or_unknown_date_not_future_authority": true,
+    "erasure_mixed_commands_bound_per_proposal": true,
+    "full_source_and_actual_clock_retained": true,
+    "no_automatic_future_execution_certified": true
+  },
+  "result": {
+    "checks": {
+      "new_complete_synthetic_question": true,
+      "actual_original_seed_five": true,
+      "final_native_http200": true,
+      "one_primary_five_actual_cloud": true,
+      "original_five_every_field_exact": true,
+      "current44_active_unclosed": true,
+      "all_durable_seed_sources_exact": true,
+      "source_fence_unchanged": true,
+      "original_three_outside_actual_recent_history": true,
+      "required_current_original_on_actual_wire": true,
+      "required_public_originals_on_actual_wire": true,
+      "complete_new_question_on_actual_wire": true,
+      "official_natural_supersede_receipt": true,
+      "valid_admitted_target": true,
+      "real_persisted_coexist": true,
+      "native_full_evidence_uses_existing_direct_guard": true,
+      "native_not_falsely_claimed_short_evidence_branch": true,
+      "actual_full_source_recorded": true,
+      "actual_source_clock_matches": true,
+      "full_quote_read_view_not_current_fact": true,
+      "future_start_after_real_source_observation": true,
+      "no_future_execution_receipt_or_model_lifetime_authority": true,
+      "complete_new_condition_in_evidence_and_qualifiers": true,
+      "writer_saved_once_no_delete": true,
+      "reply_current_and_future_complete": true,
+      "reply_public_all_conditions_exceptions": true,
+      "reply_no_actual_service_inferred": true,
+      "reply_no_auto_execution_guarantee": true,
+      "baseline_three_accepted_short_evidence_failures": true,
+      "first21_new_nodes_passed_once": true,
+      "only_two_extra_erasure_nodes_run": true,
+      "static_zero": true,
+      "no_forced_shortening_or_model_output_injection": true
+    },
+    "passed": 33,
+    "total": 33,
+    "actual_calls": 5,
+    "http200": 5,
+    "native_receipts_success": 1,
+    "actual_primary_calls": 1,
+    "affected_unique_test_nodes": 23,
+    "initial_binding_nodes": 21,
+    "extra_erasure_nodes": 2,
+    "passed_nodes_repeated": 0,
+    "passed_paid_cases_replayed": 0,
+    "estimated_cost_cny": "0.17725264",
+    "receipts": [
+      {
+        "index": 0,
+        "http_status": 200,
+        "model": "deepseek-flash",
+        "prompt_tokens": 40020,
+        "completion_tokens": 131,
+        "cached_tokens": 384,
+        "estimated_cny": "0.04016768"
+      },
+      {
+        "index": 1,
+        "http_status": 200,
+        "model": "deepseek-flash",
+        "prompt_tokens": 41729,
+        "completion_tokens": 52,
+        "cached_tokens": 384,
+        "estimated_cny": "0.04156068"
+      },
+      {
+        "index": 2,
+        "http_status": 200,
+        "model": "deepseek-flash",
+        "prompt_tokens": 40054,
+        "completion_tokens": 16,
+        "cached_tokens": 0,
+        "estimated_cny": "0.040118"
+      },
+      {
+        "index": 3,
+        "http_status": 200,
+        "model": "deepseek-flash",
+        "prompt_tokens": 42547,
+        "completion_tokens": 384,
+        "cached_tokens": 256,
+        "estimated_cny": "0.04383212"
+      },
+      {
+        "index": 4,
+        "http_status": 200,
+        "model": "deepseek-flash",
+        "prompt_tokens": 11906,
+        "completion_tokens": 262,
+        "cached_tokens": 1408,
+        "estimated_cny": "0.01157416"
+      }
+    ],
+    "required_private_indices": [
+      2
+    ],
+    "observed_private_presence": [
+      false,
+      false,
+      true
+    ],
+    "all_private_originals_retained": true,
+    "actual_recent_messages": 20,
+    "new_question_chars": 197,
+    "new_question_sha256": "57c383fb8928d51830872de256a584c79371afc72d9a51f80051b1809a994edc",
+    "reply_sha256": "5ac8fb22210671a19254099cf0f222f591f99c1361ebcc5ba59ee1a9d53b6d92",
+    "actual_proposal_relation": "SUPERSEDE",
+    "actual_persisted_relation": "COEXIST",
+    "new_binding_branch_exercised_by_natural_model": false,
+    "full_new_source_retained": true,
+    "limitations": {
+      "new_evidence_binding_branch_proven_by_unit_tests_not_this_natural_full_evidence_proposal": true,
+      "reply_added_unrequested_agency_and_glass_class_details": true,
+      "reply_current_memory_mutation_unknown_without_reported_receipt": true,
+      "native_writer_idle_final_database_receipt_not_assumed_available_before_reply": true,
+      "unique_literal_same_clause_binding_only": true,
+      "no_automatic_future_execution_verified": true,
+      "whole_goal_accuracy_not_claimed": true
+    },
+    "whole_goal_complete": false
+  },
+  "source_snapshot_sha256": "33286d2b1f821418d630f014591af49ed39889fb15812d1c29b1cfac03218ea8",
+  "reviewer": "assistant",
+  "human_review": false,
+  "provider_usage_estimate_not_invoice": true
+}
