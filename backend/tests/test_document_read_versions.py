@@ -124,7 +124,7 @@ def test_same_title_versions_never_bypass_existing_scope(outside):
         kb=8 if outside == "knowledge_base" else 7,
         category="其他" if outside == "category" else "配送",
     )
-    result = expand([anchor, allowed, other], [anchor], filters={"category": "配送"} if outside == "category" else None)
+    result = expand([anchor, allowed, other], [anchor], filters={"category": "配送"} if outside == "category" else {"knowledge_base_id": 7})
     assert (
         result["results"][1]["id"] == allowed["id"]
         and len(result["results"]) == 2

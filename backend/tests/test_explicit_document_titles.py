@@ -105,13 +105,13 @@ def test_four_independent_requested_docs_survive_original_top_three():
     assert len(plan.retrieval.source_coverage) == 4
 
 
-@pytest.mark.parametrize("scope", ["other_kb", "filter"])
-def test_explicit_titles_respect_anchor_knowledge_base_and_original_filter(scope):
+@pytest.mark.parametrize("scope", ["knowledge_base", "category"])
+def test_explicit_titles_respect_original_explicit_filter(scope):
     anchor = row(1, "A")
-    target = row(2, "B", kb=8 if scope == "other_kb" else 7)
+    target = row(2, "B", kb=8 if scope == "knowledge_base" else 7)
     target["category"] = "其他"
     result = expand(
-        [anchor, target], [anchor], "逐项比较《A》《B》", filters={"category": "目录"} if scope == "filter" else None
+        [anchor, target], [anchor], "逐项比较《A》《B》", filters={"category": "目录"} if scope == "category" else {"knowledge_base_id": 7}
     )
     assert result["results"] == [anchor] and result["unresolved_requested_titles"] == ["B"]
 

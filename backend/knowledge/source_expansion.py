@@ -107,9 +107,10 @@ def expand_source_context(bundle, vector_db, *, expected_generation, source_budg
         requested_groups = set()
         unresolved_titles = []
         ambiguous_titles = []
-        anchor_bases = {group[1] for group in original_groups}
+        # A direct user read has independent roots in the original filter scope.
+        # Ranked anchors do not define which knowledge bases may contain them.
         for title in requested_titles:
-            targets = [group for group in groups if group[1] in anchor_bases and group[2] == title]
+            targets = [group for group in groups if group[2] == title]
             if len(targets) > 1:
                 # A direct read requests these authorized originals. Retain
                 # each source identity rather than arbitrarily picking a
@@ -194,5 +195,5 @@ def expand_source_context(bundle, vector_db, *, expected_generation, source_budg
             result.update(requested_source_titles=list(requested_titles),
                           unresolved_requested_titles=unresolved_titles,
                           ambiguous_requested_titles=ambiguous_titles,
-                          requested_source_scope="same_anchor_knowledge_base_and_original_filter")
+                          requested_source_scope="original_filter")
         return result
