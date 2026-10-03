@@ -62,7 +62,9 @@ async def run(args):
         else:
             seed_proof = json.loads((seed_root / "before-question.json").read_text())
         assert seed_proof["durable_seed_verified_before_question"]
-        expected_seed_count = 4 if seed_proof.get("additional_source_written_by_real_native_turn") else 3
+        from evaluation.native_seed_provenance import expected_seed_record_count
+
+        expected_seed_count = expected_seed_record_count(seed_proof, phase)
         assert len(seed_proof["seed_records"]) == expected_seed_count
         assert seed_proof["before_question_backup"]["prior_same_task_answers"] == 0
         if seed_proof.get("provider_access_blocked_http402"):
