@@ -46,11 +46,17 @@ async def run(args):
             seed_proof["durable_seed_verified_before_question"] = True
         else:
             seed_proof = json.loads((seed_root / "before-question.json").read_text())
-        assert seed_proof["durable_seed_verified_before_question"] and len(seed_proof["seed_records"]) == 3
+        assert seed_proof["durable_seed_verified_before_question"]
+        expected_seed_count = 4 if seed_proof.get("additional_source_written_by_real_native_turn") else 3
+        assert len(seed_proof["seed_records"]) == expected_seed_count
         assert seed_proof["before_question_backup"]["prior_same_task_answers"] == 0
         assert len(seed_proof["documents_imported"]) == 4 and seed_proof["seed_http_status"] == 200
 
     fixture = json.loads((phase / "fixture.json").read_text())
+    if args.author_additional_source:
+        assert args.reuse_verified_seed and not resume_provider_block
+        assert fixture.get("additional_source_message")
+    private_sources = [fixture["source_message"], *fixture.get("additional_private_source_messages", [])]
     parent = json.loads((runtime / "backups/backend-chain-20261001/stage57/saved-audited-result.json").read_text())
     assert fixture["synthetic"] and all(parent["checks"].values())
     key = Path(args.api_key_file).read_text().strip()
@@ -178,6 +184,7 @@ async def run(args):
                         "request": payload,
                         "document_bodies_present": seen,
                         "private_source_present": fixture["source_message"] in whole,
+                        "private_sources_present": [source in whole for source in private_sources],
                         "prepared": proof["prepared"],
                         "retrieval": proof["retrieval"],
                     },
@@ -192,7 +199,7 @@ async def run(args):
                     seen[str(i) + ":" + fixture["documents"][i]["title"]]
                     for i in fixture["required_gate_document_indices"]
                 )
-                and fixture["source_message"] in whole
+                and all(source in whole for source in private_sources)
             ), "Complete requested public/private source missing before actual model"
         from inference.context_budget import CONTEXT_SAFETY_MARGIN_TOKENS, estimated_tokens
         from inference.token_counting import token_counter_info
@@ -561,13 +568,56 @@ async def run(args):
                 proof["bridge_turns"] = seed_proof["bridge_turns"]
                 proof["bridge_turns_completed"] = seed_proof["bridge_turns_completed"]
                 proof["successful_bridge_turns_replayed"] = 0
+            if args.author_additional_source:
+                original_records = await repo.list_memory_records(
+                    "tsukiyashiro_kisaki", scope, limit=None, include_inactive=True
+                )
+                assert original_records == seed_proof["seed_records"]
+                additional = await client.post(
+                    "/api/generate",
+                    json={
+                        "message": fixture["additional_source_message"],
+                        "characterId": "tsukiyashiro_kisaki",
+                        "loraId": "default",
+                        "sessionId": phase.name + "-favorite-authoring",
+                        "sessionType": "private",
+                    },
+                )
+                proof["additional_source_status"] = additional.status_code
+                proof["additional_source_response"] = additional.json()
+                (root / "additional-source-response.json").write_text(
+                    json.dumps(proof["additional_source_response"], ensure_ascii=False, indent=2) + "\n"
+                )
+                assert additional.status_code == 200 and not additional.json()["abstained"]
+                flushed = False
+                for _ in range(4):
+                    flushed = await scheduler.flush_memory(timeout=45)
+                    if flushed:
+                        break
+                assert flushed, "Inspect the existing authoring job; do not replay the user source"
             seed_records = await repo.list_memory_records(
                 "tsukiyashiro_kisaki", scope, limit=None, include_inactive=True
             )
-            if args.reuse_verified_seed:
-                assert seed_records == seed_proof["seed_records"]
+            if args.author_additional_source:
+                (root / "additional-writer-records.json").write_text(
+                    json.dumps(seed_records, ensure_ascii=False, indent=2, default=str) + "\n"
+                )
+                assert all(row in seed_records for row in original_records)
+                assert any(
+                    row not in original_records
+                    and row.get("evidence")
+                    and all(evidence in fixture["additional_source_message"] for evidence in row["evidence"])
+                    for row in seed_records
+                ), "Actual favorite authoring produced no source-grounded stored claim"
                 proof["original_seed_claims_exact_verified"] = True
-            assert len(seed_records) == 3, "Unrelated synthetic directory must not manufacture personal memories"
+                proof["additional_source_written_by_real_native_turn"] = True
+            else:
+                if args.reuse_verified_seed:
+                    assert seed_records == seed_proof["seed_records"]
+                    proof["original_seed_claims_exact_verified"] = True
+                assert len(seed_records) == (expected_seed_count if args.reuse_verified_seed else 3), (
+                    "Unrelated synthetic directory must not manufacture personal memories"
+                )
             proof.update(
                 seed_method="actual_authenticated_native_generate_then_real_semantic_writer_no_fabricated_memories",
                 seed_records=seed_records,
@@ -585,14 +635,14 @@ async def run(args):
                     sources = await connection.fetch(
                         "SELECT * FROM memory_sources WHERE owner_key=$1 AND scope_key=$2", owner_key, scope_key
                     )
-                    assert any(row["body"] == fixture["source_message"] for row in sources)
+                    assert all(any(row["body"] == source for row in sources) for source in private_sources)
                     proof["durable_seed_sources"] = [dict(row) for row in sources]
                     proof["durable_seed_verified_before_question"] = True
             finally:
                 await connection.close()
             await asyncio.to_thread(db.update_config, {"useKnowledgeBase": True})
             invalidate_config_cache()
-            if not args.reuse_verified_seed or resume_provider_block:
+            if not args.reuse_verified_seed or resume_provider_block or args.author_additional_source:
                 backup = root / "before-question.dump"
                 await asyncio.to_thread(
                     subprocess.run,
@@ -671,7 +721,7 @@ async def run(args):
                 expected_api_turns = (
                     (1 + len(fixture["bridges"]) - len(seed_proof["successful_bridge_turns"]))
                     if resume_provider_block
-                    else (1 if args.reuse_verified_seed else 11)
+                    else ((2 if args.author_additional_source else 1) if args.reuse_verified_seed else 11)
                 )
                 assert proof["http_status"] == 200 and len(proof["generation"]) == expected_api_turns
                 # Existing guard retry is an additional actual provider request,
@@ -703,6 +753,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--expect-primary-blocked", action="store_true")
     parser.add_argument("--reuse-verified-seed", action="store_true")
+    parser.add_argument("--author-additional-source", action="store_true")
     parser.add_argument("--compare-original-guard", action="store_true")
     parser.add_argument("--resume-provider-block", action="store_true")
     parser.add_argument("--provider-access-restored", action="store_true")
