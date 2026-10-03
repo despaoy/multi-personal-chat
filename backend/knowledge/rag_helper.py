@@ -221,6 +221,13 @@ class QueryExpander:
         Returns:
             过滤条件字典，可包含category和region字段
         """
+        from knowledge.source_expansion import requested_document_titles
+
+        # A complete named-source read defines its own evidence targets.
+        # Incidental domain words in other subtasks cannot exclude those sources.
+        if requested_document_titles(query):
+            return {}
+
         filters: dict[str, Any] = {}
 
         for profile in self.profiles:
