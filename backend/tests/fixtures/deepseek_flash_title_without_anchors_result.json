@@ -1,0 +1,234 @@
+{
+  "synthetic": true,
+  "model": "deepseek-flash",
+  "runtime_baseline": "7403a3acec0a9b64ac5ef49d89818e4812fb1f09",
+  "source_snapshot_sha256": "f51a83dbe7027827906b68204f47593a23ee598217b6f16b674021eb1d2137c2",
+  "question": "分别读取《绿泽角色本人偏好》《绿泽加速受理》，说明角色在这个合成场景当前最喜欢什么，以及加速的公定费用、时限、完整办理条件和例外。另按我过去的本人原话列出当时最喜欢的方案与加速使用前提。请区分公定规定与我的偏好，不能把条件满足当作已经实际办理。",
+  "required_public_originals": [
+    {
+      "title": "绿泽加速受理",
+      "category": "办理",
+      "content": "完整公共办理说明正文起点。方案绿泽加速受理，编号LZ-783。费用18元，办理时限5小时。全部办理条件：完整表格且身份核验通过。全部例外：核验失败须退回普通流程，预约不豁免核验。此资料不代表任何人的喜好或选择，满足必要条件不等于实际办理。完整公共办理说明正文终点。"
+    },
+    {
+      "title": "绿泽角色本人偏好",
+      "category": "办理",
+      "content": "绿泽合成办理场景的角色本人偏好记录。记录编号LZ-RP-785。事实主体：角色月社妃，角色标识tsukiyashiro_kisaki；不是当前用户，也不是对所有现实或原作情境的偏好结论。本记录适用范围仅为本次绿泽合成办理场景，在该场景内当前有效。修订范围：上一版本记录角色月社妃最喜欢寄件受理，这现在仅是历史偏好，不是当前结论。本次修订后的当前记录明确：角色月社妃在四个绿泽受理方案中最喜欢加速受理，窗口、代办和寄件不是她在本场景的最喜欢方案。这项当前喜好不是她已实际选择或使用加速的证明；本记录没有提供角色实际操作事实。本记录没有提供当前用户对寄件的喜好，不能证明用户喜欢或不喜欢寄件，也不能证明用户历史上从未表达过。这是完整的场景事实记录，不含缺页或外部引用。"
+    }
+  ],
+  "private_original_receipts": [
+    {
+      "sha256": "758efec3c9d67deb51b738c6349210e12288cfd1ae494bd36736c5b9da5e9048",
+      "chars": 63
+    },
+    {
+      "sha256": "2f86e342ee48a2a527c862afea764790d0dd94a35f272c8651387cc9ee49ea8a",
+      "chars": 70
+    }
+  ],
+  "expected": {
+    "role_current_favourite": "加速受理",
+    "public_fee_cny": 18,
+    "public_duration_hours": 5,
+    "public_conditions": [
+      "完整表格",
+      "身份核验通过"
+    ],
+    "public_exceptions": [
+      "核验失败须退回普通流程",
+      "预约不豁免核验"
+    ],
+    "actual_operation": "unknown; preference and satisfied conditions do not prove an operation"
+  },
+  "offline_baseline": {
+    "explicit_authorized_title": "A",
+    "validated_index": true,
+    "semantic_candidates": 0,
+    "result_same_early_return": true,
+    "actual_results": 0,
+    "requested_lookup_declared": false,
+    "cloud_requests": 0,
+    "natural_model_failure_claim": false
+  },
+  "evaluation_only_simulation": {
+    "kind": "evaluation_only_semantic_candidate_loss",
+    "original_semantic_candidate_count": 3,
+    "original_semantic_confidence": 0.6424,
+    "injected_candidate_count": 0,
+    "natural_failure_claim": false,
+    "metadata_mutated": false,
+    "originals_mutated": false,
+    "private_claims_injected": false
+  },
+  "simulation_algorithm": "Call and preserve actual RAGHelper.retrieve_with_citations result, then replace only semantic results/citations with [] and confidence with 0, abstained=True before normal source expansion. No index, fresh original DB, historical owner/source or memory mutation. No natural failure claim. Test-only wrapper never deployed.",
+  "full_reply_kept_in_restricted_server_artifacts": true,
+  "private_expected_values_kept_in_restricted_server_fixture": true,
+  "canonical_requested_sources": [
+    {
+      "title": "绿泽角色本人偏好",
+      "lookup_status": "matched_in_index_scope",
+      "source_ids": [
+        "doc_508"
+      ]
+    },
+    {
+      "title": "绿泽加速受理",
+      "lookup_status": "matched_in_index_scope",
+      "source_ids": [
+        "doc_506"
+      ]
+    }
+  ],
+  "original_source_coverage": [
+    {
+      "source_id": "doc_508",
+      "source_title": "绿泽角色本人偏好",
+      "indexed_document_ids": [
+        "doc_508_chunk_0"
+      ],
+      "retrieved_document_ids": [
+        "doc_508_chunk_0"
+      ],
+      "original_source_receipt": {
+        "version": 1,
+        "authority": "fresh_knowledge_document_read",
+        "source_id": "doc_508",
+        "document_id": 508,
+        "authority_revision": 524,
+        "original_body_sha256": "26e958c9d647bc70b431461488d8b34bd55cfd96244893edfe678f90ff000a1e",
+        "original_body_chars": 332,
+        "original_packet_id": "doc_508_original",
+        "original_packet_sha256": "8b2a5706b2a90c43c499911de50d3f92720a1ac6868412cf2350bf48780cb827",
+        "candidate_included": true
+      },
+      "indexed_chunk_count": 1,
+      "retrieved_chunk_count": 1,
+      "admitted_chunk_count": 1,
+      "status": "all_indexed_chunks_admitted",
+      "omission_reasons": [],
+      "original_status": "verified_original_body_admitted"
+    },
+    {
+      "source_id": "doc_506",
+      "source_title": "绿泽加速受理",
+      "indexed_document_ids": [
+        "doc_506_chunk_0"
+      ],
+      "retrieved_document_ids": [
+        "doc_506_chunk_0"
+      ],
+      "original_source_receipt": {
+        "version": 1,
+        "authority": "fresh_knowledge_document_read",
+        "source_id": "doc_506",
+        "document_id": 506,
+        "authority_revision": 524,
+        "original_body_sha256": "b0e18c496177e50f8a838abda3858b7679e15eb4fc25a22a6cdaa34679c00354",
+        "original_body_chars": 132,
+        "original_packet_id": "doc_506_original",
+        "original_packet_sha256": "b5a9419d2ff62ea9bec5202c11f43171d22b048beb94980e7df50b9ae5ca862c",
+        "candidate_included": true
+      },
+      "indexed_chunk_count": 1,
+      "retrieved_chunk_count": 1,
+      "admitted_chunk_count": 1,
+      "status": "all_indexed_chunks_admitted",
+      "omission_reasons": [],
+      "original_status": "verified_original_body_admitted"
+    }
+  ],
+  "private_originals_full_at_wire": true,
+  "private_originals_outside_recent_history": true,
+  "old_four_records_unchanged": true,
+  "integrity_checks": {
+    "offline_baseline_early_return": true,
+    "natural_retrieval_preserved": true,
+    "injected_candidates_empty": true,
+    "simulation_honestly_labelled": true,
+    "only_exact_requested_roots": true,
+    "weak_candidates_not_promoted": true,
+    "semantic_confidence_not_faked": true,
+    "explicit_evidence_usable": true,
+    "fresh_authority_full": true,
+    "public_complete_at_wire": true,
+    "private_complete_at_wire": true,
+    "private_not_recent": true,
+    "lookups_exact": true,
+    "role_current_correct": true,
+    "public_fee_time": true,
+    "public_and": true,
+    "public_exceptions": true,
+    "user_strongest_mail": true,
+    "user_qualified_and": true,
+    "not_inferred_actual": true,
+    "old_four_claims_unchanged": true,
+    "question_writer_no_change": true,
+    "native_main_once": true,
+    "affected_tests17": true,
+    "static_clean": true
+  },
+  "actual_calls": 5,
+  "http200": 5,
+  "native_receipts": 1,
+  "primary_calls": 1,
+  "call_receipts": [
+    {
+      "index": 0,
+      "model": "deepseek-flash",
+      "prompt_tokens": 42889,
+      "cached_tokens": 256,
+      "completion_tokens": 118,
+      "estimated_cny": "0.04311012",
+      "http_status": 200
+    },
+    {
+      "index": 1,
+      "model": "deepseek-flash",
+      "prompt_tokens": 44076,
+      "cached_tokens": 384,
+      "completion_tokens": 42,
+      "estimated_cny": "0.04386768",
+      "http_status": 200
+    },
+    {
+      "index": 2,
+      "model": "deepseek-flash",
+      "prompt_tokens": 42856,
+      "cached_tokens": 0,
+      "completion_tokens": 16,
+      "estimated_cny": "0.04292",
+      "http_status": 200
+    },
+    {
+      "index": 3,
+      "model": "deepseek-flash",
+      "prompt_tokens": 46053,
+      "cached_tokens": 43392,
+      "completion_tokens": 278,
+      "estimated_cny": "0.00464084",
+      "http_status": 200
+    },
+    {
+      "index": 4,
+      "model": "deepseek-flash",
+      "prompt_tokens": 12625,
+      "cached_tokens": 1408,
+      "completion_tokens": 6,
+      "estimated_cny": "0.01126916",
+      "http_status": 200
+    }
+  ],
+  "estimated_cost_cny": "0.14580780",
+  "cost_basis": "Actual provider usage and cache hits; Flash Saturday offpeak .02/1/4 CNY per million tokens. Estimate, not invoice.",
+  "targeted_tests": {
+    "unique_passed": 17,
+    "passed_tests_repeated": 0,
+    "full_suite_repeated": false,
+    "first_run_all_pass": true
+  },
+  "old_paid_tasks_replayed": 0,
+  "full_suite_repeated": false,
+  "assessor": "assistant",
+  "human_review_performed": false,
+  "whole_goal_complete": false
+}

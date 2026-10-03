@@ -61,8 +61,15 @@ def expand_source_context(bundle, vector_db, *, expected_generation, source_budg
     anchors with an indivisible whole-document packet.
     """
     anchors = bundle.get("results") or []
-    if bundle.get("abstained") or not anchors:
-        return bundle
+    requested_titles = requested_document_titles(query)
+    discard_candidates = bool(bundle.get("abstained") or not anchors)
+    if discard_candidates:
+        if not requested_titles:
+            return bundle
+        # The explicit title is a separate exact lookup, not a confidence
+        # upgrade for rejected semantic candidates. Resolve it only after
+        # validating the same index generation and original filter scope.
+        anchors = []
     if not isinstance(source_budget_tokens, int) or isinstance(source_budget_tokens, bool) or source_budget_tokens <= 0:
         raise ValueError("Invalid source context budget")
     with vector_db._lock:
@@ -106,7 +113,6 @@ def expand_source_context(bundle, vector_db, *, expected_generation, source_budg
             groups.setdefault(group, []).append(record)
         original_groups = set(parents)
         queue = list(parents)
-        requested_titles = requested_document_titles(query)
         requested_groups = set()
         unresolved_titles = []
         ambiguous_titles = []
@@ -194,6 +200,9 @@ def expand_source_context(bundle, vector_db, *, expected_generation, source_budg
             coverage.append({"source_id": f"doc_{group[0]}", "source_title": group[2],
                              "indexed_document_ids": indexed_ids, "retrieved_document_ids": retrieved_ids})
         result = {**bundle, "results": results, "source_context_added": len(added), "source_coverage": tuple(coverage)}
+        if discard_candidates:
+            result.update(abstained=not bool(results), citations=[],
+                          semantic_candidates_discarded=True)
         if requested_titles:
             result.update(requested_source_titles=list(requested_titles),
                           unresolved_requested_titles=unresolved_titles,
