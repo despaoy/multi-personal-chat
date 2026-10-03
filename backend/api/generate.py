@@ -1414,7 +1414,10 @@ async def _generate_with_retrieval(
                     "warnings": bundle.get("warnings") or None,
                     "modelInvoked": True,
                 }
+                from inference.evidence_coverage import requested_source_lookups
                 from knowledge.query_tasks import requests_only_source_excerpt
+
+                source_requests = requested_source_lookups(bundle, rag_message)
 
                 source_lookup = bundle.get(
                     "retrieval_strategy"
@@ -1427,6 +1430,7 @@ async def _generate_with_retrieval(
                         status="character_abstention",
                         confidence=bundle.get("confidence"),
                         reason="insufficient_retrieval_evidence",
+                        requested_sources=source_requests,
                         source_lookup=source_lookup,
                     )
 
@@ -1457,6 +1461,7 @@ async def _generate_with_retrieval(
                         documents=tuple(bundle.get("results", [])),
                         citations=tuple(rag_meta.get("citations", [])),
                         confidence=bundle.get("confidence"),
+                        requested_sources=source_requests,
                         source_lookup=source_lookup,
                         source_excerpts=(
                             (bundle["raw_excerpt"],) if isinstance(bundle.get("raw_excerpt"), dict) else ()
