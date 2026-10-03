@@ -12,7 +12,8 @@ from pathlib import Path
 
 async def run(phase):
     runtime = Path("/home/boot/lhm/multipersonal-runtime")
-    assert phase == runtime / "backups/backend-chain-20261001/stage83"
+    assert phase.parent == runtime / "backups/backend-chain-20261001"
+    assert phase.name in {"stage83", "stage84"}
     cluster = runtime / "evaluations/r148pg.s3"
     os.environ.update(
         MODEL_PROVIDER="openai_compat",
@@ -203,7 +204,7 @@ async def run(phase):
         ),
     )
     database = result["database"]
-    assert database == "stage3_stage83_native_pg_report"
+    assert database == "stage3_" + phase.name + "_native_pg_report"
     con = await asyncpg.connect(user="boot", database=database, host=str(cluster / "socket"), port=25433)
     try:
         async with con.transaction(readonly=True):
@@ -301,6 +302,23 @@ async def run(phase):
         and all(x["quotes"] and all(q in raw for q in x["quotes"]) for x in review["criteria"])
         and review["prior_phase82_case_retested"] is False,
     )
+    if phase.name == "stage84":
+        check(
+            "new_current_and_condition_satisfied_while_actual_use_explicitly_denied",
+            case["current_state"]["form_submitted"] is True
+            and case["current_state"]["identity_verification_passed"] is True
+            and case["expected_accelerated_use_condition_satisfied"] is True
+            and case["expected_actual_accelerated_use_from_user_report"] is False
+            and "没有实际使用窗口受理、加速受理或寄件受理" in case["question"]
+            and "身份核验失败" not in case["question"]
+            and "在本轮核验失败时" not in case["question"],
+        )
+        check(
+            "assistant_review_correctly_attributed_without_human_review_claim",
+            review["assessor"] == "assistant"
+            and review["human_review_performed"] is False
+            and review["prior_phase83_case_retested"] is False,
+        )
     review_passed = all(x["passed"] for x in review["criteria"])
     report = dict(
         checks=checks,
@@ -318,6 +336,8 @@ async def run(phase):
         full_native_case_qualified=int(all(checks.values()) and review_passed),
         prior_phase82_full_native_case_qualified=0,
         prior_phase81_full_native_case_qualified=1,
+        prior_phase83_full_native_case_qualified=(1 if phase.name == "stage84" else None),
+        semantic_review_assessor=review.get("assessor", "assistant"),
         runtime_code_changed=False,
         production_restarted=False,
         audit_provider_calls=0,

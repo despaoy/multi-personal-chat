@@ -27,7 +27,7 @@
     "case_kind": "complete_current_reported_action_differs_from_saved_preference",
     "raw_reply_sha256": "682b0290ec4e611a9cf63b72928d18b9e69ee8a1a97c601398d0b410f932f7fa",
     "case_question_sha256": "30ac10a57134297b52aabbefc0fdf5b3615a63b2c950b595f701b92fb24dfa23",
-    "method": "human_reading_of_one_complete_saved_actual_reply_bound_to_quotes_no_extra_model_calls",
+    "method": "assistant_manual_semantic_review_of_one_complete_saved_actual_reply_bound_to_quotes_no_extra_model_calls",
     "prior_phase82_case_retested": false,
     "criteria": [
       {
@@ -121,7 +121,9 @@
       "The answer calls the difference between actual agency use and dislike a conflict; this is interpreted as behavioral divergence because both facts are explicitly retained and the answer says it does not rewrite preference. It does not establish a logical prohibition on using a disliked option. The exact wording remains saved for review.",
       "This is a current-user report, not independent real-world execution evidence.",
       "No causal backend rewrite for the prior semantic errors was found; there is no runtime fix or prompt revision in this phase."
-    ]
+    ],
+    "assessor": "assistant",
+    "human_review_performed": false
   },
   "observed_native_chain": {
     "actual_provider_calls": 4,

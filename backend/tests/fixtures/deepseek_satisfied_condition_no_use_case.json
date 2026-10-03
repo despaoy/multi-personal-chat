@@ -1,0 +1,164 @@
+{
+  "synthetic": true,
+  "base_fixture": "deepseek_cross_kb_named_source_case.json",
+  "base_fixture_sha256": "eaf9e71db89f8173d203f3aa0ad0162d0f6de93a5ce0a7cd321591e75248c506",
+  "input_construction": "Validate and load the complete base fixture, then apply case_overrides. All four full documents, real memory source, nine full history tasks and original index identities remain intact.",
+  "case_overrides": {
+    "case_kind": "complete_and_necessary_use_condition_satisfied_but_actual_use_denied",
+    "question": "请查知识库，逐项比较《绿泽窗口受理》《绿泽代办受理》《绿泽加速受理》《绿泽寄件受理》这四份完整说明。分别列出编号、费用、办理时限、全部办理条件和全部例外，结合我已告诉你的本人办理偏好判断本轮各项偏好条件。本轮完整表格已提交，身份页齐全，代办授权有效，身份核验通过，回寄地址可投递，附件齐全。每份说明分别说明本轮核对的原文范围，未取得喜好证据的方案保留未知，必要条件不等于实际选择。另回答你最喜欢哪个受理方案；依据不足时保留未知，不能混用不同主体的证据。\n另把原话中的“喜欢加速受理”与“使用加速受理”分开核对：哪些是已保存的本人偏好表述，哪些是使用动作的必要条件？在本轮核验通过时，这两个问题分别如何判断？条件满足是否足以证明已经使用？同时分别说明用户偏好证据和角色自身偏好证据的归属与本轮取得范围。\n四份说明分别存放在四个不同的公共知识库，均属于本轮可查询范围。请分别按资料身份核对原文，不以候选排名替代读取范围。\n补充本轮本人操作报告：我已经实际选择并使用了代办受理；没有实际使用窗口受理、加速受理或寄件受理。这是我本轮对自己操作的报告，不是系统工具执行回执。\n请将我本轮报告的实际使用情况与已保存的本人喜好分别列明，说明两者是否冲突，以及现有资料是否足以确定角色本人的最喜欢方案。对寄件喜好，请区分本轮未取得证据与用户从未表达过。",
+    "original_question": "请查知识库，逐项比较《绿泽窗口受理》《绿泽代办受理》《绿泽加速受理》《绿泽寄件受理》这四份完整说明。分别列出编号、费用、办理时限、全部办理条件和全部例外，结合我已告诉你的本人办理偏好判断本轮各项偏好条件。本轮完整表格已提交，身份页齐全，代办授权有效，身份核验通过，回寄地址可投递，附件齐全。每份说明分别说明本轮核对的原文范围，未取得喜好证据的方案保留未知，必要条件不等于实际选择。另回答你最喜欢哪个受理方案；依据不足时保留未知，不能混用不同主体的证据。\n另把原话中的“喜欢加速受理”与“使用加速受理”分开核对：哪些是已保存的本人偏好表述，哪些是使用动作的必要条件？在本轮核验通过时，这两个问题分别如何判断？条件满足是否足以证明已经使用？同时分别说明用户偏好证据和角色自身偏好证据的归属与本轮取得范围。\n四份说明分别存放在四个不同的公共知识库，均属于本轮可查询范围。请分别按资料身份核对原文，不以候选排名替代读取范围。",
+    "parent_case_path": "backend/tests/fixtures/deepseek_reported_action_binding_case.json",
+    "runtime_baseline": "37532ee4078802929876bd67ef2912b50b20f47c",
+    "new_dimension": "Current full form and identity verification both satisfy the stored AND necessary-use condition. Explicit current-user report still denies actual accelerated use, while agency use and all saved preferences remain intact.",
+    "current_user_action_report": "补充本轮本人操作报告：我已经实际选择并使用了代办受理；没有实际使用窗口受理、加速受理或寄件受理。这是我本轮对自己操作的报告，不是系统工具执行回执。",
+    "comparison_request": "请将我本轮报告的实际使用情况与已保存的本人喜好分别列明，说明两者是否冲突，以及现有资料是否足以确定角色本人的最喜欢方案。对寄件喜好，请区分本轮未取得证据与用户从未表达过。",
+    "current_user_reported_used": [
+      "绿泽代办受理"
+    ],
+    "current_user_reported_not_used": [
+      "绿泽窗口受理",
+      "绿泽加速受理",
+      "绿泽寄件受理"
+    ],
+    "role_preference_evidence": [],
+    "reported_action_verified_by_tool": false,
+    "prior_question": "请查知识库，逐项比较《绿泽窗口受理》《绿泽代办受理》《绿泽加速受理》《绿泽寄件受理》这四份完整说明。分别列出编号、费用、办理时限、全部办理条件和全部例外，结合我已告诉你的本人办理偏好判断本轮各项偏好条件。本轮完整表格已提交，身份页齐全，代办授权有效，身份核验失败，回寄地址可投递，附件齐全。每份说明分别说明本轮核对的原文范围，未取得喜好证据的方案保留未知，必要条件不等于实际选择。另回答你最喜欢哪个受理方案；依据不足时保留未知，不能混用不同主体的证据。\n另把原话中的“喜欢加速受理”与“使用加速受理”分开核对：哪些是已保存的本人偏好表述，哪些是使用动作的必要条件？在本轮核验失败时，这两个问题分别如何判断？条件满足是否足以证明已经使用？同时分别说明用户偏好证据和角色自身偏好证据的归属与本轮取得范围。\n四份说明分别存放在四个不同的公共知识库，均属于本轮可查询范围。请分别按资料身份核对原文，不以候选排名替代读取范围。\n补充本轮本人操作报告：我已经实际选择并使用了代办受理；没有实际使用窗口受理、加速受理或寄件受理。这是我本轮对自己操作的报告，不是系统工具执行回执。\n请将我本轮报告的实际使用情况与已保存的本人喜好分别列明，说明两者是否冲突，以及现有资料是否足以确定角色本人的最喜欢方案。对寄件喜好，请区分本轮未取得证据与用户从未表达过。",
+    "current_state": {
+      "form_submitted": true,
+      "identity_page_complete": true,
+      "agency_authorization_valid": true,
+      "identity_verification_passed": true,
+      "return_address_deliverable": true,
+      "attachments_complete": true
+    },
+    "expected_accelerated_use_condition_satisfied": true,
+    "expected_actual_accelerated_use_from_user_report": false,
+    "changed_current_state_only": "identity verification failed -> passed; the matching current-state question is updated consistently"
+  },
+  "observed_semantic_review": {
+    "case_kind": "complete_and_necessary_use_condition_satisfied_but_actual_use_denied",
+    "raw_reply_sha256": "2e406ca4375e2191f4bec422774975ac450bc554ee3f230e187e451bf34cdb20",
+    "case_question_sha256": "022ecd37409005fa9a4e15bfa35200388da020b90bc85c717921a56895972e42",
+    "method": "assistant_manual_semantic_review_of_one_complete_saved_actual_reply_bound_to_quotes_no_extra_model_calls",
+    "assessor": "assistant",
+    "human_review_performed": false,
+    "prior_phase82_case_retested": false,
+    "prior_phase83_case_retested": false,
+    "criteria": [
+      {
+        "id": "four_complete_public_rules",
+        "passed": true,
+        "quotes": [
+          "全部办理条件：完整表格与身份页齐全",
+          "全部例外：身份页缺失须暂停，预约不豁免身份核验",
+          "全部办理条件：完整表格与代办授权齐全",
+          "全部例外：授权过期须重新取得有效授权，费用支付不能替代授权",
+          "全部办理条件：完整表格且身份核验通过",
+          "全部例外：核验失败须退回普通流程，预约不豁免核验",
+          "全部办理条件：完整表格与可投递回寄地址齐全",
+          "全部例外：地址无法投递须暂停，附件不全须补件"
+        ],
+        "assessment": "Each complete original section preserves numbers, charges, timing, conditions and exceptions."
+      },
+      {
+        "id": "historical_user_preference_negation",
+        "passed": true,
+        "quotes": [
+          "喜欢窗口受理；不喜欢代办受理；喜欢加速受理，但只有完整表格已提交且身份核验通过才使用加速受理。"
+        ],
+        "assessment": "All stored user preferences, negation and the full AND condition are preserved."
+      },
+      {
+        "id": "satisfied_and_use_condition_separate_from_liking",
+        "passed": true,
+        "quotes": [
+          "本轮这两个条件都满足",
+          "“喜欢加速受理”：已保存的本人偏好，成立。",
+          "本轮两项都满足，因此使用加速受理的前提条件成立。"
+        ],
+        "assessment": "The new complete current state satisfies both stored necessary-use conjuncts and retains the independent liking."
+      },
+      {
+        "id": "necessary_conditions_do_not_prove_actual_use",
+        "passed": true,
+        "quotes": [
+          "不足以证明“已经使用”",
+          "条件满足不等于必须使用。"
+        ],
+        "assessment": "The actual response does not infer completed or mandatory use from the satisfied prerequisites."
+      },
+      {
+        "id": "current_reported_action_not_preference_or_prohibition",
+        "passed": true,
+        "quotes": [
+          "实际选择并使用了代办受理；没有实际使用窗口受理、加速受理或寄件受理。",
+          "不算矛盾，因为“不喜欢”不等于“不会使用”",
+          "你喜欢，且本轮使用条件满足，但你报告没有实际使用。这也不冲突"
+        ],
+        "assessment": "Reported agency use, dislike and denied accelerated use are independently retained. Preference is not turned into a prohibition."
+      },
+      {
+        "id": "role_preference_unknown_independently_of_user",
+        "passed": true,
+        "quotes": [
+          "主体是“用户”，不是角色月社妃",
+          "不能把你的喜好或实际使用情况当作角色本人的喜好",
+          "角色最喜欢哪个方案，保留未知。"
+        ],
+        "assessment": "Role preference remains unknown without substituting user ranking or user use."
+      },
+      {
+        "id": "mail_missing_is_obtained_scope_not_never_expressed",
+        "passed": true,
+        "quotes": [
+          "现有记录只能说明本轮没有找到寄件喜好的证据，不能推断你从未表达过。"
+        ],
+        "assessment": "Mail liking absence is limited to obtained evidence; it is not exhaustive historical absence."
+      },
+      {
+        "id": "user_report_not_backend_execution",
+        "passed": true,
+        "quotes": [
+          "你报告的实际使用情况是",
+          "是否实际使用，需要另外的操作报告或执行回执。"
+        ],
+        "assessment": "The answer attributes the action to the user report and does not claim backend execution."
+      },
+      {
+        "id": "per_original_read_range_explicitly_answered",
+        "passed": false,
+        "quotes": [
+          "先按四份说明逐项列出。",
+          "**绿泽窗口受理**",
+          "**绿泽代办受理**",
+          "**绿泽加速受理**",
+          "**绿泽寄件受理**"
+        ],
+        "assessment": "The complete raw reply gives four rules but omits the separately requested read range for each original. Full source grants are visible at wire; their presence does not make this output facet answered."
+      }
+    ],
+    "limitations": [
+      "This new current-state branch alone is evaluated. Previous phase81/83 passes and phase82 failure are not rerun or relabelled.",
+      "The per-original scope facet is omitted, so the full case remains0 despite the correct eight other criteria.",
+      "All full source bodies, provenance contracts and the full query are preserved. No causal backend rewrite explaining the omitted output facet has been demonstrated.",
+      "Scope absence is a review of the complete raw reply; stored source grants are not substituted for the missing answer.",
+      "User action testimony is not independent real-world execution evidence."
+    ]
+  },
+  "observed_native_chain": {
+    "actual_provider_calls": 4,
+    "actual_http200": 4,
+    "actual_primary_calls": 1,
+    "native_api_replies": 1,
+    "chain_checks": "23/23",
+    "new_case_semantic_criteria": "8/9",
+    "full_case_qualified": 0,
+    "previous_cases_retested": false,
+    "main_prompt_tokens": 60843,
+    "main_input_bound": 60871,
+    "configured_window": 65536,
+    "output_reserved": 2048,
+    "margin": 512,
+    "runtime_code_changed": false
+  }
+}
