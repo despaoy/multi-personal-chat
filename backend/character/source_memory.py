@@ -13,7 +13,7 @@ from dataclasses import dataclass, field, replace
 from datetime import datetime
 from html import escape
 
-from db.memory_source_search import literal_project_source_terms, literal_source_fragment, terms
+from db.memory_source_search import literal_project_source_terms, literal_source_fragments, terms
 
 
 @dataclass(frozen=True)
@@ -127,9 +127,9 @@ class SourceMemoryService:
             # Complete source packets are admitted by the actual serving budget;
             # a count-only SQL candidate cut cannot prove an exhaustive read.
             search_limit = None if self._defer_budget else 32
-            source_fragment = literal_source_fragment(query)
-            project_tags = () if source_fragment else literal_project_source_terms(query)
-            explicit_source_scope = bool(project_tags or source_fragment)
+            source_fragments = literal_source_fragments(query)
+            project_tags = () if source_fragments else literal_project_source_terms(query)
+            explicit_source_scope = bool(project_tags or source_fragments)
             requested_order = requested_source_successors(query)
             effective_radius = 1 if requested_order else self._window_radius
             contextual_deferred = bool(explicit_source_scope and retrieval_context.strip())
@@ -147,8 +147,8 @@ class SourceMemoryService:
                 linked = scoped_linked
 
             linked_fragment_omitted = 0
-            if source_fragment:
-                scoped_linked = [row for row in linked if source_fragment in row["body"]]
+            if source_fragments:
+                scoped_linked = [row for row in linked if any(fragment in row["body"] for fragment in source_fragments)]
                 linked_fragment_omitted = len(linked) - len(scoped_linked)
                 linked = scoped_linked
 
@@ -205,7 +205,8 @@ class SourceMemoryService:
             fresh_by_id = {row["source_message_id"]: row for row in fresh}
             selected = [fresh_by_id[row["source_message_id"]] for row in selected
                         if row["source_message_id"] in fresh_by_id
-                        and (not source_fragment or source_fragment in fresh_by_id[row["source_message_id"]]["body"])]
+                        and (not source_fragments or any(fragment in fresh_by_id[row["source_message_id"]]["body"]
+                                                    for fragment in source_fragments))]
             dependency_omitted = 0
             if requested_order:
                 valid_ids = set(anchor_ids) | {child for parent, children in requested_followers.items()
@@ -222,7 +223,10 @@ class SourceMemoryService:
                          literal_project_terms=list(project_tags),
                          contextual_scope_deferred_to_explicit_task=contextual_deferred,
                          linked_project_scope_omitted=linked_project_omitted,
-                         literal_fragment_scope=bool(source_fragment),
+                         literal_fragment_scope=bool(source_fragments),
+                         literal_fragment_count=len(source_fragments),
+                         literal_fragment_match_counts=[sum(fragment in row["body"] for row in selected)
+                                                        for fragment in source_fragments],
                          linked_fragment_scope_omitted=linked_fragment_omitted,
                          covered_by_fact_count=len(covered),
                          window_radius=self._window_radius, effective_window_radius=effective_radius,

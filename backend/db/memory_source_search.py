@@ -60,39 +60,47 @@ def literal_project_source_terms(query):
     return tags
 
 
-def literal_source_fragment(query):
-    """A closed literal-containing source read; never a subject/truth inference.
+def literal_source_fragments(query):
+    """Union of independently closed positive literal source reads.
 
-    Only the unquoted leading read and one quoted locator resolve scope.
-    Unknown/mixed/excluded reads retain unrestricted retrieval. The locator
-    stays byte-exact; it is not a normalized excerpt or an SQL wildcard.
+    Each leading unquoted declaration names its own complete raw record scope.
+    Do not guess a conjunctive locator, an unresolved extra read or a quoted
+    command. Exact fragments identify speech, not a subject or verified fact.
     """
     from character.quoted_erasure_authority import masked_quotes
 
     if not isinstance(query, str):
-        return ""
+        return ()
     try:
         view, quotes = masked_quotes(query)
     except ValueError:
-        return ""
-    if not quotes:
-        return ""
-    a, z, fragment = quotes[0]
-    if (
-        not re.fullmatch(r"\s*(?:请)?(?:查找|检索|读取|查看)\s*(?:包含|含有)\s*", view[:a])
-        or not fragment.strip() or "\n" in fragment or not terms(fragment)
-        or any(char in fragment for char in '“”‘’「」『』"')
-    ):
-        return ""
-    read = re.match(r"\s*的\s*(?:完整|全部)?(?:用户)?(?:原话|原始发言)(?:记录)?\s*(?:[。；;\n]|$)", view[z:])
-    if not read:
-        return ""
-    remainder = view[z + read.end():]
-    if re.search(r"另外|同时|以及|还要|并且|顺便", remainder) or re.search(
-        r"(?:查找|检索|读取|查看|复述|还原)[^。；;\n]*(?:原话|原始|记录)", remainder
-    ):
-        return ""
-    return fragment
+        return ()
+    fragments, position = [], 0
+    prefix = (r"\s*(?:(?:再|另|同时|另外)?(?:请)?|请(?:再|另|同时|另外)?)"
+              r"(?:查找|检索|读取|查看)\s*(?:包含|含有)\s*")
+    for a, z, fragment in quotes:
+        if not re.fullmatch(prefix, view[position:a]):
+            break
+        if (not fragment.strip() or "\n" in fragment or not terms(fragment)
+                or any(char in fragment for char in '“”‘’「」『』"')):
+            return ()
+        read = re.match(r"\s*的\s*(?:完整|全部)?(?:用户)?(?:原话|原始发言)(?:记录)?\s*(?:[。；;\n]|$)", view[z:])
+        if not read:
+            return ()
+        fragments.append(fragment)
+        position = z + read.end()
+    remainder = view[position:]
+    if (not fragments or re.search(r"另外|同时|以及|还要|并且|顺便", remainder)
+            or re.search(r"(?:查找|检索|读取|查看|复述|还原)[^。；;\n]*(?:原话|原始|记录)", remainder)):
+        return ()
+    return tuple(dict.fromkeys(fragments))
+
+
+def literal_source_fragment(query):
+    """Keep the existing single-locator API: plural reads are not one locator."""
+    fragments = literal_source_fragments(query)
+    return fragments[0] if len(fragments) == 1 else ""
+
 
 
 def search_plan(scope, query, *, limit=32, dialect='sqlite'):
@@ -115,8 +123,8 @@ def search_plan(scope, query, *, limit=32, dialect='sqlite'):
     params['query_terms'] = json.dumps(tokens, ensure_ascii=False)
     bound = ('SELECT value FROM json_each(:query_terms)' if dialect == 'sqlite' else
              'SELECT value FROM jsonb_array_elements_text(CAST(:query_terms AS JSONB)) AS q(value)')
-    fragment = literal_source_fragment(query)
-    project_tags = () if fragment else literal_project_source_terms(query)
+    fragments = literal_source_fragments(query)
+    project_tags = () if fragments else literal_project_source_terms(query)
     project_filter = ""
     if project_tags:
         params['project_terms'] = json.dumps(project_tags)
@@ -127,10 +135,14 @@ def search_plan(scope, query, *, limit=32, dialect='sqlite'):
                           f"AND anchor.term IN ({project_bound})) project_scope "
                           "ON project_scope.source_key = t.source_key ")
     fragment_filter = ""
-    if fragment:
-        params["source_fragment"] = fragment
-        fragment_filter = ("AND instr(eligible.body, :source_fragment) > 0 " if dialect == "sqlite" else
-                           "AND POSITION(:source_fragment IN eligible.body) > 0 ")
+    if fragments:
+        expressions = []
+        for index, fragment in enumerate(fragments):
+            name = f"source_fragment{index}"
+            params[name] = fragment
+            expressions.append(f"instr(eligible.body, :{name}) > 0" if dialect == "sqlite" else
+                               f"POSITION(:{name} IN eligible.body) > 0")
+        fragment_filter = "AND (" + " OR ".join(expressions) + ") "
     # Inverse posting frequency is a retrieval weight, not semantic confidence.
     # Full source rows are reached through scoped postings, not latest-N scans.
     # Erasure watermark is checked in this same SQL snapshot; no text cache.
