@@ -1,0 +1,232 @@
+{
+  "synthetic_only": true,
+  "baseline": "be704f646c2bef9984372911b0a4d60b7592866d",
+  "model": "deepseek-flash",
+  "case_kind": "formatted_full_future_condition_preserves_source_positions_and_current_claim",
+  "public_documents": [
+    {
+      "title": "绿泽窗口受理",
+      "category": "办理",
+      "content": "完整公共办理说明正文起点。方案绿泽窗口受理，编号LZ-781。费用6元，办理时限16小时。全部办理条件：完整表格与身份页齐全。全部例外：身份页缺失须暂停，预约不豁免身份核验。此资料不代表任何人的喜好或选择，满足必要条件不等于实际办理。完整公共办理说明正文终点。"
+    },
+    {
+      "title": "绿泽代办受理",
+      "category": "办理",
+      "content": "完整公共办理说明正文起点。方案绿泽代办受理，编号LZ-782。费用12元，办理时限30小时。全部办理条件：完整表格与代办授权齐全。全部例外：授权过期须重新取得有效授权，费用支付不能替代授权。此资料不代表任何人的喜好或选择，满足必要条件不等于实际办理。完整公共办理说明正文终点。"
+    },
+    {
+      "title": "绿泽加速受理",
+      "category": "办理",
+      "content": "完整公共办理说明正文起点。方案绿泽加速受理，编号LZ-783。费用18元，办理时限5小时。全部办理条件：完整表格且身份核验通过。全部例外：核验失败须退回普通流程，预约不豁免核验。此资料不代表任何人的喜好或选择，满足必要条件不等于实际办理。完整公共办理说明正文终点。"
+    },
+    {
+      "title": "绿泽寄件受理",
+      "category": "办理",
+      "content": "完整公共办理说明正文起点。方案绿泽寄件受理，编号LZ-784。费用9元，办理时限48小时。全部办理条件：完整表格与可投递回寄地址齐全。全部例外：地址无法投递须暂停，附件不全须补件。此资料不代表任何人的喜好或选择，满足必要条件不等于实际办理。完整公共办理说明正文终点。"
+    },
+    {
+      "title": "绿泽角色本人偏好",
+      "category": "办理",
+      "content": "绿泽合成办理场景的角色本人偏好记录。记录编号LZ-RP-785。事实主体：角色月社妃，角色标识tsukiyashiro_kisaki；不是当前用户，也不是对所有现实或原作情境的偏好结论。本记录适用范围仅为本次绿泽合成办理场景，在该场景内当前有效。修订范围：上一版本记录角色月社妃最喜欢寄件受理，这现在仅是历史偏好，不是当前结论。本次修订后的当前记录明确：角色月社妃在四个绿泽受理方案中最喜欢加速受理，窗口、代办和寄件不是她在本场景的最喜欢方案。这项当前喜好不是她已实际选择或使用加速的证明；本记录没有提供角色实际操作事实。本记录没有提供当前用户对寄件的喜好，不能证明用户喜欢或不喜欢寄件，也不能证明用户历史上从未表达过。这是完整的场景事实记录，不含缺页或外部引用。"
+    }
+  ],
+  "private_inputs_kept_complete_in_restricted_server_artifacts": true,
+  "required_private_source_indices": [
+    2
+  ],
+  "all_three_private_originals_retained": true,
+  "result": {
+    "checks": {
+      "native-pg-spaces:full_complete_synthetic_input": true,
+      "native-pg-spaces:actual_native_seed_five": true,
+      "native-pg-spaces:native_http200": true,
+      "native-pg-spaces:original_five_every_field_exact": true,
+      "native-pg-spaces:current44_active_unclosed": true,
+      "native-pg-spaces:all_prior_sources_exact": true,
+      "native-pg-spaces:source_fence_unchanged": true,
+      "native-pg-spaces:new_original_source_full_recorded": true,
+      "native-pg-spaces:original_three_outside_actual_recent_history": true,
+      "native-pg-spaces:required_current_private_original_on_wire": true,
+      "native-pg-spaces:writer_no_delete_or_failure": true,
+      "native-pg-spaces:natural_official_proposal_kept": true,
+      "native-pg-spaces:value_rejection_not_disguised_as_extraction_success": true,
+      "native-pg-spaces:failure_counted_without_main": true,
+      "native-pg-spaces:missing_requested_public_gate_recorded": true,
+      "native-pg-spaces-next:full_complete_synthetic_input": true,
+      "native-pg-spaces-next:actual_native_seed_five": true,
+      "native-pg-spaces-next:native_http200": true,
+      "native-pg-spaces-next:original_five_every_field_exact": true,
+      "native-pg-spaces-next:current44_active_unclosed": true,
+      "native-pg-spaces-next:all_prior_sources_exact": true,
+      "native-pg-spaces-next:source_fence_unchanged": true,
+      "native-pg-spaces-next:new_original_source_full_recorded": true,
+      "native-pg-spaces-next:original_three_outside_actual_recent_history": true,
+      "native-pg-spaces-next:required_current_private_original_on_wire": true,
+      "native-pg-spaces-next:writer_no_delete_or_failure": true,
+      "native-pg-spaces-next:natural_official_proposal_kept": true,
+      "native-pg-spaces-next:value_rejection_not_disguised_as_extraction_success": true,
+      "native-pg-spaces-next:real_main_after_repair": true,
+      "native-pg-spaces-next:required_public_originals_on_real_wire": true,
+      "native-pg-spaces-next:full_question_on_real_wire": true,
+      "new_whitespace16_nodes_passed": true,
+      "new_nonleading14_nodes_passed": true,
+      "new_scope_five_passed": true,
+      "new_identity_scope_node_passed": true,
+      "static_zero": true,
+      "failed_case_only_retry": true
+    },
+    "passed": 37,
+    "total": 37,
+    "actual_calls": 9,
+    "http200": 9,
+    "native_receipts_success": 2,
+    "actual_primary_calls": 1,
+    "affected_unique_test_nodes": 36,
+    "passed_nodes_repeated": 0,
+    "passed_paid_cases_replayed": 0,
+    "estimated_cost_cny": "0.18298824",
+    "receipts": [
+      {
+        "variant": "native-pg-spaces",
+        "index": 0,
+        "http_status": 200,
+        "prompt_tokens": 40035,
+        "completion_tokens": 132,
+        "cached_tokens": 256,
+        "estimated_cny": "0.04031212"
+      },
+      {
+        "variant": "native-pg-spaces",
+        "index": 1,
+        "http_status": 200,
+        "prompt_tokens": 41744,
+        "completion_tokens": 52,
+        "cached_tokens": 384,
+        "estimated_cny": "0.04157568"
+      },
+      {
+        "variant": "native-pg-spaces",
+        "index": 2,
+        "http_status": 200,
+        "prompt_tokens": 40069,
+        "completion_tokens": 16,
+        "cached_tokens": 0,
+        "estimated_cny": "0.040133"
+      },
+      {
+        "variant": "native-pg-spaces",
+        "index": 3,
+        "http_status": 200,
+        "prompt_tokens": 11912,
+        "completion_tokens": 285,
+        "cached_tokens": 1408,
+        "estimated_cny": "0.01167216"
+      },
+      {
+        "variant": "native-pg-spaces-next",
+        "index": 0,
+        "http_status": 200,
+        "prompt_tokens": 40035,
+        "completion_tokens": 131,
+        "cached_tokens": 39808,
+        "estimated_cny": "0.00154716"
+      },
+      {
+        "variant": "native-pg-spaces-next",
+        "index": 1,
+        "http_status": 200,
+        "prompt_tokens": 41744,
+        "completion_tokens": 52,
+        "cached_tokens": 41472,
+        "estimated_cny": "0.00130944"
+      },
+      {
+        "variant": "native-pg-spaces-next",
+        "index": 2,
+        "http_status": 200,
+        "prompt_tokens": 40069,
+        "completion_tokens": 16,
+        "cached_tokens": 39296,
+        "estimated_cny": "0.00162292"
+      },
+      {
+        "variant": "native-pg-spaces-next",
+        "index": 3,
+        "http_status": 200,
+        "prompt_tokens": 42506,
+        "completion_tokens": 325,
+        "cached_tokens": 640,
+        "estimated_cny": "0.0431788"
+      },
+      {
+        "variant": "native-pg-spaces-next",
+        "index": 4,
+        "http_status": 200,
+        "prompt_tokens": 11912,
+        "completion_tokens": 285,
+        "cached_tokens": 11648,
+        "estimated_cny": "0.00163696"
+      }
+    ],
+    "runs": [
+      {
+        "variant": "native-pg-spaces",
+        "http_status": 200,
+        "abstained": true,
+        "actual_cloud_calls": 4,
+        "primary_calls": 0,
+        "accepted_memories": 0,
+        "new_memory_claims": 0,
+        "full_new_source_chars": 206,
+        "full_new_source_sha256": "542bc7af5784cbd04dcdc5ff84b87fcdfb7d311095636132fe702c302f73d8b5",
+        "reply_sha256": "4d5ed1b267a0595a260e4a139e987f1f134c6df061849e09cf93ecd5dd156892",
+        "proposal_operation": "SUPERSEDE",
+        "proposal_value_is_literal_source": false,
+        "recent_messages": 20
+      },
+      {
+        "variant": "native-pg-spaces-next",
+        "http_status": 200,
+        "abstained": false,
+        "actual_cloud_calls": 5,
+        "primary_calls": 1,
+        "accepted_memories": 0,
+        "new_memory_claims": 0,
+        "full_new_source_chars": 206,
+        "full_new_source_sha256": "542bc7af5784cbd04dcdc5ff84b87fcdfb7d311095636132fe702c302f73d8b5",
+        "reply_sha256": "21ca394ee4e57edea0a43bf9c3d0525d604b6ec95fa751c0d088dba57abf38b9",
+        "proposal_operation": "SUPERSEDE",
+        "proposal_value_is_literal_source": false,
+        "recent_messages": 20
+      }
+    ],
+    "semantic_checks": {
+      "current_full_condition": true,
+      "future_full_condition": true,
+      "future_start": true,
+      "public_identity_condition": true,
+      "public_failure_exception": true,
+      "appointment_not_exemption": true,
+      "no_scheduled_execution_claim": true,
+      "no_current_replacement_claim": true,
+      "no_actual_service_claim": true
+    },
+    "semantic_passed": 9,
+    "semantic_total": 9,
+    "private_inputs_kept_on_protected_server": true,
+    "question_chars": 206,
+    "question_sha256": "542bc7af5784cbd04dcdc5ff84b87fcdfb7d311095636132fe702c302f73d8b5",
+    "limitations": {
+      "natural_memory_value_rejected_not_claimed_fixed": true,
+      "whitespace_binding_branch_unit_proof_only": true,
+      "additional_agency_source_on_wire": true,
+      "unknown_future_automatic_execution": true,
+      "whole_goal_accuracy_not_claimed": true
+    },
+    "whole_goal_complete": false
+  },
+  "source_snapshot_sha256": "33286d2b1f821418d630f014591af49ed39889fb15812d1c29b1cfac03218ea8",
+  "reviewer": "assistant_automated_keyword_checks",
+  "human_review": false,
+  "provider_usage_estimate_not_invoice": true
+}
