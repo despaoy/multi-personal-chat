@@ -14,6 +14,21 @@ from dataclasses import asdict
 from pathlib import Path
 
 
+class EvaluationProviderBlocked(RuntimeError):
+    """Known insufficient balance stops this evaluator's remaining cloud sends."""
+
+
+async def send_with_balance_stop(client, request, sender, state, **kwargs):
+    if state.get("blocked_http_status") == 402:
+        state["blocked_send_attempts"] = state.get("blocked_send_attempts", 0) + 1
+        raise EvaluationProviderBlocked("Provider returned402; restore access before continuing the existing seed")
+    response = await sender(client, request, **kwargs)
+    if response.status_code == 402:
+        state["blocked_http_status"] = 402
+        state["blocked_send_attempts"] = 0
+    return response
+
+
 async def run(args):
     phase = Path(args.phase).resolve()
     runtime = Path("/home/boot/lhm/multipersonal-runtime")
@@ -50,6 +65,8 @@ async def run(args):
         expected_seed_count = 4 if seed_proof.get("additional_source_written_by_real_native_turn") else 3
         assert len(seed_proof["seed_records"]) == expected_seed_count
         assert seed_proof["before_question_backup"]["prior_same_task_answers"] == 0
+        if seed_proof.get("provider_access_blocked_http402"):
+            assert args.provider_access_restored, "Do not launch another paid attempt before access is restored"
         assert len(seed_proof["documents_imported"]) == 4 and seed_proof["seed_http_status"] == 200
 
     fixture = json.loads((phase / "fixture.json").read_text())
@@ -57,6 +74,10 @@ async def run(args):
         assert args.reuse_verified_seed and not resume_provider_block
         assert fixture.get("additional_source_message")
     private_sources = [fixture["source_message"], *fixture.get("additional_private_source_messages", [])]
+    if args.advance_history:
+        assert args.reuse_verified_seed and not args.author_additional_source and not resume_provider_block
+        assert len(fixture["history_advancement_tasks"]) == fixture.get("history_advancement_target_count", 8)
+
     parent = json.loads((runtime / "backups/backend-chain-20261001/stage57/saved-audited-result.json").read_text())
     assert fixture["synthetic"] and all(parent["checks"].values())
     key = Path(args.api_key_file).read_text().strip()
@@ -158,6 +179,7 @@ async def run(args):
     import httpx
 
     calls = []
+    provider_access_state = {}
     original_send = httpx.AsyncClient.send
 
     async def observed_send(client, request, **kwargs):
@@ -176,6 +198,17 @@ async def run(args):
         ):
             from html import unescape
 
+            if fixture.get("require_sources_outside_recent_history"):
+                recent = proof["prepared"][-1]["history"]
+                assert recent
+                assert all(message["role"] != "user" or message["content"] in
+                           {task["message"] for task in fixture["history_advancement_tasks"]}
+                           for message in recent)
+                assert all(source not in message["content"] for source in private_sources for message in recent)
+                assert all(value not in message["content"]
+                           for value in fixture["recent_history_forbidden_values"] for message in recent)
+                assert all(source not in message["content"] for source in private_sources
+                           for message in payload["messages"][1:-1])
             whole = chr(10).join(unescape(m["content"]) for m in payload["messages"])
             seen = {str(i) + ":" + doc["title"]: doc["content"] in whole for i, doc in enumerate(fixture["documents"])}
             (root / "primary-input-observed.json").write_text(
@@ -216,7 +249,12 @@ async def run(args):
         assert budget["counter"]["mode"] == "deepseek_v4_pro_bpe"
         assert input_bound + output_reserved + CONTEXT_SAFETY_MARGIN_TOKENS <= 65536
         (root / ("budget-before-send-" + str(len(calls)) + ".json")).write_text(json.dumps(budget, indent=2) + chr(10))
-        response = await original_send(client, request, **kwargs)
+        try:
+            response = await send_with_balance_stop(client, request, original_send, provider_access_state, **kwargs)
+        finally:
+            (root / "provider-access-state.json").write_text(
+                json.dumps(provider_access_state, indent=2) + "\n"
+            )
         await response.aread()
         calls.append(dict(request=payload, http_status=response.status_code, response=response.json(), budget=budget))
         (root / "cloud-calls.json").write_text(json.dumps(calls, ensure_ascii=False, indent=2) + "\n")
@@ -568,6 +606,44 @@ async def run(args):
                 proof["bridge_turns"] = seed_proof["bridge_turns"]
                 proof["bridge_turns_completed"] = seed_proof["bridge_turns_completed"]
                 proof["successful_bridge_turns_replayed"] = 0
+            if args.advance_history:
+                proof["history_advancement_turns"] = list(seed_proof.get("history_advancement_turns", []))
+                completed = len(proof["history_advancement_turns"])
+                proof["history_advancement_turns_replayed"] = 0
+                proof["history_advancement_turns_inherited"] = completed
+                for index, task in enumerate(fixture["history_advancement_tasks"]):
+                    if index < completed:
+                        continue
+                    if provider_access_state.get("blocked_http_status") == 402:
+                        raise EvaluationProviderBlocked("Keep completed tasks; provider must be restored before the next task")
+                    advanced = await client.post(
+                        "/api/generate",
+                        json={
+                            "message": task["message"], "characterId": "tsukiyashiro_kisaki",
+                            "loraId": "default", "sessionId": phase.name + "-advance-" + str(index + 1),
+                            "sessionType": "private",
+                        },
+                    )
+                    receipt = {"index": index, "task_id": task["id"], "status": advanced.status_code,
+                               "response": advanced.json(), "input_chars": len(task["message"])}
+                    proof["history_advancement_turns"].append(receipt)
+                    (root / "history-advancement-progress.json").write_text(
+                        json.dumps(proof["history_advancement_turns"], ensure_ascii=False, indent=2) + "\n"
+                    )
+                    assert advanced.status_code == 200 and not receipt["response"]["abstained"]
+                    flushed = False
+                    for _ in range(4):
+                        flushed = await scheduler.flush_memory(timeout=45)
+                        if flushed:
+                            break
+                    assert flushed, "Inspect this same history-advancement job; do not replay tasks"
+                    actual_records = await repo.list_memory_records(
+                        "tsukiyashiro_kisaki", scope, limit=None, include_inactive=True
+                    )
+                    assert actual_records == seed_proof["seed_records"], (
+                        "A supplied third-party data task changed private user claims; inspect its real writer"
+                    )
+                proof["history_advancement_turns_completed"] = len(proof["history_advancement_turns"])
             if args.author_additional_source:
                 original_records = await repo.list_memory_records(
                     "tsukiyashiro_kisaki", scope, limit=None, include_inactive=True
@@ -642,7 +718,7 @@ async def run(args):
                 await connection.close()
             await asyncio.to_thread(db.update_config, {"useKnowledgeBase": True})
             invalidate_config_cache()
-            if not args.reuse_verified_seed or resume_provider_block or args.author_additional_source:
+            if not args.reuse_verified_seed or resume_provider_block or args.author_additional_source or args.advance_history:
                 backup = root / "before-question.dump"
                 await asyncio.to_thread(
                     subprocess.run,
@@ -723,6 +799,8 @@ async def run(args):
                     if resume_provider_block
                     else ((2 if args.author_additional_source else 1) if args.reuse_verified_seed else 11)
                 )
+                if args.advance_history:
+                    expected_api_turns += len(fixture["history_advancement_tasks"]) - proof["history_advancement_turns_inherited"]
                 assert proof["http_status"] == 200 and len(proof["generation"]) == expected_api_turns
                 # Existing guard retry is an additional actual provider request,
                 # not another successful native API turn. Bind the measurement
@@ -754,6 +832,7 @@ if __name__ == "__main__":
     parser.add_argument("--expect-primary-blocked", action="store_true")
     parser.add_argument("--reuse-verified-seed", action="store_true")
     parser.add_argument("--author-additional-source", action="store_true")
+    parser.add_argument("--advance-history", action="store_true")
     parser.add_argument("--compare-original-guard", action="store_true")
     parser.add_argument("--resume-provider-block", action="store_true")
     parser.add_argument("--provider-access-restored", action="store_true")
