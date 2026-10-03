@@ -103,6 +103,45 @@ def literal_source_fragment(query):
 
 
 
+def unresolved_source_read_tail(view):
+    """Distinguish a source-read action from a reference to its purpose.
+
+    The caller already masked quoted material and closed every leading read.
+    Only a bare or explicitly referring source noun followed by a restrictive
+    purpose marker is a nominal explanation. Extra/negative reads and unknown
+    additional source objects still invalidate the complete literal scope.
+    """
+    verbs = r"查找|检索|读取|查看|复述|还原"
+    reference = r"(?:上述|前述|这些|这两份|这两条|该|指定的)"
+    speech = r"(?:完整|全部)?(?:用户)?(?:原话|原始发言)(?:记录)?"
+    direct = rf"(?:{verbs})\s*(?:{reference})?{speech}\s*(?:仅仅|只是|仅|只)(?:用于|用作|作为|为了)"
+    past_reference = (rf"(?:{verbs})(?:过|到)?的\s*(?:{reference})?{speech}\s*"
+                      r"(?:仅仅|只是|仅|只)?(?:用作|作为)(?:核对|对照|比较|判断|分析|审查)(?:依据|材料)")
+    purpose = re.compile(rf"{direct}|{past_reference}")
+    masked = list(view)
+    for match in purpose.finditer(view):
+        # A nominal explanation cannot waive an explicitly new or negated
+        # action, even if it names a previously read source.
+        clause_start = max(view.rfind(char, 0, match.start()) for char in '。；;\n') + 1
+        prefix = view[clause_start:match.start()]
+        if re.search(r"另外|再|还要|还需|顺便|此外|不要|别|禁止|并且|其他|另一|新的|不同", prefix):
+            continue
+        masked[match.start():match.end()] = ' ' * (match.end() - match.start())
+    remainder = ''.join(masked)
+    if re.search(rf"(?:{verbs})[^。；;\n]*(?:原话|原始|记录)", remainder):
+        return True
+    # A connector alone is not a new retrieval: conditions, output fields and
+    # comparison instructions can refer to the already declared evidence.
+    referred_object = rf"{reference}(?:完整|全部)?(?:用户)?(?:原话|原始发言|原始记录|记录|资料|目录|文档|版本|历史)(?:记录)?"
+    remainder = re.sub(referred_object, lambda m: ' ' * len(m.group()), remainder)
+    addition = r"(?:另外|同时|以及|还要|还需|并且|顺便|此外|也要)"
+    source_object = r"(?:原话|原始(?:资料|发言|记录)|记录|资料|档案|文档|目录|版本|历史)"
+    action = r"(?:核对|对照|比较|检查|补充|列出|提供|找出|查询|搜索)"
+    return bool(re.search(rf"{addition}[^。；;\n]*{action}[^。；;\n]*{source_object}", remainder)
+                or re.search(rf"{addition}[^。；;\n]*(?:其他|另一|另一个|新的|不同|全部历史|所有历史)[^。；;\n]*{source_object}", remainder))
+
+
+
 def literal_source_read_groups(query):
     """Closed literal read declarations, as a union of same-record groups.
 
@@ -151,8 +190,7 @@ def literal_source_read_groups(query):
         else:
             return ()
     remainder = view[position:]
-    if (not groups or re.search(r"另外|同时|以及|还要|并且|顺便", remainder)
-            or re.search(r"(?:查找|检索|读取|查看|复述|还原)[^。；;\n]*(?:原话|原始|记录)", remainder)):
+    if not groups or unresolved_source_read_tail(remainder):
         return ()
     return tuple(dict.fromkeys(groups))
 
