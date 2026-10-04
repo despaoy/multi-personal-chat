@@ -40,6 +40,23 @@ def required_private_sources(fixture):
     return tuple(sources[i] for i in indices)
 
 
+def validate_native_messages(fixture, *, advance_history=False, completed_history=0,
+                             authoring=False, author_only=False, include_seed=False):
+    "Validate every remaining request against the actual API schema before any cloud call."
+    from db.schemas import MessageRequest
+
+    messages = [] if author_only else [fixture["question"]]
+    if authoring:
+        messages.append(fixture["additional_source_message"])
+    if include_seed:
+        messages.extend([fixture["source_message"], *[b["message"] for b in fixture["bridges"]]])
+    if advance_history:
+        messages.extend(t["message"] for t in fixture["history_advancement_tasks"][completed_history:])
+    for message in messages:
+        MessageRequest.model_validate(dict(message=message, characterId="tsukiyashiro_kisaki",
+                                           sessionType="private"))
+
+
 async def run(args):
     phase = Path(args.phase).resolve()
     runtime = Path("/home/boot/lhm/multipersonal-runtime")
@@ -96,6 +113,13 @@ async def run(args):
     if args.advance_history:
         assert args.reuse_verified_seed and not args.author_additional_source and not args.author_current_source and not resume_provider_block
         assert len(fixture["history_advancement_tasks"]) == fixture.get("history_advancement_target_count", 8)
+
+    validate_native_messages(
+        fixture, advance_history=args.advance_history,
+        completed_history=len(seed_proof.get("history_advancement_turns", [])) if seed_proof else 0,
+        authoring=args.author_additional_source or args.author_current_source,
+        author_only=args.author_only, include_seed=not args.reuse_verified_seed,
+    )
 
     parent = json.loads((runtime / "backups/backend-chain-20261001/stage57/saved-audited-result.json").read_text())
     assert fixture["synthetic"] and all(parent["checks"].values())
@@ -559,7 +583,7 @@ async def run(args):
                 from evaluation.native_current_snapshot import inherit_history_receipts
 
                 inherit_history_receipts(proof, seed_proof)
-                for provenance_key in ("native_update_seed_origin", "native_history_seed_origin"):
+                for provenance_key in ("native_update_seed_origin", "native_history_seed_origin", "native_partial_history_seed_origin"):
                     if provenance_key in seed_proof:
                         proof[provenance_key] = seed_proof[provenance_key]
             else:

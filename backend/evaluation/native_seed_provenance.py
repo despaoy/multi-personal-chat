@@ -7,6 +7,17 @@ from pathlib import Path
 
 
 def expected_seed_record_count(proof, phase, *, _visited=frozenset()):
+    partial = proof.get("native_partial_history_seed_origin")
+    if partial is not None:
+        try:
+            assert proof.get("native_update_seed_origin") is None and proof.get("native_history_seed_origin") is None
+            identity = (partial["phase"], partial["variant"])
+            assert identity not in _visited
+            from evaluation.native_partial_history import validate_partial_history
+
+            return validate_partial_history(proof, phase, _visited | {identity})
+        except (AssertionError, KeyError, TypeError, AttributeError, OSError, ValueError) as error:
+            raise ValueError("Invalid partial native history provenance") from error
     provenance = proof.get("native_update_seed_origin")
     history = proof.get("native_history_seed_origin")
     if history is not None:
