@@ -124,6 +124,7 @@ class RetrievalResult:
     task_query: str = ""
     public_task_review: Mapping[str, Any] = field(default_factory=dict)
     public_domain_branches: Mapping[str, Any] = field(default_factory=dict)
+    public_curated_review: Mapping[str, Any] = field(default_factory=dict)
     public_task_query: str = ""
     public_dependency_indices: tuple[int, ...] = ()
 
@@ -350,6 +351,10 @@ def _system_prompt(request: GenerationRequest) -> str:
         from inference.task_evidence_coverage import TASK_COVERAGE_POLICY
 
         prompt += "\n\n" + TASK_COVERAGE_POLICY
+    if request.apply_prompt_policy and request.retrieval.public_curated_review:
+        from knowledge.curated_task_evidence import POLICY as CURATED_POLICY
+
+        prompt += "\n\n" + CURATED_POLICY
     if request.apply_prompt_policy and request.retrieval.public_domain_branches:
         from knowledge.public_domains import POLICY as DOMAIN_POLICY
 
@@ -383,6 +388,13 @@ def build_generation_request(request: GenerationRequest) -> GenerationPlan:
         if request.retrieval.public_task_query != request.message:
             raise ValueError("Public task review discarded the original message")
         render_public_tasks(request.retrieval)
+    if request.retrieval.public_curated_review:
+        from knowledge.curated_task_evidence import exclude_changed_sources, render_curated_tasks
+
+        request = replace(request, retrieval=exclude_changed_sources(request.retrieval))
+        if request.retrieval.public_task_query != request.message:
+            raise ValueError("Curated task review discarded the original message")
+        render_curated_tasks(request.retrieval)
     request = admit_deferred_sources(request, _build_generation_request_core)
     return _build_generation_request_core(request)
 

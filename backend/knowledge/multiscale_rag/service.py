@@ -322,7 +322,11 @@ class RoutedMultiScaleService:
             admitted_ids.update(block_ids.get(block, ()))
             used_chars += size
 
+        from knowledge.curated_sources import collect_curated_sources
+
+        source_catalog = collect_curated_sources(selected, self.evidence_by_parent, self.extractor, knowledge_boundary)
         return {
+            "curated_source_catalog": source_catalog,
             "retrieval_strategy": "multi_scale_character",
             "identity_coverage": self.identity_coverage,
             "route_types": sorted(route),

@@ -132,6 +132,7 @@ def assemble_domains(container, reviewed):
         "context_text": "\n\n".join(packet["text"] for packet in packets),
         "evidence_packets": packets,
         "public_domain_branches": domains,
+        "public_curated_review": character.get("public_curated_review") or {},
         "domains": character.get("domains", ()),
         "warnings": [*reviewed.get("warnings", ()), *character.get("warnings", ())],
     }

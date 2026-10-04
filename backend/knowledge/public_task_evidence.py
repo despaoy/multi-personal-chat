@@ -145,7 +145,7 @@ async def _review(messages):
     )
 
 
-async def review_public_candidates(bundle, dependencies, query, *, window_tokens, reviewer=None, public_obligations=(), scope_reviewer=None, identity_reviewer=None, fact_scope_reviewer=None, fact_reviewer=None, question_binding=None, span_references=None):
+async def review_public_candidates(bundle, dependencies, query, *, window_tokens, reviewer=None, public_obligations=(), scope_reviewer=None, identity_reviewer=None, fact_scope_reviewer=None, fact_reviewer=None, question_binding=None, span_references=None, curated_reviewer=None):
     """Keep whole matched sources; failures reject public candidates, never private ones."""
     if dependencies is None or not dict(dependencies.groups)["public_knowledge"]:
         return bundle
@@ -159,9 +159,21 @@ async def review_public_candidates(bundle, dependencies, query, *, window_tokens
             reviewer=reviewer, public_obligations=public_obligations, scope_reviewer=scope_reviewer,
             identity_reviewer=identity_reviewer, fact_scope_reviewer=fact_scope_reviewer,
             fact_reviewer=fact_reviewer, question_binding=question_binding, span_references=span_references)
-        return assemble_domains(container, reviewed)
+        from knowledge.curated_task_evidence import review_curated_bundle
+
+        character = await review_curated_bundle(container["branches"]["curated_character"]["bundle"], plan,
+            window_tokens=window_tokens, reviewer=curated_reviewer)
+        checked_container = {**container, "branches": {**container["branches"], "curated_character": {**container["branches"]["curated_character"], "bundle": character}}}
+        return assemble_domains(checked_container, reviewed)
     if bundle.get("retrieval_strategy") == "multi_scale_character":
-        return bundle
+        if question_binding is None:
+            return bundle
+        from knowledge.curated_task_evidence import review_curated_bundle
+        from knowledge.multiscale_rag.runtime import get_multiscale_rag_service
+        from knowledge.public_domains import domain_plan
+
+        plan = domain_plan(question_binding, get_multiscale_rag_service().config)
+        return await review_curated_bundle(bundle, plan, window_tokens=window_tokens, reviewer=curated_reviewer)
     tasks = dict(dependencies.groups)["public_knowledge"]
     receipt = dict(
         query=query,

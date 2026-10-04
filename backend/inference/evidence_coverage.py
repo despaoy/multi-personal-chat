@@ -104,9 +104,10 @@ def packet_coverage(total, admitted):
 
 
 def is_partial_coverage(retrieval):
+    from knowledge.curated_task_evidence import render_curated_tasks
     from knowledge.public_task_evidence import render_public_tasks
 
-    return any(row["status"] != "related_candidate_admitted" for row in render_public_tasks(retrieval)) or any(row.get("status") != "candidate_evidence_admitted" for row in retrieval.task_coverage) or any(row["lookup_status"] != "matched_in_referring_scope"
+    return any(row["status"] != "related_candidate_admitted" or row["scope"] != "direct_statement" for row in render_curated_tasks(retrieval)) or any(row["status"] != "related_candidate_admitted" for row in render_public_tasks(retrieval)) or any(row.get("status") != "candidate_evidence_admitted" for row in retrieval.task_coverage) or any(row["lookup_status"] != "matched_in_referring_scope"
                for row in _reference_source_rows(retrieval.source_references)) or any(row["lookup_status"] != "matched_in_index_scope"
                for row in _source_request_rows(retrieval.requested_sources)) or retrieval.packet_coverage.get("status") == "partial" or any(
         row.get("status") == "partial" for row in retrieval.source_coverage
@@ -114,7 +115,7 @@ def is_partial_coverage(retrieval):
 
 
 def render_coverage(retrieval):
-    if not retrieval.source_coverage and not retrieval.packet_coverage and not retrieval.requested_sources and not retrieval.source_references and not retrieval.task_coverage and not retrieval.public_task_review:
+    if not retrieval.source_coverage and not retrieval.packet_coverage and not retrieval.requested_sources and not retrieval.source_references and not retrieval.task_coverage and not retrieval.public_task_review and not retrieval.public_curated_review:
         return ""
     public_rows = [
         {
@@ -134,6 +135,10 @@ def render_coverage(retrieval):
         for row in retrieval.source_coverage
     ]
     payload = {"packets": dict(retrieval.packet_coverage), "sources": public_rows}
+    if retrieval.public_curated_review:
+        from knowledge.curated_task_evidence import render_curated_tasks
+
+        payload["curated_tasks"] = render_curated_tasks(retrieval)
     if retrieval.public_domain_branches:
         from knowledge.public_domains import render_domains
 

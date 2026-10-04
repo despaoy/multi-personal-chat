@@ -1493,8 +1493,9 @@ async def _generate_with_retrieval(
                             source_lookup=source_lookup,
                             task_coverage=tuple(bundle.get("task_candidate_coverage") or ()),
                             task_query=retrieval_query,
+                            public_curated_review=bundle.get("public_curated_review") or {},
                             public_task_review=bundle.get("public_task_review") or {},
-                            public_task_query=rag_message if bundle.get("public_task_review") else "",
+                            public_task_query=rag_message if bundle.get("public_task_review") or bundle.get("public_curated_review") or bundle.get("public_domain_branches") else "",
                             public_dependency_indices=tuple(dict(query_plan.dependencies.groups)["public_knowledge"]) if query_plan.dependencies is not None else (),
                         )
 
@@ -1523,8 +1524,9 @@ async def _generate_with_retrieval(
                             source_coverage=tuple(bundle.get("source_coverage") or ()),
                             task_coverage=tuple(bundle.get("task_candidate_coverage") or ()),
                             task_query=retrieval_query,
+                            public_curated_review=bundle.get("public_curated_review") or {},
                             public_task_review=bundle.get("public_task_review") or {},
-                            public_task_query=rag_message if bundle.get("public_task_review") else "",
+                            public_task_query=rag_message if bundle.get("public_task_review") or bundle.get("public_curated_review") or bundle.get("public_domain_branches") else "",
                             public_dependency_indices=tuple(dict(query_plan.dependencies.groups)["public_knowledge"]) if query_plan.dependencies is not None else (),
                             identity_task=bundle.get("identity_task") or {},
                             identity_subtask=bundle.get("identity_subtask") or {},
