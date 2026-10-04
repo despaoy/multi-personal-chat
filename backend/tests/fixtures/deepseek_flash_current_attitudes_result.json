@@ -1,0 +1,163 @@
+{
+  "synthetic": true,
+  "stage": 113,
+  "model": "deepseek-flash",
+  "private_inputs_kept_complete_in_restricted_server_artifacts": true,
+  "test_dimension": "Current two personal attitudes from a complete shared original with independent other-channel conditions; whole-source preservation and model-selected relevance, no factual value resupplied in query.",
+  "test_conditions": {
+    "authenticated_test_user_not_real_user": true,
+    "production_database_not_read": true,
+    "actual_native_records": 6,
+    "complete_linked_original_sources": 4,
+    "actual_before_question_history_turns": 20,
+    "actual_loaded_history_messages": 16,
+    "configured_context_window_tokens": 65536,
+    "primary_output_reserve_tokens": 2048,
+    "actual_primary_calls": 1,
+    "old_paid_cases_replayed": 0,
+    "source_clips_or_fake_native_items": 0,
+    "source_classifier_not_fact_authority": true
+  },
+  "expectations": {
+    "window_explicit_positive_attitude": true,
+    "agency_explicit_negative_attitude": true,
+    "both_requested_channel_names_present": true,
+    "source_or_original_record_basis_explicit": true,
+    "no_fabricated_actual_business_completion": true
+  },
+  "result": {
+    "checks": {
+      "native_job_terminal": true,
+      "authenticated_low_privilege_scope": true,
+      "native_http200": true,
+      "actual_primary_invoked": true,
+      "all_cloud_http200_flash": true,
+      "all_cloud_finish_stop": true,
+      "whole_required_original_on_actual_main_wire": true,
+      "required_source_outside_actual_history": true,
+      "whole_current_query_on_wire": true,
+      "expected_original_polarities_not_resupplied_in_query": true,
+      "all_native_records_everyfield_exact": true,
+      "all_prior_original_sources_everyfield_exact": true,
+      "all_before_question_sources_everyfield_exact": true,
+      "all_five_public_docs_still_exact": true,
+      "erasure_fence_unchanged": true,
+      "no_new_memory_or_erasure_or_failure": true,
+      "no_old_paid_task_replayed": true,
+      "full65k_all_cloud_calls": true,
+      "all_nonthinking": true,
+      "both_required_personal_records_selected": true,
+      "no_source_or_code_changed": true
+    },
+    "passed": 21,
+    "total": 21,
+    "semantic_checks": {
+      "window_explicit_positive_attitude": true,
+      "agency_explicit_negative_attitude": true,
+      "both_requested_channel_names_present": true,
+      "source_or_original_record_basis_explicit": true,
+      "no_fabricated_actual_business_completion": true
+    },
+    "semantic_passed": 5,
+    "semantic_total": 5,
+    "actual_calls": 6,
+    "http200": 6,
+    "native_chain_cloud_calls": 5,
+    "auxiliary_source_diagnostic_calls": 1,
+    "native_http200": 1,
+    "actual_primary_calls": 1,
+    "receipts": [
+      {
+        "kind": "native_chain",
+        "index": 0,
+        "http_status": 200,
+        "finish_reason": "stop",
+        "prompt_tokens": 33556,
+        "completion_tokens": 134,
+        "cached_tokens": 256,
+        "estimated_cny": "0.03384112"
+      },
+      {
+        "kind": "native_chain",
+        "index": 1,
+        "http_status": 200,
+        "finish_reason": "stop",
+        "prompt_tokens": 35982,
+        "completion_tokens": 54,
+        "cached_tokens": 512,
+        "estimated_cny": "0.03569624"
+      },
+      {
+        "kind": "native_chain",
+        "index": 2,
+        "http_status": 200,
+        "finish_reason": "stop",
+        "prompt_tokens": 33486,
+        "completion_tokens": 16,
+        "cached_tokens": 0,
+        "estimated_cny": "0.03355"
+      },
+      {
+        "kind": "native_chain",
+        "index": 3,
+        "http_status": 200,
+        "finish_reason": "stop",
+        "prompt_tokens": 30421,
+        "completion_tokens": 122,
+        "cached_tokens": 29440,
+        "estimated_cny": "0.0020578"
+      },
+      {
+        "kind": "native_chain",
+        "index": 4,
+        "http_status": 200,
+        "finish_reason": "stop",
+        "prompt_tokens": 10388,
+        "completion_tokens": 6,
+        "cached_tokens": 1408,
+        "estimated_cny": "0.00903216"
+      },
+      {
+        "finish_reason": "stop",
+        "prompt_tokens": 2404,
+        "completion_tokens": 421,
+        "cached_tokens": 0,
+        "kind": "source_semantics_diagnostic",
+        "index": 0,
+        "http_status": 200,
+        "estimated_cny": "0.004088"
+      }
+    ],
+    "estimated_cost_cny": "0.11826532",
+    "full_actual_history_messages": 16,
+    "no_source_or_production_code_changed": true,
+    "source_classifier_is_inference_not_current_fact_authority": true,
+    "quoted_other_subject_not_proven": true,
+    "complete_rule_projection_remains_observation": true,
+    "old_paid_cases_replayed": 0,
+    "full_or_old_tests_repeated": false,
+    "whole_goal_complete": false
+  },
+  "inspection_findings": {
+    "shared_full_sources_can_support_distinct_records": true,
+    "five_previous_packets_four_unique_sources": true,
+    "temporal_observation_mode_alone_does_not_prove_other_subject": true,
+    "reported_subject_hypothesis_not_proven": true,
+    "complete_parser_defers_unrecognized_header_or_adjunct": true,
+    "original_foreign_subject_assumption_not_used": true,
+    "raw_full_source_model_read_remains_available": true,
+    "source_classifier_is_model_inference": true,
+    "production_code_unchanged": true
+  },
+  "limitations": {
+    "prior_stage105_filter_omission_not_repaired": true,
+    "prior_stage106_length_failure_retained": true,
+    "prior_stage108_test_selection_error_retained": true,
+    "prior_stage110_unrequested_fee_delta_failure_retained": true,
+    "prior_stage111_literal_actor_label_failure_retained": true,
+    "prior_stage112_original_answer_checks_retained": "26/29",
+    "unrecognized_full_source_grammar_not_fixed": true,
+    "subject_label_contradiction_not_proven": true,
+    "whole_goal_accuracy_not_claimed": true
+  }
+}
