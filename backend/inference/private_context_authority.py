@@ -177,6 +177,11 @@ def make_private_context_revalidator(prepared, database):
     preferred_address = getattr(getattr(prepared, "relationship", None), "preferred_address", "")
 
     async def revalidate(request):
+        from inference.structured_context_authority import revalidate_private_memories
+
+        request = await revalidate_private_memories(
+            request, repository, character_id, scope, preferred_address=preferred_address,
+        )
         return await revalidate_private_sources(
             request,
             repository,

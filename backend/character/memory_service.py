@@ -911,6 +911,9 @@ class CharacterMemoryService:
                 limit=read_limit,
             )
         records = [r for r in records if not str(r.get("memory_key") or "").startswith("relationship:")]
+        from character.memory_read_authority import read_versions, record_version
+
+        stored_versions = {str(row["id"]): record_version(row) for row in records}
         # Read source authority through actual claim links, in bounded batches.
         # Keep associations: a citation on a different row cannot grant proof.
         legacy_rows = [row for row in records
@@ -1259,6 +1262,8 @@ class CharacterMemoryService:
                         temporal_mode=str(row.get('temporal_mode') or 'fact'),
                         observed_at=str(row.get('temporal_observed_at') or ''),
                         source_observation=is_source_observation(row),
+                        storage_versions=read_versions(row, stored_versions, claim_sources)[0],
+                        source_versions=read_versions(row, stored_versions, claim_sources)[1],
                         **source_fragment_fields(row),
                     ),
                 )

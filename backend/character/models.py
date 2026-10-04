@@ -188,6 +188,9 @@ class MemoryItem:
     # None means unverified, never an inference of a complete original source.
     complete_original_source: bool | None = None
     source_fragments: tuple[tuple[str, tuple[tuple[int, int], ...]], ...] = ()
+    # Internal repository version bindings; never model evidence or completion fields.
+    storage_versions: tuple[tuple[str, str], ...] = field(default=(), repr=False, compare=False)
+    source_versions: tuple[tuple[str, str, str], ...] = field(default=(), repr=False, compare=False)
 
     @property
     def relation(self) -> str:
