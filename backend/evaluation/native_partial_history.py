@@ -16,7 +16,6 @@ def validate_partial_history(proof, phase, visited):
     origin = _artifact(phase, ref, "preparation-observed.json", "preparation_sha256")
     progress = _artifact(phase, ref, "history-advancement-progress.json", "progress_sha256")
     calls = _artifact(phase, ref, "cloud-calls.json", "cloud_calls_sha256")
-    admissions = _artifact(phase, ref, "writer-admission.json", "admission_sha256")
     stop = _artifact(phase, ref, "evaluation-budget-stop.json", "budget_stop_sha256")
     previous = ref["prior_seed"]
     assert int(previous["phase"][5:]) <= int(ref["phase"][5:])
@@ -28,6 +27,28 @@ def validate_partial_history(proof, phase, visited):
     assert int(snap_ref["phase"][5:]) >= int(ref["phase"][5:])
     snapshot = _artifact(phase, snap_ref, "partial-snapshot.json", "snapshot_sha256")
     case = _artifact(phase, snap_ref, "case.json", "case_sha256")
+    if ref.get("source_only_history") is True:
+        # Older source-only runs never invoked the observed parser, so they
+        # have no admission file. Prove that branch rather than fabricate [].
+        assert not (phase.parent / ref["phase"] / ref["variant"] / "writer-admission.json").exists()
+        from character.memory_extractor import extract_memories
+        from character.memory_llm import is_memory_erasure_request
+        from character.natural_relationship import hypothetical_source_only, quoted_source_only
+
+        for turn in progress[len(prior.get("history_advancement_turns", [])):]:
+            message = case["history_advancement_tasks"][turn["index"]]["message"]
+            assert quoted_source_only(message) or hypothetical_source_only(message)
+            assert not extract_memories(message) and not is_memory_erasure_request(message)
+        for call in calls:
+            for message in call["request"]["messages"]:
+                try:
+                    payload = json.loads(message["content"])
+                except (ValueError, TypeError):
+                    continue
+                assert not (isinstance(payload, dict) and "current_user_message" in payload)
+        admissions = ()
+    else:
+        admissions = _artifact(phase, ref, "writer-admission.json", "admission_sha256")
     assert origin["synthetic_only"] is True and origin["transport"] == "authenticated_ASGI"
     assert origin["database_mode"] == "PostgreSQL" and origin["chat_auth_statuses"] == [200, 200]
     assert origin["seed_template_verified"] is True

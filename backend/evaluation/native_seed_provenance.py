@@ -7,6 +7,18 @@ from pathlib import Path
 
 
 def expected_seed_record_count(proof, phase, *, _visited=frozenset()):
+    addition = proof.get("native_additive_seed_origin")
+    if addition is not None:
+        try:
+            assert all(proof.get(key) is None for key in (
+                "native_update_seed_origin", "native_history_seed_origin", "native_partial_history_seed_origin"))
+            identity = (addition["phase"], addition["variant"])
+            assert identity not in _visited
+            from evaluation.native_additive_snapshot import validate_source_addition
+
+            return validate_source_addition(proof, phase, _visited | {identity})
+        except (AssertionError, KeyError, TypeError, AttributeError, OSError, ValueError) as error:
+            raise ValueError("Invalid native additive provenance") from error
     partial = proof.get("native_partial_history_seed_origin")
     if partial is not None:
         try:

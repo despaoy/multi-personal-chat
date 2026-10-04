@@ -1,0 +1,168 @@
+{
+  "checks": {
+    "actual_added_provenance_verified": true,
+    "actual_partial_provenance_verified": true,
+    "all_eight_records_everyfield_unchanged": true,
+    "all_prior_source_fields_unchanged": true,
+    "old38_receipts_not_replayed": true,
+    "two_successful_receipts_exact": true,
+    "third_failure_not_success": true,
+    "all_new_inputs_complete_actual_api_boundary": true,
+    "full_successful_sources_on_paid_main": true,
+    "only_two_paid_main_calls": true,
+    "final_memory_question_not_paid": true,
+    "failed_task_no_paid_main": true,
+    "actual_native_pg_messages_bound": true,
+    "failed_native_message_not_fabricated": true,
+    "actual_pending_source_retained": true,
+    "actual_budget_protection_not_chain_failure": true,
+    "canonical_main2048": true,
+    "all_official_flash200stop": true,
+    "zero_writer_parser_artifact_proven_not_invented": true,
+    "partial_dump_verified": true,
+    "source_fence_preserved": true,
+    "no_production_code_changed": true,
+    "no_production_service_restarted": true
+  },
+  "passed": 23,
+  "total": 23,
+  "new_task_grades": [
+    {
+      "case_index": 38,
+      "array_matches_complete_given_records": true,
+      "native200": true
+    },
+    {
+      "case_index": 39,
+      "array_matches_complete_given_records": true,
+      "native200": true
+    }
+  ],
+  "task_semantic_passed": 2,
+  "task_semantic_total": 2,
+  "actual_calls": 11,
+  "http200": 11,
+  "actual_final_main_calls": 2,
+  "auxiliary_calls": 9,
+  "native_http200": 2,
+  "native_http500": 1,
+  "estimated_cost_cny": "0.46830428",
+  "receipts": [
+    {
+      "index": 0,
+      "http_status": 200,
+      "prompt_tokens": 44369,
+      "cached_tokens": 256,
+      "completion_tokens": 97,
+      "finish_reason": "stop",
+      "estimated_cny": "0.04450612"
+    },
+    {
+      "index": 1,
+      "http_status": 200,
+      "prompt_tokens": 47351,
+      "cached_tokens": 512,
+      "completion_tokens": 66,
+      "finish_reason": "stop",
+      "estimated_cny": "0.04711324"
+    },
+    {
+      "index": 2,
+      "http_status": 200,
+      "prompt_tokens": 44317,
+      "cached_tokens": 0,
+      "completion_tokens": 12,
+      "finish_reason": "stop",
+      "estimated_cny": "0.044365"
+    },
+    {
+      "index": 3,
+      "http_status": 200,
+      "prompt_tokens": 43978,
+      "cached_tokens": 1152,
+      "completion_tokens": 186,
+      "finish_reason": "stop",
+      "estimated_cny": "0.04359304"
+    },
+    {
+      "index": 4,
+      "http_status": 200,
+      "prompt_tokens": 41757,
+      "cached_tokens": 384,
+      "completion_tokens": 103,
+      "finish_reason": "stop",
+      "estimated_cny": "0.04179268"
+    },
+    {
+      "index": 5,
+      "http_status": 200,
+      "prompt_tokens": 44738,
+      "cached_tokens": 512,
+      "completion_tokens": 66,
+      "finish_reason": "stop",
+      "estimated_cny": "0.04450024"
+    },
+    {
+      "index": 6,
+      "http_status": 200,
+      "prompt_tokens": 41704,
+      "cached_tokens": 0,
+      "completion_tokens": 12,
+      "finish_reason": "stop",
+      "estimated_cny": "0.041752"
+    },
+    {
+      "index": 7,
+      "http_status": 200,
+      "prompt_tokens": 40859,
+      "cached_tokens": 1152,
+      "completion_tokens": 186,
+      "finish_reason": "stop",
+      "estimated_cny": "0.04047404"
+    },
+    {
+      "index": 8,
+      "http_status": 200,
+      "prompt_tokens": 39146,
+      "cached_tokens": 384,
+      "completion_tokens": 103,
+      "finish_reason": "stop",
+      "estimated_cny": "0.03918168"
+    },
+    {
+      "index": 9,
+      "http_status": 200,
+      "prompt_tokens": 42125,
+      "cached_tokens": 512,
+      "completion_tokens": 66,
+      "finish_reason": "stop",
+      "estimated_cny": "0.04188724"
+    },
+    {
+      "index": 10,
+      "http_status": 200,
+      "prompt_tokens": 39091,
+      "cached_tokens": 0,
+      "completion_tokens": 12,
+      "finish_reason": "stop",
+      "estimated_cny": "0.039139"
+    }
+  ],
+  "unique_new_unit_nodes": 28,
+  "affected_existing_unit_nodes": 6,
+  "affected_unit_nodes_total": 34,
+  "failed_nodes_repeated": 2,
+  "narrow_error_assertions_retested": 2,
+  "preflight_failures_unpaid": true,
+  "all_jobs_terminal": true,
+  "original_completed_history": 38,
+  "current_completed_history": 40,
+  "remaining_new_tasks": 1,
+  "final_memory_question_sent": false,
+  "history_independent_new_source_recall_proven": false,
+  "production_code_changed": false,
+  "production_restarted": false,
+  "new_static_diagnostics": 0,
+  "preexisting_unchanged_diagnostics": 2,
+  "old_paid_tasks_replayed": 0
+}

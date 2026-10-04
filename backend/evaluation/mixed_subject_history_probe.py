@@ -44,12 +44,12 @@ def required_private_sources(fixture):
 
 
 def validate_native_messages(
-    fixture, *, advance_history=False, completed_history=0, authoring=False, author_only=False, include_seed=False
+    fixture, *, advance_history=False, completed_history=0, authoring=False, author_only=False, include_seed=False, history_only=False
 ):
     "Validate every remaining request against the actual API schema before any cloud call."
     from db.schemas import MessageRequest
 
-    messages = [] if author_only else [fixture["question"]]
+    messages = [] if author_only or history_only else [fixture["question"]]
     if authoring:
         messages.append(fixture["additional_source_message"])
     if include_seed:
@@ -103,6 +103,8 @@ async def run(args):
         assert len(seed_proof["documents_imported"]) == 4 and seed_proof["seed_http_status"] == 200
 
     fixture = json.loads((phase / "fixture.json").read_text())
+    if args.advance_history_only:
+        assert args.advance_history and not args.author_current_source and not args.author_additional_source and not args.author_only
     if args.author_only:
         assert args.author_current_source and not args.advance_history
     if args.author_current_source:
@@ -129,6 +131,7 @@ async def run(args):
         completed_history=len(seed_proof.get("history_advancement_turns", [])) if seed_proof else 0,
         authoring=args.author_additional_source or args.author_current_source,
         author_only=args.author_only,
+        history_only=args.advance_history_only,
         include_seed=not args.reuse_verified_seed,
     )
 
@@ -349,6 +352,7 @@ async def run(args):
     from character import memory_llm as ml
 
     admission = []
+    (root / "writer-admission.json").write_text("[]\n")
     original_parser = ml.parse_llm_proposals
 
     def observed_parser(response, **kwargs):
@@ -637,6 +641,7 @@ async def run(args):
                     "native_update_seed_origin",
                     "native_history_seed_origin",
                     "native_partial_history_seed_origin",
+                    "native_additive_seed_origin",
                 ):
                     if provenance_key in seed_proof:
                         proof[provenance_key] = seed_proof[provenance_key]
@@ -897,6 +902,23 @@ async def run(args):
             (root / "before-question.json").write_text(
                 json.dumps(proof, ensure_ascii=False, indent=2, default=str) + chr(10)
             )
+            if args.advance_history_only:
+                completed = proof["history_advancement_turns"][proof["history_advancement_turns_inherited"]:]
+                assert completed and all(turn["status"] == 200 for turn in completed)
+                proof.update(
+                    history_only=True,
+                    http_status=completed[-1]["status"],
+                    response=completed[-1]["response"],
+                    user_fact_records_after=seed_records,
+                    sync_pending_final=len(db._pending),
+                    writer_admission=admission,
+                    scheduler_final=asdict(scheduler.status),
+                    cloud_calls=len(calls),
+                    primary_calls=sum(g["observed_primary_calls"] for g in proof["generation"]),
+                )
+                (root / "result.json").write_text(json.dumps(proof, ensure_ascii=False, indent=2, default=str) + "\n")
+                print(json.dumps(dict(history_only_completed=True, completed_new_turns=len(completed), actual_cloud_calls=len(calls), final_question_sent=False)))
+                return
             if args.author_only:
                 proof.update(
                     author_only=True,
@@ -1004,6 +1026,7 @@ if __name__ == "__main__":
     parser.add_argument("--author-current-source", action="store_true")
     parser.add_argument("--author-only", action="store_true")
     parser.add_argument("--advance-history", action="store_true")
+    parser.add_argument("--advance-history-only", action="store_true")
     parser.add_argument("--compare-original-guard", action="store_true")
     parser.add_argument("--resume-provider-block", action="store_true")
     parser.add_argument("--provider-access-restored", action="store_true")
