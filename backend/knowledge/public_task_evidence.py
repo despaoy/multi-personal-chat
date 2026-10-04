@@ -102,8 +102,8 @@ def review_payload(bundle, dependencies, query, public_obligations=()):
         ):
             raise ValueError("Unverifiable public candidate identity")
         sid = f"doc_{identity}"
-        source = sources.setdefault(sid, dict(source_id=sid, title=row.get("title"), indexed_chunks=[]))
-        if source["title"] != row.get("title"):
+        source = sources.setdefault(sid, dict(source_id=sid, title=row.get("title"), knowledge_base_id=row.get("knowledge_base_id"), indexed_chunks=[]))
+        if source["title"] != row.get("title") or source["knowledge_base_id"] != row.get("knowledge_base_id"):
             raise ValueError("Conflicting public source title")
         source["indexed_chunks"].append(dict(id=chunk, content=row["content"]))
     if not 0 < len(sources) <= 24:
@@ -143,7 +143,7 @@ async def _review(messages):
     )
 
 
-async def review_public_candidates(bundle, dependencies, query, *, window_tokens, reviewer=None, public_obligations=(), scope_reviewer=None):
+async def review_public_candidates(bundle, dependencies, query, *, window_tokens, reviewer=None, public_obligations=(), scope_reviewer=None, identity_reviewer=None):
     """Keep whole matched sources; failures reject public candidates, never private ones."""
     if dependencies is None or not dict(dependencies.groups)["public_knowledge"]:
         return bundle
@@ -184,6 +184,20 @@ async def review_public_candidates(bundle, dependencies, query, *, window_tokens
                 raw_scope = await asyncio.wait_for((scope_reviewer or _review)(scope_messages), timeout=30)
                 scopes = parse_object_scopes(raw_scope, query, payload["public_task_ids"])
                 payload["object_scopes"] = scopes
+                from knowledge.public_identity_dependencies import (
+                    IDENTITY_INSTRUCTION,
+                    identity_needed,
+                    parse_identity_review,
+                )
+
+                if (reviewer is None or identity_reviewer is not None) and identity_needed(payload, scopes):
+                    identity_messages = [dict(role="system", content=IDENTITY_INSTRUCTION), dict(role="user", content=json.dumps(payload, ensure_ascii=False))]
+                    if sum(estimated_tokens(m["content"]) + 4 for m in identity_messages) + 768 + CONTEXT_SAFETY_MARGIN_TOKENS > window_tokens:
+                        receipt["reason"] = "complete_identity_input_budget_exceeded"
+                        return _filter_reviewed_bundle(bundle, receipt)
+                    raw_identity = await asyncio.wait_for((identity_reviewer or _review)(identity_messages), timeout=30)
+                    identity_result = parse_identity_review(raw_identity, payload, scopes)
+                    payload["identity_review"] = dict(raw=raw_identity, **identity_result)
                 receipt.update(object_scopes=scopes, object_scope_input=payload, object_scope_input_sha256=scope_input_digest(payload))
                 instruction = INSTRUCTION.split("输出严格JSON", 1)[0] + SOURCE_INSTRUCTION
             messages = [
@@ -219,6 +233,18 @@ async def review_public_candidates(bundle, dependencies, query, *, window_tokens
 
 def _filter_reviewed_bundle(bundle, receipt):
     selected = {row["source_id"] for row in receipt["decisions"] if row["task_ids"]}
+    if receipt.get("review_status") == "reviewed" and receipt.get("object_scopes") is not None:
+        from knowledge.public_identity_dependencies import validate_identity_receipt
+
+        payload = receipt["object_scope_input"]
+        identity = validate_identity_receipt(payload, receipt["object_scopes"])
+        bindings = {b["binding_id"]: b for b in identity["bindings"]}
+        for row in receipt.get("scoped_decisions", ()):
+            if row["source_id"] in selected:
+                for proof in row["object_evidence"]:
+                    binding = bindings.get(proof.get("identity_binding_id"))
+                    if binding is not None:
+                        selected.add(binding["source_id"])
     rows = [row for row in bundle.get("results", ()) if f"doc_{row.get('document_id')}" in selected]
     chunk_ids = {row.get("id") for row in rows}
     packets = tuple(p for p in bundle.get("original_source_packets", ()) if p.get("original_source_id") in selected)

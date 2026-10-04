@@ -245,6 +245,8 @@ async def test_actual_api_marks_partial_multi_object_scope_without_erasing_priva
         payload = json.loads(messages[-1]["content"])
         if set(payload) == {"query", "public_tasks"}:
             return json.dumps(dict(scopes=[dict(task_id="public:0:0", objects=["青桥延期", "蓝岸续租"])]))
+        if "identity_review" not in payload:
+            return json.dumps(dict(sources=[dict(source_id=s["source_id"], purpose="rules") for s in payload["sources"]], relations=[]))
         return json.dumps(source_reply(missing=True))
 
     async def model(**kwargs):

@@ -12,16 +12,18 @@ RESOLVE_INSTRUCTION = """只根据完整query和public_tasks解析每项公共�
 覆盖全部public_tasks，每项恰好一次，不发明身份，不输出来源、数值答案、解释或其他字段。"""
 
 SOURCE_INSTRUCTION = """object_scopes是先于候选资料、仅据原始问题取得的对象绑定，不授予事实或读取权限。
+identity_review中的bindings是从完整授权来源登记核验的单跳名称同一性依赖，不是业务规则或事实充分性。
+identity_only来源不能列入task_ids。规则只用别名、不含原query_text时，object_evidence必须增加identity_binding_id，值必须是identity_review.bindings中对应的binding_id；没有这个字段会被程序判定未验证。source_quote必须包含该依赖中alias的完整名称并来自本规则正文；依赖登记与规则必须同时进入最终请求才能确认对象。不得自造绑定或借用不同知识库登记。
 不能因候选资料讲的是另一对象就更改object_scopes；共享query用于限定和指代，不用于把别的任务的对象替代本项。
 仍需判断来源是否支持本项所问的行为与限定，资料仅提到对象或引用别处不能证明其规则或全部事实。
 每份来源返回source_id、task_ids、object_evidence三个字段。task_ids是提议的相关任务，不是全部事实已充分。
-object_evidence逐对象提供object_id与source_quote。quote须从本份title、完整indexed_chunks或经核验的完整original_body逐字摘取，包含object_scopes中该对象的完整query_text。
+object_evidence逐对象提供object_id与source_quote。直接原名证据的quote须包含该对象完整query_text；别名证据则必须再提供identity_binding_id且quote包含其alias，不能要求别名规则再写原query_text。quote须来自本份title、完整indexed_chunks或经核验的完整original_body逐字原文。
 每个对象最多一份短引用，不改写、不造字；引用只用于核对对象，来源完整正文仍保留。
 如果认为别名或同义对象语义相关，但可见原文不能核对对应对象名称，可以提议task_ids而object_evidence为空；程序会保留对象未验证，不会确认匹配，也不会宣称资料不相关。
 不得借前者的对象证据证明后者。对象未解出时不能猜测其身份。
 严格JSON只有decisions，覆盖每份required_source_ids恰好一次：
 {"decisions":[{"source_id":"实际来源身份","task_ids":["实际任务身份"],"object_evidence":[{"object_id":"实际对象身份","source_quote":"本份来源的逐字对象证据"}]}]}。
-不得返回布尔身份、私人编号、额外键、解释或代码块。"""
+别名规则的合法引用格式为{"object_id":"已绑定对象","source_quote":"本规则含已核验alias的逐字证据","identity_binding_id":"对应已核验binding_id"}；必须使用本轮实际值，不照抄示例。仅这个别名字段可额外加入object_evidence，不能加在来源行外。不得返回布尔身份、私人编号、未规定的额外键、解释或代码块。"""
 
 
 class ObjectScopeCapacityError(ValueError):
@@ -131,18 +133,22 @@ def parse_scoped_decisions(raw, payload, scopes):
     sources = {s["source_id"]: s for s in payload["sources"]}
     if set(sources) != set(payload["required_source_ids"]):
         raise ValueError("Missing scope source inputs")
+    from knowledge.public_identity_dependencies import validate_identity_receipt, verified_object_proof
+
+    identity_review = validate_identity_receipt(payload, scopes)
+    bindings = {b["binding_id"]: b for b in identity_review["bindings"]}
+    identity_only = {r["source_id"] for r in identity_review["source_roles"] if r["purpose"] == "identity_only"}
     objects = {o["object_id"]: o["query_text"] for o in scopes["objects"]}
     targets = {r["task_id"]: set(r["object_ids"]) for r in scopes["task_scopes"]}
     accepted, unverified = [], []
     for row, validated in zip(rows, plain):
         source = sources[row["source_id"]]
-        parts = [source.get("title"), source.get("original_body"), *[c["content"] for c in source["indexed_chunks"]]]
         proofs = row["object_evidence"]
         if not isinstance(proofs, list) or len(proofs) > len(objects):
             raise ValueError("Invalid object evidence count")
         seen, verified = set(), set()
         for proof in proofs:
-            if not isinstance(proof, dict) or set(proof) != {"object_id", "source_quote"}:
+            if not isinstance(proof, dict) or set(proof) not in ({"object_id", "source_quote"}, {"object_id", "source_quote", "identity_binding_id"}):
                 raise ValueError("Invalid object evidence fields")
             identity, quote = proof["object_id"], proof["source_quote"]
             if (
@@ -154,7 +160,9 @@ def parse_scoped_decisions(raw, payload, scopes):
                 or len(quote) > 512
             ):
                 raise ValueError("Invalid object evidence identity or quote")
-            if objects[identity] in quote and any(isinstance(part, str) and quote in part for part in parts):
+            if "identity_binding_id" in proof and (not isinstance(proof["identity_binding_id"], str) or proof["identity_binding_id"] not in bindings):
+                raise ValueError("Unknown identity dependency")
+            if row["source_id"] not in identity_only and verified_object_proof(proof, source, objects, bindings):
                 verified.add(identity)
             seen.add(identity)
         tasks = []

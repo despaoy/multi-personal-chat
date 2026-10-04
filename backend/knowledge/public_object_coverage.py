@@ -2,27 +2,27 @@
 
 
 def settle_public_object_coverage(retrieval, payload, scopes, scoped_decisions, decisions):
+    from knowledge.public_identity_dependencies import quote_admitted, validate_identity_receipt, verified_object_proof
+
+    identity_review = validate_identity_receipt(payload, scopes)
+    bindings = {b["binding_id"]: b for b in identity_review["bindings"]}
+    packets = retrieval.admitted_evidence_packets or retrieval.evidence_packets
     sources = {s["source_id"]: s for s in payload["sources"]}
     objects = {o["object_id"]: o["query_text"] for o in scopes["objects"]}
     accepted = {d["source_id"]: set(d["task_ids"]) for d in decisions}
     proofs = {}
     for row in scoped_decisions:
         source = sources[row["source_id"]]
-        chunks = source["indexed_chunks"]
-        parts = [source.get("title"), source.get("original_body"), *[c["content"] for c in chunks]]
-        allowed_ids = {c["id"] for c in chunks} | {row["source_id"] + "_original"}
         for proof in row["object_evidence"]:
             identity, quote = proof["object_id"], proof["source_quote"]
-            if objects[identity] not in quote or not any(isinstance(part, str) and quote in part for part in parts):
+            if not verified_object_proof(proof, source, objects, bindings):
                 continue
             # A visible unrelated chunk from this source, or the same text from
             # another source, does not admit this source-object proof.
-            admitted = retrieval.status == "ok" and any(
-                isinstance(packet.get("text"), str)
-                and quote in packet["text"]
-                and bool(allowed_ids.intersection(packet.get("document_ids", ())))
-                for packet in retrieval.admitted_evidence_packets or retrieval.evidence_packets
-            )
+            admitted = retrieval.status == "ok" and quote_admitted(source, quote, packets)
+            if "identity_binding_id" in proof:
+                binding = bindings[proof["identity_binding_id"]]
+                admitted = admitted and quote_admitted(sources[binding["source_id"]], binding["source_quote"], packets)
             proofs[(row["source_id"], identity)] = admitted
     tasks = {}
     for task in scopes["task_scopes"]:
