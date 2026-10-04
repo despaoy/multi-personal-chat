@@ -111,6 +111,9 @@ class RetrievalResult:
     citation_namespace: str = ""
     source_excerpts: tuple[Mapping[str, Any], ...] = ()
     evidence_packets: tuple[Mapping[str, Any], ...] = ()
+    # The packet-budget trial clears candidates to avoid recursive budgeting;
+    # retain the exact trial admission separately for model-facing coverage.
+    admitted_evidence_packets: tuple[Mapping[str, Any], ...] = ()
     identity_task: Mapping[str, str] = field(default_factory=dict)
     identity_subtask: Mapping[str, str] = field(default_factory=dict)
     source_coverage: tuple[Mapping[str, Any], ...] = ()
@@ -496,6 +499,7 @@ def _build_packet_budgeted_request(request: GenerationRequest) -> GenerationPlan
                 request.retrieval,
                 evidence=evidence,
                 evidence_packets=(),
+                admitted_evidence_packets=(*accepted, packet),
                 source_coverage=settle_source_coverage(
                     request.retrieval.source_coverage, candidate_ids, admitted_packets=(*accepted, packet)
                 ),
@@ -531,6 +535,7 @@ def _build_packet_budgeted_request(request: GenerationRequest) -> GenerationPlan
         status="character_abstention",
         evidence="",
         evidence_packets=(),
+        admitted_evidence_packets=(),
         source_coverage=settle_source_coverage(request.retrieval.source_coverage, set()),
         task_coverage=settle_task_coverage(
             request.retrieval.task_coverage, set(), source_coverage=request.retrieval.source_coverage

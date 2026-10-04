@@ -13,6 +13,7 @@ POLICY = (
     "no_related_evidence表示本次候选不支持这个公共子任务，review_unavailable表示无法完成相关性审核，"
     "related_candidate_not_admitted表示匹配候选没有进入最终请求；这些状态都不能证明所有范围不存在资料。"
     "object_scope_unverified或object_scope_unresolved表示对象依据尚未核对或指代未解，不能宣称资料不相关或全范围不存在。"
+    "object_scope_partial表示该任务只取得部分对象的对应可见依据，object_scope_not_admitted表示对应对象证明尚未进入请求；逐对象保留已有依据，缺口不补齐。"
     "不同子任务的依据不能互相担保。仍应保留可见私人记忆、用户材料和其他独立任务所支持的内容，"
     "未得到相应公共依据的事实保持未知，不借私人偏好或相似资料补齐。"
 )
@@ -290,6 +291,7 @@ def render_public_tasks(retrieval):
     parse_public_decisions(json.dumps(dict(decisions=decisions)), source_ids, ids)
     scopes = receipt.get("object_scopes")
     unverified_objects, unresolved_objects = set(), set()
+    object_coverage = {}
     if scopes is not None:
         from knowledge.public_object_scope import parse_scoped_decisions, scope_input_digest, validate_object_scopes
 
@@ -303,6 +305,9 @@ def render_public_tasks(retrieval):
             if checked["decisions"] != decisions or checked["unverified_links"] != receipt.get("object_unverified_links"):
                 raise ValueError("Source task links bypassed object evidence")
             unverified_objects = {r["task_id"] for r in checked["unverified_links"]}
+            from knowledge.public_object_coverage import settle_public_object_coverage
+
+            object_coverage = settle_public_object_coverage(retrieval, payload, scopes, checked["scoped_decisions"], checked["decisions"])
         unresolved_objects = {r["task_id"] for r in scopes["task_scopes"] if not r["object_ids"]}
     status = receipt.get("review_status")
     if status not in {"reviewed", "no_candidates", "unavailable"} or status != "reviewed" and decisions:
@@ -317,6 +322,8 @@ def render_public_tasks(retrieval):
     rows = []
     for task in tasks:
         related = {d["source_id"] for d in decisions if task["index"] in d["task_ids"]}
+        object_rows = object_coverage.get(task["index"], [])
+        admitted_objects = sum(r["status"] == "verified_object_evidence_admitted" for r in object_rows)
         task_status = (
             "review_unavailable"
             if status == "unavailable"
@@ -326,9 +333,13 @@ def render_public_tasks(retrieval):
             if not related and task["index"] in unverified_objects
             else "no_related_evidence"
             if not related
+            else "object_scope_partial"
+            if related & visible and object_rows and 0 < admitted_objects < len(object_rows)
+            else "object_scope_not_admitted"
+            if related & visible and object_rows and not admitted_objects
             else "related_candidate_admitted"
             if related & visible
             else "related_candidate_not_admitted"
         )
-        rows.append(dict(query=task["query"], task_id=task["index"], task_granularity="literal_partition" if isinstance(task["index"], str) else "segment_unverified", dependency_coverage="verified_expected_segments" if expected else "unverified", object_scope="source_object_evidence_verified" if scopes is not None and related else "unverified", status=task_status, semantic_coverage="unverified"))
+        rows.append(dict(query=task["query"], task_id=task["index"], task_granularity="literal_partition" if isinstance(task["index"], str) else "segment_unverified", dependency_coverage="verified_expected_segments" if expected else "unverified", object_scope="source_object_evidence_verified" if object_rows and admitted_objects == len(object_rows) else "partial_source_object_evidence_verified" if admitted_objects else "unverified", status=task_status, semantic_coverage="unverified", object_coverage=object_rows))
     return rows

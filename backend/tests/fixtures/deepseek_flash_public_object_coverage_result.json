@@ -1,0 +1,42 @@
+{
+  "actual_calls": 4,
+  "http200": 4,
+  "actual_final_main_calls": 1,
+  "auxiliary_calls": 3,
+  "native_http200": 0,
+  "native_http500": 0,
+  "native_full_successful_answers": 0,
+  "estimated_cost_cny": "0.00429872",
+  "estimate_not_invoice_or_current_official_quote": true,
+  "unique_passing_unit_nodes": 13,
+  "new_unit_nodes": 11,
+  "directly_affected_existing_nodes": 2,
+  "unit_pass_executions": 13,
+  "model_chain_integrity": {
+    "passed": 13,
+    "total": 13
+  },
+  "strict_model_checks": {
+    "passed": 17,
+    "total": 18
+  },
+  "strict_output_type_deviation_preserved": true,
+  "semantic_output_checks": {
+    "passed": 5,
+    "total": 5
+  },
+  "numeric_content_correct_string_type": true,
+  "original_failed_assertion_not_erased": true,
+  "normal_production_planner_not_exercised": true,
+  "fictional_control_sources": true,
+  "free_tests_actual_api_code": true,
+  "all_jobs_terminal": true,
+  "previous_main_answers_not_replayed": true,
+  "production_code_changed": true,
+  "production_restarted": true,
+  "whole_goal_complete": false,
+  "release_standard": "key_links_stable_explicit_unknown_not_perfect_all_cases",
+  "deployment_ready": 200,
+  "static_new_diagnostics": 0,
+  "preexisting_unchanged_static_diagnostics": 0
+}
