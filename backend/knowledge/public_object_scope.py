@@ -9,6 +9,7 @@ RESOLVE_INSTRUCTION = """只根据完整query和public_tasks解析每项公共�
 共享字段、限定和例外继续由完整query理解，不能因为某对象已有资料就换成它。
 一项可涉及多个对象，最多8个；没有明确公共对象、只涉及格式或无法解指代时objects为空，不猜测。
 仅输出严格JSON：{"scopes":[{"task_id":"实际任务身份","objects":["query中的完整对象名称"]}]}。
+task_id须与本次public_tasks.id的原值及JSON类型完全一致：整数直接输出数字不加引号，字符串身份不要转成数字；上面示例的字符串仅为占位符。
 覆盖全部public_tasks，每项恰好一次，不发明身份，不输出来源、数值答案、解释或其他字段。"""
 
 SOURCE_INSTRUCTION = """object_scopes是先于候选资料、仅据原始问题取得的对象绑定，不授予事实或读取权限。
