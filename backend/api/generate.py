@@ -1420,6 +1420,12 @@ async def _generate_with_retrieval(
                         _retrieve_rag_bundle(retrieval_query, 3, filters, **view_options),
                         timeout=_rag_retrieval_timeout(),
                     )
+                    from knowledge.public_task_evidence import review_public_candidates
+
+                    bundle = await review_public_candidates(
+                        bundle, query_plan.dependencies, rag_message,
+                        window_tokens=get_provider_context_budget().window_tokens,
+                    )
                     bundle["query_plan_status"] = query_plan.status
                     rag_meta = {
                         "citations": bundle.get("citations", []) if citations_enabled else [],
@@ -1451,6 +1457,8 @@ async def _generate_with_retrieval(
                             source_lookup=source_lookup,
                             task_coverage=tuple(bundle.get("task_candidate_coverage") or ()),
                             task_query=retrieval_query,
+                            public_task_review=bundle.get("public_task_review") or {},
+                            public_task_query=rag_message if bundle.get("public_task_review") else "",
                         )
 
                     # 角色知识检索结果自带按粒度组装的 context_text；
@@ -1477,6 +1485,8 @@ async def _generate_with_retrieval(
                             source_coverage=tuple(bundle.get("source_coverage") or ()),
                             task_coverage=tuple(bundle.get("task_candidate_coverage") or ()),
                             task_query=retrieval_query,
+                            public_task_review=bundle.get("public_task_review") or {},
+                            public_task_query=rag_message if bundle.get("public_task_review") else "",
                             identity_task=bundle.get("identity_task") or {},
                             identity_subtask=bundle.get("identity_subtask") or {},
                             documents=tuple(bundle.get("results", [])),
@@ -1574,6 +1584,22 @@ async def _generate_with_retrieval(
         rag_meta["citations"] = list(generation.response_citations) if citations_enabled else []
     elif generation.response_mode == "task_composite":
         rag_meta["answerMode"] = "task_composite"
+    from knowledge.public_task_evidence import render_public_tasks
+
+    public_tasks = render_public_tasks(generation.plan.retrieval)
+    if public_tasks and any(task["status"] != "related_candidate_admitted" for task in public_tasks):
+        rag_meta["warnings"] = list(dict.fromkeys([*(rag_meta.get("warnings") or []), "partial_public_evidence"]))
+        rag_meta["abstained"] = True
+        context = generation.plan.character_context
+        from html import unescape
+
+        reference = getattr(context, "reference_context", "")
+        private_visible = bool(reference and getattr(context, "used_memory_ids", ())
+                               and reference in unescape(generation.plan.messages[-1]["content"]))
+        if (query_plan.dependencies is not None and dict(query_plan.dependencies.groups)["private_memory"]
+                and private_visible and generation.model_invoked and not generation.guard_fallback
+                and not rag_meta.get("generationError")):
+            rag_meta["answerMode"] = "partial_answer"
     return generation.reply, generation.plan.retrieval.has_evidence or bool(rag_meta.get("abstained")), rag_meta
 
 

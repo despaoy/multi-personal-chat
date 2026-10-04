@@ -115,8 +115,15 @@ async def plan_retrieval_views(query: str, *, reviewer=None) -> RetrievalQueryPl
             return RetrievalQueryPlan(parse_search_views(raw, query), "applied")
         if not isinstance(value, dict) or set(value) != {"search_views", "dependencies"}:
             raise ValueError("Unexpected task-plan fields")
-        views = parse_search_views(json.dumps({"search_views": value["search_views"]}), query)
         dependencies = parse_dependencies(value["dependencies"], query)
+        try:
+            views = parse_search_views(json.dumps({"search_views": value["search_views"]}), query)
+        except (ValueError, TypeError):
+            # A rewritten ranking hint cannot erase a separately valid public
+            # dependency. Retain no invented view and grant no private bypass.
+            if not dict(dependencies.groups)["public_knowledge"]:
+                raise
+            return RetrievalQueryPlan((), "dependencies_only_invalid_views", dependencies)
         if dependencies.private_context_only and views:
             raise ValueError("Private-only plan cannot propose public searches")
         return RetrievalQueryPlan(views, "applied", dependencies)

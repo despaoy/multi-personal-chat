@@ -119,6 +119,8 @@ class RetrievalResult:
     source_references: tuple[Mapping[str, Any], ...] = ()
     task_coverage: tuple[Mapping[str, Any], ...] = ()
     task_query: str = ""
+    public_task_review: Mapping[str, Any] = field(default_factory=dict)
+    public_task_query: str = ""
 
     @property
     def has_evidence(self) -> bool:
@@ -343,6 +345,10 @@ def _system_prompt(request: GenerationRequest) -> str:
         from inference.task_evidence_coverage import TASK_COVERAGE_POLICY
 
         prompt += "\n\n" + TASK_COVERAGE_POLICY
+    if request.apply_prompt_policy and request.retrieval.public_task_review:
+        from knowledge.public_task_evidence import POLICY
+
+        prompt += "\n\n" + POLICY
     if request.retrieval.has_evidence and request.retrieval.answer_citations_bound:
         from inference.answer_citations import citation_output_policy
 
@@ -362,6 +368,12 @@ def build_generation_request(request: GenerationRequest) -> GenerationPlan:
             request.retrieval.task_coverage, query=request.retrieval.task_query or request.message
         )
         request = replace(request, retrieval=replace(request.retrieval, task_coverage=tasks))
+    if request.retrieval.public_task_review:
+        from knowledge.public_task_evidence import render_public_tasks
+
+        if request.retrieval.public_task_query != request.message:
+            raise ValueError("Public task review discarded the original message")
+        render_public_tasks(request.retrieval)
     request = admit_deferred_sources(request, _build_generation_request_core)
     return _build_generation_request_core(request)
 
