@@ -1441,6 +1441,8 @@ async def _generate_with_retrieval(
                         requested_sources=source_requests,
                         source_references=tuple(bundle.get("source_references") or ()),
                         source_lookup=source_lookup,
+                        task_coverage=tuple(bundle.get("task_candidate_coverage") or ()),
+                        task_query=retrieval_query,
                     )
 
                 # 角色知识检索结果自带按粒度组装的 context_text；
@@ -1465,6 +1467,8 @@ async def _generate_with_retrieval(
                         evidence=rag_context,
                         evidence_packets=evidence_packets,
                         source_coverage=tuple(bundle.get("source_coverage") or ()),
+                        task_coverage=tuple(bundle.get("task_candidate_coverage") or ()),
+                        task_query=retrieval_query,
                         identity_task=bundle.get("identity_task") or {},
                         identity_subtask=bundle.get("identity_subtask") or {},
                         documents=tuple(bundle.get("results", [])),

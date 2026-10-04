@@ -116,6 +116,8 @@ class RetrievalResult:
     packet_coverage: Mapping[str, Any] = field(default_factory=dict)
     requested_sources: tuple[Mapping[str, Any], ...] = ()
     source_references: tuple[Mapping[str, Any], ...] = ()
+    task_coverage: tuple[Mapping[str, Any], ...] = ()
+    task_query: str = ""
 
     @property
     def has_evidence(self) -> bool:
@@ -326,6 +328,10 @@ def _system_prompt(request: GenerationRequest) -> str:
         from inference.evidence_coverage import SOURCE_COVERAGE_POLICY
 
         prompt += '\n\n' + SOURCE_COVERAGE_POLICY
+    if request.apply_prompt_policy and request.retrieval.task_coverage:
+        from inference.task_evidence_coverage import TASK_COVERAGE_POLICY
+
+        prompt += "\n\n" + TASK_COVERAGE_POLICY
     if request.retrieval.has_evidence and request.retrieval.answer_citations_bound:
         from inference.answer_citations import citation_output_policy
 
@@ -336,7 +342,13 @@ def _system_prompt(request: GenerationRequest) -> str:
 def build_generation_request(request: GenerationRequest) -> GenerationPlan:
     """Build the one canonical model-facing message and parameter contract."""
     from inference.source_context_budget import admit_deferred_sources
+    from inference.task_evidence_coverage import validate_task_candidates
 
+    if request.retrieval.task_coverage:
+        if request.retrieval.task_query and request.message not in request.retrieval.task_query:
+            raise ValueError("Retrieval task query discarded the original message")
+        tasks = validate_task_candidates(request.retrieval.task_coverage, query=request.retrieval.task_query or request.message)
+        request = replace(request, retrieval=replace(request.retrieval, task_coverage=tasks))
     request = admit_deferred_sources(request, _build_generation_request_core)
     return _build_generation_request_core(request)
 
@@ -346,6 +358,14 @@ def _build_generation_request_core(request: GenerationRequest) -> GenerationPlan
         return _build_packet_budgeted_request(request)
     from inference.evidence_coverage import render_coverage
     from inference.memory_response import memory_query_result
+    from inference.task_evidence_coverage import settle_task_coverage
+
+    if request.retrieval.task_coverage and any("candidate_status" not in row for row in request.retrieval.task_coverage):
+        request = replace(request, retrieval=replace(
+            request.retrieval, task_coverage=settle_task_coverage(
+                request.retrieval.task_coverage, set(), source_coverage=request.retrieval.source_coverage,
+            ),
+        ))
 
     system_prompt = _system_prompt(request)
     messages: list[Message] = []
@@ -414,6 +434,7 @@ def _build_generation_request_core(request: GenerationRequest) -> GenerationPlan
 def _build_packet_budgeted_request(request: GenerationRequest) -> GenerationPlan:
     """Use the actual fixed input/output budget, never split a source packet."""
     from inference.evidence_coverage import packet_coverage, settle_source_coverage
+    from inference.task_evidence_coverage import settle_task_coverage
 
     accepted = []
     accepted_ids: set[str] = set()
@@ -438,6 +459,7 @@ def _build_packet_budgeted_request(request: GenerationRequest) -> GenerationPlan
         candidate_ids = accepted_ids | {str(i) for i in ids}
         retrieval = replace(request.retrieval, evidence=evidence, evidence_packets=(),
                             source_coverage=settle_source_coverage(request.retrieval.source_coverage, candidate_ids, admitted_packets=(*accepted, packet)),
+                            task_coverage=settle_task_coverage(request.retrieval.task_coverage, candidate_ids, admitted_packets=(*accepted, packet), source_coverage=request.retrieval.source_coverage),
                             packet_coverage=packet_coverage(len(request.retrieval.evidence_packets), len(accepted) + 1),
                             citations=tuple(c for c in request.retrieval.citations if str(c.get('id')) in candidate_ids))
         try:
@@ -457,6 +479,7 @@ def _build_packet_budgeted_request(request: GenerationRequest) -> GenerationPlan
     # Unknown evidence is not a license to generate from rejected summaries.
     retrieval = replace(request.retrieval, status='character_abstention', evidence='', evidence_packets=(),
                         source_coverage=settle_source_coverage(request.retrieval.source_coverage, set()),
+                        task_coverage=settle_task_coverage(request.retrieval.task_coverage, set(), source_coverage=request.retrieval.source_coverage),
                         packet_coverage=packet_coverage(len(request.retrieval.evidence_packets), 0),
                         citations=(), reason='evidence_budget_exhausted')
     return _build_generation_request_core(replace(request, retrieval=retrieval))

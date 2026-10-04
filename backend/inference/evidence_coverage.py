@@ -104,7 +104,7 @@ def packet_coverage(total, admitted):
 
 
 def is_partial_coverage(retrieval):
-    return any(row["lookup_status"] != "matched_in_referring_scope"
+    return any(row.get("status") != "candidate_evidence_admitted" for row in retrieval.task_coverage) or any(row["lookup_status"] != "matched_in_referring_scope"
                for row in _reference_source_rows(retrieval.source_references)) or any(row["lookup_status"] != "matched_in_index_scope"
                for row in _source_request_rows(retrieval.requested_sources)) or retrieval.packet_coverage.get("status") == "partial" or any(
         row.get("status") == "partial" for row in retrieval.source_coverage
@@ -112,7 +112,7 @@ def is_partial_coverage(retrieval):
 
 
 def render_coverage(retrieval):
-    if not retrieval.source_coverage and not retrieval.packet_coverage and not retrieval.requested_sources and not retrieval.source_references:
+    if not retrieval.source_coverage and not retrieval.packet_coverage and not retrieval.requested_sources and not retrieval.source_references and not retrieval.task_coverage:
         return ""
     public_rows = [
         {
@@ -136,6 +136,10 @@ def render_coverage(retrieval):
         payload["requested_sources"] = _source_request_rows(retrieval.requested_sources)
     if retrieval.source_references:
         payload["source_references"] = _reference_source_rows(retrieval.source_references)
+    if retrieval.task_coverage:
+        from inference.task_evidence_coverage import render_task_coverage
+
+        payload["tasks"] = render_task_coverage(retrieval.task_coverage)
     return json.dumps(payload, ensure_ascii=False)
 
 

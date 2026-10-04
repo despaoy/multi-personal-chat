@@ -81,6 +81,21 @@ def collect_task_candidates(
         coverage.append(
             {
                 "task_index": index,
+                "query": question,
+                "index_generation": original_snapshot[1] if isinstance(original_snapshot, tuple) else original_snapshot,
+                "candidate_source_links": tuple(
+                    {
+                        "document_id": str(result.get("id") or result.get("chunk_id"))
+                        if result.get("id") or result.get("chunk_id")
+                        else None,
+                        "source_id": f"doc_{result['document_id']}"
+                        if type(result.get("document_id")) is int and result["document_id"] > 0
+                        else None,
+                    }
+                    for result in bucket
+                )
+                if accepted
+                else (),
                 "kind": "original_question" if index == 0 else "public_task",
                 "candidate_count": len(bucket),
                 "retained_candidate_count": len(bucket) if accepted else 0,
