@@ -47,6 +47,10 @@ def expected_seed_record_count(proof, phase, *, _visited=frozenset()):
             from evaluation.native_successor_snapshot import validate_deferred_successor
 
             return validate_deferred_successor(proof, phase, origin, calls, old, new, provenance)
+        if provenance.get("transition") == "current_supersede":
+            from evaluation.native_current_snapshot import validate_current_successor
+
+            return validate_current_successor(proof, phase, origin, calls, old, new, provenance, _visited)
         assert provenance.get("transition") is None
         assert len(old) in {3, 4} and len(new) == len(old) + 1
         assert proof["seed_records"] == new

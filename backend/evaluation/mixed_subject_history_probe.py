@@ -83,14 +83,18 @@ async def run(args):
         assert len(seed_proof["documents_imported"]) == 4 and seed_proof["seed_http_status"] == 200
 
     fixture = json.loads((phase / "fixture.json").read_text())
-    if args.author_additional_source:
+    if args.author_only:
+        assert args.author_current_source and not args.advance_history
+    if args.author_current_source:
+        assert not args.author_additional_source
+    if args.author_additional_source or args.author_current_source:
         assert args.reuse_verified_seed and not resume_provider_block
         assert fixture.get("additional_source_message")
     private_sources = [fixture["source_message"], *fixture.get("additional_private_source_messages", [])]
     required_private = required_private_sources(fixture)
     from evaluation.source_transport import complete_source_in_transport
     if args.advance_history:
-        assert args.reuse_verified_seed and not args.author_additional_source and not resume_provider_block
+        assert args.reuse_verified_seed and not args.author_additional_source and not args.author_current_source and not resume_provider_block
         assert len(fixture["history_advancement_tasks"]) == fixture.get("history_advancement_target_count", 8)
 
     parent = json.loads((runtime / "backups/backend-chain-20261001/stage57/saved-audited-result.json").read_text())
@@ -552,6 +556,9 @@ async def run(args):
                     seed_template_verified=True,
                     seed_model_calls_replayed=0,
                 )
+                from evaluation.native_current_snapshot import inherit_history_receipts
+
+                inherit_history_receipts(proof, seed_proof)
                 for provenance_key in ("native_update_seed_origin", "native_history_seed_origin"):
                     if provenance_key in seed_proof:
                         proof[provenance_key] = seed_proof[provenance_key]
@@ -677,7 +684,7 @@ async def run(args):
                         "A supplied third-party data task changed private user claims; inspect its real writer"
                     )
                 proof["history_advancement_turns_completed"] = len(proof["history_advancement_turns"])
-            if args.author_additional_source:
+            if args.author_additional_source or args.author_current_source:
                 original_records = await repo.list_memory_records(
                     "tsukiyashiro_kisaki", scope, limit=None, include_inactive=True
                 )
@@ -720,6 +727,14 @@ async def run(args):
                 ), "Actual favorite authoring produced no source-grounded stored claim"
                 proof["original_seed_claims_exact_verified"] = True
                 proof["additional_source_written_by_real_native_turn"] = True
+            elif args.author_current_source:
+                from evaluation.native_current_snapshot import current_successor
+
+                (root / "current-writer-records.json").write_text(
+                    json.dumps(seed_records, ensure_ascii=False, indent=2, default=str) + "\n"
+                )
+                current_successor(original_records, seed_records)
+                proof["current_source_written_by_real_native_turn"] = True
             else:
                 if args.reuse_verified_seed:
                     assert seed_records == seed_proof["seed_records"]
@@ -751,7 +766,7 @@ async def run(args):
                 await connection.close()
             await asyncio.to_thread(db.update_config, {"useKnowledgeBase": True})
             invalidate_config_cache()
-            if not args.reuse_verified_seed or resume_provider_block or args.author_additional_source or args.advance_history:
+            if not args.reuse_verified_seed or resume_provider_block or args.author_additional_source or args.author_current_source or args.advance_history:
                 backup = root / "before-question.dump"
                 await asyncio.to_thread(
                     subprocess.run,
@@ -788,6 +803,24 @@ async def run(args):
             (root / "before-question.json").write_text(
                 json.dumps(proof, ensure_ascii=False, indent=2, default=str) + chr(10)
             )
+            if args.author_only:
+                proof.update(
+                    author_only=True,
+                    http_status=proof["additional_source_status"],
+                    response=proof["additional_source_response"],
+                    seed_records=original_records,
+                    user_fact_records_after=seed_records,
+                    before_question_backup=seed_proof["before_question_backup"],
+                    durable_seed_sources=seed_proof["durable_seed_sources"],
+                    writer_admission=admission,
+                    scheduler_final=asdict(scheduler.status),
+                    cloud_calls=len(calls),
+                    primary_calls=sum(g["observed_primary_calls"] for g in proof["generation"]),
+                )
+                assert len(proof["generation"]) == 1 and proof["primary_calls"] == 1
+                (root / "result.json").write_text(json.dumps(proof, ensure_ascii=False, indent=2, default=str) + "\n")
+                print(json.dumps(dict(author_only_completed=True, actual_cloud_calls=len(calls), native_http200=1)))
+                return
             response = await client.post(
                 "/api/generate",
                 json={
@@ -830,7 +863,7 @@ async def run(args):
                 expected_api_turns = (
                     (1 + len(fixture["bridges"]) - len(seed_proof["successful_bridge_turns"]))
                     if resume_provider_block
-                    else ((2 if args.author_additional_source else 1) if args.reuse_verified_seed else 11)
+                    else ((2 if args.author_additional_source or args.author_current_source else 1) if args.reuse_verified_seed else 11)
                 )
                 if args.advance_history:
                     expected_api_turns += len(fixture["history_advancement_tasks"]) - proof["history_advancement_turns_inherited"]
@@ -868,6 +901,8 @@ if __name__ == "__main__":
     parser.add_argument("--expect-primary-blocked", action="store_true")
     parser.add_argument("--reuse-verified-seed", action="store_true")
     parser.add_argument("--author-additional-source", action="store_true")
+    parser.add_argument("--author-current-source", action="store_true")
+    parser.add_argument("--author-only", action="store_true")
     parser.add_argument("--advance-history", action="store_true")
     parser.add_argument("--compare-original-guard", action="store_true")
     parser.add_argument("--resume-provider-block", action="store_true")
