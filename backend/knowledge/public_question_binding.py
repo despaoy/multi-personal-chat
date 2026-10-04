@@ -12,6 +12,15 @@ class QuestionBindingCapacityError(ValueError):
     """Complete question data cannot fit the resolver profile."""
 
 
+class QuestionBindingReviewError(ValueError):
+    """An actual resolver exchange failed; it grants no question binding."""
+
+    def __init__(self, reason, messages, raw):
+        super().__init__(f"Question binding review unavailable: {reason}")
+        self.reason = reason
+        self.diagnostic = dict(stage="object", input=messages, raw=raw if isinstance(raw, str) else None)
+
+
 def question_scope_input(dependencies, query, public_obligations=()):
     if dependencies is None or "".join(dependencies.segments) != query:
         raise ValueError("Question binding changed the original query")
@@ -66,11 +75,48 @@ async def resolve_question_binding(dependencies, query, *, window_tokens, public
         from knowledge.public_task_evidence import _review
 
         reviewer = _review
-    raw = await asyncio.wait_for(reviewer(messages), timeout=30)
-    scopes = parse_object_scopes(raw, query, [task["id"] for task in payload["public_tasks"]])
-    binding = dict(input=payload, input_sha256=_digest(payload), raw=raw, scopes=scopes)
-    validate_question_binding(binding, payload)
-    return binding
+    raw = None
+    try:
+        raw = await asyncio.wait_for(reviewer(messages), timeout=30)
+        scopes = parse_object_scopes(raw, query, [task["id"] for task in payload["public_tasks"]])
+        binding = dict(input=payload, input_sha256=_digest(payload), raw=raw, scopes=scopes)
+        validate_question_binding(binding, payload)
+        return binding
+    except asyncio.TimeoutError as exc:
+        raise QuestionBindingReviewError("timeout", messages, raw) from exc
+    except (ValueError, TypeError, KeyError, RecursionError) as exc:
+        raise QuestionBindingReviewError("invalid_or_incomplete_review", messages, raw) from exc
+    except Exception as exc:
+        raise QuestionBindingReviewError("provider_error", messages, raw) from exc
+
+
+def failed_question_binding_review(error, dependencies, query, public_obligations=()):
+    """Carry unavailable obligations and diagnostics, never resolver assertions."""
+    payload = question_scope_input(dependencies, query, public_obligations)
+    expected = [
+        dict(role="system", content=RESOLVE_INSTRUCTION),
+        dict(role="user", content=json.dumps(payload, ensure_ascii=False)),
+    ]
+    if (
+        not isinstance(error, QuestionBindingReviewError)
+        or not isinstance(error.diagnostic, dict)
+        or set(error.diagnostic) != {"stage", "input", "raw"}
+        or error.diagnostic["stage"] != "object"
+        or error.diagnostic["input"] != expected
+        or (error.diagnostic["raw"] is not None and not isinstance(error.diagnostic["raw"], str))
+    ):
+        raise ValueError("Failed question binding is not bound to the complete original input")
+    return dict(
+        query=query,
+        tasks=list(public_obligations) if public_obligations else [
+            dict(index=task["id"], query=task["text"]) for task in payload["public_tasks"]
+        ],
+        task_granularity="literal_partition" if public_obligations else "segment_unverified",
+        receipt_schema_version=2,
+        public_segment_indices=list(dict(dependencies.groups)["public_knowledge"]),
+        decisions=[], review_status="unavailable", reason=f"question_binding_{error.reason}",
+        failure_diagnostic=error.diagnostic,
+    )
 
 
 def all_bound_objects_outside_character_domain(binding, config):

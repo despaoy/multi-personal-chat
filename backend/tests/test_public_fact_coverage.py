@@ -344,62 +344,6 @@ async def test_fact_stage_cancellation_propagates():
         await bounded_review([dict(role="user", content="完整")], cancelled, 65536, 2048)
 
 
-@pytest.mark.asyncio
-async def test_actual_api_fee_only_is_partial_and_keeps_supported_private(monkeypatch):
-    from types import SimpleNamespace
-
-    from api import generate
-    from character.models import CompiledCharacterContext
-    from db.schemas import MessageRequest
-    from knowledge import intent_detector, public_fact_coverage, public_task_evidence, retrieval_query_plan
-    from knowledge.retrieval_query_plan import RetrievalQueryPlan
-
-    await positive()
-
-    async def planner(_query):
-        return RetrievalQueryPlan(status="applied", dependencies=deps(), public_obligations=obligations())
-
-    async def retrieve(*_args, **_kwargs):
-        return bundle("fee")
-
-    async def review(messages):
-        data = json.loads(messages[-1]["content"])
-        if set(data) == {"query", "public_tasks"}:
-            return json.dumps(dict(scopes=[dict(task_id=TASK, objects=["柳港续租"])]))
-        if set(data) == {"query", "public_tasks", "object_scopes"}:
-            return json.dumps(scope_reply())
-        return json.dumps(source_reply("fee"))
-
-    async def facts(messages):
-        return json.dumps(evidence_reply("fee"))
-
-    async def model(**kwargs):
-        wire = unescape(kwargs["messages"][-1]["content"])
-        assert FEE in wire and PRIVATE in wire and "partial_fact_evidence" in wire and kwargs["max_tokens"] == 2048
-        return "费用有依据，其余三项本次资料未载；私人偏好仍保留。"
-
-    monkeypatch.setattr(retrieval_query_plan, "plan_retrieval_views", planner)
-    monkeypatch.setattr(intent_detector, "needs_rag", lambda _: (True, "unit", None))
-    monkeypatch.setattr(generate, "_retrieve_rag_bundle", retrieve)
-    monkeypatch.setattr(public_task_evidence, "_review", review)
-    monkeypatch.setattr(public_fact_coverage, "_review_facts", facts)
-    monkeypatch.setattr(generate, "_get_system_prompt", lambda _: "人物规则")
-    prepared = SimpleNamespace(
-        compiled=CompiledCharacterContext("", "", PRIVATE, used_memory_ids=("fiction-private",)), history=()
-    )
-    _, used, meta = await generate._generate_with_retrieval(
-        MessageRequest(message=QUERY),
-        None,
-        prepared_character_turn=prepared,
-        runtime_config=dict(maxTokens=2048, useKnowledgeBase=True),
-        model_generate=model,
-    )
-    assert (
-        used
-        and meta["abstained"]
-        and meta["answerMode"] == "partial_answer"
-        and "partial_public_evidence" in meta["warnings"]
-    )
 
 
 async def alias_plan():

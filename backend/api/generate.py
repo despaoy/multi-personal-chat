@@ -1554,7 +1554,19 @@ async def _generate_with_retrieval(
                 errorType=type(e).__name__,
             )
             logger.warning("RAG retrieval failed: %s", e)
-            retrieval = RetrievalResult(status="character_abstention", reason="retrieval_unavailable")
+            from knowledge.public_question_binding import QuestionBindingReviewError, failed_question_binding_review
+
+            if isinstance(e, QuestionBindingReviewError):
+                retrieval = RetrievalResult(
+                    status="character_abstention", reason="question_binding_unavailable",
+                    public_task_review=failed_question_binding_review(
+                        e, query_plan.dependencies, rag_message, query_plan.public_obligations,
+                    ),
+                    public_task_query=rag_message,
+                    public_dependency_indices=tuple(dict(query_plan.dependencies.groups)["public_knowledge"]),
+                )
+            else:
+                retrieval = RetrievalResult(status="character_abstention", reason="retrieval_unavailable")
             rag_meta = {
                 "citations": [],
                 "confidence": None,
@@ -1635,8 +1647,13 @@ async def _generate_with_retrieval(
         from html import unescape
 
         reference = getattr(context, "reference_context", "")
-        private_visible = bool(reference and getattr(context, "used_memory_ids", ())
-                               and reference in unescape(generation.plan.messages[-1]["content"]))
+        visible_message = unescape(generation.plan.messages[-1]["content"])
+        speech = getattr(context, "episodic_reference_context", "")
+        private_visible = bool(reference and getattr(context, "used_memory_ids", ()) and reference in visible_message)
+        private_visible = private_visible or bool(
+            speech and getattr(context, "memory_source_status", "not_checked") == "available"
+            and speech in visible_message
+        )
         if (query_plan.dependencies is not None and dict(query_plan.dependencies.groups)["private_memory"]
                 and private_visible and generation.model_invoked and not generation.guard_fallback
                 and not rag_meta.get("generationError")):
