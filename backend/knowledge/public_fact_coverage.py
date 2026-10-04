@@ -88,7 +88,7 @@ def validate_fact_scope(payload, scopes):
     if receipt["review_status"] == "unavailable":
         if (
             receipt["scope"] is not None
-            or receipt["raw"] is not None
+            or (receipt["raw"] is not None and not isinstance(receipt["raw"], str))
             or not isinstance(receipt["reason"], str)
             or not receipt["reason"]
         ):
@@ -209,7 +209,7 @@ async def resolve_fact_scope(payload, scopes, reviewer, window_tokens):
             reason = "fact_scope_capacity_exceeded"
         except (ValueError, TypeError, KeyError, RecursionError):
             reason = "invalid_or_incomplete_fact_scope"
-    return dict(review_status="unavailable", reason=reason, raw=None, scope=None)
+    return dict(review_status="unavailable", reason=reason, raw=raw if isinstance(raw, str) else None, scope=None)
 
 
 async def review_fact_evidence(payload, scopes, scoped, decisions, reviewer, window_tokens):
@@ -239,7 +239,10 @@ async def review_fact_evidence(payload, scopes, scoped, decisions, reviewer, win
             )
         except (ValueError, TypeError, KeyError, RecursionError):
             reason = "invalid_or_incomplete_fact_evidence"
-    return dict(review_status="unavailable", reason=reason, raw=None, assessments=None, input_sha256=digest)
+    return dict(
+        review_status="unavailable", reason=reason, raw=raw if isinstance(raw, str) else None,
+        assessments=None, input_sha256=digest,
+    )
 
 
 def settle_fact_coverage(retrieval, payload, scopes, scoped, decisions, receipt):
@@ -257,7 +260,7 @@ def settle_fact_coverage(retrieval, payload, scopes, scoped, decisions, receipt)
         raise ValueError("Fact coverage discarded complete original review inputs")
     if receipt["review_status"] == "unavailable":
         if (
-            receipt["raw"] is not None
+            (receipt["raw"] is not None and not isinstance(receipt["raw"], str))
             or receipt["assessments"] is not None
             or not isinstance(receipt["reason"], str)
             or not receipt["reason"]

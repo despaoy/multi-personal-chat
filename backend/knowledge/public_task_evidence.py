@@ -222,7 +222,12 @@ async def review_public_candidates(bundle, dependencies, query, *, window_tokens
                 if fact_enabled:
                     from knowledge.public_fact_coverage import resolve_fact_scope
 
-                    payload["fact_scope_review"] = await resolve_fact_scope(payload, scopes, fact_scope_reviewer or _review, window_tokens)
+                    scope_review = await resolve_fact_scope(payload, scopes, fact_scope_reviewer or _review, window_tokens)
+                    if scope_review["review_status"] == "unavailable" and scope_review["raw"] is not None:
+                        # Keep the received failure internally, not in later reviewer input.
+                        receipt["fact_scope_failure_raw"] = scope_review["raw"]
+                        scope_review = {**scope_review, "raw": None}
+                    payload["fact_scope_review"] = scope_review
                 from knowledge.public_identity_dependencies import (
                     IDENTITY_INSTRUCTION,
                     identity_needed,
