@@ -1,0 +1,39 @@
+{
+  "actual_calls": 6,
+  "http200": 6,
+  "actual_final_main_calls": 1,
+  "auxiliary_calls": 5,
+  "native_http200": 0,
+  "native_http500": 0,
+  "new_unit_nodes": 0,
+  "estimated_cost_cny": "0.00503188",
+  "estimate_not_invoice_or_current_official_quote": true,
+  "probe_integrity": {
+    "passed": 20,
+    "total": 20
+  },
+  "findings": {
+    "full_positive_passed": true,
+    "alias_full_rules_dropped": true,
+    "alias_only_mapping_could_be_marked_admitted": true,
+    "negative_alias_rule_not_borrowed": true,
+    "one_fact_task_still_admitted": true,
+    "alias_main_fields_unknown": 4,
+    "alias_main_full_content_correct": false,
+    "all_query_and_sources_complete": true,
+    "same_actual_question_scope_reused": true,
+    "production_planner_or_native_pg_not_exercised": true
+  },
+  "alias_bridge_chain_defect_reproduced": true,
+  "alias_wrong_unknown_answer_preserved": true,
+  "negative_control_correct_in_current_case": true,
+  "aspect_level_coverage_open": true,
+  "raw_actuals_server_only": true,
+  "production_code_changed": false,
+  "production_restarted": false,
+  "all_jobs_terminal": true,
+  "full_suite_repeated": false,
+  "passed_old_main_repeated": false,
+  "whole_goal_complete": false,
+  "software_baseline_acceptance_not_goal_completion": true
+}
