@@ -868,6 +868,11 @@ class CharacterMemoryService:
 
         # An explicit caller override keeps its existing single-window contract.
         tasks = personal_time_tasks(query) if include_historical is None else ()
+        from character.preference_time_views import preference_time_tasks
+
+        preference_tasks = preference_time_tasks(query) if include_historical is None else ()
+        if not tasks:
+            tasks = preference_tasks
         task_windows = tuple((task, _historical_query_window(task.query, now)) for task in tasks)
         historical_requested = historical_requested or any(window is not None for _, window in task_windows)
 
@@ -884,6 +889,7 @@ class CharacterMemoryService:
             return not any(window is None and temporal_eligible(row, window) for window in windows)
 
         trace = diagnostics if diagnostics is not None else {}
+        trace['preference_time_view_count'] = len(preference_tasks)
         from character.memory_mentions import mention_query, review_mentions
 
         mentions_requested = mention_query(query) is not None

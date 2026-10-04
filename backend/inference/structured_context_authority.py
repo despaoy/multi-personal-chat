@@ -1,8 +1,9 @@
 """Refresh selected stored claim inputs before every generation send."""
 
 from dataclasses import replace
+from datetime import datetime, timezone
 
-from character.context_builder import compile_reference_context
+from character.context_builder import _memory_is_injectable, compile_reference_context
 from character.memory_read_authority import record_version, source_version
 
 
@@ -38,6 +39,10 @@ async def revalidate_private_memories(request, repository, character_id, scope, 
             unavailable = True
         if not valid:
             removed.add(packet.memory_id)
+    # Use the already validated effective view, not guessed raw storage dates.
+    # Take the clock after all asynchronous reads, immediately before rebuilding.
+    now = datetime.now(timezone.utc)
+    removed.update(packet.memory_id for packet in context.memory_packets if not _memory_is_injectable(packet, now))
     if not removed:
         return request
     remaining = tuple(packet for packet in context.memory_packets if packet.memory_id not in removed)
