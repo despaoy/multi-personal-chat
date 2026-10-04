@@ -164,6 +164,10 @@ class GenerationRequest:
     # expansion and latency in paired real-model replays. Keep full queries by
     # default until those tradeoffs pass broader quality evaluation.
     independent_tasks_enabled: bool = False
+    # Trusted per-generation callback; not persisted in a completion snapshot.
+    private_context_revalidator: Callable[[GenerationRequest], Awaitable[GenerationRequest]] | None = field(
+        default=None, repr=False, compare=False,
+    )
 
 
 @dataclass(frozen=True)
@@ -570,6 +574,8 @@ async def generate_character_response(
 ) -> GenerationResult:
     """Build and execute one request with an injected model adapter."""
 
+    if request.private_context_revalidator is not None:
+        request = await request.private_context_revalidator(request)
     if request.reply_guard_mode not in {"lightweight", "strict"}:
         raise ValueError("unknown reply guard mode")
     from character.memory_operation import operation_receipt_context, render_operation_response, split_operation_request
@@ -703,6 +709,11 @@ async def generate_character_response(
             task_results=outcomes,
             response_citations=result.response_citations,
         )
+    if request.private_context_revalidator is not None:
+        refreshed = await request.private_context_revalidator(request)
+        if refreshed != request:
+            request = refreshed
+            plan = build_generation_request(request)
     messages = [dict(message) for message in plan.messages]
     reply = await generate(
         messages=messages,
@@ -739,6 +750,12 @@ async def generate_character_response(
                 GenerationResult(reply=fallback[1], plan=plan, guard_violations=violations, guard_fallback=fallback[0])
             )
 
+    if request.private_context_revalidator is not None:
+        refreshed = await request.private_context_revalidator(request)
+        if refreshed != request:
+            request = refreshed
+            plan = build_generation_request(request)
+    messages = [dict(message) for message in plan.messages]
     corrected_messages = apply_retry_instruction(messages, retry_instruction(blocking))
     # The trusted correction changes fixed input size. Reuse the same complete
     # turn pruning with the actual corrected system and unchanged current query

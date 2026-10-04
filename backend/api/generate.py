@@ -1592,6 +1592,8 @@ async def _generate_with_retrieval(
         rag_meta["warnings"] = [*(rag_meta.get("warnings") or []), "character_abstention_fallback"]
         return _RAG_ABSTENTION_REPLY
 
+    from inference.private_context_authority import make_private_context_revalidator
+
     generation = await generate_character_response(
         CharacterGenerationRequest(
             message=request.message,
@@ -1610,6 +1612,9 @@ async def _generate_with_retrieval(
             # 长期记忆只进用户消息的不可信参考区。
             character_context=(prepared_character_turn.compiled if prepared_character_turn else None),
             reply_guard=getattr(prepared_character_turn, "reply_guard", None),
+            private_context_revalidator=make_private_context_revalidator(
+                prepared_character_turn, message_db if message_db is not None else db,
+            ),
             lora_name=lora_name if lora_name != "default" else None,
             temperature=_temperature,
             max_tokens=_max_tokens,
@@ -1668,6 +1673,7 @@ async def _generate_with_model_manager_character(
     *,
     prepared_character_turn,
     model_manager,
+    message_db=None,
 ) -> tuple[str, float]:
     """回退（模型管理器）路径的角色上下文生成。
 
@@ -1679,6 +1685,8 @@ async def _generate_with_model_manager_character(
     session_history（系统提示词+历史）与最后一条用户消息。
     """
     _cfg = runtime_config or {}
+    from inference.private_context_authority import make_private_context_revalidator
+
     generation_request = CharacterGenerationRequest(
         message=request.message,
         history=(tuple(request.history or []) if (request.history or []) else prepared_character_turn.history),
@@ -1686,6 +1694,9 @@ async def _generate_with_model_manager_character(
         interlocutor=request.senderName or request.userName or "普通用户",
         character_context=prepared_character_turn.compiled,
         reply_guard=getattr(prepared_character_turn, "reply_guard", None),
+        private_context_revalidator=make_private_context_revalidator(
+            prepared_character_turn, message_db if message_db is not None else db,
+        ),
         lora_name=lora_name if lora_name != "default" else None,
         temperature=float(_cfg.get("temperature", os.getenv("VLLM_TEMPERATURE", "0.7"))),
         max_tokens=int(_cfg.get("maxTokens", os.getenv("VLLM_MAX_TOKENS", "2048"))),
