@@ -75,7 +75,7 @@ MAX_HISTORY_MESSAGES = 4
 MAX_EXISTING_MEMORIES = 10
 _MAX_VALUE_CHARS = 48
 _MAX_EVIDENCE_CHARS = 120
-_MAX_QUALIFIERS = 6
+_MAX_QUALIFIERS = 8
 _MAX_QUALIFIER_CHARS = 48
 _MEMORY_WRITE_SEMANTIC_THRESHOLD = max(0.0, min(1.0, float(os.getenv("MEMORY_WRITE_SEMANTIC_THRESHOLD", "0.35"))))
 _MEMORY_WRITE_RRF_K = 60
@@ -316,6 +316,15 @@ def _truncate(text: str, limit: int) -> str:
     return cleaned if len(cleaned) <= limit else cleaned[: limit - 1].rstrip() + "…"
 
 
+def _unique_json_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("记忆 LLM JSON 包含重复字段")
+        result[key] = value
+    return result
+
+
 def _extract_json(text: str) -> dict[str, Any]:
     cleaned = (text or "").strip()
     if cleaned.startswith("```"):
@@ -325,7 +334,7 @@ def _extract_json(text: str) -> dict[str, Any]:
     if not starts:
         raise ValueError("记忆 LLM 未返回 JSON 对象或数组")
     start = min(starts)
-    value, _end = json.JSONDecoder().raw_decode(cleaned[start:])
+    value, _end = json.JSONDecoder(object_pairs_hook=_unique_json_object).raw_decode(cleaned[start:])
     if isinstance(value, list):
         # Normalize only the container. Every candidate still goes through
         # the same evidence, ownership, target and lifecycle validation.
@@ -640,22 +649,32 @@ def _normalize_attributed_to(value: Any) -> str:
     return "user" if normalized in {"user", "self", "用户", "本人"} else ""
 
 
-def _sanitize_qualifiers(raw: Any, *, evidence: str) -> tuple[tuple[str, str], ...] | None:
+def _sanitize_qualifiers(
+    raw: Any, *, evidence: str, pending: bool = False
+) -> tuple[tuple[str, str], ...] | None:
+    """Validate the whole payload before persistence; never silently drop a field."""
     if raw in (None, "", {}, []):
         return ()
-    items: list[tuple[str, Any]]
     if isinstance(raw, dict):
         items = list(raw.items())
     elif isinstance(raw, list):
+        # Legacy single-context arrays remain readable. Multiple contexts are
+        # ambiguous: joining would invent a relation, dict() would lose one.
         items = [("context", value) for value in raw]
     else:
         return None
+    if len(items) > _MAX_QUALIFIERS:
+        return None
     result: list[tuple[str, str]] = []
+    seen: set[str] = set()
     normalized_evidence = _normalize(evidence)
-    for key, value in items[:_MAX_QUALIFIERS]:
-        normalized_key = str(key or "").strip().lower()
-        if normalized_key not in _ALLOWED_QUALIFIER_KEYS:
+    for key, value in items:
+        if not isinstance(key, str):
             return None
+        normalized_key = key.strip().lower()
+        if normalized_key not in _ALLOWED_QUALIFIER_KEYS or normalized_key in seen:
+            return None
+        seen.add(normalized_key)
         if isinstance(value, bool):
             normalized_value = "true" if value else "false"
         elif isinstance(value, (str, int, float)):
@@ -664,9 +683,10 @@ def _sanitize_qualifiers(raw: Any, *, evidence: str) -> tuple[tuple[str, str], .
             return None
         if not normalized_value or len(normalized_value) > _MAX_QUALIFIER_CHARS:
             return None
-        # 自然语言限定条件必须能在当前证据中找到；结构化 certainty 布尔值
-        # 由 operation=PENDING 已表达，不要求逐字出现。
-        if normalized_value not in {"true", "false"} and _normalize(normalized_value) not in normalized_evidence:
+        # Only an explicitly pending lifecycle independently supports an
+        # unconfirmed certainty flag. It cannot certify a condition as true.
+        structural_uncertainty = pending and normalized_key == "certainty" and normalized_value == "false"
+        if not structural_uncertainty and _normalize(normalized_value) not in normalized_evidence:
             return None
         result.append((normalized_key, normalized_value))
     return tuple(result)
@@ -1239,7 +1259,9 @@ def _candidate_to_proposal(
     # admission quote. A literal later condition is therefore part of their
     # actual evidence. Semantic facts retain the stricter quote-only gate.
     qualifier_evidence = source_message if event_observation or generic_source_observation else evidence
-    qualifiers = _sanitize_qualifiers(raw_qualifiers, evidence=qualifier_evidence)
+    qualifiers = _sanitize_qualifiers(
+        raw_qualifiers, evidence=qualifier_evidence, pending=semantic_operation == "PENDING"
+    )
     if qualifiers is None:
         return None
     raw_valid_from = (raw.get("valid_from") or raw.get("valid_at")
@@ -1479,6 +1501,9 @@ def build_memory_llm_messages(
             "max_value_chars": _MAX_VALUE_CHARS,
             "max_evidence_chars": _MAX_EVIDENCE_CHARS,
             "qualifier_keys": sorted(_ALLOWED_QUALIFIER_KEYS),
+            "max_qualifiers": _MAX_QUALIFIERS,
+            "qualifier_keys_unique": True,
+            "qualifier_truncation_allowed": False,
             "max_qualifier_chars": _MAX_QUALIFIER_CHARS,
         },
         # Relative expressions belong to the source message, not queue drain.
