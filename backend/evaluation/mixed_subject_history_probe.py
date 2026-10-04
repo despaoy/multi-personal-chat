@@ -339,14 +339,9 @@ async def run(args):
         (root / ("cost-before-send-" + str(len(calls)) + ".json")).write_text(
             json.dumps(admission_budget, indent=2) + "\n"
         )
-        try:
-            response = await send_with_balance_stop(client, request, original_send, provider_access_state, **kwargs)
-        finally:
-            (root / "provider-access-state.json").write_text(json.dumps(provider_access_state, indent=2) + "\n")
-        await response.aread()
-        calls.append(dict(request=payload, http_status=response.status_code, response=response.json(), budget=budget))
-        (root / "cloud-calls.json").write_text(json.dumps(calls, ensure_ascii=False, indent=2) + "\n")
-        return response
+        from evaluation.cloud_transport_ledger import record_cloud_send
+
+        return await record_cloud_send(root, calls, payload, budget, client, request, original_send, provider_access_state, send_with_balance_stop, **kwargs)
 
     httpx.AsyncClient.send = observed_send
     from character import memory_llm as ml

@@ -23,6 +23,14 @@ def admitted_request_budget(calls, *, model, input_tokens, output_tokens, max_ca
     rates = _PEAK_RMB_PER_MILLION[model]
     spend = Decimal(0)
     for call in calls:
+        if call["http_status"] is None and call.get("request_started"):
+            budget = call.get("budget", {})
+            pending_input, pending_output = budget.get("input_bound"), budget.get("output_reserved")
+            if type(pending_input) is not int or pending_input < 0 or type(pending_output) is not int or pending_output < 0:
+                raise ValueError("Unknown provider usage lacks a complete request reservation")
+            _, miss, out = _PEAK_RMB_PER_MILLION[call["request"]["model"]]
+            spend += (pending_input * miss + pending_output * out) / Decimal(1_000_000)
+            continue
         if call["http_status"] != 200:
             continue
         usage = call["response"]["usage"]
@@ -36,7 +44,7 @@ def admitted_request_budget(calls, *, model, input_tokens, output_tokens, max_ca
     if max_cost_cny is not None and spend + reserved > Decimal(str(max_cost_cny)):
         raise EvaluationBudgetExceeded("Estimated RMB ceiling reached; preserve this run without replay")
     return {
-        "price_policy": "official peak RMB rates; current request fully uncached, full output cap reserved",
+        "price_policy": "evaluation peak reservation rates, not invoice/current quote; uncached input and full output reserved",
         "prior_calls": len(calls),
         "prior_spend_peak_upper_bound_cny": str(spend),
         "next_request_peak_reservation_cny": str(reserved),
