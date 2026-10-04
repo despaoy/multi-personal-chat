@@ -1218,6 +1218,7 @@ async def generate_reply(
 
 async def _retrieve_rag_bundle(
     query: str, top_k: int, filters: dict[str, Any] | None, *, search_views: tuple[str, ...] = (),
+    question_binding: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Retrieve curated character knowledge, then use the generic KB fallback."""
 
@@ -1233,9 +1234,15 @@ async def _retrieve_rag_bundle(
 
             character_rag = get_multiscale_rag_service()
             matched = QueryAnalyzer([character_rag.config]).analyze(query).matched_domains
+            if question_binding is not None:
+                from knowledge.public_question_binding import all_bound_objects_outside_character_domain
+
+                if all_bound_objects_outside_character_domain(question_binding, character_rag.config):
+                    matched = []
+                    character_rag = None
             # retrieve_with_citations 内部完成惰性加载和域门控。不能先用
             # is_available() 短路，否则冷启动首条请求无法触发索引加载。
-            bundle = character_rag.retrieve_with_citations(query, top_k=top_k, filters=filters)
+            bundle = character_rag.retrieve_with_citations(query, top_k=top_k, filters=filters) if character_rag is not None else None
             if bundle is not None:
                 return bundle
             if matched:
@@ -1260,7 +1267,12 @@ async def _retrieve_rag_bundle(
 
             bundle = get_corrective_rag().retrieve_with_correction(query, top_k=top_k, filters=filters)
         else:
-            view_options = {"additional_queries": search_views} if search_views else {}
+            views = search_views
+            if not views and question_binding is not None:
+                from knowledge.public_question_binding import bound_object_search_views
+
+                views = bound_object_search_views(question_binding, query)
+            view_options = {"additional_queries": views} if views else {}
             bundle = get_rag_helper().retrieve_with_citations(query, top_k=top_k, filters=filters, **view_options)
         expanded = expand_source_context(
             bundle, vector_db, expected_generation=generation,
@@ -1415,7 +1427,18 @@ async def _generate_with_retrieval(
                             filters = {"knowledge_base_id": kb_id}
                             logger.info("RAG路由: 消息→「%s」(id=%s)", kb_name, kb_id)
 
+                    from knowledge.public_question_binding import resolve_question_binding
+
+                    question_binding = None
+                    if query_plan.dependencies is not None and dict(query_plan.dependencies.groups)["public_knowledge"]:
+                        question_binding = await resolve_question_binding(
+                            query_plan.dependencies, rag_message,
+                            window_tokens=get_provider_context_budget().window_tokens,
+                            public_obligations=query_plan.public_obligations,
+                        )
                     view_options = {"search_views": query_plan.views} if query_plan.views else {}
+                    if question_binding is not None:
+                        view_options["question_binding"] = question_binding
                     bundle = await asyncio.wait_for(
                         _retrieve_rag_bundle(retrieval_query, 3, filters, **view_options),
                         timeout=_rag_retrieval_timeout(),
@@ -1426,6 +1449,7 @@ async def _generate_with_retrieval(
                         bundle, query_plan.dependencies, rag_message,
                         window_tokens=get_provider_context_budget().window_tokens,
                         public_obligations=query_plan.public_obligations,
+                        question_binding=question_binding,
                     )
                     bundle["query_plan_status"] = query_plan.status
                     rag_meta = {
