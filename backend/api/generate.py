@@ -1460,6 +1460,7 @@ async def _generate_with_retrieval(
                             task_query=retrieval_query,
                             public_task_review=bundle.get("public_task_review") or {},
                             public_task_query=rag_message if bundle.get("public_task_review") else "",
+                            public_dependency_indices=tuple(dict(query_plan.dependencies.groups)["public_knowledge"]) if query_plan.dependencies is not None else (),
                         )
 
                     # 角色知识检索结果自带按粒度组装的 context_text；
@@ -1488,6 +1489,7 @@ async def _generate_with_retrieval(
                             task_query=retrieval_query,
                             public_task_review=bundle.get("public_task_review") or {},
                             public_task_query=rag_message if bundle.get("public_task_review") else "",
+                            public_dependency_indices=tuple(dict(query_plan.dependencies.groups)["public_knowledge"]) if query_plan.dependencies is not None else (),
                             identity_task=bundle.get("identity_task") or {},
                             identity_subtask=bundle.get("identity_subtask") or {},
                             documents=tuple(bundle.get("results", [])),

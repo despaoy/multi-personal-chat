@@ -1,0 +1,41 @@
+{
+  "actual_calls": 6,
+  "http200": 6,
+  "actual_final_main_calls": 1,
+  "auxiliary_calls": 5,
+  "native_http200": 1,
+  "native_http500": 0,
+  "native_pre_main_fallbacks": 0,
+  "native_full_successful_answers": 0,
+  "native_content_correct_answers": 1,
+  "native_metadata_failures": 1,
+  "inherited_referent_scope_issue_unresolved": true,
+  "estimated_cost_cny": "0.06696500",
+  "estimate_not_invoice_or_current_official_quote": true,
+  "initial_unit_passes": 17,
+  "initial_new_unit_failures_preserved": 0,
+  "failed_unit_retest_passes": 0,
+  "unit_pass_executions": 17,
+  "unique_passing_unit_nodes": 17,
+  "new_unit_nodes": 15,
+  "directly_affected_existing_nodes": 2,
+  "final_native_integrity": {
+    "passed": 33,
+    "total": 37
+  },
+  "final_native_semantic": {
+    "passed": 20,
+    "total": 20
+  },
+  "short_query_chars": 632,
+  "atomicity_open_finding": false,
+  "per_business_coverage_not_proven": true,
+  "combined_business_segment_count": 0,
+  "all_jobs_terminal": true,
+  "production_code_changed": true,
+  "production_restarted": true,
+  "whole_goal_complete": false,
+  "deployment_ready": 200,
+  "static_new_diagnostics": 0,
+  "preexisting_unchanged_static_diagnostics": 0
+}

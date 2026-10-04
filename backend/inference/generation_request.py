@@ -121,6 +121,7 @@ class RetrievalResult:
     task_query: str = ""
     public_task_review: Mapping[str, Any] = field(default_factory=dict)
     public_task_query: str = ""
+    public_dependency_indices: tuple[int, ...] = ()
 
     @property
     def has_evidence(self) -> bool:

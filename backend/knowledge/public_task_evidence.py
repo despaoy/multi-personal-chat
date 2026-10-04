@@ -32,7 +32,7 @@ source_id和task_ids都必须使用本轮允许集合，不能照抄独立示例
 仅涉及材料未知、格式或不要跨来源的控制文字，也不能借相关词自动匹配不相关资料。
 可以所有来源都返回空task_ids。不编造任何来源、子任务、事实或数值。
 输出严格JSON，只有decisions数组，覆盖全部required_source_ids，各来源恰好一次：
-{"decisions":[{"source_id":"实际来源ID","task_ids":[实际公共句段编号]}]}。
+{"decisions":[{"source_id":"实际来源ID","task_ids":[允许的任务身份]}]}。
 每项只有source_id与task_ids。不得输出原因、改写内容、额外键或代码块。"""
 
 
@@ -151,6 +151,8 @@ async def review_public_candidates(bundle, dependencies, query, *, window_tokens
         query=query,
         tasks=list(public_obligations) if public_obligations else [dict(index=i, query=dependencies.segments[i]) for i in tasks],
         task_granularity="literal_partition" if public_obligations else "segment_unverified",
+        receipt_schema_version=2,
+        public_segment_indices=list(tasks),
         decisions=[],
         review_status="unavailable",
         reason="not_started",
@@ -226,10 +228,23 @@ def render_public_tasks(retrieval):
     from knowledge.turn_dependencies import query_segments
 
     segments = query_segments(query)
+    expected = getattr(retrieval, "public_dependency_indices", ())
+    if not isinstance(expected, tuple) or any(type(i) is not int or not 0 <= i < len(segments) for i in expected) or len(set(expected)) != len(expected):
+        raise ValueError("Invalid independent public dependency anchor")
+    declared = receipt.get("public_segment_indices")
+    if declared is None and receipt.get("receipt_schema_version") == 2:
+        raise ValueError("Public review lost its declared parent obligations")
+    if declared is None:
+        declared = [row.get("segment_index") for row in tasks] if ids and all(isinstance(i, str) for i in ids) else ids
+        declared = list(dict.fromkeys(declared))
+    if not isinstance(declared, list) or not declared or any(type(i) is not int or not 0 <= i < len(segments) for i in declared) or len(set(declared)) != len(declared):
+        raise ValueError("Invalid public parent obligation set")
+    if expected and set(declared) != set(expected):
+        raise ValueError("Public review discarded independently planned dependencies")
     if ids and all(isinstance(i, str) for i in ids):
         from knowledge.public_obligations import validate_public_obligations
 
-        validate_public_obligations(tasks, query)
+        validate_public_obligations(tasks, query, public_indices=declared)
     else:
         if (
             not ids
@@ -238,6 +253,8 @@ def render_public_tasks(retrieval):
             or any(row.get("query") != segments[row["index"]] for row in tasks)
         ):
             raise ValueError("Public task changed an original segment")
+        if set(ids) != set(declared):
+            raise ValueError("Public review lost a declared source dependency")
     if not isinstance(decisions, list) or any(not isinstance(row, dict) for row in decisions):
         raise ValueError("Invalid public decisions")
     source_ids = [row.get("source_id") for row in decisions]
@@ -266,5 +283,5 @@ def render_public_tasks(retrieval):
             if related & visible
             else "related_candidate_not_admitted"
         )
-        rows.append(dict(query=task["query"], task_id=task["index"], task_granularity="literal_partition" if isinstance(task["index"], str) else "segment_unverified", status=task_status, semantic_coverage="unverified"))
+        rows.append(dict(query=task["query"], task_id=task["index"], task_granularity="literal_partition" if isinstance(task["index"], str) else "segment_unverified", dependency_coverage="verified_expected_segments" if expected else "unverified", status=task_status, semantic_coverage="unverified"))
     return rows
