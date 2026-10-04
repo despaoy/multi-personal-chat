@@ -185,6 +185,16 @@ async def review_public_candidates(bundle, dependencies, query, *, window_tokens
         review_status="unavailable",
         reason="not_started",
     )
+    failure_diagnostic = None
+
+    async def received_review(messages, selected_reviewer, stage):
+        nonlocal failure_diagnostic
+        failure_diagnostic = dict(stage=stage, input=messages, raw=None)
+        raw = await asyncio.wait_for(selected_reviewer(messages), timeout=30)
+        if isinstance(raw, str):
+            failure_diagnostic["raw"] = raw
+        return raw
+
     try:
         if bundle.get("abstained") or not bundle.get("results"):
             receipt.update(review_status="no_candidates", reason="no_reliable_candidates")
@@ -215,8 +225,9 @@ async def review_public_candidates(bundle, dependencies, query, *, window_tokens
 
                     scopes = validate_question_binding(question_binding, dict(query=query, public_tasks=payload["public_tasks"]))
                 else:
-                    raw_scope = await asyncio.wait_for((scope_reviewer or _review)(scope_messages), timeout=30)
+                    raw_scope = await received_review(scope_messages, scope_reviewer or _review, "object")
                     scopes = parse_object_scopes(raw_scope, query, payload["public_task_ids"])
+                    failure_diagnostic = None
                 payload["object_scopes"] = scopes
                 fact_enabled = reviewer is None or fact_scope_reviewer is not None or fact_reviewer is not None
                 if fact_enabled:
@@ -239,9 +250,10 @@ async def review_public_candidates(bundle, dependencies, query, *, window_tokens
                     if sum(estimated_tokens(m["content"]) + 4 for m in identity_messages) + 768 + CONTEXT_SAFETY_MARGIN_TOKENS > window_tokens:
                         receipt["reason"] = "complete_identity_input_budget_exceeded"
                         return _filter_reviewed_bundle(bundle, receipt)
-                    raw_identity = await asyncio.wait_for((identity_reviewer or _review)(identity_messages), timeout=30)
+                    raw_identity = await received_review(identity_messages, identity_reviewer or _review, "identity")
                     identity_result = parse_identity_review(raw_identity, payload, scopes)
                     payload["identity_review"] = dict(raw=raw_identity, **identity_result)
+                    failure_diagnostic = None
                 if reviewer is None or span_references is True:
                     from knowledge.public_source_spans import SPAN_INSTRUCTION, build_source_spans
 
@@ -260,7 +272,7 @@ async def review_public_candidates(bundle, dependencies, query, *, window_tokens
             ):
                 receipt["reason"] = "complete_input_budget_exceeded"
                 return _filter_reviewed_bundle(bundle, receipt)
-            raw = await asyncio.wait_for((reviewer or _review)(messages), timeout=30)
+            raw = await received_review(messages, reviewer or _review, "source")
             if scopes is not None:
                 from knowledge.public_object_scope import parse_scoped_decisions
 
@@ -268,10 +280,12 @@ async def review_public_candidates(bundle, dependencies, query, *, window_tokens
                     from knowledge.public_source_spans import expand_span_decisions
 
                     expanded = expand_span_decisions(raw, payload, scopes)
-                    receipt["object_span_review"] = dict(raw=raw)
                 else:
                     expanded = raw
                 result = parse_scoped_decisions(expanded, payload, scopes)
+                if "source_span_catalog" in payload:
+                    receipt["object_span_review"] = dict(raw=raw)
+                failure_diagnostic = None
                 receipt.update(decisions=result["decisions"], scoped_decisions=result["scoped_decisions"], object_unverified_links=result["unverified_links"], review_status="reviewed", reason="")
                 if "fact_scope_review" in payload:
                     from knowledge.public_fact_coverage import _review_facts, review_fact_evidence
@@ -279,6 +293,7 @@ async def review_public_candidates(bundle, dependencies, query, *, window_tokens
                     receipt["fact_review"] = await review_fact_evidence(payload, scopes, result["scoped_decisions"], result["decisions"], fact_reviewer or _review_facts, window_tokens)
             else:
                 receipt.update(decisions=list(parse_public_decisions(raw, payload["required_source_ids"], payload["public_task_ids"])), review_status="reviewed", reason="")
+                failure_diagnostic = None
     except SourceSpanCapacityError:
         receipt["reason"] = "source_span_capacity_exceeded"
     except ObjectScopeCapacityError:
@@ -291,6 +306,9 @@ async def review_public_candidates(bundle, dependencies, query, *, window_tokens
         receipt["reason"] = "invalid_or_incomplete_review"
     except Exception:
         receipt["reason"] = "provider_error"
+    if receipt["review_status"] == "unavailable" and failure_diagnostic is not None:
+        # Diagnostics retain the actual failed exchange outside all proof inputs.
+        receipt["failure_diagnostic"] = failure_diagnostic
     return _filter_reviewed_bundle(bundle, receipt)
 
 
