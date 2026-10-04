@@ -260,6 +260,8 @@ async def test_actual_api_production_identity_stage_keeps_registry_rules_and_pri
         data = json.loads(messages[-1]["content"])
         if set(data) == {"query", "public_tasks"}:
             return json.dumps(dict(scopes=[dict(task_id=TASK, objects=["榆湾续办"])]))
+        if set(data) == {"query", "public_tasks", "object_scopes"}:
+            return json.dumps(dict(tasks=[dict(task_id=TASK, aspects=[dict(object_id="query-object:0", query_quote=field) for field in ["费用", "受理日", "原件", "例外"]])]))
         if "identity_review" not in data:
             return json.dumps(identity())
         return json.dumps(
@@ -277,6 +279,9 @@ async def test_actual_api_production_identity_stage_keeps_registry_rules_and_pri
             )
         )
 
+    async def facts(_messages):
+        return json.dumps(dict(assessments=[dict(aspect_id=f"fact-aspect:{i}", evidence=[dict(source_id="doc_2", source_quote=RULE, assertion="affirmative")]) for i in range(4)]))
+
     async def model(**kwargs):
         wire = unescape(kwargs["messages"][-1]["content"])
         assert all(text in wire for text in (BRIDGE, RULE, PRIVATE))
@@ -286,6 +291,9 @@ async def test_actual_api_production_identity_stage_keeps_registry_rules_and_pri
     monkeypatch.setattr(retrieval_query_plan, "plan_retrieval_views", planner)
     monkeypatch.setattr(intent_detector, "needs_rag", lambda _: (True, "unit", None))
     monkeypatch.setattr(generate, "_retrieve_rag_bundle", retrieve)
+    from knowledge import public_fact_coverage
+
+    monkeypatch.setattr(public_fact_coverage, "_review_facts", facts)
     monkeypatch.setattr(public_task_evidence, "_review", review)
     monkeypatch.setattr(generate, "_get_system_prompt", lambda _: "人物规则")
     prepared = SimpleNamespace(

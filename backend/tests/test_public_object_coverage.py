@@ -245,9 +245,14 @@ async def test_actual_api_marks_partial_multi_object_scope_without_erasing_priva
         payload = json.loads(messages[-1]["content"])
         if set(payload) == {"query", "public_tasks"}:
             return json.dumps(dict(scopes=[dict(task_id="public:0:0", objects=["青桥延期", "蓝岸续租"])]))
+        if set(payload) == {"query", "public_tasks", "object_scopes"}:
+            return json.dumps(dict(tasks=[dict(task_id="public:0:0", aspects=[dict(object_id=f"query-object:{i}", query_quote=field) for i in range(2) for field in ["费用", "完整末尾限定"]])]))
         if "identity_review" not in payload:
             return json.dumps(dict(sources=[dict(source_id=s["source_id"], purpose="rules") for s in payload["sources"]], relations=[]))
         return json.dumps(source_reply(missing=True))
+
+    async def facts(_messages):
+        return json.dumps(dict(assessments=[dict(aspect_id=f"fact-aspect:{i}", evidence=[dict(source_id="doc_1", source_quote=BODIES[1], assertion="affirmative")] if i < 2 else []) for i in range(4)]))
 
     async def model(**kwargs):
         wire = unescape(kwargs["messages"][-1]["content"])
@@ -257,6 +262,9 @@ async def test_actual_api_marks_partial_multi_object_scope_without_erasing_priva
     monkeypatch.setattr(retrieval_query_plan, "plan_retrieval_views", planner)
     monkeypatch.setattr(intent_detector, "needs_rag", lambda _: (True, "unit", None))
     monkeypatch.setattr(generate, "_retrieve_rag_bundle", retrieve)
+    from knowledge import public_fact_coverage
+
+    monkeypatch.setattr(public_fact_coverage, "_review_facts", facts)
     monkeypatch.setattr(public_task_evidence, "_review", review)
     monkeypatch.setattr(generate, "_get_system_prompt", lambda _: "人物规则")
     prepared = SimpleNamespace(
