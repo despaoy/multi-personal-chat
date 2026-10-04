@@ -134,6 +134,10 @@ def render_coverage(retrieval):
         for row in retrieval.source_coverage
     ]
     payload = {"packets": dict(retrieval.packet_coverage), "sources": public_rows}
+    if retrieval.public_domain_branches:
+        from knowledge.public_domains import render_domains
+
+        payload["public_domains"] = render_domains(retrieval)
     if retrieval.requested_sources:
         payload["requested_sources"] = _source_request_rows(retrieval.requested_sources)
     if retrieval.source_references:

@@ -119,6 +119,9 @@ def parse_scoped_decisions(raw, payload, scopes):
     from knowledge.public_task_evidence import parse_public_decisions
 
     validate_object_scopes(scopes, payload["query"], payload["public_task_ids"])
+    from knowledge.public_domains import validate_generic_sources
+
+    validate_generic_sources(payload)
     value = json.loads(raw, object_pairs_hook=_unique)
     if not isinstance(value, dict) or set(value) != {"decisions"} or not isinstance(value["decisions"], list):
         raise ValueError("Invalid scoped source review")

@@ -139,6 +139,14 @@ async def run(args):
     assert fixture["synthetic"] and all(parent["checks"].values())
     key = Path(args.api_key_file).read_text().strip()
     assert key
+    character_index = root / "no-character-index"
+    if getattr(args, "character_index_source", None):
+        from evaluation.character_index_snapshot import prepare_character_index_snapshot
+
+        character_index = prepare_character_index_snapshot(
+            args.character_index_source, root / "character-index",
+            repository_root=Path.cwd(), runtime_root=runtime,
+        )
     os.environ.update(
         ENVIRONMENT="production",
         JWT_SECRET=secrets.token_urlsafe(48),
@@ -170,7 +178,7 @@ async def run(args):
         OMP_NUM_THREADS="2",
         INTENT_MODEL_PATH=str(root / "no-intent-model"),
         VECTOR_DB_PATH=str(root / "vectors"),
-        CHARACTER_RAG_INDEX_ROOT=str(root / "no-character-index"),
+        CHARACTER_RAG_INDEX_ROOT=str(character_index),
         RAG_CITATIONS_ENABLED="false",
         CORRECTIVE_RAG_ENABLED="false",
         RERANKER_ENABLED="false",
@@ -381,6 +389,8 @@ async def run(args):
         "generation": [],
         "auth_statuses": [],
     }
+    if getattr(args, "character_index_source", None):
+        proof["character_index_snapshot"] = json.loads((root / "character-index-snapshot-private.json").read_text())
     original_guard_validation = None
     if args.compare_original_guard:
         import importlib.util
@@ -1029,5 +1039,6 @@ if __name__ == "__main__":
     parser.add_argument("--phase", required=True)
     parser.add_argument("--api-key-file", required=True)
     parser.add_argument("--variant", default="native-pg")
+    parser.add_argument("--character-index-source", help="Complete existing authorized curated index; copy without modifying originals")
     parser.add_argument("--answer-tokens", type=int, choices=[1024, 2048], default=2048)
     asyncio.run(run(parser.parse_args()))

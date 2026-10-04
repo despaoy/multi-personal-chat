@@ -149,6 +149,17 @@ async def review_public_candidates(bundle, dependencies, query, *, window_tokens
     """Keep whole matched sources; failures reject public candidates, never private ones."""
     if dependencies is None or not dict(dependencies.groups)["public_knowledge"]:
         return bundle
+    if bundle.get("independent_domains") is not None:
+        from knowledge.public_domains import assemble_domains, validate_domain_plan
+
+        container = bundle["independent_domains"]
+        plan = validate_domain_plan(container["plan"])
+        business = {**container["branches"]["generic_knowledge"]["bundle"], "generic_domain_plan": plan}
+        reviewed = await review_public_candidates(business, dependencies, query, window_tokens=window_tokens,
+            reviewer=reviewer, public_obligations=public_obligations, scope_reviewer=scope_reviewer,
+            identity_reviewer=identity_reviewer, fact_scope_reviewer=fact_scope_reviewer,
+            fact_reviewer=fact_reviewer, question_binding=question_binding, span_references=span_references)
+        return assemble_domains(container, reviewed)
     if bundle.get("retrieval_strategy") == "multi_scale_character":
         return bundle
     tasks = dict(dependencies.groups)["public_knowledge"]
@@ -167,6 +178,10 @@ async def review_public_candidates(bundle, dependencies, query, *, window_tokens
             receipt.update(review_status="no_candidates", reason="no_reliable_candidates")
         else:
             payload = review_payload(bundle, dependencies, query, public_obligations)
+            if bundle.get("generic_domain_plan") is not None:
+                from knowledge.public_domains import constrain_generic_sources
+
+                constrain_generic_sources(payload, bundle["generic_domain_plan"])
             instruction, scopes = INSTRUCTION, None
             # Injected legacy reviewers remain explicitly without object proof;
             # the production client always follows the source-blind stage.
@@ -371,8 +386,10 @@ def render_public_tasks(retrieval):
             if checked["decisions"] != decisions or checked["unverified_links"] != receipt.get("object_unverified_links"):
                 raise ValueError("Source task links bypassed object evidence")
             unverified_objects = {r["task_id"] for r in checked["unverified_links"]}
+            from knowledge.public_domains import validate_generic_sources
             from knowledge.public_object_coverage import settle_public_object_coverage
 
+            validate_generic_sources(payload)
             object_coverage = settle_public_object_coverage(retrieval, payload, scopes, checked["scoped_decisions"], checked["decisions"])
             from knowledge.public_fact_coverage import settle_fact_coverage
 
@@ -415,4 +432,20 @@ def render_public_tasks(retrieval):
             admitted_facts = sum(r["status"] == "fact_evidence_admitted" for r in fact_rows)
             task_status = "fact_review_unavailable" if fact_coverage["review_status"] != "reviewed" else "partial_fact_evidence" if fact_rows and 0 < admitted_facts < len(fact_rows) else "fact_evidence_unverified" if not fact_rows or not admitted_facts else task_status
         rows.append(dict(query=task["query"], task_id=task["index"], task_granularity="literal_partition" if isinstance(task["index"], str) else "segment_unverified", dependency_coverage="verified_expected_segments" if expected else "unverified", object_scope="source_object_evidence_verified" if object_rows and admitted_objects == len(object_rows) else "partial_source_object_evidence_verified" if admitted_objects else "unverified", status=task_status, semantic_coverage="unverified", object_coverage=object_rows, fact_scope="question_first_aspects_reviewed" if fact_coverage is not None and fact_coverage["review_status"] == "reviewed" else "unverified", fact_coverage=fact_rows))
+    if retrieval.public_domain_branches:
+        from knowledge.public_domains import validate_domain_plan
+
+        plan = validate_domain_plan(retrieval.public_domain_branches["plan"])
+        if plan["binding"]["input"] != dict(query=query, public_tasks=[dict(id=task["index"], text=task["query"]) for task in tasks]):
+            raise ValueError("Independent authority changed an original public obligation")
+        ownership = {task["task_id"]: task for task in plan["tasks"]}
+        generic_ids = {obj["object_id"] for obj in plan["objects"] if obj["authority"] == "generic_knowledge"}
+        for row in rows:
+            owned = ownership[row["task_id"]]
+            row["source_authority"] = "generic_knowledge"
+            row["applicable_object_ids"] = [identity for identity in owned["object_ids"] if identity in generic_ids]
+            if owned["authorities"] == ["curated_character"]:
+                row["status"] = "handled_by_independent_curated_domain"
+            for fact in row["fact_coverage"]:
+                fact["source_authority"] = "generic_knowledge"
     return rows

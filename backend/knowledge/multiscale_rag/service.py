@@ -173,10 +173,18 @@ class RoutedMultiScaleService:
         top_k: int = 5,
         raw_text: bool = False,
         knowledge_boundary: KnowledgeBoundary | None = None,
+        object_names: tuple[str, ...] | None = None,
     ) -> dict[str, Any]:
         if isinstance(top_k, bool) or not isinstance(top_k, int) or top_k < 1:
             raise ValueError("top_k must be a positive integer")
         analysis = analyze_explicit_domain(self.analyzer, self.config.domain_id, query)
+        if object_names is not None:
+            if not isinstance(object_names, tuple) or not object_names or any(not isinstance(name, str) or name not in query or self.config.canonical_entity(name) is None and name not in self.config.story_titles for name in object_names):
+                raise ValueError("Curated scope requires literal registered whole question objects")
+            incidental = set(analysis.entities) | set(analysis.story_hits)
+            analysis.entities = list(dict.fromkeys(self.config.canonical_entity(name) for name in object_names if self.config.canonical_entity(name) is not None))
+            analysis.story_hits = [name for name in object_names if name in self.config.story_titles]
+            analysis.expanded_keywords = list(dict.fromkeys([*analysis.entities, *analysis.story_hits, *(keyword for keyword in analysis.expanded_keywords if keyword not in incidental)]))
         broad = any(word in query for word in _BROAD_WORDS)
         route = frozenset({"story", "scene"}) if broad else choose_card_types(analysis, query)
         retriever = self.retrievers.get(route) or self.retrievers[CARD_TYPES]

@@ -1228,6 +1228,14 @@ async def _retrieve_rag_bundle(
         # An explicit named-document read owns its evidence targets. Incidental
         # character names must not replace those sources with curated lore.
         # Ordinary character questions retain the strict domain availability gate.
+        if question_binding is not None:
+            from knowledge.multiscale_rag.runtime import get_multiscale_rag_service
+            from knowledge.public_domains import domain_plan, retrieve_domains
+
+            character_rag = get_multiscale_rag_service()
+            plan = domain_plan(question_binding, character_rag.config)
+            if plan["mixed"]:
+                return retrieve_domains(plan, query, top_k, curated=character_rag.retrieve_with_citations, generic=retrieve_generic)
         if not filters and not requested_document_titles(query):
             from knowledge.multiscale_rag.runtime import get_multiscale_rag_service
             from knowledge.retrieval_core.query import QueryAnalyzer
@@ -1248,6 +1256,9 @@ async def _retrieve_rag_bundle(
             if matched:
                 raise RuntimeError("Requested character knowledge domain is unavailable")
 
+        return retrieve_generic()
+
+    def retrieve_generic() -> dict[str, Any]:
         from api import knowledge as knowledge_api
         from knowledge.rag_helper import get_rag_helper
         from knowledge.source_expansion import expand_source_context
@@ -1508,6 +1519,7 @@ async def _generate_with_retrieval(
                             reason="" if rag_context else "evidence_budget_exhausted",
                             evidence=rag_context,
                             evidence_packets=evidence_packets,
+                            public_domain_branches=bundle.get("public_domain_branches") or {},
                             source_coverage=tuple(bundle.get("source_coverage") or ()),
                             task_coverage=tuple(bundle.get("task_candidate_coverage") or ()),
                             task_query=retrieval_query,

@@ -120,6 +120,8 @@ def validate_identity_receipt(payload, scopes):
 
 def verified_object_proof(proof, source, objects, bindings):
     obj, quote = proof["object_id"], proof["source_quote"]
+    if "permitted_object_ids" in source and obj not in source["permitted_object_ids"]:
+        return False
     parts = [source.get("title"), source.get("original_body"), *[c["content"] for c in source["indexed_chunks"]]]
     if not any(isinstance(part, str) and quote in part for part in parts):
         return False

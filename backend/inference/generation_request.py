@@ -123,6 +123,7 @@ class RetrievalResult:
     task_coverage: tuple[Mapping[str, Any], ...] = ()
     task_query: str = ""
     public_task_review: Mapping[str, Any] = field(default_factory=dict)
+    public_domain_branches: Mapping[str, Any] = field(default_factory=dict)
     public_task_query: str = ""
     public_dependency_indices: tuple[int, ...] = ()
 
@@ -349,6 +350,10 @@ def _system_prompt(request: GenerationRequest) -> str:
         from inference.task_evidence_coverage import TASK_COVERAGE_POLICY
 
         prompt += "\n\n" + TASK_COVERAGE_POLICY
+    if request.apply_prompt_policy and request.retrieval.public_domain_branches:
+        from knowledge.public_domains import POLICY as DOMAIN_POLICY
+
+        prompt += "\n\n" + DOMAIN_POLICY
     if request.apply_prompt_policy and request.retrieval.public_task_review:
         from knowledge.public_task_evidence import POLICY
 
