@@ -381,6 +381,7 @@ class RAGHelper:
         filters: dict[str, Any] | None = None,
         use_cache: bool = True,
         additional_queries: tuple[str, ...] = (),
+        infer_filters: bool = True,
     ) -> list[dict[str, Any]]:
         """检索与查询最相关的知识库文档。
 
@@ -397,16 +398,12 @@ class RAGHelper:
         Returns:
             按相关性降序排列的文档列表，每项包含normalized_score等字段
         """
-        if (
-            not isinstance(additional_queries, tuple) or len(additional_queries) > 4
-            or any(
-                not isinstance(view, str) or not view.strip() or len(view) > 1024
-                or any(span not in query for span in view.split())
-                for view in additional_queries
-            )
-        ):
-            raise ValueError("Additional query views must be bounded literal input spans")
-        views = tuple(dict.fromkeys(view for view in additional_queries if view != query))
+        views = self._validated_task_views(query, additional_queries)
+        if views and self.use_vector_db:
+            return self._task_candidate_plan(
+                query, views, top_k=top_k, enable_rerank=enable_rerank,
+                filters=filters, use_cache=use_cache,
+            ).results
         if not self.use_vector_db:
             return []
 
@@ -416,7 +413,7 @@ class RAGHelper:
             # 先确定实际 filters（未显式传入时从查询中提取），再生成缓存键，
             # 确保缓存键包含所有真正影响检索结果的参数
             use_expansion = self.enable_multi_query and self.enable_query_expansion
-            if use_expansion and not filters:
+            if use_expansion and not filters and infer_filters:
                 filters = self.query_expander.extract_filters(query)
             search_filters = {k: v for k, v in (filters or {}).items() if k != "region"} or None
 
@@ -426,7 +423,7 @@ class RAGHelper:
                 f"{query}|{top_k or self.top_k}|rerank={enable_rerank}|"
                 f"expansion={use_expansion}|threshold={self.min_score_threshold}|"
                 f"recall_multiplier={self.recall_multiplier}|filters={serialized_filters}|"
-                f"generation={vector_generation}|views={json.dumps(views, ensure_ascii=False)}"
+                f"generation={vector_generation}|infer_filters={infer_filters}"
             )
             if use_cache:
                 cached = self._get_from_cache(cache_key)
@@ -438,9 +435,6 @@ class RAGHelper:
             all_results: dict[str, dict[str, Any]] = {}
 
             expanded_queries = self.query_expander.expand_query(query) if use_expansion else [query]
-            # All original expansion views remain. Extractive task views add
-            # recall votes, never filters, source permissions or new facts.
-            expanded_queries = list(dict.fromkeys([*expanded_queries, *views]))
             for q in expanded_queries:
                 recall_top_k = final_top_k * self.recall_multiplier
                 vector_db = get_vector_db()
@@ -520,6 +514,44 @@ class RAGHelper:
             return []
 
     @staticmethod
+    def _validated_task_views(query: str, additional_queries: tuple[str, ...]) -> tuple[str, ...]:
+        if (
+            not isinstance(additional_queries, tuple) or len(additional_queries) > 4
+            or any(
+                not isinstance(view, str) or not view.strip() or len(view) > 1024
+                or any(span not in query for span in view.split())
+                for view in additional_queries
+            )
+        ):
+            raise ValueError("Additional query views must be bounded literal input spans")
+        return tuple(dict.fromkeys(view for view in additional_queries if view != query))
+
+    def _task_candidate_plan(self, query, views, *, top_k, enable_rerank, filters, use_cache, threshold=0.3):
+        from knowledge.task_retrieval import collect_task_candidates
+
+        resolved_filters = copy.deepcopy(filters)
+        if self.enable_multi_query and self.enable_query_expansion and not resolved_filters:
+            resolved_filters = self.query_expander.extract_filters(query)
+
+        def snapshot():
+            index = get_vector_db()
+            return id(index), index.cache_generation
+
+        def retrieve(question, *, top_k, filters):
+            # Only the original question resolves implicit scope. A task view
+            # cannot infer a new category or change an explicit KB filter.
+            return self.retrieve_context(
+                question, top_k=top_k, enable_rerank=enable_rerank,
+                filters=filters, use_cache=use_cache, infer_filters=False,
+            )
+
+        return collect_task_candidates(
+            query, views, top_k=top_k or self.top_k, filters=resolved_filters,
+            retrieve=retrieve, confidence=self.compute_confidence,
+            stable_key=_stable_result_key, snapshot=snapshot, threshold=threshold,
+        )
+
+    @staticmethod
     def _absolute_score(result: dict[str, Any]) -> float:
         """Return a cross-query comparable score instead of per-result-list normalization."""
         value = result.get("score", result.get("fused_score", result.get("final_score", 0.0)))
@@ -576,8 +608,16 @@ class RAGHelper:
         Returns:
             {results, citations, confidence, abstained}
         """
-        view_options = {"additional_queries": additional_queries} if additional_queries else {}
-        results = self.retrieve_context(query, top_k=top_k, filters=filters, **view_options)
+        views = self._validated_task_views(query, additional_queries)
+        task_coverage = ()
+        if views and self.use_vector_db:
+            plan = self._task_candidate_plan(
+                query, views, top_k=top_k, enable_rerank=True,
+                filters=filters, use_cache=True, threshold=threshold,
+            )
+            results, task_coverage = plan.results, plan.coverage
+        else:
+            results = self.retrieve_context(query, top_k=top_k, filters=filters)
         confidence = self.compute_confidence(results)
         abstained = self.should_abstain(confidence, threshold)
         citations = self.build_citations(results) if not abstained else []
@@ -586,6 +626,7 @@ class RAGHelper:
             "citations": citations,
             "confidence": confidence,
             "abstained": abstained,
+            **({"task_candidate_coverage": task_coverage} if views else {}),
         }
 
     def format_context_results(self, results: list[dict[str, Any]]) -> str:
