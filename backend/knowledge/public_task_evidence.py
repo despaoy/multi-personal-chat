@@ -33,6 +33,10 @@ source_id和task_ids都必须使用本轮允许集合，不能照抄独立示例
 每项只有source_id与task_ids。不得输出原因、改写内容、额外键或代码块。"""
 
 
+class PublicReviewCapacityError(ValueError):
+    """Complete sources exceed reviewer capacity; this is not a bad model reply."""
+
+
 def _unique(pairs):
     value = {}
     for key, item in pairs:
@@ -94,7 +98,7 @@ def review_payload(bundle, dependencies, query):
             raise ValueError("Conflicting public source title")
         source["indexed_chunks"].append(dict(id=chunk, content=row["content"]))
     if not 0 < len(sources) <= 24:
-        raise ValueError("Public review source bound")
+        raise PublicReviewCapacityError("Public review source bound")
     from inference.evidence_coverage import settle_source_coverage
 
     originals = tuple(bundle.get("original_source_packets", ()))
@@ -156,19 +160,26 @@ async def review_public_candidates(bundle, dependencies, query, *, window_tokens
                 sum(estimated_tokens(m["content"]) + 4 for m in messages) + 768 + CONTEXT_SAFETY_MARGIN_TOKENS
                 > window_tokens
             ):
-                raise ValueError("Complete public review exceeds provider budget")
+                receipt["reason"] = "complete_input_budget_exceeded"
+                return _filter_reviewed_bundle(bundle, receipt)
             raw = await asyncio.wait_for((reviewer or _review)(messages), timeout=30)
             receipt.update(
                 decisions=list(parse_public_decisions(raw, payload["required_source_ids"], tasks)),
                 review_status="reviewed",
                 reason="",
             )
+    except PublicReviewCapacityError:
+        receipt["reason"] = "source_capacity_exceeded"
     except asyncio.TimeoutError:
         receipt["reason"] = "timeout"
     except (ValueError, TypeError, KeyError, RecursionError):
         receipt["reason"] = "invalid_or_incomplete_review"
     except Exception:
         receipt["reason"] = "provider_error"
+    return _filter_reviewed_bundle(bundle, receipt)
+
+
+def _filter_reviewed_bundle(bundle, receipt):
     selected = {row["source_id"] for row in receipt["decisions"] if row["task_ids"]}
     rows = [row for row in bundle.get("results", ()) if f"doc_{row.get('document_id')}" in selected]
     chunk_ids = {row.get("id") for row in rows}

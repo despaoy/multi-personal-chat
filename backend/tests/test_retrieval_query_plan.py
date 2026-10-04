@@ -41,13 +41,13 @@ async def test_full_question_reaches_reviewer_without_source_or_answer_injection
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("mode", ["disabled", "short", "corrective"])
-async def test_unsupported_or_short_tasks_do_not_add_a_paid_call(monkeypatch, mode):
+@pytest.mark.parametrize("mode", ["disabled", "corrective"])
+async def test_disabled_or_unsupported_tasks_do_not_add_a_paid_call(monkeypatch, mode):
     monkeypatch.setenv("RAG_TASK_PLANNER_ENABLED", "false" if mode == "disabled" else "true")
     monkeypatch.setenv("CORRECTIVE_RAG_ENABLED", "true" if mode == "corrective" else "false")
     async def review(messages):
         pytest.fail("Reviewer must not be called")
-    result = await plan_retrieval_views("短问题" if mode == "short" else QUERY, reviewer=review)
+    result = await plan_retrieval_views(QUERY, reviewer=review)
     assert not result.views
 
 

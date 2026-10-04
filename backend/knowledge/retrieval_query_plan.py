@@ -92,8 +92,7 @@ async def plan_retrieval_views(query: str, *, reviewer=None) -> RetrievalQueryPl
     enabled = os.getenv("RAG_TASK_PLANNER_ENABLED", os.getenv("DYNAMIC_CONTEXT_SEMANTIC_REVIEW_ENABLED", "false"))
     if enabled.lower().strip() not in {"true", "1", "yes", "on"}:
         return RetrievalQueryPlan(status="disabled")
-    if len(query) < 512:
-        return RetrievalQueryPlan()
+    # Evidence dependencies depend on task semantics, not question length.
     if os.getenv("CORRECTIVE_RAG_ENABLED", "false").lower().strip() in {"true", "1", "yes", "on"}:
         return RetrievalQueryPlan(status="unsupported_path")
     from knowledge.source_expansion import requested_document_titles
