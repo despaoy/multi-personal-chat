@@ -1425,6 +1425,7 @@ async def _generate_with_retrieval(
                     bundle = await review_public_candidates(
                         bundle, query_plan.dependencies, rag_message,
                         window_tokens=get_provider_context_budget().window_tokens,
+                        public_obligations=query_plan.public_obligations,
                     )
                     bundle["query_plan_status"] = query_plan.status
                     rag_meta = {

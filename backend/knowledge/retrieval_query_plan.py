@@ -15,6 +15,7 @@ class RetrievalQueryPlan:
     views: tuple[str, ...] = ()
     status: str = "not_needed"
     dependencies: TurnDependencies | None = None
+    public_obligations: tuple[dict, ...] = ()
 
     @property
     def private_context_only(self) -> bool:
@@ -44,7 +45,12 @@ current_input只适用于明确给出的资料、数值或假设推理参数，�
 “只返回JSON，不添加或删除记忆。”→control。
 “把那个没有说明来自哪里的结论核对一下。”→unresolved_source。
 未知事实值、假设未实现、审核状态未知、null输出都不是未知来源类别；已明确要求私人记录的任务仍只依赖private_memory。
-严格JSON字段只有search_views和dependencies。dependencies包含五个数组：private_memory、current_input、public_knowledge、control、unresolved_source，每数组只含实际segment id整数。
+对每个public_knowledge句段增加public_partitions项，字段只有segment_id与cuts。
+同一段中独立对象或业务的查询分别切分，不因字段枚举、私人说明或共享格式单独切出新业务。
+cuts按原文顺序列出第二及之后业务开始处的1至64字原文字面标记；标记须在该段只出现一次，不输出字符偏移、不改写。没有多个独立业务则cuts为空。每个公共段恰好一项，非公共段不得加入。
+独立示例：“核对枫舟购票费用，另核对松台换证时长。”可在“另核对松台”前切；原段所有文字由程序完整保留。
+共享的字段、范围、例外与指代仍由完整query提供，各业务不能借其他业务的依据。无公共段时public_partitions为空数组。
+严格JSON字段只有search_views、dependencies和public_partitions。dependencies包含五个数组：private_memory、current_input、public_knowledge、control、unresolved_source，每数组只含实际segment id整数。
 """
 
 
@@ -112,9 +118,17 @@ async def plan_retrieval_views(query: str, *, reviewer=None) -> RetrievalQueryPl
         if isinstance(value, dict) and set(value) == {"search_views"}:
             # Legacy view-only proposals never prove absence of public tasks.
             return RetrievalQueryPlan(parse_search_views(raw, query), "applied")
-        if not isinstance(value, dict) or set(value) != {"search_views", "dependencies"}:
+        if not isinstance(value, dict) or set(value) not in ({"search_views", "dependencies"}, {"search_views", "dependencies", "public_partitions"}):
             raise ValueError("Unexpected task-plan fields")
         dependencies = parse_dependencies(value["dependencies"], query)
+        obligations, partition_invalid = (), False
+        if "public_partitions" in value:
+            from knowledge.public_obligations import parse_public_partitions
+
+            try:
+                obligations = parse_public_partitions(value["public_partitions"], dependencies, query)
+            except (ValueError, TypeError, KeyError):
+                partition_invalid = True
         try:
             views = parse_search_views(json.dumps({"search_views": value["search_views"]}), query)
         except (ValueError, TypeError):
@@ -122,10 +136,10 @@ async def plan_retrieval_views(query: str, *, reviewer=None) -> RetrievalQueryPl
             # dependency. Retain no invented view and grant no private bypass.
             if not dict(dependencies.groups)["public_knowledge"]:
                 raise
-            return RetrievalQueryPlan((), "dependencies_only_invalid_views", dependencies)
+            return RetrievalQueryPlan((), "dependencies_only_invalid_views", dependencies, obligations)
         if dependencies.private_context_only and views:
             raise ValueError("Private-only plan cannot propose public searches")
-        return RetrievalQueryPlan(views, "applied", dependencies)
+        return RetrievalQueryPlan(views, "applied_coarse_invalid_partitions" if partition_invalid else "applied", dependencies, obligations)
     except (ValueError, TypeError, KeyError, json.JSONDecodeError):
         return RetrievalQueryPlan(status="invalid")
     except Exception:
