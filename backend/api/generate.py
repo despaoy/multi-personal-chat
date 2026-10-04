@@ -1216,7 +1216,9 @@ async def generate_reply(
         raise HTTPException(status_code=503, detail="推理排队超时，请稍后再试") from exc
 
 
-async def _retrieve_rag_bundle(query: str, top_k: int, filters: dict[str, Any] | None) -> dict[str, Any]:
+async def _retrieve_rag_bundle(
+    query: str, top_k: int, filters: dict[str, Any] | None, *, search_views: tuple[str, ...] = (),
+) -> dict[str, Any]:
     """Retrieve curated character knowledge, then use the generic KB fallback."""
 
     def retrieve() -> dict[str, Any]:
@@ -1258,7 +1260,8 @@ async def _retrieve_rag_bundle(query: str, top_k: int, filters: dict[str, Any] |
 
             bundle = get_corrective_rag().retrieve_with_correction(query, top_k=top_k, filters=filters)
         else:
-            bundle = get_rag_helper().retrieve_with_citations(query, top_k=top_k, filters=filters)
+            view_options = {"additional_queries": search_views} if search_views else {}
+            bundle = get_rag_helper().retrieve_with_citations(query, top_k=top_k, filters=filters, **view_options)
         expanded = expand_source_context(
             bundle, vector_db, expected_generation=generation,
             source_budget_tokens=get_provider_context_budget().window_tokens, filters=filters, query=query,
@@ -1401,10 +1404,15 @@ async def _generate_with_retrieval(
                         filters = {"knowledge_base_id": kb_id}
                         logger.info("RAG路由: 消息→「%s」(id=%s)", kb_name, kb_id)
 
+                from knowledge.retrieval_query_plan import plan_retrieval_views
+
+                query_plan = await plan_retrieval_views(retrieval_query)
+                view_options = {"search_views": query_plan.views} if query_plan.views else {}
                 bundle = await asyncio.wait_for(
-                    _retrieve_rag_bundle(retrieval_query, 3, filters),
+                    _retrieve_rag_bundle(retrieval_query, 3, filters, **view_options),
                     timeout=_rag_retrieval_timeout(),
                 )
+                bundle["query_plan_status"] = query_plan.status
                 rag_meta = {
                     "citations": bundle.get("citations", []) if citations_enabled else [],
                     "confidence": bundle.get("confidence"),

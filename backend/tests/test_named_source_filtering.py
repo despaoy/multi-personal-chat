@@ -94,8 +94,8 @@ def test_cache_cannot_reuse_unrestricted_named_read_for_other_scope(monkeypatch)
         "请查知识库，逐项比较《绿泽窗口受理》这份说明。但不要读取原文，另说明角色有哪些技能。",
     ],
 )
-def test_no_complete_named_read_keeps_existing_domain_inference(query):
-    assert QueryExpander().extract_filters(query) == {"category": "角色"}
+def test_unresolved_named_read_does_not_grant_a_game_category(query):
+    assert QueryExpander().extract_filters(query) == {}
 
 
 def test_explicit_title_containing_category_word_is_source_data(monkeypatch):

@@ -35,7 +35,7 @@ def test_repeated_already_requested_title_does_not_change_read_scope(query):
 def test_unknown_title_exclusions_and_unbalanced_titles_still_defer(suffix):
     query='请查知识库，读取《甲》《乙》这两份完整资料。'+suffix
     assert requested_document_titles(query)==()
-    assert QueryExpander().extract_filters(query)=={'category':'角色'}
+    assert QueryExpander().extract_filters(query)=={}
 
 def test_declared_count_with_complete_modifier_is_checked():
     query=case['question'].replace('这五份完整资料','这四份完整资料',1)

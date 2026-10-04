@@ -10,6 +10,7 @@ import hashlib
 import json
 import logging
 import os
+import re
 import time
 from collections import OrderedDict
 from threading import RLock
@@ -57,6 +58,7 @@ class DomainProfile:
         domain_keywords: dict[str, list[str]] | None = None,
         category_map: dict[str, str] | None = None,
         regions: list[str] | None = None,
+        filter_anchors: list[str] | None = None,
     ):
         self.name = name
         self.synonym_map: dict[str, list[str]] = synonym_map or {}
@@ -64,12 +66,14 @@ class DomainProfile:
         self.domain_keywords: dict[str, list[str]] = domain_keywords or {}
         self.category_map: dict[str, str] = category_map or {}
         self.regions: list[str] = regions or []
+        self.filter_anchors = tuple(filter_anchors if filter_anchors is not None else [name])
 
 
 def genshin_profile() -> DomainProfile:
     """默认原神知识域配置，词表内容与历史版本保持一致。"""
     return DomainProfile(
         name="genshin",
+        filter_anchors=["原神", "Genshin", "胡桃", "钟离", "七七", "魈", "璃月", "蒙德", "稻妻", "须弥"],
         synonym_map={
             "胡桃": ["胡桃", "往生堂堂主", "七十七代堂主", "火系主C"],
             "钟离": ["钟离", "岩王帝君", "摩拉克斯", "岩神"],
@@ -228,19 +232,36 @@ class QueryExpander:
         if requested_document_titles(query):
             return {}
 
+        # Category labels belong to their declared domain. Incidental words
+        # such as "character" in a mixed personal/public question cannot
+        # exclude an unrelated knowledge base before semantic retrieval.
+        from character.quoted_erasure_authority import masked_quotes
+
+        try:
+            scope = masked_quotes(query)[0]
+        except ValueError:
+            return {}
+        profiles = [
+            profile for profile in self.profiles
+            if any(
+                re.search(r"(?<![A-Za-z0-9_])" + re.escape(anchor) + r"(?![A-Za-z0-9_])", scope, re.I)
+                if anchor.isascii() else anchor in scope
+                for anchor in profile.filter_anchors if anchor
+            )
+        ]
         filters: dict[str, Any] = {}
 
-        for profile in self.profiles:
+        for profile in profiles:
             for cn_name, en_category in profile.category_map.items():
-                if cn_name in query:
+                if cn_name in scope:
                     filters["category"] = en_category
                     break
             if "category" in filters:
                 break
 
         # 检测地区关键词，用于后过滤
-        for profile in self.profiles:
-            region = next((r for r in profile.regions if r in query), None)
+        for profile in profiles:
+            region = next((r for r in profile.regions if r in scope), None)
             if region:
                 filters["region"] = region
                 break
@@ -359,6 +380,7 @@ class RAGHelper:
         enable_rerank: bool = True,
         filters: dict[str, Any] | None = None,
         use_cache: bool = True,
+        additional_queries: tuple[str, ...] = (),
     ) -> list[dict[str, Any]]:
         """检索与查询最相关的知识库文档。
 
@@ -375,6 +397,16 @@ class RAGHelper:
         Returns:
             按相关性降序排列的文档列表，每项包含normalized_score等字段
         """
+        if (
+            not isinstance(additional_queries, tuple) or len(additional_queries) > 4
+            or any(
+                not isinstance(view, str) or not view.strip() or len(view) > 1024
+                or any(span not in query for span in view.split())
+                for view in additional_queries
+            )
+        ):
+            raise ValueError("Additional query views must be bounded literal input spans")
+        views = tuple(dict.fromkeys(view for view in additional_queries if view != query))
         if not self.use_vector_db:
             return []
 
@@ -394,7 +426,7 @@ class RAGHelper:
                 f"{query}|{top_k or self.top_k}|rerank={enable_rerank}|"
                 f"expansion={use_expansion}|threshold={self.min_score_threshold}|"
                 f"recall_multiplier={self.recall_multiplier}|filters={serialized_filters}|"
-                f"generation={vector_generation}"
+                f"generation={vector_generation}|views={json.dumps(views, ensure_ascii=False)}"
             )
             if use_cache:
                 cached = self._get_from_cache(cache_key)
@@ -405,31 +437,16 @@ class RAGHelper:
             final_top_k = top_k or self.top_k
             all_results: dict[str, dict[str, Any]] = {}
 
-            if use_expansion:
-                expanded_queries = self.query_expander.expand_query(query)
-
-                for q in expanded_queries:
-                    recall_top_k = final_top_k * self.recall_multiplier
-                    vector_db = get_vector_db()
-                    recall_results = vector_db.hybrid_search(
-                        q,
-                        top_k=recall_top_k,
-                        threshold=self.min_score_threshold,
-                        keyword_weight=0.3,
-                        filters=search_filters,
-                    )
-
-                    for result in recall_results:
-                        self._merge_result(all_results, result)
-            else:
+            expanded_queries = self.query_expander.expand_query(query) if use_expansion else [query]
+            # All original expansion views remain. Extractive task views add
+            # recall votes, never filters, source permissions or new facts.
+            expanded_queries = list(dict.fromkeys([*expanded_queries, *views]))
+            for q in expanded_queries:
                 recall_top_k = final_top_k * self.recall_multiplier
                 vector_db = get_vector_db()
                 recall_results = vector_db.hybrid_search(
-                    query,
-                    top_k=recall_top_k,
-                    threshold=self.min_score_threshold,
-                    keyword_weight=0.3,
-                    filters=search_filters,
+                    q, top_k=recall_top_k, threshold=self.min_score_threshold,
+                    keyword_weight=0.3, filters=search_filters,
                 )
                 for result in recall_results:
                     self._merge_result(all_results, result)
@@ -552,13 +569,15 @@ class RAGHelper:
         top_k: int | None = None,
         threshold: float = 0.3,
         filters: dict[str, Any] | None = None,
+        additional_queries: tuple[str, ...] = (),
     ) -> dict[str, Any]:
         """检索并返回带引用和置信度的结构化结果。
 
         Returns:
             {results, citations, confidence, abstained}
         """
-        results = self.retrieve_context(query, top_k=top_k, filters=filters)
+        view_options = {"additional_queries": additional_queries} if additional_queries else {}
+        results = self.retrieve_context(query, top_k=top_k, filters=filters, **view_options)
         confidence = self.compute_confidence(results)
         abstained = self.should_abstain(confidence, threshold)
         citations = self.build_citations(results) if not abstained else []

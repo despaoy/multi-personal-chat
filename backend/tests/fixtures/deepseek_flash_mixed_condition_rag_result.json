@@ -1,0 +1,381 @@
+{
+  "synthetic": true,
+  "stage": 116,
+  "model": "deepseek-flash",
+  "private_inputs_kept_complete_on_server": true,
+  "dimension": "Full original current/future predicates and public eligibility rules in long mixed questions",
+  "result": {
+    "initial_grader_semantic_checks": "12/33",
+    "initial_grader_failure_retained": true,
+    "offline_grader_repair_new_cloud_calls": 0,
+    "explicit_conclusion_contract_nodes": 25,
+    "checks": {
+      "authentic_seven_records": true,
+      "all_jobs_terminal": true,
+      "all16_actual_calls_official_flash_http200": true,
+      "all_actual_cloud_stop": true,
+      "all65k_windows": true,
+      "all_nonthinking": true,
+      "original_two_failed_attempts_no_main": true,
+      "no_original_failures_erased": true,
+      "no_unrelated_core_or_config_changes": true,
+      "all_effective_file_hashes_exact": true,
+      "original21_tests_not_repeated": true,
+      "new19_task_plan_tests_passed": true,
+      "planned_native200_nonabstained": true,
+      "planned_one_actual_main": true,
+      "planned_exact_main_gate_matches_actual_paid_call": true,
+      "planned_full_original_question_on_wire": true,
+      "planned_complete_current_and_future_originals": true,
+      "planned_complete_requested_public_rule_on_wire": true,
+      "planned_all_private_originals_naturally_outside_recent_history": true,
+      "planned_actual_recent_history16": true,
+      "planned_all38_successful_task_receipts_inherited": true,
+      "planned_all_seven_records_everyfield_unchanged": true,
+      "planned_all_prior_sources_and_failed_pending_row_everyfield_unchanged": true,
+      "planned_all_five_public_documents_exact": true,
+      "planned_erasure_fence_unchanged": true,
+      "planned_zero_saved_failed_erased": true,
+      "planned_no_guard_retry_or_fallback": true,
+      "planned_current_and_future_naturally_selected": true,
+      "planned_planner_full_question_exact": true,
+      "planned_planner_all_views_literal_and_nonempty": true,
+      "planned_actual_rag_plan_applied": true,
+      "planned_output2048_preserved": true,
+      "fields_native200_nonabstained": true,
+      "fields_one_actual_main": true,
+      "fields_exact_main_gate_matches_actual_paid_call": true,
+      "fields_full_original_question_on_wire": true,
+      "fields_complete_current_and_future_originals": true,
+      "fields_complete_requested_public_rule_on_wire": true,
+      "fields_all_private_originals_naturally_outside_recent_history": true,
+      "fields_actual_recent_history16": true,
+      "fields_all38_successful_task_receipts_inherited": true,
+      "fields_all_seven_records_everyfield_unchanged": true,
+      "fields_all_prior_sources_and_failed_pending_row_everyfield_unchanged": true,
+      "fields_all_five_public_documents_exact": true,
+      "fields_erasure_fence_unchanged": true,
+      "fields_zero_saved_failed_erased": true,
+      "fields_no_guard_retry_or_fallback": true,
+      "fields_current_and_future_naturally_selected": true,
+      "fields_planner_full_question_exact": true,
+      "fields_planner_all_views_literal_and_nonempty": true,
+      "fields_actual_rag_plan_applied": true,
+      "fields_output2048_preserved": true,
+      "original_current_field_mismatch_grounded_in_actual_evidence": true
+    },
+    "passed": 53,
+    "total": 53,
+    "semantic_checks": {
+      "planned_A_public_rule": true,
+      "planned_B_public_rule": true,
+      "planned_C_public_rule": true,
+      "planned_D_public_rule": true,
+      "planned_A_future_conditions": true,
+      "planned_B_future_conditions": true,
+      "planned_C_future_conditions": true,
+      "planned_D_future_conditions": true,
+      "original_current_kind_unprovided_unknown_retained": true,
+      "planned_A_public_fee_and_duration": true,
+      "planned_C_public_fee_and_duration": true,
+      "planned_future_before_start_not_yet": true,
+      "planned_future_after_start_separate": true,
+      "planned_coexist_not_automatic_replacement": true,
+      "planned_hypothetical_not_actual_completion": true,
+      "fields_A_public_rule": true,
+      "fields_B_public_rule": true,
+      "fields_C_public_rule": true,
+      "fields_D_public_rule": true,
+      "fields_A_future_conditions": true,
+      "fields_B_future_conditions": true,
+      "fields_C_future_conditions": true,
+      "fields_D_future_conditions": true,
+      "fields_A_current_conditions": true,
+      "fields_B_current_conditions": true,
+      "fields_C_current_conditions": true,
+      "fields_D_current_conditions": true,
+      "fields_A_public_fee_and_duration": true,
+      "fields_C_public_fee_and_duration": true,
+      "fields_future_before_start_not_yet": true,
+      "fields_future_after_start_separate": true,
+      "fields_coexist_not_automatic_replacement": true,
+      "fields_hypothetical_not_actual_completion": true
+    },
+    "semantic_passed": 33,
+    "semantic_total": 33,
+    "classified_cases": {
+      "planned": {
+        "A": {
+          "current": "unknown",
+          "future": "false",
+          "public": "true"
+        },
+        "B": {
+          "current": "unknown",
+          "future": "true",
+          "public": "false"
+        },
+        "C": {
+          "current": "unknown",
+          "future": "true",
+          "public": "true"
+        },
+        "D": {
+          "current": "unknown",
+          "future": "unknown",
+          "public": "unknown"
+        }
+      },
+      "fields": {
+        "A": {
+          "current": "true",
+          "future": "false",
+          "public": "true"
+        },
+        "B": {
+          "current": "false",
+          "future": "true",
+          "public": "false"
+        },
+        "C": {
+          "current": "true",
+          "future": "true",
+          "public": "true"
+        },
+        "D": {
+          "current": "unknown",
+          "future": "unknown",
+          "public": "unknown"
+        }
+      }
+    },
+    "actual_calls": 16,
+    "http200": 16,
+    "native_http200": 3,
+    "native_http200_abstained_fallback": 1,
+    "successful_distinct_native_queries": 2,
+    "actual_final_main_calls": 2,
+    "actual_jobs": [
+      2972828,
+      2978579,
+      2985836,
+      2989288
+    ],
+    "estimated_cost_cny": "0.28790368",
+    "original_two_failure_aux_calls": 6,
+    "original_two_failure_cost_cny": "0.13478984",
+    "original_same_query_first_actual_answer_cny": "0.01363352",
+    "new_field_bound_query_cny": "0.13948032",
+    "unique_new_unit_nodes": 57,
+    "affected_existing_unit_nodes": 8,
+    "affected_unit_nodes_total": 65,
+    "unaffected_old_test_nodes_repeated": 0,
+    "old_paid_tasks_replayed": 0,
+    "query_plan_views": [
+      {
+        "attempt": "planned",
+        "view_count": 4,
+        "view_chars": [
+          11,
+          9,
+          9,
+          7
+        ],
+        "literal_spans_validated": true
+      },
+      {
+        "attempt": "fields",
+        "view_count": 1,
+        "view_chars": [
+          60
+        ],
+        "literal_spans_validated": true
+      }
+    ],
+    "original_current_identity_equivalence_not_asserted": true,
+    "original_unknown_not_regraded_as_condition_failure": true,
+    "new_field_bound_query_distinct_not_resampling": true,
+    "original_sources_history_output_not_cut": true,
+    "phase_complete": false,
+    "whole_goal_complete": false,
+    "receipts": [
+      {
+        "attempt": "conditions",
+        "index": 0,
+        "http_status": 200,
+        "finish_reason": "stop",
+        "prompt_tokens": 42272,
+        "completion_tokens": 133,
+        "cached_tokens": 256,
+        "estimated_cny": "0.04255312"
+      },
+      {
+        "attempt": "conditions",
+        "index": 1,
+        "http_status": 200,
+        "finish_reason": "stop",
+        "prompt_tokens": 45577,
+        "completion_tokens": 74,
+        "cached_tokens": 512,
+        "estimated_cny": "0.04537124"
+      },
+      {
+        "attempt": "conditions",
+        "index": 2,
+        "http_status": 200,
+        "finish_reason": "stop",
+        "prompt_tokens": 42254,
+        "completion_tokens": 16,
+        "cached_tokens": 0,
+        "estimated_cny": "0.042318"
+      },
+      {
+        "attempt": "corrected",
+        "index": 0,
+        "http_status": 200,
+        "finish_reason": "stop",
+        "prompt_tokens": 42272,
+        "completion_tokens": 133,
+        "cached_tokens": 42112,
+        "estimated_cny": "0.00153424"
+      },
+      {
+        "attempt": "corrected",
+        "index": 1,
+        "http_status": 200,
+        "finish_reason": "stop",
+        "prompt_tokens": 45577,
+        "completion_tokens": 73,
+        "cached_tokens": 45312,
+        "estimated_cny": "0.00146324"
+      },
+      {
+        "attempt": "corrected",
+        "index": 2,
+        "http_status": 200,
+        "finish_reason": "stop",
+        "prompt_tokens": 42254,
+        "completion_tokens": 16,
+        "cached_tokens": 41600,
+        "estimated_cny": "0.00155"
+      },
+      {
+        "attempt": "planned",
+        "index": 0,
+        "http_status": 200,
+        "finish_reason": "stop",
+        "prompt_tokens": 42272,
+        "completion_tokens": 133,
+        "cached_tokens": 42112,
+        "estimated_cny": "0.00153424"
+      },
+      {
+        "attempt": "planned",
+        "index": 1,
+        "http_status": 200,
+        "finish_reason": "stop",
+        "prompt_tokens": 45577,
+        "completion_tokens": 74,
+        "cached_tokens": 45312,
+        "estimated_cny": "0.00146724"
+      },
+      {
+        "attempt": "planned",
+        "index": 2,
+        "http_status": 200,
+        "finish_reason": "stop",
+        "prompt_tokens": 42254,
+        "completion_tokens": 16,
+        "cached_tokens": 42112,
+        "estimated_cny": "0.00104824"
+      },
+      {
+        "attempt": "planned",
+        "index": 3,
+        "http_status": 200,
+        "finish_reason": "stop",
+        "prompt_tokens": 601,
+        "completion_tokens": 35,
+        "cached_tokens": 0,
+        "estimated_cny": "0.000741"
+      },
+      {
+        "attempt": "planned",
+        "index": 4,
+        "http_status": 200,
+        "finish_reason": "stop",
+        "prompt_tokens": 45254,
+        "completion_tokens": 1246,
+        "cached_tokens": 42240,
+        "estimated_cny": "0.0088428"
+      },
+      {
+        "attempt": "fields",
+        "index": 0,
+        "http_status": 200,
+        "finish_reason": "stop",
+        "prompt_tokens": 42452,
+        "completion_tokens": 127,
+        "cached_tokens": 256,
+        "estimated_cny": "0.04270912"
+      },
+      {
+        "attempt": "fields",
+        "index": 1,
+        "http_status": 200,
+        "finish_reason": "stop",
+        "prompt_tokens": 45757,
+        "completion_tokens": 74,
+        "cached_tokens": 512,
+        "estimated_cny": "0.04555124"
+      },
+      {
+        "attempt": "fields",
+        "index": 2,
+        "http_status": 200,
+        "finish_reason": "stop",
+        "prompt_tokens": 42434,
+        "completion_tokens": 16,
+        "cached_tokens": 0,
+        "estimated_cny": "0.042498"
+      },
+      {
+        "attempt": "fields",
+        "index": 3,
+        "http_status": 200,
+        "finish_reason": "stop",
+        "prompt_tokens": 781,
+        "completion_tokens": 47,
+        "cached_tokens": 0,
+        "estimated_cny": "0.000969"
+      },
+      {
+        "attempt": "fields",
+        "index": 4,
+        "http_status": 200,
+        "finish_reason": "stop",
+        "prompt_tokens": 45200,
+        "completion_tokens": 1332,
+        "cached_tokens": 43648,
+        "estimated_cny": "0.00775296"
+      }
+    ],
+    "original_initial_grader_checks": "12/33",
+    "intermediate_grader_checks": "32/33",
+    "both_grader_failures_retained": true
+  },
+  "limitations": {
+    "initial_native200_abstained_not_passed": true,
+    "second_native500_before_main_retained": true,
+    "whole_sources_original_question_history_output_not_cut": true,
+    "initial_unknown_current_field_type_legitimate": true,
+    "actual_new_six_field_case_complete_not_resampling": true,
+    "only_two_actual_main_answers_not_general_accuracy_claim": true,
+    "initial_and_intermediate_grader_failures_preserved_without_paid_resampling": true,
+    "current_global_topk_merge_does_not_guarantee_all_subtasks": true,
+    "planner_not_adaptive_rag_trained_classifier": true,
+    "stored_usage_estimate_not_invoice_or_new_price_quote": true,
+    "raw_queries_replies_sources_ids_hashes_server_only": true,
+    "whole_goal_complete": false
+  }
+}
