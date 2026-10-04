@@ -96,11 +96,16 @@ def _checked_document_titles(titles, remainder):
     for task in reversed(
         list(
             re.finditer(
-                r"(?:^|[。！？!?；;\n])\s*本轮只读取[，,]\s*不新增或删除记忆(?=[。！？!?；;\n]|$)",
+                r"(?:^|[。！？!?；;\n])\s*本轮只读取(?P<scope>[^，,。！？!?；;\n]{0,20})[，,]\s*不新增或删除记忆(?=[，,。！？!?；;\n]|$)",
                 scope_view,
             )
         )
     ):
+        # This is a generic existing-data scope plus an explicit nonmutation
+        # clause. Concrete document selectors or unclosed scopes retain the
+        # original exclusion check; quoted scopes were masked above.
+        if task["scope"].strip() not in {"", "既有事实", "已有事实", "既有资料", "已有资料", "既有信息", "已有信息"}:
+            continue
         a, z = task.span()
         exclusion_text = exclusion_text[:a] + exclusion_text[a:z].replace("只读取", "读取", 1) + exclusion_text[z:]
     if (
@@ -341,6 +346,20 @@ def expand_source_context(bundle, vector_db, *, expected_generation, source_budg
                 extra.update(
                     retrieval_role="source_context",
                     supporting_document_ids=[identity for identity, _ in parents[group]],
+                    supporting_source_refs=tuple(
+                        dict(
+                            document_id=identity,
+                            source_id=f"doc_{metadata[identity]['document_id']}",
+                            source_title=metadata[identity]["title"],
+                            knowledge_base_id=metadata[identity]["knowledge_base_id"],
+                            relation="same_source"
+                            if metadata[identity]["document_id"] == group[0]
+                            else "title_reference",
+                            target_title=group[2],
+                            text=metadata[identity]["content"],
+                        )
+                        for identity, _ in parents[group]
+                    ),
                 )
             added.append(extra)
         results = [*anchors, *added]

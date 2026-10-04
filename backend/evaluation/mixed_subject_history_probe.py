@@ -33,15 +33,19 @@ def required_private_sources(fixture):
     """Explicit case requirements, never a post-hoc automatic absence waiver."""
     sources = (fixture["source_message"], *fixture.get("additional_private_source_messages", []))
     indices = fixture.get("required_private_source_indices", list(range(len(sources))))
-    if (not isinstance(indices, (list, tuple)) or not indices
-            or any(type(i) is not int or not 0 <= i < len(sources) for i in indices)
-            or len(set(indices)) != len(indices)):
+    if (
+        not isinstance(indices, (list, tuple))
+        or not indices
+        or any(type(i) is not int or not 0 <= i < len(sources) for i in indices)
+        or len(set(indices)) != len(indices)
+    ):
         raise ValueError("Invalid required private source indices")
     return tuple(sources[i] for i in indices)
 
 
-def validate_native_messages(fixture, *, advance_history=False, completed_history=0,
-                             authoring=False, author_only=False, include_seed=False):
+def validate_native_messages(
+    fixture, *, advance_history=False, completed_history=0, authoring=False, author_only=False, include_seed=False
+):
     "Validate every remaining request against the actual API schema before any cloud call."
     from db.schemas import MessageRequest
 
@@ -53,8 +57,7 @@ def validate_native_messages(fixture, *, advance_history=False, completed_histor
     if advance_history:
         messages.extend(t["message"] for t in fixture["history_advancement_tasks"][completed_history:])
     for message in messages:
-        MessageRequest.model_validate(dict(message=message, characterId="tsukiyashiro_kisaki",
-                                           sessionType="private"))
+        MessageRequest.model_validate(dict(message=message, characterId="tsukiyashiro_kisaki", sessionType="private"))
 
 
 async def run(args):
@@ -110,15 +113,23 @@ async def run(args):
     private_sources = [fixture["source_message"], *fixture.get("additional_private_source_messages", [])]
     required_private = required_private_sources(fixture)
     from evaluation.source_transport import complete_source_in_transport
+
     if args.advance_history:
-        assert args.reuse_verified_seed and not args.author_additional_source and not args.author_current_source and not resume_provider_block
+        assert (
+            args.reuse_verified_seed
+            and not args.author_additional_source
+            and not args.author_current_source
+            and not resume_provider_block
+        )
         assert len(fixture["history_advancement_tasks"]) == fixture.get("history_advancement_target_count", 8)
 
     validate_native_messages(
-        fixture, advance_history=args.advance_history,
+        fixture,
+        advance_history=args.advance_history,
         completed_history=len(seed_proof.get("history_advancement_turns", [])) if seed_proof else 0,
         authoring=args.author_additional_source or args.author_current_source,
-        author_only=args.author_only, include_seed=not args.reuse_verified_seed,
+        author_only=args.author_only,
+        include_seed=not args.reuse_verified_seed,
     )
 
     parent = json.loads((runtime / "backups/backend-chain-20261001/stage57/saved-audited-result.json").read_text())
@@ -244,14 +255,26 @@ async def run(args):
             if fixture.get("require_sources_outside_recent_history"):
                 recent = proof["prepared"][-1]["history"]
                 assert recent
-                assert all(message["role"] != "user" or message["content"] in
-                           {task["message"] for task in fixture["history_advancement_tasks"]}
-                           for message in recent)
-                assert all(not complete_source_in_transport(message["content"], source) for source in private_sources for message in recent)
-                assert all(value not in message["content"]
-                           for value in fixture["recent_history_forbidden_values"] for message in recent)
-                assert all(not complete_source_in_transport(message["content"], source) for source in private_sources
-                           for message in payload["messages"][1:-1])
+                assert all(
+                    message["role"] != "user"
+                    or message["content"] in {task["message"] for task in fixture["history_advancement_tasks"]}
+                    for message in recent
+                )
+                assert all(
+                    not complete_source_in_transport(message["content"], source)
+                    for source in private_sources
+                    for message in recent
+                )
+                assert all(
+                    value not in message["content"]
+                    for value in fixture["recent_history_forbidden_values"]
+                    for message in recent
+                )
+                assert all(
+                    not complete_source_in_transport(message["content"], source)
+                    for source in private_sources
+                    for message in payload["messages"][1:-1]
+                )
             whole = chr(10).join(unescape(m["content"]) for m in payload["messages"])
             seen = {str(i) + ":" + doc["title"]: doc["content"] in whole for i, doc in enumerate(fixture["documents"])}
             (root / "primary-input-observed.json").write_text(
@@ -260,7 +283,9 @@ async def run(args):
                         "request": payload,
                         "document_bodies_present": seen,
                         "private_source_present": complete_source_in_transport(whole, fixture["source_message"]),
-                        "private_sources_present": [complete_source_in_transport(whole, source) for source in private_sources],
+                        "private_sources_present": [
+                            complete_source_in_transport(whole, source) for source in private_sources
+                        ],
                         "prepared": proof["prepared"],
                         "retrieval": proof["retrieval"],
                     },
@@ -270,13 +295,11 @@ async def run(args):
                 )
                 + chr(10)
             )
-            assert (
-                all(
-                    seen[str(i) + ":" + fixture["documents"][i]["title"]]
-                    for i in fixture["required_gate_document_indices"]
-                )
-                and all(complete_source_in_transport(whole, source) for source in required_private)
-            ), "Complete requested public/private source missing before actual model"
+            assert all(
+                seen[str(i) + ":" + fixture["documents"][i]["title"]] for i in fixture["required_gate_document_indices"]
+            ) and all(complete_source_in_transport(whole, source) for source in required_private), (
+                "Complete requested public/private source missing before actual model"
+            )
         from inference.context_budget import CONTEXT_SAFETY_MARGIN_TOKENS, estimated_tokens
         from inference.token_counting import token_counter_info
 
@@ -298,8 +321,12 @@ async def run(args):
 
         try:
             admission_budget = admitted_request_budget(
-                calls, model=args.model, input_tokens=input_bound, output_tokens=output_reserved,
-                max_calls=args.max_cloud_calls, max_cost_cny=args.max_estimated_cost_cny,
+                calls,
+                model=args.model,
+                input_tokens=input_bound,
+                output_tokens=output_reserved,
+                max_calls=args.max_cloud_calls,
+                max_cost_cny=args.max_estimated_cost_cny,
             )
         except EvaluationBudgetExceeded as error:
             (root / "evaluation-budget-stop.json").write_text(
@@ -312,9 +339,7 @@ async def run(args):
         try:
             response = await send_with_balance_stop(client, request, original_send, provider_access_state, **kwargs)
         finally:
-            (root / "provider-access-state.json").write_text(
-                json.dumps(provider_access_state, indent=2) + "\n"
-            )
+            (root / "provider-access-state.json").write_text(json.dumps(provider_access_state, indent=2) + "\n")
         await response.aread()
         calls.append(dict(request=payload, http_status=response.status_code, response=response.json(), budget=budget))
         (root / "cloud-calls.json").write_text(json.dumps(calls, ensure_ascii=False, indent=2) + "\n")
@@ -530,6 +555,31 @@ async def run(args):
                         json.dumps(proof["documents_imported"], ensure_ascii=False, indent=2) + chr(10)
                     )
                     assert imported.status_code == 200
+            additional_public = fixture.get("additional_public_documents", [])
+            if additional_public:
+                assert args.reuse_verified_seed and fixture["synthetic"]
+                assert isinstance(additional_public, list) and len(additional_public) <= 8
+                base_id = proof["knowledge_base"]["base"]["id"]
+                additions = []
+                titles = set()
+                for spec in additional_public:
+                    assert isinstance(spec, dict) and set(spec) == {"synthetic_only", "document"}
+                    assert spec["synthetic_only"] is True
+                    document = spec["document"]
+                    assert isinstance(document, dict) and set(document) == {"title", "content", "category"}
+                    assert all(isinstance(document[key], str) and document[key].strip() for key in document)
+                    assert document["title"] not in titles and document in fixture["documents"]
+                    titles.add(document["title"])
+                    imported = await client.post(
+                        "/api/knowledge/documents", json={**document, "knowledge_base_id": base_id}
+                    )
+                    additions.append({"status": imported.status_code, "response": imported.json()})
+                    (root / "additional-public-imports.json").write_text(
+                        json.dumps(additions, ensure_ascii=False, indent=2) + chr(10)
+                    )
+                    assert imported.status_code == 200
+                proof["additional_public_documents_imported"] = additions
+                proof["additional_public_documents_synthetic_only"] = True
             chat_password = secrets.token_urlsafe(24)
             if args.reuse_verified_seed:
                 connection = await asyncpg.connect(
@@ -583,7 +633,11 @@ async def run(args):
                 from evaluation.native_current_snapshot import inherit_history_receipts
 
                 inherit_history_receipts(proof, seed_proof)
-                for provenance_key in ("native_update_seed_origin", "native_history_seed_origin", "native_partial_history_seed_origin"):
+                for provenance_key in (
+                    "native_update_seed_origin",
+                    "native_history_seed_origin",
+                    "native_partial_history_seed_origin",
+                ):
                     if provenance_key in seed_proof:
                         proof[provenance_key] = seed_proof[provenance_key]
             else:
@@ -679,17 +733,26 @@ async def run(args):
                     if index < completed:
                         continue
                     if provider_access_state.get("blocked_http_status") == 402:
-                        raise EvaluationProviderBlocked("Keep completed tasks; provider must be restored before the next task")
+                        raise EvaluationProviderBlocked(
+                            "Keep completed tasks; provider must be restored before the next task"
+                        )
                     advanced = await client.post(
                         "/api/generate",
                         json={
-                            "message": task["message"], "characterId": "tsukiyashiro_kisaki",
-                            "loraId": "default", "sessionId": phase.name + "-advance-" + str(index + 1),
+                            "message": task["message"],
+                            "characterId": "tsukiyashiro_kisaki",
+                            "loraId": "default",
+                            "sessionId": phase.name + "-advance-" + str(index + 1),
                             "sessionType": "private",
                         },
                     )
-                    receipt = {"index": index, "task_id": task["id"], "status": advanced.status_code,
-                               "response": advanced.json(), "input_chars": len(task["message"])}
+                    receipt = {
+                        "index": index,
+                        "task_id": task["id"],
+                        "status": advanced.status_code,
+                        "response": advanced.json(),
+                        "input_chars": len(task["message"]),
+                    }
                     proof["history_advancement_turns"].append(receipt)
                     (root / "history-advancement-progress.json").write_text(
                         json.dumps(proof["history_advancement_turns"], ensure_ascii=False, indent=2) + "\n"
@@ -790,7 +853,14 @@ async def run(args):
                 await connection.close()
             await asyncio.to_thread(db.update_config, {"useKnowledgeBase": True})
             invalidate_config_cache()
-            if not args.reuse_verified_seed or resume_provider_block or args.author_additional_source or args.author_current_source or args.advance_history:
+            if (
+                not args.reuse_verified_seed
+                or resume_provider_block
+                or args.author_additional_source
+                or args.author_current_source
+                or args.advance_history
+                or additional_public
+            ):
                 backup = root / "before-question.dump"
                 await asyncio.to_thread(
                     subprocess.run,
@@ -887,10 +957,16 @@ async def run(args):
                 expected_api_turns = (
                     (1 + len(fixture["bridges"]) - len(seed_proof["successful_bridge_turns"]))
                     if resume_provider_block
-                    else ((2 if args.author_additional_source or args.author_current_source else 1) if args.reuse_verified_seed else 11)
+                    else (
+                        (2 if args.author_additional_source or args.author_current_source else 1)
+                        if args.reuse_verified_seed
+                        else 11
+                    )
                 )
                 if args.advance_history:
-                    expected_api_turns += len(fixture["history_advancement_tasks"]) - proof["history_advancement_turns_inherited"]
+                    expected_api_turns += (
+                        len(fixture["history_advancement_tasks"]) - proof["history_advancement_turns_inherited"]
+                    )
                 assert proof["http_status"] == 200 and len(proof["generation"]) == expected_api_turns
                 # Existing guard retry is an additional actual provider request,
                 # not another successful native API turn. Bind the measurement

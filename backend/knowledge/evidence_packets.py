@@ -23,5 +23,11 @@ def document_evidence_packets(results: Sequence[Mapping[str, Any]]) -> tuple[dic
             if not isinstance(support, (list, tuple)) or not support:
                 continue
             packet.update(kind="background", supporting_document_ids=list(support))
+            if document.get("supporting_source_refs") is not None:
+                packet.update(
+                    supporting_source_refs=document["supporting_source_refs"],
+                    source_id=f"doc_{document['document_id']}",
+                    knowledge_base_id=document["knowledge_base_id"],
+                )
         packets.append(packet)
     return tuple(packets)

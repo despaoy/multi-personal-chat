@@ -55,6 +55,7 @@ def configured_context_window() -> int:
     """Use the serving limit, not a model's theoretical maximum window."""
     return max(1024, int(os.getenv("VLLM_MAX_MODEL_LEN", str(DEFAULT_CONTEXT_WINDOW_TOKENS))))
 
+
 DEFERRED_MEMORY_OPERATION_POLICY = (
     "【本轮本人长期记忆删除的处理状态】后端支持处理当前已鉴权对话者在当前角色范围内的个人长期记忆删除请求；"
     "这项个人数据处理能力不同于管理员命令。当前仅准备生成回复，尚未执行删除："
@@ -213,14 +214,18 @@ def _task_history(request: GenerationRequest) -> tuple[list[Message], str, int]:
 
     history = _conversation_history(request.history)
     task = request.retrieval.identity_task
-    if (not request.retrieval.has_evidence or request.retrieval.source_lookup
-            or getattr(request.character_context, "branch_context", "")
-            or not isinstance(task, Mapping)
-            or task.get('query') != request.message
-            or not isinstance(task.get('subject'), str) or not task['subject'].strip()):
-        return history, 'conversation', 0
-    retained = [item for item in history if item['role'] != 'assistant']
-    return retained, 'independent_identity', len(history) - len(retained)
+    if (
+        not request.retrieval.has_evidence
+        or request.retrieval.source_lookup
+        or getattr(request.character_context, "branch_context", "")
+        or not isinstance(task, Mapping)
+        or task.get("query") != request.message
+        or not isinstance(task.get("subject"), str)
+        or not task["subject"].strip()
+    ):
+        return history, "conversation", 0
+    retained = [item for item in history if item["role"] != "assistant"]
+    return retained, "independent_identity", len(history) - len(retained)
 
 
 def _trim_history_to_budget(
@@ -243,7 +248,7 @@ def _trim_history_to_budget(
     )
     turns: list[list[Message]] = []
     for item in history:
-        if item['role'] == 'user' or not turns:
+        if item["role"] == "user" or not turns:
             turns.append([])
         turns[-1].append(item)
     kept: list[list[Message]] = []
@@ -272,12 +277,14 @@ def _system_prompt(request: GenerationRequest) -> str:
             if getattr(context, "memory_status", "not_checked") in {"available", "no_match", "retrieval_error"}:
                 dynamic_context = "\n\n".join(filter(None, (dynamic_context, MEMORY_VISIBILITY_POLICY)))
             has_memory_reference = bool(context.reference_context or getattr(context, "episodic_reference_context", ""))
-            if (getattr(context, "memory_source_status", "not_checked") == "available"
-                    and getattr(context, "episodic_reference_context", "")):
+            if getattr(context, "memory_source_status", "not_checked") == "available" and getattr(
+                context, "episodic_reference_context", ""
+            ):
                 # Trusted application receipt, not raw speech or a current-fact grant.
                 # The final canonical source budget settles availability first.
-                dynamic_context = '\n\n'.join(part for part in (
-                    dynamic_context, SOURCE_SPEECH_PROVENANCE_POLICY) if part)
+                dynamic_context = "\n\n".join(
+                    part for part in (dynamic_context, SOURCE_SPEECH_PROVENANCE_POLICY) if part
+                )
             # Sharing an admitted observation's exact source changes its
             # transport, not the policy that applied before deduplication.
             # Unadmitted source-only retrieval still does not activate it.
@@ -301,9 +308,9 @@ def _system_prompt(request: GenerationRequest) -> str:
     else:
         prompt = request.persona_prompt.strip()
     if request.apply_prompt_policy:
-        prompt = '\n\n'.join(filter(None, (prompt, RUNTIME_CAPABILITY_POLICY)))
+        prompt = "\n\n".join(filter(None, (prompt, RUNTIME_CAPABILITY_POLICY)))
         if getattr(request.character_context, "memory_operation_deferred", False):
-            prompt += '\n\n' + DEFERRED_MEMORY_OPERATION_POLICY
+            prompt += "\n\n" + DEFERRED_MEMORY_OPERATION_POLICY
     # 对话者昵称（senderName，用户可控）不进入系统提示词：
     # 净化只能删除结构字符，语义级注入内容仍会以系统区权威出现。
     # 3.3.0 起改由 build_grounded_user_message 放入用户消息的
@@ -323,11 +330,15 @@ def _system_prompt(request: GenerationRequest) -> str:
         prompt = "\n\n".join(part for part in (prompt, CHARACTER_ABSTENTION_POLICY) if part)
         if request.retrieval.reason == "retrieval_unavailable":
             prompt += "\n本轮依据暂时无法核实；这不代表知识库中不存在答案。请自然表达暂时不能确认。"
-    if request.apply_prompt_policy and (request.retrieval.source_coverage or request.retrieval.packet_coverage
-                                       or request.retrieval.requested_sources or request.retrieval.source_references):
+    if request.apply_prompt_policy and (
+        request.retrieval.source_coverage
+        or request.retrieval.packet_coverage
+        or request.retrieval.requested_sources
+        or request.retrieval.source_references
+    ):
         from inference.evidence_coverage import SOURCE_COVERAGE_POLICY
 
-        prompt += '\n\n' + SOURCE_COVERAGE_POLICY
+        prompt += "\n\n" + SOURCE_COVERAGE_POLICY
     if request.apply_prompt_policy and request.retrieval.task_coverage:
         from inference.task_evidence_coverage import TASK_COVERAGE_POLICY
 
@@ -335,7 +346,7 @@ def _system_prompt(request: GenerationRequest) -> str:
     if request.retrieval.has_evidence and request.retrieval.answer_citations_bound:
         from inference.answer_citations import citation_output_policy
 
-        prompt += '\n\n' + citation_output_policy(request.retrieval.citation_namespace)
+        prompt += "\n\n" + citation_output_policy(request.retrieval.citation_namespace)
     return prompt
 
 
@@ -347,7 +358,9 @@ def build_generation_request(request: GenerationRequest) -> GenerationPlan:
     if request.retrieval.task_coverage:
         if request.retrieval.task_query and request.message not in request.retrieval.task_query:
             raise ValueError("Retrieval task query discarded the original message")
-        tasks = validate_task_candidates(request.retrieval.task_coverage, query=request.retrieval.task_query or request.message)
+        tasks = validate_task_candidates(
+            request.retrieval.task_coverage, query=request.retrieval.task_query or request.message
+        )
         request = replace(request, retrieval=replace(request.retrieval, task_coverage=tasks))
     request = admit_deferred_sources(request, _build_generation_request_core)
     return _build_generation_request_core(request)
@@ -360,12 +373,20 @@ def _build_generation_request_core(request: GenerationRequest) -> GenerationPlan
     from inference.memory_response import memory_query_result
     from inference.task_evidence_coverage import settle_task_coverage
 
-    if request.retrieval.task_coverage and any("candidate_status" not in row for row in request.retrieval.task_coverage):
-        request = replace(request, retrieval=replace(
-            request.retrieval, task_coverage=settle_task_coverage(
-                request.retrieval.task_coverage, set(), source_coverage=request.retrieval.source_coverage,
+    if request.retrieval.task_coverage and any(
+        "candidate_status" not in row for row in request.retrieval.task_coverage
+    ):
+        request = replace(
+            request,
+            retrieval=replace(
+                request.retrieval,
+                task_coverage=settle_task_coverage(
+                    request.retrieval.task_coverage,
+                    set(),
+                    source_coverage=request.retrieval.source_coverage,
+                ),
             ),
-        ))
+        )
 
     system_prompt = _system_prompt(request)
     messages: list[Message] = []
@@ -378,8 +399,8 @@ def _build_generation_request_core(request: GenerationRequest) -> GenerationPlan
             request.retrieval.evidence if request.retrieval.has_evidence else "",
             max_chars=request.evidence_max_chars,
             retrieval_coverage=render_coverage(request.retrieval),
-            episodic_context=getattr(request.character_context, 'episodic_reference_context', ''),
-            conversation_context=getattr(request.character_context, 'conversation_reference_context', ''),
+            episodic_context=getattr(request.character_context, "episodic_reference_context", ""),
+            conversation_context=getattr(request.character_context, "conversation_reference_context", ""),
             # 长期记忆只进入用户消息的不可信参考区，绝不进入系统提示词。
             memory_context=(
                 request.character_context.reference_context if request.character_context is not None else ""
@@ -399,7 +420,9 @@ def _build_generation_request_core(request: GenerationRequest) -> GenerationPlan
             raise ValueError("Branch evidence exceeds context budget; no facts were silently dropped")
     fixed_cost = sum(_estimated_tokens(m["content"]) + 4 for m in (*messages, current_user_message))
     if fixed_cost + request.max_tokens + CONTEXT_SAFETY_MARGIN_TOKENS > request.context_window_tokens:
-        raise ValueError("Current message and evidence exceed the serving context budget; shorten the message or evidence")
+        raise ValueError(
+            "Current message and evidence exceed the serving context budget; shorten the message or evidence"
+        )
     task_history, history_policy, excluded_assistant_messages = _task_history(request)
     history = _trim_history_to_budget(
         task_history,
@@ -434,54 +457,75 @@ def _build_generation_request_core(request: GenerationRequest) -> GenerationPlan
 def _build_packet_budgeted_request(request: GenerationRequest) -> GenerationPlan:
     """Use the actual fixed input/output budget, never split a source packet."""
     from inference.evidence_coverage import packet_coverage, settle_source_coverage
+    from inference.evidence_dependencies import dependency_satisfied
     from inference.task_evidence_coverage import settle_task_coverage
 
     accepted = []
     accepted_ids: set[str] = set()
     best = None
-    for packet in request.retrieval.evidence_packets:
-        text = packet.get('text')
-        ids = packet.get('document_ids', ())
-        if not isinstance(text, str) or not text.strip() or not isinstance(ids, (list, tuple)):
-            continue
-        if packet.get('kind') == 'background':
-            # Recheck dependencies after token-budget pruning, not just the
-            # earlier retrieval character budget. Legacy packets have no links.
-            support = packet.get('supporting_document_ids')
-            if not accepted_ids or (support is not None and (
-                not isinstance(support, (list, tuple))
-                or not accepted_ids.intersection(str(i) for i in support)
-            )):
+    pending = list(request.retrieval.evidence_packets)
+    while pending:
+        deferred = []
+        previous_count = len(accepted)
+        for packet in pending:
+            text = packet.get("text")
+            ids = packet.get("document_ids", ())
+            if not isinstance(text, str) or not text.strip() or not isinstance(ids, (list, tuple)):
                 continue
-        evidence = '\n\n'.join([*(p['text'] for p in accepted), text])
-        if request.evidence_max_chars > 0 and len(evidence) > request.evidence_max_chars:
-            continue
-        candidate_ids = accepted_ids | {str(i) for i in ids}
-        retrieval = replace(request.retrieval, evidence=evidence, evidence_packets=(),
-                            source_coverage=settle_source_coverage(request.retrieval.source_coverage, candidate_ids, admitted_packets=(*accepted, packet)),
-                            task_coverage=settle_task_coverage(request.retrieval.task_coverage, candidate_ids, admitted_packets=(*accepted, packet), source_coverage=request.retrieval.source_coverage),
-                            packet_coverage=packet_coverage(len(request.retrieval.evidence_packets), len(accepted) + 1),
-                            citations=tuple(c for c in request.retrieval.citations if str(c.get('id')) in candidate_ids))
-        try:
-            plan = _build_generation_request_core(replace(request, retrieval=retrieval))
-        except ValueError as exc:
-            if str(exc) not in {
-                'Current message and evidence exceed the serving context budget; shorten the message or evidence',
-                'Branch evidence exceeds context budget; no facts were silently dropped',
-            }:
-                raise
-            continue
-        accepted.append(packet)
-        accepted_ids = candidate_ids
-        best = plan
+            if not dependency_satisfied(packet, accepted, request.retrieval.source_coverage):
+                deferred.append(packet)
+                continue
+            evidence = "\n\n".join([*(p["text"] for p in accepted), text])
+            if request.evidence_max_chars > 0 and len(evidence) > request.evidence_max_chars:
+                continue
+            candidate_ids = accepted_ids | {str(i) for i in ids}
+            retrieval = replace(
+                request.retrieval,
+                evidence=evidence,
+                evidence_packets=(),
+                source_coverage=settle_source_coverage(
+                    request.retrieval.source_coverage, candidate_ids, admitted_packets=(*accepted, packet)
+                ),
+                task_coverage=settle_task_coverage(
+                    request.retrieval.task_coverage,
+                    candidate_ids,
+                    admitted_packets=(*accepted, packet),
+                    source_coverage=request.retrieval.source_coverage,
+                ),
+                packet_coverage=packet_coverage(len(request.retrieval.evidence_packets), len(accepted) + 1),
+                citations=tuple(c for c in request.retrieval.citations if str(c.get("id")) in candidate_ids),
+            )
+            try:
+                plan = _build_generation_request_core(replace(request, retrieval=retrieval))
+            except ValueError as exc:
+                if str(exc) not in {
+                    "Current message and evidence exceed the serving context budget; shorten the message or evidence",
+                    "Branch evidence exceeds context budget; no facts were silently dropped",
+                }:
+                    raise
+                continue
+            accepted.append(packet)
+            accepted_ids = candidate_ids
+            best = plan
+        if len(accepted) == previous_count:
+            break
+        pending = deferred
     if best is not None:
         return replace(best, retrieval=replace(best.retrieval, evidence_packets=tuple(accepted)))
     # Unknown evidence is not a license to generate from rejected summaries.
-    retrieval = replace(request.retrieval, status='character_abstention', evidence='', evidence_packets=(),
-                        source_coverage=settle_source_coverage(request.retrieval.source_coverage, set()),
-                        task_coverage=settle_task_coverage(request.retrieval.task_coverage, set(), source_coverage=request.retrieval.source_coverage),
-                        packet_coverage=packet_coverage(len(request.retrieval.evidence_packets), 0),
-                        citations=(), reason='evidence_budget_exhausted')
+    retrieval = replace(
+        request.retrieval,
+        status="character_abstention",
+        evidence="",
+        evidence_packets=(),
+        source_coverage=settle_source_coverage(request.retrieval.source_coverage, set()),
+        task_coverage=settle_task_coverage(
+            request.retrieval.task_coverage, set(), source_coverage=request.retrieval.source_coverage
+        ),
+        packet_coverage=packet_coverage(len(request.retrieval.evidence_packets), 0),
+        citations=(),
+        reason="evidence_budget_exhausted",
+    )
     return _build_generation_request_core(replace(request, retrieval=retrieval))
 
 
@@ -496,15 +540,23 @@ async def generate_character_response(
     from character.memory_operation import operation_receipt_context, render_operation_response, split_operation_request
 
     operation_response = render_operation_response(
-        request.message, getattr(request.character_context, 'memory_operation_receipt', None))
+        request.message, getattr(request.character_context, "memory_operation_receipt", None)
+    )
     if operation_response is not None:
         # Execution status has no model-input dependency. In particular, a
         # committed operation must not lose its receipt to a context overflow.
-        plan = GenerationPlan(messages=(), generation={}, prompt_policy_version=PROMPT_POLICY_VERSION,
-                              lora_name=None, retrieval=RetrievalResult(), history_policy='not_used')
-        return GenerationResult(reply=operation_response, plan=plan, response_mode='memory_operation',
-                                model_invoked=False)
-    receipt = getattr(request.character_context, 'memory_operation_receipt', None)
+        plan = GenerationPlan(
+            messages=(),
+            generation={},
+            prompt_policy_version=PROMPT_POLICY_VERSION,
+            lora_name=None,
+            retrieval=RetrievalResult(),
+            history_policy="not_used",
+        )
+        return GenerationResult(
+            reply=operation_response, plan=plan, response_mode="memory_operation", model_invoked=False
+        )
+    receipt = getattr(request.character_context, "memory_operation_receipt", None)
     split_operation = split_operation_request(request.message) if isinstance(receipt, dict) else None
     if split_operation is not None:
         operation, remaining = split_operation
@@ -512,26 +564,37 @@ async def generate_character_response(
         if confirmation is not None:
             # Only the remaining task reaches generation. The operation already
             # ran once; neither its instruction nor its result is re-inferred.
-            context = replace(request.character_context, memory_operation_receipt=None,
+            context = replace(
+                request.character_context,
+                memory_operation_receipt=None,
                 dynamic_context=request.character_context.dynamic_context.removesuffix(
-                    operation_receipt_context(receipt)).rstrip())
-            result = await generate_character_response(replace(request, message=remaining, character_context=context), generate)
-            return replace(result, reply=confirmation + '\n\n' + result.reply, response_mode='task_composite',
-                task_results=({'kind': 'memory_operation', 'query': operation, 'mode': 'memory_operation'},
-                              {'kind': 'content', 'query': remaining, 'mode': result.response_mode}))
+                    operation_receipt_context(receipt)
+                ).rstrip(),
+            )
+            result = await generate_character_response(
+                replace(request, message=remaining, character_context=context), generate
+            )
+            return replace(
+                result,
+                reply=confirmation + "\n\n" + result.reply,
+                response_mode="task_composite",
+                task_results=(
+                    {"kind": "memory_operation", "query": operation, "mode": "memory_operation"},
+                    {"kind": "content", "query": remaining, "mode": result.response_mode},
+                ),
+            )
     from inference.answer_citations import finalize_answer_citations, prepare_answer_citations
     from inference.citation_recovery import recover_missing_citations
 
     async def finalize_citations(result):
         result = finalize_answer_citations(result)
-        return await recover_missing_citations(result, generate,
-            context_window_tokens=request.context_window_tokens)
-
+        return await recover_missing_citations(result, generate, context_window_tokens=request.context_window_tokens)
 
     request = replace(request, retrieval=prepare_answer_citations(request.retrieval))
     plan = build_generation_request(request)
-    request = replace(request, retrieval=plan.retrieval,
-                      character_context=plan.character_context or request.character_context)
+    request = replace(
+        request, retrieval=plan.retrieval, character_context=plan.character_context or request.character_context
+    )
     if request.reply_guard is not None and request.retrieval.has_evidence:
         # Retrieved names are grounded references, not unprompted identity
         # leakage. Keep all other subject, safety and style checks unchanged.
@@ -543,32 +606,39 @@ async def generate_character_response(
     source_response = render_source_response(request.retrieval)
     if source_response is not None:
         reply, mode, citations = source_response
-        return GenerationResult(reply=reply, plan=plan, response_mode=mode,
-                                response_citations=citations, model_invoked=False)
+        return GenerationResult(
+            reply=reply, plan=plan, response_mode=mode, response_citations=citations, model_invoked=False
+        )
     if not plan.should_generate:
         raise RuntimeError(plan.retrieval.reason or f"retrieval status is {plan.retrieval.status}")
     from inference.current_constraint_response import render_current_constraint_response
 
     current_response = render_current_constraint_response(request.message, request.character_context)
     if current_response is not None:
-        return GenerationResult(reply=current_response, plan=plan, response_mode='current_constraint',
-                                model_invoked=False)
+        return GenerationResult(
+            reply=current_response, plan=plan, response_mode="current_constraint", model_invoked=False
+        )
     from inference.memory_response import render_memory_response, storage_fields
 
     memory_response = render_memory_response(request.message, request.character_context, history=request.history)
     if memory_response is not None:
         from character.memory_mentions import mention_query
 
-        mode = ('memory_mentions' if mention_query(request.message) is not None else
-                'memory_storage_status' if storage_fields(request.message) else 'memory_lookup')
-        return GenerationResult(reply=memory_response, plan=plan, response_mode=mode,
-                                model_invoked=False)
+        mode = (
+            "memory_mentions"
+            if mention_query(request.message) is not None
+            else "memory_storage_status"
+            if storage_fields(request.message)
+            else "memory_lookup"
+        )
+        return GenerationResult(reply=memory_response, plan=plan, response_mode=mode, model_invoked=False)
     from inference.memory_response import render_complete_memory_read
 
     complete_read = render_complete_memory_read(request.message, request.character_context, request.history)
     if complete_read is not None:
-        return GenerationResult(reply=complete_read, plan=plan, response_mode='memory_field_result',
-                                model_invoked=False)
+        return GenerationResult(
+            reply=complete_read, plan=plan, response_mode="memory_field_result", model_invoked=False
+        )
     from inference.task_execution import prepare_independent_tasks
 
     execution = prepare_independent_tasks(request)
@@ -577,13 +647,27 @@ async def generate_character_response(
         result = await generate_character_response(subrequest, generate)
         if result.guard_fallback:
             return result
-        replies = [completed[index][0] if index in completed else result.reply for index in range(len(tasks))
-                   if tasks[index].kind != 'control']
-        outcomes = tuple({'kind': task.kind, 'query': task.original,
-                          'mode': completed[index][1] if index in completed else result.response_mode}
-                         for index, task in enumerate(tasks) if task.kind != 'control')
-        return replace(result, reply='\n\n'.join(replies), response_mode='task_composite', task_results=outcomes,
-                       response_citations=result.response_citations)
+        replies = [
+            completed[index][0] if index in completed else result.reply
+            for index in range(len(tasks))
+            if tasks[index].kind != "control"
+        ]
+        outcomes = tuple(
+            {
+                "kind": task.kind,
+                "query": task.original,
+                "mode": completed[index][1] if index in completed else result.response_mode,
+            }
+            for index, task in enumerate(tasks)
+            if task.kind != "control"
+        )
+        return replace(
+            result,
+            reply="\n\n".join(replies),
+            response_mode="task_composite",
+            task_results=outcomes,
+            response_citations=result.response_citations,
+        )
     messages = [dict(message) for message in plan.messages]
     reply = await generate(
         messages=messages,
@@ -604,21 +688,21 @@ async def generate_character_response(
     )
 
     violations = validate_reply(reply, request.reply_guard)
-    blocking = retryable_violations(
-        reply, request.reply_guard, violations, strict=request.reply_guard_mode == "strict"
-    )
+    blocking = retryable_violations(reply, request.reply_guard, violations, strict=request.reply_guard_mode == "strict")
     if not blocking:
         return await finalize_citations(GenerationResult(reply=reply, plan=plan, guard_violations=violations))
 
-    if (getattr(request.character_context, "memory_status", "") == "no_match"
-            and set(blocking) == {UNSUPPORTED_USER_FACT}):
+    if getattr(request.character_context, "memory_status", "") == "no_match" and set(blocking) == {
+        UNSUPPORTED_USER_FACT
+    }:
         # Source availability alone did not make generic repair reliable in
         # r119 real-model replays. Keep the cheap fallback pending a supported
         # claim-level mechanism; no_match is not proof that all sources lack facts.
         fallback = deterministic_fallback(blocking, request.reply_guard, candidate_reply=reply)
         if fallback is not None:
-            return await finalize_citations(GenerationResult(reply=fallback[1], plan=plan, guard_violations=violations,
-                                    guard_fallback=fallback[0]))
+            return await finalize_citations(
+                GenerationResult(reply=fallback[1], plan=plan, guard_violations=violations, guard_fallback=fallback[0])
+            )
 
     corrected_messages = apply_retry_instruction(messages, retry_instruction(blocking))
     # The trusted correction changes fixed input size. Reuse the same complete
@@ -629,10 +713,14 @@ async def generate_character_response(
     retry_history = [m for m in corrected_messages[:-1] if m["role"] in {"user", "assistant"}]
     fixed_cost = sum(_estimated_tokens(m["content"]) + 4 for m in fixed_retry)
     if fixed_cost + request.max_tokens + CONTEXT_SAFETY_MARGIN_TOKENS > request.context_window_tokens:
-        raise ValueError("Current message and evidence exceed the serving context budget; shorten the message or evidence")
+        raise ValueError(
+            "Current message and evidence exceed the serving context budget; shorten the message or evidence"
+        )
     retry_history = _trim_history_to_budget(
-        retry_history, fixed_messages=fixed_retry,
-        context_window_tokens=request.context_window_tokens, max_output_tokens=request.max_tokens,
+        retry_history,
+        fixed_messages=fixed_retry,
+        context_window_tokens=request.context_window_tokens,
+        max_output_tokens=request.max_tokens,
     )
     corrected_messages = [*fixed_retry[:-1], *retry_history, fixed_retry[-1]]
     reply = await generate(
@@ -646,7 +734,8 @@ async def generate_character_response(
     )
     fallback = (
         deterministic_fallback(blocking_remaining, request.reply_guard, candidate_reply=reply)
-        if blocking_remaining else None
+        if blocking_remaining
+        else None
     )
     closed_hard_violation_ids = FACTUAL_HARD_VIOLATIONS | frozenset(
         {UNPROMPTED_CANONICAL_IDENTITY, UNPROMPTED_LORE_FLOURISH, FORBIDDEN_LAUGHTER}
@@ -658,7 +747,9 @@ async def generate_character_response(
         if fallback is None:
             raise RuntimeError("deterministic closed guard fallback is missing")
         fallback_violations = retryable_violations(
-            fallback[1], request.reply_guard, validate_reply(fallback[1], request.reply_guard),
+            fallback[1],
+            request.reply_guard,
+            validate_reply(fallback[1], request.reply_guard),
             strict=request.reply_guard_mode == "strict",
         )
         if closed_hard_violation_ids.intersection(fallback_violations):
@@ -666,11 +757,13 @@ async def generate_character_response(
     fallback_kind = ""
     if fallback is not None:
         fallback_kind, reply = fallback
-    return await finalize_citations(GenerationResult(
-        reply=reply,
-        plan=plan,
-        guard_violations=violations,
-        guard_retried=True,
-        guard_post_retry_violations=remaining,
-        guard_fallback=fallback_kind,
-    ))
+    return await finalize_citations(
+        GenerationResult(
+            reply=reply,
+            plan=plan,
+            guard_violations=violations,
+            guard_retried=True,
+            guard_post_retry_violations=remaining,
+            guard_fallback=fallback_kind,
+        )
+    )

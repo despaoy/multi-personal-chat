@@ -27,12 +27,17 @@ def attach_original_sources(bundle, read_document, *, source_budget_tokens, auth
         if not members:
             indexed = record.get("indexed_document_ids")
             retrieved = record.get("retrieved_document_ids")
-            if (not isinstance(indexed, (list, tuple)) or not indexed
-                    or not all(isinstance(i, str) and re.fullmatch(
-                        rf"doc_{identity}_chunk_(?:0|[1-9]\d*)", i) for i in indexed)
-                    or len(set(indexed)) != len(indexed)
-                    or not isinstance(retrieved, (list, tuple)) or retrieved
-                    or record.get("original_source_receipt") is not None):
+            if (
+                not isinstance(indexed, (list, tuple))
+                or not indexed
+                or not all(
+                    isinstance(i, str) and re.fullmatch(rf"doc_{identity}_chunk_(?:0|[1-9]\d*)", i) for i in indexed
+                )
+                or len(set(indexed)) != len(indexed)
+                or not isinstance(retrieved, (list, tuple))
+                or retrieved
+                or record.get("original_source_receipt") is not None
+            ):
                 raise ValueError("Original source has no authorized retrieved identity")
             # An independently requested indexed root may fit no chunks.
             # Preserve its zero coverage without reading an unauthorized
@@ -62,7 +67,16 @@ def attach_original_sources(bundle, read_document, *, source_budget_tokens, auth
             "text": text,
             "original_source_id": source_id,
             "original_body": body,
+            "knowledge_base_id": document["knowledge_base_id"],
         }
+        if all(member.get("retrieval_role") == "source_context" for member in members):
+            support = tuple(dict.fromkeys(i for member in members for i in member.get("supporting_document_ids", ())))
+            if not support:
+                raise ValueError("Dependent original has no referring evidence")
+            packet.update(kind="background", supporting_document_ids=list(support))
+            refs = [ref for member in members for ref in member.get("supporting_source_refs", ())]
+            if refs:
+                packet.update(source_id=source_id, supporting_source_refs=tuple(refs))
         cost = estimated_tokens(text) + 4
         included = cost <= remaining
         if included:
