@@ -1398,89 +1398,97 @@ async def _generate_with_retrieval(
                 timeout=_RAG_TIMEOUT,
             )
             if need_rag:
-                if kb_name:
-                    kb_id = await asyncio.to_thread(_resolve_kb_id, kb_name, database=message_db)
-                    if kb_id is not None:
-                        filters = {"knowledge_base_id": kb_id}
-                        logger.info("RAG路由: 消息→「%s」(id=%s)", kb_name, kb_id)
-
                 from knowledge.retrieval_query_plan import plan_retrieval_views
 
-                query_plan = await plan_retrieval_views(retrieval_query)
-                view_options = {"search_views": query_plan.views} if query_plan.views else {}
-                bundle = await asyncio.wait_for(
-                    _retrieve_rag_bundle(retrieval_query, 3, filters, **view_options),
-                    timeout=_rag_retrieval_timeout(),
-                )
-                bundle["query_plan_status"] = query_plan.status
-                rag_meta = {
-                    "citations": bundle.get("citations", []) if citations_enabled else [],
-                    "confidence": bundle.get("confidence"),
-                    "abstained": bundle.get("abstained", False),
-                    "answerMode": ("abstention" if bundle.get("abstained", False) else "grounded_answer"),
-                    "domainId": next(iter(bundle.get("domains") or []), None),
-                    "warnings": bundle.get("warnings") or None,
-                    "modelInvoked": True,
-                }
-                from inference.evidence_coverage import requested_source_lookups
-                from knowledge.query_tasks import requests_only_source_excerpt
-
-                source_requests = requested_source_lookups(bundle, rag_message)
-
-                source_lookup = bundle.get(
-                    "retrieval_strategy"
-                ) == "multi_scale_character" and requests_only_source_excerpt(rag_message)
-                if bundle.get("abstained", False):
-                    # Generate only the character's expression of uncertainty.
-                    # Unreliable candidates and their citations never reach it.
-                    rag_meta["citations"] = []
-                    retrieval = RetrievalResult(
-                        status="character_abstention",
-                        confidence=bundle.get("confidence"),
-                        reason="insufficient_retrieval_evidence",
-                        requested_sources=source_requests,
-                        source_references=tuple(bundle.get("source_references") or ()),
-                        source_lookup=source_lookup,
-                        task_coverage=tuple(bundle.get("task_candidate_coverage") or ()),
-                        task_query=retrieval_query,
-                    )
-
-                # 角色知识检索结果自带按粒度组装的 context_text；
-                # 通用知识库结果保留整份检索片段，交给最终请求预算裁决。
+                # Plan current speech, never an expanded query inheriting an
+                # unrelated previous topic. All original segments must remain.
+                query_plan = await plan_retrieval_views(rag_message)
+                if (query_plan.private_context_only and prepared_character_turn is not None
+                        and not prepared_character_turn.compiled.branch_context):
+                    retrieval = RetrievalResult(reason="private_context_dependencies")
+                    rag_meta = {"citations": [], "confidence": None, "abstained": False,
+                                "answerMode": "personal_context", "modelInvoked": True}
                 else:
-                    character_knowledge_context = bundle.get("context_text") or ""
-                    evidence_packets = tuple(bundle.get("evidence_packets") or ())
-                    if character_knowledge_context or bundle.get("retrieval_strategy") == "multi_scale_character":
-                        rag_context = character_knowledge_context
-                    else:
-                        from knowledge.evidence_packets import document_evidence_packets
+                    if kb_name:
+                        kb_id = await asyncio.to_thread(_resolve_kb_id, kb_name, database=message_db)
+                        if kb_id is not None:
+                            filters = {"knowledge_base_id": kb_id}
+                            logger.info("RAG路由: 消息→「%s」(id=%s)", kb_name, kb_id)
 
-                        # Citation display cannot decide which source text reaches the model.
-                        evidence_packets = (
-                            document_evidence_packets(bundle.get("results", []))
-                            + tuple(bundle.get("original_source_packets") or ())
-                        )
-                        rag_context = "\n\n".join(packet["text"] for packet in evidence_packets)
-                    retrieval = RetrievalResult(
-                        status="ok" if rag_context else "character_abstention",
-                        reason="" if rag_context else "evidence_budget_exhausted",
-                        evidence=rag_context,
-                        evidence_packets=evidence_packets,
-                        source_coverage=tuple(bundle.get("source_coverage") or ()),
-                        task_coverage=tuple(bundle.get("task_candidate_coverage") or ()),
-                        task_query=retrieval_query,
-                        identity_task=bundle.get("identity_task") or {},
-                        identity_subtask=bundle.get("identity_subtask") or {},
-                        documents=tuple(bundle.get("results", [])),
-                        citations=tuple(rag_meta.get("citations", [])),
-                        confidence=bundle.get("confidence"),
-                        requested_sources=source_requests,
-                        source_references=tuple(bundle.get("source_references") or ()),
-                        source_lookup=source_lookup,
-                        source_excerpts=(
-                            (bundle["raw_excerpt"],) if isinstance(bundle.get("raw_excerpt"), dict) else ()
-                        ),
+                    view_options = {"search_views": query_plan.views} if query_plan.views else {}
+                    bundle = await asyncio.wait_for(
+                        _retrieve_rag_bundle(retrieval_query, 3, filters, **view_options),
+                        timeout=_rag_retrieval_timeout(),
                     )
+                    bundle["query_plan_status"] = query_plan.status
+                    rag_meta = {
+                        "citations": bundle.get("citations", []) if citations_enabled else [],
+                        "confidence": bundle.get("confidence"),
+                        "abstained": bundle.get("abstained", False),
+                        "answerMode": ("abstention" if bundle.get("abstained", False) else "grounded_answer"),
+                        "domainId": next(iter(bundle.get("domains") or []), None),
+                        "warnings": bundle.get("warnings") or None,
+                        "modelInvoked": True,
+                    }
+                    from inference.evidence_coverage import requested_source_lookups
+                    from knowledge.query_tasks import requests_only_source_excerpt
+
+                    source_requests = requested_source_lookups(bundle, rag_message)
+
+                    source_lookup = bundle.get(
+                        "retrieval_strategy"
+                    ) == "multi_scale_character" and requests_only_source_excerpt(rag_message)
+                    if bundle.get("abstained", False):
+                        # Generate only the character's expression of uncertainty.
+                        # Unreliable candidates and their citations never reach it.
+                        rag_meta["citations"] = []
+                        retrieval = RetrievalResult(
+                            status="character_abstention",
+                            confidence=bundle.get("confidence"),
+                            reason="insufficient_retrieval_evidence",
+                            requested_sources=source_requests,
+                            source_references=tuple(bundle.get("source_references") or ()),
+                            source_lookup=source_lookup,
+                            task_coverage=tuple(bundle.get("task_candidate_coverage") or ()),
+                            task_query=retrieval_query,
+                        )
+
+                    # 角色知识检索结果自带按粒度组装的 context_text；
+                    # 通用知识库结果保留整份检索片段，交给最终请求预算裁决。
+                    else:
+                        character_knowledge_context = bundle.get("context_text") or ""
+                        evidence_packets = tuple(bundle.get("evidence_packets") or ())
+                        if character_knowledge_context or bundle.get("retrieval_strategy") == "multi_scale_character":
+                            rag_context = character_knowledge_context
+                        else:
+                            from knowledge.evidence_packets import document_evidence_packets
+
+                            # Citation display cannot decide which source text reaches the model.
+                            evidence_packets = (
+                                document_evidence_packets(bundle.get("results", []))
+                                + tuple(bundle.get("original_source_packets") or ())
+                            )
+                            rag_context = "\n\n".join(packet["text"] for packet in evidence_packets)
+                        retrieval = RetrievalResult(
+                            status="ok" if rag_context else "character_abstention",
+                            reason="" if rag_context else "evidence_budget_exhausted",
+                            evidence=rag_context,
+                            evidence_packets=evidence_packets,
+                            source_coverage=tuple(bundle.get("source_coverage") or ()),
+                            task_coverage=tuple(bundle.get("task_candidate_coverage") or ()),
+                            task_query=retrieval_query,
+                            identity_task=bundle.get("identity_task") or {},
+                            identity_subtask=bundle.get("identity_subtask") or {},
+                            documents=tuple(bundle.get("results", [])),
+                            citations=tuple(rag_meta.get("citations", [])),
+                            confidence=bundle.get("confidence"),
+                            requested_sources=source_requests,
+                            source_references=tuple(bundle.get("source_references") or ()),
+                            source_lookup=source_lookup,
+                            source_excerpts=(
+                                (bundle["raw_excerpt"],) if isinstance(bundle.get("raw_excerpt"), dict) else ()
+                            ),
+                        )
         except Exception as e:
             increment("rag_failures")
             log_event(

@@ -1,0 +1,292 @@
+{
+  "actual_calls": 25,
+  "http200": 25,
+  "actual_final_main_calls": 4,
+  "auxiliary_calls": 21,
+  "native_http200": 4,
+  "native_http500": 1,
+  "estimated_cost_cny": "0.31750472",
+  "receipts": [
+    {
+      "folder": "native-pg-private",
+      "index": 0,
+      "main": false,
+      "http_status": 200,
+      "prompt_tokens": 18924,
+      "cached_tokens": 256,
+      "completion_tokens": 133,
+      "estimated_cny": "0.01920512"
+    },
+    {
+      "folder": "native-pg-private",
+      "index": 1,
+      "main": false,
+      "http_status": 200,
+      "prompt_tokens": 22617,
+      "cached_tokens": 512,
+      "completion_tokens": 85,
+      "estimated_cny": "0.02245524"
+    },
+    {
+      "folder": "native-pg-private",
+      "index": 2,
+      "main": false,
+      "http_status": 200,
+      "prompt_tokens": 18780,
+      "cached_tokens": 0,
+      "completion_tokens": 16,
+      "estimated_cny": "0.018844"
+    },
+    {
+      "folder": "native-pg-private",
+      "index": 3,
+      "main": false,
+      "http_status": 200,
+      "prompt_tokens": 1310,
+      "cached_tokens": 0,
+      "completion_tokens": 141,
+      "estimated_cny": "0.001874"
+    },
+    {
+      "folder": "native-pg-private",
+      "index": 4,
+      "main": true,
+      "http_status": 200,
+      "prompt_tokens": 18600,
+      "cached_tokens": 1152,
+      "completion_tokens": 466,
+      "estimated_cny": "0.01933504"
+    },
+    {
+      "folder": "native-pg-unavailable",
+      "index": 0,
+      "main": false,
+      "http_status": 200,
+      "prompt_tokens": 19023,
+      "cached_tokens": 256,
+      "completion_tokens": 127,
+      "estimated_cny": "0.01928012"
+    },
+    {
+      "folder": "native-pg-unavailable",
+      "index": 1,
+      "main": false,
+      "http_status": 200,
+      "prompt_tokens": 22686,
+      "cached_tokens": 512,
+      "completion_tokens": 85,
+      "estimated_cny": "0.02252424"
+    },
+    {
+      "folder": "native-pg-unavailable",
+      "index": 2,
+      "main": false,
+      "http_status": 200,
+      "prompt_tokens": 18912,
+      "cached_tokens": 0,
+      "completion_tokens": 16,
+      "estimated_cny": "0.018976"
+    },
+    {
+      "folder": "native-pg-unavailable",
+      "index": 3,
+      "main": false,
+      "http_status": 200,
+      "prompt_tokens": 1478,
+      "cached_tokens": 0,
+      "completion_tokens": 218,
+      "estimated_cny": "0.00235"
+    },
+    {
+      "folder": "native-pg-unavailable",
+      "index": 4,
+      "main": true,
+      "http_status": 200,
+      "prompt_tokens": 18536,
+      "cached_tokens": 1664,
+      "completion_tokens": 375,
+      "estimated_cny": "0.01840528"
+    },
+    {
+      "folder": "native-pg-mixed",
+      "index": 0,
+      "main": false,
+      "http_status": 200,
+      "prompt_tokens": 18882,
+      "cached_tokens": 256,
+      "completion_tokens": 127,
+      "estimated_cny": "0.01913912"
+    },
+    {
+      "folder": "native-pg-mixed",
+      "index": 1,
+      "main": false,
+      "http_status": 200,
+      "prompt_tokens": 22622,
+      "cached_tokens": 512,
+      "completion_tokens": 82,
+      "estimated_cny": "0.02244824"
+    },
+    {
+      "folder": "native-pg-mixed",
+      "index": 2,
+      "main": false,
+      "http_status": 200,
+      "prompt_tokens": 18843,
+      "cached_tokens": 0,
+      "completion_tokens": 16,
+      "estimated_cny": "0.018907"
+    },
+    {
+      "folder": "native-pg-mixed",
+      "index": 3,
+      "main": false,
+      "http_status": 200,
+      "prompt_tokens": 1305,
+      "cached_tokens": 128,
+      "completion_tokens": 189,
+      "estimated_cny": "0.00193556"
+    },
+    {
+      "folder": "native-pg-mixed",
+      "index": 4,
+      "main": true,
+      "http_status": 200,
+      "prompt_tokens": 18833,
+      "cached_tokens": 16896,
+      "completion_tokens": 507,
+      "estimated_cny": "0.00430292"
+    },
+    {
+      "folder": "failed-planner-retest-isolated",
+      "index": 0,
+      "main": false,
+      "http_status": 200,
+      "prompt_tokens": 1539,
+      "cached_tokens": 0,
+      "completion_tokens": 224,
+      "estimated_cny": "0.002435"
+    },
+    {
+      "folder": "failed-planner-retest-examples",
+      "index": 0,
+      "main": false,
+      "http_status": 200,
+      "prompt_tokens": 1785,
+      "cached_tokens": 128,
+      "completion_tokens": 127,
+      "estimated_cny": "0.00216756"
+    },
+    {
+      "folder": "native-pg-final",
+      "index": 0,
+      "main": false,
+      "http_status": 200,
+      "prompt_tokens": 18899,
+      "cached_tokens": 256,
+      "completion_tokens": 133,
+      "estimated_cny": "0.01918012"
+    },
+    {
+      "folder": "native-pg-final",
+      "index": 1,
+      "main": false,
+      "http_status": 200,
+      "prompt_tokens": 18784,
+      "cached_tokens": 0,
+      "completion_tokens": 16,
+      "estimated_cny": "0.018848"
+    },
+    {
+      "folder": "native-pg-final",
+      "index": 2,
+      "main": false,
+      "http_status": 200,
+      "prompt_tokens": 1641,
+      "cached_tokens": 512,
+      "completion_tokens": 88,
+      "estimated_cny": "0.00149124"
+    },
+    {
+      "folder": "native-pg-finalretry",
+      "index": 0,
+      "main": false,
+      "http_status": 200,
+      "prompt_tokens": 18899,
+      "cached_tokens": 18688,
+      "completion_tokens": 133,
+      "estimated_cny": "0.00111676"
+    },
+    {
+      "folder": "native-pg-finalretry",
+      "index": 1,
+      "main": false,
+      "http_status": 200,
+      "prompt_tokens": 22608,
+      "cached_tokens": 512,
+      "completion_tokens": 85,
+      "estimated_cny": "0.02244624"
+    },
+    {
+      "folder": "native-pg-finalretry",
+      "index": 2,
+      "main": false,
+      "http_status": 200,
+      "prompt_tokens": 18804,
+      "cached_tokens": 18432,
+      "completion_tokens": 16,
+      "estimated_cny": "0.00080464"
+    },
+    {
+      "folder": "native-pg-finalretry",
+      "index": 3,
+      "main": false,
+      "http_status": 200,
+      "prompt_tokens": 1641,
+      "cached_tokens": 1408,
+      "completion_tokens": 88,
+      "estimated_cny": "0.00061316"
+    },
+    {
+      "folder": "native-pg-finalretry",
+      "index": 4,
+      "main": true,
+      "http_status": 200,
+      "prompt_tokens": 16967,
+      "cached_tokens": 256,
+      "completion_tokens": 426,
+      "estimated_cny": "0.01842012"
+    }
+  ],
+  "estimate_not_invoice_or_current_official_quote": true,
+  "initial_unit_execution_passes": 43,
+  "overlap_protocol_execution_passes": 2,
+  "source_dependency_execution_passes": 5,
+  "subject_architecture_execution_passes": 16,
+  "unit_pass_executions_total": 66,
+  "paid_passed_main_resampled": 0,
+  "all_jobs_terminal": true,
+  "production_code_changed": true,
+  "production_restarted": true,
+  "whole_goal_complete": false,
+  "final_native_integrity": {
+    "passed": 19,
+    "total": 19
+  },
+  "final_native_semantic": {
+    "passed": 19,
+    "total": 19
+  },
+  "mixed_content": {
+    "passed": 20,
+    "total": 20
+  },
+  "mixed_strict_shape_failed": true,
+  "prior_private_public_retrieval_preserved": true,
+  "prior_unknown_source_classification_failed": true,
+  "prior_subject_filter_native500_preserved": true,
+  "subject_filter_reason": "nearest_pronoun_topic_heuristic_mistook_referent_for_non_user_owner",
+  "deployment_ready": 200,
+  "static_new_diagnostics": 0,
+  "preexisting_unchanged_static_diagnostics": 1
+}

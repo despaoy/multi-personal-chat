@@ -429,6 +429,10 @@ def memory_write_allowed(message: str) -> bool:
     该门禁同时供规则提取器和后台 LLM 使用，保证两条路径遵守同一套
     用户拒绝与敏感信息策略。敏感消息不发送给记忆 LLM。
     """
+    from character.memory_authorization import explicit_memory_read_only
+
+    if explicit_memory_read_only(message or ""):
+        return False
     text = (message or "").strip()
     return bool(text and not _MEMORY_OPTOUT_PATTERN.search(text) and not _SENSITIVE_PATTERN.search(text))
 

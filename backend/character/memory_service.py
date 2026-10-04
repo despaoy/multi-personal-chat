@@ -1025,7 +1025,21 @@ class CharacterMemoryService:
         # Goal-category routing is a relevance heuristic, not an authorization
         # or subject boundary. A contextual reviewer must still see resources
         # needed by compound tasks (e.g. research topic + available hardware).
-        suppression_intents = replace(intents, goal=False) if for_contextual_selection else intents
+        suppression_intents = intents
+        if for_contextual_selection:
+            from character.memory_read_subject import closed_other_subject_fields
+
+            # Pronoun/topic proximity is a ranking heuristic. An ambiguous
+            # clause cannot veto other tasks before the mandatory selector has
+            # reviewed the complete query and authorized source evidence.
+            closed_other_fields = closed_other_subject_fields(query)
+            suppression_intents = replace(
+                intents, goal=False,
+                suppress_name='name' in closed_other_fields,
+                suppress_preference='preference' in closed_other_fields,
+            )
+            trace['subject_filter_mode'] = ('closed_other_lookup' if closed_other_fields
+                                            else 'contextual_review')
         from character.current_turn_memory import shadowed_memory_ids
 
         # Keep the repository snapshot and storage-presence diagnostics intact.

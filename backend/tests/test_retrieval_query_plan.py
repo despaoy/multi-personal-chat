@@ -31,7 +31,10 @@ def test_untrusted_output_cannot_invent_values_filters_or_permissions(raw):
 async def test_full_question_reaches_reviewer_without_source_or_answer_injection(monkeypatch):
     monkeypatch.setenv("RAG_TASK_PLANNER_ENABLED", "true")
     async def review(messages):
-        assert json.loads(messages[-1]["content"]) == {"query": QUERY}
+        payload = json.loads(messages[-1]["content"])
+        assert payload["query"] == QUERY
+        assert "".join(segment["text"] for segment in payload["segments"]) == QUERY
+        assert [segment["id"] for segment in payload["segments"]] == list(range(len(payload["segments"])))
         return json.dumps({"search_views": [["青川通道", "公共办理规则", "核验条件"]]})
     result = await plan_retrieval_views(QUERY, reviewer=review)
     assert result.status == "applied" and result.views == ("青川通道 公共办理规则 核验条件",)
