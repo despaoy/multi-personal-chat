@@ -10,6 +10,14 @@ from dataclasses import dataclass
 from knowledge.turn_dependencies import TurnDependencies, parse_dependencies, query_segments
 
 
+class QueryPlanReviewError(RuntimeError):
+    # Missing attempted dependency proof cannot grant public evidence.
+
+    def __init__(self, status):
+        self.status = status
+        super().__init__("query_plan_" + status)
+
+
 @dataclass(frozen=True)
 class RetrievalQueryPlan:
     views: tuple[str, ...] = ()

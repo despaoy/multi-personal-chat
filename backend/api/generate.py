@@ -1421,11 +1421,15 @@ async def _generate_with_retrieval(
                 timeout=_RAG_TIMEOUT,
             )
             if need_rag:
-                from knowledge.retrieval_query_plan import plan_retrieval_views
+                from knowledge.retrieval_query_plan import QueryPlanReviewError, plan_retrieval_views
 
                 # Plan current speech, never an expanded query inheriting an
                 # unrelated previous topic. All original segments must remain.
                 query_plan = await plan_retrieval_views(rag_message)
+                if query_plan.dependencies is None and query_plan.status in {"invalid", "unavailable"}:
+                    # An attempted semantic plan failed. Ranking candidates cannot
+                    # replace missing object/task proof; keep private context intact.
+                    raise QueryPlanReviewError(query_plan.status)
                 if (query_plan.private_context_only and prepared_character_turn is not None
                         and not prepared_character_turn.compiled.branch_context):
                     retrieval = RetrievalResult(reason="private_context_dependencies")
@@ -1555,6 +1559,7 @@ async def _generate_with_retrieval(
             )
             logger.warning("RAG retrieval failed: %s", e)
             from knowledge.public_question_binding import QuestionBindingReviewError, failed_question_binding_review
+            from knowledge.retrieval_query_plan import QueryPlanReviewError
 
             if isinstance(e, QuestionBindingReviewError):
                 retrieval = RetrievalResult(
@@ -1565,6 +1570,8 @@ async def _generate_with_retrieval(
                     public_task_query=rag_message,
                     public_dependency_indices=tuple(dict(query_plan.dependencies.groups)["public_knowledge"]),
                 )
+            elif isinstance(e, QueryPlanReviewError):
+                retrieval = RetrievalResult(status="character_abstention", reason="query_plan_" + e.status)
             else:
                 retrieval = RetrievalResult(status="character_abstention", reason="retrieval_unavailable")
             rag_meta = {
@@ -1573,7 +1580,7 @@ async def _generate_with_retrieval(
                 "abstained": True,
                 "answerMode": "abstention",
                 "modelInvoked": True,
-                "warnings": ["retrieval_unavailable"],
+                "warnings": ["query_plan_" + e.status if isinstance(e, QueryPlanReviewError) else "retrieval_unavailable"],
             }
 
     model_generate = model_generate or _vllm_client.generate

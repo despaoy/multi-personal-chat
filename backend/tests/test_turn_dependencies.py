@@ -106,7 +106,7 @@ async def test_every_full_original_segment_reaches_planner(monkeypatch):
 async def test_actual_route_uses_dependencies_not_presence_of_one_memory(monkeypatch, mode):
     from api import generate
     from db.schemas import MessageRequest
-    from knowledge import intent_detector, retrieval_query_plan
+    from knowledge import intent_detector, public_question_binding, retrieval_query_plan
 
     value = baseline()
     if mode == "mixed":
@@ -132,6 +132,11 @@ async def test_actual_route_uses_dependencies_not_presence_of_one_memory(monkeyp
 
     compiled = CompiledCharacterContext("", "", "", branch_context="fiction" if mode == "branch" else "")
     prepared = None if mode == "missing_context" else SimpleNamespace(compiled=compiled, history=())
+    async def no_binding(*args, **kwargs):
+        # This routing-only control has no question or source approval.
+        return None
+
+    monkeypatch.setattr(public_question_binding, "resolve_question_binding", no_binding)
     monkeypatch.setattr(retrieval_query_plan, "plan_retrieval_views", planner)
     monkeypatch.setattr(intent_detector, "needs_rag", lambda _: (True, "unit", None))
     monkeypatch.setattr(generate, "_retrieve_rag_bundle", retrieve)
