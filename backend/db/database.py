@@ -3612,6 +3612,13 @@ class SQLiteDB:
         scope=memory_source.source_scope(character_id,platform,adapter,sender_id,conversation_type,conversation_id)
         return memory_source.run_sqlite(self._get_connection().cursor(),linked_receipt_plan(scope,claim_sources))
 
+    def linked_memory_source_revisions(self, character_id, platform, adapter, sender_id,
+                                      conversation_type, conversation_id, *, claim_sources):
+        from db.memory_claim_source_revisions import linked_revision_plan
+
+        scope=memory_source.source_scope(character_id,platform,adapter,sender_id,conversation_type,conversation_id)
+        return memory_source.run_sqlite(self._get_connection().cursor(),linked_revision_plan(scope,claim_sources))
+
     def memory_source_windows(self, character_id, platform, adapter, sender_id,
                               conversation_type, conversation_id, *, source_message_ids, radius=1):
         from db.memory_source_window import window_plan

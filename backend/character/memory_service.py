@@ -920,6 +920,25 @@ class CharacterMemoryService:
         from character.memory_read_authority import read_versions, record_version
 
         stored_versions = {str(row["id"]): record_version(row) for row in records}
+        # Exact normalized-claim revisions grant no complete speech read.
+        source_pairs = {str(row['id']): tuple(row.get('source_message_ids') or ())
+                        for row in records if str(row.get('id', '')).isdigit()}
+        source_revisions = {}
+        revision_reader = getattr(self._repo, 'linked_source_revisions', None)
+        trace['claim_revision_status'] = 'not_needed'
+        pairs = tuple(dict.fromkeys((int(key), str(source_id)) for key, ids in source_pairs.items() for source_id in ids))
+        if pairs:
+            trace['claim_revision_status'] = 'available' if callable(revision_reader) else 'unsupported'
+            if callable(revision_reader):
+                try:
+                    for start in range(0, len(pairs), 200):
+                        revisions = await revision_reader(character_id, user_scope, claim_sources=pairs[start:start + 200])
+                        for revision in revisions:
+                            source_revisions.setdefault(str(revision['memory_id']), {})[str(revision['source_message_id'])] = revision
+                except Exception:
+                    source_revisions = {}
+                    trace['claim_revision_status'] = 'retrieval_error'
+        from character.memory_read_authority import read_source_record_bindings
         # Read source authority through actual claim links, in bounded batches.
         # Keep associations: a citation on a different row cannot grant proof.
         legacy_rows = [row for row in records
@@ -1270,6 +1289,8 @@ class CharacterMemoryService:
                         source_observation=is_source_observation(row),
                         storage_versions=read_versions(row, stored_versions, claim_sources)[0],
                         source_versions=read_versions(row, stored_versions, claim_sources)[1],
+                        source_record_pairs=read_source_record_bindings(row, stored_versions, source_pairs, source_revisions)[0],
+                        source_record_versions=read_source_record_bindings(row, stored_versions, source_pairs, source_revisions)[1],
                         **source_fragment_fields(row),
                     ),
                 )

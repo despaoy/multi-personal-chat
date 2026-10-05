@@ -237,6 +237,14 @@ class DatabaseCharacterMemoryRepository:
         return await asyncio.to_thread(reader,character_id,user_scope.platform,user_scope.adapter,user_scope.sender_id,
             user_scope.conversation_type,user_scope.conversation_id,claim_sources=claim_sources)
 
+    async def linked_source_revisions(self, character_id: str, user_scope: UserScope, *,
+                                     claim_sources: tuple[tuple[int,str],...]) -> list[dict[str,Any]]:
+        reader=getattr(self._database,"linked_memory_source_revisions",None)
+        if reader is None:
+            raise RuntimeError("Database does not support exact source revisions")
+        return await asyncio.to_thread(reader,character_id,user_scope.platform,user_scope.adapter,user_scope.sender_id,
+            user_scope.conversation_type,user_scope.conversation_id,claim_sources=claim_sources)
+
     async def linked_sources(self, character_id: str, user_scope: UserScope, *,
                              memory_ids: tuple[int, ...]) -> list[dict[str, Any]]:
         reader = getattr(self._database, "linked_memory_sources", None)

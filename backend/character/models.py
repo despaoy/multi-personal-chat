@@ -191,6 +191,8 @@ class MemoryItem:
     # Internal repository version bindings; never model evidence or completion fields.
     storage_versions: tuple[tuple[str, str], ...] = field(default=(), repr=False, compare=False)
     source_versions: tuple[tuple[str, str, str], ...] = field(default=(), repr=False, compare=False)
+    source_record_pairs: tuple[tuple[str, str], ...] = field(default=(), repr=False, compare=False)
+    source_record_versions: tuple[tuple[str, str, str], ...] = field(default=(), repr=False, compare=False)
 
     @property
     def relation(self) -> str:

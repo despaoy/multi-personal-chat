@@ -4,7 +4,7 @@ from dataclasses import replace
 from datetime import datetime, timezone
 
 from character.context_builder import _memory_is_injectable, compile_reference_context
-from character.memory_read_authority import record_version, source_version
+from character.memory_read_authority import record_version, source_record_version, source_version
 
 
 async def revalidate_private_memories(request, repository, character_id, scope, *, preferred_address=""):
@@ -22,6 +22,15 @@ async def revalidate_private_memories(request, repository, character_id, scope, 
                     row = await repository.get_memory_record(int(memory_id), character_id, scope)
                     claim_versions[memory_id] = record_version(row) if row is not None else None
                 if claim_versions[memory_id] != expected:
+                    valid = False
+            if packet.source_record_pairs:
+                expected = {(key, sid): version for key, sid, version in packet.source_record_versions}
+                pairs = tuple((int(key), sid) for key, sid in packet.source_record_pairs)
+                revisions = await repository.linked_source_revisions(character_id, scope, claim_sources=pairs)
+                fresh = {(str(row['memory_id']), str(row['source_message_id'])): source_record_version(row)
+                         for row in revisions}
+                if (set(expected) != set(packet.source_record_pairs) or len(fresh) != len(revisions)
+                        or set(fresh) != set(expected) or any(fresh.get(pair) != version for pair, version in expected.items())):
                     valid = False
             if packet.source_versions:
                 pairs = tuple((int(memory_id), source_id) for memory_id, source_id, _version in packet.source_versions)
