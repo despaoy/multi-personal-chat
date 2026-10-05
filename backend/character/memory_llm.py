@@ -44,6 +44,7 @@ from character.memory_extractor import (
 from character.memory_query import lookup_fields
 from character.memory_subject import explicitly_other_subject
 from character.models import MemoryItem, UserScope
+from character.preference_qualifier_labels import normalize_preference_labels
 from character.temporal_provenance import model_temporal_provenance
 from db.memory_claim_guard import MemoryClaimConflict
 from db.memory_source import ClaimSourceRevokedError
@@ -1255,6 +1256,11 @@ def _candidate_to_proposal(
             planned = re.search(r"计划|打算|准备|预计", evidence)
             if planned:
                 raw_qualifiers = {**raw_qualifiers, "certainty": planned.group()}
+    if semantic_operation in {"ADD", "MERGE", "SUPERSEDE", "COEXIST"}:
+        raw_qualifiers = normalize_preference_labels(
+            raw_qualifiers, kind=kind, evidence=evidence, source_message=source_message,
+            canonical=_canonical_memory_fields(kind, value, evidence),
+        )
     # Source observations persist the entire current utterance, not this short
     # admission quote. A literal later condition is therefore part of their
     # actual evidence. Semantic facts retain the stricter quote-only gate.
