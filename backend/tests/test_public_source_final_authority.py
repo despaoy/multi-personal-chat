@@ -241,15 +241,29 @@ async def test_guard_retry_rechecks_public_source_after_first_model(tmp_path):
 @pytest.mark.asyncio
 async def test_source_revoked_during_main_cannot_reach_citation_repair(tmp_path):
     db, docs, request = fixture(tmp_path)
+    from inference.citation_recovery import ANNOTATION_POLICY
+
     calls = []
+    annotations = []
 
     async def model(**kwargs):
-        calls.append(kwargs["messages"])
-        assert len(calls) == 1
-        db.delete_knowledge_document(docs[0]["id"])
-        return BODY_A
+        messages = kwargs["messages"]
+        if messages[0]["content"] == ANNOTATION_POLICY:
+            import json
+
+            payload = json.loads(messages[-1]["content"])
+            annotations.append(payload)
+            assert BODY_A not in json.dumps(payload, ensure_ascii=False)
+            return '{"citations":[]}'
+        calls.append(messages)
+        if len(calls) == 1:
+            db.delete_knowledge_document(docs[0]["id"])
+            return BODY_A
+        assert len(calls) == 2 and BODY_A not in wire(messages) and BODY_B in wire(messages)
+        return BODY_B
 
     result = await generate_character_response(request, model)
-    assert len(calls) == 1 and not result.response_citations
-    assert result.citation_repair_status == "public_source_authority_changed"
+    assert len(calls) == 2 and len(annotations) == 1 and not result.response_citations
+    assert result.authority_refreshed and not result.authority_fallback
+    assert result.reply == BODY_B and BODY_A not in result.reply
     assert BODY_A not in result.plan.retrieval.evidence and BODY_B in result.plan.retrieval.evidence

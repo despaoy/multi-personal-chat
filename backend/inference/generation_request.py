@@ -172,6 +172,9 @@ class GenerationRequest:
     public_context_revalidator: Callable[[GenerationRequest], Awaitable[GenerationRequest]] | None = field(
         default=None, repr=False, compare=False,
     )
+    # Internal bound for one fresh-input regeneration after authority changes.
+    authority_refresh_count: int = field(default=0, repr=False)
+
 
 
 @dataclass(frozen=True)
@@ -205,6 +208,8 @@ class GenerationResult:
     model_invoked: bool = True
     citation_repair_attempted: bool = False
     citation_repair_status: str = ""
+    authority_refreshed: bool = False
+    authority_fallback: bool = False
     task_results: tuple[Mapping[str, Any], ...] = ()
 
 
@@ -587,6 +592,7 @@ async def generate_character_response(
     """Build and execute one request with an injected model adapter."""
 
     request = await _revalidate_context(request)
+    initial_reply_guard = request.reply_guard
     if request.reply_guard_mode not in {"lightweight", "strict"}:
         raise ValueError("unknown reply guard mode")
     from character.memory_operation import operation_receipt_context, render_operation_response, split_operation_request
@@ -638,22 +644,38 @@ async def generate_character_response(
     from inference.answer_citations import finalize_answer_citations, prepare_answer_citations
     from inference.citation_recovery import recover_missing_citations
 
+    async def refresh_answer(result, refreshed):
+        if request.authority_refresh_count >= 1:
+            # A second concurrent withdrawal cannot make retries unbounded or
+            # return either obsolete answer. Keep the fresh plan for diagnosis.
+            return replace(
+                result,
+                reply="本轮资料在生成期间再次发生变化，暂时无法可靠核对答案，请再试一次。",
+                plan=build_generation_request(refreshed),
+                response_citations=(),
+                authority_refreshed=True,
+                authority_fallback=True,
+                citation_repair_status="context_authority_changed",
+            )
+        fresh_request = replace(
+            refreshed,
+            reply_guard=initial_reply_guard,
+            authority_refresh_count=request.authority_refresh_count + 1,
+        )
+        # Reuse only unchanged trusted inputs and currently admitted sources.
+        # Never feed the obsolete answer back as history, evidence or repair.
+        fresh_result = await generate_character_response(fresh_request, generate)
+        return replace(fresh_result, authority_refreshed=True)
+
     async def finalize_citations(result):
-        if request.public_context_revalidator is not None:
-            refreshed = await request.public_context_revalidator(request)
-            if refreshed != request:
-                # A source changed while the main model was working. Do not
-                # resend that old answer/body for citation annotation or bind
-                # its old markers to a source whose authority was withdrawn.
-                result = replace(result, plan=build_generation_request(refreshed))
-                result = finalize_answer_citations(result)
-                return replace(result, response_citations=(), citation_repair_status="public_source_authority_changed")
+        refreshed = await _revalidate_context(request)
+        if refreshed != request:
+            return await refresh_answer(result, refreshed)
         result = finalize_answer_citations(result)
         result = await recover_missing_citations(result, generate, context_window_tokens=request.context_window_tokens)
-        if request.public_context_revalidator is not None:
-            refreshed = await request.public_context_revalidator(request)
-            if refreshed != request:
-                result = replace(result, plan=build_generation_request(refreshed), response_citations=(), citation_repair_status="public_source_authority_changed")
+        refreshed = await _revalidate_context(request)
+        if refreshed != request:
+            return await refresh_answer(result, refreshed)
         return result
 
     request = replace(request, retrieval=prepare_answer_citations(request.retrieval))

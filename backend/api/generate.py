@@ -1644,6 +1644,11 @@ async def _generate_with_retrieval(
         rag_meta["warnings"] = list(dict.fromkeys([*(rag_meta.get("warnings") or []), "partial_source_context"]))
     if generation.plan.retrieval.answer_citations_bound:
         rag_meta["citations"] = list(generation.response_citations) if citations_enabled else []
+    if generation.authority_refreshed:
+        rag_meta["warnings"] = list(dict.fromkeys([*(rag_meta.get("warnings") or []), "context_authority_refreshed"]))
+    if generation.authority_fallback:
+        rag_meta.update(answerMode="abstention", abstained=True, citations=[])
+        rag_meta["warnings"] = list(dict.fromkeys([*(rag_meta.get("warnings") or []), "context_authority_changed"]))
     if not getattr(generation, "model_invoked", True):
         rag_meta["modelInvoked"] = False
         rag_meta["answerMode"] = generation.response_mode
@@ -1681,7 +1686,7 @@ async def _generate_with_retrieval(
             and dict(query_plan.dependencies.groups)["private_memory"]
             and private_visible
         )
-        if (generation.model_invoked and not generation.guard_fallback
+        if (generation.model_invoked and not generation.guard_fallback and not generation.authority_fallback
                 and not rag_meta.get("generationError") and (public_visible or private_visible)):
             rag_meta["answerMode"] = "partial_answer"
         elif rag_meta.get("answerMode") == "grounded_answer":
