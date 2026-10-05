@@ -1423,9 +1423,12 @@ async def _generate_with_retrieval(
             if need_rag:
                 from knowledge.retrieval_query_plan import QueryPlanReviewError, plan_retrieval_views
 
-                # Plan current speech, never an expanded query inheriting an
-                # unrelated previous topic. All original segments must remain.
-                query_plan = await plan_retrieval_views(rag_message)
+                # Keep current speech intact; authorized history only supplies
+                # reference context, never extra tasks, facts or source grants.
+                plan_options = ({"history": effective_history,
+                                 "context_budget": get_provider_context_budget().review}
+                                if effective_history else {})
+                query_plan = await plan_retrieval_views(rag_message, **plan_options)
                 if query_plan.dependencies is None and query_plan.status in {"invalid", "unavailable"}:
                     # An attempted semantic plan failed. Ranking candidates cannot
                     # replace missing object/task proof; keep private context intact.
