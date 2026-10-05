@@ -20,10 +20,15 @@ def admitted_request_budget(calls, *, model, input_tokens, output_tokens, max_ca
     """
     if max_calls is not None and len(calls) >= max_calls:
         raise EvaluationBudgetExceeded("Cloud request limit reached; preserve this run without replay")
+    if type(input_tokens) is not int or input_tokens < 0 or type(output_tokens) is not int or output_tokens < 0:
+        raise ValueError("Request reservation requires nonnegative integer token bounds")
     rates = _PEAK_RMB_PER_MILLION[model]
     spend = Decimal(0)
     for call in calls:
-        if call["http_status"] is None and call.get("request_started"):
+        response = call.get("response")
+        usage = response.get("usage") if isinstance(response, dict) else None
+        if call.get("request_started") and (call["http_status"] is None
+                or (call["http_status"] == 200 and not isinstance(usage, dict))):
             budget = call.get("budget", {})
             pending_input, pending_output = budget.get("input_bound"), budget.get("output_reserved")
             if type(pending_input) is not int or pending_input < 0 or type(pending_output) is not int or pending_output < 0:
@@ -33,7 +38,8 @@ def admitted_request_budget(calls, *, model, input_tokens, output_tokens, max_ca
             continue
         if call["http_status"] != 200:
             continue
-        usage = call["response"]["usage"]
+        if not isinstance(usage, dict):
+            raise ValueError("Successful call lacks usage and a complete request reservation")
         prompt, output = usage["prompt_tokens"], usage["completion_tokens"]
         cached = usage.get("prompt_cache_hit_tokens", usage.get("prompt_tokens_details", {}).get("cached_tokens", 0))
         if not (0 <= cached <= prompt and output >= 0):
@@ -45,6 +51,8 @@ def admitted_request_budget(calls, *, model, input_tokens, output_tokens, max_ca
         raise EvaluationBudgetExceeded("Estimated RMB ceiling reached; preserve this run without replay")
     return {
         "price_policy": "evaluation peak reservation rates, not invoice/current quote; uncached input and full output reserved",
+        "input_bound": input_tokens,
+        "output_reserved": output_tokens,
         "prior_calls": len(calls),
         "prior_spend_peak_upper_bound_cny": str(spend),
         "next_request_peak_reservation_cny": str(reserved),
