@@ -16,7 +16,7 @@ from db.database import SQLiteDB
 from inference.generation_request import GenerationRequest, RetrievalResult, build_generation_request
 from knowledge.evidence_packets import document_evidence_packets
 from knowledge.original_sources import attach_original_sources
-from knowledge.public_fact_coverage import settle_fact_coverage, validate_fact_scope
+from knowledge.public_fact_coverage import fact_input, settle_fact_coverage, validate_fact_scope
 from knowledge.public_object_scope import scope_input_digest
 from knowledge.public_task_evidence import render_public_tasks, review_public_candidates
 from knowledge.turn_dependencies import parse_dependencies
@@ -311,11 +311,7 @@ async def test_unavailable_received_text_never_promotes_graph_or_assessments(sta
             assessments=None,
         )
         fact_receipt["input_sha256"] = scope_input_digest(
-            {
-                **payload,
-                "approved_scoped_decisions": receipt["scoped_decisions"],
-                "approved_decisions": receipt["decisions"],
-            }
+            fact_input(payload, receipt["scoped_decisions"], receipt["decisions"])
         )
         settled = settle_fact_coverage(
             RetrievalResult(status="ok"),
