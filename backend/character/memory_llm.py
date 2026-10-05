@@ -28,6 +28,7 @@ import httpx
 
 from character.event_memory import EVENT_TZ
 from character.evidence_selector import InputBudgetError, _history_view
+from character.identity_alias_evidence import explicit_alias_value, identity_alias_projection, normalize_alias_labels
 from character.memory_clock import observation_clock
 from character.memory_extractor import (
     MAX_EXTRACTED_MEMORIES,
@@ -52,8 +53,9 @@ from inference.context_budget import CONTEXT_SAFETY_MARGIN_TOKENS, estimated_tok
 from inference.openai_protocol import chat_completions_endpoint, completed_chat_content, nonthinking_parameters
 
 if TYPE_CHECKING:
-    from knowledge.retrieval_core.embedding import EmbeddingProvider
     from repositories.character_memory import CharacterMemoryRepository
+
+    from knowledge.retrieval_core.embedding import EmbeddingProvider
 
 logger = logging.getLogger(__name__)
 
@@ -1019,7 +1021,14 @@ def _candidate_to_proposal(
         return None
     event_observation = kind == "shared_event" and semantic_operation not in {"NOOP", "RETRACT", "ERASE"}
     generic_source_observation = False
-    if (not event_observation
+    alias_projection = (identity_alias_projection(source=source_message, evidence=evidence, value=value)
+        if kind in {'name', 'other_user_fact'} and semantic_operation in {'ADD', 'MERGE', 'SUPERSEDE', 'COEXIST'} else None)
+    if kind == 'name' and explicit_alias_value(source_message, value) and alias_projection is None:
+        supported_name = _supported_generic_fact(value, evidence)
+        if supported_name is None or supported_name[0] != 'name':
+            return None
+    self_alias_exclusion = alias_projection is not None and alias_projection[1].startswith('user_alias_exclusion_')
+    if (not event_observation and not self_alias_exclusion
             and (_THIRD_PARTY_FACT_PATTERN.search(evidence) or _NAMED_THIRD_PARTY_PATTERN.search(evidence))):
         return None
     if (kind in {'name', 'like', 'dislike', 'major', 'study_stage', 'location', 'workplace'}
@@ -1091,6 +1100,8 @@ def _candidate_to_proposal(
         target_memory_key=target_memory_key,
         existing_memories=existing_memories,
     )
+    if alias_projection is not None and target_record is not None and target_memory_key != alias_projection[1]:
+        return None  # Alias ownership cannot mutate the primary-name predicate.
     if semantic_operation in _TARGET_REQUIRED_OPERATIONS and target_record is None:
         return None
     if target_record is not None:
@@ -1228,11 +1239,13 @@ def _candidate_to_proposal(
     if (
         target_record is not None
         and semantic_operation not in {"RETRACT", "ERASE"}
+        and alias_projection is None
         and not _target_key_matches_kind(kind, target_memory_key)
     ):
         return None
 
     raw_qualifiers = raw.get("qualifiers")
+    raw_qualifiers = normalize_alias_labels(raw_qualifiers, projection=alias_projection)
     misplaced_validity: dict[str, Any] = {}
     if isinstance(raw_qualifiers, dict):
         # Known envelope fields sometimes occur alongside real qualifiers.
@@ -1292,7 +1305,7 @@ def _candidate_to_proposal(
         canonical_content = str(target_record.get("content") or f"用户撤回记忆：{target_memory_key}")
         importance = float(target_record.get("importance") or 0.5)
     else:
-        canonical = _canonical_memory_fields(kind, value, evidence)
+        canonical = alias_projection or _canonical_memory_fields(kind, value, evidence)
         if canonical is None:
             return None
         memory_type, key, canonical_content, importance = canonical
@@ -1304,6 +1317,9 @@ def _candidate_to_proposal(
                 and target_memory_key in {"user_origin", "user_residence"}
                 and key != target_memory_key):
             return None  # Same value type does not mean the same predicate.
+
+    if alias_projection is not None:
+        proposed_content = ''  # Keep only the independently grounded alias predicate.
 
     # 旧 UPDATE 入口一直承诺由本地模板生成 content；新关系操作才允许
     # 使用已通过主体/证据硬校验的 LLM 自包含表述。
