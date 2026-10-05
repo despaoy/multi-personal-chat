@@ -1600,6 +1600,7 @@ async def _generate_with_retrieval(
         return _RAG_ABSTENTION_REPLY
 
     from inference.private_context_authority import make_private_context_revalidator
+    from inference.public_context_authority import make_public_context_revalidator
 
     generation = await generate_character_response(
         CharacterGenerationRequest(
@@ -1622,6 +1623,7 @@ async def _generate_with_retrieval(
             private_context_revalidator=make_private_context_revalidator(
                 prepared_character_turn, message_db if message_db is not None else db,
             ),
+            public_context_revalidator=make_public_context_revalidator(db.get_knowledge_document),
             lora_name=lora_name if lora_name != "default" else None,
             temperature=_temperature,
             max_tokens=_max_tokens,

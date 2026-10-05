@@ -1,9 +1,22 @@
 """Fresh authoritative original bodies, independently budgeted alongside indexed context."""
 
 import hashlib
+import json
 import re
 
 from inference.context_budget import estimated_tokens
+
+
+def document_authority_snapshot(document):
+    # Hash authoritative contents and scope, excluding unrelated metadata.
+    if not isinstance(document, dict):
+        raise ValueError("Knowledge source is unavailable")
+    identity = document.get("id")
+    if isinstance(identity, bool) or not isinstance(identity, int) or identity <= 0:
+        raise ValueError("Invalid knowledge source identity")
+    fields = {key: document.get(key) for key in ("id", "title", "category", "knowledge_base_id", "content")}
+    digest = hashlib.sha256(json.dumps(fields, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    return dict(version=1, source_id=f"doc_{identity}", document_id=identity, document_sha256=digest)
 
 
 def attach_original_sources(bundle, read_document, *, source_budget_tokens, authority_revision):
@@ -50,6 +63,7 @@ def attach_original_sources(bundle, read_document, *, source_budget_tokens, auth
         for member in members:
             if any(document.get(key) != member.get(key) for key in ["title", "category", "knowledge_base_id"]):
                 raise RuntimeError("Original source scope changed during retrieval")
+        record = {**record, "source_authority_snapshot": document_authority_snapshot(document)}
         body = document.get("content")
         title = document.get("title")
         if not isinstance(body, str) or not body.strip() or not isinstance(title, str):

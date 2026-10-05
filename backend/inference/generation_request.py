@@ -169,6 +169,10 @@ class GenerationRequest:
         default=None, repr=False, compare=False,
     )
 
+    public_context_revalidator: Callable[[GenerationRequest], Awaitable[GenerationRequest]] | None = field(
+        default=None, repr=False, compare=False,
+    )
+
 
 @dataclass(frozen=True)
 class GenerationPlan:
@@ -568,14 +572,21 @@ def _build_packet_budgeted_request(request: GenerationRequest) -> GenerationPlan
     return _build_generation_request_core(replace(request, retrieval=retrieval))
 
 
+
+async def _revalidate_context(request):
+    for revalidate in (request.private_context_revalidator, request.public_context_revalidator):
+        if revalidate is not None:
+            request = await revalidate(request)
+    return request
+
+
 async def generate_character_response(
     request: GenerationRequest,
     generate: Callable[..., Awaitable[str]],
 ) -> GenerationResult:
     """Build and execute one request with an injected model adapter."""
 
-    if request.private_context_revalidator is not None:
-        request = await request.private_context_revalidator(request)
+    request = await _revalidate_context(request)
     if request.reply_guard_mode not in {"lightweight", "strict"}:
         raise ValueError("unknown reply guard mode")
     from character.memory_operation import operation_receipt_context, render_operation_response, split_operation_request
@@ -628,8 +639,22 @@ async def generate_character_response(
     from inference.citation_recovery import recover_missing_citations
 
     async def finalize_citations(result):
+        if request.public_context_revalidator is not None:
+            refreshed = await request.public_context_revalidator(request)
+            if refreshed != request:
+                # A source changed while the main model was working. Do not
+                # resend that old answer/body for citation annotation or bind
+                # its old markers to a source whose authority was withdrawn.
+                result = replace(result, plan=build_generation_request(refreshed))
+                result = finalize_answer_citations(result)
+                return replace(result, response_citations=(), citation_repair_status="public_source_authority_changed")
         result = finalize_answer_citations(result)
-        return await recover_missing_citations(result, generate, context_window_tokens=request.context_window_tokens)
+        result = await recover_missing_citations(result, generate, context_window_tokens=request.context_window_tokens)
+        if request.public_context_revalidator is not None:
+            refreshed = await request.public_context_revalidator(request)
+            if refreshed != request:
+                result = replace(result, plan=build_generation_request(refreshed), response_citations=(), citation_repair_status="public_source_authority_changed")
+        return result
 
     request = replace(request, retrieval=prepare_answer_citations(request.retrieval))
     plan = build_generation_request(request)
@@ -709,8 +734,8 @@ async def generate_character_response(
             task_results=outcomes,
             response_citations=result.response_citations,
         )
-    if request.private_context_revalidator is not None:
-        refreshed = await request.private_context_revalidator(request)
+    if request.private_context_revalidator is not None or request.public_context_revalidator is not None:
+        refreshed = await _revalidate_context(request)
         if refreshed != request:
             request = refreshed
             plan = build_generation_request(request)
@@ -750,8 +775,8 @@ async def generate_character_response(
                 GenerationResult(reply=fallback[1], plan=plan, guard_violations=violations, guard_fallback=fallback[0])
             )
 
-    if request.private_context_revalidator is not None:
-        refreshed = await request.private_context_revalidator(request)
+    if request.private_context_revalidator is not None or request.public_context_revalidator is not None:
+        refreshed = await _revalidate_context(request)
         if refreshed != request:
             request = refreshed
             plan = build_generation_request(request)
