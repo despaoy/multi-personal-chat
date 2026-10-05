@@ -1666,10 +1666,24 @@ async def _generate_with_retrieval(
             speech and getattr(context, "memory_source_status", "not_checked") == "available"
             and speech in visible_message
         )
-        if (query_plan.dependencies is not None and dict(query_plan.dependencies.groups)["private_memory"]
-                and private_visible and generation.model_invoked and not generation.guard_fallback
-                and not rag_meta.get("generationError")):
+        public_visible = any(
+            task["status"] == "related_candidate_admitted"
+            or any(
+                fact["status"] == "fact_evidence_admitted" and fact["admitted_evidence"]
+                for fact in task.get("fact_coverage", ())
+            )
+            for task in public_tasks
+        )
+        private_visible = bool(
+            query_plan.dependencies is not None
+            and dict(query_plan.dependencies.groups)["private_memory"]
+            and private_visible
+        )
+        if (generation.model_invoked and not generation.guard_fallback
+                and not rag_meta.get("generationError") and (public_visible or private_visible)):
             rag_meta["answerMode"] = "partial_answer"
+        elif rag_meta.get("answerMode") == "grounded_answer":
+            rag_meta["answerMode"] = "abstention"
     return generation.reply, generation.plan.retrieval.has_evidence or bool(rag_meta.get("abstained")), rag_meta
 
 
