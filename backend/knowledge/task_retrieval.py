@@ -41,9 +41,15 @@ def collect_task_candidates(
     stable_key: Callable,
     snapshot: Callable,
     threshold: float = 0.3,
+    question_binding=None,
 ) -> TaskCandidatePlan:
     if isinstance(top_k, bool) or not isinstance(top_k, int) or top_k < 1:
         raise ValueError("Task candidate limit must be a positive integer")
+    reference_names = ()
+    if question_binding is not None:
+        from knowledge.public_question_binding import bound_object_search_views
+
+        reference_names = bound_object_search_views(question_binding, query)
     if (
         not isinstance(views, tuple)
         or len(views) > 4
@@ -51,7 +57,7 @@ def collect_task_candidates(
             not isinstance(view, str)
             or not view.strip()
             or len(view) > 1024
-            or any(span not in query for span in view.split())
+            or (view not in reference_names and any(span not in query for span in view.split()))
             for view in views
         )
         or len(set(views)) != len(views)
@@ -104,6 +110,8 @@ def collect_task_candidates(
                 "semantic_coverage": "unverified" if accepted else "not_established",
             }
         )
+        if index and question_binding is not None and any(span not in query for span in question.split()):
+            coverage[-1]["reference_binding"] = deepcopy(question_binding)
         if not accepted:
             continue
         for rank, result in enumerate(bucket, 1):

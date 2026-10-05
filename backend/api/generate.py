@@ -1279,11 +1279,14 @@ async def _retrieve_rag_bundle(
             bundle = get_corrective_rag().retrieve_with_correction(query, top_k=top_k, filters=filters)
         else:
             views = search_views
-            if not views and question_binding is not None:
+            contextual_binding = question_binding is not None and "reference_context" in question_binding["input"]
+            if contextual_binding or (not views and question_binding is not None):
                 from knowledge.public_question_binding import bound_object_search_views
 
                 views = bound_object_search_views(question_binding, query)
             view_options = {"additional_queries": views} if views else {}
+            if contextual_binding:
+                view_options["question_binding"] = question_binding
             bundle = get_rag_helper().retrieve_with_citations(query, top_k=top_k, filters=filters, **view_options)
         expanded = expand_source_context(
             bundle, vector_db, expected_generation=generation,
@@ -1453,6 +1456,8 @@ async def _generate_with_retrieval(
                             query_plan.dependencies, rag_message,
                             window_tokens=get_provider_context_budget().window_tokens,
                             public_obligations=query_plan.public_obligations,
+                            **({"history": effective_history, "context_budget": get_provider_context_budget().review}
+                               if effective_history else {}),
                         )
                     view_options = {"search_views": query_plan.views} if query_plan.views else {}
                     if question_binding is not None:
@@ -1569,6 +1574,8 @@ async def _generate_with_retrieval(
                     status="character_abstention", reason="question_binding_unavailable",
                     public_task_review=failed_question_binding_review(
                         e, query_plan.dependencies, rag_message, query_plan.public_obligations,
+                        **({"history": effective_history, "context_budget": get_provider_context_budget().review}
+                           if effective_history else {}),
                     ),
                     public_task_query=rag_message,
                     public_dependency_indices=tuple(dict(query_plan.dependencies.groups)["public_knowledge"]),

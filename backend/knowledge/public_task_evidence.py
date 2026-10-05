@@ -214,16 +214,19 @@ async def review_public_candidates(bundle, dependencies, query, *, window_tokens
                     parse_object_scopes,
                     scope_input_digest,
                 )
+                from knowledge.question_reference_context import binding_payload_for_tasks
 
+                question_input = (binding_payload_for_tasks(question_binding, query, payload["public_tasks"])
+                                  if question_binding is not None else dict(query=query, public_tasks=payload["public_tasks"]))
                 scope_messages = [dict(role="system", content=RESOLVE_INSTRUCTION),
-                    dict(role="user", content=json.dumps(dict(query=query, public_tasks=payload["public_tasks"]), ensure_ascii=False))]
+                    dict(role="user", content=json.dumps(question_input, ensure_ascii=False))]
                 if sum(estimated_tokens(m["content"]) + 4 for m in scope_messages) + 768 + CONTEXT_SAFETY_MARGIN_TOKENS > window_tokens:
                     receipt["reason"] = "complete_scope_input_budget_exceeded"
                     return _filter_reviewed_bundle(bundle, receipt)
                 if question_binding is not None:
                     from knowledge.public_question_binding import validate_question_binding
 
-                    scopes = validate_question_binding(question_binding, dict(query=query, public_tasks=payload["public_tasks"]))
+                    scopes = validate_question_binding(question_binding, question_input)
                 else:
                     raw_scope = await received_review(scope_messages, scope_reviewer or _review, "object")
                     scopes = parse_object_scopes(raw_scope, query, payload["public_task_ids"])
@@ -471,7 +474,11 @@ def render_public_tasks(retrieval):
         from knowledge.public_domains import validate_domain_plan
 
         plan = validate_domain_plan(retrieval.public_domain_branches["plan"])
-        if plan["binding"]["input"] != dict(query=query, public_tasks=[dict(id=task["index"], text=task["query"]) for task in tasks]):
+        from knowledge.question_reference_context import binding_payload_for_tasks
+
+        if plan["binding"]["input"] != binding_payload_for_tasks(
+            plan["binding"], query, [dict(id=task["index"], text=task["query"]) for task in tasks]
+        ):
             raise ValueError("Independent authority changed an original public obligation")
         ownership = {task["task_id"]: task for task in plan["tasks"]}
         generic_ids = {obj["object_id"] for obj in plan["objects"] if obj["authority"] == "generic_knowledge"}

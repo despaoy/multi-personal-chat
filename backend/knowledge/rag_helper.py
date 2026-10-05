@@ -514,19 +514,24 @@ class RAGHelper:
             return []
 
     @staticmethod
-    def _validated_task_views(query: str, additional_queries: tuple[str, ...]) -> tuple[str, ...]:
+    def _validated_task_views(query: str, additional_queries: tuple[str, ...], *, question_binding=None) -> tuple[str, ...]:
+        reference_names = ()
+        if question_binding is not None:
+            from knowledge.public_question_binding import bound_object_search_views
+
+            reference_names = bound_object_search_views(question_binding, query)
         if (
             not isinstance(additional_queries, tuple) or len(additional_queries) > 4
             or any(
                 not isinstance(view, str) or not view.strip() or len(view) > 1024
-                or any(span not in query for span in view.split())
+                or (view not in reference_names and any(span not in query for span in view.split()))
                 for view in additional_queries
             )
         ):
             raise ValueError("Additional query views must be bounded literal input spans")
         return tuple(dict.fromkeys(view for view in additional_queries if view != query))
 
-    def _task_candidate_plan(self, query, views, *, top_k, enable_rerank, filters, use_cache, threshold=0.3):
+    def _task_candidate_plan(self, query, views, *, top_k, enable_rerank, filters, use_cache, threshold=0.3, question_binding=None):
         from knowledge.task_retrieval import collect_task_candidates
 
         resolved_filters = copy.deepcopy(filters)
@@ -548,7 +553,7 @@ class RAGHelper:
         return collect_task_candidates(
             query, views, top_k=top_k or self.top_k, filters=resolved_filters,
             retrieve=retrieve, confidence=self.compute_confidence,
-            stable_key=_stable_result_key, snapshot=snapshot, threshold=threshold,
+            stable_key=_stable_result_key, snapshot=snapshot, threshold=threshold, question_binding=question_binding,
         )
 
     @staticmethod
@@ -602,18 +607,20 @@ class RAGHelper:
         threshold: float = 0.3,
         filters: dict[str, Any] | None = None,
         additional_queries: tuple[str, ...] = (),
+        question_binding: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """检索并返回带引用和置信度的结构化结果。
 
         Returns:
             {results, citations, confidence, abstained}
         """
-        views = self._validated_task_views(query, additional_queries)
+        views = self._validated_task_views(query, additional_queries, question_binding=question_binding)
         task_coverage = ()
         if views and self.use_vector_db:
             plan = self._task_candidate_plan(
                 query, views, top_k=top_k, enable_rerank=True,
                 filters=filters, use_cache=True, threshold=threshold,
+                **({"question_binding": question_binding} if question_binding is not None else {}),
             )
             results, task_coverage = plan.results, plan.coverage
         else:

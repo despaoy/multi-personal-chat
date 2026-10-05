@@ -3,6 +3,7 @@
 import hashlib
 
 from knowledge.public_question_binding import validate_question_binding
+from knowledge.question_reference_context import binding_payload_for_tasks
 
 POLICY = (
     "【独立公共资料来源】public_domains按原始问题对象分别说明角色原作与业务知识库的证据范围。"
@@ -90,7 +91,7 @@ def retrieve_domains(plan, query, top_k, *, curated, generic):
 def constrain_generic_sources(payload, plan):
     """A business source cannot certify a curated object with the same name."""
     validate_domain_plan(plan)
-    if plan["binding"]["input"] != dict(query=payload["query"], public_tasks=payload["public_tasks"]):
+    if plan["binding"]["input"] != binding_payload_for_tasks(plan["binding"], payload["query"], payload["public_tasks"]):
         raise ValueError("Domain ownership discarded a question obligation")
     allowed = [obj["object_id"] for obj in plan["objects"] if obj["authority"] == "generic_knowledge"]
     payload["domain_plan"] = plan
@@ -104,7 +105,7 @@ def validate_generic_sources(payload):
     if plan is None:
         return
     validate_domain_plan(plan)
-    if plan["binding"]["input"] != dict(query=payload["query"], public_tasks=payload["public_tasks"]):
+    if plan["binding"]["input"] != binding_payload_for_tasks(plan["binding"], payload["query"], payload["public_tasks"]):
         raise ValueError("Domain proof changed the complete question")
     allowed = [obj["object_id"] for obj in plan["objects"] if obj["authority"] == "generic_knowledge"]
     if any(source.get("permitted_object_ids") != allowed for source in payload["sources"]):

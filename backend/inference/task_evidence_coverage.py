@@ -43,7 +43,16 @@ def validate_task_candidates(records, *, query=None):
             elif text != root_query:
                 raise ValueError("Task receipt changed the original question")
         elif any(span not in root_query for span in text.split()):
-            raise ValueError("Task receipt adds text outside the original question")
+            from knowledge.public_question_binding import bound_object_search_views
+
+            binding = record.get("reference_binding")
+            if not isinstance(binding, dict) or text not in bound_object_search_views(binding, root_query):
+                raise ValueError("Task receipt adds text outside verified question references")
+        if "reference_binding" in record:
+            from knowledge.public_question_binding import bound_object_search_views
+
+            if not index or text not in bound_object_search_views(record["reference_binding"], root_query):
+                raise ValueError("Task receipt changed the actual reference binding")
         kind = "original_question" if index == 0 else "public_task"
         if type(record.get("task_index")) is not int or record["task_index"] != index or record.get("kind") != kind:
             raise ValueError("Invalid task receipt identity")
