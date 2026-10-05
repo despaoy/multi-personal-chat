@@ -44,4 +44,8 @@ def normalize_alias_labels(raw, *, projection):
         return raw
     # The independent complete declarative predicate supplies admission.
     # All actual conditions/unknown labels still face ordinary validation.
-    return {key: value for key, value in raw.items() if key != "certainty" or value not in ("稳定", "stable", "明确")}
+    return {
+        key: value
+        for key, value in raw.items()
+        if key != "certainty" or value not in ("稳定", "stable", "明确", "明确立即生效")
+    }
