@@ -9,6 +9,8 @@ source_span_catalog是程序从当前完整来源抽取的逐字片段，只提�
 审核每个来源是否支持public_task_ids中的任务、对象及共同限定；没有依据时task_ids为空，不能借另一业务规则或私人偏好补齐。
 不要生成、复制或改写source_quote。只选source_span_id，程序将提取它对应的真实原文。片段必须属于当前source_id并包含该对象完整query_text，或包含已核验identity_review中对应别名。
 别名规则的object_evidence必须同时使用对应identity_binding_id，登记来源与规则须同知识库；不得把规则中的别名替换为问题正式名。identity_only登记不提供业务事实，task_ids为空。
+task_ids元素必须与public_task_ids的原值及JSON类型完全一致：整数2输出[2]而不是["2"]；字符串身份保留原字符串，不能换成segments编号。
+object_evidence只引用本来源task_ids实际关联的task_scopes.object_ids；task_ids为空时object_evidence也为空。identity_binding_id只能取identity_review.bindings中实际已有的binding_id；bindings为空则绝不能使用此字段，query-object编号不是名称授权编号。different与uncertain登记不产生binding。
 每个required_source_ids恰好一次，仅输出严格JSON：
 {"decisions":[{"source_id":"允许来源","task_ids":["允许任务"],"object_evidence":[{"object_id":"绑定对象","source_span_id":"当前来源可选位置"}]}]}。
 仅别名object_evidence可加identity_binding_id；不输出source_quote、解释、额外键或代码块。source_span_id不是source_id或object_id，须取本轮实际目录。未解决对象及不存在的名称关系保持未知。"""

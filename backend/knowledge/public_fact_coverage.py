@@ -13,6 +13,7 @@ FACT_SCOPE_INSTRUCTION = """只根据完整query、public_tasks和已固定objec
 query_quote是完整query中逐字存在、足以指明该事实方面的文字；不能是模型自造字段名、答案、输出格式或代词。保留范围、否定及例外限定，不能删除末尾所问限制。
 广泛问完整规定而没有逐个字段时，以原任务文字作为综合方面；没有可解析对象时aspects为空，不猜。
 每个已绑定对象至少一个方面，每对象最多8个，总数最多32个；超出不能偷偷省略，以过量完整结果让程序报告容量边界。
+task_id必须与public_tasks.id的原值及JSON类型完全一致：整数2输出2而不是"2"；字符串身份保留原字符串，不能以segments编号替换。没有对象的任务aspects为空，不能借另一任务对象补齐。
 严格JSON只有tasks，所有public_tasks恰好一次：{"tasks":[{"task_id":"允许任务身份","aspects":[{"object_id":"本任务已绑定对象","query_quote":"完整query逐字所问方面"}]}]}。同任务同对象同query_quote不重复。"""
 
 FACT_EVIDENCE_INSTRUCTION = """逐项核对fact_scope_review.scope中的事实方面，不回答、不改写query、对象、任务或原文。

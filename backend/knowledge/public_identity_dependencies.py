@@ -9,7 +9,7 @@ IDENTITY_INSTRUCTION = """只判断完整可见来源是否明确登记名称同
 同一词或相似词不构成同一性。不把规则中的不准、不得等否定条件当成名称同一性的否定；必须区分名称关系与业务条件。
 仅在完整可见正文中逐字引用同时含object_id对应query_text与alias的名称登记；quote不超过512字符，alias是逐字名称，不是代词或完整句子。
 仅同一knowledge_base_id中的来源可建立关系，不跨知识库扩大权限。sources的purpose逐个标注identity_only（只有名称关系，没有本任务业务规则）、rules（有实际业务事实）或other。
-每个source_id恰好一次。关系不能据title单独确认；关系最多32条，每个对象和别名最多一条，不作多跳推断。
+每个source_id恰好一次。关系不能据title单独确认；关系最多32条，每个对象和别名在每份来源中最多一条，不作多跳推断。不同来源可以分别报告different或uncertain，它们都不建立同一性；same不能与同组其他关系混用。
 严格JSON只有sources和relations：{"sources":[{"source_id":"允许来源","purpose":"identity_only或rules或other"}],"relations":[{"object_id":"已绑定对象","alias":"正文中的另一个完整名称","source_id":"登记来源","source_quote":"逐字完整登记依据","relation":"same或different或uncertain"}]}。
 没有可靠名称关系时relations为空。same必须明确且当前有效，不把否定描述或仅提及两个名称算作same。"""
 
@@ -51,7 +51,7 @@ def parse_identity_review(raw, payload, scopes):
     if not isinstance(relations, list) or len(relations) > 32:
         raise ValueError("Identity relation capacity exceeded")
     names = {o["object_id"]: o["query_text"] for o in scopes["objects"]}
-    bindings, seen, alias_targets = [], set(), {}
+    bindings, seen, alias_targets = [], {}, {}
     for row in relations:
         keys = {"object_id", "alias", "source_id", "source_quote", "relation"}
         if not isinstance(row, dict) or set(row) != keys:
@@ -76,9 +76,14 @@ def parse_identity_review(raw, payload, scopes):
         ):
             raise ValueError("Invalid identity relation identity or quote")
         key = (obj, alias)
-        if key in seen:
+        previous = seen.get(key, ())
+        # Distinct nonaffirmative source assessments grant no alias edge.
+        # Keep their independent provenance rather than failing other tasks.
+        if previous and (
+            relation == "same" or any(old_sid == sid or old_relation == "same" for old_sid, old_relation in previous)
+        ):
             raise ValueError("Conflicting identity relation")
-        seen.add(key)
+        seen.setdefault(key, []).append((sid, relation))
         source = source_map[sid]
         parts = [source.get("original_body"), *[c["content"] for c in source["indexed_chunks"]]]
         kb = source.get("knowledge_base_id")

@@ -1230,11 +1230,11 @@ async def _retrieve_rag_bundle(
         # Ordinary character questions retain the strict domain availability gate.
         if question_binding is not None:
             from knowledge.multiscale_rag.runtime import get_multiscale_rag_service
-            from knowledge.public_domains import domain_plan, retrieve_domains
+            from knowledge.public_domains import domain_plan, requires_independent_domains, retrieve_domains
 
             character_rag = get_multiscale_rag_service()
             plan = domain_plan(question_binding, character_rag.config)
-            if plan["mixed"]:
+            if requires_independent_domains(plan):
                 return retrieve_domains(plan, query, top_k, curated=character_rag.retrieve_with_citations, generic=retrieve_generic)
         if not filters and not requested_document_titles(query):
             from knowledge.multiscale_rag.runtime import get_multiscale_rag_service

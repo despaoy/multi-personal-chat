@@ -49,9 +49,22 @@ def validate_domain_plan(plan, *, config=None):
     return plan
 
 
+def requires_independent_domains(plan):
+    """Keep known business objects beside scopes that remain unresolved.
+
+    Unresolved tasks retain the curated path, but cannot suppress identified
+    generic objects or gain their object bindings. Wholly unresolved requests
+    still use the strict existing route.
+    """
+    return plan["mixed"] or (
+        any(obj["authority"] == "generic_knowledge" for obj in plan["objects"])
+        and any(not task["object_ids"] for task in plan["tasks"])
+    )
+
+
 def retrieve_domains(plan, query, top_k, *, curated, generic):
     """One failed branch cannot erase another; never crop the original query."""
-    if plan["binding"]["input"]["query"] not in query or not plan["mixed"]:
+    if plan["binding"]["input"]["query"] not in query or not requires_independent_domains(plan):
         raise ValueError("Independent retrieval requires the complete mixed question")
     names = tuple(obj["query_text"] for obj in plan["objects"] if obj["authority"] == "curated_character")
     branches = {}
