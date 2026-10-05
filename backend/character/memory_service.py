@@ -1085,7 +1085,9 @@ class CharacterMemoryService:
             )
             and not _is_suppressed(row, suppression_intents)
             and str(row.get('id')) not in shadowed_ids
-            and not query_plan.suppresses(row)
+            # Open owner proximity is a retrieval heuristic, not a veto
+            # before the mandatory contextual selector reviews every candidate.
+            and (for_contextual_selection or not query_plan.suppresses(row))
             and str(row.get("content") or "").strip()
         ]
         trace['usable_records'] = len(usable_records)
