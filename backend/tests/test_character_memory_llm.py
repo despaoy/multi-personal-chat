@@ -22,7 +22,7 @@ def test_llm_candidate_requires_exact_evidence_and_builds_local_content():
     result = parse_llm_memories(
         _response(
             {
-                "kind": "goal",
+                "operation": "ADD", "kind": "goal",
                 "value": "保研面试",
                 "evidence": "最近主要在准备保研面试",
                 "confidence": 0.94,
@@ -40,7 +40,7 @@ def test_llm_candidate_cannot_invent_evidence_or_value():
     invented_evidence = parse_llm_memories(
         _response(
             {
-                "kind": "like",
+                "operation": "ADD", "kind": "like",
                 "value": "咖啡",
                 "evidence": "我喜欢咖啡",
                 "confidence": 0.99,
@@ -51,7 +51,7 @@ def test_llm_candidate_cannot_invent_evidence_or_value():
     invented_value = parse_llm_memories(
         _response(
             {
-                "kind": "like",
+                "operation": "ADD", "kind": "like",
                 "value": "咖啡",
                 "evidence": "我喜欢红茶",
                 "confidence": 0.99,
@@ -67,7 +67,7 @@ def test_llm_candidate_cannot_invent_evidence_or_value():
 def test_llm_path_respects_opt_out_sensitive_and_uncertain_policy():
     candidate = _response(
         {
-            "kind": "like",
+            "operation": "ADD", "kind": "like",
             "value": "咖啡",
             "evidence": "我喜欢咖啡",
             "confidence": 0.99,
@@ -78,7 +78,7 @@ def test_llm_path_respects_opt_out_sensitive_and_uncertain_policy():
     assert parse_llm_memories(candidate, source_message="我的支付密码是123456") == []
     uncertain = _response(
         {
-            "kind": "like",
+            "operation": "ADD", "kind": "like",
             "value": "咖啡",
             "evidence": "我可能喜欢咖啡",
             "confidence": 0.99,
@@ -184,7 +184,7 @@ async def test_scheduler_processes_memory_after_enqueue_and_closes_cleanly():
     completion = _Completion(
         _response(
             {
-                "kind": "study_stage",
+                "operation": "ADD", "kind": "study_stage",
                 "value": "大三",
                 "evidence": "今年刚升大三",
                 "confidence": 0.96,

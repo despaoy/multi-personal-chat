@@ -5,8 +5,8 @@ import pytest
 from character.memory_llm import parse_llm_proposals
 
 
-def event(source, *, evidence=None, summary='用户在泉州学陶艺', value='陶艺', **extra):
-    return parse_llm_proposals(json.dumps(dict(memories=[dict(kind='shared_event',
+def event(source, *, evidence=None, summary='用户在泉州学陶艺', value='陶艺', operation='ADD', **extra):
+    return parse_llm_proposals(json.dumps(dict(memories=[dict(operation=operation, kind='shared_event',
         value=value, evidence=evidence or source, content=summary, confidence=0.99, **extra)])),
         source_message=source)
 
@@ -45,7 +45,7 @@ def test_event_speaker_is_provenance_not_model_actor_label():
 
 def test_non_event_fields_are_not_silently_converted_to_quotations():
     source = '我喜欢陶艺。'
-    proposal, = parse_llm_proposals(json.dumps(dict(memories=[dict(kind='like', value='陶艺',
+    proposal, = parse_llm_proposals(json.dumps(dict(memories=[dict(operation="ADD", kind='like', value='陶艺',
         evidence=source, content='用户喜欢陶艺', confidence=0.99)])), source_message=source)
     assert proposal.memory.content == '用户喜欢陶艺'
     assert not proposal.source_observation

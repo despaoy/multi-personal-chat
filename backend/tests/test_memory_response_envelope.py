@@ -58,7 +58,7 @@ def test_excess_candidates_fail_instead_of_silent_truncation():
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize('case', ['valid', 'empty', 'trailing', 'mixed', 'excess', 'confidence', 'low_confidence'])
+@pytest.mark.parametrize('case', ['valid', 'empty', 'trailing', 'mixed', 'excess', 'confidence', 'low_confidence', 'operation'])
 async def test_scheduler_preserves_source_but_never_writes_partial_invalid_response(tmp_path, case):
     from types import SimpleNamespace
     from unittest.mock import AsyncMock
@@ -82,6 +82,8 @@ async def test_scheduler_preserves_source_but_never_writes_partial_invalid_respo
         raw = json.dumps({'memories': [candidate()] * 5})
     elif case == 'confidence':
         raw = json.dumps({'memories': [candidate(), dict(candidate(), confidence=True)]})
+    elif case == 'operation':
+        raw = json.dumps({'memories': [candidate(), dict(candidate(), operation='private-invalid')]})
     elif case == 'low_confidence':
         raw = json.dumps({'memories': [dict(candidate(), confidence=0.1)]})
     completion = SimpleNamespace(complete=AsyncMock(return_value=raw), close=AsyncMock())
@@ -126,3 +128,24 @@ def test_valid_numeric_confidence_preserves_admission(confidence, accepted):
     raw = dict(candidate(), confidence=confidence)
     result = parse_llm_proposals(json.dumps({'memories': [raw]}), source_message='我的专业是物理学。')
     assert bool(result) is accepted
+
+
+@pytest.mark.parametrize('operation', [None, True, 1, [], {}, '', ' ', 'private-invalid'])
+def test_invalid_operation_is_protocol_failure(operation):
+    raw = dict(candidate(), operation=operation)
+    with pytest.raises(ValueError, match='operation') as caught:
+        parse_llm_proposals(json.dumps({'memories': [raw]}), source_message='我的专业是物理学。')
+    assert 'private-invalid' not in str(caught.value)
+
+
+def test_missing_operation_does_not_default_to_add():
+    raw = candidate()
+    del raw['operation']
+    with pytest.raises(ValueError, match='operation'):
+        parse_llm_proposals(json.dumps({'memories': [raw]}), source_message='我的专业是物理学。')
+
+
+def test_operation_normalization_preserves_explicit_add():
+    raw = dict(candidate(), operation=' add ')
+    result = parse_llm_proposals(json.dumps({'memories': [raw]}), source_message='我的专业是物理学。')
+    assert len(result) == 1 and result[0].operation == 'ADD'

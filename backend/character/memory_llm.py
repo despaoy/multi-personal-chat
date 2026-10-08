@@ -962,17 +962,22 @@ def _candidate_to_proposal(
     confidence = raw.get("confidence")
     if type(confidence) not in (int, float) or not 0.0 <= confidence <= 1.0:
         raise ValueError("记忆 LLM confidence 必须是 0 到 1 的 JSON 数值")
+    operation = raw.get("operation")
+    if not isinstance(operation, str):
+        raise ValueError("记忆 LLM operation 必须是明确的操作名称")
+    operation = operation.strip().upper()
+    # UPDATE 与 IGNORE 保留现有公开解析契约。
+    semantic_operation = "SUPERSEDE" if operation == "UPDATE" else operation
+    if operation == "IGNORE":
+        return None
+    if semantic_operation not in _SEMANTIC_OPERATIONS:
+        raise ValueError("记忆 LLM operation 不受支持")
     kind = str(raw.get("kind") or "").strip()
     value = re.sub(r"\s+", " ", str(raw.get("value") or "")).strip()
     evidence = re.sub(r"\s+", " ", str(raw.get("evidence") or "")).strip()
     proposed_content = re.sub(r"\s+", " ", str(raw.get("content") or "")).strip()
     if proposed_content in {"用户开头的第三人称事实", "第三人称安全描述"}:
         proposed_content = ""
-    operation = str(raw.get("operation") or "ADD").strip().upper()
-    if operation == "IGNORE":
-        return None
-    # UPDATE 是旧公开解析契约；保留返回值，但持久化时按 SUPERSEDE 执行。
-    semantic_operation = "SUPERSEDE" if operation == "UPDATE" else operation
     target_memory_id = str(raw.get("target_memory_id") or "").strip()
     target_memory_key = str(raw.get("target_memory_key") or "").strip()
 
@@ -997,8 +1002,6 @@ def _candidate_to_proposal(
             and unretracted_source != source_message
             and normalized_evidence
             and normalized_evidence not in _normalize(unretracted_source)):
-        return None
-    if semantic_operation not in _SEMANTIC_OPERATIONS:
         return None
     required_confidence = (
         min(confidence_threshold, PENDING_CONFIDENCE_THRESHOLD)

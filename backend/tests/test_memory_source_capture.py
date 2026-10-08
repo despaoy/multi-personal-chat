@@ -126,7 +126,7 @@ async def test_inflight_model_cannot_restore_claim_after_clear(tmp_path):
         async def complete(self, messages):
             started.set()
             await resume.wait()
-            return json.dumps({"memories": [{"kind": "name", "value": "阿黎", "evidence": "我叫阿黎",
+            return json.dumps({"memories": [{"operation": "ADD", "kind": "name", "value": "阿黎", "evidence": "我叫阿黎",
                                                "confidence": .96}]}, ensure_ascii=False)
 
     pending = asyncio.create_task(submit(repo, Delayed(""), message="我叫阿黎",

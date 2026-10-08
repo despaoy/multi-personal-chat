@@ -18,7 +18,7 @@ async def test_model_cannot_set_observation_time(tmp_path, model_time, source_ti
     class Completion:
         async def complete(self, messages):
             return json.dumps({"memories": [{
-                "kind": "study_stage", "value": "大三", "evidence": "今年刚升大三",
+                "operation": "ADD", "kind": "study_stage", "value": "大三", "evidence": "今年刚升大三",
                 "confidence": 0.96, "observed_at": model_time,
                 "valid_from": "2025-09-01", "valid_to": "2026-07-01",
             }]})

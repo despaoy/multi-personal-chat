@@ -16,7 +16,7 @@ from character.memory_subject import explicitly_other_subject
                                                ('在', '博物馆工作', 'workplace')])
 def test_explicit_other_subject_is_not_a_personal_field(owner, predicate, value, kind):
     source = owner + predicate + value + '。'
-    output = json.dumps(dict(memories=[dict(kind=kind, value=value, evidence=source,
+    output = json.dumps(dict(memories=[dict(operation="ADD", kind=kind, value=value, evidence=source,
         content='用户说自己' + predicate + value, attributed_to='user', confidence=0.99)]))
     assert parse_llm_proposals(output, source_message=source) == []
 
@@ -25,7 +25,7 @@ def test_explicit_other_subject_is_not_a_personal_field(owner, predicate, value,
 @pytest.mark.parametrize('verb', ['已经搬到', '刚搬家到', '刚刚搬到'])
 def test_relocation_owner_is_checked_before_personal_location_admission(owner, verb):
     source = owner + verb + '衡阳了。'
-    output = json.dumps(dict(memories=[dict(kind='location', value='衡阳', evidence=source,
+    output = json.dumps(dict(memories=[dict(operation="ADD", kind='location', value='衡阳', evidence=source,
         content='用户搬到了衡阳', attributed_to='user', confidence=.99)]))
     assert parse_llm_proposals(output, source_message=source) == []
     assert explicitly_other_subject(source=source, evidence='衡阳', value='衡阳')
@@ -38,7 +38,7 @@ def test_trimmed_quote_cannot_drop_its_original_subject():
 def test_other_clause_does_not_discard_separate_self_fact():
     source = '我哥哥在青州，我自己在临沂学雕刻。'
     assert not explicitly_other_subject(source=source, evidence='我自己在临沂学雕刻', value='临沂')
-    output = json.dumps(dict(memories=[dict(kind='location', value='临沂',
+    output = json.dumps(dict(memories=[dict(operation="ADD", kind='location', value='临沂',
         evidence='我自己在临沂学雕刻', confidence=0.99)]))
     assert len(parse_llm_proposals(output, source_message=source)) == 1
 
@@ -57,6 +57,6 @@ def test_question_owner_grammar_includes_existing_write_vocabulary():
 
 def test_shared_event_is_not_reclassified_by_personal_field_guard():
     source = '我姐姐喜欢我送给她的陶杯。'
-    output = json.dumps(dict(memories=[dict(kind='shared_event', value='陶杯',
+    output = json.dumps(dict(memories=[dict(operation="ADD", kind='shared_event', value='陶杯',
         evidence=source, confidence=0.99)]))
     assert len(parse_llm_proposals(output, source_message=source)) == 1
