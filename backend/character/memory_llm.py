@@ -494,20 +494,6 @@ def _record_id(record: dict[str, Any]) -> str:
     return str(record.get("id") or record.get("memory_id") or "").strip()
 
 
-def _sanitize_history(history: tuple[dict[str, str], ...], *, max_chars: int = 2000) -> tuple[dict[str, str], ...]:
-    """只保留真实对话角色；system/tool/RAG/external 内容不进入记忆判断。"""
-
-    cleaned: list[dict[str, str]] = []
-    for item in history:
-        role = str(item.get("role") or "").strip().lower()
-        if role not in {"user", "assistant"}:
-            continue
-        content = str(item.get("content") or "").strip()
-        if content:
-            cleaned.append({"role": role, "content": content})
-    return tuple(_history_view(cleaned, max_messages=MAX_HISTORY_MESSAGES, max_chars=max_chars))
-
-
 def _select_existing_memories(
     records: tuple[dict[str, Any], ...], feedback_target_ids: tuple[str, ...]
 ) -> tuple[dict[str, Any], ...]:
@@ -1487,7 +1473,8 @@ def build_memory_llm_messages(
     reference_time = observation_clock(observed_at)
     if not context_window_tokens and len(message) > max_input_chars:
         raise InputBudgetError("current memory message exceeds input budget")
-    safe_history = _sanitize_history(history, max_chars=4 * context_window_tokens if context_window_tokens else 2000)
+    safe_history = _history_view(history, max_messages=MAX_HISTORY_MESSAGES,
+                                 max_chars=4 * context_window_tokens if context_window_tokens else 2000)
     selected_memories = _select_existing_memories(existing_memories, feedback_target_ids)
     from character.quoted_erasure_authority import partial_source_packet
 
@@ -1499,12 +1486,7 @@ def build_memory_llm_messages(
     payload = {
         "current_user_message": message,
         "recent_history": [
-            {
-                "role": str(item.get("role") or "")[:16],
-                "content": str(item.get("content") or ""),
-                "eligible_as_memory_evidence": False,
-            }
-            for item in safe_history
+            {**item, "eligible_as_memory_evidence": False} for item in safe_history
         ],
         "rule_hints": [
             {

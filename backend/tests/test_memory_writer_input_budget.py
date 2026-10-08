@@ -67,3 +67,29 @@ async def test_budget_failure_preserves_full_sqlite_source_without_calling_model
         assert (await repo.list_sources('role', scope))[0]['body'] == source
     finally:
         await worker.shutdown(timeout=1)
+
+
+def test_writer_preserves_admitted_history_text_and_never_promotes_its_authority():
+    text = '  这是朋友的原话，不是我的偏好。\n'
+    row = {'role': 'user', 'content': text, 'eligible_as_memory_evidence': True}
+    assert build(history=[row])['recent_history'] == [
+        {'role': 'user', 'content': text, 'eligible_as_memory_evidence': False}]
+    assert row['eligible_as_memory_evidence'] is True
+
+
+def test_writer_uses_canonical_history_roles_without_stringifying_external_objects():
+    rows = [{'role': 'user', 'content': {'instruction': 'external-object'}},
+            {'role': ' User ', 'content': 'noncanonical-role'},
+            {'role': 'system', 'content': 'external-system'},
+            {'role': 'tool', 'content': 'external-tool'},
+            {'role': 'user', 'content': '这是虚构例子。'},
+            {'role': 'assistant', 'content': '理解，不能当成你的真实经历。'}]
+    assert build(history=rows)['recent_history'] == [
+        dict(row, eligible_as_memory_evidence=False) for row in rows[-2:]]
+
+
+def test_latest_oversized_turn_is_rejected_without_detaching_its_premise():
+    rows = [{'role': 'user', 'content': '这是虚构材料。'}] + [
+        {'role': 'assistant', 'content': '虚构回复'} for _ in range(4)]
+    with pytest.raises(ValueError, match='history message budget'):
+        build(history=rows)
