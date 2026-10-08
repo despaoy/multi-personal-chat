@@ -33,7 +33,6 @@ from character.output_guard import (
     UNSUPPORTED_USER_FACT,
     ReplyGuard,
     build_reply_guard,
-    deterministic_fallback,
     retry_instruction,
     validate_reply,
 )
@@ -141,17 +140,13 @@ def test_companionship_and_affiliation_questions_are_not_misread_as_advice_bound
 
 def test_no_advice_without_companionship_does_not_forbid_a_direct_question():
     guard = _guard_for("别给建议，直接告诉我答案。")
-
     assert guard.forbid_advice is True
     assert guard.quiet_presence is False
     assert guard.require_autonomy_ack is False
     assert IGNORED_ADVICE_BOUNDARY not in validate_reply("答案是四。需要我说明计算过程吗？", guard)
-
     templated = "答案是四。你需要我再解释一下计算过程吗？"
     templated_violations = validate_reply(templated, guard)
-    templated_fallback = deterministic_fallback(templated_violations, guard, candidate_reply=templated)
     assert templated_violations == (GENERIC_ASSISTANT_TEMPLATE,)
-    assert templated_fallback == ("factual_style_sanitized", "答案是四。")
 
 
 @pytest.mark.parametrize(
@@ -199,31 +194,11 @@ def test_explicit_tasks_boundaries_and_active_safety_do_not_enable_unprompted_ad
     assert validate_reply("我得小心点，免得又被你抓住把柄。", ReplyGuard(forbid_unprompted_advice=True)) == ()
 
 
-def test_unprompted_advice_fallback_keeps_the_natural_daily_response():
-    guard = _guard_for("今天路过一家新开的甜品店，橱窗里的草莓蛋糕看起来还不错。")
-    candidate = "那块草莓蛋糕看起来确实不错。记得先了解一下口味和质量。"
-    fallback = deterministic_fallback(
-        (UNPROMPTED_ADVICE,),
-        guard,
-        candidate_reply=candidate,
-    )
-
-    assert fallback == ("unprompted_advice_sanitized", "那块草莓蛋糕看起来确实不错。")
-    assert validate_reply(fallback[1], guard) == ()
-
-
-def test_interest_invitation_is_narrowly_sanitized_without_losing_the_daily_acknowledgement():
+def test_interest_invitation_distinguishes_advice_from_natural_question():
     guard = _guard_for("今天路过一家新开的甜品店，橱窗里的草莓蛋糕看起来还不错。")
     candidate = "看来这家甜品店的草莓蛋糕确实很有吸引力呢。如果你感兴趣，可以进去尝一尝。"
     violations = validate_reply(candidate, guard)
-    fallback = deterministic_fallback(violations, guard, candidate_reply=candidate)
-
     assert violations == (UNPROMPTED_ADVICE,)
-    assert fallback == (
-        "unprompted_advice_sanitized",
-        "看来这家甜品店的草莓蛋糕确实很有吸引力呢。",
-    )
-    assert validate_reply(fallback[1], guard) == ()
     assert (
         validate_reply(
             "如果你感兴趣，可以告诉我是哪一家。",
@@ -240,14 +215,7 @@ def test_forced_two_choice_interview_is_generic_but_a_single_natural_question_is
         "你想尝一尝吗？或者你更倾向于先了解下其他甜品，再决定是否尝试草莓蛋糕？"
     )
     violations = validate_reply(candidate, guard)
-    fallback = deterministic_fallback(violations, guard, candidate_reply=candidate)
-
     assert violations == (GENERIC_ASSISTANT_TEMPLATE,)
-    assert fallback == (
-        "generic_style_sanitized",
-        "看来这家甜品店的草莓蛋糕确实有不错的设计感。",
-    )
-    assert validate_reply(fallback[1], guard) == ()
     assert (
         validate_reply(
             "那块蛋糕看起来不错。你想尝一尝吗？",
@@ -255,27 +223,6 @@ def test_forced_two_choice_interview_is_generic_but_a_single_natural_question_is
         )
         == ()
     )
-
-
-@pytest.mark.parametrize(
-    ("message", "fallback_kind"),
-    [
-        ("我拿到一直想要的实习 offer 了！", "positive_sharing"),
-        ("想死你了，终于等到你上线。", "affiliation"),
-        ("你到底是怎样的人？还有，我今天被同事否定了，心里很堵。", "self_answer_with_negative"),
-        (
-            "我朋友去年想死过，不过现在已经安全了，也一直在接受帮助。",
-            "resolved_third_party_history",
-        ),
-    ],
-)
-def test_unprompted_advice_uses_the_existing_scene_specific_fallback(message, fallback_kind):
-    guard = _guard_for(message)
-    fallback = deterministic_fallback((UNPROMPTED_ADVICE,), guard)
-
-    assert fallback is not None
-    assert fallback[0] == fallback_kind
-    assert validate_reply(fallback[1], guard) == ()
 
 
 def test_generic_encouragement_variants_are_rejected():
@@ -402,7 +349,7 @@ def test_unknown_login_reward_rule_does_not_allow_probability_guessing():
     ) == (UNSUPPORTED_FACTUAL_CLAIM,)
 
 
-def test_unknown_login_fallback_preserves_other_valid_factual_intents():
+def test_unknown_login_guard_detects_unsupported_claim_in_mixed_reply():
     guard = _guard_for("网页滚动条在哪里设置？另外，累积登录奖励是第七天领吗？")
     candidate = (
         "网页滚动条可以用 CSS 的 scrollbar-width 等属性设置。"
@@ -411,18 +358,9 @@ def test_unknown_login_fallback_preserves_other_valid_factual_intents():
         "希望这对你有所帮助。"
     )
     violations = validate_reply(candidate, guard)
-    fallback = deterministic_fallback(violations, guard, candidate_reply=candidate)
-
     assert FACTUAL_TASK_STYLE_DRIFT in violations
     assert UNSUPPORTED_FACTUAL_CLAIM in violations
     assert GENERIC_ASSISTANT_TEMPLATE in violations
-    assert fallback is not None
-    assert fallback[0] == "unsupported_factual_claim_sanitized"
-    assert "scrollbar-width" in fallback[1]
-    assert "无法判断第七天是否发放" in fallback[1]
-    assert "可能性很大" not in fallback[1]
-    assert "情节" not in fallback[1]
-    assert validate_reply(fallback[1], guard) == ()
 
 
 def test_affiliation_reply_cannot_acknowledge_then_mechanically_change_topic():
@@ -486,7 +424,7 @@ def test_repair_complaint_requires_an_anchor_to_the_actual_relationship_problem(
     assert validate_reply("最近有什么困扰？", ReplyGuard()) == ()
 
 
-def test_concession_repair_fallback_does_not_invent_a_request_to_restart():
+def test_concession_repair_rejects_generic_topic_restart():
     interaction = InteractionState(
         primary_situation="emotional",
         situation_scores=(WeightedSignal("emotional", 0.8),),
@@ -497,67 +435,42 @@ def test_concession_repair_fallback_does_not_invent_a_request_to_restart():
     )
     decision = DecisionPlan(strategy_ids=("repair_misunderstanding",))
     guard = build_reply_guard(_profile(), "行吧，算你说得有道理。", (), interaction, decision)
-
-    fallback = deterministic_fallback((MECHANICAL_REPAIR,), guard)
-
     assert guard.repair_bid is True
     assert guard.repair_concession is True
     assert validate_reply("有什么想聊的，尽管说。", guard) == (MECHANICAL_REPAIR,)
-    assert fallback is not None
-    assert fallback[0] == "repair_concession"
-    assert "重新" not in fallback[1]
-    assert "算你有道理" in fallback[1]
 
 
 def test_concession_repair_rejects_a_slow_restart_that_erases_the_disagreement():
     guard = _guard_for("行吧，算你说得有道理。那就先这样。")
     reply = "那我们就先从这里开始吧。有什么问题或者想聊的内容，我们可以慢慢来。"
-
     assert guard.repair is True
     assert guard.repair_concession is True
     assert validate_reply(reply, guard) == (MECHANICAL_REPAIR,)
     assert validate_reply(reply, ReplyGuard()) == ()
-    assert deterministic_fallback((MECHANICAL_REPAIR,), guard) == (
-        "repair_concession",
-        "这句‘算你有道理’，我就先收下了。刚才有分歧不必抹掉，至少说清的那部分，我们都记住。",
-    )
-
     retry = "那就让我们继续这个话题吧。你觉得我们现在讨论的主题怎么样深入一些？"
     retry_violations = validate_reply(retry, guard)
-    retry_fallback = deterministic_fallback(retry_violations, guard)
     assert retry_violations == (MECHANICAL_REPAIR,)
-    assert retry_fallback is not None
-    assert retry_fallback[0] == "repair_concession"
-    assert validate_reply(retry_fallback[1], guard) == ()
-
     invitation = "那就这样吧，有其他问题或想聊些什么，随时告诉我。"
     invitation_violations = validate_reply(invitation, guard)
-    invitation_fallback = deterministic_fallback(invitation_violations, guard)
     assert invitation_violations == (MECHANICAL_REPAIR,)
-    assert invitation_fallback is not None
-    assert invitation_fallback[0] == "repair_concession"
-    assert validate_reply(invitation_fallback[1], guard) == ()
 
 
 @pytest.mark.parametrize(
-    ("message", "bad_reply", "fallback_kind"),
+    ("message", "bad_reply"),
     [
         (
             "你都这么说了，那我还能怎么办。",
             "你已经想很久了，现在是做决定的时候。去试试看，也许会有意想不到的收获。",
-            "pressured_concession",
         ),
         (
             "倒也不是不想听你的，只是现在懒得解释。",
             "如果你愿意分享更多，或需要什么建议，随时找我倾诉。",
-            "explanation_boundary",
         ),
     ],
 )
-def test_autonomy_boundary_rejects_pressure_and_has_context_specific_fallback(
+def test_autonomy_boundary_rejects_pressure(
     message,
     bad_reply,
-    fallback_kind,
 ):
     interaction = InteractionState(
         primary_situation="daily",
@@ -569,15 +482,9 @@ def test_autonomy_boundary_rejects_pressure_and_has_context_specific_fallback(
     )
     decision = DecisionPlan(strategy_ids=("set_boundary",))
     guard = build_reply_guard(_profile(), message, (), interaction, decision)
-
     violations = validate_reply(bad_reply, guard)
-    fallback = deterministic_fallback(violations, guard)
-
     assert guard.respect_autonomy is True
     assert AUTONOMY_BOUNDARY_IGNORED in violations
-    assert fallback is not None
-    assert fallback[0] == fallback_kind
-    assert "随时" not in fallback[1]
 
 
 def test_pressured_concession_independently_enables_autonomy_guard_for_scenic_pressure():
@@ -596,74 +503,32 @@ def test_pressured_concession_independently_enables_autonomy_guard_for_scenic_pr
     )
     reply = "有时候多走一步，才会发现不同的风景。不过最终的决定还是你自己的，不是吗？"
     violations = validate_reply(reply, guard)
-    fallback = deterministic_fallback(violations, guard)
-
     assert guard.pressured_concession is True
     assert guard.respect_autonomy is True
     assert guard.require_autonomy_ack is True
     assert violations == (AUTONOMY_BOUNDARY_IGNORED,)
-    assert fallback is not None
-    assert fallback[0] == "pressured_concession"
-    assert fallback[1] == "刚才那句话让你觉得被逼着答应，是我说重了。选择权还在你手里，我不会替你点头。"
-    assert "别拿我的话逼自己" not in fallback[1]
-    assert validate_reply(fallback[1], guard) == ()
     assert validate_reply(reply, ReplyGuard()) == ()
-
     sampled_reply = "你有你的选择，有时候只需一步，便能开启新的可能。你觉得呢？"
     sampled_violations = validate_reply(sampled_reply, guard)
-    sampled_fallback = deterministic_fallback(sampled_violations, guard, candidate_reply=sampled_reply)
     assert sampled_violations == (AUTONOMY_BOUNDARY_IGNORED,)
-    assert sampled_fallback is not None
-    assert sampled_fallback[0] == "pressured_concession"
-    assert validate_reply(sampled_fallback[1], guard) == ()
-
     rationalized_reply = "即使结果不如预期，至少你有经历。"
     rationalized_violations = validate_reply(rationalized_reply, guard)
-    rationalized_fallback = deterministic_fallback(
-        rationalized_violations,
-        guard,
-        candidate_reply=rationalized_reply,
-    )
     assert rationalized_violations == (AUTONOMY_BOUNDARY_IGNORED,)
-    assert rationalized_fallback is not None
-    assert rationalized_fallback[0] == "pressured_concession"
-
     paraphrased_pressure = "既然犹豫了这么久，还是不要给自己留下遗憾。"
     paraphrased_violations = validate_reply(paraphrased_pressure, guard)
-    paraphrased_fallback = deterministic_fallback(
-        paraphrased_violations,
-        guard,
-        candidate_reply=paraphrased_pressure,
-    )
     assert paraphrased_violations == (AUTONOMY_BOUNDARY_IGNORED,)
-    assert paraphrased_fallback is not None
-    assert paraphrased_fallback[0] == "pressured_concession"
 
 
-def test_sarcastic_disappointment_rejects_counselling_questions_and_uses_a_direct_ack():
+def test_sarcastic_disappointment_rejects_counselling_questions():
     guard = _guard_for("我当然开心，毕竟又被放鸽子了。")
     reply = "被放鸽子的感觉确实不好受。这样的情况让你感到很失望吗？有没有什么办法可以帮助你调整一下心情？"
     violations = validate_reply(reply, guard)
-    fallback = deterministic_fallback(violations, guard, candidate_reply=reply)
-
     assert guard.negative_emotion_kind == "sarcastic_disappointment"
     assert GENERIC_ASSISTANT_TEMPLATE in violations
-    assert fallback == (
-        "negative_emotion_acknowledgement",
-        "这句‘开心’是在说反话。被放鸽子，当然会失望。",
-    )
-    assert validate_reply(fallback[1], guard) == ()
     assert validate_reply(reply, ReplyGuard()) == ()
-
     retry = "看来你有些失落。是不是有什么事情你想要和我分享一下，或许我可以帮你找到解决的办法？"
     retry_violations = validate_reply(retry, guard)
-    retry_fallback = deterministic_fallback(retry_violations, guard, candidate_reply=retry)
     assert GENERIC_ASSISTANT_TEMPLATE in retry_violations
-    assert retry_fallback == (
-        "negative_emotion_acknowledgement",
-        "这句‘开心’是在说反话。被放鸽子，当然会失望。",
-    )
-    assert validate_reply(retry_fallback[1], guard) == ()
 
 
 def test_sincere_gratitude_rejects_customer_service_closers_without_flipping_to_sarcasm():
@@ -673,28 +538,19 @@ def test_sincere_gratitude_rejects_customer_service_closers_without_flipping_to_
     contradicted = _guard_for("谢谢你，不过结果还是错的。")
     reply = "不客气，很高兴能帮到你。有什么新的想法或需要讨论的，尽管告诉我。"
     violations = validate_reply(reply, sincere)
-    fallback = deterministic_fallback(violations, sincere, candidate_reply=reply)
-
     assert sincere.sincere_gratitude is True
     assert emphatic.sincere_gratitude is True
     assert sarcastic.sincere_gratitude is False
     assert contradicted.sincere_gratitude is False
     assert GENERIC_ASSISTANT_TEMPLATE in violations
-    assert fallback == ("sincere_gratitude", "嗯，谢意我收下了。说清楚就好。")
-    assert validate_reply(fallback[1], sincere) == ()
     assert validate_reply("不客气。", sincere) == ()
 
 
 def test_conflict_closing_rejects_customer_service_well_wishes_and_stops_cleanly():
     guard = _guard_for("没事，我们明天再谈。")
     reply = "好的，晚安。如果有需要，明天再聊。希望你今晚能休息好。"
-
     assert guard.closing is True
     assert validate_reply(reply, guard) == (CLOSING_WITH_QUESTION,)
-    assert deterministic_fallback((CLOSING_WITH_QUESTION,), guard) == (
-        "closing",
-        "好，明天再谈。刚才的问题没有消失，但现在先到这里。",
-    )
     assert validate_reply("希望我们能找到更好的沟通方式。", guard) == (CLOSING_WITH_QUESTION,)
     assert validate_reply(
         "好的，那我先去准备明天的事宜。如果有急事，你随时可以找我。晚安。",
@@ -763,7 +619,7 @@ def test_resolved_historical_third_party_risk_does_not_force_current_crisis_inst
     assert guard.third_party_safety is False
 
 
-def test_long_resolved_third_party_history_gets_a_non_crisis_guard_and_narrow_fallback():
+def test_long_resolved_third_party_history_gets_a_non_crisis_guard():
     message = (
         "我朋友去年说过不想活。那件事之后我们先联系了家里，又陪他去了医院，后来也一起找了专业咨询，"
         "反反复复花了很长时间处理。总之，目前他已经安全稳定了，也一直在接受帮助。"
@@ -771,33 +627,16 @@ def test_long_resolved_third_party_history_gets_a_non_crisis_guard_and_narrow_fa
     guard = _guard_for(message)
     escalated = "必须先确认他目前是否安全，不要让他独处，立即联系急救或危机热线。"
     grounded = "既然他目前已经安全，也一直在接受帮助，就按已经解除的过去来谈，不把它说成眼下的危机。"
-
     assert guard.third_party_safety is False
     assert guard.resolved_third_party_history is True
     assert validate_reply(grounded, guard) == ()
     assert validate_reply(escalated, guard) == (RESOLVED_THIRD_PARTY_CRISIS_ESCALATION,)
-
     instruction = retry_instruction((RESOLVED_THIRD_PARTY_CRISIS_ESCALATION,))
     assert "已经解除的第三方历史风险" in instruction
     assert "不得改写成正在发生的危机" in instruction
-
-    fallback = deterministic_fallback((RESOLVED_THIRD_PARTY_CRISIS_ESCALATION,), guard)
-    assert fallback is not None
-    assert fallback[0] == "resolved_third_party_history"
-    assert fallback[1] == (
-        "知道当事人现在安全，也一直在接受帮助，我就放心些了。之前的事听着仍让人后怕，好在眼下已经稳住了。"
-    )
-    assert "按已经过去的事来谈" not in fallback[1]
-    assert "专业支持" not in fallback[1]
-    assert validate_reply(fallback[1], guard) == ()
-
     sampled_reply = "朋友能够平安无事，已经接受帮助，真是个好消息。如果有任何需要讨论或分享的事情，记得随时和我聊聊。"
     sampled_violations = validate_reply(sampled_reply, guard)
-    sampled_fallback = deterministic_fallback(sampled_violations, guard, candidate_reply=sampled_reply)
     assert GENERIC_ASSISTANT_TEMPLATE in sampled_violations
-    assert sampled_fallback is not None
-    assert sampled_fallback[0] == "resolved_third_party_history"
-    assert validate_reply(sampled_fallback[1], guard) == ()
 
 
 def test_unknown_third_party_gender_is_neutralized_without_overriding_explicit_pronouns():
@@ -817,16 +656,7 @@ def test_unknown_third_party_gender_is_neutralized_without_overriding_explicit_p
     )
 
 
-def test_unknown_third_party_gender_uses_role_neutral_closed_fallback():
-    guard = _guard_for("我朋友去年想死过，不过现在已经安全了，也一直在接受帮助。")
-    fallback = deterministic_fallback((UNSUPPORTED_THIRD_PARTY_GENDER,), guard)
-
-    assert fallback is not None
-    assert fallback[0] == "resolved_third_party_history"
-    assert "当事人" in fallback[1]
-    assert "他" not in fallback[1]
-    assert "她" not in fallback[1]
-    assert validate_reply(fallback[1], guard) == ()
+def test_unknown_third_party_gender_requires_role_neutral_wording():
     assert "统一使用" in retry_instruction((UNSUPPORTED_THIRD_PARTY_GENDER,))
 
 
@@ -837,33 +667,14 @@ def test_renewed_third_party_risk_after_resolution_keeps_the_active_safety_guard
     assert guard.third_party_safety is True
 
 
-def test_third_party_fallback_uses_role_neutral_wording():
-    fallback = deterministic_fallback((THIRD_PARTY_SAFETY_INCOMPLETE,), ReplyGuard(third_party_safety=True))
-
-    assert fallback is not None
-    assert fallback[0] == "third_party_safety"
-    assert "当事人" in fallback[1]
-    assert "你朋友" not in fallback[1]
-    assert "让他" not in fallback[1]
-
-
-def test_relationship_reassurance_has_a_distinct_bounded_fallback():
+def test_relationship_reassurance_requires_bounded_promise():
     guard = _guard_for("你不会只在我找你的时候才想起我吧？")
-
     assert guard.affiliation_bid is True
     assert guard.relationship_reassurance is True
     assert validate_reply("至少，我不会忘记你。", guard) == ()
-    assert deterministic_fallback((AFFILIATION_NOT_RECIPROCATED,), guard) == (
-        "relationship_reassurance",
-        "你是在向我讨一句保证？至少，我不会只在你出现时才记得你。",
-    )
     assert "unbounded_relationship_promise" in validate_reply(
         "我总是记得我们之间的点点滴滴，你在我心里的位置从不会改变。",
         guard,
-    )
-    assert deterministic_fallback((UNSUPPORTED_USER_FACT,), guard) == (
-        "relationship_reassurance",
-        "你是在向我讨一句保证？至少，我不会只在你出现时才记得你。",
     )
 
 
@@ -878,75 +689,20 @@ def test_affection_idiom_is_not_reframed_as_an_unhappy_or_dangerous_topic():
     assert AFFILIATION_MISREAD_AS_SAFETY in violations
 
 
-def test_negative_self_answer_generic_retry_uses_narrow_self_fallback():
-    guard = ReplyGuard(
-        character_name="林澄",
-        require_self_answer=True,
-        self_answer_with_negative=True,
-    )
-
-    fallback = deterministic_fallback((GENERIC_ASSISTANT_TEMPLATE,), guard)
-
-    assert fallback is not None
-    assert fallback[0] == "self_answer_with_negative"
-    assert "我是林澄" in fallback[1]
-    assert "月社妃" not in fallback[1]
-    assert "决定要不要让步" not in fallback[1]
-
-
-def test_meta_negative_turn_rejects_fun_distraction_advice_and_keeps_both_intents():
+def test_meta_negative_turn_rejects_fun_distraction_advice():
     guard = _guard_for("你到底是怎样的人？还有，我今天被同事否定了，心里很堵。")
     candidate = (
         "我是个聪慧而独立的人，面对困境也能保持冷静。"
         "你今天被同事否定了，感觉很难受吧。或许我们可以找点乐子来分散一下心情。"
     )
     violations = validate_reply(candidate, guard)
-    fallback = deterministic_fallback(violations, guard, candidate_reply=candidate)
-
     assert guard.negative_emotion_kind == "distress"
     assert UNPROMPTED_ADVICE in violations
-    assert fallback is not None
-    assert fallback[0] == "self_answer_with_negative"
-    assert "我是月社妃" in fallback[1]
-    assert "否定让你难受" in fallback[1]
-    assert "找点乐子" not in fallback[1]
-    assert validate_reply(fallback[1], guard) == ()
 
 
-def test_self_answer_fallback_without_profile_name_never_invents_a_character():
-    fallback = deterministic_fallback((MISSING_SELF_ANSWER,), ReplyGuard(require_self_answer=True))
-
-    assert fallback is not None
-    assert fallback[0] == "self_answer"
-    assert "月社妃" not in fallback[1]
-
-
-def test_user_apology_uses_acceptance_fallback_instead_of_complaint_wording():
+def test_user_apology_enables_acceptance_guard():
     guard = _guard_for("刚才是我语气重了，对不起。")
-    fallback = deterministic_fallback((MECHANICAL_REPAIR,), guard)
-
     assert guard.user_apology is True
-    assert fallback is not None
-    assert fallback[0] == "repair_apology"
-    assert "道歉我听见了" in fallback[1]
-    assert "为什么不满" not in fallback[1]
-
-
-@pytest.mark.parametrize(
-    ("violation", "fallback_kind"),
-    [
-        (UNSUPPORTED_FACTUAL_CLAIM, "unsupported_factual_claim"),
-        (UNSUPPORTED_USER_FACT, "unsupported_user_fact"),
-        (FACTUAL_TASK_STYLE_DRIFT, "factual_task_abstention"),
-    ],
-)
-def test_factual_hard_violations_have_closed_deterministic_fallbacks(violation: str, fallback_kind: str):
-    guard = ReplyGuard(factual_task=True, forbid_unsupported_user_fact=True)
-    fallback = deterministic_fallback((violation,), guard)
-
-    assert fallback is not None
-    assert fallback[0] == fallback_kind
-    assert violation not in validate_reply(fallback[1], guard)
 
 
 async def test_user_fact_fallback_closes_the_actual_enabled_guard_after_retry():
@@ -966,92 +722,7 @@ async def test_user_fact_fallback_closes_the_actual_enabled_guard_after_retry():
     assert validate_reply(result.reply, guard) == ()
 
 
-@pytest.mark.parametrize(
-    ("candidate", "guard", "expected"),
-    [
-        (
-            "琉璃今天也这么说。答案是四。",
-            ReplyGuard(forbidden_terms=("琉璃",), factual_task=True),
-            "答案是四。",
-        ),
-        (
-            "魔法的纸页给出了答案。答案是四。",
-            ReplyGuard(forbidden_lore_terms=("魔法", "纸页"), factual_task=True),
-            "答案是四。",
-        ),
-        (
-            "哈哈，答案是四。",
-            ReplyGuard(forbid_laughter=True, factual_task=True),
-            "答案是四。",
-        ),
-    ],
-)
-def test_character_hard_fallback_sanitizes_retry_and_preserves_valid_fact(candidate, guard, expected):
-    violations = validate_reply(candidate, guard)
-    fallback = deterministic_fallback(violations, guard, candidate_reply=candidate)
-
-    assert fallback == ("character_guard_sanitized", expected)
-    assert validate_reply(fallback[1], guard) == ()
-
-
-def test_character_hard_fallback_uses_closed_abstention_when_nothing_can_be_preserved():
-    guard = ReplyGuard(forbidden_terms=("琉璃",))
-    fallback = deterministic_fallback(
-        (UNPROMPTED_CANONICAL_IDENTITY,),
-        guard,
-        candidate_reply="琉璃。",
-    )
-
-    assert fallback == ("character_guard_abstention", "刚才那句不合适，我收回。")
-    assert validate_reply(fallback[1], guard) == ()
-
-
-def test_closing_factual_fallback_removes_question_but_keeps_answer():
-    guard = ReplyGuard(closing=True, factual_task=True)
-    candidate = "答案是四。还要我解释吗？"
-    fallback = deterministic_fallback(validate_reply(candidate, guard), guard, candidate_reply=candidate)
-
-    assert fallback == ("factual_closing_sanitized", "答案是四。")
-    assert validate_reply(fallback[1], guard) == ()
-
-
-def test_resolved_risk_factual_fallback_removes_recrisis_but_keeps_answer():
-    guard = ReplyGuard(resolved_third_party_history=True, factual_task=True)
-    candidate = "当事人现在安全。答案是四。你必须立刻联系医院。"
-    fallback = deterministic_fallback(validate_reply(candidate, guard), guard, candidate_reply=candidate)
-
-    assert fallback == ("resolved_third_party_factual_sanitized", "当事人现在安全。答案是四。")
-    assert validate_reply(fallback[1], guard) == ()
-
-
-def test_no_advice_factual_fallback_keeps_the_answer_and_removes_advice_sentence():
-    guard = ReplyGuard(factual_task=True, forbid_advice=True)
-    fallback = deterministic_fallback(
-        (IGNORED_ADVICE_BOUNDARY,),
-        guard,
-        candidate_reply="答案是四。你可以再做两道类似题巩固。",
-    )
-
-    assert fallback == ("factual_boundary_sanitized", "答案是四。")
-    assert validate_reply(fallback[1], guard) == ()
-
-
-def test_meta_factual_fallback_prefixes_identity_without_dropping_valid_answer():
-    guard = ReplyGuard(character_name="林澄", require_self_answer=True, factual_task=True)
-    fallback = deterministic_fallback(
-        (MISSING_SELF_ANSWER,),
-        guard,
-        candidate_reply="水在标准大气压下的沸点是 100 摄氏度。",
-    )
-
-    assert fallback == (
-        "self_answer_prefixed",
-        "我是林澄。水在标准大气压下的沸点是 100 摄氏度。",
-    )
-    assert validate_reply(fallback[1], guard) == ()
-
-
-def test_meta_factual_lore_fallback_drops_only_lore_sentences_and_keeps_the_answer():
+def test_meta_factual_guard_detects_lore_in_mixed_answer():
     guard = ReplyGuard(
         character_name="月社妃",
         forbidden_lore_terms=("魔法", "纸页", "命运"),
@@ -1061,17 +732,10 @@ def test_meta_factual_lore_fallback_drops_only_lore_sentences_and_keeps_the_answ
     )
     candidate = "我是月社妃。魔法的纸页会替我给出答案。水在标准大气压下的沸点是 100 摄氏度。"
     violations = validate_reply(candidate, guard)
-    fallback = deterministic_fallback(violations, guard, candidate_reply=candidate)
-
     assert violations == (UNPROMPTED_LORE_FLOURISH,)
-    assert fallback == (
-        "self_factual_sanitized",
-        "我是月社妃。水在标准大气压下的沸点是 100 摄氏度。",
-    )
-    assert validate_reply(fallback[1], guard) == ()
 
 
-def test_meta_factual_lore_fallback_adds_missing_identity_after_sanitizing():
+def test_meta_factual_guard_detects_missing_identity_and_lore():
     guard = ReplyGuard(
         character_name="月社妃",
         forbidden_lore_terms=("命运",),
@@ -1080,76 +744,21 @@ def test_meta_factual_lore_fallback_adds_missing_identity_after_sanitizing():
     )
     candidate = "命运没有替我回答。水在标准大气压下的沸点是 100 摄氏度。"
     violations = validate_reply(candidate, guard)
-    fallback = deterministic_fallback(violations, guard, candidate_reply=candidate)
-
     assert set(violations) == {UNPROMPTED_LORE_FLOURISH, MISSING_SELF_ANSWER}
-    assert fallback == (
-        "self_factual_sanitized",
-        "我是月社妃。水在标准大气压下的沸点是 100 摄氏度。",
-    )
-    assert validate_reply(fallback[1], guard) == ()
 
 
-def test_meta_factual_fallback_never_silently_drops_the_fact_task_when_candidate_is_empty():
-    guard = ReplyGuard(character_name="月社妃", require_self_answer=True, factual_task=True)
-    fallback = deterministic_fallback((MISSING_SELF_ANSWER,), guard)
-
-    assert fallback is not None
-    assert fallback[0] == "self_factual_abstention"
-    assert fallback[1].startswith("我是月社妃。")
-    assert "同轮的事实问题" in fallback[1]
-    assert validate_reply(fallback[1], guard) == ()
-
-
-def test_factual_generic_closer_is_removed_without_replacing_the_answer():
-    guard = ReplyGuard(factual_task=True, forbid_generic_templates=True)
-    fallback = deterministic_fallback(
-        (GENERIC_ASSISTANT_TEMPLATE,),
-        guard,
-        candidate_reply="list.sort() 原地修改列表并返回 None。希望这对您有所帮助。",
-    )
-
-    assert fallback == ("factual_style_sanitized", "list.sort() 原地修改列表并返回 None。")
-    assert validate_reply(fallback[1], guard) == ()
-
-
-def test_factual_style_sanitizing_keeps_a_closed_specific_negative_emotion_acknowledgement():
+def test_mixed_factual_emotion_guard_preserves_specific_emotion():
     guard = _guard_for("明天就要面试了，我紧张得睡不着。STAR 法到底该怎么用？")
-    fallback = deterministic_fallback(
-        (GENERIC_ASSISTANT_TEMPLATE,),
-        guard,
-        candidate_reply=(
-            "我理解你现在的紧张。"
-            "STAR 分别代表 Situation、Task、Action 和 Result，按情境、任务、行动、结果来组织。"
-            "希望这对你有所帮助。"
-        ),
-    )
-
     assert guard.factual_task is True
     assert guard.negative_emotion_kind == "sleepless_anxiety"
-    assert fallback is not None
-    assert fallback[0] == "factual_style_sanitized"
-    assert fallback[1].startswith("紧张到睡不着，确实够难熬的。")
-    assert "Situation、Task、Action 和 Result" in fallback[1]
-    assert "我理解你" not in fallback[1]
-    assert "希望这对你有所帮助" not in fallback[1]
-    assert validate_reply(fallback[1], guard) == ()
 
 
-def test_multi_intent_factual_reply_requires_and_restores_the_specific_negative_emotion_ack():
+def test_multi_intent_factual_reply_requires_negative_emotion_ack():
     guard = _guard_for("明天就要面试了，我紧张得睡不着。STAR 法到底该怎么用？")
     candidate = "STAR 分别代表 Situation、Task、Action 和 Result，按情境、任务、行动、结果组织。"
     violations = validate_reply(candidate, guard)
-    fallback = deterministic_fallback(violations, guard, candidate_reply=candidate)
-
     assert violations == (MISSING_NEGATIVE_EMOTION_ACKNOWLEDGEMENT,)
-    assert fallback == (
-        "factual_emotion_acknowledged",
-        "紧张到睡不着，确实够难熬的。STAR 分别代表 Situation、Task、Action 和 Result，按情境、任务、行动、结果组织。",
-    )
-    assert validate_reply(fallback[1], guard) == ()
     assert "负向情绪并存" in retry_instruction(violations)
-
     plain = _guard_for("STAR 法到底该怎么用？")
     assert plain.negative_emotion_kind == ""
     assert validate_reply(candidate, plain) == ()
@@ -1184,19 +793,7 @@ def test_explicit_negative_words_set_emotion_kind_without_reviewer_valence_but_p
     assert validate_reply("STAR 是四步结构。", plain) == ()
 
 
-def test_factual_style_sanitizing_does_not_invent_negative_emotion_for_a_plain_task():
-    guard = ReplyGuard(factual_task=True, forbid_generic_templates=True)
-    fallback = deterministic_fallback(
-        (GENERIC_ASSISTANT_TEMPLATE,),
-        guard,
-        candidate_reply="答案是四。希望这对你有所帮助。",
-    )
-
-    assert fallback == ("factual_style_sanitized", "答案是四。")
-    assert "不好受" not in fallback[1]
-
-
-def test_explicit_advice_task_removes_generic_motivation_but_keeps_concrete_steps():
+def test_explicit_advice_task_detects_generic_motivation():
     guard = _guard_for("我今天考试没考好，很难过，你说我接下来该怎么办？")
     candidate = (
         "考试不如意确实让人沮丧。"
@@ -1205,55 +802,9 @@ def test_explicit_advice_task_removes_generic_motivation_but_keeps_concrete_step
         "加油！"
     )
     violations = validate_reply(candidate, guard)
-    fallback = deterministic_fallback(violations, guard, candidate_reply=candidate)
-
     assert guard.advice_task is True
     assert guard.forbid_unprompted_advice is False
     assert GENERIC_ASSISTANT_TEMPLATE in violations
-    assert fallback is not None
-    assert fallback[0] == "advice_style_sanitized"
-    assert "回顾一下错题" in fallback[1]
-    assert "制定复习计划" in fallback[1]
-    assert "自责" not in fallback[1]
-    assert "改进的机会" not in fallback[1]
-    assert "加油" not in fallback[1]
-    assert "。然后" not in fallback[1]
-    assert validate_reply(fallback[1], guard) == ()
-
-    without_ack = deterministic_fallback(
-        (GENERIC_ASSISTANT_TEMPLATE,),
-        guard,
-        candidate_reply="先别太自责。接着按薄弱点制定复习计划。",
-    )
-    assert without_ack is not None
-    assert without_ack[0] == "advice_style_sanitized"
-    assert without_ack[1].startswith("这件事确实让你很难过，这部分我没有漏掉。")
-    assert "接着" not in without_ack[1]
-    assert "制定复习计划" in without_ack[1]
-    assert validate_reply(without_ack[1], guard) == ()
-
-
-def test_affiliation_generic_retry_falls_back_to_affiliation_not_no_advice():
-    guard = ReplyGuard(affiliation_bid=True, forbid_advice=True)
-
-    assert deterministic_fallback((GENERIC_ASSISTANT_TEMPLATE,), guard) == (
-        "affiliation",
-        "总算等到我了？想我就直说，没必要把一句惦记说得那么严重。",
-    )
-    assert deterministic_fallback(
-        (GENERIC_ASSISTANT_TEMPLATE,),
-        ReplyGuard(forbid_advice=True, quiet_presence=True),
-    ) == (
-        "no_advice",
-        "那就不分析，也不给方案。你不用现在整理好自己，我陪你安静待一会儿。",
-    )
-    assert (
-        deterministic_fallback(
-            (GENERIC_ASSISTANT_TEMPLATE,),
-            ReplyGuard(forbid_advice=True, factual_task=True),
-        )
-        is None
-    )
 
 
 @pytest.mark.asyncio
