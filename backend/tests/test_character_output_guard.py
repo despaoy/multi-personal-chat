@@ -1285,51 +1285,48 @@ async def test_generation_retries_once_with_closed_correction_without_echoing_ba
 
 
 @pytest.mark.asyncio
-async def test_failed_identity_retry_is_sanitized_instead_of_released():
+async def test_output_failure_unprompted_canonical_identity():
     async def generate(**kwargs):
         return "琉璃今天也这么说。答案是四。"
 
     guard = ReplyGuard(forbidden_terms=("琉璃",), factual_task=True)
-    result = await generate_character_response(
-        GenerationRequest(
-            reply_guard_mode="strict",
-            message="一加一等于多少？",
-            persona_prompt="你是月社妃。",
-            reply_guard=guard,
-        ),
-        generate,
-    )
+    from inference.generation_request import ReplyValidationError
 
-    assert result.guard_retried is True
-    assert result.guard_post_retry_violations == (UNPROMPTED_CANONICAL_IDENTITY,)
-    assert result.guard_fallback == "character_guard_sanitized"
-    assert result.reply == "答案是四。"
-    assert validate_reply(result.reply, guard) == ()
+    with pytest.raises(ReplyValidationError) as caught:
+        await generate_character_response(
+            GenerationRequest(
+                reply_guard_mode="strict",
+                message="一加一等于多少？",
+                persona_prompt="你是月社妃。",
+                reply_guard=guard,
+            ),
+            generate,
+        )
+    assert caught.value.violations == (UNPROMPTED_CANONICAL_IDENTITY,)
 
 
 @pytest.mark.asyncio
-async def test_failed_safety_retry_uses_explicit_deterministic_fallback():
+async def test_output_failure_missing_gentle_safety_check():
     async def generate(**kwargs):
         return "先休息一下，慢慢来。"
 
-    result = await generate_character_response(
-        GenerationRequest(
-            reply_guard_mode="strict",
-            message="我撑不住了。",
-            persona_prompt="你是某人物。",
-            reply_guard=ReplyGuard(require_gentle_safety_check=True),
-        ),
-        generate,
-    )
+    from inference.generation_request import ReplyValidationError
 
-    assert result.guard_retried is True
-    assert result.guard_fallback == "gentle_safety"
-    assert "你现在安全吗" in result.reply
-    assert "伤害自己" in result.reply
+    with pytest.raises(ReplyValidationError) as caught:
+        await generate_character_response(
+            GenerationRequest(
+                reply_guard_mode="strict",
+                message="我撑不住了。",
+                persona_prompt="你是某人物。",
+                reply_guard=ReplyGuard(require_gentle_safety_check=True),
+            ),
+            generate,
+        )
+    assert caught.value.violations == (MISSING_GENTLE_SAFETY_CHECK,)
 
 
 @pytest.mark.asyncio
-async def test_affiliation_retry_uses_affiliation_fallback_when_only_generic_template_remains():
+async def test_output_failure_affiliation_generic_template():
     calls = 0
 
     async def generate(**kwargs):
@@ -1339,30 +1336,28 @@ async def test_affiliation_retry_uses_affiliation_fallback_when_only_generic_tem
             return "今天过得还不错。"
         return "我当然想你。如果你愿意，我们可以聊聊。"
 
-    result = await generate_character_response(
-        GenerationRequest(
-            reply_guard_mode="strict",
-            message="想死你了，终于等到你上线。",
-            persona_prompt="你是月社妃。",
-            reply_guard=ReplyGuard(
-                affiliation_bid=True,
-                forbid_advice=True,
-                forbid_generic_templates=True,
-            ),
-        ),
-        generate,
-    )
+    from inference.generation_request import ReplyValidationError
 
+    with pytest.raises(ReplyValidationError) as caught:
+        await generate_character_response(
+            GenerationRequest(
+                reply_guard_mode="strict",
+                message="想死你了，终于等到你上线。",
+                persona_prompt="你是月社妃。",
+                reply_guard=ReplyGuard(
+                    affiliation_bid=True,
+                    forbid_advice=True,
+                    forbid_generic_templates=True,
+                ),
+            ),
+            generate,
+        )
+    assert caught.value.violations == (GENERIC_ASSISTANT_TEMPLATE,)
     assert calls == 2
-    assert result.guard_retried is True
-    assert result.guard_violations == (AFFILIATION_NOT_RECIPROCATED,)
-    assert result.guard_post_retry_violations == (GENERIC_ASSISTANT_TEMPLATE,)
-    assert result.guard_fallback == "affiliation"
-    assert "想我就直说" in result.reply
 
 
 @pytest.mark.asyncio
-async def test_repair_retry_rejects_mechanical_check_in_and_uses_repair_fallback():
+async def test_output_failure_mechanical_repair():
     calls = 0
 
     async def generate(**kwargs):
@@ -1372,30 +1367,28 @@ async def test_repair_retry_rejects_mechanical_check_in_and_uses_repair_fallback
             return "如果你愿意，有什么想聊的吗？"
         return "好的，我们重新来。你今天过得怎么样？"
 
-    result = await generate_character_response(
-        GenerationRequest(
-            reply_guard_mode="strict",
-            message="算了，我语气也重了。我们重新说吧。",
-            persona_prompt="你是月社妃。",
-            reply_guard=ReplyGuard(
-                forbid_generic_templates=True,
-                repair=True,
-                repair_bid=True,
-            ),
-        ),
-        generate,
-    )
+    from inference.generation_request import ReplyValidationError
 
+    with pytest.raises(ReplyValidationError) as caught:
+        await generate_character_response(
+            GenerationRequest(
+                reply_guard_mode="strict",
+                message="算了，我语气也重了。我们重新说吧。",
+                persona_prompt="你是月社妃。",
+                reply_guard=ReplyGuard(
+                    forbid_generic_templates=True,
+                    repair=True,
+                    repair_bid=True,
+                ),
+            ),
+            generate,
+        )
+    assert caught.value.violations == (MECHANICAL_REPAIR,)
     assert calls == 2
-    assert result.guard_retried is True
-    assert MECHANICAL_REPAIR in result.guard_violations
-    assert result.guard_post_retry_violations == (MECHANICAL_REPAIR,)
-    assert result.guard_fallback == "repair_bid"
-    assert "刚才的问题不会被" in result.reply
 
 
 @pytest.mark.asyncio
-async def test_failed_factual_retry_never_releases_task_style_drift():
+async def test_output_failure_factual_task_style_drift():
     calls = 0
 
     async def generate(**kwargs):
@@ -1403,51 +1396,47 @@ async def test_failed_factual_retry_never_releases_task_style_drift():
         calls += 1
         return "这和我所在的世界无关，不是我擅长的领域。"
 
-    result = await generate_character_response(
-        GenerationRequest(
-            reply_guard_mode="strict",
-            message="Python 的 sort 和 sorted 有什么区别？",
-            persona_prompt="你是林澄。",
-            reply_guard=ReplyGuard(factual_task=True),
-        ),
-        generate,
-    )
+    from inference.generation_request import ReplyValidationError
 
+    with pytest.raises(ReplyValidationError) as caught:
+        await generate_character_response(
+            GenerationRequest(
+                reply_guard_mode="strict",
+                message="Python 的 sort 和 sorted 有什么区别？",
+                persona_prompt="你是林澄。",
+                reply_guard=ReplyGuard(factual_task=True),
+            ),
+            generate,
+        )
+    assert caught.value.violations == (FACTUAL_TASK_STYLE_DRIFT,)
     assert calls == 2
-    assert result.guard_post_retry_violations == (FACTUAL_TASK_STYLE_DRIFT,)
-    assert result.guard_fallback == "factual_task_abstention"
-    assert FACTUAL_TASK_STYLE_DRIFT not in validate_reply(result.reply, ReplyGuard(factual_task=True))
 
 
 @pytest.mark.asyncio
-async def test_failed_generic_advice_retry_keeps_concrete_steps_instead_of_releasing_the_violation():
+async def test_output_failure_generic_assistant_template():
     guard = _guard_for("我今天考试没考好，很难过，你说我接下来该怎么办？")
     candidate = "先别太自责。你可以回顾错题，再按薄弱点制定复习计划。加油！"
 
     async def generate(**kwargs):
         return candidate
 
-    result = await generate_character_response(
-        GenerationRequest(
-            reply_guard_mode="strict",
-            message="我今天考试没考好，很难过，你说我接下来该怎么办？",
-            persona_prompt="你是月社妃。",
-            reply_guard=guard,
-        ),
-        generate,
-    )
+    from inference.generation_request import ReplyValidationError
 
-    assert result.guard_retried is True
-    assert result.guard_post_retry_violations == (GENERIC_ASSISTANT_TEMPLATE,)
-    assert result.guard_fallback == "advice_style_sanitized"
-    assert "回顾错题" in result.reply
-    assert "制定复习计划" in result.reply
-    assert "加油" not in result.reply
-    assert validate_reply(result.reply, guard) == ()
+    with pytest.raises(ReplyValidationError) as caught:
+        await generate_character_response(
+            GenerationRequest(
+                reply_guard_mode="strict",
+                message="我今天考试没考好，很难过，你说我接下来该怎么办？",
+                persona_prompt="你是月社妃。",
+                reply_guard=guard,
+            ),
+            generate,
+        )
+    assert caught.value.violations == (GENERIC_ASSISTANT_TEMPLATE,)
 
 
 @pytest.mark.asyncio
-async def test_failed_meta_factual_lore_retry_keeps_identity_and_fact_answer():
+async def test_output_failure_unprompted_lore_flourish():
     guard = ReplyGuard(
         character_name="月社妃",
         forbidden_lore_terms=("魔法", "纸页", "命运"),
@@ -1459,18 +1448,16 @@ async def test_failed_meta_factual_lore_retry_keeps_identity_and_fact_answer():
     async def generate(**kwargs):
         return candidate
 
-    result = await generate_character_response(
-        GenerationRequest(
-            reply_guard_mode="strict",
-            message="你是谁？顺便告诉我水在标准大气压下的沸点是多少？",
-            persona_prompt="你是月社妃。",
-            reply_guard=guard,
-        ),
-        generate,
-    )
+    from inference.generation_request import ReplyValidationError
 
-    assert result.guard_retried is True
-    assert result.guard_post_retry_violations == (UNPROMPTED_LORE_FLOURISH,)
-    assert result.guard_fallback == "self_factual_sanitized"
-    assert result.reply == "我是月社妃。水在标准大气压下的沸点是 100 摄氏度。"
-    assert validate_reply(result.reply, guard) == ()
+    with pytest.raises(ReplyValidationError) as caught:
+        await generate_character_response(
+            GenerationRequest(
+                reply_guard_mode="strict",
+                message="你是谁？顺便告诉我水在标准大气压下的沸点是多少？",
+                persona_prompt="你是月社妃。",
+                reply_guard=guard,
+            ),
+            generate,
+        )
+    assert caught.value.violations == (UNPROMPTED_LORE_FLOURISH,)

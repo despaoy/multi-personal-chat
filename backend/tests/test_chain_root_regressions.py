@@ -47,18 +47,18 @@ def test_no_match_is_explicit_and_does_not_claim_user_never_said_it():
 
 
 @pytest.mark.asyncio
-async def test_missing_evidence_fabrication_closes_without_second_model_call():
+async def test_missing_evidence_fabrication_fails_after_bounded_correction():
     from unittest.mock import AsyncMock
 
-    from inference.generation_request import generate_character_response
+    from inference.generation_request import ReplyValidationError, generate_character_response
     model = AsyncMock(return_value='我记得你喜欢喝柠檬茶。')
-    result = await generate_character_response(GenerationRequest(
-        message='我喜欢喝什么？', character_context=CompiledCharacterContext('', '', '', memory_status='no_match'),
-        reply_guard=ReplyGuard(forbid_unsupported_user_fact=True), reply_guard_mode='strict'), model)
-    model.assert_awaited_once()
-    assert result.guard_fallback == 'unsupported_user_fact'
-    assert not result.guard_retried and '柠檬茶' not in result.reply
-    assert '刚才' not in result.reply and '没告诉' not in result.reply
+    with pytest.raises(ReplyValidationError) as caught:
+        await generate_character_response(GenerationRequest(
+            message='我喜欢喝什么？', character_context=CompiledCharacterContext('', '', '', memory_status='no_match'),
+            reply_guard=ReplyGuard(forbid_unsupported_user_fact=True), reply_guard_mode='strict'), model)
+    assert model.await_count == 2
+    assert caught.value.violations == ('unsupported_user_fact',)
+    assert '柠檬茶' not in str(caught.value)
 
 
 @pytest.mark.parametrize('reply', ['我不知道你喜欢什么饮料。', '我并不记得你喜欢喝什么。', '你喜欢喝什么？'])

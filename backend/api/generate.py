@@ -30,6 +30,7 @@ from inference.generation_request import (
     GenerationRequest as CharacterGenerationRequest,
 )
 from inference.generation_request import (
+    ReplyValidationError,
     RetrievalResult,
     generate_character_response,
 )
@@ -690,6 +691,13 @@ async def _generate_reply_body(
             errorType=type(e).__name__,
         )
         logger.error("Generation failed: %s", type(e).__name__)
+        if isinstance(e, ReplyValidationError):
+            raise HTTPException(503, detail={
+                "stage": "reply_validation",
+                "reason": "model_output_invalid",
+                "violations": list(e.violations),
+                "message": "模型回复经一次修正仍未通过校验，本轮未返回回复。请重试或检查模型与输出策略。",
+            }) from e
         # 安全：不把内部异常字符串返回给客户端（信息泄露），
         # 日志记录错误类型；异常链保留内部原因，客户端收到通用消息。
         raise HTTPException(503 if is_vllm else 500, "生成回复失败，请检查所选模型服务后重试") from e

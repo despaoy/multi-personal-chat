@@ -17,7 +17,6 @@ from urllib.request import Request, urlopen
 from character.output_guard import (
     UNSUPPORTED_USER_FACT,
     ReplyGuard,
-    deterministic_fallback,
     ground_reply_guard,
     retryable_violations,
     validate_reply,
@@ -42,11 +41,6 @@ def inspect_guard(row, reply):
     result = dict(violations=violations, blocking=blocking, action='pass', final_if_no_retry=reply)
     if blocking:
         result.update(action='would_retry', final_if_no_retry=None)
-        if (row['prepared']['compiled']['memory_status'] == 'no_match'
-                and set(blocking) == {UNSUPPORTED_USER_FACT}):
-            fallback = deterministic_fallback(blocking, guard, candidate_reply=reply)
-            if fallback:
-                result.update(action='immediate_fallback', final_if_no_retry=fallback[1])
     result['forced_preference_detector'] = UNSUPPORTED_USER_FACT in validate_reply(
         reply, replace(guard, forbid_unsupported_user_fact=True))
     return result

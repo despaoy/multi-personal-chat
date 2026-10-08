@@ -10,7 +10,7 @@ from character.output_guard import (
     retryable_violations,
     validate_reply,
 )
-from inference.generation_request import GenerationRequest, generate_character_response
+from inference.generation_request import GenerationRequest, ReplyValidationError, generate_character_response
 
 
 @pytest.mark.parametrize(
@@ -58,9 +58,10 @@ async def test_explicit_boundaries_safety_and_facts_still_get_bounded_retry(repl
         calls.append(kwargs)
         return reply
 
-    result = await generate_character_response(GenerationRequest(message="你好", reply_guard=guard), generate)
+    with pytest.raises(ReplyValidationError) as caught:
+        await generate_character_response(GenerationRequest(message="你好", reply_guard=guard), generate)
     assert len(calls) == 2
-    assert result.guard_retried
+    assert caught.value.violations
 
 
 async def test_successful_hard_retry_with_soft_style_issue_is_not_replaced_by_fallback():

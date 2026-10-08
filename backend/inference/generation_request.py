@@ -27,6 +27,14 @@ if TYPE_CHECKING:  # pragma: no cover - 仅类型注解使用，避免运行时�
     from character.output_guard import ReplyGuard
 
 
+class ReplyValidationError(RuntimeError):
+    """A bounded correction still failed the selected output policy."""
+
+    def __init__(self, violations: tuple[str, ...]):
+        self.violations = violations
+        super().__init__("Reply validation failed after correction: " + ", ".join(violations))
+
+
 Message = dict[str, str]
 RetrievalStatus = Literal["not_requested", "ok", "abstained", "character_abstention", "error"]
 
@@ -768,13 +776,7 @@ async def generate_character_response(
         **dict(plan.generation),
     )
     from character.output_guard import (
-        FACTUAL_HARD_VIOLATIONS,
-        FORBIDDEN_LAUGHTER,
-        UNPROMPTED_CANONICAL_IDENTITY,
-        UNPROMPTED_LORE_FLOURISH,
-        UNSUPPORTED_USER_FACT,
         apply_retry_instruction,
-        deterministic_fallback,
         retry_instruction,
         retryable_violations,
         validate_reply,
@@ -784,18 +786,6 @@ async def generate_character_response(
     blocking = retryable_violations(reply, request.reply_guard, violations, strict=request.reply_guard_mode == "strict")
     if not blocking:
         return await finalize_citations(GenerationResult(reply=reply, plan=plan, guard_violations=violations))
-
-    if getattr(request.character_context, "memory_status", "") == "no_match" and set(blocking) == {
-        UNSUPPORTED_USER_FACT
-    }:
-        # Source availability alone did not make generic repair reliable in
-        # r119 real-model replays. Keep the cheap fallback pending a supported
-        # claim-level mechanism; no_match is not proof that all sources lack facts.
-        fallback = deterministic_fallback(blocking, request.reply_guard, candidate_reply=reply)
-        if fallback is not None:
-            return await finalize_citations(
-                GenerationResult(reply=fallback[1], plan=plan, guard_violations=violations, guard_fallback=fallback[0])
-            )
 
     if request.private_context_revalidator is not None or request.public_context_revalidator is not None:
         refreshed = await _revalidate_context(request)
@@ -831,31 +821,8 @@ async def generate_character_response(
     blocking_remaining = retryable_violations(
         reply, request.reply_guard, remaining, strict=request.reply_guard_mode == "strict"
     )
-    fallback = (
-        deterministic_fallback(blocking_remaining, request.reply_guard, candidate_reply=reply)
-        if blocking_remaining
-        else None
-    )
-    closed_hard_violation_ids = FACTUAL_HARD_VIOLATIONS | frozenset(
-        {UNPROMPTED_CANONICAL_IDENTITY, UNPROMPTED_LORE_FLOURISH, FORBIDDEN_LAUGHTER}
-    )
-    # Diagnostics intentionally tolerated by the selected policy must not
-    # become hard failures again after a retry for an independent violation.
-    closed_hard_failures = closed_hard_violation_ids.intersection(blocking_remaining)
-    if closed_hard_failures:
-        if fallback is None:
-            raise RuntimeError("deterministic closed guard fallback is missing")
-        fallback_violations = retryable_violations(
-            fallback[1],
-            request.reply_guard,
-            validate_reply(fallback[1], request.reply_guard),
-            strict=request.reply_guard_mode == "strict",
-        )
-        if closed_hard_violation_ids.intersection(fallback_violations):
-            raise RuntimeError("deterministic closed guard fallback did not close the violation")
-    fallback_kind = ""
-    if fallback is not None:
-        fallback_kind, reply = fallback
+    if blocking_remaining:
+        raise ReplyValidationError(blocking_remaining)
     return await finalize_citations(
         GenerationResult(
             reply=reply,
@@ -863,6 +830,5 @@ async def generate_character_response(
             guard_violations=violations,
             guard_retried=True,
             guard_post_retry_violations=remaining,
-            guard_fallback=fallback_kind,
         )
     )

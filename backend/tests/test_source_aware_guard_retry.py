@@ -5,7 +5,12 @@ import pytest
 
 from character.models import CompiledCharacterContext
 from character.output_guard import ReplyGuard
-from inference.generation_request import GenerationRequest, RetrievalResult, generate_character_response
+from inference.generation_request import (
+    GenerationRequest,
+    ReplyValidationError,
+    RetrievalResult,
+    generate_character_response,
+)
 
 
 def request(**kwargs):
@@ -33,10 +38,6 @@ async def test_source_presence_does_not_by_itself_expand_retry_policy(channel, m
         return '你一直喜欢画插画。' if len(calls) == 1 else '画插画的是你。'
 
     result = await generate_character_response(req, model)
-    if memory_status == 'no_match':
-        assert len(calls) == 1 and not result.guard_retried
-        assert result.guard_fallback == 'unsupported_user_fact'
-        return
     assert len(calls) == 2
     assert result.guard_retried and not result.guard_fallback
     assert result.reply == '画插画的是你。'
@@ -46,7 +47,7 @@ async def test_source_presence_does_not_by_itself_expand_retry_policy(channel, m
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize('evidence', ['none', 'rag_only', 'assistant_only', 'trimmed_user_history'])
-async def test_no_admitted_user_evidence_still_uses_single_call_fast_fallback(evidence):
+async def test_no_admitted_user_evidence_rejects_failed_correction(evidence):
     req = request()
     if evidence == 'rag_only':
         req = replace(req, retrieval=RetrievalResult(status='ok', evidence='原作人物的朋友关系'))
@@ -60,9 +61,11 @@ async def test_no_admitted_user_evidence_still_uses_single_call_fast_fallback(ev
         calls.append(kwargs)
         return '你一直喜欢画插画。'
 
-    result = await generate_character_response(req, model)
-    assert len(calls) == 1 and not result.guard_retried
-    assert result.guard_fallback == 'unsupported_user_fact'
+    with pytest.raises(ReplyValidationError) as caught:
+        await generate_character_response(req, model)
+    assert len(calls) == 2
+    assert caught.value.violations == ('unsupported_user_fact',)
+
 
 
 @pytest.mark.asyncio
@@ -76,7 +79,8 @@ async def test_source_presence_never_licenses_unrelated_fact_or_unbounded_retrie
         calls.append(kwargs)
         return '你一直喜欢咖啡。'
 
-    result = await generate_character_response(req, model)
-    assert len(calls) == 2 and result.guard_retried
-    assert result.guard_fallback == 'unsupported_user_fact'
-    assert '咖啡' not in result.reply
+    with pytest.raises(ReplyValidationError) as caught:
+        await generate_character_response(req, model)
+    assert len(calls) == 2
+    assert caught.value.violations == ('unsupported_user_fact',)
+    assert '咖啡' not in str(caught.value)

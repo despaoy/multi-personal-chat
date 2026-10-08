@@ -21,8 +21,9 @@ async def test_unavailable_character_domain_does_not_switch_to_generic_kb(monkey
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("provider", ["vllm", "openai"])
-async def test_generation_failure_is_reported_and_recorded(monkeypatch, provider):
+@pytest.mark.parametrize("provider", ["vllm", "openai_compat"])
+@pytest.mark.parametrize("output_invalid", [False, True])
+async def test_generation_failure_is_reported_and_recorded(monkeypatch, provider, output_invalid):
     from api import generate
     from inference import model_manager
 
@@ -44,7 +45,8 @@ async def test_generation_failure_is_reported_and_recorded(monkeypatch, provider
     async def available():
         return True
 
-    failure = RuntimeError("model unavailable")
+    from inference.generation_request import ReplyValidationError
+    failure = ReplyValidationError(("unsupported_user_fact",)) if output_invalid else RuntimeError("model unavailable")
 
     async def failed_expression(*args, **kwargs):
         raise failure
@@ -61,9 +63,12 @@ async def test_generation_failure_is_reported_and_recorded(monkeypatch, provider
 
     with pytest.raises(HTTPException) as caught:
         await generate._generate_reply_impl(MessageRequest(message="问题"), persist_message=False)
-    assert caught.value.status_code == (503 if provider == "vllm" else 500)
+    assert caught.value.status_code == (503 if provider == "vllm" or output_invalid else 500)
+    if output_invalid:
+        assert caught.value.detail["stage"] == "reply_validation"
+        assert caught.value.detail["violations"] == ["unsupported_user_fact"]
     assert caught.value.__cause__ is failure
-    assert records[0]["error_type"] == "RuntimeError"
+    assert records[0]["error_type"] == type(failure).__name__
     assert ("model_failure", False) in counters
     assert ("model_failure", True) not in counters
 
