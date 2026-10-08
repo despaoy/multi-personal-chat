@@ -47,7 +47,6 @@ from character.models import (
 )
 from character.natural_relationship import (
     compile_notes,
-    load_notes,
     parse_command,
     relationship_write_blocked,
     save_note,
@@ -272,7 +271,7 @@ class CharacterContextService:
                 asyncio.to_thread(self._profiles.get_profile, character_id),
                 self._memory_repo.get_relationship_record(character_id, user_scope),
                 self._load_history(turn, user_scope, character_id),
-                self._load_relationship_notes(character_id, user_scope),
+                self._memory_repo.list_relationship_notes(character_id, user_scope),
             )
             # Context is needed before recall, not only after an arbitrary top-k.
             # Assistant guesses are excluded from query expansion; both speakers
@@ -287,7 +286,7 @@ class CharacterContextService:
                 self._memory_repo.get_relationship_record(character_id, user_scope),
                 self._load_memory_candidates(character_id, user_scope, turn.message),
                 self._load_history(turn, user_scope, character_id),
-                self._load_relationship_notes(character_id, user_scope),
+                self._memory_repo.list_relationship_notes(character_id, user_scope),
             )
         memories_items, memory_candidates, memory_recall = memories
         from repositories.character_memory import relationship_from_record
@@ -600,13 +599,6 @@ class CharacterContextService:
 
         return outcome
 
-    async def _load_relationship_notes(self, character_id, user_scope):
-        try:
-            return await load_notes(self._memory_repo, character_id, user_scope)
-        except Exception:
-            logger.warning("关系备忘录读取失败", exc_info=True)
-            return []
-
     async def _load_memory_candidates(
         self, character_id: str, user_scope: UserScope, query: str,
         *, retrieval_context: str = "", reference_time: datetime | None = None,
@@ -626,13 +618,9 @@ class CharacterContextService:
         """调用方带现场历史时直接使用，否则从数据库读取。"""
         if turn.history:
             return list(turn.history)
-        try:
-            return await self._message_repo.list_recent_conversation_history(
-                user_scope, limit=self._history_limit, max_chars=self._history_max_chars, character_id=character_id
-            )
-        except Exception:
-            logger.warning("角色历史读取失败，按空历史继续", exc_info=True)
-            return []
+        return await self._message_repo.list_recent_conversation_history(
+            user_scope, limit=self._history_limit, max_chars=self._history_max_chars, character_id=character_id
+        )
 
 
 def build_character_context_service(database, *, source_recall_enabled: bool | None = None) -> CharacterContextService:

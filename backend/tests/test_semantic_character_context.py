@@ -31,6 +31,9 @@ class _MemoryRepository:
     async def get_relationship_record(self, _character_id, _user_scope):
         return {"interaction_count": 8}
 
+    async def list_relationship_notes(self, *args):
+        return []
+
 
 class _MemoryService:
     async def load_relevant_memories(self, _character_id, _user_scope, _message):

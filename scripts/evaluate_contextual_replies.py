@@ -43,6 +43,9 @@ class EmptyRepository:
     async def get_relationship_record(self, *args):
         return {"relationship_stage": self.stage, "interaction_count": 12}
 
+    async def list_relationship_notes(self, *args):
+        return []
+
 
 class EmptyMemories:
     async def load_relevant_memories(self, *args, **kwargs):

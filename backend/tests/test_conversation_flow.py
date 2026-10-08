@@ -150,6 +150,9 @@ async def test_service_integrates_all_cues_without_new_reads_or_writes():
             self.reads += 1
             return None
 
+        async def list_relationship_notes(self, *args):
+            return []
+
     class Memories:
         async def load_relevant_memories(self, *args, **kwargs):
             return (), 0

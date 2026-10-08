@@ -135,8 +135,8 @@ def test_fresh_grant_recheck_drops_context_candidate():
 
 def test_context_read_error_is_not_claimed_absence():
     repo = RecordingRepository(fail_history=True)
-    result = asyncio.run(SourceMemoryService(repo).recall("role", SCOPE, "current", retrieval_context="history"))
-    assert result.diagnostics["status"] == "retrieval_error" and result.context == ""
+    with pytest.raises(RuntimeError, match="isolated simulated read failure"):
+        asyncio.run(SourceMemoryService(repo).recall("role", SCOPE, "current", retrieval_context="history"))
 
 
 def test_context_match_cannot_sneak_partial_source_through_budget():

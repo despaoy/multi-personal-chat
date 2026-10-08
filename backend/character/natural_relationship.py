@@ -137,11 +137,6 @@ def active_note(record: dict, now: datetime | None = None) -> bool:
     return True
 
 
-async def load_notes(repo, character_id, scope) -> list[dict]:
-    reader = getattr(repo, "list_relationship_notes", None)
-    return await reader(character_id, scope) if reader else []
-
-
 def compile_notes(records: list[dict], message: str, now: datetime | None = None) -> str:
     notes = [r for r in records if active_note(r, now)]
     notes.sort(
@@ -189,7 +184,7 @@ async def save_note(repo, character_id, scope, command: NoteCommand, source_mess
     if command.target:
         matches = [
             r
-            for r in await load_notes(repo, character_id, scope)
+            for r in await repo.list_relationship_notes(character_id, scope)
             if active_note(r) and r.get("content") == command.target
         ]
         if len(matches) != 1:
@@ -220,7 +215,7 @@ async def save_note(repo, character_id, scope, command: NoteCommand, source_mess
         raise ValueError("只能批量解除短期状态")
     # Transient state is a single replaceable slot. Other notes have independent
     # keys so unrelated boundaries/events never overwrite one another.
-    existing = await load_notes(repo, character_id, scope)
+    existing = await repo.list_relationship_notes(character_id, scope)
     if command.clear:
         for row in existing:
             if row.get("metadata", {}).get("category") == "transient":

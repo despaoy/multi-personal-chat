@@ -118,8 +118,6 @@ class DatabaseMessageRepository:
         私聊读取该用户全部私聊记录；群聊/频道只读取该用户在该会话内的
         记录，与长期记忆的隔离范围保持一致。
         """
-        if not hasattr(self._database, "list_conversation_history"):
-            return []
         return list(
             await asyncio.to_thread(
                 self._database.list_conversation_history,

@@ -182,8 +182,8 @@ async def test_adapter_without_direction_metadata_fails_unknown_instead_of_guess
                 window.pop("following_rows")
             return windows
 
-    result = await SourceMemoryService(Repo(db), max_chars=16384, defer_budget=True).recall("role", SCOPE, QUERY)
-    assert not result.context and result.diagnostics["status"] == "retrieval_error"
+    with pytest.raises(KeyError, match="following_rows"):
+        await SourceMemoryService(Repo(db), max_chars=16384, defer_budget=True).recall("role", SCOPE, QUERY)
 
 
 async def test_long_following_condition_never_leaves_only_short_anchor(tmp_path):

@@ -82,6 +82,8 @@ class CharacterMemoryRepository(Protocol):
                            source_message_ids: tuple[str, ...] | None = None,
                            limit: int = 100) -> list[dict[str, Any]]: ...
 
+    async def list_relationship_notes(self, character_id: str, user_scope: UserScope) -> list[dict[str, Any]]: ...
+
     async def get_relationship(
         self, character_id: str, user_scope: UserScope
     ) -> RelationshipState: ...
@@ -247,18 +249,14 @@ class DatabaseCharacterMemoryRepository:
 
     async def linked_sources(self, character_id: str, user_scope: UserScope, *,
                              memory_ids: tuple[int, ...]) -> list[dict[str, Any]]:
-        reader = getattr(self._database, "linked_memory_sources", None)
-        if reader is None:
-            return []
+        reader = self._database.linked_memory_sources
         return await asyncio.to_thread(
             reader, character_id, user_scope.platform, user_scope.adapter, user_scope.sender_id,
             user_scope.conversation_type, user_scope.conversation_id, memory_ids=memory_ids)
 
     async def search_sources(self, character_id: str, user_scope: UserScope, *, query: str,
                              limit: int | None = 32) -> list[dict[str, Any]]:
-        reader = getattr(self._database, "search_memory_sources", None)
-        if reader is None:
-            return []
+        reader = self._database.search_memory_sources
         return await asyncio.to_thread(
             reader, character_id, user_scope.platform, user_scope.adapter, user_scope.sender_id,
             user_scope.conversation_type, user_scope.conversation_id, query=query, limit=limit)
@@ -313,9 +311,7 @@ class DatabaseCharacterMemoryRepository:
     async def list_relationship_notes(self, character_id: str, user_scope: UserScope) -> list[dict[str, Any]]:
         from character.natural_relationship import is_note
 
-        reader = getattr(self._database, "list_character_memory_claims", None)
-        if reader is None:
-            return []  # Legacy adapters cannot safely retain temporary metadata.
+        reader = self._database.list_character_memory_claims
         rows = await asyncio.to_thread(
             reader, character_id, user_scope.platform, user_scope.adapter,
             user_scope.sender_id, user_scope.conversation_type, user_scope.conversation_id,

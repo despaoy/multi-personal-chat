@@ -116,149 +116,143 @@ class SourceMemoryService:
         started = time.monotonic()
         if scope.adapter == "narrative":
             return SourceRecall(diagnostics=dict(status="unsupported_branch"))
-        reader = getattr(self._repo, "list_sources", None)
-        search = getattr(self._repo, "search_sources", None)
-        linker = getattr(self._repo, "linked_sources", None)
-        if not callable(reader) or not callable(search) or not callable(linker):
-            return SourceRecall(diagnostics=dict(status="unsupported_adapter"))
+        reader = self._repo.list_sources
+        search = self._repo.search_sources
+        linker = self._repo.linked_sources
         ids = tuple(dict.fromkeys(int(memory.memory_id) for memory in memories
                                    if str(memory.memory_id).isdigit() and int(memory.memory_id) > 0))[:200]
-        try:
-            # Complete source packets are admitted by the actual serving budget;
-            # a count-only SQL candidate cut cannot prove an exhaustive read.
-            search_limit = None if self._defer_budget else 32
-            read_plan = resolve_source_read_plan(query)
-            source_groups = read_plan.atom_groups
-            source_fragments = read_plan.selectors
-            project_tags = () if source_fragments else literal_project_source_terms(query)
-            explicit_source_scope = bool(project_tags or source_fragments)
-            requested_order = requested_source_successors(query)
-            effective_radius = 1 if requested_order else self._window_radius
-            contextual_deferred = bool(explicit_source_scope and retrieval_context.strip())
-            lanes = [linker(character_id, scope, memory_ids=ids),
-                     search(character_id, scope, query=query, limit=search_limit)]
-            if retrieval_context.strip() and not explicit_source_scope:
-                lanes.append(search(character_id, scope, query=retrieval_context, limit=search_limit))
-            linked, found, *contextual_results = await asyncio.gather(*lanes)
-            contextual = contextual_results[0] if contextual_results else []
-            original_linked_read_count = len(linked)
-            linked_project_omitted = 0
-            if project_tags:
-                scoped_linked = [row for row in linked if set(project_tags).intersection(terms(row['body']))]
-                linked_project_omitted = len(linked) - len(scoped_linked)
-                linked = scoped_linked
+        # Complete source packets are admitted by the actual serving budget;
+        # a count-only SQL candidate cut cannot prove an exhaustive read.
+        search_limit = None if self._defer_budget else 32
+        read_plan = resolve_source_read_plan(query)
+        source_groups = read_plan.atom_groups
+        source_fragments = read_plan.selectors
+        project_tags = () if source_fragments else literal_project_source_terms(query)
+        explicit_source_scope = bool(project_tags or source_fragments)
+        requested_order = requested_source_successors(query)
+        effective_radius = 1 if requested_order else self._window_radius
+        contextual_deferred = bool(explicit_source_scope and retrieval_context.strip())
+        lanes = [linker(character_id, scope, memory_ids=ids),
+                 search(character_id, scope, query=query, limit=search_limit)]
+        if retrieval_context.strip() and not explicit_source_scope:
+            lanes.append(search(character_id, scope, query=retrieval_context, limit=search_limit))
+        linked, found, *contextual_results = await asyncio.gather(*lanes)
+        contextual = contextual_results[0] if contextual_results else []
+        original_linked_read_count = len(linked)
+        linked_project_omitted = 0
+        if project_tags:
+            scoped_linked = [row for row in linked if set(project_tags).intersection(terms(row['body']))]
+            linked_project_omitted = len(linked) - len(scoped_linked)
+            linked = scoped_linked
 
-            linked_fragment_omitted = 0
-            if source_fragments:
-                scoped_linked = [row for row in linked if read_plan.matches(row["body"])]
-                linked_fragment_omitted = len(linked) - len(scoped_linked)
-                linked = scoped_linked
+        linked_fragment_omitted = 0
+        if source_fragments:
+            scoped_linked = [row for row in linked if read_plan.matches(row["body"])]
+            linked_fragment_omitted = len(linked) - len(scoped_linked)
+            linked = scoped_linked
 
-            linked_read_count, indexed_read_count = original_linked_read_count, len(found)
-            contextual_read_count = len(contextual)
-            covered = {row["source_message_id"] for row in [*linked, *found, *contextual]
-                       if covered_by_fact(row, memories)}
-            if not effective_radius:
-                linked = [row for row in linked if row["source_message_id"] not in covered]
-                found = [row for row in found if row["source_message_id"] not in covered]
-                contextual = [row for row in contextual if row["source_message_id"] not in covered]
-            # Linked sources were selected by fact recall; lexical candidates
-            # cover utterances whose model produced no usable claim at all.
-            # Cloud serving budgets admit complete sources by actual size.
-            # Legacy compact callers retain their existing four-source cap.
-            selected, candidate_count = select_sources(linked, found, contextual=contextual,
-                limit=None if self._defer_budget else 4)
-            window_ids = []
-            requested_followers = {}
-            anchor_ids = [row["source_message_id"] for row in selected]
-            if effective_radius and selected:
-                windows = []
-                # The repository keeps its bounded four-anchor read contract.
-                for offset in range(0, len(anchor_ids), 4):
-                    windows.extend(await self._repo.source_windows(character_id, scope,
-                        source_message_ids=tuple(anchor_ids[offset:offset + 4]), radius=effective_radius))
-                rows_by_id = {}
-                for window in windows:
-                    rows = window["rows"]
-                    if requested_order:
-                        anchors = [row for row in rows if row['source_message_id'] == window['anchor_id']]
-                        if len(anchors) != 1:
-                            raise ValueError("Requested source-order anchor unavailable")
-                        rows = [anchors[0], *window['following_rows'][:1]]
-                        requested_followers[window['anchor_id']] = tuple(row['source_message_id'] for row in rows[1:])
+        linked_read_count, indexed_read_count = original_linked_read_count, len(found)
+        contextual_read_count = len(contextual)
+        covered = {row["source_message_id"] for row in [*linked, *found, *contextual]
+                   if covered_by_fact(row, memories)}
+        if not effective_radius:
+            linked = [row for row in linked if row["source_message_id"] not in covered]
+            found = [row for row in found if row["source_message_id"] not in covered]
+            contextual = [row for row in contextual if row["source_message_id"] not in covered]
+        # Linked sources were selected by fact recall; lexical candidates
+        # cover utterances whose model produced no usable claim at all.
+        # Cloud serving budgets admit complete sources by actual size.
+        # Legacy compact callers retain their existing four-source cap.
+        selected, candidate_count = select_sources(linked, found, contextual=contextual,
+            limit=None if self._defer_budget else 4)
+        window_ids = []
+        requested_followers = {}
+        anchor_ids = [row["source_message_id"] for row in selected]
+        if effective_radius and selected:
+            windows = []
+            # The repository keeps its bounded four-anchor read contract.
+            for offset in range(0, len(anchor_ids), 4):
+                windows.extend(await self._repo.source_windows(character_id, scope,
+                    source_message_ids=tuple(anchor_ids[offset:offset + 4]), radius=effective_radius))
+            rows_by_id = {}
+            for window in windows:
+                rows = window["rows"]
+                if requested_order:
+                    anchors = [row for row in rows if row['source_message_id'] == window['anchor_id']]
+                    if len(anchors) != 1:
+                        raise ValueError("Requested source-order anchor unavailable")
+                    rows = [anchors[0], *window['following_rows'][:1]]
+                    requested_followers[window['anchor_id']] = tuple(row['source_message_id'] for row in rows[1:])
 
-                    # Exact fact dedup must not suppress the anchor needed to
-                    # retrieve a source-only later correction.
-                    if len(rows) == 1 and window["anchor_id"] in covered and not requested_order:
-                        continue
-                    window_ids.append(dict(anchor_id=window["anchor_id"],
-                                           source_ids=[row["source_message_id"] for row in rows]))
-                    rows_by_id.update((row["source_message_id"], row) for row in rows)
-                selected = sorted(rows_by_id.values(), key=lambda row: (row["observed_at"], json.dumps(row["source_message_id"]) if requested_order else row["source_message_id"]))
-            # Re-read only chosen identities after ranking. Erased sources must
-            # not be restored from cached candidate text; use current SQL grant.
-            fresh = []
-            chosen_ids = tuple(row["source_message_id"] for row in selected)
-            # Keep exact scoped fresh reads below the repository's row limit;
-            # a larger union/window must not silently lose rows in SQL LIMIT.
-            for offset in range(0, len(chosen_ids), 100):
-                fresh.extend(await reader(character_id, scope,
-                    source_message_ids=chosen_ids[offset:offset + 100]))
-            fresh_by_id = {row["source_message_id"]: row for row in fresh}
-            selected = [fresh_by_id[row["source_message_id"]] for row in selected
-                        if row["source_message_id"] in fresh_by_id
-                        and (not source_groups or read_plan.matches(fresh_by_id[row["source_message_id"]]["body"]))]
-            dependency_omitted = 0
-            if requested_order:
-                valid_ids = set(anchor_ids) | {child for parent, children in requested_followers.items()
-                                                if parent in fresh_by_id for child in children}
-                with_authorized_anchor = [row for row in selected if row['source_message_id'] in valid_ids]
-                dependency_omitted = len(selected) - len(with_authorized_anchor)
-                selected = with_authorized_anchor
-            result = compile_sources(selected, max_chars=self._max_chars,
-                                     max_items=None if self._defer_budget else 4 * (1 + 2 * self._window_radius))
-            trace = dict(result.diagnostics, linked_count=len(linked), indexed_count=len(found),
-                         linked_read_count=linked_read_count, indexed_read_count=indexed_read_count,
-                         contextual_count=len(contextual), contextual_read_count=contextual_read_count,
-                         contextual_search_enabled=bool(contextual_results),
-                         literal_project_terms=list(project_tags),
-                         contextual_scope_deferred_to_explicit_task=contextual_deferred,
-                         linked_project_scope_omitted=linked_project_omitted,
-                         source_read_scope_kind=read_plan.match_mode,
-                         source_read_selector_modes=[fragment.match_mode for fragment in source_fragments],
-                         literal_fragment_scope=bool(source_fragments),
-                         literal_fragment_count=len(source_fragments),
-                         literal_read_group_sizes=[len(group) for group in source_groups],
-                         literal_read_group_match_counts=[sum(all(fragment.matches(row["body"]) for fragment in group)
-                                                              for row in selected) for group in source_groups],
-                         literal_fragment_match_counts=[sum(fragment.matches(row["body"]) for row in selected)
-                                                        for fragment in source_fragments],
-                         linked_fragment_scope_omitted=linked_fragment_omitted,
-                         covered_by_fact_count=len(covered),
-                         window_radius=self._window_radius, effective_window_radius=effective_radius,
-                         requested_source_order="next_visible_after_each_anchor" if requested_order else "not_resolved",
-                         requested_following=[dict(anchor_id=key, source_ids=list(value)) for key,value in requested_followers.items()],
-                         following_missing_for_anchors=[key for key in anchor_ids if requested_order and not requested_followers.get(key)],
-                         following_anchor_dependency_omitted=dependency_omitted,
-                         windows=window_ids,
-                         window_semantic_relation="not_inferred", anchor_ids=anchor_ids,
-                         selection_omitted=max(0, candidate_count - len(anchor_ids)),
-                         fresh_recheck_omitted=max(0, len(chosen_ids) - len(selected)),
-                         source_search_limit=search_limit,
-                         candidate_limit_reached=search_limit is not None and (
-                             indexed_read_count == search_limit or contextual_read_count == search_limit),
-                         ranking=("covered_rrf_linked_sparse_history" if contextual_results
-                                  else "covered_rrf_linked_sparse"),
-                         query_terms_semantic=False, elapsed_ms=(time.monotonic() - started) * 1000)
-            candidate_context = ""
-            if self._defer_budget and result.diagnostics["status"] == "budget_omitted":
-                candidate_context = compile_sources(selected, max_chars=None,
-                    max_items=None if self._defer_budget else 4 * (1 + 2 * self._window_radius)).context
-            trace["candidate_budget_pending"] = bool(candidate_context)
-            return SourceRecall(result.context, trace, candidate_context)
-        except Exception as exc:
-            return SourceRecall(diagnostics=dict(status="retrieval_error", error_type=type(exc).__name__,
-                                                 elapsed_ms=(time.monotonic() - started) * 1000))
+                # Exact fact dedup must not suppress the anchor needed to
+                # retrieve a source-only later correction.
+                if len(rows) == 1 and window["anchor_id"] in covered and not requested_order:
+                    continue
+                window_ids.append(dict(anchor_id=window["anchor_id"],
+                                       source_ids=[row["source_message_id"] for row in rows]))
+                rows_by_id.update((row["source_message_id"], row) for row in rows)
+            selected = sorted(rows_by_id.values(), key=lambda row: (row["observed_at"], json.dumps(row["source_message_id"]) if requested_order else row["source_message_id"]))
+        # Re-read only chosen identities after ranking. Erased sources must
+        # not be restored from cached candidate text; use current SQL grant.
+        fresh = []
+        chosen_ids = tuple(row["source_message_id"] for row in selected)
+        # Keep exact scoped fresh reads below the repository's row limit;
+        # a larger union/window must not silently lose rows in SQL LIMIT.
+        for offset in range(0, len(chosen_ids), 100):
+            fresh.extend(await reader(character_id, scope,
+                source_message_ids=chosen_ids[offset:offset + 100]))
+        fresh_by_id = {row["source_message_id"]: row for row in fresh}
+        selected = [fresh_by_id[row["source_message_id"]] for row in selected
+                    if row["source_message_id"] in fresh_by_id
+                    and (not source_groups or read_plan.matches(fresh_by_id[row["source_message_id"]]["body"]))]
+        dependency_omitted = 0
+        if requested_order:
+            valid_ids = set(anchor_ids) | {child for parent, children in requested_followers.items()
+                                            if parent in fresh_by_id for child in children}
+            with_authorized_anchor = [row for row in selected if row['source_message_id'] in valid_ids]
+            dependency_omitted = len(selected) - len(with_authorized_anchor)
+            selected = with_authorized_anchor
+        result = compile_sources(selected, max_chars=self._max_chars,
+                                 max_items=None if self._defer_budget else 4 * (1 + 2 * self._window_radius))
+        trace = dict(result.diagnostics, linked_count=len(linked), indexed_count=len(found),
+                     linked_read_count=linked_read_count, indexed_read_count=indexed_read_count,
+                     contextual_count=len(contextual), contextual_read_count=contextual_read_count,
+                     contextual_search_enabled=bool(contextual_results),
+                     literal_project_terms=list(project_tags),
+                     contextual_scope_deferred_to_explicit_task=contextual_deferred,
+                     linked_project_scope_omitted=linked_project_omitted,
+                     source_read_scope_kind=read_plan.match_mode,
+                     source_read_selector_modes=[fragment.match_mode for fragment in source_fragments],
+                     literal_fragment_scope=bool(source_fragments),
+                     literal_fragment_count=len(source_fragments),
+                     literal_read_group_sizes=[len(group) for group in source_groups],
+                     literal_read_group_match_counts=[sum(all(fragment.matches(row["body"]) for fragment in group)
+                                                          for row in selected) for group in source_groups],
+                     literal_fragment_match_counts=[sum(fragment.matches(row["body"]) for row in selected)
+                                                    for fragment in source_fragments],
+                     linked_fragment_scope_omitted=linked_fragment_omitted,
+                     covered_by_fact_count=len(covered),
+                     window_radius=self._window_radius, effective_window_radius=effective_radius,
+                     requested_source_order="next_visible_after_each_anchor" if requested_order else "not_resolved",
+                     requested_following=[dict(anchor_id=key, source_ids=list(value)) for key,value in requested_followers.items()],
+                     following_missing_for_anchors=[key for key in anchor_ids if requested_order and not requested_followers.get(key)],
+                     following_anchor_dependency_omitted=dependency_omitted,
+                     windows=window_ids,
+                     window_semantic_relation="not_inferred", anchor_ids=anchor_ids,
+                     selection_omitted=max(0, candidate_count - len(anchor_ids)),
+                     fresh_recheck_omitted=max(0, len(chosen_ids) - len(selected)),
+                     source_search_limit=search_limit,
+                     candidate_limit_reached=search_limit is not None and (
+                         indexed_read_count == search_limit or contextual_read_count == search_limit),
+                     ranking=("covered_rrf_linked_sparse_history" if contextual_results
+                              else "covered_rrf_linked_sparse"),
+                     query_terms_semantic=False, elapsed_ms=(time.monotonic() - started) * 1000)
+        candidate_context = ""
+        if self._defer_budget and result.diagnostics["status"] == "budget_omitted":
+            candidate_context = compile_sources(selected, max_chars=None,
+                max_items=None if self._defer_budget else 4 * (1 + 2 * self._window_radius)).context
+        trace["candidate_budget_pending"] = bool(candidate_context)
+        return SourceRecall(result.context, trace, candidate_context)
 
 
 def _share_observation_sources(context, source_context, *, preferred_address, complete_evidence):

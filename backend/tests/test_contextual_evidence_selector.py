@@ -179,6 +179,9 @@ async def test_context_service_selects_before_compiling_and_reuses_loaded_histor
                 }
             ]
 
+        async def list_relationship_notes(self, *args):
+            return []
+
     class Messages:
         calls = 0
 
@@ -346,6 +349,9 @@ async def test_oversized_selected_packet_cannot_enable_memory_recall_strategy():
 
         async def list_memory_records(self, *args, **kwargs):
             return [{"id": "a", "content": "用户研究点云补全", "evidence": ["原始来源" * 1600]}]
+
+        async def list_relationship_notes(self, *args):
+            return []
 
     class Messages:
         async def list_recent_conversation_history(self, *args, **kwargs):
