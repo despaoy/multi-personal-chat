@@ -53,6 +53,8 @@ from inference.context_budget import CONTEXT_SAFETY_MARGIN_TOKENS, estimated_tok
 from inference.openai_protocol import chat_completions_endpoint, completed_chat_content, nonthinking_parameters
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from repositories.character_memory import CharacterMemoryRepository
 
     from knowledge.retrieval_core.embedding import EmbeddingProvider
@@ -176,39 +178,44 @@ class MemoryLlmConfig:
     context_window_tokens: int = 0
 
     @classmethod
-    def from_env(cls) -> MemoryLlmConfig:
-        enabled = os.getenv("MEMORY_LLM_ENABLED", "false").strip().lower() in {
-            "1",
-            "true",
-            "yes",
-            "on",
-        }
-        base_url = os.getenv("MEMORY_LLM_BASE_URL", "").strip()
-        if not base_url:
-            base_url = (
-                os.getenv("VLLM_BASE_URLS", "").split(",", 1)[0].strip() or os.getenv("VLLM_BASE_URL", "").strip()
-            )
-        model = (
-            os.getenv("MEMORY_LLM_MODEL", "").strip()
-            or os.getenv("VLLM_SERVED_MODEL_NAME", "").strip()
-            or os.getenv("VLLM_MODEL", "").strip()
-        )
+    def from_env(cls, env: Mapping[str, str] | None = None) -> MemoryLlmConfig:
+        env = os.environ if env is None else env
+        enabled_value = env.get("MEMORY_LLM_ENABLED", "false").strip().lower()
+        if enabled_value not in {"1", "true", "yes", "on", "0", "false", "no", "off"}:
+            raise ValueError("MEMORY_LLM_ENABLED must be an explicit boolean")
+        enabled = enabled_value in {"1", "true", "yes", "on"}
+        # Explicit writer settings take priority; otherwise inherit the configured vLLM service.
+        base_url = (env.get("MEMORY_LLM_BASE_URL", "").strip()
+                    or env.get("VLLM_BASE_URLS", "").split(",", 1)[0].strip()
+                    or env.get("VLLM_BASE_URL", "").strip())
+        model = (env.get("MEMORY_LLM_MODEL", "").strip()
+                 or env.get("VLLM_SERVED_MODEL_NAME", "").strip()
+                 or env.get("VLLM_MODEL", "").strip())
+        if enabled and not (base_url and model):
+            raise ValueError("Enabled memory writer requires MEMORY_LLM_BASE_URL and MEMORY_LLM_MODEL "
+                             "or their documented VLLM settings; configure them or set MEMORY_LLM_ENABLED=false")
+
+        def number(key, default, parse, minimum, maximum=math.inf):
+            try:
+                value = parse(env.get(key, str(default)))
+            except (ValueError, OverflowError):
+                raise ValueError(f"{key} must be a valid {parse.__name__}") from None
+            if not math.isfinite(value) or not minimum <= value <= maximum:
+                raise ValueError(f"{key} must be finite and between {minimum} and {maximum}")
+            return value
+
         return cls(
-            enabled=enabled and bool(base_url and model),
-            base_url=base_url,
-            model=model,
-            api_key=os.getenv("MEMORY_LLM_API_KEY", "").strip() or os.getenv("VLLM_API_KEY", "").strip(),
-            timeout_seconds=max(1.0, float(os.getenv("MEMORY_LLM_TIMEOUT", "30"))),
-            queue_size=max(1, int(os.getenv("MEMORY_LLM_QUEUE_SIZE", "64"))),
-            max_input_chars=max(256, int(os.getenv("MEMORY_LLM_MAX_INPUT_CHARS", "2000"))),
-            context_window_tokens=max(0, int(os.getenv("MEMORY_LLM_CONTEXT_WINDOW_TOKENS",
-                os.getenv("VLLM_MAX_MODEL_LEN", "8192")))),
-            confidence_threshold=max(
-                0.0,
-                min(1.0, float(os.getenv("MEMORY_LLM_CONFIDENCE_THRESHOLD", str(DEFAULT_CONFIDENCE_THRESHOLD)))),
-            ),
-            idle_seconds=max(0.0, float(os.getenv("MEMORY_LLM_IDLE_SECONDS", "2.0"))),
-            batch_size=max(1, int(os.getenv("MEMORY_LLM_BATCH_SIZE", "4"))),
+            enabled=enabled, base_url=base_url, model=model,
+            api_key=env.get("MEMORY_LLM_API_KEY", "").strip() or env.get("VLLM_API_KEY", "").strip(),
+            timeout_seconds=number("MEMORY_LLM_TIMEOUT", 30, float, 1),
+            queue_size=number("MEMORY_LLM_QUEUE_SIZE", 64, int, 1),
+            max_input_chars=number("MEMORY_LLM_MAX_INPUT_CHARS", 2000, int, 256),
+            context_window_tokens=number("MEMORY_LLM_CONTEXT_WINDOW_TOKENS",
+                                         env.get("VLLM_MAX_MODEL_LEN", "8192"), int, 0),
+            confidence_threshold=number("MEMORY_LLM_CONFIDENCE_THRESHOLD", DEFAULT_CONFIDENCE_THRESHOLD,
+                                        float, 0, 1),
+            idle_seconds=number("MEMORY_LLM_IDLE_SECONDS", 2.0, float, 0),
+            batch_size=number("MEMORY_LLM_BATCH_SIZE", 4, int, 1),
         )
 
 

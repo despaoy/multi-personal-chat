@@ -132,6 +132,9 @@ async def lifespan(app: FastAPI):
     logger.info("🚀 MultiPersonal Chat System后端服务启动中（增强版）...")
 
     validate_or_raise_for_startup(container.startup_env)
+    from character.memory_llm import MemoryLlmConfig
+
+    MemoryLlmConfig.from_env(container.startup_env)
 
     # 初始化数据库
     try:
