@@ -135,4 +135,5 @@ async def test_legacy_writer_cannot_overwrite_target_when_it_cannot_store_coexis
             pytest.fail("legacy overwrite cannot preserve the present target and future source together")
 
     job.repository = Legacy()
-    assert await scheduler._persist_proposal(job, proposal) == "skipped"
+    with pytest.raises(AttributeError, match="append_claim"):
+        await scheduler._persist_proposal(job, proposal)

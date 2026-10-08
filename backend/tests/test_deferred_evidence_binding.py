@@ -149,7 +149,8 @@ async def test_legacy_adapter_cannot_overwrite_after_date_omission(tmp_path):
             pytest.fail("omitted date cannot authorize current deletion")
 
     job.repository = Legacy()
-    assert await scheduler._persist_proposal(job, proposal) == "skipped"
+    with pytest.raises(AttributeError, match="append_claim"):
+        await scheduler._persist_proposal(job, proposal)
 
 
 @pytest.mark.asyncio

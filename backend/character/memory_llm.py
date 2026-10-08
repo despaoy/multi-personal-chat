@@ -2047,28 +2047,18 @@ class MemoryEnrichmentScheduler:
                 semantic_operation = "COEXIST"
 
         if semantic_operation == "ERASE":
-            eraser = getattr(job.repository, "erase_memory", None)
-            if callable(eraser):
-                deleted = await eraser(
-                    job.character_id,
-                    job.user_scope,
-                    # The validated key names the logical memory being
-                    # forgotten. Selecting only its latest ID would leave
-                    # earlier superseded versions and their source text.
-                    # ID-only/legacy adapters retain their original behavior.
-                    memory_id=None if proposal.target_memory_key else target_id,
-                    memory_key=proposal.target_memory_key or None,
-                    scope_level=proposal.scope_level,
-                    **({"protected_memory_keys": proposal.protected_memory_keys}
-                       if proposal.protected_memory_keys else {}),
-                )
-            else:
-                if proposal.protected_memory_keys:
-                    return "skipped"  # A legacy delete cannot enforce retained descendants.
-                legacy_delete = getattr(job.repository, "delete_memory", None)
-                if not callable(legacy_delete) or not isinstance(target_id, int):
-                    return "skipped"
-                deleted = await legacy_delete(target_id, job.character_id, job.user_scope)
+            deleted = await job.repository.erase_memory(
+                job.character_id,
+                job.user_scope,
+                # The validated key names the logical memory being
+                # forgotten. Selecting only its latest ID would leave
+                # earlier superseded versions and their source text.
+                memory_id=None if proposal.target_memory_key else target_id,
+                memory_key=proposal.target_memory_key or None,
+                scope_level=proposal.scope_level,
+                **({"protected_memory_keys": proposal.protected_memory_keys}
+                   if proposal.protected_memory_keys else {}),
+            )
             if int(deleted or 0) > 0:
                 self._erased += 1
                 return "erased"
@@ -2092,96 +2082,62 @@ class MemoryEnrichmentScheduler:
             source_message_ids=(job.source_message_id,) if job.source_message_id else (),
         )
 
-        append_claim = getattr(job.repository, "append_claim", None)
-        if callable(append_claim):
-            parent_id = target_id if semantic_operation in {"MERGE", "COEXIST"} else None
-            # MERGE 的新 claim 已在 parser 中聚合旧内容，因此它是新的
-            # canonical active 版本；旧版本要进入 superseded，不能继续以
-            # active 重复参与检索。parent 同时保留可追溯关系。
-            supersedes_id = target_id if semantic_operation in {"MERGE", "SUPERSEDE", "RETRACT"} else None
-            metadata = {
-                "qualifiers": dict(proposal.qualifiers),
-                "target_memory_key": proposal.target_memory_key,
-                "write_mode": job.write_mode,
-                "feedback_target_ids": list(job.feedback_target_ids),
-                "temporal_provenance": model_temporal_provenance(
-                    evidence=proposal.evidence, observed_at=job.observed_at,
-                    proposed_from=proposal.proposed_valid_from or proposal.valid_from,
-                    proposed_to=proposal.proposed_valid_to or proposal.valid_to,
-                    time_expression=dict(proposal.qualifiers).get("time", ""),
-                ),
-            }
-            if deferred is not None:
-                metadata["deferred_mutation"] = dict(
-                    original_operation=proposal.operation,
-                    reason="source_start_after_observation",
-                    expression=deferred.text,
-                    source_observed_at=deferred.observed_at.isoformat(),
-                    earliest_possible_start=deferred.lower.isoformat(),
-                    not_a_scheduled_replacement=True,
-                )
-            if proposal.source_observation:
-                metadata.update(content_semantics="quoted_source", speaker_role="user",
-                                described_subject="not_resolved")
-            record = await append_claim(
-                job.character_id,
-                job.user_scope,
-                memory,
-                memory_key=item.memory_key,
-                relation_type=semantic_operation,
-                scope_level=proposal.scope_level,
-                status="pending" if semantic_operation == "PENDING" else None,
-                parent_memory_id=parent_id,
-                supersedes_memory_id=supersedes_id,
-                evidence=(proposal.evidence,),
-                confidence=proposal.confidence,
-                attributed_to=proposal.attributed_to,
-                valid_from=proposal.valid_from or None,
-                valid_to=proposal.valid_to or None,
-                observed_at=observed_at,
-                source_message_id=job.source_message_id,
-                source_message_ids=(job.source_message_id,) if job.source_message_id else (),
-                metadata=metadata,
-            )
-            if isinstance(record, dict) and record.get("persisted") is False:
-                return "no_change"
-            self._saved += 1
-            return "saved"
-
+        parent_id = target_id if semantic_operation in {"MERGE", "COEXIST"} else None
+        # MERGE 的新 claim 已在 parser 中聚合旧内容，因此它是新的
+        # canonical active 版本；旧版本要进入 superseded，不能继续以
+        # active 重复参与检索。parent 同时保留可追溯关系。
+        supersedes_id = target_id if semantic_operation in {"MERGE", "SUPERSEDE", "RETRACT"} else None
+        metadata = {
+            "qualifiers": dict(proposal.qualifiers),
+            "target_memory_key": proposal.target_memory_key,
+            "write_mode": job.write_mode,
+            "feedback_target_ids": list(job.feedback_target_ids),
+            "temporal_provenance": model_temporal_provenance(
+                evidence=proposal.evidence, observed_at=job.observed_at,
+                proposed_from=proposal.proposed_valid_from or proposal.valid_from,
+                proposed_to=proposal.proposed_valid_to or proposal.valid_to,
+                time_expression=dict(proposal.qualifiers).get("time", ""),
+            ),
+        }
         if deferred is not None:
-            # A legacy overwrite cannot represent two temporal observations.
-            # Keep the current target rather than invent a successful deferral.
-            return "skipped"
-
-        # 旧仓储兼容：确定事实仍可工作；PENDING 不降级成 active，避免把
-        # “可能”错误注入。RETRACT 在无版本能力时删除旧 active 记录。
-        if semantic_operation == "PENDING":
-            return "skipped"
-        if semantic_operation == "RETRACT":
-            legacy_delete = getattr(job.repository, "delete_memory", None)
-            if callable(legacy_delete) and isinstance(target_id, int):
-                deleted = await legacy_delete(target_id, job.character_id, job.user_scope)
-                if deleted:
-                    self._saved += 1
-                    return "saved"
-                return "no_change"
-            return "skipped"
-        legacy_write = getattr(job.repository, "add_or_update_memory", None)
-        if not callable(legacy_write):
-            return "skipped"
-        memory_key = item.memory_key
-        if semantic_operation == "COEXIST" and proposal.qualifiers:
-            suffix = "_".join(value for _key, value in proposal.qualifiers)[:16]
-            memory_key = _truncate(f"{memory_key}__{suffix}", 60)
-        await legacy_write(
+            metadata["deferred_mutation"] = dict(
+                original_operation=proposal.operation,
+                reason="source_start_after_observation",
+                expression=deferred.text,
+                source_observed_at=deferred.observed_at.isoformat(),
+                earliest_possible_start=deferred.lower.isoformat(),
+                not_a_scheduled_replacement=True,
+            )
+        if proposal.source_observation:
+            metadata.update(content_semantics="quoted_source", speaker_role="user",
+                            described_subject="not_resolved")
+        record = await job.repository.append_claim(
             job.character_id,
             job.user_scope,
             memory,
-            memory_key=memory_key,
+            memory_key=item.memory_key,
+            relation_type=semantic_operation,
+            scope_level=proposal.scope_level,
+            status="pending" if semantic_operation == "PENDING" else None,
+            parent_memory_id=parent_id,
+            supersedes_memory_id=supersedes_id,
+            evidence=(proposal.evidence,),
+            confidence=proposal.confidence,
+            attributed_to=proposal.attributed_to,
+            valid_from=proposal.valid_from or None,
+            valid_to=proposal.valid_to or None,
+            observed_at=observed_at,
             source_message_id=job.source_message_id,
+            source_message_ids=(job.source_message_id,) if job.source_message_id else (),
+            metadata=metadata,
         )
+        if record["persisted"] is False:
+            return "no_change"
+        if record["persisted"] is not True:
+            raise ValueError("append_claim must return an explicit persisted boolean")
         self._saved += 1
         return "saved"
+
 
     async def shutdown(self, timeout: float = 10.0) -> None:
         self._closed = True

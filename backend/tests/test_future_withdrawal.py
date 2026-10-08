@@ -136,4 +136,5 @@ async def test_legacy_adapter_cannot_execute_future_withdrawal_now(tmp_path, ope
             pytest.fail("legacy overwrite cannot retain both observations")
 
     job.repository = Legacy()
-    assert await scheduler._persist_proposal(job, proposal) == "skipped"
+    with pytest.raises(AttributeError, match="append_claim"):
+        await scheduler._persist_proposal(job, proposal)

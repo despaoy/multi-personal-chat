@@ -108,7 +108,7 @@ class _Repository:
     async def list_memory_records(self, character_id, user_scope, limit=30, *, include_inactive=False):
         return []
 
-    async def add_or_update_memory(
+    async def append_claim(
         self,
         character_id,
         user_scope,
@@ -116,8 +116,10 @@ class _Repository:
         *,
         memory_key,
         source_message_id=None,
+        **kwargs,
     ):
         self.writes.append((character_id, user_scope, memory, memory_key, source_message_id))
+        return {"id": len(self.writes), "persisted": True}
 
 
 def test_write_search_recalls_old_fact_beyond_recent_window():

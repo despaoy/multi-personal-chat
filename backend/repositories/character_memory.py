@@ -550,36 +550,8 @@ class DatabaseCharacterMemoryRepository:
         source_ids = [str(item).strip() for item in source_message_ids if str(item).strip()]
         if source_message_id and source_message_id not in source_ids:
             source_ids.insert(0, source_message_id)
-        appender = getattr(self._database, "append_character_memory_claim", None)
-        if appender is None:
-            if metadata_payload.get("origin") in {"rule_v2", "rule_candidate"}:
-                raise RuntimeError("规则记忆写入需要支持版本与证据的数据库适配器")
-            if (relation != 'ADD' or status not in {None, 'active'}
-                    or scope_level != 'conversation' or parent_memory_id is not None
-                    or supersedes_memory_id is not None or valid_from or valid_to):
-                # A legacy upsert cannot implement retraction, pending state,
-                # version links, validity windows or wider scope. Reporting a
-                # successful semantic mutation would leave active false facts.
-                raise RuntimeError("此记忆操作需要支持版本与生命周期的数据库适配器")
-            # Only plain active conversation records retain legacy compatibility.
-            memory_id = await self.add_or_update_memory(
-                character_id,
-                user_scope,
-                memory,
-                memory_key=key,
-                source_message_id=source_message_id,
-            )
-            return {
-                "id": memory_id,
-                "persisted": True,
-                "compatibility_fallback": True,
-                "relation_type": relation,
-                "scope_level": "conversation",
-                "status": status or ("pending" if relation == "PENDING" else "active"),
-            }
-
         record = await asyncio.to_thread(
-            appender,
+            self._database.append_character_memory_claim,
             character_id,
             user_scope.platform,
             user_scope.adapter,
@@ -648,28 +620,21 @@ class DatabaseCharacterMemoryRepository:
         """Physically erase a claim or complete logical key version chain."""
         if scope_level is not None and scope_level not in _VALID_SCOPE_LEVELS:
             raise ValueError(f"未知的记忆作用域: {scope_level!r}")
-        eraser = getattr(self._database, "erase_character_memories", None)
-        if eraser is not None:
-            return int(
-                await asyncio.to_thread(
-                    eraser,
-                    character_id,
-                    user_scope.platform,
-                    user_scope.adapter,
-                    user_scope.sender_id,
-                    user_scope.conversation_type,
-                    user_scope.conversation_id,
-                    memory_id=memory_id,
-                    memory_key=memory_key,
-                    scope_level=scope_level,
-                    **({"protected_memory_keys": protected_memory_keys} if protected_memory_keys else {}),
-                )
+        return int(
+            await asyncio.to_thread(
+                self._database.erase_character_memories,
+                character_id,
+                user_scope.platform,
+                user_scope.adapter,
+                user_scope.sender_id,
+                user_scope.conversation_type,
+                user_scope.conversation_id,
+                memory_id=memory_id,
+                memory_key=memory_key,
+                scope_level=scope_level,
+                **({"protected_memory_keys": protected_memory_keys} if protected_memory_keys else {}),
             )
-        if protected_memory_keys:
-            raise RuntimeError("当前数据库适配器无法保护保留条目")
-        if memory_id is None:
-            raise RuntimeError("当前数据库适配器不支持按 memory_key 物理删除")
-        return int(await self.delete_memory(int(memory_id), character_id, user_scope))
+        )
 
 
 _default_repository: DatabaseCharacterMemoryRepository | None = None
