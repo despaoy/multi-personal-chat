@@ -6,7 +6,12 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from character.evidence_selector import ContextualEvidenceSelector, parse_decisions, selection_messages
+from character.evidence_selector import (
+    ContextualEvidenceSelector,
+    InputBudgetError,
+    parse_decisions,
+    selection_messages,
+)
 from character.memory_service import CharacterMemoryService
 from character.models import MemoryItem, UserScope
 
@@ -87,10 +92,8 @@ async def test_bad_outputs_fail_closed(raw):
     async def reviewer(_messages):
         return raw
 
-    result = await ContextualEvidenceSelector(reviewer).select("query", [_item("a")])
-    assert result.status == "fallback"
-    assert result.reason == "invalid_output"
-    assert result.memories == ()
+    with pytest.raises(ValueError):
+        await ContextualEvidenceSelector(reviewer).select("query", [_item("a")])
 
 
 def test_duplicate_and_missing_ids_rejected():
@@ -102,8 +105,8 @@ async def test_timeout_and_cancellation():
     async def slow(_messages):
         await asyncio.sleep(10)
 
-    result = await ContextualEvidenceSelector(slow, timeout_seconds=0.001).select("q", [_item("a")])
-    assert result.reason == "timeout"
+    with pytest.raises(TimeoutError):
+        await ContextualEvidenceSelector(slow, timeout_seconds=0.001).select("q", [_item("a")])
 
     async def cancelled(_messages):
         raise asyncio.CancelledError
@@ -158,8 +161,9 @@ async def test_concurrent_requests_do_not_share_selection_state():
 
 
 async def test_context_service_selects_before_compiling_and_reuses_loaded_history():
-    from character.models import CharacterProfile
     from services.character_context import CharacterContextService, TurnInput
+
+    from character.models import CharacterProfile
 
     class Profiles:
         def get_profile(self, character_id):
@@ -275,10 +279,10 @@ async def test_complete_long_claim_can_be_reviewed_but_whole_input_budget_still_
     result = await selector.select("query", [item])
     assert result.memories == (item,)
     assert result.status == "selected"
-    result = await selector.select("query", [_item("a", "前提" * 10000)])
-    assert result.status == "fallback" and result.reason == "input_budget"
-    result = await selector.select("长" * 4001, [_item("a")])
-    assert result.status == "fallback"
+    with pytest.raises(InputBudgetError):
+        await selector.select("query", [_item("a", "前提" * 10000)])
+    with pytest.raises(InputBudgetError):
+        await selector.select("长" * 4001, [_item("a")])
     assert len(calls) == 1
 
 
@@ -292,11 +296,10 @@ async def test_recent_history_is_atomic_instead_of_tail_clipped():
     async def reviewer(messages):
         pytest.fail("over-budget history must fail before review")
 
-    result = await ContextualEvidenceSelector(reviewer).select(
-        "q", [_item("a")], history=[{"role": "user", "content": "长" * 6001}]
-    )
-    assert result.status == "fallback" and result.reason == "input_budget"
-    assert not result.memories
+    with pytest.raises(InputBudgetError):
+        await ContextualEvidenceSelector(reviewer).select(
+            "q", [_item("a")], history=[{"role": "user", "content": "长" * 6001}]
+        )
 
 
 async def test_compound_goal_keeps_non_goal_resources_for_semantic_review():
@@ -335,9 +338,10 @@ async def test_recall_preserves_fifth_evidence_correction_for_semantic_review():
 
 
 async def test_oversized_selected_packet_cannot_enable_memory_recall_strategy():
+    from services.character_context import CharacterContextService, TurnInput
+
     from character.contextual_policy import ContextualDecisionPolicy
     from character.models import CharacterProfile
-    from services.character_context import CharacterContextService, TurnInput
 
     class Profiles:
         def get_profile(self, character_id):

@@ -77,7 +77,6 @@ irrelevant=无用；wrong_subject=主体不符；stale=不适用于所问时间�
 class SelectionOutcome:
     memories: tuple[MemoryItem, ...] = ()
     status: str = "disabled"
-    reason: str = ""
     decisions: tuple[tuple[str, str], ...] = ()
     candidate_count: int = 0
     latency_ms: float = 0.0
@@ -254,11 +253,11 @@ def parse_decisions(raw: object, candidate_ids: set[str]) -> tuple[tuple[str, st
 class ContextualEvidenceSelector:
     def __init__(self, reviewer: Reviewer, *, timeout_seconds: float = 30.0,
                  context_budget: ReviewContextBudget | None = None) -> None:
-        if not math.isfinite(timeout_seconds) or timeout_seconds <= 0:
-            raise ValueError("timeout must be finite and positive")
+        if not math.isfinite(timeout_seconds) or not 0 < timeout_seconds <= 120:
+            raise ValueError("timeout must be finite and within (0, 120] seconds")
         self.reviewer = reviewer
         self.context_budget = context_budget
-        self.timeout_seconds = min(timeout_seconds, 120.0)
+        self.timeout_seconds = timeout_seconds
 
     async def select(
         self,
@@ -272,50 +271,30 @@ class ContextualEvidenceSelector:
         max_items: int | None = None,
     ) -> SelectionOutcome:
         started = time.perf_counter()
-        bounded = tuple(candidates[:MAX_CANDIDATES])
+        bounded = tuple(candidates)
+        if len(bounded) > MAX_CANDIDATES:
+            raise InputBudgetError("candidate count exceeds selection budget")
+        if max_items is not None and (type(max_items) is not int or max_items < 0):
+            raise ValueError("max_items must be a nonnegative integer")
         if not bounded:
             return SelectionOutcome(status="empty")
         ids = {item.memory_id for item in bounded}
         if "" in ids or len(ids) != len(bounded):
-            return SelectionOutcome(status="fallback", reason="invalid_candidates", candidate_count=len(bounded))
-        try:
-            messages = selection_messages(
-                query, bounded, history=history, profile=profile, interaction=interaction, reference_time=reference_time,
-                context_budget=self.context_budget
-            )
-            raw = await asyncio.wait_for(self.reviewer(messages), timeout=self.timeout_seconds)
-            decisions = parse_decisions(raw, ids)
-        except asyncio.TimeoutError:
-            reason = "timeout"
-        except InputBudgetError:
-            reason = "input_budget"
-        except (ValueError, TypeError, RecursionError):
-            reason = "invalid_output"
-        except Exception:
-            # Never log raw model output or user evidence; cancellation propagates.
-            reason = "provider_error"
-        else:
-            by_id = {item.memory_id: item for item in bounded}
-            # Validated use decisions remain whole within MAX_CANDIDATES.
-            # Final packet and serving budgets decide admission, not a second
-            # implicit top-five cut. Explicit caller caps retain their contract.
-            selected = tuple(by_id[key] for key, label in decisions if label == "use")
-            if max_items is not None:
-                selected = selected[: max(0, max_items)]
-            return SelectionOutcome(
-                selected,
-                "selected",
-                "",
-                decisions,
-                len(bounded),
-                (time.perf_counter() - started) * 1000,
-            )
-        # Recall was deliberately widened: baseline top-k is NOT a safe fallback.
+            raise ValueError("invalid_candidates")
+        messages = selection_messages(
+            query, bounded, history=history, profile=profile, interaction=interaction, reference_time=reference_time,
+            context_budget=self.context_budget
+        )
+        raw = await asyncio.wait_for(self.reviewer(messages), timeout=self.timeout_seconds)
+        decisions = parse_decisions(raw, ids)
+        by_id = {item.memory_id: item for item in bounded}
+        # Keep reviewed evidence whole; only an explicit caller cap limits it.
+        selected = tuple(by_id[key] for key, label in decisions if label == "use")
+        if max_items is not None:
+            selected = selected[:max_items]
         return SelectionOutcome(
-            status="fallback",
-            reason=reason,
-            candidate_count=len(bounded),
-            latency_ms=(time.perf_counter() - started) * 1000,
+            memories=selected, status="selected", decisions=decisions,
+            candidate_count=len(bounded), latency_ms=(time.perf_counter() - started) * 1000,
         )
 
 
@@ -336,8 +315,5 @@ async def _local_reviewer(messages: Sequence[Mapping[str, str]]) -> object:
 def create_evidence_selector(*, context_budget: ReviewContextBudget | None = None) -> ContextualEvidenceSelector | None:
     if os.getenv("CONTEXTUAL_MEMORY_SELECTION_ENABLED", "false").lower().strip() not in {"true", "1", "yes", "on"}:
         return None
-    try:
-        timeout = float(os.getenv("CONTEXTUAL_MEMORY_SELECTION_TIMEOUT_SECONDS", "30"))
-        return ContextualEvidenceSelector(_local_reviewer, timeout_seconds=timeout, context_budget=context_budget)
-    except ValueError:
-        return ContextualEvidenceSelector(_local_reviewer, context_budget=context_budget)
+    timeout = float(os.getenv("CONTEXTUAL_MEMORY_SELECTION_TIMEOUT_SECONDS", "30"))
+    return ContextualEvidenceSelector(_local_reviewer, timeout_seconds=timeout, context_budget=context_budget)

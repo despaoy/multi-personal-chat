@@ -37,7 +37,7 @@ def test_small_fitting_history_serialization_is_unchanged():
 
 
 @pytest.mark.parametrize("overflow", ["latest_turn", "candidate", "query", "empty_history_fixed"])
-async def test_mandatory_overflow_still_abstains_without_provider_call(overflow):
+async def test_mandatory_overflow_fails_without_provider_call(overflow):
     async def reviewer(_messages):
         pytest.fail("Incomplete mandatory evidence must never reach the provider")
 
@@ -53,9 +53,8 @@ async def test_mandatory_overflow_still_abstains_without_provider_call(overflow)
         query = "完整问题" * 3000
         if overflow == "empty_history_fixed":
             history = []
-    result = await ContextualEvidenceSelector(reviewer, context_budget=ReviewContextBudget(8192)).select(query, [candidate], history=history)
-    assert result.status == "fallback" and result.reason == "input_budget"
-    assert result.memories == ()
+    with pytest.raises(InputBudgetError):
+        await ContextualEvidenceSelector(reviewer, context_budget=ReviewContextBudget(8192)).select(query, [candidate], history=history)
 
 
 async def test_reviewer_receives_complete_source_and_selects_original_object():

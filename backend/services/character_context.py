@@ -138,7 +138,6 @@ class PreparedCharacterTurn:
     semantic_review_rule_confidence: float = 0.0
     semantic_review_confidence: float | None = None
     memory_selection_status: str = "disabled"
-    memory_selection_reason: str = ""
     memory_selection_candidate_count: int = 0
     memory_selection_latency_ms: float = 0.0
     contextual_policy_status: str = "disabled"
@@ -313,8 +312,8 @@ class CharacterContextService:
             )
             memories_items = memory_selection.memories
             logger.info(
-                "Contextual memory selection status=%s reason=%s candidates=%d selected=%d latency_ms=%.1f",
-                memory_selection.status, memory_selection.reason, memory_selection.candidate_count,
+                "Contextual memory selection status=%s candidates=%d selected=%d latency_ms=%.1f",
+                memory_selection.status, memory_selection.candidate_count,
                 len(memories_items), memory_selection.latency_ms,
             )
         situation_type = (
@@ -412,7 +411,6 @@ class CharacterContextService:
             memory_budget=memory_budget,
             memory_recall=memory_recall,
             memory_selection_status=memory_selection.status,
-            memory_selection_reason=memory_selection.reason,
             memory_selection_candidate_count=memory_selection.candidate_count,
             memory_selection_latency_ms=memory_selection.latency_ms,
             contextual_policy_status=policy_outcome.status,

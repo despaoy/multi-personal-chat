@@ -152,7 +152,6 @@ async def main(args):
                 semantic_status=prepared.semantic_review_status,
                 semantic_triggers=prepared.semantic_review_reasons,
                 selection_status=prepared.memory_selection_status,
-                selection_reason=prepared.memory_selection_reason,
                 selection_candidates=prepared.memory_selection_candidate_count,
                 policy_status=prepared.contextual_policy_status,
                 policy_reason=prepared.contextual_policy_reason,

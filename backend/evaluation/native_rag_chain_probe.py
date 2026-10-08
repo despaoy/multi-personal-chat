@@ -203,7 +203,6 @@ async def main(args):
                 query=turn.message,
                 history=list(prepared.history),
                 selection_status=prepared.memory_selection_status,
-                selection_reason=prepared.memory_selection_reason,
                 semantic_status=prepared.semantic_review_status,
                 policy_status=prepared.contextual_policy_status,
                 policy_reason=prepared.contextual_policy_reason,

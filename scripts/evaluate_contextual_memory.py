@@ -124,10 +124,10 @@ async def evaluate(
             )[-1200:],
         )
         candidate_ids = [item.memory_id for item in memories]
-        status, reason = "selected", ""
+        status = "selected"
         if selector is not None:
             outcome = await selector.select(case["query"], memories, history=case.get("history", []))
-            memories, status, reason = outcome.memories, outcome.status, outcome.reason
+            memories, status = outcome.memories, outcome.status
         observation = SelectionObservation(
             key,
             frozenset(case["gold_ids"]),
@@ -144,7 +144,6 @@ async def evaluate(
                 "gold_ids": case["gold_ids"],
                 "candidate_ids": candidate_ids,
                 "status": status,
-                "fallback_reason": reason,
                 "decisions": list(outcome.decisions) if selector is not None else [],
                 **({"model_outputs": list(responses)} if capture_responses else {}),
             }

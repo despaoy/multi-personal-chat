@@ -114,8 +114,8 @@ async def test_reviewer_cannot_replace_a_conditioned_candidate_with_rewritten_me
     async def reviewer(messages):
         return json.dumps({'decisions': [{'id': 'conditioned', 'label': 'use',
                                          'qualifiers': [], 'content': '条件已成立'}]})
-    out = await ContextualEvidenceSelector(reviewer).select('核对条件。', [_conditioned_item()])
-    assert out.status == 'fallback' and out.reason == 'invalid_output' and out.memories == ()
+    with pytest.raises(ValueError, match="invalid_decision"):
+        await ContextualEvidenceSelector(reviewer).select('核对条件。', [_conditioned_item()])
 
 
 def test_typed_time_query_and_ordinary_query_have_identical_interpretation_metadata():
