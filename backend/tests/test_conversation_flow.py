@@ -154,8 +154,8 @@ async def test_service_integrates_all_cues_without_new_reads_or_writes():
             return []
 
     class Memories:
-        async def load_relevant_memories(self, *args, **kwargs):
-            return (), 0
+        async def recall_with_diagnostics(self, *args, **kwargs):
+            return (), 0, {"status": "no_records_returned"}
 
     class Analyzer(SituationAnalyzer):
         def estimate(self, *args):

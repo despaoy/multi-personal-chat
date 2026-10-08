@@ -36,21 +36,19 @@ class _MemoryRepository:
 
 
 class _MemoryService:
-    async def load_relevant_memories(self, _character_id, _user_scope, _message):
-        return (), 0
+    async def recall_with_diagnostics(self, *args, **kwargs):
+        return (), 0, {"status": "no_records_returned"}
 
 
 async def test_retrieval_failure_is_visible_through_preparation():
     class FailedRecall:
         async def recall_with_diagnostics(self, *args, **kwargs):
-            return (), 0, {'status': 'retrieval_error', 'stage': 'read', 'error_type': 'RuntimeError'}
+            raise RuntimeError("synthetic read failure")
 
     service = _service()
     service._memory_service = FailedRecall()
-    prepared = await service.prepare_turn(_turn('我的专业是什么？'), 'tsukiyashiro_kisaki')
-    assert prepared.memory_recall['status'] == 'retrieval_error'
-    assert prepared.compiled.memory_status == 'retrieval_error'
-    assert prepared.compiled.used_memory_ids == ()
+    with pytest.raises(RuntimeError, match="synthetic read failure"):
+        await service.prepare_turn(_turn('我的专业是什么？'), 'tsukiyashiro_kisaki')
 
 
 async def test_storage_snapshot_reaches_generation_without_selected_memory():
@@ -240,3 +238,60 @@ async def test_decision_failure_is_not_retried_with_fewer_arguments():
         await service.prepare_turn(_turn("你好"), "tsukiyashiro_kisaki")
     assert caught.value is failure
     decide.assert_called_once()
+
+
+@pytest.mark.parametrize("selection_enabled", [False, True])
+async def test_missing_current_recall_interface_does_not_use_legacy_result(selection_enabled):
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+
+    legacy = AsyncMock(return_value=((), 0))
+    service = _service()
+    service._memory_service = SimpleNamespace(load_relevant_memories=legacy)
+    selector = SimpleNamespace(select=AsyncMock())
+    service._memory_selector = selector if selection_enabled else None
+    with pytest.raises(AttributeError, match="recall_with_diagnostics"):
+        await service.prepare_turn(_turn("我的专业是什么？"), "tsukiyashiro_kisaki")
+    legacy.assert_not_awaited()
+    selector.select.assert_not_awaited()
+
+
+@pytest.mark.parametrize("selection_enabled", [False, True])
+async def test_single_recall_preserves_context_and_storage_diagnostics(selection_enabled):
+    from dataclasses import replace
+    from datetime import datetime, timezone
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+
+    from character.evidence_selector import SelectionOutcome
+
+    stamp = datetime(2026, 10, 9, tzinfo=timezone.utc)
+    trace = {"status": "no_records_returned", "field_presence": {"major": False}}
+    recall = AsyncMock(return_value=((), 0, trace))
+    service = _service()
+    service._memory_service = SimpleNamespace(recall_with_diagnostics=recall)
+    service._memory_selector = SimpleNamespace(select=AsyncMock(return_value=SelectionOutcome(status="empty"))) if selection_enabled else None
+    turn = replace(_turn("我晚上喝咖啡吗？", ({"role": "user", "content": "我晚上不喝咖啡。"},)), received_at=stamp)
+    prepared = await service.prepare_turn(turn, "tsukiyashiro_kisaki")
+    recall.assert_awaited_once()
+    assert prepared.memory_recall is trace
+    assert prepared.compiled.memory_status == "no_match"
+    assert dict(prepared.compiled.memory_field_presence) == {"major": False}
+    if selection_enabled:
+        assert recall.call_args.kwargs["for_contextual_selection"] is True
+        assert "我晚上不喝咖啡。" in recall.call_args.kwargs["retrieval_context"]
+        assert recall.call_args.kwargs["reference_time"] == stamp
+    else:
+        assert recall.call_args.kwargs == {}
+
+
+async def test_manual_review_fixture_supports_current_preparation_contract():
+    import runpy
+    from pathlib import Path
+
+    fixture = runpy.run_path(str(Path(__file__).resolve().parents[1] / "scripts/run_interaction_reply_review.py"))
+    service = CharacterContextService(_Profiles(), fixture["_MemoryRepository"](), fixture["_Messages"](),
+        memory_service=fixture["_MemoryService"](), source_recall_enabled=False)
+    prepared = await service.prepare_turn(_turn("你好"), "tsukiyashiro_kisaki")
+    assert prepared.history == () and prepared.compiled.memory_packets == ()
+    assert prepared.memory_recall["status"] == "no_records_returned"

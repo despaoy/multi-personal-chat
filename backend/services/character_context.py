@@ -384,8 +384,7 @@ class CharacterContextService:
             memory_field_presence=tuple((key, value) for key, value in
                                         (memory_recall.get('field_presence') or {}).items()
                                         if value is None or isinstance(value, bool)),
-            memory_status=("available" if injected_memory_ids else
-                           "retrieval_error" if memory_recall.get('status') == 'retrieval_error' else "no_match"),
+            memory_status="available" if injected_memory_ids else "no_match",
         )
 
         if self._source_recall_enabled:
@@ -601,16 +600,12 @@ class CharacterContextService:
         self, character_id: str, user_scope: UserScope, query: str,
         *, retrieval_context: str = "", reference_time: datetime | None = None,
     ) -> tuple[tuple[MemoryItem, ...], int, dict[str, object]]:
-        recall = getattr(self._memory_service, 'recall_with_diagnostics', None)
         kwargs = {}
         if self._memory_selector is not None:
             kwargs = dict(for_contextual_selection=True, retrieval_context=retrieval_context,
                 reference_time=reference_time,
             )
-        if recall is not None:
-            return await recall(character_id, user_scope, query, **kwargs)
-        items, count = await self._memory_service.load_relevant_memories(character_id, user_scope, query, **kwargs)
-        return items, count, {'status': 'unavailable'}
+        return await self._memory_service.recall_with_diagnostics(character_id, user_scope, query, **kwargs)
 
     async def _load_history(self, turn: TurnInput, user_scope: UserScope, character_id: str) -> list[dict[str, str]]:
         """调用方带现场历史时直接使用，否则从数据库读取。"""

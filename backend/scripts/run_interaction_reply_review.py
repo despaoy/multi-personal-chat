@@ -45,12 +45,12 @@ class _MemoryRepository:
 
 
 class _MemoryService:
-    async def load_relevant_memories(self, character_id, user_scope, message):
-        return (), 0
+    async def recall_with_diagnostics(self, *args, **kwargs):
+        return (), 0, {"status": "no_records_returned"}
 
 
 class _Messages:
-    async def list_recent_conversation_history(self, user_scope, *, limit, max_chars):
+    async def list_recent_conversation_history(self, user_scope, *, limit, max_chars, character_id=None):
         return ()
 
 

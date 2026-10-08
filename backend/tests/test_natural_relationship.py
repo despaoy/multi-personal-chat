@@ -160,8 +160,8 @@ class Profiles:
 
 
 class EmptyMemory:
-    async def load_relevant_memories(self, *args, **kwargs):
-        return (), 0
+    async def recall_with_diagnostics(self, *args, **kwargs):
+        return (), 0, {"status": "no_records_returned"}
 
 
 @pytest.mark.asyncio
