@@ -4,7 +4,10 @@ import re
 
 _NAME = r"[\w\u4e00-\u9fff]{1,12}"
 _POSITIVE = re.compile(r"我(?:的)?(?:常用)?(?:别名|昵称)(?:是|叫)(?P<name>" + _NAME + r")")
-_EXCLUDED = re.compile(r"(?P<name>" + _NAME + r")(?:不是|不属于)(?:我(?:的)?|本人(?:的)?)(?:别名|昵称)")
+_EXCLUDED = re.compile(
+    r"(?P<name>" + _NAME + r")(?:不是|不属于)(?:我(?:的)?|本人(?:的)?)(?:别名|昵称)"
+    r"(?:[，,]\s*(?:请)?(?:不要|别)(?:再)?(?:这样|这么)叫我)?"
+)
 _FOLLOWING_LIMIT = re.compile(r"^(?:但|不过|然而|只有|仅|除非|暂时|可能|也许|计划|将来|明年)")
 
 
@@ -33,7 +36,7 @@ def identity_alias_projection(*, source, evidence, value):
         if positive and value == positive["name"]:
             name = positive["name"]
             matches.append(("user_fact", "user_alias", f"用户明确说自己的常用别名是{name}", 0.7))
-        elif excluded and (value == excluded["name"] or value in evidence and excluded["name"] in value):
+        elif excluded and excluded["name"] in value:
             name = excluded["name"]
             matches.append(("user_fact", "user_alias_exclusion_" + name, f"用户明确说{name}不是本人的别名", 0.6))
     return matches[0] if len(matches) == 1 else None

@@ -162,8 +162,13 @@ async def test_normal_scheduler_storage_keeps_primary_and_alias_separate(tmp_pat
                 ensure_ascii=False,
             )
 
+    class Embedding:
+        def embed_texts(self, texts):
+            return [[1.0, 0.0] for _ in texts]
+
     scheduler = MemoryEnrichmentScheduler(
-        config=MemoryLlmConfig(enabled=True, base_url="http://127.0.0.1:1", model="component"), completion=Completion()
+        config=MemoryLlmConfig(enabled=True, base_url="http://127.0.0.1:1", model="component"),
+        completion=Completion(), embedding_provider=Embedding()
     )
     try:
         receipt = await scheduler.schedule_and_wait(
@@ -198,3 +203,24 @@ def test_exclusion_index_can_include_its_own_contiguous_friend_explanation():
 
 def test_unrelated_friend_index_cannot_supply_self_alias_ownership():
     assert not parse(NEGATIVE, value="兰溪", kind="other_user_fact", qualifiers={})
+
+
+@pytest.mark.parametrize('suffix', ['，不要这样叫我', ',别这么叫我', '，请不要再这样叫我'])
+def test_alias_denial_with_reinforcing_address_boundary_is_preserved(suffix):
+    source = '小岚不是我的昵称' + suffix + '。'
+    proposal, = parse(source, value='不被称呼为小岚', kind='other_user_fact', source=source, qualifiers={})
+    assert proposal.memory.memory_key == 'user_alias_exclusion_小岚'
+    assert proposal.memory.content == '用户明确说小岚不是本人的别名'
+    assert proposal.evidence == source
+
+
+@pytest.mark.parametrize('source', [
+    '小岚不是我的昵称，但仅在工作时不要这样叫我。',
+    '小岚不是我的昵称，不要这样叫我，除非在游戏里。',
+    '朋友说“小岚不是我的昵称，不要这样叫我”。',
+    '如果小岚不是我的昵称，不要这样叫我。',
+])
+def test_conditional_or_quoted_denial_does_not_become_unconditional_alias_exclusion(source):
+    proposals = parse(source, value='小岚', kind='other_user_fact', source=source, qualifiers={})
+    assert all(not item.memory.memory_key.startswith('user_alias_exclusion_') for item in proposals)
+    assert all(source in item.memory.content and item.evidence == source for item in proposals)

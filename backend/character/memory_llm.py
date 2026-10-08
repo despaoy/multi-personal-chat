@@ -1007,6 +1007,8 @@ def _candidate_to_proposal(
         if supported_name is None or supported_name[0] != 'name':
             return None
     self_alias_exclusion = alias_projection is not None and alias_projection[1].startswith('user_alias_exclusion_')
+    if self_alias_exclusion:
+        value = alias_projection[1].removeprefix('user_alias_exclusion_')
     if (not event_observation and not self_alias_exclusion
             and (_THIRD_PARTY_FACT_PATTERN.search(evidence) or _NAMED_THIRD_PARTY_PATTERN.search(evidence))):
         return None
