@@ -28,6 +28,34 @@ def _object(record):
     return _normalized(value) if len(value) >= 2 else ""
 
 
+def _record_objects(record):
+    from character.memory_query import MEMORY_FIELD_NAMES, PERSONAL_MEMORY_KEYS
+    from character.memory_subject import is_source_observation
+
+    names = {_object(record)} - {""}
+    if record.get("memory_type") == "user_fact" and not is_source_observation(record):
+        names.update(noun for noun, field in MEMORY_FIELD_NAMES.items()
+                     if PERSONAL_MEMORY_KEYS[field] == record.get("memory_key"))
+        named = re.fullmatch(r"用户的(?P<object>[^，,。；;！？!?]{1,12})叫[^，,。；;！？!?]+", record.get("content", ""))
+        if named:
+            names.update((named['object'] + '名字', named['object'] + '的名字'))
+    return names
+
+
+def _requested_objects(clause):
+    from character.memory_llm import _ERASE_REQUEST_PATTERN
+
+    retention = _PROTECTED.fullmatch(clause)
+    deletion = _ERASE_REQUEST_PATTERN.search(clause)
+    text = retention['object'] if retention else clause[deletion.end():] if deletion else ''
+    names = set()
+    for part in re.split(r'和|与|、', _normalized(text)):
+        match = re.fullmatch(r'(?:我(?:本人)?的|本人的)?(?P<name>.+?)(?:的?(?:全部|所有)?(?:记录|信息|记忆))?', part)
+        if match:
+            names.add(match['name'])
+    return names
+
+
 def _identity(record):
     return str(record.get("id") or record.get("memory_id") or "")
 
@@ -126,10 +154,18 @@ def partial_erasure_plan(message, records=None):
     if records is None:
         return PartialErasurePlan(True, tuple(affirmative), tuple(protected))
     records = tuple(records)
+    objects = {_identity(record): _record_objects(record) for record in records}
+    requested = {clause: _requested_objects(clause) for clause in (*affirmative, *protected)}
+
+    def matches(record, clause):
+        literal = _object(record)
+        return bool(literal and literal in _normalized(clause)
+                    or objects[_identity(record)] & requested[clause])
+
     kept = []
     unresolved_clauses = []
     for clause in protected:
-        matched = [record for record in records if _object(record) and _object(record) in _normalized(clause)]
+        matched = [record for record in records if matches(record, clause)]
         if not matched:
             unresolved_clauses.append(clause)
         kept.extend(matched)
@@ -156,8 +192,7 @@ def partial_erasure_plan(message, records=None):
             _identity(record)
             for record in records
             if _identity(record) not in protected_ids
-            and _object(record)
-            and any(_object(record) in _normalized(clause) for clause in affirmative)
+            and any(matches(record, clause) for clause in affirmative)
         )
     )
     return PartialErasurePlan(
@@ -167,6 +202,6 @@ def partial_erasure_plan(message, records=None):
         () if unresolved else allowed,
         protected_ids,
         tuple(dict.fromkeys(str(record.get("memory_key") or "") for record in kept)),
-        tuple(dict.fromkeys(_object(record) for record in kept)),
+        tuple(sorted({name for record in kept for name in objects[_identity(record)]})),
         unresolved,
     )

@@ -193,6 +193,12 @@ async def test_erase_latest_claim_removes_older_key_versions_and_preserves_other
         claims = await repo.list_memory_records("role", scope, limit=None, include_inactive=True)
         assert [record["id"] for record in claims] == [major["id"]]
         assert scheduler.status.erased == 1
+        from character.memory_service import CharacterMemoryService
+
+        memories, _ = await CharacterMemoryService(repo, semantic_enabled=False).load_relevant_memories(
+            "role", scope, "我的大学专业是什么？", for_contextual_selection=True)
+        assert len(memories) == 1 and "海洋工程" in memories[0].content
+        assert all("豆沙" not in item.content and "糯米" not in item.content for item in memories)
         remaining_foreign = database.list_character_memory_claims(**other, include_inactive=True)
         assert [record["id"] for record in remaining_foreign] == [foreign["id"]]
         stored = database._get_connection().execute("SELECT body, state FROM memory_sources").fetchall()

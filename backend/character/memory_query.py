@@ -16,7 +16,7 @@ _FIELD_NOUNS = {
     'name': ('姓名', '名字'),
     'origin': ('来源地', '籍贯', '故乡', '家乡'),
     'residence': ('现居地', '住址', '居住地'),
-    'major': ('专业', '学科'),
+    'major': ('专业', '学科', '大学专业'),
     'workplace': ('工作地点', '工作单位', '工作场所'),
     'study_stage': ('年级', '学习阶段'),
 }
@@ -110,11 +110,10 @@ def profile_lookup_fields(message: str) -> tuple[str, ...]:
                 return ()
     if match[1] is None:
         return tuple(PERSONAL_MEMORY_KEYS)
-    nouns = {**MEMORY_FIELD_NAMES, '大学专业': 'major'}
     parts = re.split(r'和|与|、', match[1])
-    if not parts or any(part not in nouns for part in parts):
+    if not parts or any(part not in MEMORY_FIELD_NAMES for part in parts):
         return ()
-    fields = {nouns[part] for part in parts}
+    fields = {MEMORY_FIELD_NAMES[part] for part in parts}
     return tuple(field for field in PERSONAL_MEMORY_KEYS if field in fields)
 
 
