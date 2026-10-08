@@ -99,6 +99,9 @@ class CharacterMemoryRepository(Protocol):
         self, character_id: str, user_scope: UserScope, state: RelationshipState
     ) -> dict[str, Any]: ...
 
+    async def set_address_from_turn(self, character_id: str, user_scope: UserScope, *,
+                                    source_message_id: str, observed_at: datetime, address: str) -> dict[str, Any]: ...
+
     async def increment_interaction(self, character_id: str, user_scope: UserScope) -> int: ...
 
     async def list_memories(

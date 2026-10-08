@@ -249,3 +249,36 @@ async def test_expired_restart_receipt_resumes_without_answer_regeneration(datab
     finally:
         await dm.shutdown_delivery_memory()
         await runtime.shutdown(timeout=1)
+
+
+@pytest.mark.asyncio
+async def test_completion_write_failure_is_blocked_with_preserved_semantic_receipt(database, monkeypatch):
+    runtime = TurnCompletionRuntime(2)
+    monkeypatch.setattr(dm, "get_turn_completion_runtime", lambda: runtime)
+    monkeypatch.setattr(dm, "POLL_SECONDS", 0.01)
+    key, owner, stored = generated(database)
+    deliver(database, key, owner, stored)
+    calls = []
+
+    async def complete(prepared, turn, reply, **kwargs):
+        calls.append(kwargs)
+        kwargs['memory_receipt'].set_result({'status': 'saved', 'source_capture': 'recorded'})
+        return _TurnOutcome(failed_writes=('preferred_address',), source_capture='recorded',
+                            memory_enrichment_scheduled=True, memory_enrichment_status='queued_hot')
+
+    worker = dm.ensure_delivery_memory_worker(database, SimpleNamespace(complete_turn=complete))
+    try:
+        await worker.wait_idle(timeout=3)
+        row = database.integration_receipt('get', key=key)
+        response = json.loads(row['response'])
+        marker = response['context']['memory_completion']
+        assert row['status'] == 'delivered' and response['memory_completion_state'] == 'blocked'
+        assert marker['reason'] == 'completion_write_failed'
+        assert marker['completion_outcome']['failed_writes'] == ['preferred_address']
+        assert marker['semantic_receipt']['status'] == 'saved'
+        assert response['reply']['replyText'] == '原始模型回复'
+        await worker.wait_idle(timeout=3)
+        assert len(calls) == 1
+    finally:
+        await dm.shutdown_delivery_memory()
+        await runtime.shutdown(timeout=1)

@@ -227,7 +227,7 @@ async def test_internal_no_archive_does_not_reserve_completion(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_relation_failure_keeps_formatted_root_diagnostic(monkeypatch, caplog):
+async def test_relation_failure_reports_stage_without_private_diagnostic(monkeypatch, caplog):
     from character import memory_llm
     from character.models import RelationshipState, UserScope
     from services.character_context import CharacterContextService, TurnInput
@@ -236,7 +236,7 @@ async def test_relation_failure_keeps_formatted_root_diagnostic(monkeypatch, cap
     service._memory_repo = SimpleNamespace(
         increment_interaction=AsyncMock(return_value=1),
         get_relationship_record=AsyncMock(return_value=None),
-        upsert_relationship=AsyncMock(side_effect=RuntimeError("synthetic-relation-failure")),
+        set_address_from_turn=AsyncMock(side_effect=RuntimeError("synthetic-relation-failure")),
     )
     monkeypatch.setattr(memory_llm, "get_memory_enrichment_scheduler", lambda: SimpleNamespace(enabled=False))
     scope = UserScope("web", "unit", "owner", "owner", "private")
@@ -252,8 +252,10 @@ async def test_relation_failure_keeps_formatted_root_diagnostic(monkeypatch, cap
     result = await service.complete_turn(prepared, turn, "ack", source_message_id="source")
     records = [r for r in caplog.records if r.name == "services.character_context" and "角色关系更新失败" in str(r.msg)]
     assert result.interaction_count == 1 and len(records) == 1
-    assert records[0].getMessage() == "角色关系更新失败 character=role"
-    assert isinstance(records[0].exc_info[1], RuntimeError)
+    assert result.failed_writes == ("preferred_address",)
+    assert records[0].getMessage() == "角色关系更新失败 character=role type=RuntimeError"
+    assert records[0].exc_info is None
+    assert "synthetic-relation-failure" not in caplog.text
 
 
 @pytest.mark.asyncio

@@ -75,3 +75,47 @@ async def test_partial_completion_warning_is_distinct_from_total_failure():
     warning = await generate._complete_character_turn(SimpleNamespace(character_id='role'),
         MessageRequest(message='我今年大三，专业是统计学。', sourceMessageId='source'), '原始回复', character_service=service)
     assert '部分保存' in warning and '部分写入失败' in warning
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('failure', ['count', 'address', 'missing_adapter', 'unknown_status', 'both', 'none'])
+async def test_required_completion_writes_are_explicit_and_do_not_use_legacy_path(scenario, monkeypatch, failure, caplog):
+    service, prepared, _, repo, scheduler = scenario
+    scheduler.enabled = False
+    monkeypatch.setattr('services.character_context.extract_memories', lambda *a, **k: ())
+    repo.upsert_relationship = AsyncMock(side_effect=AssertionError('legacy write is forbidden'))
+    repo.set_address_from_turn = AsyncMock(return_value={
+        'status': 'written', 'relationship': {'relationship_stage': 'familiar'}})
+    if failure in {'count', 'both'}:
+        repo.increment_interaction.side_effect = OSError('private-counter-body')
+    if failure in {'address', 'both'}:
+        repo.set_address_from_turn.side_effect = OSError('private-address-body')
+    if failure == 'missing_adapter':
+        del repo.set_address_from_turn
+    if failure == 'unknown_status':
+        repo.set_address_from_turn.return_value = {'status': 'unknown'}
+    turn = TurnInput('请叫我杉岚。', 'web', 'web-character', 'reader', 'reader', 'private')
+    result = await service.complete_turn(prepared, turn, '已生成的回复', source_message_id='source')
+    expected = (() if failure not in {'count', 'both'} else ('interaction_count',))
+    if failure in {'address', 'missing_adapter', 'unknown_status', 'both'}:
+        expected += ('preferred_address',)
+    assert result.failed_writes == expected
+    assert result.memory_enrichment_status == 'no_change'
+    if 'preferred_address' not in expected:
+        assert result.preferred_address == '杉岚' and result.stage == 'familiar'
+        repo.set_address_from_turn.assert_awaited_once_with(prepared.character_id, prepared.user_scope,
+            source_message_id='source', observed_at=prepared.received_at, address='杉岚')
+    repo.upsert_relationship.assert_not_awaited()
+    assert 'private-counter-body' not in caplog.text and 'private-address-body' not in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_web_completion_preserves_memory_failure_alongside_counter_failure(scenario):
+    from api import generate
+    service, prepared, turn, repo, _ = scenario
+    repo.increment_interaction.side_effect = OSError('private-counter-body')
+    request = MessageRequest(message=turn.message, characterId='role', platform='web', adapter='web-character',
+        senderId='reader', conversationId='reader', conversationType='private', sourceMessageId='source')
+    warning = await generate._complete_character_turn(prepared, request, '模型原始回复', character_service=service)
+    assert '交互统计' in warning and '原文已保存' in warning and '长期记忆处理失败' in warning
+    assert 'private-counter-body' not in warning

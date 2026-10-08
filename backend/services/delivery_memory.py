@@ -261,7 +261,7 @@ class DeliveryMemoryWorker:
                 else result.get("source_capture") or outcome.source_capture
             )
             status = result.get("status", "unknown")
-            if capture in {"stale", "revoked", "conflict"}:
+            if outcome.failed_writes or capture in {"stale", "revoked", "conflict"}:
                 state = "blocked"
             elif capture == "failed" or status in {
                 "failed",
@@ -275,7 +275,8 @@ class DeliveryMemoryWorker:
                 state = "pending"
             else:
                 state = "completed"
-            await persist(state, semantic_receipt=result)
+            await persist(state, semantic_receipt=result,
+                          **({"reason": "completion_write_failed"} if outcome.failed_writes else {}))
         except asyncio.CancelledError:
             # Persisted running lease survives shutdown; never invent rollback
             # for a live executor thread or a scheduler-owned semantic job.

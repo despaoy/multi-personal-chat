@@ -155,6 +155,7 @@ class PreparedCharacterTurn:
 class _TurnOutcome:
     """生成后写回的执行回执，供接口反馈和投递状态判断使用。"""
 
+    failed_writes: tuple[str, ...] = ()
     new_memories: int = 0
     memory_enrichment_scheduled: bool = False
     source_capture: str = ""
@@ -456,12 +457,9 @@ class CharacterContextService:
                 outcome.interaction_count = await self._memory_repo.increment_interaction(
                     prepared.character_id, prepared.user_scope
                 )
-        except Exception:
-            logger.warning(
-                "角色交互计数更新失败 character=%s error=%s",
-                prepared.character_id,
-                exc_info=True,
-            )
+        except Exception as exc:
+            outcome.failed_writes += ("interaction_count",)
+            logger.warning("角色交互计数更新失败 character=%s type=%s", prepared.character_id, type(exc).__name__)
 
         # 2. 提取记忆候选。启用 LLM 时只提交后台复核任务；未启用时
         # 保留原规则写入，方便离线开发和向后兼容。
@@ -558,41 +556,22 @@ class CharacterContextService:
             address = (extract_preferred_address(turn.message)
                        if memory_write_allowed(turn.message) and not relationship_write_blocked(turn.message) else None)
             if address:
-                guarded = getattr(self._memory_repo, "set_address_from_turn", None)
-                if source_message_id and callable(guarded):
-                    result = await guarded(
-                        prepared.character_id, prepared.user_scope,
-                        source_message_id=source_message_id, observed_at=prepared.received_at,
-                        address=address,
-                    )
-                    if result["status"] in {"stale", "revoked", "conflict"}:
-                        outcome.source_capture = result["status"]
-                        return outcome
-                    stage = result["relationship"]["relationship_stage"]
-                else:
-                    from repositories.character_memory import relationship_from_record
-
-                    current = relationship_from_record(await self._memory_repo.get_relationship_record(
-                        prepared.character_id, prepared.user_scope,
-                    ))
-                    stage = current.stage
-                    await self._memory_repo.upsert_relationship(
-                        prepared.character_id,
-                        prepared.user_scope,
-                        RelationshipState(
-                            stage=stage,  # type: ignore[arg-type]
-                            preferred_address=address or prepared.relationship.preferred_address,
-                            summary=current.summary,
-                        ),
-                    )
+                result = await self._memory_repo.set_address_from_turn(
+                    prepared.character_id, prepared.user_scope,
+                    source_message_id=source_message_id, observed_at=prepared.received_at,
+                    address=address,
+                )
+                if result["status"] in {"stale", "revoked", "conflict"}:
+                    outcome.source_capture = result["status"]
+                    return outcome
+                if result["status"] != "written":
+                    raise ValueError("Address write did not confirm persistence")
+                stage = result["relationship"]["relationship_stage"]
             outcome.stage = stage
             outcome.preferred_address = address or prepared.relationship.preferred_address
-        except Exception:
-            logger.warning(
-                "角色关系更新失败 character=%s",
-                prepared.character_id,
-                exc_info=True,
-            )
+        except Exception as exc:
+            outcome.failed_writes += ("preferred_address",)
+            logger.warning("角色关系更新失败 character=%s type=%s", prepared.character_id, type(exc).__name__)
 
         return outcome
 

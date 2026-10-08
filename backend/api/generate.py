@@ -831,17 +831,24 @@ async def _complete_character_turn(prepared, request: MessageRequest, reply: str
         )
         capture = getattr(outcome, "source_capture", "")
         status = getattr(outcome, "memory_enrichment_status", "")
+        warning = None
         if status == "partial":
-            return "这条信息的长期记忆仅部分保存，部分写入失败；请检查已保存内容后再重试。"
-        if capture == "recorded" and status == "failed":
-            return "原文已保存，但长期记忆处理失败；本次回复不代表结构化记忆已写入，请稍后重试。"
-        if capture == "failed" or status == "failed":
-            return "这条信息的长期记忆保存失败；本次回复不代表已保存，请稍后重试。"
-        if capture in {"revoked", "stale"}:
-            return "这条信息未保存到长期记忆：相关记忆已删除，本次回复不会恢复它。"
-        if capture == "conflict":
-            return "这条信息未保存到长期记忆：同一条消息已绑定其他内容，请重新发送。"
-        return None
+            warning = "这条信息的长期记忆仅部分保存，部分写入失败；请检查已保存内容后再重试。"
+        elif capture == "recorded" and status == "failed":
+            warning = "原文已保存，但长期记忆处理失败；本次回复不代表结构化记忆已写入，请稍后重试。"
+        elif capture == "failed" or status == "failed":
+            warning = "这条信息的长期记忆保存失败；本次回复不代表已保存，请稍后重试。"
+        elif capture in {"revoked", "stale"}:
+            warning = "这条信息未保存到长期记忆：相关记忆已删除，本次回复不会恢复它。"
+        elif capture == "conflict":
+            warning = "这条信息未保存到长期记忆：同一条消息已绑定其他内容，请重新发送。"
+        failures = getattr(outcome, "failed_writes", ())
+        if failures:
+            labels = {"interaction_count": "交互统计", "preferred_address": "称呼更新"}
+            detail = "、".join(labels[stage] for stage in failures)
+            partial = f"部分回写失败（{detail}）；已完成的保存不会撤销，请检查后重试。"
+            warning = partial + (warning or "")
+        return warning
     except Exception as e:
         logger.warning("角色记忆回写失败 character=%s type=%s", prepared.character_id, type(e).__name__)
         # Cancelling a to_thread write does not prove its transaction rolled
