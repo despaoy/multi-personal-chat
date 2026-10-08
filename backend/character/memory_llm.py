@@ -959,6 +959,9 @@ def _candidate_to_proposal(
     confidence_threshold: float,
     feedback_target_ids: tuple[str, ...] = (),
 ) -> ValidatedMemoryProposal | None:
+    confidence = raw.get("confidence")
+    if type(confidence) not in (int, float) or not 0.0 <= confidence <= 1.0:
+        raise ValueError("记忆 LLM confidence 必须是 0 到 1 的 JSON 数值")
     kind = str(raw.get("kind") or "").strip()
     value = re.sub(r"\s+", " ", str(raw.get("value") or "")).strip()
     evidence = re.sub(r"\s+", " ", str(raw.get("evidence") or "")).strip()
@@ -995,11 +998,7 @@ def _candidate_to_proposal(
             and normalized_evidence
             and normalized_evidence not in _normalize(unretracted_source)):
         return None
-    try:
-        confidence = float(raw.get("confidence") or 0.0)
-    except (TypeError, ValueError):
-        return None
-    if semantic_operation not in _SEMANTIC_OPERATIONS or not 0.0 <= confidence <= 1.0:
+    if semantic_operation not in _SEMANTIC_OPERATIONS:
         return None
     required_confidence = (
         min(confidence_threshold, PENDING_CONFIDENCE_THRESHOLD)

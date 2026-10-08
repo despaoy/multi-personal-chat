@@ -58,7 +58,7 @@ def test_excess_candidates_fail_instead_of_silent_truncation():
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize('case', ['valid', 'empty', 'trailing', 'mixed', 'excess'])
+@pytest.mark.parametrize('case', ['valid', 'empty', 'trailing', 'mixed', 'excess', 'confidence', 'low_confidence'])
 async def test_scheduler_preserves_source_but_never_writes_partial_invalid_response(tmp_path, case):
     from types import SimpleNamespace
     from unittest.mock import AsyncMock
@@ -80,6 +80,10 @@ async def test_scheduler_preserves_source_but_never_writes_partial_invalid_respo
         raw = json.dumps({'memories': [candidate(), None]})
     elif case == 'excess':
         raw = json.dumps({'memories': [candidate()] * 5})
+    elif case == 'confidence':
+        raw = json.dumps({'memories': [candidate(), dict(candidate(), confidence=True)]})
+    elif case == 'low_confidence':
+        raw = json.dumps({'memories': [dict(candidate(), confidence=0.1)]})
     completion = SimpleNamespace(complete=AsyncMock(return_value=raw), close=AsyncMock())
     worker = MemoryEnrichmentScheduler(config=MemoryLlmConfig(True, 'unused', 'fixture'), completion=completion)
     try:
@@ -90,7 +94,7 @@ async def test_scheduler_preserves_source_but_never_writes_partial_invalid_respo
         records = await repo.list_memory_records('role', scope)
         if case == 'valid':
             assert receipt['status'] == 'saved' and receipt['persisted'] == len(records) == 1
-        elif case == 'empty':
+        elif case in {'empty', 'low_confidence'}:
             assert receipt['status'] == 'no_change' and not records
         else:
             assert receipt['status'] == 'failed' and receipt['stage'] == 'proposal_validation'
@@ -99,3 +103,26 @@ async def test_scheduler_preserves_source_but_never_writes_partial_invalid_respo
     finally:
         await worker.shutdown(timeout=1)
         database.close_connection()
+
+
+@pytest.mark.parametrize('confidence', [None, True, False, '0.95', 'private-value', [], {}, -0.1, 1.1, 1e100])
+def test_invalid_confidence_is_protocol_failure(confidence):
+    raw = dict(candidate(), confidence=confidence)
+    with pytest.raises(ValueError, match='confidence') as caught:
+        parse_llm_proposals(json.dumps({'memories': [raw]}), source_message='我的专业是物理学。')
+    assert 'private-value' not in str(caught.value)
+
+
+@pytest.mark.parametrize('operation', ['ADD', 'NOOP', 'IGNORE'])
+def test_missing_confidence_fails_before_business_filtering(operation):
+    raw = dict(candidate(), operation=operation)
+    del raw['confidence']
+    with pytest.raises(ValueError, match='confidence'):
+        parse_llm_proposals(json.dumps({'memories': [raw]}), source_message='我的专业是物理学。')
+
+
+@pytest.mark.parametrize('confidence,accepted', [(0, False), (0.1, False), (0.95, True), (1, True)])
+def test_valid_numeric_confidence_preserves_admission(confidence, accepted):
+    raw = dict(candidate(), confidence=confidence)
+    result = parse_llm_proposals(json.dumps({'memories': [raw]}), source_message='我的专业是物理学。')
+    assert bool(result) is accepted
