@@ -822,7 +822,12 @@ async def _complete_character_turn(prepared, request: MessageRequest, reply: str
             reservation=completion_slot,
         )
         capture = getattr(outcome, "source_capture", "")
-        if capture == "failed":
+        status = getattr(outcome, "memory_enrichment_status", "")
+        if status == "partial":
+            return "这条信息的长期记忆仅部分保存，部分写入失败；请检查已保存内容后再重试。"
+        if capture == "recorded" and status == "failed":
+            return "原文已保存，但长期记忆处理失败；本次回复不代表结构化记忆已写入，请稍后重试。"
+        if capture == "failed" or status == "failed":
             return "这条信息的长期记忆保存失败；本次回复不代表已保存，请稍后重试。"
         if capture in {"revoked", "stale"}:
             return "这条信息未保存到长期记忆：相关记忆已删除，本次回复不会恢复它。"
@@ -830,7 +835,7 @@ async def _complete_character_turn(prepared, request: MessageRequest, reply: str
             return "这条信息未保存到长期记忆：同一条消息已绑定其他内容，请重新发送。"
         return None
     except Exception as e:
-        logger.warning("角色记忆回写失败 character=%s: %s", prepared.character_id, e)
+        logger.warning("角色记忆回写失败 character=%s type=%s", prepared.character_id, type(e).__name__)
         # Cancelling a to_thread write does not prove its transaction rolled
         # back. Never claim failure or successful storage on timeout/unknown.
         return "这条信息的长期记忆保存状态尚未确认；本次回复不代表已保存，请稍后检查。"

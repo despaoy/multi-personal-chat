@@ -153,7 +153,7 @@ class PreparedCharacterTurn:
 
 @dataclass
 class _TurnOutcome:
-    """complete_turn 的执行结果（用于日志与测试断言）。"""
+    """生成后写回的执行回执，供接口反馈和投递状态判断使用。"""
 
     new_memories: int = 0
     memory_enrichment_scheduled: bool = False
@@ -446,8 +446,7 @@ class CharacterContextService:
     ) -> _TurnOutcome:
         """生成成功后回写：交互计数、新记忆、关系推进。
 
-        任何单条写入失败只记日志，不影响其余写入（记忆是增强项，
-        不允许让已完成生成的消息在调用方表现为失败）。
+        记忆失败通过回执明确反馈，并保留已完成数量；已生成回复由调用方保留。
         """
         outcome = _TurnOutcome()
 
@@ -542,12 +541,11 @@ class CharacterContextService:
                     )
                     outcome.new_memories += int(saved)
                 outcome.memory_enrichment_status = "saved" if outcome.new_memories else "no_change"
-        except Exception:
-            logger.warning(
-                "角色长期记忆写入失败 character=%s",
-                prepared.character_id,
-                exc_info=True,
-            )
+        except Exception as exc:
+            if outcome.source_capture != "failed":
+                outcome.memory_enrichment_status = "partial" if outcome.new_memories else "failed"
+            logger.warning("角色长期记忆写入失败 character=%s type=%s",
+                           prepared.character_id, type(exc).__name__)
 
         if memory_retry_only or outcome.source_capture in {"stale", "revoked", "conflict"}:
             return outcome
