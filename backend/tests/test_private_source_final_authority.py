@@ -1,6 +1,6 @@
 """New component race with real SQLite source capture/recall/authorized erase.
 
-Classifier, public planner, public transport failure and main provider are mocks;
+Classifier, public planner, empty public retrieval and main provider are mocks;
 this file makes no paid provider request and claims no native auth/vector test.
 """
 
@@ -67,14 +67,12 @@ async def exercise(tmp_path, monkeypatch, *, erase_during_review):
             if erase_during_review:
                 db.clear_character_memories(**fields)
                 assert db.list_memory_sources(**fields) == []
-            # Actual strict resolver failure retains complete unavailable public
-            # tasks; this is a declared component failure, not a cloud fault.
-            return "{"
+            return json.dumps(dict(scopes=[dict(task_id=1, objects=["朔湾改签"])]))
 
         return await original_resolve(dependencies, query, reviewer=review, **kwargs)
 
-    async def public_unavailable(*args, **kwargs):
-        raise RuntimeError("declared component public transport failure")
+    async def empty_public_result(*args, **kwargs):
+        return dict(results=[], citations=[], abstained=True)
 
     async def model(**kwargs):
         wire = unescape("\n".join(m["content"] for m in kwargs["messages"]))
@@ -86,7 +84,7 @@ async def exercise(tmp_path, monkeypatch, *, erase_during_review):
     monkeypatch.setattr(retrieval_query_plan, "plan_retrieval_views", planner)
     monkeypatch.setattr(intent_detector, "needs_rag", lambda _: (True, "declared-component", None))
     monkeypatch.setattr(public_question_binding, "resolve_question_binding", binding)
-    monkeypatch.setattr(generate, "_retrieve_rag_bundle", public_unavailable)
+    monkeypatch.setattr(generate, "_retrieve_rag_bundle", empty_public_result)
     monkeypatch.setattr(generate, "_get_system_prompt", lambda _: "虚构评测角色规则")
     _, used, meta = await generate._generate_with_retrieval(
         MessageRequest(message=QUERY, characterId="fiction-role"),
@@ -227,25 +225,29 @@ async def test_changed_source_snapshot_never_substitutes_new_unreviewed_content(
 
 
 @pytest.mark.asyncio
-async def test_failed_fresh_source_read_does_not_grant_cached_private_packet(tmp_path, monkeypatch):
+@pytest.mark.parametrize("after_model", [False, True])
+async def test_failed_source_read_stops_generation(tmp_path, monkeypatch, after_model):
     from inference.generation_request import generate_character_response
 
     request, _prepared, _repository, _db, _fields = await complete_request(tmp_path)
-
-    async def unavailable(*args, **kwargs):
-        raise RuntimeError("declared scoped read failure")
-
-    monkeypatch.setattr(DatabaseCharacterMemoryRepository, "list_sources", unavailable)
+    original_read = DatabaseCharacterMemoryRepository.list_sources
+    failure = RuntimeError("declared scoped read failure")
     calls = []
+
+    async def read(repository, *args, **kwargs):
+        if not after_model or calls:
+            raise failure
+        return await original_read(repository, *args, **kwargs)
+
+    monkeypatch.setattr(DatabaseCharacterMemoryRepository, "list_sources", read)
 
     async def model(**kwargs):
         calls.append(kwargs)
-        return "公共费用有依据，私人原话本轮不可核验。"
+        return "已有模型回答也不能掩盖来源复查故障。"
 
-    result = await generate_character_response(request, model)
-    wire = model_wire(calls[0]["messages"])
-    assert len(calls) == 1 and BODY not in wire and SIBLING not in wire and PUBLIC in wire
-    assert result.plan.character_context.memory_source_status == "authority_unavailable"
+    with pytest.raises(RuntimeError) as caught:
+        await generate_character_response(request, model)
+    assert caught.value is failure and len(calls) == int(after_model)
 
 
 @pytest.mark.asyncio
@@ -372,3 +374,29 @@ async def test_request_callback_never_changes_serialized_completion_schema(tmp_p
         "used_memory_ids",
         "memory_operation_receipt",
     }
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("field", ["episodic_reference_context", "source_candidate_context"])
+async def test_malformed_private_packet_fails_before_model(tmp_path, field):
+    from dataclasses import replace
+    from unittest.mock import AsyncMock
+
+    from inference.generation_request import generate_character_response
+
+    request, *_ = await complete_request(tmp_path)
+    context = replace(request.character_context, **{field: "{incomplete"})
+    model = AsyncMock()
+    with pytest.raises(ValueError, match="Invalid complete private source packet"):
+        await generate_character_response(replace(request, character_context=context), model)
+    model.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_missing_source_reader_is_not_a_successful_empty_read():
+    from types import SimpleNamespace
+
+    repository = DatabaseCharacterMemoryRepository(SimpleNamespace())
+    scope = UserScope("web", "unit", "owner", "owner", "private")
+    with pytest.raises(RuntimeError, match="scoped source reads"):
+        await repository.list_sources("fiction-role", scope, source_message_ids=("source-1",))

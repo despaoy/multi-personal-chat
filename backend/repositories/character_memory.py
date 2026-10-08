@@ -286,7 +286,7 @@ class DatabaseCharacterMemoryRepository:
                            limit: int = 100) -> list[dict[str, Any]]:
         reader = getattr(self._database, "list_memory_sources", None)
         if reader is None:
-            return []
+            raise RuntimeError("Database does not support scoped source reads")
         return await asyncio.to_thread(
             reader, character_id, user_scope.platform, user_scope.adapter, user_scope.sender_id,
             user_scope.conversation_type, user_scope.conversation_id,

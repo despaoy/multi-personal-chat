@@ -227,21 +227,22 @@ async def test_storage_change_invalidates_reviewed_claim_without_substituting_ne
 
 
 @pytest.mark.asyncio
-async def test_scoped_read_failure_removes_only_affected_packet(tmp_path, monkeypatch):
-    from inference.structured_context_authority import revalidate_private_memories
+@pytest.mark.parametrize("reader", ["get_memory_record", "linked_source_revisions", "linked_source_receipts"])
+async def test_scoped_read_failure_stops_generation(tmp_path, monkeypatch, reader):
+    from unittest.mock import AsyncMock
 
-    request, _prepared, repo, _db, scope, target, public = await structured_request(tmp_path)
-    read = repo.get_memory_record
+    request, *_ = await structured_request(tmp_path, projected=True)
+    failure = RuntimeError("explicit isolated read failure")
 
-    async def fail_target(memory_id, *args):
-        if str(memory_id) == target.memory_id:
-            raise RuntimeError("explicit isolated read failure")
-        return await read(memory_id, *args)
+    async def fail(*args, **kwargs):
+        raise failure
 
-    monkeypatch.setattr(repo, "get_memory_record", fail_target)
-    refreshed = await revalidate_private_memories(request, repo, "fiction-role", scope)
-    wire, _result = await wire_response(refreshed)
-    assert target.content not in wire and "我喜欢豆浆" in wire and public in wire
+    monkeypatch.setattr(DatabaseCharacterMemoryRepository, reader, fail)
+    model = AsyncMock()
+    with pytest.raises(RuntimeError) as caught:
+        await generate_character_response(request, model)
+    assert caught.value is failure
+    model.assert_not_awaited()
 
 
 @pytest.mark.asyncio

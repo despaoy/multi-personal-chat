@@ -51,57 +51,42 @@ async def revalidate_private_sources(request, repository, character_id, scope, *
     if not text and not candidate:
         return request
 
-    unavailable = False
-    try:
-        rows = _records(text)
-        deferred = _records(candidate)
-    except (ValueError, TypeError, KeyError):
-        rows, deferred = [], []
-        unavailable = True
+    rows = _records(text)
+    deferred = _records(candidate)
     originals = {}
     for row in [*rows, *deferred]:
         source_id = row["source_id"]
         if source_id in originals and originals[source_id] != row:
-            unavailable = True
+            raise ValueError("Conflicting private source snapshots")
         originals[source_id] = row
     ids = tuple(originals)
     granted = set()
-    if not unavailable:
-        try:
-            fresh = []
-            for offset in range(0, len(ids), 100):
-                fresh.extend(
-                    await repository.list_sources(
-                        character_id,
-                        scope,
-                        source_message_ids=ids[offset : offset + 100],
-                    )
-                )
-            seen = set()
-            for row in fresh:
-                source_id = row["source_message_id"]
-                if source_id not in originals or source_id in seen:
-                    raise ValueError("Invalid fresh scoped private source identities")
-                seen.add(source_id)
-                original = originals[source_id]
-                if row["body"] == original["text"] and row["observed_at"] == original["observed_at"]:
-                    granted.add(source_id)
-        except Exception:
-            unavailable = True
-            granted.clear()
+    seen = set()
+    for offset in range(0, len(ids), 100):
+        fresh = await repository.list_sources(
+            character_id, scope, source_message_ids=ids[offset : offset + 100],
+        )
+        for row in fresh:
+            source_id = row["source_message_id"]
+            if source_id not in originals or source_id in seen:
+                raise ValueError("Invalid fresh scoped private source identities")
+            seen.add(source_id)
+            original = originals[source_id]
+            if row["body"] == original["text"] and row["observed_at"] == original["observed_at"]:
+                granted.add(source_id)
 
     revoked = set(ids) - granted
-    if not unavailable and not revoked:
+    if not revoked:
         return request
     bodies = tuple(originals[source_id]["text"] for source_id in revoked)
-    admitted = "" if unavailable else _retain_packet(text, rows, granted)
-    deferred_text = "" if unavailable else _retain_packet(candidate, deferred, granted)
+    admitted = _retain_packet(text, rows, granted)
+    deferred_text = _retain_packet(candidate, deferred, granted)
     status = (
         "available"
         if admitted
         else context.memory_source_status
         if deferred_text
-        else ("authority_unavailable" if unavailable else "authority_changed")
+        else "authority_changed"
     )
     updated = replace(
         context,
@@ -120,11 +105,8 @@ async def revalidate_private_sources(request, repository, character_id, scope, *
     for packet in context.memory_packets:
         if not revoked.intersection(packet.source_message_ids):
             continue
-        try:
-            row = await repository.get_memory_record(int(packet.memory_id), character_id, scope)
-            valid = row is not None and row["content"] == packet.content and row["evidence"] == list(packet.evidence)
-        except Exception:
-            valid = False
+        row = await repository.get_memory_record(int(packet.memory_id), character_id, scope)
+        valid = row is not None and row["content"] == packet.content and row["evidence"] == list(packet.evidence)
         if not valid:
             removed.add(packet.memory_id)
     if removed:
@@ -143,7 +125,7 @@ async def revalidate_private_sources(request, repository, character_id, scope, *
             memory_packets=remaining,
             used_memory_ids=used_ids,
             reference_context=reference,
-            memory_status="available" if remaining else "retrieval_error" if unavailable else "no_match",
+            memory_status="available" if remaining else "no_match",
             source_shared_memory_ids=tuple(key for key in context.source_shared_memory_ids if key not in removed),
         )
     elif any(body in context.reference_context for body in bodies):
@@ -153,7 +135,7 @@ async def revalidate_private_sources(request, repository, character_id, scope, *
             used_memory_ids=(),
             memory_packets=(),
             source_shared_memory_ids=(),
-            memory_status="retrieval_error",
+            memory_status="no_match",
         )
 
     changes = {}
