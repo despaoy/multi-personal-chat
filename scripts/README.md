@@ -7,7 +7,7 @@
 - `check_repository_integrity.py`：核对冻结数据、API 挂载、前端导航、脚本索引、README 链接和归档完整性。
 - `check_release_hygiene.py`：只读扫描拟发布文件，检查Python/JSON/JSONL语法和私有运行产物，列出字节相同的文件供人工判断；不自动删除历史证据。
 - `local-verify.ps1`：Windows 完整验证流水线。
-- `start-local-backend.ps1`：以 mock 推理模式启动本地后端。
+- `start-local-backend.ps1`：保留现有模型配置启动本地后端；仅显式传入 `-Mock` 才切换为模拟推理，且只允许 development/test 环境。Python 子进程异常退出会报错。
 - `restore_sqlite_backup.py`：在路径和目标检查后恢复 SQLite 备份。
 - `download_model.py`、`validate_lora_training.py`：模型下载和 LoRA 训练前只读检查。
 

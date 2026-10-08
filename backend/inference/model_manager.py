@@ -20,51 +20,23 @@ from inference.openai_protocol import chat_completions_endpoint, completed_chat_
 
 logger = logging.getLogger(__name__)
 
-# DB 配置缓存统一委托给 cache.config_cache（60s TTL + jitter + Redis 共享），
-# 消除三套独立缓存导致的状态不同步问题。
-# 此前 model_manager 维护独立 5s 缓存，与 config_cache 的 60s 缓存失效不联动，
-# 导致配置更新后 inference 层与 API 层行为不一致。
+# Shared TTL cache; database errors must not become default model settings.
 _db_config_lock = threading.Lock()
 
 
-def _coerce_config_value(value):
-    """Convert persisted config strings to primitive Python values.
-
-    M-3 fix: 委托到 db.config_utils.coerce_config_value，消除重复实现。
-    保留此函数以兼容现有调用方（_get_db_config 内部使用）。
-    """
-    from db.config_utils import coerce_config_value
-    return coerce_config_value(value)
-
-
 def _get_db_config():
-    """Read model config through the unified cache.config_cache layer.
+    from cache.config_cache import get_cached_config, set_cached_config
+    from db.config_utils import coerce_config_value
 
-    统一入口：先查 Redis/local 缓存（60s TTL + jitter），未命中则从 db 加载并回填缓存。
-    这样 api/config.py 调用 invalidate_config_cache() 后，所有模块下次读取都会重新加载。
-    """
     with _db_config_lock:
-        try:
-            from cache.config_cache import get_cached_config, set_cached_config
-            cached = get_cached_config()
-            if cached is not None:
-                return dict(cached)
-        except Exception:
-            pass
+        cached = get_cached_config()
+        if cached is not None:
+            return dict(cached)
+        from db.adapter import db
 
-        try:
-            from db.adapter import db
-            raw_config = getattr(db, "config", {}) or {}
-            result = {key: _coerce_config_value(value) for key, value in raw_config.items()}
-            try:
-                from cache.config_cache import set_cached_config
-                set_cached_config(result)
-            except Exception:
-                pass
-            return result.copy()
-        except Exception as exc:
-            logger.warning("Failed to read model config from database adapter: %s", exc)
-            return {}
+        result = {key: coerce_config_value(value) for key, value in db.config.items()}
+        set_cached_config(result)
+        return result
 
 _db_cfg = _get_db_config()
 from typing import Optional, Dict, Any, List, Tuple
@@ -80,6 +52,19 @@ class ModelProvider(str, Enum):
     OPENAI_COMPAT = "openai_compat"
     VLLM = "vllm"
     MOCK = "mock"
+
+
+def validate_provider(value) -> ModelProvider:
+    try:
+        provider = ModelProvider(value)
+    except (ValueError, TypeError) as exc:
+        raise ValueError("模型提供商缺失或无效，请配置 MODEL_PROVIDER 或 config.modelProvider") from exc
+    if provider == ModelProvider.MOCK:
+        environment = os.getenv("ENVIRONMENT", "development").strip().lower()
+        if environment not in {"development", "dev", "test", "testing"}:
+            raise ValueError("mock 仅允许在 development/test 环境显式启用")
+        logger.warning("Explicit mock provider: real model inference is unavailable")
+    return provider
 
 
 @dataclass
@@ -812,6 +797,11 @@ class ModelManager:
     """模型管理器，负责多提供商切换、LoRA管理、模型文件操作。"""
 
     def __init__(self, base_dir: Optional[Path] = None):
+        env_provider = os.getenv("MODEL_PROVIDER", "").strip().lower()
+        provider_name = env_provider or _get_db_config().get("modelProvider")
+        self._current_provider = validate_provider(provider_name)
+        logger.info("Model provider selected from %s: %s",
+                    "environment" if env_provider else "database", self._current_provider.value)
         backend_dir = Path(__file__).resolve().parents[1]
         configured_root = os.getenv("MODEL_STORAGE_PATH", "").strip()
         if configured_root and base_dir is None:
@@ -834,30 +824,6 @@ class ModelManager:
             ModelProvider.VLLM: VLLMProvider(),
         }
 
-        self._current_provider = ModelProvider.MOCK
-        env_provider = os.getenv("MODEL_PROVIDER", "").strip().lower()
-        # C11 fix: DB 默认值从 "mock" 改为 "vllm"，但保留显式 mock 配置能力（开发环境）
-        db_provider = _db_cfg.get("modelProvider", "vllm")
-        provider_name = env_provider or db_provider
-        if provider_name in [e.value for e in ModelProvider]:
-            self._current_provider = ModelProvider(provider_name)
-            source = "environment" if env_provider else "database"
-            logger.info(f"Initialized model provider from {source}: {provider_name}")
-        # C11 fix: 生产环境强制禁止 mock 作为默认 provider
-        # 若生产环境显式配置 mock（如演示场景），允许使用但记录警告；
-        # 若是默认值（未配置）且环境为生产，则拒绝启动
-        is_production = os.getenv("ENVIRONMENT", "development").strip().lower() in {"production", "prod"}
-        if is_production and self._current_provider == ModelProvider.MOCK:
-            if not env_provider and db_provider == "mock":
-                # 未显式配置，使用的是默认值 → 拒绝启动
-                raise RuntimeError(
-                    "生产环境禁止使用 mock 作为默认模型提供商。"
-                    "请通过 MODEL_PROVIDER 环境变量或数据库 config.modelProvider "
-                    "显式配置有效的提供商（如 vllm / openai_compat / ollama）。"
-                )
-            logger.warning(
-                "生产环境显式配置为 mock provider，将返回罐头回复，仅适用于演示场景"
-            )
         self._load_cache()
 
     def _load_cache(self):
@@ -878,9 +844,7 @@ class ModelManager:
             logger.error(f"保存模型缓存失败: {e}")
 
     def set_provider(self, provider: ModelProvider) -> bool:
-        if provider not in self._providers:
-            logger.error(f"未知提供商: {provider}")
-            return False
+        provider = validate_provider(provider)
         self._current_provider = provider
         logger.info(f"已切换到提供商: {provider.value}")
         return True

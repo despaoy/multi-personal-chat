@@ -152,21 +152,14 @@ async def set_model_provider(request: Request, current_user: dict = Depends(get_
         model_manager = get_model_manager()
 
         body = await request.json()
-        provider_name = body.get("provider", "ollama")
-
-        provider_map = {
-            "ollama": ModelProvider.OLLAMA,
-            "llama_cpp": ModelProvider.LLAMA_CPP,
-            "openai_compat": ModelProvider.OPENAI_COMPAT,
-            "transformers_peft": ModelProvider.TRANSFORMERS_PEFT,
-            "vllm": ModelProvider.VLLM,
-            "mock": ModelProvider.MOCK
-        }
-
-        if provider_name not in provider_map:
-            raise HTTPException(status_code=400, detail="无效的提供商名称")
-
-        success = model_manager.set_provider(provider_map[provider_name])
+        if not isinstance(body, dict):
+            raise HTTPException(400, "请求必须是包含 provider 的对象")
+        provider_name = body.get("provider")
+        try:
+            provider = ModelProvider(provider_name)
+            success = model_manager.set_provider(provider)
+        except ValueError as exc:
+            raise HTTPException(400, "提供商名称无效，或当前环境不允许使用该提供商") from exc
 
         if success:
             await run_db(db.update_config, {"modelProvider": provider_name})

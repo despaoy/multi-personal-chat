@@ -1,6 +1,7 @@
 param(
     [int]$Port = 8000,
-    [string]$HostName = "127.0.0.1"
+    [string]$HostName = "127.0.0.1",
+    [switch]$Mock
 )
 
 $ErrorActionPreference = "Stop"
@@ -21,21 +22,24 @@ function Find-Python {
     throw "Python was not found. Install Python 3.12 or make py/python available in PATH."
 }
 
-$env:ENVIRONMENT = "development"
-$env:MODEL_PROVIDER = "mock"
-$env:VLLM_ENABLED = "false"
-$env:VLLM_BASE_URLS = ""
+if ($Mock) {
+    $env:MODEL_PROVIDER = "mock"
+    $env:VLLM_ENABLED = "false"
+    $env:VLLM_BASE_URLS = ""
+    Write-Warning "Explicit mock mode: real model inference is unavailable."
+}
 $env:BACKEND_URL = "http://${HostName}:$Port"
 if (-not $env:SECURITY_MIDDLEWARE_ENABLED) { $env:SECURITY_MIDDLEWARE_ENABLED = "true" }
 
 $Python = Find-Python
-$Args = @($Python.Args) + @("run.py", "--host", $HostName, "--port", "$Port", "--reload", "--workers", "1")
+$PythonArgs = @($Python.Args) + @("run.py", "--host", $HostName, "--port", "$Port", "--reload", "--workers", "1")
 
-Write-Host "Starting backend in mock mode: $($env:BACKEND_URL)" -ForegroundColor Cyan
-Write-Host "vLLM and local large model loading are disabled." -ForegroundColor DarkGray
+Write-Host "Starting backend: $($env:BACKEND_URL)" -ForegroundColor Cyan
+Write-Host "Provider settings come from the environment and backend/.env or database configuration."
 Push-Location $Backend
 try {
-    & $Python.Command @Args
+    & $Python.Command @PythonArgs
+    if ($LASTEXITCODE -ne 0) { throw "Backend process exited with code $LASTEXITCODE" }
 } finally {
     Pop-Location
 }
