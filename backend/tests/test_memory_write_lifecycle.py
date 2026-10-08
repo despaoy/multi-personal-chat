@@ -406,6 +406,12 @@ class _ClaimRepository:
         self.erases.append(kwargs)
         return 1
 
+    async def search_sources(self, *args, **kwargs):
+        return []
+
+    async def list_sources(self, *args, **kwargs):
+        return []
+
 
 @pytest.mark.asyncio
 async def test_idle_write_waits_for_flush_and_uses_append_claim_contract():

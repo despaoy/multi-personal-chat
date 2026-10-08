@@ -61,7 +61,7 @@ async def test_budget_failure_preserves_full_sqlite_source_without_calling_model
     try:
         result = await worker.schedule_and_wait(repository=repo, character_id='role', user_scope=scope,
             message=source, history=history, rule_hints=[], source_message_id='budget-source')
-        assert result['status'] == 'skipped' and result['reason'] == 'input_budget'
+        assert result['status'] == 'failed' and result['reason'] == 'input_budget'
         assert result['persisted'] == 0 and result['source_capture'] == 'recorded'
         assert await repo.list_memory_records('role', scope) == []
         assert (await repo.list_sources('role', scope))[0]['body'] == source

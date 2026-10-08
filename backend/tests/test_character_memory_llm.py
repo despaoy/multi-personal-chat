@@ -219,3 +219,12 @@ async def test_scheduler_processes_memory_after_enqueue_and_closes_cleanly():
     assert len(repository.writes) == 1
     assert repository.writes[0][3] == "user_study_stage"
     assert repository.writes[0][4] == "msg-1"
+
+
+@pytest.fixture(autouse=True)
+def explicit_embedding_fixture(monkeypatch):
+    # This module checks lexical/key/feedback ranking with an orthogonal semantic channel.
+    class Embedding:
+        def embed_texts(self, texts):
+            return [[1.0, 0.0], *[[0.0, 1.0] for _ in texts[1:]]]
+    monkeypatch.setattr("knowledge.retrieval_core.embedding.get_default_embedding_provider", lambda: Embedding())

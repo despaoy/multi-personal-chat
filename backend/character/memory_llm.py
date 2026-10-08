@@ -7,7 +7,7 @@ worker 按入队顺序处理，避免同一用户连续修正事实时旧任务�
 
 写入判断先搜索当前作用域的全部 active 旧记忆，再取相关 Top-10，
 显式反馈目标优先。当前同时使用词面相关性与语义相似度；语义模型
-不可用时降级为词面检索。不再按最近更新时间预先截断候选。
+不可用时明确失败，停止结构化写入。不再按最近更新时间预先截断候选。
 """
 
 from __future__ import annotations
@@ -583,32 +583,18 @@ def _search_existing_memories(
         if target_match:
             target_matches.add(index)
 
-    semantic_scores: dict[int, float] = {}
-    try:
-        import numpy as np
+    import numpy as np
 
-        if embedding_provider is None:
-            from knowledge.retrieval_core.embedding import get_default_embedding_provider
+    from knowledge.retrieval_core.embedding import get_default_embedding_provider, normalized_vector
 
-            embedding_provider = get_default_embedding_provider()
-        matrix = np.asarray(
-            embedding_provider.embed_texts([message, *[str(record.get("content") or "") for record in active]]),
-            dtype=np.float32,
-        )
-        if matrix.ndim != 2 or matrix.shape[0] != len(active) + 1:
-            raise ValueError("embedding provider 返回形状不正确")
-        query_vector = matrix[0]
-        query_norm = float(np.linalg.norm(query_vector))
-        if query_norm > 0.0:
-            query_vector = query_vector / query_norm
-        for index, vector in enumerate(matrix[1:]):
-            norm = float(np.linalg.norm(vector))
-            semantic_scores[index] = max(
-                0.0,
-                min(1.0, float(np.dot(query_vector, vector / norm))) if norm > 0.0 else 0.0,
-            )
-    except Exception as exc:  # noqa: BLE001 - semantic retrieval must not block memory writes
-        logger.warning("后台记忆语义检索不可用，降级为词面检索: %s", exc)
+    provider = embedding_provider if embedding_provider is not None else get_default_embedding_provider()
+    matrix = np.asarray(provider.embed_texts([message, *[str(record.get("content") or "") for record in active]]),
+                        dtype=np.float32)
+    if matrix.ndim != 2 or matrix.shape[0] != len(active) + 1:
+        raise ValueError("embedding provider 返回形状不正确")
+    query_vector = normalized_vector(matrix[0])
+    semantic_scores = {index: max(0.0, min(1.0, float(np.dot(query_vector, normalized_vector(vector)))))
+                       for index, vector in enumerate(matrix[1:])}
 
     def rank_scores(scores: dict[int, float]) -> dict[int, int]:
         ordered = sorted(scores, key=lambda index: scores[index], reverse=True)
@@ -619,7 +605,7 @@ def _search_existing_memories(
     candidates: list[tuple[bool, bool, float, float, float, dict[str, Any]]] = []
     for index, record in enumerate(active):
         lexical_score = lexical_scores[index]
-        semantic_score = semantic_scores.get(index, 0.0)
+        semantic_score = semantic_scores[index]
         relevant = (
             index in key_matches
             or index in target_matches
@@ -628,11 +614,8 @@ def _search_existing_memories(
         )
         if not relevant:
             continue
-        fused_score = 0.0
-        if index in lexical_ranks:
-            fused_score += 1.0 / (_MEMORY_WRITE_RRF_K + lexical_ranks[index])
-        if index in semantic_ranks:
-            fused_score += 1.0 / (_MEMORY_WRITE_RRF_K + semantic_ranks[index])
+        fused_score = (1.0 / (_MEMORY_WRITE_RRF_K + lexical_ranks[index])
+                       + 1.0 / (_MEMORY_WRITE_RRF_K + semantic_ranks[index]))
         candidates.append(
             (
                 index in target_matches,
@@ -1828,6 +1811,7 @@ class MemoryEnrichmentScheduler:
             "persisted": 0,
             "conflicts": 0,
             "operation_outcomes": (),
+            "stage": "source_capture",
         }
         try:
             # Preserve complete admitted speech before interpretation. Empty or
@@ -1866,6 +1850,7 @@ class MemoryEnrichmentScheduler:
                 return
             # Search the entire visible active collection; apply Top-K only
             # after relevance ranking so older facts are not silently excluded.
+            result["stage"] = "memory_read"
             records = tuple(
                 await job.repository.list_memory_records(
                     job.character_id,
@@ -1873,6 +1858,7 @@ class MemoryEnrichmentScheduler:
                     limit=None,
                 )
             )
+            result["stage"] = "memory_search"
             existing_memories = await asyncio.to_thread(
                 _search_existing_memories,
                 records,
@@ -1885,15 +1871,11 @@ class MemoryEnrichmentScheduler:
 
             source_candidates = ()
             if erasure_now:
-                try:
-                    source_candidates, result['source_candidate_coverage'] = await candidates(
-                        job.repository, job.character_id, job.user_scope, job.message, records,
-                        context_window_tokens=self._context_window_tokens)
-                except Exception as exc:
-                    # Failure of optional raw-source recall must not disable an
-                    # otherwise valid claim-target deletion. Never infer absence.
-                    result['source_candidate_coverage'] = dict(status='retrieval_error', complete=False,
-                                                               error_type=type(exc).__name__)
+                result['stage'] = 'source_candidates'
+                source_candidates, result['source_candidate_coverage'] = await candidates(
+                    job.repository, job.character_id, job.user_scope, job.message, records,
+                    context_window_tokens=self._context_window_tokens)
+            result["stage"] = "proposal_generation"
             response = await self._completion.complete(
                 build_memory_llm_messages(
                     job.message,
@@ -1909,6 +1891,7 @@ class MemoryEnrichmentScheduler:
                     source_erasure_candidates=source_candidates,
                 )
             )
+            result["stage"] = "proposal_validation"
             proposals = parse_llm_proposals(
                 response,
                 source_message=job.message,
@@ -1935,6 +1918,7 @@ class MemoryEnrichmentScheduler:
                     {row['source_id'] for row in source_candidates}, authorized=erasure_now)
                     if source_candidates else ())
             result["accepted"] = len(proposals) + bool(source_ids)
+            result["stage"] = "persistence"
             outcomes: list[str] = []
             if source_ids:
                 from db.source_erasure import SourceClaimConflict
@@ -1963,12 +1947,12 @@ class MemoryEnrichmentScheduler:
                 except Exception as exc:
                     self._failed += 1
                     outcomes.append("failed")
-                    self._last_error = _truncate(str(exc), 240)
+                    self._last_error = type(exc).__name__
                     logger.warning(
-                        "后台记忆单条写入失败 character=%s operation=%s",
+                        "后台记忆单条写入失败 character=%s operation=%s type=%s",
                         job.character_id,
                         proposal.operation,
-                        exc_info=True,
+                        type(exc).__name__,
                     )
                 finally:
                     # Preserve confirmed earlier commits even if cancellation
@@ -2007,13 +1991,6 @@ class MemoryEnrichmentScheduler:
                 saved + erased,
                 status,
             )
-        except InputBudgetError:
-            # Capture above retained the full admitted source. No model has
-            # seen a partial utterance and no semantic operation was applied.
-            result['status'] = 'skipped'
-            result['reason'] = 'input_budget'
-            self._skipped += 1
-            self._last_outcome = 'skipped'
         except asyncio.CancelledError:
             result['status'] = 'cancelled'
             self._last_outcome = 'cancelled'
@@ -2021,10 +1998,12 @@ class MemoryEnrichmentScheduler:
         except Exception as exc:
             self._failed += 1
             self._last_outcome = "failed"
-            self._last_error = _truncate(str(exc), 240)
+            self._last_error = type(exc).__name__
             result["status"] = "failed"
             result["error"] = self._last_error
-            logger.warning("后台记忆判断失败，本轮跳过写入", exc_info=True)
+            if isinstance(exc, InputBudgetError):
+                result["reason"] = "input_budget"
+            logger.warning("后台记忆处理失败 stage=%s type=%s", result["stage"], type(exc).__name__)
         finally:
             self._recent_results.append(result)
             if job.receipt is not None and not job.receipt.done():

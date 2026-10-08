@@ -1295,6 +1295,8 @@ class CharacterMemoryService:
 
     def _semantic_similarities(self, query: str, records: list[dict[str, Any]]) -> dict[int, float]:
         """批量计算余弦相似度；记忆向量按 id/updated_at/content hash 缓存。"""
+        from knowledge.retrieval_core.embedding import normalized_vector
+
         with self._embedding_lock:
             if self._embedding_provider is None:
                 from knowledge.retrieval_core.embedding import get_default_embedding_provider
@@ -1321,14 +1323,14 @@ class CharacterMemoryService:
             matrix = np.asarray(encoded, dtype=np.float32)
             if matrix.ndim != 2 or matrix.shape[0] != len(missing_texts) + 1:
                 raise ValueError("embedding provider 返回形状不正确")
-            query_vector = _normalized_vector(matrix[0])
+            query_vector = normalized_vector(matrix[0])
             for offset, index in enumerate(missing_indices, start=1):
-                vector = _normalized_vector(matrix[offset])
+                vector = normalized_vector(matrix[offset])
                 self._embedding_cache[keys[index]] = vector
                 vectors[index] = vector
 
             return {
-                index: _clamp01(float(np.dot(query_vector, _normalized_vector(vector))))
+                index: _clamp01(float(np.dot(query_vector, vector)))
                 for index, vector in vectors.items()
             }
 
@@ -1342,16 +1344,3 @@ def _env_bool(name: str, default: bool) -> bool:
     if value is None:
         return default
     return value.strip().lower() in {"1", "true", "yes", "on"}
-
-
-def _normalized_vector(vector: np.ndarray) -> np.ndarray:
-    value = np.asarray(vector, dtype=np.float32).reshape(-1)
-    if not np.isfinite(value).all():
-        raise ValueError("embedding vector contains nonfinite values")
-    with np.errstate(over="ignore", invalid="ignore"):
-        norm = float(np.linalg.norm(value))
-    if not math.isfinite(norm):
-        raise ValueError("embedding vector norm is nonfinite")
-    if norm <= 0.0:
-        raise ValueError("embedding vector has zero norm")
-    return value / norm

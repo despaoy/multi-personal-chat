@@ -63,6 +63,12 @@ class Repo:
         self.deleted.append(scope.sender_id)
         return 1
 
+    async def search_sources(self, *args, **kwargs):
+        return []
+
+    async def list_sources(self, *args, **kwargs):
+        return []
+
 
 class Completion:
     def __init__(self, gate=None):
@@ -103,7 +109,7 @@ async def test_receipts_follow_exact_jobs_not_global_last_status():
         await worker.shutdown(timeout=1)
 
 
-async def test_raw_source_search_failure_does_not_disable_claim_erasure():
+async def test_raw_source_search_failure_stops_before_claim_erasure():
     class SourceFailureRepo(Repo):
         async def search_sources(self, *args, **kwargs):
             raise RuntimeError('source search unavailable')
@@ -114,9 +120,9 @@ async def test_raw_source_search_failure_does_not_disable_claim_erasure():
     worker, repo = scheduler(), SourceFailureRepo()
     try:
         result = await worker.schedule_and_wait(**job(repo, 'a'))
-        assert result['status'] == 'erased'
-        assert result['source_candidate_coverage']['status'] == 'retrieval_error'
-        assert repo.deleted == ['a']
+        assert result['status'] == 'failed' and result['stage'] == 'source_candidates'
+        assert result['persisted'] == 0 and result['error'] == 'RuntimeError'
+        assert repo.deleted == []
     finally:
         await worker.shutdown(timeout=1)
 

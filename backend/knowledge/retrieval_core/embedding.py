@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import math
 import os
 import threading
 import time
@@ -333,3 +334,16 @@ class EmbeddingCache:
             self.load()
         stale = [k for k in self._vectors if k not in valid_keys]
         return self.drop(stale)
+
+
+def normalized_vector(vector: np.ndarray) -> np.ndarray:
+    value = np.asarray(vector, dtype=np.float32).reshape(-1)
+    if not np.isfinite(value).all():
+        raise ValueError("embedding vector contains nonfinite values")
+    with np.errstate(over="ignore", invalid="ignore"):
+        norm = float(np.linalg.norm(value))
+    if not math.isfinite(norm):
+        raise ValueError("embedding vector norm is nonfinite")
+    if norm <= 0.0:
+        raise ValueError("embedding vector has zero norm")
+    return value / norm
