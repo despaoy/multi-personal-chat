@@ -6,7 +6,7 @@ import asyncio
 
 import pytest
 
-from character.models import CharacterProfile, RelationshipState
+from character.models import CharacterProfile
 from character.semantic_state_estimator import SemanticInputBudgetError, SemanticStateEstimator
 from services.character_context import CharacterContextService, TurnInput, build_character_context_service
 
@@ -25,9 +25,6 @@ class _Profiles:
 
 
 class _MemoryRepository:
-    async def get_relationship(self, _character_id, _user_scope):
-        return RelationshipState(stage="familiar")
-
     async def get_relationship_record(self, _character_id, _user_scope):
         return {"interaction_count": 8}
 

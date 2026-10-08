@@ -20,13 +20,13 @@ BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
-from character.models import RelationshipState  # noqa: E402
+from services.character_context import CharacterContextService, TurnInput  # noqa: E402
+
 from character.profile_registry import CharacterProfileRegistry  # noqa: E402
 from character.semantic_state_estimator import SemanticStateEstimator  # noqa: E402
 from inference.generation_request import GenerationRequest, generate_character_response  # noqa: E402
 from inference.lora_registry import get_lora_system_prompt  # noqa: E402
 from inference.model_manager import OllamaProvider  # noqa: E402
-from services.character_context import CharacterContextService, TurnInput  # noqa: E402
 
 CHARACTER_ID = "tsukiyashiro_kisaki"
 MODEL_ID = "ollama:qwen2.5:7b"
@@ -34,9 +34,6 @@ OUTPUT_DIR = BACKEND_DIR / "evaluation"
 
 
 class _MemoryRepository:
-    async def get_relationship(self, character_id, user_scope):
-        return RelationshipState(stage="familiar")
-
     async def get_relationship_record(self, character_id, user_scope):
         return {"interaction_count": 12}
 

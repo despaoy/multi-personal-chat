@@ -963,9 +963,6 @@ class _Profiles:
 
 
 class _MemoryRepository:
-    async def get_relationship(self, character_id, user_scope):
-        return RelationshipState(stage="familiar")
-
     async def get_relationship_record(self, character_id, user_scope):
         return {"interaction_count": 7}
 

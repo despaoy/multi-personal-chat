@@ -49,11 +49,6 @@ _VALID_MEMORY_STATUSES: tuple[str, ...] = (
 )
 
 
-def relationship_from_record(row) -> RelationshipState:
-    """Reuse one loaded relationship row for state and interaction metadata."""
-    return _row_to_relationship(row)
-
-
 class CharacterMemoryRepository(Protocol):
     """角色关系与长期记忆的持久化接口。"""
 
@@ -83,10 +78,6 @@ class CharacterMemoryRepository(Protocol):
                            limit: int = 100) -> list[dict[str, Any]]: ...
 
     async def list_relationship_notes(self, character_id: str, user_scope: UserScope) -> list[dict[str, Any]]: ...
-
-    async def get_relationship(
-        self, character_id: str, user_scope: UserScope
-    ) -> RelationshipState: ...
 
     async def get_relationship_record(
         self, character_id: str, user_scope: UserScope
@@ -166,7 +157,7 @@ class CharacterMemoryRepository(Protocol):
     ) -> int: ...
 
 
-def _row_to_relationship(row: Optional[dict[str, Any]]) -> RelationshipState:
+def relationship_from_record(row: dict[str, Any] | None) -> RelationshipState:
     if not row:
         return RelationshipState()
     stage = row.get("relationship_stage", "stranger")
@@ -295,12 +286,6 @@ class DatabaseCharacterMemoryRepository:
         )
         rows = [_decode_memory_record(dict(row)) for row in rows]
         return [row for row in rows if is_note(row)]
-
-    async def get_relationship(
-        self, character_id: str, user_scope: UserScope
-    ) -> RelationshipState:
-        row = await self.get_relationship_record(character_id, user_scope)
-        return _row_to_relationship(row)
 
     async def get_relationship_record(
         self, character_id: str, user_scope: UserScope

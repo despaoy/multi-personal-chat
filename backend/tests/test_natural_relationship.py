@@ -21,7 +21,7 @@ from character.natural_relationship import (
     save_note,
 )
 from db.database import SQLiteDB
-from repositories.character_memory import DatabaseCharacterMemoryRepository
+from repositories.character_memory import DatabaseCharacterMemoryRepository, relationship_from_record
 from services.character_context import CharacterContextService, TurnInput
 
 SCOPE = UserScope("qq", "nonebot", "alice", "group1", "group")
@@ -188,7 +188,7 @@ async def test_current_turn_overlay_then_successful_persistence(repo, monkeypatc
     await repo.upsert_relationship("kisaki", SCOPE, RelationshipState(stage="close"))
     await service.complete_turn(prepared, turn, "知道了", source_message_id="m1")
     assert len(await repo.list_relationship_notes("kisaki", SCOPE)) == 1
-    assert (await repo.get_relationship("kisaki", SCOPE)).stage == "close"  # no stale override
+    assert relationship_from_record(await repo.get_relationship_record("kisaki", SCOPE)).stage == "close"  # no stale override
     plain = TurnInput("你好", "qq", "nonebot", "alice", "group1", "group", history=turn.history)
     prepared = await service.prepare_turn(plain, "kisaki")
     assert "不要追问我的收入" in prepared.compiled.conversation_reference_context
@@ -212,7 +212,7 @@ async def test_fiction_does_not_fall_through_to_memory(repo, monkeypatch):
     prepared = await service.prepare_turn(turn, "kisaki")
     await service.complete_turn(prepared, turn, "好的")
     assert not await repo.list_memory_records("kisaki", SCOPE)
-    assert not (await repo.get_relationship("kisaki", SCOPE)).preferred_address
+    assert not relationship_from_record(await repo.get_relationship_record("kisaki", SCOPE)).preferred_address
 
 
 def test_admin_note_crud_preserves_expiry_and_isolation(repo):
