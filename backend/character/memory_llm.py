@@ -43,7 +43,7 @@ from character.memory_extractor import (
     unretracted_memory_source,
 )
 from character.memory_query import lookup_fields
-from character.memory_subject import explicitly_other_subject
+from character.memory_subject import claims_other_subject_as_user, explicitly_other_subject
 from character.models import MemoryItem, UserScope
 from character.preference_qualifier_labels import normalize_preference_labels
 from character.temporal_provenance import model_temporal_provenance
@@ -1026,6 +1026,10 @@ def _candidate_to_proposal(
             and semantic_operation not in {'NOOP', 'RETRACT', 'ERASE'}
             and explicitly_other_subject(source=source_message, evidence=evidence, value=value)):
         return None
+    if kind == "other_user_fact" and claims_other_subject_as_user(
+        source=source_message, evidence=evidence, value=value, content=proposed_content,
+    ):
+        raise ValueError("记忆 LLM 提案将明确的其他主体改写为用户")
     if not event_observation and not _normalize_attributed_to(raw.get("attributed_to")):
         return None
 

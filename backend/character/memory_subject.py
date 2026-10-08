@@ -25,7 +25,11 @@ _CLAUSES = re.compile(r'[^，,。！？!?；;\n]+')
 _DIRECT_SUBJECT = re.compile(
     r'^(?:但是|不过|而|但)?\s*(?P<owner>' + OWNER_PATTERN.pattern + r')'
     r'(?:本人|自己)?(?:的)?(?:目前|现在|以前|曾经|去年|今年|最近|已经|刚刚|刚|一直|正在|也|很|不|并不|最|挺|比较)*'
-    r'(?P<predicate>不喜欢|喜欢|讨厌|爱|叫|名字是|专业是|读的是|学的是|来自|(?:老家|故乡|家乡)(?:在|是)|居住在|住在|搬(?:家)?到|在|是|准备|工作)'
+    r'(?P<predicate>不喜欢|喜欢|讨厌|爱|叫|名字是|专业是|读的是|学的是|学习|来自|(?:老家|故乡|家乡)(?:在|是)|居住在|住在|搬(?:家)?到|在|是|准备|工作)'
+)
+
+_INVERSE_SUBJECT = re.compile(
+    r'^(?:喜欢|讨厌|学习|学|读|叫).+?的是(?P<owner>' + OWNER_PATTERN.pattern + r')(?:本人|自己)?$'
 )
 
 
@@ -50,6 +54,15 @@ def explicitly_other_subject(*, source: str, evidence: str, value: str) -> bool:
             overlap = source[max(start, clause.start()):min(end, clause.end())]
             if value not in overlap:
                 continue
-            match = _DIRECT_SUBJECT.match(clause.group().strip())
+            clause_text = clause.group().strip()
+            match = _DIRECT_SUBJECT.match(clause_text) or _INVERSE_SUBJECT.fullmatch(clause_text)
             subjects.append(match['owner'] if match else None)
     return bool(subjects) and all(owner is not None and owner not in SELF_OWNERS for owner in subjects)
+
+
+def claims_other_subject_as_user(*, source: str, evidence: str, value: str, content: str) -> bool:
+    """Detect an explicit user claim whose cited source assigns the value elsewhere."""
+    normalized = "我" + content.removeprefix("用户") if content.startswith("用户") else content
+    subject = _DIRECT_SUBJECT.match(normalized)
+    return bool(subject and subject['owner'] in SELF_OWNERS
+                and explicitly_other_subject(source=source, evidence=evidence, value=value))
