@@ -15,6 +15,7 @@ from character.models import CompiledCharacterContext, MemoryItem, UserScope
 from character.source_fragment_provenance import source_completeness_payload, source_fragment_fields
 from character.source_memory import attach_sources, compile_sources
 from character.temporal_projection import project_temporal_record
+from db.database import SQLiteDB
 from inference.generation_request import GenerationRequest, build_generation_request
 from repositories.character_memory import DatabaseCharacterMemoryRepository
 
@@ -196,33 +197,24 @@ def test_unverified_completeness_is_explicit_in_model_input():
     )
 
 
-async def test_service_keeps_saved_provenance_with_actual_read_view():
-    class Repo:
-        async def list_memory_records(self, *args, **kwargs):
-            return [record()]
-
-    service = CharacterMemoryService(Repo(), semantic_enabled=False)
-    memories, total = await service.load_relevant_memories(
-        "role",
-        SCOPE,
-        "预约确认原话完整吗",
-        for_contextual_selection=True,
-        reference_time=datetime(2026, 10, 2, tzinfo=timezone.utc),
-    )
-    assert total == len(memories) == 1
-    assert memories[0].complete_original_source is False
-    assert memories[0].source_fragments == item().source_fragments
-    assert memories[0].evidence == TEXTS and memories[0].observed_at == STAMP
-
-
-async def test_direct_repository_read_preserves_partial_annotation():
-    class Repo(DatabaseCharacterMemoryRepository):
-        async def list_memory_records(self, *args, **kwargs):
-            return [record()]
-
-    memories = await Repo(object()).list_memories("role", SCOPE)
-    assert memories[0].complete_original_source is False and memories[0].source_fragments == item().source_fragments
-    assert memories[0].evidence == TEXTS and memories[0].source_message_ids == ("original",)
+async def test_real_repository_recall_preserves_partial_annotation(tmp_path):
+    database = SQLiteDB(tmp_path / "partial.sqlite")
+    repo = DatabaseCharacterMemoryRepository(database)
+    row = record()
+    try:
+        await repo.append_claim("role", SCOPE, item(), memory_key=row["memory_key"],
+            evidence=TEXTS, source_message_ids=("original",), observed_at=STAMP, metadata=row["metadata"])
+        service = CharacterMemoryService(repo, semantic_enabled=False)
+        memories, total = await service.load_relevant_memories(
+            "role", SCOPE, "预约确认原话完整吗", for_contextual_selection=True,
+            reference_time=datetime(2026, 10, 2, tzinfo=timezone.utc))
+        assert total == len(memories) == 1
+        assert memories[0].complete_original_source is False
+        assert memories[0].source_fragments == item().source_fragments
+        assert memories[0].evidence == TEXTS and memories[0].observed_at == STAMP
+        assert memories[0].source_message_ids == ("original",)
+    finally:
+        database.close_connection()
 
 
 def test_one_partial_fragment_cannot_be_shared_as_a_complete_source():

@@ -111,7 +111,6 @@ INTENT_HYBRID_SCORE_FLOOR = 0.4
 MIN_CLAIM_CONFIDENCE = max(0.0, min(1.0, float(os.getenv("MIN_MEMORY_CLAIM_CONFIDENCE", "0.45"))))
 PENDING_STATUS_FACTOR = 0.35
 
-_VALID_MEMORY_TYPES = ("user_fact", "shared_event", "promise", "conversation_summary")
 _CURRENT_MEMORY_STATUSES = frozenset(("active", "current"))
 _NON_CURRENT_MEMORY_STATUSES = frozenset(("superseded", "retracted", "archived", "erased", "deleted"))
 _NON_RETRIEVABLE_RELATIONS = frozenset(("RETRACT", "NOOP", "ERASE"))
@@ -1197,9 +1196,6 @@ class CharacterMemoryService:
         for index in sorted(eligible):
             row = usable_records[index]
             content = event_reference_content(row, now).strip()
-            memory_type = row.get("memory_type", "user_fact")
-            if memory_type not in _VALID_MEMORY_TYPES:
-                memory_type = "user_fact"
             importance = importance_scores[index]
             status = _memory_status(row) if version_filter_enabled else "active"
             relation_type = str(row.get("relation_type") or row.get("relation") or "ADD").upper()
@@ -1213,7 +1209,7 @@ class CharacterMemoryService:
                     fused_scores[index],
                     MemoryItem(
                         memory_id=str(row.get("id", "")),
-                        memory_type=memory_type,  # type: ignore[arg-type]
+                        memory_type=row["memory_type"],
                         content=content,
                         importance=importance,
                         evidence=(

@@ -64,11 +64,9 @@ async def test_real_repository_and_retrieval_preserve_observation_semantics(tmp_
         metadata=dict(content_semantics='quoted_source', speaker_role='user', described_subject='not_resolved'),
         evidence=('我妹妹在学陶艺。',))
     service = CharacterMemoryService(repo, semantic_enabled=False)
-    direct = await repo.list_memories('c', scope)
-    assert direct[0].source_observation
-    assert direct[0].evidence == ('我妹妹在学陶艺。',)
     items, _ = await service.load_relevant_memories('c', scope, '陶艺')
     assert len(items) == 1 and items[0].source_observation
+    assert items[0].evidence == ('我妹妹在学陶艺。',)
     text, _ = compile_reference_context(tuple(items), complete_evidence=True, observation_semantics=True)
     assert json.loads(text.splitlines()[1][2:])['subject_scope'] == 'not_resolved'
 

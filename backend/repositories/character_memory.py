@@ -14,12 +14,9 @@ import asyncio
 import json
 from typing import TYPE_CHECKING, Any, Optional, Protocol
 
-from character.source_fragment_provenance import source_fragment_fields
-
 if TYPE_CHECKING:
     from datetime import datetime
 
-from character.memory_subject import is_source_observation
 from character.models import (
     MemoryItem,
     RelationshipState,
@@ -103,10 +100,6 @@ class CharacterMemoryRepository(Protocol):
                                     source_message_id: str, observed_at: datetime, address: str) -> dict[str, Any]: ...
 
     async def increment_interaction(self, character_id: str, user_scope: UserScope) -> int: ...
-
-    async def list_memories(
-        self, character_id: str, user_scope: UserScope, limit: int = 30
-    ) -> list[MemoryItem]: ...
 
     async def list_memory_records(
         self,
@@ -212,6 +205,8 @@ def _decode_memory_record(row: dict[str, Any]) -> dict[str, Any]:
     record["source_message_ids"] = source_ids
     record["evidence"] = evidence
     record["metadata"] = metadata
+    if record.get("memory_type") not in _VALID_MEMORY_TYPES:
+        raise ValueError("Invalid stored memory_type")
     record["attributed_to"] = str(metadata.get("attributed_to") or "user")
     record["qualifiers"] = metadata.get("qualifiers", [])
     return record
@@ -365,32 +360,6 @@ class DatabaseCharacterMemoryRepository:
                 user_scope.conversation_id,
             )
         )
-
-    async def list_memories(
-        self, character_id: str, user_scope: UserScope, limit: int = 30
-    ) -> list[MemoryItem]:
-        rows = await self.list_memory_records(character_id, user_scope, limit)
-        items: list[MemoryItem] = []
-        for row in rows:
-            memory_type = row.get("memory_type", "user_fact")
-            if memory_type not in _VALID_MEMORY_TYPES:
-                memory_type = "user_fact"
-            content = str(row.get("content") or "").strip()
-            if not content:
-                continue
-            items.append(
-                MemoryItem(
-                    memory_id=str(row.get("id", "")),
-                    memory_type=memory_type,  # type: ignore[arg-type]
-                    content=content,
-                    importance=float(row.get("importance") or 0.0),
-                    source_observation=is_source_observation(row),
-                    **source_fragment_fields(row),
-                    evidence=tuple(row.get("evidence") or ()) if is_source_observation(row) else (),
-                    source_message_ids=tuple(row.get("source_message_ids") or ()) if is_source_observation(row) else (),
-                )
-            )
-        return items
 
     async def list_memory_records(
         self,
