@@ -78,20 +78,12 @@ def wire(messages):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("change", ["delete", "content", "title", "category", "knowledge_base_id", "read_error"])
+@pytest.mark.parametrize("change", ["delete", "content", "title", "category", "knowledge_base_id"])
 async def test_authority_change_removes_whole_source_and_keeps_independent(tmp_path, change):
     db, docs, request = fixture(tmp_path)
     identity = docs[0]["id"]
     if change == "delete":
         assert db.delete_knowledge_document(identity)
-    elif change == "read_error":
-
-        def read(doc_id):
-            if doc_id == identity:
-                raise OSError("declared isolated source read failure")
-            return db.get_knowledge_document(doc_id)
-
-        request = replace(request, public_context_revalidator=make_public_context_revalidator(read))
     else:
         value = docs[1]["knowledge_base_id"] if change == "knowledge_base_id" else "修改后的版本不继承旧审核"
         assert db.update_knowledge_document(identity, {change: value})
@@ -267,3 +259,48 @@ async def test_source_revoked_during_main_cannot_reach_citation_repair(tmp_path)
     assert result.authority_refreshed and not result.authority_fallback
     assert result.reply == BODY_B and BODY_A not in result.reply
     assert BODY_A not in result.plan.retrieval.evidence and BODY_B in result.plan.retrieval.evidence
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("after_model", [False, True])
+async def test_source_read_error_aborts_without_replacement_answer(tmp_path, after_model):
+    db, _docs, request = fixture(tmp_path)
+    failure = OSError("declared isolated source read failure")
+    calls = []
+
+    def read(identity):
+        if not after_model or calls:
+            raise failure
+        return db.get_knowledge_document(identity)
+
+    async def model(**kwargs):
+        calls.append(kwargs)
+        return "A complete model response that must not mask a failed source read"
+
+    with pytest.raises(OSError) as caught:
+        await generate_character_response(
+            replace(request, public_context_revalidator=make_public_context_revalidator(read)), model,
+        )
+    assert caught.value is failure
+    assert len(calls) == int(after_model)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("defect", ["missing_snapshot", "wrong_identity", "duplicate"])
+async def test_invalid_authority_record_fails_before_model(tmp_path, defect):
+    from unittest.mock import AsyncMock
+
+    _db, _docs, request = fixture(tmp_path)
+    rows = [dict(row) for row in request.retrieval.source_coverage]
+    if defect == "missing_snapshot":
+        rows[0].pop("source_authority_snapshot")
+    elif defect == "wrong_identity":
+        rows[0]["source_authority_snapshot"] = dict(rows[0]["source_authority_snapshot"], document_id=True)
+    else:
+        rows.append(dict(rows[0]))
+    model = AsyncMock()
+    with pytest.raises(ValueError, match="public source authority"):
+        await generate_character_response(
+            replace(request, retrieval=replace(request.retrieval, source_coverage=tuple(rows))), model,
+        )
+    model.assert_not_awaited()

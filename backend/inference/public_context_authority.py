@@ -23,22 +23,18 @@ def _recheck(records, read_document):
         source_id = record.get("source_id")
         snapshot = record.get("source_authority_snapshot")
         if source_id in seen:
-            granted.discard(source_id)
-            continue
+            raise ValueError("Duplicate public source authority record")
         seen.add(source_id)
-        try:
-            if not isinstance(snapshot, dict) or snapshot.get("source_id") != source_id:
-                continue
-            identity = snapshot["document_id"]
-            if isinstance(identity, bool) or not isinstance(identity, int) or source_id != f"doc_{identity}":
-                continue
-            document = read_document(identity)
-            if document_authority_snapshot(document) == snapshot:
-                granted.add(source_id)
-        except Exception:
-            # A read error cannot grant old contents. Other sources still get
-            # their own fresh read instead of inheriting this source's failure.
-            continue
+        if not isinstance(snapshot, dict) or snapshot.get("source_id") != source_id:
+            raise ValueError("Invalid public source authority snapshot")
+        identity = snapshot["document_id"]
+        if isinstance(identity, bool) or not isinstance(identity, int) or source_id != f"doc_{identity}":
+            raise ValueError("Invalid public source authority identity")
+        document = read_document(identity)
+        # An absent or changed document revokes its old grant; a failed read
+        # propagates so the caller cannot report a successful evidence check.
+        if document is not None and document_authority_snapshot(document) == snapshot:
+            granted.add(source_id)
     return granted
 
 
