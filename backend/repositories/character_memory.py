@@ -175,7 +175,7 @@ def _row_to_relationship(row: Optional[dict[str, Any]]) -> RelationshipState:
         return RelationshipState()
     stage = row.get("relationship_stage", "stranger")
     if stage not in _VALID_STAGES:
-        stage = "stranger"
+        raise ValueError("Invalid relationship_stage in stored relationship")
     return RelationshipState(
         stage=stage,  # type: ignore[arg-type]
         preferred_address=str(row.get("preferred_address") or ""),
@@ -183,33 +183,29 @@ def _row_to_relationship(row: Optional[dict[str, Any]]) -> RelationshipState:
     )
 
 
-def _decode_json(value: Any, fallback: Any) -> Any:
-    if isinstance(value, (dict, list)):
-        return value
-    if value in (None, ""):
-        return fallback
-    try:
-        return json.loads(str(value))
-    except (TypeError, ValueError, json.JSONDecodeError):
-        return fallback
+def _decode_json(value: Any, expected_type: type, field: str) -> Any:
+    if value is None:
+        return expected_type()
+    if isinstance(value, str):
+        try:
+            value = json.loads(value)
+        except json.JSONDecodeError:
+            raise ValueError(f"Invalid JSON in memory field {field}") from None
+    if not isinstance(value, expected_type):
+        raise ValueError(f"Memory field {field} must contain {expected_type.__name__}")
+    return value
 
 
 def _decode_memory_record(row: dict[str, Any]) -> dict[str, Any]:
     """Expose JSON payloads as typed convenience fields without hiding raw columns."""
     record = dict(row)
-    source_ids = _decode_json(record.get("source_message_ids_json"), [])
-    if not isinstance(source_ids, list):
-        source_ids = []
+    source_ids = _decode_json(record.get("source_message_ids_json"), list, "source_message_ids_json")
     source_ids = [str(item) for item in source_ids if str(item).strip()]
     legacy_source = str(record.get("source_message_id") or "").strip()
     if legacy_source and legacy_source not in source_ids:
         source_ids.insert(0, legacy_source)
-    evidence = _decode_json(record.get("evidence_json"), [])
-    if not isinstance(evidence, list):
-        evidence = []
-    metadata = _decode_json(record.get("metadata_json"), {})
-    if not isinstance(metadata, dict):
-        metadata = {}
+    evidence = _decode_json(record.get("evidence_json"), list, "evidence_json")
+    metadata = _decode_json(record.get("metadata_json"), dict, "metadata_json")
     record["source_message_ids"] = source_ids
     record["evidence"] = evidence
     record["metadata"] = metadata
