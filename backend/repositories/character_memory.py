@@ -226,9 +226,7 @@ class DatabaseCharacterMemoryRepository:
 
     async def source_windows(self, character_id: str, user_scope: UserScope, *,
                              source_message_ids: tuple[str, ...], radius: int = 1) -> list[dict[str, Any]]:
-        reader = getattr(self._database, "memory_source_windows", None)
-        if reader is None:
-            raise NotImplementedError("Source windows unavailable on this database adapter")
+        reader = self._database.memory_source_windows
         return await asyncio.to_thread(
             reader, character_id, user_scope.platform, user_scope.adapter, user_scope.sender_id,
             user_scope.conversation_type, user_scope.conversation_id,
@@ -408,56 +406,34 @@ class DatabaseCharacterMemoryRepository:
         invalid_levels = set(scope_levels or ()) - set(_VALID_SCOPE_LEVELS)
         if invalid_levels:
             raise ValueError(f"未知的记忆作用域: {sorted(invalid_levels)!r}")
-        layered_reader = getattr(self._database, "list_character_memory_claims", None)
-        if layered_reader is not None:
-            rows = await asyncio.to_thread(
-                layered_reader,
-                character_id,
-                user_scope.platform,
-                user_scope.adapter,
-                user_scope.sender_id,
-                user_scope.conversation_type,
-                user_scope.conversation_id,
-                limit,
-                include_inactive=include_inactive,
-                scope_levels=scope_levels,
-            )
-        else:
-            rows = await asyncio.to_thread(
-                self._database.list_character_memories,
-                character_id,
-                user_scope.platform,
-                user_scope.adapter,
-                user_scope.sender_id,
-                user_scope.conversation_type,
-                user_scope.conversation_id,
-                limit,
-            )
-        decoded = [_decode_memory_record(dict(row)) for row in rows]
-        if include_inactive:
-            return decoded
-        return [row for row in decoded if row.get("status", "active") == "active"]
+        rows = await asyncio.to_thread(
+            self._database.list_character_memory_claims,
+            character_id,
+            user_scope.platform,
+            user_scope.adapter,
+            user_scope.sender_id,
+            user_scope.conversation_type,
+            user_scope.conversation_id,
+            limit,
+            include_inactive=include_inactive,
+            scope_levels=scope_levels,
+        )
+        return [_decode_memory_record(dict(row)) for row in rows]
 
     async def get_memory_record(
         self, memory_id: int, character_id: str, user_scope: UserScope
     ) -> Optional[dict[str, Any]]:
-        reader = getattr(self._database, "get_character_memory_claim", None)
-        if reader is not None:
-            row = await asyncio.to_thread(
-                reader,
-                int(memory_id),
-                character_id,
-                user_scope.platform,
-                user_scope.adapter,
-                user_scope.sender_id,
-                user_scope.conversation_type,
-                user_scope.conversation_id,
-            )
-            return _decode_memory_record(dict(row)) if row else None
-        rows = await self.list_memory_records(
-            character_id, user_scope, limit=500, include_inactive=True
+        row = await asyncio.to_thread(
+            self._database.get_character_memory_claim,
+            int(memory_id),
+            character_id,
+            user_scope.platform,
+            user_scope.adapter,
+            user_scope.sender_id,
+            user_scope.conversation_type,
+            user_scope.conversation_id,
         )
-        return next((row for row in rows if int(row.get("id") or 0) == int(memory_id)), None)
+        return _decode_memory_record(dict(row)) if row else None
 
     async def add_or_update_memory(
         self,
