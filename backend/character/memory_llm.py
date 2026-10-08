@@ -335,16 +335,19 @@ def _unique_json_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     return result
 
 
+def _reject_json_constant(value: str):
+    raise ValueError("记忆 LLM JSON 包含非有限数值")
+
+
 def _extract_json(text: str) -> dict[str, Any]:
-    cleaned = (text or "").strip()
-    if cleaned.startswith("```"):
-        cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned, flags=re.IGNORECASE)
-        cleaned = re.sub(r"\s*```$", "", cleaned)
-    starts = [index for token in ("{", "[") if (index := cleaned.find(token)) >= 0]
-    if not starts:
-        raise ValueError("记忆 LLM 未返回 JSON 对象或数组")
-    start = min(starts)
-    value, _end = json.JSONDecoder(object_pairs_hook=_unique_json_object).raw_decode(cleaned[start:])
+    cleaned = text.strip()
+    fence = re.fullmatch(r"```(?:json)?\s*([\s\S]*?)\s*```", cleaned, flags=re.IGNORECASE)
+    if fence:
+        cleaned = fence.group(1)
+    try:
+        value = json.loads(cleaned, object_pairs_hook=_unique_json_object, parse_constant=_reject_json_constant)
+    except json.JSONDecodeError:
+        raise ValueError("记忆 LLM 必须返回完整的单个 JSON 结果") from None
     if isinstance(value, list):
         # Normalize only the container. Every candidate still goes through
         # the same evidence, ownership, target and lifecycle validation.
@@ -948,7 +951,7 @@ def _supported_generic_fact(value: str, evidence: str) -> tuple[str, ExtractedMe
 
 
 def _candidate_to_proposal(
-    raw: Any,
+    raw: dict[str, Any],
     *,
     source_message: str,
     history: tuple[dict[str, str], ...],
@@ -956,8 +959,6 @@ def _candidate_to_proposal(
     confidence_threshold: float,
     feedback_target_ids: tuple[str, ...] = (),
 ) -> ValidatedMemoryProposal | None:
-    if not isinstance(raw, dict):
-        return None
     kind = str(raw.get("kind") or "").strip()
     value = re.sub(r"\s+", " ", str(raw.get("value") or "")).strip()
     evidence = re.sub(r"\s+", " ", str(raw.get("evidence") or "")).strip()
@@ -1402,16 +1403,20 @@ def parse_llm_proposals(
     """解析并硬校验证据、旧 ID、主体、时间、作用域与删除权限。"""
     if source_type.strip().lower() != "user" or not _source_message_allowed(source_message):
         return []
-    raw_memories = _extract_json(text).get("memories", [])
+    raw_memories = _extract_json(text)["memories"]
     if not isinstance(raw_memories, list):
         raise ValueError("记忆 LLM 的 memories 必须是数组")
+    if len(raw_memories) > MAX_EXTRACTED_MEMORIES:
+        raise ValueError("记忆 LLM 候选数量超过约定上限")
+    if any(not isinstance(raw, dict) for raw in raw_memories):
+        raise ValueError("记忆 LLM 每条候选必须是对象")
     from dataclasses import replace
 
     from character.erasure_authority import partial_erasure_plan
 
     partial = partial_erasure_plan(source_message, existing_memories)
     proposals: list[ValidatedMemoryProposal] = []
-    for raw in raw_memories[: MAX_EXTRACTED_MEMORIES * 2]:
+    for raw in raw_memories:
         proposal = _candidate_to_proposal(
             raw,
             source_message=source_message,
@@ -1437,7 +1442,7 @@ def parse_llm_proposals(
         proposals,
         key=lambda item: item.memory.importance if item.memory is not None else 0.0,
         reverse=True,
-    )[:MAX_EXTRACTED_MEMORIES]
+    )
 
 
 def parse_llm_memories(text: str, *, source_message: str) -> list[ExtractedMemory]:
