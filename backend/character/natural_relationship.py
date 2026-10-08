@@ -151,6 +151,7 @@ def compile_notes(records: list[dict], message: str, now: datetime | None = None
             target = matches[0]
             notes = [r for r in notes if r is not target]
             if command.action == "correct":
+                _validate_event_content(target["metadata"]["category"], command.content)
                 command_note = {"类别": CATEGORIES[target["metadata"]["category"]], "内容": command.content}
         else:
             operation_notice = "备忘录操作未匹配唯一有效条目，不能声称已更正或结束；需要确认原内容。"
@@ -180,6 +181,16 @@ def compile_notes(records: list[dict], message: str, now: datetime | None = None
     )
 
 
+def _validate_event_content(category: str, content: str) -> None:
+    # A note label does not authorize promoting declared fiction to a real event.
+    # Match that explicit instruction, not topic words such as reading fiction.
+    if category == "shared_event" and re.search(
+        r"(?:把|将)[^，。！？\n]{0,60}(?:虚构|编造|杜撰)[^，。！？\n]{0,60}"
+        r"(?:当作|当成|视为|记为|保存为|记录为|写成)(?:现实|真实)", content,
+    ):
+        raise ValueError("不能将明确虚构的内容保存为真实共同事件")
+
+
 async def save_note(repo, character_id, scope, command: NoteCommand, source_message_id=None):
     if command.target:
         matches = [
@@ -190,6 +201,8 @@ async def save_note(repo, character_id, scope, command: NoteCommand, source_mess
         if len(matches) != 1:
             return None  # No fuzzy correction of someone else's or ambiguous evidence.
         target = matches[0]
+        if command.action == "correct":
+            _validate_event_content(target["metadata"]["category"], command.content)
         return await repo.append_claim(
             character_id,
             scope,
@@ -213,6 +226,7 @@ async def save_note(repo, character_id, scope, command: NoteCommand, source_mess
         raise ValueError("无效的关系备忘录")
     if command.clear and command.category != "transient":
         raise ValueError("只能批量解除短期状态")
+    _validate_event_content(command.category, command.content)
     # Transient state is a single replaceable slot. Other notes have independent
     # keys so unrelated boundaries/events never overwrite one another.
     existing = await repo.list_relationship_notes(character_id, scope)
