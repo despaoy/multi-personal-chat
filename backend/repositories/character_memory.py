@@ -236,17 +236,13 @@ class DatabaseCharacterMemoryRepository:
 
     async def linked_source_receipts(self, character_id: str, user_scope: UserScope, *,
                                      claim_sources: tuple[tuple[int,str],...]) -> list[dict[str,Any]]:
-        reader=getattr(self._database,"linked_memory_source_receipts",None)
-        if reader is None:
-            raise RuntimeError("Database does not support exact source receipts")
+        reader = self._database.linked_memory_source_receipts
         return await asyncio.to_thread(reader,character_id,user_scope.platform,user_scope.adapter,user_scope.sender_id,
             user_scope.conversation_type,user_scope.conversation_id,claim_sources=claim_sources)
 
     async def linked_source_revisions(self, character_id: str, user_scope: UserScope, *,
                                      claim_sources: tuple[tuple[int,str],...]) -> list[dict[str,Any]]:
-        reader=getattr(self._database,"linked_memory_source_revisions",None)
-        if reader is None:
-            raise RuntimeError("Database does not support exact source revisions")
+        reader = self._database.linked_memory_source_revisions
         return await asyncio.to_thread(reader,character_id,user_scope.platform,user_scope.adapter,user_scope.sender_id,
             user_scope.conversation_type,user_scope.conversation_id,claim_sources=claim_sources)
 
@@ -266,28 +262,15 @@ class DatabaseCharacterMemoryRepository:
 
     async def capture_source(self, character_id: str, user_scope: UserScope, *,
                              source_message_id: str, body: str, observed_at: datetime) -> str:
-        from db.memory_source import source_scope
-
-        writer = getattr(self._database, "capture_memory_source", None)
-        if writer is None:
-            return "unsupported_adapter"
-        fields = (character_id, user_scope.platform, user_scope.adapter, user_scope.sender_id,
-                  user_scope.conversation_type, user_scope.conversation_id)
-        try:
-            source_scope(*fields)
-        except ValueError:
-            # Branch/legacy claims retain their old path; never invent an
-            # authority for an independent full-source copy.
-            return "unsupported_scope"
-        return await asyncio.to_thread(writer, *fields, source_message_id=source_message_id,
-                                       body=body, observed_at=observed_at)
+        return await asyncio.to_thread(
+            self._database.capture_memory_source, character_id, user_scope.platform, user_scope.adapter,
+            user_scope.sender_id, user_scope.conversation_type, user_scope.conversation_id,
+            source_message_id=source_message_id, body=body, observed_at=observed_at)
 
     async def list_sources(self, character_id: str, user_scope: UserScope, *,
                            source_message_ids: tuple[str, ...] | None = None,
                            limit: int = 100) -> list[dict[str, Any]]:
-        reader = getattr(self._database, "list_memory_sources", None)
-        if reader is None:
-            raise RuntimeError("Database does not support scoped source reads")
+        reader = self._database.list_memory_sources
         return await asyncio.to_thread(
             reader, character_id, user_scope.platform, user_scope.adapter, user_scope.sender_id,
             user_scope.conversation_type, user_scope.conversation_id,
@@ -295,9 +278,7 @@ class DatabaseCharacterMemoryRepository:
 
     async def erase_unlinked_sources(self, character_id: str, user_scope: UserScope, *,
                                      source_message_ids: tuple[str, ...]) -> int:
-        eraser = getattr(self._database, 'erase_unlinked_memory_sources', None)
-        if eraser is None:
-            raise RuntimeError('Database adapter does not support source erasure')
+        eraser = self._database.erase_unlinked_memory_sources
         return int(await asyncio.to_thread(eraser, character_id, user_scope.platform, user_scope.adapter,
             user_scope.sender_id, user_scope.conversation_type, user_scope.conversation_id,
             source_message_ids=source_message_ids))
