@@ -208,7 +208,6 @@ def test_lifespan_resource_references_are_cleared_between_application_runs() -> 
         connection_pool=object(),
         http_client_pool=object(),
         backup_mgr=object(),
-        failover_mgr=object(),
         access_control_mgr=object(),
         unrelated="preserved",
     )
@@ -218,6 +217,5 @@ def test_lifespan_resource_references_are_cleared_between_application_runs() -> 
     assert config.connection_pool is None
     assert config.http_client_pool is None
     assert config.backup_mgr is None
-    assert config.failover_mgr is None
     assert config.access_control_mgr is None
     assert config.unrelated == "preserved"

@@ -170,8 +170,8 @@ def test_orm_metadata_declares_runtime_indexes():
 
 
 def test_sqlite_assigns_exactly_one_admin_under_concurrent_registration(tmp_path):
-    from concurrent.futures import ThreadPoolExecutor
     import threading
+    from concurrent.futures import ThreadPoolExecutor
 
     from db.database import SQLiteDB
 
@@ -556,7 +556,6 @@ async def test_enhanced_cache_endpoints_use_async_cache_contract(monkeypatch):
     monkeypatch.setattr(enhanced, "connection_pool", lambda: None)
     monkeypatch.setattr(enhanced, "http_client_pool", lambda: None)
     monkeypatch.setattr(enhanced, "backup_mgr", lambda: None)
-    monkeypatch.setattr(enhanced, "failover_mgr", lambda: None)
     monkeypatch.setattr(enhanced, "access_control_mgr", lambda: None)
     monkeypatch.setattr(enhanced, "circuit_breaker_registry", None)
 
@@ -626,8 +625,9 @@ def test_integration_tokens_are_environment_only(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_config_api_rejects_integration_tokens():
-    from api import config
     from fastapi import HTTPException
+
+    from api import config
 
     class Request:
         async def json(self):
@@ -639,8 +639,9 @@ async def test_config_api_rejects_integration_tokens():
     assert exc_info.value.status_code == 422
 @pytest.mark.asyncio
 async def test_config_api_rejects_non_object_payload():
-    from api import config
     from fastapi import HTTPException
+
+    from api import config
 
     class Request:
         async def json(self):
@@ -796,3 +797,27 @@ def test_response_cache_restarts_on_a_fresh_event_loop():
     assert first_value == "world"
     assert second_value == "world"
     assert second_lock is not first_lock
+
+
+@pytest.mark.asyncio
+async def test_enhanced_status_does_not_advertise_retired_failover(monkeypatch):
+    import httpx
+    from fastapi import FastAPI
+
+    from api import enhanced
+    from app.dependencies import get_current_admin
+
+    async def no_vllm_stats():
+        return None
+
+    monkeypatch.setattr(enhanced, '_get_vllm_load_balancer_stats', no_vllm_stats)
+    app = FastAPI()
+    app.include_router(enhanced.router)
+    app.dependency_overrides[get_current_admin] = lambda: {'role': 'admin'}
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url='http://test') as client:
+        status = await client.get('/api/enhanced/status')
+        assert status.status_code == 200
+        assert 'failover' not in status.json()['enhancedFeatures']
+        assert 'failover' not in status.json()['availableFeatures']
+        retired = await client.get('/api/enhanced/failover/status')
+        assert retired.status_code == 404

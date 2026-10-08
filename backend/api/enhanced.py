@@ -14,7 +14,6 @@ from app.config import (
     RESOURCE_POOL_AVAILABLE,
     CIRCUIT_BREAKER_AVAILABLE,
     BACKUP_MANAGER_AVAILABLE,
-    FAILOVER_AVAILABLE,
     INPUT_VALIDATOR_AVAILABLE,
     ENCRYPTION_AVAILABLE,
     ACCESS_CONTROL_AVAILABLE,
@@ -23,14 +22,13 @@ from app.config import (
     response_cache,
     encryption_mgr,
 )
-# C-F1 fix: connection_pool/http_client_pool/backup_mgr/failover_mgr/
+# C-F1 fix: connection_pool/http_client_pool/backup_mgr/
 # access_control_mgr 在 lifespan 中通过 app.config.xxx = ... 赋值。
 # 若在导入时绑定，会永远持有 None。改为动态访问模块属性。
 from app import config as _app_config
 connection_pool = lambda: _app_config.connection_pool
 http_client_pool = lambda: _app_config.http_client_pool
 backup_mgr = lambda: _app_config.backup_mgr
-failover_mgr = lambda: _app_config.failover_mgr
 access_control_mgr = lambda: _app_config.access_control_mgr
 
 
@@ -74,7 +72,6 @@ async def get_enhanced_status(current_user: dict = Depends(get_current_admin)):
         "resourcePool": RESOURCE_POOL_AVAILABLE,
         "circuitBreaker": CIRCUIT_BREAKER_AVAILABLE,
         "backupManager": BACKUP_MANAGER_AVAILABLE,
-        "failover": FAILOVER_AVAILABLE,
         "inputValidator": INPUT_VALIDATOR_AVAILABLE,
         "encryption": ENCRYPTION_AVAILABLE,
         "accessControl": ACCESS_CONTROL_AVAILABLE,
@@ -86,7 +83,6 @@ async def get_enhanced_status(current_user: dict = Depends(get_current_admin)):
         "loadBalancer": vllm_stats is not None,
         "resourcePool": connection_pool() is not None or http_client_pool() is not None,
         "backupManager": backup_mgr() is not None,
-        "failover": failover_mgr() is not None,
         "encryption": encryption_mgr is not None,
         "accessControl": access_control_mgr() is not None,
     }
@@ -120,10 +116,6 @@ async def get_enhanced_stats(current_user: dict = Depends(get_current_admin)):
     _bm = backup_mgr()
     if _bm:
         stats["backup"] = _bm.get_backup_stats()
-
-    _fm = failover_mgr()
-    if _fm:
-        stats["failover"] = _fm.get_failover_status()
 
     if response_cache:
         stats["responseCache"] = response_cache.stats
@@ -210,16 +202,6 @@ async def restore_backup(
         status_code=409,
         detail="不支持在线恢复 SQLite。请停止后端后运行 scripts/restore_sqlite_backup.py，并在恢复后重新启动服务。",
     )
-
-# --- 故障转移API ---
-
-@router.get("/api/enhanced/failover/status")
-async def get_failover_status(current_user: dict = Depends(get_current_admin)):
-    _fm = failover_mgr()
-    if not _fm:
-        raise HTTPException(status_code=503, detail="故障转移管理器不可用")
-    return {"success": True, "status": _fm.get_failover_status()}
-
 
 # --- 缓存管理API ---
 

@@ -292,13 +292,6 @@ except ImportError:
     BACKUP_MANAGER_AVAILABLE = False
 
 try:
-    from infra.failover import FailoverManager
-
-    FAILOVER_AVAILABLE = True
-except ImportError:
-    FAILOVER_AVAILABLE = False
-
-try:
     from infra.input_validator import (
         InputValidator,
         MESSAGE_SCHEMA,
@@ -348,7 +341,6 @@ connection_pool = None  # 在lifespan中初始化
 http_client_pool = None  # 在lifespan中初始化
 circuit_breaker_registry = global_registry if CIRCUIT_BREAKER_AVAILABLE else None
 backup_mgr = None  # 在lifespan中初始化
-failover_mgr = None  # 在lifespan中初始化
 encryption_mgr = EncryptionManager() if ENCRYPTION_AVAILABLE else None
 access_control_mgr = None  # 在lifespan中初始化
 response_cache = ResponseCache() if LLM_OPTIMIZER_AVAILABLE else None

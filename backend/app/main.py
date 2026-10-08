@@ -31,14 +31,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 # 应用配置 + 增强模块全局实例
-# C-F1 fix: lifespan 管理的单例 (failover_mgr/backup_mgr/connection_pool/
+# C-F1 fix: lifespan 管理的单例 (backup_mgr/connection_pool/
 # http_client_pool/access_control_mgr) 在 lifespan 中通过 `_cfg.xxx = ...`
 # 重新赋值。这里只导入常量与导入时初始化的单例，不导入会被 lifespan 重赋值的单例，
 # 避免读者误以为本模块中的本地名会跟随 lifespan 更新（实际它们仍指向 None）。
 from app.config import (
     ACCESS_CONTROL_AVAILABLE,
     BACKUP_MANAGER_AVAILABLE,
-    FAILOVER_AVAILABLE,
     RESOURCE_POOL_AVAILABLE,
 )
 from app.readiness import ReadinessProbe, ReadinessProbeTimeout
@@ -101,7 +100,6 @@ _LIFESPAN_RESOURCE_NAMES = (
     "connection_pool",
     "http_client_pool",
     "backup_mgr",
-    "failover_mgr",
     "access_control_mgr",
 )
 
@@ -113,15 +111,7 @@ def _clear_lifespan_resource_references(config_module) -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # C-F1 fix: 原先用 `global x` 赋值只更新 main.py 模块命名空间，
-    # 不会更新 app.config 模块中的同名变量。api/generate.py 等通过
-    # `from app.config import failover_mgr` 在导入时绑定到 None，永远
-    # 看不到 lifespan 中创建的实例。改为通过 `app.config.xxx = ...`
-    # 显式赋值到 config 模块属性，所有通过 `from app import config`
-    # 或 `import app.config` 访问的模块都能看到最新实例。
-    # 注意：已通过 `from app.config import failover_mgr` 导入的模块仍持有
-    # 旧的 None 引用，这些模块需改为 `from app import config` 后用
-    # `config.failover_mgr` 访问（本次修复同步更新调用方）。
+    # Access lifecycle-owned resources through the config module to observe current instances.
     import app.config as _cfg
 
     _clear_lifespan_resource_references(_cfg)
@@ -194,29 +184,6 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.warning(f"备份管理器初始化失败: {e}")
 
-    if FAILOVER_AVAILABLE:
-        try:
-            from infra.failover import FailoverManager, FailoverStrategy
-
-            _cfg.failover_mgr = FailoverManager(strategy=FailoverStrategy.AUTO_FAILOVER)
-
-            # I-2 fix: 不再注册 vLLM provider 到 FailoverManager。
-            # VLLMClient 内部已有完整的实例健康检查（try_recover + UNHEALTHY 标记）、
-            # 熔断器和故障转移能力，此处冗余注册只会导致两套系统重复做 /health 探测，
-            # 且只注册一个 provider 无转移目标，check_and_failover() 永远返回 None。
-            # 未来如需非 vLLM fallback（如 ollama），可在此处注册。
-
-            # 无 provider 时不启动 HealthChecker，避免空转循环（每 10s 唤醒无意义）
-            if _cfg.failover_mgr._providers:
-                await _cfg.failover_mgr.start()
-                logger.info("✅ 故障转移管理器已启动（含 HealthChecker）")
-            else:
-                logger.info(
-                    "✅ 故障转移管理器已初始化（无 provider，跳过 HealthChecker 启动；vLLM 由 VLLMClient 内部管理）"
-                )
-        except Exception as e:
-            logger.warning(f"故障转移管理器初始化失败: {e}")
-
     if ACCESS_CONTROL_AVAILABLE:
         try:
             from infra.access_control import AccessControlManager
@@ -287,7 +254,6 @@ async def lifespan(app: FastAPI):
         await _close_resource("SQLite 连接池", _cfg.connection_pool, "close")
         await _close_resource("HTTP 客户端池", _cfg.http_client_pool, "close")
         await _close_resource("备份调度器", _cfg.backup_mgr, "stop_scheduled_backup")
-        await _close_resource("故障转移管理器", _cfg.failover_mgr, "stop")
         # PG 模式下显式关闭引擎连接池与 SyncPgAdapter 后台事件循环。
         if postgres_mode:
             await _close_resource("PostgreSQL 适配器", database, "close")

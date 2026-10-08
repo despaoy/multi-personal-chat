@@ -28,14 +28,12 @@ async def test_generation_failure_is_reported_and_recorded(monkeypatch, provider
     from inference import model_manager
 
     records, counters = [], []
-    from app import config
+    from unittest.mock import Mock
 
-    async def forbidden_failover():
-        pytest.fail("A failed request must not switch the configured provider")
-
-    monkeypatch.setattr(config, "failover_mgr", SimpleNamespace(check_and_failover=forbidden_failover))
-    monkeypatch.setattr(model_manager, "get_model_manager", lambda: SimpleNamespace(
-        _current_provider=SimpleNamespace(value=provider), set_lora_adapter=lambda _: None))
+    switch = Mock(side_effect=AssertionError("A failed request must not switch the configured provider"))
+    manager = SimpleNamespace(_current_provider=SimpleNamespace(value=provider),
+                              set_lora_adapter=lambda _: None, set_provider=switch)
+    monkeypatch.setattr(model_manager, "get_model_manager", lambda: manager)
     monkeypatch.setattr(generate, "db", SimpleNamespace(config={}, loras=[]))
     monkeypatch.setattr(generate, "INPUT_VALIDATOR_AVAILABLE", False)
     monkeypatch.setattr(generate, "response_cache", None)
@@ -69,6 +67,7 @@ async def test_generation_failure_is_reported_and_recorded(monkeypatch, provider
         assert caught.value.detail["violations"] == ["unsupported_user_fact"]
     assert caught.value.__cause__ is failure
     assert records[0]["error_type"] == type(failure).__name__
+    switch.assert_not_called()
     assert ("model_failure", False) in counters
     assert ("model_failure", True) not in counters
 
