@@ -1874,6 +1874,13 @@ class MemoryEnrichmentScheduler:
                 job.feedback_target_ids,
                 self._embedding_provider,
             )
+            from character.erasure_authority import partial_erasure_plan
+
+            partial = partial_erasure_plan(job.message, existing_memories)
+            if erasure_now and partial is not None and (not partial.valid or partial.unresolved_protection):
+                result["stage"] = "erasure_authorization"
+                result["reason"] = "unresolved_erasure_scope"
+                raise ValueError("Cannot confirm the requested erasure and retention scope")
             from character.source_erasure_selection import candidates, selected_ids
 
             source_candidates = ()
@@ -1908,9 +1915,6 @@ class MemoryEnrichmentScheduler:
                 feedback_target_ids=job.feedback_target_ids,
                 source_type="user",
             )
-            from character.erasure_authority import partial_erasure_plan
-
-            partial = partial_erasure_plan(job.message, existing_memories)
             if deferred_erasure:
                 # No source-only deletion is authorized at this observation.
                 source_ids = ()

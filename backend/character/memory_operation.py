@@ -92,6 +92,8 @@ def operation_receipt_context(receipt: dict[str, object]) -> str:
     """Only fixed status facts enter the system context, never raw errors."""
     status = receipt.get('status')
     text = _STATUS_TEXT.get(status, '操作结果未确认。') if isinstance(status, str) else '操作结果未确认。'
+    if status == 'failed' and receipt.get('reason') == 'unresolved_erasure_scope':
+        text = '未能确认删除与保留范围，未执行删除。需要明确条目或提供相关原话。'
     count = receipt.get('persisted', 0)
     count = count if type(count) is int and 0 <= count <= 100 else 0
     return f'【本轮长期记忆操作执行回执】\n{text}\n已确认完成的操作数：{count}。\n范围仅为长期记忆及关联来源，不表示聊天历史已经删除。'
