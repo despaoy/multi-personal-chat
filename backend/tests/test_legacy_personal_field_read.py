@@ -223,7 +223,7 @@ async def test_temporal_observation_keeps_complete_source_when_the_quote_was_cli
 
 
 @pytest.mark.asyncio
-async def test_linked_source_failure_preserves_typed_memories_and_unverified_legacy_state(tmp_path):
+async def test_linked_source_failure_stops_partial_field_recall(tmp_path):
     repo = DatabaseCharacterMemoryRepository(SQLiteDB(tmp_path / "failure.sqlite"))
     await seed(repo, "岚舟", "我叫岚舟。", source="我叫岚舟。")
     await repo.append_claim(
@@ -239,13 +239,9 @@ async def test_linked_source_failure_preserves_typed_memories_and_unverified_leg
     async def unavailable(*args, **kwargs):
         raise RuntimeError("source reader unavailable")
 
-    repo.linked_sources = unavailable
-    items, trace, context = await read(repo, "我的姓名和居住地是什么？")
-    assert trace["legacy_source_status"] == "retrieval_error"
-    assert trace["field_presence"]["name"] is None and trace["field_presence"]["residence"] is True
-    assert {item.memory_key for item in items} == {"fact_岚舟", "user_residence"}
-    reads = read_memory_fields("我的姓名和居住地是什么？", context)
-    assert [(r.field, r.status) for r in reads] == [("name", "unverified"), ("residence", "known")]
+    repo.linked_source_receipts = unavailable
+    with pytest.raises(RuntimeError, match="source reader unavailable"):
+        await read(repo, "我的姓名和居住地是什么？")
 
 
 @pytest.mark.asyncio

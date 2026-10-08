@@ -395,7 +395,7 @@ class _ClaimRepository:
         self.claims: list[tuple[tuple, dict]] = []
         self.erases: list[dict] = []
 
-    async def list_memory_records(self, character_id, user_scope, limit=30):
+    async def list_memory_records(self, character_id, user_scope, limit=30, *, include_inactive=False):
         return self.records[:limit]
 
     async def append_claim(self, *args, **kwargs):

@@ -72,6 +72,9 @@ class CharacterMemoryRepository(Protocol):
     async def search_sources(self, character_id: str, user_scope: UserScope, *, query: str,
                              limit: int | None = 32) -> list[dict[str, Any]]: ...
 
+    async def linked_source_revisions(self, character_id: str, user_scope: UserScope, *,
+                                      claim_sources: tuple[tuple[int, str], ...]) -> list[dict[str, Any]]: ...
+
     async def linked_source_receipts(self, character_id: str, user_scope: UserScope, *,
                                      claim_sources: tuple[tuple[int,str],...]) -> list[dict[str,Any]]: ...
 

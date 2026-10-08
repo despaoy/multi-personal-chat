@@ -9,7 +9,7 @@ from character.models import UserScope
 
 
 class _Repo:
-    async def list_memory_records(self, character_id, user_scope, limit=100):
+    async def list_memory_records(self, character_id, user_scope, limit=100, *, include_inactive=False):
         return [
             {
                 "id": 1,

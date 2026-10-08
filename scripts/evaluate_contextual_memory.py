@@ -124,8 +124,6 @@ async def evaluate(
             )[-1200:],
         )
         candidate_ids = [item.memory_id for item in memories]
-        if service._semantic_failure_logged:
-            raise RuntimeError("embedding evaluation silently fell back; refusing to report it as semantic recall")
         status, reason = "selected", ""
         if selector is not None:
             outcome = await selector.select(case["query"], memories, history=case.get("history", []))

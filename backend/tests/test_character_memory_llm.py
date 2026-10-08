@@ -105,7 +105,7 @@ class _Repository:
     def __init__(self) -> None:
         self.writes = []
 
-    async def list_memory_records(self, character_id, user_scope, limit=30):
+    async def list_memory_records(self, character_id, user_scope, limit=30, *, include_inactive=False):
         return []
 
     async def add_or_update_memory(
@@ -149,7 +149,7 @@ def test_write_search_limits_topk_and_does_not_fill_with_unrelated_records():
 @pytest.mark.asyncio
 async def test_scheduler_passes_old_relevant_memory_to_llm():
     class Repository(_Repository):
-        async def list_memory_records(self, character_id, user_scope, limit=30):
+        async def list_memory_records(self, character_id, user_scope, limit=30, *, include_inactive=False):
             records = [{"id": str(index), "content": "用户参加周末登山活动"} for index in range(600)] + [
                 {"id": "old", "content": "用户喜欢咖啡", "memory_key": "preference_咖啡"}
             ]

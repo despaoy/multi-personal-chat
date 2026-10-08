@@ -76,11 +76,10 @@ async def test_distinguishable_retrieval_outcomes(rows, status):
 
 @pytest.mark.asyncio
 async def test_repository_failure_is_not_empty_database():
-    items, count, trace = await recall([], '我的专业是什么？', error=RuntimeError('unavailable'))
-    assert items == () and count == 0
-    assert trace['status'] == 'retrieval_error'
-    assert trace['error_type'] == 'RuntimeError'
-    assert trace['stage'] == 'read'
+    failure = RuntimeError('unavailable')
+    with pytest.raises(RuntimeError) as caught:
+        await recall([], '我的专业是什么？', error=failure)
+    assert caught.value is failure
 
 
 @pytest.mark.asyncio
@@ -91,18 +90,16 @@ async def test_other_person_fields_are_not_user_fields():
 
 
 @pytest.mark.asyncio
-async def test_semantic_failure_preserves_field_recall_and_reports_fallback(monkeypatch):
+async def test_enabled_semantic_failure_stops_recall(monkeypatch):
     service = CharacterMemoryService(Repo([row('user_major', '用户学习天文学')]), semantic_enabled=True)
 
     def broken(*args):
         raise RuntimeError('embedding unavailable')
 
     monkeypatch.setattr(service, '_semantic_similarities', broken)
-    items, _, trace = await service.recall_with_diagnostics(
-        'role', UserScope('web', 'test', 'u', 'c', 'private'), '我的专业是什么？')
-    assert len(items) == 1
-    assert trace['status'] == 'selected'
-    assert trace['semantic_status'] == 'fallback'
+    with pytest.raises(RuntimeError, match='embedding unavailable'):
+        await service.recall_with_diagnostics(
+            'role', UserScope('web', 'test', 'u', 'c', 'private'), '我的专业是什么？')
 
 
 @pytest.mark.asyncio

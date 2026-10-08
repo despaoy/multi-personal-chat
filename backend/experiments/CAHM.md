@@ -186,3 +186,7 @@ python experiments/evaluate_cahm.py --memory-llm-base-url http://127.0.0.1:8001 
 - [LongMemEval](https://github.com/xiaowu0162/LongMemEval)：知识更新、时间查询、弃答与证据评测分类。
 
 Qoder、Trae 等产品可以确认具有跨会话记忆行为，但其内部抽取、冲突裁决与召回算法未公开，因此没有作为已验证实现依据。
+
+## 读取链路更新（2026-10-09）
+
+上述实现记录保留当时的实验行为。当前回复召回已取消向量故障后的 bigram 回退；必要数据库/来源读取与已启用的向量计算失败直接传播。显式关闭语义排序可走词面通道。详见 `docs/reports/backend-memory-strict-20261009.md`；后台写入召回的独立实现仍待整理。

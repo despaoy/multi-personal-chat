@@ -603,7 +603,7 @@ class _FakeMemoryRepo:
     def __init__(self, records: list[dict]) -> None:
         self._records = records
 
-    async def list_memory_records(self, character_id, user_scope, limit=30):
+    async def list_memory_records(self, character_id, user_scope, limit=30, *, include_inactive=False):
         return self._records
 
 

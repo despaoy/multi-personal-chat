@@ -10,7 +10,7 @@
 | character/profile_registry.py | 角色画像及LoRA到画像的映射 |
 | character/situation_analyzer.py | 规则识别情境、意图、情绪和边界 |
 | character/decision_policy.py | 生成当前轮回复策略 |
-| character/semantic_state_estimator.py、semantic_review_adapter.py | 可选模型语义复核，闭集输出与失败回退 |
+| character/semantic_state_estimator.py、semantic_review_adapter.py | 可选模型语义复核，闭集输出与失败传播 |
 | character/context_builder.py | 编译角色上下文 |
 | character/memory_extractor.py | 高精度规则记忆候选与写入门禁 |
 | character/memory_llm.py | 后台召回旧记忆、提出版本操作并本地校验 |
@@ -21,7 +21,7 @@
 
 稳定人物画像规定身份与行为边界。动态状态根据当前消息和关系状态产生；普通单意图轮不再一律输出机械的“情景/意图/语气/行动/避免”模板。复杂否定、反讽、多意图和指代可触发可选语义复核。
 
-DYNAMIC_CONTEXT_SEMANTIC_REVIEW_ENABLED默认关闭；启用后仍受超时、闭集标签及数值校验约束，失败回退规则结果。角色身份不是根据用户提到的人名自动改变；固定角色部署保持自动LoRA路由关闭。
+DYNAMIC_CONTEXT_SEMANTIC_REVIEW_ENABLED默认关闭；启用后仍受超时、闭集标签及数值校验约束，失败停止本轮准备并报告错误。角色身份不是根据用户提到的人名自动改变；固定角色部署保持自动LoRA路由关闭。
 
 画像和行为策略属于系统指令。检索出的RAG与用户记忆进入不可信参考边界；角色历史保留消息角色结构，不能简单说所有历史都被改成user消息。
 
@@ -40,9 +40,9 @@ DYNAMIC_CONTEXT_SEMANTIC_REVIEW_ENABLED默认关闭；启用后仍受超时、�
 
 ## 读取：为当前回答选择记忆
 
-memory_service.load_relevant_memories先读取配置限制内的候选，按生命周期、有效时间和主体过滤，再通过查询扩展、词面、语义、意图、重要度与新近度排序，使用RRF融合并选出少量相关记忆。明确询问过去时可走历史版本查询。
+读取链路更新：2026-10-09。`memory_service.load_relevant_memories` 默认在授权作用域内读取完整候选，显式消融配置可以设置读取上限。历史问题读取所需版本；生命周期、有效时间和主体边界校验后，通过查询扩展、词面、语义、意图、重要度与新近度排序，再由实际配置决定是否执行证据选择审核。
 
-读取链路仍有候选读取上限；不能宣称每次回复都会对数据库所有旧记忆全局召回。未被选入上下文不等于数据库记录被覆盖或删除。
+来源版本与完整原文凭据按精确“记忆—来源”配对读取并保留权限边界。必要读取、已启用语义排序或其输出校验失败时直接报错，不返回空记忆或换成词面结果。正常无记录、无匹配、证据不足与明确关闭语义排序保持独立语义；未选入上下文不等于记录被删除。上面的写入段描述独立的后台写入召回，其回退逻辑尚待后续重构。
 
 ## 版本、作用域和交付
 

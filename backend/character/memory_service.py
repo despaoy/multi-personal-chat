@@ -1,8 +1,8 @@
 """长期记忆检索与排序服务。
 
 CAHM 在保留中文 bigram、重要性、新近度、结构化意图和主体抑制的基础上，
-加入进程内缓存的句向量余弦相似度与最低混合分门控。provider 不可用时
-明确降级为原词面排序，保证记忆增强失败不影响在线回复。
+加入进程内缓存的句向量余弦相似度与最低混合分门控。必要读取与已启用
+的语义排序失败直接传播；合法空查询与显式关闭语义排序保持独立语义。
 """
 
 from __future__ import annotations
@@ -10,7 +10,6 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
-import logging
 import math
 import os
 import re
@@ -33,8 +32,6 @@ from character.temporal_projection import project_temporal_record
 if TYPE_CHECKING:
     from knowledge.retrieval_core.embedding import EmbeddingProvider
     from repositories.character_memory import CharacterMemoryRepository
-
-logger = logging.getLogger(__name__)
 
 # 综合得分权重：相关度 60% + 重要性 30% + 新近度 10%
 WEIGHT_RELEVANCE = 0.6
@@ -773,7 +770,6 @@ class CharacterMemoryService:
         self._candidate_limit = max(1, int(candidate_limit)) if candidate_limit is not None else None
         self._embedding_cache: dict[tuple[str, str, str], np.ndarray] = {}
         self._embedding_lock = threading.Lock()
-        self._semantic_failure_logged = False
         self._include_pending = bool(include_pending)
         self._rrf_enabled = _env_bool("CAHM_RRF_ENABLED", True) if rrf_enabled is None else bool(rrf_enabled)
         self._query_expansion_enabled = (
@@ -793,13 +789,8 @@ class CharacterMemoryService:
     async def recall_with_diagnostics(self, character_id: str, user_scope: UserScope, query: str, **kwargs):
         trace: dict[str, Any] = {}
         started = time.monotonic()
-        try:
-            items, count = await self.load_relevant_memories(character_id, user_scope, query,
-                                                            diagnostics=trace, **kwargs)
-        except Exception as exc:
-            logger.warning('Memory retrieval failed at stage=%s type=%s', trace.get('stage'), type(exc).__name__)
-            trace.update(status='retrieval_error', error_type=type(exc).__name__)
-            items, count = (), trace.get('records_read', 0)
+        items, count = await self.load_relevant_memories(character_id, user_scope, query,
+                                                        diagnostics=trace, **kwargs)
         trace['elapsed_ms'] = (time.monotonic() - started) * 1000
         return items, count, trace
 
@@ -899,23 +890,10 @@ class CharacterMemoryService:
         trace.update(stage='read', status='not_completed', fields=list(query_plan.fields),
                      excluded_fields=list(query_plan.excluded_fields), records_read=0, usable_records=0,
                      eligible_records=0, selected_count=0, semantic_status='disabled')
-        try:
-            records = await self._repo.list_memory_records(
-                character_id,
-                user_scope,
-                limit=read_limit,
-                include_inactive=historical_requested or mentions_requested,
-            )
-        except TypeError as exc:
-            # 兼容旧仓储与轻量测试替身；仓储内部自身抛出的 TypeError 不吞掉。
-            message = str(exc)
-            if "include_inactive" not in message and "unexpected keyword" not in message:
-                raise
-            records = await self._repo.list_memory_records(
-                character_id,
-                user_scope,
-                limit=read_limit,
-            )
+        records = await self._repo.list_memory_records(
+            character_id, user_scope, limit=read_limit,
+            include_inactive=historical_requested or mentions_requested,
+        )
         records = [r for r in records if not str(r.get("memory_key") or "").startswith("relationship:")]
         from character.memory_read_authority import read_versions, record_version
 
@@ -924,20 +902,16 @@ class CharacterMemoryService:
         source_pairs = {str(row['id']): tuple(row.get('source_message_ids') or ())
                         for row in records if str(row.get('id', '')).isdigit()}
         source_revisions = {}
-        revision_reader = getattr(self._repo, 'linked_source_revisions', None)
         trace['claim_revision_status'] = 'not_needed'
         pairs = tuple(dict.fromkeys((int(key), str(source_id)) for key, ids in source_pairs.items() for source_id in ids))
         if pairs:
-            trace['claim_revision_status'] = 'available' if callable(revision_reader) else 'unsupported'
-            if callable(revision_reader):
-                try:
-                    for start in range(0, len(pairs), 200):
-                        revisions = await revision_reader(character_id, user_scope, claim_sources=pairs[start:start + 200])
-                        for revision in revisions:
-                            source_revisions.setdefault(str(revision['memory_id']), {})[str(revision['source_message_id'])] = revision
-                except Exception:
-                    source_revisions = {}
-                    trace['claim_revision_status'] = 'retrieval_error'
+            trace['stage'] = 'source_revisions'
+            for start in range(0, len(pairs), 200):
+                revisions = await self._repo.linked_source_revisions(
+                    character_id, user_scope, claim_sources=pairs[start:start + 200])
+                for revision in revisions:
+                    source_revisions.setdefault(str(revision['memory_id']), {})[str(revision['source_message_id'])] = revision
+            trace['claim_revision_status'] = 'available'
         from character.memory_read_authority import read_source_record_bindings
         # Read source authority through actual claim links, in bounded batches.
         # Keep associations: a citation on a different row cannot grant proof.
@@ -950,47 +924,25 @@ class CharacterMemoryService:
                          and str(row.get('id', '')).isdigit()]
         semantic_ids = {str(row['id']) for row in semantic_rows}
         claim_sources = {}
-        linked_reader = getattr(self._repo, "linked_sources", None)
         trace['legacy_source_status'] = 'not_needed'
         trace['temporal_source_status'] = 'not_needed'
-        receipt_reader = getattr(self._repo, "linked_source_receipts", None)
-        if (legacy_rows or semantic_rows) and (callable(receipt_reader) or callable(linked_reader)):
+        pairs = tuple(dict.fromkeys((int(row['id']), str(source_id))
+            for row in (*legacy_rows, *semantic_rows) if str(row.get('id', '')).isdigit()
+            for source_id in row.get('source_message_ids') or ()))
+        if pairs:
+            trace['stage'] = 'source_receipts'
+            trace['source_receipt_pairs_requested'] = len(pairs)
+            for start in range(0, len(pairs), 200):
+                linked = await self._repo.linked_source_receipts(
+                    character_id, user_scope, claim_sources=pairs[start:start + 200])
+                for source in linked:
+                    if isinstance(source.get('body'), str) and str(source.get('memory_id', '')).isdigit():
+                        claim_sources.setdefault(str(source['memory_id']), {})[str(source['source_message_id'])] = source
+            trace['source_receipt_pairs_returned'] = sum(len(sources) for sources in claim_sources.values())
+            trace['source_authority_reader'] = 'exact_claim_source_pairs'
             for name, rows in (('legacy_source_status', legacy_rows), ('temporal_source_status', semantic_rows)):
                 if rows:
                     trace[name] = 'available'
-            try:
-                if callable(receipt_reader):
-                    pairs = tuple(dict.fromkeys((int(row['id']),str(source_id))
-                        for row in (*legacy_rows,*semantic_rows) if str(row.get('id','')).isdigit()
-                        for source_id in row.get('source_message_ids') or ()))
-                    trace['source_receipt_pairs_requested']=len(pairs)
-                    for start in range(0,len(pairs),200):
-                        linked=await receipt_reader(character_id,user_scope,claim_sources=pairs[start:start+200])
-                        for source in linked:
-                            if isinstance(source.get('body'),str) and str(source.get('memory_id','')).isdigit():
-                                claim_sources.setdefault(str(source['memory_id']),{})[str(source['source_message_id'])]=source
-                    trace['source_receipt_pairs_returned']=sum(len(sources) for sources in claim_sources.values())
-                    trace['source_authority_reader']='exact_claim_source_pairs'
-                else:
-                    # Compatibility for external legacy repositories only.
-                    ids = list(dict.fromkeys(int(row['id']) for row in (*legacy_rows, *semantic_rows)
-                                             if str(row.get('id', '')).isdigit()))
-                    for start in range(0, len(ids), 100):
-                        linked = await linked_reader(character_id, user_scope, memory_ids=tuple(ids[start:start + 100]))
-                        for source in linked:
-                            if isinstance(source.get('body'), str) and str(source.get('memory_id', '')).isdigit():
-                                claim_sources.setdefault(str(source['memory_id']), {})[str(source['source_message_id'])] = source
-            except Exception:
-                claim_sources = {}
-                if legacy_rows:
-                    trace['legacy_source_status'] = 'retrieval_error'
-                if semantic_rows:
-                    trace['temporal_source_status'] = 'retrieval_error'
-        elif legacy_rows or semantic_rows:
-            if legacy_rows:
-                trace['legacy_source_status'] = 'unsupported'
-            if semantic_rows:
-                trace['temporal_source_status'] = 'unsupported'
         from character.legacy_field_projection import project_legacy_personal_record
 
         records = [project_legacy_personal_record(row, claim_sources.get(str(row['id']), {})) for row in records]
@@ -1098,14 +1050,8 @@ class CharacterMemoryService:
         semantic_scores: dict[int, float] | None = None
         trace['stage'] = 'rank'
         if self._semantic_enabled:
-            try:
-                semantic_scores = await asyncio.to_thread(self._semantic_similarities, retrieval_query, usable_records)
-                trace['semantic_status'] = 'available'
-            except Exception as exc:  # 记忆增强失败不得影响回复
-                trace['semantic_status'] = 'fallback'
-                if not self._semantic_failure_logged:
-                    logger.warning("CAHM 语义检索不可用，降级到 bigram baseline: %s", exc)
-                    self._semantic_failure_logged = True
+            semantic_scores = await asyncio.to_thread(self._semantic_similarities, retrieval_query, usable_records)
+            trace['semantic_status'] = 'available'
 
         query_views = (
             _expand_memory_query(query, intents) if self._query_expansion_enabled else ((query or "").strip(),)
@@ -1259,6 +1205,9 @@ class CharacterMemoryService:
             relation_type = str(row.get("relation_type") or row.get("relation") or "ADD").upper()
             if not evidence_enabled:
                 relation_type = "ADD"
+            storage_versions, source_versions = read_versions(row, stored_versions, claim_sources)
+            record_pairs, record_versions = read_source_record_bindings(
+                row, stored_versions, source_pairs, source_revisions)
             scored.append(
                 (
                     fused_scores[index],
@@ -1289,10 +1238,10 @@ class CharacterMemoryService:
                         temporal_mode=str(row.get('temporal_mode') or 'fact'),
                         observed_at=str(row.get('temporal_observed_at') or ''),
                         source_observation=is_source_observation(row),
-                        storage_versions=read_versions(row, stored_versions, claim_sources)[0],
-                        source_versions=read_versions(row, stored_versions, claim_sources)[1],
-                        source_record_pairs=read_source_record_bindings(row, stored_versions, source_pairs, source_revisions)[0],
-                        source_record_versions=read_source_record_bindings(row, stored_versions, source_pairs, source_revisions)[1],
+                        storage_versions=storage_versions,
+                        source_versions=source_versions,
+                        source_record_pairs=record_pairs,
+                        source_record_versions=record_versions,
                         **source_fragment_fields(row),
                     ),
                 )
@@ -1403,4 +1352,6 @@ def _normalized_vector(vector: np.ndarray) -> np.ndarray:
         norm = float(np.linalg.norm(value))
     if not math.isfinite(norm):
         raise ValueError("embedding vector norm is nonfinite")
-    return value if norm <= 0.0 else value / norm
+    if norm <= 0.0:
+        raise ValueError("embedding vector has zero norm")
+    return value / norm

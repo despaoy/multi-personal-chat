@@ -14,7 +14,7 @@ class _Repo:
         self.records = records
         self.limits = []
 
-    async def list_memory_records(self, character_id, user_scope, limit=30):
+    async def list_memory_records(self, character_id, user_scope, limit=30, *, include_inactive=False):
         self.limits.append(limit)
         return self.records[:limit]
 
@@ -104,9 +104,8 @@ async def test_nonfinite_embeddings_cannot_become_perfect_similarity(bad):
 
     repo = _Repo([_row(1, "preference_咖啡", "用户说喜欢咖啡")])
     service = CharacterMemoryService(repo, semantic_enabled=True, embedding_provider=CorruptEmbedding())
-    selected, _ = await service.load_relevant_memories("kisaki", _scope(), "量子纠缠是什么")
-    assert selected == ()
-    assert service._semantic_failure_logged is True
+    with pytest.raises(ValueError, match="nonfinite"):
+        await service.load_relevant_memories("kisaki", _scope(), "量子纠缠是什么")
 
 
 @pytest.mark.parametrize("bad", [float("nan"), float("inf"), "NaN", "Infinity"])

@@ -160,10 +160,9 @@ async def test_complete_source_reader_failure_is_visible_and_never_promotes_a_qu
     async def unavailable(*args, **kwargs):
         raise RuntimeError("source read unavailable")
 
-    repo.linked_sources = unavailable
-    _, _, trace, result = await read(repo, "user_major")
-    assert trace["temporal_source_status"] == "retrieval_error"
-    assert trace["field_presence"]["major"] is None and result.status == "unverified"
+    repo.linked_source_receipts = unavailable
+    with pytest.raises(RuntimeError, match="source read unavailable"):
+        await read(repo, "user_major")
 
 
 @pytest.mark.asyncio

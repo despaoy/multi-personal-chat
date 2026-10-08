@@ -47,9 +47,9 @@ async def test_scoped_current_presence_is_not_retrieval_relevance(rows, expected
 @pytest.mark.asyncio
 async def test_partial_read_and_error_never_prove_absence():
     _, partial = await status(limit=1)
-    _, failed = await status(error=True)
-    assert 'field_presence' not in partial and 'field_presence' not in failed
-    assert failed['status'] == 'retrieval_error'
+    assert 'field_presence' not in partial
+    with pytest.raises(RuntimeError, match='unavailable'):
+        await status(error=True)
 
 
 @pytest.mark.asyncio
@@ -61,16 +61,15 @@ async def test_presence_survives_irrelevant_query():
 
 
 @pytest.mark.asyncio
-async def test_completed_storage_read_survives_later_ranking_failure(monkeypatch):
+async def test_ranking_failure_cannot_return_a_partial_storage_result(monkeypatch):
     import character.memory_service as memory_service
 
     def broken(*args):
         raise RuntimeError('ranking failed')
 
     monkeypatch.setattr(memory_service, '_retrieval_text', broken)
-    _, trace = await status([{'id': '1', 'memory_key': 'user_name', 'content': '用户说自己叫温宁'}])
-    assert trace['status'] == 'retrieval_error'
-    assert trace['field_presence']['name'] is True
+    with pytest.raises(RuntimeError, match='ranking failed'):
+        await status([{'id': '1', 'memory_key': 'user_name', 'content': '用户说自己叫温宁'}])
 
 
 @pytest.mark.parametrize('message', ['你保存了我的姓名吗？', '你记住我的姓名了吗？',
