@@ -77,6 +77,17 @@ def compile_user_recall_context(history):
 
 logger = logging.getLogger(__name__)
 
+
+class ContextAfterMemoryOperationError(RuntimeError):
+    """Context failed after an explicit operation returned its execution receipt."""
+
+    def __init__(self, receipt):
+        from character.memory_operation import operation_receipt_context
+
+        super().__init__("context preparation failed after a memory operation")
+        self.operation_summary = operation_receipt_context(receipt)
+
+
 # prepare_turn 并发加载时历史读取的参数
 HISTORY_LIMIT = 24
 # 约对应 8K 中文/混合 token，和 24K 模型窗口的三分之一历史预算对齐。
@@ -127,7 +138,6 @@ class PreparedCharacterTurn:
     semantic_review_history_count: int = 0
     semantic_review_rule_confidence: float = 0.0
     semantic_review_confidence: float | None = None
-    semantic_review_fallback_reason: str = ""
     memory_selection_status: str = "disabled"
     memory_selection_reason: str = ""
     memory_selection_candidate_count: int = 0
@@ -231,8 +241,11 @@ class CharacterContextService:
             message=turn.message, rule_hints=(), history=history,
             source_message_id=source_message_id or None, observed_at=received_at,
         )
-        # Retrieve after execution, not from the stale pre-deletion snapshot.
-        prepared = await self.prepare_turn(turn, character_id)
+        # The operation may already be committed; preserve its receipt on failure.
+        try:
+            prepared = await self.prepare_turn(turn, character_id)
+        except Exception as exc:
+            raise ContextAfterMemoryOperationError(receipt) from exc
         return replace(prepared, memory_operation_receipt=receipt,
             compiled=replace(prepared.compiled,
                 memory_operation_receipt={key: receipt[key] for key in ('status', 'persisted', 'source_erased') if key in receipt},
@@ -243,8 +256,7 @@ class CharacterContextService:
     async def prepare_turn(self, turn: TurnInput, character_id: str) -> PreparedCharacterTurn:
         """加载本轮全部上下文并编译成模型输入。
 
-        任何用户范围字段非法都会抛 ValueError（调用方应降级为
-        无角色上下文的旧行为，而不是让整条消息失败）。
+        配置、读取、分析与已启用审核的失败交给调用方报告，不替换角色或规则状态。
         """
         received_at = turn.received_at or datetime.now(timezone.utc)
         user_scope = build_user_scope(
@@ -285,55 +297,14 @@ class CharacterContextService:
         # Reuse the already-loaded history: no extra database/model call. The
         # caller-provided live history wins over the persisted fallback.
         effective_history = tuple(turn.history) or tuple(history)
-        analysis_ok = True
-        try:
-            interaction = self._situation_analyzer.estimate(
-                turn.message,
-                effective_history,
-            )
-        except Exception:
-            # Analysis is an enhancement. Preserve the character path with a
-            # neutral legacy plan if a custom analyzer or a future rule fails.
-            logger.warning("互动状态分析失败，按中性角色策略继续", exc_info=True)
-            interaction = InteractionState()
-            analysis_ok = False
-
+        interaction = self._situation_analyzer.estimate(turn.message, effective_history)
         semantic_outcome: SemanticReviewOutcome | None = None
-        semantic_review_status = "analysis_failed" if not analysis_ok else "disabled"
-        semantic_review_reasons: tuple[str, ...] = ()
-        semantic_review_latency_ms = 0.0
-        semantic_review_history_count = 0
-        semantic_review_rule_confidence = 0.0
-        semantic_review_confidence: float | None = None
-        semantic_review_fallback_reason = ""
-        if analysis_ok and self._semantic_estimator is not None:
-            # The estimator itself owns timeout, validation and fail-closed
-            # recovery.  Its reviewer calls only the low-level base model and
-            # cannot re-enter this character-context pipeline.
-            try:
-                semantic_outcome = await self._semantic_estimator.refine_with_diagnostics(
-                    turn.message,
-                    effective_history,
-                    interaction,
-                )
-            except Exception:
-                # A future custom estimator must obey the same fail-closed
-                # contract as the built-in implementation.  Cancellation is
-                # not an Exception on supported Python versions and still
-                # propagates to the request owner.
-                logger.warning("语义复核编排失败，保留规则互动状态", exc_info=True)
-                semantic_review_status = "fallback"
-                semantic_review_fallback_reason = "error"
-            else:
-                interaction = semantic_outcome.state
-                semantic_review_status = semantic_outcome.status
-                semantic_review_reasons = semantic_outcome.reasons
-                semantic_review_latency_ms = semantic_outcome.latency_ms
-                semantic_review_history_count = semantic_outcome.history_count
-                semantic_review_rule_confidence = semantic_outcome.rule_confidence
-                semantic_review_confidence = semantic_outcome.review_confidence
-                semantic_review_fallback_reason = semantic_outcome.fallback_reason
-                _observe_semantic_review(semantic_outcome)
+        if self._semantic_estimator is not None:
+            semantic_outcome = await self._semantic_estimator.refine_with_diagnostics(
+                turn.message, effective_history, interaction,
+            )
+            interaction = semantic_outcome.state
+            _observe_semantic_review(semantic_outcome)
         memory_selection = SelectionOutcome()
         if self._memory_selector is not None:
             memory_selection = await self._memory_selector.select(
@@ -380,17 +351,13 @@ class CharacterContextService:
                 else RESPONSE_GOALS[SITUATION_DAILY]
             ),
         )
-        try:
-            decision = self._decision_policy.decide(
-                profile,
-                relationship,
-                situation_type,
-                interaction=interaction if interaction.has_soft_context else None,
-                has_relevant_memory=bool(injected_memory_ids),
-            )
-        except Exception:
-            logger.warning("互动策略评分失败，按旧版角色策略继续", exc_info=True)
-            decision = self._decision_policy.decide(profile, relationship, situation_type)
+        decision = self._decision_policy.decide(
+            profile,
+            relationship,
+            situation_type,
+            interaction=interaction if interaction.has_soft_context else None,
+            has_relevant_memory=bool(injected_memory_ids),
+        )
 
         policy_outcome = PolicyOutcome(decision)
         if self._contextual_policy is not None:
@@ -463,13 +430,12 @@ class CharacterContextService:
             ),
             interaction=interaction,
             decision=decision,
-            semantic_review_status=semantic_review_status,
-            semantic_review_reasons=semantic_review_reasons,
-            semantic_review_latency_ms=semantic_review_latency_ms,
-            semantic_review_history_count=semantic_review_history_count,
-            semantic_review_rule_confidence=semantic_review_rule_confidence,
-            semantic_review_confidence=semantic_review_confidence,
-            semantic_review_fallback_reason=semantic_review_fallback_reason,
+            semantic_review_status=semantic_outcome.status if semantic_outcome else "disabled",
+            semantic_review_reasons=semantic_outcome.reasons if semantic_outcome else (),
+            semantic_review_latency_ms=semantic_outcome.latency_ms if semantic_outcome else 0.0,
+            semantic_review_history_count=semantic_outcome.history_count if semantic_outcome else 0,
+            semantic_review_rule_confidence=semantic_outcome.rule_confidence if semantic_outcome else 0.0,
+            semantic_review_confidence=semantic_outcome.review_confidence if semantic_outcome else None,
         )
 
     async def complete_turn(
@@ -709,14 +675,12 @@ def build_character_context_service(database, *, source_recall_enabled: bool | N
 def _observe_semantic_review(outcome: SemanticReviewOutcome) -> None:
     """Record text-free semantic-review metrics without risking the turn."""
 
-    if outcome.status not in {"applied", "fallback", "recursive_skip"}:
+    if outcome.status != "applied":
         return
     try:
         from infra.observability import increment, log_event
 
         increment(f"dynamic_context_semantic_review_{outcome.status}")
-        if outcome.fallback_reason:
-            increment(f"dynamic_context_semantic_review_fallback_{outcome.fallback_reason}")
         log_event(
             "dynamic_context_semantic_review",
             status=outcome.status,
@@ -725,7 +689,6 @@ def _observe_semantic_review(outcome: SemanticReviewOutcome) -> None:
             historyCount=outcome.history_count,
             ruleConfidence=outcome.rule_confidence,
             reviewConfidence=outcome.review_confidence,
-            fallbackReason=outcome.fallback_reason,
         )
     except Exception:
         # Diagnostics must never turn an optional review into a request failure.

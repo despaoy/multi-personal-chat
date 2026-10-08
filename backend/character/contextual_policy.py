@@ -68,12 +68,9 @@ class ContextualDecisionPolicy:
             return PolicyOutcome(baseline, "protected", "safety")
         started = time.perf_counter()
         if self.context_budget is None and len(query) > 4000:
-            return PolicyOutcome(baseline, "fallback", "input_budget")
-        try:
-            bounded_history = _history_view(history, **(dict(max_messages=self.context_budget.history_messages,
-                max_chars=4 * self.context_budget.window_tokens) if self.context_budget else {}))
-        except InputBudgetError:
-            return PolicyOutcome(baseline, "fallback", "input_budget", (time.perf_counter() - started) * 1000)
+            raise InputBudgetError("complete policy query exceeds input budget")
+        bounded_history = _history_view(history, **(dict(max_messages=self.context_budget.history_messages,
+            max_chars=4 * self.context_budget.window_tokens) if self.context_budget else {}))
         allowed = set(STRATEGY_INSTRUCTIONS) - {"ensure_safety", "check_safety_gently"}
         if not has_relevant_memory:
             allowed.discard("recall_shared_context")
@@ -99,50 +96,41 @@ class ContextualDecisionPolicy:
         messages = [{"role": "system", "content": INSTRUCTION},
                     {"role": "user", "content": json.dumps(payload, ensure_ascii=False)}]
         if self.context_budget and not self.context_budget.fits(messages, 160):
-            return PolicyOutcome(baseline, 'fallback', 'input_budget', (time.perf_counter() - started) * 1000)
-        try:
-            raw = await asyncio.wait_for(
-                self.reviewer(messages),
-                timeout=self.timeout_seconds,
-            )
-            if not isinstance(raw, str) or len(raw) > 2000:
-                raise ValueError("invalid_response")
-            value = json.loads(raw, object_pairs_hook=_unique_object)
-            if not isinstance(value, dict) or set(value) != {"strategy_ids"}:
-                raise ValueError("invalid_schema")
-            ids = value["strategy_ids"]
-            if not isinstance(ids, list) or not 1 <= len(ids) <= 2:
-                raise ValueError("invalid_strategy_count")
-            if any(not isinstance(key, str) or key not in allowed for key in ids) or len(set(ids)) != len(ids):
-                raise ValueError("invalid_strategy")
-            chosen = set(ids)
-            exclusive = {"graceful_close", "stay_present", "set_boundary"}
-            probing = {"gentle_probe", "clarify_need"}
-            if (chosen & exclusive and chosen & probing) or {"light_tease", "repair_misunderstanding"} <= chosen:
-                raise ValueError("incompatible_strategies")
-        except asyncio.TimeoutError:
-            reason = "timeout"
-        except (ValueError, TypeError, RecursionError):
-            reason = "invalid_output"
-        except Exception:
-            reason = "provider_error"
-        else:
-            # Persona choices cannot crowd out an explicitly recognized task.
-            # Only closed application strategies are inserted, never model text.
-            required = []
-            if acts.get("information_request", 0) >= 0.5:
-                required.append("respond_directly")
-            if acts.get("advice_request", 0) >= 0.5 and acts.get("advice_boundary", 0) < 0.5:
-                required.append("offer_suggestion")
-            ids = list(dict.fromkeys([*required, *ids]))[:2]
-            plan = replace(
-                baseline,
-                strategy_ids=tuple(ids),
-                action="；".join(STRATEGY_INSTRUCTIONS[key] for key in ids),
-                selection_source="semantic",
-            )
-            return PolicyOutcome(plan, "applied", "", (time.perf_counter() - started) * 1000)
-        return PolicyOutcome(baseline, "fallback", reason, (time.perf_counter() - started) * 1000)
+            raise InputBudgetError("complete policy evidence exceeds serving context budget")
+        raw = await asyncio.wait_for(
+            self.reviewer(messages),
+            timeout=self.timeout_seconds,
+        )
+        if not isinstance(raw, str) or len(raw) > 2000:
+            raise ValueError("invalid_response")
+        value = json.loads(raw, object_pairs_hook=_unique_object)
+        if not isinstance(value, dict) or set(value) != {"strategy_ids"}:
+            raise ValueError("invalid_schema")
+        ids = value["strategy_ids"]
+        if not isinstance(ids, list) or not 1 <= len(ids) <= 2:
+            raise ValueError("invalid_strategy_count")
+        if any(not isinstance(key, str) or key not in allowed for key in ids) or len(set(ids)) != len(ids):
+            raise ValueError("invalid_strategy")
+        chosen = set(ids)
+        exclusive = {"graceful_close", "stay_present", "set_boundary"}
+        probing = {"gentle_probe", "clarify_need"}
+        if (chosen & exclusive and chosen & probing) or {"light_tease", "repair_misunderstanding"} <= chosen:
+            raise ValueError("incompatible_strategies")
+        # Persona choices cannot crowd out an explicitly recognized task.
+        # Only closed application strategies are inserted, never model text.
+        required = []
+        if acts.get("information_request", 0) >= 0.5:
+            required.append("respond_directly")
+        if acts.get("advice_request", 0) >= 0.5 and acts.get("advice_boundary", 0) < 0.5:
+            required.append("offer_suggestion")
+        ids = list(dict.fromkeys([*required, *ids]))[:2]
+        plan = replace(
+            baseline,
+            strategy_ids=tuple(ids),
+            action="；".join(STRATEGY_INSTRUCTIONS[key] for key in ids),
+            selection_source="semantic",
+        )
+        return PolicyOutcome(plan, "applied", "", (time.perf_counter() - started) * 1000)
 
 
 async def _reviewer(messages):

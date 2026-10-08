@@ -348,7 +348,6 @@ async def _run() -> list[dict]:
                             "history_count": prepared.semantic_review_history_count,
                             "rule_confidence": prepared.semantic_review_rule_confidence,
                             "review_confidence": prepared.semantic_review_confidence,
-                            "fallback_reason": prepared.semantic_review_fallback_reason,
                         },
                     },
                 }
@@ -428,7 +427,7 @@ def _write(results: list[dict]) -> tuple[Path, Path]:
                 f"- 对话行为：{acts}",
                 f"- 用户需要：{needs}",
                 f"- 选中策略：{strategies}",
-                f"- 语义复核：`{semantic['status']}`；触发原因：{semantic_reasons}；回退：{semantic['fallback_reason'] or '无'}；耗时：{semantic['latency_ms']} ms",
+                f"- 语义复核：`{semantic['status']}`；触发原因：{semantic_reasons}；耗时：{semantic['latency_ms']} ms",
                 f"- 输出硬校验重试：{item['guard_retried']}；首次违规：{', '.join(item['guard_violations']) or '无'}",
                 f"- 重试后违规：{', '.join(item['guard_post_retry_violations']) or '无'}；确定性策略降级：{item['guard_fallback'] or '无'}",
                 f"- 推理耗时：{item['cost_seconds']} 秒",

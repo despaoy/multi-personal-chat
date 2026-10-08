@@ -469,8 +469,6 @@ async def _generate_reply_body(
             execute_memory_operations=persist_message and delivery_context is None,
             defer_memory_operations=persist_message and delivery_context is not None and not request.branchId,
         )
-        if request.characterId and prepared_character_turn is None:
-            raise HTTPException(503, "人物上下文暂时不可用，请稍后重试；本轮未降级为普通聊天")
     if prepared_character_turn is not None:
         mapped_character_id = prepared_character_turn.character_id
 
@@ -706,17 +704,14 @@ async def _prepare_character_turn(
     request: MessageRequest, character_id: str, *, character_service=None, execute_memory_operations: bool = False,
     defer_memory_operations: bool = False
 ):
-    """准备角色上下文；任何失败都降级为无角色上下文的旧行为。
+    """Prepare the selected character; failures stop generation at this API boundary.
 
-    返回 prepared_turn | None。
-    用户范围非法（如管理台测试无 senderId）、画像缺失或数据库
-    故障都不应让整条消息失败。
-
-    character_service 由 HTTP 层注入（绑定当前应用容器的数据库）；
-    为 None 时回退全局默认服务（bot 直连等非 HTTP 调用方）。
+    HTTP callers inject the application-scoped service. Direct non-HTTP callers
+    use the default service when none was supplied.
     """
     try:
         from services.character_context import (
+            ContextAfterMemoryOperationError,
             TurnInput,
             get_default_character_context_service,
         )
@@ -753,9 +748,18 @@ async def _prepare_character_turn(
                     prepared.compiled, memory_operation_deferred=True,
                 ))
         return prepared
-    except Exception as e:
-        logger.warning("角色上下文准备失败，按无角色上下文继续 character=%s: %s", character_id, e)
-        return None
+    except ContextAfterMemoryOperationError as exc:
+        raise HTTPException(503, detail={
+            "code": "context_failed_after_memory_operation",
+            "message": "角色上下文准备失败，回复未生成。请先核对本轮记忆操作回执，再检查审核模型和上下文配置。",
+            "memoryOperation": exc.operation_summary,
+        }) from exc
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(
+            503, "角色上下文准备失败，本轮未生成。请检查数据库、审核模型及上下文配置后重试。",
+        ) from exc
 
 
 def _reply_with_memory_warning(reply: str, warning: str | None) -> str:

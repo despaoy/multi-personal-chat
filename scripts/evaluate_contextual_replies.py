@@ -148,7 +148,6 @@ async def evaluate(
                     "decision": asdict(prepared.decision),
                     "state_status": prepared.semantic_review_status,
                     "state_reasons": list(prepared.semantic_review_reasons),
-                    "state_fallback": prepared.semantic_review_fallback_reason,
                     "policy_status": prepared.contextual_policy_status,
                     "policy_reason": prepared.contextual_policy_reason,
                     "used_memory_ids": list(prepared.compiled.used_memory_ids),

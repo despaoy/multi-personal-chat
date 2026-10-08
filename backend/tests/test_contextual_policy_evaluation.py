@@ -61,3 +61,20 @@ async def test_required_act_coverage_does_not_count_personas_twice():
     assert result["state_diagnostics"]["case_count"] == 1
     assert result["state_diagnostics"]["cases_missing_required_acts"] == 0
     assert result["state_diagnostics"]["reviewed_cases"] == 0
+
+
+async def test_failed_semantic_state_stops_before_policy_evaluation():
+    calls = []
+    async def reviewer(messages):
+        calls.append(messages)
+        return "invalid"
+    with pytest.raises(json.JSONDecodeError):
+        await evaluate([{"id": "q", "query": "你好", "situation": "daily", "acts": ["greeting"]}], reviewer, "semantic_all")
+    assert len(calls) == 1
+
+
+async def test_failed_policy_is_not_scored_as_a_rule_decision():
+    async def reviewer(messages):
+        return '{"strategy_ids":["invented"]}'
+    with pytest.raises(ValueError, match="invalid_strategy"):
+        await evaluate([{"id": "q", "query": "你好", "situation": "daily", "acts": ["greeting"]}], reviewer)

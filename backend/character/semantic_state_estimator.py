@@ -8,8 +8,8 @@ identifier is checked against the application's existing closed vocabularies
 and every numeric value is finite and bounded before it is trusted.
 
 This is deliberately a small adapter rather than a second dialogue engine.
-Clear turns stay on the fast deterministic path; timeouts, provider failures
-and malformed replies preserve the exact original state.
+Clear turns stay on the deterministic path. Required review failures propagate;
+no unreviewed state is substituted for a failed model result.
 """
 
 from __future__ import annotations
@@ -32,8 +32,7 @@ if TYPE_CHECKING:
     from inference.context_budget import ReviewContextBudget
 
 SemanticReviewer = Callable[[Sequence[Mapping[str, str]]], Awaitable[object]]
-SemanticReviewStatus = Literal["disabled", "not_needed", "applied", "fallback", "recursive_skip"]
-SemanticFallbackReason = Literal["", "timeout", "invalid", "error", "input_budget"]
+SemanticReviewStatus = Literal["disabled", "not_needed", "applied"]
 
 REVIEW_MULTI_INTENT = "multi_intent"
 REVIEW_SARCASM = "sarcasm"
@@ -217,7 +216,6 @@ class SemanticReviewOutcome:
     history_count: int
     rule_confidence: float
     review_confidence: float | None
-    fallback_reason: SemanticFallbackReason
 
 
 class SemanticStateEstimator:
@@ -267,100 +265,33 @@ class SemanticStateEstimator:
         history: Sequence[Mapping[str, Any]],
         state: InteractionState,
     ) -> SemanticReviewOutcome:
-        """Return a validated estimate plus bounded, text-free diagnostics.
-
-        The fail-closed behaviour is part of the public contract: callers do
-        not need their own provider-error or malformed-output recovery path.
-        Cancellation from the caller is not swallowed.
-        """
-
+        """Return only successful/intentional outcomes; review errors propagate."""
         reasons = self.review_reasons(message, state)
-        try:
-            history_count = len(_recent_dialogue(history, context_budget=self._context_budget))
-        except SemanticInputBudgetError:
-            history_count = 0
         rule_confidence = _diagnostic_confidence(state.confidence)
-        if self._reviewer is None:
+        if self._reviewer is None or not (message or "").strip() or not reasons:
             return _outcome(
                 state,
-                status="disabled",
+                status="disabled" if self._reviewer is None else "not_needed",
                 reasons=reasons,
-                history_count=history_count,
-                rule_confidence=rule_confidence,
-            )
-        if not (message or "").strip() or not reasons:
-            return _outcome(
-                state,
-                status="not_needed",
-                reasons=reasons,
-                history_count=history_count,
+                history_count=0,
                 rule_confidence=rule_confidence,
             )
         if _SEMANTIC_REVIEW_ACTIVE.get():
-            return _outcome(
-                state,
-                status="recursive_skip",
-                reasons=reasons,
-                history_count=history_count,
-                rule_confidence=rule_confidence,
-            )
+            raise RuntimeError("recursive semantic review is not allowed")
 
-        try:
-            messages = build_semantic_review_messages(message, history, state, reasons=reasons,
-                                                      context_budget=self._context_budget)
-        except SemanticInputBudgetError:
-            return _outcome(
-                state,
-                status="fallback",
-                reasons=reasons,
-                history_count=history_count,
-                rule_confidence=rule_confidence,
-                fallback_reason="input_budget",
-            )
+        recent_history = _recent_dialogue(history, context_budget=self._context_budget)
+        messages = _build_review_messages(message, recent_history, reasons, self._context_budget)
         active_token = _SEMANTIC_REVIEW_ACTIVE.set(True)
         started_at = time.perf_counter()
         try:
-            try:
-                raw = await asyncio.wait_for(self._reviewer(messages), timeout=self._timeout_seconds)
-            except (TimeoutError, asyncio.TimeoutError):
-                return _outcome(
-                    state,
-                    status="fallback",
-                    reasons=reasons,
-                    latency_ms=_elapsed_ms(started_at),
-                    history_count=history_count,
-                    rule_confidence=rule_confidence,
-                    fallback_reason="timeout",
-                )
-            except Exception:
-                return _outcome(
-                    state,
-                    status="fallback",
-                    reasons=reasons,
-                    latency_ms=_elapsed_ms(started_at),
-                    history_count=history_count,
-                    rule_confidence=rule_confidence,
-                    fallback_reason="error",
-                )
-
-            try:
-                reviewed_state = _parse_reviewed_state(raw, state, message=message, reasons=reasons)
-            except Exception:
-                return _outcome(
-                    state,
-                    status="fallback",
-                    reasons=reasons,
-                    latency_ms=_elapsed_ms(started_at),
-                    history_count=history_count,
-                    rule_confidence=rule_confidence,
-                    fallback_reason="invalid",
-                )
+            raw = await asyncio.wait_for(self._reviewer(messages), timeout=self._timeout_seconds)
+            reviewed_state = _parse_reviewed_state(raw, state, message=message, reasons=reasons)
             return _outcome(
                 reviewed_state,
                 status="applied",
                 reasons=reasons,
                 latency_ms=_elapsed_ms(started_at),
-                history_count=history_count,
+                history_count=len(recent_history),
                 rule_confidence=rule_confidence,
                 review_confidence=reviewed_state.confidence,
             )
@@ -422,9 +353,14 @@ def build_semantic_review_messages(
     """Build complete-turn provider input under the selected serving budget."""
 
     selected_reasons = tuple(semantic_review_reasons(message, state) if reasons is None else reasons)
+    return _build_review_messages(
+        message, _recent_dialogue(history, context_budget=context_budget), selected_reasons, context_budget,
+    )
+
+
+def _build_review_messages(message, recent_history, selected_reasons, context_budget):
     if not set(selected_reasons) <= REVIEW_REASON_IDS:
         raise ValueError("unknown semantic review reason")
-    recent_history = _recent_dialogue(history, context_budget=context_budget)
     if context_budget is None and (len(message or "") > MAX_REVIEW_MESSAGE_CHARS or sum(
         len(item["content"]) for item in recent_history
     ) > MAX_REVIEW_HISTORY_TOTAL_CHARS):
@@ -775,7 +711,6 @@ def _outcome(
     rule_confidence: float,
     latency_ms: float = 0.0,
     review_confidence: float | None = None,
-    fallback_reason: SemanticFallbackReason = "",
 ) -> SemanticReviewOutcome:
     return SemanticReviewOutcome(
         state=state,
@@ -785,16 +720,15 @@ def _outcome(
         history_count=history_count,
         rule_confidence=rule_confidence,
         review_confidence=review_confidence,
-        fallback_reason=fallback_reason,
     )
 
 
 def _valid_timeout(value: float) -> float:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
-        return DEFAULT_REVIEW_TIMEOUT_SECONDS
+        raise ValueError("semantic review timeout must be finite and positive")
     timeout = float(value)
     if not math.isfinite(timeout) or timeout <= 0.0:
-        return DEFAULT_REVIEW_TIMEOUT_SECONDS
+        raise ValueError("semantic review timeout must be finite and positive")
     return timeout
 
 
@@ -813,7 +747,6 @@ __all__ = [
     "SemanticReviewer",
     "SemanticReviewOutcome",
     "SemanticReviewStatus",
-    "SemanticFallbackReason",
     "SemanticStateEstimator",
     "build_semantic_review_messages",
     "semantic_review_reasons",

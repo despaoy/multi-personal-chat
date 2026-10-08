@@ -254,3 +254,29 @@ async def test_relation_failure_keeps_formatted_root_diagnostic(monkeypatch, cap
     assert result.interaction_count == 1 and len(records) == 1
     assert records[0].getMessage() == "角色关系更新失败 character=role"
     assert isinstance(records[0].exc_info[1], RuntimeError)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("selection", ["explicit", "mapped"])
+async def test_real_context_failure_stops_generation_and_releases_slot(monkeypatch, selection):
+    from api import generate
+
+    real_prepare = generate._prepare_character_turn
+    gen, runtime, request, _, generation, storage = generation_environment(monkeypatch, "openai_compat")
+    monkeypatch.setattr(gen, "_prepare_character_turn", real_prepare)
+    if selection == "mapped":
+        request.characterId = None
+        gen.db.loras = [{"id": "unit-lora", "name": "unit-persona", "status": "active"}]
+        monkeypatch.setattr(gen, "get_lora_character_id", lambda name: "tsukiyashiro_kisaki")
+    failure = RuntimeError("fiction-private-model-diagnostic")
+    service = SimpleNamespace(prepare_turn=AsyncMock(side_effect=failure))
+    try:
+        with pytest.raises(HTTPException) as caught:
+            await gen._generate_reply_impl(request, enable_rag=False, record_invocation=False, character_service=service)
+        assert caught.value.status_code == 503 and caught.value.__cause__ is failure
+        assert "fiction-private" not in str(caught.value.detail)
+        generation.assert_not_awaited()
+        storage.assert_not_awaited()
+        assert runtime.active == runtime.reserved == 0
+    finally:
+        await runtime.shutdown(timeout=1)

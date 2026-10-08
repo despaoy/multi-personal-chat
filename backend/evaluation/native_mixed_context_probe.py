@@ -474,7 +474,6 @@ async def main(args):
                 selection_status=prepared.memory_selection_status,
                 selection_reason=prepared.memory_selection_reason,
                 semantic_status=prepared.semantic_review_status,
-                semantic_reason=prepared.semantic_review_fallback_reason,
                 policy_status=prepared.contextual_policy_status,
                 policy_reason=prepared.contextual_policy_reason,
                 used_memory_ids=list(prepared.compiled.used_memory_ids),

@@ -52,8 +52,7 @@ async def test_real_context_and_guard_pipeline_has_no_gold_leakage(monkeypatch):
     async def reviewer(messages):
         calls.append(messages)
         assert "secret_gold_marker" not in json.dumps(messages)
-        # Invalid semantic review is recorded and falls back to the actual rule
-        # state; the fixture cannot secretly inject its gold into that state.
+        # Invalid semantic review must stop this arm before reply generation.
         if "state 必须包含" in messages[0]["content"]:
             return "invalid"
         if "allowed_strategies" in messages[-1]["content"]:
@@ -62,13 +61,17 @@ async def test_real_context_and_guard_pipeline_has_no_gold_leakage(monkeypatch):
 
     report = await evaluate([{"id": "a", "query": "你好", "gold": "secret_gold_marker"}], reviewer)
     assert len(report["cases"]) == 3
-    assert report["summary"]["generation_failures"] == 0
+    assert report["summary"]["generation_failures"] == 2
     assert report["summary"]["human_reviews_completed"] == 0
     assert report["cases"][0]["diagnostics"]["state_status"] == "disabled"
-    assert report["cases"][1]["diagnostics"]["state_status"] == "fallback"
-    assert report["cases"][2]["diagnostics"]["policy_status"] == "applied"
-    assert all(row["diagnostics"]["used_memory_ids"] == [] for row in report["cases"])
-    assert len(calls) >= 6
+    assert report["cases"][0]["diagnostics"]["used_memory_ids"] == []
+    for row in report["cases"][1:]:
+        assert row["status"] == "error" and row["error_stage"] == "prepare_turn"
+        assert row["error_type"] == "JSONDecodeError"
+        assert row["generation_attempt_count"] == 0 and row["reply"] == ""
+        assert "diagnostics" not in row
+    assert sum("state 必须包含" in call[0]["content"] for call in calls) == 2
+    assert not any("allowed_strategies" in call[-1]["content"] for call in calls)
 
 
 async def test_generation_errors_are_preserved_not_replaced(monkeypatch):

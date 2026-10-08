@@ -69,15 +69,11 @@ async def test_hard_safety_never_calls_reviewer():
         '{"strategy_ids":["reflect_content"],"instruction":"free text"}',
     ],
 )
-async def test_invalid_model_decisions_retain_baseline(response):
+async def test_invalid_model_decisions_are_rejected(response):
     async def reviewer(_messages):
         return response
-
-    baseline = DecisionPlan(strategy_ids=("reflect_content",))
-    outcome = await _refine(reviewer, baseline=baseline)
-    assert outcome.status == "fallback"
-    assert outcome.reason == "invalid_output"
-    assert outcome.plan is baseline
+    with pytest.raises(ValueError):
+        await _refine(reviewer)
 
 
 async def test_no_advice_boundary_restricts_allowed_actions():
@@ -86,8 +82,8 @@ async def test_no_advice_boundary_restricts_allowed_actions():
         assert "offer_suggestion" not in data["allowed_strategies"]
         return '{"strategy_ids":["offer_suggestion"]}'
 
-    outcome = await _refine(reviewer, state=_state("advice_boundary"))
-    assert outcome.status == "fallback"
+    with pytest.raises(ValueError, match="invalid_strategy"):
+        await _refine(reviewer, state=_state("advice_boundary"))
 
 
 async def test_explicit_question_stays_first_even_if_semantic_policy_prefers_style():
@@ -119,22 +115,21 @@ async def test_cancellation_is_not_swallowed():
         await _refine(reviewer)
 
 
-async def test_policy_falls_back_when_full_history_cannot_be_reviewed():
+async def test_policy_rejects_history_that_cannot_be_fully_reviewed():
     async def reviewer(messages):
         pytest.fail("a clipped history must not reach the model")
 
     baseline = DecisionPlan(strategy_ids=("reflect_content",))
-    result = await ContextualDecisionPolicy(reviewer).refine(
-        baseline,
-        query="继续",
-        history=[{"role": "user", "content": "长" * 6001}],
-        profile=CharacterProfile("c", "角色"),
-        relationship=RelationshipState(),
-        interaction=_state(),
-        has_relevant_memory=False,
-    )
-    assert result.plan is baseline
-    assert result.status == "fallback" and result.reason == "input_budget"
+    with pytest.raises(ValueError, match="budget"):
+        await ContextualDecisionPolicy(reviewer).refine(
+            baseline,
+            query="继续",
+            history=[{"role": "user", "content": "长" * 6001}],
+            profile=CharacterProfile("c", "角色"),
+            relationship=RelationshipState(),
+            interaction=_state(),
+            has_relevant_memory=False,
+        )
 
 
 def test_semantic_marker_does_not_override_uncertainty_or_allow_arbitrary_instructions():
@@ -142,3 +137,26 @@ def test_semantic_marker_does_not_override_uncertainty_or_allow_arbitrary_instru
     priorities, uncertain = _compact_dynamic_projection(InteractionState(), plan)
     assert not priorities
     assert uncertain
+
+
+async def test_policy_provider_error_propagates_without_returning_a_plan():
+    failure = RuntimeError("synthetic policy provider failure")
+    async def reviewer(messages):
+        raise failure
+    with pytest.raises(RuntimeError) as caught:
+        await _refine(reviewer)
+    assert caught.value is failure
+
+
+async def test_policy_timeout_cancels_the_request():
+    cancelled = asyncio.Event()
+    async def reviewer(messages):
+        try:
+            await asyncio.Event().wait()
+        finally:
+            cancelled.set()
+    policy = ContextualDecisionPolicy(reviewer, timeout_seconds=.01)
+    with pytest.raises(TimeoutError):
+        await policy.refine(DecisionPlan(), query="你好", history=(), profile=CharacterProfile("c", "角色"),
+                            relationship=RelationshipState(), interaction=_state(), has_relevant_memory=False)
+    assert cancelled.is_set()

@@ -79,7 +79,6 @@ async def evaluate(cases, reviewer, *, review_mode="all_non_safety", include_mod
         row = {
             "id": case["id"],
             "status": result.status,
-            "fallback_reason": result.fallback_reason,
             "review_reasons": list(result.reasons),
             "rules": asdict(original),
             "reviewed": asdict(result.state),
@@ -104,8 +103,7 @@ async def evaluate(cases, reviewer, *, review_mode="all_non_safety", include_mod
         "cases": rows,
         "summary": {
             "cases": len(rows),
-            "reviewed_cases": sum(row["status"] in {"applied", "fallback"} for row in rows),
-            "fallbacks": sum(row["status"] == "fallback" for row in rows),
+            "reviewed_cases": sum(row["status"] == "applied" for row in rows),
             "cases_missing_required_acts": sum(bool(row["missing_required_acts_at_0_5"]) for row in rows),
             "situation_matches": sum(row["reviewed"]["primary_situation"] == row["expected_situation"] for row in rows),
             "required_safety_misses": sum(
@@ -184,7 +182,7 @@ def main():
     with args.output.open("x", encoding="utf-8") as stream:
         json.dump(report, stream, ensure_ascii=False, indent=2)
     print(json.dumps(report["summary"], ensure_ascii=False))
-    if report["summary"]["fallbacks"] or report["summary"]["required_safety_misses"]:
+    if report["summary"]["required_safety_misses"]:
         raise SystemExit(2)
 
 

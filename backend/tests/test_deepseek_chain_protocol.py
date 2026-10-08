@@ -115,9 +115,8 @@ async def test_fence_normalization_does_not_accept_unsupported_content(change):
     async def reviewer(messages):
         return raw
     original = SituationAnalyzer().estimate(data["source_message"])
-    outcome = await SemanticStateEstimator(reviewer, review_mode="all_non_safety").refine_with_diagnostics(data["source_message"], data["history"], original)
-    assert outcome.status == "fallback" and outcome.fallback_reason == "invalid"
-    assert outcome.state is original
+    with pytest.raises(ValueError):
+        await SemanticStateEstimator(reviewer, review_mode="all_non_safety").refine_with_diagnostics(data["source_message"], data["history"], original)
 
 @pytest.mark.parametrize("status", ["available", "no_match", "retrieval_error"])
 def test_partial_visibility_does_not_prove_never_saved_or_never_told(status):

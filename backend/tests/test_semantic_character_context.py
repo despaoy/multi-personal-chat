@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import asyncio
 
-from character.models import CharacterProfile, InteractionState, RelationshipState
-from character.semantic_state_estimator import SemanticStateEstimator
+import pytest
+
+from character.models import CharacterProfile, RelationshipState
+from character.semantic_state_estimator import SemanticInputBudgetError, SemanticStateEstimator
 from services.character_context import CharacterContextService, TurnInput, build_character_context_service
 
 
@@ -169,68 +171,37 @@ async def test_hard_safety_turn_never_calls_semantic_reviewer():
     assert prepared.interaction.primary_situation == "safety"
 
 
-async def test_timeout_falls_back_to_the_exact_rule_state_and_keeps_character_context():
+async def test_timeout_stops_character_preparation():
     async def slow(_messages):
         await asyncio.sleep(0.1)
         return _review_payload()
-
     service = _service(SemanticStateEstimator(slow, timeout_seconds=0.01))
-    rule_state = service._situation_analyzer.estimate("我当然开心，毕竟又被放鸽子了", ())
-    prepared = await service.prepare_turn(
-        _turn("我当然开心，毕竟又被放鸽子了"),
-        "tsukiyashiro_kisaki",
-    )
-
-    assert prepared.semantic_review_status == "fallback"
-    assert prepared.semantic_review_fallback_reason == "timeout"
-    assert prepared.interaction == rule_state
-    assert prepared.compiled.profile_context
-    assert prepared.compiled.dynamic_context
+    with pytest.raises(TimeoutError):
+        await service.prepare_turn(_turn("我当然开心，毕竟又被放鸽子了"), "tsukiyashiro_kisaki")
 
 
-async def test_rule_analyzer_failure_skips_semantic_review_and_preserves_legacy_fallback():
+async def test_rule_analyzer_failure_stops_before_semantic_review():
     reviewer = _Reviewer(_review_payload())
-    prepared = await _service(
-        SemanticStateEstimator(reviewer),
-        analyzer=_BrokenAnalyzer(),
-    ).prepare_turn(
-        _turn("这轮规则分析器会失败"),
-        "tsukiyashiro_kisaki",
-    )
-
+    service = _service(SemanticStateEstimator(reviewer), analyzer=_BrokenAnalyzer())
+    with pytest.raises(RuntimeError, match="synthetic analyzer failure"):
+        await service.prepare_turn(_turn("这轮规则分析器会失败"), "tsukiyashiro_kisaki")
     assert reviewer.calls == []
-    assert prepared.semantic_review_status == "analysis_failed"
-    assert prepared.interaction == InteractionState()
-    assert "日常互动" in prepared.compiled.dynamic_context
 
 
-async def test_input_budget_fallback_remains_distinct_at_service_boundary():
+async def test_input_budget_failure_remains_distinct_at_service_boundary():
     reviewer = _Reviewer(_review_payload())
     service = _service(SemanticStateEstimator(reviewer, review_mode="all_non_safety"))
     message = "背景。" * 1400 + "我只想安静待一会。"
-    original = service._situation_analyzer.estimate(message, ())
-    prepared = await service.prepare_turn(_turn(message), "tsukiyashiro_kisaki")
-
-    assert prepared.semantic_review_status == "fallback"
-    assert prepared.semantic_review_fallback_reason == "input_budget"
-    assert prepared.interaction == original
-    assert prepared.compiled.profile_context
+    with pytest.raises(SemanticInputBudgetError):
+        await service.prepare_turn(_turn(message), "tsukiyashiro_kisaki")
     assert reviewer.calls == []
 
 
-async def test_unexpected_custom_estimator_failure_keeps_the_rule_state():
-    service = _service(_BrokenSemanticEstimator())
-    rule_state = service._situation_analyzer.estimate("我当然开心，毕竟又被放鸽子了", ())
-
-    prepared = await service.prepare_turn(
-        _turn("我当然开心，毕竟又被放鸽子了"),
-        "tsukiyashiro_kisaki",
-    )
-
-    assert prepared.semantic_review_status == "fallback"
-    assert prepared.semantic_review_fallback_reason == "error"
-    assert prepared.interaction == rule_state
-    assert prepared.compiled.profile_context
+async def test_custom_estimator_failure_is_not_replaced_by_rule_state():
+    with pytest.raises(RuntimeError, match="synthetic estimator failure"):
+        await _service(_BrokenSemanticEstimator()).prepare_turn(
+            _turn("我当然开心，毕竟又被放鸽子了"), "tsukiyashiro_kisaki",
+        )
 
 
 async def test_service_without_estimator_keeps_the_existing_constructor_contract():
@@ -253,3 +224,16 @@ def test_production_service_factory_wires_the_environment_controlled_reviewer(mo
     assert service._semantic_estimator is not None
     assert service._semantic_estimator._reviewer is not None
     assert service._semantic_estimator._timeout_seconds == 1.75
+
+
+async def test_decision_failure_is_not_retried_with_fewer_arguments():
+    from unittest.mock import Mock
+
+    service = _service()
+    failure = RuntimeError("synthetic decision failure")
+    decide = Mock(side_effect=failure)
+    service._decision_policy.decide = decide
+    with pytest.raises(RuntimeError) as caught:
+        await service.prepare_turn(_turn("你好"), "tsukiyashiro_kisaki")
+    assert caught.value is failure
+    decide.assert_called_once()

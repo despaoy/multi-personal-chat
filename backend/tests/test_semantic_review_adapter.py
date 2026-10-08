@@ -35,18 +35,17 @@ def test_settings_accept_explicit_truthy_values(value):
 
 
 @pytest.mark.parametrize("value", ["", "invalid", "0", "-1", "nan", "inf"])
-def test_invalid_timeouts_fall_back_to_the_safe_default(value):
-    settings = SemanticReviewSettings.from_env({"DYNAMIC_CONTEXT_SEMANTIC_REVIEW_TIMEOUT_SECONDS": value})
+def test_invalid_timeouts_fail_explicitly(value):
+    with pytest.raises(ValueError):
+        SemanticReviewSettings.from_env({"DYNAMIC_CONTEXT_SEMANTIC_REVIEW_TIMEOUT_SECONDS": value})
 
-    assert settings.timeout_seconds == DEFAULT_SEMANTIC_REVIEW_TIMEOUT_SECONDS
 
-
-def test_timeout_is_bounded_to_prevent_pathological_configuration():
-    too_short = SemanticReviewSettings.from_env({"DYNAMIC_CONTEXT_SEMANTIC_REVIEW_TIMEOUT_SECONDS": "0.001"})
-    too_long = SemanticReviewSettings.from_env({"DYNAMIC_CONTEXT_SEMANTIC_REVIEW_TIMEOUT_SECONDS": "999"})
-
-    assert too_short.timeout_seconds == MIN_SEMANTIC_REVIEW_TIMEOUT_SECONDS
-    assert too_long.timeout_seconds == MAX_SEMANTIC_REVIEW_TIMEOUT_SECONDS
+def test_out_of_range_timeout_is_rejected_instead_of_clamped():
+    for value in ["0.001", "999", True]:
+        with pytest.raises(ValueError):
+            SemanticReviewSettings.from_env({"DYNAMIC_CONTEXT_SEMANTIC_REVIEW_TIMEOUT_SECONDS": value})
+    for value in [MIN_SEMANTIC_REVIEW_TIMEOUT_SECONDS, MAX_SEMANTIC_REVIEW_TIMEOUT_SECONDS]:
+        assert SemanticReviewSettings.from_env({"DYNAMIC_CONTEXT_SEMANTIC_REVIEW_TIMEOUT_SECONDS": value}).timeout_seconds == value
 
 
 @pytest.mark.asyncio

@@ -1017,7 +1017,7 @@ async def test_prepare_turn_uses_history_aware_soft_policy_in_dynamic_context():
 
 
 @pytest.mark.asyncio
-async def test_prepare_turn_keeps_character_context_when_soft_analysis_fails():
+async def test_prepare_turn_stops_when_soft_analysis_fails():
     service = CharacterContextService(
         _Profiles(),
         _MemoryRepository(),  # type: ignore[arg-type]
@@ -1026,20 +1026,16 @@ async def test_prepare_turn_keeps_character_context_when_soft_analysis_fails():
         situation_analyzer=_BrokenAnalyzer(),  # type: ignore[arg-type]
     )
     history = ({"role": "assistant", "content": "在听。"},)
-    prepared = await service.prepare_turn(
-        TurnInput(
-            message="这轮分析器会失败",
-            platform="qq",
-            adapter="onebot",
-            sender_id="user-1",
-            conversation_id="user-1",
-            conversation_type="private",
-            history=history,
-        ),
-        "tsukiyashiro_kisaki",
-    )
-
-    assert prepared.history == history
-    assert "日常互动" in prepared.compiled.dynamic_context
-    assert "互动状态（系统估计）" not in prepared.compiled.dynamic_context
-    assert "这轮分析器会失败" not in prepared.compiled.dynamic_context
+    with pytest.raises(RuntimeError, match="synthetic analyzer failure"):
+        await service.prepare_turn(
+            TurnInput(
+                message="这轮分析器会失败",
+                platform="qq",
+                adapter="onebot",
+                sender_id="user-1",
+                conversation_id="user-1",
+                conversation_type="private",
+                history=history,
+            ),
+            "tsukiyashiro_kisaki",
+        )

@@ -3,8 +3,7 @@
 This module intentionally knows nothing about the character generation
 pipeline.  It calls the selected low-level provider directly so a semantic review can
 never re-enter reply generation, RAG, memory, or persona assembly.  Parsing
-and fail-closed recovery remain the responsibility of
-``SemanticStateEstimator``.
+remains the responsibility of ``SemanticStateEstimator``; failures propagate.
 """
 
 from __future__ import annotations
@@ -19,7 +18,7 @@ SEMANTIC_REVIEW_ENABLED_ENV = "DYNAMIC_CONTEXT_SEMANTIC_REVIEW_ENABLED"
 SEMANTIC_REVIEW_TIMEOUT_ENV = "DYNAMIC_CONTEXT_SEMANTIC_REVIEW_TIMEOUT_SECONDS"
 # Real Qwen 7B/8B reviewer runs on the supported local/server transports
 # complete in roughly 3.0-3.8 seconds.  Five seconds leaves bounded headroom
-# while preserving fail-closed recovery under load.
+# while keeping the review latency bounded under load.
 DEFAULT_SEMANTIC_REVIEW_TIMEOUT_SECONDS = 5.0
 MIN_SEMANTIC_REVIEW_TIMEOUT_SECONDS = 0.1
 MAX_SEMANTIC_REVIEW_TIMEOUT_SECONDS = 30.0
@@ -75,8 +74,6 @@ class VLLMSemanticReviewer:
         request_messages = _copy_messages(messages)
         client = await self._client_factory()
         if client is None:
-            # Do not convert this into a semantic answer.  The estimator owns
-            # the fail-closed fallback to the original deterministic state.
             raise RuntimeError("semantic review client is unavailable")
         return await client.generate(
             messages=request_messages,
@@ -152,11 +149,12 @@ def _parse_timeout(raw: object) -> float:
         return DEFAULT_SEMANTIC_REVIEW_TIMEOUT_SECONDS
     try:
         timeout = float(raw)
-    except (TypeError, ValueError):
-        return DEFAULT_SEMANTIC_REVIEW_TIMEOUT_SECONDS
-    if not math.isfinite(timeout) or timeout <= 0.0:
-        return DEFAULT_SEMANTIC_REVIEW_TIMEOUT_SECONDS
-    return min(MAX_SEMANTIC_REVIEW_TIMEOUT_SECONDS, max(MIN_SEMANTIC_REVIEW_TIMEOUT_SECONDS, timeout))
+    except (TypeError, ValueError) as exc:
+        raise ValueError("semantic review timeout must be a number") from exc
+    if isinstance(raw, bool) or not math.isfinite(timeout) or not MIN_SEMANTIC_REVIEW_TIMEOUT_SECONDS <= timeout <= MAX_SEMANTIC_REVIEW_TIMEOUT_SECONDS:
+        raise ValueError("semantic review timeout must be between 0.1 and 30 seconds")
+    return timeout
+
 
 
 __all__ = [

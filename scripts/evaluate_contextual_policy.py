@@ -83,7 +83,6 @@ async def evaluate(cases, reviewer, state_source="supplied"):
             safety_triggered=case.get("safety_triggered", False),
         )
         state_status = "supplied"
-        state_reason = ""
         review_reasons = ()
         if state_source != "supplied":
             # Gold acts/situation remain evaluator-only in inferred modes.
@@ -93,7 +92,6 @@ async def evaluate(cases, reviewer, state_source="supplied"):
                 reviewed = await estimator.refine_with_diagnostics(case["query"], case.get("history", []), interaction)
                 interaction = reviewed.state
                 state_status = reviewed.status
-                state_reason = reviewed.fallback_reason
                 review_reasons = reviewed.reasons
         inferred_acts = {signal.signal_id: signal.score for signal in interaction.user_acts}
         # Fixture acts are required facets, not an exhaustive annotation of all
@@ -104,7 +102,6 @@ async def evaluate(cases, reviewer, state_source="supplied"):
             {
                 "id": case["id"],
                 "status": state_status,
-                "fallback_reason": state_reason,
                 "review_reasons": list(review_reasons),
                 "expected_situation": case["situation"],
                 "inferred_situation": interaction.primary_situation,
@@ -151,7 +148,6 @@ async def evaluate(cases, reviewer, state_source="supplied"):
                     "reason": outcome.reason,
                     "state_source": state_source,
                     "state_review_status": state_status,
-                    "state_review_reason": state_reason,
                     "inferred_situation": interaction.primary_situation,
                     "inferred_acts": {signal.signal_id: signal.score for signal in interaction.user_acts},
                     "baseline_constraint_violations": constraint_violations(
@@ -186,13 +182,11 @@ async def evaluate(cases, reviewer, state_source="supplied"):
             "required_act_score_threshold": 0.5,
             "cases_missing_required_acts": sum(bool(row["missing_required_acts_at_0_5"]) for row in state_rows),
             "situation_matches": sum(row["expected_situation"] == row["inferred_situation"] for row in state_rows),
-            "reviewed_cases": sum(row["status"] in {"applied", "fallback"} for row in state_rows),
+            "reviewed_cases": sum(row["status"] == "applied" for row in state_rows),
         },
         "cases": rows,
         "summary": {
             "decisions": len(rows),
-            "fallbacks": sum(row["status"] == "fallback" for row in rows),
-            "state_review_fallback_cases": sum(row["state_review_status"] == "fallback" for row in rows[::2]),
             "baseline_projection_constraint_violations": sum(
                 bool(row["baseline_constraint_violations"]) for row in rows
             ),
@@ -247,9 +241,7 @@ def main():
         json.dump(report, output, ensure_ascii=False, indent=2)
     print(json.dumps(report["summary"], ensure_ascii=False, indent=2))
     if (
-        report["summary"]["fallbacks"]
-        or report["summary"]["state_review_fallback_cases"]
-        or report["summary"]["constraint_violations"]
+        report["summary"]["constraint_violations"]
         or report["summary"]["projection_constraint_violations"]
     ):
         raise SystemExit(2)

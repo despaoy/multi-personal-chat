@@ -2,10 +2,10 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
+from services.character_context import CharacterContextService, PreparedCharacterTurn, TurnInput
 
 from character.memory_operation import operation_receipt_context
 from character.models import CompiledCharacterContext, RelationshipState, UserScope
-from services.character_context import CharacterContextService, PreparedCharacterTurn, TurnInput
 
 
 def setup_service(monkeypatch, receipt):
@@ -85,3 +85,29 @@ async def test_api_preparation_only_executes_when_explicitly_enabled(enabled):
         service.prepare_turn.assert_not_awaited()
     else:
         service.prepare_interactive_turn.assert_not_awaited()
+
+
+@pytest.mark.parametrize("status", ["erased", "partial"])
+async def test_context_failure_preserves_executed_memory_operation_receipt(monkeypatch, status):
+    from fastapi import HTTPException
+    from services.character_context import ContextAfterMemoryOperationError
+
+    from api.generate import _prepare_character_turn
+    from db.schemas import MessageRequest
+
+    receipt = {"status": status, "persisted": 1, "error": "fiction-private-memory-text"}
+    service, worker = setup_service(monkeypatch, receipt)
+    failure = RuntimeError("fiction-private-provider-text")
+    service.prepare_turn.side_effect = failure
+    request = MessageRequest(message="请从记忆里删除我的住址。", userId="u", sessionId="c", sourceMessageId="operation-1")
+    with pytest.raises(HTTPException) as caught:
+        await _prepare_character_turn(request, "role", character_service=service, execute_memory_operations=True)
+    error = caught.value
+    assert error.status_code == 503 and error.detail["code"] == "context_failed_after_memory_operation"
+    assert "已确认完成的操作数：1" in error.detail["memoryOperation"]
+    assert "回复未生成" in error.detail["message"]
+    assert "fiction-private" not in str(error.detail)
+    assert isinstance(error.__cause__, ContextAfterMemoryOperationError)
+    assert error.__cause__.__cause__ is failure
+    worker.schedule_and_wait.assert_awaited_once()
+    service.prepare_turn.assert_awaited_once()

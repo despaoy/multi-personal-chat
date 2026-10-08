@@ -137,10 +137,15 @@ async def test_context_failure_cannot_advertise_capability():
         raise RuntimeError("read unavailable")
 
     service.prepare_turn = failed
-    result = await _prepare_character_turn(
-        request("请从长期记忆中删除我的猫名。"), "role", character_service=service, defer_memory_operations=True
-    )
-    assert result is None and not service.writes
+    from fastapi import HTTPException
+
+    with pytest.raises(HTTPException) as caught:
+        await _prepare_character_turn(
+            request("请从长期记忆中删除我的猫名。"), "role", character_service=service, defer_memory_operations=True
+        )
+    assert caught.value.status_code == 503
+    assert isinstance(caught.value.__cause__, RuntimeError)
+    assert not service.writes
 
 
 @pytest.mark.parametrize("deferred", [False, True])

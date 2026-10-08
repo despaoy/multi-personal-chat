@@ -4,24 +4,18 @@ import pytest
 from scripts.evaluate_semantic_state import evaluate, validate_cases
 
 
-async def test_state_fixture_gold_is_not_model_input_and_failure_is_preserved():
+async def test_state_fixture_gold_is_not_model_input_and_failure_stops_evaluation():
     seen = []
-
     async def reviewer(messages):
         seen.append(messages)
         assert "fixture_only_marker" not in json.dumps(messages)
         return "invalid"
-
-    report = await evaluate(
-        [{"id": "fixture_only_marker", "query": "你好", "situation": "factual", "acts": ["advice_request"]}],
-        reviewer,
-        include_model_output=True,
-    )
+    with pytest.raises(json.JSONDecodeError):
+        await evaluate(
+            [{"id": "fixture_only_marker", "query": "你好", "situation": "factual", "acts": ["advice_request"]}],
+            reviewer, include_model_output=True,
+        )
     assert len(seen) == 1
-    assert report["summary"]["fallbacks"] == 1
-    assert report["summary"]["cases_missing_required_acts"] == 1
-    assert report["cases"][0]["reviewed"] == report["cases"][0]["rules"]
-    assert report["cases"][0]["model_final_outputs"] == ["invalid"]
 
 
 async def test_safety_gate_bypasses_even_full_state_experiment():

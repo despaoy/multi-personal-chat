@@ -1,4 +1,4 @@
-"""Contracts for selective, fail-closed semantic interaction review."""
+"""Contracts for selective, explicit-failure semantic interaction review."""
 
 from __future__ import annotations
 
@@ -19,6 +19,7 @@ from character.semantic_state_estimator import (
     REVIEW_MULTI_INTENT,
     REVIEW_REFERENCE,
     REVIEW_SARCASM,
+    SemanticInputBudgetError,
     SemanticReviewOutcome,
     SemanticStateEstimator,
     semantic_review_reasons,
@@ -236,14 +237,12 @@ async def test_complete_history_preserves_late_correction_beyond_old_prefix():
         ("你好", [{"role": "user", "content": "字" * 601}] * 6),
     ],
 )
-async def test_complete_input_over_budget_preserves_original_without_provider_call(message, history):
-    original = _state()
+async def test_complete_input_over_budget_fails_without_provider_call(message, history):
     reviewer = _Reviewer(_review_payload())
-    outcome = await SemanticStateEstimator(reviewer, review_mode="all_non_safety").refine_with_diagnostics(
-        message, history, original
-    )
-    assert outcome.state is original
-    assert (outcome.status, outcome.fallback_reason) == ("fallback", "input_budget")
+    with pytest.raises(SemanticInputBudgetError):
+        await SemanticStateEstimator(reviewer, review_mode="all_non_safety").refine_with_diagnostics(
+            message, history, _state()
+        )
     assert reviewer.calls == []
 
 
@@ -343,12 +342,9 @@ async def test_primary_situation_may_choose_one_of_several_equal_top_scores():
         _review_payload(user_acts={"seek_support": 1.01}),
     ],
 )
-async def test_invalid_or_untrusted_output_preserves_exact_original_state(response):
-    original = _state(confidence=0.2)
-
-    result = await SemanticStateEstimator(_Reviewer(response)).refine("随便吧", (), original)
-
-    assert result is original
+async def test_invalid_or_untrusted_output_is_rejected(response):
+    with pytest.raises(ValueError):
+        await SemanticStateEstimator(_Reviewer(response)).refine("随便吧", (), _state(confidence=0.2))
 
 
 async def test_free_text_outside_state_is_discarded_not_promoted_to_trusted_fields():
@@ -672,16 +668,14 @@ async def test_diagnostic_outcomes_are_frozen_bounded_and_store_no_raw_provider_
 
     assert disabled.status == "disabled"
     assert disabled.state is ambiguous
-    assert disabled.history_count == 2
+    assert disabled.history_count == 0
     assert disabled.rule_confidence == 0.2
     assert disabled.review_confidence is None
-    assert disabled.fallback_reason == ""
     assert REVIEW_LOW_CONFIDENCE in disabled.reasons
 
     assert applied.status == "applied"
     assert applied.review_confidence == 0.72
     assert applied.latency_ms >= 0.0
-    assert applied.fallback_reason == ""
     assert {field.name for field in fields(SemanticReviewOutcome)} == {
         "state",
         "status",
@@ -690,69 +684,31 @@ async def test_diagnostic_outcomes_are_frozen_bounded_and_store_no_raw_provider_
         "history_count",
         "rule_confidence",
         "review_confidence",
-        "fallback_reason",
     }
     with pytest.raises(FrozenInstanceError):
-        applied.status = "fallback"  # type: ignore[misc]
+        applied.status = "disabled"  # type: ignore[misc]
 
 
-async def test_diagnostic_statuses_distinguish_noop_timeout_invalid_and_provider_error():
-    ambiguous = _state(confidence=0.2)
-    clear = _state(
-        primary="factual",
-        situations=(("factual", 0.95),),
-        acts=(("information_request", 0.9),),
-        needs=(("information", 0.9),),
-    )
-
-    async def slow(_messages):
-        await asyncio.sleep(0.1)
-        return _review_payload()
-
-    async def broken(_messages):
-        raise RuntimeError("provider unavailable")
-
-    not_needed = await SemanticStateEstimator(_Reviewer(_review_payload())).refine_with_diagnostics(
-        "一加一等于多少？",
-        (),
-        clear,
-    )
-    timed_out = await SemanticStateEstimator(slow, timeout_seconds=0.01).refine_with_diagnostics(
-        "随便吧",
-        (),
-        ambiguous,
-    )
-    invalid = await SemanticStateEstimator(_Reviewer(_review_payload(confidence=2.0))).refine_with_diagnostics(
-        "随便吧",
-        (),
-        ambiguous,
-    )
-    errored = await SemanticStateEstimator(broken).refine_with_diagnostics("随便吧", (), ambiguous)
-
-    assert (not_needed.status, not_needed.fallback_reason) == ("not_needed", "")
-    assert (timed_out.status, timed_out.fallback_reason) == ("fallback", "timeout")
-    assert (invalid.status, invalid.fallback_reason) == ("fallback", "invalid")
-    assert (errored.status, errored.fallback_reason) == ("fallback", "error")
-    assert timed_out.state is ambiguous
-    assert invalid.state is ambiguous
-    assert errored.state is ambiguous
 
 
-async def test_timeout_and_provider_exception_both_fail_closed():
+
+async def test_timeout_cancels_reviewer_and_provider_error_is_preserved():
     original = _state(confidence=0.2)
-
+    cancelled = asyncio.Event()
     async def slow(_messages):
-        await asyncio.sleep(0.1)
-        return _review_payload()
-
+        try:
+            await asyncio.Event().wait()
+        finally:
+            cancelled.set()
+    failure = RuntimeError("synthetic provider failure")
     async def broken(_messages):
-        raise RuntimeError("provider unavailable")
-
-    timed_out = await SemanticStateEstimator(slow, timeout_seconds=0.01).refine("随便吧", (), original)
-    failed = await SemanticStateEstimator(broken).refine("随便吧", (), original)
-
-    assert timed_out is original
-    assert failed is original
+        raise failure
+    with pytest.raises(TimeoutError):
+        await SemanticStateEstimator(slow, timeout_seconds=0.01).refine("随便吧", (), original)
+    assert cancelled.is_set()
+    with pytest.raises(RuntimeError) as caught:
+        await SemanticStateEstimator(broken).refine("随便吧", (), original)
+    assert caught.value is failure
 
 
 async def test_no_reviewer_or_no_trigger_is_a_noop():
@@ -770,27 +726,18 @@ async def test_no_reviewer_or_no_trigger_is_a_noop():
     assert reviewer.calls == []
 
 
-async def test_context_local_recursion_guard_prevents_nested_semantic_review():
+async def test_recursion_fails_and_releases_context_guard():
     original = _state(confidence=0.2)
-
-    class _RecursiveReviewer:
-        calls = 0
-        nested_result = None
-
-        async def __call__(self, _messages):
-            self.calls += 1
-            self.nested_result = await estimator.refine_with_diagnostics("嗯……", (), original)
-            return _review_payload()
-
-    reviewer = _RecursiveReviewer()
-    estimator = SemanticStateEstimator(reviewer)
-
-    result = await estimator.refine("嗯……", (), original)
-
-    assert result.primary_situation == "emotional"
-    assert reviewer.calls == 1
-    assert reviewer.nested_result.status == "recursive_skip"
-    assert reviewer.nested_result.state is original
+    calls = []
+    async def recursive(messages):
+        calls.append(messages)
+        return await estimator.refine_with_diagnostics("嗯……", (), original)
+    estimator = SemanticStateEstimator(recursive)
+    with pytest.raises(RuntimeError, match="recursive"):
+        await estimator.refine("嗯……", (), original)
+    assert len(calls) == 1
+    estimator._reviewer = _Reviewer(_review_payload())
+    assert (await estimator.refine("嗯……", (), original)).primary_situation == "emotional"
 
 
 async def test_contextvar_review_guard_is_isolated_across_concurrent_tasks():
@@ -818,3 +765,19 @@ async def test_contextvar_review_guard_is_isolated_across_concurrent_tasks():
 
     assert reviewer.calls == 2
     assert first.status == second.status == "applied"
+
+
+@pytest.mark.parametrize("timeout", [True, None, "5", 0, -1, float("nan"), float("inf")])
+def test_invalid_estimator_timeout_is_not_defaulted(timeout):
+    with pytest.raises(ValueError):
+        SemanticStateEstimator(None, timeout_seconds=timeout)
+
+
+async def test_disabled_or_protected_review_does_not_validate_unused_history_budget():
+    history = [{"role": "user", "content": "背景" * 4000}]
+    original = _state(confidence=0.2)
+    assert await SemanticStateEstimator(None).refine("随便吧", history, original) is original
+    safety = SituationAnalyzer().estimate("我现在有立即伤害自己的打算。")
+    reviewer = _Reviewer(_review_payload())
+    assert await SemanticStateEstimator(reviewer).refine("随便吧", history, safety) is safety
+    assert reviewer.calls == []

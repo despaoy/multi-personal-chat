@@ -150,7 +150,6 @@ async def main(args):
             dict(
                 user_acts=[dict(id=s.signal_id, score=s.score) for s in prepared.interaction.user_acts],
                 semantic_status=prepared.semantic_review_status,
-                semantic_reason=prepared.semantic_review_fallback_reason,
                 semantic_triggers=prepared.semantic_review_reasons,
                 selection_status=prepared.memory_selection_status,
                 selection_reason=prepared.memory_selection_reason,
