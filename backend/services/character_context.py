@@ -495,16 +495,18 @@ class CharacterContextService:
                 outcome.memory_enrichment_mode = classify_memory_write_mode(turn.message)
                 # Keep authorized complete speech durable even when semantic
                 # enrichment is full. Pending identity metadata is not speech.
-                capture = getattr(self._memory_repo, "capture_source", None)
-                if (source_message_id and callable(capture) and memory_write_allowed(turn.message)
-                        and not is_memory_erasure_request(turn.message)):
+                if memory_write_allowed(turn.message) and not is_memory_erasure_request(turn.message):
                     outcome.source_capture = "failed"
                     outcome.memory_enrichment_status = "source_capture_failed"
-                    outcome.source_capture = await capture(
+                    if not source_message_id:
+                        raise ValueError("Memory source capture requires source_message_id")
+                    outcome.source_capture = await self._memory_repo.capture_source(
                         prepared.character_id, prepared.user_scope,
                         source_message_id=source_message_id, body=turn.message,
                         observed_at=prepared.received_at,
                     )
+                    if outcome.source_capture not in {"recorded", "stale", "revoked", "conflict"}:
+                        raise ValueError("Source capture did not confirm persistence")
                 if outcome.source_capture in {"stale", "revoked", "conflict"}:
                     outcome.memory_enrichment_status = "source_" + outcome.source_capture
                 else:

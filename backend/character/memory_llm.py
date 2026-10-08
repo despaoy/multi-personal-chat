@@ -1824,17 +1824,17 @@ class MemoryEnrichmentScheduler:
             # Preserve complete admitted speech before interpretation. Empty or
             # invalid model proposals must not erase source-only observations.
             # Erasure instructions themselves are never added to the quote pool.
-            capture = getattr(job.repository, "capture_source", None)
             deferred_erasure = _future_only_erasure_request(job.message, observed_at=job.observed_at)
             erasure_now = is_memory_erasure_request(job.message) and not deferred_erasure
             if deferred_erasure:
                 result["source_erasure_policy"] = "deferred_until_source_start"
             if erasure_now:
                 result["source_capture"] = "erase_request"
-            elif not job.source_message_id:
-                result["source_capture"] = "missing_identity"
-            elif callable(capture):
-                result["source_capture"] = await capture(
+            else:
+                result["source_capture"] = "failed"
+                if not job.source_message_id:
+                    raise ValueError("Memory source capture requires source_message_id")
+                result["source_capture"] = await job.repository.capture_source(
                     job.character_id, job.user_scope, source_message_id=job.source_message_id,
                     body=job.message, observed_at=job.observed_at)
                 if result["source_capture"] in {"stale", "revoked", "conflict"}:
@@ -1845,12 +1845,12 @@ class MemoryEnrichmentScheduler:
                     self._skipped += 1
                     self._last_outcome = "skipped"
                     return
-            else:
-                result["source_capture"] = "unsupported_adapter"
+                if result["source_capture"] != "recorded":
+                    raise ValueError("Source capture did not confirm persistence")
             if job.source_only:
                 # Original speech is retained without asking a model to turn
                 # a hypothetical into a fact. Existing capture/privacy fences
-                # above still apply, including missing identities and erasure.
+                # above still apply; missing capture cannot report success.
                 result["status"] = "source_only"
                 self._no_change += 1
                 self._last_outcome = "source_only"

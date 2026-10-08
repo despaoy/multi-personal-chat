@@ -390,6 +390,9 @@ class _Completion:
 
 
 class _ClaimRepository:
+    async def capture_source(self, *args, **kwargs):
+        return "recorded"
+
     def __init__(self, records: list[dict] | None = None) -> None:
         self.records = records or []
         self.claims: list[tuple[tuple, dict]] = []
@@ -576,6 +579,9 @@ async def test_complete_turn_passes_only_actual_injected_memory_ids(monkeypatch)
             return True
 
     class _Repository:
+        async def capture_source(self, *args, **kwargs):
+            return "recorded"
+
         async def increment_interaction(self, character_id, user_scope):
             return 1
 

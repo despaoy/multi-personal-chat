@@ -33,7 +33,7 @@ async def test_background_model_receives_source_clock_not_processing_clock(tmp_p
         config=MemoryLlmConfig(True, "unused", "unused"), completion=completion)
     repo = DatabaseCharacterMemoryRepository(SQLiteDB(tmp_path / "model-clock.sqlite"))
     assert scheduler.schedule(repository=repo, character_id="role", user_scope=SCOPE,
-                              message="我明天要面试。", rule_hints=[], observed_at=RECEIVED)
+                              message="我明天要面试。", rule_hints=[], observed_at=RECEIVED, source_message_id="source-clock")
     await scheduler.shutdown(timeout=3)
     assert datetime.fromisoformat(completion.payload["current_time_utc"]) == RECEIVED
     assert completion.payload["current_time_local"] == "2026-01-31T23:59:00+08:00"

@@ -102,6 +102,9 @@ class _Completion:
 
 
 class _Repository:
+    async def capture_source(self, *args, **kwargs):
+        return "recorded"
+
     def __init__(self) -> None:
         self.writes = []
 
@@ -167,6 +170,7 @@ async def test_scheduler_passes_old_relevant_memory_to_llm():
         character_id="kisaki",
         user_scope=UserScope("qq", "astrbot", "user-1", "user-1", "private"),
         message="请记住我现在不喝咖啡了",
+        source_message_id="complete-source",
         rule_hints=[],
     )
     await scheduler.shutdown(timeout=2.0)
