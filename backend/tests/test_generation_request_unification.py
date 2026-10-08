@@ -229,3 +229,71 @@ async def test_production_rag_uses_shared_grounded_request(monkeypatch):
     assert captured["messages"] == [dict(message) for message in expected.messages]
     assert captured["temperature"] == expected.generation["temperature"] == 0.5
     assert expected.prompt_policy_version
+
+
+@pytest.mark.asyncio
+async def test_configuration_read_failure_stops_before_model_or_save(monkeypatch):
+    from unittest.mock import AsyncMock
+
+    from fastapi import HTTPException
+
+    from api import generate
+    from inference import model_manager
+
+    failure = OSError("database disconnected")
+
+    class BrokenDatabase:
+        loras = []
+
+        @property
+        def config(self):
+            raise failure
+
+    monkeypatch.setattr(model_manager, "get_model_manager", lambda: SimpleNamespace(
+        _current_provider=SimpleNamespace(value="openai_compat")))
+    monkeypatch.setattr(generate, "INPUT_VALIDATOR_AVAILABLE", False)
+    model, save = AsyncMock(), AsyncMock()
+    monkeypatch.setattr(generate, "_generate_with_retrieval", model)
+    monkeypatch.setattr(generate, "_save_message", save)
+    with pytest.raises(HTTPException) as caught:
+        await generate._generate_reply_impl(MessageRequest(message="完整测试问题"), message_db=BrokenDatabase())
+    assert caught.value.status_code == 503 and caught.value.__cause__ is failure
+    model.assert_not_awaited()
+    save.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_native_timeout_cancels_work_and_releases_capacity_without_breaker(monkeypatch):
+    import asyncio
+    from unittest.mock import AsyncMock
+
+    from fastapi import HTTPException
+
+    from api import generate
+    from inference import model_manager
+
+    semaphore = asyncio.Semaphore(1)
+    cancelled = asyncio.Event()
+
+    async def pending(*args, **kwargs):
+        try:
+            await asyncio.Event().wait()
+        finally:
+            cancelled.set()
+
+    monkeypatch.setattr(model_manager, "get_model_manager", lambda: SimpleNamespace(
+        _current_provider=SimpleNamespace(value="openai_compat"), set_lora_adapter=lambda _: None))
+    monkeypatch.setattr(generate, "db", SimpleNamespace(config={}, loras=[]))
+    monkeypatch.setattr(generate, "INPUT_VALIDATOR_AVAILABLE", False)
+    monkeypatch.setattr(generate, "response_cache", None)
+    monkeypatch.setattr(generate, "circuit_breaker_registry", None)
+    monkeypatch.setattr(generate, "get_llm_semaphore", lambda: semaphore)
+    monkeypatch.setattr(generate, "_MODEL_INFERENCE_TIMEOUT", 0.01)
+    monkeypatch.setattr(generate, "_generate_with_retrieval", pending)
+    save = AsyncMock()
+    monkeypatch.setattr(generate, "_save_message", save)
+    with pytest.raises(HTTPException) as caught:
+        await generate._generate_reply_impl(MessageRequest(message="完整测试问题"), record_invocation=False)
+    assert caught.value.status_code == 500 and isinstance(caught.value.__cause__, TimeoutError)
+    assert cancelled.is_set() and not semaphore.locked()
+    save.assert_not_awaited()

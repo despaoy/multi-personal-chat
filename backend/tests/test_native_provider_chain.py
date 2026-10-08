@@ -58,6 +58,19 @@ async def test_selected_provider_receives_messages_and_budget_without_local_over
         return reply, False, {}
 
     monkeypatch.setattr(generate, "_generate_with_retrieval", compiled_retrieval)
+    if provider == "vllm" and not available:
+        from fastapi import HTTPException
+
+        with pytest.raises(HTTPException) as caught:
+            await generate._generate_reply_impl(
+                MessageRequest(message="我的当前住处是哪？"), persist_message=False,
+                record_invocation=False, enable_rag=False,
+            )
+        assert caught.value.status_code == 503
+        assert not calls
+        local_call.assert_not_awaited()
+        return
+
     response = await generate._generate_reply_impl(
         MessageRequest(message="我的当前住处是哪？"), persist_message=False, record_invocation=False, enable_rag=False
     )

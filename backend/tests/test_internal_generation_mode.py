@@ -19,20 +19,21 @@ def _request():
 @pytest.mark.parametrize('mode,label', [('current_constraint', 'statement/constraint'),
     ('memory_lookup', 'memory/lookup'), ('source_excerpt', 'rag/source_excerpt'),
     ('memory_operation', 'memory/operation'), ('task_composite', 'tasks/composite')])
-async def test_fallback_deterministic_response_has_no_model_invocation(monkeypatch, mode, label):
+@pytest.mark.parametrize("provider", ["vllm", "openai_compat"])
+async def test_deterministic_response_has_no_model_invocation(monkeypatch, mode, label, provider):
     import api.generate as gen
     from inference import model_manager as mm
 
     saved, recorded = _install_common(monkeypatch, gen)
 
     class Manager:
-        _current_provider = SimpleNamespace(value='vllm')
+        _current_provider = SimpleNamespace(value=provider)
 
         def set_lora_adapter(self, value):
             pass
 
         def get_status(self):
-            return {'currentProvider': 'vllm', 'providers': {'vllm': {'modelName': 'not-called'}}}
+            return {'currentProvider': provider, 'providers': {provider: {'modelName': 'not-called'}}}
 
         async def async_generate(self, **kwargs):
             pytest.fail('No model invocation expected')
@@ -41,7 +42,9 @@ async def test_fallback_deterministic_response_has_no_model_invocation(monkeypat
         return '当前声明的回应', False, {'modelInvoked': False, 'answerMode': mode}
 
     monkeypatch.setattr(mm, 'get_model_manager', lambda: Manager())
-    monkeypatch.setattr(gen, '_ensure_vllm', _async_return(False))
+    monkeypatch.setattr(gen, '_ensure_vllm', _async_return(True))
+    monkeypatch.setattr(gen, '_vllm_client', object())
+    monkeypatch.setattr(gen, '_generate_with_vllm', deterministic)
     monkeypatch.setattr(gen, '_generate_with_retrieval', deterministic)
     monkeypatch.setattr(gen, 'get_llm_semaphore', lambda: asyncio.Semaphore(2))
     result = await gen._generate_reply_impl(_request(), persist_message=True, enable_rag=False,
@@ -134,14 +137,11 @@ async def test_internal_mode_vllm_failure_does_not_persist(monkeypatch):
 
     monkeypatch.setattr(gen, "_generate_with_vllm", fake_vllm)
 
-    result = await gen._generate_reply_impl(
-        _request(),
-        persist_message=False,
-        enable_rag=False,
-        record_invocation=False,
-    )
-
-    assert result.reply == "fallback-reply"
+    with pytest.raises(HTTPException) as caught:
+        await gen._generate_reply_impl(
+            _request(), persist_message=False, enable_rag=False, record_invocation=False,
+        )
+    assert caught.value.status_code == 503
     assert saved == []
     assert recorded == []
 
@@ -154,7 +154,7 @@ async def test_internal_mode_model_manager_failure_does_not_record_invocation(mo
     saved, recorded = _install_common(monkeypatch, gen)
 
     class FakeManager:
-        _current_provider = SimpleNamespace(value="vllm")
+        _current_provider = SimpleNamespace(value="openai_compat")
 
         def set_lora_adapter(self, value):
             pass
@@ -219,7 +219,8 @@ async def test_explicit_memory_operations_respect_internal_and_delivery_modes(mo
 
 
 @pytest.mark.asyncio
-async def test_message_db_reaches_save_and_invocation_record(monkeypatch):
+@pytest.mark.parametrize("provider", ["vllm", "openai_compat"])
+async def test_message_db_reaches_save_and_invocation_record(monkeypatch, provider):
     """容器注入的数据库必须贯穿消息保存与模型调用记录。
 
     只有人物服务走容器库、消息仍写全局库时，自定义容器实例的
@@ -231,7 +232,13 @@ async def test_message_db_reaches_save_and_invocation_record(monkeypatch):
     _install_common(monkeypatch, gen)
 
     class FakeManager:
-        _current_provider = SimpleNamespace(value="vllm")
+        _current_provider = SimpleNamespace(value=provider)
+
+        def set_lora_adapter(self, value):
+            pass
+
+        def get_status(self):
+            return {"currentProvider": provider, "providers": {provider: {"modelName": "unit-model"}}}
 
     monkeypatch.setattr(mm, "get_model_manager", lambda: FakeManager())
     monkeypatch.setattr(gen, "_ensure_vllm", _async_return(True))
@@ -241,10 +248,11 @@ async def test_message_db_reaches_save_and_invocation_record(monkeypatch):
         return "reply", False, {}
 
     monkeypatch.setattr(gen, "_generate_with_vllm", fake_vllm)
+    monkeypatch.setattr(gen, "_generate_with_retrieval", fake_vllm)
 
     captured = {}
 
-    async def fake_save(request, reply, model_name, lora_name, cost_time, *, database=None, character_id=None):
+    async def fake_save(request, reply, model_name, lora_name, cost_time, *, database=None, character_id=None, saved_receipt=None):
         captured["save_db"] = database
         return True
 
