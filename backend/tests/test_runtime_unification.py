@@ -422,7 +422,16 @@ async def test_vllm_rag_abstention_generates_character_uncertainty(monkeypatch, 
     monkeypatch.setattr(generate, "_retrieve_rag_bundle", retrieve)
     monkeypatch.setattr(generate, "_get_system_prompt", lambda _: "system")
     monkeypatch.setattr(generate, "_vllm_client", Client())
-    monkeypatch.setattr(generate, "_RAG_ABSTENTION_REPLY", "insufficient evidence")
+
+    if outcome != "character reply":
+        expected = RuntimeError if outcome == "error" else ValueError
+        with pytest.raises(expected, match="model unavailable|non-empty text"):
+            await generate._generate_with_vllm(
+                MessageRequest(message="unknown question", sessionId="session"),
+                "character-adapter", runtime_config={"useKnowledgeBase": True},
+            )
+        assert captured
+        return
 
     reply, used_rag, meta = await generate._generate_with_vllm(
         MessageRequest(message="unknown question", sessionId="session"),
@@ -430,7 +439,7 @@ async def test_vllm_rag_abstention_generates_character_uncertainty(monkeypatch, 
         runtime_config={"useKnowledgeBase": True},
     )
 
-    assert reply == ("character reply" if outcome == "character reply" else "insufficient evidence")
+    assert reply == "character reply"
     assert used_rag is True
     assert meta["abstained"] is True
     assert meta["modelInvoked"] is True
@@ -442,11 +451,7 @@ async def test_vllm_rag_abstention_generates_character_uncertainty(monkeypatch, 
     assert "不得猜测或补编" in captured["messages"][0]["content"]
     assert "UNRELIABLE_FACT" not in str(captured["messages"])
     assert "unknown question" in captured["messages"][-1]["content"]
-    if outcome != "character reply":
-        assert "character_abstention_fallback" in meta["warnings"]
-        assert meta["generationError"] == ("RuntimeError" if outcome == "error" else "EmptyModelReply")
-    else:
-        assert "generationError" not in meta
+    assert "generationError" not in meta
 
 @pytest.mark.asyncio
 async def test_inference_timeout_cancels_model_task_without_killing_worker(monkeypatch):

@@ -251,6 +251,17 @@ async def test_actual_api_marks_partial_answer_only_for_visible_private_context(
         return deepcopy(bundle())
 
     async def reject(messages):
+        payload = json.loads(messages[-1]["content"])
+        if "sources" not in payload:
+            if "object_scopes" not in payload:
+                return json.dumps(dict(scopes=[
+                    dict(task_id=0, objects=["青桥延期"]),
+                    dict(task_id=1, objects=["蓝岸续租"]),
+                ]))
+            return json.dumps(dict(tasks=[
+                dict(task_id=0, aspects=[dict(object_id="query-object:0", query_quote="费用")]),
+                dict(task_id=1, aspects=[dict(object_id="query-object:1", query_quote="时长")]),
+            ]))
         return '{"decisions":[{"source_id":"doc_1","task_ids":[]},{"source_id":"doc_2","task_ids":[]}]}'
 
     async def model(**kwargs):
@@ -276,7 +287,7 @@ async def test_actual_api_marks_partial_answer_only_for_visible_private_context(
         assert "partial_public_evidence" in meta["warnings"]
 
 
-async def test_abstention_fallback_never_claims_a_successful_partial_answer(monkeypatch):
+async def test_abstention_model_failure_propagates(monkeypatch):
     from types import SimpleNamespace
 
     from api import generate
@@ -291,7 +302,18 @@ async def test_abstention_fallback_never_claims_a_successful_partial_answer(monk
     async def retrieve(*_args, **_kwargs):
         return deepcopy(bundle())
 
-    async def reject(_messages):
+    async def reject(messages):
+        payload = json.loads(messages[-1]["content"])
+        if "sources" not in payload:
+            if "object_scopes" not in payload:
+                return json.dumps(dict(scopes=[
+                    dict(task_id=0, objects=["青桥延期"]),
+                    dict(task_id=1, objects=["蓝岸续租"]),
+                ]))
+            return json.dumps(dict(tasks=[
+                dict(task_id=0, aspects=[dict(object_id="query-object:0", query_quote="费用")]),
+                dict(task_id=1, aspects=[dict(object_id="query-object:1", query_quote="时长")]),
+            ]))
         return '{"decisions":[{"source_id":"doc_1","task_ids":[]},{"source_id":"doc_2","task_ids":[]}]}'
 
     async def failure(**_kwargs):
@@ -304,12 +326,11 @@ async def test_abstention_fallback_never_claims_a_successful_partial_answer(monk
     monkeypatch.setattr(generate, "_get_system_prompt", lambda _: "人物规则")
     context = CompiledCharacterContext("", "", PRIVATE, used_memory_ids=("private-a",))
     prepared = SimpleNamespace(compiled=context, history=())
-    _, used, meta = await generate._generate_with_retrieval(
-        MessageRequest(message=QUERY),
-        None,
-        prepared_character_turn=prepared,
-        runtime_config=dict(maxTokens=2048, useKnowledgeBase=True),
-        model_generate=failure,
-    )
-    assert used and meta["abstained"] and meta["answerMode"] == "abstention"
-    assert meta["generationError"] == "RuntimeError" and "character_abstention_fallback" in meta["warnings"]
+    with pytest.raises(RuntimeError, match="generation failed"):
+        await generate._generate_with_retrieval(
+            MessageRequest(message=QUERY),
+            None,
+            prepared_character_turn=prepared,
+            runtime_config=dict(maxTokens=2048, useKnowledgeBase=True),
+            model_generate=failure,
+        )

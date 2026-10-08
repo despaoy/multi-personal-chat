@@ -14,9 +14,6 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Request
 from services.chat_generation import ChatGenerationService
 
-# C-F1 fix: failover_mgr 在 lifespan 中通过 app.config.failover_mgr = ...
-# 赋值，导入时绑定到 None 会永远看不到实例。改为动态访问模块属性。
-from app import config as _app_config
 from app.config import (
     INPUT_VALIDATOR_AVAILABLE,
     circuit_breaker_registry,
@@ -43,11 +40,6 @@ from infra.concurrency_control import InferenceQueueFull, RateLimitExceeded, inf
 from infra.observability import increment, log_event, set_consecutive
 from infra.security_utils import strip_control_chars
 
-
-def _failover_mgr():
-    return _app_config.failover_mgr
-
-
 if INPUT_VALIDATOR_AVAILABLE:
     from infra.input_validator import MESSAGE_SCHEMA, InputValidator
 
@@ -63,9 +55,6 @@ _RAG_TIMEOUT = float(os.getenv("RAG_TIMEOUT", "8"))
 _RAG_COLD_START_TIMEOUT = float(os.getenv("RAG_COLD_START_TIMEOUT", "60"))
 _DB_WRITE_TIMEOUT = float(os.getenv("DB_WRITE_TIMEOUT", "3"))
 _MODEL_INFERENCE_TIMEOUT = float(os.getenv("MODEL_INFERENCE_TIMEOUT", "180"))
-_RAG_ABSTENTION_REPLY = (
-    os.getenv("RAG_ABSTENTION_REPLY", "").strip() or "我没有找到足够可靠的信息，暂时无法回答这个问题。"
-)
 _DETERMINISTIC_MODEL_LABELS = {
     "current_constraint": "statement/constraint",
     "memory_lookup": "memory/lookup",
@@ -539,7 +528,9 @@ async def _generate_reply_body(
             logger.warning("response cache read failed: %s", e)
 
     # ── 按当前提供方选择 vLLM 高并发推理 ──
-    if _mgr._current_provider.value == "vllm" and await _ensure_vllm() and _vllm_client:
+    if _mgr._current_provider.value == "vllm":
+        if not await _ensure_vllm() or _vllm_client is None:
+            raise HTTPException(503, "所选 vLLM 服务不可用，请恢复服务后重试")
         try:
             reply, used_rag, rag_meta = await _generate_with_vllm(
                 request,
@@ -668,14 +659,15 @@ async def _generate_reply_body(
                 costTime=failed_cost,
                 errorType=type(e).__name__,
             )
-            logger.warning("vLLM inference failed, falling back to model manager: %s", e)
-            if vllm_effective_lora:
-                raise HTTPException(
-                    status_code=503,
-                    detail="所选 LoRA 推理失败，请检查 vLLM 适配器状态",
-                ) from e
+            set_consecutive("model_failure", False)
+            if isinstance(e, HTTPException):
+                raise
+            raise HTTPException(
+                status_code=503,
+                detail="模型生成失败，请检查所选模型服务及适配器状态后重试",
+            ) from e
 
-    # ── 回退：使用原有模型管理器，共享检索与提示词策略 ──
+    # 非 vLLM 提供商通过模型管理器调用同一生成链路。
     fallback_rag_meta: dict[str, Any] = {}
     fallback_used_rag = False
     try:
@@ -875,18 +867,9 @@ async def _generate_reply_body(
             costTime=failed_cost,
             errorType=type(e).__name__,
         )
-        logger.exception("generate reply failed: %s", e)
-        # C-F1 fix: 动态读取 app.config.failover_mgr，而非导入时绑定的 None
-        _fmgr = _failover_mgr()
-        if _fmgr:
-            try:
-                fallback_provider = await _fmgr.check_and_failover()
-                if fallback_provider:
-                    logger.info("故障转移至: %s", fallback_provider)
-            except Exception as fe:
-                logger.warning("故障转移失败: %s", fe)
+        logger.error("Model manager generation failed: %s", type(e).__name__)
         # 安全：不把内部异常字符串返回给客户端（信息泄露），
-        # 真实详情已写入日志（含 exc_info=True），客户端只收到通用消息。
+        # 日志记录错误类型；异常链保留内部原因，客户端收到通用消息。
         raise HTTPException(status_code=500, detail="生成回复失败，请稍后重试") from e
 
 
@@ -1565,49 +1548,18 @@ async def _generate_with_retrieval(
                 costTime=0,
                 errorType=type(e).__name__,
             )
-            logger.warning("RAG retrieval failed: %s", e)
-            from knowledge.public_question_binding import QuestionBindingReviewError, failed_question_binding_review
-            from knowledge.retrieval_query_plan import QueryPlanReviewError
-
-            if isinstance(e, QuestionBindingReviewError):
-                retrieval = RetrievalResult(
-                    status="character_abstention", reason="question_binding_unavailable",
-                    public_task_review=failed_question_binding_review(
-                        e, query_plan.dependencies, rag_message, query_plan.public_obligations,
-                        **({"history": effective_history, "context_budget": get_provider_context_budget().review}
-                           if effective_history else {}),
-                    ),
-                    public_task_query=rag_message,
-                    public_dependency_indices=tuple(dict(query_plan.dependencies.groups)["public_knowledge"]),
-                )
-            elif isinstance(e, QueryPlanReviewError):
-                retrieval = RetrievalResult(status="character_abstention", reason="query_plan_" + e.status)
-            else:
-                retrieval = RetrievalResult(status="character_abstention", reason="retrieval_unavailable")
-            rag_meta = {
-                "citations": [],
-                "confidence": None,
-                "abstained": True,
-                "answerMode": "abstention",
-                "modelInvoked": True,
-                "warnings": ["query_plan_" + e.status if isinstance(e, QueryPlanReviewError) else "retrieval_unavailable"],
-            }
+            raise HTTPException(
+                status_code=503,
+                detail="检索或证据审核失败，请检查检索服务及审核模型状态后重试",
+            ) from e
 
     model_generate = model_generate or _vllm_client.generate
 
     async def generate_reply(**kwargs):
-        if retrieval.status != "character_abstention":
-            return await model_generate(**kwargs)
-        try:
-            reply = await model_generate(**kwargs)
-            if isinstance(reply, str) and reply.strip():
-                return reply
-            rag_meta["generationError"] = "EmptyModelReply"
-        except Exception as exc:
-            rag_meta["generationError"] = type(exc).__name__
-            logger.warning("Character abstention generation failed; using fallback", exc_info=True)
-        rag_meta["warnings"] = [*(rag_meta.get("warnings") or []), "character_abstention_fallback"]
-        return _RAG_ABSTENTION_REPLY
+        reply = await model_generate(**kwargs)
+        if not isinstance(reply, str) or not reply.strip():
+            raise ValueError("Model response must be non-empty text")
+        return reply
 
     from inference.private_context_authority import make_private_context_revalidator
     from inference.public_context_authority import make_public_context_revalidator

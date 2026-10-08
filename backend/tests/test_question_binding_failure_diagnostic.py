@@ -119,6 +119,15 @@ async def run_api(tmp_path, monkeypatch, defect=None, *, private=True, fee_only=
             return whole_sources((first_body, SECOND), (1, 2))
         return complete_sources()
 
+    # The send-time authority check must see the same complete documents as retrieval.
+    if fee_only:
+        from test_failed_object_identity_source_reviews import complete_sources as whole_sources
+        source_bundle = whole_sources((first_body, SECOND), (1, 2))
+    else:
+        source_bundle = complete_sources()
+    documents = {row["document_id"]: dict(row, id=row["document_id"]) for row in source_bundle["results"]}
+    monkeypatch.setattr(generate.db, "get_knowledge_document", documents.get)
+
     async def review(messages):
         data = json.loads(messages[-1]["content"])
         assert data["query"] == QUERY
@@ -231,34 +240,17 @@ async def test_actual_generation_positive_keeps_five_facts_and_normal_private(tm
 
 
 @pytest.mark.parametrize("defect", ["json", "typed_id", "fence", "non_text", "transport", "timeout"])
-async def test_actual_generation_failed_binding_keeps_diagnostic_and_private_partial_answer(
-    tmp_path, monkeypatch, defect, caplog
-):
-    from knowledge.public_task_evidence import render_public_tasks
+@pytest.mark.parametrize("private", [True, False])
+async def test_failed_binding_stops_generation(tmp_path, monkeypatch, defect, private, caplog):
+    from fastapi import HTTPException
 
-    observed, meta = await run_api(tmp_path, monkeypatch, defect)
-    assert observed["retrieval_calls"] == 0
+    from knowledge.public_question_binding import QuestionBindingReviewError
+
+    with pytest.raises(HTTPException) as caught:
+        await run_api(tmp_path, monkeypatch, defect, private=private)
+    assert caught.value.status_code == 503
+    assert isinstance(caught.value.__cause__, QuestionBindingReviewError)
     assert MARKER not in caplog.text
-    receipt = observed["initial_retrieval"].public_task_review
-    assert receipt.get("failure_diagnostic") == dict(
-        stage="object",
-        input=observed["binding"][0],
-        raw=observed.get("raw") if isinstance(observed.get("raw"), str) else None,
-    )
-    rows = render_public_tasks(observed["plan"].retrieval)
-    assert [row["task_id"] for row in rows] == [0, 1] and all(row["status"] == "review_unavailable" for row in rows)
-    assert (
-        meta["abstained"] and meta["answerMode"] == "partial_answer" and "partial_public_evidence" in meta["warnings"]
-    )
-
-
-async def test_actual_generation_failed_binding_without_private_stays_abstention(tmp_path, monkeypatch):
-    from knowledge.public_task_evidence import render_public_tasks
-
-    observed, meta = await run_api(tmp_path, monkeypatch, "json", private=False)
-    assert observed["retrieval_calls"] == 0 and meta["answerMode"] == "abstention" and meta["abstained"]
-    assert all(row["status"] == "review_unavailable" for row in render_public_tasks(observed["plan"].retrieval))
-    assert observed["initial_retrieval"].public_task_review.get("failure_diagnostic")
 
 
 async def test_cancelled_binding_propagates_without_failure_receipt():
@@ -332,11 +324,12 @@ async def test_current_protocol_fee_only_and_private_original_is_partial(tmp_pat
     assert meta["answerMode"] == "partial_answer" and meta["abstained"] and not meta.get("generationError")
 
 
-async def test_unadmitted_whole_private_source_does_not_mark_partial_answer(tmp_path, monkeypatch):
-    observed, meta = await run_api(tmp_path, monkeypatch, "json", private_large=True)
-    context = observed["plan"].character_context
-    assert context.memory_source_status == "budget_omitted" and not context.episodic_reference_context
-    assert meta["answerMode"] == "abstention" and meta["abstained"]
+async def test_binding_failure_with_large_private_source_still_errors(tmp_path, monkeypatch):
+    from fastapi import HTTPException
+
+    with pytest.raises(HTTPException) as caught:
+        await run_api(tmp_path, monkeypatch, "json", private_large=True)
+    assert caught.value.status_code == 503
 
 
 async def test_diagnostic_valid_json_cannot_grant_binding_or_hide_changed_input():

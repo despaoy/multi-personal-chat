@@ -21,13 +21,20 @@ async def test_unavailable_character_domain_does_not_switch_to_generic_kb(monkey
 
 
 @pytest.mark.asyncio
-async def test_abstention_fallback_records_model_failure(monkeypatch):
+@pytest.mark.parametrize("provider", ["vllm", "openai"])
+async def test_generation_failure_is_reported_and_recorded(monkeypatch, provider):
     from api import generate
     from inference import model_manager
 
     records, counters = [], []
+    from app import config
+
+    async def forbidden_failover():
+        pytest.fail("A failed request must not switch the configured provider")
+
+    monkeypatch.setattr(config, "failover_mgr", SimpleNamespace(check_and_failover=forbidden_failover))
     monkeypatch.setattr(model_manager, "get_model_manager", lambda: SimpleNamespace(
-        _current_provider=SimpleNamespace(value="vllm")))
+        _current_provider=SimpleNamespace(value=provider), set_lora_adapter=lambda _: None))
     monkeypatch.setattr(generate, "db", SimpleNamespace(config={}, loras=[]))
     monkeypatch.setattr(generate, "INPUT_VALIDATOR_AVAILABLE", False)
     monkeypatch.setattr(generate, "response_cache", None)
@@ -37,20 +44,25 @@ async def test_abstention_fallback_records_model_failure(monkeypatch):
     async def available():
         return True
 
+    failure = RuntimeError("model unavailable")
+
     async def failed_expression(*args, **kwargs):
-        return "暂时无法确定", True, {
-            "modelInvoked": True, "abstained": True, "generationError": "RuntimeError",
-            "warnings": ["character_abstention_fallback"],
-        }
+        raise failure
 
     async def record(*args, **kwargs):
         records.append(kwargs)
 
     monkeypatch.setattr(generate, "_ensure_vllm", available)
+    monkeypatch.setattr(generate, "circuit_breaker_registry", None)
+    monkeypatch.setattr(generate, "_generate_with_retrieval", failed_expression)
     monkeypatch.setattr(generate, "_generate_with_vllm", failed_expression)
     monkeypatch.setattr(generate, "_record_model_invocation", record)
-    result = await generate._generate_reply_impl(MessageRequest(message="问题"), persist_message=False)
-    assert result.abstained
+    from fastapi import HTTPException
+
+    with pytest.raises(HTTPException) as caught:
+        await generate._generate_reply_impl(MessageRequest(message="问题"), persist_message=False)
+    assert caught.value.status_code == (503 if provider == "vllm" else 500)
+    assert caught.value.__cause__ is failure
     assert records[0]["error_type"] == "RuntimeError"
     assert ("model_failure", False) in counters
     assert ("model_failure", True) not in counters
@@ -58,7 +70,7 @@ async def test_abstention_fallback_records_model_failure(monkeypatch):
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("failure", [RuntimeError("retrieval unavailable"), TimeoutError("timeout")])
-async def test_retrieval_errors_generate_only_character_uncertainty(monkeypatch, failure):
+async def test_retrieval_errors_stop_before_model_generation(monkeypatch, failure):
     from api import generate
     from knowledge import intent_detector
 
@@ -74,15 +86,16 @@ async def test_retrieval_errors_generate_only_character_uncertainty(monkeypatch,
     monkeypatch.setattr(intent_detector, "needs_rag", lambda _: (True, "fact", None))
     monkeypatch.setattr(generate, "_retrieve_rag_bundle", broken_retrieval)
     monkeypatch.setattr(generate, "_get_system_prompt", lambda _: "persona")
-    reply, used_rag, meta = await generate._generate_with_vllm(
-        MessageRequest(message="人物关系是什么"), None,
-        runtime_config={"useKnowledgeBase": True}, model_generate=model,
-    )
-    assert reply and used_rag and meta["abstained"]
-    assert meta["citations"] == []
-    assert meta["warnings"] == ["retrieval_unavailable"]
-    assert "【本轮证据不足】" in captured["messages"][0]["content"]
-    assert "不代表知识库中不存在答案" in captured["messages"][0]["content"]
+    from fastapi import HTTPException
+
+    with pytest.raises(HTTPException) as caught:
+        await generate._generate_with_vllm(
+            MessageRequest(message="人物关系是什么"), None,
+            runtime_config={"useKnowledgeBase": True}, model_generate=model,
+        )
+    assert caught.value.status_code == 503
+    assert caught.value.__cause__ is failure
+    assert not captured
 
 
 @pytest.mark.parametrize("status", ["abstained", "error", "character_abstention"])
