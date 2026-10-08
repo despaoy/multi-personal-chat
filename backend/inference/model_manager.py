@@ -131,9 +131,6 @@ class BaseProvider(ABC):
         self.name = name
         self._loaded = False
         self._model_name = ""
-        # R-1 fix: fallback httpx.AsyncClient，仅在 http_client_pool 不可用时使用
-        # （PG 模式 / 测试环境）。生产环境通过 _acquire_http_client 走共享池。
-        self._fallback_async_client: Any = None
 
     @abstractmethod
     def generate(self, prompt: str, session_history: List[Dict] = None,
@@ -158,25 +155,10 @@ class BaseProvider(ABC):
 
     @asynccontextmanager
     async def _acquire_http_client(self, timeout: float = 120.0):
-        """获取 httpx.AsyncClient（R-1 fix：统一复用 HttpClientPool）。
+        """Borrow the shared pool client, or own a client for a standalone call."""
+        from app.config import http_client_pool
 
-        优先从 app.config.http_client_pool 获取共享客户端；
-        pool 不可用时创建调用级 AsyncClient，并在创建它的事件循环中关闭。
-        生产请求仍通过共享池复用连接。
-
-        Args:
-            timeout: 回退模式下 AsyncClient 的请求超时（秒）。
-
-        Yields:
-            httpx.AsyncClient 实例。
-        """
-        pool = None
-        try:
-            from app.config import http_client_pool
-            pool = http_client_pool
-        except Exception as exc:
-            logger.debug("http_client_pool 不可用，使用 fallback: %s", exc)
-
+        pool = http_client_pool
         if pool is not None:
             # P1-M4 fix: pool 的 client 以固定 request_timeout 创建，此处无法
             # 逐请求覆盖。调用方应在 client.post(...) 时显式传入 timeout 参数
@@ -185,7 +167,7 @@ class BaseProvider(ABC):
                 yield client
             return
 
-        # Fallback is for tests and standalone scripts; close it on the creating loop.
+        # A standalone call owns its client and closes it on the creating loop.
         import httpx
         async with httpx.AsyncClient(
             timeout=httpx.Timeout(timeout),
@@ -196,27 +178,8 @@ class BaseProvider(ABC):
             yield client
 
     def close(self):
-        """释放底层资源（httpx 客户端、模型句柄等）。
-
-        C6 fix: 子类若持有 httpx.Client/AsyncClient 等资源，应覆写此方法。
-        ModelManager.shutdown() 会在应用关闭时遍历所有 provider 调用 close()。
-        R-1 fix: 共享 pool 的客户端由 pool 自行管理生命周期，此处仅清理 fallback client。
-        """
-        client = self._fallback_async_client
-        if client is not None:
-            try:
-                import asyncio
-                try:
-                    loop = asyncio.get_event_loop()
-                    if loop.is_running():
-                        asyncio.ensure_future(client.aclose(), loop=loop)
-                    else:
-                        asyncio.run(client.aclose())
-                except RuntimeError:
-                    asyncio.run(client.aclose())
-            except Exception:
-                pass
-            self._fallback_async_client = None
+        """Providers with owned persistent resources override this hook."""
+        return None
 
 
 class OpenAICompatProvider(BaseProvider):
@@ -282,35 +245,31 @@ class OpenAICompatProvider(BaseProvider):
         if not self.api_key:
             raise RuntimeError("未配置 API Key，请在设置页面配置 OpenAI 兼容 API Key")
         start = time.time()
-        try:
-            async with self._acquire_http_client(timeout=120.0) as client:
-                # P1-M4 fix: 请求级 timeout 覆盖 pool 默认值，确保生效
-                response = await client.post(
-                    chat_completions_endpoint(self.base_url),
-                    headers={
-                        "Authorization": f"Bearer {self.api_key}",
-                        "Content-Type": "application/json"
-                    },
-                    json={
-                        "model": self.model,
-                        "messages": messages,
-                        "temperature": temperature,
-                        "max_tokens": max_tokens,
-                        **({"top_p": top_p} if top_p is not None else {}),
-                        **nonthinking_parameters(self.base_url, local_template=False),
-                    },
-                    timeout=120.0,
-                )
-            if response.status_code == 200:
-                data = response.json()
-                reply = completed_chat_content(data)
-                cost = round(time.time() - start, 2)
-                return reply, cost
-            else:
-                raise RuntimeError(f"API返回错误: {response.status_code} - {response.text[:200]}")
-        except Exception as e:
-            logger.error(f"OpenAI兼容API调用失败: {e}")
-            raise
+        async with self._acquire_http_client(timeout=120.0) as client:
+            # P1-M4 fix: 请求级 timeout 覆盖 pool 默认值，确保生效
+            response = await client.post(
+                chat_completions_endpoint(self.base_url),
+                headers={
+                    "Authorization": f"Bearer {self.api_key}",
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "model": self.model,
+                    "messages": messages,
+                    "temperature": temperature,
+                    "max_tokens": max_tokens,
+                    **({"top_p": top_p} if top_p is not None else {}),
+                    **nonthinking_parameters(self.base_url, local_template=False),
+                },
+                timeout=120.0,
+            )
+        if response.status_code == 200:
+            data = response.json()
+            reply = completed_chat_content(data)
+            cost = round(time.time() - start, 2)
+            return reply, cost
+        else:
+            raise RuntimeError(f"API返回错误: {response.status_code}")
 
     def generate(self, prompt: str, session_history: List[Dict] = None,
                  rag_docs: List[Dict] = None, max_tokens_override: int = None) -> Tuple[str, float]:
@@ -322,11 +281,6 @@ class OpenAICompatProvider(BaseProvider):
                              rag_docs: List[Dict] = None, max_tokens_override: int = None) -> Tuple[str, float]:
         """异步生成 - 原生 async，无需线程池"""
         return await self._generate_async(prompt, session_history, rag_docs, max_tokens_override)
-
-    def close(self):
-        # R-1 fix: 共享 pool 的客户端由 pool 管理，此处仅清理 fallback client
-        super().close()
-
 
 class MockProvider(BaseProvider):
     """模拟提供商，用于测试"""
@@ -380,29 +334,25 @@ class OllamaProvider(BaseProvider):
 
         max_tokens = max_tokens_override if max_tokens_override else int(_db_cfg.get('maxTokens', 512))
 
-        try:
-            async with self._acquire_http_client(timeout=120.0) as client:
-                # P1-M4 fix: 请求级 timeout 覆盖 pool 默认值
-                response = await client.post(
-                    f"{self.base_url}/api/chat",
-                    json={
-                        "model": self.model,
-                        "messages": messages,
-                        "stream": False,
-                        "options": {"temperature": float(_db_cfg.get('temperature', 0.8)), "top_p": 0.9, "num_predict": max_tokens}
-                    },
-                    timeout=120.0,
-                )
-            if response.status_code == 200:
-                data = response.json()
-                reply = data["message"]["content"].strip()
-                cost = round(time.time() - start, 2)
-                return reply, cost
-            else:
-                raise RuntimeError(f"Ollama返回错误状态码: {response.status_code}")
-        except Exception as e:
-            logger.error(f"Ollama调用失败: {e}")
-            raise
+        async with self._acquire_http_client(timeout=120.0) as client:
+            # P1-M4 fix: 请求级 timeout 覆盖 pool 默认值
+            response = await client.post(
+                f"{self.base_url}/api/chat",
+                json={
+                    "model": self.model,
+                    "messages": messages,
+                    "stream": False,
+                    "options": {"temperature": float(_db_cfg.get('temperature', 0.8)), "top_p": 0.9, "num_predict": max_tokens}
+                },
+                timeout=120.0,
+            )
+        if response.status_code == 200:
+            data = response.json()
+            reply = data["message"]["content"].strip()
+            cost = round(time.time() - start, 2)
+            return reply, cost
+        else:
+            raise RuntimeError(f"Ollama返回错误状态码: {response.status_code}")
 
     def generate(self, prompt: str, session_history: List[Dict] = None,
                  rag_docs: List[Dict] = None, max_tokens_override: int = None) -> Tuple[str, float]:
@@ -414,11 +364,6 @@ class OllamaProvider(BaseProvider):
                              rag_docs: List[Dict] = None, max_tokens_override: int = None) -> Tuple[str, float]:
         """异步生成 - 原生 async，无需线程池"""
         return await self._generate_async(prompt, session_history, rag_docs, max_tokens_override)
-
-    def close(self):
-        # R-1 fix: 共享 pool 的客户端由 pool 管理，此处仅清理 fallback client
-        super().close()
-
 
 class LlamaCppProvider(BaseProvider):
     """llama.cpp 提供商"""
@@ -449,29 +394,25 @@ class LlamaCppProvider(BaseProvider):
 
         max_tokens = max_tokens_override if max_tokens_override else int(_db_cfg.get('maxTokens', 512))
 
-        try:
-            async with self._acquire_http_client(timeout=120.0) as client:
-                # P1-M4 fix: 请求级 timeout 覆盖 pool 默认值
-                response = await client.post(
-                    f"{self.base_url}/completion",
-                    json={
-                        "prompt": full_prompt,
-                        "n_predict": max_tokens,
-                        "temperature": float(_db_cfg.get('temperature', 0.8)),
-                        "top_p": 0.9,
-                    },
-                    timeout=120.0,
-                )
-            if response.status_code == 200:
-                data = response.json()
-                reply = data.get("content", "").strip()
-                cost = round(time.time() - start, 2)
-                return reply, cost
-            else:
-                raise RuntimeError(f"llama.cpp返回错误状态码: {response.status_code}")
-        except Exception as e:
-            logger.error(f"llama.cpp调用失败: {e}")
-            raise
+        async with self._acquire_http_client(timeout=120.0) as client:
+            # P1-M4 fix: 请求级 timeout 覆盖 pool 默认值
+            response = await client.post(
+                f"{self.base_url}/completion",
+                json={
+                    "prompt": full_prompt,
+                    "n_predict": max_tokens,
+                    "temperature": float(_db_cfg.get('temperature', 0.8)),
+                    "top_p": 0.9,
+                },
+                timeout=120.0,
+            )
+        if response.status_code == 200:
+            data = response.json()
+            reply = data.get("content", "").strip()
+            cost = round(time.time() - start, 2)
+            return reply, cost
+        else:
+            raise RuntimeError(f"llama.cpp返回错误状态码: {response.status_code}")
 
     def generate(self, prompt: str, session_history: List[Dict] = None,
                  rag_docs: List[Dict] = None, max_tokens_override: int = None) -> Tuple[str, float]:
@@ -483,11 +424,6 @@ class LlamaCppProvider(BaseProvider):
                              rag_docs: List[Dict] = None, max_tokens_override: int = None) -> Tuple[str, float]:
         """异步生成 - 原生 async，无需线程池"""
         return await self._generate_async(prompt, session_history, rag_docs, max_tokens_override)
-
-    def close(self):
-        # R-1 fix: 共享 pool 的客户端由 pool 管理，此处仅清理 fallback client
-        super().close()
-
 
 class TransformersPeftProvider(BaseProvider):
     """Transformers + PEFT 本地推理提供商"""
@@ -787,11 +723,6 @@ class VLLMProvider(BaseProvider):
                              rag_docs: List[Dict] = None, max_tokens_override: int = None) -> Tuple[str, float]:
         """异步生成入口"""
         return await self.generate_async(prompt, session_history, rag_docs, max_tokens_override)
-
-    def close(self):
-        # R-1 fix: 共享 pool 的客户端由 pool 管理，此处仅清理 fallback client
-        super().close()
-
 
 class ModelManager:
     """模型管理器，负责多提供商切换、LoRA管理、模型文件操作。"""
