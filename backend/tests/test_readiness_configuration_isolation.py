@@ -1,72 +1,43 @@
-from __future__ import annotations
-
-import sys
-from types import ModuleType, SimpleNamespace
+from types import SimpleNamespace
 
 import pytest
+from fastapi import HTTPException
 
 from app.main import create_app, readiness_check
 from app.runtime import RuntimeContainer
 
 
-def _application(startup_env: dict[str, str]):
-    database = SimpleNamespace(execute_sql=lambda _query: [{"ok": 1}])
-    container = RuntimeContainer(
-        db=database,
-        is_pg_mode=lambda: False,
-        inference_runtime=None,
-        startup_env={
-            "SECURITY_MIDDLEWARE_ENABLED": "false",
-            **startup_env,
-        },
-    )
-    return create_app(container)
-
-
 @pytest.mark.asyncio
-@pytest.mark.parametrize(
-    "required_environment",
-    [
-        {"MODEL_PROVIDER": "vllm", "VLLM_ENABLED": "false"},
-        {"MODEL_PROVIDER": "transformers", "VLLM_ENABLED": "true"},
-    ],
-)
-async def test_readiness_model_requirement_is_isolated_per_application(
-    monkeypatch,
-    required_environment: dict[str, str],
-) -> None:
-    vector_db = ModuleType("knowledge.vector_db")
-    vector_db.get_vector_db = lambda: object()
-    monkeypatch.setitem(sys.modules, "knowledge.vector_db", vector_db)
+async def test_readiness_dependency_and_cache_are_isolated_per_application(monkeypatch):
+    calls = [0, 0]
 
-    from api import generate
+    def healthy():
+        calls[0] += 1
+        return True
 
-    model_checks: list[str] = []
+    def unavailable():
+        calls[1] += 1
+        return False
 
-    class HealthyClient:
-        async def health_check(self):
-            model_checks.append("health")
-            return {"summary": {"healthy": 1}}
+    def application(check):
+        return create_app(RuntimeContainer(
+            db=SimpleNamespace(execute_sql=lambda query: [{"ok": 1}]),
+            is_pg_mode=lambda: False,
+            model_check=check,
+            startup_env={"SECURITY_MIDDLEWARE_ENABLED": "false", "MODEL_PROVIDER": "openai_compat", "VLLM_ENABLED": "false"},
+        ))
 
-    async def get_vllm_client():
-        model_checks.append("client")
-        return HealthyClient()
-
-    monkeypatch.setattr(generate, "get_vllm_client", get_vllm_client)
+    first, second = application(healthy), application(unavailable)
     monkeypatch.setenv("MODEL_PROVIDER", "vllm")
     monkeypatch.setenv("VLLM_ENABLED", "true")
-
-    model_not_required = _application(
-        {
-            "MODEL_PROVIDER": "transformers",
-            "VLLM_ENABLED": "false",
-        }
-    )
-    model_required = _application(required_environment)
-
-    first_result = await readiness_check(SimpleNamespace(app=model_not_required))
-    second_result = await readiness_check(SimpleNamespace(app=model_required))
-
-    assert first_result["deps"]["model"] is True
-    assert second_result["deps"]["model"] is True
-    assert model_checks == ["client", "health"]
+    try:
+        assert (await readiness_check(SimpleNamespace(app=first)))["deps"]["model"] is True
+        with pytest.raises(HTTPException) as caught:
+            await readiness_check(SimpleNamespace(app=second))
+        assert caught.value.status_code == 503
+        assert caught.value.detail["deps"] == {"database": True, "model": False}
+        assert (await readiness_check(SimpleNamespace(app=first)))["status"] == "ready"
+        assert calls == [1, 1]
+    finally:
+        first.state.readiness_probe.shutdown()
+        second.state.readiness_probe.shutdown()

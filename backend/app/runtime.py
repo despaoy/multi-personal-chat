@@ -20,6 +20,7 @@ class RuntimeContainer:
     is_pg_mode: Callable[[], bool]
     inference_runtime: Any | None = None
     startup_env: Mapping[str, str] = field(default_factory=lambda: dict(os.environ))
+    model_check: Callable[[], Any] | None = None
 
     def __post_init__(self) -> None:
         # Keep startup validation deterministic even if tests or callers mutate

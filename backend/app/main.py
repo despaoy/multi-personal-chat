@@ -440,16 +440,6 @@ async def health_check():
     return {"status": "healthy", "timestamp": datetime.now().isoformat()}
 
 
-async def _readiness_model_check() -> bool:
-    from api.generate import get_vllm_client
-
-    client = await get_vllm_client()
-    if client is None:
-        return False
-    health = await client.health_check()
-    return health.get("summary", {}).get("healthy", 0) > 0
-
-
 async def readiness_check(request: Request):
     """Return one cached dependency snapshot without initializing optional RAG."""
     probe = getattr(request.app.state, "readiness_probe", None)
@@ -502,7 +492,7 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 def create_app(container: RuntimeContainer | None = None) -> FastAPI:
     """Assemble one FastAPI application around an explicit runtime container."""
-    from app.config import is_vllm_enabled
+    from inference.model_readiness import check_model_readiness
 
     runtime_container = container if container is not None else RuntimeContainer.default(startup_env=_STARTUP_ENV)
     application = FastAPI(
@@ -512,12 +502,10 @@ def create_app(container: RuntimeContainer | None = None) -> FastAPI:
         lifespan=lifespan,
     )
     application.state.runtime_container = runtime_container
-    runtime_env = runtime_container.startup_env
-    model_required = runtime_env.get("MODEL_PROVIDER", "").strip().lower() == "vllm" or is_vllm_enabled(runtime_env)
     application.state.readiness_probe = ReadinessProbe(
         database_check=lambda: get_runtime_container(application).db.execute_sql("SELECT 1"),
-        model_check=_readiness_model_check if model_required else None,
-        model_required=model_required,
+        model_check=runtime_container.model_check or check_model_readiness,
+        model_required=True,
     )
     _install_middleware(application, runtime_container.startup_env)
     for router in _ROUTERS:

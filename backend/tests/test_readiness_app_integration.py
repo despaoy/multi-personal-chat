@@ -15,7 +15,7 @@ from app.runtime import RuntimeContainer
 async def test_app_readiness_collapses_concurrent_calls_without_loading_rag(
     monkeypatch,
 ):
-    calls = {"database": 0, "rag": 0}
+    calls = {"database": 0, "model": 0, "rag": 0}
 
     class Database:
         def execute_sql(self, query):
@@ -31,14 +31,20 @@ async def test_app_readiness_collapses_concurrent_calls_without_loading_rag(
     vector_db = ModuleType("knowledge.vector_db")
     vector_db.get_vector_db = fail_if_rag_is_loaded
     monkeypatch.setitem(sys.modules, "knowledge.vector_db", vector_db)
+    async def model_check():
+        calls["model"] += 1
+        await asyncio.sleep(0.03)
+        return True
+
     app = create_app(
         RuntimeContainer(
             db=Database(),
             is_pg_mode=lambda: False,
             inference_runtime=None,
+            model_check=model_check,
             startup_env={
                 "SECURITY_MIDDLEWARE_ENABLED": "false",
-                "MODEL_PROVIDER": "transformers",
+                "MODEL_PROVIDER": "openai_compat",
                 "VLLM_ENABLED": "false",
             },
         )
@@ -52,4 +58,4 @@ async def test_app_readiness_collapses_concurrent_calls_without_loading_rag(
         app.state.readiness_probe.shutdown()
 
     assert all(result["status"] == "ready" for result in results)
-    assert calls == {"database": 1, "rag": 0}
+    assert calls == {"database": 1, "model": 1, "rag": 0}

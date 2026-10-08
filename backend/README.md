@@ -77,3 +77,11 @@ python scripts/build_character_rag_index.py
 [`../docs/architecture/CHARACTER_KNOWLEDGE_RETRIEVAL.md`](../docs/architecture/CHARACTER_KNOWLEDGE_RETRIEVAL.md)。
 
 模型提供商选择：非空 `MODEL_PROVIDER` 优先于数据库 `modelProvider`；缺失或非法值明确失败，不切换为 mock。mock 仅可在 development/test 环境显式启用，日志会标明模拟推理。模型配置数据库读取失败不会使用空配置继续运行。
+
+## 就绪检查
+
+`/health` 只表示进程响应；`/ready` 检查数据库和模型管理器当前选中的提供商，模型检查不能因关闭 vLLM 而跳过。
+OpenAI 兼容服务使用与生成相同的配置和鉴权查询模型列表；Ollama 查询所选模型详情，llama.cpp 查询健康状态，vLLM 使用聊天链路的共享客户端。
+鉴权、连接、解析或配置失败返回 503；模型不在列表、mock、尚未加载的 Transformers 模型也不报告就绪。Transformers 必须先完成模型预热，探测本身不会加载权重。
+成功结果缓存 5 秒、失败 1 秒，并发请求共享一次探测；运行时模型切换最迟在当前缓存到期后反映。
+检查不发送聊天请求，不消耗生成 token，不代表余额、回答质量、全部 LoRA 或可选 RAG 已通过验证。`details.rag=not_probed` 明确保留该边界。
