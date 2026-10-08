@@ -242,7 +242,8 @@ async def test_repository_forwards_protected_keys_and_refuses_unsafe_legacy_fall
         await legacy.erase_memory("role", scope, memory_id=4, protected_memory_keys=(INK,))
 
 
-async def test_actual_scheduler_guards_unlinked_sources_and_passes_kept_keys_to_eraser():
+@pytest.mark.parametrize('source_ids', [[], ['mixed-source']])
+async def test_actual_scheduler_guards_unlinked_sources_and_passes_kept_keys_to_eraser(source_ids):
     class Repo:
         def __init__(self):
             self.erased = []
@@ -280,7 +281,7 @@ async def test_actual_scheduler_guards_unlinked_sources_and_passes_kept_keys_to_
         async def complete(self, messages):
             self.payload = json.loads(messages[-1]["content"])
             raw = json.loads(response())
-            raw["erase_source_ids"] = ["mixed-source"]
+            raw["erase_source_ids"] = source_ids
             return json.dumps(raw)
 
         async def close(self):
@@ -307,6 +308,11 @@ async def test_actual_scheduler_guards_unlinked_sources_and_passes_kept_keys_to_
             source_message_id="new-delete",
             timeout_seconds=2,
         )
+        if source_ids:
+            assert result['status'] == 'failed' and result['stage'] == 'proposal_validation'
+            assert result['accepted'] == result['persisted'] == 0
+            assert not repo.erased and not repo.raw_erased
+            return
         assert result["status"] == "erased" and result["persisted"] == 1 and result["source_capture"] == "erase_request"
         assert not repo.captured and not repo.raw_erased
         assert repo.erased[0]["memory_key"] == COURSE and repo.erased[0]["protected_memory_keys"] == (INK,)

@@ -1409,7 +1409,18 @@ def parse_llm_proposals(
     """解析并硬校验证据、旧 ID、主体、时间、作用域与删除权限。"""
     if source_type.strip().lower() != "user" or not _source_message_allowed(source_message):
         return []
-    raw_memories = _extract_json(text)["memories"]
+    return _proposals_from_payload(
+        _extract_json(text), source_message=source_message, history=history,
+        existing_memories=existing_memories, confidence_threshold=confidence_threshold,
+        feedback_target_ids=feedback_target_ids)
+
+
+def _proposals_from_payload(
+    payload: dict[str, Any], *, source_message: str,
+    history: tuple[dict[str, str], ...], existing_memories: tuple[dict[str, Any], ...],
+    confidence_threshold: float, feedback_target_ids: tuple[str, ...],
+) -> list[ValidatedMemoryProposal]:
+    raw_memories = payload["memories"]
     if not isinstance(raw_memories, list):
         raise ValueError("记忆 LLM 的 memories 必须是数组")
     if len(raw_memories) > MAX_EXTRACTED_MEMORIES:
@@ -1917,28 +1928,19 @@ class MemoryEnrichmentScheduler:
                 )
             )
             result["stage"] = "proposal_validation"
-            proposals = parse_llm_proposals(
-                response,
+            payload = _extract_json(response)
+            proposals = _proposals_from_payload(
+                payload,
                 source_message=job.message,
                 history=job.history,
                 existing_memories=existing_memories,
                 confidence_threshold=self._confidence_threshold,
                 feedback_target_ids=job.feedback_target_ids,
-                source_type="user",
             )
-            if deferred_erasure:
-                # No source-only deletion is authorized at this observation.
-                source_ids = ()
-            elif partial is not None:
-                # Full raw speech cannot be selected independently while a
-                # personal item must survive. Validated claim erasure still
-                # revokes linked full sources under the existing privacy fence.
-                source_ids = ()
+            if partial is not None and not deferred_erasure:
                 result['source_erasure_policy'] = 'claim_targets_only_for_partial_retention'
-            else:
-                source_ids = (selected_ids(_extract_json(response),
-                    {row['source_id'] for row in source_candidates}, authorized=erasure_now)
-                    if source_candidates else ())
+            source_ids = selected_ids(payload, {row['source_id'] for row in source_candidates},
+                                      authorized=erasure_now and partial is None)
             result["accepted"] = len(proposals) + bool(source_ids)
             result["stage"] = "persistence"
             outcomes: list[str] = []

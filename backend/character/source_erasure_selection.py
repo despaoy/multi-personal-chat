@@ -44,9 +44,11 @@ async def candidates(repository, character_id, scope, query, records, *, context
 
 def selected_ids(payload, allowed, *, authorized):
     ids = payload.get('erase_source_ids', [])
+    if not isinstance(ids, list):
+        raise ValueError('Invalid source erasure target list')
     if not ids:
         return ()
-    if (not authorized or not isinstance(ids, list) or len(ids) > 32
+    if (not authorized or len(ids) > 32
             or any(not isinstance(value, str) or value not in allowed for value in ids)):
         raise ValueError('Invalid or unauthorized source erasure targets')
     return tuple(dict.fromkeys(ids))

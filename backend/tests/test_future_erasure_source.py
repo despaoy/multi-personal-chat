@@ -47,6 +47,10 @@ async def test_future_only_erasure_preserves_full_request_and_old_source(tmp_pat
         assert receipt["source_capture"] == "recorded"
         assert receipt["source_erasure_policy"] == "deferred_until_source_start"
         assert not completion.payload.get("source_erasure_candidates")
+        if response == '{"memories":[]}':
+            assert receipt['status'] == 'no_change'
+        else:
+            assert receipt['status'] == 'failed' and receipt['stage'] == 'proposal_validation'
         assert scheduler.status.erased == 0
     finally:
         await scheduler.shutdown(timeout=2)
