@@ -14,44 +14,9 @@ from typing import Any
 
 from infra.environment import parse_unit_interval
 
-from .retrieval_core.tokenization import segment
+from .query_reformulation import append_retrieval_keywords
 
 logger = logging.getLogger(__name__)
-
-# 简易中文停用词表（用于查询重写时去停用词）
-_STOPWORDS = {
-    "的",
-    "了",
-    "是",
-    "在",
-    "我",
-    "你",
-    "他",
-    "她",
-    "它",
-    "们",
-    "这",
-    "那",
-    "怎么",
-    "什么",
-    "为什么",
-    "哪里",
-    "哪个",
-    "请问",
-    "一下",
-    "可能",
-    "应该",
-    "the",
-    "a",
-    "an",
-    "is",
-    "are",
-    "was",
-    "were",
-    "what",
-    "how",
-    "why",
-}
 
 class CorrectiveRAG:
     """纠正性 RAG：retrieve → confidence check → reformulate → re-retrieve → abstain。
@@ -72,29 +37,9 @@ class CorrectiveRAG:
 
     def reformulate_query(self, query: str, top_results: list[dict[str, Any]]) -> str:
         """从 top 结果提取关键词，追加到原查询形成重写查询。"""
-        keywords: list[str] = []
-        query_folded = query.casefold()
-        for result in top_results[:3]:
-            content = result.get("content", "")
-            title = result.get("title", "")
-            text = f"{title} {content}"
-            for tok in segment(text):
-                if (
-                    len(tok) > 1
-                    and tok not in keywords
-                    and tok not in _STOPWORDS
-                    and tok.casefold() not in query_folded
-                ):
-                    keywords.append(tok)
-            if len(keywords) >= 8:
-                break
-
-        if not keywords:
-            return query
-
-        # 追加最多 5 个关键词到原查询
-        extra = " ".join(keywords[:5])
-        return f"{query} {extra}"
+        return append_retrieval_keywords(query, (
+            f"{result.get('title', '')} {result.get('content', '')}" for result in top_results[:3]
+        ))
 
     def retrieve_with_correction(
         self,

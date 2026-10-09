@@ -18,7 +18,7 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from knowledge import corrective_rag, rag_helper
+from knowledge import rag_helper
 from knowledge.corrective_rag import CorrectiveRAG
 from knowledge.rag_helper import DomainProfile, QueryExpander, _stable_result_key
 
@@ -294,7 +294,9 @@ class TestCorrectiveRAG:
 
 class TestChineseTokenize:
     def test_jieba_tokenizer_extracts_chinese_words(self):
-        tokens = corrective_rag.segment("胡桃是往生堂堂主")
+        from knowledge.retrieval_core.tokenization import segment
+
+        tokens = segment("胡桃是往生堂堂主")
         # 中文被切成词（而非旧实现的单字，单字会被关键词过滤全部丢弃）
         assert any(len(t) >= 2 and any("\u4e00" <= ch <= "\u9fff" for ch in t) for t in tokens)
         assert all(t.strip() for t in tokens)

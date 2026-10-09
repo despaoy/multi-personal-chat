@@ -16,62 +16,12 @@ guardrail（沿用既有路线图约束）：
 from __future__ import annotations
 
 import logging
-import re
 from collections.abc import Callable
 from typing import Any
 
+from ..query_reformulation import append_retrieval_keywords
+
 logger = logging.getLogger(__name__)
-
-
-# 与既有 CorrectiveRAG 相同的停用词（避免两处漂移，直接对齐）
-_STOPWORDS = {
-    "的",
-    "了",
-    "是",
-    "在",
-    "我",
-    "你",
-    "他",
-    "她",
-    "它",
-    "们",
-    "这",
-    "那",
-    "怎么",
-    "什么",
-    "为什么",
-    "哪里",
-    "哪个",
-    "请问",
-    "一下",
-    "可能",
-    "应该",
-    "the",
-    "a",
-    "an",
-    "is",
-    "are",
-    "was",
-    "were",
-    "what",
-    "how",
-    "why",
-}
-
-try:
-    import jieba
-
-    _JIEBA_AVAILABLE = True
-except ImportError:  # pragma: no cover - 测试环境无 jieba 时走确定性回退
-    jieba = None
-    _JIEBA_AVAILABLE = False
-
-
-def _tokenize(text: str) -> list[str]:
-    if _JIEBA_AVAILABLE:
-        tokens = [t.strip() for t in jieba.cut(text)]
-        return [t for t in tokens if t]
-    return re.findall(r"[\u4e00-\u9fff]+|[a-zA-Z0-9]+", text)
 
 
 # 检索函数协议：query, top_k, filters → bundle | None
@@ -87,23 +37,10 @@ class CorrectiveRetrievalAdapter:
 
     def reformulate_query(self, query: str, bundle: dict[str, Any]) -> str:
         """从 top 结果提取关键词追加到原查询（不改变原意）。"""
-        keywords: list[str] = []
-        query_folded = query.casefold()
-        for result in (bundle.get("results") or [])[:3]:
-            text = "{} {}".format(result.get("title") or "", result.get("summary") or "")
-            for token in _tokenize(text):
-                if (
-                    len(token) > 1
-                    and token not in keywords
-                    and token not in _STOPWORDS
-                    and token.casefold() not in query_folded
-                ):
-                    keywords.append(token)
-            if len(keywords) >= 8:
-                break
-        if not keywords:
-            return query
-        return f"{query} {' '.join(keywords[:5])}"
+        return append_retrieval_keywords(query, (
+            "{} {}".format(result.get("title") or "", result.get("summary") or "")
+            for result in (bundle.get("results") or [])[:3]
+        ))
 
     def retrieve_with_correction(
         self,
