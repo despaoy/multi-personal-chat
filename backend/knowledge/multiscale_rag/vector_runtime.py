@@ -40,10 +40,11 @@ class LocalMeanPoolingEmbeddingProvider:
                 return self._tokenizer, self._model
             from transformers import AutoModel, AutoTokenizer
 
-            self._tokenizer = AutoTokenizer.from_pretrained(self.model_path, local_files_only=True)
-            self._model = AutoModel.from_pretrained(self.model_path, local_files_only=True)
-            self._model.eval()
-            self._model.to("cpu")
+            tokenizer = AutoTokenizer.from_pretrained(self.model_path, local_files_only=True)
+            model = AutoModel.from_pretrained(self.model_path, local_files_only=True)
+            model.eval()
+            model.to("cpu")
+            self._tokenizer, self._model = tokenizer, model
             # Inference mode is scoped in embed_texts. Do not disable gradients
             # for the caller's thread: the same process may later train LoRA.
             return self._tokenizer, self._model
