@@ -60,3 +60,28 @@ def test_explicit_source_setting_wins_over_environment(monkeypatch,override):
     monkeypatch.setenv('MEMORY_SOURCE_RECALL_ENABLED','invalid-unused-setting')
     service=CharacterContextService(Mock(),Mock(),Mock(),memory_service=Mock(),source_recall_enabled=override)
     assert service._source_recall_enabled is override
+
+
+@pytest.mark.parametrize('name,argument',[
+    ('CAHM_SEMANTIC_MEMORY_ENABLED','semantic_enabled'),
+    ('CAHM_RRF_ENABLED','rrf_enabled'),
+    ('CAHM_QUERY_EXPANSION_ENABLED','query_expansion_enabled'),
+    ('CAHM_VERSION_FILTER_ENABLED','version_filter_enabled'),
+    ('CAHM_EVIDENCE_ENABLED','evidence_enabled'),
+])
+@pytest.mark.parametrize('mode',['default','disabled','invalid','override'])
+def test_memory_recall_flags_keep_defaults_and_explicit_precedence(monkeypatch,name,argument,mode):
+    from character.memory_service import CharacterMemoryService
+
+    for key in ['CAHM_SEMANTIC_MEMORY_ENABLED','CAHM_RRF_ENABLED','CAHM_QUERY_EXPANSION_ENABLED','CAHM_VERSION_FILTER_ENABLED','CAHM_EVIDENCE_ENABLED']:
+        monkeypatch.delenv(key,raising=False)
+    if mode!='default':
+        monkeypatch.setenv(name,'off' if mode=='disabled' else 'private-invalid-value')
+    kwargs={argument:False} if mode=='override' else {}
+    if mode=='invalid':
+        with pytest.raises(ValueError,match=name) as caught:
+            CharacterMemoryService(Mock(),embedding_provider=Mock(),**kwargs)
+        assert 'private-invalid-value' not in str(caught.value)
+    else:
+        service=CharacterMemoryService(Mock(),embedding_provider=Mock(),**kwargs)
+        assert getattr(service,'_'+argument) is (mode=='default')

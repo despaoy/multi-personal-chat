@@ -28,10 +28,12 @@ from character.memory_subject import is_source_observation
 from character.models import MemoryItem, UserScope
 from character.source_fragment_provenance import source_fragment_fields
 from character.temporal_projection import project_temporal_record
+from infra.environment import read_bool
 
 if TYPE_CHECKING:
-    from knowledge.retrieval_core.embedding import EmbeddingProvider
     from repositories.character_memory import CharacterMemoryRepository
+
+    from knowledge.retrieval_core.embedding import EmbeddingProvider
 
 # 综合得分权重：相关度 60% + 重要性 30% + 新近度 10%
 WEIGHT_RELEVANCE = 0.6
@@ -751,12 +753,7 @@ class CharacterMemoryService:
     ) -> None:
         self._repo = repository
         if semantic_enabled is None:
-            semantic_enabled = os.getenv("CAHM_SEMANTIC_MEMORY_ENABLED", "true").strip().lower() in {
-                "1",
-                "true",
-                "yes",
-                "on",
-            }
+            semantic_enabled = read_bool(os.environ, "CAHM_SEMANTIC_MEMORY_ENABLED", True)
         self._semantic_enabled = bool(semantic_enabled)
         self._embedding_provider = embedding_provider
         self._gate_enabled = bool(gate_enabled)
@@ -770,19 +767,19 @@ class CharacterMemoryService:
         self._embedding_cache: dict[tuple[str, str, str], np.ndarray] = {}
         self._embedding_lock = threading.Lock()
         self._include_pending = bool(include_pending)
-        self._rrf_enabled = _env_bool("CAHM_RRF_ENABLED", True) if rrf_enabled is None else bool(rrf_enabled)
+        self._rrf_enabled = read_bool(os.environ, "CAHM_RRF_ENABLED", True) if rrf_enabled is None else bool(rrf_enabled)
         self._query_expansion_enabled = (
-            _env_bool("CAHM_QUERY_EXPANSION_ENABLED", True)
+            read_bool(os.environ, "CAHM_QUERY_EXPANSION_ENABLED", True)
             if query_expansion_enabled is None
             else bool(query_expansion_enabled)
         )
         self._version_filter_enabled = (
-            _env_bool("CAHM_VERSION_FILTER_ENABLED", True)
+            read_bool(os.environ, "CAHM_VERSION_FILTER_ENABLED", True)
             if version_filter_enabled is None
             else bool(version_filter_enabled)
         )
         self._evidence_enabled = (
-            _env_bool("CAHM_EVIDENCE_ENABLED", True) if evidence_enabled is None else bool(evidence_enabled)
+            read_bool(os.environ, "CAHM_EVIDENCE_ENABLED", True) if evidence_enabled is None else bool(evidence_enabled)
         )
 
     async def recall_with_diagnostics(self, character_id: str, user_scope: UserScope, query: str, **kwargs):
@@ -1333,10 +1330,3 @@ class CharacterMemoryService:
 
 def _clamp01(value: float) -> float:
     return max(0.0, min(1.0, value))
-
-
-def _env_bool(name: str, default: bool) -> bool:
-    value = os.getenv(name)
-    if value is None:
-        return default
-    return value.strip().lower() in {"1", "true", "yes", "on"}
