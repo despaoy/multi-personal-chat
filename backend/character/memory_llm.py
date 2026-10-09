@@ -931,6 +931,13 @@ def _supported_generic_fact(value: str, evidence: str) -> tuple[str, ExtractedMe
     return matches[0] if len(matches) == 1 else None
 
 
+def _proposal_text(raw: dict[str, Any], field: str) -> str:
+    value = raw.get(field, "")
+    if not isinstance(value, str):
+        raise ValueError(f"记忆 LLM {field} 必须是字符串")
+    return value
+
+
 def _candidate_to_proposal(
     raw: dict[str, Any],
     *,
@@ -953,17 +960,17 @@ def _candidate_to_proposal(
         return None
     if semantic_operation not in _SEMANTIC_OPERATIONS:
         raise ValueError("记忆 LLM operation 不受支持")
-    kind = str(raw.get("kind") or "").strip()
-    value = re.sub(r"\s+", " ", str(raw.get("value") or "")).strip()
-    evidence = raw.get("evidence")
-    if not isinstance(evidence, str) or not evidence.strip():
+    kind = _proposal_text(raw, "kind").strip()
+    value = re.sub(r"\s+", " ", _proposal_text(raw, "value")).strip()
+    evidence = _proposal_text(raw, "evidence")
+    if not evidence.strip():
         raise ValueError("记忆 LLM evidence 必须是非空字符串")
     evidence = re.sub(r"\s+", " ", evidence).strip()
-    proposed_content = re.sub(r"\s+", " ", str(raw.get("content") or "")).strip()
+    proposed_content = re.sub(r"\s+", " ", _proposal_text(raw, "content")).strip()
     if proposed_content in {"用户开头的第三人称事实", "第三人称安全描述"}:
         proposed_content = ""
-    target_memory_id = str(raw.get("target_memory_id") or "").strip()
-    target_memory_key = str(raw.get("target_memory_key") or "").strip()
+    target_memory_id = _proposal_text(raw, "target_memory_id").strip()
+    target_memory_key = _proposal_text(raw, "target_memory_key").strip()
 
     normalized_source = _normalize(source_message)
     normalized_evidence = _normalize(evidence)
