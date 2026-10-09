@@ -1292,12 +1292,10 @@ def _candidate_to_proposal(
         raise ValueError("记忆 LLM valid_from 不能晚于 valid_to")
 
     if target_record is not None and semantic_operation in {"RETRACT", "ERASE"}:
-        memory_type = str(target_record.get("memory_type") or "user_fact")
-        if memory_type not in {"user_fact", "shared_event", "promise", "conversation_summary"}:
-            memory_type = "user_fact"
+        memory_type = target_record["memory_type"]
         key = target_memory_key
         canonical_content = str(target_record.get("content") or f"用户撤回记忆：{target_memory_key}")
-        importance = float(target_record.get("importance") or 0.5)
+        importance = float(target_record.get("importance", 0.5))
     else:
         canonical = alias_projection or _canonical_memory_fields(kind, value, evidence)
         if canonical is None:
