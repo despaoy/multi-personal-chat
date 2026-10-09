@@ -31,7 +31,6 @@ from character.memory_service import (  # noqa: E402
     HYBRID_WEIGHT_RECENCY,
     HYBRID_WEIGHT_SEMANTIC,
     MIN_HYBRID_MEMORY_SCORE,
-    SEMANTIC_MEMORY_CANDIDATE_LIMIT,
     CharacterMemoryService,
 )
 from character.models import UserScope  # noqa: E402
@@ -62,8 +61,9 @@ class _CaseRepository:
         now = datetime.now(timezone.utc).isoformat()
         self.records = [{**record, "updated_at": record.get("updated_at", now)} for record in records]
 
-    async def list_memory_records(self, character_id, user_scope, limit=30):
-        return self.records[:limit]
+    async def list_memory_records(self, character_id, user_scope, limit=30, *, include_inactive=False):
+        records = self.records if include_inactive else [row for row in self.records if row.get("status", "active") == "active"]
+        return records[:limit]
 
 
 def _load_jsonl(path: Path) -> list[dict[str, Any]]:
@@ -355,7 +355,7 @@ async def evaluate(args) -> dict[str, Any]:
         "configuration": {
             "embedding_model": provider.model_id,
             "context_extraction_evaluated": context_predictions is not None,
-            "semantic_candidate_limit": SEMANTIC_MEMORY_CANDIDATE_LIMIT,
+            "semantic_candidate_limit": None,
             "min_hybrid_memory_score": args.min_hybrid_score,
             "hybrid_weights": {
                 "semantic": HYBRID_WEIGHT_SEMANTIC,

@@ -69,7 +69,6 @@ MEMORY_LLM_CONFIDENCE_THRESHOLD=0.85
 
 # 检索与 claim 门控
 CAHM_SEMANTIC_MEMORY_ENABLED=true
-SEMANTIC_MEMORY_CANDIDATE_LIMIT=100
 MIN_HYBRID_MEMORY_SCORE=0.35
 MIN_MEMORY_CLAIM_CONFIDENCE=0.45
 CAHM_RRF_ENABLED=true
@@ -190,3 +189,5 @@ Qoder、Trae 等产品可以确认具有跨会话记忆行为，但其内部抽�
 ## 读取链路更新（2026-10-09）
 
 上述实现记录保留当时的实验行为。当前回复召回已取消向量故障后的 bigram 回退；必要数据库/来源读取与已启用的向量计算失败直接传播。显式关闭语义排序可走词面通道。详见 `docs/reports/backend-memory-strict-20261009.md`；后台写入召回于同日也取消语义故障回退；当前行为见 `docs/reports/backend-writer-strict-20261009.md`。
+
+默认召回读取全部有效记忆，再按相关性和上下文预算选择；评测中的 `semantic_candidate_limit: null` 表示未在读取前截断。构造参数 `candidate_limit` 仅用于显式的消融实验。

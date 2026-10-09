@@ -106,9 +106,6 @@ _PROMISE_INTENT_PATTERN = re.compile(r"(?:我们|咱|我|你).{0,6}(?:约好|说
 # 新近度半衰期（天）：30 天前的记忆新近度得分约为一半
 RECENCY_HALF_LIFE_DAYS = 30.0
 
-# 每次排序的候选上限（读取最近 N 条进入打分）
-CANDIDATE_LIMIT = 30
-SEMANTIC_MEMORY_CANDIDATE_LIMIT = max(1, int(os.getenv("SEMANTIC_MEMORY_CANDIDATE_LIMIT", "100")))
 MIN_HYBRID_MEMORY_SCORE = max(0.0, min(1.0, float(os.getenv("MIN_HYBRID_MEMORY_SCORE", "0.35"))))
 INTENT_HYBRID_SCORE_FLOOR = 0.4
 MIN_CLAIM_CONFIDENCE = max(0.0, min(1.0, float(os.getenv("MIN_MEMORY_CLAIM_CONFIDENCE", "0.45"))))
