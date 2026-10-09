@@ -306,10 +306,6 @@ class VectorDatabase:
             "built": self.bm25._built,
         }
 
-    def _save_bm25(self):
-        # A keyword-only publication would break snapshot coherence.
-        self._save_index()
-
     def _rebuild_id_mapping(self):
         self._id_to_index = {}
         for i, meta in enumerate(self.metadata):
@@ -483,6 +479,9 @@ class VectorDatabase:
                 train_size = min(len(embeddings), max(256, self.config.nlist * 39))
                 self.index.train(embeddings[:train_size])
 
+            # 修改开始后即使失败，也不能授权旧缓存或把内存状态视为已落盘。
+            self._dirty = True
+            self.clear_cache()
             self.index.add_with_ids(embeddings, ids)
 
             start_idx = len(self.metadata)
@@ -493,7 +492,6 @@ class VectorDatabase:
             self.bm25.add_documents(documents)
 
             self._add_count += len(documents)
-            self._dirty = True
 
             if self.config.save_on_every_n_adds <= 0 or self._add_count >= self.config.save_on_every_n_adds:
                 self._save_index()
@@ -501,8 +499,6 @@ class VectorDatabase:
             else:
                 logger.info(f"延迟保存：已添加 {self._add_count} 个文档（阈值: {self.config.save_on_every_n_adds}）")
 
-            # 已提交新增文档，后续迁移失败也不能继续使用旧查询缓存。
-            self.clear_cache()
             self._maybe_migrate_index()
 
             logger.info(f"成功添加 {len(documents)} 个文档到向量数据库（总计: {len(self.metadata)}）")
@@ -753,21 +749,6 @@ class VectorDatabase:
                 results.append(query_results)
 
             return results
-
-    def rebuild_index(self):
-        """重建整个向量索引：清空现有索引后重新添加所有文档。
-
-        用于索引损坏后恢复或强制切换索引类型。
-        """
-        if len(self.metadata) == 0:
-            return
-        with self._lock:
-            documents = self.metadata.copy()
-            self.index = None
-            self.metadata = []
-            self._id_to_index = {}
-            self._create_index()
-        self.add_documents(documents)
 
     def clear_all(self):
         """清空所有向量索引和元数据，并立即持久化空索引到磁盘。
