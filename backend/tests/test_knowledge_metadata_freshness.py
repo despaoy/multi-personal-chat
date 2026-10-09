@@ -122,13 +122,18 @@ async def test_missing_document_does_not_change_index_authority(saved_document):
 async def test_generic_generation_checks_freshness_before_cache_or_correction(monkeypatch, corrective):
     from threading import RLock
 
-    import knowledge.corrective_rag as corrective_module
     import knowledge.rag_helper as rag_module
     from knowledge import vector_db
 
     calls = []
     record = dict(id="doc_1_chunk_0", document_id=1, chunk_index=0, knowledge_base_id=7,
                   title="新标题", category="规程", content="末尾纠正。")
+    def read_original(identity):
+        assert identity == 1
+        calls.append("source")
+        return {**record, "id": identity}
+
+    monkeypatch.setattr(generate.db, "get_knowledge_document", read_original)
     bundle = dict(results=[record], citations=[], confidence=0.8, abstained=False)
     indexed = SimpleNamespace(_lock=RLock(), cache_generation=11, snapshot_validated=True, metadata=[record],
                               _match_filters=lambda row, filters: all(row.get(k) == v for k, v in filters.items()))
@@ -145,17 +150,17 @@ async def test_generic_generation_checks_freshness_before_cache_or_correction(mo
         calls.append("generic")
         return bundle
 
-    def correction(*args, **kwargs):
-        calls.append("corrective")
-        return bundle
-
     monkeypatch.setattr(knowledge, "_ensure_vector_index", ready)
     monkeypatch.setattr(rag_module, "get_rag_helper", lambda: SimpleNamespace(retrieve_with_citations=generic, build_citations=lambda rows: rag_module.RAGHelper.build_citations(None, rows)))
-    monkeypatch.setattr(
-        corrective_module, "get_corrective_rag", lambda: SimpleNamespace(retrieve_with_correction=correction)
-    )
     actual = await generate._retrieve_rag_bundle("核对规则", 3, {"knowledge_base_id": 7})
-    assert actual["results"] == bundle["results"] and actual["source_coverage"] and calls == ["ensure", "corrective" if corrective else "generic"]
+    assert actual["results"] == bundle["results"] and actual["source_coverage"] and calls == ["ensure", "generic", "source"]
+    assert actual["source_coverage"][0]["original_source_receipt"]["authority"] == "fresh_knowledge_document_read"
+    if corrective:
+        assert actual["original_query"] == "核对规则"
+        assert actual["rounds"] == [dict(query="核对规则", confidence=0.8, abstained=False)]
+        assert actual["reformulated"] is False
+    else:
+        assert "rounds" not in actual
 
 
 async def test_unready_index_never_returns_stale_cached_sources(monkeypatch):

@@ -140,16 +140,3 @@ class CorrectiveRAG:
             "reformulated_query": current_query if reformulated else None,
             "rounds": rounds,
         }
-
-
-_corrective_rag: CorrectiveRAG | None = None
-
-
-def get_corrective_rag(threshold: float = 0.3, max_retries: int = 1) -> CorrectiveRAG:
-    """获取 CorrectiveRAG 单例。"""
-    global _corrective_rag
-    if _corrective_rag is None:
-        from .rag_helper import get_rag_helper
-
-        _corrective_rag = CorrectiveRAG(get_rag_helper(), threshold=threshold, max_retries=max_retries)
-    return _corrective_rag

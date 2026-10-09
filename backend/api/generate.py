@@ -1105,9 +1105,9 @@ async def _retrieve_rag_bundle(
         generation = vector_db.cache_generation
         revision = knowledge_api._vector_index_revision
         if os.getenv("CORRECTIVE_RAG_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}:
-            from knowledge.corrective_rag import get_corrective_rag
+            from knowledge.corrective_rag import CorrectiveRAG
 
-            bundle = get_corrective_rag().retrieve_with_correction(query, top_k=top_k, filters=filters)
+            bundle = CorrectiveRAG(get_rag_helper()).retrieve_with_correction(query, top_k=top_k, filters=filters)
         else:
             views = search_views
             contextual_binding = question_binding is not None and "reference_context" in question_binding["input"]
