@@ -41,9 +41,11 @@ _DEFAULT_INDEX_ROOT = _BACKEND_ROOT / "data" / "knowledge" / "tsukiyashiro_kisak
 def _env_float(name: str, default: float) -> float:
     try:
         value = float(os.getenv(name, str(default)))
-        return value if math.isfinite(value) else default
     except ValueError:
-        return default
+        raise ValueError(f"{name} must be a finite number") from None
+    if not math.isfinite(value):
+        raise ValueError(f"{name} must be a finite number")
+    return value
 
 
 def _load_bundle(root: Path) -> tuple[list[KnowledgeIndexDocument], np.ndarray, dict[str, Any]]:

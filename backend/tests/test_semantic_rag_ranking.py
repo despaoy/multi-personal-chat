@@ -201,9 +201,34 @@ def test_semantic_threshold_is_independent_of_rule_threshold(monkeypatch):
     assert not _runtime(3.0, "cross_encoder").retrieve_with_citations("q")["abstained"]
 
 
-def test_invalid_threshold_uses_finite_default(monkeypatch):
-    monkeypatch.setenv("CHARACTER_RAG_CROSS_ENCODER_MIN_LOGIT", "nan")
-    assert _runtime(-1.0, "cross_encoder").retrieve_with_citations("q")["abstained"]
+@pytest.mark.parametrize('name,method', [
+    ('CHARACTER_RAG_CROSS_ENCODER_MIN_LOGIT', 'cross_encoder'),
+    ('CHARACTER_RAG_ABSTAIN_THRESHOLD', 'deterministic'),
+    ('MULTISCALE_RAG_ABSTAIN_THRESHOLD', 'deterministic'),
+])
+@pytest.mark.parametrize('value', ['', 'invalid', 'nan', 'inf', '-inf'])
+def test_invalid_threshold_raises_named_configuration_error(monkeypatch, name, method, value):
+    monkeypatch.delenv('CHARACTER_RAG_ABSTAIN_THRESHOLD', raising=False)
+    monkeypatch.setenv(name, value)
+    with pytest.raises(ValueError, match=name):
+        _runtime(.5, method).retrieve_with_citations('q')
+
+
+@pytest.mark.parametrize('method,below,above', [('cross_encoder', -.1, .1), ('deterministic', .2, .3)])
+def test_unconfigured_threshold_keeps_documented_default(monkeypatch, method, below, above):
+    for name in ('CHARACTER_RAG_CROSS_ENCODER_MIN_LOGIT', 'CHARACTER_RAG_ABSTAIN_THRESHOLD', 'MULTISCALE_RAG_ABSTAIN_THRESHOLD'):
+        monkeypatch.delenv(name, raising=False)
+    assert _runtime(below, method).retrieve_with_citations('q')['abstained']
+    assert not _runtime(above, method).retrieve_with_citations('q')['abstained']
+
+
+def test_explicit_threshold_preserves_precedence_and_negative_logits(monkeypatch):
+    monkeypatch.setenv('CHARACTER_RAG_ABSTAIN_THRESHOLD', '0.4')
+    monkeypatch.setenv('MULTISCALE_RAG_ABSTAIN_THRESHOLD', 'invalid')
+    assert _runtime(.3, 'deterministic').retrieve_with_citations('q')['abstained']
+    assert not _runtime(.5, 'deterministic').retrieve_with_citations('q')['abstained']
+    monkeypatch.setenv('CHARACTER_RAG_CROSS_ENCODER_MIN_LOGIT', '-2')
+    assert not _runtime(-1, 'cross_encoder').retrieve_with_citations('q')['abstained']
 
 
 def test_generic_kb_switch_cannot_enable_character_reranking(monkeypatch):
