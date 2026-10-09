@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from threading import RLock
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 import faiss
 import numpy as np
@@ -104,7 +104,7 @@ class BM25Retriever:
         for token, freq in self.doc_freqs.items():
             self.idf[token] = math.log((n_docs - freq + 0.5) / (freq + 0.5) + 1.0)
 
-    def search(self, query: str, top_k: int = 10, threshold: float = 0.0) -> List[Tuple[int, float]]:
+    def search(self, query: str, top_k: int = 10, threshold: float = 0.0, *, candidate_indices: list[int] | None = None) -> list[tuple[int, float]]:
         """BM25关键词搜索。
 
         Args:
@@ -123,7 +123,9 @@ class BM25Retriever:
             return []
 
         scores = []
-        for doc_idx, doc_tokens in enumerate(self.tokenized_corpus):
+        candidates = range(len(self.tokenized_corpus)) if candidate_indices is None else candidate_indices
+        for doc_idx in candidates:
+            doc_tokens = self.tokenized_corpus[doc_idx]
             score = 0.0
             token_counts = Counter(doc_tokens)
             doc_len = self.doc_lens[doc_idx]
@@ -547,21 +549,26 @@ class VectorDatabase:
             if filters:
                 search_k = min(top_k * 5, len(self.metadata))
 
-            scores, faiss_ids = self.index.search(query_embedding, search_k)
+            while True:
+                scores, faiss_ids = self.index.search(query_embedding, search_k)
 
-            results = []
-            for score, faiss_id in zip(scores[0], faiss_ids[0]):
-                if score < threshold:
-                    continue
-                meta_idx = self._id_to_index.get(int(faiss_id))
-                if meta_idx is None or meta_idx < 0 or meta_idx >= len(self.metadata):
-                    continue
-                result = {**self.metadata[meta_idx], "score": float(score)}
-                if filters and not self._match_filters(result, filters):
-                    continue
-                results.append(result)
-                if len(results) >= top_k:
+                results = []
+                for score, faiss_id in zip(scores[0], faiss_ids[0]):
+                    if score < threshold:
+                        continue
+                    meta_idx = self._id_to_index.get(int(faiss_id))
+                    if meta_idx is None or meta_idx < 0 or meta_idx >= len(self.metadata):
+                        continue
+                    result = {**self.metadata[meta_idx], "score": float(score)}
+                    if filters and not self._match_filters(result, filters):
+                        continue
+                    results.append(result)
+                    if len(results) >= top_k:
+                        break
+
+                if not filters or len(results) >= top_k or search_k >= len(self.metadata) or scores[0][-1] < threshold:
                     break
+                search_k = min(search_k * 2, len(self.metadata))
 
             # 存入查询缓存
             self._set_query_cache(cache_key, results)
@@ -622,10 +629,10 @@ class VectorDatabase:
                 doc_scores[key] = {"vector_score": doc["score"], "bm25_score": 0.0, "doc": doc}
 
             if self.bm25._built:
-                for key, score in self.bm25.search(query, top_k=recall_k, threshold=0.0):
+                candidates = [i for i, doc in enumerate(self.metadata) if self._match_filters(doc, filters)] if filters else None
+                options = {"candidate_indices": candidates} if candidates is not None else {}
+                for key, score in self.bm25.search(query, top_k=recall_k, threshold=0.0, **options):
                     doc = self.metadata[key]
-                    if filters and not self._match_filters(doc, filters):
-                        continue
                     if key in doc_scores:
                         doc_scores[key]["bm25_score"] = score
                     else:
