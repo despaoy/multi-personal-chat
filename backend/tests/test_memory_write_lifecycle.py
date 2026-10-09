@@ -332,7 +332,8 @@ def test_invalid_subject_time_and_external_source_are_rejected():
     )
 
     assert parse_llm_proposals(third_party, source_message="我室友喜欢咖啡") == []
-    assert parse_llm_proposals(bad_time, source_message="我正在准备保研") == []
+    with pytest.raises(ValueError, match="valid_from.*valid_to"):
+        parse_llm_proposals(bad_time, source_message="我正在准备保研")
     assert (
         parse_llm_proposals(
             _response(

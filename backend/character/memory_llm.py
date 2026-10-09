@@ -669,8 +669,12 @@ def _sanitize_qualifiers(
     return tuple(result)
 
 
-def _normalize_iso_time(raw: Any) -> str | None:
-    text = str(raw or "").strip()
+def _normalize_iso_time(raw: Any, field: str) -> str:
+    if raw is None:
+        return ""
+    if not isinstance(raw, str):
+        raise ValueError(f"记忆 LLM {field} 必须是 ISO 8601 字符串")
+    text = raw.strip()
     if not text:
         return ""
     try:
@@ -685,8 +689,8 @@ def _normalize_iso_time(raw: Any) -> str | None:
             else:
                 value = value.astimezone(timezone.utc)
         return value.isoformat()
-    except (TypeError, ValueError, OverflowError):
-        return None
+    except (ValueError, OverflowError) as exc:
+        raise ValueError(f"记忆 LLM {field} 必须是有效 ISO 8601 时间") from exc
 
 
 def _resolve_target_record(
@@ -1273,19 +1277,19 @@ def _candidate_to_proposal(
     )
     if qualifiers is None:
         return None
-    raw_valid_from = (raw.get("valid_from") or raw.get("valid_at")
-                      or misplaced_validity.get("valid_from") or misplaced_validity.get("valid_at"))
-    raw_valid_to = (raw.get("valid_to") or raw.get("invalid_at")
-                    or misplaced_validity.get("valid_to") or misplaced_validity.get("invalid_at"))
-    valid_from = _normalize_iso_time(raw_valid_from)
-    valid_to = _normalize_iso_time(raw_valid_to)
+    raw_valid_from = next((value for value in (
+        raw.get("valid_from"), raw.get("valid_at"), misplaced_validity.get("valid_from"), misplaced_validity.get("valid_at")
+    ) if value is not None and value != ""), None)
+    raw_valid_to = next((value for value in (
+        raw.get("valid_to"), raw.get("invalid_at"), misplaced_validity.get("valid_to"), misplaced_validity.get("invalid_at")
+    ) if value is not None and value != ""), None)
+    valid_from = _normalize_iso_time(raw_valid_from, "valid_from")
+    valid_to = _normalize_iso_time(raw_valid_to, "valid_to")
     # Observation time belongs to server provenance, not semantic extraction.
     # Keep accepting legacy model payloads, but ignore their observed_at field.
     observed_at = ""
-    if valid_from is None or valid_to is None:
-        return None
     if valid_from and valid_to and datetime.fromisoformat(valid_from) > datetime.fromisoformat(valid_to):
-        return None
+        raise ValueError("记忆 LLM valid_from 不能晚于 valid_to")
 
     if target_record is not None and semantic_operation in {"RETRACT", "ERASE"}:
         memory_type = str(target_record.get("memory_type") or "user_fact")

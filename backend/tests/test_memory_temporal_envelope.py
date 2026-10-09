@@ -52,7 +52,8 @@ def test_real_qualifiers_are_still_validated(qualifier):
 @pytest.mark.parametrize("dates", [dict(valid_from="not-a-date"),
                                    dict(valid_from="2026-11-01", valid_to="2026-10-01")])
 def test_date_validation_is_not_bypassed(dates):
-    assert parse(candidate(qualifiers={"observed_at": "bad", **dates})) == []
+    with pytest.raises(ValueError, match="valid_from"):
+        parse(candidate(qualifiers={"observed_at": "bad", **dates}))
 
 
 def test_existing_top_level_precedence_is_preserved():
