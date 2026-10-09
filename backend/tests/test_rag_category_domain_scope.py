@@ -44,7 +44,6 @@ def test_unanchored_query_keeps_complete_rule_candidates_and_explicit_filter(mon
     index=Index()
     monkeypatch.setattr(rag_helper,"get_vector_db",lambda:index)
     helper=RAGHelper()
-    helper.use_vector_db=True
     assert helper.retrieve_context("请按青川办理规则判断，角色不是用户。",enable_rerank=False,use_cache=False)[0]["id"]=="rule"
     assert all(x is None for x in index.filters)
     index.filters=[]

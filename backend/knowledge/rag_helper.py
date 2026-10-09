@@ -21,25 +21,8 @@ try:
 except ImportError:
     logger = logging.getLogger(__name__)
 
-VECTOR_DB_AVAILABLE = False
-_vector_db = None
-
-try:
-    from .vector_db import get_vector_db
-
-    VECTOR_DB_AVAILABLE = True
-    logger.info("RAG辅助工具: 向量数据库模块加载成功")
-except ImportError as e:
-    logger.warning(f"RAG辅助工具: 向量数据库模块不可用: {e}")
-
-RERANKER_AVAILABLE = False
-try:
-    from .reranker import get_reranker
-
-    RERANKER_AVAILABLE = True
-    logger.info("RAG辅助工具: Cross-Encoder重排器模块加载成功")
-except ImportError as e:
-    logger.warning(f"RAG辅助工具: Cross-Encoder重排器模块不可用: {e}")
+from .reranker import get_reranker
+from .vector_db import get_vector_db
 
 
 class DomainProfile:
@@ -279,14 +262,12 @@ class RAGHelper:
 
     def __init__(self):
         """初始化RAG辅助类，自动加载向量数据库和重排器（若可用）。"""
-        self.use_vector_db = VECTOR_DB_AVAILABLE
         self.min_score_threshold = 0.05
         self.max_context_length = 2000
         self.top_k = 5
 
-        self.enable_reranking = RERANKER_AVAILABLE
         self.reranker = None
-        self.enable_reranking = self.enable_reranking and os.getenv("RERANKER_ENABLED", "false").strip().lower() in {
+        self.enable_reranking = os.getenv("RERANKER_ENABLED", "false").strip().lower() in {
             "1",
             "true",
             "yes",
@@ -305,12 +286,7 @@ class RAGHelper:
         self._cache_ttl = max(1, int(os.getenv("RAG_RETRIEVAL_CACHE_TTL", "60")))
 
         if self.enable_reranking:
-            try:
-                self.reranker = get_reranker()
-                logger.info("RAGHelper: Cross-Encoder重排器初始化成功")
-            except Exception as e:
-                logger.error(f"RAGHelper: 重排器初始化失败: {e}")
-                self.enable_reranking = False
+            self.reranker = get_reranker()
 
     def _get_from_cache(self, query: str) -> list[dict[str, Any]] | None:
         with self._cache_lock:
@@ -399,119 +375,91 @@ class RAGHelper:
             按相关性降序排列的文档列表，每项包含normalized_score等字段
         """
         views = self._validated_task_views(query, additional_queries)
-        if views and self.use_vector_db:
+        if views:
             return self._task_candidate_plan(
                 query, views, top_k=top_k, enable_rerank=enable_rerank,
                 filters=filters, use_cache=use_cache,
             ).results
-        if not self.use_vector_db:
-            return []
 
-        try:
-            start_time = time.time()
 
-            # 先确定实际 filters（未显式传入时从查询中提取），再生成缓存键，
-            # 确保缓存键包含所有真正影响检索结果的参数
-            use_expansion = self.enable_multi_query and self.enable_query_expansion
-            if use_expansion and not filters and infer_filters:
-                filters = self.query_expander.extract_filters(query)
-            search_filters = {k: v for k, v in (filters or {}).items() if k != "region"} or None
+        # 先确定实际 filters（未显式传入时从查询中提取），再生成缓存键，
+        # 确保缓存键包含所有真正影响检索结果的参数
+        use_expansion = self.enable_multi_query and self.enable_query_expansion
+        if use_expansion and not filters and infer_filters:
+            filters = self.query_expander.extract_filters(query)
+        search_filters = {k: v for k, v in (filters or {}).items() if k != "region"} or None
 
-            vector_generation = get_vector_db().cache_generation
-            serialized_filters = json.dumps(filters or {}, ensure_ascii=False, sort_keys=True, default=str)
-            cache_key = (
-                f"{query}|{top_k or self.top_k}|rerank={enable_rerank}|"
-                f"expansion={use_expansion}|threshold={self.min_score_threshold}|"
-                f"recall_multiplier={self.recall_multiplier}|filters={serialized_filters}|"
-                f"generation={vector_generation}|infer_filters={infer_filters}"
+        vector_db = get_vector_db()
+        vector_generation = vector_db.cache_generation
+        serialized_filters = json.dumps(filters or {}, ensure_ascii=False, sort_keys=True, default=str)
+        cache_key = (
+            f"{query}|{top_k or self.top_k}|rerank={enable_rerank and self.enable_reranking}|"
+            f"expansion={use_expansion}|threshold={self.min_score_threshold}|"
+            f"recall_multiplier={self.recall_multiplier}|filters={serialized_filters}|"
+            f"generation={vector_generation}|infer_filters={infer_filters}"
+        )
+        if use_cache:
+            cached = self._get_from_cache(cache_key)
+            if cached is not None:
+                logger.info("RAG缓存命中")
+                return cached
+
+        final_top_k = top_k or self.top_k
+        all_results: dict[str, dict[str, Any]] = {}
+
+        expanded_queries = self.query_expander.expand_query(query) if use_expansion else [query]
+        for q in expanded_queries:
+            recall_top_k = final_top_k * self.recall_multiplier
+            recall_results = vector_db.hybrid_search(
+                q, top_k=recall_top_k, threshold=self.min_score_threshold,
+                keyword_weight=0.3, filters=search_filters,
             )
-            if use_cache:
-                cached = self._get_from_cache(cache_key)
-                if cached is not None:
-                    logger.info(f"RAG缓存命中: {query}")
-                    return cached
+            for result in recall_results:
+                self._merge_result(all_results, result)
 
-            final_top_k = top_k or self.top_k
-            all_results: dict[str, dict[str, Any]] = {}
-
-            expanded_queries = self.query_expander.expand_query(query) if use_expansion else [query]
-            for q in expanded_queries:
-                recall_top_k = final_top_k * self.recall_multiplier
-                vector_db = get_vector_db()
-                recall_results = vector_db.hybrid_search(
-                    q, top_k=recall_top_k, threshold=self.min_score_threshold,
-                    keyword_weight=0.3, filters=search_filters,
-                )
-                for result in recall_results:
-                    self._merge_result(all_results, result)
-
-            if not all_results:
-                logger.info("RAG检索未找到相关文档")
-                return []
-
-            # 地区加权：如果查询指定了地区，提升包含该地区关键词的文档
-            region_filter = (filters or {}).get("region", "")
-            if region_filter and region_filter in self.query_expander.region_keywords:
-                region_kws = self.query_expander.region_keywords[region_filter]
-                for result in all_results.values():
-                    content = result.get("content", "") + result.get("title", "")
-                    if any(kw in content for kw in region_kws):
-                        result["region_boost"] = 0.5
-                    else:
-                        result["region_boost"] = -0.5  # 惩罚非目标地区文档
-
-            for result in all_results.values():
-                bonus = result.get("query_count", 1) * 0.05
-                region_bonus = result.get("region_boost", 0)
-                base_score = result.get("fused_score", result.get("score", 0)) or 0
-                result["final_score"] = base_score + bonus + region_bonus
-
-            # 确定性排序：final_score 降序，同分按稳定融合标识键升序
-            recall_results = [
-                item[1]
-                for item in sorted(
-                    all_results.items(),
-                    key=lambda item: (-item[1]["final_score"], item[0]),
-                )
-            ]
-
-            logger.info(f"第一阶段混合检索完成: {len(recall_results)} 个候选文档")
-
-            if enable_rerank and self.enable_reranking and self.reranker and len(recall_results) > 1:
-                try:
-                    rerank_start = time.time()
-                    reranked_results = self.reranker.rerank(query, recall_results, top_k=final_top_k)
-                    rerank_time = time.time() - rerank_start
-
-                    if reranked_results and len(reranked_results) > 0:
-                        reranked_results = self._normalize_scores(reranked_results)
-                        logger.info(
-                            f"第二阶段重排完成: {len(recall_results)} -> {len(reranked_results)} 文档, "
-                            f"重排耗时={rerank_time:.3f}s"
-                        )
-                        total_time = time.time() - start_time
-                        logger.info(f"两阶段检索总耗时: {total_time:.3f}s")
-
-                        if use_cache:
-                            self._add_to_cache(cache_key, reranked_results)
-                        return reranked_results
-                    else:
-                        logger.warning("重排返回空结果，使用原始召回结果")
-                except Exception as e:
-                    logger.error(f"重排失败，使用原始召回结果: {e}")
-
-            results = recall_results[:final_top_k]
-            results = self._normalize_scores(results, "final_score")
-            total_time = time.time() - start_time
-            logger.info(f"检索完成（未使用重排）: {len(results)} 个文档, 耗时={total_time:.3f}s")
-
-            if use_cache:
-                self._add_to_cache(cache_key, results)
-            return results
-
-        except Exception as e:
-            logger.error(f"RAG检索失败: {e}")
+        if not all_results:
+            logger.info("RAG检索未找到相关文档")
             return []
+
+        # 地区加权：如果查询指定了地区，提升包含该地区关键词的文档
+        region_filter = (filters or {}).get("region", "")
+        if region_filter and region_filter in self.query_expander.region_keywords:
+            region_kws = self.query_expander.region_keywords[region_filter]
+            for result in all_results.values():
+                content = result.get("content", "") + result.get("title", "")
+                if any(kw in content for kw in region_kws):
+                    result["region_boost"] = 0.5
+                else:
+                    result["region_boost"] = -0.5  # 惩罚非目标地区文档
+
+        for result in all_results.values():
+            bonus = result.get("query_count", 1) * 0.05
+            region_bonus = result.get("region_boost", 0)
+            base_score = result.get("fused_score", result.get("score", 0)) or 0
+            result["final_score"] = base_score + bonus + region_bonus
+
+        # 确定性排序：final_score 降序，同分按稳定融合标识键升序
+        recall_results = [
+            item[1]
+            for item in sorted(
+                all_results.items(),
+                key=lambda item: (-item[1]["final_score"], item[0]),
+            )
+        ]
+
+        logger.info(f"第一阶段混合检索完成: {len(recall_results)} 个候选文档")
+
+        if enable_rerank and self.enable_reranking:
+            results = self.reranker.rerank(query, recall_results, top_k=final_top_k)
+            if not results:
+                raise RuntimeError("RAG reranker returned no results for non-empty candidates")
+            results = self._normalize_scores(results, "rerank_score")
+        else:
+            results = self._normalize_scores(recall_results[:final_top_k], "final_score")
+        logger.info("检索完成")
+        if use_cache:
+            self._add_to_cache(cache_key, results)
+        return results
 
     @staticmethod
     def _validated_task_views(query: str, additional_queries: tuple[str, ...], *, question_binding=None) -> tuple[str, ...]:
@@ -616,7 +564,7 @@ class RAGHelper:
         """
         views = self._validated_task_views(query, additional_queries, question_binding=question_binding)
         task_coverage = ()
-        if views and self.use_vector_db:
+        if views:
             plan = self._task_candidate_plan(
                 query, views, top_k=top_k, enable_rerank=True,
                 filters=filters, use_cache=True, threshold=threshold,

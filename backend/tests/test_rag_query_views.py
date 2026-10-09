@@ -18,7 +18,6 @@ def helper_for(monkeypatch):
     index = Index()
     monkeypatch.setattr(rag_helper, "get_vector_db", lambda: index)
     helper = rag_helper.RAGHelper()
-    helper.use_vector_db = True
     helper.enable_query_expansion = False
     return helper, index
 

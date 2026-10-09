@@ -44,7 +44,6 @@ def helper_for(monkeypatch):
     index = ScopedIndex()
     monkeypatch.setattr(rag_helper, "get_vector_db", lambda: index)
     helper = rag_helper.RAGHelper()
-    helper.use_vector_db = True
     helper.enable_reranking = False
     return helper, index
 

@@ -92,7 +92,6 @@ class _FakeVectorDB:
 def _make_helper(monkeypatch, fake: _FakeVectorDB) -> rag_helper.RAGHelper:
     monkeypatch.setattr(rag_helper, "get_vector_db", lambda: fake, raising=False)
     helper = rag_helper.RAGHelper()
-    helper.use_vector_db = True
     return helper
 
 
