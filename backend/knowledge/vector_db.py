@@ -208,39 +208,18 @@ class VectorDatabase:
                     f"文档数: {len(self.metadata)}")
 
     def _check_gpu_availability(self) -> bool:
-        try:
-            import torch
-            if torch.cuda.is_available():
-                gpu_name = torch.cuda.get_device_name(0)
-                logger.info(f"检测到GPU: {gpu_name}")
-                return True
-            return False
-        except ImportError:
-            logger.warning("PyTorch未安装，使用CPU")
-            return False
+        import torch
+
+        return bool(torch.cuda.is_available())
 
     def _load_model(self):
         if self._model is None:
-            try:
-                from sentence_transformers import SentenceTransformer
-                logger.info("正在加载向量嵌入模型...")
-                self._device = "cuda" if self._use_gpu else "cpu"
-                model_path = resolve_local_model_path()
-                logger.info(f"使用嵌入模型路径: {model_path}")
-                try:
-                    self._model = SentenceTransformer(model_path, device=self._device)
-                    logger.info(f"向量嵌入模型加载完成，设备: {self._device}")
-                except (RuntimeError, Exception) as gpu_err:
-                    if "CUDA out of memory" in str(gpu_err) or "out of memory" in str(gpu_err).lower():
-                        logger.warning(f"GPU显存不足，回退到CPU加载嵌入模型: {gpu_err}")
-                        self._device = "cpu"
-                        self._model = SentenceTransformer(model_path, device="cpu")
-                        logger.info(f"向量嵌入模型加载完成，设备: cpu（GPU回退）")
-                    else:
-                        raise
-            except Exception as e:
-                logger.error(f"加载模型失败: {e}")
-                raise
+            from sentence_transformers import SentenceTransformer
+
+            self._device = "cuda" if self._use_gpu else "cpu"
+            model_path = resolve_local_model_path()
+            self._model = SentenceTransformer(model_path, device=self._device)
+            logger.info("向量嵌入模型加载完成，设备: %s", self._device)
 
     def _determine_index_type(self) -> str:
         if self.config.index_type != "auto":

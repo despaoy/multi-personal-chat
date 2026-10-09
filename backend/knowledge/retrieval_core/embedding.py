@@ -124,7 +124,6 @@ class SentenceTransformerEmbeddingProvider:
         expected_dim: int = DEFAULT_EMBEDDING_DIM,
         batch_size: int = 32,
         timeout_seconds: float = 300.0,
-        max_retries: int = 1,
         device: str | None = None,
     ):
         self._model_path = model_path
@@ -132,7 +131,6 @@ class SentenceTransformerEmbeddingProvider:
         self._expected_dim = expected_dim
         self._batch_size = max(1, int(batch_size))
         self._timeout_seconds = float(timeout_seconds)
-        self._max_retries = max(0, int(max_retries))
         self._device = device
         self._model = None
         self._fingerprint: str | None = None
@@ -170,15 +168,7 @@ class SentenceTransformerEmbeddingProvider:
         device = self._device
         if device is None:
             device = "cuda" if _cuda_available() else "cpu"
-        try:
-            self._model = SentenceTransformer(self.model_path, device=device)
-        except Exception as e:
-            if device != "cpu" and ("out of memory" in str(e).lower() or "cuda" in str(e).lower()):
-                logger.warning("GPU 加载失败，回退 CPU: %s", e)
-                device = "cpu"
-                self._model = SentenceTransformer(self.model_path, device="cpu")
-            else:
-                raise EmbeddingModelError(f"embedding 模型加载失败: {e}") from e
+        self._model = SentenceTransformer(self.model_path, device=device)
         logger.info("embedding 模型已加载: %s (device=%s)", self.model_path, device)
         return self._model
 
@@ -192,34 +182,24 @@ class SentenceTransformerEmbeddingProvider:
         model = self._load_model_locked()
         start = time.monotonic()
         all_embeddings: list[np.ndarray] = []
-        last_error: Exception | None = None
-        for attempt in range(self._max_retries + 1):
-            try:
-                for i in range(0, len(texts), self._batch_size):
-                    batch = texts[i : i + self._batch_size]
-                    embeddings = model.encode(
-                        batch,
-                        normalize_embeddings=True,
-                        batch_size=len(batch),
-                        show_progress_bar=False,
-                    )
-                    all_embeddings.append(np.asarray(embeddings, dtype=np.float32))
-                    if time.monotonic() - start > self._timeout_seconds:
-                        raise TimeoutError(
-                            f"embedding 编码超时（>{self._timeout_seconds}s，已完成 {i + len(batch)}/{len(texts)}）"
-                        )
-                matrix = np.vstack(all_embeddings)
-                if matrix.shape[1] != self.dimension:
-                    raise EmbeddingModelError(f"embedding 维度不符: 期望 {self.dimension}, 实际 {matrix.shape[1]}")
-                return matrix.astype(np.float32, copy=False)
-            except Exception as e:  # noqa: BLE001 - 重试后仍失败则传播
-                last_error = e
-                all_embeddings = []
-                if attempt >= self._max_retries:
-                    break
-                logger.warning("embedding 批量编码失败，重试 %d/%d: %s", attempt + 1, self._max_retries, e)
-                time.sleep(0.5 * (attempt + 1))
-        raise last_error if last_error else EmbeddingModelError("embedding 编码失败")
+        for i in range(0, len(texts), self._batch_size):
+            batch = texts[i : i + self._batch_size]
+            embeddings = model.encode(
+                batch,
+                normalize_embeddings=True,
+                batch_size=len(batch),
+                show_progress_bar=False,
+            )
+            all_embeddings.append(np.asarray(embeddings, dtype=np.float32))
+            if time.monotonic() - start > self._timeout_seconds:
+                raise TimeoutError(
+                    f"embedding 编码超时（>{self._timeout_seconds}s，已完成 {i + len(batch)}/{len(texts)}）"
+                )
+        matrix = np.vstack(all_embeddings)
+        if matrix.shape[1] != self.dimension:
+            raise EmbeddingModelError(f"embedding 维度不符: 期望 {self.dimension}, 实际 {matrix.shape[1]}")
+        return matrix.astype(np.float32, copy=False)
+
 
     def embed_query(self, query: str) -> np.ndarray:
         return self.embed_texts([query])[0]
@@ -237,12 +217,9 @@ def get_default_embedding_provider() -> SentenceTransformerEmbeddingProvider:
 
 
 def _cuda_available() -> bool:
-    try:
-        import torch
+    import torch
 
-        return bool(torch.cuda.is_available())
-    except Exception:  # pragma: no cover - torch 缺失时按 CPU 处理
-        return False
+    return bool(torch.cuda.is_available())
 
 
 # ---------------------------------------------------------------------------
