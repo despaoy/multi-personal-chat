@@ -1097,7 +1097,7 @@ def _ensure_vector_index():
         if _vector_index_built and _vector_index_revision == _get_rebuild_revision():
             return True
     except Exception as exc:
-        logger.warning("读取知识索引修订号失败: %s", exc)
+        logger.warning("读取知识索引修订号失败: %s", type(exc).__name__)
         return False
 
     with _vector_index_lock:
@@ -1106,13 +1106,6 @@ def _ensure_vector_index():
                 return True
             _vector_index_built = False
             _vector_index_revision = None
-            from app.config import VECTOR_DB_AVAILABLE
-
-            if not VECTOR_DB_AVAILABLE:
-                _vector_index_revision = _get_rebuild_revision()
-                _vector_index_built = True
-                return True
-
             from knowledge.vector_db import get_vector_db
 
             vector_db = get_vector_db()
@@ -1288,7 +1281,7 @@ def _ensure_vector_index():
                 _vector_index_built = True
             return True
         except Exception as e:
-            logger.warning("向量索引重建失败: %s", e)
+            logger.warning("向量索引重建失败: %s", type(e).__name__)
             return False
 
 
