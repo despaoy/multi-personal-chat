@@ -24,13 +24,13 @@ def prepared(tmp_path, monkeypatch):
         doc = KnowledgeIndexDocument(directory, 'tsukiyashiro_kisaki', kind, '月社妃',
                                      '月社妃在图书室阅读。', '月社妃在图书室阅读。', '月社妃在图书室阅读。')
         (root / 'documents.jsonl').write_text(json.dumps(doc.to_dict()), encoding='utf-8')
-        (root / 'manifest.json').write_text('{}', encoding='utf-8')
+        (root / 'manifest.json').write_text(json.dumps(dict(document_count=1,vector_dimension=384,normalized=True,embedding_model=FakeQueryEmbeddingProvider.model_id)), encoding='utf-8')
         np.save(root / 'vectors.npy', np.eye(1, 384, dtype=np.float32))
     return module.MultiScaleRagRuntime(index_root=tmp_path)
 
 
 @pytest.mark.parametrize('entry', ['is_available', 'stats', 'retrieve'])
-@pytest.mark.parametrize('damage', ['missing', 'json', 'dimensions', 'nan', 'inf', '-inf'])
+@pytest.mark.parametrize('damage', ['missing', 'json', 'dimensions', 'nan', 'inf', '-inf', 'manifest_count', 'manifest_dimension', 'manifest_normalized', 'manifest_model', 'manifest_missing_model'])
 def test_broken_index_raises_instead_of_unavailable_or_no_match(prepared, entry, damage):
     root = prepared.index_root / 'card_index'
     if damage == 'missing':
@@ -39,6 +39,19 @@ def test_broken_index_raises_instead_of_unavailable_or_no_match(prepared, entry,
     elif damage == 'json':
         (root / 'documents.jsonl').write_text('{broken', encoding='utf-8')
         error = json.JSONDecodeError
+    elif damage.startswith('manifest_'):
+        path=root / 'manifest.json'
+        manifest=json.loads(path.read_text(encoding='utf-8'))
+        changes={'manifest_count':('document_count',2),'manifest_dimension':('vector_dimension',768),
+                 'manifest_normalized':('normalized',False),'manifest_model':('embedding_model','different-model')}
+        if damage=='manifest_missing_model':
+            del manifest['embedding_model']
+            error=KeyError
+        else:
+            key,value=changes[damage]
+            manifest[key]=value
+            error=ValueError
+        path.write_text(json.dumps(manifest),encoding='utf-8')
     elif damage == 'dimensions':
         np.save(root / 'vectors.npy', np.zeros((1, 2), dtype=np.float32))
         error = ValueError

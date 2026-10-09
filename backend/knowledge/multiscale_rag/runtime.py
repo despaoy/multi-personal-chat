@@ -65,6 +65,9 @@ def _load_bundle(root: Path) -> tuple[list[KnowledgeIndexDocument], np.ndarray, 
         raise ValueError(f"多粒度索引数量或维度异常: {root} {vectors.shape} docs={len(documents)}")
     if not np.isfinite(vectors).all():
         raise ValueError(f"Non-finite character index vectors: {root}")
+    if (manifest["document_count"] != len(documents) or manifest["vector_dimension"] != vectors.shape[1]
+            or manifest["normalized"] is not True):
+        raise ValueError(f"Character index manifest does not match vectors: {root}")
     return documents, vectors, manifest
 
 
@@ -145,6 +148,8 @@ class MultiScaleRagRuntime:
                 _load_bundle(self.index_root / "scene_story_index"),
                 _load_bundle(self.index_root / "evidence_index"),
             ]
+            if any(manifest["embedding_model"] != self._provider.model_id for _, _, manifest in bundles):
+                raise ValueError("Character index embedding model does not match query encoder")
             documents = [document for docs, _, _ in bundles for document in docs]
             vectors = np.vstack([matrix for _, matrix, _ in bundles])
             domain_id = self._base_config.domain_id
