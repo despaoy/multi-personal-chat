@@ -46,7 +46,7 @@ def record():
 
 def response(source):
     return json.dumps({'memories': [dict(kind='other_user_fact', value='', content='',
-        evidence=source, operation='ERASE', target_memory_id='7', target_memory_key='fact_pet', confidence=.99)]})
+        evidence=source, operation='ERASE', target_memory_id='7', target_memory_key='fact_pet', confidence=.99, attributed_to='user')]})
 
 
 class Repo:

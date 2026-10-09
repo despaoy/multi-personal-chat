@@ -1591,7 +1591,6 @@ class MemoryEnrichmentScheduler:
         self._idle_tasks: dict[tuple[Any, ...], asyncio.Task[None]] = {}
         self._worker: asyncio.Task[None] | None = None
         self._closed = False
-        self._inflight = 0
         self._queued_jobs = 0
         self._processing = 0
         self._saved = 0
@@ -1602,6 +1601,10 @@ class MemoryEnrichmentScheduler:
         self._last_outcome = "idle"
         self._last_error = ""
         self._recent_results: deque[dict[str, Any]] = deque(maxlen=32)
+
+    @property
+    def _inflight(self) -> int:
+        return self._queued_jobs + self._processing + sum(len(jobs) for jobs in self._pending.values())
 
     @property
     def status(self) -> MemoryEnrichmentStatus:
@@ -1698,13 +1701,11 @@ class MemoryEnrichmentScheduler:
             ),
             receipt=receipt,
         )
-        self._inflight += 1
         scope_key = self._scope_key(repository, character_id, user_scope)
         if mode == "hot":
             # 先提交同一 scope 已缓冲的旧事实，保证后续纠错不会越过它。
             self._flush_scope(scope_key)
             if not self._enqueue((job,)):
-                self._inflight -= 1
                 self._remember_schedule_skip("queue_full")
                 return False
             self._last_outcome = "queued_hot"
@@ -1763,7 +1764,6 @@ class MemoryEnrichmentScheduler:
             timer.cancel()
         jobs = tuple(self._pending.pop(scope_key, ()))
         if jobs and not self._enqueue(jobs):
-            self._inflight = max(0, self._inflight - len(jobs))
             self._skipped += len(jobs)
             self._last_outcome = "skipped"
             for job in jobs:
@@ -1810,7 +1810,6 @@ class MemoryEnrichmentScheduler:
                 raise
             finally:
                 self._processing = max(0, self._processing - len(jobs))
-                self._inflight = max(0, self._inflight - len(jobs))
                 self._queue.task_done()
 
     @staticmethod
@@ -2160,7 +2159,6 @@ class MemoryEnrichmentScheduler:
             jobs = self._queue.get_nowait()
             self._cancel_job_receipts(jobs)
             self._queued_jobs = max(0, self._queued_jobs - len(jobs))
-            self._inflight = max(0, self._inflight - len(jobs))
             self._queue.task_done()
         await self._completion.close()
 

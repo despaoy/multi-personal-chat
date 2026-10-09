@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from character.memory_llm import MemoryEnrichmentScheduler, MemoryLlmConfig
+from character.models import UserScope
 from character.profile_registry import CharacterProfileRegistry
 from db.database import SQLiteDB
 from repositories.character_memory import DatabaseCharacterMemoryRepository
@@ -17,7 +18,7 @@ WHEN = datetime(2026, 10, 1, tzinfo=timezone.utc)
 
 
 @pytest.fixture
-def setup(tmp_path, monkeypatch):
+async def setup(tmp_path, monkeypatch, request):
     import character.memory_llm as memory_llm
 
     for name in ['DYNAMIC_CONTEXT_SEMANTIC_REVIEW_ENABLED', 'CONTEXTUAL_MEMORY_SELECTION_ENABLED', 'CONTEXTUAL_DECISION_POLICY_ENABLED']:
@@ -27,11 +28,17 @@ def setup(tmp_path, monkeypatch):
     profiles = CharacterProfileRegistry()
     profiles.load_profiles()
     service = CharacterContextService(profiles, repo, DatabaseMessageRepository(database), source_recall_enabled=True)
-    completion = SimpleNamespace(complete=AsyncMock(side_effect=AssertionError('no semantic model for capacity skip')), close=AsyncMock())
-    scheduler = MemoryEnrichmentScheduler(config=MemoryLlmConfig(True, 'unused', 'unused', queue_size=1), completion=completion)
-    scheduler._inflight = 1  # Unit-level full-capacity branch; native probe holds a real worker.
+    completion = SimpleNamespace(complete=AsyncMock(return_value='{"memories":[]}'), close=AsyncMock())
+    scheduler = MemoryEnrichmentScheduler(config=MemoryLlmConfig(True, 'unused', 'unused', queue_size=1, idle_seconds=3600), completion=completion)
+    if getattr(request, "param", True):
+        assert scheduler.schedule(repository=repo, character_id="capacity-holder",
+            user_scope=UserScope("test", "test", "holder", "holder", "private"),
+            message="我喜欢红茶", rule_hints=[], immediate=False)
     monkeypatch.setattr(memory_llm, 'get_memory_enrichment_scheduler', lambda: scheduler)
-    return database, repo, service, scheduler, completion
+    try:
+        yield database, repo, service, scheduler, completion
+    finally:
+        await scheduler.shutdown(timeout=0)
 
 
 async def prepare(service, message=BODY):
@@ -103,9 +110,9 @@ async def test_capture_failure_is_visible_and_does_not_enqueue(setup):
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("setup", [False], indirect=True)
 async def test_capture_and_actual_final_writer_share_same_clock(setup):
     database, repo, service, scheduler, completion = setup
-    scheduler._inflight = 0
     scheduler._idle_seconds = 0
     completion.complete.side_effect = None
     completion.complete.return_value = '{"memories":[]}'
