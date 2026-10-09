@@ -13,6 +13,7 @@ import pickle
 import re
 import time
 from collections import Counter, OrderedDict, defaultdict
+from copy import deepcopy
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -543,7 +544,7 @@ class VectorDatabase:
             cached = self._get_cached_query(cache_key)
             if cached is not None:
                 logger.debug(f"查询缓存命中: query='{query[:30]}...'")
-                return cached
+                return deepcopy(cached)
 
             query_embedding = self._get_embedding(query)
             query_embedding = np.array([query_embedding]).astype('float32')
@@ -571,7 +572,7 @@ class VectorDatabase:
             # 存入查询缓存
             self._set_query_cache(cache_key, results)
 
-            return results
+            return deepcopy(results)
 
     def _match_filters(self, doc: Dict[str, Any], filters: Dict[str, Any]) -> bool:
         for key, value in filters.items():
@@ -652,7 +653,7 @@ class VectorDatabase:
                 fused_results.append(doc)
 
             fused_results.sort(key=lambda x: x["fused_score"], reverse=True)
-            return fused_results[:top_k]
+            return deepcopy(fused_results[:top_k])
 
     def clear_all(self):
         """清空所有向量索引和元数据，并立即持久化空索引到磁盘。

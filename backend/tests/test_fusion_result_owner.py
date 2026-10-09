@@ -39,3 +39,32 @@ def test_fusion_keeps_prior_results_and_vector_cache_independent(tmp_path,monkey
     assert pure==before==vector.search('beta',top_k=2,threshold=0)
     assert encode.call_count==1
     assert all('fused_score' not in row and 'bm25_score' not in row for row in pure)
+
+
+@pytest.mark.parametrize("mode", ["vector", "hybrid", "keyword_only"])
+def test_callers_cannot_mutate_cached_or_indexed_nested_metadata(tmp_path, monkeypatch, mode):
+    monkeypatch.setattr(VectorDatabase, "_check_gpu_availability", lambda self: False)
+    vector = VectorDatabase(str(tmp_path / "vectors"), IndexConfig(index_type="flat"))
+    vector._model = object()
+    embedding = np.eye(1, 384, dtype=np.float32)
+    monkeypatch.setattr(vector, "_get_embeddings_batch", lambda texts: embedding)
+    query = embedding[0].copy()
+    if mode == "keyword_only":
+        query[0], query[1] = 0, 1
+    encode = Mock(return_value=query)
+    monkeypatch.setattr(vector, "_get_embedding", encode)
+    vector.add_documents([dict(id=1, title="alpha permission", content="alpha access requires written approval",
+                              access_rules=dict(conditions=["written approval"]))])
+    search = vector.search if mode == "vector" else vector.hybrid_search
+    first = search("alpha", top_k=1, threshold=0.5)
+    original = deepcopy(first)
+    assert len(first) == 1
+    first[0]["title"] = "changed title"
+    first[0]["access_rules"]["conditions"].clear()
+    first.clear()
+    second = search("alpha", top_k=1, threshold=0.5)
+    assert second == original
+    second[0]["access_rules"]["conditions"].append("caller-only condition")
+    vector.clear_cache()
+    assert search("alpha", top_k=1, threshold=0.5) == original
+    assert encode.call_count == 2
