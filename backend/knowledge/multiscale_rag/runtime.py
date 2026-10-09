@@ -118,7 +118,6 @@ class MultiScaleRagRuntime:
         self.index_root = Path(configured) if configured else Path(index_root or _DEFAULT_INDEX_ROOT)
         self._load_lock = threading.Lock()
         self._loaded = False
-        self._load_attempted = False
         self._warmup_started = False
         self._service: RoutedMultiScaleService | None = None
         self._base_config = get_default_registry().require("tsukiyashiro_kisaki")
@@ -138,66 +137,59 @@ class MultiScaleRagRuntime:
         with self._load_lock:
             if self._loaded and self._service is not None:
                 return True
-            self._load_attempted = True
-            try:
-                bundles = [
-                    _load_bundle(self.index_root / "card_index"),
-                    _load_bundle(self.index_root / "scene_story_index"),
-                    _load_bundle(self.index_root / "evidence_index"),
-                ]
-                documents = [document for docs, _, _ in bundles for document in docs]
-                vectors = np.vstack([matrix for _, matrix, _ in bundles])
-                domain_id = self._base_config.domain_id
-                for document in documents:
-                    # The promoted experiment index is format-compatible. Expose
-                    # stable production identifiers without rewriting artifacts.
-                    document.domain_id = domain_id
-                    if document.index_version in LEGACY_INDEX_FORMAT_VERSIONS:
-                        document.index_version = INDEX_FORMAT_VERSION
-                    text_version = document.metadata.get("embedding_text_version")
-                    if text_version in LEGACY_EMBEDDING_TEXT_VERSIONS:
-                        document.metadata["embedding_text_version"] = EMBEDDING_TEXT_VERSION
-                config = KnowledgeDomainConfig(
-                    domain_id=domain_id,
-                    source_root=self._base_config.source_root,
-                    loader=lambda _root: [],
-                    document_types=["story", "scene", "fact", "relation", "event", "evidence"],
-                    aliases=dict(self._base_config.aliases),
-                    story_titles=list(self._base_config.story_titles),
-                    narrative_policy=self._base_config.narrative_policy,
-                    retrieval_defaults=self._base_config.retrieval_defaults,
-                    prompt_supplement=self._base_config.prompt_supplement,
-                    index_version=INDEX_FORMAT_VERSION,
-                    enabled=True,
-                )
-                self._service = RoutedMultiScaleService(
-                    config,
-                    _route_indexes(domain_id, documents, vectors),
-                    self._provider,
-                    all_documents=documents,
-                    source_extractor=OriginalTextExtractor(_REPO_ROOT),
-                    context_max_chars=self.context_max_chars,
-                )
-                counts: dict[str, int] = {}
-                for document in documents:
-                    counts[document.document_type] = counts.get(document.document_type, 0) + 1
-                self._stats = {
-                    "available": True,
-                    "domain_id": self._base_config.domain_id,
-                    "index_root": str(self.index_root),
-                    "documents": len(documents),
-                    "document_type_counts": counts,
-                    "embedding_model": self._provider.model_id,
-                }
-                self._loaded = True
-                logger.info("多粒度角色知识索引已加载: %s", self._stats)
-                return True
-            except Exception as exc:  # noqa: BLE001 - caller owns controlled fallback
-                self._loaded = False
-                self._service = None
-                self._stats = {"available": False, "index_root": str(self.index_root), "error": str(exc)}
-                logger.warning("多粒度角色知识索引加载失败: %s", exc)
-                return False
+            bundles = [
+                _load_bundle(self.index_root / "card_index"),
+                _load_bundle(self.index_root / "scene_story_index"),
+                _load_bundle(self.index_root / "evidence_index"),
+            ]
+            documents = [document for docs, _, _ in bundles for document in docs]
+            vectors = np.vstack([matrix for _, matrix, _ in bundles])
+            domain_id = self._base_config.domain_id
+            for document in documents:
+                # The promoted experiment index is format-compatible. Expose
+                # stable production identifiers without rewriting artifacts.
+                document.domain_id = domain_id
+                if document.index_version in LEGACY_INDEX_FORMAT_VERSIONS:
+                    document.index_version = INDEX_FORMAT_VERSION
+                text_version = document.metadata.get("embedding_text_version")
+                if text_version in LEGACY_EMBEDDING_TEXT_VERSIONS:
+                    document.metadata["embedding_text_version"] = EMBEDDING_TEXT_VERSION
+            config = KnowledgeDomainConfig(
+                domain_id=domain_id,
+                source_root=self._base_config.source_root,
+                loader=lambda _root: [],
+                document_types=["story", "scene", "fact", "relation", "event", "evidence"],
+                aliases=dict(self._base_config.aliases),
+                story_titles=list(self._base_config.story_titles),
+                narrative_policy=self._base_config.narrative_policy,
+                retrieval_defaults=self._base_config.retrieval_defaults,
+                prompt_supplement=self._base_config.prompt_supplement,
+                index_version=INDEX_FORMAT_VERSION,
+                enabled=True,
+            )
+            service = RoutedMultiScaleService(
+                config,
+                _route_indexes(domain_id, documents, vectors),
+                self._provider,
+                all_documents=documents,
+                source_extractor=OriginalTextExtractor(_REPO_ROOT),
+                context_max_chars=self.context_max_chars,
+            )
+            counts: dict[str, int] = {}
+            for document in documents:
+                counts[document.document_type] = counts.get(document.document_type, 0) + 1
+            self._stats = {
+                "available": True,
+                "domain_id": self._base_config.domain_id,
+                "index_root": str(self.index_root),
+                "documents": len(documents),
+                "document_type_counts": counts,
+                "embedding_model": self._provider.model_id,
+            }
+            self._service = service
+            self._loaded = True
+            logger.info("多粒度角色知识索引已加载: %s", self._stats)
+            return True
 
     def is_available(self) -> bool:
         return self._ensure_loaded()
@@ -216,11 +208,11 @@ class MultiScaleRagRuntime:
         self._warmup_started = True
 
         def _warm() -> None:
-            if self._ensure_loaded():
-                try:
-                    self._provider.embed_query("多粒度检索预热")
-                except Exception as exc:  # noqa: BLE001
-                    logger.warning("多粒度角色知识检索 embedding 预热失败: %s", exc)
+            try:
+                self._ensure_loaded()
+                self._provider.embed_query("多粒度检索预热")
+            except Exception as exc:  # Background optimization; requests retry and propagate failures.
+                logger.warning("角色知识预热失败: %s", type(exc).__name__)
 
         threading.Thread(target=_warm, name="character-rag-warmup", daemon=True).start()
 
@@ -234,18 +226,19 @@ class MultiScaleRagRuntime:
         knowledge_boundary: KnowledgeBoundary | None = None,
         object_names: tuple[str, ...] | None = None,
     ) -> dict[str, Any] | None:
-        if not query.strip() or not self._ensure_loaded() or self._service is None:
+        if not query.strip():
             return None
         # knowledge_base_id belongs to the generic user-managed KB. Character
         # knowledge retrieval owns a curated work domain and must not silently
         # ignore that filter.
         if filters:
             return None
-        if domain_id and domain_id not in {self._base_config.domain_id, self._service.config.domain_id}:
+        if domain_id and domain_id != self._base_config.domain_id:
             return None
         gate = self._gate.analyze(query)
         if not domain_id and not gate.matched_domains:
             return None
+        self._ensure_loaded()
         scoped = {"object_names": object_names} if object_names is not None else {}
         if knowledge_boundary is None:
             result = self._service.retrieve(query, top_k=top_k, **scoped)
