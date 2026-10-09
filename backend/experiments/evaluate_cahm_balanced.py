@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import inspect
 import json
 import math
 import statistics
@@ -105,7 +104,8 @@ class _CaseRepository:
             normalized.append(row)
         self.records = normalized
 
-    async def list_memory_records(self, character_id, user_scope, limit=100):
+    async def list_memory_records(self, character_id, user_scope, limit=100, *, include_inactive=False):
+        # Deliberately expose all fixture statuses to test service-level lifecycle ablations.
         return self.records[:limit]
 
 
@@ -390,7 +390,7 @@ def _service_for_variant(
     *,
     min_hybrid_score: float,
     candidate_limit: int,
-) -> tuple[CharacterMemoryService, dict[str, Any], list[str]]:
+) -> tuple[CharacterMemoryService, dict[str, Any]]:
     requested: dict[str, Any] = {
         "embedding_provider": provider,
         "semantic_enabled": True,
@@ -403,10 +403,7 @@ def _service_for_variant(
         "version_filter_enabled": variant.version_filter_enabled,
         "evidence_enabled": variant.evidence_enabled,
     }
-    parameters = inspect.signature(CharacterMemoryService.__init__).parameters
-    effective = {key: value for key, value in requested.items() if key in parameters}
-    unsupported = sorted(set(requested) - set(effective))
-    return CharacterMemoryService(repository, **effective), effective, unsupported
+    return CharacterMemoryService(repository, **requested), requested
 
 
 def _selected_evidence_complete(item: Any) -> bool:
@@ -425,16 +422,13 @@ async def _evaluate_retrieval_variant(
 ) -> dict[str, Any]:
     repository = _CaseRepository()
     audited_provider = _AuditedEmbeddingProvider(provider)
-    service, effective_config, unsupported_switches = _service_for_variant(
+    service, effective_config = _service_for_variant(
         repository,
         variant,
         audited_provider,
         min_hybrid_score=min_hybrid_score,
         candidate_limit=candidate_limit,
     )
-    load_parameters = inspect.signature(service.load_relevant_memories).parameters
-    historical_query_control_supported = "include_historical" in load_parameters
-
     relevant_cases = 0
     recall_at_1_values: list[float] = []
     recall_at_5_values: list[float] = []
@@ -452,9 +446,6 @@ async def _evaluate_retrieval_variant(
         repository.set_records(records)
         rows_by_id = {_record_id(row): row for row in records if _record_id(row)}
         query = str(case.get("query") or "")
-        call_kwargs: dict[str, Any] = {}
-        if historical_query_control_supported:
-            call_kwargs["include_historical"] = bool(case.get("include_historical"))
         started = time.perf_counter()
         error = ""
         try:
@@ -462,7 +453,7 @@ async def _evaluate_retrieval_variant(
                 "cahm-balanced-eval",
                 UserScope("evaluation", "cahm", "synthetic-user", "synthetic-user", "private"),
                 query,
-                **call_kwargs,
+                include_historical=bool(case.get("include_historical")),
             )
             completed_cases += 1
         except Exception as exc:  # preserve the failure in the report; an error is not a successful retrieval
@@ -556,8 +547,8 @@ async def _evaluate_retrieval_variant(
         "effective_configuration": {
             key: value for key, value in effective_config.items() if key != "embedding_provider"
         },
-        "unsupported_service_switches": unsupported_switches,
-        "historical_query_control_supported": historical_query_control_supported,
+        "unsupported_service_switches": [],
+        "historical_query_control_supported": True,
         "cases": len(cases),
         "successfully_processed_cases": completed_cases,
         "relevant_cases": relevant_cases,
