@@ -914,6 +914,18 @@ def _get_rebuild_revision() -> int:
     return parse_revision(db.get_config_value(_VECTOR_REBUILD_REVISION_KEY, "0"))
 
 
+def _chunk_fingerprint_record(row: dict) -> bytes:
+    parts = (
+        str(row.get("documentId")),
+        str(row.get("chunkIndex")),
+        row.get("content", "") or "",
+        row.get("doc_title") or "",
+        row.get("doc_category") or "",
+        str(row.get("doc_kb_id") or ""),
+    )
+    return ("\x1f".join(parts) + "\x1e").encode("utf-8")
+
+
 def _compute_chunk_fingerprint() -> str:
     """计算 chunk 内容指纹，用于检测内容变更（即使 chunk 数量不变）。
 
@@ -932,16 +944,7 @@ def _compute_chunk_fingerprint() -> str:
     for row in db.iter_chunks_with_document(batch_size=500):
         if row.get("doc_title") is None:
             continue  # 孤儿 chunk，与重建遍历保持一致
-        parts = (
-            str(row.get("documentId")),
-            str(row.get("chunkIndex")),
-            row.get("content", "") or "",
-            row.get("doc_title") or "",
-            row.get("doc_category") or "",
-            str(row.get("doc_kb_id") or ""),
-        )
-        h.update("\x1f".join(parts).encode("utf-8"))
-        h.update(b"\x1e")  # 记录分隔符
+        h.update(_chunk_fingerprint_record(row))
     return h.hexdigest()[:16]
 
 
@@ -1195,16 +1198,7 @@ def _ensure_vector_index():
                 batch_vector_docs.append(_vector_chunk_document(row, kb_name_map))
 
                 # 同步累积指纹（与 _compute_chunk_fingerprint 一致，均跳过孤儿）
-                parts = (
-                    str(row.get("documentId")),
-                    str(row.get("chunkIndex")),
-                    row.get("content", "") or "",
-                    row.get("doc_title") or "",
-                    row.get("doc_category") or "",
-                    str(row.get("doc_kb_id") or ""),
-                )
-                fp_hash.update("\x1f".join(parts).encode("utf-8"))
-                fp_hash.update(b"\x1e")
+                fp_hash.update(_chunk_fingerprint_record(row))
 
                 # 攒够一批立即写入，释放内存
                 if len(batch_vector_docs) >= vector_batch_size:

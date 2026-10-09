@@ -820,6 +820,13 @@ class TestEnsureVectorIndexEndToEnd:
 
         add_called = {"called": False}
         class MockVectorDB:
+            def __init__(self):
+                from threading import RLock
+                self._lock = RLock()
+                self.snapshot_validated = True
+                self.metadata = [kmod._vector_chunk_document(row, {}) for row in db.iter_chunks_with_document()]
+            def clear_cache(self):
+                pass
             def get_stats(self):
                 return {"total_documents": 2, "index_size": 2, "bm25_corpus_size": 2,
                         "index_type": "flat", "embedding_dim": 768, "use_gpu": False,
