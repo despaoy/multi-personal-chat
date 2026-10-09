@@ -106,72 +106,38 @@ class CorrectiveRAG:
             rounds 记录每轮使用的 query、confidence 和 abstained 结果。
         """
         rounds: list[dict[str, Any]] = []
-
-        def _record(current_query: str, response: dict[str, Any]) -> None:
-            rounds.append(
-                {
-                    "query": current_query,
-                    "confidence": response.get("confidence", 0.0),
-                    "abstained": bool(response.get("abstained", False)),
-                }
-            )
-
         current_query = query
-        response = self.rag_helper.retrieve_with_citations(
-            current_query, top_k=top_k, threshold=self.threshold, filters=filters
-        )
-        _record(current_query, response)
-
-        if not response.get("abstained", False):
-            # 置信度足够，直接返回
-            return {
-                **response,
-                "reformulated": False,
-                "original_query": query,
-                "reformulated_query": None,
-                "rounds": rounds,
-            }
-
-        # 低置信度，尝试重写查询重试（max_retries 真实控制重试轮数）
-        logger.info(f"纠正性RAG: 首次置信度 {response.get('confidence', 0.0)} < {self.threshold}，尝试查询重写")
-        reformulated_query: str | None = None
-
-        for attempt in range(self.max_retries):
-            candidate = self.reformulate_query(current_query, response.get("results", []))
-            if candidate == current_query:
-                # 重写查询没有新增信息，不做无意义的第二次检索
-                logger.info("纠正性RAG: 重写查询无新增信息，停止重试")
-                break
-            reformulated_query = candidate
-            current_query = candidate
-            logger.info(f"纠正性RAG: 第{attempt + 1}次重写查询 -> {current_query}")
-
+        for attempt in range(self.max_retries + 1):
             response = self.rag_helper.retrieve_with_citations(
                 current_query, top_k=top_k, threshold=self.threshold, filters=filters
             )
-            _record(current_query, response)
+            rounds.append({
+                "query": current_query,
+                "confidence": response["confidence"],
+                "abstained": response["abstained"],
+            })
+            if not response["abstained"] or attempt == self.max_retries:
+                break
+            candidate = self.reformulate_query(current_query, response["results"])
+            if candidate == current_query:
+                logger.info("纠正性RAG: 重写查询无新增信息，停止重试")
+                break
+            current_query = candidate
+            logger.info("纠正性RAG: 执行第%d次查询重写", attempt + 1)
 
-            if not response.get("abstained", False):
-                logger.info(f"纠正性RAG: 重写后置信度 {response.get('confidence', 0.0)} >= {self.threshold}，成功")
-                return {
-                    **response,
-                    "reformulated": True,
-                    "original_query": query,
-                    "reformulated_query": reformulated_query,
-                    "rounds": rounds,
-                }
-
-        # 重试耗尽或无有效重写，弃答
-        final_confidence = rounds[-1]["confidence"] if rounds else 0.0
-        logger.info(f"纠正性RAG: 最终置信度 {final_confidence} 仍低，弃答")
+        if response["abstained"]:
+            response = {
+                "results": [],
+                "citations": [],
+                "confidence": response["confidence"],
+                "abstained": True,
+            }
+        reformulated = current_query != query
         return {
-            "results": [],
-            "citations": [],
-            "confidence": final_confidence,
-            "abstained": True,
-            "reformulated": reformulated_query is not None,
+            **response,
+            "reformulated": reformulated,
             "original_query": query,
-            "reformulated_query": reformulated_query,
+            "reformulated_query": current_query if reformulated else None,
             "rounds": rounds,
         }
 
