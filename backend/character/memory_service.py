@@ -29,7 +29,7 @@ from character.memory_subject import is_source_observation
 from character.models import MemoryItem, UserScope
 from character.source_fragment_provenance import source_fragment_fields
 from character.temporal_projection import project_temporal_record
-from infra.environment import read_bool
+from infra.environment import parse_unit_interval, read_bool
 
 if TYPE_CHECKING:
     from repositories.character_memory import CharacterMemoryRepository
@@ -106,9 +106,9 @@ _PROMISE_INTENT_PATTERN = re.compile(r"(?:我们|咱|我|你).{0,6}(?:约好|说
 # 新近度半衰期（天）：30 天前的记忆新近度得分约为一半
 RECENCY_HALF_LIFE_DAYS = 30.0
 
-MIN_HYBRID_MEMORY_SCORE = max(0.0, min(1.0, float(os.getenv("MIN_HYBRID_MEMORY_SCORE", "0.35"))))
+MIN_HYBRID_MEMORY_SCORE = parse_unit_interval(os.getenv("MIN_HYBRID_MEMORY_SCORE", "0.35"), "MIN_HYBRID_MEMORY_SCORE")
 INTENT_HYBRID_SCORE_FLOOR = 0.4
-MIN_CLAIM_CONFIDENCE = max(0.0, min(1.0, float(os.getenv("MIN_MEMORY_CLAIM_CONFIDENCE", "0.45"))))
+MIN_CLAIM_CONFIDENCE = parse_unit_interval(os.getenv("MIN_MEMORY_CLAIM_CONFIDENCE", "0.45"), "MIN_MEMORY_CLAIM_CONFIDENCE")
 PENDING_STATUS_FACTOR = 0.35
 
 _CURRENT_MEMORY_STATUSES = frozenset(("active", "current"))
@@ -756,12 +756,14 @@ class CharacterMemoryService:
         self._embedding_provider = embedding_provider
         self._gate_enabled = bool(gate_enabled)
         self._min_hybrid_score = (
-            MIN_HYBRID_MEMORY_SCORE if min_hybrid_score is None else max(0.0, min(1.0, float(min_hybrid_score)))
+            MIN_HYBRID_MEMORY_SCORE if min_hybrid_score is None else parse_unit_interval(min_hybrid_score, "min_hybrid_score")
         )
         # Recency is a ranking signal, not a pre-retrieval exclusion rule.
         # Keep an explicit limit only for callers running legacy ablations.
         # Prompt and final selection budgets below remain unchanged.
-        self._candidate_limit = max(1, int(candidate_limit)) if candidate_limit is not None else None
+        if candidate_limit is not None and (type(candidate_limit) is not int or candidate_limit < 1):
+            raise ValueError("candidate_limit must be a positive integer or None")
+        self._candidate_limit = candidate_limit
         self._embedding_cache: OrderedDict[tuple[str, str, str], np.ndarray] = OrderedDict()
         self._embedding_lock = threading.Lock()
         self._include_pending = bool(include_pending)

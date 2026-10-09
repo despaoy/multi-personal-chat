@@ -621,8 +621,8 @@ async def evaluate(
     # Fail explicitly before producing a report if the configured embedding is
     # unavailable.  Silent lexical fallback would mislabel the comparison.
     provider.embed_texts(["CAHM balanced evaluation warmup"])
-    min_hybrid_score = float(getattr(args, "min_hybrid_score", MIN_HYBRID_MEMORY_SCORE))
-    candidate_limit = max(1, int(getattr(args, "candidate_limit", 100)))
+    min_hybrid_score = getattr(args, "min_hybrid_score", MIN_HYBRID_MEMORY_SCORE)
+    candidate_limit = getattr(args, "candidate_limit", 100)
     retrieval: dict[str, Any] = {}
     for variant in RETRIEVAL_VARIANTS:
         retrieval[variant.name] = await _evaluate_retrieval_variant(
