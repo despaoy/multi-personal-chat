@@ -481,15 +481,6 @@ def classify_memory_write_mode(message: str) -> str:
     return "idle" if memory_write_allowed(text) else "skip"
 
 
-def _source_message_allowed(message: str) -> bool:
-    """ERASE 以外沿用规则写入门；删除请求也不能把敏感原文发给 LLM。"""
-
-    # ``不要记住``仍是纯 opt-out，不自动升级为删除。明确遗忘且文本本身
-    # 不含敏感凭据时，memory_write_allowed 通常已经为 True，此分支仅为
-    # 将来 opt-out 规则扩展预留，不绕过敏感信息门禁。
-    return memory_write_allowed(message)
-
-
 def _record_id(record: dict[str, Any]) -> str:
     return str(record.get("id") or record.get("memory_id") or "").strip()
 
@@ -1397,7 +1388,7 @@ def parse_llm_proposals(
     source_type: str = "user",
 ) -> list[ValidatedMemoryProposal]:
     """解析并硬校验证据、旧 ID、主体、时间、作用域与删除权限。"""
-    if source_type.strip().lower() != "user" or not _source_message_allowed(source_message):
+    if source_type.strip().lower() != "user" or not memory_write_allowed(source_message):
         return []
     return _proposals_from_payload(
         _extract_json(text), source_message=source_message, history=history,
@@ -1665,7 +1656,7 @@ class MemoryEnrichmentScheduler:
         mode = "hot" if immediate is True else classified_mode
         if immediate is False and mode != "skip":
             mode = "idle"
-        if mode == "skip" or not _source_message_allowed(message):
+        if mode == "skip" or not memory_write_allowed(message):
             self._remember_schedule_skip("write_gate")
             return False
         if self._inflight >= self._capacity:
