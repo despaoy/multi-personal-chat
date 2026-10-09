@@ -15,6 +15,7 @@ import os
 import re
 import threading
 import time
+from collections import OrderedDict
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
@@ -764,7 +765,7 @@ class CharacterMemoryService:
         # Keep an explicit limit only for callers running legacy ablations.
         # Prompt and final selection budgets below remain unchanged.
         self._candidate_limit = max(1, int(candidate_limit)) if candidate_limit is not None else None
-        self._embedding_cache: dict[tuple[str, str, str], np.ndarray] = {}
+        self._embedding_cache: OrderedDict[tuple[str, str, str], np.ndarray] = OrderedDict()
         self._embedding_lock = threading.Lock()
         self._include_pending = bool(include_pending)
         self._rrf_enabled = read_bool(os.environ, "CAHM_RRF_ENABLED", True) if rrf_enabled is None else bool(rrf_enabled)
@@ -1319,13 +1320,19 @@ class CharacterMemoryService:
             query_vector = normalized_vector(matrix[0])
             for offset, index in enumerate(missing_indices, start=1):
                 vector = normalized_vector(matrix[offset])
-                self._embedding_cache[keys[index]] = vector
                 vectors[index] = vector
 
-            return {
+            scores = {
                 index: _clamp01(float(np.dot(query_vector, vector)))
                 for index, vector in vectors.items()
             }
+            self._embedding_cache.update((keys[index], vectors[index]) for index in missing_indices)
+            for key in keys.values():
+                self._embedding_cache.move_to_end(key)
+            while len(self._embedding_cache) > 1024:
+                self._embedding_cache.popitem(last=False)
+            return scores
+
 
 
 def _clamp01(value: float) -> float:
