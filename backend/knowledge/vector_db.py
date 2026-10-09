@@ -663,22 +663,6 @@ class VectorDatabase:
         with self._lock:
             vector_results = self.search(query, top_k=recall_k, threshold=threshold, filters=filters)
 
-            if not vector_results and not self.bm25._built:
-                return []
-
-            bm25_results = []
-            if self.bm25._built:
-                bm25_hits = self.bm25.search(query, top_k=recall_k, threshold=0.0)
-                for doc_idx, score in bm25_hits:
-                    if doc_idx < len(self.metadata):
-                        result = {**self.metadata[doc_idx], "bm25_score": score}
-                        if filters and not self._match_filters(result, filters):
-                            continue
-                        bm25_results.append(result)
-
-            if not vector_results and not bm25_results:
-                return []
-
             doc_scores: Dict[int, Dict[str, float]] = {}
 
             for doc in vector_results:
@@ -687,14 +671,15 @@ class VectorDatabase:
                     continue
                 doc_scores[key] = {"vector_score": doc.get("score", 0), "bm25_score": 0.0, "doc": doc}
 
-            for doc in bm25_results:
-                key = self._find_metadata_index(doc)
-                if key is None:
-                    continue
-                if key in doc_scores:
-                    doc_scores[key]["bm25_score"] = doc.get("bm25_score", 0)
-                else:
-                    doc_scores[key] = {"vector_score": 0.0, "bm25_score": doc.get("bm25_score", 0), "doc": doc}
+            if self.bm25._built:
+                for key, score in self.bm25.search(query, top_k=recall_k, threshold=0.0):
+                    doc = self.metadata[key]
+                    if filters and not self._match_filters(doc, filters):
+                        continue
+                    if key in doc_scores:
+                        doc_scores[key]["bm25_score"] = score
+                    else:
+                        doc_scores[key] = {"vector_score": 0.0, "bm25_score": score, "doc": doc}
 
             max_bm25 = max((s["bm25_score"] for s in doc_scores.values()), default=1.0) or 1.0
             max_vector = max((s["vector_score"] for s in doc_scores.values()), default=1.0) or 1.0
