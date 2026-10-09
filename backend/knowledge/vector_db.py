@@ -714,42 +714,6 @@ class VectorDatabase:
             fused_results.sort(key=lambda x: x["fused_score"], reverse=True)
             return fused_results[:top_k]
 
-    def batch_search(
-        self,
-        queries: List[str],
-        top_k: int = 5,
-        threshold: float = 0.15,
-        filters: Optional[Dict[str, Any]] = None,
-    ) -> List[List[Dict[str, Any]]]:
-        self._ensure_index()
-        if len(self.metadata) == 0:
-            return [[] for _ in queries]
-
-        self._load_model()
-        query_embeddings = self._get_embeddings_batch(queries)
-
-        with self._lock:
-            results = []
-            for i, query_emb in enumerate(query_embeddings):
-                query_emb = np.array([query_emb]).astype('float32')
-                scores, faiss_ids = self.index.search(query_emb, top_k)
-
-                query_results = []
-                for score, faiss_id in zip(scores[0], faiss_ids[0]):
-                    if score < threshold:
-                        continue
-                    meta_idx = self._id_to_index.get(int(faiss_id))
-                    if meta_idx is None or meta_idx < 0 or meta_idx >= len(self.metadata):
-                        continue
-                    result = {**self.metadata[meta_idx], "score": float(score)}
-                    if filters and not self._match_filters(result, filters):
-                        continue
-                    query_results.append(result)
-
-                results.append(query_results)
-
-            return results
-
     def clear_all(self):
         """清空所有向量索引和元数据，并立即持久化空索引到磁盘。
 
