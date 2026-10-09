@@ -119,7 +119,6 @@ class MultiScaleRagRuntime:
         )
         self.index_root = Path(configured) if configured else Path(index_root or _DEFAULT_INDEX_ROOT)
         self._load_lock = threading.Lock()
-        self._loaded = False
         self._warmup_started = False
         self._service: RoutedMultiScaleService | None = None
         self._base_config = get_default_registry().require("tsukiyashiro_kisaki")
@@ -134,10 +133,10 @@ class MultiScaleRagRuntime:
         return self._base_config
 
     def _ensure_loaded(self) -> bool:
-        if self._loaded and self._service is not None:
+        if self._service is not None:
             return True
         with self._load_lock:
-            if self._loaded and self._service is not None:
+            if self._service is not None:
                 return True
             bundles = [
                 _load_bundle(self.index_root / "card_index"),
@@ -189,7 +188,6 @@ class MultiScaleRagRuntime:
                 "embedding_model": self._provider.model_id,
             }
             self._service = service
-            self._loaded = True
             logger.info("多粒度角色知识索引已加载: %s", self._stats)
             return True
 
@@ -198,7 +196,7 @@ class MultiScaleRagRuntime:
 
     def is_warm(self) -> bool:
         """Return without I/O; used only to choose the cold-start timeout."""
-        return self._loaded and self._service is not None and self._provider._model is not None
+        return self._service is not None and self._provider._model is not None
 
     def stats(self) -> dict[str, Any]:
         self._ensure_loaded()

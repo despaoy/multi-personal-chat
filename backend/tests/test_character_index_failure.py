@@ -44,7 +44,7 @@ def test_broken_index_raises_instead_of_unavailable_or_no_match(prepared, entry,
         error = ValueError
     with pytest.raises(error):
         prepared.retrieve_with_citations(QUERY) if entry == 'retrieve' else getattr(prepared, entry)()
-    assert not prepared._loaded and prepared._service is None and prepared._stats == {}
+    assert not prepared.is_warm() and prepared._service is None and prepared._stats == {}
 
 
 @pytest.mark.parametrize('query,kwargs', [('', {}), ('今天天气怎么样', {}), (QUERY, {'filters': {'knowledge_base_id': 7}}), (QUERY, {'domain_id': 'unrelated-domain'})])
