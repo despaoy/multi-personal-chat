@@ -484,15 +484,9 @@ class VectorDatabase:
         if self._dirty:
             self._save_index()
 
-    def _normalize_query(self, query: str) -> str:
-        """规范化查询文本，用于缓存key生成"""
-        return " ".join(query.lower().split())
-
     def _get_query_cache_key(self, query: str, top_k: int, threshold: float, filters: Optional[Dict[str, Any]]) -> str:
-        """生成查询缓存key"""
-        normalized = self._normalize_query(query)
-        filter_str = json.dumps(filters, sort_keys=True) if filters else ""
-        return f"{normalized}|{top_k}|{threshold}|{filter_str}"
+        """Bind cached results to the exact model input and effective filters."""
+        return json.dumps([query, top_k, threshold, filters or {}], ensure_ascii=False, sort_keys=True)
 
     def _get_cached_query(self, cache_key: str) -> Optional[List[Dict[str, Any]]]:
         """从查询缓存中获取结果，过期则返回None"""
