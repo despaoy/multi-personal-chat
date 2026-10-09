@@ -51,6 +51,7 @@ from db.memory_claim_guard import MemoryClaimConflict
 from db.memory_source import ClaimSourceRevokedError
 from inference.context_budget import CONTEXT_SAFETY_MARGIN_TOKENS, estimated_tokens
 from inference.openai_protocol import chat_completions_endpoint, completed_chat_content, nonthinking_parameters
+from infra.environment import read_bool
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -180,10 +181,7 @@ class MemoryLlmConfig:
     @classmethod
     def from_env(cls, env: Mapping[str, str] | None = None) -> MemoryLlmConfig:
         env = os.environ if env is None else env
-        enabled_value = env.get("MEMORY_LLM_ENABLED", "false").strip().lower()
-        if enabled_value not in {"1", "true", "yes", "on", "0", "false", "no", "off"}:
-            raise ValueError("MEMORY_LLM_ENABLED must be an explicit boolean")
-        enabled = enabled_value in {"1", "true", "yes", "on"}
+        enabled = read_bool(env, "MEMORY_LLM_ENABLED")
         # Explicit writer settings take priority; otherwise inherit the configured vLLM service.
         base_url = (env.get("MEMORY_LLM_BASE_URL", "").strip()
                     or env.get("VLLM_BASE_URLS", "").split(",", 1)[0].strip()

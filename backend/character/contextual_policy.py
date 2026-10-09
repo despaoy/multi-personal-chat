@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING
 
 from character.decision_policy import STRATEGY_INSTRUCTIONS
 from character.evidence_selector import InputBudgetError, _history_view, _unique_object
+from infra.environment import read_bool
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -148,6 +149,6 @@ async def _reviewer(messages):
 
 
 def create_contextual_policy(*, context_budget: ReviewContextBudget | None = None) -> ContextualDecisionPolicy | None:
-    if os.getenv("CONTEXTUAL_DECISION_POLICY_ENABLED", "false").lower().strip() not in {"true", "1", "yes", "on"}:
+    if not read_bool(os.environ, "CONTEXTUAL_DECISION_POLICY_ENABLED"):
         return None
     return ContextualDecisionPolicy(_reviewer, context_budget=context_budget)

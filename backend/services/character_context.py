@@ -61,11 +61,13 @@ from character.situation_analyzer import (
     SituationAnalyzer,
     affect_label,
 )
+from infra.environment import read_bool
 
 if TYPE_CHECKING:
-    from character.profile_registry import CharacterProfileRegistry
     from repositories.character_memory import CharacterMemoryRepository
     from repositories.messages import MessageRepository
+
+    from character.profile_registry import CharacterProfileRegistry
     from services.delivery_memory import CompletionSnapshot
 
 def compile_user_recall_context(history):
@@ -212,7 +214,7 @@ class CharacterContextService:
         self._source_memory = SourceMemoryService(memory_repository, window_radius=source_window_radius,
                                                  max_chars=source_max_chars, defer_budget=defer_source_budget)
         self._source_recall_enabled = (source_recall_enabled if source_recall_enabled is not None else
-            os.getenv("MEMORY_SOURCE_RECALL_ENABLED", "false").lower() in {"true", "1", "yes", "on"})
+            read_bool(os.environ, "MEMORY_SOURCE_RECALL_ENABLED"))
 
     async def prepare_interactive_turn(
         self, turn: TurnInput, character_id: str, *, source_message_id: str = '',
@@ -600,11 +602,11 @@ def build_character_context_service(database, *, source_recall_enabled: bool | N
     create_app(custom_container) 的应用实例必须用容器数据库构建服务，
     而不是全局单例——否则多应用实例/测试注入会读写到错误的数据库。
     """
-    from character.profile_registry import get_default_profile_registry
-    from character.semantic_review_adapter import create_default_semantic_review_runtime
     from repositories.character_memory import DatabaseCharacterMemoryRepository
     from repositories.messages import DatabaseMessageRepository
 
+    from character.profile_registry import get_default_profile_registry
+    from character.semantic_review_adapter import create_default_semantic_review_runtime
     from inference.provider_context import get_provider_context_budget
 
     budget = get_provider_context_budget()

@@ -18,6 +18,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 
 from character.source_fragment_provenance import source_completeness_payload
+from infra.environment import read_bool
 
 if TYPE_CHECKING:
     from character.models import CharacterProfile, InteractionState, MemoryItem
@@ -313,7 +314,7 @@ async def _local_reviewer(messages: Sequence[Mapping[str, str]]) -> object:
 
 
 def create_evidence_selector(*, context_budget: ReviewContextBudget | None = None) -> ContextualEvidenceSelector | None:
-    if os.getenv("CONTEXTUAL_MEMORY_SELECTION_ENABLED", "false").lower().strip() not in {"true", "1", "yes", "on"}:
+    if not read_bool(os.environ, "CONTEXTUAL_MEMORY_SELECTION_ENABLED"):
         return None
     timeout = float(os.getenv("CONTEXTUAL_MEMORY_SELECTION_TIMEOUT_SECONDS", "30"))
     return ContextualEvidenceSelector(_local_reviewer, timeout_seconds=timeout, context_budget=context_budget)

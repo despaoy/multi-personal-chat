@@ -14,6 +14,8 @@ from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Protocol
 
+from infra.environment import read_bool
+
 SEMANTIC_REVIEW_ENABLED_ENV = "DYNAMIC_CONTEXT_SEMANTIC_REVIEW_ENABLED"
 SEMANTIC_REVIEW_TIMEOUT_ENV = "DYNAMIC_CONTEXT_SEMANTIC_REVIEW_TIMEOUT_SECONDS"
 # Real Qwen 7B/8B reviewer runs on the supported local/server transports
@@ -27,9 +29,6 @@ MAX_SEMANTIC_REVIEW_TIMEOUT_SECONDS = 30.0
 # truncated an otherwise valid real response before conversation_phase.
 # This is an output ceiling, not a minimum or an extra inference pass.
 SEMANTIC_REVIEW_MAX_TOKENS = 768
-
-_TRUE_VALUES = frozenset({"1", "true", "yes", "on"})
-
 
 class SemanticReviewClient(Protocol):
     """Small structural contract for local and cloud review clients."""
@@ -59,7 +58,7 @@ class SemanticReviewSettings:
     @classmethod
     def from_env(cls, env: Mapping[str, object] | None = None) -> SemanticReviewSettings:
         source = os.environ if env is None else env
-        enabled = str(source.get(SEMANTIC_REVIEW_ENABLED_ENV, "false")).strip().lower() in _TRUE_VALUES
+        enabled = read_bool(source, SEMANTIC_REVIEW_ENABLED_ENV)
         timeout = _parse_timeout(source.get(SEMANTIC_REVIEW_TIMEOUT_ENV))
         return cls(enabled=enabled, timeout_seconds=timeout)
 
