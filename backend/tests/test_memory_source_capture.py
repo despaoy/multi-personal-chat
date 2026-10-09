@@ -41,7 +41,7 @@ async def submit(repo, completion, *, message, source_id="source", observed=None
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("response", ['{"memories":[]}', 'not valid JSON', RuntimeError("model unavailable"),
-    json.dumps({"memories": [{"operation": "SUPERSEDE", "target_memory_id": "user_workplace",
+    json.dumps({"memories": [{"attributed_to": "user", "operation": "SUPERSEDE", "target_memory_id": "user_workplace",
                               "kind": "workplace", "value": "图书馆", "confidence": .95,
                               "evidence": "去年我在图书馆工作，后来离职了。"}]}, ensure_ascii=False)])
 async def test_source_survives_empty_invalid_and_failed_interpretation(tmp_path, response):
@@ -126,7 +126,7 @@ async def test_inflight_model_cannot_restore_claim_after_clear(tmp_path):
         async def complete(self, messages):
             started.set()
             await resume.wait()
-            return json.dumps({"memories": [{"operation": "ADD", "kind": "name", "value": "阿黎", "evidence": "我叫阿黎",
+            return json.dumps({"memories": [{"attributed_to": "user", "operation": "ADD", "kind": "name", "value": "阿黎", "evidence": "我叫阿黎",
                                                "confidence": .96}]}, ensure_ascii=False)
 
     pending = asyncio.create_task(submit(repo, Delayed(""), message="我叫阿黎",

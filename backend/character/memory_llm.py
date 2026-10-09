@@ -627,7 +627,9 @@ def _search_existing_memories(
 
 
 def _normalize_attributed_to(value: Any) -> str:
-    normalized = str(value or "user").strip().lower()
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError("记忆 LLM attributed_to 必须明确填写归属")
+    normalized = value.strip().lower()
     return "user" if normalized in {"user", "self", "用户", "本人"} else ""
 
 

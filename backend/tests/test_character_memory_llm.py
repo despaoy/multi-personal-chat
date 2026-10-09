@@ -21,7 +21,7 @@ def _response(*memories):
 def test_llm_candidate_requires_exact_evidence_and_builds_local_content():
     result = parse_llm_memories(
         _response(
-            {
+            {"attributed_to": "user",
                 "operation": "ADD", "kind": "goal",
                 "value": "保研面试",
                 "evidence": "最近主要在准备保研面试",
@@ -39,7 +39,7 @@ def test_llm_candidate_requires_exact_evidence_and_builds_local_content():
 def test_llm_candidate_cannot_invent_evidence_or_value():
     invented_evidence = parse_llm_memories(
         _response(
-            {
+            {"attributed_to": "user",
                 "operation": "ADD", "kind": "like",
                 "value": "咖啡",
                 "evidence": "我喜欢咖啡",
@@ -50,7 +50,7 @@ def test_llm_candidate_cannot_invent_evidence_or_value():
     )
     invented_value = parse_llm_memories(
         _response(
-            {
+            {"attributed_to": "user",
                 "operation": "ADD", "kind": "like",
                 "value": "咖啡",
                 "evidence": "我喜欢红茶",
@@ -66,7 +66,7 @@ def test_llm_candidate_cannot_invent_evidence_or_value():
 
 def test_llm_path_respects_opt_out_sensitive_and_uncertain_policy():
     candidate = _response(
-        {
+        {"attributed_to": "user",
             "operation": "ADD", "kind": "like",
             "value": "咖啡",
             "evidence": "我喜欢咖啡",
@@ -77,7 +77,7 @@ def test_llm_path_respects_opt_out_sensitive_and_uncertain_policy():
     assert parse_llm_memories(candidate, source_message="不要记住我喜欢咖啡") == []
     assert parse_llm_memories(candidate, source_message="我的支付密码是123456") == []
     uncertain = _response(
-        {
+        {"attributed_to": "user",
             "operation": "ADD", "kind": "like",
             "value": "咖啡",
             "evidence": "我可能喜欢咖啡",
@@ -183,7 +183,7 @@ async def test_scheduler_passes_old_relevant_memory_to_llm():
 async def test_scheduler_processes_memory_after_enqueue_and_closes_cleanly():
     completion = _Completion(
         _response(
-            {
+            {"attributed_to": "user",
                 "operation": "ADD", "kind": "study_stage",
                 "value": "大三",
                 "evidence": "今年刚升大三",

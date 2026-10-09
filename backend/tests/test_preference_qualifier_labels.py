@@ -11,7 +11,7 @@ def proposal(source, evidence, *, kind="dislike", qualifiers=None, operation="AD
     response = json.dumps(
         {
             "memories": [
-                {
+                {"attributed_to": "user",
                     "kind": kind,
                     "value": "紫樱茶",
                     "evidence": evidence,

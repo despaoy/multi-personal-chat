@@ -135,7 +135,7 @@ def test_plan_observation_still_rejects_invented_or_unknown_late_qualifiers(qual
 def test_semantic_fact_cannot_borrow_an_unquoted_late_qualifier():
     raw = {
         "memories": [
-            {
+            {"attributed_to": "user",
                 "kind": "like",
                 "value": "红茶",
                 "evidence": "我喜欢红茶。",
