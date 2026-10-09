@@ -17,6 +17,8 @@ from collections import OrderedDict
 from threading import RLock
 from typing import Any
 
+from infra.environment import read_bool
+
 try:
     from nonebot.log import logger
 except ImportError:
@@ -268,14 +270,8 @@ class RAGHelper:
         self.top_k = 5
 
         self.reranker = None
-        self.enable_reranking = os.getenv("RERANKER_ENABLED", "false").strip().lower() in {
-            "1",
-            "true",
-            "yes",
-            "on",
-        }
+        self.enable_reranking = read_bool(os.environ, "RERANKER_ENABLED")
         self.recall_multiplier = 4
-        self.rerank_top_k = 5
 
         self.query_expander = QueryExpander()
         self.enable_query_expansion = True

@@ -16,14 +16,11 @@ from typing import Any
 
 import torch
 
+from infra.environment import read_bool
+
 logger = logging.getLogger(__name__)
 
 _BACKEND_DIR = Path(__file__).parent
-
-
-def _env_flag(name: str, default: str = "false") -> bool:
-    """读取布尔型环境变量（支持1/true/yes/on）。"""
-    return os.getenv(name, default).strip().lower() in {"1", "true", "yes", "on"}
 
 
 @dataclass
@@ -35,7 +32,7 @@ class RerankConfig:
     warmup_on_init: bool = False
     score_normalize: bool = True
     # 默认离线：仅当显式设置 RERANKER_ALLOW_DOWNLOAD=true 时才允许联网下载
-    allow_download: bool = field(default_factory=lambda: _env_flag("RERANKER_ALLOW_DOWNLOAD"))
+    allow_download: bool = field(default_factory=lambda: read_bool(os.environ, "RERANKER_ALLOW_DOWNLOAD"))
 
     def __post_init__(self):
         if isinstance(self.batch_size, bool) or not isinstance(self.batch_size, int) or self.batch_size < 1:
@@ -263,14 +260,6 @@ def get_reranker(config: RerankConfig | None = None) -> CrossEncoderReranker:
     if _reranker_instance is None:
         _reranker_instance = CrossEncoderReranker(config)
     return _reranker_instance
-
-
-def rerank_documents(query: str, candidates: list[dict], top_k: int = 5) -> list[dict]:
-    reranker = get_reranker()
-    if os.getenv("RERANKER_ENABLED", "false").strip().lower() not in {"1", "true", "yes", "on"}:
-        return candidates[:top_k]
-
-    return reranker.rerank(query, candidates, top_k)
 
 
 if __name__ == "__main__":

@@ -6,6 +6,7 @@ import os
 import re
 from typing import TYPE_CHECKING, Any
 
+from infra.environment import read_bool
 from knowledge.entity_scope import explicit_identity_subject, identity_evidence_subject, in_identity_scope
 from knowledge.evidence_packet import render_card_evidence
 from knowledge.query_tasks import requests_source_text
@@ -153,7 +154,7 @@ class RoutedMultiScaleService:
         self.retrievers = {key: HybridRetriever(config, index, embedding_provider) for key, index in indexes.items()}
         # Independent opt-in: the generic KB switch must not silently change
         # character retrieval. The first real dev ablation regressed on raw text.
-        enabled = os.getenv("CHARACTER_RAG_RERANKER_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}
+        enabled = read_bool(os.environ, "CHARACTER_RAG_RERANKER_ENABLED")
         self.reranker = reranker or PipelineReranker(
             cross_encoder_enabled=enabled,
             text_view=os.getenv("CHARACTER_RAG_RERANK_TEXT_VIEW", "content"),

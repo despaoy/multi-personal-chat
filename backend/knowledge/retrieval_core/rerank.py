@@ -21,6 +21,8 @@ import re
 from dataclasses import replace
 from typing import TYPE_CHECKING, Any
 
+from infra.environment import read_bool
+
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
@@ -101,10 +103,6 @@ _TERM_ALTERNATIVES: dict[str, tuple[str, ...]] = {
     "自杀": ("自缢", "轻生", "主动赴死"),
     "车祸": ("交通事故",),
 }
-
-
-def _env_flag(name: str, default: str = "false") -> bool:
-    return os.getenv(name, default).strip().lower() in {"1", "true", "yes", "on"}
 
 
 def _tokenize_query_terms(query: str, excluded_terms: set[str] | None = None) -> list[str]:
@@ -229,7 +227,7 @@ class PipelineReranker:
             return self._cross_encoder
         enabled = self._cross_encoder_enabled
         if enabled is None:
-            enabled = _env_flag("RERANKER_ENABLED", "false")
+            enabled = read_bool(os.environ, "RERANKER_ENABLED")
         if not enabled:
             return None
         from knowledge.reranker import get_reranker
