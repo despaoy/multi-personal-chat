@@ -546,7 +546,7 @@ class VectorDatabase:
                         continue
                     meta_idx = self._id_to_index.get(int(faiss_id))
                     if meta_idx is None or meta_idx < 0 or meta_idx >= len(self.metadata):
-                        continue
+                        raise ValueError("Vector document mapping is inconsistent; rebuild the knowledge index")
                     result = {**self.metadata[meta_idx], "score": float(score)}
                     if filters and not self._match_filters(result, filters):
                         continue
