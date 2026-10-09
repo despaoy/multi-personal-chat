@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import threading
+from collections import OrderedDict
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -29,7 +30,7 @@ class LocalMeanPoolingEmbeddingProvider:
         self.max_length = max(8, int(max_length))
         self._tokenizer = None
         self._model = None
-        self._query_cache: dict[str, np.ndarray] = {}
+        self._query_cache: OrderedDict[str, np.ndarray] = OrderedDict()
         # Singleton warmup and the first request may arrive together. Protect
         # Transformers lazy imports and CPU model inference from that race.
         self._runtime_lock = threading.RLock()
@@ -77,11 +78,16 @@ class LocalMeanPoolingEmbeddingProvider:
         return matrix
 
     def embed_query(self, query: str) -> np.ndarray:
-        cached = self._query_cache.get(query)
-        if cached is None:
-            cached = self.embed_texts([query])[0]
-            self._query_cache[query] = cached
-        return cached.copy()
+        with self._runtime_lock:
+            cached = self._query_cache.get(query)
+            if cached is None:
+                cached = self.embed_texts([query])[0]
+                self._query_cache[query] = cached
+                if len(self._query_cache) > 256:
+                    self._query_cache.popitem(last=False)
+            self._query_cache.move_to_end(query)
+            return cached.copy()
+
 
 
 class MatrixInnerProductIndex:
