@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from threading import RLock
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import faiss
 import numpy as np
@@ -783,65 +783,6 @@ class VectorDatabase:
                 results.append(query_results)
 
             return results
-
-    def delete_documents(self, doc_ids: List[Any]) -> int:
-        if not doc_ids:
-            return 0
-
-        with self._lock:
-            faiss_ids_to_remove = []
-            indices_to_remove = set()
-
-            for doc_id in doc_ids:
-                faiss_id = self._to_faiss_id(doc_id)
-                if faiss_id is not None and faiss_id in self._id_to_index:
-                    meta_idx = self._id_to_index[faiss_id]
-                    indices_to_remove.add(meta_idx)
-                    faiss_ids_to_remove.append(faiss_id)
-
-            if not indices_to_remove:
-                return 0
-
-            try:
-                faiss_ids_array = np.array(faiss_ids_to_remove, dtype=np.int64)
-                if hasattr(self.index, 'remove_ids'):
-                    n_removed = self.index.remove_ids(faiss_ids_array)
-                    logger.info(f"从FAISS索引中删除 {n_removed} 个向量")
-                else:
-                    logger.warning("当前索引不支持remove_ids，需要重建索引")
-                    self._rebuild_index_excluding(indices_to_remove)
-                    return len(indices_to_remove)
-
-                sorted_indices = sorted(indices_to_remove, reverse=True)
-                for idx in sorted_indices:
-                    if idx < len(self.metadata):
-                        self.metadata.pop(idx)
-
-                self._rebuild_id_mapping()
-                self._rebuild_bm25()
-                self._save_index()
-
-                # 数据变更后清除查询缓存
-                self.clear_cache()
-
-                return len(indices_to_remove)
-
-            except Exception as e:
-                logger.error(f"删除文档失败: {e}")
-                return 0
-
-    def _rebuild_index_excluding(self, exclude_indices: Set[int]):
-        documents = [meta for i, meta in enumerate(self.metadata) if i not in exclude_indices]
-        self.index = None
-        self.metadata = []
-        self._id_to_index = {}
-        self._create_index()
-        if documents:
-            self._re_add_all_documents(documents)
-
-    def _rebuild_bm25(self):
-        self.bm25 = BM25Retriever()
-        self.bm25.add_documents(self.metadata)
 
     def rebuild_index(self):
         """重建整个向量索引：清空现有索引后重新添加所有文档。

@@ -847,61 +847,6 @@ async def update_knowledge_document(
         if updated_doc is None:
             raise HTTPException(status_code=404, detail="文档不存在")
 
-        # 如果内容更新了，重新分块
-        if "content" in update_data:
-
-            # 获取路径信息用于注入
-            kb_name = ""
-            folder_name = update_data.get("category", existing_doc.get("category", "未分类"))
-            kb_id = update_data.get("knowledge_base_id", existing_doc.get("knowledge_base_id"))
-            folder_id = update_data.get("folder_id", existing_doc.get("folder_id"))
-            if kb_id:
-                kb = await run_db(db.get_knowledge_base, kb_id)
-                if kb:
-                    kb_name = kb["name"]
-            if folder_id:
-                folder = await run_db(db.get_knowledge_folder, folder_id)
-                if folder:
-                    folder_name = folder["name"]
-
-            from knowledge.text_splitter import simple_text_split
-
-            chunks = simple_text_split(update_data["content"])
-            vector_docs = []
-
-            for i, chunk_content in enumerate(chunks):
-                path_prefix = f"[{kb_name}/{folder_name}]" if kb_name else f"[{folder_name}]"
-                doc_title = update_data.get("title", existing_doc.get("title", ""))
-                enriched_content = f"{path_prefix} {doc_title}: {chunk_content}"
-
-                vector_docs.append(
-                    {
-                        "id": f"doc_{doc_id}_chunk_{i}",
-                        "chunk_index": i,
-                        "title": doc_title,
-                        "content": enriched_content,
-                        "source_type": update_data.get("sourceType", existing_doc.get("sourceType", "text")),
-                        "document_id": doc_id,
-                        "category": folder_name,
-                        "knowledge_base_id": kb_id,
-                    }
-                )
-
-            if VECTOR_DB_AVAILABLE and vector_docs:
-                try:
-                    old_chunk_ids = []
-                    for i in range(existing_doc.get("chunkCount", 0)):
-                        old_chunk_ids.append(f"doc_{doc_id}_chunk_{i}")
-                    if old_chunk_ids:
-                        from app.config import get_vector_db
-
-                        vector_db = get_vector_db()
-                        await asyncio.to_thread(vector_db.delete_documents, old_chunk_ids)
-                    await asyncio.to_thread(vector_db.add_documents, vector_docs)
-                    logger.info("文档 %s 向量数据库已更新", doc_id)
-                except Exception as ve:
-                    logger.warning("更新向量数据库失败: %s", ve)
-
         await run_db(_invalidate_local_knowledge_index)
 
         logger.info("更新知识库文档: %s", doc_id)
@@ -924,24 +869,9 @@ async def delete_knowledge_document(doc_id: int, current_user: dict = Depends(ge
         if not existing_doc:
             raise HTTPException(status_code=404, detail="文档不存在")
 
-        chunks = await run_db(db.get_knowledge_chunks, doc_id)
         if not await run_db(db.delete_knowledge_document, doc_id):
             raise HTTPException(status_code=404, detail="文档不存在")
         await run_db(_invalidate_local_knowledge_index)
-
-        if VECTOR_DB_AVAILABLE:
-            try:
-                from app.config import get_vector_db
-
-                vector_db = get_vector_db()
-                chunk_ids = []
-                for chunk in chunks:
-                    chunk_id = f"doc_{doc_id}_chunk_{chunk.get('chunkIndex', chunk.get('id', 0))}"
-                    chunk_ids.append(chunk_id)
-                if chunk_ids:
-                    await asyncio.to_thread(vector_db.delete_documents, chunk_ids)
-            except Exception as ve:
-                logger.warning("从向量数据库删除文档失败: %s", ve)
 
         logger.info("删除知识库文档: %s", doc_id)
         return {"success": True, "message": "文档删除成功"}
