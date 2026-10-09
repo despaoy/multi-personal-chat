@@ -293,9 +293,7 @@ class CharacterContextService:
 
         relationship = relationship_from_record(relationship_record)
 
-        # Reuse the already-loaded history: no extra database/model call. The
-        # caller-provided live history wins over the persisted fallback.
-        effective_history = tuple(turn.history) or tuple(history)
+        effective_history = tuple(history)
         interaction = self._situation_analyzer.estimate(turn.message, effective_history)
         semantic_outcome: SemanticReviewOutcome | None = None
         if self._semantic_estimator is not None:
@@ -393,7 +391,8 @@ class CharacterContextService:
 
             sources = await self._source_memory.recall(character_id, user_scope, turn.message,
                                                        memories=compiled.memory_packets,
-                                                       retrieval_context=compile_user_recall_context(effective_history))
+                                                       retrieval_context=(user_topic_context if self._memory_selector is not None
+                                                           else compile_user_recall_context(effective_history)))
             compiled = attach_sources(compiled, sources, preferred_address=relationship.preferred_address,
                                       complete_evidence=self._memory_selector is not None)
             memory_recall["sources"] = sources.diagnostics

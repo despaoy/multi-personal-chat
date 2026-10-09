@@ -85,12 +85,23 @@ async def test_legitimate_empty_storage_still_prepares_context(tmp_path, selecti
     assert prepared.compiled.memory_packets == ()
 
 
-async def test_explicit_live_history_does_not_read_stored_history(tmp_path, monkeypatch):
+@pytest.mark.parametrize("selection_enabled", [False, True])
+async def test_explicit_live_history_does_not_read_stored_history(tmp_path, monkeypatch, selection_enabled):
     database = SQLiteDB(tmp_path / "live.sqlite")
     reader = Mock(side_effect=OSError("stored history unavailable"))
     monkeypatch.setattr(database, "list_conversation_history", reader)
-    history = ({"role": "user", "content": "今天只讨论青岚项目的离线预算。"},)
-    prepared = await service_for(database, False).prepare_turn(
+    user_context = "青岚项目只有离线设备，禁止训练；只有收到书面许可才可以联网。"
+    history = ({"role": "user", "content": user_context},
+               {"role": "assistant", "content": "我猜已经获得联网许可。"})
+    service = service_for(database, selection_enabled)
+    source_recall = AsyncMock(wraps=service._source_memory.recall)
+    memory_recall = AsyncMock(wraps=service._memory_service.recall_with_diagnostics)
+    monkeypatch.setattr(service._source_memory, "recall", source_recall)
+    monkeypatch.setattr(service._memory_service, "recall_with_diagnostics", memory_recall)
+    prepared = await service.prepare_turn(
         TurnInput("继续讨论预算", "web", "required-reads", "reader", "room", "private", history=history), "role")
     assert prepared.history == history
+    assert source_recall.call_args.kwargs["retrieval_context"] == user_context
+    if selection_enabled:
+        assert memory_recall.call_args.kwargs["retrieval_context"] == user_context
     reader.assert_not_called()
