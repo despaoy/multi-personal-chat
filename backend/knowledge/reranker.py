@@ -29,7 +29,7 @@ def _env_flag(name: str, default: str = "false") -> bool:
 @dataclass
 class RerankConfig:
     model_name: str = field(default_factory=lambda: os.getenv("RERANKER_MODEL_PATH", str(_BACKEND_DIR / "bge-reranker-base")))
-    device: str = "cuda:0"
+    device: str = "auto"
     batch_size: int = 8
     max_length: int = 512
     warmup_on_init: bool = False
@@ -47,7 +47,7 @@ class RerankConfig:
 class CrossEncoderReranker:
     """Cross-Encoder重排器，使用BGE-Reranker-Base模型对候选文档进行精细化相关性评分。
 
-    支持模型预热、GPU/CPU自动切换、分数归一化。
+    支持模型预热、显式设备选择（auto 按可用性选择 GPU/CPU）、分数归一化。
     默认离线加载本地模型目录；加载或推理失败直接抛出异常。
     """
 
@@ -64,22 +64,12 @@ class CrossEncoderReranker:
         self._model_loaded = False
         self._warmup_done = False
 
-        # GPU不可用时立即回退CPU，避免后续加载/推理走CUDA专属路径
-        if not self._check_gpu_available():
-            if self.device != "cpu":
-                logger.warning(f"GPU不可用，设备从 {self.device} 回退到CPU")
-            self.device = "cpu"
+        if self.device == "auto":
+            self.device = "cuda:0" if torch.cuda.is_available() else "cpu"
+        elif torch.device(self.device).type == "cuda" and not torch.cuda.is_available():
+            raise RuntimeError("Configured CUDA reranker device is unavailable; provide the device or explicitly select cpu")
 
-        logger.info(f"Cross-Encoder重排器初始化完成，设备: {self.device}")
-
-    def _check_gpu_available(self) -> bool:
-        try:
-            if not torch.cuda.is_available():
-                return False
-            torch.cuda.device_count()
-            return True
-        except Exception:
-            return False
+        logger.info("Cross-Encoder device: %s", self.device)
 
     def _load_model(self) -> bool:
         if self._model_loaded:

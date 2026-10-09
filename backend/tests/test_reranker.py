@@ -5,7 +5,7 @@
 - 模型缺失、加载失败和推理异常必须报错；修复后允许下一次请求重新加载
 - 输入candidate不被原地修改，返回副本携带rerank_score/rerank_normalized_score
 - 空候选不加载模型；单候选仍取得真实分数
-- GPU不可用时回退CPU且不使用CUDA专属dtype，GPU路径保持原有dtype
+- auto 选择可用设备；显式 CUDA 不可用时报错，CPU 不使用 CUDA dtype
 - 非法输入、非有限分数不能伪装成成功
 - top_k/batch_size/max_length参数边界校验
 """
@@ -247,12 +247,13 @@ def test_empty_skips_loading_but_single_candidate_gets_model_score(monkeypatch):
 # ---------- 设备处理 ----------
 
 
-def test_gpu_unavailable_falls_back_to_cpu(monkeypatch):
+@pytest.mark.parametrize('device', ['auto', 'cpu'])
+def test_cpu_device_selection_keeps_cpu_dtype(monkeypatch, device):
     _force_cpu(monkeypatch)
     model = _FakeModel()
     calls = _install_fake_transformers(monkeypatch, tokenizer=_FakeTokenizer(), model=model)
 
-    config = RerankConfig(model_name="fake-model", device="cuda:0")
+    config = RerankConfig(model_name="fake-model", device=device)
     reranker = CrossEncoderReranker(config)
     assert reranker.device == "cpu"
 
@@ -411,3 +412,34 @@ def test_explicit_model_path_reaches_tokenizer_and_model_unchanged(monkeypatch):
     encoder = CrossEncoderReranker(RerankConfig(model_name='chosen/model'))
     assert len(encoder.rerank('查询', _make_candidates())) == 3
     assert [call['path'] for call in calls] == ['chosen/model', 'chosen/model']
+
+
+def test_explicit_cuda_device_is_not_silently_replaced(monkeypatch):
+    _force_cpu(monkeypatch)
+    calls = _install_fake_transformers(monkeypatch, tokenizer=_FakeTokenizer(), model=_FakeModel())
+    with pytest.raises(RuntimeError, match='CUDA reranker device is unavailable'):
+        CrossEncoderReranker(RerankConfig(model_name='fake-model', device='cuda:0'))
+    assert calls == []
+
+
+def test_auto_device_selects_available_gpu(monkeypatch):
+    _force_gpu(monkeypatch)
+    assert CrossEncoderReranker(RerankConfig(model_name='fake-model')).device == 'cuda:0'
+
+
+@pytest.mark.parametrize('device', ['auto', 'cuda:0'])
+def test_device_detection_error_is_not_cpu_fallback(monkeypatch, device):
+    error = OSError('device detection failed')
+    def detect():
+        raise error
+    monkeypatch.setattr(torch.cuda, 'is_available', detect)
+    with pytest.raises(OSError) as caught:
+        CrossEncoderReranker(RerankConfig(model_name='fake-model', device=device))
+    assert caught.value is error
+
+
+def test_explicit_cpu_does_not_probe_gpu(monkeypatch):
+    def detect():
+        raise AssertionError('explicit CPU must not probe GPU')
+    monkeypatch.setattr(torch.cuda, 'is_available', detect)
+    assert CrossEncoderReranker(RerankConfig(model_name='fake-model', device='cpu')).device == 'cpu'
