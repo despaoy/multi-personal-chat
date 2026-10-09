@@ -38,6 +38,7 @@ from inference.lora_registry import get_lora_character_id
 from inference.lora_utils import resolve_lora_served_name
 from inference.provider_context import get_provider_context_budget
 from infra.concurrency_control import InferenceQueueFull, RateLimitExceeded, inference_runtime
+from infra.environment import read_bool
 from infra.observability import increment, log_event, set_consecutive
 from infra.security_utils import strip_control_chars
 
@@ -1095,6 +1096,8 @@ async def _retrieve_rag_bundle(
         from knowledge.source_expansion import expand_source_context
         from knowledge.vector_db import get_vector_db
 
+        corrective_enabled = read_bool(os.environ, "CORRECTIVE_RAG_ENABLED")
+
         # A normal generation does not necessarily follow the search API.
         # Resolve dirty metadata/content before consulting either cached RAG
         # path; an incomplete rebuild cannot authorize stale source evidence.
@@ -1104,7 +1107,7 @@ async def _retrieve_rag_bundle(
         vector_db = get_vector_db()
         generation = vector_db.cache_generation
         revision = knowledge_api._vector_index_revision
-        if os.getenv("CORRECTIVE_RAG_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}:
+        if corrective_enabled:
             from knowledge.corrective_rag import CorrectiveRAG
 
             bundle = CorrectiveRAG(get_rag_helper()).retrieve_with_correction(query, top_k=top_k, filters=filters)

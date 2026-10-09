@@ -22,6 +22,8 @@ import time
 from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import Any
 
+from infra.environment import read_bool
+
 from .cache import AnswerCache, answer_cache_key
 from .corrective import CorrectiveRetrievalAdapter
 from .models import (  # noqa: E402
@@ -49,10 +51,6 @@ _THINK_BLOCK_RE = re.compile(r"<think>.*?</think>", re.DOTALL)
 _DEFAULT_GENERATION_TIMEOUT = 60.0
 # 与 inference.generation_request 的既有策略一致：有证据时温度收紧
 _GROUNDED_TEMPERATURE_CAP = 0.5
-
-
-def _env_flag(name: str, default: str = "false") -> bool:
-    return os.getenv(name, default).strip().lower() in {"1", "true", "yes", "on"}
 
 
 def _strip_think_blocks(text: str) -> str:
@@ -88,7 +86,7 @@ class GroundedAnswerService:
         self._domain_supplements = domain_supplements
         self._index_version_resolver = index_version_resolver
         self.corrective_enabled = (
-            _env_flag("GROUNDED_ANSWER_CORRECTIVE", "true") if corrective_enabled is None else corrective_enabled
+            read_bool(os.environ, "GROUNDED_ANSWER_CORRECTIVE", default=True) if corrective_enabled is None else corrective_enabled
         )
         self.corrective_max_retries = corrective_max_retries
         self.abstention_reply = abstention_reply or DEFAULT_ABSTENTION_REPLY
