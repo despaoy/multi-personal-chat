@@ -71,10 +71,10 @@ class BM25Retriever:
         Args:
             documents: 文档列表，每个文档需包含title和content字段
         """
-        for doc in documents:
-            text = f"{doc.get('title', '')} {doc.get('content', '')}"
+        texts = [f"{doc.get('title', '')} {doc.get('content', '')}" for doc in documents]
+        tokenized = [tokenize(text) for text in texts]
+        for text, tokens in zip(texts, tokenized, strict=True):
             self.corpus.append(text)
-            tokens = tokenize(text)
             self.tokenized_corpus.append(tokens)
             self.doc_lens.append(len(tokens))
 

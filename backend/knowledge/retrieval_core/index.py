@@ -75,12 +75,11 @@ class BM25Index:
         return "\n".join([precise] * field_weight + [doc.summary, doc.content])
 
     def build(self, documents: Sequence[KnowledgeIndexDocument]) -> None:
-        self._doc_tokens = []
+        tokenized = [tokenize(self.document_text(doc, self.field_weight)) for doc in documents]
+        self._doc_tokens = tokenized
         self._doc_lens = []
         self._doc_freqs = defaultdict(int)
-        for doc in documents:
-            tokens = tokenize(self.document_text(doc, self.field_weight))
-            self._doc_tokens.append(tokens)
+        for tokens in tokenized:
             self._doc_lens.append(len(tokens))
             for token in set(tokens):
                 self._doc_freqs[token] += 1
