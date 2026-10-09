@@ -32,6 +32,7 @@ from character.memory_service import (  # noqa: E402
     HYBRID_WEIGHT_SEMANTIC,
     MIN_HYBRID_MEMORY_SCORE,
     CharacterMemoryService,
+    validate_retrieval_settings,
 )
 from character.models import UserScope  # noqa: E402
 from knowledge.retrieval_core.embedding import get_default_embedding_provider  # noqa: E402
@@ -303,6 +304,10 @@ def _render_markdown(report: dict[str, Any]) -> str:
 
 
 async def evaluate(args) -> dict[str, Any]:
+    min_hybrid_score, _ = validate_retrieval_settings(args.min_hybrid_score, None)
+    base_url, model = args.memory_llm_base_url.strip(), args.memory_llm_model.strip()
+    if bool(base_url) != bool(model):
+        raise ValueError("--memory-llm-base-url and --memory-llm-model must be provided together")
     rows = _load_jsonl(args.dataset)
     extraction_cases = [row for row in rows if row.get("task") == "extraction"]
     retrieval_cases = [row for row in rows if row.get("task") == "retrieval"]
@@ -313,11 +318,11 @@ async def evaluate(args) -> dict[str, Any]:
     ]
 
     llm_config = None
-    if args.memory_llm_base_url and args.memory_llm_model:
+    if base_url and model:
         llm_config = MemoryLlmConfig(
             enabled=True,
-            base_url=args.memory_llm_base_url,
-            model=args.memory_llm_model,
+            base_url=base_url,
+            model=model,
             api_key=args.memory_llm_api_key,
             confidence_threshold=args.memory_llm_confidence_threshold,
         )
@@ -328,7 +333,7 @@ async def evaluate(args) -> dict[str, Any]:
     groups = []
     for ablation in ABLATIONS:
         extraction_predictions = context_predictions if ablation.context_extraction else rule_predictions
-        retrieval = await _retrieval_metrics(retrieval_cases, ablation, provider, args.min_hybrid_score)
+        retrieval = await _retrieval_metrics(retrieval_cases, ablation, provider, min_hybrid_score)
         groups.append(
             {
                 **asdict(ablation),
@@ -356,7 +361,7 @@ async def evaluate(args) -> dict[str, Any]:
             "embedding_model": provider.model_id,
             "context_extraction_evaluated": context_predictions is not None,
             "semantic_candidate_limit": None,
-            "min_hybrid_memory_score": args.min_hybrid_score,
+            "min_hybrid_memory_score": min_hybrid_score,
             "hybrid_weights": {
                 "semantic": HYBRID_WEIGHT_SEMANTIC,
                 "lexical": HYBRID_WEIGHT_LEXICAL,
