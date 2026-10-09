@@ -33,7 +33,9 @@ class CorrectiveRetrievalAdapter:
 
     def __init__(self, retrieve: RetrieveFn, max_retries: int = 1):
         self._retrieve = retrieve
-        self.max_retries = max(0, int(max_retries))
+        if type(max_retries) is not int or max_retries < 0:
+            raise ValueError("CorrectiveRetrievalAdapter.max_retries must be a non-negative integer")
+        self.max_retries = max_retries
 
     def reformulate_query(self, query: str, bundle: dict[str, Any]) -> str:
         """从 top 结果提取关键词追加到原查询（不改变原意）。"""
@@ -55,43 +57,31 @@ class CorrectiveRetrievalAdapter:
         改写信息记录 rounds / reformulated_query，进 retrieval_metadata。
         """
         info: dict[str, Any] = {"reformulated": False, "reformulated_query": None, "rounds": []}
-        bundle = self._retrieve(query, top_k=top_k, filters=filters)
-
-        def _record(current: str, b: dict[str, Any] | None) -> None:
-            info["rounds"].append(
-                {
-                    "query": current,
-                    "confidence": float(b.get("confidence") or 0.0) if b else 0.0,
-                    "abstained": bool(b.get("abstained")) if b else True,
-                }
-            )
-
-        _record(query, bundle)
-
-        if bundle is None or not bundle.get("abstained"):
-            return bundle, info
-
+        bundle = None
         current_query = query
-        for _attempt in range(self.max_retries):
-            candidate = self.reformulate_query(current_query, bundle or {})
+        for attempt in range(self.max_retries + 1):
+            current = self._retrieve(current_query, top_k=top_k, filters=filters)
+            info["rounds"].append({
+                "query": current_query,
+                "confidence": current["confidence"] if current is not None else 0.0,
+                "abstained": current["abstained"] if current is not None else True,
+            })
+            if current is None:
+                # A rewritten query outside the domain cannot replace its last in-domain evidence.
+                break
+            if not current["abstained"]:
+                bundle = self._merge_bundles(bundle, current) if bundle is not None else current
+                break
+            bundle = current
+            if attempt == self.max_retries:
+                break
+            candidate = self.reformulate_query(current_query, bundle)
             if candidate == current_query:
                 logger.info("Grounded Answer corrective: 重写查询无新增信息，停止重试")
                 break
             current_query = candidate
-            retry_bundle = self._retrieve(current_query, top_k=top_k, filters=filters)
-            _record(current_query, retry_bundle)
-
-            if retry_bundle is None:
-                # 改写后未命中域：保留首轮结果（域门控更可信）
-                break
-            if not retry_bundle.get("abstained"):
-                info["reformulated"] = True
-                info["reformulated_query"] = candidate
-                merged = self._merge_bundles(bundle, retry_bundle)
-                return merged, info
-            bundle = retry_bundle
-
-        logger.info("Grounded Answer corrective: 重试后仍低置信度，交由 abstention 策略裁决")
+            info["reformulated"] = True
+            info["reformulated_query"] = candidate
         return bundle, info
 
     @staticmethod
