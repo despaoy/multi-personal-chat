@@ -99,8 +99,10 @@ def test_corrupt_bundle_never_falls_back_to_old_files(vector):
     vector.metadata_path.write_bytes(pickle.dumps(vector.metadata))
     vector.bm25_path.write_bytes(pickle.dumps(vector._bm25_state()))
     vector.snapshot_path.write_bytes(b"broken complete bundle")
-    loaded = reopen(vector)
-    assert not loaded.snapshot_validated and loaded.metadata == [] and loaded.bm25.corpus == []
+    before = digest(vector.snapshot_path)
+    with pytest.raises(zipfile.BadZipFile):
+        reopen(vector)
+    assert digest(vector.snapshot_path) == before
 
 
 def test_manifest_checksum_checked(vector):
@@ -111,7 +113,8 @@ def test_manifest_checksum_checked(vector):
     with zipfile.ZipFile(vector.snapshot_path, "w") as archive:
         for name, value in members.items():
             archive.writestr(name, value)
-    assert not reopen(vector).snapshot_validated
+    with pytest.raises(ValueError, match="checksum"):
+        reopen(vector)
 
 
 def test_reader_pins_old_descriptor_across_new_publication(vector, monkeypatch):
@@ -164,3 +167,30 @@ def test_empty_snapshot_overrides_legacy_sources(vector):
     loaded = reopen(vector)
     assert loaded.snapshot_validated and loaded.metadata == [] and loaded.bm25.corpus == []
     assert loaded.index.ntotal == 0
+
+
+@pytest.mark.parametrize('component', ['index', 'metadata', 'bm25'])
+@pytest.mark.parametrize('damage', ['missing', 'corrupt'])
+def test_incomplete_legacy_index_raises_without_replacement(vector, component, damage):
+    faiss.write_index(vector.index, str(vector.index_path))
+    vector.metadata_path.write_bytes(pickle.dumps(vector.metadata))
+    vector.bm25_path.write_bytes(pickle.dumps(vector._bm25_state()))
+    paths = {'index': vector.index_path, 'metadata': vector.metadata_path, 'bm25': vector.bm25_path}
+    target = paths[component]
+    if damage == 'missing':
+        target.unlink()
+    else:
+        target.write_bytes(b'broken component')
+    before = {p.name: digest(p) for p in paths.values() if p.exists()}
+    error = RuntimeError if component == 'index' else FileNotFoundError if damage == 'missing' else pickle.UnpicklingError
+    with pytest.raises(error):
+        reopen(vector)
+    assert {p.name: digest(p) for p in paths.values() if p.exists()} == before
+    assert not vector.snapshot_path.exists()
+
+
+def test_new_empty_database_remains_valid(tmp_path, monkeypatch):
+    monkeypatch.setattr(VectorDatabase, '_check_gpu_availability', lambda self: False)
+    empty = VectorDatabase(str(tmp_path))
+    assert empty.metadata == [] and empty.bm25.corpus == [] and empty.index.ntotal == 0
+    assert empty.search('没有资料') == []

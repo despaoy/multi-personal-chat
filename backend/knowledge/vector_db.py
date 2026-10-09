@@ -285,7 +285,7 @@ class VectorDatabase:
 
     def _ensure_index(self):
         if self.index is None:
-            if self.snapshot_path.exists() or self.index_path.exists():
+            if any(path.exists() for path in (self.snapshot_path, self.index_path, self.metadata_path, self.bm25_path)):
                 self._load_index()
             else:
                 self._create_index()
@@ -320,48 +320,33 @@ class VectorDatabase:
             logger.info("创建FAISS平面索引（默认回退）")
 
     def _load_index(self):
-        try:
-            if self.snapshot_path.exists():
-                self.index, self.metadata, self._snapshot_bm25 = load_snapshot(
-                    self.db_path, self.EMBEDDING_DIM, self._to_faiss_id
-                )
-                self.snapshot_validated = True
-            else:
-                # Legacy triples remain readable but cannot authorize API reuse.
-                self.index = faiss.read_index(str(self.index_path))
-                if self.metadata_path.exists():
-                    with open(self.metadata_path, 'rb') as f:
-                        self.metadata = pickle.load(f)
-            logger.info(f"加载FAISS索引完成，共 {len(self.metadata)} 条记录")
-        except Exception as e:
-            logger.error(f"加载索引失败: {e}")
-            self.metadata = []
-            self._snapshot_bm25 = None
-            self.snapshot_validated = False
-            self._create_index("flat")
+        if self.snapshot_path.exists():
+            self.index, self.metadata, self._snapshot_bm25 = load_snapshot(
+                self.db_path, self.EMBEDDING_DIM, self._to_faiss_id
+            )
+            self.snapshot_validated = True
+        else:
+            # Legacy triples remain readable but cannot authorize API reuse.
+            self.index = faiss.read_index(str(self.index_path))
+            with open(self.metadata_path, 'rb') as f:
+                self.metadata = pickle.load(f)
+        logger.info(f"加载FAISS索引完成，共 {len(self.metadata)} 条记录")
 
     def _load_bm25(self):
-        try:
-            if self.snapshot_path.exists():
-                bm25_data = self._snapshot_bm25
-                if bm25_data is None:
-                    return  # Invalid snapshots never fall back to legacy files.
-            elif self.bm25_path.exists():
-                with open(self.bm25_path, 'rb') as f:
-                    bm25_data = pickle.load(f)
-            else:
-                return
-            self.bm25.corpus = bm25_data["corpus"]
-            self.bm25.doc_freqs = defaultdict(int, bm25_data["doc_freqs"])
-            self.bm25.doc_lens = bm25_data["doc_lens"]
-            self.bm25.avgdl = bm25_data["avgdl"]
-            self.bm25.idf = bm25_data["idf"]
-            self.bm25.tokenized_corpus = bm25_data["tokenized_corpus"]
-            self.bm25._built = bm25_data["built"]
-        except Exception as e:
-            self.snapshot_validated = False
-            self.bm25 = BM25Retriever()
-            logger.warning("BM25状态加载失败: %s", e)
+        if self.snapshot_path.exists():
+            bm25_data = self._snapshot_bm25
+        elif self.bm25_path.exists() or self.metadata:
+            with open(self.bm25_path, 'rb') as f:
+                bm25_data = pickle.load(f)
+        else:
+            return
+        self.bm25.corpus = bm25_data["corpus"]
+        self.bm25.doc_freqs = defaultdict(int, bm25_data["doc_freqs"])
+        self.bm25.doc_lens = bm25_data["doc_lens"]
+        self.bm25.avgdl = bm25_data["avgdl"]
+        self.bm25.idf = bm25_data["idf"]
+        self.bm25.tokenized_corpus = bm25_data["tokenized_corpus"]
+        self.bm25._built = bm25_data["built"]
 
     def _bm25_state(self):
         return {
