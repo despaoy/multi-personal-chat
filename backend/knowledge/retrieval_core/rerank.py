@@ -23,6 +23,8 @@ from typing import TYPE_CHECKING, Any
 
 from infra.environment import read_bool
 
+from .tokenization import segment
+
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
@@ -106,13 +108,8 @@ _TERM_ALTERNATIVES: dict[str, tuple[str, ...]] = {
 
 
 def _tokenize_query_terms(query: str, excluded_terms: set[str] | None = None) -> list[str]:
-    """查询词切分：优先 jieba（中文正确分词），缺失时确定性回退。"""
-    try:
-        import jieba
-
-        tokens = [t.strip() for t in jieba.cut(query) if t.strip()]
-    except ImportError:
-        tokens = re.findall(r"[\u4e00-\u9fff]+|[a-zA-Z0-9]+", query)
+    """分词后排除停用词与已识别实体。"""
+    tokens = segment(query)
     excluded = excluded_terms or set()
     return [
         token

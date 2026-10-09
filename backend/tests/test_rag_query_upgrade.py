@@ -293,14 +293,8 @@ class TestCorrectiveRAG:
 
 
 class TestChineseTokenize:
-    def test_fallback_tokenizer_is_deterministic(self, monkeypatch):
-        monkeypatch.setattr(corrective_rag, "_JIEBA_AVAILABLE", False)
-        tokens = corrective_rag._tokenize("往生堂 堂主 Hu Tao！")
-        assert tokens == ["往生堂", "堂主", "Hu", "Tao"]
-
-    @pytest.mark.skipif(not corrective_rag._JIEBA_AVAILABLE, reason="jieba 不可用")
     def test_jieba_tokenizer_extracts_chinese_words(self):
-        tokens = corrective_rag._tokenize("胡桃是往生堂堂主")
+        tokens = corrective_rag.segment("胡桃是往生堂堂主")
         # 中文被切成词（而非旧实现的单字，单字会被关键词过滤全部丢弃）
         assert any(len(t) >= 2 and any("\u4e00" <= ch <= "\u9fff" for ch in t) for t in tokens)
         assert all(t.strip() for t in tokens)

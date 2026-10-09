@@ -4,14 +4,15 @@
 - 默认重试次数限制为 1 次（max_retries=1），由构造参数真实控制
 - 由环境变量 CORRECTIVE_RAG_ENABLED 控制（默认 false，生产/实验分离）
 - 复用 RAGHelper 的 retrieve_with_citations / compute_confidence / should_abstain
-- 查询重写仅基于关键词提取（优先 jieba，缺失时确定性回退），不调用 LLM 或外部服务
+- 查询重写仅基于关键词提取（使用必需的 jieba 分词），不调用 LLM 或外部服务
 """
 
 from __future__ import annotations
 
 import logging
-import re
 from typing import Any
+
+from .retrieval_core.tokenization import segment
 
 logger = logging.getLogger(__name__)
 
@@ -50,24 +51,6 @@ _STOPWORDS = {
     "why",
 }
 
-try:
-    import jieba
-
-    _JIEBA_AVAILABLE = True
-except ImportError:  # pragma: no cover - 测试环境强制走回退分支
-    jieba = None
-    _JIEBA_AVAILABLE = False
-
-
-def _tokenize(text: str) -> list[str]:
-    """中文分词：优先项目已有的 jieba；不可用时回退为确定性的
-    中文连续片段 + 英文单词切分。"""
-    if _JIEBA_AVAILABLE:
-        tokens = [t.strip() for t in jieba.cut(text)]
-        return [t for t in tokens if t]
-    return re.findall(r"[\u4e00-\u9fff]+|[a-zA-Z0-9]+", text)
-
-
 class CorrectiveRAG:
     """纠正性 RAG：retrieve → confidence check → reformulate → re-retrieve → abstain。
 
@@ -91,7 +74,7 @@ class CorrectiveRAG:
             content = result.get("content", "")
             title = result.get("title", "")
             text = f"{title} {content}"
-            for tok in _tokenize(text):
+            for tok in segment(text):
                 if (
                     len(tok) > 1
                     and tok not in keywords
