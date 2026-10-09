@@ -22,6 +22,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 import faiss
 import numpy as np
 
+from knowledge.retrieval_core.embedding import resolve_local_model_path
 from knowledge.snapshot_store import SNAPSHOT_NAME, load_snapshot, save_snapshot
 
 logger = logging.getLogger(__name__)
@@ -159,38 +160,8 @@ class VectorDatabase:
     HNSW（大数据集，自动迁移阈值默认10万）。集成BM25检索器实现混合搜索。
     """
 
-    EMBEDDING_MODELS = {
-        "default": os.getenv("EMBEDDING_MODEL_PATH", ""),
-        "bge-small-zh": "BAAI/bge-small-zh-v1.5",
-        "bge-base-zh": "BAAI/bge-base-zh-v1.5",
-    }
     EMBEDDING_DIM = 384
     EMBEDDING_CACHE_SIZE = 2000
-
-    _LOCAL_MODEL_SEARCH_PATHS = [
-        Path(__file__).parent.parent / "RAG" / "paraphrase-multilingual-MiniLM-L12-v2",
-        Path(__file__).parent.parent / "models" / "paraphrase-multilingual-MiniLM-L12-v2",
-        Path.home() / ".cache" / "huggingface" / "hub" / "models--sentence-transformers--paraphrase-multilingual-MiniLM-L12-v2",
-        # 国内镜像/ModelScope 缓存路径
-        Path.home() / ".cache" / "modelscope" / "hub" / "iic" / "nlp_corom_sentence-embedding_chinese-base",
-        Path(os.getenv("MULTIPERSONAL_LAB_ROOT") or os.getenv("QQCHAT_LAB_ROOT", "")) / "models" / "paraphrase-multilingual-MiniLM-L12-v2",
-    ]
-
-    @classmethod
-    def _find_local_embedding_model(cls) -> str:
-        env_path = os.getenv("EMBEDDING_MODEL_PATH", "")
-        if env_path and Path(env_path).exists():
-            return env_path
-        for candidate in cls._LOCAL_MODEL_SEARCH_PATHS:
-            if candidate.exists() and (candidate / "config.json").exists():
-                return str(candidate)
-        if os.getenv("ALLOW_REMOTE_EMBEDDING_MODEL", "false").lower() in {"1", "true", "yes", "on"}:
-            return "paraphrase-multilingual-MiniLM-L12-v2"
-        raise FileNotFoundError(
-            "Embedding model not found locally. Set EMBEDDING_MODEL_PATH or download "
-            "paraphrase-multilingual-MiniLM-L12-v2; set ALLOW_REMOTE_EMBEDDING_MODEL=true "
-            "only when outbound HuggingFace access is available."
-        )
 
     def __init__(self, db_path: str = "data/vector_db", index_config: Optional[IndexConfig] = None):
         """初始化向量数据库。
@@ -254,7 +225,7 @@ class VectorDatabase:
                 from sentence_transformers import SentenceTransformer
                 logger.info("正在加载向量嵌入模型...")
                 self._device = "cuda" if self._use_gpu else "cpu"
-                model_path = self._find_local_embedding_model()
+                model_path = resolve_local_model_path()
                 logger.info(f"使用嵌入模型路径: {model_path}")
                 try:
                     self._model = SentenceTransformer(model_path, device=self._device)

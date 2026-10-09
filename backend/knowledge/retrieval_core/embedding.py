@@ -29,8 +29,6 @@ logger = logging.getLogger(__name__)
 DEFAULT_EMBEDDING_MODEL_ID = "paraphrase-multilingual-MiniLM-L12-v2"
 DEFAULT_EMBEDDING_DIM = 384
 
-_HUB_CACHE_NAME = "models--sentence-transformers--paraphrase-multilingual-MiniLM-L12-v2"
-
 _LOCAL_MODEL_SEARCH_PATHS: list[Path] = [
     # backend/RAG、backend/models（与现有 vector_db 约定一致）
     Path(__file__).resolve().parents[2] / "RAG" / DEFAULT_EMBEDDING_MODEL_ID,
@@ -50,13 +48,14 @@ def resolve_local_model_path(model_id: str = DEFAULT_EMBEDDING_MODEL_ID) -> str:
     显式允许时返回模型名（联网加载），否则抛错。
     """
     env_path = os.getenv("EMBEDDING_MODEL_PATH", "").strip()
-    if env_path and Path(env_path).exists():
+    if env_path:
+        if not Path(env_path).is_dir() or not (Path(env_path) / "config.json").is_file():
+            raise EmbeddingModelError("EMBEDDING_MODEL_PATH 无效：请配置包含 config.json 的模型目录")
         return env_path
 
     hub_root = Path.home() / ".cache" / "huggingface" / "hub"
-    candidate_hub = hub_root / f"models--sentence-transformers--{model_id.replace('/', '--')}"
-    if not candidate_hub.exists():
-        candidate_hub = hub_root / _HUB_CACHE_NAME
+    hub_id = model_id if "/" in model_id else f"sentence-transformers/{model_id}"
+    candidate_hub = hub_root / ("models--" + hub_id.replace("/", "--"))
     if candidate_hub.exists():
         snapshots = candidate_hub / "snapshots"
         if snapshots.exists():
@@ -66,9 +65,14 @@ def resolve_local_model_path(model_id: str = DEFAULT_EMBEDDING_MODEL_ID) -> str:
                 ):
                     return str(snapshot)
 
-    for candidate in _LOCAL_MODEL_SEARCH_PATHS:
-        if candidate.exists() and (candidate / "config.json").exists():
-            return str(candidate)
+    if model_id in {DEFAULT_EMBEDDING_MODEL_ID, f"sentence-transformers/{DEFAULT_EMBEDDING_MODEL_ID}"}:
+        candidates = list(_LOCAL_MODEL_SEARCH_PATHS)
+        lab_root = os.getenv("MULTIPERSONAL_LAB_ROOT") or os.getenv("QQCHAT_LAB_ROOT")
+        if lab_root:
+            candidates.append(Path(lab_root) / "models" / DEFAULT_EMBEDDING_MODEL_ID)
+        for candidate in candidates:
+            if candidate.is_dir() and (candidate / "config.json").is_file():
+                return str(candidate)
 
     if os.getenv("ALLOW_REMOTE_EMBEDDING_MODEL", "false").strip().lower() in {"1", "true", "yes", "on"}:
         return model_id
