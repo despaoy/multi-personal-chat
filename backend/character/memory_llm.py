@@ -1705,9 +1705,7 @@ class MemoryEnrichmentScheduler:
         if mode == "hot":
             # 先提交同一 scope 已缓冲的旧事实，保证后续纠错不会越过它。
             self._flush_scope(scope_key)
-            if not self._enqueue((job,)):
-                self._remember_schedule_skip("queue_full")
-                return False
+            self._enqueue((job,))
             self._last_outcome = "queued_hot"
             return True
 
@@ -1745,17 +1743,11 @@ class MemoryEnrichmentScheduler:
         except asyncio.TimeoutError:
             return {'status': 'pending', 'accepted': 0, 'persisted': 0}
 
-    def _enqueue(self, jobs: tuple[_MemoryJob, ...]) -> bool:
-        if not jobs:
-            return True
+    def _enqueue(self, jobs: tuple[_MemoryJob, ...]) -> None:
+        # Admission bounds total jobs; nonempty batches cannot exhaust this queue.
         self._ensure_worker()
-        try:
-            self._queue.put_nowait(jobs)
-            self._queued_jobs += len(jobs)
-            return True
-        except asyncio.QueueFull:
-            logger.warning("后台记忆判断队列已满，本批次跳过")
-            return False
+        self._queue.put_nowait(jobs)
+        self._queued_jobs += len(jobs)
 
     def _flush_scope(self, scope_key: tuple[Any, ...]) -> None:
         timer = self._idle_tasks.pop(scope_key, None)
@@ -1763,13 +1755,8 @@ class MemoryEnrichmentScheduler:
         if timer is not None and timer is not current:
             timer.cancel()
         jobs = tuple(self._pending.pop(scope_key, ()))
-        if jobs and not self._enqueue(jobs):
-            self._skipped += len(jobs)
-            self._last_outcome = "skipped"
-            for job in jobs:
-                self._recent_results.append(
-                    {"source_message_id": job.source_message_id or "", "status": "skipped", "reason": "queue_full"}
-                )
+        if jobs:
+            self._enqueue(jobs)
 
     async def _flush_after_idle(self, scope_key: tuple[Any, ...]) -> None:
         try:
