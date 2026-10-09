@@ -9,6 +9,7 @@ import copy
 import hashlib
 import json
 import logging
+import math
 import os
 import re
 import time
@@ -507,11 +508,15 @@ class RAGHelper:
     @staticmethod
     def _absolute_score(result: dict[str, Any]) -> float:
         """Return a cross-query comparable score instead of per-result-list normalization."""
-        value = result.get("score", result.get("fused_score", result.get("final_score", 0.0)))
+        value = result.get("score", result.get("fused_score", result.get("final_score")))
+        message = "RAG retrieval score must be a finite number"
         try:
-            return max(0.0, min(1.0, float(value)))
-        except (TypeError, ValueError):
-            return 0.0
+            score = float(value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(message) from exc
+        if isinstance(value, bool) or not math.isfinite(score):
+            raise ValueError(message)
+        return max(0.0, min(1.0, score))
 
     def compute_confidence(self, results: list[dict[str, Any]]) -> float:
         """Estimate confidence from absolute retrieval scores, not min-max rank scores."""
