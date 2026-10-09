@@ -63,6 +63,8 @@ def _load_bundle(root: Path) -> tuple[list[KnowledgeIndexDocument], np.ndarray, 
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     if vectors.shape != (len(documents), 384):
         raise ValueError(f"多粒度索引数量或维度异常: {root} {vectors.shape} docs={len(documents)}")
+    if not np.isfinite(vectors).all():
+        raise ValueError(f"Non-finite character index vectors: {root}")
     return documents, vectors, manifest
 
 

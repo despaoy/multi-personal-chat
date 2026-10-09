@@ -30,7 +30,7 @@ def prepared(tmp_path, monkeypatch):
 
 
 @pytest.mark.parametrize('entry', ['is_available', 'stats', 'retrieve'])
-@pytest.mark.parametrize('damage', ['missing', 'json', 'dimensions'])
+@pytest.mark.parametrize('damage', ['missing', 'json', 'dimensions', 'nan', 'inf', '-inf'])
 def test_broken_index_raises_instead_of_unavailable_or_no_match(prepared, entry, damage):
     root = prepared.index_root / 'card_index'
     if damage == 'missing':
@@ -39,8 +39,13 @@ def test_broken_index_raises_instead_of_unavailable_or_no_match(prepared, entry,
     elif damage == 'json':
         (root / 'documents.jsonl').write_text('{broken', encoding='utf-8')
         error = json.JSONDecodeError
-    else:
+    elif damage == 'dimensions':
         np.save(root / 'vectors.npy', np.zeros((1, 2), dtype=np.float32))
+        error = ValueError
+    else:
+        vectors = np.eye(1, 384, dtype=np.float32)
+        vectors[0, 0] = float(damage)
+        np.save(root / 'vectors.npy', vectors)
         error = ValueError
     with pytest.raises(error):
         prepared.retrieve_with_citations(QUERY) if entry == 'retrieve' else getattr(prepared, entry)()
