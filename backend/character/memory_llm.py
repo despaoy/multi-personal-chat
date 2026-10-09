@@ -2033,10 +2033,10 @@ class MemoryEnrichmentScheduler:
             deferred = deferred_source_start(proposal.evidence, observed_at=job.observed_at)
             if deferred is None:
                 deferred = deferred_evidence_start(
-                    proposal.evidence, getattr(job, "message", ""), observed_at=job.observed_at
+                    proposal.evidence, job.message, observed_at=job.observed_at
                 )
             if (deferred is None and semantic_operation == "ERASE"
-                    and _future_only_erasure_request(getattr(job, "message", ""), observed_at=job.observed_at)):
+                    and _future_only_erasure_request(job.message, observed_at=job.observed_at)):
                 # A contiguous quoted command can omit its preceding date.
                 # Whole-message future authority still forbids deleting now.
                 deferred = deferred_source_start(job.message, observed_at=job.observed_at)
@@ -2058,14 +2058,14 @@ class MemoryEnrichmentScheduler:
                 **({"protected_memory_keys": proposal.protected_memory_keys}
                    if proposal.protected_memory_keys else {}),
             )
-            if int(deleted or 0) > 0:
+            if deleted > 0:
                 self._erased += 1
                 return "erased"
             return "no_change"
 
         item = proposal.memory
         if item is None:
-            return "no_change"
+            raise ValueError("write proposal must contain memory")
         observed_at = job.observed_at.isoformat()
         memory = MemoryItem(
             memory_id="",

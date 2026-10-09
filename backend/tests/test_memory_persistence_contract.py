@@ -43,7 +43,7 @@ async def test_writer_reports_only_explicit_persistence_results(record):
     if record != 'missing-interface':
         repo.append_claim = AsyncMock(return_value=record)
     completion = SimpleNamespace(close=AsyncMock(), complete=AsyncMock(return_value=json.dumps({'memories': [
-        dict(kind='study_stage', value='大三', evidence='我今年大三', confidence=.99, operation='ADD')]})))
+        dict(kind='study_stage', value='大三', evidence='我今年大三', confidence=.99, operation='ADD', attributed_to='user')]})))
     worker = MemoryEnrichmentScheduler(config=MemoryLlmConfig(True, 'http://unused', 'fixture'), completion=completion)
     try:
         receipt = await worker.schedule_and_wait(repository=repo, character_id='role', user_scope=SCOPE,

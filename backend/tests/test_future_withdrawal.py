@@ -52,6 +52,7 @@ async def writer(tmp_path, operation, source, with_qualifier=True):
     assert len(proposals) == 1
     scheduler = MemoryEnrichmentScheduler(config=MemoryLlmConfig(True, "unit-only", "unit-only"), completion=None)
     job = SimpleNamespace(
+        message=source,
         repository=repo,
         character_id="unit-character",
         user_scope=SCOPE,

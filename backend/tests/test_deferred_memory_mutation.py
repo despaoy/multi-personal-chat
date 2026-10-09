@@ -77,6 +77,7 @@ async def setup_writer(tmp_path, evidence, relation="SUPERSEDE", proposed_from="
     assert len(proposals) == 1
     scheduler = MemoryEnrichmentScheduler(config=MemoryLlmConfig(True, "unit-only", "unit-only"), completion=None)
     job = SimpleNamespace(
+        message=evidence,
         repository=repo,
         character_id="unit-character",
         user_scope=SCOPE,
