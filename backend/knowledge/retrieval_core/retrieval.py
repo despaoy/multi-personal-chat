@@ -13,7 +13,6 @@
 
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -22,9 +21,6 @@ if TYPE_CHECKING:
     from .embedding import EmbeddingProvider
     from .index import DomainIndex
     from .query import QueryAnalysis
-
-logger = logging.getLogger(__name__)
-
 
 @dataclass
 class RetrievalCandidate:
@@ -195,11 +191,7 @@ class HybridRetriever:
         threshold: float = 0.0,
     ) -> dict[int, tuple]:
         best: dict[int, tuple] = {}
-        try:
-            query_vector = self.embedding_provider.embed_query(analysis.original_query)
-        except Exception as e:  # noqa: BLE001 - 向量通道失败降级为稀疏召回
-            logger.warning("向量通道失败（降级 sparse-only）: %s", e)
-            return best
+        query_vector = self.embedding_provider.embed_query(analysis.original_query)
         for rank0, (row, score) in enumerate(self.index.search_vector(query_vector, recall_k, threshold=threshold)):
             doc = self.index.get_document(row)
             if doc is None or not match_metadata_filters(doc, filters):
