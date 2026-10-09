@@ -1391,125 +1391,33 @@ async def search_knowledge(
                 logger.warning("未找到知识库「%s」，返回空结果（不退化为全库搜索）", request.knowledgeBaseName)
                 return _knowledge_search_response(query, [], "empty")
 
-        # 首次搜索时确保向量索引已构建（同步操作，放线程池避免阻塞事件循环）
-        # _ensure_vector_index 返回 False 表示重建失败（落盘失败、数量不一致、
-        # 并发 CRUD 等）。此时不能继续 RAG/向量检索，否则会从部分重建或过期
-        # 索引返回结果。降级到 DB 关键词检索，并记录结构化告警。
-        index_ready = await asyncio.to_thread(_ensure_vector_index)
+        if not await asyncio.to_thread(_ensure_vector_index):
+            raise RuntimeError("Knowledge index rebuild did not complete")
 
-        # 优先使用 RAGHelper 完整管线（retrieve_context 是同步阻塞的 CPU 密集型操作）
-        if index_ready:
-            try:
-                from knowledge.rag_helper import get_rag_helper
+        from knowledge.rag_helper import get_rag_helper
 
-                rag = get_rag_helper()
-                results = await asyncio.to_thread(rag.retrieve_context, query, top_k, True, filters, None)
-                if results:
-                    formatted = []
-                    for r in results:
-                        formatted.append(
-                            {
-                                "documentId": r.get("id"),
-                                "documentTitle": r.get("title", ""),
-                                "chunkIndex": r.get("chunk_index", 0),
-                                "content": r.get("content", ""),
-                                "score": r.get("normalized_score", r.get("score", 0)),
-                                "searchType": "rag_pipeline",
-                            }
-                        )
-                    return _knowledge_search_response(query, formatted, "evidence")
-            except Exception as e:
-                logger.warning("通用证据检索失败，回退向量检索: %s", e)
-        else:
-            logger.warning("vector_index_not_ready action=degrade_to_keyword reason=rebuild_returned_false")
-
-        # 回退：向量检索（hybrid_search 同步阻塞，放线程池）
-        if index_ready and VECTOR_DB_AVAILABLE:
-            try:
-                from app.config import get_vector_db
-
-                vector_db = get_vector_db()
-                vector_results = await asyncio.to_thread(
-                    lambda: vector_db.hybrid_search(query, top_k=top_k, filters=filters)
-                )
-                if vector_results:
-                    formatted = []
-                    for r in vector_results:
-                        formatted.append(
-                            {
-                                "documentId": r.get("id"),
-                                "documentTitle": r.get("title", ""),
-                                "chunkIndex": r.get("chunk_index", r.get("chunk_id", 0)),
-                                "content": r.get("content", ""),
-                                "score": r.get("score", 0),
-                                "searchType": "hybrid",
-                            }
-                        )
-                    return _knowledge_search_response(query, formatted, "hybrid")
-            except Exception as ve:
-                logger.warning("向量检索失败: %s", ve)
-
-        # 最终回退：关键词匹配（支持分词匹配，提高召回率）
-        # 关键词回退是同步阻塞的 CPU/IO 密集型操作（全库扫描），在 async
-        # 接口内直接执行会阻塞事件循环。放到线程池执行。
-        logger.info("回退到关键词匹配")
-
-        def _keyword_fallback():
-            query_lower = query.lower()
-            # 提取查询中的关键词（中文单字+英文单词）
-            import heapq
-            import re as _re
-
-            query_keywords = _re.findall(r"[\u4e00-\u9fff]|[a-zA-Z]+", query_lower)
-            # 关键词降级必须继承知识库过滤条件，否则会在用户指定 knowledgeBaseName
-            # 时返回其他知识库的内容。target_kb_id 来自上层构造的 filters。
-            target_kb_id = filters.get("knowledge_base_id") if filters else None
-            # 使用 JOIN 分批读取 chunk + document，避免 N+1 查询。
-            # 使用大小受限的 top-k 堆，扫描完整集合但内存占用恒定为 O(top_k)。
-            top_heap: list[tuple[float, int, dict]] = []
-            seq = 0  # 序号作为 tie-breaker，避免 dict 比较
-            for row in db.iter_chunks_with_document(batch_size=500):
-                doc_title = row.get("doc_title")
-                if doc_title is None:
-                    continue  # 孤儿 chunk
-                # 继承上层知识库过滤条件，避免降级路径泄漏其他知识库内容
-                if target_kb_id is not None and row.get("doc_kb_id") != target_kb_id:
-                    continue
-                content = row["content"].lower()
-                # 完整匹配
-                score = content.count(query_lower) * 0.5
-                if query_lower in doc_title.lower():
-                    score += 1.0
-                # 分词匹配：每个关键词命中加分
-                for kw in query_keywords:
-                    if len(kw) >= 2 or (len(kw) == 1 and "\u4e00" <= kw <= "\u9fff"):
-                        score += content.count(kw) * 0.2
-                        if kw in doc_title.lower():
-                            score += 0.5
-                if score > 0:
-                    seq += 1
-                    item = {
-                        "documentId": row["documentId"],
-                        "documentTitle": doc_title,
-                        "chunkIndex": row["chunkIndex"],
-                        "content": row["content"],
-                        "score": round(score, 2),
-                        "searchType": "keyword",
-                    }
-                    # 维护 top_k 堆：堆大小超过 top_k 时弹出最小元素
-                    if len(top_heap) < top_k:
-                        heapq.heappush(top_heap, (item["score"], seq, item))
-                    else:
-                        heapq.heappushpop(top_heap, (item["score"], seq, item))
-            # 堆中元素按分数降序输出
-            top_heap.sort(key=lambda x: x[0], reverse=True)
-            results = [item for _, _, item in top_heap]
-            return _knowledge_search_response(query, results, "keyword")
-
-        return await asyncio.to_thread(_keyword_fallback)
-    except Exception as e:
-        logger.exception("搜索知识库失败: %s", e)
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        results = await asyncio.to_thread(
+            get_rag_helper().retrieve_context, query, top_k=top_k,
+            enable_rerank=True, filters=filters, use_cache=False,
+        )
+        formatted = [
+            {
+                "documentId": row.get("id"),
+                "documentTitle": row.get("title", ""),
+                "chunkIndex": row.get("chunk_index", 0),
+                "content": row.get("content", ""),
+                "score": row.get("normalized_score", row.get("score", 0)),
+                "searchType": "rag_pipeline",
+            }
+            for row in results
+        ]
+        return _knowledge_search_response(query, formatted, "evidence" if formatted else "empty")
+    except Exception as exc:
+        logger.error("知识库搜索失败: %s", type(exc).__name__)
+        raise HTTPException(
+            status_code=503,
+            detail="知识库检索未完成，请检查索引、数据库及检索模型后重试",
+        ) from exc
 
 
 @router.get("/api/knowledge/stats")

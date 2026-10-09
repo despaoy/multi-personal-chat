@@ -134,10 +134,11 @@ class TestPaginationTotalCount:
         """
         from fastapi import FastAPI
         from fastapi.testclient import TestClient
+
+        from api import evaluation, experiments, retrieval_eval
         from app.dependencies import get_current_admin, get_current_user
         from db import adapter as adapter_module
         from db.database import SQLiteDB
-        from api import experiments, evaluation, retrieval_eval
 
         test_db = SQLiteDB(tmp_path / "api_test.db")
         # Patch the module-level db object used by routers
@@ -428,6 +429,7 @@ class TestIterChunksWithDocument:
         """Chunks whose document was deleted (doc_title=None) are returned
         so the caller can skip them."""
         import sqlite3
+
         from db.database import SQLiteDB
         db = SQLiteDB(tmp_path / "orphan.db")
 
@@ -495,7 +497,9 @@ class TestVectorRebuildStatus:
         original_db = self._patch_kmod_db(kmod, db)
         try:
             from api.knowledge import (
-                _VECTOR_REBUILD_STATUS_KEY, _read_rebuild_status, _write_rebuild_status,
+                _VECTOR_REBUILD_STATUS_KEY,
+                _read_rebuild_status,
+                _write_rebuild_status,
             )
 
             # Initially empty
@@ -553,7 +557,7 @@ class TestVectorRebuildStatus:
         db = self._make_db(tmp_path)
         original_db = self._patch_kmod_db(kmod, db)
         try:
-            from api.knowledge import _mark_rebuild_dirty, _read_rebuild_status, _get_rebuild_revision
+            from api.knowledge import _get_rebuild_revision, _mark_rebuild_dirty, _read_rebuild_status
 
             rev_before = _get_rebuild_revision()
             _mark_rebuild_dirty()
@@ -596,6 +600,7 @@ class TestVectorRebuildStatus:
         """_get_expected_chunk_count uses INNER JOIN, so orphan chunks
         (whose document was deleted) don't cause permanent count mismatch."""
         import sqlite3
+
         from api import knowledge as kmod
         db = self._make_db(tmp_path)
         original_db = self._patch_kmod_db(kmod, db)
@@ -632,6 +637,7 @@ class TestVectorRebuildStatus:
         rebuild traversal. Otherwise orphans cause permanent fingerprint
         mismatch and repeated rebuilds."""
         import sqlite3
+
         from api import knowledge as kmod
         db = self._make_db(tmp_path)
         original_db = self._patch_kmod_db(kmod, db)
@@ -1133,6 +1139,7 @@ class TestEnsureVectorIndexEndToEnd:
         """
         import threading
         import time
+
         from api import knowledge as kmod
 
         db = self._make_db(tmp_path)
@@ -1251,65 +1258,26 @@ class TestEnsureVectorIndexEndToEnd:
             db.close_connection()
 
     @pytest.mark.asyncio
-    async def test_search_degrades_to_keyword_when_rebuild_fails(self, tmp_path, monkeypatch):
-        """When _ensure_vector_index() returns False, search_knowledge must
-        skip RAG and vector retrieval, falling through to DB keyword search.
+    async def test_search_rejects_incomplete_index(self, monkeypatch):
+        from unittest.mock import Mock
 
-        Verifies the Major fix: the return value of _ensure_vector_index()
-        is no longer ignored. A failing rebuild (disk error, concurrent CRUD,
-        count mismatch) must not serve results from a partial/stale index.
-        """
+        from fastapi import HTTPException
+
         from api import knowledge as kmod
         from db.schemas import KnowledgeSearchRequest
+        from knowledge import rag_helper
 
-        db = self._make_db(tmp_path)
-        original_db = kmod.db
-        kmod.db = db
-        kmod._vector_index_built = False
-
-        self._insert_doc_with_chunks(db, 1, "Doc1", ["hello world", "foo bar"])
-
-        # Force _ensure_vector_index to return False (rebuild failed)
         monkeypatch.setattr(kmod, "_ensure_vector_index", lambda: False)
-
-        # Track whether RAG/vector paths were attempted
-        rag_called = {"value": False}
-        original_get_rag = None
-        try:
-            from knowledge import rag_helper
-            original_get_rag = rag_helper.get_rag_helper
-            def tracking_get_rag_helper():
-                rag_called["value"] = True
-                raise AssertionError("RAG must not be called when rebuild failed")
-            monkeypatch.setattr(rag_helper, "get_rag_helper", tracking_get_rag_helper)
-        except ImportError:
-            pass  # rag_helper not available; RAG block will throw on import anyway
-
-        try:
-            request = KnowledgeSearchRequest(query="hello", topK=5)
-            response = await kmod.search_knowledge(request)
-
-            assert response["success"] is True
-            assert response["searchType"] == "keyword", (
-                f"must degrade to keyword when rebuild fails, got {response['searchType']}"
-            )
-            assert not rag_called["value"], "RAG must not be invoked when index is not ready"
-            # Keyword search should still find the matching chunk
-            assert len(response["results"]) > 0, "keyword fallback must return matching chunks"
-        finally:
-            kmod.db = original_db
-            db.close_connection()
+        factory = Mock(side_effect=AssertionError("incomplete index"))
+        monkeypatch.setattr(rag_helper, "get_rag_helper", factory)
+        with pytest.raises(HTTPException) as caught:
+            await kmod.search_knowledge(KnowledgeSearchRequest(query="hello", topK=5))
+        assert caught.value.status_code == 503
+        factory.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_keyword_fallback_respects_knowledge_base_filter(self, tmp_path, monkeypatch):
-        """When rebuild fails and search degrades to keyword, the
-        knowledgeBaseName filter must still be honored. Chunks from other
-        knowledge bases must NOT leak into results.
-
-        Two knowledge bases are created, each with a document containing
-        the query term. Without the filter, both would match. The filter
-        must restrict results to only the requested KB.
-        """
+    async def test_successful_search_respects_knowledge_base_filter(self, tmp_path, monkeypatch):
+        """Successful retrieval preserves the requested knowledge-base scope."""
         from api import knowledge as kmod
         from db.schemas import KnowledgeSearchRequest
 
@@ -1342,8 +1310,20 @@ class TestEnsureVectorIndexEndToEnd:
                 {"doc": doc_id, "content": "shared_term body"},
             )
 
-        # 强制重建失败，触发关键词降级
-        monkeypatch.setattr(kmod, "_ensure_vector_index", lambda: False)
+        monkeypatch.setattr(kmod, "_ensure_vector_index", lambda: True)
+        from types import SimpleNamespace
+
+        from knowledge import rag_helper
+
+        def retrieve(query, *, top_k, enable_rerank, filters, use_cache):
+            assert enable_rerank and not use_cache and filters is not None
+            return [
+                dict(id=row["documentId"], title=row["doc_title"], content=row["content"], score=.8)
+                for row in db.iter_chunks_with_document(batch_size=500)
+                if row["doc_kb_id"] == filters["knowledge_base_id"]
+            ][:top_k]
+
+        monkeypatch.setattr(rag_helper, "get_rag_helper", lambda: SimpleNamespace(retrieve_context=retrieve))
 
         try:
             # 指定 KB_ALPHA 过滤
@@ -1351,7 +1331,7 @@ class TestEnsureVectorIndexEndToEnd:
             response = await kmod.search_knowledge(request)
 
             assert response["success"] is True
-            assert response["searchType"] == "keyword"
+            assert response["searchType"] == "rag_pipeline"
             assert len(response["results"]) == 1, "must return exactly one chunk from KB_ALPHA"
             result = response["results"][0]
             assert result["documentTitle"] == "AlphaDoc", (
@@ -1438,15 +1418,17 @@ class TestSearchInputValidation:
     """
 
     def test_empty_query_rejected(self):
-        from db.schemas import KnowledgeSearchRequest
         from pydantic import ValidationError
+
+        from db.schemas import KnowledgeSearchRequest
 
         with pytest.raises(ValidationError):
             KnowledgeSearchRequest(query="")
 
     def test_whitespace_only_query_rejected(self):
-        from db.schemas import KnowledgeSearchRequest
         from pydantic import ValidationError
+
+        from db.schemas import KnowledgeSearchRequest
 
         # strip_whitespace=True 会在验证前去除首尾空白，纯空白变空字符串
         # 触发 min_length=1
@@ -1460,8 +1442,9 @@ class TestSearchInputValidation:
         assert req.query == "hello world", "leading/trailing whitespace must be stripped"
 
     def test_overlong_query_rejected(self):
-        from db.schemas import KnowledgeSearchRequest
         from pydantic import ValidationError
+
+        from db.schemas import KnowledgeSearchRequest
 
         with pytest.raises(ValidationError):
             KnowledgeSearchRequest(query="x" * 2001)
