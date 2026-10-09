@@ -12,6 +12,8 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from infra.environment import parse_unit_interval
+
 from .retrieval_core.tokenization import segment
 
 logger = logging.getLogger(__name__)
@@ -63,8 +65,10 @@ class CorrectiveRAG:
 
     def __init__(self, rag_helper, threshold: float = 0.3, max_retries: int = 1):
         self.rag_helper = rag_helper
-        self.threshold = threshold
-        self.max_retries = max(0, int(max_retries))
+        self.threshold = parse_unit_interval(threshold, "CorrectiveRAG.threshold")
+        if type(max_retries) is not int or max_retries < 0:
+            raise ValueError("CorrectiveRAG.max_retries must be a non-negative integer")
+        self.max_retries = max_retries
 
     def reformulate_query(self, query: str, top_results: list[dict[str, Any]]) -> str:
         """从 top 结果提取关键词，追加到原查询形成重写查询。"""
