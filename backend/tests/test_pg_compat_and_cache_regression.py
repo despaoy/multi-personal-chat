@@ -490,7 +490,7 @@ class TestVectorRebuildStatus:
         return original
 
     def test_status_round_trip(self, tmp_path):
-        """_write_rebuild_status / _read_rebuild_status round-trip correctly,
+        """Database status writes and API reads round-trip correctly,
         including fingerprint and revision fields."""
         from api import knowledge as kmod
         db = self._make_db(tmp_path)
@@ -499,20 +499,19 @@ class TestVectorRebuildStatus:
             from api.knowledge import (
                 _VECTOR_REBUILD_STATUS_KEY,
                 _read_rebuild_status,
-                _write_rebuild_status,
             )
 
             # Initially empty
             assert db.get_config_value(_VECTOR_REBUILD_STATUS_KEY, "") == ""
 
             # Write building (no fingerprint/revision)
-            _write_rebuild_status("building", 500)
+            db.set_config_value(_VECTOR_REBUILD_STATUS_KEY, "building:500")
             status, count, fp, rev = _read_rebuild_status()
             assert (status, count, fp, rev) == ("building", 500, "", -1)
 
             # Completion must match actual persisted revision authority.
             db.set_config_value(kmod._VECTOR_REBUILD_REVISION_KEY, "7")
-            assert _write_rebuild_status("complete", 500, "abc123def456", 7)
+            assert db.commit_knowledge_index_revision(7, 500, "abc123def456")
             status, count, fp, rev = _read_rebuild_status()
             assert (status, count, fp, rev) == ("complete", 500, "abc123def456", 7)
 
@@ -767,7 +766,7 @@ class TestEnsureVectorIndexEndToEnd:
 
         # Pre-write a stale complete:2:fakefp:0 — count matches but revision is stale
         # after database revision invalidation increments it
-        kmod._write_rebuild_status("complete", 2, "stale_fp", 0)
+        db.commit_knowledge_index_revision(0, 2, "stale_fp")
         db.mark_knowledge_index_dirty()
         kmod._invalidate_local_knowledge_index()
 
@@ -816,7 +815,7 @@ class TestEnsureVectorIndexEndToEnd:
 
         real_fp = kmod._compute_chunk_fingerprint()
         current_rev = kmod._get_rebuild_revision()
-        kmod._write_rebuild_status("complete", 2, real_fp, current_rev)
+        db.commit_knowledge_index_revision(current_rev, 2, real_fp)
 
         add_called = {"called": False}
         class MockVectorDB:
@@ -859,7 +858,7 @@ class TestEnsureVectorIndexEndToEnd:
         self._insert_doc_with_chunks(db, 1, "Doc1", ["original0", "original1"])
         fp_before = kmod._compute_chunk_fingerprint()
         current_rev = kmod._get_rebuild_revision()
-        kmod._write_rebuild_status("complete", 2, fp_before, current_rev)
+        db.commit_knowledge_index_revision(current_rev, 2, fp_before)
 
         # Update content WITHOUT database revision invalidation (revision unchanged)
         db.execute_sql(
@@ -990,7 +989,7 @@ class TestEnsureVectorIndexEndToEnd:
         self._insert_doc_with_chunks(db, 1, "Doc1", ["c0", "c1"])
         real_fp = kmod._compute_chunk_fingerprint()
         current_rev = kmod._get_rebuild_revision()
-        kmod._write_rebuild_status("complete", 2, real_fp, current_rev)
+        db.commit_knowledge_index_revision(current_rev, 2, real_fp)
 
         added_docs = {"count": 0}
         class MockVectorDB:
@@ -1088,7 +1087,7 @@ class TestEnsureVectorIndexEndToEnd:
         self._insert_doc_with_chunks(db, 1, "Doc1", ["c0", "c1"])
         real_fp = kmod._compute_chunk_fingerprint()
         current_rev = kmod._get_rebuild_revision()
-        kmod._write_rebuild_status("complete", 2, real_fp, current_rev)
+        db.commit_knowledge_index_revision(current_rev, 2, real_fp)
 
         # Patch _compute_chunk_fingerprint to simulate CRUD during fingerprint calc.
         # The real fingerprint is computed, then a CRUD is triggered (incrementing

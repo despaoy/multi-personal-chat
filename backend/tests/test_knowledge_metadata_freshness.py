@@ -28,8 +28,8 @@ def saved_document(tmp_path, monkeypatch):
     monkeypatch.setattr(knowledge, "db", database)
     monkeypatch.setattr(knowledge, "VECTOR_DB_AVAILABLE", False)
     monkeypatch.setattr(knowledge, "_vector_index_built", True)
-    knowledge._write_rebuild_status(
-        "complete", 1, knowledge._compute_chunk_fingerprint(), knowledge._get_rebuild_revision()
+    database.commit_knowledge_index_revision(
+        knowledge._get_rebuild_revision(), 1, knowledge._compute_chunk_fingerprint()
     )
     return database, row, new
 
@@ -68,12 +68,29 @@ async def test_combined_metadata_move_invalidates_once_with_full_original_source
 
 
 @pytest.mark.parametrize("change", [{}, dict(title="旧标题"), dict(category="草案"), dict(fileSize=123)])
-async def test_unchanged_indexed_metadata_does_not_rebuild_or_drop_evidence(saved_document, change):
+async def test_unchanged_indexed_metadata_does_not_rebuild_or_drop_evidence(saved_document, change, monkeypatch):
     database, row, new = saved_document
     original = database.get_knowledge_chunks(row["id"])
     revision = knowledge._get_rebuild_revision()
     await knowledge.update_knowledge_document(row["id"], KnowledgeDocumentUpdate(**change), dict(role="admin"))
-    assert knowledge._get_rebuild_revision() == revision and knowledge._vector_index_built
+    from threading import RLock
+    from unittest.mock import Mock
+
+    from knowledge import vector_db
+
+    names = {kb["id"]: kb["name"] for kb in database.get_knowledge_bases()}
+    metadata = [knowledge._vector_chunk_document(chunk, names) for chunk in database.iter_chunks_with_document()]
+    forbidden = Mock(side_effect=AssertionError("unchanged evidence must reuse the index"))
+    vector = SimpleNamespace(
+        _lock=RLock(), snapshot_validated=True, metadata=metadata, clear_cache=Mock(),
+        clear_all=forbidden, add_documents=forbidden,
+        get_stats=lambda: dict(total_documents=1, index_size=1, bm25_corpus_size=1),
+    )
+    monkeypatch.setattr(vector_db, "get_vector_db", lambda: vector)
+    assert knowledge._get_rebuild_revision() == revision
+    assert knowledge._ensure_vector_index() is True
+    forbidden.assert_not_called()
+    assert knowledge._vector_index_built
     assert database.get_knowledge_chunks(row["id"]) == original and knowledge._read_rebuild_status()[0] == "complete"
 
 

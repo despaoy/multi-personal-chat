@@ -991,20 +991,6 @@ def _read_rebuild_status() -> tuple[str, int, str, int]:
     return (status, count, fingerprint, revision)
 
 
-def _write_rebuild_status(status: str, count: int, fingerprint: str = "", revision: int = -1) -> bool:
-    """写入重建状态到 config 表。
-
-    fingerprint 和 revision 仅在 status='complete' 时有意义。
-    """
-    if status == "complete" and fingerprint:
-        return db.commit_knowledge_index_revision(revision, count, fingerprint)
-    elif fingerprint:
-        db.set_config_value(_VECTOR_REBUILD_STATUS_KEY, f"{status}:{count}:{fingerprint}")
-    else:
-        db.set_config_value(_VECTOR_REBUILD_STATUS_KEY, f"{status}:{count}")
-    return True
-
-
 def _invalidate_local_knowledge_index() -> None:
     """Reset local acceleration only after the durable document transaction."""
     global _vector_index_built, _vector_index_revision
@@ -1111,7 +1097,7 @@ def _ensure_vector_index():
                     if _get_rebuild_revision() != current_revision:
                         logger.warning("空库清理期间检测到并发 CRUD，不标记 complete，等待下次重建")
                         return False
-                    if not _write_rebuild_status("complete", 0, _EMPTY_FINGERPRINT, current_revision):
+                    if not db.commit_knowledge_index_revision(current_revision, 0, _EMPTY_FINGERPRINT):
                         return False
                     logger.info("向量索引已清空并标记 complete:0:empty:%s", current_revision)
                     _vector_index_revision = current_revision
@@ -1138,7 +1124,7 @@ def _ensure_vector_index():
                             logger.info("跳过检查期间检测到并发 CRUD，放弃跳过，进入重建")
                             # 落入下方重建分支：重新读取最新 revision
                         else:
-                            if not _write_rebuild_status("complete", expected_count, current_fp, current_revision):
+                            if not db.commit_knowledge_index_revision(current_revision, expected_count, current_fp):
                                 return False
                             logger.info(
                                 "向量索引已完整: %d 个文档（complete，数量+指纹+revision 匹配），跳过重建",
@@ -1173,7 +1159,7 @@ def _ensure_vector_index():
             # 顶部读取的 current_revision 可能已过期（跳过分支检测到并发 CRUD
             # 后落入此路径，或指纹计算期间发生 CRUD）。
             start_revision = _get_rebuild_revision()
-            _write_rebuild_status("building", expected_count)
+            db.set_config_value(_VECTOR_REBUILD_STATUS_KEY, f"building:{expected_count}")
             vector_db.clear_all()  # 失败时抛异常，状态保持 building
 
             # 使用 JOIN 分批读取 chunk + document，避免 N+1 查询。
@@ -1238,7 +1224,7 @@ def _ensure_vector_index():
                         final_revision,
                     )
                     return False
-                if not _write_rebuild_status("complete", total_chunks_indexed, final_fp, start_revision):
+                if not db.commit_knowledge_index_revision(start_revision, total_chunks_indexed, final_fp):
                     return False
                 logger.info(
                     "向量索引重建完成: %s 个 chunks（数量+指纹+revision CAS 校验通过，revision=%s）",
