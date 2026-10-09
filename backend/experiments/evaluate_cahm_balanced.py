@@ -39,6 +39,7 @@ from character.memory_llm import (  # noqa: E402
 from character.memory_service import (  # noqa: E402
     MIN_HYBRID_MEMORY_SCORE,
     CharacterMemoryService,
+    validate_retrieval_settings,
 )
 from character.models import UserScope  # noqa: E402
 from knowledge.retrieval_core.embedding import (  # noqa: E402
@@ -614,6 +615,8 @@ async def evaluate(
     relation_cases = [row for row in rows if str(row.get("task") or "").startswith("relation")]
     retrieval_cases = [row for row in rows if str(row.get("task") or "").startswith("retrieval")]
 
+    min_hybrid_score, candidate_limit = validate_retrieval_settings(
+        getattr(args, "min_hybrid_score", MIN_HYBRID_MEMORY_SCORE), getattr(args, "candidate_limit", 100))
     llm_config = _memory_llm_config_from_args(args)
     relation = await _evaluate_relations(relation_cases, llm_config, completion=memory_completion)
 
@@ -621,8 +624,6 @@ async def evaluate(
     # Fail explicitly before producing a report if the configured embedding is
     # unavailable.  Silent lexical fallback would mislabel the comparison.
     provider.embed_texts(["CAHM balanced evaluation warmup"])
-    min_hybrid_score = getattr(args, "min_hybrid_score", MIN_HYBRID_MEMORY_SCORE)
-    candidate_limit = getattr(args, "candidate_limit", 100)
     retrieval: dict[str, Any] = {}
     for variant in RETRIEVAL_VARIANTS:
         retrieval[variant.name] = await _evaluate_retrieval_variant(

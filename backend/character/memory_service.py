@@ -731,6 +731,13 @@ def _reciprocal_rank_fusion(
     return fused
 
 
+def validate_retrieval_settings(min_hybrid_score: float | None, candidate_limit: int | None) -> tuple[float, int | None]:
+    score = MIN_HYBRID_MEMORY_SCORE if min_hybrid_score is None else parse_unit_interval(min_hybrid_score, "min_hybrid_score")
+    if candidate_limit is not None and (type(candidate_limit) is not int or candidate_limit < 1):
+        raise ValueError("candidate_limit must be a positive integer or None")
+    return score, candidate_limit
+
+
 class CharacterMemoryService:
     """CAHM 长期记忆检索；可切换 lexical baseline 做消融。"""
 
@@ -755,15 +762,8 @@ class CharacterMemoryService:
         self._semantic_enabled = bool(semantic_enabled)
         self._embedding_provider = embedding_provider
         self._gate_enabled = bool(gate_enabled)
-        self._min_hybrid_score = (
-            MIN_HYBRID_MEMORY_SCORE if min_hybrid_score is None else parse_unit_interval(min_hybrid_score, "min_hybrid_score")
-        )
-        # Recency is a ranking signal, not a pre-retrieval exclusion rule.
-        # Keep an explicit limit only for callers running legacy ablations.
-        # Prompt and final selection budgets below remain unchanged.
-        if candidate_limit is not None and (type(candidate_limit) is not int or candidate_limit < 1):
-            raise ValueError("candidate_limit must be a positive integer or None")
-        self._candidate_limit = candidate_limit
+        # Recency affects ranking; only explicit ablations bound candidate reads.
+        self._min_hybrid_score, self._candidate_limit = validate_retrieval_settings(min_hybrid_score, candidate_limit)
         self._embedding_cache: OrderedDict[tuple[str, str, str], np.ndarray] = OrderedDict()
         self._embedding_lock = threading.Lock()
         self._include_pending = bool(include_pending)
