@@ -1,10 +1,10 @@
 """Shared reranker integration.
 
 优先接入项目现有 CrossEncoderReranker（bge-reranker-base，
-RERANKER_ENABLED 控制）；本地模型不可用时走确定性特征降级
+RERANKER_ENABLED 控制）；显式禁用时使用确定性特征排序
 （不吞掉精确关系/实体命中，不因长 evidence 获得优势，不改文档）。
 
-降级打分特征（全部通用规则，无作品特例）：
+确定性打分特征（全部通用规则，无作品特例）：
 - 实体重合率（查询实体 ∩ 文档实体）
 - 文档类型与查询意图匹配
 - 查询词在文档中的覆盖率（jieba 分词，停用词剔除）
@@ -15,7 +15,6 @@ RERANKER_ENABLED 控制）；本地模型不可用时走确定性特征降级
 
 from __future__ import annotations
 
-import logging
 import math
 import os
 import re
@@ -27,8 +26,6 @@ if TYPE_CHECKING:
 
     from .query import QueryAnalysis
     from .retrieval import RetrievalCandidate
-
-logger = logging.getLogger(__name__)
 
 # 查询词覆盖计算用停用词（与 corrective_rag 约定一致的通用词表）
 _STOPWORDS = {
@@ -129,7 +126,7 @@ def _tokenize_query_terms(query: str, excluded_terms: set[str] | None = None) ->
 
 
 class DeterministicReranker:
-    """无模型降级重排：确定性特征打分，稳定排序。"""
+    """显式无模型重排：确定性特征打分，稳定排序。"""
 
     def rerank(
         self,
@@ -210,7 +207,7 @@ class DeterministicReranker:
 
 
 class PipelineReranker:
-    """重排门面：CrossEncoder 可用则用之，否则确定性降级。"""
+    """重排门面：按配置选择模型或确定性重排，模型失败直接上报。"""
 
     def __init__(
         self,
@@ -225,49 +222,19 @@ class PipelineReranker:
         # cross_encoder 可注入（测试）；None 时按环境变量惰性获取现有单例
         self._cross_encoder = cross_encoder
         self._cross_encoder_enabled = cross_encoder_enabled
-        self._cross_encoder_unavailable = False
-        self._last_used_cross_encoder = False
         self.deterministic = DeterministicReranker()
-
-    @property
-    def uses_cross_encoder(self) -> bool:
-        """最近一次 rerank 是否实际使用了 CrossEncoder（logit 分数语义）。"""
-        return self._last_used_cross_encoder
 
     def _resolve_cross_encoder(self) -> Any | None:
         if self._cross_encoder is not None:
             return self._cross_encoder
-        if self._cross_encoder_unavailable:
-            return None
         enabled = self._cross_encoder_enabled
         if enabled is None:
             enabled = _env_flag("RERANKER_ENABLED", "false")
         if not enabled:
             return None
-        try:
-            from knowledge.reranker import get_reranker
+        from knowledge.reranker import get_reranker
 
-            encoder = get_reranker()
-            # 探测一次模型可用性（加载失败时 rerank 返回原始顺序）
-            # CrossEncoderReranker 对单候选会直接返回且不加载模型，
-            # 因此探针必须至少包含两项，才能确认真实模型分数可用。
-            probe = encoder.rerank(
-                "probe",
-                [
-                    {"id": "probe_relevant", "title": "relevant", "content": "probe relevant"},
-                    {"id": "probe_other", "title": "other", "content": "unrelated"},
-                ],
-                top_k=1,
-            )
-            if probe and "rerank_score" not in probe[0]:
-                self._cross_encoder_unavailable = True
-                logger.info("CrossEncoder 模型不可用，使用确定性降级重排")
-                return None
-            return encoder
-        except Exception as e:  # noqa: BLE001 - 任何失败都走降级
-            self._cross_encoder_unavailable = True
-            logger.info("CrossEncoder 初始化失败，使用确定性降级重排: %s", e)
-            return None
+        return get_reranker()
 
     def rerank(
         self,
@@ -277,7 +244,6 @@ class PipelineReranker:
     ) -> list[RetrievalCandidate]:
         """重排候选：输出稳定排序，保留原始分数与来源，不修改文档内容。"""
         if not candidates or top_k <= 0:
-            self._last_used_cross_encoder = False
             return []
 
         # Scores and method diagnostics are request-local; never mutate recalled
@@ -286,14 +252,8 @@ class PipelineReranker:
 
         encoder = self._resolve_cross_encoder()
         if encoder is not None:
-            try:
-                result = self._cross_encoder_rerank(analysis, candidates, top_k, encoder)
-                self._last_used_cross_encoder = True
-                return result
-            except Exception as e:  # noqa: BLE001
-                logger.warning("CrossEncoder 重排失败，降级确定性重排: %s", e)
+            return self._cross_encoder_rerank(analysis, candidates, top_k, encoder)
 
-        self._last_used_cross_encoder = False
         scored = self.deterministic.rerank(analysis, candidates)
         reranked: list[RetrievalCandidate] = []
         for candidate, rerank_score in scored[:top_k]:
@@ -323,7 +283,6 @@ class PipelineReranker:
         if not reranked_dicts:
             raise RuntimeError("CrossEncoder 返回空结果")
         if "rerank_score" not in reranked_dicts[0]:
-            # 模型未真正加载（原始顺序回退）→ 走确定性降级
             raise RuntimeError("CrossEncoder 未加载模型（原始顺序回退）")
         by_id = {candidate.document.id: candidate for candidate in candidates}
         ordered: list[RetrievalCandidate] = []

@@ -2,11 +2,12 @@
 Cross-Encoder重排模块 - 优化版
 基于BGE-Reranker模型的文档精排模块，作为RAG检索的第二阶段，
 对粗排召回的候选文档进行精确的相关性打分和排序。
-改进：分数归一化、模型预热、批量优化、降级机制、GPU显存管理、
+改进：分数归一化、模型预热、批量优化、GPU显存管理、
 默认离线加载（本地模型目录优先，未显式开启下载时不联网）、输入候选保护
 """
 
 import logging
+import math
 import os
 import time
 from dataclasses import dataclass, field
@@ -40,7 +41,6 @@ class RerankConfig:
     enable_quantization: bool = False
     warmup_on_init: bool = False
     score_normalize: bool = True
-    fallback_to_original: bool = True
     # 默认离线：仅当显式设置 RERANKER_ALLOW_DOWNLOAD=true 时才允许联网下载
     allow_download: bool = field(default_factory=lambda: _env_flag("RERANKER_ALLOW_DOWNLOAD"))
 
@@ -54,8 +54,8 @@ class RerankConfig:
 class CrossEncoderReranker:
     """Cross-Encoder重排器，使用BGE-Reranker-Base模型对候选文档进行精细化相关性评分。
 
-    支持4bit量化、模型预热、GPU/CPU自动切换、分数归一化和降级回退（模型加载失败时返回原始排序）。
-    默认离线加载本地模型目录；加载失败时记录原因，且同一实例不会重复尝试同一失败路径。
+    支持4bit量化、模型预热、GPU/CPU自动切换、分数归一化。
+    默认离线加载本地模型目录；加载或推理失败直接抛出异常。
     """
 
     def __init__(self, config: RerankConfig | None = None):
@@ -69,7 +69,6 @@ class CrossEncoderReranker:
         self.tokenizer = None
         self.model = None
         self._model_loaded = False
-        self._load_failed = False
         self._warmup_done = False
 
         # GPU不可用时立即回退CPU，避免后续加载/推理走CUDA专属路径
@@ -106,11 +105,6 @@ class CrossEncoderReranker:
     def _load_model(self) -> bool:
         if self._model_loaded:
             return True
-        if self._load_failed:
-            # 该路径此前已加载失败，不再重复尝试，直接走fallback
-            logger.debug(f"模型此前加载失败，跳过重复加载: {self.config.model_name}")
-            return False
-
         try:
             logger.info(
                 f"正在加载Cross-Encoder模型: {self.config.model_name} (允许联网下载={self.config.allow_download})"
@@ -138,11 +132,9 @@ class CrossEncoderReranker:
                     last_error = e
                     self.tokenizer = None
                     self.model = None
-                    logger.warning(f"从路径加载Cross-Encoder模型失败: {path}: {e}")
 
             if self.model is None or self.tokenizer is None:
-                reason = last_error or "未找到可用的模型路径"
-                raise RuntimeError(f"所有候选路径均加载失败: {reason}")
+                raise RuntimeError("CrossEncoder 模型加载失败，请检查 RERANKER_MODEL_PATH 和本地模型文件") from last_error
 
             self.model.to(self.device)
             self.model.eval()
@@ -150,7 +142,6 @@ class CrossEncoderReranker:
             for param in self.model.parameters():
                 param.requires_grad = False
 
-            self._model_loaded = True
             load_time = time.time() - start_time
 
             model_size = sum(p.numel() for p in self.model.parameters())
@@ -166,40 +157,37 @@ class CrossEncoderReranker:
             if self.config.warmup_on_init:
                 self._warmup()
 
+            self._model_loaded = True
             return True
 
-        except Exception as e:
-            self._load_failed = True
+        except Exception:
             self.tokenizer = None
             self.model = None
-            logger.error(f"加载Cross-Encoder模型失败（后续rerank调用不再重试，按fallback配置降级）: {e}")
-            return False
+            raise
 
     def _warmup(self):
         if self._warmup_done:
             return
 
-        try:
-            logger.info("Cross-Encoder模型预热中...")
-            dummy_input = self.tokenizer(
-                "预热查询",
-                "预热文档内容",
-                truncation=True,
-                padding=True,
-                max_length=self.config.max_length,
-                return_tensors="pt",
-            ).to(self.device)
+        logger.info("Cross-Encoder模型预热中...")
+        dummy_input = self.tokenizer(
+            "预热查询",
+            "预热文档内容",
+            truncation=True,
+            padding=True,
+            max_length=self.config.max_length,
+            return_tensors="pt",
+        ).to(self.device)
 
-            with torch.no_grad():
-                _ = self.model(**dummy_input)
+        with torch.no_grad():
+            _ = self.model(**dummy_input)
 
-            if self.device != "cpu":
-                torch.cuda.empty_cache()
+        if self.device != "cpu":
+            torch.cuda.empty_cache()
 
-            self._warmup_done = True
-            logger.info("Cross-Encoder模型预热完成")
-        except Exception as e:
-            logger.warning(f"模型预热失败: {e}")
+        self._warmup_done = True
+        logger.info("Cross-Encoder模型预热完成")
+
 
     def _normalize_scores(self, scores: list[float]) -> list[float]:
         if not scores or not self.config.score_normalize:
@@ -223,13 +211,11 @@ class CrossEncoderReranker:
         """对候选文档列表进行Cross-Encoder精确相关性重排。
 
         将查询与每个候选文档配对输入模型打分，支持批量推理以提升效率。
-        模型加载失败或推理异常时根据fallback_to_original配置决定降级行为
-        （返回原始排序或空结果）。默认离线加载本地模型目录。
+        默认离线加载本地模型目录，加载或推理失败直接抛出异常。
 
         不修改调用方传入的candidate字典：返回复制后的候选副本，
         并在副本上附加rerank_score与rerank_normalized_score字段。
-        空候选或单候选直接返回，不加载模型；content为空或类型非法的候选
-        会被跳过，不影响其余有效候选。
+        空候选直接返回；非空候选必须具有有效文本，并全部获得模型分数。
 
         Args:
             query: 用户查询文本
@@ -248,81 +234,59 @@ class CrossEncoderReranker:
 
         if not candidates:
             return []
-        if len(candidates) <= 1:
-            return [dict(candidate) if isinstance(candidate, dict) else candidate for candidate in candidates[:top_k]]
-
-        # 先过滤无效候选，避免无意义地加载模型
         candidate_texts = []
-        valid_candidates = []
-        for cand in candidates:
-            if not isinstance(cand, dict):
-                logger.warning("跳过非法候选（非字典类型），其余候选继续重排")
-                continue
-            content = cand.get("content")
-            if not isinstance(content, str) or not content:
-                logger.warning("跳过content为空或类型非法的候选，其余候选继续重排")
-                continue
-            candidate_texts.append(content)
-            valid_candidates.append(cand)
+        for candidate in candidates:
+            if not isinstance(candidate, dict) or not isinstance(candidate.get("content"), str) or not candidate["content"].strip():
+                raise ValueError("CrossEncoder candidate content must be non-empty text")
+            candidate_texts.append(candidate["content"])
 
-        if len(valid_candidates) <= 1:
-            return [dict(candidate) for candidate in valid_candidates[:top_k]]
+        self._load_model()
 
-        if not self._load_model():
-            if self.config.fallback_to_original:
-                logger.warning("模型加载失败，返回原始排序结果")
-                return [dict(candidate) for candidate in valid_candidates[:top_k]]
-            return []
+        start_time = time.time()
 
-        try:
-            start_time = time.time()
+        scores = []
+        batch_size = self.config.batch_size
 
-            scores = []
-            batch_size = self.config.batch_size
+        for i in range(0, len(candidates), batch_size):
+            batch_end = min(i + batch_size, len(candidates))
+            batch_texts = candidate_texts[i:batch_end]
 
-            for i in range(0, len(valid_candidates), batch_size):
-                batch_end = min(i + batch_size, len(valid_candidates))
-                batch_texts = candidate_texts[i:batch_end]
+            inputs = self.tokenizer(
+                [query] * len(batch_texts),
+                batch_texts,
+                truncation=True,
+                padding=True,
+                max_length=self.config.max_length,
+                return_tensors="pt",
+            ).to(self.device)
 
-                inputs = self.tokenizer(
-                    [query] * len(batch_texts),
-                    batch_texts,
-                    truncation=True,
-                    padding=True,
-                    max_length=self.config.max_length,
-                    return_tensors="pt",
-                ).to(self.device)
+            with torch.no_grad():
+                outputs = self.model(**inputs)
+                batch_scores = outputs.logits[:, 0].cpu().tolist()
+                scores.extend(batch_scores)
 
-                with torch.no_grad():
-                    outputs = self.model(**inputs)
-                    batch_scores = outputs.logits[:, 0].cpu().tolist()
-                    scores.extend(batch_scores)
+            if self.device != "cpu" and i + batch_size < len(candidates):
+                torch.cuda.empty_cache()
 
-                if self.device != "cpu" and i + batch_size < len(valid_candidates):
-                    torch.cuda.empty_cache()
+        if len(scores) != len(candidates) or not all(math.isfinite(score) for score in scores):
+            raise RuntimeError("CrossEncoder returned incomplete or non-finite scores")
+        normalized_scores = self._normalize_scores(scores)
 
-            normalized_scores = self._normalize_scores(scores)
+        sorted_pairs = sorted(zip(candidates, scores, normalized_scores), key=lambda x: x[1], reverse=True)
 
-            sorted_pairs = sorted(zip(valid_candidates, scores, normalized_scores), key=lambda x: x[1], reverse=True)
+        reranked = []
+        for doc, raw_score, norm_score in sorted_pairs[:top_k]:
+            # 复制候选字典，不原地修改调用方传入的原始数据
+            doc_copy = dict(doc)
+            doc_copy["rerank_score"] = raw_score
+            doc_copy["rerank_normalized_score"] = norm_score
+            reranked.append(doc_copy)
 
-            reranked = []
-            for doc, raw_score, norm_score in sorted_pairs[:top_k]:
-                # 复制候选字典，不原地修改调用方传入的原始数据
-                doc_copy = dict(doc)
-                doc_copy["rerank_score"] = raw_score
-                doc_copy["rerank_normalized_score"] = norm_score
-                reranked.append(doc_copy)
+        process_time = time.time() - start_time
+        logger.info(f"重排完成: {len(candidates)} -> {len(reranked)} 文档, 耗时={process_time:.3f}s")
 
-            process_time = time.time() - start_time
-            logger.info(f"重排完成: {len(candidates)} -> {len(reranked)} 文档, 耗时={process_time:.3f}s")
+        return reranked
 
-            return reranked
-
-        except Exception as e:
-            logger.error(f"重排失败: {e}")
-            if self.config.fallback_to_original:
-                return [dict(candidate) for candidate in valid_candidates[:top_k]]
-            return []
 
 
 _reranker_instance: CrossEncoderReranker | None = None

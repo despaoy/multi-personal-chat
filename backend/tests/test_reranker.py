@@ -2,11 +2,11 @@
 
 使用mock tokenizer/model验证（不加载真实模型）：
 - 默认离线加载（local_files_only=True），联网下载需显式opt-in
-- 模型缺失/加载失败时按fallback_to_original降级，且失败路径不重复尝试
+- 模型缺失、加载失败和推理异常必须报错；修复后允许下一次请求重新加载
 - 输入candidate不被原地修改，返回副本携带rerank_score/rerank_normalized_score
-- 空候选/单候选不加载模型
+- 空候选不加载模型；单候选仍取得真实分数
 - GPU不可用时回退CPU且不使用CUDA专属dtype，GPU路径保持原有dtype
-- 推理异常遵守fallback配置
+- 非法输入、非有限分数不能伪装成成功
 - top_k/batch_size/max_length参数边界校验
 """
 
@@ -130,7 +130,7 @@ def _force_gpu(monkeypatch):
     monkeypatch.setattr(torch.cuda, "device_count", lambda: 1)
 
 
-# ---------- 本地加载与fallback ----------
+# ---------- 本地加载与失败传播 ----------
 
 
 def test_local_load_is_offline_by_default(monkeypatch):
@@ -161,34 +161,29 @@ def test_download_requires_explicit_opt_in(monkeypatch):
         assert call["kwargs"]["local_files_only"] is False
 
 
-def test_missing_model_returns_original_order(monkeypatch):
+def test_missing_model_raises_with_original_cause(monkeypatch, caplog):
     _force_cpu(monkeypatch)
-    _install_fake_transformers(monkeypatch, load_error=OSError("本地模型文件不存在（离线模式）"))
-    candidates = _make_candidates()
+    error = OSError('private-model-load-detail')
+    _install_fake_transformers(monkeypatch, load_error=error)
+    reranker = CrossEncoderReranker(RerankConfig(model_name='missing-model'))
+    with pytest.raises(RuntimeError, match='RERANKER_MODEL_PATH') as caught:
+        reranker.rerank('查询', _make_candidates(), top_k=2)
+    assert caught.value.__cause__ is error
+    assert reranker.model is None and reranker.tokenizer is None
+    assert not reranker._model_loaded
+    assert 'private-model-load-detail' not in caplog.text
 
-    tolerant = CrossEncoderReranker(RerankConfig(model_name="missing-model", fallback_to_original=True))
-    result = tolerant.rerank("查询", candidates, top_k=2)
-    assert [c["id"] for c in result] == ["a", "b"]
-    assert all("rerank_score" not in c for c in result)
 
-    strict = CrossEncoderReranker(RerankConfig(model_name="missing-model", fallback_to_original=False))
-    assert strict.rerank("查询", candidates, top_k=2) == []
-
-
-def test_failed_path_not_retried(monkeypatch, tmp_path):
+def test_loading_can_recover_on_next_request(monkeypatch, tmp_path):
     _force_cpu(monkeypatch)
-    calls = _install_fake_transformers(monkeypatch, load_error=OSError("模型缺失"))
-    missing = str(tmp_path / "missing-model")  # 绝对路径：候选路径去重后仅1条
-
-    reranker = CrossEncoderReranker(RerankConfig(model_name=missing))
-    reranker.rerank("查询", _make_candidates())
-    reranker.rerank("查询", _make_candidates())
-
-    tokenizer_calls = [c for c in calls if c["kind"] == "tokenizer"]
-    model_calls = [c for c in calls if c["kind"] == "model"]
-    assert len(tokenizer_calls) == 1, "第二次rerank不应重复尝试加载失败的路径"
-    # tokenizer加载失败后同一路径不会继续尝试model加载
-    assert len(model_calls) == 0
+    calls = _install_fake_transformers(monkeypatch, load_error=OSError('missing model'))
+    reranker = CrossEncoderReranker(RerankConfig(model_name=str(tmp_path / 'model')))
+    with pytest.raises(RuntimeError):
+        reranker.rerank('查询', _make_candidates())
+    assert len(calls) == 1
+    _install_fake_transformers(monkeypatch, tokenizer=_FakeTokenizer(), model=_FakeModel())
+    assert len(reranker.rerank('查询', _make_candidates())) == 3
+    assert reranker._model_loaded
 
 
 # ---------- 输入保护与输出分数 ----------
@@ -225,41 +220,28 @@ def test_candidates_copied_not_mutated(monkeypatch):
     assert by_id["b"]["content"] == "乙文"
 
 
-def test_invalid_content_candidates_skipped(monkeypatch):
-    _force_cpu(monkeypatch)
-    model = _FakeModel(score_map={"甲文": 0.2, "乙文": 0.8})
-    _install_fake_transformers(monkeypatch, tokenizer=_FakeTokenizer(), model=model)
-
-    reranker = CrossEncoderReranker(RerankConfig(model_name="fake-model"))
-    candidates = [
-        {"id": "a", "content": "甲文"},
-        {"id": "empty", "content": ""},
-        {"id": "non-str", "content": 123},
-        {"id": "missing-content"},
-        {"id": "b", "content": "乙文"},
-    ]
-    result = reranker.rerank("查询", candidates, top_k=5)
-    assert [c["id"] for c in result] == ["b", "a"]
-
-    # 全部无效时不加载模型，直接返回空
-    all_invalid_reranker = CrossEncoderReranker(RerankConfig(model_name="fake-model"))
-    assert (
-        all_invalid_reranker.rerank("查询", [{"id": "x", "content": ""}, {"id": "y"}, {"id": "z", "content": None}])
-        == []
-    )
-    assert all_invalid_reranker._model_loaded is False
-
-
-def test_empty_or_single_candidates_skip_model_load(monkeypatch):
+@pytest.mark.parametrize('invalid', [None, {'content': ''}, {'content': '  '}, {'content': 123}, {}])
+def test_invalid_candidates_raise_before_loading(monkeypatch, invalid):
     _force_cpu(monkeypatch)
     calls = _install_fake_transformers(monkeypatch, tokenizer=_FakeTokenizer(), model=_FakeModel())
-    reranker = CrossEncoderReranker(RerankConfig(model_name="fake-model"))
-
-    assert reranker.rerank("查询", []) == []
-    single = [{"id": "only", "content": "唯一候选"}]
-    assert reranker.rerank("查询", single) == single
+    reranker = CrossEncoderReranker(RerankConfig(model_name='fake-model'))
+    with pytest.raises(ValueError, match='content'):
+        reranker.rerank('查询', [_make_candidates()[0], invalid])
     assert calls == []
-    assert reranker._model_loaded is False
+
+
+def test_empty_skips_loading_but_single_candidate_gets_model_score(monkeypatch):
+    _force_cpu(monkeypatch)
+    calls = _install_fake_transformers(monkeypatch, tokenizer=_FakeTokenizer(), model=_FakeModel({'唯一候选': 0.7}))
+    reranker = CrossEncoderReranker(RerankConfig(model_name='fake-model'))
+    assert reranker.rerank('查询', []) == []
+    assert calls == []
+    single = [{'id': 'only', 'content': '唯一候选'}]
+    result = reranker.rerank('查询', single)
+    assert result[0]['rerank_score'] == pytest.approx(0.7)
+    assert result[0]['id'] == 'only' and result[0] is not single[0]
+    assert 'rerank_score' not in single[0]
+    assert reranker._model_loaded
 
 
 # ---------- 设备处理 ----------
@@ -298,36 +280,27 @@ def test_gpu_path_keeps_existing_dtype(monkeypatch):
     assert model.target_device == "cuda:0"
 
 
-def test_inference_exception_respects_fallback(monkeypatch):
+@pytest.mark.parametrize('size', [1, 3])
+def test_inference_error_propagates_without_partial_results(monkeypatch, size, caplog):
     _force_cpu(monkeypatch)
-    model = _FakeModel(forward_error=RuntimeError("推理后端异常"))
-    _install_fake_transformers(monkeypatch, tokenizer=_FakeTokenizer(), model=model)
-    candidates = _make_candidates()
+    error = RuntimeError('private-inference-detail')
+    _install_fake_transformers(monkeypatch, tokenizer=_FakeTokenizer(), model=_FakeModel(forward_error=error))
+    candidates = _make_candidates()[:size]
+    snapshot = [dict(item) for item in candidates]
+    reranker = CrossEncoderReranker(RerankConfig(model_name='fake-model'))
+    with pytest.raises(RuntimeError) as caught:
+        reranker.rerank('查询', candidates)
+    assert caught.value is error and candidates == snapshot
+    assert 'private-inference-detail' not in caplog.text
 
-    tolerant = CrossEncoderReranker(RerankConfig(model_name="fake-model", fallback_to_original=True))
-    result = tolerant.rerank("查询", candidates, top_k=2)
-    assert [c["id"] for c in result] == ["a", "b"]  # 原始排序
 
-    strict = CrossEncoderReranker(RerankConfig(model_name="fake-model", fallback_to_original=False))
-    assert strict.rerank("查询", candidates, top_k=2) == []
-
-
-def test_inference_fallback_keeps_only_valid_candidate_copies(monkeypatch):
+@pytest.mark.parametrize('value', [float('nan'), float('inf'), float('-inf')])
+def test_non_finite_model_scores_raise(monkeypatch, value):
     _force_cpu(monkeypatch)
-    model = _FakeModel(forward_error=RuntimeError("推理后端异常"))
-    _install_fake_transformers(monkeypatch, tokenizer=_FakeTokenizer(), model=model)
-    candidates = [
-        {"id": "a", "content": "甲文"},
-        {"id": "invalid", "content": ""},
-        {"id": "b", "content": "乙文"},
-    ]
-
-    reranker = CrossEncoderReranker(RerankConfig(model_name="fake-model", fallback_to_original=True))
-    result = reranker.rerank("查询", candidates, top_k=3)
-
-    assert [candidate["id"] for candidate in result] == ["a", "b"]
-    assert result[0] is not candidates[0]
-    assert result[1] is not candidates[2]
+    _install_fake_transformers(monkeypatch, tokenizer=_FakeTokenizer(), model=_FakeModel({'甲文': value}))
+    reranker = CrossEncoderReranker(RerankConfig(model_name='fake-model'))
+    with pytest.raises(RuntimeError, match='non-finite'):
+        reranker.rerank('查询', _make_candidates())
 
 
 # ---------- 参数边界 ----------
@@ -355,3 +328,55 @@ def test_invalid_top_k_raises(monkeypatch, bad_top_k):
 def test_invalid_config_raises(field_updates):
     with pytest.raises(ValueError):
         RerankConfig(model_name="fake-model", **field_updates)
+
+
+def test_model_adapter_and_pipeline_score_single_candidate(monkeypatch):
+    from test_semantic_rag_ranking import _analysis, _candidate
+
+    from knowledge.retrieval_core.rerank import PipelineReranker
+
+    _force_cpu(monkeypatch)
+    model = _FakeModel({'evidence': 0.8})
+    _install_fake_transformers(monkeypatch, tokenizer=_FakeTokenizer(), model=model)
+    encoder = CrossEncoderReranker(RerankConfig(model_name='fake-model'))
+    result = PipelineReranker(cross_encoder=encoder).rerank(_analysis(), [_candidate('1', 'evidence')], 1)
+    assert result[0].rerank_score == pytest.approx(0.8)
+    assert result[0].rerank_method == 'cross_encoder'
+    assert model.forward_calls == [['evidence']]
+
+
+def test_incomplete_model_scores_raise(monkeypatch):
+    _force_cpu(monkeypatch)
+
+    class IncompleteModel(_FakeModel):
+        def __call__(self, **kwargs):
+            return SimpleNamespace(logits=torch.tensor([[0.2]]))
+
+    _install_fake_transformers(monkeypatch, tokenizer=_FakeTokenizer(), model=IncompleteModel())
+    encoder = CrossEncoderReranker(RerankConfig(model_name='fake-model'))
+    with pytest.raises(RuntimeError, match='incomplete'):
+        encoder.rerank('查询', _make_candidates())
+
+
+@pytest.mark.parametrize('fail', [False, True])
+def test_requested_warmup_is_completed_or_raises(monkeypatch, fail):
+    _force_cpu(monkeypatch)
+    error = OSError('warmup failure') if fail else None
+
+    class WarmupTokenizer(_FakeTokenizer):
+        def __call__(self, queries, texts, **kwargs):
+            if isinstance(queries, str):
+                queries, texts = [queries], [texts]
+            return super().__call__(queries, texts, **kwargs)
+
+    _install_fake_transformers(monkeypatch, tokenizer=WarmupTokenizer(), model=_FakeModel(forward_error=error))
+    encoder = CrossEncoderReranker(RerankConfig(model_name='fake-model', warmup_on_init=True))
+    if fail:
+        with pytest.raises(OSError) as caught:
+            encoder.rerank('查询', _make_candidates())
+        assert caught.value is error
+        assert not encoder._model_loaded and not encoder._warmup_done
+        assert encoder.model is None and encoder.tokenizer is None
+    else:
+        assert len(encoder.rerank('查询', _make_candidates())) == 3
+        assert encoder._model_loaded and encoder._warmup_done

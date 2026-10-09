@@ -118,11 +118,9 @@ def main():
             batch_size=args.batch_size,
             max_length=args.max_length,
             allow_download=False,
-            fallback_to_original=False,
         )
     )
-    if not encoder._load_model():
-        raise RuntimeError("cross encoder failed to load; no semantic result will be reported")
+    encoder._load_model()
     variants = {
         "deterministic": PipelineReranker(cross_encoder_enabled=False),
         "cross_encoder": PipelineReranker(cross_encoder=encoder, text_view=args.text_view),

@@ -1,6 +1,7 @@
 """Semantic scores must retain their own ordering, scale and provenance."""
 
 from types import SimpleNamespace
+from unittest.mock import Mock
 
 import pytest
 
@@ -95,7 +96,7 @@ def test_invalid_reranker_view_is_not_silently_accepted():
 
 
 @pytest.mark.parametrize("kind", ["nan", "missing", "duplicate", "unknown", "unscored"])
-def test_invalid_encoder_results_use_explicit_deterministic_fallback(kind):
+def test_invalid_encoder_results_raise_without_changing_ranking_method(kind):
     class Broken:
         def rerank(self, query, candidates, top_k):
             values = [dict(item, rerank_score=0.4) for item in candidates]
@@ -112,11 +113,54 @@ def test_invalid_encoder_results_use_explicit_deterministic_fallback(kind):
             return values
 
     reranker = PipelineReranker(cross_encoder=Broken())
-    reranker.deterministic = SimpleNamespace(rerank=lambda analysis, candidates: [(item, 0.2) for item in candidates])
-    result = reranker.rerank(_analysis(), [_candidate("1"), _candidate("2")], 2)
-    assert len(result) == 2
-    assert all(item.rerank_method == "deterministic" and item.rerank_score == 0.2 for item in result)
-    assert not reranker.uses_cross_encoder
+    reranker.deterministic.rerank = Mock(side_effect=AssertionError('unexpected downgrade'))
+    candidates = [_candidate("1"), _candidate("2")]
+    with pytest.raises(RuntimeError):
+        reranker.rerank(_analysis(), candidates, 2)
+    reranker.deterministic.rerank.assert_not_called()
+    assert all(item.rerank_score is None and item.rerank_method == 'none' for item in candidates)
+
+
+@pytest.mark.parametrize('stage', ['initialization', 'inference'])
+def test_required_encoder_errors_propagate_without_sticky_disable(monkeypatch, stage, caplog):
+    error = OSError('private-reranker-error')
+    encoder = SimpleNamespace(rerank=Mock(side_effect=error))
+    factory = Mock(side_effect=error) if stage == 'initialization' else Mock(return_value=encoder)
+    monkeypatch.setattr('knowledge.reranker.get_reranker', factory)
+    reranker = PipelineReranker(cross_encoder_enabled=True)
+    reranker.deterministic.rerank = Mock(side_effect=AssertionError('unexpected downgrade'))
+    for _ in range(2):
+        with pytest.raises(OSError) as caught:
+            reranker.rerank(_analysis(), [_candidate('1'), _candidate('2')], 2)
+        assert caught.value is error
+    assert factory.call_count == 2
+    assert encoder.rerank.call_count == (2 if stage == 'inference' else 0)
+    reranker.deterministic.rerank.assert_not_called()
+    assert 'private-reranker-error' not in caplog.text
+
+
+def test_enabled_encoder_runs_only_actual_query(monkeypatch):
+    encoder = SimpleNamespace(rerank=Mock(wraps=Encoder().rerank))
+    monkeypatch.setattr('knowledge.reranker.get_reranker', lambda: encoder)
+    result = PipelineReranker(cross_encoder_enabled=True).rerank(_analysis(), [_candidate('1')], 1)
+    assert result[0].rerank_method == 'cross_encoder'
+    encoder.rerank.assert_called_once()
+    assert encoder.rerank.call_args.args[0] == _analysis().original_query
+    assert encoder.rerank.call_args.args[1][0]['id'] == '1'
+
+
+def test_explicit_disabled_encoder_uses_deterministic_ranking(monkeypatch):
+    factory = Mock(side_effect=AssertionError('disabled model must not load'))
+    monkeypatch.setattr('knowledge.reranker.get_reranker', factory)
+    analysis = _analysis()
+    analysis.predicate_preferences = []
+    analysis.causal_intent = False
+    analysis.story_hits = []
+    candidates = [_candidate('1'), _candidate('2')]
+    result = PipelineReranker(cross_encoder_enabled=False).rerank(analysis, candidates, 2)
+    assert len(result) == 2 and all(item.rerank_method == 'deterministic' for item in result)
+    assert all(item.rerank_method == 'none' for item in candidates)
+    factory.assert_not_called()
 
 
 def _runtime(score, method):
