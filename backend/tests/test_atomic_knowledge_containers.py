@@ -174,7 +174,7 @@ async def test_public_container_route_requires_no_postcommit_database_signal(tmp
     def forbidden():
         raise AssertionError("Public container mutation must already have durable dirty authority")
 
-    monkeypatch.setattr(knowledge, "_mark_rebuild_dirty", forbidden)
+    monkeypatch.setattr(db, "mark_knowledge_index_dirty", forbidden)
     admin = {"role": "admin"}
     if operation == "rename":
         result = await knowledge.update_knowledge_base(kb["id"], KnowledgeBaseUpdate(name="新资料组"), admin)

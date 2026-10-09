@@ -137,7 +137,7 @@ async def test_public_document_paths_use_atomic_publication_before_local_notific
     def forbidden():
         raise AssertionError("Legacy post-commit database notification must not run")
 
-    monkeypatch.setattr(knowledge, "_mark_rebuild_dirty", forbidden)
+    monkeypatch.setattr(db, "mark_knowledge_index_dirty", forbidden)
     kb = db.create_knowledge_base("完整合成库")
     admin = {"role": "admin"}
     before = 0

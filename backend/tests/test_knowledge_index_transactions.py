@@ -178,7 +178,7 @@ def test_all_ready_branches_reject_real_revision_change_at_completion(tmp_path, 
     assert database.get_config_value(state.STATUS_KEY) == "dirty"
 
 
-def test_api_dirty_marks_use_one_actual_database_transaction(tmp_path, monkeypatch):
+def test_document_transaction_precedes_local_cache_invalidation(tmp_path, monkeypatch):
     database = SQLiteDB(tmp_path / "state.db")
     monkeypatch.setattr(knowledge, "db", database)
     monkeypatch.setattr(knowledge, "_vector_index_built", True)
@@ -188,6 +188,7 @@ def test_api_dirty_marks_use_one_actual_database_transaction(tmp_path, monkeypat
         raise AssertionError("Separate config writes cannot be used for invalidation")
 
     monkeypatch.setattr(database, "set_config_value", forbidden)
-    knowledge._mark_rebuild_dirty()
+    database.save_knowledge_document(dict(title="完整规则", content="须书面确认。"), chunks=["须书面确认。"])
+    knowledge._invalidate_local_knowledge_index()
     assert database.get_config_value(state.REVISION_KEY) == 1 and database.get_config_value(state.STATUS_KEY) == "dirty"
     assert not knowledge._vector_index_built and knowledge._vector_index_revision is None

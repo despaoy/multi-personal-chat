@@ -552,15 +552,16 @@ class TestVectorRebuildStatus:
 
     def test_dirty_status_triggers_rebuild(self, tmp_path):
         """If status is 'dirty' (document CUD), the index must be rebuilt.
-        _mark_rebuild_dirty also increments revision as an independent CAS signal."""
+        database revision invalidation also increments revision as an independent CAS signal."""
         from api import knowledge as kmod
         db = self._make_db(tmp_path)
         original_db = self._patch_kmod_db(kmod, db)
         try:
-            from api.knowledge import _get_rebuild_revision, _mark_rebuild_dirty, _read_rebuild_status
+            from api.knowledge import _get_rebuild_revision, _read_rebuild_status
 
             rev_before = _get_rebuild_revision()
-            _mark_rebuild_dirty()
+            db.mark_knowledge_index_dirty()
+            kmod._invalidate_local_knowledge_index()
             status, _, _, _ = _read_rebuild_status()
             assert status == "dirty", "dirty status must trigger rebuild"
             rev_after = _get_rebuild_revision()
@@ -765,9 +766,10 @@ class TestEnsureVectorIndexEndToEnd:
         self._insert_doc_with_chunks(db, 1, "Doc1", ["c0", "c1"])
 
         # Pre-write a stale complete:2:fakefp:0 — count matches but revision is stale
-        # after _mark_rebuild_dirty increments it
+        # after database revision invalidation increments it
         kmod._write_rebuild_status("complete", 2, "stale_fp", 0)
-        kmod._mark_rebuild_dirty()  # increments revision to 1, sets status=dirty
+        db.mark_knowledge_index_dirty()
+        kmod._invalidate_local_knowledge_index()
 
         added_docs = {"count": 0}
         class MockVectorDB:
@@ -852,7 +854,7 @@ class TestEnsureVectorIndexEndToEnd:
         current_rev = kmod._get_rebuild_revision()
         kmod._write_rebuild_status("complete", 2, fp_before, current_rev)
 
-        # Update content WITHOUT _mark_rebuild_dirty (revision unchanged)
+        # Update content WITHOUT database revision invalidation (revision unchanged)
         db.execute_sql(
             "UPDATE knowledge_chunks SET content = :new WHERE documentId = 1 AND chunkIndex = 0",
             {"new": "modified0"},
@@ -922,7 +924,7 @@ class TestEnsureVectorIndexEndToEnd:
             db.close_connection()
 
     def test_concurrent_crud_during_rebuild_does_not_mark_complete(self, tmp_path, monkeypatch):
-        """If a CRUD operation runs mid-rebuild (via the real _mark_rebuild_dirty
+        """If a CRUD operation runs mid-rebuild (via the real database revision invalidation
         path), the rebuild's commit critical section must detect the revision
         change and refuse to write complete. Final status is dirty (written by
         the CRUD), not building."""
@@ -950,7 +952,8 @@ class TestEnsureVectorIndexEndToEnd:
                 added_docs["count"] += len(docs)
                 self._docs += len(docs)
                 # 真实 CRUD 路径：自增 revision + 写 dirty + 重置 _vector_index_built
-                kmod._mark_rebuild_dirty()
+                db.mark_knowledge_index_dirty()
+                kmod._invalidate_local_knowledge_index()
 
         mock_inst = MockVectorDB()
         self._patch_vector_db(monkeypatch, kmod, mock_inst)
@@ -1011,7 +1014,7 @@ class TestEnsureVectorIndexEndToEnd:
     def test_concurrent_crud_in_commit_window_does_not_mark_complete(self, tmp_path, monkeypatch):
         """Narrow-window race: CRUD happens after the final revision check
         passes but before complete is written. With the _revision_lock
-        commit critical section, the CRUD's _mark_rebuild_dirty must block
+        commit critical section, the CRUD's database revision invalidation must block
         until complete is written, then increment revision — but the rebuild
         has already committed with the old revision.
 
@@ -1045,9 +1048,10 @@ class TestEnsureVectorIndexEndToEnd:
                 self._docs += len(docs)
             def flush(self):
                 # 模拟窄窗口：在 flush（commit 临界区之前）发生并发 CRUD。
-                # _mark_rebuild_dirty 会自增 revision 并设 _vector_index_built=False。
+                # database revision invalidation 会自增 revision 并设 _vector_index_built=False。
                 # commit 临界区随后检测到 revision 变化，拒绝标记 complete。
-                kmod._mark_rebuild_dirty()
+                db.mark_knowledge_index_dirty()
+                kmod._invalidate_local_knowledge_index()
 
         mock_inst = MockVectorDB()
         self._patch_vector_db(monkeypatch, kmod, mock_inst)
@@ -1086,12 +1090,21 @@ class TestEnsureVectorIndexEndToEnd:
         def fingerprint_with_concurrent_crud():
             fp = original_compute_fp()
             # Simulate CRUD happening right after fingerprint computation
-            kmod._mark_rebuild_dirty()
+            db.mark_knowledge_index_dirty()
+            kmod._invalidate_local_knowledge_index()
             return fp
         monkeypatch.setattr(kmod, "_compute_chunk_fingerprint", fingerprint_with_concurrent_crud)
 
         add_called = {"called": False}
+        from threading import RLock
+
         class MockVectorDB:
+            def __init__(self):
+                self._lock = RLock()
+
+            def flush(self):
+                pass
+
             def get_stats(self):
                 return {"total_documents": 2, "index_size": 2, "bm25_corpus_size": 2,
                         "index_type": "flat", "embedding_dim": 768, "use_gpu": False,
@@ -1108,7 +1121,7 @@ class TestEnsureVectorIndexEndToEnd:
             # Should NOT skip (return True without rebuild) — CRUD happened
             # during fingerprint, commit critical section detects revision change.
             # It falls through to rebuild path. Rebuild will succeed because
-            # _mark_rebuild_dirty already incremented revision; the rebuild's
+            # database revision invalidation already incremented revision; the rebuild's
             # start_revision = latest revision, so commit CAS passes.
             result = kmod._ensure_vector_index()
             assert result is True, "rebuild after concurrent CRUD should succeed"
@@ -1116,147 +1129,60 @@ class TestEnsureVectorIndexEndToEnd:
             # rebuild path re-fetches; the key assertion is that the skip
             # branch did NOT set _vector_index_built without re-checking
             assert kmod._vector_index_built is True
+            assert add_called["called"], "Unvalidated old snapshot must be rebuilt"
         finally:
             kmod.db = original_db
             db.close_connection()
 
-    def test_real_thread_lock_blocks_crud_in_commit_window(self, tmp_path, monkeypatch):
-        """Real two-thread proof that _revision_lock serializes the commit
-        critical section against CRUD.
+    def test_real_document_commit_invalidates_paused_index_completion(self, tmp_path, monkeypatch):
+        from threading import Event, Thread
 
-        The rebuild thread enters the commit critical section (holds
-        _revision_lock) and pauses BEFORE writing complete. A real CRUD
-        thread then calls _mark_rebuild_dirty() and MUST block on
-        _revision_lock. The test asserts the CRUD has not completed within
-        a short window while the lock is held. After releasing the rebuild,
-        CRUD runs and overwrites complete with dirty.
-
-        If _revision_lock were removed from _mark_rebuild_dirty, the CRUD
-        thread would complete immediately (no blocking), and this test
-        would fail the "must block" assertion. The single-threaded mock
-        tests above cannot prove this — they only verify the post-hoc
-        revision CAS check.
-        """
-        import threading
-        import time
+        from test_knowledge_cross_process_freshness import RecordingVector
 
         from api import knowledge as kmod
+        from knowledge import vector_db
 
         db = self._make_db(tmp_path)
-        original_db = kmod.db
-        kmod.db = db
-        kmod._vector_index_built = False
+        other = type(db)(db.db_path)
+        monkeypatch.setattr(kmod, 'db', db)
+        monkeypatch.setattr(kmod, '_vector_index_built', False)
+        monkeypatch.setattr(kmod, '_vector_index_revision', None)
+        document = db.save_knowledge_document(dict(title='完整规则', content='须书面确认。'), chunks=['须书面确认。'])
+        monkeypatch.setattr(vector_db, 'get_vector_db', lambda: RecordingVector())
+        entered, committed = Event(), Event()
+        failures = []
+        original = db.commit_knowledge_index_revision
 
-        self._insert_doc_with_chunks(db, 1, "Doc1", ["c0", "c1"])
+        def paused_completion(expected, count, fingerprint):
+            entered.set()
+            assert committed.wait(5), 'writer must commit independently of process cache lock'
+            return original(expected, count, fingerprint)
 
-        entered_commit = threading.Event()
-        release_commit = threading.Event()
-        crud_started = threading.Event()
-        crud_completed = threading.Event()
+        def writer():
+            try:
+                assert entered.wait(5)
+                other.save_knowledge_document(dict(title='新规则'), doc_id=document['id'])
+                committed.set()
+                kmod._invalidate_local_knowledge_index()
+            except Exception as exc:
+                failures.append(exc)
+                committed.set()
 
-        original_write = kmod._write_rebuild_status
-
-        def patched_write_rebuild_status(status, count, fingerprint="", revision=-1):
-            # 仅 hook 重建 commit（complete:{count>0}）。空库清理（complete:0）
-            # 和 building 状态写入不阻塞，避免测试死锁。
-            if status == "complete" and count > 0:
-                entered_commit.set()
-                # 等待主线程允许完成 commit；持有 _revision_lock 期间阻塞 CRUD
-                release_commit.wait(timeout=10)
-            original_write(status, count, fingerprint, revision)
-
-        monkeypatch.setattr(kmod, "_write_rebuild_status", patched_write_rebuild_status)
-
-        added_docs = {"count": 0}
-
-        class MockVectorDB:
-            def __init__(self):
-                self._docs = 0
-
-            def get_stats(self):
-                return {"total_documents": self._docs, "index_size": self._docs,
-                        "bm25_corpus_size": self._docs, "index_type": "flat",
-                        "embedding_dim": 768, "use_gpu": False, "bm25_built": False,
-                        "bm25_vocab_size": 0, "dirty": False}
-
-            def clear_all(self):
-                self._docs = 0
-
-            def add_documents(self, docs):
-                added_docs["count"] += len(docs)
-                self._docs += len(docs)
-
-            def flush(self):
-                pass
-
-        self._patch_vector_db(monkeypatch, kmod, MockVectorDB())
-
-        rebuild_result = {"value": None}
-
-        def rebuild_thread_main():
-            rebuild_result["value"] = kmod._ensure_vector_index()
-
-        def crud_thread_main():
-            # 等 rebuild 进入 commit 临界区
-            if not entered_commit.wait(timeout=5):
-                crud_completed.set()
-                return
-            # 短暂等待确保 rebuild 真的持有 _revision_lock
-            time.sleep(0.15)
-            crud_started.set()
-            # 调用 _mark_rebuild_dirty：应阻塞在 _revision_lock 上
-            kmod._mark_rebuild_dirty()
-            crud_completed.set()
-
-        rebuild_t = threading.Thread(target=rebuild_thread_main, name="rebuild")
-        crud_t = threading.Thread(target=crud_thread_main, name="crud")
-
+        monkeypatch.setattr(db, 'commit_knowledge_index_revision', paused_completion)
+        thread = Thread(target=writer)
+        thread.start()
         try:
-            rebuild_t.start()
-            crud_t.start()
-
-            # 等 CRUD 线程开始尝试 _mark_rebuild_dirty
-            assert crud_started.wait(timeout=5), "CRUD thread did not start"
-
-            # 关键断言：CRUD 必须阻塞在 _revision_lock 上，未在短窗口内完成。
-            # 若 _mark_rebuild_dirty 未加锁，此处会失败。
-            assert not crud_completed.wait(timeout=1.0), (
-                "CRUD completed while rebuild holds _revision_lock — "
-                "lock is not blocking the commit critical section"
-            )
-
-            # 释放 rebuild，让它完成 commit
-            release_commit.set()
-
-            # 等两个线程结束
-            crud_t.join(timeout=5)
-            rebuild_t.join(timeout=5)
-
-            assert not crud_t.is_alive(), "CRUD thread did not complete after release"
-            assert not rebuild_t.is_alive(), "rebuild thread did not complete after release"
-
-            # rebuild 应成功标记 complete（被 CRUD 随后覆盖为 dirty）
-            assert rebuild_result["value"] is True, "rebuild must succeed in commit"
-            assert added_docs["count"] == 2, "rebuild must have indexed 2 chunks"
-
-            # 最终状态：CRUD 在 rebuild 完成后执行，覆盖 complete 为 dirty
-            status, _, _, _ = kmod._read_rebuild_status()
-            assert status == "dirty", (
-                f"final status must be dirty after CRUD overwrote complete, got {status}"
-            )
-            assert kmod._vector_index_built is False, (
-                "_vector_index_built must be False after CRUD marked dirty"
-            )
+            assert kmod._ensure_vector_index() is False
+            thread.join(5)
+            assert not thread.is_alive() and not failures
+            assert other.get_knowledge_document(document['id'])['title'] == '新规则'
+            assert kmod._read_rebuild_status()[0] == 'dirty'
+            assert not kmod._vector_index_built and kmod._vector_index_revision is None
         finally:
-            # 防止任何路径下死锁
-            release_commit.set()
-            if rebuild_t.is_alive():
-                rebuild_t.join(timeout=2)
-            if crud_t.is_alive():
-                crud_t.join(timeout=2)
-            kmod.db = original_db
+            entered.set()
+            thread.join(5)
             db.close_connection()
-
+            other.close_connection()
     @pytest.mark.asyncio
     async def test_search_rejects_incomplete_index(self, monkeypatch):
         from unittest.mock import Mock

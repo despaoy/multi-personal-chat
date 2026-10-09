@@ -889,13 +889,8 @@ async def delete_knowledge_document(doc_id: int, current_user: dict = Depends(ge
 _vector_index_built = False
 _vector_index_revision: int | None = None
 _vector_index_lock = threading.Lock()
-# 独立的 revision 锁：保护 revision 自增、dirty 写入和 _vector_index_built 重置
-# 的 read-modify-write 原子性。_ensure_vector_index 的 commit 临界区（revision
-# 校验 + 写 complete + 设 _vector_index_built）也使用此锁，确保 CRUD 的
-# _mark_rebuild_dirty 与重建 commit 互斥。
-# 锁顺序约束：允许按 _vector_index_lock → _revision_lock 顺序嵌套获取
-# （_ensure_vector_index 持有 _vector_index_lock 时进入 _revision_lock 临界区）。
-# 严禁反向获取（_revision_lock 内不得请求 _vector_index_lock），否则死锁。
+# 只保护本进程完成标志与缓存失效；持久化版本由数据库事务和 CAS 管理。
+# 嵌套锁顺序固定为 _vector_index_lock → _revision_lock。
 _revision_lock = threading.Lock()
 
 # 重建状态键，存储在 config 表中。
@@ -1013,27 +1008,6 @@ def _invalidate_local_knowledge_index() -> None:
     with _revision_lock:
         _vector_index_built = False
         _vector_index_revision = None
-
-
-def _mark_rebuild_dirty() -> None:
-    """标记向量索引为脏：下次搜索必须重建。
-
-    所有文档创建/更新/删除操作应在事务提交后调用此函数。
-    即使数量未变（仅内容更新），dirty 状态也会强制重建，避免旧向量被检索。
-
-    原子性保证：revision 自增、写 dirty、重置 _vector_index_built 必须在同一
-    _revision_lock 临界区内完成。否则重建线程可能在 CRUD 设置 False 后、
-    等待锁期间把 _vector_index_built 重新设为 True，覆盖 CRUD 的 dirty 信号。
-    """
-    global _vector_index_built, _vector_index_revision
-    with _revision_lock:
-        # 在锁内完成所有状态变更，确保与 _ensure_vector_index 的 commit 临界区互斥
-        _vector_index_built = False
-        _vector_index_revision = None
-        try:
-            db.mark_knowledge_index_dirty()
-        except Exception as e:
-            logger.warning("标记重建 dirty 持久化失败（内存标志已重置）: %s", e)
 
 
 def _vector_chunk_document(row: dict, kb_name_map: dict) -> dict:
