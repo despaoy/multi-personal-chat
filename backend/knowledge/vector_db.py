@@ -141,7 +141,7 @@ class BM25Retriever:
                 denominator = tf + self.k1 * (1 - self.b + self.b * doc_len / max(self.avgdl, 1))
                 score += idf * numerator / denominator
 
-            if score >= threshold:
+            if score > 0 and score >= threshold:
                 scores.append((doc_idx, score))
 
         scores.sort(key=lambda x: x[1], reverse=True)
