@@ -955,7 +955,10 @@ def _candidate_to_proposal(
         raise ValueError("记忆 LLM operation 不受支持")
     kind = str(raw.get("kind") or "").strip()
     value = re.sub(r"\s+", " ", str(raw.get("value") or "")).strip()
-    evidence = re.sub(r"\s+", " ", str(raw.get("evidence") or "")).strip()
+    evidence = raw.get("evidence")
+    if not isinstance(evidence, str) or not evidence.strip():
+        raise ValueError("记忆 LLM evidence 必须是非空字符串")
+    evidence = re.sub(r"\s+", " ", evidence).strip()
     proposed_content = re.sub(r"\s+", " ", str(raw.get("content") or "")).strip()
     if proposed_content in {"用户开头的第三人称事实", "第三人称安全描述"}:
         proposed_content = ""
@@ -991,7 +994,7 @@ def _candidate_to_proposal(
     )
     if semantic_operation != "NOOP" and confidence < required_confidence:
         return None
-    if not evidence or len(evidence) > _MAX_EVIDENCE_CHARS:
+    if len(evidence) > _MAX_EVIDENCE_CHARS:
         return None
     event_observation = kind == "shared_event" and semantic_operation not in {"NOOP", "RETRACT", "ERASE"}
     generic_source_observation = False
