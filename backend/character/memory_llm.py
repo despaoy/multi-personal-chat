@@ -546,7 +546,9 @@ def _search_existing_memories(
                 return ()
             required = set((*plan.allowed_ids, *plan.protected_ids))
             selected = tuple(row for row in active if _record_id(row) in required)
-            return selected if len(selected) <= MAX_EXISTING_MEMORIES else ()
+            if len(selected) > MAX_EXISTING_MEMORIES:
+                raise InputBudgetError("complete erasure selection exceeds memory candidate budget")
+            return selected
     documents = [terms(str(record.get("content") or "")) for record in active]
     frequencies = Counter(term for document in documents for term in document)
     query = terms(message)
