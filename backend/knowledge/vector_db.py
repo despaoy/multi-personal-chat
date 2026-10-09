@@ -777,15 +777,14 @@ class VectorDatabase:
     def get_stats(self) -> Dict[str, Any]:
         with self._lock:
             index_type = "unknown"
-            if self.index:
-                if isinstance(self.index, faiss.IndexIDMap):
-                    inner = self.index.index
-                    if isinstance(inner, faiss.IndexFlatIP):
-                        index_type = "flat"
-                    elif isinstance(inner, faiss.IndexIVFFlat):
-                        index_type = "ivf"
-                    elif isinstance(inner, faiss.IndexHNSWFlat):
-                        index_type = "hnsw"
+            if isinstance(self.index, faiss.IndexIDMap):
+                inner = faiss.downcast_index(self.index.index)
+                if isinstance(inner, faiss.IndexFlatIP):
+                    index_type = "flat"
+                elif isinstance(inner, faiss.IndexIVFFlat):
+                    index_type = "ivf"
+                elif isinstance(inner, faiss.IndexHNSWFlat):
+                    index_type = "hnsw"
 
             return {
                 "total_documents": len(self.metadata),
