@@ -496,11 +496,11 @@ class VectorDatabase:
 
     def _get_cached_query(self, cache_key: str) -> Optional[List[Dict[str, Any]]]:
         """从查询缓存中获取结果，过期则返回None"""
-        if cache_key not in self._query_cache:
+        cached_entry = self._query_cache.get(cache_key)
+        if cached_entry is None:
             return None
-        cached_entry = self._query_cache[cache_key]
         cached_time, cached_results = cached_entry
-        if time.time() - cached_time > self._query_cache_ttl:
+        if time.monotonic() - cached_time >= self._query_cache_ttl:
             # 缓存过期，移除
             self._query_cache.pop(cache_key, None)
             return None
@@ -513,7 +513,7 @@ class VectorDatabase:
         # LRU淘汰
         while len(self._query_cache) >= self._query_cache_max_size:
             self._query_cache.popitem(last=False)
-        self._query_cache[cache_key] = (time.time(), results)
+        self._query_cache[cache_key] = (time.monotonic(), results)
 
     def search(
         self,
