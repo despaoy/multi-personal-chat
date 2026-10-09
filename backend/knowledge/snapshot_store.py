@@ -55,18 +55,23 @@ def _write_pickle(path, value):
         os.fsync(stream.fileno())
 
 
+def document_ids(metadata, id_converter):
+    ids = [id_converter(record["id"]) for record in metadata]
+    if None in ids or len(set(ids)) != len(ids):
+        raise ValueError("FAISS/source identity mismatch")
+    return ids
+
+
 def validate_snapshot(index, metadata, bm25, dimension, id_converter):
     """Counts alone cannot detect positional BM25/source mismatches."""
     if not isinstance(metadata, list) or not isinstance(bm25, dict):
         raise ValueError("Invalid snapshot record types")
     if index.d != dimension or index.ntotal != len(metadata) or not hasattr(index, "id_map"):
         raise ValueError("FAISS dimension or count mismatch")
-    ids = [id_converter(record["id"]) for record in metadata]
+    ids = document_ids(metadata, id_converter)
     actual_ids = faiss.vector_to_array(index.id_map).tolist()
     if (
-        None in ids
-        or len(set(ids)) != len(ids)
-        or len(set(actual_ids)) != len(actual_ids)
+        len(set(actual_ids)) != len(actual_ids)
         or set(ids) != set(actual_ids)
     ):
         raise ValueError("FAISS/source identity mismatch")

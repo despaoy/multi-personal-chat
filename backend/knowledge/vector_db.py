@@ -23,7 +23,7 @@ import faiss
 import numpy as np
 
 from knowledge.retrieval_core.embedding import resolve_local_model_path
-from knowledge.snapshot_store import SNAPSHOT_NAME, load_snapshot, save_snapshot
+from knowledge.snapshot_store import SNAPSHOT_NAME, document_ids, load_snapshot, save_snapshot
 
 logger = logging.getLogger(__name__)
 
@@ -307,13 +307,7 @@ class VectorDatabase:
         }
 
     def _rebuild_id_mapping(self):
-        self._id_to_index = {}
-        for i, meta in enumerate(self.metadata):
-            doc_id = meta.get("id")
-            if doc_id is not None:
-                faiss_id = self._to_faiss_id(doc_id)
-                if faiss_id is not None:
-                    self._id_to_index[faiss_id] = i
+        self._id_to_index = {key: i for i, key in enumerate(document_ids(self.metadata, self._to_faiss_id))}
 
     def _save_index(self):
         """Publish the complete triple together; failures remain dirty."""
@@ -401,18 +395,9 @@ class VectorDatabase:
             raise
 
     def _re_add_all_documents(self, documents: List[Dict[str, Any]]):
+        ids = np.array(document_ids(documents, self._to_faiss_id), dtype=np.int64)
         texts = [f"{doc.get('title', '')} {doc.get('content', '')}" for doc in documents]
         embeddings = self._get_embeddings_batch(texts)
-
-        ids = []
-        for i, doc in enumerate(documents):
-            doc_id = doc.get("id")
-            faiss_id = self._to_faiss_id(doc_id) if doc_id is not None else i
-            if faiss_id is None:
-                faiss_id = i
-            ids.append(faiss_id)
-
-        ids = np.array(ids, dtype=np.int64)
 
         if hasattr(self.index, 'is_trained') and not self.index.is_trained:
             logger.info("训练IVF索引...")
@@ -451,6 +436,10 @@ class VectorDatabase:
 
         with self._lock:
             self._ensure_index()
+            keys = document_ids(documents, self._to_faiss_id)
+            if self._id_to_index.keys() & set(keys):
+                raise ValueError("Document identity already exists in vector index")
+            ids = np.array(keys, dtype=np.int64)
             self._load_model()
 
             texts = []
@@ -460,19 +449,6 @@ class VectorDatabase:
 
             logger.info(f"正在生成 {len(texts)} 个向量...")
             embeddings = self._get_embeddings_batch(texts)
-
-            ids = []
-            start_id = len(self.metadata)
-            for i, doc in enumerate(documents):
-                doc_id = doc.get("id")
-                faiss_id = None
-                if doc_id is not None:
-                    faiss_id = self._to_faiss_id(doc_id)
-                if faiss_id is None:
-                    faiss_id = start_id + i
-                ids.append(faiss_id)
-
-            ids = np.array(ids, dtype=np.int64)
 
             if hasattr(self.index, 'is_trained') and not self.index.is_trained:
                 logger.info("训练IVF索引...")
