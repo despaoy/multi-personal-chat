@@ -617,25 +617,6 @@ class VectorDatabase:
                     return False
         return True
 
-    def _find_metadata_index(self, doc: Dict[str, Any]) -> Optional[int]:
-        doc_id = doc.get("id")
-        if doc_id is not None:
-            faiss_id = self._to_faiss_id(doc_id)
-            if faiss_id is not None and faiss_id in self._id_to_index:
-                return self._id_to_index[faiss_id]
-        doc_content = doc.get("content", "")
-        doc_title = doc.get("title", "")
-        for i, meta in enumerate(self.metadata):
-            if meta.get("content") == doc_content and meta.get("title") == doc_title:
-                return i
-        # Use content hash as stable fallback key
-        content_hash = hashlib.md5(str(doc_content).encode()).hexdigest()[:8]
-        for i, meta in enumerate(self.metadata):
-            meta_hash = hashlib.md5(str(meta.get("content", "")).encode()).hexdigest()[:8]
-            if meta_hash == content_hash:
-                return i
-        return None
-
     def hybrid_search(
         self,
         query: str,
@@ -666,10 +647,8 @@ class VectorDatabase:
             doc_scores: Dict[int, Dict[str, float]] = {}
 
             for doc in vector_results:
-                key = self._find_metadata_index(doc)
-                if key is None:
-                    continue
-                doc_scores[key] = {"vector_score": doc.get("score", 0), "bm25_score": 0.0, "doc": doc}
+                key = self._id_to_index[self._to_faiss_id(doc["id"])]
+                doc_scores[key] = {"vector_score": doc["score"], "bm25_score": 0.0, "doc": doc}
 
             if self.bm25._built:
                 for key, score in self.bm25.search(query, top_k=recall_k, threshold=0.0):
