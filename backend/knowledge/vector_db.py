@@ -241,33 +241,30 @@ class VectorDatabase:
                 self._create_index()
 
     def _create_index(self, index_type: Optional[str] = None):
-        idx_type = index_type or self._determine_index_type()
+        idx_type = self._determine_index_type() if index_type is None else index_type
         dim = self.EMBEDDING_DIM
 
         if idx_type == "flat":
             base_index = faiss.IndexFlatIP(dim)
-            self.index = faiss.IndexIDMap(base_index)
             logger.info("创建FAISS平面索引（适合小数据集）")
 
         elif idx_type == "ivf":
             nlist = min(self.config.nlist, max(1, int(math.sqrt(len(self.metadata)))))
             quantizer = faiss.IndexFlatIP(dim)
             base_index = faiss.IndexIVFFlat(quantizer, dim, nlist, faiss.METRIC_INNER_PRODUCT)
-            self.index = faiss.IndexIDMap(base_index)
-            self.index.nprobe = self.config.nprobe
+            base_index.nprobe = self.config.nprobe
             logger.info(f"创建FAISS IVF索引（nlist={nlist}，适合中等数据集）")
 
         elif idx_type == "hnsw":
             base_index = faiss.IndexHNSWFlat(dim, self.config.m_hnsw, faiss.METRIC_INNER_PRODUCT)
             base_index.hnsw.efConstruction = self.config.ef_construction
             base_index.hnsw.efSearch = self.config.ef_search
-            self.index = faiss.IndexIDMap(base_index)
             logger.info(f"创建FAISS HNSW索引（M={self.config.m_hnsw}，适合大数据集）")
 
         else:
-            base_index = faiss.IndexFlatIP(dim)
-            self.index = faiss.IndexIDMap(base_index)
-            logger.info("创建FAISS平面索引（默认回退）")
+            raise ValueError(f"不支持的 index_type: {idx_type!r}；请选择 flat、ivf、hnsw 或配置 auto")
+
+        self.index = faiss.IndexIDMap(base_index)
 
     def _load_index(self):
         if self.snapshot_path.exists():
