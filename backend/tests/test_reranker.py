@@ -166,9 +166,9 @@ def test_missing_model_raises_with_original_cause(monkeypatch, caplog):
     error = OSError('private-model-load-detail')
     _install_fake_transformers(monkeypatch, load_error=error)
     reranker = CrossEncoderReranker(RerankConfig(model_name='missing-model'))
-    with pytest.raises(RuntimeError, match='RERANKER_MODEL_PATH') as caught:
+    with pytest.raises(OSError) as caught:
         reranker.rerank('查询', _make_candidates(), top_k=2)
-    assert caught.value.__cause__ is error
+    assert caught.value is error
     assert reranker.model is None and reranker.tokenizer is None
     assert not reranker._model_loaded
     assert 'private-model-load-detail' not in caplog.text
@@ -178,7 +178,7 @@ def test_loading_can_recover_on_next_request(monkeypatch, tmp_path):
     _force_cpu(monkeypatch)
     calls = _install_fake_transformers(monkeypatch, load_error=OSError('missing model'))
     reranker = CrossEncoderReranker(RerankConfig(model_name=str(tmp_path / 'model')))
-    with pytest.raises(RuntimeError):
+    with pytest.raises(OSError):
         reranker.rerank('查询', _make_candidates())
     assert len(calls) == 1
     _install_fake_transformers(monkeypatch, tokenizer=_FakeTokenizer(), model=_FakeModel())
@@ -380,3 +380,34 @@ def test_requested_warmup_is_completed_or_raises(monkeypatch, fail):
     else:
         assert len(encoder.rerank('查询', _make_candidates())) == 3
         assert encoder._model_loaded and encoder._warmup_done
+
+
+def test_config_reads_model_path_when_constructed(monkeypatch):
+    monkeypatch.setenv('RERANKER_MODEL_PATH', '/models/first')
+    first = RerankConfig()
+    monkeypatch.setenv('RERANKER_MODEL_PATH', '/models/second')
+    assert first.model_name == '/models/first'
+    assert RerankConfig().model_name == '/models/second'
+    assert RerankConfig(model_name='/models/explicit').model_name == '/models/explicit'
+
+
+def test_failed_relative_model_load_never_tries_another_directory(monkeypatch):
+    _force_cpu(monkeypatch)
+    error = OSError('configured model missing')
+    calls = _install_fake_transformers(monkeypatch, load_error=error)
+    encoder = CrossEncoderReranker(RerankConfig(model_name='relative/model'))
+    with pytest.raises(OSError) as caught:
+        encoder.rerank('查询', _make_candidates())
+    assert caught.value is error
+    assert len(calls) == 1 and calls[0]['path'] == 'relative/model'
+    assert calls[0]['kwargs']['local_files_only'] is True
+    assert encoder.model is None and encoder.tokenizer is None
+
+
+def test_explicit_model_path_reaches_tokenizer_and_model_unchanged(monkeypatch):
+    _force_cpu(monkeypatch)
+    monkeypatch.setenv('RERANKER_MODEL_PATH', '/models/environment')
+    calls = _install_fake_transformers(monkeypatch, tokenizer=_FakeTokenizer(), model=_FakeModel())
+    encoder = CrossEncoderReranker(RerankConfig(model_name='chosen/model'))
+    assert len(encoder.rerank('查询', _make_candidates())) == 3
+    assert [call['path'] for call in calls] == ['chosen/model', 'chosen/model']

@@ -21,12 +21,6 @@ logger = logging.getLogger(__name__)
 _BACKEND_DIR = Path(__file__).parent
 
 
-def _resolve_path(p: str) -> str:
-    if os.path.isabs(p):
-        return p
-    return str(_BACKEND_DIR / p)
-
-
 def _env_flag(name: str, default: str = "false") -> bool:
     """读取布尔型环境变量（支持1/true/yes/on）。"""
     return os.getenv(name, default).strip().lower() in {"1", "true", "yes", "on"}
@@ -34,11 +28,10 @@ def _env_flag(name: str, default: str = "false") -> bool:
 
 @dataclass
 class RerankConfig:
-    model_name: str = os.getenv("RERANKER_MODEL_PATH", _resolve_path("bge-reranker-base"))
+    model_name: str = field(default_factory=lambda: os.getenv("RERANKER_MODEL_PATH", str(_BACKEND_DIR / "bge-reranker-base")))
     device: str = "cuda:0"
     batch_size: int = 8
     max_length: int = 512
-    enable_quantization: bool = False
     warmup_on_init: bool = False
     score_normalize: bool = True
     # 默认离线：仅当显式设置 RERANKER_ALLOW_DOWNLOAD=true 时才允许联网下载
@@ -54,7 +47,7 @@ class RerankConfig:
 class CrossEncoderReranker:
     """Cross-Encoder重排器，使用BGE-Reranker-Base模型对候选文档进行精细化相关性评分。
 
-    支持4bit量化、模型预热、GPU/CPU自动切换、分数归一化。
+    支持模型预热、GPU/CPU自动切换、分数归一化。
     默认离线加载本地模型目录；加载或推理失败直接抛出异常。
     """
 
@@ -88,20 +81,6 @@ class CrossEncoderReranker:
         except Exception:
             return False
 
-    def _candidate_model_paths(self) -> list[str]:
-        """返回去重后的候选模型路径（原始值 + 相对backend/knowledge目录解析的绝对路径）。"""
-        paths: list[str] = []
-        seen = set()
-        for p in (self.config.model_name, _resolve_path(self.config.model_name)):
-            if not p:
-                continue
-            key = os.path.normcase(os.path.normpath(os.path.abspath(p)))
-            if key in seen:
-                continue
-            seen.add(key)
-            paths.append(p)
-        return paths
-
     def _load_model(self) -> bool:
         if self._model_loaded:
             return True
@@ -120,21 +99,8 @@ class CrossEncoderReranker:
                 # CPU路径不使用CUDA专属dtype
                 load_kwargs["torch_dtype"] = torch.float16
 
-            last_error: Exception | None = None
-            for path in self._candidate_model_paths():
-                if not Path(path).exists() and not self.config.allow_download:
-                    logger.warning(f"本地模型路径不存在（离线模式，不联网下载）: {path}")
-                try:
-                    self.tokenizer = AutoTokenizer.from_pretrained(path, **load_kwargs)
-                    self.model = AutoModelForSequenceClassification.from_pretrained(path, **load_kwargs)
-                    break
-                except Exception as e:
-                    last_error = e
-                    self.tokenizer = None
-                    self.model = None
-
-            if self.model is None or self.tokenizer is None:
-                raise RuntimeError("CrossEncoder 模型加载失败，请检查 RERANKER_MODEL_PATH 和本地模型文件") from last_error
+            self.tokenizer = AutoTokenizer.from_pretrained(self.config.model_name, **load_kwargs)
+            self.model = AutoModelForSequenceClassification.from_pretrained(self.config.model_name, **load_kwargs)
 
             self.model.to(self.device)
             self.model.eval()
