@@ -1965,6 +1965,7 @@ class MemoryEnrichmentScheduler:
                     self._failed += 1
                     outcomes.append("failed")
                     self._last_error = type(exc).__name__
+                    result["error"] = self._last_error
                     logger.warning(
                         "后台记忆单条写入失败 character=%s operation=%s type=%s",
                         job.character_id,
