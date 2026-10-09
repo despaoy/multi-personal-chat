@@ -533,18 +533,18 @@ class VectorDatabase:
         Returns:
             按相似度降序排列的搜索结果列表，每项包含完整元数据及score字段
         """
-        self._ensure_index()
-        if len(self.metadata) == 0:
-            return []
-
-        # 查询缓存检查
-        cache_key = self._get_query_cache_key(query, top_k, threshold, filters)
-        cached = self._get_cached_query(cache_key)
-        if cached is not None:
-            logger.debug(f"查询缓存命中: query='{query[:30]}...'")
-            return cached
-
         with self._lock:
+            self._ensure_index()
+            if len(self.metadata) == 0:
+                return []
+
+            # 查询缓存检查
+            cache_key = self._get_query_cache_key(query, top_k, threshold, filters)
+            cached = self._get_cached_query(cache_key)
+            if cached is not None:
+                logger.debug(f"查询缓存命中: query='{query[:30]}...'")
+                return cached
+
             query_embedding = self._get_embedding(query)
             query_embedding = np.array([query_embedding]).astype('float32')
 
@@ -616,8 +616,8 @@ class VectorDatabase:
         Returns:
             按融合分数降序排列的搜索结果，每项包含vector_score、bm25_score、fused_score
         """
-        recall_k = min(top_k * 3, len(self.metadata))
         with self._lock:
+            recall_k = min(top_k * 3, len(self.metadata))
             vector_results = self.search(query, top_k=recall_k, threshold=threshold, filters=filters)
 
             doc_scores: Dict[int, Dict[str, float]] = {}
