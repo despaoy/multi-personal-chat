@@ -51,7 +51,7 @@ from db.memory_claim_guard import MemoryClaimConflict
 from db.memory_source import ClaimSourceRevokedError
 from inference.context_budget import CONTEXT_SAFETY_MARGIN_TOKENS, estimated_tokens
 from inference.openai_protocol import chat_completions_endpoint, completed_chat_content, nonthinking_parameters
-from infra.environment import read_bool
+from infra.environment import parse_unit_interval, read_bool
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -83,7 +83,7 @@ _MAX_VALUE_CHARS = 48
 _MAX_EVIDENCE_CHARS = 120
 _MAX_QUALIFIERS = 8
 _MAX_QUALIFIER_CHARS = 48
-_MEMORY_WRITE_SEMANTIC_THRESHOLD = max(0.0, min(1.0, float(os.getenv("MEMORY_WRITE_SEMANTIC_THRESHOLD", "0.35"))))
+_MEMORY_WRITE_SEMANTIC_THRESHOLD = parse_unit_interval(os.getenv("MEMORY_WRITE_SEMANTIC_THRESHOLD", "0.35"), "MEMORY_WRITE_SEMANTIC_THRESHOLD")
 _MEMORY_WRITE_RRF_K = 60
 
 _SEMANTIC_OPERATIONS = {
