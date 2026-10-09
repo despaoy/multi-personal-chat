@@ -20,7 +20,6 @@ import json
 import logging
 import math
 import os
-import re
 from collections import Counter, defaultdict
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -28,6 +27,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 
 from .documents import KnowledgeIndexDocument
+from .tokenization import tokenize
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
@@ -42,19 +42,6 @@ DOCUMENTS_FILE = "documents.jsonl"
 FAISS_FILE = "faiss.bin"
 MANIFEST_FILE = "index_manifest.json"
 CACHE_FILE = "embedding_cache.npz"
-
-
-def _tokenize(text: str) -> list[str]:
-    """中文 jieba 分词 + 英文/数字词切分（与现有 BM25 约定一致）。"""
-    tokens = re.findall(r"\w+", text.lower())
-    try:
-        import jieba
-
-        cn_tokens = list(jieba.cut(text))
-        tokens.extend(t for t in cn_tokens if t.strip() and not t.isascii())
-    except ImportError:
-        tokens.extend(re.findall(r"[\u4e00-\u9fff]", text))
-    return [t for t in tokens if t.strip()]
 
 
 class BM25Index:
@@ -92,7 +79,7 @@ class BM25Index:
         self._doc_lens = []
         self._doc_freqs = defaultdict(int)
         for doc in documents:
-            tokens = _tokenize(self.document_text(doc, self.field_weight))
+            tokens = tokenize(self.document_text(doc, self.field_weight))
             self._doc_tokens.append(tokens)
             self._doc_lens.append(len(tokens))
             for token in set(tokens):
@@ -108,7 +95,7 @@ class BM25Index:
         """返回 (文档行号, BM25 分数) 列表，按分数降序。"""
         if not self._built or top_k <= 0:
             return []
-        query_tokens = _tokenize(query)
+        query_tokens = tokenize(query)
         if not query_tokens:
             return []
         scores: list[tuple[int, float]] = []

@@ -10,7 +10,6 @@ import logging
 import math
 import os
 import pickle
-import re
 import time
 from collections import Counter, OrderedDict, defaultdict
 from copy import deepcopy
@@ -24,6 +23,7 @@ import faiss
 import numpy as np
 
 from knowledge.retrieval_core.embedding import resolve_local_model_path
+from knowledge.retrieval_core.tokenization import tokenize
 from knowledge.snapshot_store import SNAPSHOT_NAME, document_ids, load_snapshot, save_snapshot
 
 logger = logging.getLogger(__name__)
@@ -65,18 +65,6 @@ class BM25Retriever:
         self.tokenized_corpus: List[List[str]] = []
         self._built = False
 
-    def _tokenize(self, text: str) -> List[str]:
-        """中文用jieba分词，英文按单词切分"""
-        tokens = re.findall(r'[\w]+', text.lower())
-        try:
-            import jieba
-            cn_tokens = list(jieba.cut(text))
-            tokens.extend(t for t in cn_tokens if t.strip() and not t.isascii())
-        except ImportError:
-            cn_chars = re.findall(r'[\u4e00-\u9fff]', text)
-            tokens.extend(cn_chars)
-        return tokens
-
     def add_documents(self, documents: List[Dict[str, Any]]):
         """将文档加入BM25索引，对标题和内容分词后统计词频和文档频率。
 
@@ -86,7 +74,7 @@ class BM25Retriever:
         for doc in documents:
             text = f"{doc.get('title', '')} {doc.get('content', '')}"
             self.corpus.append(text)
-            tokens = self._tokenize(text)
+            tokens = tokenize(text)
             self.tokenized_corpus.append(tokens)
             self.doc_lens.append(len(tokens))
 
@@ -118,7 +106,7 @@ class BM25Retriever:
         if not self._built or not self.corpus:
             return []
 
-        query_tokens = self._tokenize(query)
+        query_tokens = tokenize(query)
         if not query_tokens:
             return []
 
