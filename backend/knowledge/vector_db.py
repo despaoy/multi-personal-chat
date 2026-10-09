@@ -705,7 +705,7 @@ class VectorDatabase:
                 norm_bm25 = scores["bm25_score"] / max_bm25 if max_bm25 > 0 else 0
                 fused_score = (1 - keyword_weight) * norm_vector + keyword_weight * norm_bm25
 
-                doc = scores["doc"]
+                doc = dict(scores["doc"])
                 doc["vector_score"] = scores["vector_score"]
                 doc["bm25_score"] = scores["bm25_score"]
                 doc["fused_score"] = fused_score
