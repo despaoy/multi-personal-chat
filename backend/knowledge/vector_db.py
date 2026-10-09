@@ -384,53 +384,24 @@ class VectorDatabase:
     def _get_embedding(self, text: str) -> np.ndarray:
         return self._get_embeddings_batch([text])[0]
 
-    def _maybe_migrate_index(self, new_doc_count: int):
-        current_type = self._determine_index_type()
-        if current_type == "flat" and new_doc_count >= self.config.auto_switch_threshold:
-            logger.info(f"文档数({new_doc_count})超过阈值({self.config.auto_switch_threshold})，迁移到IVF索引")
-            self._migrate_to_ivf()
-        elif current_type == "ivf" and new_doc_count >= 100000:
-            logger.info(f"文档数({new_doc_count})超过10万，迁移到HNSW索引")
-            self._migrate_to_hnsw()
-
-    def _migrate_to_ivf(self):
-        if len(self.metadata) == 0:
+    def _maybe_migrate_index(self):
+        if self.config.index_type != "auto":
             return
-        old_index = self.index
-        old_metadata = self.metadata
-        old_id_to_index = self._id_to_index
-        try:
-            documents = self.metadata.copy()
-            self.index = None
-            self.metadata = []
-            self._id_to_index = {}
-            self._create_index("ivf")
-            self._re_add_all_documents(documents)
-        except Exception:
-            self.index = old_index
-            self.metadata = old_metadata
-            self._id_to_index = old_id_to_index
-            logger.error("IVF索引迁移失败，已恢复旧索引")
-            raise
+        target = self._determine_index_type()
+        expected = {"flat": faiss.IndexFlatIP, "ivf": faiss.IndexIVFFlat, "hnsw": faiss.IndexHNSWFlat}[target]
+        if not isinstance(faiss.downcast_index(self.index.index), expected):
+            self._migrate_index(target)
 
-    def _migrate_to_hnsw(self):
-        if len(self.metadata) == 0:
+    def _migrate_index(self, index_type: str):
+        if not self.metadata:
             return
-        old_index = self.index
-        old_metadata = self.metadata
-        old_id_to_index = self._id_to_index
+        old_index, old_metadata, old_mapping = self.index, self.metadata, self._id_to_index
         try:
-            documents = self.metadata.copy()
-            self.index = None
-            self.metadata = []
-            self._id_to_index = {}
-            self._create_index("hnsw")
-            self._re_add_all_documents(documents)
+            self._create_index(index_type)
+            self._re_add_all_documents(old_metadata.copy())
         except Exception:
-            self.index = old_index
-            self.metadata = old_metadata
-            self._id_to_index = old_id_to_index
-            logger.error("HNSW索引迁移失败，已恢复旧索引")
+            self.index, self.metadata, self._id_to_index = old_index, old_metadata, old_mapping
+            logger.error("索引迁移失败，已恢复旧索引")
             raise
 
     def _re_add_all_documents(self, documents: List[Dict[str, Any]]):
@@ -530,10 +501,9 @@ class VectorDatabase:
             else:
                 logger.info(f"延迟保存：已添加 {self._add_count} 个文档（阈值: {self.config.save_on_every_n_adds}）")
 
-            self._maybe_migrate_index(len(self.metadata))
-
-            # 数据变更后清除查询缓存，防止脏读过期结果
+            # 已提交新增文档，后续迁移失败也不能继续使用旧查询缓存。
             self.clear_cache()
+            self._maybe_migrate_index()
 
             logger.info(f"成功添加 {len(documents)} 个文档到向量数据库（总计: {len(self.metadata)}）")
 
