@@ -774,12 +774,12 @@ class ModelManager:
 
     def set_lora_adapter(self, lora_path: Optional[str]):
         provider = self.get_current_provider()
-        if hasattr(provider, 'set_lora_adapter'):
-            provider.set_lora_adapter(lora_path)
-        else:
-            peft_provider = self._providers.get(ModelProvider.TRANSFORMERS_PEFT)
-            if peft_provider and hasattr(peft_provider, 'set_lora_adapter'):
-                peft_provider.set_lora_adapter(lora_path)
+        setter = getattr(provider, 'set_lora_adapter', None)
+        if setter is None:
+            if lora_path is not None:
+                raise ValueError("Selected model provider does not support LoRA")
+            return
+        setter(lora_path)
 
     def get_status(self) -> Dict[str, Any]:
         providers_status = {}

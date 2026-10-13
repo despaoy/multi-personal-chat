@@ -63,41 +63,16 @@ def refresh_lora_dir_map(lora_base: Optional[Path] = None) -> dict[str, str]:
         return dict(LORA_DIR_MAP)
 
 
-# C-R1 fix: 原先 LORA_PATH_MAP = {} 是静态空 dict，全程无代码填充，
-# 导致 vLLM 故障回退到 TransformersPeftProvider 时 LoRA 永远不会被加载，
-# 静默退化为 base model。改为函数动态查找：从 db.loras 表的 id 列映射
-# 到 LORA_DIR_MAP 的目录路径。调用方需改为 get_lora_path_by_id(id)。
 def get_lora_path_by_id(lora_id: str, *, loras: list | None = None) -> str | None:
-    """根据 LoRA id 查找其文件系统路径。
-
-    查找逻辑：
-    1. 遍历 loras（默认 db.loras），找到匹配 id 的 LoRA 记录
-    2. 用 LoRA 的 name 字段在 LORA_DIR_MAP 中查找路径
-    3. 若 name 未命中，尝试用 id 本身作为目录名（历史兼容）
-
-    loras 由容器注入的调用方传入（从当前应用容器数据库读出的
-    列表）：默认查全局 db.loras 时，自定义容器下 LoRA 列表来自
-    容器、路径却在全局库查不到，会静默退回基座模型。
-    """
-    try:
-        directory_map = refresh_lora_dir_map()
-        for lora in (loras if loras is not None else db.loras):
-            if str(lora.get("id")) == str(lora_id):
-                name = lora.get("name", "")
-                if name and name in directory_map:
-                    return directory_map[name]
-                # 历史兼容：部分旧 LoRA 的目录名等于 id
-                if str(lora_id) in directory_map:
-                    return directory_map[str(lora_id)]
-                return None
-    except Exception:
-        pass
+    """Resolve a registered adapter by name or stored ID; propagate read errors."""
+    directory_map = refresh_lora_dir_map()
+    for lora in (loras if loras is not None else db.loras):
+        if str(lora.get("id")) == str(lora_id):
+            name = lora.get("name", "")
+            if name and name in directory_map:
+                return directory_map[name]
+            return directory_map.get(str(lora_id))
     return None
-
-
-# 保留 LORA_PATH_MAP 作为空 dict 的向后兼容别名，但标记为废弃。
-# 新代码应使用 get_lora_path_by_id()。
-LORA_PATH_MAP = {}  # deprecated, use get_lora_path_by_id()
 
 
 def _resolve_path(p: str) -> str:

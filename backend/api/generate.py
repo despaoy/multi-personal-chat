@@ -373,6 +373,8 @@ async def _generate_reply_body(
     else:
         lora_name = selected_lora["name"] if selected_lora else "default"
 
+    if selected_lora and _mgr._current_provider.value not in {"vllm", "transformers_peft"}:
+        raise HTTPException(422, "所选模型提供商不支持 LoRA，请选择基础模型或显式选择支持 LoRA 的提供商")
     vllm_lora_name = resolve_lora_served_name(lora_name) if lora_name != "default" else "default"
 
     # ── 角色上下文准备（仅当 LoRA 显式映射了人物画像时启用） ──
@@ -483,8 +485,6 @@ async def _generate_reply_body(
             model_label = model_name
             stored_model_name = "vllm"
         else:
-            from inference.model_manager import ModelProvider
-
             semaphore = get_llm_semaphore()
             try:
                 await asyncio.wait_for(semaphore.acquire(), timeout=30.0)
@@ -492,15 +492,13 @@ async def _generate_reply_body(
                 raise HTTPException(503, "服务繁忙，请稍后再试") from exc
             try:
                 async with _loop_local_lock("local_model"):
-                    lora_path = get_lora_path_by_id(selected_lora["id"], loras=loras) if selected_lora else None
-                    if lora_path:
-                        if ModelProvider.TRANSFORMERS_PEFT in _mgr._providers:
-                            peft_provider = _mgr._providers[ModelProvider.TRANSFORMERS_PEFT]
-                            if hasattr(peft_provider, "set_lora_adapter"):
-                                peft_provider.set_lora_adapter(lora_path)
-                            _mgr.set_provider(ModelProvider.TRANSFORMERS_PEFT)
-                    else:
-                        _mgr.set_lora_adapter(None)
+                    try:
+                        lora_path = get_lora_path_by_id(selected_lora["id"], loras=loras) if selected_lora else None
+                    except OSError as exc:
+                        raise HTTPException(503, "所选 LoRA 目录读取失败，请检查适配器存储后重试") from exc
+                    if selected_lora and lora_path is None:
+                        raise HTTPException(409, "所选 LoRA 没有可用本地目录，请先重新激活")
+                    _mgr.set_lora_adapter(lora_path)
 
                     async def adapter(*, messages, **kwargs):
                         text, _cost = await _mgr.async_generate(
