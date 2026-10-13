@@ -607,3 +607,48 @@ async def test_structural_output_limits_do_not_silently_publish_partial_success(
         with pytest.raises(RuntimeError, match="exceeds"):
             await run()
         assert [event.type for event in events] == (["meta"] if streaming else [])
+
+
+@pytest.mark.parametrize("kwargs", [
+    {"generation_timeout": 0}, {"generation_timeout": -1}, {"generation_timeout": True},
+    {"generation_timeout": float("nan")}, {"generation_timeout": float("inf")},
+    {"answer_max_chars": -1}, {"answer_max_chars": True}, {"answer_max_chars": 3.5},
+    {"answer_max_chars": "4000"}, {"answer_max_chars": None},
+])
+def test_generation_config_rejects_invalid_limits(kwargs):
+    with pytest.raises(ValueError, match="generation_timeout|answer_max_chars"):
+        GroundedAnswerService(**kwargs)
+
+
+@pytest.mark.parametrize("streaming", [False, True])
+async def test_generation_config_finite_timeout_cancels_model_work(streaming):
+    import asyncio
+
+    closed = False
+
+    async def generate(**kwargs):
+        nonlocal closed
+        try:
+            await asyncio.sleep(1)
+            return "甲是学生。[S1]"
+        finally:
+            closed = True
+
+    service = GroundedAnswerService(retriever=lambda *a, **kw: _bundle(), corrective_enabled=False, generation_timeout=0.01)
+    with pytest.raises(TimeoutError):
+        if streaming:
+            _ = [event async for event in service.answer_stream("甲是谁", generate=generate, domain_id="story")]
+        else:
+            await service.answer("甲是谁", generate=generate, domain_id="story")
+    assert closed
+
+
+async def test_generation_config_zero_explicitly_disables_character_limit():
+    body = "甲是学生。" * 1000
+
+    async def generate(**kwargs):
+        return body + "[S1]"
+
+    service = GroundedAnswerService(retriever=lambda *a, **kw: _bundle(), corrective_enabled=False, answer_max_chars=0)
+    result = await service.answer("甲是谁", generate=generate, domain_id="story")
+    assert result.answer == body and not result.abstained

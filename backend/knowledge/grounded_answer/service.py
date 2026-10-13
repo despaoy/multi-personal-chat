@@ -19,6 +19,7 @@ import os
 import re
 import time
 from collections.abc import AsyncIterator, Awaitable, Callable
+from math import isfinite
 from typing import Any
 
 from infra.environment import read_bool
@@ -90,7 +91,11 @@ class GroundedAnswerService:
         self.corrective_max_retries = corrective_max_retries
         self.abstention_reply = abstention_reply or DEFAULT_ABSTENTION_REPLY
         self.generation_timeout = float(generation_timeout)
-        self.answer_max_chars = int(answer_max_chars)
+        if isinstance(generation_timeout, bool) or not isfinite(self.generation_timeout) or self.generation_timeout <= 0:
+            raise ValueError("generation_timeout must be a finite positive number")
+        if type(answer_max_chars) is not int or answer_max_chars < 0:
+            raise ValueError("answer_max_chars must be a non-negative integer")
+        self.answer_max_chars = answer_max_chars
 
     # ------------------------------------------------------------------
     # 对外入口 1：知识问答（自检索；/api/ask 等）
