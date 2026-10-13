@@ -223,3 +223,84 @@ async def test_ask_returns_http_error_for_provider_failure(monkeypatch):
     assert result.json()["success"] is False
     assert "synthetic private detail" not in result.text
     assert "answer" not in result.json()
+
+
+@pytest.mark.parametrize("kind", ["provider", "timeout", "cancelled", "invalid_chunk", "empty", "citation"])
+async def test_stream_failure_propagates_without_success_events_and_closes(kind):
+    import asyncio
+
+    closed = False
+    error = OSError("synthetic provider failure")
+
+    async def generate_stream(**kwargs):
+        nonlocal closed
+        try:
+            if kind == "provider":
+                yield "unverified partial text"
+                raise error
+            if kind == "timeout":
+                await asyncio.sleep(1)
+            if kind == "cancelled":
+                raise asyncio.CancelledError
+            yield {"invalid_chunk": None, "empty": "<think>only reasoning</think>", "citation": "甲是学生。"}.get(kind, "")
+        finally:
+            closed = True
+
+    async def generate(**kwargs):
+        raise AssertionError("must not fall back to non-stream generation")
+
+    service = GroundedAnswerService(
+        retriever=lambda *a, **kw: _bundle(), corrective_enabled=False,
+        generation_timeout=0.01 if kind == "timeout" else 10,
+    )
+    events = []
+    expected = {"provider": OSError, "timeout": TimeoutError, "cancelled": asyncio.CancelledError,
+                "invalid_chunk": TypeError, "empty": RuntimeError, "citation": RuntimeError}[kind]
+    with pytest.raises(expected) as caught:
+        async for event in service.answer_stream("甲是谁", generate=generate, generate_stream=generate_stream, domain_id="story"):
+            events.append(event.type)
+    if kind == "provider":
+        assert caught.value is error
+    assert closed
+    assert events == ["meta"]
+
+
+@pytest.mark.parametrize("failure", ["retrieval", "provider"])
+async def test_ask_stream_ends_with_error_without_done(monkeypatch, failure):
+    import json
+    from unittest.mock import AsyncMock
+
+    from fastapi import FastAPI
+    from httpx import ASGITransport, AsyncClient
+
+    from api import ask
+
+    def retrieve(*a, **kw):
+        if failure == "retrieval":
+            raise OSError("synthetic private detail")
+        return _bundle()
+
+    generate = AsyncMock(side_effect=OSError("synthetic private detail"))
+    service = GroundedAnswerService(retriever=retrieve, corrective_enabled=False)
+    monkeypatch.setattr(ask, "get_grounded_answer_service", AsyncMock(return_value=service))
+    monkeypatch.setattr(ask, "_resolve_generate_adapters", AsyncMock(return_value=(generate, None, "test")))
+    app = FastAPI()
+    app.include_router(ask.router)
+    app.dependency_overrides[ask.get_current_user] = lambda: {"id": 1, "role": "user"}
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post("/api/ask/stream", json={"message": "甲是谁", "domainId": "story"})
+    events = [json.loads(line[6:]) for line in response.text.splitlines() if line.startswith("data: ")]
+    assert [event["type"] for event in events] == (["error"] if failure == "retrieval" else ["meta", "error"])
+    assert "synthetic private detail" not in response.text
+    if failure == "retrieval":
+        generate.assert_not_awaited()
+
+
+async def test_stream_no_domain_remains_normal_abstention():
+    async def generate(**kwargs):
+        raise AssertionError("no evidence must not invoke model")
+
+    service = GroundedAnswerService(retriever=lambda *a, **kw: None)
+    events = [event async for event in service.answer_stream("普通问题", generate=generate)]
+    assert [event.type for event in events] == ["meta", "delta", "citations", "done"]
+    assert events[-1].data["abstained"] is True

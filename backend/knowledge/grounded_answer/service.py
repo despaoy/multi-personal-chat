@@ -7,7 +7,7 @@
 - 不绕过现有 Provider / 流式输出 / 业务服务：生成函数由调用方注入
   （vLLM 客户端 / ModelManager 适配器 / 评估用 DeepSeek 适配器）
 - abstention 模式不调用模型（结构性防绕过）
-- 非流式检索/模型失败向上传播，不以弃答掩盖系统错误
+- 检索/模型失败向上传播，不以弃答掩盖系统错误
 - 流式与非流式共用同一 citation 绑定逻辑，最终结构语义一致
 """
 
@@ -224,56 +224,12 @@ class GroundedAnswerService:
         start = time.perf_counter()
 
         retrieval_start = time.perf_counter()
-        try:
-            bundle, corrective_info = await self._retrieve_with_optional_correction(
-                self._contextual_retrieval_query(query, history, domain_id),
-                domain_id=domain_id,
-                top_k=top_k,
-                filters=filters,
-            )
-        except asyncio.CancelledError:
-            raise
-        except Exception as exc:  # noqa: BLE001 - SSE 内返回结构化降级序列
-            timings.retrieval_ms = (time.perf_counter() - retrieval_start) * 1000
-            logger.warning("Grounded Answer 流式检索失败（降级 abstention）: %s", type(exc).__name__)
-            packet = EvidencePacket(
-                query=query,
-                domain_id=domain_id,
-                answer_mode=AnswerMode.ABSTENTION,
-                retrieval_confidence=0.0,
-                warnings=["degraded:retrieval_unavailable"],
-            )
-            yield AnswerStreamEvent(
-                type="meta",
-                data={"answer_mode": AnswerMode.ABSTENTION.value, "domain_id": domain_id},
-            )
-            yield AnswerStreamEvent(
-                type="error",
-                data={
-                    "kind": FailureKind.RETRIEVAL_UNAVAILABLE.value,
-                    "message": "知识检索暂不可用",
-                },
-            )
-            yield AnswerStreamEvent(type="delta", data={"text": self.abstention_reply})
-            yield AnswerStreamEvent(type="citations", data={"citations": []})
-            yield AnswerStreamEvent(
-                type="done",
-                data=self._done_payload(
-                    answer=self.abstention_reply,
-                    packet=packet,
-                    citations=[],
-                    warnings=list(packet.warnings),
-                    timings=timings,
-                    start=start,
-                    model_invoked=False,
-                    corrective_info=None,
-                    model_id=model_id,
-                    abstained=True,
-                    failure_kind=FailureKind.RETRIEVAL_UNAVAILABLE.value,
-                    used_rag=False,
-                ),
-            )
-            return
+        bundle, corrective_info = await self._retrieve_with_optional_correction(
+            self._contextual_retrieval_query(query, history, domain_id),
+            domain_id=domain_id,
+            top_k=top_k,
+            filters=filters,
+        )
         timings.retrieval_ms = (time.perf_counter() - retrieval_start) * 1000
 
         decision = self.mode_decider.decide(bundle, persona=bool(persona_prompt))
@@ -367,69 +323,14 @@ class GroundedAnswerService:
                     chunk = await asyncio.wait_for(anext(stream_iter), timeout=remaining)
                 except StopAsyncIteration:
                     break
+                if not isinstance(chunk, str):
+                    raise TypeError("Grounded model stream chunk must be text")
                 if not chunk:
                     continue
                 if first_token:
                     timings.first_token_ms = (time.perf_counter() - generation_start) * 1000
                     first_token = False
-                chunks.append(str(chunk))
-        except asyncio.CancelledError:
-            logger.info("Grounded Answer 流式生成被客户端取消 query_len=%d", len(query))
-            raise
-        except TimeoutError:
-            logger.warning("Grounded Answer 流式生成超时（降级 abstention）query_len=%d", len(query))
-            yield AnswerStreamEvent(
-                type="error",
-                data={
-                    "kind": FailureKind.GENERATION_TIMEOUT.value,
-                    "message": "生成服务暂不可用",
-                },
-            )
-            yield AnswerStreamEvent(type="citations", data={"citations": []})
-            yield AnswerStreamEvent(
-                type="done",
-                data=self._done_payload(
-                    answer=self.abstention_reply,
-                    packet=packet,
-                    citations=[],
-                    warnings=[*packet.warnings, "generation_degraded"],
-                    timings=timings,
-                    start=start,
-                    model_invoked=True,
-                    corrective_info=corrective_info,
-                    model_id=model_id,
-                    abstained=True,
-                    failure_kind=FailureKind.GENERATION_TIMEOUT.value,
-                ),
-            )
-            return
-        except Exception as e:  # noqa: BLE001 - 中途失败不得返回伪完整 citations
-            logger.warning("Grounded Answer 流式生成失败（降级 abstention）: %s", e)
-            yield AnswerStreamEvent(
-                type="error",
-                data={
-                    "kind": self._classify_generation_error(e).value,
-                    "message": "生成服务暂不可用",
-                },
-            )
-            yield AnswerStreamEvent(type="citations", data={"citations": []})
-            yield AnswerStreamEvent(
-                type="done",
-                data=self._done_payload(
-                    answer=self.abstention_reply,
-                    packet=packet,
-                    citations=[],
-                    warnings=[*packet.warnings, "generation_degraded"],
-                    timings=timings,
-                    start=start,
-                    model_invoked=True,
-                    corrective_info=corrective_info,
-                    model_id=model_id,
-                    abstained=True,
-                    failure_kind=self._classify_generation_error(e).value,
-                ),
-            )
-            return
+                chunks.append(chunk)
         finally:
             if stream_iter is not None:
                 close = getattr(stream_iter, "aclose", None)
@@ -438,37 +339,14 @@ class GroundedAnswerService:
 
         timings.generation_ms = (time.perf_counter() - generation_start) * 1000
         raw_answer = _strip_think_blocks("".join(chunks))
+        if not raw_answer:
+            raise RuntimeError("Grounded model returned empty answer")
         result_citations, answer_text, warnings, citation_valid = self._finalize_answer(
             raw_answer, packet, want_citations=want_citations
         )
 
         if not citation_valid:
-            yield AnswerStreamEvent(
-                type="error",
-                data={
-                    "kind": FailureKind.INVALID_CITATION.value,
-                    "message": "回答未能绑定有效资料来源",
-                },
-            )
-            yield AnswerStreamEvent(type="delta", data={"text": self.abstention_reply})
-            yield AnswerStreamEvent(type="citations", data={"citations": []})
-            yield AnswerStreamEvent(
-                type="done",
-                data=self._done_payload(
-                    answer=self.abstention_reply,
-                    packet=packet,
-                    citations=[],
-                    warnings=warnings,
-                    timings=timings,
-                    start=start,
-                    model_invoked=True,
-                    corrective_info=corrective_info,
-                    model_id=model_id,
-                    abstained=True,
-                    failure_kind=FailureKind.INVALID_CITATION.value,
-                ),
-            )
-            return
+            raise RuntimeError("Grounded model answer failed citation validation")
 
         # 模型原始流可能含 think 块或引用标记；只有通过与非流式相同的
         # 校验和清理后才把正文交给客户端，避免先泄漏、后纠正。
@@ -760,21 +638,14 @@ class GroundedAnswerService:
 
     @staticmethod
     def _wrap_as_stream(generate: GenerateFn) -> GenerateStreamFn:
-        """无流式后端时降级：一次性生成后整体产出（保持事件契约一致）。"""
+        """将注入的一次性生成接口适配为流事件，不切换模型。"""
 
         async def _single_shot(**kwargs: Any) -> AsyncIterator[str]:
             text = await generate(**kwargs)
-            if text:
-                yield text
+            yield text
 
         return _single_shot
 
-    @staticmethod
-    def _classify_generation_error(exc: Exception) -> FailureKind:
-        name = type(exc).__name__.lower()
-        if any(token in name for token in ("connect", "timeout", "remote", "protocol")):
-            return FailureKind.PROVIDER_UNAVAILABLE
-        return FailureKind.INTERNAL_ERROR
 
 
 def _prompt_version() -> str:

@@ -209,8 +209,8 @@ async def ask_stream(
 ):
     """知识问答（SSE 流式）。
 
-    事件序列：meta → delta* → citations → done（中途失败为 error →
-    citations(空) → done(degraded)）。citation metadata 在正文完成后
+    事件序列：meta → delta* → citations → done；失败以 error 终止。
+    citation metadata 在正文完成后
     统一发送，避免流式过程中引用映射变化。
     """
     service = await get_grounded_answer_service()
