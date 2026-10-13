@@ -189,3 +189,79 @@ async def test_ranking_score_zero_prevents_answer_model_despite_high_recall_scor
 
     result = await service.answer("核对验收限制", domain_id=runtime.config.domain_id, generate=generate)
     assert result.abstained and not result.model_invoked and result.confidence == 0
+
+
+@pytest.mark.parametrize("field,value", [
+    ("max_lines", 0), ("max_lines", True), ("max_lines", "2"), ("max_lines", 1.5),
+    ("max_chars", 99), ("max_chars", True), ("max_chars", "100"), ("max_chars", 1.5),
+])
+def test_source_extractor_configuration_is_not_implicitly_corrected(tmp_path, field, value):
+    with pytest.raises(ValueError, match=field):
+        OriginalTextExtractor(tmp_path, **{field: value})
+
+
+@pytest.mark.parametrize("field", ["line_start", "line_end"])
+@pytest.mark.parametrize("value", [None, True, "1", 1.5])
+def test_source_extractor_line_identity_is_not_coerced(tmp_path, field, value):
+    from knowledge.retrieval_core.documents import SourceReference
+
+    (tmp_path / "source.txt").write_text("完整原文。", encoding="utf-8")
+    kwargs = dict(source_path="source.txt", line_start=1, line_end=1)
+    kwargs[field] = value
+    with pytest.raises(ValueError, match="来源行号"):
+        OriginalTextExtractor(tmp_path).extract(SourceReference(**kwargs))
+
+
+@pytest.mark.parametrize("start,end", [(1, 4), (4, 4), (3, 2)])
+def test_source_extractor_missing_declared_lines_are_not_partial_success(tmp_path, start, end):
+    from knowledge.retrieval_core.documents import SourceReference
+
+    (tmp_path / "source.txt").write_text("第一条。\n完整条件：仅离线。\n最终限制：禁止联网。", encoding="utf-8")
+    with pytest.raises(ValueError, match="来源行号"):
+        OriginalTextExtractor(tmp_path).extract(SourceReference("source.txt", start, end))
+
+
+@pytest.mark.parametrize("limit", ["lines", "chars"])
+def test_source_extractor_limits_fail_instead_of_losing_tail(tmp_path, limit):
+    from knowledge.retrieval_core.documents import SourceReference
+
+    body = ("完整资料。\n" * 2 if limit == "lines" else "完整资料。" * 25) + "最终限制：禁止联网。"
+    (tmp_path / "source.txt").write_text(body, encoding="utf-8")
+    source = SourceReference("source.txt", 1, len(body.splitlines()))
+    extractor = OriginalTextExtractor(tmp_path, **({"max_lines": 2} if limit == "lines" else {"max_chars": 100}))
+    with pytest.raises(ValueError, match="max_" + limit):
+        extractor.extract(source)
+
+
+def test_source_extractor_exact_limit_keeps_full_tail_and_metadata(tmp_path):
+    from knowledge.retrieval_core.documents import SourceReference
+
+    body = "完整资料。" * 25 + "\n最终限制：禁止联网。"
+    (tmp_path / "source.txt").write_text(body, encoding="utf-8")
+    excerpt = OriginalTextExtractor(tmp_path, max_lines=2, max_chars=len(body)).extract(SourceReference("source.txt", 1, 2))
+    assert excerpt.text == body and not excerpt.truncated
+    assert (excerpt.line_start, excerpt.line_end) == (1, 2)
+
+
+@pytest.mark.parametrize("failure", ["missing_file", "over_limit"])
+def test_source_extractor_tightening_does_not_hide_read_failures(tmp_path, failure):
+    from knowledge.retrieval_core.documents import SourceReference
+
+    source = SourceReference("source.txt", 1, 2)
+    if failure == "over_limit":
+        (tmp_path / "source.txt").write_text("完整证据。\n最终限制：禁止联网。", encoding="utf-8")
+    extractor = OriginalTextExtractor(tmp_path, max_lines=1 if failure == "over_limit" else 2)
+    with pytest.raises(ValueError if failure == "over_limit" else FileNotFoundError):
+        extractor.tighten_to_evidence(source, "完整证据。")
+
+
+def test_source_extractor_tightening_matches_complete_span_without_widening(tmp_path):
+    from knowledge.retrieval_core.documents import SourceReference
+
+    (tmp_path / "source.txt").write_text("第一条。\n完整证据：禁止联网。\n第三条。", encoding="utf-8")
+    extractor = OriginalTextExtractor(tmp_path)
+    source = SourceReference("source.txt", 1, 3)
+    narrowed, status = extractor.tighten_to_evidence(source, "完整证据：禁止联网。")
+    assert status == "exact_source_match" and (narrowed.line_start, narrowed.line_end) == (2, 2)
+    unmatched, status = extractor.tighten_to_evidence(source, "未在来源出现的文字")
+    assert unmatched is source and status == "approved_evidence_fallback"

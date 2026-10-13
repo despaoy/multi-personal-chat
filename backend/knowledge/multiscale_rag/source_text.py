@@ -43,9 +43,13 @@ class OriginalTextExtractor:
         max_lines: int = 800,
         max_chars: int = 40_000,
     ) -> None:
+        if type(max_lines) is not int or max_lines < 1:
+            raise ValueError("max_lines must be a positive integer")
+        if type(max_chars) is not int or max_chars < 100:
+            raise ValueError("max_chars must be an integer >= 100")
         self.corpus_root = Path(corpus_root).resolve()
-        self.max_lines = max(1, int(max_lines))
-        self.max_chars = max(100, int(max_chars))
+        self.max_lines = max_lines
+        self.max_chars = max_chars
 
     def resolve_path(self, source_path: str) -> Path:
         if not source_path:
@@ -64,30 +68,24 @@ class OriginalTextExtractor:
         return path.read_text(encoding="utf-8-sig").splitlines()
 
     def extract(self, source: SourceReference) -> RawExcerpt:
-        start = int(source.line_start or 0)
-        end = int(source.line_end or 0)
-        if start < 1 or end < start:
+        start, end = source.line_start, source.line_end
+        if type(start) is not int or type(end) is not int or start < 1 or end < start:
             raise ValueError(f"非法来源行号: {start}-{end}")
+        if end - start + 1 > self.max_lines:
+            raise ValueError("Complete source span exceeds max_lines; narrow the declared span or increase the limit")
 
         path = self.resolve_path(source.source_path)
         lines = self._read_lines(path)
-        if start > len(lines):
-            raise ValueError(f"起始行超出文件范围: {start}>{len(lines)}")
-
-        requested_end = min(end, len(lines))
-        limited_end = min(requested_end, start + self.max_lines - 1)
-        selected = lines[start - 1 : limited_end]
-        text = "\n".join(selected)
-        truncated = end > len(lines) or limited_end < requested_end
+        if end > len(lines):
+            raise ValueError(f"来源行号超出文件范围: {start}-{end}>{len(lines)}")
+        text = "\n".join(lines[start - 1:end])
         if len(text) > self.max_chars:
-            text = text[: self.max_chars]
-            truncated = True
+            raise ValueError("Complete source span exceeds max_chars; narrow the declared span or increase the limit")
         return RawExcerpt(
             source_path=source.source_path,
             line_start=start,
-            line_end=limited_end,
+            line_end=end,
             text=text,
-            truncated=truncated,
         )
 
     def tighten_to_evidence(
@@ -103,10 +101,7 @@ class OriginalTextExtractor:
         evidence = (evidence_text or "").strip().replace("\r\n", "\n")
         if not evidence:
             return source, "empty_evidence"
-        try:
-            excerpt = self.extract(source)
-        except (ValueError, FileNotFoundError, UnicodeError):
-            return source, "source_unavailable"
+        excerpt = self.extract(source)
 
         haystack = excerpt.text.replace("\r\n", "\n")
         offset = haystack.find(evidence)
