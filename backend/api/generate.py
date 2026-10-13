@@ -128,62 +128,13 @@ def _security_policy_response() -> GenerateResponse:
     )
 
 
-def _read_shared_kb_config_mapping() -> dict:
-    """读取进程共享的意图模型配置中的知识库名称→ID映射。
-
-    intent_classifier_model/config.json 是全局训练产物，与具体
-    应用容器无绑定；读取失败或文件不存在时返回空映射。
-    """
-    try:
-        from pathlib import Path
-
-        config_path = Path(__file__).parent.parent / "intent_classifier_model" / "config.json"
-        if config_path.exists():
-            import json
-
-            with open(config_path, encoding="utf-8") as f:
-                config = json.load(f)
-            mapping = config.get("kb_name_to_id", {})
-            return mapping if isinstance(mapping, dict) else {}
-    except Exception as e:
-        logger.debug("从模型config读取KB映射失败: %s", e)
-    return {}
-
-
 def _resolve_kb_id(kb_name: str, *, database=None):
-    """根据知识库名称查询其ID，用于RAG检索过滤
-
-    database 为容器注入的数据库时，只查该数据库：进程共享的
-    intent_classifier_model/config.json 是全局训练产物，其中可能
-    保存同名知识库的旧 ID，先读它会让容器实例绕过自己的数据库，
-    RAG 过滤到错误的知识库。database 为 None 时（全局默认路径）
-    优先读共享配置映射（训练时保存，避免每次查库），回退全局数据库。
-    """
-    if database is not None:
-        try:
-            bases = database.get_knowledge_bases()
-            for b in bases:
-                if b["name"] == kb_name:
-                    return b["id"]
-        except Exception as e:
-            logger.warning("数据库查询KB ID失败: %s", e)
-        return None
-
-    # 全局路径：优先从模型config读取（训练时保存的映射，避免每次查库）
-    kb_name_to_id = _read_shared_kb_config_mapping()
-    if kb_name in kb_name_to_id:
-        return kb_name_to_id[kb_name]
-
-    # 回退到全局数据库查询
-    try:
-        bases = db.get_knowledge_bases()
-        for b in bases:
-            if b["name"] == kb_name:
-                return b["id"]
-    except Exception as e:
-        logger.warning("数据库查询KB ID失败: %s", e)
-
-    return None
+    """Resolve a selected classifier label only against the active database."""
+    database = database if database is not None else db
+    base = database.get_knowledge_base_by_name(kb_name)
+    if base is None:
+        raise LookupError("Selected knowledge base is missing; refresh the intent classifier or restore the knowledge base")
+    return base["id"]
 
 
 async def _ensure_vllm():
@@ -1274,9 +1225,8 @@ async def _generate_with_retrieval(
                 else:
                     if kb_name:
                         kb_id = await asyncio.to_thread(_resolve_kb_id, kb_name, database=message_db)
-                        if kb_id is not None:
-                            filters = {"knowledge_base_id": kb_id}
-                            logger.info("RAG路由: 消息→「%s」(id=%s)", kb_name, kb_id)
+                        filters = {"knowledge_base_id": kb_id}
+                        logger.info("RAG路由: 消息→「%s」(id=%s)", kb_name, kb_id)
 
                     from knowledge.public_question_binding import resolve_question_binding
 

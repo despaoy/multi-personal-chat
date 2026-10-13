@@ -690,6 +690,12 @@ class PgDatabase:
             row = result.fetchone()
             return _row_to_dict(row) if row else None
 
+    async def get_knowledge_base_by_name(self, name: str) -> dict | None:
+        async with self.async_session() as session:
+            result = await session.execute(knowledge_bases_table.select().where(knowledge_bases_table.c.name == name))
+            row = result.fetchone()
+            return _row_to_dict(row) if row else None
+
     async def update_knowledge_base(self, kb_id: int, data: Dict) -> Optional[Dict]:
         """Publish a renamed evidence path with its index revision."""
         async with self.async_session() as session, session.begin():
@@ -3082,6 +3088,9 @@ class SyncPgAdapter:
 
     def get_knowledge_base(self, kb_id):
         return self._run(self._pg.get_knowledge_base(kb_id))
+
+    def get_knowledge_base_by_name(self, name):
+        return self._run(self._pg.get_knowledge_base_by_name(name))
 
     def get_knowledge_folder(self, folder_id):
         return self._run(self._pg.get_knowledge_folder(folder_id))

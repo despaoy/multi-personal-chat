@@ -1818,6 +1818,11 @@ class SQLiteDB:
         row = cursor.fetchone()
         return dict(row) if row else None
 
+    def get_knowledge_base_by_name(self, name: str):
+        """Read the current unique identity without listing document statistics."""
+        row = self._get_connection().execute('SELECT * FROM knowledge_bases WHERE name = ?', (name,)).fetchone()
+        return dict(row) if row else None
+
     def update_knowledge_base(self, kb_id: int, data: Dict):
         """Rename an evidence path and invalidate it in the same transaction."""
         conn = self._get_connection()

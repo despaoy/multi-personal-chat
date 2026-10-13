@@ -604,11 +604,6 @@ async def train_intent_classifier(
         negative_samples = all_samples.get("none", [])
         kb_samples = {k: v for k, v in all_samples.items() if k != "none"}
 
-        # 构建 KB名称→ID 映射（供预测时RAG过滤使用）
-        from db.adapter import db
-        all_bases = db.get_knowledge_bases()
-        kb_name_to_id = {b["name"]: b["id"] for b in all_bases if b["name"] in kb_names}
-
         total = sum(len(v) for v in all_samples.values())
         _add_log(f"样本统计: 总计 {total} 条, 知识库 {kb_names}, 负例 {len(negative_samples)} 条")
 
@@ -618,7 +613,7 @@ async def train_intent_classifier(
         # ── 2. 编码 + 训练 ──
         _training_status.update(stage="train", message="编码文本 + 训练多分类模型...", progress=15)
         _add_log("开始编码和训练...")
-        result = await asyncio.to_thread(_train_multiclass_model, kb_samples, negative_samples, kb_name_to_id)
+        result = await asyncio.to_thread(_train_multiclass_model, kb_samples, negative_samples)
 
         if not result.get("success"):
             raise RuntimeError(result.get("error", "训练失败"))
@@ -664,7 +659,6 @@ async def train_intent_classifier(
 def _train_multiclass_model(
     kb_samples: Dict[str, List[str]],
     negative_samples: List[str],
-    kb_name_to_id: Optional[Dict[str, int]] = None,
 ) -> Dict[str, Any]:
     try:
         from sentence_transformers import SentenceTransformer
@@ -743,7 +737,6 @@ def _train_multiclass_model(
         "embedding_model": "paraphrase-multilingual-MiniLM-L12-v2",
         "label_names": label_names,
         "label_map": label_map,
-        "kb_name_to_id": kb_name_to_id or {},
         "version": "4.1-multiclass-routed",
         "training_samples": len(texts),
         "samples_per_class": {name: labels.count(i) for name, i in label_map.items()},

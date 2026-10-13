@@ -332,58 +332,49 @@ def test_lora_path_resolution_uses_injected_loras(monkeypatch):
 
 
 def test_resolve_kb_id_uses_injected_database(monkeypatch):
-    """RAG 知识库映射的数据库回退必须使用注入的数据库。
-
-    自定义容器下查全局库会拿到错误的知识库 ID，RAG 检索过滤到
-    其他实例的知识库。
-    """
+    """A missing selected label cannot switch to another database."""
     import api.generate as gen
 
     class GlobalDB:
-        def get_knowledge_bases(self):
-            return [{"id": 99, "name": "全局知识库"}]
+        def get_knowledge_base_by_name(self, name):
+            return dict(id=99, name=name) if name == "全局知识库" else None
 
     class ContainerDB:
-        def get_knowledge_bases(self):
-            return [{"id": 7, "name": "游戏攻略"}]
+        def get_knowledge_base_by_name(self, name):
+            return dict(id=7, name=name) if name == "游戏攻略" else None
 
     monkeypatch.setattr(gen, "db", GlobalDB())
-    # 容器注入的数据库优先：返回容器库的 ID
     assert gen._resolve_kb_id("游戏攻略", database=ContainerDB()) == 7
-    # 同名知识库在全局库中不存在：不注入时查不到
-    assert gen._resolve_kb_id("游戏攻略") is None
+    assert gen._resolve_kb_id("全局知识库") == 99
+    with pytest.raises(LookupError, match="Selected knowledge base is missing"):
+        gen._resolve_kb_id("游戏攻略")
+    with pytest.raises(LookupError, match="Selected knowledge base is missing"):
+        gen._resolve_kb_id("全局知识库", database=ContainerDB())
 
 
-def test_resolve_kb_id_container_db_bypasses_shared_config(monkeypatch):
-    """注入容器数据库时不得读取进程共享的训练配置映射。
-
-    intent_classifier_model/config.json 是全局训练产物：若其中保存了
-    同名知识库的旧 ID（99），先读它会让容器实例绕过自己的数据库，
-    RAG 过滤到错误的知识库。容器注入路径必须只查容器数据库。
-    """
+def test_resolve_kb_id_ignores_stale_training_snapshot(monkeypatch, tmp_path):
+    """Neither injected nor global routes may use an old training ID."""
     import api.generate as gen
 
     class GlobalDB:
-        def get_knowledge_bases(self):
-            return [{"id": 88, "name": "全局知识库"}]
+        def get_knowledge_base_by_name(self, name):
+            return dict(id=88, name=name)
 
     class ContainerDB:
-        def get_knowledge_bases(self):
-            return [{"id": 7, "name": "游戏攻略"}]
+        def get_knowledge_base_by_name(self, name):
+            return dict(id=7, name=name)
 
-    # 共享配置含同名知识库的旧 ID
-    monkeypatch.setattr(
-        gen, "_read_shared_kb_config_mapping", lambda: {"游戏攻略": 99}
-    )
+    # An actual stale file would have overridden the global route before.
+    backend = tmp_path / "backend"
+    config = backend / "intent_classifier_model" / "config.json"
+    config.parent.mkdir(parents=True)
+    body = '{"kb_name_to_id":{"游戏攻略":99}}'
+    config.write_text(body, encoding="utf-8")
+    monkeypatch.setattr(gen, "__file__", str(backend / "api" / "generate.py"))
     monkeypatch.setattr(gen, "db", GlobalDB())
-
-    # 容器注入：即使共享配置有旧 ID，也必须返回容器库的真实 ID
     assert gen._resolve_kb_id("游戏攻略", database=ContainerDB()) == 7
-    # 容器库查不到的名字：不得回退共享配置或全局库
-    assert gen._resolve_kb_id("不存在的库", database=ContainerDB()) is None
-
-    # 不注入时（全局默认路径）共享配置优先的既有行为保持不变
-    assert gen._resolve_kb_id("游戏攻略") == 99
+    assert gen._resolve_kb_id("游戏攻略") == 88
+    assert config.read_text(encoding="utf-8") == body
 
 
 @pytest.mark.asyncio
