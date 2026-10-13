@@ -153,3 +153,64 @@ def test_prompt_advertises_the_actual_lossless_contract():
     assert contract["max_qualifiers"] == len(contract["qualifier_keys"]) == 8
     assert contract["qualifier_keys_unique"] is True
     assert contract["qualifier_truncation_allowed"] is False
+
+
+async def recall_stored_qualifiers(metadata, *, contextual=False):
+    from character.memory_service import CharacterMemoryService
+    from character.models import UserScope
+
+    row = dict(id="synthetic", memory_key="preference_蓝莓茶", memory_type="user_fact",
+               content="用户说喜欢蓝莓茶", importance=0.9, confidence=0.98, status="active",
+               updated_at="2026-10-13T00:00:00+00:00", evidence=[SOURCE])
+    if metadata != "missing":
+        row["metadata"] = metadata
+
+    class Repository:
+        async def list_memory_records(self, *args, **kwargs):
+            return [row]
+
+    service = CharacterMemoryService(Repository(), semantic_enabled=False)
+    return await service.recall_with_diagnostics(
+        "role", UserScope("web", "qualifiers", "owner", "owner", "private"),
+        "我喜欢蓝莓茶吗？", for_contextual_selection=contextual,
+    )
+
+
+@pytest.mark.parametrize("contextual", [False, True])
+async def test_stored_qualifiers_survive_recall_compilation_and_model_input(contextual):
+    from character.context_builder import compile_reference_context
+    from character.models import CompiledCharacterContext
+    from inference.generation_request import GenerationRequest, build_generation_request
+
+    items, total, diagnostics = await recall_stored_qualifiers({"qualifiers": QUALIFIERS}, contextual=contextual)
+    assert total == 1 and len(items) == 1 and diagnostics["status"] == "selected"
+    assert dict(items[0].qualifiers) == QUALIFIERS and items[0].evidence == (SOURCE,)
+    reference, ids = compile_reference_context(items, complete_evidence=True)
+    plan = build_generation_request(GenerationRequest(
+        message="核对我对蓝莓茶的全部偏好和限制。", context_window_tokens=65536,
+        character_context=CompiledCharacterContext(
+            "人物设定", "", reference, memory_status="available", used_memory_ids=ids, memory_packets=items),
+    ))
+    user_text = "\n".join(message["content"] for message in plan.messages if message["role"] == "user")
+    assert all(value in user_text for value in QUALIFIERS.values())
+    assert SOURCE in user_text and ids == ("synthetic",)
+    assert all(SOURCE not in message["content"] for message in plan.messages if message["role"] == "system")
+
+
+@pytest.mark.parametrize("metadata", ["missing", None, {}, {"qualifiers": {}}])
+async def test_stored_qualifier_absence_remains_valid(metadata):
+    items, total, diagnostics = await recall_stored_qualifiers(metadata)
+    assert total == 1 and len(items) == 1 and items[0].qualifiers == ()
+    assert diagnostics["status"] == "selected"
+
+
+@pytest.mark.parametrize("qualifiers", [
+    None, [], "condition", 1,
+    {"": "申请已提交"}, {"condition": " "},
+    {"condition": "申请已提交", "exception": None},
+    {"condition": "申请已提交", "exception": {"text": "未通过不使用"}},
+])
+@pytest.mark.parametrize("contextual", [False, True])
+async def test_stored_qualifier_corruption_errors_instead_of_unconditional_fact(qualifiers, contextual):
+    with pytest.raises(ValueError, match="Stored memory qualifiers"):
+        await recall_stored_qualifiers({"qualifiers": qualifiers}, contextual=contextual)

@@ -653,12 +653,14 @@ def _evidence_texts(value: Any) -> tuple[str, ...]:
 def _row_qualifiers(row: dict[str, Any]) -> tuple[tuple[str, str], ...]:
     """Preserve an entire valid qualifier map as data, never repair partial logic."""
     metadata = row.get('metadata')
-    values = metadata.get('qualifiers') if isinstance(metadata, dict) else None
+    if metadata is None:
+        return ()
+    values = metadata.get('qualifiers', {})
     if not isinstance(values, dict) or not all(
-        isinstance(key, str) and key and isinstance(value, str) and value.strip()
+        isinstance(key, str) and key.strip() and isinstance(value, str) and value.strip()
         for key, value in values.items()
     ):
-        return ()
+        raise ValueError("Stored memory qualifiers must be a map of non-empty text")
     return tuple(sorted(values.items()))
 
 
