@@ -103,6 +103,8 @@ class AskResponse(BaseModel):
     abstained: bool = False
     warnings: list[str] = Field(default_factory=list)
     model: str = ""
+    cacheHit: bool = False
+    modelInvoked: bool = False
     costTime: float = 0.0
     retrievalMetadata: dict[str, Any] = Field(default_factory=dict)
 

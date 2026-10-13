@@ -140,7 +140,8 @@ class GroundedAnswerService:
             cached = self.cache.get(key)
             if cached is not None:
                 cached.cache_hit = True
-                cached.timings.total_ms = (time.perf_counter() - start) * 1000
+                cached.model_invoked = False
+                cached.timings = AnswerTimings(total_ms=(time.perf_counter() - start) * 1000)
                 return cached
 
         # 角色知识检索是同步 CPU 工作，放入线程池避免阻塞事件循环。

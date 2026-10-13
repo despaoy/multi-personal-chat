@@ -158,6 +158,8 @@ async def ask(request: AskRequest, current_user: dict = Depends(get_current_user
         abstained=result.abstained,
         warnings=list(result.warnings),
         model=model_id,
+        cacheHit=result.cache_hit,
+        modelInvoked=result.model_invoked,
         costTime=round(cost_time, 2),
         retrievalMetadata=result.retrieval_metadata,
     )

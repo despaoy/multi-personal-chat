@@ -428,6 +428,9 @@ async def test_cache_request_identity_preserves_prompt_differences_and_exact_hit
     assert first.answer != second.answer
     assert not first.cache_hit and not second.cache_hit
     assert repeated.cache_hit and repeated.answer == second.answer
+    assert first.model_invoked and second.model_invoked and not repeated.model_invoked
+    assert repeated.timings.retrieval_ms == repeated.timings.generation_ms == repeated.timings.packet_ms == 0
+    assert repeated.timings.prompt_ms == repeated.timings.first_token_ms == 0
 
 
 @pytest.mark.parametrize("ttl", [-1, float("nan"), float("inf"), float("-inf"), True])
@@ -516,3 +519,30 @@ def test_cache_lru_failed_copy_preserves_existing_answer(monkeypatch, key):
     monkeypatch.setattr(cache_module, "deepcopy", original_copy)
     assert cache.stats()["entries"] == 1
     assert cache.get("a").answer == result.answer
+
+
+async def test_api_cache_provenance_distinguishes_reuse_from_generation(monkeypatch):
+    from unittest.mock import AsyncMock
+
+    from fastapi import FastAPI
+    from httpx import ASGITransport, AsyncClient
+
+    from api import ask
+
+    generate = AsyncMock(return_value="甲是学生。[S1]")
+    service = GroundedAnswerService(retriever=lambda *a, **kw: _bundle(),
+                                   index_version_resolver=lambda domain: "v1", corrective_enabled=False)
+    monkeypatch.setattr(ask, "get_grounded_answer_service", AsyncMock(return_value=service))
+    monkeypatch.setattr(ask, "_resolve_generate_adapters", AsyncMock(return_value=(generate, None, "test")))
+    app = FastAPI()
+    app.include_router(ask.router)
+    app.dependency_overrides[ask.get_current_user] = lambda: {"id": 1, "role": "user"}
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        first = await client.post("/api/ask", json={"message": "甲是谁", "domainId": "story"})
+        second = await client.post("/api/ask", json={"message": "甲是谁", "domainId": "story"})
+    assert first.status_code == second.status_code == 200
+    assert first.json()["modelInvoked"] and not first.json()["cacheHit"]
+    assert second.json()["cacheHit"] and not second.json()["modelInvoked"]
+    assert first.json()["answer"] == second.json()["answer"]
+    assert first.json()["citations"] == second.json()["citations"]
+    assert generate.await_count == 1
