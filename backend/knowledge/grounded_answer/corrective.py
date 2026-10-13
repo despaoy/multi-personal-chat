@@ -20,6 +20,7 @@ from collections.abc import Callable
 from typing import Any
 
 from ..query_reformulation import append_retrieval_keywords
+from .packet import citation_document_id
 
 logger = logging.getLogger(__name__)
 
@@ -103,8 +104,8 @@ class CorrectiveRetrievalAdapter:
         merged_results = list(documents.values())
 
         citation_by_id: dict[str, dict[str, Any]] = {}
-        for citation in list(primary.get("citations") or []) + list(secondary.get("citations") or []):
-            cite_id = str(citation.get("source_id"))
+        for citation in [*primary["citations"], *secondary["citations"]]:
+            cite_id = citation_document_id(citation)
             citation_by_id.setdefault(cite_id, dict(citation))
 
         # 重排名次重排（合并后按融合分数稳定排序）

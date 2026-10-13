@@ -172,3 +172,49 @@ def test_citation_binding_requires_packet_metadata(failure):
         packet.citations[0].pop("document_id")
     with pytest.raises(KeyError):
         validator.bind(validation, packet)
+
+
+@pytest.mark.parametrize("identity", ["id", "source_id", "mixed"])
+async def test_corrective_native_citations_survive_two_rounds_and_answer(identity):
+    from copy import deepcopy
+    from unittest.mock import Mock
+
+    data = bundle()
+    rounds = []
+    for index in range(2):
+        current = deepcopy(data)
+        current.update(results=[data["results"][index]], citations=[dict(id=data["results"][index]["id"])],
+                       evidence_packets=[data["evidence_packets"][index]],
+                       confidence=0.2 if index == 0 else 0.8, abstained=index == 0,
+                       query_analysis={"entities": ["月社妃", "琉璃"]})
+        if identity == "source_id" or (identity == "mixed" and index == 1):
+            current["citations"][0]["source_id"] = current["citations"][0].pop("id")
+        rounds.append(current)
+    original = deepcopy(rounds)
+    retrieve = Mock(side_effect=rounds)
+    model_calls = []
+
+    async def generate(**kwargs):
+        model_calls.append(kwargs)
+        return "需结合许可规则和审批记录判断。[S1][S2]"
+
+    service = GroundedAnswerService(retriever=retrieve, corrective_enabled=True)
+    result = await service.answer("许可是否批准？", generate=generate, domain_id="fixture")
+    assert retrieve.call_count == 2 and len(model_calls) == 1
+    assert not result.abstained
+    expected = {data["results"][i]["id"] for i in range(2)}
+    assert {citation["document_id"] for citation in result.citations} == expected
+    assert rounds == original
+
+
+@pytest.mark.parametrize("bad_citation", [{}, {"id": "a", "source_id": "b"}])
+def test_corrective_native_merge_rejects_invalid_citation_identity(bad_citation):
+    from copy import deepcopy
+
+    from knowledge.grounded_answer.corrective import CorrectiveRetrievalAdapter
+
+    first = bundle()
+    second = deepcopy(first)
+    first["citations"][0] = bad_citation
+    with pytest.raises(ValueError, match="Citation"):
+        CorrectiveRetrievalAdapter._merge_bundles(first, second)

@@ -59,6 +59,18 @@ def _admitted_evidence_by_document(bundle: Mapping[str, Any]) -> dict[str, list[
     return evidence
 
 
+def citation_document_id(citation: Mapping[str, Any]) -> str:
+    """Resolve the native and legacy citation identities at the retrieval boundary."""
+    native_id = citation.get("id")
+    legacy_id = citation.get("source_id")
+    if native_id and legacy_id and str(native_id) != str(legacy_id):
+        raise ValueError("Citation has conflicting document identifiers")
+    doc_id = str(legacy_id or native_id or "")
+    if not doc_id:
+        raise ValueError("Citation is missing its document identifier")
+    return doc_id
+
+
 class EvidencePacketBuilder:
     """Retrieval bundle → EvidencePacket。"""
 
@@ -93,13 +105,7 @@ class EvidencePacketBuilder:
         truncated = False
 
         for citation in citations:
-            native_id = citation.get("id")
-            legacy_id = citation.get("source_id")
-            if native_id and legacy_id and str(native_id) != str(legacy_id):
-                raise ValueError("Citation has conflicting document identifiers")
-            doc_id = str(legacy_id or native_id or "")
-            if not doc_id:
-                raise ValueError("Citation is missing its document identifier")
+            doc_id = citation_document_id(citation)
             item = result_by_id[doc_id]
 
             key = f"S{len(documents) + 1}"
