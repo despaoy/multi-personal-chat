@@ -73,9 +73,11 @@ def reply(defect, valid):
     return json.dumps(valid, ensure_ascii=False)
 
 
-async def run_review(stage=None, defect=None):
+async def run_review(stage=None, defect=None, audit=None):
     observed = {name: [] for name in (*STAGES, "fact_scope", "facts")}
     received = {}
+    if audit is not None:
+        audit.update(received=received, observed=observed)
     deps = parse_dependencies(
         dict(public_knowledge=[0, 1], private_memory=[2], current_input=[], control=[], unresolved_source=[]), QUERY
     )
@@ -247,31 +249,18 @@ async def test_complete_alias_negation_and_five_facts_positive(tmp_path):
         ("source", "timeout"),
     ],
 )
-async def test_failed_stage_keeps_exact_diagnostic_without_authorizing_sources(tmp_path, stage, defect):
-    result, received, observed = await run_review(stage, defect)
-    receipt = result["public_task_review"]
-    assert receipt["review_status"] == "unavailable" and receipt["decisions"] == [] and result["results"] == []
-    assert (
-        not result["original_source_packets"] and not result["source_coverage"] and "object_span_review" not in receipt
-    )
-    diagnostic = receipt.get("failure_diagnostic")
-    assert diagnostic == dict(
-        stage=stage, input=observed[stage][0], raw=received.get(stage) if isinstance(received.get(stage), str) else None
-    )
-    assert all(not observed[later] for later in STAGES[STAGES.index(stage) + 1 :]) and not observed["facts"]
-    plan, wire = await build(result, tmp_path)
-    assert all(body not in wire for body in (REGISTRY, RULES, OTHER))
-    assert all(row["status"] == "review_unavailable" for row in render_public_tasks(plan.retrieval))
-    # Even a valid response saved as a diagnostic cannot upgrade unavailable evidence.
-    changed = deepcopy(receipt)
-    changed["failure_diagnostic"]["raw"] = json.dumps(dict(decisions=[]))
-    result["public_task_review"] = changed
-    plan, _ = await build(result, tmp_path / "changed")
-    assert all(row["status"] == "review_unavailable" for row in render_public_tasks(plan.retrieval))
+async def test_failed_stage_propagates_without_authorizing_sources(tmp_path, stage, defect):
+    audit = {}
+    error_type = RuntimeError if defect == "transport" else asyncio.TimeoutError if defect == "timeout" else TypeError if defect == "non_text" else ValueError
+    with pytest.raises(error_type):
+        await run_review(stage, defect, audit=audit)
+    observed = audit["observed"]
+    assert len(observed[stage]) == 1
+    assert all(not observed[later] for later in STAGES[STAGES.index(stage) + 1:]) and not observed["facts"]
 
 
 @pytest.mark.parametrize("failure", [None, "identity", "source"])
-async def test_mixed_authority_keeps_curated_original_and_private_on_generic_failure(corpus, tmp_path, failure):
+async def test_mixed_authority_review_requires_complete_generic_success(corpus, tmp_path, failure):
     plan, deps = await plan_for(corpus)
     registry = "当前名称登记：晨露街续借与晨露借还为同一业务，仅确认名称关系，不载明业务条款。"
     rules = "晨露借还42元，假日不办理，预约不能豁免原件。"
@@ -334,7 +323,7 @@ async def test_mixed_authority_keeps_curated_original_and_private_on_generic_fai
         assert MARKER not in json.dumps(messages)
         return json.dumps(selection(data))
 
-    result = await review_public_candidates(
+    pending = review_public_candidates(
         dict(independent_domains=container),
         deps,
         MIXED_QUERY,
@@ -345,14 +334,11 @@ async def test_mixed_authority_keeps_curated_original_and_private_on_generic_fai
         span_references=True,
         curated_reviewer=curated,
     )
+    if failure is not None:
+        with pytest.raises(ValueError):
+            await pending
+        return
+    result = await pending
     built, wire = await build(result, tmp_path / "private", MIXED_QUERY, (1, 2))
     assert CURATED_BODY in wire and render_curated_tasks(built.retrieval)[0]["status"] == "related_candidate_admitted"
-    if failure is None:
-        assert registry in wire and rules in wire and len(result["results"]) == 2
-    else:
-        assert registry not in wire and rules not in wire and result["results"] == []
-        assert result["public_task_review"]["failure_diagnostic"] == dict(
-            stage=failure, input=observed[failure], raw=received[failure]
-        )
-        statuses = {row["task_id"]: row["status"] for row in render_public_tasks(built.retrieval)}
-        assert statuses == {1: "handled_by_independent_curated_domain", 2: "review_unavailable"}
+    assert registry in wire and rules in wire and len(result["results"]) == 2

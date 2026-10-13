@@ -220,13 +220,8 @@ async def bounded_review(messages, reviewer, window_tokens, output_tokens):
         sum(estimated_tokens(m["content"]) + 4 for m in messages) + output_tokens + CONTEXT_SAFETY_MARGIN_TOKENS
         > window_tokens
     ):
-        return None, "complete_fact_input_budget_exceeded"
-    try:
-        return await asyncio.wait_for(reviewer(messages), timeout=30), ""
-    except asyncio.TimeoutError:
-        return None, "timeout"
-    except Exception:
-        return None, "provider_error"
+        raise ValueError("Complete fact review input exceeds context budget")
+    return await asyncio.wait_for(reviewer(messages), timeout=30)
 
 
 async def resolve_fact_scope(payload, scopes, reviewer, window_tokens):
@@ -235,47 +230,23 @@ async def resolve_fact_scope(payload, scopes, reviewer, window_tokens):
         dict(role="system", content=FACT_SCOPE_INSTRUCTION),
         dict(role="user", content=json.dumps(data, ensure_ascii=False)),
     ]
-    raw, reason = await bounded_review(messages, reviewer, window_tokens, 768)
-    if not reason:
-        try:
-            return dict(review_status="reviewed", reason="", raw=raw, scope=parse_fact_scope(raw, payload, scopes))
-        except FactScopeCapacityError:
-            reason = "fact_scope_capacity_exceeded"
-        except (ValueError, TypeError, KeyError, RecursionError):
-            reason = "invalid_or_incomplete_fact_scope"
-    return dict(review_status="unavailable", reason=reason, raw=raw if isinstance(raw, str) else None, scope=None)
+    raw = await bounded_review(messages, reviewer, window_tokens, 768)
+    return dict(review_status="reviewed", reason="", raw=raw, scope=parse_fact_scope(raw, payload, scopes))
 
 
 async def review_fact_evidence(payload, scopes, scoped, decisions, reviewer, window_tokens):
     data = fact_input(payload, scoped, decisions)
     digest = scope_input_digest(data)
     if validate_fact_scope(payload, scopes) is None:
-        return dict(
-            review_status="unavailable",
-            reason="fact_scope_unavailable",
-            raw=None,
-            assessments=None,
-            input_sha256=digest,
-        )
+        raise ValueError("Fact evidence review requires a completed question-first scope")
     messages = [
         dict(role="system", content=FACT_EVIDENCE_INSTRUCTION),
         dict(role="user", content=json.dumps(data, ensure_ascii=False)),
     ]
-    raw, reason = await bounded_review(messages, reviewer, window_tokens, 2048)
-    if not reason:
-        try:
-            return dict(
-                review_status="reviewed",
-                reason="",
-                raw=raw,
-                assessments=parse_fact_evidence(raw, payload, scopes, scoped, decisions),
-                input_sha256=digest,
-            )
-        except (ValueError, TypeError, KeyError, RecursionError):
-            reason = "invalid_or_incomplete_fact_evidence"
+    raw = await bounded_review(messages, reviewer, window_tokens, 2048)
     return dict(
-        review_status="unavailable", reason=reason, raw=raw if isinstance(raw, str) else None,
-        assessments=None, input_sha256=digest,
+        review_status="reviewed", reason="", raw=raw,
+        assessments=parse_fact_evidence(raw, payload, scopes, scoped, decisions), input_sha256=digest,
     )
 
 

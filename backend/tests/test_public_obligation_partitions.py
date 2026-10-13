@@ -132,10 +132,10 @@ async def test_review_cannot_return_parent_private_or_boolean_identity(bad_ids):
             dict(decisions=[dict(source_id="doc_1", task_ids=bad_ids), dict(source_id="doc_2", task_ids=[])])
         )
 
-    result = await review_public_candidates(
-        bundle(), dependencies(), QUERY, window_tokens=65536, reviewer=review, public_obligations=partitions()
-    )
-    assert result["abstained"] and result["public_task_review"]["reason"] == "invalid_or_incomplete_review"
+    with pytest.raises(ValueError):
+        await review_public_candidates(
+            bundle(), dependencies(), QUERY, window_tokens=65536, reviewer=review, public_obligations=partitions()
+        )
 
 
 @pytest.mark.asyncio

@@ -257,13 +257,10 @@ async def test_dropped_complement_keeps_known_two_facts_without_quote_leak():
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("failure", ["scope", "evidence"])
-async def test_fact_stage_failure_keeps_source_body_private_and_honest_unknown(failure):
+async def test_fact_stage_failure_propagates_before_result(failure):
     await positive()
-    result, req = await run(scope_failure=failure == "scope", bad_quote=failure == "evidence")
-    plan = build_generation_request(req)
-    row = render_public_tasks(plan.retrieval)[0]
-    assert result["results"] and row["status"] == "fact_review_unavailable" and row["fact_coverage"] == []
-    assert FULL in unescape(plan.messages[-1]["content"]) and PRIVATE in unescape(plan.messages[-1]["content"])
+    with pytest.raises(RuntimeError if failure == "scope" else ValueError):
+        await run(scope_failure=failure == "scope", bad_quote=failure == "evidence")
 
 
 @pytest.mark.asyncio
@@ -329,8 +326,9 @@ async def test_fact_review_capacity_preserves_complete_input_without_calling_pro
     async def forbidden(_messages):
         raise AssertionError("Should not call provider")
 
-    raw, reason = await bounded_review(messages, forbidden, 100, 2048)
-    assert raw is None and reason == "complete_fact_input_budget_exceeded" and len(messages[0]["content"]) == 4000
+    with pytest.raises(ValueError, match="Complete fact review input exceeds context budget"):
+        await bounded_review(messages, forbidden, 100, 2048)
+    assert len(messages[0]["content"]) == 4000
 
 
 @pytest.mark.asyncio

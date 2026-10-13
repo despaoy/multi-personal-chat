@@ -16,6 +16,8 @@ from knowledge.public_task_evidence import render_public_tasks, review_public_ca
 from knowledge.retrieval_query_plan import QueryPlanReviewError, RetrievalQueryPlan, plan_retrieval_views
 from knowledge.turn_dependencies import parse_dependencies
 
+pytestmark = pytest.mark.usefixtures("no_live_context_review")
+
 QUERY = "核对青桥延期规定的费用。核对蓝岸续租规定的时长。读取我的已有偏好。"
 PRIVATE = '{"memory_id":"private-a","content":"用户喜欢布丁，但只在周末食用。"}'
 
@@ -139,29 +141,27 @@ async def test_review_preserves_complete_matched_source_and_excludes_other_task_
         '{"decisions":[],"decisions":[]}',
     ],
 )
-async def test_invalid_review_never_retains_candidates_or_erases_private_context(bad):
+async def test_invalid_review_raises_without_mutating_bundle(bad):
     await positive()
-
+    original = bundle()
+    before = deepcopy(original)
     async def review(_messages):
         return bad
-
-    result = await review_public_candidates(bundle(), dependencies(), QUERY, window_tokens=65536, reviewer=review)
-    assert not result["results"] and result["abstained"] and not result["original_source_packets"]
-    plan = build_generation_request(request(result))
-    assert PRIVATE in unescape(plan.messages[-1]["content"])
-    assert all(row["status"] == "review_unavailable" for row in render_public_tasks(plan.retrieval))
+    with pytest.raises(ValueError):
+        await review_public_candidates(original, dependencies(), QUERY, window_tokens=65536, reviewer=review)
+    assert original == before and "public_task_review" not in original
 
 
-async def test_provider_failure_rejects_public_candidates_without_retry():
+async def test_provider_failure_propagates_without_retry():
     await positive()
     calls = []
-
+    error = RuntimeError("Declared provider failure")
     async def fail(_messages):
         calls.append(True)
-        raise RuntimeError("provider unavailable")
-
-    result = await review_public_candidates(bundle(), dependencies(), QUERY, window_tokens=65536, reviewer=fail)
-    assert calls == [True] and result["abstained"] and result["public_task_review"]["reason"] == "provider_error"
+        raise error
+    with pytest.raises(RuntimeError) as caught:
+        await review_public_candidates(bundle(), dependencies(), QUERY, window_tokens=65536, reviewer=fail)
+    assert calls == [True] and caught.value is error
 
 
 async def test_cancelled_review_propagates():
@@ -182,8 +182,8 @@ async def test_complete_review_budget_stops_before_call_without_prefix_clipping(
     async def fail(_messages):
         pytest.fail("Incomplete input must not be paid for")
 
-    result = await review_public_candidates(bundle(), dependencies(), QUERY, window_tokens=1, reviewer=fail)
-    assert not result["results"] and result["abstained"]
+    with pytest.raises(ValueError, match="exceeds context budget"):
+        await review_public_candidates(bundle(), dependencies(), QUERY, window_tokens=1, reviewer=fail)
 
 
 async def test_related_source_is_not_claimed_admitted_after_actual_budget_exclusion():
@@ -241,11 +241,11 @@ async def test_actual_api_marks_partial_answer_only_for_visible_private_context(
 
     from api import generate
     from db.schemas import MessageRequest
-    from knowledge import intent_detector, public_task_evidence, retrieval_query_plan
+    from knowledge import public_fact_coverage, public_task_evidence, retrieval_query_plan
 
     await positive()
 
-    async def planner(_query):
+    async def planner(_query, **kwargs):
         return RetrievalQueryPlan(status="applied", dependencies=dependencies())
 
     async def retrieve(*_args, **_kwargs):
@@ -263,15 +263,21 @@ async def test_actual_api_marks_partial_answer_only_for_visible_private_context(
                 dict(task_id=0, aspects=[dict(object_id="query-object:0", query_quote="费用")]),
                 dict(task_id=1, aspects=[dict(object_id="query-object:1", query_quote="时长")]),
             ]))
-        return '{"decisions":[{"source_id":"doc_1","task_ids":[]},{"source_id":"doc_2","task_ids":[]}]}'
+        return json.dumps(dict(decisions=[
+            dict(source_id=source_id, task_ids=[], object_evidence=[]) for source_id in payload["required_source_ids"]
+        ]))
 
     async def model(**kwargs):
         assert kwargs["max_tokens"] == 2048
         return "本人偏好有记录，公共规定本次无法确认。"
 
     monkeypatch.setattr(retrieval_query_plan, "plan_retrieval_views", planner)
-    monkeypatch.setattr(intent_detector, "needs_rag", lambda _: (True, "unit", None))
     monkeypatch.setattr(generate, "_retrieve_rag_bundle", retrieve)
+    async def no_fact_support(messages):
+        payload = json.loads(messages[-1]["content"])
+        return json.dumps(dict(assessments=[dict(aspect_id=row["aspect_id"], evidence=[])
+                                            for row in payload["fact_scope_review"]["scope"]["aspects"]]))
+    monkeypatch.setattr(public_fact_coverage, "_review_facts", no_fact_support)
     monkeypatch.setattr(public_task_evidence, "_review", reject)
     monkeypatch.setattr(generate, "_get_system_prompt", lambda _: "人物规则")
     for reference, expected in [(PRIVATE, "partial_answer"), ("", "abstention")]:
@@ -293,11 +299,11 @@ async def test_abstention_model_failure_propagates(monkeypatch):
 
     from api import generate
     from db.schemas import MessageRequest
-    from knowledge import intent_detector, public_task_evidence, retrieval_query_plan
+    from knowledge import public_fact_coverage, public_task_evidence, retrieval_query_plan
 
     await positive()
 
-    async def planner(_query):
+    async def planner(_query, **kwargs):
         return RetrievalQueryPlan(status="applied", dependencies=dependencies())
 
     async def retrieve(*_args, **_kwargs):
@@ -315,14 +321,20 @@ async def test_abstention_model_failure_propagates(monkeypatch):
                 dict(task_id=0, aspects=[dict(object_id="query-object:0", query_quote="费用")]),
                 dict(task_id=1, aspects=[dict(object_id="query-object:1", query_quote="时长")]),
             ]))
-        return '{"decisions":[{"source_id":"doc_1","task_ids":[]},{"source_id":"doc_2","task_ids":[]}]}'
+        return json.dumps(dict(decisions=[
+            dict(source_id=source_id, task_ids=[], object_evidence=[]) for source_id in payload["required_source_ids"]
+        ]))
 
     async def failure(**_kwargs):
         raise RuntimeError("generation failed")
 
     monkeypatch.setattr(retrieval_query_plan, "plan_retrieval_views", planner)
-    monkeypatch.setattr(intent_detector, "needs_rag", lambda _: (True, "unit", None))
     monkeypatch.setattr(generate, "_retrieve_rag_bundle", retrieve)
+    async def no_fact_support(messages):
+        payload = json.loads(messages[-1]["content"])
+        return json.dumps(dict(assessments=[dict(aspect_id=row["aspect_id"], evidence=[])
+                                            for row in payload["fact_scope_review"]["scope"]["aspects"]]))
+    monkeypatch.setattr(public_fact_coverage, "_review_facts", no_fact_support)
     monkeypatch.setattr(public_task_evidence, "_review", reject)
     monkeypatch.setattr(generate, "_get_system_prompt", lambda _: "人物规则")
     context = CompiledCharacterContext("", "", PRIVATE, used_memory_ids=("private-a",))

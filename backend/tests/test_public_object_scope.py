@@ -46,8 +46,10 @@ def source_reply():
     )
 
 
-async def run(scope_value=None, source_value=None, *, window=65536, scope_error=None):
+async def run(scope_value=None, source_value=None, *, window=65536, scope_error=None, audit=None):
     calls = []
+    if audit is not None:
+        audit["calls"] = calls
 
     async def resolve(messages):
         calls.append("scope")
@@ -149,13 +151,11 @@ async def test_untrusted_scope_output_never_invents_object_or_drops_task(defect)
         value["scopes"][1] = deepcopy(value["scopes"][0])
     elif defect == "missing_task":
         value["scopes"].pop()
-    result, req, calls = await run(scope_value=value)
-    assert (
-        calls == ["scope"]
-        and result["abstained"]
-        and result["public_task_review"]["reason"] == "invalid_or_incomplete_review"
-    )
-    assert PRIVATE in unescape(build_generation_request(req).messages[-1]["content"])
+    audit = {}
+    with pytest.raises(ValueError):
+        await run(scope_value=value, audit=audit)
+    assert audit["calls"] == ["scope"]
+
 
 
 @pytest.mark.asyncio
@@ -185,13 +185,17 @@ async def test_unresolved_object_does_not_become_absent_rule():
 
 
 @pytest.mark.asyncio
-async def test_source_blind_failure_and_budget_do_not_retry_or_erase_private():
+async def test_source_blind_failure_and_budget_do_not_retry_or_return_result():
     await positive()
-    result, req, calls = await run(scope_error=RuntimeError("unavailable"))
-    assert calls == ["scope"] and result["public_task_review"]["reason"] == "provider_error"
-    assert PRIVATE in unescape(build_generation_request(req).messages[-1]["content"])
-    result, _, calls = await run(window=1)
-    assert calls == [] and result["public_task_review"]["reason"] == "complete_scope_input_budget_exceeded"
+    error = RuntimeError("Declared scope failure")
+    audit = {}
+    with pytest.raises(RuntimeError) as caught:
+        await run(scope_error=error, audit=audit)
+    assert audit["calls"] == ["scope"] and caught.value is error
+    audit = {}
+    with pytest.raises(ValueError, match="scope input exceeds context budget"):
+        await run(window=1, audit=audit)
+    assert audit["calls"] == []
 
 
 @pytest.mark.asyncio
@@ -291,12 +295,10 @@ async def test_complete_object_capacity_is_not_invalid_provider_output():
     async def forbidden(_messages):
         pytest.fail("A graph capacity stop must not send incomplete source input")
 
-    result = await review_public_candidates(
-        bundle(), dep, query, window_tokens=65536, public_obligations=parts, reviewer=forbidden, scope_reviewer=resolve
-    )
-    assert (
-        calls == ["scope"]
-        and result["public_task_review"]["reason"] == "object_scope_capacity_exceeded"
-        and result["abstained"]
-    )
+    from knowledge.public_object_scope import ObjectScopeCapacityError
+    with pytest.raises(ObjectScopeCapacityError):
+        await review_public_candidates(
+            bundle(), dep, query, window_tokens=65536, public_obligations=parts, reviewer=forbidden, scope_reviewer=resolve
+        )
+    assert calls == ["scope"]
     assert len(names) == 65 and names[-1] in query

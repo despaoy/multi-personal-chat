@@ -97,9 +97,12 @@ def fact_value():
     )
 
 
-async def run_reviews(failure=None):
+async def run_reviews(failure=None, audit=None):
     observed = {"scope_calls": 0, "fact_calls": 0, "source_calls": 0}
     received = {}
+
+    if audit is not None:
+        audit.update(received=received, observed=observed)
 
     async def objects(messages):
         assert json.loads(messages[-1]["content"])["query"] == QUERY
@@ -261,31 +264,17 @@ async def test_complete_positive_keeps_all_review_raw_and_five_facts(tmp_path):
         "fact_transport",
     ],
 )
-async def test_failed_review_keeps_received_text_only_as_diagnostic_and_preserves_sources(tmp_path, failure):
-    result, received, observed = await run_reviews(failure)
-    receipt = result["public_task_review"]
-    scope_receipt = receipt["object_scope_input"]["fact_scope_review"]
-    fact_receipt = receipt["fact_review"]
+async def test_failed_review_propagates_before_later_stages(tmp_path, failure):
+    audit = {}
+    error_type = RuntimeError if failure.endswith("transport") else asyncio.TimeoutError if failure.endswith("timeout") else ValueError
+    with pytest.raises(error_type):
+        await run_reviews(failure, audit=audit)
+    observed = audit["observed"]
+    assert observed["scope_calls"] == 1
     if failure.startswith("scope"):
-        assert (
-            scope_receipt["review_status"] == "unavailable"
-            and scope_receipt["scope"] is None
-            and scope_receipt["raw"] is None
-        )
-        assert receipt.get("fact_scope_failure_raw") == received.get("scope")
-        assert (
-            fact_receipt["reason"] == "fact_scope_unavailable"
-            and fact_receipt["raw"] is None
-            and fact_receipt["assessments"] is None
-            and observed["fact_calls"] == 0
-        )
+        assert observed["source_calls"] == observed["fact_calls"] == 0
     else:
-        assert fact_receipt["review_status"] == "unavailable" and fact_receipt["assessments"] is None
-        assert fact_receipt["raw"] == received.get("facts")
-    plan = await plan_from(result, tmp_path)
-    rows = render_public_tasks(plan.retrieval)
-    assert all(row["status"] == "fact_review_unavailable" and not row["fact_coverage"] for row in rows)
-    assert all(row["object_scope"] == "source_object_evidence_verified" for row in rows) and plan.should_generate
+        assert observed["source_calls"] == observed["fact_calls"] == 1
 
 
 @pytest.mark.parametrize("stage", ["scope", "facts"])

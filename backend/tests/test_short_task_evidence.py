@@ -168,10 +168,8 @@ async def test_complete_input_budget_exclusion_is_not_invalid_model_output(monke
     async def forbidden(_messages):
         pytest.fail("No call with incomplete provider capacity")
 
-    result = await review_public_candidates(fixture(), plan.dependencies, QUERY, window_tokens=1, reviewer=forbidden)
-    assert result["abstained"] and not result["results"]
-    assert result["public_task_review"]["reason"] == "complete_input_budget_exceeded"
-    assert result["public_task_review"]["review_status"] == "unavailable"
+    with pytest.raises(ValueError, match="source input exceeds context budget"):
+        await review_public_candidates(fixture(), plan.dependencies, QUERY, window_tokens=1, reviewer=forbidden)
     assert fixture()["results"][0]["content"].endswith("本人携带原件。")
 
 
@@ -184,8 +182,9 @@ async def test_whole_source_capacity_is_not_invalid_model_output(monkeypatch):
     async def forbidden(_messages):
         pytest.fail("Capacity exclusions do not call the model")
 
-    result = await review_public_candidates(large, plan.dependencies, QUERY, window_tokens=65536, reviewer=forbidden)
-    assert result["abstained"] and result["public_task_review"]["reason"] == "source_capacity_exceeded"
+    from knowledge.public_task_evidence import PublicReviewCapacityError
+    with pytest.raises(PublicReviewCapacityError):
+        await review_public_candidates(large, plan.dependencies, QUERY, window_tokens=65536, reviewer=forbidden)
     assert len(large["results"]) == 25 and large["results"][-1]["content"].endswith("无关。")
 
 
@@ -198,8 +197,9 @@ async def test_invalid_paid_review_remains_protocol_failure(monkeypatch):
         calls.append(True)
         return '{"decisions":[]}'
 
-    result = await review_public_candidates(fixture(), plan.dependencies, QUERY, window_tokens=65536, reviewer=invalid)
-    assert calls == [True] and result["public_task_review"]["reason"] == "invalid_or_incomplete_review"
+    with pytest.raises(ValueError):
+        await review_public_candidates(fixture(), plan.dependencies, QUERY, window_tokens=65536, reviewer=invalid)
+    assert calls == [True]
 
 
 @pytest.mark.asyncio

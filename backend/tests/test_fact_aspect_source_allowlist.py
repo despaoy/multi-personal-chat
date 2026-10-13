@@ -59,10 +59,9 @@ async def test_missing_identity_binding_never_grants_alias_fact_source():
 
 
 @pytest.mark.asyncio
-async def test_failed_scope_contains_no_asserted_aspect_allowlist():
-    reviewed, _ = await run(scope_failure=True)
-    payload, _, scoped, decisions = inputs(reviewed["public_task_review"])
-    assert fact_input(payload, scoped, decisions)["aspect_allowed_sources"] == []
+async def test_failed_scope_raises_before_returning_an_aspect_allowlist():
+    with pytest.raises(RuntimeError, match="reviewer unavailable"):
+        await run(scope_failure=True)
 
 
 @pytest.mark.asyncio
