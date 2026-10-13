@@ -7,6 +7,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -158,6 +159,10 @@ def _build_real_manager(monkeypatch, base_dir: Path):
 
 
 def test_model_manager_resumes_partial_download_and_uses_catalog_root(tmp_path, monkeypatch) -> None:
+    cache_path = tmp_path / "models" / "model_cache.json"
+    cache_path.parent.mkdir()
+    legacy = b'{"qwen3-8b":{"path":"historical-only","downloaded_at":"2025-01-01"}}'
+    cache_path.write_bytes(legacy)
     manager = _build_real_manager(monkeypatch, tmp_path)
     try:
         from inference.model_manager import MODEL_CONFIGS
@@ -167,6 +172,8 @@ def test_model_manager_resumes_partial_download_and_uses_catalog_root(tmp_path, 
         partial_dir.mkdir(parents=True)
         (partial_dir / "config.json").write_text("{}", encoding="utf-8")
         calls = []
+        assert not manager.check_model_exists("qwen3-8b")
+        assert not next(row for row in manager.list_available_models() if row["name"] == "qwen3-8b")["downloaded"]
 
         def snapshot_download(*, repo_id: str, local_dir: str, resume_download: bool):
             calls.append((repo_id, local_dir, resume_download))
@@ -187,6 +194,13 @@ def test_model_manager_resumes_partial_download_and_uses_catalog_root(tmp_path, 
         assert result["success"] is True
         assert len(calls) == 1
         assert manager.check_model_exists("qwen3-8b") is True
+        assert next(row for row in manager.list_available_models() if row["name"] == "qwen3-8b")["downloaded"]
+        assert manager.download_model_from_hf("qwen3-8b")["success"] and len(calls) == 1
+        assert cache_path.read_bytes() == legacy
+        assert manager.delete_model("qwen3-8b")
+        assert not manager.check_model_exists("qwen3-8b")
+        assert not next(row for row in manager.list_available_models() if row["name"] == "qwen3-8b")["downloaded"]
+        assert cache_path.read_bytes() == legacy
     finally:
         manager.shutdown()
 
@@ -213,5 +227,36 @@ def test_model_manager_serializes_model_directory_mutations(tmp_path, monkeypatc
             results = list(executor.map(manager.download_model_from_hf, ["qwen3-8b", "qwen3-8b"]))
         assert all(item["success"] for item in results)
         assert peak_active == 1
+    finally:
+        manager.shutdown()
+
+
+@pytest.mark.parametrize("missing", ["required_file", "weights"])
+def test_model_manager_rejects_incomplete_download(tmp_path, monkeypatch, missing):
+    manager = _build_real_manager(monkeypatch, tmp_path)
+    try:
+        from inference.model_manager import MODEL_CONFIGS
+
+        config = MODEL_CONFIGS["qwen3-8b"]
+        calls = []
+
+        def snapshot_download(*, repo_id, local_dir, resume_download):
+            assert repo_id == config.repo_id and resume_download
+            calls.append(local_dir)
+            target = Path(local_dir)
+            target.mkdir(parents=True)
+            for required in config.required_files:
+                if missing != "required_file" or required != config.required_files[0]:
+                    (target / required).write_text("{}", encoding="utf-8")
+            if missing != "weights":
+                (target / "model.safetensors").write_bytes(b"controlled-unit-weights")
+            return local_dir
+
+        monkeypatch.setitem(sys.modules, "huggingface_hub", SimpleNamespace(snapshot_download=snapshot_download))
+        result = manager.download_model_from_hf("qwen3-8b")
+        assert len(calls) == 1 and not result["success"] and "缺少必需文件或权重" in result["error"]
+        assert not manager.check_model_exists("qwen3-8b")
+        assert not next(row for row in manager.list_available_models() if row["name"] == "qwen3-8b")["downloaded"]
+        assert not (manager.models_dir / "model_cache.json").exists()
     finally:
         manager.shutdown()

@@ -7,12 +7,10 @@
 
 import os
 import time
-import json
 import logging
 import random
 import threading
 from enum import Enum
-from datetime import datetime
 from pathlib import Path
 
 from inference.openai_protocol import chat_completions_endpoint, completed_chat_content, nonthinking_parameters
@@ -743,7 +741,6 @@ class ModelManager:
             self.base_dir = base_dir or backend_dir
             self.models_dir = self.base_dir / "models"
         self.models_dir.mkdir(parents=True, exist_ok=True)
-        self.cache_file = self.models_dir / "model_cache.json"
         self._model_files_lock = threading.RLock()
 
         self._providers: Dict[ModelProvider, BaseProvider] = {
@@ -754,25 +751,6 @@ class ModelManager:
             ModelProvider.TRANSFORMERS_PEFT: TransformersPeftProvider(),
             ModelProvider.VLLM: VLLMProvider(),
         }
-
-        self._load_cache()
-
-    def _load_cache(self):
-        self.cache: Dict[str, Any] = {}
-        if self.cache_file.exists():
-            try:
-                with open(self.cache_file, 'r', encoding='utf-8') as f:
-                    self.cache = json.load(f)
-            except Exception as e:
-                logger.warning(f"读取模型缓存失败: {e}")
-                self.cache = {}
-
-    def _save_cache(self):
-        try:
-            with open(self.cache_file, 'w', encoding='utf-8') as f:
-                json.dump(self.cache, f, indent=2, ensure_ascii=False)
-        except Exception as e:
-            logger.error(f"保存模型缓存失败: {e}")
 
     def set_provider(self, provider: ModelProvider) -> bool:
         provider = validate_provider(provider)
@@ -816,16 +794,6 @@ class ModelManager:
     def list_available_models(self) -> List[Dict[str, Any]]:
         models = []
         for model_key, config in MODEL_CONFIGS.items():
-            model_dir = self.models_dir / config.name
-            downloaded = model_dir.exists()
-            if downloaded:
-                all_required = all(
-                    (model_dir / f).exists() for f in config.required_files
-                )
-                has_weights = bool(
-                    list(model_dir.glob("*.safetensors")) + list(model_dir.glob("*.bin"))
-                )
-                downloaded = all_required and has_weights
 
             models.append({
                 "name": model_key,
@@ -833,7 +801,7 @@ class ModelManager:
                 "repo_id": config.repo_id,
                 "size": config.size,
                 "description": config.description,
-                "downloaded": downloaded,
+                "downloaded": self.check_model_exists(model_key),
             })
         return models
 
@@ -893,11 +861,8 @@ class ModelManager:
                 local_dir=str(model_dir),
                 resume_download=True,
             )
-            self.cache[model_name] = {
-                "downloaded_at": datetime.now().isoformat(),
-                "path": str(model_dir),
-            }
-            self._save_cache()
+            if not self.check_model_exists(model_name):
+                raise RuntimeError("模型下载后缺少必需文件或权重，未完成下载")
 
             return {
                 "success": True,
@@ -928,9 +893,6 @@ class ModelManager:
         try:
             import shutil
             shutil.rmtree(model_dir)
-            if model_name in self.cache:
-                del self.cache[model_name]
-                self._save_cache()
             logger.info(f"模型已删除: {config.name}")
             return True
         except Exception as e:
