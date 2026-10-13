@@ -376,3 +376,28 @@ async def test_decision_contract_normal_low_and_high_confidence(confidence, abst
     result = await service.answer("甲是谁", generate=generate, domain_id="story")
     assert result.abstained is abstained
     assert generate.await_count == (0 if abstained else 1)
+
+
+@pytest.mark.parametrize("failure", ["retriever", "domains", "query_analysis"])
+@pytest.mark.parametrize("streaming", [False, True])
+async def test_retrieval_boundary_rejects_missing_dependency_or_unsupported_bundle(failure, streaming):
+    from unittest.mock import AsyncMock
+
+    data = _bundle()
+    if failure != "retriever":
+        del data[failure]
+    service = GroundedAnswerService(
+        retriever=None if failure == "retriever" else lambda *a, **kw: data,
+        corrective_enabled=False,
+    )
+    generate = AsyncMock()
+    events = []
+    with pytest.raises(RuntimeError if failure == "retriever" else ValueError,
+                       match="retriever is not configured|structured retrieval bundle"):
+        if streaming:
+            async for event in service.answer_stream("甲是谁", generate=generate, domain_id="story"):
+                events.append(event.type)
+        else:
+            await service.answer("甲是谁", generate=generate, domain_id="story")
+    assert not events
+    generate.assert_not_awaited()

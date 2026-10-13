@@ -392,7 +392,7 @@ class GroundedAnswerService:
         filters: dict[str, Any] | None,
     ) -> tuple[dict[str, Any] | None, dict[str, Any]]:
         if self.retriever is None:
-            return None, {"reformulated": False, "reformulated_query": None, "rounds": []}
+            raise RuntimeError("Grounded answer retriever is not configured")
 
         def _retrieve(q: str, *, top_k: int, filters: dict | None):
             return self.retriever(q, top_k=top_k, filters=filters, domain_id=domain_id)
@@ -402,7 +402,7 @@ class GroundedAnswerService:
             return bundle, {"reformulated": False, "reformulated_query": None, "rounds": []}
 
         adapter = CorrectiveRetrievalAdapter(
-            lambda q, top_k, filters: self.retriever(q, top_k=top_k, filters=filters, domain_id=domain_id),
+            _retrieve,
             max_retries=self.corrective_max_retries,
         )
         bundle, info = await asyncio.to_thread(adapter.retrieve_with_correction, query, top_k=top_k, filters=filters)
@@ -544,15 +544,15 @@ class GroundedAnswerService:
         bundle: dict[str, Any] | None,
         decision: ModeDecision,
     ) -> EvidencePacket:
-        if bundle is None or not is_structured_retrieval_bundle(bundle):
-            mode = AnswerMode.NO_RAG if bundle is None else decision.mode
+        if bundle is None:
             return EvidencePacket(
                 query=query,
                 domain_id=None,
-                answer_mode=mode,
+                answer_mode=AnswerMode.NO_RAG,
                 retrieval_confidence=0.0,
-                warnings=["unsupported_retrieval_bundle"] if bundle is not None else [],
             )
+        if not is_structured_retrieval_bundle(bundle):
+            raise ValueError("Grounded answer requires a structured retrieval bundle with domains and query_analysis")
         return self.packet_builder.build(
             query,
             bundle,
