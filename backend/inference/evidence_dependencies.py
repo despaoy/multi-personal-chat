@@ -8,14 +8,11 @@ from inference.evidence_coverage import settle_source_coverage
 def dependency_satisfied(packet, admitted_packets, source_coverage):
     if packet.get("kind") != "background":
         return True
-    ids = {str(i) for p in admitted_packets for i in p.get("document_ids", ())}
     support = packet.get("supporting_document_ids")
-    if not ids:
-        return False
-    if support is None:
-        return True  # Legacy background still requires an actually admitted root.
-    if not isinstance(support, (tuple, list)) or not support or not all(isinstance(i, str) for i in support):
-        return False
+    if (not isinstance(support, (tuple, list)) or not support
+            or any(not isinstance(identity, str) or not identity.strip() for identity in support)):
+        raise ValueError("Background evidence must identify supporting documents")
+    ids = {i for p in admitted_packets for i in p.get("document_ids", ())}
     refs = packet.get("supporting_source_refs")
     if refs is None:
         return bool(ids.intersection(support))

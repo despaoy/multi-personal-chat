@@ -168,7 +168,8 @@ def test_unverifiable_whole_parent_never_grants_a_dependency(change):
 @pytest.mark.parametrize(
     "change", ["parent_id", "kb", "relation", "missing_title", "support", "missing_text", "conflict"]
 )
-def test_invalid_dependency_receipt_is_rejected_from_a_valid_baseline(change):
+@pytest.mark.parametrize("parent_present", [False, True])
+def test_invalid_dependency_receipt_is_rejected_from_a_valid_baseline(change, parent_present):
     request, *_ = positive()
     request = only_originals(request)
     parent, child = deepcopy(request.retrieval.evidence_packets)
@@ -189,7 +190,7 @@ def test_invalid_dependency_receipt_is_rejected_from_a_valid_baseline(change):
     else:
         child["supporting_source_refs"] = (*child["supporting_source_refs"], dict(ref, text="另一段《蓝溪补充》。"))
     with pytest.raises(ValueError):
-        dependency_satisfied(child, [parent], request.retrieval.source_coverage)
+        dependency_satisfied(child, [parent] if parent_present else [], request.retrieval.source_coverage)
 
 
 def test_unrooted_cycle_cannot_admit_itself_or_loop():
@@ -209,3 +210,13 @@ def test_stored_parent_id_without_actual_packets_is_not_dependency_evidence():
     parent, child = request.retrieval.evidence_packets
     assert dependency_satisfied(child, [parent], request.retrieval.source_coverage)
     assert not dependency_satisfied(child, [], request.retrieval.source_coverage)
+
+
+@pytest.mark.parametrize("support", [None, [], "a", [None], [""], [" "]])
+@pytest.mark.parametrize("parent_present", [False, True])
+def test_invalid_dependency_metadata_is_an_error_even_without_admitted_parent(support, parent_present):
+    packet = {"kind": "background", "text": "条件：须审批。", "document_ids": ["b"],
+              "supporting_document_ids": support}
+    parent = {"kind": "evidence", "text": "合成规程根证据。", "document_ids": ["a"]}
+    with pytest.raises(ValueError, match="Background evidence must identify supporting documents"):
+        dependency_satisfied(packet, [parent] if parent_present else [], ())

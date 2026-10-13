@@ -22,13 +22,11 @@ def test_complete_chunks_keep_content_and_native_or_legacy_identity():
     assert packets[1]["document_ids"] == ["2"] and "补充规定" in packets[1]["text"]
 
 
-def test_uncitable_chunk_stays_whole_but_invalid_or_empty_content_is_excluded():
+def test_uncitable_chunk_stays_whole_without_inventing_source_identity():
     packets = document_evidence_packets(
         [
             {"content": "完整已检索资料"},
             {"id": True, "content": "没有合法来源编号"},
-            {"content": " "},
-            {"content": None},
         ]
     )
     assert len(packets) == 2 and all(p["document_ids"] == [] for p in packets)
@@ -133,3 +131,42 @@ def test_true_token_overflow_excludes_entire_chunk_and_dependent_citation():
     assert [p["document_ids"] for p in result.retrieval.evidence_packets] == [["fits"]]
     assert [c["source_id"] for c in result.retrieval.citations] == ["fits"]
     assert "最后限制" not in result.retrieval.evidence and "仍需审批" in result.retrieval.evidence
+
+
+@pytest.mark.parametrize("corrupt", [
+    {"content": None}, {"content": " "},
+    {"retrieval_role": "source_context"},
+    {"retrieval_role": "source_context", "supporting_document_ids": []},
+    {"retrieval_role": "source_context", "supporting_document_ids": "anchor"},
+    {"retrieval_role": "source_context", "supporting_document_ids": [""]},
+])
+async def test_corrupt_retrieved_document_returns_error_before_model(monkeypatch, corrupt):
+    from fastapi import HTTPException
+
+    from api import generate
+    from db.schemas import MessageRequest
+    from knowledge import intent_detector
+
+    valid = {"id": "anchor", "title": "合成验收规程", "content": "周五验收；只允许离线测试，禁止联网。"}
+    broken = {**valid, "id": "other", **corrupt}
+    calls = []
+
+    async def retrieve(*args):
+        return {"results": [valid, broken], "citations": [{"source_id": "anchor"}],
+                "confidence": 0.9, "abstained": False}
+
+    async def model(**kwargs):
+        calls.append(kwargs)
+        return "must not silently omit invalid source evidence"
+
+    monkeypatch.setenv("RAG_CITATIONS_ENABLED", "false")
+    monkeypatch.setattr(generate, "_retrieve_rag_bundle", retrieve)
+    monkeypatch.setattr(generate, "_get_system_prompt", lambda _: "人物规则")
+    monkeypatch.setattr(intent_detector, "needs_rag", lambda _: (True, "fixture", None))
+    with pytest.raises(HTTPException) as error:
+        await generate._generate_with_retrieval(
+            MessageRequest(message="按规程说明验收时间和全部限制。"), None,
+            runtime_config={"maxTokens": 1024, "useKnowledgeBase": True}, model_generate=model,
+        )
+    assert error.value.status_code == 503 and isinstance(error.value.__cause__, ValueError)
+    assert not calls

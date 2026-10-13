@@ -21,7 +21,7 @@ def test_final_window_admits_whole_packets_and_updates_citations():
 
 def test_no_packet_fits_does_not_use_background_as_fact():
     packets = ({'text': '甲' * 8000, 'document_ids': ['a'], 'kind': 'evidence'},
-               {'text': '背景', 'document_ids': [], 'kind': 'background'})
+               {'text': '背景', 'document_ids': [], 'kind': 'background', 'supporting_document_ids': ['a']})
     request = GenerationRequest(message='问题', max_tokens=100, context_window_tokens=2000,
                                 retrieval=RetrievalResult(status='ok', evidence='甲' * 8000,
                                     evidence_packets=packets, citations=({'id': 'a'},)))

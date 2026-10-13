@@ -9,7 +9,7 @@ def document_evidence_packets(results: Sequence[Mapping[str, Any]]) -> tuple[dic
     for document in results:
         body = document.get("content")
         if not isinstance(body, str) or not body.strip():
-            continue
+            raise ValueError("Retrieved document content must be non-empty text")
         identity = document.get("id") or document.get("chunk_id")
         ids = (
             [str(identity)]
@@ -20,8 +20,9 @@ def document_evidence_packets(results: Sequence[Mapping[str, Any]]) -> tuple[dic
         packet = {"kind": "evidence", "document_ids": ids, "text": f"【检索资料片段: {title}】\n{body}"}
         if document.get("retrieval_role") == "source_context":
             support = document.get("supporting_document_ids")
-            if not isinstance(support, (list, tuple)) or not support:
-                continue
+            if (not isinstance(support, (list, tuple)) or not support
+                    or any(not isinstance(identity, str) or not identity.strip() for identity in support)):
+                raise ValueError("Background evidence must identify supporting documents")
             packet.update(kind="background", supporting_document_ids=list(support))
             if document.get("supporting_source_refs") is not None:
                 packet.update(
