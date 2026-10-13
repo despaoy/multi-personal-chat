@@ -2,7 +2,7 @@
 
 缓存键绑定：
 - domain（或 auto 域集合）
-- query 归一化（去控制字符/折叠空白/小写 ASCII）
+- 原始 query / speaker（不合并可能改变模型输入的差异）
 - filters / top_k
 - index_version（索引更新后旧缓存不再命中，避免过期证据）
 - prompt 契约版本
@@ -18,10 +18,8 @@ from __future__ import annotations
 
 import hashlib
 import json
-import re
 import threading
 import time
-import unicodedata
 from copy import deepcopy
 from typing import TYPE_CHECKING, Any
 
@@ -31,13 +29,6 @@ if TYPE_CHECKING:
     from .models import GroundedAnswerResult
 
 _MAX_CACHE_ENTRIES = 128
-
-
-def normalize_query(query: str) -> str:
-    """查询归一化（缓存键组成部分；不改变检索语义，仅归一空白）。"""
-    cleaned = "".join(ch for ch in (query or "") if unicodedata.category(ch)[0] != "C")
-    cleaned = re.sub(r"\s+", " ", cleaned).strip()
-    return cleaned.casefold()
 
 
 def answer_cache_key(
@@ -59,7 +50,7 @@ def answer_cache_key(
 ) -> str:
     payload = {
         "domains": sorted(domains) if domains else [str(domain_id or "auto")],
-        "query": normalize_query(query),
+        "query": query,
         "filters": filters or {},
         "top_k": int(top_k),
         "index_version": index_version,
@@ -69,7 +60,7 @@ def answer_cache_key(
         "max_tokens": int(max_tokens),
         "top_p": float(top_p),
         "persona": hashlib.sha256((persona_prompt or "").encode("utf-8")).hexdigest()[:16],
-        "speaker": normalize_query(speaker)[:48],
+        "speaker": speaker,
         "want_citations": bool(want_citations),
         "history": hashlib.sha256(
             json.dumps(history or [], ensure_ascii=False, sort_keys=True).encode("utf-8")

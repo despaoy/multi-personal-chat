@@ -401,3 +401,30 @@ async def test_retrieval_boundary_rejects_missing_dependency_or_unsupported_bund
             await service.answer("甲是谁", generate=generate, domain_id="story")
     assert not events
     generate.assert_not_awaited()
+
+
+@pytest.mark.parametrize("queries,speakers", [
+    (("Code A", "code a"), ("", "")),
+    (("甲  是谁", "甲 是谁"), ("", "")),
+    (("甲是谁", "甲是谁"), ("Alice", "alice")),
+])
+async def test_cache_request_identity_preserves_prompt_differences_and_exact_hits(queries, speakers):
+    from unittest.mock import Mock
+
+    calls = []
+    retrieve = Mock(side_effect=lambda *a, **kw: _bundle())
+
+    async def generate(**kwargs):
+        calls.append(kwargs["messages"])
+        return f"回答第{len(calls)}次：甲是学生。[S1]"
+
+    service = GroundedAnswerService(retriever=retrieve, index_version_resolver=lambda domain: "v1",
+                                   cache=AnswerCache(ttl_seconds=60), corrective_enabled=False)
+    first = await service.answer(queries[0], speaker=speakers[0], generate=generate, domain_id="story")
+    second = await service.answer(queries[1], speaker=speakers[1], generate=generate, domain_id="story")
+    repeated = await service.answer(queries[1], speaker=speakers[1], generate=generate, domain_id="story")
+    assert len(calls) == retrieve.call_count == 2
+    assert calls[0] != calls[1]
+    assert first.answer != second.answer
+    assert not first.cache_hit and not second.cache_hit
+    assert repeated.cache_hit and repeated.answer == second.answer
