@@ -81,10 +81,10 @@ async def exercise(tmp_path, monkeypatch, mode):
             )
         )
 
-    async def planner(query):
+    async def planner(query, **kwargs):
         assert query == QUERY
         try:
-            plan = await original_plan(query, reviewer=reviewer)
+            plan = await original_plan(query, reviewer=reviewer, **kwargs)
         except QueryPlanReviewError as exc:
             seen["status"] = exc.status
             raise
@@ -98,7 +98,7 @@ async def exercise(tmp_path, monkeypatch, mode):
 
     async def retrieve(*args, **kwargs):
         seen["retrieval"] += 1
-        if mode in {"disabled", "valid"}:
+        if mode in {"valid"}:
             # Control verifies dispatch only; it supplies no approved evidence.
             return dict(results=[], citations=[], abstained=True)
         doc = database.get_knowledge_document(document["id"])
@@ -156,7 +156,7 @@ async def exercise(tmp_path, monkeypatch, mode):
             model_generate=model,
             message_db=database,
         )
-        if mode not in {"disabled", "valid"}:
+        if mode not in {"valid"}:
             with pytest.raises(HTTPException) as caught:
                 await pending
             error = caught.value
@@ -184,10 +184,10 @@ async def test_failed_plan_stops_retrieval_and_answer_without_mutating_sources(t
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("mode", ["valid", "disabled"])
-async def test_complete_plan_or_disabled_planner_preserve_normal_dispatch(tmp_path, monkeypatch, mode):
+@pytest.mark.parametrize("mode", ["valid"])
+async def test_complete_semantic_plan_preserves_normal_dispatch(tmp_path, monkeypatch, mode):
     seen, metadata = await exercise(tmp_path, monkeypatch, mode)
     assert seen["retrieval"] == 1 and metadata["abstained"]
-    assert seen["status"] == ("applied" if mode == "valid" else "disabled")
-    assert seen["binding"] == (1 if mode == "valid" else 0)
+    assert seen["status"] == "applied"
+    assert seen["binding"] == 1
     assert not any(w.startswith("query_plan_") for w in (metadata.get("warnings") or []))

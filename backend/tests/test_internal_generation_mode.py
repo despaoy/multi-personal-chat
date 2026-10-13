@@ -331,52 +331,6 @@ def test_lora_path_resolution_uses_injected_loras(monkeypatch):
     assert db_mod.get_lora_path_by_id(42) is None
 
 
-def test_resolve_kb_id_uses_injected_database(monkeypatch):
-    """A missing selected label cannot switch to another database."""
-    import api.generate as gen
-
-    class GlobalDB:
-        def get_knowledge_base_by_name(self, name):
-            return dict(id=99, name=name) if name == "全局知识库" else None
-
-    class ContainerDB:
-        def get_knowledge_base_by_name(self, name):
-            return dict(id=7, name=name) if name == "游戏攻略" else None
-
-    monkeypatch.setattr(gen, "db", GlobalDB())
-    assert gen._resolve_kb_id("游戏攻略", database=ContainerDB()) == 7
-    assert gen._resolve_kb_id("全局知识库") == 99
-    with pytest.raises(LookupError, match="Selected knowledge base is missing"):
-        gen._resolve_kb_id("游戏攻略")
-    with pytest.raises(LookupError, match="Selected knowledge base is missing"):
-        gen._resolve_kb_id("全局知识库", database=ContainerDB())
-
-
-def test_resolve_kb_id_ignores_stale_training_snapshot(monkeypatch, tmp_path):
-    """Neither injected nor global routes may use an old training ID."""
-    import api.generate as gen
-
-    class GlobalDB:
-        def get_knowledge_base_by_name(self, name):
-            return dict(id=88, name=name)
-
-    class ContainerDB:
-        def get_knowledge_base_by_name(self, name):
-            return dict(id=7, name=name)
-
-    # An actual stale file would have overridden the global route before.
-    backend = tmp_path / "backend"
-    config = backend / "intent_classifier_model" / "config.json"
-    config.parent.mkdir(parents=True)
-    body = '{"kb_name_to_id":{"游戏攻略":99}}'
-    config.write_text(body, encoding="utf-8")
-    monkeypatch.setattr(gen, "__file__", str(backend / "api" / "generate.py"))
-    monkeypatch.setattr(gen, "db", GlobalDB())
-    assert gen._resolve_kb_id("游戏攻略", database=ContainerDB()) == 7
-    assert gen._resolve_kb_id("游戏攻略") == 88
-    assert config.read_text(encoding="utf-8") == body
-
-
 @pytest.mark.asyncio
 async def test_model_manager_fallback_uses_character_context(monkeypatch):
     """vLLM 不可用回退到模型管理器时，必须使用编译后的角色上下文。

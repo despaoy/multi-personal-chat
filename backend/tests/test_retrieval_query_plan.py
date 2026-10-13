@@ -53,17 +53,6 @@ async def test_full_question_reaches_reviewer_without_source_or_answer_injection
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("mode", ["disabled", "corrective"])
-async def test_disabled_or_unsupported_tasks_do_not_add_a_paid_call(monkeypatch, mode):
-    monkeypatch.setenv("RAG_TASK_PLANNER_ENABLED", "false" if mode == "disabled" else "true")
-    monkeypatch.setenv("CORRECTIVE_RAG_ENABLED", "true" if mode == "corrective" else "false")
-    async def review(messages):
-        pytest.fail("Reviewer must not be called")
-    result = await plan_retrieval_views(QUERY, reviewer=review)
-    assert not result.views
-
-
-@pytest.mark.asyncio
 @pytest.mark.parametrize("mode", ["invalid", "exception", "timeout"])
 async def test_failed_review_raises_with_original_cause(monkeypatch, mode):
     monkeypatch.setenv("RAG_TASK_PLANNER_ENABLED", "true")
@@ -121,19 +110,6 @@ async def test_valid_timeout_boundaries_are_used_as_configured(monkeypatch, time
     monkeypatch.setattr(asyncio, "wait_for", wait_for)
     assert (await plan_retrieval_views(QUERY, reviewer=review)).status == "applied"
     assert seen == [float(timeout)]
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("name", ["RAG_TASK_PLANNER_ENABLED", "DYNAMIC_CONTEXT_SEMANTIC_REVIEW_ENABLED", "CORRECTIVE_RAG_ENABLED"])
-async def test_invalid_feature_switch_does_not_silently_disable(monkeypatch, name):
-    monkeypatch.setenv("RAG_TASK_PLANNER_ENABLED", "true")
-    if name == "DYNAMIC_CONTEXT_SEMANTIC_REVIEW_ENABLED":
-        monkeypatch.delenv("RAG_TASK_PLANNER_ENABLED")
-    monkeypatch.setenv(name, "typo")
-    async def forbidden(_messages):
-        pytest.fail("Invalid switch must fail before a model call")
-    with pytest.raises(ValueError, match=name):
-        await plan_retrieval_views(QUERY, reviewer=forbidden)
 
 
 @pytest.mark.asyncio

@@ -7,7 +7,6 @@ import json
 import os
 from dataclasses import dataclass
 
-from infra.environment import read_bool
 from knowledge.turn_dependencies import TurnDependencies, parse_dependencies, query_segments
 
 
@@ -29,6 +28,12 @@ class RetrievalQueryPlan:
     @property
     def private_context_only(self) -> bool:
         return self.dependencies is not None and self.dependencies.private_context_only
+
+
+    @property
+    def needs_public_retrieval(self) -> bool:
+        groups = dict(self.dependencies.groups)
+        return bool(groups["public_knowledge"] or groups["unresolved_source"])
 
 
 _SYSTEM = """你规划整段请求的证据依赖与公共搜索视图，不回答、不编写事实、不授予读取或写入权限。
@@ -135,19 +140,6 @@ def planning_messages(query: str, *, history=(), context_budget=None):
 
 
 async def plan_retrieval_views(query: str, *, history=(), context_budget=None, reviewer=None) -> RetrievalQueryPlan:
-    enabled_name = (
-        "RAG_TASK_PLANNER_ENABLED" if "RAG_TASK_PLANNER_ENABLED" in os.environ
-        else "DYNAMIC_CONTEXT_SEMANTIC_REVIEW_ENABLED"
-    )
-    if not read_bool(os.environ, enabled_name):
-        return RetrievalQueryPlan(status="disabled")
-    # Corrective RAG owns its separate planning path.
-    if read_bool(os.environ, "CORRECTIVE_RAG_ENABLED"):
-        return RetrievalQueryPlan(status="unsupported_path")
-    from knowledge.source_expansion import requested_document_titles
-
-    if requested_document_titles(query):
-        return RetrievalQueryPlan()
     try:
         timeout = float(os.getenv("RAG_TASK_PLANNER_TIMEOUT_SECONDS", "30"))
     except ValueError as exc:

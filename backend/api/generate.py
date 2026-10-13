@@ -128,15 +128,6 @@ def _security_policy_response() -> GenerateResponse:
     )
 
 
-def _resolve_kb_id(kb_name: str, *, database=None):
-    """Resolve a selected classifier label only against the active database."""
-    database = database if database is not None else db
-    base = database.get_knowledge_base_by_name(kb_name)
-    if base is None:
-        raise LookupError("Selected knowledge base is missing; refresh the intent classifier or restore the knowledge base")
-    return base["id"]
-
-
 async def _ensure_vllm():
     """延迟初始化可恢复的共享 vLLM 客户端。"""
     global _vllm_client, _vllm_initialized
@@ -1143,195 +1134,132 @@ async def _generate_with_retrieval(
     }
     retrieval = RetrievalResult()
     filters = None
-    # An executable personal-field read has no external knowledge dependency.
-    # Use the same evidence contract as generation, not another keyword router.
-    memory_lookup_ready = False
-    personal_lookup_only = False
-    operation_response_ready = False
-    if _use_kb and prepared_character_turn is not None:
-        from character.memory_operation import render_operation_response
-        from character.memory_query import lookup_fields, storage_fields
-        from inference.current_constraint_response import render_current_constraint_response
-        from inference.memory_response import render_complete_memory_read, render_memory_response
-
-        operation_response_ready = (
-            render_operation_response(
-                request.message, getattr(prepared_character_turn.compiled, "memory_operation_receipt", None)
-            )
-            is not None
-        )
-
-        # Dependency routing is independent of whether a saved answer exists.
-        # A personal lookup can still need generation over visible history;
-        # external story knowledge cannot resolve missing private user data.
-        personal_lookup_only = bool(lookup_fields(request.message) or storage_fields(request.message)) and not (
-            prepared_character_turn.compiled.branch_context
-        )
-        memory_lookup_ready = (
-            render_current_constraint_response(request.message, prepared_character_turn.compiled) is not None
-            or render_memory_response(
-                request.message,
-                prepared_character_turn.compiled,
-                history=tuple(request.history or []) or prepared_character_turn.history,
-            )
-            is not None
-            or render_complete_memory_read(
-                request.message,
-                prepared_character_turn.compiled,
-                tuple(request.history or []) or prepared_character_turn.history,
-            )
-            is not None
-        )
-    if _use_kb and not (memory_lookup_ready or personal_lookup_only or operation_response_ready):
+    if _use_kb:
         try:
             from knowledge.dialogue_query import contextual_retrieval_query
-            from knowledge.intent_detector import needs_rag
             from knowledge.retrieval_core.registry import get_default_registry
+            from knowledge.retrieval_query_plan import plan_retrieval_views
 
             effective_history = tuple(request.history or []) or (
                 prepared_character_turn.history if prepared_character_turn else ()
             )
-            from character.memory_operation import split_operation_request
-
-            operation_tasks = (
-                split_operation_request(request.message)
-                if prepared_character_turn is not None
-                and getattr(prepared_character_turn, "memory_operation_receipt", None) is not None
-                else None
+            rag_message = request.message
+            query_plan = await plan_retrieval_views(
+                rag_message, history=effective_history, context_budget=get_provider_context_budget().review,
             )
-            rag_message = operation_tasks[1] if operation_tasks else request.message
-            retrieval_query = contextual_retrieval_query(
-                rag_message, effective_history, get_default_registry().list_domains()
-            )
+            if not query_plan.needs_public_retrieval:
+                retrieval = RetrievalResult(reason="local_context_dependencies")
+                rag_meta = {"citations": [], "confidence": None, "abstained": False,
+                            "answerMode": "personal_context" if query_plan.private_context_only else "direct_answer",
+                            "modelInvoked": True}
+            else:
+                retrieval_query = contextual_retrieval_query(
+                    rag_message, effective_history, get_default_registry().list_domains()
+                )
+                from knowledge.public_question_binding import resolve_question_binding
 
-            need_rag, _, kb_name = await asyncio.wait_for(
-                asyncio.to_thread(needs_rag, retrieval_query),
-                timeout=_RAG_TIMEOUT,
-            )
-            if need_rag:
-                from knowledge.retrieval_query_plan import plan_retrieval_views
-
-                # Keep current speech intact; authorized history only supplies
-                # reference context, never extra tasks, facts or source grants.
-                plan_options = ({"history": effective_history,
-                                 "context_budget": get_provider_context_budget().review}
-                                if effective_history else {})
-                query_plan = await plan_retrieval_views(rag_message, **plan_options)
-                if (query_plan.private_context_only and prepared_character_turn is not None
-                        and not prepared_character_turn.compiled.branch_context):
-                    retrieval = RetrievalResult(reason="private_context_dependencies")
-                    rag_meta = {"citations": [], "confidence": None, "abstained": False,
-                                "answerMode": "personal_context", "modelInvoked": True}
-                else:
-                    if kb_name:
-                        kb_id = await asyncio.to_thread(_resolve_kb_id, kb_name, database=message_db)
-                        filters = {"knowledge_base_id": kb_id}
-                        logger.info("RAG路由: 消息→「%s」(id=%s)", kb_name, kb_id)
-
-                    from knowledge.public_question_binding import resolve_question_binding
-
-                    question_binding = None
-                    if query_plan.dependencies is not None and dict(query_plan.dependencies.groups)["public_knowledge"]:
-                        question_binding = await resolve_question_binding(
-                            query_plan.dependencies, rag_message,
-                            window_tokens=get_provider_context_budget().window_tokens,
-                            public_obligations=query_plan.public_obligations,
-                            **({"history": effective_history, "context_budget": get_provider_context_budget().review}
-                               if effective_history else {}),
-                        )
-                    view_options = {"search_views": query_plan.views} if query_plan.views else {}
-                    if question_binding is not None:
-                        view_options["question_binding"] = question_binding
-                    bundle = await asyncio.wait_for(
-                        _retrieve_rag_bundle(retrieval_query, 3, filters, **view_options),
-                        timeout=_rag_retrieval_timeout(),
-                    )
-                    from knowledge.public_task_evidence import review_public_candidates
-
-                    bundle = await review_public_candidates(
-                        bundle, query_plan.dependencies, rag_message,
+                question_binding = None
+                if query_plan.dependencies is not None and dict(query_plan.dependencies.groups)["public_knowledge"]:
+                    question_binding = await resolve_question_binding(
+                        query_plan.dependencies, rag_message,
                         window_tokens=get_provider_context_budget().window_tokens,
                         public_obligations=query_plan.public_obligations,
-                        question_binding=question_binding,
+                        **({"history": effective_history, "context_budget": get_provider_context_budget().review}
+                           if effective_history else {}),
                     )
-                    bundle["query_plan_status"] = query_plan.status
-                    rag_meta = {
-                        "citations": bundle.get("citations", []) if citations_enabled else [],
-                        "confidence": bundle.get("confidence"),
-                        "abstained": bundle.get("abstained", False),
-                        "answerMode": ("abstention" if bundle.get("abstained", False) else "grounded_answer"),
-                        "domainId": next(iter(bundle.get("domains") or []), None),
-                        "warnings": bundle.get("warnings") or None,
-                        "modelInvoked": True,
-                    }
-                    from inference.evidence_coverage import requested_source_lookups
-                    from knowledge.query_tasks import requests_only_source_excerpt
+                view_options = {"search_views": query_plan.views} if query_plan.views else {}
+                if question_binding is not None:
+                    view_options["question_binding"] = question_binding
+                bundle = await asyncio.wait_for(
+                    _retrieve_rag_bundle(retrieval_query, 3, filters, **view_options),
+                    timeout=_rag_retrieval_timeout(),
+                )
+                from knowledge.public_task_evidence import review_public_candidates
 
-                    source_requests = requested_source_lookups(bundle, rag_message)
+                bundle = await review_public_candidates(
+                    bundle, query_plan.dependencies, rag_message,
+                    window_tokens=get_provider_context_budget().window_tokens,
+                    public_obligations=query_plan.public_obligations,
+                    question_binding=question_binding,
+                )
+                bundle["query_plan_status"] = query_plan.status
+                rag_meta = {
+                    "citations": bundle.get("citations", []) if citations_enabled else [],
+                    "confidence": bundle.get("confidence"),
+                    "abstained": bundle.get("abstained", False),
+                    "answerMode": ("abstention" if bundle.get("abstained", False) else "grounded_answer"),
+                    "domainId": next(iter(bundle.get("domains") or []), None),
+                    "warnings": bundle.get("warnings") or None,
+                    "modelInvoked": True,
+                }
+                from inference.evidence_coverage import requested_source_lookups
+                from knowledge.query_tasks import requests_only_source_excerpt
 
-                    source_lookup = bundle.get(
-                        "retrieval_strategy"
-                    ) == "multi_scale_character" and requests_only_source_excerpt(rag_message)
-                    if bundle.get("abstained", False):
-                        # Generate only the character's expression of uncertainty.
-                        # Unreliable candidates and their citations never reach it.
-                        rag_meta["citations"] = []
-                        retrieval = RetrievalResult(
-                            status="character_abstention",
-                            confidence=bundle.get("confidence"),
-                            reason="insufficient_retrieval_evidence",
-                            requested_sources=source_requests,
-                            source_references=tuple(bundle.get("source_references") or ()),
-                            source_lookup=source_lookup,
-                            task_coverage=tuple(bundle.get("task_candidate_coverage") or ()),
-                            task_query=retrieval_query,
-                            public_curated_review=bundle.get("public_curated_review") or {},
-                            public_task_review=bundle.get("public_task_review") or {},
-                            public_task_query=rag_message if bundle.get("public_task_review") or bundle.get("public_curated_review") or bundle.get("public_domain_branches") else "",
-                            public_dependency_indices=tuple(dict(query_plan.dependencies.groups)["public_knowledge"]) if query_plan.dependencies is not None else (),
-                        )
+                source_requests = requested_source_lookups(bundle, rag_message)
 
-                    # 角色知识检索结果自带按粒度组装的 context_text；
-                    # 通用知识库结果保留整份检索片段，交给最终请求预算裁决。
+                source_lookup = bundle.get(
+                    "retrieval_strategy"
+                ) == "multi_scale_character" and requests_only_source_excerpt(rag_message)
+                if bundle.get("abstained", False):
+                    # Generate only the character's expression of uncertainty.
+                    # Unreliable candidates and their citations never reach it.
+                    rag_meta["citations"] = []
+                    retrieval = RetrievalResult(
+                        status="character_abstention",
+                        confidence=bundle.get("confidence"),
+                        reason="insufficient_retrieval_evidence",
+                        requested_sources=source_requests,
+                        source_references=tuple(bundle.get("source_references") or ()),
+                        source_lookup=source_lookup,
+                        task_coverage=tuple(bundle.get("task_candidate_coverage") or ()),
+                        task_query=retrieval_query,
+                        public_curated_review=bundle.get("public_curated_review") or {},
+                        public_task_review=bundle.get("public_task_review") or {},
+                        public_task_query=rag_message if bundle.get("public_task_review") or bundle.get("public_curated_review") or bundle.get("public_domain_branches") else "",
+                        public_dependency_indices=tuple(dict(query_plan.dependencies.groups)["public_knowledge"]) if query_plan.dependencies is not None else (),
+                    )
+
+                # 角色知识检索结果自带按粒度组装的 context_text；
+                # 通用知识库结果保留整份检索片段，交给最终请求预算裁决。
+                else:
+                    character_knowledge_context = bundle.get("context_text") or ""
+                    evidence_packets = tuple(bundle.get("evidence_packets") or ())
+                    if character_knowledge_context or bundle.get("retrieval_strategy") == "multi_scale_character":
+                        rag_context = character_knowledge_context
                     else:
-                        character_knowledge_context = bundle.get("context_text") or ""
-                        evidence_packets = tuple(bundle.get("evidence_packets") or ())
-                        if character_knowledge_context or bundle.get("retrieval_strategy") == "multi_scale_character":
-                            rag_context = character_knowledge_context
-                        else:
-                            from knowledge.evidence_packets import document_evidence_packets
+                        from knowledge.evidence_packets import document_evidence_packets
 
-                            # Citation display cannot decide which source text reaches the model.
-                            evidence_packets = (
-                                document_evidence_packets(bundle.get("results", []))
-                                + tuple(bundle.get("original_source_packets") or ())
-                            )
-                            rag_context = "\n\n".join(packet["text"] for packet in evidence_packets)
-                        retrieval = RetrievalResult(
-                            status="ok" if rag_context else "character_abstention",
-                            reason="" if rag_context else "evidence_budget_exhausted",
-                            evidence=rag_context,
-                            evidence_packets=evidence_packets,
-                            public_domain_branches=bundle.get("public_domain_branches") or {},
-                            source_coverage=tuple(bundle.get("source_coverage") or ()),
-                            task_coverage=tuple(bundle.get("task_candidate_coverage") or ()),
-                            task_query=retrieval_query,
-                            public_curated_review=bundle.get("public_curated_review") or {},
-                            public_task_review=bundle.get("public_task_review") or {},
-                            public_task_query=rag_message if bundle.get("public_task_review") or bundle.get("public_curated_review") or bundle.get("public_domain_branches") else "",
-                            public_dependency_indices=tuple(dict(query_plan.dependencies.groups)["public_knowledge"]) if query_plan.dependencies is not None else (),
-                            identity_task=bundle.get("identity_task") or {},
-                            identity_subtask=bundle.get("identity_subtask") or {},
-                            documents=tuple(bundle.get("results", [])),
-                            citations=tuple(rag_meta.get("citations", [])),
-                            confidence=bundle.get("confidence"),
-                            requested_sources=source_requests,
-                            source_references=tuple(bundle.get("source_references") or ()),
-                            source_lookup=source_lookup,
-                            source_excerpts=(
-                                (bundle["raw_excerpt"],) if isinstance(bundle.get("raw_excerpt"), dict) else ()
-                            ),
+                        # Citation display cannot decide which source text reaches the model.
+                        evidence_packets = (
+                            document_evidence_packets(bundle.get("results", []))
+                            + tuple(bundle.get("original_source_packets") or ())
                         )
+                        rag_context = "\n\n".join(packet["text"] for packet in evidence_packets)
+                    retrieval = RetrievalResult(
+                        status="ok" if rag_context else "character_abstention",
+                        reason="" if rag_context else "evidence_budget_exhausted",
+                        evidence=rag_context,
+                        evidence_packets=evidence_packets,
+                        public_domain_branches=bundle.get("public_domain_branches") or {},
+                        source_coverage=tuple(bundle.get("source_coverage") or ()),
+                        task_coverage=tuple(bundle.get("task_candidate_coverage") or ()),
+                        task_query=retrieval_query,
+                        public_curated_review=bundle.get("public_curated_review") or {},
+                        public_task_review=bundle.get("public_task_review") or {},
+                        public_task_query=rag_message if bundle.get("public_task_review") or bundle.get("public_curated_review") or bundle.get("public_domain_branches") else "",
+                        public_dependency_indices=tuple(dict(query_plan.dependencies.groups)["public_knowledge"]) if query_plan.dependencies is not None else (),
+                        identity_task=bundle.get("identity_task") or {},
+                        identity_subtask=bundle.get("identity_subtask") or {},
+                        documents=tuple(bundle.get("results", [])),
+                        citations=tuple(rag_meta.get("citations", [])),
+                        confidence=bundle.get("confidence"),
+                        requested_sources=source_requests,
+                        source_references=tuple(bundle.get("source_references") or ()),
+                        source_lookup=source_lookup,
+                        source_excerpts=(
+                            (bundle["raw_excerpt"],) if isinstance(bundle.get("raw_excerpt"), dict) else ()
+                        ),
+                    )
         except Exception as e:
             increment("rag_failures")
             log_event(
