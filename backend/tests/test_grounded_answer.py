@@ -428,3 +428,41 @@ async def test_cache_request_identity_preserves_prompt_differences_and_exact_hit
     assert first.answer != second.answer
     assert not first.cache_hit and not second.cache_hit
     assert repeated.cache_hit and repeated.answer == second.answer
+
+
+@pytest.mark.parametrize("ttl", [-1, float("nan"), float("inf"), float("-inf"), True])
+def test_cache_config_rejects_invalid_lifetime(ttl):
+    with pytest.raises(ValueError, match="ttl_seconds"):
+        AnswerCache(ttl_seconds=ttl)
+
+
+@pytest.mark.parametrize("capacity", [0, -1, 1.5, True, "2", None])
+def test_cache_config_rejects_invalid_capacity(capacity):
+    with pytest.raises(ValueError, match="max_entries"):
+        AnswerCache(max_entries=capacity)
+
+
+@pytest.mark.parametrize("ttl", [0, 1.5])
+async def test_cache_config_zero_disables_and_positive_lifetime_expires(monkeypatch, ttl):
+    from knowledge.grounded_answer import cache as cache_module
+
+    clock = [10.0]
+    monkeypatch.setattr(cache_module.time, "monotonic", lambda: clock[0])
+    calls = 0
+
+    async def generate(**kwargs):
+        nonlocal calls
+        calls += 1
+        return "甲是学生。[S1]"
+
+    service = GroundedAnswerService(retriever=lambda *a, **kw: _bundle(),
+                                   index_version_resolver=lambda domain: "v1",
+                                   cache=AnswerCache(ttl_seconds=ttl, max_entries=1), corrective_enabled=False)
+    await service.answer("甲是谁", generate=generate, domain_id="story")
+    repeated = await service.answer("甲是谁", generate=generate, domain_id="story")
+    assert repeated.cache_hit is (ttl > 0)
+    assert calls == (1 if ttl > 0 else 2)
+    clock[0] += 2
+    expired = await service.answer("甲是谁", generate=generate, domain_id="story")
+    assert not expired.cache_hit
+    assert calls == (2 if ttl > 0 else 3)

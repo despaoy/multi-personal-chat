@@ -21,6 +21,7 @@ import json
 import threading
 import time
 from copy import deepcopy
+from math import isfinite
 from typing import TYPE_CHECKING, Any
 
 from .prompt import GROUNDED_PROMPT_VERSION
@@ -74,8 +75,12 @@ class AnswerCache:
     """进程内 TTL + 容量受限 LRU（线程安全）。"""
 
     def __init__(self, ttl_seconds: float = 120.0, max_entries: int = _MAX_CACHE_ENTRIES):
-        self.ttl = max(0.0, float(ttl_seconds))
-        self.max_entries = max(1, int(max_entries))
+        self.ttl = float(ttl_seconds)
+        if isinstance(ttl_seconds, bool) or not isfinite(self.ttl) or self.ttl < 0:
+            raise ValueError("AnswerCache ttl_seconds must be a finite non-negative number")
+        if type(max_entries) is not int or max_entries <= 0:
+            raise ValueError("AnswerCache max_entries must be a positive integer")
+        self.max_entries = max_entries
         self._store: dict[str, tuple[float, GroundedAnswerResult]] = {}
         self._lock = threading.Lock()
         self.hits = 0
