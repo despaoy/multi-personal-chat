@@ -336,3 +336,47 @@ def test_alembic_007_upgrades_old_sqlite_contract(tmp_path):
     assert row["scope_level"] == "conversation"
     assert str(columns["revision"]["default"]).replace("'", "") in {"1", "(1)"}
     assert any(item["column_names"][-3:] == ["scope_level", "memory_key", "revision"] for item in uniques)
+
+
+@pytest.mark.parametrize("bad", [None, "invalid", True, -0.1, 1.1, float("nan"), float("inf")])
+@pytest.mark.parametrize("field", ["importance", "confidence"])
+@pytest.mark.parametrize("backend", ["sqlite", "postgres"])
+async def test_memory_score_invalid_write_fails_before_database_access(bad, field, backend, monkeypatch):
+    if backend == "postgres":
+        monkeypatch.setenv("DATABASE_URL", "postgresql+asyncpg://synthetic:synthetic@127.0.0.1:9/memory_scores")
+        from db.pg_database import PgDatabase
+
+    # No connection is supplied: invalid input must fail before opening a transaction.
+    database = object.__new__(SQLiteDB if backend == "sqlite" else PgDatabase)
+    kwargs = dict(SCOPE, memory_type="user_fact", memory_key="preference_咖啡", content="用户说喜欢咖啡",
+                  importance=0.6, confidence=0.98, evidence_json='["我喜欢咖啡。"]')
+    kwargs[field] = bad
+    with pytest.raises(ValueError, match="memory " + field):
+        if backend == "sqlite":
+            database.append_character_memory_claim(**kwargs)
+        else:
+            await database.append_character_memory_claim(**kwargs)
+
+
+@pytest.mark.parametrize("score", [0.0, 1.0])
+async def test_memory_score_repository_round_trip_preserves_boundaries(tmp_path, score):
+    database = _db(tmp_path)
+    repository = DatabaseCharacterMemoryRepository(database)
+    memory = MemoryItem("", "user_fact", "用户说喜欢咖啡", importance=score)
+    stored = await repository.append_claim(
+        "kisaki", _scope(), memory, memory_key="preference_咖啡", confidence=score, evidence=("我喜欢咖啡。",),
+    )
+    reread = await repository.get_memory_record(stored["id"], "kisaki", _scope())
+    assert reread["importance"] == score and reread["confidence"] == score
+    assert reread["evidence"] == ["我喜欢咖啡。"]
+
+
+async def test_memory_score_repository_does_not_turn_nan_into_confidence_one(tmp_path):
+    database = _db(tmp_path)
+    repository = DatabaseCharacterMemoryRepository(database)
+    with pytest.raises(ValueError, match="memory confidence"):
+        await repository.append_claim(
+            "kisaki", _scope(), _memory("用户说喜欢咖啡"), memory_key="preference_咖啡",
+            confidence=float("nan"), evidence=("我喜欢咖啡。",),
+        )
+    assert await repository.list_memory_records("kisaki", _scope(), limit=None) == []

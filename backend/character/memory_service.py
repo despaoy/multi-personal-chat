@@ -10,7 +10,6 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
-import math
 import os
 import re
 import threading
@@ -578,16 +577,6 @@ def _recency(updated_at: Any, now: datetime) -> float:
     return 0.5 ** (age_days / RECENCY_HALF_LIFE_DAYS)
 
 
-def _safe_float(value: Any, default: float) -> float:
-    try:
-        number = float(value)
-        # NaN must not become 1.0 through min/max clamping; that would promote
-        # a corrupt confidence/importance value to the strongest possible one.
-        return number if math.isfinite(number) else 0.0
-    except (TypeError, ValueError):
-        return default
-
-
 def _memory_status(row: dict[str, Any]) -> str:
     """读取新旧 schema 的 claim 状态；旧记录视为 active。"""
 
@@ -1084,9 +1073,9 @@ class CharacterMemoryService:
             if intent_match:
                 intent_scores[index] = INTENT_RELEVANCE_FLOOR
 
-            importance = _clamp01(_safe_float(row.get("importance"), 0.0))
+            importance = parse_unit_interval(row.get("importance", 0.0), "memory importance")
             recency = _recency(row.get("updated_at"), now)
-            confidence = _clamp01(_safe_float(row.get("confidence"), 1.0))
+            confidence = parse_unit_interval(row.get("confidence", 1.0), "memory confidence")
             if version_filter_enabled and confidence < MIN_CLAIM_CONFIDENCE:
                 # 证据不足的 claim 不因重要度或新近度进入上下文。
                 continue

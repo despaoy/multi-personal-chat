@@ -479,7 +479,7 @@ class DatabaseCharacterMemoryRepository:
             parent_memory_id=parent_memory_id,
             supersedes_memory_id=supersedes_memory_id,
             evidence_json=json.dumps(list(evidence), ensure_ascii=False),
-            confidence=max(0.0, min(float(confidence), 1.0)),
+            confidence=confidence,
             valid_from=valid_from,
             valid_to=valid_to,
             observed_at=observed_at,

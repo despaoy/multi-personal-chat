@@ -12,6 +12,7 @@ from cache.ttl_value_cache import BoundedTTLCache
 from db.conversation_indexes import SOURCE_INDEX_STATEMENTS
 from db.errors import RegistrationClosedError
 from db import memory_source
+from infra.environment import parse_unit_interval
 
 logger = logging.getLogger(__name__)
 
@@ -3255,8 +3256,8 @@ class SQLiteDB:
             raise ValueError("memory_key must not be empty")
         if not str(content).strip():
             raise ValueError("memory content must not be empty")
-        confidence_value = max(0.0, min(float(confidence), 1.0))
-        importance_value = max(0.0, min(float(importance), 1.0))
+        confidence_value = parse_unit_interval(confidence, "memory confidence")
+        importance_value = parse_unit_interval(importance, "memory importance")
         storage_character, storage_type, storage_conversation = self._claim_storage_scope(
             character_id, conversation_type, conversation_id, scope_level
         )

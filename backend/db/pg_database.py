@@ -17,6 +17,7 @@ from cache.ttl_value_cache import BoundedTTLCache
 from db.conversation_indexes import SOURCE_INDEX_STATEMENTS
 from db.errors import RegistrationClosedError
 from db import memory_source
+from infra.environment import parse_unit_interval
 from db.urls import resolve_runtime_database_url
 
 logger = logging.getLogger(__name__)
@@ -1626,8 +1627,8 @@ class PgDatabase:
             memory_type=memory_type,
             memory_key=memory_key,
             content=content,
-            importance=max(0.0, min(float(importance), 1.0)),
-            confidence=max(0.0, min(float(confidence), 1.0)),
+            importance=parse_unit_interval(importance, "memory importance"),
+            confidence=parse_unit_interval(confidence, "memory confidence"),
             source_message_id=source_message_id,
             source_message_ids_json=source_message_ids_json,
             evidence_json=evidence_json,

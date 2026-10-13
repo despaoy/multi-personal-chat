@@ -113,5 +113,29 @@ async def test_nonfinite_claim_confidence_cannot_pass_contextual_lifecycle_gate(
     row = _row(1, "preference_咖啡", "用户说喜欢咖啡")
     row["confidence"] = bad
     service = CharacterMemoryService(_Repo([row]), semantic_enabled=False)
-    selected, _ = await service.load_relevant_memories("kisaki", _scope(), "咖啡", for_contextual_selection=True)
-    assert selected == ()
+    with pytest.raises(ValueError, match="memory confidence"):
+        await service.load_relevant_memories("kisaki", _scope(), "咖啡", for_contextual_selection=True)
+
+
+@pytest.mark.parametrize("bad", [None, "invalid", True, -0.1, 1.1, float("nan"), float("inf")])
+@pytest.mark.parametrize("field", ["importance", "confidence"])
+@pytest.mark.parametrize("contextual", [False, True])
+async def test_memory_score_corruption_errors_instead_of_defaults(bad, field, contextual):
+    row = _row(1, "preference_咖啡", "用户说喜欢咖啡")
+    row.update(confidence=0.98, evidence=["我喜欢咖啡。"], metadata={"qualifiers": {}})
+    row[field] = bad
+    service = CharacterMemoryService(_Repo([row]), semantic_enabled=False)
+    with pytest.raises(ValueError, match="memory " + field):
+        await service.recall_with_diagnostics("kisaki", _scope(), "我喜欢咖啡吗？", for_contextual_selection=contextual)
+
+
+@pytest.mark.parametrize("importance,confidence", [(0.0, 1.0), (1.0, 1.0), (0.6, 0.0)])
+async def test_memory_score_boundaries_keep_normal_confidence_gate(importance, confidence):
+    row = _row(1, "preference_咖啡", "用户说喜欢咖啡", importance)
+    row["confidence"] = confidence
+    service = CharacterMemoryService(_Repo([row]), semantic_enabled=False)
+    selected, _ = await service.load_relevant_memories("kisaki", _scope(), "我喜欢咖啡吗？")
+    if confidence == 0:
+        assert selected == ()
+    else:
+        assert len(selected) == 1 and selected[0].importance == importance and selected[0].confidence == confidence
