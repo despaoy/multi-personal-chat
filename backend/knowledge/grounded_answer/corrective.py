@@ -87,15 +87,20 @@ class CorrectiveRetrievalAdapter:
     @staticmethod
     def _merge_bundles(primary: dict[str, Any], secondary: dict[str, Any]) -> dict[str, Any]:
         """按 document id 去重合并两轮证据（主轮在前，保排名稳定）。"""
-        merged_results: list[dict[str, Any]] = []
-        seen_ids: set[str] = set()
-        for original in list(primary.get("results") or []) + list(secondary.get("results") or []):
-            result = dict(original)
-            doc_id = str(result.get("id"))
-            if doc_id in seen_ids:
-                continue
-            seen_ids.add(doc_id)
-            merged_results.append(result)
+        documents: dict[str, dict[str, Any]] = {}
+        authority_fields = (
+            "title", "summary", "content", "source", "domain_id", "index_version", "document_type",
+            "metadata", "reality_status", "temporal_scope", "content_scope",
+        )
+        for original in [*primary["results"], *secondary["results"]]:
+            doc_id = str(original["id"])
+            existing = documents.get(doc_id)
+            if existing is not None:
+                if any(existing.get(field) != original.get(field) for field in authority_fields):
+                    raise ValueError("Conflicting document evidence across corrective retrieval rounds")
+            else:
+                documents[doc_id] = dict(original)
+        merged_results = list(documents.values())
 
         citation_by_id: dict[str, dict[str, Any]] = {}
         for citation in list(primary.get("citations") or []) + list(secondary.get("citations") or []):
