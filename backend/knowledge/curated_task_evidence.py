@@ -201,45 +201,35 @@ async def _review(messages):
 
 
 async def review_curated_bundle(bundle, plan, *, window_tokens, reviewer=None):
-    receipt = dict(query=plan["binding"]["input"]["query"], plan=plan, status="unavailable", reason="not_started")
+    """Return a completed review or normal no-candidate result; propagate failures."""
+    receipt = dict(query=plan["binding"]["input"]["query"], plan=plan)
     result = dict(bundle)
-    try:
-        payload = curated_payload(bundle, plan)
-        receipt.update(payload=payload, payload_sha256=_digest(payload))
-        if bundle.get("abstained") or not payload["sources"] or not payload["tasks"]:
-            receipt.update(status="no_candidates", reason="no_reliable_curated_sources")
-        else:
-            packets = tuple(curated_source_packet(source) for source in payload["sources"])
-            result["evidence_packets"] = (*bundle.get("evidence_packets", ()), *packets)
-            result["context_text"] = "\n\n".join(p["text"] for p in result["evidence_packets"])
-            messages = [
-                dict(role="system", content=INSTRUCTION),
-                dict(role="user", content=json.dumps(payload, ensure_ascii=False)),
-            ]
-            if (
-                sum(estimated_tokens(m["content"]) + 4 for m in messages) + 2048 + CONTEXT_SAFETY_MARGIN_TOKENS
-                > window_tokens
-            ):
-                raise CuratedTaskCapacityError("Complete curated review input exceeds context budget")
-            raw = await asyncio.wait_for((reviewer or _review)(messages), timeout=30)
-            receipt["raw"] = raw
-            decisions = parse_curated_review(raw, payload)
-            receipt.update(
-                decisions=decisions,
-                unowned_empty_reviews_ignored=len(json.loads(raw)["tasks"]) - len(decisions),
-                status="reviewed",
-                reason="",
-            )
-    except CuratedTaskCapacityError:
-        receipt["reason"] = "complete_curated_input_capacity_exceeded"
-    except asyncio.TimeoutError:
-        receipt["reason"] = "timeout"
-    except (CuratedSourceChangedError, OSError):
-        receipt["reason"] = "original_curated_source_changed"
-    except (ValueError, TypeError, KeyError, RecursionError):
-        receipt["reason"] = "invalid_or_changed_curated_review"
-    except Exception:
-        receipt["reason"] = "provider_error"
+    payload = curated_payload(bundle, plan)
+    receipt.update(payload=payload, payload_sha256=_digest(payload))
+    if bundle.get("abstained") or not payload["sources"] or not payload["tasks"]:
+        receipt.update(status="no_candidates", reason="no_reliable_curated_sources")
+    else:
+        packets = tuple(curated_source_packet(source) for source in payload["sources"])
+        result["evidence_packets"] = (*bundle.get("evidence_packets", ()), *packets)
+        result["context_text"] = "\n\n".join(p["text"] for p in result["evidence_packets"])
+        messages = [
+            dict(role="system", content=INSTRUCTION),
+            dict(role="user", content=json.dumps(payload, ensure_ascii=False)),
+        ]
+        if (
+            sum(estimated_tokens(m["content"]) + 4 for m in messages) + 2048 + CONTEXT_SAFETY_MARGIN_TOKENS
+            > window_tokens
+        ):
+            raise CuratedTaskCapacityError("Complete curated review input exceeds context budget")
+        raw = await asyncio.wait_for((reviewer or _review)(messages), timeout=30)
+        receipt["raw"] = raw
+        decisions = parse_curated_review(raw, payload)
+        receipt.update(
+            decisions=decisions,
+            unowned_empty_reviews_ignored=len(json.loads(raw)["tasks"]) - len(decisions),
+            status="reviewed",
+            reason="",
+        )
     result["public_curated_review"] = receipt
     return result
 

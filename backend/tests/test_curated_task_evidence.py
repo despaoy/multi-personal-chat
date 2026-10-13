@@ -12,6 +12,7 @@ from inference.generation_request import GenerationRequest, RetrievalResult, bui
 from knowledge import curated_sources, public_domains
 from knowledge.curated_sources import collect_curated_sources, curated_source_packet
 from knowledge.curated_task_evidence import (
+    CuratedTaskCapacityError,
     curated_payload,
     parse_curated_review,
     render_curated_tasks,
@@ -305,11 +306,11 @@ async def test_review_capacity_never_crops_complete_question_or_sources(corpus):
     async def forbidden(messages):
         pytest.fail("No clipped paid request is allowed")
 
-    result = await review_curated_bundle(bundle(corpus), plan, window_tokens=128, reviewer=forbidden)
-    receipt = result["public_curated_review"]
-    assert receipt["reason"] == "complete_curated_input_capacity_exceeded"
-    assert receipt["payload"]["query"] == QUERY and receipt["payload"]["sources"][0]["excerpt"]["text"] == BODY
-    assert BODY in result["context_text"]
+    original = bundle(corpus)
+    before = copy.deepcopy(original)
+    with pytest.raises(CuratedTaskCapacityError, match="exceeds context budget"):
+        await review_curated_bundle(original, plan, window_tokens=128, reviewer=forbidden)
+    assert original == before and original["curated_source_catalog"]["sources"][0]["excerpt"]["text"] == BODY
 
 
 async def test_complete_catalogue_overflow_is_explicit_without_sending(corpus):
@@ -325,9 +326,11 @@ async def test_complete_catalogue_overflow_is_explicit_without_sending(corpus):
     async def forbidden(messages):
         pytest.fail("Catalogue must not omit lines to call a model")
 
-    result = await review_curated_bundle(original, plan, window_tokens=65536, reviewer=forbidden)
-    assert result["public_curated_review"]["reason"] == "complete_curated_input_capacity_exceeded"
-    assert len(result["curated_source_catalog"]["sources"][0]["excerpt"]["text"].splitlines()) == 300
+    before = copy.deepcopy(original)
+    with pytest.raises(CuratedTaskCapacityError):
+        await review_curated_bundle(original, plan, window_tokens=65536, reviewer=forbidden)
+    assert original == before
+    assert len(original["curated_source_catalog"]["sources"][0]["excerpt"]["text"].splitlines()) == 300
 
 
 async def test_cancelled_curated_review_propagates(corpus):
@@ -390,7 +393,7 @@ async def test_unowned_review_cannot_borrow_curated_proof_or_hide_missing_tasks(
         parse_curated_review(json.dumps(value), payload)
 
 
-async def test_failed_review_retains_actual_raw_without_promoting_decisions(corpus):
+async def test_failed_review_raises_without_returning_partial_receipt(corpus):
     plan, _ = await plan_for(corpus)
     raw = '{"tasks":[]}'
 
@@ -398,9 +401,11 @@ async def test_failed_review_retains_actual_raw_without_promoting_decisions(corp
         assert json.loads(messages[-1]["content"])["query"] == QUERY
         return raw
 
-    result = await review_curated_bundle(bundle(corpus), plan, window_tokens=65536, reviewer=reviewer)
-    receipt = result["public_curated_review"]
-    assert receipt["status"] == "unavailable" and receipt["raw"] == raw and "decisions" not in receipt
+    original = bundle(corpus)
+    before = copy.deepcopy(original)
+    with pytest.raises(ValueError):
+        await review_curated_bundle(original, plan, window_tokens=65536, reviewer=reviewer)
+    assert original == before and "public_curated_review" not in original
 
 
 async def test_real_mixed_review_entry_keeps_business_and_curated_authorities(corpus):
@@ -579,3 +584,73 @@ def test_catalogue_snapshot_keeps_excerpt_and_file_hash_on_same_original(corpus,
     assert source["body_sha256"] == source["source_file_sha256"] == expected
     assert validate_curated_source(source) is source
     assert corpus.path.read_text(encoding="utf-8") == BODY
+
+
+@pytest.mark.parametrize("failure", ["provider", "timeout", "invalid", "capacity", "source_changed", "source_deleted"])
+async def test_curated_review_failure_stops_chat_before_answer(corpus, monkeypatch, failure):
+    from fastapi import HTTPException
+
+    from api import generate
+    from db.schemas import MessageRequest
+    from inference.context_budget import ReviewContextBudget
+    from knowledge import curated_task_evidence, public_question_binding, retrieval_query_plan
+    from knowledge.curated_task_evidence import CuratedTaskCapacityError
+    from knowledge.multiscale_rag import runtime
+
+    plan, dependencies = await plan_for(corpus)
+    seen = dict(review=0, answer=0)
+    error = asyncio.TimeoutError("Declared isolated timeout") if failure == "timeout" else RuntimeError("Declared isolated provider failure")
+    budget = 1024 if failure == "capacity" else 65536
+
+    async def planner(query, **kwargs):
+        assert query == QUERY
+        return retrieval_query_plan.RetrievalQueryPlan(status="applied", dependencies=dependencies)
+
+    async def binding(deps, query, **kwargs):
+        assert deps == dependencies and query == QUERY
+        return plan["binding"]
+
+    async def retrieve(query, top_k, filters, **kwargs):
+        assert query == QUERY and kwargs["question_binding"] == plan["binding"]
+        return bundle(corpus)
+
+    async def reviewer(messages):
+        payload = json.loads(messages[-1]["content"])
+        assert payload["query"] == QUERY and payload["sources"][0]["excerpt"]["text"] == BODY
+        seen["review"] += 1
+        if failure in {"provider", "timeout"}:
+            raise error
+        if failure == "invalid":
+            return '{"tasks":[]}'
+        if failure == "source_changed":
+            corpus.path.write_text(BODY + "\n本次测试原文版本已改变。", encoding="utf8")
+        elif failure == "source_deleted":
+            corpus.path.unlink()
+        return json.dumps(selection(payload))
+
+    async def answer(**kwargs):
+        seen["answer"] += 1
+        pytest.fail("A failed original-source review cannot generate an answer")
+
+    monkeypatch.setattr(retrieval_query_plan, "plan_retrieval_views", planner)
+    monkeypatch.setattr(public_question_binding, "resolve_question_binding", binding)
+    monkeypatch.setattr(runtime, "get_multiscale_rag_service", lambda: SimpleNamespace(config=corpus.config))
+    monkeypatch.setattr(generate, "_retrieve_rag_bundle", retrieve)
+    monkeypatch.setattr(curated_task_evidence, "_review", reviewer)
+    monkeypatch.setattr(generate, "get_provider_context_budget", lambda: SimpleNamespace(
+        review=ReviewContextBudget(budget), window_tokens=budget, evidence_max_chars=0,
+    ))
+    with pytest.raises(HTTPException) as caught:
+        await generate._generate_with_retrieval(
+            MessageRequest(message=QUERY), None,
+            runtime_config=dict(useKnowledgeBase=True, maxTokens=256), model_generate=answer,
+        )
+    expected = {
+        "provider": RuntimeError, "timeout": asyncio.TimeoutError, "invalid": ValueError,
+        "capacity": CuratedTaskCapacityError, "source_changed": curated_sources.CuratedSourceChangedError,
+        "source_deleted": FileNotFoundError,
+    }
+    assert caught.value.status_code == 503 and isinstance(caught.value.__cause__, expected[failure])
+    if failure in {"provider", "timeout"}:
+        assert caught.value.__cause__ is error
+    assert seen == dict(review=0 if failure == "capacity" else 1, answer=0)
