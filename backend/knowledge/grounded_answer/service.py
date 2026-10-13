@@ -7,8 +7,7 @@
 - 不绕过现有 Provider / 流式输出 / 业务服务：生成函数由调用方注入
   （vLLM 客户端 / ModelManager 适配器 / 评估用 DeepSeek 适配器）
 - abstention 模式不调用模型（结构性防绕过）
-- 模型失败时保留检索 evidence，降级为明确 abstention，
-  不返回未经验证的半截结构
+- 非流式检索/模型失败向上传播，不以弃答掩盖系统错误
 - 流式与非流式共用同一 citation 绑定逻辑，最终结构语义一致
 """
 
@@ -146,34 +145,10 @@ class GroundedAnswerService:
 
         # 角色知识检索是同步 CPU 工作，放入线程池避免阻塞事件循环。
         retrieval_start = time.perf_counter()
-        try:
-            bundle, corrective_info = await self._retrieve_with_optional_correction(
-                self._contextual_retrieval_query(query, history, domain_id),
-                domain_id=domain_id,
-                top_k=top_k,
-                filters=filters,
-            )
-        except asyncio.CancelledError:
-            raise
-        except Exception as exc:  # noqa: BLE001 - 检索故障转为明确降级结果
-            timings.retrieval_ms = (time.perf_counter() - retrieval_start) * 1000
-            timings.total_ms = (time.perf_counter() - start) * 1000
-            logger.warning("Grounded Answer 检索失败（降级 abstention）: %s", type(exc).__name__)
-            return GroundedAnswerResult(
-                answer=self.abstention_reply,
-                answer_mode=AnswerMode.ABSTENTION,
-                domain_id=domain_id,
-                citations=[],
-                confidence=None,
-                abstained=True,
-                warnings=["degraded:retrieval_unavailable"],
-                failure_kind=FailureKind.RETRIEVAL_UNAVAILABLE.value,
-                used_rag=False,
-                model_invoked=False,
-                model_id=model_id,
-                retrieval_metadata={"domain_id": domain_id, "evidence_count": 0},
-                timings=timings,
-            )
+        bundle, corrective_info = await self._retrieve_with_optional_correction(
+            self._contextual_retrieval_query(query, history, domain_id),
+            domain_id=domain_id, top_k=top_k, filters=filters,
+        )
         timings.retrieval_ms = (time.perf_counter() - retrieval_start) * 1000
 
         result = await self._answer_from_bundle(
@@ -629,66 +604,21 @@ class GroundedAnswerService:
         timings.prompt_ms = (time.perf_counter() - prompt_start) * 1000
 
         generation_start = time.perf_counter()
-        try:
-            raw_answer = await asyncio.wait_for(
-                generate(
-                    messages=messages,
-                    temperature=temperature,
-                    max_tokens=max_tokens,
-                    top_p=top_p,
-                ),
-                timeout=self.generation_timeout,
-            )
-        except TimeoutError:
-            timings.generation_ms = (time.perf_counter() - generation_start) * 1000
-            logger.warning("Grounded Answer 生成超时（降级 abstention）query_len=%d", len(query))
-            return self._degraded_result(
-                packet,
-                decision,
-                corrective_info,
-                model_id,
-                FailureKind.GENERATION_TIMEOUT,
-                timings,
-            )
-        except asyncio.CancelledError:
-            raise
-        except Exception as e:  # noqa: BLE001 - Provider 故障保留 evidence、明确降级
-            timings.generation_ms = (time.perf_counter() - generation_start) * 1000
-            logger.warning("Grounded Answer 生成失败（降级 abstention）: %s", type(e).__name__)
-            return self._degraded_result(
-                packet,
-                decision,
-                corrective_info,
-                model_id,
-                self._classify_generation_error(e),
-                timings,
-            )
+        raw_answer = await asyncio.wait_for(
+            generate(messages=messages, temperature=temperature, max_tokens=max_tokens, top_p=top_p),
+            timeout=self.generation_timeout,
+        )
         timings.generation_ms = (time.perf_counter() - generation_start) * 1000
-
-        raw_answer = _strip_think_blocks(str(raw_answer or ""))
-        if not raw_answer.strip():
-            return self._degraded_result(
-                packet,
-                decision,
-                corrective_info,
-                model_id,
-                FailureKind.INVALID_MODEL_OUTPUT,
-                timings,
-            )
-
+        if not isinstance(raw_answer, str):
+            raise TypeError("Grounded model output must be text")
+        raw_answer = _strip_think_blocks(raw_answer)
+        if not raw_answer:
+            raise RuntimeError("Grounded model returned empty answer")
         citations, answer_text, warnings, citation_valid = self._finalize_answer(
             raw_answer, packet, want_citations=want_citations
         )
         if not citation_valid:
-            return self._degraded_result(
-                packet,
-                decision,
-                corrective_info,
-                model_id,
-                FailureKind.INVALID_CITATION,
-                timings,
-                extra_warnings=warnings,
-            )
+            raise RuntimeError("Grounded model answer failed citation validation")
 
         return GroundedAnswerResult(
             answer=answer_text,
@@ -756,42 +686,6 @@ class GroundedAnswerService:
         if self._domain_supplements is None or not packet.domain_id:
             return ""
         return self._domain_supplements(packet.domain_id) or ""
-
-    def _degraded_result(
-        self,
-        packet: EvidencePacket,
-        decision: ModeDecision,
-        corrective_info: dict[str, Any] | None,
-        model_id: str,
-        failure: FailureKind,
-        timings: AnswerTimings,
-        extra_warnings: list[str] | None = None,
-    ) -> GroundedAnswerResult:
-        """模型失败降级：保留检索 evidence（metadata），明确 abstention。"""
-        metadata = self._retrieval_metadata(packet, decision, corrective_info, model_id=model_id)
-        return GroundedAnswerResult(
-            answer=self.abstention_reply,
-            answer_mode=AnswerMode.ABSTENTION,
-            domain_id=packet.domain_id,
-            citations=[],
-            confidence=packet.retrieval_confidence,
-            abstained=True,
-            warnings=list(
-                dict.fromkeys(
-                    [
-                        *packet.warnings,
-                        *(extra_warnings or []),
-                        f"degraded:{failure.value}",
-                    ]
-                )
-            ),
-            failure_kind=failure.value,
-            used_rag=True,
-            model_invoked=True,
-            model_id=model_id,
-            retrieval_metadata={**metadata, "degraded_reason": failure.value},
-            timings=timings,
-        )
 
     def _retrieval_metadata(
         self,

@@ -73,7 +73,7 @@ async def test_no_domain_abstains_without_invoking_model():
 
 
 @pytest.mark.asyncio
-async def test_retrieval_failure_is_controlled_and_skips_model():
+async def test_retrieval_failure_propagates_and_skips_model():
     def retrieve(*_args: Any, **_kwargs: Any):
         raise OSError("index unavailable")
 
@@ -81,15 +81,12 @@ async def test_retrieval_failure_is_controlled_and_skips_model():
         raise AssertionError("generation must not run")
 
     service = GroundedAnswerService(retriever=retrieve)
-    result = await service.answer("甲是谁", generate=generate, domain_id="story")
-
-    assert result.abstained is True
-    assert result.failure_kind == FailureKind.RETRIEVAL_UNAVAILABLE.value
-    assert result.model_invoked is False
+    with pytest.raises(OSError, match="index unavailable"):
+        await service.answer("甲是谁", generate=generate, domain_id="story")
 
 
 @pytest.mark.asyncio
-async def test_missing_citation_degrades_instead_of_returning_ungrounded_answer():
+async def test_missing_citation_raises_instead_of_returning_ungrounded_answer():
     async def generate(**_kwargs: Any) -> str:
         return "甲是学生。"
 
@@ -98,11 +95,8 @@ async def test_missing_citation_degrades_instead_of_returning_ungrounded_answer(
         cache=AnswerCache(ttl_seconds=0),
         corrective_enabled=False,
     )
-    result = await service.answer("甲是谁", generate=generate, domain_id="story")
-
-    assert result.abstained is True
-    assert result.failure_kind == FailureKind.INVALID_CITATION.value
-    assert result.citations == []
+    with pytest.raises(RuntimeError, match="citation validation"):
+        await service.answer("甲是谁", generate=generate, domain_id="story")
 
 
 @pytest.mark.asyncio
@@ -183,3 +177,49 @@ async def test_api_generation_adapters_resolve_vllm_only_on_first_generation(mon
     chunks = [chunk async for chunk in generate_stream(messages=[], temperature=0.2, max_tokens=64, top_p=0.9)]
     assert chunks == ["流", "式"]
     assert resolutions == 1
+
+
+@pytest.mark.parametrize("kind", ["provider", "timeout", "cancelled"])
+async def test_generation_error_propagates(kind):
+    import asyncio
+    error = {"provider": OSError("synthetic provider failure"), "timeout": TimeoutError("synthetic timeout"), "cancelled": asyncio.CancelledError()}[kind]
+    async def generate(**kwargs):
+        raise error
+    service = GroundedAnswerService(retriever=lambda *a, **kw: _bundle(), corrective_enabled=False)
+    with pytest.raises(type(error)) as caught:
+        await service.answer("甲是谁", generate=generate, domain_id="story")
+    assert caught.value is error
+
+
+@pytest.mark.parametrize("value", [None, {"answer": "invented protocol"}, "", "<think>reasoning only</think>"])
+async def test_malformed_model_output_is_an_error(value):
+    async def generate(**kwargs):
+        return value
+    service = GroundedAnswerService(retriever=lambda *a, **kw: _bundle(), corrective_enabled=False)
+    with pytest.raises((TypeError, RuntimeError), match="Grounded model"):
+        await service.answer("甲是谁", generate=generate, domain_id="story")
+
+
+async def test_ask_returns_http_error_for_provider_failure(monkeypatch):
+    from unittest.mock import AsyncMock
+
+    from fastapi import FastAPI
+    from httpx import ASGITransport, AsyncClient
+
+    from api import ask
+    from app.main import global_exception_handler
+
+    generate = AsyncMock(side_effect=OSError("synthetic private detail"))
+    service = GroundedAnswerService(retriever=lambda *a, **kw: _bundle(), corrective_enabled=False)
+    monkeypatch.setattr(ask, "get_grounded_answer_service", AsyncMock(return_value=service))
+    monkeypatch.setattr(ask, "_resolve_generate_adapters", AsyncMock(return_value=(generate, None, "test")))
+    app = FastAPI()
+    app.include_router(ask.router)
+    app.add_exception_handler(Exception, global_exception_handler)
+    app.dependency_overrides[ask.get_current_user] = lambda: {"id": 1, "role": "user"}
+    async with AsyncClient(transport=ASGITransport(app=app, raise_app_exceptions=False), base_url="http://test") as client:
+        result = await client.post("/api/ask", json={"message": "甲是谁", "domainId": "story"})
+    assert result.status_code == 500
+    assert result.json()["success"] is False
+    assert "synthetic private detail" not in result.text
+    assert "answer" not in result.json()
