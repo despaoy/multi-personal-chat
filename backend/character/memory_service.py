@@ -23,6 +23,7 @@ import numpy as np
 
 from character.context_builder import MAX_MEMORY_ITEMS
 from character.event_memory import event_reference_content
+from character.memory_clock import parse_memory_timestamp
 from character.memory_query import AMBIGUOUS_MEMORY_KEYS, PERSONAL_MEMORY_KEYS, plan_memory_query
 from character.memory_subject import is_source_observation
 from character.models import MemoryItem, UserScope
@@ -209,20 +210,14 @@ _MEMORY_CONTENT_PREFIXES = tuple(
 )
 
 
-def _parse_timestamp(value: Any) -> datetime | None:
-    """解析数据库中的 ISO 文本时间戳，失败时返回 None。"""
-    if isinstance(value, datetime):
-        return value if value.tzinfo is not None else value.replace(tzinfo=timezone.utc)
-    if not isinstance(value, str) or not value.strip():
-        return None
-    text = value.strip()
-    try:
-        parsed = datetime.fromisoformat(text)
-    except ValueError:
-        return None
-    if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
-    return parsed
+def _record_validity(row: dict[str, Any]) -> list[datetime | None]:
+    bounds = []
+    for field, alias in (("valid_from", "valid_at"), ("valid_to", "invalid_at")):
+        value = row.get(field)
+        if value is None or value == "":
+            value = row.get(alias)
+        bounds.append(parse_memory_timestamp(value, field))
+    return bounds
 
 
 @dataclass(frozen=True)
@@ -334,13 +329,12 @@ def _is_historical_record(
         return False
 
     if row.get('temporal_mode') == 'observation':
-        observed = _parse_timestamp(row.get('temporal_observed_at'))
+        observed = parse_memory_timestamp(row.get('temporal_observed_at'), 'temporal_observed_at')
         return (observed is not None
                 and (window.start is None or observed >= window.start)
                 and (window.end is None or observed < window.end))
 
-    valid_from = _parse_timestamp(row.get("valid_from") or row.get("valid_at"))
-    valid_to = _parse_timestamp(row.get("valid_to") or row.get("invalid_at"))
+    valid_from, valid_to = _record_validity(row)
     # 半开区间重叠：[claim_from, claim_to) ∩ [query_from, query_to)
     if window.end is not None and valid_from is not None and valid_from >= window.end:
         return False
@@ -568,7 +562,7 @@ def _is_suppressed(row: dict[str, Any], intents: _MemoryIntents) -> bool:
 
 def _recency(updated_at: Any, now: datetime) -> float:
     """新近度得分：30 天半衰期，越新得分越高，范围 [0, 1]。"""
-    parsed = _parse_timestamp(updated_at)
+    parsed = parse_memory_timestamp(updated_at, "updated_at")
     if parsed is None:
         return 0.0
     age_days = max(0.0, (now - parsed).total_seconds() / 86400.0)
@@ -597,8 +591,7 @@ def _is_current_record(row: dict[str, Any], now: datetime, *, include_pending: b
     if relation_type in _NON_RETRIEVABLE_RELATIONS:
         return False
 
-    valid_from = _parse_timestamp(row.get("valid_from") or row.get("valid_at"))
-    valid_to = _parse_timestamp(row.get("valid_to") or row.get("invalid_at"))
+    valid_from, valid_to = _record_validity(row)
     if valid_from is not None and valid_from > now:
         return False
     return valid_to is None or valid_to > now

@@ -39,6 +39,7 @@ from math import isfinite
 from typing import cast
 
 from character.decision_policy import STRATEGY_INSTRUCTIONS
+from character.memory_clock import parse_memory_timestamp
 from character.models import (
     CharacterContext,
     CharacterProfile,
@@ -225,19 +226,6 @@ def _truncate(text: str, max_chars: int) -> str:
     return text[: max_chars - 1].rstrip() + _TRUNCATION_MARK
 
 
-def _parse_reference_time(value: str) -> datetime | None:
-    text = (value or "").strip()
-    if not text:
-        return None
-    try:
-        parsed = datetime.fromisoformat(text)
-    except ValueError:
-        return None
-    if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
-    return parsed
-
-
 def _memory_is_injectable(item: MemoryItem, now: datetime) -> bool:
     status = str(item.status or "active").strip().lower()
     relation = str(item.relation_type or "ADD").strip().upper()
@@ -251,11 +239,11 @@ def _memory_is_injectable(item: MemoryItem, now: datetime) -> bool:
     if not item.content.strip() or not isfinite(item.confidence) or item.confidence < MIN_REFERENCE_MEMORY_CONFIDENCE:
         return False
     if item.temporal_mode == "observation":
-        observed = _parse_reference_time(item.observed_at)
+        observed = parse_memory_timestamp(item.observed_at, "observed_at")
         if observed is None or observed > now:
             return False
-    valid_from = _parse_reference_time(item.valid_from)
-    valid_to = _parse_reference_time(item.valid_to)
+    valid_from = parse_memory_timestamp(item.valid_from, "valid_from")
+    valid_to = parse_memory_timestamp(item.valid_to, "valid_to")
     if not item.historical:
         if valid_from is not None and valid_from > now:
             return False
