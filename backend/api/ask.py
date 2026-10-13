@@ -79,48 +79,26 @@ async def _resolve_generate_adapters() -> tuple[Any, Any, str]:
                 resolved = (cloud_generate, None)
                 return resolved
 
-            client = await get_vllm_client() if selected == "vllm" else None
-            if client is not None:
+            if selected != "vllm":
+                raise ValueError(f"Knowledge answers require openai_compat or vllm; selected provider: {selected}")
+            client = await get_vllm_client()
+            if client is None:
+                raise RuntimeError("Selected vLLM client is unavailable; check VLLM_ENABLED and vLLM configuration")
 
-                async def vllm_generate(**kwargs: Any) -> str:
-                    return await client.generate(**kwargs)
+            async def vllm_generate(**kwargs: Any) -> str:
+                return await client.generate(**kwargs)
 
-                async def vllm_stream(**kwargs: Any) -> AsyncIterator[str]:
-                    stream = await client.generate(**kwargs, stream=True)
-                    try:
-                        async for chunk in stream:
-                            yield chunk
-                    finally:
-                        close = getattr(stream, "aclose", None)
-                        if close is not None:
-                            await close()
+            async def vllm_stream(**kwargs: Any) -> AsyncIterator[str]:
+                stream = await client.generate(**kwargs, stream=True)
+                try:
+                    async for chunk in stream:
+                        yield chunk
+                finally:
+                    close = getattr(stream, "aclose", None)
+                    if close is not None:
+                        await close()
 
-                resolved = (vllm_generate, vllm_stream)
-                return resolved
-
-            # 回退：ModelManager（无流式后端时整体产出一次）
-            from inference.model_manager import get_model_manager
-
-            manager = get_model_manager()
-
-            async def manager_generate(
-                *,
-                messages: list[dict[str, str]],
-                temperature: float,
-                max_tokens: int,
-                top_p: float,
-            ) -> str:
-                del temperature, top_p
-                prompt = _flatten_messages(messages)
-                reply, _cost = await manager.async_generate(
-                    prompt,
-                    session_history=None,
-                    rag_docs=None,
-                    max_tokens_override=max_tokens,
-                )
-                return reply
-
-            resolved = (manager_generate, None)
+            resolved = (vllm_generate, vllm_stream)
             return resolved
 
     async def generate(**kwargs: Any) -> str:
@@ -131,28 +109,12 @@ async def _resolve_generate_adapters() -> tuple[Any, Any, str]:
         generate_fn, stream_fn = await resolve()
         if stream_fn is None:
             text = await generate_fn(**kwargs)
-            if text:
-                yield text
+            yield text
             return
         async for chunk in stream_fn(**kwargs):
             yield chunk
 
     return generate, generate_stream, model_id
-
-
-def _flatten_messages(messages: list[dict[str, str]]) -> str:
-    """ModelManager 回退路径：messages → 平铺 prompt（system 在前）。"""
-    parts: list[str] = []
-    for message in messages:
-        role = message.get("role", "")
-        content = message.get("content", "")
-        if role == "system":
-            parts.append(content)
-        elif role == "user":
-            parts.append(f"用户：{content}")
-        elif role == "assistant":
-            parts.append(f"助手：{content}")
-    return "\n\n".join(parts)
 
 
 def _safe_citations(citations: list[dict[str, Any]], *, debug: bool) -> list[dict[str, Any]]:

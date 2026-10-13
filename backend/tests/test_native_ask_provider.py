@@ -84,3 +84,35 @@ async def test_cloud_knowledge_cancellation_propagates_without_local_fallback(mo
     pending.cancel()
     with pytest.raises(asyncio.CancelledError):
         await pending
+
+
+@pytest.mark.parametrize("selected", ["ollama", "llama_cpp", "transformers_peft", "mock", "vllm"])
+@pytest.mark.parametrize("streaming", [False, True])
+async def test_knowledge_provider_cannot_fall_back_to_flattened_generation(monkeypatch, selected, streaming):
+    from unittest.mock import AsyncMock
+
+    from api import ask, generate
+    from inference import model_manager
+
+    fallback = AsyncMock(side_effect=AssertionError("must not flatten or redirect the request"))
+    provider = SimpleNamespace(get_status=lambda: {"modelName": "synthetic-model"})
+    manager = SimpleNamespace(
+        _current_provider=SimpleNamespace(value=selected),
+        get_current_provider=lambda: provider, async_generate=fallback,
+    )
+    monkeypatch.setattr(model_manager, "get_model_manager", lambda: manager)
+    client = AsyncMock(return_value=None)
+    monkeypatch.setattr(generate, "get_vllm_client", client)
+    answer, stream, _ = await ask._resolve_generate_adapters()
+    client.assert_not_awaited()
+    params = dict(messages=[{"role": "system", "content": "仅使用证据"},
+                            {"role": "user", "content": "证据：课程十点半开始。问题：课程何时开始？"}],
+                  temperature=0.23, max_tokens=300, top_p=0.77)
+    expected = RuntimeError if selected == "vllm" else ValueError
+    with pytest.raises(expected, match="vLLM client is unavailable|require openai_compat or vllm"):
+        if streaming:
+            _ = [part async for part in stream(**params)]
+        else:
+            await answer(**params)
+    fallback.assert_not_awaited()
+    assert client.await_count == (1 if selected == "vllm" else 0)
