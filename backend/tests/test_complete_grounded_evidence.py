@@ -218,3 +218,44 @@ def test_corrective_native_merge_rejects_invalid_citation_identity(bad_citation)
     first["citations"][0] = bad_citation
     with pytest.raises(ValueError, match="Citation"):
         CorrectiveRetrievalAdapter._merge_bundles(first, second)
+
+
+@pytest.mark.parametrize("overlap", [False, True])
+async def test_corrective_admitted_source_text_survives_into_model_prompt(overlap):
+    from copy import deepcopy
+    from unittest.mock import Mock
+
+    from knowledge.grounded_answer.corrective import CorrectiveRetrievalAdapter
+
+    data = bundle()
+    first = deepcopy(data)
+    first.update(results=[data["results"][0]], citations=[data["citations"][0]],
+                 evidence_packets=[data["evidence_packets"][0]], confidence=0.2, abstained=True,
+                 query_analysis={"entities": ["月社妃", "琉璃"]})
+    first["results"][0]["content"] = "摘要仅用于检索，完整条件保存在原文证据包。"
+    second = deepcopy(first if overlap else data)
+    if not overlap:
+        second.update(results=[data["results"][1]], citations=[data["citations"][1]],
+                      evidence_packets=[data["evidence_packets"][1]])
+    second.update(confidence=0.8, abstained=False, query_analysis=first["query_analysis"])
+    if overlap:
+        second["evidence_packets"] = []
+    original = deepcopy([first, second])
+    merged = CorrectiveRetrievalAdapter._merge_bundles(first, second)
+    packet = EvidencePacketBuilder().build("许可是否批准？", merged, AnswerMode.GROUNDED_ANSWER)
+    expected = first["evidence_packets"][0]["text"]
+    by_id = {item.document_id: item for item in packet.documents}
+    assert by_id[first["results"][0]["id"]].evidence_text == expected
+    assert FIXTURE["late_qualifier"] in expected
+    model_calls = []
+
+    async def generate(**kwargs):
+        model_calls.append(kwargs)
+        prompt = unescape("\n".join(message["content"] for message in kwargs["messages"]))
+        assert expected in prompt
+        return "需满足原文所列完整许可条件。[S1]"
+
+    service = GroundedAnswerService(retriever=Mock(side_effect=[first, second]), corrective_enabled=True)
+    result = await service.answer("许可是否批准？", generate=generate, domain_id="fixture")
+    assert len(model_calls) == 1 and not result.abstained
+    assert [first, second] == original

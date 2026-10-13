@@ -123,4 +123,7 @@ class CorrectiveRetrievalAdapter:
             **secondary,  # 以改写轮 bundle 为基础（其 confidence 已达标）
             "results": merged_results,
             "citations": merged_citations,
+            "evidence_packets": [
+                *primary.get("evidence_packets", []), *secondary.get("evidence_packets", []),
+            ],
         }
