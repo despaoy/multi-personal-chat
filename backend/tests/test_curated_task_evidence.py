@@ -151,10 +151,10 @@ def test_hidden_or_missing_original_cannot_become_curated_source(corpus):
     )
     assert not hidden["sources"] and hidden["unavailable"][0]["status"] == "no_visible_source"
     corpus.path.unlink()
-    missing = collect_curated_sources(
-        [SimpleNamespace(document=corpus.card)], {corpus.card.id: corpus.evidence}, corpus.extractor, None
-    )
-    assert not missing["sources"] and missing["unavailable"][0]["status"] == "source_unavailable"
+    with pytest.raises(FileNotFoundError):
+        collect_curated_sources(
+            [SimpleNamespace(document=corpus.card)], {corpus.card.id: corpus.evidence}, corpus.extractor, None
+        )
 
 
 async def test_complete_question_and_exact_registered_aliases_bind_literal_curated_tasks(corpus):
@@ -515,3 +515,41 @@ async def test_pure_curated_entry_uses_actual_config_binding_without_generic_aut
         assert render_curated_tasks(built.retrieval)[0]["status"] == "related_candidate_admitted"
     else:
         assert result is original and not reviewed_payloads and "public_curated_review" not in result
+
+
+@pytest.mark.parametrize("failure", ["decode", "over_limit", "changed_during_read"])
+async def test_catalogue_read_failure_is_not_partial_success_or_model_input(corpus, monkeypatch, failure):
+    from knowledge.grounded_answer.service import GroundedAnswerService
+
+    error_type, message = ValueError, "changed during original read"
+    if failure == "decode":
+        corpus.path.write_bytes(b"\xff")
+        error_type, message = UnicodeError, "decode"
+    elif failure == "over_limit":
+        corpus.extractor = OriginalTextExtractor(corpus.path.parent, max_lines=1)
+        message = "max_lines"
+    else:
+        original = corpus.extractor.extract
+
+        def changing(source):
+            result = original(source)
+            corpus.path.write_text(BODY + "\n新增条件：原来源已改变。", encoding="utf-8")
+            return result
+
+        monkeypatch.setattr(corpus.extractor, "extract", changing)
+
+    def retrieve(query, **kwargs):
+        return collect_curated_sources(
+            [SimpleNamespace(document=corpus.card)], {corpus.card.id: corpus.evidence}, corpus.extractor, None
+        )
+
+    calls = []
+
+    async def generate(**kwargs):
+        calls.append(kwargs)
+        return "must not generate after a source read failure"
+
+    service = GroundedAnswerService(retriever=retrieve, corrective_enabled=False)
+    with pytest.raises(error_type, match=message):
+        await service.answer("核对来源中的人物自述和全部限制。", domain_id=corpus.config.domain_id, generate=generate)
+    assert not calls

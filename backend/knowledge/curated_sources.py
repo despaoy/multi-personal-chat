@@ -33,35 +33,32 @@ def collect_curated_sources(candidates, evidence_by_parent, extractor, boundary)
         if evidence.id in seen:
             raise ValueError("Ambiguous native curated source identity")
         seen.add(evidence.id)
-        try:
-            path = extractor.resolve_path(evidence.source.source_path)
-            before = path.read_bytes()
-            excerpt = extractor.extract(evidence.source).to_dict()
-            if path.read_bytes() != before:
-                raise ValueError("Curated source changed during original read")
-            sources.append(
-                dict(
-                    source_id=evidence.id,
-                    parent_id=card.id,
-                    domain_id=card.domain_id,
-                    authority="fresh_curated_declared_span",
-                    declared_source=evidence.source.to_dict(),
-                    excerpt=excerpt,
-                    source_file_sha256=_sha(before),
-                    body_sha256=_sha(excerpt["text"].encode()),
-                    extraction_limits=dict(max_lines=extractor.max_lines, max_chars=extractor.max_chars),
-                    indexed_claim=card.content,
-                    indexed_claim_status="not_independently_verified",
-                    indexed_annotations=dict(
-                        metadata=card.metadata,
-                        reality_status=card.reality_status,
-                        temporal_scope=card.temporal_scope,
-                        content_scope=card.content_scope,
-                    ),
-                )
+        path = extractor.resolve_path(evidence.source.source_path)
+        before = path.read_bytes()
+        excerpt = extractor.extract(evidence.source).to_dict()
+        if path.read_bytes() != before:
+            raise ValueError("Curated source changed during original read")
+        sources.append(
+            dict(
+                source_id=evidence.id,
+                parent_id=card.id,
+                domain_id=card.domain_id,
+                authority="fresh_curated_declared_span",
+                declared_source=evidence.source.to_dict(),
+                excerpt=excerpt,
+                source_file_sha256=_sha(before),
+                body_sha256=_sha(excerpt["text"].encode()),
+                extraction_limits=dict(max_lines=extractor.max_lines, max_chars=extractor.max_chars),
+                indexed_claim=card.content,
+                indexed_claim_status="not_independently_verified",
+                indexed_annotations=dict(
+                    metadata=card.metadata,
+                    reality_status=card.reality_status,
+                    temporal_scope=card.temporal_scope,
+                    content_scope=card.content_scope,
+                ),
             )
-        except (ValueError, OSError, UnicodeError) as exc:
-            unavailable.append(dict(parent_id=card.id, status="source_unavailable", error_type=type(exc).__name__))
+        )
     return dict(sources=sources, unavailable=unavailable)
 
 
