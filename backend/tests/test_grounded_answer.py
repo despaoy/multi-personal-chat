@@ -304,3 +304,32 @@ async def test_stream_no_domain_remains_normal_abstention():
     events = [event async for event in service.answer_stream("普通问题", generate=generate)]
     assert [event.type for event in events] == ["meta", "delta", "citations", "done"]
     assert events[-1].data["abstained"] is True
+
+
+@pytest.mark.parametrize("score", ["invalid", {}, True, float("nan"), float("inf"), float("-inf")])
+async def test_rerank_score_contract_rejects_invalid_before_model(score):
+    from unittest.mock import AsyncMock
+
+    data = _bundle()
+    data["results"][0]["rerank_score"] = score
+    data["citations"][0]["rerank_score"] = 0.9
+    generate = AsyncMock(side_effect=AssertionError("invalid rank must not invoke model"))
+    service = GroundedAnswerService(retriever=lambda *a, **kw: data, corrective_enabled=False)
+    with pytest.raises((TypeError, ValueError)):
+        await service.answer("甲是谁", generate=generate, domain_id="story")
+    generate.assert_not_awaited()
+
+
+@pytest.mark.parametrize("score,expected", [(None, AnswerMode.GROUNDED_ANSWER), (0.9, AnswerMode.DIRECT_ANSWER),
+                                           (1.2, AnswerMode.DIRECT_ANSWER)])
+async def test_rerank_score_contract_uses_result_only_and_allows_unranked(score, expected):
+    data = _bundle()
+    data["results"][0]["rerank_score"] = score
+    data["citations"][0]["rerank_score"] = 0.99
+
+    async def generate(**kwargs):
+        return "甲是学生。[S1]"
+
+    service = GroundedAnswerService(retriever=lambda *a, **kw: data, corrective_enabled=False)
+    result = await service.answer("甲是谁", generate=generate, domain_id="story")
+    assert result.answer_mode == expected and not result.abstained

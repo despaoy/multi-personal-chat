@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from math import isfinite
 from typing import TYPE_CHECKING, Any
 
 from .models import AnswerMode, FailureKind
@@ -46,20 +47,15 @@ class ModeDecision:
     effective_confidence: float = 0.0
 
 
-def _top_rerank_scores(bundle: Mapping[str, Any], limit: int = 2) -> list[float | None]:
-    """按检索排名取前 N 个归一化重排分（results 顺序即排名顺序）。"""
+def _top_rerank_scores(results: list[Mapping[str, Any]]) -> list[float | None]:
+    """Read the first two authoritative ranking scores; absence means no reranker."""
     scores: list[float | None] = []
-    citation_by_id = {str(c.get("source_id")): c for c in (bundle.get("citations") or [])}
-    for item in (bundle.get("results") or [])[:limit]:
+    for item in results[:2]:
         value = item.get("rerank_score")
-        if value is None:
-            # results 缺分时回退 citation（同一文档）中的归一化分数
-            citation = citation_by_id.get(str(item.get("id")))
-            value = citation.get("rerank_score") if citation else None
-        try:
-            scores.append(float(value) if value is not None else None)
-        except (TypeError, ValueError):
-            scores.append(None)
+        score = float(value) if value is not None else None
+        if isinstance(value, bool) or (score is not None and not isfinite(score)):
+            raise ValueError("rerank_score must be a finite number")
+        scores.append(score)
     return scores
 
 
@@ -99,7 +95,7 @@ class AnswerModeDecider:
             )
 
         # top1/top2 差距小 → 证据可能不一致，置信度打折（温和惩罚）
-        top_scores = _top_rerank_scores(bundle)
+        top_scores = _top_rerank_scores(results)
         effective = confidence
         if (
             len(top_scores) >= 2
@@ -138,7 +134,6 @@ class AnswerModeDecider:
                 effective_confidence=effective,
             )
 
-        top_scores = _top_rerank_scores(bundle, limit=1)
         top1 = top_scores[0] if top_scores else None
         if (
             top1 is not None
