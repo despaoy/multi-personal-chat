@@ -79,13 +79,18 @@ class AnswerModeDecider:
             )
 
         warnings: list[str] = []
-        results = list(bundle.get("results") or [])
-        citations = list(bundle.get("citations") or [])
-        confidence = float(bundle.get("confidence") or 0.0)
+        results = list(bundle["results"])
+        citations = list(bundle["citations"])
+        confidence = float(bundle["confidence"])
+        if isinstance(bundle["confidence"], bool) or not isfinite(confidence):
+            raise ValueError("retrieval confidence must be a finite number")
+        abstained = bundle["abstained"]
+        if not isinstance(abstained, bool):
+            raise TypeError("retrieval abstained must be a boolean")
         analysis = bundle.get("query_analysis") or {}
         entities = list(analysis.get("entities") or [])
 
-        if bundle.get("abstained") or not results or not citations:
+        if abstained or not results or not citations:
             reason = FailureKind.NO_RETRIEVAL.value if not results else FailureKind.LOW_CONFIDENCE.value
             return ModeDecision(
                 mode=AnswerMode.ABSTENTION,

@@ -333,3 +333,46 @@ async def test_rerank_score_contract_uses_result_only_and_allows_unranked(score,
     service = GroundedAnswerService(retriever=lambda *a, **kw: data, corrective_enabled=False)
     result = await service.answer("甲是谁", generate=generate, domain_id="story")
     assert result.answer_mode == expected and not result.abstained
+
+
+@pytest.mark.parametrize("field", ["results", "citations", "confidence", "abstained"])
+async def test_decision_contract_missing_fields_are_errors(field):
+    from unittest.mock import AsyncMock
+
+    data = _bundle()
+    del data[field]
+    generate = AsyncMock()
+    service = GroundedAnswerService(retriever=lambda *a, **kw: data, corrective_enabled=False)
+    with pytest.raises(KeyError, match=field):
+        await service.answer("甲是谁", generate=generate, domain_id="story")
+    generate.assert_not_awaited()
+
+
+@pytest.mark.parametrize("field,value", [
+    ("confidence", None), ("confidence", ""), ("confidence", "invalid"), ("confidence", True),
+    ("confidence", float("nan")), ("confidence", float("inf")),
+    ("abstained", "false"), ("abstained", 0), ("abstained", None),
+])
+async def test_decision_contract_invalid_values_do_not_become_abstention(field, value):
+    from unittest.mock import AsyncMock
+
+    data = _bundle()
+    data[field] = value
+    generate = AsyncMock()
+    service = GroundedAnswerService(retriever=lambda *a, **kw: data, corrective_enabled=False)
+    with pytest.raises((TypeError, ValueError)):
+        await service.answer("甲是谁", generate=generate, domain_id="story")
+    generate.assert_not_awaited()
+
+
+@pytest.mark.parametrize("confidence,abstained", [(0.0, True), (0.9, False), (1.2, False)])
+async def test_decision_contract_normal_low_and_high_confidence(confidence, abstained):
+    from unittest.mock import AsyncMock
+
+    data = _bundle()
+    data.update(confidence=confidence, abstained=abstained)
+    generate = AsyncMock(return_value="甲是学生。[S1]")
+    service = GroundedAnswerService(retriever=lambda *a, **kw: data, corrective_enabled=False)
+    result = await service.answer("甲是谁", generate=generate, domain_id="story")
+    assert result.abstained is abstained
+    assert generate.await_count == (0 if abstained else 1)

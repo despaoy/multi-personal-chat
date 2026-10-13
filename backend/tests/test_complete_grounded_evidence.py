@@ -45,6 +45,7 @@ def bundle():
         citations=[dict(id=x["id"]) for x in items],
         evidence_packets=packets,
         confidence=0.8,
+        abstained=False,
     )
 
 
