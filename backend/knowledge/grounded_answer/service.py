@@ -340,14 +340,9 @@ class GroundedAnswerService:
 
         timings.generation_ms = (time.perf_counter() - generation_start) * 1000
         raw_answer = _strip_think_blocks("".join(chunks))
-        if not raw_answer:
-            raise RuntimeError("Grounded model returned empty answer")
-        result_citations, answer_text, warnings, citation_valid = self._finalize_answer(
+        result_citations, answer_text, warnings = self._finalize_answer(
             raw_answer, packet, want_citations=want_citations
         )
-
-        if not citation_valid:
-            raise RuntimeError("Grounded model answer failed citation validation")
 
         # 模型原始流可能含 think 块或引用标记；只有通过与非流式相同的
         # 校验和清理后才把正文交给客户端，避免先泄漏、后纠正。
@@ -491,13 +486,9 @@ class GroundedAnswerService:
         if not isinstance(raw_answer, str):
             raise TypeError("Grounded model output must be text")
         raw_answer = _strip_think_blocks(raw_answer)
-        if not raw_answer:
-            raise RuntimeError("Grounded model returned empty answer")
-        citations, answer_text, warnings, citation_valid = self._finalize_answer(
+        citations, answer_text, warnings = self._finalize_answer(
             raw_answer, packet, want_citations=want_citations
         )
-        if not citation_valid:
-            raise RuntimeError("Grounded model answer failed citation validation")
 
         return GroundedAnswerResult(
             answer=answer_text,
@@ -521,7 +512,7 @@ class GroundedAnswerService:
         packet: EvidencePacket,
         *,
         want_citations: bool,
-    ) -> tuple[list[dict[str, Any]], str, list[str], bool]:
+    ) -> tuple[list[dict[str, Any]], str, list[str]]:
         """citation 解析 → 校验 → 绑定 → 回答清理 → 后置检查。
 
         answer 一律移除 [S#] 标记（正文纯文本）；引用信息由结构化
@@ -531,13 +522,16 @@ class GroundedAnswerService:
         validation = self.validator.validate(raw_answer, packet)
         warnings.extend(validation.warnings)
 
-        citations = self.validator.bind(validation, packet) if want_citations else []
         answer_text = self.validator.sanitize_answer(raw_answer, validation)
+        if not answer_text:
+            raise RuntimeError("Grounded model returned empty answer")
+        if not validation.valid_keys or validation.invalid_keys:
+            raise RuntimeError("Grounded model answer failed citation validation")
+        citations = self.validator.bind(validation, packet) if want_citations else []
 
         post = self.validator.post_check(answer_text, packet, answer_max_chars=self.answer_max_chars)
         warnings.extend(post)
-        citation_valid = bool(validation.valid_keys) and not validation.invalid_keys
-        return citations, answer_text, warnings, citation_valid
+        return citations, answer_text, warnings
 
     def _build_packet(
         self,

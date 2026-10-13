@@ -546,3 +546,21 @@ async def test_api_cache_provenance_distinguishes_reuse_from_generation(monkeypa
     assert first.json()["answer"] == second.json()["answer"]
     assert first.json()["citations"] == second.json()["citations"]
     assert generate.await_count == 1
+
+
+@pytest.mark.parametrize("streaming", [False, True])
+@pytest.mark.parametrize("want_citations", [False, True])
+@pytest.mark.parametrize("text", ["[S1]", "  [S1] "])
+async def test_finalized_answer_requires_body_after_citation_removal(streaming, want_citations, text):
+    async def generate(**kwargs):
+        return text
+
+    service = GroundedAnswerService(retriever=lambda *a, **kw: _bundle(), corrective_enabled=False)
+    events = []
+    with pytest.raises(RuntimeError, match="empty answer"):
+        if streaming:
+            async for event in service.answer_stream("甲是谁", generate=generate, domain_id="story", want_citations=want_citations):
+                events.append(event.type)
+        else:
+            await service.answer("甲是谁", generate=generate, domain_id="story", want_citations=want_citations)
+    assert events == (["meta"] if streaming else [])
