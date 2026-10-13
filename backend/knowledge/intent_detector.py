@@ -220,10 +220,6 @@ class RAGIntentDetector:
         # 使用正则表达式匹配疑问模式
         return bool(self.question_pattern.match(message))
     
-    def _contains_genshin_content(self, message: str) -> bool:
-        """[已弃用] 检查是否包含原神相关内容 - 仅为向后兼容保留，规则引擎不再依赖此方法"""
-        return False
-    
     def analyze_message(self, message: str) -> Dict[str, Any]:
         """
         分析消息特征
@@ -383,26 +379,7 @@ def get_intent_detector() -> RAGIntentDetector:
 
 
 def needs_rag(message: str, context: Optional[Dict[str, Any]] = None) -> Tuple[bool, str, Optional[str]]:
-    """
-    便捷函数：判断消息是否需要RAG（ML模型优先 + 低置信度规则兜底）
-
-    策略：
-    - ML分类器可用且高置信度（>=0.65）→ 完全信任ML预测
-    - ML置信度较低 → 使用规则引擎作为tiebreaker，冲突时优先ML的正例判断
-    - ML不可用 → 回退到规则引擎
-
-    Args:
-        message: 用户消息
-        context: 可选上下文
-
-    Returns:
-        Tuple[是否需要RAG, 判断原因, 预测的KB名称(无则为None)]
-        KB名称可用于RAG检索时按知识库过滤，提升检索精度
-    """
-    global _ML_AVAILABLE, _ml_config
-
-    # A topic classifier cannot turn an established self-report into an
-    # external task. This also avoids loading a classifier for local-only turns.
+    """Use a classifier's positive route or the shared rules; propagate prediction errors."""
     from knowledge.task_dependency import local_context_only
 
     if local_context_only(message):
@@ -410,41 +387,12 @@ def needs_rag(message: str, context: Optional[Dict[str, Any]] = None) -> Tuple[b
 
     if not _ML_AVAILABLE:
         _load_ml_model()
-
     if _ML_AVAILABLE:
-        try:
-            pred, reason, confidence, kb_name = _ml_predict(message)
+        pred, reason, _confidence, kb_name = _ml_predict(message)
+        if pred:
+            return True, reason, kb_name
 
-            # ML高置信度 → 信任ML，但ML预测"不需要"时检查规则引擎安全网
-            if confidence >= 0.65:
-                if not pred:
-                    # ML预测不需要RAG，但检查规则引擎是否检测到疑问句
-                    detector = get_intent_detector()
-                    rule_pred, rule_reason = detector.needs_rag(message, context)
-                    if rule_pred:
-                        logger.info(f"ML预测不需要(置信度: {confidence:.2%}), 但规则引擎检测到疑问特征, 触发RAG: {rule_reason}")
-                        return True, f"规则安全网({rule_reason[:40]}...)", None
-                return pred, reason, kb_name
-
-            # ML置信度较低 → 使用规则引擎作为tiebreaker
-            detector = get_intent_detector()
-            rule_pred, rule_reason = detector.needs_rag(message, context)
-
-            # ML与规则一致 → 信任预测
-            if pred == rule_pred:
-                return pred, f"{reason} (规则一致)", kb_name
-
-            # 冲突时：ML预测需要RAG则优先ML（高召回），ML预测不需要则信任规则（安全网）
-            if pred:
-                logger.info(f"ML({confidence:.2%}→{pred})与规则({rule_pred})冲突, 采用ML正例: {reason}")
-                return pred, f"{reason} (ML优先)", kb_name
-            logger.info(f"ML({confidence:.2%}→{pred})与规则({rule_pred})冲突, 采用规则: {rule_reason}")
-            return rule_pred, f"规则兜底({rule_reason[:40]}...)", None
-        except Exception as e:
-            logger.warning(f"ML 预测失败，回退规则引擎: {e}")
-
-    detector = get_intent_detector()
-    pred, reason = detector.needs_rag(message, context)
+    pred, reason = get_intent_detector().needs_rag(message, context)
     return pred, reason, None
 
 
@@ -460,49 +408,3 @@ def analyze_message(message: str) -> Dict[str, Any]:
     """
     detector = get_intent_detector()
     return detector.analyze_message(message)
-
-
-# 测试函数
-if __name__ == "__main__":
-    # 配置日志
-    logging.basicConfig(level=logging.INFO)
-    
-    detector = RAGIntentDetector()
-    
-    test_messages = [
-        "你好",
-        "胡桃你好呀",
-        "原神是什么游戏？",
-        "蒙德有哪些角色？",
-        "璃月的地理位置在哪里？",
-        "胡桃的命座效果是什么？",
-        "谢谢你的帮助",
-        "好的，我明白了",
-        "哈哈哈，你真有趣",
-        "元素反应有哪些类型？",
-        "深渊螺旋怎么打？",
-        "圣遗物怎么搭配最好？",
-        "在吗",
-        "今天天气怎么样？",
-        "晚上吃什么？",
-        "抽卡保底机制是怎样的？",
-        "！！！",
-        "😊",
-        "原神中胡桃这个角色有什么特点？",
-        "如何培养胡桃？",
-    ]
-    
-    print("RAG意图检测器测试结果：")
-    print("=" * 80)
-    
-    for msg in test_messages:
-        needs, reason, kb_name = needs_rag(msg)
-        analysis = analyze_message(msg)
-
-        print(f"消息: {msg}")
-        print(f"长度: {len(msg)}字符")
-        print(f"需要RAG: {'是' if needs else '否'}")
-        print(f"路由KB: {kb_name or '无'}")
-        print(f"原因: {reason}")
-        print(f"特征: {analysis['features']}")
-        print("-" * 80)
