@@ -63,11 +63,8 @@ class OriginalTextExtractor:
             raise FileNotFoundError(candidate)
         return candidate
 
-    @staticmethod
-    def _read_lines(path: Path) -> list[str]:
-        return path.read_text(encoding="utf-8-sig").splitlines()
-
-    def extract(self, source: SourceReference) -> RawExcerpt:
+    def extract(self, source: SourceReference, *, snapshot: bytes | None = None) -> RawExcerpt:
+        """Use caller-owned bytes when source hashes must describe the same snapshot."""
         start, end = source.line_start, source.line_end
         if type(start) is not int or type(end) is not int or start < 1 or end < start:
             raise ValueError(f"非法来源行号: {start}-{end}")
@@ -75,7 +72,9 @@ class OriginalTextExtractor:
             raise ValueError("Complete source span exceeds max_lines; narrow the declared span or increase the limit")
 
         path = self.resolve_path(source.source_path)
-        lines = self._read_lines(path)
+        if snapshot is None:
+            snapshot = path.read_bytes()
+        lines = snapshot.decode("utf-8-sig").splitlines()
         if end > len(lines):
             raise ValueError(f"来源行号超出文件范围: {start}-{end}>{len(lines)}")
         text = "\n".join(lines[start - 1:end])

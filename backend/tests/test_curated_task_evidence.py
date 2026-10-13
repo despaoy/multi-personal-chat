@@ -531,8 +531,8 @@ async def test_catalogue_read_failure_is_not_partial_success_or_model_input(corp
     else:
         original = corpus.extractor.extract
 
-        def changing(source):
-            result = original(source)
+        def changing(source, **kwargs):
+            result = original(source, **kwargs)
             corpus.path.write_text(BODY + "\n新增条件：原来源已改变。", encoding="utf-8")
             return result
 
@@ -553,3 +553,29 @@ async def test_catalogue_read_failure_is_not_partial_success_or_model_input(corp
     with pytest.raises(error_type, match=message):
         await service.answer("核对来源中的人物自述和全部限制。", domain_id=corpus.config.domain_id, generate=generate)
     assert not calls
+
+
+def test_catalogue_snapshot_keeps_excerpt_and_file_hash_on_same_original(corpus, monkeypatch):
+    import hashlib
+
+    from knowledge.curated_sources import validate_curated_source
+
+    original = corpus.extractor.extract
+
+    def transient_change(source, **kwargs):
+        corpus.path.write_text("中间版本：人物说法已改变。\n限制也改变。\n不可混入原快照。", encoding="utf-8")
+        try:
+            return original(source, **kwargs)
+        finally:
+            corpus.path.write_text(BODY, encoding="utf-8")
+
+    monkeypatch.setattr(corpus.extractor, "extract", transient_change)
+    catalog = collect_curated_sources(
+        [SimpleNamespace(document=corpus.card)], {corpus.card.id: corpus.evidence}, corpus.extractor, None
+    )
+    source = catalog["sources"][0]
+    expected = hashlib.sha256(BODY.encode()).hexdigest()
+    assert source["excerpt"]["text"] == BODY
+    assert source["body_sha256"] == source["source_file_sha256"] == expected
+    assert validate_curated_source(source) is source
+    assert corpus.path.read_text(encoding="utf-8") == BODY

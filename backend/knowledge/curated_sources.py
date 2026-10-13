@@ -35,7 +35,7 @@ def collect_curated_sources(candidates, evidence_by_parent, extractor, boundary)
         seen.add(evidence.id)
         path = extractor.resolve_path(evidence.source.source_path)
         before = path.read_bytes()
-        excerpt = extractor.extract(evidence.source).to_dict()
+        excerpt = extractor.extract(evidence.source, snapshot=before).to_dict()
         if path.read_bytes() != before:
             raise ValueError("Curated source changed during original read")
         sources.append(
@@ -123,13 +123,10 @@ def validate_curated_source(source, *, verify_original=True):
         return source
     path = extractor.resolve_path(reference.source_path)
     before = path.read_bytes()
-    excerpt = extractor.extract(reference).to_dict()
-    if (
-        path.read_bytes() != before
-        or _sha(before) != source["source_file_sha256"]
-        or excerpt != source["excerpt"]
-        or _sha(excerpt["text"].encode()) != source["body_sha256"]
-    ):
+    if _sha(before) != source["source_file_sha256"]:
+        raise CuratedSourceChangedError("Curated original span changed its actual source")
+    excerpt = extractor.extract(reference, snapshot=before).to_dict()
+    if path.read_bytes() != before or excerpt != source["excerpt"]:
         raise CuratedSourceChangedError("Curated original span changed its actual source")
     return source
 
