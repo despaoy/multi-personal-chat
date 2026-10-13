@@ -116,14 +116,10 @@ class GroundedAnswerService:
         timings = AnswerTimings()
         start = time.perf_counter()
 
-        # 缓存键需要 index_version：由注入的 resolver 提供（域配置快照，
-        # 不触发检索）；未知时用 "unknown"，缓存仍与 prompt/模型绑定
+        # Configured resolvers own index identity; failures must not bypass cache policy.
         index_version = ""
         if self._index_version_resolver is not None:
-            try:
-                index_version = self._index_version_resolver(domain_id)
-            except Exception:  # noqa: BLE001 - 缓存键成分失败不影响主链路
-                index_version = ""
+            index_version = self._index_version_resolver(domain_id)
 
         if self.cache.ttl > 0 and index_version:
             key = answer_cache_key(
@@ -759,10 +755,7 @@ class GroundedAnswerService:
     def _supplement_for(self, packet: EvidencePacket) -> str:
         if self._domain_supplements is None or not packet.domain_id:
             return ""
-        try:
-            return self._domain_supplements(packet.domain_id) or ""
-        except Exception:  # noqa: BLE001 - 域补充规则失败不影响主链路
-            return ""
+        return self._domain_supplements(packet.domain_id) or ""
 
     def _degraded_result(
         self,
