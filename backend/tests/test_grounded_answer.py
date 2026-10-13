@@ -564,3 +564,46 @@ async def test_finalized_answer_requires_body_after_citation_removal(streaming, 
         else:
             await service.answer("甲是谁", generate=generate, domain_id="story", want_citations=want_citations)
     assert events == (["meta"] if streaming else [])
+
+
+@pytest.mark.parametrize("streaming", [False, True])
+@pytest.mark.parametrize("want_citations", [False, True])
+@pytest.mark.parametrize("case", ["citations", "length", "boundary"])
+async def test_structural_output_limits_do_not_silently_publish_partial_success(streaming, want_citations, case):
+    from copy import deepcopy
+
+    from knowledge.grounded_answer.validator import CitationValidator
+
+    data = _bundle()
+    second = deepcopy(data["results"][0])
+    second["id"] = "doc-2"
+    data["results"].append(second)
+    citation = deepcopy(data["citations"][0])
+    citation["source_id"] = "doc-2"
+    data["citations"].append(citation)
+    body = "甲是学生。"
+    text = body + ("[S1][S2]" if case == "citations" else "[S1]")
+
+    async def generate(**kwargs):
+        return text
+
+    service = GroundedAnswerService(retriever=lambda *a, **kw: data, corrective_enabled=False,
+                                   validator=CitationValidator(max_citations=1),
+                                   answer_max_chars=len(body) - (case == "length"))
+    events = []
+
+    async def run():
+        if streaming:
+            async for event in service.answer_stream("甲是谁", generate=generate, domain_id="story", want_citations=want_citations):
+                events.append(event)
+            return events[-1].data["answer"]
+        result = await service.answer("甲是谁", generate=generate, domain_id="story", want_citations=want_citations)
+        assert len(result.citations) == (1 if want_citations else 0)
+        return result.answer
+
+    if case == "boundary":
+        assert await run() == body
+    else:
+        with pytest.raises(RuntimeError, match="exceeds"):
+            await run()
+        assert [event.type for event in events] == (["meta"] if streaming else [])

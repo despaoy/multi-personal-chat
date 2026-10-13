@@ -95,8 +95,7 @@ class CitationValidator:
         if result.duplicate_count:
             result.warnings.append(f"duplicate_citations:{result.duplicate_count}")
         if len(result.valid_keys) > self.max_citations:
-            result.warnings.append(f"citation_count_truncated:{len(result.valid_keys)}>{self.max_citations}")
-            result.valid_keys = result.valid_keys[: self.max_citations]
+            raise RuntimeError(f"Grounded model citation count exceeds limit: {len(result.valid_keys)}>{self.max_citations}")
         if packet.documents and not result.valid_keys:
             result.warnings.append("missing_valid_citation")
         if not packet.documents and CITATION_MARKER_RE.search(answer_text):
@@ -139,14 +138,14 @@ class CitationValidator:
         *,
         answer_max_chars: int = 4000,
     ) -> list[str]:
-        """轻量回答后检查（只报结构化告警，不做语义裁决）。"""
+        """检查正文硬性长度上限；其他启发式信号保留为告警。"""
         warnings: list[str] = []
         for artifact in _EVIDENCE_TAG_ARTIFACTS:
             if artifact in answer_text:
                 warnings.append("evidence_tag_artifact_leak")
                 break
         if answer_max_chars > 0 and len(answer_text) > answer_max_chars:
-            warnings.append(f"answer_exceeds_budget:{len(answer_text)}>{answer_max_chars}")
+            raise RuntimeError(f"Grounded model answer exceeds character limit: {len(answer_text)}>{answer_max_chars}")
         if not packet.documents and answer_text.strip() and _looks_confident(answer_text):
             warnings.append("confident_answer_without_evidence")
         return warnings
