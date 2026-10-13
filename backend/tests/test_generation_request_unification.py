@@ -24,13 +24,13 @@ async def test_unavailable_character_domain_does_not_switch_to_generic_kb(monkey
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("provider", ["vllm", "openai_compat"])
-@pytest.mark.parametrize("output_invalid", [False, True])
-async def test_generation_failure_is_reported_and_recorded(monkeypatch, provider, output_invalid):
+@pytest.mark.parametrize("failure_kind", ["provider", "reply_validation", "context_authority"])
+async def test_generation_failure_is_reported_and_recorded(monkeypatch, provider, failure_kind):
     from api import generate
     from inference import model_manager
 
     records, counters = [], []
-    from unittest.mock import Mock
+    from unittest.mock import AsyncMock, Mock
 
     switch = Mock(side_effect=AssertionError("A failed request must not switch the configured provider"))
     manager = SimpleNamespace(_current_provider=SimpleNamespace(value=provider),
@@ -45,8 +45,14 @@ async def test_generation_failure_is_reported_and_recorded(monkeypatch, provider
     async def available():
         return True
 
-    from inference.generation_request import ReplyValidationError
-    failure = ReplyValidationError(("unsupported_user_fact",)) if output_invalid else RuntimeError("model unavailable")
+    from inference.generation_request import ContextAuthorityChangedError, ReplyValidationError
+    failure = {
+        "provider": RuntimeError("model unavailable"),
+        "reply_validation": ReplyValidationError(("unsupported_user_fact",)),
+        "context_authority": ContextAuthorityChangedError("Context authority changed again after one regeneration"),
+    }[failure_kind]
+    save = AsyncMock()
+    monkeypatch.setattr(generate, "_save_message", save)
 
     async def failed_expression(*args, **kwargs):
         raise failure
@@ -62,13 +68,17 @@ async def test_generation_failure_is_reported_and_recorded(monkeypatch, provider
     from fastapi import HTTPException
 
     with pytest.raises(HTTPException) as caught:
-        await generate._generate_reply_impl(MessageRequest(message="问题"), persist_message=False)
-    assert caught.value.status_code == (503 if provider == "vllm" or output_invalid else 500)
-    if output_invalid:
+        await generate._generate_reply_impl(MessageRequest(message="按当前完整资料回答，不使用已撤销版本。"))
+    assert caught.value.status_code == (503 if provider == "vllm" or failure_kind != "provider" else 500)
+    if failure_kind == "context_authority":
+        assert caught.value.detail["stage"] == "context_authority"
+        assert caught.value.detail["reason"] == "repeated_authority_change"
+    if failure_kind == "reply_validation":
         assert caught.value.detail["stage"] == "reply_validation"
         assert caught.value.detail["violations"] == ["unsupported_user_fact"]
     assert caught.value.__cause__ is failure
-    assert records[0]["error_type"] == type(failure).__name__
+    assert len(records) == 1 and records[0]["error_type"] == type(failure).__name__
+    save.assert_not_awaited()
     switch.assert_not_called()
     assert ("model_failure", False) in counters
     assert ("model_failure", True) not in counters

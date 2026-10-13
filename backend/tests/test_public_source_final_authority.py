@@ -256,7 +256,7 @@ async def test_source_revoked_during_main_cannot_reach_citation_repair(tmp_path)
 
     result = await generate_character_response(request, model)
     assert len(calls) == 2 and len(annotations) == 1 and not result.response_citations
-    assert result.authority_refreshed and not result.authority_fallback
+    assert result.authority_refreshed
     assert result.reply == BODY_B and BODY_A not in result.reply
     assert BODY_A not in result.plan.retrieval.evidence and BODY_B in result.plan.retrieval.evidence
 

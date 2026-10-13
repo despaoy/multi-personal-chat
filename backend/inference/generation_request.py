@@ -35,6 +35,10 @@ class ReplyValidationError(RuntimeError):
         super().__init__("Reply validation failed after correction: " + ", ".join(violations))
 
 
+class ContextAuthorityChangedError(RuntimeError):
+    """Trusted context changed again after the permitted single regeneration."""
+
+
 Message = dict[str, str]
 RetrievalStatus = Literal["not_requested", "ok", "abstained", "character_abstention", "error"]
 
@@ -217,7 +221,6 @@ class GenerationResult:
     citation_repair_attempted: bool = False
     citation_repair_status: str = ""
     authority_refreshed: bool = False
-    authority_fallback: bool = False
     task_results: tuple[Mapping[str, Any], ...] = ()
 
 
@@ -653,19 +656,9 @@ async def generate_character_response(
     from inference.answer_citations import finalize_answer_citations, prepare_answer_citations
     from inference.citation_recovery import recover_missing_citations
 
-    async def refresh_answer(result, refreshed):
+    async def refresh_answer(refreshed):
         if request.authority_refresh_count >= 1:
-            # A second concurrent withdrawal cannot make retries unbounded or
-            # return either obsolete answer. Keep the fresh plan for diagnosis.
-            return replace(
-                result,
-                reply="本轮资料在生成期间再次发生变化，暂时无法可靠核对答案，请再试一次。",
-                plan=build_generation_request(refreshed),
-                response_citations=(),
-                authority_refreshed=True,
-                authority_fallback=True,
-                citation_repair_status="context_authority_changed",
-            )
+            raise ContextAuthorityChangedError("Context authority changed again after one regeneration")
         fresh_request = replace(
             refreshed,
             reply_guard=initial_reply_guard,
@@ -679,12 +672,12 @@ async def generate_character_response(
     async def finalize_citations(result):
         refreshed = await _revalidate_context(request)
         if refreshed != request:
-            return await refresh_answer(result, refreshed)
+            return await refresh_answer(refreshed)
         result = finalize_answer_citations(result)
         result = await recover_missing_citations(result, generate, context_window_tokens=request.context_window_tokens)
         refreshed = await _revalidate_context(request)
         if refreshed != request:
-            return await refresh_answer(result, refreshed)
+            return await refresh_answer(refreshed)
         return result
 
     request = replace(request, retrieval=prepare_answer_citations(request.retrieval))

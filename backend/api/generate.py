@@ -27,12 +27,13 @@ from db.adapter import db
 from db.database import get_lora_path_by_id
 from db.schemas import GenerateResponse, MessageRequest
 from inference.generation_request import (
-    GenerationRequest as CharacterGenerationRequest,
-)
-from inference.generation_request import (
+    ContextAuthorityChangedError,
     ReplyValidationError,
     RetrievalResult,
     generate_character_response,
+)
+from inference.generation_request import (
+    GenerationRequest as CharacterGenerationRequest,
 )
 from inference.lora_registry import get_lora_character_id
 from inference.lora_utils import resolve_lora_served_name
@@ -634,6 +635,11 @@ async def _generate_reply_body(
             errorType=type(e).__name__,
         )
         logger.error("Generation failed: %s", type(e).__name__)
+        if isinstance(e, ContextAuthorityChangedError):
+            raise HTTPException(503, detail={
+                "stage": "context_authority", "reason": "repeated_authority_change",
+                "message": "本轮资料在生成期间持续变化，未返回答案，请稍后重新请求。",
+            }) from e
         if isinstance(e, ReplyValidationError):
             raise HTTPException(503, detail={
                 "stage": "reply_validation",
@@ -1333,9 +1339,6 @@ async def _generate_with_retrieval(
         rag_meta["citations"] = list(generation.response_citations) if citations_enabled else []
     if generation.authority_refreshed:
         rag_meta["warnings"] = list(dict.fromkeys([*(rag_meta.get("warnings") or []), "context_authority_refreshed"]))
-    if generation.authority_fallback:
-        rag_meta.update(answerMode="abstention", abstained=True, citations=[])
-        rag_meta["warnings"] = list(dict.fromkeys([*(rag_meta.get("warnings") or []), "context_authority_changed"]))
     if not getattr(generation, "model_invoked", True):
         rag_meta["modelInvoked"] = False
         rag_meta["answerMode"] = generation.response_mode
@@ -1373,7 +1376,7 @@ async def _generate_with_retrieval(
             and dict(query_plan.dependencies.groups)["private_memory"]
             and private_visible
         )
-        if (generation.model_invoked and not generation.guard_fallback and not generation.authority_fallback
+        if (generation.model_invoked and not generation.guard_fallback
                 and (public_visible or private_visible)):
             rag_meta["answerMode"] = "partial_answer"
         elif rag_meta.get("answerMode") == "grounded_answer":
