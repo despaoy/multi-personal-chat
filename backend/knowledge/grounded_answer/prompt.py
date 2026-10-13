@@ -135,17 +135,17 @@ class GroundedPromptBuilder:
         blocks: list[str] = []
         # EvidencePacket is already an atomic admission decision. Re-slicing
         # each document would lose late negations and invalidate its citation.
-        source_chars = sum(len(item.to_block()) for item in packet.documents) + 2 * (len(packet.documents) - 1)
+        source_blocks = [item.to_block() for item in packet.documents]
+        source_chars = sum(map(len, source_blocks)) + 2 * (len(source_blocks) - 1)
         if source_chars > self.evidence_max_chars:
             raise ValueError("Complete evidence packet exceeds grounded prompt budget")
-        for item in packet.documents:
+        for item, bounded in zip(packet.documents, source_blocks, strict=True):
             attrs = [f'id="{item.citation_key}"']
             if item.document_type:
                 attrs.append(f'type="{_escape_data(item.document_type)}"')
             if item.layer_label:
                 attrs.append(f'layer="{_escape_data(item.layer_label)}"')
             attrs.append('trust="untrusted"')
-            bounded = item.to_block()
             blocks.append("<evidence {}>\n{}\n</evidence>".format(" ".join(attrs), _escape_data(bounded)))
         header = '<retrieved_evidence trust="untrusted" purpose="factual_grounding">'
         return header + "\n" + "\n".join(blocks) + "\n</retrieved_evidence>"
