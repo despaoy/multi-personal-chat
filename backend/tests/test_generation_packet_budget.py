@@ -1,3 +1,7 @@
+import asyncio
+
+import pytest
+
 from inference.generation_request import GenerationRequest, RetrievalResult, build_generation_request
 
 
@@ -40,3 +44,31 @@ def test_token_budget_rechecks_background_ownership():
     assert '孤立场景' not in plan.messages[-1]['content']
     assert '共享场景' in plan.messages[-1]['content']
     assert plan.retrieval.citations == ({'id': 'a'},)
+
+
+@pytest.mark.parametrize("invalid", [
+    {"text": None}, {"text": " "}, {"document_ids": "a"},
+    {"document_ids": [None]}, {"document_ids": [1]}, {"document_ids": [""]},
+])
+@pytest.mark.parametrize("include_valid", [False, True])
+def test_malformed_packet_errors_instead_of_partial_answer_or_abstention(invalid, include_valid):
+    from inference.generation_request import generate_character_response
+
+    valid = {"kind": "evidence", "text": "合成记录：周五可验收，但仅限离线环境。", "document_ids": ["a"]}
+    broken = {**valid, **invalid}
+    packets = (valid, broken) if include_valid else (broken,)
+    request = GenerationRequest(
+        message="什么时间及条件下可以验收？", apply_prompt_policy=False,
+        context_window_tokens=8192, max_tokens=512,
+        retrieval=RetrievalResult(status="ok", evidence=valid["text"], evidence_packets=packets,
+                                  citations=({"id": "a"},)),
+    )
+    calls = []
+
+    async def generate(**kwargs):
+        calls.append(kwargs)
+        return "must not hide invalid evidence"
+
+    with pytest.raises(ValueError, match="Invalid generation evidence packet"):
+        asyncio.run(generate_character_response(request, generate))
+    assert not calls and request.retrieval.evidence_packets == packets

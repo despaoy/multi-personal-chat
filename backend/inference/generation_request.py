@@ -524,15 +524,16 @@ def _build_packet_budgeted_request(request: GenerationRequest) -> GenerationPlan
         for packet in pending:
             text = packet.get("text")
             ids = packet.get("document_ids", ())
-            if not isinstance(text, str) or not text.strip() or not isinstance(ids, (list, tuple)):
-                continue
+            if (not isinstance(text, str) or not text.strip() or not isinstance(ids, (list, tuple))
+                    or any(not isinstance(identity, str) or not identity.strip() for identity in ids)):
+                raise ValueError("Invalid generation evidence packet: text and document identities must be valid")
             if not dependency_satisfied(packet, accepted, request.retrieval.source_coverage):
                 deferred.append(packet)
                 continue
             evidence = "\n\n".join([*(p["text"] for p in accepted), text])
             if request.evidence_max_chars > 0 and len(evidence) > request.evidence_max_chars:
                 continue
-            candidate_ids = accepted_ids | {str(i) for i in ids}
+            candidate_ids = accepted_ids | set(ids)
             retrieval = replace(
                 request.retrieval,
                 evidence=evidence,
