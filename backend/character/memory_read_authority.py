@@ -18,16 +18,20 @@ def source_version(row):
     return record_version({name: row[name] for name in ("source_message_id", "body", "observed_at")})
 
 
+def source_event_ids(row):
+    events = row.get("source_event_ids")
+    if events is None:
+        return ()
+    if isinstance(events, str):
+        events = json.loads(events)
+    if not isinstance(events, (list, tuple, set)):
+        raise ValueError("Memory source_event_ids must contain a collection of record IDs")
+    return events
+
+
 def read_versions(row, stored_versions, source_receipts):
     ids = [str(row["id"])]
-    events = row.get("source_event_ids")
-    if isinstance(events, str):
-        try:
-            events = json.loads(events)
-        except ValueError:
-            events = ()
-    if isinstance(events, (list, tuple, set)):
-        ids.extend(str(key) for key in events if str(key) in stored_versions)
+    ids.extend(str(key) for key in source_event_ids(row) if str(key) in stored_versions)
     ids = tuple(dict.fromkeys(ids))
     claims = tuple((key, stored_versions[key]) for key in ids)
     sources = tuple(

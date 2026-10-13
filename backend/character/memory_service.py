@@ -25,6 +25,7 @@ from character.context_builder import MAX_MEMORY_ITEMS
 from character.event_memory import event_reference_content
 from character.memory_clock import parse_memory_timestamp
 from character.memory_query import AMBIGUOUS_MEMORY_KEYS, PERSONAL_MEMORY_KEYS, plan_memory_query
+from character.memory_read_authority import source_event_ids
 from character.memory_subject import is_source_observation
 from character.models import MemoryItem, UserScope
 from character.source_fragment_provenance import source_fragment_fields
@@ -597,38 +598,34 @@ def _is_current_record(row: dict[str, Any], now: datetime, *, include_pending: b
     return valid_to is None or valid_to > now
 
 
-def _json_value(value: Any) -> Any:
-    """兼容仓储已解码值和旧/测试仓储直接返回的 JSON 文本。"""
-
-    if not isinstance(value, str):
-        return value
-    text = value.strip()
-    if not text or text[0] not in '[{"':
-        return value
-    try:
-        return json.loads(text)
-    except (TypeError, ValueError, json.JSONDecodeError):
-        return value
+def _record_list(row: dict[str, Any], field: str) -> list | tuple:
+    if field in row:
+        values = row[field]
+    else:
+        raw = row.get(field + "_json")
+        values = [] if raw is None or raw == "" else json.loads(raw)
+    if not isinstance(values, (list, tuple)):
+        raise ValueError(f"Memory {field} must contain a list")
+    return values
 
 
 def _evidence_texts(value: Any) -> tuple[str, ...]:
     """把 evidence/source event 的常见表示规范化为短文本元组。"""
 
-    decoded = _json_value(value)
-    if decoded is None:
+    if value is None:
         return ()
-    if isinstance(decoded, dict):
+    if isinstance(value, dict):
         for key in ("text", "content", "quote", "evidence", "summary"):
-            text = str(decoded.get(key) or "").strip()
+            text = str(value.get(key) or "").strip()
             if text:
                 return (text,)
         return ()
-    if isinstance(decoded, (list, tuple, set)):
+    if isinstance(value, (list, tuple, set)):
         result: list[str] = []
-        for item in decoded:
+        for item in value:
             result.extend(_evidence_texts(item))
         return tuple(result)
-    text = str(decoded).strip()
+    text = str(value).strip()
     return (text,) if text else ()
 
 
@@ -648,12 +645,8 @@ def _row_qualifiers(row: dict[str, Any]) -> tuple[tuple[str, str], ...]:
 
 def _source_ids(row: dict[str, Any]) -> tuple[str, ...]:
     values: list[str] = []
-    for key in ("source_message_ids", "source_message_ids_json", "source_event_ids"):
-        decoded = _json_value(row.get(key))
-        if isinstance(decoded, (list, tuple, set)):
-            values.extend(str(item).strip() for item in decoded if str(item).strip())
-        elif decoded is not None and str(decoded).strip():
-            values.append(str(decoded).strip())
+    for decoded in (_record_list(row, "source_message_ids"), source_event_ids(row)):
+        values.extend(str(item).strip() for item in decoded if str(item).strip())
     source_message_id = str(row.get("source_message_id") or "").strip()
     if source_message_id:
         values.append(source_message_id)
@@ -665,10 +658,8 @@ def _row_evidence(
 ) -> tuple[str, ...]:
     """提取 claim 自带 evidence，并按显式 source event ID 附一跳事件。"""
 
-    values: list[str] = []
+    values = list(_evidence_texts(_record_list(row, "evidence")))
     for key in (
-        "evidence",
-        "evidence_json",
         "source_event",
         "source_events",
         "adjacent_event",
@@ -676,18 +667,16 @@ def _row_evidence(
     ):
         values.extend(_evidence_texts(row.get(key)))
 
-    explicit_event_ids = _json_value(row.get("source_event_ids"))
-    if isinstance(explicit_event_ids, (list, tuple, set)):
-        for event_id in explicit_event_ids:
-            related = rows_by_id.get(str(event_id))
-            if related is None:
-                continue
-            # A provenance link cannot resurrect erased/retracted/pending facts.
-            if _memory_status(related) not in {*_CURRENT_MEMORY_STATUSES, "superseded", "archived"}:
-                continue
-            content = str(related.get("content") or "").strip()
-            if content:
-                values.append(content)
+    for event_id in source_event_ids(row):
+        related = rows_by_id.get(str(event_id))
+        if related is None:
+            continue
+        # A provenance link cannot resurrect erased/retracted/pending facts.
+        if _memory_status(related) not in {*_CURRENT_MEMORY_STATUSES, "superseded", "archived"}:
+            continue
+        content = str(related.get("content") or "").strip()
+        if content:
+            values.append(content)
 
     # Legacy compilation carries four snippets. A semantic reviewer must see
     # every snippet (including late corrections), or reject the whole budget.

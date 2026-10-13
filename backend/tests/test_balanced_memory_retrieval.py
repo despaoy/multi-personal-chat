@@ -284,3 +284,74 @@ async def test_legacy_hybrid_ablation_switches_remain_callable():
     assert [item.memory_id for item in selected] == ["1"]
     assert selected[0].evidence == ()
     assert selected[0].status == "active"
+
+
+async def test_evidence_decode_round_trip_preserves_json_looking_original_speech(tmp_path):
+    from repositories.character_memory import DatabaseCharacterMemoryRepository
+
+    from db.database import SQLiteDB
+
+    original = ('["咖啡", "但禁止加糖"]', '{"text":"我不喜欢冰咖啡","condition":"仅限冬天"}', '"我喜欢咖啡"')
+    database = SQLiteDB(tmp_path / "evidence.sqlite")
+    repository = DatabaseCharacterMemoryRepository(database)
+    stored = await repository.append_claim(
+        "kisaki", _scope(), MemoryItem("", "user_fact", "用户说喜欢咖啡", importance=0.6),
+        memory_key="preference_咖啡", confidence=0.98, evidence=original,
+    )
+    selected, _ = await CharacterMemoryService(repository, semantic_enabled=False).load_relevant_memories(
+        "kisaki", _scope(), "我喜欢咖啡吗？")
+    assert len(selected) == 1 and selected[0].memory_id == str(stored["id"])
+    assert selected[0].evidence == original
+    reference, ids = compile_reference_context(selected, complete_evidence=True)
+    import json
+
+    packet = json.loads(next(line[2:] for line in reference.splitlines() if line.startswith("- {")))
+    assert ids == (str(stored["id"]),) and packet["evidence"] == list(original)
+
+
+@pytest.mark.parametrize("empty", [False, True])
+def test_evidence_decode_canonical_fields_do_not_merge_stale_raw_columns(empty):
+    from character.memory_service import _row_evidence, _source_ids
+
+    evidence = [] if empty else ["完整当前原话：只能离线，禁止联网。"]
+    sources = [] if empty else ["current"]
+    row = dict(evidence=evidence, evidence_json='["旧摘要"]', source_message_ids=sources,
+               source_message_ids_json='["stale"]')
+    assert _row_evidence(row, {}, complete=True) == tuple(evidence)
+    assert _source_ids(row) == tuple(sources)
+
+
+@pytest.mark.parametrize("field", ["evidence_json", "source_message_ids_json"])
+@pytest.mark.parametrize("bad", ['["incomplete"', '{}', 'null'])
+async def test_evidence_decode_invalid_legacy_fields_error_instead_of_text(field, bad):
+    row = _row(1, "用户说喜欢咖啡", memory_key="preference_咖啡", memory_type="user_fact",
+               confidence=0.98, **{field: bad})
+    service = CharacterMemoryService(_Repo([row]), semantic_enabled=False)
+    with pytest.raises(ValueError):
+        await service.recall_with_diagnostics("kisaki", _scope(), "我喜欢咖啡吗？")
+
+
+@pytest.mark.parametrize("bad", ['[99', '{}', False])
+async def test_evidence_decode_malformed_event_links_cannot_disagree_with_read_authority(bad):
+    from character.memory_read_authority import read_versions, record_version
+
+    row = _row(1, "用户说喜欢咖啡", memory_key="preference_咖啡", memory_type="user_fact",
+               confidence=0.98, source_event_ids=bad)
+    service = CharacterMemoryService(_Repo([row]), semantic_enabled=False)
+    with pytest.raises(ValueError):
+        await service.load_relevant_memories("kisaki", _scope(), "我喜欢咖啡吗？")
+    with pytest.raises(ValueError):
+        read_versions(row, {"1": record_version(row)}, {})
+
+
+@pytest.mark.parametrize("links", [[99], "[99]"])
+async def test_evidence_decode_complete_event_links_keep_evidence_and_version_binding(links):
+    from character.memory_read_authority import record_version
+
+    parent = _row(1, "用户说喜欢咖啡", memory_key="preference_咖啡", memory_type="user_fact",
+                  confidence=0.98, evidence=["我喜欢咖啡。"], source_event_ids=links)
+    event = _row(99, "条件：冬天也禁止加糖。", status="archived")
+    selected, _ = await CharacterMemoryService(_Repo([parent, event]), semantic_enabled=False).load_relevant_memories(
+        "kisaki", _scope(), "我喜欢咖啡吗？")
+    assert len(selected) == 1 and selected[0].evidence == ("我喜欢咖啡。", event["content"])
+    assert selected[0].storage_versions == (("1", record_version(parent)), ("99", record_version(event)))
