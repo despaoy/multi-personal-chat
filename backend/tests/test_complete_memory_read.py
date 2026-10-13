@@ -7,6 +7,8 @@ from test_memory_response import context, packets
 from inference.generation_request import GenerationRequest, generate_character_response
 from inference.memory_response import render_complete_memory_read
 
+pytestmark = pytest.mark.usefixtures("no_live_context_review")
+
 
 def missing_context():
     return replace(context(()), memory_status='no_match',
@@ -55,19 +57,19 @@ def test_other_tasks_not_swallowed(query):
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize('use_kb', [False, True])
-async def test_api_skips_external_retrieval_and_reports_zero_calls(monkeypatch, use_kb):
+async def test_api_private_plan_keeps_zero_answer_calls(monkeypatch, semantic_plan, use_kb):
     from api import generate
     from db.schemas import MessageRequest
-    from knowledge import intent_detector
 
     async def model(**_):
         pytest.fail('Unexpected model call')
 
     monkeypatch.setattr(generate, '_get_system_prompt', lambda _: 'persona')
-    monkeypatch.setattr(intent_detector, 'needs_rag', lambda _: pytest.fail('No external dependency'))
+    planning = semantic_plan('我的专业是什么？', dict(private_memory=[0]))
     reply, rag, meta = await generate._generate_with_vllm(
         MessageRequest(message='我的专业是什么？'), None, runtime_config={'useKnowledgeBase': use_kb},
         prepared_character_turn=SimpleNamespace(history=(), compiled=missing_context()), model_generate=model)
+    assert len(planning) == int(use_kb)
     assert not rag and '你的专业' in reply
     assert meta['modelInvoked'] is False and meta['answerMode'] == 'memory_field_result'
     assert generate._DETERMINISTIC_MODEL_LABELS[meta['answerMode']] == 'memory/field_result'
@@ -76,10 +78,9 @@ async def test_api_skips_external_retrieval_and_reports_zero_calls(monkeypatch, 
 @pytest.mark.asyncio
 @pytest.mark.parametrize('query', ['我来自哪里？', '我的专业是什么？', '我住哪里？', '我叫什么？'])
 @pytest.mark.parametrize('status', ['no_match', 'retrieval_error'])
-async def test_personal_read_with_history_never_requires_external_knowledge(monkeypatch, query, status):
+async def test_personal_read_with_history_never_requires_external_knowledge(monkeypatch, semantic_plan, query, status):
     from api import generate
     from db.schemas import MessageRequest
-    from knowledge import intent_detector
 
     calls = []
 
@@ -88,39 +89,48 @@ async def test_personal_read_with_history_never_requires_external_knowledge(monk
         return '这点还不能确定。'
 
     monkeypatch.setattr(generate, '_get_system_prompt', lambda _: 'persona')
-    monkeypatch.setattr(intent_detector, 'needs_rag', lambda _: pytest.fail('Personal read routed to external RAG'))
+    planning = semantic_plan(query, dict(private_memory=[0]))
     history = ({'role': 'user', 'content': '说回我本人，我来自贵阳。'},)
     _, rag, meta = await generate._generate_with_vllm(
         MessageRequest(message=query), None, runtime_config={'useKnowledgeBase': True},
         prepared_character_turn=SimpleNamespace(history=history, compiled=replace(missing_context(), memory_status=status)),
         model_generate=model)
+    assert len(planning) == 1 and planning[0]["history"] == list(history)
     assert len(calls) == 1 and not rag
     assert any(m['content'] == history[0]['content'] for m in calls[0]['messages'])
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize('query,branch', [
-    ('我的专业适合什么工作？', ''), ('我朋友的专业是什么？', ''),
-    ('我的专业是什么，以及夜子的哥哥是谁？', ''), ('我来自哪里？', '分支场景'),
+@pytest.mark.parametrize('query,branch,groups,external', [
+    ('我的专业适合什么工作？', '', dict(private_memory=[0], public_knowledge=[0]), True),
+    ('我朋友的专业是什么？', '', dict(unresolved_source=[0]), True),
+    ('我的专业是什么，以及夜子的哥哥是谁？', '', dict(private_memory=[0], public_knowledge=[0]), True),
+    ('我来自哪里？', '分支场景', dict(private_memory=[0]), False),
 ])
-async def test_nonpersonal_dependencies_keep_rag_routing(monkeypatch, query, branch):
+async def test_nonpersonal_or_branch_turns_use_full_semantic_plan(monkeypatch, semantic_plan, query, branch, groups, external):
     from api import generate
     from db.schemas import MessageRequest
-    from knowledge import intent_detector
+    from knowledge import public_question_binding
 
+    planning = semantic_plan(query, groups)
     routed = []
 
-    def needs_rag(text):
-        routed.append(text)
-        return False, 0, None
+    async def binding(*args, **kwargs):
+        return None  # This dispatch control grants no object/source proof.
+
+    async def retrieve(*args, **kwargs):
+        routed.append(args[0])
+        return dict(results=[], citations=[], abstained=True)
 
     async def model(**_):
         return '还不能确定。'
 
     monkeypatch.setattr(generate, '_get_system_prompt', lambda _: 'persona')
-    monkeypatch.setattr(intent_detector, 'needs_rag', needs_rag)
+    monkeypatch.setattr(public_question_binding, 'resolve_question_binding', binding)
+    monkeypatch.setattr(generate, '_retrieve_rag_bundle', retrieve)
     await generate._generate_with_vllm(
         MessageRequest(message=query), None, runtime_config={'useKnowledgeBase': True},
         prepared_character_turn=SimpleNamespace(history=(), compiled=replace(missing_context(), branch_context=branch)),
         model_generate=model)
-    assert len(routed) == 1
+    assert len(planning) == 1 and planning[0]['query'] == query
+    assert routed == ([query] if external else [])

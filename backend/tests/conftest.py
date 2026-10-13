@@ -8,6 +8,8 @@ import sys
 import tempfile
 from pathlib import Path
 
+import pytest
+
 # Never let unit tests migrate or write the developer's local database. PostgreSQL
 # integration runs must opt in explicitly with USE_POSTGRESQL=true.
 _TEST_RUNTIME_ROOT = Path(tempfile.mkdtemp(prefix="qqchat-pytest-"))
@@ -31,3 +33,48 @@ collect_ignore_glob = [
     "security_test.py",
     "fault_injection_test.py",
 ]
+
+
+
+@pytest.fixture
+def no_live_context_review(monkeypatch):
+    """These unit tests must supply a reviewer rather than contact a provider."""
+    from inference import review_client
+
+    async def forbidden():
+        pytest.fail("Unit test attempted live review; supply complete semantic controls")
+
+    monkeypatch.setattr(review_client, "get_context_review_client", forbidden)
+
+
+@pytest.fixture
+def semantic_plan(monkeypatch):
+    """Validate an explicitly supplied unit response through the actual planner."""
+    import json
+
+    from knowledge import retrieval_query_plan
+    from knowledge.turn_dependencies import KINDS, parse_dependencies
+
+    actual = retrieval_query_plan.plan_retrieval_views
+
+    def install(query, groups):
+        complete = {kind: groups.get(kind, []) for kind in KINDS}
+        parse_dependencies(complete, query)
+        calls = []
+
+        async def reviewer(messages):
+            payload = json.loads(messages[-1]["content"])
+            assert payload["query"] == query
+            calls.append(payload)
+            return json.dumps(dict(search_views=[], dependencies=complete, public_partitions=[
+                dict(segment_id=i, cuts=[]) for i in complete["public_knowledge"]
+            ]))
+
+        async def planner(message, **kwargs):
+            assert message == query
+            return await actual(message, reviewer=reviewer, **kwargs)
+
+        monkeypatch.setattr(retrieval_query_plan, "plan_retrieval_views", planner)
+        return calls
+
+    return install

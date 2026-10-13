@@ -4,6 +4,7 @@ from character.memory_operation import is_only_memory_erasure, render_operation_
 from character.models import CompiledCharacterContext
 from inference.generation_request import GenerationRequest, generate_character_response
 
+pytestmark = pytest.mark.usefixtures("no_live_context_review")
 
 @pytest.mark.parametrize('message', [
     '请把你记住的我的住址彻底删掉。',
@@ -39,16 +40,15 @@ async def test_operation_receipt_does_not_require_a_model_context_budget(status,
 
 
 @pytest.mark.parametrize('status', ['erased', 'pending', 'failed'])
-async def test_api_operation_receipt_has_no_external_retrieval_dependency(monkeypatch, status):
+async def test_api_operation_receipt_has_no_external_retrieval_dependency(monkeypatch, semantic_plan, status):
     from types import SimpleNamespace
 
     from api import generate
     from db.schemas import MessageRequest
-    from knowledge import intent_detector
 
-    routed = []
+    query = '请把我的宠物名字从记忆里删除。'
+    planning = semantic_plan(query, dict(control=[0]))
     monkeypatch.setattr(generate, '_get_system_prompt', lambda _: 'persona')
-    monkeypatch.setattr(intent_detector, 'needs_rag', lambda query: (routed.append(query) or (False, 0, None)))
     context = CompiledCharacterContext('', '', '',
         memory_operation_receipt={'status': status, 'persisted': 1 if status == 'erased' else 0})
     prepared = SimpleNamespace(history=(), compiled=context)
@@ -59,7 +59,7 @@ async def test_api_operation_receipt_has_no_external_retrieval_dependency(monkey
     _, used_rag, meta = await generate._generate_with_vllm(
         MessageRequest(message='请把我的宠物名字从记忆里删除。'), None,
         prepared_character_turn=prepared, runtime_config={'useKnowledgeBase': True}, model_generate=must_not_call)
-    assert routed == []
+    assert len(planning) == 1 and planning[0]["query"] == query
     assert not used_rag and meta['answerMode'] == 'memory_operation'
 
 

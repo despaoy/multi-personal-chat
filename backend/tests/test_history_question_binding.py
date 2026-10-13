@@ -20,6 +20,8 @@ from knowledge.public_question_binding import (
 from knowledge.question_reference_context import build_reference_context
 from knowledge.turn_dependencies import KINDS, parse_dependencies
 
+pytestmark = pytest.mark.usefixtures("no_live_context_review")
+
 QUERY = "查它们的费用与材料，保留预约不免原件的限制。"
 HISTORY = [
     {"role": "user", "content": "前者是竹湾登记，后者是枫台续期；查询各自公共规定，只读，不能混用例外。"},
@@ -248,7 +250,7 @@ async def test_normal_api_binding_receives_same_effective_history_as_planning(mo
     from api import generate
     from character.models import CompiledCharacterContext
     from db.schemas import MessageRequest
-    from knowledge import intent_detector, public_question_binding, retrieval_query_plan
+    from knowledge import public_question_binding, retrieval_query_plan
 
     expected = (
         HISTORY
@@ -276,7 +278,6 @@ async def test_normal_api_binding_receives_same_effective_history_as_planning(mo
 
     monkeypatch.setattr(retrieval_query_plan, "plan_retrieval_views", planner)
     monkeypatch.setattr(public_question_binding, "resolve_question_binding", resolver)
-    monkeypatch.setattr(intent_detector, "needs_rag", lambda _: (True, "unit", None))
     monkeypatch.setattr(generate, "_retrieve_rag_bundle", retrieval)
     prepared = SimpleNamespace(compiled=CompiledCharacterContext("", "", ""), history=tuple(HISTORY))
     with pytest.raises(ExpectedStop):

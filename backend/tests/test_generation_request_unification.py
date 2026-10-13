@@ -5,6 +5,8 @@ import pytest
 from db.schemas import MessageRequest
 from inference.generation_request import GenerationRequest, build_generation_request
 
+pytestmark = pytest.mark.usefixtures("no_live_context_review")
+
 
 @pytest.mark.asyncio
 async def test_unavailable_character_domain_does_not_switch_to_generic_kb(monkeypatch):
@@ -74,20 +76,19 @@ async def test_generation_failure_is_reported_and_recorded(monkeypatch, provider
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("failure", [RuntimeError("retrieval unavailable"), TimeoutError("timeout")])
-async def test_retrieval_errors_stop_before_model_generation(monkeypatch, failure):
+async def test_retrieval_errors_stop_before_model_generation(monkeypatch, semantic_plan, failure):
     from api import generate
-    from knowledge import intent_detector
 
     captured = {}
 
-    async def broken_retrieval(*args):
+    async def broken_retrieval(*args, **kwargs):
         raise failure
 
     async def model(**kwargs):
         captured.update(kwargs)
         return "暂时还不能确定。"
 
-    monkeypatch.setattr(intent_detector, "needs_rag", lambda _: (True, "fact", None))
+    semantic_plan("人物关系是什么", dict(unresolved_source=[0]))
     monkeypatch.setattr(generate, "_retrieve_rag_bundle", broken_retrieval)
     monkeypatch.setattr(generate, "_get_system_prompt", lambda _: "persona")
     from fastapi import HTTPException
@@ -181,57 +182,71 @@ async def test_production_and_character_benchmark_share_model_request(monkeypatc
 
 
 @pytest.mark.asyncio
-async def test_production_rag_uses_shared_grounded_request(monkeypatch):
+async def test_production_rag_uses_shared_grounded_request(monkeypatch, semantic_plan):
+    """Transport/building control with complete fiction, not a relevance eval."""
     import re
 
     from api import generate
     from inference import answer_citations
     from inference.answer_citations import prepare_answer_citations
-    from knowledge import intent_detector
+    from inference.context_budget import ReviewContextBudget
+    from knowledge import public_question_binding, public_task_evidence
+    from knowledge.evidence_packets import document_evidence_packets
 
+    query = "核对虚构夏屿展览的完整条款，保留费用、开放时间和雨天限制。"
+    body = "虚构夏屿展览入场费17元，只在周六开放；雨天停止，预约不能免除雨天限制。"
+    document = dict(id="fiction-rule", title="虚构展览完整条款", content=body)
+    citations = [dict(source_id=document["id"])]
+    planning = semantic_plan(query, dict(public_knowledge=[0]))
     monkeypatch.setattr(answer_citations.secrets, "token_hex", lambda _size: "123456abcdef")
     captured = {}
 
     class Client:
         async def generate(self, **kwargs):
             captured.update(kwargs)
-            return "answer" + re.search(r"\[\[cite:[0-9a-f]{12}:S1\]\]", kwargs["messages"][0]["content"]).group(0)
+            marker = re.search(r"\[\[cite:[0-9a-f]{12}:S1\]\]", kwargs["messages"][0]["content"]).group(0)
+            return "已依据完整虚构条款回答。" + marker
 
-    async def retrieve(query, top_k, filters):
-        return {
-            "results": [{"id": "doc-1", "content": "evidence"}],
-            "citations": [{"source_id": "doc-1"}],
-            "confidence": 0.9,
-            "abstained": False,
-        }
+    async def retrieve(question, top_k, filters, **kwargs):
+        assert question == query
+        return dict(results=[document], citations=citations, confidence=0.9, abstained=False)
 
-    monkeypatch.setattr(intent_detector, "needs_rag", lambda _: (True, "fact", None))
+    async def binding(*args, **kwargs):
+        return None
+
+    async def transmission_control(bundle, *args, **kwargs):
+        # Semantic relevance is controlled here; source/negation transmission
+        # and the canonical generation builder are the behavior under test.
+        assert bundle["results"] == [document] and body.endswith("预约不能免除雨天限制。")
+        return bundle
+
+    monkeypatch.setattr(public_question_binding, "resolve_question_binding", binding)
+    monkeypatch.setattr(public_task_evidence, "review_public_candidates", transmission_control)
     monkeypatch.setattr(generate, "_retrieve_rag_bundle", retrieve)
     monkeypatch.setattr(generate, "_get_system_prompt", lambda _: "persona")
     monkeypatch.setattr(generate, "_vllm_client", Client())
-
+    monkeypatch.setattr(generate, "get_provider_context_budget", lambda: SimpleNamespace(
+        review=ReviewContextBudget(65536), window_tokens=65536, evidence_max_chars=0,
+    ))
     reply, _, meta = await generate._generate_with_vllm(
-        MessageRequest(message="question", senderName="琉璃"),
-        None,
-        runtime_config={"useKnowledgeBase": True, "temperature": 0.7},
+        MessageRequest(message=query, senderName="虚构读者"), None,
+        runtime_config=dict(useKnowledgeBase=True, temperature=0.7, maxTokens=256),
     )
-    expected = build_generation_request(
-        GenerationRequest(
-            message="question",
-            persona_prompt="persona",
-            interlocutor="琉璃",
-            retrieval=prepare_answer_citations(generate.RetrievalResult(status="ok", evidence="evidence",
-                documents=({"id": "doc-1", "content": "evidence"},), citations=({"source_id": "doc-1"},),
-                evidence_packets=({"kind": "evidence", "document_ids": ["doc-1"],
-                    "text": "【检索资料片段: 未命名资料】\nevidence"},))),
-            temperature=0.7,
-        )
-    )
-
-    assert reply == "answer"
-    assert [c["source_id"] for c in meta["citations"]] == ["doc-1"]
+    packets = document_evidence_packets([document])
+    expected = build_generation_request(GenerationRequest(
+        message=query, persona_prompt="persona", interlocutor="虚构读者",
+        retrieval=prepare_answer_citations(generate.RetrievalResult(
+            status="ok", evidence="\n\n".join(packet["text"] for packet in packets),
+            evidence_packets=packets, documents=(document,), citations=tuple(citations), confidence=0.9,
+            public_dependency_indices=(0,),
+        )), temperature=0.7, max_tokens=256, context_window_tokens=65536, evidence_max_chars=0,
+    ))
+    assert len(planning) == 1 and planning[0]["query"] == query
+    assert reply == "已依据完整虚构条款回答。"
+    assert [citation["source_id"] for citation in meta["citations"]] == [document["id"]]
     assert captured["messages"] == [dict(message) for message in expected.messages]
     assert captured["temperature"] == expected.generation["temperature"] == 0.5
+    assert body in "\n".join(message["content"] for message in captured["messages"])
     assert expected.prompt_policy_version
 
 
