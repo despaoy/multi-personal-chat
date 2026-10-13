@@ -128,3 +128,64 @@ def test_source_extractor_rejects_path_traversal(tmp_path: Path):
     extractor = OriginalTextExtractor(tmp_path)
     with pytest.raises(ValueError, match="超出语料根目录"):
         extractor.resolve_path("../outside.txt")
+
+
+def ranking_score_runtime(score, method="heuristic", *, empty=False):
+    from types import SimpleNamespace
+
+    runtime = object.__new__(MultiScaleRagRuntime)
+    runtime._base_config = SimpleNamespace(domain_id="synthetic")
+    runtime._gate = SimpleNamespace(analyze=lambda query: SimpleNamespace(entities=[], matched_domains=["synthetic"]))
+    results = [] if empty else [dict(id="synthetic", title="合成资料", content="只能离线验收，禁止联网。",
+                                    rerank_score=score, fused_score=0.99, rerank_method=method)]
+    runtime._service = SimpleNamespace(retrieve=lambda *a, **kw: dict(
+        results=results, context_text="只能离线验收，禁止联网。" if results else "",
+        citations=[dict(source_id="synthetic")] if results else [],
+    ))
+    return runtime
+
+
+@pytest.mark.parametrize("score", [0.0, -0.1, 0.24, 0.25, 0.8])
+def test_ranking_score_heuristic_never_substitutes_high_recall_score(monkeypatch, score):
+    monkeypatch.setenv("CHARACTER_RAG_ABSTAIN_THRESHOLD", "0.25")
+    runtime = ranking_score_runtime(score)
+    bundle = runtime.retrieve_with_citations("核对验收限制", domain_id=runtime.config.domain_id)
+    assert bundle["confidence"] == score and bundle["abstained"] is (score < 0.25)
+
+
+@pytest.mark.parametrize("score", [-1.0, 0.0, 1.0])
+def test_ranking_score_cross_encoder_keeps_logit_threshold(monkeypatch, score):
+    import math
+
+    monkeypatch.setenv("CHARACTER_RAG_CROSS_ENCODER_MIN_LOGIT", "0")
+    runtime = ranking_score_runtime(score, "cross_encoder")
+    bundle = runtime.retrieve_with_citations("核对验收限制", domain_id=runtime.config.domain_id)
+    assert bundle["confidence"] == round(1 / (1 + math.exp(-score)), 4)
+    assert bundle["abstained"] is (score < 0)
+
+
+@pytest.mark.parametrize("score", [None, "invalid", True, float("nan"), float("inf")])
+@pytest.mark.parametrize("method", ["heuristic", "cross_encoder"])
+def test_ranking_score_corruption_is_not_low_confidence_abstention(score, method):
+    runtime = ranking_score_runtime(score, method)
+    with pytest.raises((ValueError, TypeError)):
+        runtime.retrieve_with_citations("核对验收限制", domain_id=runtime.config.domain_id)
+
+
+def test_ranking_score_empty_results_remain_normal_abstention():
+    runtime = ranking_score_runtime(None, empty=True)
+    bundle = runtime.retrieve_with_citations("核对验收限制", domain_id=runtime.config.domain_id)
+    assert bundle["confidence"] == 0 and bundle["abstained"] and not bundle["results"]
+
+
+async def test_ranking_score_zero_prevents_answer_model_despite_high_recall_score():
+    from knowledge.grounded_answer.service import GroundedAnswerService
+
+    runtime = ranking_score_runtime(0.0)
+    service = GroundedAnswerService(retriever=runtime.retrieve_with_citations, corrective_enabled=False)
+
+    async def generate(**kwargs):
+        raise AssertionError("High recall score must not rescue a rejected ranking score")
+
+    result = await service.answer("核对验收限制", domain_id=runtime.config.domain_id, generate=generate)
+    assert result.abstained and not result.model_invoked and result.confidence == 0

@@ -251,9 +251,12 @@ class MultiScaleRagRuntime:
             result = self._service.retrieve(query, top_k=top_k, **scoped)
         else:
             result = self._service.retrieve(query, top_k=top_k, knowledge_boundary=knowledge_boundary, **scoped)
-        results = result.get("results", [])
+        results = result["results"]
         top = results[0] if results else {}
-        score = float(top.get("rerank_score") or 0.0)
+        value = top["rerank_score"] if results else 0.0
+        score = float(value)
+        if isinstance(value, bool) or not math.isfinite(score):
+            raise ValueError("rerank_score must be a finite number")
         semantic = top.get("rerank_method") == "cross_encoder"
         if semantic:
             # Raw logits can be negative. Never replace them with recall scores
@@ -261,18 +264,16 @@ class MultiScaleRagRuntime:
             # NOT an empirically calibrated probability of answer correctness.
             confidence = 1.0 / (1.0 + math.exp(-max(-700.0, min(700.0, score))))
             threshold = _env_float("CHARACTER_RAG_CROSS_ENCODER_MIN_LOGIT", 0.0)
-            abstained = not results or not math.isfinite(score) or score < threshold
+            abstained = not results or score < threshold
         else:
             confidence = score
-            if confidence <= 0:
-                confidence = min(1.0, float(top.get("fused_score") or 0.0) * 8.0)
             threshold_name = (
                 "CHARACTER_RAG_ABSTAIN_THRESHOLD"
                 if os.getenv("CHARACTER_RAG_ABSTAIN_THRESHOLD") is not None
                 else "MULTISCALE_RAG_ABSTAIN_THRESHOLD"
             )
             threshold = _env_float(threshold_name, 0.25)
-            abstained = not results or not math.isfinite(confidence) or confidence < threshold
+            abstained = not results or confidence < threshold
         return {
             **result,
             "confidence": round(confidence, 4),
