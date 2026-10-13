@@ -64,47 +64,50 @@ def test_complete_long_packet_recovered_by_actual_fixed_request_budget():
     assert plan.character_context.memory_packets == () and request.character_context.source_candidate_context == FULL
 
 
-def test_too_large_source_omitted_whole_and_preserves_current_message_and_typed_fact():
+def test_too_large_source_fails_before_generation_and_preserves_input():
     huge = compile_sources([ROW | dict(body="完整限制。" * 5000)], max_chars=None).context
     ctx = replace(
-        context(huge),
-        reference_context="independently valid fact",
-        used_memory_ids=("known",),
+        context(huge), reference_context="independently valid fact", used_memory_ids=("known",),
         memory_field_presence=(("known", True), ("unresolved", False)),
     )
-    plan = build_generation_request(
-        GenerationRequest(message="当前完整任务", character_context=ctx, context_window_tokens=8192, max_tokens=1024)
+    request = GenerationRequest(
+        message="当前完整任务", character_context=ctx, context_window_tokens=8192, max_tokens=1024
     )
-    assert source_text(plan) == {} and "当前完整任务" in plan.messages[-1]["content"]
-    assert (
-        plan.character_context.reference_context == "independently valid fact"
-        and plan.character_context.used_memory_ids == ("known",)
-    )
-    assert (
-        plan.character_context.memory_source_status == "budget_omitted"
-        and plan.character_context.source_candidate_context == ""
-    )
-    assert plan.character_context.memory_field_presence == (("known", True), ("unresolved", None))
+    calls = []
+
+    async def generate(**kwargs):
+        calls.append(kwargs)
+        return "must not generate without complete source evidence"
+
+    with pytest.raises(ValueError, match="context budget"):
+        asyncio.run(generate_character_response(request, generate))
+    assert not calls and request.character_context is ctx
+    assert ctx.source_candidate_context == huge and ctx.used_memory_ids == ("known",)
+    assert ctx.memory_field_presence == (("known", True), ("unresolved", False))
 
 
-@pytest.mark.parametrize("corrupt", ["speaker", "duplicate", "inferred_current"])
-def test_invalid_deferred_packet_is_not_injected_or_absence_proof(corrupt):
-    p = json.loads(FULL)
+@pytest.mark.parametrize("corrupt", ["speaker", "duplicate", "inferred_current", "json"])
+def test_invalid_deferred_packet_fails_before_generation(corrupt):
+    packet = json.loads(FULL)
     if corrupt == "speaker":
-        p["speaker_role"] = "assistant"
+        packet["speaker_role"] = "assistant"
     elif corrupt == "duplicate":
-        p["records"].append(p["records"][0])
-    else:
-        p["current_validity"] = "confirmed_current"
-    plan = build_generation_request(
-        GenerationRequest(
-            message="验收",
-            character_context=context(json.dumps(p), memory_field_presence=(("field", False),)),
-            context_window_tokens=65536,
-        )
-    )
-    assert source_text(plan) == {} and plan.character_context.memory_source_status == "retrieval_error"
-    assert plan.character_context.memory_field_presence == (("field", None),)
+        packet["records"].append(packet["records"][0])
+    elif corrupt == "inferred_current":
+        packet["current_validity"] = "confirmed_current"
+    candidate = "{" if corrupt == "json" else json.dumps(packet)
+    ctx = context(candidate, memory_field_presence=(("field", False),))
+    request = GenerationRequest(message="验收", character_context=ctx, context_window_tokens=65536)
+    calls = []
+
+    async def generate(**kwargs):
+        calls.append(kwargs)
+        return "must not generate with malformed sources"
+
+    with pytest.raises(ValueError, match="Invalid deferred source packet"):
+        asyncio.run(generate_character_response(request, generate))
+    assert not calls and request.character_context is ctx
+    assert ctx.source_candidate_context == candidate and ctx.memory_field_presence == (("field", False),)
 
 
 def test_public_packet_attempts_cannot_change_private_source_decision():

@@ -6,11 +6,6 @@ from datetime import datetime
 
 from character.source_memory import SourceRecall, attach_sources
 
-_BUDGET_ERRORS = {
-    "Current message and evidence exceed the serving context budget; shorten the message or evidence",
-    "Branch evidence exceeds context budget; no facts were silently dropped",
-}
-
 
 def _complete_packet(text):
     try:
@@ -55,21 +50,12 @@ def admit_deferred_sources(request, build):
     if not candidate:
         return request
 
-    def without(status):
-        omitted = attach_sources(context, SourceRecall(diagnostics={"status": status}))
-        return replace(request, character_context=omitted)
-
     if not _complete_packet(candidate):
-        return without("retrieval_error")
+        raise ValueError("Invalid deferred source packet; restore complete attributed source records before retrying")
     admitted = attach_sources(context, SourceRecall(candidate, {"status": "available"}))
     proposed = replace(request, character_context=admitted)
     # Public evidence may consume the remaining allowance, but cannot cause
     # separate packet attempts to silently change this private-source decision.
     base = replace(proposed, retrieval=type(request.retrieval)())
-    try:
-        build(base)
-    except ValueError as exc:
-        if str(exc) not in _BUDGET_ERRORS:
-            raise
-        return without("budget_omitted")
+    build(base)
     return proposed
