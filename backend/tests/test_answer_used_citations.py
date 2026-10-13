@@ -1,5 +1,6 @@
 """Citations follow answer use and whole-source admission, never rank alone."""
 
+import json
 import re
 from dataclasses import replace
 
@@ -51,7 +52,13 @@ def test_unknown_or_conflicting_source_metadata_never_binds(invalid):
     ("维修WX-204[S2]，课程YY-573-R[S1]，再次课程[S1]", ["repair", "course"]),
     ("课程YY-573-R，没有标记。", []), ("YY-573-R[S99]", [])])
 async def test_actual_generated_answer_binds_only_valid_used_keys_in_first_use_order(raw, expected):
+    calls = []
+
     async def generate(**kwargs):
+        calls.append(kwargs)
+        if len(calls) == 2:
+            assert kwargs["max_tokens"] == 512 and not expected
+            return json.dumps(dict(citations=[]))
         assert "来源标记" in kwargs["messages"][0]["content"]
         assert all(d["content"] in kwargs["messages"][-1]["content"] for d in bundle().documents)
         return owned_template(raw, kwargs)
@@ -59,7 +66,7 @@ async def test_actual_generated_answer_binds_only_valid_used_keys_in_first_use_o
     result = await generate_character_response(GenerationRequest(message="查课程或维修编号", retrieval=bundle(), max_tokens=128), generate)
     assert [c["source_id"] for c in result.response_citations] == expected
     assert all(c["source_path"] == c["source_id"] + ".txt" for c in result.response_citations)
-    assert "[S" not in result.reply
+    assert "[S" not in result.reply and len(calls) == (1 if expected else 2)
 
 
 async def test_budget_rejected_source_cannot_be_restored_by_a_model_marker():

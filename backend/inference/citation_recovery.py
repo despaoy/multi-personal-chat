@@ -2,14 +2,12 @@
 
 import asyncio
 import json
-import logging
 import re
 from dataclasses import replace
 from difflib import SequenceMatcher
 
 from inference.context_budget import ReviewContextBudget
 
-logger = logging.getLogger(__name__)
 ANNOTATION_TOKENS = 512
 ANNOTATION_TIMEOUT_SECONDS = 20
 ANNOTATION_POLICY = (
@@ -40,7 +38,7 @@ def _sources(retrieval):
     for document in retrieval.documents:
         source_id = str(document.get("id") or document.get("chunk_id") or "")
         if source_id in documents:
-            return []
+            raise ValueError("Citation annotation has duplicate source documents")
         documents[source_id] = document
     sources = []
     for citation in retrieval.citations:
@@ -52,34 +50,38 @@ def _sources(retrieval):
             or str(citation.get("id") or "") != source_id
             or source_id not in documents
         ):
-            return []
+            raise ValueError("Citation annotation source identity is not admitted")
         document = documents[source_id]
         title = str(document.get("title") or document.get("original_title") or "")
         if str(citation.get("source_title") or "") != title:
-            return []
+            raise ValueError("Citation annotation source title changed")
         body = _body(document)
         if not body or body not in retrieval.evidence:
-            return []
+            raise ValueError("Citation annotation requires the complete admitted source body")
         sources.append({"key": key, "body": body, "metadata": citation})
     if len({s["key"] for s in sources}) != len(sources):
-        return []
+        raise ValueError("Citation annotation has duplicate source keys")
     return sources
 
 
+def _annotation_object(pairs):
+    value = dict(pairs)
+    if len(value) != len(pairs):
+        raise ValueError("Duplicate citation annotation field")
+    return value
+
+
 def validate_annotations(raw, answer, sources):
-    """Return only exact source-bound spans; reject a malformed batch whole."""
-    try:
-        data = json.loads(raw)
-    except (TypeError, ValueError):
-        return None
+    """Return exact source-bound spans or raise for an invalid complete batch."""
+    data = json.loads(raw, object_pairs_hook=_annotation_object)
     if not isinstance(data, dict) or set(data) != {"citations"} or not isinstance(data["citations"], list):
-        return None
+        raise ValueError("Invalid citation annotation envelope")
     by_key = {source["key"]: source for source in sources}
     bound = []
     seen = set()
     for item in data["citations"]:
         if not isinstance(item, dict) or set(item) != {"key", "quote"}:
-            return None
+            raise ValueError("Invalid citation annotation fields")
         key, quote = item["key"], item["quote"]
         if (
             not isinstance(key, str)
@@ -88,7 +90,7 @@ def validate_annotations(raw, answer, sources):
             or len(re.sub(r"[\W_]", "", quote)) < 8
             or re.search(r"\[\[cite:|\[S\d{1,2}\]", quote)
         ):
-            return None
+            raise ValueError("Invalid citation annotation reference or quote")
         source = by_key[key]
         title = str(source["metadata"].get("source_title") or "")
         if (
@@ -97,7 +99,7 @@ def validate_annotations(raw, answer, sources):
             or quote in title
             or sum(quote in candidate["body"] for candidate in sources) != 1
         ):
-            return None
+            raise ValueError("Citation annotation quote is not unique admitted answer evidence")
         # Validate every span first; repeat evidence for one source binds it once.
         if key in seen:
             continue
@@ -143,45 +145,33 @@ async def recover_missing_citations(result, generate, *, context_window_tokens):
     sources = _sources(retrieval)
     if not sources:
         return replace(result, citation_repair_status="no_admitted_sources")
+    payload = {
+        "answer": result.reply,
+        "sources": [{"key": source["key"], "body": source["body"]} for source in sources],
+    }
     messages = [
         {"role": "system", "content": ANNOTATION_POLICY},
-        {
-            "role": "user",
-            "content": json.dumps(
-                {
-                    "answer": result.reply,
-                    "sources": [{"key": source["key"], "body": source["body"]} for source in sources],
-                },
-                ensure_ascii=False,
-            ),
-        },
+        {"role": "user", "content": json.dumps(payload, ensure_ascii=False)},
     ]
     if not ReviewContextBudget(context_window_tokens).fits(messages, ANNOTATION_TOKENS):
-        return replace(result, citation_repair_status="annotation_budget_exhausted")
+        raise ValueError("Complete citation annotation input exceeds context budget")
     # Check full input first, then budget the bounded suggestions as well.
-    payload = json.loads(messages[-1]["content"])
     payload["allowed_exact_quotes"] = _exact_candidates(result.reply, sources)
     messages[-1]["content"] = json.dumps(payload, ensure_ascii=False)
     if not ReviewContextBudget(context_window_tokens).fits(messages, ANNOTATION_TOKENS):
-        return replace(result, citation_repair_status="annotation_budget_exhausted")
-    try:
-        async with asyncio.timeout(ANNOTATION_TIMEOUT_SECONDS):
-            raw = await generate(
-                messages=messages,
-                lora_name=result.plan.lora_name,
-                temperature=0.0,
-                max_tokens=ANNOTATION_TOKENS,
-                top_p=1.0,
-                repetition_penalty=1.0,
-                frequency_penalty=0.0,
-                enable_thinking=False,
-            )
-    except Exception:
-        logger.warning("Citation annotation request failed; preserve the original answer")
-        return replace(result, citation_repair_attempted=True, citation_repair_status="annotation_failed")
+        raise ValueError("Complete citation annotation input exceeds context budget")
+    async with asyncio.timeout(ANNOTATION_TIMEOUT_SECONDS):
+        raw = await generate(
+            messages=messages,
+            lora_name=result.plan.lora_name,
+            temperature=0.0,
+            max_tokens=ANNOTATION_TOKENS,
+            top_p=1.0,
+            repetition_penalty=1.0,
+            frequency_penalty=0.0,
+            enable_thinking=False,
+        )
     bound = validate_annotations(raw, result.reply, sources)
-    if bound is None:
-        return replace(result, citation_repair_attempted=True, citation_repair_status="invalid_annotation")
     return replace(
         result,
         response_citations=bound,
