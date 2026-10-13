@@ -41,11 +41,11 @@ def test_all_complete_sources_and_late_qualifications_are_offered_even_at_zero_s
 
 
 @pytest.mark.parametrize("invalid", [{"id": "repair", "source_id": "course"}, {"source_id": "missing"}])
-def test_unknown_or_conflicting_source_metadata_never_binds(invalid):
-    prepared = prepare_answer_citations(replace(bundle(), citations=(invalid,)))
-    assert not prepared.citations
-    result = finalize_answer_citations(GenerationResult(reply="课程编号[S1]", plan=build_generation_request(GenerationRequest(message="问", retrieval=prepared))))
-    assert not result.response_citations
+def test_unknown_or_conflicting_source_metadata_raises(invalid):
+    original = replace(bundle(), citations=(invalid,))
+    with pytest.raises(ValueError, match="Answer citation source"):
+        prepare_answer_citations(original)
+    assert original.citations == (invalid,) and not original.answer_citations_bound
 
 
 @pytest.mark.parametrize("raw,expected", [("课程YY-573-R[S1]", ["course"]),
@@ -135,3 +135,81 @@ async def test_api_propagates_budget_abstention_instead_of_claiming_grounded_ans
     assert meta["abstained"] is True
     assert meta["answerMode"] == "abstention"
     assert meta["citations"] == []
+
+
+def test_citation_preparation_keeps_uncited_and_uncitable_source_bodies():
+    original = bundle()
+    extra = (dict(content="附录完整限定：预约不代表已获得实际执行授权。"),
+             dict(id=True, content="未编号原文：周末关闭，未确认不得办理。"))
+    original = replace(original, documents=(*original.documents, *extra), citations=original.citations[:1])
+    prepared = prepare_answer_citations(original)
+    plan = build_generation_request(GenerationRequest(message="保留所有完整规则及附录限定。", retrieval=prepared))
+    assert len(prepared.evidence_packets) == 5 and [c["source_id"] for c in prepared.citations] == ["course"]
+    assert all(row["content"] in prepared.evidence and row["content"] in plan.messages[-1]["content"]
+               for row in original.documents)
+    assert all(packet["document_ids"] == [] for packet in prepared.evidence_packets[-2:])
+    assert all("来源标记：" not in packet["text"] for packet in prepared.evidence_packets[1:])
+
+
+def test_citation_preparation_reuses_background_dependencies_for_budget_pruning():
+    original = bundle()
+    anchor = dict(original.documents[0], content="完整课程背景" * 8000 + "末尾：未确认不得执行。")
+    background = dict(original.documents[1], retrieval_role="source_context", supporting_document_ids=["course"])
+    original = replace(original, documents=(anchor, background, original.documents[2]))
+    prepared = prepare_answer_citations(original)
+    assert prepared.evidence_packets[1]["kind"] == "background"
+    assert prepared.evidence_packets[1]["supporting_document_ids"] == ["course"]
+    plan = build_generation_request(GenerationRequest(
+        message="核对完整条款并保留独立资料。", retrieval=prepared, context_window_tokens=2400, max_tokens=128,
+    ))
+    assert [c["source_id"] for c in plan.retrieval.citations] == ["paint"]
+    assert original.documents[2]["content"] in plan.messages[-1]["content"]
+    assert background["content"] not in plan.messages[-1]["content"] and "未确认不得执行" not in plan.messages[-1]["content"]
+
+
+@pytest.mark.parametrize("citation", [dict(id=7), dict(source_id="7"), dict(id=7, source_id="7")])
+def test_citation_preparation_normalizes_native_and_legacy_ids_once(citation):
+    doc = dict(chunk_id=7, original_title="完整补充资料", content="周四办理，雨天暂停，预约不能免除原件。")
+    original = RetrievalResult(status="ok", evidence=doc["content"], documents=(doc,), citations=(citation,))
+    prepared = prepare_answer_citations(original)
+    assert prepared.evidence_packets[0]["document_ids"] == ["7"]
+    assert prepared.citations[0] == dict(citation, id="7", source_id="7", source_title=doc["original_title"], key="S1")
+    assert original.citations == (citation,) and original.documents == (doc,)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("defect", [
+    "duplicate_citation", "duplicate_document", "normalized_duplicate_document", "invalid_identity",
+    "source_capacity", "invalid_packet_ids", "invalid_packet_text",
+])
+async def test_citation_preparation_failure_stops_before_model(defect):
+    original = bundle()
+    if defect == "duplicate_citation":
+        original = replace(original, citations=(original.citations[0], original.citations[0]))
+    elif defect == "duplicate_document":
+        original = replace(original, documents=(*original.documents, original.documents[0]))
+    elif defect == "normalized_duplicate_document":
+        original = replace(original, documents=(dict(original.documents[0], id=1), dict(original.documents[1], id="1")),
+                           citations=(dict(source_id="1"),))
+    elif defect == "invalid_identity":
+        original = replace(original, citations=(dict(source_id=True),))
+    elif defect == "source_capacity":
+        docs = tuple(dict(id=f"record-{i}", title=f"完整资料{i}", content=f"第{i}项规则：周四办理，雨天暂停。") for i in range(100))
+        original = replace(original, documents=docs, citations=tuple(dict(source_id=doc["id"]) for doc in docs))
+    else:
+        packet = dict(document_ids="course" if defect == "invalid_packet_ids" else ["course"],
+                      text=None if defect == "invalid_packet_text" else original.documents[0]["content"])
+        original = replace(original, evidence_packets=(packet,))
+    calls = []
+
+    async def model(**kwargs):
+        calls.append(kwargs)
+        raise AssertionError("Citation preparation failure must precede model generation")
+
+    with pytest.raises(ValueError, match="Answer citation"):
+        await generate_character_response(GenerationRequest(
+            message="核对全部完整来源和限制。", retrieval=original, context_window_tokens=65536,
+        ), model)
+    assert not calls and not original.answer_citations_bound and not original.citation_namespace
+    if defect == "source_capacity":
+        assert len(original.documents) == len(original.citations) == 100

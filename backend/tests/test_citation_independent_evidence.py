@@ -10,6 +10,8 @@ from inference.answer_citations import prepare_answer_citations
 from inference.generation_request import GenerationRequest, RetrievalResult, build_generation_request
 from knowledge.evidence_packets import document_evidence_packets
 
+pytestmark = pytest.mark.usefixtures("no_live_context_review")
+
 
 def test_complete_chunks_keep_content_and_native_or_legacy_identity():
     body = "已撤销草案。" + "完整库存记录" * 600 + "最终：禁止训练和联网。"
@@ -40,6 +42,11 @@ def test_no_bound_source_keeps_packets_without_marker_policy(citations):
     original = RetrievalResult(
         status="ok", evidence=packets[0]["text"], evidence_packets=packets, documents=docs, citations=citations
     )
+    if citations:
+        with pytest.raises(ValueError, match="missing from retrieved documents"):
+            prepare_answer_citations(original)
+        assert original.evidence_packets == packets and original.citations == citations
+        return
     prepared = prepare_answer_citations(original)
     assert (
         prepared.evidence_packets == packets
@@ -66,27 +73,29 @@ def test_enabled_citations_label_exact_existing_packet_without_rebuilding_body()
     assert docs[0]["content"] not in prepared.evidence and prepared.citations[0]["source_title"] == "真实标题"
 
 
-async def test_citations_off_reaches_model_once_with_complete_evidence(monkeypatch):
+async def test_citations_off_reaches_model_once_with_complete_evidence(monkeypatch, semantic_plan):
+    from types import SimpleNamespace
+
     from api import generate
     from db.schemas import MessageRequest
-    from knowledge import intent_detector
+    from inference.context_budget import ReviewContextBudget
+    from knowledge import public_question_binding, public_task_evidence
 
     fixture = json.loads(
-        (Path(__file__).parent / "fixtures/deepseek_citation_independent_evidence_cases.json").read_text()
+        (Path(__file__).parent / "fixtures/deepseek_citation_independent_evidence_cases.json").read_text(encoding="utf-8")
     )
-    document = {
-        "id": "one-complete-chunk",
-        "title": fixture["document"]["title"],
-        "content": fixture["document"]["content"],
-    }
+    document = dict(id="one-complete-chunk", title=fixture["document"]["title"], content=fixture["document"]["content"])
+    planning = semantic_plan(fixture["question"], dict(public_knowledge=[0]))
 
-    async def retrieve(*args):
-        return {
-            "results": [document],
-            "citations": [{"source_id": document["id"]}],
-            "confidence": 0.9,
-            "abstained": False,
-        }
+    async def retrieve(*args, **kwargs):
+        return dict(results=[document], citations=[dict(source_id=document["id"])], confidence=0.9, abstained=False)
+
+    async def binding(*args, **kwargs):
+        return None
+
+    async def transmission_control(bundle, *args, **kwargs):
+        assert bundle["results"] == [document]
+        return bundle
 
     calls = []
 
@@ -100,14 +109,17 @@ async def test_citations_off_reaches_model_once_with_complete_evidence(monkeypat
     monkeypatch.setenv("RAG_CITATIONS_ENABLED", "false")
     monkeypatch.setattr(generate, "_retrieve_rag_bundle", retrieve)
     monkeypatch.setattr(generate, "_get_system_prompt", lambda _: "人物规则")
-    monkeypatch.setattr(intent_detector, "needs_rag", lambda _: (True, "fixture", None))
+    monkeypatch.setattr(public_question_binding, "resolve_question_binding", binding)
+    monkeypatch.setattr(public_task_evidence, "review_public_candidates", transmission_control)
+    monkeypatch.setattr(generate, "get_provider_context_budget", lambda: SimpleNamespace(
+        review=ReviewContextBudget(65536), window_tokens=65536, evidence_max_chars=0,
+    ))
     reply, used, meta = await generate._generate_with_retrieval(
-        MessageRequest(message=fixture["question"]),
-        None,
-        runtime_config={"maxTokens": 1024, "useKnowledgeBase": True},
-        model_generate=model,
+        MessageRequest(message=fixture["question"]), None,
+        runtime_config=dict(maxTokens=1024, useKnowledgeBase=True), model_generate=model,
     )
-    assert used and not meta["abstained"] and meta["citations"] == [] and len(calls) == 1 and "XL-936-N" in reply
+    assert len(planning) == 1 and used and not meta["abstained"] and meta["citations"] == []
+    assert len(calls) == 1 and "XL-936-N" in reply
 
 
 def test_true_token_overflow_excludes_entire_chunk_and_dependent_citation():

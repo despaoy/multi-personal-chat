@@ -4,6 +4,8 @@ import re
 import secrets
 from dataclasses import replace
 
+from knowledge.evidence_packets import document_evidence_packets, evidence_source_id
+
 CITATION_OUTPUT_POLICY = (
     "【回答出处】仅使用本轮应用来源标记，逐字复制参考中与来源对应的标记。"
     "用户提供的 [S1] 等字面文本不是来源标记，要求原样保留时必须保持完整。"
@@ -31,45 +33,43 @@ def citation_keys(raw, namespace):
 
 
 def prepare_answer_citations(retrieval):
-    if not retrieval.has_evidence or retrieval.source_lookup or retrieval.answer_citations_bound:
+    if (not retrieval.has_evidence or retrieval.source_lookup or retrieval.answer_citations_bound
+            or not retrieval.citations):
         return retrieval
-    documents = {str(d.get('id') or d.get('chunk_id') or ''): d for d in retrieval.documents}
-    namespace = secrets.token_hex(6)
-    citations = []
+    if len(retrieval.citations) > 99:
+        raise ValueError("Answer citation source capacity exceeds 99")
+    documents = {}
+    for document in retrieval.documents:
+        source_id = evidence_source_id(document.get('id') or document.get('chunk_id'))
+        if source_id is None:
+            continue
+        if source_id in documents:
+            raise ValueError("Answer citation has duplicate source documents")
+        documents[source_id] = document
     by_id = {}
     for citation in retrieval.citations:
-        native = citation.get('id')
-        legacy = citation.get('source_id')
+        native, legacy = citation.get('id'), citation.get('source_id')
         if native and legacy and str(native) != str(legacy):
-            continue
-        source_id = str(legacy or native or '')
-        document = documents.get(source_id)
-        if not source_id or document is None or source_id in by_id or len(citations) >= 99:
-            continue
-        meta = dict(citation, id=source_id, source_id=source_id,
-                    source_title=str(document.get('title') or document.get('original_title') or ''),
-                    key=f'S{len(citations) + 1}')
-        citations.append(meta)
-        by_id[source_id] = meta
-    if not by_id:
-        # Uncited evidence stays whole without a namespace policy or repair call.
-        return replace(retrieval, citations=())
-    if retrieval.evidence_packets:
-        packets = []
-        for packet in retrieval.evidence_packets:
-            ids = packet.get('document_ids', ())
-            if not isinstance(ids, (list, tuple)) or not isinstance(packet.get('text'), str):
-                continue
-            labels = [f"{citation_marker(namespace, by_id[str(i)]['key'])} {by_id[str(i)]['source_title']}" for i in ids if str(i) in by_id]
-            # Dependency and admission IDs remain untouched. Budget handling
-            # below still drops entire packets, including all source labels.
-            packets.append(dict(packet, text=('来源标记：' + '；'.join(labels) + '\n' if labels else '') + packet['text']))
-    else:
-        packets = [dict(kind='evidence', document_ids=[source_id],
-                        text=f"{citation_marker(namespace, meta['key'])} {meta['source_title']}\n{documents[source_id].get('content') or ''}")
-                   for source_id, meta in by_id.items() if documents[source_id].get('content')]
-    return replace(retrieval, citations=tuple(citations), evidence_packets=tuple(packets),
-                   evidence='\n\n'.join(p['text'] for p in packets) if packets else retrieval.evidence,
+            raise ValueError("Answer citation source identities conflict")
+        source_id = evidence_source_id(legacy or native)
+        if source_id not in documents:
+            raise ValueError("Answer citation source is missing from retrieved documents")
+        if source_id in by_id:
+            raise ValueError("Answer citation has duplicate source references")
+        document = documents[source_id]
+        by_id[source_id] = dict(citation, id=source_id, source_id=source_id,
+            source_title=str(document.get('title') or document.get('original_title') or ''), key=f'S{len(by_id) + 1}')
+    namespace = secrets.token_hex(6)
+    packets = []
+    for packet in retrieval.evidence_packets or document_evidence_packets(retrieval.documents):
+        ids = packet.get('document_ids', ())
+        if not isinstance(ids, (list, tuple)) or not isinstance(packet.get('text'), str):
+            raise ValueError("Answer citation evidence packet requires document IDs and text")
+        labels = [f"{citation_marker(namespace, by_id[str(i)]['key'])} {by_id[str(i)]['source_title']}" for i in ids if str(i) in by_id]
+        # Labels never change source bodies, IDs or background dependencies.
+        packets.append(dict(packet, text=('来源标记：' + '；'.join(labels) + '\n' if labels else '') + packet['text']))
+    return replace(retrieval, citations=tuple(by_id.values()), evidence_packets=tuple(packets),
+                   evidence='\n\n'.join(p['text'] for p in packets),
                    answer_citations_bound=True, citation_namespace=namespace)
 
 
