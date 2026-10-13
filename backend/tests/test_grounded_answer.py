@@ -466,3 +466,53 @@ async def test_cache_config_zero_disables_and_positive_lifetime_expires(monkeypa
     expired = await service.answer("甲是谁", generate=generate, domain_id="story")
     assert not expired.cache_hit
     assert calls == (2 if ttl > 0 else 3)
+
+
+@pytest.mark.parametrize("touch", ["read", "replace"])
+def test_cache_lru_keeps_recent_answer_without_extending_ttl(monkeypatch, touch):
+    from knowledge.grounded_answer import cache as cache_module
+    from knowledge.grounded_answer.models import GroundedAnswerResult
+
+    clock = [10.0]
+    monkeypatch.setattr(cache_module.time, "monotonic", lambda: clock[0])
+    cache = AnswerCache(ttl_seconds=5, max_entries=2)
+    result = GroundedAnswerResult(answer="甲是学生。", answer_mode=AnswerMode.GROUNDED_ANSWER, domain_id="story",
+                                  citations=[{"document_id": "doc-1"}])
+    cache.set("a", result)
+    clock[0] = 11
+    cache.set("b", result)
+    clock[0] = 12
+    if touch == "read":
+        received = cache.get("a")
+        received.citations[0]["document_id"] = "caller-change"
+        assert cache.get("a").citations[0]["document_id"] == "doc-1"
+    else:
+        cache.set("a", result)
+    clock[0] = 13
+    cache.set("c", result)
+    assert cache.get("b") is None
+    assert cache.get("a") is not None and cache.get("c") is not None
+    assert cache.stats()["entries"] == 2
+    clock[0] = 16 if touch == "read" else 18
+    assert cache.get("a") is None
+
+
+@pytest.mark.parametrize("key", ["a", "b"])
+def test_cache_lru_failed_copy_preserves_existing_answer(monkeypatch, key):
+    from knowledge.grounded_answer import cache as cache_module
+    from knowledge.grounded_answer.models import GroundedAnswerResult
+
+    cache = AnswerCache(max_entries=1)
+    result = GroundedAnswerResult(answer="甲是学生。", answer_mode=AnswerMode.GROUNDED_ANSWER, domain_id="story")
+    cache.set("a", result)
+    original_copy = cache_module.deepcopy
+
+    def failed_copy(value):
+        raise RuntimeError("synthetic copy failure")
+
+    monkeypatch.setattr(cache_module, "deepcopy", failed_copy)
+    with pytest.raises(RuntimeError, match="synthetic copy failure"):
+        cache.set(key, result)
+    monkeypatch.setattr(cache_module, "deepcopy", original_copy)
+    assert cache.stats()["entries"] == 1
+    assert cache.get("a").answer == result.answer

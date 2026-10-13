@@ -20,6 +20,7 @@ import hashlib
 import json
 import threading
 import time
+from collections import OrderedDict
 from copy import deepcopy
 from math import isfinite
 from typing import TYPE_CHECKING, Any
@@ -81,7 +82,7 @@ class AnswerCache:
         if type(max_entries) is not int or max_entries <= 0:
             raise ValueError("AnswerCache max_entries must be a positive integer")
         self.max_entries = max_entries
-        self._store: dict[str, tuple[float, GroundedAnswerResult]] = {}
+        self._store: OrderedDict[str, tuple[float, GroundedAnswerResult]] = OrderedDict()
         self._lock = threading.Lock()
         self.hits = 0
         self.misses = 0
@@ -99,19 +100,19 @@ class AnswerCache:
                 del self._store[key]
                 self.misses += 1
                 return None
+            cached = deepcopy(result)
+            self._store.move_to_end(key)
             self.hits += 1
-            return deepcopy(result)
+            return cached
 
     def set(self, key: str, result: GroundedAnswerResult) -> None:
         if self.ttl <= 0:
             return
         with self._lock:
-            if key in self._store:
-                del self._store[key]
-            elif len(self._store) >= self.max_entries:
-                oldest = min(self._store, key=lambda k: self._store[k][0])
-                del self._store[oldest]
             self._store[key] = (time.monotonic(), deepcopy(result))
+            self._store.move_to_end(key)
+            if len(self._store) > self.max_entries:
+                self._store.popitem(last=False)
 
     def clear(self) -> None:
         with self._lock:
