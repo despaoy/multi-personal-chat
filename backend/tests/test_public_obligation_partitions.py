@@ -10,7 +10,7 @@ from tests.test_public_task_evidence_review import PRIVATE, bundle, request
 from inference.generation_request import build_generation_request
 from knowledge.public_obligations import parse_public_partitions, validate_public_obligations
 from knowledge.public_task_evidence import render_public_tasks, review_public_candidates
-from knowledge.retrieval_query_plan import plan_retrieval_views
+from knowledge.retrieval_query_plan import QueryPlanReviewError, plan_retrieval_views
 from knowledge.turn_dependencies import parse_dependencies
 
 QUERY = "读取我的梅糕偏好。核对青桥延期规定的费用，另核对蓝岸续租规定的时长。两部分分别保留所有限定，缺对应资料则未知。"
@@ -139,7 +139,7 @@ async def test_review_cannot_return_parent_private_or_boolean_identity(bad_ids):
 
 
 @pytest.mark.asyncio
-async def test_planner_keeps_valid_dependency_when_partition_invalid(monkeypatch):
+async def test_planner_rejects_invalid_partition_without_coarse_plan(monkeypatch):
     await positive()
     monkeypatch.setenv("RAG_TASK_PLANNER_ENABLED", "true")
     value = dict(
@@ -154,6 +154,6 @@ async def test_planner_keeps_valid_dependency_when_partition_invalid(monkeypatch
     plan = await plan_retrieval_views(QUERY, reviewer=review)
     assert plan.public_obligations == partitions() and not plan.private_context_only
     value["public_partitions"][0]["cuts"] = ["另一个不存在的业务"]
-    coarse = await plan_retrieval_views(QUERY, reviewer=review)
-    assert coarse.status == "applied_coarse_invalid_partitions" and coarse.dependencies == dependencies()
-    assert not coarse.public_obligations and not coarse.private_context_only
+    with pytest.raises(QueryPlanReviewError, match="query_plan_invalid") as caught:
+        await plan_retrieval_views(QUERY, reviewer=review)
+    assert isinstance(caught.value.__cause__, ValueError)

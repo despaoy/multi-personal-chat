@@ -13,7 +13,7 @@ from character.models import CompiledCharacterContext
 from inference.generation_request import GenerationRequest, RetrievalResult, build_generation_request
 from knowledge.original_sources import attach_original_sources
 from knowledge.public_task_evidence import render_public_tasks, review_public_candidates
-from knowledge.retrieval_query_plan import RetrievalQueryPlan, plan_retrieval_views
+from knowledge.retrieval_query_plan import QueryPlanReviewError, RetrievalQueryPlan, plan_retrieval_views
 from knowledge.turn_dependencies import parse_dependencies
 
 QUERY = "核对青桥延期规定的费用。核对蓝岸续租规定的时长。读取我的已有偏好。"
@@ -202,7 +202,7 @@ async def test_other_query_cannot_reuse_public_review_receipt():
         build_generation_request(replace(request(result), message="另一个任务"))
 
 
-async def test_invalid_views_cannot_erase_valid_public_dependencies(monkeypatch):
+async def test_invalid_views_fail_instead_of_returning_dependency_only_plan(monkeypatch):
     await positive()
     monkeypatch.setenv("RAG_TASK_PLANNER_ENABLED", "true")
     query = QUERY + "只核对已有依据。" * 80
@@ -216,11 +216,12 @@ async def test_invalid_views_cannot_erase_valid_public_dependencies(monkeypatch)
     )
 
     async def review(_messages):
-        return json.dumps(dict(search_views=[["改写而非原文的检索词"]], dependencies=dep))
+        return json.dumps(dict(search_views=[["改写而非原文的检索词"]], dependencies=dep,
+                               public_partitions=[dict(segment_id=i, cuts=[]) for i in [0, 1]]))
 
-    result = await plan_retrieval_views(query, reviewer=review)
-    assert result.status == "dependencies_only_invalid_views" and result.views == ()
-    assert result.dependencies is not None and not result.private_context_only
+    with pytest.raises(QueryPlanReviewError, match="query_plan_invalid") as caught:
+        await plan_retrieval_views(query, reviewer=review)
+    assert isinstance(caught.value.__cause__, ValueError)
 
 
 async def test_empty_candidate_path_adds_no_review_call():

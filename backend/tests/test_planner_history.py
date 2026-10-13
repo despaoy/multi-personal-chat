@@ -5,8 +5,9 @@ from types import SimpleNamespace
 
 import pytest
 
+from character.evidence_selector import InputBudgetError
 from inference.context_budget import ReviewContextBudget
-from knowledge.retrieval_query_plan import plan_retrieval_views, planning_messages
+from knowledge.retrieval_query_plan import QueryPlanReviewError, plan_retrieval_views, planning_messages
 from knowledge.turn_dependencies import KINDS, parse_dependencies, query_segments
 
 QUERY = "按刚才的两项分别核对，不改记录。"
@@ -59,8 +60,8 @@ async def test_incomplete_review_fails_before_any_model_call(monkeypatch, mode):
     async def forbidden(_messages):
         pytest.fail("Incomplete history or mandatory input must not be sent")
 
-    result = await plan_retrieval_views(QUERY, history=history, context_budget=budget, reviewer=forbidden)
-    assert result.status == "invalid" and result.dependencies is None
+    with pytest.raises(InputBudgetError):
+        await plan_retrieval_views(QUERY, history=history, context_budget=budget, reviewer=forbidden)
 
 
 @pytest.mark.asyncio
@@ -70,11 +71,10 @@ async def test_history_cannot_grant_search_spans_not_in_current_question(monkeyp
     async def unit_review(_messages):
         groups = {kind: [] for kind in KINDS}
         groups["public_knowledge"] = [0]
-        return json.dumps({"search_views": [["周末阅读偏好"]], "dependencies": groups})
+        return json.dumps({"search_views": [["周末阅读偏好"]], "dependencies": groups, "public_partitions": [dict(segment_id=0, cuts=[])]})
 
-    result = await plan_retrieval_views(QUERY, history=[{"role": "user", "content": PREMISE}], reviewer=unit_review)
-    assert result.views == () and not result.private_context_only
-    assert result.status == "dependencies_only_invalid_views"
+    with pytest.raises(QueryPlanReviewError, match="query_plan_invalid"):
+        await plan_retrieval_views(QUERY, history=[{"role": "user", "content": PREMISE}], reviewer=unit_review)
 
 
 @pytest.mark.asyncio
@@ -84,10 +84,10 @@ async def test_authority_fields_in_model_output_are_rejected(monkeypatch):
     async def unit_review(_messages):
         groups = {kind: [] for kind in KINDS}
         groups["private_memory"] = [0]
-        return json.dumps({"search_views": [], "dependencies": groups, "source_grants": ["all_owners"]})
+        return json.dumps({"search_views": [], "dependencies": groups, "public_partitions": [], "source_grants": ["all_owners"]})
 
-    result = await plan_retrieval_views(QUERY, history=[{"role": "user", "content": PREMISE}], reviewer=unit_review)
-    assert result.status == "invalid" and not result.private_context_only
+    with pytest.raises(QueryPlanReviewError, match="query_plan_invalid"):
+        await plan_retrieval_views(QUERY, history=[{"role": "user", "content": PREMISE}], reviewer=unit_review)
 
 
 @pytest.mark.asyncio

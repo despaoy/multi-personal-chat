@@ -6,12 +6,14 @@ from datetime import datetime, timezone
 from html import unescape
 
 import pytest
+from fastapi import HTTPException
 from repositories.character_memory import DatabaseCharacterMemoryRepository
 from services.character_context import PreparedCharacterTurn
 
 from character.models import CompiledCharacterContext, RelationshipState, UserScope
 from character.source_memory import SourceMemoryService, attach_sources
 from db.database import SQLiteDB
+from knowledge.retrieval_query_plan import QueryPlanReviewError
 
 QUERY = "读取我保存的私人饮品喜好原话；同时查询桐屿续签的费用和完整材料规则；只读，不新增或删除记忆，缺少依据保持未知。"
 PRIVATE = "虚构测试原话：我不喜欢薄荷水，只在周日午间吃过午饭且没有牙痛时喜欢；缺少一项条件仍不喜欢。这不证明我已经喝过或完成现实审核。"
@@ -74,14 +76,18 @@ async def exercise(tmp_path, monkeypatch, mode):
         return json.dumps(
             dict(
                 dependencies=dependencies,
-                search_views=[["not in original query"]],
-                public_partitions=[dict(segment_id=1, cuts=[])],
+                search_views=[["not in original query"]] if mode == "invalid_views" else [["桐屿续签", "费用"]],
+                public_partitions=[dict(segment_id=1, cuts=["不存在的业务"] if mode == "invalid_partition" else [])],
             )
         )
 
     async def planner(query):
         assert query == QUERY
-        plan = await original_plan(query, reviewer=reviewer)
+        try:
+            plan = await original_plan(query, reviewer=reviewer)
+        except QueryPlanReviewError as exc:
+            seen["status"] = exc.status
+            raise
         seen["status"] = plan.status
         return plan
 
@@ -92,7 +98,7 @@ async def exercise(tmp_path, monkeypatch, mode):
 
     async def retrieve(*args, **kwargs):
         seen["retrieval"] += 1
-        if mode in {"disabled", "invalid_views"}:
+        if mode in {"disabled", "valid"}:
             # Control verifies dispatch only; it supplies no approved evidence.
             return dict(results=[], citations=[], abstained=True)
         doc = database.get_knowledge_document(document["id"])
@@ -133,7 +139,7 @@ async def exercise(tmp_path, monkeypatch, mode):
     monkeypatch.setattr(generate, "_get_system_prompt", lambda _: "虚构角色依据可见来源回答")
     monkeypatch.setattr(generate, "generate_character_response", capture)
     try:
-        _, used, metadata = await generate._generate_with_retrieval(
+        pending = generate._generate_with_retrieval(
             MessageRequest(message=QUERY, characterId="fiction-role"),
             None,
             runtime_config=dict(maxTokens=2048, useKnowledgeBase=True),
@@ -150,6 +156,17 @@ async def exercise(tmp_path, monkeypatch, mode):
             model_generate=model,
             message_db=database,
         )
+        if mode not in {"disabled", "valid"}:
+            with pytest.raises(HTTPException) as caught:
+                await pending
+            error = caught.value
+            assert error.status_code == 503 and isinstance(error.__cause__, QueryPlanReviewError)
+            assert error.__cause__.__cause__ is not None
+            assert seen["retrieval"] == seen["binding"] == seen["model"] == 0
+            assert database.list_memory_sources(**fields) == before
+            assert database.get_knowledge_document(document["id"])["content"] == PUBLIC
+            return seen, error
+        _, used, metadata = await pending
         assert database.list_memory_sources(**fields) == before
         assert database.get_knowledge_document(document["id"])["content"] == PUBLIC
         assert used and seen["model"] == 1 and seen["private_complete"] and not seen["public_visible"]
@@ -159,21 +176,18 @@ async def exercise(tmp_path, monkeypatch, mode):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("mode", ["provider_error", "timeout", "invalid_json", "incomplete_dependencies"])
-async def test_failed_dependency_plan_never_grants_public_candidates_but_keeps_private(tmp_path, monkeypatch, mode):
-    seen, metadata = await exercise(tmp_path, monkeypatch, mode)
-    assert seen["retrieval"] == seen["binding"] == 0
-    assert metadata["abstained"] and metadata["answerMode"] == "abstention"
-    assert not metadata["citations"]
-    assert seen["retrieval_plan"].reason == "query_plan_" + seen["status"]
-    assert "query_plan_" + seen["status"] in metadata["warnings"]
+@pytest.mark.parametrize("mode", ["provider_error", "timeout", "invalid_json", "incomplete_dependencies", "invalid_views", "invalid_partition"])
+async def test_failed_plan_stops_retrieval_and_answer_without_mutating_sources(tmp_path, monkeypatch, mode):
+    seen, error = await exercise(tmp_path, monkeypatch, mode)
+    expected = mode if mode in {"provider_error", "timeout"} else "invalid"
+    assert seen["status"] == expected and error.__cause__.status == expected
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("mode", ["invalid_views", "disabled"])
-async def test_valid_dependencies_or_disabled_planner_preserve_normal_dispatch(tmp_path, monkeypatch, mode):
+@pytest.mark.parametrize("mode", ["valid", "disabled"])
+async def test_complete_plan_or_disabled_planner_preserve_normal_dispatch(tmp_path, monkeypatch, mode):
     seen, metadata = await exercise(tmp_path, monkeypatch, mode)
     assert seen["retrieval"] == 1 and metadata["abstained"]
-    assert seen["status"] == ("dependencies_only_invalid_views" if mode == "invalid_views" else "disabled")
-    assert seen["binding"] == (1 if mode == "invalid_views" else 0)
+    assert seen["status"] == ("applied" if mode == "valid" else "disabled")
+    assert seen["binding"] == (1 if mode == "valid" else 0)
     assert not any(w.startswith("query_plan_") for w in (metadata.get("warnings") or []))

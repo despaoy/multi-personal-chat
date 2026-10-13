@@ -7,7 +7,7 @@ from types import SimpleNamespace
 import pytest
 
 from character.models import CompiledCharacterContext
-from knowledge.retrieval_query_plan import RetrievalQueryPlan, plan_retrieval_views
+from knowledge.retrieval_query_plan import QueryPlanReviewError, RetrievalQueryPlan, plan_retrieval_views
 from knowledge.turn_dependencies import KINDS, parse_dependencies, query_segments
 
 QUERY = "请读取我保存的练琴偏好。下面是完整独立假设，规则是否适用？只读取，不变更记忆。"
@@ -74,14 +74,14 @@ def test_one_sentence_can_depend_on_private_and_public_evidence():
 
 
 @pytest.mark.asyncio
-async def test_legacy_empty_search_views_never_prove_private_only(monkeypatch):
+async def test_legacy_empty_search_views_are_rejected_as_incomplete(monkeypatch):
     monkeypatch.setenv("RAG_TASK_PLANNER_ENABLED", "true")
 
     async def review(messages):
         return '{"search_views":[]}'
 
-    result = await plan_retrieval_views(QUERY + "仅讨论给定假设。" * 90, reviewer=review)
-    assert result.status == "applied" and not result.private_context_only
+    with pytest.raises(QueryPlanReviewError, match="query_plan_invalid"):
+        await plan_retrieval_views(QUERY + "仅讨论给定假设。" * 90, reviewer=review)
 
 
 @pytest.mark.asyncio
@@ -95,7 +95,7 @@ async def test_every_full_original_segment_reaches_planner(monkeypatch):
         value = {kind: [] for kind in KINDS}
         value["private_memory"] = [0]
         value["current_input"] = list(range(1, len(payload["segments"])))
-        return json.dumps(dict(search_views=[], dependencies=value))
+        return json.dumps(dict(search_views=[], dependencies=value, public_partitions=[]))
 
     result = await plan_retrieval_views(query, reviewer=review)
     assert result.status == "applied" and result.private_context_only

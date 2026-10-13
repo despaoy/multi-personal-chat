@@ -10,7 +10,7 @@ from inference.generation_request import GenerationRequest, RetrievalResult, bui
 from knowledge.evidence_packets import document_evidence_packets
 from knowledge.original_sources import attach_original_sources
 from knowledge.public_task_evidence import render_public_tasks, review_public_candidates
-from knowledge.retrieval_query_plan import plan_retrieval_views
+from knowledge.retrieval_query_plan import QueryPlanReviewError, plan_retrieval_views
 from knowledge.turn_dependencies import query_segments
 
 QUERY = "核对紫岑借阅规定的费用与登记材料。核对白榆续借规定的费用。读取我保存的梅糕偏好。"
@@ -70,7 +70,8 @@ async def valid_plan(monkeypatch, query=QUERY):
             control=list(range(3, len(segments))),
             unresolved_source=[],
         )
-        return json.dumps(dict(search_views=[["紫岑", "借阅规定"], ["白榆", "续借规定"]], dependencies=groups))
+        return json.dumps(dict(search_views=[["紫岑", "借阅规定"], ["白榆", "续借规定"]], dependencies=groups,
+                               public_partitions=[dict(segment_id=i, cuts=[]) for i in [0, 1]]))
 
     result = await plan_retrieval_views(query, reviewer=reviewer)
     assert seen == [True] and result.status == "applied" and not result.private_context_only
@@ -141,6 +142,7 @@ async def test_short_private_plan_requires_complete_valid_protocol(monkeypatch):
         return json.dumps(
             dict(
                 search_views=[],
+                public_partitions=[],
                 dependencies=dict(
                     private_memory=[0], control=[1], current_input=[], public_knowledge=[], unresolved_source=[]
                 ),
@@ -155,8 +157,8 @@ async def test_short_private_plan_requires_complete_valid_protocol(monkeypatch):
         value["search_views"] = [["梅糕"]]
         return json.dumps(value)
 
-    bad = await plan_retrieval_views(query, reviewer=invalid)
-    assert bad.status == "invalid" and not bad.private_context_only
+    with pytest.raises(QueryPlanReviewError, match="query_plan_invalid"):
+        await plan_retrieval_views(query, reviewer=invalid)
 
 
 @pytest.mark.asyncio
@@ -207,5 +209,5 @@ async def test_empty_short_input_never_calls_planner(monkeypatch):
     async def forbidden(_messages):
         pytest.fail("Empty input is not a representable task")
 
-    result = await plan_retrieval_views("", reviewer=forbidden)
-    assert result.status == "invalid" and result.dependencies is None
+    with pytest.raises(ValueError, match="Query cannot be completely represented"):
+        await plan_retrieval_views("", reviewer=forbidden)

@@ -1258,7 +1258,7 @@ async def _generate_with_retrieval(
                 timeout=_RAG_TIMEOUT,
             )
             if need_rag:
-                from knowledge.retrieval_query_plan import QueryPlanReviewError, plan_retrieval_views
+                from knowledge.retrieval_query_plan import plan_retrieval_views
 
                 # Keep current speech intact; authorized history only supplies
                 # reference context, never extra tasks, facts or source grants.
@@ -1266,10 +1266,6 @@ async def _generate_with_retrieval(
                                  "context_budget": get_provider_context_budget().review}
                                 if effective_history else {})
                 query_plan = await plan_retrieval_views(rag_message, **plan_options)
-                if query_plan.dependencies is None and query_plan.status in {"invalid", "unavailable"}:
-                    # An attempted semantic plan failed. Ranking candidates cannot
-                    # replace missing object/task proof; keep private context intact.
-                    raise QueryPlanReviewError(query_plan.status)
                 if (query_plan.private_context_only and prepared_character_turn is not None
                         and not prepared_character_turn.compiled.branch_context):
                     retrieval = RetrievalResult(reason="private_context_dependencies")
