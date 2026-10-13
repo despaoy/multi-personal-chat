@@ -278,21 +278,19 @@ class RoutedMultiScaleService:
 
         wants_raw = raw_text or requests_source_text(query)
         raw_excerpt = None
-        raw_status = "not_requested" if not wants_raw else "extractor_unavailable"
-        if wants_raw and self.extractor is not None:
+        raw_status = "not_requested"
+        if wants_raw:
             raw_status = "no_visible_source"
             for candidate in selected:
                 evidence = self.evidence_by_parent.get(candidate.document.id)
                 if evidence is None or not visible_to(evidence, knowledge_boundary):
                     continue
-                try:
-                    raw_excerpt = self.extractor.extract(evidence.source).to_dict()
-                    raw_excerpt.update({"evidence_id": evidence.id, "parent_id": candidate.document.id})
-                    raw_status = "truncated" if raw_excerpt.get("truncated") else "available"
-                    break
-                except (ValueError, FileNotFoundError, UnicodeError):
-                    raw_status = "source_unavailable"
-                    continue
+                if self.extractor is None:
+                    raise RuntimeError("Original source extraction is required; configure the source extractor")
+                raw_excerpt = self.extractor.extract(evidence.source).to_dict()
+                raw_excerpt.update({"evidence_id": evidence.id, "parent_id": candidate.document.id})
+                raw_status = "truncated" if raw_excerpt.get("truncated") else "available"
+                break
 
         if raw_excerpt and raw_excerpt.get("text"):
             # Put exact source first so a long background cannot crowd it out

@@ -1,6 +1,8 @@
 """Claim evidence reaches ordinary generation whole, ahead of broad background."""
 from types import SimpleNamespace
 
+import pytest
+
 from knowledge.multiscale_rag import service
 from knowledge.retrieval_core.documents import SourceReference
 
@@ -95,3 +97,33 @@ def test_shared_background_survives_when_later_sibling_evidence_fits(monkeypatch
     background = [p for p in result['evidence_packets'] if p['kind'] == 'background']
     assert len(background) == 1
     assert background[0]['supporting_document_ids'] == ['0', '1']
+
+
+@pytest.mark.parametrize("error_type", [FileNotFoundError, UnicodeError, ValueError])
+async def test_raw_source_failure_stops_before_alternate_candidate_and_model(monkeypatch, error_type):
+    from knowledge.grounded_answer.service import GroundedAnswerService
+
+    instance = make_service(monkeypatch, ["完整第一候选证据：禁止联网。", "完整第二候选证据：另需审批。"])
+    for identity, evidence in instance.evidence_by_parent.items():
+        evidence.id = "evidence-" + identity
+        evidence.source = SourceReference("synthetic-" + identity + ".txt", 1, 1)
+    reads = []
+
+    def extract(source):
+        reads.append(source.source_path)
+        raise error_type("synthetic source read failed")
+
+    instance.extractor = SimpleNamespace(extract=extract)
+    pipeline = GroundedAnswerService(
+        retriever=lambda query, **kwargs: instance.retrieve(query, raw_text=True),
+        corrective_enabled=False,
+    )
+    calls = []
+
+    async def generate(**kwargs):
+        calls.append(kwargs)
+        return "must not generate from a replacement source or summary"
+
+    with pytest.raises(error_type, match="synthetic source read failed"):
+        await pipeline.answer("请给出原文依据。", generate=generate, domain_id="test")
+    assert reads == ["synthetic-0.txt"] and not calls

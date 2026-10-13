@@ -197,15 +197,18 @@ async def test_persistent_recall_without_chat_history_after_many_newer_records(t
     '请给出原文', '能指出支持你说法的原作内容吗？',
     '请提供相关的原著段落。', '出处？', '能列出引文吗？',
 ])
-def test_rag_deduplicates_scene_and_delivers_exact_excerpt(monkeypatch, query):
+def test_rag_deduplicates_scene_and_delivers_exact_excerpt(monkeypatch, query, tmp_path):
     from types import SimpleNamespace
 
     from knowledge.multiscale_rag import service
-    from knowledge.multiscale_rag.source_text import RawExcerpt
+    from knowledge.multiscale_rag.source_text import OriginalTextExtractor
     from knowledge.retrieval_core.documents import SourceReference
     source = SourceReference('test.txt', 4, 6)
+    (tmp_path / 'test.txt').write_text('占位一\n占位二\n占位三\n未被改写的原文。\n完整条件：仅离线。\n最终例外：仍需审批。', encoding='utf-8')
     docs = [SimpleNamespace(id=f'fact-{i}', document_type='fact', title=f'事实{i}',
-                            summary=f'摘要{i}', metadata={'scene_id': 'shared-scene'}, source=source)
+                            summary=f'摘要{i}', metadata={'scene_id': 'shared-scene'}, source=source,
+                            domain_id='test', content=f'摘要{i}', reality_status='objective',
+                            temporal_scope='current', content_scope='main_story')
             for i in range(2)]
     candidates = [SimpleNamespace(document=d, to_dict=lambda: {}) for d in docs]
     instance = object.__new__(service.RoutedMultiScaleService)
@@ -217,7 +220,7 @@ def test_rag_deduplicates_scene_and_delivers_exact_excerpt(monkeypatch, query):
     instance.reranker = None
     instance.by_id = {'shared-scene': SimpleNamespace(id='shared-scene', title='共同场景', summary='背景内容')}
     instance.evidence_by_parent = {'fact-0': SimpleNamespace(id='evidence-0', source=source)}
-    instance.extractor = SimpleNamespace(extract=lambda _: RawExcerpt('test.txt', 4, 6, '未被改写的原文。'))
+    instance.extractor = OriginalTextExtractor(tmp_path)
     monkeypatch.setattr(service, 'analyze_explicit_domain', lambda *a: SimpleNamespace(entities=[]))
     monkeypatch.setattr(service, 'choose_card_types', lambda *a: service.CARD_TYPES)
     monkeypatch.setattr(service, 'rerank_with_title_frames', lambda *a, **kw: candidates)
@@ -228,19 +231,12 @@ def test_rag_deduplicates_scene_and_delivers_exact_excerpt(monkeypatch, query):
     assert result['raw_source_status'] == 'available'
     # The same request must not relabel a summary as original source text.
     instance.extractor = None
-    unavailable = instance.retrieve(query)
-    assert unavailable['raw_source_status'] == 'extractor_unavailable'
-    assert unavailable['raw_excerpt'] is None
-    assert '【原文摘录】' not in unavailable['context_text']
-
-    def missing_source(_):
-        raise FileNotFoundError('source missing')
-
-    instance.extractor = SimpleNamespace(extract=missing_source)
-    missing = instance.retrieve(query)
-    assert missing['raw_source_status'] == 'source_unavailable'
-    assert missing['raw_excerpt'] is None
-    assert '【原文摘录】' not in missing['context_text']
+    with pytest.raises(RuntimeError, match='source extractor'):
+        instance.retrieve(query)
+    instance.extractor = OriginalTextExtractor(tmp_path)
+    (tmp_path / 'test.txt').unlink()
+    with pytest.raises(FileNotFoundError):
+        instance.retrieve(query)
 
 
 @pytest.mark.parametrize('question', ['我还喜欢绘画吗？', '我已经完成申请了吗？', '我拿到录取了吗？', '我喜欢哪种运动？'])
