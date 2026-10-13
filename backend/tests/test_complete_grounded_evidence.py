@@ -138,3 +138,37 @@ async def test_identical_followup_with_different_history_cannot_share_cached_ans
     assert second.answer == "琉璃已取得书面许可。"
     assert first.citations[0]["document_id"] == "stage8-kisaki-permit"
     assert second.citations[0]["document_id"] == "stage8-ruri-permit"
+
+
+@pytest.mark.parametrize("failure", ["conflict", "missing_id", "missing_document"])
+async def test_broken_citation_aborts_before_model_generation(failure):
+    from unittest.mock import AsyncMock
+
+    data = bundle()
+    data["query_analysis"] = {"entities": ["月社妃", "琉璃"]}
+    if failure == "conflict":
+        data["citations"][0]["source_id"] = "another-document"
+    elif failure == "missing_id":
+        data["citations"][0].pop("id")
+    else:
+        data["results"].pop(0)
+    generate = AsyncMock(side_effect=AssertionError("broken evidence must not reach the model"))
+    service = GroundedAnswerService(retriever=lambda *a, **kw: data, corrective_enabled=False)
+    with pytest.raises(KeyError if failure == "missing_document" else ValueError):
+        await service.answer("月社妃是否获批许可？", generate=generate, domain_id="fixture")
+    generate.assert_not_awaited()
+
+
+@pytest.mark.parametrize("failure", ["metadata", "document_id"])
+def test_citation_binding_requires_packet_metadata(failure):
+    from knowledge.grounded_answer.validator import CitationValidator
+
+    packet = EvidencePacketBuilder().build("许可是否批准？", bundle(), AnswerMode.GROUNDED_ANSWER)
+    validator = CitationValidator()
+    validation = validator.validate("月社妃尚未获批。[S1]", packet)
+    if failure == "metadata":
+        packet.citations = packet.citations[1:]
+    else:
+        packet.citations[0].pop("document_id")
+    with pytest.raises(KeyError):
+        validator.bind(validation, packet)

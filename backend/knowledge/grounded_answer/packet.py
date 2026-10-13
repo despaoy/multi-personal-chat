@@ -96,17 +96,11 @@ class EvidencePacketBuilder:
             native_id = citation.get("id")
             legacy_id = citation.get("source_id")
             if native_id and legacy_id and str(native_id) != str(legacy_id):
-                packet_warnings.append("citation_conflicting_document_id")
-                continue
+                raise ValueError("Citation has conflicting document identifiers")
             doc_id = str(legacy_id or native_id or "")
             if not doc_id:
-                continue
-            item = result_by_id.get(doc_id)
-            if item is None:
-                # citation 与 results 不一致（索引更新竞态）：跳过该引用，
-                # 不允许引用无完整 metadata 的文档
-                packet_warnings.append("citation_missing_document")
-                continue
+                raise ValueError("Citation is missing its document identifier")
+            item = result_by_id[doc_id]
 
             key = f"S{len(documents) + 1}"
             # EvidenceItem 构造后用 to_block() 统一格式化（与 prompt 证据区共用）

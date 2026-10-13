@@ -115,15 +115,13 @@ class CitationValidator:
         """按合法 key 回填 citation metadata；输出顺序 = 首次出现顺序。"""
         if not validation.valid_keys:
             return []
-        by_key = {c.get("key"): c for c in packet.citations}
+        by_key = {c["key"]: c for c in packet.citations}
         bound: list[dict[str, Any]] = []
         for key in validation.valid_keys:
-            meta = by_key.get(key)
-            if meta is None:
-                continue
+            meta = by_key[key]
             citation = {k: v for k, v in meta.items() if k in _CITATION_SOURCE_FIELDS}
             citation["key"] = key
-            citation["document_id"] = str(meta.get("document_id") or meta.get("source_id") or "")
+            citation["document_id"] = meta["document_id"]
             bound.append(citation)
         return bound
 
