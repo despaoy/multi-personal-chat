@@ -64,7 +64,7 @@ def requires_independent_domains(plan):
 
 
 def retrieve_domains(plan, query, top_k, *, curated, generic):
-    """One failed branch cannot erase another; never crop the original query."""
+    """Retrieve each requested authority completely; propagate branch failures."""
     if plan["binding"]["input"]["query"] not in query or not requires_independent_domains(plan):
         raise ValueError("Independent retrieval requires the complete mixed question")
     names = tuple(obj["query_text"] for obj in plan["objects"] if obj["authority"] == "curated_character")
@@ -73,13 +73,10 @@ def retrieve_domains(plan, query, top_k, *, curated, generic):
         ("curated_character", lambda: curated(query, top_k=top_k, object_names=names)),
         ("generic_knowledge", generic),
     ):
-        try:
-            bundle = retrieve()
-            if not isinstance(bundle, dict):
-                raise RuntimeError("Requested source authority is unavailable")
-            branches[authority] = dict(status="retrieved", bundle=bundle)
-        except Exception as exc:
-            branches[authority] = dict(status="unavailable", error_type=type(exc).__name__, bundle={})
+        bundle = retrieve()
+        if not isinstance(bundle, dict):
+            raise TypeError(f"Invalid {authority} retrieval result: expected a dictionary")
+        branches[authority] = dict(status="retrieved", bundle=bundle)
     business = branches["generic_knowledge"]["bundle"]
     return {
         **business,

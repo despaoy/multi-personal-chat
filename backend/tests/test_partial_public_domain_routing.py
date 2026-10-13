@@ -14,6 +14,8 @@ from knowledge.public_domains import domain_plan, retrieve_domains
 from knowledge.public_question_binding import resolve_question_binding
 from knowledge.turn_dependencies import parse_dependencies
 
+pytestmark = pytest.mark.usefixtures("no_live_context_review")
+
 QUERY = (
     "核对青妃集市展期的费用、时长、截止、材料及末尾例外。核对晴汀续领的相同五项。另一公共任务缺项不能改变独立业务规则。"
 )
@@ -48,7 +50,7 @@ async def binding(*, empty=False):
 
 
 @pytest.mark.parametrize("curated_error", [False, True])
-async def test_api_keeps_business_full_original_beside_unresolved_task(monkeypatch, curated_error):
+async def test_api_preserves_normal_business_or_propagates_curated_fault(monkeypatch, curated_error):
     from api import generate, knowledge
     from knowledge import rag_helper, vector_db
     from knowledge.multiscale_rag import runtime
@@ -105,10 +107,15 @@ async def test_api_keeps_business_full_original_beside_unresolved_task(monkeypat
         "get_rag_helper",
         lambda: SimpleNamespace(retrieve_with_citations=generic, build_citations=lambda records: []),
     )
+    if curated_error:
+        with pytest.raises(RuntimeError, match="Controlled unresolved character branch unavailable"):
+            await generate._retrieve_rag_bundle(QUERY, 3, None, question_binding=receipt)
+        assert calls == ["curated"]
+        return
     bundle = await generate._retrieve_rag_bundle(QUERY, 3, None, question_binding=receipt)
     assert calls == ["curated", "fresh", "generic"]
     branches = bundle["independent_domains"]["branches"]
-    assert branches["curated_character"]["status"] == ("unavailable" if curated_error else "retrieved")
+    assert branches["curated_character"]["status"] == "retrieved"
     business = branches["generic_knowledge"]["bundle"]
     assert business["original_source_packets"][0]["original_body"] == BODY
     assert business["source_coverage"][0]["original_source_receipt"]["authority_revision"] == 88
