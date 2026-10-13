@@ -73,7 +73,9 @@ class GroundedPromptBuilder:
     """构建 grounded-answer 的 system + user 消息。"""
 
     def __init__(self, evidence_max_chars: int = 6000):
-        self.evidence_max_chars = max(600, int(evidence_max_chars))
+        if type(evidence_max_chars) is not int or evidence_max_chars < 600:
+            raise ValueError("evidence_max_chars must be an integer >= 600")
+        self.evidence_max_chars = evidence_max_chars
 
     # -- system -------------------------------------------------------------
     def build_system_prompt(

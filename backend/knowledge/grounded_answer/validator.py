@@ -71,7 +71,9 @@ class CitationValidator:
     """模型输出 → 合法 citation key 集合 → 服务端回填 metadata。"""
 
     def __init__(self, max_citations: int = DEFAULT_MAX_CITATIONS):
-        self.max_citations = max(1, int(max_citations))
+        if type(max_citations) is not int or max_citations < 1:
+            raise ValueError("max_citations must be an integer >= 1")
+        self.max_citations = max_citations
 
     # -- 解析与校验 ---------------------------------------------------------
     def validate(self, answer_text: str, packet: EvidencePacket) -> CitationValidation:

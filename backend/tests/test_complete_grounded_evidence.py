@@ -302,3 +302,30 @@ def test_admitted_evidence_contract_keeps_background_separate_and_deduplicates_t
     packet = EvidencePacketBuilder().build("许可是否批准？", data, AnswerMode.GROUNDED_ANSWER)
     assert packet.documents[0].evidence_text == data["evidence_packets"][0]["text"]
     assert "背景不应替代原文" not in packet.context_text
+
+
+@pytest.mark.parametrize("component", ["packet", "prompt", "citation"])
+@pytest.mark.parametrize("value", [0, True, 600.5, "600"])
+def test_grounded_budget_config_rejects_implicit_corrections(component, value):
+    from knowledge.grounded_answer.validator import CitationValidator
+
+    constructor = {"packet": EvidencePacketBuilder, "prompt": GroundedPromptBuilder, "citation": CitationValidator}[component]
+    with pytest.raises(ValueError, match="must be an integer"):
+        constructor(value)
+
+
+@pytest.mark.parametrize("constructor", [EvidencePacketBuilder, GroundedPromptBuilder])
+def test_grounded_budget_config_rejects_too_small_explicit_evidence_limit(constructor):
+    with pytest.raises(ValueError, match=">= 600"):
+        constructor(599)
+
+
+def test_grounded_budget_config_accepts_boundary_and_keeps_complete_evidence():
+    from knowledge.grounded_answer.validator import CitationValidator
+
+    packet = EvidencePacketBuilder(600).build("许可是否批准？", bundle(), AnswerMode.GROUNDED_ANSWER)
+    prompt = GroundedPromptBuilder(600).build_evidence_section(packet)
+    assert packet.documents and len(packet.context_text) <= 600
+    assert packet.documents[0].evidence_text in unescape(prompt)
+    validation = CitationValidator(1).validate("依据原文回答。[S1]", packet)
+    assert validation.valid_keys == ["S1"] and not validation.invalid_keys

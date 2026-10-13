@@ -81,7 +81,9 @@ class EvidencePacketBuilder:
     def __init__(self, evidence_budget_chars: int = 6000):
         # 上游已做一次预算裁剪，
         # 此处防止异常超大 bundle 直接塞满 prompt
-        self.evidence_budget = max(600, int(evidence_budget_chars))
+        if type(evidence_budget_chars) is not int or evidence_budget_chars < 600:
+            raise ValueError("evidence_budget_chars must be an integer >= 600")
+        self.evidence_budget = evidence_budget_chars
 
     def build(
         self,
