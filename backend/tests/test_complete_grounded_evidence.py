@@ -260,3 +260,45 @@ async def test_corrective_admitted_source_text_survives_into_model_prompt(overla
     result = await service.answer("许可是否批准？", generate=generate, domain_id="fixture")
     assert len(model_calls) == 1 and not result.abstained
     assert [first, second] == original
+
+
+@pytest.mark.parametrize("failure", ["null_list", "not_packet", "kind", "missing_text", "empty_text", "ids_type", "empty_ids", "invalid_id"])
+async def test_admitted_evidence_contract_cannot_silently_use_card_content(failure):
+    from unittest.mock import AsyncMock
+
+    data = bundle()
+    data["query_analysis"] = {"entities": ["月社妃"]}
+    if failure == "null_list":
+        data["evidence_packets"] = None
+    elif failure == "not_packet":
+        data["evidence_packets"][0] = "invalid packet"
+    else:
+        packet = data["evidence_packets"][0]
+        if failure == "kind":
+            packet["kind"] = "unknown"
+        elif failure == "missing_text":
+            del packet["text"]
+        elif failure == "empty_text":
+            packet["text"] = " "
+        elif failure == "ids_type":
+            packet["document_ids"] = "document"
+        elif failure == "empty_ids":
+            packet["document_ids"] = []
+        else:
+            packet["document_ids"] = [None]
+    generate = AsyncMock()
+    service = GroundedAnswerService(retriever=lambda *a, **kw: data, corrective_enabled=False)
+    with pytest.raises((ValueError, TypeError, KeyError)):
+        await service.answer("许可是否批准？", generate=generate, domain_id="fixture")
+    generate.assert_not_awaited()
+
+
+def test_admitted_evidence_contract_keeps_background_separate_and_deduplicates_text():
+    from copy import deepcopy
+
+    data = bundle()
+    data["evidence_packets"].append(deepcopy(data["evidence_packets"][0]))
+    data["evidence_packets"].append(dict(kind="background", text="背景不应替代原文", document_ids=[]))
+    packet = EvidencePacketBuilder().build("许可是否批准？", data, AnswerMode.GROUNDED_ANSWER)
+    assert packet.documents[0].evidence_text == data["evidence_packets"][0]["text"]
+    assert "背景不应替代原文" not in packet.context_text

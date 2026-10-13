@@ -10,10 +10,12 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Mapping
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from .models import AnswerMode, EvidenceItem, EvidencePacket
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
 
 logger = logging.getLogger(__name__)
 
@@ -43,16 +45,18 @@ def _extract_evidence_text(content: str) -> str:
 
 def _admitted_evidence_by_document(bundle: Mapping[str, Any]) -> dict[str, list[str]]:
     evidence: dict[str, list[str]] = {}
-    for packet in bundle.get("evidence_packets") or []:
-        if not isinstance(packet, Mapping) or packet.get("kind") != "evidence":
+    for packet in bundle.get("evidence_packets", []):
+        if packet["kind"] == "background":
             continue
-        text = packet.get("text")
-        ids = packet.get("document_ids")
-        if not isinstance(text, str) or not text.strip() or not isinstance(ids, (list, tuple)):
-            continue
+        if packet["kind"] != "evidence":
+            raise ValueError("Unknown retrieval evidence packet kind")
+        text = packet["text"]
+        ids = packet["document_ids"]
+        if not isinstance(text, str) or not text.strip() or not isinstance(ids, (list, tuple)) or not ids:
+            raise ValueError("Retrieval evidence requires non-empty text and document identifiers")
         for document_id in ids:
             if not isinstance(document_id, str) or not document_id:
-                continue
+                raise ValueError("Retrieval evidence document identifier must be non-empty text")
             blocks = evidence.setdefault(document_id, [])
             if text not in blocks:
                 blocks.append(text)
