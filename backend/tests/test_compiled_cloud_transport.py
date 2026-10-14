@@ -269,7 +269,13 @@ async def test_cache_hit_checks_archive_result_without_new_model_call(installed,
     cache = Cache()
     monkeypatch.setattr(generate, "response_cache", cache)
     assert (await receive()).modelInvoked
-    archive = AsyncMock(return_value=saved)
+    failure = OSError("fiction-cache-archive-error")
+    def add_message(record):
+        if not saved:
+            raise failure
+        return {"id": "cached-fixture-row", **record}
+    generate.db.add_message = add_message
+    archive = AsyncMock(wraps=generate._save_message)
     monkeypatch.setattr(generate, "_save_message", archive)
     request = MessageRequest(message=QUERY, loraName="default")
     if saved:
@@ -279,7 +285,8 @@ async def test_cache_hit_checks_archive_result_without_new_model_call(installed,
         with pytest.raises(HTTPException) as error:
             await generate._generate_reply_impl(request, persist_message=True, record_invocation=False)
         assert error.value.status_code == 503 and error.value.detail["stage"] == "message_archive"
-        assert error.value.detail["modelInvoked"] is False and error.value.detail["messageSaved"] is False
+        assert error.value.detail["modelInvoked"] is False and error.value.detail["messageSaved"] is None
+        assert error.value.__cause__ is failure
     archive.assert_awaited_once()
     assert archive.await_args.args[1] == ANSWER
     assert len(installed.calls) == 1 and cache.writes == 1

@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
+from fastapi import HTTPException
 
 from db.schemas import MessageRequest
 
@@ -117,7 +118,13 @@ async def test_generation_preserves_answer_and_existing_warnings(monkeypatch, pr
     meta = dict(warnings=["原有检索提示"], answerMode="unit", confidence=0.3, citations=[])
     monkeypatch.setattr(gen, "_generate_with_vllm", AsyncMock(return_value=("模型原始内容", False, meta)))
     monkeypatch.setattr(gen, "_generate_with_retrieval", AsyncMock(return_value=("模型原始内容", False, meta)))
-    monkeypatch.setattr(gen, "_save_message", AsyncMock(return_value=mode != "archive_failure"))
+    failure = OSError("fiction-archive-write-error")
+    if mode == "archive_failure":
+        def fail(record):
+            raise failure
+        gen.db.add_message = fail
+    else:
+        monkeypatch.setattr(gen, "_save_message", AsyncMock(return_value=True))
     prepared = SimpleNamespace(
         character_id="tsukiyashiro_kisaki",
         compiled=SimpleNamespace(profile_context="", dynamic_context="", reference_context=""),
@@ -127,6 +134,14 @@ async def test_generation_preserves_answer_and_existing_warnings(monkeypatch, pr
     service = SimpleNamespace(
         complete_turn=AsyncMock(return_value=SimpleNamespace(source_capture=mode, memory_enrichment_status="skipped"))
     )
+    if mode == "archive_failure":
+        with pytest.raises(HTTPException) as error:
+            await gen._generate_reply_impl(request(), enable_rag=False, record_invocation=False, character_service=service)
+        assert error.value.status_code == 503 and error.value.detail["stage"] == "message_archive"
+        assert error.value.detail["modelInvoked"] is True and error.value.detail["messageSaved"] is None
+        assert error.value.__cause__ is failure
+        service.complete_turn.assert_not_awaited()
+        return
     result = await gen._generate_reply_impl(
         request(),
         persist_message=mode != "internal",
@@ -141,7 +156,7 @@ async def test_generation_preserves_answer_and_existing_warnings(monkeypatch, pr
     else:
         assert result.reply == "模型原始内容" and result.warnings == ["原有检索提示"]
     assert meta["warnings"] == ["原有检索提示"]
-    if mode in {"internal", "archive_failure"}:
+    if mode == "internal":
         service.complete_turn.assert_not_awaited()
     else:
         service.complete_turn.assert_awaited_once()

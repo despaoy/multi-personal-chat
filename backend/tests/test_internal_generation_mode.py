@@ -252,7 +252,7 @@ async def test_message_db_reaches_save_and_invocation_record(monkeypatch, provid
 
     captured = {}
 
-    async def fake_save(request, reply, model_name, lora_name, cost_time, *, database=None, character_id=None, saved_receipt=None):
+    async def fake_save(request, reply, model_name, lora_name, cost_time, *, database=None, character_id=None, saved_receipt=None, model_invoked=None):
         captured["save_db"] = database
         return True
 
@@ -286,7 +286,7 @@ async def test_save_message_and_invocation_use_injected_database(monkeypatch):
     class FakeDB:
         def add_message(self, record):
             calls.append(("message", record))
-            return 1
+            return {"id": "fixture-message", **record}
 
         def add_model_invocation(self, record):
             calls.append(("invocation", record))

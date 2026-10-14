@@ -480,15 +480,11 @@ async def _generate_reply_body(
             logger.debug("response cache hit")
             if persist_message:
                 stored_model_name = "vllm" if response.model.startswith("vllm/") else response.model
-                saved = await _save_message(
+                await _save_message(
                     request, response.reply, stored_model_name, lora_name,
                     round(time.time() - start_time, 2), database=message_db, character_id=mapped_character_id,
+                    model_invoked=False,
                 )
-                if not saved:
-                    raise HTTPException(503, detail={
-                        "stage": "message_archive", "message": "缓存回复未能保存，请检查数据库连接后重试",
-                        "modelInvoked": False, "messageSaved": False,
-                    })
             return response.model_copy(update={
                 "modelInvoked": False, "costTime": round(time.time() - start_time, 2),
                 "warnings": list(dict.fromkeys([*(response.warnings or []), "cached_model_response"])),
@@ -567,7 +563,7 @@ async def _generate_reply_body(
         message_saved = False
         archive_receipt = {}
         if persist_message:
-            message_saved = await _save_message(
+            await _save_message(
                 request,
                 reply,
                 stored_model_name,
@@ -576,17 +572,18 @@ async def _generate_reply_body(
                 database=message_db,
                 character_id=mapped_character_id,
                 saved_receipt=archive_receipt,
+                model_invoked=model_invoked,
             )
-        # 仅当本轮消息确实要持久化且保存成功时才回写人物状态：
-        # persist_message=False（如 Claw 内部推理）不得污染人物记忆；
-        # 消息保存失败时跳过回写，保持消息记录与人物状态一致。
+            message_saved = True
+        # Required archive failure has already stopped this turn. Internal
+        # generation does not archive messages or update character memory.
         if delivery_context is not None:
             delivery_context.update(message_saved=message_saved, character_id=mapped_character_id)
             if prepared_character_turn is not None and message_saved:
                 from services.delivery_memory import freeze_completion
 
                 delivery_context["completion_snapshot"] = freeze_completion(prepared_character_turn)
-        if prepared_character_turn is not None and persist_message and message_saved and delivery_context is None:
+        if prepared_character_turn is not None and persist_message and delivery_context is None:
             completion_warning = await _complete_character_turn(
                 prepared_character_turn,
                 request,
@@ -1492,11 +1489,12 @@ async def _save_message(
     database=None,
     character_id: str | None = None,
     saved_receipt: dict | None = None,
+    model_invoked: bool | None = None,
 ) -> bool:
     """Save generated replies with platform-aware metadata.
 
-    返回保存是否成功：调用方以此决定是否回写人物状态（记忆/关系），
-    保存失败时不得继续 complete_turn，否则消息记录与人物状态会脱节。
+    Return True only with a valid storage receipt; errors stop generation.
+    A timed-out thread can still commit, so an error does not prove rollback.
     database 为容器注入的数据库（必须与人物历史读取同库），
     None 时用全局单例。
     """
@@ -1531,7 +1529,9 @@ async def _save_message(
             ),
             timeout=_DB_WRITE_TIMEOUT,
         )
-        if saved_receipt is not None and isinstance(stored, dict) and stored.get("id"):
+        if not isinstance(stored, dict) or not stored.get("id"):
+            raise ValueError("Message storage returned no valid receipt")
+        if saved_receipt is not None:
             saved_receipt.update(stored)
         return True
     except Exception as e:
@@ -1551,9 +1551,13 @@ async def _save_message(
             "Failed to save message record traceId=%s sessionId=%s error=%s",
             request.traceId,
             request.sessionId,
-            e,
+            type(e).__name__,
         )
-        return False
+        raise HTTPException(503, detail={
+            "stage": "message_archive",
+            "message": "消息保存失败或未确认，请检查数据库及该请求的保存状态后重试",
+            "modelInvoked": model_invoked, "messageSaved": None,
+        }) from e
 
 
 # ═══════════════════════════════════════════

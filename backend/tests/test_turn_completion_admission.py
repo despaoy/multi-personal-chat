@@ -197,11 +197,15 @@ async def test_preparation_error_or_cancel_releases_capacity(monkeypatch, failur
 @pytest.mark.asyncio
 async def test_archive_failure_releases_unused_slot_without_complete(monkeypatch):
     gen, runtime, request, prepare, generation, storage = generation_environment(monkeypatch, "openai_compat")
-    storage.return_value = False
+    failure = HTTPException(503, detail={"stage": "message_archive", "modelInvoked": True, "messageSaved": None})
+    storage.side_effect = failure
     complete = AsyncMock()
-    await gen._generate_reply_impl(
-        request, enable_rag=False, record_invocation=False, character_service=SimpleNamespace(complete_turn=complete)
-    )
+    with pytest.raises(HTTPException) as error:
+        await gen._generate_reply_impl(
+            request, enable_rag=False, record_invocation=False, character_service=SimpleNamespace(complete_turn=complete)
+        )
+    assert error.value is failure
+    storage.assert_awaited_once()
     complete.assert_not_awaited()
     assert runtime.active == runtime.reserved == 0
     await runtime.shutdown(timeout=1)
