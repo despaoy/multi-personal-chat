@@ -211,7 +211,7 @@ async def run(args):
     check(
         "guard_did_not_retry_or_replace_actual_answer",
         not result["generation"][0]["guard_retried"]
-        and not result["generation"][0]["guard_fallback"]
+        and not result["generation"][0].get("guard_fallback")
         and not result["generation"][0]["guard_violations"],
     )
 

@@ -135,7 +135,6 @@ async def recover_missing_citations(result, generate, *, context_window_tokens):
     retrieval = result.plan.retrieval
     if (
         result.response_citations
-        or result.guard_fallback
         or not result.model_invoked
         or not retrieval.has_evidence
         or not retrieval.answer_citations_bound

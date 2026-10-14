@@ -109,24 +109,15 @@ async def test_optional_attempts_survive_a_later_guard_contract_failure(monkeypa
     monkeypatch.setenv("CONTEXTUAL_DECISION_POLICY_ENABLED", "false")
 
     async def reviewer(messages):
-        return "模型原始回答。"
+        return "你一直喜欢喝咖啡。"
 
-    async def guarded_failure(request, adapter):
-        await adapter(
-            messages=[{"role": "user", "content": "你好"}],
-            temperature=0.0,
-            max_tokens=768,
-            lora_name=None,
-            enable_thinking=False,
-        )
-        raise RuntimeError("deterministic closed guard fallback did not close the violation")
-
-    monkeypatch.setattr("scripts.evaluate_contextual_replies.generate_character_response", guarded_failure)
-    report = await evaluate([{"id": "a", "query": "你好"}], reviewer, arms=("rules",), capture_reply_attempts=True)
+    report = await evaluate([{"id": "a", "query": "今天天气不错。"}], reviewer,
+                            arms=("rules",), capture_reply_attempts=True)
     row = report["cases"][0]
-    assert row["status"] == "error"
-    assert row["local_contract_error"] == "guard_fallback_invalid"
-    assert row["error_stage"] == "generate_response"
-    assert row["generation_attempt_count"] == 1
-    assert row["model_reply_attempts"][0]["reply"] == "模型原始回答。"
-    assert row["reply"] == ""
+    assert row["diagnostics"]["reply_guard"]["forbid_unsupported_user_fact"]
+    assert row["status"] == "error" and row["local_contract_error"] == "reply_validation_failed"
+    assert row["guard_post_retry_violations"] == ["unsupported_user_fact"]
+    assert row["error_stage"] == "generate_response" and row["generation_attempt_count"] == 2
+    assert [attempt["reply"] for attempt in row["model_reply_attempts"]] == ["你一直喜欢喝咖啡。"] * 2
+    assert row["reply"] == "" and report["summary"]["reply_validation_failures"] == 1
+    assert "guard_fallback" not in row and "guard_fallbacks" not in report["summary"]

@@ -94,12 +94,22 @@ def test_native_packet_background_dependency_is_preserved():
     assert [c["source_id"] for c in plan.retrieval.citations] == ["course"]
 
 
-def test_guard_fallback_cannot_claim_any_retrieved_source():
+async def test_failed_guard_never_produces_a_citable_reply():
+    from character.output_guard import ReplyGuard
+    from inference.generation_request import ReplyValidationError
+
     prepared = prepare_answer_citations(bundle())
-    plan = build_generation_request(GenerationRequest(message="课程号", retrieval=prepared))
-    result = finalize_answer_citations(GenerationResult(reply="保守回应" + citation_marker(prepared.citation_namespace, "S1"), plan=plan, guard_fallback="unsupported_user_fact"))
-    assert result.response_citations == ()
-    assert result.reply == "保守回应"
+    calls = []
+
+    async def generate(**kwargs):
+        calls.append(kwargs)
+        return "你一直喜欢喝咖啡。" + citation_marker(prepared.citation_namespace, "S1")
+
+    request = GenerationRequest(message="课程编号是什么？", retrieval=prepared,
+        reply_guard=ReplyGuard(forbid_unsupported_user_fact=True), reply_guard_mode="strict")
+    with pytest.raises(ReplyValidationError) as error:
+        await generate_character_response(request, generate)
+    assert error.value.violations == ("unsupported_user_fact",) and len(calls) == 2
 
 
 def test_explicit_source_lookup_and_non_rag_literal_markers_stay_unchanged():

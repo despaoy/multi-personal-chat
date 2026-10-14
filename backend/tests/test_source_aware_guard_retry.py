@@ -39,7 +39,7 @@ async def test_source_presence_does_not_by_itself_expand_retry_policy(channel, m
 
     result = await generate_character_response(req, model)
     assert len(calls) == 2
-    assert result.guard_retried and not result.guard_fallback
+    assert result.guard_retried
     assert result.reply == '画插画的是你。'
     assert calls[0]['messages'][-1] == calls[1]['messages'][-1]
     assert '你一直喜欢画插画。' not in str(calls[1]['messages'])

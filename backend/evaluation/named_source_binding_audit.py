@@ -240,7 +240,7 @@ async def run(phase):
         plan["status"] == "ok"
         and not result["generation"][0]["guard_retried"]
         and not result["generation"][0]["guard_violations"]
-        and not result["generation"][0]["guard_fallback"],
+        and not result["generation"][0].get("guard_fallback"),
     )
     stored = []
     for item in [before, result]:

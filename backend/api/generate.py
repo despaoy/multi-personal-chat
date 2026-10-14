@@ -1372,7 +1372,7 @@ async def _generate_with_retrieval(
             and dict(query_plan.dependencies.groups)["private_memory"]
             and private_visible
         )
-        if (generation.model_invoked and not generation.guard_fallback
+        if (generation.model_invoked
                 and (public_visible or private_visible)):
             rag_meta["answerMode"] = "partial_answer"
         elif rag_meta.get("answerMode") == "grounded_answer":

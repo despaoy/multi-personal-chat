@@ -42,4 +42,4 @@ async def test_nominal_reference_is_not_replaced_by_no_memory_fallback():
         character_context=CompiledCharacterContext('', '', '', memory_status='no_match'),
         reply_guard=ReplyGuard(forbid_unsupported_user_fact=True)), model)
     assert result.reply == original
-    assert len(calls) == 1 and not result.guard_fallback and not result.guard_violations
+    assert len(calls) == 1 and not result.guard_violations

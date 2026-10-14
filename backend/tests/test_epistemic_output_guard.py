@@ -81,7 +81,7 @@ async def test_complete_recorded_first_answer_is_returned_unchanged_once(mode):
     result = await generate_character_response(request(mode=mode), captured_generator)
     assert len(calls) == 1 and result.model_invoked and result.response_mode == "generated"
     assert result.reply == FIRST_REPLY
-    assert not result.guard_violations and not result.guard_retried and not result.guard_fallback
+    assert not result.guard_violations and not result.guard_retried
     assert all("【输出校验修正】" not in m["content"] for m in calls[0]["messages"])
 
 
@@ -138,7 +138,7 @@ async def test_real_boundary_retry_preserves_complete_epistemic_answer():
     )
     assert len(calls) == 2 and result.guard_retried
     assert result.guard_violations == (IGNORED_ADVICE_BOUNDARY,)
-    assert not result.guard_post_retry_violations and not result.guard_fallback
+    assert not result.guard_post_retry_violations
     assert result.reply == FIRST_REPLY
     assert calls[0]["messages"][-1] == calls[1]["messages"][-1]
     assert "建议你去散步。" not in str(calls[1]["messages"])

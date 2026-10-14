@@ -25,7 +25,7 @@ from character.contextual_policy import ContextualDecisionPolicy  # noqa: E402
 from character.models import RelationshipStage  # noqa: E402
 from character.profile_registry import CharacterProfileRegistry  # noqa: E402
 from character.semantic_state_estimator import SemanticStateEstimator  # noqa: E402
-from inference.generation_request import GenerationRequest, generate_character_response  # noqa: E402
+from inference.generation_request import GenerationRequest, ReplyValidationError, generate_character_response  # noqa: E402
 from inference.lora_registry import get_lora_system_prompt  # noqa: E402
 from services.character_context import CharacterContextService, TurnInput  # noqa: E402
 
@@ -203,7 +203,6 @@ async def evaluate(
                     guard_retried=result.guard_retried,
                     guard_violations=list(result.guard_violations),
                     guard_post_retry_violations=list(result.guard_post_retry_violations),
-                    guard_fallback=result.guard_fallback,
                 )
             except Exception as error:
                 # Record failures, never replace missing model replies with an
@@ -213,10 +212,11 @@ async def evaluate(
                 # Fixed local contracts only. Never persist arbitrary provider
                 # error messages, which may contain credentials or input text.
                 contracts = {
-                    "deterministic closed guard fallback is missing": "guard_fallback_missing",
-                    "deterministic closed guard fallback did not close the violation": "guard_fallback_invalid",
                     "fixture relationship stage was not applied": "fixture_relationship_mismatch",
                 }
+                if isinstance(error, ReplyValidationError):
+                    row["local_contract_error"] = "reply_validation_failed"
+                    row["guard_post_retry_violations"] = list(error.violations)
                 if isinstance(error, RuntimeError) and str(error) in contracts:
                     row["local_contract_error"] = contracts[str(error)]
             rows.append(row)
@@ -238,7 +238,7 @@ async def evaluate(
             "distinct_queries": len(cases),
             "replies": len(rows),
             "generation_failures": sum(row["status"] != "generated" for row in rows),
-            "guard_fallbacks": sum(bool(row.get("guard_fallback")) for row in rows),
+            "reply_validation_failures": sum(row.get("local_contract_error") == "reply_validation_failed" for row in rows),
             "human_reviews_completed": 0,
         },
     }

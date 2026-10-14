@@ -248,7 +248,7 @@ async def test_public_empty_final_budget_does_not_skip_generation_with_private_s
         ),
         generate,
     )
-    assert len(observed) == 1 and result.model_invoked and not result.guard_retried and not result.guard_fallback
+    assert len(observed) == 1 and result.model_invoked and not result.guard_retried
     assert (
         result.plan.character_context.memory_source_status == "available"
         and result.plan.retrieval.status == "character_abstention"

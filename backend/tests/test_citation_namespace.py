@@ -57,13 +57,6 @@ def test_source_budget_rejection_cannot_be_undone_by_matching_namespace():
     assert result.response_citations == ()
 
 
-def test_guard_fallback_removes_only_owned_marker_and_preserves_literal():
-    data = prepared()
-    result = finish(data, "保守回应[S1]" + citation_marker(data.citation_namespace, "S1"), guard_fallback="unsupported_user_fact")
-    assert result.reply == "保守回应[S1]"
-    assert result.response_citations == ()
-
-
 def test_preparation_is_idempotent_and_does_not_mutate_other_request():
     first = prepared()
     evidence = first.evidence

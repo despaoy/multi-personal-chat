@@ -50,7 +50,7 @@ def validate_source_addition(proof, phase, visited):
     )
     prefix = calls[: snap["calls_before_question"]]
     assert len(snap["generation"]) == 1 and snap["generation"][0]["model_invoked"]
-    assert not snap["generation"][0]["guard_fallback"]
+    assert not snap["generation"][0].get("guard_fallback")
     assert (
         sum(any("<user_query>" in message["content"] for message in call["request"]["messages"]) for call in prefix)
         == snap["generation"][0]["observed_primary_calls"]

@@ -331,7 +331,6 @@ async def _run() -> list[dict]:
                     "guard_retried": generation.guard_retried,
                     "guard_violations": list(generation.guard_violations),
                     "guard_post_retry_violations": list(generation.guard_post_retry_violations),
-                    "guard_fallback": generation.guard_fallback,
                     "diagnostic": {
                         "primary_situation": interaction.primary_situation,
                         "situation_scores": _signal_rows(interaction.situation_scores),
@@ -429,7 +428,7 @@ def _write(results: list[dict]) -> tuple[Path, Path]:
                 f"- 选中策略：{strategies}",
                 f"- 语义复核：`{semantic['status']}`；触发原因：{semantic_reasons}；耗时：{semantic['latency_ms']} ms",
                 f"- 输出硬校验重试：{item['guard_retried']}；首次违规：{', '.join(item['guard_violations']) or '无'}",
-                f"- 重试后违规：{', '.join(item['guard_post_retry_violations']) or '无'}；确定性策略降级：{item['guard_fallback'] or '无'}",
+                f"- 重试后违规：{', '.join(item['guard_post_retry_violations']) or '无'}",
                 f"- 推理耗时：{item['cost_seconds']} 秒",
                 "",
             ]

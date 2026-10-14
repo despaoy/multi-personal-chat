@@ -54,4 +54,4 @@ async def test_traced_style_of_question_survives_shared_pipeline(reply):
         character_context=CompiledCharacterContext('', '', '', memory_status='no_match'),
         reply_guard=ReplyGuard(forbid_unsupported_user_fact=True)), model)
     assert result.reply == reply and len(calls) == 1
-    assert not result.guard_fallback and not result.guard_retried
+    assert not result.guard_retried

@@ -489,7 +489,6 @@ async def run(args):
                 "guard_retried": result.guard_retried,
                 "guard_violations": list(result.guard_violations),
                 "guard_post_retry_violations": list(result.guard_post_retry_violations),
-                "guard_fallback": result.guard_fallback,
                 "observed_primary_calls": sum(
                     c["request"].get("max_tokens") == args.answer_tokens
                     and any("<user_query>" in m.get("content", "") for m in c["request"].get("messages", []))

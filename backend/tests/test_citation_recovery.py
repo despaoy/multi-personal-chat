@@ -137,13 +137,11 @@ def test_unadmitted_or_mismatched_sources_do_not_call_model(change):
     assert calls == [] and original.reply == ANSWER and original.response_citations == ()
 
 
-@pytest.mark.parametrize("change", ["existing", "guard_fallback", "no_model", "source_lookup"])
+@pytest.mark.parametrize("change", ["existing", "no_model", "source_lookup"])
 def test_already_bound_or_guarded_paths_do_not_call_model(change):
     original = result()
     if change == "existing":
         original = replace(original, response_citations=(original.plan.retrieval.citations[0],))
-    if change == "guard_fallback":
-        original = replace(original, guard_fallback="safe")
     if change == "no_model":
         original = replace(original, model_invoked=False)
     if change == "source_lookup":

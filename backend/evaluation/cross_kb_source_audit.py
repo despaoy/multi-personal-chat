@@ -179,7 +179,7 @@ async def run(phase):
         result["generation"][0]["retrieval"]["status"] == "ok"
         and not result["generation"][0]["guard_retried"]
         and not result["generation"][0]["guard_violations"]
-        and not result["generation"][0]["guard_fallback"],
+        and not result["generation"][0].get("guard_fallback"),
     )
     tokenizer = Tokenizer.from_file(str(_TOKENIZER_PATH))
 

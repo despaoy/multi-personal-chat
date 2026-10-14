@@ -26,7 +26,7 @@ async def test_preference_wording_never_alone_causes_retry_or_whole_reply_fallba
         character_context=CompiledCharacterContext('', '', '', memory_status=status),
         reply_guard=ReplyGuard(forbid_unsupported_user_fact=True)), model)
     assert result.reply == reply and len(calls) == 1
-    assert not result.guard_retried and not result.guard_fallback
+    assert not result.guard_retried
     assert UNSUPPORTED_USER_FACT in result.guard_violations
 
 
@@ -38,7 +38,7 @@ async def test_diagnostic_does_not_reactivate_after_independent_boundary_retry()
 
     result = await generate_character_response(GenerationRequest(message='不要给建议。',
         reply_guard=ReplyGuard(forbid_advice=True, forbid_unsupported_user_fact=True)), model)
-    assert result.guard_retried and not result.guard_fallback
+    assert result.guard_retried
     assert result.reply == '你喜欢陶艺。'
     assert result.guard_post_retry_violations == (UNSUPPORTED_USER_FACT,)
 

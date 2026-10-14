@@ -98,7 +98,7 @@ def main():
                 stream.write(json.dumps(result, ensure_ascii=False) + '\n')
             count += len(result['fresh_calls'])
             print(json.dumps(dict(case=row['case'], seed=seed, reply=result['result']['reply'],
-                fallback=result['result']['guard_fallback'], fresh_calls=len(result['fresh_calls'])),
+                post_retry_violations=result['result']['guard_post_retry_violations'], fresh_calls=len(result['fresh_calls'])),
                 ensure_ascii=False), flush=True)
     (output / 'manifest.json').write_text(json.dumps(dict(frozen_first_replies=len(rows),
         trials=len(rows)*3, actual_generation_calls=count, writer_calls=0, application_chain=False,

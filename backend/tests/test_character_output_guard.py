@@ -37,7 +37,7 @@ from character.output_guard import (
     validate_reply,
 )
 from character.situation_analyzer import SituationAnalyzer
-from inference.generation_request import GenerationRequest, generate_character_response
+from inference.generation_request import GenerationRequest, ReplyValidationError, generate_character_response
 
 
 def _profile() -> CharacterProfile:
@@ -705,7 +705,7 @@ def test_user_apology_enables_acceptance_guard():
     assert guard.user_apology is True
 
 
-async def test_user_fact_fallback_closes_the_actual_enabled_guard_after_retry():
+async def test_failed_user_fact_guard_reports_error_after_one_correction():
     calls = []
 
     async def generate(**kwargs):
@@ -715,11 +715,10 @@ async def test_user_fact_fallback_closes_the_actual_enabled_guard_after_retry():
     guard = ReplyGuard(forbid_unsupported_user_fact=True)
     request = GenerationRequest(message="今天天气不错。", persona_prompt="角色", reply_guard=guard,
                                 reply_guard_mode="strict")
-    result = await generate_character_response(request, generate)
-    assert len(calls) == 2
-    assert result.guard_fallback == "unsupported_user_fact"
-    assert result.guard_post_retry_violations == (UNSUPPORTED_USER_FACT,)
-    assert validate_reply(result.reply, guard) == ()
+    with pytest.raises(ReplyValidationError) as error:
+        await generate_character_response(request, generate)
+    assert len(calls) == 2 and error.value.violations == (UNSUPPORTED_USER_FACT,)
+    assert "你一直喜欢喝咖啡。" not in str(calls[1]["messages"])
 
 
 def test_meta_factual_guard_detects_lore_in_mixed_answer():

@@ -125,7 +125,7 @@ async def run(phase):
         and len(result["generation"]) == 1
         and result["generation"][0]["observed_primary_calls"] == 1
         and not result["generation"][0]["guard_retried"]
-        and not result["generation"][0]["guard_fallback"],
+        and not result["generation"][0].get("guard_fallback"),
     )
     check(
         "actual_wire_contains_every_full_original_and_full_new_user_report",

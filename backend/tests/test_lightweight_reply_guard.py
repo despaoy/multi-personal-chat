@@ -1,5 +1,7 @@
 """Lightweight chat avoids style-only inference while keeping hard boundaries."""
 
+from dataclasses import asdict
+
 import pytest
 
 from character.output_guard import (
@@ -38,7 +40,7 @@ async def test_style_or_normal_farewell_uses_one_call_without_template_fallback(
     assert len(calls) == 1
     assert result.guard_violations
     assert not result.guard_retried
-    assert not result.guard_fallback
+    assert "guard_fallback" not in asdict(result)
 
 
 @pytest.mark.parametrize(
@@ -79,7 +81,6 @@ async def test_successful_hard_retry_with_soft_style_issue_is_not_replaced_by_fa
     assert result.guard_retried
     assert result.reply == "祝你好运！"
     assert result.guard_post_retry_violations == (GENERIC_ASSISTANT_TEMPLATE,)
-    assert not result.guard_fallback
 
 
 async def test_name_diagnostic_does_not_reactivate_after_boundary_retry():
@@ -94,7 +95,6 @@ async def test_name_diagnostic_does_not_reactivate_after_boundary_retry():
     assert result.guard_retried
     assert result.reply == '我的同事叫赵宁。'
     assert result.guard_post_retry_violations == (UNPROMPTED_CANONICAL_IDENTITY,)
-    assert not result.guard_fallback
 
 
 def test_name_diagnostic_is_not_a_factual_correctness_certificate():

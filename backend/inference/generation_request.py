@@ -214,7 +214,6 @@ class GenerationResult:
     guard_violations: tuple[str, ...] = ()
     guard_retried: bool = False
     guard_post_retry_violations: tuple[str, ...] = ()
-    guard_fallback: str = ""
     response_mode: str = "generated"
     response_citations: tuple[Mapping[str, Any], ...] = ()
     model_invoked: bool = True
@@ -733,8 +732,6 @@ async def generate_character_response(
     if execution is not None:
         subrequest, tasks, completed = execution
         result = await generate_character_response(subrequest, generate)
-        if result.guard_fallback:
-            return result
         replies = [
             completed[index][0] if index in completed else result.reply
             for index in range(len(tasks))

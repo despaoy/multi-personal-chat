@@ -96,7 +96,7 @@ async def evaluate_public(
             "distinct_cases": len(cases),
             "responses": len(rows),
             "generation_failures": sum(row["status"] != "generated" for row in rows),
-            "guard_fallbacks": sum(bool(row.get("guard_fallback")) for row in rows),
+            "reply_validation_failures": sum(row.get("local_contract_error") == "reply_validation_failed" for row in rows),
             "human_reviews_completed": 0,
         },
         "limitations": [

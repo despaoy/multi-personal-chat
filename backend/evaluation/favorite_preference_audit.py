@@ -92,7 +92,7 @@ def run(phase):
     check("one_actual_lookup_main_without_retry", len(primary) == result["primary_calls"] == 1
           and len(result["generation"]) == 1
           and not result["generation"][0]["guard_retried"]
-          and not result["generation"][0]["guard_fallback"])
+          and not result["generation"][0].get("guard_fallback"))
     raw = primary[0]["response"]["choices"][0]["message"]["content"]
     wire = primary[0]["request"]["messages"]
     whole = "\n".join(unescape(m["content"]) for m in wire)

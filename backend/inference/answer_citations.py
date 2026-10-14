@@ -81,7 +81,7 @@ def finalize_answer_citations(result):
     bound = []
     seen = set()
     for key in citation_keys(result.reply, retrieval.citation_namespace):
-        if key in by_key and key not in seen and not result.guard_fallback:
+        if key in by_key and key not in seen:
             seen.add(key)
             # The model supplies a key, never paths, titles or source IDs.
             bound.append(by_key[key])

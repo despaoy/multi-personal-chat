@@ -42,7 +42,7 @@ async def test_open_question_is_not_replaced_with_no_memory_fallback():
         character_context=CompiledCharacterContext('', '', '', memory_status='no_match'),
         reply_guard=ReplyGuard(forbid_unsupported_user_fact=True)), model)
     assert result.reply == original and len(calls) == 1
-    assert result.guard_fallback == '' and not result.guard_violations
+    assert not result.guard_violations
 
 
 def test_replay_uses_first_raw_reply_not_retry_or_final_fallback():

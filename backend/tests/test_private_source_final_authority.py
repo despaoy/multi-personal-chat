@@ -351,7 +351,7 @@ async def test_guard_retry_rechecks_grant_after_first_reply(tmp_path):
         return "本轮仅依据当前仍可核验的公共资料回答。"
 
     result = await generate_character_response(request, model)
-    assert result.guard_retried and len(calls) == 2 and not result.guard_fallback
+    assert result.guard_retried and len(calls) == 2
     assert BODY in model_wire(calls[0]["messages"]) and BODY not in model_wire(calls[1]["messages"])
     assert SIBLING not in model_wire(calls[1]["messages"]) and PUBLIC in model_wire(calls[1]["messages"])
     assert first_reply not in model_wire(calls[1]["messages"])

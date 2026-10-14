@@ -45,7 +45,7 @@ def fixture(tmp_path):
     output = json.dumps(
         dict(
             memories=[
-                dict(kind="like", value="花栗茶", evidence=source, confidence=0.98, operation="ADD", qualifiers=quals)
+                dict(kind="like", value="花栗茶", evidence=source, attributed_to="user", confidence=0.98, operation="ADD", qualifiers=quals)
             ]
         ),
         ensure_ascii=False,
@@ -289,3 +289,20 @@ def test_history_only_does_not_waive_an_invalid_remaining_task():
     fixture["history_advancement_tasks"][1]["message"] = "x" * 8001
     with pytest.raises(ValidationError):
         validate_native_messages(fixture, advance_history=True, completed_history=1, history_only=True)
+
+
+@pytest.mark.parametrize("historical_fallback", [False, True])
+def test_current_metadata_omits_retired_field_and_historical_fallback_is_still_rejected(tmp_path, historical_fallback):
+    phase, proof, snapshot, _origin, _calls, persist = fixture(tmp_path)
+    for record in (proof, snapshot):
+        if historical_fallback:
+            record["generation"][0]["guard_fallback"] = "unsupported_user_fact"
+        else:
+            record["generation"][0].pop("guard_fallback")
+    persist()
+    if historical_fallback:
+        with pytest.raises(ValueError, match="Invalid native additive provenance") as error:
+            expected_seed_record_count(proof, phase)
+        assert isinstance(error.value.__cause__, AssertionError)
+    else:
+        assert expected_seed_record_count(proof, phase) == 4
