@@ -1093,13 +1093,10 @@ async def _retrieve_rag_bundle(
 def _rag_retrieval_timeout() -> float:
     """Allow character-index cold start without weakening steady-state limits."""
 
-    try:
-        from knowledge.multiscale_rag.runtime import get_multiscale_rag_service
+    from knowledge.multiscale_rag.runtime import get_multiscale_rag_service
 
-        if not get_multiscale_rag_service().is_warm():
-            return max(_RAG_TIMEOUT, _RAG_COLD_START_TIMEOUT)
-    except Exception:  # noqa: BLE001 - retrieval owns the fallback/error handling
-        pass
+    if not get_multiscale_rag_service().is_warm():
+        return max(_RAG_TIMEOUT, _RAG_COLD_START_TIMEOUT)
     return _RAG_TIMEOUT
 
 
@@ -1174,9 +1171,10 @@ async def _generate_with_retrieval(
                 view_options = {"search_views": query_plan.views} if query_plan.views else {}
                 if question_binding is not None:
                     view_options["question_binding"] = question_binding
+                retrieval_timeout = _rag_retrieval_timeout()
                 bundle = await asyncio.wait_for(
                     _retrieve_rag_bundle(retrieval_query, 3, filters, **view_options),
-                    timeout=_rag_retrieval_timeout(),
+                    timeout=retrieval_timeout,
                 )
                 from knowledge.public_task_evidence import review_public_candidates
 
