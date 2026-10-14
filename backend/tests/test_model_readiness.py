@@ -15,7 +15,10 @@ from inference.model_readiness import check_model_readiness
 
 @pytest.fixture
 def providers(monkeypatch):
-    monkeypatch.setattr(model_manager, "_get_db_config", lambda: {})
+    monkeypatch.setattr(model_manager, "_get_db_config", lambda: {
+        "openaiCompatBaseUrl": "https://fiction.example", "openaiCompatApiKey": "fiction-readiness-key",
+        "openaiCompatModel": "fiction-model",
+    })
     return {
         "openai_compat": model_manager.OpenAICompatProvider(),
         "ollama": model_manager.OllamaProvider(),
@@ -75,9 +78,6 @@ async def test_openai_readiness_uses_refreshed_generation_configuration(monkeypa
 ])
 async def test_openai_failure_never_becomes_ready(monkeypatch, providers, status, payload, expected):
     provider = providers["openai_compat"]
-    provider.base_url = "https://fiction.example"
-    provider.api_key = "fiction-readiness-key"
-    provider.model = "fiction-model"
     select(monkeypatch, provider)
     install_http(monkeypatch, provider, lambda request: httpx.Response(status, json=payload))
     probe = ReadinessProbe(database_check=lambda: True, model_check=check_model_readiness, model_required=True)
@@ -94,7 +94,6 @@ async def test_openai_failure_never_becomes_ready(monkeypatch, providers, status
 @pytest.mark.parametrize("fault,expected", [("connect", "ConnectError"), ("json", "JSONDecodeError"), ("timeout", "TimeoutError")])
 async def test_remote_failure_and_timeout_are_explicit_and_cancelled(monkeypatch, providers, fault, expected):
     provider = providers["openai_compat"]
-    provider.api_key = "fiction-readiness-key"
     events = []
 
     async def handler(request):
@@ -121,7 +120,8 @@ async def test_remote_failure_and_timeout_are_explicit_and_cancelled(monkeypatch
 
 def test_missing_key_and_configuration_read_failure_propagate(monkeypatch, providers):
     provider = providers["openai_compat"]
-    provider.api_key = ""
+    monkeypatch.delenv("OPENAI_COMPAT_API_KEY", raising=False)
+    monkeypatch.setattr(model_manager, "_get_db_config", lambda: {"openaiCompatApiKey": ""})
     select(monkeypatch, provider)
     with pytest.raises(ValueError, match="API key"):
         check_model_readiness()

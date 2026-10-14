@@ -91,9 +91,11 @@ async def test_shared_pool_owns_client_and_failures_never_create_replacement(mon
 @pytest.mark.parametrize('mode', ['success', 'http_error', 'transport_error'])
 async def test_http_provider_errors_propagate_without_private_body_logging(monkeypatch, caplog, kind, mode):
     from inference import model_manager
-    monkeypatch.setattr(model_manager, '_get_db_config', lambda: {})
+    monkeypatch.setattr(model_manager, '_get_db_config', lambda: {
+        'openaiCompatBaseUrl': 'https://fiction.example', 'openaiCompatApiKey': 'synthetic-test-key',
+        'openaiCompatModel': 'fiction-model',
+    })
     provider = getattr(model_manager, kind)()
-    provider.api_key = 'synthetic-test-key'
     if mode == 'http_error':
         response = httpx.Response(502, text='private-response-body')
     else:

@@ -81,6 +81,10 @@ python scripts/build_character_rag_index.py
 
 模型提供商选择：非空 `MODEL_PROVIDER` 优先于数据库 `modelProvider`；缺失或非法值明确失败，不切换为 mock。mock 仅可在 development/test 环境显式启用，日志会标明模拟推理。模型配置数据库读取失败不会使用空配置继续运行。
 
+OpenAI 兼容连接设置只由提供商统一解析：非空数据库字段优先，其次对应 OPENAI_COMPAT 环境变量，地址/模型缺省仍使用 DeepSeek 的现有默认值；空数据库字段重新按此优先级解析，不沿用上次的内存值。清空 API Key 且没有环境密钥时，生成明确失败。数据库读取失败不会转而使用环境值继续。
+
+生成参数按每次调用的配置快照读取，沿用共享 TTL 缓存及配置接口的主动失效；不使用模块导入时的永久快照。OpenAI 请求在借用连接前固定本次地址、密钥和模型，运行时更新不改变已经开始的请求。配置保存后运行时刷新失败返回 503，并明确 configPersisted=true；提供商切换已发生时同时标记 providerSwitched=true，不声称整体成功。
+
 ## 就绪检查
 
 `/health` 只表示进程响应；`/ready` 检查数据库和模型管理器当前选中的提供商，模型检查不能因关闭 vLLM 而跳过。

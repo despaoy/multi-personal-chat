@@ -36,7 +36,6 @@ def _get_db_config():
         set_cached_config(result)
         return result
 
-_db_cfg = _get_db_config()
 from typing import Optional, Dict, Any, List, Tuple
 from dataclasses import dataclass
 from contextlib import asynccontextmanager
@@ -185,35 +184,22 @@ class OpenAICompatProvider(BaseProvider):
 
     def __init__(self):
         super().__init__("openai_compat")
-        self.base_url = os.getenv("OPENAI_COMPAT_BASE_URL", "https://api.deepseek.com")
-        self.api_key = os.getenv("OPENAI_COMPAT_API_KEY", "")
-        self.model = os.getenv("OPENAI_COMPAT_MODEL", "deepseek-chat")
-        self._model_name = self.model
-        self._loaded = True
-        # R-1 fix: 不再自建 httpx.Client，统一通过 _acquire_http_client() 获取共享 AsyncClient
-        # 从数据库配置覆盖
         self._refresh_db_config()
+        self._loaded = True
 
     def _refresh_db_config(self):
-        """从数据库刷新配置"""
-        global _db_cfg
-        _db_cfg = _get_db_config()
-        if _db_cfg.get("openaiCompatBaseUrl"):
-            self.base_url = _db_cfg["openaiCompatBaseUrl"]
-        if _db_cfg.get("openaiCompatApiKey"):
-            self.api_key = _db_cfg["openaiCompatApiKey"]
-        if _db_cfg.get("openaiCompatModel"):
-            self.model = _db_cfg["openaiCompatModel"]
-            self._model_name = self.model
+        """Resolve stored settings, then environment defaults, from one snapshot."""
+        config = _get_db_config()
+        self.base_url = config.get("openaiCompatBaseUrl") or os.getenv("OPENAI_COMPAT_BASE_URL", "https://api.deepseek.com")
+        self.api_key = config.get("openaiCompatApiKey") or os.getenv("OPENAI_COMPAT_API_KEY", "")
+        self.model = config.get("openaiCompatModel") or os.getenv("OPENAI_COMPAT_MODEL", "deepseek-chat")
+        self._model_name = self.model
+        return config
 
     async def _generate_async(self, prompt: str, session_history: List[Dict] = None,
                               rag_docs: List[Dict] = None, max_tokens_override: int = None) -> Tuple[str, float]:
         """异步生成实现（R-1 fix: 使用共享 HttpClientPool）"""
-        # 每次生成前刷新配置，确保使用最新的API Key
-        self._refresh_db_config()
-
-        if not self.api_key:
-            raise RuntimeError("未配置 API Key，请在设置页面配置 OpenAI 兼容 API Key")
+        config = self._refresh_db_config()
 
         messages = []
 
@@ -229,10 +215,10 @@ class OpenAICompatProvider(BaseProvider):
 
         messages.append({"role": "user", "content": prompt})
 
-        max_tokens = max_tokens_override if max_tokens_override else int(_db_cfg.get('maxTokens', 512))
+        max_tokens = max_tokens_override if max_tokens_override else int(config.get('maxTokens', 512))
 
         return await self._complete_messages(
-            messages, temperature=float(_db_cfg.get('temperature', 0.8)), max_tokens=max_tokens)
+            messages, temperature=float(config.get('temperature', 0.8)), max_tokens=max_tokens)
 
     async def async_complete(self, messages, *, temperature, max_tokens, top_p=None):
         """Complete compiled review or grounded-answer messages without re-entering chat."""
@@ -240,24 +226,25 @@ class OpenAICompatProvider(BaseProvider):
         return await self._complete_messages(messages, temperature=temperature, max_tokens=max_tokens, top_p=top_p)
 
     async def _complete_messages(self, messages, *, temperature, max_tokens, top_p=None):
-        if not self.api_key:
+        base_url, api_key, model = self.base_url, self.api_key, self.model
+        if not api_key:
             raise RuntimeError("未配置 API Key，请在设置页面配置 OpenAI 兼容 API Key")
         start = time.time()
         async with self._acquire_http_client(timeout=120.0) as client:
             # P1-M4 fix: 请求级 timeout 覆盖 pool 默认值，确保生效
             response = await client.post(
-                chat_completions_endpoint(self.base_url),
+                chat_completions_endpoint(base_url),
                 headers={
-                    "Authorization": f"Bearer {self.api_key}",
+                    "Authorization": f"Bearer {api_key}",
                     "Content-Type": "application/json"
                 },
                 json={
-                    "model": self.model,
+                    "model": model,
                     "messages": messages,
                     "temperature": temperature,
                     "max_tokens": max_tokens,
                     **({"top_p": top_p} if top_p is not None else {}),
-                    **nonthinking_parameters(self.base_url, local_template=False),
+                    **nonthinking_parameters(base_url, local_template=False),
                 },
                 timeout=120.0,
             )
@@ -315,6 +302,7 @@ class OllamaProvider(BaseProvider):
     async def _generate_async(self, prompt: str, session_history: List[Dict] = None,
                               rag_docs: List[Dict] = None, max_tokens_override: int = None) -> Tuple[str, float]:
         """异步生成实现（R-1 fix: 使用共享 HttpClientPool）"""
+        config = _get_db_config()
         start = time.time()
         messages = []
 
@@ -330,7 +318,7 @@ class OllamaProvider(BaseProvider):
 
         messages.append({"role": "user", "content": prompt})
 
-        max_tokens = max_tokens_override if max_tokens_override else int(_db_cfg.get('maxTokens', 512))
+        max_tokens = max_tokens_override if max_tokens_override else int(config.get('maxTokens', 512))
 
         async with self._acquire_http_client(timeout=120.0) as client:
             # P1-M4 fix: 请求级 timeout 覆盖 pool 默认值
@@ -340,7 +328,7 @@ class OllamaProvider(BaseProvider):
                     "model": self.model,
                     "messages": messages,
                     "stream": False,
-                    "options": {"temperature": float(_db_cfg.get('temperature', 0.8)), "top_p": 0.9, "num_predict": max_tokens}
+                    "options": {"temperature": float(config.get('temperature', 0.8)), "top_p": 0.9, "num_predict": max_tokens}
                 },
                 timeout=120.0,
             )
@@ -376,6 +364,7 @@ class LlamaCppProvider(BaseProvider):
     async def _generate_async(self, prompt: str, session_history: List[Dict] = None,
                               rag_docs: List[Dict] = None, max_tokens_override: int = None) -> Tuple[str, float]:
         """异步生成实现（R-1 fix: 使用共享 HttpClientPool）"""
+        config = _get_db_config()
         start = time.time()
         full_prompt = prompt
         if session_history:
@@ -390,7 +379,7 @@ class LlamaCppProvider(BaseProvider):
             parts.append(f"User: {prompt}")
             full_prompt = "\n".join(parts)
 
-        max_tokens = max_tokens_override if max_tokens_override else int(_db_cfg.get('maxTokens', 512))
+        max_tokens = max_tokens_override if max_tokens_override else int(config.get('maxTokens', 512))
 
         async with self._acquire_http_client(timeout=120.0) as client:
             # P1-M4 fix: 请求级 timeout 覆盖 pool 默认值
@@ -399,7 +388,7 @@ class LlamaCppProvider(BaseProvider):
                 json={
                     "prompt": full_prompt,
                     "n_predict": max_tokens,
-                    "temperature": float(_db_cfg.get('temperature', 0.8)),
+                    "temperature": float(config.get('temperature', 0.8)),
                     "top_p": 0.9,
                 },
                 timeout=120.0,
@@ -552,6 +541,7 @@ class TransformersPeftProvider(BaseProvider):
 
     def generate(self, prompt: str, session_history: List[Dict] = None,
                  rag_docs: List[Dict] = None, max_tokens_override: int = None) -> Tuple[str, float]:
+        config = _get_db_config()
         import torch
 
         self._ensure_loaded()
@@ -581,13 +571,13 @@ class TransformersPeftProvider(BaseProvider):
         else:
             input_ids = torch.tensor(encoded, dtype=torch.long, device=self._model.device)
 
-        max_tokens = max_tokens_override if max_tokens_override else int(_db_cfg.get('maxTokens', 512))
+        max_tokens = max_tokens_override if max_tokens_override else int(config.get('maxTokens', 512))
 
         with torch.no_grad():
             output = self._model.generate(
                 input_ids,
                 max_new_tokens=max_tokens,
-                temperature=float(_db_cfg.get('temperature', 0.85)),
+                temperature=float(config.get('temperature', 0.85)),
                 top_p=0.92,
                 do_sample=True,
                 repetition_penalty=1.15,
@@ -639,27 +629,6 @@ class VLLMProvider(BaseProvider):
         self._loaded = True
         # R-1 fix: 不再自建 httpx.AsyncClient，统一通过 _acquire_http_client() 获取共享 AsyncClient
         self._lora_adapter: Optional[str] = None
-        self._refresh_db_config()
-
-    def _refresh_db_config(self):
-        """从数据库刷新生成参数配置。
-
-        注意：vllmBaseUrl / vllmModel / vllmTimeout 由 VLLMClient 单例从
-        环境变量读取，db 配置修改这些字段不会生效（VLLMClient 在首次
-        get_vllm_client() 时锁定配置）。此处不再覆盖 self.base_url/model/timeout，
-        避免 VLLMProvider 的状态显示与 VLLMClient 实际使用的配置不一致。
-        如需运行时切换 vLLM 实例或模型，应通过环境变量 + 重启，或重构
-        VLLMClient 支持热重载。
-        """
-        global _db_cfg
-        _db_cfg = _get_db_config()
-        # 仅刷新生成参数（maxTokens/temperature 等），不影响 vLLM 连接配置
-
-    def _chat_completions_url(self) -> str:
-        base = self.base_url.rstrip("/")
-        if not base.endswith("/v1"):
-            base = f"{base}/v1"
-        return f"{base}/chat/completions"
 
     def set_lora_adapter(self, lora_path: Optional[str]):
         """通过 vLLM 的 --enable-lora 传递 LoRA 名称"""
@@ -681,7 +650,7 @@ class VLLMProvider(BaseProvider):
         3. VLLMClient 的多实例负载均衡对 VLLMProvider 无效
         现统一委托给 VLLMClient.generate，消除连接池冗余和状态隔离。
         """
-        self._refresh_db_config()
+        config = _get_db_config()
         start = time.time()
 
         messages = []
@@ -695,8 +664,8 @@ class VLLMProvider(BaseProvider):
 
         messages.append({"role": "user", "content": prompt})
 
-        max_tokens = max_tokens_override if max_tokens_override else int(_db_cfg.get('maxTokens', 512))
-        temperature = float(_db_cfg.get('temperature', 0.8))
+        max_tokens = max_tokens_override if max_tokens_override else int(config.get('maxTokens', 512))
+        temperature = float(config.get('temperature', 0.8))
 
         # 复用 VLLMClient 全局单例（内部已有 3 次重试 + 熔断器 + 负载均衡）
         from inference.vllm_client import get_vllm_client

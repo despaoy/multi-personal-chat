@@ -109,11 +109,11 @@ async def test_native_answer_uses_complete_content_and_provider_specific_thinkin
         reason = "stop" if len(requests) == 1 else "length"
         return httpx.Response(200, json={"choices": [{"finish_reason": reason, "message": {"content": "完整回答"}}]})
 
-    monkeypatch.setattr(model_manager, "_get_db_config", lambda: {"maxTokens": 1024, "temperature": 0.2})
+    monkeypatch.setattr(model_manager, "_get_db_config", lambda: {
+        "maxTokens": 1024, "temperature": 0.2, "openaiCompatBaseUrl": base_url,
+        "openaiCompatApiKey": "private-test-credential", "openaiCompatModel": "configured-large-model",
+    })
     provider = model_manager.OpenAICompatProvider()
-    provider.base_url = base_url
-    provider.api_key = "private-test-credential"
-    provider.model = "configured-large-model"
     client = httpx.AsyncClient(transport=httpx.MockTransport(respond))
 
     @asynccontextmanager

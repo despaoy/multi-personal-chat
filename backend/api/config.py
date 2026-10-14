@@ -98,24 +98,18 @@ async def update_config(request: Request, current_user: dict = Depends(get_curre
     await run_db(db.update_config, new_config)
     # 使缓存失效
     await run_db(invalidate_config_cache)
-    # 同步OpenAI兼容提供商配置
     compat_keys = {'openaiCompatBaseUrl', 'openaiCompatApiKey', 'openaiCompatModel'}
-    if compat_keys & set(new_config.keys()):
+    if compat_keys & new_config.keys():
         try:
-            from inference.model_manager import get_model_manager
-            manager = get_model_manager()
-            from inference.model_manager import ModelProvider
-            provider = manager._providers.get(ModelProvider.OPENAI_COMPAT)
-            if provider:
-                if 'openaiCompatBaseUrl' in new_config:
-                    provider.base_url = new_config['openaiCompatBaseUrl']
-                if 'openaiCompatApiKey' in new_config:
-                    provider.api_key = new_config['openaiCompatApiKey']
-                if 'openaiCompatModel' in new_config:
-                    provider.model = new_config['openaiCompatModel']
-                    provider._model_name = new_config['openaiCompatModel']
-        except Exception as e:
-            logger.warning(f"同步OpenAI兼容配置失败: {e}")
+            from inference.model_manager import ModelProvider, get_model_manager
+
+            provider = get_model_manager()._providers[ModelProvider.OPENAI_COMPAT]
+            await run_db(provider._refresh_db_config)
+        except Exception as exc:
+            raise HTTPException(status_code=503, detail={
+                "stage": "runtime_config", "configPersisted": True,
+                "message": "配置已保存，但运行时同步失败；请检查配置数据库和模型状态后重试",
+            }) from exc
     return {"success": True, "message": "配置已更新", "config": _mask_config(await run_db(lambda: db.config))}
 
 
@@ -166,14 +160,13 @@ async def set_model_provider(request: Request, current_user: dict = Depends(get_
             await run_db(invalidate_config_cache)
             if provider_name == "openai_compat":
                 compat_provider = model_manager.get_current_provider()
-                cfg = await run_db(lambda: db.config)
-                if hasattr(compat_provider, 'api_key') and cfg.get('openaiCompatApiKey'):
-                    compat_provider.api_key = cfg['openaiCompatApiKey']
-                if hasattr(compat_provider, 'base_url') and cfg.get('openaiCompatBaseUrl'):
-                    compat_provider.base_url = cfg['openaiCompatBaseUrl']
-                if hasattr(compat_provider, 'model') and cfg.get('openaiCompatModel'):
-                    compat_provider.model = cfg['openaiCompatModel']
-                    compat_provider._model_name = cfg['openaiCompatModel']
+                try:
+                    await run_db(compat_provider._refresh_db_config)
+                except Exception as exc:
+                    raise HTTPException(status_code=503, detail={
+                        "stage": "runtime_config", "configPersisted": True, "providerSwitched": True,
+                        "message": "提供商已切换并保存，但运行时同步失败；请检查配置数据库和模型状态后重试",
+                    }) from exc
             return {
                 "success": True,
                 "message": f"已切换到提供商: {provider_name}",
