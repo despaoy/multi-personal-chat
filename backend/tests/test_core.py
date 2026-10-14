@@ -367,36 +367,6 @@ class TestMultiPlatformStorage:
         assert first == second
         assert first != changed
 
-    def test_degraded_response_private_vs_group(self):
-        from api.integrations import AstrBotMessageRequest, _degraded_response
-
-        private_req = AstrBotMessageRequest(
-            platform="qq",
-            adapter="napcat",
-            conversationId="42",
-            conversationType="private",
-            senderId="u1",
-            text="hello",
-        )
-        group_req = AstrBotMessageRequest(
-            platform="qq",
-            adapter="napcat",
-            conversationId="100",
-            conversationType="group",
-            senderId="u1",
-            text="hello",
-        )
-
-        private_resp = _degraded_response(private_req, "trace-private", model="db-unavailable")
-        group_resp = _degraded_response(group_req, "trace-group", model="db-unavailable")
-
-        assert private_resp.shouldReply is True
-        assert private_resp.replyText
-        assert private_resp.traceId == "trace-private"
-        assert group_resp.shouldReply is False
-        assert group_resp.replyText == ""
-        assert group_resp.traceId == "trace-group"
-
     @pytest.mark.asyncio
     async def test_astrbot_global_switch_can_disable_platforms(self, monkeypatch):
         from api.integrations import _is_platform_enabled
@@ -533,9 +503,6 @@ class _DummyRequest:
 
 
 class _FakeRuntime:
-    def __init__(self, *, error=None):
-        self.error = error
-
     async def check_rate_limits(self, platform, conversation_id, sender_id):
         return None
 
@@ -543,24 +510,10 @@ class _FakeRuntime:
         return 1
 
     async def submit(self, factory, session_id, priority, timeout=None):
-        if self.error:
-            raise self.error
         result = factory()
         if asyncio.iscoroutine(result):
             result = await result
         return result
-
-
-class _FailingDb:
-    @property
-    def config(self):
-        return {}
-
-    def add_integration_event(self, event):
-        return None
-
-    def mark_integration_message_processed(self, platform, adapter, message_id):
-        raise RuntimeError("database unavailable")
 
 
 class TestAstrBotContracts:
@@ -647,82 +600,6 @@ class TestAstrBotIntegrationFlow:
         resp = await self._call_success(monkeypatch, "wechat_official", "private", "openid-1")
         assert resp.shouldReply is True
         assert resp.replyText == "reply:wechat_official"
-
-    @pytest.mark.asyncio
-    async def test_backend_timeout_degrades_private_message(self, monkeypatch):
-        from api import integrations
-
-        temp_db = TestMultiPlatformStorage()._make_db()
-        monkeypatch.setenv("ENVIRONMENT", "development")
-        monkeypatch.setenv("ASTRBOT_INTEGRATION_TOKEN", "test-token")
-        monkeypatch.setenv("INTEGRATION_SIGNATURE_REQUIRED", "false")
-        monkeypatch.setattr(integrations, "db", temp_db)
-        monkeypatch.setattr(integrations, "inference_runtime", _FakeRuntime(error=asyncio.TimeoutError()))
-        req = integrations.AstrBotMessageRequest(
-            platform="telegram",
-            adapter="telegram",
-            messageId="timeout-1",
-            conversationId="42",
-            conversationType="private",
-            senderId="sender-1",
-            text="hello",
-        )
-
-        resp = await integrations.receive_astrbot_message(req, _DummyRequest(), x_integration_token="test-token")
-
-        assert resp.shouldReply is True
-        assert resp.model == "queue-timeout"
-        assert resp.replyText
-
-    @pytest.mark.asyncio
-    async def test_model_failure_degrades_group_silently(self, monkeypatch):
-        from api import integrations
-
-        temp_db = TestMultiPlatformStorage()._make_db()
-        monkeypatch.setenv("ENVIRONMENT", "development")
-        monkeypatch.setenv("ASTRBOT_INTEGRATION_TOKEN", "test-token")
-        monkeypatch.setenv("INTEGRATION_SIGNATURE_REQUIRED", "false")
-        monkeypatch.setattr(integrations, "db", temp_db)
-        monkeypatch.setattr(integrations, "inference_runtime", _FakeRuntime(error=RuntimeError("model failed")))
-        req = integrations.AstrBotMessageRequest(
-            platform="qq",
-            adapter="napcat",
-            messageId="model-fail-1",
-            conversationId="10001",
-            conversationType="group",
-            senderId="sender-1",
-            text="hello",
-        )
-
-        resp = await integrations.receive_astrbot_message(req, _DummyRequest(), x_integration_token="test-token")
-
-        assert resp.shouldReply is False
-        assert resp.model == "generation-failed"
-
-    @pytest.mark.asyncio
-    async def test_database_exception_degrades_private_message(self, monkeypatch):
-        from api import integrations
-
-        monkeypatch.setenv("ENVIRONMENT", "development")
-        monkeypatch.setenv("ASTRBOT_INTEGRATION_TOKEN", "test-token")
-        monkeypatch.setenv("INTEGRATION_SIGNATURE_REQUIRED", "false")
-        monkeypatch.setattr(integrations, "db", _FailingDb())
-        monkeypatch.setattr(integrations, "inference_runtime", _FakeRuntime())
-        req = integrations.AstrBotMessageRequest(
-            platform="telegram",
-            adapter="telegram",
-            messageId="db-fail-1",
-            conversationId="42",
-            conversationType="private",
-            senderId="sender-1",
-            text="hello",
-        )
-
-        resp = await integrations.receive_astrbot_message(req, _DummyRequest(), x_integration_token="test-token")
-
-        assert resp.shouldReply is True
-        assert resp.model == "db-unavailable"
-
 
 class TestDeploymentValidation:
     def test_production_requires_explicit_critical_environment(self):

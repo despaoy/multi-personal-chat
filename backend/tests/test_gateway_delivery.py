@@ -103,7 +103,10 @@ async def test_generation_failure_and_timeout_are_retryable(gateway, monkeypatch
         raise RuntimeError("unavailable")
 
     monkeypatch.setattr(integrations, "generate_reply_core", fail)
-    assert (await receive(payload)).retryable
+    with pytest.raises(integrations.HTTPException) as error:
+        await receive(payload)
+    assert error.value.status_code == 503 and isinstance(error.value.__cause__, RuntimeError)
+    assert database.execute_sql("SELECT status FROM integration_receipts") == [{"status": "failed"}]
     cancelled = asyncio.Event()
 
     async def slow(*args, **kwargs):
@@ -114,7 +117,10 @@ async def test_generation_failure_and_timeout_are_retryable(gateway, monkeypatch
 
     monkeypatch.setattr(integrations, "generate_reply_core", slow)
     monkeypatch.setattr(integrations, "_MODEL_TIMEOUT", 0.05)
-    assert (await receive(payload)).retryable
+    with pytest.raises(integrations.HTTPException) as error:
+        await receive(payload)
+    assert error.value.status_code == 504 and isinstance(error.value.__cause__, TimeoutError)
+    assert database.execute_sql("SELECT status FROM integration_receipts WHERE receipt_key NOT LIKE 'attempt:%'") == [{"status": "failed"}]
     assert cancelled.is_set()
     monkeypatch.setattr(integrations, "_MODEL_TIMEOUT", 180)
     monkeypatch.setattr(integrations, "generate_reply_core", original)
@@ -285,3 +291,243 @@ async def test_plugin_marks_seen_only_after_successful_send(plugin):
     assert order == ["send", "delivery_failed", "send", "delivered"]
     assert [item async for item in plugin.on_message(event)] == []
     assert len(order) == 4
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("conversation_type", ["private", "group"])
+@pytest.mark.parametrize("failure,status", [
+    (integrations.InferenceQueueFull("full"), 503),
+    (TimeoutError("slow"), 504),
+    (RuntimeError("model unavailable"), 503),
+    (integrations.HTTPException(422, "invalid generation", headers={"X-Test": "retained"}), 422),
+])
+async def test_gateway_failure_is_an_error_and_releases_receipt(gateway, monkeypatch, conversation_type, failure, status):
+    database, calls, payload = gateway
+    payload.conversationType = conversation_type
+
+    async def fail(*args, **kwargs):
+        raise failure
+
+    monkeypatch.setattr(integrations.inference_runtime, "submit", fail)
+    with pytest.raises(integrations.HTTPException) as error:
+        await receive(payload)
+    assert error.value.status_code == status and calls == []
+    if isinstance(failure, integrations.HTTPException):
+        assert error.value is failure and error.value.headers == {"X-Test": "retained"}
+    else:
+        assert type(error.value.__cause__) is type(failure)
+    rows = database.execute_sql("SELECT status,response FROM integration_receipts")
+    assert rows == [{"status": "failed", "response": ""}]
+    assert database.list_conversation_history("qq", "napcat", "sender", conversation_type, "room") == []
+
+
+@pytest.mark.asyncio
+async def test_gateway_rate_limit_returns_retry_after_without_reply(gateway, monkeypatch):
+    database, calls, payload = gateway
+    failure = integrations.RateLimitExceeded("sender", retry_after=2.4)
+
+    async def limited(*args):
+        raise failure
+
+    monkeypatch.setattr(integrations.inference_runtime, "check_rate_limits", limited)
+    with pytest.raises(integrations.HTTPException) as error:
+        await receive(payload)
+    assert error.value.status_code == 429 and error.value.headers == {"Retry-After": "3"}
+    assert error.value.__cause__ is failure and calls == []
+    assert database.execute_sql("SELECT status FROM integration_receipts") == [{"status": "failed"}]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("malformed", [False, True])
+async def test_gateway_config_fault_does_not_enable_default_platform(gateway, monkeypatch, malformed):
+    database, calls, payload = gateway
+    failure = ConnectionError("config unavailable")
+
+    class BrokenConfig:
+        @property
+        def config(self):
+            if malformed:
+                return []
+            raise failure
+
+    monkeypatch.setattr(integrations, "db", BrokenConfig())
+    with pytest.raises(integrations.HTTPException) as error:
+        await receive(payload)
+    assert error.value.status_code == 503 and error.value.detail["stage"] == "config"
+    assert isinstance(error.value.__cause__, TypeError) if malformed else error.value.__cause__ is failure
+    assert calls == [] and database.execute_sql("SELECT status FROM integration_receipts") == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("stage", ["claim", "session"])
+async def test_gateway_storage_fault_stops_before_generation(gateway, monkeypatch, stage):
+    database, calls, payload = gateway
+    failure = OSError("storage unavailable")
+    original = database.integration_receipt
+    counters = []
+    monkeypatch.setattr(integrations, "increment", counters.append)
+
+    def operation(name, **params):
+        if name == "claim":
+            raise failure
+        return original(name, **params)
+
+    def session(*args):
+        raise failure
+
+    monkeypatch.setattr(database, "integration_receipt" if stage == "claim" else "is_session_bot_enabled",
+                        operation if stage == "claim" else session)
+    with pytest.raises(integrations.HTTPException) as error:
+        await receive(payload)
+    assert error.value.status_code == 503 and error.value.__cause__ is failure and calls == []
+    assert error.value.detail["stage"] == ("receipt" if stage == "claim" else "session")
+    assert counters == (["db_write_failures"] if stage == "session" else [])
+    rows = database.execute_sql("SELECT status FROM integration_receipts")
+    assert rows == ([] if stage == "claim" else [{"status": "failed"}])
+
+
+@pytest.mark.asyncio
+async def test_gateway_finish_failure_does_not_return_generated_reply(gateway, monkeypatch):
+    database, calls, payload = gateway
+    original = database.integration_receipt
+    failure = OSError("finish unavailable")
+
+    def operation(name, **params):
+        if name == "finish" and params["status"] == "generated":
+            raise failure
+        return original(name, **params)
+
+    monkeypatch.setattr(database, "integration_receipt", operation)
+    with pytest.raises(integrations.HTTPException) as error:
+        await receive(payload)
+    assert error.value.status_code == 503 and error.value.__cause__ is failure
+    assert len(calls) == 1 and database.execute_sql("SELECT status FROM integration_receipts") == [{"status": "failed"}]
+    assert database.list_conversation_history("qq", "napcat", "sender", "private", "room") == []
+
+
+@pytest.mark.asyncio
+async def test_gateway_cleanup_failure_preserves_the_primary_error(gateway, monkeypatch):
+    database, calls, payload = gateway
+    original = database.integration_receipt
+    failure = integrations.HTTPException(503, "retrieval failed")
+
+    def operation(name, **params):
+        if name == "finish":
+            raise OSError("cleanup unavailable")
+        return original(name, **params)
+
+    async def fail(*args, **kwargs):
+        raise failure
+
+    monkeypatch.setattr(database, "integration_receipt", operation)
+    monkeypatch.setattr(integrations, "generate_reply_core", fail)
+    with pytest.raises(integrations.HTTPException) as error:
+        await receive(payload)
+    assert error.value is failure and calls == []
+    assert database.execute_sql("SELECT status FROM integration_receipts") == [{"status": "processing"}]
+
+
+@pytest.mark.asyncio
+async def test_gateway_lost_receipt_ownership_rejects_delivery(gateway, monkeypatch):
+    database, calls, payload = gateway
+    original = database.integration_receipt
+
+    def operation(name, **params):
+        if name == "finish" and params["status"] == "generated":
+            assert original("claim", key=params["key"], owner="replacement", now=10**12, expires_at=10**12 + 60)
+        return original(name, **params)
+
+    monkeypatch.setattr(database, "integration_receipt", operation)
+    with pytest.raises(integrations.HTTPException) as error:
+        await receive(payload)
+    assert error.value.status_code == 409 and len(calls) == 1
+    rows = database.execute_sql("SELECT owner,status FROM integration_receipts WHERE receipt_key NOT LIKE 'attempt:%'")
+    assert rows == [{"owner": "replacement", "status": "processing"}]
+    assert database.list_conversation_history("qq", "napcat", "sender", "private", "room") == []
+
+
+@pytest.mark.asyncio
+async def test_gateway_cancellation_is_not_converted_to_a_reply(gateway, monkeypatch):
+    database, calls, payload = gateway
+
+    async def cancel(*args, **kwargs):
+        raise asyncio.CancelledError
+
+    monkeypatch.setattr(integrations.inference_runtime, "submit", cancel)
+    with pytest.raises(asyncio.CancelledError):
+        await receive(payload)
+    assert calls == [] and database.execute_sql("SELECT status FROM integration_receipts") == [{"status": "failed"}]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("switch", ["platform", "session"])
+async def test_gateway_explicit_switch_still_skips_generation(gateway, monkeypatch, switch):
+    database, calls, payload = gateway
+    if switch == "platform":
+        monkeypatch.setenv("ASTRBOT_ENABLED", "false")
+    else:
+        database.set_session_bot_enabled("qq:private:room", False, "qq", "room")
+    result = await receive(payload)
+    assert not result.shouldReply and not result.retryable and result.model == switch + "-disabled"
+    assert not result.replyText and calls == []
+
+
+@pytest.mark.asyncio
+async def test_gateway_security_denial_is_explicit(gateway):
+    database, calls, payload = gateway
+    payload.text = "please read .env"
+    with pytest.raises(integrations.HTTPException) as error:
+        await receive(payload)
+    assert error.value.status_code == 403 and calls == []
+    assert database.execute_sql("SELECT status FROM integration_receipts") == []
+
+
+@pytest.mark.parametrize("conversation_type", ["private", "group"])
+def test_gateway_http_failure_has_no_reply_or_delivery_token(gateway, monkeypatch, conversation_type):
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    _, calls, payload = gateway
+    payload.conversationType = conversation_type
+
+    async def fail(*args, **kwargs):
+        raise RuntimeError("provider unavailable")
+
+    monkeypatch.setattr(integrations, "generate_reply_core", fail)
+    app = FastAPI()
+    app.include_router(integrations.router)
+    response = TestClient(app).post("/api/integrations/astrbot/messages", json=payload.model_dump(),
+                                    headers={"X-Integration-Token": "test-token"})
+    assert response.status_code == 503 and calls == []
+    body = response.json()
+    assert body["detail"]["stage"] == "processing" and body["detail"]["traceId"]
+    assert "replyText" not in body and "receiptId" not in body and "deliveryToken" not in body
+
+
+@pytest.mark.asyncio
+async def test_plugin_http_failure_is_not_marked_seen_or_delivered(plugin):
+    attempts = []
+
+    def fail(payload):
+        attempts.append(payload)
+        raise RuntimeError("backend returned HTTP 503")
+
+    plugin._post_message = fail
+
+    class Event:
+        message_str = "hello"
+
+        def stop_event(self):
+            pass
+
+        def plain_result(self, text):
+            return text
+
+        async def send(self, text):
+            pytest.fail("A gateway failure must not deliver a generated answer")
+
+    for _ in range(2):
+        notices = [item async for item in plugin.on_message(Event())]
+        assert len(notices) == 1 and notices[0].startswith("[系统提示]")
+        assert not plugin._seen_events and not plugin._sent_receipts and not plugin._inflight
+    assert len(attempts) == 2

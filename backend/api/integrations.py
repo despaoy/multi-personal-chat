@@ -14,6 +14,7 @@ import logging
 import os
 import time
 import uuid
+from math import ceil
 from typing import TYPE_CHECKING, Any, Literal, TypeVar
 
 from fastapi import APIRouter, Header, HTTPException, Request
@@ -117,11 +118,10 @@ async def _run_blocking(label: str, func: Callable[[], T], timeout: float = _DB_
 
 
 async def _load_config(timeout: float = _DB_TIMEOUT) -> dict[str, Any]:
-    try:
-        config = await _run_blocking("load-config", lambda: db.config, timeout=timeout)
-        return config if isinstance(config, dict) else {}
-    except Exception:
-        return {}
+    config = await _run_blocking("load-config", lambda: db.config, timeout=timeout)
+    if not isinstance(config, dict):
+        raise TypeError("AstrBot configuration must be a mapping")
+    return config
 
 
 def _allowed_tokens() -> list[str]:
@@ -280,26 +280,6 @@ def _request_character_service(http_request: Request):
     return build_character_context_service(container_db)
 
 
-def _degraded_response(
-    request: AstrBotMessageRequest,
-    trace_id: str,
-    *,
-    model: str,
-    reply_text: str = "\u540e\u7aef\u670d\u52a1\u6682\u65f6\u7e41\u5fd9\uff0c\u8bf7\u7a0d\u540e\u518d\u8bd5\u3002",
-    cost_time: float = 0.0,
-) -> AstrBotMessageResponse:
-    if request.conversationType == "private":
-        return AstrBotMessageResponse(
-            shouldReply=True,
-            replyText=reply_text,
-            model=model,
-            costTime=cost_time,
-            traceId=trace_id,
-            retryable=True,
-        )
-    return AstrBotMessageResponse(shouldReply=False, model=model, costTime=cost_time, traceId=trace_id, retryable=True)
-
-
 @router.post("/api/integrations/astrbot/messages", response_model=AstrBotMessageResponse)
 async def receive_astrbot_message(
     request: AstrBotMessageRequest,
@@ -374,19 +354,17 @@ async def receive_astrbot_message(
             request.platform,
             redact_sensitive(request.senderId),
         )
-        return _degraded_response(
-            request,
-            trace_id,
-            model="security-policy",
-            reply_text="\u8be5\u8bf7\u6c42\u6d89\u53ca\u7cfb\u7edf\u914d\u7f6e\u6216\u51ed\u636e\uff0c\u5df2\u88ab\u5b89\u5168\u7b56\u7565\u62e6\u622a\u3002",
-        )
+        raise HTTPException(status_code=403, detail="Request blocked by the system credential policy")
 
     try:
         if not await _is_platform_enabled(request.platform):
             return AstrBotMessageResponse(shouldReply=False, model="platform-disabled", traceId=trace_id)
-    except Exception:
-        logger.warning("AstrBot platform switch check failed traceId=%s", trace_id, exc_info=True)
-        return _degraded_response(request, trace_id, model="config-unavailable")
+    except Exception as exc:
+        logger.warning("AstrBot configuration failed traceId=%s errorType=%s", trace_id, type(exc).__name__)
+        raise HTTPException(status_code=503, detail={
+            "stage": "config", "traceId": trace_id,
+            "message": "AstrBot configuration unavailable; check the configuration database",
+        }) from exc
 
     dedup_message_id = _dedup_message_id(request, text)
     await _record_integration_event(request, trace_id, text, dedup_message_id)
@@ -426,9 +404,12 @@ async def receive_astrbot_message(
                 traceId=trace_id,
                 retryable=not existing or existing["status"] != "delivered",
             )
-    except Exception:
-        logger.warning("Gateway receipt unavailable", exc_info=True)
-        return _degraded_response(request, trace_id, model="db-unavailable")
+    except Exception as exc:
+        logger.warning("Gateway receipt failed traceId=%s errorType=%s", trace_id, type(exc).__name__)
+        raise HTTPException(status_code=503, detail={
+            "stage": "receipt", "traceId": trace_id,
+            "message": "Gateway receipt storage unavailable; check the database",
+        }) from exc
     try:
         remaining = max(0.01, budget - (time.monotonic() - start_time))
         reply = await asyncio.wait_for(
@@ -453,7 +434,7 @@ async def receive_astrbot_message(
             response=json.dumps({"reply": reply.model_dump(), "context": context}, ensure_ascii=False),
         )
         if not finished:
-            return _degraded_response(request, trace_id, model="receipt-superseded")
+            raise HTTPException(status_code=409, detail="Gateway receipt superseded; do not deliver this response")
         return reply
     except (Exception, asyncio.CancelledError) as exc:
         try:
@@ -462,37 +443,30 @@ async def receive_astrbot_message(
             logger.warning("Unable to release gateway receipt; lease will expire", exc_info=True)
         if isinstance(exc, asyncio.CancelledError):
             raise
-        return _degraded_response(request, trace_id, model="generation-failed")
+        logger.warning("Gateway processing failed traceId=%s errorType=%s", trace_id, type(exc).__name__)
+        if isinstance(exc, HTTPException):
+            raise
+        if isinstance(exc, RateLimitExceeded):
+            raise HTTPException(status_code=429, detail={
+                "stage": "admission", "traceId": trace_id, "message": "Request rate limit exceeded",
+            }, headers={"Retry-After": str(max(1, ceil(exc.retry_after)))}) from exc
+        if isinstance(exc, TimeoutError):
+            raise HTTPException(status_code=504, detail={
+                "stage": "processing", "traceId": trace_id,
+                "message": "Gateway processing timed out; check queue and service latency",
+            }) from exc
+        message = ("Inference queue is full; retry later" if isinstance(exc, InferenceQueueFull)
+                   else "AstrBot processing failed; check generation and session storage services")
+        raise HTTPException(status_code=503, detail={
+            "stage": "admission" if isinstance(exc, InferenceQueueFull) else "processing",
+            "traceId": trace_id, "message": message,
+        }) from exc
 
 
 async def _process_astrbot_message(request, http_request, text, dedup_message_id, trace_id, start_time, context):
     runtime = _request_inference_runtime(http_request)
     source_db = _request_container_db(http_request) or db
-    try:
-        await runtime.check_rate_limits(request.platform, request.conversationId, request.senderId)
-    except RateLimitExceeded as exc:
-        log_event(
-            "integration_rate_limited",
-            level="warning",
-            traceId=trace_id,
-            platform=request.platform,
-            conversationId=request.conversationId,
-            senderId=request.senderId,
-            model=f"rate-limit:{exc.scope}",
-            costTime=0,
-            errorType="RateLimitExceeded",
-        )
-        if request.conversationType == "private":
-            return AstrBotMessageResponse(
-                shouldReply=True,
-                replyText="\u8bf7\u6c42\u8fc7\u4e8e\u9891\u7e41\uff0c\u8bf7\u7a0d\u540e\u518d\u8bd5\u3002",
-                model="rate-limit",
-                traceId=trace_id,
-                retryable=True,
-            )
-        return AstrBotMessageResponse(
-            shouldReply=False, model=f"rate-limit:{exc.scope}", traceId=trace_id, retryable=True
-        )
+    await runtime.check_rate_limits(request.platform, request.conversationId, request.senderId)
 
     session_id = _session_id(request.platform, request.conversationType, request.conversationId)
     try:
@@ -505,20 +479,12 @@ async def _process_astrbot_message(request, http_request, text, dedup_message_id
                 request.conversationType,
             ),
         )
-    except Exception:
+    except Exception as exc:
         increment("db_write_failures")
-        log_event(
-            "db_write_failed",
-            level="warning",
-            traceId=trace_id,
-            platform=request.platform,
-            conversationId=request.conversationId,
-            senderId=request.senderId,
-            model="session-switch",
-            costTime=0,
-            errorType="SessionSwitchUnavailable",
-        )
-        return _degraded_response(request, trace_id, model="db-unavailable")
+        raise HTTPException(status_code=503, detail={
+            "stage": "session", "traceId": trace_id,
+            "message": "Session state storage unavailable; check the database",
+        }) from exc
     if not session_enabled:
         return AstrBotMessageResponse(shouldReply=False, model="session-disabled", traceId=trace_id)
 
@@ -542,83 +508,18 @@ async def _process_astrbot_message(request, http_request, text, dedup_message_id
     context["request"] = msg.model_dump()
     character_service = _request_character_service(http_request)
     message_db = _request_container_db(http_request)
-    try:
-        result = await runtime.submit(
-            lambda: generate_reply_core(
-                msg,
-                current_user={"username": "astrbot", "user_id": 0},
-                character_service=character_service,
-                message_db=message_db,
-                delivery_context=context,
-            ),
-            session_id=session_id,
-            priority=priority,
-            timeout=_MODEL_TIMEOUT,
-        )
-    except InferenceQueueFull:
-        log_event(
-            "integration_queue_full",
-            level="warning",
-            traceId=trace_id,
-            platform=request.platform,
-            conversationId=request.conversationId,
-            senderId=request.senderId,
-            model="queue-full",
-            costTime=round(time.monotonic() - start_time, 2),
-            errorType="InferenceQueueFull",
-        )
-        return _degraded_response(
-            request,
-            trace_id,
-            model="queue-full",
-            reply_text="\u5f53\u524d\u6d88\u606f\u8f83\u591a\uff0c\u6211\u7a0d\u540e\u518d\u56de\u590d\u3002",
-        )
-    except asyncio.TimeoutError:
-        log_event(
-            "integration_queue_timeout",
-            level="warning",
-            traceId=trace_id,
-            platform=request.platform,
-            conversationId=request.conversationId,
-            senderId=request.senderId,
-            model="queue-timeout",
-            costTime=round(time.monotonic() - start_time, 2),
-            errorType="TimeoutError",
-        )
-        return _degraded_response(
-            request,
-            trace_id,
-            model="queue-timeout",
-            reply_text="\u5f53\u524d\u5904\u7406\u8f83\u6162\uff0c\u8bf7\u7a0d\u540e\u518d\u8bd5\u3002",
-        )
-    except HTTPException as exc:
-        log_event(
-            "integration_generation_failed",
-            level="warning",
-            traceId=trace_id,
-            platform=request.platform,
-            conversationId=request.conversationId,
-            senderId=request.senderId,
-            model=f"generation-http-{exc.status_code}",
-            costTime=round(time.monotonic() - start_time, 2),
-            errorType=str(exc.status_code),
-        )
-        logger.warning("AstrBot generation HTTP error traceId=%s status=%s", trace_id, exc.status_code)
-        return _degraded_response(request, trace_id, model=f"generation-http-{exc.status_code}")
-    except Exception:
-        log_event(
-            "integration_generation_failed",
-            level="warning",
-            traceId=trace_id,
-            platform=request.platform,
-            conversationId=request.conversationId,
-            senderId=request.senderId,
-            model="generation-failed",
-            costTime=round(time.monotonic() - start_time, 2),
-            errorType="Exception",
-        )
-        logger.warning("AstrBot generation failed traceId=%s", trace_id, exc_info=True)
-        return _degraded_response(request, trace_id, model="generation-failed")
+    result = await runtime.submit(
+        lambda: generate_reply_core(
+            msg,
+            current_user={"username": "astrbot", "user_id": 0},
+            character_service=character_service,
+            message_db=message_db,
+            delivery_context=context,
+        ),
+        session_id=session_id,
+        priority=priority,
+        timeout=_MODEL_TIMEOUT,
+    )
 
     log_event(
         "integration_reply",
