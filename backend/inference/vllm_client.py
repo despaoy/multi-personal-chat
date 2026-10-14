@@ -877,28 +877,39 @@ class VLLMClient:
         if errors:
             raise RuntimeError(f"LoRA unload failed: {', '.join(errors)}")
 
-    async def list_loras(self) -> Optional[List[str]]:
-        """查询vLLM中可用的LoRA适配器列表
+    async def list_loras(self) -> list[str]:
+        """Only adapters present throughout the configured pool are selectable."""
+        if not self._instances:
+            raise RuntimeError("No vLLM instances are configured")
+        client = await self._ensure_client()
 
-        Returns:
-            LoRA名称列表，查询失败返回None
-        """
+        async def catalog(instance):
+            response = await client.get(
+                f"{instance.base_url}/v1/models", headers=self._build_headers(), timeout=self._timeout,
+            )
+            response.raise_for_status()
+            payload = response.json()
+            rows = payload.get("data") if isinstance(payload, dict) else None
+            if not isinstance(rows, list):
+                raise ValueError("vLLM model catalog must contain a data list")
+            names = set()
+            for row in rows:
+                name = row.get("id") if isinstance(row, dict) else None
+                if not isinstance(name, str) or not name.strip():
+                    raise ValueError("vLLM model catalog contains an invalid model id")
+                if name != self._model:
+                    names.add(name)
+            return names
+
+        tasks = [asyncio.create_task(catalog(instance)) for instance in self._instances]
         try:
-            client = await self._ensure_client()
-            url = f"{self._instances[0].base_url}/v1/models" if self._instances else None
-            if not url:
-                return None
-            resp = await client.get(url, headers=self._build_headers())
-            if resp.status_code == 200:
-                data = resp.json()
-                models = data.get("data", [])
-                # 返回非基础模型的LoRA名称
-                base_model = self._model
-                return [m["id"] for m in models if m["id"] != base_model]
-            return None
-        except Exception as e:
-            logger.debug(f"查询vLLM LoRA列表失败: {e}")
-            return None
+            inventories = await asyncio.gather(*tasks)
+        finally:
+            for task in tasks:
+                if not task.done():
+                    task.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
+        return sorted(set.intersection(*inventories))
 
     def _resolve_model_name(self, lora_name: Optional[str]) -> str:
         """解析模型名称，返回 LoRA 或基础模型 ID

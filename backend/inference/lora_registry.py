@@ -65,14 +65,17 @@ def get_lora_system_prompt(lora_name: str) -> str:
     """获取指定 LoRA 的系统提示词。
 
     Args:
-        lora_name: LoRA 名称。若不存在则返回空字符串。
+        lora_name: LoRA 名称；基础模型或未注册的自定义适配器没有附加提示词。
 
     Returns:
         系统提示词字符串。
     """
-    if lora_name in LORA_REGISTRY:
-        return LORA_REGISTRY[lora_name].get("system_prompt", "")
-    return ""
+    if lora_name not in LORA_REGISTRY:
+        return ""
+    prompt = LORA_REGISTRY[lora_name]["system_prompt"]
+    if not isinstance(prompt, str) or not prompt.strip():
+        raise ValueError("Registered LoRA has no usable system prompt")
+    return prompt
 
 
 def get_lora_character_id(lora_name: str) -> str | None:

@@ -36,6 +36,7 @@ from inference.generation_request import (
     GenerationRequest as CharacterGenerationRequest,
 )
 from inference.lora_registry import get_lora_character_id
+from inference.lora_registry import get_lora_system_prompt as _get_system_prompt
 from inference.lora_utils import resolve_lora_served_name
 from inference.provider_context import get_provider_context_budget
 from infra.concurrency_control import InferenceQueueFull, RateLimitExceeded, inference_runtime
@@ -426,21 +427,17 @@ async def _generate_reply_body(
 
     # 检查vLLM是否实际支持该LoRA，避免404触发熔断
     vllm_effective_lora = vllm_lora_name if lora_name != "default" else None
-    if _mgr._current_provider.value == "vllm" and vllm_effective_lora and await _ensure_vllm() and _vllm_client:
+    if _mgr._current_provider.value == "vllm" and vllm_effective_lora:
         try:
+            if not await _ensure_vllm() or _vllm_client is None:
+                raise RuntimeError("Selected vLLM service is unavailable")
             available_loras = await _vllm_client.list_loras()
-            if available_loras is not None and vllm_effective_lora not in available_loras:
-                logger.warning(
-                    "Selected LoRA is not loaded in vLLM name=%s available=%s",
-                    vllm_effective_lora,
-                    available_loras,
-                )
-                raise HTTPException(status_code=409, detail="所选 LoRA 尚未加载到 vLLM，请先重新激活")
+            if vllm_effective_lora not in available_loras:
+                raise HTTPException(409, "所选 LoRA 尚未加载到 vLLM，请先重新激活")
         except HTTPException:
             raise
-        except Exception as e:
-            # A failed capability probe should not make the model unavailable.
-            logger.warning("failed to query vLLM LoRA inventory: %s", e)
+        except Exception as exc:
+            raise HTTPException(503, "所选 LoRA 状态查询失败，请检查 vLLM 服务及适配器后重试") from exc
 
     completion_warning = None
     start_time = time.time()
@@ -1405,19 +1402,6 @@ async def _generate_with_retrieval(
         elif rag_meta.get("answerMode") == "grounded_answer":
             rag_meta["answerMode"] = "abstention"
     return generation.reply, generation.plan.retrieval.has_evidence or bool(rag_meta.get("abstained")), rag_meta
-
-
-def _get_system_prompt(lora_name: str) -> str:
-    """获取 LoRA 对应的系统提示词"""
-    try:
-        # H1 fix: 此前从 bot.bot 导入 LORA_REGISTRY，造成 API 层反向依赖 bot 层。
-        # 现从 inference.lora_registry 中立层导入，依赖方向：api → inference。
-        from inference.lora_registry import get_lora_system_prompt
-
-        return get_lora_system_prompt(lora_name)
-    except Exception as e:
-        logger.warning("获取系统提示词失败: %s", e)
-        return ""
 
 
 def _estimate_tokens(text: str) -> int:

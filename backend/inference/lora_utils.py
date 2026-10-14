@@ -3,11 +3,8 @@
 from __future__ import annotations
 
 import json
-import logging
 import os
 import re
-
-logger = logging.getLogger(__name__)
 
 _DEFAULT_ALIASES = {
     "hutao_lora_7b": "hutao",
@@ -40,28 +37,3 @@ def resolve_lora_served_name(database_name: str) -> str:
     if not _SAFE_MODEL_NAME.fullmatch(database_name):
         raise ValueError("LoRA name contains unsupported characters")
     return get_lora_name_map().get(database_name, database_name)
-
-
-def safe_resolve_lora_served_name(database_name: str, check_compatibility: bool = False) -> str:
-    """安全解析 LoRA served name：可选兼容性检查，不兼容时降级到 default。
-
-    Args:
-        database_name: 数据库中的 LoRA 名称
-        check_compatibility: 是否执行兼容性检查（默认 False，避免运行时开销）
-
-    Returns:
-        兼容则返回 served name，不兼容则返回 "default"
-    """
-    if database_name == "default" or not database_name:
-        return "default"
-
-    if check_compatibility:
-        try:
-            from inference.adapter_checker import safe_resolve_lora
-            safe_name = safe_resolve_lora(database_name)
-            if safe_name == "default":
-                return "default"
-        except Exception:
-            pass  # 检查失败时不阻止，保守地使用原名
-
-    return resolve_lora_served_name(database_name)

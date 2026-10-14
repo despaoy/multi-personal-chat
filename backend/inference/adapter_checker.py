@@ -2,19 +2,16 @@
 
 遵循路线图 guardrail：
 - 验证 base_model_id、tokenizer、target_modules、rank、PEFT version
-- 不兼容时阻止激活并降级到 default
+- 不兼容时明确报告并阻止激活
 - 返回结构化报告供 API 和日志使用
 """
 from __future__ import annotations
 
 import json
-import logging
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, Any, List, Optional
-
-logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -203,29 +200,3 @@ class AdapterChecker:
                 report = self.check_adapter(d)
                 results[d.name] = report
         return results
-
-
-def safe_resolve_lora(name: str, checker: Optional[AdapterChecker] = None) -> str:
-    """安全解析 LoRA 名称：检查通过返回原名，否则降级到 default。
-
-    Args:
-        name: 请求的 LoRA 名称
-        checker: 适配器检查器实例（None 时创建默认）
-
-    Returns:
-        兼容则返回 name，不兼容则返回 "default"
-    """
-    if name == "default" or not name:
-        return "default"
-
-    if checker is None:
-        checker = AdapterChecker()
-
-    report = checker.check_adapter(name)
-    if not report.compatible:
-        logger.warning(
-            f"适配器 {name} 不兼容，降级到 default。errors={report.errors}"
-        )
-        return "default"
-
-    return name
