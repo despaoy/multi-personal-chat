@@ -24,7 +24,7 @@ export const navigationItems: NavigationItem[] = [
   { href: '/lora', label: 'LoRA 管理', translationKey: 'nav.lora', group: 'models', adminOnly: true, keywords: '模型 适配器 model' },
   { href: '/training', label: '模型训练', translationKey: 'nav.training', group: 'models', adminOnly: true, keywords: '微调 任务 training' },
   { href: '/intent-training', label: '意图训练', translationKey: 'nav.intentTraining', group: 'models', adminOnly: true, keywords: '分类 intent' },
-  { href: '/router', label: '模型路由', translationKey: 'nav.router', group: 'models', adminOnly: true, keywords: '分发 router' },
+  { href: '/router', label: '适配器检查', translationKey: 'nav.router', group: 'models', adminOnly: true, keywords: '模型 适配器 兼容性 adapter compatibility' },
   { href: '/evaluation', label: '效果评测', translationKey: 'nav.evaluation', group: 'research', adminOnly: true, keywords: '测试 评分 evaluation' },
   { href: '/experiments', label: '实验管理', translationKey: 'nav.experiments', group: 'research', adminOnly: true, keywords: '对照 experiments' },
   { href: '/preferences', label: '偏好学习', translationKey: 'nav.preferences', group: 'research', adminOnly: true, keywords: '反馈 对齐 DPO preferences' },

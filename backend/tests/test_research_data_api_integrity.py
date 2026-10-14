@@ -88,7 +88,7 @@ def test_router_config_updates_are_serialized_without_lost_fields(monkeypatch) -
     async def update_both():
         return await asyncio.gather(
             router_api.update_router_config(
-                RouterConfigUpdate(enabled=True),
+                RouterConfigUpdate(enabled=False),
                 current_user={"role": "admin"},
             ),
             router_api.update_router_config(
@@ -100,7 +100,7 @@ def test_router_config_updates_are_serialized_without_lost_fields(monkeypatch) -
     asyncio.run(update_both())
     persisted = json.loads(database.router_config or "{}")
 
-    assert persisted["enabled"] is True
+    assert persisted["enabled"] is False
     assert persisted["default_adapter"] == "kisaki"
 
 

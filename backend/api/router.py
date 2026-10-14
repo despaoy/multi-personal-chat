@@ -79,7 +79,8 @@ async def get_router_config(current_user: dict = Depends(get_current_admin)):
                 },
             }
         config = _normalize_config(config)
-        return {"success": True, "config": config}
+        return {"success": True, "config": config, "routingAvailable": False,
+                "message": "在线规则路由已退出；旧配置仅保留历史资料，角色请明确选择"}
     except Exception as e:
         logger.error(f"获取路由配置失败: {e}")
         raise HTTPException(status_code=500, detail="LoRA 路由操作失败") from e
@@ -89,6 +90,8 @@ async def get_router_config(current_user: dict = Depends(get_current_admin)):
 async def update_router_config(req: RouterConfigUpdate,
                                current_user: dict = Depends(get_current_admin)):
     """更新路由配置并原子化同进程内的读改写。"""
+    if req.enabled is True or req.mode in {"rule", "intent"}:
+        raise HTTPException(409, "在线自动路由未接入训练后的分类器，当前请明确选择角色或适配器")
     try:
         async with _get_router_config_lock():
             rows = await _execute_sql(
@@ -116,7 +119,8 @@ async def update_router_config(req: RouterConfigUpdate,
             from inference.lora_router import get_lora_router
 
             get_lora_router(config)
-        return {"success": True, "config": config}
+        return {"success": True, "config": config, "routingAvailable": False,
+                "message": "在线规则路由已退出；旧配置仅保留历史资料，角色请明确选择"}
     except Exception as exc:
         logger.exception("更新路由配置失败")
         raise HTTPException(status_code=500, detail="路由配置更新失败") from exc
@@ -124,40 +128,30 @@ async def update_router_config(req: RouterConfigUpdate,
 
 @router.get("/api/router/adapters")
 async def list_adapters(current_user: dict = Depends(get_current_admin)):
-    """列出已注册适配器及兼容性状态"""
     try:
         from db.database import refresh_lora_dir_map
         directory_map = await asyncio.to_thread(refresh_lora_dir_map)
         adapters = []
         for name, path in directory_map.items():
-            compat_rows = await _execute_sql(
+            rows = await asyncio.to_thread(
+                db.execute_sql,
                 "SELECT * FROM adapter_compatibility WHERE adapter_name=:name ORDER BY checked_at DESC LIMIT 1",
                 {"name": name},
             )
             compatibility = None
-            if compat_rows:
-                r = compat_rows[0]
-                try:
-                    checks = json.loads(r["checks"]) if r["checks"] else {}
-                except Exception:
-                    checks = {}
-                try:
-                    warnings = json.loads(r["warnings"]) if r["warnings"] else []
-                except Exception:
-                    warnings = []
-                try:
-                    errors = json.loads(r["errors"]) if r["errors"] else []
-                except Exception:
-                    errors = []
+            if rows:
+                row = rows[0]
+                checks, warnings, errors = (json.loads(row[key]) for key in ("checks", "warnings", "errors"))
+                if not isinstance(checks, dict) or not isinstance(warnings, list) or not isinstance(errors, list):
+                    raise ValueError("Invalid stored adapter compatibility report")
                 compatibility = {
-                    "compatible": bool(r["compatible"]), "checked_at": r["checked_at"],
+                    "compatible": bool(row["compatible"]), "checked_at": row["checked_at"],
                     "checks": checks, "warnings": warnings, "errors": errors,
                 }
             adapters.append({"name": name, "path": path, "compatibility": compatibility})
         return {"success": True, "adapters": adapters, "total": len(adapters)}
-    except Exception as e:
-        logger.error(f"列出适配器失败: {e}")
-        raise HTTPException(status_code=500, detail="LoRA 路由操作失败") from e
+    except Exception as exc:
+        raise HTTPException(503, "适配器列表读取失败，请检查存储或重新执行兼容性检查") from exc
 
 
 @router.get("/api/router/logs")
@@ -178,41 +172,38 @@ async def get_routing_logs(limit: int = 100, current_user: dict = Depends(get_cu
 
 @router.post("/api/router/check/{adapter_name}")
 async def check_adapter_compat(adapter_name: str, current_user: dict = Depends(get_current_admin)):
-    """手动触发适配器兼容性检查"""
     try:
-        from inference.adapter_checker import AdapterChecker
         from db.database import refresh_lora_dir_map
+        from inference.adapter_checker import AdapterChecker
         directory_map = await asyncio.to_thread(refresh_lora_dir_map)
         if adapter_name not in directory_map:
-            raise HTTPException(status_code=404, detail=f"adapter {adapter_name} not found")
-        checker = AdapterChecker()
-        report = await asyncio.to_thread(checker.check_adapter, directory_map[adapter_name])
+            raise HTTPException(404, "未找到所选适配器")
+        report = await asyncio.to_thread(AdapterChecker().check_adapter, directory_map[adapter_name])
+        result = {
+            "success": True, "adapter_name": adapter_name, "compatible": report.compatible,
+            "checks": report.checks, "warnings": report.warnings, "errors": report.errors,
+        }
         try:
-            await _execute_sql_insert(
+            written = await asyncio.to_thread(
+                db.execute_sql,
                 "INSERT INTO adapter_compatibility (adapter_name, checked_at, compatible, checks, warnings, errors) "
                 "VALUES (:adapter_name, :checked_at, :compatible, :checks, :warnings, :errors)",
                 {
-                    "adapter_name": adapter_name, "checked_at": _now(),
-                    "compatible": int(report.compatible),
-                    "checks": json.dumps(report.checks, ensure_ascii=False),
+                    "adapter_name": adapter_name, "checked_at": datetime.now(timezone.utc).isoformat(),
+                    "compatible": int(report.compatible), "checks": json.dumps(report.checks, ensure_ascii=False),
                     "warnings": json.dumps(report.warnings, ensure_ascii=False),
                     "errors": json.dumps(report.errors, ensure_ascii=False),
                 },
             )
-        except Exception as e:
-            logger.warning(f"存储兼容性记录失败（非致命）: {e}")
-        return {
-            "success": True,
-            "adapter_name": adapter_name,
-            "compatible": report.compatible,
-            "checks": report.checks,
-            "warnings": report.warnings,
-            "errors": report.errors,
-        }
+            if written != 1:
+                raise ValueError("Adapter report storage did not confirm one inserted row")
+        except Exception as exc:
+            raise HTTPException(503, detail={
+                "stage": "adapter_compatibility_record", "message": "检查已完成，但结果保存失败或未确认，请检查数据库后重试",
+                "checkCompleted": True, "recordSaved": None,
+            }) from exc
+        return result
     except HTTPException:
         raise
-    except ImportError as exc:
-        raise HTTPException(status_code=503, detail="适配器兼容性检查模块不可用") from exc
-    except Exception as e:
-        logger.error(f"兼容性检查失败: {e}")
-        raise HTTPException(status_code=500, detail="LoRA 路由操作失败") from e
+    except Exception as exc:
+        raise HTTPException(503, "适配器检查失败，请检查适配器文件、依赖和数据库后重试") from exc

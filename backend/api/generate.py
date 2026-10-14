@@ -342,35 +342,6 @@ async def _generate_reply_body(
     if prepared_override is not None or request.characterId or request.loraName == "default":
         selected_lora = None  # Explicit adapter or base model; never auto-route to another persona.
 
-    if not request.loraName and not request.characterId and prepared_override is None:
-        try:
-            raw_router_config = runtime_config.get("lora_router_config", {"enabled": False})
-            router_config = json.loads(raw_router_config) if isinstance(raw_router_config, str) else raw_router_config
-            if not isinstance(router_config, dict):
-                router_config = {"enabled": False}
-            if router_config.get("enabled"):
-                from inference.lora_router import RouteTarget, get_lora_router
-
-                lora_router = get_lora_router(router_config)
-                decision = lora_router.route(request.message)
-                lora_router.log_routing(decision, request.traceId)
-                if decision.target == RouteTarget.PERSONA_ADAPTER.value:
-                    routed = next(
-                        (item for item in loras if item["name"] == decision.adapter_name),
-                        None,
-                    )
-                    if routed is not None:
-                        selected_lora = routed
-                    else:
-                        logger.warning(
-                            "LoRA route fallback: adapter is not registered adapter=%s traceId=%s",
-                            decision.adapter_name,
-                            request.traceId,
-                        )
-        except Exception:
-            logger.warning(
-                "LoRA routing failed; using explicit/active adapter traceId=%s", request.traceId, exc_info=True
-            )
     if request.loraName and request.loraName != "default":
         selected_lora = next((item for item in loras if item["name"] == request.loraName), None)
         if selected_lora is None:
