@@ -217,13 +217,13 @@ async def test_real_repository_recall_preserves_partial_annotation(tmp_path):
         database.close_connection()
 
 
-def test_one_partial_fragment_cannot_be_shared_as_a_complete_source():
+def test_partial_original_keeps_independent_memory_reference():
     memory = replace(item(), evidence=(TEXTS[0],), source_fragments=(("original", ((41, 41 + len(TEXTS[0])),)),))
     reference, ids = compile_reference_context((memory,), complete_evidence=True)
     context = CompiledCharacterContext("", "", reference, used_memory_ids=ids, memory_packets=(memory,))
     sources = compile_sources([dict(source_message_id="original", observed_at=STAMP, body=TEXTS[0])])
-    after = attach_sources(context, sources, complete_evidence=True, share_observations=True)
-    assert after.reference_context == reference and after.source_shared_memory_ids == ()
+    after = attach_sources(context, sources)
+    assert after.reference_context == reference and after.memory_packets == (memory,)
 
 
 def test_original_gap_is_explained_without_exposing_or_guessing_removed_characters():

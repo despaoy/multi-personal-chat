@@ -272,11 +272,6 @@ class CompiledCharacterContext:
     episodic_reference_context: str = ""
     # Conversation notes/preferences are contextual cues, not user fact packets.
     conversation_reference_context: str = ""
-    # These selected observation IDs remain represented by complete source
-    # packets, not repeated in reference_context. No stored record is removed.
-    source_shared_memory_ids: tuple[str, ...] = ()
-    # Transient backup for replacing/clearing an attached source packet safely.
-    source_reference_backup: str = ""
     memory_operation_receipt: dict[str, object] | None = None
     # Generation-only delivery state; never an executed receipt or frozen job.
     memory_operation_deferred: bool = False

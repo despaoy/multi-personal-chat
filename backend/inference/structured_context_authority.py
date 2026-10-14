@@ -50,23 +50,18 @@ async def revalidate_private_memories(request, repository, character_id, scope, 
     if not removed:
         return request
     remaining = tuple(packet for packet in context.memory_packets if packet.memory_id not in removed)
-    shared = tuple(key for key in context.source_shared_memory_ids if key not in removed)
     kwargs = dict(
         preferred_address=preferred_address,
         complete_evidence=True,
         observation_semantics=any(packet.source_observation for packet in remaining),
         max_chars=None,
     )
-    full_reference, used_ids = compile_reference_context(remaining, **kwargs)
-    visible = tuple(packet for packet in remaining if packet.memory_id not in shared)
-    reference = compile_reference_context(visible, **kwargs)[0] if shared else full_reference
+    reference, used_ids = compile_reference_context(remaining, **kwargs)
     updated = replace(
         context,
         memory_packets=remaining,
         used_memory_ids=used_ids,
         reference_context=reference,
-        source_shared_memory_ids=shared,
-        source_reference_backup=full_reference if shared else "",
         memory_review_text="",
         memory_field_presence=tuple((key, None) for key, _value in context.memory_field_presence),
         memory_status="available" if remaining else "no_match",

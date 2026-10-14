@@ -16,8 +16,8 @@ from urllib.request import Request, urlopen
 
 
 async def replay(row, seed):
-    from character.models import CompiledCharacterContext, MemoryItem
     from character.output_guard import ReplyGuard
+    from evaluation.recorded_context import restore_recorded_context
     from inference.generation_request import (
         GenerationPlan,
         GenerationRequest,
@@ -25,8 +25,7 @@ async def replay(row, seed):
         generate_character_response,
     )
 
-    context = dict(row['prepared']['compiled'])
-    context['memory_packets'] = tuple(MemoryItem(**item) for item in context['memory_packets'])
+    context = restore_recorded_context(row['prepared']['compiled'])
     raw_plan = dict(row['generation']['plan'])
     raw_plan['retrieval'] = RetrievalResult(**raw_plan['retrieval'])
     observed = row['model_calls'][0]
@@ -34,7 +33,7 @@ async def replay(row, seed):
     plan = GenerationPlan(**raw_plan)
     if plan.lora_name:
         raise ValueError('No LoRA allowed')
-    request = GenerationRequest(message=row['message'], character_context=CompiledCharacterContext(**context),
+    request = GenerationRequest(message=row['message'], character_context=context,
         reply_guard=ReplyGuard(**row['prepared']['reply_guard']), retrieval=plan.retrieval,
         history=row['prepared']['history'])
     attempted = 0

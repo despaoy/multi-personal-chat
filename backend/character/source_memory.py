@@ -255,51 +255,7 @@ class SourceMemoryService:
         return SourceRecall(result.context, trace, candidate_context)
 
 
-def _share_observation_sources(context, source_context, *, preferred_address, complete_evidence):
-    from character.context_builder import compile_reference_context
-
-    try:
-        data = json.loads(source_context)
-        if (data.get('source_kind') != 'historical_user_utterances' or data.get('speaker_role') != 'user'
-                or not isinstance(data.get('records'), list)):
-            return context
-        records = {row['source_id']: row for row in data['records']}
-        if len(records) != len(data['records']):
-            return context
-        covered = []
-        for item in context.memory_packets:
-            if (not item.source_observation or item.temporal_mode != 'observation'
-                    or item.status != 'active' or item.relation_type != 'ADD'
-                    or item.complete_original_source is False
-                    or item.historical or item.qualifiers or len(item.evidence) != 1
-                    or len(item.source_message_ids) != 1):
-                continue
-            row = records.get(item.source_message_ids[0])
-            if (row and row['text'] == item.evidence[0] and row['observed_at'] == item.observed_at
-                    and item.memory_id in context.used_memory_ids):
-                covered.append(item.memory_id)
-    except (ValueError, TypeError, KeyError, AttributeError):
-        return context
-    if not covered:
-        return context
-    original, ids = compile_reference_context(context.memory_packets, preferred_address=preferred_address,
-                                               complete_evidence=complete_evidence)
-    # Never overwrite additional reference content, a caller-specific packet
-    # format, or an address whose compilation parameters were not supplied.
-    if original != context.reference_context or ids != context.used_memory_ids:
-        return context
-    remaining = tuple(item for item in context.memory_packets
-                      if item.memory_id in context.used_memory_ids and item.memory_id not in covered)
-    reference, _ = compile_reference_context(remaining, preferred_address=preferred_address,
-                                             complete_evidence=complete_evidence)
-    return replace(context, reference_context=reference, source_shared_memory_ids=tuple(covered),
-                   source_reference_backup=context.reference_context)
-
-
-def attach_sources(context, result, *, preferred_address="", complete_evidence=False, share_observations=False):
-    if context.source_shared_memory_ids:
-        context = replace(context, reference_context=context.source_reference_backup,
-                          source_shared_memory_ids=(), source_reference_backup="", episodic_reference_context="")
+def attach_sources(context, result):
     status = str(result.diagnostics.get('status') or 'not_checked')
     context = replace(context, memory_source_status=status, episodic_reference_context='',
                       source_candidate_context=result.candidate_context)
@@ -310,11 +266,6 @@ def attach_sources(context, result, *, preferred_address="", complete_evidence=F
         return context
     # Unclassified but relevant source speech defeats a proof of absence, not
     # an independently established fact. No raw quote becomes a MemoryItem.
-    # Offline candidate only: shorter input did not reliably improve live
-    # answers. Keep the established reference transport by default.
-    if share_observations:
-        context = _share_observation_sources(context, result.context, preferred_address=preferred_address,
-                                             complete_evidence=complete_evidence)
     return replace(context, episodic_reference_context=result.context,
                    memory_field_presence=tuple((key, None if value is False else value)
                                                for key, value in context.memory_field_presence))

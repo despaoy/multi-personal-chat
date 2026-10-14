@@ -93,7 +93,6 @@ async def revalidate_private_sources(request, repository, character_id, scope, *
         episodic_reference_context=admitted,
         source_candidate_context=deferred_text,
         memory_source_status=status,
-        source_reference_backup="",
         memory_review_text="",
         memory_field_presence=tuple((key, None) for key, _value in context.memory_field_presence),
     )
@@ -126,7 +125,6 @@ async def revalidate_private_sources(request, repository, character_id, scope, *
             used_memory_ids=used_ids,
             reference_context=reference,
             memory_status="available" if remaining else "no_match",
-            source_shared_memory_ids=tuple(key for key in context.source_shared_memory_ids if key not in removed),
         )
     elif any(body in context.reference_context for body in bodies):
         updated = replace(
@@ -134,7 +132,6 @@ async def revalidate_private_sources(request, repository, character_id, scope, *
             reference_context="",
             used_memory_ids=(),
             memory_packets=(),
-            source_shared_memory_ids=(),
             memory_status="no_match",
         )
 

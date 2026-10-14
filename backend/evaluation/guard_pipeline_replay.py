@@ -13,8 +13,8 @@ from dataclasses import asdict
 from pathlib import Path
 from unittest.mock import patch
 
-from character.models import CompiledCharacterContext, MemoryItem
 from character.output_guard import ReplyGuard
+from evaluation.recorded_context import restore_recorded_context
 from inference.generation_request import (
     GenerationPlan,
     GenerationRequest,
@@ -24,15 +24,14 @@ from inference.generation_request import (
 
 
 async def replay(row, cloud):
-    compiled = dict(row['prepared']['compiled'])
-    compiled['memory_packets'] = tuple(MemoryItem(**m) for m in compiled.get('memory_packets', []))
+    compiled = restore_recorded_context(row['prepared']['compiled'])
     retrieval = RetrievalResult(**row['generation']['plan']['retrieval'])
     body = cloud['request']
     plan = GenerationPlan(messages=tuple(body['messages']), retrieval=retrieval,
         generation={key: body[key] for key in ('temperature', 'max_tokens', 'top_p', 'frequency_penalty')},
         prompt_policy_version=row['generation']['plan']['prompt_policy_version'], lora_name=None)
     request = GenerationRequest(message=row['message'], history=row['prepared']['history'],
-        character_context=CompiledCharacterContext(**compiled), retrieval=retrieval,
+        character_context=compiled, retrieval=retrieval,
         reply_guard=ReplyGuard(**row['prepared']['reply_guard']))
     calls = []
     reply = cloud['response']['choices'][0]['message']['content']

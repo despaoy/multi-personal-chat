@@ -187,7 +187,7 @@ async def run(args):
                     if args.source_recall:
                         sources = await SourceMemoryService(repo, window_radius=args.source_window_radius).recall(profile.character_id, scope, query,
                                                                          memories=context.memory_packets)
-                        context = attach_sources(context, sources, complete_evidence=True)
+                        context = attach_sources(context, sources)
                         trace["sources"] = sources.diagnostics
                 calls = []
 

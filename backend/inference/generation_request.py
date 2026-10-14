@@ -317,10 +317,8 @@ def _system_prompt(request: GenerationRequest) -> str:
                 dynamic_context = "\n\n".join(
                     part for part in (dynamic_context, SOURCE_SPEECH_PROVENANCE_POLICY) if part
                 )
-            # Sharing an admitted observation's exact source changes its
-            # transport, not the policy that applied before deduplication.
-            # Unadmitted source-only retrieval still does not activate it.
-            if context.reference_context or getattr(context, "source_shared_memory_ids", ()):
+            # Source speech alone does not grant structured-memory attribution.
+            if context.reference_context:
                 dynamic_context = "\n\n".join(part for part in (dynamic_context, MEMORY_ATTRIBUTION_POLICY) if part)
             # Fact-lane absence is not evidence-lane absence. Original speech
             # remains unclassified evidence: do not attach the active-fact

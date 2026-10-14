@@ -395,8 +395,7 @@ class CharacterContextService:
                                                        memories=compiled.memory_packets,
                                                        retrieval_context=(user_topic_context if self._memory_selector is not None
                                                            else compile_user_recall_context(effective_history)))
-            compiled = attach_sources(compiled, sources, preferred_address=relationship.preferred_address,
-                                      complete_evidence=self._memory_selector is not None)
+            compiled = attach_sources(compiled, sources)
             memory_recall["sources"] = sources.diagnostics
 
         interaction_count = int((relationship_record or {}).get("interaction_count") or 0)
