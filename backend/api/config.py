@@ -9,7 +9,7 @@ from app.config import (
     INPUT_VALIDATOR_AVAILABLE,
     CONFIG_SCHEMA,
 )
-from cache.config_cache import get_cached_config, set_cached_config, invalidate_config_cache
+from cache.config_cache import invalidate_config_cache, read_config
 from infra.db_executor import run_db
 
 logger = logging.getLogger(__name__)
@@ -56,14 +56,12 @@ def _mask_config(config: dict) -> dict:
 
 @router.get("/api/config")
 async def get_config(current_user: dict = Depends(get_current_admin)):
-    """获取系统配置（Redis 缓存优先，TTL 60s；敏感字段脱敏后返回）"""
-    cached = await run_db(get_cached_config)
-    if cached is not None:
-        return {"config": _mask_config(cached), "cached": True}
-
-    config = await run_db(lambda: db.config)
-    await run_db(set_cached_config, config)
-    return {"config": _mask_config(config)}
+    """Read a process-local TTL snapshot, with sensitive values masked."""
+    try:
+        config, cached = await run_db(read_config, db)
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail="配置读取失败，请检查配置数据库后重试") from exc
+    return {"config": _mask_config(config), "cached": cached}
 
 
 @router.put("/api/config")

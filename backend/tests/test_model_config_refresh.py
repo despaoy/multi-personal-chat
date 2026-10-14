@@ -11,7 +11,6 @@ import pytest
 from fastapi import HTTPException
 
 from api import config as config_api
-from cache import config_cache
 from db import adapter
 from db.database import SQLiteDB
 from inference import model_manager
@@ -28,9 +27,8 @@ def configured(monkeypatch, tmp_path):
     database.update_config(STORED)
     monkeypatch.setattr(adapter, "db", database)
     monkeypatch.setattr(config_api, "db", database)
-    monkeypatch.setattr(config_cache, "get_cached_config", lambda: None)
-    monkeypatch.setattr(config_cache, "set_cached_config", lambda value: True)
-    monkeypatch.setattr(config_api, "invalidate_config_cache", lambda: None)
+    # These provider tests isolate refresh/transport behavior from cache expiry.
+    monkeypatch.setattr(model_manager, "_get_db_config", lambda: database.config)
     monkeypatch.setenv("MODEL_PROVIDER", "openai_compat")
     monkeypatch.setenv("OPENAI_COMPAT_BASE_URL", "https://environment.example")
     monkeypatch.setenv("OPENAI_COMPAT_API_KEY", "fiction-environment-key")

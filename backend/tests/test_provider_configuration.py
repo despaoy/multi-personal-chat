@@ -54,7 +54,6 @@ def test_runtime_mock_switch_is_rejected_without_changing_provider(tmp_path, mon
 
 
 def test_database_configuration_failure_is_not_empty_defaults(monkeypatch):
-    from cache import config_cache
     from db import adapter
     from inference import model_manager
 
@@ -65,7 +64,6 @@ def test_database_configuration_failure_is_not_empty_defaults(monkeypatch):
         def config(self):
             raise failure
 
-    monkeypatch.setattr(config_cache, "get_cached_config", lambda: None)
     monkeypatch.setattr(adapter, "db", Database())
     with pytest.raises(OSError) as caught:
         model_manager._get_db_config()
@@ -73,27 +71,32 @@ def test_database_configuration_failure_is_not_empty_defaults(monkeypatch):
 
 
 def test_database_configuration_is_converted_once_and_cached(monkeypatch):
-    from cache import config_cache
     from db import adapter
     from inference import model_manager
 
-    cached = []
-    monkeypatch.setattr(config_cache, "get_cached_config", lambda: None)
-    monkeypatch.setattr(config_cache, "set_cached_config", cached.append)
-    monkeypatch.setattr(adapter, "db", SimpleNamespace(config={"maxTokens": "733", "useKnowledgeBase": "false"}))
-    result = model_manager._get_db_config()
-    assert result == {"maxTokens": 733, "useKnowledgeBase": False} and cached == [result]
+    reads = []
+
+    class Database:
+        @property
+        def config(self):
+            reads.append(True)
+            return {"maxTokens": "733", "useKnowledgeBase": "false"}
+
+    monkeypatch.setattr(adapter, "db", Database())
+    first = model_manager._get_db_config()
+    second = model_manager._get_db_config()
+    assert first == second == {"maxTokens": 733, "useKnowledgeBase": False} and reads == [True]
 
 
 def test_valid_ttl_cache_is_not_mutated_by_consumer(monkeypatch):
-    from cache import config_cache
+    from db import adapter
     from inference import model_manager
 
-    cached = {"modelProvider": "openai_compat"}
-    monkeypatch.setattr(config_cache, "get_cached_config", lambda: cached)
+    database = SimpleNamespace(config={"modelProvider": "openai_compat"})
+    monkeypatch.setattr(adapter, "db", database)
     result = model_manager._get_db_config()
     result["modelProvider"] = "mock"
-    assert cached == {"modelProvider": "openai_compat"}
+    assert database.config == model_manager._get_db_config() == {"modelProvider": "openai_compat"}
 
 
 @pytest.mark.asyncio

@@ -103,38 +103,16 @@ async def _is_duplicate_message(message_id: str) -> bool:
 # 配置 - 通过db.adapter读取
 # ============================================
 
-def _load_db_config() -> Dict[str, Any]:
-    """从数据库加载配置，返回字典（通过db.adapter统一访问）"""
-    try:
-        return db.config
-    except Exception as exc:
-        logger.warning("加载数据库配置失败，返回空配置: %s", exc)
-        return {}
-
-# DB 配置缓存统一委托给 cache.config_cache（60s TTL + jitter + Redis 共享），
-# 消除三套独立缓存导致的状态不同步问题。
-# 此前 bot 维护独立 30s 缓存，与 config_cache 的 60s 缓存失效不联动，
-# 导致配置更新后 bot 层与 API 层行为不一致。
+# Same-process readers share one bounded snapshot. A separate legacy bot
+# process observes external changes when its own TTL expires.
 def _get_db_config() -> Dict[str, Any]:
-    """获取数据库配置（统一走 cache.config_cache，设置页修改后 60s 内全局生效）"""
-    try:
-        from cache.config_cache import get_cached_config, set_cached_config
-        cached = get_cached_config()
-        if cached is not None:
-            return dict(cached)
-    except Exception:
-        pass
+    from cache.config_cache import read_config
 
-    config = _load_db_config()
-    try:
-        from cache.config_cache import set_cached_config
-        set_cached_config(config)
-    except Exception:
-        pass
-    return config
+    return read_config(db)[0]
+
 
 class Config:
-    """机器人配置 - 环境变量项为静态属性，数据库项通过@property动态读取（30秒缓存）"""
+    """机器人配置 - 环境变量项为静态属性，数据库项通过@property动态读取（60秒 TTL 缓存）"""
     # 环境变量配置（静态，启动时读取一次）
     OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
     OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:7b")
@@ -144,7 +122,7 @@ class Config:
     # LoRA风格配置
     USE_LORA_STYLE = True
 
-    # 以下配置通过 @property 动态读取 db.config，设置页修改后30秒内自动生效
+    # 以下配置通过 @property 动态读取 db.config，独立进程在约一分钟内重新读取配置
     @property
     def BOT_NAME(self):
         return _get_db_config().get('botName', os.getenv("NICKNAME", "胡桃"))

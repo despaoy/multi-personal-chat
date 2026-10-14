@@ -71,7 +71,7 @@ source "$MULTIPERSONAL_LAB_ROOT"/activate_qqchat.sh
 | vLLM | 8001 | 默认推理端口 |
 | 实验 vLLM | 8002 | LoRA 对比实验使用，不写死到生产配置 |
 | AstrBot | 6185 | 平台管理面板 |
-| Redis | 6379 | 可选；不可用时退化到进程内缓存 |
+| Redis | 6379 | 知识统计等组件使用；配置缓存采用独立的进程内 TTL 快照 |
 
 ## 禁止事项
 

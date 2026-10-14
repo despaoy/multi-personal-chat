@@ -18,23 +18,11 @@ from inference.openai_protocol import chat_completions_endpoint, completed_chat_
 
 logger = logging.getLogger(__name__)
 
-# Shared TTL cache; database errors must not become default model settings.
-_db_config_lock = threading.Lock()
-
-
 def _get_db_config():
-    from cache.config_cache import get_cached_config, set_cached_config
-    from db.config_utils import coerce_config_value
+    from cache.config_cache import read_config
+    from db.adapter import db
 
-    with _db_config_lock:
-        cached = get_cached_config()
-        if cached is not None:
-            return dict(cached)
-        from db.adapter import db
-
-        result = {key: coerce_config_value(value) for key, value in db.config.items()}
-        set_cached_config(result)
-        return result
+    return read_config(db)[0]
 
 from typing import Optional, Dict, Any, List, Tuple
 from dataclasses import dataclass
