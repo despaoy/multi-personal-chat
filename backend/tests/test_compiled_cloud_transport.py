@@ -11,6 +11,7 @@ import pytest
 from fastapi import HTTPException
 
 from api import generate
+from cache.response_cache import ResponseCache
 from db.schemas import AskRequest, GenerateResponse, MessageRequest
 from inference import model_manager
 from inference.generation_request import GenerationRequest, RetrievalResult, generate_character_response
@@ -19,19 +20,21 @@ QUERY = "虚构档案馆周二09:00开门、17:00闭馆，暴雨暂停开放。�
 ANSWER = "单元控制：周二09:00开门、17:00闭馆，暴雨暂停开放。"
 
 
-class Cache:
+class Cache(ResponseCache):
+    """Count real cache operations without replacing cache behavior."""
+
     def __init__(self):
-        self.rows = {}
+        super().__init__(max_size=2, default_ttl=60)
         self.reads = 0
         self.writes = 0
 
     async def get(self, prompt_hash, key):
         self.reads += 1
-        return self.rows.get((prompt_hash, key))
+        return await super().get(prompt_hash, key)
 
     async def set(self, prompt_hash, key, row, **kwargs):
         self.writes += 1
-        self.rows[(prompt_hash, key)] = dict(row)
+        return await super().set(prompt_hash, key, row, **kwargs)
 
 
 @pytest.fixture

@@ -12,6 +12,8 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException
 
+from cache.response_cache import ResponseCache
+
 # ============================================
 # JWT 配置
 # ============================================
@@ -319,12 +321,7 @@ try:
 except ImportError:
     ACCESS_CONTROL_AVAILABLE = False
 
-try:
-    from cache.response_cache import ResponseCache
-
-    LLM_OPTIMIZER_AVAILABLE = True
-except ImportError:
-    LLM_OPTIMIZER_AVAILABLE = False
+LLM_OPTIMIZER_AVAILABLE = True
 
 # ============================================
 # 服务启动时间
@@ -343,7 +340,7 @@ circuit_breaker_registry = global_registry if CIRCUIT_BREAKER_AVAILABLE else Non
 backup_mgr = None  # 在lifespan中初始化
 encryption_mgr = EncryptionManager() if ENCRYPTION_AVAILABLE else None
 access_control_mgr = None  # 在lifespan中初始化
-response_cache = ResponseCache() if LLM_OPTIMIZER_AVAILABLE else None
+response_cache = ResponseCache()
 
 
 # ============================================

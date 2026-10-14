@@ -782,8 +782,8 @@ def test_response_cache_restarts_on_a_fresh_event_loop():
     from cache.response_cache import ResponseCache
 
     cache = ResponseCache(default_ttl=60)
-    prompt_hash = cache.compute_prompt_hash("hello")
-    cache_key = cache.build_cache_key(model_name="model")
+    prompt_hash = "fixture-prompt"
+    cache_key = "fixture-model"
 
     async def use_cache(write: bool):
         if write:
