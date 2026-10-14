@@ -71,6 +71,7 @@ class GenerateResponse(BaseModel):
     answerMode: str | None = None
     domainId: str | None = None
     warnings: list[str] | None = None
+    modelInvoked: bool = False
 
 
 # ============================================
@@ -87,7 +88,7 @@ class AskRequest(BaseModel):
     history: list[dict[str, str]] = Field(default_factory=list, max_length=20)
     temperature: float = Field(0.3, ge=0.0, le=1.0)
     maxTokens: int = Field(1024, ge=64, le=4096)
-    topP: float = Field(0.9, ge=0.1, le=1.0)
+    topP: float = Field(1.0, ge=0.1, le=1.0)
     wantCitations: bool = True
     debug: bool = False
 

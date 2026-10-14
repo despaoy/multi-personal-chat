@@ -114,7 +114,7 @@ class GroundedAnswerService:
         model_id: str = "",
         temperature: float = 0.3,
         max_tokens: int = 1024,
-        top_p: float = 0.9,
+        top_p: float = 1.0,
         want_citations: bool = True,
     ) -> GroundedAnswerResult:
         timings = AnswerTimings()
@@ -223,7 +223,7 @@ class GroundedAnswerService:
         model_id: str = "",
         temperature: float = 0.3,
         max_tokens: int = 1024,
-        top_p: float = 0.9,
+        top_p: float = 1.0,
         want_citations: bool = True,
     ) -> AsyncIterator[AnswerStreamEvent]:
         timings = AnswerTimings()

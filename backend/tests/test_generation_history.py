@@ -80,7 +80,7 @@ def test_message_request_rejects_too_many_history_turns():
 def test_response_cache_key_covers_history_and_interlocutor(monkeypatch):
     import api.generate as gen
 
-    monkeypatch.setattr(gen, "get_vllm_served_model_name", lambda: "test-model")
+    model_identity = {"provider": "vllm", "status": {"modelName": "test-model"}}
     base = {
         "message": "same question",
         "sessionId": "room-1",
@@ -91,13 +91,13 @@ def test_response_cache_key_covers_history_and_interlocutor(monkeypatch):
     c = MessageRequest(**base, history=[], userName="alice")
     d = MessageRequest(**base, history=[], userName="bob")
 
-    a_hash, a_key, _ = gen._response_cache_keys(a, "lora", {})
-    b_hash, b_key, _ = gen._response_cache_keys(b, "lora", {})
-    c_hash, c_key, _ = gen._response_cache_keys(c, "lora", {})
-    d_hash, d_key, _ = gen._response_cache_keys(d, "lora", {})
-    e_hash, e_key, _ = gen._response_cache_keys(a, "lora", {}, enable_rag=False)
-    f_hash, f_key, _ = gen._response_cache_keys(a, "lora", {"topP": 0.1})
-    g_hash, g_key, _ = gen._response_cache_keys(a, "lora", {"topP": 0.9})
+    a_hash, a_key, _ = gen._response_cache_keys(a, "lora", {}, model_identity=model_identity)
+    b_hash, b_key, _ = gen._response_cache_keys(b, "lora", {}, model_identity=model_identity)
+    c_hash, c_key, _ = gen._response_cache_keys(c, "lora", {}, model_identity=model_identity)
+    d_hash, d_key, _ = gen._response_cache_keys(d, "lora", {}, model_identity=model_identity)
+    e_hash, e_key, _ = gen._response_cache_keys(a, "lora", {}, enable_rag=False, model_identity=model_identity)
+    f_hash, f_key, _ = gen._response_cache_keys(a, "lora", {"topP": 0.1}, model_identity=model_identity)
+    g_hash, g_key, _ = gen._response_cache_keys(a, "lora", {"topP": 0.9}, model_identity=model_identity)
 
     assert (a_hash, a_key) != (b_hash, b_key)
     assert (c_hash, c_key) != (d_hash, d_key)

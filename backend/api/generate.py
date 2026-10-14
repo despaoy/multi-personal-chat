@@ -195,6 +195,7 @@ def _response_cache_keys(
     config: dict[str, Any],
     *,
     enable_rag: bool = True,
+    model_identity: dict[str, Any],
 ) -> tuple[str, str, int]:
     """Include every response-affecting setting in the cache identity.
 
@@ -202,8 +203,7 @@ def _response_cache_keys(
     不会走到本函数——有状态对话每轮都要回写记忆与关系，缓存命中
     会跳过回写导致状态与对话脱节。
     """
-    model_name = get_vllm_served_model_name()
-    use_knowledge_base = bool(config.get("useKnowledgeBase", True))
+    use_knowledge_base = bool(config.get("useKnowledgeBase", True)) and enable_rag
     interlocutor = request.senderName or request.userName or ""
     prompt_identity = {
         "message": request.message,
@@ -212,7 +212,8 @@ def _response_cache_keys(
         "enable_rag": enable_rag,
     }
     identity = {
-        "model": model_name,
+        "model": model_identity,
+        "generation_contract": "compiled-native-v1",
         "lora": lora_name,
         "temperature": float(config.get("temperature", os.getenv("VLLM_TEMPERATURE", "0.7"))),
         "max_tokens": int(config.get("maxTokens", os.getenv("VLLM_MAX_TOKENS", "2048"))),
@@ -270,7 +271,7 @@ async def _generate_reply_body(
     prepared_override=None,
     _completion_slots=None,
 ):
-    """默认聊天生成实现：优先使用 vLLM，回退到模型管理器。
+    """使用所选提供商执行共享检索和上下文编译。
 
     character_service / message_db 由 HTTP 层经容器注入（绑定当前
     应用容器的数据库）：前者用于人物上下文（记忆/关系/历史），后者
@@ -329,6 +330,10 @@ async def _generate_reply_body(
         )
     except Exception as exc:
         raise HTTPException(503, "生成配置读取失败，请检查数据库连接后重试") from exc
+
+    if _mgr._current_provider.value == "openai_compat":
+        runtime_config = dict(runtime_config)
+        runtime_config.setdefault("topP", 1.0)
 
     # 获取LoRA：始终计算 active_lora，优先使用前端指定的，否则使用当前激活的
     active_lora = next((item for item in loras if item["status"] == "active"), None)
@@ -443,33 +448,51 @@ async def _generate_reply_body(
     cache_ttl = 300
     # 带角色上下文的对话是有状态流程（每轮回写记忆/关系），整体绕过
     # 响应缓存：缓存命中会跳过回写，导致人物状态与对话脱节。
-    use_response_cache = response_cache is not None and prepared_character_turn is None
+    use_response_cache = (
+        response_cache is not None and prepared_character_turn is None and selected_lora is None
+        and not (runtime_config.get("useKnowledgeBase", True) and enable_rag)
+    )
     if use_response_cache:
+        try:
+            provider = _mgr.get_current_provider()
+            if _mgr._current_provider.value == "openai_compat":
+                await asyncio.to_thread(provider._refresh_db_config)
+            model_identity = {
+                "provider": _mgr._current_provider.value, "status": provider.get_status(),
+                "endpoint": getattr(provider, "base_url", None),
+                "credential_sha256": hashlib.sha256(getattr(provider, "api_key", "").encode()).hexdigest(),
+            }
+        except Exception as exc:
+            raise HTTPException(503, "模型配置读取失败，请检查配置及模型状态后重试") from exc
         try:
             prompt_hash, cache_key, cache_ttl = _response_cache_keys(
                 request,
                 lora_name,
                 runtime_config,
                 enable_rag=enable_rag,
+                model_identity=model_identity,
             )
             cached = await response_cache.get(prompt_hash, cache_key)
-            if cached:
-                logger.debug("response cache hit")
-                if persist_message:
-                    cached_model = cached.get("model", "response-cache")
-                    stored_model_name = "vllm" if cached_model.startswith("vllm/") else cached_model
-                    await _save_message(
-                        request,
-                        cached.get("reply", ""),
-                        stored_model_name,
-                        lora_name,
-                        round(time.time() - start_time, 2),
-                        database=message_db,
-                        character_id=mapped_character_id,
-                    )
-                return GenerateResponse(**cached)
-        except Exception as e:
-            logger.warning("response cache read failed: %s", e)
+            response = GenerateResponse(**cached) if cached is not None else None
+        except Exception as exc:
+            raise HTTPException(503, "回复缓存读取失败，请检查缓存状态后重试") from exc
+        if response is not None:
+            logger.debug("response cache hit")
+            if persist_message:
+                stored_model_name = "vllm" if response.model.startswith("vllm/") else response.model
+                saved = await _save_message(
+                    request, response.reply, stored_model_name, lora_name,
+                    round(time.time() - start_time, 2), database=message_db, character_id=mapped_character_id,
+                )
+                if not saved:
+                    raise HTTPException(503, detail={
+                        "stage": "message_archive", "message": "缓存回复未能保存，请检查数据库连接后重试",
+                        "modelInvoked": False, "messageSaved": False,
+                    })
+            return response.model_copy(update={
+                "modelInvoked": False, "costTime": round(time.time() - start_time, 2),
+                "warnings": list(dict.fromkeys([*(response.warnings or []), "cached_model_response"])),
+            })
 
     is_vllm = _mgr._current_provider.value == "vllm"
     model_name = f"vllm/{get_vllm_served_model_name()}" if is_vllm else "model_manager"
@@ -501,10 +524,13 @@ async def _generate_reply_body(
                     _mgr.set_lora_adapter(lora_path)
 
                     async def adapter(*, messages, **kwargs):
-                        text, _cost = await _mgr.async_generate(
-                            prompt=messages[-1]["content"], session_history=messages[:-1],
-                            rag_docs=None, max_tokens_override=kwargs["max_tokens"],
-                        )
+                        if _mgr._current_provider.value == "openai_compat":
+                            text, _cost = await _mgr.get_current_provider().async_complete(messages, **kwargs)
+                        else:
+                            text, _cost = await _mgr.async_generate(
+                                prompt=messages[-1]["content"], session_history=messages[:-1],
+                                rag_docs=None, max_tokens_override=kwargs["max_tokens"],
+                            )
                         return text
 
                     async def generate():
@@ -595,14 +621,18 @@ async def _generate_reply_body(
             abstained=rag_meta.get("abstained", False),
             answerMode=rag_meta.get("answerMode"),
             domainId=rag_meta.get("domainId"),
+            modelInvoked=model_invoked,
             warnings=([*(rag_meta.get("warnings") or []), completion_warning]
                       if completion_warning else rag_meta.get("warnings")),
         )
         if use_response_cache:
             try:
                 await response_cache.set(prompt_hash, cache_key, result.model_dump(), ttl=cache_ttl)
-            except Exception as e:
-                logger.warning("响应缓存写入失败: %s", type(e).__name__)
+            except Exception as exc:
+                raise HTTPException(503, detail={
+                    "stage": "response_cache", "message": "回复缓存写入失败，请检查缓存状态后重试",
+                    "modelInvoked": model_invoked, "messageSaved": message_saved,
+                }) from exc
 
         return result
     except HTTPException:
@@ -1378,60 +1408,6 @@ async def _generate_with_retrieval(
         elif rag_meta.get("answerMode") == "grounded_answer":
             rag_meta["answerMode"] = "abstention"
     return generation.reply, generation.plan.retrieval.has_evidence or bool(rag_meta.get("abstained")), rag_meta
-
-
-async def _generate_with_model_manager_character(
-    request: MessageRequest,
-    lora_name: str,
-    runtime_config: dict[str, Any] | None,
-    *,
-    prepared_character_turn,
-    model_manager,
-    message_db=None,
-) -> tuple[str, float]:
-    """回退（模型管理器）路径的角色上下文生成。
-
-    与 vLLM 路径共用 build_generation_request 的同一套编译：
-    画像/关系/情景/决策进系统提示词，长期记忆与对话者昵称进
-    用户消息的不可信参考区，request.history 为空时使用数据库
-    加载的完整历史。model_manager.async_generate 只接受
-    prompt + session_history，因此把编译后的消息列表拆成
-    session_history（系统提示词+历史）与最后一条用户消息。
-    """
-    _cfg = runtime_config or {}
-    from inference.private_context_authority import make_private_context_revalidator
-
-    generation_request = CharacterGenerationRequest(
-        message=request.message,
-        history=(tuple(request.history or []) if (request.history or []) else prepared_character_turn.history),
-        persona_prompt=_get_system_prompt(lora_name),
-        interlocutor=request.senderName or request.userName or "普通用户",
-        character_context=prepared_character_turn.compiled,
-        reply_guard=getattr(prepared_character_turn, "reply_guard", None),
-        private_context_revalidator=make_private_context_revalidator(
-            prepared_character_turn, message_db if message_db is not None else db,
-        ),
-        lora_name=lora_name if lora_name != "default" else None,
-        temperature=float(_cfg.get("temperature", os.getenv("VLLM_TEMPERATURE", "0.7"))),
-        max_tokens=int(_cfg.get("maxTokens", os.getenv("VLLM_MAX_TOKENS", "2048"))),
-        top_p=float(_cfg.get("topP", os.getenv("VLLM_TOP_P", "0.9"))),
-        context_window_tokens=get_provider_context_budget(model_manager).window_tokens,
-    )
-    total_cost = 0.0
-
-    async def _model_manager_adapter(*, messages, max_tokens, **_kwargs):
-        nonlocal total_cost
-        reply, call_cost = await model_manager.async_generate(
-            prompt=messages[-1]["content"],
-            session_history=messages[:-1],
-            rag_docs=None,
-            max_tokens_override=max_tokens,
-        )
-        total_cost += call_cost
-        return reply
-
-    generation = await generate_character_response(generation_request, _model_manager_adapter)
-    return generation.reply, round(total_cost, 2)
 
 
 def _get_system_prompt(lora_name: str) -> str:

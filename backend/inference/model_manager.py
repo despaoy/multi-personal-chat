@@ -13,7 +13,12 @@ import threading
 from enum import Enum
 from pathlib import Path
 
-from inference.openai_protocol import chat_completions_endpoint, completed_chat_content, nonthinking_parameters
+from inference.openai_protocol import (
+    chat_completions_endpoint,
+    completed_chat_content,
+    nonthinking_parameters,
+    validate_completion_options,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -208,13 +213,27 @@ class OpenAICompatProvider(BaseProvider):
         return await self._complete_messages(
             messages, temperature=float(config.get('temperature', 0.8)), max_tokens=max_tokens)
 
-    async def async_complete(self, messages, *, temperature, max_tokens, top_p=None):
-        """Complete compiled review or grounded-answer messages without re-entering chat."""
+    async def async_complete(
+        self, messages, *, temperature, max_tokens, top_p=None,
+        frequency_penalty=0.0, repetition_penalty=1.0, enable_thinking=False, lora_name=None,
+    ):
+        """Send one compiled request with its explicit generation settings."""
         self._refresh_db_config()
-        return await self._complete_messages(messages, temperature=temperature, max_tokens=max_tokens, top_p=top_p)
+        return await self._complete_messages(
+            messages, temperature=temperature, max_tokens=max_tokens, top_p=top_p,
+            frequency_penalty=frequency_penalty, repetition_penalty=repetition_penalty,
+            enable_thinking=enable_thinking, lora_name=lora_name,
+        )
 
-    async def _complete_messages(self, messages, *, temperature, max_tokens, top_p=None):
+    async def _complete_messages(
+        self, messages, *, temperature, max_tokens, top_p=None,
+        frequency_penalty=0.0, repetition_penalty=1.0, enable_thinking=False, lora_name=None,
+    ):
         base_url, api_key, model = self.base_url, self.api_key, self.model
+        validate_completion_options(
+            base_url, top_p=top_p, frequency_penalty=frequency_penalty,
+            repetition_penalty=repetition_penalty, enable_thinking=enable_thinking, lora_name=lora_name,
+        )
         if not api_key:
             raise RuntimeError("未配置 API Key，请在设置页面配置 OpenAI 兼容 API Key")
         start = time.time()
@@ -232,6 +251,7 @@ class OpenAICompatProvider(BaseProvider):
                     "temperature": temperature,
                     "max_tokens": max_tokens,
                     **({"top_p": top_p} if top_p is not None else {}),
+                    **({"frequency_penalty": frequency_penalty} if frequency_penalty else {}),
                     **nonthinking_parameters(base_url, local_template=False),
                 },
                 timeout=120.0,
