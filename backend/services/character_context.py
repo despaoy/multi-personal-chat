@@ -286,7 +286,7 @@ class CharacterContextService:
             profile, relationship_record, memories, history, relationship_notes = await asyncio.gather(
                 asyncio.to_thread(self._profiles.get_profile, character_id),
                 self._memory_repo.get_relationship_record(character_id, user_scope),
-                self._load_memory_candidates(character_id, user_scope, turn.message),
+                self._load_memory_candidates(character_id, user_scope, turn.message, reference_time=received_at),
                 self._load_history(turn, user_scope, character_id),
                 self._memory_repo.list_relationship_notes(character_id, user_scope),
             )
@@ -571,11 +571,9 @@ class CharacterContextService:
         self, character_id: str, user_scope: UserScope, query: str,
         *, retrieval_context: str = "", reference_time: datetime | None = None,
     ) -> tuple[tuple[MemoryItem, ...], int, dict[str, object]]:
-        kwargs = {}
+        kwargs = dict(reference_time=reference_time)
         if self._memory_selector is not None:
-            kwargs = dict(for_contextual_selection=True, retrieval_context=retrieval_context,
-                reference_time=reference_time,
-            )
+            kwargs.update(for_contextual_selection=True, retrieval_context=retrieval_context)
         return await self._memory_service.recall_with_diagnostics(character_id, user_scope, query, **kwargs)
 
     async def _load_history(self, turn: TurnInput, user_scope: UserScope, character_id: str) -> list[dict[str, str]]:
