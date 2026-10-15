@@ -267,7 +267,7 @@ def render_curated_tasks(retrieval):
         try:
             validate_curated_source(source)
             fresh[sid] = True
-        except (CuratedSourceChangedError, OSError):
+        except (CuratedSourceChangedError, FileNotFoundError):
             fresh[sid] = False
     for task in owned:
         row = decisions.get(task["task_id"])
@@ -340,7 +340,7 @@ def exclude_changed_sources(retrieval):
     for source in payload["sources"]:
         try:
             validate_curated_source(source)
-        except (CuratedSourceChangedError, OSError):
+        except (CuratedSourceChangedError, FileNotFoundError):
             stale.update([source["source_id"], source["parent_id"]])
     if not stale:
         return retrieval
