@@ -1,12 +1,25 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
+from provider_fixtures import cloud_connection
 
+from inference.request_context import resolve_request_context
 from knowledge.grounded_answer.cache import AnswerCache
 from knowledge.grounded_answer.models import AnswerMode, FailureKind
 from knowledge.grounded_answer.service import GroundedAnswerService
+
+
+def _install_ask_scope_fixture(monkeypatch):
+    from inference import model_manager
+
+    connection = cloud_connection("test")
+    manager = SimpleNamespace(
+        _current_provider=SimpleNamespace(value="openai_compat"), get_current_provider=lambda: connection,
+    )
+    monkeypatch.setattr(model_manager, "get_model_manager", lambda: manager)
 
 
 def _bundle() -> dict[str, Any]:
@@ -169,7 +182,8 @@ async def test_api_generation_adapters_resolve_vllm_only_on_first_generation(mon
     manager = SimpleNamespace(_current_provider=SimpleNamespace(value="vllm"), get_current_provider=lambda: provider)
     monkeypatch.setattr(model_manager, "get_model_manager", lambda: manager)
     monkeypatch.setattr(generate_api, "get_vllm_client", get_client)
-    generate, generate_stream, _model_id = await ask_api._resolve_generate_adapters()
+    context = await resolve_request_context(manager)
+    generate, generate_stream, _model_id, _identity = await ask_api._resolve_generate_adapters(context)
     assert resolutions == 0
 
     assert await generate(messages=[], temperature=0.2, max_tokens=64, top_p=0.9) == "完成"
@@ -207,12 +221,14 @@ async def test_ask_returns_http_error_for_provider_failure(monkeypatch):
     from httpx import ASGITransport, AsyncClient
 
     from api import ask
+
+    _install_ask_scope_fixture(monkeypatch)
     from app.main import global_exception_handler
 
     generate = AsyncMock(side_effect=OSError("synthetic private detail"))
     service = GroundedAnswerService(retriever=lambda *a, **kw: _bundle(), corrective_enabled=False)
     monkeypatch.setattr(ask, "get_grounded_answer_service", AsyncMock(return_value=service))
-    monkeypatch.setattr(ask, "_resolve_generate_adapters", AsyncMock(return_value=(generate, None, "test")))
+    monkeypatch.setattr(ask, "_resolve_generate_adapters", AsyncMock(return_value=(generate, None, "test", "0" * 64)))
     app = FastAPI()
     app.include_router(ask.router)
     app.add_exception_handler(Exception, global_exception_handler)
@@ -275,6 +291,8 @@ async def test_ask_stream_ends_with_error_without_done(monkeypatch, failure):
 
     from api import ask
 
+    _install_ask_scope_fixture(monkeypatch)
+
     def retrieve(*a, **kw):
         if failure == "retrieval":
             raise OSError("synthetic private detail")
@@ -283,7 +301,7 @@ async def test_ask_stream_ends_with_error_without_done(monkeypatch, failure):
     generate = AsyncMock(side_effect=OSError("synthetic private detail"))
     service = GroundedAnswerService(retriever=retrieve, corrective_enabled=False)
     monkeypatch.setattr(ask, "get_grounded_answer_service", AsyncMock(return_value=service))
-    monkeypatch.setattr(ask, "_resolve_generate_adapters", AsyncMock(return_value=(generate, None, "test")))
+    monkeypatch.setattr(ask, "_resolve_generate_adapters", AsyncMock(return_value=(generate, None, "test", "0" * 64)))
     app = FastAPI()
     app.include_router(ask.router)
     app.dependency_overrides[ask.get_current_user] = lambda: {"id": 1, "role": "user"}
@@ -529,11 +547,13 @@ async def test_api_cache_provenance_distinguishes_reuse_from_generation(monkeypa
 
     from api import ask
 
+    _install_ask_scope_fixture(monkeypatch)
+
     generate = AsyncMock(return_value="甲是学生。[S1]")
     service = GroundedAnswerService(retriever=lambda *a, **kw: _bundle(),
                                    index_version_resolver=lambda domain: "v1", corrective_enabled=False)
     monkeypatch.setattr(ask, "get_grounded_answer_service", AsyncMock(return_value=service))
-    monkeypatch.setattr(ask, "_resolve_generate_adapters", AsyncMock(return_value=(generate, None, "test")))
+    monkeypatch.setattr(ask, "_resolve_generate_adapters", AsyncMock(return_value=(generate, None, "test", "0" * 64)))
     app = FastAPI()
     app.include_router(ask.router)
     app.dependency_overrides[ask.get_current_user] = lambda: {"id": 1, "role": "user"}

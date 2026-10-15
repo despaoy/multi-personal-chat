@@ -3,6 +3,9 @@
 from types import SimpleNamespace
 
 import pytest
+from provider_fixtures import cloud_connection
+
+from inference.request_context import resolve_request_context
 
 
 @pytest.mark.asyncio
@@ -20,7 +23,8 @@ async def test_cloud_knowledge_answer_keeps_roles_parameters_and_selected_model(
             calls.append(dict(messages=messages, **params))
             return "课程十点半开始。[S1]", 0.1
 
-    cloud = Cloud()
+    controlled = Cloud()
+    cloud = cloud_connection("deepseek-v4-pro", completion=controlled.async_complete)
     manager = SimpleNamespace(
         _current_provider=SimpleNamespace(value="openai_compat"), get_current_provider=lambda: cloud
     )
@@ -32,7 +36,8 @@ async def test_cloud_knowledge_answer_keeps_roles_parameters_and_selected_model(
         raise AssertionError("Selecting cloud must never initialize local vLLM")
 
     monkeypatch.setattr(generate, "get_vllm_client", wrong_provider)
-    answer, stream, model = await ask._resolve_generate_adapters()
+    context = await resolve_request_context(manager)
+    answer, stream, model, _identity = await ask._resolve_generate_adapters(context)
     assert not calls
     assert model == "openai_compat/deepseek-v4-pro"
     messages = [
@@ -64,19 +69,18 @@ async def test_cloud_knowledge_cancellation_propagates_without_local_fallback(mo
             entered.set()
             await asyncio.Future()
 
-    monkeypatch.setattr(
-        model_manager,
-        "get_model_manager",
-        lambda: SimpleNamespace(
-            _current_provider=SimpleNamespace(value="openai_compat"), get_current_provider=lambda: Cloud()
-        ),
+    cloud = cloud_connection("deepseek-v4-pro", completion=Cloud().async_complete)
+    manager = SimpleNamespace(
+        _current_provider=SimpleNamespace(value="openai_compat"), get_current_provider=lambda: cloud,
     )
+    monkeypatch.setattr(model_manager, "get_model_manager", lambda: manager)
 
     async def wrong_provider():
         raise AssertionError("Cancellation must not switch provider")
 
     monkeypatch.setattr(generate, "get_vllm_client", wrong_provider)
-    answer, _, _ = await ask._resolve_generate_adapters()
+    context = await resolve_request_context(manager)
+    answer, _, _, _identity = await ask._resolve_generate_adapters(context)
     pending = asyncio.create_task(
         answer(messages=[dict(role="user", content="完整证据")], temperature=0.2, max_tokens=64, top_p=0.8)
     )
@@ -103,7 +107,8 @@ async def test_knowledge_provider_cannot_fall_back_to_flattened_generation(monke
     monkeypatch.setattr(model_manager, "get_model_manager", lambda: manager)
     client = AsyncMock(return_value=None)
     monkeypatch.setattr(generate, "get_vllm_client", client)
-    answer, stream, _ = await ask._resolve_generate_adapters()
+    context = await resolve_request_context(manager)
+    answer, stream, _, _identity = await ask._resolve_generate_adapters(context)
     client.assert_not_awaited()
     params = dict(messages=[{"role": "system", "content": "仅使用证据"},
                             {"role": "user", "content": "证据：课程十点半开始。问题：课程何时开始？"}],

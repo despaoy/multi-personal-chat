@@ -4,7 +4,7 @@
 
 主聊天在准备角色上下文、调用默认语义审核后，才为主回答取得云端配置快照。审核客户端自行刷新数据库配置，token 计数和元数据又使用聊天环境；同一请求可能使用不同的实际模型及计数器。
 
-服务器在修改前运行真实 API 内部入口、默认审核适配器、OpenAICompatibleProvider 和 HTTP 编码，使用独立 SQLite 及明确的 httpx.MockTransport：审核实际发送 deepseek-flash，随后修改隔离设置，主答实际发送 deepseek-v4-pro，而两次计数元数据均标 Flash。没有访问外部模型、读取真实用户对话或支付模型费用。
+服务器在修改前运行真实 API 内部入口、默认审核适配器、OpenAICompatibleProvider 和 HTTP 编码，使用隔离测试配置及明确的 httpx.MockTransport：审核实际发送 deepseek-flash，随后修改隔离设置，主答实际发送 deepseek-v4-pro，而两次计数元数据均标 Flash。没有访问外部模型、读取真实用户对话或支付模型费用。
 
 ## 修改
 

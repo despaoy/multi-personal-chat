@@ -6,7 +6,7 @@
 - filters / top_k
 - index_version（索引更新后旧缓存不再命中，避免过期证据）
 - prompt 契约版本
-- 生成模型 ID 与关键生成参数
+- 生成模型 ID、实际连接身份摘要与关键生成参数
 - answer_mode / persona 指纹
 - 输入对话历史指纹（同一句追问在不同上下文下不能复用答案）
 
@@ -49,6 +49,7 @@ def answer_cache_key(
     speaker: str,
     want_citations: bool,
     history: list[dict[str, str]] | None = None,
+    cache_identity: str = "",
 ) -> str:
     payload = {
         "domains": sorted(domains) if domains else [str(domain_id or "auto")],
@@ -58,6 +59,7 @@ def answer_cache_key(
         "index_version": index_version,
         "prompt_version": GROUNDED_PROMPT_VERSION,
         "model_id": model_id,
+        "cache_identity": cache_identity,
         "temperature": float(temperature),
         "max_tokens": int(max_tokens),
         "top_p": float(top_p),
