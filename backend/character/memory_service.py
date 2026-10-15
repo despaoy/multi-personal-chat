@@ -1173,7 +1173,7 @@ class CharacterMemoryService:
                 relation_type = "ADD"
             storage_versions, source_versions = read_versions(row, stored_versions, claim_sources)
             record_pairs, record_versions = read_source_record_bindings(
-                row, stored_versions, source_pairs, source_revisions)
+                storage_versions, source_pairs, source_revisions)
             scored.append(
                 (
                     fused_scores[index],

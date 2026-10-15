@@ -46,8 +46,7 @@ def source_record_version(row):
     return record_version({name: row[name] for name in ("source_message_id", "body_sha256", "observed_at")})
 
 
-def read_source_record_bindings(row, stored_versions, source_pairs, revisions):
-    claims = read_versions(row, stored_versions, {})[0]
+def read_source_record_bindings(claims, source_pairs, revisions):
     pairs = tuple((key, source_id) for key, _version in claims for source_id in source_pairs.get(key, ()))
     versions = tuple((key, source_id, source_record_version(revisions[key][source_id]))
                      for key, source_id in pairs if source_id in revisions.get(key, {}))
