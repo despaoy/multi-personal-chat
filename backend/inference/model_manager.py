@@ -175,19 +175,26 @@ class BaseProvider(ABC):
 class OpenAICompatProvider(BaseProvider):
     """OpenAI兼容API提供商（支持DeepSeek、通义千问等）"""
 
-    def __init__(self):
+    def __init__(self, config_snapshot: dict[str, Any] | None = None):
         super().__init__("openai_compat")
+        self._snapshot_config = dict(config_snapshot) if config_snapshot is not None else None
         self._refresh_db_config()
         self._loaded = True
 
     def _refresh_db_config(self):
         """Resolve stored settings, then environment defaults, from one snapshot."""
-        config = _get_db_config()
+        config = self._snapshot_config if self._snapshot_config is not None else _get_db_config()
         self.base_url = config.get("openaiCompatBaseUrl") or os.getenv("OPENAI_COMPAT_BASE_URL", "https://api.deepseek.com")
         self.api_key = config.get("openaiCompatApiKey") or os.getenv("OPENAI_COMPAT_API_KEY", "")
         self.model = config.get("openaiCompatModel") or os.getenv("OPENAI_COMPAT_MODEL", "deepseek-chat")
         self._model_name = self.model
         return config
+
+    def snapshot(self):
+        """Own one resolved connection for a request, without refreshing mid-turn."""
+        if self._snapshot_config is not None:
+            return self
+        return OpenAICompatProvider(_get_db_config())
 
     async def _generate_async(self, prompt: str, session_history: List[Dict] = None,
                               rag_docs: List[Dict] = None, max_tokens_override: int = None) -> Tuple[str, float]:
@@ -218,7 +225,8 @@ class OpenAICompatProvider(BaseProvider):
         frequency_penalty=0.0, repetition_penalty=1.0, enable_thinking=False, lora_name=None,
     ):
         """Send one compiled request with its explicit generation settings."""
-        self._refresh_db_config()
+        if self._snapshot_config is None:
+            self._refresh_db_config()
         return await self._complete_messages(
             messages, temperature=temperature, max_tokens=max_tokens, top_p=top_p,
             frequency_penalty=frequency_penalty, repetition_penalty=repetition_penalty,

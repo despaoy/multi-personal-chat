@@ -31,6 +31,10 @@ async def test_selected_provider_receives_messages_and_budget_without_local_over
         def get_current_provider(self):
             return self
 
+        def snapshot(self):
+            return SimpleNamespace(async_complete=self.async_complete,
+                                   get_status=lambda: {"modelName": "selected-native"})
+
         async def async_complete(self, messages, *, temperature, max_tokens, top_p,
                                  frequency_penalty, repetition_penalty, enable_thinking, lora_name):
             assert provider == "openai_compat"

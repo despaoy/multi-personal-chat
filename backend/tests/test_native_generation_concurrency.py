@@ -39,6 +39,8 @@ def installed(monkeypatch):
             state.active -= 1
 
     provider.async_complete = complete
+    provider.snapshot = lambda: provider
+    provider.get_status = lambda: {"modelName": "fixture-cloud"}
     async def local(**kwargs):
         before = state.selected
         result = await complete([{"role": "user", "content": kwargs["prompt"]}])

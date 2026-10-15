@@ -421,13 +421,16 @@ async def _generate_reply_body(
         response_cache is not None and prepared_character_turn is None and selected_lora is None
         and not (runtime_config.get("useKnowledgeBase", True) and enable_rag)
     )
+    request_provider = _mgr._current_provider.value
+    cloud_provider = None
     if use_response_cache:
         try:
             provider = _mgr.get_current_provider()
-            if _mgr._current_provider.value == "openai_compat":
-                await asyncio.to_thread(provider._refresh_db_config)
+            if request_provider == "openai_compat":
+                provider = await asyncio.to_thread(provider.snapshot)
+                cloud_provider = provider
             model_identity = {
-                "provider": _mgr._current_provider.value, "status": provider.get_status(),
+                "provider": request_provider, "status": provider.get_status(),
                 "endpoint": getattr(provider, "base_url", None),
                 "credential_sha256": hashlib.sha256(getattr(provider, "api_key", "").encode()).hexdigest(),
             }
@@ -459,7 +462,7 @@ async def _generate_reply_body(
                 "warnings": list(dict.fromkeys([*(response.warnings or []), "cached_model_response"])),
             })
 
-    is_vllm = _mgr._current_provider.value == "vllm"
+    is_vllm = request_provider == "vllm"
     model_name = f"vllm/{get_vllm_served_model_name()}" if is_vllm else "model_manager"
     try:
         if is_vllm:
@@ -473,28 +476,31 @@ async def _generate_reply_body(
             model_label = model_name
             stored_model_name = "vllm"
         else:
-            native_provider = _mgr._current_provider.value
             semaphore = get_llm_semaphore()
             try:
                 await asyncio.wait_for(semaphore.acquire(), timeout=30.0)
             except TimeoutError as exc:
                 raise HTTPException(503, "服务繁忙，请稍后再试") from exc
             try:
-                async with (nullcontext() if native_provider == "openai_compat" else _loop_local_lock("local_model")):
+                async with (nullcontext() if request_provider == "openai_compat" else _loop_local_lock("local_model")):
                     try:
                         lora_path = get_lora_path_by_id(selected_lora["id"], loras=loras) if selected_lora else None
                     except OSError as exc:
                         raise HTTPException(503, "所选 LoRA 目录读取失败，请检查适配器存储后重试") from exc
                     if selected_lora and lora_path is None:
                         raise HTTPException(409, "所选 LoRA 没有可用本地目录，请先重新激活")
-                    if native_provider != "openai_compat":
+                    if request_provider != "openai_compat":
                         _mgr.set_lora_adapter(lora_path)
 
                     async def adapter(*, messages, **kwargs):
-                        if _mgr._current_provider.value != native_provider:
+                        nonlocal cloud_provider, model_name
+                        if _mgr._current_provider.value != request_provider:
                             raise RuntimeError("Selected provider changed before generation; retry the request")
-                        if native_provider == "openai_compat":
-                            text, _cost = await _mgr.get_current_provider().async_complete(messages, **kwargs)
+                        if request_provider == "openai_compat":
+                            if cloud_provider is None:
+                                cloud_provider = _mgr.get_current_provider().snapshot()
+                            model_name = cloud_provider.get_status()["modelName"]
+                            text, _cost = await cloud_provider.async_complete(messages, **kwargs)
                         else:
                             text, _cost = await _mgr.async_generate(
                                 prompt=messages[-1]["content"], session_history=messages[:-1],
@@ -514,10 +520,12 @@ async def _generate_reply_body(
                     reply, used_rag, rag_meta = await asyncio.wait_for(operation, timeout=_MODEL_INFERENCE_TIMEOUT)
             finally:
                 semaphore.release()
-            status = _mgr.get_status()
-            current_provider = native_provider
-            model_name = status.get("providers", {}).get(current_provider, {}).get("modelName", "Unknown")
-            model_label = f"{model_name} ({current_provider})"
+            if cloud_provider is not None:
+                model_name = cloud_provider.get_status()["modelName"]
+            else:
+                status = _mgr.get_status()
+                model_name = status.get("providers", {}).get(request_provider, {}).get("modelName", "Unknown")
+            model_label = f"{model_name} ({request_provider})"
             stored_model_name = model_name
 
         cost_time = round(time.time() - start_time, 2)

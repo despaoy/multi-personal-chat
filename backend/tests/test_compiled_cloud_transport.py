@@ -59,20 +59,22 @@ def installed(monkeypatch):
     monkeypatch.setattr(generate, "_get_system_prompt", lambda _: "只依据本题完整资料；保留时间、否定和例外。")
     monkeypatch.setattr(generate, "get_provider_context_budget", lambda: SimpleNamespace(window_tokens=65536, evidence_max_chars=0))
     calls = []
-    state = SimpleNamespace(status=200, finish="stop", failure=None)
+    state = SimpleNamespace(status=200, finish="stop", failure=None, on_request=None)
 
     def respond(request):
         if state.failure is not None:
             raise state.failure
         calls.append(dict(body=json.loads(request.content), endpoint=str(request.url), auth=request.headers["Authorization"]))
+        if state.on_request is not None:
+            state.on_request()
         return httpx.Response(state.status, json={"choices": [{"finish_reason": state.finish, "message": {"content": ANSWER}}]})
 
     @asynccontextmanager
-    async def acquire(timeout):
+    async def acquire(_self, timeout):
         async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as client:
             yield client
 
-    monkeypatch.setattr(provider, "_acquire_http_client", acquire)
+    monkeypatch.setattr(model_manager.OpenAICompatProvider, "_acquire_http_client", acquire)
 
     async def compiled(request, lora_name, *, model_generate, runtime_config, **kwargs):
         result = await generate_character_response(GenerationRequest(
@@ -193,7 +195,7 @@ async def test_required_configuration_failure_cannot_fall_through_cache_handling
     def fail():
         raise failure
 
-    monkeypatch.setattr(installed.provider, "_refresh_db_config", fail)
+    monkeypatch.setattr(model_manager, "_get_db_config", fail)
     with pytest.raises(HTTPException) as error:
         await receive()
     assert error.value.status_code == 503 and error.value.__cause__ is failure
@@ -293,3 +295,79 @@ async def test_cache_hit_checks_archive_result_without_new_model_call(installed,
     archive.assert_awaited_once()
     assert archive.await_args.args[1] == ANSWER
     assert len(installed.calls) == 1 and cache.writes == 1
+
+
+@pytest.mark.asyncio
+async def test_snapshot_owns_settings_and_next_request_reads_new_configuration(installed):
+    snapshot = installed.provider.snapshot()
+    installed.stored.update(openaiCompatModel="next-model", openaiCompatBaseUrl="https://next.example/v1",
+                            openaiCompatApiKey="fiction-next-key")
+    installed.provider._refresh_db_config()
+    await snapshot.async_complete([{"role": "user", "content": QUERY}], temperature=0.1, max_tokens=173)
+    first = installed.calls[-1]
+    assert first["body"]["model"] == "fixture-model" and first["auth"] == "Bearer fiction-key"
+    assert first["endpoint"] == "https://api.deepseek.com/v1/chat/completions"
+    assert snapshot.get_status()["modelName"] == "fixture-model"
+    assert installed.provider.snapshot().get_status()["modelName"] == "next-model"
+
+
+@pytest.mark.asyncio
+async def test_cache_identity_and_wire_use_same_snapshot_when_settings_change_before_dispatch(installed, monkeypatch):
+    cache = Cache()
+    monkeypatch.setattr(generate, "response_cache", cache)
+    compiled = generate._generate_with_retrieval
+    async def changed(*args, **kwargs):
+        installed.stored.update(openaiCompatModel="next-model", openaiCompatApiKey="fiction-next-key")
+        installed.provider._refresh_db_config()
+        return await compiled(*args, **kwargs)
+    monkeypatch.setattr(generate, "_generate_with_retrieval", changed)
+    first = await receive()
+    assert first.model == "fixture-model (openai_compat)"
+    assert installed.calls[0]["body"]["model"] == "fixture-model" and installed.calls[0]["auth"] == "Bearer fiction-key"
+    second = await receive()
+    assert second.model == "next-model (openai_compat)" and len(installed.calls) == 2
+    assert installed.calls[1]["body"]["model"] == "next-model" and installed.calls[1]["auth"] == "Bearer fiction-next-key"
+    installed.stored.update(openaiCompatModel="fixture-model", openaiCompatApiKey="fiction-key")
+    third = await receive()
+    assert not third.modelInvoked and third.model == "fixture-model (openai_compat)" and len(installed.calls) == 2
+
+
+@pytest.mark.asyncio
+async def test_configuration_change_during_transport_does_not_relabel_completed_reply(installed):
+    def change():
+        installed.stored["openaiCompatModel"] = "next-model"
+        installed.provider._refresh_db_config()
+    installed.state.on_request = change
+    result = await receive()
+    assert installed.calls[0]["body"]["model"] == "fixture-model"
+    assert result.model == "fixture-model (openai_compat)" and installed.provider.model == "next-model"
+
+
+@pytest.mark.asyncio
+async def test_multiple_model_calls_in_one_turn_share_configuration_snapshot(installed, monkeypatch):
+    compiled = generate._generate_with_retrieval
+    async def two_calls(*args, **kwargs):
+        await compiled(*args, **kwargs)
+        installed.stored["openaiCompatModel"] = "next-model"
+        installed.provider._refresh_db_config()
+        return await compiled(*args, **kwargs)
+    monkeypatch.setattr(generate, "_generate_with_retrieval", two_calls)
+    result = await receive()
+    assert len(installed.calls) == 2 and {call["body"]["model"] for call in installed.calls} == {"fixture-model"}
+    assert result.model == "fixture-model (openai_compat)"
+
+
+@pytest.mark.asyncio
+async def test_cache_snapshot_keeps_its_provider_type_when_manager_changes_during_lookup(installed, monkeypatch):
+    monkeypatch.setattr(generate, "response_cache", Cache())
+    first = await receive()
+    original = installed.provider.snapshot
+    def changed():
+        snapshot = original()
+        installed.manager._current_provider = model_manager.ModelProvider.OLLAMA
+        return snapshot
+    monkeypatch.setattr(installed.provider, "snapshot", changed)
+    second = await receive()
+    assert first.model == second.model == "fixture-model (openai_compat)"
+    assert not second.modelInvoked and len(installed.calls) == 1
+    installed.manager.async_generate.assert_not_awaited()
