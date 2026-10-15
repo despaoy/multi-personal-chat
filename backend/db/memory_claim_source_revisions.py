@@ -51,14 +51,13 @@ def linked_revision_plan(scope, claim_sources):
     )
     valid = []
     for row in rows:
-        try:
-            origin = json.loads(row["origin_scope"])
-            if (not isinstance(origin, list) or len(origin) != 6
-                    or source_scope(*origin)["owner_key"] != scope["owner_key"]
-                    or row["scope_level"] == "conversation" and origin != fields
-                    or row["scope_level"] == "user_character" and origin[0] != fields[0]):
-                continue
-        except (TypeError, ValueError):
+        origin = json.loads(row["origin_scope"])
+        if not isinstance(origin, list) or len(origin) != 6:
+            raise ValueError("Stored memory source origin must contain six identity fields")
+        origin_scope = source_scope(*origin)
+        if (origin_scope["owner_key"] != scope["owner_key"]
+                or row["scope_level"] == "conversation" and origin != fields
+                or row["scope_level"] == "user_character" and origin[0] != fields[0]):
             continue
         valid.append(row)
     counts = Counter((row["memory_id"], row["source_message_id"]) for row in valid)
