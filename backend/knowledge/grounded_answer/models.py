@@ -158,6 +158,8 @@ class GroundedAnswerResult:
     model_invoked: bool = False
     model_id: str = ""
     cache_hit: bool = False
+    # Internal dependencies for cache reuse and final source verification.
+    curated_source_receipts: tuple[dict[str, Any], ...] = field(default=(), repr=False)
     retrieval_metadata: dict[str, Any] = field(default_factory=dict)
     timings: AnswerTimings = field(default_factory=AnswerTimings)
 

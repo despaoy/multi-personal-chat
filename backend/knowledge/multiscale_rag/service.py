@@ -276,6 +276,10 @@ class RoutedMultiScaleService:
                 for doc in relation_docs
             ]
 
+        from knowledge.curated_sources import collect_curated_sources
+
+        source_catalog = collect_curated_sources(selected, self.evidence_by_parent, self.extractor, knowledge_boundary)
+        sources_by_id = {source["source_id"]: source for source in source_catalog["sources"]}
         wants_raw = raw_text or requests_source_text(query)
         raw_excerpt = None
         raw_status = "not_requested"
@@ -287,7 +291,7 @@ class RoutedMultiScaleService:
                     continue
                 if self.extractor is None:
                     raise RuntimeError("Original source extraction is required; configure the source extractor")
-                raw_excerpt = self.extractor.extract(evidence.source).to_dict()
+                raw_excerpt = dict(sources_by_id[evidence.id]["excerpt"])
                 raw_excerpt.update({"evidence_id": evidence.id, "parent_id": candidate.document.id})
                 raw_status = "truncated" if raw_excerpt.get("truncated") else "available"
                 break
@@ -321,9 +325,6 @@ class RoutedMultiScaleService:
             admitted_ids.update(block_ids.get(block, ()))
             used_chars += size
 
-        from knowledge.curated_sources import collect_curated_sources
-
-        source_catalog = collect_curated_sources(selected, self.evidence_by_parent, self.extractor, knowledge_boundary)
         return {
             "curated_source_catalog": source_catalog,
             "retrieval_strategy": "multi_scale_character",

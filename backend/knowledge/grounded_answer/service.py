@@ -23,6 +23,7 @@ from math import isfinite
 from typing import Any
 
 from infra.environment import read_bool
+from knowledge.curated_sources import CuratedSourceChangedError, validate_curated_source
 
 from .cache import AnswerCache, answer_cache_key
 from .corrective import CorrectiveRetrievalAdapter
@@ -55,6 +56,28 @@ _GROUNDED_TEMPERATURE_CAP = 0.5
 
 def _strip_think_blocks(text: str) -> str:
     return _THINK_BLOCK_RE.sub("", text).strip()
+
+
+def _source_receipts(bundle):
+    # Injected document-only services need no filesystem dependency contract.
+    # A present catalogue must supply its actual records; malformed data fails.
+    if "curated_source_catalog" not in bundle:
+        return ()
+    sources = bundle["curated_source_catalog"]["sources"]
+    if not isinstance(sources, list):
+        raise ValueError("Curated source catalogue records must be a list")
+    return tuple(sources)
+
+
+async def _validate_sources(receipts):
+    if not receipts:
+        return
+
+    def validate():
+        for source in receipts:
+            validate_curated_source(source)
+
+    await asyncio.to_thread(validate)
 
 
 class GroundedAnswerService:
@@ -145,6 +168,12 @@ class GroundedAnswerService:
                 history=history,
             )
             cached = self.cache.get(key)
+            if cached is not None:
+                try:
+                    await _validate_sources(cached.curated_source_receipts)
+                except CuratedSourceChangedError:
+                    # A valid source revision is an ordinary cache miss.
+                    cached = None
             if cached is not None:
                 cached.cache_hit = True
                 cached.model_invoked = False
@@ -310,6 +339,8 @@ class GroundedAnswerService:
         )
         timings.prompt_ms = (time.perf_counter() - prompt_start) * 1000
 
+        receipts = _source_receipts(bundle)
+        await _validate_sources(receipts)
         generation_start = time.perf_counter()
         chunks: list[str] = []
         stream_iter: AsyncIterator[str] | None = None
@@ -350,6 +381,8 @@ class GroundedAnswerService:
         result_citations, answer_text, warnings = self._finalize_answer(
             raw_answer, packet, want_citations=want_citations
         )
+
+        await _validate_sources(receipts)
 
         # 模型原始流可能含 think 块或引用标记；只有通过与非流式相同的
         # 校验和清理后才把正文交给客户端，避免先泄漏、后纠正。
@@ -484,6 +517,8 @@ class GroundedAnswerService:
         )
         timings.prompt_ms = (time.perf_counter() - prompt_start) * 1000
 
+        receipts = _source_receipts(bundle)
+        await _validate_sources(receipts)
         generation_start = time.perf_counter()
         raw_answer = await asyncio.wait_for(
             generate(messages=messages, temperature=temperature, max_tokens=max_tokens, top_p=top_p),
@@ -497,6 +532,7 @@ class GroundedAnswerService:
             raw_answer, packet, want_citations=want_citations
         )
 
+        await _validate_sources(receipts)
         return GroundedAnswerResult(
             answer=answer_text,
             answer_mode=packet.answer_mode,
@@ -509,6 +545,7 @@ class GroundedAnswerService:
             used_rag=True,
             model_invoked=True,
             model_id=model_id,
+            curated_source_receipts=receipts,
             retrieval_metadata=metadata,
             timings=timings,
         )
