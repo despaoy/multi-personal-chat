@@ -49,14 +49,14 @@ async def test_nonstream_adapter_does_not_return_truncated_reasoning(monkeypatch
     async def fake_client():
         return Client()
     monkeypatch.setattr(client, '_ensure_client', fake_client)
-    assert await client._generate_non_stream([], None, 0.7, 8, 0.9, 1.0, 0.0, True) == ''
+    with pytest.raises(ValueError, match='finish normally'):
+        await client._generate_non_stream([], None, 0.7, 8, 0.9, 1.0, 0.0, True)
     assert client._instances[0].current_connections == 0
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize('parts,expected', [
     (['<thi', 'nk>隐藏', '</th', 'ink>', '正常回答'], '正常回答'),
-    (['<think>', '未完成隐藏内容'], ''),
     (['原样', '正常文本<'], '原样正常文本<'),
 ])
 async def test_actual_stream_adapter_filters_before_yield(monkeypatch, parts, expected):
@@ -72,6 +72,7 @@ async def test_actual_stream_adapter_filters_before_yield(monkeypatch, parts, ex
             yield 'data: ' + json.dumps({'choices': [{'delta': {'reasoning_content': '原生推理字段'}}]})
             for part in parts:
                 yield 'data: ' + json.dumps({'choices': [{'delta': {'content': part}}]})
+            yield 'data: ' + json.dumps({'choices': [{'delta': {}, 'finish_reason': 'stop'}]})
             yield 'data: [DONE]'
 
     class Client:

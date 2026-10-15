@@ -12,16 +12,16 @@ import json
 import logging
 import os
 import time
+from contextlib import aclosing
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, AsyncGenerator, Dict, List, Optional, Tuple
 
 import httpx
 
-from infra.circuit_breaker import (
-    CircuitBreaker, CircuitOpenError, CircuitState,
-)
+from infra.circuit_breaker import CircuitBreaker
 from interfaces import InferenceInterface
+from inference.openai_protocol import ProviderResponseError, completed_chat_content
 from inference.reasoning_text import ReasoningTextFilter, strip_reasoning_text
 
 logger = logging.getLogger(__name__)
@@ -482,10 +482,9 @@ class VLLMClient:
                 )
 
                 if resp.status_code == 200:
-                    data = resp.json()
-                    text = data["choices"][0]["message"]["content"].strip()
-                    # 兜底过滤：即使 chat_template_kwargs 未生效，也移除 think 段
-                    text = _strip_think_tags(text)
+                    text = _strip_think_tags(completed_chat_content(resp.json()))
+                    if not text.strip():
+                        raise ValueError("vLLM completion has no usable content")
                     elapsed = time.monotonic() - start_time
                     async with self._instance_lock:
                         instance.record_success(elapsed)
@@ -493,9 +492,7 @@ class VLLMClient:
 
                 # 5xx 服务器错误可重试
                 if resp.status_code >= 500:
-                    last_error = RuntimeError(
-                        f"vLLM 返回 {resp.status_code}: {resp.text[:200]}"
-                    )
+                    last_error = ProviderResponseError(resp.status_code)
                     async with self._instance_lock:
                         instance.record_failure()
                     if attempt < self._max_retries - 1:
@@ -509,9 +506,7 @@ class VLLMClient:
                     continue
 
                 # 4xx 客户端错误不重试
-                raise RuntimeError(
-                    f"vLLM 返回 {resp.status_code}: {resp.text[:200]}"
-                )
+                raise ProviderResponseError(resp.status_code)
 
             except httpx.TimeoutException as exc:
                 last_error = exc
@@ -539,6 +534,11 @@ class VLLMClient:
                     await asyncio.sleep(delay)
                 continue
 
+            except Exception:
+                async with self._instance_lock:
+                    instance.record_failure()
+                raise
+
             finally:
                 async with self._instance_lock:
                     instance.current_connections = max(
@@ -559,25 +559,16 @@ class VLLMClient:
         enable_thinking: bool,
     ) -> AsyncGenerator[str, None]:
         """流式生成，带熔断器保护"""
-        async with self._request_semaphore:
-            if self._circuit_breaker.state == CircuitState.OPEN:
-                raise CircuitOpenError("vLLM circuit is open")
-            try:
-                async for chunk in self._generate_stream(
-                    messages,
-                    lora_name,
-                    temperature,
-                    max_tokens,
-                    top_p,
-                    repetition_penalty,
-                    frequency_penalty,
-                    enable_thinking,
-                ):
-                    yield chunk
-                await self._circuit_breaker.record_success()
-            except Exception as e:
-                await self._circuit_breaker.record_failure(str(e))
-                raise
+        async with (
+            self._request_semaphore,
+            self._circuit_breaker(),
+            aclosing(self._generate_stream(
+                messages, lora_name, temperature, max_tokens, top_p,
+                repetition_penalty, frequency_penalty, enable_thinking,
+            )) as stream,
+        ):
+            async for chunk in stream:
+                yield chunk
 
     async def _generate_stream(
         self,
@@ -622,32 +613,50 @@ class VLLMClient:
                 headers=self._build_headers(),
             ) as resp:
                 if resp.status_code != 200:
-                    error_body = await resp.aread()
-                    async with self._instance_lock:
-                        instance.record_failure()
-                    raise RuntimeError(
-                        f"vLLM 流式返回 {resp.status_code}: "
-                        f"{error_body.decode('utf-8', errors='replace')[:200]}"
-                    )
+                    raise ProviderResponseError(resp.status_code)
 
                 reasoning_filter = ReasoningTextFilter()
+                stopped = completed = visible_content = False
                 async for line in resp.aiter_lines():
-                    if not line.startswith("data: "):
+                    if not line.startswith("data:"):
                         continue
-                    data_str = line[6:]  # 去掉 "data: " 前缀
-                    if data_str.strip() == "[DONE]":
+                    data_str = line[5:].strip()
+                    if not data_str:
+                        continue
+                    if data_str == "[DONE]":
+                        if not stopped:
+                            raise ValueError("vLLM stream ended without a normal finish reason")
+                        completed = True
                         break
-                    try:
-                        chunk = json.loads(data_str)
-                        delta = chunk.get("choices", [{}])[0].get("delta", {})
-                        content = delta.get("content", "")
-                        if content:
-                            visible = reasoning_filter.feed(content)
-                            if visible:
-                                yield visible
-                    except (json.JSONDecodeError, IndexError, KeyError):
+                    chunk = json.loads(data_str)
+                    if not isinstance(chunk, dict) or "error" in chunk:
+                        raise ValueError("vLLM stream returned an invalid or error event")
+                    choices = chunk.get("choices")
+                    if choices == [] and isinstance(chunk.get("usage"), dict):
                         continue
+                    if not isinstance(choices, list) or len(choices) != 1 or not isinstance(choices[0], dict):
+                        raise ValueError("Invalid vLLM stream choices")
+                    choice = choices[0]
+                    delta = choice.get("delta")
+                    if stopped or not isinstance(delta, dict):
+                        raise ValueError("Invalid vLLM stream delta")
+                    finish_reason = choice.get("finish_reason")
+                    if finish_reason not in (None, "stop"):
+                        raise ValueError("vLLM stream did not finish normally")
+                    stopped = finish_reason == "stop"
+                    content = delta.get("content")
+                    if content is not None:
+                        if not isinstance(content, str):
+                            raise ValueError("Invalid vLLM stream content")
+                        visible = reasoning_filter.feed(content)
+                        visible_content |= bool(visible.strip())
+                        if visible:
+                            yield visible
+                if not completed:
+                    raise ValueError("vLLM stream ended before [DONE]")
                 tail = reasoning_filter.finish()
+                if not visible_content and not tail.strip():
+                    raise ValueError("vLLM stream has no usable content")
                 if tail:
                     yield tail
 
@@ -655,10 +664,12 @@ class VLLMClient:
             async with self._instance_lock:
                 instance.record_success(elapsed)
 
-        except (httpx.TimeoutException, httpx.ConnectError) as exc:
+        except Exception as exc:
             async with self._instance_lock:
                 instance.record_failure()
-            raise RuntimeError(f"vLLM 流式请求失败: {exc}") from exc
+            if isinstance(exc, (httpx.TimeoutException, httpx.ConnectError)):
+                raise RuntimeError("vLLM stream transport failed") from exc
+            raise
 
         finally:
             async with self._instance_lock:
