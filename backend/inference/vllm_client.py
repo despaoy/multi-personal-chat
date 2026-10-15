@@ -19,7 +19,7 @@ from typing import Any, AsyncGenerator, Dict, List, Optional, Tuple
 import httpx
 
 from infra.circuit_breaker import (
-    CircuitBreaker, CircuitOpenError, CircuitState, DegradationMode,
+    CircuitBreaker, CircuitOpenError, CircuitState,
 )
 from interfaces import InferenceInterface
 from inference.reasoning_text import ReasoningTextFilter, strip_reasoning_text
@@ -298,7 +298,6 @@ class VLLMClient:
             failure_threshold=20,
             recovery_timeout=60.0,
             half_open_max_calls=5,
-            degradation_mode=DegradationMode.RAISE,
         )
         self._register_to_global_registry()
 

@@ -25,18 +25,16 @@ def test_response_cache_identity_isolated_by_lora_and_config():
 
 
 @pytest.mark.asyncio
-async def test_raise_degradation_never_fabricates_a_model_success():
+async def test_open_circuit_never_fabricates_a_model_success():
     from infra.circuit_breaker import (
         CircuitBreaker,
         CircuitOpenError,
-        DegradationMode,
     )
 
     breaker = CircuitBreaker(
         name="model",
         failure_threshold=1,
         recovery_timeout=60,
-        degradation_mode=DegradationMode.RAISE,
     )
 
     async def fail():

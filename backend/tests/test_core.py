@@ -23,12 +23,11 @@ class TestCircuitBreaker:
     """熔断器三状态机测试"""
 
     def _make_cb(self, threshold=3, timeout=1.0):
-        from infra.circuit_breaker import CircuitBreaker, DegradationMode
+        from infra.circuit_breaker import CircuitBreaker
         return CircuitBreaker(
             name="test",
             failure_threshold=threshold,
             recovery_timeout=timeout,
-            degradation_mode=DegradationMode.DEFAULT,
         )
 
     @pytest.mark.asyncio
@@ -92,26 +91,22 @@ class TestCircuitBreaker:
         assert cb.state.value == "half_open"
 
     @pytest.mark.asyncio
-    async def test_degradation_returns_default(self):
-        from infra.circuit_breaker import CircuitBreaker, DegradationMode
-        cb = CircuitBreaker(
-            name="test",
-            failure_threshold=1,
-            recovery_timeout=60,
-            degradation_mode=DegradationMode.DEFAULT,
-        )
-        cb.set_default("fallback")
+    async def test_open_circuit_rejects_without_calling_upstream_again(self):
+        from infra.circuit_breaker import CircuitBreaker, CircuitOpenError
+
+        cb = CircuitBreaker(name="test", failure_threshold=1, recovery_timeout=60)
+        calls = 0
+
         async def failing_func():
+            nonlocal calls
+            calls += 1
             raise RuntimeError("fail")
 
-        # Trigger open
-        try:
+        with pytest.raises(RuntimeError, match="fail"):
             await cb.call(failing_func)
-        except RuntimeError:
-            pass
-        # Should return default value instead of raising
-        result = await cb.call(failing_func)
-        assert result == "fallback"
+        with pytest.raises(CircuitOpenError):
+            await cb.call(failing_func)
+        assert calls == 1
 
     @pytest.mark.asyncio
     async def test_reset(self):

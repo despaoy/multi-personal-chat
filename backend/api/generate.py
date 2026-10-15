@@ -40,6 +40,7 @@ from inference.lora_registry import get_lora_character_id
 from inference.lora_registry import get_lora_system_prompt as _get_system_prompt
 from inference.lora_utils import resolve_lora_served_name
 from inference.provider_context import get_provider_context_budget
+from infra.circuit_breaker import CircuitOpenError
 from infra.concurrency_control import InferenceQueueFull, RateLimitExceeded, inference_runtime
 from infra.environment import read_bool
 from infra.observability import increment, log_event, set_consecutive
@@ -652,6 +653,12 @@ async def _generate_reply_body(
             except HTTPException as record_error:
                 # Keep the model cause and recording error on separate chains.
                 raise HTTPException(503, detail=record_error.detail) from e
+        if isinstance(e, CircuitOpenError):
+            raise HTTPException(503, detail={
+                "stage": "model_circuit", "reason": "circuit_open",
+                "message": "模型服务连续失败，暂时停止调用。请恢复所选模型服务后重试。",
+                "modelInvoked": False,
+            }) from e
         if isinstance(e, ContextAuthorityChangedError):
             raise HTTPException(503, detail={
                 "stage": "context_authority", "reason": "repeated_authority_change",
