@@ -1,7 +1,6 @@
 """Event rules use frozen times and disposable databases, never user data."""
 
 from datetime import datetime, timezone
-from types import SimpleNamespace
 
 import pytest
 
@@ -9,11 +8,10 @@ from character.context_builder import build_user_scope
 from character.event_memory import event_reference_content, parse_event
 from character.memory_extractor import extract_memories
 from character.memory_service import CharacterMemoryService
-from character.models import CompiledCharacterContext, MemoryItem, RelationshipState
+from character.models import MemoryItem
 from character.rule_memory_writer import write_rule_memory
 from db.database import SQLiteDB
 from repositories.character_memory import DatabaseCharacterMemoryRepository
-from services.character_context import CharacterContextService, PreparedCharacterTurn, TurnInput
 
 NOW = datetime(2026, 9, 22, 16, 30, tzinfo=timezone.utc)  # Sep 23 in +08:00.
 
@@ -209,29 +207,3 @@ async def test_old_date_after_reschedule_is_not_silently_reopened(repo):
     rows = await current(repo)
     assert len(rows) == 1
     assert rows[0]["metadata"]["event"]["scheduled_date"] == "2026-09-25"
-
-
-@pytest.mark.asyncio
-async def test_chat_completion_routes_event_without_scheduler(repo, monkeypatch):
-    monkeypatch.setattr("character.memory_llm.get_memory_enrichment_scheduler", lambda: SimpleNamespace(enabled=False))
-    service = CharacterContextService(object(), repo, object())
-    prepared = PreparedCharacterTurn(
-        character_id="kisaki",
-        user_scope=scope(),
-        compiled=CompiledCharacterContext("", "", "", ()),
-        history=(),
-        relationship=RelationshipState(),
-        memory_candidates=0,
-        interaction_count=0,
-        reply_guard=None,
-    )
-    for text in ("我明天要面试。", "面试取消了。"):
-        outcome = await service.complete_turn(
-            prepared,
-            TurnInput(text, "qq", "nonebot", "alice", "g1", "group"),
-            "祝面试成功",
-            source_message_id=text,
-        )
-        assert outcome.new_memories == 1
-        assert outcome.memory_enrichment_mode == "rules"
-    assert "已取消" in (await current(repo))[0]["content"]

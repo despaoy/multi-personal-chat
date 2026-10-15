@@ -1,8 +1,8 @@
 """Transfer tests for dialogue scope and evaluation infrastructure."""
 import pytest
+from evaluation.dialogue_audit import load_cases
 
 from db.database import SQLiteDB
-from evaluation.dialogue_audit import load_cases
 from knowledge.dialogue_query import contextual_retrieval_query
 from knowledge.retrieval_core.registry import KnowledgeDomainConfig
 
@@ -176,9 +176,20 @@ async def test_persistent_recall_without_chat_history_after_many_newer_records(t
     monkeypatch.setenv('CAHM_SEMANTIC_MEMORY_ENABLED', 'false')
     db = SQLiteDB(tmp_path / 'persistent.db')
     svc = build_character_context_service(db)
-    seed = TurnInput('我叫林青。', 'web', 'audit', 'u1', 'room', 'group')
-    prepared = await svc.prepare_turn(seed, 'tsukiyashiro_kisaki')
-    await svc.complete_turn(prepared, seed, '你好。', source_message_id='source-1')
+    from datetime import datetime, timezone
+
+    from repositories.character_memory import DatabaseCharacterMemoryRepository
+
+    from character.models import MemoryItem, UserScope
+
+    repo = DatabaseCharacterMemoryRepository(db)
+    scope = UserScope('web', 'audit', 'u1', 'room', 'group')
+    observed = datetime.now(timezone.utc)
+    assert await repo.capture_source('tsukiyashiro_kisaki', scope,
+        source_message_id='source-1', body='我叫林青。', observed_at=observed) == 'recorded'
+    await repo.append_claim('tsukiyashiro_kisaki', scope, MemoryItem('', 'user_fact', '用户姓名是林青', .95),
+        memory_key='user_name', evidence=('我叫林青。',), source_message_id='source-1',
+        observed_at=observed.isoformat(), confidence=.99, metadata={'origin': 'rule_v2'})
     for index in range(count):
         db.add_or_update_character_memory(character_id='tsukiyashiro_kisaki', platform='web',
             adapter='audit', sender_id='u1', conversation_type='group', conversation_id='room',

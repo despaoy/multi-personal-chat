@@ -1,18 +1,16 @@
 """M1 regression probes; all persistence tests use disposable SQLite databases."""
 
 import asyncio
-from types import SimpleNamespace
 
 import pytest
 
 from character.context_builder import build_user_scope
 from character.memory_extractor import extract_memories, extract_preferred_address
-from character.models import CompiledCharacterContext, MemoryItem, RelationshipState
+from character.models import MemoryItem
 from character.natural_relationship import relationship_write_blocked
 from character.rule_memory_writer import write_rule_memory
 from db.database import SQLiteDB
 from repositories.character_memory import DatabaseCharacterMemoryRepository
-from services.character_context import CharacterContextService, PreparedCharacterTurn, TurnInput
 
 
 def scope(sender="alice", conversation="g1"):
@@ -252,41 +250,6 @@ async def test_ambiguous_legacy_aliases_remain_untouched_and_pending_deduplicate
     assert len([row for row in rows if row["status"] == "active"]) == 2
     candidate = next(row for row in rows if row["status"] == "pending")
     assert candidate["metadata"]["review_reason"] == "ambiguous_legacy_aliases"
-
-
-@pytest.mark.asyncio
-async def test_chat_completion_persists_user_evidence_without_model_calls(repo, monkeypatch):
-    monkeypatch.setattr(
-        "character.memory_llm.get_memory_enrichment_scheduler",
-        lambda: SimpleNamespace(enabled=False),
-    )
-    service = CharacterContextService(object(), repo, object())
-    prepared = PreparedCharacterTurn(
-        character_id="kisaki",
-        user_scope=scope(),
-        compiled=CompiledCharacterContext("", "", "", ()),
-        history=(),
-        relationship=RelationshipState(),
-        memory_candidates=0,
-        interaction_count=0,
-        reply_guard=None,
-    )
-    for message_id, message in (("m1", "我喜欢喝咖啡。"), ("m2", "我不喜欢咖啡。")):
-        outcome = await service.complete_turn(
-            prepared,
-            TurnInput(message, "qq", "nonebot", "alice", "g1", "group"),
-            "我猜用户住在北京。",
-            source_message_id=message_id,
-        )
-        assert outcome.new_memories == 1
-        assert outcome.memory_enrichment_mode == "rules"
-        assert not outcome.memory_enrichment_scheduled
-    rows = await repo.list_memory_records("kisaki", scope(), include_inactive=True)
-    assert len(rows) == 2
-    current = next(row for row in rows if row["status"] == "active")
-    assert current["evidence"] == ["我不喜欢咖啡。"]
-    assert current["source_message_ids"] == ["m2"]
-    assert all("北京" not in str(row) for row in rows)
 
 
 @pytest.mark.asyncio

@@ -261,6 +261,11 @@ async def test_queued_http_turn_uses_execution_provider_and_one_owning_service(b
     rig = budget_rig
     database = rig.database if database_kind == "default" else rig.custom_db
     other_database = rig.custom_db if database_kind == "default" else rig.database
+    # This ownership test needs an enabled, terminal synthetic no-change writer.
+    # Source capture and the completion/archive/counter writes remain real.
+    monkeypatch.setattr("character.memory_llm.get_memory_enrichment_scheduler", lambda: SimpleNamespace(
+        enabled=True, schedule=lambda **kwargs: False, status=SimpleNamespace(last_outcome="no_change"),
+    ))
     queued, release = asyncio.Event(), asyncio.Event()
     preparations, completions = [], []
     actual_prepare = character_context.CharacterContextService.prepare_turn

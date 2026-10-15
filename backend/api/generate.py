@@ -844,6 +844,8 @@ async def _complete_character_turn(prepared, request: MessageRequest, reply: str
                 ("原文已保存，但" if capture == "recorded" else "")
                 + "长期记忆任务尚未受理；本次回复不代表结构化记忆已写入，请稍后重试。"
             )
+        elif status == "disabled":
+            warning = "自动长期记忆未启用；本次回复不代表已保存。"
         failures = getattr(outcome, "failed_writes", ())
         if failures:
             labels = {"interaction_count": "交互统计", "preferred_address": "称呼更新"}

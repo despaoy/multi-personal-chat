@@ -2,15 +2,15 @@
 
 import json
 from datetime import datetime, timezone
-from types import SimpleNamespace
 
 import pytest
 
 from character.memory_llm import MemoryEnrichmentScheduler, MemoryLlmConfig
-from character.models import CompiledCharacterContext, RelationshipState, UserScope
+from character.models import UserScope
+from character.memory_extractor import extract_memories
+from character.rule_memory_writer import write_rule_memory
 from db.database import SQLiteDB
 from repositories.character_memory import DatabaseCharacterMemoryRepository
-from services.character_context import CharacterContextService, PreparedCharacterTurn, TurnInput
 
 RECEIVED = datetime(2026, 1, 31, 15, 59, tzinfo=timezone.utc)  # 23:59 in the existing event timezone.
 SCOPE = UserScope("test", "clock", "user", "user", "private")
@@ -48,16 +48,11 @@ async def test_background_model_receives_source_clock_not_processing_clock(tmp_p
     (datetime.fromisoformat("2026-04-30T23:59:00+08:00"), "2026-05-01"),
     (datetime(2026, 1, 31, 16, 1, tzinfo=timezone.utc), "2026-02-02"),
 ])
-async def test_rules_use_received_time_for_event_and_observation(tmp_path, monkeypatch, message, received, expected_date):
-    monkeypatch.setattr("character.memory_llm.get_memory_enrichment_scheduler",
-                        lambda: SimpleNamespace(enabled=False))
+async def test_rule_utility_uses_received_time_for_event_and_observation(tmp_path, message, received, expected_date):
     repo = DatabaseCharacterMemoryRepository(SQLiteDB(tmp_path / "rule-clock.sqlite"))
-    service = CharacterContextService(object(), repo, object())
-    prepared = PreparedCharacterTurn("role", SCOPE, CompiledCharacterContext("", "", ""), (),
-                                     RelationshipState(), 0, 0, None, received_at=received)
-    turn = TurnInput(message, "test", "clock", "user", "user", "private")
-    outcome = await service.complete_turn(prepared, turn, "好的", source_message_id="original")
-    assert outcome.new_memories == 1
+    extracted = extract_memories(message, reference_time=received)
+    assert len(extracted) == 1
+    assert await write_rule_memory(repo, "role", SCOPE, extracted[0], "original", observed_at=received)
     row, = await repo.list_memory_records("role", SCOPE, limit=None)
     assert datetime.fromisoformat(row["observed_at"]) == received
     if "面试" in message:

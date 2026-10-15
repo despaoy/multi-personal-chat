@@ -52,7 +52,6 @@ from character.natural_relationship import (
     save_note,
 )
 from character.output_guard import ReplyGuard, build_reply_guard
-from character.rule_memory_writer import write_rule_memory
 from character.semantic_state_estimator import SemanticReviewOutcome, SemanticStateEstimator
 from character.situation_analyzer import (
     RESPONSE_GOALS,
@@ -462,8 +461,7 @@ class CharacterContextService:
             outcome.failed_writes += ("interaction_count",)
             logger.warning("角色交互计数更新失败 character=%s type=%s", prepared.character_id, type(exc).__name__)
 
-        # 2. 提取记忆候选。启用 LLM 时只提交后台复核任务；未启用时
-        # 保留原规则写入，方便离线开发和向后兼容。
+        # 2. 显式备忘录直接保存；自动记忆仅使用启用的语义写入器。
         try:
             note_command = parse_command(turn.message)
             extracted = () if note_command else extract_memories(turn.message, reference_time=prepared.received_at)
@@ -533,15 +531,8 @@ class CharacterContextService:
                         else scheduler.status.last_outcome
                     )
             else:
-                outcome.memory_enrichment_mode = "rules"
-                for item in extracted[:4]:
-                    saved = await write_rule_memory(
-                        self._memory_repo, prepared.character_id, prepared.user_scope,
-                        item, source_message_id or None,
-                        observed_at=prepared.received_at,
-                    )
-                    outcome.new_memories += int(saved)
-                outcome.memory_enrichment_status = "saved" if outcome.new_memories else "no_change"
+                outcome.memory_enrichment_mode = "disabled"
+                outcome.memory_enrichment_status = "disabled"
         except Exception as exc:
             if outcome.source_capture != "failed":
                 outcome.memory_enrichment_status = "partial" if outcome.new_memories else "failed"

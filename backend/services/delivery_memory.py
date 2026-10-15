@@ -324,6 +324,8 @@ class DeliveryMemoryWorker:
                 state, reason = "blocked", "completion_write_failed"
             elif capture in {"stale", "revoked", "conflict", "failed"}:
                 state, reason = "blocked", "source_" + capture
+            elif status == "disabled":
+                state, reason = "blocked", "memory_disabled"
             elif unstarted:
                 state, reason = "pending", status
                 attempts -= 1

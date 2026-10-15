@@ -5,7 +5,6 @@ from unittest.mock import AsyncMock, Mock
 import pytest
 from services.character_context import CharacterContextService, TurnInput
 
-from character.memory_extractor import ExtractedMemory
 from character.models import RelationshipState, UserScope
 from db.schemas import MessageRequest
 
@@ -34,24 +33,6 @@ async def test_scheduling_failure_preserves_source_receipt_and_reports_failure(s
     repo.capture_source.assert_awaited_once()
     scheduler.schedule.assert_called_once()
     assert 'private-storage-detail' not in caplog.text and 'OSError' in caplog.text
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize('saved', [0, 1])
-async def test_rule_failure_keeps_completed_count_and_never_reports_skipped(scenario, monkeypatch, saved):
-    service, prepared, turn, _, scheduler = scenario
-    scheduler.enabled = False
-    monkeypatch.setattr('services.character_context.extract_memories', lambda *a, **k: (
-        ExtractedMemory('user_fact', 'user_study_stage', '用户今年大三', .9),
-        ExtractedMemory('user_fact', 'user_major', '用户的专业是统计学', .9)))
-    turn = TurnInput('我今年大三，专业是统计学。', 'web', 'web-character', 'reader', 'reader', 'private')
-    write = AsyncMock(side_effect=[True] * saved + [OSError('private-storage-detail')])
-    monkeypatch.setattr('services.character_context.write_rule_memory', write)
-    result = await service.complete_turn(prepared, turn, '已生成的回复', source_message_id='source')
-    assert result.new_memories == saved
-    assert result.memory_enrichment_status == ('partial' if saved else 'failed')
-    assert write.await_count == saved + 1
-    scheduler.schedule.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -100,7 +81,7 @@ async def test_required_completion_writes_are_explicit_and_do_not_use_legacy_pat
     if failure in {'address', 'missing_adapter', 'unknown_status', 'both'}:
         expected += ('preferred_address',)
     assert result.failed_writes == expected
-    assert result.memory_enrichment_status == 'no_change'
+    assert result.memory_enrichment_status == result.memory_enrichment_mode == 'disabled'
     if 'preferred_address' not in expected:
         assert result.preferred_address == '杉岚' and result.stage == 'familiar'
         repo.set_address_from_turn.assert_awaited_once_with(prepared.character_id, prepared.user_scope,
