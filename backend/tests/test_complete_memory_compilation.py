@@ -7,7 +7,6 @@ import pytest
 
 from character.context_builder import (
     MAX_COMPLETE_MEMORY_TOTAL_CHARS,
-    MEMORY_REFERENCE_DISCLAIMER,
     compile_reference_context,
 )
 from character.models import CompiledCharacterContext, MemoryItem
@@ -38,24 +37,16 @@ def test_complete_packet_preserves_late_negation_all_sources_and_dates():
     assert packet["historical"] is True
 
 
-def test_oversized_packet_is_skipped_not_cut_and_next_complete_packet_fits():
+def test_oversized_selected_packet_rejects_partial_complete_set():
     huge = item("huge", evidence=("x" * MAX_COMPLETE_MEMORY_TOTAL_CHARS,))
-    reference, ids = compile_reference_context((huge, item("small")), complete_evidence=True)
-    assert ids == ("small",)
-    assert '"huge"' not in reference
-    assert '"small"' in reference
+    with pytest.raises(ValueError, match="reference context budget"):
+        compile_reference_context((huge, item("small")), complete_evidence=True)
 
 
-def test_total_budget_drops_whole_packets_and_preserves_order():
+def test_total_budget_rejects_incomplete_selected_packet_set():
     memories = tuple(item(str(i), evidence=("x" * 1600,)) for i in range(5))
-    reference, ids = compile_reference_context(memories, preferred_address="小明", complete_evidence=True)
-    assert ids == ("0", "1")
-    body = reference.removeprefix(MEMORY_REFERENCE_DISCLAIMER + "\n")
-    assert len(body) <= MAX_COMPLETE_MEMORY_TOTAL_CHARS
-    # Each equal-size packet is whole; admitting the next would exceed budget.
-    assert len(body) + 1 + len(body.splitlines()[-1]) > MAX_COMPLETE_MEMORY_TOTAL_CHARS
-    for line in body.splitlines()[1:]:
-        assert json.loads(line[2:])["evidence"] == ["x" * 1600]
+    with pytest.raises(ValueError, match="reference context budget"):
+        compile_reference_context(memories, preferred_address="小明", complete_evidence=True)
 
 
 def test_complete_mode_keeps_all_fitting_lifecycle_eligible_items():

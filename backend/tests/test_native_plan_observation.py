@@ -82,13 +82,9 @@ def test_cloud_reference_allowance_preserves_full_plan_and_late_conditions():
     assert packet["content_semantics"] == "quoted_source" and packet["speaker_role"] == "user"
 
 
-def test_small_reference_budget_omits_whole_packet_without_losing_late_condition():
-    diagnostics = {}
-    reference, ids = compile_reference_context(
-        (observation(),), complete_evidence=True, max_chars=2000, diagnostics=diagnostics
-    )
-    assert reference == "" and ids == ()
-    assert diagnostics["budget_skipped"] == 1 and diagnostics["budget_chars"] == 2000
+def test_small_reference_budget_rejects_selected_plan_instead_of_omitting_it():
+    with pytest.raises(ValueError, match="reference context budget"):
+        compile_reference_context((observation(),), complete_evidence=True, max_chars=2000)
 
 
 def test_native_cloud_service_propagates_reference_budget_and_observation_semantics(monkeypatch):

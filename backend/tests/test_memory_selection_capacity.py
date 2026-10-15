@@ -55,8 +55,13 @@ async def test_selection_keeps_candidate_bound_and_explicit_caller_limits():
         for i in range(26)
     )
     selector = ContextualEvidenceSelector(all_use, context_budget=ReviewContextBudget(65536))
-    result = await selector.select("核对所有提供的本人资料", original)
-    assert result.candidate_count == MAX_CANDIDATES and result.memories == original[:MAX_CANDIDATES]
+    from character.evidence_selector import InputBudgetError
+
+    with pytest.raises(InputBudgetError, match="candidate count exceeds selection budget"):
+        await selector.select("核对所有提供的本人资料", original)
+    bounded = original[:MAX_CANDIDATES]
+    result = await selector.select("核对所有提供的本人资料", bounded)
+    assert result.candidate_count == MAX_CANDIDATES and result.memories == bounded
     for limit in (0, 1, 5):
         limited = await selector.select(QUESTION, facts(), max_items=limit)
         assert limited.memories == facts()[:limit]
@@ -91,18 +96,11 @@ def test_complete_mode_never_bypasses_lifecycle_or_confidence(invalid):
     assert '"memory_id":"forbidden"' not in context
 
 
-def test_real_character_budget_omits_whole_packet_and_keeps_later_fitting_fact():
+def test_real_character_budget_rejects_missing_selected_fact_instead_of_using_later_one():
     original = facts()
     huge = replace(original[0], memory_id="huge", evidence=("完整原文开始" + "证据" * 7000 + "完整原文末尾",))
-    stats = {}
-    context, ids = compile_reference_context(
-        (*original[:5], huge, original[-1]), complete_evidence=True, diagnostics=stats
-    )
-    assert ids == tuple(item.memory_id for item in original)
-    assert stats["budget_skipped"] == 1 and stats["count_skipped"] == 0
-    assert stats["used_chars"] <= stats["budget_chars"]
-    assert "完整原文开始" not in context and "完整原文末尾" not in context
-    assert FACTS[-1][2] in context
+    with pytest.raises(ValueError, match="reference context budget"):
+        compile_reference_context((*original[:5], huge, original[-1]), complete_evidence=True)
 
 
 async def test_non_use_decisions_do_not_gain_admission_when_count_limit_removed():

@@ -705,6 +705,8 @@ async def _prepare_character_turn(
     HTTP callers inject the application-scoped service. Direct non-HTTP callers
     use the default service when none was supplied.
     """
+    from character.context_builder import MemoryContextBudgetError
+
     try:
         from services.character_context import (
             ContextAfterMemoryOperationError,
@@ -750,6 +752,11 @@ async def _prepare_character_turn(
             "message": "角色上下文准备失败，回复未生成。请先核对本轮记忆操作回执，再检查审核模型和上下文配置。",
             "memoryOperation": exc.operation_summary,
         }, exc)) from exc
+    except MemoryContextBudgetError as exc:
+        raise HTTPException(503, detail={
+            "stage": "memory_context", "reason": "selected_evidence_budget_exceeded",
+            "message": "已选必要记忆无法完整放入当前上下文，本轮未生成。请缩小问题范围或增加上下文预算。",
+        }) from exc
     except HTTPException:
         raise
     except Exception as exc:

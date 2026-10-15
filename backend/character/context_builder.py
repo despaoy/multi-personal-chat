@@ -16,8 +16,8 @@
 - 保留调用方提供的相关度顺序；
 - 同一轮请求只编译一次（由调用方保证）。
 
-情境记忆选择器启用时使用独立的完整证据路径：最多 5 条、总预算
-6000 字符，整包加入或跳过，绝不截去来源、时间限定或句尾纠正。
+情境记忆选择器启用时，完整入选集合必须全部放入提供方参考预算，
+不足时明确报错，不能丢掉来源、时间限定或句尾纠正后继续生成。
 
 人物画像与动态上下文长度限制（第一版）：
 - 人物特征/价值观/原作核心关系/语言习惯/行为边界每类最多 8 项，
@@ -62,6 +62,11 @@ from character.situation_analyzer import (
     SITUATION_SAFETY,
 )
 from character.source_fragment_provenance import source_completeness_payload
+
+
+class MemoryContextBudgetError(ValueError):
+    """The complete selected memory set cannot fit its reference budget."""
+
 
 # 记忆区效率限制（第一版）
 MAX_MEMORY_ITEMS = 5
@@ -714,7 +719,7 @@ def _select_memory_lines(
     cap = max_chars if max_chars is not None else (
         MAX_COMPLETE_MEMORY_TOTAL_CHARS if complete_evidence else MAX_MEMORY_TOTAL_CHARS
     )
-    stats = dict(input_count=len(memories), filtered_count=0, invalid_count=0,
+    stats = dict(input_count=len(memories), filtered_count=0,
                  budget_skipped=0, count_skipped=0, selected_count=0, used_chars=reserved_chars,
                  budget_chars=cap)
     memory_lines: list[str] = []
@@ -727,19 +732,14 @@ def _select_memory_lines(
         if not _memory_is_injectable(item, now):
             stats['filtered_count'] += 1
             continue
-        try:
-            # r123: explicit uncertainty wording regressed real-model reading.
-            # Preserve the metadata on MemoryItem, but keep the new rendering
-            # experimental until a separate source-observation lane is proven.
-            render_item = (replace(item, source_observation=False)
-                           if item.source_observation and not observation_semantics else item)
-            line = _complete_memory_evidence_packet(render_item) if complete_evidence else _memory_evidence_packet(render_item)
-        except (TypeError, ValueError):
-            stats['invalid_count'] += 1
-            continue
+        render_item = (replace(item, source_observation=False)
+                       if item.source_observation and not observation_semantics else item)
+        line = _complete_memory_evidence_packet(render_item) if complete_evidence else _memory_evidence_packet(render_item)
         # 首条记忆的行间换行已计入 reserved_chars（称呼行与其后的换行）
         separator_len = 1 if (memory_lines or reserved_chars) else 0
         if total + separator_len + len(line) > cap:
+            if complete_evidence:
+                raise MemoryContextBudgetError("Selected memory evidence exceeds reference context budget")
             stats['budget_skipped'] += 1
             continue
         memory_lines.append(line)
@@ -769,8 +769,8 @@ def compile_reference_context(
       保留调用方提供的相关度顺序。称呼行先占用总预算，再分配给
       记忆，参考区不会因额外插入称呼而突破上限。
     - complete_evidence=True 时由 6000 字符的原子证据包预算决定条目数，
-      不再额外截断为五条；
-      不裁剪任何 claim 或附属证据，放不下的包不会出现在 used_memory_ids。
+      不再额外截断为五条；整个有效入选集合必须完整放入预算，
+      否则抛出 MemoryContextBudgetError，不返回部分结果。
       调用方可用 max_chars 明确传入提供方工作预算；None 保留已有默认值。
     """
     address = preferred_address.strip()
