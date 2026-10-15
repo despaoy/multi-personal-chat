@@ -195,14 +195,14 @@ def test_claw_executor_runs_in_child_and_enforces_timeout(monkeypatch):
     assert "timed out" in timed_out["error"] or "exited without a result" in timed_out["error"]
 
 
-def test_production_jwt_secret_must_be_explicit_and_strong():
-    from app.config import _validate_jwt_secret
+def test_jwt_secret_must_be_explicit_and_strong():
+    from infra.deployment import validate_jwt_secret
 
     with pytest.raises(RuntimeError):
-        _validate_jwt_secret("", "production")
+        validate_jwt_secret("")
     with pytest.raises(RuntimeError):
-        _validate_jwt_secret("short", "production")
-    assert _validate_jwt_secret("s" * 32, "production") == "s" * 32
+        validate_jwt_secret("short")
+    assert validate_jwt_secret("s" * 32) == "s" * 32
 
 def test_database_startup_probe_uses_adapter_contract():
     from app.main import _initialize_database

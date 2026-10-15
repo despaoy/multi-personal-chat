@@ -18,6 +18,9 @@ _SECRET_PLACEHOLDERS = {
     "change-me-to-a-random-secret",
     "your-48-char-secure-secret-here-change-in-production",
     "PLEASE_SET_A_SECURE_SECRET_HERE",
+    "multipersonal-jwt-secret-change-in-production",
+    "CHANGE_ME_TO_A_SECURE_JWT_SECRET_AT_LEAST_32_CHARS",
+    "replace-with-at-least-32-random-characters",
 }
 
 
@@ -29,7 +32,7 @@ class DeploymentValidationResult:
 
     def raise_if_invalid(self) -> None:
         if not self.ok:
-            raise RuntimeError("Invalid production deployment configuration: " + "; ".join(self.errors))
+            raise RuntimeError("Invalid deployment configuration: " + "; ".join(self.errors))
 
 
 def _value(env: Mapping[str, str], key: str) -> str:
@@ -42,6 +45,13 @@ def _has_any(env: Mapping[str, str], *keys: str) -> bool:
 
 def _is_placeholder(value: str) -> bool:
     return value.strip() in _SECRET_PLACEHOLDERS
+
+
+def validate_jwt_secret(secret: str) -> str:
+    """Require one explicit signing key without generating or changing it."""
+    if len(secret.strip()) < 32 or _is_placeholder(secret):
+        raise RuntimeError("JWT_SECRET must be explicitly set to a non-placeholder value with at least 32 characters")
+    return secret
 
 
 def _is_truthy(value: str) -> bool:
@@ -58,11 +68,11 @@ def _is_valid_encryption_key(value: str) -> bool:
 def validate_deployment_environment(env: Mapping[str, str] | None = None) -> DeploymentValidationResult:
     """Validate production-critical environment variables.
 
-    Development runs are intentionally lenient. Production must declare the
+    JWT signing keys are required in every environment. Production must declare the
     external gateway, database, model, authentication, CORS, and logging
     settings explicitly so accidental defaults do not become the deployment.
     """
-    env = env or os.environ
+    env = os.environ if env is None else env
     errors: list[str] = []
     warnings: list[str] = []
     production = _value(env, "ENVIRONMENT").lower() == "production"
@@ -119,11 +129,10 @@ def validate_deployment_environment(env: Mapping[str, str] | None = None) -> Dep
     elif not _has_any(env, "VLLM_BASE_URL", "VLLM_BASE_URLS"):
         (errors if production else warnings).append("VLLM_BASE_URL or VLLM_BASE_URLS is required for model inference")
 
-    jwt_secret = _value(env, "JWT_SECRET")
-    if production and (len(jwt_secret) < 32 or _is_placeholder(jwt_secret)):
-        errors.append("JWT_SECRET must be explicitly set to a non-placeholder value with at least 32 characters")
-    elif not jwt_secret:
-        warnings.append("JWT_SECRET is not set; development will auto-generate one")
+    try:
+        validate_jwt_secret(_value(env, "JWT_SECRET"))
+    except RuntimeError as exc:
+        errors.append(str(exc))
 
     encryption_key = _value(env, "ENCRYPTION_KEY")
     if production and not _is_valid_encryption_key(encryption_key):
