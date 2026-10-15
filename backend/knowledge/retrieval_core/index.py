@@ -27,6 +27,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 
 from .documents import KnowledgeIndexDocument
+from .embedding import vector_norm
 from .tokenization import tokenize
 
 if TYPE_CHECKING:
@@ -283,6 +284,9 @@ class DomainIndex:
         if not self.documents or self._faiss_index is None or top_k <= 0:
             return []
         vector = np.ascontiguousarray(np.asarray(query_vector, dtype=np.float32).reshape(1, -1))
+        if vector.shape[1] != self._faiss_index.d:
+            raise ValueError(f"Query embedding dimension mismatch: {vector.shape[1]} != {self._faiss_index.d}")
+        vector_norm(vector)
         k = min(top_k, self._faiss_index.ntotal)
         if k <= 0:
             return []

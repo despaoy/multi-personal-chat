@@ -317,14 +317,19 @@ class EmbeddingCache:
         return self.drop(stale)
 
 
-def normalized_vector(vector: np.ndarray) -> np.ndarray:
-    value = np.asarray(vector, dtype=np.float32).reshape(-1)
-    if not np.isfinite(value).all():
+def vector_norm(vector: np.ndarray) -> float:
+    """Validate an embedding without changing its inner-product magnitude."""
+    if not np.isfinite(vector).all():
         raise ValueError("embedding vector contains nonfinite values")
     with np.errstate(over="ignore", invalid="ignore"):
-        norm = float(np.linalg.norm(value))
+        norm = float(np.linalg.norm(vector))
     if not math.isfinite(norm):
         raise ValueError("embedding vector norm is nonfinite")
     if norm <= 0.0:
         raise ValueError("embedding vector has zero norm")
-    return value / norm
+    return norm
+
+
+def normalized_vector(vector: np.ndarray) -> np.ndarray:
+    value = np.asarray(vector, dtype=np.float32).reshape(-1)
+    return value / vector_norm(value)

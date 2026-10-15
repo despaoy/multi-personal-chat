@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from knowledge.retrieval_core.embedding import resolve_local_model_path
+from knowledge.retrieval_core.embedding import resolve_local_model_path, vector_norm
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -73,8 +73,10 @@ class LocalMeanPoolingEmbeddingProvider:
                     pooled = torch.nn.functional.normalize(pooled, p=2, dim=1)
                     batches.append(pooled.cpu().numpy().astype(np.float32, copy=False))
         matrix = np.vstack(batches)
-        if matrix.shape[1] != self.dimension:
-            raise ValueError(f"embedding 维度异常: {matrix.shape}")
+        if matrix.shape != (len(texts), self.dimension):
+            raise ValueError(f"embedding shape mismatch: {matrix.shape}, expected {(len(texts), self.dimension)}")
+        for vector in matrix:
+            vector_norm(vector)
         return matrix
 
     def embed_query(self, query: str) -> np.ndarray:
