@@ -24,7 +24,7 @@ from contextvars import ContextVar
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal
 
-from character.evidence_selector import InputBudgetError, _history_view
+from character.evidence_selector import InputBudgetError, _history_view, _unique_object
 from character.models import InteractionState, WeightedSignal
 from character.situation_analyzer import ACT_LABELS, NEED_LABELS, PHASE_LABELS, SITUATION_LABELS
 
@@ -416,7 +416,7 @@ def _parse_reviewed_state(
         fence = re.fullmatch(r"```(?:json)?[ \t]*\r?\n([\s\S]*?)\r?\n```", text)
         if fence is not None:
             text = fence.group(1)
-        payload = json.loads(text)
+        payload = json.loads(text, object_pairs_hook=_unique_object)
     if not isinstance(payload, Mapping):
         raise ValueError("semantic review must be an object")
 
@@ -574,10 +574,13 @@ def _parse_signals(raw: object, allowed: frozenset[str], *, limit: int) -> tuple
     for signal_id, raw_score in entries:
         if not isinstance(signal_id, str) or signal_id not in allowed:
             raise ValueError("unknown signal id")
-        score = _bounded_number(raw_score, 0.0, 1.0)
-        if score > 0.0:
-            scores[signal_id] = max(scores.get(signal_id, 0.0), score)
-    ordered = sorted(scores.items(), key=lambda item: (-item[1], item[0]))[:limit]
+        if signal_id in scores:
+            raise ValueError("duplicate signal id")
+        scores[signal_id] = _bounded_number(raw_score, 0.0, 1.0)
+    ordered = sorted(
+        ((key, score) for key, score in scores.items() if score > 0.0),
+        key=lambda item: (-item[1], item[0]),
+    )[:limit]
     return tuple(WeightedSignal(signal_id, score) for signal_id, score in ordered)
 
 
