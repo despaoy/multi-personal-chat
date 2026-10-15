@@ -604,16 +604,6 @@ async def _generate_reply_body(
         raise
     except Exception as e:
         failed_cost = round(time.time() - start_time, 2)
-        if record_invocation:
-            await _record_model_invocation(
-                request,
-                model_name,
-                lora_name,
-                failed_cost,
-                used_rag=False,
-                error_type=type(e).__name__,
-                database=message_db,
-            )
         increment("model_failures")
         set_consecutive("model_failure", False)
         log_event(
@@ -628,6 +618,20 @@ async def _generate_reply_body(
             errorType=type(e).__name__,
         )
         logger.error("Generation failed: %s", type(e).__name__)
+        if record_invocation:
+            try:
+                await _record_model_invocation(
+                    request,
+                    model_name,
+                    lora_name,
+                    failed_cost,
+                    used_rag=False,
+                    error_type=type(e).__name__,
+                    database=message_db,
+                )
+            except HTTPException as record_error:
+                # Keep the model cause and recording error on separate chains.
+                raise HTTPException(503, detail=record_error.detail) from e
         if isinstance(e, ContextAuthorityChangedError):
             raise HTTPException(503, detail={
                 "stage": "context_authority", "reason": "repeated_authority_change",
@@ -1392,7 +1396,7 @@ async def _record_model_invocation(
     completion_text: str = "",
     database=None,
 ):
-    """记录模型调用；database 为容器注入的数据库，None 时用全局单例。"""
+    """Record required accounting before archive; timed-out writes may still commit."""
     target_db = database if database is not None else db
     try:
         prompt_tokens = _estimate_tokens(request.message)
@@ -1431,7 +1435,16 @@ async def _record_model_invocation(
             costTime=cost_time,
             errorType=type(e).__name__,
         )
-        logger.warning("Failed to save model invocation traceId=%s error=%s", request.traceId, e)
+        logger.warning("Failed to save model invocation traceId=%s error=%s", request.traceId, type(e).__name__)
+        raise HTTPException(503, detail={
+            "stage": "model_invocation_record",
+            "message": ("生成失败，且调用记录保存失败或未确认，请检查数据库和模型服务后重试"
+                        if error_type else "模型已完成，但调用记录保存失败或未确认，请检查数据库后重试"),
+            "generationErrorType": error_type or None,
+            "recordErrorType": type(e).__name__,
+            "modelInvoked": None if error_type else True,
+            "invocationRecorded": None, "messageSaved": False,
+        }) from e
 
 
 async def _save_message(

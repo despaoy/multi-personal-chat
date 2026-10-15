@@ -3,12 +3,23 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime, timezone
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import pytest
 from fastapi import HTTPException
 
 from db.schemas import MessageRequest
+
+
+@pytest.fixture
+async def completion_runtime(monkeypatch):
+    from services import turn_completion
+    runtime = turn_completion.TurnCompletionRuntime(capacity=1)
+    monkeypatch.setattr(turn_completion, "get_turn_completion_runtime", lambda: runtime)
+    yield runtime
+    await runtime.shutdown(timeout=1)
 
 
 def _request():
@@ -192,30 +203,38 @@ def _async_return(value):
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize('persist,delivery,allowed', [(False, None, False), (True, {}, False), (True, None, True)])
-async def test_explicit_memory_operations_respect_internal_and_delivery_modes(monkeypatch, persist, delivery, allowed):
+async def test_explicit_memory_operations_respect_internal_and_delivery_modes(monkeypatch, persist, delivery, allowed, completion_runtime):
     import api.generate as gen
     from inference import model_manager as mm
 
     _install_common(monkeypatch, gen)
-    monkeypatch.setattr(gen, 'db', SimpleNamespace(config={}, loras=[{'name': 'kisaki', 'status': 'active', 'id': 1}]))
+    monkeypatch.setattr(gen, 'db', SimpleNamespace(config={}, loras=[]))
+    from character.models import RelationshipState, UserScope
     seen = []
 
-    async def prepare(request, character_id, *, character_service=None, execute_memory_operations=False):
-        seen.append(execute_memory_operations)
-        return SimpleNamespace(character_id=character_id)
+    async def prepare(request, character_id, *, character_service=None, execute_memory_operations=False, defer_memory_operations=False):
+        seen.append((execute_memory_operations, defer_memory_operations))
+        return SimpleNamespace(character_id=character_id,
+            user_scope=UserScope("web", "fixture", "owner", "s1", "private"),
+            relationship=RelationshipState(), history=(), received_at=datetime.now(timezone.utc),
+            compiled=SimpleNamespace(used_memory_ids=()), memory_operation_receipt=None)
 
     async def generate(*args, **kwargs):
         return 'reply', False, {}
 
     monkeypatch.setattr(gen, '_prepare_character_turn', prepare)
+    monkeypatch.setattr(gen, '_complete_character_turn', AsyncMock(return_value=None))
     monkeypatch.setattr(gen, '_generate_with_vllm', generate)
     monkeypatch.setattr(gen, '_ensure_vllm', _async_return(True))
     monkeypatch.setattr(gen, '_vllm_client', object())
     monkeypatch.setattr(mm, 'get_model_manager', lambda: SimpleNamespace(_current_provider=SimpleNamespace(value='vllm')))
-    request = MessageRequest(message='忘掉我的住址。', sessionType='private', sessionId='s1')
+    request = MessageRequest(message='忘掉我的住址。', characterId='tsukiyashiro_kisaki', loraName='default', sessionType='private', sessionId='s1')
     await gen._generate_reply_impl(request, persist_message=persist, delivery_context=delivery,
                                   enable_rag=False, record_invocation=False)
-    assert seen == [allowed]
+    assert seen == [(allowed, persist and delivery is not None)]
+    if persist and delivery is not None:
+        assert delivery["completion_snapshot"]["user_scope"]["sender_id"] == "owner"
+    assert completion_runtime.reserved == completion_runtime.active == 0
 
 
 @pytest.mark.asyncio
@@ -332,97 +351,28 @@ def test_lora_path_resolution_uses_injected_loras(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_model_manager_fallback_uses_character_context(monkeypatch):
-    """vLLM 不可用回退到模型管理器时，必须使用编译后的角色上下文。
-
-    回退路径不得退化为"原始消息 + request.history"：关系/情景/决策
-    要进系统提示词，长期记忆进用户消息的不可信参考区，数据库历史
-    在 request.history 为空时兜底，否则生成成功后回写的人物状态
-    与实际喂给模型的上下文脱节。
-    """
+async def test_unavailable_selected_vllm_never_dispatches_another_provider(monkeypatch):
+    """The removed fallback is an explicit unavailable error before any dispatch."""
     import api.generate as gen
     from inference import model_manager as mm
 
     saved, recorded = _install_common(monkeypatch, gen)
-    # 激活映射了人物画像的 kisaki LoRA
-    monkeypatch.setattr(
-        gen,
-        "db",
-        SimpleNamespace(config={}, loras=[{"name": "kisaki", "status": "active", "id": 1}]),
-    )
-
-    fake_prepared = SimpleNamespace(
-        character_id="tsukiyashiro_kisaki",
-        compiled=SimpleNamespace(
-            profile_context="人物画像",
-            dynamic_context="关系动态：熟悉阶段",
-            reference_context="长期记忆：用户说自己叫小明",
-        ),
-        history=({"role": "user", "content": "数据库历史消息"},),
-    )
-
-    async def fake_prepare(request, character_id, *, character_service=None, execute_memory_operations=False):
-        assert character_id == "tsukiyashiro_kisaki"
-        return fake_prepared
-
-    monkeypatch.setattr(gen, "_prepare_character_turn", fake_prepare)
-
-    captured = {}
-
-    class FakeManager:
-        _current_provider = SimpleNamespace(value="vllm")
-
-        def set_lora_adapter(self, value):
-            pass
-
-        async def async_generate(self, **kwargs):
-            captured.update(kwargs)
-            return "fallback-reply", 0.01
-
-        def get_status(self):
-            return {"currentProvider": "vllm", "providers": {"vllm": {"modelName": "fake"}}}
-
-    monkeypatch.setattr(mm, "get_model_manager", lambda: FakeManager())
-    # vLLM 整体不可用：跳过 vLLM 分支直接进入模型管理器回退
+    manager = SimpleNamespace(_current_provider=SimpleNamespace(value="vllm"),
+                              async_generate=AsyncMock())
+    monkeypatch.setattr(mm, "get_model_manager", lambda: manager)
     monkeypatch.setattr(gen, "_ensure_vllm", _async_return(False))
     monkeypatch.setattr(gen, "_vllm_client", None)
-    monkeypatch.setattr(gen, "get_llm_semaphore", lambda: asyncio.Semaphore(2))
-
-    request = MessageRequest(
-        message="我们聊点什么",
-        sessionType="private",
-        sessionId="s1",
-        senderName="小明",
-        history=[],
-    )
-    result = await gen._generate_reply_impl(
-        request,
-        persist_message=False,
-        enable_rag=False,
-        record_invocation=False,
-    )
-
-    assert result.reply == "fallback-reply"
-    assert saved == []
-    assert recorded == []
-
-    session_history = captured["session_history"]
-    # 系统提示词包含编译后的关系动态，但不含具体记忆内容；安全规则本身
-    # 可以使用“长期记忆参考”这一术语来约束模型如何解释不可信参考区。
-    system_message = session_history[0]
-    assert system_message["role"] == "system"
-    assert "关系动态：熟悉阶段" in system_message["content"]
-    assert "长期记忆：用户说自己叫小明" not in system_message["content"]
-    # request.history 为空时使用数据库加载的历史
-    assert any(m["content"] == "数据库历史消息" for m in session_history)
-    # 长期记忆进入最终用户消息的不可信参考区
-    prompt = captured["prompt"]
-    assert "长期记忆：用户说自己叫小明" in prompt
-    assert "我们聊点什么" in prompt
+    retrieval = AsyncMock()
+    monkeypatch.setattr(gen, "_generate_with_retrieval", retrieval)
+    with pytest.raises(HTTPException) as error:
+        await gen._generate_reply_impl(_request(), persist_message=False, enable_rag=False, record_invocation=False)
+    assert error.value.status_code == 503 and saved == recorded == []
+    manager.async_generate.assert_not_awaited()
+    retrieval.assert_not_awaited()
 
 
 @pytest.mark.asyncio
-async def test_injected_character_service_reaches_prepare_and_complete(monkeypatch):
+async def test_injected_character_service_reaches_prepare_and_complete(monkeypatch, completion_runtime):
     """HTTP 层注入的容器角色服务必须贯穿准备与回写两个阶段。
 
     create_app(custom_container) 的生成链路若回退全局默认服务，
@@ -436,7 +386,7 @@ async def test_injected_character_service_reaches_prepare_and_complete(monkeypat
     monkeypatch.setattr(
         gen,
         "db",
-        SimpleNamespace(config={}, loras=[{"name": "kisaki", "status": "active", "id": 1}]),
+        SimpleNamespace(config={}, loras=[]),
     )
 
     # 消息保存成功，让回写路径执行
@@ -458,12 +408,13 @@ async def test_injected_character_service_reaches_prepare_and_complete(monkeypat
         history=(),
     )
 
-    async def fake_prepare(request, character_id, *, character_service=None, execute_memory_operations=False):
+    async def fake_prepare(request, character_id, *, character_service=None, execute_memory_operations=False, defer_memory_operations=False):
         seen["prepare_service"] = character_service
         return fake_prepared
 
-    async def fake_complete(prepared, request, reply, *, character_service=None):
+    async def fake_complete(prepared, request, reply, *, character_service=None, completion_slot=None):
         seen["complete_service"] = character_service
+        assert completion_slot is not None
 
     monkeypatch.setattr(gen, "_prepare_character_turn", fake_prepare)
     monkeypatch.setattr(gen, "_complete_character_turn", fake_complete)
@@ -480,7 +431,7 @@ async def test_injected_character_service_reaches_prepare_and_complete(monkeypat
     monkeypatch.setattr(gen, "_vllm_client", object())
     monkeypatch.setattr(gen, "_generate_with_vllm", fake_vllm)
 
-    request = MessageRequest(message="你好", sessionType="private", sessionId="s1")
+    request = MessageRequest(message="你好", characterId="tsukiyashiro_kisaki", loraName="default", sessionType="private", sessionId="s1")
     result = await gen._generate_reply_impl(
         request,
         persist_message=True,
