@@ -2,15 +2,13 @@
 RAG意图检测模块
 负责智能分析用户消息，判断是否需要触发RAG知识库检索。
 
-检测策略（混合方案）：
-- 优先使用训练好的 ML 分类器（embedding + LogisticRegression）
-- 分类器不可用时回退到规则引擎（关键词匹配 + 句式分析）
+训练好的 ML 分类器严格加载并保留自身判定；不可用时直接报错。
+显式规则工具只供既有离线实验使用，主聊天使用独立语义规划。
 """
 
 import os
 import re
 import json
-import pickle
 import logging
 from pathlib import Path
 from typing import List, Tuple, Dict, Any, Optional
@@ -270,67 +268,46 @@ class RAGIntentDetector:
 _intent_detector: Optional[RAGIntentDetector] = None
 
 
-def _load_ml_model():
+def _set_ml_model(artifacts):
+    """Publish or invalidate one complete in-process classifier state."""
     global _ml_encoder, _ml_classifier, _ml_config, _ML_AVAILABLE
-    if _ML_AVAILABLE:
-        return
-    try:
-        base = Path(__file__).parent
-        # 与 intent_trainer.MODEL_DIR 保持一致：优先读 INTENT_MODEL_PATH 环境变量
+    _ml_encoder, _ml_classifier, _ml_config = artifacts if artifacts is not None else (None, None, None)
+    _ML_AVAILABLE = artifacts is not None
+
+
+def _read_ml_model(model_dir=None):
+    """Read one artifact set without changing availability or routing state."""
+    if model_dir is None:
         configured = os.getenv("INTENT_MODEL_PATH", "").strip()
-        if configured:
-            model_dir = Path(configured).expanduser()
-            if not model_dir.is_absolute():
-                model_dir = base.parent / model_dir
-        else:
-            model_dir = base.parent / "intent_classifier_model"
-        config_path = model_dir / "config.json"
-        classifier_path = model_dir / "classifier.joblib"
-        legacy_model_path = base.parent / "intent_classifier_model.pkl"
-        legacy_config_path = base.parent / "intent_classifier_config.json"
+        model_dir = Path(configured).expanduser() if configured else Path("intent_classifier_model")
+    model_dir = Path(model_dir)
+    if not model_dir.is_absolute():
+        model_dir = Path(__file__).parent.parent / model_dir
 
-        if model_dir.exists() and classifier_path.exists() and config_path.exists():
-            import joblib
-            with open(config_path, "r", encoding="utf-8") as f:
-                _ml_config = json.load(f)
-            _ml_classifier = joblib.load(classifier_path)
-            _ml_scaler = joblib.load(model_dir / "scaler.joblib")
-            _ml_config["_scaler"] = _ml_scaler
-        elif legacy_model_path.exists() and legacy_config_path.exists():
-            with open(legacy_config_path, "r", encoding="utf-8") as f:
-                _ml_config = json.load(f)
-            with open(legacy_model_path, "rb") as f:
-                _ml_classifier = pickle.load(f)
-        else:
-            logger.info("ML 分类器模型文件不存在，使用规则引擎")
-            return
+    import joblib
+    from sentence_transformers import SentenceTransformer
 
-        from sentence_transformers import SentenceTransformer
-        embed_model_name = _ml_config.get("embedding_model", "paraphrase-multilingual-MiniLM-L12-v2")
-        local_candidates = [
-            base.parent / "RAG" / embed_model_name,
-            base.parent / "models" / embed_model_name,
-        ]
-        # 与 .env 的 EMBEDDING_MODEL_PATH 对齐，避免无外网时回退到 huggingface.co
-        env_embed = os.getenv("EMBEDDING_MODEL_PATH", "").strip()
-        if env_embed:
-            local_candidates.append(Path(env_embed).expanduser())
-        _ml_encoder = None
-        for candidate in local_candidates:
-            if candidate.exists():
-                try:
-                    _ml_encoder = SentenceTransformer(str(candidate))
-                    break
-                except Exception:
-                    continue
-        if _ml_encoder is None:
-            # 是否离线由部署环境显式配置，不在进程内全局篡改。
-            _ml_encoder = SentenceTransformer(embed_model_name)
+    with (model_dir / "config.json").open(encoding="utf-8") as source:
+        config = json.load(source)
+    if not isinstance(config, dict) or not isinstance(config.get("embedding_model"), str) or not config["embedding_model"].strip():
+        raise ValueError("Intent classifier config requires embedding_model")
+    classifier = joblib.load(model_dir / "classifier.joblib")
+    scaler = joblib.load(model_dir / "scaler.joblib")
+    if not callable(getattr(classifier, "predict_proba", None)) or not callable(getattr(scaler, "transform", None)):
+        raise TypeError("Invalid intent classifier or scaler artifact")
+    encoder = SentenceTransformer(config["embedding_model"])
+    config["_scaler"] = scaler
 
-        _ML_AVAILABLE = True
-        logger.info(f"ML 意图分类器加载成功 (v{_ml_config.get('version', '1.0')}, F1: {_ml_config.get('cv_f1_mean', 'N/A')})")
-    except Exception as e:
-        logger.warning(f"ML 分类器加载失败，使用规则引擎: {e}")
+    return encoder, classifier, config
+
+
+def _load_ml_model(model_dir=None):
+    """An explicit directory always reloads the requested artifact set."""
+    if model_dir is None and _ML_AVAILABLE:
+        return
+    _set_ml_model(None)
+    _set_ml_model(_read_ml_model(model_dir))
+    logger.info("Intent classifier artifact set loaded")
 
 
 def _ml_predict(message: str) -> Tuple[bool, str, float, Optional[str]]:
@@ -379,21 +356,10 @@ def get_intent_detector() -> RAGIntentDetector:
 
 
 def needs_rag(message: str, context: Optional[Dict[str, Any]] = None) -> Tuple[bool, str, Optional[str]]:
-    """Use a classifier's positive route or the shared rules; propagate prediction errors."""
-    from knowledge.task_dependency import local_context_only
-
-    if local_context_only(message):
-        return False, "完整请求仅依赖个人上下文或为个人陈述，不需要RAG", None
-
-    if not _ML_AVAILABLE:
-        _load_ml_model()
-    if _ML_AVAILABLE:
-        pred, reason, _confidence, kb_name = _ml_predict(message)
-        if pred:
-            return True, reason, kb_name
-
-    pred, reason = get_intent_detector().needs_rag(message, context)
-    return pred, reason, None
+    """Use the trained classifier decision, including a negative result."""
+    _load_ml_model()
+    pred, reason, _confidence, kb_name = _ml_predict(message)
+    return pred, reason, kb_name
 
 
 def analyze_message(message: str) -> Dict[str, Any]:

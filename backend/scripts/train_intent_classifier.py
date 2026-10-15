@@ -4,19 +4,20 @@ RAG 意图分类器训练数据生成 + 模型训练脚本
 生成高质量、领域对齐的训练数据，训练轻量级意图分类模型。
 """
 
-import os
 import json
-import random
 import logging
-from pathlib import Path
+import random
+import sys
 from itertools import product
+from pathlib import Path
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
 
 BACKEND_DIR = Path(__file__).parent.parent
 OUTPUT_DIR = BACKEND_DIR
-MODEL_DIR = BACKEND_DIR / "intent_classifier_model"
+sys.path.insert(0, str(BACKEND_DIR))
+from knowledge.intent_trainer import MODEL_DIR, _load_embed_model  # noqa: E402 -- direct script bootstrap
 
 GENSHIN_REGIONS = [
     "蒙德", "蒙德城", "璃月", "璃月港", "稻妻", "须弥", "枫丹", "纳塔", "至冬",
@@ -378,42 +379,13 @@ def generate_training_data() -> list:
 def train_model(data: list):
     logger.info("开始训练意图分类模型...")
 
-    try:
-        from sentence_transformers import SentenceTransformer
-    except ImportError:
-        logger.error("请安装 sentence-transformers: pip install sentence-transformers")
-        return False
-
+    import joblib
+    import numpy as np
     from sklearn.linear_model import LogisticRegression
     from sklearn.model_selection import cross_val_score
     from sklearn.preprocessing import StandardScaler
-    import numpy as np
-    import joblib
 
-    # 加载嵌入模型
-    model_candidates = [
-        OUTPUT_DIR.parent / "RAG" / "paraphrase-multilingual-MiniLM-L12-v2",
-        OUTPUT_DIR / "models" / "paraphrase-multilingual-MiniLM-L12-v2",
-        "paraphrase-multilingual-MiniLM-L12-v2",
-    ]
-
-    embed_model = None
-    for candidate in model_candidates:
-        if Path(candidate).exists() if not isinstance(candidate, str) else False:
-            try:
-                embed_model = SentenceTransformer(str(candidate))
-                logger.info(f"使用本地嵌入模型: {candidate}")
-                break
-            except Exception:
-                continue
-
-    if embed_model is None:
-        try:
-            embed_model = SentenceTransformer("paraphrase-multilingual-MiniLM-L12-v2")
-            logger.info("使用在线嵌入模型")
-        except Exception as e:
-            logger.error(f"无法加载嵌入模型: {e}")
-            return False
+    embed_model, embedding_source = _load_embed_model()
 
     texts = [d[0] for d in data]
     labels = [d[1] for d in data]
@@ -427,7 +399,7 @@ def train_model(data: list):
 
     logger.info("交叉验证中...")
     clf = LogisticRegression(C=1.0, max_iter=1000, class_weight="balanced")
-    scores = cross_val_score(clf, X_scaled, y, cv=5, scoring="f1")
+    scores = cross_val_score(clf, X_scaled, y, cv=5, scoring="f1", error_score="raise")
     logger.info(f"5折交叉验证 F1: {scores.mean():.4f} (+/- {scores.std():.4f})")
 
     logger.info("训练最终模型...")
@@ -439,7 +411,7 @@ def train_model(data: list):
 
     config = {
         "model_type": "logistic_regression",
-        "embedding_model": "paraphrase-multilingual-MiniLM-L12-v2",
+        "embedding_model": embedding_source,
         "threshold": 0.5,
         "confidence_fallback": 0.3,
         "version": "2.0",
@@ -499,7 +471,7 @@ def main():
     data = generate_training_data()
     success = train_model(data)
     if success:
-        logger.info("训练完成！模型已保存到 backend/intent_classifier_model/")
+        logger.info("训练完成！模型已保存到 %s", MODEL_DIR)
         logger.info("请重启后端服务以加载新模型")
     else:
         logger.error("训练失败")

@@ -573,6 +573,7 @@ async def train_intent_classifier(
         "message": "加载样本数据...", "result": None, "started_at": time.time(),
     }
 
+    result = None
     try:
         # ── 1. 加载已保存的样本 ──
         _training_status.update(stage="load_samples", message="加载样本数据...", progress=5)
@@ -621,7 +622,8 @@ async def train_intent_classifier(
         # ── 3. 重载意图检测器 ──
         _check_cancelled()
         _training_status.update(stage="reload", message="重载意图检测器...", progress=95)
-        _reload_intent_detector()
+        await _reload_intent_detector()
+        result = {**result, "artifacts_saved": True, "reloaded": True}
 
         _training_status.update(
             running=False, stage="done", message="训练完成！", progress=100, result=result,
@@ -630,26 +632,24 @@ async def train_intent_classifier(
         return result
 
     except asyncio.CancelledError:
-        _training_status.update(
-            running=False,
-            stage="cancelled",
-            message="训练已取消",
-            progress=0,
-            result={"cancelled": True},
-        )
+        cancelled = {"cancelled": True}
+        if result is not None and result.get("success"):
+            cancelled.update(result, success=False, artifacts_saved=True, reloaded=False, cancelled=True)
+        _training_status.update(running=False, stage="cancelled", message="训练已取消", progress=0, result=cancelled)
         raise
-    except RuntimeError as e:
-        if "取消" in str(e):
-            _training_status.update(running=False, stage="cancelled", message="训练已取消", progress=0, result={"cancelled": True})
-        else:
-            _training_status.update(running=False, stage="error", message=str(e), progress=0, result={"error": str(e)})
-        _add_log(str(e))
-        return {"error": str(e)}
-    except Exception as e:
-        logger.error(f"训练失败: {e}", exc_info=True)
-        _training_status.update(running=False, stage="error", message=str(e), progress=0, result={"error": str(e)})
-        _add_log(f"训练失败: {e}")
-        return {"error": str(e)}
+    except Exception as exc:
+        failure = {"error": str(exc)}
+        message = str(exc)
+        if result is not None and result.get("success"):
+            failure = {**result, **failure, "success": False, "artifacts_saved": True, "reloaded": False}
+            message = "训练产物已保存，但重载失败：" + message
+        cancelled = isinstance(exc, RuntimeError) and "取消" in str(exc)
+        if cancelled:
+            failure["cancelled"] = True
+        _training_status.update(running=False, stage="cancelled" if cancelled else "error",
+            message="训练已取消" if cancelled else message, progress=0, result=failure)
+        _add_log(message)
+        return failure
 
 
 # ═══════════════════════════════════════════════════════════
@@ -695,9 +695,7 @@ def _train_multiclass_model(
     _add_log(f"训练数据: {len(texts)} 条, 类别: {label_names}")
     _add_log(f"各类别样本数: {dict(zip(label_names, [labels.count(i) for i in range(len(label_names))]))}")
 
-    embed_model = _load_embed_model()
-    if not embed_model:
-        raise RuntimeError("无法加载嵌入模型")
+    embed_model, embedding_source = _load_embed_model()
 
     _add_log(f"编码 {len(texts)} 条文本...")
     X = embed_model.encode(texts, show_progress_bar=False, batch_size=64)
@@ -713,13 +711,9 @@ def _train_multiclass_model(
         C=1.0, max_iter=1000, class_weight="balanced",
         solver="lbfgs",
     )
-    try:
-        scores = cross_val_score(clf, X_scaled, y, cv=min(5, len(set(labels))), scoring="accuracy")
-        cv_acc, cv_std = float(scores.mean()), float(scores.std())
-        _add_log(f"交叉验证准确率: {cv_acc:.4f} (+/- {cv_std:.4f})")
-    except Exception as e:
-        _add_log(f"交叉验证失败: {e}")
-        cv_acc, cv_std = 0.0, 0.0
+    scores = cross_val_score(clf, X_scaled, y, cv=min(5, len(set(labels))), scoring="accuracy", error_score="raise")
+    cv_acc, cv_std = float(scores.mean()), float(scores.std())
+    _add_log(f"交叉验证准确率: {cv_acc:.4f} (+/- {cv_std:.4f})")
 
     _check_cancelled()
 
@@ -734,7 +728,7 @@ def _train_multiclass_model(
 
     config = {
         "model_type": "multiclass_logistic_regression",
-        "embedding_model": "paraphrase-multilingual-MiniLM-L12-v2",
+        "embedding_model": embedding_source,
         "label_names": label_names,
         "label_map": label_map,
         "version": "4.1-multiclass-routed",
@@ -766,40 +760,27 @@ def _train_multiclass_model(
 
 def _load_embed_model():
     from sentence_transformers import SentenceTransformer
-    candidates = [
-        BACKEND_DIR.parent / "RAG" / "paraphrase-multilingual-MiniLM-L12-v2",
-        BACKEND_DIR / "models" / "paraphrase-multilingual-MiniLM-L12-v2",
-        Path(os.getenv("EMBEDDING_MODEL_PATH") or os.getenv("EMBED_MODEL_PATH", "")),
-    ]
-    for candidate in candidates:
-        if candidate and Path(candidate).exists():
-            try:
-                model = SentenceTransformer(str(candidate))
-                logger.info(f"使用本地嵌入模型: {candidate}")
-                return model
-            except Exception:
-                continue
-    try:
-        model = SentenceTransformer("paraphrase-multilingual-MiniLM-L12-v2")
-        logger.info("使用在线嵌入模型")
-        return model
-    except Exception as e:
-        logger.error(f"无法加载嵌入模型: {e}")
-        return None
+
+    source = (os.getenv("EMBEDDING_MODEL_PATH") or os.getenv("EMBED_MODEL_PATH", "")).strip()
+    if not source:
+        raise ValueError("Intent training requires EMBEDDING_MODEL_PATH")
+    path = Path(source).expanduser()
+    if not path.is_absolute():
+        path = BACKEND_DIR / path
+    path = path.resolve()
+    if not path.is_dir():
+        raise FileNotFoundError(f"Intent embedding directory does not exist: {path}")
+    return SentenceTransformer(str(path)), str(path)
 
 
-def _reload_intent_detector():
-    try:
-        import knowledge.intent_detector as module
-        module._ML_AVAILABLE = False
-        module._ml_encoder = None
-        module._ml_classifier = None
-        module._ml_config = None
-        from knowledge.intent_detector import needs_rag
-        needs_rag("测试")
-        _add_log("意图检测器已重载")
-    except Exception as e:
-        _add_log(f"意图检测器重载失败（下次启动时自动加载）: {e}")
+async def _reload_intent_detector():
+    from knowledge import intent_detector
+
+    intent_detector._set_ml_model(None)
+    artifacts = await asyncio.to_thread(intent_detector._read_ml_model, MODEL_DIR)
+    _check_cancelled()
+    intent_detector._set_ml_model(artifacts)
+    _add_log("意图检测器已重载")
 
 
 def get_model_info() -> Dict[str, Any]:
