@@ -166,14 +166,23 @@ def capture_plan(identity, body, observed_at, *, postgres=False):
     fence = yield from lock_owner(identity, postgres=postgres)
     if stamp <= fence:
         return "stale"
-    rows = yield ("SELECT state, body_digest, observed_at FROM memory_sources WHERE source_key = :source_key", identity)
-    if rows and rows[0]["state"] == "pending" and rows[0]["body_digest"]:
-        row = rows[0]
-        if row["observed_at"] <= fence:
-            return "stale"
-        if row["body_digest"] != hashlib.sha256(body.encode()).hexdigest() or row["observed_at"] != stamp:
-            return "conflict"
     params = dict(identity, body=body, observed_at=stamp)
+    rows = yield ("SELECT state, body_digest, observed_at, body = :body AS body_matches, "
+                  "EXISTS (SELECT 1 FROM memory_source_terms t WHERE t.scope_key = :scope_key "
+                  "AND t.source_key = :source_key) AS indexed "
+                  "FROM memory_sources WHERE source_key = :source_key", params)
+    if rows:
+        row = rows[0]
+        # Capture commits speech and every posting atomically. Pre-013 sources
+        # have no postings and must still take the index backfill path below.
+        if (row["state"] == "recorded" and row["body_matches"]
+                and row["observed_at"] == stamp and row["indexed"]):
+            return "recorded"
+        if row["state"] == "pending" and row["body_digest"]:
+            if row["observed_at"] <= fence:
+                return "stale"
+            if row["body_digest"] != hashlib.sha256(body.encode()).hexdigest() or row["observed_at"] != stamp:
+                return "conflict"
     # Only pending anchors can be filled. Replays cannot overwrite text or undo
     # revocation, even when a caller retries with a newer observation timestamp.
     yield ("INSERT INTO memory_sources "
