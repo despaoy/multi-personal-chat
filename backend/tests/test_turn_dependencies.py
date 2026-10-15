@@ -166,10 +166,9 @@ def test_overlapping_sentence_preserves_controls_and_unresolved_dependencies(kin
 
 
 @pytest.mark.parametrize("indices", [[], [0]])
-def test_legacy_unknown_label_retains_unresolved_source_semantics(indices):
+def test_unknown_dependency_label_is_rejected_instead_of_rewritten(indices):
     value = baseline()
     value["unknown"] = indices
     value.pop("unresolved_source")
-    plan = parse_dependencies(value, QUERY)
-    assert dict(plan.groups)["unresolved_source"] == tuple(indices)
-    assert plan.private_context_only == (not indices)
+    with pytest.raises(ValueError, match="Unexpected dependency groups"):
+        parse_dependencies(value, QUERY)

@@ -28,16 +28,6 @@ class TurnDependencies:
 
 def parse_dependencies(value: object, query: str) -> TurnDependencies:
     segments = query_segments(query)
-    if isinstance(value, dict) and set(value) == {
-        "private_memory",
-        "current_input",
-        "public_knowledge",
-        "control",
-        "unknown",
-    }:
-        # Old ambiguous labels retain every unresolved index, never become a
-        # private-only exemption merely because values are unknown.
-        value = {("unresolved_source" if key == "unknown" else key): indices for key, indices in value.items()}
     if not isinstance(value, dict) or set(value) != set(KINDS):
         raise ValueError("Unexpected dependency groups")
     groups = []

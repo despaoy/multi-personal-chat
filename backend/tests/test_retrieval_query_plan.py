@@ -73,15 +73,19 @@ async def test_failed_review_raises_with_original_cause(monkeypatch, mode):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("field", ["dependencies", "public_partitions"])
+@pytest.mark.parametrize("field", ["dependencies", "public_partitions", "legacy_unknown"])
 async def test_incomplete_legacy_plan_is_rejected(monkeypatch, field):
     monkeypatch.setenv("RAG_TASK_PLANNER_ENABLED", "true")
     async def review(_messages):
         value = complete_plan()
-        del value[field]
+        if field == "legacy_unknown":
+            value["dependencies"]["unknown"] = value["dependencies"].pop("unresolved_source")
+        else:
+            del value[field]
         return json.dumps(value)
-    with pytest.raises(QueryPlanReviewError, match="query_plan_invalid"):
+    with pytest.raises(QueryPlanReviewError, match="query_plan_invalid") as caught:
         await plan_retrieval_views(QUERY, reviewer=review)
+    assert caught.value.status == "invalid" and type(caught.value.__cause__) is ValueError
 
 
 @pytest.mark.asyncio
