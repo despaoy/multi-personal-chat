@@ -68,6 +68,7 @@ if TYPE_CHECKING:
     from repositories.messages import MessageRepository
 
     from character.profile_registry import CharacterProfileRegistry
+    from inference.provider_context import ProviderContextBudget
     from services.delivery_memory import CompletionSnapshot
 
 def compile_user_recall_context(history):
@@ -595,7 +596,9 @@ class CharacterContextService:
         )
 
 
-def build_character_context_service(database, *, source_recall_enabled: bool | None = None) -> CharacterContextService:
+def build_character_context_service(
+    database, *, source_recall_enabled: bool | None = None, context_budget: ProviderContextBudget | None = None,
+) -> CharacterContextService:
     """基于指定数据库构建编排服务。
 
     create_app(custom_container) 的应用实例必须用容器数据库构建服务，
@@ -608,7 +611,7 @@ def build_character_context_service(database, *, source_recall_enabled: bool | N
     from character.semantic_review_adapter import create_default_semantic_review_runtime
     from inference.provider_context import get_provider_context_budget
 
-    budget = get_provider_context_budget()
+    budget = get_provider_context_budget() if context_budget is None else context_budget
     semantic_runtime = create_default_semantic_review_runtime()
 
     return CharacterContextService(
@@ -655,18 +658,16 @@ def _observe_semantic_review(outcome: SemanticReviewOutcome) -> None:
         logger.debug("语义复核诊断记录失败", exc_info=True)
 
 
-_default_service: CharacterContextService | None = None
+_default_service: tuple[ProviderContextBudget, CharacterContextService] | None = None
 
 
 def get_default_character_context_service() -> CharacterContextService:
-    """返回基于全局单例的默认编排服务（进程内单例）。
+    """Reuse the default service only while its request budget is unchanged."""
+    from db.adapter import db
+    from inference.provider_context import get_provider_context_budget
 
-    仅供非 HTTP 兼容调用方（bot 直连、旧测试）使用；HTTP 路径
-    应经 build_character_context_service(container.db) 按应用构建。
-    """
     global _default_service
-    if _default_service is None:
-        from db.adapter import db as _db
-
-        _default_service = build_character_context_service(_db)
-    return _default_service
+    budget = get_provider_context_budget()
+    if _default_service is None or _default_service[0] != budget:
+        _default_service = (budget, build_character_context_service(db, context_budget=budget))
+    return _default_service[1]

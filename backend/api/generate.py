@@ -403,6 +403,17 @@ async def _generate_reply_body(
         _completion_slots.append(completion_slot)
 
     if mapped_character_id and prepared_override is None:
+        if character_service is None:
+            from services.character_context import (
+                build_character_context_service,
+                get_default_character_context_service,
+            )
+
+            try:
+                character_service = (get_default_character_context_service() if source_db is db
+                                     else build_character_context_service(source_db))
+            except Exception as exc:
+                raise HTTPException(503, "角色上下文配置读取失败，请检查上下文及审核配置后重试") from exc
         prepared_character_turn = await _prepare_character_turn(
             request,
             mapped_character_id,
@@ -938,27 +949,16 @@ def get_chat_generation_service() -> ChatGenerationService:
 
 
 def get_request_chat_generation_service(request: Request) -> ChatGenerationService:
-    """Compose the HTTP service from the owning application's runtime.
+    """Bind the application runtime and database before queue admission.
 
-    生成链路必须完全绑定当前应用容器的数据库：人物上下文服务
-    （记忆/关系/历史）与消息持久化/调用记录/生成配置读取都要走
-    容器数据库。只注入人物服务时，上一轮消息仍写入全局库，下一轮
-    从容器库读不到，历史会断裂。容器数据库即全局单例时复用
-    模块级缓存服务。
+    Character context is built after the queued request resolves its provider.
+    Memory reads, completion writes and message storage use the same database.
     """
-
-    from services.character_context import build_character_context_service
-
     container = get_runtime_container(request.app)
     runtime = inference_runtime if container.inference_runtime is None else container.inference_runtime
-    character_service = None
-    message_db = None
-    if container.db is not db:
-        character_service = build_character_context_service(container.db)
-        message_db = container.db
-    if runtime is inference_runtime and character_service is None:
+    if runtime is inference_runtime and container.db is db:
         return get_chat_generation_service()
-    return _build_chat_generation_service(runtime, character_service, message_db)
+    return _build_chat_generation_service(runtime, message_db=container.db)
 
 
 async def generate_reply_core(
