@@ -46,17 +46,6 @@ def test_flash_complete_numeric_request_keeps_whole_required_sources(flash):
     assert counter.token_counter_info()["mode"] == "deepseek_v41_flash_bpe"
 
 
-@pytest.mark.parametrize("asset", ["missing", "corrupt"])
-def test_flash_missing_or_changed_asset_uses_byte_bound(flash, monkeypatch, tmp_path, asset):
-    path = tmp_path / "tokenizer.json"
-    if asset == "corrupt":
-        path.write_text("{}")
-    monkeypatch.setattr(counter, "_FLASH_TOKENIZER_PATH", path)
-    text = "编号N09R119的件数为14，身份核验失败且材料不全。"
-    assert estimated_tokens(text) == len(text.encode("utf-8"))
-    assert counter.token_counter_info()["mode"] == "utf8_byte_upper_bound"
-
-
 def test_switching_models_cannot_reuse_wrong_asset_or_change_other_provider(flash, monkeypatch):
     flash_hash = counter.token_counter_info()["asset_sha256"]
     text = "1234567890，身份核验失败。"

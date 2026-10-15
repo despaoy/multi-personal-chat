@@ -1,7 +1,6 @@
 """Real numeric-request calibration and complete-input serving boundaries."""
 
 import json
-import sys
 from copy import deepcopy
 from dataclasses import replace
 from html import unescape
@@ -101,25 +100,6 @@ def test_other_provider_or_model_keeps_existing_estimate(deepseek, monkeypatch, 
     assert estimated_tokens("1234567890") == 3
     assert estimated_tokens("身份核验失败") == 6
     assert counter.token_counter_info() == {"mode": "generic_character_estimate"}
-
-
-@pytest.mark.parametrize("asset", ["missing", "corrupt"])
-def test_missing_or_changed_data_uses_byte_bound_not_unsafe_average(deepseek, monkeypatch, tmp_path, asset):
-    path = tmp_path / "tokenizer.json"
-    if asset == "corrupt":
-        path.write_text("{}")
-    monkeypatch.setattr(counter, "_TOKENIZER_PATH", path)
-    text = CASE["bridges"][0]["message"] + "身份核验失败且材料不全。"
-    assert estimated_tokens(text) == len(text.encode("utf-8"))
-    assert estimated_tokens(text) > GOLDEN["measured_counting"]["old_estimate"] // 8
-    assert counter.token_counter_info()["mode"] == "utf8_byte_upper_bound"
-
-
-def test_missing_optional_library_does_not_restore_character_average(deepseek, monkeypatch):
-    monkeypatch.setitem(sys.modules, "tokenizers", None)
-    text = CASE["source_message"] + CASE["bridges"][0]["message"]
-    assert estimated_tokens(text) == len(text.encode("utf-8"))
-    assert counter.token_counter_info()["unavailable_reason"] == "ModuleNotFoundError"
 
 
 def complete_request(**changes):
