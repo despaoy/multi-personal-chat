@@ -23,7 +23,7 @@ from math import isfinite
 from typing import Any
 
 from infra.environment import read_bool
-from knowledge.curated_sources import CuratedSourceChangedError, validate_curated_source
+from knowledge.curated_sources import CuratedSourceChangedError, curated_source_receipts, validate_curated_source
 
 from .cache import AnswerCache, answer_cache_key
 from .corrective import CorrectiveRetrievalAdapter
@@ -56,17 +56,6 @@ _GROUNDED_TEMPERATURE_CAP = 0.5
 
 def _strip_think_blocks(text: str) -> str:
     return _THINK_BLOCK_RE.sub("", text).strip()
-
-
-def _source_receipts(bundle):
-    # Injected document-only services need no filesystem dependency contract.
-    # A present catalogue must supply its actual records; malformed data fails.
-    if "curated_source_catalog" not in bundle:
-        return ()
-    sources = bundle["curated_source_catalog"]["sources"]
-    if not isinstance(sources, list):
-        raise ValueError("Curated source catalogue records must be a list")
-    return tuple(sources)
 
 
 async def _validate_sources(receipts):
@@ -339,7 +328,7 @@ class GroundedAnswerService:
         )
         timings.prompt_ms = (time.perf_counter() - prompt_start) * 1000
 
-        receipts = _source_receipts(bundle)
+        receipts = curated_source_receipts(bundle)
         await _validate_sources(receipts)
         generation_start = time.perf_counter()
         chunks: list[str] = []
@@ -517,7 +506,7 @@ class GroundedAnswerService:
         )
         timings.prompt_ms = (time.perf_counter() - prompt_start) * 1000
 
-        receipts = _source_receipts(bundle)
+        receipts = curated_source_receipts(bundle)
         await _validate_sources(receipts)
         generation_start = time.perf_counter()
         raw_answer = await asyncio.wait_for(

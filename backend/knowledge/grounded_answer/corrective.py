@@ -19,6 +19,8 @@ import logging
 from collections.abc import Callable
 from typing import Any
 
+from knowledge.curated_sources import curated_source_receipts
+
 from ..query_reformulation import append_retrieval_keywords
 from .packet import citation_document_id
 
@@ -119,8 +121,32 @@ class CorrectiveRetrievalAdapter:
             citation_by_id[doc_id] for result in merged_results if (doc_id := str(result.get("id"))) in citation_by_id
         ]
 
+        catalog = {}
+        if "curated_source_catalog" in primary or "curated_source_catalog" in secondary:
+            if "curated_source_catalog" not in primary or "curated_source_catalog" not in secondary:
+                raise ValueError("Corrective retrieval changed its curated source contract")
+            sources, unavailable = {}, {}
+            for bundle in (primary, secondary):
+                for source in curated_source_receipts(bundle):
+                    parent_id = source["parent_id"]
+                    if parent_id in sources and sources[parent_id] != source:
+                        raise ValueError("Conflicting curated source snapshots across corrective retrieval rounds")
+                    sources[parent_id] = source
+                for missing in bundle["curated_source_catalog"]["unavailable"]:
+                    parent_id = missing["parent_id"]
+                    if parent_id in unavailable and unavailable[parent_id] != missing:
+                        raise ValueError("Conflicting unavailable sources across corrective retrieval rounds")
+                    unavailable[parent_id] = missing
+            if sources.keys() & unavailable.keys():
+                raise ValueError("Curated source availability changed across corrective retrieval rounds")
+            catalog["curated_source_catalog"] = dict(
+                sources=list(sources.values()),
+                unavailable=list(unavailable.values()),
+            )
+
         return {
             **secondary,  # 以改写轮 bundle 为基础（其 confidence 已达标）
+            **catalog,
             "results": merged_results,
             "citations": merged_citations,
             "evidence_packets": [

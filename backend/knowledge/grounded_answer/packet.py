@@ -10,7 +10,10 @@
 from __future__ import annotations
 
 import logging
+from pathlib import PurePosixPath
 from typing import TYPE_CHECKING, Any
+
+from knowledge.curated_sources import curated_source_packet, curated_source_receipts
 
 from .models import AnswerMode, EvidenceItem, EvidencePacket
 
@@ -75,12 +78,53 @@ def citation_document_id(citation: Mapping[str, Any]) -> str:
     return doc_id
 
 
+def _curated_answer_documents(bundle):
+    """Index cards locate originals; only this read's declared spans are facts."""
+    sources = {}
+    unavailable = set()
+    for source in curated_source_receipts(bundle):
+        parent_id = source["parent_id"]
+        if parent_id in sources:
+            raise ValueError("Duplicate curated source parent binding")
+        sources[parent_id] = source
+    for missing in bundle["curated_source_catalog"]["unavailable"]:
+        parent_id = missing["parent_id"]
+        if missing["status"] != "no_visible_source" or parent_id in unavailable or parent_id in sources:
+            raise ValueError("Invalid unavailable curated source binding")
+        unavailable.add(parent_id)
+    results = bundle["results"]
+    result_ids = [item["id"] for item in results]
+    if len(set(result_ids)) != len(result_ids) or set(result_ids) != set(sources) | unavailable:
+        raise ValueError("Curated sources must bind every selected document exactly once")
+
+    documents = []
+    for item in results:
+        if item["id"] in unavailable:
+            continue
+        source = sources[item["id"]]
+        if source["domain_id"] != item["domain_id"] or source["domain_id"] not in bundle["domains"]:
+            raise ValueError("Curated source has a conflicting document domain")
+        excerpt = source["excerpt"]
+        documents.append({
+            **item,
+            "document_type": "evidence",
+            "title": PurePosixPath(excerpt["source_path"]).name,
+            "summary": "",
+            "content": curated_source_packet(source)["text"],
+            "source": dict(source_path=excerpt["source_path"], line_start=excerpt["line_start"], line_end=excerpt["line_end"]),
+            "metadata": {},
+            "reality_status": "unknown",
+            "temporal_scope": "unknown",
+            "content_scope": "unknown",
+        })
+    return documents
+
+
 class EvidencePacketBuilder:
     """Retrieval bundle → EvidencePacket。"""
 
     def __init__(self, evidence_budget_chars: int = 6000):
-        # 上游已做一次预算裁剪，
-        # 此处防止异常超大 bundle 直接塞满 prompt
+        # Answer evidence has its own complete-document admission budget.
         if type(evidence_budget_chars) is not int or evidence_budget_chars < 600:
             raise ValueError("evidence_budget_chars must be an integer >= 600")
         self.evidence_budget = evidence_budget_chars
@@ -95,9 +139,17 @@ class EvidencePacketBuilder:
     ) -> EvidencePacket:
         """bundle 契约见角色知识检索 runtime 返回值。"""
         packet_warnings = list(warnings or [])
-        admitted_evidence = _admitted_evidence_by_document(bundle)
-        results = list(bundle.get("results") or [])
-        citations = list(bundle.get("citations") or [])
+        curated = "curated_source_catalog" in bundle
+        if curated:
+            results = _curated_answer_documents(bundle)
+            if answer_mode == AnswerMode.ABSTENTION:
+                results = []
+            citations = [{"id": item["id"]} for item in results]
+            admitted_evidence = {item["id"]: [item["content"]] for item in results}
+        else:
+            results = list(bundle.get("results") or [])
+            citations = list(bundle.get("citations") or [])
+            admitted_evidence = _admitted_evidence_by_document(bundle)
         domains = [str(d) for d in (bundle.get("domains") or [])]
 
         result_by_id: dict[str, Mapping[str, Any]] = {}
@@ -144,6 +196,8 @@ class EvidencePacketBuilder:
             block = evidence_item.to_block()
             size = len(block) + (2 if blocks else 0)
             if used + size > self.evidence_budget:
+                if curated:
+                    raise ValueError("Complete curated answer evidence exceeds its character budget")
                 truncated = True
                 continue
 

@@ -67,7 +67,7 @@ class EvidenceItem:
     rerank_score: float | None
     layer_label: str  # 叙事层标签（如 第1卷·主线·current·objective）
 
-    _TYPE_LABELS = {"fact": "事实", "relation": "关系", "event": "事件"}
+    _TYPE_LABELS = {"evidence": "原作片段", "fact": "事实", "relation": "关系", "event": "事件"}
 
     def context_block_header(self) -> str:
         type_label = self._TYPE_LABELS.get(self.document_type, self.document_type)

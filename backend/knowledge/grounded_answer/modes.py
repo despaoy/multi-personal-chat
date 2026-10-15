@@ -15,6 +15,8 @@ from dataclasses import dataclass
 from math import isfinite
 from typing import TYPE_CHECKING, Any
 
+from knowledge.curated_sources import curated_source_receipts
+
 from .models import AnswerMode, FailureKind
 
 if TYPE_CHECKING:
@@ -80,7 +82,10 @@ class AnswerModeDecider:
 
         warnings: list[str] = []
         results = list(bundle["results"])
-        citations = list(bundle["citations"])
+        evidence_count = (
+            len(curated_source_receipts(bundle))
+            if "curated_source_catalog" in bundle else len(bundle["citations"])
+        )
         confidence = float(bundle["confidence"])
         if isinstance(bundle["confidence"], bool) or not isfinite(confidence):
             raise ValueError("retrieval confidence must be a finite number")
@@ -90,7 +95,7 @@ class AnswerModeDecider:
         analysis = bundle.get("query_analysis") or {}
         entities = list(analysis.get("entities") or [])
 
-        if abstained or not results or not citations:
+        if abstained or not results or not evidence_count:
             reason = FailureKind.NO_RETRIEVAL.value if not results else FailureKind.LOW_CONFIDENCE.value
             return ModeDecision(
                 mode=AnswerMode.ABSTENTION,
@@ -143,7 +148,7 @@ class AnswerModeDecider:
         if (
             top1 is not None
             and top1 >= self.thresholds.direct_top1_score
-            and len(citations) <= self.thresholds.direct_max_documents
+            and evidence_count <= self.thresholds.direct_max_documents
             and not persona
         ):
             return ModeDecision(

@@ -131,6 +131,17 @@ def validate_curated_source(source, *, verify_original=True):
     return source
 
 
+def curated_source_receipts(bundle):
+    # Injected document-only services need no filesystem dependency contract.
+    # A present catalogue must supply its actual records; malformed data fails.
+    if "curated_source_catalog" not in bundle:
+        return ()
+    sources = bundle["curated_source_catalog"]["sources"]
+    if not isinstance(sources, list):
+        raise ValueError("Curated source catalogue records must be a list")
+    return tuple(sources)
+
+
 def curated_source_packet(source):
     excerpt = source["excerpt"]
     location = f"{excerpt['source_path']} L{excerpt['line_start']}-{excerpt['line_end']}"
