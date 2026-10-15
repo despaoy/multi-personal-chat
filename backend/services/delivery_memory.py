@@ -2,8 +2,8 @@
 
 One serial worker per app database reserves existing completion capacity before
 claiming a durable receipt. Its lease is renewed while the same task is alive;
-only abandoned work is eligible for another process. Recovery is at least once,
-with existing source identity and erasure fences authoritative on every retry.
+confirmed unstarted work can recover automatically. Unknown execution outcomes
+are blocked because semantic writes do not have proposal-level idempotency.
 """
 
 from __future__ import annotations
@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import sys
 import time
 import uuid
 from contextlib import suppress
@@ -24,6 +25,23 @@ from services.turn_completion import CompletionUnavailable, get_turn_completion_
 logger = logging.getLogger(__name__)
 LEASE_SECONDS = 300
 POLL_SECONDS = 1
+MAX_COMPLETION_ATTEMPTS = 3
+_COMPLETED_STATUSES = frozenset({
+    "saved", "erased", "no_change", "source_only", "relationship_note_saved", "skipped_fiction_or_note", "skipped",
+})
+
+
+def _is_unstarted_receipt(receipt: dict, scheduled: bool | None) -> bool:
+    return (
+        scheduled is False and receipt.get("status") in {"capacity", "closed"}
+        or receipt.get("status") == "cancelled" and receipt.get("stage") == "queue"
+        and receipt.get("accepted") == 0 and receipt.get("persisted") == 0
+    )
+
+
+def _is_retryable_receipt(receipt: dict) -> bool:
+    return (receipt.get("status") == "failed" and receipt.get("retryable") is True
+            and receipt.get("stage") == "proposal_generation")
 
 
 @dataclass(frozen=True)
@@ -170,7 +188,10 @@ class DeliveryMemoryWorker:
         stored = json.loads(record["response"])
         context = stored["context"]
         marker = context["memory_completion"]
-        marker.update(state="running", attempt_id=uuid.uuid4().hex)
+        abandoned = stored["memory_completion_state"] == "running" and marker.get("execution_started") is not False
+        if not abandoned:
+            marker.update(attempt_id=uuid.uuid4().hex, execution_started=False)
+        marker["state"] = "running"
         response = encode(stored, "running")
         key, owner = record["receipt_key"], record["owner"]
         if not await self.operation(
@@ -185,36 +206,43 @@ class DeliveryMemoryWorker:
             return
         self.active_key = key
         lost = asyncio.Event()
+        lease_lock = asyncio.Lock()
 
         async def persist(state, **details):
             nonlocal response
-            marker.update(state=state, **details)
-            updated = encode(stored, state)
-            accepted = await self.operation(
-                "memory_update",
-                key=key,
-                owner=owner,
-                expected=response,
-                response=updated,
-                expires_at=time.time() + (5 if state == "pending" else LEASE_SECONDS),
-            )
-            if not accepted:
-                lost.set()
-                raise RuntimeError("Completion lease superseded")
-            response = updated
+            async with lease_lock:
+                if renewal.done():
+                    await renewal
+                if lost.is_set():
+                    raise RuntimeError("Completion lease superseded")
+                marker.update(state=state, **details)
+                updated = encode(stored, state)
+                accepted = await self.operation(
+                    "memory_update",
+                    key=key,
+                    owner=owner,
+                    expected=response,
+                    response=updated,
+                    expires_at=time.time() + (5 if state == "pending" else LEASE_SECONDS),
+                )
+                if not accepted:
+                    lost.set()
+                    raise RuntimeError("Completion lease superseded")
+                response = updated
 
         async def heartbeat():
             while True:
                 await asyncio.sleep(10)
-                if not await self.operation(
-                    "memory_renew",
-                    key=key,
-                    owner=owner,
-                    expected=response,
-                    expires_at=time.time() + LEASE_SECONDS,
-                ):
-                    lost.set()
-                    return
+                async with lease_lock:
+                    if not await self.operation(
+                        "memory_renew",
+                        key=key,
+                        owner=owner,
+                        expected=response,
+                        expires_at=time.time() + LEASE_SECONDS,
+                    ):
+                        lost.set()
+                        return
 
         renewal = asyncio.create_task(heartbeat(), name="delivery-memory-lease")
         try:
@@ -223,6 +251,26 @@ class DeliveryMemoryWorker:
             except (KeyError, TypeError, ValueError):
                 await persist("blocked", reason="invalid_snapshot")
                 return
+            if abandoned:
+                await persist("blocked", reason="execution_outcome_unknown")
+                return
+            attempts = marker.get("attempts", 0)
+            if type(attempts) is not int or attempts < 0:
+                await persist("blocked", reason="invalid_retry_budget")
+                return
+            if attempts >= MAX_COMPLETION_ATTEMPTS:
+                await persist("blocked", reason="retry_limit_reached")
+                return
+            previous = marker.get("semantic_receipt")
+            if previous is not None and not (
+                _is_retryable_receipt(previous) or _is_unstarted_receipt(
+                    previous, marker.get("completion_outcome", {}).get("memory_enrichment_scheduled"))
+            ):
+                await persist("blocked", reason="partial_write" if previous.get("status") == "partial" else "semantic_failure")
+                return
+            marker.pop("semantic_receipt", None)
+            attempts += 1
+            await persist("running", attempts=attempts, execution_started=True)
             if self.service is None:
                 from services.character_context import build_character_context_service
 
@@ -241,7 +289,14 @@ class DeliveryMemoryWorker:
 
             # Wait on the same runtime-owned task. No observation deadline
             # creates another attempt while its real work is still alive.
-            outcome = await runtime.run(complete, timeout=None, reservation=slot)
+            try:
+                outcome = await runtime.run(complete, timeout=None, reservation=slot)
+            except CompletionUnavailable:
+                if slot.state not in {"reserved", "released"}:
+                    raise
+                await persist("pending", attempts=attempts - 1, execution_started=False,
+                              reason="completion_unavailable")
+                return
             await persist("running", turn_finished=True, completion_outcome=asdict(outcome))
             result = (
                 await asyncio.shield(receipt)
@@ -261,29 +316,36 @@ class DeliveryMemoryWorker:
                 else result.get("source_capture") or outcome.source_capture
             )
             status = result.get("status", "unknown")
-            if outcome.failed_writes or capture in {"stale", "revoked", "conflict"}:
-                state = "blocked"
-            elif capture == "failed" or status in {
-                "failed",
-                "partial",
-                "cancelled",
-                "capacity",
-                "queue_full",
-                "closed",
-                "unknown",
-            }:
-                state = "pending"
-            else:
+            unstarted = _is_unstarted_receipt(result, outcome.memory_enrichment_scheduled)
+            reason = ""
+            if outcome.failed_writes:
+                state, reason = "blocked", "completion_write_failed"
+            elif capture in {"stale", "revoked", "conflict", "failed"}:
+                state, reason = "blocked", "source_" + capture
+            elif unstarted:
+                state, reason = "pending", status
+                attempts -= 1
+            elif _is_retryable_receipt(result):
+                state, reason = (("pending", "transient_model_failure") if attempts < MAX_COMPLETION_ATTEMPTS
+                                 else ("blocked", "retry_limit_reached"))
+            elif status in _COMPLETED_STATUSES and not (status == "skipped" and outcome.memory_enrichment_scheduled):
                 state = "completed"
-            await persist(state, semantic_receipt=result,
-                          **({"reason": "completion_write_failed"} if outcome.failed_writes else {}))
+            else:
+                state, reason = "blocked", "partial_write" if status == "partial" else "semantic_failure"
+            await persist(state, attempts=attempts, execution_started=not unstarted,
+                          semantic_receipt=result, reason=reason)
         except asyncio.CancelledError:
             # Persisted running lease survives shutdown; never invent rollback
             # for a live executor thread or a scheduler-owned semantic job.
             raise
         finally:
+            primary_error = sys.exception()
             renewal.cancel()
-            await asyncio.gather(renewal, return_exceptions=True)
+            result, = await asyncio.gather(renewal, return_exceptions=True)
+            if isinstance(result, Exception):
+                if primary_error is None:
+                    raise result
+                logger.warning("交付记忆续租失败: %s", type(result).__name__)
 
     async def wait_idle(self, timeout=90):
         async with asyncio.timeout(timeout):

@@ -191,6 +191,8 @@ async def test_shutdown_resolves_active_and_queued_receipts():
     await worker.shutdown(timeout=.01)
     results = await asyncio.wait_for(asyncio.gather(first, second), timeout=1)
     assert all(result['status'] == 'cancelled' for result in results)
+    assert results[0]['stage'] != 'queue' and results[0]['retryable'] is False
+    assert results[1]['stage'] == 'queue' and results[1]['retryable'] is True
     assert worker.status.queued == worker.status.processing == 0
     assert repo.deleted == []
 
@@ -199,7 +201,7 @@ async def test_cancellation_preserves_already_confirmed_commits(monkeypatch):
     from character.memory_llm import ValidatedMemoryProposal
 
     worker = scheduler()
-    monkeypatch.setattr('character.memory_llm.parse_llm_proposals',
+    monkeypatch.setattr('character.memory_llm._proposals_from_payload',
                         lambda *a, **kw: [ValidatedMemoryProposal(operation='ADD')] * 2)
     second_started = asyncio.Event()
     calls = 0
@@ -220,6 +222,7 @@ async def test_cancellation_preserves_already_confirmed_commits(monkeypatch):
         result = await task
         assert result['status'] == 'cancelled'
         assert result['persisted'] == 1
+        assert result['stage'] == 'persistence' and result['retryable'] is False
         assert result['operation_outcomes'] == ('saved',)
         assert worker.status.last_outcome == 'cancelled'
     finally:

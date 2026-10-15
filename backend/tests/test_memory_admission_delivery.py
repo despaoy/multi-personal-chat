@@ -54,6 +54,7 @@ async def test_refused_memory_is_pending_then_recovers_without_repeating_turn(tm
         marker = response['context']['memory_completion']
         assert row['status'] == 'delivered' and response['memory_completion_state'] == 'pending'
         assert marker['turn_finished'] and marker['semantic_receipt']['status'] == rejection
+        assert marker['attempts'] == 0 and marker['execution_started'] is False
         assert current['scheduler'].status.last_outcome == rejection
         assert current['scheduler'].status.recent_results[-1] == {'status': rejection, 'reason': rejection}
         completion.complete.assert_not_awaited()
@@ -82,6 +83,7 @@ async def test_refused_memory_is_pending_then_recovers_without_repeating_turn(tm
         final = json.loads(database.integration_receipt('get', key=key)['response'])
         marker = final['context']['memory_completion']
         assert final['memory_completion_state'] == 'completed'
+        assert marker['attempts'] == 1
         assert marker['semantic_receipt']['status'] == 'saved' and marker['semantic_receipt']['persisted'] == 1
         records = await repo.list_memory_records(snapshot.character_id, snapshot.user_scope)
         assert len(records) == 1 and '深蓝色油墨' in records[0]['content']

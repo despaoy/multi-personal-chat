@@ -1804,6 +1804,7 @@ class MemoryEnrichmentScheduler:
         for job in jobs:
             if job.receipt is not None and not job.receipt.done():
                 job.receipt.set_result({'status': 'cancelled', 'accepted': 0, 'persisted': 0,
+                                       'stage': 'queue', 'retryable': True,
                                        'source_message_id': job.source_message_id or ''})
 
     async def _process_job(self, job: _MemoryJob) -> None:
@@ -1816,6 +1817,7 @@ class MemoryEnrichmentScheduler:
             "conflicts": 0,
             "operation_outcomes": (),
             "stage": "source_capture",
+            "retryable": False,
         }
         try:
             # Preserve complete admitted speech before interpretation. Empty or
@@ -2001,6 +2003,13 @@ class MemoryEnrichmentScheduler:
             self._last_error = type(exc).__name__
             result["status"] = "failed"
             result["error"] = self._last_error
+            result["retryable"] = result["stage"] == "proposal_generation" and (
+                isinstance(exc, (httpx.TimeoutException, httpx.NetworkError))
+                or isinstance(exc, httpx.HTTPStatusError)
+                and exc.response.status_code in {408, 429, 500, 502, 503, 504}
+            )
+            if isinstance(exc, httpx.HTTPStatusError):
+                result["http_status"] = exc.response.status_code
             if isinstance(exc, InputBudgetError):
                 result["reason"] = "input_budget"
             logger.warning("后台记忆处理失败 stage=%s type=%s", result["stage"], type(exc).__name__)

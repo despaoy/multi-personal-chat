@@ -214,7 +214,7 @@ async def test_busy_ack_persists_then_automatic_worker_waits_for_exact_semantic_
 
 
 @pytest.mark.asyncio
-async def test_expired_restart_receipt_resumes_without_answer_regeneration(database, monkeypatch):
+async def test_started_restart_receipt_is_blocked_without_answer_regeneration(database, monkeypatch):
     runtime = TurnCompletionRuntime(capacity=1)
     monkeypatch.setattr(dm, "get_turn_completion_runtime", lambda: runtime)
     monkeypatch.setattr(dm, "POLL_SECONDS", 0.01)
@@ -240,11 +240,11 @@ async def test_expired_restart_receipt_resumes_without_answer_regeneration(datab
     worker = dm.ensure_delivery_memory_worker(database, SimpleNamespace(complete_turn=complete))
     try:
         await worker.wait_idle(timeout=3)
-        assert len(calls) == 1 and calls[0]["memory_retry_only"]
+        assert calls == []
         final = database.integration_receipt("get", key=key)
-        assert (
-            final["status"] == "delivered" and json.loads(final["response"])["memory_completion_state"] == "completed"
-        )
+        response = json.loads(final["response"])
+        assert final["status"] == "delivered" and response["memory_completion_state"] == "blocked"
+        assert response["context"]["memory_completion"]["reason"] == "execution_outcome_unknown"
         assert json.loads(final["response"])["reply"]["replyText"] == "原始模型回复"
     finally:
         await dm.shutdown_delivery_memory()
