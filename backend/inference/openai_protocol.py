@@ -3,6 +3,34 @@
 from urllib.parse import urlsplit
 
 
+class ProviderResponseError(RuntimeError):
+    """A rejected model request, without private HTTP response/request data."""
+
+    def __init__(self, status_code: int):
+        self.status_code = status_code
+        super().__init__(f"Model provider returned HTTP {status_code}")
+
+    @property
+    def http_status(self) -> int:
+        # Upstream authentication must not log this application's user out.
+        return 503 if self.status_code in (402, 429) else 502
+
+    def public_detail(self) -> dict:
+        if self.status_code in (401, 403):
+            kind = "provider_auth_error"
+            message = "模型服务认证失败，请检查模型 API 密钥及权限配置。"
+        elif self.status_code == 402:
+            kind = "provider_balance_error"
+            message = "模型服务余额不足，请检查模型账户余额后重试。"
+        elif self.status_code == 429:
+            kind = "provider_rate_limited"
+            message = "模型服务触发限流，请稍后重试或检查模型账户限额。"
+        else:
+            kind = "provider_upstream_error"
+            message = f"模型服务请求失败（HTTP {self.status_code}），请检查接口、模型配置及服务状态后重试。"
+        return dict(kind=kind, message=message, upstreamStatus=self.status_code)
+
+
 def is_deepseek_api(base_url: str) -> bool:
     return urlsplit(base_url).hostname == "api.deepseek.com"
 

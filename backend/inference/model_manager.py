@@ -14,6 +14,7 @@ from enum import Enum
 from pathlib import Path
 
 from inference.openai_protocol import (
+    ProviderResponseError,
     chat_completions_endpoint,
     completed_chat_content,
     nonthinking_parameters,
@@ -270,7 +271,7 @@ class OpenAICompatProvider(BaseProvider):
             cost = round(time.time() - start, 2)
             return reply, cost
         else:
-            raise RuntimeError(f"API返回错误: {response.status_code}")
+            raise ProviderResponseError(response.status_code)
 
     def generate(self, prompt: str, session_history: List[Dict] = None,
                  rag_docs: List[Dict] = None, max_tokens_override: int = None) -> Tuple[str, float]:

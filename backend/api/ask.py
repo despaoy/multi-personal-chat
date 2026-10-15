@@ -25,6 +25,7 @@ from fastapi.responses import StreamingResponse
 
 from app.dependencies import get_current_user
 from db.schemas import AskRequest, AskResponse
+from inference.openai_protocol import ProviderResponseError
 from inference.request_context import InferenceRequestContext, resolve_request_context, use_request_context
 from knowledge.grounded_answer.service import get_grounded_answer_service
 from knowledge.grounded_answer.validator import public_citation_view
@@ -226,10 +227,13 @@ async def ask_stream(
                         "utf-8"
                     )
             except Exception as e:  # noqa: BLE001 - SSE 中途异常以 error 事件收尾
-                logger.warning("grounded_answer_stream failed: %s", type(e).__name__)
+                detail = (e.public_detail() if isinstance(e, ProviderResponseError)
+                          else {"kind": "internal_error", "message": "服务内部错误"})
+                logger.warning("grounded_answer_stream failed: %s upstream_status=%s",
+                               detail["kind"], detail.get("upstreamStatus"))
                 yield "data: {}\n\n".format(
                     json.dumps(
-                        {"type": "error", "kind": "internal_error", "message": "服务内部错误"},
+                        {"type": "error", **detail},
                         ensure_ascii=False,
                     )
                 ).encode("utf-8")

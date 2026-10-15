@@ -15,6 +15,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Request
 from services.chat_generation import ChatGenerationService
 
+from api.error_details import with_provider_error
 from app.config import (
     INPUT_VALIDATOR_AVAILABLE,
     circuit_breaker_registry,
@@ -39,6 +40,7 @@ from inference.generation_request import (
 from inference.lora_registry import get_lora_character_id
 from inference.lora_registry import get_lora_system_prompt as _get_system_prompt
 from inference.lora_utils import resolve_lora_served_name
+from inference.openai_protocol import ProviderResponseError
 from inference.provider_context import get_provider_context_budget
 from infra.circuit_breaker import CircuitOpenError
 from infra.concurrency_control import InferenceQueueFull, RateLimitExceeded, inference_runtime
@@ -652,7 +654,9 @@ async def _generate_reply_body(
                 )
             except HTTPException as record_error:
                 # Keep the model cause and recording error on separate chains.
-                raise HTTPException(503, detail=record_error.detail) from e
+                raise HTTPException(503, detail=with_provider_error(record_error.detail, e)) from e
+        if isinstance(e, ProviderResponseError):
+            raise HTTPException(e.http_status, detail=e.public_detail()) from e
         if isinstance(e, CircuitOpenError):
             raise HTTPException(503, detail={
                 "stage": "model_circuit", "reason": "circuit_open",
@@ -730,16 +734,18 @@ async def _prepare_character_turn(
                 ))
         return prepared
     except ContextAfterMemoryOperationError as exc:
-        raise HTTPException(503, detail={
+        raise HTTPException(503, detail=with_provider_error({
             "code": "context_failed_after_memory_operation",
             "message": "角色上下文准备失败，回复未生成。请先核对本轮记忆操作回执，再检查审核模型和上下文配置。",
             "memoryOperation": exc.operation_summary,
-        }) from exc
+        }, exc)) from exc
     except HTTPException:
         raise
     except Exception as exc:
         raise HTTPException(
-            503, "角色上下文准备失败，本轮未生成。请检查数据库、审核模型及上下文配置后重试。",
+            503, with_provider_error(
+                "角色上下文准备失败，本轮未生成。请检查数据库、审核模型及上下文配置后重试。", exc,
+            ),
         ) from exc
 
 
@@ -1308,7 +1314,7 @@ async def _generate_with_retrieval(
             )
             raise HTTPException(
                 status_code=503,
-                detail="检索或证据审核失败，请检查检索服务及审核模型状态后重试",
+                detail=with_provider_error("检索或证据审核失败，请检查检索服务及审核模型状态后重试", e),
             ) from e
 
     model_generate = model_generate or _vllm_client.generate

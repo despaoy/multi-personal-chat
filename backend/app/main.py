@@ -42,6 +42,7 @@ from app.config import (
 )
 from app.readiness import ReadinessProbe, ReadinessProbeTimeout
 from app.runtime import RuntimeContainer, get_runtime_container
+from inference.openai_protocol import ProviderResponseError  # noqa: E402
 from infra.deployment import validate_or_raise_for_startup
 
 logger = logging.getLogger("main")
@@ -448,7 +449,13 @@ async def readiness_check(request: Request):
 # 全局异常处理
 # ═══════════════════════════════════════════
 async def global_exception_handler(request: Request, exc: Exception):
-    logger.error(f"请求异常: {exc}")
+    if isinstance(exc, ProviderResponseError):
+        detail = exc.public_detail()
+        logger.warning("Model request failed: %s upstream_status=%s", detail["kind"], exc.status_code)
+        return JSONResponse(status_code=exc.http_status, content={
+            "success": False, "error": detail["kind"], **detail,
+        })
+    logger.error("请求异常: %s", type(exc).__name__)
     return JSONResponse(
         status_code=500,
         content={
@@ -483,6 +490,7 @@ def create_app(container: RuntimeContainer | None = None) -> FastAPI:
     application.add_api_route("/", root, methods=["GET"])
     application.add_api_route("/health", health_check, methods=["GET"])
     application.add_api_route("/ready", readiness_check, methods=["GET"])
+    application.add_exception_handler(ProviderResponseError, global_exception_handler)
     application.add_exception_handler(Exception, global_exception_handler)
     return application
 

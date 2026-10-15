@@ -145,7 +145,11 @@ async def test_completion_failure_never_switches_provider_or_returns_a_reply(ins
         installed.state.failure = httpx.ConnectError("fiction-private-error")
     with pytest.raises(HTTPException) as error:
         await receive()
-    assert error.value.status_code == 500 and installed.manager._current_provider == model_manager.ModelProvider.OPENAI_COMPAT
+    assert error.value.status_code == (502 if failure == "http" else 500)
+    assert installed.manager._current_provider == model_manager.ModelProvider.OPENAI_COMPAT
+    if failure == "http":
+        assert error.value.detail["kind"] == "provider_upstream_error"
+        assert error.value.detail["upstreamStatus"] == 503
     installed.manager.async_generate.assert_not_awaited()
     assert "fiction-private" not in str(error.value.detail)
 
