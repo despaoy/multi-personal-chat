@@ -8,6 +8,7 @@ import logging
 import os
 import time
 import uuid
+from contextlib import nullcontext
 from datetime import datetime, timezone
 from typing import Any
 
@@ -472,23 +473,27 @@ async def _generate_reply_body(
             model_label = model_name
             stored_model_name = "vllm"
         else:
+            native_provider = _mgr._current_provider.value
             semaphore = get_llm_semaphore()
             try:
                 await asyncio.wait_for(semaphore.acquire(), timeout=30.0)
             except TimeoutError as exc:
                 raise HTTPException(503, "服务繁忙，请稍后再试") from exc
             try:
-                async with _loop_local_lock("local_model"):
+                async with (nullcontext() if native_provider == "openai_compat" else _loop_local_lock("local_model")):
                     try:
                         lora_path = get_lora_path_by_id(selected_lora["id"], loras=loras) if selected_lora else None
                     except OSError as exc:
                         raise HTTPException(503, "所选 LoRA 目录读取失败，请检查适配器存储后重试") from exc
                     if selected_lora and lora_path is None:
                         raise HTTPException(409, "所选 LoRA 没有可用本地目录，请先重新激活")
-                    _mgr.set_lora_adapter(lora_path)
+                    if native_provider != "openai_compat":
+                        _mgr.set_lora_adapter(lora_path)
 
                     async def adapter(*, messages, **kwargs):
-                        if _mgr._current_provider.value == "openai_compat":
+                        if _mgr._current_provider.value != native_provider:
+                            raise RuntimeError("Selected provider changed before generation; retry the request")
+                        if native_provider == "openai_compat":
                             text, _cost = await _mgr.get_current_provider().async_complete(messages, **kwargs)
                         else:
                             text, _cost = await _mgr.async_generate(
@@ -510,7 +515,7 @@ async def _generate_reply_body(
             finally:
                 semaphore.release()
             status = _mgr.get_status()
-            current_provider = status.get("currentProvider", "unknown")
+            current_provider = native_provider
             model_name = status.get("providers", {}).get(current_provider, {}).get("modelName", "Unknown")
             model_label = f"{model_name} ({current_provider})"
             stored_model_name = model_name
