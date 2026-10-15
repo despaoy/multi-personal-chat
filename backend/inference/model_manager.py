@@ -5,11 +5,11 @@
 支持 Ollama / llama.cpp / Transformers+PEFT / Mock 四种提供商。
 """
 
-import os
-import time
 import logging
+import os
 import random
 import threading
+import time
 from enum import Enum
 from pathlib import Path
 
@@ -21,7 +21,6 @@ from inference.openai_protocol import (
     validate_completion_options,
 )
 
-
 logger = logging.getLogger(__name__)
 
 def _get_db_config():
@@ -30,10 +29,10 @@ def _get_db_config():
 
     return read_config(db)[0]
 
-from typing import Optional, Dict, Any, List, Tuple
-from dataclasses import dataclass
-from contextlib import asynccontextmanager
 from abc import ABC, abstractmethod
+from contextlib import asynccontextmanager
+from dataclasses import dataclass
+from typing import Any, Dict, List, Optional, Tuple
 
 
 class ModelProvider(str, Enum):
@@ -447,54 +446,32 @@ class TransformersPeftProvider(BaseProvider):
         self._loaded = False
 
     def _ensure_loaded(self):
-        """线程安全的模型加载（double-check locking）"""
+        """Publish a complete NF4 model only after initialization succeeds."""
         if self._model is not None:
             return
         with self._load_lock:
             if self._model is not None:
                 return
 
-            import torch
-            from transformers import AutoModelForCausalLM, AutoTokenizer
             from peft import PeftModel
+            from transformers import AutoTokenizer
 
             base_path = str(Path(self._base_model_path).resolve())
-            if not Path(base_path).exists():
-                raise FileNotFoundError(f"模型路径不存在: {base_path}")
+            if not Path(base_path).is_dir():
+                raise FileNotFoundError(f"模型目录不存在: {base_path}")
+            if self._lora_path is not None and not Path(self._lora_path).is_dir():
+                raise FileNotFoundError(f"LoRA适配器目录不存在: {self._lora_path}")
 
-            self._tokenizer = AutoTokenizer.from_pretrained(base_path)
+            tokenizer = AutoTokenizer.from_pretrained(base_path)
+            model = self._load_4bit(base_path)
+            if self._lora_path is not None:
+                model = PeftModel.from_pretrained(model, self._lora_path)
+            model.eval()
 
-            # 尝试多种加载策略（Windows bitsandbytes 兼容性）
-            load_strategies = [
-                ("4-bit NF4 量化", self._load_4bit),
-                ("8-bit 量化", self._load_8bit),
-                ("FP16 半精度", self._load_fp16),
-            ]
-
-            base_model = None
-            for strategy_name, load_fn in load_strategies:
-                try:
-                    logger.info(f"尝试 {strategy_name} 加载 Qwen3-8B...")
-                    base_model = load_fn(base_path)
-                    logger.info(f"✅ {strategy_name} 加载成功")
-                    break
-                except Exception as e:
-                    logger.warning(f"❌ {strategy_name} 加载失败: {e}")
-                    continue
-
-            if base_model is None:
-                raise RuntimeError("所有加载策略均失败，请检查模型文件和 GPU 显存")
-
-            if self._lora_path and Path(self._lora_path).exists():
-                logger.info(f"加载LoRA适配器: {self._lora_path}")
-                self._model = PeftModel.from_pretrained(base_model, self._lora_path)
-            else:
-                self._model = base_model
-
-            self._model.eval()
+            self._tokenizer = tokenizer
+            self._model = model
             self._loaded = True
-            vram = torch.cuda.memory_allocated() / 1024**3
-            logger.info(f"7B 模型加载完成，显存: {vram:.1f}GB")
+            logger.info("Transformers PEFT 模型加载完成")
 
     def _load_4bit(self, base_path: str):
         """4-bit NF4 量化加载"""
@@ -513,48 +490,19 @@ class TransformersPeftProvider(BaseProvider):
             low_cpu_mem_usage=True,
         )
 
-    def _load_8bit(self, base_path: str):
-        """8-bit 量化加载"""
-        import torch
-        from transformers import AutoModelForCausalLM, BitsAndBytesConfig
-        config = BitsAndBytesConfig(load_in_8bit=True)
-        return AutoModelForCausalLM.from_pretrained(
-            base_path,
-            quantization_config=config,
-            device_map="auto",
-            low_cpu_mem_usage=True,
-        )
-
-    def _load_fp16(self, base_path: str):
-        """FP16 半精度加载（需要足够显存）"""
-        import torch
-        from transformers import AutoModelForCausalLM
-        return AutoModelForCausalLM.from_pretrained(
-            base_path,
-            torch_dtype=torch.float16,
-            device_map="auto",
-            low_cpu_mem_usage=True,
-        )
-
     def set_lora_adapter(self, lora_path: Optional[str]):
         with self._load_lock:
-            if lora_path and Path(lora_path).exists():
-                self._lora_path = lora_path
-                if self._model is not None:
-                    import torch
-                    from transformers import AutoModelForCausalLM, BitsAndBytesConfig
-                    from peft import PeftModel
-
-                    logger.info(f"热切换LoRA适配器: {lora_path}")
-                    base_model = self._model.base_model.model if hasattr(self._model, 'base_model') else self._model
-                    del self._model
-                    torch.cuda.empty_cache()
-                    self._model = PeftModel.from_pretrained(base_model, lora_path)
-                    self._model.eval()
-                logger.info(f"LoRA适配器已设置: {lora_path}")
-            else:
-                self._lora_path = None
-                logger.info("LoRA适配器已清除")
+            if lora_path is not None:
+                if not lora_path or not Path(lora_path).is_dir():
+                    raise FileNotFoundError(f"LoRA适配器目录不存在: {lora_path}")
+                lora_path = str(Path(lora_path).resolve())
+            if lora_path == self._lora_path:
+                return
+            # PEFT may change base weights; a new selection requires a clean load.
+            self._model = None
+            self._tokenizer = None
+            self._loaded = False
+            self._lora_path = lora_path
 
     def generate(self, prompt: str, session_history: List[Dict] = None,
                  rag_docs: List[Dict] = None, max_tokens_override: int = None) -> Tuple[str, float]:
@@ -613,19 +561,17 @@ class TransformersPeftProvider(BaseProvider):
         }
 
     def close(self):
-        # C6 fix: 释放 GPU 显存与模型句柄
-        try:
-            if self._model is not None:
+        with self._load_lock:
+            had_model = self._model is not None
+            self._model = None
+            self._tokenizer = None
+            self._loaded = False
+            if had_model:
                 import torch
-                del self._model
-                self._model = None
-                self._tokenizer = None
-                self._loaded = False
+
                 if torch.cuda.is_available():
                     torch.cuda.empty_cache()
                 logger.info("TransformersPeftProvider 模型资源已释放")
-        except Exception as e:
-            logger.warning(f"释放 TransformersPeftProvider 资源失败: {e}")
 
 
 class VLLMProvider(BaseProvider):
