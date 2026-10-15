@@ -72,8 +72,9 @@ async def test_complete_source_is_not_truncated_to_model_input_limit(tmp_path):
 async def test_existing_source_admission_gates_apply_before_capture(tmp_path, message, source_type):
     repo = DatabaseCharacterMemoryRepository(SQLiteDB(tmp_path / "gate.sqlite"))
     completion = Completion('{"memories":[]}')
-    admitted, _ = await submit(repo, completion, message=message, source_type=source_type)
+    admitted, status = await submit(repo, completion, message=message, source_type=source_type)
     assert not admitted and completion.calls == 0
+    assert status.last_outcome == "skipped"
     assert await repo.list_sources("role", SCOPE) == []
 
 

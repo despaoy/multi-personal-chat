@@ -1638,8 +1638,8 @@ class MemoryEnrichmentScheduler:
 
     def _remember_schedule_skip(self, reason: str) -> None:
         self._skipped += 1
-        self._last_outcome = "skipped"
-        self._recent_results.append({"status": "skipped", "reason": reason})
+        self._last_outcome = reason if reason in {"capacity", "closed"} else "skipped"
+        self._recent_results.append({"status": self._last_outcome, "reason": reason})
 
     def schedule(
         self,

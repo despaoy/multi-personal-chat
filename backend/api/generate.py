@@ -801,6 +801,11 @@ async def _complete_character_turn(prepared, request: MessageRequest, reply: str
             warning = "这条信息未保存到长期记忆：相关记忆已删除，本次回复不会恢复它。"
         elif capture == "conflict":
             warning = "这条信息未保存到长期记忆：同一条消息已绑定其他内容，请重新发送。"
+        elif status in {"capacity", "closed"}:
+            warning = (
+                ("原文已保存，但" if capture == "recorded" else "")
+                + "长期记忆任务尚未受理；本次回复不代表结构化记忆已写入，请稍后重试。"
+            )
         failures = getattr(outcome, "failed_writes", ())
         if failures:
             labels = {"interaction_count": "交互统计", "preferred_address": "称呼更新"}
