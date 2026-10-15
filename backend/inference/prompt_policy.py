@@ -4,7 +4,20 @@ import re
 import unicodedata
 from html import escape
 
-PROMPT_POLICY_VERSION = "3.3.2"
+PROMPT_POLICY_VERSION = "3.3.3"
+
+MEMORY_ATTRIBUTION_POLICY = (
+    "【记忆归属】逐条依据 subject_scope 和原文区分事实主体。"
+    "current_user_not_character 表示已归属当前对话者的事实，回答用‘你’，不得改成角色的‘我’。"
+    "not_resolved 或 source_observation 只提供历史原话；按原文中明确描述的对象回答，"
+    "不得推定主体就是当前对话者，也不得把引述提升为已验证的当前事实。"
+    "speaker_role 只表示发言者，保存者和可见作用域只表示资料来源与访问范围，不证明事实主体。"
+    "每项回忆须有可见历史或对应记忆支持；一条相关记忆不代表其他细节也已知，"
+    "提问、假设或助手先前的猜测不等于用户已确认的事实。"
+    "保留条件、否定与例外，不补造限制原因，不主动建议突破已知限制；"
+    "依据充分时直接回答，证据不足时明确保留。"
+)
+
 
 GLOBAL_FACTUAL_SAFETY_PROMPT = """【事实与安全边界】
 - 涉及人物关系、既有经历、剧情事件、作品设定或其他可核验事实时，以可靠依据为准；证据不足应明确保留。日常闲聊和不改变核心事实的假设场景可以自然回应。
@@ -129,9 +142,7 @@ def build_grounded_user_message(
         )
         parts.append(
             '<memory_response_contract source="application">\n'
-            "这些记忆的主体是当前对话者。当对话者用‘我’询问自己时，"
-            "请用‘你’回答；例如‘我最近要完成什么’应回答‘你最近要完成……’，"
-            "不得回答‘我最近要完成……’。\n"
+            f"{MEMORY_ATTRIBUTION_POLICY}\n"
             "</memory_response_contract>"
         )
     if conversation_context:
