@@ -67,6 +67,22 @@ class ContextualDecisionPolicy:
             strategy in {"ensure_safety", "check_safety_gently"} for strategy in baseline.strategy_ids
         ):
             return PolicyOutcome(baseline, "protected", "safety")
+        acts = {signal.signal_id: signal.score for signal in interaction.user_acts}
+        # Persona choices cannot crowd out an explicitly recognized task.
+        # Only closed application strategies are inserted, never model text.
+        required = []
+        if acts.get("information_request", 0) >= 0.5:
+            required.append("respond_directly")
+        if acts.get("advice_request", 0) >= 0.5 and acts.get("advice_boundary", 0) < 0.5:
+            required.append("offer_suggestion")
+        if len(required) == 2:
+            plan = replace(
+                baseline,
+                strategy_ids=tuple(required),
+                action="；".join(STRATEGY_INSTRUCTIONS[key] for key in required),
+                selection_source="required",
+            )
+            return PolicyOutcome(plan, "protected", "required_tasks")
         started = time.perf_counter()
         if self.context_budget is None and len(query) > 4000:
             raise InputBudgetError("complete policy query exceeds input budget")
@@ -77,7 +93,6 @@ class ContextualDecisionPolicy:
             allowed.discard("recall_shared_context")
         if interaction.primary_situation != "meta" and "respond_about_self" not in baseline.strategy_ids:
             allowed.discard("respond_about_self")
-        acts = {signal.signal_id: signal.score for signal in interaction.user_acts}
         if acts.get("advice_boundary", 0) >= 0.5:
             allowed -= {"offer_suggestion", "gentle_probe", "clarify_need"}
         payload = {
@@ -114,13 +129,6 @@ class ContextualDecisionPolicy:
             raise ValueError("invalid_strategy")
         if not strategies_compatible(ids, interaction):
             raise ValueError("incompatible_strategies")
-        # Persona choices cannot crowd out an explicitly recognized task.
-        # Only closed application strategies are inserted, never model text.
-        required = []
-        if acts.get("information_request", 0) >= 0.5:
-            required.append("respond_directly")
-        if acts.get("advice_request", 0) >= 0.5 and acts.get("advice_boundary", 0) < 0.5:
-            required.append("offer_suggestion")
         ids = list(dict.fromkeys([*required, *ids]))[:2]
         if not strategies_compatible(ids, interaction):
             raise ValueError("incompatible_strategies")
