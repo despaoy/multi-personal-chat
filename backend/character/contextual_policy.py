@@ -15,7 +15,7 @@ import time
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
 
-from character.decision_policy import STRATEGY_INSTRUCTIONS
+from character.decision_policy import STRATEGY_INSTRUCTIONS, strategies_compatible
 from character.evidence_selector import InputBudgetError, _history_view, _unique_object
 from infra.environment import read_bool
 
@@ -112,10 +112,7 @@ class ContextualDecisionPolicy:
             raise ValueError("invalid_strategy_count")
         if any(not isinstance(key, str) or key not in allowed for key in ids) or len(set(ids)) != len(ids):
             raise ValueError("invalid_strategy")
-        chosen = set(ids)
-        exclusive = {"graceful_close", "stay_present", "set_boundary"}
-        probing = {"gentle_probe", "clarify_need"}
-        if (chosen & exclusive and chosen & probing) or {"light_tease", "repair_misunderstanding"} <= chosen:
+        if not strategies_compatible(ids, interaction):
             raise ValueError("incompatible_strategies")
         # Persona choices cannot crowd out an explicitly recognized task.
         # Only closed application strategies are inserted, never model text.
@@ -125,6 +122,8 @@ class ContextualDecisionPolicy:
         if acts.get("advice_request", 0) >= 0.5 and acts.get("advice_boundary", 0) < 0.5:
             required.append("offer_suggestion")
         ids = list(dict.fromkeys([*required, *ids]))[:2]
+        if not strategies_compatible(ids, interaction):
+            raise ValueError("incompatible_strategies")
         plan = replace(
             baseline,
             strategy_ids=tuple(ids),

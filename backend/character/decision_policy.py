@@ -375,25 +375,41 @@ class DecisionPolicy:
         )
 
 
+_INCOMPATIBLE_STRATEGIES: dict[str, set[str]] = {
+    "light_tease": {"repair_misunderstanding", "graceful_close", "set_boundary"},
+    "set_boundary": {"gentle_probe", "clarify_need"},
+    "gentle_probe": {"graceful_close"},
+    "clarify_need": {"graceful_close"},
+    "offer_suggestion": {"graceful_close"},
+    "stay_present": {"offer_suggestion", "gentle_probe", "clarify_need"},
+    "check_safety_gently": {"light_tease", "graceful_close"},
+}
+
+
+def _closing_task_strategy(interaction: InteractionState) -> str | None:
+    acts = _signal_map(interaction.user_acts)
+    closing = acts.get("closing", 0.0) >= 0.5 or interaction.conversation_phase == "closing"
+    information = acts.get("information_request", 0.0)
+    advice = acts.get("advice_request", 0.0)
+    if closing and max(information, advice) >= 0.5:
+        return "respond_directly" if information >= advice else "offer_suggestion"
+    return None
+
+
+def strategies_compatible(strategy_ids: tuple[str, ...] | list[str], interaction: InteractionState) -> bool:
+    """Share existing strategy exclusions and the explicit task-before-close case."""
+    chosen = set(strategy_ids)
+    if len(chosen) == 2 and "graceful_close" in chosen and _closing_task_strategy(interaction) in chosen:
+        return True
+    return not any(chosen & _INCOMPATIBLE_STRATEGIES.get(key, set()) for key in chosen)
+
+
 def _choose_compatible(candidates: list[_Candidate], interaction: InteractionState) -> tuple[_Candidate, ...]:
     if not candidates:
         return (_Candidate("reflect_content", 0.0),)
 
-    acts = _signal_map(interaction.user_acts)
-    closing_requested = acts.get("closing", 0.0) >= 0.5 or interaction.conversation_phase == "closing"
-    if (
-        closing_requested
-        and max(
-            acts.get("information_request", 0.0),
-            acts.get("advice_request", 0.0),
-        )
-        >= 0.5
-    ):
-        task_strategy = (
-            "respond_directly"
-            if acts.get("information_request", 0.0) >= acts.get("advice_request", 0.0)
-            else "offer_suggestion"
-        )
+    task_strategy = _closing_task_strategy(interaction)
+    if task_strategy:
         task = next(item for item in candidates if item.strategy_id == task_strategy)
         close = next(item for item in candidates if item.strategy_id == "graceful_close")
         return (task, close)
@@ -417,14 +433,6 @@ def _choose_compatible(candidates: list[_Candidate], interaction: InteractionSta
     if primary.strategy_id in {"graceful_close", "set_boundary"}:
         return (primary,)
 
-    incompatible: dict[str, set[str]] = {
-        "light_tease": {"repair_misunderstanding", "graceful_close", "set_boundary"},
-        "gentle_probe": {"graceful_close"},
-        "clarify_need": {"graceful_close"},
-        "offer_suggestion": {"graceful_close"},
-        "stay_present": {"offer_suggestion", "gentle_probe", "clarify_need"},
-        "check_safety_gently": {"light_tease", "graceful_close"},
-    }
     for candidate in candidates:
         if candidate.strategy_id == primary.strategy_id:
             continue
@@ -437,9 +445,7 @@ def _choose_compatible(candidates: list[_Candidate], interaction: InteractionSta
             continue
         if not answers_explicit_act and primary.score - candidate.score > 0.38:
             continue
-        if candidate.strategy_id in incompatible.get(primary.strategy_id, set()):
-            continue
-        if primary.strategy_id in incompatible.get(candidate.strategy_id, set()):
+        if not strategies_compatible((primary.strategy_id, candidate.strategy_id), interaction):
             continue
         return (primary, candidate)
     return (primary,)
