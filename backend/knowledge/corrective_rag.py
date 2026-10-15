@@ -2,7 +2,7 @@
 
 遵循路线图 guardrail：
 - 默认重试次数限制为 1 次（max_retries=1），由构造参数真实控制
-- 由环境变量 CORRECTIVE_RAG_ENABLED 控制（默认 false，生产/实验分离）
+- 仅供显式离线实验调用，主聊天使用已验证的语义视图检索
 - 复用 RAGHelper 的 retrieve_with_citations / compute_confidence / should_abstain
 - 查询重写仅基于关键词提取（使用必需的 jieba 分词），不调用 LLM 或外部服务
 """

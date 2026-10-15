@@ -1,8 +1,7 @@
 """Corrective RAG 适配（与通用知识库 CorrectiveRAG 协调，不重写）。
 
 与既有 knowledge/corrective_rag.py 的关系：
-- 既有 CorrectiveRAG 服务 legacy RAGHelper 链路（api/generate
-  回退分支），保持不动
+- 既有 CorrectiveRAG 仅保留给显式离线实验，主聊天不调用
 - 本模块服务结构化检索 bundle：首次检索不足 → 关键词改写
   （jieba，无 LLM）→ 二次检索 → 证据合并 → 最终 abstention
 

@@ -118,8 +118,7 @@ async def test_missing_document_does_not_change_index_authority(saved_document):
     )
 
 
-@pytest.mark.parametrize("corrective", [False, True])
-async def test_generic_generation_checks_freshness_before_cache_or_correction(monkeypatch, corrective):
+async def test_generic_generation_checks_freshness_before_cache(monkeypatch):
     from threading import RLock
 
     import knowledge.rag_helper as rag_module
@@ -140,7 +139,6 @@ async def test_generic_generation_checks_freshness_before_cache_or_correction(mo
     monkeypatch.setattr(vector_db, "get_vector_db", lambda: indexed)
     monkeypatch.setattr(knowledge, "_vector_index_revision", 77)
     monkeypatch.setattr(knowledge, "_get_rebuild_revision", lambda: 77)
-    monkeypatch.setenv("CORRECTIVE_RAG_ENABLED", "true" if corrective else "false")
 
     def ready():
         calls.append("ensure")
@@ -155,12 +153,7 @@ async def test_generic_generation_checks_freshness_before_cache_or_correction(mo
     actual = await generate._retrieve_rag_bundle("核对规则", 3, {"knowledge_base_id": 7})
     assert actual["results"] == bundle["results"] and actual["source_coverage"] and calls == ["ensure", "generic", "source"]
     assert actual["source_coverage"][0]["original_source_receipt"]["authority"] == "fresh_knowledge_document_read"
-    if corrective:
-        assert actual["original_query"] == "核对规则"
-        assert actual["rounds"] == [dict(query="核对规则", confidence=0.8, abstained=False)]
-        assert actual["reformulated"] is False
-    else:
-        assert "rounds" not in actual
+
 
 
 async def test_unready_index_never_returns_stale_cached_sources(monkeypatch):

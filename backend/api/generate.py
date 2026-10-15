@@ -44,7 +44,6 @@ from inference.openai_protocol import ProviderResponseError
 from inference.provider_context import get_provider_context_budget
 from infra.circuit_breaker import CircuitOpenError
 from infra.concurrency_control import InferenceQueueFull, RateLimitExceeded, inference_runtime
-from infra.environment import read_bool
 from infra.observability import increment, log_event, set_consecutive
 from infra.security_utils import strip_control_chars
 
@@ -1044,7 +1043,7 @@ async def _retrieve_rag_bundle(
     query: str, top_k: int, filters: dict[str, Any] | None, *, search_views: tuple[str, ...] = (),
     question_binding: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Retrieve curated character knowledge, then use the generic KB fallback."""
+    """Retrieve authorized knowledge with fresh source authority."""
 
     def retrieve() -> dict[str, Any]:
         from knowledge.source_expansion import requested_document_titles
@@ -1088,32 +1087,25 @@ async def _retrieve_rag_bundle(
         from knowledge.source_expansion import expand_source_context
         from knowledge.vector_db import get_vector_db
 
-        corrective_enabled = read_bool(os.environ, "CORRECTIVE_RAG_ENABLED")
-
         # A normal generation does not necessarily follow the search API.
-        # Resolve dirty metadata/content before consulting either cached RAG
-        # path; an incomplete rebuild cannot authorize stale source evidence.
+        # Resolve dirty metadata/content before consulting cached RAG
+        # lookup; an incomplete rebuild cannot authorize stale source evidence.
         if not knowledge_api._ensure_vector_index():
             raise RuntimeError("Generic knowledge index is not ready")
 
         vector_db = get_vector_db()
         generation = vector_db.cache_generation
         revision = knowledge_api._vector_index_revision
-        if corrective_enabled:
-            from knowledge.corrective_rag import CorrectiveRAG
+        views = search_views
+        contextual_binding = question_binding is not None and "reference_context" in question_binding["input"]
+        if contextual_binding or (not views and question_binding is not None):
+            from knowledge.public_question_binding import bound_object_search_views
 
-            bundle = CorrectiveRAG(get_rag_helper()).retrieve_with_correction(query, top_k=top_k, filters=filters)
-        else:
-            views = search_views
-            contextual_binding = question_binding is not None and "reference_context" in question_binding["input"]
-            if contextual_binding or (not views and question_binding is not None):
-                from knowledge.public_question_binding import bound_object_search_views
-
-                views = bound_object_search_views(question_binding, query)
-            view_options = {"additional_queries": views} if views else {}
-            if contextual_binding:
-                view_options["question_binding"] = question_binding
-            bundle = get_rag_helper().retrieve_with_citations(query, top_k=top_k, filters=filters, **view_options)
+            views = bound_object_search_views(question_binding, query)
+        view_options = {"additional_queries": views} if views else {}
+        if contextual_binding:
+            view_options["question_binding"] = question_binding
+        bundle = get_rag_helper().retrieve_with_citations(query, top_k=top_k, filters=filters, **view_options)
         expanded = expand_source_context(
             bundle, vector_db, expected_generation=generation,
             source_budget_tokens=get_provider_context_budget().window_tokens, filters=filters, query=query,
