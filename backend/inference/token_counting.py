@@ -2,7 +2,7 @@
 
 import hashlib
 import os
-from functools import lru_cache
+from functools import lru_cache, partial
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -14,12 +14,12 @@ _FLASH_TOKENIZER_REVISION = "2cba9e42aa026125f3ed06c6d98c1db82f7ca027"
 _FLASH_TOKENIZER_PATH = Path(__file__).parent / "tokenizer_data/deepseek-v4.1-flash.json"
 
 
-def _deepseek_model():
-    model = os.getenv("OPENAI_COMPAT_MODEL", "").strip()
+def _deepseek_model(provider, base_url, model):
+    model = model.strip()
     if (
-        os.getenv("MODEL_PROVIDER", "").strip().lower() == "openai_compat"
+        provider.strip().lower() == "openai_compat"
         and model in {"deepseek-v4-pro", "deepseek-flash"}
-        and urlsplit(os.getenv("OPENAI_COMPAT_BASE_URL", "")).hostname == "api.deepseek.com"
+        and urlsplit(base_url).hostname == "api.deepseek.com"
     ):
         return model
     return None
@@ -46,18 +46,32 @@ def _deepseek_text_tokens(text, model="deepseek-v4-pro"):
     return len(_deepseek_tokenizer(model).encode(text, add_special_tokens=False).ids)
 
 
-def serving_text_tokens(text):
-    """Use each supported official DeepSeek model's pinned data for cloud."""
-    model = _deepseek_model()
-    if model:
-        return _deepseek_text_tokens(text, model)
+def _generic_text_tokens(text):
     non_ascii = sum(1 for char in text if ord(char) > 127)
     return non_ascii + (len(text) - non_ascii + 3) // 4
 
 
+def text_token_counter(provider, base_url, model):
+    """Select once from the resolved connection; counting never rereads config."""
+    selected = _deepseek_model(provider, base_url, model)
+    return partial(_deepseek_text_tokens, model=selected) if selected else _generic_text_tokens
+
+
+def serving_text_tokens(text):
+    """Environment-selected counting for direct callers without a connection."""
+    model = _deepseek_model(
+        os.getenv("MODEL_PROVIDER", ""), os.getenv("OPENAI_COMPAT_BASE_URL", ""),
+        os.getenv("OPENAI_COMPAT_MODEL", ""),
+    )
+    return _deepseek_text_tokens(text, model) if model else _generic_text_tokens(text)
+
+
 def token_counter_info():
     """Safe measurement provenance for tests and evaluation receipts."""
-    model = _deepseek_model()
+    model = _deepseek_model(
+        os.getenv("MODEL_PROVIDER", ""), os.getenv("OPENAI_COMPAT_BASE_URL", ""),
+        os.getenv("OPENAI_COMPAT_MODEL", ""),
+    )
     if not model:
         return {"mode": "generic_character_estimate"}
     _deepseek_tokenizer(model)

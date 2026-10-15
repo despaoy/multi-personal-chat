@@ -15,7 +15,8 @@ source_id 只能逐字复制候选白名单。候选是有界检索，不代表�
 '''
 
 
-async def candidates(repository, character_id, scope, query, records, *, context_window_tokens):
+async def candidates(repository, character_id, scope, query, records, *, context_window_tokens,
+                     count_tokens=estimated_tokens):
     search = repository.search_sources
     recent = repository.list_sources
     found, latest = await asyncio.gather(search(character_id, scope, query=query, limit=32),
@@ -33,7 +34,7 @@ async def candidates(repository, character_id, scope, query, records, *, context
         body = row.get('body')
         if not isinstance(body, str) or not body:
             continue
-        item_cost = estimated_tokens(body) + estimated_tokens(str(source_id)) + 100
+        item_cost = count_tokens(body) + count_tokens(str(source_id)) + 100
         if len(selected) >= 32 or cost + item_cost > budget:
             omitted += 1
             continue

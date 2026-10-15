@@ -7,6 +7,7 @@ from character.memory_llm import MemoryEnrichmentScheduler, MemoryLlmConfig
 from character.models import UserScope
 from character.source_erasure_selection import candidates, selected_ids
 from db.database import SQLiteDB
+from inference.token_counting import text_token_counter
 from repositories.character_memory import DatabaseCharacterMemoryRepository
 
 SCOPE = UserScope('web', 'test', 'user', 'user', 'private')
@@ -66,7 +67,9 @@ async def test_candidate_budget_keeps_full_sources_and_reports_omissions():
         async def list_sources(self, *args, **kwargs):
             return [dict(source_message_id='short', body='完整短原话')]
 
-    rows, coverage = await candidates(Repo(), 'role', SCOPE, '删除', (), context_window_tokens=8192)
+    rows, coverage = await candidates(
+        Repo(), 'role', SCOPE, '删除', (), context_window_tokens=8192,
+        count_tokens=text_token_counter('openai_compat', 'http://unused', 'test'))
     assert rows == (dict(source_id='short', text='完整短原话', observed_at=None),)
     assert coverage['omitted'] == 1 and coverage['complete'] is False
 

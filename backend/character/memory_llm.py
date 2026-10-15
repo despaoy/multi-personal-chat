@@ -51,6 +51,7 @@ from db.memory_claim_guard import MemoryClaimConflict
 from db.memory_source import ClaimSourceRevokedError
 from inference.context_budget import CONTEXT_SAFETY_MARGIN_TOKENS, estimated_tokens
 from inference.openai_protocol import chat_completions_endpoint, completed_chat_content, nonthinking_parameters
+from inference.token_counting import text_token_counter
 from infra.environment import parse_unit_interval, read_bool
 
 if TYPE_CHECKING:
@@ -1476,6 +1477,7 @@ def build_memory_llm_messages(
     observed_at: datetime | None = None,
     context_window_tokens: int = 0,
     source_erasure_candidates: tuple[dict[str, Any], ...] = (),
+    count_tokens=estimated_tokens,
 ) -> list[dict[str, str]]:
     reference_time = observation_clock(observed_at)
     if not context_window_tokens and len(message) > max_input_chars:
@@ -1561,7 +1563,7 @@ def build_memory_llm_messages(
         {"role": "user", "content": json.dumps(payload, ensure_ascii=False)},
     ]
     if context_window_tokens:
-        required = sum(estimated_tokens(item['content']) + 4 for item in messages)
+        required = sum(count_tokens(item['content']) + 4 for item in messages)
         if required + 768 + CONTEXT_SAFETY_MARGIN_TOKENS > context_window_tokens:
             raise InputBudgetError("complete memory request exceeds serving context budget")
     return messages
@@ -1582,6 +1584,7 @@ class MemoryEnrichmentScheduler:
         self._embedding_provider = embedding_provider
         self._max_input_chars = config.max_input_chars
         self._context_window_tokens = config.context_window_tokens
+        self._count_tokens = text_token_counter("openai_compat", config.base_url, config.model)
         self._confidence_threshold = config.confidence_threshold
         self._idle_seconds = config.idle_seconds
         self._batch_size = config.batch_size
@@ -1887,7 +1890,7 @@ class MemoryEnrichmentScheduler:
                 result['stage'] = 'source_candidates'
                 source_candidates, result['source_candidate_coverage'] = await candidates(
                     job.repository, job.character_id, job.user_scope, job.message, records,
-                    context_window_tokens=self._context_window_tokens)
+                    context_window_tokens=self._context_window_tokens, count_tokens=self._count_tokens)
             result["stage"] = "proposal_generation"
             response = await self._completion.complete(
                 build_memory_llm_messages(
@@ -1902,6 +1905,7 @@ class MemoryEnrichmentScheduler:
                     observed_at=job.observed_at,
                     context_window_tokens=self._context_window_tokens,
                     source_erasure_candidates=source_candidates,
+                    count_tokens=self._count_tokens,
                 )
             )
             result["stage"] = "proposal_validation"

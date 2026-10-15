@@ -12,6 +12,7 @@ from unittest.mock import AsyncMock
 import pytest
 from test_memory_retry_policy import delivered_memory as delivered_memory
 
+from character.memory_llm import MemoryEnrichmentScheduler, MemoryLlmConfig
 from inference import token_counting as counter
 from inference.context_budget import ReviewContextBudget, estimated_tokens
 from inference.generation_request import (
@@ -125,9 +126,14 @@ async def test_required_asset_failure_blocks_real_memory_job_and_keeps_source(
     required_deepseek, delivered_memory, tmp_path, monkeypatch, no_live_context_review,
 ):
     rig = delivered_memory
-    # The reused fixture intentionally defaults direct constructors to no token
-    # window; explicitly enable the real writer budget for this integration.
-    rig.scheduler._context_window_tokens = 8192
+    # This dependency belongs to the writer connection, independently of chat.
+    embedding = rig.scheduler._embedding_provider
+    await rig.scheduler.shutdown(timeout=1)
+    rig.scheduler = MemoryEnrichmentScheduler(
+        config=MemoryLlmConfig(True, "https://api.deepseek.com", required_deepseek.model,
+                               context_window_tokens=8192, idle_seconds=0),
+        completion=rig.completion, embedding_provider=embedding,
+    )
     monkeypatch.setattr(counter, required_deepseek.path_field, tmp_path / "missing-writer-tokenizer.json")
     response = await rig.step()
     marker = response["context"]["memory_completion"]
