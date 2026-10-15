@@ -42,7 +42,9 @@ def _without_history_turns(history, bodies):
     return history if len(kept) == len(history) else tuple(kept)
 
 
-async def revalidate_private_sources(request, repository, character_id, scope, *, preferred_address=""):
+async def revalidate_private_sources(
+    request, repository, character_id, scope, *, preferred_address="", max_chars=None,
+):
     context = request.character_context
     if context is None:
         return request
@@ -108,25 +110,12 @@ async def revalidate_private_sources(request, repository, character_id, scope, *
         valid = row is not None and row["content"] == packet.content and row["evidence"] == list(packet.evidence)
         if not valid:
             removed.add(packet.memory_id)
-    if removed:
-        from character.context_builder import compile_reference_context
+    reference_changed = any(body in context.reference_context for body in bodies)
+    if removed or (reference_changed and context.memory_packets):
+        from inference.structured_context_authority import without_memories
 
-        remaining = tuple(packet for packet in context.memory_packets if packet.memory_id not in removed)
-        reference, used_ids = compile_reference_context(
-            remaining,
-            preferred_address=preferred_address,
-            complete_evidence=True,
-            observation_semantics=any(packet.source_observation for packet in remaining),
-            max_chars=None,
-        )
-        updated = replace(
-            updated,
-            memory_packets=remaining,
-            used_memory_ids=used_ids,
-            reference_context=reference,
-            memory_status="available" if remaining else "no_match",
-        )
-    elif any(body in context.reference_context for body in bodies):
+        updated = without_memories(updated, removed, preferred_address=preferred_address, max_chars=max_chars)
+    elif reference_changed:
         updated = replace(
             updated,
             reference_context="",
@@ -154,12 +143,13 @@ def make_private_context_revalidator(prepared, database):
 
     repository = DatabaseCharacterMemoryRepository(database)
     preferred_address = getattr(getattr(prepared, "relationship", None), "preferred_address", "")
+    max_chars = prepared.memory_budget.get("budget_chars")
 
     async def revalidate(request):
         from inference.structured_context_authority import revalidate_private_memories
 
         request = await revalidate_private_memories(
-            request, repository, character_id, scope, preferred_address=preferred_address,
+            request, repository, character_id, scope, preferred_address=preferred_address, max_chars=max_chars,
         )
         return await revalidate_private_sources(
             request,
@@ -167,6 +157,7 @@ def make_private_context_revalidator(prepared, database):
             character_id,
             scope,
             preferred_address=preferred_address,
+            max_chars=max_chars,
         )
 
     return revalidate

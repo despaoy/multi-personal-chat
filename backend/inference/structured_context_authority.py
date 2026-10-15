@@ -7,7 +7,29 @@ from character.context_builder import _memory_is_injectable, compile_reference_c
 from character.memory_read_authority import record_version, source_record_version, source_version
 
 
-async def revalidate_private_memories(request, repository, character_id, scope, *, preferred_address=""):
+def without_memories(context, removed, *, preferred_address="", max_chars=None):
+    """Rebuild the still-authorized packets under this turn's original budget."""
+    remaining = tuple(packet for packet in context.memory_packets if packet.memory_id not in removed)
+    reference, used_ids = compile_reference_context(
+        remaining,
+        preferred_address=preferred_address,
+        complete_evidence=True,
+        observation_semantics=any(packet.source_observation for packet in remaining),
+        max_chars=max_chars,
+    )
+    admitted = set(used_ids)
+    return replace(
+        context,
+        memory_packets=tuple(packet for packet in remaining if packet.memory_id in admitted),
+        used_memory_ids=used_ids,
+        reference_context=reference,
+        memory_status="available" if used_ids else "no_match",
+    )
+
+
+async def revalidate_private_memories(
+    request, repository, character_id, scope, *, preferred_address="", max_chars=None,
+):
     context = request.character_context
     if context is None or not context.memory_packets:
         return request
@@ -49,22 +71,11 @@ async def revalidate_private_memories(request, repository, character_id, scope, 
     removed.update(packet.memory_id for packet in context.memory_packets if not _memory_is_injectable(packet, now))
     if not removed:
         return request
-    remaining = tuple(packet for packet in context.memory_packets if packet.memory_id not in removed)
-    kwargs = dict(
-        preferred_address=preferred_address,
-        complete_evidence=True,
-        observation_semantics=any(packet.source_observation for packet in remaining),
-        max_chars=None,
-    )
-    reference, used_ids = compile_reference_context(remaining, **kwargs)
+    updated = without_memories(context, removed, preferred_address=preferred_address, max_chars=max_chars)
     updated = replace(
-        context,
-        memory_packets=remaining,
-        used_memory_ids=used_ids,
-        reference_context=reference,
+        updated,
         memory_review_text="",
         memory_field_presence=tuple((key, None) for key, _value in context.memory_field_presence),
-        memory_status="available" if remaining else "no_match",
     )
     bodies = tuple(
         value
