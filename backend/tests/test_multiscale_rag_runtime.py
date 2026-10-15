@@ -31,9 +31,16 @@ class FakeQueryEmbeddingProvider:
         return raw / norm if norm else raw
 
 
-def test_runtime_loads_all_four_scales_and_returns_bundle():
+def test_runtime_loads_all_four_scales_and_returns_bundle(monkeypatch):
+    from knowledge.multiscale_rag.vector_runtime import LocalMeanPoolingEmbeddingProvider
+
+    # Preserve the real provider/model identity required by these artifacts;
+    # only query encoding is a declared synthetic control in this unit test.
+    provider = LocalMeanPoolingEmbeddingProvider(model_path="synthetic-no-model-assets")
+    monkeypatch.setattr(provider, "embed_query", FakeQueryEmbeddingProvider().embed_query)
+    monkeypatch.setattr("knowledge.multiscale_rag.runtime.LocalMeanPoolingEmbeddingProvider", lambda **_kwargs: provider)
+    monkeypatch.setenv("CHARACTER_RAG_RERANKER_ENABLED", "false")
     runtime = MultiScaleRagRuntime()
-    runtime._provider = FakeQueryEmbeddingProvider()
 
     assert runtime.is_available() is True
     stats = runtime.stats()

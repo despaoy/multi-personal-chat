@@ -4,8 +4,8 @@
 - documents  canonical 索引文档契约
 - registry   知识域注册与配置（domain/alias/叙事层策略）
 - loaders    Source Loader（approved 卡等来源 → canonical 文档）
-- embedding  Embedding Provider 抽象 + 缓存
-- index      持久化向量/稀疏/实体索引
+- embedding  embedding providers and vector validation
+- index      in-memory vector/sparse/entity indexes
 - query      查询理解与别名归一
 - retrieval  混合召回与 RRF 融合
 - rerank     重排（CrossEncoder + 确定性降级）
@@ -15,13 +15,11 @@ Character-domain orchestration lives in ``knowledge.multiscale_rag.runtime``.
 
 from .documents import KnowledgeIndexDocument, SourceReference
 from .embedding import (
-    EmbeddingCache,
     EmbeddingProvider,
     SentenceTransformerEmbeddingProvider,
-    embedding_cache_key,
     get_default_embedding_provider,
 )
-from .index import DomainIndex, build_domain_index
+from .index import DomainIndex
 from .loaders import AliasEntityNormalizer, ApprovedCardsLoader, UnapprovedDataError
 from .query import QueryAnalysis, QueryAnalyzer
 from .registry import (
@@ -41,7 +39,6 @@ __all__ = [
     "DeterministicReranker",
     "DomainIndex",
     "DomainRegistry",
-    "EmbeddingCache",
     "EmbeddingProvider",
     "HybridRetriever",
     "KnowledgeDomainConfig",
@@ -57,7 +54,5 @@ __all__ = [
     "SourceReference",
     "UnapprovedDataError",
     "build_default_registry",
-    "build_domain_index",
-    "embedding_cache_key",
     "get_default_registry",
 ]

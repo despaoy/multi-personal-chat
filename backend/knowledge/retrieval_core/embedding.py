@@ -1,14 +1,8 @@
-"""Shared embedding provider abstraction and cache.
+"""Shared embedding providers, explicit model resolution and vector validation.
 
-- EmbeddingProvider 协议：单条/批量向量化、模型 ID、维度、超时、
-  错误传播。领域代码不读环境密钥、不初始化云端客户端、不写死
-  localhost、不偷偷下载模型——路径解析与开关收敛在 Provider 层。
-- EmbeddingCache：缓存键绑定 domain_id + document_id +
-  embedding_text 指纹 + 模型 ID + 模型指纹，不同模型向量不混用。
-
-默认实现复用项目既有的本地 sentence-transformers 模型
-（paraphrase-multilingual-MiniLM-L12-v2，384 维），优先从本地
-缓存解析路径；未找到本地模型且未显式允许联网时抛错（不静默下载）。
+The default SentenceTransformer provider is reused by long-term memory.
+Character retrieval uses its own pooling provider with the same path and
+vector validation helpers. Missing required models propagate clear errors.
 """
 
 from __future__ import annotations
@@ -220,101 +214,6 @@ def _cuda_available() -> bool:
     import torch
 
     return bool(torch.cuda.is_available())
-
-
-# ---------------------------------------------------------------------------
-# embedding 缓存
-# ---------------------------------------------------------------------------
-
-
-def embedding_cache_key(
-    domain_id: str,
-    document_id: str,
-    embedding_text_fingerprint: str,
-    model_id: str,
-    model_fingerprint: str,
-) -> str:
-    """缓存键绑定 domain + 文档 ID + 文本指纹 + 模型 ID + 模型指纹。"""
-    raw = f"{domain_id}|{document_id}|{embedding_text_fingerprint}|{model_id}|{model_fingerprint}"
-    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:32]
-
-
-class EmbeddingCache:
-    """npz 持久化的向量缓存（全量加载 + 原子写回）。
-
-    适用于当前知识域规模（数百至数万文档）；超大规模域可替换为
-    键值后端实现同接口。
-    """
-
-    def __init__(self, path: Path):
-        self.path = Path(path)
-        self._vectors: dict[str, np.ndarray] = {}
-        self._dirty = False
-        self._loaded = False
-
-    def load(self) -> int:
-        self._vectors = {}
-        self._loaded = True
-        if not self.path.exists():
-            return 0
-        try:
-            with np.load(self.path, allow_pickle=False) as data:
-                for key in data.files:
-                    self._vectors[str(key)] = np.asarray(data[key], dtype=np.float32)
-        except Exception as e:  # pragma: no cover - 损坏缓存视为空
-            logger.warning("embedding 缓存加载失败（视为空缓存）: %s", e)
-            self._vectors = {}
-        return len(self._vectors)
-
-    def get(self, key: str) -> np.ndarray | None:
-        if not self._loaded:
-            self.load()
-        vector = self._vectors.get(key)
-        if vector is None:
-            return None
-        return vector.astype(np.float32, copy=True)
-
-    def put(self, key: str, vector: np.ndarray) -> None:
-        if not self._loaded:
-            self.load()
-        self._vectors[key] = np.asarray(vector, dtype=np.float32)
-        self._dirty = True
-
-    def drop(self, keys: list[str]) -> int:
-        if not self._loaded:
-            self.load()
-        dropped = sum(1 for k in keys if k in self._vectors)
-        for key in keys:
-            self._vectors.pop(key, None)
-        if dropped:
-            self._dirty = True
-        return dropped
-
-    def save(self) -> None:
-        if not self._dirty:
-            return
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        # npz 临时文件必须以 .npz 结尾，否则 numpy 会再追加后缀
-        tmp_path = self.path.with_name(self.path.stem + ".tmp.npz")
-        if self._vectors:
-            np.savez(tmp_path, **self._vectors)
-        else:
-            # 空缓存也落盘占位，避免残留旧文件被误加载
-            np.savez(tmp_path, __empty__=np.zeros(0, dtype=np.float32))
-        os.replace(str(tmp_path), str(self.path))
-        self._dirty = False
-
-    def __len__(self) -> int:
-        if not self._loaded:
-            self.load()
-        return len(self._vectors)
-
-    def prune_to(self, valid_keys: set) -> int:
-        """删除不在 valid_keys 内的缓存项，返回删除数。"""
-        if not self._loaded:
-            self.load()
-        stale = [k for k in self._vectors if k not in valid_keys]
-        return self.drop(stale)
 
 
 def vector_norm(vector: np.ndarray) -> float:

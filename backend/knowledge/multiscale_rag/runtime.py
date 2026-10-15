@@ -72,7 +72,7 @@ def _load_bundle(root: Path) -> tuple[list[KnowledgeIndexDocument], np.ndarray, 
 
 
 def _memory_index(domain_id: str, documents: list[KnowledgeIndexDocument], vectors: np.ndarray) -> DomainIndex:
-    index = DomainIndex(domain_id, Path("__character_rag_runtime__"), int(vectors.shape[1]))
+    index = DomainIndex(domain_id, dimension=int(vectors.shape[1]))
     index.documents = documents
     index._rebuild_entity_index()
     index.bm25.build(documents)
