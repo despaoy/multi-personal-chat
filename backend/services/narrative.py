@@ -40,8 +40,9 @@ def parse_proposals(reply, active_ids):
         return body, [], ["invalid_branch_proposals"]
 
 
-class _BranchRelationship:
-    def __init__(self, state):
+class _BranchMemoryRepository(DatabaseCharacterMemoryRepository):
+    def __init__(self, database, state):
+        super().__init__(database)
         self.state = state
 
     async def get_relationship_record(self, *_args):
@@ -78,11 +79,12 @@ async def prepare_branch(request, owner, repo):
     latest = await asyncio.to_thread(repo.get, owner, branch["id"], writable=True)
     if latest["revision"] != branch["revision"]:
         raise HTTPException(409, "分支状态已变化，请重试")
+    memory_repo = _BranchMemoryRepository(repo.db, states[0])
     service = CharacterContextService(
         get_default_profile_registry(),
-        _BranchRelationship(states[0]),
+        memory_repo,
         _BranchHistory(rows),
-        memory_service=CharacterMemoryService(DatabaseCharacterMemoryRepository(repo.db)),
+        memory_service=CharacterMemoryService(memory_repo),
     )
     # Derive identity server-side. No client-supplied history, sender or conversation is trusted.
     turn = TurnInput(

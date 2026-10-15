@@ -247,14 +247,24 @@ async def _generate_reply_impl(
     delivery_context: dict | None = None,
     prepared_override=None,
 ):
+    from inference.model_manager import get_model_manager
+    from inference.request_context import get_request_context, resolve_request_context, use_request_context
+
+    context = get_request_context()
+    if context is None:
+        try:
+            context = await resolve_request_context(get_model_manager())
+        except Exception as exc:
+            raise HTTPException(503, "模型配置读取失败，请检查配置及模型状态后重试") from exc
     slots = []
     try:
-        return await _generate_reply_body(
-            request, current_user, persist_message=persist_message, enable_rag=enable_rag,
-            record_invocation=record_invocation, character_service=character_service,
-            message_db=message_db, delivery_context=delivery_context,
-            prepared_override=prepared_override, _completion_slots=slots,
-        )
+        with use_request_context(context):
+            return await _generate_reply_body(
+                request, current_user, persist_message=persist_message, enable_rag=enable_rag,
+                record_invocation=record_invocation, character_service=character_service,
+                message_db=message_db, delivery_context=delivery_context,
+                prepared_override=prepared_override, _completion_slots=slots,
+            )
     finally:
         for slot in slots:
             slot.release()
@@ -309,9 +319,12 @@ async def _generate_reply_body(
     # 此前仅 training/generate-dialogues 有此检查，主聊天端点遗漏，
     # 导致生产环境默认 mock 时静默返回罐头回复。现统一拦截。
     from inference.model_manager import get_model_manager
+    from inference.request_context import get_request_context
 
     _mgr = get_model_manager()
-    if _mgr._current_provider.value == "mock":
+    request_context = get_request_context()
+    request_provider = request_context.provider_name
+    if request_provider == "mock":
         raise HTTPException(
             status_code=503,
             detail="当前模型提供商为 mock 模式，无法提供真实推理。"
@@ -333,7 +346,7 @@ async def _generate_reply_body(
     except Exception as exc:
         raise HTTPException(503, "生成配置读取失败，请检查数据库连接后重试") from exc
 
-    if _mgr._current_provider.value == "openai_compat":
+    if request_provider == "openai_compat":
         runtime_config = dict(runtime_config)
         runtime_config.setdefault("topP", 1.0)
 
@@ -351,7 +364,7 @@ async def _generate_reply_body(
     else:
         lora_name = selected_lora["name"] if selected_lora else "default"
 
-    if selected_lora and _mgr._current_provider.value not in {"vllm", "transformers_peft"}:
+    if selected_lora and request_provider not in {"vllm", "transformers_peft"}:
         raise HTTPException(422, "所选模型提供商不支持 LoRA，请选择基础模型或显式选择支持 LoRA 的提供商")
     vllm_lora_name = resolve_lora_served_name(lora_name) if lora_name != "default" else "default"
 
@@ -399,7 +412,7 @@ async def _generate_reply_body(
 
     # 检查vLLM是否实际支持该LoRA，避免404触发熔断
     vllm_effective_lora = vllm_lora_name if lora_name != "default" else None
-    if _mgr._current_provider.value == "vllm" and vllm_effective_lora:
+    if request_provider == "vllm" and vllm_effective_lora:
         try:
             if not await _ensure_vllm() or _vllm_client is None:
                 raise RuntimeError("Selected vLLM service is unavailable")
@@ -421,14 +434,10 @@ async def _generate_reply_body(
         response_cache is not None and prepared_character_turn is None and selected_lora is None
         and not (runtime_config.get("useKnowledgeBase", True) and enable_rag)
     )
-    request_provider = _mgr._current_provider.value
-    cloud_provider = None
+    cloud_provider = request_context.provider
     if use_response_cache:
         try:
-            provider = _mgr.get_current_provider()
-            if request_provider == "openai_compat":
-                provider = await asyncio.to_thread(provider.snapshot)
-                cloud_provider = provider
+            provider = cloud_provider if cloud_provider is not None else _mgr.get_current_provider()
             model_identity = {
                 "provider": request_provider, "status": provider.get_status(),
                 "endpoint": getattr(provider, "base_url", None),
@@ -493,12 +502,10 @@ async def _generate_reply_body(
                         _mgr.set_lora_adapter(lora_path)
 
                     async def adapter(*, messages, **kwargs):
-                        nonlocal cloud_provider, model_name
+                        nonlocal model_name
                         if _mgr._current_provider.value != request_provider:
                             raise RuntimeError("Selected provider changed before generation; retry the request")
                         if request_provider == "openai_compat":
-                            if cloud_provider is None:
-                                cloud_provider = _mgr.get_current_provider().snapshot()
                             model_name = cloud_provider.get_status()["modelName"]
                             text, _cost = await cloud_provider.async_complete(messages, **kwargs)
                         else:

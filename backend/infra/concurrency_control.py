@@ -10,6 +10,8 @@ import time
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
+from inference.request_context import detached_request_context
+
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
@@ -217,11 +219,12 @@ class InferenceRuntime:
             if self._workers_started:
                 return
             self._workers = [
-                asyncio.create_task(self._worker(idx), name=f"inference-worker-{idx}")
+                asyncio.create_task(
+                    self._worker(idx), name=f"inference-worker-{idx}", context=detached_request_context())
                 for idx in range(self.worker_count)
             ]
             self._maintenance_task = asyncio.create_task(
-                self._maintenance_loop(), name="inference-runtime-maintenance"
+                self._maintenance_loop(), name="inference-runtime-maintenance", context=detached_request_context()
             )
             self._workers_started = True
 

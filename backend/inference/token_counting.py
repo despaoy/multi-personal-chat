@@ -68,10 +68,17 @@ def serving_text_tokens(text):
 
 def token_counter_info():
     """Safe measurement provenance for tests and evaluation receipts."""
-    model = _deepseek_model(
-        os.getenv("MODEL_PROVIDER", ""), os.getenv("OPENAI_COMPAT_BASE_URL", ""),
-        os.getenv("OPENAI_COMPAT_MODEL", ""),
-    )
+    from inference.request_context import get_request_context
+
+    context = get_request_context()
+    if context is None:
+        model = _deepseek_model(
+            os.getenv("MODEL_PROVIDER", ""), os.getenv("OPENAI_COMPAT_BASE_URL", ""),
+            os.getenv("OPENAI_COMPAT_MODEL", ""),
+        )
+    else:
+        model = (_deepseek_model(context.provider_name, context.provider.base_url, context.provider.model)
+                 if context.provider is not None else None)
     if not model:
         return {"mode": "generic_character_estimate"}
     _deepseek_tokenizer(model)

@@ -20,6 +20,7 @@ from datetime import datetime
 
 from character.context_builder import build_user_scope
 from character.models import RelationshipState, UserScope
+from inference.request_context import detached_request_context
 from services.turn_completion import CompletionUnavailable, get_turn_completion_runtime
 
 logger = logging.getLogger(__name__)
@@ -151,7 +152,8 @@ class DeliveryMemoryWorker:
         self.closed = False
         self.wakeup = asyncio.Event()
         self.active_key: str | None = None
-        self.task = asyncio.create_task(self._loop(), name="delivery-memory-worker")
+        self.task = asyncio.create_task(
+            self._loop(), name="delivery-memory-worker", context=detached_request_context())
 
     async def operation(self, operation, **params):
         # SyncPg owns its cross-thread futures. Do not use a response timeout

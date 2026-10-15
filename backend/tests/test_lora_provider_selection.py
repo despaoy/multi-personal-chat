@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 from fastapi import HTTPException
+from provider_fixtures import cloud_connection
 
 from db.schemas import MessageRequest
 
@@ -65,6 +66,8 @@ def install_api(monkeypatch, provider):
         get_status=lambda: dict(currentProvider=provider, providers={provider: dict(modelName="controlled-selected-model")}),
     )
     row = dict(id="registered-adapter", name="controlled-adapter", status="active")
+    connection = cloud_connection("controlled-selected-model")
+    manager.get_current_provider = lambda: connection
     monkeypatch.setattr(model_manager, "get_model_manager", lambda: manager)
     monkeypatch.setattr(generate, "db", SimpleNamespace(config={}, loras=[row]))
     monkeypatch.setattr(generate, "INPUT_VALIDATOR_AVAILABLE", False)

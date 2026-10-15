@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 from fastapi import HTTPException
+from provider_fixtures import cloud_connection
 
 from api import generate
 from db.database import SQLiteDB
@@ -32,6 +33,8 @@ def generation(monkeypatch, database):
     manager = SimpleNamespace(_current_provider=SimpleNamespace(value="openai_compat"),
         set_lora_adapter=Mock(), get_status=lambda: {"currentProvider": "openai_compat",
             "providers": {"openai_compat": {"modelName": "fixture-model"}}})
+    connection = cloud_connection("fixture-model")
+    manager.get_current_provider = lambda: connection
     monkeypatch.setattr(model_manager, "get_model_manager", lambda: manager)
     monkeypatch.setattr(generate, "db", database)
     monkeypatch.setattr(generate, "INPUT_VALIDATOR_AVAILABLE", False)

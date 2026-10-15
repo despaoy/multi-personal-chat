@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 from fastapi import HTTPException
+from provider_fixtures import cloud_connection
 
 from db.schemas import MessageRequest
 
@@ -107,6 +108,8 @@ async def test_generation_preserves_answer_and_existing_warnings(monkeypatch, pr
         set_lora_adapter=lambda _: None,
         get_status=lambda: dict(currentProvider=provider, providers={provider: dict(modelName="unit-model")}),
     )
+    connection = cloud_connection("unit-model")
+    manager.get_current_provider = lambda: connection
     monkeypatch.setattr(mm, "get_model_manager", lambda: manager)
     monkeypatch.setattr(gen, "INPUT_VALIDATOR_AVAILABLE", False)
     monkeypatch.setattr(gen, "response_cache", None)

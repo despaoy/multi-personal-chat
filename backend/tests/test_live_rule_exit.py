@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 from fastapi import HTTPException
+from provider_fixtures import cloud_connection
 
 from api import generate
 from api import router as compatibility
@@ -154,6 +155,8 @@ async def test_legacy_rule_config_cannot_choose_a_persona_from_a_name(monkeypatc
     manager = SimpleNamespace(_current_provider=SimpleNamespace(value="openai_compat"),
         set_lora_adapter=Mock(), set_provider=Mock(),
         get_status=lambda: {"currentProvider": "openai_compat", "providers": {"openai_compat": {"modelName": "fixture-model"}}})
+    connection = cloud_connection("fixture-model")
+    manager.get_current_provider = lambda: connection
     monkeypatch.setattr(model_manager, "get_model_manager", lambda: manager)
     legacy = {"enabled": True, "mode": "rule", "persona_keywords": {"hutao": ["胡桃"]}, "persona_adapters": {"hutao": "hutao"}}
     store = SimpleNamespace(config={"useKnowledgeBase": False, "lora_router_config": json.dumps(legacy)},

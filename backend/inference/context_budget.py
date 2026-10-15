@@ -6,9 +6,11 @@ CONTEXT_SAFETY_MARGIN_TOKENS = 512
 
 
 def estimated_tokens(text: str) -> int:
+    from inference.request_context import get_request_context
     from inference.token_counting import serving_text_tokens
 
-    return serving_text_tokens(text)
+    context = get_request_context()
+    return context.count_tokens(text) if context is not None else serving_text_tokens(text)
 
 
 @dataclass(frozen=True)

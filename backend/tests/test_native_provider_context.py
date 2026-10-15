@@ -64,7 +64,7 @@ async def test_native_api_compiler_keeps_complete_cloud_message_and_three_large_
     from api import generate as api
     from db.schemas import MessageRequest
     from inference import model_manager
-    from inference.generation_request import build_generation_request
+    from inference.generation_request import GenerationResult, build_generation_request
 
     monkeypatch.setattr(model_manager, "get_model_manager", lambda: selected("openai_compat"))
     monkeypatch.setenv("OPENAI_COMPAT_CONTEXT_WINDOW_TOKENS", "65536")
@@ -76,7 +76,7 @@ async def test_native_api_compiler_keeps_complete_cloud_message_and_three_large_
     async def observe(request, generate):
         plan = build_generation_request(request)
         observed.append((request, plan))
-        return SimpleNamespace(reply="保留完整内容", plan=plan, model_invoked=True, response_mode="generated")
+        return GenerationResult(reply="保留完整内容", plan=plan)
 
     monkeypatch.setattr(api, "generate_character_response", observe)
     result = await api._generate_with_retrieval(

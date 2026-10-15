@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 from fastapi import HTTPException
+from provider_fixtures import cloud_connection
 from services import turn_completion
 
 from api import generate
@@ -111,6 +112,8 @@ async def generation(monkeypatch):
     manager = SimpleNamespace(_current_provider=SimpleNamespace(value="openai_compat"),
         set_lora_adapter=lambda _: None,
         get_status=lambda: {"currentProvider": "openai_compat", "providers": {"openai_compat": {"modelName": "fixture-model"}}})
+    connection = cloud_connection("fixture-model")
+    manager.get_current_provider = lambda: connection
     monkeypatch.setattr(model_manager, "get_model_manager", lambda: manager)
     monkeypatch.setattr(generate, "INPUT_VALIDATOR_AVAILABLE", False)
     monkeypatch.setattr(generate, "response_cache", None)

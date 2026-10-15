@@ -51,6 +51,7 @@ from db.memory_claim_guard import MemoryClaimConflict
 from db.memory_source import ClaimSourceRevokedError
 from inference.context_budget import CONTEXT_SAFETY_MARGIN_TOKENS, estimated_tokens
 from inference.openai_protocol import chat_completions_endpoint, completed_chat_content, nonthinking_parameters
+from inference.request_context import detached_request_context
 from inference.token_counting import text_token_counter
 from infra.environment import parse_unit_interval, read_bool
 
@@ -1637,7 +1638,8 @@ class MemoryEnrichmentScheduler:
 
     def _ensure_worker(self) -> None:
         if self._worker is None or self._worker.done():
-            self._worker = asyncio.create_task(self._run(), name="character-memory-llm-worker")
+            self._worker = asyncio.create_task(
+                self._run(), name="character-memory-llm-worker", context=detached_request_context())
 
     def _remember_schedule_skip(self, reason: str) -> None:
         self._skipped += 1
@@ -1724,6 +1726,7 @@ class MemoryEnrichmentScheduler:
             self._idle_tasks[scope_key] = asyncio.create_task(
                 self._flush_after_idle(scope_key),
                 name="character-memory-idle-consolidation",
+                context=detached_request_context(),
             )
             self._last_outcome = "buffered_idle"
         return True

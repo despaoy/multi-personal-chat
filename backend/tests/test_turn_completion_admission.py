@@ -101,6 +101,11 @@ def generation_environment(monkeypatch, provider):
         set_lora_adapter=lambda _: None,
         get_status=lambda: dict(currentProvider=provider, providers={provider: dict(modelName="unit-model")}),
     )
+    connection = SimpleNamespace(base_url="https://completion.invalid/v1", model="unit-model")
+    connection.snapshot = lambda: connection
+    connection.get_status = lambda: {"modelName": "unit-model"}
+    connection.async_complete = AsyncMock(side_effect=AssertionError("This admission control must not invoke a provider"))
+    manager.get_current_provider = lambda: connection
     monkeypatch.setattr(mm, "get_model_manager", lambda: manager)
     monkeypatch.setattr(gen, "INPUT_VALIDATOR_AVAILABLE", False)
     monkeypatch.setattr(gen, "response_cache", None)

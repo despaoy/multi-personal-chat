@@ -1,6 +1,7 @@
 from types import SimpleNamespace
 
 import pytest
+from provider_fixtures import cloud_connection
 
 from db.schemas import MessageRequest
 from inference.generation_request import GenerationRequest, build_generation_request
@@ -35,6 +36,8 @@ async def test_generation_failure_is_reported_and_recorded(monkeypatch, provider
     switch = Mock(side_effect=AssertionError("A failed request must not switch the configured provider"))
     manager = SimpleNamespace(_current_provider=SimpleNamespace(value=provider),
                               set_lora_adapter=lambda _: None, set_provider=switch)
+    connection = cloud_connection("fixture-model")
+    manager.get_current_provider = lambda: connection
     monkeypatch.setattr(model_manager, "get_model_manager", lambda: manager)
     monkeypatch.setattr(generate, "db", SimpleNamespace(config={}, loras=[]))
     monkeypatch.setattr(generate, "INPUT_VALIDATOR_AVAILABLE", False)
@@ -278,8 +281,10 @@ async def test_configuration_read_failure_stops_before_model_or_save(monkeypatch
         def config(self):
             raise failure
 
+    connection = cloud_connection("fixture-model")
     monkeypatch.setattr(model_manager, "get_model_manager", lambda: SimpleNamespace(
-        _current_provider=SimpleNamespace(value="openai_compat")))
+        _current_provider=SimpleNamespace(value="openai_compat"),
+        get_current_provider=lambda: connection))
     monkeypatch.setattr(generate, "INPUT_VALIDATOR_AVAILABLE", False)
     model, save = AsyncMock(), AsyncMock()
     monkeypatch.setattr(generate, "_generate_with_retrieval", model)
@@ -310,8 +315,10 @@ async def test_native_timeout_cancels_work_and_releases_capacity_without_breaker
         finally:
             cancelled.set()
 
+    connection = cloud_connection("fixture-model")
     monkeypatch.setattr(model_manager, "get_model_manager", lambda: SimpleNamespace(
-        _current_provider=SimpleNamespace(value="openai_compat"), set_lora_adapter=lambda _: None))
+        _current_provider=SimpleNamespace(value="openai_compat"), set_lora_adapter=lambda _: None,
+        get_current_provider=lambda: connection))
     monkeypatch.setattr(generate, "db", SimpleNamespace(config={}, loras=[]))
     monkeypatch.setattr(generate, "INPUT_VALIDATOR_AVAILABLE", False)
     monkeypatch.setattr(generate, "response_cache", None)

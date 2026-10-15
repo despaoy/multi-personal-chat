@@ -18,7 +18,7 @@ FACTS = "虚构题设：3张票，每张2元，共6元；尚未付款，下雨�
 def installed(monkeypatch):
     state = SimpleNamespace(active=0, maximum=0, selected=None, calls=[], fault=None,
         entered=asyncio.Event(), release=None, capacity_reached=asyncio.Event(), expected_capacity=None)
-    provider = SimpleNamespace()
+    provider = SimpleNamespace(base_url="https://native.invalid/v1", model="fixture-cloud")
 
     async def complete(messages, **kwargs):
         state.active += 1

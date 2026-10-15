@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 from fastapi import HTTPException
+from provider_fixtures import cloud_connection
 
 from db.schemas import MessageRequest
 
@@ -37,8 +38,13 @@ async def test_deterministic_response_has_no_model_invocation(monkeypatch, mode,
 
     saved, recorded = _install_common(monkeypatch, gen)
 
+    connection = cloud_connection("not-called")
+
     class Manager:
         _current_provider = SimpleNamespace(value=provider)
+
+        def get_current_provider(self):
+            return connection
 
         def set_lora_adapter(self, value):
             pass
@@ -158,32 +164,34 @@ async def test_internal_mode_vllm_failure_does_not_persist(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_internal_mode_model_manager_failure_does_not_record_invocation(monkeypatch):
+async def test_internal_mode_model_manager_failure_does_not_record_invocation(monkeypatch, tmp_path):
     import api.generate as gen
     from inference import model_manager as mm
 
     saved, recorded = _install_common(monkeypatch, gen)
+    from db.database import SQLiteDB
+
+    monkeypatch.setattr(gen, "db", SQLiteDB(tmp_path / "internal-provider-error.sqlite"))
+
+    failure = RuntimeError("model manager down")
+    connection = cloud_connection("fixture-model", completion=AsyncMock(side_effect=failure))
 
     class FakeManager:
         _current_provider = SimpleNamespace(value="openai_compat")
+
+        def get_current_provider(self):
+            return connection
 
         def set_lora_adapter(self, value):
             pass
 
         async def async_generate(self, **kwargs):
-            raise RuntimeError("model manager down")
+            pytest.fail("Cloud failure must reach the selected connection async_complete")
 
     monkeypatch.setattr(mm, "get_model_manager", lambda: FakeManager())
-    monkeypatch.setattr(gen, "_ensure_vllm", _async_return(True))
-    monkeypatch.setattr(gen, "_vllm_client", object())
     monkeypatch.setattr(gen, "get_llm_semaphore", lambda: asyncio.Semaphore(2))
 
-    async def fake_vllm(*args, **kwargs):
-        raise RuntimeError("vllm down")
-
-    monkeypatch.setattr(gen, "_generate_with_vllm", fake_vllm)
-
-    with pytest.raises(HTTPException):
+    with pytest.raises(HTTPException) as caught:
         await gen._generate_reply_impl(
             _request(),
             persist_message=False,
@@ -191,6 +199,8 @@ async def test_internal_mode_model_manager_failure_does_not_record_invocation(mo
             record_invocation=False,
         )
 
+    assert caught.value.status_code == 500 and caught.value.__cause__ is failure
+    connection.async_complete.assert_awaited_once()
     assert saved == []
     assert recorded == []
 
@@ -250,8 +260,13 @@ async def test_message_db_reaches_save_and_invocation_record(monkeypatch, provid
 
     _install_common(monkeypatch, gen)
 
+    connection = cloud_connection("unit-model")
+
     class FakeManager:
         _current_provider = SimpleNamespace(value=provider)
+
+        def get_current_provider(self):
+            return connection
 
         def set_lora_adapter(self, value):
             pass

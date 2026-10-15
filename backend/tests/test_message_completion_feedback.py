@@ -6,6 +6,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
+from provider_fixtures import cloud_connection
 
 from character.context_builder import build_user_scope
 from db.database import SQLiteDB
@@ -175,6 +176,8 @@ async def test_both_consumers_use_actual_saved_row_and_keep_visible_failure(monk
         set_lora_adapter=lambda _: None,
         get_status=lambda: dict(currentProvider=provider, providers={provider: dict(modelName="unit-model")}),
     )
+    connection = cloud_connection("unit-model")
+    manager.get_current_provider = lambda: connection
     monkeypatch.setattr(mm, "get_model_manager", lambda: manager)
     monkeypatch.setattr(gen, "INPUT_VALIDATOR_AVAILABLE", False)
     monkeypatch.setattr(gen, "response_cache", None)

@@ -32,7 +32,8 @@ async def test_selected_provider_receives_messages_and_budget_without_local_over
             return self
 
         def snapshot(self):
-            return SimpleNamespace(async_complete=self.async_complete,
+            return SimpleNamespace(base_url="https://native.invalid/v1", model="selected-native",
+                                   async_complete=self.async_complete,
                                    get_status=lambda: {"modelName": "selected-native"})
 
         async def async_complete(self, messages, *, temperature, max_tokens, top_p,
