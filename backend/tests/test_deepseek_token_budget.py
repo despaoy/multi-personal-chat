@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 from tokenizers import Tokenizer
 
+from character.evidence_selector import InputBudgetError
 from character.models import CompiledCharacterContext
 from character.output_guard import ReplyGuard
 from character.source_memory import compile_sources
@@ -204,7 +205,7 @@ async def test_retry_fixed_overflow_stops_before_second_model_request(deepseek, 
         calls.append(kwargs)
         return "建议你去散步。"
 
-    with pytest.raises(ValueError, match="serving context budget"):
+    with pytest.raises(InputBudgetError, match="serving context budget"):
         await generate_character_response(request, generate)
     assert len(calls) == 1
     assert CASE["question"] in unescape(calls[0]["messages"][-1]["content"])

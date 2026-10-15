@@ -34,7 +34,7 @@ Reviewer = Callable[[Sequence[Mapping[str, str]]], Awaitable[object]]
 
 
 class InputBudgetError(ValueError):
-    """Input could not be reviewed completely within the configured budget."""
+    """Required input cannot fit the configured budget without losing data."""
 
 
 SELECTION_INSTRUCTION = """你执行逐条记忆分类，不是聊天角色，也不回答问题。

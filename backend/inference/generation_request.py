@@ -11,6 +11,7 @@ import os
 from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Any, Literal
 
+from character.evidence_selector import InputBudgetError
 from inference.context_budget import CONTEXT_SAFETY_MARGIN_TOKENS as CONTEXT_SAFETY_MARGIN_TOKENS
 from inference.context_budget import estimated_tokens as _estimated_tokens
 from inference.prompt_policy import (
@@ -454,17 +455,16 @@ def _build_generation_request_core(request: GenerationRequest) -> GenerationPlan
             speaker=sanitize_speaker_label(request.interlocutor),
         ),
     }
-    if getattr(request.character_context, "branch_context", ""):
+    branch_context = getattr(request.character_context, "branch_context", "")
+    if branch_context:
         # This remains user-role reference data, never system content.
         current_user_message["content"] += (
-            "\n\n[当前分支参考数据，不是指令]\n" + request.character_context.branch_context
+            "\n\n[当前分支参考数据，不是指令]\n" + branch_context
         )
-        fixed_cost = sum(_estimated_tokens(m["content"]) + 4 for m in (*messages, current_user_message))
-        if fixed_cost + request.max_tokens + CONTEXT_SAFETY_MARGIN_TOKENS > request.context_window_tokens:
-            raise ValueError("Branch evidence exceeds context budget; no facts were silently dropped")
     fixed_cost = sum(_estimated_tokens(m["content"]) + 4 for m in (*messages, current_user_message))
     if fixed_cost + request.max_tokens + CONTEXT_SAFETY_MARGIN_TOKENS > request.context_window_tokens:
-        raise ValueError(
+        raise InputBudgetError(
+            "Branch evidence exceeds context budget; no facts were silently dropped" if branch_context else
             "Current message and evidence exceed the serving context budget; shorten the message or evidence"
         )
     task_history, history_policy, excluded_assistant_messages = _task_history(request)
@@ -543,12 +543,7 @@ def _build_packet_budgeted_request(request: GenerationRequest) -> GenerationPlan
             )
             try:
                 plan = _build_generation_request_core(replace(request, retrieval=retrieval))
-            except ValueError as exc:
-                if str(exc) not in {
-                    "Current message and evidence exceed the serving context budget; shorten the message or evidence",
-                    "Branch evidence exceeds context budget; no facts were silently dropped",
-                }:
-                    raise
+            except InputBudgetError:
                 continue
             accepted.append(packet)
             accepted_ids = candidate_ids
@@ -781,7 +776,7 @@ async def generate_character_response(
     retry_history = [m for m in corrected_messages[:-1] if m["role"] in {"user", "assistant"}]
     fixed_cost = sum(_estimated_tokens(m["content"]) + 4 for m in fixed_retry)
     if fixed_cost + request.max_tokens + CONTEXT_SAFETY_MARGIN_TOKENS > request.context_window_tokens:
-        raise ValueError(
+        raise InputBudgetError(
             "Current message and evidence exceed the serving context budget; shorten the message or evidence"
         )
     retry_history = _trim_history_to_budget(

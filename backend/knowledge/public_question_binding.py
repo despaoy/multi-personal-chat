@@ -4,6 +4,7 @@ import asyncio
 import hashlib
 import json
 
+from character.evidence_selector import InputBudgetError
 from inference.context_budget import CONTEXT_SAFETY_MARGIN_TOKENS, estimated_tokens
 from knowledge.public_object_scope import RESOLVE_INSTRUCTION, parse_object_scopes
 
@@ -78,7 +79,7 @@ def validate_question_binding(binding, payload):
 async def resolve_question_binding(dependencies, query, *, window_tokens, public_obligations=(), history=(), context_budget=None, reviewer=None):
     try:
         payload = question_scope_input(dependencies, query, public_obligations, history=history, context_budget=context_budget)
-    except ValueError as exc:
+    except InputBudgetError as exc:
         raise QuestionBindingCapacityError("Complete question references cannot fit the resolver profile") from exc
     messages = [
         dict(role="system", content=RESOLVE_INSTRUCTION),
