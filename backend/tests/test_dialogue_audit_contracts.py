@@ -192,7 +192,6 @@ def test_rag_deduplicates_scene_and_delivers_exact_excerpt(monkeypatch, query, t
     instance.evidence_by_parent = {'fact-0': SimpleNamespace(id='evidence-0', source=source)}
     instance.extractor = OriginalTextExtractor(tmp_path)
     monkeypatch.setattr(service, 'analyze_explicit_domain', lambda *a: SimpleNamespace(entities=[]))
-    monkeypatch.setattr(service, 'choose_card_types', lambda *a: service.CARD_TYPES)
     monkeypatch.setattr(service, 'rerank_with_title_frames', lambda *a, **kw: candidates)
     result = instance.retrieve(query)
     assert result['context_text'].count('【父场景】') == 1

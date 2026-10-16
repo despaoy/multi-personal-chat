@@ -69,14 +69,13 @@ def test_boundary_filters_parents_timelines_and_raw_evidence_before_exposure(mon
     instance.identity_coverage = False
     instance.config = SimpleNamespace(domain_id="test")
     instance.analyzer = None
-    instance.indexes = {frozenset({"relation"}): index}
-    instance.retrievers = {frozenset({"relation"}): SimpleNamespace(search=search, index=index)}
+    instance.indexes = {service.CARD_TYPES: index}
+    instance.retrievers = {service.CARD_TYPES: SimpleNamespace(search=search, index=index)}
     instance.reranker = None
     instance.by_id = {scene.id: scene}
     instance.evidence_by_parent = {known.id: evidence}
     instance.extractor = SimpleNamespace(extract=lambda _: pytest.fail("hidden evidence must not be read"))
     monkeypatch.setattr(service, "analyze_explicit_domain", lambda *args: SimpleNamespace(entities=["kisaki", "ruri"]))
-    monkeypatch.setattr(service, "choose_card_types", lambda *args: frozenset({"relation"}))
 
     def rerank(analysis, candidates, **kwargs):
         assert [item.document.id for item in candidates] == ["known"]

@@ -91,7 +91,7 @@ class MatrixInnerProductIndex:
             raise ValueError("vectors 必须为二维矩阵")
         self.matrix = np.ascontiguousarray(matrix)
         self.ntotal = int(matrix.shape[0])
-        self.d = int(matrix.shape[1]) if self.ntotal else 0
+        self.d = int(matrix.shape[1])
 
     def search(self, query: np.ndarray, top_k: int):
         query_matrix = np.asarray(query, dtype=np.float32).reshape(-1, self.d)

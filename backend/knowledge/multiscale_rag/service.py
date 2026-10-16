@@ -22,9 +22,6 @@ if TYPE_CHECKING:
 
 CARD_TYPES = frozenset({"fact", "relation", "event"})
 _BROAD_WORDS = ("整卷", "整个故事", "故事概述", "剧情概述", "主要剧情", "总体讲了", "完整回顾")
-_RELATION_FOCUS_WORDS = ("什么关系", "是什么关系", "关系经历", "关系变化", "感情变成", "后来变成")
-_IDENTITY_FOCUS_WORDS = ("什么人", "什么身份", "是什么人物", "个人资料")
-_EVENT_FOCUS_WORDS = ("怎么回事", "发生了什么", "为何", "为什么", "袭击", "遇害", "死于")
 
 
 def analyze_explicit_domain(analyzer: QueryAnalyzer, domain_id: str, query: str) -> QueryAnalysis:
@@ -44,34 +41,6 @@ def analyze_explicit_domain(analyzer: QueryAnalyzer, domain_id: str, query: str)
             analysis.matched_domains.append(domain_id)
             analysis.domain_hit_reasons[domain_id] = "explicit_domain"
     return analysis
-
-
-def choose_card_types(analysis: QueryAnalysis, query: str) -> frozenset[str]:
-    """Choose a schema partition before recall, not after top-k truncation."""
-    # Complete identity queries share a dependency set regardless of surface
-    # form. In particular, "who is X" must not silently exclude relation cards.
-    if identity_evidence_subject(analysis):
-        return frozenset({"fact", "relation"})
-    # “什么人/什么身份”既可能由身份事实卡回答，也可能需要家族关系卡；
-    # 不能因查询中出现“家”便提前截断到 relation。
-    if any(word in query for word in _IDENTITY_FOCUS_WORDS):
-        return frozenset({"fact", "relation"})
-    # “父亲袭击某人是怎么回事”虽然含亲属词，但核心是在询问事件。
-    # 事件提示优先于 relation_type，保留事实卡用于原因或结果补充。
-    if any(word in query for word in _EVENT_FOCUS_WORDS):
-        return frozenset({"fact", "event"})
-    if analysis.reality_preferences:
-        return CARD_TYPES
-    if analysis.relation_type_preferences:
-        return frozenset({"relation"})
-    if (
-        "relation" in analysis.doc_type_preferences
-        and len(analysis.entities) >= 2
-        and any(word in query for word in _RELATION_FOCUS_WORDS)
-    ):
-        return frozenset({"relation"})
-    preferred = frozenset(CARD_TYPES & set(analysis.doc_type_preferences))
-    return preferred or CARD_TYPES
 
 
 def rerank_with_title_frames(
@@ -187,8 +156,8 @@ class RoutedMultiScaleService:
             analysis.story_hits = [name for name in object_names if name in self.config.story_titles]
             analysis.expanded_keywords = list(dict.fromkeys([*analysis.entities, *analysis.story_hits, *(keyword for keyword in analysis.expanded_keywords if keyword not in incidental)]))
         broad = any(word in query for word in _BROAD_WORDS)
-        route = frozenset({"story", "scene"}) if broad else choose_card_types(analysis, query)
-        retriever = self.retrievers.get(route) or self.retrievers[CARD_TYPES]
+        route = frozenset({"story", "scene"}) if broad else CARD_TYPES
+        retriever = self.retrievers[route]
         recall_k = max(top_k * 12, 60)
         if knowledge_boundary is not None:
             # Until visibility-aware ANN indexes are built, recall the complete
@@ -197,7 +166,7 @@ class RoutedMultiScaleService:
             recall_k = max(recall_k, retriever.index.count())
         recalled = retriever.search(analysis, top_k=recall_k, recall_k=recall_k, mode="hybrid")
         recalled = [candidate for candidate in recalled if visible_to(candidate.document, knowledge_boundary)]
-        pair = explicit_relation_pair(analysis) if route == frozenset({"relation"}) else frozenset()
+        pair = explicit_relation_pair(analysis) if not broad else frozenset()
         before_scope = len(recalled)
         recalled = [candidate for candidate in recalled if in_relation_scope(candidate.document, pair)]
         identity_subject = identity_evidence_subject(analysis)
@@ -252,12 +221,19 @@ class RoutedMultiScaleService:
                     emitted_scenes.add(scene.id)
 
         timeline: list[dict[str, Any]] = []
-        if route == frozenset({"relation"}) and route in self.indexes and len(analysis.entities) >= 2:
+        if (
+            not broad
+            and len(analysis.entities) >= 2
+            and any(c.document.document_type == "relation" for c in selected)
+        ):
             wanted = set(analysis.entities)
             relation_docs = [
                 doc
                 for doc in self.indexes[route].documents
-                if wanted <= set(doc.entities) and visible_to(doc, knowledge_boundary) and in_relation_scope(doc, pair)
+                if doc.document_type == "relation"
+                and wanted <= set(doc.entities)
+                and visible_to(doc, knowledge_boundary)
+                and in_relation_scope(doc, pair)
             ]
             relation_docs.sort(
                 key=lambda doc: (

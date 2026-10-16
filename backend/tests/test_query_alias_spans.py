@@ -55,14 +55,3 @@ def test_configured_domain_aliases_preserve_identity_subjects():
             result = query_analyzer.analyze(alias + suffix, domain_id=config.domain_id)
             assert result.normalized_query == canonical + suffix, (alias, result)
             assert explicit_identity_subject(result) == canonical, (alias, result)
-
-
-def test_equivalent_identity_forms_search_the_same_partition(tmp_path):
-    from knowledge.multiscale_rag.service import choose_card_types
-
-    query_analyzer = analyzer(tmp_path, {'小林': '林远', '林远': '林远'})
-    for name in ('小林', '林远'):
-        for suffix in ('是谁？', '是什么人？', '是什么身份？', '的身份是什么？'):
-            query = name + suffix
-            result = query_analyzer.analyze(query)
-            assert choose_card_types(result, query) == frozenset({'fact', 'relation'})

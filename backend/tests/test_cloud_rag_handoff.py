@@ -156,7 +156,6 @@ def test_public_service_none_keeps_whole_packet(monkeypatch):
     instance.retrievers = {service.CARD_TYPES: SimpleNamespace(search=lambda *a, **kw: [candidate])}
     instance.evidence_by_parent = {doc.id: SimpleNamespace(content=text)}
     monkeypatch.setattr(service, "analyze_explicit_domain", lambda *a: SimpleNamespace(entities=[]))
-    monkeypatch.setattr(service, "choose_card_types", lambda *a: service.CARD_TYPES)
     monkeypatch.setattr(service, "rerank_with_title_frames", lambda *a, **kw: [candidate])
     result = instance.retrieve("资料")
     assert text in result["context_text"] and result["evidence_packets"][0]["text"] == result["context_text"]

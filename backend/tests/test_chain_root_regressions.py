@@ -12,12 +12,10 @@ from inference.generation_request import GenerationRequest, _estimated_tokens, b
 
 
 def test_protagonist_is_not_master_servant_relation():
-    from knowledge.multiscale_rag.service import choose_card_types
     from knowledge.retrieval_core.query import QueryAnalyzer
     query = '月社妃是哪本魔法之书的主人公？'
     analysis = QueryAnalyzer([]).analyze(query)
     assert not analysis.relation_type_preferences
-    assert 'fact' in choose_card_types(analysis, query)
     relation = QueryAnalyzer([]).analyze('她的主人是谁？')
     assert relation.relation_type_preferences
 

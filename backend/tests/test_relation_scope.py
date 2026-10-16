@@ -78,15 +78,14 @@ def test_scope_precedes_reranking_and_applies_to_timeline(monkeypatch, query, sc
     instance.identity_coverage = False
     instance.config = SimpleNamespace(domain_id='test')
     instance.analyzer = None
-    instance.indexes = {frozenset({'relation'}): SimpleNamespace(documents=[c.document for c in candidates])}
-    instance.retrievers = {frozenset({'relation'}): SimpleNamespace(search=lambda *a, **kw: candidates)}
+    instance.indexes = {service.CARD_TYPES: SimpleNamespace(documents=[c.document for c in candidates])}
+    instance.retrievers = {service.CARD_TYPES: SimpleNamespace(search=lambda *a, **kw: candidates)}
     instance.reranker = None
     instance.extractor = None
     instance.by_id = {}
     instance.evidence_by_parent = {}
     monkeypatch.setattr(service, 'analyze_explicit_domain', lambda *a: SimpleNamespace(
         entities=['a', 'b'], normalized_query=query))
-    monkeypatch.setattr(service, 'choose_card_types', lambda *a: frozenset({'relation'}))
 
     def rank(_analysis, recalled, **kwargs):
         assert len(recalled) == int(include_direct) + int(not scoped)

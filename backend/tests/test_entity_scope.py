@@ -82,7 +82,6 @@ def test_filter_runs_before_ranking_and_preserves_retrieval_diagnostics(monkeypa
     instance.retrievers = {service.CARD_TYPES: SimpleNamespace(search=lambda *a, **kw: candidates)}
     monkeypatch.setattr(service, 'analyze_explicit_domain', lambda *a: SimpleNamespace(
         entities=['林远'], normalized_query=query))
-    monkeypatch.setattr(service, 'choose_card_types', lambda *a: service.CARD_TYPES)
 
     def rank(_analysis, recalled, **kwargs):
         assert [c.document.id for c in recalled] == ['direct']

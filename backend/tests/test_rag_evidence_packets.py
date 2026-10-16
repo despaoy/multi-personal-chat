@@ -24,7 +24,6 @@ def make_service(monkeypatch, evidence_texts):
     instance.evidence_by_parent = {str(i): SimpleNamespace(content=text)
                                    for i, text in enumerate(evidence_texts) if text is not None}
     monkeypatch.setattr(service, 'analyze_explicit_domain', lambda *a: SimpleNamespace(entities=[]))
-    monkeypatch.setattr(service, 'choose_card_types', lambda *a: service.CARD_TYPES)
     monkeypatch.setattr(service, 'rerank_with_title_frames', lambda *a, **kw: candidates)
     return instance
 
@@ -100,20 +99,23 @@ def test_shared_background_survives_when_later_sibling_evidence_fits(monkeypatch
 
 
 @pytest.mark.parametrize("error_type", [FileNotFoundError, UnicodeError, ValueError])
-async def test_raw_source_failure_stops_before_alternate_candidate_and_model(monkeypatch, error_type):
+async def test_raw_source_failure_stops_before_alternate_candidate_and_model(monkeypatch, tmp_path, error_type):
     from knowledge.grounded_answer.service import GroundedAnswerService
+    from knowledge.multiscale_rag.source_text import OriginalTextExtractor
 
     instance = make_service(monkeypatch, ["完整第一候选证据：禁止联网。", "完整第二候选证据：另需审批。"])
     for identity, evidence in instance.evidence_by_parent.items():
         evidence.id = "evidence-" + identity
         evidence.source = SourceReference("synthetic-" + identity + ".txt", 1, 1)
+        (tmp_path / evidence.source.source_path).write_text(evidence.content, encoding="utf-8")
     reads = []
 
-    def extract(source):
+    def extract(source, *, snapshot=None):
         reads.append(source.source_path)
         raise error_type("synthetic source read failed")
 
-    instance.extractor = SimpleNamespace(extract=extract)
+    instance.extractor = OriginalTextExtractor(tmp_path)
+    monkeypatch.setattr(instance.extractor, "extract", extract)
     pipeline = GroundedAnswerService(
         retriever=lambda query, **kwargs: instance.retrieve(query, raw_text=True),
 

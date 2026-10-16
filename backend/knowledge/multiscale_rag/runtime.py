@@ -89,26 +89,14 @@ def _route_indexes(
     documents: list[KnowledgeIndexDocument],
     vectors: np.ndarray,
 ) -> dict[frozenset[str], DomainIndex]:
-    routes = {
-        CARD_TYPES,
-        frozenset({"fact"}),
-        frozenset({"relation"}),
-        frozenset({"event"}),
-        frozenset({"fact", "relation"}),
-        frozenset({"fact", "event"}),
-        frozenset({"relation", "event"}),
-        frozenset({"story", "scene"}),
-        frozenset({"evidence"}),
-    }
     indexes: dict[frozenset[str], DomainIndex] = {}
-    for route in routes:
+    for route in (CARD_TYPES, frozenset({"story", "scene"})):
         rows = [row for row, document in enumerate(documents) if document.document_type in route]
-        if rows:
-            indexes[route] = _memory_index(
-                domain_id,
-                [documents[row] for row in rows],
-                vectors[rows],
-            )
+        indexes[route] = _memory_index(
+            domain_id,
+            [documents[row] for row in rows],
+            vectors[rows],
+        )
     return indexes
 
 

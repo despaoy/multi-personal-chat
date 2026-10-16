@@ -326,7 +326,6 @@ def test_service_scope_retains_full_question_and_excludes_incidental_entity(conf
         observed.append(scoped)
         raise ReachedRecall()
 
-    monkeypatch.setattr(service, "choose_card_types", lambda *args: service.CARD_TYPES)
     target.retrievers = {service.CARD_TYPES: SimpleNamespace(search=search)}
     with pytest.raises(ReachedRecall):
         target.retrieve(QUERY, object_names=("叶澄岚", "杜木汐"))
