@@ -61,7 +61,6 @@ async def test_deterministic_response_has_no_model_invocation(monkeypatch, mode,
     monkeypatch.setattr(mm, 'get_model_manager', lambda: Manager())
     monkeypatch.setattr(gen, '_ensure_vllm', _async_return(True))
     monkeypatch.setattr(gen, '_vllm_client', object())
-    monkeypatch.setattr(gen, '_generate_with_vllm', deterministic)
     monkeypatch.setattr(gen, '_generate_with_retrieval', deterministic)
     monkeypatch.setattr(gen, 'get_llm_semaphore', lambda: asyncio.Semaphore(2))
     result = await gen._generate_reply_impl(_request(), persist_message=True, enable_rag=False,
@@ -111,7 +110,7 @@ async def test_internal_mode_success_does_not_persist(monkeypatch):
     async def fake_vllm(*args, **kwargs):
         return "tool-reply", False, {}
 
-    monkeypatch.setattr(gen, "_generate_with_vllm", fake_vllm)
+    monkeypatch.setattr(gen, "_generate_with_retrieval", fake_vllm)
 
     result = await gen._generate_reply_impl(
         _request(),
@@ -152,7 +151,7 @@ async def test_internal_mode_vllm_failure_does_not_persist(monkeypatch):
     async def fake_vllm(*args, **kwargs):
         raise RuntimeError("vllm down")
 
-    monkeypatch.setattr(gen, "_generate_with_vllm", fake_vllm)
+    monkeypatch.setattr(gen, "_generate_with_retrieval", fake_vllm)
 
     with pytest.raises(HTTPException) as caught:
         await gen._generate_reply_impl(
@@ -234,7 +233,7 @@ async def test_explicit_memory_operations_respect_internal_and_delivery_modes(mo
 
     monkeypatch.setattr(gen, '_prepare_character_turn', prepare)
     monkeypatch.setattr(gen, '_complete_character_turn', AsyncMock(return_value=None))
-    monkeypatch.setattr(gen, '_generate_with_vllm', generate)
+    monkeypatch.setattr(gen, '_generate_with_retrieval', generate)
     monkeypatch.setattr(gen, '_ensure_vllm', _async_return(True))
     monkeypatch.setattr(gen, '_vllm_client', object())
     monkeypatch.setattr(mm, 'get_model_manager', lambda: SimpleNamespace(_current_provider=SimpleNamespace(value='vllm')))
@@ -281,7 +280,6 @@ async def test_message_db_reaches_save_and_invocation_record(monkeypatch, provid
     async def fake_vllm(*args, **kwargs):
         return "reply", False, {}
 
-    monkeypatch.setattr(gen, "_generate_with_vllm", fake_vllm)
     monkeypatch.setattr(gen, "_generate_with_retrieval", fake_vllm)
 
     captured = {}
@@ -444,7 +442,7 @@ async def test_injected_character_service_reaches_prepare_and_complete(monkeypat
 
     monkeypatch.setattr(gen, "_ensure_vllm", _async_return(True))
     monkeypatch.setattr(gen, "_vllm_client", object())
-    monkeypatch.setattr(gen, "_generate_with_vllm", fake_vllm)
+    monkeypatch.setattr(gen, "_generate_with_retrieval", fake_vllm)
 
     request = MessageRequest(message="你好", characterId="tsukiyashiro_kisaki", loraName="default", sessionType="private", sessionId="s1")
     result = await gen._generate_reply_impl(

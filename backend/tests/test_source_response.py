@@ -104,7 +104,7 @@ async def test_production_retrieval_preserves_source_packet_and_reports_actual_m
     monkeypatch.setattr(intent_detector, 'needs_rag', lambda _: (True, 'source', None))
     monkeypatch.setattr(generate, '_retrieve_rag_bundle', retrieve)
     monkeypatch.setattr(generate, '_get_system_prompt', lambda _: 'persona')
-    reply, used_rag, meta = await generate._generate_with_vllm(
+    reply, used_rag, meta = await generate._generate_with_retrieval(
         MessageRequest(message=message), None, runtime_config={'useKnowledgeBase': True}, model_generate=model)
     assert used_rag
     if direct:

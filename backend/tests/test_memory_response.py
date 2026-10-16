@@ -133,7 +133,7 @@ async def test_api_reports_memory_read_as_zero_model_calls_not_rag_source(monkey
     monkeypatch.setattr(generate, '_get_system_prompt', lambda _: 'persona')
     monkeypatch.setattr(intent_detector, 'needs_rag', lambda _: pytest.fail('Verified field read needs no external RAG'))
     prepared = SimpleNamespace(history=(), compiled=context(packets('我住在银川。')))
-    reply, used_rag, meta = await generate._generate_with_vllm(
+    reply, used_rag, meta = await generate._generate_with_retrieval(
         MessageRequest(message='我现在住哪里？'), None, runtime_config={'useKnowledgeBase': use_kb},
         prepared_character_turn=prepared, model_generate=model)
     assert '银川' in reply and not used_rag
@@ -161,7 +161,7 @@ async def test_partial_or_mixed_read_routes_by_dependency(monkeypatch, message, 
 
     monkeypatch.setattr(generate, '_get_system_prompt', lambda _: 'persona')
     monkeypatch.setattr(intent_detector, 'needs_rag', needs_rag)
-    reply, _, _ = await generate._generate_with_vllm(
+    reply, _, _ = await generate._generate_with_retrieval(
         MessageRequest(message=message), None, runtime_config={'useKnowledgeBase': True},
         prepared_character_turn=SimpleNamespace(history=(), compiled=context(packets('我住在银川。'))),
         model_generate=model)

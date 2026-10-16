@@ -60,9 +60,8 @@ async def test_selected_provider_receives_messages_and_budget_without_local_over
     monkeypatch.setattr(generate, "get_llm_semaphore", lambda: asyncio.Semaphore(1))
     available_check = AsyncMock(return_value=available)
     monkeypatch.setattr(generate, "_ensure_vllm", available_check)
-    monkeypatch.setattr(generate, "_vllm_client", object())
     local_call = AsyncMock(side_effect=AssertionError("Configured native provider must not call local inference"))
-    monkeypatch.setattr(generate, "_generate_with_vllm", local_call)
+    monkeypatch.setattr(generate, "_vllm_client", SimpleNamespace(generate=local_call))
 
     async def compiled_retrieval(request, lora_name, *, model_generate, **kwargs):
         reply = await model_generate(

@@ -66,7 +66,6 @@ async def test_generation_failure_is_reported_and_recorded(monkeypatch, provider
     monkeypatch.setattr(generate, "_ensure_vllm", available)
     monkeypatch.setattr(generate, "circuit_breaker_registry", None)
     monkeypatch.setattr(generate, "_generate_with_retrieval", failed_expression)
-    monkeypatch.setattr(generate, "_generate_with_vllm", failed_expression)
     monkeypatch.setattr(generate, "_record_model_invocation", record)
     from fastapi import HTTPException
 
@@ -107,7 +106,7 @@ async def test_retrieval_errors_stop_before_model_generation(monkeypatch, semant
     from fastapi import HTTPException
 
     with pytest.raises(HTTPException) as caught:
-        await generate._generate_with_vllm(
+        await generate._generate_with_retrieval(
             MessageRequest(message="人物关系是什么"), None,
             runtime_config={"useKnowledgeBase": True}, model_generate=model,
         )
@@ -147,7 +146,7 @@ async def test_production_and_character_benchmark_share_model_request(monkeypatc
 
     monkeypatch.setattr(generate, "_get_system_prompt", lambda _: "persona")
     monkeypatch.setattr(generate, "_vllm_client", Client())
-    await generate._generate_with_vllm(
+    await generate._generate_with_retrieval(
         MessageRequest(message="question", senderName="琉璃"),
         None,
         runtime_config={
@@ -241,7 +240,7 @@ async def test_production_rag_uses_shared_grounded_request(monkeypatch, semantic
     monkeypatch.setattr(generate, "get_provider_context_budget", lambda: SimpleNamespace(
         review=ReviewContextBudget(65536), window_tokens=65536, evidence_max_chars=0,
     ))
-    reply, _, meta = await generate._generate_with_vllm(
+    reply, _, meta = await generate._generate_with_retrieval(
         MessageRequest(message=query, senderName="虚构读者"), None,
         runtime_config=dict(useKnowledgeBase=True, temperature=0.7, maxTokens=256),
     )

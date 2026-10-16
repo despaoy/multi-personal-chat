@@ -28,6 +28,7 @@ from app.dependencies import get_current_admin, get_current_user
 from app.runtime import get_runtime_container
 from db.adapter import db
 from db.database import get_lora_path_by_id
+from db.message_feedback import reply_with_warning
 from db.schemas import GenerateResponse, MessageRequest
 from inference.generation_request import (
     ContextAuthorityChangedError,
@@ -499,7 +500,7 @@ async def _generate_reply_body(
         if is_vllm:
             if not await _ensure_vllm() or _vllm_client is None:
                 raise HTTPException(503, "所选 vLLM 服务不可用，请恢复服务后重试")
-            reply, used_rag, rag_meta = await _generate_with_vllm(
+            reply, used_rag, rag_meta = await _generate_with_retrieval(
                 request, vllm_effective_lora, vllm_lora_name, runtime_config,
                 enable_rag=enable_rag, prepared_character_turn=prepared_character_turn,
                 message_db=message_db,
@@ -620,7 +621,7 @@ async def _generate_reply_body(
         )
 
         result = GenerateResponse(
-            reply=_reply_with_memory_warning(reply, completion_warning),
+            reply=reply_with_warning(reply, completion_warning),
             model=model_label,
             costTime=cost_time,
             citations=rag_meta.get("citations"),
@@ -785,13 +786,6 @@ async def _prepare_character_turn(
                 "角色上下文准备失败，本轮未生成。请检查数据库、审核模型及上下文配置后重试。", exc,
             ),
         ) from exc
-
-
-def _reply_with_memory_warning(reply: str, warning: str | None) -> str:
-    """Keep model content and make persistence feedback visible to reply-only clients."""
-    from db.message_feedback import reply_with_warning
-
-    return reply_with_warning(reply, warning)
 
 
 async def _persist_completion_feedback(receipt: dict, warning: str, *, database=None) -> bool:
@@ -1157,11 +1151,6 @@ def _rag_retrieval_timeout() -> float:
     if not get_multiscale_rag_service().is_warm():
         return max(_RAG_TIMEOUT, _RAG_COLD_START_TIMEOUT)
     return _RAG_TIMEOUT
-
-
-async def _generate_with_vllm(*args, **kwargs):
-    """Compatibility entry point for the vLLM transport."""
-    return await _generate_with_retrieval(*args, **kwargs)
 
 
 async def _generate_with_retrieval(

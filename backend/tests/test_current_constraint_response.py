@@ -59,7 +59,7 @@ async def test_current_statement_contract_bypasses_rag_but_does_not_report_stora
 
     monkeypatch.setattr(generate, '_retrieve_rag_bundle', forbidden)
     monkeypatch.setattr(generate, '_get_system_prompt', lambda _: 'persona')
-    reply, rag, meta = await generate._generate_with_vllm(
+    reply, rag, meta = await generate._generate_with_retrieval(
         MessageRequest(message='更正一下，我只有负责人批准才预约会议。'), None,
         prepared_character_turn=SimpleNamespace(compiled=context(), history=()),
         runtime_config={'useKnowledgeBase': True}, model_generate=forbidden)

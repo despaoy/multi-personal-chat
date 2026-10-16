@@ -123,7 +123,7 @@ async def test_selected_lora_requires_successful_inventory_before_generation(mon
     fake = SimpleNamespace(list_loras=listing)
     monkeypatch.setattr(generate, "_vllm_client", fake)
     monkeypatch.setattr(generate, "_ensure_vllm", AsyncMock(return_value=inventory != "unavailable"))
-    monkeypatch.setattr(generate, "_generate_with_vllm", state.generation)
+    monkeypatch.setattr(generate, "_generate_with_retrieval", state.generation)
     req = MessageRequest(message="完整题设：3张票，每张2元，计算总额。", loraName="controlled-adapter")
     if inventory == "ready":
         result = await generate._generate_reply_impl(req, record_invocation=False)
@@ -152,7 +152,7 @@ async def test_explicit_base_model_does_not_require_adapter_inventory(monkeypatc
     listing = AsyncMock(side_effect=AssertionError("Base model does not require adapter discovery"))
     monkeypatch.setattr(generate, "_vllm_client", SimpleNamespace(list_loras=listing))
     monkeypatch.setattr(generate, "_ensure_vllm", AsyncMock(return_value=True))
-    monkeypatch.setattr(generate, "_generate_with_vllm", state.generation)
+    monkeypatch.setattr(generate, "_generate_with_retrieval", state.generation)
     result = await generate._generate_reply_impl(MessageRequest(message="完整题设：3张票，每张2元。", loraName="default"),
         record_invocation=False)
     assert result.reply == "根据完整当前输入回答。"

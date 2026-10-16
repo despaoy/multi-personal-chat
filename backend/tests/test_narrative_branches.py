@@ -352,7 +352,7 @@ def test_full_web_generation_and_canonical_return(repo, monkeypatch):
     )
     monkeypatch.setattr(gen, "_ensure_vllm", ensure)
     monkeypatch.setattr(gen, "_vllm_client", object())
-    monkeypatch.setattr(gen, "_generate_with_vllm", model)
+    monkeypatch.setattr(gen, "_generate_with_retrieval", model)
     monkeypatch.setattr(gen, "response_cache", ForbiddenCache())
     runtime = Runtime()
     app = FastAPI()

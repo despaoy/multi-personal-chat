@@ -52,7 +52,7 @@ async def test_add_read_repeat_correct_across_sessions(tmp_path, monkeypatch, ac
 
         monkeypatch.setattr(generate, '_retrieve_rag_bundle', forbidden)
         monkeypatch.setattr(generate, '_get_system_prompt', lambda _: 'persona')
-        delivered, _, meta = await generate._generate_with_vllm(
+        delivered, _, meta = await generate._generate_with_retrieval(
             MessageRequest(message=query), None, runtime_config={'useKnowledgeBase': True},
             model_generate=forbidden, prepared_character_turn=prepared)
         assert delivered == reply and meta['modelInvoked'] is False

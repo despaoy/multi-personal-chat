@@ -96,7 +96,7 @@ async def test_condition_read_uses_no_external_retrieval(monkeypatch):
 
     monkeypatch.setattr(generate, '_get_system_prompt', lambda _: 'persona')
     monkeypatch.setattr(intent_detector, 'needs_rag', lambda _: pytest.fail('No external RAG needed'))
-    reply, rag, meta = await generate._generate_with_vllm(
+    reply, rag, meta = await generate._generate_with_retrieval(
         MessageRequest(message='如果休息好，我就一定开长途车吗？'), None,
         runtime_config={'useKnowledgeBase': True}, model_generate=model,
         prepared_character_turn=SimpleNamespace(history=(), compiled=context()))

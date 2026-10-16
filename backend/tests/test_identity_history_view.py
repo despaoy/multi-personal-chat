@@ -104,7 +104,7 @@ async def test_production_adapter_preserves_query_binding(monkeypatch, query_bou
     monkeypatch.setattr(intent_detector, 'needs_rag', lambda _: (True, 'identity', None))
     monkeypatch.setattr(generate, '_retrieve_rag_bundle', retrieve)
     monkeypatch.setattr(generate, '_get_system_prompt', lambda _: 'persona')
-    await generate._generate_with_vllm(
+    await generate._generate_with_retrieval(
         MessageRequest(message='林远是谁？', history=list(identity_request().history)), None,
         runtime_config={'useKnowledgeBase': True}, model_generate=model)
     assert len(observed) == 1

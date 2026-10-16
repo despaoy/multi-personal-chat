@@ -64,7 +64,7 @@ async def test_profile_routes_to_actual_generation_with_or_without_saved_records
         ('profile',) if saved else (), memory_status='available' if saved else 'no_match',
         memory_packets=(item,) if saved else (), memory_field_presence=tuple((f, saved) for f in ('name', 'residence', 'major')))
     prepared = SimpleNamespace(compiled=ctx, history=({'role':'user','content':'今天整理了资料。'},), reply_guard=None)
-    reply, used_rag, meta = await generate._generate_with_vllm(MessageRequest(message=QUERY), None,
+    reply, used_rag, meta = await generate._generate_with_retrieval(MessageRequest(message=QUERY), None,
         runtime_config={'useKnowledgeBase':True}, prepared_character_turn=prepared, model_generate=model)
     assert reply and len(calls) == 1 and used_rag is False
     assert not meta.get('abstained') and meta.get('answerMode') != 'abstention'
@@ -88,7 +88,7 @@ async def test_mixed_profile_keeps_actual_external_retrieval_and_uncertainty(mon
     monkeypatch.setattr(generate, '_retrieve_rag_bundle', retrieval)
     monkeypatch.setattr(generate, '_get_system_prompt', lambda _: 'persona')
     query=QUERY+'月社妃和琉璃是什么关系？'
-    _, used_rag, meta=await generate._generate_with_vllm(MessageRequest(message=query),None,
+    _, used_rag, meta=await generate._generate_with_retrieval(MessageRequest(message=query),None,
         runtime_config={'useKnowledgeBase':True},model_generate=model)
     assert len(retrieved)==len(calls)==1 and used_rag and meta['abstained']
     assert meta['answerMode']=='abstention' and not meta['citations']

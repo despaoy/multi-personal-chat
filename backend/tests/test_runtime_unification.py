@@ -339,7 +339,7 @@ async def test_vllm_generation_reuses_one_rag_result(monkeypatch):
     monkeypatch.setattr(generate, "_vllm_client", Client())
 
     request = MessageRequest(message="question", sessionId="session")
-    reply, used_rag, meta = await generate._generate_with_vllm(
+    reply, used_rag, meta = await generate._generate_with_retrieval(
         request,
         None,
         runtime_config={"useKnowledgeBase": True},
@@ -374,7 +374,7 @@ async def test_vllm_generation_omits_rag_policy_without_evidence(monkeypatch):
     monkeypatch.setattr(generate, "_get_system_prompt", lambda _: "persona")
     monkeypatch.setattr(generate, "_vllm_client", Client())
 
-    reply, used_rag, meta = await generate._generate_with_vllm(
+    reply, used_rag, meta = await generate._generate_with_retrieval(
         MessageRequest(message="ordinary chat", sessionId="session"),
         None,
         runtime_config={"useKnowledgeBase": False},
@@ -426,14 +426,14 @@ async def test_vllm_rag_abstention_generates_character_uncertainty(monkeypatch, 
     if outcome != "character reply":
         expected = RuntimeError if outcome == "error" else ValueError
         with pytest.raises(expected, match="model unavailable|non-empty text"):
-            await generate._generate_with_vllm(
+            await generate._generate_with_retrieval(
                 MessageRequest(message="unknown question", sessionId="session"),
                 "character-adapter", runtime_config={"useKnowledgeBase": True},
             )
         assert captured
         return
 
-    reply, used_rag, meta = await generate._generate_with_vllm(
+    reply, used_rag, meta = await generate._generate_with_retrieval(
         MessageRequest(message="unknown question", sessionId="session"),
         "character-adapter",
         runtime_config={"useKnowledgeBase": True},

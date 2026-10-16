@@ -140,7 +140,7 @@ async def test_api_propagates_budget_abstention_instead_of_claiming_grounded_ans
     monkeypatch.setattr(generate, "_get_system_prompt", lambda _: "persona")
     monkeypatch.setattr(generate, "_vllm_client", Client())
     monkeypatch.setattr(generate, "get_provider_context_budget", lambda: ProviderContextBudget(8192))
-    _, _, meta = await generate._generate_with_vllm(MessageRequest(message="课程编号"), None,
+    _, _, meta = await generate._generate_with_retrieval(MessageRequest(message="课程编号"), None,
         runtime_config={"useKnowledgeBase": True, "maxTokens": 128})
     assert meta["abstained"] is True
     assert meta["answerMode"] == "abstention"

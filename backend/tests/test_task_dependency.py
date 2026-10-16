@@ -178,6 +178,6 @@ async def test_production_route_preserves_task_ownership(monkeypatch, message, e
     monkeypatch.setattr(intent_detector, '_load_ml_model', lambda: None)
     monkeypatch.setattr(generate, '_retrieve_rag_bundle', retrieve)
     monkeypatch.setattr(generate, '_get_system_prompt', lambda _: 'persona')
-    await generate._generate_with_vllm(MessageRequest(message=message), None,
+    await generate._generate_with_retrieval(MessageRequest(message=message), None,
         runtime_config={'useKnowledgeBase': True}, model_generate=model)
     assert bool(retrieved) is external

@@ -7,6 +7,8 @@ from types import SimpleNamespace
 import pytest
 
 from db.schemas import MessageRequest
+from inference.request_context import InferenceRequestContext, use_request_context
+from inference.token_counting import text_token_counter
 
 
 @pytest.mark.asyncio
@@ -40,14 +42,19 @@ async def test_vllm_generation_receives_request_history(monkeypatch):
     monkeypatch.setattr(gen, "generate_character_response", fake_character_response)
     monkeypatch.setattr(gen, "_get_system_prompt", lambda *args, **kwargs: "")
     monkeypatch.setattr(gen, "_retrieve_rag_bundle", lambda *args, **kwargs: {})
+    monkeypatch.setenv("VLLM_MAX_MODEL_LEN", "8192")
+    monkeypatch.setenv("RAG_CITATIONS_ENABLED", "true")
+    monkeypatch.setenv("CHARACTER_INDEPENDENT_TASKS_ENABLED", "false")
 
-    reply, used_rag, rag_meta = await gen._generate_with_vllm(
-        request,
-        None,
-        None,
-        {"useKnowledgeBase": False},
-        enable_rag=False,
-    )
+    context = InferenceRequestContext("vllm", None, text_token_counter("vllm", "", ""))
+    with use_request_context(context):
+        reply, used_rag, rag_meta = await gen._generate_with_retrieval(
+            request,
+            None,
+            None,
+            {"useKnowledgeBase": False},
+            enable_rag=False,
+        )
 
     assert reply == "second-reply"
     assert isinstance(captured["request"], GenerationRequest)

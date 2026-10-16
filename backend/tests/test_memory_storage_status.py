@@ -126,7 +126,7 @@ async def test_api_status_task_needs_neither_rag_nor_model(monkeypatch, presence
 
     prepared = SimpleNamespace(history=(), compiled=CompiledCharacterContext('', '', '',
                                 memory_field_presence=presence))
-    _, used_rag, meta = await generate._generate_with_vllm(MessageRequest(message='你保存了我的姓名吗？'),
+    _, used_rag, meta = await generate._generate_with_retrieval(MessageRequest(message='你保存了我的姓名吗？'),
         None, prepared_character_turn=prepared, runtime_config={'useKnowledgeBase': True}, model_generate=model)
     assert not used_rag and meta['answerMode'] == 'memory_storage_status'
     assert meta['modelInvoked'] is False

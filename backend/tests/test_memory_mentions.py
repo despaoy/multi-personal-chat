@@ -92,7 +92,7 @@ async def test_provenance_display_uses_no_external_rag_or_model(monkeypatch, use
 
     monkeypatch.setattr(generate, '_get_system_prompt', lambda _: 'persona')
     monkeypatch.setattr(intent_detector, 'needs_rag', lambda _: pytest.fail('Not external knowledge'))
-    reply, used_rag, meta = await generate._generate_with_vllm(MessageRequest(message=message), None,
+    reply, used_rag, meta = await generate._generate_with_retrieval(MessageRequest(message=message), None,
         runtime_config={'useKnowledgeBase': use_kb}, prepared_character_turn=SimpleNamespace(history=(), compiled=context),
         model_generate=model)
     assert '待确认' in reply and not used_rag

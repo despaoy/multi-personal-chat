@@ -151,7 +151,7 @@ async def test_real_disabled_completion_is_visible_in_web_reply_and_exact_archiv
     warning = result.warnings[-1]
     assert "未启用" in warning and "不代表已保存" in warning
     assert "保存失败" not in warning and "重试" not in warning
-    assert result.reply == generate._reply_with_memory_warning(REPLY, warning)
+    assert result.reply == f"{REPLY}\n\n保存提示：{warning}"
 
     rows = [row for row in rig.database.get_messages(limit=10) if row["traceId"] == request.traceId]
     assert len(rows) == 1 and rows[0]["message"] == BODY and rows[0]["reply"] == result.reply

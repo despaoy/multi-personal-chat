@@ -56,7 +56,7 @@ async def test_api_operation_receipt_has_no_external_retrieval_dependency(monkey
     async def must_not_call(**kwargs):
         pytest.fail('Operation receipt must not invoke answer model')
 
-    _, used_rag, meta = await generate._generate_with_vllm(
+    _, used_rag, meta = await generate._generate_with_retrieval(
         MessageRequest(message='请把我的宠物名字从记忆里删除。'), None,
         prepared_character_turn=prepared, runtime_config={'useKnowledgeBase': True}, model_generate=must_not_call)
     assert len(planning) == 1 and planning[0]["query"] == query

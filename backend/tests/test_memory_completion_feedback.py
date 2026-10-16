@@ -119,7 +119,6 @@ async def test_generation_preserves_answer_and_existing_warnings(monkeypatch, pr
     monkeypatch.setattr(gen, "_ensure_vllm", AsyncMock(return_value=provider == "vllm"))
     monkeypatch.setattr(gen, "_vllm_client", object())
     meta = dict(warnings=["原有检索提示"], answerMode="unit", confidence=0.3, citations=[])
-    monkeypatch.setattr(gen, "_generate_with_vllm", AsyncMock(return_value=("模型原始内容", False, meta)))
     monkeypatch.setattr(gen, "_generate_with_retrieval", AsyncMock(return_value=("模型原始内容", False, meta)))
     failure = OSError("fiction-archive-write-error")
     if mode == "archive_failure":

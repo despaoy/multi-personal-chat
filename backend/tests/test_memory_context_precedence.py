@@ -93,7 +93,7 @@ async def test_api_passes_the_same_effective_history_to_shortcut_and_generation(
         return '我会依据最新对话。'
 
     history = ({'role': 'user', 'content': '我现在住在西宁。'},)
-    reply, used_rag, meta = await generate._generate_with_vllm(
+    reply, used_rag, meta = await generate._generate_with_retrieval(
         MessageRequest(message='我住哪里？'), None, runtime_config={'useKnowledgeBase': True},
         prepared_character_turn=SimpleNamespace(compiled=saved(), history=history), model_generate=model)
     # Ordinary generation need not emit RAG metadata; actual calls are the evidence.

@@ -51,7 +51,7 @@ async def test_http_web_receipt_survives_real_save_and_completion_without_client
         return "知道了。", False, {}
 
     monkeypatch.setattr(gen, "_ensure_vllm", available)
-    monkeypatch.setattr(gen, "_generate_with_vllm", model_reply)
+    monkeypatch.setattr(gen, "_generate_with_retrieval", model_reply)
     requests = []
 
     class Queued:
