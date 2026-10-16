@@ -90,7 +90,6 @@ async def arrange_authority_budget_case(tmp_path, monkeypatch, path):
             history_limit=budget.history_limit, history_max_chars=budget.history_max_chars,
             source_max_chars=budget.source_max_chars, defer_source_budget=budget.defer_source_budget,
             reference_max_chars=budget.reference_max_chars,
-            reference_observation_semantics=budget.reference_observation_semantics,
         )
         prepared = await service.prepare_turn(TurnInput(
             message=QUERY, platform=scope.platform, adapter=scope.adapter,

@@ -190,14 +190,12 @@ class CharacterContextService:
         source_max_chars: int = 2400,
         defer_source_budget: bool = False,
         reference_max_chars: int | None = None,
-        reference_observation_semantics: bool = False,
     ) -> None:
         if min(history_limit, history_max_chars, source_max_chars) <= 0:
             raise ValueError('Context budgets must be positive')
         if reference_max_chars is not None and (type(reference_max_chars) is not int or reference_max_chars <= 0):
             raise ValueError("Reference context budget must be a positive integer")
         self._reference_max_chars = reference_max_chars
-        self._reference_observation_semantics = reference_observation_semantics
         self._history_limit = history_limit
         self._history_max_chars = history_max_chars
         self._profiles = profile_registry
@@ -330,7 +328,6 @@ class CharacterContextService:
             complete_evidence=self._memory_selector is not None,
             diagnostics=memory_budget,
             max_chars=self._reference_max_chars,
-            observation_semantics=self._reference_observation_semantics,
         )
 
         note_context = compile_notes(relationship_notes, turn.message, received_at)
@@ -613,7 +610,6 @@ def build_character_context_service(
         source_max_chars=budget.source_max_chars,
         defer_source_budget=budget.defer_source_budget,
         reference_max_chars=budget.reference_max_chars,
-        reference_observation_semantics=budget.reference_observation_semantics,
         memory_selector=create_evidence_selector(context_budget=budget.review),
         contextual_policy=create_contextual_policy(context_budget=budget.review),
         semantic_estimator=SemanticStateEstimator(

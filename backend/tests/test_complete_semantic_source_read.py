@@ -94,7 +94,7 @@ async def test_complete_self_source_recovers_only_the_recorded_field_without_sto
     assert result.status == "known" and result.value == value
     assert len(items) == 1 and items[0].memory_key == key and items[0].memory_id == str(claim["id"])
     compiled, used = compile_reference_context(
-        items, complete_evidence=True, observation_semantics=True, max_chars=6000
+        items, complete_evidence=True, max_chars=6000
     )
     assert str(claim["id"]) in used and source in compiled
     assert await repo.list_memory_records("kisaki", SCOPE, include_inactive=True) == before

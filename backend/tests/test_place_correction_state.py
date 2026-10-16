@@ -120,7 +120,7 @@ async def test_complete_semantic_correction_reads_status_value_and_original_vers
     (result,) = read_memory_fields("我现在住哪里？", context)
     assert result.status == ("known" if known else "unverified")
     assert result.value == ("舟山" if known else None)
-    text, used = compile_reference_context(items, complete_evidence=True, observation_semantics=True, max_chars=6000)
+    text, used = compile_reference_context(items, complete_evidence=True, max_chars=6000)
     assert str(new["id"]) in used and source in text
     if known:
         assert "有你的现居地记录" in render_memory_response("你保存了我的居住地吗？", context)

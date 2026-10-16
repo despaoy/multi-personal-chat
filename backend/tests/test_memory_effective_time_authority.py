@@ -347,7 +347,7 @@ async def test_unverified_model_endpoints_do_not_override_source_based_effective
     assert selected.storage_versions and selected.source_versions and not selected.valid_to
     assert selected.temporal_mode == ("observation" if future_plan else "asserted_state")
     reference, ids = compile_reference_context(
-        memories, complete_evidence=True, observation_semantics=True, max_chars=None
+        memories, complete_evidence=True, max_chars=None
     )
     assert source in reference
     context = CompiledCharacterContext(

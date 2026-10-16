@@ -16,7 +16,7 @@ def variants(row):
     items = tuple(MemoryItem(**item) for item in compiled['memory_packets'])
     if not items or not all(item.source_observation for item in items):
         raise ValueError('Only observation-only references supported')
-    current, _ = compile_reference_context(items, observation_semantics=True)
+    current, _ = compile_reference_context(items)
     if current != compiled['reference_context']:
         raise ValueError('Reference reconstruction differs')
     source = json.loads(compiled['episodic_reference_context'])

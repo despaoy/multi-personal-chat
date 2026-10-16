@@ -12,7 +12,7 @@ from inference.generation_request import GenerationRequest, build_generation_req
 def row():
     item = MemoryItem('1', 'shared_event', '原话', evidence=('我同学在学木工。',),
         observed_at='2026-01-01T00:00:00+00:00', source_message_ids=('s',), source_observation=True)
-    reference, _ = compile_reference_context((item,), observation_semantics=True)
+    reference, _ = compile_reference_context((item,))
     source = json.dumps(dict(records=[dict(source_id='s', observed_at=item.observed_at, text=item.evidence[0])]),
                         ensure_ascii=False)
     context = CompiledCharacterContext('', '', reference, memory_packets=(item,), episodic_reference_context=source)
@@ -26,6 +26,9 @@ def test_only_observation_reference_changes_and_original_is_immutable():
     results = variants(data)
     assert json.dumps(data) == before
     assert len(results) == 3
+    assert results['annotated'] != results['legacy']
+    assert '描述主体=未解析' in str(results['annotated'])
+    assert '描述主体=未解析' not in str(results['legacy'])
     for messages in results.values():
         assert messages[0] == data['model_calls'][0]['request']['messages'][0]
         assert '谁在学木工？' in messages[-1]['content']

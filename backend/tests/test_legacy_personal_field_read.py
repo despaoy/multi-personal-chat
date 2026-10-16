@@ -253,7 +253,7 @@ async def test_uncertain_legacy_source_reaches_compiler_with_its_trusted_receipt
     claim = await seed(repo, "丽水", "我目前住在丽水", source=source)
     items, trace, _ = await read(repo, "我的居住地是什么？")
     assert items and items[0].observed_at == NOW.isoformat()
-    text, used = compile_reference_context(items, complete_evidence=True, max_chars=6000, observation_semantics=True)
+    text, used = compile_reference_context(items, complete_evidence=True, max_chars=6000)
     assert used == (str(claim["id"]),) and source in text
     assert '"content_semantics":"quoted_source"' in text
     assert trace["field_presence"]["residence"] is None

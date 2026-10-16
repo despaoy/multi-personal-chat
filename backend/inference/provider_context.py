@@ -14,7 +14,6 @@ class ProviderContextBudget:
     source_max_chars: int = 2400
     review: ReviewContextBudget | None = None
     reference_max_chars: int | None = None
-    reference_observation_semantics: bool = False
     defer_source_budget: bool = False
     rag_max_chars: int | None = 6000
     evidence_max_chars: int = 6000
@@ -53,7 +52,6 @@ def get_provider_context_budget(manager=None, *, env=None):
             rag_max_chars=None,
             evidence_max_chars=0,
             reference_max_chars=window // 2,
-            reference_observation_semantics=True,
             review=ReviewContextBudget(window, history_messages=2 * history_limit),
         )
     window = max(1024, int(source.get("VLLM_MAX_MODEL_LEN", "8192")))

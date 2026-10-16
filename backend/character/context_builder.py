@@ -33,7 +33,6 @@
 from __future__ import annotations
 
 import json
-from dataclasses import replace
 from datetime import datetime, timezone
 from math import isfinite
 from typing import cast
@@ -701,7 +700,6 @@ def compile_reference_context(
     preferred_address: str = "",
     complete_evidence: bool = False,
     diagnostics: dict[str, int] | None = None,
-    observation_semantics: bool = False,
     max_chars: int | None = None,
 ) -> tuple[str, tuple[str, ...]]:
     """Compile untrusted reference text within one complete character budget.
@@ -709,6 +707,7 @@ def compile_reference_context(
     The budget includes the actual disclaimer, address and line separators.
     Ordinary recall admits whole packets in rank order, up to five items.
     Complete evidence must include every eligible selected packet or fail.
+    Source observations keep their unresolved subject in every format/provider.
     Nothing from this block enters the trusted system context.
     """
     if max_chars is not None and (type(max_chars) is not int or max_chars <= 0):
@@ -732,11 +731,9 @@ def compile_reference_context(
         if not _memory_is_injectable(item, now):
             stats["filtered_count"] += 1
             continue
-        render_item = (replace(item, source_observation=False)
-                       if item.source_observation and not observation_semantics else item)
-        line = _complete_memory_evidence_packet(render_item) if complete_evidence else _memory_evidence_packet(render_item)
-        candidate_disclaimer = (MIXED_REFERENCE_DISCLAIMER if observation_semantics
-                                and (observed_source or item.source_observation) else MEMORY_REFERENCE_DISCLAIMER)
+        line = _complete_memory_evidence_packet(item) if complete_evidence else _memory_evidence_packet(item)
+        candidate_disclaimer = (MIXED_REFERENCE_DISCLAIMER if observed_source or item.source_observation
+                                else MEMORY_REFERENCE_DISCLAIMER)
         candidate_chars = body_chars + bool(lines) + len(line)
         if not complete_evidence and len(candidate_disclaimer) + 1 + candidate_chars > cap:
             stats["budget_skipped"] += 1

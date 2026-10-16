@@ -154,7 +154,7 @@ def test_partial_semantic_projection_never_rehydrates_removed_original_text(sour
 @pytest.mark.parametrize("complete", [False, True])
 def test_both_reference_formats_convey_partial_source_outside_system_rules(complete):
     memory = item()
-    text, ids = compile_reference_context((memory,), complete_evidence=complete, observation_semantics=True)
+    text, ids = compile_reference_context((memory,), complete_evidence=complete)
     assert ids == ("6",)
     if complete:
         packet = json.loads(text.splitlines()[1][2:])

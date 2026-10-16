@@ -14,7 +14,6 @@ def without_memories(context, removed, *, preferred_address="", max_chars=None):
         remaining,
         preferred_address=preferred_address,
         complete_evidence=True,
-        observation_semantics=any(packet.source_observation for packet in remaining),
         max_chars=max_chars,
     )
     admitted = set(used_ids)

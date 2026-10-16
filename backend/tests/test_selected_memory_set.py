@@ -116,7 +116,7 @@ async def arrange_selected_memory(tmp_path, monkeypatch, *, cap=6000):
         registry, repository, DatabaseMessageRepository(database),
         memory_service=CharacterMemoryService(repository, semantic_enabled=False),
         memory_selector=ContextualEvidenceSelector(all_necessary, context_budget=ReviewContextBudget(65536)),
-        source_recall_enabled=False, reference_max_chars=cap, reference_observation_semantics=True,
+        source_recall_enabled=False, reference_max_chars=cap,
     )
     actual_prepare = service.prepare_turn
 

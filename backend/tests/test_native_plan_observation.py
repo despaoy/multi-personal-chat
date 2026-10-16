@@ -74,7 +74,7 @@ def test_cloud_reference_allowance_preserves_full_plan_and_late_conditions():
     # Actual temporal read views retain the original quotation in content too.
     item = replace(item, content="用户原话记录：" + json.dumps(list(item.evidence), ensure_ascii=False))
     reference, ids = compile_reference_context(
-        (item,), complete_evidence=True, max_chars=32768, observation_semantics=True
+        (item,), complete_evidence=True, max_chars=32768
     )
     assert ids == ("plan-1",)
     packet = json.loads(reference.split("\n", 1)[1][2:])
@@ -87,7 +87,7 @@ def test_small_reference_budget_rejects_selected_plan_instead_of_omitting_it():
         compile_reference_context((observation(),), complete_evidence=True, max_chars=2000)
 
 
-def test_native_cloud_service_propagates_reference_budget_and_observation_semantics(monkeypatch):
+def test_native_cloud_service_propagates_reference_budget(monkeypatch):
     from inference import model_manager
     from services.character_context import build_character_context_service
 
@@ -98,7 +98,7 @@ def test_native_cloud_service_propagates_reference_budget_and_observation_semant
     )
     monkeypatch.setenv("OPENAI_COMPAT_CONTEXT_WINDOW_TOKENS", "65536")
     service = build_character_context_service(object())
-    assert service._reference_max_chars == 32768 and service._reference_observation_semantics is True
+    assert service._reference_max_chars == 32768
 
 
 def test_writer_declares_numeric_schema_bounds_and_plan_observation_route():

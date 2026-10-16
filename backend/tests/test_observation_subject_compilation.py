@@ -20,13 +20,14 @@ def observation():
 
 @pytest.mark.parametrize('complete', [False, True])
 def test_observation_never_inherits_personal_subject_disclaimer(complete):
-    text, ids = compile_reference_context((observation(),), complete_evidence=complete, observation_semantics=True)
+    text, ids = compile_reference_context((observation(),), complete_evidence=complete)
     assert ids == ('1',)
     assert MEMORY_REFERENCE_DISCLAIMER not in text
     if complete:
         packet = json.loads(text.splitlines()[1][2:])
         assert packet['subject_scope'] == 'not_resolved'
         assert packet['speaker_role'] == 'user'
+        assert packet['source_observation'] is True and packet['content_semantics'] == 'quoted_source'
     else:
         assert '描述主体=未解析' in text
     plan = build_generation_request(GenerationRequest(message='陶艺是谁学的？',
@@ -37,7 +38,7 @@ def test_observation_never_inherits_personal_subject_disclaimer(complete):
 
 def test_mixed_packets_keep_individual_subjects_and_all_ids():
     fact = MemoryItem('2', 'user_fact', '用户喜欢红茶')
-    text, ids = compile_reference_context((observation(), fact), complete_evidence=True, observation_semantics=True)
+    text, ids = compile_reference_context((observation(), fact), complete_evidence=True)
     rows = [json.loads(line[2:]) for line in text.splitlines()[1:]]
     assert ids == ('1', '2')
     assert [r['subject_scope'] for r in rows] == ['not_resolved', 'current_user_not_character']
@@ -67,11 +68,5 @@ async def test_real_repository_and_retrieval_preserve_observation_semantics(tmp_
     items, _ = await service.load_relevant_memories('c', scope, '陶艺')
     assert len(items) == 1 and items[0].source_observation
     assert items[0].evidence == ('我妹妹在学陶艺。',)
-    text, _ = compile_reference_context(tuple(items), complete_evidence=True, observation_semantics=True)
+    text, _ = compile_reference_context(tuple(items), complete_evidence=True)
     assert json.loads(text.splitlines()[1][2:])['subject_scope'] == 'not_resolved'
-
-
-def test_new_metadata_does_not_enable_rejected_rendering_by_default():
-    for complete in (False, True):
-        assert compile_reference_context((observation(),), complete_evidence=complete) == compile_reference_context(
-            (replace(observation(), source_observation=False),), complete_evidence=complete)

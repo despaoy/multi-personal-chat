@@ -61,11 +61,11 @@ def test_only_admitted_observations_choose_the_actual_budgeted_disclaimer(status
         observed_at=(datetime.now(timezone.utc) - timedelta(days=1)).isoformat(),
     )
     expected, identities = compile_reference_context(
-        (ITEM, observed), complete_evidence=True, observation_semantics=True, max_chars=10000,
+        (ITEM, observed), complete_evidence=True, max_chars=10000,
     )
     stats = {}
     actual = compile_reference_context(
-        (ITEM, observed), complete_evidence=True, observation_semantics=True, max_chars=len(expected), diagnostics=stats,
+        (ITEM, observed), complete_evidence=True, max_chars=len(expected), diagnostics=stats,
     )
     assert actual == (expected, identities) and stats["used_chars"] == len(expected)
     if status == "active":

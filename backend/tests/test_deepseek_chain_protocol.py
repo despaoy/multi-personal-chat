@@ -90,7 +90,7 @@ async def test_sqlite_keeps_both_records_when_original_source_recall_is_disabled
     assert added["metadata"]["content_semantics"] == "quoted_source"
     service = CharacterMemoryService(repo, semantic_enabled=False)
     packets, _, _ = await service.recall_with_diagnostics("role", scope, "我养了几只猫，分别叫什么？")
-    reference = compile_reference_context(packets, complete_evidence=True, observation_semantics=True)[0]
+    reference = compile_reference_context(packets, complete_evidence=True)[0]
     assert "麦芽" in reference and "芝麻" in reference
 
 @pytest.mark.asyncio
