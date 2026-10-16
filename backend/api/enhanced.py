@@ -28,16 +28,16 @@ access_control_mgr = lambda: _app_config.access_control_mgr
 
 async def _get_vllm_load_balancer_stats():
     """Read live balancing/health data from the client that serves requests."""
+    if not _app_config.is_vllm_enabled():
+        return None
+    from inference.vllm_client import get_vllm_client
+
     try:
-        from app.config import is_vllm_enabled
-        if not is_vllm_enabled():
-            return None
-        from inference.vllm_client import get_vllm_client
         client = await get_vllm_client()
         return await client.get_stats()
     except Exception as exc:
-        logger.debug("读取 vLLM 负载统计失败: %s", exc)
-        return None
+        logger.error("读取 vLLM 负载统计失败: %s", type(exc).__name__)
+        raise HTTPException(status_code=503, detail="vLLM 负载统计不可用，请检查配置和服务状态") from exc
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
