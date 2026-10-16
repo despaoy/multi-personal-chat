@@ -12,6 +12,7 @@ from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import FileResponse
 from app.dependencies import get_current_admin
 from infra.db_executor import run_db
+from inference.openai_protocol import ProviderResponseError
 from pydantic import BaseModel
 from typing import Optional
 
@@ -883,6 +884,12 @@ async def _run_dialogue_generation(request):
                 "upstream_status": exc.status_code,
                 "message": "角色资料搜索失败，请恢复搜索服务后重试。",
             },
+        ) from exc
+    except ProviderResponseError as exc:
+        logger.warning("Dialogue model request failed: upstream_status=%s", exc.status_code)
+        raise HTTPException(
+            status_code=exc.http_status,
+            detail=_dialogue_error_detail(exc.public_detail(), all_validated, total_cost),
         ) from exc
     except HTTPException as exc:
         exc.detail = _dialogue_error_detail(exc.detail, all_validated, total_cost)

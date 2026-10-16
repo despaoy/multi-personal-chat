@@ -20,6 +20,7 @@ from fastapi import FastAPI, HTTPException
 from api import training
 from app.dependencies import get_current_admin
 from inference import model_manager
+from inference.openai_protocol import ProviderResponseError
 
 DESCRIPTION = "完全虚构角色青汐研究员；保留预约条件，不声称已经办理。"
 MARKER = "SYNTHETIC_DIALOGUE_OUTPUT_PRIVATE_MARKER"
@@ -80,6 +81,8 @@ def rig(monkeypatch):
         context.requested.append((count, turns))
         context.batches.append(deepcopy(batch))
         if context.defect and ordinal == context.fail_at:
+            if context.defect == "provider_rejection":
+                raise ProviderResponseError(context.upstream_status)
             if context.defect == "provider_exception":
                 raise RuntimeError("SYNTHETIC_UPSTREAM_PRIVATE_FAILURE")
             if context.defect == "provider_http_error":
@@ -201,6 +204,29 @@ async def test_two_complete_batches_still_return_success_without_partial_error(r
         mapped_messages(batch)[0] for batch in rig.batches
     ]
     assert rig.requested == [(1, 1), (1, 2)]
+    assert_released(rig)
+
+
+@pytest.mark.parametrize("upstream,fail_at,http_status,kind", [
+    (401, 1, 502, "provider_auth_error"),
+    (402, 2, 503, "provider_balance_error"),
+])
+async def test_model_rejection_keeps_provider_reason_and_any_completed_batches(rig, upstream, fail_at, http_status, kind):
+    rig.defect, rig.fail_at, rig.upstream_status = "provider_rejection", fail_at, upstream
+    response = await post(rig, 2)
+    assert response.status_code == http_status
+    detail = response.json()["detail"]
+    assert detail["kind"] == kind and detail["upstreamStatus"] == upstream
+    assert "密钥" in detail["message"] if upstream == 401 else "余额" in detail["message"]
+    if fail_at == 1:
+        assert "partial_result" not in detail
+    else:
+        assert detail["partial_result"] == dict(
+            dialogues=rig.state["all_generated_dialogues"], total=1, cost_time=0.25,
+        )
+        assert len(rig.state["all_generated_dialogues"]) == 1
+        assert rig.state["all_generated_dialogues"][0]["conversations"] == mapped_messages(rig.batches[0])[0]
+    assert rig.manager.async_generate.await_count == fail_at
     assert_released(rig)
 
 
