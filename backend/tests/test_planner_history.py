@@ -7,7 +7,7 @@ import pytest
 
 from character.evidence_selector import InputBudgetError
 from inference.context_budget import ReviewContextBudget
-from knowledge.retrieval_query_plan import QueryPlanReviewError, plan_retrieval_views, planning_messages
+from knowledge.retrieval_query_plan import QueryPlanReviewError, plan_retrieval, planning_messages
 from knowledge.turn_dependencies import KINDS, parse_dependencies, query_segments
 
 QUERY = "按刚才的两项分别核对，不改记录。"
@@ -61,7 +61,7 @@ async def test_incomplete_review_fails_before_any_model_call(monkeypatch, mode):
         pytest.fail("Incomplete history or mandatory input must not be sent")
 
     with pytest.raises(InputBudgetError):
-        await plan_retrieval_views(QUERY, history=history, context_budget=budget, reviewer=forbidden)
+        await plan_retrieval(QUERY, history=history, context_budget=budget, reviewer=forbidden)
 
 
 @pytest.mark.asyncio
@@ -74,7 +74,7 @@ async def test_history_cannot_grant_search_spans_not_in_current_question(monkeyp
         return json.dumps({"search_views": [["周末阅读偏好"]], "dependencies": groups, "public_partitions": [dict(segment_id=0, cuts=[])]})
 
     with pytest.raises(QueryPlanReviewError, match="query_plan_invalid"):
-        await plan_retrieval_views(QUERY, history=[{"role": "user", "content": PREMISE}], reviewer=unit_review)
+        await plan_retrieval(QUERY, history=[{"role": "user", "content": PREMISE}], reviewer=unit_review)
 
 
 @pytest.mark.asyncio
@@ -84,10 +84,10 @@ async def test_authority_fields_in_model_output_are_rejected(monkeypatch):
     async def unit_review(_messages):
         groups = {kind: [] for kind in KINDS}
         groups["private_memory"] = [0]
-        return json.dumps({"search_views": [], "dependencies": groups, "public_partitions": [], "source_grants": ["all_owners"]})
+        return json.dumps({"dependencies": groups, "public_partitions": [], "source_grants": ["all_owners"]})
 
     with pytest.raises(QueryPlanReviewError, match="query_plan_invalid"):
-        await plan_retrieval_views(QUERY, history=[{"role": "user", "content": PREMISE}], reviewer=unit_review)
+        await plan_retrieval(QUERY, history=[{"role": "user", "content": PREMISE}], reviewer=unit_review)
 
 
 @pytest.mark.asyncio
@@ -122,7 +122,7 @@ async def test_actual_generation_route_passes_the_same_effective_history(monkeyp
         return "这是明确标记的单元测试控制回答，不是真实模型成功。"
 
     prepared = SimpleNamespace(compiled=CompiledCharacterContext("", "", ""), history=database_history)
-    monkeypatch.setattr(retrieval_query_plan, "plan_retrieval_views", unit_planner)
+    monkeypatch.setattr(retrieval_query_plan, "plan_retrieval", unit_planner)
     monkeypatch.setattr(intent_detector, "needs_rag", lambda _: (True, "unit", None))
     monkeypatch.setattr(generate, "_retrieve_rag_bundle", forbidden_public)
     monkeypatch.setattr(generate, "_get_system_prompt", lambda _: "单元角色规则")

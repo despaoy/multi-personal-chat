@@ -87,7 +87,7 @@ async def exercise(tmp_path, monkeypatch, *, erase_during_review):
         assert QUERY in wire
         return "仅依据仍获授权的资料回答，未知保持未知。"
 
-    monkeypatch.setattr(retrieval_query_plan, "plan_retrieval_views", planner)
+    monkeypatch.setattr(retrieval_query_plan, "plan_retrieval", planner)
     monkeypatch.setattr(public_question_binding, "resolve_question_binding", binding)
     monkeypatch.setattr(generate, "_retrieve_rag_bundle", empty_public_result)
     monkeypatch.setattr(generate, "_get_system_prompt", lambda _: "虚构评测角色规则")

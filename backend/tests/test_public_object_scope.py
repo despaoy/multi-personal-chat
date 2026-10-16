@@ -256,7 +256,7 @@ async def test_actual_api_uses_verified_object_links_and_retains_private_answer(
         assert "object_scope_unverified" in wire
         return "已有私人偏好及前者费用可答，后者时长本次没有对应依据。"
 
-    monkeypatch.setattr(retrieval_query_plan, "plan_retrieval_views", planner)
+    monkeypatch.setattr(retrieval_query_plan, "plan_retrieval", planner)
     monkeypatch.setattr(intent_detector, "needs_rag", lambda _: (True, "unit", None))
     monkeypatch.setattr(generate, "_retrieve_rag_bundle", retrieve)
     monkeypatch.setattr(public_task_evidence, "_review", review)

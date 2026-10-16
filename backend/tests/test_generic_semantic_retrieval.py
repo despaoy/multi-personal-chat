@@ -31,7 +31,6 @@ BODIES = (
     "竹湾登记：周二09:00至11:00受理，缴款12元；持申请卡正本，节假日不受理，预订不替代正本。",
     "枫台续期：周四14:00至16:00受理，缴款18元；持确认函正本，节假日不受理，预订不替代正本。",
 )
-VIEWS = ("费用 材料",)
 
 
 async def arrange_generic_plan(tmp_path, monkeypatch):
@@ -92,7 +91,7 @@ async def arrange_generic_plan(tmp_path, monkeypatch):
 
 
 async def retrieve_bound(rig):
-    return await generate._retrieve_rag_bundle(QUERY, 3, None, search_views=VIEWS, question_binding=rig.binding)
+    return await generate._retrieve_rag_bundle(QUERY, 3, None, question_binding=rig.binding)
 
 
 async def baseline_preflight(rig, monkeypatch, *, old_flag):

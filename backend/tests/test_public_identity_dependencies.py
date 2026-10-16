@@ -288,7 +288,7 @@ async def test_actual_api_production_identity_stage_keeps_registry_rules_and_pri
         assert "verified_object_evidence_admitted" in wire and kwargs["max_tokens"] == 2048
         return "续办费用与原件及例外依完整规则回答，周末偏好保留。"
 
-    monkeypatch.setattr(retrieval_query_plan, "plan_retrieval_views", planner)
+    monkeypatch.setattr(retrieval_query_plan, "plan_retrieval", planner)
     monkeypatch.setattr(intent_detector, "needs_rag", lambda _: (True, "unit", None))
     monkeypatch.setattr(generate, "_retrieve_rag_bundle", retrieve)
     from knowledge import public_fact_coverage

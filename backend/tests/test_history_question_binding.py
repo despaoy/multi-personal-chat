@@ -252,6 +252,8 @@ async def test_normal_api_binding_receives_same_effective_history_as_planning(mo
     from db.schemas import MessageRequest
     from knowledge import public_question_binding, retrieval_query_plan
 
+    monkeypatch.setattr(generate, "_rag_retrieval_timeout", lambda: 30.0)
+
     expected = (
         HISTORY
         if history_source == "prepared_database"
@@ -276,7 +278,7 @@ async def test_normal_api_binding_receives_same_effective_history_as_planning(mo
         observed.append("retrieval")
         raise ExpectedStop()
 
-    monkeypatch.setattr(retrieval_query_plan, "plan_retrieval_views", planner)
+    monkeypatch.setattr(retrieval_query_plan, "plan_retrieval", planner)
     monkeypatch.setattr(public_question_binding, "resolve_question_binding", resolver)
     monkeypatch.setattr(generate, "_retrieve_rag_bundle", retrieval)
     prepared = SimpleNamespace(compiled=CompiledCharacterContext("", "", ""), history=tuple(HISTORY))

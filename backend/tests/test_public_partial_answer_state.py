@@ -44,7 +44,7 @@ async def test_unprepared_public_state_uses_final_fact_coverage(monkeypatch, mod
 
     from knowledge import public_question_binding
 
-    monkeypatch.setattr(retrieval_query_plan, "plan_retrieval_views", planner)
+    monkeypatch.setattr(retrieval_query_plan, "plan_retrieval", planner)
     monkeypatch.setattr(public_question_binding, "resolve_question_binding", no_binding)
     monkeypatch.setattr(intent_detector, "needs_rag", lambda _: (True, "declared-unit", None))
     monkeypatch.setattr(generate, "_retrieve_rag_bundle", retrieve)

@@ -57,7 +57,7 @@ def semantic_plan(monkeypatch):
     from knowledge import retrieval_query_plan
     from knowledge.turn_dependencies import KINDS, parse_dependencies
 
-    actual = retrieval_query_plan.plan_retrieval_views
+    actual = retrieval_query_plan.plan_retrieval
 
     def install(query, groups):
         complete = {kind: groups.get(kind, []) for kind in KINDS}
@@ -68,7 +68,7 @@ def semantic_plan(monkeypatch):
             payload = json.loads(messages[-1]["content"])
             assert payload["query"] == query
             calls.append(payload)
-            return json.dumps(dict(search_views=[], dependencies=complete, public_partitions=[
+            return json.dumps(dict(dependencies=complete, public_partitions=[
                 dict(segment_id=i, cuts=[]) for i in complete["public_knowledge"]
             ]))
 
@@ -76,7 +76,7 @@ def semantic_plan(monkeypatch):
             assert message == query
             return await actual(message, reviewer=reviewer, **kwargs)
 
-        monkeypatch.setattr(retrieval_query_plan, "plan_retrieval_views", planner)
+        monkeypatch.setattr(retrieval_query_plan, "plan_retrieval", planner)
         return calls
 
     return install

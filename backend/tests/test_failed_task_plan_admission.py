@@ -25,6 +25,8 @@ async def exercise(tmp_path, monkeypatch, mode):
     from db.schemas import MessageRequest
     from knowledge import intent_detector, public_question_binding, retrieval_query_plan
 
+    monkeypatch.setattr(generate, "_rag_retrieval_timeout", lambda: 30.0)
+
     database = SQLiteDB(tmp_path / "native-source.sqlite")
     scope = UserScope("web", "failed-plan-unit", "fiction-owner", "fiction-owner", "private")
     fields = dict(
@@ -44,7 +46,7 @@ async def exercise(tmp_path, monkeypatch, mode):
     repository = DatabaseCharacterMemoryRepository(database)
     recalled = await SourceMemoryService(repository, defer_budget=True).recall("fiction-role", scope, QUERY)
     context = attach_sources(
-        CompiledCharacterContext("虚构角色", "", "", memory_status="no_match"), recalled, complete_evidence=True
+        CompiledCharacterContext("虚构角色", "", "", memory_status="no_match"), recalled
     )
     assert PRIVATE in context.episodic_reference_context
     base = database.create_knowledge_base("虚构公共规则", "声明的单元候选库")
@@ -54,7 +56,7 @@ async def exercise(tmp_path, monkeypatch, mode):
     database.add_knowledge_chunk(dict(documentId=document["id"], chunkIndex=0, content=PUBLIC))
     before = database.list_memory_sources(**fields)
     seen = dict(retrieval=0, model=0, binding=0)
-    original_plan = retrieval_query_plan.plan_retrieval_views
+    original_plan = retrieval_query_plan.plan_retrieval
     monkeypatch.setenv("RAG_TASK_PLANNER_ENABLED", "false" if mode == "disabled" else "true")
     monkeypatch.setenv("CORRECTIVE_RAG_ENABLED", "false")
     monkeypatch.setenv("CHARACTER_INDEPENDENT_TASKS_ENABLED", "false")
@@ -76,7 +78,7 @@ async def exercise(tmp_path, monkeypatch, mode):
         return json.dumps(
             dict(
                 dependencies=dependencies,
-                search_views=[["not in original query"]] if mode == "invalid_views" else [["桐屿续签", "费用"]],
+                **({"search_views": [["not in original query"]]} if mode == "invalid_views" else {}),
                 public_partitions=[dict(segment_id=1, cuts=["不存在的业务"] if mode == "invalid_partition" else [])],
             )
         )
@@ -132,7 +134,7 @@ async def exercise(tmp_path, monkeypatch, mode):
         assert QUERY in wire and PRIVATE in wire
         return "明确零云单元检查占位，私人来源保留，公共未知；不是实际模型答案。"
 
-    monkeypatch.setattr(retrieval_query_plan, "plan_retrieval_views", planner)
+    monkeypatch.setattr(retrieval_query_plan, "plan_retrieval", planner)
     monkeypatch.setattr(intent_detector, "needs_rag", lambda _: (True, "declared-unit", None))
     monkeypatch.setattr(public_question_binding, "resolve_question_binding", binding)
     monkeypatch.setattr(generate, "_retrieve_rag_bundle", retrieve)

@@ -632,7 +632,7 @@ async def test_curated_review_failure_stops_chat_before_answer(corpus, monkeypat
         seen["answer"] += 1
         pytest.fail("A failed original-source review cannot generate an answer")
 
-    monkeypatch.setattr(retrieval_query_plan, "plan_retrieval_views", planner)
+    monkeypatch.setattr(retrieval_query_plan, "plan_retrieval", planner)
     monkeypatch.setattr(public_question_binding, "resolve_question_binding", binding)
     monkeypatch.setattr(runtime, "get_multiscale_rag_service", lambda: SimpleNamespace(config=corpus.config))
     monkeypatch.setattr(generate, "_retrieve_rag_bundle", retrieve)

@@ -13,7 +13,7 @@ from character.models import CompiledCharacterContext
 from inference.generation_request import GenerationRequest, RetrievalResult, build_generation_request
 from knowledge.original_sources import attach_original_sources
 from knowledge.public_task_evidence import render_public_tasks, review_public_candidates
-from knowledge.retrieval_query_plan import QueryPlanReviewError, RetrievalQueryPlan, plan_retrieval_views
+from knowledge.retrieval_query_plan import QueryPlanReviewError, RetrievalQueryPlan, plan_retrieval
 from knowledge.turn_dependencies import parse_dependencies
 
 pytestmark = pytest.mark.usefixtures("no_live_context_review")
@@ -220,7 +220,7 @@ async def test_invalid_views_fail_instead_of_returning_dependency_only_plan(monk
                                public_partitions=[dict(segment_id=i, cuts=[]) for i in [0, 1]]))
 
     with pytest.raises(QueryPlanReviewError, match="query_plan_invalid") as caught:
-        await plan_retrieval_views(query, reviewer=review)
+        await plan_retrieval(query, reviewer=review)
     assert isinstance(caught.value.__cause__, ValueError)
 
 
@@ -271,7 +271,7 @@ async def test_actual_api_marks_partial_answer_only_for_visible_private_context(
         assert kwargs["max_tokens"] == 2048
         return "本人偏好有记录，公共规定本次无法确认。"
 
-    monkeypatch.setattr(retrieval_query_plan, "plan_retrieval_views", planner)
+    monkeypatch.setattr(retrieval_query_plan, "plan_retrieval", planner)
     monkeypatch.setattr(generate, "_retrieve_rag_bundle", retrieve)
     async def no_fact_support(messages):
         payload = json.loads(messages[-1]["content"])
@@ -328,7 +328,7 @@ async def test_abstention_model_failure_propagates(monkeypatch):
     async def failure(**_kwargs):
         raise RuntimeError("generation failed")
 
-    monkeypatch.setattr(retrieval_query_plan, "plan_retrieval_views", planner)
+    monkeypatch.setattr(retrieval_query_plan, "plan_retrieval", planner)
     monkeypatch.setattr(generate, "_retrieve_rag_bundle", retrieve)
     async def no_fact_support(messages):
         payload = json.loads(messages[-1]["content"])

@@ -7,7 +7,7 @@ from types import SimpleNamespace
 import pytest
 
 from character.models import CompiledCharacterContext
-from knowledge.retrieval_query_plan import QueryPlanReviewError, RetrievalQueryPlan, plan_retrieval_views
+from knowledge.retrieval_query_plan import QueryPlanReviewError, RetrievalQueryPlan, plan_retrieval
 from knowledge.turn_dependencies import KINDS, parse_dependencies, query_segments
 
 QUERY = "请读取我保存的练琴偏好。下面是完整独立假设，规则是否适用？只读取，不变更记忆。"
@@ -81,7 +81,7 @@ async def test_legacy_empty_search_views_are_rejected_as_incomplete(monkeypatch)
         return '{"search_views":[]}'
 
     with pytest.raises(QueryPlanReviewError, match="query_plan_invalid"):
-        await plan_retrieval_views(QUERY + "仅讨论给定假设。" * 90, reviewer=review)
+        await plan_retrieval(QUERY + "仅讨论给定假设。" * 90, reviewer=review)
 
 
 @pytest.mark.asyncio
@@ -95,9 +95,9 @@ async def test_every_full_original_segment_reaches_planner(monkeypatch):
         value = {kind: [] for kind in KINDS}
         value["private_memory"] = [0]
         value["current_input"] = list(range(1, len(payload["segments"])))
-        return json.dumps(dict(search_views=[], dependencies=value, public_partitions=[]))
+        return json.dumps(dict(dependencies=value, public_partitions=[]))
 
-    result = await plan_retrieval_views(query, reviewer=review)
+    result = await plan_retrieval(query, reviewer=review)
     assert result.status == "applied" and result.private_context_only
 
 
@@ -137,7 +137,7 @@ async def test_actual_route_uses_dependencies_not_presence_of_one_memory(monkeyp
         return None
 
     monkeypatch.setattr(public_question_binding, "resolve_question_binding", no_binding)
-    monkeypatch.setattr(retrieval_query_plan, "plan_retrieval_views", planner)
+    monkeypatch.setattr(retrieval_query_plan, "plan_retrieval", planner)
     monkeypatch.setattr(intent_detector, "needs_rag", lambda _: (True, "unit", None))
     monkeypatch.setattr(generate, "_retrieve_rag_bundle", retrieve)
     monkeypatch.setattr(generate, "_get_system_prompt", lambda _: "人物规则")

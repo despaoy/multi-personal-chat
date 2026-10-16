@@ -1065,7 +1065,7 @@ async def generate_reply(
 
 
 async def _retrieve_rag_bundle(
-    query: str, top_k: int, filters: dict[str, Any] | None, *, search_views: tuple[str, ...] = (),
+    query: str, top_k: int, filters: dict[str, Any] | None, *,
     question_binding: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Retrieve authorized knowledge with fresh source authority."""
@@ -1121,9 +1121,9 @@ async def _retrieve_rag_bundle(
         vector_db = get_vector_db()
         generation = vector_db.cache_generation
         revision = knowledge_api._vector_index_revision
-        views = search_views
+        views = ()
         contextual_binding = question_binding is not None and "reference_context" in question_binding["input"]
-        if contextual_binding or (not views and question_binding is not None):
+        if question_binding is not None:
             from knowledge.public_question_binding import bound_object_search_views
 
             views = bound_object_search_views(question_binding, query)
@@ -1191,15 +1191,13 @@ async def _generate_with_retrieval(
     filters = None
     if _use_kb:
         try:
-            from knowledge.dialogue_query import contextual_retrieval_query
-            from knowledge.retrieval_core.registry import get_default_registry
-            from knowledge.retrieval_query_plan import plan_retrieval_views
+            from knowledge.retrieval_query_plan import plan_retrieval
 
             effective_history = tuple(request.history or []) or (
                 prepared_character_turn.history if prepared_character_turn else ()
             )
             rag_message = request.message
-            query_plan = await plan_retrieval_views(
+            query_plan = await plan_retrieval(
                 rag_message, history=effective_history, context_budget=get_provider_context_budget().review,
             )
             if not query_plan.needs_public_retrieval:
@@ -1208,10 +1206,8 @@ async def _generate_with_retrieval(
                             "answerMode": "personal_context" if query_plan.private_context_only else "direct_answer",
                             "modelInvoked": True}
             else:
-                retrieval_query = contextual_retrieval_query(
-                    rag_message, effective_history, get_default_registry().list_domains()
-                )
-                from knowledge.public_question_binding import resolve_question_binding
+                retrieval_query = rag_message
+                from knowledge.public_question_binding import bound_object_search_views, resolve_question_binding
 
                 question_binding = None
                 if query_plan.dependencies is not None and dict(query_plan.dependencies.groups)["public_knowledge"]:
@@ -1222,12 +1218,13 @@ async def _generate_with_retrieval(
                         **({"history": effective_history, "context_budget": get_provider_context_budget().review}
                            if effective_history else {}),
                     )
-                view_options = {"search_views": query_plan.views} if query_plan.views else {}
-                if question_binding is not None:
-                    view_options["question_binding"] = question_binding
+                if question_binding is not None and "reference_context" in question_binding["input"]:
+                    anchors = tuple(name for name in bound_object_search_views(question_binding, rag_message) if name not in rag_message)
+                    retrieval_query = "\n".join((*anchors, rag_message))
+                binding_options = {"question_binding": question_binding} if question_binding is not None else {}
                 retrieval_timeout = _rag_retrieval_timeout()
                 bundle = await asyncio.wait_for(
-                    _retrieve_rag_bundle(retrieval_query, 3, filters, **view_options),
+                    _retrieve_rag_bundle(retrieval_query, 3, filters, **binding_options),
                     timeout=retrieval_timeout,
                 )
                 from knowledge.public_task_evidence import review_public_candidates

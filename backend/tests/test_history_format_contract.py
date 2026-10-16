@@ -62,13 +62,13 @@ def test_invalid_history_structure_reports_a_safe_field(history, field):
 async def test_history_error_stops_reviews_and_context_preparation(monkeypatch, boundary):
     from api import generate
     from db.schemas import MessageRequest
-    from knowledge.retrieval_query_plan import plan_retrieval_views
+    from knowledge.retrieval_query_plan import plan_retrieval
 
     history = [{"role": "user", "content": {"synthetic-private-text": "禁止猜测"}}]
     review = AsyncMock()
     if boundary == "planner":
         with pytest.raises(HistoryFormatError) as caught:
-            await plan_retrieval_views("继续核对完整前文。", history=history, reviewer=review)
+            await plan_retrieval("继续核对完整前文。", history=history, reviewer=review)
         assert caught.value.field == "history[0].content"
         review.assert_not_awaited()
     else:

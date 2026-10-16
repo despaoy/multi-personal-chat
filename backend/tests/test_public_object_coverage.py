@@ -259,7 +259,7 @@ async def test_actual_api_marks_partial_multi_object_scope_without_erasing_priva
         assert PRIVATE in wire and BODIES[1] in wire and "object_scope_partial" in wire and kwargs["max_tokens"] == 2048
         return "青桥费用及末尾限定有依据，蓝岸本次缺对应资料；你的私人偏好保留。"
 
-    monkeypatch.setattr(retrieval_query_plan, "plan_retrieval_views", planner)
+    monkeypatch.setattr(retrieval_query_plan, "plan_retrieval", planner)
     monkeypatch.setattr(intent_detector, "needs_rag", lambda _: (True, "unit", None))
     monkeypatch.setattr(generate, "_retrieve_rag_bundle", retrieve)
     from knowledge import public_fact_coverage

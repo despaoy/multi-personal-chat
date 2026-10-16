@@ -216,7 +216,7 @@ async def run_api(tmp_path, monkeypatch, defect=None, *, private=True, fee_only=
             else "没有可接纳的公共依据，规则保持未知。"
         )
 
-    monkeypatch.setattr(retrieval_query_plan, "plan_retrieval_views", planner)
+    monkeypatch.setattr(retrieval_query_plan, "plan_retrieval", planner)
     monkeypatch.setattr(intent_detector, "needs_rag", lambda _: (True, "declared-unit", None))
     monkeypatch.setattr(generate, "_retrieve_rag_bundle", retrieve)
     monkeypatch.setattr(public_task_evidence, "_review", review)

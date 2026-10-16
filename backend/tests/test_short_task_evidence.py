@@ -10,7 +10,7 @@ from inference.generation_request import GenerationRequest, RetrievalResult, bui
 from knowledge.evidence_packets import document_evidence_packets
 from knowledge.original_sources import attach_original_sources
 from knowledge.public_task_evidence import render_public_tasks, review_public_candidates
-from knowledge.retrieval_query_plan import QueryPlanReviewError, plan_retrieval_views
+from knowledge.retrieval_query_plan import QueryPlanReviewError, plan_retrieval
 from knowledge.turn_dependencies import query_segments
 
 QUERY = "核对紫岑借阅规定的费用与登记材料。核对白榆续借规定的费用。读取我保存的梅糕偏好。"
@@ -70,10 +70,10 @@ async def valid_plan(monkeypatch, query=QUERY):
             control=list(range(3, len(segments))),
             unresolved_source=[],
         )
-        return json.dumps(dict(search_views=[["紫岑", "借阅规定"], ["白榆", "续借规定"]], dependencies=groups,
+        return json.dumps(dict(dependencies=groups,
                                public_partitions=[dict(segment_id=i, cuts=[]) for i in [0, 1]]))
 
-    result = await plan_retrieval_views(query, reviewer=reviewer)
+    result = await plan_retrieval(query, reviewer=reviewer)
     assert seen == [True] and result.status == "applied" and not result.private_context_only
     assert result.dependencies.segments == query_segments(query)
     return result
@@ -141,7 +141,6 @@ async def test_short_private_plan_requires_complete_valid_protocol(monkeypatch):
         assert json.loads(messages[-1]["content"])["query"] == query
         return json.dumps(
             dict(
-                search_views=[],
                 public_partitions=[],
                 dependencies=dict(
                     private_memory=[0], control=[1], current_input=[], public_knowledge=[], unresolved_source=[]
@@ -149,8 +148,8 @@ async def test_short_private_plan_requires_complete_valid_protocol(monkeypatch):
             )
         )
 
-    plan = await plan_retrieval_views(query, reviewer=private)
-    assert plan.private_context_only and not plan.views
+    plan = await plan_retrieval(query, reviewer=private)
+    assert plan.private_context_only
 
     async def invalid(messages):
         value = json.loads(await private(messages))
@@ -158,7 +157,7 @@ async def test_short_private_plan_requires_complete_valid_protocol(monkeypatch):
         return json.dumps(value)
 
     with pytest.raises(QueryPlanReviewError, match="query_plan_invalid"):
-        await plan_retrieval_views(query, reviewer=invalid)
+        await plan_retrieval(query, reviewer=invalid)
 
 
 @pytest.mark.asyncio
@@ -210,4 +209,4 @@ async def test_empty_short_input_never_calls_planner(monkeypatch):
         pytest.fail("Empty input is not a representable task")
 
     with pytest.raises(ValueError, match="Query cannot be completely represented"):
-        await plan_retrieval_views("", reviewer=forbidden)
+        await plan_retrieval("", reviewer=forbidden)
