@@ -150,7 +150,7 @@ def validate_object_scopes(scope, query, task_ids):
 
 
 def parse_scoped_decisions(raw, payload, scopes):
-    from knowledge.public_task_evidence import parse_public_decisions
+    from knowledge.public_task_evidence import validate_public_decisions
 
     validate_object_scopes(scopes, payload["query"], payload["public_task_ids"])
     from knowledge.public_domains import validate_generic_sources
@@ -162,8 +162,8 @@ def parse_scoped_decisions(raw, payload, scopes):
     rows = value["decisions"]
     if any(not isinstance(r, dict) or set(r) != {"source_id", "task_ids", "object_evidence"} for r in rows):
         raise ValueError("Invalid scoped source fields")
-    plain = parse_public_decisions(
-        json.dumps(dict(decisions=[dict(source_id=r["source_id"], task_ids=r["task_ids"]) for r in rows])),
+    plain = validate_public_decisions(
+        [dict(source_id=r["source_id"], task_ids=r["task_ids"]) for r in rows],
         payload["required_source_ids"],
         payload["public_task_ids"],
     )

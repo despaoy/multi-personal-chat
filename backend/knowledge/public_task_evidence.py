@@ -56,7 +56,11 @@ def parse_public_decisions(raw, source_ids, task_ids):
     value = json.loads(raw, object_pairs_hook=_unique)
     if not isinstance(value, dict) or set(value) != {"decisions"}:
         raise ValueError("Invalid public review envelope")
-    rows = value["decisions"]
+    return validate_public_decisions(value["decisions"], source_ids, task_ids)
+
+
+def validate_public_decisions(rows, source_ids, task_ids):
+    """Validate stored or parsed selections without a JSON round trip."""
     if not isinstance(rows, list) or len(rows) != len(source_ids):
         raise ValueError("Incomplete public review")
     seen, decisions = set(), []
@@ -360,7 +364,7 @@ def render_public_tasks(retrieval):
     source_ids = [row.get("source_id") for row in decisions]
     if any(not isinstance(s, str) or not re.fullmatch(r"doc_[1-9]\d*", s) for s in source_ids):
         raise ValueError("Invalid public source references")
-    parse_public_decisions(json.dumps(dict(decisions=decisions)), source_ids, ids)
+    validate_public_decisions(decisions, source_ids, ids)
     scopes = receipt.get("object_scopes")
     unverified_objects, unresolved_objects = set(), set()
     object_coverage, fact_coverage = {}, None

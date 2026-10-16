@@ -265,8 +265,9 @@ async def test_curated_task_identity_type_is_preserved_without_output_coercion(s
     value["tasks"][0]["task_id"] = identity
     raw = json.dumps(value)
     if type(identity) is int:
-        checked = parse_curated_review(raw, receipt["payload"])
+        checked, ignored = parse_curated_review(raw, receipt["payload"])
         assert checked == list(receipt["decisions"])
+        assert ignored == 0
     else:
         with pytest.raises(ValueError, match="Unknown curated task or scope"):
             parse_curated_review(raw, receipt["payload"])

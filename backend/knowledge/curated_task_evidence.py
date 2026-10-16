@@ -103,6 +103,7 @@ def curated_payload(bundle, plan, *, verify_original=True):
 
 
 def parse_curated_review(raw, payload, *, verify_original=True):
+    """Return validated decisions and the count of known unowned empty rows."""
     plan = public_domains.validate_domain_plan(payload["domain_plan"])
     if payload["query"] != plan["binding"]["input"]["query"] or payload["actual_question_binding"] != plan["binding"]:
         raise ValueError("Curated review changed the complete question")
@@ -188,7 +189,7 @@ def parse_curated_review(raw, payload, *, verify_original=True):
         checked.append(dict(task_id=identity, scope=row["scope"], evidence=proofs, limitations=row["limitations"]))
     if seen.intersection(tasks) != set(tasks):
         raise ValueError("Curated review lost an original task")
-    return checked
+    return checked, len(value["tasks"]) - len(checked)
 
 
 async def _review(messages):
@@ -223,10 +224,10 @@ async def review_curated_bundle(bundle, plan, *, window_tokens, reviewer=None):
             raise CuratedTaskCapacityError("Complete curated review input exceeds context budget")
         raw = await asyncio.wait_for((reviewer or _review)(messages), timeout=30)
         receipt["raw"] = raw
-        decisions = parse_curated_review(raw, payload)
+        decisions, ignored = parse_curated_review(raw, payload)
         receipt.update(
             decisions=decisions,
-            unowned_empty_reviews_ignored=len(json.loads(raw)["tasks"]) - len(decisions),
+            unowned_empty_reviews_ignored=ignored,
             status="reviewed",
             reason="",
         )
@@ -251,10 +252,10 @@ def render_curated_tasks(retrieval):
     if payload is not None and (receipt["payload_sha256"] != _digest(payload) or payload["domain_plan"] != plan):
         raise ValueError("Curated receipt changed its complete actual inputs")
     if status == "reviewed":
-        checked = parse_curated_review(receipt["raw"], payload, verify_original=False)
+        checked, ignored = parse_curated_review(receipt["raw"], payload, verify_original=False)
         if checked != receipt["decisions"]:
             raise ValueError("Curated receipt changed the actual model selection")
-        if receipt.get("unowned_empty_reviews_ignored", 0) != len(json.loads(receipt["raw"])["tasks"]) - len(checked):
+        if receipt.get("unowned_empty_reviews_ignored", 0) != ignored:
             raise ValueError("Curated receipt changed its unowned empty review count")
         decisions = {row["task_id"]: row for row in checked}
     elif receipt.get("decisions"):

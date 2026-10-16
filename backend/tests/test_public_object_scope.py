@@ -159,7 +159,7 @@ async def test_untrusted_scope_output_never_invents_object_or_drops_task(defect)
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("defect", ["scope_binding", "accepted_links", "quote", "input_digest"])
+@pytest.mark.parametrize("defect", ["scope_binding", "accepted_links", "quote", "input_digest", "non_list_tasks"])
 async def test_canonical_generation_rechecks_object_proof_receipt(defect):
     _, req = await positive()
     receipt = deepcopy(req.retrieval.public_task_review)
@@ -171,6 +171,8 @@ async def test_canonical_generation_rechecks_object_proof_receipt(defect):
         receipt["scoped_decisions"][0]["object_evidence"][0]["source_quote"] = "青桥延期未在实际正文的证明"
     elif defect == "input_digest":
         receipt["object_scope_input_sha256"] = "0" * 64
+    elif defect == "non_list_tasks":
+        receipt["decisions"][0]["task_ids"] = tuple(receipt["decisions"][0]["task_ids"])
     with pytest.raises(ValueError):
         build_generation_request(replace(req, retrieval=replace(req.retrieval, public_task_review=receipt)))
 
