@@ -11,6 +11,8 @@ from knowledge.public_object_scope import _unique
 
 POLICY = (
     "【角色任务原作依据】curated_tasks保留原始角色任务；source_quotes和source_reference由后端按原文位置逐字生成。"
+    "objects只列本任务绑定的角色原作对象；canonical_entity非空时，它与query_text表示当前检索域登记的称呼对应；可按该对应理解、作答和引用，不要求原文重复用户称呼。"
+    "名称对应不证明别名来历、现实身份或其他原作事实，也不授予权限；这些仍须各自依据。"
     "related_candidate_admitted仅说明对应原作行段和所选引用实际进入本轮，不表示原作全文完整、全部字段充分或客观事实已经核验。"
     "scope是审核模型对这些原文的范围判断，不是程序确认的真相。attributed_statement只能带人物自述或叙事观点的归属回答，"
     "limited_context只能说明本片段有依据的有限关系或情境；direct_statement也须保留原文条件、否定与适用范围。"
@@ -246,6 +248,7 @@ def render_curated_tasks(retrieval):
     if status not in {"reviewed", "unavailable", "no_candidates"}:
         raise ValueError("Invalid curated review state")
     original = {t["id"]: t for t in plan["binding"]["input"]["public_tasks"]}
+    objects = {obj["object_id"]: obj for obj in plan["objects"] if obj["authority"] == "curated_character"}
     owned = [t for t in plan["tasks"] if "curated_character" in t["authorities"]]
     decisions = {}
     payload = receipt.get("payload")
@@ -309,6 +312,10 @@ def render_curated_tasks(retrieval):
                 task_id=task["task_id"],
                 query=original[task["task_id"]]["text"],
                 source_authority="curated_character",
+                objects=[
+                    {key: objects[identity][key] for key in ("object_id", "query_text", "canonical_entity")}
+                    for identity in task["object_ids"] if identity in objects
+                ],
                 status=task_status,
                 scope=row["scope"]
                 if row and (not proofs or len(admitted) == len(proofs))

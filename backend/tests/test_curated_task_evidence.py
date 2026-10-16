@@ -634,7 +634,7 @@ async def test_curated_review_failure_stops_chat_before_answer(corpus, monkeypat
 
     monkeypatch.setattr(retrieval_query_plan, "plan_retrieval", planner)
     monkeypatch.setattr(public_question_binding, "resolve_question_binding", binding)
-    monkeypatch.setattr(runtime, "get_multiscale_rag_service", lambda: SimpleNamespace(config=corpus.config))
+    monkeypatch.setattr(runtime, "get_multiscale_rag_service", lambda: SimpleNamespace(config=corpus.config, is_warm=lambda: True))
     monkeypatch.setattr(generate, "_retrieve_rag_bundle", retrieve)
     monkeypatch.setattr(curated_task_evidence, "_review", reviewer)
     monkeypatch.setattr(generate, "get_provider_context_budget", lambda: SimpleNamespace(
@@ -654,3 +654,47 @@ async def test_curated_review_failure_stops_chat_before_answer(corpus, monkeypat
     if failure in {"provider", "timeout"}:
         assert caught.value.__cause__ is error
     assert seen == dict(review=0 if failure == "capacity" else 1, answer=0)
+
+
+
+async def test_registered_curated_names_reach_final_prompt_with_their_actual_task(corpus):
+    from html import unescape
+
+    from inference.evidence_coverage import render_coverage
+    result = await reviewed(corpus)
+    state = retrieval(result)
+    rows = render_curated_tasks(state)
+    objects = rows[0]["objects"]
+    assert [(obj["query_text"], obj["canonical_entity"]) for obj in objects] == [("林澄澈", "澄澈"), ("白露川", "露川")]
+    assert all(set(obj) == {"object_id", "query_text", "canonical_entity"} for obj in objects)
+    assert all(obj["query_text"] != "晨露街续借" for obj in objects)
+    assert {obj["object_id"] for obj in objects} == set(rows[0]["evidence"][0]["object_ids"])
+    built = build_generation_request(GenerationRequest(message=QUERY, retrieval=state, context_window_tokens=65536, evidence_max_chars=0))
+    payload = json.loads(render_coverage(built.retrieval))
+    assert payload["curated_tasks"][0]["objects"] == objects
+    assert "不要求原文重复用户称呼" in built.messages[0]["content"]
+    wire = unescape(built.messages[-1]["content"])
+    coverage = wire.split('<retrieval_coverage source="application" scope="retrieved_material">', 1)[1].split("</retrieval_coverage>", 1)[0]
+    assert json.loads(coverage)["curated_tasks"][0]["objects"] == objects
+    assert BODY in built.messages[-1]["content"] and QUERY in built.messages[-1]["content"]
+    assert rows[0]["status"] == "related_candidate_admitted"
+
+
+@pytest.mark.parametrize("defect", ["canonical", "object_id", "authority"])
+async def test_changed_registration_cannot_gain_a_final_name_projection(corpus, defect):
+    result = await reviewed(corpus)
+    altered = copy.deepcopy(result)
+    obj = altered["public_curated_review"]["plan"]["objects"][0]
+    obj[{"canonical": "canonical_entity", "object_id": "object_id", "authority": "authority"}[defect]] = "synthetic-unregistered"
+    with pytest.raises(ValueError, match="binding"):
+        render_curated_tasks(retrieval(altered))
+
+
+async def test_name_registration_survives_missing_admission_without_becoming_factual_proof(corpus):
+    result = await reviewed(corpus)
+    state = replace(retrieval(result), evidence="", evidence_packets=(), admitted_evidence_packets=())
+    row = render_curated_tasks(state)[0]
+    assert [(obj["query_text"], obj["canonical_entity"]) for obj in row["objects"]] == [("林澄澈", "澄澈"), ("白露川", "露川")]
+    assert row["status"] == "related_candidate_not_admitted" and row["scope"] == "not_admitted"
+    assert row["semantic_coverage"] == "unverified" and row["limitations"] == ""
+    assert all("source_quotes" not in proof for proof in row["evidence"])
