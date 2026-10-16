@@ -2,9 +2,7 @@
 import asyncio
 import json
 import logging
-import math
 import os
-import re
 import tempfile
 import time
 import zipfile
@@ -22,6 +20,7 @@ from db.schemas import DatasetUploadRequest, TrainingStartRequest, DialogueGener
 from app.config import INPUT_VALIDATOR_AVAILABLE, TRAINING_SCHEMA, generation_state, get_generation_state_lock
 
 from services.character_research import CharacterResearchError, search_character_info
+from training.dialogue_generation import DialogueBatchError, parse_dialogue_batch
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -687,41 +686,25 @@ async def generate_dialogues(request: DialogueGenerateRequest, current_user: dic
         ]
 
         BATCH_SIZE_PER_TURN = 6
-        estimated_batches = sum(max(1, math.ceil(count / BATCH_SIZE_PER_TURN)) for _, count in turn_targets)
+        estimated_batches = sum((count + BATCH_SIZE_PER_TURN - 1) // BATCH_SIZE_PER_TURN for _, count in turn_targets)
         async with get_generation_state_lock():
             generation_state["total_batches"] = estimated_batches
         global_batch_num = 0
         scene_idx = 0
 
         for target_turns, need_count in turn_targets:
-            generated_this_turn = 0
-            retry_count = 0
-            max_retries_per_turn = need_count * 3  # 防止模型持续生成不足轮次导致死循环
-
-            while generated_this_turn < need_count:
+            for batch_start in range(0, need_count, BATCH_SIZE_PER_TURN):
                 async with get_generation_state_lock():
-                    if generation_state["cancel_requested"]:
-                        cancel_flag = True
-                    else:
-                        cancel_flag = False
+                    cancel_flag = generation_state["cancel_requested"]
                 if cancel_flag:
-                    logger.info(f"对话生成已取消，已生成 {len(all_validated)} 组")
-                    break
-
-                retry_count += 1
-                if retry_count > max_retries_per_turn:
-                    logger.warning(f"{target_turns}轮对话重试已达上限({max_retries_per_turn})，已生成{generated_this_turn}/{need_count}组，跳过")
+                    logger.info("Dialogue generation cancelled after %s dialogues", len(all_validated))
                     break
 
                 global_batch_num += 1
-                batch_count = min(BATCH_SIZE_PER_TURN, need_count - generated_this_turn)
+                batch_count = min(BATCH_SIZE_PER_TURN, need_count - batch_start)
 
                 async with get_generation_state_lock():
-                    generation_state.update({
-                        "batch_num": global_batch_num,
-                        "generated_count": len(all_validated),
-                        "progress": round(len(all_validated) / total_target * 100, 1),
-                    })
+                    generation_state["batch_num"] = global_batch_num
 
                 batch_scenes = []
                 for i in range(batch_count):
@@ -732,15 +715,8 @@ async def generate_dialogues(request: DialogueGenerateRequest, current_user: dic
 
                 if target_turns == 1:
                     turn_guide = "单轮对话，用户说一句、角色回复一句即可。用户消息可以是打招呼、道别、简短提问、确认信息等。角色回复要简洁自然但有个性。"
-                    example_fmt = """[
-  {"conversations": [{"role":"user","content":"早上好呀～"},{"role":"assistant","content":"嘿嘿早上好！今天精神不错嘛～"}]},
-  {"conversations": [{"role":"user","content":"帮我查下天气"},{"role":"assistant","content":"行啊我看看……呃好像我也查不到，要不你自己看看？"}]}
-]"""
                 elif target_turns == 2:
                     turn_guide = "两轮对话，用户发起话题→角色回应→用户追问或回应→角色再回应。话题自然切换，可以稍有转折。"
-                    example_fmt = """[
-  {"conversations": [{"role":"user","content":"你最近在忙啥"},{"role":"assistant","content":"最近忙着给往生堂整理账本呢，快累死我了"},{"role":"user","content":"哈哈那你加油"},{"role":"assistant","content":"谢谢～你要不要来帮忙呀，请你吃饭！"}]}
-]"""
                 elif target_turns <= 3:
                     turn_guide = "三轮对话，有完整的起承转合：寒暄/引入→展开话题→自然结束或留下悬念。消息长度要有变化，不要每轮都对称。"
                 elif target_turns <= 5:
@@ -748,20 +724,14 @@ async def generate_dialogues(request: DialogueGenerateRequest, current_user: dic
                 else:
                     turn_guide = "长对话，有完整的话题发展弧线。前面铺垫、中间深入、后面自然收敛或转折。要有口语化表达、语气词、甚至打字错误或口语修正，让对话非常像真人在qq上聊天。"
 
-                if target_turns <= 2:
-                    format_example = example_fmt
-                else:
-                    turns_desc = f"(共{target_turns}对 user+assistant)"
-                    format_example = f"""[{{
-  "conversations": [
-    {{"role":"user","content":"口语化的用户消息"}},
-    {{"role":"assistant","content":"有人物特点的回复"}},
-    {{"role":"user","content":"自然的追问或其他话题"}},
-    {{"role":"assistant","content":"自然的回应"}},
-    ...
-    {turns_desc}
-  ]
-}}]"""
+                format_example = json.dumps([
+                    {"conversations": [
+                        {"role": role, "content": f"第{turn + 1}轮的{'用户消息' if role == 'user' else '角色回复'}"}
+                        for turn in range(target_turns)
+                        for role in ("user", "assistant")
+                    ]}
+                    for _ in range(batch_count)
+                ], ensure_ascii=False, indent=2)
 
                 system_prompt = f"""你是一个专业的QQ聊天对话数据生成器。请生成{batch_count}组对话数据，每组恰好{target_turns}轮对话。
 
@@ -801,83 +771,43 @@ async def generate_dialogues(request: DialogueGenerateRequest, current_user: dic
                 )
                 total_cost += cost
 
-                cleaned = result.strip()
-                cleaned = re.sub(r'^```(?:json)?\s*', '', cleaned)
-                cleaned = re.sub(r'\s*```$', '', cleaned)
-
                 try:
-                    dialogues = json.loads(cleaned)
-                except json.JSONDecodeError:
-                    match = re.search(r'\[.*\]', cleaned, re.DOTALL)
-                    if match:
-                        try:
-                            dialogues = json.loads(match.group())
-                        except json.JSONDecodeError as e2:
-                            logger.warning(f"批次{global_batch_num}解析失败: {e2}, 内容前500字: {cleaned[:500]}")
-                            continue
-                    else:
-                        logger.warning(f"批次{global_batch_num}格式无效, 内容前500字: {cleaned[:500]}")
-                        continue
-
-                if not isinstance(dialogues, list):
-                    logger.warning(f"批次{global_batch_num}返回值不是数组")
-                    continue
-
-                batch_start_count = len(all_validated)
-                scene_iter = iter(batch_scenes)
-
-                for item in dialogues:
-                    if not isinstance(item, dict):
-                        continue
-                    convs = item.get("conversations", [])
-                    if not convs or not isinstance(convs, list):
-                        continue
-                    # 第一阶段：过滤有效消息
-                    raw_convs = []
-                    for conv in convs:
-                        if isinstance(conv, dict) and "role" in conv and "content" in conv:
-                            if conv["role"] in ("user", "assistant") and conv["content"].strip():
-                                raw_convs.append({
-                                    "from": "human" if conv["role"] == "user" else "gpt",
-                                    "value": conv["content"].strip()
-                                })
-
-                    # 第二阶段：配对验证 —— 确保消息严格交替 human/gpt
-                    paired_convs = []
-                    i = 0
-                    while i + 1 < len(raw_convs):
-                        if raw_convs[i]["from"] == "human" and raw_convs[i + 1]["from"] == "gpt":
-                            paired_convs.append(raw_convs[i])
-                            paired_convs.append(raw_convs[i + 1])
-                            i += 2
-                        else:
-                            # 跳过不匹配的消息，尝试下一对
-                            i += 1
-
-                    # 第三阶段：严格要求对话轮数
-                    # 每轮 = 1条human + 1条gpt = 2条消息
-                    min_required = target_turns * 2
-                    if len(paired_convs) >= min_required:
-                        # 截断到恰好目标轮数（防止模型多生成）
-                        valid_convs = paired_convs[:min_required]
-                        scene = next(scene_iter, "闲聊")
-                        all_validated.append({
-                            "conversations": valid_convs,
-                            "system": f"你是{request.character_description}，请始终保持角色设定和语言风格",
-                            "scene": scene,
-                            "turns": len(valid_convs) // 2,
-                            "tags": ([request.style] if request.style else []) + [f"{target_turns}轮"]
-                        })
-
-                generated_this_turn += len(all_validated) - batch_start_count
-
-                new_in_batch = all_validated[batch_start_count:]
-                if new_in_batch:
-                    async with get_generation_state_lock():
-                        generation_state["new_dialogues"] = new_in_batch
-                        generation_state["all_generated_dialogues"].extend(new_in_batch)
-
-                logger.info(f"对话生成进度: {len(all_validated)}/{total_target} ({target_turns}轮批次, 已生成{generated_this_turn}/{need_count})")
+                    conversations = parse_dialogue_batch(result, batch_count, target_turns)
+                except DialogueBatchError as exc:
+                    logger.warning("Dialogue batch %s failed validation: %s", global_batch_num, exc.reason)
+                    raise HTTPException(
+                        status_code=502,
+                        detail={
+                            "error": "dialogue_batch_invalid",
+                            "stage": "dialogue_validation",
+                            "reason": exc.reason,
+                            "batch": global_batch_num,
+                            "expected_count": batch_count,
+                            "target_turns": target_turns,
+                            "completed_count": len(all_validated),
+                            "requested_count": total_target,
+                            "message": "模型返回的对话批次不符合约定，请检查模型服务及输出。",
+                        },
+                    ) from exc
+                new_in_batch = [
+                    {
+                        "conversations": messages,
+                        "system": f"你是{request.character_description}，请始终保持角色设定和语言风格",
+                        "scene": scene,
+                        "turns": target_turns,
+                        "tags": ([request.style] if request.style else []) + [f"{target_turns}轮"],
+                    }
+                    for messages, scene in zip(conversations, batch_scenes)
+                ]
+                all_validated.extend(new_in_batch)
+                async with get_generation_state_lock():
+                    generation_state.update({
+                        "new_dialogues": new_in_batch,
+                        "generated_count": len(all_validated),
+                        "progress": round(len(all_validated) / total_target * 100, 1),
+                    })
+                    generation_state["all_generated_dialogues"].extend(new_in_batch)
+                logger.info("Dialogue generation progress: %s/%s", len(all_validated), total_target)
 
             async with get_generation_state_lock():
                 if generation_state["cancel_requested"]:
@@ -886,19 +816,8 @@ async def generate_dialogues(request: DialogueGenerateRequest, current_user: dic
         async with get_generation_state_lock():
             was_cancelled = generation_state["cancel_requested"]
 
-        if not all_validated and not was_cancelled:
-            raise HTTPException(
-                status_code=500,
-                detail="生成的对话数据验证失败，请重试"
-            )
-
-        all_validated = all_validated[:total_target]
-
-        async with get_generation_state_lock():
-            generation_state.update({
-                "progress": 100 if not was_cancelled else round(len(all_validated) / total_target * 100, 1),
-                "generated_count": len(all_validated),
-            })
+        if not was_cancelled and len(all_validated) != total_target:
+            raise RuntimeError("Dialogue plan did not produce its requested count")
 
         return {
             "success": True,

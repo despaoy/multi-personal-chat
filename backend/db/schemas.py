@@ -314,9 +314,17 @@ class DialogueGenerateRequest(BaseModel):
     """对话生成请求"""
 
     character_description: str
-    num_dialogues: int = 10
+    num_dialogues: int = Field(default=10, ge=1, strict=True)
     style: str | None = None
     custom_prompt: str | None = None
+
+
+    @field_validator("character_description")
+    @classmethod
+    def require_character_description(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("character_description must not be blank")
+        return value
 
 
 # ============================================
