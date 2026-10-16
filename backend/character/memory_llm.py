@@ -151,6 +151,7 @@ MERGE/SUPERSEDE/COEXIST/RETRACT/ERASE 必须从白名单逐字复制 target_memo
 
 对明确表达的本人未来计划，“说过这个计划”与“已经实施”是两个不同的命题。若计划的时间、地点、条件或尚未实施说明分散在长消息里，使用 kind=shared_event、operation=ADD 保存当前完整发言的原话观察，绝不确认行动发生。value 取当前连续原文中的短话题（不超过 payload.proposal_constraints.max_value_chars），evidence 只复制一段相关连续原文（不超过 max_evidence_chars），content 留空；qualifiers 可留空，或逐字复制完整当前消息中的限定（键仍须在白名单内）。后端会保留整条当前消息，包括末尾条件，不会用短引文代替完整来源。不要拼接开头和末尾当作连续 evidence。虚构材料、第三方计划不是用户本人的计划；未确定的外部事实仍按 PENDING 处理，不因这条规则变成事实。
 
+写入新内容的 ADD/MERGE/SUPERSEDE/COEXIST/PENDING 必须填写合法 kind 和非空 value；不能因为已有 target 就省略类型或猜测类型。
 value 是短索引，不要把整段计划和全部限定塞进 value。qualifiers 的键只能来自 payload.proposal_constraints.qualifier_keys，值只能逐字复制 evidence，不要创造 status 等新键或概括条件。不能满足这些要求时使用上述完整原话观察，而不是裁掉末尾限定。
 
 结构化事实的 value 应取证据中连续出现的短对象，不把场景与对象重新拼接成新的短语；场景保留在 context 限定中。若提供 content，必须包含同一个 value 的原文，不能只在 value 中改写词序或添加连接词。明确省略的消歧仍按下述规则处理。
@@ -983,6 +984,11 @@ def _candidate_to_proposal(
         raise MemoryResponseError('operation', "记忆 LLM operation 不受支持")
     kind = _proposal_text(raw, "kind").strip()
     value = re.sub(r"\s+", " ", _proposal_text(raw, "value")).strip()
+    writes_content = semantic_operation not in {"NOOP", "RETRACT", "ERASE"}
+    if (kind or writes_content) and kind not in _ALLOWED_KINDS and kind != "user_fact":
+        raise MemoryResponseError("kind", "记忆 LLM kind 缺失或不受支持")
+    if writes_content and (not value or len(value) > _MAX_VALUE_CHARS):
+        raise MemoryResponseError("value", "记忆 LLM value 必须是约定长度内的非空短索引")
     evidence = _proposal_text(raw, "evidence")
     if not evidence.strip():
         raise MemoryResponseError('evidence', "记忆 LLM evidence 必须是非空字符串")
@@ -1179,15 +1185,16 @@ def _candidate_to_proposal(
             kind, supported_memory = supported
             proposed_content = supported_memory.content
 
-    if kind not in _ALLOWED_KINDS:
-        if target_record is None:
-            supported = _supported_generic_fact(value, evidence) if kind == "user_fact" else None
-            if supported is None:
-                return None
-            kind, supported_memory = supported
-            proposed_content = supported_memory.content
-        else:
-            kind = _infer_kind_from_target(target_record)
+    if kind == "user_fact" and target_record is None:
+        supported = _supported_generic_fact(value, evidence)
+        if supported is None:
+            return None
+        kind, supported_memory = supported
+        proposed_content = supported_memory.content
+    elif kind not in _ALLOWED_KINDS:
+        # Only target-only withdrawal/erasure or the supported user_fact type
+        # can reach this branch; an unknown model kind is never inferred.
+        kind = _infer_kind_from_target(target_record)
     if not value and target_record is not None and semantic_operation in {"RETRACT", "ERASE"}:
         value = target_memory_key or "target"
     if not value or (len(value) > _MAX_VALUE_CHARS and semantic_operation not in {"RETRACT", "ERASE"}):

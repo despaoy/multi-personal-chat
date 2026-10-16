@@ -160,7 +160,7 @@ async def test_receipt_does_not_hide_partial_or_conflicted_operations(monkeypatc
     from character.memory_llm import ValidatedMemoryProposal
 
     worker = scheduler()
-    monkeypatch.setattr('character.memory_llm.parse_llm_proposals',
+    monkeypatch.setattr('character.memory_llm._proposals_from_payload',
                         lambda *a, **kw: [ValidatedMemoryProposal(operation='ADD') for _ in outcomes])
     pending = iter(outcomes)
 
@@ -232,8 +232,9 @@ async def test_cancellation_preserves_already_confirmed_commits(monkeypatch):
 async def test_actual_sqlite_receipt_requires_claim_and_source_removal(tmp_path):
     from datetime import datetime, timezone
 
-    from db.database import SQLiteDB
     from repositories.character_memory import DatabaseCharacterMemoryRepository
+
+    from db.database import SQLiteDB
 
     database = SQLiteDB(tmp_path / 'erase.sqlite')
     repo = DatabaseCharacterMemoryRepository(database)
@@ -263,23 +264,20 @@ async def test_actual_sqlite_receipt_requires_claim_and_source_removal(tmp_path)
         await worker.shutdown(timeout=1)
 
 
-async def test_real_database_conflict_does_not_replay_stale_model_proposal(tmp_path, monkeypatch):
+async def test_real_database_conflict_does_not_replay_stale_model_proposal(tmp_path):
     from datetime import datetime, timezone
 
+    from repositories.character_memory import DatabaseCharacterMemoryRepository
+
     from character.memory_extractor import extract_memories
-    from character.memory_llm import ValidatedMemoryProposal
     from character.models import MemoryItem
     from db.database import SQLiteDB
-    from repositories.character_memory import DatabaseCharacterMemoryRepository
 
     repo = DatabaseCharacterMemoryRepository(SQLiteDB(tmp_path / 'conflict.sqlite'))
     scope = job(repo, 'a')['user_scope']
     original = await repo.append_claim('role', scope, MemoryItem('', 'user_fact', '用户住在南宁', .8),
                                        memory_key='user_location', observed_at='2025-01-01T00:00:00+00:00')
     item = extract_memories('我住在桂林。')[0]
-    proposal = ValidatedMemoryProposal(operation='SUPERSEDE', memory=item,
-        target_memory_id=str(original['id']), evidence=item.evidence, confidence=.99)
-    monkeypatch.setattr('character.memory_llm.parse_llm_proposals', lambda *a, **kw: [proposal])
 
     class InterleavedCompletion(Completion):
         calls = 0
@@ -289,7 +287,9 @@ async def test_real_database_conflict_does_not_replay_stale_model_proposal(tmp_p
             await repo.append_claim('role', scope, MemoryItem('', 'user_fact', '用户住在洛阳', .8),
                 memory_key='user_location', relation_type='SUPERSEDE', supersedes_memory_id=original['id'],
                 observed_at=datetime.now(timezone.utc).isoformat())
-            return '{}'
+            return json.dumps({'memories': [dict(kind='location', value='桂林',
+                evidence=item.evidence, attributed_to='user', operation='SUPERSEDE', confidence=.99,
+                target_memory_id=str(original['id']), target_memory_key='user_location')]})
 
     worker = scheduler()
     worker._completion = InterleavedCompletion()

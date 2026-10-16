@@ -9,7 +9,7 @@ from character.memory_llm import parse_llm_proposals
 
 def parse(source, value, evidence=None, **changes):
     raw = dict(
-        kind="location", value=value, evidence=evidence or source, confidence=0.98, operation="ADD", qualifiers={}
+        kind="location", value=value, evidence=evidence or source, confidence=0.98, operation="ADD", qualifiers={}, attributed_to="user"
     )
     raw.update(changes)
     return parse_llm_proposals(json.dumps({"memories": [raw]}, ensure_ascii=False), source_message=source)

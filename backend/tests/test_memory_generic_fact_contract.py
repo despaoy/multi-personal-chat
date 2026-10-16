@@ -8,7 +8,7 @@ from character.memory_llm import parse_llm_proposals
 
 
 def parse(source, value, **changes):
-    raw = dict(kind="user_fact", value=value, evidence=source, confidence=.96, operation="ADD")
+    raw = dict(kind="user_fact", value=value, evidence=source, confidence=.96, operation="ADD", attributed_to="user")
     raw.update(changes)
     return parse_llm_proposals(json.dumps({"memories": [raw]}), source_message=source)
 
@@ -35,7 +35,6 @@ def test_generic_storage_type_uses_unique_supported_field(source, value, key, co
     ("我住在漳州吗？", "漳州", {}),
     ("不要记住我住在漳州。", "漳州", {}),
     ("我住在漳州。", "漳州", {"confidence": .1}),
-    ("我住在漳州。", "漳州", {"kind": "arbitrary_schema"}),
     ("我来自淮安，我住在淮安。", "淮安", {}),
     # This wording is not covered by the existing independent extractor;
     # a generic type alone is not enough to recover the specific field.
@@ -49,3 +48,8 @@ def test_generic_content_is_reconstructed_from_evidence_not_model_paraphrase():
     proposals = parse("我的专业是气象学。", "气象学", content="用户在气象学机构工作")
     assert len(proposals) == 1
     assert proposals[0].memory.content == "用户说自己的专业是气象学"
+
+
+def test_unknown_schema_is_protocol_error_instead_of_empty_result():
+    with pytest.raises(ValueError, match="kind"):
+        parse("我住在漳州。", "漳州", kind="arbitrary_schema")
