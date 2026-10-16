@@ -1,6 +1,6 @@
 """
 应用配置模块
-从 main.py 提取：JWT、LLM 并发控制、搜索工具、增强模块导入、全局实例
+从 main.py 提取：JWT、LLM 并发控制、增强模块导入、全局实例
 """
 
 import os
@@ -125,102 +125,6 @@ def get_vllm_served_model_name(env=os.environ) -> str:
         or env.get("VLLM_MODEL")
         or "qwen3-8b-instruct-awq"
     )
-
-
-# ============================================
-# 角色信息网络搜索工具
-# ============================================
-
-# _logger 已在文件顶部定义为 __logger
-
-# 模块级共享 httpx.Client，避免每次搜索都新建 TCP 连接+TLS 握手。
-# 两个搜索源(DuckDuckGo/Wikipedia)均为短超时(5s)，可安全共享同一客户端。
-import httpx as _httpx_module
-_search_http_client = _httpx_module.Client(timeout=5.0, follow_redirects=True)
-
-
-def _search_character_info(character_desc: str, max_results: int = 3) -> str:
-    """在网络上搜索角色信息（短超时+降级，不阻塞生成）"""
-
-    import concurrent.futures
-    from urllib.parse import quote
-
-    query = f"{character_desc} 角色 人物介绍"
-    query_encoded = quote(query)
-
-    def try_duckduckgo():
-        """DuckDuckGo HTML 搜索"""
-        try:
-            url = f"https://html.duckduckgo.com/html/?q={query_encoded}"
-            headers = {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-            }
-            resp = _search_http_client.get(url, headers=headers)
-            if resp.status_code == 200:
-                from bs4 import BeautifulSoup
-
-                soup = BeautifulSoup(resp.text, "html.parser")
-                items = soup.select(".result")
-                lines = []
-                for r in items[:max_results]:
-                    t = r.select_one(".result__title")
-                    s = r.select_one(".result__snippet")
-                    if t and s:
-                        lines.append(
-                            f"- {t.get_text(strip=True)}\n  {s.get_text(strip=True)[:250]}"
-                        )
-                return "\n".join(lines) if lines else ""
-        except Exception as e:
-            # H3 fix (扩展): 此前静默吞噬，DuckDuckGo 搜索失败时无法排障
-            __logger.warning("DuckDuckGo 搜索失败 (query=%s): %s", character_desc, e)
-        return ""
-
-    def try_wikipedia():
-        """Wikipedia API"""
-        try:
-            params = {
-                "action": "query",
-                "list": "search",
-                "srsearch": character_desc,
-                "format": "json",
-                "srlimit": 3,
-            }
-            resp = _search_http_client.get("https://zh.wikipedia.org/w/api.php", params=params)
-            if resp.status_code == 200:
-                pages = resp.json().get("query", {}).get("search", [])
-                import re
-
-                return "\n".join(
-                    f"- {p['title']}\n  {re.sub(r'<[^>]+>', '', p.get('snippet', ''))[:250]}"
-                    for p in pages[:max_results]
-                )
-        except Exception as e:
-            # H3 fix: 此前静默吞噬，Wikipedia 搜索失败时无法排障
-            __logger.warning("Wikipedia 搜索失败 (query=%s): %s", character_desc, e)
-        return ""
-
-    # 并行搜索，总超时 6 秒
-    result = ""
-    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
-        futures = {
-            executor.submit(try_duckduckgo): "ddg",
-            executor.submit(try_wikipedia): "wiki",
-        }
-        for future in concurrent.futures.as_completed(futures, timeout=6):
-            try:
-                r = future.result(timeout=5)
-                if r and len(r) > len(result):
-                    result = r
-            except Exception as e:
-                # H3 fix (扩展): 此前静默吞噬 future 异常（含超时、子线程内未捕获异常）
-                __logger.warning("搜索 future 失败 (query=%s): %s", character_desc, e)
-
-    if result:
-        __logger.info(f"角色信息搜索成功: {len(result)} 字符")
-    else:
-        __logger.info("角色信息搜索无结果（网络受限），将基于用户描述生成")
-
-    return result
 
 
 # ============================================
