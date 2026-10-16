@@ -7,7 +7,7 @@ import time
 from fastapi import APIRouter, HTTPException, Depends, Response, Request
 
 from db.schemas import RegisterRequest, LoginRequest
-from db.adapter import db
+from app.runtime import get_runtime_container
 from db.errors import RegistrationClosedError
 from app.config import create_access_token
 from app.dependencies import get_current_user
@@ -153,12 +153,12 @@ def _bootstrap_registration_only() -> bool:
     }
 
 
-def _registration_allowed() -> bool:
+def _registration_allowed(database) -> bool:
     if not _bootstrap_registration_only():
         return True
 
-    rows = db.execute_sql("SELECT COUNT(*) AS count FROM users")
-    user_count = int(rows[0]["count"]) if rows else 0
+    rows = database.execute_sql("SELECT COUNT(*) AS count FROM users")
+    user_count = int(rows[0]["count"])
     return user_count == 0
 
 def _hash_password(password: str) -> str:
@@ -201,21 +201,27 @@ def _set_auth_cookie(response: Response, token: str):
     )
 
 
+def _get_auth_database(request: Request):
+    return get_runtime_container(request.app).db
+
+
 @router.post("/api/auth/register")
-async def register(request: RegisterRequest, response: Response):
+async def register(
+    request: RegisterRequest, response: Response, database=Depends(_get_auth_database),
+):
     """用户注册"""
     try:
         async with _get_registration_lock():
             bootstrap_only = _bootstrap_registration_only()
-            if not await _run_database_work(_registration_allowed):
+            if not await _run_database_work(_registration_allowed, database):
                 raise HTTPException(status_code=403, detail="生产环境已关闭公开注册")
 
-            existing = await _run_database_work(db.get_user_by_username, request.username)
+            existing = await _run_database_work(database.get_user_by_username, request.username)
             if existing:
                 raise HTTPException(status_code=409, detail="用户名已存在")
 
             password_hash = await _run_password_work(_hash_password, request.password)
-            user = await _run_database_work(db.add_user, request.username, password_hash, bootstrap_only)
+            user = await _run_database_work(database.add_user, request.username, password_hash, bootstrap_only)
 
         user_id = user["id"]
         now = user["created_at"]
@@ -238,29 +244,28 @@ async def register(request: RegisterRequest, response: Response):
 
 
 @router.post("/api/auth/login")
-async def login(request: LoginRequest, response: Response):
+async def login(
+    request: LoginRequest, response: Response, database=Depends(_get_auth_database),
+):
     """用户登录"""
-    try:
-        row = await _run_database_work(db.get_user_by_username, request.username)
-        if not row:
-            raise HTTPException(status_code=401, detail="用户名或密码错误")
+    row = await _run_database_work(database.get_user_by_username, request.username)
+    if not row:
+        raise HTTPException(status_code=401, detail="用户名或密码错误")
 
-        if not await _run_password_work(_verify_password, request.password, row["password_hash"]):
-            raise HTTPException(status_code=401, detail="用户名或密码错误")
+    if not await _run_password_work(_verify_password, request.password, row["password_hash"]):
+        raise HTTPException(status_code=401, detail="用户名或密码错误")
 
-        token = create_access_token(row['username'], row['id'], row.get('role', 'user'))
-        _set_auth_cookie(response, token)
-        return {
-            "success": True,
-            "user": {
-                "id": row['id'],
-                "username": row['username'],
-                "created_at": row['created_at'],
-                "role": row.get('role', 'user'),
-            }
+    token = create_access_token(row['username'], row['id'], row.get('role', 'user'))
+    _set_auth_cookie(response, token)
+    return {
+        "success": True,
+        "user": {
+            "id": row['id'],
+            "username": row['username'],
+            "created_at": row['created_at'],
+            "role": row.get('role', 'user'),
         }
-    except HTTPException:
-        raise
+    }
 
 
 @router.post("/api/auth/logout")
@@ -279,9 +284,11 @@ async def logout(request: Request, response: Response):
 
 
 @router.get("/api/auth/me")
-async def get_current_user_info(current_user: dict = Depends(get_current_user)):
+async def get_current_user_info(
+    current_user: dict = Depends(get_current_user), database=Depends(_get_auth_database),
+):
     """获取当前用户信息"""
-    user_row = await _run_database_work(db.get_user_by_username, current_user["username"])
+    user_row = await _run_database_work(database.get_user_by_username, current_user["username"])
     return {
         "success": True,
         "user": {

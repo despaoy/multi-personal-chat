@@ -458,14 +458,12 @@ def test_production_registration_allows_only_bootstrap_user(monkeypatch):
     monkeypatch.setenv("ENVIRONMENT", "production")
     monkeypatch.setenv("ALLOW_PUBLIC_REGISTRATION", "false")
 
-    monkeypatch.setattr(auth, "db", FakeDb(0))
-    assert auth._registration_allowed() is True
+    assert auth._registration_allowed(FakeDb(0)) is True
 
-    monkeypatch.setattr(auth, "db", FakeDb(1))
-    assert auth._registration_allowed() is False
+    assert auth._registration_allowed(FakeDb(1)) is False
 
     monkeypatch.setenv("ALLOW_PUBLIC_REGISTRATION", "true")
-    assert auth._registration_allowed() is True
+    assert auth._registration_allowed(FakeDb(1)) is True
 
 
 def test_forwarded_ip_requires_explicit_trusted_proxy(monkeypatch):

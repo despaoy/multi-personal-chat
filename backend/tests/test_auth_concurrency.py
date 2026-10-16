@@ -30,11 +30,11 @@ async def test_login_offloads_database_and_bcrypt_work(monkeypatch):
         worker_threads.append(threading.get_ident())
         return password == "secret" and password_hash == "stored-hash"
 
-    monkeypatch.setattr(auth, "db", SimpleNamespace(get_user_by_username=get_user))
+    database = SimpleNamespace(get_user_by_username=get_user)
     monkeypatch.setattr(auth, "_verify_password", verify_password)
     monkeypatch.setattr(auth, "create_access_token", lambda *args: "token")
 
-    result = await auth.login(LoginRequest(username="alice", password="secret"), Response())
+    result = await auth.login(LoginRequest(username="alice", password="secret"), Response(), database=database)
 
     assert result["success"] is True
     assert len(worker_threads) == 2
@@ -62,13 +62,12 @@ async def test_register_offloads_all_blocking_steps(monkeypatch):
         }),
     )
 
-    monkeypatch.setattr(auth, "db", fake_db)
-    monkeypatch.setattr(auth, "_registration_allowed", lambda: record(True))
+    monkeypatch.setattr(auth, "_registration_allowed", lambda _database: record(True))
     monkeypatch.setattr(auth, "_hash_password", lambda password: record("hash"))
     monkeypatch.setattr(auth, "create_access_token", lambda *args: "token")
 
     result = await auth.register(
-        RegisterRequest(username="alice", password="long-secret"), Response()
+        RegisterRequest(username="alice", password="long-secret"), Response(), database=fake_db
     )
 
     assert result["success"] is True
@@ -88,13 +87,12 @@ async def test_register_maps_database_uniqueness_race_to_conflict(monkeypatch):
             IntegrityError("duplicate username")
         ),
     )
-    monkeypatch.setattr(auth, "db", fake_db)
-    monkeypatch.setattr(auth, "_registration_allowed", lambda: True)
+    monkeypatch.setattr(auth, "_registration_allowed", lambda _database: True)
     monkeypatch.setattr(auth, "_hash_password", lambda password: "hash")
 
     with pytest.raises(HTTPException) as exc_info:
         await auth.register(
-            RegisterRequest(username="alice", password="long-secret"), Response()
+            RegisterRequest(username="alice", password="long-secret"), Response(), database=fake_db
         )
 
     assert exc_info.value.status_code == 409
@@ -130,14 +128,13 @@ async def test_register_maps_bootstrap_race_to_forbidden(monkeypatch):
             _ for _ in ()
         ).throw(RegistrationClosedError("already bootstrapped")),
     )
-    monkeypatch.setattr(auth, "db", fake_db)
     monkeypatch.setattr(auth, "_bootstrap_registration_only", lambda: True)
-    monkeypatch.setattr(auth, "_registration_allowed", lambda: True)
+    monkeypatch.setattr(auth, "_registration_allowed", lambda _database: True)
     monkeypatch.setattr(auth, "_hash_password", lambda password: "hash")
 
     with pytest.raises(HTTPException) as exc_info:
         await auth.register(
-            RegisterRequest(username="alice", password="long-secret"), Response()
+            RegisterRequest(username="alice", password="long-secret"), Response(), database=fake_db
         )
 
     assert exc_info.value.status_code == 403
