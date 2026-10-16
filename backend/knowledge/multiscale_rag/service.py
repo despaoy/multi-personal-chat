@@ -1,4 +1,4 @@
-"""Routed retrieval over physically separated character-knowledge indexes."""
+"""Retrieve fine and coarse character sources in one shared candidate pool."""
 
 from __future__ import annotations
 
@@ -20,8 +20,7 @@ from .visibility import KnowledgeBoundary, visible_to
 if TYPE_CHECKING:
     from .source_text import OriginalTextExtractor
 
-CARD_TYPES = frozenset({"fact", "relation", "event"})
-_BROAD_WORDS = ("整卷", "整个故事", "故事概述", "剧情概述", "主要剧情", "总体讲了", "完整回顾")
+RETRIEVAL_TYPES = frozenset({"fact", "relation", "event", "scene", "story"})
 
 
 def analyze_explicit_domain(analyzer: QueryAnalyzer, domain_id: str, query: str) -> QueryAnalysis:
@@ -97,14 +96,14 @@ def select_identity_coverage(ranked, top_k: int, subject: str):
 
 
 class RoutedMultiScaleService:
-    """Route first, retrieve second; fine and coarse scales never compete."""
+    """Recall all source scales before visibility, ownership and ranking."""
 
     context_max_chars = 6000
 
     def __init__(
         self,
         config,
-        indexes: dict[frozenset[str], Any],
+        index: Any,
         embedding_provider,
         *,
         all_documents: list,
@@ -118,9 +117,8 @@ class RoutedMultiScaleService:
         self.context_max_chars = context_max_chars
         self.config = config
         self.identity_coverage = identity_coverage
-        self.indexes = indexes
         self.analyzer = QueryAnalyzer([config])
-        self.retrievers = {key: HybridRetriever(config, index, embedding_provider) for key, index in indexes.items()}
+        self.retriever = HybridRetriever(config, index, embedding_provider)
         # Independent opt-in: the generic KB switch must not silently change
         # character retrieval. The first real dev ablation regressed on raw text.
         enabled = read_bool(os.environ, "CHARACTER_RAG_RERANKER_ENABLED")
@@ -155,9 +153,7 @@ class RoutedMultiScaleService:
             analysis.entities = list(dict.fromkeys(self.config.canonical_entity(name) for name in object_names if self.config.canonical_entity(name) is not None))
             analysis.story_hits = [name for name in object_names if name in self.config.story_titles]
             analysis.expanded_keywords = list(dict.fromkeys([*analysis.entities, *analysis.story_hits, *(keyword for keyword in analysis.expanded_keywords if keyword not in incidental)]))
-        broad = any(word in query for word in _BROAD_WORDS)
-        route = frozenset({"story", "scene"}) if broad else CARD_TYPES
-        retriever = self.retrievers[route]
+        retriever = self.retriever
         recall_k = max(top_k * 12, 60)
         if knowledge_boundary is not None:
             # Until visibility-aware ANN indexes are built, recall the complete
@@ -166,7 +162,7 @@ class RoutedMultiScaleService:
             recall_k = max(recall_k, retriever.index.count())
         recalled = retriever.search(analysis, top_k=recall_k, recall_k=recall_k, mode="hybrid")
         recalled = [candidate for candidate in recalled if visible_to(candidate.document, knowledge_boundary)]
-        pair = explicit_relation_pair(analysis) if not broad else frozenset()
+        pair = explicit_relation_pair(analysis)
         before_scope = len(recalled)
         recalled = [candidate for candidate in recalled if in_relation_scope(candidate.document, pair)]
         identity_subject = identity_evidence_subject(analysis)
@@ -222,14 +218,13 @@ class RoutedMultiScaleService:
 
         timeline: list[dict[str, Any]] = []
         if (
-            not broad
-            and len(analysis.entities) >= 2
+            len(analysis.entities) >= 2
             and any(c.document.document_type == "relation" for c in selected)
         ):
             wanted = set(analysis.entities)
             relation_docs = [
                 doc
-                for doc in self.indexes[route].documents
+                for doc in retriever.index.documents
                 if doc.document_type == "relation"
                 and wanted <= set(doc.entities)
                 and visible_to(doc, knowledge_boundary)
@@ -252,7 +247,7 @@ class RoutedMultiScaleService:
                 for doc in relation_docs
             ]
 
-        from knowledge.curated_sources import collect_curated_sources
+        from knowledge.curated_sources import collect_curated_sources, curated_reference
 
         source_catalog = collect_curated_sources(selected, self.evidence_by_parent, self.extractor, knowledge_boundary)
         sources_by_id = {source["source_id"]: source for source in source_catalog["sources"]}
@@ -262,7 +257,7 @@ class RoutedMultiScaleService:
         if wants_raw:
             raw_status = "no_visible_source"
             for candidate in selected:
-                evidence = self.evidence_by_parent.get(candidate.document.id)
+                evidence = curated_reference(candidate.document, self.evidence_by_parent)
                 if evidence is None or not visible_to(evidence, knowledge_boundary):
                     continue
                 if self.extractor is None:
@@ -305,7 +300,7 @@ class RoutedMultiScaleService:
             "curated_source_catalog": source_catalog,
             "retrieval_strategy": "multi_scale_character",
             "identity_coverage": self.identity_coverage,
-            "route_types": sorted(route),
+            "candidate_types": sorted(RETRIEVAL_TYPES),
             "relation_scope": {"pair": sorted(pair), "excluded_candidates": before_scope - before_identity_scope},
             "identity_scope": {
                 "subject": identity_subject,

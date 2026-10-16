@@ -18,8 +18,7 @@ def make_service(monkeypatch, evidence_texts):
     instance.identity_coverage = False
     instance.config = SimpleNamespace(domain_id='test')
     instance.analyzer = instance.reranker = instance.extractor = None
-    instance.indexes = {}
-    instance.retrievers = {service.CARD_TYPES: SimpleNamespace(search=lambda *a, **kw: candidates)}
+    instance.retriever = SimpleNamespace(search=lambda *a, **kw: candidates)
     instance.by_id = {'scene': SimpleNamespace(id='scene', title='场景', summary='背景' * 1500)}
     instance.evidence_by_parent = {str(i): SimpleNamespace(content=text)
                                    for i, text in enumerate(evidence_texts) if text is not None}
@@ -76,7 +75,7 @@ def test_background_cannot_masquerade_as_evidence_when_all_packets_excluded(monk
 
 def test_background_requires_its_own_admitted_evidence(monkeypatch):
     instance = make_service(monkeypatch, ['有效证据', '长' * 6100])
-    candidates = instance.retrievers[service.CARD_TYPES].search()
+    candidates = instance.retriever.search()
     candidates[1].document.metadata['scene_id'] = 'excluded-scene'
     instance.by_id['scene'].summary = '有效场景'
     instance.by_id['excluded-scene'] = SimpleNamespace(id='excluded-scene', title='孤立场景', summary='不应入模')

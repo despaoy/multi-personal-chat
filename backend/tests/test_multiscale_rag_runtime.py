@@ -9,7 +9,7 @@ import numpy as np
 import pytest
 
 from knowledge.multiscale_rag.runtime import MultiScaleRagRuntime
-from knowledge.multiscale_rag.service import CARD_TYPES
+from knowledge.multiscale_rag.service import RETRIEVAL_TYPES
 from knowledge.multiscale_rag.source_text import OriginalTextExtractor
 
 if TYPE_CHECKING:
@@ -59,7 +59,7 @@ def test_runtime_loads_all_four_scales_and_returns_bundle(monkeypatch):
     assert bundle is not None
     assert bundle["results"]
     assert bundle["domains"] == ["tsukiyashiro_kisaki"]
-    assert bundle["query_analysis"]["route_types"] == sorted(CARD_TYPES)
+    assert bundle["query_analysis"]["candidate_types"] == sorted(RETRIEVAL_TYPES)
     assert bundle["context_trust"] == "untrusted_retrieved_evidence"
     assert isinstance(bundle["abstained"], bool)
 

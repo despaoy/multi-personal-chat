@@ -77,9 +77,8 @@ def test_filter_runs_before_ranking_and_preserves_retrieval_diagnostics(monkeypa
     instance.identity_coverage = False
     instance.config = SimpleNamespace(domain_id='test')
     instance.analyzer = instance.reranker = instance.extractor = None
-    instance.indexes = {}
     instance.by_id = instance.evidence_by_parent = {}
-    instance.retrievers = {service.CARD_TYPES: SimpleNamespace(search=lambda *a, **kw: candidates)}
+    instance.retriever = SimpleNamespace(search=lambda *a, **kw: candidates)
     monkeypatch.setattr(service, 'analyze_explicit_domain', lambda *a: SimpleNamespace(
         entities=['林远'], normalized_query=query))
 

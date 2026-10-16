@@ -6,7 +6,7 @@ import pytest
 from test_multiscale_rag_runtime import FakeQueryEmbeddingProvider
 
 from knowledge.multiscale_rag.runtime import MultiScaleRagRuntime
-from knowledge.multiscale_rag.service import CARD_TYPES, analyze_explicit_domain
+from knowledge.multiscale_rag.service import analyze_explicit_domain
 from knowledge.multiscale_rag.vector_runtime import LocalMeanPoolingEmbeddingProvider
 
 QUERY = '妃和琉璃是什么关系？'
@@ -27,7 +27,7 @@ def runtime(monkeypatch):
 def search(runtime, mode, **kwargs):
     service = runtime._service
     analysis = analyze_explicit_domain(service.analyzer, service.config.domain_id, QUERY)
-    return service.retrievers[CARD_TYPES].search(analysis, top_k=3, mode=mode, **kwargs)
+    return service.retriever.search(analysis, top_k=3, mode=mode, **kwargs)
 
 
 @pytest.mark.parametrize('mode', ['hybrid', 'vector', 'runtime'])
@@ -76,7 +76,7 @@ def test_invalid_query_vector_cannot_become_successful_retrieval(runtime, mode, 
 
 
 def test_vector_validation_preserves_inner_product_scores_and_threshold(runtime):
-    index = runtime._service.indexes[CARD_TYPES]
+    index = runtime._service.retriever.index
     query = 2.0 * FakeQueryEmbeddingProvider().embed_query(QUERY)
     expected = np.sort(index._faiss_index.matrix @ query)[::-1][:3]
     result = index.search_vector(query, top_k=3)

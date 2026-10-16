@@ -6,8 +6,8 @@ from unittest.mock import Mock
 import numpy as np
 import pytest
 
-from knowledge.multiscale_rag.runtime import _route_indexes
-from knowledge.multiscale_rag.service import CARD_TYPES, RoutedMultiScaleService
+from knowledge.multiscale_rag.runtime import _retrieval_index
+from knowledge.multiscale_rag.service import RETRIEVAL_TYPES, RoutedMultiScaleService
 from knowledge.multiscale_rag.source_text import OriginalTextExtractor
 from knowledge.retrieval_core.documents import KnowledgeIndexDocument, SourceReference
 from knowledge.retrieval_core.registry import KnowledgeDomainConfig
@@ -23,7 +23,6 @@ BODIES = {
     "relation": "林栖与穆远登记为工作搭档，双方没有亲属关系。",
     "event": "昨晚林栖与穆远争执，是因为受理号复核时发现错字；双方随后协商重新填写。",
 }
-COARSE = frozenset({"scene", "story"})
 
 
 class ControlledEmbedding:
@@ -114,14 +113,14 @@ def arrange(root, *, order=("fact", "relation", "event"), empty=False):
             )
         )
     vectors = np.ones((len(docs), 384), dtype=np.float32) / np.sqrt(384)
-    indexes = _route_indexes(config.domain_id, docs, vectors)
+    index = _retrieval_index(config.domain_id, docs, vectors)
     embedding = ControlledEmbedding()
     ranking = ControlledRanking(list(order))
     service = RoutedMultiScaleService(
-        config, indexes, embedding, all_documents=docs, source_extractor=OriginalTextExtractor(root), reranker=ranking
+        config, index, embedding, all_documents=docs, source_extractor=OriginalTextExtractor(root), reranker=ranking
     )
     return SimpleNamespace(
-        service=service, embedding=embedding, ranking=ranking, indexes=indexes, documents=docs, config=config
+        service=service, embedding=embedding, ranking=ranking, index=index, documents=docs, config=config
     )
 
 
@@ -137,24 +136,16 @@ def test_mixed_question_retains_every_complete_atomic_source(tmp_path):
     rig = arrange(tmp_path)
     result = rig.service.retrieve(MIXED, top_k=3)
     assert {row["id"] for row in result["results"]} == set(BODIES)
-    assert set(rig.ranking.pools[0]) == set(BODIES)
+    assert set(rig.ranking.pools[0]) == {*BODIES, "scene"}
     assert {row["excerpt"]["text"] for row in result["curated_source_catalog"]["sources"]} == set(BODIES.values())
-    assert result["route_types"] == sorted(CARD_TYPES)
+    assert result["candidate_types"] == sorted(RETRIEVAL_TYPES)
 
 
-def test_existing_overview_operation_keeps_its_separate_index(tmp_path):
+def test_existing_overview_operation_remains_retrievable(tmp_path):
     rig = arrange(tmp_path, order=("scene",))
     result = rig.service.retrieve("请完整回顾《虚构登记故事》。", top_k=1)
     assert result["results"][0]["id"] == "scene"
-    assert result["route_types"] == sorted(COARSE)
-
-
-def test_required_overview_index_failure_never_switches_to_cards(tmp_path):
-    rig = arrange(tmp_path)
-    del rig.service.retrievers[COARSE]
-    with pytest.raises(KeyError):
-        rig.service.retrieve("请完整回顾《虚构登记故事》。", top_k=1)
-    assert rig.ranking.pools == []
+    assert result["candidate_types"] == sorted(RETRIEVAL_TYPES)
 
 
 def test_complete_empty_card_index_is_no_match_without_model_work(tmp_path):
@@ -171,11 +162,3 @@ def test_identity_alias_forms_preserve_all_candidate_types(tmp_path, query):
     result = rig.service.retrieve(query, top_k=3)
     assert {row["id"] for row in result["results"]} == set(BODIES)
     assert result["identity_scope"]["subject"] == "林栖"
-
-
-def test_required_card_index_failure_is_explicit(tmp_path):
-    rig = arrange(tmp_path)
-    del rig.service.retrievers[CARD_TYPES]
-    with pytest.raises(KeyError):
-        rig.service.retrieve(MIXED)
-    assert rig.ranking.pools == []

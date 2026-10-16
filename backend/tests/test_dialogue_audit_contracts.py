@@ -185,8 +185,7 @@ def test_rag_deduplicates_scene_and_delivers_exact_excerpt(monkeypatch, query, t
     instance.identity_coverage = False
     instance.config = SimpleNamespace(domain_id='test')
     instance.analyzer = None
-    instance.indexes = {}
-    instance.retrievers = {service.CARD_TYPES: SimpleNamespace(search=lambda *a, **kw: candidates)}
+    instance.retriever = SimpleNamespace(search=lambda *a, **kw: candidates)
     instance.reranker = None
     instance.by_id = {'shared-scene': SimpleNamespace(id='shared-scene', title='共同场景', summary='背景内容')}
     instance.evidence_by_parent = {'fact-0': SimpleNamespace(id='evidence-0', source=source)}

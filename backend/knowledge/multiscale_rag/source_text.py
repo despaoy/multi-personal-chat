@@ -40,8 +40,8 @@ class OriginalTextExtractor:
         self,
         corpus_root: Path,
         *,
-        max_lines: int = 800,
-        max_chars: int = 40_000,
+        max_lines: int = 5000,
+        max_chars: int = 100_000,
     ) -> None:
         if type(max_lines) is not int or max_lines < 1:
             raise ValueError("max_lines must be a positive integer")

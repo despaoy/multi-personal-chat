@@ -24,7 +24,7 @@ from .constants import (
     LEGACY_EMBEDDING_TEXT_VERSIONS,
     LEGACY_INDEX_FORMAT_VERSIONS,
 )
-from .service import CARD_TYPES, RoutedMultiScaleService
+from .service import RETRIEVAL_TYPES, RoutedMultiScaleService
 from .source_text import OriginalTextExtractor
 from .vector_runtime import LocalMeanPoolingEmbeddingProvider, attach_vectors
 
@@ -84,20 +84,9 @@ def _memory_index(domain_id: str, documents: list[KnowledgeIndexDocument], vecto
     return index
 
 
-def _route_indexes(
-    domain_id: str,
-    documents: list[KnowledgeIndexDocument],
-    vectors: np.ndarray,
-) -> dict[frozenset[str], DomainIndex]:
-    indexes: dict[frozenset[str], DomainIndex] = {}
-    for route in (CARD_TYPES, frozenset({"story", "scene"})):
-        rows = [row for row, document in enumerate(documents) if document.document_type in route]
-        indexes[route] = _memory_index(
-            domain_id,
-            [documents[row] for row in rows],
-            vectors[rows],
-        )
-    return indexes
+def _retrieval_index(domain_id: str, documents: list[KnowledgeIndexDocument], vectors: np.ndarray) -> DomainIndex:
+    rows = [row for row, document in enumerate(documents) if document.document_type in RETRIEVAL_TYPES]
+    return _memory_index(domain_id, [documents[row] for row in rows], vectors[rows])
 
 
 class MultiScaleRagRuntime:
@@ -167,7 +156,7 @@ class MultiScaleRagRuntime:
             )
             service = RoutedMultiScaleService(
                 config,
-                _route_indexes(domain_id, documents, vectors),
+                _retrieval_index(domain_id, documents, vectors),
                 self._provider,
                 all_documents=documents,
                 source_extractor=OriginalTextExtractor(_REPO_ROOT),
@@ -274,7 +263,7 @@ class MultiScaleRagRuntime:
             "query_analysis": {
                 "entities": gate.entities,
                 "matched_domains": gate.matched_domains,
-                "route_types": result.get("route_types", []),
+                "candidate_types": result.get("candidate_types", []),
             },
             "warnings": ["cross_encoder_threshold_requires_domain_calibration"] if semantic else [],
         }

@@ -78,8 +78,7 @@ def test_scope_precedes_reranking_and_applies_to_timeline(monkeypatch, query, sc
     instance.identity_coverage = False
     instance.config = SimpleNamespace(domain_id='test')
     instance.analyzer = None
-    instance.indexes = {service.CARD_TYPES: SimpleNamespace(documents=[c.document for c in candidates])}
-    instance.retrievers = {service.CARD_TYPES: SimpleNamespace(search=lambda *a, **kw: candidates)}
+    instance.retriever = SimpleNamespace(search=lambda *a, **kw: candidates, index=SimpleNamespace(documents=[c.document for c in candidates]))
     instance.reranker = None
     instance.extractor = None
     instance.by_id = {}

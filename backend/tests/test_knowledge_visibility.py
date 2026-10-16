@@ -69,8 +69,7 @@ def test_boundary_filters_parents_timelines_and_raw_evidence_before_exposure(mon
     instance.identity_coverage = False
     instance.config = SimpleNamespace(domain_id="test")
     instance.analyzer = None
-    instance.indexes = {service.CARD_TYPES: index}
-    instance.retrievers = {service.CARD_TYPES: SimpleNamespace(search=search, index=index)}
+    instance.retriever = SimpleNamespace(search=search, index=index)
     instance.reranker = None
     instance.by_id = {scene.id: scene}
     instance.evidence_by_parent = {known.id: evidence}

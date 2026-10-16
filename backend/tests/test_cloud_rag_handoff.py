@@ -151,9 +151,8 @@ def test_public_service_none_keeps_whole_packet(monkeypatch):
     instance.identity_coverage = False
     instance.config = SimpleNamespace(domain_id="test")
     instance.analyzer = instance.reranker = instance.extractor = None
-    instance.indexes = {}
     instance.by_id = {}
-    instance.retrievers = {service.CARD_TYPES: SimpleNamespace(search=lambda *a, **kw: [candidate])}
+    instance.retriever = SimpleNamespace(search=lambda *a, **kw: [candidate])
     instance.evidence_by_parent = {doc.id: SimpleNamespace(content=text)}
     monkeypatch.setattr(service, "analyze_explicit_domain", lambda *a: SimpleNamespace(entities=[]))
     monkeypatch.setattr(service, "rerank_with_title_frames", lambda *a, **kw: [candidate])

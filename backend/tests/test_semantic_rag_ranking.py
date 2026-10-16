@@ -269,6 +269,7 @@ def test_generic_kb_switch_cannot_enable_character_reranking(monkeypatch):
     monkeypatch.delenv("CHARACTER_RAG_RERANKER_ENABLED", raising=False)
     monkeypatch.setenv("CHARACTER_RAG_RERANK_TEXT_VIEW", "embedding_text")
     monkeypatch.setattr(service, "QueryAnalyzer", lambda configs: None)
+    monkeypatch.setattr(service, "HybridRetriever", lambda *args: None)
     instance = service.RoutedMultiScaleService(SimpleNamespace(domain_id="test"), {}, None, all_documents=[])
     assert instance.reranker._resolve_cross_encoder() is None
     assert instance.reranker.text_view == "embedding_text"
@@ -280,5 +281,6 @@ def test_character_reranking_has_independent_explicit_opt_in(monkeypatch):
     monkeypatch.setenv("RERANKER_ENABLED", "false")
     monkeypatch.setenv("CHARACTER_RAG_RERANKER_ENABLED", "true")
     monkeypatch.setattr(service, "QueryAnalyzer", lambda configs: None)
+    monkeypatch.setattr(service, "HybridRetriever", lambda *args: None)
     instance = service.RoutedMultiScaleService(SimpleNamespace(domain_id="test"), {}, None, all_documents=[])
     assert instance.reranker._cross_encoder_enabled is True

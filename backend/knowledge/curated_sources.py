@@ -21,12 +21,17 @@ class CuratedSourceChangedError(ValueError):
     """A valid original snapshot no longer matches the current source file."""
 
 
+def curated_reference(document, evidence_by_parent):
+    """Broad records own their span; claim cards use their evidence child."""
+    return document if document.document_type in {"scene", "story"} else evidence_by_parent.get(document.id)
+
+
 def collect_curated_sources(candidates, evidence_by_parent, extractor, boundary):
     """Read every selected visible evidence reference; never invent a source."""
     sources, unavailable, seen = [], [], set()
     for candidate in candidates:
         card = candidate.document
-        evidence = evidence_by_parent.get(card.id)
+        evidence = curated_reference(card, evidence_by_parent)
         if extractor is None or evidence is None or not visible_to(evidence, boundary):
             unavailable.append(dict(parent_id=card.id, status="no_visible_source"))
             continue

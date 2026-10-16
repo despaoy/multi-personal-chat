@@ -19,6 +19,7 @@ def test_reranker_flag_contract(monkeypatch, entry, value):
     monkeypatch.setattr(rag_helper, "get_reranker", factory)
     monkeypatch.setattr(reranker, "get_reranker", factory)
     monkeypatch.setattr(service, "QueryAnalyzer", lambda configs: None)
+    monkeypatch.setattr(service, "HybridRetriever", lambda *args: None)
     def resolve():
         if entry == "generic":
             return rag_helper.RAGHelper().enable_reranking
