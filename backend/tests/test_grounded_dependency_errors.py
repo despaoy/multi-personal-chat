@@ -6,6 +6,7 @@ import pytest
 
 from knowledge.grounded_answer.service import GroundedAnswerService
 
+pytestmark = pytest.mark.usefixtures("literal_grounded_query")
 
 def _bundle() -> dict[str, Any]:
     return {

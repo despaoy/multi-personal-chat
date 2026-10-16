@@ -275,7 +275,10 @@ class DatabaseCharacterMemoryRepository:
     async def list_sources(self, character_id: str, user_scope: UserScope, *,
                            source_message_ids: tuple[str, ...] | None = None,
                            limit: int = 100) -> list[dict[str, Any]]:
-        reader = self._database.list_memory_sources
+        try:
+            reader = self._database.list_memory_sources
+        except AttributeError as exc:
+            raise RuntimeError("Database adapter must provide scoped source reads (list_memory_sources)") from exc
         return await asyncio.to_thread(
             reader, character_id, user_scope.platform, user_scope.adapter, user_scope.sender_id,
             user_scope.conversation_type, user_scope.conversation_id,

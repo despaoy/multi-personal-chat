@@ -6,6 +6,7 @@ from dataclasses import replace
 from html import unescape
 
 import pytest
+from scope_fixtures import install_public_source_reader, literal_span_response, open_scope_response
 from tests.test_public_task_evidence_review import PRIVATE, request
 
 from inference.generation_request import build_generation_request
@@ -86,7 +87,7 @@ async def run(*, bridge=BRIDGE, relation="same", kb=7, identity_only_claim=False
     async def resolve(messages):
         data = json.loads(messages[-1]["content"])
         assert set(data) == {"query", "public_tasks"} and data["query"] == QUERY
-        return json.dumps(dict(scopes=[dict(task_id=TASK, objects=["榆湾续办"])]))
+        return open_scope_response(messages, [dict(task_id=TASK, objects=["榆湾续办"])])
 
     async def identify(messages):
         data = json.loads(messages[-1]["content"])
@@ -250,7 +251,7 @@ async def test_actual_api_production_identity_stage_keeps_registry_rules_and_pri
 
     await positive()
 
-    async def planner(_query):
+    async def planner(_query, **_context):
         return RetrievalQueryPlan(status="applied", dependencies=deps(), public_obligations=parts())
 
     async def retrieve(*_args, **_kwargs):
@@ -258,13 +259,26 @@ async def test_actual_api_production_identity_stage_keeps_registry_rules_and_pri
 
     async def review(messages):
         data = json.loads(messages[-1]["content"])
-        if set(data) == {"query", "public_tasks"}:
-            return json.dumps(dict(scopes=[dict(task_id=TASK, objects=["榆湾续办"])]))
+        if set(data) - {"scope_policy", "reference_context"} == {"query", "public_tasks"}:
+            return open_scope_response(messages, [dict(task_id=TASK, objects=["榆湾续办"])])
         if set(data) == {"query", "public_tasks", "object_scopes"}:
-            return json.dumps(dict(tasks=[dict(task_id=TASK, aspects=[dict(object_id="query-object:0", query_quote=field) for field in ["费用", "受理日", "原件", "例外"]])]))
+            return json.dumps(
+                dict(
+                    tasks=[
+                        dict(
+                            task_id=TASK,
+                            aspects=[
+                                dict(object_id="query-object:0", query_quote=field)
+                                for field in ["费用", "受理日", "原件", "例外"]
+                            ],
+                        )
+                    ]
+                )
+            )
         if "identity_review" not in data:
             return json.dumps(identity())
-        return json.dumps(
+        return literal_span_response(
+            data,
             dict(
                 decisions=[
                     dict(source_id="doc_1", task_ids=[], object_evidence=[]),
@@ -276,11 +290,21 @@ async def test_actual_api_production_identity_stage_keeps_registry_rules_and_pri
                         ],
                     ),
                 ]
-            )
+            ),
         )
 
     async def facts(_messages):
-        return json.dumps(dict(assessments=[dict(aspect_id=f"fact-aspect:{i}", evidence=[dict(source_id="doc_2", source_quote=RULE, assertion="affirmative")]) for i in range(4)]))
+        return json.dumps(
+            dict(
+                assessments=[
+                    dict(
+                        aspect_id=f"fact-aspect:{i}",
+                        evidence=[dict(source_id="doc_2", source_quote=RULE, assertion="affirmative")],
+                    )
+                    for i in range(4)
+                ]
+            )
+        )
 
     async def model(**kwargs):
         wire = unescape(kwargs["messages"][-1]["content"])
@@ -291,6 +315,7 @@ async def test_actual_api_production_identity_stage_keeps_registry_rules_and_pri
     monkeypatch.setattr(retrieval_query_plan, "plan_retrieval", planner)
     monkeypatch.setattr(intent_detector, "needs_rag", lambda _: (True, "unit", None))
     monkeypatch.setattr(generate, "_retrieve_rag_bundle", retrieve)
+    install_public_source_reader(monkeypatch, generate, bundle())
     from knowledge import public_fact_coverage
 
     monkeypatch.setattr(public_fact_coverage, "_review_facts", facts)

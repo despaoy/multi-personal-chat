@@ -45,7 +45,8 @@ def test_unknown_query_remains_unchanged(tmp_path):
 
 
 def test_configured_domain_aliases_preserve_identity_subjects():
-    from knowledge.entity_scope import explicit_identity_subject
+    from experiments.query_scope import explicit_identity_subject
+
     from knowledge.retrieval_core.registry import get_default_registry
 
     config = get_default_registry().require('tsukiyashiro_kisaki')

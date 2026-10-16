@@ -22,6 +22,8 @@ from inference.request_context import get_request_context
 from knowledge.grounded_answer.cache import AnswerCache
 from knowledge.grounded_answer.service import GroundedAnswerService
 
+pytestmark = pytest.mark.usefixtures("literal_grounded_query")
+
 SOURCE = "合成原作资料：虚构档案馆周二09:00开门、17:00闭馆；暴雨暂停开放。这是完整给定资料，不涉及真实用户。"
 QUESTION = "依据给定档案馆资料说明周二开放时间，并保留暴雨例外。"
 ANSWER = "周二09:00开门、17:00闭馆；暴雨暂停开放。"

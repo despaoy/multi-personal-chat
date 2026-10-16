@@ -21,7 +21,7 @@ from .models import AnswerMode, EvidencePacket
 
 logger = logging.getLogger(__name__)
 
-GROUNDED_PROMPT_VERSION = "grounded-answer-v5"
+GROUNDED_PROMPT_VERSION = "grounded-answer-v6"
 
 # 复用项目既有全局安全边界（与聊天链路同源，避免两套规则漂移）
 from inference.prompt_policy import (  # noqa: E402

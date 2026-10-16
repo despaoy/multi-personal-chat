@@ -2,7 +2,7 @@
 
 from types import SimpleNamespace
 
-from knowledge.entity_scope import identity_evidence_subject
+from experiments.query_scope import identity_evidence_subject
 from knowledge.multiscale_rag.service import rerank_with_title_frames
 from knowledge.relation_scope import relation_endpoints
 

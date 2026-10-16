@@ -6,6 +6,7 @@ import pytest
 from knowledge.multiscale_rag import service
 from knowledge.retrieval_core.documents import SourceReference
 
+pytestmark = pytest.mark.usefixtures("literal_grounded_query")
 
 def make_service(monkeypatch, evidence_texts):
     source = SourceReference('test.txt', 1, 24)

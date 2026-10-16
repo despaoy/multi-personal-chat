@@ -6,6 +6,7 @@ from dataclasses import replace
 from types import SimpleNamespace
 
 import pytest
+from scope_fixtures import open_scope_response
 
 from inference.generation_request import GenerationRequest, RetrievalResult, build_generation_request
 from knowledge import public_domains
@@ -35,20 +36,17 @@ async def make_plan(config, *, unresolved=False):
 
     async def scope(messages):
         assert json.loads(messages[-1]["content"])["query"] == QUERY
-        return json.dumps(
-            dict(
-                scopes=[
+        return open_scope_response(messages, [
                     dict(task_id=0, objects=[] if unresolved else ["叶澄岚", "杜木汐"]),
                     dict(task_id=1, objects=["澄岚展期"]),
-                ]
-            )
-        )
+                ])
 
-    binding = await resolve_question_binding(deps, QUERY, window_tokens=65536, reviewer=scope)
+    binding = await resolve_question_binding(deps, QUERY, window_tokens=65536, reviewer=scope, with_retrieval_scope=True)
     return domain_plan(binding, config), deps
 
 
-def curated(query, *, top_k, object_names, domain_id):
+def curated(query, *, top_k, object_names, domain_id, query_scope):
+    assert query_scope.query == query and query_scope.domain_id == domain_id
     assert query == QUERY and object_names == ("叶澄岚", "杜木汐")
     assert domain_id == "fictional_curated"
     return dict(
@@ -356,10 +354,10 @@ async def test_actual_chat_branch_failure_stops_review_and_answer(config, monkey
         tasks = payload["public_tasks"]
         assert len(tasks) == 2 and tasks[0]["text"] == "核对叶澄岚与杜木汐的原作关系，保留非血缘限定。"
         scopes.append(payload)
-        return json.dumps(dict(scopes=[
+        return open_scope_response(messages, [
             dict(task_id=tasks[0]["id"], objects=["叶澄岚", "杜木汐"]),
             dict(task_id=tasks[1]["id"], objects=["澄岚展期"]),
-        ]))
+        ])
 
     def unavailable(*args, **kwargs):
         assert args[0] == QUERY

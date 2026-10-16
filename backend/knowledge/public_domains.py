@@ -75,7 +75,9 @@ def retrieve_curated_scope(plan, query, top_k, *, curated):
     if plan["binding"]["input"]["query"] not in query:
         raise ValueError("Curated retrieval discarded the complete bound question")
     names = tuple(obj["query_text"] for obj in plan["objects"] if obj["authority"] == "curated_character")
-    bundle = curated(query, top_k=top_k, domain_id=plan["domain_id"], object_names=names or None)
+    from knowledge.retrieval_scope import scope_for_plan
+
+    bundle = curated(query, top_k=top_k, domain_id=plan["domain_id"], object_names=names or None, query_scope=scope_for_plan(plan, query))
     if bundle is None:
         raise RuntimeError("Requested character knowledge domain is unavailable (curated_character)")
     if not isinstance(bundle, dict):

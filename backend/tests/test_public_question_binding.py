@@ -5,6 +5,7 @@ import json
 from types import SimpleNamespace
 
 import pytest
+from scope_fixtures import open_scope_response
 
 from knowledge.public_domains import all_bound_objects_generic, domain_plan
 from knowledge.public_question_binding import (
@@ -29,11 +30,11 @@ async def binding(name="青妃集市展期", query=QUERY):
     async def reviewer(messages):
         seen.append(messages)
         payload = json.loads(messages[-1]["content"])
-        assert payload == dict(query=query, public_tasks=[dict(id=1, text=dependencies(query).segments[1])])
-        assert set(payload) == {"query", "public_tasks"}
-        return json.dumps(dict(scopes=[dict(task_id=1, objects=[name] if name else [])]))
+        assert payload == dict(query=query, public_tasks=[dict(id=1, text=dependencies(query).segments[1])], scope_policy=dict(allow_independent_identity=False, include_unresolved=False))
+        assert set(payload) == {"query", "public_tasks", "scope_policy"}
+        return open_scope_response(messages, [dict(task_id=1, objects=[name] if name else [])])
 
-    receipt = await resolve_question_binding(dependencies(query), query, window_tokens=65536, reviewer=reviewer)
+    receipt = await resolve_question_binding(dependencies(query), query, window_tokens=65536, reviewer=reviewer, with_retrieval_scope=True)
     assert len(seen) == 1
     return receipt
 
@@ -85,7 +86,7 @@ async def test_complete_over_capacity_input_stops_before_call_without_truncating
         pytest.fail("No clipped question or paid request is allowed")
 
     with pytest.raises(QuestionBindingCapacityError):
-        await resolve_question_binding(dependencies(), QUERY, window_tokens=128, reviewer=forbidden)
+        await resolve_question_binding(dependencies(), QUERY, window_tokens=128, reviewer=forbidden, with_retrieval_scope=True)
 
 
 async def test_cancellation_propagates_without_invented_binding():
@@ -95,7 +96,7 @@ async def test_cancellation_propagates_without_invented_binding():
         raise asyncio.CancelledError()
 
     with pytest.raises(asyncio.CancelledError):
-        await resolve_question_binding(dependencies(), QUERY, window_tokens=65536, reviewer=cancelled)
+        await resolve_question_binding(dependencies(), QUERY, window_tokens=65536, reviewer=cancelled, with_retrieval_scope=True)
 
 
 async def test_generic_route_reaches_fresh_authority_and_full_body(monkeypatch):
@@ -199,11 +200,10 @@ async def test_evidence_review_reuses_exact_pre_retrieval_binding_without_second
         calls.append("scope")
         from test_public_object_scope import scopes
 
-        return json.dumps(scopes())
+        return open_scope_response(messages, scopes()["scopes"])
 
     receipt = await resolve_question_binding(
-        dep(), q, window_tokens=65536, public_obligations=obligations(), reviewer=scope
-    )
+        dep(), q, window_tokens=65536, public_obligations=obligations(), reviewer=scope, with_retrieval_scope=True)
 
     async def source(messages):
         calls.append("source")
@@ -244,8 +244,8 @@ async def test_complete_object_views_cannot_be_trimmed_or_rebound():
 
     async def scope(messages):
         assert json.loads(messages[-1]["content"])["query"] == query
-        return json.dumps(dict(scopes=[dict(task_id=0, objects=names)]))
+        return open_scope_response(messages, [dict(task_id=0, objects=names)])
 
-    complete = await resolve_question_binding(deps, query, window_tokens=65536, reviewer=scope)
+    complete = await resolve_question_binding(deps, query, window_tokens=65536, reviewer=scope, with_retrieval_scope=True)
     with pytest.raises(QuestionBindingCapacityError, match="Complete object view set"):
         bound_object_search_views(complete, query)

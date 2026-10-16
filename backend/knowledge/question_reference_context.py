@@ -65,11 +65,12 @@ def binding_payload_for_tasks(binding, query, tasks):
     """Keep independently checked current obligations beside frozen references."""
     payload = dict(query=query, public_tasks=tasks)
     original = binding["input"]
-    if not isinstance(original, dict) or set(original) not in (
-        {"query", "public_tasks"},
-        {"query", "public_tasks", "reference_context"},
-    ):
+    if not isinstance(original, dict) or set(original) - {"reference_context", "scope_policy"} != {"query", "public_tasks"}:
         raise ValueError("Question binding has unexpected input fields")
+    if "scope_policy" in original:
+        from knowledge.retrieval_scope import validate_scope_policy
+
+        payload["scope_policy"] = dict(validate_scope_policy(original["scope_policy"]))
     if "reference_context" in original:
         payload["reference_context"] = deepcopy(validate_reference_context(original["reference_context"]))
     return payload

@@ -9,6 +9,7 @@ from threading import RLock
 from types import SimpleNamespace
 
 import pytest
+from scope_fixtures import open_scope_response
 
 from knowledge.public_domains import domain_plan, retrieve_domains
 from knowledge.public_question_binding import resolve_question_binding
@@ -35,18 +36,23 @@ async def binding(*, empty=False):
 
     async def resolver(messages):
         payload = json.loads(messages[-1]["content"])
-        assert payload == dict(query=QUERY, public_tasks=[dict(id=i, text=deps.segments[i]) for i in range(3)])
-        return json.dumps(
-            dict(
-                scopes=[
-                    dict(task_id=0, objects=[] if empty else ["青妃集市展期"]),
-                    dict(task_id=1, objects=[] if empty else ["晴汀续领"]),
-                    dict(task_id=2, objects=[]),
-                ]
-            )
+        assert payload == dict(
+            query=QUERY,
+            public_tasks=[dict(id=i, text=deps.segments[i]) for i in range(3)],
+            scope_policy=dict(allow_independent_identity=False, include_unresolved=False),
+        )
+        return open_scope_response(
+            messages,
+            [
+                dict(task_id=0, objects=[] if empty else ["青妃集市展期"]),
+                dict(task_id=1, objects=[] if empty else ["晴汀续领"]),
+                dict(task_id=2, objects=[]),
+            ],
         )
 
-    return await resolve_question_binding(deps, QUERY, window_tokens=65536, reviewer=resolver)
+    return await resolve_question_binding(
+        deps, QUERY, window_tokens=65536, reviewer=resolver, with_retrieval_scope=True
+    )
 
 
 @pytest.mark.parametrize("curated_error", [False, True])
@@ -129,7 +135,8 @@ async def test_unresolved_branch_cannot_receive_a_business_object_grant():
     seen = []
 
     def curated(query, **kwargs):
-        assert query == QUERY and kwargs["object_names"] == ()
+        assert query == QUERY and kwargs["object_names"] is None
+        assert kwargs["query_scope"].rules == ((2, "open", ()),)
         seen.append("curated")
         return dict(abstained=True, results=[])
 

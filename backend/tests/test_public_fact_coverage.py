@@ -7,6 +7,7 @@ from dataclasses import replace
 from html import unescape
 
 import pytest
+from scope_fixtures import open_scope_response
 from tests.test_public_task_evidence_review import PRIVATE, request
 
 from inference.generation_request import build_generation_request
@@ -122,7 +123,7 @@ async def run(mode="full", *, split_original=False, scope_failure=False, bad_quo
     async def object_review(messages):
         data = json.loads(messages[-1]["content"])
         assert set(data) == {"query", "public_tasks"}
-        return json.dumps(dict(scopes=[dict(task_id=TASK, objects=["柳港续租"])]))
+        return open_scope_response(messages, [dict(task_id=TASK, objects=["柳港续租"])])
 
     async def fact_scope(messages):
         data = json.loads(messages[-1]["content"])
@@ -348,7 +349,7 @@ async def alias_plan():
     from tests import test_public_identity_dependencies as identity
 
     async def object_scope(_messages):
-        return json.dumps(dict(scopes=[dict(task_id=identity.TASK, objects=["榆湾续办"])]))
+        return open_scope_response(_messages, [dict(task_id=identity.TASK, objects=["榆湾续办"])])
 
     async def fact_scope(_messages):
         return json.dumps(

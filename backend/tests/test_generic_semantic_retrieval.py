@@ -13,6 +13,7 @@ import numpy as np
 import pytest
 import test_history_question_binding as history_fixture
 from fastapi import HTTPException
+from scope_fixtures import open_scope_response
 
 from api import generate, knowledge
 from db.database import SQLiteDB
@@ -60,7 +61,8 @@ async def arrange_generic_plan(tmp_path, monkeypatch):
             vectors.append(item)
         return np.asarray(vectors, dtype=np.float32)
 
-    monkeypatch.setattr(vector, "_model", SimpleNamespace(encode=encode))
+    monkeypatch.setattr(vector, "_model", object())
+    monkeypatch.setattr(vector_db, "sentence_transformer_embeddings", lambda _model, texts, **options: encode(texts, **options))
     monkeypatch.setattr(vector_db, "get_vector_db", lambda: vector)
     monkeypatch.setattr(rag_helper, "get_vector_db", lambda: vector)
     assert knowledge._ensure_vector_index() is True
@@ -149,7 +151,7 @@ async def test_generic_index_failure_still_stops_api_with_503_before_answer(tmp_
                 assert payload["reference_context"]["history"] == history_fixture.HISTORY
                 task, = payload["public_tasks"]
                 assert task["text"] == QUERY
-                return json.dumps({"scopes": [{"task_id": task["id"], "objects": list(NAMES)}]})
+                return open_scope_response(messages, [{"task_id": task["id"], "objects": list(NAMES)}])
             return await actual_binding(*args, **kwargs, reviewer=controlled)
 
         monkeypatch.setattr(public_question_binding, "resolve_question_binding", resolve)

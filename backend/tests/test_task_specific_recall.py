@@ -7,6 +7,7 @@ from unittest.mock import Mock
 
 import numpy as np
 import pytest
+from scope_fixtures import open_scope_response
 
 from api import generate, knowledge
 from db.database import SQLiteDB
@@ -38,7 +39,7 @@ async def arrange(tmp_path, monkeypatch):
     async def review(messages):
         payload = json.loads(messages[-1]["content"])
         assert payload["query"] == QUERY and len(payload["public_tasks"]) == 2
-        return json.dumps(dict(scopes=[dict(task_id=task["id"], objects=[NAME]) for task in payload["public_tasks"]]))
+        return open_scope_response(messages, [dict(task_id=task["id"], objects=[NAME]) for task in payload["public_tasks"]])
 
     binding = await resolve_question_binding(dependencies, QUERY, window_tokens=65536,
         public_obligations=obligations, reviewer=review)
@@ -72,7 +73,8 @@ async def arrange(tmp_path, monkeypatch):
             values.append(item)
         return np.asarray(values, dtype=np.float32)
 
-    monkeypatch.setattr(vector, "_model", SimpleNamespace(encode=encode))
+    monkeypatch.setattr(vector, "_model", object())
+    monkeypatch.setattr(vector_db, "sentence_transformer_embeddings", lambda _model, texts, **options: encode(texts, **options))
     monkeypatch.setattr(vector_db, "get_vector_db", lambda: vector)
     monkeypatch.setattr(rag_helper, "get_vector_db", lambda: vector)
     assert knowledge._ensure_vector_index()
@@ -151,7 +153,7 @@ async def binding_for(query):
 
     async def review(messages):
         payload = json.loads(messages[-1]["content"])
-        return json.dumps(dict(scopes=[dict(task_id=task["id"], objects=[NAME]) for task in payload["public_tasks"]]))
+        return open_scope_response(messages, [dict(task_id=task["id"], objects=[NAME]) for task in payload["public_tasks"]])
 
     return await resolve_question_binding(dependencies, query, window_tokens=65536, reviewer=review)
 

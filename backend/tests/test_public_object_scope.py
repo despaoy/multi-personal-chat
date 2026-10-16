@@ -7,6 +7,7 @@ from dataclasses import replace
 from html import unescape
 
 import pytest
+from scope_fixtures import install_public_source_reader, literal_span_response, open_scope_response
 from tests.test_public_task_evidence_review import PRIVATE, bundle, request
 
 from inference.generation_request import build_generation_request
@@ -157,7 +158,6 @@ async def test_untrusted_scope_output_never_invents_object_or_drops_task(defect)
     assert audit["calls"] == ["scope"]
 
 
-
 @pytest.mark.asyncio
 @pytest.mark.parametrize("defect", ["scope_binding", "accepted_links", "quote", "input_digest", "non_list_tasks"])
 async def test_canonical_generation_rechecks_object_proof_receipt(defect):
@@ -232,7 +232,7 @@ async def test_actual_api_uses_verified_object_links_and_retains_private_answer(
     await positive()
     calls = []
 
-    async def planner(_query):
+    async def planner(_query, **_context):
         return RetrievalQueryPlan(status="applied", dependencies=dependencies(), public_obligations=obligations())
 
     async def retrieve(*_args, **_kwargs):
@@ -240,14 +240,46 @@ async def test_actual_api_uses_verified_object_links_and_retains_private_answer(
 
     async def review(messages):
         payload = json.loads(messages[-1]["content"])
-        if set(payload) == {"query", "public_tasks"}:
+        if set(payload) - {"scope_policy", "reference_context"} == {"query", "public_tasks"}:
             calls.append("scope")
-            return json.dumps(scopes())
+            return open_scope_response(messages, scopes()["scopes"])
+        if set(payload) == {"query", "public_tasks", "object_scopes"}:
+            calls.append("fact_scope")
+            return json.dumps(
+                dict(
+                    tasks=[
+                        dict(task_id="public:1:0", aspects=[dict(object_id="query-object:0", query_quote="费用")]),
+                        dict(task_id="public:1:1", aspects=[dict(object_id="query-object:1", query_quote="时长")]),
+                    ]
+                )
+            )
+        if "source_span_catalog" not in payload:
+            calls.append("identity")
+            return json.dumps(
+                dict(
+                    sources=[dict(source_id=row["source_id"], purpose="rules") for row in payload["sources"]],
+                    relations=[],
+                )
+            )
         calls.append("source")
         value = source_reply()
         # Reproduce the actual faulty proposal: one source proposes both objects.
         value["decisions"][0]["task_ids"].append("public:1:1")
-        return json.dumps(value)
+        return literal_span_response(payload, value)
+
+    async def facts(_messages):
+        calls.append("fact_evidence")
+        return json.dumps(
+            dict(
+                assessments=[
+                    dict(
+                        aspect_id="fact-aspect:0",
+                        evidence=[dict(source_id="doc_1", source_quote="青桥延期费用为31元", assertion="affirmative")],
+                    ),
+                    dict(aspect_id="fact-aspect:1", evidence=[]),
+                ]
+            )
+        )
 
     async def model(**kwargs):
         assert kwargs["max_tokens"] == 2048
@@ -259,6 +291,10 @@ async def test_actual_api_uses_verified_object_links_and_retains_private_answer(
     monkeypatch.setattr(retrieval_query_plan, "plan_retrieval", planner)
     monkeypatch.setattr(intent_detector, "needs_rag", lambda _: (True, "unit", None))
     monkeypatch.setattr(generate, "_retrieve_rag_bundle", retrieve)
+    install_public_source_reader(monkeypatch, generate, bundle())
+    from knowledge import public_fact_coverage
+
+    monkeypatch.setattr(public_fact_coverage, "_review_facts", facts)
     monkeypatch.setattr(public_task_evidence, "_review", review)
     monkeypatch.setattr(generate, "_get_system_prompt", lambda _: "人物规则")
     context = CompiledCharacterContext("", "", PRIVATE, used_memory_ids=("fiction-private",))
@@ -270,7 +306,12 @@ async def test_actual_api_uses_verified_object_links_and_retains_private_answer(
         runtime_config=dict(maxTokens=2048, useKnowledgeBase=True),
         model_generate=model,
     )
-    assert calls == ["scope", "source"] and used and meta["abstained"] and meta["answerMode"] == "partial_answer"
+    assert (
+        calls == ["scope", "fact_scope", "source", "fact_evidence"]
+        and used
+        and meta["abstained"]
+        and meta["answerMode"] == "partial_answer"
+    )
     assert "partial_public_evidence" in meta["warnings"]
 
 
@@ -290,17 +331,24 @@ async def test_complete_object_capacity_is_not_invalid_provider_output():
 
     async def resolve(_messages):
         calls.append("scope")
-        return json.dumps(
-            dict(scopes=[dict(task_id=parts[i]["index"], objects=names[i * 8 : (i + 1) * 8]) for i in range(9)])
+        return open_scope_response(
+            _messages, [dict(task_id=parts[i]["index"], objects=names[i * 8 : (i + 1) * 8]) for i in range(9)]
         )
 
     async def forbidden(_messages):
         pytest.fail("A graph capacity stop must not send incomplete source input")
 
     from knowledge.public_object_scope import ObjectScopeCapacityError
+
     with pytest.raises(ObjectScopeCapacityError):
         await review_public_candidates(
-            bundle(), dep, query, window_tokens=65536, public_obligations=parts, reviewer=forbidden, scope_reviewer=resolve
+            bundle(),
+            dep,
+            query,
+            window_tokens=65536,
+            public_obligations=parts,
+            reviewer=forbidden,
+            scope_reviewer=resolve,
         )
     assert calls == ["scope"]
     assert len(names) == 65 and names[-1] in query

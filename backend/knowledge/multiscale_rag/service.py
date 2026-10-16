@@ -8,13 +8,12 @@ from dataclasses import replace
 from typing import TYPE_CHECKING, Any
 
 from infra.environment import read_bool
-from knowledge.entity_scope import explicit_identity_subject, identity_evidence_subject, in_identity_scope
 from knowledge.evidence_packet import render_card_evidence
 from knowledge.query_tasks import requests_source_text
-from knowledge.relation_scope import explicit_relation_pair, in_relation_scope
 from knowledge.retrieval_core.query import QueryAnalysis, QueryAnalyzer
 from knowledge.retrieval_core.rerank import PipelineReranker
 from knowledge.retrieval_core.retrieval import HybridRetriever, RetrievalCandidate
+from knowledge.retrieval_scope import QueryScope
 
 from .visibility import KnowledgeBoundary, visible_to
 
@@ -106,9 +105,12 @@ class RoutedMultiScaleService:
         knowledge_boundary: KnowledgeBoundary | None = None,
         object_names: tuple[str, ...] | None = None,
         analysis: QueryAnalysis | None = None,
+        query_scope: QueryScope | None = None,
     ) -> dict[str, Any]:
         if isinstance(top_k, bool) or not isinstance(top_k, int) or top_k < 1:
             raise ValueError("top_k must be a positive integer")
+        if query_scope is not None and (query_scope.query != query or query_scope.domain_id != self.config.domain_id):
+            raise ValueError("Semantic query scope belongs to another request or domain")
         if analysis is None:
             analysis = self.analyzer.analyze(query, domain_id=self.config.domain_id)
         elif analysis.original_query != query or analysis.matched_domains != [self.config.domain_id]:
@@ -130,12 +132,10 @@ class RoutedMultiScaleService:
             recall_k = max(recall_k, retriever.index.count())
         recalled = retriever.search(analysis, top_k=recall_k, recall_k=recall_k, mode="hybrid")
         recalled = [candidate for candidate in recalled if visible_to(candidate.document, knowledge_boundary)]
-        pair = explicit_relation_pair(analysis)
         before_scope = len(recalled)
-        recalled = [candidate for candidate in recalled if in_relation_scope(candidate.document, pair)]
-        identity_subject = identity_evidence_subject(analysis)
-        before_identity_scope = len(recalled)
-        recalled = [candidate for candidate in recalled if in_identity_scope(candidate.document, identity_subject)]
+        if query_scope is not None:
+            recalled = [candidate for candidate in recalled if query_scope.allows(candidate.document)]
+        identity_subject = query_scope.identity_subject if query_scope is not None else ""
         selected = rerank_with_title_frames(
             analysis,
             recalled,
@@ -195,7 +195,7 @@ class RoutedMultiScaleService:
                 if doc.document_type == "relation"
                 and wanted <= set(doc.entities)
                 and visible_to(doc, knowledge_boundary)
-                and in_relation_scope(doc, pair)
+                and (query_scope is None or query_scope.allows(doc))
             ]
             relation_docs.sort(
                 key=lambda doc: (
@@ -267,21 +267,11 @@ class RoutedMultiScaleService:
             "curated_source_catalog": source_catalog,
             "retrieval_strategy": "multi_scale_character",
             "candidate_types": sorted(RETRIEVAL_TYPES),
-            "relation_scope": {"pair": sorted(pair), "excluded_candidates": before_scope - before_identity_scope},
-            "identity_scope": {
-                "subject": identity_subject,
-                "excluded_candidates": before_identity_scope - len(recalled),
-            },
-            # Bind the dependency decision to the actual retrieval input, not
-            # an entity label that might have been resolved from a follow-up.
+            "query_scope": query_scope.describe(before_scope - len(recalled)) if query_scope is not None else dict(status="unscoped", rules=[], excluded_candidates=0),
             "identity_task": {"query": query, "subject": identity_subject}
-            if explicit_identity_subject(analysis)
-            else {},
-            "identity_subtask": (
-                {"query": query, "subject": identity_subject}
-                if identity_subject and not explicit_identity_subject(analysis)
-                else {}
-            ),
+            if query_scope is not None and query_scope.independent_identity else {},
+            "identity_subtask": {"query": query, "subject": identity_subject}
+            if identity_subject and not query_scope.independent_identity else {},
             "results": [candidate.to_dict() for candidate in selected],
             "relation_timeline": timeline,
             "context_text": "\n\n".join(admitted),

@@ -244,6 +244,8 @@ class GroundedAnswerService:
     ) -> AsyncIterator[AnswerStreamEvent]:
         if history is not None:
             validate_history(history)
+        if self._index_version_resolver is not None:
+            self._index_version_resolver(domain_id)
         timings = AnswerTimings()
         start = time.perf_counter()
 

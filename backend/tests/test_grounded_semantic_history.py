@@ -6,6 +6,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
 import pytest
+from scope_fixtures import open_scope_response
 
 from inference.context_budget import ReviewContextBudget
 from knowledge import dialogue_query, public_question_binding, retrieval_query_plan
@@ -23,7 +24,7 @@ HISTORY = [
 pytestmark = pytest.mark.usefixtures("no_live_context_review")
 
 
-def controls(monkeypatch, query, history, *, names=None, kind="public_knowledge", corrupt=False):
+def controls(monkeypatch, query, history, *, names=None, kind="public_knowledge", corrupt=False, groups=None):
     names = [NAME] if names is None else names
     budget = SimpleNamespace(window_tokens=65536, review=ReviewContextBudget(65536))
     monkeypatch.setattr(dialogue_query, "get_provider_context_budget", lambda: budget)
@@ -34,10 +35,11 @@ def controls(monkeypatch, query, history, *, names=None, kind="public_knowledge"
         assert payload["query"] == query and payload.get("history", []) == history
         exchanges.append("plan")
         ids = list(range(len(query_segments(query))))
+        selected = groups or {key: ids if key == kind else [] for key in KINDS}
         return json.dumps(
             dict(
-                dependencies={key: ids if key == kind else [] for key in KINDS},
-                public_partitions=[dict(segment_id=i, cuts=[]) for i in ids] if kind == "public_knowledge" else [],
+                dependencies=selected,
+                public_partitions=[dict(segment_id=i, cuts=[]) for i in selected["public_knowledge"]],
             )
         )
 
@@ -45,7 +47,7 @@ def controls(monkeypatch, query, history, *, names=None, kind="public_knowledge"
         payload = json.loads(messages[-1]["content"])
         assert payload["query"] == query and payload.get("reference_context", {}).get("history", []) == history
         exchanges.append("binding")
-        return json.dumps(dict(scopes=[dict(task_id=task["id"], objects=names) for task in payload["public_tasks"]]))
+        return open_scope_response(messages, [dict(task_id=task["id"], objects=names) for task in payload["public_tasks"]])
 
     async def plan(*args, **kwargs):
         return await retrieval_query_plan.plan_retrieval(*args, reviewer=planning, **kwargs)
@@ -95,11 +97,13 @@ async def test_empty_semantic_object_set_keeps_complete_literal_question(monkeyp
     assert (await dialogue_query.resolve_retrieval_query(query, HISTORY)).query == query
 
 
-async def test_explicit_domain_without_history_needs_no_semantic_call(monkeypatch):
-    review = AsyncMock(side_effect=AssertionError("A standalone literal query needs no history review"))
-    monkeypatch.setattr(dialogue_query, "plan_retrieval", review)
-    assert (await dialogue_query.resolve_retrieval_query("  完整当前问题。  ", None, domain_id="selected")).query == "  完整当前问题。  "
-    review.assert_not_awaited()
+async def test_explicit_domain_without_history_retains_required_semantic_scope(monkeypatch):
+    query = "  完整当前问题。  "
+    exchanges = controls(monkeypatch, query, [], names=[], groups=dict(public_knowledge=[0], control=[1], private_memory=[], current_input=[], unresolved_source=[]))
+    result = await dialogue_query.resolve_retrieval_query(query, None, domain_id="selected")
+    assert result.query == query
+    assert result.question_binding["input"]["scope_policy"] == dict(allow_independent_identity=True, include_unresolved=False)
+    assert exchanges == ["plan", "binding"]
 
 
 @pytest.mark.parametrize("failure", ["planner", "binding", "changed_proof", "assistant_only"])

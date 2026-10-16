@@ -6,6 +6,7 @@ from dataclasses import replace
 from types import SimpleNamespace
 
 import pytest
+from scope_fixtures import open_scope_response
 
 from inference.context_budget import ReviewContextBudget
 from knowledge.public_object_scope import parse_object_scopes
@@ -42,7 +43,7 @@ async def binding():
         assert payload["query"] == QUERY
         assert payload["reference_context"]["history"] == HISTORY
         assert payload["public_tasks"] == [{"id": 0, "text": QUERY}]
-        return json.dumps({"scopes": [{"task_id": 0, "objects": ["竹湾登记", "枫台续期"]}]})
+        return open_scope_response(messages, [{"task_id": 0, "objects": ["竹湾登记", "枫台续期"]}])
 
     return await resolve_question_binding(
         dependencies(),

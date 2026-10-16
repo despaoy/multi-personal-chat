@@ -165,10 +165,9 @@ def test_unproven_single_character_never_gains_domain_from_question_words(tmp_pa
 
 
 @pytest.mark.parametrize("transport", ["normal", "stream"])
-async def test_explicit_domain_keeps_literal_alias_map_without_semantic_review(tmp_path, monkeypatch, transport):
+async def test_explicit_domain_keeps_alias_map_and_its_required_semantic_scope(tmp_path, monkeypatch, transport):
     rig = setup_answer_scope(tmp_path, monkeypatch)
-    review = AsyncMock(side_effect=AssertionError("The caller explicitly chose its domain"))
-    monkeypatch.setattr(dialogue_query, "plan_retrieval", review)
+    exchanges = controls(monkeypatch, QUERY, [], names=["岚"])
     service = build_default_grounded_answer_service()
     service.cache = AnswerCache(ttl_seconds=0)
 
@@ -186,7 +185,7 @@ async def test_explicit_domain_keeps_literal_alias_map_without_semantic_review(t
             async for event in service.answer_stream(QUERY, domain_id=rig.config.domain_id, top_k=1, generate=model)
         ]
         assert events[-1].data["model_invoked"] and not events[-1].data["abstained"]
-    review.assert_not_awaited()
+    assert exchanges == ["plan", "binding"]
     model.assert_awaited_once()
 
 

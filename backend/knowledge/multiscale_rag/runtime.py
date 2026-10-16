@@ -211,6 +211,7 @@ class MultiScaleRagRuntime:
         *,
         knowledge_boundary: KnowledgeBoundary | None = None,
         object_names: tuple[str, ...] | None = None,
+        query_scope=None,
     ) -> dict[str, Any] | None:
         if not query.strip():
             return None
@@ -226,6 +227,8 @@ class MultiScaleRagRuntime:
             return None
         self._ensure_loaded()
         scoped = {"object_names": object_names} if object_names is not None else {}
+        if query_scope is not None:
+            scoped["query_scope"] = query_scope
         if knowledge_boundary is None:
             result = self._service.retrieve(query, top_k=top_k, analysis=gate, **scoped)
         else:

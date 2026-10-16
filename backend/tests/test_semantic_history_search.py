@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 from fastapi import HTTPException
+from scope_fixtures import open_scope_response
 
 from db.schemas import MessageRequest
 from inference.context_budget import ReviewContextBudget
@@ -46,7 +47,7 @@ def install(monkeypatch, tmp_path, query, history, *, resolved=True, corrupt=Non
         payload = json.loads(messages[-1]["content"])
         assert payload["query"] == query and payload["reference_context"]["history"] == history
         observed.append("binding")
-        return json.dumps(dict(scopes=[dict(task_id=task["id"], objects=[NAME] if resolved else []) for task in payload["public_tasks"]]))
+        return open_scope_response(messages, [dict(task_id=task["id"], objects=[NAME] if resolved else []) for task in payload["public_tasks"]])
 
     async def planner(message, **kwargs):
         return await actual_plan(message, reviewer=plan_review, **kwargs)

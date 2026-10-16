@@ -8,6 +8,7 @@ from types import SimpleNamespace
 
 import pytest
 from repositories.character_memory import DatabaseCharacterMemoryRepository
+from scope_fixtures import open_scope_response
 
 from character.models import CompiledCharacterContext, UserScope
 from character.source_memory import SourceMemoryService, attach_sources
@@ -127,9 +128,9 @@ async def public_retrieval(setup, lengths):
 
     async def resolver(messages):
         assert json.loads(messages[-1]["content"])["query"] == QUERY
-        return json.dumps(dict(scopes=[dict(task_id=0, objects=["林澄澈", "白露川"])]))
+        return open_scope_response(messages, [dict(task_id=0, objects=["林澄澈", "白露川"])])
 
-    binding = await resolve_question_binding(deps, QUERY, window_tokens=65536, reviewer=resolver)
+    binding = await resolve_question_binding(deps, QUERY, window_tokens=65536, reviewer=resolver, with_retrieval_scope=True)
 
     async def reviewer(messages):
         payload = json.loads(messages[-1]["content"])

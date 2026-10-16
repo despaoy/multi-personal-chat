@@ -20,6 +20,8 @@ from inference.vllm_client import VLLMClient
 from infra.circuit_breaker import CircuitBreakerRegistry
 from knowledge.grounded_answer.service import GroundedAnswerService
 
+pytestmark = pytest.mark.usefixtures("literal_grounded_query")
+
 QUERY = "依据虚构青屿档案馆的完整资料，说明周二开放时间，并保留雨天例外和不开放的日期。"
 SOURCE = (
     "虚构青屿档案馆周二09:00至17:00开放，周一不开放。\n"

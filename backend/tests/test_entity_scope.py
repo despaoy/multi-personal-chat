@@ -1,8 +1,10 @@
 from types import SimpleNamespace
 
 import pytest
+from experiments.query_scope import explicit_identity_subject
 
-from knowledge.entity_scope import explicit_identity_subject, in_identity_scope
+from knowledge.entity_scope import in_identity_scope
+from knowledge.retrieval_scope import QueryScope
 
 
 @pytest.mark.parametrize('name', ['人物甲', '林远', 'Alex'])
@@ -85,9 +87,10 @@ def test_filter_runs_before_ranking_and_preserves_retrieval_diagnostics(monkeypa
         return recalled
 
     monkeypatch.setattr(service, 'rerank_with_title_frames', rank)
-    result = instance.retrieve(query)
-    assert result['identity_scope'] == {'subject': '林远', 'excluded_candidates': 1}
+    scope_mode = {"林远是谁？": "independent_identity", "我只想聊聊自己的感受，林远是谁？": "independent_identity", "先说我的专业，再告诉我林远是谁。": "identity"}[query]
+    result = instance.retrieve(query, query_scope=QueryScope("test", query, ((0, scope_mode, ("林远",)),)))
+    assert result['query_scope'] == dict(status='task_bound', rules=[dict(task_id=0, mode=scope_mode, objects=['林远'])], include_unresolved=False, excluded_candidates=1)
     assert result['identity_task'] == ({} if '我的专业' in query else {'query': query, 'subject': '林远'})
-    assert result['relation_scope']['excluded_candidates'] == 0
+    assert result['query_scope']['rules'][0]['mode'] in {'identity', 'independent_identity'}
     assert [c['id'] for c in result['citations']] == ['direct']
     assert '医生' not in result['context_text']

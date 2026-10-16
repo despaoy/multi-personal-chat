@@ -6,6 +6,7 @@ from dataclasses import replace
 from html import unescape
 
 import pytest
+from scope_fixtures import open_scope_response
 from tests.test_public_identity_dependencies import (
     BRIDGE,
     PRIVATE,
@@ -111,7 +112,7 @@ async def selected_review():
     calls = []
 
     async def resolve(messages):
-        return json.dumps(dict(scopes=[dict(task_id=TASK, objects=["榆湾续办"])]))
+        return open_scope_response(messages, [dict(task_id=TASK, objects=["榆湾续办"])])
 
     async def identify(messages):
         return json.dumps(identity())

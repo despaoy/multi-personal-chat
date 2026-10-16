@@ -6,7 +6,7 @@ import json
 
 from character.evidence_selector import InputBudgetError
 from inference.context_budget import CONTEXT_SAFETY_MARGIN_TOKENS, estimated_tokens
-from knowledge.public_object_scope import RESOLVE_INSTRUCTION, parse_object_scopes
+from knowledge.public_object_scope import parse_object_scopes, resolver_instruction
 
 
 class QuestionBindingCapacityError(ValueError):
@@ -28,7 +28,7 @@ class QuestionBindingReviewError(ValueError):
         self.diagnostic = dict(stage="object", input=messages, raw=raw if isinstance(raw, str) else None)
 
 
-def question_scope_input(dependencies, query, public_obligations=(), *, history=(), context_budget=None):
+def question_scope_input(dependencies, query, public_obligations=(), *, history=(), context_budget=None, with_retrieval_scope=False):
     if dependencies is None or "".join(dependencies.segments) != query:
         raise ValueError("Question binding changed the original query")
     from knowledge.public_obligations import validate_public_obligations
@@ -47,6 +47,12 @@ def question_scope_input(dependencies, query, public_obligations=(), *, history=
             else [dict(id=i, text=dependencies.segments[i]) for i in indices]
         ),
     )
+    if with_retrieval_scope:
+        groups = dict(dependencies.groups)
+        payload["scope_policy"] = dict(
+            allow_independent_identity=len(payload["public_tasks"]) == 1 and not any(groups[kind] for kind in ("private_memory", "current_input", "unresolved_source")),
+            include_unresolved=bool(groups["unresolved_source"]),
+        )
     if history:
         from knowledge.question_reference_context import build_reference_context
 
@@ -76,19 +82,19 @@ def validate_question_binding(binding, payload):
     if payload != binding_payload_for_tasks(binding, payload["query"], payload["public_tasks"]):
         raise ValueError("Question reference input changed")
     scopes = parse_object_scopes(binding["raw"], payload["query"], [task["id"] for task in payload["public_tasks"]],
-                                 reference_context=payload.get("reference_context"))
+                                 reference_context=payload.get("reference_context"), scope_policy=payload.get("scope_policy"))
     if scopes != binding["scopes"]:
         raise ValueError("Question binding changed the actual resolver response")
     return scopes
 
 
-async def resolve_question_binding(dependencies, query, *, window_tokens, public_obligations=(), history=(), context_budget=None, reviewer=None):
+async def resolve_question_binding(dependencies, query, *, window_tokens, public_obligations=(), history=(), context_budget=None, reviewer=None, with_retrieval_scope=False):
     try:
-        payload = question_scope_input(dependencies, query, public_obligations, history=history, context_budget=context_budget)
+        payload = question_scope_input(dependencies, query, public_obligations, history=history, context_budget=context_budget, with_retrieval_scope=with_retrieval_scope)
     except InputBudgetError as exc:
         raise QuestionBindingCapacityError("Complete question references cannot fit the resolver profile") from exc
     messages = [
-        dict(role="system", content=RESOLVE_INSTRUCTION),
+        dict(role="system", content=resolver_instruction(payload.get("scope_policy"))),
         dict(role="user", content=json.dumps(payload, ensure_ascii=False)),
     ]
     if sum(estimated_tokens(m["content"]) + 4 for m in messages) + 768 + CONTEXT_SAFETY_MARGIN_TOKENS > window_tokens:
@@ -103,7 +109,7 @@ async def resolve_question_binding(dependencies, query, *, window_tokens, public
         if not isinstance(raw, str):
             raise ValueError("Question resolver response must be text")
         scopes = parse_object_scopes(raw, query, [task["id"] for task in payload["public_tasks"]],
-                                     reference_context=payload.get("reference_context"))
+                                     reference_context=payload.get("reference_context"), scope_policy=payload.get("scope_policy"))
         return dict(input=payload, input_sha256=_digest(payload), raw=raw, scopes=scopes)
     except asyncio.TimeoutError as exc:
         raise QuestionBindingReviewError("timeout", messages, raw) from exc
@@ -113,11 +119,11 @@ async def resolve_question_binding(dependencies, query, *, window_tokens, public
         raise QuestionBindingReviewError("provider_error", messages, raw) from exc
 
 
-def failed_question_binding_review(error, dependencies, query, public_obligations=(), *, history=(), context_budget=None):
+def failed_question_binding_review(error, dependencies, query, public_obligations=(), *, history=(), context_budget=None, with_retrieval_scope=False):
     """Carry unavailable obligations and diagnostics, never resolver assertions."""
-    payload = question_scope_input(dependencies, query, public_obligations, history=history, context_budget=context_budget)
+    payload = question_scope_input(dependencies, query, public_obligations, history=history, context_budget=context_budget, with_retrieval_scope=with_retrieval_scope)
     expected = [
-        dict(role="system", content=RESOLVE_INSTRUCTION),
+        dict(role="system", content=resolver_instruction(payload.get("scope_policy"))),
         dict(role="user", content=json.dumps(payload, ensure_ascii=False)),
     ]
     if (

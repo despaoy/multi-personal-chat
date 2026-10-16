@@ -1,8 +1,10 @@
 from types import SimpleNamespace
 
 import pytest
+from experiments.query_scope import explicit_relation_pair
 
-from knowledge.relation_scope import explicit_relation_pair, in_relation_scope
+from knowledge.relation_scope import in_relation_scope
+from knowledge.retrieval_scope import QueryScope
 
 
 @pytest.mark.parametrize('names', [('人物甲', '人物乙'), ('莉娜', '亚历克斯')])
@@ -89,10 +91,10 @@ def test_scope_precedes_reranking_and_applies_to_timeline(monkeypatch, query, sc
         return recalled
 
     monkeypatch.setattr(service, 'rerank_with_title_frames', rank)
-    result = instance.retrieve(query)
+    result = instance.retrieve(query, query_scope=QueryScope("test", query, ((0, "direct_relation" if scoped else "open", ("a", "b")),)))
     expected = ({'direct'} if include_direct else set()) | (set() if scoped else {'unrelated'})
     assert {d['id'] for d in result['results']} == expected
     assert {d['id'] for d in result['relation_timeline']} == expected
-    assert result['relation_scope']['excluded_candidates'] == int(scoped)
+    assert result['query_scope']['excluded_candidates'] == int(scoped)
     if scoped:
         assert 'unrelated' not in result['context_text']

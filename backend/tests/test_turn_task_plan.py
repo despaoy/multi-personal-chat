@@ -1,8 +1,8 @@
 from types import SimpleNamespace
 
 import pytest
+from experiments.query_scope import explicit_identity_subject, identity_evidence_subject
 
-from knowledge.entity_scope import explicit_identity_subject, identity_evidence_subject
 from knowledge.task_plan import plan_turn_tasks
 
 

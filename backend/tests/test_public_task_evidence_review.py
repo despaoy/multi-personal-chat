@@ -8,6 +8,7 @@ from dataclasses import replace
 from html import unescape
 
 import pytest
+from scope_fixtures import open_scope_response
 
 from character.models import CompiledCharacterContext
 from inference.generation_request import GenerationRequest, RetrievalResult, build_generation_request
@@ -255,10 +256,10 @@ async def test_actual_api_marks_partial_answer_only_for_visible_private_context(
         payload = json.loads(messages[-1]["content"])
         if "sources" not in payload:
             if "object_scopes" not in payload:
-                return json.dumps(dict(scopes=[
+                return open_scope_response(messages, [
                     dict(task_id=0, objects=["青桥延期"]),
                     dict(task_id=1, objects=["蓝岸续租"]),
-                ]))
+                ])
             return json.dumps(dict(tasks=[
                 dict(task_id=0, aspects=[dict(object_id="query-object:0", query_quote="费用")]),
                 dict(task_id=1, aspects=[dict(object_id="query-object:1", query_quote="时长")]),
@@ -313,10 +314,10 @@ async def test_abstention_model_failure_propagates(monkeypatch):
         payload = json.loads(messages[-1]["content"])
         if "sources" not in payload:
             if "object_scopes" not in payload:
-                return json.dumps(dict(scopes=[
+                return open_scope_response(messages, [
                     dict(task_id=0, objects=["青桥延期"]),
                     dict(task_id=1, objects=["蓝岸续租"]),
-                ]))
+                ])
             return json.dumps(dict(tasks=[
                 dict(task_id=0, aspects=[dict(object_id="query-object:0", query_quote="费用")]),
                 dict(task_id=1, aspects=[dict(object_id="query-object:1", query_quote="时长")]),

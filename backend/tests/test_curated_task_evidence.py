@@ -7,6 +7,7 @@ from dataclasses import replace
 from types import SimpleNamespace
 
 import pytest
+from scope_fixtures import open_scope_response
 
 from inference.generation_request import GenerationRequest, RetrievalResult, build_generation_request
 from knowledge import curated_sources, public_domains
@@ -24,6 +25,8 @@ from knowledge.public_question_binding import resolve_question_binding
 from knowledge.public_task_evidence import review_public_candidates
 from knowledge.retrieval_core.documents import KnowledgeIndexDocument, SourceReference
 from knowledge.turn_dependencies import parse_dependencies
+
+pytestmark = pytest.mark.usefixtures("literal_grounded_query")
 
 QUERY = "请保留本人已存的限制。核对林澄澈与白露川的关系和引用，区分人物自述与客观事实。另核对晨露街续借费用、否定和末尾例外。"
 BODY = (
@@ -71,11 +74,9 @@ async def plan_for(corpus, query=QUERY):
 
     async def resolver(messages):
         assert json.loads(messages[-1]["content"])["query"] == query
-        return json.dumps(
-            dict(scopes=[dict(task_id=1, objects=["林澄澈", "白露川"]), dict(task_id=2, objects=["晨露街续借"])])
-        )
+        return open_scope_response(messages, [dict(task_id=1, objects=["林澄澈", "白露川"]), dict(task_id=2, objects=["晨露街续借"])])
 
-    binding = await resolve_question_binding(dependencies, query, window_tokens=65536, reviewer=resolver)
+    binding = await resolve_question_binding(dependencies, query, window_tokens=65536, reviewer=resolver, with_retrieval_scope=True)
     return public_domains.domain_plan(binding, corpus.config), dependencies
 
 
@@ -487,9 +488,9 @@ async def test_pure_curated_entry_uses_actual_config_binding_without_generic_aut
 
     async def resolver(messages):
         assert json.loads(messages[-1]["content"])["query"] == query
-        return json.dumps(dict(scopes=[dict(task_id=1, objects=["林澄澈", "白露川"])]))
+        return open_scope_response(messages, [dict(task_id=1, objects=["林澄澈", "白露川"])])
 
-    binding = await resolve_question_binding(deps, query, window_tokens=65536, reviewer=resolver)
+    binding = await resolve_question_binding(deps, query, window_tokens=65536, reviewer=resolver, with_retrieval_scope=True)
     monkeypatch.setattr(runtime, "get_multiscale_rag_service", lambda: SimpleNamespace(config=corpus.config))
     reviewed_payloads = []
 

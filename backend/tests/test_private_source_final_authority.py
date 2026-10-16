@@ -9,6 +9,7 @@ from html import unescape
 
 import pytest
 from repositories.character_memory import DatabaseCharacterMemoryRepository
+from scope_fixtures import open_scope_response
 
 from character.models import CompiledCharacterContext, UserScope
 from character.source_memory import SourceMemoryService, attach_sources
@@ -73,7 +74,7 @@ async def exercise(tmp_path, monkeypatch, *, erase_during_review):
             if erase_during_review:
                 db.clear_character_memories(**fields)
                 assert db.list_memory_sources(**fields) == []
-            return json.dumps(dict(scopes=[dict(task_id=payload["public_tasks"][0]["id"], objects=["朔湾改签"])]))
+            return open_scope_response(messages, [dict(task_id=payload["public_tasks"][0]["id"], objects=["朔湾改签"])])
 
         return await original_resolve(dependencies, query, reviewer=review, **kwargs)
 
@@ -403,5 +404,53 @@ async def test_missing_source_reader_is_not_a_successful_empty_read():
 
     repository = DatabaseCharacterMemoryRepository(SimpleNamespace())
     scope = UserScope("web", "unit", "owner", "owner", "private")
-    with pytest.raises(RuntimeError, match="scoped source reads"):
+    with pytest.raises(RuntimeError, match="scoped source reads") as caught:
         await repository.list_sources("fiction-role", scope, source_message_ids=("source-1",))
+    assert isinstance(caught.value.__cause__, AttributeError)
+
+
+@pytest.mark.asyncio
+async def test_source_reader_success_preserves_scope_and_exact_records():
+    from types import SimpleNamespace
+
+    row = dict(source_message_id="source-1", content="虚构历史原话：只在周末喝无糖茶。")
+    calls = []
+
+    def reader(*args, **kwargs):
+        calls.append((args, kwargs))
+        return [row]
+
+    repository = DatabaseCharacterMemoryRepository(SimpleNamespace(list_memory_sources=reader))
+    scope = UserScope("web", "unit", "owner", "owner", "private")
+    result = await repository.list_sources("fiction-role", scope, source_message_ids=("source-1",), limit=7)
+    assert result == [row] and result[0] is row
+    assert calls == [
+        (
+            (
+                "fiction-role",
+                scope.platform,
+                scope.adapter,
+                scope.sender_id,
+                scope.conversation_type,
+                scope.conversation_id,
+            ),
+            dict(source_message_ids=("source-1",), limit=7),
+        )
+    ]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "error", [AttributeError("source decoder failed"), RuntimeError("source database unavailable")]
+)
+async def test_source_reader_execution_failure_keeps_original_error(error):
+    from types import SimpleNamespace
+
+    def reader(*_args, **_kwargs):
+        raise error
+
+    repository = DatabaseCharacterMemoryRepository(SimpleNamespace(list_memory_sources=reader))
+    scope = UserScope("web", "unit", "owner", "owner", "private")
+    with pytest.raises(type(error)) as caught:
+        await repository.list_sources("fiction-role", scope, source_message_ids=("source-1",))
+    assert caught.value is error and caught.value.__cause__ is None

@@ -6,6 +6,7 @@ from unittest.mock import Mock
 
 import numpy as np
 import pytest
+from scope_fixtures import open_scope_response
 from test_multiscale_card_recall import ControlledRanking, arrange
 
 from api import generate
@@ -69,11 +70,9 @@ async def bound_scope(query=QUERY, names=("岚",)):
     async def reviewer(messages):
         payload = json.loads(messages[-1]["content"])
         assert payload["query"] == query
-        return json.dumps(
-            dict(scopes=[dict(task_id=task["id"], objects=list(names)) for task in payload["public_tasks"]])
-        )
+        return open_scope_response(messages, [dict(task_id=task["id"], objects=list(names)) for task in payload["public_tasks"]])
 
-    return await resolve_question_binding(deps, query, window_tokens=65536, reviewer=reviewer)
+    return await resolve_question_binding(deps, query, window_tokens=65536, reviewer=reviewer, with_retrieval_scope=True)
 
 
 async def test_proven_single_character_scope_uses_complete_curated_original(tmp_path, monkeypatch):
@@ -202,9 +201,9 @@ async def test_unresolved_mixed_task_searches_available_curated_domain_without_i
     async def review(messages):
         payload = json.loads(messages[-1]["content"])
         assert payload["query"] == query
-        return json.dumps(dict(scopes=[dict(task_id=0, objects=[]), dict(task_id=1, objects=["岚展期"])]))
+        return open_scope_response(messages, [dict(task_id=0, objects=[]), dict(task_id=1, objects=["岚展期"])])
 
-    binding = await resolve_question_binding(deps, query, window_tokens=65536, reviewer=review)
+    binding = await resolve_question_binding(deps, query, window_tokens=65536, reviewer=review, with_retrieval_scope=True)
     plan = domain_plan(binding, rig.config)
     result = retrieve_domains(
         plan,
@@ -238,9 +237,9 @@ async def test_history_bound_single_character_scope_keeps_current_original(tmp_p
     async def review(messages):
         payload = json.loads(messages[-1]["content"])
         assert payload["query"] == query and "reference_context" in payload
-        return json.dumps(dict(scopes=[dict(task_id=task["id"], objects=["岚"]) for task in payload["public_tasks"]]))
+        return open_scope_response(messages, [dict(task_id=task["id"], objects=["岚"]) for task in payload["public_tasks"]])
 
-    binding = await resolve_question_binding(deps, query, window_tokens=65536, history=history, reviewer=review)
+    binding = await resolve_question_binding(deps, query, window_tokens=65536, history=history, reviewer=review, with_retrieval_scope=True)
     retrieval_query = bound_retrieval_query(binding, query)
     assert retrieval_query == "岚\n" + query
     result = await generate._retrieve_rag_bundle(retrieval_query, 1, None, question_binding=binding)

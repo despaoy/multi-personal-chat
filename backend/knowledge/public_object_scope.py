@@ -23,7 +23,28 @@ task_id须与本次public_tasks.id的原值及JSON类型完全一致：整数直
 输出前逐对象核对：只因年度修饰紧接业务名、没有逗号，不表示它变成业务全名。“2028年度松叶登记”的时间修饰“2028年度”是适用条件，名字仍为query中连续存在的“松叶登记”；不得输出前者。只有问题明确把含年份的整段文字声明为名称本身（如业务全名、名称为等）时，才完整保留该正式名。年月、年龄、身份范围无论有无分隔符都由完整query继续保留，不能以保留范围为由污染objects中的本名。
 """
 
+def resolver_instruction(scope_policy=None):
+    if scope_policy is None:
+        return RESOLVE_INSTRUCTION
+    from knowledge.retrieval_scope import validate_scope_policy
+
+    validate_scope_policy(scope_policy)
+    return RESOLVE_INSTRUCTION.replace(
+        '"objects":["query中的完整对象名称"]',
+        '"objects":["query中的完整对象名称"],"retrieval_scope":"open"',
+    ) + """
+本次每项scopes还必须返回retrieval_scope，只能取open、identity、independent_identity、direct_relation之一，不能省略或增加其他字段。
+按每项实际公共任务及完整query的限定判断取证范围，不按某个词或另一任务机械分类。此标签不证明事实、身份、证据充分性或权限。
+identity：只核对一个人物的基本身份；objects恰好一个实际人物本名或明确简称。
+independent_identity：满足identity，且整段当前请求仅需要这项独立公共身份事实，沿用历史指代、私人事实、假设及其他内容任务都不需要。只有scope_policy.allow_independent_identity为true才可使用；不能仅因本任务是身份问题就把整段请求当作独立身份问题。
+direct_relation：只核对objects中恰好两位人物之间的直接关系。需要第三方、成因、桥接关系、其他对象各自事实或更多内容时不能把这些需求关进这一个人物对。
+open：其他任务、开放关系、因果和经过、需要未具名第三方、无法可靠确定范围或objects为空。保留完整问题，不猜第三方名字。每项独立判断，不能用一项的闭合范围删去另一项所需证据。
+同一人物的身份问题含必要历史指代时用identity而不是independent_identity。正式业务、机构或作品概述不按人物身份限定。名称本身、否定、条件和例外继续按完整query保留。
+"""
+
+
 SOURCE_INSTRUCTION = """object_scopes是先于候选资料、仅据原始问题取得的对象绑定，不授予事实或读取权限。
+其中retrieval_scope只声明提问的取证范围，不证明身份、事实或证据充分性；审核仍须依据完整query及本份原文。
 identity_review中的bindings是从完整授权来源登记核验的单跳名称同一性依赖，不是业务规则或事实充分性。
 identity_only来源不能列入task_ids。规则只用别名、不含原query_text时，object_evidence必须增加identity_binding_id，值必须是identity_review.bindings中对应的binding_id；没有这个字段会被程序判定未验证。source_quote必须包含该依赖中alias的完整名称并来自本规则正文；依赖登记与规则必须同时进入最终请求才能确认对象。不得自造绑定或借用不同知识库登记。
 不能因候选资料讲的是另一对象就更改object_scopes；共享query用于限定和指代，不用于把别的任务的对象替代本项。
@@ -51,20 +72,24 @@ def _unique(pairs):
     return value
 
 
-def parse_object_scopes(raw, query, task_ids, *, reference_context=None):
+def parse_object_scopes(raw, query, task_ids, *, reference_context=None, scope_policy=None):
     from knowledge.question_reference_context import object_reference_origin, validate_reference_context
 
     if reference_context is not None:
         validate_reference_context(reference_context)
+    if scope_policy is not None:
+        from knowledge.retrieval_scope import validate_scope_policy
+
+        validate_scope_policy(scope_policy)
     value = json.loads(raw, object_pairs_hook=_unique)
     if not isinstance(value, dict) or set(value) != {"scopes"}:
         raise ValueError("Invalid scope envelope")
     rows = value["scopes"]
     if not isinstance(rows, list) or len(rows) != len(task_ids):
         raise ValueError("Incomplete question object scope")
-    seen, names, registry, by_task = set(), {}, [], {}
+    seen, names, registry, by_task, modes = set(), {}, [], {}, {}
     for row in rows:
-        if not isinstance(row, dict) or set(row) != {"task_id", "objects"}:
+        if not isinstance(row, dict) or set(row) != ({"task_id", "objects", "retrieval_scope"} if scope_policy is not None else {"task_id", "objects"}):
             raise ValueError("Invalid task object fields")
         task, objects = row["task_id"], row["objects"]
         if not any(type(task) is type(i) and task == i for i in task_ids) or task in seen:
@@ -81,6 +106,11 @@ def parse_object_scopes(raw, query, task_ids, *, reference_context=None):
             raise ValueError("Object names must be literal complete query data")
         for name in objects:
             object_reference_origin(name, query, reference_context)
+        if scope_policy is not None:
+            mode = row["retrieval_scope"]
+            if mode not in ("open", "identity", "independent_identity", "direct_relation") or mode in ("identity", "independent_identity") and len(objects) != 1 or mode == "direct_relation" and len(objects) != 2 or mode == "independent_identity" and (not scope_policy["allow_independent_identity"] or len(task_ids) != 1):
+                raise ValueError("Invalid or incomplete semantic task scope")
+            modes[task] = mode
         by_task[task] = objects
         seen.add(task)
     canonical = []
@@ -98,8 +128,10 @@ def parse_object_scopes(raw, query, task_ids, *, reference_context=None):
                     obj["reference_origin"] = origin
                 registry.append(obj)
             references.append(names[name])
-        canonical.append(dict(task_id=task, object_ids=references))
+        canonical.append(dict(task_id=task, object_ids=references, **({"retrieval_scope": modes[task]} if scope_policy is not None else {})))
     scope = dict(query=query, objects=registry, task_scopes=canonical)
+    if scope_policy is not None:
+        scope["scope_policy"] = dict(scope_policy)
     if reference_context is not None:
         from copy import deepcopy
 
@@ -108,12 +140,15 @@ def parse_object_scopes(raw, query, task_ids, *, reference_context=None):
 
 
 def validate_object_scopes(scope, query, task_ids):
-    if not isinstance(scope, dict) or set(scope) not in (
-        {"query", "objects", "task_scopes"}, {"query", "objects", "task_scopes", "reference_context"}
-    ) or scope["query"] != query:
+    if not isinstance(scope, dict) or set(scope) - {"reference_context", "scope_policy"} != {"query", "objects", "task_scopes"} or scope["query"] != query:
         raise ValueError("Object scopes are bound to another question")
     from knowledge.question_reference_context import object_reference_origin, validate_reference_context
 
+    policy = None
+    if "scope_policy" in scope:
+        from knowledge.retrieval_scope import validate_scope_policy
+
+        policy = validate_scope_policy(scope["scope_policy"])
     context = scope.get("reference_context")
     if "reference_context" in scope:
         validate_reference_context(context)
@@ -138,14 +173,14 @@ def validate_object_scopes(scope, query, task_ids):
     for row in rows:
         if (
             not isinstance(row, dict)
-            or set(row) != {"task_id", "object_ids"}
+            or set(row) != ({"task_id", "object_ids", "retrieval_scope"} if policy is not None else {"task_id", "object_ids"})
             or not isinstance(row["object_ids"], list)
             or any(not isinstance(i, str) or i not in objects for i in row["object_ids"])
         ):
             raise ValueError("Invalid scoped object references")
-        restored.append(dict(task_id=row["task_id"], objects=[objects[i] for i in row["object_ids"]]))
+        restored.append(dict(task_id=row["task_id"], objects=[objects[i] for i in row["object_ids"]], **({"retrieval_scope": row["retrieval_scope"]} if policy is not None else {})))
     # Verify the registry as well as all task identities, without reinterpretation.
-    value = parse_object_scopes(json.dumps(dict(scopes=restored)), query, task_ids, reference_context=context)
+    value = parse_object_scopes(json.dumps(dict(scopes=restored)), query, task_ids, reference_context=context, scope_policy=policy)
     if value != scope:
         raise ValueError("Object scope registry changed ordering or binding")
     return scope

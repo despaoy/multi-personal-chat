@@ -24,6 +24,8 @@ from knowledge.multiscale_rag.source_text import OriginalTextExtractor
 from knowledge.multiscale_rag.vector_runtime import LocalMeanPoolingEmbeddingProvider, write_vector_artifacts
 from knowledge.retrieval_core.documents import KnowledgeIndexDocument, SourceReference
 
+pytestmark = pytest.mark.usefixtures("literal_grounded_query")
+
 DOMAIN = "tsukiyashiro_kisaki"
 QUERY = "请给出虚构星禾档案馆通行安排的完整原文，逐项保留日期、时段、否定、条件和例外。"
 BODY_A = (

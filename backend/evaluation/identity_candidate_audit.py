@@ -8,6 +8,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from experiments.identity_coverage import rerank_with_identity_coverage
+from experiments.query_scope import identity_evidence_subject
 
 from knowledge.entity_scope import in_identity_scope
 from knowledge.multiscale_rag.runtime import MultiScaleRagRuntime
@@ -51,6 +52,7 @@ def main():
 
     def observe_rank(analysis, candidates, **kw):
         stage["scoped_ids"] = [c.document.id for c in candidates]
+        stage["identity_subject"] = identity_evidence_subject(analysis)
         ranked = original_rank(analysis, candidates, **kw)
         stage["ranked"] = [dict(describe(c.document), score=c.rerank_score, method=c.rerank_method) for c in ranked]
         return ranked
@@ -67,7 +69,7 @@ def main():
         for query in queries:
             stage.clear()
             result = service.retrieve(query, top_k=3)
-            subject = result["identity_scope"]["subject"]
+            subject = stage.get("identity_subject", "")
             inventory = [
                 describe(d)
                 for d in service.by_id.values()

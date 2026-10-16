@@ -7,6 +7,7 @@ from html import unescape
 
 import pytest
 from repositories.character_memory import DatabaseCharacterMemoryRepository
+from scope_fixtures import open_scope_response
 
 from character.models import CompiledCharacterContext, UserScope
 from character.source_memory import SourceMemoryService, attach_sources
@@ -78,7 +79,7 @@ async def reviewed_bundle(mode):
 
     async def objects(messages):
         assert json.loads(messages[-1]["content"])["query"] == QUERY
-        return json.dumps(dict(scopes=[dict(task_id=0, objects=["栖舟续签", "杉屿登记"])]))
+        return open_scope_response(messages, [dict(task_id=0, objects=["栖舟续签", "杉屿登记"])])
 
     async def aspects(messages):
         assert json.loads(messages[-1]["content"])["query"] == QUERY

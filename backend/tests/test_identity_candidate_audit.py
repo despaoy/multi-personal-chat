@@ -42,7 +42,7 @@ def runtime_control():
         recalled = service.retriever.search(query)
         analysis = SimpleNamespace(original_query=query, normalized_query=query, entities=["林远"])
         ranked = service_module.rerank_with_title_frames(analysis, recalled, top_k=top_k, reranker=service.reranker)
-        return dict(identity_scope=dict(subject="林远"), results=[dict(id=c.document.id) for c in ranked])
+        return dict(query_scope=dict(status="unscoped",rules=[],excluded_candidates=0), results=[dict(id=c.document.id) for c in ranked])
 
     service.retrieve = retrieve
     runtime = SimpleNamespace(_ensure_loaded=Mock(return_value=True), _service=service)

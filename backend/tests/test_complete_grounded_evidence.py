@@ -14,6 +14,8 @@ from knowledge.grounded_answer.prompt import GroundedPromptBuilder
 from knowledge.grounded_answer.service import GroundedAnswerService
 from knowledge.grounded_answer.validator import public_citation_view
 
+pytestmark = pytest.mark.usefixtures("literal_grounded_query")
+
 ROOT = Path(__file__).parent / "fixtures"
 FIXTURE = json.loads((ROOT / "deepseek_grounded_evidence_cases.json").read_text(encoding="utf-8"))
 

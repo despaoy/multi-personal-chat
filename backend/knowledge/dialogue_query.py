@@ -18,8 +18,6 @@ class RetrievalQuery:
 
 
 async def resolve_retrieval_query(message: str, history, *, domain_id: str | None = None) -> RetrievalQuery | None:
-    if not history and domain_id is not None:
-        return RetrievalQuery(message)
     budget = get_provider_context_budget()
     plan = await plan_retrieval(message, history=history, context_budget=budget.review)
     if not plan.needs_public_retrieval:
@@ -28,7 +26,7 @@ async def resolve_retrieval_query(message: str, history, *, domain_id: str | Non
         return RetrievalQuery(message)
     binding = await resolve_question_binding(
         plan.dependencies, message, window_tokens=budget.window_tokens,
-        public_obligations=plan.public_obligations, history=history,
+        public_obligations=plan.public_obligations, history=history, with_retrieval_scope=True,
         context_budget=budget.review,
     )
     return RetrievalQuery(bound_retrieval_query(binding, message), binding)

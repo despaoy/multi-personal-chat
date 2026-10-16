@@ -5,6 +5,7 @@ from dataclasses import replace
 from types import SimpleNamespace
 
 import pytest
+from scope_fixtures import open_scope_response
 
 from inference.generation_request import GenerationRequest, RetrievalResult, build_generation_request
 from knowledge import curated_sources, public_domains
@@ -88,9 +89,9 @@ async def reviewed(sources):
 
     async def resolver(messages):
         assert json.loads(messages[-1]["content"])["query"] == QUERY
-        return json.dumps(dict(scopes=[dict(task_id=0, objects=["林澄澈", "白露川"])]))
+        return open_scope_response(messages, [dict(task_id=0, objects=["林澄澈", "白露川"])])
 
-    binding = await resolve_question_binding(deps, QUERY, window_tokens=65536, reviewer=resolver)
+    binding = await resolve_question_binding(deps, QUERY, window_tokens=65536, reviewer=resolver, with_retrieval_scope=True)
     plan = public_domains.domain_plan(binding, sources.config)
 
     async def reviewer(messages):
@@ -186,9 +187,9 @@ async def test_changed_task_cannot_clear_independent_task_scope_negation_or_exce
 
     async def resolver(messages):
         assert json.loads(messages[-1]["content"])["query"] == query
-        return json.dumps(dict(scopes=[dict(task_id=task, objects=["林澄澈", "白露川"]) for task in [0, 1]]))
+        return open_scope_response(messages, [dict(task_id=task, objects=["林澄澈", "白露川"]) for task in [0, 1]])
 
-    binding = await resolve_question_binding(deps, query, window_tokens=65536, reviewer=resolver)
+    binding = await resolve_question_binding(deps, query, window_tokens=65536, reviewer=resolver, with_retrieval_scope=True)
     plan = public_domains.domain_plan(binding, sources.config)
 
     async def reviewer(messages):

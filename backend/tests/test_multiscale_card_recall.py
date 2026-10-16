@@ -11,6 +11,7 @@ from knowledge.multiscale_rag.service import RETRIEVAL_TYPES, RoutedMultiScaleSe
 from knowledge.multiscale_rag.source_text import OriginalTextExtractor
 from knowledge.retrieval_core.documents import KnowledgeIndexDocument, SourceReference
 from knowledge.retrieval_core.registry import KnowledgeDomainConfig
+from knowledge.retrieval_scope import QueryScope
 
 MIXED = "请核对林栖与穆远是什么关系，并说明林栖的登记身份和昨晚争执的经过。"
 QUERIES = {
@@ -159,6 +160,6 @@ def test_complete_empty_card_index_is_no_match_without_model_work(tmp_path):
 @pytest.mark.parametrize("query", ["小林是谁？", "小林是什么身份？"])
 def test_identity_alias_forms_preserve_all_candidate_types(tmp_path, query):
     rig = arrange(tmp_path)
-    result = rig.service.retrieve(query, top_k=3)
+    result = rig.service.retrieve(query, top_k=3, query_scope=QueryScope(rig.config.domain_id, query, ((0, "independent_identity", ("林栖",)),)))
     assert {row["id"] for row in result["results"]} == set(BODIES)
-    assert result["identity_scope"]["subject"] == "林栖"
+    assert result["query_scope"]["rules"][0]["objects"] == ["林栖"]

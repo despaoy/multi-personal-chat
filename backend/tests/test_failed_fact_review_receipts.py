@@ -9,6 +9,7 @@ from html import unescape
 
 import pytest
 from repositories.character_memory import DatabaseCharacterMemoryRepository
+from scope_fixtures import open_scope_response
 
 from character.models import CompiledCharacterContext, UserScope
 from character.source_memory import SourceMemoryService, attach_sources
@@ -106,7 +107,7 @@ async def run_reviews(failure=None, audit=None):
 
     async def objects(messages):
         assert json.loads(messages[-1]["content"])["query"] == QUERY
-        return json.dumps(dict(scopes=[dict(task_id=0, objects=["霁浦登记"]), dict(task_id=1, objects=["竹原续签"])]))
+        return open_scope_response(messages, [dict(task_id=0, objects=["霁浦登记"]), dict(task_id=1, objects=["竹原续签"])])
 
     async def scope(messages):
         observed["scope_calls"] += 1

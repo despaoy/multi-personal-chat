@@ -201,16 +201,16 @@ async def review_public_candidates(bundle, dependencies, query, *, window_tokens
         # the production client always follows the source-blind stage.
         if reviewer is None or scope_reviewer is not None or question_binding is not None:
             from knowledge.public_object_scope import (
-                RESOLVE_INSTRUCTION,
                 SOURCE_INSTRUCTION,
                 parse_object_scopes,
+                resolver_instruction,
                 scope_input_digest,
             )
             from knowledge.question_reference_context import binding_payload_for_tasks
 
             question_input = (binding_payload_for_tasks(question_binding, query, payload["public_tasks"])
                               if question_binding is not None else dict(query=query, public_tasks=payload["public_tasks"]))
-            scope_messages = [dict(role="system", content=RESOLVE_INSTRUCTION),
+            scope_messages = [dict(role="system", content=resolver_instruction(question_input.get("scope_policy"))),
                 dict(role="user", content=json.dumps(question_input, ensure_ascii=False))]
             if sum(estimated_tokens(m["content"]) + 4 for m in scope_messages) + 768 + CONTEXT_SAFETY_MARGIN_TOKENS > window_tokens:
                 raise ValueError("Complete public scope input exceeds context budget")
