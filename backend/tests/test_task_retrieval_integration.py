@@ -24,7 +24,6 @@ def prepared(monkeypatch):
     index = Index()
     monkeypatch.setattr(rag_helper, "get_vector_db", lambda: index)
     helper = rag_helper.RAGHelper()
-    helper.enable_query_expansion = False
     return helper, index
 
 
@@ -35,22 +34,6 @@ def test_each_task_retained_and_all_views_have_independent_receipts(monkeypatch)
     assert len(b["task_candidate_coverage"]) == 5
     assert all(x["semantic_coverage"] == "unverified" for x in b["task_candidate_coverage"])
     assert not b["abstained"]
-
-
-def test_only_whole_original_question_can_infer_filters(monkeypatch):
-    h, i = prepared(monkeypatch)
-    h.enable_query_expansion = True
-    h.query_expander.expand_query = lambda q: [q]
-    seen = []
-
-    def infer(q):
-        seen.append(q)
-        assert q == ROOT
-        return {}
-
-    h.query_expander.extract_filters = infer
-    h.retrieve_context(ROOT, top_k=1, additional_queries=VIEWS, enable_rerank=False)
-    assert seen == [ROOT] and all(f is None for q, f in i.calls)
 
 
 def test_explicit_scope_is_identical_in_every_bucket(monkeypatch):

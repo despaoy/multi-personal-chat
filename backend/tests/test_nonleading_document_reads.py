@@ -5,7 +5,6 @@ from types import SimpleNamespace
 
 import pytest
 
-from knowledge.rag_helper import QueryExpander
 from knowledge.source_expansion import requested_document_titles
 
 
@@ -20,7 +19,6 @@ from knowledge.source_expansion import requested_document_titles
 def test_independent_read_after_complete_statement(prefix):
     query = prefix + "读取《紫茶规则》《合成角色偏好》。本轮核对条件及其例外。"
     assert requested_document_titles(query) == ("紫茶规则", "合成角色偏好")
-    assert QueryExpander().extract_filters(query) == {}
 
 
 @pytest.mark.parametrize(

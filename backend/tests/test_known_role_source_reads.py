@@ -5,7 +5,6 @@ from pathlib import Path
 
 import pytest
 
-from knowledge.rag_helper import QueryExpander
 from knowledge.source_expansion import requested_document_titles
 
 root=Path(__file__).parent/'fixtures'
@@ -15,9 +14,8 @@ assert hashlib.sha256(parent).hexdigest()==spec['base_fixture_sha256']
 case={**json.loads(parent),**spec['case_overrides']}
 titles=tuple(x['title'] for x in case['documents'])
 
-def test_full_actual_question_retains_five_titles_and_no_inferred_role_filter():
+def test_full_actual_question_retains_five_titles():
     assert requested_document_titles(case['question'])==titles
-    assert QueryExpander().extract_filters(case['question'])=={}
     assert len(case['bridges'])==9 and len(case['documents'])==5
 
 @pytest.mark.parametrize('query',[
@@ -26,7 +24,6 @@ def test_full_actual_question_retains_five_titles_and_no_inferred_role_filter():
 ])
 def test_repeated_already_requested_title_does_not_change_read_scope(query):
     assert requested_document_titles(query)==('甲','乙')
-    assert QueryExpander().extract_filters(query)=={}
 
 @pytest.mark.parametrize('suffix',[
     '另读取《丙》角色资料。', '不要读取《乙》角色资料。',
@@ -35,7 +32,6 @@ def test_repeated_already_requested_title_does_not_change_read_scope(query):
 def test_unknown_title_exclusions_and_unbalanced_titles_still_defer(suffix):
     query='请查知识库，读取《甲》《乙》这两份完整资料。'+suffix
     assert requested_document_titles(query)==()
-    assert QueryExpander().extract_filters(query)=={}
 
 def test_declared_count_with_complete_modifier_is_checked():
     query=case['question'].replace('这五份完整资料','这四份完整资料',1)

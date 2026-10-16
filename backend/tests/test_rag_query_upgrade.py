@@ -1,9 +1,8 @@
-"""RAG 升级最小行为验证：查询扩展、稳定 ID 融合、低置信纠正。
+"""RAG 稳定排序、结果隔离及独立纠正接口验证。
 
 只覆盖本次升级直接相关的行为：
-- 原始查询始终保留且排第一，扩展去重且最多 5 条
 - 稳定 ID 融合正确且不修改 vector_db 返回的原始字典
-- 中文关键词重写有效（jieba / 确定性回退）
+- 独立纠正接口使用中文分词
 - CorrectiveRAG max_retries=0/1 行为正确
 - no-op 重写不会触发第二次检索
 """
@@ -14,58 +13,11 @@ import os
 import sys
 from typing import Any
 
-import pytest
-
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from knowledge import rag_helper
 from knowledge.corrective_rag import CorrectiveRAG
-from knowledge.rag_helper import DomainProfile, QueryExpander, _stable_result_key
-
-# ---------------------------------------------------------------------------
-# 查询扩展
-# ---------------------------------------------------------------------------
-
-
-class TestQueryExpansion:
-    def test_original_query_always_first_and_dedup(self):
-        expander = QueryExpander()
-        query = "璃月 胡桃怎么配队"
-        expanded = expander.expand_query(query)
-
-        assert expanded[0] == query
-        assert len(expanded) <= 5
-        assert len(expanded) == len(set(expanded))  # 稳定去重
-        assert all(expanded)
-
-    def test_no_match_returns_only_original(self):
-        expander = QueryExpander()
-        assert expander.expand_query("今天天气不错") == ["今天天气不错"]
-
-    def test_explicit_empty_profiles_disable_domain_expansion(self):
-        expander = QueryExpander(profiles=[])
-        assert expander.expand_query("胡桃的圣遗物怎么选") == ["胡桃的圣遗物怎么选"]
-
-    def test_custom_domain_profile_isolated_from_genshin_vocab(self):
-        profile = DomainProfile(
-            name="kisaki",
-            synonym_map={"妃": ["月社妃", "妃大人"]},
-        )
-        expander = QueryExpander(profiles=[profile])
-        expanded = expander.expand_query("妃的圣遗物怎么选")
-
-        assert expanded[0] == "妃的圣遗物怎么选"
-        # 只包含月社妃域的替换变体，不掺入原神圣遗物词表
-        assert "月社妃的圣遗物怎么选" in expanded
-        assert "妃大人的圣遗物怎么选" in expanded
-        assert all("遗器" not in q and "artifact" not in q for q in expanded)
-
-    def test_default_expander_keeps_genshin_behavior(self):
-        expander = QueryExpander()
-        expanded = expander.expand_query("胡桃的圣遗物怎么选")
-        assert any("往生堂堂主" in q for q in expanded)
-        assert any("遗器" in q for q in expanded)
-
+from knowledge.rag_helper import _stable_result_key
 
 # ---------------------------------------------------------------------------
 # 稳定 ID 融合
@@ -96,31 +48,14 @@ def _make_helper(monkeypatch, fake: _FakeVectorDB) -> rag_helper.RAGHelper:
 
 
 class TestFusion:
-    def test_same_id_merged_with_max_score_and_query_count(self, monkeypatch):
-        # "胡桃怎么配队" 会扩展出 5 条查询（原词 + 同义词替换）
-        doc = {"id": "doc_1_chunk_0", "title": "胡桃攻略", "content": "往生堂堂主", "score": 0.4, "fused_score": 0.4}
-        rounds = []
-        for i in range(5):
-            variant = dict(doc)
-            variant["score"] = 0.4 if i == 0 else 0.9
-            variant["fused_score"] = variant["score"]
-            rounds.append([variant])
-
-        fake = _FakeVectorDB(rounds)
-        helper = _make_helper(monkeypatch, fake)
-        results = helper.retrieve_context("胡桃怎么配队", top_k=3, use_cache=False)
-
-        assert len(results) == 1
-        assert results[0]["query_count"] == 5
-        assert results[0]["score"] == pytest.approx(0.9)
 
     def test_fusion_does_not_mutate_vector_db_results(self, monkeypatch):
         doc = {"id": "doc_1_chunk_0", "title": "胡桃攻略", "content": "往生堂堂主", "score": 0.5, "fused_score": 0.5}
-        fake = _FakeVectorDB([[dict(doc)] for _ in range(5)])
+        fake = _FakeVectorDB([[dict(doc)]])
         helper = _make_helper(monkeypatch, fake)
         helper.retrieve_context("胡桃怎么配队", top_k=3, use_cache=False)
 
-        assert len(fake.returned) == 5
+        assert len(fake.returned) == 1
         for raw in fake.returned:
             assert "query_count" not in raw
             assert "final_score" not in raw
@@ -134,7 +69,7 @@ class TestFusion:
         assert _stable_result_key(doc_a) != _stable_result_key(doc_b)
         assert _stable_result_key(doc_a) == _stable_result_key(dict(doc_a))
 
-        fake = _FakeVectorDB([[doc_a, doc_b]] + [[dict(doc_a), dict(doc_b)]] * 4)
+        fake = _FakeVectorDB([[doc_a, doc_b]])
         helper = _make_helper(monkeypatch, fake)
         results = helper.retrieve_context("胡桃怎么配队", top_k=5, use_cache=False)
 
@@ -151,7 +86,6 @@ class TestFusion:
         doc_b = {"id": "a", "title": "A", "content": "内容A", "score": 0.5, "fused_score": 0.5}
         fake = _FakeVectorDB([[doc_a, doc_b]])
         helper = _make_helper(monkeypatch, fake)
-        helper.enable_multi_query = False
         results = helper.retrieve_context("任意查询", top_k=5, use_cache=False)
 
         assert [r["id"] for r in results] == ["a", "b"]

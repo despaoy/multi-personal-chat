@@ -6,7 +6,6 @@ from pathlib import Path
 import pytest
 
 from knowledge import rag_helper
-from knowledge.rag_helper import QueryExpander
 
 CASE = json.loads(
     (Path(__file__).parent / "fixtures/deepseek_named_source_binding_case.json").read_text(encoding="utf-8")
@@ -82,19 +81,6 @@ def test_cache_cannot_reuse_unrestricted_named_read_for_other_scope(monkeypatch)
     assert len(first["results"]) == 4
     assert not second["results"] and second["abstained"]
     assert any(filters == {"knowledge_base_id": 77} for _, filters in index.calls)
-
-
-@pytest.mark.parametrize(
-    "query",
-    [
-        "角色有哪些技能？",
-        "背景提到《绿泽窗口受理》，另说明角色有哪些技能。",
-        "请查知识库，逐项比较《绿泽窗口受理》这四份说明。另说明角色有哪些技能。",
-        "请查知识库，逐项比较《绿泽窗口受理》这份说明。但不要读取原文，另说明角色有哪些技能。",
-    ],
-)
-def test_unresolved_named_read_does_not_grant_a_game_category(query):
-    assert QueryExpander().extract_filters(query) == {}
 
 
 def test_explicit_title_containing_category_word_is_source_data(monkeypatch):

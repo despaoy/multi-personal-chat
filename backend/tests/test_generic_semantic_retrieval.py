@@ -66,7 +66,6 @@ async def arrange_generic_plan(tmp_path, monkeypatch):
     monkeypatch.setattr(rag_helper, "get_vector_db", lambda: vector)
     assert knowledge._ensure_vector_index() is True
     helper = rag_helper.RAGHelper()
-    helper.enable_query_expansion = False  # Isolate the existing semantic task views.
     monkeypatch.setattr(rag_helper, "get_rag_helper", lambda: helper)
     budget = get_provider_context_budget(
         manager=SimpleNamespace(_current_provider=SimpleNamespace(value="openai_compat")),

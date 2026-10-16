@@ -20,7 +20,6 @@ def prepared(monkeypatch):
     factory = Mock(return_value=index)
     monkeypatch.setattr(rag_helper, 'get_vector_db', factory)
     helper = rag_helper.RAGHelper()
-    helper.enable_query_expansion = False
     return helper, index, factory
 
 
@@ -53,15 +52,21 @@ def test_required_failure_propagates_without_results_or_cache(prepared, stage, w
     assert not helper._query_cache
 
 
-def test_later_expanded_query_failure_cannot_return_partial_evidence(prepared):
+def test_later_validated_task_failure_cannot_return_partial_evidence(prepared):
     helper, index, _ = prepared
-    helper.enable_query_expansion = True
-    helper.query_expander.expand_query = lambda q: [q, '档案馆借阅期限']
     error = TimeoutError('second search failed')
     index.hybrid_search.side_effect = [ROWS[:1], error]
     with pytest.raises(TimeoutError) as caught:
-        helper.retrieve_with_citations(QUERY)
-    assert caught.value is error and not helper._query_cache
+        helper.retrieve_with_citations(QUERY, additional_queries=('档案馆 借阅期限',))
+    assert caught.value is error and index.hybrid_search.call_count == 2
+    # Only the complete first bucket may be cached, never a successful aggregate
+    # or the failed bucket. A caller still receives the original failure.
+    assert len(helper._query_cache) == 1
+    index.hybrid_search.side_effect = None
+    index.hybrid_search.return_value = ROWS[1:]
+    result = helper.retrieve_with_citations(QUERY, additional_queries=('档案馆 借阅期限',))
+    assert {row['id'] for row in result['results']} == {'opening', 'loan'}
+    assert index.hybrid_search.call_count == 3
 
 
 def test_legitimate_empty_search_keeps_abstention(prepared):

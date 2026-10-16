@@ -27,7 +27,6 @@ def prepared(tmp_path, monkeypatch):
     vector.add_documents([dict(DOCUMENT)])
     monkeypatch.setattr(rag_helper, 'get_vector_db', lambda: vector)
     helper = rag_helper.RAGHelper()
-    helper.enable_query_expansion = False
     encode.reset_mock()
     return vector, encode, helper
 
