@@ -66,3 +66,64 @@ def test_invalid_persisted_key_fails_closed(isolated_key_files):
 
     with pytest.raises(encryption.KeyManagementError, match="ENCRYPTION_KEY"):
         encryption.EncryptionManager()
+
+
+def test_explicit_environment_key_never_reads_unused_key_files(monkeypatch, isolated_key_files):
+    canonical, _ = isolated_key_files
+    key = bytes(range(32))
+    encoded = base64.urlsafe_b64encode(key).decode("ascii")
+    monkeypatch.setenv("ENCRYPTION_KEY", encoded)
+    reads = []
+
+    def forbidden(path):
+        reads.append(path)
+        raise PermissionError("synthetic unreadable unused key file")
+
+    monkeypatch.setattr(encryption.EncryptionManager, "_read_key_from_file", staticmethod(forbidden))
+    manager = encryption.EncryptionManager()
+    ciphertext = encryption.EncryptionManager(key=key).encrypt("synthetic existing encrypted data")
+    assert manager.decrypt(ciphertext) == "synthetic existing encrypted data"
+    assert manager.decrypt(manager.encrypt("synthetic new data")) == "synthetic new data"
+    assert reads == [] and not canonical.exists()
+
+
+def test_invalid_environment_key_cannot_read_or_switch_to_valid_file(monkeypatch, isolated_key_files):
+    canonical, _ = isolated_key_files
+    canonical.parent.mkdir(parents=True)
+    persisted = b"ENCRYPTION_KEY=" + base64.urlsafe_b64encode(bytes(range(32))) + b"\n"
+    canonical.write_bytes(persisted)
+    monkeypatch.setenv("ENCRYPTION_KEY", "not-a-valid-key")
+    reads = []
+
+    def forbidden(path):
+        reads.append(path)
+        raise AssertionError("Invalid explicit key must fail before reading another source")
+
+    monkeypatch.setattr(encryption.EncryptionManager, "_read_key_from_file", staticmethod(forbidden))
+    with pytest.raises(encryption.KeyManagementError, match="环境变量"):
+        encryption.EncryptionManager()
+    assert reads == [] and canonical.read_bytes() == persisted
+
+
+def test_selected_key_file_read_failure_is_not_hidden_by_legacy_or_generation(monkeypatch, isolated_key_files):
+    canonical, legacy = isolated_key_files
+    canonical.parent.mkdir(parents=True)
+    canonical.write_text("# selected key file\n", encoding="utf-8")
+    legacy.parent.mkdir(parents=True)
+    legacy.write_text("ENCRYPTION_KEY=" + base64.urlsafe_b64encode(bytes(range(32))).decode("ascii") + "\n", encoding="utf-8")
+    before = {path: path.read_bytes() for path in (canonical, legacy)}
+    cause = PermissionError("synthetic selected key file unreadable")
+    actual = type(canonical).read_text
+    reads = []
+
+    def read_text(path, *args, **kwargs):
+        reads.append(path)
+        if path == canonical:
+            raise cause
+        return actual(path, *args, **kwargs)
+
+    monkeypatch.setattr(type(canonical), "read_text", read_text)
+    with pytest.raises(encryption.KeyManagementError, match="读取密钥文件") as caught:
+        encryption.EncryptionManager()
+    assert caught.value.__cause__ is cause and reads == [canonical]
+    assert all(path.read_bytes() == value for path, value in before.items())

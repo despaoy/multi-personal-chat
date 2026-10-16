@@ -170,13 +170,12 @@ class EncryptionManager:
 
     def _load_or_generate_key(self) -> bytes:
         """Load the canonical key, migrate the legacy path, or create a dev key."""
-        candidates = (
-            ("环境变量", os.environ.get(_ENV_KEY_NAME)),
-            (str(_ENV_FILE_PATH), self._read_key_from_file(_ENV_FILE_PATH)),
-        )
-        for source, encoded_key in candidates:
-            if not encoded_key:
-                continue
+        source = "环境变量"
+        encoded_key = os.environ.get(_ENV_KEY_NAME)
+        if not encoded_key:
+            source = str(_ENV_FILE_PATH)
+            encoded_key = self._read_key_from_file(_ENV_FILE_PATH)
+        if encoded_key:
             key = self._decode_key(encoded_key, source)
             os.environ[_ENV_KEY_NAME] = encoded_key
             logger.info("从%s加载加密密钥成功", source)
