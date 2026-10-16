@@ -43,23 +43,21 @@ async def test_duplicate_json_keys_fail_before_applied_diagnostics(kind, fenced)
 @pytest.mark.parametrize('field,signal', [('situation_scores', 'emotional'),
                                          ('user_acts', 'seek_support'), ('user_needs', 'validation')])
 @pytest.mark.parametrize('scores', [(0.0, .8), (.8, 0.0)])
-async def test_duplicate_signal_ids_fail_even_when_one_score_is_zero(field, signal, scores):
+async def test_signal_lists_fail_even_when_one_duplicate_score_is_zero(field, signal, scores):
     payload = _review_payload(**{field: [dict(signal_id=signal, score=score) for score in scores]})
     reviewer = _Reviewer(payload)
-    with pytest.raises(ValueError, match='duplicate signal id'):
+    with pytest.raises(ValueError, match='signals must be an object'):
         await SemanticStateEstimator(reviewer).refine(QUERY, HISTORY, _state(confidence=.2))
     assert len(reviewer.calls) == 1
 
 
-@pytest.mark.parametrize('representation', ['mapping', 'flat_mapping', 'json', 'flat_json', 'json_fence', 'bare_fence'])
-async def test_unique_list_signals_preserve_supported_response_forms_and_zero_filtering(representation):
+@pytest.mark.parametrize('representation', ['mapping', 'json', 'json_fence', 'bare_fence'])
+async def test_declared_signal_maps_preserve_transport_forms_and_zero_filtering(representation):
     payload = _review_payload(
-        situation_scores=[dict(signal_id='emotional', score=.82), dict(signal_id='daily', score=0.0)],
-        user_acts=[dict(signal_id='seek_support', score=.76), dict(signal_id='greeting', score=0.0)],
-        user_needs=[dict(signal_id='validation', score=.8), dict(signal_id='guidance', score=0.0)],
+        situation_scores={'emotional': 0.82, 'daily': 0.0},
+        user_acts={'seek_support': 0.76, 'greeting': 0.0},
+        user_needs={'validation': 0.8, 'guidance': 0.0},
     )
-    if representation in {'flat_mapping', 'flat_json'}:
-        payload = payload['state']
     raw = payload if representation.endswith('mapping') else json.dumps(payload, ensure_ascii=False)
     if representation in {'json_fence', 'bare_fence'}:
         raw = ('```json\n' if representation == 'json_fence' else '```\n') + raw + '\n```'
