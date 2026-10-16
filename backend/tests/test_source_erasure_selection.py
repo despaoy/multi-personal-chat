@@ -2,13 +2,13 @@ import json
 from datetime import datetime, timezone
 
 import pytest
+from repositories.character_memory import DatabaseCharacterMemoryRepository
 
 from character.memory_llm import MemoryEnrichmentScheduler, MemoryLlmConfig
 from character.models import UserScope
 from character.source_erasure_selection import candidates, selected_ids
 from db.database import SQLiteDB
 from inference.token_counting import text_token_counter
-from repositories.character_memory import DatabaseCharacterMemoryRepository
 
 SCOPE = UserScope('web', 'test', 'user', 'user', 'private')
 
@@ -100,7 +100,7 @@ async def test_scheduler_rejects_invalid_selection_even_without_candidates(tmp_p
             payload = json.loads(messages[1]['content'])
             assert not payload.get('source_erasure_candidates')
             memories = [] if '删除' in message else [dict(kind='major', value='物理学',
-                evidence='我的专业是物理学', operation='ADD', confidence=0.99)]
+                evidence='我的专业是物理学', operation='ADD', confidence=0.99, attributed_to='user')]
             return json.dumps(dict(memories=memories, erase_source_ids=selection))
 
         async def close(self):

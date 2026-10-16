@@ -41,7 +41,7 @@ async def test_protocol_failure_reaches_receipt_without_claim_write(tmp_path):
         result = await worker.schedule_and_wait(repository=repo,character_id='role',user_scope=scope,
             message=SOURCE,rule_hints=(),source_message_id='evidence-request')
         assert result['status']=='failed' and result['stage']=='proposal_validation'
-        assert result['error']=='ValueError' and result['accepted']==result['persisted']==0
+        assert result['error']=='MemoryResponseError' and result['accepted']==result['persisted']==0
         completion.complete.assert_awaited_once()
         assert await repo.list_memory_records('role',scope)==[]
     finally:

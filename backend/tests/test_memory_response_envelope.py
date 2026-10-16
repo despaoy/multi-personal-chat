@@ -8,7 +8,7 @@ from character.memory_llm import parse_llm_proposals
 
 
 def candidate(value="物理学"):
-    return dict(kind="major", value=value, evidence="我的专业是物理学", confidence=.95, operation="ADD")
+    return dict(kind="major", value=value, evidence="我的专业是物理学", confidence=.95, operation="ADD", attributed_to="user")
 
 
 @pytest.mark.parametrize("prefix,suffix", [("", ""), ("```json\n", "\n```")])
@@ -101,7 +101,7 @@ async def test_scheduler_preserves_source_but_never_writes_partial_invalid_respo
         else:
             assert receipt['status'] == 'failed' and receipt['stage'] == 'proposal_validation'
             assert receipt['accepted'] == receipt['persisted'] == 0 and not records
-            assert receipt['error'] == 'ValueError' and 'private-tail' not in json.dumps(receipt)
+            assert receipt['error'] == 'MemoryResponseError' and 'private-tail' not in json.dumps(receipt)
     finally:
         await worker.shutdown(timeout=1)
         database.close_connection()

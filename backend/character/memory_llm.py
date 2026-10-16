@@ -77,6 +77,12 @@ _ALLOWED_KINDS = {
     "shared_event",
     "other_user_fact",
 }
+_PROPOSAL_FIELDS = {
+    "kind", "value", "content", "evidence", "confidence", "operation",
+    "target_memory_id", "target_memory_key", "attributed_to", "qualifiers",
+    "valid_from", "valid_to", "valid_at", "invalid_at", "observed_at", "scope_level",
+}
+
 DEFAULT_CONFIDENCE_THRESHOLD = 0.85
 PENDING_CONFIDENCE_THRESHOLD = 0.65
 MAX_HISTORY_MESSAGES = 4
@@ -156,6 +162,7 @@ value 是短索引，不要把整段计划和全部限定塞进 value。qualifie
 
 只输出严格 JSON，不要 Markdown、解释或思考过程：
 {"memories":[{"kind":"name|like|dislike|major|study_stage|location|workplace|goal|promise|shared_event|other_user_fact","value":"结构化值","content":"用户开头的第三人称事实","evidence":"当前消息连续原文","confidence":0.0,"operation":"ADD|MERGE|SUPERSEDE|COEXIST|PENDING|RETRACT|NOOP|ERASE","target_memory_id":"","target_memory_key":"","attributed_to":"user","qualifiers":{},"valid_from":"","valid_to":"","observed_at":"","scope_level":"conversation"}]}
+顶层只允许 memories 和本轮明确提供的 erase_source_ids，候选只能包含以上声明字段。
 没有合格记忆时输出 {"memories":[]}。"""
 
 
@@ -326,17 +333,25 @@ def _truncate(text: str, limit: int) -> str:
     return cleaned if len(cleaned) <= limit else cleaned[: limit - 1].rstrip() + "…"
 
 
+class MemoryResponseError(ValueError):
+    """Invalid model protocol; field names are fixed, never copied from model output."""
+
+    def __init__(self, field: str, message: str) -> None:
+        super().__init__(message)
+        self.field = field
+
+
 def _unique_json_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     result: dict[str, Any] = {}
     for key, value in pairs:
         if key in result:
-            raise ValueError("记忆 LLM JSON 包含重复字段")
+            raise MemoryResponseError('response', "记忆 LLM JSON 包含重复字段")
         result[key] = value
     return result
 
 
 def _reject_json_constant(value: str):
-    raise ValueError("记忆 LLM JSON 包含非有限数值")
+    raise MemoryResponseError('response', "记忆 LLM JSON 包含非有限数值")
 
 
 def _extract_json(text: str) -> dict[str, Any]:
@@ -347,15 +362,17 @@ def _extract_json(text: str) -> dict[str, Any]:
     try:
         value = json.loads(cleaned, object_pairs_hook=_unique_json_object, parse_constant=_reject_json_constant)
     except json.JSONDecodeError:
-        raise ValueError("记忆 LLM 必须返回完整的单个 JSON 结果") from None
+        raise MemoryResponseError('response', "记忆 LLM 必须返回完整的单个 JSON 结果") from None
     if isinstance(value, list):
         # Normalize only the container. Every candidate still goes through
         # the same evidence, ownership, target and lifecycle validation.
         return {"memories": value}
     if not isinstance(value, dict):
-        raise ValueError("记忆 LLM 顶层结果必须是对象")
+        raise MemoryResponseError('response', "记忆 LLM 顶层结果必须是对象")
+    if set(value) - {"memories", "erase_source_ids"}:
+        raise MemoryResponseError("response", "记忆 LLM 顶层包含未声明字段")
     if "memories" not in value:
-        raise ValueError("记忆 LLM 缺少 memories 集合")
+        raise MemoryResponseError('memories', "记忆 LLM 缺少 memories 集合")
     return value
 
 
@@ -938,7 +955,7 @@ def _supported_generic_fact(value: str, evidence: str) -> tuple[str, ExtractedMe
 def _proposal_text(raw: dict[str, Any], field: str) -> str:
     value = raw.get(field, "")
     if not isinstance(value, str):
-        raise ValueError(f"记忆 LLM {field} 必须是字符串")
+        raise MemoryResponseError(field, f"记忆 LLM {field} 必须是字符串")
     return value
 
 
@@ -953,22 +970,22 @@ def _candidate_to_proposal(
 ) -> ValidatedMemoryProposal | None:
     confidence = raw.get("confidence")
     if type(confidence) not in (int, float) or not 0.0 <= confidence <= 1.0:
-        raise ValueError("记忆 LLM confidence 必须是 0 到 1 的 JSON 数值")
+        raise MemoryResponseError('confidence', "记忆 LLM confidence 必须是 0 到 1 的 JSON 数值")
     operation = raw.get("operation")
     if not isinstance(operation, str):
-        raise ValueError("记忆 LLM operation 必须是明确的操作名称")
+        raise MemoryResponseError('operation', "记忆 LLM operation 必须是明确的操作名称")
     operation = operation.strip().upper()
     # UPDATE 与 IGNORE 保留现有公开解析契约。
     semantic_operation = "SUPERSEDE" if operation == "UPDATE" else operation
     if operation == "IGNORE":
         return None
     if semantic_operation not in _SEMANTIC_OPERATIONS:
-        raise ValueError("记忆 LLM operation 不受支持")
+        raise MemoryResponseError('operation', "记忆 LLM operation 不受支持")
     kind = _proposal_text(raw, "kind").strip()
     value = re.sub(r"\s+", " ", _proposal_text(raw, "value")).strip()
     evidence = _proposal_text(raw, "evidence")
     if not evidence.strip():
-        raise ValueError("记忆 LLM evidence 必须是非空字符串")
+        raise MemoryResponseError('evidence', "记忆 LLM evidence 必须是非空字符串")
     evidence = re.sub(r"\s+", " ", evidence).strip()
     proposed_content = re.sub(r"\s+", " ", _proposal_text(raw, "content")).strip()
     if proposed_content in {"用户开头的第三人称事实", "第三人称安全描述"}:
@@ -1417,11 +1434,13 @@ def _proposals_from_payload(
 ) -> list[ValidatedMemoryProposal]:
     raw_memories = payload["memories"]
     if not isinstance(raw_memories, list):
-        raise ValueError("记忆 LLM 的 memories 必须是数组")
+        raise MemoryResponseError('memories', "记忆 LLM 的 memories 必须是数组")
     if len(raw_memories) > MAX_EXTRACTED_MEMORIES:
-        raise ValueError("记忆 LLM 候选数量超过约定上限")
+        raise MemoryResponseError('memories', "记忆 LLM 候选数量超过约定上限")
     if any(not isinstance(raw, dict) for raw in raw_memories):
-        raise ValueError("记忆 LLM 每条候选必须是对象")
+        raise MemoryResponseError('memories[]', "记忆 LLM 每条候选必须是对象")
+    if any(set(raw) - _PROPOSAL_FIELDS for raw in raw_memories):
+        raise MemoryResponseError("memories[]", "记忆 LLM 候选包含未声明字段")
     from dataclasses import replace
 
     from character.erasure_authority import partial_erasure_plan
@@ -2017,6 +2036,8 @@ class MemoryEnrichmentScheduler:
             )
             if isinstance(exc, httpx.HTTPStatusError):
                 result["http_status"] = exc.response.status_code
+            if isinstance(exc, MemoryResponseError):
+                result.update(reason="invalid_model_response", field=exc.field)
             if isinstance(exc, InputBudgetError):
                 result["reason"] = "input_budget"
             logger.warning("后台记忆处理失败 stage=%s type=%s", result["stage"], type(exc).__name__)
