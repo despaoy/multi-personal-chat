@@ -9,6 +9,7 @@ from fastapi import HTTPException
 from provider_fixtures import cloud_connection
 
 from db.schemas import MessageRequest
+from services.character_context import _TurnOutcome
 
 
 def request():
@@ -29,7 +30,7 @@ def request():
         ("stale", "已删除"),
         ("conflict", "其他内容"),
         ("recorded", None),
-        ("unsupported_scope", None),
+        ("unsupported_scope", "尚未确认"),
         ("", None),
     ],
 )
@@ -38,7 +39,7 @@ async def test_capture_outcome_is_not_discarded(capture, expected):
 
     service = SimpleNamespace(
         complete_turn=AsyncMock(
-            return_value=SimpleNamespace(source_capture=capture, memory_enrichment_status="skipped")
+            return_value=_TurnOutcome(source_capture=capture, memory_enrichment_status="skipped")
         )
     )
     warning = await gen._complete_character_turn(
@@ -134,7 +135,7 @@ async def test_generation_preserves_answer_and_existing_warnings(monkeypatch, pr
     )
     monkeypatch.setattr(gen, "_prepare_character_turn", AsyncMock(return_value=prepared))
     service = SimpleNamespace(
-        complete_turn=AsyncMock(return_value=SimpleNamespace(source_capture=mode, memory_enrichment_status="skipped"))
+        complete_turn=AsyncMock(return_value=_TurnOutcome(source_capture=mode, memory_enrichment_status="skipped"))
     )
     if mode == "archive_failure":
         with pytest.raises(HTTPException) as error:

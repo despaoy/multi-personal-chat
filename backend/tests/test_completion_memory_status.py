@@ -3,7 +3,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
 import pytest
-from services.character_context import CharacterContextService, TurnInput
+from services.character_context import CharacterContextService, TurnInput, _TurnOutcome
 
 from character.models import RelationshipState, UserScope
 from db.schemas import MessageRequest
@@ -51,7 +51,7 @@ async def test_actual_service_failure_is_visible_through_web_completion(scenario
 async def test_partial_completion_warning_is_distinct_from_total_failure():
     from api import generate
 
-    service = SimpleNamespace(complete_turn=AsyncMock(return_value=SimpleNamespace(
+    service = SimpleNamespace(complete_turn=AsyncMock(return_value=_TurnOutcome(
         source_capture='', memory_enrichment_status='partial', new_memories=1)))
     warning = await generate._complete_character_turn(SimpleNamespace(character_id='role'),
         MessageRequest(message='我今年大三，专业是统计学。', sourceMessageId='source'), '原始回复', character_service=service)

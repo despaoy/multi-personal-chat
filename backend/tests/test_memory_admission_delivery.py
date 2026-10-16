@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock
 import pytest
 from repositories.character_memory import DatabaseCharacterMemoryRepository
 from services import delivery_memory as dm
-from services.character_context import CharacterContextService
+from services.character_context import CharacterContextService, _TurnOutcome
 from services.turn_completion import TurnCompletionRuntime
 from test_delivery_memory import deliver, generated
 
@@ -108,7 +108,7 @@ async def test_refused_memory_is_pending_then_recovers_without_repeating_turn(tm
 async def test_chat_feedback_reports_unaccepted_memory_without_claiming_raw_storage(status, capture):
     from api import generate
 
-    service = SimpleNamespace(complete_turn=AsyncMock(return_value=SimpleNamespace(
+    service = SimpleNamespace(complete_turn=AsyncMock(return_value=_TurnOutcome(
         memory_enrichment_status=status, source_capture=capture)))
     warning = await generate._complete_character_turn(SimpleNamespace(character_id='tsukiyashiro_kisaki'),
         MessageRequest(message='我本人长期喜欢深蓝色油墨，这是明确的个人偏好。', sourceMessageId='synthetic-source'),

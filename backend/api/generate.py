@@ -851,8 +851,8 @@ async def _complete_character_turn(prepared, request: MessageRequest, reply: str
             timeout=_DB_WRITE_TIMEOUT,
             reservation=completion_slot,
         )
-        capture = getattr(outcome, "source_capture", "")
-        status = getattr(outcome, "memory_enrichment_status", "")
+        capture = outcome.source_capture
+        status = outcome.memory_enrichment_status
         warning = None
         if status == "partial":
             warning = "这条信息的长期记忆仅部分保存，部分写入失败；请检查已保存内容后再重试。"
@@ -864,14 +864,23 @@ async def _complete_character_turn(prepared, request: MessageRequest, reply: str
             warning = "这条信息未保存到长期记忆：相关记忆已删除，本次回复不会恢复它。"
         elif capture == "conflict":
             warning = "这条信息未保存到长期记忆：同一条消息已绑定其他内容，请重新发送。"
-        elif status in {"capacity", "closed"}:
+        elif status in {"capacity", "closed", "not_scheduled"}:
             warning = (
                 ("原文已保存，但" if capture == "recorded" else "")
                 + "长期记忆任务尚未受理；本次回复不代表结构化记忆已写入，请稍后重试。"
             )
         elif status == "disabled":
             warning = "自动长期记忆未启用；本次回复不代表已保存。"
-        failures = getattr(outcome, "failed_writes", ())
+        elif status in {"pending", "cancelled", "unknown"}:
+            warning = "本轮长期记忆操作的结果尚未确认；请稍后检查，避免重复提交。"
+        elif status == "conflict":
+            warning = "长期记忆记录在处理期间发生变化，本轮操作未完成；请检查后重试。"
+        elif capture not in {"", "recorded"} or status not in {
+            "saved", "erased", "no_change", "source_only", "relationship_note_saved",
+            "skipped_fiction_or_note", "skipped", "queued_hot", "buffered_idle", "write_gate",
+        }:
+            raise ValueError("Unrecognized memory completion result")
+        failures = outcome.failed_writes
         if failures:
             labels = {"interaction_count": "交互统计", "preferred_address": "称呼更新"}
             detail = "、".join(labels[stage] for stage in failures)
