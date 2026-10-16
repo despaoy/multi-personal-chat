@@ -18,6 +18,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 
 from character.source_fragment_provenance import source_completeness_payload
+from inference.history import validate_history
 from infra.environment import read_bool
 
 if TYPE_CHECKING:
@@ -93,16 +94,12 @@ def _history_view(history: Sequence[Mapping[str, str]], *,
     premise that qualified it. Legacy leading assistant-only history remains
     unchanged when it fits; this view cannot reconstruct missing upstream data.
     """
+    validate_history(history)
     turns: list[list[dict[str, str]]] = []
     for entry in history:
-        if not isinstance(entry, Mapping) or entry.get("role") not in {"user", "assistant"}:
-            continue
-        content = entry.get("content")
-        if not isinstance(content, str) or not content.strip():
-            continue
         if entry['role'] == 'user' or not turns:
             turns.append([])
-        turns[-1].append({"role": str(entry["role"]), "content": content})
+        turns[-1].append({"role": entry["role"], "content": entry["content"]})
     selected: list[list[dict[str, str]]] = []
     count = 0
     for turn in reversed(turns):

@@ -123,9 +123,7 @@ def planning_messages(query: str, *, history=(), context_budget=None):
             {"max_messages": context_budget.history_messages,
              "max_chars": 4 * context_budget.window_tokens} if context_budget else {}))
         payload["history"] = complete
-        original_count = sum(isinstance(row, dict) and row.get("role") in {"user", "assistant"}
-                             and isinstance(row.get("content"), str) and bool(row["content"].strip())
-                             for row in history)
+        original_count = len(history)
         if original_count > len(complete):
             payload["history_omitted_messages"] = original_count - len(complete)
     messages = [{"role": "system", "content": _SYSTEM},

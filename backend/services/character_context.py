@@ -60,6 +60,7 @@ from character.situation_analyzer import (
     SituationAnalyzer,
     affect_label,
 )
+from inference.history import validate_history
 from infra.environment import read_bool
 
 if TYPE_CHECKING:
@@ -575,11 +576,11 @@ class CharacterContextService:
 
     async def _load_history(self, turn: TurnInput, user_scope: UserScope, character_id: str) -> list[dict[str, str]]:
         """调用方带现场历史时直接使用，否则从数据库读取。"""
-        if turn.history:
-            return list(turn.history)
-        return await self._message_repo.list_recent_conversation_history(
+        history = list(turn.history) if turn.history else await self._message_repo.list_recent_conversation_history(
             user_scope, limit=self._history_limit, max_chars=self._history_max_chars, character_id=character_id
         )
+        validate_history(history)
+        return history
 
 
 def build_character_context_service(

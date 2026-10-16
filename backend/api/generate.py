@@ -39,6 +39,7 @@ from inference.generation_request import (
 from inference.generation_request import (
     GenerationRequest as CharacterGenerationRequest,
 )
+from inference.history import HistoryFormatError, validate_history
 from inference.lora_registry import get_lora_character_id
 from inference.lora_registry import get_lora_system_prompt as _get_system_prompt
 from inference.lora_utils import resolve_lora_served_name
@@ -297,6 +298,10 @@ async def _generate_reply_body(
     行为。必须保证消息写入与人物历史读取使用同一数据库，否则上一
     轮消息写入全局库、下一轮从容器库读不到，历史会断裂。
     """
+    try:
+        validate_history(request.history)
+    except HistoryFormatError as exc:
+        raise HTTPException(503, detail=exc.public_detail()) from exc
     if (
         prepared_override is None
         and not request.branchId
@@ -675,6 +680,8 @@ async def _generate_reply_body(
             except HTTPException as record_error:
                 # Keep the model cause and recording error on separate chains.
                 raise HTTPException(503, detail=with_provider_error(record_error.detail, e)) from e
+        if isinstance(e, HistoryFormatError):
+            raise HTTPException(503, detail=e.public_detail()) from e
         if isinstance(e, ProviderResponseError):
             raise HTTPException(e.http_status, detail=e.public_detail()) from e
         if isinstance(e, CircuitOpenError):
@@ -763,6 +770,8 @@ async def _prepare_character_turn(
             "message": "角色上下文准备失败，回复未生成。请先核对本轮记忆操作回执，再检查审核模型和上下文配置。",
             "memoryOperation": exc.operation_summary,
         }, exc)) from exc
+    except HistoryFormatError as exc:
+        raise HTTPException(503, detail=exc.public_detail()) from exc
     except MemoryContextBudgetError as exc:
         raise HTTPException(503, detail={
             "stage": "memory_context", "reason": "selected_evidence_budget_exceeded",
@@ -1306,6 +1315,8 @@ async def _generate_with_retrieval(
                             (bundle["raw_excerpt"],) if isinstance(bundle.get("raw_excerpt"), dict) else ()
                         ),
                     )
+        except HistoryFormatError:
+            raise
         except Exception as e:
             increment("rag_failures")
             log_event(

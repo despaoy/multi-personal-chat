@@ -71,8 +71,9 @@ async def test_keep_contiguous_whole_turn_suffix(tmp_path, monkeypatch, backend)
 @pytest.mark.parametrize('backend', ['sqlite', 'postgres'])
 @pytest.mark.parametrize('budget', [0, -1, 100])
 async def test_single_sided_legacy_and_order_remain(tmp_path, monkeypatch, backend, budget):
+    # Legacy one-sided rows keep their exact saved text, including whitespace.
     assert await read_history(tmp_path, monkeypatch, backend, [(' 用户 ', ''), ('', ' 助手 ')], budget) == [
-        {'role': 'user', 'content': '用户'}, {'role': 'assistant', 'content': '助手'}]
+        {'role': 'user', 'content': ' 用户 '}, {'role': 'assistant', 'content': ' 助手 '}]
 
 
 def test_shared_assembly_respects_every_budget_and_never_mutates_source():
@@ -98,3 +99,13 @@ async def test_real_history_budget_has_no_orphan_and_does_not_delete_storage(tmp
     stored = db.list_conversation_history('web', 'audit', 'user', 'private', 'room',
                                            max_chars=0, character_id='role')
     assert stored == [{'role': 'user', 'content': user}, {'role': 'assistant', 'content': '你住在北京。'}]
+
+
+@pytest.mark.parametrize('fits', [True, False])
+async def test_stored_history_preserves_original_text_and_budgets_its_full_length(tmp_path, monkeypatch, fits):
+    user = '  虚构材料，不是我的经历：\n    if friday:\n        pay()\n'
+    reply = '\n  仅周五执行；出差时顺延。  '
+    budget = len(user) + len(reply) - (0 if fits else 1)
+    result = await read_history(tmp_path, monkeypatch, 'sqlite', [(user, reply)], budget)
+    expected = [{'role': 'user', 'content': user}, {'role': 'assistant', 'content': reply}] if fits else []
+    assert result == expected

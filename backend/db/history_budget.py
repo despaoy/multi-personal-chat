@@ -21,7 +21,7 @@ def assemble_history(turns_newest_first: Iterable[tuple[str | None, str | None]]
     kept: list[list[dict[str, str]]] = []
     total = 0
     for message, reply in turns_newest_first:
-        turn = [{'role': role, 'content': content.strip()}
+        turn = [{'role': role, 'content': content}
                 for role, content in (('user', message), ('assistant', reply))
                 if content and content.strip()]
         size = sum(len(item['content']) for item in turn)

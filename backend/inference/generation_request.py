@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Any, Literal
 from character.evidence_selector import InputBudgetError
 from inference.context_budget import CONTEXT_SAFETY_MARGIN_TOKENS as CONTEXT_SAFETY_MARGIN_TOKENS
 from inference.context_budget import estimated_tokens as _estimated_tokens
+from inference.history import validate_history
 from inference.prompt_policy import (
     MEMORY_ATTRIBUTION_POLICY,
     PROMPT_POLICY_VERSION,
@@ -214,16 +215,6 @@ class GenerationResult:
     task_results: tuple[Mapping[str, Any], ...] = ()
 
 
-def _conversation_history(history: Sequence[Mapping[str, str]]) -> list[Message]:
-    messages: list[Message] = []
-    for item in history:
-        role = str(item.get("role", ""))
-        content = str(item.get("content", "")).strip()
-        if role in {"user", "assistant"} and content:
-            messages.append({"role": role, "content": content})
-    return messages
-
-
 def _task_history(request: GenerationRequest) -> tuple[list[Message], str, int]:
     """Prior assistant answers are not dependencies of a standalone identity read.
 
@@ -234,7 +225,8 @@ def _task_history(request: GenerationRequest) -> tuple[list[Message], str, int]:
     """
     from collections.abc import Mapping
 
-    history = _conversation_history(request.history)
+    validate_history(request.history)
+    history = [{"role": item["role"], "content": item["content"]} for item in request.history]
     task = request.retrieval.identity_task
     if (
         not request.retrieval.has_evidence
