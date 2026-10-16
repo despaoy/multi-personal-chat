@@ -22,6 +22,14 @@ _LABELS = {
 }
 
 
+class EventMemoryReadError(ValueError):
+    """Stored event failure with a safe field name, without its private value."""
+
+    def __init__(self, field: str, message: str):
+        self.field = field
+        super().__init__(message)
+
+
 @dataclass(frozen=True)
 class EventChange:
     subject: str
@@ -78,15 +86,17 @@ def event_reference_content(row: dict, now: datetime) -> str:
     content = str(row.get("content") or "")
     if row.get("status", "active") not in {"active", "current"}:
         return content  # Historical versions describe what was known then.
-    event = (row.get("metadata") or {}).get("event") or {}
-    if not isinstance(event, dict):
+    event = (row.get("metadata") or {}).get("event")
+    if event is None:
         return content
+    if not isinstance(event, dict):
+        raise EventMemoryReadError("event", "Memory event metadata must be an object")
     scheduled = event.get("scheduled_date")
-    if scheduled and event.get("state") in {"planned", "ongoing", "postponed"}:
+    if scheduled not in (None, "") and event.get("state") in {"planned", "ongoing", "postponed"}:
         try:
             overdue = date.fromisoformat(scheduled) < now.astimezone(EVENT_TZ).date()
-        except (ValueError, TypeError):
-            overdue = False
+        except (ValueError, TypeError) as exc:
+            raise EventMemoryReadError("event.scheduled_date", "Memory event scheduled_date must be a valid ISO date") from exc
         if overdue:
             return f"用户事项：{event.get('subject', '')}；原计划日期：{scheduled}；日期已过，结果未知（不能当作当前待办或已完成）"
     return content

@@ -88,3 +88,47 @@ async def test_invalid_embedding_output_cannot_become_successful_recall(reposito
         embedding_provider=SimpleNamespace(embed_texts=encode))
     with pytest.raises(ValueError, match="zero norm|形状不正确"):
         await service.recall_with_diagnostics("role", SCOPE, QUERY)
+
+
+@pytest.mark.parametrize("event,field", [
+    ({"subject": "面试", "state": "planned", "scheduled_date": "2026-02-30"}, "scheduled_date"),
+    ({"subject": "面试", "state": "planned", "scheduled_date": "SYNTHETIC_PRIVATE_BAD_DATE"}, "scheduled_date"),
+    ({"subject": "面试", "state": "planned", "scheduled_date": False}, "scheduled_date"),
+    (False, "metadata"),
+])
+async def test_invalid_stored_event_stops_api_instead_of_returning_a_normal_plan(repository, monkeypatch, caplog, event, field):
+    monkeypatch.setenv("CONTEXTUAL_MEMORY_SELECTION_ENABLED", "false")
+    monkeypatch.setenv("CONTEXTUAL_DECISION_POLICY_ENABLED", "false")
+    source = "我计划在2026年9月24日参加面试，只有收到通知且持证件原件才去；下雨取消。"
+    stamp = datetime.now(timezone.utc) - timedelta(seconds=1)
+    await repository.capture_source("role", SCOPE, source_message_id="event-source", body=source, observed_at=stamp)
+    stored = await repository.append_claim(
+        "role", SCOPE, MemoryItem("", "shared_event", source, .9), memory_key="goal_面试", confidence=.99,
+        evidence=(source,), source_message_id="event-source", observed_at=stamp.isoformat(),
+        metadata={"origin": "rule_v2", "event": event},
+    )
+    before = await repository.get_memory_record(stored["id"], "role", SCOPE)
+    profile = CharacterProfile("role", "虚构角色", identity="测试角色", boundaries=("不编造事实",))
+    # A damaged event container has no topic shortcut. Supply complete semantic
+    # retrieval controls so the required record reaches the parser regardless.
+    def encode(texts):
+        return np.asarray([[1., 0.] if "面试" in text else [0., 1.] for text in texts], dtype=np.float32)
+
+    memory = CharacterMemoryService(repository, semantic_enabled=True,
+        embedding_provider=SimpleNamespace(embed_texts=Mock(side_effect=encode)))
+    service = CharacterContextService(
+        SimpleNamespace(get_profile=Mock(return_value=profile)), repository, DatabaseMessageRepository(repository._database),
+        memory_service=memory, source_recall_enabled=False,
+    )
+    request = MessageRequest(message="我的面试安排是什么？", platform=SCOPE.platform, adapter=SCOPE.adapter,
+        userId=SCOPE.sender_id, sessionId=SCOPE.conversation_id, conversationType="private")
+    with pytest.raises(HTTPException) as caught:
+        await _prepare_character_turn(request, "role", character_service=service)
+    assert caught.value.status_code == 503 and isinstance(caught.value.__cause__, ValueError)
+    assert field in str(caught.value.__cause__)
+    assert caught.value.detail["stage"] == "memory_read"
+    assert caught.value.detail["reason"] == "invalid_event_record"
+    assert caught.value.detail["field"] == ("event" if field == "metadata" else "event.scheduled_date")
+    assert "SYNTHETIC_PRIVATE_BAD_DATE" not in str(caught.value.detail) + caplog.text
+    assert source not in str(caught.value.detail) + caplog.text
+    assert await repository.get_memory_record(stored["id"], "role", SCOPE) == before

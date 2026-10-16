@@ -705,6 +705,7 @@ async def _prepare_character_turn(
     use the default service when none was supplied.
     """
     from character.context_builder import MemoryContextBudgetError
+    from character.event_memory import EventMemoryReadError
 
     try:
         from services.character_context import (
@@ -755,6 +756,11 @@ async def _prepare_character_turn(
         raise HTTPException(503, detail={
             "stage": "memory_context", "reason": "selected_evidence_budget_exceeded",
             "message": "已选必要记忆无法完整放入当前上下文，本轮未生成。请缩小问题范围或增加上下文预算。",
+        }) from exc
+    except EventMemoryReadError as exc:
+        raise HTTPException(503, detail={
+            "stage": "memory_read", "reason": "invalid_event_record", "field": exc.field,
+            "message": "已保存的事件记录格式错误，本轮未生成。请检查并修复对应记忆字段后重试。",
         }) from exc
     except HTTPException:
         raise

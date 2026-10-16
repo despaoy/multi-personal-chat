@@ -183,6 +183,13 @@ async def test_overdue_is_unknown_not_completed_and_does_not_write(repo):
     assert "已完成" in event_reference_content((await current(repo))[0], later)
 
 
+@pytest.mark.parametrize("event", [None, {}, {"subject": "面试", "state": "ongoing", "scheduled_date": ""}])
+def test_missing_optional_schedule_keeps_the_complete_unknown_date_record(event):
+    content = "面试日期尚未确定，只有收到通知且持证件原件才去；下雨取消。"
+    row = dict(content=content, status="active", metadata=dict(event=event))
+    assert event_reference_content(row, NOW) == content
+
+
 @pytest.mark.asyncio
 async def test_actual_retrieval_labels_overdue_and_keeps_completion(repo):
     await save(repo, "我明天要面试。")
