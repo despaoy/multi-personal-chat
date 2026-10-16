@@ -56,7 +56,6 @@ def test_unproved_new_event_title_never_becomes_asserted_index_value():
     {'evidence': '这条内容没有出现在用户原话中'},
     {'confidence': 0.1},
     {'target_memory_id': 'unknown', 'target_memory_key': 'event_unknown'},
-    {'qualifiers': {'condition': '原话没有这项条件'}},
     {'operation': 'ERASE'},
 ])
 def test_observation_recovery_preserves_existing_admission_guards(change):
@@ -88,4 +87,11 @@ def test_oversized_model_evidence_is_protocol_failure_not_empty_admission():
     data = fixture()
     data['model_output']['memories'][0]['evidence'] = 'x' * 121
     with pytest.raises(ValueError, match='evidence'):
+        parse(data)
+
+
+def test_uncovered_model_qualifier_is_not_observation_recovery():
+    data = fixture()
+    data['model_output']['memories'][0]['qualifiers'] = {'condition': '原话没有这项条件'}
+    with pytest.raises(ValueError, match='qualifiers'):
         parse(data)

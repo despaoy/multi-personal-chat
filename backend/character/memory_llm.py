@@ -646,7 +646,7 @@ def _normalize_attributed_to(value: Any) -> str:
 
 def _sanitize_qualifiers(
     raw: Any, *, evidence: str, pending: bool = False
-) -> tuple[tuple[str, str], ...] | None:
+) -> tuple[tuple[str, str], ...]:
     """Validate the whole payload before persistence; never silently drop a field."""
     if raw in (None, "", {}, []):
         return ()
@@ -657,32 +657,30 @@ def _sanitize_qualifiers(
         # ambiguous: joining would invent a relation, dict() would lose one.
         items = [("context", value) for value in raw]
     else:
-        return None
+        raise MemoryResponseError("qualifiers", "记忆 LLM qualifiers 必须是键值对象或单项上下文列表")
     if len(items) > _MAX_QUALIFIERS:
-        return None
+        raise MemoryResponseError("qualifiers", "记忆 LLM qualifiers 数量超过约定上限")
     result: list[tuple[str, str]] = []
     seen: set[str] = set()
     normalized_evidence = _normalize(evidence)
     for key, value in items:
-        if not isinstance(key, str):
-            return None
         normalized_key = key.strip().lower()
         if normalized_key not in _ALLOWED_QUALIFIER_KEYS or normalized_key in seen:
-            return None
+            raise MemoryResponseError("qualifiers", "记忆 LLM qualifiers 字段未声明或规范化后重复")
         seen.add(normalized_key)
         if isinstance(value, bool):
             normalized_value = "true" if value else "false"
         elif isinstance(value, (str, int, float)):
             normalized_value = re.sub(r"\s+", " ", str(value)).strip()
         else:
-            return None
+            raise MemoryResponseError("qualifiers", "记忆 LLM qualifiers 的值必须是简单标量")
         if not normalized_value or len(normalized_value) > _MAX_QUALIFIER_CHARS:
-            return None
+            raise MemoryResponseError("qualifiers", "记忆 LLM qualifiers 的值必须非空且不超过约定长度")
         # Only an explicitly pending lifecycle independently supports an
         # unconfirmed certainty flag. It cannot certify a condition as true.
         structural_uncertainty = pending and normalized_key == "certainty" and normalized_value == "false"
         if not structural_uncertainty and _normalize(normalized_value) not in normalized_evidence:
-            return None
+            raise MemoryResponseError("qualifiers", "记忆 LLM qualifiers 的限定值没有被当前提议的证据覆盖")
         result.append((normalized_key, normalized_value))
     return tuple(result)
 
@@ -1285,8 +1283,6 @@ def _candidate_to_proposal(
     qualifiers = _sanitize_qualifiers(
         raw_qualifiers, evidence=qualifier_evidence, pending=semantic_operation == "PENDING"
     )
-    if qualifiers is None:
-        return None
     raw_valid_from = next((value for value in (
         raw.get("valid_from"), raw.get("valid_at"), misplaced_validity.get("valid_from"), misplaced_validity.get("valid_at")
     ) if value is not None and value != ""), None)
@@ -2033,7 +2029,7 @@ class MemoryEnrichmentScheduler:
             if isinstance(exc, httpx.HTTPStatusError):
                 result["http_status"] = exc.response.status_code
             if isinstance(exc, MemoryResponseError):
-                result.update(reason="invalid_model_response", field=exc.field)
+                result.update(reason="invalid_model_response", field=exc.field, message=str(exc))
             if isinstance(exc, InputBudgetError):
                 result["reason"] = "input_budget"
             logger.warning("后台记忆处理失败 stage=%s type=%s", result["stage"], type(exc).__name__)

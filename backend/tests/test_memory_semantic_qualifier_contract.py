@@ -43,24 +43,28 @@ def test_field_does_not_depend_on_model_metadata(source, value, key):
 
 
 @pytest.mark.parametrize(
-    "source,value,evidence,qualifiers",
+    "source,value,evidence,qualifiers,protocol_error",
     [
-        ("我目前住在丽水。", "丽水", None, {"type": "hometown"}),
-        ("我喜欢宣城。", "宣城", None, {"type": "hometown"}),
-        ("我目前住在丽水。", "丽水", None, {"type": "unknown"}),
-        ("我目前住在丽水。", "丽水", None, {"type": "current_residence", "secret": "x"}),
-        ("我姐姐目前住在丽水。", "丽水", "目前住在丽水", {"type": "current_residence"}),
-        ("假设我目前住在丽水。", "丽水", "我目前住在丽水", {"type": "current_residence"}),
-        ("不要记住我目前住在丽水。", "丽水", "我目前住在丽水", {"type": "current_residence"}),
-        ("我的老家在宣城吗？", "宣城", None, {"type": "hometown"}),
-        ("我姐姐的老家在宣城。", "宣城", "老家在宣城", {"type": "hometown"}),
-        ("她的故乡是崇左。", "崇左", "故乡是崇左", {"type": "hometown"}),
-        ("小陈的老家在宣城。", "宣城", "老家在宣城", {"type": "hometown"}),
-        ("假设我叫叶澄，老家在宣城。", "宣城", "老家在宣城", {"type": "hometown"}),
+        ("我目前住在丽水。", "丽水", None, {"type": "hometown"}, True),
+        ("我喜欢宣城。", "宣城", None, {"type": "hometown"}, True),
+        ("我目前住在丽水。", "丽水", None, {"type": "unknown"}, True),
+        ("我目前住在丽水。", "丽水", None, {"type": "current_residence", "secret": "x"}, True),
+        ("我姐姐目前住在丽水。", "丽水", "目前住在丽水", {"type": "current_residence"}, False),
+        ("假设我目前住在丽水。", "丽水", "我目前住在丽水", {"type": "current_residence"}, False),
+        ("不要记住我目前住在丽水。", "丽水", "我目前住在丽水", {"type": "current_residence"}, False),
+        ("我的老家在宣城吗？", "宣城", None, {"type": "hometown"}, False),
+        ("我姐姐的老家在宣城。", "宣城", "老家在宣城", {"type": "hometown"}, False),
+        ("她的故乡是崇左。", "崇左", "故乡是崇左", {"type": "hometown"}, False),
+        ("小陈的老家在宣城。", "宣城", "老家在宣城", {"type": "hometown"}, False),
+        ("假设我叫叶澄，老家在宣城。", "宣城", "老家在宣城", {"type": "hometown"}, False),
     ],
 )
-def test_model_label_cannot_supply_fact_or_bypass_admission(source, value, evidence, qualifiers):
-    assert not parse(source, value, evidence, qualifiers=qualifiers)
+def test_model_label_cannot_supply_fact_or_bypass_admission(source, value, evidence, qualifiers, protocol_error):
+    if protocol_error:
+        with pytest.raises(ValueError, match="qualifiers"):
+            parse(source, value, evidence, qualifiers=qualifiers)
+    else:
+        assert not parse(source, value, evidence, qualifiers=qualifiers)
 
 
 def test_planned_certainty_is_grounded_and_remains_pending():
@@ -86,7 +90,8 @@ def test_planned_certainty_is_grounded_and_remains_pending():
     ],
 )
 def test_certainty_label_cannot_invent_pending_evidence(source, operation, label):
-    assert not parse(source, "安庆", kind="other_user_fact", operation=operation, qualifiers={"certainty": label})
+    with pytest.raises(ValueError, match="qualifiers"):
+        parse(source, "安庆", kind="other_user_fact", operation=operation, qualifiers={"certainty": label})
 
 
 @pytest.mark.parametrize("case_id", ["phase1_complete_profile", "phase1_future_not_present"])

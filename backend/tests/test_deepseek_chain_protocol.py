@@ -42,7 +42,7 @@ def test_observation_does_not_promote_free_form_summary_to_a_fact():
 @pytest.mark.parametrize("changes", [
     {"target_memory_id": "999"}, {"target_memory_key": "user_name"},
     {"confidence": .1}, {"attributed_to": "assistant"},
-    {"evidence": "我新养的猫叫雪饼。"}, {"qualifiers": {"unknown": "x"}},
+    {"evidence": "我新养的猫叫雪饼。"},
 ])
 def test_quote_fallback_preserves_existing_admission_boundaries(changes):
     assert not merge(changes)
@@ -53,11 +53,11 @@ def test_no_target_is_not_a_new_paraphrased_fact():
 @pytest.mark.asyncio
 async def test_sqlite_keeps_both_records_when_original_source_recall_is_disabled(tmp_path):
     from legacy_memory_fixtures import seed_legacy_memory
+    from repositories.character_memory import DatabaseCharacterMemoryRepository
 
     from character.context_builder import compile_reference_context
     from character.memory_service import CharacterMemoryService
     from db.database import SQLiteDB
-    from repositories.character_memory import DatabaseCharacterMemoryRepository
     data = fixture("deepseek_merge_admission.json")
     database = SQLiteDB(tmp_path / "merge.sqlite")
     repo = DatabaseCharacterMemoryRepository(database)
@@ -151,8 +151,9 @@ async def test_erase_latest_claim_removes_older_key_versions_and_preserves_other
     from datetime import datetime, timezone
     from types import SimpleNamespace
 
-    from db.database import SQLiteDB
     from repositories.character_memory import DatabaseCharacterMemoryRepository
+
+    from db.database import SQLiteDB
     database = SQLiteDB(tmp_path / "erasure.sqlite")
     repo = DatabaseCharacterMemoryRepository(database)
     scope = UserScope("test", "test", "user", "room", "private")
@@ -211,3 +212,8 @@ async def test_erase_latest_claim_removes_older_key_versions_and_preserves_other
         assert not database._get_connection().execute("SELECT * FROM memory_source_terms").fetchall()
     finally:
         await scheduler.shutdown(timeout=1)
+
+
+def test_unknown_model_qualifier_is_error_without_quote_recovery():
+    with pytest.raises(ValueError, match="qualifiers"):
+        merge({"qualifiers": {"unknown": "x"}})

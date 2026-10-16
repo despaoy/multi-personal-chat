@@ -42,6 +42,7 @@ def proposal(qualifiers, *, source=SOURCE, operation="ADD"):
                         value="蓝莓茶",
                         evidence=source,
                         confidence=0.98,
+                        attributed_to="user",
                         operation=operation,
                         qualifiers=qualifiers,
                     )
@@ -79,25 +80,26 @@ def test_invalid_suffix_rejects_whole_proposal(tail):
     positive()
     baseline = dict(list(QUALIFIERS.items())[:6])
     assert len(proposal(baseline)) == 1
-    assert _sanitize_qualifiers({**baseline, **tail}, evidence=SOURCE) is None
-    assert not proposal({**baseline, **tail})
+    with pytest.raises(ValueError, match="qualifiers"):
+        _sanitize_qualifiers({**baseline, **tail}, evidence=SOURCE)
+    with pytest.raises(ValueError, match="qualifiers"):
+        proposal({**baseline, **tail})
 
 
 @pytest.mark.parametrize("collision", [" Condition ", "CONDITION", "condition "])
 def test_normalized_key_collision_is_not_last_value_wins(collision):
     positive()
-    assert (
+    with pytest.raises(ValueError, match="qualifiers"):
         _sanitize_qualifiers(
             {"condition": QUALIFIERS["condition"], collision: QUALIFIERS["exception"]}, evidence=SOURCE
         )
-        is None
-    )
 
 
 def test_list_compatibility_never_discards_a_second_context():
     positive()
     assert _sanitize_qualifiers([QUALIFIERS["context"]], evidence=SOURCE) == (("context", QUALIFIERS["context"]),)
-    assert _sanitize_qualifiers([QUALIFIERS["context"], QUALIFIERS["condition"]], evidence=SOURCE) is None
+    with pytest.raises(ValueError, match="qualifiers"):
+        _sanitize_qualifiers([QUALIFIERS["context"], QUALIFIERS["condition"]], evidence=SOURCE)
 
 
 @pytest.mark.parametrize(
@@ -112,7 +114,8 @@ def test_list_compatibility_never_discards_a_second_context():
 )
 def test_boolean_cannot_certify_an_unobserved_condition(key, value, pending):
     positive()
-    assert _sanitize_qualifiers({key: value}, evidence=SOURCE, pending=pending) is None
+    with pytest.raises(ValueError, match="qualifiers"):
+        _sanitize_qualifiers({key: value}, evidence=SOURCE, pending=pending)
 
 
 def test_pending_false_certainty_keeps_uncertain_lifecycle():

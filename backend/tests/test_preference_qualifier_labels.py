@@ -50,7 +50,8 @@ def test_complete_self_preference_ignores_only_redundant_labels(kind, verb, labe
     ],
 )
 def test_other_labels_and_unrelated_conditions_still_require_quote(qualifiers):
-    assert not proposal("我不喜欢紫樱茶。我周五喜欢菱谷饼。", "我不喜欢紫樱茶。", qualifiers=qualifiers)
+    with pytest.raises(ValueError, match="qualifiers"):
+        proposal("我不喜欢紫樱茶。我周五喜欢菱谷饼。", "我不喜欢紫樱茶。", qualifiers=qualifiers)
 
 
 @pytest.mark.parametrize(
@@ -62,7 +63,8 @@ def test_other_labels_and_unrelated_conditions_still_require_quote(qualifiers):
     ],
 )
 def test_clipped_conditional_or_other_subject_cannot_gain_self_authority(source, evidence):
-    assert not proposal(source, evidence, qualifiers={"certainty": "稳定", "preference_strength": "否定"})
+    with pytest.raises(ValueError, match="qualifiers"):
+        proposal(source, evidence, qualifiers={"certainty": "稳定", "preference_strength": "否定"})
 
 
 def test_actual_literal_preference_qualification_remains():
