@@ -128,7 +128,7 @@ class CharacterMemoryRepository(Protocol):
         status: Optional[str] = None,
         parent_memory_id: Optional[int] = None,
         supersedes_memory_id: Optional[int] = None,
-        evidence: tuple[Any, ...] = (),
+        evidence: tuple[str | dict[str, str], ...] = (),
         confidence: float = 1.0,
         attributed_to: str = "user",
         valid_from: Optional[str] = None,
@@ -183,15 +183,37 @@ def _decode_json(value: Any, expected_type: type, field: str) -> Any:
     return value
 
 
+def _nonempty_text(value: Any) -> bool:
+    return isinstance(value, str) and bool(value.strip())
+
+
+def _decode_text_list(value: Any, field: str) -> list[str]:
+    values = _decode_json(value, list, field)
+    if not all(_nonempty_text(item) for item in values):
+        raise ValueError(f"Memory field {field} must contain non-empty text elements")
+    return values
+
+
+def _decode_evidence(value: Any) -> list[str | dict[str, str]]:
+    values = _decode_json(value, list, "evidence_json")
+    for item in values:
+        if _nonempty_text(item):
+            continue
+        if (isinstance(item, dict) and set(item) == {"message_id", "quote"}
+                and all(_nonempty_text(part) for part in item.values())):
+            continue
+        raise ValueError("Memory field evidence_json must contain text or attributed quote records")
+    return values
+
+
 def _decode_memory_record(row: dict[str, Any]) -> dict[str, Any]:
     """Expose JSON payloads as typed convenience fields without hiding raw columns."""
     record = dict(row)
-    source_ids = _decode_json(record.get("source_message_ids_json"), list, "source_message_ids_json")
-    source_ids = [str(item) for item in source_ids if str(item).strip()]
+    source_ids = _decode_text_list(record.get("source_message_ids_json"), "source_message_ids_json").copy()
     legacy_source = str(record.get("source_message_id") or "").strip()
     if legacy_source and legacy_source not in source_ids:
         source_ids.insert(0, legacy_source)
-    evidence = _decode_json(record.get("evidence_json"), list, "evidence_json")
+    evidence = _decode_evidence(record.get("evidence_json"))
     metadata = _decode_json(record.get("metadata_json"), dict, "metadata_json")
     record["source_message_ids"] = source_ids
     record["evidence"] = evidence
@@ -430,7 +452,7 @@ class DatabaseCharacterMemoryRepository:
         status: Optional[str] = None,
         parent_memory_id: Optional[int] = None,
         supersedes_memory_id: Optional[int] = None,
-        evidence: tuple[Any, ...] = (),
+        evidence: tuple[str | dict[str, str], ...] = (),
         confidence: float = 1.0,
         attributed_to: str = "user",
         valid_from: Optional[str] = None,
@@ -457,9 +479,11 @@ class DatabaseCharacterMemoryRepository:
 
         metadata_payload = dict(metadata or {})
         metadata_payload["attributed_to"] = str(attributed_to or "user")
-        source_ids = [str(item).strip() for item in source_message_ids if str(item).strip()]
-        if source_message_id and source_message_id not in source_ids:
+        source_ids = list(source_message_ids)
+        if source_message_id is not None and source_message_id != "" and source_message_id not in source_ids:
             source_ids.insert(0, source_message_id)
+        source_ids = [item.strip() for item in _decode_text_list(source_ids, "source_message_ids_json")]
+        evidence_payload = _decode_evidence(list(evidence))
         record = await asyncio.to_thread(
             self._database.append_character_memory_claim,
             character_id,
@@ -478,7 +502,7 @@ class DatabaseCharacterMemoryRepository:
             status=status,
             parent_memory_id=parent_memory_id,
             supersedes_memory_id=supersedes_memory_id,
-            evidence_json=json.dumps(list(evidence), ensure_ascii=False),
+            evidence_json=json.dumps(evidence_payload, ensure_ascii=False),
             confidence=confidence,
             valid_from=valid_from,
             valid_to=valid_to,

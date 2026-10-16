@@ -609,26 +609,6 @@ def _record_list(row: dict[str, Any], field: str) -> list | tuple:
     return values
 
 
-def _evidence_texts(value: Any) -> tuple[str, ...]:
-    """把 evidence/source event 的常见表示规范化为短文本元组。"""
-
-    if value is None:
-        return ()
-    if isinstance(value, dict):
-        for key in ("text", "content", "quote", "evidence", "summary"):
-            text = str(value.get(key) or "").strip()
-            if text:
-                return (text,)
-        return ()
-    if isinstance(value, (list, tuple, set)):
-        result: list[str] = []
-        for item in value:
-            result.extend(_evidence_texts(item))
-        return tuple(result)
-    text = str(value).strip()
-    return (text,) if text else ()
-
-
 def _row_qualifiers(row: dict[str, Any]) -> tuple[tuple[str, str], ...]:
     """Preserve an entire valid qualifier map as data, never repair partial logic."""
     metadata = row.get('metadata')
@@ -658,14 +638,7 @@ def _row_evidence(
 ) -> tuple[str, ...]:
     """提取 claim 自带 evidence，并按显式 source event ID 附一跳事件。"""
 
-    values = list(_evidence_texts(_record_list(row, "evidence")))
-    for key in (
-        "source_event",
-        "source_events",
-        "adjacent_event",
-        "adjacent_events",
-    ):
-        values.extend(_evidence_texts(row.get(key)))
+    values = [item if isinstance(item, str) else item["quote"] for item in _record_list(row, "evidence")]
 
     for event_id in source_event_ids(row):
         related = rows_by_id.get(str(event_id))
