@@ -48,6 +48,32 @@ def test_complete_round_trip_binds_keyword(vector):
     assert not list(vector.db_path.glob(".snapshot-*"))
 
 
+@pytest.mark.parametrize("fail_at", [1, 4])
+def test_file_sync_failure_keeps_previous_complete_snapshot(vector, monkeypatch, fail_at):
+    vector._save_index()
+    before = digest(vector.snapshot_path)
+    vector.metadata[0]["content"] = "New complete rules that must not publish on sync failure"
+    vector.bm25 = BM25Retriever()
+    vector.bm25.add_documents(vector.metadata)
+    original = store.os.fsync
+    calls = 0
+
+    def sync(descriptor):
+        nonlocal calls
+        calls += 1
+        if calls == fail_at:
+            raise OSError("synthetic sync failure")
+        return original(descriptor)
+
+    monkeypatch.setattr(store.os, "fsync", sync)
+    with pytest.raises(OSError, match="synthetic sync failure"):
+        vector._save_index()
+    assert calls == fail_at and vector._dirty
+    assert digest(vector.snapshot_path) == before
+    assert reopen(vector).metadata[0]["content"] == "LL-842-Q full current rules"
+    assert not list(vector.db_path.glob(".snapshot-*"))
+
+
 @pytest.mark.parametrize("stage", ["_write_faiss", "_write_pickle", "replace"])
 def test_failed_publication_retains_previous_snapshot(vector, monkeypatch, stage):
     vector._save_index()

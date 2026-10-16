@@ -39,7 +39,8 @@ def _hash(path):
 
 
 def _sync_file(path):
-    with path.open("rb") as stream:
+    # Windows requires write access for fsync, even after the writer closed.
+    with path.open("r+b") as stream:
         os.fsync(stream.fileno())
 
 
