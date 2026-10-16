@@ -15,14 +15,13 @@
 from __future__ import annotations
 
 import logging
-import unicodedata
 from html import escape
 
 from .models import AnswerMode, EvidencePacket
 
 logger = logging.getLogger(__name__)
 
-GROUNDED_PROMPT_VERSION = "grounded-answer-v3"
+GROUNDED_PROMPT_VERSION = "grounded-answer-v4"
 
 # 复用项目既有全局安全边界（与聊天链路同源，避免两套规则漂移）
 from inference.prompt_policy import (  # noqa: E402
@@ -50,11 +49,6 @@ PERSONA_FACT_PRIORITY_PROMPT = """
 - 不得添加资料中不存在的剧情、原因或结果；不得删除必要的限定词（如"据本人所说""推测"）。
 - 资料不足时，角色可以以自己的口吻表示不确定，但不得编造。"""
 
-# 对话者昵称进入用户消息不可信参考区（沿用 3.3.0 策略）
-_MAX_HISTORY_ITEMS = 20
-_MAX_HISTORY_ITEM_CHARS = 2000
-
-
 def _sanitize_speaker(raw: str | None) -> str:
     # 与 prompt_policy.sanitize_speaker_label 同语义（局部包装便于单测）
     return sanitize_speaker_label(raw)
@@ -63,10 +57,6 @@ def _sanitize_speaker(raw: str | None) -> str:
 def _escape_data(text: str) -> str:
     """转义证据/用户输入中的 HTML 结构字符，防止闭合 XML 边界标签。"""
     return escape(text, quote=False)
-
-
-def _strip_control(text: str) -> str:
-    return "".join(ch for ch in text if unicodedata.category(ch)[0] != "C")
 
 
 class GroundedPromptBuilder:
@@ -116,8 +106,7 @@ class GroundedPromptBuilder:
                 "</speaker_label>"
             )
         parts.append(self.build_evidence_section(packet))
-        query = _strip_control(packet.query)
-        parts.append("<user_query>\n" + _escape_data(query) + "\n</user_query>")
+        parts.append("<user_query>\n" + _escape_data(packet.query) + "\n</user_query>")
         return "\n\n".join(parts)
 
     def build_evidence_section(self, packet: EvidencePacket) -> str:
@@ -162,10 +151,6 @@ class GroundedPromptBuilder:
     ) -> list[dict[str, str]]:
         system = self.build_system_prompt(packet, persona_prompt=persona_prompt, domain_supplement=domain_supplement)
         messages: list[dict[str, str]] = [{"role": "system", "content": system}]
-        for item in (history or [])[-_MAX_HISTORY_ITEMS:]:
-            role = item.get("role")
-            content = _strip_control(str(item.get("content") or "")).strip()
-            if role in {"user", "assistant"} and content:
-                messages.append({"role": role, "content": content[:_MAX_HISTORY_ITEM_CHARS]})
+        messages.extend({"role": item["role"], "content": item["content"]} for item in history or [])
         messages.append({"role": "user", "content": self.build_user_message(packet, speaker=speaker)})
         return messages

@@ -22,6 +22,7 @@ from collections.abc import AsyncIterator, Awaitable, Callable
 from math import isfinite
 from typing import Any
 
+from inference.history import validate_history
 from infra.environment import read_bool
 from knowledge.curated_sources import CuratedSourceChangedError, curated_source_receipts, validate_curated_source
 
@@ -130,6 +131,8 @@ class GroundedAnswerService:
         top_p: float = 1.0,
         want_citations: bool = True,
     ) -> GroundedAnswerResult:
+        if history is not None:
+            validate_history(history)
         timings = AnswerTimings()
         start = time.perf_counter()
 
@@ -246,6 +249,8 @@ class GroundedAnswerService:
         top_p: float = 1.0,
         want_citations: bool = True,
     ) -> AsyncIterator[AnswerStreamEvent]:
+        if history is not None:
+            validate_history(history)
         timings = AnswerTimings()
         start = time.perf_counter()
 

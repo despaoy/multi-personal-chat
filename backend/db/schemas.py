@@ -98,6 +98,14 @@ class AskRequest(BaseModel):
     wantCitations: bool = True
     debug: bool = False
 
+    @field_validator("history")
+    @classmethod
+    def _validate_history(cls, value: list[dict[str, str]]) -> list[dict[str, str]]:
+        validate_history(value)
+        if any(len(item["content"]) > 2000 for item in value):
+            raise ValueError("history content exceeds 2000 characters")
+        return value
+
 
 class AskResponse(BaseModel):
     """知识问答响应：非流式与流式最终结构语义一致。"""
