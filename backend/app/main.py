@@ -132,17 +132,6 @@ async def lifespan(app: FastAPI):
             logger.critical(f"❌ 数据库初始化失败，服务无法启动: {e}", exc_info=True)
             raise RuntimeError(f"数据库初始化失败: {e}") from e
 
-        # 初始化 Redis 缓存（可选，失败不影响服务）
-        try:
-            from cache.redis_client import health_check
-
-            if health_check():
-                logger.info("✅ Redis 缓存连接正常")
-            else:
-                logger.warning("⚠️ Redis 缓存连接失败，将使用数据库直连模式")
-        except Exception as e:
-            logger.warning(f"Redis 缓存初始化跳过: {e}")
-
         # Both SQLite resources must use the database selected by the runtime container.
         db_file = Path(database.db_path).expanduser().resolve() if not postgres_mode else None
         _cfg.http_client_pool = HttpClientPool(max_connections=100, request_timeout=120.0)
@@ -244,13 +233,6 @@ async def lifespan(app: FastAPI):
             await close_async_redis()
         except Exception as e:
             logger.warning(f"关闭 async Redis 客户端失败: {e}")
-        # 关闭共享的 sync Redis 客户端与连接池
-        try:
-            from cache.redis_client import close_sync_redis
-
-            await asyncio.to_thread(close_sync_redis)
-        except Exception as e:
-            logger.warning(f"关闭 sync Redis 客户端失败: {e}")
         _clear_lifespan_resource_references(_cfg)
         logger.info("✅ 资源清理完成")
 

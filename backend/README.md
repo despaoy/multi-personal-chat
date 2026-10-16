@@ -38,6 +38,8 @@ python -m alembic heads
 
 资源池、备份、访问控制、加密和熔断组件属于后端必要依赖。缺依赖或初始化失败时终止启动，并清理此前已分配的生命周期资源。SQLite 池和备份复用容器数据库的实际路径；PostgreSQL 不创建 SQLite 池或文件备份。关闭流程仅释放已创建的模型管理器。
 
+Web 后端不为启动探测创建同步 Redis 连接。Redis 当前用于 NoneBot 的异步共享消息去重，连接和原子预留失败会阻止该消息生成；配置缓存仍使用独立的进程内快照。
+
 运行时数据库、模型、LoRA、日志、索引和密钥不属于源码目录，边界见 [`../docs/operations/SERVER_LAYOUT.md`](../docs/operations/SERVER_LAYOUT.md)。
 
 ## 知识检索边界

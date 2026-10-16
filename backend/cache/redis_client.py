@@ -1,10 +1,7 @@
-"""Shared Redis connections, lifecycle and health checks."""
+"""Shared asynchronous Redis resources for message deduplication."""
 import logging
 import os
-from typing import Any, Optional
-
-import redis
-from redis import ConnectionPool
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -14,49 +11,12 @@ logger = logging.getLogger(__name__)
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 REDIS_DB = int(os.getenv("REDIS_DB", "0"))
 
-# 同步/异步分别维护独立连接池：
-# - 同步 `redis.ConnectionPool` 用于 redis.Redis（同步客户端）
-# - 异步 `redis.asyncio.ConnectionPool` 用于 redis.asyncio.Redis（异步客户端）
-# 此前曾把同步 pool 复用给异步 client，创建对象不会报错，但执行异步命令时
-# 会在事件循环中调用阻塞 IO，真实 Redis 下缓存、消息去重等功能持续退化。
-_pool: Optional[ConnectionPool] = None
-_client: Optional[redis.Redis] = None
-_async_pool: Optional[Any] = None  # redis.asyncio.ConnectionPool
-_async_client: Optional[Any] = None
-_async_lock: Any = None  # asyncio.Lock, 延迟初始化
+# Shared asynchronous resources used by NoneBot message deduplication.
+_async_pool: Any = None
+_async_client: Any = None
+_async_lock: Any = None
 
 
-def get_redis_pool() -> ConnectionPool:
-    """获取或创建同步 Redis 连接池"""
-    global _pool
-    if _pool is None:
-        _pool = ConnectionPool.from_url(
-            REDIS_URL,
-            db=REDIS_DB,
-            max_connections=50,
-            socket_timeout=5,
-            socket_connect_timeout=3,
-            retry_on_timeout=True,
-            decode_responses=True,
-        )
-        logger.info("Redis 同步连接池已创建")
-    return _pool
-
-
-def get_redis() -> redis.Redis:
-    """获取 Redis 同步客户端"""
-    global _client
-    if _client is None:
-        _client = redis.Redis(connection_pool=get_redis_pool())
-    return _client
-
-
-# ============================================
-# 异步 Redis 客户端（统一共享，避免多模块各自创建连接池）
-# 此前多个模块各自调用
-# redis.asyncio.from_url() 创建独立连接池（分别 10/20 连接），
-# 与同步客户端合计 80 个 max 连接。现统一为单一 async 客户端。
-# ============================================
 def _get_async_pool():
     """获取或创建异步 Redis 连接池（redis.asyncio.ConnectionPool）。
 
@@ -124,33 +84,3 @@ async def close_async_redis() -> None:
         except Exception:
             pass
         _async_pool = None
-
-
-def close_sync_redis() -> None:
-    """关闭同步 Redis 客户端与连接池（应用退出时调用）。
-
-    与 close_async_redis 对称，补全同步客户端的生命周期管理。
-    进程退出时 OS 会回收资源，但显式关闭可在长驻进程中复用模块时
-    避免连接泄漏。
-    """
-    global _client, _pool
-    if _client is not None:
-        try:
-            _client.close()
-        except Exception:
-            pass
-        _client = None
-    if _pool is not None:
-        try:
-            _pool.disconnect()
-        except Exception:
-            pass
-        _pool = None
-
-
-def health_check() -> bool:
-    """Redis 健康检查"""
-    try:
-        return get_redis().ping()
-    except Exception:
-        return False

@@ -91,8 +91,6 @@ def lifecycle(monkeypatch, tmp_path):
         ("cache.redis_client", "close_async_redis"),
     ]:
         monkeypatch.setattr(module + "." + name, AsyncMock())
-    monkeypatch.setattr("cache.redis_client.close_sync_redis", Mock())
-    monkeypatch.setattr("cache.redis_client.health_check", lambda: True)
     monkeypatch.setattr("services.turn_completion.start_turn_completions", Mock())
     worker = Mock()
     monkeypatch.setattr("services.delivery_memory.ensure_delivery_memory_worker", worker)
@@ -199,3 +197,19 @@ async def test_shutdown_closes_existing_model_and_preserves_request_failure(life
     model.shutdown.assert_awaited_once()
     rig.getter.assert_not_called()
     assert rig.events == ["sqlite", "http", "backup"]
+
+
+async def test_web_startup_does_not_connect_unrelated_deduplication_redis(lifecycle, monkeypatch):
+    import redis
+    import redis.asyncio as aioredis
+
+    sync_pool = Mock(side_effect=AssertionError("Web backend must not create a sync Redis pool"))
+    async_pool = Mock(side_effect=AssertionError("Idle message deduplication must not connect"))
+    monkeypatch.setattr(redis.ConnectionPool, "from_url", sync_pool)
+    monkeypatch.setattr(aioredis.ConnectionPool, "from_url", async_pool)
+    app, _ = lifecycle.application()
+    async with lifecycle.main.lifespan(app):
+        assert lifecycle.config.http_client_pool is not None
+    sync_pool.assert_not_called()
+    async_pool.assert_not_called()
+    assert lifecycle.events == ["sqlite", "http", "backup"]
