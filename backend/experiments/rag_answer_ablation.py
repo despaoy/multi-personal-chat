@@ -17,6 +17,7 @@ from inference.prompt_policy import (
     build_grounded_user_message,
     compose_system_prompt,
 )
+from infra.environment import parse_unit_interval
 
 
 @dataclass
@@ -67,7 +68,7 @@ class RAGAnswerAblation:
         self.persona_prompt = system_prompt.strip()
         self.system_prompt = compose_system_prompt(self.persona_prompt, include_rag=True)
         self.formal = formal
-        self.threshold = threshold
+        self.threshold = parse_unit_interval(threshold, "RAGAnswerAblation.threshold")
         self.retrieval_strategy = retrieval_strategy
         self._retrieval_runner = None
 
@@ -94,7 +95,7 @@ class RAGAnswerAblation:
         confidence = helper.compute_confidence(rows)
         should_abstain = abstain and confidence < self.threshold
         return {
-            "results": [] if should_abstain else rows,
+            "results": rows,
             "citations": [] if should_abstain else helper.build_citations(rows),
             "confidence": confidence,
             "abstained": should_abstain,
@@ -111,13 +112,13 @@ class RAGAnswerAblation:
             first = self._package(rows, abstain=True)
             if not first["abstained"]:
                 return first
-            from knowledge.corrective_rag import CorrectiveRAG
-            from knowledge.rag_helper import get_rag_helper
+            from experiments.query_reformulation import append_retrieval_keywords
 
-            reformulator = CorrectiveRAG(
-                get_rag_helper(), threshold=self.threshold, max_retries=1
-            )
-            rewritten = reformulator.reformulate_query(question, rows)
+            rewritten = append_retrieval_keywords(question, (
+                f"{row.get('title', '')} {row.get('content', '')}" for row in rows[:3]
+            ))
+            if rewritten == question:
+                return first
             second_rows = self._retrieve_rows(rewritten)
             second = self._package(second_rows, abstain=True)
             second.update(
@@ -139,6 +140,7 @@ class RAGAnswerAblation:
             started = time.perf_counter()
             error = ""
             evidence = ""
+            retrieved = None
             try:
                 retrieved = self._retrieve(variant, item["question"])
                 abstained = bool(retrieved.get("abstained"))
@@ -146,7 +148,7 @@ class RAGAnswerAblation:
                 if abstained:
                     answer = ""
                 elif mock:
-                    answer = str(item.get("gold_answer", ""))
+                    answer = item["gold_answer"]
                 else:
                     messages = [
                         {"role": "system", "content": self.system_prompt},
@@ -158,27 +160,31 @@ class RAGAnswerAblation:
                         },
                     ]
                     answer = generate(messages)
+                if not abstained and (not isinstance(answer, str) or not answer.strip()):
+                    raise ValueError("Answer evaluation requires non-empty answer text")
             except Exception as exc:
-                retrieved = {"results": [], "citations": [], "confidence": 0.0, "abstained": True}
-                abstained, answer, error = True, "", f"{type(exc).__name__}: {exc}"
+                abstained, answer, error = None, "", f"{type(exc).__name__}: {exc}"
                 result.failures += 1
             latency = (time.perf_counter() - started) * 1000
             latencies.append(latency)
             expected = set(map(str, item.get("expected_doc_ids", [])))
-            cited = {str(row.get("source_id", "")) for row in retrieved.get("citations", [])}
+            cited = {str(row.get("source_id", "")) for row in retrieved["citations"]} if retrieved is not None else set()
             answerable = bool(expected)
             if answerable:
-                citation_hits.append(float(bool(expected & cited)))
-                answerable_abstained.append(float(abstained))
+                citation_hits.append(float(not error and bool(expected & cited)))
+                if not error:
+                    answerable_abstained.append(float(abstained))
                 if answer:
                     coverage.append(_coverage(answer, evidence))
             else:
-                unanswerable_ok.append(float(abstained))
+                unanswerable_ok.append(float(abstained is True and not error))
             result.samples.append({
                 "id": item["id"], "question_type": item["question_type"], "answer": answer,
-                "expected_doc_ids": sorted(expected), "cited_doc_ids": sorted(cited),
-                "confidence": retrieved.get("confidence"), "abstained": abstained,
-                "reformulated": bool(retrieved.get("reformulated")),
+                "expected_doc_ids": sorted(expected), "cited_doc_ids": sorted(cited) if not error else [],
+                "retrieved_doc_ids": [str(row["id"]) for row in retrieved["results"]] if retrieved is not None else [],
+                "status": "error" if error else "abstained" if abstained else "answered",
+                "confidence": retrieved["confidence"] if retrieved is not None else None, "abstained": abstained,
+                "reformulated": bool(retrieved.get("reformulated")) if retrieved is not None else None,
                 "evidence_token_coverage": round(_coverage(answer, evidence), 4) if answer else 0.0,
                 "latency_ms": round(latency, 3), "error": error,
             })

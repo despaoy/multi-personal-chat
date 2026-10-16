@@ -1,11 +1,4 @@
-"""RAG 稳定排序、结果隔离及独立纠正接口验证。
-
-只覆盖本次升级直接相关的行为：
-- 稳定 ID 融合正确且不修改 vector_db 返回的原始字典
-- 独立纠正接口使用中文分词
-- CorrectiveRAG max_retries=0/1 行为正确
-- no-op 重写不会触发第二次检索
-"""
+"""Stable fusion IDs, isolated results and required Chinese tokenization."""
 
 from __future__ import annotations
 
@@ -16,7 +9,6 @@ from typing import Any
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from knowledge import rag_helper
-from knowledge.corrective_rag import CorrectiveRAG
 from knowledge.rag_helper import _stable_result_key
 
 # ---------------------------------------------------------------------------
@@ -89,141 +81,6 @@ class TestFusion:
         results = helper.retrieve_context("任意查询", top_k=5, use_cache=False)
 
         assert [r["id"] for r in results] == ["a", "b"]
-
-
-# ---------------------------------------------------------------------------
-# CorrectiveRAG
-# ---------------------------------------------------------------------------
-
-
-class _StubRAGHelper:
-    def __init__(self, responses: list[dict[str, Any]]):
-        self.responses = list(responses)
-        self.calls: list[str] = []
-
-    def retrieve_with_citations(
-        self, query: str, top_k: int | None = None, threshold: float = 0.3, filters: dict[str, Any] | None = None
-    ):
-        self.calls.append(query)
-        return self.responses.pop(0)
-
-
-def _abstained_response(results=None, confidence=0.1):
-    return {
-        "results": results or [],
-        "citations": [],
-        "confidence": confidence,
-        "abstained": True,
-    }
-
-
-def _success_response(confidence=0.8):
-    return {
-        "results": [{"id": "d1", "title": "文档", "content": "内容", "score": confidence}],
-        "citations": [{"source_id": "d1"}],
-        "confidence": confidence,
-        "abstained": False,
-    }
-
-
-_KEYWORD_RESULTS = [
-    {"title": "胡桃攻略", "content": "往生堂 堂主 火属性", "score": 0.2},
-]
-
-
-class TestCorrectiveRAG:
-    def test_max_retries_zero_only_first_retrieval(self):
-        stub = _StubRAGHelper([_abstained_response(_KEYWORD_RESULTS)])
-        rag = CorrectiveRAG(stub, threshold=0.3, max_retries=0)
-
-        result = rag.retrieve_with_correction("胡桃怎么配队")
-
-        assert len(stub.calls) == 1
-        assert stub.calls[0] == "胡桃怎么配队"
-        assert result["abstained"] is True
-        assert result["reformulated"] is False
-        assert result["reformulated_query"] is None
-        assert len(result["rounds"]) == 1
-        assert result["rounds"][0] == {
-            "query": "胡桃怎么配队",
-            "confidence": 0.1,
-            "abstained": True,
-        }
-
-    def test_default_max_retries_one_recovers(self):
-        stub = _StubRAGHelper(
-            [
-                _abstained_response(_KEYWORD_RESULTS),
-                _success_response(),
-            ]
-        )
-        rag = CorrectiveRAG(stub, threshold=0.3, max_retries=1)
-
-        result = rag.retrieve_with_correction("胡桃怎么配队")
-
-        assert len(stub.calls) == 2
-        assert stub.calls[0] == "胡桃怎么配队"
-        assert stub.calls[1].startswith("胡桃怎么配队 ")
-        # 中文关键词提取生效（不依赖具体分词粒度）
-        assert "往生" in stub.calls[1]
-        assert result["abstained"] is False
-        assert result["reformulated"] is True
-        assert result["original_query"] == "胡桃怎么配队"
-        assert result["reformulated_query"] == stub.calls[1]
-        assert len(result["rounds"]) == 2
-        assert result["rounds"][0]["abstained"] is True
-        assert result["rounds"][1]["abstained"] is False
-
-    def test_noop_rewrite_skips_second_retrieval(self):
-        # 首轮无结果 -> 提取不到关键词 -> 重写等于原查询 -> 不做第二次检索
-        stub = _StubRAGHelper([_abstained_response([])])
-        rag = CorrectiveRAG(stub, threshold=0.3, max_retries=1)
-
-        result = rag.retrieve_with_correction("胡桃怎么配队")
-
-        assert len(stub.calls) == 1
-        assert result["abstained"] is True
-        assert result["reformulated"] is False
-        assert result["reformulated_query"] is None
-        assert len(result["rounds"]) == 1
-
-    def test_existing_keywords_are_not_appended_again(self):
-        results = [{"title": "胡桃", "content": "胡桃 配队", "score": 0.1}]
-        stub = _StubRAGHelper([_abstained_response(results)])
-        rag = CorrectiveRAG(stub, threshold=0.3, max_retries=2)
-
-        result = rag.retrieve_with_correction("胡桃 配队")
-
-        assert len(stub.calls) == 1
-        assert result["reformulated"] is False
-
-    def test_retry_exhaustion_abstains(self):
-        stub = _StubRAGHelper(
-            [
-                _abstained_response(_KEYWORD_RESULTS),
-                _abstained_response(_KEYWORD_RESULTS, confidence=0.2),
-            ]
-        )
-        rag = CorrectiveRAG(stub, threshold=0.3, max_retries=1)
-
-        result = rag.retrieve_with_correction("胡桃怎么配队")
-
-        assert len(stub.calls) == 2
-        assert result["abstained"] is True
-        assert result["results"] == []
-        assert result["confidence"] == 0.2
-        assert len(result["rounds"]) == 2
-
-    def test_high_confidence_returns_directly(self):
-        stub = _StubRAGHelper([_success_response()])
-        rag = CorrectiveRAG(stub, threshold=0.3, max_retries=1)
-
-        result = rag.retrieve_with_correction("胡桃怎么配队")
-
-        assert len(stub.calls) == 1
-        assert result["abstained"] is False
-        assert result["reformulated"] is False
-        assert result["rounds"][0]["query"] == "胡桃怎么配队"
 
 
 class TestChineseTokenize:

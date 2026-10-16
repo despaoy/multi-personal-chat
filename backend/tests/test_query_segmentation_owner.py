@@ -4,8 +4,8 @@ from unittest.mock import Mock
 
 import jieba
 import pytest
+from experiments.query_reformulation import append_retrieval_keywords
 
-from knowledge.corrective_rag import CorrectiveRAG
 from knowledge.retrieval_core.documents import KnowledgeIndexDocument
 from knowledge.retrieval_core.query import QueryAnalysis
 from knowledge.retrieval_core.rerank import PipelineReranker
@@ -21,18 +21,12 @@ def rerank():
     assert all(row.rerank_method == "none" for row in rows)
 
 
-def correct():
-    helper = Mock()
-    helper.retrieve_with_citations.side_effect = [
-        dict(results=[dict(id=7, title="实验室", content="进入实验室必须取得书面许可", score=0.1)], citations=[], confidence=0.1, abstained=True),
-        dict(results=[dict(id=7, title="实验室", content="进入实验室必须取得书面许可", score=0.8)], citations=[], confidence=0.8, abstained=False),
-    ]
-    result = CorrectiveRAG(helper).retrieve_with_correction("进入需要什么条件")
-    assert result["reformulated"] and not result["abstained"]
-    assert helper.retrieve_with_citations.call_count == 2
+def reformulate():
+    result = append_retrieval_keywords("进入需要什么条件", ["实验室 进入实验室必须取得书面许可"])
+    assert result.startswith("进入需要什么条件 ") and "许可" in result
 
 
-@pytest.mark.parametrize("operation", [rerank, correct])
+@pytest.mark.parametrize("operation", [rerank, reformulate])
 @pytest.mark.parametrize("failure", [None, "missing", "segmentation"])
 def test_query_segmentation_success_and_failure(monkeypatch, operation, failure):
     if failure is None:

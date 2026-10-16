@@ -1,11 +1,10 @@
-"""Shared keyword rules retain adapter-specific source fields."""
+"""Explicit offline keyword controls preserve inputs and propagate failures."""
 import builtins
 from unittest.mock import Mock
 
 import jieba
 import pytest
-
-from knowledge.corrective_rag import CorrectiveRAG
+from experiments.query_reformulation import append_retrieval_keywords
 
 
 @pytest.mark.parametrize("failure", [None, "missing", "segmentation"])
@@ -13,7 +12,7 @@ def test_reformulation_preserves_inputs_and_reports_failure(monkeypatch, failure
     row = dict(title="the", content="beta gamma delta epsilon zeta theta", summary="unusedfield")
     original = dict(row)
     def operation():
-        return CorrectiveRAG(None).reformulate_query("ALPHA beta", [row])
+        return append_retrieval_keywords("ALPHA beta", [f"{row['title']} {row['content']}"])
     if failure == "missing":
         original_import = builtins.__import__
         def load(name, *args, **kwargs):

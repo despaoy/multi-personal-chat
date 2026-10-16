@@ -1,7 +1,7 @@
-"""One bounded keyword-append rule for corrective retrieval adapters."""
+"""Keyword baseline for explicit offline ablations, never serving queries."""
 from collections.abc import Iterable
 
-from .retrieval_core.tokenization import segment
+from knowledge.retrieval_core.tokenization import segment
 
 _STOPWORDS = {
     "的",
