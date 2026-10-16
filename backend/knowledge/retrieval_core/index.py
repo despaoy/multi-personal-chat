@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 
 from .embedding import vector_norm
+from .errors import RetrievalIndexError
 from .tokenization import tokenize
 
 if TYPE_CHECKING:
@@ -65,11 +66,15 @@ class BM25Index:
         self._idf = {
             token: math.log((n_docs - freq + 0.5) / (freq + 0.5) + 1.0) for token, freq in self._doc_freqs.items()
         }
-        self._built = n_docs > 0
+        self._built = True
 
     def search(self, query: str, top_k: int) -> list[tuple[int, float]]:
         """返回 (文档行号, BM25 分数) 列表，按分数降序。"""
-        if not self._built or top_k <= 0:
+        if top_k <= 0:
+            return []
+        if not self._built:
+            raise RetrievalIndexError("sparse", "not_initialized")
+        if not self._doc_tokens:
             return []
         query_tokens = tokenize(query)
         if not query_tokens:
@@ -127,19 +132,23 @@ class DomainIndex:
         threshold: float = 0.0,
     ) -> list[tuple[int, float]]:
         """向量近邻检索：返回 (行号, 相似度)，按相似度降序。"""
-        if not self.documents or self._faiss_index is None or top_k <= 0:
+        if top_k <= 0:
+            return []
+        self.require_ready("vector")
+        if not self.documents:
             return []
         vector = np.ascontiguousarray(np.asarray(query_vector, dtype=np.float32).reshape(1, -1))
         if vector.shape[1] != self._faiss_index.d:
             raise ValueError(f"Query embedding dimension mismatch: {vector.shape[1]} != {self._faiss_index.d}")
         vector_norm(vector)
         k = min(top_k, self._faiss_index.ntotal)
-        if k <= 0:
-            return []
         scores, rows = self._faiss_index.search(vector, k)
         return [(int(row), float(score)) for row, score in zip(rows[0], scores[0]) if row >= 0 and score >= threshold]
 
     def search_sparse(self, query: str, top_k: int) -> list[tuple[int, float]]:
+        if top_k <= 0:
+            return []
+        self.require_ready("sparse")
         return self.bm25.search(query, top_k)
 
     def entity_lookup(self, entities: Iterable[str]) -> list[int]:
@@ -158,10 +167,31 @@ class DomainIndex:
     def count(self) -> int:
         return len(self.documents)
 
+    def require_ready(self, mode: str = "hybrid") -> None:
+        """Only requested channels must be initialized and match document rows."""
+        if mode not in {"sparse", "vector", "hybrid"}:
+            raise ValueError("Unknown retrieval mode; choose sparse, vector or hybrid")
+        if mode in {"sparse", "hybrid"}:
+            if not self.bm25._built:
+                raise RetrievalIndexError("sparse", "not_initialized")
+            if len(self.bm25._doc_tokens) != len(self.documents):
+                raise RetrievalIndexError("sparse", "row_count_mismatch")
+        if mode in {"vector", "hybrid"}:
+            if self._faiss_index is None:
+                raise RetrievalIndexError("vector", "not_initialized")
+            if self._faiss_index.ntotal != len(self.documents):
+                raise RetrievalIndexError("vector", "row_count_mismatch")
+
     def is_healthy(self) -> bool:
         """一致性检查：manifest 与 documents/faiss 行数闭合。"""
         declared = self.manifest.get("document_count")
-        return declared is not None and declared == len(self.documents)
+        if declared is None or declared != len(self.documents):
+            return False
+        try:
+            self.require_ready()
+        except RetrievalIndexError:
+            return False
+        return True
 
     def stats(self) -> dict[str, Any]:
         type_counts: dict[str, int] = defaultdict(int)

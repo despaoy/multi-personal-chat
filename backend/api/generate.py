@@ -50,6 +50,7 @@ from infra.concurrency_control import InferenceQueueFull, RateLimitExceeded, inf
 from infra.environment import read_bool
 from infra.observability import increment, log_event, set_consecutive
 from infra.security_utils import strip_control_chars
+from knowledge.retrieval_core.errors import RetrievalIndexError
 
 if INPUT_VALIDATOR_AVAILABLE:
     from infra.input_validator import MESSAGE_SCHEMA, InputValidator
@@ -1332,7 +1333,8 @@ async def _generate_with_retrieval(
             )
             raise HTTPException(
                 status_code=503,
-                detail=with_provider_error("检索或证据审核失败，请检查检索服务及审核模型状态后重试", e),
+                detail=(e.public_detail() if isinstance(e, RetrievalIndexError) else
+                        with_provider_error("检索或证据审核失败，请检查检索服务及审核模型状态后重试", e)),
             ) from e
 
     model_generate = model_generate or _vllm_client.generate

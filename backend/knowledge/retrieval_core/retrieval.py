@@ -259,7 +259,12 @@ class HybridRetriever:
         - vector：仅向量通道排序（内积分数）
         - hybrid：三通道 RRF 融合 + 实体加权 + 叙事层/类型权重
         """
+        if mode not in {"sparse", "vector", "hybrid"}:
+            raise ValueError("Unknown retrieval mode; choose sparse, vector or hybrid")
+        if top_k <= 0:
+            return []
         if self.index.count() == 0:
+            self.index.require_ready(mode)
             return []
         defaults = self.config.retrieval_defaults
         recall_k = recall_k or defaults.recall_k
@@ -325,8 +330,7 @@ class HybridRetriever:
     ) -> list[RetrievalCandidate]:
         if not channel:
             return []
-        scores = [score for _, score in channel.values()]
-        max_score = max(scores) if scores else 1.0
+        max_score = max(score for _, score in channel.values())
         result: list[RetrievalCandidate] = []
         for row, (rank, score) in sorted(channel.items(), key=lambda kv: (kv[1][0], kv[0])):
             doc = self.index.get_document(row)
