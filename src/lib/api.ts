@@ -47,6 +47,16 @@ export type * from './api-contracts';
 
 const API_BASE_URL = '/api';
 
+export class ApiRequestError extends Error {
+  constructor(public readonly status: number, public readonly detail: unknown) {
+    const message = detail && typeof detail === 'object' && 'message' in detail
+      ? detail.message
+      : detail;
+    super(`Request failed: ${status} - ${typeof message === 'string' ? message : JSON.stringify(message)}`);
+    this.name = 'ApiRequestError';
+  }
+}
+
 /** 系统统计响应 - 包含今日回复数、响应时间、活跃会话、资源使用等指标 */
 export interface StatsResponse {
   todayReplies: number;
@@ -323,6 +333,10 @@ export interface DialogueGenerateResponse {
   total: number;
   cost_time: number;
   cancelled?: boolean;
+}
+
+export interface DialogueGenerationFailureDetail {
+  partial_result?: Pick<DialogueGenerateResponse, 'dialogues' | 'total' | 'cost_time'>;
 }
 
 /** 对话生成进度 */
@@ -695,15 +709,14 @@ class ApiClient {
         this._handle401Redirect();
       }
       // 尝试提取后端错误详情
-      let detail = '';
+      let detail: unknown;
       try {
         const errBody = await response.json();
-        const rawDetail = errBody?.detail || errBody?.message || errBody;
-        detail = typeof rawDetail === 'string' ? rawDetail : JSON.stringify(rawDetail);
+        detail = errBody?.detail || errBody?.message || errBody;
       } catch {
         detail = response.statusText;
       }
-      throw new Error(`Request failed: ${response.status} - ${detail}`);
+      throw new ApiRequestError(response.status, detail);
     }
 
     // 204 No Content

@@ -15,7 +15,7 @@ from unittest.mock import AsyncMock, Mock
 
 import httpx
 import pytest
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 
 from api import training
 from app.dependencies import get_current_admin
@@ -80,6 +80,10 @@ def rig(monkeypatch):
         context.requested.append((count, turns))
         context.batches.append(deepcopy(batch))
         if context.defect and ordinal == context.fail_at:
+            if context.defect == "provider_exception":
+                raise RuntimeError("SYNTHETIC_UPSTREAM_PRIVATE_FAILURE")
+            if context.defect == "provider_http_error":
+                raise HTTPException(status_code=503, detail="合成模型服务不可用")
             if context.defect == "extra_item":
                 batch.append(deepcopy(batch[0]))
             elif context.defect == "extra_turn":
@@ -149,7 +153,9 @@ async def test_second_bad_batch_preserves_first_complete_dialogue_without_qualit
     rig.defect, rig.fail_at = "missing_message", 2
     response = await post(rig, 2)
     assert response.status_code == 502
-    assert response.json()["detail"] == dict(
+    detail = response.json()["detail"]
+    partial = detail.pop("partial_result")
+    assert detail == dict(
         error="dialogue_batch_invalid", stage="dialogue_validation", reason="wrong_turn_count",
         batch=2, expected_count=1, target_turns=2, completed_count=1, requested_count=2,
         message="模型返回的对话批次不符合约定，请检查模型服务及输出。",
@@ -159,7 +165,42 @@ async def test_second_bad_batch_preserves_first_complete_dialogue_without_qualit
     assert rig.state["all_generated_dialogues"][0]["conversations"] == mapped_messages(rig.batches[0])[0]
     assert rig.state["new_dialogues"] == rig.state["all_generated_dialogues"]
     assert rig.state["generated_count"] == 1 and rig.state["total"] == 2 and rig.state["progress"] == 50
-    assert MARKER not in response.text and MARKER not in caplog.text
+    assert partial == dict(dialogues=rig.state["all_generated_dialogues"], total=1, cost_time=0.5)
+    assert rig.batches[1][0]["conversations"][0]["content"] not in response.text
+    assert MARKER not in caplog.text
+    assert_released(rig)
+
+
+@pytest.mark.parametrize("defect,status,message", [
+    ("provider_exception", 500, "对话生成失败，请检查模型服务及后端日志。"),
+    ("provider_http_error", 503, "合成模型服务不可用"),
+])
+async def test_provider_failure_returns_completed_batches_without_polling_or_retry(rig, caplog, defect, status, message):
+    rig.defect, rig.fail_at = defect, 2
+    response = await post(rig, 2)
+    assert response.status_code == status
+    assert response.json()["detail"] == dict(
+        message=message,
+        partial_result=dict(dialogues=rig.state["all_generated_dialogues"], total=1, cost_time=0.25),
+    )
+    assert len(rig.state["all_generated_dialogues"]) == 1
+    assert rig.state["all_generated_dialogues"][0]["conversations"] == mapped_messages(rig.batches[0])[0]
+    assert rig.requested == [(1, 1), (1, 2)] and rig.manager.async_generate.await_count == 2
+    assert "SYNTHETIC_UPSTREAM_PRIVATE_FAILURE" not in response.text + caplog.text
+    assert MARKER not in caplog.text
+    assert_released(rig)
+
+
+async def test_two_complete_batches_still_return_success_without_partial_error(rig):
+    response = await post(rig, 2)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["success"] is True and data["cancelled"] is False
+    assert data["total"] == 2 and data["cost_time"] == 0.5
+    assert [item["conversations"] for item in data["dialogues"]] == [
+        mapped_messages(batch)[0] for batch in rig.batches
+    ]
+    assert rig.requested == [(1, 1), (1, 2)]
     assert_released(rig)
 
 

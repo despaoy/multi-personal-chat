@@ -34,7 +34,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
-import { api, type Dataset, type TrainingTask, type CreateDatasetRequest, type StartTrainingRequest, type DialogueConversation, type DialogueGenerateRequest, type DialogueGenerationProgress, type SavedDialogueItem } from '@/lib/api';
+import { api, ApiRequestError, type Dataset, type TrainingTask, type CreateDatasetRequest, type StartTrainingRequest, type DialogueConversation, type DialogueGenerateRequest, type DialogueGenerationFailureDetail, type DialogueGenerationProgress, type SavedDialogueItem } from '@/lib/api';
 import { toast } from 'sonner';
 import { usePageData } from '@/hooks/usePageData';
 import { SavedDialoguesPanel } from '@/components/training/SavedDialoguesPanel';
@@ -521,6 +521,15 @@ function TrainingContent() {
       }
     } catch (error) {
       if (abortControllerRef.current !== controller || controller.signal.aborted) return;
+      if (error instanceof ApiRequestError) {
+        const partial = (error.detail as DialogueGenerationFailureDetail | null)?.partial_result;
+        if (partial) {
+          setGeneratedDialogues(partial.dialogues);
+          setGenGeneratedCount(partial.total);
+          setGenTotal(numDialogues);
+          setGenProgress(partial.total / numDialogues * 100);
+        }
+      }
       if (error instanceof DOMException && error.name === 'AbortError') {
         toast.error('生成请求已中断，尚未确认后台停止');
       } else if (error instanceof Error && error.message.includes('已有生成任务正在运行')) {
@@ -528,7 +537,7 @@ function TrainingContent() {
           duration: 6000,
         });
       } else {
-        console.error('Failed to generate dialogues:', error);
+        console.error('Failed to generate dialogues:', error instanceof Error ? error.message : 'Unknown error');
         toast.error(error instanceof Error ? error.message : '对话生成失败');
       }
     } finally {

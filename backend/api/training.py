@@ -639,6 +639,20 @@ def _dialogue_result(dialogues, cost, *, cancelled):
     }
 
 
+def _dialogue_error_detail(detail, dialogues, cost):
+    """Return only this task's validated batches alongside its failure."""
+    if not dialogues:
+        return detail
+    return {
+        **(detail if isinstance(detail, dict) else {"message": detail}),
+        "partial_result": {
+            "dialogues": dialogues,
+            "total": len(dialogues),
+            "cost_time": round(cost, 2),
+        },
+    }
+
+
 async def _run_dialogue_generation(request):
     all_validated = []
     total_cost = 0.0
@@ -870,11 +884,17 @@ async def _run_dialogue_generation(request):
                 "message": "角色资料搜索失败，请恢复搜索服务后重试。",
             },
         ) from exc
-    except HTTPException:
+    except HTTPException as exc:
+        exc.detail = _dialogue_error_detail(exc.detail, all_validated, total_cost)
         raise
     except Exception as exc:
         logger.error("Dialogue generation failed: %s", type(exc).__name__)
-        raise HTTPException(status_code=500, detail="对话生成失败，请检查模型服务及后端日志。") from exc
+        raise HTTPException(
+            status_code=500,
+            detail=_dialogue_error_detail(
+                "对话生成失败，请检查模型服务及后端日志。", all_validated, total_cost,
+            ),
+        ) from exc
 
 
 
