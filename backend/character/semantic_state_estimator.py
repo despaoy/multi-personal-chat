@@ -1,15 +1,9 @@
-"""Selective semantic review for ambiguous interaction states.
+"""Validate model-owned non-safety interaction states.
 
-The deterministic :mod:`character.situation_analyzer` remains the first and
-only safety gate.  This module optionally asks an injected asynchronous
-reviewer to reconsider *ambiguous* non-safety turns.  The reviewer never gets
-to write free-form text into :class:`~character.models.InteractionState`: every
-identifier is checked against the application's existing closed vocabularies
-and every numeric value is finite and bounded before it is trusted.
-
-This is deliberately a small adapter rather than a second dialogue engine.
-Clear turns stay on the deterministic path. Required review failures propagate;
-no unreviewed state is substituted for a failed model result.
+The application requests a complete semantic review. Closed identifiers and
+finite, bounded scores are validated before use; review failures propagate.
+The existing safety gate remains independent. Explicit selective experiments
+retain their historical rule-assisted postprocessing in a separate function.
 """
 
 from __future__ import annotations
@@ -21,7 +15,7 @@ import re
 import time
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from contextvars import ContextVar
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any, Literal
 
 from character.evidence_selector import InputBudgetError, _history_view, _unique_object
@@ -239,10 +233,9 @@ class SemanticStateEstimator:
     def review_reasons(self, message: str, state: InteractionState) -> tuple[str, ...]:
         """Return closed reason IDs explaining why semantic review is useful."""
 
-        reasons = semantic_review_reasons(message, state)
-        if self._review_mode == "all_non_safety" and (message or "").strip() and not _is_safety_state(state):
-            return (*reasons, REVIEW_FULL_ABLATION)
-        return reasons
+        if self._review_mode == "all_non_safety":
+            return (REVIEW_FULL_ABLATION,) if (message or "").strip() and not _is_safety_state(state) else ()
+        return semantic_review_reasons(message, state)
 
     def needs_review(self, message: str, state: InteractionState) -> bool:
         """Whether this non-safety, non-empty turn should use the reviewer."""
@@ -285,7 +278,9 @@ class SemanticStateEstimator:
         started_at = time.perf_counter()
         try:
             raw = await asyncio.wait_for(self._reviewer(messages), timeout=self._timeout_seconds)
-            reviewed_state = _parse_reviewed_state(raw, state, message=message, reasons=reasons)
+            reviewed_state = _parse_reviewed_state(raw)
+            if self._review_mode == "selective":
+                reviewed_state = _apply_selective_protection(reviewed_state, state, message, reasons)
             return _outcome(
                 reviewed_state,
                 status="applied",
@@ -401,13 +396,7 @@ def _recent_dialogue(history: Sequence[Mapping[str, Any]], *,
         raise SemanticInputBudgetError(str(exc)) from exc
 
 
-def _parse_reviewed_state(
-    raw: object,
-    original: InteractionState,
-    *,
-    message: str = "",
-    reasons: Sequence[str] = (),
-) -> InteractionState:
+def _parse_reviewed_state(raw: object) -> InteractionState:
     payload: object = raw
     if isinstance(raw, str):
         if len(raw) > 20000:
@@ -443,16 +432,36 @@ def _parse_reviewed_state(
         raise ValueError("semantic review needs a situation hypothesis")
     situation_scores = _align_primary_signal(situation_scores, primary)
     situation_scores = situation_scores[:3]
+    return InteractionState(
+        primary_situation=primary,
+        situation_scores=situation_scores,
+        user_acts=_parse_signals(candidate["user_acts"], _ALLOWED_ACTS, limit=4),
+        user_needs=_parse_signals(candidate["user_needs"], _ALLOWED_NEEDS, limit=3),
+        valence=_bounded_number(candidate["valence"], -1.0, 1.0),
+        arousal=_bounded_number(candidate["arousal"], 0.0, 1.0),
+        warmth=_bounded_number(candidate["warmth"], -1.0, 1.0),
+        face_threat=_bounded_number(candidate["face_threat"], 0.0, 1.0),
+        conversation_phase=phase,
+        confidence=_bounded_number(candidate["confidence"], 0.0, 1.0),
+        safety_triggered=False,
+    )
+
+
+def _apply_selective_protection(reviewed, original, message, reasons):
+    """Preserve the explicitly selected historical rule-assisted contract."""
+    primary = reviewed.primary_situation
+    phase = reviewed.conversation_phase
+    situation_scores = reviewed.situation_scores
+    user_acts = reviewed.user_acts
+    user_needs = reviewed.user_needs
+    reviewed_valence = reviewed.valence
     if original.primary_situation == "meta":
         # Identity and internal-system questions keep their deterministic
         # boundary while the reviewer may still add a second emotional act.
         primary = "meta"
         situation_scores = _force_primary_signal(situation_scores, "meta", limit=3)
 
-    user_acts = _parse_signals(candidate["user_acts"], _ALLOWED_ACTS, limit=4)
-    user_needs = _parse_signals(candidate["user_needs"], _ALLOWED_NEEDS, limit=3)
     sarcasm_review = REVIEW_SARCASM in reasons
-    reviewed_valence = _bounded_number(candidate["valence"], -1.0, 1.0)
     original_act_scores = {signal.signal_id: _finite_score(signal.score) for signal in original.user_acts}
     deterministic_negative_sarcasm = (
         sarcasm_review
@@ -521,18 +530,14 @@ def _parse_reviewed_state(
     elif original.conversation_phase == "repairing" and (explicit_rule_repair or REVIEW_MULTI_INTENT in reasons):
         phase = "repairing"
 
-    return InteractionState(
+    return replace(
+        reviewed,
         primary_situation=primary,
         situation_scores=situation_scores,
         user_acts=user_acts,
         user_needs=user_needs,
         valence=reviewed_valence,
-        arousal=_bounded_number(candidate["arousal"], 0.0, 1.0),
-        warmth=_bounded_number(candidate["warmth"], -1.0, 1.0),
-        face_threat=_bounded_number(candidate["face_threat"], 0.0, 1.0),
         conversation_phase=phase,
-        confidence=_bounded_number(candidate["confidence"], 0.0, 1.0),
-        safety_triggered=False,
     )
 
 

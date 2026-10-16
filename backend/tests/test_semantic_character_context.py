@@ -5,10 +5,10 @@ from __future__ import annotations
 import asyncio
 
 import pytest
+from services.character_context import CharacterContextService, TurnInput, build_character_context_service
 
 from character.models import CharacterProfile
 from character.semantic_state_estimator import SemanticInputBudgetError, SemanticStateEstimator
-from services.character_context import CharacterContextService, TurnInput, build_character_context_service
 
 
 class _Profiles:
@@ -117,15 +117,18 @@ def _turn(message: str, history=()) -> TurnInput:
 
 
 def _service(estimator=None, *, analyzer=None) -> CharacterContextService:
-    return CharacterContextService(
+    service = CharacterContextService(
         _Profiles(),
         _MemoryRepository(),  # type: ignore[arg-type]
         _Messages(),  # type: ignore[arg-type]
         memory_service=_MemoryService(),  # type: ignore[arg-type]
         situation_analyzer=analyzer,
         semantic_estimator=estimator,
+        source_recall_enabled=False,
     )
 
+    service._contextual_policy = None  # State-review tests do not select persona strategies.
+    return service
 
 async def test_ambiguous_turn_is_reviewed_before_decision_and_compilation():
     reviewer = _Reviewer(_review_payload())
@@ -279,7 +282,7 @@ async def test_single_recall_preserves_context_and_storage_diagnostics(selection
         assert "我晚上不喝咖啡。" in recall.call_args.kwargs["retrieval_context"]
         assert recall.call_args.kwargs["reference_time"] == stamp
     else:
-        assert recall.call_args.kwargs == {}
+        assert recall.call_args.kwargs == {"reference_time": stamp}
 
 
 async def test_manual_review_fixture_supports_current_preparation_contract():
@@ -289,6 +292,7 @@ async def test_manual_review_fixture_supports_current_preparation_contract():
     fixture = runpy.run_path(str(Path(__file__).resolve().parents[1] / "scripts/run_interaction_reply_review.py"))
     service = CharacterContextService(_Profiles(), fixture["_MemoryRepository"](), fixture["_Messages"](),
         memory_service=fixture["_MemoryService"](), source_recall_enabled=False)
+    service._contextual_policy = None  # The manual memory fixture supplies no policy provider.
     prepared = await service.prepare_turn(_turn("你好"), "tsukiyashiro_kisaki")
     assert prepared.history == () and prepared.compiled.memory_packets == ()
     assert prepared.memory_recall["status"] == "no_records_returned"

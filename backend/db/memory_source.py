@@ -221,6 +221,37 @@ def link_plan(identity, memory_id):
            "ON CONFLICT (memory_id, source_key) DO NOTHING", dict(identity, memory_id=memory_id))
 
 
+
+def inherit_link_plan(scope, target_id, memory_id, source_ids, current_source_id):
+    """Carry declared dependencies from the validated target under its owner lock.
+
+    Preserve original source keys; IDs alone cannot grant new source links.
+    The caller inserts this successor and validates its target in the same transaction.
+    """
+    requested = set(source_ids) - {current_source_id}
+    if not requested:
+        return
+    params = dict(scope, target_id=target_id, memory_id=memory_id)
+    params.update({f"source{i}": sid for i, sid in enumerate(sorted(requested))})
+    placeholders = ",".join(f":source{i}" for i in range(len(requested)))
+    rows = yield (
+        "SELECT s.source_key,s.source_message_id,s.state FROM memory_source_links l "
+        "JOIN memory_sources s ON s.source_key=l.source_key "
+        "WHERE l.memory_id=:target_id AND s.owner_key=:owner_key "
+        f"AND s.source_message_id IN ({placeholders})", params,
+    )
+    if any(row["state"] == "revoked" for row in rows):
+        raise ClaimSourceRevokedError("inherited memory source was revoked")
+    if len(rows) != len(requested) or {row["source_message_id"] for row in rows} != requested:
+        raise ValueError("Inherited memory sources must be unambiguously linked to the validated target")
+    for row in rows:
+        yield (
+            "INSERT INTO memory_source_links (memory_id,source_key) VALUES (:memory_id,:source_key) "
+            "ON CONFLICT (memory_id,source_key) DO NOTHING",
+            dict(memory_id=memory_id, source_key=row["source_key"]),
+        )
+
+
 def revoke_plan(scope, memory_ids, *, clear=False):
     """Caller holds owner lock; source purge and claim deletion commit together.
 

@@ -1,8 +1,11 @@
 """Explicit additive evidence must survive versioning and cross-session reads."""
 import json
 from dataclasses import replace
+from datetime import datetime, timezone
 
 import pytest
+from repositories.character_memory import DatabaseCharacterMemoryRepository
+from services.character_context import TurnInput, build_character_context_service
 
 from character.conditional_memory import verified_constraint_atoms
 from character.context_builder import build_user_scope
@@ -11,8 +14,6 @@ from character.memory_service import CharacterMemoryService
 from character.rule_memory_writer import write_rule_memory
 from db.database import SQLiteDB
 from inference.constraint_response import render_constraint_response
-from repositories.character_memory import DatabaseCharacterMemoryRepository
-from services.character_context import TurnInput, build_character_context_service
 
 
 @pytest.mark.asyncio
@@ -21,13 +22,14 @@ from services.character_context import TurnInput, build_character_context_servic
     ('启动仪器', '设备检查完成', '获得授权'),
     ('去游泳', '周末', '天气合适'),
 ])
-async def test_add_read_repeat_correct_across_sessions(tmp_path, monkeypatch, action, first, second):
+async def test_add_read_repeat_correct_across_sessions(tmp_path, monkeypatch, semantic_plan, action, first, second):
     monkeypatch.setenv('CONTEXTUAL_MEMORY_SELECTION_ENABLED', 'false')
     db = SQLiteDB(tmp_path / 'additive.sqlite')
     repo = DatabaseCharacterMemoryRepository(db)
     scope = build_user_scope('web', 'test', 'u1', 'old', 'private')
     texts = [f'我只有{first}才{action}。', f'补充一下，我只有{second}才{action}。']
     for index, text in enumerate(texts):
+        assert await repo.capture_source('tsukiyashiro_kisaki', scope, source_message_id=f'm{index}', body=text, observed_at=datetime.now(timezone.utc)) == 'recorded'
         item, = extract_memories(text)
         assert await write_rule_memory(repo, 'tsukiyashiro_kisaki', scope, item, f'm{index}')
     rows = await repo.list_memory_records('tsukiyashiro_kisaki', scope, limit=None, include_inactive=True)
@@ -52,11 +54,13 @@ async def test_add_read_repeat_correct_across_sessions(tmp_path, monkeypatch, ac
 
         monkeypatch.setattr(generate, '_retrieve_rag_bundle', forbidden)
         monkeypatch.setattr(generate, '_get_system_prompt', lambda _: 'persona')
+        semantic_plan(query, {"private_memory": [0]})
         delivered, _, meta = await generate._generate_with_retrieval(
             MessageRequest(message=query), None, runtime_config={'useKnowledgeBase': True},
-            model_generate=forbidden, prepared_character_turn=prepared)
+            model_generate=forbidden, prepared_character_turn=prepared, message_db=db)
         assert delivered == reply and meta['modelInvoked'] is False
     correction, = extract_memories(f'更正一下，我只有取得新许可才{action}。')
+    assert await repo.capture_source('tsukiyashiro_kisaki', scope, source_message_id='correction', body=f'更正一下，我只有取得新许可才{action}。', observed_at=datetime.now(timezone.utc)) == 'recorded'
     assert await write_rule_memory(repo, 'tsukiyashiro_kisaki', scope, correction, 'correction')
     prepared = await service.prepare_turn(TurnInput(f'我{action}需要什么条件？', 'web', 'test', 'u1', 'third', 'private'), 'tsukiyashiro_kisaki')
     reply = render_constraint_response(f'我{action}需要什么条件？', prepared.compiled)

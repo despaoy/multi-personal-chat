@@ -1,5 +1,6 @@
 """Conditional assertions must survive the storage/read boundary without inversion."""
 import pytest
+from repositories.character_memory import DatabaseCharacterMemoryRepository
 
 from character.conditional_memory import parse_necessary_condition
 from character.memory_extractor import extract_memories
@@ -7,7 +8,6 @@ from character.memory_service import CharacterMemoryService, _row_qualifiers
 from character.models import UserScope
 from character.rule_memory_writer import write_rule_memory
 from db.database import SQLiteDB
-from repositories.character_memory import DatabaseCharacterMemoryRepository
 
 
 @pytest.mark.parametrize('change', [
@@ -116,8 +116,9 @@ async def test_repeated_pending_constraint_is_not_added_or_promoted(tmp_path):
 
 @pytest.mark.asyncio
 async def test_condition_packet_survives_new_private_session_preparation(tmp_path, monkeypatch):
-    from character.context_builder import build_user_scope
     from services.character_context import TurnInput, build_character_context_service
+
+    from character.context_builder import build_user_scope
 
     monkeypatch.setenv('CONTEXTUAL_MEMORY_SELECTION_ENABLED', 'false')
     database = SQLiteDB(tmp_path / 'cross-session.sqlite')
@@ -144,7 +145,11 @@ async def test_condition_packet_survives_new_private_session_preparation(tmp_pat
 @pytest.mark.parametrize('metadata', [None, [], {'qualifiers': []},
     {'qualifiers': {'condition': '周末', 'action': None}}])
 def test_invalid_qualifiers_are_not_partly_repaired(metadata):
-    assert _row_qualifiers({'metadata': metadata}) == ()
+    if metadata is None:
+        assert _row_qualifiers({'metadata': metadata}) == ()
+    else:
+        with pytest.raises(ValueError, match="Stored memory"):
+            _row_qualifiers({'metadata': metadata})
 
 
 @pytest.mark.parametrize('text', [

@@ -3,22 +3,22 @@ PostgreSQL 异步数据库访问层
 使用 async SQLAlchemy + asyncpg，提供与 SQLiteDB 相同的方法签名（异步版本）
 """
 
-import os
-import time
 import json
 import logging
+import os
+import time
 from datetime import datetime
-from typing import Optional, Dict, List, Any
+from typing import Any, Dict, List, Optional
 
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from cache.ttl_value_cache import BoundedTTLCache
+from db import memory_source
 from db.conversation_indexes import SOURCE_INDEX_STATEMENTS
 from db.errors import RegistrationClosedError
-from db import memory_source
-from infra.environment import parse_unit_interval
 from db.urls import resolve_runtime_database_url
+from infra.environment import parse_unit_interval
 
 logger = logging.getLogger(__name__)
 
@@ -1747,6 +1747,10 @@ class PgDatabase:
             source_identity = memory_source.claim_source_identity(source_fields, source_message_id)
             if row is not None and source_identity is not None:
                 await memory_source.run_postgres(session, memory_source.link_plan(source_identity, row._mapping["id"]))
+            if row is not None and target_id is not None and relation in {"SUPERSEDE", "MERGE"}:
+                await memory_source.run_postgres(session, memory_source.inherit_link_plan(
+                    memory_source.owner_scope(*source_fields), target_id, row._mapping["id"],
+                    json.loads(source_message_ids_json), source_message_id))
             if target_id is not None and relation in {"SUPERSEDE", "MERGE", "RETRACT"}:
                 await session.execute(
                     text(
@@ -2392,7 +2396,7 @@ class PgDatabase:
                 "description = EXCLUDED.description, code = EXCLUDED.code, "
                 "enabled = EXCLUDED.enabled, updated_at = EXCLUDED.updated_at"
             )
-            result = await session.execute(
+            await session.execute(
                 stmt,
                 {
                     "n": name,

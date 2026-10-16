@@ -84,7 +84,7 @@ async def test_shared_generation_executes_logic_without_model():
 
 
 @pytest.mark.asyncio
-async def test_condition_read_uses_no_external_retrieval(monkeypatch):
+async def test_condition_read_uses_no_external_retrieval(monkeypatch, semantic_plan):
     from types import SimpleNamespace
 
     from api import generate
@@ -96,6 +96,7 @@ async def test_condition_read_uses_no_external_retrieval(monkeypatch):
 
     monkeypatch.setattr(generate, '_get_system_prompt', lambda _: 'persona')
     monkeypatch.setattr(intent_detector, 'needs_rag', lambda _: pytest.fail('No external RAG needed'))
+    semantic_plan("如果休息好，我就一定开长途车吗？", {"private_memory": [0]})
     reply, rag, meta = await generate._generate_with_retrieval(
         MessageRequest(message='如果休息好，我就一定开长途车吗？'), None,
         runtime_config={'useKnowledgeBase': True}, model_generate=model,
@@ -105,12 +106,13 @@ async def test_condition_read_uses_no_external_retrieval(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_persisted_constraint_is_executable_in_new_session(tmp_path, monkeypatch):
+    from repositories.character_memory import DatabaseCharacterMemoryRepository
+    from services.character_context import TurnInput, build_character_context_service
+
     from character.context_builder import build_user_scope
     from character.memory_service import CharacterMemoryService
     from character.rule_memory_writer import write_rule_memory
     from db.database import SQLiteDB
-    from repositories.character_memory import DatabaseCharacterMemoryRepository
-    from services.character_context import TurnInput, build_character_context_service
 
     monkeypatch.setenv('CONTEXTUAL_MEMORY_SELECTION_ENABLED', 'false')
     db = SQLiteDB(tmp_path / 'conditions.sqlite')

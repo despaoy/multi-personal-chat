@@ -614,6 +614,8 @@ def _row_qualifiers(row: dict[str, Any]) -> tuple[tuple[str, str], ...]:
     metadata = row.get('metadata')
     if metadata is None:
         return ()
+    if not isinstance(metadata, dict):
+        raise ValueError("Stored memory metadata must be an object")
     values = metadata.get('qualifiers', {})
     if not isinstance(values, dict) or not all(
         isinstance(key, str) and key.strip() and isinstance(value, str) and value.strip()

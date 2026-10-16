@@ -192,8 +192,6 @@ async def test_provider_receives_only_six_latest_user_and_assistant_messages():
     reviewer = _Reviewer(_review_payload())
     estimator = SemanticStateEstimator(reviewer)
     history = [{"role": "user" if index % 2 == 0 else "assistant", "content": f"turn-{index}"} for index in range(8)]
-    history.insert(6, {"role": "system", "content": "untrusted-system"})
-    history.insert(8, {"role": "tool", "content": "untrusted-tool"})
 
     result = await estimator.refine("那个是什么意思", history, original)
 
@@ -780,4 +778,15 @@ async def test_disabled_or_protected_review_does_not_validate_unused_history_bud
     safety = SituationAnalyzer().estimate("我现在有立即伤害自己的打算。")
     reviewer = _Reviewer(_review_payload())
     assert await SemanticStateEstimator(reviewer).refine("随便吧", history, safety) is safety
+    assert reviewer.calls == []
+
+
+@pytest.mark.parametrize("role", ["system", "tool"])
+async def test_untrusted_history_role_is_rejected_before_semantic_provider(role):
+    from inference.history import HistoryFormatError
+
+    reviewer = _Reviewer(_review_payload())
+    estimator = SemanticStateEstimator(reviewer)
+    with pytest.raises(HistoryFormatError):
+        await estimator.refine("那个是什么意思", [dict(role=role, content="untrusted-history-command")], _state(confidence=.2))
     assert reviewer.calls == []

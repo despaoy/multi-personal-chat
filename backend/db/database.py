@@ -1,17 +1,17 @@
-import os
 import json
-import sqlite3
-import time
 import logging
+import os
+import sqlite3
 import threading
-from pathlib import Path
+import time
 from datetime import datetime
-from typing import Optional, Dict
+from pathlib import Path
+from typing import Dict, Optional
 
 from cache.ttl_value_cache import BoundedTTLCache
+from db import memory_source
 from db.conversation_indexes import SOURCE_INDEX_STATEMENTS
 from db.errors import RegistrationClosedError
-from db import memory_source
 from infra.environment import parse_unit_interval
 
 logger = logging.getLogger(__name__)
@@ -3327,6 +3327,11 @@ class SQLiteDB:
             source_identity = memory_source.claim_source_identity(source_fields, source_message_id)
             if source_identity is not None:
                 memory_source.run_sqlite(cursor, memory_source.link_plan(source_identity, memory_id))
+
+            if target_id is not None and relation in {"SUPERSEDE", "MERGE"}:
+                memory_source.run_sqlite(cursor, memory_source.inherit_link_plan(
+                    memory_source.owner_scope(*source_fields), target_id, memory_id,
+                    json.loads(source_message_ids_json), source_message_id))
 
             if target_id is not None and relation in {"SUPERSEDE", "MERGE", "RETRACT"}:
                 target_status = "retracted" if relation == "RETRACT" else "superseded"

@@ -1,4 +1,6 @@
 import pytest
+from repositories.character_memory import DatabaseCharacterMemoryRepository
+from services.character_context import TurnInput, build_character_context_service
 
 from character.context_builder import build_user_scope
 from character.memory_extractor import extract_memories
@@ -8,8 +10,6 @@ from character.models import CompiledCharacterContext
 from character.rule_memory_writer import write_rule_memory
 from db.database import SQLiteDB
 from inference.memory_response import render_memory_response
-from repositories.character_memory import DatabaseCharacterMemoryRepository
-from services.character_context import TurnInput, build_character_context_service
 
 
 @pytest.mark.parametrize('message', ['我提过哪些游泳限制？', '我说过什么专业？',
@@ -77,7 +77,7 @@ def test_unknown_read_is_not_reported_as_empty_history():
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize('use_kb', [False, True])
-async def test_provenance_display_uses_no_external_rag_or_model(monkeypatch, use_kb):
+async def test_provenance_display_uses_no_external_rag_or_model(monkeypatch, use_kb, semantic_plan):
     from types import SimpleNamespace
 
     from api import generate
@@ -92,6 +92,7 @@ async def test_provenance_display_uses_no_external_rag_or_model(monkeypatch, use
 
     monkeypatch.setattr(generate, '_get_system_prompt', lambda _: 'persona')
     monkeypatch.setattr(intent_detector, 'needs_rag', lambda _: pytest.fail('Not external knowledge'))
+    semantic_plan(message, {"private_memory": [0]})
     reply, used_rag, meta = await generate._generate_with_retrieval(MessageRequest(message=message), None,
         runtime_config={'useKnowledgeBase': use_kb}, prepared_character_turn=SimpleNamespace(history=(), compiled=context),
         model_generate=model)

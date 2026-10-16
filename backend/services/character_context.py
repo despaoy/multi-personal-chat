@@ -615,6 +615,7 @@ def build_character_context_service(
         contextual_policy=create_contextual_policy(context_budget=budget.review),
         semantic_estimator=SemanticStateEstimator(
             semantic_runtime.reviewer,
+            review_mode="all_non_safety",
             timeout_seconds=semantic_runtime.timeout_seconds,
             context_budget=budget.review,
         ),
