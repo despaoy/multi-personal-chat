@@ -15,7 +15,6 @@ def make_service(monkeypatch, evidence_texts):
     candidates = [SimpleNamespace(document=d, to_dict=lambda: {}) for d in docs]
     instance = object.__new__(service.RoutedMultiScaleService)
     instance.context_max_chars = 6000
-    instance.identity_coverage = False
     instance.config = SimpleNamespace(domain_id='test')
     instance.analyzer = instance.reranker = instance.extractor = None
     instance.retriever = SimpleNamespace(search=lambda *a, **kw: candidates)

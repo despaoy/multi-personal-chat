@@ -182,7 +182,6 @@ def test_rag_deduplicates_scene_and_delivers_exact_excerpt(monkeypatch, query, t
             for i in range(2)]
     candidates = [SimpleNamespace(document=d, to_dict=lambda: {}) for d in docs]
     instance = object.__new__(service.RoutedMultiScaleService)
-    instance.identity_coverage = False
     instance.config = SimpleNamespace(domain_id='test')
     instance.analyzer = None
     instance.retriever = SimpleNamespace(search=lambda *a, **kw: candidates)

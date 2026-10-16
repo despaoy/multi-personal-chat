@@ -2,8 +2,8 @@ from dataclasses import replace
 from types import SimpleNamespace
 
 import pytest
+from experiments.identity_coverage import rerank_with_identity_coverage, select_identity_coverage
 
-from knowledge.multiscale_rag.service import rerank_with_title_frames, select_identity_coverage
 from knowledge.retrieval_core.retrieval import RetrievalCandidate
 
 
@@ -44,8 +44,8 @@ def test_relation_participates_before_rank_truncation_only_when_explicitly_enabl
         return [replace(c, rerank_method=method) for c in candidates[:top_k]]
 
     analysis = SimpleNamespace(entities=['林远'], normalized_query='林远是谁？', original_query='林远是谁？')
-    result = rerank_with_title_frames(analysis, rows, top_k=3,
-                                     reranker=SimpleNamespace(rerank=rank), identity_coverage=enabled)
+    result = rerank_with_identity_coverage(analysis, rows, top_k=3,
+                                     reranker=SimpleNamespace(rerank=rank), enabled=enabled)
     assert limits == [26 if enabled else 20]
     assert [c.row for c in result] == ([0, 1, 25] if enabled else [0, 1, 2])
     assert rows[0].rerank_method == 'none'
@@ -56,5 +56,5 @@ def test_open_or_multi_entity_query_never_reserves_relation():
     analysis = SimpleNamespace(entities=['林远', '安宁'], normalized_query='林远为什么帮助安宁？',
                                original_query='林远为什么帮助安宁？')
     rank = SimpleNamespace(rerank=lambda a, c, top_k: [replace(x) for x in c[:top_k]])
-    assert len(rerank_with_title_frames(analysis, rows, top_k=3, reranker=rank, identity_coverage=True)) == 3
+    assert len(rerank_with_identity_coverage(analysis, rows, top_k=3, reranker=rank, enabled=True)) == 3
     assert select_identity_coverage(rows, 3, '') == rows[:3]

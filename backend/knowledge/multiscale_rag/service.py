@@ -11,7 +11,7 @@ from infra.environment import read_bool
 from knowledge.entity_scope import explicit_identity_subject, identity_evidence_subject, in_identity_scope
 from knowledge.evidence_packet import render_card_evidence
 from knowledge.query_tasks import requests_source_text
-from knowledge.relation_scope import explicit_relation_pair, in_relation_scope, relation_endpoints
+from knowledge.relation_scope import explicit_relation_pair, in_relation_scope
 from knowledge.retrieval_core.query import QueryAnalysis, QueryAnalyzer
 from knowledge.retrieval_core.rerank import PipelineReranker
 from knowledge.retrieval_core.retrieval import HybridRetriever, RetrievalCandidate
@@ -24,26 +24,22 @@ if TYPE_CHECKING:
 RETRIEVAL_TYPES = frozenset({"fact", "relation", "event", "scene", "story"})
 
 
-
-
 def rerank_with_title_frames(
     analysis: QueryAnalysis,
     candidates: list[RetrievalCandidate],
     *,
     top_k: int,
     reranker: PipelineReranker,
-    identity_coverage: bool = False,
 ) -> list[RetrievalCandidate]:
     """Preserve model ordering; literal title matches belong to deterministic mode."""
-    subject = identity_evidence_subject(analysis) if identity_coverage and top_k >= 2 else ""
     quoted = [match.strip() for match in re.findall(r"《([^》]{1,80})》", analysis.original_query) if match.strip()]
     # Scope alignment must see recalled candidates before intermediate top-k
     # drops them. The deterministic reranker already scores the same pool.
     ranked = reranker.rerank(
-        analysis, candidates, top_k=max(top_k * 4, 20, len(candidates) if subject or quoted else 0)
+        analysis, candidates, top_k=max(top_k * 4, 20, len(candidates) if quoted else 0)
     )
     if ranked and all(candidate.rerank_method == "cross_encoder" for candidate in ranked):
-        return select_identity_coverage(ranked, top_k, subject)
+        return ranked[:top_k]
     query_cn = "".join(re.findall(r"[\u4e00-\u9fff]", analysis.normalized_query or analysis.original_query))
     query_bigrams = {query_cn[index : index + 2] for index in range(max(0, len(query_cn) - 1))}
     for candidate in ranked:
@@ -60,23 +56,8 @@ def rerank_with_title_frames(
         lexical_bonus = 0.12 * (len(query_bigrams & text_bigrams) / len(query_bigrams)) if query_bigrams else 0.0
         candidate.rerank_score = round(base + quote_bonus + lexical_bonus, 4)
     ranked.sort(key=lambda candidate: (-(candidate.rerank_score or 0.0), -candidate.fused_score, candidate.row))
-    return select_identity_coverage(ranked, top_k, subject)
+    return ranked[:top_k]
 
-
-def select_identity_coverage(ranked, top_k: int, subject: str):
-    """Experimental type coverage, not a factual or temporal validity verdict.
-
-    Keep the best overall evidence and reserve at most one existing slot for a
-    directly owned relation. Do not synthesize ownership from text mentions or
-    fetch hidden/out-of-scope cards. Callers must filter visibility beforehand.
-    """
-    selected = ranked[:top_k]
-    if not subject or top_k < 2 or not selected:
-        return selected
-    eligible = [c for c in ranked if subject in relation_endpoints(c.document)]
-    if eligible and not any(subject in relation_endpoints(c.document) for c in selected):
-        selected = [*selected[:-1], eligible[0]]
-    return selected
 
 
 class RoutedMultiScaleService:
@@ -93,14 +74,12 @@ class RoutedMultiScaleService:
         all_documents: list,
         source_extractor: OriginalTextExtractor | None = None,
         reranker: PipelineReranker | None = None,
-        identity_coverage: bool = False,
         context_max_chars: int | None = 6000,
     ) -> None:
         if context_max_chars is not None and (type(context_max_chars) is not int or context_max_chars < 1):
             raise ValueError("context_max_chars must be a positive integer or None")
         self.context_max_chars = context_max_chars
         self.config = config
-        self.identity_coverage = identity_coverage
         self.analyzer = QueryAnalyzer([config])
         self.retriever = HybridRetriever(config, index, embedding_provider)
         # Independent opt-in: the generic KB switch must not silently change
@@ -162,7 +141,6 @@ class RoutedMultiScaleService:
             recalled,
             top_k=top_k,
             reranker=self.reranker,
-            identity_coverage=self.identity_coverage,
         )
 
         context_blocks: list[str] = []
@@ -288,7 +266,6 @@ class RoutedMultiScaleService:
         return {
             "curated_source_catalog": source_catalog,
             "retrieval_strategy": "multi_scale_character",
-            "identity_coverage": self.identity_coverage,
             "candidate_types": sorted(RETRIEVAL_TYPES),
             "relation_scope": {"pair": sorted(pair), "excluded_candidates": before_scope - before_identity_scope},
             "identity_scope": {

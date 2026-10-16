@@ -188,7 +188,7 @@ def _runtime(score, method):
     runtime = object.__new__(MultiScaleRagRuntime)
     runtime._ensure_loaded = lambda: True
     runtime._base_config = SimpleNamespace(domain_id="test")
-    runtime._gate = SimpleNamespace(analyze=lambda query, **_scope: SimpleNamespace(entities=[], matched_domains=["test"]))
+    runtime._gate = SimpleNamespace(analyze=lambda query, **_scope: QueryAnalysis(query, query, matched_domains=["test"]))
     runtime._service = SimpleNamespace(
         config=SimpleNamespace(domain_id="test"),
         retrieve=lambda query, top_k, **_scope: {

@@ -66,7 +66,6 @@ def test_boundary_filters_parents_timelines_and_raw_evidence_before_exposure(mon
         return [RetrievalCandidate(0, future), RetrievalCandidate(1, known)]
 
     instance = object.__new__(service.RoutedMultiScaleService)
-    instance.identity_coverage = False
     instance.config = SimpleNamespace(domain_id="test")
     instance.analyzer = None
     instance.retriever = SimpleNamespace(search=search, index=index)

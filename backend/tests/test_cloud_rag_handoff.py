@@ -148,7 +148,6 @@ def test_public_service_none_keeps_whole_packet(monkeypatch):
     candidate = SimpleNamespace(document=doc, to_dict=lambda: {"id": doc.id})
     instance = object.__new__(service.RoutedMultiScaleService)
     instance.context_max_chars = None
-    instance.identity_coverage = False
     instance.config = SimpleNamespace(domain_id="test")
     instance.analyzer = instance.reranker = instance.extractor = None
     instance.by_id = {}

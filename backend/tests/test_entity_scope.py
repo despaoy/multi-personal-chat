@@ -74,7 +74,6 @@ def test_filter_runs_before_ranking_and_preserves_retrieval_diagnostics(monkeypa
                                         entities=['林远', '安宁'], metadata={'subject': '安宁'})
     candidates = [RetrievalCandidate(0, unrelated), RetrievalCandidate(1, direct)]
     instance = object.__new__(service.RoutedMultiScaleService)
-    instance.identity_coverage = False
     instance.config = SimpleNamespace(domain_id='test')
     instance.analyzer = instance.reranker = instance.extractor = None
     instance.by_id = instance.evidence_by_parent = {}
