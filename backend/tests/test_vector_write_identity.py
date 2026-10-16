@@ -8,7 +8,7 @@ import pytest
 from knowledge.vector_db import IndexConfig, VectorDatabase
 
 
-@pytest.mark.parametrize('damage',['missing','invalid','duplicate','existing'])
+@pytest.mark.parametrize('damage',['missing','invalid','duplicate','existing','boolean','fractional','empty'])
 def test_invalid_batch_preserves_published_index(tmp_path,monkeypatch,damage):
     monkeypatch.setattr(VectorDatabase,'_check_gpu_availability',lambda self:False)
     vector=VectorDatabase(str(tmp_path/'vectors'),IndexConfig(index_type='flat'))
@@ -28,6 +28,12 @@ def test_invalid_batch_preserves_published_index(tmp_path,monkeypatch,damage):
         docs[0]['id']=None
     elif damage=='duplicate':
         docs.append(dict(docs[0],id='8'))
+    elif damage=='boolean':
+        docs[0]['id']=True
+    elif damage=='fractional':
+        docs[0]['id']=1.75
+    elif damage=='empty':
+        docs[0]['id']=''
     else:
         docs[0]['id']='7'
     load=Mock(side_effect=AssertionError('invalid identity must not load the model'))

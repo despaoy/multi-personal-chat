@@ -12,8 +12,9 @@ import os
 import time
 from collections import Counter, OrderedDict, defaultdict
 from copy import deepcopy
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
+from numbers import Integral
 from pathlib import Path
 from threading import RLock
 from typing import Any, Dict, List, Optional
@@ -301,47 +302,24 @@ class VectorDatabase:
             self._dirty = False
             logger.info("FAISS、来源与BM25完整快照保存完成")
 
-    def _to_faiss_id(self, id_value: Any) -> Optional[int]:
-        try:
-            if isinstance(id_value, int):
-                if id_value < -(1 << 63) or id_value >= (1 << 63):
-                    id_value = id_value % (1 << 63)
-                return id_value
-            elif isinstance(id_value, str):
-                try:
-                    value = int(id_value)
-                    if value < -(1 << 63) or value >= (1 << 63):
-                        value = value % (1 << 63)
-                    return value
-                except ValueError:
-                    pass
-                try:
-                    if len(id_value) > 16:
-                        hex_str = id_value[:16]
-                        if all(c in '0123456789abcdefABCDEF' for c in hex_str):
-                            value = int(hex_str, 16)
-                            if value < -(1 << 63) or value >= (1 << 63):
-                                value = value % (1 << 63)
-                            return value
-                    if all(c in '0123456789abcdefABCDEF' for c in id_value):
-                        value = int(id_value, 16)
-                        if value < -(1 << 63) or value >= (1 << 63):
-                            value = value % (1 << 63)
-                        return value
-                except ValueError:
-                    pass
-                hash_obj = hashlib.md5(id_value.encode('utf-8'))
-                digest_bytes = hash_obj.digest()[:8]
-                value = int.from_bytes(digest_bytes, byteorder='big', signed=True)
-                return value
-            else:
+    def _to_faiss_id(self, id_value: Any) -> int:
+        """Encode declared IDs with the existing persisted integer/string mapping."""
+        if isinstance(id_value, Integral) and not isinstance(id_value, bool):
+            value = int(id_value)
+        elif isinstance(id_value, str) and id_value.strip():
+            try:
                 value = int(id_value)
-                if value < -(1 << 63) or value >= (1 << 63):
-                    value = value % (1 << 63)
-                return value
-        except Exception as e:
-            logger.warning(f"无法转换ID '{id_value}' 为整数: {e}")
-            return None
+            except ValueError:
+                prefix = id_value[:16]
+                value = (
+                    int(prefix, 16)
+                    if all(char in "0123456789abcdefABCDEF" for char in prefix)
+                    else int.from_bytes(hashlib.md5(id_value.encode("utf-8")).digest()[:8], "big", signed=True)
+                )
+        else:
+            raise ValueError("Document ID must be a non-empty string or an integer")
+        limit = 1 << 63
+        return value if -limit <= value < limit else value % limit
 
     def _get_embeddings_batch(self, texts: List[str]) -> np.ndarray:
         self._load_model()
