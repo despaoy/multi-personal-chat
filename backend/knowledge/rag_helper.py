@@ -266,7 +266,6 @@ class RAGHelper:
     def __init__(self):
         """初始化RAG辅助类，自动加载向量数据库和重排器（若可用）。"""
         self.min_score_threshold = 0.05
-        self.max_context_length = 2000
         self.top_k = 5
 
         self.reranker = None
@@ -585,63 +584,6 @@ class RAGHelper:
             **({"task_candidate_coverage": task_coverage} if views else {}),
         }
 
-    def format_context_results(self, results: list[dict[str, Any]]) -> str:
-        """把已经检索到的结果格式化为模型上下文，不再次执行检索。"""
-        if not results:
-            return ""
-
-        context_parts = []
-        total_length = 0
-        for result in results:
-            doc_content = result.get("content", "")
-            doc_title = result.get("title", "")
-            score = result.get("normalized_score", result.get("score", 0))
-            doc_text = f"【相关文档: {doc_title}（相关度: {score:.2f}）】\n{doc_content}\n"
-
-            if total_length + len(doc_text) > self.max_context_length:
-                remaining = self.max_context_length - total_length
-                if remaining > 100:
-                    doc_text = f"【相关文档: {doc_title}（相关度: {score:.2f}）】\n{doc_content[:remaining]}...\n"
-                    context_parts.append(doc_text)
-                    total_length += len(doc_text)
-                break
-
-            context_parts.append(doc_text)
-            total_length += len(doc_text)
-
-        if not context_parts:
-            return ""
-
-        logger.info("构建RAG上下文，长度: %d，文档数: %d", total_length, len(context_parts))
-        return "\n".join(context_parts)
-
-    def build_context_prompt(
-        self,
-        query: str,
-        top_k: int | None = None,
-        filters: dict[str, Any] | None = None,
-    ) -> str:
-        """检索一次并构建模型上下文；已有结果应调用 format_context_results。"""
-        results = self.retrieve_context(query, top_k, filters=filters)
-        return self.format_context_results(results)
-
-    def format_results_for_display(self, results: list[dict[str, Any]]) -> str:
-        if not results:
-            return ""
-
-        parts = []
-        for i, result in enumerate(results, 1):
-            title = result.get("title", "无标题")
-            content = result.get("content", "")
-            score = result.get("normalized_score", result.get("score", 0))
-
-            if len(content) > 512:
-                content = content[:512] + "..."
-
-            parts.append(f"{i}. {title} (相关度: {score:.2f})\n   {content}\n")
-
-        return "\n".join(parts)
-
     def clear_cache(self) -> None:
         with self._cache_lock:
             self._query_cache.clear()
@@ -656,38 +598,3 @@ def get_rag_helper() -> RAGHelper:
     if _rag_helper is None:
         _rag_helper = RAGHelper()
     return _rag_helper
-
-
-def rag_retrieve(
-    query: str, top_k: int = 10, enable_rerank: bool = True, filters: dict[str, Any] | None = None
-) -> list[dict[str, Any]]:
-    """便捷函数：检索与查询相关的知识库文档。
-
-    Args:
-        query: 用户查询文本
-        top_k: 返回结果数量，默认10
-        enable_rerank: 是否启用重排，默认True
-        filters: 元数据过滤条件
-
-    Returns:
-        按相关性降序排列的文档列表
-    """
-    helper = get_rag_helper()
-    return helper.retrieve_context(query, top_k, enable_rerank, filters=filters)
-
-
-def rag_build_prompt(query: str, top_k: int = 10, filters: dict[str, Any] | None = None) -> str:
-    """便捷函数：检索知识库并构建上下文提示文本。
-
-    Args:
-        query: 用户查询, top_k: 检索文档数量，默认10
-        filters: 元数据过滤条件
-
-    Returns:
-        格式化后的上下文字符串，无匹配文档时返回空字符串
-    """
-    logger.info(f"rag_build_prompt被调用: query={query}, top_k={top_k}")
-    helper = get_rag_helper()
-    result = helper.build_context_prompt(query, top_k, filters=filters)
-    logger.info(f"rag_build_prompt返回: 长度={len(result)}")
-    return result
