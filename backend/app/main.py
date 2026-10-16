@@ -275,13 +275,6 @@ async def lifespan(app: FastAPI):
             await close_vllm_client()
         except Exception as e:
             logger.warning(f"关闭 vLLM 客户端失败: {e}")
-        # 关闭 bot 模块中共享的 HTTP 客户端（RAG 搜索 + Ollama 推理）
-        try:
-            from bot.bot import _close_bot_http_clients
-
-            await _close_bot_http_clients()
-        except Exception as e:
-            logger.warning(f"关闭 bot HTTP 客户端失败: {e}")
         if _cfg.circuit_breaker_registry is not None:
             await _close_resource(
                 "熔断器注册表",

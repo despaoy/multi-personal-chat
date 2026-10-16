@@ -39,7 +39,7 @@ def get_redis_pool() -> ConnectionPool:
             retry_on_timeout=True,
             decode_responses=True,
         )
-        logger.info(f"✅ Redis 同步连接池已创建: {REDIS_URL}")
+        logger.info("Redis 同步连接池已创建")
     return _pool
 
 
@@ -67,25 +67,28 @@ def _get_async_pool():
     global _async_pool
     if _async_pool is None:
         import redis.asyncio as aioredis
+        from redis.asyncio.retry import Retry
+        from redis.backoff import NoBackoff
+
         _async_pool = aioredis.ConnectionPool.from_url(
             REDIS_URL,
             db=REDIS_DB,
             max_connections=50,
             socket_timeout=5,
             socket_connect_timeout=3,
-            retry_on_timeout=True,
+            # SET NX may already have succeeded when its acknowledgement is lost.
+            retry=Retry(NoBackoff(), 0),
             decode_responses=True,
         )
-        logger.info(f"✅ Redis 异步连接池已创建: {REDIS_URL}")
+        logger.info("Redis 异步连接池已创建")
     return _async_pool
 
 
 async def get_async_redis():
     """获取 Redis 异步客户端（单例，全进程共享）。
 
-    返回 redis.asyncio.Redis 实例；若 Redis 不可用则返回 None。
-    所有需要 async Redis 的生产模块（配置缓存、bot 去重等）都应调用此函数，
-    不得各自通过 from_url 创建独立连接池。
+    完成连接检查后才发布客户端；故障及取消直接传播。
+    使用应用持有的异步连接池，不创建另一套连接资源。
     """
     global _async_client, _async_lock
     if _async_client is not None:
@@ -96,17 +99,14 @@ async def get_async_redis():
     async with _async_lock:
         if _async_client is not None:
             return _async_client
-        try:
-            import redis.asyncio as aioredis
-            # 使用异步连接池，避免与同步 pool 混用导致事件循环阻塞
-            _async_client = aioredis.Redis(connection_pool=_get_async_pool())
-            await _async_client.ping()
-            logger.info(f"✅ Redis 异步客户端已连接(共享异步连接池): {REDIS_URL}")
-            return _async_client
-        except Exception as e:
-            logger.warning(f"Redis 异步客户端不可用: {e}")
-            _async_client = None
-            return None
+        import redis.asyncio as aioredis
+
+        client = aioredis.Redis(connection_pool=_get_async_pool())
+        if await client.ping() is not True:
+            raise RuntimeError("Redis connection check did not succeed")
+        _async_client = client
+        logger.info("Redis 异步客户端已连接")
+        return client
 
 
 async def close_async_redis() -> None:

@@ -61,43 +61,27 @@ from infra.concurrency_control import (
 # ============================================
 # 消息去重（幂等设计）
 # ============================================
-_processed_messages: Dict[str, float] = {}  # {message_id: timestamp}
 _DEDUP_TTL = 3600  # 1小时TTL
-_DEDUP_MAX_SIZE = 10000  # 内存去重集合最大容量
 
-# ============================================
-# 统一生成链路下 NoneBot 不再维护自己的 RAG/Ollama HTTP 客户端
-# ============================================
-async def _close_bot_http_clients() -> None:
-    """保留兼容入口；统一生成服务不依赖本模块自有 HTTP 客户端。"""
-    pass
+
+class MessageDeduplicationError(RuntimeError):
+    """Message processing must stop when shared deduplication is unverified."""
+
 
 async def _is_duplicate_message(message_id: str) -> bool:
-    """检查消息是否已处理（幂等去重）"""
-    # 尝试Redis去重（使用统一的 async 客户端）
+    """Reserve one shared message identity; service failures are not misses."""
     try:
         from cache.redis_client import get_async_redis
+
         redis = await get_async_redis()
-        if redis:
-            key = f"dedup:msg:{message_id}"
-            was_set = await redis.set(key, "1", nx=True, ex=_DEDUP_TTL)
-            return was_set is None or was_set is False
+        was_set = await redis.set(f"dedup:msg:{message_id}", "1", nx=True, ex=_DEDUP_TTL)
     except Exception as exc:
-        logger.debug("Redis 去重失败，回退到内存去重: %s", exc)
-
-    # 回退到内存去重
-    import time
-    now = time.time()
-    if len(_processed_messages) > _DEDUP_MAX_SIZE:
-        expired = [k for k, v in _processed_messages.items() if now - v > _DEDUP_TTL]
-        for k in expired:
-            del _processed_messages[k]
-
-    if message_id in _processed_messages:
+        raise MessageDeduplicationError("Shared message deduplication failed") from exc
+    if was_set is True:
+        return False
+    if was_set is None or was_set is False:
         return True
-
-    _processed_messages[message_id] = now
-    return False
+    raise MessageDeduplicationError("Shared message deduplication returned an invalid status")
 
 # ============================================
 # 配置 - 通过db.adapter读取
@@ -757,19 +741,17 @@ def init_bot():
         """处理所有消息"""
         logger.info("消息处理器被触发")
 
-        # 幂等去重
-        msg_id = str(getattr(event, 'message_id', ''))
-        if msg_id and await _is_duplicate_message(msg_id):
-            logger.debug(f"跳过重复消息: {msg_id}")
-            return
-
         try:
             if not await should_reply(event):
                 logger.info("不满足回复条件，跳过")
                 return
+            msg_id = str(event.message_id)
+            if await _is_duplicate_message(msg_id):
+                logger.debug("跳过重复消息")
+                return
 
             user_message = str(event.message).strip()
-            logger.info(f"[路由] user_id={str(event.user_id)}, 是否claw={claw_sessions.get(str(event.user_id), False)}, 消息={user_message[:50]}")
+            logger.info(f"[路由] user_id={event.user_id}, 是否claw={claw_sessions.get(str(event.user_id), False)}, 字符数={len(user_message)}")
 
             if not claw_sessions.get(str(event.user_id), False):
                 if user_message == "/claw":
@@ -918,6 +900,9 @@ def init_bot():
                     logger.info("回复发送成功")
         except FinishedException:
             logger.info("消息处理完成")
+        except MessageDeduplicationError as exc:
+            logger.error(f"消息去重失败: {type(exc.__cause__ or exc).__name__}")
+            await message_handler.finish("消息去重状态无法确认，本轮未生成回复。请检查 Redis 服务后重新发送消息。")
         except Exception as e:
             logger.error(f"处理消息时出错: {e}")
             import traceback
