@@ -52,6 +52,8 @@ def test_no_target_is_not_a_new_paraphrased_fact():
 
 @pytest.mark.asyncio
 async def test_sqlite_keeps_both_records_when_original_source_recall_is_disabled(tmp_path):
+    from legacy_memory_fixtures import seed_legacy_memory
+
     from character.context_builder import compile_reference_context
     from character.memory_service import CharacterMemoryService
     from db.database import SQLiteDB
@@ -62,7 +64,8 @@ async def test_sqlite_keeps_both_records_when_original_source_recall_is_disabled
     scope = UserScope("test", "test", "user", "private", "private")
     old = data["existing_memories"][0]
     from character.memory_extractor import ExtractedMemory
-    await repo.add_or_update_memory("role", scope,
+
+    seed_legacy_memory(repo, "role", scope,
         ExtractedMemory("user_fact", old["memory_key"], old["content"], .6),
         memory_key=old["memory_key"], source_message_id="original-source")
     records = await repo.list_memory_records("role", scope, limit=None, include_inactive=True)

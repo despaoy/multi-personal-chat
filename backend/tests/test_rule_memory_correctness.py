@@ -143,9 +143,11 @@ async def test_conditions_survive_repetition_and_uncertain_changes_are_pending(r
 
 @pytest.mark.asyncio
 async def test_legacy_revision_zero_is_superseded_and_other_scopes_unchanged(repo):
+    from legacy_memory_fixtures import seed_legacy_memory
+
     for sender in ("alice", "bob"):
-        await repo.add_or_update_memory(
-            "kisaki",
+        seed_legacy_memory(
+            repo, "kisaki",
             scope(sender),
             MemoryItem("", "user_fact", "用户说喜欢喝咖啡", 0.6),
             memory_key="preference_喝咖啡",
@@ -236,9 +238,11 @@ async def test_stale_update_cannot_overwrite_a_newer_version(repo):
 
 @pytest.mark.asyncio
 async def test_ambiguous_legacy_aliases_remain_untouched_and_pending_deduplicates(repo):
+    from legacy_memory_fixtures import seed_legacy_memory
+
     for key in ("preference_咖啡", "preference_喝咖啡"):
-        await repo.add_or_update_memory(
-            "kisaki",
+        seed_legacy_memory(
+            repo, "kisaki",
             scope(),
             MemoryItem("", "user_fact", "旧偏好", 0.6),
             memory_key=key,

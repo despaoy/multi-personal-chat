@@ -154,9 +154,11 @@ async def test_ambiguous_or_unmatched_updates_change_nothing(repo):
 
 @pytest.mark.asyncio
 async def test_unique_legacy_goal_can_close_but_relationship_notes_are_untouched(repo):
+    from legacy_memory_fixtures import seed_legacy_memory
+
     for key in ("goal_面试", "relationship:shared_event:面试"):
-        await repo.add_or_update_memory(
-            "kisaki", scope(), MemoryItem("", "shared_event", "准备面试", 0.7), memory_key=key
+        seed_legacy_memory(
+            repo, "kisaki", scope(), MemoryItem("", "shared_event", "准备面试", 0.7), memory_key=key
         )
     assert await save(repo, "面试结束了。") == 1
     rows = await current(repo)

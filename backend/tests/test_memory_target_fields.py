@@ -11,10 +11,12 @@ from db.database import SQLiteDB
 
 @pytest.mark.parametrize("importance",[0.0,0.5,1.0])
 async def test_erasure_preserves_stored_fields(tmp_path,importance):
+    from legacy_memory_fixtures import seed_legacy_memory
+
     repo=DatabaseCharacterMemoryRepository(SQLiteDB(tmp_path/'memory.sqlite'))
     scope=UserScope('web','fixture','fiction','fiction','private')
     content='用户说自己来自或居住在杭州'
-    await repo.add_or_update_memory('role',scope,MemoryItem('0','user_fact',content,importance),memory_key='user_location',source_message_id='source')
+    seed_legacy_memory(repo,'role',scope,MemoryItem('0','user_fact',content,importance),memory_key='user_location',source_message_id='source')
     records=await repo.list_memory_records('role',scope)
     assert len(records)==1 and records[0]['importance']==importance
     source='请把你记住的我的住址彻底删掉。'

@@ -114,16 +114,6 @@ class CharacterMemoryRepository(Protocol):
         self, memory_id: int, character_id: str, user_scope: UserScope
     ) -> Optional[dict[str, Any]]: ...
 
-    async def add_or_update_memory(
-        self,
-        character_id: str,
-        user_scope: UserScope,
-        memory: MemoryItem,
-        *,
-        memory_key: str,
-        source_message_id: Optional[str] = None,
-    ) -> int: ...
-
     async def append_claim(
         self,
         character_id: str,
@@ -419,36 +409,6 @@ class DatabaseCharacterMemoryRepository:
             user_scope.conversation_id,
         )
         return _decode_memory_record(dict(row)) if row else None
-
-    async def add_or_update_memory(
-        self,
-        character_id: str,
-        user_scope: UserScope,
-        memory: MemoryItem,
-        *,
-        memory_key: str,
-        source_message_id: Optional[str] = None,
-    ) -> int:
-        if memory.memory_type not in _VALID_MEMORY_TYPES:
-            raise ValueError(f"未知的记忆类型: {memory.memory_type!r}")
-        key = memory_key.strip()
-        if not key:
-            raise ValueError("memory_key 为空，拒绝写入长期记忆")
-        record = await asyncio.to_thread(
-            self._database.add_or_update_character_memory,
-            character_id,
-            user_scope.platform,
-            user_scope.adapter,
-            user_scope.sender_id,
-            user_scope.conversation_type,
-            user_scope.conversation_id,
-            memory.memory_type,
-            key,
-            memory.content,
-            memory.importance,
-            source_message_id,
-        )
-        return int(record.get("id") or 0)
 
     async def append_claim(
         self,

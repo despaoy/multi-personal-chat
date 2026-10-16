@@ -13,13 +13,43 @@ ITEM = MemoryItem('', 'user_fact', '用户今年大三', .9)
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize('operation', ['ADD', 'PENDING', 'SUPERSEDE', 'RETRACT'])
-async def test_repository_requires_versioned_database_without_legacy_upsert(operation):
+@pytest.mark.parametrize('changes', [
+    {'relation_type': operation} for operation in ('ADD', 'PENDING', 'SUPERSEDE', 'RETRACT', 'MERGE', 'COEXIST')
+] + [{'status': status} for status in ('pending', 'retracted', 'superseded', 'archived')]
+  + [{'scope_level': 'user_global'}, {'scope_level': 'user_character'},
+     {'parent_memory_id': 1}, {'supersedes_memory_id': 1}, {'valid_to': '2026-09-01'},
+     {'valid_from': '2026-09-01'}])
+async def test_repository_requires_versioned_database_without_legacy_upsert(changes):
     database = SimpleNamespace(add_or_update_character_memory=Mock())
     repo = DatabaseCharacterMemoryRepository(database)
     with pytest.raises(AttributeError, match='append_character_memory_claim'):
-        await repo.append_claim('role', SCOPE, ITEM, memory_key='user_study_stage', relation_type=operation)
+        await repo.append_claim('role', SCOPE, ITEM, memory_key='user_study_stage', **changes)
     database.add_or_update_character_memory.assert_not_called()
+
+
+async def test_explicit_noop_needs_no_legacy_write():
+    database = SimpleNamespace(add_or_update_character_memory=Mock())
+    result = await DatabaseCharacterMemoryRepository(database).append_claim(
+        'role', SCOPE, ITEM, memory_key='user_study_stage', relation_type='NOOP')
+    assert result == {'id': 0, 'persisted': False, 'relation_type': 'NOOP', 'memory_key': 'user_study_stage'}
+    database.add_or_update_character_memory.assert_not_called()
+
+
+async def test_versioned_repository_add_read_and_original_source_round_trip(tmp_path):
+    from datetime import datetime, timezone
+
+    from db.database import SQLiteDB
+
+    repo = DatabaseCharacterMemoryRepository(SQLiteDB(tmp_path / 'versioned.sqlite'))
+    clock = datetime(2026, 10, 1, 12, 0, tzinfo=timezone.utc)
+    assert await repo.capture_source('role', SCOPE, source_message_id='fixture-source',
+        body='我今年大三。', observed_at=clock) == 'recorded'
+    saved = await repo.append_claim('role', SCOPE, ITEM, memory_key='user_study_stage',
+        evidence=('我今年大三',), source_message_id='fixture-source', observed_at=clock.isoformat())
+    assert saved['persisted'] is True and saved['revision'] > 0
+    read = await repo.get_memory_record(saved['id'], 'role', SCOPE)
+    assert read['content'] == ITEM.content and read['memory_key'] == 'user_study_stage'
+    assert read['source_message_ids'] == ['fixture-source'] and read['evidence'] == ['我今年大三']
 
 
 @pytest.mark.asyncio
