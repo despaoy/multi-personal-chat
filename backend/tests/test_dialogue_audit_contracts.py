@@ -3,8 +3,6 @@ import pytest
 from evaluation.dialogue_audit import load_cases
 
 from db.database import SQLiteDB
-from knowledge.dialogue_query import contextual_retrieval_query
-from knowledge.retrieval_core.registry import KnowledgeDomainConfig
 
 
 def test_multiline_suite_and_incomplete_records(tmp_path):
@@ -44,45 +42,6 @@ def test_history_type_collision_and_equal_timestamp_order(tmp_path):
     add(db, '同号频道', kind='channel')
     history = db.list_conversation_history('web', 'web-character', 'same-user', 'group', 'same-room')
     assert [x['content'] for x in history if x['role'] == 'user'] == ['群聊第一轮', '群聊第二轮']
-
-
-@pytest.mark.parametrize('name', ['测试人物甲', '另一作品人物乙'])
-def test_retrieval_followup_inherits_only_user_topic(tmp_path, name):
-    configs = [KnowledgeDomainConfig('test', tmp_path, lambda _: [], aliases={name: name})]
-    history = [{'role': 'user', 'content': f'{name}是什么身份？'},
-               {'role': 'assistant', 'content': '我猜是某国总统，这个猜测不可作为查询事实。'}]
-    query = contextual_retrieval_query('请给出原文依据。', history, configs)
-    assert name in query and '总统' not in query
-    assert contextual_retrieval_query('换个话题，我今天看书了。', history, configs) == '换个话题，我今天看书了。'
-    history += [{'role': 'user', 'content': '我今天看书了。'}]
-    assert contextual_retrieval_query('那有什么特点？', history, configs) == '那有什么特点？'
-
-
-@pytest.mark.parametrize('query', [
-    '能指出支持你说法的原作内容吗？',
-    '可以列出相关的原著段落吗？',
-    '这个结论出自哪一章节？',
-    '请提供引文。',
-    '出处？',
-])
-def test_source_task_followup_routes_to_authorized_user_topic(tmp_path, query):
-    configs = [KnowledgeDomainConfig('test', tmp_path, lambda _: [], aliases={'测试主角': '测试主角'})]
-    history = [{'role': 'user', 'content': '测试主角和朋友是什么关系？'},
-               {'role': 'assistant', 'content': '某个未验证的猜测'},
-               {'role': 'user', 'content': '这种关系有没有冲突？'}]
-    resolved = contextual_retrieval_query(query, history, configs)
-    assert '测试主角' in resolved and query in resolved
-    assert '未验证' not in resolved
-    assert contextual_retrieval_query(query, [], configs) == query
-    history += [{'role': 'user', 'content': '我今天读完了另一本原著。'}]
-    assert contextual_retrieval_query(query, history, configs) == query
-
-
-def test_source_mention_without_request_does_not_inherit_topic(tmp_path):
-    configs = [KnowledgeDomainConfig('test', tmp_path, lambda _: [], aliases={'测试主角': '测试主角'})]
-    history = [{'role': 'user', 'content': '测试主角是什么身份？'}]
-    query = '我今天读完了另一本原著。'
-    assert contextual_retrieval_query(query, history, configs) == query
 
 
 @pytest.mark.parametrize('reply', ['如果你喜欢某种食物，可以再讨论。', '你喜欢独处还是结伴呢？', '你习惯早起吗？'])

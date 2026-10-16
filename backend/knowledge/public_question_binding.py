@@ -168,6 +168,14 @@ def bound_object_search_views(binding, retrieval_query):
     return names
 
 
+def bound_retrieval_query(binding, query):
+    """Keep the original question beside object names from its validated proof."""
+    if binding is None:
+        return query
+    anchors = tuple(name for name in bound_object_search_views(binding, query) if name not in query)
+    return "\n".join((*anchors, query))
+
+
 def bound_task_search_views(binding, retrieval_query):
     """Preserve each complete public task beside its proven object anchors."""
     bound_object_search_views(binding, retrieval_query)

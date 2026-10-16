@@ -25,6 +25,7 @@ from typing import Any
 from inference.history import validate_history
 from infra.environment import read_bool
 from knowledge.curated_sources import CuratedSourceChangedError, curated_source_receipts, validate_curated_source
+from knowledge.dialogue_query import contextual_retrieval_query
 
 from .cache import AnswerCache, answer_cache_key
 from .corrective import CorrectiveRetrievalAdapter
@@ -175,7 +176,7 @@ class GroundedAnswerService:
         # 角色知识检索是同步 CPU 工作，放入线程池避免阻塞事件循环。
         retrieval_start = time.perf_counter()
         bundle, corrective_info = await self._retrieve_with_optional_correction(
-            self._contextual_retrieval_query(query, history, domain_id),
+            await contextual_retrieval_query(query, history),
             domain_id=domain_id, top_k=top_k, filters=filters,
         )
         timings.retrieval_ms = (time.perf_counter() - retrieval_start) * 1000
@@ -256,7 +257,7 @@ class GroundedAnswerService:
 
         retrieval_start = time.perf_counter()
         bundle, corrective_info = await self._retrieve_with_optional_correction(
-            self._contextual_retrieval_query(query, history, domain_id),
+            await contextual_retrieval_query(query, history),
             domain_id=domain_id,
             top_k=top_k,
             filters=filters,
@@ -401,21 +402,9 @@ class GroundedAnswerService:
     # ------------------------------------------------------------------
     # 内部编排
     # ------------------------------------------------------------------
-    @staticmethod
-    def _contextual_retrieval_query(query, history, domain_id):
-        if not history:
-            return query
-        from knowledge.dialogue_query import contextual_retrieval_query
-        from knowledge.retrieval_core.registry import get_default_registry
-
-        configs = get_default_registry().list_domains()
-        if domain_id:
-            configs = [config for config in configs if config.domain_id == domain_id]
-        return contextual_retrieval_query(query, history, configs) if configs else query
-
     async def _retrieve_with_optional_correction(
         self,
-        query: str,
+        query: str | None,
         *,
         domain_id: str | None,
         top_k: int,
@@ -423,6 +412,9 @@ class GroundedAnswerService:
     ) -> tuple[dict[str, Any] | None, dict[str, Any]]:
         if self.retriever is None:
             raise RuntimeError("Grounded answer retriever is not configured")
+
+        if query is None:
+            return None, {"reformulated": False, "reformulated_query": None, "rounds": []}
 
         def _retrieve(q: str, *, top_k: int, filters: dict | None):
             return self.retriever(q, top_k=top_k, filters=filters, domain_id=domain_id)

@@ -1,56 +1,26 @@
-"""Resolve bounded knowledge follow-ups using user topics, never model claims.
+"""Resolve history references through the existing source-blind semantic reviews.
 
-This is retrieval query construction, not fact extraction. Only registered
-domain anchors are inherited; unrelated turns terminate the chain. Ambiguous
-pronouns are left intact for the answerer to clarify, not resolved to a person.
+Only proven object names supplement the complete current query. Historical
+tasks, model claims and guessed facts never become retrieval query text.
 """
-from __future__ import annotations
 
-import re
-from typing import TYPE_CHECKING
-
-from knowledge.query_tasks import requests_source_text
-from knowledge.retrieval_core.query import QueryAnalyzer
-
-if TYPE_CHECKING:
-    from collections.abc import Mapping, Sequence
-
-_FOLLOWUP = re.compile(
-    r'^(?:那|那么|所以|但是|不过|确定|请)?(?:他|她|它|这|那|谁|为什么|怎么|具体|能否|能不能)'
-)
-_RESET = re.compile(r'换.{0,3}话题|不聊|先不说|与.{0,12}无关')
+from inference.provider_context import get_provider_context_budget
+from knowledge.public_question_binding import bound_retrieval_query, resolve_question_binding
+from knowledge.retrieval_query_plan import plan_retrieval
 
 
-def _is_followup(text: str) -> bool:
-    # A source-request is a retrieval task, independent of an exact sentence
-    # prefix. Mentioning a source in an unrelated statement is not that task.
-    return bool(requests_source_text(text) or _FOLLOWUP.search(text))
-
-
-def contextual_retrieval_query(message: str, history: Sequence[Mapping[str, str]], configs) -> str:
-    if _RESET.search(message) or not _is_followup(message):
+async def contextual_retrieval_query(message: str, history) -> str | None:
+    if not history:
         return message
-    analyzer = QueryAnalyzer(configs)
-    current = analyzer.analyze(message)
-    # A current explicit entity is self-contained; do not mix unrelated people.
-    if current.entities:
+    budget = get_provider_context_budget()
+    plan = await plan_retrieval(message, history=history, context_budget=budget.review)
+    if not plan.needs_public_retrieval:
+        return None
+    if not dict(plan.dependencies.groups)["public_knowledge"]:
         return message
-    topics = []
-    for row in reversed(history[-8:]):
-        if row.get('role') != 'user':
-            continue
-        text = str(row.get('content', '')).strip()
-        if not text or len(text) > 600 or _RESET.search(text):
-            break
-        analysis = analyzer.analyze(text)
-        if analysis.matched_domains:
-            topics.append(text)
-            if analysis.entities:
-                if len(analysis.matched_domains) != 1:
-                    return message
-                return '\n'.join([*reversed(topics), message])
-        elif _is_followup(text):
-            topics.append(text)
-        else:
-            break
-    return message
+    binding = await resolve_question_binding(
+        plan.dependencies, message, window_tokens=budget.window_tokens,
+        public_obligations=plan.public_obligations, history=history,
+        context_budget=budget.review,
+    )
+    return bound_retrieval_query(binding, message)

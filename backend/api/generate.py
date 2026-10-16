@@ -1200,7 +1200,7 @@ async def _generate_with_retrieval(
                             "modelInvoked": True}
             else:
                 retrieval_query = rag_message
-                from knowledge.public_question_binding import bound_object_search_views, resolve_question_binding
+                from knowledge.public_question_binding import bound_retrieval_query, resolve_question_binding
 
                 question_binding = None
                 if query_plan.dependencies is not None and dict(query_plan.dependencies.groups)["public_knowledge"]:
@@ -1211,9 +1211,7 @@ async def _generate_with_retrieval(
                         **({"history": effective_history, "context_budget": get_provider_context_budget().review}
                            if effective_history else {}),
                     )
-                if question_binding is not None and "reference_context" in question_binding["input"]:
-                    anchors = tuple(name for name in bound_object_search_views(question_binding, rag_message) if name not in rag_message)
-                    retrieval_query = "\n".join((*anchors, rag_message))
+                retrieval_query = bound_retrieval_query(question_binding, rag_message)
                 binding_options = {"question_binding": question_binding} if question_binding is not None else {}
                 retrieval_timeout = _rag_retrieval_timeout()
                 bundle = await asyncio.wait_for(

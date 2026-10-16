@@ -111,7 +111,7 @@ def test_packet_budget_includes_actual_separators():
 
 
 @pytest.mark.asyncio
-async def test_identical_followup_with_different_history_cannot_share_cached_answer():
+async def test_identical_followup_with_different_history_cannot_share_cached_answer(monkeypatch):
     data = bundle()
     data["query_analysis"] = {"entities": ["月社妃", "琉璃"]}
     calls = []
@@ -127,6 +127,11 @@ async def test_identical_followup_with_different_history_cannot_share_cached_ans
         cache=AnswerCache(ttl_seconds=60),
         corrective_enabled=False,
     )
+    from unittest.mock import AsyncMock
+
+    # Cache isolation is tested with explicitly controlled semantic query preparation.
+    monkeypatch.setattr("knowledge.grounded_answer.service.contextual_retrieval_query",
+                        AsyncMock(side_effect=lambda query, history: query))
     first = await service.answer(
         FIXTURE["cases"][2]["message"], history=FIXTURE["cases"][2]["history"], domain_id="fixture", generate=generate
     )
