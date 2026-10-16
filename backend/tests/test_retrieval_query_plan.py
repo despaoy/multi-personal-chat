@@ -4,7 +4,8 @@ import json
 
 import pytest
 
-from knowledge.retrieval_query_plan import QueryPlanReviewError, parse_search_views, plan_retrieval_views
+from knowledge import retrieval_query_plan
+from knowledge.retrieval_query_plan import QueryPlanReviewError, plan_retrieval_views
 from knowledge.turn_dependencies import query_segments
 
 QUERY = "请按青川通道公共办理规则回答费用、时长和核验条件。" + "假设方案资料完整，实际情况未知。" * 40
@@ -20,28 +21,89 @@ def complete_plan():
     )
 
 
-def test_literal_public_views_keep_original_query_and_deduplicate():
-    raw = json.dumps({"search_views": [["青川通道", "公共办理规则", "费用", "时长"], ["青川通道", "公共办理规则", "费用", "时长"]]})
-    assert parse_search_views(raw, QUERY) == ("青川通道 公共办理规则 费用 时长",)
+async def test_literal_public_views_keep_original_query_and_deduplicate():
+    value = complete_plan()
+    value["search_views"] = [["青川通道", "公共办理规则", "费用", "时长"]] * 2
+
+    async def review(_messages):
+        return json.dumps(value)
+
+    result = await plan_retrieval_views(QUERY, reviewer=review)
+    assert result.views == ("青川通道 公共办理规则 费用 时长",)
     assert QUERY.startswith("请按青川通道")
 
 
-@pytest.mark.parametrize("raw", [
-    '{"search_views":[["未提供的答案"]]}',
-    '{"search_views":[[true]]}',
-    '{"search_views":{},"source_grants":["私密库"]}',
-    '{"search_views":[],"search_views":[["青川通道"]]}',
-    '{"search_views":[[]]}',
-    '{"search_views":[["青川通道"]],"filters":{"knowledge_base_id":1}}',
+@pytest.mark.parametrize("views", [
+    [["未提供的答案"]], [[True]], {}, [[]],
 ])
-def test_untrusted_output_cannot_invent_values_filters_or_permissions(raw):
-    with pytest.raises(ValueError):
-        parse_search_views(raw, QUERY)
+async def test_untrusted_output_cannot_invent_values_or_view_shapes(views):
+    value = complete_plan()
+    value["search_views"] = views
+
+    async def review(_messages):
+        return json.dumps(value)
+
+    with pytest.raises(QueryPlanReviewError, match="query_plan_invalid") as caught:
+        await plan_retrieval_views(QUERY, reviewer=review)
+    assert isinstance(caught.value.__cause__, ValueError)
+
+
+@pytest.mark.parametrize("field,value", [("source_grants", ["私密库"]), ("filters", {"knowledge_base_id": 1})])
+async def test_complete_plan_cannot_add_filters_or_source_permissions(field, value):
+    proposal = complete_plan()
+    proposal[field] = value
+
+    async def review(_messages):
+        return json.dumps(proposal)
+
+    with pytest.raises(QueryPlanReviewError, match="query_plan_invalid") as caught:
+        await plan_retrieval_views(QUERY, reviewer=review)
+    assert str(caught.value.__cause__) == "Unexpected task-plan fields"
+
+
+async def test_complete_plan_rejects_duplicate_keys_before_view_validation():
+    raw = json.dumps(complete_plan()).replace('"search_views":', '"search_views": [], "search_views":', 1)
+
+    async def review(_messages):
+        return raw
+
+    with pytest.raises(QueryPlanReviewError, match="query_plan_invalid") as caught:
+        await plan_retrieval_views(QUERY, reviewer=review)
+    assert str(caught.value.__cause__) == "Duplicate query-plan key"
+
+
+async def test_complete_model_plan_is_decoded_only_once(monkeypatch):
+    raw = json.dumps(complete_plan())
+    original = json.loads
+    calls = []
+
+    def load(value, **kwargs):
+        calls.append(value)
+        return original(value, **kwargs)
+
+    async def review(_messages):
+        return raw
+
+    monkeypatch.setattr(retrieval_query_plan.json, "loads", load)
+    result = await plan_retrieval_views(QUERY, reviewer=review)
+    assert result.views == ("青川通道 公共办理规则 核验条件",)
+    assert calls == [raw]
+
+
+@pytest.mark.parametrize("container", [bytes, bytearray])
+async def test_non_text_complete_model_plan_is_not_silently_decoded(container):
+    raw = container(json.dumps(complete_plan()).encode("utf-8"))
+
+    async def review(_messages):
+        return raw
+
+    with pytest.raises(QueryPlanReviewError, match="query_plan_invalid") as caught:
+        await plan_retrieval_views(QUERY, reviewer=review)
+    assert str(caught.value.__cause__) == "Query planner must return text"
 
 
 @pytest.mark.asyncio
-async def test_full_question_reaches_reviewer_without_source_or_answer_injection(monkeypatch):
-    monkeypatch.setenv("RAG_TASK_PLANNER_ENABLED", "true")
+async def test_full_question_reaches_reviewer_without_source_or_answer_injection():
     async def review(messages):
         payload = json.loads(messages[-1]["content"])
         assert payload["query"] == QUERY
@@ -54,8 +116,7 @@ async def test_full_question_reaches_reviewer_without_source_or_answer_injection
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("mode", ["invalid", "exception", "timeout"])
-async def test_failed_review_raises_with_original_cause(monkeypatch, mode):
-    monkeypatch.setenv("RAG_TASK_PLANNER_ENABLED", "true")
+async def test_failed_review_raises_with_original_cause(mode):
     async def review(messages):
         if mode == "exception":
             raise RuntimeError("Declared unit provider failure")
@@ -74,8 +135,7 @@ async def test_failed_review_raises_with_original_cause(monkeypatch, mode):
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("field", ["dependencies", "public_partitions", "legacy_unknown"])
-async def test_incomplete_legacy_plan_is_rejected(monkeypatch, field):
-    monkeypatch.setenv("RAG_TASK_PLANNER_ENABLED", "true")
+async def test_incomplete_legacy_plan_is_rejected(field):
     async def review(_messages):
         value = complete_plan()
         if field == "legacy_unknown":
@@ -91,7 +151,6 @@ async def test_incomplete_legacy_plan_is_rejected(monkeypatch, field):
 @pytest.mark.asyncio
 @pytest.mark.parametrize("timeout", ["0", "0.09", "30.1", "nan", "inf", "bad"])
 async def test_invalid_timeout_is_not_clamped_or_sent(monkeypatch, timeout):
-    monkeypatch.setenv("RAG_TASK_PLANNER_ENABLED", "true")
     monkeypatch.setenv("RAG_TASK_PLANNER_TIMEOUT_SECONDS", timeout)
     async def forbidden(_messages):
         pytest.fail("Invalid timeout must fail before a model call")
@@ -102,7 +161,6 @@ async def test_invalid_timeout_is_not_clamped_or_sent(monkeypatch, timeout):
 @pytest.mark.asyncio
 @pytest.mark.parametrize("timeout", ["0.1", "30"])
 async def test_valid_timeout_boundaries_are_used_as_configured(monkeypatch, timeout):
-    monkeypatch.setenv("RAG_TASK_PLANNER_ENABLED", "true")
     monkeypatch.setenv("RAG_TASK_PLANNER_TIMEOUT_SECONDS", timeout)
     original = asyncio.wait_for
     seen = []
@@ -117,8 +175,7 @@ async def test_valid_timeout_boundaries_are_used_as_configured(monkeypatch, time
 
 
 @pytest.mark.asyncio
-async def test_cancellation_propagates(monkeypatch):
-    monkeypatch.setenv("RAG_TASK_PLANNER_ENABLED", "true")
+async def test_cancellation_propagates():
     async def review(_messages):
         raise asyncio.CancelledError()
     with pytest.raises(asyncio.CancelledError):
@@ -126,8 +183,7 @@ async def test_cancellation_propagates(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_flat_search_view_strings_are_rejected(monkeypatch):
-    monkeypatch.setenv("RAG_TASK_PLANNER_ENABLED", "true")
+async def test_flat_search_view_strings_are_rejected():
     async def review(messages):
         assert "必须是二维字符串数组" in messages[0]["content"]
         value = complete_plan()

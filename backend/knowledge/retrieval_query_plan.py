@@ -84,11 +84,7 @@ def _unique_object(pairs):
     return result
 
 
-def parse_search_views(raw: str, query: str) -> tuple[str, ...]:
-    value = json.loads(raw, object_pairs_hook=_unique_object)
-    if not isinstance(value, dict) or set(value) != {"search_views"}:
-        raise ValueError("Unexpected query-plan fields")
-    groups = value["search_views"]
+def _parse_search_views(groups: object, query: str) -> tuple[str, ...]:
     if not isinstance(groups, list) or len(groups) > 4:
         raise ValueError("Invalid search-view count")
     views = []
@@ -154,6 +150,8 @@ async def plan_retrieval_views(query: str, *, history=(), context_budget=None, r
     except Exception as exc:
         raise QueryPlanReviewError("provider_error") from exc
     try:
+        if not isinstance(raw, str):
+            raise ValueError("Query planner must return text")
         value = json.loads(raw, object_pairs_hook=_unique_object)
         if not isinstance(value, dict) or set(value) != {"search_views", "dependencies", "public_partitions"}:
             raise ValueError("Unexpected task-plan fields")
@@ -161,7 +159,7 @@ async def plan_retrieval_views(query: str, *, history=(), context_budget=None, r
         from knowledge.public_obligations import parse_public_partitions
 
         obligations = parse_public_partitions(value["public_partitions"], dependencies, query)
-        views = parse_search_views(json.dumps({"search_views": value["search_views"]}), query)
+        views = _parse_search_views(value["search_views"], query)
         if dependencies.private_context_only and views:
             raise ValueError("Private-only plan cannot propose public searches")
     except (ValueError, TypeError, KeyError, RecursionError) as exc:
