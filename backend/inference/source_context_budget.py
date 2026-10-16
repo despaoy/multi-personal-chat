@@ -7,7 +7,8 @@ from datetime import datetime
 from character.source_memory import SourceRecall, attach_sources
 
 
-def _complete_packet(text):
+def _parse_complete_packet(text):
+    """Return the validated packet, or None for invalid input."""
     try:
         packet = json.loads(text)
         if (
@@ -19,7 +20,7 @@ def _complete_packet(text):
             or not isinstance(packet["records"], list)
             or not packet["records"]
         ):
-            return False
+            return None
         ids = set()
         for row in packet["records"]:
             if (
@@ -32,11 +33,11 @@ def _complete_packet(text):
                 or not isinstance(row["observed_at"], str)
                 or datetime.fromisoformat(row["observed_at"]).utcoffset() is None
             ):
-                return False
+                return None
             ids.add(row["source_id"])
-        return True
+        return packet
     except (ValueError, TypeError, KeyError, AttributeError):
-        return False
+        return None
 
 
 def admit_deferred_sources(request, build):
@@ -50,7 +51,7 @@ def admit_deferred_sources(request, build):
     if not candidate:
         return request
 
-    if not _complete_packet(candidate):
+    if _parse_complete_packet(candidate) is None:
         raise ValueError("Invalid deferred source packet; restore complete attributed source records before retrying")
     admitted = attach_sources(context, SourceRecall(candidate, {"status": "available"}))
     proposed = replace(request, character_context=admitted)

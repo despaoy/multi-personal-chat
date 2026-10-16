@@ -8,26 +8,28 @@ import json
 from dataclasses import replace
 
 from character.models import UserScope
-from inference.source_context_budget import _complete_packet
+from inference.source_context_budget import _parse_complete_packet
 
 
-def _records(text):
+def _packet(text):
     if not text:
-        return []
-    if not _complete_packet(text):
+        return None
+    packet = _parse_complete_packet(text)
+    if packet is None:
         raise ValueError("Invalid complete private source packet")
-    return json.loads(text)["records"]
+    return packet
 
 
-def _retain_packet(text, rows, granted):
+def _retain_packet(text, packet, granted):
+    if packet is None:
+        return text
+    rows = packet["records"]
     kept = [row for row in rows if row["source_id"] in granted]
     if len(kept) == len(rows):
         return text
     if not kept:
         return ""
-    value = json.loads(text)
-    value["records"] = kept
-    return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+    return json.dumps(dict(packet, records=kept), ensure_ascii=False, separators=(",", ":"))
 
 
 def _without_history_turns(history, bodies):
@@ -53,8 +55,10 @@ async def revalidate_private_sources(
     if not text and not candidate:
         return request
 
-    rows = _records(text)
-    deferred = _records(candidate)
+    packet = _packet(text)
+    deferred_packet = _packet(candidate)
+    rows = packet["records"] if packet is not None else []
+    deferred = deferred_packet["records"] if deferred_packet is not None else []
     originals = {}
     for row in [*rows, *deferred]:
         source_id = row["source_id"]
@@ -81,8 +85,8 @@ async def revalidate_private_sources(
     if not revoked:
         return request
     bodies = tuple(originals[source_id]["text"] for source_id in revoked)
-    admitted = _retain_packet(text, rows, granted)
-    deferred_text = _retain_packet(candidate, deferred, granted)
+    admitted = _retain_packet(text, packet, granted)
+    deferred_text = _retain_packet(candidate, deferred_packet, granted)
     status = (
         "available"
         if admitted
