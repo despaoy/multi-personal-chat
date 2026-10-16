@@ -69,3 +69,58 @@ def test_development_requires_an_explicit_valid_encryption_key(key, accepted):
     encryption_errors = [error for error in result.errors if "ENCRYPTION_KEY" in error]
     assert bool(encryption_errors) is not accepted
     assert not any("auto-generate" in warning for warning in result.warnings)
+
+
+@pytest.mark.parametrize("representation,accepted", [
+    pytest.param("urlsafe", True, id="valid-urlsafe"),
+    pytest.param("standard", True, id="valid-standard-base64"),
+    pytest.param("punctuation", False, id="illegal-character-inserted"),
+    pytest.param("padding", False, id="excess-padding"),
+])
+def test_encryption_manager_and_deployment_share_strict_configured_key_decoding(
+    monkeypatch, tmp_path, representation, accepted,
+):
+    from infra import encryption
+
+    # These bytes force both encodings to exercise their distinct alphabets;
+    # all credentials and ciphertext in this test are explicitly synthetic.
+    raw = bytes([251, 255]) * 16
+    urlsafe = base64.urlsafe_b64encode(raw).decode("ascii")
+    standard = base64.b64encode(raw).decode("ascii")
+    assert "-" in urlsafe and "_" in urlsafe
+    assert "+" in standard and "/" in standard
+    if representation == "standard":
+        encoded = standard
+    elif representation == "punctuation":
+        encoded = urlsafe[:8] + "!" + urlsafe[8:]
+    elif representation == "padding":
+        encoded = urlsafe + "="
+    else:
+        assert representation == "urlsafe"
+        encoded = urlsafe
+
+    canonical = tmp_path / "backend" / ".env"
+    legacy = tmp_path / "backend" / "infra" / ".env"
+    monkeypatch.setattr(encryption, "_ENV_FILE_PATH", canonical)
+    monkeypatch.setattr(encryption, "_LEGACY_ENV_FILE_PATH", legacy)
+    monkeypatch.setenv("ENCRYPTION_KEY", encoded)
+    env = _cloud_environment()
+    # Pass the exact supplied representation into both production entry points.
+    # In particular, do not trim, filter, repair padding or re-encode it here.
+    env["ENCRYPTION_KEY"] = encoded
+    validation = validate_deployment_environment(env)
+
+    if accepted:
+        existing = encryption.EncryptionManager(key=raw).encrypt("synthetic preexisting encrypted data")
+        configured = encryption.EncryptionManager()
+        assert configured.decrypt(existing) == "synthetic preexisting encrypted data"
+        assert validation.ok and validation.errors == []
+    else:
+        with pytest.raises(encryption.KeyManagementError, match="环境变量") as caught:
+            encryption.EncryptionManager()
+        assert isinstance(caught.value.__cause__, ValueError)
+        assert encoded not in str(caught.value) and encoded not in str(caught.value.__cause__)
+        assert validation.ok is False
+        assert validation.errors and all("ENCRYPTION_KEY" in error for error in validation.errors)
+        assert encoded not in repr(validation)
+    assert not canonical.exists() and not legacy.exists()

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import binascii
 import logging
 import os
 from dataclasses import dataclass, field
@@ -58,11 +59,18 @@ def _is_truthy(value: str) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "on", "enabled"}
 
 
-def _is_valid_encryption_key(value: str) -> bool:
+def decode_encryption_key(value: str) -> bytes:
+    """Decode one complete standard/URL-safe Base64 key without discarding characters."""
+    message = "ENCRYPTION_KEY must be an explicit valid Base64 encoded 32-byte key"
+    if not isinstance(value, str):
+        raise ValueError(message)
     try:
-        return len(base64.urlsafe_b64decode(value.encode("ascii"))) == 32
-    except Exception:
-        return False
+        key = base64.b64decode(value.encode("ascii"), altchars=b"-_", validate=True)
+    except (UnicodeEncodeError, binascii.Error) as exc:
+        raise ValueError(message) from exc
+    if len(key) != 32:
+        raise ValueError(message)
+    return key
 
 
 def validate_deployment_environment(env: Mapping[str, str] | None = None) -> DeploymentValidationResult:
@@ -134,9 +142,10 @@ def validate_deployment_environment(env: Mapping[str, str] | None = None) -> Dep
     except RuntimeError as exc:
         errors.append(str(exc))
 
-    encryption_key = _value(env, "ENCRYPTION_KEY")
-    if not _is_valid_encryption_key(encryption_key):
-        errors.append("ENCRYPTION_KEY must be an explicit URL-safe base64 encoded 32-byte key")
+    try:
+        decode_encryption_key(env.get("ENCRYPTION_KEY", ""))
+    except ValueError as exc:
+        errors.append(str(exc))
 
     origins = _value(env, "ALLOWED_ORIGINS") or _value(env, "CORS_ORIGINS")
     if production and (not origins or origins == "*" or "localhost" in origins or "127.0.0.1" in origins):

@@ -37,6 +37,8 @@ from typing import Any, Optional
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
+from infra.deployment import decode_encryption_key
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -139,16 +141,13 @@ class EncryptionManager:
 
     @staticmethod
     def _decode_key(encoded_key: str, source: str) -> bytes:
-        """Decode and validate one URL-safe base64 AES-256 key."""
+        """Attach configuration-source information to the shared strict decoder."""
         try:
-            key = base64.urlsafe_b64decode(encoded_key.encode("ascii"))
-        except Exception as exc:
-            raise KeyManagementError(f"解析 {source} 中的 {_ENV_KEY_NAME} 失败") from exc
-        if len(key) != _KEY_LENGTH:
+            return decode_encryption_key(encoded_key)
+        except ValueError as exc:
             raise KeyManagementError(
-                f"{source} 中的 {_ENV_KEY_NAME} 必须解码为 {_KEY_LENGTH} 字节"
-            )
-        return key
+                f"{source} 中的 {_ENV_KEY_NAME} 必须为有效的 {_KEY_LENGTH} 字节 Base64 编码"
+            ) from exc
 
     @staticmethod
     def _read_key_from_file(path: Path) -> Optional[str]:
