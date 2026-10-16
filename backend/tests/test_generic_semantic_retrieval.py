@@ -106,7 +106,7 @@ async def baseline_preflight(rig, monkeypatch, *, old_flag):
     return {
         "legacy_flag": old_flag, "candidate_count": len(bundle["results"]), "abstained": bundle["abstained"],
         "original_packet_count": len(packets), "searches": list(rig.searches),
-        "bound_names_searched": all(name in rig.searches for name in NAMES),
+        "bound_names_searched": all(name + "\n" + QUERY in rig.searches for name in NAMES),
         "both_complete_originals": {packet["original_body"] for packet in packets} == set(BODIES),
         "bound_task_buckets": sum(row.get("reference_binding") == rig.binding for row in coverage),
     }
@@ -118,12 +118,12 @@ async def test_generic_plan_keeps_both_bound_objects_and_fresh_full_sources(tmp_
     try:
         monkeypatch.setenv("CORRECTIVE_RAG_ENABLED", "true")  # A retired branch cannot bypass the canonical plan.
         bundle = await retrieve_bound(rig)
-        assert rig.searches == [QUERY, *NAMES]
+        assert rig.searches == [QUERY, *(name + "\n" + QUERY for name in NAMES)]
         assert bundle["abstained"] is False
         assert {row["document_id"] for row in bundle["results"]} == {row["id"] for row in rig.documents}
         assert {packet["original_body"] for packet in bundle["original_source_packets"]} == set(BODIES)
         buckets = bundle["task_candidate_coverage"]
-        assert [bucket["query"] for bucket in buckets] == [QUERY, *NAMES]
+        assert [bucket["query"] for bucket in buckets] == [QUERY, *(name + "\n" + QUERY for name in NAMES)]
         assert all(bucket["reference_binding"] == rig.binding for bucket in buckets[1:])
         receipts = [row["original_source_receipt"] for row in bundle["source_coverage"]]
         assert len(receipts) == 2

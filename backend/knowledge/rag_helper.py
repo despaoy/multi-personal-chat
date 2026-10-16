@@ -16,13 +16,11 @@ from typing import Any
 
 from infra.environment import read_bool
 
-try:
-    from nonebot.log import logger
-except ImportError:
-    logger = logging.getLogger(__name__)
-
 from .reranker import get_reranker
+from .task_retrieval import literal_task_views
 from .vector_db import get_vector_db
+
+logger = logging.getLogger(__name__)
 
 
 def _stable_result_key(result: dict[str, Any]) -> str:
@@ -113,7 +111,7 @@ class RAGHelper:
         Returns:
             按相关性降序排列的文档列表，每项包含normalized_score等字段
         """
-        views = self._validated_task_views(query, additional_queries)
+        views = literal_task_views(query, additional_queries)
         if views:
             return self._task_candidate_plan(
                 query, views, top_k=top_k, enable_rerank=enable_rerank,
@@ -163,24 +161,6 @@ class RAGHelper:
         if use_cache:
             self._add_to_cache(cache_key, results)
         return results
-
-    @staticmethod
-    def _validated_task_views(query: str, additional_queries: tuple[str, ...], *, question_binding=None) -> tuple[str, ...]:
-        reference_names = ()
-        if question_binding is not None:
-            from knowledge.public_question_binding import bound_object_search_views
-
-            reference_names = bound_object_search_views(question_binding, query)
-        if (
-            not isinstance(additional_queries, tuple) or len(additional_queries) > 4
-            or any(
-                not isinstance(view, str) or not view.strip() or len(view) > 1024
-                or (view not in reference_names and any(span not in query for span in view.split()))
-                for view in additional_queries
-            )
-        ):
-            raise ValueError("Additional query views must be bounded literal input spans")
-        return tuple(dict.fromkeys(view for view in additional_queries if view != query))
 
     def _task_candidate_plan(self, query, views, *, top_k, enable_rerank, filters, use_cache, threshold=0.3, question_binding=None):
         from knowledge.task_retrieval import collect_task_candidates
@@ -266,7 +246,14 @@ class RAGHelper:
         Returns:
             {results, citations, confidence, abstained}
         """
-        views = self._validated_task_views(query, additional_queries, question_binding=question_binding)
+        if question_binding is not None:
+            from knowledge.public_question_binding import bound_task_search_views
+
+            if additional_queries:
+                raise ValueError("Bound task retrieval cannot accept separate query hints")
+            views = bound_task_search_views(question_binding, query)
+        else:
+            views = literal_task_views(query, additional_queries)
         task_coverage = ()
         if views:
             plan = self._task_candidate_plan(

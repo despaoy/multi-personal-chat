@@ -30,6 +30,17 @@ class TaskCandidatePlan:
     coverage: tuple[dict[str, Any], ...]
 
 
+def literal_task_views(query, views):
+    """Validate explicit literal hints without changing their scope."""
+    if (
+        not isinstance(views, tuple) or len(views) > 4
+        or any(not isinstance(view, str) or not view.strip() or len(view) > 1024
+               or any(span not in query for span in view.split()) for view in views)
+    ):
+        raise ValueError("Invalid bounded task views")
+    return tuple(dict.fromkeys(view for view in views if view != query))
+
+
 def collect_task_candidates(
     query: str,
     views: tuple[str, ...],
@@ -45,25 +56,14 @@ def collect_task_candidates(
 ) -> TaskCandidatePlan:
     if isinstance(top_k, bool) or not isinstance(top_k, int) or top_k < 1:
         raise ValueError("Task candidate limit must be a positive integer")
-    reference_names = ()
     if question_binding is not None:
-        from knowledge.public_question_binding import bound_object_search_views
+        from knowledge.public_question_binding import bound_task_search_views
 
-        reference_names = bound_object_search_views(question_binding, query)
-    if (
-        not isinstance(views, tuple)
-        or len(views) > 4
-        or any(
-            not isinstance(view, str)
-            or not view.strip()
-            or len(view) > 1024
-            or (view not in reference_names and any(span not in query for span in view.split()))
-            for view in views
-        )
-        or len(set(views)) != len(views)
-        or query in views
-    ):
-        raise ValueError("Invalid bounded task views")
+        expected = bound_task_search_views(question_binding, query)
+    else:
+        expected = literal_task_views(query, views)
+    if views != expected:
+        raise ValueError("Incomplete or changed task query set")
     if (
         isinstance(threshold, bool)
         or not isinstance(threshold, (int, float))
@@ -110,7 +110,7 @@ def collect_task_candidates(
                 "semantic_coverage": "unverified" if accepted else "not_established",
             }
         )
-        if index and question_binding is not None and any(span not in query for span in question.split()):
+        if index and question_binding is not None:
             coverage[-1]["reference_binding"] = deepcopy(question_binding)
         if not accepted:
             continue

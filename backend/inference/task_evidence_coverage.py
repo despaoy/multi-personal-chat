@@ -20,6 +20,8 @@ def validate_task_candidates(records, *, query=None):
         raise ValueError("Invalid task candidate receipt count")
     validated = []
     root_query = query
+    bound_queries = None
+    source_binding = None
     for index, record in enumerate(records):
         if not isinstance(record, Mapping):
             raise ValueError("Invalid task candidate receipt")
@@ -35,24 +37,29 @@ def validate_task_candidates(records, *, query=None):
             record["status"] = record.pop("candidate_status")
             record["semantic_coverage"] = "unverified" if record.get("retained_candidate_count") else "not_established"
         text = record.get("query")
-        if not isinstance(text, str) or not text.strip() or (index and len(text) > 1024):
+        if not isinstance(text, str) or not text.strip():
             raise ValueError("Invalid original task query")
         if index == 0:
             if root_query is None:
                 root_query = text
             elif text != root_query:
                 raise ValueError("Task receipt changed the original question")
-        elif any(span not in root_query for span in text.split()):
-            from knowledge.public_question_binding import bound_object_search_views
+            if "reference_binding" in record:
+                raise ValueError("Original question cannot acquire a task reference binding")
+        elif "reference_binding" in record:
+            from knowledge.public_question_binding import bound_task_search_views
 
-            binding = record.get("reference_binding")
-            if not isinstance(binding, dict) or text not in bound_object_search_views(binding, root_query):
-                raise ValueError("Task receipt adds text outside verified question references")
-        if "reference_binding" in record:
-            from knowledge.public_question_binding import bound_object_search_views
-
-            if not index or text not in bound_object_search_views(record["reference_binding"], root_query):
-                raise ValueError("Task receipt changed the actual reference binding")
+            if bound_queries is None:
+                source_binding = record["reference_binding"]
+                if index != 1 or not isinstance(source_binding, dict):
+                    raise ValueError("Invalid task reference binding")
+                bound_queries = bound_task_search_views(source_binding, root_query)
+                if len(records) != len(bound_queries) + 1:
+                    raise ValueError("Incomplete bound task receipts")
+            if record["reference_binding"] != source_binding or text != bound_queries[index - 1]:
+                raise ValueError("Task receipt changed the complete bound task query")
+        elif bound_queries is not None or len(text) > 1024 or any(span not in root_query for span in text.split()):
+            raise ValueError("Task receipt adds text outside verified question references")
         kind = "original_question" if index == 0 else "public_task"
         if type(record.get("task_index")) is not int or record["task_index"] != index or record.get("kind") != kind:
             raise ValueError("Invalid task receipt identity")

@@ -98,7 +98,7 @@ async def test_api_preserves_normal_business_or_propagates_curated_fault(monkeyp
 
     def generic(query, **kwargs):
         assert query == QUERY and kwargs["filters"] is None
-        assert kwargs["additional_queries"] == ("青妃集市展期", "晴汀续领")
+        assert kwargs["question_binding"] == receipt and "additional_queries" not in kwargs
         calls.append("generic")
         return dict(results=[row], confidence=0.8, abstained=False)
 

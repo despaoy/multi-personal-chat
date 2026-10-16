@@ -50,6 +50,7 @@ from infra.concurrency_control import InferenceQueueFull, RateLimitExceeded, inf
 from infra.environment import read_bool
 from infra.observability import increment, log_event, set_consecutive
 from infra.security_utils import strip_control_chars
+from knowledge.public_question_binding import QuestionBindingCapacityError
 from knowledge.retrieval_core.errors import RetrievalIndexError
 
 if INPUT_VALIDATOR_AVAILABLE:
@@ -1121,16 +1122,8 @@ async def _retrieve_rag_bundle(
         vector_db = get_vector_db()
         generation = vector_db.cache_generation
         revision = knowledge_api._vector_index_revision
-        views = ()
-        contextual_binding = question_binding is not None and "reference_context" in question_binding["input"]
-        if question_binding is not None:
-            from knowledge.public_question_binding import bound_object_search_views
-
-            views = bound_object_search_views(question_binding, query)
-        view_options = {"additional_queries": views} if views else {}
-        if contextual_binding:
-            view_options["question_binding"] = question_binding
-        bundle = get_rag_helper().retrieve_with_citations(query, top_k=top_k, filters=filters, **view_options)
+        binding_options = {"question_binding": question_binding} if question_binding is not None else {}
+        bundle = get_rag_helper().retrieve_with_citations(query, top_k=top_k, filters=filters, **binding_options)
         expanded = expand_source_context(
             bundle, vector_db, expected_generation=generation,
             source_budget_tokens=get_provider_context_budget().window_tokens, filters=filters, query=query,
@@ -1330,7 +1323,7 @@ async def _generate_with_retrieval(
             )
             raise HTTPException(
                 status_code=503,
-                detail=(e.public_detail() if isinstance(e, RetrievalIndexError) else
+                detail=(e.public_detail() if isinstance(e, (RetrievalIndexError, QuestionBindingCapacityError)) else
                         with_provider_error("检索或证据审核失败，请检查检索服务及审核模型状态后重试", e)),
             ) from e
 

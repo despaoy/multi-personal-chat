@@ -13,6 +13,7 @@ from knowledge.public_question_binding import (
     QuestionBindingCapacityError,
     QuestionBindingReviewError,
     bound_object_search_views,
+    bound_task_search_views,
     failed_question_binding_review,
     resolve_question_binding,
     validate_question_binding,
@@ -128,17 +129,14 @@ async def test_failure_diagnostic_keeps_complete_reference_input_without_grantin
 
 
 async def test_only_exact_bound_reference_views_pass_retrieval_validation():
-    from knowledge.rag_helper import RAGHelper
+    from knowledge.task_retrieval import literal_task_views
 
     receipt = await binding()
-    assert RAGHelper._validated_task_views(QUERY, ("竹湾登记", "枫台续期"), question_binding=receipt)
-    for query, views, proof in [
-        (QUERY, ("竹湾登记",), None),
-        (QUERY, ("其他业务",), receipt),
-        ("查询另一个对象。", ("竹湾登记",), receipt),
-    ]:
-        with pytest.raises(ValueError):
-            RAGHelper._validated_task_views(query, views, question_binding=proof)
+    assert bound_task_search_views(receipt, QUERY) == ("竹湾登记\n" + QUERY, "枫台续期\n" + QUERY)
+    with pytest.raises(ValueError):
+        literal_task_views(QUERY, ("竹湾登记",))
+    with pytest.raises(ValueError):
+        bound_task_search_views(receipt, "查询另一个对象。")
 
 
 async def test_reference_binding_is_reused_in_source_review_and_canonical_receipt(monkeypatch):
@@ -343,8 +341,8 @@ async def test_reference_proof_reaches_candidate_collection_and_final_visibility
         stable_key=lambda row: row["id"],
         snapshot=lambda: ("unit", 4),
     )
-    plan = collect_task_candidates(QUERY, ("竹湾登记", "枫台续期"), question_binding=receipt, **kwargs)
-    assert calls == [QUERY, "竹湾登记", "枫台续期"]
+    plan = collect_task_candidates(QUERY, bound_task_search_views(receipt, QUERY), question_binding=receipt, **kwargs)
+    assert calls == [QUERY, "竹湾登记\n" + QUERY, "枫台续期\n" + QUERY]
     validated = validate_task_candidates(plan.coverage, query=QUERY)
     assert all(r["reference_binding"] == receipt for r in validated[1:])
     assert all("reference_binding" not in r for r in render_task_coverage(validated))

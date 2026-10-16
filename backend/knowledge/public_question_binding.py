@@ -12,6 +12,12 @@ from knowledge.public_object_scope import RESOLVE_INSTRUCTION, parse_object_scop
 class QuestionBindingCapacityError(ValueError):
     """Complete question data cannot fit the resolver profile."""
 
+    def public_detail(self):
+        return {
+            "stage": "question_binding", "reason": "capacity_exceeded",
+            "message": "公共任务或完整输入超出处理预算，本轮未生成回复。请缩小问题范围或拆分后重试。",
+        }
+
 
 class QuestionBindingReviewError(ValueError):
     """An actual resolver exchange failed; it grants no question binding."""
@@ -160,3 +166,21 @@ def bound_object_search_views(binding, retrieval_query):
     if "reference_context" not in binding["input"] and any(name not in retrieval_query for name in names):
         raise ValueError("Object search view is not literal retrieval input")
     return names
+
+
+def bound_task_search_views(binding, retrieval_query):
+    """Preserve each complete public task beside its proven object anchors."""
+    bound_object_search_views(binding, retrieval_query)
+    scopes = binding["scopes"]
+    objects = {row["object_id"]: row["query_text"] for row in scopes["objects"]}
+    texts = {task["id"]: task["text"] for task in binding["input"]["public_tasks"]}
+    views = []
+    for task in scopes["task_scopes"]:
+        text = texts[task["task_id"]]
+        for identity in task["object_ids"] or (None,):
+            view = objects[identity] + "\n" + text if identity is not None else text
+            if view != retrieval_query and view not in views:
+                views.append(view)
+    if len(views) > 4:
+        raise QuestionBindingCapacityError("Complete public task views exceed retrieval capacity")
+    return tuple(views)
