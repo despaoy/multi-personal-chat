@@ -25,6 +25,9 @@ from training.dialogue_generation import DialogueBatchError, parse_dialogue_batc
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
+_dialogue_generation_task: asyncio.Task | None = None
+_DIALOGUE_CANCELLED = "dialogue_user_cancel"
+
 
 _DATASET_EXPORT_MAX_CONCURRENCY = max(
     1, int(os.getenv("TRAINING_EXPORT_MAX_CONCURRENCY", "2"))
@@ -589,9 +592,9 @@ async def generate_dialogues(request: DialogueGenerateRequest, current_user: dic
     s2 fix: 消耗 LLM token/GPU 资源，限定 admin。
     """
 
-    # 防止重复生成（异步安全检查+初始化）
+    global _dialogue_generation_task
     async with get_generation_state_lock():
-        if generation_state["is_generating"]:
+        if _dialogue_generation_task is not None and not _dialogue_generation_task.done():
             raise HTTPException(status_code=409, detail="已有生成任务正在运行")
 
         # 初始化状态
@@ -608,6 +611,37 @@ async def generate_dialogues(request: DialogueGenerateRequest, current_user: dic
             "started_at": time.time(),
         })
 
+        task = asyncio.create_task(_run_dialogue_generation(request), name="dialogue-generation")
+        _dialogue_generation_task = task
+
+    try:
+        result = await task
+        if asyncio.current_task().cancelling():
+            raise asyncio.CancelledError
+        return result
+    except asyncio.CancelledError as exc:
+        if asyncio.current_task().cancelling() or exc.args != (_DIALOGUE_CANCELLED,):
+            raise
+        return _dialogue_result([], 0.0, cancelled=True)
+    finally:
+        async with get_generation_state_lock():
+            if _dialogue_generation_task is task:
+                generation_state.update({"is_generating": False, "cancel_requested": False})
+
+
+def _dialogue_result(dialogues, cost, *, cancelled):
+    return {
+        "success": not cancelled,
+        "dialogues": dialogues,
+        "total": len(dialogues),
+        "cost_time": round(cost, 2),
+        "cancelled": cancelled,
+    }
+
+
+async def _run_dialogue_generation(request):
+    all_validated = []
+    total_cost = 0.0
     try:
         from inference.model_manager import get_model_manager
         manager = get_model_manager()
@@ -637,8 +671,6 @@ async def generate_dialogues(request: DialogueGenerateRequest, current_user: dic
 请保留资料中的否定、条件和时间范围，不编造缺失的角色事实。"""
 
         total_target = request.num_dialogues
-        all_validated = []
-        total_cost = 0.0
 
         # ============================================================
         # 轮次分布策略 —— 模拟真人聊天中不同长度的对话比例
@@ -819,14 +851,12 @@ async def generate_dialogues(request: DialogueGenerateRequest, current_user: dic
         if not was_cancelled and len(all_validated) != total_target:
             raise RuntimeError("Dialogue plan did not produce its requested count")
 
-        return {
-            "success": True,
-            "dialogues": all_validated,
-            "total": len(all_validated),
-            "cost_time": round(total_cost, 2),
-            "cancelled": was_cancelled,
-        }
+        return _dialogue_result(all_validated, total_cost, cancelled=was_cancelled)
 
+    except asyncio.CancelledError:
+        if not generation_state["cancel_requested"]:
+            raise
+        return _dialogue_result(all_validated, total_cost, cancelled=True)
     except CharacterResearchError as exc:
         logger.warning("Character research failed: source=%s reason=%s status=%s", exc.source, exc.reason, exc.status_code)
         raise HTTPException(
@@ -845,9 +875,7 @@ async def generate_dialogues(request: DialogueGenerateRequest, current_user: dic
     except Exception as exc:
         logger.error("Dialogue generation failed: %s", type(exc).__name__)
         raise HTTPException(status_code=500, detail="对话生成失败，请检查模型服务及后端日志。") from exc
-    finally:
-        async with get_generation_state_lock():
-            generation_state.update({"is_generating": False, "cancel_requested": False})
+
 
 
 @router.post("/api/training/generate-dialogues/cancel")
@@ -857,10 +885,12 @@ async def cancel_dialogue_generation(current_user: dict = Depends(get_current_ad
     s2 fix: 影响全局生成任务，限定 admin。
     """
     async with get_generation_state_lock():
-        if not generation_state["is_generating"]:
+        task = _dialogue_generation_task
+        if task is None or task.done():
             # C13 fix: 无任务可取消是冲突状态，应用 409 而非 200+success=False
             raise HTTPException(status_code=409, detail="没有正在进行的生成任务")
         generation_state["cancel_requested"] = True
+        task.cancel(_DIALOGUE_CANCELLED)
     return {"success": True, "message": "已发送取消请求"}
 
 
@@ -881,23 +911,29 @@ async def force_reset_generation(current_user: dict = Depends(get_current_admin)
     C-S1 fix: 强制重置会丢失正在进行的生成进度，限定 admin。
     """
     async with get_generation_state_lock():
-        if not generation_state["is_generating"] and not generation_state["cancel_requested"]:
+        task = _dialogue_generation_task
+        if task is None or task.done():
             # C13 fix: 无任务可重置是冲突状态，应用 409 而非 200+success=False
             raise HTTPException(status_code=409, detail="没有正在进行的生成任务")
-        generation_state.update({
-            "is_generating": False,
-            "cancel_requested": False,
-            "progress": 0,
-            "total": 0,
-            "batch_num": 0,
-            "total_batches": 0,
-            "generated_count": 0,
-            "new_dialogues": [],
-            "all_generated_dialogues": [],
-            "started_at": None,
-        })
-    logger.info("生成状态已强制重置")
-    return {"success": True, "message": "生成状态已强制重置"}
+        generation_state["cancel_requested"] = True
+        task.cancel(_DIALOGUE_CANCELLED)
+    await asyncio.gather(task, return_exceptions=True)
+    async with get_generation_state_lock():
+        if _dialogue_generation_task is task:
+            generation_state.update({
+                "is_generating": False,
+                "cancel_requested": False,
+                "progress": 0,
+                "total": 0,
+                "batch_num": 0,
+                "total_batches": 0,
+                "generated_count": 0,
+                "new_dialogues": [],
+                "all_generated_dialogues": [],
+                "started_at": None,
+            })
+    logger.info("Original dialogue generation task terminated")
+    return {"success": True, "message": "原生成任务已终止"}
 
 
 # ═══════════════════════════════════════════════════════════

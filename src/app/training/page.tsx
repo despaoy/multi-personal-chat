@@ -34,7 +34,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
-import { api, type Dataset, type TrainingTask, type CreateDatasetRequest, type StartTrainingRequest, type DialogueConversation, type DialogueGenerateRequest, type SavedDialogueItem } from '@/lib/api';
+import { api, type Dataset, type TrainingTask, type CreateDatasetRequest, type StartTrainingRequest, type DialogueConversation, type DialogueGenerateRequest, type DialogueGenerationProgress, type SavedDialogueItem } from '@/lib/api';
 import { toast } from 'sonner';
 import { usePageData } from '@/hooks/usePageData';
 import { SavedDialoguesPanel } from '@/components/training/SavedDialoguesPanel';
@@ -129,72 +129,74 @@ function TrainingContent() {
   // ========== 挂载时检测后台是否有正在进行的生成任务（断线重连） ==========
   const reconnectTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // 可复用的重连逻辑：从进度数据恢复生成状态并开始轮询
-  const reconnectToGeneration = useCallback((progress: { total: number; progress: number; batch_num: number; total_batches: number; generated_count: number; all_generated_dialogues: DialogueConversation[]; new_dialogues: DialogueConversation[] }) => {
-    setGenerating(true);
+  const clearGenerationTimers = useCallback(() => {
+    if (reconnectTimerRef.current) clearInterval(reconnectTimerRef.current);
+    if (progressTimerRef.current) clearInterval(progressTimerRef.current);
+    reconnectTimerRef.current = null;
+    progressTimerRef.current = null;
+  }, []);
+
+  const applyGenerationProgress = useCallback((progress: DialogueGenerationProgress) => {
+    setGeneratedDialogues(progress.all_generated_dialogues);
     setGenTotal(progress.total);
     setGenProgress(progress.progress);
     setGenGeneratedCount(progress.generated_count);
     setGenBatchInfo(`批次 ${progress.batch_num}/${progress.total_batches}`);
-
-    if (progress.all_generated_dialogues && progress.all_generated_dialogues.length > 0) {
-      setGeneratedDialogues(progress.all_generated_dialogues);
-    }
-
-    // 清除旧的定时器
-    if (reconnectTimerRef.current) clearInterval(reconnectTimerRef.current);
-    if (progressTimerRef.current) clearInterval(progressTimerRef.current);
-
-    // 启动进度轮询
-    reconnectTimerRef.current = setInterval(async () => {
-      try {
-        const p = await api.getDialogueGenerationProgress();
-        if (!p.is_generating) {
-          setGenerating(false);
-          setGenProgress(p.progress || 0);
-          setGenGeneratedCount(p.generated_count);
-          if (reconnectTimerRef.current) {
-            clearInterval(reconnectTimerRef.current);
-            reconnectTimerRef.current = null;
-          }
-          return;
-        }
-        setGenProgress(p.progress);
-        setGenGeneratedCount(p.generated_count);
-        setGenBatchInfo(`批次 ${p.batch_num}/${p.total_batches}`);
-        if (p.new_dialogues && p.new_dialogues.length > 0) {
-          setGeneratedDialogues(prev => [...prev, ...p.new_dialogues]);
-        }
-      } catch {
-        // ignore
-      }
-    }, 2000);
-
-    toast.info('检测到后台正在生成对话，已恢复连接');
   }, []);
 
+  const reconnectToGeneration = useCallback((progress: DialogueGenerationProgress, controller: AbortController) => {
+    applyGenerationProgress(progress);
+    if (!progress.is_generating) {
+      controller.abort();
+      return;
+    }
+    setGenerating(true);
+    clearGenerationTimers();
+    reconnectTimerRef.current = setInterval(async () => {
+      try {
+        const snapshot = await api.getDialogueGenerationProgress();
+        if (abortControllerRef.current !== controller || controller.signal.aborted) return;
+        applyGenerationProgress(snapshot);
+        if (!snapshot.is_generating) {
+          clearGenerationTimers();
+          controller.abort();
+          setGenerating(false);
+        }
+      } catch {
+        if (abortControllerRef.current === controller && !controller.signal.aborted) {
+          clearGenerationTimers();
+          toast.error('进度查询失败，后台状态未确认；请重新打开页面检查。');
+        }
+      }
+    }, 2000);
+    toast.info('检测到后台正在生成对话，已恢复连接');
+  }, [applyGenerationProgress, clearGenerationTimers]);
+
   useEffect(() => {
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
     const checkAndReconnect = async () => {
       try {
         const progress = await api.getDialogueGenerationProgress();
-        if (progress.is_generating) {
-          reconnectToGeneration(progress);
-        }
+        if (abortControllerRef.current !== controller) return;
+        reconnectToGeneration(progress, controller);
       } catch {
-        // 后台不可用，忽略
+        if (abortControllerRef.current === controller) {
+          controller.abort();
+          toast.error('无法读取对话生成进度，请检查后端连接');
+        }
       } finally {
-        setReconnecting(false);
+        if (abortControllerRef.current === controller) setReconnecting(false);
       }
     };
     checkAndReconnect();
 
     return () => {
-      if (reconnectTimerRef.current) {
-        clearInterval(reconnectTimerRef.current);
-        reconnectTimerRef.current = null;
-      }
+      abortControllerRef.current?.abort();
+      abortControllerRef.current = null;
+      clearGenerationTimers();
     };
-  }, [reconnectToGeneration]);
+  }, [clearGenerationTimers, reconnectToGeneration]);
 
   // 加载数据
   const loadDatasets = useCallback(async () => {
@@ -412,40 +414,41 @@ function TrainingContent() {
 
   // 强制重置生成状态
   const handleForceReset = async () => {
+    const controller = abortControllerRef.current;
     try {
-      await api.forceResetGeneration();
+      const response = await api.forceResetGeneration();
+      if (abortControllerRef.current !== controller) {
+        toast.info(response.message);
+        return;
+      }
+      abortControllerRef.current = null;
+      controller?.abort();
+      clearGenerationTimers();
       setGenerating(false);
       setGenProgress(0);
       setGenBatchInfo('');
       setGenGeneratedCount(0);
+      setGenTotal(0);
       setGeneratedDialogues([]);
-      if (progressTimerRef.current) {
-        clearInterval(progressTimerRef.current);
-        progressTimerRef.current = null;
-      }
-      if (reconnectTimerRef.current) {
-        clearInterval(reconnectTimerRef.current);
-        reconnectTimerRef.current = null;
-      }
-      abortControllerRef.current = null;
-      toast.success('生成状态已重置，可以重新生成');
+      setSelectedDialogues(new Set());
+      toast.info(response.message);
     } catch {
-      toast.error('重置失败');
+      if (abortControllerRef.current === controller) toast.error('重置失败');
     }
   };
 
   // 生成对话
   const handleGenerate = async () => {
-    // 如果正在生成，点击则取消
     if (generating) {
+      const controller = abortControllerRef.current;
       try {
         await api.cancelDialogueGeneration();
-        if (abortControllerRef.current) {
-          abortControllerRef.current.abort();
-        }
-        toast.success('已取消生成');
+        if (abortControllerRef.current !== controller || controller?.signal.aborted) return;
+        toast.info('取消请求已受理，正在等待后台确认');
       } catch {
-        toast.error('取消失败');
+        if (abortControllerRef.current === controller && !controller?.signal.aborted) {
+          toast.error('取消请求失败');
+        }
       }
       return;
     }
@@ -455,17 +458,24 @@ function TrainingContent() {
       return;
     }
 
-    // 启动前先检查后台是否已有生成任务在运行（断线重连场景）
+    const controller = new AbortController();
+    clearGenerationTimers();
+    abortControllerRef.current = controller;
     try {
       const existingProgress = await api.getDialogueGenerationProgress();
+      if (abortControllerRef.current !== controller || controller.signal.aborted) return;
       if (existingProgress.is_generating) {
-        // 后台有正在进行的生成，恢复连接而非启动新任务
-        reconnectToGeneration(existingProgress);
+        reconnectToGeneration(existingProgress, controller);
         return;
       }
     } catch {
-      // 后端不可用，继续尝试启动新任务
+      if (abortControllerRef.current === controller) {
+        controller.abort();
+        toast.error('无法确认后台生成状态，请检查后端连接');
+      }
+      return;
     }
+
     try {
       setGenerating(true);
       setGenProgress(0);
@@ -475,25 +485,17 @@ function TrainingContent() {
       setGeneratedDialogues([]);
       setSelectedDialogues(new Set());
 
-      const controller = new AbortController();
-      abortControllerRef.current = controller;
-
-      // 启动进度轮询
       progressTimerRef.current = setInterval(async () => {
         try {
           const progress = await api.getDialogueGenerationProgress();
-          if (progress.is_generating) {
-            setGenProgress(progress.progress);
-            setGenGeneratedCount(progress.generated_count);
-            setGenTotal(progress.total);
-            setGenBatchInfo(`批次 ${progress.batch_num}/${progress.total_batches}`);
-            // 实时追加本批次新生成的对话到右侧预览
-            if (progress.new_dialogues && progress.new_dialogues.length > 0) {
-              setGeneratedDialogues(prev => [...prev, ...progress.new_dialogues]);
-            }
-          }
+          if (abortControllerRef.current !== controller || controller.signal.aborted) return;
+          applyGenerationProgress(progress);
+          if (!progress.is_generating) clearGenerationTimers();
         } catch {
-          // 忽略进度查询错误
+          if (abortControllerRef.current === controller && !controller.signal.aborted) {
+            clearGenerationTimers();
+            toast.error('进度查询失败，后台状态未确认；请重新打开页面检查。');
+          }
         }
       }, 2000);
 
@@ -505,29 +507,24 @@ function TrainingContent() {
       };
 
       const response = await api.generateDialogues(request, controller.signal);
-      if (response.success) {
-        // 不直接覆盖，而是合并：API返回的完整数据 + 轮询期间可能遗漏的
-        setGeneratedDialogues((prev) => {
-          // 如果轮询已收集到数据，以API返回的为准（更完整）
-          // 但如果轮询数据比API返回的更多（不太可能），保留轮询数据
-          const dialogues = response.dialogues || [];
-          if (dialogues.length >= prev.length) {
-            return dialogues;
-          }
-          return prev;
-        });
-        if (response.cancelled) {
-          toast.success(`已取消生成，获得 ${response.total} 组对话`);
-        } else {
-          toast.success(`成功生成 ${response.total} 组对话，耗时 ${response.cost_time}s`);
-        }
+      if (abortControllerRef.current !== controller || controller.signal.aborted) return;
+      setGeneratedDialogues(response.dialogues);
+      setGenGeneratedCount(response.total);
+      setGenTotal(numDialogues);
+      setGenProgress(response.total / numDialogues * 100);
+      if (response.cancelled) {
+        toast.info(`已取消生成，保留 ${response.total} 组完整对话`);
+      } else if (response.success) {
+        toast.success(`成功生成 ${response.total} 组对话，耗时 ${response.cost_time}s`);
+      } else {
+        toast.error('对话生成未完成，请检查后台返回结果');
       }
     } catch (error) {
+      if (abortControllerRef.current !== controller || controller.signal.aborted) return;
       if (error instanceof DOMException && error.name === 'AbortError') {
-        toast.success('已取消生成');
+        toast.error('生成请求已中断，尚未确认后台停止');
       } else if (error instanceof Error && error.message.includes('已有生成任务正在运行')) {
-        // 后台有残留的生成任务（断线重连场景），提示用户强制重置
-        toast.error('后台仍有生成任务在运行，点击下方"强制重置"按钮清除残留状态', {
+        toast.error('后台仍有生成任务在运行，可重新连接或强制重置', {
           duration: 6000,
         });
       } else {
@@ -535,17 +532,11 @@ function TrainingContent() {
         toast.error(error instanceof Error ? error.message : '对话生成失败');
       }
     } finally {
-      setGenerating(false);
-      setGenProgress(0);
-      if (progressTimerRef.current) {
-        clearInterval(progressTimerRef.current);
-        progressTimerRef.current = null;
+      if (abortControllerRef.current === controller) {
+        controller.abort();
+        clearGenerationTimers();
+        setGenerating(false);
       }
-      if (reconnectTimerRef.current) {
-        clearInterval(reconnectTimerRef.current);
-        reconnectTimerRef.current = null;
-      }
-      abortControllerRef.current = null;
     }
   };
 
