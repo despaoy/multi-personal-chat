@@ -706,6 +706,7 @@ async def _prepare_character_turn(
     """
     from character.context_builder import MemoryContextBudgetError
     from character.event_memory import EventMemoryReadError
+    from repositories.character_memory import MemoryRecordError
 
     try:
         from services.character_context import (
@@ -761,6 +762,11 @@ async def _prepare_character_turn(
         raise HTTPException(503, detail={
             "stage": "memory_read", "reason": "invalid_event_record", "field": exc.field,
             "message": "已保存的事件记录格式错误，本轮未生成。请检查并修复对应记忆字段后重试。",
+        }) from exc
+    except MemoryRecordError as exc:
+        raise HTTPException(503, detail={
+            "stage": "memory_read", "reason": "invalid_memory_record", "field": exc.field,
+            "message": "已保存的记忆记录格式错误，本轮未生成。请检查并修复对应记忆字段后重试。",
         }) from exc
     except HTTPException:
         raise

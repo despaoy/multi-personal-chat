@@ -49,6 +49,20 @@ _VALID_MEMORY_STATUSES: tuple[str, ...] = (
 )
 
 
+class MemoryRecordError(ValueError):
+    """A memory payload failure identified by a safe schema field."""
+
+    def __init__(self, field: str, message: str) -> None:
+        self.field = field
+        super().__init__(message)
+
+
+def _require_enum(value: Any, field: str, allowed: tuple[str, ...]) -> str:
+    if value not in allowed:
+        raise MemoryRecordError(field, f"Invalid memory {field}")
+    return value
+
+
 class CharacterMemoryRepository(Protocol):
     """角色关系与长期记忆的持久化接口。"""
 
@@ -177,9 +191,9 @@ def _decode_json(value: Any, expected_type: type, field: str) -> Any:
         try:
             value = json.loads(value)
         except json.JSONDecodeError:
-            raise ValueError(f"Invalid JSON in memory field {field}") from None
+            raise MemoryRecordError(field, f"Invalid JSON in memory field {field}") from None
     if not isinstance(value, expected_type):
-        raise ValueError(f"Memory field {field} must contain {expected_type.__name__}")
+        raise MemoryRecordError(field, f"Memory field {field} must contain {expected_type.__name__}")
     return value
 
 
@@ -190,7 +204,7 @@ def _nonempty_text(value: Any) -> bool:
 def _decode_text_list(value: Any, field: str) -> list[str]:
     values = _decode_json(value, list, field)
     if not all(_nonempty_text(item) for item in values):
-        raise ValueError(f"Memory field {field} must contain non-empty text elements")
+        raise MemoryRecordError(field, f"Memory field {field} must contain non-empty text elements")
     return values
 
 
@@ -202,7 +216,7 @@ def _decode_evidence(value: Any) -> list[str | dict[str, str]]:
         if (isinstance(item, dict) and set(item) == {"message_id", "quote"}
                 and all(_nonempty_text(part) for part in item.values())):
             continue
-        raise ValueError("Memory field evidence_json must contain text or attributed quote records")
+        raise MemoryRecordError("evidence_json", "Memory field evidence_json must contain text or attributed quote records")
     return values
 
 
@@ -218,8 +232,9 @@ def _decode_memory_record(row: dict[str, Any]) -> dict[str, Any]:
     record["source_message_ids"] = source_ids
     record["evidence"] = evidence
     record["metadata"] = metadata
-    if record.get("memory_type") not in _VALID_MEMORY_TYPES:
-        raise ValueError("Invalid stored memory_type")
+    for field, allowed in (("memory_type", _VALID_MEMORY_TYPES), ("status", _VALID_MEMORY_STATUSES),
+                           ("relation_type", _VALID_RELATION_TYPES)):
+        _require_enum(record.get(field), field, allowed)
     record["attributed_to"] = str(metadata.get("attributed_to") or "user")
     record["qualifiers"] = metadata.get("qualifiers", [])
     return record
@@ -462,15 +477,11 @@ class DatabaseCharacterMemoryRepository:
         source_message_ids: tuple[str, ...] = (),
         metadata: Optional[dict[str, Any]] = None,
     ) -> dict[str, Any]:
-        relation = str(relation_type or "ADD").upper()
-        if relation not in _VALID_RELATION_TYPES:
-            raise ValueError(f"未知的记忆关系: {relation_type!r}")
-        if scope_level not in _VALID_SCOPE_LEVELS:
-            raise ValueError(f"未知的记忆作用域: {scope_level!r}")
-        if status is not None and status not in _VALID_MEMORY_STATUSES:
-            raise ValueError(f"未知的记忆状态: {status!r}")
-        if memory.memory_type not in _VALID_MEMORY_TYPES:
-            raise ValueError(f"未知的记忆类型: {memory.memory_type!r}")
+        relation = _require_enum(relation_type, "relation_type", _VALID_RELATION_TYPES)
+        _require_enum(scope_level, "scope_level", _VALID_SCOPE_LEVELS)
+        if status is not None:
+            _require_enum(status, "status", _VALID_MEMORY_STATUSES)
+        _require_enum(memory.memory_type, "memory_type", _VALID_MEMORY_TYPES)
         key = str(memory_key or "").strip()
         if not key:
             raise ValueError("memory_key 为空，拒绝写入长期记忆")

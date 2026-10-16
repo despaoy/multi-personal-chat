@@ -9,23 +9,27 @@ from character.models import MemoryItem, UserScope
 from db.database import SQLiteDB
 
 
+def _record(**values):
+    return {"memory_type": "user_fact", "status": "active", "relation_type": "ADD", **values}
+
+
 @pytest.mark.parametrize('field', ['source_message_ids_json', 'evidence_json', 'metadata_json'])
 @pytest.mark.parametrize('value', ['', 'private-broken-json', 'null', '42', '"text"'])
 def test_malformed_json_is_not_empty_evidence(field, value):
     with pytest.raises(ValueError, match=field) as error:
-        _decode_memory_record({"memory_type": "user_fact", field: value})
+        _decode_memory_record(_record(**{field: value}))
     assert 'private-broken-json' not in str(error.value)
 
 
 @pytest.mark.parametrize(('field', 'value'), [('evidence_json', {}), ('source_message_ids_json', {}), ('metadata_json', [])])
 def test_valid_json_with_wrong_shape_is_rejected(field, value):
     with pytest.raises(ValueError, match=field):
-        _decode_memory_record({"memory_type": "user_fact", field: value})
+        _decode_memory_record(_record(**{field: value}))
 
 
 def test_legitimate_absence_and_legacy_single_source_are_preserved():
-    row = _decode_memory_record({'memory_type': 'user_fact', 'source_message_id': 'original', 'source_message_ids_json': None,
-                                 'evidence_json': '[]', 'metadata_json': '{}'})
+    row = _decode_memory_record(_record(source_message_id='original', source_message_ids_json=None,
+                                      evidence_json='[]', metadata_json='{}'))
     assert row['source_message_ids'] == ['original'] and row['evidence'] == [] and row['metadata'] == {}
     assert relationship_from_record(None).stage == 'stranger'
     assert relationship_from_record({'relationship_stage': 'close'}).stage == 'close'
@@ -56,18 +60,20 @@ async def test_stored_corruption_fails_both_scoped_list_and_exact_lookup(tmp_pat
 @pytest.mark.parametrize('memory_type', ['', None, 'private-invalid-type', 17])
 def test_unknown_type_never_becomes_user_fact(memory_type):
     with pytest.raises(ValueError, match='memory_type') as caught:
-        _decode_memory_record({'memory_type': memory_type})
+        _decode_memory_record(_record(memory_type=memory_type))
     assert 'private-invalid-type' not in str(caught.value)
 
 
 def test_missing_type_is_not_a_legacy_user_fact():
+    row = _record()
+    del row["memory_type"]
     with pytest.raises(ValueError, match='memory_type'):
-        _decode_memory_record({})
+        _decode_memory_record(row)
 
 
 @pytest.mark.parametrize('memory_type', ['user_fact', 'shared_event', 'promise', 'conversation_summary'])
 def test_supported_record_type_is_preserved(memory_type):
-    assert _decode_memory_record({'memory_type': memory_type})['memory_type'] == memory_type
+    assert _decode_memory_record(_record(memory_type=memory_type))['memory_type'] == memory_type
 
 
 @pytest.mark.asyncio
