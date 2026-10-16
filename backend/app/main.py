@@ -47,6 +47,7 @@ from app.readiness import ReadinessProbe, ReadinessProbeTimeout
 from app.runtime import RuntimeContainer, get_runtime_container
 from inference.openai_protocol import ProviderResponseError  # noqa: E402
 from infra.deployment import validate_or_raise_for_startup
+from infra.environment import read_bool
 
 logger = logging.getLogger("main")
 
@@ -320,45 +321,29 @@ def _allowed_origins(env: Mapping[str, str] | None = None) -> list[str]:
     ]
 
 
-# ── 安全中间件（可通过环境变量控制开关） ──
-_SECURITY_ENABLED = os.getenv("SECURITY_MIDDLEWARE_ENABLED", "true").lower() == "true"
+# ── 安全中间件按当前应用的启动配置装配 ──
+def _install_middleware(application: FastAPI, env: Mapping[str, str]) -> None:
+    if read_bool(env, "SECURITY_MIDDLEWARE_ENABLED", True):
+        from middleware.security import (
+            AuditLogMiddleware,
+            InputValidationMiddleware,
+            RateLimitMiddleware,
+            SecurityHeadersMiddleware,
+            SecurityMiddleware,
+        )
 
-
-def _install_middleware(
-    application: FastAPI,
-    env: Mapping[str, str] | None = None,
-) -> None:
-    source = os.environ if env is None else env
-    security_enabled = (
-        _SECURITY_ENABLED if env is None else source.get("SECURITY_MIDDLEWARE_ENABLED", "true").lower() == "true"
-    )
-    if security_enabled:
-        try:
-            from middleware.security import (
-                AuditLogMiddleware,
-                InputValidationMiddleware,
-                RateLimitMiddleware,
-                SecurityHeadersMiddleware,
-                SecurityMiddleware,
-            )
-
-            # Starlette's last added middleware is outermost. Request order:
-            # CORS -> audit -> security headers -> auth -> rate limit -> validation.
-            application.add_middleware(InputValidationMiddleware)
-            application.add_middleware(RateLimitMiddleware)
-            application.add_middleware(SecurityMiddleware)
-            application.add_middleware(SecurityHeadersMiddleware)
-            application.add_middleware(AuditLogMiddleware)
-            logger.info("✅ 安全中间件已启用（认证+限流+输入验证+审计+安全头）")
-        except ImportError as e:
-            if source.get("ENVIRONMENT", "development").strip().lower() == "production":
-                raise RuntimeError("Security middleware is required in production") from e
-            logger.warning(f"安全中间件导入失败，跳过: {e}")
-
+        # Starlette's last added middleware is outermost. Request order:
+        # CORS -> audit -> security headers -> auth -> rate limit -> validation.
+        application.add_middleware(InputValidationMiddleware)
+        application.add_middleware(RateLimitMiddleware)
+        application.add_middleware(SecurityMiddleware)
+        application.add_middleware(SecurityHeadersMiddleware)
+        application.add_middleware(AuditLogMiddleware)
+        logger.info("✅ 安全中间件已启用（认证+限流+输入验证+审计+安全头）")
     # CORS is outermost so even authentication and rate-limit errors include CORS headers.
     application.add_middleware(
         CORSMiddleware,
-        allow_origins=_allowed_origins(source),
+        allow_origins=_allowed_origins(env),
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
