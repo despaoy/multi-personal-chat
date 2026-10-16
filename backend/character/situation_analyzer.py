@@ -480,6 +480,9 @@ class _Features:
 class SituationAnalyzer:
     """Compatibility facade backed by a soft multi-signal estimator."""
 
+    def __init__(self, *, defer_non_safety: bool = False):
+        self._defer_non_safety = defer_non_safety
+
     def estimate(
         self,
         message: str,
@@ -491,7 +494,15 @@ class SituationAnalyzer:
         scores are smoothed with the two most recent user turns using
         0.7/0.2/0.1 weights, preserving conversational momentum without
         treating a stale request as if it had been repeated.
+
+        Configured full semantic callers defer ordinary scoring; existing
+        safety-related and empty-input states retain this complete estimator.
         """
+        if self._defer_non_safety:
+            text = (message or "").strip().lower()
+            if text and not (_is_hard_safety(text) or _is_ambiguous_distress(text)):
+                # Only the configured reviewer may complete this baseline.
+                return InteractionState()
         current = _score_message(message)
         previous = _recent_user_features(history, limit=2)
 

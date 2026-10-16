@@ -611,6 +611,7 @@ def build_character_context_service(
         defer_source_budget=budget.defer_source_budget,
         reference_max_chars=budget.reference_max_chars,
         memory_selector=create_evidence_selector(context_budget=budget.review),
+        situation_analyzer=SituationAnalyzer(defer_non_safety=semantic_runtime.reviewer is not None),
         decision_policy=DecisionPolicy(defer_optional_strategies=contextual_policy is not None),
         contextual_policy=contextual_policy,
         semantic_estimator=SemanticStateEstimator(
