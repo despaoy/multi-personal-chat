@@ -127,16 +127,16 @@ async def api_turn(rig):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("strategy_ids", [
-    ("offer_suggestion", "stay_present"),  # Contradictory raw model pair.
-    ("stay_present",),  # Pair becomes contradictory after required-action merge.
+@pytest.mark.parametrize("strategy_ids,error_reason", [
+    (("offer_suggestion", "stay_present"), "incompatible_strategies"),
+    (("stay_present",), "missing_or_misordered_required_strategies"),
 ])
-async def test_conflicting_policy_stops_real_api_before_answer_model(tmp_path, monkeypatch, circuit_rig, strategy_ids):
+async def test_invalid_policy_stops_real_api_before_answer_model(tmp_path, monkeypatch, circuit_rig, strategy_ids, error_reason):
     rig = arrange_policy_conflict(tmp_path, monkeypatch, circuit_rig, strategy_ids)
     with pytest.raises(HTTPException) as caught:
         await api_turn(rig)
     assert caught.value.status_code == 503 and isinstance(caught.value.__cause__, ValueError)
-    assert "incompatible" in str(caught.value.__cause__).lower()
+    assert str(caught.value.__cause__) == error_reason
     assert len(rig.state_calls) == len(rig.policy_calls) == len(rig.baselines) == 1
     assert "offer_suggestion" in rig.baselines[0].strategy_ids
     assert not rig.calls and not rig.prepared
@@ -178,7 +178,7 @@ async def test_explicit_advice_before_requested_close_remains_compatible():
     async def reviewer(messages):
         payload = json.loads(messages[-1]["content"])
         assert "先给准备建议" in payload["query"] and "今天就聊到这里" in payload["query"]
-        return '{"strategy_ids":["graceful_close"]}'
+        return '{"strategy_ids":["offer_suggestion","graceful_close"]}'
 
     outcome = await ContextualDecisionPolicy(reviewer).refine(
         baseline,

@@ -18,10 +18,10 @@ def _state(*acts, safety=False):
     )
 
 
-async def _refine(reviewer, *, state=None, baseline=None, has_memory=False):
+async def _refine(reviewer, *, state=None, baseline=None, has_memory=False, query="我们继续聊吧"):
     return await ContextualDecisionPolicy(reviewer).refine(
         baseline or DecisionPlan(strategy_ids=("reflect_content",)),
-        query="我们继续聊吧",
+        query=query,
         history=[{"role": "user", "content": "前文数据"}],
         profile=CharacterProfile("char", "角色", values=("尊重自主选择",)),
         relationship=RelationshipState(),
@@ -87,21 +87,23 @@ async def test_no_advice_boundary_restricts_allowed_actions():
 
 
 async def test_explicit_question_stays_first_even_if_semantic_policy_prefers_style():
-    async def reviewer(_messages):
-        return '{"strategy_ids":["light_tease"]}'
+    async def reviewer(messages):
+        assert json.loads(messages[-1]["content"])["required_strategies"] == ["respond_directly"]
+        return '{"strategy_ids":["respond_directly","light_tease"]}'
 
     state = _state("information_request")
-    outcome = await _refine(reviewer, state=state)
+    outcome = await _refine(reviewer, state=state, query="已知三个数为2、4、6，请计算平均值。")
     priorities, _ = _compact_dynamic_projection(state, outcome.plan)
     assert priorities[0].startswith(STRATEGY_INSTRUCTIONS["respond_directly"])
 
 
 async def test_semantic_boundary_cannot_drop_an_explicit_task():
-    async def reviewer(_messages):
-        return '{"strategy_ids":["set_boundary"]}'
+    async def reviewer(messages):
+        assert json.loads(messages[-1]["content"])["required_strategies"] == ["respond_directly"]
+        return '{"strategy_ids":["respond_directly","set_boundary"]}'
 
     state = _state("information_request")
-    outcome = await _refine(reviewer, state=state)
+    outcome = await _refine(reviewer, state=state, query="已知三个数为2、4、6，请计算平均值。")
     assert "respond_directly" in outcome.plan.strategy_ids
     priorities, _ = _compact_dynamic_projection(state, outcome.plan)
     assert STRATEGY_INSTRUCTIONS["respond_directly"] in priorities[0]
