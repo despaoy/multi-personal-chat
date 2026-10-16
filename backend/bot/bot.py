@@ -1,11 +1,11 @@
 """
 QQ自动回复机器人 - 多LoRA角色风格
-基于NoneBot2 + vLLM + LoRA热切换
+基于 NoneBot2 接入统一后端生成服务
 支持私聊和@消息识别
 
 集成架构：
   Bot → db.adapter（统一数据库访问）→ SQLite/PostgreSQL
-  Bot → HTTP API（RAG检索等需要后端进程状态的服务）→ FastAPI后端
+  Bot → ChatGenerationService + InferenceRuntime → 已配置的模型与检索服务
 """
 
 import os
@@ -101,13 +101,7 @@ def _get_db_config() -> Dict[str, Any]:
 class Config:
     """机器人配置 - 环境变量项为静态属性，数据库项通过@property动态读取（60秒 TTL 缓存）"""
     # 环境变量配置（静态，启动时读取一次）
-    OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-    OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:7b")
     SUPERUSERS = [str(u) for u in json.loads(os.getenv("SUPERUSERS", "[]"))]
-    API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000")
-
-    # LoRA风格配置
-    USE_LORA_STYLE = True
 
     # 以下配置通过 @property 动态读取 db.config，独立进程在约一分钟内重新读取配置
     @property
@@ -119,60 +113,8 @@ class Config:
         return float(_get_db_config().get('replyDelay', os.getenv("REPLY_DELAY", "0.8")))
 
     @property
-    def AUTO_REPLY(self):
-        return _get_db_config().get('autoReply', True)
-
-    @property
-    def GROUP_REPLY(self):
-        return _get_db_config().get('groupReply', True)
-
-    @property
-    def PRIVATE_REPLY(self):
-        return _get_db_config().get('privateReply', True)
-
-    @property
-    def TEMPERATURE(self):
-        return float(_get_db_config().get('temperature', 0.7))
-
-    @property
-    def MAX_TOKENS(self):
-        return int(_get_db_config().get('maxTokens', 2048))
-
-    @property
     def CONTEXT_WINDOW(self):
         return _get_db_config().get('contextWindow', '24k')
-
-    @property
-    def USE_KNOWLEDGE_BASE(self):
-        return _get_db_config().get('useKnowledgeBase', True)
-
-    @property
-    def CONTENT_FILTER(self):
-        return _get_db_config().get('contentFilter', True)
-
-    @property
-    def CONTENT_REVIEW(self):
-        return _get_db_config().get('contentReview', True)
-
-    @property
-    def ADMIN_QQ_LIST(self):
-        return _get_db_config().get('adminQqList', '')
-
-    @property
-    def ERROR_ALERT(self):
-        return _get_db_config().get('errorAlert', True)
-
-    @property
-    def DAILY_STATS(self):
-        return _get_db_config().get('dailyStats', True)
-
-    @property
-    def ANOMALY_DETECTION(self):
-        return _get_db_config().get('anomalyDetection', False)
-
-    @property
-    def DEFAULT_REPLY_TEMPLATE(self):
-        return _get_db_config().get('defaultReplyTemplate', '')
 
 config = Config()
 
@@ -195,23 +137,14 @@ class SessionHistory:
 
     def _load_from_db(self, session_id: str):
         """从数据库恢复最近N轮对话（通过db.adapter）"""
-        try:
-            # 修复：使用 SQL 层 session_id 过滤，避免取全局最近 10 条后 Python 过滤
-            #   原实现 db.get_messages(limit=10) 取全局前 10 条 → 若当前会话不在前 10 则颗粒无收
-            messages = db.get_messages(limit=10, session_id=session_id)
-            # 按时间正序排列（SQL 返回 DESC，reversed 后为 ASC——最早→最新）
-            session_msgs = list(reversed(messages))
-
-            result = []
-            for msg in session_msgs:
-                result.append({"role": "user", "content": msg.get("message", "")})
-                result.append({"role": "assistant", "content": msg.get("reply", "")})
-
-            if result:
-                self.sessions[session_id] = result
-                logger.info(f"会话 {session_id} 从数据库恢复 {len(result)//2} 轮历史")
-        except Exception as e:
-            logger.debug(f"恢复会话 {session_id} 失败（可能首次对话）: {e}")
+        messages = db.get_messages(limit=10, session_id=session_id)
+        result = []
+        for msg in reversed(messages):
+            result.append({"role": "user", "content": msg.get("message", "")})
+            result.append({"role": "assistant", "content": msg.get("reply", "")})
+        if result:
+            self.sessions[session_id] = result
+            logger.info(f"会话 {session_id} 从数据库恢复 {len(result)//2} 轮历史")
 
     def get_history(self, session_id: str, tokenizer=None) -> List[Dict[str, str]]:
         """获取会话历史，按token数截断"""
@@ -672,11 +605,8 @@ def init_bot():
     logger.info("=" * 50)
     logger.info(f"QQ自动回复机器人 - 当前角色: {_current_lora}")
     logger.info("=" * 50)
-    logger.info(f"Ollama地址: {config.OLLAMA_BASE_URL}")
-    logger.info(f"Ollama模型: {config.OLLAMA_MODEL}")
-    logger.info(f"LoRA风格: {'启用' if config.USE_LORA_STYLE else '禁用'} (当前: {_current_lora})")
+    logger.info("模型推理与检索: 统一后端生成服务")
     logger.info(f"回复延迟: {config.REPLY_DELAY}秒")
-    logger.info(f"RAG检索: 通过后端API ({config.API_BASE_URL})")
     logger.info(f"数据库: 通过db.adapter统一访问")
     logger.info("=" * 50)
 

@@ -391,3 +391,34 @@ async def test_message_entry_sends_the_real_success_reply(bot_module, message_ha
     assert str(matcher.finish.await_args.args[0]) == "尚未付款。"
     bot_module.process_message.assert_awaited_once_with(event)
     bot.send.assert_not_awaited()
+
+
+async def test_history_read_failure_stops_before_model(
+    bot_module, private_event, generation_control, monkeypatch,
+):
+    _, _, generate = generation_control
+    failure = RuntimeError("synthetic-private-history-error")
+    reader = Mock(side_effect=failure)
+    monkeypatch.setattr(bot_module, "db", SimpleNamespace(get_messages=reader))
+    history = bot_module.SessionHistory()
+    monkeypatch.setattr(bot_module, "session_history", history)
+    with pytest.raises(RuntimeError) as caught:
+        await bot_module.process_message(private_event)
+    assert caught.value is failure
+    generate.assert_not_awaited()
+    assert history.sessions == {}
+
+
+def test_history_empty_result_and_recovery_remain_distinct(bot_module, monkeypatch):
+    failure = RuntimeError("Controlled history service unavailable")
+    reader = Mock(side_effect=[failure, [], [{"message": "周五执行，出差例外。", "reply": "已记录例外。"}]])
+    monkeypatch.setattr(bot_module, "db", SimpleNamespace(get_messages=reader))
+    history = bot_module.SessionHistory()
+    with pytest.raises(RuntimeError) as caught:
+        history.get_history("fiction-owner")
+    assert caught.value is failure
+    assert history.get_history("fiction-owner") == []
+    assert history.get_history("fiction-owner") == [
+        {"role": "user", "content": "周五执行，出差例外。"},
+        {"role": "assistant", "content": "已记录例外。"},
+    ]
