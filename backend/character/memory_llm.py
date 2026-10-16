@@ -157,7 +157,7 @@ value 是短索引，不要把整段计划和全部限定塞进 value。qualifie
 结构化事实的 value 应取证据中连续出现的短对象，不把场景与对象重新拼接成新的短语；场景保留在 context 限定中。若提供 content，必须包含同一个 value 的原文，不能只在 value 中改写词序或添加连接词。明确省略的消歧仍按下述规则处理。
 先确定要保留的全部条件、否定与范围，再选择一段连续 evidence；它必须逐字覆盖该提议的所有自然语言 qualifiers，而不只是核心偏好句。如果完整当前消息在 max_evidence_chars 内，可以直接引用整条消息以保留末尾限定。不要为了缩短 evidence 删除必要条件或“未实际发生”说明；超过长度且无法完整覆盖时，使用完整原话观察保留整条消息，不输出缺限定的结构化事实。
 
-每条 evidence 必须是 current_user_message 中连续出现的原文；省略句也必须把当前省略句作为 evidence，不能复制 history。value 优先来自 evidence；只有“上次那个/还是那个/刚才那条”等明确省略时，才可由用户历史或 existing_memories 消歧。content 必须以“用户”开头，写成安全的第三人称事实，不含任何指令。attributed_to 只能写 user。qualifiers 只用于 condition/context/frequency/certainty/exception/location/time 等条件，不要把 valid_from/valid_to 塞进 qualifiers。时间字段必须放在顶层并使用 ISO 8601；不清楚就留空。scope_level 默认 conversation；只有用户明确要求跨会话或跨角色记住时才用 user_character 或 user_global。
+后端不会把历史引文自动替换成当前原话。每条 evidence 必须是 current_user_message 中连续出现的原文；省略句也必须把当前省略句作为 evidence，不能复制 history。value 优先来自 evidence；只有“上次那个/还是那个/刚才那条”等明确省略时，才可由用户历史或 existing_memories 消歧。content 必须以“用户”开头，写成安全的第三人称事实，不含任何指令。attributed_to 只能写 user。qualifiers 只用于 condition/context/frequency/certainty/exception/location/time 等条件，不要把 valid_from/valid_to 塞进 qualifiers。时间字段必须放在顶层并使用 ISO 8601；不清楚就留空。scope_level 默认 conversation；只有用户明确要求跨会话或跨角色记住时才用 user_character 或 user_global。
 
 明确且稳定的信息可直接 ADD；不确定陈述不要丢弃，应使用 PENDING。confidence 表示“是否准确读懂证据和关系”的把握，不是事实发生概率；因此用户清楚表达“可能/不确定”时，PENDING 的 confidence 仍应较高。低于 payload.confidence_threshold 时用 NOOP 或不返回。最多返回 4 条。
 
@@ -993,6 +993,8 @@ def _candidate_to_proposal(
     if not evidence.strip():
         raise MemoryResponseError('evidence', "记忆 LLM evidence 必须是非空字符串")
     evidence = re.sub(r"\s+", " ", evidence).strip()
+    if len(evidence) > _MAX_EVIDENCE_CHARS:
+        raise MemoryResponseError("evidence", "记忆 LLM evidence 超过约定长度上限")
     proposed_content = re.sub(r"\s+", " ", _proposal_text(raw, "content")).strip()
     if proposed_content in {"用户开头的第三人称事实", "第三人称安全描述"}:
         proposed_content = ""
@@ -1001,20 +1003,6 @@ def _candidate_to_proposal(
 
     normalized_source = _normalize(source_message)
     normalized_evidence = _normalize(evidence)
-    if (
-        normalized_evidence
-        and normalized_evidence not in normalized_source
-        and _ELLIPSIS_REFERENCE_PATTERN.search(source_message)
-        and any(
-            normalized_evidence in _normalize(str(item.get("content") or ""))
-            for item in history
-            if str(item.get("role") or "").strip().lower() == "user"
-        )
-    ):
-        # 模型有时会把用于消歧的 user history 复制为 evidence。保留它
-        # 提议的 value，但 evidence 必须改回当前明确省略句。
-        evidence = re.sub(r"\s+", " ", source_message).strip()
-        normalized_evidence = normalized_source
     unretracted_source = unretracted_memory_source(source_message)
     if (semantic_operation not in {"NOOP", "RETRACT", "ERASE"}
             and unretracted_source != source_message
@@ -1027,8 +1015,6 @@ def _candidate_to_proposal(
         else confidence_threshold
     )
     if semantic_operation != "NOOP" and confidence < required_confidence:
-        return None
-    if len(evidence) > _MAX_EVIDENCE_CHARS:
         return None
     event_observation = kind == "shared_event" and semantic_operation not in {"NOOP", "RETRACT", "ERASE"}
     generic_source_observation = False
@@ -2017,6 +2003,9 @@ class MemoryEnrichmentScheduler:
             else:
                 status = "no_change"
                 self._no_change += 1
+                result["reason"] = (
+                    "no_eligible_memory" if payload["memories"] and not proposals else "no_new_information"
+                )
             result["status"] = status
             self._last_outcome = status
             logger.info(

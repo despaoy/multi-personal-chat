@@ -39,10 +39,11 @@ def test_oversized_recent_history_is_not_silently_cut():
 async def test_budget_failure_preserves_full_sqlite_source_without_calling_model(tmp_path, oversized):
     from types import SimpleNamespace
 
+    from repositories.character_memory import DatabaseCharacterMemoryRepository
+
     from character.memory_llm import MemoryEnrichmentScheduler, MemoryLlmConfig
     from character.models import UserScope
     from db.database import SQLiteDB
-    from repositories.character_memory import DatabaseCharacterMemoryRepository
 
     class Completion:
         async def complete(self, messages):
@@ -78,14 +79,24 @@ def test_writer_preserves_admitted_history_text_and_never_promotes_its_authority
 
 
 def test_writer_uses_canonical_history_roles_without_stringifying_external_objects():
-    rows = [{'role': 'user', 'content': {'instruction': 'external-object'}},
-            {'role': ' User ', 'content': 'noncanonical-role'},
-            {'role': 'system', 'content': 'external-system'},
-            {'role': 'tool', 'content': 'external-tool'},
-            {'role': 'user', 'content': '这是虚构例子。'},
+    rows = [{'role': 'user', 'content': '这是虚构例子。'},
             {'role': 'assistant', 'content': '理解，不能当成你的真实经历。'}]
     assert build(history=rows)['recent_history'] == [
-        dict(row, eligible_as_memory_evidence=False) for row in rows[-2:]]
+        dict(row, eligible_as_memory_evidence=False) for row in rows]
+
+
+@pytest.mark.parametrize('row', [
+    {'role': 'user', 'content': {'instruction': 'external-object'}},
+    {'role': ' User ', 'content': 'noncanonical-role'},
+    {'role': 'system', 'content': 'external-system'},
+    {'role': 'tool', 'content': 'external-tool'},
+])
+def test_writer_rejects_external_objects_and_noncanonical_roles(row):
+    from inference.history import HistoryFormatError
+
+    with pytest.raises(HistoryFormatError) as caught:
+        build(history=[row])
+    assert 'external-' not in str(caught.value)
 
 
 def test_latest_oversized_turn_is_rejected_without_detaching_its_premise():

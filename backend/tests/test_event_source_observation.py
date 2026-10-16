@@ -46,7 +46,7 @@ def test_event_speaker_is_provenance_not_model_actor_label():
 def test_non_event_fields_are_not_silently_converted_to_quotations():
     source = '我喜欢陶艺。'
     proposal, = parse_llm_proposals(json.dumps(dict(memories=[dict(operation="ADD", kind='like', value='陶艺',
-        evidence=source, content='用户喜欢陶艺', confidence=0.99)])), source_message=source)
+        evidence=source, content='用户喜欢陶艺', confidence=0.99, attributed_to='user')])), source_message=source)
     assert proposal.memory.content == '用户喜欢陶艺'
     assert not proposal.source_observation
 
@@ -75,12 +75,12 @@ def test_event_merge_accumulates_observations_without_erasing_old_details():
 
 @pytest.mark.asyncio
 async def test_event_observation_merge_retains_prior_record_and_provenance(tmp_path):
+    from repositories.character_memory import DatabaseCharacterMemoryRepository
     from test_memory_write_lifecycle import _Completion, _scope
 
     from character.memory_llm import MemoryEnrichmentScheduler, MemoryLlmConfig
     from character.models import MemoryItem
     from db.database import SQLiteDB
-    from repositories.character_memory import DatabaseCharacterMemoryRepository
 
     repo = DatabaseCharacterMemoryRepository(SQLiteDB(tmp_path / 'events.db'))
     scope = _scope()

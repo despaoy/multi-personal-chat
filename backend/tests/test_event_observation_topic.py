@@ -57,7 +57,6 @@ def test_unproved_new_event_title_never_becomes_asserted_index_value():
     {'confidence': 0.1},
     {'target_memory_id': 'unknown', 'target_memory_key': 'event_unknown'},
     {'qualifiers': {'condition': '原话没有这项条件'}},
-    {'evidence': 'x' * 121},
     {'operation': 'ERASE'},
 ])
 def test_observation_recovery_preserves_existing_admission_guards(change):
@@ -76,8 +75,17 @@ def test_generic_fact_cannot_use_event_observation_exception():
 def test_old_history_cannot_replace_current_correction_evidence():
     data = fixture()
     data['model_output']['memories'][0]['evidence'] = data['history'][0]['content']
-    assert parse(data) == []
+    assert len(data['history'][0]['content']) > 120
+    with pytest.raises(ValueError, match='evidence'):
+        parse(data)
 
 
 def test_non_user_source_is_never_promoted_by_event_topic_recovery():
     assert parse(copy.deepcopy(fixture()), source_type='assistant') == []
+
+
+def test_oversized_model_evidence_is_protocol_failure_not_empty_admission():
+    data = fixture()
+    data['model_output']['memories'][0]['evidence'] = 'x' * 121
+    with pytest.raises(ValueError, match='evidence'):
+        parse(data)
