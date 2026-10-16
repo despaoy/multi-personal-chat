@@ -580,6 +580,7 @@ class SituationAnalyzer:
 
     def response_goal(self, state: InteractionState) -> str:
         """Describe the goal using only fixed application-owned text."""
+        goal = RESPONSE_GOALS[state.primary_situation]
         has_emotion = _signal_score(state.user_acts, "seek_support") >= 0.3
         has_practical = (
             max(
@@ -590,7 +591,7 @@ class SituationAnalyzer:
         )
         if has_emotion and has_practical:
             return "先承接情绪，同时完成对方明确提出的信息或建议请求"
-        return RESPONSE_GOALS.get(state.primary_situation, RESPONSE_GOALS[SITUATION_DAILY])
+        return goal
 
 
 def affect_label(valence: float, arousal: float) -> str:

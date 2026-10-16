@@ -316,9 +316,7 @@ class CharacterContextService:
                 memory_selection.status, memory_selection.candidate_count,
                 len(memories_items), memory_selection.latency_ms,
             )
-        situation_type = (
-            interaction.primary_situation if interaction.primary_situation in SITUATION_LABELS else SITUATION_DAILY
-        )
+        situation_type = interaction.primary_situation
 
         # Budget the evidence before selecting a recall action. Selection is
         # not injection: complete packets can be too large for the final prompt.
@@ -338,7 +336,7 @@ class CharacterContextService:
         situation = SituationState(
             # 系统提示词中只放固定分类标签，用户消息原文绝不进入
             # 系统提示词（提示词注入防护）
-            topic=SITUATION_LABELS.get(situation_type, SITUATION_LABELS[SITUATION_DAILY]),
+            topic=SITUATION_LABELS[situation_type],
             emotion_hint=(
                 affect_label(interaction.valence, interaction.arousal) if interaction.has_soft_context else ""
             ),
