@@ -11,11 +11,6 @@ from infra.concurrency_control import inference_runtime
 
 from app.config import (
     LOAD_BALANCER_AVAILABLE,
-    RESOURCE_POOL_AVAILABLE,
-    CIRCUIT_BREAKER_AVAILABLE,
-    BACKUP_MANAGER_AVAILABLE,
-    ENCRYPTION_AVAILABLE,
-    ACCESS_CONTROL_AVAILABLE,
     LLM_OPTIMIZER_AVAILABLE,
     circuit_breaker_registry,
     response_cache,
@@ -68,12 +63,12 @@ async def get_enhanced_status(current_user: dict = Depends(get_current_admin)):
     """获取增强功能状态"""
     available = {
         "loadBalancer": LOAD_BALANCER_AVAILABLE,
-        "resourcePool": RESOURCE_POOL_AVAILABLE,
-        "circuitBreaker": CIRCUIT_BREAKER_AVAILABLE,
-        "backupManager": BACKUP_MANAGER_AVAILABLE,
+        "resourcePool": True,
+        "circuitBreaker": True,
+        "backupManager": True,
         "inputValidator": True,
-        "encryption": ENCRYPTION_AVAILABLE,
-        "accessControl": ACCESS_CONTROL_AVAILABLE,
+        "encryption": True,
+        "accessControl": True,
         "llmOptimizer": LLM_OPTIMIZER_AVAILABLE,
     }
     vllm_stats = await _get_vllm_load_balancer_stats()

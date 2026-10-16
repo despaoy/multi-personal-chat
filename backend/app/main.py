@@ -29,16 +29,8 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-# 应用配置 + 增强模块全局实例
-# C-F1 fix: lifespan 管理的单例 (backup_mgr/connection_pool/
-# http_client_pool/access_control_mgr) 在 lifespan 中通过 `_cfg.xxx = ...`
-# 重新赋值。这里只导入常量与导入时初始化的单例，不导入会被 lifespan 重赋值的单例，
-# 避免读者误以为本模块中的本地名会跟随 lifespan 更新（实际它们仍指向 None）。
-from app.config import (
-    ACCESS_CONTROL_AVAILABLE,
-    BACKUP_MANAGER_AVAILABLE,
-    RESOURCE_POOL_AVAILABLE,
-)
+# Read lifespan-owned resources through the module to observe current instances.
+from app import config as _cfg
 
 # Freeze after configured-key loading/migration publishes the effective key.
 _STARTUP_ENV = dict(os.environ)
@@ -47,6 +39,9 @@ from app.readiness import ReadinessProbe, ReadinessProbeTimeout
 from app.runtime import RuntimeContainer, get_runtime_container
 from inference.openai_protocol import ProviderResponseError  # noqa: E402
 from infra.deployment import validate_or_raise_for_startup
+from infra.access_control import AccessControlManager
+from infra.backup_manager import BackupManager
+from infra.resource_pool import ConnectionPool, HttpClientPool
 from infra.environment import read_bool
 
 logger = logging.getLogger("main")
@@ -116,99 +111,62 @@ def _clear_lifespan_resource_references(config_module) -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Access lifecycle-owned resources through the config module to observe current instances.
-    import app.config as _cfg
-
     _clear_lifespan_resource_references(_cfg)
     container = get_runtime_container(app)
     database = container.db
     postgres_mode = bool(container.is_pg_mode())
 
-    logger.info("🚀 MultiPersonal Chat System后端服务启动中（增强版）...")
-
-    validate_or_raise_for_startup(container.startup_env)
-    from character.memory_llm import MemoryLlmConfig
-
-    MemoryLlmConfig.from_env(container.startup_env)
-
-    # 初始化数据库
     try:
-        _initialize_database(database)
-        logger.info("✅ 数据库初始化完成 (%s)", "PostgreSQL" if postgres_mode else "SQLite")
-    except Exception as e:
-        logger.critical(f"❌ 数据库初始化失败，服务无法启动: {e}", exc_info=True)
-        raise RuntimeError(f"数据库初始化失败: {e}") from e
+        logger.info("🚀 MultiPersonal Chat System后端服务启动中（增强版）...")
 
-    # 初始化 Redis 缓存（可选，失败不影响服务）
-    try:
-        from cache.redis_client import health_check
+        validate_or_raise_for_startup(container.startup_env)
+        from character.memory_llm import MemoryLlmConfig
 
-        if health_check():
-            logger.info("✅ Redis 缓存连接正常")
-        else:
-            logger.warning("⚠️ Redis 缓存连接失败，将使用数据库直连模式")
-    except Exception as e:
-        logger.warning(f"Redis 缓存初始化跳过: {e}")
+        MemoryLlmConfig.from_env(container.startup_env)
 
-    if RESOURCE_POOL_AVAILABLE:
+        # 初始化数据库
         try:
-            from infra.resource_pool import ConnectionPool, HttpClientPool
-
-            _cfg.http_client_pool = HttpClientPool(
-                max_connections=100,
-                request_timeout=120.0,
-            )
-            if not postgres_mode:
-                db_path = str(getattr(database, "db_path", _BACKEND_ROOT / "qq_assistant.db"))
-                _cfg.connection_pool = ConnectionPool(db_path, max_size=20)
-            logger.info(
-                "✅ 资源池初始化完成 (%s)",
-                "HTTP" if postgres_mode else "SQLite + HTTP",
-            )
+            _initialize_database(database)
+            logger.info("✅ 数据库初始化完成 (%s)", "PostgreSQL" if postgres_mode else "SQLite")
         except Exception as e:
-            logger.warning(f"资源池初始化失败: {e}")
+            logger.critical(f"❌ 数据库初始化失败，服务无法启动: {e}", exc_info=True)
+            raise RuntimeError(f"数据库初始化失败: {e}") from e
 
-    if BACKUP_MANAGER_AVAILABLE and not postgres_mode:
+        # 初始化 Redis 缓存（可选，失败不影响服务）
         try:
-            from infra.backup_manager import BackupManager
+            from cache.redis_client import health_check
 
-            db_path = str(getattr(database, "db_path", _BACKEND_ROOT / "qq_assistant.db"))
-            db_file = Path(db_path).expanduser()
-            if not db_file.is_absolute():
-                db_file = db_file.resolve()
-            db_path = str(db_file)
+            if health_check():
+                logger.info("✅ Redis 缓存连接正常")
+            else:
+                logger.warning("⚠️ Redis 缓存连接失败，将使用数据库直连模式")
+        except Exception as e:
+            logger.warning(f"Redis 缓存初始化跳过: {e}")
+
+        # Both SQLite resources must use the database selected by the runtime container.
+        db_file = Path(database.db_path).expanduser().resolve() if not postgres_mode else None
+        _cfg.http_client_pool = HttpClientPool(max_connections=100, request_timeout=120.0)
+        if not postgres_mode:
+            _cfg.connection_pool = ConnectionPool(str(db_file), max_size=20)
             configured_backup_dir = container.startup_env.get("BACKUP_DIR", "").strip()
-            backup_dir = (
-                Path(configured_backup_dir).expanduser() if configured_backup_dir else db_file.parent / "backups"
-            )
+            backup_dir = Path(configured_backup_dir).expanduser() if configured_backup_dir else db_file.parent / "backups"
             if not backup_dir.is_absolute():
                 backup_dir = db_file.parent / backup_dir
-            _cfg.backup_mgr = BackupManager(db_path, backup_dir=str(backup_dir))
+            _cfg.backup_mgr = BackupManager(str(db_file), backup_dir=str(backup_dir))
             await _cfg.backup_mgr.start_scheduled_backup()
-            logger.info("✅ 备份管理器初始化完成")
-        except Exception as e:
-            logger.warning(f"备份管理器初始化失败: {e}")
+        _cfg.access_control_mgr = AccessControlManager(database)
+        logger.info("✅ 资源池、备份调度与访问控制初始化完成")
 
-    if ACCESS_CONTROL_AVAILABLE:
-        try:
-            from infra.access_control import AccessControlManager
+        # 延迟重建向量索引（首次搜索时自动触发，避免启动时阻塞）
+        # 见 api/knowledge.py search_knowledge 中的 _ensure_vector_index()
 
-            _cfg.access_control_mgr = AccessControlManager(database)
-            logger.info("✅ 访问控制管理器初始化完成（统一 DB adapter）")
-        except Exception as e:
-            logger.warning(f"访问控制管理器初始化失败: {e}")
+        from services.turn_completion import start_turn_completions
 
-    # 延迟重建向量索引（首次搜索时自动触发，避免启动时阻塞）
-    # 见 api/knowledge.py search_knowledge 中的 _ensure_vector_index()
+        start_turn_completions()
+        from services.delivery_memory import ensure_delivery_memory_worker
 
-    from services.turn_completion import start_turn_completions
-
-    start_turn_completions()
-    from services.delivery_memory import ensure_delivery_memory_worker
-
-    ensure_delivery_memory_worker(database)
-    logger.info("✅ 增强版服务启动完成！")
-    try:
+        ensure_delivery_memory_worker(database)
+        logger.info("✅ 增强版服务启动完成！")
         yield
     finally:
         logger.info("👋 服务关闭中，清理资源...")
@@ -263,12 +221,9 @@ async def lifespan(app: FastAPI):
         if postgres_mode:
             await _close_resource("PostgreSQL 适配器", database, "close")
         # C6 fix: 关闭所有模型 Provider 持有的 httpx 客户端与 GPU 句柄。
-        try:
-            from inference.model_manager import get_model_manager
+        from inference import model_manager
 
-            await _close_resource("模型管理器", get_model_manager(), "shutdown")
-        except Exception as e:
-            logger.warning(f"获取模型管理器失败: {e}")
+        await _close_resource("模型管理器", model_manager._model_manager, "shutdown")
         # C10 fix: 关闭 generate.py 中独立的 vLLM 客户端连接池
         try:
             from api.generate import close_vllm_client

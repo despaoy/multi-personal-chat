@@ -133,41 +133,13 @@ def get_vllm_served_model_name(env=os.environ) -> str:
 
 LOAD_BALANCER_AVAILABLE = True
 
-try:
-    from infra.resource_pool import ConnectionPool, HttpClientPool
 
-    RESOURCE_POOL_AVAILABLE = True
-except ImportError:
-    RESOURCE_POOL_AVAILABLE = False
-
-try:
-    from infra.circuit_breaker import global_registry
-
-    CIRCUIT_BREAKER_AVAILABLE = True
-except ImportError:
-    CIRCUIT_BREAKER_AVAILABLE = False
-
-try:
-    from infra.backup_manager import BackupManager
-
-    BACKUP_MANAGER_AVAILABLE = True
-except ImportError:
-    BACKUP_MANAGER_AVAILABLE = False
+from infra.circuit_breaker import global_registry
 
 
-try:
-    from infra.encryption import EncryptionManager
 
-    ENCRYPTION_AVAILABLE = True
-except ImportError:
-    ENCRYPTION_AVAILABLE = False
+from infra.encryption import EncryptionManager
 
-try:
-    from infra.access_control import AccessControlManager, Permission
-
-    ACCESS_CONTROL_AVAILABLE = True
-except ImportError:
-    ACCESS_CONTROL_AVAILABLE = False
 
 LLM_OPTIMIZER_AVAILABLE = True
 
@@ -184,9 +156,9 @@ service_start_time = datetime.now()
 
 connection_pool = None  # 在lifespan中初始化
 http_client_pool = None  # 在lifespan中初始化
-circuit_breaker_registry = global_registry if CIRCUIT_BREAKER_AVAILABLE else None
+circuit_breaker_registry = global_registry
 backup_mgr = None  # 在lifespan中初始化
-encryption_mgr = EncryptionManager() if ENCRYPTION_AVAILABLE else None
+encryption_mgr = EncryptionManager()
 access_control_mgr = None  # 在lifespan中初始化
 response_cache = ResponseCache()
 
@@ -196,7 +168,7 @@ response_cache = ResponseCache()
 # ============================================
 
 try:
-    from knowledge.vector_db import get_vector_db
+    from knowledge.vector_db import get_vector_db as get_vector_db
 
     VECTOR_DB_AVAILABLE = True
 except ImportError:

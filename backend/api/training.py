@@ -426,14 +426,12 @@ async def start_training(request: TrainingStartRequest, current_user: dict = Dep
         import psutil
         mem = psutil.virtual_memory()
         gpu_available = False
-        gpu_mem_total = 0
         gpu_mem_free = 0
 
         try:
             import torch
             if torch.cuda.is_available():
                 gpu_available = True
-                gpu_mem_total = torch.cuda.get_device_properties(0).total_memory / (1024**3)
                 gpu_mem_free = torch.cuda.mem_get_info(0)[0] / (1024**3)  # (free, total)
         except (ImportError, RuntimeError):
             pass

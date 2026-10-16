@@ -69,13 +69,13 @@ def test_numeric_boundaries_remain_exact_and_errors_do_not_echo_values():
 async def test_invalid_writer_configuration_stops_startup_before_database(monkeypatch):
     from app import main
 
-    runtime = SimpleNamespace(db=object(), is_pg_mode=lambda: False,
+    runtime = SimpleNamespace(db=object(), is_pg_mode=lambda: False, inference_runtime=None,
                               startup_env={'MEMORY_LLM_ENABLED': 'true'})
     initialize = Mock()
     monkeypatch.setattr(main, 'get_runtime_container', lambda app: runtime)
     monkeypatch.setattr(main, 'validate_or_raise_for_startup', lambda env: None)
     monkeypatch.setattr(main, '_initialize_database', initialize)
     with pytest.raises(ValueError, match='Enabled memory writer requires'):
-        async with main.lifespan(SimpleNamespace()):
+        async with main.lifespan(SimpleNamespace(state=SimpleNamespace())):
             pytest.fail('invalid writer configuration admitted startup')
     initialize.assert_not_called()

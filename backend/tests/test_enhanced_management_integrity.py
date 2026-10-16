@@ -155,8 +155,6 @@ async def test_enhanced_status_distinguishes_available_code_from_active_resource
     async def no_vllm_stats():
         return None
 
-    monkeypatch.setattr(enhanced, "BACKUP_MANAGER_AVAILABLE", True)
-    monkeypatch.setattr(enhanced, "ACCESS_CONTROL_AVAILABLE", True)
     monkeypatch.setattr(enhanced, "_get_vllm_load_balancer_stats", no_vllm_stats)
     monkeypatch.setattr(enhanced, "backup_mgr", lambda: None)
     monkeypatch.setattr(enhanced, "access_control_mgr", lambda: None)
