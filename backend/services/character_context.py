@@ -598,6 +598,7 @@ def build_character_context_service(
 
     budget = get_provider_context_budget() if context_budget is None else context_budget
     semantic_runtime = create_default_semantic_review_runtime()
+    contextual_policy = create_contextual_policy(context_budget=budget.review)
 
     return CharacterContextService(
         profile_registry=get_default_profile_registry(),
@@ -610,7 +611,8 @@ def build_character_context_service(
         defer_source_budget=budget.defer_source_budget,
         reference_max_chars=budget.reference_max_chars,
         memory_selector=create_evidence_selector(context_budget=budget.review),
-        contextual_policy=create_contextual_policy(context_budget=budget.review),
+        decision_policy=DecisionPolicy(defer_optional_strategies=contextual_policy is not None),
+        contextual_policy=contextual_policy,
         semantic_estimator=SemanticStateEstimator(
             semantic_runtime.reviewer,
             review_mode="all_non_safety",

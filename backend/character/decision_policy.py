@@ -1,15 +1,14 @@
-"""Character response policy with soft candidate-strategy scoring.
+"""Deterministic safety and optional character-strategy baselines.
 
-Legacy callers may continue to pass only a primary situation string and receive
-the original table-driven behavior. Runtime character turns additionally pass
-an InteractionState; that path scores a small repertoire of abstract dialogue
-actions and returns at most two compatible strategies. The policy never writes
-final dialogue and never receives raw user text.
+Direct callers retain the existing table/scoring contract. When a configured
+semantic policy owns optional choices, ordinary turns prepare only a baseline;
+safety-related signals retain their existing scoring and protection path.
+The policy never writes dialogue or receives raw user text.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from character.conversation_flow import ordinary_conversation
 from character.models import (
@@ -122,7 +121,10 @@ class _Candidate:
 
 
 class DecisionPolicy:
-    """Hybrid policy: hard safety gate plus soft candidate scoring."""
+    """Preserve safety and defer optional choices when configured."""
+
+    def __init__(self, *, defer_optional_strategies: bool = False):
+        self._defer_optional_strategies = defer_optional_strategies
 
     def decide(
         self,
@@ -134,15 +136,19 @@ class DecisionPolicy:
         has_relevant_memory: bool = False,
     ) -> DecisionPlan:
         """Create a response plan while preserving the legacy call contract."""
-        base = _BASE_PLANS.get(situation_type) or _BASE_PLANS[SITUATION_DAILY]
-
         # Safety remains a hard gate and cannot be overruled by soft signals,
         # relationship closeness or strategy scores.
         if situation_type == SITUATION_SAFETY or (interaction and interaction.safety_triggered):
             return _BASE_PLANS[SITUATION_SAFETY]
 
+        base = _BASE_PLANS[situation_type]
         if interaction is None:
             return self._legacy_decision(base, relationship)
+        # The configured model owns optional strategy selection. Safety-related
+        # signals retain the existing deterministic scoring/protection path.
+        if (self._defer_optional_strategies and interaction.has_soft_context
+                and not _signal_map(interaction.user_needs).get("safety_clarification", 0.0)):
+            return replace(base, confidence=interaction.confidence, selection_source="pending_semantic")
         plan = self._soft_decision(
             profile,
             relationship,
