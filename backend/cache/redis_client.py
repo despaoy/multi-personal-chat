@@ -1,16 +1,7 @@
-"""
-Redis 客户端 - 统一缓存层
-
-提供：
-- 连接池管理
-- 基础缓存操作（get/set/delete/exists）
-- Python 对象序列化（JSON）
-- 健康检查
-"""
-import json
-import os
+"""Shared Redis connections, lifecycle and health checks."""
 import logging
-from typing import Optional, Any, Union
+import os
+from typing import Any, Optional
 
 import redis
 from redis import ConnectionPool
@@ -163,77 +154,3 @@ def health_check() -> bool:
         return get_redis().ping()
     except Exception:
         return False
-
-
-# ============================================
-# 基础缓存操作
-# ============================================
-
-def cache_get(key: str) -> Optional[Any]:
-    """从缓存获取 JSON 反序列化后的值"""
-    try:
-        raw = get_redis().get(key)
-        if raw is None:
-            return None
-        return json.loads(raw)
-    except Exception as e:
-        logger.debug(f"cache_get({key}): {e}")
-        return None
-
-
-def cache_set(key: str, value: Any, ttl: int = 300) -> bool:
-    """设置缓存（JSON 序列化），ttl 单位秒"""
-    try:
-        raw = json.dumps(value, ensure_ascii=False, default=str)
-        get_redis().set(key, raw, ex=ttl)
-        return True
-    except Exception as e:
-        logger.warning(f"cache_set({key}): {e}")
-        return False
-
-
-def cache_delete(key: str) -> bool:
-    """删除缓存"""
-    try:
-        get_redis().delete(key)
-        return True
-    except Exception as e:
-        logger.warning(f"cache_delete({key}): {e}")
-        return False
-
-
-def cache_exists(key: str) -> bool:
-    """检查缓存是否存在"""
-    try:
-        return bool(get_redis().exists(key))
-    except Exception:
-        return False
-
-
-def cache_incr(key: str, amount: int = 1, ttl: Optional[int] = None) -> int:
-    """原子自增，可选设置过期时间"""
-    try:
-        r = get_redis()
-        val = r.incrby(key, amount)
-        if ttl is not None:
-            r.expire(key, ttl)
-        return val
-    except Exception:
-        return -1
-
-
-def cache_expire(key: str, ttl: int) -> bool:
-    """设置键过期时间"""
-    try:
-        get_redis().expire(key, ttl)
-        return True
-    except Exception:
-        return False
-
-
-def cache_keys(pattern: str) -> list[str]:
-    """按模式搜索键名"""
-    try:
-        return get_redis().keys(pattern)
-    except Exception:
-        return []
