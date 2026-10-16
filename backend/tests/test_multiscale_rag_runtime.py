@@ -190,7 +190,7 @@ async def test_ranking_score_zero_prevents_answer_model_despite_high_recall_scor
     from knowledge.grounded_answer.service import GroundedAnswerService
 
     runtime = ranking_score_runtime(0.0)
-    service = GroundedAnswerService(retriever=runtime.retrieve_with_citations, corrective_enabled=False)
+    service = GroundedAnswerService(retriever=runtime.retrieve_with_citations)
 
     async def generate(**kwargs):
         raise AssertionError("High recall score must not rescue a rejected ranking score")

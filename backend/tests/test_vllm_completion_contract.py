@@ -209,7 +209,7 @@ async def test_actual_ask_stream_rejects_corruption_after_fully_cited_body_and_c
         retrieved.append(query)
         return complete_bundle(source_path)
 
-    service = GroundedAnswerService(retriever=retrieve, corrective_enabled=False)
+    service = GroundedAnswerService(retriever=retrieve)
     provider = SimpleNamespace(get_status=lambda: {"modelName": "fiction-vllm-model"})
     manager = SimpleNamespace(
         _current_provider=SimpleNamespace(value="vllm"), get_current_provider=lambda: provider,

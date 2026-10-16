@@ -98,6 +98,7 @@ def arrange_grounded_sources(tmp_path, monkeypatch):
                 "index_version": INDEX_FORMAT_VERSION,
                 "embedding_text_version": EMBEDDING_TEXT_VERSION,
                 "embedding_model": provider.model_id,
+                "embedding_encoding": provider.encoding_contract,
                 "document_count": len(documents),
                 "vector_dimension": 384,
                 "normalized": True,
@@ -110,7 +111,6 @@ def arrange_grounded_sources(tmp_path, monkeypatch):
     monkeypatch.setenv("CHARACTER_RAG_RERANKER_ENABLED", "false")
     monkeypatch.setenv("RERANKER_ENABLED", "false")
     monkeypatch.setenv("CHARACTER_RAG_CROSS_ENCODER_MIN_LOGIT", "0")
-    monkeypatch.setenv("GROUNDED_ANSWER_CORRECTIVE", "false")
     monkeypatch.setenv("GROUNDED_GENERATION_TIMEOUT", "5")
     monkeypatch.setenv("GROUNDED_ANSWER_MAX_CHARS", "4000")
     monkeypatch.setattr(runtime_module, "_REPO_ROOT", corpus)

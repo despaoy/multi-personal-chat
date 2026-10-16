@@ -125,7 +125,7 @@ async def test_identical_followup_with_different_history_cannot_share_cached_ans
         retriever=lambda *args, **kwargs: data,
         index_version_resolver=lambda domain: "fixture-v1",
         cache=AnswerCache(ttl_seconds=60),
-        corrective_enabled=False,
+
     )
     from unittest.mock import AsyncMock
 
@@ -159,7 +159,7 @@ async def test_broken_citation_aborts_before_model_generation(failure):
     else:
         data["results"].pop(0)
     generate = AsyncMock(side_effect=AssertionError("broken evidence must not reach the model"))
-    service = GroundedAnswerService(retriever=lambda *a, **kw: data, corrective_enabled=False)
+    service = GroundedAnswerService(retriever=lambda *a, **kw: data)
     with pytest.raises(KeyError if failure == "missing_document" else ValueError):
         await service.answer("月社妃是否获批许可？", generate=generate, domain_id="fixture")
     generate.assert_not_awaited()
@@ -180,91 +180,10 @@ def test_citation_binding_requires_packet_metadata(failure):
         validator.bind(validation, packet)
 
 
-@pytest.mark.parametrize("identity", ["id", "source_id", "mixed"])
-async def test_corrective_native_citations_survive_two_rounds_and_answer(identity):
-    from copy import deepcopy
-    from unittest.mock import Mock
-
-    data = bundle()
-    rounds = []
-    for index in range(2):
-        current = deepcopy(data)
-        current.update(results=[data["results"][index]], citations=[dict(id=data["results"][index]["id"])],
-                       evidence_packets=[data["evidence_packets"][index]],
-                       confidence=0.2 if index == 0 else 0.8, abstained=index == 0,
-                       query_analysis={"entities": ["月社妃", "琉璃"]})
-        if identity == "source_id" or (identity == "mixed" and index == 1):
-            current["citations"][0]["source_id"] = current["citations"][0].pop("id")
-        rounds.append(current)
-    original = deepcopy(rounds)
-    retrieve = Mock(side_effect=rounds)
-    model_calls = []
-
-    async def generate(**kwargs):
-        model_calls.append(kwargs)
-        return "需结合许可规则和审批记录判断。[S1][S2]"
-
-    service = GroundedAnswerService(retriever=retrieve, corrective_enabled=True)
-    result = await service.answer("许可是否批准？", generate=generate, domain_id="fixture")
-    assert retrieve.call_count == 2 and len(model_calls) == 1
-    assert not result.abstained
-    expected = {data["results"][i]["id"] for i in range(2)}
-    assert {citation["document_id"] for citation in result.citations} == expected
-    assert rounds == original
 
 
-@pytest.mark.parametrize("bad_citation", [{}, {"id": "a", "source_id": "b"}])
-def test_corrective_native_merge_rejects_invalid_citation_identity(bad_citation):
-    from copy import deepcopy
-
-    from knowledge.grounded_answer.corrective import CorrectiveRetrievalAdapter
-
-    first = bundle()
-    second = deepcopy(first)
-    first["citations"][0] = bad_citation
-    with pytest.raises(ValueError, match="Citation"):
-        CorrectiveRetrievalAdapter._merge_bundles(first, second)
 
 
-@pytest.mark.parametrize("overlap", [False, True])
-async def test_corrective_admitted_source_text_survives_into_model_prompt(overlap):
-    from copy import deepcopy
-    from unittest.mock import Mock
-
-    from knowledge.grounded_answer.corrective import CorrectiveRetrievalAdapter
-
-    data = bundle()
-    first = deepcopy(data)
-    first.update(results=[data["results"][0]], citations=[data["citations"][0]],
-                 evidence_packets=[data["evidence_packets"][0]], confidence=0.2, abstained=True,
-                 query_analysis={"entities": ["月社妃", "琉璃"]})
-    first["results"][0]["content"] = "摘要仅用于检索，完整条件保存在原文证据包。"
-    second = deepcopy(first if overlap else data)
-    if not overlap:
-        second.update(results=[data["results"][1]], citations=[data["citations"][1]],
-                      evidence_packets=[data["evidence_packets"][1]])
-    second.update(confidence=0.8, abstained=False, query_analysis=first["query_analysis"])
-    if overlap:
-        second["evidence_packets"] = []
-    original = deepcopy([first, second])
-    merged = CorrectiveRetrievalAdapter._merge_bundles(first, second)
-    packet = EvidencePacketBuilder().build("许可是否批准？", merged, AnswerMode.GROUNDED_ANSWER)
-    expected = first["evidence_packets"][0]["text"]
-    by_id = {item.document_id: item for item in packet.documents}
-    assert by_id[first["results"][0]["id"]].evidence_text == expected
-    assert FIXTURE["late_qualifier"] in expected
-    model_calls = []
-
-    async def generate(**kwargs):
-        model_calls.append(kwargs)
-        prompt = unescape("\n".join(message["content"] for message in kwargs["messages"]))
-        assert expected in prompt
-        return "需满足原文所列完整许可条件。[S1]"
-
-    service = GroundedAnswerService(retriever=Mock(side_effect=[first, second]), corrective_enabled=True)
-    result = await service.answer("许可是否批准？", generate=generate, domain_id="fixture")
-    assert len(model_calls) == 1 and not result.abstained
-    assert [first, second] == original
 
 
 @pytest.mark.parametrize("failure", ["null_list", "not_packet", "kind", "missing_text", "empty_text", "ids_type", "empty_ids", "invalid_id"])
@@ -292,7 +211,7 @@ async def test_admitted_evidence_contract_cannot_silently_use_card_content(failu
         else:
             packet["document_ids"] = [None]
     generate = AsyncMock()
-    service = GroundedAnswerService(retriever=lambda *a, **kw: data, corrective_enabled=False)
+    service = GroundedAnswerService(retriever=lambda *a, **kw: data)
     with pytest.raises((ValueError, TypeError, KeyError)):
         await service.answer("许可是否批准？", generate=generate, domain_id="fixture")
     generate.assert_not_awaited()

@@ -148,7 +148,7 @@ async def ask_rig(tmp_path, monkeypatch):
             database.close_connection()
 
     rig.service = GroundedAnswerService(
-        retriever=retrieve, cache=AnswerCache(ttl_seconds=60), corrective_enabled=False,
+        retriever=retrieve, cache=AnswerCache(ttl_seconds=60),
         index_version_resolver=lambda domain: "synthetic-source-v1",
     )
     monkeypatch.setattr(ask, "get_grounded_answer_service", AsyncMock(return_value=rig.service))
@@ -285,7 +285,7 @@ async def test_external_sse_cancellation_cancels_actual_transport_and_clears_con
 
 async def test_simultaneous_ask_requests_keep_distinct_snapshots_and_reset_their_own_tasks(ask_rig, monkeypatch):
     rig = ask_rig
-    original = rig.service._retrieve_with_optional_correction
+    original = rig.service._retrieve
     entered = {model: asyncio.Event() for model in ("deepseek-flash", "deepseek-v4-pro")}
     release = asyncio.Event()
     cleaned = []
@@ -302,7 +302,7 @@ async def test_simultaneous_ask_requests_keep_distinct_snapshots_and_reset_their
         finally:
             cleaned.append(get_request_context())
 
-    monkeypatch.setattr(rig.service, "_retrieve_with_optional_correction", pause_retrieval)
+    monkeypatch.setattr(rig.service, "_retrieve", pause_retrieval)
     first = asyncio.create_task(invoke())
     second = None
     try:

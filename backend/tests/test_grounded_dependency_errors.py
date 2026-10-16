@@ -59,7 +59,7 @@ async def test_dependency_exception_propagates_before_generation(stage):
     retrieve = Mock(return_value=_bundle())
     generate = AsyncMock(return_value="甲是学生。[S1]")
     options = {"index_version_resolver": fail} if stage == "version" else {"domain_supplements": fail}
-    service = GroundedAnswerService(retriever=retrieve, corrective_enabled=False, **options)
+    service = GroundedAnswerService(retriever=retrieve,  **options)
     with pytest.raises(OSError) as caught:
         if stage == "stream_supplement":
             async for _event in service.answer_stream("甲是谁", generate=generate, domain_id="story"):
@@ -80,6 +80,6 @@ async def test_success_and_absent_optional_callbacks_remain_valid(configured):
         assert ("synthetic-domain-rule" in text) is configured
         return "甲是学生。[S1]"
     options = dict(index_version_resolver=lambda domain: "v1", domain_supplements=lambda domain: "synthetic-domain-rule") if configured else {}
-    result = await GroundedAnswerService(retriever=lambda *a, **kw: _bundle(), corrective_enabled=False, **options).answer("甲是谁", generate=generate, domain_id="story")
+    result = await GroundedAnswerService(retriever=lambda *a, **kw: _bundle(),  **options).answer("甲是谁", generate=generate, domain_id="story")
     assert not result.abstained and not result.failure_kind
     assert result.citations[0]["document_id"] == "doc-1"

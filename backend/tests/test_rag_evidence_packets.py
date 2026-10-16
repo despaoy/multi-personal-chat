@@ -116,7 +116,7 @@ async def test_raw_source_failure_stops_before_alternate_candidate_and_model(mon
     instance.extractor = SimpleNamespace(extract=extract)
     pipeline = GroundedAnswerService(
         retriever=lambda query, **kwargs: instance.retrieve(query, raw_text=True),
-        corrective_enabled=False,
+
     )
     calls = []
 

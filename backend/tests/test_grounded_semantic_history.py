@@ -117,7 +117,7 @@ async def test_failed_review_cannot_retrieve_generate_or_publish_a_partial_strea
             AsyncMock(side_effect=error),
         )
     retrieve, model = Mock(), AsyncMock()
-    service = GroundedAnswerService(retriever=retrieve, corrective_enabled=False)
+    service = GroundedAnswerService(retriever=retrieve)
     emitted = []
     with pytest.raises((RuntimeError, ValueError)):
         if transport == "normal":
@@ -187,7 +187,7 @@ async def test_semantic_query_reaches_retrieval_while_original_input_reaches_ans
     model = AsyncMock(side_effect=generate)
     service = GroundedAnswerService(
         retriever=retrieve,
-        corrective_enabled=False,
+
         cache=AnswerCache(ttl_seconds=60),
         index_version_resolver=lambda _: "v1",
     )

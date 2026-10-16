@@ -554,7 +554,7 @@ async def test_catalogue_read_failure_is_not_partial_success_or_model_input(corp
         calls.append(kwargs)
         return "must not generate after a source read failure"
 
-    service = GroundedAnswerService(retriever=retrieve, corrective_enabled=False)
+    service = GroundedAnswerService(retriever=retrieve)
     with pytest.raises(error_type, match=message):
         await service.answer("核对来源中的人物自述和全部限制。", domain_id=corpus.config.domain_id, generate=generate)
     assert not calls

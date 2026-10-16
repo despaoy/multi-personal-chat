@@ -23,12 +23,10 @@ from math import isfinite
 from typing import Any
 
 from inference.history import validate_history
-from infra.environment import read_bool
 from knowledge.curated_sources import CuratedSourceChangedError, curated_source_receipts, validate_curated_source
 from knowledge.dialogue_query import contextual_retrieval_query
 
 from .cache import AnswerCache, answer_cache_key
-from .corrective import CorrectiveRetrievalAdapter
 from .models import (  # noqa: E402
     AnswerMode,
     AnswerStreamEvent,
@@ -85,8 +83,6 @@ class GroundedAnswerService:
         retriever: RetrieveFn | None = None,
         domain_supplements: Callable[[str], str] | None = None,
         index_version_resolver: Callable[[str | None], str] | None = None,
-        corrective_enabled: bool | None = None,
-        corrective_max_retries: int = 1,
         abstention_reply: str = DEFAULT_ABSTENTION_REPLY,
         generation_timeout: float = _DEFAULT_GENERATION_TIMEOUT,
         answer_max_chars: int = 4000,
@@ -99,10 +95,6 @@ class GroundedAnswerService:
         self.retriever = retriever
         self._domain_supplements = domain_supplements
         self._index_version_resolver = index_version_resolver
-        self.corrective_enabled = (
-            read_bool(os.environ, "GROUNDED_ANSWER_CORRECTIVE", default=True) if corrective_enabled is None else corrective_enabled
-        )
-        self.corrective_max_retries = corrective_max_retries
         self.abstention_reply = abstention_reply or DEFAULT_ABSTENTION_REPLY
         self.generation_timeout = float(generation_timeout)
         if isinstance(generation_timeout, bool) or not isfinite(self.generation_timeout) or self.generation_timeout <= 0:
@@ -175,7 +167,7 @@ class GroundedAnswerService:
 
         # 角色知识检索是同步 CPU 工作，放入线程池避免阻塞事件循环。
         retrieval_start = time.perf_counter()
-        bundle, corrective_info = await self._retrieve_with_optional_correction(
+        bundle = await self._retrieve(
             await contextual_retrieval_query(query, history),
             domain_id=domain_id, top_k=top_k, filters=filters,
         )
@@ -193,7 +185,6 @@ class GroundedAnswerService:
             max_tokens=max_tokens,
             top_p=top_p,
             want_citations=want_citations,
-            corrective_info=corrective_info,
             timings=timings,
         )
         # 独立知识问答没有 legacy 聊天链路可回退。未命中域时应返回
@@ -256,7 +247,7 @@ class GroundedAnswerService:
         start = time.perf_counter()
 
         retrieval_start = time.perf_counter()
-        bundle, corrective_info = await self._retrieve_with_optional_correction(
+        bundle = await self._retrieve(
             await contextual_retrieval_query(query, history),
             domain_id=domain_id,
             top_k=top_k,
@@ -273,7 +264,8 @@ class GroundedAnswerService:
         yield AnswerStreamEvent(
             type="meta",
             data={
-                "answer_mode": packet.answer_mode.value,
+                "answer_mode": (AnswerMode.ABSTENTION.value if packet.answer_mode == AnswerMode.NO_RAG
+                                else packet.answer_mode.value),
                 "domain_id": packet.domain_id,
             },
         )
@@ -291,7 +283,6 @@ class GroundedAnswerService:
                     timings=timings,
                     start=start,
                     model_invoked=False,
-                    corrective_info=corrective_info,
                     model_id=model_id,
                     abstained=True,
                     failure_kind=FailureKind.NO_DOMAIN.value,
@@ -311,12 +302,11 @@ class GroundedAnswerService:
                     citations=[],
                     warnings=[
                         *packet.warnings,
-                        f"abstention:{packet.abstention_reason or FailureKind.LOW_CONFIDENCE.value}",
+                        f"abstention:{packet.abstention_reason}",
                     ],
                     timings=timings,
                     start=start,
                     model_invoked=False,
-                    corrective_info=corrective_info,
                     model_id=model_id,
                     abstained=True,
                 ),
@@ -393,7 +383,6 @@ class GroundedAnswerService:
                 timings=timings,
                 start=start,
                 model_invoked=True,
-                corrective_info=corrective_info,
                 model_id=model_id,
                 abstained=False,
             ),
@@ -402,33 +391,21 @@ class GroundedAnswerService:
     # ------------------------------------------------------------------
     # 内部编排
     # ------------------------------------------------------------------
-    async def _retrieve_with_optional_correction(
+    async def _retrieve(
         self,
         query: str | None,
         *,
         domain_id: str | None,
         top_k: int,
         filters: dict[str, Any] | None,
-    ) -> tuple[dict[str, Any] | None, dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         if self.retriever is None:
             raise RuntimeError("Grounded answer retriever is not configured")
-
         if query is None:
-            return None, {"reformulated": False, "reformulated_query": None, "rounds": []}
-
-        def _retrieve(q: str, *, top_k: int, filters: dict | None):
-            return self.retriever(q, top_k=top_k, filters=filters, domain_id=domain_id)
-
-        if not self.corrective_enabled:
-            bundle = await asyncio.to_thread(_retrieve, query, top_k=top_k, filters=filters)
-            return bundle, {"reformulated": False, "reformulated_query": None, "rounds": []}
-
-        adapter = CorrectiveRetrievalAdapter(
-            _retrieve,
-            max_retries=self.corrective_max_retries,
+            return None
+        return await asyncio.to_thread(
+            self.retriever, query, top_k=top_k, filters=filters, domain_id=domain_id,
         )
-        bundle, info = await asyncio.to_thread(adapter.retrieve_with_correction, query, top_k=top_k, filters=filters)
-        return bundle, info
 
     async def _answer_from_bundle(
         self,
@@ -444,7 +421,6 @@ class GroundedAnswerService:
         max_tokens: int,
         top_p: float,
         want_citations: bool,
-        corrective_info: dict[str, Any] | None,
         timings: AnswerTimings,
     ) -> GroundedAnswerResult:
         packet_start = time.perf_counter()
@@ -452,7 +428,7 @@ class GroundedAnswerService:
         packet = self._build_packet(query, bundle, decision)
         timings.packet_ms = (time.perf_counter() - packet_start) * 1000
 
-        metadata = self._retrieval_metadata(packet, decision, corrective_info, model_id=model_id)
+        metadata = self._retrieval_metadata(packet, decision, model_id=model_id)
 
         if packet.answer_mode == AnswerMode.NO_RAG:
             # 未命中域：调用方（聊天链路）应回退既有检索；此处返回
@@ -475,7 +451,7 @@ class GroundedAnswerService:
 
         if packet.answer_mode == AnswerMode.ABSTENTION or not packet.documents:
             # abstention：结构上不调用模型（防绕过）；无答案也返回正常结构
-            reason = packet.abstention_reason or FailureKind.LOW_CONFIDENCE.value
+            reason = packet.abstention_reason
             return GroundedAnswerResult(
                 answer=self.abstention_reply,
                 answer_mode=AnswerMode.ABSTENTION,
@@ -488,7 +464,7 @@ class GroundedAnswerService:
                 used_rag=True,
                 model_invoked=False,
                 model_id=model_id,
-                retrieval_metadata={**metadata, "abstention_reason": reason},
+                retrieval_metadata=metadata,
                 timings=timings,
             )
 
@@ -574,16 +550,28 @@ class GroundedAnswerService:
                 query=query,
                 domain_id=None,
                 answer_mode=AnswerMode.NO_RAG,
+                abstention_reason=decision.abstention_reason,
                 retrieval_confidence=0.0,
             )
         if not is_structured_retrieval_bundle(bundle):
             raise ValueError("Grounded answer requires a structured retrieval bundle with domains and query_analysis")
-        return self.packet_builder.build(
+        packet = self.packet_builder.build(
             query,
             bundle,
             decision.mode,
             warnings=decision.warnings,
         )
+        reason = decision.abstention_reason
+        if not packet.documents:
+            packet.answer_mode = AnswerMode.ABSTENTION
+            if not reason:
+                reason = (FailureKind.CONTEXT_BUDGET_EXCEEDED.value if packet.truncated
+                          else FailureKind.NO_RETRIEVAL.value)
+        if packet.answer_mode == AnswerMode.ABSTENTION:
+            packet.abstention_reason = packet.abstention_reason or reason
+            if not packet.abstention_reason:
+                raise ValueError("Abstention requires an explicit evidence or decision reason")
+        return packet
 
     def _supplement_for(self, packet: EvidencePacket) -> str:
         if self._domain_supplements is None or not packet.domain_id:
@@ -594,15 +582,15 @@ class GroundedAnswerService:
         self,
         packet: EvidencePacket,
         decision: ModeDecision,
-        corrective_info: dict[str, Any] | None,
         *,
         model_id: str,
     ) -> dict[str, Any]:
         analysis = packet.query_analysis or {}
-        metadata: dict[str, Any] = {
+        return {
             "domain_id": packet.domain_id,
             "domains": list(analysis.get("matched_domains") or []),
             "confidence": round(decision.effective_confidence, 4),
+            "abstention_reason": packet.abstention_reason,
             "retrieval_confidence": round(packet.retrieval_confidence, 4),
             "evidence_count": len(packet.documents),
             "evidence_chars": len(packet.context_text),
@@ -613,13 +601,6 @@ class GroundedAnswerService:
             "prompt_version": _prompt_version(),
             "model_id": model_id,
         }
-        if corrective_info:
-            metadata["corrective"] = {
-                "reformulated": bool(corrective_info.get("reformulated")),
-                "reformulated_query": corrective_info.get("reformulated_query"),
-                "rounds": len(corrective_info.get("rounds") or []),
-            }
-        return metadata
 
     def _done_payload(
         self,
@@ -631,7 +612,6 @@ class GroundedAnswerService:
         timings: AnswerTimings,
         start: float,
         model_invoked: bool,
-        corrective_info: dict[str, Any] | None,
         model_id: str = "",
         abstained: bool | None = None,
         failure_kind: str = "",
@@ -657,7 +637,7 @@ class GroundedAnswerService:
             "failure_kind": failure_kind,
             "used_rag": (used_rag if used_rag is not None else packet.answer_mode != AnswerMode.NO_RAG),
             "costTime": round(timings.total_ms / 1000, 2),
-            "retrieval_metadata": self._retrieval_metadata(packet, decision, corrective_info, model_id=model_id),
+            "retrieval_metadata": self._retrieval_metadata(packet, decision, model_id=model_id),
             "timings": timings.to_dict(),
         }
 

@@ -106,7 +106,7 @@ async def test_missing_citation_raises_instead_of_returning_ungrounded_answer():
     service = GroundedAnswerService(
         retriever=lambda *_args, **_kwargs: _bundle(),
         cache=AnswerCache(ttl_seconds=0),
-        corrective_enabled=False,
+
     )
     with pytest.raises(RuntimeError, match="citation validation"):
         await service.answer("甲是谁", generate=generate, domain_id="story")
@@ -129,7 +129,7 @@ async def test_stream_only_emits_validated_answer_and_closes_provider_stream():
 
     service = GroundedAnswerService(
         retriever=lambda *_args, **_kwargs: _bundle(),
-        corrective_enabled=False,
+
     )
     events = [
         event
@@ -199,7 +199,7 @@ async def test_generation_error_propagates(kind):
     error = {"provider": OSError("synthetic provider failure"), "timeout": TimeoutError("synthetic timeout"), "cancelled": asyncio.CancelledError()}[kind]
     async def generate(**kwargs):
         raise error
-    service = GroundedAnswerService(retriever=lambda *a, **kw: _bundle(), corrective_enabled=False)
+    service = GroundedAnswerService(retriever=lambda *a, **kw: _bundle())
     with pytest.raises(type(error)) as caught:
         await service.answer("甲是谁", generate=generate, domain_id="story")
     assert caught.value is error
@@ -209,7 +209,7 @@ async def test_generation_error_propagates(kind):
 async def test_malformed_model_output_is_an_error(value):
     async def generate(**kwargs):
         return value
-    service = GroundedAnswerService(retriever=lambda *a, **kw: _bundle(), corrective_enabled=False)
+    service = GroundedAnswerService(retriever=lambda *a, **kw: _bundle())
     with pytest.raises((TypeError, RuntimeError), match="Grounded model"):
         await service.answer("甲是谁", generate=generate, domain_id="story")
 
@@ -226,7 +226,7 @@ async def test_ask_returns_http_error_for_provider_failure(monkeypatch):
     from app.main import global_exception_handler
 
     generate = AsyncMock(side_effect=OSError("synthetic private detail"))
-    service = GroundedAnswerService(retriever=lambda *a, **kw: _bundle(), corrective_enabled=False)
+    service = GroundedAnswerService(retriever=lambda *a, **kw: _bundle())
     monkeypatch.setattr(ask, "get_grounded_answer_service", AsyncMock(return_value=service))
     monkeypatch.setattr(ask, "_resolve_generate_adapters", AsyncMock(return_value=(generate, None, "test", "0" * 64)))
     app = FastAPI()
@@ -266,7 +266,7 @@ async def test_stream_failure_propagates_without_success_events_and_closes(kind)
         raise AssertionError("must not fall back to non-stream generation")
 
     service = GroundedAnswerService(
-        retriever=lambda *a, **kw: _bundle(), corrective_enabled=False,
+        retriever=lambda *a, **kw: _bundle(),
         generation_timeout=0.01 if kind == "timeout" else 10,
     )
     events = []
@@ -299,7 +299,7 @@ async def test_ask_stream_ends_with_error_without_done(monkeypatch, failure):
         return _bundle()
 
     generate = AsyncMock(side_effect=OSError("synthetic private detail"))
-    service = GroundedAnswerService(retriever=retrieve, corrective_enabled=False)
+    service = GroundedAnswerService(retriever=retrieve)
     monkeypatch.setattr(ask, "get_grounded_answer_service", AsyncMock(return_value=service))
     monkeypatch.setattr(ask, "_resolve_generate_adapters", AsyncMock(return_value=(generate, None, "test", "0" * 64)))
     app = FastAPI()
@@ -332,7 +332,7 @@ async def test_rerank_score_contract_rejects_invalid_before_model(score):
     data["results"][0]["rerank_score"] = score
     data["citations"][0]["rerank_score"] = 0.9
     generate = AsyncMock(side_effect=AssertionError("invalid rank must not invoke model"))
-    service = GroundedAnswerService(retriever=lambda *a, **kw: data, corrective_enabled=False)
+    service = GroundedAnswerService(retriever=lambda *a, **kw: data)
     with pytest.raises((TypeError, ValueError)):
         await service.answer("甲是谁", generate=generate, domain_id="story")
     generate.assert_not_awaited()
@@ -348,7 +348,7 @@ async def test_rerank_score_contract_uses_result_only_and_allows_unranked(score,
     async def generate(**kwargs):
         return "甲是学生。[S1]"
 
-    service = GroundedAnswerService(retriever=lambda *a, **kw: data, corrective_enabled=False)
+    service = GroundedAnswerService(retriever=lambda *a, **kw: data)
     result = await service.answer("甲是谁", generate=generate, domain_id="story")
     assert result.answer_mode == expected and not result.abstained
 
@@ -360,7 +360,7 @@ async def test_decision_contract_missing_fields_are_errors(field):
     data = _bundle()
     del data[field]
     generate = AsyncMock()
-    service = GroundedAnswerService(retriever=lambda *a, **kw: data, corrective_enabled=False)
+    service = GroundedAnswerService(retriever=lambda *a, **kw: data)
     with pytest.raises(KeyError, match=field):
         await service.answer("甲是谁", generate=generate, domain_id="story")
     generate.assert_not_awaited()
@@ -377,7 +377,7 @@ async def test_decision_contract_invalid_values_do_not_become_abstention(field, 
     data = _bundle()
     data[field] = value
     generate = AsyncMock()
-    service = GroundedAnswerService(retriever=lambda *a, **kw: data, corrective_enabled=False)
+    service = GroundedAnswerService(retriever=lambda *a, **kw: data)
     with pytest.raises((TypeError, ValueError)):
         await service.answer("甲是谁", generate=generate, domain_id="story")
     generate.assert_not_awaited()
@@ -390,7 +390,7 @@ async def test_decision_contract_normal_low_and_high_confidence(confidence, abst
     data = _bundle()
     data.update(confidence=confidence, abstained=abstained)
     generate = AsyncMock(return_value="甲是学生。[S1]")
-    service = GroundedAnswerService(retriever=lambda *a, **kw: data, corrective_enabled=False)
+    service = GroundedAnswerService(retriever=lambda *a, **kw: data)
     result = await service.answer("甲是谁", generate=generate, domain_id="story")
     assert result.abstained is abstained
     assert generate.await_count == (0 if abstained else 1)
@@ -406,7 +406,7 @@ async def test_retrieval_boundary_rejects_missing_dependency_or_unsupported_bund
         del data[failure]
     service = GroundedAnswerService(
         retriever=None if failure == "retriever" else lambda *a, **kw: data,
-        corrective_enabled=False,
+
     )
     generate = AsyncMock()
     events = []
@@ -437,7 +437,7 @@ async def test_cache_request_identity_preserves_prompt_differences_and_exact_hit
         return f"回答第{len(calls)}次：甲是学生。[S1]"
 
     service = GroundedAnswerService(retriever=retrieve, index_version_resolver=lambda domain: "v1",
-                                   cache=AnswerCache(ttl_seconds=60), corrective_enabled=False)
+                                   cache=AnswerCache(ttl_seconds=60))
     first = await service.answer(queries[0], speaker=speakers[0], generate=generate, domain_id="story")
     second = await service.answer(queries[1], speaker=speakers[1], generate=generate, domain_id="story")
     repeated = await service.answer(queries[1], speaker=speakers[1], generate=generate, domain_id="story")
@@ -478,7 +478,7 @@ async def test_cache_config_zero_disables_and_positive_lifetime_expires(monkeypa
 
     service = GroundedAnswerService(retriever=lambda *a, **kw: _bundle(),
                                    index_version_resolver=lambda domain: "v1",
-                                   cache=AnswerCache(ttl_seconds=ttl, max_entries=1), corrective_enabled=False)
+                                   cache=AnswerCache(ttl_seconds=ttl, max_entries=1))
     await service.answer("甲是谁", generate=generate, domain_id="story")
     repeated = await service.answer("甲是谁", generate=generate, domain_id="story")
     assert repeated.cache_hit is (ttl > 0)
@@ -551,7 +551,7 @@ async def test_api_cache_provenance_distinguishes_reuse_from_generation(monkeypa
 
     generate = AsyncMock(return_value="甲是学生。[S1]")
     service = GroundedAnswerService(retriever=lambda *a, **kw: _bundle(),
-                                   index_version_resolver=lambda domain: "v1", corrective_enabled=False)
+                                   index_version_resolver=lambda domain: "v1")
     monkeypatch.setattr(ask, "get_grounded_answer_service", AsyncMock(return_value=service))
     monkeypatch.setattr(ask, "_resolve_generate_adapters", AsyncMock(return_value=(generate, None, "test", "0" * 64)))
     app = FastAPI()
@@ -575,7 +575,7 @@ async def test_finalized_answer_requires_body_after_citation_removal(streaming, 
     async def generate(**kwargs):
         return text
 
-    service = GroundedAnswerService(retriever=lambda *a, **kw: _bundle(), corrective_enabled=False)
+    service = GroundedAnswerService(retriever=lambda *a, **kw: _bundle())
     events = []
     with pytest.raises(RuntimeError, match="empty answer"):
         if streaming:
@@ -607,7 +607,7 @@ async def test_structural_output_limits_do_not_silently_publish_partial_success(
     async def generate(**kwargs):
         return text
 
-    service = GroundedAnswerService(retriever=lambda *a, **kw: data, corrective_enabled=False,
+    service = GroundedAnswerService(retriever=lambda *a, **kw: data,
                                    validator=CitationValidator(max_citations=1),
                                    answer_max_chars=len(body) - (case == "length"))
     events = []
@@ -654,7 +654,7 @@ async def test_generation_config_finite_timeout_cancels_model_work(streaming):
         finally:
             closed = True
 
-    service = GroundedAnswerService(retriever=lambda *a, **kw: _bundle(), corrective_enabled=False, generation_timeout=0.01)
+    service = GroundedAnswerService(retriever=lambda *a, **kw: _bundle(),  generation_timeout=0.01)
     with pytest.raises(TimeoutError):
         if streaming:
             _ = [event async for event in service.answer_stream("甲是谁", generate=generate, domain_id="story")]
@@ -669,6 +669,6 @@ async def test_generation_config_zero_explicitly_disables_character_limit():
     async def generate(**kwargs):
         return body + "[S1]"
 
-    service = GroundedAnswerService(retriever=lambda *a, **kw: _bundle(), corrective_enabled=False, answer_max_chars=0)
+    service = GroundedAnswerService(retriever=lambda *a, **kw: _bundle(),  answer_max_chars=0)
     result = await service.answer("甲是谁", generate=generate, domain_id="story")
     assert result.answer == body and not result.abstained

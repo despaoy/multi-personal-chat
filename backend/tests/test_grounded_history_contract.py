@@ -37,7 +37,7 @@ async def test_question_and_admitted_history_reach_model_verbatim(monkeypatch, c
         return "甲是学生。[S1]"
 
     model = AsyncMock(side_effect=generate)
-    service = GroundedAnswerService(retriever=lambda *a, **kw: _bundle(), corrective_enabled=False)
+    service = GroundedAnswerService(retriever=lambda *a, **kw: _bundle())
     if transport == "normal":
         result = await service.answer(QUERY, history=history, domain_id="story", generate=model)
         assert not result.abstained and result.model_invoked and result.citations
@@ -61,7 +61,7 @@ async def test_service_rejects_invalid_history_before_cache_or_retrieval(monkeyp
     cache = SimpleNamespace(ttl=120, get=Mock(return_value=cached), set=Mock())
     version, retrieve, model = Mock(return_value="v1"), Mock(return_value=_bundle()), AsyncMock(return_value="甲是学生。[S1]")
     context = Mock(return_value="甲是谁")
-    service = GroundedAnswerService(retriever=retrieve, cache=cache, index_version_resolver=version, corrective_enabled=False)
+    service = GroundedAnswerService(retriever=retrieve, cache=cache, index_version_resolver=version)
     monkeypatch.setattr("knowledge.grounded_answer.service.contextual_retrieval_query", context)
     emitted = []
     with pytest.raises(HistoryFormatError) as caught:
