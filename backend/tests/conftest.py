@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import os
 import secrets
 import sys
@@ -21,6 +22,8 @@ os.environ.setdefault("DATABASE_PATH", str(_TEST_RUNTIME_ROOT / "qq_assistant.db
 _test_jwt_secret = os.environ.get("JWT_SECRET", "")
 if len(_test_jwt_secret) < 32 or _test_jwt_secret == "multipersonal-jwt-secret-change-in-production":
     os.environ["JWT_SECRET"] = secrets.token_urlsafe(48)
+# Test-only explicit encryption configuration; never provision workspace keys.
+os.environ.setdefault("ENCRYPTION_KEY", base64.urlsafe_b64encode(secrets.token_bytes(32)).decode("ascii"))
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 BACKEND_ROOT = PROJECT_ROOT / "backend"
 for path in (PROJECT_ROOT, BACKEND_ROOT):

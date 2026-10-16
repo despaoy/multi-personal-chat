@@ -68,7 +68,7 @@ def _is_valid_encryption_key(value: str) -> bool:
 def validate_deployment_environment(env: Mapping[str, str] | None = None) -> DeploymentValidationResult:
     """Validate production-critical environment variables.
 
-    JWT signing keys are required in every environment. Production must declare the
+    JWT signing keys and encryption keys are required in every environment. Production must declare the
     external gateway, database, model, authentication, CORS, and logging
     settings explicitly so accidental defaults do not become the deployment.
     """
@@ -135,10 +135,8 @@ def validate_deployment_environment(env: Mapping[str, str] | None = None) -> Dep
         errors.append(str(exc))
 
     encryption_key = _value(env, "ENCRYPTION_KEY")
-    if production and not _is_valid_encryption_key(encryption_key):
+    if not _is_valid_encryption_key(encryption_key):
         errors.append("ENCRYPTION_KEY must be an explicit URL-safe base64 encoded 32-byte key")
-    elif not encryption_key:
-        warnings.append("ENCRYPTION_KEY is not set; development will auto-generate one")
 
     origins = _value(env, "ALLOWED_ORIGINS") or _value(env, "CORS_ORIGINS")
     if production and (not origins or origins == "*" or "localhost" in origins or "127.0.0.1" in origins):

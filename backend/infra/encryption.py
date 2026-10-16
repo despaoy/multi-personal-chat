@@ -3,7 +3,7 @@
 
 提供敏感数据的加密和解密功能，包括：
 - AES-256-GCM加密算法
-- 密钥管理（环境变量读取、自动生成、密钥轮换）
+- 密钥管理（显式加载、历史路径迁移、主动密钥轮换）
 - 字段级加密/解密
 - 批量加密/解密
 - 敏感字段自动识别
@@ -75,7 +75,6 @@ _ENV_KEY_NAME = "ENCRYPTION_KEY"
 _BACKEND_ROOT = Path(__file__).resolve().parents[1]
 _ENV_FILE_PATH = _BACKEND_ROOT / ".env"
 _LEGACY_ENV_FILE_PATH = Path(__file__).resolve().parent / ".env"
-_PRODUCTION_ENVIRONMENTS = {"production", "prod"}
 
 
 # ---------------------------------------------------------------------------
@@ -104,7 +103,7 @@ class KeyManagementError(Exception):
 class EncryptionManager:
     """管理敏感数据的加密和解密。
 
-    使用AES-256-GCM加密算法，密钥从环境变量读取或自动生成。
+    使用AES-256-GCM加密算法，按配置优先级加载已有密钥。
     支持字段级加密、批量操作和密钥轮换。
 
     Attributes:
@@ -117,7 +116,7 @@ class EncryptionManager:
 
         Args:
             key: 可选的加密密钥（32字节）。如果未提供，
-                 将从环境变量ENCRYPTION_KEY读取，或自动生成新密钥。
+                 将按环境变量、backend/.env、历史路径加载已有密钥。
 
         Raises:
             KeyManagementError: 密钥初始化失败
@@ -129,7 +128,7 @@ class EncryptionManager:
                 )
             self._key = key
         else:
-            self._key = self._load_or_generate_key()
+            self._key = self._load_key()
 
         self._aesgcm = AESGCM(self._key)
         logger.info("EncryptionManager 初始化完成")
@@ -168,8 +167,8 @@ class EncryptionManager:
             raise KeyManagementError(f"读取密钥文件 {path} 失败") from exc
         return None
 
-    def _load_or_generate_key(self) -> bytes:
-        """Load the canonical key, migrate the legacy path, or create a dev key."""
+    def _load_key(self) -> bytes:
+        """Load a configured key or migrate its legacy path; never create a replacement."""
         source = "环境变量"
         encoded_key = os.environ.get(_ENV_KEY_NAME)
         if not encoded_key:
@@ -192,16 +191,7 @@ class EncryptionManager:
             )
             return key
 
-        environment = os.getenv("ENVIRONMENT", "development").strip().lower()
-        if environment in _PRODUCTION_ENVIRONMENTS:
-            raise KeyManagementError(
-                "生产环境必须显式配置 ENCRYPTION_KEY，禁止自动生成"
-            )
-
-        logger.warning("未找到加密密钥，正在为开发环境生成并持久化新密钥")
-        key = AESGCM.generate_key(bit_length=256)
-        self._save_key_to_env(key)
-        return key
+        raise KeyManagementError("必须显式配置 ENCRYPTION_KEY，禁止自动生成")
 
     def _save_key_to_env(self, key: bytes) -> None:
         """将密钥保存到.env文件。

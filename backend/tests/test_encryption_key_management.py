@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import os
 
 import pytest
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
@@ -19,17 +20,23 @@ def isolated_key_files(monkeypatch, tmp_path):
     return canonical, legacy
 
 
-def test_development_key_persists_and_survives_restart(monkeypatch, isolated_key_files):
-    canonical, _ = isolated_key_files
+def test_preconfigured_canonical_key_survives_restart_without_changing_file(monkeypatch, isolated_key_files):
+    canonical, legacy = isolated_key_files
+    key = bytes(range(32))
+    encoded = base64.urlsafe_b64encode(key).decode("ascii")
+    canonical.parent.mkdir(parents=True)
+    configured = f"SYNTHETIC_UNRELATED_SETTING=unchanged\nENCRYPTION_KEY={encoded}\n".encode()
+    canonical.write_bytes(configured)
+    existing = encryption.EncryptionManager(key=key).encrypt("synthetic existing encrypted data")
+
     first = encryption.EncryptionManager()
-    ciphertext = first.encrypt("persistent secret")
-
-    assert canonical.exists()
-    assert "ENCRYPTION_KEY=" in canonical.read_text(encoding="utf-8")
-
+    assert first.decrypt(existing) == "synthetic existing encrypted data"
+    ciphertext = first.encrypt("synthetic new encrypted data")
     monkeypatch.delenv("ENCRYPTION_KEY", raising=False)
     restarted = encryption.EncryptionManager()
-    assert restarted.decrypt(ciphertext) == "persistent secret"
+    assert restarted.decrypt(existing) == "synthetic existing encrypted data"
+    assert restarted.decrypt(ciphertext) == "synthetic new encrypted data"
+    assert canonical.read_bytes() == configured and not legacy.exists()
 
 
 def test_legacy_key_is_migrated_without_rotating_data(monkeypatch, isolated_key_files):
@@ -49,14 +56,34 @@ def test_legacy_key_is_migrated_without_rotating_data(monkeypatch, isolated_key_
     assert restarted.decrypt(ciphertext) == "legacy secret"
 
 
-def test_production_rejects_missing_encryption_key(monkeypatch, isolated_key_files):
-    canonical, _ = isolated_key_files
-    monkeypatch.setenv("ENVIRONMENT", "production")
+@pytest.mark.parametrize("environment", [None, "development", "production"],
+                         ids=["unset-environment", "development", "production"])
+def test_every_environment_rejects_missing_key_without_generation_or_write(
+    monkeypatch, isolated_key_files, environment,
+):
+    canonical, legacy = isolated_key_files
+    if environment is None:
+        monkeypatch.delenv("ENVIRONMENT", raising=False)
+    else:
+        monkeypatch.setenv("ENVIRONMENT", environment)
+    # Keep an existing unrelated configuration byte-for-byte, rather than only
+    # checking whether a brand-new dotenv would have appeared.
+    canonical.parent.mkdir(parents=True)
+    configured = b"SYNTHETIC_UNRELATED_SETTING=unchanged\n"
+    canonical.write_bytes(configured)
+    before_paths = set(canonical.parent.rglob("*"))
 
-    with pytest.raises(encryption.KeyManagementError, match="必须显式配置"):
+    def forbidden(*args, **kwargs):
+        raise AssertionError("Missing configuration must neither generate nor persist a key")
+
+    monkeypatch.setattr(AESGCM, "generate_key", forbidden)
+    monkeypatch.setattr(encryption.EncryptionManager, "_save_key_to_env", forbidden)
+    with pytest.raises(encryption.KeyManagementError, match="必须显式配置 ENCRYPTION_KEY，禁止自动生成"):
         encryption.EncryptionManager()
 
-    assert not canonical.exists()
+    assert "ENCRYPTION_KEY" not in os.environ
+    assert canonical.read_bytes() == configured and not legacy.exists()
+    assert set(canonical.parent.rglob("*")) == before_paths
 
 
 def test_invalid_persisted_key_fails_closed(isolated_key_files):

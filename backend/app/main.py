@@ -20,7 +20,6 @@ if str(_BACKEND_ROOT) not in sys.path:
 from app.env import load_backend_env
 
 load_backend_env()
-_STARTUP_ENV = dict(os.environ)
 
 import asyncio
 from contextlib import asynccontextmanager
@@ -40,6 +39,10 @@ from app.config import (
     BACKUP_MANAGER_AVAILABLE,
     RESOURCE_POOL_AVAILABLE,
 )
+
+# Freeze after configured-key loading/migration publishes the effective key.
+_STARTUP_ENV = dict(os.environ)
+
 from app.readiness import ReadinessProbe, ReadinessProbeTimeout
 from app.runtime import RuntimeContainer, get_runtime_container
 from inference.openai_protocol import ProviderResponseError  # noqa: E402

@@ -49,3 +49,23 @@ def test_selected_or_default_local_provider_still_requires_local_url(provider):
     result = validate_deployment_environment(env)
     assert not result.ok
     assert any("VLLM_BASE_URL" in error for error in result.errors)
+
+
+
+@pytest.mark.parametrize("key,accepted", [
+    pytest.param(None, False, id="missing-key"),
+    pytest.param("not-a-valid-key", False, id="invalid-key"),
+    pytest.param(base64.urlsafe_b64encode(b"e" * 32).decode(), True, id="explicit-valid-key"),
+])
+def test_development_requires_an_explicit_valid_encryption_key(key, accepted):
+    env = _cloud_environment()
+    env["ENVIRONMENT"] = "development"
+    if key is None:
+        env.pop("ENCRYPTION_KEY")
+    else:
+        env["ENCRYPTION_KEY"] = key
+    result = validate_deployment_environment(env)
+    assert result.ok is accepted
+    encryption_errors = [error for error in result.errors if "ENCRYPTION_KEY" in error]
+    assert bool(encryption_errors) is not accepted
+    assert not any("auto-generate" in warning for warning in result.warnings)
