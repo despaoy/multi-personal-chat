@@ -1,6 +1,7 @@
 """FastAPI 依赖注入"""
 from fastapi import Request, HTTPException
 from app.config import verify_token
+from app.runtime import get_runtime_container
 from infra.auth_work import run_auth_database
 from infra.bounded_executor import BlockingWorkRejected, BlockingWorkTimeout
 from infra.observability import increment
@@ -77,15 +78,9 @@ async def get_current_admin(request: Request) -> dict:
             raise HTTPException(status_code=403, detail="需要管理员权限")
         return user
 
-    # DB 复核当前用户角色。真实请求使用应用容器；最小化单元测试
-    # 没有 request.app 时保留全局适配器回退。
+    # Revalidate the current role against this application's database.
     try:
-        try:
-            from app.runtime import get_runtime_container
-
-            database = get_runtime_container(request.app).db
-        except (AttributeError, RuntimeError):
-            from db.adapter import db as database
+        database = get_runtime_container(request.app).db
 
         row = await run_auth_database(
             database.get_user_by_username,
@@ -99,9 +94,8 @@ async def get_current_admin(request: Request) -> dict:
             detail="Authentication service is busy; retry later",
             headers={"Retry-After": "1"},
         ) from exc
-    except Exception:
-        # DB 不可达时按最小权限原则拒绝，避免误授权
-        raise HTTPException(status_code=503, detail="无法验证用户权限，请稍后重试")
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail="无法验证用户权限，请稍后重试") from exc
 
     if current_role != "admin":
         raise HTTPException(status_code=403, detail="需要管理员权限")

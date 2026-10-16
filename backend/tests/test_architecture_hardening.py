@@ -123,7 +123,9 @@ def test_intent_detector_memory_recall_questions_do_not_trigger_retrieval():
 class _FakeRequest:
     """最小化的 Request 替身，仅满足 get_current_user/get_current_admin 的访问需求。"""
 
-    def __init__(self, payload: dict | None):
+    def __init__(self, payload: dict | None, database=None):
+        from app.runtime import RuntimeContainer
+        self.app = SimpleNamespace(state=SimpleNamespace(runtime_container=RuntimeContainer(db=database, is_pg_mode=lambda: False)))
         self.state = SimpleNamespace(jwt_payload=payload)
         self.headers = {}
         self.cookies = {}
@@ -135,7 +137,8 @@ async def test_get_current_admin_allows_admin_role(monkeypatch):
     from app import dependencies
 
     payload = {"sub": "admin_user", "user_id": 1, "role": "admin", "jti": "jti-admin"}
-    request = _FakeRequest(payload)
+    database = SimpleNamespace(get_user_by_username=None)
+    request = _FakeRequest(payload, database)
 
     # 绕过 token 黑名单检查
     monkeypatch.setattr(
@@ -143,7 +146,7 @@ async def test_get_current_admin_allows_admin_role(monkeypatch):
     )
     # DB 复核仍返回 admin
     monkeypatch.setattr(
-        "db.adapter.db.get_user_by_username",
+        database, "get_user_by_username",
         lambda username: {"id": 1, "username": username, "role": "admin"},
         raising=False,
     )
@@ -161,13 +164,14 @@ async def test_get_current_admin_rejects_non_admin_role(monkeypatch):
 
     # token 中持 admin，但 DB 已降级为 user（模拟管理员被降级后旧 token 仍持 admin）
     payload = {"sub": "demoted_user", "user_id": 2, "role": "admin", "jti": "jti-demoted"}
-    request = _FakeRequest(payload)
+    database = SimpleNamespace(get_user_by_username=None)
+    request = _FakeRequest(payload, database)
 
     monkeypatch.setattr(
         "api.auth.is_token_revoked", lambda jti: False, raising=False
     )
     monkeypatch.setattr(
-        "db.adapter.db.get_user_by_username",
+        database, "get_user_by_username",
         lambda username: {"id": 2, "username": username, "role": "user"},
         raising=False,
     )
@@ -184,7 +188,8 @@ async def test_get_current_admin_rejects_when_db_unreachable(monkeypatch):
     from app import dependencies
 
     payload = {"sub": "admin_user", "user_id": 1, "role": "admin", "jti": "jti-db-down"}
-    request = _FakeRequest(payload)
+    database = SimpleNamespace(get_user_by_username=None)
+    request = _FakeRequest(payload, database)
 
     monkeypatch.setattr(
         "api.auth.is_token_revoked", lambda jti: False, raising=False
@@ -194,7 +199,7 @@ async def test_get_current_admin_rejects_when_db_unreachable(monkeypatch):
         raise RuntimeError("DB connection lost")
 
     monkeypatch.setattr(
-        "db.adapter.db.get_user_by_username", _raise, raising=False
+        database, "get_user_by_username", _raise, raising=False
     )
 
     with pytest.raises(HTTPException) as exc:

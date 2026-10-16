@@ -108,7 +108,10 @@ async def test_admin_database_backpressure_returns_retryable_503(
     async def fail(*_args, **_kwargs):
         raise error
 
+    from app.runtime import RuntimeContainer
+    database = SimpleNamespace(get_user_by_username=lambda _username: None)
     request = SimpleNamespace(
+        app=SimpleNamespace(state=SimpleNamespace(runtime_container=RuntimeContainer(db=database, is_pg_mode=lambda: False))),
         state=SimpleNamespace(
             jwt_payload={
                 "sub": "admin",
@@ -134,7 +137,6 @@ async def test_admin_database_backpressure_returns_retryable_503(
 async def test_admin_database_check_does_not_run_on_event_loop(monkeypatch):
     from api import auth
     from app import dependencies
-    from db import adapter
 
     event_loop_thread = threading.get_ident()
     database_threads: list[int] = []
@@ -143,7 +145,10 @@ async def test_admin_database_check_does_not_run_on_event_loop(monkeypatch):
         database_threads.append(threading.get_ident())
         return {"id": 1, "username": username, "role": "admin"}
 
+    from app.runtime import RuntimeContainer
+    database = SimpleNamespace(get_user_by_username=get_user)
     request = SimpleNamespace(
+        app=SimpleNamespace(state=SimpleNamespace(runtime_container=RuntimeContainer(db=database, is_pg_mode=lambda: False))),
         state=SimpleNamespace(
             jwt_payload={
                 "sub": "admin",
@@ -156,7 +161,6 @@ async def test_admin_database_check_does_not_run_on_event_loop(monkeypatch):
         cookies={},
     )
     monkeypatch.setattr(auth, "is_token_revoked", lambda _jti: False)
-    monkeypatch.setattr(adapter.db, "get_user_by_username", get_user)
 
     result = await dependencies.get_current_admin(request)
 
