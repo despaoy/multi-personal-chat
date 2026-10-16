@@ -16,7 +16,6 @@ import asyncio
 import threading
 import logging
 from pathlib import Path
-from datetime import datetime
 from typing import Optional, Dict, Any, List
 
 from dotenv import load_dotenv
@@ -66,6 +65,10 @@ _DEDUP_TTL = 3600  # 1小时TTL
 
 class MessageDeduplicationError(RuntimeError):
     """Message processing must stop when shared deduplication is unverified."""
+
+
+class SessionReplyCheckError(RuntimeError):
+    """The session reply setting could not be read."""
 
 
 async def _is_duplicate_message(message_id: str) -> bool:
@@ -454,40 +457,13 @@ async def generate_with_local_model(prompt: str, session_id: Optional[str] = Non
 # ============================================
 # 消息处理
 # ============================================
-async def save_message_to_backend(event: MessageEvent, message: str, reply: str, cost_time: float):
-    """保存消息到后端数据库（通过db.adapter统一访问）"""
-    try:
-        session_type = "private" if isinstance(event, PrivateMessageEvent) else "group"
-        session_id = str(event.user_id) if isinstance(event, PrivateMessageEvent) else str(event.group_id)
-        lora_name = _current_lora or "default"
-
-        message_data = {
-            "sessionType": session_type,
-            "sessionId": session_id,
-            "sessionName": str(event.sender.nickname) if hasattr(event.sender, 'nickname') else "未知用户",
-            "userId": str(event.user_id),
-            "userName": str(event.sender.nickname) if hasattr(event.sender, 'nickname') else "未知用户",
-            "message": message,
-            "reply": reply,
-            "modelName": config.OLLAMA_MODEL,
-            "loraName": lora_name,
-            "costTime": cost_time,
-            "createdAt": datetime.now().isoformat()
-        }
-
-        db.add_message(message_data)
-        logger.info("消息已保存到数据库")
-
-    except Exception as e:
-        logger.warning(f"保存消息到数据库失败: {e}")
-
 async def should_reply(event: MessageEvent) -> bool:
     """判断是否应该回复该消息"""
     # 检查该会话是否启用了机器人（通过db.adapter）
+    is_group = isinstance(event, GroupMessageEvent)
+    session_id = str(event.group_id) if is_group else str(event.user_id)
+    conversation_type = "group" if is_group else "private"
     try:
-        is_group = isinstance(event, GroupMessageEvent)
-        session_id = str(event.group_id) if is_group else str(event.user_id)
-        conversation_type = "group" if is_group else "private"
         enabled = await asyncio.to_thread(
             db.is_session_bot_enabled,
             session_id,
@@ -495,11 +471,11 @@ async def should_reply(event: MessageEvent) -> bool:
             session_id,
             conversation_type,
         )
-        if not enabled:
-            logger.info(f"会话 {session_id} 机器人已关闭，跳过")
-            return False
-    except Exception:
-        pass
+    except Exception as exc:
+        raise SessionReplyCheckError("Session reply setting read failed") from exc
+    if not enabled:
+        logger.info(f"会话 {session_id} 机器人已关闭，跳过")
+        return False
 
     # 私聊消息总是回复
     if isinstance(event, PrivateMessageEvent):
@@ -509,9 +485,7 @@ async def should_reply(event: MessageEvent) -> bool:
     # 群聊消息
     if isinstance(event, GroupMessageEvent):
         message_text = str(event.message)
-        # M5 fix: 群聊消息可能含 PII（用户姓名、手机号、私聊内容等），
-        # 此前直接 logger.info 全文会写入日志文件造成泄露。改为只记长度与短预览。
-        logger.info(f"群聊消息: len={len(message_text)}, preview={message_text[:30]!r}")
+        logger.info(f"群聊消息: 字符数={len(message_text)}")
 
         if event.is_tome():
             logger.info("检测到@机器人，回复")
@@ -544,10 +518,8 @@ async def process_message(event: MessageEvent) -> str:
     if not user_message:
         return "嗯？怎么不说话呀？"
 
-    logger.info(f"收到消息: len={len(user_message)}, preview={user_message[:30]!r}")
+    logger.info(f"收到消息: 字符数={len(user_message)}")
 
-    # C17 fix: 统一群消息 session_id 为 str(group_id)，与 should_reply 和
-    # save_message_to_backend 保持一致。
     is_private = isinstance(event, PrivateMessageEvent)
     conversation_id = str(event.user_id) if is_private else str(event.group_id)
     session_id = conversation_id
@@ -562,63 +534,46 @@ async def process_message(event: MessageEvent) -> str:
 
     start_time = time.time()
     _sync_current_lora()
-    logger.info(f"开始处理消息: {user_message[:50]}... (LoRA={_current_lora})")
+    logger.info(f"开始处理消息: LoRA={_current_lora}")
 
-    try:
-        await inference_runtime.check_rate_limits("qq", conversation_id, sender_id)
-    except RateLimitExceeded:
-        logger.warning("NoneBot 消息触发限流 conversation=%s", conversation_id)
-        reply = "请求过于频繁，请稍后再试。"
-    else:
-        msg = MessageRequest(
-            message=user_message,
-            sessionType=conversation_type,
-            conversationType=conversation_type,
-            sessionId=session_id,
-            sessionName=sender_name,
-            userId=sender_id,
-            userName=sender_name,
-            senderName=sender_name,
-            platform="qq",
-            adapter="nonebot",
-            conversationId=conversation_id,
-            senderId=sender_id,
-            traceId="",
+    await inference_runtime.check_rate_limits("qq", conversation_id, sender_id)
+    msg = MessageRequest(
+        message=user_message,
+        sessionType=conversation_type,
+        conversationType=conversation_type,
+        sessionId=session_id,
+        sessionName=sender_name,
+        userId=sender_id,
+        userName=sender_name,
+        senderName=sender_name,
+        platform="qq",
+        adapter="nonebot",
+        conversationId=conversation_id,
+        senderId=sender_id,
+        traceId="",
+    )
+
+    async def _queued_generation():
+        # Read and update history under the runtime's session lock.
+        msg.history = session_history.get_history(session_id)
+        result = await generate_reply_core(
+            msg,
+            current_user={"username": "nonebot", "user_id": 0},
         )
+        session_history.add_message(session_id, "user", user_message)
+        session_history.add_message(session_id, "assistant", result.reply)
+        return result
 
-        async def _queued_generation():
-            # Read and update history while InferenceRuntime still holds the
-            # session lock, so two fast messages cannot both snapshot old
-            # history and lose the first reply.
-            msg.history = session_history.get_history(session_id)
-            result = await generate_reply_core(
-                msg,
-                current_user={"username": "nonebot", "user_id": 0},
-            )
-            session_history.add_message(session_id, "user", user_message)
-            session_history.add_message(session_id, "assistant", result.reply)
-            return result
-
-        try:
-            result = await inference_runtime.submit(
-                _queued_generation,
-                session_id=session_id,
-                priority=inference_runtime.priority_for("nonebot", conversation_type),
-                timeout=float(os.getenv("MODEL_INFERENCE_TIMEOUT", "180")),
-            )
-            reply = result.reply
-        except InferenceQueueFull:
-            logger.warning("NoneBot 推理队列已满 conversation=%s", conversation_id)
-            reply = "[系统提示] 当前消息较多，请稍后再试。"
-        except asyncio.TimeoutError:
-            logger.warning("NoneBot 推理排队超时 conversation=%s", conversation_id)
-            reply = "[系统提示] 当前处理较慢，请稍后再试。"
-        except Exception as exc:
-            logger.error(f"NoneBot 统一生成失败: {type(exc).__name__}: {exc}", exc_info=True)
-            reply = "[系统提示] AI 推理服务暂不可用，请稍后再试或联系管理员"
+    result = await inference_runtime.submit(
+        _queued_generation,
+        session_id=session_id,
+        priority=inference_runtime.priority_for("nonebot", conversation_type),
+        timeout=float(os.getenv("MODEL_INFERENCE_TIMEOUT", "180")),
+    )
+    reply = result.reply
 
     cost_time = round(time.time() - start_time, 2)
-    logger.info(f"发送回复: len={len(reply)}, cost={cost_time}s, preview={reply[:30]!r}")
+    logger.info(f"准备回复: 字符数={len(reply)}, cost={cost_time}s")
 
     # 动态延迟
     import random
@@ -651,7 +606,7 @@ async def handle_claw(bot: Bot, user_message: str, event: MessageEvent, lora_nam
     thinking = await call_llm_claw(analysis_prompt, lora_name or _current_lora)
     await bot.send(event, thinking)
     # M5 fix (扩展): 思考结果可能回显用户消息中的 PII，只记长度与短预览（≤60 chars）
-    logger.info(f"[claw] 思考结果: len={len(thinking)}, preview={thinking[:60]!r}")
+    logger.info(f"[claw] 思考结果: 字符数={len(thinking)}")
 
     prompt = f"""
 你是一个命令解释器。根据用户请求，选择最合适的工具并输出JSON。
@@ -666,7 +621,7 @@ async def handle_claw(bot: Bot, user_message: str, event: MessageEvent, lora_nam
 如果没有参数，args设为{{}}。"""
     json_reply = await llm_raw(prompt)
     # M5 fix: LLM 原始输出可能回显用户消息中的 PII，只记长度与短预览（≤60 chars）
-    logger.info(f"[claw] LLM原始输出: len={len(json_reply)}, preview={json_reply[:60]!r}")
+    logger.info(f"[claw] LLM输出: 字符数={len(json_reply)}")
 
     text = json_reply.strip()
     if text.startswith("```"):
@@ -688,7 +643,7 @@ async def handle_claw(bot: Bot, user_message: str, event: MessageEvent, lora_nam
         explain = await call_llm_claw(f"你是{char_name}，你正在帮用户编写代码，向用户简单解释代码的功能，用户要求{user_message}", lora_name or _current_lora)
         await bot.send(event, explain)
         # M5 fix (扩展): 解释结果可能回显用户请求中的 PII，只记长度与短预览（≤60 chars）
-        logger.info(f"[claw] 解释结果: len={len(explain)}, preview={explain[:60]!r}")
+        logger.info(f"[claw] 解释结果: 字符数={len(explain)}")
     raw = await execute_tool(call["tool"], call.get("args", {}), bot=bot, event=event)
     args = call.get("args", {})
     code = ""
@@ -779,7 +734,7 @@ def init_bot():
                             pass
 
                     reply = await process_message(event)
-                    logger.info(f"准备发送回复: {reply[:50]}...")
+                    logger.info(f"准备发送回复: 字符数={len(reply)}")
 
                     # 多消息分段
                     import re, random
@@ -889,7 +844,7 @@ def init_bot():
                         await message_handler.finish(Message(reply))
                     logger.info("回复发送成功")
             else:
-                logger.info(f"[claw] 进入操作模式处理: {user_message[:50]}")
+                logger.info(f"[claw] 进入操作模式处理: 字符数={len(user_message)}")
                 if user_message == "/exit":
                     del claw_sessions[str(event.user_id)]
                     await message_handler.finish("你已退出claw模式")
@@ -903,10 +858,23 @@ def init_bot():
         except MessageDeduplicationError as exc:
             logger.error(f"消息去重失败: {type(exc.__cause__ or exc).__name__}")
             await message_handler.finish("消息去重状态无法确认，本轮未生成回复。请检查 Redis 服务后重新发送消息。")
-        except Exception as e:
-            logger.error(f"处理消息时出错: {e}")
+        except SessionReplyCheckError as exc:
+            logger.error(f"读取会话回复设置失败: {type(exc.__cause__ or exc).__name__}")
+            await message_handler.finish("会话回复设置读取失败，本轮未生成回复。请检查数据库服务后重新发送消息。")
+        except RateLimitExceeded:
+            logger.warning("消息触发限流")
+            await message_handler.finish("请求过于频繁，请稍后再试。")
+        except InferenceQueueFull:
+            logger.warning("推理队列已满")
+            await message_handler.finish("[系统提示] 推理队列已满，请稍后再试。")
+        except asyncio.TimeoutError:
+            logger.warning("消息处理超时")
+            await message_handler.finish("[系统提示] 消息处理超时，本轮回复未完成，请稍后重试。")
+        except Exception as exc:
             import traceback
-            logger.error(traceback.format_exc())
+
+            logger.error("消息处理失败: {}\n{}", type(exc).__name__, "".join(traceback.format_tb(exc.__traceback__)))
+            await message_handler.finish("[系统提示] 消息处理失败，本轮回复未完成。请检查后端服务后重新发送消息。")
 
     # ============================================
     # 命令处理器
@@ -939,7 +907,7 @@ def init_bot():
     @clear_cmd.handle()
     async def handle_clear(bot: Bot, event: MessageEvent):
         """清除对话历史命令"""
-        # C17 fix: 与 should_reply/process_message/save_message_to_backend 保持一致
+        # 与 should_reply/process_message 使用相同的会话标识。
         # 群消息使用 str(group_id)，私聊使用 str(user_id)
         # 此前使用 f"{group_id}_{user_id}" 复合格式导致清除命令失效
         session_id = str(event.user_id) if isinstance(event, PrivateMessageEvent) else str(event.group_id)

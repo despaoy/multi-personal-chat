@@ -8,7 +8,7 @@ import importlib.util
 import logging
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import AsyncMock, Mock, call
 
 import pytest
 import redis.asyncio as aioredis
@@ -160,9 +160,20 @@ async def test_client_initialization_cancellation_is_preserved(redis_state, monk
 
 
 @pytest.fixture
-def message_handler(bot_module, monkeypatch):
-    import nonebot
+def private_event():
     from nonebot.adapters.onebot.v11 import Message, PrivateMessageEvent
+
+    text = "完整合成记录：尚未付款，仅周五执行，出差例外。"
+    return PrivateMessageEvent.model_validate(dict(
+        time=1792108800, self_id=9001, post_type="message", message_type="private", sub_type="friend",
+        message_id=7, user_id=1001, message=Message(text), raw_message=text, font=0,
+        sender=dict(user_id=1001, nickname="fiction-owner"),
+    ))
+
+
+@pytest.fixture
+def message_handler(bot_module, private_event, monkeypatch):
+    import nonebot
     from nonebot.exception import FinishedException
 
     matchers = []
@@ -188,13 +199,7 @@ def message_handler(bot_module, monkeypatch):
     monkeypatch.setattr(bot_module, "should_reply", AsyncMock(return_value=True))
     monkeypatch.setattr(bot_module, "process_message", AsyncMock(return_value="不应生成"))
     bot_module.init_bot()
-    text = "完整合成记录：尚未付款，仅周五执行，出差例外。"
-    event = PrivateMessageEvent.model_validate(dict(
-        time=1792108800, self_id=9001, post_type="message", message_type="private", sub_type="friend",
-        message_id=7, user_id=1001, message=Message(text), raw_message=text, font=0,
-        sender=dict(user_id=1001, nickname="fiction-owner"),
-    ))
-    return matchers[0], event, SimpleNamespace(send=AsyncMock())
+    return matchers[0], private_event, SimpleNamespace(send=AsyncMock())
 
 
 async def test_selected_message_reports_deduplication_failure_before_generation(bot_module, message_handler, monkeypatch):
@@ -256,3 +261,133 @@ async def test_atomic_reservation_failure_is_not_automatically_replayed(monkeypa
         operation.assert_awaited_once()
     finally:
         await pool.aclose()
+
+
+async def test_session_setting_read_failure_does_not_enable_replies(bot_module, private_event, monkeypatch):
+    failure = RuntimeError("synthetic-private-database-error")
+    reader = Mock(side_effect=failure)
+    monkeypatch.setattr(bot_module, "db", SimpleNamespace(is_session_bot_enabled=reader))
+    with pytest.raises(RuntimeError) as caught:
+        await bot_module.should_reply(private_event)
+    assert caught.value.__cause__ is failure
+    reader.assert_called_once_with("1001", "qq", "1001", "private")
+
+
+@pytest.fixture
+def generation_control(bot_module, monkeypatch):
+    async def submit(factory, **kwargs):
+        return await factory()
+
+    runtime = SimpleNamespace(check_rate_limits=AsyncMock(), submit=AsyncMock(side_effect=submit),
+                              priority_for=Mock(return_value=10))
+    history = SimpleNamespace(get_history=Mock(return_value=[
+        {"role": "user", "content": "仅在周五付款，出差时顺延。"},
+        {"role": "assistant", "content": "已记录周五执行及出差例外。"},
+    ]), add_message=Mock())
+    generate = AsyncMock(return_value=SimpleNamespace(reply="尚未付款；周五执行，出差时顺延。"))
+    monkeypatch.setattr(bot_module, "inference_runtime", runtime)
+    monkeypatch.setattr(bot_module, "session_history", history)
+    monkeypatch.setattr(bot_module, "generate_reply_core", generate)
+    monkeypatch.setattr(bot_module, "_sync_current_lora", Mock())
+    monkeypatch.setattr(bot_module, "config", SimpleNamespace(REPLY_DELAY=-100))
+    return runtime, history, generate
+
+
+@pytest.mark.parametrize("stage", ["rate", "queue", "model"])
+async def test_generation_failures_propagate_without_a_reply(bot_module, private_event, generation_control, stage):
+    runtime, history, generate = generation_control
+    if stage == "rate":
+        failure = bot_module.RateLimitExceeded("sender", 2)
+        runtime.check_rate_limits.side_effect = failure
+    elif stage == "queue":
+        failure = bot_module.InferenceQueueFull("synthetic-private-queue-error")
+        runtime.submit.side_effect = failure
+    else:
+        failure = RuntimeError("synthetic-private-model-error")
+        generate.side_effect = failure
+    with pytest.raises(type(failure)) as caught:
+        await bot_module.process_message(private_event)
+    assert caught.value is failure
+    history.add_message.assert_not_called()
+    if stage != "model":
+        generate.assert_not_awaited()
+
+
+@pytest.mark.parametrize("enabled", [True, False])
+async def test_private_reply_selection_preserves_explicit_setting(bot_module, private_event, monkeypatch, enabled):
+    reader = Mock(return_value=enabled)
+    monkeypatch.setattr(bot_module, "db", SimpleNamespace(is_session_bot_enabled=reader))
+    assert await bot_module.should_reply(private_event) is enabled
+
+
+async def test_generation_success_keeps_history_and_request_identity(bot_module, private_event, generation_control):
+    runtime, history, generate = generation_control
+    assert await bot_module.process_message(private_event) == generate.return_value.reply
+    runtime.check_rate_limits.assert_awaited_once_with("qq", "1001", "1001")
+    runtime.submit.assert_awaited_once()
+    request = generate.await_args.args[0]
+    assert request.message == str(private_event.message)
+    assert request.history == history.get_history.return_value
+    assert (request.platform, request.adapter, request.conversationId, request.senderId) == (
+        "qq", "nonebot", "1001", "1001")
+    assert history.add_message.call_args_list == [
+        call("1001", "user", str(private_event.message)),
+        call("1001", "assistant", generate.return_value.reply),
+    ]
+
+
+async def test_generation_cancellation_is_preserved(bot_module, private_event, generation_control):
+    _, history, generate = generation_control
+    generate.side_effect = asyncio.CancelledError
+    with pytest.raises(asyncio.CancelledError):
+        await bot_module.process_message(private_event)
+    history.add_message.assert_not_called()
+
+
+@pytest.mark.parametrize("stage,expected", [
+    ("selection", "会话回复设置读取失败"), ("rate", "请求过于频繁"),
+    ("queue", "推理队列已满"), ("timeout", "消息处理超时"), ("model", "消息处理失败"),
+])
+async def test_message_entry_reports_failures_once_without_private_details(
+    bot_module, message_handler, monkeypatch, stage, expected,
+):
+    from nonebot.exception import FinishedException
+
+    matcher, event, bot = message_handler
+    detail = "synthetic-private-upstream-content"
+    failures = {
+        "selection": bot_module.SessionReplyCheckError(detail),
+        "rate": bot_module.RateLimitExceeded("sender", 2),
+        "queue": bot_module.InferenceQueueFull(detail),
+        "timeout": asyncio.TimeoutError(detail),
+        "model": RuntimeError(detail),
+    }
+    target = bot_module.should_reply if stage == "selection" else bot_module.process_message
+    target.side_effect = failures[stage]
+    dedup = AsyncMock(return_value=False)
+    monkeypatch.setattr(bot_module, "_is_duplicate_message", dedup)
+    logs = []
+    sink = bot_module.logger.add(lambda message: logs.append(str(message)))
+    try:
+        with pytest.raises(FinishedException):
+            await matcher.handlers[0](bot, event)
+    finally:
+        bot_module.logger.remove(sink)
+    matcher.finish.assert_awaited_once()
+    assert expected in matcher.finish.await_args.args[0]
+    assert detail not in str(matcher.finish.await_args) + ''.join(logs)
+    bot.send.assert_not_awaited()
+    if stage == "selection":
+        dedup.assert_not_awaited()
+        bot_module.process_message.assert_not_awaited()
+
+
+async def test_message_entry_sends_the_real_success_reply(bot_module, message_handler, monkeypatch):
+    matcher, event, bot = message_handler
+    monkeypatch.setattr(bot_module, "_is_duplicate_message", AsyncMock(return_value=False))
+    bot_module.process_message.return_value = "尚未付款。"
+    await matcher.handlers[0](bot, event)
+    matcher.finish.assert_awaited_once()
+    assert str(matcher.finish.await_args.args[0]) == "尚未付款。"
+    bot_module.process_message.assert_awaited_once_with(event)
+    bot.send.assert_not_awaited()
