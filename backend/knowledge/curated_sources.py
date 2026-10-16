@@ -150,7 +150,7 @@ def curated_source_receipts(bundle):
 def curated_source_packet(source):
     excerpt = source["excerpt"]
     location = f"{excerpt['source_path']} L{excerpt['line_start']}-{excerpt['line_end']}"
-    scope = "declared_span_partial" if excerpt["truncated"] else "complete_declared_span"
+    scope = "标注范围的部分原文" if excerpt["truncated"] else "标注范围的完整原文"
     return dict(
         kind="evidence",
         document_ids=[source["source_id"]],

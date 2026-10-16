@@ -8,6 +8,7 @@ import pytest
 from knowledge.multiscale_rag.runtime import MultiScaleRagRuntime
 from knowledge.multiscale_rag.service import rerank_with_title_frames
 from knowledge.retrieval_core.documents import KnowledgeIndexDocument
+from knowledge.retrieval_core.query import QueryAnalysis
 from knowledge.retrieval_core.rerank import PipelineReranker
 from knowledge.retrieval_core.retrieval import RetrievalCandidate
 
@@ -18,16 +19,7 @@ def _candidate(key, title="unrelated"):
 
 
 def _analysis():
-    return SimpleNamespace(
-        original_query="《标题》发生什么？",
-        normalized_query="标题",
-        entities=[],
-        doc_type_preferences=[],
-        relation_type_preferences=[],
-        reality_preferences=[],
-        temporal_preferences=[],
-        content_scope_preferences=[],
-    )
+    return QueryAnalysis(original_query="《标题》发生什么？", normalized_query="标题")
 
 
 class Encoder:
@@ -184,8 +176,6 @@ def test_explicit_disabled_encoder_uses_deterministic_ranking(monkeypatch):
     factory = Mock(side_effect=AssertionError('disabled model must not load'))
     monkeypatch.setattr('knowledge.reranker.get_reranker', factory)
     analysis = _analysis()
-    analysis.predicate_preferences = []
-    analysis.causal_intent = False
     analysis.story_hits = []
     candidates = [_candidate('1'), _candidate('2')]
     result = PipelineReranker(cross_encoder_enabled=False).rerank(analysis, candidates, 2)

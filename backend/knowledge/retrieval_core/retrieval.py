@@ -6,7 +6,7 @@
 3. entity：实体精确索引（保证含查询实体的文档进入候选）
 
 融合：RRF（可解释）+ 精确实体命中加权（通用规则）+ 叙事层权重
-（domain 配置的策略表 + 查询意图偏好）+ 硬性 metadata 过滤。
+（domain 配置的策略表）+ 硬性 metadata 过滤。
 
 不使用针对具体人物/卡片/问句的 if/else 调权。
 """
@@ -22,6 +22,7 @@ if TYPE_CHECKING:
     from .index import DomainIndex
     from .query import QueryAnalysis
 
+
 @dataclass
 class RetrievalCandidate:
     """单条候选（保留全部分数与来源，供重排与引用使用）。"""
@@ -36,7 +37,6 @@ class RetrievalCandidate:
     rrf_score: float = 0.0
     entity_boost: float = 0.0
     layer_multiplier: float = 1.0
-    type_multiplier: float = 1.0
     fused_score: float = 0.0
     rerank_score: float | None = None
     rerank_method: str = "none"
@@ -64,7 +64,6 @@ class RetrievalCandidate:
             "rrf_score": round(self.rrf_score, 6),
             "entity_boost": round(self.entity_boost, 6),
             "layer_multiplier": round(self.layer_multiplier, 4),
-            "type_multiplier": round(self.type_multiplier, 4),
             "fused_score": round(self.fused_score, 6),
             "rerank_score": round(self.rerank_score, 4) if self.rerank_score is not None else None,
             "rerank_method": self.rerank_method,
@@ -125,32 +124,14 @@ class HybridRetriever:
         self.temporal_boost = dict(policy.temporal_boost)
         self.scope_boost = dict(policy.scope_boost)
 
-    # -- 叙事层与类型权重 ---------------------------------------------------
-    def _layer_multiplier(self, doc: KnowledgeIndexDocument, analysis: QueryAnalysis) -> float:
-        lo, hi = self.layer_lo, self.layer_hi
-        multiplier = 1.0
-
-        if analysis.reality_preferences:
-            multiplier *= hi if doc.reality_status in analysis.reality_preferences else lo
-        else:
-            multiplier *= self.reality_boost.get(doc.reality_status, 1.0)
-
-        if analysis.temporal_preferences:
-            multiplier *= hi if doc.temporal_scope in analysis.temporal_preferences else lo
-        else:
-            multiplier *= self.temporal_boost.get(doc.temporal_scope, 1.0)
-
-        if analysis.scope_preferences:
-            multiplier *= hi if doc.content_scope in analysis.scope_preferences else lo
-        else:
-            multiplier *= self.scope_boost.get(doc.content_scope, 1.0)
-
-        return max(lo, min(hi, multiplier))
-
-    def _type_multiplier(self, doc: KnowledgeIndexDocument, analysis: QueryAnalysis) -> float:
-        if not analysis.doc_type_preferences:
-            return 1.0
-        return 1.15 if doc.document_type in analysis.doc_type_preferences else 0.95
+    # -- 声明的叙事层权重 ---------------------------------------------------
+    def _layer_multiplier(self, doc: KnowledgeIndexDocument) -> float:
+        multiplier = (
+            self.reality_boost.get(doc.reality_status, 1.0)
+            * self.temporal_boost.get(doc.temporal_scope, 1.0)
+            * self.scope_boost.get(doc.content_scope, 1.0)
+        )
+        return max(self.layer_lo, min(self.layer_hi, multiplier))
 
     def _entity_boost(self, doc: KnowledgeIndexDocument, analysis: QueryAnalysis) -> float:
         if not analysis.entities:
@@ -170,8 +151,6 @@ class HybridRetriever:
         """BM25 通道：归一查询与原始查询各查一次，取每文档最优名次。"""
         best: dict[int, tuple] = {}  # row -> (best_rank, best_score)
         query_texts = [analysis.normalized_query, analysis.original_query]
-        if analysis.lexical_expansions:
-            query_texts.append(f"{analysis.normalized_query} {' '.join(analysis.lexical_expansions)}")
         for query_text in dict.fromkeys(query_texts):
             for rank0, (row, score) in enumerate(self.index.search_sparse(query_text, recall_k)):
                 doc = self.index.get_document(row)
@@ -257,7 +236,7 @@ class HybridRetriever:
 
         - sparse：仅 BM25 通道排序（分数归一化到 [0,1]）
         - vector：仅向量通道排序（内积分数）
-        - hybrid：三通道 RRF 融合 + 实体加权 + 叙事层/类型权重
+        - hybrid：三通道 RRF 融合 + 实体加权 + 配置的叙事层权重
         """
         if mode not in {"sparse", "vector", "hybrid"}:
             raise ValueError("Unknown retrieval mode; choose sparse, vector or hybrid")
@@ -313,11 +292,8 @@ class HybridRetriever:
                 rrf += 1.0 / (self.rrf_k + candidate.entity_rank)
             candidate.rrf_score = rrf
             candidate.entity_boost = self._entity_boost(candidate.document, analysis)
-            candidate.layer_multiplier = self._layer_multiplier(candidate.document, analysis)
-            candidate.type_multiplier = self._type_multiplier(candidate.document, analysis)
-            candidate.fused_score = (
-                (rrf + candidate.entity_boost) * candidate.layer_multiplier * candidate.type_multiplier
-            )
+            candidate.layer_multiplier = self._layer_multiplier(candidate.document)
+            candidate.fused_score = (rrf + candidate.entity_boost) * candidate.layer_multiplier
 
         ranked = sorted(candidates.values(), key=lambda c: (-c.fused_score, c.row))
         return ranked[:top_k]

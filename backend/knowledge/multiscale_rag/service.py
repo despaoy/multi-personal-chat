@@ -50,7 +50,7 @@ def rerank_with_title_frames(
     reranker: PipelineReranker,
     identity_coverage: bool = False,
 ) -> list[RetrievalCandidate]:
-    """Preserve semantic ordering; title bonuses apply only to rule fallback."""
+    """Preserve model ordering; literal title matches belong to deterministic mode."""
     subject = identity_evidence_subject(analysis) if identity_coverage and top_k >= 2 else ""
     quoted = [match.strip() for match in re.findall(r"《([^》]{1,80})》", analysis.original_query) if match.strip()]
     # Scope alignment must see recalled candidates before intermediate top-k
@@ -149,10 +149,8 @@ class RoutedMultiScaleService:
         if object_names is not None:
             if not isinstance(object_names, tuple) or not object_names or any(not isinstance(name, str) or name not in query or self.config.canonical_entity(name) is None and name not in self.config.story_titles for name in object_names):
                 raise ValueError("Curated scope requires literal registered whole question objects")
-            incidental = set(analysis.entities) | set(analysis.story_hits)
             analysis.entities = list(dict.fromkeys(self.config.canonical_entity(name) for name in object_names if self.config.canonical_entity(name) is not None))
             analysis.story_hits = [name for name in object_names if name in self.config.story_titles]
-            analysis.expanded_keywords = list(dict.fromkeys([*analysis.entities, *analysis.story_hits, *(keyword for keyword in analysis.expanded_keywords if keyword not in incidental)]))
         retriever = self.retriever
         recall_k = max(top_k * 12, 60)
         if knowledge_boundary is not None:

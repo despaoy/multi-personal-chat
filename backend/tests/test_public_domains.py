@@ -310,7 +310,6 @@ def test_service_scope_retains_full_question_and_excludes_incidental_entity(conf
         original_query=QUERY,
         normalized_query=QUERY,
         entities=["澄岚", "木汐", "误匹配"],
-        expanded_keywords=["澄岚", "木汐", "误匹配", "关系"],
         story_hits=[],
     )
     monkeypatch.setattr(service, "analyze_explicit_domain", lambda *args: analysis)
@@ -330,7 +329,7 @@ def test_service_scope_retains_full_question_and_excludes_incidental_entity(conf
     with pytest.raises(ReachedRecall):
         target.retrieve(QUERY, object_names=("叶澄岚", "杜木汐"))
     assert observed[0].original_query == QUERY
-    assert observed[0].entities == ["澄岚", "木汐"] and "误匹配" not in observed[0].expanded_keywords
+    assert observed[0].entities == ["澄岚", "木汐"]
     with pytest.raises(ValueError):
         target.retrieve(QUERY, object_names=("澄岚展期",))
 

@@ -11,15 +11,6 @@ from db.schemas import MessageRequest
 from inference.generation_request import GenerationRequest, _estimated_tokens, build_generation_request
 
 
-def test_protagonist_is_not_master_servant_relation():
-    from knowledge.retrieval_core.query import QueryAnalyzer
-    query = '月社妃是哪本魔法之书的主人公？'
-    analysis = QueryAnalyzer([]).analyze(query)
-    assert not analysis.relation_type_preferences
-    relation = QueryAnalyzer([]).analyze('她的主人是谁？')
-    assert relation.relation_type_preferences
-
-
 def test_recalling_a_fact_is_not_a_bid_for_affection():
     from character.situation_analyzer import SituationAnalyzer
     state = SituationAnalyzer().estimate('你记得我喜欢什么饮料吗？')
