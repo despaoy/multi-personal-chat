@@ -86,14 +86,15 @@ def compile_sources(rows, *, max_chars=2400, max_items=4):
             omitted.append(dict(source_id=row["source_message_id"], reason="item_budget"))
             continue
         record = dict(source_id=row["source_message_id"], observed_at=row["observed_at"], text=row["body"])
-        candidate = json.dumps(dict(source_kind="historical_user_utterances", speaker_role="user",
-            described_subject="not_resolved", current_validity="not_resolved", records=[*records, record]),
-            ensure_ascii=False, separators=(",", ":"))
-        if max_chars is not None and len(escape(candidate, quote=False)) > max_chars:
-            # Do not substitute older/lower-ranked excerpts when the best
-            # complete source (possibly a correction) cannot fit.
-            omitted.append(dict(source_id=row["source_message_id"], reason="whole_source_budget"))
-            return SourceRecall("", dict(status="budget_omitted", omitted=omitted, selected_ids=[]))
+        if max_chars is not None:
+            candidate = json.dumps(dict(source_kind="historical_user_utterances", speaker_role="user",
+                described_subject="not_resolved", current_validity="not_resolved", records=[*records, record]),
+                ensure_ascii=False, separators=(",", ":"))
+            if len(escape(candidate, quote=False)) > max_chars:
+                # Do not substitute older/lower-ranked excerpts when the best
+                # complete source (possibly a correction) cannot fit.
+                omitted.append(dict(source_id=row["source_message_id"], reason="whole_source_budget"))
+                return SourceRecall("", dict(status="budget_omitted", omitted=omitted, selected_ids=[]))
         records.append(record)
     packet = (json.dumps(dict(source_kind="historical_user_utterances", speaker_role="user",
                  described_subject="not_resolved", current_validity="not_resolved", records=records),
@@ -249,8 +250,7 @@ class SourceMemoryService:
                      query_terms_semantic=False, elapsed_ms=(time.monotonic() - started) * 1000)
         candidate_context = ""
         if self._defer_budget and result.diagnostics["status"] == "budget_omitted":
-            candidate_context = compile_sources(selected, max_chars=None,
-                max_items=None if self._defer_budget else 4 * (1 + 2 * self._window_radius)).context
+            candidate_context = compile_sources(selected, max_chars=None, max_items=None).context
         trace["candidate_budget_pending"] = bool(candidate_context)
         return SourceRecall(result.context, trace, candidate_context)
 
