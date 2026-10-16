@@ -706,7 +706,7 @@ async def _prepare_character_turn(
     """
     from character.context_builder import MemoryContextBudgetError
     from character.event_memory import EventMemoryReadError
-    from repositories.character_memory import MemoryRecordError
+    from character.memory_read_authority import MemoryRecordError
 
     try:
         from services.character_context import (

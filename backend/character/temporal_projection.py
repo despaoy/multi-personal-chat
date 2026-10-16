@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import json
 import re
-from datetime import datetime
 
 from character.memory_extractor import complete_self_assertions, extract_memories
 from character.memory_request import memory_statement_body
 from character.source_fragment_provenance import source_fragment_fields
 from character.temporal_expression import source_temporal_spans
+from character.temporal_provenance import semantic_observation_clock
 
 
 def project_temporal_record(row: dict, sources: dict | None = None) -> dict:
@@ -23,24 +23,14 @@ def project_temporal_record(row: dict, sources: dict | None = None) -> dict:
     Lifecycle/authorization/confidence gates remain the caller's responsibility.
     """
     metadata = row.get("metadata")
-    provenance = metadata.get("temporal_provenance") if isinstance(metadata, dict) else None
-    if not isinstance(provenance, dict) or provenance.get("version") != 1:
+    observed = semantic_observation_clock(metadata, row.get("observed_at"))
+    if observed is None:
         return row
+    provenance = metadata["temporal_provenance"]
     # Neither guessed endpoints nor their omission establishes applicability.
     # Classify the proposition from its source identically in both cases.
     fragment_only = (provenance.get("producer") == "source_erasure_projection"
                      or source_fragment_fields(row)["complete_original_source"] is False)
-    if provenance.get("producer") not in {"semantic_memory", "source_erasure_projection"} or provenance.get("validity_authority") not in (
-        "unverified",
-        "unspecified",
-    ):
-        return row
-    try:
-        observed = datetime.fromisoformat(str(row.get("observed_at") or ""))
-        if observed.utcoffset() is None:
-            return row
-    except ValueError:
-        return row
     evidence = row.get("evidence")
     source_ids = row.get("source_message_ids")
     if (

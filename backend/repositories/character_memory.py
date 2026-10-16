@@ -17,11 +17,13 @@ from typing import TYPE_CHECKING, Any, Optional, Protocol
 if TYPE_CHECKING:
     from datetime import datetime
 
+from character.memory_read_authority import MemoryRecordError
 from character.models import (
     MemoryItem,
     RelationshipState,
     UserScope,
 )
+from character.temporal_provenance import semantic_observation_clock
 
 _VALID_STAGES: tuple[str, ...] = ("stranger", "acquaintance", "familiar", "close")
 _VALID_MEMORY_TYPES: tuple[str, ...] = (
@@ -47,14 +49,6 @@ _VALID_MEMORY_STATUSES: tuple[str, ...] = (
     "retracted",
     "archived",
 )
-
-
-class MemoryRecordError(ValueError):
-    """A memory payload failure identified by a safe schema field."""
-
-    def __init__(self, field: str, message: str) -> None:
-        self.field = field
-        super().__init__(message)
 
 
 def _require_enum(value: Any, field: str, allowed: tuple[str, ...]) -> str:
@@ -235,6 +229,7 @@ def _decode_memory_record(row: dict[str, Any]) -> dict[str, Any]:
     for field, allowed in (("memory_type", _VALID_MEMORY_TYPES), ("status", _VALID_MEMORY_STATUSES),
                            ("relation_type", _VALID_RELATION_TYPES)):
         _require_enum(record.get(field), field, allowed)
+    semantic_observation_clock(metadata, record.get("observed_at"))
     record["attributed_to"] = str(metadata.get("attributed_to") or "user")
     record["qualifiers"] = metadata.get("qualifiers", [])
     return record
@@ -495,6 +490,7 @@ class DatabaseCharacterMemoryRepository:
             source_ids.insert(0, source_message_id)
         source_ids = [item.strip() for item in _decode_text_list(source_ids, "source_message_ids_json")]
         evidence_payload = _decode_evidence(list(evidence))
+        semantic_observation_clock(metadata_payload, observed_at)
         record = await asyncio.to_thread(
             self._database.append_character_memory_claim,
             character_id,

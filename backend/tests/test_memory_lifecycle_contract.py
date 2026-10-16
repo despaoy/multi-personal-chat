@@ -7,11 +7,12 @@ import pytest
 from fastapi import HTTPException
 
 from api.generate import _prepare_character_turn
+from character.memory_read_authority import MemoryRecordError
 from character.memory_service import CharacterMemoryService
 from character.models import MemoryItem
 from db.schemas import MessageRequest
 from inference.generation_request import generate_character_response
-from repositories.character_memory import MemoryRecordError, _decode_memory_record
+from repositories.character_memory import _decode_memory_record
 from tests.test_structured_memory_authority import structured_request
 
 

@@ -7,13 +7,41 @@ semantic role (start/end/event) nor continuous validity between two dates.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from datetime import datetime
 
 from character.memory_clock import observation_clock
+from character.memory_read_authority import MemoryRecordError
 from character.temporal_expression import resolve_temporal_expression
 
-if TYPE_CHECKING:
-    from datetime import datetime
+
+def semantic_observation_clock(metadata: object, observed_at: object) -> datetime | None:
+    """Validate semantic provenance; None denotes the legacy/rule contract."""
+    if metadata is None:
+        return None
+    if not isinstance(metadata, dict):
+        raise MemoryRecordError("metadata_json", "Memory metadata must be an object")
+    if "temporal_provenance" not in metadata:
+        return None
+    provenance = metadata["temporal_provenance"]
+    field = "metadata_json.temporal_provenance"
+    if not isinstance(provenance, dict):
+        raise MemoryRecordError(field, f"Invalid memory {field}")
+    if type(provenance.get("version")) is not int or provenance["version"] != 1:
+        raise MemoryRecordError(field + ".version", f"Unsupported memory {field}.version")
+    producer = provenance.get("producer")
+    if producer == "rule":
+        return None
+    if producer not in ("semantic_memory", "source_erasure_projection"):
+        raise MemoryRecordError(field + ".producer", f"Unsupported memory {field}.producer")
+    if provenance.get("validity_authority") not in ("unverified", "unspecified"):
+        raise MemoryRecordError(field + ".validity_authority", f"Invalid memory {field}.validity_authority")
+    try:
+        observed = observed_at if isinstance(observed_at, datetime) else datetime.fromisoformat(observed_at)
+    except (ValueError, TypeError):
+        raise MemoryRecordError("observed_at", "Semantic memory observed_at must be an ISO timestamp with timezone") from None
+    if observed.utcoffset() is None:
+        raise MemoryRecordError("observed_at", "Semantic memory observed_at must include a timezone")
+    return observed
 
 
 def model_temporal_provenance(

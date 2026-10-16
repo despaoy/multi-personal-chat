@@ -10,6 +10,7 @@ import pytest
 from character.context_builder import _complete_memory_evidence_packet, _memory_evidence_packet, _memory_is_injectable
 from character.evidence_selector import selection_messages
 from character.memory_extractor import extract_memories
+from character.memory_read_authority import MemoryRecordError
 from character.memory_service import CharacterMemoryService, _HistoricalWindow, _is_historical_record
 from character.models import CompiledCharacterContext, MemoryItem, UserScope
 from character.temporal_projection import project_temporal_record
@@ -178,13 +179,21 @@ def test_unknown_or_partially_supported_statement_is_a_quote(text, content, key)
 
 
 @pytest.mark.parametrize("metadata", [{}, {"origin": "rule_v2"},
-    {"temporal_provenance": {"version": 1, "producer": "rule", "validity_authority": "unspecified"}},
-    {"temporal_provenance": {"version": 1, "producer": "semantic_memory", "validity_authority": "verified"}},
-    {"temporal_provenance": {"version": 1, "producer": "semantic_memory", "validity_authority": []}},
-    {"temporal_provenance": {"version": 2, "producer": "semantic_memory", "validity_authority": "unverified"}}])
+    {"temporal_provenance": {"version": 1, "producer": "rule", "validity_authority": "unspecified"}}])
 def test_legacy_and_other_producers_are_not_migrated(metadata):
     row = record("我现在住在合肥。", metadata=metadata)
     assert project_temporal_record(row) is row
+
+
+@pytest.mark.parametrize("provenance", [
+    {"version": 1, "producer": "semantic_memory", "validity_authority": "verified"},
+    {"version": 1, "producer": "semantic_memory", "validity_authority": []},
+    {"version": 2, "producer": "semantic_memory", "validity_authority": "unverified"},
+])
+def test_invalid_semantic_provenance_cannot_return_unprojected_fact(provenance):
+    row = record("我现在住在合肥。", metadata={"temporal_provenance": provenance})
+    with pytest.raises(MemoryRecordError, match="temporal_provenance"):
+        project_temporal_record(row)
 
 
 class Repo:

@@ -1,4 +1,4 @@
-"""Internal version bindings for stored claims and reviewed source receipts.
+"""Read contracts for stored claims and reviewed source receipts.
 
 These digests are minted from scoped repository reads, never model messages.
 They bind a read view to its inputs without comparing a paraphrase to storage.
@@ -6,6 +6,14 @@ They bind a read view to its inputs without comparing a paraphrase to storage.
 
 import hashlib
 import json
+
+
+class MemoryRecordError(ValueError):
+    """A memory payload failure identified by a safe schema field."""
+
+    def __init__(self, field: str, message: str) -> None:
+        self.field = field
+        super().__init__(message)
 
 
 def record_version(row):

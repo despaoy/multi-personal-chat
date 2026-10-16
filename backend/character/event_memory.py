@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, timezone
 
 from character.memory_clock import DEFAULT_MEMORY_TIMEZONE, observation_clock
+from character.memory_read_authority import MemoryRecordError
 from character.models import MemoryItem
 from character.temporal_expression import resolve_temporal_expression
 
@@ -22,12 +23,8 @@ _LABELS = {
 }
 
 
-class EventMemoryReadError(ValueError):
+class EventMemoryReadError(MemoryRecordError):
     """Stored event failure with a safe field name, without its private value."""
-
-    def __init__(self, field: str, message: str):
-        self.field = field
-        super().__init__(message)
 
 
 @dataclass(frozen=True)
