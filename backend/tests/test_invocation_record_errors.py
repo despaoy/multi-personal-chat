@@ -37,7 +37,6 @@ def generation(monkeypatch, database):
     manager.get_current_provider = lambda: connection
     monkeypatch.setattr(model_manager, "get_model_manager", lambda: manager)
     monkeypatch.setattr(generate, "db", database)
-    monkeypatch.setattr(generate, "INPUT_VALIDATOR_AVAILABLE", False)
     monkeypatch.setattr(generate, "response_cache", None)
     monkeypatch.setattr(generate, "circuit_breaker_registry", None)
     monkeypatch.setattr(generate, "get_llm_semaphore", lambda: asyncio.Semaphore(1))

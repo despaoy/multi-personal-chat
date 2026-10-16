@@ -13,7 +13,8 @@ from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 
-from app.config import INPUT_VALIDATOR_AVAILABLE, KNOWLEDGE_DOCUMENT_SCHEMA, VECTOR_DB_AVAILABLE
+from app.config import VECTOR_DB_AVAILABLE
+from infra.input_validator import KNOWLEDGE_DOCUMENT_SCHEMA, InputValidator
 from app.dependencies import get_current_admin
 from db.adapter import db
 from db.schemas import (
@@ -728,12 +729,10 @@ async def create_knowledge_document(request: KnowledgeDocumentCreate, current_us
     """创建知识库文档"""
     try:
         # 输入验证
-        if INPUT_VALIDATOR_AVAILABLE:
-            from infra.input_validator import InputValidator
 
-            is_valid, errors = InputValidator.validate(request.model_dump(), KNOWLEDGE_DOCUMENT_SCHEMA)
-            if not is_valid:
-                raise HTTPException(status_code=422, detail={"message": "输入验证失败", "errors": errors})
+        is_valid, errors = InputValidator.validate(request.model_dump(), KNOWLEDGE_DOCUMENT_SCHEMA)
+        if not is_valid:
+            raise HTTPException(status_code=422, detail={"message": "输入验证失败", "errors": errors})
 
         # 获取知识库和文件夹信息（用于路径注入）
         kb_name = ""

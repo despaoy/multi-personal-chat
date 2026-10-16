@@ -134,7 +134,6 @@ async def test_real_disabled_completion_is_visible_in_web_reply_and_exact_archiv
     synthetic_reply = AsyncMock(return_value=(REPLY, False, dict(modelInvoked=False,
         answerMode="fixture_existing_reply", warnings=["合成生成夹具提示"])))
     monkeypatch.setattr(generate, "_generate_with_retrieval", synthetic_reply)
-    monkeypatch.setattr(generate, "INPUT_VALIDATOR_AVAILABLE", False)
     monkeypatch.setattr(generate, "response_cache", None)
     monkeypatch.setattr(generate, "circuit_breaker_registry", None)
     monkeypatch.setattr(generate, "get_llm_semaphore", lambda: asyncio.Semaphore(1))

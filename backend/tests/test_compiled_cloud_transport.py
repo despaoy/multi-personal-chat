@@ -52,7 +52,6 @@ def installed(monkeypatch):
     monkeypatch.setattr(model_manager, "get_model_manager", lambda: manager)
     runtime_config = {"useKnowledgeBase": False, "temperature": 0.83, "maxTokens": 173}
     monkeypatch.setattr(generate, "db", SimpleNamespace(config=runtime_config, loras=[]))
-    monkeypatch.setattr(generate, "INPUT_VALIDATOR_AVAILABLE", False)
     monkeypatch.setattr(generate, "response_cache", None)
     monkeypatch.setattr(generate, "circuit_breaker_registry", None)
     monkeypatch.setattr(generate, "get_llm_semaphore", lambda: asyncio.Semaphore(1))

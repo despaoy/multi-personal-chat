@@ -132,7 +132,6 @@ async def test_public_document_paths_use_atomic_publication_before_local_notific
     db = SQLiteDB(tmp_path / "api.db")
     monkeypatch.setattr(knowledge, "db", db)
     monkeypatch.setattr(knowledge, "VECTOR_DB_AVAILABLE", False)
-    monkeypatch.setattr(knowledge, "INPUT_VALIDATOR_AVAILABLE", False)
 
     def forbidden():
         raise AssertionError("Legacy post-commit database notification must not run")

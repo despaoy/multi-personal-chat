@@ -18,7 +18,6 @@ from services.chat_generation import ChatGenerationService
 
 from api.error_details import with_provider_error
 from app.config import (
-    INPUT_VALIDATOR_AVAILABLE,
     circuit_breaker_registry,
     get_llm_semaphore,
     get_vllm_served_model_name,
@@ -53,8 +52,7 @@ from infra.security_utils import strip_control_chars
 from knowledge.public_question_binding import QuestionBindingCapacityError
 from knowledge.retrieval_core.errors import RetrievalIndexError
 
-if INPUT_VALIDATOR_AVAILABLE:
-    from infra.input_validator import MESSAGE_SCHEMA, InputValidator
+from infra.input_validator import MESSAGE_SCHEMA, InputValidator
 
 logger = logging.getLogger(__name__)
 
@@ -344,10 +342,9 @@ async def _generate_reply_body(
         )
 
     # 输入验证
-    if INPUT_VALIDATOR_AVAILABLE:
-        is_valid, errors = InputValidator.validate(request.model_dump(), MESSAGE_SCHEMA)
-        if not is_valid:
-            raise HTTPException(status_code=422, detail={"message": "输入验证失败", "errors": errors})
+    is_valid, errors = InputValidator.validate(request.model_dump(), MESSAGE_SCHEMA)
+    if not is_valid:
+        raise HTTPException(status_code=422, detail={"message": "输入验证失败", "errors": errors})
 
     source_db = message_db if message_db is not None else db
     try:

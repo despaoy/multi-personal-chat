@@ -18,7 +18,8 @@ from typing import Optional
 
 from db.adapter import db
 from db.schemas import DatasetUploadRequest, TrainingStartRequest, DialogueGenerateRequest
-from app.config import INPUT_VALIDATOR_AVAILABLE, TRAINING_SCHEMA, generation_state, get_generation_state_lock
+from app.config import generation_state, get_generation_state_lock
+from infra.input_validator import TRAINING_SCHEMA, InputValidator
 
 from services.character_research import CharacterResearchError, search_character_info
 from training.dialogue_generation import DialogueBatchError, parse_dialogue_batch
@@ -417,11 +418,9 @@ async def start_training(request: TrainingStartRequest, current_user: dict = Dep
         request.dataset_name = _validate_resource_name(request.dataset_name, "数据集名称")
 
         # 输入验证
-        if INPUT_VALIDATOR_AVAILABLE:
-            from infra.input_validator import InputValidator
-            is_valid, errors = InputValidator.validate(request.model_dump(), TRAINING_SCHEMA)
-            if not is_valid:
-                raise HTTPException(status_code=422, detail={"message": "输入验证失败", "errors": errors})
+        is_valid, errors = InputValidator.validate(request.model_dump(), TRAINING_SCHEMA)
+        if not is_valid:
+            raise HTTPException(status_code=422, detail={"message": "输入验证失败", "errors": errors})
 
         # 内存检查：训练需要大量GPU/CPU内存
         import psutil

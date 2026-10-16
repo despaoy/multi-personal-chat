@@ -5,10 +5,7 @@ from fastapi import APIRouter, Request, HTTPException, Depends
 from app.dependencies import get_current_admin
 
 from db.adapter import db
-from app.config import (
-    INPUT_VALIDATOR_AVAILABLE,
-    CONFIG_SCHEMA,
-)
+from infra.input_validator import CONFIG_SCHEMA, InputValidator
 from cache.config_cache import invalidate_config_cache, read_config
 from infra.db_executor import run_db
 
@@ -86,13 +83,11 @@ async def update_config(request: Request, current_user: dict = Depends(get_curre
     new_config = {k: v for k, v in new_config.items()
                   if not (isinstance(v, str) and _MASK_MARKER in v)}
     # 输入验证 - 逐字段验证键值对
-    if INPUT_VALIDATOR_AVAILABLE:
-        from infra.input_validator import InputValidator
-        for key, value in new_config.items():
-            entry = {"key": str(key), "value": str(value)}
-            is_valid, errors = InputValidator.validate(entry, CONFIG_SCHEMA)
-            if not is_valid:
-                raise HTTPException(status_code=422, detail={"message": f"配置项 '{key}' 验证失败", "errors": errors})
+    for key, value in new_config.items():
+        entry = {"key": str(key), "value": str(value)}
+        is_valid, errors = InputValidator.validate(entry, CONFIG_SCHEMA)
+        if not is_valid:
+            raise HTTPException(status_code=422, detail={"message": f"配置项 '{key}' 验证失败", "errors": errors})
     await run_db(db.update_config, new_config)
     # 使缓存失效
     await run_db(invalidate_config_cache)

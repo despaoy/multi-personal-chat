@@ -3,6 +3,7 @@
 import os
 import uuid
 from types import SimpleNamespace
+from services.character_context import _TurnOutcome
 from unittest.mock import AsyncMock
 
 import pytest
@@ -179,7 +180,6 @@ async def test_both_consumers_use_actual_saved_row_and_keep_visible_failure(monk
     connection = cloud_connection("unit-model")
     manager.get_current_provider = lambda: connection
     monkeypatch.setattr(mm, "get_model_manager", lambda: manager)
-    monkeypatch.setattr(gen, "INPUT_VALIDATOR_AVAILABLE", False)
     monkeypatch.setattr(gen, "response_cache", None)
     monkeypatch.setattr(gen, "circuit_breaker_registry", None)
     monkeypatch.setattr(gen, "db", database)
@@ -196,7 +196,7 @@ async def test_both_consumers_use_actual_saved_row_and_keep_visible_failure(monk
     monkeypatch.setattr(gen, "_prepare_character_turn", AsyncMock(return_value=prepared))
     service = SimpleNamespace(
         complete_turn=AsyncMock(
-            return_value=SimpleNamespace(
+            return_value=_TurnOutcome(
                 source_capture="recorded" if mode == "recorded" else "failed", memory_enrichment_status="skipped"
             )
         )

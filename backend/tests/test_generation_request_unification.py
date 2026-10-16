@@ -40,7 +40,6 @@ async def test_generation_failure_is_reported_and_recorded(monkeypatch, provider
     manager.get_current_provider = lambda: connection
     monkeypatch.setattr(model_manager, "get_model_manager", lambda: manager)
     monkeypatch.setattr(generate, "db", SimpleNamespace(config={}, loras=[]))
-    monkeypatch.setattr(generate, "INPUT_VALIDATOR_AVAILABLE", False)
     monkeypatch.setattr(generate, "response_cache", None)
     monkeypatch.setattr(generate, "_vllm_client", object())
     monkeypatch.setattr(generate, "set_consecutive", lambda *args: counters.append(args))
@@ -284,7 +283,6 @@ async def test_configuration_read_failure_stops_before_model_or_save(monkeypatch
     monkeypatch.setattr(model_manager, "get_model_manager", lambda: SimpleNamespace(
         _current_provider=SimpleNamespace(value="openai_compat"),
         get_current_provider=lambda: connection))
-    monkeypatch.setattr(generate, "INPUT_VALIDATOR_AVAILABLE", False)
     model, save = AsyncMock(), AsyncMock()
     monkeypatch.setattr(generate, "_generate_with_retrieval", model)
     monkeypatch.setattr(generate, "_save_message", save)
@@ -319,7 +317,6 @@ async def test_native_timeout_cancels_work_and_releases_capacity_without_breaker
         _current_provider=SimpleNamespace(value="openai_compat"), set_lora_adapter=lambda _: None,
         get_current_provider=lambda: connection))
     monkeypatch.setattr(generate, "db", SimpleNamespace(config={}, loras=[]))
-    monkeypatch.setattr(generate, "INPUT_VALIDATOR_AVAILABLE", False)
     monkeypatch.setattr(generate, "response_cache", None)
     monkeypatch.setattr(generate, "circuit_breaker_registry", None)
     monkeypatch.setattr(generate, "get_llm_semaphore", lambda: semaphore)

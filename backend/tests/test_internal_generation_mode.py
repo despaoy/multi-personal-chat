@@ -70,7 +70,6 @@ async def test_deterministic_response_has_no_model_invocation(monkeypatch, mode,
 
 
 def _install_common(monkeypatch, gen):
-    monkeypatch.setattr(gen, "INPUT_VALIDATOR_AVAILABLE", False)
     monkeypatch.setattr(gen, "response_cache", None)
     monkeypatch.setattr(gen, "db", SimpleNamespace(config={}, loras=[]))
     monkeypatch.setattr(gen, "circuit_breaker_registry", None)

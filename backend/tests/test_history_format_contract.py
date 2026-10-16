@@ -110,7 +110,6 @@ async def test_actual_generation_api_reports_history_failure_before_model(monkey
     monkeypatch.setattr(generate, "circuit_breaker_registry", None)
     monkeypatch.setattr(generate, "_get_system_prompt", lambda _: "")
     monkeypatch.setattr(generate, "_vllm_client", SimpleNamespace(generate=model))
-    monkeypatch.setattr(generate, "INPUT_VALIDATOR_AVAILABLE", False)
     save, record = AsyncMock(), AsyncMock()
     monkeypatch.setattr(generate, "_save_message", save)
     monkeypatch.setattr(generate, "_record_model_invocation", record)

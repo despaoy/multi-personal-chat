@@ -70,7 +70,6 @@ def install_api(monkeypatch, provider):
     manager.get_current_provider = lambda: connection
     monkeypatch.setattr(model_manager, "get_model_manager", lambda: manager)
     monkeypatch.setattr(generate, "db", SimpleNamespace(config={}, loras=[row]))
-    monkeypatch.setattr(generate, "INPUT_VALIDATOR_AVAILABLE", False)
     monkeypatch.setattr(generate, "response_cache", None)
     monkeypatch.setattr(generate, "circuit_breaker_registry", None)
     monkeypatch.setattr(generate, "get_lora_character_id", lambda _: None)

@@ -162,7 +162,6 @@ async def test_legacy_rule_config_cannot_choose_a_persona_from_a_name(monkeypatc
     store = SimpleNamespace(config={"useKnowledgeBase": False, "lora_router_config": json.dumps(legacy)},
         loras=[{"id": "fiction-hutao", "name": "hutao", "status": "inactive"}])
     monkeypatch.setattr(generate, "db", store)
-    monkeypatch.setattr(generate, "INPUT_VALIDATOR_AVAILABLE", False)
     monkeypatch.setattr(generate, "response_cache", None)
     monkeypatch.setattr(generate, "circuit_breaker_registry", None)
     monkeypatch.setattr(generate, "get_llm_semaphore", lambda: asyncio.Semaphore(1))

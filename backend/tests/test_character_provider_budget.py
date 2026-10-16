@@ -26,7 +26,7 @@ from character.models import MemoryItem, UserScope
 from db import adapter
 from db.database import SQLiteDB
 from db.schemas import MessageRequest
-from inference import model_manager, vllm_client
+from inference import model_manager
 from inference.provider_context import get_provider_context_budget
 from inference.request_context import get_request_context, resolve_request_context, use_request_context
 from inference.review_client import OpenAICompatibleReviewClient
@@ -114,13 +114,14 @@ async def arrange_provider_budget(tmp_path, monkeypatch):
     )
     rig.manager = manager
     monkeypatch.setattr(model_manager, "get_model_manager", lambda: manager)
-    monkeypatch.setattr(vllm_client, "get_vllm_client", AsyncMock(return_value=OpenAICompatibleReviewClient(connection)))
+    # Every selected review transport has a complete, explicit unit client.
+    monkeypatch.setattr("inference.review_client.get_context_review_client",
+                        AsyncMock(return_value=OpenAICompatibleReviewClient(connection)))
     monkeypatch.setattr(adapter, "db", default_db)
     monkeypatch.setattr(generate, "db", default_db)
     monkeypatch.setattr(generate, "response_cache", None)
     monkeypatch.setattr(generate, "circuit_breaker_registry", circuit_registry)
     monkeypatch.setattr(generate, "get_llm_semaphore", lambda: asyncio.Semaphore(4))
-    monkeypatch.setattr(generate, "INPUT_VALIDATOR_AVAILABLE", False)
     monkeypatch.setattr(generate, "_get_system_prompt", lambda _: "只核对所给完整虚构记录，保留引述属性。")
     # Explicitly disable the independent post-reply semantic writer; its
     # interpreter is outside this budget-factory test. Actual counter writes run.

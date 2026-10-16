@@ -53,7 +53,6 @@ async def test_selected_provider_receives_messages_and_budget_without_local_over
 
     manager = Manager()
     monkeypatch.setattr(model_manager, "get_model_manager", lambda: manager)
-    monkeypatch.setattr(generate, "INPUT_VALIDATOR_AVAILABLE", False)
     monkeypatch.setattr(generate, "response_cache", None)
     monkeypatch.setattr(generate, "db", SimpleNamespace(config={}, loras=[]))
     monkeypatch.setattr(generate, "circuit_breaker_registry", None)

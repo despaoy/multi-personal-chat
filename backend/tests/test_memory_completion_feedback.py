@@ -112,7 +112,6 @@ async def test_generation_preserves_answer_and_existing_warnings(monkeypatch, pr
     connection = cloud_connection("unit-model")
     manager.get_current_provider = lambda: connection
     monkeypatch.setattr(mm, "get_model_manager", lambda: manager)
-    monkeypatch.setattr(gen, "INPUT_VALIDATOR_AVAILABLE", False)
     monkeypatch.setattr(gen, "response_cache", None)
     monkeypatch.setattr(gen, "circuit_breaker_registry", None)
     monkeypatch.setattr(gen, "db", SimpleNamespace(config={}, loras=[]))

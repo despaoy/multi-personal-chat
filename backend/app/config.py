@@ -154,19 +154,6 @@ try:
 except ImportError:
     BACKUP_MANAGER_AVAILABLE = False
 
-try:
-    from infra.input_validator import (
-        InputValidator,
-        MESSAGE_SCHEMA,
-        KNOWLEDGE_DOCUMENT_SCHEMA,
-        KNOWLEDGE_SCHEMA,
-        TRAINING_SCHEMA,
-        CONFIG_SCHEMA,
-    )
-
-    INPUT_VALIDATOR_AVAILABLE = True
-except ImportError:
-    INPUT_VALIDATOR_AVAILABLE = False
 
 try:
     from infra.encryption import EncryptionManager

@@ -4,6 +4,7 @@ import asyncio
 import threading
 from datetime import datetime, timezone
 from types import SimpleNamespace
+from services.character_context import _TurnOutcome
 from unittest.mock import AsyncMock
 
 import pytest
@@ -115,7 +116,6 @@ async def generation(monkeypatch):
     connection = cloud_connection("fixture-model")
     manager.get_current_provider = lambda: connection
     monkeypatch.setattr(model_manager, "get_model_manager", lambda: manager)
-    monkeypatch.setattr(generate, "INPUT_VALIDATOR_AVAILABLE", False)
     monkeypatch.setattr(generate, "response_cache", None)
     monkeypatch.setattr(generate, "circuit_breaker_registry", None)
     monkeypatch.setattr(generate, "get_llm_semaphore", lambda: asyncio.Semaphore(1))
@@ -124,7 +124,7 @@ async def generation(monkeypatch):
     monkeypatch.setattr(generate, "_prepare_character_turn", AsyncMock(return_value=prepared))
     runtime = turn_completion.TurnCompletionRuntime(capacity=1)
     monkeypatch.setattr(turn_completion, "get_turn_completion_runtime", lambda: runtime)
-    service = SimpleNamespace(complete_turn=AsyncMock(return_value=SimpleNamespace(
+    service = SimpleNamespace(complete_turn=AsyncMock(return_value=_TurnOutcome(
         source_capture="recorded", memory_enrichment_status="skipped")))
     model = AsyncMock(return_value=(REPLY, False, {"modelInvoked": True}))
     monkeypatch.setattr(generate, "_generate_with_retrieval", model)

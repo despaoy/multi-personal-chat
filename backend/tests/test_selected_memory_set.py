@@ -110,7 +110,6 @@ async def arrange_selected_memory(tmp_path, monkeypatch, *, cap=6000):
     monkeypatch.setattr(generate, "response_cache", None)
     monkeypatch.setattr(generate, "circuit_breaker_registry", rig.registry)
     monkeypatch.setattr(generate, "get_llm_semaphore", lambda: asyncio.Semaphore(4))
-    monkeypatch.setattr(generate, "INPUT_VALIDATOR_AVAILABLE", False)
     monkeypatch.setattr(generate, "_get_system_prompt", lambda _: "仅核对两份完整虚构引文，保留所有否定和例外。")
     service = CharacterContextService(
         registry, repository, DatabaseMessageRepository(database),

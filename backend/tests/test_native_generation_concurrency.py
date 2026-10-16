@@ -55,7 +55,6 @@ def installed(monkeypatch):
     monkeypatch.setattr(model_manager, "get_model_manager", lambda: manager)
     database = SimpleNamespace(config={"useKnowledgeBase": False}, loras=[])
     monkeypatch.setattr(generate, "db", database)
-    monkeypatch.setattr(generate, "INPUT_VALIDATOR_AVAILABLE", False)
     monkeypatch.setattr(generate, "response_cache", None)
     monkeypatch.setattr(generate, "circuit_breaker_registry", None)
     monkeypatch.setattr(generate, "get_lora_character_id", lambda _: None)

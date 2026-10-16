@@ -110,7 +110,6 @@ async def test_character_entry_does_not_require_or_auto_select_lora(monkeypatch)
     from inference import model_manager as mm
 
     monkeypatch.setattr(mm, 'get_model_manager', lambda: SimpleNamespace(_current_provider=SimpleNamespace(value='vllm')))
-    monkeypatch.setattr(gen, 'INPUT_VALIDATOR_AVAILABLE', False)
     monkeypatch.setattr(gen, 'response_cache', None)
     monkeypatch.setattr(gen, '_ensure_vllm', AsyncMock(return_value=True))
     monkeypatch.setattr(gen, '_vllm_client', object())

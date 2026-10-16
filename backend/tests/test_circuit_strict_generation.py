@@ -77,7 +77,6 @@ async def circuit_rig(tmp_path, monkeypatch):
     monkeypatch.setattr(generate, "response_cache", None)
     monkeypatch.setattr(generate, "circuit_breaker_registry", registry)
     monkeypatch.setattr(generate, "get_llm_semaphore", lambda: semaphore)
-    monkeypatch.setattr(generate, "INPUT_VALIDATOR_AVAILABLE", False)
     monkeypatch.setattr(generate, "_get_system_prompt", lambda _: "只依据完整给定题设；保留时间、否定和例外。")
     monkeypatch.setattr(generate, "get_provider_context_budget", lambda: SimpleNamespace(window_tokens=65536, evidence_max_chars=0))
     monkeypatch.setenv("CHARACTER_INDEPENDENT_TASKS_ENABLED", "false")

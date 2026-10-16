@@ -107,7 +107,6 @@ def generation_environment(monkeypatch, provider):
     connection.async_complete = AsyncMock(side_effect=AssertionError("This admission control must not invoke a provider"))
     manager.get_current_provider = lambda: connection
     monkeypatch.setattr(mm, "get_model_manager", lambda: manager)
-    monkeypatch.setattr(gen, "INPUT_VALIDATOR_AVAILABLE", False)
     monkeypatch.setattr(gen, "response_cache", None)
     monkeypatch.setattr(gen, "circuit_breaker_registry", None)
     monkeypatch.setattr(gen, "db", SimpleNamespace(config={}, loras=[]))
@@ -272,7 +271,7 @@ async def test_real_context_failure_stops_generation_and_releases_slot(monkeypat
     from api import generate
 
     real_prepare = generate._prepare_character_turn
-    gen, runtime, request, _, generation, storage = generation_environment(monkeypatch, "openai_compat")
+    gen, runtime, request, _, generation, storage = generation_environment(monkeypatch, "vllm" if selection == "mapped" else "openai_compat")
     monkeypatch.setattr(gen, "_prepare_character_turn", real_prepare)
     if selection == "mapped":
         request.characterId = None
