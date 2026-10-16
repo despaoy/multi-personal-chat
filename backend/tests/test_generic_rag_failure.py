@@ -91,7 +91,9 @@ def test_recovery_does_not_reuse_failed_partial_result(prepared):
     helper.reranker = SimpleNamespace(rerank=Mock(side_effect=TimeoutError('failure')))
     with pytest.raises(TimeoutError):
         helper.retrieve_context(QUERY)
-    helper.reranker.rerank.side_effect = lambda q, rows, top_k: [dict(row, rerank_score=1.0) for row in rows[:top_k]]
+    helper.reranker.rerank.side_effect = lambda q, rows, top_k: [
+        dict(row, rerank_score=1.0, rerank_normalized_score=1.0) for row in rows[:top_k]
+    ]
     assert len(helper.retrieve_context(QUERY)) == 2
     assert index.hybrid_search.call_count == 2
 
@@ -101,7 +103,8 @@ def test_actual_reranking_mode_separates_cache_and_preserves_scores(prepared):
     assert helper.retrieve_context(QUERY)[0]['id'] == 'opening'
     helper.enable_reranking = True
     helper.reranker = SimpleNamespace(rerank=Mock(side_effect=lambda q, rows, top_k: [
-        dict(rows[1], rerank_score=2.0), dict(rows[0], rerank_score=-1.0),
+        dict(rows[1], rerank_score=2.0, rerank_normalized_score=1.0),
+        dict(rows[0], rerank_score=-1.0, rerank_normalized_score=0.0),
     ]))
     result = helper.retrieve_context(QUERY)
     assert [r['id'] for r in result] == ['loan', 'opening']
@@ -126,7 +129,9 @@ def test_single_candidate_still_uses_enabled_reranker(prepared):
     helper, index, factory = prepared
     index.hybrid_search.return_value = ROWS[:1]
     helper.enable_reranking = True
-    helper.reranker = SimpleNamespace(rerank=Mock(side_effect=lambda q, rows, top_k: [dict(rows[0], rerank_score=.8)]))
+    helper.reranker = SimpleNamespace(rerank=Mock(side_effect=lambda q, rows, top_k: [
+        dict(rows[0], rerank_score=.8, rerank_normalized_score=1.0),
+    ]))
     assert helper.retrieve_context(QUERY)[0]['rerank_score'] == .8
     helper.reranker.rerank.assert_called_once()
     factory.assert_called_once()

@@ -89,24 +89,6 @@ class RAGHelper:
             while len(self._query_cache) > self._cache_max_size:
                 self._query_cache.popitem(last=False)
 
-    def _normalize_scores(self, results: list[dict[str, Any]], score_key: str = "score") -> list[dict[str, Any]]:
-        if not results:
-            return results
-
-        scores = [r.get(score_key, 0) for r in results]
-        min_score = min(scores)
-        max_score = max(scores)
-        score_range = max_score - min_score
-
-        if score_range == 0:
-            for r in results:
-                r["normalized_score"] = 1.0 if max_score > 0 else 0.0
-        else:
-            for r in results:
-                r["normalized_score"] = (r.get(score_key, 0) - min_score) / score_range
-
-        return results
-
     def retrieve_context(
         self,
         query: str,
@@ -171,9 +153,12 @@ class RAGHelper:
             results = self.reranker.rerank(query, recall_results, top_k=final_top_k)
             if not results:
                 raise RuntimeError("RAG reranker returned no results for non-empty candidates")
-            results = self._normalize_scores(results, "rerank_score")
+            score_key = "rerank_normalized_score"
         else:
-            results = self._normalize_scores(recall_results[:final_top_k], "final_score")
+            results = recall_results[:final_top_k]
+            score_key = "final_score"
+        for result in results:
+            result["normalized_score"] = result[score_key]
         logger.info("检索完成")
         if use_cache:
             self._add_to_cache(cache_key, results)

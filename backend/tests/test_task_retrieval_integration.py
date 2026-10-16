@@ -55,7 +55,7 @@ def test_reranking_is_bound_to_each_task_and_does_not_globally_truncate(monkeypa
     class Ranker:
         def rerank(self, q, rows, top_k):
             seen.append(q)
-            return rows[:top_k]
+            return [dict(row, rerank_score=1.0, rerank_normalized_score=1.0) for row in rows[:top_k]]
 
     h.reranker = Ranker()
     h.enable_reranking = True
