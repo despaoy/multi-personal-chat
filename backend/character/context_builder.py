@@ -71,7 +71,6 @@ class MemoryContextBudgetError(ValueError):
 # 记忆区效率限制（第一版）
 MAX_MEMORY_ITEMS = 5
 MAX_MEMORY_TOTAL_CHARS = 1000
-MAX_SINGLE_MEMORY_CHARS = 300
 # Opt-in semantic selection must not lose corrections after the selector has
 # reviewed them. Complete JSON packets are included atomically within this cap.
 MAX_COMPLETE_MEMORY_TOTAL_CHARS = 6000
@@ -696,60 +695,6 @@ def compile_dynamic_context(
     return "\n\n".join("\n".join(block) for block in blocks if block)
 
 
-def _select_memory_lines(
-    memories: tuple[MemoryItem, ...],
-    *,
-    reserved_chars: int = 0,
-    complete_evidence: bool = False,
-    diagnostics: dict[str, int] | None = None,
-    observation_semantics: bool = False,
-    max_chars: int | None = None,
-) -> tuple[list[str], list[str]]:
-    """按调用方提供的相关度顺序挑选记忆，并施加效率限制。
-
-    reserved_chars 是称呼行等固定内容预先占用的预算（含其行间换行），
-    防止参考区最终超出总长度上限。
-    返回 (记忆行列表, 使用的 memory_id 列表)。
-    """
-    # 第一步：候选 evidence packet。即使调用方绕过检索服务直接构造
-    # MemoryItem，过期、撤回、冲突或低置信 claim 也不会进入 prompt。
-    now = datetime.now(timezone.utc)
-    if max_chars is not None and (type(max_chars) is not int or max_chars <= 0):
-        raise ValueError("Reference context budget must be a positive integer")
-    cap = max_chars if max_chars is not None else (
-        MAX_COMPLETE_MEMORY_TOTAL_CHARS if complete_evidence else MAX_MEMORY_TOTAL_CHARS
-    )
-    stats = dict(input_count=len(memories), filtered_count=0,
-                 budget_skipped=0, count_skipped=0, selected_count=0, used_chars=reserved_chars,
-                 budget_chars=cap)
-    memory_lines: list[str] = []
-    used_ids: list[str] = []
-    total = reserved_chars
-    for index, item in enumerate(memories):
-        if not complete_evidence and len(memory_lines) >= MAX_MEMORY_ITEMS:
-            stats['count_skipped'] = len(memories) - index
-            break
-        if not _memory_is_injectable(item, now):
-            stats['filtered_count'] += 1
-            continue
-        render_item = (replace(item, source_observation=False)
-                       if item.source_observation and not observation_semantics else item)
-        line = _complete_memory_evidence_packet(render_item) if complete_evidence else _memory_evidence_packet(render_item)
-        # 首条记忆的行间换行已计入 reserved_chars（称呼行与其后的换行）
-        separator_len = 1 if (memory_lines or reserved_chars) else 0
-        if total + separator_len + len(line) > cap:
-            if complete_evidence:
-                raise MemoryContextBudgetError("Selected memory evidence exceeds reference context budget")
-            stats['budget_skipped'] += 1
-            continue
-        memory_lines.append(line)
-        used_ids.append(item.memory_id)
-        total += separator_len + len(line)
-    if diagnostics is not None:
-        diagnostics.update(stats, selected_count=len(used_ids), used_chars=total)
-    return memory_lines, used_ids
-
-
 def compile_reference_context(
     memories: tuple[MemoryItem, ...],
     *,
@@ -759,42 +704,55 @@ def compile_reference_context(
     observation_semantics: bool = False,
     max_chars: int | None = None,
 ) -> tuple[str, tuple[str, ...]]:
-    """编译长期记忆参考区（不可信用户区域）。
+    """Compile untrusted reference text within one complete character budget.
 
-    返回 (reference_context, used_memory_ids)：
-    - 开头固定注明安全声明，降低用户通过历史记忆注入恶意指令的风险；
-    - 用户自述的称呼偏好（"叫我X"）属于用户控制内容，与记忆一起
-      放在本不可信参考区，绝不进入系统提示词；
-    - 效率限制：最多 5 条、总长约 1000 字符（含称呼行）、证据整条加入、
-      保留调用方提供的相关度顺序。称呼行先占用总预算，再分配给
-      记忆，参考区不会因额外插入称呼而突破上限。
-    - complete_evidence=True 时由 6000 字符的原子证据包预算决定条目数，
-      不再额外截断为五条；整个有效入选集合必须完整放入预算，
-      否则抛出 MemoryContextBudgetError，不返回部分结果。
-      调用方可用 max_chars 明确传入提供方工作预算；None 保留已有默认值。
+    The budget includes the actual disclaimer, address and line separators.
+    Ordinary recall admits whole packets in rank order, up to five items.
+    Complete evidence must include every eligible selected packet or fail.
+    Nothing from this block enters the trusted system context.
     """
-    address = preferred_address.strip()
-    address_line = ""
-    if address:
-        address = _truncate(address, MAX_PREFERRED_ADDRESS_CHARS)
-        address_line = f"- 用户希望被称为：{address}（用户自述偏好）"
-
-    # 称呼行与其后的换行先占用总预算
-    reserved = len(address_line) + 1 if address_line else 0
-    memory_lines, used_ids = _select_memory_lines(
-        memories, reserved_chars=reserved, complete_evidence=complete_evidence, diagnostics=diagnostics,
-        observation_semantics=observation_semantics, max_chars=max_chars,
+    if max_chars is not None and (type(max_chars) is not int or max_chars <= 0):
+        raise ValueError("Reference context budget must be a positive integer")
+    cap = max_chars if max_chars is not None else (
+        MAX_COMPLETE_MEMORY_TOTAL_CHARS if complete_evidence else MAX_MEMORY_TOTAL_CHARS
     )
+    address = preferred_address.strip()
+    lines = [f"- 用户希望被称为：{_truncate(address, MAX_PREFERRED_ADDRESS_CHARS)}（用户自述偏好）"] if address else []
+    body_chars = sum(map(len, lines))
+    disclaimer = MEMORY_REFERENCE_DISCLAIMER
+    observed_source = False
+    used_ids: list[str] = []
+    stats = dict(input_count=len(memories), filtered_count=0, budget_skipped=0, count_skipped=0,
+                 selected_count=0, used_chars=0, budget_chars=cap)
+    now = datetime.now(timezone.utc)
+    for index, item in enumerate(memories):
+        if not complete_evidence and len(used_ids) >= MAX_MEMORY_ITEMS:
+            stats["count_skipped"] = len(memories) - index
+            break
+        if not _memory_is_injectable(item, now):
+            stats["filtered_count"] += 1
+            continue
+        render_item = (replace(item, source_observation=False)
+                       if item.source_observation and not observation_semantics else item)
+        line = _complete_memory_evidence_packet(render_item) if complete_evidence else _memory_evidence_packet(render_item)
+        candidate_disclaimer = (MIXED_REFERENCE_DISCLAIMER if observation_semantics
+                                and (observed_source or item.source_observation) else MEMORY_REFERENCE_DISCLAIMER)
+        candidate_chars = body_chars + bool(lines) + len(line)
+        if not complete_evidence and len(candidate_disclaimer) + 1 + candidate_chars > cap:
+            stats["budget_skipped"] += 1
+            continue
+        lines.append(line)
+        used_ids.append(item.memory_id)
+        body_chars = candidate_chars
+        disclaimer = candidate_disclaimer
+        observed_source = observed_source or item.source_observation
 
-    if address_line:
-        memory_lines = [address_line, *memory_lines]
-
-    if not memory_lines:
-        return "", ()
-    disclaimer = (MIXED_REFERENCE_DISCLAIMER if observation_semantics and any(item.source_observation and item.memory_id in used_ids
-                  for item in memories) else MEMORY_REFERENCE_DISCLAIMER)
-    reference_context = f"{disclaimer}\n" + "\n".join(memory_lines)
-    return reference_context, tuple(used_ids)
+    reference = f"{disclaimer}\n" + "\n".join(lines) if lines else ""
+    if len(reference) > cap:
+        raise MemoryContextBudgetError("Selected memory evidence exceeds reference context budget")
+    if diagnostics is not None:
+        diagnostics.update(stats, selected_count=len(used_ids), used_chars=len(reference))
+    return reference, tuple(used_ids)
 
 
 def compile_character_context(

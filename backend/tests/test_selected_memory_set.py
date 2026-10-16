@@ -176,6 +176,7 @@ async def test_fitting_complete_set_reaches_answer_model_with_both_full_sources(
         assert set(prepared.compiled.used_memory_ids) == set(rig.identities)
         assert prepared.memory_budget["budget_skipped"] == 0
         assert 6000 < prepared.memory_budget["used_chars"] < prepared.memory_budget["budget_chars"] == 20000
+        assert prepared.memory_budget["used_chars"] == len(prepared.compiled.reference_context)
         assert all(body in prepared.compiled.reference_context and body in rig.answers[0] for body in rig.bodies)
     finally:
         await cleanup(rig)
