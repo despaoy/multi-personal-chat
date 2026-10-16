@@ -6,9 +6,9 @@ from types import SimpleNamespace
 
 import pytest
 
+from knowledge.public_domains import all_bound_objects_generic, domain_plan
 from knowledge.public_question_binding import (
     QuestionBindingCapacityError,
-    all_bound_objects_outside_character_domain,
     resolve_question_binding,
     validate_question_binding,
 )
@@ -47,17 +47,17 @@ def config():
 async def test_complete_business_object_rejects_embedded_character_alias_and_reuses_exact_payload():
     receipt = await binding()
     assert validate_question_binding(receipt, receipt["input"]) == receipt["scopes"]
-    assert all_bound_objects_outside_character_domain(receipt, config())
+    assert all_bound_objects_generic(domain_plan(receipt, config()))
     assert receipt["input"]["query"] == QUERY
 
 
 async def test_explicit_registered_alias_keeps_strict_character_route():
     receipt = await binding("妃", "只读已保存的完整本人偏好。请核对妃的家庭关系和末尾否定限制。")
-    assert not all_bound_objects_outside_character_domain(receipt, config())
+    assert not all_bound_objects_generic(domain_plan(receipt, config()))
 
 
 async def test_unresolved_scope_does_not_grant_generic_override():
-    assert not all_bound_objects_outside_character_domain(await binding(None), config())
+    assert not all_bound_objects_generic(domain_plan(await binding(None), config()))
 
 
 @pytest.mark.parametrize("change", ["query", "task_text", "task_id", "raw", "scope", "digest"])
@@ -146,7 +146,9 @@ async def test_generic_route_reaches_fresh_authority_and_full_body(monkeypatch):
 
     def retrieve(query, **kwargs):
         assert query == QUERY and kwargs["filters"] is None
-        assert kwargs["additional_queries"] == ("青妃集市展期",)
+        from knowledge.public_question_binding import bound_task_search_views
+        assert kwargs["question_binding"] is receipt
+        assert bound_task_search_views(receipt, query) == ("青妃集市展期\n" + dependencies().segments[1],)
         calls.append("generic")
         return dict(results=[row], confidence=0.8, abstained=False)
 
@@ -155,7 +157,8 @@ async def test_generic_route_reaches_fresh_authority_and_full_body(monkeypatch):
         "get_rag_helper",
         lambda: SimpleNamespace(retrieve_with_citations=retrieve, build_citations=lambda records: []),
     )
-    bundle = await generate._retrieve_rag_bundle(QUERY, 3, None, question_binding=await binding())
+    receipt = await binding()
+    bundle = await generate._retrieve_rag_bundle(QUERY, 3, None, question_binding=receipt)
     assert calls == ["fresh", "generic"]
     assert bundle["original_source_packets"][0]["original_body"] == body
     assert bundle["source_coverage"][0]["original_source_receipt"]["authority_revision"] == 77

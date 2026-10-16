@@ -135,21 +135,6 @@ class QueryAnalyzer:
             self._story_titles[config.domain_id] = list(config.story_titles)
 
     # -- 实体识别 ---------------------------------------------------------
-    def _scan_entities(self, domain_id: str, query: str) -> tuple:
-        """返回 (规范实体列表, 命中的原始 token 列表)。"""
-        normalizer = self._normalizers[domain_id]
-        entities: list[str] = []
-        matched_tokens: list[str] = []
-        for _, _, token, canonical in normalizer.match_spans(query):
-            if canonical not in entities:
-                entities.append(canonical)
-            if token not in matched_tokens:
-                matched_tokens.append(token)
-        return entities, matched_tokens
-
-    def _normalize_query(self, domain_id: str, query: str) -> str:
-        """把查询中的别名替换为规范名（长词优先）。"""
-        return self._normalizers[domain_id].normalize_text(query)
 
     # -- 域自动选择 ---------------------------------------------------------
     def _match_domain(
@@ -182,45 +167,38 @@ class QueryAnalyzer:
 
     # -- 主入口 -------------------------------------------------------------
     def analyze(self, query: str, domain_id: str | None = None) -> QueryAnalysis:
+        if domain_id is not None and domain_id not in self._normalizers:
+            raise ValueError(f"Unknown query domain: {domain_id}")
         if not query.strip():
             return QueryAnalysis(original_query=query, normalized_query=query)
 
-        candidate_domains = (
-            [domain_id] if domain_id and domain_id in self._normalizers else list(self._normalizers.keys())
-        )
-
-        all_entities: list[str] = []
-        matched_domains: list[str] = []
-        domain_reasons: dict[str, str] = {}
-        story_hits: list[str] = []
-        normalized_query = query
-
-        for did in candidate_domains:
-            entities, matched_tokens = self._scan_entities(did, query)
-            stories = [title for title in self._story_titles.get(did, []) if title in query]
-            reason = self._match_domain(did, entities, matched_tokens, stories, query)
-            if reason:
-                matched_domains.append(did)
-                domain_reasons[did] = reason
-                for entity in entities:
-                    if entity not in all_entities:
-                        all_entities.append(entity)
-                for story in stories:
-                    if story not in story_hits:
-                        story_hits.append(story)
-                if did == domain_id:
-                    normalized_query = self._normalize_query(did, query)
-
-        # 无显式 domain 时，用命中的第一个域做归一（多域时保留原文，
-        # 由各域分别归一——retrieval 层按域处理）
-        if domain_id is None and matched_domains:
-            normalized_query = self._normalize_query(matched_domains[0], query)
-
+        candidates = [domain_id] if domain_id is not None else list(self._normalizers)
+        entities: list[str] = []
+        domains: list[str] = []
+        reasons: dict[str, str] = {}
+        stories: list[str] = []
+        normalized_views: dict[str, str] = {}
+        for did in candidates:
+            normalizer = self._normalizers[did]
+            matches = normalizer.match_spans(query)
+            names = list(dict.fromkeys(canonical for _, _, _, canonical in matches))
+            tokens = list(dict.fromkeys(token for _, _, token, _ in matches))
+            titles = [title for title in self._story_titles[did] if title in query]
+            reason = (
+                "explicit_domain" if domain_id is not None else self._match_domain(did, names, tokens, titles, query)
+            )
+            if reason is None:
+                continue
+            domains.append(did)
+            reasons[did] = reason
+            entities.extend(name for name in names if name not in entities)
+            stories.extend(title for title in titles if title not in stories)
+            normalized_views[did] = normalizer.normalize_matches(query, matches)
         return QueryAnalysis(
             original_query=query,
-            normalized_query=normalized_query,
-            entities=all_entities,
-            matched_domains=matched_domains,
-            story_hits=story_hits,
-            domain_hit_reasons=domain_reasons,
+            normalized_query=normalized_views[domains[0]] if len(domains) == 1 else query,
+            entities=entities,
+            matched_domains=domains,
+            story_hits=stories,
+            domain_hit_reasons=reasons,
         )

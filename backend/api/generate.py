@@ -1079,27 +1079,32 @@ async def _retrieve_rag_bundle(
         # Ordinary character questions retain the strict domain availability gate.
         if question_binding is not None:
             from knowledge.multiscale_rag.runtime import get_multiscale_rag_service
-            from knowledge.public_domains import domain_plan, requires_independent_domains, retrieve_domains
+            from knowledge.public_domains import (
+                all_bound_objects_generic,
+                domain_plan,
+                requires_independent_domains,
+                retrieve_curated_scope,
+                retrieve_domains,
+            )
 
             character_rag = get_multiscale_rag_service()
             plan = domain_plan(question_binding, character_rag.config)
             if requires_independent_domains(plan):
                 return retrieve_domains(plan, query, top_k, curated=character_rag.retrieve_with_citations, generic=retrieve_generic)
+            if not filters and not requested_document_titles(query):
+                if any(obj["authority"] == "curated_character" for obj in plan["objects"]):
+                    return retrieve_curated_scope(plan, query, top_k, curated=character_rag.retrieve_with_citations)
+                if all_bound_objects_generic(plan):
+                    return retrieve_generic()
         if not filters and not requested_document_titles(query):
             from knowledge.multiscale_rag.runtime import get_multiscale_rag_service
             from knowledge.retrieval_core.query import QueryAnalyzer
 
             character_rag = get_multiscale_rag_service()
             matched = QueryAnalyzer([character_rag.config]).analyze(query).matched_domains
-            if question_binding is not None:
-                from knowledge.public_question_binding import all_bound_objects_outside_character_domain
-
-                if all_bound_objects_outside_character_domain(question_binding, character_rag.config):
-                    matched = []
-                    character_rag = None
             # retrieve_with_citations 内部完成惰性加载和域门控。不能先用
             # is_available() 短路，否则冷启动首条请求无法触发索引加载。
-            bundle = character_rag.retrieve_with_citations(query, top_k=top_k, filters=filters) if character_rag is not None else None
+            bundle = character_rag.retrieve_with_citations(query, top_k=top_k, filters=filters)
             if bundle is not None:
                 return bundle
             if matched:

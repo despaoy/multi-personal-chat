@@ -133,9 +133,14 @@ class AliasEntityNormalizer:
         return list(dict.fromkeys(canonical for _, _, _, canonical in self.match_spans(text)))
 
     def normalize_text(self, text: str) -> str:
+        return self.normalize_matches(text, self.match_spans(text))
+
+    @staticmethod
+    def normalize_matches(text: str, matches: list[tuple[int, int, str, str]]) -> str:
+        """Normalize the same literal spans used to identify registered names."""
         parts: list[str] = []
         cursor = 0
-        for start, end, _, canonical in sorted(self.match_spans(text)):
+        for start, end, _, canonical in sorted(matches):
             parts.extend((text[cursor:start], canonical))
             cursor = end
         parts.append(text[cursor:])

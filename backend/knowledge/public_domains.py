@@ -63,21 +63,38 @@ def requires_independent_domains(plan):
     )
 
 
+def all_bound_objects_generic(plan):
+    """Unresolved tasks cannot authorize a wholly generic source override."""
+    return bool(plan["objects"]) and all(task["object_ids"] for task in plan["tasks"]) and all(
+        obj["authority"] == "generic_knowledge" for obj in plan["objects"]
+    )
+
+
+def retrieve_curated_scope(plan, query, top_k, *, curated):
+    """Use the proven source domain; source failure never selects another one."""
+    if plan["binding"]["input"]["query"] not in query:
+        raise ValueError("Curated retrieval discarded the complete bound question")
+    names = tuple(obj["query_text"] for obj in plan["objects"] if obj["authority"] == "curated_character")
+    bundle = curated(query, top_k=top_k, domain_id=plan["domain_id"], object_names=names or None)
+    if bundle is None:
+        raise RuntimeError("Requested character knowledge domain is unavailable (curated_character)")
+    if not isinstance(bundle, dict):
+        raise TypeError("Invalid curated_character retrieval result: expected a dictionary")
+    return bundle
+
+
 def retrieve_domains(plan, query, top_k, *, curated, generic):
     """Retrieve each requested authority completely; propagate branch failures."""
-    if plan["binding"]["input"]["query"] not in query or not requires_independent_domains(plan):
+    if not requires_independent_domains(plan):
         raise ValueError("Independent retrieval requires the complete mixed question")
-    names = tuple(obj["query_text"] for obj in plan["objects"] if obj["authority"] == "curated_character")
-    branches = {}
-    for authority, retrieve in (
-        ("curated_character", lambda: curated(query, top_k=top_k, object_names=names)),
-        ("generic_knowledge", generic),
-    ):
-        bundle = retrieve()
-        if not isinstance(bundle, dict):
-            raise TypeError(f"Invalid {authority} retrieval result: expected a dictionary")
-        branches[authority] = dict(status="retrieved", bundle=bundle)
-    business = branches["generic_knowledge"]["bundle"]
+    character = retrieve_curated_scope(plan, query, top_k, curated=curated)
+    business = generic()
+    if not isinstance(business, dict):
+        raise TypeError("Invalid generic_knowledge retrieval result: expected a dictionary")
+    branches = {
+        "curated_character": dict(status="retrieved", bundle=character),
+        "generic_knowledge": dict(status="retrieved", bundle=business),
+    }
     return {
         **business,
         "independent_domains": dict(plan=plan, branches=branches),

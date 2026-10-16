@@ -74,7 +74,7 @@ def test_boundary_filters_parents_timelines_and_raw_evidence_before_exposure(mon
     instance.by_id = {scene.id: scene}
     instance.evidence_by_parent = {known.id: evidence}
     instance.extractor = SimpleNamespace(extract=lambda _: pytest.fail("hidden evidence must not be read"))
-    monkeypatch.setattr(service, "analyze_explicit_domain", lambda *args: SimpleNamespace(entities=["kisaki", "ruri"]))
+    instance.analyzer = SimpleNamespace(analyze=lambda *args, **_scope: SimpleNamespace(entities=['kisaki', 'ruri']))
 
     def rerank(analysis, candidates, **kwargs):
         assert [item.document.id for item in candidates] == ["known"]

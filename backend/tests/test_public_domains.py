@@ -48,8 +48,9 @@ async def make_plan(config, *, unresolved=False):
     return domain_plan(binding, config), deps
 
 
-def curated(query, *, top_k, object_names):
+def curated(query, *, top_k, object_names, domain_id):
     assert query == QUERY and object_names == ("叶澄岚", "杜木汐")
+    assert domain_id == "fictional_curated"
     return dict(
         abstained=False,
         domains=["fictional_curated"],
@@ -115,13 +116,14 @@ async def test_branch_failure_propagates_without_returning_partial_result(config
             raise error
         return curated(*args, **kwargs) if authority == "curated_character" else generic()
 
-    with pytest.raises(TypeError if defect == "invalid" else type(error)) as caught:
+    expected = (RuntimeError if failed == "curated_character" else TypeError) if defect == "invalid" else type(error)
+    with pytest.raises(expected) as caught:
         retrieve_domains(plan, QUERY, 3,
             curated=lambda *args, **kwargs: fetch("curated_character", *args, **kwargs),
             generic=lambda: fetch("generic_knowledge"))
     assert calls == (["curated_character"] if failed == "curated_character" else ["curated_character", "generic_knowledge"])
     if defect == "invalid":
-        assert failed in str(caught.value) and "expected a dictionary" in str(caught.value)
+        assert failed in str(caught.value) and ("unavailable" if failed == "curated_character" else "expected a dictionary") in str(caught.value)
     else:
         assert caught.value is error
 
@@ -312,9 +314,8 @@ def test_service_scope_retains_full_question_and_excludes_incidental_entity(conf
         entities=["澄岚", "木汐", "误匹配"],
         story_hits=[],
     )
-    monkeypatch.setattr(service, "analyze_explicit_domain", lambda *args: analysis)
     target = service.RoutedMultiScaleService.__new__(service.RoutedMultiScaleService)
-    target.analyzer = object()
+    target.analyzer = SimpleNamespace(analyze=lambda *args, **_scope: analysis)
     target.config = config
     observed = []
 

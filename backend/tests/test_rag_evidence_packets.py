@@ -22,7 +22,7 @@ def make_service(monkeypatch, evidence_texts):
     instance.by_id = {'scene': SimpleNamespace(id='scene', title='场景', summary='背景' * 1500)}
     instance.evidence_by_parent = {str(i): SimpleNamespace(content=text)
                                    for i, text in enumerate(evidence_texts) if text is not None}
-    monkeypatch.setattr(service, 'analyze_explicit_domain', lambda *a: SimpleNamespace(entities=[]))
+    instance.analyzer = SimpleNamespace(analyze=lambda *a, **_scope: SimpleNamespace(entities=[]))
     monkeypatch.setattr(service, 'rerank_with_title_frames', lambda *a, **kw: candidates)
     return instance
 

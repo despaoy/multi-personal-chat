@@ -83,8 +83,7 @@ def test_scope_precedes_reranking_and_applies_to_timeline(monkeypatch, query, sc
     instance.extractor = None
     instance.by_id = {}
     instance.evidence_by_parent = {}
-    monkeypatch.setattr(service, 'analyze_explicit_domain', lambda *a: SimpleNamespace(
-        entities=['a', 'b'], normalized_query=query))
+    instance.analyzer = SimpleNamespace(analyze=lambda *a, **_scope: SimpleNamespace(entities=['a', 'b'], normalized_query=query))
 
     def rank(_analysis, recalled, **kwargs):
         assert len(recalled) == int(include_direct) + int(not scoped)

@@ -221,15 +221,15 @@ class MultiScaleRagRuntime:
             return None
         if domain_id and domain_id != self._base_config.domain_id:
             return None
-        gate = self._gate.analyze(query)
+        gate = self._gate.analyze(query, domain_id=domain_id)
         if not domain_id and not gate.matched_domains:
             return None
         self._ensure_loaded()
         scoped = {"object_names": object_names} if object_names is not None else {}
         if knowledge_boundary is None:
-            result = self._service.retrieve(query, top_k=top_k, **scoped)
+            result = self._service.retrieve(query, top_k=top_k, analysis=gate, **scoped)
         else:
-            result = self._service.retrieve(query, top_k=top_k, knowledge_boundary=knowledge_boundary, **scoped)
+            result = self._service.retrieve(query, top_k=top_k, knowledge_boundary=knowledge_boundary, analysis=gate, **scoped)
         results = result["results"]
         top = results[0] if results else {}
         value = top["rerank_score"] if results else 0.0

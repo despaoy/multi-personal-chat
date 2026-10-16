@@ -6,7 +6,6 @@ import pytest
 from test_multiscale_rag_runtime import FakeQueryEmbeddingProvider
 
 from knowledge.multiscale_rag.runtime import MultiScaleRagRuntime
-from knowledge.multiscale_rag.service import analyze_explicit_domain
 from knowledge.multiscale_rag.vector_runtime import LocalMeanPoolingEmbeddingProvider
 
 QUERY = '妃和琉璃是什么关系？'
@@ -26,7 +25,7 @@ def runtime(monkeypatch):
 
 def search(runtime, mode, **kwargs):
     service = runtime._service
-    analysis = analyze_explicit_domain(service.analyzer, service.config.domain_id, QUERY)
+    analysis = service.analyzer.analyze(QUERY, domain_id=service.config.domain_id)
     return service.retriever.search(analysis, top_k=3, mode=mode, **kwargs)
 
 

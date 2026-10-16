@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import re
+from dataclasses import replace
 from typing import TYPE_CHECKING, Any
 
 from infra.environment import read_bool
@@ -23,23 +24,6 @@ if TYPE_CHECKING:
 RETRIEVAL_TYPES = frozenset({"fact", "relation", "event", "scene", "story"})
 
 
-def analyze_explicit_domain(analyzer: QueryAnalyzer, domain_id: str, query: str) -> QueryAnalysis:
-    """Analyze a caller-selected domain without losing one-character entities.
-
-    The production analyzer intentionally applies automatic-domain gating even
-    when a domain is supplied.  Offline/domain-scoped retrieval already knows
-    the domain, so a single-character canonical entity must still participate
-    in entity recall and reranking.
-    """
-    analysis = analyzer.analyze(query, domain_id=domain_id)
-    entities, _matched_tokens = analyzer._scan_entities(domain_id, query)
-    if entities:
-        analysis.entities = list(entities)
-        analysis.normalized_query = analyzer._normalize_query(domain_id, query)
-        if domain_id not in analysis.matched_domains:
-            analysis.matched_domains.append(domain_id)
-            analysis.domain_hit_reasons[domain_id] = "explicit_domain"
-    return analysis
 
 
 def rerank_with_title_frames(
@@ -142,15 +126,22 @@ class RoutedMultiScaleService:
         raw_text: bool = False,
         knowledge_boundary: KnowledgeBoundary | None = None,
         object_names: tuple[str, ...] | None = None,
+        analysis: QueryAnalysis | None = None,
     ) -> dict[str, Any]:
         if isinstance(top_k, bool) or not isinstance(top_k, int) or top_k < 1:
             raise ValueError("top_k must be a positive integer")
-        analysis = analyze_explicit_domain(self.analyzer, self.config.domain_id, query)
+        if analysis is None:
+            analysis = self.analyzer.analyze(query, domain_id=self.config.domain_id)
+        elif analysis.original_query != query or analysis.matched_domains != [self.config.domain_id]:
+            raise ValueError("Query analysis does not belong to the current request and domain")
         if object_names is not None:
             if not isinstance(object_names, tuple) or not object_names or any(not isinstance(name, str) or name not in query or self.config.canonical_entity(name) is None and name not in self.config.story_titles for name in object_names):
                 raise ValueError("Curated scope requires literal registered whole question objects")
-            analysis.entities = list(dict.fromkeys(self.config.canonical_entity(name) for name in object_names if self.config.canonical_entity(name) is not None))
-            analysis.story_hits = [name for name in object_names if name in self.config.story_titles]
+            analysis = replace(
+                analysis,
+                entities=list(dict.fromkeys(self.config.canonical_entity(name) for name in object_names if self.config.canonical_entity(name) is not None)),
+                story_hits=[name for name in object_names if name in self.config.story_titles],
+            )
         retriever = self.retriever
         recall_k = max(top_k * 12, 60)
         if knowledge_boundary is not None:

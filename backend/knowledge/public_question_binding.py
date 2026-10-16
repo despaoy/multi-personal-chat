@@ -142,17 +142,6 @@ def failed_question_binding_review(error, dependencies, query, public_obligation
     )
 
 
-def all_bound_objects_outside_character_domain(binding, config):
-    """Registered aliases own whole names, never substrings of other objects.
-
-    Empty/unresolved scopes and explicit curated targets keep the strict domain
-    path. Mixed genuine curated/generic routing is not certified here.
-    """
-    scopes = validate_question_binding(binding, binding["input"])
-    names = [obj["query_text"] for obj in scopes["objects"]]
-    if not names or any(not row["object_ids"] for row in scopes["task_scopes"]):
-        return False
-    return all(config.canonical_entity(name) is None and name not in config.story_titles for name in names)
 
 
 def bound_object_search_views(binding, retrieval_query):

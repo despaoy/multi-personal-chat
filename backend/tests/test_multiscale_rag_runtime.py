@@ -116,7 +116,7 @@ def ranking_score_runtime(score, method="heuristic", *, empty=False):
 
     runtime = object.__new__(MultiScaleRagRuntime)
     runtime._base_config = SimpleNamespace(domain_id="synthetic")
-    runtime._gate = SimpleNamespace(analyze=lambda query: SimpleNamespace(entities=[], matched_domains=["synthetic"]))
+    runtime._gate = SimpleNamespace(analyze=lambda query, **_scope: SimpleNamespace(entities=[], matched_domains=["synthetic"]))
     results = [] if empty else [dict(id="synthetic", title="合成资料", content="只能离线验收，禁止联网。",
                                     rerank_score=score, fused_score=0.99, rerank_method=method)]
     runtime._service = SimpleNamespace(retrieve=lambda *a, **kw: dict(
