@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from knowledge.dialogue_query import RetrievalQuery
 from knowledge.grounded_answer.cache import AnswerCache
 from knowledge.grounded_answer.models import AnswerMode
 from knowledge.grounded_answer.packet import EvidencePacketBuilder
@@ -130,8 +131,8 @@ async def test_identical_followup_with_different_history_cannot_share_cached_ans
     from unittest.mock import AsyncMock
 
     # Cache isolation is tested with explicitly controlled semantic query preparation.
-    monkeypatch.setattr("knowledge.grounded_answer.service.contextual_retrieval_query",
-                        AsyncMock(side_effect=lambda query, history: query))
+    monkeypatch.setattr("knowledge.grounded_answer.service.resolve_retrieval_query",
+                        AsyncMock(side_effect=lambda query, history, **kwargs: RetrievalQuery(query)))
     first = await service.answer(
         FIXTURE["cases"][2]["message"], history=FIXTURE["cases"][2]["history"], domain_id="fixture", generate=generate
     )

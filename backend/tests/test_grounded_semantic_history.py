@@ -31,7 +31,7 @@ def controls(monkeypatch, query, history, *, names=None, kind="public_knowledge"
 
     async def planning(messages):
         payload = json.loads(messages[-1]["content"])
-        assert payload["query"] == query and payload["history"] == history
+        assert payload["query"] == query and payload.get("history", []) == history
         exchanges.append("plan")
         ids = list(range(len(query_segments(query))))
         return json.dumps(
@@ -43,7 +43,7 @@ def controls(monkeypatch, query, history, *, names=None, kind="public_knowledge"
 
     async def objects(messages):
         payload = json.loads(messages[-1]["content"])
-        assert payload["query"] == query and payload["reference_context"]["history"] == history
+        assert payload["query"] == query and payload.get("reference_context", {}).get("history", []) == history
         exchanges.append("binding")
         return json.dumps(dict(scopes=[dict(task_id=task["id"], objects=names) for task in payload["public_tasks"]]))
 
@@ -68,9 +68,10 @@ async def test_proven_object_supplements_complete_query_without_old_tasks(monkey
     history = deepcopy(HISTORY)
     before = deepcopy(history)
     exchanges = controls(monkeypatch, query, history)
-    resolved = await dialogue_query.contextual_retrieval_query(query, history)
-    assert resolved == NAME + "\n" + query
-    assert "不能假设周五可借" not in resolved and "全年开放" not in resolved
+    resolved = await dialogue_query.resolve_retrieval_query(query, history)
+    assert resolved.query == NAME + "\n" + query
+    assert resolved.question_binding["input"]["query"] == query
+    assert "不能假设周五可借" not in resolved.query and "全年开放" not in resolved.query
     assert history == before and exchanges == ["plan", "binding"]
 
 
@@ -79,25 +80,25 @@ async def test_long_user_reference_keeps_its_full_tail_for_both_reviewers(monkey
     history[0]["content"] = "背景" * 1100 + history[0]["content"] + "最终限制：不得混用其他机构。"
     query = "核对它的现行规程，保留全部例外。"
     controls(monkeypatch, query, history)
-    assert await dialogue_query.contextual_retrieval_query(query, history) == NAME + "\n" + query
+    assert (await dialogue_query.resolve_retrieval_query(query, history)).query == NAME + "\n" + query
 
 
 async def test_new_explicit_object_does_not_inherit_a_previous_topic(monkeypatch):
     query = "请核对虚构临桥图书室的公开借阅期限。"
     controls(monkeypatch, query, HISTORY, names=["虚构临桥图书室"])
-    assert await dialogue_query.contextual_retrieval_query(query, HISTORY) == query
+    assert (await dialogue_query.resolve_retrieval_query(query, HISTORY)).query == query
 
 
 async def test_empty_semantic_object_set_keeps_complete_literal_question(monkeypatch):
     query = "请解释资料中没有明确命名的那项业务。"
     controls(monkeypatch, query, HISTORY, names=[])
-    assert await dialogue_query.contextual_retrieval_query(query, HISTORY) == query
+    assert (await dialogue_query.resolve_retrieval_query(query, HISTORY)).query == query
 
 
-async def test_no_history_needs_no_semantic_call(monkeypatch):
+async def test_explicit_domain_without_history_needs_no_semantic_call(monkeypatch):
     review = AsyncMock(side_effect=AssertionError("A standalone literal query needs no history review"))
     monkeypatch.setattr(dialogue_query, "plan_retrieval", review)
-    assert await dialogue_query.contextual_retrieval_query("  完整当前问题。  ", None) == "  完整当前问题。  "
+    assert (await dialogue_query.resolve_retrieval_query("  完整当前问题。  ", None, domain_id="selected")).query == "  完整当前问题。  "
     review.assert_not_awaited()
 
 
@@ -200,7 +201,12 @@ async def test_semantic_query_reaches_retrieval_while_original_input_reaches_ans
         events = [event async for event in service.answer_stream(query, history=history, generate=model)]
         assert [event.type for event in events] == ["meta", "delta", "citations", "done"]
         assert events[-1].data["model_invoked"] and not events[-1].data["abstained"]
-    retrieve.assert_called_once_with(NAME + "\n" + query, top_k=3, filters=None, domain_id=None)
+    retrieve.assert_called_once()
+    args, kwargs = retrieve.call_args
+    assert args == (NAME + "\n" + query,)
+    binding = kwargs.pop("question_binding")
+    assert kwargs == dict(top_k=3, filters=None, domain_id=None)
+    assert binding["input"]["query"] == query and binding["input"]["reference_context"]["history"] == history
     model.assert_awaited_once()
     assert exchanges == ["plan", "binding"] and history == HISTORY
 

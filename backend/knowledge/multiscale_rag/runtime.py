@@ -262,6 +262,10 @@ class MultiScaleRagRuntime:
             "domains": [self._base_config.domain_id],
             "query_analysis": {
                 "entities": gate.entities,
+                "registered_aliases": (
+                    {name: canonical for name in object_names if (canonical := self.config.canonical_entity(name)) is not None}
+                    if object_names is not None else gate.registered_aliases
+                ),
                 "matched_domains": gate.matched_domains,
                 "candidate_types": result.get("candidate_types", []),
             },

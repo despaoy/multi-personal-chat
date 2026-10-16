@@ -9,6 +9,8 @@ from test_grounded_dependency_errors import _bundle
 from knowledge.grounded_answer.cache import AnswerCache
 from knowledge.grounded_answer.service import GroundedAnswerService
 
+pytestmark = pytest.mark.usefixtures("literal_grounded_query")
+
 QUERY = "请核对虚构远岚通行证所需材料，预约是否免原件，周五能否受理。"
 SOURCE = "虚构远岚通行证需本人身份证原件与受理号；预约不豁免原件；周五不受理。"
 FILTERS = {"knowledge_base_id": 77, "user_id": "synthetic-owner"}

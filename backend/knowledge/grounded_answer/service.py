@@ -19,12 +19,13 @@ import os
 import re
 import time
 from collections.abc import AsyncIterator, Awaitable, Callable
+from functools import partial
 from math import isfinite
 from typing import Any
 
 from inference.history import validate_history
 from knowledge.curated_sources import CuratedSourceChangedError, curated_source_receipts, validate_curated_source
-from knowledge.dialogue_query import contextual_retrieval_query
+from knowledge.dialogue_query import resolve_retrieval_query
 
 from .cache import AnswerCache, answer_cache_key
 from .models import (  # noqa: E402
@@ -168,7 +169,7 @@ class GroundedAnswerService:
         # 角色知识检索是同步 CPU 工作，放入线程池避免阻塞事件循环。
         retrieval_start = time.perf_counter()
         bundle = await self._retrieve(
-            await contextual_retrieval_query(query, history),
+            query, history=history,
             domain_id=domain_id, top_k=top_k, filters=filters,
         )
         timings.retrieval_ms = (time.perf_counter() - retrieval_start) * 1000
@@ -248,7 +249,7 @@ class GroundedAnswerService:
 
         retrieval_start = time.perf_counter()
         bundle = await self._retrieve(
-            await contextual_retrieval_query(query, history),
+            query, history=history,
             domain_id=domain_id,
             top_k=top_k,
             filters=filters,
@@ -393,18 +394,21 @@ class GroundedAnswerService:
     # ------------------------------------------------------------------
     async def _retrieve(
         self,
-        query: str | None,
+        query: str,
         *,
+        history: list[dict[str, str]] | None,
         domain_id: str | None,
         top_k: int,
         filters: dict[str, Any] | None,
     ) -> dict[str, Any] | None:
         if self.retriever is None:
             raise RuntimeError("Grounded answer retriever is not configured")
-        if query is None:
+        resolved = await resolve_retrieval_query(query, history, domain_id=domain_id)
+        if resolved is None:
             return None
+        scope = {"question_binding": resolved.question_binding} if resolved.question_binding is not None else {}
         return await asyncio.to_thread(
-            self.retriever, query, top_k=top_k, filters=filters, domain_id=domain_id,
+            self.retriever, resolved.query, top_k=top_k, filters=filters, domain_id=domain_id, **scope,
         )
 
     async def _answer_from_bundle(
@@ -670,7 +674,24 @@ def build_default_grounded_answer_service() -> GroundedAnswerService:
 
     character_rag = get_multiscale_rag_service()
 
-    def _retriever(query: str, *, top_k: int, filters: dict | None, domain_id: str | None):
+    def _retriever(query: str, *, top_k: int, filters: dict | None, domain_id: str | None, question_binding=None):
+        from knowledge.public_domains import (
+            all_bound_objects_generic,
+            domain_plan,
+            requires_independent_domains,
+            retrieve_curated_scope,
+        )
+
+        if domain_id is not None and domain_id != character_rag.config.domain_id:
+            raise ValueError(f"Unknown knowledge answer domain: {domain_id}")
+        if question_binding is not None:
+            plan = domain_plan(question_binding, character_rag.config)
+            if requires_independent_domains(plan):
+                raise ValueError("Independent knowledge answers do not support mixed source authorities")
+            if all_bound_objects_generic(plan):
+                return None
+            if any(obj["authority"] == "curated_character" for obj in plan["objects"]):
+                return retrieve_curated_scope(plan, query, top_k, curated=partial(character_rag.retrieve_with_citations, filters=filters))
         return character_rag.retrieve_with_citations(query, domain_id=domain_id, top_k=top_k, filters=filters)
 
     def _domain_supplement(domain_id: str) -> str:
@@ -679,8 +700,8 @@ def build_default_grounded_answer_service() -> GroundedAnswerService:
         return getattr(character_rag.config, "prompt_supplement", "") or ""
 
     def _index_version_resolver(domain_id: str | None) -> str:
-        if domain_id and domain_id != character_rag.config.domain_id:
-            return "unknown"
+        if domain_id is not None and domain_id != character_rag.config.domain_id:
+            raise ValueError(f"Unknown knowledge answer domain: {domain_id}")
         return f"{character_rag.config.domain_id}:{INDEX_FORMAT_VERSION}"
 
     return GroundedAnswerService(

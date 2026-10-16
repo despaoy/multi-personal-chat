@@ -14,9 +14,9 @@ RAG）回答原作事实、人物关系、剧情事件和原文出处问题。�
 - 故事或场景概述；
 - 带来源定位的原文证据。
 
-普通闲聊不会强制触发检索。运行时首先进行作品域门控；未匹配已注册作品域的
-问题会交回正常对话流程。带 `knowledge_base_id` 的请求属于通用用户知识库，
-不会由角色知识检索静默接管。
+聊天入口根据完整问题与可用历史的语义来源规划决定是否公共检索，再用对象绑定选择资料来源。独立知识问答未选域时也执行这条语义准备；无历史且明确选域时直接使用该域。已确认角色对象不会再被问法词表否决，单字域问法词表已删除。未知指定域、审核故障和所需来源故障明确失败，正常无匹配或证据不足保持弃答语义。
+
+带 `knowledge_base_id` 的请求属于通用用户知识库，不会由角色知识检索静默接管。聊天支持分别处理角色和业务来源；独立知识问答当前只支持角色来源，遇到混合来源任务会明确报错。
 
 ## 与通用知识库的边界
 
@@ -25,7 +25,7 @@ RAG）回答原作事实、人物关系、剧情事件和原文出处问题。�
 | 数据来源 | 审核后的作品场景、知识卡和原文证据 | 用户上传或扫描的文档 |
 | 入口 | `knowledge.multiscale_rag` | `knowledge.rag_helper` |
 | 数据组织 | 故事、场景、知识卡、证据四层 | 文档分块 |
-| 路由 | 作品域和问题粒度路由 | `knowledge_base_id` 与通用意图判断 |
+| 范围选择 | 显式作品域或已绑定角色／故事对象 | `knowledge_base_id` 与已绑定业务对象／任务 |
 | 主要用途 | 角色事实一致性与剧情溯源 | 私有资料问答 |
 
 `knowledge.retrieval_core` 只提供查询分析、BM25、向量召回、实体召回、RRF
@@ -53,25 +53,22 @@ story
 ## 在线检索流程
 
 ```text
-用户消息
+用户消息与可用历史
   ↓
-作品域门控与实体识别
+完整来源规划与对象绑定（无历史且明确选域时直接使用指定域）
   ↓
-问题粒度路由
-  ├── 剧情概述 → story / scene
-  ├── 事实问题 → fact
-  ├── 关系问题 → relation
-  ├── 事件问题 → event
-  └── 原文请求 → evidence
+作品域与登记名称对齐
   ↓
-BM25 + 向量 + 实体召回
+故事、场景、事实、关系和事件统一候选索引
   ↓
-RRF 融合与确定性重排序
+BM25 + 向量 + 实体召回 → RRF 融合与重排序
   ↓
-父场景回填、引用和置信度
+当前原文读取、完整证据预算与引用绑定
   ↓
-Grounded Answer 或证据不足时拒答
+Grounded Answer 或证据不足时弃答
 ```
+
+登记名称对应随查询分析进入独立回答提示，仅用于对齐用户称呼与资料登记名，不能补充原作事实或授予权限。模型、检索与证据来源保持各自记录，复用审核结果不计作新模型调用。
 
 返回的结构化 bundle 至少包含 `results`、`citations`、`confidence`、
 `abstained`、`context_text`、`domains` 和 `query_analysis`。检索到的内容按
@@ -82,9 +79,9 @@ Grounded Answer 或证据不足时拒答
 | 路径 | 职责 |
 | --- | --- |
 | `backend/knowledge/multiscale_rag/runtime.py` | 生产入口、惰性加载、域门控和 bundle 适配 |
-| `backend/knowledge/multiscale_rag/service.py` | 粒度路由、分区检索和上下文组装 |
+| `backend/knowledge/multiscale_rag/service.py` | 统一候选检索、对象范围与上下文组装 |
 | `backend/knowledge/multiscale_rag/hierarchy_builder.py` | 构建故事、场景、知识卡和证据层级 |
-| `backend/knowledge/multiscale_rag/index_builder.py` | 为不同粒度生成索引语义文本 |
+| `backend/knowledge/multiscale_rag/index_builder.py` | 为各层文档生成统一检索语义文本 |
 | `backend/knowledge/multiscale_rag/source_text.py` | 原文定位与路径边界检查 |
 | `backend/knowledge/retrieval_core/` | 共享查询、索引、召回、RRF 和重排序组件 |
 | `backend/knowledge/grounded_answer/` | 证据约束回答、引用校验和拒答 |

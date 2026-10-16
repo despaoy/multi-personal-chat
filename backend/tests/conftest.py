@@ -80,3 +80,14 @@ def semantic_plan(monkeypatch):
         return calls
 
     return install
+
+
+@pytest.fixture
+def literal_grounded_query(monkeypatch):
+    """Answer contract tests control preparation; this is not semantic evidence."""
+    from knowledge import dialogue_query
+
+    async def resolve(query, history, **kwargs):
+        return dialogue_query.RetrievalQuery(query)
+
+    monkeypatch.setattr("knowledge.grounded_answer.service.resolve_retrieval_query", resolve)

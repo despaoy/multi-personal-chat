@@ -4,23 +4,31 @@ Only proven object names supplement the complete current query. Historical
 tasks, model claims and guessed facts never become retrieval query text.
 """
 
+from dataclasses import dataclass
+
 from inference.provider_context import get_provider_context_budget
 from knowledge.public_question_binding import bound_retrieval_query, resolve_question_binding
 from knowledge.retrieval_query_plan import plan_retrieval
 
 
-async def contextual_retrieval_query(message: str, history) -> str | None:
-    if not history:
-        return message
+@dataclass(frozen=True)
+class RetrievalQuery:
+    query: str
+    question_binding: dict | None = None
+
+
+async def resolve_retrieval_query(message: str, history, *, domain_id: str | None = None) -> RetrievalQuery | None:
+    if not history and domain_id is not None:
+        return RetrievalQuery(message)
     budget = get_provider_context_budget()
     plan = await plan_retrieval(message, history=history, context_budget=budget.review)
     if not plan.needs_public_retrieval:
         return None
     if not dict(plan.dependencies.groups)["public_knowledge"]:
-        return message
+        return RetrievalQuery(message)
     binding = await resolve_question_binding(
         plan.dependencies, message, window_tokens=budget.window_tokens,
         public_obligations=plan.public_obligations, history=history,
         context_budget=budget.review,
     )
-    return bound_retrieval_query(binding, message)
+    return RetrievalQuery(bound_retrieval_query(binding, message), binding)

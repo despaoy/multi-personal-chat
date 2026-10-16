@@ -11,6 +11,8 @@ from knowledge.grounded_answer.cache import AnswerCache
 from knowledge.grounded_answer.models import AnswerMode, FailureKind
 from knowledge.grounded_answer.service import GroundedAnswerService
 
+pytestmark = pytest.mark.usefixtures("literal_grounded_query")
+
 
 def _install_ask_scope_fixture(monkeypatch):
     from inference import model_manager
