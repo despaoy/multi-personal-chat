@@ -194,18 +194,6 @@ class MemoryItem:
     source_record_pairs: tuple[tuple[str, str], ...] = field(default=(), repr=False, compare=False)
     source_record_versions: tuple[tuple[str, str, str], ...] = field(default=(), repr=False, compare=False)
 
-    @property
-    def relation(self) -> str:
-        """兼容把关系字段简称为 relation 的消费方。"""
-
-        return self.relation_type
-
-    @property
-    def source_ids(self) -> tuple[str, ...]:
-        """兼容通用 evidence packet 对来源 ID 的称呼。"""
-
-        return self.source_message_ids
-
 
 @dataclass(frozen=True)
 class DecisionPlan:

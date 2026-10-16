@@ -407,12 +407,6 @@ def _service_for_variant(
     return CharacterMemoryService(repository, **requested), requested
 
 
-def _selected_evidence_complete(item: Any) -> bool:
-    evidence = tuple(getattr(item, "evidence", ()) or ())
-    source_ids = tuple(getattr(item, "source_message_ids", ()) or getattr(item, "source_ids", ()) or ())
-    return bool(evidence and source_ids)
-
-
 async def _evaluate_retrieval_variant(
     cases: list[dict[str, Any]],
     variant: RetrievalVariant,
@@ -501,7 +495,7 @@ async def _evaluate_retrieval_variant(
             for item_id in sorted(gold_ids):
                 evidence_required += 1
                 item = selected_by_id.get(item_id)
-                if item is not None and _selected_evidence_complete(item):
+                if item is not None and item.evidence and item.source_message_ids:
                     evidence_complete += 1
                 else:
                     missing_evidence_ids.append(item_id)

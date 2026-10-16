@@ -206,10 +206,10 @@ async def test_selected_claim_carries_decoded_evidence_validity_relation_and_sou
     assert len(selected) == 1
     item = selected[0]
     assert item.status == "active"
-    assert item.relation == "SUPERSEDE"
+    assert item.relation_type == "SUPERSEDE"
     assert item.confidence == 0.88
     assert item.valid_from == now.isoformat()
-    assert item.source_ids == ("msg-10", "msg-11", "99")
+    assert item.source_message_ids == ("msg-10", "msg-11", "99")
     assert item.evidence == (
         "用户说：改做点云识别",
         "相邻事件：用户先暂停代码补全方向",
