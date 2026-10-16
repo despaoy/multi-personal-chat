@@ -118,10 +118,13 @@ async def test_source_revision_fingerprints_do_not_enter_model_selection_or_comp
         assert all(version not in output for _key, _source_id, version in target.source_record_versions)
 
 
-async def test_source_revision_read_failure_removes_only_affected_normal_fact(tmp_path, monkeypatch):
+async def test_source_revision_read_failure_stops_before_model(tmp_path, monkeypatch):
+    from unittest.mock import AsyncMock
+
+    from inference.generation_request import generate_character_response
     from repositories.character_memory import DatabaseCharacterMemoryRepository
 
-    request, _prepared, _repo, _db, _scope, target, public = await structured_request(tmp_path)
+    request, _prepared, _repo, _db, _scope, target, _public = await structured_request(tmp_path)
     original = DatabaseCharacterMemoryRepository.linked_source_revisions
 
     async def fail_target(repository, character_id, scope, *, claim_sources):
@@ -130,6 +133,7 @@ async def test_source_revision_read_failure_removes_only_affected_normal_fact(tm
         return await original(repository, character_id, scope, claim_sources=claim_sources)
 
     monkeypatch.setattr(DatabaseCharacterMemoryRepository, "linked_source_revisions", fail_target)
-    wire, _result = await wire_response(request)
-    assert target.content not in wire and BODY.rstrip("。") not in wire
-    assert "用户说喜欢豆浆" in wire and public in wire
+    model = AsyncMock(return_value="不应生成")
+    with pytest.raises(RuntimeError, match="Controlled isolated revision read unavailable"):
+        await generate_character_response(request, model)
+    model.assert_not_awaited()
