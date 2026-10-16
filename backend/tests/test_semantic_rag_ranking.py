@@ -95,7 +95,9 @@ def test_invalid_reranker_view_is_not_silently_accepted():
         PipelineReranker(text_view="invented")
 
 
-@pytest.mark.parametrize("kind", ["nan", "missing", "duplicate", "unknown", "unscored"])
+@pytest.mark.parametrize("kind", ["nan", "missing", "duplicate", "unknown", "unscored",
+                                 "string_score", "boolean_score", "numeric_id", "second_unscored",
+                                 "invalid_container", "invalid_row"])
 def test_invalid_encoder_results_raise_without_changing_ranking_method(kind):
     class Broken:
         def rerank(self, query, candidates, top_k):
@@ -108,6 +110,18 @@ def test_invalid_encoder_results_raise_without_changing_ranking_method(kind):
                 values[1] = values[0]
             elif kind == "unknown":
                 values[0]["id"] = "unseen"
+            elif kind == "string_score":
+                values[0]["rerank_score"] = "0.4"
+            elif kind == "boolean_score":
+                values[0]["rerank_score"] = True
+            elif kind == "numeric_id":
+                values[0]["id"] = 1
+            elif kind == "second_unscored":
+                values[1].pop("rerank_score")
+            elif kind == "invalid_container":
+                return tuple(values)
+            elif kind == "invalid_row":
+                values[1] = None
             else:
                 values[0].pop("rerank_score")
             return values
@@ -119,6 +133,23 @@ def test_invalid_encoder_results_raise_without_changing_ranking_method(kind):
         reranker.rerank(_analysis(), candidates, 2)
     reranker.deterministic.rerank.assert_not_called()
     assert all(item.rerank_score is None and item.rerank_method == 'none' for item in candidates)
+
+
+def test_native_numeric_scores_preserve_scale_order_and_candidate_identity():
+    import numpy as np
+
+    scores = [np.float32(1.25), np.float64(0.0), -2]
+
+    class NumericEncoder:
+        def rerank(self, query, candidates, top_k):
+            return [dict(item, rerank_score=score) for item, score in zip(reversed(candidates), scores)]
+
+    candidates = [_candidate("1"), _candidate("2"), _candidate("3")]
+    result = PipelineReranker(cross_encoder=NumericEncoder()).rerank(_analysis(), candidates, 3)
+    assert [item.document.id for item in result] == ["3", "2", "1"]
+    assert [item.rerank_score for item in result] == [1.25, 0.0, -2.0]
+    assert all(item.rerank_method == "cross_encoder" for item in result)
+    assert all(item.rerank_score is None and item.rerank_method == "none" for item in candidates)
 
 
 @pytest.mark.parametrize('stage', ['initialization', 'inference'])

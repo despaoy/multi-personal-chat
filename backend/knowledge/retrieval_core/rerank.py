@@ -19,6 +19,7 @@ import math
 import os
 import re
 from dataclasses import replace
+from numbers import Real
 from typing import TYPE_CHECKING, Any
 
 from infra.environment import read_bool
@@ -275,24 +276,26 @@ class PipelineReranker:
         reranked_dicts: list[dict[str, Any]] = encoder.rerank(
             analysis.original_query, payload, top_k=max(top_k, len(candidates))
         )
-        if not reranked_dicts:
-            raise RuntimeError("CrossEncoder 返回空结果")
-        if "rerank_score" not in reranked_dicts[0]:
-            raise RuntimeError("CrossEncoder 未加载模型（原始顺序回退）")
+        if not isinstance(reranked_dicts, list) or len(reranked_dicts) != len(candidates):
+            raise RuntimeError("CrossEncoder returned incomplete candidate set")
         by_id = {candidate.document.id: candidate for candidate in candidates}
         ordered: list[RetrievalCandidate] = []
         seen: set[str] = set()
         for item in reranked_dicts:
-            candidate = by_id.get(str(item.get("id")))
-            if candidate is None or candidate.document.id in seen:
+            if not isinstance(item, dict):
+                raise RuntimeError("CrossEncoder returned an invalid candidate row")
+            identity = item.get("id")
+            if not isinstance(identity, str) or identity not in by_id or identity in seen:
                 raise RuntimeError("CrossEncoder returned unknown or duplicate IDs")
-            score = float(item["rerank_score"])
+            raw_score = item.get("rerank_score")
+            if isinstance(raw_score, bool) or not isinstance(raw_score, Real):
+                raise RuntimeError("CrossEncoder returned an invalid numeric score")
+            score = float(raw_score)
             if not math.isfinite(score):
                 raise RuntimeError("CrossEncoder returned non-finite score")
-            seen.add(candidate.document.id)
+            candidate = by_id[identity]
+            seen.add(identity)
             candidate.rerank_score = score
             candidate.rerank_method = "cross_encoder"
             ordered.append(candidate)
-        if len(ordered) != len(candidates):
-            raise RuntimeError("CrossEncoder returned incomplete candidate set")
         return ordered[:top_k]
