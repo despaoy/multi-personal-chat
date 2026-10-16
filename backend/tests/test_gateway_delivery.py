@@ -46,7 +46,7 @@ def gateway(monkeypatch, tmp_path):
         calls.append(msg)
         assert await _save_message(msg, "reply", "model", "default", 0.1, database=database)
         kwargs["delivery_context"].update(message_saved=True, character_id=None)
-        return GenerateResponse(reply="reply", costTime=0.1)
+        return GenerateResponse(reply="reply", model="model", costTime=0.1)
 
     monkeypatch.setattr(integrations, "generate_reply_core", generate)
     payload = integrations.AstrBotMessageRequest(

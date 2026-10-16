@@ -9,7 +9,7 @@ SQLAlchemy ORM 模型（数据库 schema）定义在 db/models.py。
 from datetime import datetime
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, Field, PrivateAttr, StringConstraints, field_validator
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, StringConstraints, field_validator
 
 # ============================================
 # 核心消息模型
@@ -58,11 +58,13 @@ class MessageRequest(BaseModel):
 
 
 class GenerateResponse(BaseModel):
+    model_config = ConfigDict(hide_input_in_errors=True)
+
     branchId: str | None = None
     branchRevision: int | None = None
     evidenceSources: list[dict[str, Any]] = Field(default_factory=list)
-    reply: str
-    model: str = "Qwen/Qwen3-8B"
+    reply: str = Field(strict=True)
+    model: str = Field(strict=True)
     costTime: float
     citations: list[dict[str, Any]] | None = None
     confidence: float | None = None
@@ -72,6 +74,13 @@ class GenerateResponse(BaseModel):
     domainId: str | None = None
     warnings: list[str] | None = None
     modelInvoked: bool = False
+
+    @field_validator("reply", "model")
+    @classmethod
+    def _require_response_text(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("Response text fields must not be blank")
+        return value
 
 
 # ============================================

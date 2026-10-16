@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from pydantic import ValidationError
 from services.chat_generation import ChatGenerationService
 
 from api.error_details import with_provider_error
@@ -468,7 +469,14 @@ async def _generate_reply_body(
                 model_identity=model_identity,
             )
             cached = await response_cache.get(prompt_hash, cache_key)
-            response = GenerateResponse(**cached) if cached is not None else None
+            response = GenerateResponse.model_validate(cached) if cached is not None else None
+        except ValidationError as exc:
+            raise HTTPException(503, detail={
+                "stage": "response_cache", "reason": "invalid_cached_response",
+                "fields": list(dict.fromkeys(str(error["loc"][0]) if error["loc"] else "$"
+                                             for error in exc.errors(include_input=False))),
+                "message": "缓存的生成结果缺少必要字段或内容无效，请清理该条缓存后重试。",
+            }) from exc
         except Exception as exc:
             raise HTTPException(503, "回复缓存读取失败，请检查缓存状态后重试") from exc
         if response is not None:

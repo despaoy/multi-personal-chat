@@ -129,7 +129,7 @@ def test_archive_during_generation_rejects_commit(repo):
 
     async def generate(*args, **kwargs):
         repo.archive("1", branch["id"], 1)
-        return GenerateResponse(reply="回答", costTime=0)
+        return GenerateResponse(reply="回答", model="fixture", costTime=0)
 
     with pytest.raises(HTTPException) as exc:
         asyncio.run(
