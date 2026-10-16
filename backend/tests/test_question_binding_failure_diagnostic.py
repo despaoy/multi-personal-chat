@@ -41,6 +41,9 @@ async def exercise(defect=None):
             raw = "```json\n" + raw + "\n```\n" + MARKER
         elif defect == "non_text":
             raw = {"marker": MARKER}
+        elif defect in {"bytes", "bytearray"}:
+            encoded = raw.encode("utf-8")
+            raw = bytearray(encoded) if defect == "bytearray" else encoded
         received["raw"] = raw
         return raw
 
@@ -58,7 +61,7 @@ async def test_complete_source_blind_positive_preserves_exact_input_and_response
     assert validate_question_binding(binding, binding["input"]) == binding["scopes"]
 
 
-@pytest.mark.parametrize("defect", ["json", "typed_id", "fence", "non_text", "transport", "timeout"])
+@pytest.mark.parametrize("defect", ["json", "typed_id", "fence", "non_text", "transport", "timeout", "bytes", "bytearray"])
 async def test_failed_binding_exposes_internal_diagnostic_without_binding(defect):
     binding, error, received = await exercise(defect)
     assert binding is None and error is not None
@@ -69,6 +72,8 @@ async def test_failed_binding_exposes_internal_diagnostic_without_binding(defect
         raw=received.get("raw") if isinstance(received.get("raw"), str) else None,
     )
     assert not hasattr(error, "binding")
+    if defect in {"bytes", "bytearray"}:
+        assert error.reason == "invalid_or_incomplete_review" and diagnostic["raw"] is None
 
 
 async def run_api(tmp_path, monkeypatch, defect=None, *, private=True, fee_only=False, private_large=False):

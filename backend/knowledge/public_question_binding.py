@@ -94,11 +94,11 @@ async def resolve_question_binding(dependencies, query, *, window_tokens, public
     raw = None
     try:
         raw = await asyncio.wait_for(reviewer(messages), timeout=30)
+        if not isinstance(raw, str):
+            raise ValueError("Question resolver response must be text")
         scopes = parse_object_scopes(raw, query, [task["id"] for task in payload["public_tasks"]],
                                      reference_context=payload.get("reference_context"))
-        binding = dict(input=payload, input_sha256=_digest(payload), raw=raw, scopes=scopes)
-        validate_question_binding(binding, payload)
-        return binding
+        return dict(input=payload, input_sha256=_digest(payload), raw=raw, scopes=scopes)
     except asyncio.TimeoutError as exc:
         raise QuestionBindingReviewError("timeout", messages, raw) from exc
     except (ValueError, TypeError, KeyError, RecursionError) as exc:
