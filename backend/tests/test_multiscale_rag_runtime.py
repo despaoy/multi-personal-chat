@@ -19,7 +19,8 @@ if TYPE_CHECKING:
 
 class FakeQueryEmbeddingProvider:
     dimension = 384
-    model_id = "test-384"
+    model_id = "paraphrase-multilingual-MiniLM-L12-v2"
+    encoding_contract = "complete-token-windows-weighted-v1"
 
     def __init__(self) -> None:
         self._model = object()
@@ -272,3 +273,17 @@ def test_source_extractor_tightening_matches_complete_span_without_widening(tmp_
     assert status == "exact_source_match" and (narrowed.line_start, narrowed.line_end) == (2, 2)
     unmatched, status = extractor.tighten_to_evidence(source, "未在来源出现的文字")
     assert unmatched is source and status == "approved_evidence_fallback"
+
+
+@pytest.mark.parametrize("contract", [None, "prefix-only-v1"])
+def test_runtime_rejects_incompatible_encoding_before_exposing_a_service(monkeypatch, tmp_path, contract):
+    from knowledge.multiscale_rag import runtime as module
+
+    provider = FakeQueryEmbeddingProvider()
+    manifest = dict(embedding_model=provider.model_id, embedding_encoding=contract)
+    monkeypatch.setattr(module, "_load_bundle", lambda root: ([], np.empty((0, 384)), manifest))
+    monkeypatch.setattr(module, "LocalMeanPoolingEmbeddingProvider", lambda **kwargs: provider)
+    runtime = MultiScaleRagRuntime(index_root=tmp_path)
+    with pytest.raises(ValueError, match="encoding contract mismatch.*rebuild"):
+        runtime._ensure_loaded()
+    assert runtime._service is None

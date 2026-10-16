@@ -1,11 +1,8 @@
 """Targeted snapshot integrity and failure preservation tests; no model calls."""
 
-import ast
 import hashlib
 import pickle
 import zipfile
-from pathlib import Path
-from types import SimpleNamespace
 
 import faiss
 import numpy as np
@@ -167,22 +164,16 @@ def test_reader_pins_old_descriptor_across_new_publication(vector, monkeypatch):
     assert reopen(vector).metadata == vector.metadata
 
 
-def test_legacy_triple_cannot_authorize_database_reuse(vector):
+def test_legacy_triple_requires_explicit_rebuild_without_replacing_files(vector):
     faiss.write_index(vector.index, str(vector.index_path))
     vector.metadata_path.write_bytes(pickle.dumps(vector.metadata))
     vector.bm25_path.write_bytes(pickle.dumps(vector._bm25_state()))
-    loaded = reopen(vector)
-    assert loaded.get_stats()["index_size"] == 2 and not loaded.snapshot_validated
-    tree = ast.parse((Path(__file__).resolve().parents[1] / "api/knowledge.py").read_text())
-    node = next(
-        n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "_loaded_metadata_matches_database"
-    )
-    module = ast.Module(body=[node], type_ignores=[])
-    namespace = {"db": SimpleNamespace(), "getattr": getattr}
-    exec(compile(module, "scoped legacy gate", "exec"), namespace)
-    assert namespace[node.name](loaded) is False
-    vector._save_index()
-    assert reopen(vector).snapshot_validated
+    paths = [vector.index_path, vector.metadata_path, vector.bm25_path]
+    before = [digest(path) for path in paths]
+    with pytest.raises(ValueError, match="Legacy vector index.*rebuild"):
+        reopen(vector)
+    assert [digest(path) for path in paths] == before
+    assert not vector.snapshot_path.exists()
 
 
 def test_empty_snapshot_overrides_legacy_sources(vector):
@@ -208,8 +199,7 @@ def test_incomplete_legacy_index_raises_without_replacement(vector, component, d
     else:
         target.write_bytes(b'broken component')
     before = {p.name: digest(p) for p in paths.values() if p.exists()}
-    error = RuntimeError if component == 'index' else FileNotFoundError if damage == 'missing' else pickle.UnpicklingError
-    with pytest.raises(error):
+    with pytest.raises(ValueError, match="Legacy vector index.*rebuild"):
         reopen(vector)
     assert {p.name: digest(p) for p in paths.values() if p.exists()} == before
     assert not vector.snapshot_path.exists()
@@ -220,3 +210,43 @@ def test_new_empty_database_remains_valid(tmp_path, monkeypatch):
     empty = VectorDatabase(str(tmp_path))
     assert empty.metadata == [] and empty.bm25.corpus == [] and empty.index.ntotal == 0
     assert empty.search('没有资料') == []
+
+
+@pytest.mark.parametrize("contract", [None, "prefix-only-v1", "complete-token-windows-weighted-v0"])
+def test_missing_or_wrong_encoding_cannot_authorize_snapshot_reuse(vector, contract):
+    import json
+
+    vector._save_index()
+    with zipfile.ZipFile(vector.snapshot_path) as archive:
+        members = {name: archive.read(name) for name in archive.namelist()}
+    manifest = json.loads(members["manifest.json"])
+    if contract is None:
+        del manifest["embedding_encoding"]
+    else:
+        manifest["embedding_encoding"] = contract
+    members["manifest.json"] = json.dumps(manifest).encode()
+    with zipfile.ZipFile(vector.snapshot_path, "w") as archive:
+        for name, value in members.items():
+            archive.writestr(name, value)
+    before = digest(vector.snapshot_path)
+    with pytest.raises(ValueError, match="encoding contract mismatch.*rebuild"):
+        reopen(vector)
+    assert digest(vector.snapshot_path) == before
+
+
+def test_prefix_encoding_schema_cannot_be_relabelled_as_a_complete_snapshot(vector):
+    import json
+
+    vector._save_index()
+    with zipfile.ZipFile(vector.snapshot_path) as archive:
+        members = {name: archive.read(name) for name in archive.namelist()}
+    manifest = json.loads(members["manifest.json"])
+    manifest["schema"] = 1
+    members["manifest.json"] = json.dumps(manifest).encode()
+    with zipfile.ZipFile(vector.snapshot_path, "w") as archive:
+        for name, value in members.items():
+            archive.writestr(name, value)
+    before = digest(vector.snapshot_path)
+    with pytest.raises(ValueError, match="Unsupported snapshot manifest.*rebuild"):
+        reopen(vector)
+    assert digest(vector.snapshot_path) == before

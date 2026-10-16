@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from knowledge.retrieval_core.embedding import resolve_local_model_path, vector_norm
+from knowledge.retrieval_core.embedding import ENCODING_CONTRACT, complete_embeddings, resolve_local_model_path
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -23,11 +23,12 @@ if TYPE_CHECKING:
 class LocalMeanPoolingEmbeddingProvider:
     model_id = "paraphrase-multilingual-MiniLM-L12-v2"
     dimension = 384
+    encoding_contract = ENCODING_CONTRACT
 
     def __init__(self, model_path: str | None = None, *, batch_size: int = 24, max_length: int = 128) -> None:
         self.model_path = model_path or resolve_local_model_path(self.model_id)
-        self.batch_size = max(1, int(batch_size))
-        self.max_length = max(8, int(max_length))
+        self.batch_size = batch_size
+        self.max_length = max_length
         self._tokenizer = None
         self._model = None
         self._query_cache: OrderedDict[str, np.ndarray] = OrderedDict()
@@ -57,27 +58,16 @@ class LocalMeanPoolingEmbeddingProvider:
             import torch
 
             tokenizer, model = self._load()
-            batches: list[np.ndarray] = []
+            def encode(features):
+                hidden = model(**features).last_hidden_state
+                mask = features["attention_mask"].unsqueeze(-1).to(hidden.dtype)
+                return ((hidden * mask).sum(dim=1) / mask.sum(dim=1)).detach().float().cpu().numpy()
+
             with torch.inference_mode():
-                for start in range(0, len(texts), self.batch_size):
-                    encoded = tokenizer(
-                        texts[start : start + self.batch_size],
-                        padding=True,
-                        truncation=True,
-                        max_length=self.max_length,
-                        return_tensors="pt",
-                    )
-                    hidden = model(**encoded).last_hidden_state
-                    mask = encoded["attention_mask"].unsqueeze(-1).to(hidden.dtype)
-                    pooled = (hidden * mask).sum(dim=1) / mask.sum(dim=1).clamp(min=1e-9)
-                    pooled = torch.nn.functional.normalize(pooled, p=2, dim=1)
-                    batches.append(pooled.cpu().numpy().astype(np.float32, copy=False))
-        matrix = np.vstack(batches)
-        if matrix.shape != (len(texts), self.dimension):
-            raise ValueError(f"embedding shape mismatch: {matrix.shape}, expected {(len(texts), self.dimension)}")
-        for vector in matrix:
-            vector_norm(vector)
-        return matrix
+                return complete_embeddings(
+                    texts, tokenizer, max_tokens=self.max_length, batch_size=self.batch_size,
+                    dimension=self.dimension, encode_batch=encode,
+                )
 
     def embed_query(self, query: str) -> np.ndarray:
         with self._runtime_lock:

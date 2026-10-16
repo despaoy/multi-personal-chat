@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_EMBEDDING_MODEL_ID = "paraphrase-multilingual-MiniLM-L12-v2"
 DEFAULT_EMBEDDING_DIM = 384
+ENCODING_CONTRACT = "complete-token-windows-weighted-v1"
 
 _LOCAL_MODEL_SEARCH_PATHS: list[Path] = [
     # backend/RAG、backend/models（与现有 vector_db 约定一致）
@@ -78,8 +79,8 @@ def resolve_local_model_path(model_id: str = DEFAULT_EMBEDDING_MODEL_ID) -> str:
 
 
 def compute_model_fingerprint(model_path: str) -> str:
-    """模型指纹：config.json + modules.json 内容哈希（缓存失效依据）。"""
-    digest = hashlib.sha256()
+    """Fingerprint the encoding contract and model configuration for cache invalidation."""
+    digest = hashlib.sha256(ENCODING_CONTRACT.encode())
     for name in ("config.json", "modules.json", "sentence_bert_config.json"):
         p = Path(model_path) / name
         if p.exists():
@@ -123,8 +124,8 @@ class SentenceTransformerEmbeddingProvider:
         self._model_path = model_path
         self.model_id = model_id
         self._expected_dim = expected_dim
-        self._batch_size = max(1, int(batch_size))
-        self._timeout_seconds = float(timeout_seconds)
+        self._batch_size = batch_size
+        self._timeout_seconds = timeout_seconds
         self._device = device
         self._model = None
         self._fingerprint: str | None = None
@@ -174,25 +175,10 @@ class SentenceTransformerEmbeddingProvider:
 
     def _embed_texts_locked(self, texts: list[str]) -> np.ndarray:
         model = self._load_model_locked()
-        start = time.monotonic()
-        all_embeddings: list[np.ndarray] = []
-        for i in range(0, len(texts), self._batch_size):
-            batch = texts[i : i + self._batch_size]
-            embeddings = model.encode(
-                batch,
-                normalize_embeddings=True,
-                batch_size=len(batch),
-                show_progress_bar=False,
-            )
-            all_embeddings.append(np.asarray(embeddings, dtype=np.float32))
-            if time.monotonic() - start > self._timeout_seconds:
-                raise TimeoutError(
-                    f"embedding 编码超时（>{self._timeout_seconds}s，已完成 {i + len(batch)}/{len(texts)}）"
-                )
-        matrix = np.vstack(all_embeddings)
-        if matrix.shape[1] != self.dimension:
-            raise EmbeddingModelError(f"embedding 维度不符: 期望 {self.dimension}, 实际 {matrix.shape[1]}")
-        return matrix.astype(np.float32, copy=False)
+        return sentence_transformer_embeddings(
+            model, texts, batch_size=self._batch_size, dimension=self.dimension,
+            timeout_seconds=self._timeout_seconds,
+        )
 
 
     def embed_query(self, query: str) -> np.ndarray:
@@ -232,3 +218,85 @@ def vector_norm(vector: np.ndarray) -> float:
 def normalized_vector(vector: np.ndarray) -> np.ndarray:
     value = np.asarray(vector, dtype=np.float32).reshape(-1)
     return value / vector_norm(value)
+
+
+def complete_embeddings(texts, tokenizer, *, max_tokens, batch_size, dimension, encode_batch, timeout_seconds=300):
+    if any(type(value) is not int or value < 1 for value in (max_tokens, batch_size, dimension)):
+        raise ValueError("Embedding window, batch and dimension must be positive integers")
+    if (
+        isinstance(timeout_seconds, bool)
+        or not isinstance(timeout_seconds, (int, float))
+        or not math.isfinite(timeout_seconds)
+        or timeout_seconds <= 0
+    ):
+        raise ValueError("Embedding deadline must be finite and positive")
+    capacity = max_tokens - tokenizer.num_special_tokens_to_add(pair=False)
+    if capacity < 1:
+        raise ValueError("Embedding window has no room for payload tokens")
+    if not texts:
+        return np.zeros((0, dimension), dtype=np.float32)
+    deadline = time.monotonic() + timeout_seconds
+    accumulated = np.zeros((len(texts), dimension), dtype=np.float64)
+    for source_start in range(0, len(texts), batch_size):
+        source_texts = texts[source_start : source_start + batch_size]
+        tokens = tokenizer(source_texts, add_special_tokens=False, truncation=False, padding=False)["input_ids"]
+        if len(tokens) != len(source_texts):
+            raise ValueError("Tokenizer did not preserve the number of source texts")
+        encoded = tokenizer(
+            source_texts,
+            truncation=True,
+            max_length=max_tokens,
+            stride=0,
+            return_overflowing_tokens=True,
+            return_special_tokens_mask=True,
+            padding=True,
+            return_tensors="pt",
+        )
+        owners = encoded.pop("overflow_to_sample_mapping").tolist()
+        specials = encoded.pop("special_tokens_mask").tolist()
+        recovered = [[] for _ in source_texts]
+        weights = []
+        for owner, row, attention, special in zip(
+            owners, encoded["input_ids"].tolist(), encoded["attention_mask"].tolist(), specials, strict=True
+        ):
+            payload = [
+                token for token, active, marker in zip(row, attention, special, strict=True) if active and not marker
+            ]
+            recovered[owner].extend(payload)
+            weights.append(max(1, len(payload)))
+        if recovered != tokens:
+            raise ValueError("Tokenizer did not preserve complete source tokens")
+        for start in range(0, len(owners), batch_size):
+            if time.monotonic() > deadline:
+                raise TimeoutError("Complete embedding encoding exceeded its deadline")
+            stop = start + batch_size
+            features = {name: values[start:stop] for name, values in encoded.items()}
+            rows = np.asarray(encode_batch(features), dtype=np.float32)
+            if rows.shape != (len(owners[start:stop]), dimension):
+                raise ValueError("embedding shape mismatch for complete token windows")
+            for owner, weight, row in zip(owners[start:stop], weights[start:stop], rows, strict=True):
+                accumulated[source_start + owner] += weight * row / vector_norm(row)
+    if time.monotonic() > deadline:
+        raise TimeoutError("Complete embedding encoding exceeded its deadline")
+    return np.asarray([row / vector_norm(row) for row in accumulated], dtype=np.float32)
+
+
+def sentence_transformer_embeddings(model, texts, *, batch_size, dimension, timeout_seconds=300):
+    import torch
+
+    def encode(features):
+        features = {name: value.to(model.device) for name, value in features.items()}
+        features["modality"] = "text"
+        return model(features)["sentence_embedding"].detach().float().cpu().numpy()
+
+    model.eval()
+    with torch.inference_mode():
+        return complete_embeddings(
+            texts,
+            model.tokenizer,
+            max_tokens=model.max_seq_length,
+            batch_size=batch_size,
+            dimension=dimension,
+            encode_batch=encode,
+            timeout_seconds=timeout_seconds,
+        )

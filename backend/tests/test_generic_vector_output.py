@@ -24,6 +24,10 @@ def prepared(tmp_path, monkeypatch):
     vector = VectorDatabase(str(tmp_path / 'vectors'), IndexConfig(index_type='flat', batch_encode_size=1))
     encode = Mock(side_effect=healthy)
     vector._model = SimpleNamespace(encode=encode)
+    # The complete native-window encoder has separate token-coverage tests.
+    # This control exercises how retrieval handles its returned vector batches.
+    monkeypatch.setattr("knowledge.vector_db.sentence_transformer_embeddings",
+                        lambda model, texts, **kwargs: model.encode(texts, **kwargs))
     vector.add_documents([dict(DOCUMENT)])
     monkeypatch.setattr(rag_helper, 'get_vector_db', lambda: vector)
     helper = rag_helper.RAGHelper()

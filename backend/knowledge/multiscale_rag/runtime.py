@@ -150,6 +150,8 @@ class MultiScaleRagRuntime:
             ]
             if any(manifest["embedding_model"] != self._provider.model_id for _, _, manifest in bundles):
                 raise ValueError("Character index embedding model does not match query encoder")
+            if any(manifest.get("embedding_encoding") != self._provider.encoding_contract for _, _, manifest in bundles):
+                raise ValueError("Character index encoding contract mismatch; rebuild with build_character_rag_index.py")
             documents = [document for docs, _, _ in bundles for document in docs]
             vectors = np.vstack([matrix for _, matrix, _ in bundles])
             domain_id = self._base_config.domain_id

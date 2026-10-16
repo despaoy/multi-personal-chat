@@ -9,7 +9,6 @@ import json
 import logging
 import math
 import os
-import pickle
 import time
 from collections import Counter, OrderedDict, defaultdict
 from copy import deepcopy
@@ -22,7 +21,7 @@ from typing import Any, Dict, List, Optional
 import faiss
 import numpy as np
 
-from knowledge.retrieval_core.embedding import resolve_local_model_path, vector_norm
+from knowledge.retrieval_core.embedding import resolve_local_model_path, sentence_transformer_embeddings, vector_norm
 from knowledge.retrieval_core.tokenization import tokenize
 from knowledge.snapshot_store import SNAPSHOT_NAME, document_ids, load_snapshot, save_snapshot
 
@@ -258,26 +257,18 @@ class VectorDatabase:
         self.index = faiss.IndexIDMap(base_index)
 
     def _load_index(self):
-        if self.snapshot_path.exists():
-            self.index, self.metadata, self._snapshot_bm25 = load_snapshot(
-                self.db_path, self.EMBEDDING_DIM, self._to_faiss_id
-            )
-            self.snapshot_validated = True
-        else:
-            # Legacy triples remain readable but cannot authorize API reuse.
-            self.index = faiss.read_index(str(self.index_path))
-            with open(self.metadata_path, 'rb') as f:
-                self.metadata = pickle.load(f)
+        if not self.snapshot_path.exists():
+            raise ValueError("Legacy vector index has no encoding contract; explicitly rebuild it from source documents")
+        self.index, self.metadata, self._snapshot_bm25 = load_snapshot(
+            self.db_path, self.EMBEDDING_DIM, self._to_faiss_id
+        )
+        self.snapshot_validated = True
         logger.info(f"加载FAISS索引完成，共 {len(self.metadata)} 条记录")
 
     def _load_bm25(self):
-        if self.snapshot_path.exists():
-            bm25_data = self._snapshot_bm25
-        elif self.bm25_path.exists() or self.metadata:
-            with open(self.bm25_path, 'rb') as f:
-                bm25_data = pickle.load(f)
-        else:
+        if not self.snapshot_path.exists():
             return
+        bm25_data = self._snapshot_bm25
         self.bm25.corpus = bm25_data["corpus"]
         self.bm25.doc_freqs = defaultdict(int, bm25_data["doc_freqs"])
         self.bm25.doc_lens = bm25_data["doc_lens"]
@@ -359,7 +350,7 @@ class VectorDatabase:
         for i in range(0, len(texts), batch_size):
             batch = texts[i:i + batch_size]
             embeddings = np.asarray(
-                self._model.encode(batch, normalize_embeddings=True, batch_size=len(batch)), dtype=np.float32
+                sentence_transformer_embeddings(self._model, batch, batch_size=len(batch), dimension=self.EMBEDDING_DIM), dtype=np.float32
             )
             if embeddings.shape != (len(batch), self.EMBEDDING_DIM):
                 raise ValueError(f"embedding shape mismatch: {embeddings.shape}, expected {(len(batch), self.EMBEDDING_DIM)}")

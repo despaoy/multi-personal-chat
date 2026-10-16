@@ -43,6 +43,7 @@ def _write_partition(root: Path, name: str, documents: list, matrix, allowed: se
             "document_count": len(selected),
             "vector_dimension": int(vectors.shape[1]),
             "embedding_model": provider.model_id,
+            "embedding_encoding": provider.encoding_contract,
             "normalized": True,
             "physical_scale_partition": True,
         },

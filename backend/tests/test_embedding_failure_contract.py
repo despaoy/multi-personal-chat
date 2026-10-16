@@ -52,26 +52,25 @@ def test_device_probe_failure_is_not_cpu_availability(monkeypatch,caller):
             VectorDatabase.__new__(VectorDatabase)._check_gpu_availability()
     assert caught.value is error
 
-@pytest.mark.parametrize('failure',['encode','dimension','timeout'])
-def test_encoding_failure_does_not_repeat_batches(monkeypatch,failure):
-    provider=embedding.SentenceTransformerEmbeddingProvider(model_path='fixture',expected_dim=2,batch_size=1,timeout_seconds=1)
-    encode=Mock(return_value=np.ones((1,3 if failure=='dimension' else 2),dtype=np.float32))
-    provider._model=SimpleNamespace(encode=encode)
-    if failure=='encode':
-        encode.side_effect=ValueError('invalid input')
-    if failure=='timeout':
-        times=iter([0,2])
-        monkeypatch.setattr(embedding.time,'monotonic',lambda:next(times))
-    expected={'encode':ValueError,'dimension':embedding.EmbeddingModelError,'timeout':TimeoutError}[failure]
-    with pytest.raises(expected):
-        provider.embed_texts(['complete synthetic input'])
-    assert encode.call_count==1
+@pytest.mark.parametrize("error", [ValueError("invalid input"), TimeoutError("encoding deadline")])
+def test_encoding_failure_does_not_repeat_or_change_the_error(monkeypatch, error):
+    provider = embedding.SentenceTransformerEmbeddingProvider(model_path="fixture")
+    provider._model = object()
+    encode = Mock(side_effect=error)
+    monkeypatch.setattr(embedding, "sentence_transformer_embeddings", encode)
+    with pytest.raises(type(error)) as caught:
+        provider.embed_texts(["complete synthetic input"])
+    assert caught.value is error and encode.call_count == 1
 
-def test_successful_batches_and_empty_input_keep_contract():
-    provider=embedding.SentenceTransformerEmbeddingProvider(model_path='fixture',expected_dim=2,batch_size=1)
-    encode=Mock(side_effect=[np.array([[1.,0.]]),np.array([[0.,1.]])])
-    provider._model=SimpleNamespace(encode=encode)
-    assert provider.embed_texts([]).shape==(0,2)
+
+def test_successful_batches_and_empty_input_keep_contract(monkeypatch):
+    provider = embedding.SentenceTransformerEmbeddingProvider(model_path="fixture", expected_dim=2, batch_size=1)
+    provider._model = object()
+    matrix = np.eye(2, dtype=np.float32)
+    encode = Mock(return_value=matrix)
+    monkeypatch.setattr(embedding, "sentence_transformer_embeddings", encode)
+    assert provider.embed_texts([]).shape == (0, 2)
     encode.assert_not_called()
-    np.testing.assert_array_equal(provider.embed_texts(['first','second']),np.eye(2,dtype=np.float32))
-    assert encode.call_count==2
+    assert provider.embed_texts(["first", "second"]) is matrix
+    encode.assert_called_once_with(provider._model, ["first", "second"], batch_size=1,
+                                   dimension=2, timeout_seconds=300.0)

@@ -14,6 +14,8 @@ from pathlib import Path
 
 import faiss
 
+from knowledge.retrieval_core.embedding import ENCODING_CONTRACT
+
 SNAPSHOT_NAME = "index_snapshot.zip"
 MEMBERS = ("faiss_index.bin", "metadata.pkl", "bm25_state.pkl")
 
@@ -100,7 +102,8 @@ def save_snapshot(root, index, metadata, bm25, dimension, id_converter):
         _write_pickle(folder / MEMBERS[1], metadata)
         _write_pickle(folder / MEMBERS[2], bm25)
         manifest = {
-            "schema": 1,
+            "schema": 2,
+            "embedding_encoding": ENCODING_CONTRACT,
             "dimension": dimension,
             "count": len(metadata),
             "sha256": {name: _hash(folder / name) for name in MEMBERS},
@@ -128,8 +131,10 @@ def load_snapshot(root, dimension, id_converter):
         if len(names) != 4 or set(names) != {*MEMBERS, "manifest.json"}:
             raise ValueError("Invalid snapshot members")
         manifest = json.loads(archive.read("manifest.json"))
-        if manifest["schema"] != 1 or manifest["dimension"] != dimension or set(manifest["sha256"]) != set(MEMBERS):
-            raise ValueError("Unsupported snapshot manifest")
+        if manifest["schema"] != 2 or manifest["dimension"] != dimension or set(manifest["sha256"]) != set(MEMBERS):
+            raise ValueError("Unsupported snapshot manifest; explicitly rebuild from source documents")
+        if manifest.get("embedding_encoding") != ENCODING_CONTRACT:
+            raise ValueError("Vector index encoding contract mismatch; explicitly rebuild from source documents")
         for name in MEMBERS:
             path = folder / name
             with archive.open(name) as source, path.open("wb") as target:
