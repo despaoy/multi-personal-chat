@@ -44,6 +44,7 @@ from inference.openai_protocol import ProviderResponseError
 from inference.provider_context import get_provider_context_budget
 from infra.circuit_breaker import CircuitOpenError
 from infra.concurrency_control import InferenceQueueFull, RateLimitExceeded, inference_runtime
+from infra.environment import read_bool
 from infra.observability import increment, log_event, set_consecutive
 from infra.security_utils import strip_control_chars
 
@@ -207,7 +208,7 @@ def _response_cache_keys(
     不会走到本函数——有状态对话每轮都要回写记忆与关系，缓存命中
     会跳过回写导致状态与对话脱节。
     """
-    use_knowledge_base = bool(config.get("useKnowledgeBase", True)) and enable_rag
+    use_knowledge_base = read_bool(config, "useKnowledgeBase", True) and enable_rag
     interlocutor = request.senderName or request.userName or ""
     prompt_identity = {
         "message": request.message,
@@ -445,7 +446,7 @@ async def _generate_reply_body(
     # 响应缓存：缓存命中会跳过回写，导致人物状态与对话脱节。
     use_response_cache = (
         response_cache is not None and prepared_character_turn is None and selected_lora is None
-        and not (runtime_config.get("useKnowledgeBase", True) and enable_rag)
+        and not (read_bool(runtime_config, "useKnowledgeBase", True) and enable_rag)
     )
     cloud_provider = request_context.provider
     if use_response_cache:
@@ -1172,17 +1173,13 @@ async def _generate_with_retrieval(
     _temperature = float(_cfg.get("temperature", os.getenv("VLLM_TEMPERATURE", "0.7")))
     _max_tokens = int(_cfg.get("maxTokens", os.getenv("VLLM_MAX_TOKENS", "2048")))
     _top_p = float(_cfg.get("topP", os.getenv("VLLM_TOP_P", "0.9")))
-    _use_kb = _cfg.get("useKnowledgeBase", True) and enable_rag
+    _use_kb = read_bool(_cfg, "useKnowledgeBase", True) and enable_rag
 
     # RAG 检索（受设置页 useKnowledgeBase 开关控制）
     rag_context = ""
     rag_meta: dict[str, Any] = {}
-    citations_enabled = os.getenv("RAG_CITATIONS_ENABLED", "true").strip().lower() in {
-        "1",
-        "true",
-        "yes",
-        "on",
-    }
+    citations_enabled = read_bool(os.environ, "RAG_CITATIONS_ENABLED", True)
+    independent_tasks_enabled = read_bool(os.environ, "CHARACTER_INDEPENDENT_TASKS_ENABLED", False)
     retrieval = RetrievalResult()
     filters = None
     if _use_kb:
@@ -1354,7 +1351,7 @@ async def _generate_with_retrieval(
             persona_prompt=_get_system_prompt(prompt_lora_name or lora_name),
             interlocutor=request.senderName or request.userName or "普通用户",
             retrieval=retrieval,
-            independent_tasks_enabled=os.getenv("CHARACTER_INDEPENDENT_TASKS_ENABLED", "false").lower() == "true",
+            independent_tasks_enabled=independent_tasks_enabled,
             # 编译后的角色上下文：画像/关系/情景/决策进系统提示词，
             # 长期记忆只进用户消息的不可信参考区。
             character_context=(prepared_character_turn.compiled if prepared_character_turn else None),
