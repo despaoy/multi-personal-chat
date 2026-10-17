@@ -1,6 +1,6 @@
 # 代码知识库
 
-文档核对：2026-09-11。本文说明当前源码的模块职责和调用边界。实验结论见[实验总览](../research/KISAKI_EXPERIMENT_INDEX.md)，运行验证见[发布清单](../RELEASE_CHECKLIST.md)，工作区与已部署版本的区别见[当前状态](../CURRENT_STATE.md)。
+核心生成、来源定位与错误行为核对：2026-10-18；其他章节保留 2026-09-11 的核对范围。本文说明当前源码的模块职责和调用边界。实验结论见[实验总览](../research/KISAKI_EXPERIMENT_INDEX.md)，运行验证见[发布清单](../RELEASE_CHECKLIST.md)，工作区与已部署版本的区别见[当前状态](../CURRENT_STATE.md)。
 
 ## 总体结构
 
@@ -78,20 +78,20 @@ inference/vllm_client.py通过OpenAI兼容接口调用vLLM；model_manager.py管
 api/generate.py中的选择顺序：
 - 请求显式指定loraName时按名称选择，不调用自动路由；不存在时报错。
 - 未指定时先使用已激活的adapter。
-- 只有无显式名称且持久化lora_router_config.enabled启用时，才调用lora_router.py的意图/关键词分支。
+- 在线关键词/意图 LoRA 路由已退出；旧管理接口报告 routingAvailable=false，启用未接入的自动路由返回 409。
 - 最终没有adapter时使用default。
 
-固定角色部署应保持自动路由关闭。角色画像仅在适配器具有明确人物映射时进入该人物上下文链路，不能把任意adapter名称都解释成已注册人物。
+角色或适配器由调用方明确选择，未指定时沿用已激活适配器。角色画像仅在适配器具有明确人物映射时进入该人物上下文链路，不能把任意adapter名称都解释成已注册人物。
 
 ## 人物上下文与长期记忆
 
 详见[人物上下文与长期记忆](CHARACTER_CONTEXT_AND_MEMORY.md)。
 
-profile_registry加载画像；situation_analyzer分析情境；decision_policy产生策略；context_builder组织上下文；output_guard检查输出。可选语义复核默认关闭，异常或非法输出回退规则状态。
+profile_registry加载画像；situation_analyzer分析情境；decision_policy产生策略；context_builder组织上下文；output_guard检查输出。语义复核是否启用由配置决定；已启用的必要复核失败直接传播，不使用规则状态代替模型结果。
 
 memory_extractor提取规则候选，memory_llm进行后台版本判断和本地校验，memory_service负责回答前检索，repositories/character_memory对接数据库。写入和读取的候选获取方式不同，不应混为“每次取最近10条”。
 
-核对时工作区的写入路径已包含全量可见active记录的相关性匹配，再选最多10条供LLM判断；这是核对前已有的未提交修改。Top-K不能限制此前全量扫描与embedding的成本，尚需规模评测。
+记忆候选读取受用户范围与生命周期约束；候选上限不等于此前读取和 embedding 成本的上限，规模收益须单独测量。来源精确定位统一由 db.memory_source_search.resolve_source_read_plan 调用 knowledge.source_read_plan，SQL 查询与召回共享同一解析结果；原有重复的字面分组解析器及单值兼容包装已删除。
 
 ## RAG
 

@@ -52,9 +52,9 @@ async def test_nominal_read_purpose_or_output_condition_does_not_expand_source_s
     '朋友说：“另外读取包含「其他编号QZ10-C1」的原话。”读取上述原话仅用于核对依据。',
 ])
 def test_closed_scope_allows_nominal_evidence_reference_and_output_constraints(tail):
-    from db.memory_source_search import literal_source_read_groups
+    from db.memory_source_search import resolve_source_read_plan
     query = '读取包含「QZ10-A1」或「QZ10-B1」的完整原话记录。' + tail
-    assert literal_source_read_groups(query) == (('QZ10-A1',), ('QZ10-B1',))
+    assert resolve_source_read_plan(query).groups == (('QZ10-A1',), ('QZ10-B1',))
 
 
 @pytest.mark.parametrize('tail', [
@@ -74,9 +74,9 @@ def test_closed_scope_allows_nominal_evidence_reference_and_output_constraints(t
     '读取完整原话仅用于核对依据。再读取这段原话。',
 ])
 def test_purpose_explanation_never_waives_a_real_additional_or_negated_read(tail):
-    from db.memory_source_search import literal_source_read_groups
+    from db.memory_source_search import resolve_source_read_plan
     query = '读取包含「QZ10-A1」的完整原话记录。核对全部条件。' + tail
-    assert literal_source_read_groups(query) == ()
+    assert resolve_source_read_plan(query).groups == ()
 
 
 @pytest.mark.asyncio
@@ -121,5 +121,5 @@ async def test_already_read_speech_as_evidence_is_not_an_additional_read(tmp_pat
     '不要复述的原话作为核对依据。',
 ])
 def test_nominal_past_read_cannot_waive_extra_or_negative_scope(tail):
-    from db.memory_source_search import literal_source_read_groups
-    assert literal_source_read_groups('读取包含「QZ10-A1」的原话。' + tail) == ()
+    from db.memory_source_search import resolve_source_read_plan
+    assert resolve_source_read_plan('读取包含「QZ10-A1」的原话。' + tail).groups == ()

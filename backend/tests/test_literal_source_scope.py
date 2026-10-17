@@ -43,15 +43,14 @@ async def test_literal_whole_source_survives_unrelated_complete_history(tmp_path
     ('  查找包含『QZ8-07-001』的完整原话记录。', 'QZ8-07-001'),
 ])
 def test_literal_reader_resolves_only_exact_locator(query, expected):
-    from db.memory_source_search import literal_source_fragment
-    assert literal_source_fragment(query) == expected
+    from db.memory_source_search import literal_source_fragments
+    assert literal_source_fragments(query) == (expected,)
 
 
 @pytest.mark.parametrize("query", [
     '朋友说：“查找包含「QZ8-07-001」的完整原话记录。”',
     '不要查找包含「QZ8-07-001」的完整原话记录。',
     '查找包含「QZ8-07-001」和「另一项」的完整原话记录。',
-    '查找包含「QZ8-07-001」的完整原话记录。另读取包含「另一项」的原话。',
     '查找包含「QZ8-07-001」的完整原话记录。不要读取原始资料。',
     '查找包含「QZ8-07-001」的完整原话记录。同时核对另一段原始发言。',
     '查找包含「QZ8-07-001的完整原话记录。',
@@ -61,8 +60,8 @@ def test_literal_reader_resolves_only_exact_locator(query, expected):
     '查找包含「   」的完整原话记录。',
 ])
 def test_unresolved_or_quoted_read_does_not_narrow_source_candidates(query):
-    from db.memory_source_search import literal_source_fragment
-    assert literal_source_fragment(query) == ""
+    from db.memory_source_search import literal_source_fragments
+    assert literal_source_fragments(query) == ()
 
 
 def test_exact_locator_uses_bound_literal_and_scoped_current_grant(tmp_path):

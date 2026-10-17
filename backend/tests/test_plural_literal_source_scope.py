@@ -45,9 +45,8 @@ async def test_two_closed_source_reads_do_not_expand_to_history_union(tmp_path, 
     '读取包含「QZ8-01」的完整原话记录。读取包含「QZ8-02」的完整原话记录。只核对保存的资料。',
 ])
 def test_independently_closed_declarations_form_literal_union(query):
-    from db.memory_source_search import literal_source_fragment, literal_source_fragments
+    from db.memory_source_search import literal_source_fragments
     assert literal_source_fragments(query) == ('QZ8-01', 'QZ8-02')
-    assert literal_source_fragment(query) == ''
 
 
 @pytest.mark.parametrize('query', [

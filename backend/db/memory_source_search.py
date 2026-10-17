@@ -96,13 +96,6 @@ def literal_source_fragments(query):
     return tuple(dict.fromkeys(fragments))
 
 
-def literal_source_fragment(query):
-    """Keep the existing single-locator API: plural reads are not one locator."""
-    fragments = literal_source_fragments(query)
-    return fragments[0] if len(fragments) == 1 else ""
-
-
-
 def unresolved_source_read_tail(view):
     """Distinguish a source-read action from a reference to its purpose.
 
@@ -139,61 +132,6 @@ def unresolved_source_read_tail(view):
     action = r"(?:核对|对照|比较|检查|补充|列出|提供|找出|查询|搜索)"
     return bool(re.search(rf"{addition}[^。；;\n]*{action}[^。；;\n]*{source_object}", remainder)
                 or re.search(rf"{addition}[^。；;\n]*(?:其他|另一|另一个|新的|不同|全部历史|所有历史)[^。；;\n]*{source_object}", remainder))
-
-
-
-def literal_source_read_groups(query):
-    """Closed literal read declarations, as a union of same-record groups.
-
-    A conjunction requires every fragment in one original speech record.
-    Disjunctions and separately closed reads are unions. Mixed operators have
-    no guessed precedence; unresolved or quoted commands retain sparse recall.
-    """
-    from character.quoted_erasure_authority import masked_quotes
-
-    if not isinstance(query, str):
-        return ()
-    try:
-        view, quotes = masked_quotes(query)
-    except ValueError:
-        return ()
-    groups, position, index = [], 0, 0
-    prefix = (r"\s*(?:(?:再|另|同时|另外)?(?:请)?|请(?:再|另|同时|另外)?)"
-              r"(?:查找|检索|读取|查看)\s*(?:包含|含有)\s*")
-    suffix = r"\s*的\s*(?:完整|全部)?(?:用户)?(?:原话|原始发言)(?:记录)?\s*(?:[。；;\n]|$)"
-    while index < len(quotes):
-        a, _, _ = quotes[index]
-        if not re.fullmatch(prefix, view[position:a]):
-            break
-        members, operator = [], None
-        while index < len(quotes):
-            _, z, fragment = quotes[index]
-            if (not fragment.strip() or "\n" in fragment or not terms(fragment)
-                    or any(char in fragment for char in '“”‘’「」『』"')):
-                return ()
-            members.append(fragment)
-            index += 1
-            read = re.match(suffix, view[z:])
-            if read:
-                position = z + read.end()
-                members = tuple(dict.fromkeys(members))
-                groups.extend((member,) for member in members) if operator == 'or' else groups.append(members)
-                break
-            if index >= len(quotes):
-                return ()
-            connector = view[z:quotes[index][0]].strip()
-            next_operator = ('and' if connector in {'和', '与', '及', '并且'} else
-                             'or' if connector in {'或', '或者'} else None)
-            if next_operator is None or (operator is not None and next_operator != operator):
-                return ()
-            operator = next_operator
-        else:
-            return ()
-    remainder = view[position:]
-    if not groups or unresolved_source_read_tail(remainder):
-        return ()
-    return tuple(dict.fromkeys(groups))
-
 
 
 def resolve_source_read_plan(query):

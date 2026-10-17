@@ -59,7 +59,7 @@ Web 页面 `/narrative` 支持基于原作创建独立假设、分支对话、�
 
 - AstrBot 网关插件 `multipersonal_gateway` 统一接入 QQ、Telegram、企业微信、公众号和个人微信。
 - `traceId` 全链路追踪，`platform + adapter + messageId` 幂等。
-- 平台、会话、发送者和全局限流；群聊与私聊降级策略。
+- 平台、会话、发送者和全局限流；群聊与私聊采用各自会话策略。
 
 ### 工程与评测
 
@@ -92,7 +92,7 @@ LoRA   BGE/FAISS         Redis
 - FastAPI 负责会话策略、幂等、队列、RAG、模型调用、历史和指标。
 - vLLM/Transformers 是可替换的推理后端。
 - 模型、LoRA、数据库、日志和向量索引不进入 Git，默认放在仓库外。
-- 所有外部边界都设置超时、降级和结构化错误。
+- 必要外部依赖失败明确报告；超时和并发控制由对应调用边界执行，不自动切换模型或数据库。
 
 ## 仓库结构
 

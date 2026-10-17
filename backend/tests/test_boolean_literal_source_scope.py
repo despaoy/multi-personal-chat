@@ -51,8 +51,8 @@ async def test_same_record_boolean_read_does_not_fall_back_to_large_history(tmp_
     ('读取包含「QZ9-A1」和「QZ9-A2」的原话。再读取包含「QZ9-B1」和「QZ9-B2」的原话。核对各版本。', (('QZ9-A1', 'QZ9-A2'), ('QZ9-B1', 'QZ9-B2'))),
 ])
 def test_closed_groups_have_explicit_same_record_semantics(query, expected):
-    from db.memory_source_search import literal_source_read_groups
-    assert literal_source_read_groups(query) == expected
+    from db.memory_source_search import resolve_source_read_plan
+    assert resolve_source_read_plan(query).groups == expected
 
 
 @pytest.mark.parametrize('query', [
@@ -69,8 +69,8 @@ def test_closed_groups_have_explicit_same_record_semantics(query, expected):
     '读取包含「QZ9-A1」除了「QZ9-A2」的原话。',
 ])
 def test_ambiguous_or_unauthorized_groups_cannot_authorize_partial_scope(query):
-    from db.memory_source_search import literal_source_read_groups
-    assert literal_source_read_groups(query) == ()
+    from db.memory_source_search import resolve_source_read_plan
+    assert resolve_source_read_plan(query).groups == ()
 
 
 def test_exact_bound_boolean_sql_retains_all_versions_and_security_scope(tmp_path):
