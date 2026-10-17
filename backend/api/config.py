@@ -39,7 +39,7 @@ def _mask_config(config: dict) -> dict:
     for k, v in config.items():
         if str(k).lower() in _SERVER_ONLY_CONFIG_KEYS_NORMALIZED:
             continue
-        if any(s in k.lower() for s in _SENSITIVE_KEYWORDS) and v:
+        if k != "maxTokens" and any(s in k.lower() for s in _SENSITIVE_KEYWORDS) and v:
             masked[k] = _mask_value(str(v))
         else:
             masked[k] = v
@@ -49,6 +49,13 @@ def _mask_config(config: dict) -> dict:
 # ============================================
 # 系统配置
 # ============================================
+
+async def _request_json(request: Request):
+    try:
+        return await request.json()
+    except JSONDecodeError as exc:
+        raise HTTPException(400, "请求必须是合法 JSON") from exc
+
 
 @router.get("/api/config")
 async def get_config(current_user: dict = Depends(get_current_admin)):
@@ -66,7 +73,7 @@ async def update_config(request: Request, current_user: dict = Depends(get_curre
 
     C-S1 fix: 系统配置含 API key 等敏感项，限定 admin。
     """
-    new_config = await request.json()
+    new_config = await _request_json(request)
     if not isinstance(new_config, dict):
         raise HTTPException(status_code=422, detail="Configuration payload must be an object")
     server_only = {
@@ -87,22 +94,27 @@ async def update_config(request: Request, current_user: dict = Depends(get_curre
         is_valid, errors = InputValidator.validate(entry, CONFIG_SCHEMA)
         if not is_valid:
             raise HTTPException(status_code=422, detail={"message": f"配置项 '{key}' 验证失败", "errors": errors})
-    await run_db(db.update_config, new_config)
-    # 使缓存失效
-    await run_db(invalidate_config_cache)
-    compat_keys = {'openaiCompatBaseUrl', 'openaiCompatApiKey', 'openaiCompatModel'}
-    if compat_keys & new_config.keys():
-        try:
+    progress = {"stage": "config_persistence", "configPersisted": None}
+    try:
+        await run_db(db.update_config, new_config)
+        progress["configPersisted"] = True
+        progress["stage"] = "config_cache"
+        await run_db(invalidate_config_cache)
+        compat_keys = {'openaiCompatBaseUrl', 'openaiCompatApiKey', 'openaiCompatModel'}
+        if compat_keys & new_config.keys():
+            progress["stage"] = "runtime_config"
             from inference.model_manager import ModelProvider, get_model_manager
 
             provider = get_model_manager()._providers[ModelProvider.OPENAI_COMPAT]
             await run_db(provider._refresh_db_config)
-        except Exception as exc:
-            raise HTTPException(status_code=503, detail={
-                "stage": "runtime_config", "configPersisted": True,
-                "message": "配置已保存，但运行时同步失败；请检查配置数据库和模型状态后重试",
-            }) from exc
-    return {"success": True, "message": "配置已更新", "config": _mask_config(await run_db(lambda: db.config))}
+        progress["stage"] = "config_readback"
+        saved_config = await run_db(lambda: db.config)
+        return {"success": True, "message": "配置已更新", "config": _mask_config(saved_config)}
+    except Exception as exc:
+        raise HTTPException(503, detail={
+            **progress,
+            "message": "配置保存未完整完成，请核对已保存配置与模型状态后重试。结果未确认时，请勿假定配置未变更。",
+        }) from exc
 
 
 # ============================================
@@ -128,10 +140,7 @@ async def set_model_provider(request: Request, current_user: dict = Depends(get_
     try:
         from inference.model_manager import ModelProvider, get_model_manager
 
-        try:
-            body = await request.json()
-        except JSONDecodeError as exc:
-            raise HTTPException(400, "请求必须是合法 JSON") from exc
+        body = await _request_json(request)
         if not isinstance(body, dict):
             raise HTTPException(400, "请求必须是包含 provider 的对象")
         provider_name = body.get("provider")
@@ -166,5 +175,5 @@ async def set_model_provider(request: Request, current_user: dict = Depends(get_
     except Exception as exc:
         raise HTTPException(503, detail={
             **progress,
-            "message": "模型提供商设置未完整完成；请核对当前模型状态与已保存配置后重试。未确认的操作状态为 null。",
+            "message": "模型提供商设置未完整完成，请核对当前模型状态与已保存配置后重试。结果未确认时，请勿假定配置未变更。",
         }) from exc
