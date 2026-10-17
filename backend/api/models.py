@@ -85,28 +85,19 @@ async def delete_model(
     current_user: dict = Depends(get_current_admin),
     service: ModelManagementService = Depends(get_model_management_service),
 ):
-    """删除模型
-
-    C-S1 fix: 模型删除为不可逆操作，限定 admin。
-    """
+    """Delete model files; an I/O failure may leave a partially deleted directory."""
     try:
-        success = await service.delete_model(model_name)
-
-        if success:
-            return {
-                "success": True,
-                "message": "模型已删除"
-            }
-        else:
+        if not await service.delete_model(model_name):
             raise HTTPException(status_code=400, detail="删除模型失败")
     except HTTPException:
-        # C1 fix: HTTPException 是 Exception 子类，必须单独捕获并 re-raise，
-        # 否则下方 except Exception 会把 400 改写成 500，丢失原始状态码与语义。
-        # 对比 api/router.py:185、api/auth.py:116 均使用此模式。
         raise
-    except Exception:
-        logger.exception("删除模型失败")
-        raise HTTPException(status_code=500, detail="删除模型失败")
+    except Exception as exc:
+        logger.error("模型删除失败: %s", type(exc).__name__)
+        raise HTTPException(
+            status_code=503,
+            detail=f"模型删除未完成（{type(exc).__name__}），可能已删除部分文件，请刷新模型列表并检查目录权限后重试",
+        ) from exc
+    return {"success": True, "message": "模型已删除"}
 
 
 @router.post("/api/models/check-7b")

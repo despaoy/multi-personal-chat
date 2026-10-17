@@ -832,17 +832,15 @@ class ModelManager:
             return False
 
         model_dir = self.models_dir / config.name
-        if not model_dir.exists():
+        try:
+            model_dir.lstat()
+        except FileNotFoundError:
             return True
 
-        try:
-            import shutil
-            shutil.rmtree(model_dir)
-            logger.info(f"模型已删除: {config.name}")
-            return True
-        except Exception as e:
-            logger.error(f"删除模型失败: {e}")
-            return False
+        import shutil
+        shutil.rmtree(model_dir)
+        logger.info("模型已删除: %s", config.name)
+        return True
 
 
 _model_manager: Optional[ModelManager] = None
