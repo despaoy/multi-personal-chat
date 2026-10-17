@@ -347,11 +347,16 @@ async def _generate_reply_body(
         raise HTTPException(status_code=422, detail={"message": "输入验证失败", "errors": errors})
 
     source_db = message_db if message_db is not None else db
+    select_active_lora = not request.loraName and not request.characterId and prepared_override is None
     try:
-        runtime_config, loras = await asyncio.gather(
-            asyncio.to_thread(lambda: source_db.config or {}),
-            asyncio.to_thread(lambda: list(source_db.loras)),
-        )
+        if select_active_lora or request.loraName not in {"", "default"}:
+            runtime_config, loras = await asyncio.gather(
+                asyncio.to_thread(lambda: source_db.config or {}),
+                asyncio.to_thread(lambda: list(source_db.loras)),
+            )
+        else:
+            runtime_config = await asyncio.to_thread(lambda: source_db.config or {})
+            loras = []
     except Exception as exc:
         raise HTTPException(503, "生成配置读取失败，请检查数据库连接后重试") from exc
 
@@ -365,19 +370,14 @@ async def _generate_reply_body(
                 503, "生成参数配置无效，请检查 topP 是否为当前模型服务支持的数值后重试"
             ) from exc
 
-    # 获取LoRA：始终计算 active_lora，优先使用前端指定的，否则使用当前激活的
-    active_lora = next((item for item in loras if item["status"] == "active"), None)
-    selected_lora = active_lora
-    if prepared_override is not None or request.characterId or request.loraName == "default":
-        selected_lora = None  # Explicit adapter or base model; never auto-route to another persona.
-
+    selected_lora = None
     if request.loraName and request.loraName != "default":
         selected_lora = next((item for item in loras if item["name"] == request.loraName), None)
         if selected_lora is None:
             raise HTTPException(status_code=422, detail="Specified LoRA does not exist")
-        lora_name = selected_lora["name"]
-    else:
-        lora_name = selected_lora["name"] if selected_lora else "default"
+    elif select_active_lora:
+        selected_lora = next((item for item in loras if item["status"] == "active"), None)
+    lora_name = selected_lora["name"] if selected_lora else "default"
 
     if selected_lora and request_provider not in {"vllm", "transformers_peft"}:
         raise HTTPException(422, "所选模型提供商不支持 LoRA，请选择基础模型或显式选择支持 LoRA 的提供商")

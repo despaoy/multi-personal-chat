@@ -288,6 +288,8 @@ def test_gateway_rejects_branch_instead_of_ignoring():
 
 
 def test_character_mismatch_rejected_before_provider_call(repo, monkeypatch):
+    # This test covers adapter ownership, independently of semantic strategy selection.
+    monkeypatch.setenv("CONTEXTUAL_DECISION_POLICY_ENABLED", "false")
     from types import SimpleNamespace
 
     import api.generate as gen
