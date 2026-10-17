@@ -2,7 +2,7 @@
 """
 模型管理模块
 负责多提供商模型推理、本地模型文件管理、LoRA适配器切换。
-支持 Ollama / llama.cpp / Transformers+PEFT / Mock 四种提供商。
+统一管理已配置的远程、本地模型提供商及资源生命周期。
 """
 
 import logging
@@ -654,6 +654,15 @@ class VLLMProvider(BaseProvider):
         """异步生成入口"""
         return await self.generate_async(prompt, session_history, rag_docs, max_tokens_override)
 
+class ProviderShutdownError(RuntimeError):
+    """All provider close failures, retained across asynchronous/thread boundaries."""
+
+    def __init__(self, failures):
+        self.failures = tuple(failures)
+        details = ", ".join(f"{name}: {type(error).__name__}" for name, error in self.failures)
+        super().__init__(f"Model provider cleanup failed ({details})")
+
+
 class ModelManager:
     """模型管理器，负责多提供商切换、LoRA管理、模型文件操作。"""
 
@@ -754,15 +763,19 @@ class ModelManager:
         return bool(weight_files)
 
     def shutdown(self):
-        """关闭所有 provider 的底层资源（httpx 客户端、GPU 句柄等）。
-
-        C6 fix: 应在应用 lifespan 的 shutdown 阶段调用，避免资源泄漏。
-        """
+        """Attempt all provider closes; retain every failure and cancellation."""
+        failures = []
         for provider in self._providers.values():
             try:
                 provider.close()
-            except Exception as e:
-                logger.warning(f"关闭 provider {getattr(provider, 'name', '?')} 失败: {e}")
+            except BaseException as error:
+                failures.append((provider.name, error))
+        if failures:
+            error = ProviderShutdownError(failures)
+            for _, failure in failures:
+                if not isinstance(failure, Exception):
+                    raise failure from error
+            raise error
 
     def download_model_from_hf(self, model_name: str, force: bool = False) -> Dict[str, Any]:
         """Download one model while serializing destructive model-directory changes."""
