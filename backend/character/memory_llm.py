@@ -1782,6 +1782,8 @@ class MemoryEnrichmentScheduler:
     async def flush_memory(self, timeout: float = 10.0) -> bool:
         """立即提交所有 idle 缓冲并等待完成；不关闭客户端。"""
 
+        if not math.isfinite(timeout) or timeout < 0:
+            raise ValueError("timeout must be finite and nonnegative")
         timers = tuple(self._idle_tasks.values())
         self._idle_tasks.clear()
         for timer in timers:
@@ -1793,7 +1795,7 @@ class MemoryEnrichmentScheduler:
         if self._queued_jobs == 0 and self._processing == 0:
             return True
         try:
-            await asyncio.wait_for(self._queue.join(), timeout=max(timeout, 0.0))
+            await asyncio.wait_for(self._queue.join(), timeout=timeout)
             return True
         except TimeoutError:
             return False
@@ -2152,6 +2154,8 @@ class MemoryEnrichmentScheduler:
 
 
     async def shutdown(self, timeout: float = 10.0) -> None:
+        if not math.isfinite(timeout) or timeout < 0:
+            raise ValueError("timeout must be finite and nonnegative")
         self._closed = True
         await self.flush_memory(timeout=timeout)
         if self._worker is not None and not self._worker.done():
@@ -2186,7 +2190,7 @@ def get_memory_enrichment_scheduler() -> MemoryEnrichmentScheduler:
 async def shutdown_memory_enrichment() -> None:
     global _default_scheduler
     scheduler = _default_scheduler
-    _default_scheduler = None
     if scheduler is not None:
         timeout = float(os.getenv("MEMORY_LLM_SHUTDOWN_TIMEOUT", "10"))
         await scheduler.shutdown(timeout=timeout)
+        _default_scheduler = None
