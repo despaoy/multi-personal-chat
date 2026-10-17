@@ -9,7 +9,7 @@ from character.memory_query import plan_memory_query
 
 
 def proposal(source, value, **changes):
-    raw = dict(kind="location", value=value, evidence=source, confidence=.96, operation="ADD")
+    raw = dict(attributed_to='user', kind="location", value=value, evidence=source, confidence=.96, operation="ADD")
     raw.update(changes)
     return json.dumps({"memories": [raw]}, ensure_ascii=False)
 

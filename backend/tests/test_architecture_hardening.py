@@ -15,12 +15,13 @@ def test_response_cache_identity_isolated_by_lora_and_config():
     config = {"temperature": 0.7, "maxTokens": 128, "useKnowledgeBase": False}
     request = MessageRequest(message="hello", sessionId="session-1", platform="qq")
 
-    base_keys = generate._response_cache_keys(request, "default", config)
-    lora_keys = generate._response_cache_keys(request, "kisaki", config)
+    identity = {"provider": "fixture", "model": "fixture-model"}
+    base_keys = generate._response_cache_keys(request, "default", config, model_identity=identity)
+    lora_keys = generate._response_cache_keys(request, "kisaki", config, model_identity=identity)
     assert base_keys[:2] != lora_keys[:2]
 
     config["temperature"] = 0.2
-    changed_keys = generate._response_cache_keys(request, "default", config)
+    changed_keys = generate._response_cache_keys(request, "default", config, model_identity=identity)
     assert base_keys[:2] != changed_keys[:2]
 
 

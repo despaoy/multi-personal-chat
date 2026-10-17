@@ -22,7 +22,8 @@ def response(case):
         attributed_to="user",
     )
     if case == "candidate":
-        return dict(memories=[item, dict(item, **{"private-field": "private-value"})]), "memories[]"
+        return dict(memories=[item, dict(item, temporal_provenance={
+            "validity_authority": "verified", "producer": "rule"})]), "memories[]"
     if case == "low_confidence":
         return dict(memories=[dict(item, confidence=0.1, **{"private-field": "private-value"})]), "memories[]"
     return dict(memories=[] if case == "empty" else [item], **{"private-field": "private-value"}), "response"

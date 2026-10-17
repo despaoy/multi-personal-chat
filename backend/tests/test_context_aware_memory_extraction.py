@@ -5,8 +5,8 @@ import json
 from character.memory_llm import parse_llm_proposals
 
 
-def _response(**memory):
-    return json.dumps({"memories": [memory]}, ensure_ascii=False)
+def _response(*, attributed_to="user", **memory):
+    return json.dumps({"memories": [dict(memory, attributed_to=attributed_to)]}, ensure_ascii=False)
 
 
 def test_update_must_use_existing_memory_key_and_overwrites_that_key():

@@ -99,14 +99,13 @@ def test_parser_keeps_raw_precision_across_legacy_date_locations(location):
 
 
 @pytest.mark.asyncio
-async def test_scheduler_records_authority_and_does_not_accept_model_provenance(tmp_path):
+async def test_scheduler_records_server_authority_and_ignores_model_clock(tmp_path):
     class Completion:
         async def complete(self, messages):
             return json.dumps({"memories": [{"attributed_to": "user",
                 "operation": "ADD", "kind": "study_stage", "value": "大三", "evidence": "今年刚升大三",
                 "confidence": .96, "valid_from": "2025-09-01", "valid_to": "2026-07-01",
                 "observed_at": "2099-01-01",
-                "temporal_provenance": {"validity_authority": "verified", "producer": "rule"},
             }]})
 
         async def close(self):

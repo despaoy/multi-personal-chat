@@ -16,7 +16,7 @@ def test_format_failure_is_not_empty_success():
 
 def test_valid_structure_is_not_evidence_support():
     def output(value):
-        return json.dumps(dict(memories=[dict(kind='like', value=value,
+        return json.dumps(dict(memories=[dict(attributed_to='user', kind='like', value=value,
             evidence='我喜欢红茶', confidence=0.99, operation='ADD')]))
     rejected = audit_call(call(output('咖啡')))
     assert rejected['status'] == 'none_admitted' and rejected['accepted'] == []

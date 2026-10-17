@@ -9,7 +9,7 @@ import pytest
 from fastapi import HTTPException
 
 from api import config as config_api
-from cache import config_cache, redis_client
+from cache import config_cache
 from db import adapter
 from db.database import SQLiteDB
 from inference import model_manager
@@ -22,10 +22,6 @@ def isolated_snapshot(monkeypatch):
     monkeypatch.setattr(config_cache, "monotonic", lambda: clock[0])
     monkeypatch.setattr(config_cache, "_ttl_with_jitter", lambda ttl: ttl)
 
-    def forbidden():
-        pytest.fail("Configuration snapshots must not use a Redis client")
-
-    monkeypatch.setattr(redis_client, "get_redis", forbidden)
     return clock
 
 

@@ -38,7 +38,7 @@ def test_trimmed_quote_cannot_drop_its_original_subject():
 def test_other_clause_does_not_discard_separate_self_fact():
     source = '我哥哥在青州，我自己在临沂学雕刻。'
     assert not explicitly_other_subject(source=source, evidence='我自己在临沂学雕刻', value='临沂')
-    output = json.dumps(dict(memories=[dict(operation="ADD", kind='location', value='临沂',
+    output = json.dumps(dict(memories=[dict(attributed_to='user', operation="ADD", kind='location', value='临沂',
         evidence='我自己在临沂学雕刻', confidence=0.99)]))
     assert len(parse_llm_proposals(output, source_message=source)) == 1
 
@@ -57,6 +57,6 @@ def test_question_owner_grammar_includes_existing_write_vocabulary():
 
 def test_shared_event_is_not_reclassified_by_personal_field_guard():
     source = '我姐姐喜欢我送给她的陶杯。'
-    output = json.dumps(dict(memories=[dict(operation="ADD", kind='shared_event', value='陶杯',
+    output = json.dumps(dict(memories=[dict(attributed_to='user', operation="ADD", kind='shared_event', value='陶杯',
         evidence=source, confidence=0.99)]))
     assert len(parse_llm_proposals(output, source_message=source)) == 1

@@ -783,6 +783,7 @@ def complete_self_assertions(message: str, *, reference_time: datetime | None = 
     from character.temporal_expression import source_temporal_spans
 
     statement = memory_statement_body(message)
+    statement = assertion_before_lookup(statement) or statement
     if source_temporal_spans(statement):
         return ()
     sentences = _asserted_sentences(statement)

@@ -8,7 +8,7 @@ from character.memory_llm import parse_llm_proposals
 
 
 def candidate(message, kind, value, **kwargs):
-    return json.dumps({'memories': [dict(kind=kind, value=value, evidence=message,
+    return json.dumps({'memories': [dict(attributed_to='user', kind=kind, value=value, evidence=message,
         content='用户提到' + value, confidence=.96, operation='ADD', **kwargs)]}, ensure_ascii=False)
 
 
@@ -53,7 +53,7 @@ def test_question_split_does_not_certify_uncertain_or_qualified_residence(messag
 @pytest.mark.parametrize('kind', ['location', 'user_fact'])
 def test_existing_residence_can_be_superseded_with_scoped_evidence(kind):
     message = '我搬到宣城了，你还记得我的专业吗？'
-    raw = dict(kind=kind, value='宣城', evidence=message, confidence=.96,
+    raw = dict(attributed_to='user', kind=kind, value='宣城', evidence=message, confidence=.96,
                operation='SUPERSEDE', target_memory_id='7', target_memory_key='user_residence')
     result, = parse_llm_proposals(json.dumps({'memories': [raw]}), source_message=message,
         existing_memories=({'id':'7', 'memory_key':'user_residence',
@@ -114,7 +114,7 @@ async def test_scoped_update_persists_versions_and_keeps_full_source(tmp_path):
             payload = json.loads(messages[-1]['content'])
             source = payload['current_user_message']
             update = source == statements[1]
-            proposal = dict(kind='location', value='宣城' if update else '衡水',
+            proposal = dict(attributed_to='user', kind='location', value='宣城' if update else '衡水',
                 evidence=source, confidence=.96, operation='SUPERSEDE' if update else 'ADD')
             if update:
                 old, = payload['existing_memories']
