@@ -4,7 +4,6 @@ import asyncio
 import io
 import logging
 import os
-import re
 import threading
 import zipfile
 from collections.abc import Awaitable
@@ -328,7 +327,7 @@ async def upload_zip(kb_id: int, file: UploadFile = File(...), current_user: dic
     if not existing:
         raise HTTPException(status_code=404, detail="知识库不存在")
 
-    if not file.filename or not file.filename.endswith(".zip"):
+    if not file.filename or not file.filename.lower().endswith(".zip"):
         raise HTTPException(status_code=400, detail="请上传ZIP文件")
 
     content = await file.read(_ZIP_MAX_BYTES + 1)
@@ -392,7 +391,7 @@ async def upload_zip(kb_id: int, file: UploadFile = File(...), current_user: dic
                         continue
 
                     # 文档标题 = 文件名（去掉扩展名）
-                    doc_title = re.sub(r"\.(txt|md|json)$", "", filename)
+                    doc_title = filename.rsplit(".", 1)[0]
 
                     # 创建文档 - 注入文件夹路径到category
                     document_data = {
