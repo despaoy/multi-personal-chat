@@ -22,7 +22,8 @@ from app.env import load_backend_env
 load_backend_env()
 
 import asyncio
-from contextlib import asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager
+from importlib import import_module
 from datetime import datetime
 
 from fastapi import FastAPI, HTTPException, Request
@@ -55,11 +56,15 @@ def _initialize_database(database) -> None:
 
 
 async def _close_resource(label: str, resource, method_name: str) -> None:
-    """Close one resource without blocking the event loop or later cleanup."""
-    if resource is None:
-        return
+    """Close an owned resource or lazy module callback; report failures to the exit stack."""
     try:
-        method = getattr(resource, method_name)
+        if isinstance(resource, str):
+            resource = import_module(resource)
+        for attribute in method_name.split("."):
+            if resource is None:
+                return
+            resource = getattr(resource, attribute)
+        method = resource
         if inspect.iscoroutinefunction(method):
             result = await method()
         else:
@@ -67,7 +72,17 @@ async def _close_resource(label: str, resource, method_name: str) -> None:
         if inspect.isawaitable(result):
             await result
     except Exception as exc:
-        logger.warning("关闭%s失败: %s", label, exc)
+        logger.error("关闭%s失败: %s", label, type(exc).__name__)
+        raise
+
+
+@asynccontextmanager
+async def _closing_resource(label: str, resource, method_name: str):
+    """Use exit contexts so successive close failures retain earlier exceptions."""
+    try:
+        yield
+    finally:
+        await _close_resource(label, resource, method_name)
 
 
 # ── 导入所有 API 路由 ──
@@ -159,81 +174,31 @@ async def lifespan(app: FastAPI):
         yield
     finally:
         logger.info("👋 服务关闭中，清理资源...")
-        try:
-            from evaluation.runtime_runner import shutdown_generation_evaluations
-
-            await shutdown_generation_evaluations()
-        except Exception as e:
-            logger.warning("关闭评估任务失败: %s", e)
-        try:
-            from training.task_manager import shutdown_simple_lora_trainer
-
-            await shutdown_simple_lora_trainer()
-        except Exception as e:
-            logger.warning("关闭 LoRA 训练任务失败: %s", e)
-        try:
-            from api.knowledge import shutdown_intent_tasks
-
-            await shutdown_intent_tasks()
-        except Exception as e:
-            logger.warning("关闭 RAG 意图任务失败: %s", e)
-        try:
-            from services.delivery_memory import shutdown_delivery_memory
-
-            await shutdown_delivery_memory()
-        except Exception as e:
-            logger.warning("关闭交付记忆任务失败: %s", type(e).__name__)
-        try:
-            from services.turn_completion import shutdown_turn_completions
-
-            # Accepted completions may still enqueue semantic jobs. Drain them
-            # while their scheduler and database dependencies remain available.
-            await shutdown_turn_completions()
-        except Exception as e:
-            logger.warning("关闭角色回写任务失败: %s", e)
-        try:
-            from character.memory_llm import shutdown_memory_enrichment
-
-            await shutdown_memory_enrichment()
-        except Exception as e:
-            logger.warning("关闭后台长期记忆任务失败: %s", e)
-        await _close_resource(
-            "readiness probe",
-            getattr(app.state, "readiness_probe", None),
-            "shutdown",
+        # Drain accepted work before closing its scheduler and database dependencies.
+        resources = (
+            ("评估任务", "evaluation.runtime_runner", "shutdown_generation_evaluations"),
+            ("LoRA 训练任务", "training.task_manager", "shutdown_simple_lora_trainer"),
+            ("RAG 意图任务", "api.knowledge", "shutdown_intent_tasks"),
+            ("交付记忆任务", "services.delivery_memory", "shutdown_delivery_memory"),
+            ("角色回写任务", "services.turn_completion", "shutdown_turn_completions"),
+            ("后台长期记忆任务", "character.memory_llm", "shutdown_memory_enrichment"),
+            ("readiness probe", getattr(app.state, "readiness_probe", None), "shutdown"),
+            ("推理调度器", container.inference_runtime, "shutdown"),
+            ("SQLite 连接池", _cfg.connection_pool, "close"),
+            ("HTTP 客户端池", _cfg.http_client_pool, "close"),
+            ("备份调度器", _cfg.backup_mgr, "stop_scheduled_backup"),
+            ("PostgreSQL 适配器", database if postgres_mode else None, "close"),
+            ("模型管理器", "inference.model_manager", "_model_manager.shutdown"),
+            ("vLLM 客户端", "api.generate", "close_vllm_client"),
+            ("熔断器注册表", _cfg.circuit_breaker_registry, "clear"),
+            ("async Redis 客户端", "cache.redis_client", "close_async_redis"),
         )
-        await _close_resource("推理调度器", container.inference_runtime, "shutdown")
-        await _close_resource("SQLite 连接池", _cfg.connection_pool, "close")
-        await _close_resource("HTTP 客户端池", _cfg.http_client_pool, "close")
-        await _close_resource("备份调度器", _cfg.backup_mgr, "stop_scheduled_backup")
-        # PG 模式下显式关闭引擎连接池与 SyncPgAdapter 后台事件循环。
-        if postgres_mode:
-            await _close_resource("PostgreSQL 适配器", database, "close")
-        # C6 fix: 关闭所有模型 Provider 持有的 httpx 客户端与 GPU 句柄。
-        from inference import model_manager
-
-        await _close_resource("模型管理器", model_manager._model_manager, "shutdown")
-        # C10 fix: 关闭 generate.py 中独立的 vLLM 客户端连接池
-        try:
-            from api.generate import close_vllm_client
-
-            await close_vllm_client()
-        except Exception as e:
-            logger.warning(f"关闭 vLLM 客户端失败: {e}")
-        if _cfg.circuit_breaker_registry is not None:
-            await _close_resource(
-                "熔断器注册表",
-                _cfg.circuit_breaker_registry,
-                "clear",
-            )
-        # 关闭共享的 async Redis 客户端
-        try:
-            from cache.redis_client import close_async_redis
-
-            await close_async_redis()
-        except Exception as e:
-            logger.warning(f"关闭 async Redis 客户端失败: {e}")
-        _clear_lifespan_resource_references(_cfg)
+        cleanup = AsyncExitStack()
+        cleanup.callback(_clear_lifespan_resource_references, _cfg)
+        for resource in reversed(resources):
+            await cleanup.enter_async_context(_closing_resource(*resource))
+        # Forward the active failure so cleanup errors retain its exception chain.
+        await cleanup.__aexit__(*sys.exc_info())
         logger.info("✅ 资源清理完成")
 
 

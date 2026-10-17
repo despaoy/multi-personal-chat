@@ -70,17 +70,13 @@ async def get_async_redis():
 
 
 async def close_async_redis() -> None:
-    """关闭异步 Redis 客户端与连接池（应用退出时调用）"""
-    global _async_client, _async_pool
-    if _async_client is not None:
-        try:
-            await _async_client.aclose()
-        except Exception:
-            pass
-        _async_client = None
-    if _async_pool is not None:
-        try:
-            await _async_pool.aclose()
-        except Exception:
-            pass
-        _async_pool = None
+    """Release idle shared resources; attempt both closes and propagate failures."""
+    global _async_client, _async_pool, _async_lock
+    client, pool = _async_client, _async_pool
+    _async_client = _async_pool = _async_lock = None
+    try:
+        if client is not None:
+            await client.aclose()
+    finally:
+        if pool is not None:
+            await pool.aclose()

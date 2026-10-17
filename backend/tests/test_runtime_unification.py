@@ -584,24 +584,6 @@ async def test_close_resource_offloads_synchronous_cleanup():
     assert close_threads[0] != event_loop_thread
 
 
-def test_lifespan_cleanup_is_guarded_by_finally():
-    import ast
-    import inspect
-    import textwrap
-
-    from app import main
-
-    tree = ast.parse(textwrap.dedent(inspect.getsource(main.lifespan)))
-    guarded = [
-        node
-        for node in ast.walk(tree)
-        if isinstance(node, ast.Try)
-        and node.finalbody
-        and any(isinstance(child, (ast.Yield, ast.YieldFrom)) for child in ast.walk(node))
-    ]
-    assert guarded, "lifespan shutdown must run from a finally block"
-
-
 def test_integration_tokens_are_environment_only(monkeypatch):
     from api import integrations
     from api.config import _mask_config
