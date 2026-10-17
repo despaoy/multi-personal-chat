@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import math
 import threading
 from concurrent.futures import Future, ThreadPoolExecutor
 from functools import partial
@@ -26,6 +27,7 @@ class _WorkState:
         self.cancel_requested = threading.Event()
         self.skipped = False
 
+
 class BoundedThreadExecutor:
     """A dedicated thread pool with a hard running-plus-queued limit."""
 
@@ -41,8 +43,8 @@ class BoundedThreadExecutor:
             raise ValueError("max_workers must be positive")
         if max_pending < max_workers:
             raise ValueError("max_pending must be at least max_workers")
-        if default_timeout <= 0:
-            raise ValueError("default_timeout must be positive")
+        if not math.isfinite(default_timeout) or default_timeout <= 0:
+            raise ValueError("default_timeout must be positive and finite")
 
         self.name = name
         self.max_workers = max_workers
@@ -75,8 +77,8 @@ class BoundedThreadExecutor:
         """Run one function without allowing an unbounded executor queue."""
 
         wait_timeout = self.default_timeout if timeout is None else timeout
-        if wait_timeout <= 0:
-            raise ValueError("timeout must be positive")
+        if not math.isfinite(wait_timeout) or wait_timeout <= 0:
+            raise ValueError("timeout must be positive and finite")
 
         if not self._slots.acquire(blocking=False):
             self._increment("rejected")
@@ -106,9 +108,7 @@ class BoundedThreadExecutor:
         if not done:
             state.cancel_requested.set()
             self._increment("timed_out")
-            raise BlockingWorkTimeout(
-                f"{self.name} work exceeded {wait_timeout:.3f}s"
-            )
+            raise BlockingWorkTimeout(f"{self.name} work exceeded {wait_timeout:.3f}s")
         return await wrapped
 
     def stats(self) -> dict[str, int | str]:
@@ -126,7 +126,6 @@ class BoundedThreadExecutor:
     def _consume_future_exception(future: asyncio.Future[Any]) -> None:
         if not future.cancelled():
             future.exception()
-
 
     @staticmethod
     def _run_work(

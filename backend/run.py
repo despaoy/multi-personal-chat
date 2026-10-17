@@ -6,6 +6,7 @@
     python run.py --port 8080   # 指定端口
     python run.py --reload      # 开发模式（热重载）
 """
+
 import sys
 import os
 from pathlib import Path
@@ -21,21 +22,12 @@ from app.env import load_backend_env
 load_backend_env()
 
 import uvicorn
+from infra.environment import read_positive_int
 
-
-def _positive_int_env(name: str, default: int) -> int:
-    """Read a positive integer runtime limit with a startup-friendly error."""
-    raw = os.getenv(name, str(default))
-    try:
-        value = int(raw)
-    except (TypeError, ValueError) as exc:
-        raise RuntimeError(f"{name} must be a positive integer") from exc
-    if value < 1:
-        raise RuntimeError(f"{name} must be a positive integer")
-    return value
 
 def main():
     import argparse
+
     parser = argparse.ArgumentParser(description="MultiPersonal Chat System后端服务")
     parser.add_argument("--port", type=int, default=8000, help="监听端口（默认8000）")
     parser.add_argument("--host", default="0.0.0.0", help="监听地址")
@@ -45,9 +37,7 @@ def main():
 
     worker_count = args.workers if args.workers is not None else int(os.getenv("BACKEND_WORKERS", "1"))
     if worker_count != 1:
-        parser.error(
-            "当前幂等缓存、会话锁和集成 nonce 状态为进程内实现，BACKEND_WORKERS/--workers 必须为 1"
-        )
+        parser.error("当前幂等缓存、会话锁和集成 nonce 状态为进程内实现，BACKEND_WORKERS/--workers 必须为 1")
 
     uvicorn.run(
         "app.main:app",
@@ -55,9 +45,9 @@ def main():
         port=args.port,
         reload=args.reload,
         workers=worker_count,
-        limit_concurrency=_positive_int_env("BACKEND_LIMIT_CONCURRENCY", 256),
-        backlog=_positive_int_env("BACKEND_BACKLOG", 512),
-        timeout_keep_alive=_positive_int_env("BACKEND_KEEPALIVE_TIMEOUT", 10),
+        limit_concurrency=read_positive_int(os.environ, "BACKEND_LIMIT_CONCURRENCY", 256),
+        backlog=read_positive_int(os.environ, "BACKEND_BACKLOG", 512),
+        timeout_keep_alive=read_positive_int(os.environ, "BACKEND_KEEPALIVE_TIMEOUT", 10),
         timeout_graceful_shutdown=30,
     )
 

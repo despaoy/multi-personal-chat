@@ -12,6 +12,7 @@ from db.errors import RegistrationClosedError
 from app.config import create_access_token
 from app.dependencies import get_current_user
 from infra.auth_work import run_auth_database
+from infra.environment import read_positive_int, read_positive_float
 from infra.bounded_executor import (
     BlockingWorkRejected,
     BlockingWorkTimeout,
@@ -35,33 +36,11 @@ def _get_registration_lock() -> asyncio.Lock:
     return _registration_lock
 
 
-def _positive_int_env(name: str, default: int) -> int:
-    raw = os.getenv(name, str(default))
-    try:
-        value = int(raw)
-    except (TypeError, ValueError) as exc:
-        raise RuntimeError(f"{name} must be a positive integer") from exc
-    if value < 1:
-        raise RuntimeError(f"{name} must be a positive integer")
-    return value
-
-
-def _positive_float_env(name: str, default: float) -> float:
-    raw = os.getenv(name, str(default))
-    try:
-        value = float(raw)
-    except (TypeError, ValueError) as exc:
-        raise RuntimeError(f"{name} must be a positive number") from exc
-    if value <= 0:
-        raise RuntimeError(f"{name} must be a positive number")
-    return value
-
-
 _password_executor = BoundedThreadExecutor(
     name="auth-password",
-    max_workers=_positive_int_env("AUTH_PASSWORD_WORKERS", 2),
-    max_pending=_positive_int_env("AUTH_PASSWORD_MAX_PENDING", 8),
-    default_timeout=_positive_float_env("AUTH_PASSWORD_TIMEOUT_SECONDS", 10.0),
+    max_workers=read_positive_int(os.environ, "AUTH_PASSWORD_WORKERS", 2),
+    max_pending=read_positive_int(os.environ, "AUTH_PASSWORD_MAX_PENDING", 8),
+    default_timeout=read_positive_float(os.environ, "AUTH_PASSWORD_TIMEOUT_SECONDS", 10.0),
 )
 
 

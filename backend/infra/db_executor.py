@@ -6,24 +6,16 @@ import os
 from typing import Any, Callable, TypeVar
 
 from infra.bounded_executor import BoundedThreadExecutor
+from infra.environment import read_positive_int, read_positive_float
 
 T = TypeVar("T")
 
 
-def _positive_int_env(name: str, default: int) -> int:
-    raw = os.getenv(name, str(default))
-    try:
-        value = int(raw)
-    except (TypeError, ValueError):
-        return default
-    return max(1, value)
-
-
 db_executor = BoundedThreadExecutor(
     name="async-db",
-    max_workers=_positive_int_env("ASYNC_DB_WORKERS", 8),
-    max_pending=_positive_int_env("ASYNC_DB_MAX_PENDING", 32),
-    default_timeout=float(os.getenv("ASYNC_DB_TIMEOUT_SECONDS", "30")),
+    max_workers=read_positive_int(os.environ, "ASYNC_DB_WORKERS", 8),
+    max_pending=read_positive_int(os.environ, "ASYNC_DB_MAX_PENDING", 32),
+    default_timeout=read_positive_float(os.environ, "ASYNC_DB_TIMEOUT_SECONDS", 30.0),
 )
 
 

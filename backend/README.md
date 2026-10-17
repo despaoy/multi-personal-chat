@@ -46,6 +46,8 @@ Web 后端不为启动探测创建同步 Redis 连接。Redis 当前用于 NoneB
 
 ZIP 与目录导入返回 complete/partial/failed/unconfirmed 状态，只有 complete 的 success 为 true。有效批处理请求通过结果报告已确认保存的数量及错误；超时停止后续操作，提示刷新核对，保留可能稍后完成的写入语义。格式、权限和 ZIP 路径校验仍由原有 HTTP 边界处理。前端按状态提示并刷新已保存内容。
 
+数据库、认证执行器和启动入口共用正数配置读取。可选数字设置缺省时保留原默认值；显式无效值直接报告配置名，不静默恢复默认或夹到 1。默认及单次等待超时必须为有限正数，非法预算在资源分配/任务提交前拒绝；正常超时后底层任务仍可能完成的语义保持不变。
+
 运行时数据库、模型、LoRA、日志、索引和密钥不属于源码目录，边界见 [`../docs/operations/SERVER_LAYOUT.md`](../docs/operations/SERVER_LAYOUT.md)。
 
 ## 知识检索边界
