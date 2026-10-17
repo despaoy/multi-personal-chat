@@ -741,8 +741,8 @@ async def create_knowledge_document(request: KnowledgeDocumentCreate, current_us
     except HTTPException:
         raise
     except Exception as e:
-        logger.exception("创建知识库文档失败: %s", e)
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        logger.error("创建知识库文档失败: %s", type(e).__name__)
+        raise HTTPException(status_code=500, detail="知识文档创建未完成，请检查数据库及输入内容后重试") from e
 
 
 @router.put("/api/knowledge/documents/{doc_id}")
@@ -756,25 +756,7 @@ async def update_knowledge_document(
             raise HTTPException(status_code=404, detail="文档不存在")
 
         # 更新文档
-        update_data = {}
-        if request.title is not None:
-            update_data["title"] = request.title
-        if request.content is not None:
-            update_data["content"] = request.content
-        if request.category is not None:
-            update_data["category"] = request.category
-        if request.knowledge_base_id is not None:
-            update_data["knowledge_base_id"] = request.knowledge_base_id
-        if request.folder_id is not None:
-            update_data["folder_id"] = request.folder_id
-        if request.sourceType is not None:
-            update_data["sourceType"] = request.sourceType
-        if request.sourceUrl is not None:
-            update_data["sourceUrl"] = request.sourceUrl
-        if request.fileType is not None:
-            update_data["fileType"] = request.fileType
-        if request.fileSize is not None:
-            update_data["fileSize"] = request.fileSize
+        update_data = request.model_dump(exclude_none=True)
 
         from knowledge.text_splitter import simple_text_split
 
@@ -790,8 +772,8 @@ async def update_knowledge_document(
     except HTTPException:
         raise
     except Exception as e:
-        logger.exception("更新知识库文档失败: %s", e)
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        logger.error("更新知识库文档失败: %s", type(e).__name__)
+        raise HTTPException(status_code=500, detail="知识文档更新未完成，请检查数据库及输入内容后重试") from e
 
 
 @router.delete("/api/knowledge/documents/{doc_id}")
@@ -814,8 +796,8 @@ async def delete_knowledge_document(doc_id: int, current_user: dict = Depends(ge
     except HTTPException:
         raise
     except Exception as e:
-        logger.exception("删除知识库文档失败: %s", e)
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        logger.error("删除知识库文档失败: %s", type(e).__name__)
+        raise HTTPException(status_code=500, detail="知识文档删除未完成，请检查数据库及输入内容后重试") from e
 
 
 # ============================================
