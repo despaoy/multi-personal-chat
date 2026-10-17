@@ -1804,7 +1804,7 @@ class MemoryEnrichmentScheduler:
         while True:
             jobs = await self._queue.get()
             try:
-                self._queued_jobs = max(0, self._queued_jobs - len(jobs))
+                self._queued_jobs -= len(jobs)
                 self._processing += len(jobs)
                 for job in jobs:
                     await self._process_job(job)
@@ -1812,7 +1812,7 @@ class MemoryEnrichmentScheduler:
                 self._cancel_job_receipts(jobs)
                 raise
             finally:
-                self._processing = max(0, self._processing - len(jobs))
+                self._processing -= len(jobs)
                 self._queue.task_done()
 
     @staticmethod
@@ -2168,7 +2168,7 @@ class MemoryEnrichmentScheduler:
         while not self._queue.empty():
             jobs = self._queue.get_nowait()
             self._cancel_job_receipts(jobs)
-            self._queued_jobs = max(0, self._queued_jobs - len(jobs))
+            self._queued_jobs -= len(jobs)
             self._queue.task_done()
         await self._completion.close()
 
