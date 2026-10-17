@@ -39,8 +39,16 @@ class _Bucket:
 
 class TokenBucketLimiter:
     def __init__(self, rate: float, capacity: int):
-        self.rate = max(float(rate), 0.0)
-        self.capacity = max(int(capacity), 1)
+        if not math.isfinite(rate) or rate < 0:
+            raise ValueError("rate must be nonnegative and finite")
+        if capacity < 1:
+            raise ValueError("capacity must be positive")
+        self.rate = rate
+        self.capacity = capacity
+        self.reset()
+
+    def reset(self) -> None:
+        """Reset inactive lifecycle state while retaining this limiter's configuration."""
         self._buckets: dict[str, _Bucket] = {}
         self._lock = asyncio.Lock()
         self._allowed = 0
@@ -359,18 +367,8 @@ class InferenceRuntime:
             self._active_guard = asyncio.Lock()
             self._rate_limit_guard = asyncio.Lock()
             self._active_count = 0
-            self.global_limiter = TokenBucketLimiter(
-                float(os.getenv("CHAT_GLOBAL_QPS", "20")),
-                int(os.getenv("CHAT_GLOBAL_BURST", "40")),
-            )
-            self.conversation_limiter = TokenBucketLimiter(
-                float(os.getenv("CHAT_CONVERSATION_QPS", "1")),
-                int(os.getenv("CHAT_CONVERSATION_BURST", "5")),
-            )
-            self.sender_limiter = TokenBucketLimiter(
-                float(os.getenv("CHAT_SENDER_QPS", "0.5")),
-                int(os.getenv("CHAT_SENDER_BURST", "3")),
-            )
+            for limiter in (self.global_limiter, self.conversation_limiter, self.sender_limiter):
+                limiter.reset()
 
         # Replace this last: no await occurs after releasing the old lock, so
         # a new lifecycle cannot observe partially reset state on this loop.
