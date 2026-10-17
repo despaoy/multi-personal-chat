@@ -231,3 +231,33 @@ async def test_document_creation_preserves_schema_defaults_metadata_and_folder_c
     assert not knowledge._vector_index_built
     rig.add.assert_not_called()
     rig.getter.assert_not_called()
+
+
+
+def test_loaded_native_snapshot_reuses_complete_two_chunk_source(publication, monkeypatch):
+    rig = publication
+    second = "补充完整条件：需要改期者须在截止前联系陈老师，获得新的书面确认后再办理。"
+    row = rig.db.save_knowledge_document(
+        dict(title="完整登记规则", content=TEXT + second, knowledge_base_id=rig.kb["id"], folder_id=rig.folder["id"]),
+        chunks=[TEXT, second],
+    )
+    assert knowledge._ensure_vector_index()
+    status = knowledge._read_rebuild_status()
+    assert status[0:2] == ("complete", 2)
+    loaded = vectors.VectorDatabase(rig.vector.db_path)
+    assert loaded.snapshot_validated and loaded.index.ntotal == len(loaded.bm25.corpus) == len(loaded.metadata) == 2
+    assert loaded.metadata == rig.vector.metadata
+    clear = Mock(wraps=loaded.clear_all)
+    encode = Mock(side_effect=AssertionError("Validated snapshot must not request embeddings"))
+    monkeypatch.setattr(loaded, "clear_all", clear)
+    monkeypatch.setattr(loaded, "_get_embeddings_batch", encode)
+    rig.getter.return_value = loaded
+    monkeypatch.setattr(knowledge, "_vector_index_built", False)
+    monkeypatch.setattr(knowledge, "_vector_index_revision", None)
+    assert knowledge._ensure_vector_index()
+    clear.assert_not_called()
+    encode.assert_not_called()
+    assert knowledge._vector_index_built and knowledge._vector_index_revision == knowledge._get_rebuild_revision()
+    assert knowledge._read_rebuild_status() == status
+    assert rig.db.get_knowledge_document(row["id"])["content"] == TEXT + second
+    assert [chunk["content"] for chunk in rig.db.get_knowledge_chunks(row["id"])] == [TEXT, second]

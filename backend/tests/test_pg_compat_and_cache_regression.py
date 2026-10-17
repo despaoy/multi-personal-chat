@@ -796,49 +796,6 @@ class TestEnsureVectorIndexEndToEnd:
             kmod.db = original_db
             db.close_connection()
 
-    def test_complete_with_matching_count_fp_and_revision_skips_rebuild(self, tmp_path, monkeypatch):
-        """When status=complete, count, fingerprint, AND revision all match,
-        _ensure_vector_index must skip rebuild."""
-        from api import knowledge as kmod
-
-        db = self._make_db(tmp_path)
-        original_db = kmod.db
-        kmod.db = db
-        kmod._vector_index_built = False
-
-        self._insert_doc_with_chunks(db, 1, "Doc1", ["c0", "c1"])
-
-        real_fp = kmod._compute_chunk_fingerprint()
-        current_rev = kmod._get_rebuild_revision()
-        db.commit_knowledge_index_revision(current_rev, 2, real_fp)
-
-        add_called = {"called": False}
-        class MockVectorDB:
-            def __init__(self):
-                from threading import RLock
-                self._lock = RLock()
-                self.snapshot_validated = True
-                self.metadata = [kmod._vector_chunk_document(row, {}) for row in db.iter_chunks_with_document()]
-            def clear_cache(self):
-                pass
-            def get_stats(self):
-                return {"total_documents": 2, "index_size": 2, "bm25_corpus_size": 2,
-                        "index_type": "flat", "embedding_dim": 768, "use_gpu": False,
-                        "bm25_built": False, "bm25_vocab_size": 0, "dirty": False}
-            def clear_all(self):
-                raise AssertionError("clear_all must not be called when skipping rebuild")
-            def add_documents(self, docs):
-                add_called["called"] = True
-
-        self._patch_vector_db(monkeypatch, MockVectorDB())
-
-        try:
-            assert kmod._ensure_vector_index() is True
-            assert not add_called["called"], "must skip rebuild when count + fp + revision match"
-            assert kmod._vector_index_built is True
-        finally:
-            kmod.db = original_db
-            db.close_connection()
 
     def test_content_change_with_same_count_forces_rebuild(self, tmp_path, monkeypatch):
         """When chunk count is unchanged but content is updated, the
@@ -890,39 +847,6 @@ class TestEnsureVectorIndexEndToEnd:
             kmod.db = original_db
             db.close_connection()
 
-    def test_persistence_failure_does_not_mark_complete(self, tmp_path, monkeypatch):
-        """If clear_all() raises (disk full / permission denied), _ensure_vector_index
-        must NOT write complete status. It should return False and leave status as building."""
-        from api import knowledge as kmod
-
-        db = self._make_db(tmp_path)
-        original_db = kmod.db
-        kmod.db = db
-        kmod._vector_index_built = False
-
-        self._insert_doc_with_chunks(db, 1, "Doc1", ["c0", "c1"])
-
-        class MockVectorDB:
-            def get_stats(self):
-                return {"total_documents": 0, "index_size": 0, "bm25_corpus_size": 0,
-                        "index_type": "flat", "embedding_dim": 768, "use_gpu": False,
-                        "bm25_built": False, "bm25_vocab_size": 0, "dirty": False}
-            def clear_all(self):
-                raise OSError("disk full simulation")
-            def add_documents(self, docs):
-                raise AssertionError("should not reach add_documents if clear_all failed")
-
-        self._patch_vector_db(monkeypatch, MockVectorDB())
-
-        try:
-            result = kmod._ensure_vector_index()
-            assert result is False, "must return False when persistence fails"
-            status, _, _, _ = kmod._read_rebuild_status()
-            assert status == "building", "status must remain building, not complete"
-            assert kmod._vector_index_built is False
-        finally:
-            kmod.db = original_db
-            db.close_connection()
 
     def test_concurrent_crud_during_rebuild_does_not_mark_complete(self, tmp_path, monkeypatch):
         """If a CRUD operation runs mid-rebuild (via the real database revision invalidation

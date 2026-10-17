@@ -48,6 +48,7 @@ async def test_committed_document_change_uses_one_index_publication(tmp_path,mon
             knowledge._ensure_vector_index()
         assert raised.value is failure
         assert knowledge._read_rebuild_status()[0]!='complete' and not knowledge._vector_index_built
+        assert knowledge._read_rebuild_status()[0]==('building' if operation=='update' else 'dirty')
     else:
         assert knowledge._ensure_vector_index()
         assert knowledge._read_rebuild_status()[0]=='complete'
