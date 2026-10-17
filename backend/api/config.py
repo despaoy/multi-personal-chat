@@ -1,5 +1,5 @@
 """配置与模型状态API"""
-import logging
+from json import JSONDecodeError
 
 from fastapi import APIRouter, Request, HTTPException, Depends
 from app.dependencies import get_current_admin
@@ -9,7 +9,6 @@ from infra.input_validator import CONFIG_SCHEMA, InputValidator
 from cache.config_cache import invalidate_config_cache, read_config
 from infra.db_executor import run_db
 
-logger = logging.getLogger(__name__)
 router = APIRouter()
 
 # 敏感字段关键词（匹配任一即脱敏）
@@ -112,64 +111,60 @@ async def update_config(request: Request, current_user: dict = Depends(get_curre
 
 @router.get("/api/model/status")
 async def get_model_status(current_user: dict = Depends(get_current_admin)):
-    """获取模型状态"""
-    # C3 fix: 原先失败时返回 HTTP 200 + {"success": False}，破坏 REST 语义，
-    # 前端需通过 success 字段而非状态码判断错误。改为 raise HTTPException，
-    # 与模块内其他端点（update_config、set_model_provider）的失败处理一致。
+    """获取模型状态，读取失败保留原因并明确报错。"""
     try:
         from inference.model_manager import get_model_manager
+
         model_manager = get_model_manager()
-        return {
-            "success": True,
-            "status": model_manager.get_status()
-        }
-    except Exception as e:
-        logger.error(f"获取模型状态失败: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="获取模型状态失败")
+        return {"success": True, "status": await run_db(model_manager.get_status)}
+    except Exception as exc:
+        raise HTTPException(503, "模型状态读取失败，请检查配置及模型服务后重试") from exc
 
 
 @router.put("/api/model/provider")
 async def set_model_provider(request: Request, current_user: dict = Depends(get_current_admin)):
-    """设置模型提供商
-
-    C-S1 fix: 切换模型 provider 影响全局推理，限定 admin。
-    """
+    """设置提供商；失败时报告已确认和未确认的操作状态。"""
+    progress = {"stage": "request", "providerSwitched": False, "configPersisted": False}
     try:
-        from inference.model_manager import get_model_manager, ModelProvider
-        model_manager = get_model_manager()
+        from inference.model_manager import ModelProvider, get_model_manager
 
-        body = await request.json()
+        try:
+            body = await request.json()
+        except JSONDecodeError as exc:
+            raise HTTPException(400, "请求必须是合法 JSON") from exc
         if not isinstance(body, dict):
             raise HTTPException(400, "请求必须是包含 provider 的对象")
         provider_name = body.get("provider")
         try:
             provider = ModelProvider(provider_name)
-            success = model_manager.set_provider(provider)
         except ValueError as exc:
             raise HTTPException(400, "提供商名称无效，或当前环境不允许使用该提供商") from exc
 
-        if success:
-            await run_db(db.update_config, {"modelProvider": provider_name})
-            await run_db(invalidate_config_cache)
-            if provider_name == "openai_compat":
-                compat_provider = model_manager.get_current_provider()
-                try:
-                    await run_db(compat_provider._refresh_db_config)
-                except Exception as exc:
-                    raise HTTPException(status_code=503, detail={
-                        "stage": "runtime_config", "configPersisted": True, "providerSwitched": True,
-                        "message": "提供商已切换并保存，但运行时同步失败；请检查配置数据库和模型状态后重试",
-                    }) from exc
-            return {
-                "success": True,
-                "message": f"已切换到提供商: {provider_name}",
-                "status": model_manager.get_status()
-            }
-        else:
-            raise HTTPException(status_code=400, detail="提供商切换失败")
+        progress["stage"] = "provider_selection"
+        model_manager = get_model_manager()
+        progress["providerSwitched"] = None
+        try:
+            model_manager.set_provider(provider)
+        except ValueError as exc:
+            raise HTTPException(400, "提供商名称无效，或当前环境不允许使用该提供商") from exc
+        progress["providerSwitched"] = True
 
+        progress.update(stage="config_persistence", configPersisted=None)
+        await run_db(db.update_config, {"modelProvider": provider_name})
+        progress["configPersisted"] = True
+        progress["stage"] = "config_cache"
+        await run_db(invalidate_config_cache)
+        if provider == ModelProvider.OPENAI_COMPAT:
+            progress["stage"] = "runtime_config"
+            compat_provider = model_manager.get_current_provider()
+            await run_db(compat_provider._refresh_db_config)
+        progress["stage"] = "model_status"
+        status = await run_db(model_manager.get_status)
+        return {"success": True, "message": f"已切换到提供商: {provider_name}", "status": status}
     except HTTPException:
         raise
-    except Exception as e:
-        logger.error(f"设置提供商失败: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as exc:
+        raise HTTPException(503, detail={
+            **progress,
+            "message": "模型提供商设置未完整完成；请核对当前模型状态与已保存配置后重试。未确认的操作状态为 null。",
+        }) from exc
