@@ -1,7 +1,6 @@
 """增强功能API"""
 import asyncio
 import logging
-from pathlib import Path
 from typing import Literal, Optional
 
 from fastapi import APIRouter, HTTPException, Depends
@@ -10,20 +9,11 @@ from db.schemas import ApiKeyCreateRequest
 from infra.concurrency_control import inference_runtime
 
 from app.config import (
-    LOAD_BALANCER_AVAILABLE,
-    LLM_OPTIMIZER_AVAILABLE,
     circuit_breaker_registry,
     response_cache,
     encryption_mgr,
 )
-# C-F1 fix: connection_pool/http_client_pool/backup_mgr/
-# access_control_mgr 在 lifespan 中通过 app.config.xxx = ... 赋值。
-# 若在导入时绑定，会永远持有 None。改为动态访问模块属性。
 from app import config as _app_config
-connection_pool = lambda: _app_config.connection_pool
-http_client_pool = lambda: _app_config.http_client_pool
-backup_mgr = lambda: _app_config.backup_mgr
-access_control_mgr = lambda: _app_config.access_control_mgr
 
 
 async def _get_vllm_load_balancer_stats():
@@ -43,42 +33,27 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-def _validate_path(path_str: str, allowed_base: str = None) -> str:
-    """Validate path doesn't contain traversal sequences and is within allowed base."""
-    if not path_str:
-        raise ValueError("Path cannot be empty")
-    # Block path traversal
-    if '..' in path_str or '\x00' in path_str:
-        raise ValueError("Path contains invalid sequences")
-    resolved = Path(path_str).resolve()
-    if allowed_base:
-        base = Path(allowed_base).resolve()
-        if not resolved.is_relative_to(base):
-            raise ValueError(f"Path must be within {allowed_base}")
-    return str(resolved)
-
-
 @router.get("/api/enhanced/status")
 async def get_enhanced_status(current_user: dict = Depends(get_current_admin)):
     """获取增强功能状态"""
     available = {
-        "loadBalancer": LOAD_BALANCER_AVAILABLE,
+        "loadBalancer": True,
         "resourcePool": True,
         "circuitBreaker": True,
         "backupManager": True,
         "inputValidator": True,
         "encryption": True,
         "accessControl": True,
-        "llmOptimizer": LLM_OPTIMIZER_AVAILABLE,
+        "llmOptimizer": True,
     }
     vllm_stats = await _get_vllm_load_balancer_stats()
     active = {
         **available,
         "loadBalancer": vllm_stats is not None,
-        "resourcePool": connection_pool() is not None or http_client_pool() is not None,
-        "backupManager": backup_mgr() is not None,
+        "resourcePool": _app_config.connection_pool is not None or _app_config.http_client_pool is not None,
+        "backupManager": _app_config.backup_mgr is not None,
         "encryption": encryption_mgr is not None,
-        "accessControl": access_control_mgr() is not None,
+        "accessControl": _app_config.access_control_mgr is not None,
     }
     return {
         "success": True,
@@ -96,18 +71,18 @@ async def get_enhanced_stats(current_user: dict = Depends(get_current_admin)):
     if vllm_stats is not None:
         stats["loadBalancer"] = vllm_stats
     # C-F1 fix: 动态访问 lifespan 中赋值的单例
-    _cp = connection_pool()
+    _cp = _app_config.connection_pool
     if _cp:
         stats["connectionPool"] = _cp.get_pool_stats()
 
-    _hcp = http_client_pool()
+    _hcp = _app_config.http_client_pool
     if _hcp:
         stats["httpClientPool"] = _hcp.get_pool_stats()
 
     if circuit_breaker_registry:
         stats["circuitBreakers"] = circuit_breaker_registry.get_all_stats()
 
-    _bm = backup_mgr()
+    _bm = _app_config.backup_mgr
     if _bm:
         stats["backup"] = _bm.get_backup_stats()
 
@@ -153,7 +128,7 @@ async def reset_circuit_breaker(name: str, current_user: dict = Depends(get_curr
 
 @router.get("/api/enhanced/backups")
 async def list_backups(current_user: dict = Depends(get_current_admin)):
-    _bm = backup_mgr()
+    _bm = _app_config.backup_mgr
     if not _bm:
         raise HTTPException(status_code=503, detail="备份管理器不可用")
     backups = await asyncio.to_thread(_bm.list_backups)
@@ -165,7 +140,7 @@ async def create_backup(
     backup_type: Literal["full", "incremental"] = "full",
     current_user: dict = Depends(get_current_admin),
 ):
-    _bm = backup_mgr()
+    _bm = _app_config.backup_mgr
     if not _bm:
         raise HTTPException(status_code=503, detail="备份管理器不可用")
     from infra.backup_manager import BackupType
@@ -190,7 +165,7 @@ async def restore_backup(
     # SQLite connections are thread-local and may still reference the old file.
     # Replacing the database under a running process can split reads and writes
     # across two files, so restoration must be performed while the backend is stopped.
-    if not backup_mgr():
+    if not _app_config.backup_mgr:
         raise HTTPException(status_code=503, detail="备份管理器不可用")
     raise HTTPException(
         status_code=409,
@@ -219,7 +194,7 @@ async def invalidate_cache(pattern: Optional[str] = None, current_user: dict = D
 
 @router.get("/api/enhanced/access-control/keys")
 async def list_api_keys(current_user: dict = Depends(get_current_admin)):
-    _acm = access_control_mgr()
+    _acm = _app_config.access_control_mgr
     if not _acm:
         raise HTTPException(status_code=503, detail="访问控制不可用")
     try:
@@ -235,7 +210,7 @@ async def create_api_key(
     request: ApiKeyCreateRequest,
     current_user: dict = Depends(get_current_admin),
 ):
-    _acm = access_control_mgr()
+    _acm = _app_config.access_control_mgr
     if not _acm:
         raise HTTPException(status_code=503, detail="访问控制不可用")
     from infra.access_control import Role
@@ -258,7 +233,7 @@ async def revoke_api_key(
     key_id: int,
     current_user: dict = Depends(get_current_admin),
 ):
-    _acm = access_control_mgr()
+    _acm = _app_config.access_control_mgr
     if not _acm:
         raise HTTPException(status_code=503, detail="访问控制不可用")
     try:

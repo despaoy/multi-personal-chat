@@ -101,7 +101,7 @@ async def test_enhanced_backup_endpoints_use_the_real_manager_contract(monkeypat
             return _BackupInfo()
 
     manager = BackupManager()
-    monkeypatch.setattr(enhanced, "backup_mgr", lambda: manager)
+    monkeypatch.setattr(enhanced._app_config, "backup_mgr", manager)
 
     listed = await enhanced.list_backups({"role": "admin"})
     created = await enhanced.create_backup("full", {"role": "admin"})
@@ -156,10 +156,10 @@ async def test_enhanced_status_distinguishes_available_code_from_active_resource
         return None
 
     monkeypatch.setattr(enhanced, "_get_vllm_load_balancer_stats", no_vllm_stats)
-    monkeypatch.setattr(enhanced, "backup_mgr", lambda: None)
-    monkeypatch.setattr(enhanced, "access_control_mgr", lambda: None)
-    monkeypatch.setattr(enhanced, "connection_pool", lambda: None)
-    monkeypatch.setattr(enhanced, "http_client_pool", lambda: None)
+    monkeypatch.setattr(enhanced._app_config, "backup_mgr", None)
+    monkeypatch.setattr(enhanced._app_config, "access_control_mgr", None)
+    monkeypatch.setattr(enhanced._app_config, "connection_pool", None)
+    monkeypatch.setattr(enhanced._app_config, "http_client_pool", None)
 
     result = await enhanced.get_enhanced_status({"role": "admin"})
 
@@ -185,7 +185,7 @@ async def test_api_key_storage_failures_return_stable_503_responses(monkeypatch)
         def revoke_api_key_by_id(self, key_id):
             raise RuntimeError("sqlite path=/private/access.db")
 
-    monkeypatch.setattr(enhanced, "access_control_mgr", lambda: BrokenManager())
+    monkeypatch.setattr(enhanced._app_config, "access_control_mgr", BrokenManager())
 
     calls = (
         enhanced.list_api_keys({"role": "admin"}),

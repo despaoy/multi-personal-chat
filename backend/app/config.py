@@ -132,17 +132,12 @@ def get_vllm_served_model_name(env=os.environ) -> str:
 # 增强模块导入
 # ============================================
 
-LOAD_BALANCER_AVAILABLE = True
-
 
 from infra.circuit_breaker import global_registry
 
 
-
 from infra.encryption import EncryptionManager
 
-
-LLM_OPTIMIZER_AVAILABLE = True
 
 # ============================================
 # 服务启动时间
