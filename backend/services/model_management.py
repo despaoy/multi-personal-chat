@@ -6,6 +6,19 @@ import asyncio
 from typing import Any, Protocol
 
 
+class UnknownModelError(ValueError):
+    """The requested name is absent from the managed model catalog."""
+
+
+class ModelDownloadError(RuntimeError):
+    """Download started but did not complete; only safe context is public."""
+
+    def __init__(self, error: Exception) -> None:
+        super().__init__(
+            f"模型下载未完成（{type(error).__name__}），可能已保存部分文件，请刷新模型列表并检查网络和目录权限后重试"
+        )
+
+
 class ModelManagementService(Protocol):
     """Operations required by the model-management HTTP API."""
 
@@ -13,7 +26,7 @@ class ModelManagementService(Protocol):
 
     async def check_model_exists(self, model_name: str) -> bool: ...
 
-    async def download_model(self, model_name: str, *, force: bool = False) -> Any: ...
+    async def download_model(self, model_name: str, *, force: bool = False) -> dict[str, Any]: ...
 
     async def delete_model(self, model_name: str) -> bool: ...
 
@@ -35,7 +48,7 @@ class ModelManagerService:
     async def check_model_exists(self, model_name: str) -> bool:
         return await asyncio.to_thread(self._manager.check_model_exists, model_name)
 
-    async def download_model(self, model_name: str, *, force: bool = False) -> Any:
+    async def download_model(self, model_name: str, *, force: bool = False) -> dict[str, Any]:
         return await asyncio.to_thread(
             self._manager.download_model_from_hf,
             model_name=model_name,

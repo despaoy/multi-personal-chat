@@ -21,6 +21,8 @@ from inference.openai_protocol import (
     validate_completion_options,
 )
 
+from services.model_management import ModelDownloadError, UnknownModelError
+
 logger = logging.getLogger(__name__)
 
 def _get_db_config():
@@ -786,7 +788,7 @@ class ModelManager:
     def _download_model_from_hf_locked(self, model_name: str, force: bool = False) -> Dict[str, Any]:
         config = MODEL_CONFIGS.get(model_name)
         if not config:
-            return {"success": False, "error": f"未知模型: {model_name}"}
+            raise UnknownModelError("模型名称未登记")
 
         model_dir = self.models_dir / config.name
 
@@ -815,9 +817,8 @@ class ModelManager:
                 "model_name": model_name,
                 "path": str(download_path),
             }
-        except Exception as e:
-            logger.error(f"下载模型失败: {e}")
-            return {"success": False, "error": str(e)}
+        except Exception as exc:
+            raise ModelDownloadError(exc) from exc
 
     def delete_model(self, model_name: str) -> bool:
         """Delete one model without racing an in-process download."""

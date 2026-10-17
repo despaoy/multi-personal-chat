@@ -14,7 +14,7 @@ from fastapi.testclient import TestClient
 from api.models import router
 from app.dependencies import get_current_admin, get_current_user
 from app.providers import get_model_management_service
-from services.model_management import ModelManagerService
+from services.model_management import ModelDownloadError, ModelManagerService, UnknownModelError
 
 
 class FakeModelManager:
@@ -125,20 +125,20 @@ def test_model_routes_do_not_expose_internal_errors() -> None:
     assert "private" not in response.text
 
 class RejectedDownloadService:
-    def __init__(self, error: str) -> None:
+    def __init__(self, error: Exception) -> None:
         self.error = error
 
     async def download_model(self, model_name: str, *, force: bool = False):
-        return {"success": False, "error": self.error}
+        raise self.error
 
 
 def test_model_download_route_maps_manager_failures_to_stable_http_errors() -> None:
-    with _build_client(RejectedDownloadService("network token=/private")) as client:
+    with _build_client(RejectedDownloadService(OSError("network token=/private"))) as client:
         upstream_failure = client.post(
             "/api/models/download",
             json={"model_name": "qwen3-8b", "force": False},
         )
-    with _build_client(RejectedDownloadService("未知模型: missing")) as client:
+    with _build_client(RejectedDownloadService(UnknownModelError("missing"))) as client:
         unknown_model = client.post(
             "/api/models/download",
             json={"model_name": "missing", "force": False},
@@ -253,8 +253,10 @@ def test_model_manager_rejects_incomplete_download(tmp_path, monkeypatch, missin
             return local_dir
 
         monkeypatch.setitem(sys.modules, "huggingface_hub", SimpleNamespace(snapshot_download=snapshot_download))
-        result = manager.download_model_from_hf("qwen3-8b")
-        assert len(calls) == 1 and not result["success"] and "缺少必需文件或权重" in result["error"]
+        with pytest.raises(ModelDownloadError) as caught:
+            manager.download_model_from_hf("qwen3-8b")
+        assert len(calls) == 1 and isinstance(caught.value.__cause__, RuntimeError)
+        assert "缺少必需文件或权重" in str(caught.value.__cause__)
         assert not manager.check_model_exists("qwen3-8b")
         assert not next(row for row in manager.list_available_models() if row["name"] == "qwen3-8b")["downloaded"]
         assert not (manager.models_dir / "model_cache.json").exists()

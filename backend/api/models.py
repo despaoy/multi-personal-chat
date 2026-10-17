@@ -6,20 +6,25 @@ from app.dependencies import get_current_admin
 from app.providers import get_model_management_service
 
 from db.schemas import ModelDownloadRequest
-from services.model_management import ModelManagementService
+from services.model_management import ModelDownloadError, ModelManagementService, UnknownModelError
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-def _require_download_success(result):
-    """Convert manager-level failures into stable HTTP error semantics."""
-
-    if isinstance(result, dict) and result.get("success") is True:
+async def _download_model(service: ModelManagementService, model_name: str, *, force: bool = False) -> dict:
+    """Translate the shared download contract without classifying exception text."""
+    try:
+        result = await service.download_model(model_name, force=force)
+        if not isinstance(result, dict) or result.get("success") is not True:
+            raise RuntimeError("Model downloader did not return a successful result")
         return result
-    error = result.get("error", "") if isinstance(result, dict) else ""
-    status_code = 400 if str(error).startswith("未知模型:") else 502
-    raise HTTPException(status_code=status_code, detail="模型下载失败")
+    except UnknownModelError as exc:
+        raise HTTPException(status_code=400, detail="模型下载失败") from exc
+    except Exception as exc:
+        logger.error("模型下载失败: %s", type(exc).__name__)
+        detail = str(exc) if isinstance(exc, ModelDownloadError) else "模型下载失败"
+        raise HTTPException(status_code=502, detail=detail) from exc
 
 @router.get("/api/models")
 async def list_models(
@@ -65,18 +70,8 @@ async def download_model(
     current_user: dict = Depends(get_current_admin),
     service: ModelManagementService = Depends(get_model_management_service),
 ):
-    """下载模型
-
-    C-S1 fix: 模型下载占用大量磁盘/带宽，限定 admin。
-    """
-    try:
-        result = await service.download_model(request.model_name, force=request.force)
-        return _require_download_success(result)
-    except HTTPException:
-        raise
-    except Exception:
-        logger.exception("下载模型失败")
-        raise HTTPException(status_code=500, detail="下载模型失败")
+    """Download a registered model through the shared error boundary."""
+    return await _download_model(service, request.model_name, force=request.force)
 
 
 @router.delete("/api/models/{model_name}")
@@ -118,10 +113,9 @@ async def check_and_download_7b_model(
             }
 
         logger.info("7B模型不存在，开始自动下载...")
-        result = await service.download_model(model_name)
-        return _require_download_success(result)
+        return await _download_model(service, model_name)
     except HTTPException:
         raise
-    except Exception:
-        logger.exception("检查/下载7B模型失败")
-        raise HTTPException(status_code=500, detail="检查/下载7B模型失败")
+    except Exception as exc:
+        logger.error("模型下载前检查失败: %s", type(exc).__name__)
+        raise HTTPException(status_code=503, detail="模型检查未完成，请检查模型目录和权限后重试") from exc
