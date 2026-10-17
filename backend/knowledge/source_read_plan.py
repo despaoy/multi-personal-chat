@@ -49,54 +49,6 @@ _FRAMES = (
 )
 
 
-def _unquoted_view(query):
-    from character.quoted_erasure_authority import masked_quotes
-    try:
-        return masked_quotes(query)[0]
-    except ValueError:
-        return None
-
-
-def has_identifier_read_selector(query):
-    view = _unquoted_view(query)
-    return view is not None and bool(re.search(rf'{_ACTION}{_SELECTOR}|按{_SELECTOR}', view))
-
-
-def identifier_read_plan(query, unresolved_tail):
-    """Each explicitly enumerated ID is an independent complete-source root.
-
-    Distinct ID reads are unions, not a requirement to concatenate different
-    records. All matching original versions remain eligible; unknown or
-    contradictory additional requests do not authorize a partial plan.
-    """
-    view = _unquoted_view(query)
-    if view is None:
-        return SourceReadPlan()
-    position, identifiers = 0, []
-    while position < len(view):
-        match = next((m for pattern in _FRAMES if (m := pattern.match(view, position))), None)
-        if match is None:
-            break
-        members = re.findall(_IDENTIFIER, match['ids'])
-        if not all(any(char.isdigit() for char in member) for member in members):
-            return SourceReadPlan()
-        identifiers.extend(members)
-        position = match.end()
-    if not identifiers:
-        return SourceReadPlan()
-    remainder = view[position:]
-    # A detached unquoted identifier may denote another requested dependency.
-    later = re.findall(rf'(?<![A-Za-z0-9_-]){_IDENTIFIER}(?![A-Za-z0-9_-])', remainder)
-    if (any(any(char.isdigit() for char in value) and value not in identifiers for value in later)
-            or unresolved_tail(remainder)
-            or re.search(r'(?:不要|(?<!分)别|禁止|不必|无需|排除|不包括)\s*(?:再|分别|逐项)?'
-                         r'(?:核对|核查|读取|查看|比较|资料|原话|原始|记录|编号)', remainder)
-            or re.search(r'(?:核对|核查|比较|对照)[^。；;\n]*(?:其他|另一|新的|不同)'
-                         r'[^。；;\n]*(?:原话|原始|记录|资料|目录|版本)', remainder)):
-        return SourceReadPlan()
-    return SourceReadPlan(tuple((identity,) for identity in dict.fromkeys(identifiers)), 'identifier_token')
-
-
 @dataclass(frozen=True)
 class SourceReadAtom:
     value: str
