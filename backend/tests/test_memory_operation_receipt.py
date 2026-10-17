@@ -147,6 +147,7 @@ async def test_closed_scheduler_does_not_return_old_success():
     await worker.shutdown(timeout=1)
     result = await worker.schedule_and_wait(**job(Repo(), 'a'))
     assert result['status'] == 'not_scheduled' and result['persisted'] == 0
+    assert result['reason'] == 'closed' and result['stage'] == 'admission'
 
 
 @pytest.mark.parametrize('outcomes,expected', [

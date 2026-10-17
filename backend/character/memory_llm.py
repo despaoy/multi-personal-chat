@@ -1649,10 +1649,13 @@ class MemoryEnrichmentScheduler:
             self._worker = asyncio.create_task(
                 self._run(), name="character-memory-llm-worker", context=detached_request_context())
 
-    def _remember_schedule_skip(self, reason: str) -> None:
+    def _remember_schedule_skip(self, reason: str, *, receipt: asyncio.Future[dict[str, Any]] | None) -> None:
         self._skipped += 1
         self._last_outcome = reason if reason in {"capacity", "closed"} else "skipped"
         self._recent_results.append({"status": self._last_outcome, "reason": reason})
+        if receipt is not None and not receipt.done():
+            receipt.set_result({"status": "not_scheduled", "reason": reason, "stage": "admission",
+                                "accepted": 0, "persisted": 0})
 
     def schedule(
         self,
@@ -1672,24 +1675,24 @@ class MemoryEnrichmentScheduler:
         receipt: asyncio.Future[dict[str, Any]] | None = None,
     ) -> bool:
         if self._closed:
-            self._remember_schedule_skip("closed")
+            self._remember_schedule_skip("closed", receipt=receipt)
             return False
         if not self.enabled:
-            self._remember_schedule_skip("disabled")
+            self._remember_schedule_skip("disabled", receipt=receipt)
             return False
         if source_type.strip().lower() != "user":
-            self._remember_schedule_skip("non_user_source")
+            self._remember_schedule_skip("non_user_source", receipt=receipt)
             return False
         classified_mode = classify_memory_write_mode(message)
         mode = "hot" if immediate is True else classified_mode
         if immediate is False and mode != "skip":
             mode = "idle"
         if mode == "skip" or not memory_write_allowed(message):
-            self._remember_schedule_skip("write_gate")
+            self._remember_schedule_skip("write_gate", receipt=receipt)
             return False
         if self._inflight >= self._capacity:
             logger.warning("后台记忆判断容量已满，本轮不写入长期记忆")
-            self._remember_schedule_skip("capacity")
+            self._remember_schedule_skip("capacity", receipt=receipt)
             return False
 
         observation = observation_clock(observed_at)
@@ -1750,8 +1753,7 @@ class MemoryEnrichmentScheduler:
             raise ValueError('timeout_seconds must be finite and positive')
         receipt = asyncio.get_running_loop().create_future()
         if not self.schedule(**{**kwargs, 'immediate': True, 'receipt': receipt}):
-            receipt.cancel()
-            return {'status': 'not_scheduled', 'accepted': 0, 'persisted': 0}
+            return receipt.result()
         try:
             return await asyncio.wait_for(asyncio.shield(receipt), timeout_seconds)
         except asyncio.TimeoutError:
