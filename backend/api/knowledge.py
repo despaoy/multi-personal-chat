@@ -440,8 +440,19 @@ KNOWLEDGE_BASES_DIR = Path(__file__).parent.parent / "knowledge_bases"
 SUPPORTED_EXTENSIONS = {".txt", ".md", ".json", ".csv", ".html", ".xml"}
 
 
-def _scan_directory(directory: Path) -> dict:
+def _knowledge_source_path(path: Path) -> Path:
+    resolved = path.resolve()
+    if not resolved.is_relative_to(KNOWLEDGE_BASES_DIR.resolve()):
+        raise HTTPException(status_code=400, detail="来源路径超出知识库目录范围")
+    return resolved
+
+
+def _scan_directory(directory: Path, ancestors: frozenset[Path] = frozenset()) -> dict:
     """扫描目录结构，返回树形结构"""
+    resolved = _knowledge_source_path(directory)
+    if resolved in ancestors:
+        raise HTTPException(status_code=400, detail="知识库来源目录存在循环链接")
+    ancestors = ancestors | {resolved}
     result = {"name": directory.name, "type": "folder", "children": [], "fileCount": 0, "totalSize": 0}
     if not directory.exists():
         return result
@@ -450,11 +461,12 @@ def _scan_directory(directory: Path) -> dict:
         if item.name.startswith(".") or item.name == "__pycache__":
             continue
         if item.is_dir():
-            sub = _scan_directory(item)
+            sub = _scan_directory(item, ancestors)
             result["children"].append(sub)
             result["fileCount"] += sub["fileCount"]
             result["totalSize"] += sub["totalSize"]
         elif item.is_file() and item.suffix.lower() in SUPPORTED_EXTENSIONS:
+            _knowledge_source_path(item)
             file_size = item.stat().st_size
             result["children"].append(
                 {
@@ -500,7 +512,7 @@ async def import_scanned_directory(
 
     如果 kb_id 为空，则自动创建新知识库。
     """
-    target_dir = KNOWLEDGE_BASES_DIR / directory_name
+    target_dir = _knowledge_source_path(KNOWLEDGE_BASES_DIR / directory_name)
     if not target_dir.exists() or not target_dir.is_dir():
         raise HTTPException(status_code=404, detail=f"目录不存在: {directory_name}")
 
@@ -531,6 +543,11 @@ async def import_scanned_directory(
             if sub_dir.name.startswith(".") or not sub_dir.is_dir():
                 continue
 
+            try:
+                _knowledge_source_path(sub_dir)
+            except HTTPException as exc:
+                errors.append(_knowledge_import_error(sub_dir.name, exc))
+                continue
             folder_name = sub_dir.name
 
             # 创建文件夹
@@ -552,6 +569,7 @@ async def import_scanned_directory(
                     continue
 
                 try:
+                    _knowledge_source_path(file_path)
                     # 尝试多种编码读取
                     content = None
                     for encoding in ["utf-8", "gbk", "gb2312", "utf-16"]:
@@ -606,6 +624,7 @@ async def import_scanned_directory(
                 continue
 
             try:
+                _knowledge_source_path(file_path)
                 content = None
                 for encoding in ["utf-8", "gbk", "gb2312", "utf-16"]:
                     try:
