@@ -404,7 +404,6 @@ async def upload_zip(kb_id: int, file: UploadFile = File(...), current_user: dic
                         "sourceType": "file",
                         "fileType": filename.rsplit(".", 1)[-1] if "." in filename else "txt",
                         "fileSize": len(file_content.encode("utf-8")),
-                        "chunkCount": 0,
                     }
 
                     # 分块处理
@@ -617,7 +616,6 @@ async def import_scanned_directory(
                         "sourceType": "file",
                         "fileType": file_path.suffix.lstrip("."),
                         "fileSize": file_size,
-                        "chunkCount": 0,
                     }
 
                     # 原子发布文档、完整分块和索引修订
@@ -667,7 +665,6 @@ async def import_scanned_directory(
                     "sourceType": "file",
                     "fileType": file_path.suffix.lstrip("."),
                     "fileSize": file_path.stat().st_size,
-                    "chunkCount": 0,
                 }
 
                 from knowledge.text_splitter import simple_text_split
@@ -739,35 +736,21 @@ async def create_knowledge_document(request: KnowledgeDocumentCreate, current_us
     try:
         # 输入验证
 
-        is_valid, errors = InputValidator.validate(request.model_dump(), KNOWLEDGE_DOCUMENT_SCHEMA)
+        document_data = request.model_dump()
+        is_valid, errors = InputValidator.validate(document_data, KNOWLEDGE_DOCUMENT_SCHEMA)
         if not is_valid:
             raise HTTPException(status_code=422, detail={"message": "输入验证失败", "errors": errors})
 
         # 使用文件夹元数据确定文档分类
-        folder_name = request.category
-        if request.folder_id:
-            folder = await run_db(db.get_knowledge_folder, request.folder_id)
+        if document_data["folder_id"]:
+            folder = await run_db(db.get_knowledge_folder, document_data["folder_id"])
             if folder:
-                folder_name = folder["name"]
-
-        # 创建文档
-        document_data = {
-            "title": request.title,
-            "content": request.content,
-            "category": folder_name,
-            "knowledge_base_id": request.knowledge_base_id,
-            "folder_id": request.folder_id,
-            "sourceType": request.sourceType,
-            "sourceUrl": request.sourceUrl,
-            "fileType": request.fileType,
-            "fileSize": request.fileSize,
-            "chunkCount": 0,
-        }
+                document_data["category"] = folder["name"]
 
         # 原子发布文档、完整分块和索引修订
         from knowledge.text_splitter import simple_text_split
 
-        chunks = simple_text_split(request.content)
+        chunks = simple_text_split(document_data["content"])
         document = await run_db(db.save_knowledge_document, document_data, chunks=chunks)
         chunk_count = len(chunks)
 

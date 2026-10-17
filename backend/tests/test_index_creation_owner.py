@@ -207,3 +207,27 @@ async def test_generation_retrieval_preserves_index_failure_before_evidence_use(
     else:
         assert not knowledge._vector_index_built and knowledge._read_rebuild_status()[0] != "complete"
     assert rig.db.get_knowledge_document(row["id"])["content"] == TEXT
+
+
+
+@pytest.mark.parametrize("metadata", [False, True])
+async def test_document_creation_preserves_schema_defaults_metadata_and_folder_category(publication, metadata):
+    rig = publication
+    options = dict(title="完整登记规则", content=TEXT)
+    if metadata:
+        options.update(category="请求分类", knowledge_base_id=rig.kb["id"], folder_id=rig.folder["id"],
+                       sourceType="file", sourceUrl="https://example.invalid/source", fileType="TXT", fileSize=0)
+    request = KnowledgeDocumentCreate(**options)
+    original = request.model_dump()
+    result = await knowledge.create_knowledge_document(request, {"role": "admin"})
+    assert result["success"] and result["chunkCount"] == 1
+    doc = rig.db.get_knowledge_document(result["document"]["id"])
+    for key, value in original.items():
+        expected = rig.folder["name"] if metadata and key == "category" else value
+        assert doc[key] == expected and result["document"][key] == expected
+    assert request.model_dump() == original
+    assert doc["chunkCount"] == 1 and "".join(row["content"] for row in rig.db.get_knowledge_chunks(doc["id"])) == TEXT
+    assert knowledge._get_rebuild_revision() == rig.revision + 1 and knowledge._read_rebuild_status()[0] == "dirty"
+    assert not knowledge._vector_index_built
+    rig.add.assert_not_called()
+    rig.getter.assert_not_called()
