@@ -86,9 +86,13 @@ def _add_log(msg: str):
     logger.info(f"[IntentTrainer] {msg}")
 
 
+class IntentTaskCancelled(RuntimeError):
+    """Cooperative cancellation, distinct from a dependency or generation error."""
+
+
 def _check_cancelled():
     if _cancel_flag.is_set():
-        raise RuntimeError("任务已被用户取消")
+        raise IntentTaskCancelled("任务已被用户取消")
 
 
 # ═══════════════════════════════════════════════════════════
@@ -181,6 +185,10 @@ def add_sample(label: str, text: str) -> Dict[str, Any]:
 # 样本生成（LLM + 知识库文档）
 # ═══════════════════════════════════════════════════════════
 
+class SampleGenerationError(RuntimeError):
+    """A safe, actionable failure of the sample-generation contract."""
+
+
 async def generate_samples(
     kb_ids: List[int],
     samples_per_kb: int = 100,
@@ -219,10 +227,13 @@ async def generate_samples(
         selected_kbs = [b for b in all_bases if b["id"] in kb_ids] if kb_ids else all_bases[:MAX_KB_COUNT]
 
         if not selected_kbs:
-            raise RuntimeError("没有可用的知识库")
+            raise SampleGenerationError("没有可用的知识库")
+
+        if kb_ids and len(selected_kbs) != len(set(kb_ids)):
+            raise SampleGenerationError("部分选中的知识库不存在，请刷新后重新选择")
 
         if len(selected_kbs) > MAX_KB_COUNT:
-            raise RuntimeError(f"最多选择 {MAX_KB_COUNT} 个知识库")
+            raise SampleGenerationError(f"最多选择 {MAX_KB_COUNT} 个知识库")
 
         # ── 2. 读取知识库文档内容 ──
         _generation_status.update(stage="load_docs", message="读取知识库文档...", progress=8)
@@ -235,8 +246,6 @@ async def generate_samples(
         _check_cancelled()
         _generation_status.update(stage="connect", message="连接vLLM服务...", progress=10)
         vllm_client = await _get_vllm_client()
-        if not vllm_client:
-            raise RuntimeError("vLLM服务不可用")
         _add_log("vLLM服务连接成功")
 
         # 使用全局共享单例，生命周期由 app.main lifespan 统一管理，此处不 close
@@ -248,22 +257,23 @@ async def generate_samples(
     except asyncio.CancelledError:
         _generation_status.update(running=False, stage="cancelled", message="已取消", progress=0)
         raise
-    except RuntimeError as e:
-        if "取消" in str(e):
-            _generation_status.update(running=False, stage="cancelled", message="已取消", progress=0)
-        else:
-            _generation_status.update(running=False, stage="error", message=str(e), progress=0)
-        return {"error": str(e)}
-    except Exception as e:
-        _generation_status.update(running=False, stage="error", message=str(e), progress=0)
-        return {"error": str(e)}
+    except IntentTaskCancelled:
+        _generation_status.update(running=False, stage="cancelled", message="已取消", progress=0)
+        return {"error": "已取消"}
+    except Exception as exc:
+        stage = _generation_status["stage"]
+        reason = str(exc) if isinstance(exc, SampleGenerationError) else type(exc).__name__
+        message = f"样本生成失败（{stage}：{reason}），请检查知识库、vLLM服务和请求数量后重试"
+        _generation_status.update(running=False, stage="error", message=message, progress=0)
+        logger.error("样本生成失败，阶段=%s，类型=%s", stage, type(exc).__name__)
+        raise SampleGenerationError(message) from exc
 
 
 async def _generate_samples_inner(
     vllm_client, selected_kbs, kb_docs,
     samples_per_kb: int, negative_count: int, lora_name: Optional[str],
 ) -> Dict[str, Any]:
-    """样本生成主逻辑（由 generate_samples 调用，client 由外层负责关闭）"""
+    """完成全部生成与数量检查后才保存；共享客户端由应用生命周期关闭。"""
     # ── 4. 为每个知识库生成正例（基于文档内容） ──
     kb_samples: Dict[str, List[str]] = {}
     total_kbs = len(selected_kbs)
@@ -277,36 +287,31 @@ async def _generate_samples_inner(
         )
         _add_log(f"生成知识库「{kb['name']}」的正例样本...")
 
-        doc_context = kb_docs.get(kb["name"], "")
+        doc_context = kb_docs[kb["name"]]
         samples = await _generate_kb_samples_with_docs(
             vllm_client, kb["name"], doc_context, samples_per_kb, lora_name
         )
         kb_samples[kb["name"]] = samples
         _add_log(f"知识库「{kb['name']}」: 生成 {len(samples)} 条正例")
 
-    # ── 5. 生成通用负例（日常闲聊） ──
     _check_cancelled()
     _generation_status.update(stage="generate_neg", message="生成通用负例样本...", progress=60)
-    _add_log("生成通用负例样本...")
-    general_negative_count = max(negative_count // 2, 50)
-    negative_samples = await _generate_negative_samples(vllm_client, general_negative_count, lora_name)
-    _add_log(f"通用负例生成完成: {len(negative_samples)} 条")
+    general_count = (negative_count + 1) // 2
+    negative_samples = await _generate_negative_samples(vllm_client, general_count, lora_name)
 
-    # ── 6. 为每个KB生成硬负例（跨域混淆问题） ──
     _check_cancelled()
     _generation_status.update(stage="generate_hard_neg", message="生成跨KB硬负例...", progress=70)
-    _add_log("生成跨KB硬负例样本...")
-    hard_neg_per_kb = max(negative_count // (total_kbs * 2), 10)
-    hard_negatives = await _generate_hard_negatives_per_kb(
-        vllm_client, selected_kbs, kb_docs, hard_neg_per_kb, lora_name
-    )
-    for kb_name, hard_negs in hard_negatives.items():
-        # 硬负例归入对应KB的负例池（标签为"none"，但内容是与该KB混淆的跨域问题）
-        negative_samples.extend(hard_negs)
-        _add_log(f"知识库「{kb_name}」: 生成 {len(hard_negs)} 条硬负例")
+    hard_count = (negative_count - general_count + total_kbs - 1) // total_kbs
+    if hard_count:
+        hard_negatives = await _generate_hard_negatives_per_kb(
+            vllm_client, selected_kbs, kb_docs, hard_count, lora_name
+        )
+        for samples in hard_negatives.values():
+            negative_samples.extend(samples)
 
-    # ── 7. 保存样本 ──
-    kb_samples["none"] = list(set(negative_samples))
+    _check_cancelled()
+    kb_samples["none"] = _take_samples(negative_samples, negative_count)
+    _generation_status.update(stage="save", message="保存样本...", progress=90)
     save_samples(kb_samples)
 
     total = sum(len(v) for v in kb_samples.values())
@@ -319,47 +324,35 @@ async def _generate_samples_inner(
 
 
 def _load_kb_documents(kbs: list) -> Dict[str, str]:
-    """读取知识库文档内容，拼接为上下文"""
+    """Load bounded source text; missing evidence cannot become a guessed topic."""
     from db.adapter import db
+
     result = {}
     for kb in kbs:
-        try:
-            docs = db.get_knowledge_documents(knowledge_base_id=kb["id"], limit=200)
-            parts = []
-            for doc in docs[:30]:  # 最多30篇文档
+        docs = db.get_knowledge_documents(knowledge_base_id=kb["id"], limit=30)
+        parts = []
+        for doc in docs:
+            content = doc.get("content", "").strip()
+            if content:
                 title = doc.get("title", "")
-                content = doc.get("content", "")
                 if title:
                     parts.append(f"【{title}】")
-                if content:
-                    # 截取前200字，避免过长
-                    parts.append(content[:200])
-            result[kb["name"]] = "\n".join(parts)[:3000]  # 最多3000字符
-        except Exception as e:
-            logger.warning(f"读取知识库「{kb['name']}」文档失败: {e}")
-            result[kb["name"]] = ""
+                parts.append(content[:200])
+        text = "\n".join(parts)[:3000]
+        if not text:
+            raise SampleGenerationError(f"知识库 {kb['id']} 没有可用文档内容，请先补全文档")
+        result[kb["name"]] = text
     return result
 
 
 async def _get_vllm_client():
-    """通过 inference 层获取 vLLM 客户端单例，不依赖 api 层。
-
-    使用全局共享单例（get_vllm_client），避免每次调用创建独立实例导致
-    httpx 连接池与熔断器状态泄漏。单例生命周期由 app.main lifespan 统一管理。
-    """
-    # D-1 fix: 统一使用 app.config.is_vllm_enabled() 判定
+    """Use the application's shared vLLM client without substituting a provider."""
     from app.config import is_vllm_enabled
+    from inference.vllm_client import get_vllm_client
+
     if not is_vllm_enabled():
-        logger.warning("vLLM 未启用（缺少 VLLM_ENABLED 或 VLLM_BASE_URLS 环境变量）")
-        return None
-    try:
-        from inference.vllm_client import get_vllm_client
-        client = await get_vllm_client()
-        logger.info("vLLM 客户端单例获取成功（通过 inference 层）")
-        return client
-    except Exception as e:
-        logger.warning(f"vLLM 客户端初始化失败: {e}")
-        return None
+        raise SampleGenerationError("样本生成需要启用并配置 vLLM 服务")
+    return await get_vllm_client()
 
 
 async def _generate_with_vllm(client, prompt: str, lora_name: Optional[str] = None) -> str:
@@ -375,6 +368,8 @@ async def _generate_with_vllm(client, prompt: str, lora_name: Optional[str] = No
 
 
 def _parse_samples(text: str) -> list:
+    if not isinstance(text, str) or not text.strip():
+        raise SampleGenerationError("模型未返回非空文本样本")
     samples = []
     for line in text.strip().split("\n"):
         line = line.strip()
@@ -390,66 +385,64 @@ def _parse_samples(text: str) -> list:
     return samples
 
 
+def _take_samples(samples: list[str], count: int) -> list[str]:
+    unique = list(dict.fromkeys(samples))
+    if len(unique) < count:
+        raise SampleGenerationError(f"有效去重样本不足：需要 {count} 条，实际 {len(unique)} 条")
+    return unique[:count]
+
+
+async def _generate_sample_batches(client, prompts: list[str], count: int, lora_name: Optional[str]) -> list[str]:
+    samples = []
+    for prompt in prompts:
+        reply = await _generate_with_vllm(client, prompt, lora_name)
+        samples.extend(_parse_samples(reply))
+    return _take_samples(samples, count)
+
+
 async def _generate_kb_samples_with_docs(
     client, kb_name: str, doc_context: str, count: int, lora_name: Optional[str] = None
 ) -> list:
     """基于知识库文档内容生成查询样本"""
-    batch_size = max(count // 3, 10)
+    batch_size = (count + 2) // 3
 
-    if doc_context:
-        # 有文档内容：基于文档生成具体问题
-        prompts = [
-            (
-                f"以下是知识库的部分文档内容：\n\n{doc_context}\n\n"
-                f"请根据以上文档内容，生成{batch_size}条用户可能会问的具体问题。"
-                f"问题必须直接涉及文档中提到的角色、技能、数值、机制等具体内容，"
-                f"例如「胡桃的二命效果是什么」「雷电将军的元素爆发倍率多少」这样的具体问题。"
-                f"不要生成关于知识库本身的元问题（如「是否包含」「有没有」等）。"
-                f"每条一行，使用自然的中文口语，不要编号。"
-            ),
-            (
-                f"以下是知识库的部分文档内容：\n\n{doc_context}\n\n"
-                f"请根据以上文档内容，生成{batch_size}条玩家常问的具体问题。"
-                f"包括具体的数据、效果、获取方式、对比等。"
-                f"问题必须引用文档中的具体内容，例如「钟离的护盾吸收量怎么算」「甘雨的蓄力箭倍率」等。"
-                f"不要生成泛泛的问题。每条一行，用日常对话语气，不要编号。"
-            ),
-            (
-                f"以下是知识库的部分文档内容：\n\n{doc_context}\n\n"
-                f"请根据以上文档内容，生成{batch_size}条进阶问题。"
-                f"包括机制细节、策略搭配、数值对比等深度内容。"
-                f"问题必须具体，例如「行秋的雨帘剑减伤比例是多少」「温迪大招聚怪范围多大」等。"
-                f"每条一行，用自然语气，不要编号。"
-            ),
-        ]
-    else:
-        # 无文档内容：用知识库名称推断领域
-        prompts = [
-            f"假设有一个关于「{kb_name}」的知识库，生成{batch_size}条用户可能会问的具体问题。"
-            f"问题应该涉及具体的角色、技能、数值、机制等内容。"
-            f"每条一行，使用自然的中文口语，不要编号。",
-            f"生成{batch_size}条关于「{kb_name}」领域的常见具体问题。"
-            f"包括数据查询、效果说明、获取方式等。每条一行，用日常对话语气，不要编号。",
-            f"生成{batch_size}条关于「{kb_name}」领域的进阶问题。"
-            f"包括机制、策略、对比等深度内容。每条一行，用自然语气，不要编号。",
-        ]
+    if not doc_context.strip():
+        raise SampleGenerationError("生成正例需要知识库文档内容")
+    # 有文档内容：基于文档生成具体问题
+    prompts = [
+        (
+            f"以下是知识库的部分文档内容：\n\n{doc_context}\n\n"
+            f"请根据以上文档内容，生成{batch_size}条用户可能会问的具体问题。"
+            f"问题必须直接涉及文档中提到的角色、技能、数值、机制等具体内容，"
+            f"例如「胡桃的二命效果是什么」「雷电将军的元素爆发倍率多少」这样的具体问题。"
+            f"不要生成关于知识库本身的元问题（如「是否包含」「有没有」等）。"
+            f"每条一行，使用自然的中文口语，不要编号。"
+        ),
+        (
+            f"以下是知识库的部分文档内容：\n\n{doc_context}\n\n"
+            f"请根据以上文档内容，生成{batch_size}条玩家常问的具体问题。"
+            f"包括具体的数据、效果、获取方式、对比等。"
+            f"问题必须引用文档中的具体内容，例如「钟离的护盾吸收量怎么算」「甘雨的蓄力箭倍率」等。"
+            f"不要生成泛泛的问题。每条一行，用日常对话语气，不要编号。"
+        ),
+        (
+            f"以下是知识库的部分文档内容：\n\n{doc_context}\n\n"
+            f"请根据以上文档内容，生成{batch_size}条进阶问题。"
+            f"包括机制细节、策略搭配、数值对比等深度内容。"
+            f"问题必须具体，例如「行秋的雨帘剑减伤比例是多少」「温迪大招聚怪范围多大」等。"
+            f"每条一行，用自然语气，不要编号。"
+        ),
+    ]
 
-    all_samples = []
-    for i, prompt in enumerate(prompts):
-        try:
-            reply = await _generate_with_vllm(client, prompt, lora_name)
-            samples = _parse_samples(reply)
-            all_samples.extend(samples)
-        except Exception as e:
-            logger.warning(f"知识库「{kb_name}」样本生成批次 {i+1} 失败: {e}")
-
-    return list(set(all_samples))[:count]
+    return await _generate_sample_batches(client, prompts, count, lora_name)
 
 
 async def _generate_negative_samples(
     client, count: int, lora_name: Optional[str] = None
 ) -> list:
-    batch_size = max(count // 4, 10)
+    if count == 0:
+        return []
+    batch_size = (count + 3) // 4
     prompts = [
         f"生成{batch_size}条日常闲聊消息，每条一行。包括问候、感叹、情感表达等，不涉及任何知识查询意图。用自然的中文口语，不要编号。",
         f"生成{batch_size}条游戏玩家的日常聊天消息，每条一行。包括分享游戏状态、表达喜好、社交互动等，不涉及具体知识查询。用自然语气，不要编号。",
@@ -457,23 +450,7 @@ async def _generate_negative_samples(
         f"生成{batch_size}条非知识查询的社交消息，每条一行。包括道谢、道歉、确认、告别等，不涉及任何信息查询。用日常口语，不要编号。",
     ]
 
-    all_samples = []
-    for i, prompt in enumerate(prompts):
-        try:
-            reply = await _generate_with_vllm(client, prompt, lora_name)
-            samples = _parse_samples(reply)
-            all_samples.extend(samples)
-        except Exception as e:
-            logger.warning(f"负例生成批次 {i+1} 失败: {e}")
-
-    template_neg = [
-        "你好", "晚安", "好的", "谢谢", "哈哈", "嗯嗯",
-        "好无聊", "好累", "吃饭了吗", "在干嘛",
-        "太棒了", "我刚上线", "随便聊聊", "来玩吧",
-        "好开心", "真的吗", "知道了", "666",
-    ]
-    all_samples.extend(template_neg)
-    return list(set(all_samples))[:count]
+    return await _generate_sample_batches(client, prompts, count, lora_name)
 
 
 async def _generate_hard_negatives_per_kb(
@@ -500,12 +477,11 @@ async def _generate_hard_negatives_per_kb(
         {kb_name: [硬负例问题列表]}
     """
     result: Dict[str, List[str]] = {}
-    total_kbs = len(selected_kbs)
 
-    for i, kb in enumerate(selected_kbs):
+    for kb in selected_kbs:
         _check_cancelled()
         kb_name = kb["name"]
-        kb_doc = kb_docs.get(kb_name, "")
+        kb_doc = kb_docs[kb_name]
 
         # 其他KB的名称和领域摘要
         other_kbs = [k for k in selected_kbs if k["name"] != kb_name]
@@ -515,37 +491,23 @@ async def _generate_hard_negatives_per_kb(
         else:
             other_parts = []
             for okb in other_kbs:
-                other_doc = kb_docs.get(okb["name"], "")[:200]
+                other_doc = kb_docs[okb["name"]][:200]
                 other_parts.append(f"「{okb['name']}」: {other_doc}")
             other_desc = "\n".join(other_parts)
 
         # 构造提示：生成跨域混淆问题
-        if kb_doc:
-            prompt = (
-                f"以下是知识库「{kb_name}」的文档内容：\n\n{kb_doc[:1500]}\n\n"
-                f"同时存在其他知识库：\n{other_desc}\n\n"
-                f"请生成{count_per_kb}条「看起来像属于「{kb_name}」但实际应该检索其他知识库」的混淆问题。\n"
-                f"这些问题应该提到「{kb_name}」领域的内容（如角色名、术语），"
-                f"但问题核心实际属于其他知识库的范畴。\n"
-                f"例如：如果「{kb_name}」是角色库、其他是武器库，"
-                f"生成「胡桃的护摩之杖属性怎么样」「钟离用什么圣遗物」这类跨域问题。\n"
-                f"每条一行，用自然中文口语，不要编号。"
-            )
-        else:
-            prompt = (
-                f"假设有一个关于「{kb_name}」的知识库，"
-                f"同时存在其他知识库：{', '.join(k['name'] for k in other_kbs)}。\n"
-                f"请生成{count_per_kb}条「提到「{kb_name}」相关内容但实际属于其他知识库」的混淆问题。\n"
-                f"每条一行，用自然中文口语，不要编号。"
-            )
+        prompt = (
+            f"以下是知识库「{kb_name}」的文档内容：\n\n{kb_doc[:1500]}\n\n"
+            f"同时存在其他知识库：\n{other_desc}\n\n"
+            f"请生成{count_per_kb}条「看起来像属于「{kb_name}」但实际应该检索其他知识库」的混淆问题。\n"
+            f"这些问题应该提到「{kb_name}」领域的内容（如角色名、术语），"
+            f"但问题核心实际属于其他知识库的范畴。\n"
+            f"例如：如果「{kb_name}」是角色库、其他是武器库，"
+            f"生成「胡桃的护摩之杖属性怎么样」「钟离用什么圣遗物」这类跨域问题。\n"
+            f"每条一行，用自然中文口语，不要编号。"
+        )
 
-        try:
-            reply = await _generate_with_vllm(client, prompt, lora_name)
-            samples = _parse_samples(reply)
-            result[kb_name] = samples
-        except Exception as e:
-            logger.warning(f"知识库「{kb_name}」硬负例生成失败: {e}")
-            result[kb_name] = []
+        result[kb_name] = await _generate_sample_batches(client, [prompt], count_per_kb, lora_name)
 
     return result
 
