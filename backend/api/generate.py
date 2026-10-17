@@ -42,7 +42,7 @@ from inference.history import HistoryFormatError, validate_history
 from inference.lora_registry import get_lora_character_id
 from inference.lora_registry import get_lora_system_prompt as _get_system_prompt
 from inference.lora_utils import resolve_lora_served_name
-from inference.openai_protocol import ProviderResponseError
+from inference.openai_protocol import ProviderResponseError, validate_completion_options
 from inference.provider_context import get_provider_context_budget
 from infra.circuit_breaker import CircuitOpenError
 from infra.concurrency_control import InferenceQueueFull, RateLimitExceeded, inference_runtime
@@ -358,6 +358,12 @@ async def _generate_reply_body(
     if request_provider == "openai_compat":
         runtime_config = dict(runtime_config)
         runtime_config.setdefault("topP", 1.0)
+        try:
+            validate_completion_options(request_context.provider.base_url, top_p=float(runtime_config["topP"]))
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(
+                503, "生成参数配置无效，请检查 topP 是否为当前模型服务支持的数值后重试"
+            ) from exc
 
     # 获取LoRA：始终计算 active_lora，优先使用前端指定的，否则使用当前激活的
     active_lora = next((item for item in loras if item["status"] == "active"), None)
