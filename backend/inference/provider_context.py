@@ -3,7 +3,7 @@
 import os
 from dataclasses import dataclass
 
-from inference.context_budget import ReviewContextBudget
+from inference.context_budget import ReviewContextBudget, configured_context_window
 
 
 @dataclass(frozen=True)
@@ -54,5 +54,5 @@ def get_provider_context_budget(manager=None, *, env=None):
             reference_max_chars=window // 2,
             review=ReviewContextBudget(window, history_messages=2 * history_limit),
         )
-    window = max(1024, int(source.get("VLLM_MAX_MODEL_LEN", "8192")))
+    window = configured_context_window(env=source)
     return ProviderContextBudget(window_tokens=window)

@@ -1,8 +1,23 @@
 """Shared serving-budget text counting with provider-specific offline data."""
 
+import os
 from dataclasses import dataclass
 
 CONTEXT_SAFETY_MARGIN_TOKENS = 512
+MIN_CONTEXT_WINDOW_TOKENS = 1024
+
+
+def configured_context_window(*, env=None) -> int:
+    """Read the actual local serving limit; never expand invalid configuration."""
+    source = os.environ if env is None else env
+    message = f"VLLM_MAX_MODEL_LEN must be an integer of at least {MIN_CONTEXT_WINDOW_TOKENS}"
+    try:
+        window = int(source.get("VLLM_MAX_MODEL_LEN", "8192"))
+    except (TypeError, ValueError, OverflowError):
+        raise ValueError(message) from None
+    if window < MIN_CONTEXT_WINDOW_TOKENS:
+        raise ValueError(message)
+    return window
 
 
 def estimated_tokens(text: str) -> int:
@@ -19,7 +34,7 @@ class ReviewContextBudget:
     history_messages: int = 128
 
     def __post_init__(self):
-        if self.window_tokens < 1024 or self.history_messages < 1:
+        if self.window_tokens < MIN_CONTEXT_WINDOW_TOKENS or self.history_messages < 1:
             raise ValueError('Invalid review context budget')
 
     def fits(self, messages, output_tokens):

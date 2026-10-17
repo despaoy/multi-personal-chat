@@ -7,12 +7,12 @@ generation-parameter contract seen by the model.
 
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Any, Literal
 
 from character.evidence_selector import InputBudgetError
 from inference.context_budget import CONTEXT_SAFETY_MARGIN_TOKENS as CONTEXT_SAFETY_MARGIN_TOKENS
+from inference.context_budget import configured_context_window
 from inference.context_budget import estimated_tokens as _estimated_tokens
 from inference.history import validate_history
 from inference.prompt_policy import (
@@ -55,8 +55,6 @@ CHARACTER_ABSTENTION_POLICY = (
     "必要时可以请用户提供章节或原文片段；无需提及置信度、向量库等系统术语。"
 )
 
-DEFAULT_CONTEXT_WINDOW_TOKENS = 8192
-
 # Runtime capabilities are separate from the frozen training prompt contract.
 RUNTIME_CAPABILITY_POLICY = (
     "【当前聊天能力边界】未收到工具执行成功的结果，不得声称已经完成现实操作、设置通知、保存或删除资料；"
@@ -64,11 +62,6 @@ RUNTIME_CAPABILITY_POLICY = (
     "出现现实中的急性严重身体症状或正在发生的危险时，优先明确建议立即联系当地急救或现场帮助，"
     "不以角色化陪伴代替现实求助，也不承诺亲自到场。"
 )
-
-
-def configured_context_window() -> int:
-    """Use the serving limit, not a model's theoretical maximum window."""
-    return max(1024, int(os.getenv("VLLM_MAX_MODEL_LEN", str(DEFAULT_CONTEXT_WINDOW_TOKENS))))
 
 
 DEFERRED_MEMORY_OPERATION_POLICY = (
