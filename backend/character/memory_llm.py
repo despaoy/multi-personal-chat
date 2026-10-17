@@ -1827,12 +1827,10 @@ class MemoryEnrichmentScheduler:
             "write_mode": job.write_mode,
             "status": "no_change",
             "accepted": 0,
-            "persisted": 0,
-            "conflicts": 0,
-            "operation_outcomes": (),
             "stage": "source_capture",
             "retryable": False,
         }
+        outcomes: list[str] = []
         try:
             # Preserve complete admitted speech before interpretation. Empty or
             # invalid model proposals must not erase source-only observations.
@@ -1935,7 +1933,6 @@ class MemoryEnrichmentScheduler:
                                       authorized=erasure_now and partial is None)
             result["accepted"] = len(proposals) + bool(source_ids)
             result["stage"] = "persistence"
-            outcomes: list[str] = []
             if source_ids:
                 from db.source_erasure import SourceClaimConflict
 
@@ -1948,8 +1945,6 @@ class MemoryEnrichmentScheduler:
                     outcomes.append('erased' if count else 'no_change')
                 except SourceClaimConflict:
                     outcomes.append('conflict')
-                result['persisted'] = outcomes.count('erased')
-                result['operation_outcomes'] = tuple(outcomes)
             for proposal in proposals:
                 try:
                     outcomes.append(await self._persist_proposal(job, proposal))
@@ -1971,18 +1966,9 @@ class MemoryEnrichmentScheduler:
                         proposal.operation,
                         type(exc).__name__,
                     )
-                finally:
-                    # Preserve confirmed earlier commits even if cancellation
-                    # interrupts a later operation in this same job.
-                    result['persisted'] = outcomes.count('saved') + outcomes.count('erased')
-                    result['conflicts'] = outcomes.count('conflict')
-                    result['operation_outcomes'] = tuple(outcomes)
 
             saved = outcomes.count("saved")
             erased = outcomes.count("erased")
-            result["persisted"] = saved + erased
-            result["conflicts"] = outcomes.count("conflict")
-            result["operation_outcomes"] = tuple(outcomes)
             if any(value in outcomes for value in ("failed", "conflict", "skipped")) and saved + erased:
                 status = "partial"
             elif "failed" in outcomes:
@@ -2034,6 +2020,10 @@ class MemoryEnrichmentScheduler:
                 result["reason"] = "input_budget"
             logger.warning("后台记忆处理失败 stage=%s type=%s", result["stage"], type(exc).__name__)
         finally:
+            # Publish confirmed commits once, including failed or cancelled jobs.
+            result["persisted"] = outcomes.count("saved") + outcomes.count("erased")
+            result["conflicts"] = outcomes.count("conflict")
+            result["operation_outcomes"] = tuple(outcomes)
             self._recent_results.append(result)
             if job.receipt is not None and not job.receipt.done():
                 job.receipt.set_result(dict(result))
