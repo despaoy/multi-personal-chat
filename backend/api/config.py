@@ -2,6 +2,8 @@
 from json import JSONDecodeError
 
 from fastapi import APIRouter, Request, HTTPException, Depends
+from pydantic import ValidationError
+from inference.generation_options import GenerationOptions
 from app.dependencies import get_current_admin
 
 from db.adapter import db
@@ -85,9 +87,19 @@ async def update_config(request: Request, current_user: dict = Depends(get_curre
             status_code=422,
             detail="AstrBot integration tokens are server-only environment variables",
         )
+    try:
+        numeric_updates = GenerationOptions(**{
+            key: new_config[key] for key in GenerationOptions.model_fields if key in new_config
+        }).model_dump(exclude_unset=True)
+    except ValidationError as exc:
+        raise HTTPException(422, detail={
+            "message": "生成参数配置无效，请修改标出的字段后重试。",
+            "fields": sorted({error["loc"][0] for error in exc.errors(include_input=False)}),
+        }) from exc
     # 过滤掉含脱敏标记的未修改字段（前端回传的脱敏值不应覆盖真实凭证）
     new_config = {k: v for k, v in new_config.items()
                   if not (isinstance(v, str) and _MASK_MARKER in v)}
+    new_config.update(numeric_updates)
     # 输入验证 - 逐字段验证键值对
     for key, value in new_config.items():
         entry = {"key": str(key), "value": str(value)}

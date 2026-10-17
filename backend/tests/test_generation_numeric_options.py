@@ -8,6 +8,7 @@ from fastapi import HTTPException
 from pydantic import ValidationError
 
 from db.schemas import GenerateResponse, MessageRequest
+from inference.generation_options import read_generation_options
 from test_lora_provider_selection import install_api
 from test_generation_boolean_config import control as control
 
@@ -125,7 +126,7 @@ def test_one_numeric_contract_keeps_environment_defaults_and_cache_identity(rig,
     monkeypatch.setenv("VLLM_TEMPERATURE", "0.4")
     monkeypatch.setenv("VLLM_MAX_TOKENS", "3072")
     monkeypatch.setenv("VLLM_TOP_P", "0.8")
-    resolved = rig.api._generation_options({})
+    resolved = read_generation_options({})
     assert resolved == {"temperature": 0.4, "maxTokens": 3072, "topP": 0.8}
     arguments = dict(model_identity={"provider": "synthetic"}, enable_rag=False)
     assert rig.api._response_cache_keys(request(character=False), "default", {}, **arguments) == (

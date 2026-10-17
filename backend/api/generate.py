@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
+from pydantic import ValidationError
 from services.chat_generation import ChatGenerationService
 
 from api.error_details import with_provider_error
@@ -38,6 +38,7 @@ from inference.generation_request import (
 from inference.generation_request import (
     GenerationRequest as CharacterGenerationRequest,
 )
+from inference.generation_options import read_generation_options
 from inference.history import HistoryFormatError, validate_history
 from inference.lora_registry import get_lora_character_id
 from inference.lora_registry import get_lora_system_prompt as _get_system_prompt
@@ -184,29 +185,6 @@ async def close_vllm_client():
 router = APIRouter()
 
 
-class _GenerationOptions(BaseModel):
-    model_config = ConfigDict(allow_inf_nan=False, hide_input_in_errors=True)
-
-    temperature: float = Field(ge=0)
-    maxTokens: int = Field(gt=0)
-    topP: float = Field(gt=0, le=1)
-
-    @field_validator("*", mode="before")
-    @classmethod
-    def reject_boolean(cls, value):
-        if isinstance(value, bool):
-            raise ValueError("Generation parameters must be numeric, not boolean")
-        return value
-
-
-def _generation_options(config: dict[str, Any]) -> dict[str, float | int]:
-    return _GenerationOptions(
-        temperature=config.get("temperature", os.getenv("VLLM_TEMPERATURE", "0.7")),
-        maxTokens=config.get("maxTokens", os.getenv("VLLM_MAX_TOKENS", "2048")),
-        topP=config.get("topP", os.getenv("VLLM_TOP_P", "0.9")),
-    ).model_dump()
-
-
 def _response_cache_keys(
     request: MessageRequest,
     lora_name: str,
@@ -221,7 +199,7 @@ def _response_cache_keys(
     不会走到本函数——有状态对话每轮都要回写记忆与关系，缓存命中
     会跳过回写导致状态与对话脱节。
     """
-    options = _generation_options(config)
+    options = read_generation_options(config)
     use_knowledge_base = read_bool(config, "useKnowledgeBase", True) and enable_rag
     interlocutor = request.senderName or request.userName or ""
     prompt_identity = {
@@ -375,7 +353,7 @@ async def _generate_reply_body(
     if request_provider == "openai_compat":
         runtime_config.setdefault("topP", 1.0)
     try:
-        runtime_config.update(_generation_options(runtime_config))
+        runtime_config.update(read_generation_options(runtime_config))
         if request_provider == "openai_compat":
             validate_completion_options(request_context.provider.base_url, top_p=runtime_config["topP"])
     except (TypeError, ValueError) as exc:
@@ -1200,7 +1178,7 @@ async def _generate_with_retrieval(
     """Shared retrieval, abstention and character policy for either transport."""
     # 使用请求开始时读取的配置快照，避免同一次生成多次同步访问数据库。
     _cfg = runtime_config or {}
-    options = _generation_options(_cfg)
+    options = read_generation_options(_cfg)
     _temperature, _max_tokens, _top_p = options["temperature"], options["maxTokens"], options["topP"]
     _use_kb = read_bool(_cfg, "useKnowledgeBase", True) and enable_rag
 
