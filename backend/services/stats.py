@@ -12,6 +12,7 @@ from datetime import datetime, timedelta
 from typing import Any
 
 from infra.db_executor import run_db
+from infra.environment import ConfigurationError, parse_unit_interval, read_nonnegative_float, read_nonnegative_int
 from infra.observability import count_recent, get_consecutive, snapshot as observability_snapshot
 
 
@@ -34,7 +35,7 @@ def _boolean(value: Any, name: str, default: bool) -> bool:
             return True
         if normalized in {"0", "false", "no", "off", "disabled"}:
             return False
-    raise ValueError(f"{name} must be a boolean")
+    raise ConfigurationError(name, "an explicit boolean")
 
 
 class StatsService:
@@ -44,9 +45,15 @@ class StatsService:
         self._database = database
         self._runtime = inference_runtime
         self._env = dict(env)
-        self._ttl = float(self._env.get("STATS_CACHE_TTL_SECONDS", "5"))
-        if not math.isfinite(self._ttl) or self._ttl < 0:
-            raise ValueError("STATS_CACHE_TTL_SECONDS must be finite and nonnegative")
+        self._ttl = read_nonnegative_float(self._env, "STATS_CACHE_TTL_SECONDS", 5.0)
+        self._response_threshold = read_nonnegative_float(self._env, "ALERT_RESPONSE_P95_SECONDS", 30.0)
+        self._auth_threshold = read_nonnegative_int(self._env, "ALERT_AUTH_FAILURES_5M", 10)
+        self._db_threshold = read_nonnegative_int(self._env, "ALERT_DB_FAILURES_5M", 1)
+        self._consecutive_threshold = read_nonnegative_int(self._env, "ALERT_MODEL_CONSECUTIVE_FAILURES", 3)
+        try:
+            self._queue_threshold = parse_unit_interval(self._env.get("ALERT_QUEUE_RATIO", "0.8"), "ALERT_QUEUE_RATIO")
+        except ValueError:
+            raise ConfigurationError("ALERT_QUEUE_RATIO", "a finite number between 0 and 1") from None
         self._cache: dict[str, Any] | None = None
         self._updated_at = 0.0
         self._lock: asyncio.Lock | None = None
@@ -212,12 +219,7 @@ class StatsService:
         queue_length = int(metrics["queueLength"])
         queue_max = int(metrics["queueMaxSize"])
         queue_ratio = queue_length / queue_max
-        response_threshold = float(self._env.get("ALERT_RESPONSE_P95_SECONDS", "30"))
-        queue_threshold = float(self._env.get("ALERT_QUEUE_RATIO", "0.8"))
-        auth_threshold = int(self._env.get("ALERT_AUTH_FAILURES_5M", "10"))
-        db_threshold = int(self._env.get("ALERT_DB_FAILURES_5M", "1"))
-        consecutive_threshold = int(self._env.get("ALERT_MODEL_CONSECUTIVE_FAILURES", "3"))
-        if get_consecutive("model_failure") >= consecutive_threshold:
+        if get_consecutive("model_failure") >= self._consecutive_threshold:
             alerts.append(
                 {
                     "severity": "critical",
@@ -226,7 +228,7 @@ class StatsService:
                     "value": get_consecutive("model_failure"),
                 }
             )
-        if count_recent("db_write_failures", 300.0) >= db_threshold:
+        if count_recent("db_write_failures", 300.0) >= self._db_threshold:
             alerts.append(
                 {
                     "severity": "warning",
@@ -244,7 +246,7 @@ class StatsService:
                     "value": metrics["astrBotGateway"],
                 }
             )
-        if queue_ratio >= queue_threshold:
+        if queue_ratio >= self._queue_threshold:
             alerts.append(
                 {
                     "severity": "warning",
@@ -253,7 +255,7 @@ class StatsService:
                     "value": {"queueLength": queue_length, "queueMaxSize": queue_max},
                 }
             )
-        if float(metrics["p95ResponseTime"]) >= response_threshold:
+        if float(metrics["p95ResponseTime"]) >= self._response_threshold:
             alerts.append(
                 {
                     "severity": "warning",
@@ -263,7 +265,7 @@ class StatsService:
                 }
             )
         auth_failures = count_recent("integration_auth_failures", 300.0)
-        if auth_failures >= auth_threshold:
+        if auth_failures >= self._auth_threshold:
             alerts.append(
                 {
                     "severity": "warning",

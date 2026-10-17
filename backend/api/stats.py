@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import asyncio
 import copy
+import csv
 import logging
+import math
 import os
 import subprocess
 import time
@@ -18,13 +20,14 @@ from app.config import service_start_time
 from app.dependencies import get_current_admin
 from app.runtime import get_runtime_container
 from db.schemas import StatsResponse
+from infra.environment import ConfigurationError, read_nonnegative_float
 from services.stats import StatsService
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/stats", tags=["stats"])
 
 # Host hardware is shared by the process; business snapshots belong to each app.
-_RESOURCE_CACHE_TTL_SECONDS = max(0.0, float(os.getenv("STATS_RESOURCE_CACHE_TTL_SECONDS", "15")))
+_RESOURCE_CACHE_TTL_SECONDS = read_nonnegative_float(os.environ, "STATS_RESOURCE_CACHE_TTL_SECONDS", 15.0)
 _resource_cache: dict[str, Any] | None = None
 _resource_cache_updated_at = 0.0
 _resource_cache_lock: asyncio.Lock | None = None
@@ -43,6 +46,17 @@ def _get_resource_cache_lock() -> asyncio.Lock:
     return _resource_cache_lock
 
 
+async def _resource_probe(label: str, collect):
+    try:
+        return await asyncio.to_thread(collect)
+    except Exception as exc:
+        logger.error("%s资源采集失败: %s", label, type(exc).__name__)
+        raise HTTPException(
+            status_code=503,
+            detail=f"{label}资源采集未完成（{type(exc).__name__}），请检查驱动、监测工具及系统权限后重试",
+        ) from exc
+
+
 async def _resource_snapshot() -> dict[str, Any]:
     """Cache expensive host/GPU probes and collapse concurrent refreshes."""
     global _resource_cache, _resource_cache_updated_at
@@ -55,73 +69,42 @@ async def _resource_snapshot() -> dict[str, Any]:
     async with cache_lock:
         now = time.monotonic()
         if _resource_cache is None or now - _resource_cache_updated_at >= _RESOURCE_CACHE_TTL_SECONDS:
-            system, gpu = await asyncio.gather(asyncio.to_thread(get_system_stats), asyncio.to_thread(get_gpu_stats))
+            system, gpu = await asyncio.gather(
+                _resource_probe("系统", get_system_stats), _resource_probe("GPU", get_gpu_stats)
+            )
             _resource_cache = {"system": system, "gpu": gpu}
             _resource_cache_updated_at = time.monotonic()
         return copy.deepcopy(_resource_cache)
 
 
 def get_gpu_stats():
-    gpu_used = 0.0
-    gpu_total = 0.0
-    try:
-        import pynvml
-
-        pynvml.nvmlInit()
-        device_count = pynvml.nvmlDeviceGetCount()
-        if device_count > 0:
-            handle = pynvml.nvmlDeviceGetHandleByIndex(0)
-            mem_info = pynvml.nvmlDeviceGetMemoryInfo(handle)
-            gpu_used = round(mem_info.used / (1024**3), 1)
-            gpu_total = round(mem_info.total / (1024**3), 1)
-        pynvml.nvmlShutdown()
-        if gpu_total > 0:
-            return {"gpu_used": gpu_used, "gpu_total": gpu_total}
-    except Exception:
-        pass
-
-    try:
-        result = subprocess.run(
-            ["nvidia-smi", "--query-gpu=memory.total,memory.used", "--format=csv,noheader,nounits"],
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-        if result.returncode == 0 and result.stdout.strip():
-            parts = result.stdout.strip().split(",")
-            if len(parts) >= 2:
-                gpu_total = round(float(parts[0].strip()) / 1024, 1)
-                gpu_used = round(float(parts[1].strip()) / 1024, 1)
-                return {"gpu_used": gpu_used, "gpu_total": gpu_total}
-    except Exception:
-        pass
-
-    return {"gpu_used": 0.0, "gpu_total": 0.0}
+    """Read the first enumerated GPU through the required NVIDIA driver tool."""
+    result = subprocess.run(
+        ["nvidia-smi", "--query-gpu=memory.total,memory.used", "--format=csv,noheader,nounits"],
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=5,
+    )
+    rows = list(csv.reader(result.stdout.strip().splitlines()))
+    if not rows:
+        return {"gpu_used": 0.0, "gpu_total": 0.0}
+    total, used = map(float, rows[0])
+    if not math.isfinite(total) or total <= 0 or not 0 <= used <= total:
+        raise ValueError("GPU memory must be finite with 0 <= used <= total and total > 0")
+    return {"gpu_used": round(used / 1024, 1), "gpu_total": round(total / 1024, 1)}
 
 
 def get_system_stats():
     cpu_usage = int(psutil.cpu_percent(interval=None))
     memory = psutil.virtual_memory()
-    memory_used = round(memory.used / (1024**3), 1)
-    memory_total = round(memory.total / (1024**3), 1)
-
-    import platform as _platform
-
-    try:
-        disk_path = "C:" if _platform.system() == "Windows" else "/"
-        disk = psutil.disk_usage(disk_path)
-        disk_used = round(disk.used / (1024**3), 1)
-        disk_total = round(disk.total / (1024**3), 1)
-    except Exception:
-        disk_used = 0.0
-        disk_total = 0.0
-
+    disk = psutil.disk_usage(os.path.abspath(os.sep))
     return {
         "cpu_usage": cpu_usage,
-        "memory_used": memory_used,
-        "memory_total": memory_total,
-        "disk_used": disk_used,
-        "disk_total": disk_total,
+        "memory_used": round(memory.used / (1024**3), 1),
+        "memory_total": round(memory.total / (1024**3), 1),
+        "disk_used": round(disk.used / (1024**3), 1),
+        "disk_total": round(disk.total / (1024**3), 1),
     }
 
 
@@ -151,6 +134,12 @@ def _get_stats_service(request: Request) -> StatsService:
 async def _stats_snapshot(request: Request) -> dict[str, Any]:
     try:
         return await _get_stats_service(request).snapshot()
+    except ConfigurationError as exc:
+        logger.error("统计数据采集失败: %s key=%s", type(exc).__name__, exc.name)
+        raise HTTPException(
+            status_code=503,
+            detail=f"统计配置 {exc.name} 无效：{exc.requirement}。请修正后重试",
+        ) from exc
     except Exception as exc:
         logger.error("统计数据采集失败: %s", type(exc).__name__)
         raise HTTPException(status_code=503, detail="统计采集未完成，请检查数据库、运行配置及推理调度器后重试") from exc

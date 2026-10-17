@@ -4,6 +4,15 @@ from collections.abc import Mapping
 import math
 
 
+class ConfigurationError(RuntimeError):
+    """An invalid named setting, without retaining its potentially private value."""
+
+    def __init__(self, name: str, requirement: str) -> None:
+        self.name = name
+        self.requirement = requirement
+        super().__init__(f"{name} must be {requirement}")
+
+
 def read_bool(env: Mapping[str, object], name: str, default: bool = False) -> bool:
     value = str(env.get(name, str(default))).strip().lower()
     if value not in {"1", "true", "yes", "on", "0", "false", "no", "off"}:
@@ -41,4 +50,26 @@ def read_positive_float(env: Mapping[str, str], name: str, default: float) -> fl
         raise RuntimeError(message) from None
     if not math.isfinite(value) or value <= 0:
         raise RuntimeError(message)
+    return value
+
+
+def read_nonnegative_int(env: Mapping[str, str], name: str, default: int) -> int:
+    requirement = "a nonnegative integer"
+    try:
+        value = int(env.get(name, str(default)))
+    except ValueError:
+        raise ConfigurationError(name, requirement) from None
+    if value < 0:
+        raise ConfigurationError(name, requirement)
+    return value
+
+
+def read_nonnegative_float(env: Mapping[str, str], name: str, default: float) -> float:
+    requirement = "a finite nonnegative number"
+    try:
+        value = float(env.get(name, str(default)))
+    except ValueError:
+        raise ConfigurationError(name, requirement) from None
+    if not math.isfinite(value) or value < 0:
+        raise ConfigurationError(name, requirement)
     return value
