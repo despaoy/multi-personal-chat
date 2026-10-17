@@ -629,22 +629,26 @@ class TestDeploymentValidation:
 
 class TestServiceStatus:
     @pytest.mark.asyncio
-    async def test_services_includes_astrbot_gateway_degraded(self, monkeypatch):
-        from api import stats
+    async def test_services_includes_astrbot_gateway_degraded(self, monkeypatch, tmp_path):
+        from services import stats as statistics
+        from stats_fixtures import StatsRig
 
-        monkeypatch.setenv("ASTRBOT_ENABLED", "true")
-        monkeypatch.setattr(stats, "_check_service", lambda port: False)
-
-        payload = await stats.get_services()
+        rig = StatsRig(tmp_path / "gateway.sqlite", env={"ASTRBOT_ENABLED": "true"})
+        monkeypatch.setattr(statistics, "check_service", lambda port: False)
+        async with rig.client() as client:
+            response = await client.get("/api/stats/services")
+        assert response.status_code == 200
+        payload = response.json()
         astrbot = next(item for item in payload["services"] if item["name"] == "AstrBot Gateway")
-
         assert astrbot["status"] == "degraded"
         assert astrbot["port"] == 6185
 
 class TestObservability:
     def test_metrics_payload_uses_model_invocations_for_percentiles_and_failures(self, monkeypatch):
         from datetime import datetime
-        from api import stats
+        from services import stats as statistics
+        from services.stats import StatsService
+        from infra.concurrency_control import inference_runtime
 
         db = TestMultiPlatformStorage()._make_db()
         now = datetime.now().isoformat()
@@ -662,10 +666,9 @@ class TestObservability:
         db.add_model_invocation({"traceId": "ok", "platform": "qq", "costTime": 2.0, "createdAt": now})
         db.add_model_invocation({"traceId": "bad", "platform": "qq", "costTime": 10.0, "errorType": "TimeoutError", "createdAt": now})
 
-        monkeypatch.setattr(stats, "db", db)
-        monkeypatch.setattr(stats, "_check_service", lambda port: True)
+        monkeypatch.setattr(statistics, "check_service", lambda port: True)
 
-        metrics = stats._metrics_payload()
+        metrics = StatsService(database=db, inference_runtime=inference_runtime, env={}).collect()["metrics"]
 
         assert metrics["todayMessages"] == 3
         assert metrics["todayReplies"] == 3
@@ -675,7 +678,8 @@ class TestObservability:
         assert metrics["queueLength"] >= 0
 
     def test_alerts_include_queue_slow_auth_and_model_failure(self):
-        from api import stats
+        from services.stats import StatsService
+        from infra.concurrency_control import inference_runtime
         from infra import observability
 
         observability._COUNTERS.clear()
@@ -692,7 +696,7 @@ class TestObservability:
             "p95ResponseTime": 99,
             "astrBotGateway": {"status": "running"},
         }
-        alerts = stats._alerts_from_metrics(metrics)
+        alerts = StatsService(database=object(), inference_runtime=inference_runtime, env={}).alerts(metrics)
         alert_types = {item["type"] for item in alerts}
 
         assert "model_consecutive_failures" in alert_types

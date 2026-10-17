@@ -9,7 +9,7 @@ import pytest
 
 @pytest.mark.asyncio
 async def test_metrics_snapshot_single_flights_concurrent_refreshes(monkeypatch):
-    from api import stats
+    from services.stats import StatsService
 
     calls = 0
     calls_lock = threading.Lock()
@@ -21,16 +21,14 @@ async def test_metrics_snapshot_single_flights_concurrent_refreshes(monkeypatch)
         time.sleep(0.03)
         return {"nested": {"value": 1}}
 
-    monkeypatch.setattr(stats, "_metrics_payload", build_payload)
-    monkeypatch.setattr(stats, "_METRICS_CACHE_TTL_SECONDS", 30.0)
-    stats._reset_metrics_cache()
-    snapshots = await asyncio.gather(*(stats._metrics_snapshot() for _ in range(20)))
+    service = StatsService(database=object(), inference_runtime=object(), env={"STATS_CACHE_TTL_SECONDS": "30"})
+    monkeypatch.setattr(service, "collect", build_payload)
+    snapshots = await asyncio.gather(*(service.snapshot() for _ in range(20)))
 
     assert calls == 1
     assert all(item == {"nested": {"value": 1}} for item in snapshots)
     snapshots[0]["nested"]["value"] = 99
-    assert (await stats._metrics_snapshot())["nested"]["value"] == 1
-    stats._reset_metrics_cache()
+    assert (await service.snapshot())["nested"]["value"] == 1
 
 
 def test_observability_counter_updates_are_thread_safe():
@@ -80,7 +78,7 @@ async def test_resource_snapshot_caches_expensive_probes(monkeypatch):
     monkeypatch.setattr(stats, "get_system_stats", system_stats)
     monkeypatch.setattr(stats, "get_gpu_stats", gpu_stats)
     monkeypatch.setattr(stats, "_RESOURCE_CACHE_TTL_SECONDS", 30.0)
-    stats._reset_metrics_cache()
+    monkeypatch.setattr(stats, "_resource_cache", None)
 
     snapshots = await asyncio.gather(*(stats._resource_snapshot() for _ in range(20)))
 
@@ -89,7 +87,7 @@ async def test_resource_snapshot_caches_expensive_probes(monkeypatch):
 
 
 def test_metrics_snapshot_refreshes_on_a_fresh_event_loop(monkeypatch):
-    from api import stats
+    from services.stats import StatsService
 
     calls = 0
 
@@ -98,13 +96,11 @@ def test_metrics_snapshot_refreshes_on_a_fresh_event_loop(monkeypatch):
         calls += 1
         return {"generation": calls}
 
-    monkeypatch.setattr(stats, "_metrics_payload", build_payload)
-    monkeypatch.setattr(stats, "_METRICS_CACHE_TTL_SECONDS", 30.0)
-    stats._reset_metrics_cache()
+    service = StatsService(database=object(), inference_runtime=object(), env={"STATS_CACHE_TTL_SECONDS": "30"})
+    monkeypatch.setattr(service, "collect", build_payload)
 
-    first = asyncio.run(stats._metrics_snapshot())
-    second = asyncio.run(stats._metrics_snapshot())
+    first = asyncio.run(service.snapshot())
+    second = asyncio.run(service.snapshot())
 
     assert first == {"generation": 1}
     assert second == {"generation": 2}
-    stats._reset_metrics_cache()
