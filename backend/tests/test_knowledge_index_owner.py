@@ -42,8 +42,11 @@ async def test_committed_document_change_uses_one_index_publication(tmp_path,mon
     getter.assert_not_called()
     assert encode.call_count==calls
     if fail_rebuild:
-        monkeypatch.setattr(vector,'clear_all',Mock(side_effect=OSError('synthetic publication failure')))
-        assert knowledge._ensure_vector_index() is False
+        failure=OSError('synthetic publication failure')
+        monkeypatch.setattr(vector,'clear_all',Mock(side_effect=failure))
+        with pytest.raises(OSError) as raised:
+            knowledge._ensure_vector_index()
+        assert raised.value is failure
         assert knowledge._read_rebuild_status()[0]!='complete' and not knowledge._vector_index_built
     else:
         assert knowledge._ensure_vector_index()

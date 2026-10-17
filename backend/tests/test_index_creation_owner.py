@@ -129,6 +129,7 @@ async def test_index_failure_keeps_complete_source_and_returns_search_failure(pu
     with pytest.raises(HTTPException) as raised:
         await knowledge.search_knowledge(request, {"role": "admin"})
     assert raised.value.status_code == 503
+    assert raised.value.__cause__ is failure
     assert "synthetic-private" not in str(raised.value.detail) + caplog.text
     assert knowledge._read_rebuild_status()[0] != "complete" and not knowledge._vector_index_built
     assert knowledge._get_rebuild_revision() == rig.revision + 1
@@ -172,3 +173,37 @@ async def test_scan_reuses_existing_named_base_before_atomic_document_publicatio
     rig.getter.assert_not_called()
     assert knowledge._ensure_vector_index()
     rig.add.assert_called_once()
+
+
+
+@pytest.mark.parametrize("stage", ["authority", "flush"])
+async def test_generation_retrieval_preserves_index_failure_before_evidence_use(publication, monkeypatch, caplog, stage):
+    from api import generate
+    from knowledge import rag_helper
+
+    rig = publication
+    row = rig.db.save_knowledge_document(
+        dict(title="登记规则", content=TEXT, knowledge_base_id=rig.kb["id"]), chunks=[TEXT]
+    )
+    assert row["content"] == TEXT
+    failure = OSError("synthetic-private-index-" + stage)
+    if stage == "authority":
+        assert knowledge._ensure_vector_index()
+        monkeypatch.setattr(rig.db, "get_config_value", Mock(side_effect=failure))
+    else:
+        monkeypatch.setattr(rig.vector, "flush", Mock(side_effect=failure))
+    retrieval = Mock(side_effect=AssertionError("Failed index must not authorize evidence"))
+    monkeypatch.setattr(rag_helper, "get_rag_helper", retrieval)
+    builds = rig.add.call_count
+    with pytest.raises(OSError) as raised:
+        await generate._retrieve_rag_bundle(
+            "登记办理的完整条件及未确认付款限制", 5, {"knowledge_base_id": rig.kb["id"]}
+        )
+    assert raised.value is failure
+    retrieval.assert_not_called()
+    assert "synthetic-private" not in caplog.text
+    if stage == "authority":
+        assert rig.add.call_count == builds
+    else:
+        assert not knowledge._vector_index_built and knowledge._read_rebuild_status()[0] != "complete"
+    assert rig.db.get_knowledge_document(row["id"])["content"] == TEXT

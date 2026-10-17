@@ -175,7 +175,8 @@ def test_failed_persisted_authority_never_authorizes_warm_cached_index(readers, 
         writer.set_config_value(knowledge._VECTOR_REBUILD_REVISION_KEY, "bad" if failure == "malformed" else "-1")
     builds = vector.builds
     metadata = deepcopy(vector.metadata)
-    assert knowledge._ensure_vector_index() is False
+    with pytest.raises(RuntimeError if failure == "unreadable" else ValueError):
+        knowledge._ensure_vector_index()
     assert vector.builds == builds and vector.metadata == metadata
 
 

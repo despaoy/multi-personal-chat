@@ -997,7 +997,7 @@ def _ensure_vector_index():
             return True
     except Exception as exc:
         logger.warning("读取知识索引修订号失败: %s", type(exc).__name__)
-        return False
+        raise
 
     with _vector_index_lock:
         try:
@@ -1172,7 +1172,7 @@ def _ensure_vector_index():
             return True
         except Exception as e:
             logger.warning("向量索引重建失败: %s", type(e).__name__)
-            return False
+            raise
 
 
 @router.post("/api/knowledge/search")
