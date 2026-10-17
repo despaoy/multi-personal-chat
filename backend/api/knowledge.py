@@ -375,35 +375,7 @@ async def upload_zip(kb_id: int, file: UploadFile = File(...), current_user: dic
         from knowledge.text_splitter import simple_text_split
 
         chunks = simple_text_split(file_content)
-        document = await run_db(db.save_knowledge_document, document_data, chunks=chunks)
-        vector_docs = []
-
-        for i, chunk_content in enumerate(chunks):
-            # 注入文件夹路径到检索文本：知识库名/文件夹名/文档名 + 内容
-            enriched_content = f"[{kb_name}/{folder_name}] {doc_title}: {chunk_content}"
-
-            vector_docs.append(
-                {
-                    "id": f"doc_{document['id']}_chunk_{i}",
-                    "chunk_index": i,
-                    "title": doc_title,
-                    "content": enriched_content,
-                    "source_type": "file",
-                    "document_id": document["id"],
-                    "category": folder_name,
-                    "knowledge_base_id": kb_id,
-                }
-            )
-
-        # 添加到向量数据库
-        if VECTOR_DB_AVAILABLE and vector_docs:
-            try:
-                from app.config import get_vector_db
-
-                vector_db = get_vector_db()
-                await asyncio.to_thread(vector_db.add_documents, vector_docs)
-            except Exception as ve:
-                logger.error("添加到向量数据库失败: %s", ve)
+        await run_db(db.save_knowledge_document, document_data, chunks=chunks)
 
         # 数据与 dirty 修订已原子提交；此处仅清除当前进程的加速状态
         await run_db(_invalidate_local_knowledge_index)
@@ -571,36 +543,11 @@ async def import_scanned_directory(
                     "chunkCount": 0,
                 }
 
-                # 分块 + 路径注入
+                # 原子发布文档、完整分块和索引修订
                 from knowledge.text_splitter import simple_text_split
 
                 chunks = simple_text_split(content)
-                document = await run_db(db.save_knowledge_document, document_data, chunks=chunks)
-                vector_docs = []
-
-                for i, chunk_content in enumerate(chunks):
-                    enriched_content = f"[{kb_name}/{folder_name}] {doc_title}: {chunk_content}"
-                    vector_docs.append(
-                        {
-                            "id": f"doc_{document['id']}_chunk_{i}",
-                            "chunk_index": i,
-                            "title": doc_title,
-                            "content": enriched_content,
-                            "source_type": "file",
-                            "document_id": document["id"],
-                            "category": folder_name,
-                            "knowledge_base_id": kb_id,
-                        }
-                    )
-
-                if VECTOR_DB_AVAILABLE and vector_docs:
-                    try:
-                        from app.config import get_vector_db
-
-                        vector_db = get_vector_db()
-                        await asyncio.to_thread(vector_db.add_documents, vector_docs)
-                    except Exception as ve:
-                        logger.error("添加到向量数据库失败: %s", ve)
+                await run_db(db.save_knowledge_document, document_data, chunks=chunks)
 
                 # 数据与 dirty 修订已原子提交；此处仅清除当前进程的加速状态
                 await run_db(_invalidate_local_knowledge_index)
@@ -643,32 +590,7 @@ async def import_scanned_directory(
             from knowledge.text_splitter import simple_text_split
 
             chunks = simple_text_split(content)
-            document = await run_db(db.save_knowledge_document, document_data, chunks=chunks)
-            vector_docs = []
-
-            for i, chunk_content in enumerate(chunks):
-                enriched_content = f"[{kb_name}] {doc_title}: {chunk_content}"
-                vector_docs.append(
-                    {
-                        "id": f"doc_{document['id']}_chunk_{i}",
-                        "chunk_index": i,
-                        "title": doc_title,
-                        "content": enriched_content,
-                        "source_type": "file",
-                        "document_id": document["id"],
-                        "category": "未分类",
-                        "knowledge_base_id": kb_id,
-                    }
-                )
-
-            if VECTOR_DB_AVAILABLE and vector_docs:
-                try:
-                    from app.config import get_vector_db
-
-                    vector_db = get_vector_db()
-                    await asyncio.to_thread(vector_db.add_documents, vector_docs)
-                except Exception as ve:
-                    logger.error("添加到向量数据库失败: %s", ve)
+            await run_db(db.save_knowledge_document, document_data, chunks=chunks)
 
             # 数据与 dirty 修订已原子提交；此处仅清除当前进程的加速状态
             await run_db(_invalidate_local_knowledge_index)
@@ -734,13 +656,8 @@ async def create_knowledge_document(request: KnowledgeDocumentCreate, current_us
         if not is_valid:
             raise HTTPException(status_code=422, detail={"message": "输入验证失败", "errors": errors})
 
-        # 获取知识库和文件夹信息（用于路径注入）
-        kb_name = ""
+        # 使用文件夹元数据确定文档分类
         folder_name = request.category
-        if request.knowledge_base_id:
-            kb = await run_db(db.get_knowledge_base, request.knowledge_base_id)
-            if kb:
-                kb_name = kb["name"]
         if request.folder_id:
             folder = await run_db(db.get_knowledge_folder, request.folder_id)
             if folder:
@@ -760,42 +677,12 @@ async def create_knowledge_document(request: KnowledgeDocumentCreate, current_us
             "chunkCount": 0,
         }
 
-        # 分块处理 - 注入路径到检索文本
+        # 原子发布文档、完整分块和索引修订
         from knowledge.text_splitter import simple_text_split
 
         chunks = simple_text_split(request.content)
         document = await run_db(db.save_knowledge_document, document_data, chunks=chunks)
         chunk_count = len(chunks)
-        vector_docs = []
-
-        for i, chunk_content in enumerate(chunks):
-            # 注入文件夹路径到检索文本
-            path_prefix = f"[{kb_name}/{folder_name}]" if kb_name else f"[{folder_name}]"
-            enriched_content = f"{path_prefix} {request.title}: {chunk_content}"
-
-            vector_docs.append(
-                {
-                    "id": f"doc_{document['id']}_chunk_{i}",
-                    "chunk_index": i,
-                    "title": request.title,
-                    "content": enriched_content,
-                    "source_type": request.sourceType,
-                    "document_id": document["id"],
-                    "category": folder_name,
-                    "knowledge_base_id": request.knowledge_base_id,
-                }
-            )
-
-        # 添加到向量数据库
-        if VECTOR_DB_AVAILABLE and vector_docs:
-            try:
-                from app.config import get_vector_db
-
-                vector_db = get_vector_db()
-                await asyncio.to_thread(vector_db.add_documents, vector_docs)
-                logger.info("文档已添加到向量数据库: %s", document["title"])
-            except Exception as ve:
-                logger.error("添加到向量数据库失败: %s", ve)
 
         # 数据与 dirty 修订已原子提交；此处仅清除当前进程的加速状态
         await run_db(_invalidate_local_knowledge_index)

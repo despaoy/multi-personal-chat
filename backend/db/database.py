@@ -1765,6 +1765,7 @@ class SQLiteDB:
             kb_id = cursor.lastrowid
             return {"id": kb_id, "name": name, "description": description, "created_at": now, "updated_at": now}
         except sqlite3.IntegrityError:
+            conn.rollback()
             return None
 
     def get_knowledge_bases(self):
@@ -1856,6 +1857,7 @@ class SQLiteDB:
             folder_id = cursor.lastrowid
             return {"id": folder_id, "knowledge_base_id": kb_id, "name": name, "description": description, "created_at": now, "updated_at": now}
         except sqlite3.IntegrityError:
+            conn.rollback()
             return None
 
     def get_knowledge_folders(self, kb_id: int):
