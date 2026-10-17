@@ -876,7 +876,7 @@ def _get_expected_chunk_count() -> int:
         'SELECT COUNT(*) AS cnt FROM knowledge_chunks c INNER JOIN knowledge_documents d ON c."documentId" = d.id',
         {},
     )
-    return rows[0]["cnt"] if rows else 0
+    return rows[0]["cnt"]
 
 
 def _read_rebuild_status() -> tuple[str, int, str, int]:

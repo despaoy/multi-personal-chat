@@ -211,3 +211,35 @@ def test_corrupt_local_identity_cannot_pass_global_complete_count(readers, monke
     monkeypatch.setattr(knowledge, "_vector_index_built", False)
     monkeypatch.setattr(knowledge, "_vector_index_revision", None)
     assert knowledge._ensure_vector_index() and vector.metadata[0]["id"] == f"doc_{doc['id']}_chunk_0"
+
+
+
+async def test_missing_count_row_cannot_authorize_empty_index(readers, monkeypatch):
+    from unittest.mock import Mock
+
+    from db.schemas import KnowledgeSearchRequest
+    from fastapi import HTTPException
+
+    reader, writer, doc, new, vector = readers
+    external_update(writer, doc, dict(title="完整新规则"))
+    before = deepcopy(vector.metadata)
+    revision = knowledge._get_rebuild_revision()
+    clear = Mock(wraps=vector.clear_all)
+    monkeypatch.setattr(vector, "clear_all", clear)
+    execute = reader.execute_sql
+
+    def missing_aggregate(query, params=None):
+        if query.startswith("SELECT COUNT(*) AS cnt"):
+            return []
+        return execute(query, params)
+
+    monkeypatch.setattr(reader, "execute_sql", missing_aggregate)
+    request = KnowledgeSearchRequest(query="完整课程规则、红色暴雨例外及书面确认条件")
+    with pytest.raises(HTTPException) as caught:
+        await knowledge.search_knowledge(request, {"role": "admin"})
+    assert caught.value.status_code == 503 and isinstance(caught.value.__cause__, IndexError)
+    clear.assert_not_called()
+    assert vector.metadata == before and not knowledge._vector_index_built
+    assert knowledge._read_rebuild_status()[0] == "dirty"
+    assert knowledge._get_rebuild_revision() == revision
+    assert reader.get_knowledge_chunks(doc["id"])[0]["content"] == doc["content"]
