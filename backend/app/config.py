@@ -12,6 +12,7 @@ from datetime import datetime, timedelta, timezone
 from fastapi import HTTPException
 
 from infra.deployment import validate_jwt_secret
+from infra.environment import read_positive_int
 
 from cache.response_cache import ResponseCache
 
@@ -65,14 +66,14 @@ def verify_token(token: str) -> dict:
 def _resolve_concurrency_limit() -> int:
     """解析 LLM 并发上限，优先 LLM_MAX_CONCURRENCY，旧键 MODEL_MAX_CONCURRENCY 发 deprecation warning。"""
     primary = os.getenv("LLM_MAX_CONCURRENCY")
-    if primary:
-        return max(1, int(primary))
+    if primary is not None:
+        return read_positive_int(os.environ, "LLM_MAX_CONCURRENCY", 2)
     legacy = os.getenv("MODEL_MAX_CONCURRENCY")
-    if legacy:
+    if legacy is not None:
         __logger.warning(
             "MODEL_MAX_CONCURRENCY 已弃用，请改用 LLM_MAX_CONCURRENCY。旧键将在下个大版本移除。"
         )
-        return max(1, int(legacy))
+        return read_positive_int(os.environ, "MODEL_MAX_CONCURRENCY", 2)
     return 2
 
 

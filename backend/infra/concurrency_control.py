@@ -5,12 +5,14 @@ from __future__ import annotations
 import asyncio
 import itertools
 import logging
+import math
 import os
 import time
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from inference.request_context import detached_request_context
+from infra.environment import read_positive_float, read_positive_int
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
@@ -114,13 +116,15 @@ class InferenceRuntime:
     """Single-process bounded priority scheduler shared by every chat entrypoint."""
 
     def __init__(self) -> None:
-        self.max_queue_size = int(os.getenv("INFERENCE_QUEUE_MAX_SIZE", "100"))
-        legacy_workers = os.getenv("MODEL_MAX_CONCURRENCY")
-        worker_value = os.getenv("INFERENCE_WORKERS") or os.getenv("LLM_MAX_CONCURRENCY") or legacy_workers or "2"
-        if legacy_workers and not os.getenv("INFERENCE_WORKERS") and not os.getenv("LLM_MAX_CONCURRENCY"):
+        self.max_queue_size = read_positive_int(os.environ, "INFERENCE_QUEUE_MAX_SIZE", 100)
+        worker_key = next(
+            (key for key in ("INFERENCE_WORKERS", "LLM_MAX_CONCURRENCY", "MODEL_MAX_CONCURRENCY") if key in os.environ),
+            "INFERENCE_WORKERS",
+        )
+        if worker_key == "MODEL_MAX_CONCURRENCY":
             logger.warning("MODEL_MAX_CONCURRENCY 已弃用，请改用 INFERENCE_WORKERS")
-        self.worker_count = max(1, int(worker_value))
-        self.queue_timeout = float(os.getenv("INFERENCE_QUEUE_TIMEOUT", "180"))
+        self.worker_count = read_positive_int(os.environ, worker_key, 2)
+        self.queue_timeout = read_positive_float(os.environ, "INFERENCE_QUEUE_TIMEOUT", 180.0)
         self._queue: asyncio.PriorityQueue[_QueuedInference] = asyncio.PriorityQueue(maxsize=self.max_queue_size)
         self._sequence = itertools.count()
         self._workers_started = False
@@ -180,6 +184,9 @@ class InferenceRuntime:
         priority: int,
         timeout: float | None = None,
     ) -> Any:
+        wait_timeout = self.queue_timeout if timeout is None else timeout
+        if not math.isfinite(wait_timeout) or wait_timeout <= 0:
+            raise ValueError("timeout must be positive and finite")
         await self._ensure_workers()
         loop = asyncio.get_running_loop()
         future = loop.create_future()
@@ -199,7 +206,7 @@ class InferenceRuntime:
 
         self._stats["submitted"] += 1
         try:
-            return await asyncio.wait_for(future, timeout=timeout or self.queue_timeout)
+            return await asyncio.wait_for(future, timeout=wait_timeout)
         except (asyncio.TimeoutError, asyncio.CancelledError):
             self._stats["cancelled"] += 1
             if not future.done():
