@@ -14,7 +14,7 @@ from collections import OrderedDict
 from threading import RLock
 from typing import Any
 
-from infra.environment import read_bool
+from infra.environment import read_bool, read_positive_int
 
 from .reranker import get_reranker
 from .task_retrieval import literal_task_views
@@ -60,7 +60,7 @@ class RAGHelper:
         self._query_cache: OrderedDict[str, tuple[float, list[dict[str, Any]]]] = OrderedDict()
         self._cache_lock = RLock()
         self._cache_max_size = 100
-        self._cache_ttl = max(1, int(os.getenv("RAG_RETRIEVAL_CACHE_TTL", "60")))
+        self._cache_ttl = read_positive_int(os.environ, "RAG_RETRIEVAL_CACHE_TTL", 60)
 
         if self.enable_reranking:
             self.reranker = get_reranker()
