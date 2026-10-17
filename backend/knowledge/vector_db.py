@@ -501,7 +501,7 @@ class VectorDatabase:
             cache_key = self._get_query_cache_key(query, top_k, threshold, filters)
             cached = self._get_cached_query(cache_key)
             if cached is not None:
-                logger.debug(f"查询缓存命中: query='{query[:30]}...'")
+                logger.debug("查询缓存命中")
                 return deepcopy(cached)
 
             query_embedding = self._get_embedding(query)
