@@ -68,6 +68,7 @@ def install_api(monkeypatch, provider):
     row = dict(id="registered-adapter", name="controlled-adapter", status="active")
     connection = cloud_connection("controlled-selected-model")
     manager.get_current_provider = lambda: connection
+    manager._providers[model_manager.ModelProvider(provider)] = connection
     monkeypatch.setattr(model_manager, "get_model_manager", lambda: manager)
     monkeypatch.setattr(generate, "db", SimpleNamespace(config={}, loras=[row]))
     monkeypatch.setattr(generate, "response_cache", None)

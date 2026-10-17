@@ -185,6 +185,10 @@ async def close_vllm_client():
 router = APIRouter()
 
 
+class _ModelIdentityError(RuntimeError):
+    """The invoked provider did not supply a usable model identity."""
+
+
 def _response_cache_keys(
     request: MessageRequest,
     lora_name: str,
@@ -317,7 +321,7 @@ async def _generate_reply_body(
     # C11 fix: 主聊天端点 mock provider 防护
     # 此前仅 training/generate-dialogues 有此检查，主聊天端点遗漏，
     # 导致生产环境默认 mock 时静默返回罐头回复。现统一拦截。
-    from inference.model_manager import get_model_manager
+    from inference.model_manager import ModelProvider, get_model_manager
     from inference.request_context import get_request_context
 
     _mgr = get_model_manager()
@@ -551,11 +555,18 @@ async def _generate_reply_body(
                     reply, used_rag, rag_meta = await asyncio.wait_for(operation, timeout=_MODEL_INFERENCE_TIMEOUT)
             finally:
                 semaphore.release()
-            if cloud_provider is not None:
-                model_name = cloud_provider.get_status()["modelName"]
-            else:
-                status = _mgr.get_status()
-                model_name = status.get("providers", {}).get(request_provider, {}).get("modelName", "Unknown")
+            if rag_meta.get("modelInvoked", True) is not False:
+                try:
+                    provider = (
+                        cloud_provider if cloud_provider is not None
+                        else _mgr._providers[ModelProvider(request_provider)]
+                    )
+                    name = provider.get_status()["modelName"]
+                    if not isinstance(name, str) or not name.strip():
+                        raise ValueError("Selected provider must report a nonempty model name")
+                    model_name = name
+                except Exception as exc:
+                    raise _ModelIdentityError("Selected provider model identity is unavailable") from exc
             model_label = f"{model_name} ({request_provider})"
             stored_model_name = model_name
 
@@ -678,6 +689,12 @@ async def _generate_reply_body(
                 raise HTTPException(503, detail=with_provider_error(record_error.detail, e)) from e
         if isinstance(e, HistoryFormatError):
             raise HTTPException(503, detail=e.public_detail()) from e
+        if isinstance(e, _ModelIdentityError):
+            raise HTTPException(503, detail={
+                "stage": "model_status", "reason": "model_identity_unavailable",
+                "modelInvoked": True, "messageSaved": False,
+                "message": "生成后模型标识读取失败，本轮结果未保存。请检查所选模型配置后重试。",
+            }) from e
         if isinstance(e, ProviderResponseError):
             raise HTTPException(e.http_status, detail=e.public_detail()) from e
         if isinstance(e, CircuitOpenError):
