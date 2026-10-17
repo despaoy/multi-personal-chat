@@ -44,6 +44,8 @@ Web 后端不为启动探测创建同步 Redis 连接。Redis 当前用于 NoneB
 
 知识文档创建、ZIP 和目录导入与更新/删除共用原子文档、分块和修订号发布，再由检索入口统一构建索引；写入入口不再先做一次增量向量化。重复知识库或文件夹创建返回已存在前结束本次 SQLite 事务，保证后续文档事务可继续。
 
+ZIP 与目录导入返回 complete/partial/failed/unconfirmed 状态，只有 complete 的 success 为 true。有效批处理请求通过结果报告已确认保存的数量及错误；超时停止后续操作，提示刷新核对，保留可能稍后完成的写入语义。格式、权限和 ZIP 路径校验仍由原有 HTTP 边界处理。前端按状态提示并刷新已保存内容。
+
 运行时数据库、模型、LoRA、日志、索引和密钥不属于源码目录，边界见 [`../docs/operations/SERVER_LAYOUT.md`](../docs/operations/SERVER_LAYOUT.md)。
 
 ## 知识检索边界

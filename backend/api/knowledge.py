@@ -28,6 +28,7 @@ from db.schemas import (
     KnowledgeSearchRequest,
 )
 from infra.db_executor import run_db
+from infra.bounded_executor import BlockingWorkTimeout
 
 logger = logging.getLogger(__name__)
 
@@ -273,6 +274,44 @@ async def delete_knowledge_folder(folder_id: int, current_user: dict = Depends(g
 # ============================================
 
 
+def _knowledge_import_error(entry: str, error: Exception) -> str:
+    logger.warning("知识导入条目处理失败: %s", type(error).__name__)
+    return f"{entry}：处理未完成（{type(error).__name__}），请核对文件权限、数据服务及已保存文档。"
+
+
+def _knowledge_import_result(
+    created_folders: dict, created_docs: int, errors: list[str], *, unconfirmed: bool = False
+) -> dict[str, Any]:
+    if unconfirmed:
+        status = "unconfirmed"
+        message = f"导入结果未确认：已确认保存 {created_docs} 个文档，请刷新核对后再决定是否重试。"
+    elif errors:
+        status = "partial" if created_docs else "failed"
+        message = (
+            f"部分导入：已保存 {created_docs} 个文档，{len(errors)} 项处理未完成。"
+            if created_docs
+            else f"导入失败：{len(errors)} 项处理未完成。"
+        )
+    else:
+        status = "complete"
+        message = f"已导入 {created_docs} 个文档。" if created_docs else "未找到可导入的文档。"
+    logger.log(
+        logging.INFO if status == "complete" else logging.WARNING,
+        "知识导入结束: status=%s saved=%d errors=%d",
+        status,
+        created_docs,
+        len(errors),
+    )
+    return {
+        "success": status == "complete",
+        "status": status,
+        "message": message,
+        "createdFolders": list(created_folders),
+        "createdDocs": created_docs,
+        "errors": errors,
+    }
+
+
 @router.post("/api/knowledge/bases/{kb_id}/upload-zip")
 async def upload_zip(kb_id: int, file: UploadFile = File(...), current_user: dict = Depends(get_current_admin)):
     """上传ZIP文件，自动按目录结构创建文件夹和文档
@@ -289,108 +328,106 @@ async def upload_zip(kb_id: int, file: UploadFile = File(...), current_user: dic
     if not file.filename or not file.filename.endswith(".zip"):
         raise HTTPException(status_code=400, detail="请上传ZIP文件")
 
-    try:
-        content = await file.read(_ZIP_MAX_BYTES + 1)
-        if len(content) > _ZIP_MAX_BYTES:
-            raise HTTPException(status_code=413, detail=f"文件大小超过限制 ({_ZIP_MAX_BYTES // 1024 // 1024}MB)")
-        zf = zipfile.ZipFile(io.BytesIO(content))
-        zip_entries = _validated_zip_entries(zf)
-    except zipfile.BadZipFile as exc:
-        raise HTTPException(status_code=400, detail="无效的ZIP文件") from exc
-
-    kb_name = existing["name"]
+    content = await file.read(_ZIP_MAX_BYTES + 1)
+    if len(content) > _ZIP_MAX_BYTES:
+        raise HTTPException(status_code=413, detail=f"文件大小超过限制 ({_ZIP_MAX_BYTES // 1024 // 1024}MB)")
     created_folders = {}
     created_docs = 0
     errors = []
+    unconfirmed = False
+    try:
+        with zipfile.ZipFile(io.BytesIO(content)) as zf:
+            zip_entries = _validated_zip_entries(zf)
+            for zip_entry in zip_entries:
+                entry = zip_entry.filename
+                # 跳过目录条目和隐藏文件
+                if entry.endswith("/") or entry.startswith(".") or "__MACOSX" in entry:
+                    continue
 
-    for zip_entry in zip_entries:
-        entry = zip_entry.filename
-        # 跳过目录条目和隐藏文件
-        if entry.endswith("/") or entry.startswith(".") or "__MACOSX" in entry:
-            continue
+                # 解析路径：folder_name/filename.txt
+                parts = PurePosixPath(entry).parts
+                if len(parts) < 2:
+                    # 根目录下的文件，归入"未分类"
+                    folder_name = "未分类"
+                    filename = parts[0]
+                else:
+                    folder_name = parts[-2]
+                    filename = parts[-1]
 
-        # 解析路径：folder_name/filename.txt
-        parts = PurePosixPath(entry).parts
-        if len(parts) < 2:
-            # 根目录下的文件，归入"未分类"
-            folder_name = "未分类"
-            filename = parts[0]
-        else:
-            folder_name = parts[-2]
-            filename = parts[-1]
+                # 只处理文本文件
+                if not filename.lower().endswith((".txt", ".md", ".json")):
+                    continue
 
-        # 只处理文本文件
-        if not filename.lower().endswith((".txt", ".md", ".json")):
-            continue
+                try:
+                    # 获取或创建文件夹
+                    if folder_name not in created_folders:
+                        folder = await run_db(db.create_knowledge_folder, kb_id, folder_name)
+                        if folder is None:
+                            # 文件夹已存在，查找它
+                            folders = await run_db(db.get_knowledge_folders, kb_id)
+                            folder = next((f for f in folders if f["name"] == folder_name), None)
+                        if folder:
+                            created_folders[folder_name] = folder["id"]
+                        else:
+                            errors.append(f"无法创建文件夹: {folder_name}")
+                            continue
 
-        # 安全检查
-        if ".." in entry or entry.startswith("/"):
-            continue
+                    folder_id = created_folders[folder_name]
 
-        # 获取或创建文件夹
-        if folder_name not in created_folders:
-            folder = await run_db(db.create_knowledge_folder, kb_id, folder_name)
-            if folder is None:
-                # 文件夹已存在，查找它
-                folders = await run_db(db.get_knowledge_folders, kb_id)
-                folder = next((f for f in folders if f["name"] == folder_name), None)
-            if folder:
-                created_folders[folder_name] = folder["id"]
-            else:
-                errors.append(f"无法创建文件夹: {folder_name}")
-                continue
+                    # 读取文件内容
+                    file_bytes = zf.read(zip_entry)
+                    try:
+                        file_content = file_bytes.decode("utf-8")
+                    except UnicodeDecodeError:
+                        try:
+                            file_content = file_bytes.decode("gbk")
+                        except UnicodeDecodeError:
+                            errors.append(f"文件编码不支持: {entry}")
+                            continue
 
-        folder_id = created_folders[folder_name]
+                    if not file_content.strip():
+                        continue
 
-        # 读取文件内容
-        try:
-            file_content = zf.read(zip_entry).decode("utf-8")
-        except UnicodeDecodeError:
-            try:
-                file_content = zf.read(zip_entry).decode("gbk")
-            except UnicodeDecodeError:
-                errors.append(f"文件编码不支持: {entry}")
-                continue
+                    # 文档标题 = 文件名（去掉扩展名）
+                    doc_title = re.sub(r"\.(txt|md|json)$", "", filename)
 
-        if not file_content.strip():
-            continue
+                    # 创建文档 - 注入文件夹路径到category
+                    document_data = {
+                        "title": doc_title,
+                        "content": file_content,
+                        "category": folder_name,
+                        "knowledge_base_id": kb_id,
+                        "folder_id": folder_id,
+                        "sourceType": "file",
+                        "fileType": filename.rsplit(".", 1)[-1] if "." in filename else "txt",
+                        "fileSize": len(file_content.encode("utf-8")),
+                        "chunkCount": 0,
+                    }
 
-        # 文档标题 = 文件名（去掉扩展名）
-        doc_title = re.sub(r"\.(txt|md|json)$", "", filename)
+                    # 分块处理
+                    from knowledge.text_splitter import simple_text_split
 
-        # 创建文档 - 注入文件夹路径到category
-        document_data = {
-            "title": doc_title,
-            "content": file_content,
-            "category": folder_name,
-            "knowledge_base_id": kb_id,
-            "folder_id": folder_id,
-            "sourceType": "file",
-            "fileType": filename.rsplit(".", 1)[-1] if "." in filename else "txt",
-            "fileSize": len(file_content.encode("utf-8")),
-            "chunkCount": 0,
-        }
+                    chunks = simple_text_split(file_content)
+                    await run_db(db.save_knowledge_document, document_data, chunks=chunks)
+                    created_docs += 1
 
-        # 分块处理
-        from knowledge.text_splitter import simple_text_split
+                    # 数据与 dirty 修订已原子提交；此处仅清除当前进程的加速状态
+                    await run_db(_invalidate_local_knowledge_index)
 
-        chunks = simple_text_split(file_content)
-        await run_db(db.save_knowledge_document, document_data, chunks=chunks)
-
-        # 数据与 dirty 修订已原子提交；此处仅清除当前进程的加速状态
-        await run_db(_invalidate_local_knowledge_index)
-        created_docs += 1
-
-    zf.close()
-
-    logger.info("ZIP上传完成: 知识库=%s, 文件夹=%d, 文档=%d", kb_name, len(created_folders), created_docs)
-    return {
-        "success": True,
-        "message": f"成功导入 {created_docs} 个文档到 {len(created_folders)} 个文件夹",
-        "createdFolders": list(created_folders.keys()),
-        "createdDocs": created_docs,
-        "errors": errors,
-    }
+                except BlockingWorkTimeout:
+                    raise
+                except Exception as exc:
+                    errors.append(_knowledge_import_error(entry, exc))
+    except zipfile.BadZipFile as exc:
+        raise HTTPException(status_code=400, detail="无效的ZIP文件") from exc
+    except BlockingWorkTimeout:
+        unconfirmed = True
+        errors.append("导入操作超时，结果未确认，请刷新核对后再决定是否重试。")
+    except HTTPException:
+        raise
+    except Exception as exc:
+        errors.append(_knowledge_import_error(file.filename, exc))
+    return _knowledge_import_result(created_folders, created_docs, errors, unconfirmed=unconfirmed)
 
 
 # ============================================
@@ -465,148 +502,159 @@ async def import_scanned_directory(
     if not target_dir.exists() or not target_dir.is_dir():
         raise HTTPException(status_code=404, detail=f"目录不存在: {directory_name}")
 
-    # 获取或创建知识库
-    if kb_id:
-        kb = await run_db(db.get_knowledge_base, kb_id)
-        if not kb:
-            raise HTTPException(status_code=404, detail="知识库不存在")
-    else:
-        kb = await run_db(db.create_knowledge_base, directory_name)
-        if kb is None:
-            # 已存在同名知识库，查找它
-            all_bases = await run_db(db.get_knowledge_bases)
-            kb = next((b for b in all_bases if b["name"] == directory_name), None)
-            if not kb:
-                raise HTTPException(status_code=500, detail="无法创建或找到知识库")
-
-    kb_id = kb["id"]
-    kb_name = kb["name"]
     created_folders = {}
     created_docs = 0
     errors = []
-
-    # 遍历子目录
-    for sub_dir in sorted(target_dir.iterdir()):
-        if sub_dir.name.startswith(".") or not sub_dir.is_dir():
-            continue
-
-        folder_name = sub_dir.name
-
-        # 创建文件夹
-        folder = await run_db(db.create_knowledge_folder, kb_id, folder_name)
-        if folder is None:
-            folders = await run_db(db.get_knowledge_folders, kb_id)
-            folder = next((f for f in folders if f["name"] == folder_name), None)
-        if folder:
-            created_folders[folder_name] = folder["id"]
+    unconfirmed = False
+    kb = None
+    try:
+        # 获取或创建知识库
+        if kb_id:
+            kb = await run_db(db.get_knowledge_base, kb_id)
+            if not kb:
+                raise HTTPException(status_code=404, detail="知识库不存在")
         else:
-            errors.append(f"无法创建文件夹: {folder_name}")
-            continue
+            kb = await run_db(db.create_knowledge_base, directory_name)
+            if kb is None:
+                # 已存在同名知识库，查找它
+                all_bases = await run_db(db.get_knowledge_bases)
+                kb = next((b for b in all_bases if b["name"] == directory_name), None)
+                if not kb:
+                    raise HTTPException(status_code=500, detail="无法创建或找到知识库")
 
-        folder_id = created_folders[folder_name]
+        kb_id = kb["id"]
 
-        # 遍历文件夹中的文件
-        for file_path in sorted(sub_dir.iterdir()):
+        # 遍历子目录
+        for sub_dir in sorted(target_dir.iterdir()):
+            if sub_dir.name.startswith(".") or not sub_dir.is_dir():
+                continue
+
+            folder_name = sub_dir.name
+
+            # 创建文件夹
+            folder = await run_db(db.create_knowledge_folder, kb_id, folder_name)
+            if folder is None:
+                folders = await run_db(db.get_knowledge_folders, kb_id)
+                folder = next((f for f in folders if f["name"] == folder_name), None)
+            if folder:
+                created_folders[folder_name] = folder["id"]
+            else:
+                errors.append(f"无法创建文件夹: {folder_name}")
+                continue
+
+            folder_id = created_folders[folder_name]
+
+            # 遍历文件夹中的文件
+            for file_path in sorted(sub_dir.iterdir()):
+                if not file_path.is_file() or file_path.suffix.lower() not in SUPPORTED_EXTENSIONS:
+                    continue
+
+                try:
+                    # 尝试多种编码读取
+                    content = None
+                    for encoding in ["utf-8", "gbk", "gb2312", "utf-16"]:
+                        try:
+                            content = file_path.read_text(encoding=encoding)
+                            break
+                        except UnicodeError:
+                            continue
+
+                    if content is None:
+                        errors.append(f"文件编码不支持: {file_path.name}")
+                        continue
+
+                    if not content.strip():
+                        continue
+
+                    doc_title = file_path.stem
+                    file_size = file_path.stat().st_size
+
+                    # 创建文档
+                    document_data = {
+                        "title": doc_title,
+                        "content": content,
+                        "category": folder_name,
+                        "knowledge_base_id": kb_id,
+                        "folder_id": folder_id,
+                        "sourceType": "file",
+                        "fileType": file_path.suffix.lstrip("."),
+                        "fileSize": file_size,
+                        "chunkCount": 0,
+                    }
+
+                    # 原子发布文档、完整分块和索引修订
+                    from knowledge.text_splitter import simple_text_split
+
+                    chunks = simple_text_split(content)
+                    await run_db(db.save_knowledge_document, document_data, chunks=chunks)
+                    created_docs += 1
+
+                    # 数据与 dirty 修订已原子提交；此处仅清除当前进程的加速状态
+                    await run_db(_invalidate_local_knowledge_index)
+
+
+                except BlockingWorkTimeout:
+                    raise
+                except Exception as exc:
+                    errors.append(_knowledge_import_error(file_path.name, exc))
+
+        # 也处理根目录下的文件（不属于任何子文件夹）
+        for file_path in sorted(target_dir.iterdir()):
             if not file_path.is_file() or file_path.suffix.lower() not in SUPPORTED_EXTENSIONS:
                 continue
 
             try:
-                # 尝试多种编码读取
                 content = None
                 for encoding in ["utf-8", "gbk", "gb2312", "utf-16"]:
                     try:
                         content = file_path.read_text(encoding=encoding)
                         break
-                    except (UnicodeDecodeError, UnicodeError):
+                    except UnicodeError:
                         continue
 
                 if content is None:
                     errors.append(f"文件编码不支持: {file_path.name}")
                     continue
-
                 if not content.strip():
                     continue
 
                 doc_title = file_path.stem
-                file_size = file_path.stat().st_size
-
-                # 创建文档
                 document_data = {
                     "title": doc_title,
                     "content": content,
-                    "category": folder_name,
+                    "category": "未分类",
                     "knowledge_base_id": kb_id,
-                    "folder_id": folder_id,
+                    "folder_id": None,
                     "sourceType": "file",
                     "fileType": file_path.suffix.lstrip("."),
-                    "fileSize": file_size,
+                    "fileSize": file_path.stat().st_size,
                     "chunkCount": 0,
                 }
 
-                # 原子发布文档、完整分块和索引修订
                 from knowledge.text_splitter import simple_text_split
 
                 chunks = simple_text_split(content)
                 await run_db(db.save_knowledge_document, document_data, chunks=chunks)
+                created_docs += 1
 
                 # 数据与 dirty 修订已原子提交；此处仅清除当前进程的加速状态
                 await run_db(_invalidate_local_knowledge_index)
+            except BlockingWorkTimeout:
+                raise
+            except Exception as exc:
+                errors.append(_knowledge_import_error(file_path.name, exc))
 
-                created_docs += 1
-
-            except Exception as e:
-                errors.append(f"处理文件 {file_path.name} 失败: {str(e)}")
-
-    # 也处理根目录下的文件（不属于任何子文件夹）
-    for file_path in sorted(target_dir.iterdir()):
-        if not file_path.is_file() or file_path.suffix.lower() not in SUPPORTED_EXTENSIONS:
-            continue
-
-        try:
-            content = None
-            for encoding in ["utf-8", "gbk", "gb2312", "utf-16"]:
-                try:
-                    content = file_path.read_text(encoding=encoding)
-                    break
-                except (UnicodeDecodeError, UnicodeError):
-                    continue
-
-            if content is None or not content.strip():
-                continue
-
-            doc_title = file_path.stem
-            document_data = {
-                "title": doc_title,
-                "content": content,
-                "category": "未分类",
-                "knowledge_base_id": kb_id,
-                "folder_id": None,
-                "sourceType": "file",
-                "fileType": file_path.suffix.lstrip("."),
-                "fileSize": file_path.stat().st_size,
-                "chunkCount": 0,
-            }
-
-            from knowledge.text_splitter import simple_text_split
-
-            chunks = simple_text_split(content)
-            await run_db(db.save_knowledge_document, document_data, chunks=chunks)
-
-            # 数据与 dirty 修订已原子提交；此处仅清除当前进程的加速状态
-            await run_db(_invalidate_local_knowledge_index)
-            created_docs += 1
-        except Exception as e:
-            errors.append(f"处理根目录文件 {file_path.name} 失败: {str(e)}")
-
-    logger.info("扫描导入完成: 知识库=%s, 文件夹=%d, 文档=%d", kb_name, len(created_folders), created_docs)
-    return {
-        "success": True,
-        "message": f"成功导入 {created_docs} 个文档到 {len(created_folders)} 个文件夹",
-        "knowledgeBase": kb,
-        "createdFolders": list(created_folders.keys()),
-        "createdDocs": created_docs,
-        "errors": errors,
-    }
+    except BlockingWorkTimeout:
+        unconfirmed = True
+        errors.append("导入操作超时，结果未确认，请刷新核对后再决定是否重试。")
+    except HTTPException:
+        raise
+    except Exception as exc:
+        errors.append(_knowledge_import_error(directory_name, exc))
+    result = _knowledge_import_result(created_folders, created_docs, errors, unconfirmed=unconfirmed)
+    if kb is not None:
+        result["knowledgeBase"] = kb
+    return result
 
 
 # ============================================

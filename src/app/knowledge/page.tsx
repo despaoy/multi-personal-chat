@@ -39,7 +39,18 @@ import { useState, useRef } from 'react';
 import { toast } from 'sonner';
 import { formatDistanceToNow } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
-import { type KnowledgeDocument, type ScanDirectory } from '@/lib/api';
+import { type KnowledgeDocument, type ScanDirectory, type KnowledgeImportResult } from '@/lib/api';
+
+function notifyKnowledgeImport(result: KnowledgeImportResult) {
+  const notify = {
+    complete: result.createdDocs > 0 ? toast.success : toast.info,
+    partial: toast.warning,
+    failed: toast.error,
+    unconfirmed: toast.warning,
+  }[result.status];
+  notify(result.message);
+  result.errors.forEach(error => toast.warning(error));
+}
 
 export default function KnowledgePage() {
   return (
@@ -149,10 +160,7 @@ function KnowledgeContent() {
     try {
       setUploading(true);
       const result = await uploadZip(activeBaseId, file);
-      toast.success(result.message);
-      if (result.errors?.length) {
-        result.errors.forEach(err => toast.warning(err));
-      }
+      notifyKnowledgeImport(result);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : '上传失败');
     } finally { 
@@ -213,10 +221,7 @@ function KnowledgeContent() {
     try {
       setImporting(dirName);
       const result = await importDir(dirName);
-      toast.success(result.message);
-      if (result.errors?.length) {
-        result.errors.forEach(err => toast.warning(err));
-      }
+      notifyKnowledgeImport(result);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : '导入失败');
     } finally {

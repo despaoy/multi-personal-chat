@@ -404,8 +404,9 @@ export interface KnowledgeFolder {
   updated_at: string;
 }
 
-/** ZIP上传响应 */
-export interface ZipUploadResponse {
+/** 知识导入结果：只把全部完成标记为成功。 */
+export interface KnowledgeImportResult {
+  status: 'complete' | 'partial' | 'failed' | 'unconfirmed';
   success: boolean;
   message: string;
   createdFolders: string[];
@@ -1180,10 +1181,10 @@ class ApiClient {
   }
 
   /** 上传ZIP文件到知识库 */
-  async uploadKnowledgeZip(kbId: number, file: File): Promise<ZipUploadResponse> {
+  async uploadKnowledgeZip(kbId: number, file: File): Promise<KnowledgeImportResult> {
     const formData = new FormData();
     formData.append('file', file);
-    return this.request<ZipUploadResponse>(`/knowledge/bases/${kbId}/upload-zip`, {
+    return this.request<KnowledgeImportResult>(`/knowledge/bases/${kbId}/upload-zip`, {
       method: 'POST',
       body: formData,
     });
@@ -1195,11 +1196,11 @@ class ApiClient {
   }
 
   /** 导入扫描到的目录 */
-  async importScannedDir(directoryName: string, kbId?: number): Promise<ZipUploadResponse & { knowledgeBase?: KnowledgeBase }> {
+  async importScannedDir(directoryName: string, kbId?: number): Promise<KnowledgeImportResult & { knowledgeBase?: KnowledgeBase }> {
     const params = new URLSearchParams();
     params.append('directory_name', directoryName);
     if (kbId) params.append('kb_id', kbId.toString());
-    return this.request<ZipUploadResponse & { knowledgeBase?: KnowledgeBase }>(`/knowledge/scan/import?${params.toString()}`, {
+    return this.request<KnowledgeImportResult & { knowledgeBase?: KnowledgeBase }>(`/knowledge/scan/import?${params.toString()}`, {
       method: 'POST',
     });
   }

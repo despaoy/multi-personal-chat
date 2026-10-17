@@ -226,7 +226,6 @@ export function useKnowledge(enabled = true) {
     } catch (err) {
       const msg = err instanceof Error ? err.message : '上传ZIP失败';
       setError(msg);
-      toast.error(msg);
       throw err;
     }
   };
@@ -258,7 +257,6 @@ export function useKnowledge(enabled = true) {
     } catch (err) {
       const msg = err instanceof Error ? err.message : '导入目录失败';
       setError(msg);
-      toast.error(msg);
       throw err;
     }
   };
