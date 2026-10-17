@@ -15,6 +15,7 @@ import logging
 import os
 import random
 import threading
+from tempfile import TemporaryDirectory
 import time
 from pathlib import Path
 from typing import Dict, Any, Optional, List
@@ -143,11 +144,15 @@ def get_samples() -> Dict[str, Any]:
 
 
 def save_samples(samples: Dict[str, List[str]]) -> Dict[str, Any]:
-    """保存样本（编辑后）"""
-    path = _get_samples_path()
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(samples, f, ensure_ascii=False, indent=2)
+    """Prepare the complete payload before atomically publishing the sample file."""
     stats = {label: len(items) for label, items in samples.items()}
+    payload = json.dumps(samples, ensure_ascii=False, indent=2)
+    path = _get_samples_path()
+    with TemporaryDirectory(prefix=".samples-", dir=path.parent) as folder:
+        candidate = Path(folder) / path.name
+        candidate.touch(mode=0o600)
+        candidate.write_text(payload, encoding="utf-8")
+        os.replace(candidate, path)
     return {"success": True, "stats": stats}
 
 

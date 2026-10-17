@@ -459,6 +459,19 @@ class IntentSampleGenerateRequest(BaseModel):
     lora_name: str | None = Field(default=None, max_length=256)
 
 
+class IntentSampleAddRequest(BaseModel):
+    label: str
+    text: str
+
+
+class IntentSampleUpdateRequest(IntentSampleAddRequest):
+    index: int = Field(ge=0)
+
+
+class IntentSamplesSaveRequest(BaseModel):
+    samples: dict[str, list[str]]
+
+
 class IntentTrainRequest(BaseModel):
     """Request for training the lightweight intent classifier."""
 

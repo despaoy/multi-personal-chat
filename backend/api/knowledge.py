@@ -17,7 +17,10 @@ from infra.input_validator import KNOWLEDGE_DOCUMENT_SCHEMA, InputValidator
 from app.dependencies import get_current_admin
 from db.adapter import db
 from db.schemas import (
+    IntentSampleAddRequest,
     IntentSampleGenerateRequest,
+    IntentSamplesSaveRequest,
+    IntentSampleUpdateRequest,
     IntentTrainRequest,
     KnowledgeBaseCreate,
     KnowledgeBaseUpdate,
@@ -1300,6 +1303,14 @@ async def get_generation_status(current_user: dict = Depends(get_current_admin))
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
+def _intent_samples_error(exc: Exception) -> HTTPException:
+    logger.error("意图样本读写失败: %s", type(exc).__name__)
+    return HTTPException(
+        status_code=503,
+        detail=f"意图样本读写未完成（{type(exc).__name__}），请检查样本文件、存储空间和权限后重试",
+    )
+
+
 @router.get("/api/knowledge/train-intent/samples")
 async def get_intent_samples(current_user: dict = Depends(get_current_admin)):
     """获取当前所有训练样本"""
@@ -1307,24 +1318,24 @@ async def get_intent_samples(current_user: dict = Depends(get_current_admin)):
         from knowledge.intent_trainer import get_samples
 
         return {"success": True, **get_samples()}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+    except Exception as exc:
+        raise _intent_samples_error(exc) from exc
 
 
 @router.put("/api/knowledge/train-intent/samples")
-async def update_intent_sample(request: dict, current_user: dict = Depends(get_current_admin)):
+async def update_intent_sample(request: IntentSampleUpdateRequest, current_user: dict = Depends(get_current_admin)):
     """编辑单条样本"""
     try:
         from knowledge.intent_trainer import update_sample
 
-        result = update_sample(request.get("label"), request.get("index"), request.get("text"))
+        result = update_sample(request.label, request.index, request.text)
         if "error" in result:
             raise HTTPException(status_code=400, detail=result["error"])
-        return {"success": True}
+        return result
     except HTTPException:
         raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+    except Exception as exc:
+        raise _intent_samples_error(exc) from exc
 
 
 @router.delete("/api/knowledge/train-intent/samples")
@@ -1336,35 +1347,33 @@ async def delete_intent_sample(label: str, index: int, current_user: dict = Depe
         result = delete_sample(label, index)
         if "error" in result:
             raise HTTPException(status_code=400, detail=result["error"])
-        return {"success": True}
+        return result
     except HTTPException:
         raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+    except Exception as exc:
+        raise _intent_samples_error(exc) from exc
 
 
 @router.patch("/api/knowledge/train-intent/samples")
-async def batch_save_intent_samples(request: dict, current_user: dict = Depends(get_current_admin)):
+async def batch_save_intent_samples(request: IntentSamplesSaveRequest, current_user: dict = Depends(get_current_admin)):
     """批量保存样本（覆盖写入）"""
     try:
         from knowledge.intent_trainer import save_samples
 
-        result = save_samples(request.get("samples", {}))
-        return {"success": True, "stats": result.get("stats", {})}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        return save_samples(request.samples)
+    except Exception as exc:
+        raise _intent_samples_error(exc) from exc
 
 
 @router.post("/api/knowledge/train-intent/samples")
-async def add_intent_sample(request: dict, current_user: dict = Depends(get_current_admin)):
+async def add_intent_sample(request: IntentSampleAddRequest, current_user: dict = Depends(get_current_admin)):
     """添加单条样本"""
     try:
         from knowledge.intent_trainer import add_sample
 
-        add_sample(request.get("label"), request.get("text"))
-        return {"success": True}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        return add_sample(request.label, request.text)
+    except Exception as exc:
+        raise _intent_samples_error(exc) from exc
 
 
 @router.post("/api/knowledge/train-intent")
