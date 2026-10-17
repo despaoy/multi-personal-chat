@@ -4,7 +4,6 @@ Scope comes only from explicit filters; keyword rules never rewrite the query.
 """
 
 import copy
-import hashlib
 import json
 import logging
 import math
@@ -24,20 +23,8 @@ logger = logging.getLogger(__name__)
 
 
 def _stable_result_key(result: dict[str, Any]) -> str:
-    """生成检索结果的稳定融合标识。
-
-    优先使用稳定 ID（id / chunk_id / document_id）识别同一文档；
-    没有稳定 ID 时退化为 title+content 的 sha256 摘要，
-    避免旧的 title + content[:100] 前缀容易碰撞的问题。
-    """
-    for field in ("id", "chunk_id", "document_id"):
-        value = result.get(field)
-        if value is not None and value != "":
-            return f"{field}:{value}"
-    title = result.get("title") or ""
-    content = result.get("content") or ""
-    digest = hashlib.sha256(f"{title}\n{content}".encode()).hexdigest()
-    return f"content:{digest}"
+    """Use the unique source ID already validated by the vector index."""
+    return f"id:{result['id']}"
 
 
 class RAGHelper:

@@ -2,11 +2,7 @@
 
 from __future__ import annotations
 
-import os
-import sys
 from typing import Any
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from knowledge import rag_helper
 from knowledge.rag_helper import _stable_result_key
@@ -53,11 +49,11 @@ class TestFusion:
             assert "final_score" not in raw
             assert "region_boost" not in raw
 
-    def test_no_id_uses_content_digest_and_avoids_prefix_collision(self, monkeypatch):
-        # 同 title 且前 100 字符相同、但整体内容不同的两份文档不应被误融合
+    def test_distinct_source_ids_preserve_common_prefix_evidence(self, monkeypatch):
+        # 索引中的不同来源片段即使标题和前缀相同，也不能误融合。
         shared_prefix = "胡桃是往生堂第七十七代堂主，掌管往生堂事务，" + "火系角色。" * 20
-        doc_a = {"title": "胡桃", "content": shared_prefix + "尾部差异A", "score": 0.6}
-        doc_b = {"title": "胡桃", "content": shared_prefix + "尾部差异B", "score": 0.7}
+        doc_a = {"id": "source-a", "title": "胡桃", "content": shared_prefix + "尾部差异A", "score": 0.6}
+        doc_b = {"id": "source-b", "title": "胡桃", "content": shared_prefix + "尾部差异B", "score": 0.7}
         assert _stable_result_key(doc_a) != _stable_result_key(doc_b)
         assert _stable_result_key(doc_a) == _stable_result_key(dict(doc_a))
 
@@ -68,10 +64,8 @@ class TestFusion:
         assert len(results) == 2
         assert {r["content"][-1] for r in results} == {"A", "B"}
 
-    def test_stable_key_prefers_id_fields(self):
+    def test_stable_key_uses_required_id(self):
         assert _stable_result_key({"id": 7}) == "id:7"
-        assert _stable_result_key({"chunk_id": "c1", "document_id": "d1"}) == "chunk_id:c1"
-        assert _stable_result_key({"document_id": "d1"}) == "document_id:d1"
 
     def test_deterministic_ordering_on_ties(self, monkeypatch):
         doc_a = {"id": "b", "title": "B", "content": "内容B", "score": 0.5, "fused_score": 0.5}
