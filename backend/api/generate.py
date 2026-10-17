@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 from services.chat_generation import ChatGenerationService
 
 from api.error_details import with_provider_error
@@ -197,6 +197,29 @@ async def close_vllm_client():
 router = APIRouter()
 
 
+class _GenerationOptions(BaseModel):
+    model_config = ConfigDict(allow_inf_nan=False, hide_input_in_errors=True)
+
+    temperature: float = Field(ge=0)
+    maxTokens: int = Field(gt=0)
+    topP: float = Field(gt=0, le=1)
+
+    @field_validator("*", mode="before")
+    @classmethod
+    def reject_boolean(cls, value):
+        if isinstance(value, bool):
+            raise ValueError("Generation parameters must be numeric, not boolean")
+        return value
+
+
+def _generation_options(config: dict[str, Any]) -> dict[str, float | int]:
+    return _GenerationOptions(
+        temperature=config.get("temperature", os.getenv("VLLM_TEMPERATURE", "0.7")),
+        maxTokens=config.get("maxTokens", os.getenv("VLLM_MAX_TOKENS", "2048")),
+        topP=config.get("topP", os.getenv("VLLM_TOP_P", "0.9")),
+    ).model_dump()
+
+
 def _response_cache_keys(
     request: MessageRequest,
     lora_name: str,
@@ -211,6 +234,7 @@ def _response_cache_keys(
     不会走到本函数——有状态对话每轮都要回写记忆与关系，缓存命中
     会跳过回写导致状态与对话脱节。
     """
+    options = _generation_options(config)
     use_knowledge_base = read_bool(config, "useKnowledgeBase", True) and enable_rag
     interlocutor = request.senderName or request.userName or ""
     prompt_identity = {
@@ -223,9 +247,9 @@ def _response_cache_keys(
         "model": model_identity,
         "generation_contract": "compiled-native-v1",
         "lora": lora_name,
-        "temperature": float(config.get("temperature", os.getenv("VLLM_TEMPERATURE", "0.7"))),
-        "max_tokens": int(config.get("maxTokens", os.getenv("VLLM_MAX_TOKENS", "2048"))),
-        "top_p": float(config.get("topP", os.getenv("VLLM_TOP_P", "0.9"))),
+        "temperature": options["temperature"],
+        "max_tokens": options["maxTokens"],
+        "top_p": options["topP"],
         "use_knowledge_base": use_knowledge_base,
         "enable_rag": enable_rag,
         "platform": request.platform,
@@ -360,15 +384,17 @@ async def _generate_reply_body(
     except Exception as exc:
         raise HTTPException(503, "生成配置读取失败，请检查数据库连接后重试") from exc
 
+    runtime_config = dict(runtime_config)
     if request_provider == "openai_compat":
-        runtime_config = dict(runtime_config)
         runtime_config.setdefault("topP", 1.0)
-        try:
-            validate_completion_options(request_context.provider.base_url, top_p=float(runtime_config["topP"]))
-        except (TypeError, ValueError) as exc:
-            raise HTTPException(
-                503, "生成参数配置无效，请检查 topP 是否为当前模型服务支持的数值后重试"
-            ) from exc
+    try:
+        runtime_config.update(_generation_options(runtime_config))
+        if request_provider == "openai_compat":
+            validate_completion_options(request_context.provider.base_url, top_p=runtime_config["topP"])
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(
+            503, "生成参数配置无效，请检查 temperature、maxTokens、topP 及当前模型服务要求后重试"
+        ) from exc
 
     selected_lora = None
     if request.loraName and request.loraName != "default":
@@ -1187,9 +1213,8 @@ async def _generate_with_retrieval(
     """Shared retrieval, abstention and character policy for either transport."""
     # 使用请求开始时读取的配置快照，避免同一次生成多次同步访问数据库。
     _cfg = runtime_config or {}
-    _temperature = float(_cfg.get("temperature", os.getenv("VLLM_TEMPERATURE", "0.7")))
-    _max_tokens = int(_cfg.get("maxTokens", os.getenv("VLLM_MAX_TOKENS", "2048")))
-    _top_p = float(_cfg.get("topP", os.getenv("VLLM_TOP_P", "0.9")))
+    options = _generation_options(_cfg)
+    _temperature, _max_tokens, _top_p = options["temperature"], options["maxTokens"], options["topP"]
     _use_kb = read_bool(_cfg, "useKnowledgeBase", True) and enable_rag
 
     # RAG 检索（受设置页 useKnowledgeBase 开关控制）
