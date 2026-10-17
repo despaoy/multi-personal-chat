@@ -45,7 +45,6 @@ class RecordingVector:
 
 @pytest.fixture
 def readers(tmp_path, monkeypatch):
-    import app.config
     from knowledge import vector_db as vector_module
 
     path = tmp_path / "shared.db"
@@ -65,7 +64,6 @@ def readers(tmp_path, monkeypatch):
     reader.add_knowledge_chunk(dict(documentId=doc["id"], chunkIndex=0, content=doc["content"]))
     vector = RecordingVector()
     monkeypatch.setattr(knowledge, "db", reader)
-    monkeypatch.setattr(app.config, "VECTOR_DB_AVAILABLE", True)
     monkeypatch.setattr(vector_module, "get_vector_db", lambda: vector)
     monkeypatch.setattr(knowledge, "_vector_index_built", False)
     monkeypatch.setattr(knowledge, "_vector_index_revision", None)

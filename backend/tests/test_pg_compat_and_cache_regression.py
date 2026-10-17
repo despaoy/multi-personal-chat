@@ -697,7 +697,7 @@ class TestEnsureVectorIndexEndToEnd:
                 {"doc_id": doc_id, "idx": i, "content": c},
             )
 
-    def _patch_vector_db(self, monkeypatch, kmod, mock_inst):
+    def _patch_vector_db(self, monkeypatch, mock_inst):
         """Patch the late imports inside _ensure_vector_index.
 
         Also ensures mock_inst has a flush() method (default no-op) so the
@@ -709,11 +709,6 @@ class TestEnsureVectorIndexEndToEnd:
         # 给 mock 添加默认 flush（若未定义），避免每个 mock 重复定义
         if not hasattr(mock_inst, "flush"):
             mock_inst.flush = lambda: None
-        monkeypatch.setattr(kmod, "VECTOR_DB_AVAILABLE", True, raising=False)
-        fake_app_config = types.ModuleType("app.config")
-        fake_app_config.VECTOR_DB_AVAILABLE = True
-        fake_app_config.get_vector_db = lambda: mock_inst
-        monkeypatch.setitem(sys.modules, "app.config", fake_app_config)
         fake_vector_db_mod = types.ModuleType("knowledge.vector_db")
         fake_vector_db_mod.get_vector_db = lambda: mock_inst
         monkeypatch.setitem(sys.modules, "knowledge.vector_db", fake_vector_db_mod)
@@ -739,7 +734,7 @@ class TestEnsureVectorIndexEndToEnd:
             def add_documents(self, docs):
                 raise AssertionError("should not add documents when expected_count==0")
 
-        self._patch_vector_db(monkeypatch, kmod, MockVectorDB())
+        self._patch_vector_db(monkeypatch, MockVectorDB())
 
         try:
             assert kmod._ensure_vector_index() is True
@@ -786,7 +781,7 @@ class TestEnsureVectorIndexEndToEnd:
                 self._docs += len(docs)
 
         mock_inst = MockVectorDB()
-        self._patch_vector_db(monkeypatch, kmod, mock_inst)
+        self._patch_vector_db(monkeypatch, mock_inst)
 
         try:
             assert kmod._ensure_vector_index() is True
@@ -835,7 +830,7 @@ class TestEnsureVectorIndexEndToEnd:
             def add_documents(self, docs):
                 add_called["called"] = True
 
-        self._patch_vector_db(monkeypatch, kmod, MockVectorDB())
+        self._patch_vector_db(monkeypatch, MockVectorDB())
 
         try:
             assert kmod._ensure_vector_index() is True
@@ -884,7 +879,7 @@ class TestEnsureVectorIndexEndToEnd:
                 self._docs += len(docs)
 
         mock_inst = MockVectorDB()
-        self._patch_vector_db(monkeypatch, kmod, mock_inst)
+        self._patch_vector_db(monkeypatch, mock_inst)
 
         try:
             assert kmod._ensure_vector_index() is True
@@ -917,7 +912,7 @@ class TestEnsureVectorIndexEndToEnd:
             def add_documents(self, docs):
                 raise AssertionError("should not reach add_documents if clear_all failed")
 
-        self._patch_vector_db(monkeypatch, kmod, MockVectorDB())
+        self._patch_vector_db(monkeypatch, MockVectorDB())
 
         try:
             result = kmod._ensure_vector_index()
@@ -962,7 +957,7 @@ class TestEnsureVectorIndexEndToEnd:
                 kmod._invalidate_local_knowledge_index()
 
         mock_inst = MockVectorDB()
-        self._patch_vector_db(monkeypatch, kmod, mock_inst)
+        self._patch_vector_db(monkeypatch, mock_inst)
 
         try:
             result = kmod._ensure_vector_index()
@@ -1007,7 +1002,7 @@ class TestEnsureVectorIndexEndToEnd:
                 self._docs += len(docs)
 
         mock_inst = MockVectorDB()
-        self._patch_vector_db(monkeypatch, kmod, mock_inst)
+        self._patch_vector_db(monkeypatch, mock_inst)
 
         try:
             assert kmod._ensure_vector_index() is True
@@ -1060,7 +1055,7 @@ class TestEnsureVectorIndexEndToEnd:
                 kmod._invalidate_local_knowledge_index()
 
         mock_inst = MockVectorDB()
-        self._patch_vector_db(monkeypatch, kmod, mock_inst)
+        self._patch_vector_db(monkeypatch, mock_inst)
 
         try:
             result = kmod._ensure_vector_index()
@@ -1121,7 +1116,7 @@ class TestEnsureVectorIndexEndToEnd:
                 add_called["called"] = True
 
         mock_inst = MockVectorDB()
-        self._patch_vector_db(monkeypatch, kmod, mock_inst)
+        self._patch_vector_db(monkeypatch, mock_inst)
 
         try:
             # Should NOT skip (return True without rebuild) — CRUD happened

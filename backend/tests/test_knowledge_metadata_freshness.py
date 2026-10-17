@@ -26,7 +26,6 @@ def saved_document(tmp_path, monkeypatch):
     )
     database.add_knowledge_chunk(dict(documentId=row["id"], chunkIndex=0, content=row["content"]))
     monkeypatch.setattr(knowledge, "db", database)
-    monkeypatch.setattr(knowledge, "VECTOR_DB_AVAILABLE", False)
     monkeypatch.setattr(knowledge, "_vector_index_built", True)
     database.commit_knowledge_index_revision(
         knowledge._get_rebuild_revision(), 1, knowledge._compute_chunk_fingerprint()

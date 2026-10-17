@@ -164,18 +164,6 @@ response_cache = ResponseCache()
 
 
 # ============================================
-# 向量数据库
-# ============================================
-
-try:
-    from knowledge.vector_db import get_vector_db as get_vector_db
-
-    VECTOR_DB_AVAILABLE = True
-except ImportError:
-    VECTOR_DB_AVAILABLE = False
-
-
-# ============================================
 # 对话生成状态追踪（异步安全）
 # ============================================
 

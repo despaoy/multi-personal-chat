@@ -143,7 +143,6 @@ class RecordingVector:
 
 @pytest.mark.parametrize("branch", ["empty", "rebuild", "reuse"])
 def test_all_ready_branches_reject_real_revision_change_at_completion(tmp_path, monkeypatch, branch):
-    import app.config
     from knowledge import vector_db as vector_module
 
     database = SQLiteDB(tmp_path / "state.db")
@@ -155,7 +154,6 @@ def test_all_ready_branches_reject_real_revision_change_at_completion(tmp_path, 
         )
         database.add_knowledge_chunk(dict(documentId=doc["id"], chunkIndex=0, content=doc["content"]))
     monkeypatch.setattr(knowledge, "db", database)
-    monkeypatch.setattr(app.config, "VECTOR_DB_AVAILABLE", True)
     monkeypatch.setattr(vector_module, "get_vector_db", lambda: vector)
     monkeypatch.setattr(knowledge, "_vector_index_built", False)
     monkeypatch.setattr(knowledge, "_vector_index_revision", None)

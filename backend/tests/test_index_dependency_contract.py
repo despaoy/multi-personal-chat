@@ -6,7 +6,6 @@ import pytest
 from fastapi import HTTPException
 
 from api import knowledge
-from app import config
 from db.schemas import KnowledgeSearchRequest
 
 
@@ -17,7 +16,6 @@ async def test_index_preparation_failure_reaches_search_without_private_detail(m
     monkeypatch.setattr(knowledge,'_vector_index_revision',7 if stage=='revision' else None)
     monkeypatch.setattr(knowledge,'_get_rebuild_revision',Mock(return_value=7))
     if stage=='dependency':
-        monkeypatch.setattr(config,'VECTOR_DB_AVAILABLE',False)
         original=builtins.__import__
         def unavailable(name,*args,**kwargs):
             if name=='knowledge.vector_db':

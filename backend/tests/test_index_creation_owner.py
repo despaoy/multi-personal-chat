@@ -10,7 +10,6 @@ import pytest
 from fastapi import HTTPException, UploadFile
 
 from api import knowledge
-from app import config
 from db.database import SQLiteDB
 from db.schemas import KnowledgeDocumentCreate, KnowledgeSearchRequest
 from knowledge import vector_db as vectors
@@ -24,7 +23,6 @@ def publication(tmp_path, monkeypatch):
     monkeypatch.setattr(knowledge, "db", db)
     monkeypatch.setattr(knowledge, "_vector_index_built", False)
     monkeypatch.setattr(knowledge, "_vector_index_revision", None)
-    monkeypatch.setattr(knowledge, "VECTOR_DB_AVAILABLE", True)
     monkeypatch.setattr(vectors.VectorDatabase, "_check_gpu_availability", lambda self: False)
     vector = vectors.VectorDatabase(str(tmp_path / "vectors"))
     monkeypatch.setattr(vector, "_model", object())
@@ -33,12 +31,12 @@ def publication(tmp_path, monkeypatch):
     monkeypatch.setattr(vector, "_get_embedding", lambda text: np.eye(1, 384, dtype=np.float32)[0])
     add = Mock(wraps=vector.add_documents)
     monkeypatch.setattr(vector, "add_documents", add)
-    legacy = Mock(return_value=vector)
-    monkeypatch.setattr(config, "get_vector_db", legacy)
-    monkeypatch.setattr(vectors, "get_vector_db", lambda: vector)
+    getter = Mock(return_value=vector)
+    monkeypatch.setattr(vectors, "get_vector_db", getter)
     kb = db.create_knowledge_base("完整合成登记库")
     folder = db.create_knowledge_folder(kb["id"], "适用条件")
     assert knowledge._ensure_vector_index()
+    getter.reset_mock()
     revision = knowledge._get_rebuild_revision()
     lookup = Mock(wraps=db.get_knowledge_base)
     monkeypatch.setattr(db, "get_knowledge_base", lookup)
@@ -49,7 +47,7 @@ def publication(tmp_path, monkeypatch):
         vector=vector,
         encode=encode,
         add=add,
-        legacy=legacy,
+        getter=getter,
         kb=kb,
         folder=folder,
         revision=revision,
@@ -99,7 +97,7 @@ async def test_create_and_import_use_one_authoritative_index_publication(publica
     assert knowledge._read_rebuild_status()[0] == "dirty" and not knowledge._vector_index_built
     rig.add.assert_not_called()
     rig.encode.assert_not_called()
-    rig.legacy.assert_not_called()
+    rig.getter.assert_not_called()
     if route == "create":
         rig.lookup.assert_not_called()
     assert knowledge._ensure_vector_index()
@@ -139,7 +137,7 @@ async def test_index_failure_keeps_complete_source_and_returns_search_failure(pu
     assert "".join(row["content"] for row in rig.db.get_knowledge_chunks(docs[0]["id"])) == TEXT
     rig.add.assert_called_once()
     rig.encode.assert_called_once()
-    rig.legacy.assert_not_called()
+    rig.getter.assert_called_once_with()
 
 
 @pytest.mark.parametrize("kind", ["base", "folder"])
@@ -171,6 +169,6 @@ async def test_scan_reuses_existing_named_base_before_atomic_document_publicatio
     assert knowledge._get_rebuild_revision() == rig.revision + 1
     assert len(rig.db.get_knowledge_bases()) == 1
     rig.add.assert_not_called()
-    rig.legacy.assert_not_called()
+    rig.getter.assert_not_called()
     assert knowledge._ensure_vector_index()
     rig.add.assert_called_once()

@@ -13,7 +13,6 @@ from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 
-from app.config import VECTOR_DB_AVAILABLE
 from infra.input_validator import KNOWLEDGE_DOCUMENT_SCHEMA, InputValidator
 from app.dependencies import get_current_admin
 from db.adapter import db
@@ -1241,18 +1240,18 @@ async def get_knowledge_stats(current_user: dict = Depends(get_current_admin)):
 @router.get("/api/vector/stats")
 async def get_vector_stats(current_user: dict = Depends(get_current_admin)):
     """获取向量数据库统计数据"""
-    if not VECTOR_DB_AVAILABLE:
-        raise HTTPException(status_code=503, detail="向量数据库不可用")
-
     try:
-        from app.config import get_vector_db
+        from knowledge.vector_db import get_vector_db
 
         vector_db = get_vector_db()
         stats = await asyncio.to_thread(vector_db.get_stats)
         return {"success": True, "stats": stats}
-    except Exception as e:
-        logger.exception("获取向量数据库统计失败: %s", e)
-        raise HTTPException(status_code=500, detail=str(e)) from e
+    except Exception as exc:
+        logger.error("获取向量数据库统计失败: %s", type(exc).__name__)
+        raise HTTPException(
+            status_code=503,
+            detail="向量数据库统计未完成，请检查索引及向量数据库依赖后重试",
+        ) from exc
 
 
 # ============================================
