@@ -58,7 +58,6 @@ logger = logging.getLogger(__name__)
 
 # ── vLLM 客户端（延迟初始化） ──
 _vllm_client = None
-_vllm_initialized = False
 _vllm_init_lock: asyncio.Lock | None = None
 _vllm_init_lock_loop: asyncio.AbstractEventLoop | None = None
 
@@ -138,21 +137,18 @@ def _security_policy_response() -> GenerateResponse:
 
 
 async def _ensure_vllm():
-    """延迟初始化可恢复的共享 vLLM 客户端。"""
-    global _vllm_client, _vllm_initialized
+    """初始化已启用的共享客户端；故障明确失败，后续请求可重新尝试。"""
+    global _vllm_client
     if _vllm_client is not None:
-        _vllm_initialized = True
         return True
 
     async with _loop_local_lock("vllm"):
         if _vllm_client is not None:
-            _vllm_initialized = True
             return True
 
         from app.config import is_vllm_enabled
 
         if not is_vllm_enabled():
-            _vllm_initialized = False
             return False
 
         try:
@@ -161,16 +157,11 @@ async def _ensure_vllm():
             client = await _get_shared()
             if client is None:
                 raise RuntimeError("共享 vLLM 客户端返回空实例")
-            _vllm_client = client
-            _vllm_initialized = True
-            logger.info("vLLM 客户端初始化成功（共享单例）")
-            return True
         except Exception as exc:
-            # vLLM 是外部服务，短暂初始化失败必须允许后续请求重试。
-            _vllm_client = None
-            _vllm_initialized = False
-            logger.warning("vLLM 客户端初始化失败: %s", exc)
-            return False
+            raise HTTPException(503, "vLLM 客户端初始化失败，请检查服务及配置后重试") from exc
+        _vllm_client = client
+        logger.info("vLLM 客户端初始化成功（共享单例）")
+        return True
 
 
 async def get_vllm_client():
@@ -180,18 +171,14 @@ async def get_vllm_client():
 
 
 async def close_vllm_client():
-    """关闭共享 vLLM 客户端，并允许后续应用生命周期重新初始化。"""
-    global _vllm_client, _vllm_initialized
+    """关闭共享客户端，失败交由生命周期处理器保留并继续清理其他资源。"""
+    global _vllm_client
     async with _loop_local_lock("vllm"):
         _vllm_client = None
-        _vllm_initialized = False
-        try:
-            from inference.vllm_client import close_shared_vllm_client
+        from inference.vllm_client import close_shared_vllm_client
 
-            await close_shared_vllm_client()
-            logger.info("vLLM 客户端已关闭（共享单例）")
-        except Exception as exc:
-            logger.warning("关闭 vLLM 客户端失败: %s", exc)
+        await close_shared_vllm_client()
+        logger.info("vLLM 客户端已关闭（共享单例）")
 
 
 router = APIRouter()
@@ -1627,7 +1614,8 @@ async def vllm_status(current_user: dict = Depends(get_current_admin)):
     """查询 vLLM 实例状态"""
     if not await _ensure_vllm() or not _vllm_client:
         return {"enabled": False, "instances": []}
-    return {
-        "enabled": True,
-        "instances": await _vllm_client.health_check(),
-    }
+    try:
+        instances = await _vllm_client.health_check()
+    except Exception as exc:
+        raise HTTPException(503, "vLLM 状态查询失败，请检查服务连接后重试") from exc
+    return {"enabled": True, "instances": instances}

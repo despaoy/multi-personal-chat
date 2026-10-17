@@ -636,29 +636,33 @@ async def test_config_api_rejects_non_object_payload():
 
 @pytest.mark.asyncio
 async def test_vllm_initialization_retries_after_transient_failure(monkeypatch):
+    from fastapi import HTTPException
+
     from api import generate
     from app import config
     from inference import vllm_client
 
     attempts = 0
     expected_client = object()
+    failure = ConnectionError("vLLM is starting")
 
     async def get_shared_client():
         nonlocal attempts
         attempts += 1
         if attempts == 1:
-            raise ConnectionError("vLLM is starting")
+            raise failure
         return expected_client
 
     monkeypatch.setattr(config, "is_vllm_enabled", lambda: True)
     monkeypatch.setattr(vllm_client, "get_vllm_client", get_shared_client)
     monkeypatch.setattr(generate, "_vllm_client", None)
-    monkeypatch.setattr(generate, "_vllm_initialized", False)
     monkeypatch.setattr(generate, "_vllm_init_lock", None)
     monkeypatch.setattr(generate, "_vllm_init_lock_loop", None)
 
-    assert await generate._ensure_vllm() is False
-    assert generate._vllm_initialized is False
+    with pytest.raises(HTTPException) as caught:
+        await generate._ensure_vllm()
+    assert caught.value.status_code == 503 and caught.value.__cause__ is failure
+    assert generate._vllm_client is None
     assert await generate._ensure_vllm() is True
     assert generate._vllm_client is expected_client
     assert attempts == 2
