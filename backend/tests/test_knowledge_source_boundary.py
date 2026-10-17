@@ -8,6 +8,8 @@ from fastapi import FastAPI
 
 from api import knowledge
 from app.dependencies import get_current_admin
+from app.runtime import RuntimeContainer
+from infra.bounded_executor import BoundedThreadExecutor
 from db.database import SQLiteDB
 
 TEXT = "完整登记规则：12月5日14点在二楼办理，本人携身份证和书面确认，未确认不得付款；截止为4日18点。"
@@ -29,9 +31,14 @@ def sources(tmp_path, monkeypatch):
     monkeypatch.setattr(knowledge, "_vector_index_built", False)
     monkeypatch.setattr(knowledge, "_vector_index_revision", None)
     app = FastAPI()
+    executor = BoundedThreadExecutor(name="source-boundary-scan", max_workers=1, max_pending=2, default_timeout=3)
+    app.state.runtime_container = RuntimeContainer(db=db, is_pg_mode=lambda: False, knowledge_scan_executor=executor)
     app.include_router(knowledge.router)
     app.dependency_overrides[get_current_admin] = lambda: {"role": "admin"}
-    return SimpleNamespace(root=root, target=target, outside=outside, db=db, kb=kb, app=app)
+    try:
+        yield SimpleNamespace(root=root, target=target, outside=outside, db=db, kb=kb, app=app)
+    finally:
+        executor.shutdown()
 
 
 async def request(rig, *, name=None):

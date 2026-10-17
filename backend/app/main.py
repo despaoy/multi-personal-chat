@@ -43,6 +43,7 @@ from infra.deployment import validate_or_raise_for_startup
 from infra.access_control import AccessControlManager
 from infra.backup_manager import BackupManager
 from infra.resource_pool import ConnectionPool, HttpClientPool
+from infra.bounded_executor import BoundedThreadExecutor
 from infra.environment import read_bool
 
 logger = logging.getLogger("main")
@@ -138,6 +139,9 @@ async def lifespan(app: FastAPI):
         from character.memory_llm import MemoryLlmConfig
 
         MemoryLlmConfig.from_env(container.startup_env)
+        container.knowledge_scan_executor = BoundedThreadExecutor(
+            name="knowledge-scan", max_workers=2, max_pending=4, default_timeout=30.0
+        )
 
         # 初始化数据库
         try:
@@ -182,6 +186,7 @@ async def lifespan(app: FastAPI):
             ("交付记忆任务", "services.delivery_memory", "shutdown_delivery_memory"),
             ("角色回写任务", "services.turn_completion", "shutdown_turn_completions"),
             ("后台长期记忆任务", "character.memory_llm", "shutdown_memory_enrichment"),
+            ("知识库扫描", container.knowledge_scan_executor, "shutdown"),
             ("readiness probe", getattr(app.state, "readiness_probe", None), "shutdown"),
             ("推理调度器", container.inference_runtime, "shutdown"),
             ("SQLite 连接池", _cfg.connection_pool, "close"),
@@ -195,6 +200,7 @@ async def lifespan(app: FastAPI):
         )
         cleanup = AsyncExitStack()
         cleanup.callback(_clear_lifespan_resource_references, _cfg)
+        cleanup.callback(setattr, container, "knowledge_scan_executor", None)
         for resource in reversed(resources):
             await cleanup.enter_async_context(_closing_resource(*resource))
         # Forward the active failure so cleanup errors retain its exception chain.

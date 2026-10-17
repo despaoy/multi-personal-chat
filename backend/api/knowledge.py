@@ -11,10 +11,11 @@ from collections.abc import Awaitable
 from pathlib import Path, PurePosixPath
 from typing import Any, Literal
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 
 from infra.input_validator import KNOWLEDGE_DOCUMENT_SCHEMA, InputValidator
 from app.dependencies import get_current_admin
+from app.runtime import get_runtime_container
 from db.adapter import db
 from db.schemas import (
     IntentSampleAddRequest,
@@ -481,8 +482,7 @@ def _scan_directory(directory: Path, ancestors: frozenset[Path] = frozenset()) -
     return result
 
 
-@router.get("/api/knowledge/scan")
-async def scan_knowledge_dirs(current_user: dict = Depends(get_current_admin)):
+def _scan_knowledge_dirs() -> dict:
     """扫描 knowledge_bases 目录，返回所有可用的知识库文件夹结构
 
     扫描 backend/knowledge_bases/ 下的所有子目录，
@@ -499,6 +499,24 @@ async def scan_knowledge_dirs(current_user: dict = Depends(get_current_admin)):
         directories.append(tree)
 
     return {"success": True, "directories": directories}
+
+
+@router.get("/api/knowledge/scan")
+async def scan_knowledge_dirs(request: Request, current_user: dict = Depends(get_current_admin)):
+    """Scan configured sources without blocking the service event loop."""
+    try:
+        executor = get_runtime_container(request.app).knowledge_scan_executor
+        if executor is None:
+            raise RuntimeError("Knowledge scan executor is not initialized")
+        return await executor.run(_scan_knowledge_dirs)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error("知识库目录扫描失败: %s", type(exc).__name__)
+        raise HTTPException(
+            status_code=503,
+            detail=f"知识库扫描未完成（{type(exc).__name__}），请检查来源目录及服务负载后重试",
+        ) from exc
 
 
 @router.post("/api/knowledge/scan/import")
