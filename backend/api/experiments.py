@@ -10,6 +10,7 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Depends
 from app.dependencies import get_current_admin, get_request_database
 from db.schemas import ExperimentStartRequest
+from services.experiment_execution import cancel_experiment, run_owned_thread
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -37,9 +38,10 @@ async def _create_experiment_record(
     experiment_id: str,
     experiment_type: str,
     hypothesis: str,
+    mock: bool,
 ) -> None:
     try:
-        await asyncio.to_thread(
+        await run_owned_thread(
             database.execute_sql_insert,
             "INSERT INTO experiment_runs (id, experiment_type, hypothesis, status, started_at, results, config_path, report_path) "
             "VALUES (:id, :et, :hyp, 'running', :ts, :r, '', '')",
@@ -51,6 +53,9 @@ async def _create_experiment_record(
                 "r": json.dumps({}),
             },
         )
+    except asyncio.CancelledError:
+        await cancel_experiment(database, experiment_id, mock=mock)
+        raise
     except Exception as exc:
         logger.error("failed to create experiment=%s type=%s", experiment_id, type(exc).__name__)
         raise HTTPException(
@@ -73,22 +78,22 @@ async def list_experiments(
         offset = max(0, int(offset))
         # 使用命名参数 :name，SQLite 与 PostgreSQL 均支持
         if experiment_type:
-            rows = await asyncio.to_thread(database.execute_sql,
+            rows = await run_owned_thread(database.execute_sql,
                 "SELECT * FROM experiment_runs WHERE experiment_type=:et "
                 "ORDER BY started_at DESC LIMIT :lim OFFSET :off",
                 {"et": experiment_type, "lim": limit, "off": offset},
             )
-            count_rows = await asyncio.to_thread(database.execute_sql,
+            count_rows = await run_owned_thread(database.execute_sql,
                 "SELECT COUNT(*) AS cnt FROM experiment_runs WHERE experiment_type=:et",
                 {"et": experiment_type},
             )
         else:
-            rows = await asyncio.to_thread(database.execute_sql,
+            rows = await run_owned_thread(database.execute_sql,
                 "SELECT * FROM experiment_runs ORDER BY started_at DESC "
                 "LIMIT :lim OFFSET :off",
                 {"lim": limit, "off": offset},
             )
-            count_rows = await asyncio.to_thread(database.execute_sql,
+            count_rows = await run_owned_thread(database.execute_sql,
                 "SELECT COUNT(*) AS cnt FROM experiment_runs",
                 {},
             )
@@ -115,7 +120,7 @@ async def get_experiment(
 ):
     """获取单个实验详情"""
     try:
-        rows = await asyncio.to_thread(database.execute_sql,"SELECT * FROM experiment_runs WHERE id=:id", {"id": exp_id})
+        rows = await run_owned_thread(database.execute_sql,"SELECT * FROM experiment_runs WHERE id=:id", {"id": exp_id})
         if not rows:
             raise HTTPException(status_code=404, detail="experiment not found")
         r = rows[0]
@@ -149,6 +154,7 @@ async def start_lora_ablation(
         exp_id,
         "lora_ablation",
         req.hypothesis or "LoRA vs DoRA vs RSLoRA ablation",
+        req.mock,
     )
     if req.mock:
         mock_results = {
@@ -160,7 +166,7 @@ async def start_lora_ablation(
                 {"variant": "rslora", "eval_loss": 1.82, "perplexity": 6.17, "adapter_size_mb": 45.2, "trainable_params": 19568128},
             ],
         }
-        await asyncio.to_thread(database.execute_sql,
+        await run_owned_thread(database.execute_sql,
             "UPDATE experiment_runs SET status='completed', completed_at=:ts, results=:r WHERE id=:id",
             {"ts": _now(), "r": json.dumps(mock_results), "id": exp_id},
         )
@@ -170,7 +176,7 @@ async def start_lora_ablation(
         "Formal R1V4 training is blocked until human review, the V4 dataset, and Gold v3 "
         "are frozen. Run scripts/validate_kisaki_v4_training_gate.py to inspect blockers."
     )
-    await asyncio.to_thread(database.execute_sql,
+    await run_owned_thread(database.execute_sql,
         "UPDATE experiment_runs SET status='failed', completed_at=:ts, results=:r WHERE id=:id",
         {"ts": _now(), "r": json.dumps({"mock": False, "error": error}), "id": exp_id},
     )
@@ -189,13 +195,15 @@ async def start_rag_ablation(
         exp_id,
         "rag_ablation",
         req.hypothesis or "vector vs BM25 vs hybrid vs hybrid+reranker",
+        req.mock,
     )
     try:
         from experiments.rag_ablation import RAGAblation
 
         ablation = RAGAblation(formal=not req.mock)
-        raw_results = await asyncio.to_thread(
-            ablation.run_all_mock if req.mock else ablation.run_all
+        raw_results = await run_owned_thread(
+            ablation.run_all_mock if req.mock else ablation.run_all,
+            on_cancel=ablation.cancel,
         )
         serialized = _serialize_results(raw_results)
         payload = {
@@ -204,7 +212,7 @@ async def start_rag_ablation(
             "results": serialized,
             "comparison_table": ablation.build_comparison_table(raw_results),
         }
-        await asyncio.to_thread(database.execute_sql,
+        await run_owned_thread(database.execute_sql,
             "UPDATE experiment_runs SET status='completed', completed_at=:ts, results=:r WHERE id=:id",
             {"ts": _now(), "r": json.dumps(payload, ensure_ascii=False), "id": exp_id},
         )
@@ -215,23 +223,26 @@ async def start_rag_ablation(
             "mock": req.mock,
             "results": payload,
         }
+    except asyncio.CancelledError:
+        await cancel_experiment(database, exp_id, mock=req.mock)
+        raise
     except ValueError as exc:
         error = str(exc)
-        await asyncio.to_thread(database.execute_sql,
+        await run_owned_thread(database.execute_sql,
             "UPDATE experiment_runs SET status='failed', completed_at=:ts, results=:r WHERE id=:id",
             {"ts": _now(), "r": json.dumps({"mock": req.mock, "error": error}), "id": exp_id},
         )
         raise HTTPException(status_code=409, detail=error)
     except ImportError:
         error = "RAG ablation module not available"
-        await asyncio.to_thread(database.execute_sql,
+        await run_owned_thread(database.execute_sql,
             "UPDATE experiment_runs SET status='failed', completed_at=:ts, results=:r WHERE id=:id",
             {"ts": _now(), "r": json.dumps({"error": error}), "id": exp_id},
         )
         raise HTTPException(status_code=503, detail=error)
     except Exception as e:
         logger.error("RAG ablation failed experiment_id=%s type=%s", exp_id, type(e).__name__)
-        await asyncio.to_thread(database.execute_sql,
+        await run_owned_thread(database.execute_sql,
             "UPDATE experiment_runs SET status='failed', completed_at=:ts, results=:r WHERE id=:id",
             {"ts": _now(), "r": json.dumps({"error": str(e)}, ensure_ascii=False), "id": exp_id},
         )
@@ -250,6 +261,7 @@ async def start_quantization_benchmark(
         exp_id,
         "quantization_benchmark",
         req.hypothesis or "FP16 vs AWQ vs NF4 vs INT8 comparison",
+        req.mock,
     )
     try:
         from experiments.quantization_benchmark import QuantizationBenchmark
@@ -259,14 +271,14 @@ async def start_quantization_benchmark(
                 "A real quantization comparison requires one isolated vLLM process per "
                 "quantization variant. Use scripts/lab-run-kisaki-r3.sh on the lab server."
             )
-            await asyncio.to_thread(database.execute_sql,
+            await run_owned_thread(database.execute_sql,
                 "UPDATE experiment_runs SET status='failed', completed_at=:ts, results=:r WHERE id=:id",
                 {"ts": _now(), "r": json.dumps({"error": error}), "id": exp_id},
             )
             raise HTTPException(status_code=409, detail=error)
         rows = [item.to_dict() for item in await bench.run_comparison(bench.DEFAULT_CONFIGS, mock=True)]
         results = {"mock": True, "formal": False, "results": rows}
-        await asyncio.to_thread(database.execute_sql,
+        await run_owned_thread(database.execute_sql,
             "UPDATE experiment_runs SET status='completed', completed_at=:ts, results=:r WHERE id=:id",
             {"ts": _now(), "r": json.dumps(results), "id": exp_id},
         )
@@ -275,14 +287,14 @@ async def start_quantization_benchmark(
         raise
     except ImportError as exc:
         error = "Quantization benchmark module is unavailable"
-        await asyncio.to_thread(database.execute_sql,
+        await run_owned_thread(database.execute_sql,
             "UPDATE experiment_runs SET status='failed', completed_at=:ts, results=:r WHERE id=:id",
             {"ts": _now(), "r": json.dumps({"mock": req.mock, "error": error}), "id": exp_id},
         )
         raise HTTPException(status_code=503, detail=error) from exc
     except Exception as e:
         logger.error("量化基准实验失败 experiment_id=%s type=%s", exp_id, type(e).__name__)
-        await asyncio.to_thread(database.execute_sql,
+        await run_owned_thread(database.execute_sql,
             "UPDATE experiment_runs SET status='failed', completed_at=:ts, results=:r WHERE id=:id",
             {"ts": _now(), "r": json.dumps({"error": str(e)}), "id": exp_id},
         )
@@ -296,7 +308,7 @@ async def download_report(
 ):
     """获取实验报告（Markdown 格式）"""
     try:
-        rows = await asyncio.to_thread(database.execute_sql,"SELECT * FROM experiment_runs WHERE id=:id", {"id": exp_id})
+        rows = await run_owned_thread(database.execute_sql,"SELECT * FROM experiment_runs WHERE id=:id", {"id": exp_id})
         if not rows:
             raise HTTPException(status_code=404, detail="experiment not found")
         r = rows[0]

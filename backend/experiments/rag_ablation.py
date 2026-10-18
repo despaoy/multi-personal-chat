@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+from asyncio import CancelledError
 import hashlib
 import json
 import logging
@@ -11,6 +12,7 @@ import time
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
+from threading import Event
 from typing import Any, Callable, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
@@ -61,8 +63,12 @@ class RAGAblation:
         self.dataset_path = Path(dataset_path) if dataset_path else default
         self.k = k
         self.formal = formal
+        self._cancel_requested = Event()
         self._vector_db = None
         self._rag_helper = None
+
+    def cancel(self) -> None:
+        self._cancel_requested.set()
 
     def _dataset(self) -> Dict[str, Any]:
         dataset = json.loads(self.dataset_path.read_text(encoding="utf-8"))
@@ -131,6 +137,8 @@ class RAGAblation:
         ndcg_values: List[float] = []
         latencies: List[float] = []
         for question in dataset["questions"]:
+            if self._cancel_requested.is_set():
+                raise CancelledError("RAG ablation cancelled")
             expected = list(question.get("expected_doc_ids", []))
             started = time.perf_counter()
             retrieved = retrieve(str(question.get("question", "")), self.k)

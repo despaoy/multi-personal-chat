@@ -2,6 +2,7 @@
 import asyncio
 import json
 import sys
+import threading
 from types import ModuleType, SimpleNamespace
 from unittest.mock import Mock
 
@@ -174,3 +175,86 @@ async def test_cancellation_is_not_converted_to_an_empty_result_or_http_error(st
     with pytest.raises(asyncio.CancelledError) as caught:
         await experiments.start_rag_ablation(ExperimentStartRequest(mock=False), current_user={'role': 'admin'}, database=stores.databases[0])
     assert caught.value is error
+    row = stores.databases[0].execute_sql("SELECT status,results FROM experiment_runs WHERE id!='shared'")[0]
+    assert row['status'] == 'failed' and json.loads(row['results'])['error'] == 'cancelled'
+    assert json.loads(row['results'])['mock'] is False
+
+
+@pytest.mark.parametrize('stage', ['work', 'work-error', 'insert', 'commit'])
+async def test_http_cancellation_joins_work_and_publishes_only_confirmed_state(stores, monkeypatch, stage):
+    database = stores.databases[0]
+    original_execute = database.execute_sql
+    original_insert = database.execute_sql_insert
+    started, release, finished = threading.Event(), threading.Event(), threading.Event()
+    fault = OSError('synthetic-worker-fault-after-cancellation')
+
+    def hold(func, *args, **kwargs):
+        started.set()
+        assert release.wait(3), 'controlled operation was not released'
+        try:
+            if stage == 'work-error':
+                raise fault
+            return func(*args, **kwargs)
+        finally:
+            finished.set()
+
+    if stage in {'work', 'work-error'}:
+        stores.retrieve.side_effect = lambda *args: hold(lambda: [{'id': '42', 'content': '12月20日开课，12月18日19点前确认。'}])
+    elif stage == 'insert':
+        monkeypatch.setattr(database, 'execute_sql_insert', lambda *args, **kwargs: hold(original_insert, *args, **kwargs))
+    else:
+        def committing(query, params=None):
+            if "SET status='completed'" in query:
+                return hold(original_execute, query, params)
+            return original_execute(query, params)
+        monkeypatch.setattr(database, 'execute_sql', committing)
+    request = None
+    try:
+        async with client(database) as api:
+            request = asyncio.create_task(api.post('/api/experiments/rag-ablation', json={'mock': False}))
+            assert await asyncio.wait_for(asyncio.to_thread(started.wait, 2), 3)
+            request.cancel('controlled-user-cancel')
+            await asyncio.wait({request}, timeout=.05)
+            assert not request.done() and not finished.is_set()
+            if stage == 'work':
+                request.cancel('controlled-second-cancel')
+                await asyncio.wait({request}, timeout=.05)
+                assert not request.done()
+            release.set()
+            with pytest.raises(asyncio.CancelledError) as caught:
+                await request
+            assert caught.value.args == ('controlled-user-cancel',) and finished.is_set()
+            if stage == 'work-error':
+                assert caught.value.__cause__ is fault
+        row = original_execute("SELECT status,results FROM experiment_runs WHERE id!='shared'")[0]
+        if stage == 'commit':
+            assert row['status'] == 'completed' and json.loads(row['results'])['formal']
+        else:
+            assert row['status'] == 'failed' and json.loads(row['results']) == {'mock': False, 'error': 'cancelled'}
+        if stage in {'work', 'work-error'}:
+            assert stores.retrieve.call_count == 1
+        if stage == 'insert':
+            assert stores.formal == []
+    finally:
+        release.set()
+        if request is not None:
+            await asyncio.gather(request, return_exceptions=True)
+
+
+async def test_cancellation_cleanup_write_failure_remains_an_explicit_error(stores, monkeypatch):
+    database = stores.databases[0]
+    original_execute = database.execute_sql
+    cancellation = asyncio.CancelledError('controlled-worker-cancel')
+    failure = OSError('synthetic-cancellation-record-unavailable')
+    stores.retrieve.side_effect = cancellation
+
+    def fail_cancel_record(query, params=None):
+        if "AND status='running'" in query:
+            raise failure
+        return original_execute(query, params)
+
+    monkeypatch.setattr(database, 'execute_sql', fail_cancel_record)
+    with pytest.raises(OSError) as caught:
+        await experiments.start_rag_ablation(ExperimentStartRequest(mock=False), current_user={'role': 'admin'}, database=database)
+    assert caught.value is failure and caught.value.__context__ is cancellation
+    assert original_execute("SELECT status FROM experiment_runs WHERE id!='shared'") == [{'status': 'running'}]
