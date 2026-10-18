@@ -18,8 +18,10 @@ import sqlite3
 import sys
 import logging
 from pathlib import Path
+from contextlib import closing
 from datetime import datetime
 from sqlalchemy import text
+from sqlalchemy.exc import DataError, IntegrityError
 
 
 def _validate_table_name(name: str) -> str:
@@ -85,69 +87,38 @@ async def _migrate_table(pg_db, table_name: str, pg_table, sqlite_rows: list[dic
 
     async with pg_db.async_session() as session:
         for i, row in enumerate(sqlite_rows, 1):
-            # M1 fix: 用 session.begin_nested() 管理 SAVEPOINT，失败时由
-            # context manager 自动 ROLLBACK TO SAVEPOINT，保证事务不进入
-            # aborted 状态，后续行仍可正常插入。
-            # 若 begin_nested 失败（极少见），降级为整事务 rollback + 重建。
-            try:
-                # 过滤并映射字段
-                values = {}
-                for key, value in row.items():
-                    if key.startswith("_"):
-                        continue
-                    # M4 fix: 映射是复制而非替换
-                    # 1. 原始列名若存在于 PG 表，保留写入（如 task_id）
-                    if key in valid_columns:
-                        values[key] = value
-                    # 2. 若有映射，额外写入映射后的列（如 task_id → id）
-                    if column_mapping and key in column_mapping:
-                        mapped_key = column_mapping[key]
-                        if mapped_key in valid_columns and mapped_key not in values:
-                            values[mapped_key] = value
-
-                if not values:
-                    failed += 1
-                    if failed <= 3:
-                        logger.warning(f"  WARNING: {table_name} row {i} has no migratable columns")
+            values = {}
+            for key, value in row.items():
+                if key.startswith("_"):
                     continue
+                if key in valid_columns:
+                    values[key] = value
+                if column_mapping and key in column_mapping:
+                    mapped_key = column_mapping[key]
+                    if mapped_key in valid_columns and mapped_key not in values:
+                        values[mapped_key] = value
 
-                if conflict_columns:
-                    cols = ", ".join(f'"{c}"' for c in values.keys())
-                    placeholders = ", ".join(f":{c}" for c in values.keys())
-                    conflict_cols = ", ".join(f'"{c}"' for c in conflict_columns)
-                    sql = f'INSERT INTO "{table_name}" ({cols}) VALUES ({placeholders}) ON CONFLICT ({conflict_cols}) DO NOTHING'
-                else:
-                    cols = ", ".join(f'"{c}"' for c in values.keys())
-                    placeholders = ", ".join(f":{c}" for c in values.keys())
-                    sql = f'INSERT INTO "{table_name}" ({cols}) VALUES ({placeholders}) ON CONFLICT DO NOTHING'
-
-                # 用 begin_nested 包裹单行插入
-                try:
-                    row_inserted = False
-                    async with session.begin_nested():
-                        result = await session.execute(text(sql), values)
-                        row_inserted = bool(result.rowcount and result.rowcount > 0)
-                    # Count only after the savepoint exits successfully.
-                    if row_inserted:
-                        inserted += 1
-                except Exception as row_err:
-                    # savepoint 已自动回滚，事务仍可用
-                    failed += 1
-                    if failed <= 3:
-                        logger.warning(f"  ⚠️  {table_name} 行 {i} 插入失败: {row_err}")
-                    # 若事务整体已损坏（极少见），rollback 重建
-                    if not session.is_active:
-                        await session.rollback()
-            except Exception as outer_err:
-                # begin_nested 本身失败或事务损坏，降级处理
+            if not values:
                 failed += 1
                 if failed <= 3:
-                    logger.warning(f"  ⚠️  {table_name} 行 {i} 事务异常: {outer_err}")
-                try:
-                    if session.in_transaction():
-                        await session.rollback()
-                except Exception:
-                    pass
+                    logger.warning("%s row %d has no migratable columns", table_name, i)
+                continue
+
+            cols = ", ".join(f'"{c}"' for c in values)
+            placeholders = ", ".join(f":{c}" for c in values)
+            conflict = "(" + ", ".join(f'"{c}"' for c in conflict_columns) + ")" if conflict_columns else ""
+            sql = f'INSERT INTO "{table_name}" ({cols}) VALUES ({placeholders}) ON CONFLICT {conflict} DO NOTHING'
+            try:
+                async with session.begin_nested():
+                    result = await session.execute(text(sql), values)
+                    row_inserted = bool(result.rowcount and result.rowcount > 0)
+                if row_inserted:
+                    inserted += 1
+            except (IntegrityError, DataError) as error:
+                # Only rejected row data can resume after its savepoint rollback.
+                failed += 1
+                if failed <= 3:
+                    logger.warning("%s row %d failed: %s", table_name, i, type(error).__name__)
 
             # 进度报告
             if i % 500 == 0:
@@ -283,74 +254,71 @@ async def migrate(sqlite_path: str | Path = SQLITE_DB_PATH):
     logger.info(f"   SQLite: {sqlite_path}")
     logger.info("=" * 60)
 
-    # 初始化 PostgreSQL
-    await pg_db.init()
+    try:
+        await pg_db.init()
+        with closing(sqlite3.connect(f"file:{sqlite_path}?mode=ro", uri=True)) as sqlite_conn:
+            sqlite_conn.row_factory = sqlite3.Row
+            total_inserted = 0
+            total_failed = 0  # M1 fix: 统计行级失败
+            start_time = datetime.now()
 
-    # 连接 SQLite
-    sqlite_conn = sqlite3.connect(f"file:{sqlite_path}?mode=ro", uri=True)
-    sqlite_conn.row_factory = sqlite3.Row
+            # 按依赖顺序迁移（先迁移被外键引用的表）
+            # P0-C2 fix: 元组增加 column_mapping 字段，用于 SQLite→PG 字段名不一致的表
+            migration_plan = [
+                # (表名, SQLAlchemy Table, ON CONFLICT 列, 字段映射 dict)
+                ("config", config_table, ["key"], None),
+                ("users", users_table, None, None),
+                ("loras", loras_table, ["id"], None),
+                ("messages", messages_table, None, None),
+                ("knowledge_bases", knowledge_bases_table, None, None),
+                ("knowledge_folders", knowledge_folders_table, None, None),
+                ("knowledge_documents", knowledge_documents_table, None, None),
+                ("knowledge_chunks", knowledge_chunks_table, None, None),
+                ("user_data", user_data_table, None, None),
+                ("saved_dialogues", saved_dialogues_table, None, None),
+                ("api_keys", api_keys_table, ["id"], None),
+                ("claw_tools", claw_tools_table, ["name"], None),
+                ("audit_logs", audit_logs_table, None, None),
+                ("intent_samples", intent_samples_table, None, None),
+                ("intent_active_kbs", intent_active_kbs_table, None, None),
+                # M4 fix: SQLite training_tasks 主键是 task_id，PG 主键是 id。
+                # 映射 task_id → id 是复制语义：task_id 值同时写入 PG 的 id 和 task_id 两列，
+                # 保证 task_id 唯一索引不为空，数据契约完整。
+                ("training_tasks", training_tasks_table, ["id"], {"task_id": "id"}),
+                # Phase 2 fix: 补齐遗漏的 10 张表
+                ("integration_message_dedup", integration_message_dedup_table, ["dedupKey"], None),
+                ("integration_receipts", integration_receipts_table, ["receipt_key"], None),
+                ("conversations", conversations_table, None, None),
+                ("integration_events", integration_events_table, None, None),
+                ("model_invocations", model_invocations_table, None, None),
+                ("gold_eval_runs", gold_eval_runs_table, ["id"], None),
+                ("experiment_runs", experiment_runs_table, ["id"], None),
+                ("retrieval_eval_questions", retrieval_eval_questions_table, ["id"], None),
+                ("preference_pairs", preference_pairs_table, ["id"], None),
+                ("adapter_compatibility", adapter_compatibility_table, None, None),
+                ("feedback", feedback_table, None, None),
+            ]
+            from db.models import metadata
 
-    total_inserted = 0
-    total_failed = 0  # M1 fix: 统计行级失败
-    start_time = datetime.now()
+            migration_plan.extend(
+                (name, metadata.tables[name], None, None)
+                for name in ("narrative_branches", "branch_assertions", "branch_states")
+            )
 
-    # 按依赖顺序迁移（先迁移被外键引用的表）
-    # P0-C2 fix: 元组增加 column_mapping 字段，用于 SQLite→PG 字段名不一致的表
-    migration_plan = [
-        # (表名, SQLAlchemy Table, ON CONFLICT 列, 字段映射 dict)
-        ("config", config_table, ["key"], None),
-        ("users", users_table, None, None),
-        ("loras", loras_table, ["id"], None),
-        ("messages", messages_table, None, None),
-        ("knowledge_bases", knowledge_bases_table, None, None),
-        ("knowledge_folders", knowledge_folders_table, None, None),
-        ("knowledge_documents", knowledge_documents_table, None, None),
-        ("knowledge_chunks", knowledge_chunks_table, None, None),
-        ("user_data", user_data_table, None, None),
-        ("saved_dialogues", saved_dialogues_table, None, None),
-        ("api_keys", api_keys_table, ["id"], None),
-        ("claw_tools", claw_tools_table, ["name"], None),
-        ("audit_logs", audit_logs_table, None, None),
-        ("intent_samples", intent_samples_table, None, None),
-        ("intent_active_kbs", intent_active_kbs_table, None, None),
-        # M4 fix: SQLite training_tasks 主键是 task_id，PG 主键是 id。
-        # 映射 task_id → id 是复制语义：task_id 值同时写入 PG 的 id 和 task_id 两列，
-        # 保证 task_id 唯一索引不为空，数据契约完整。
-        ("training_tasks", training_tasks_table, ["id"], {"task_id": "id"}),
-        # Phase 2 fix: 补齐遗漏的 10 张表
-        ("integration_message_dedup", integration_message_dedup_table, ["dedupKey"], None),
-        ("integration_receipts", integration_receipts_table, ["receipt_key"], None),
-        ("conversations", conversations_table, None, None),
-        ("integration_events", integration_events_table, None, None),
-        ("model_invocations", model_invocations_table, None, None),
-        ("gold_eval_runs", gold_eval_runs_table, ["id"], None),
-        ("experiment_runs", experiment_runs_table, ["id"], None),
-        ("retrieval_eval_questions", retrieval_eval_questions_table, ["id"], None),
-        ("preference_pairs", preference_pairs_table, ["id"], None),
-        ("adapter_compatibility", adapter_compatibility_table, None, None),
-        ("feedback", feedback_table, None, None),
-    ]
-    from db.models import metadata
+            for table_name, pg_table, conflict_cols, col_mapping in migration_plan:
+                logger.info(f"\n📦 迁移表: {table_name}")
+                rows = _read_sqlite_table(sqlite_conn, table_name)
+                inserted, failed = await _migrate_table(pg_db, table_name, pg_table, rows, conflict_cols, col_mapping)
+                total_inserted += inserted
+                total_failed += failed
 
-    migration_plan.extend(
-        (name, metadata.tables[name], None, None)
-        for name in ("narrative_branches", "branch_assertions", "branch_states")
-    )
-
-    for table_name, pg_table, conflict_cols, col_mapping in migration_plan:
-        logger.info(f"\n📦 迁移表: {table_name}")
-        rows = _read_sqlite_table(sqlite_conn, table_name)
-        inserted, failed = await _migrate_table(pg_db, table_name, pg_table, rows, conflict_cols, col_mapping)
-        total_inserted += inserted
-        total_failed += failed
-
-    # P0-C2 fix: 同步 PG 序列，避免后续 INSERT 因序列值小于已迁移数据主键而冲突。
-    # 仅对含 SERIAL/identity 列的表生效，无序列的表会被自动跳过。
-    # M1 fix: 序列同步失败必须使迁移命令非零退出，避免未同步的数据库被误判为迁移成功。
-    seq_synced, seq_failed = await _sync_pg_sequences(pg_db)
-    total_failed += seq_failed
-
-    sqlite_conn.close()
+            # P0-C2 fix: 同步 PG 序列，避免后续 INSERT 因序列值小于已迁移数据主键而冲突。
+            # 仅对含 SERIAL/identity 列的表生效，无序列的表会被自动跳过。
+            # M1 fix: 序列同步失败必须使迁移命令非零退出，避免未同步的数据库被误判为迁移成功。
+            seq_synced, seq_failed = await _sync_pg_sequences(pg_db)
+            total_failed += seq_failed
+    finally:
+        await pg_db.close()
 
     elapsed = (datetime.now() - start_time).total_seconds()
     # m2 fix: 失败判断在成功日志之前，避免日志语义冲突
@@ -362,9 +330,6 @@ async def migrate(sqlite_path: str | Path = SQLITE_DB_PATH):
         logger.info("\n" + "=" * 60)
         logger.info(f"🎉 迁移完成！共插入 {total_inserted} 行，耗时 {elapsed:.1f}s")
         logger.info("=" * 60)
-
-    # 关闭连接
-    await pg_db.close()
 
     # M1 fix: 存在行级或序列同步失败时以非零状态退出
     if total_failed:

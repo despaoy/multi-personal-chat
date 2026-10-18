@@ -13,13 +13,13 @@ These tests use mock pg_db / session objects — no real PostgreSQL required.
 
 from __future__ import annotations
 
-import asyncio
 import os
 import sys
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from sqlalchemy.exc import DataError, IntegrityError, OperationalError
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 if str(BACKEND_ROOT) not in sys.path:
@@ -29,42 +29,6 @@ if str(BACKEND_ROOT) not in sys.path:
 # 避免 PgDatabase() 单例初始化抛出 ValueError。
 # 测试通过 monkeypatch 替换 pg_db，不会真实连接数据库。
 os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://test:test@localhost/test")
-
-# 如果 asyncpg 未安装，插入 mock 的 db.pg_database 模块，避免导入失败
-import types as _types
-_mock_pg_module = _types.ModuleType("db.pg_database")
-_mock_pg_module.pg_db = MagicMock()
-_mock_pg_module.pg_db.init = AsyncMock()
-_mock_pg_module.pg_db.close = AsyncMock()
-# 提供 migrate() 内部导入所需的表对象（用 MagicMock 代替）
-for _tbl_name in [
-    "config_table", "users_table", "loras_table", "messages_table",
-    "knowledge_bases_table", "knowledge_folders_table",
-    "knowledge_documents_table", "knowledge_chunks_table",
-    "user_data_table", "saved_dialogues_table",
-    "api_keys_table", "claw_tools_table",
-    "audit_logs_table", "intent_samples_table",
-    "intent_active_kbs_table", "training_tasks_table",
-    "integration_message_dedup_table", "integration_receipts_table", "conversations_table",
-    "integration_events_table", "model_invocations_table",
-    "gold_eval_runs_table", "experiment_runs_table",
-    "retrieval_eval_questions_table", "preference_pairs_table",
-    "adapter_compatibility_table", "feedback_table",
-]:
-    setattr(_mock_pg_module, _tbl_name, MagicMock())
-
-# 尝试导入真实 asyncpg；如果可用，让真实模块覆盖 mock；否则用 mock
-try:
-    import asyncpg  # noqa: F401
-    # asyncpg 可用，尝试导入真实 db.pg_database
-    try:
-        import db.pg_database  # noqa: F401
-    except Exception:
-        # 真实导入失败（如 DATABASE_URL 问题），回退到 mock
-        sys.modules["db.pg_database"] = _mock_pg_module
-except ImportError:
-    # asyncpg 不可用，直接用 mock
-    sys.modules["db.pg_database"] = _mock_pg_module
 
 from db.migration import _migrate_table, _sync_pg_sequences, _validate_table_name
 
@@ -200,7 +164,8 @@ def test_validate_table_name_rejects_injection():
 # ============================================
 
 @pytest.mark.asyncio
-async def test_migrate_table_uses_begin_nested_for_isolation():
+@pytest.mark.parametrize("error_type", [IntegrityError, DataError])
+async def test_migrate_table_uses_begin_nested_for_isolation(error_type, caplog):
     """单行失败不应污染事务，后续行仍可插入；返回值包含 failed 计数。"""
     rows = [
         {"id": 1, "name": "row1"},
@@ -209,7 +174,7 @@ async def test_migrate_table_uses_begin_nested_for_isolation():
     ]
     table = FakeTable(["id", "name"])
     # 第 2 行 execute 抛异常，会被 begin_nested 块内的 try/except 捕获
-    session = FakeSession(execute_side_effects=[1, RuntimeError("duplicate key"), 1])
+    session = FakeSession(execute_side_effects=[1, error_type("controlled INSERT", {"private": "synthetic-private"}, Exception("row data rejected")), 1])
     pg_db = FakePgDb(session)
 
     inserted, failed = await _migrate_table(pg_db, "test_table", table, rows, conflict_columns=["id"])
@@ -219,6 +184,8 @@ async def test_migrate_table_uses_begin_nested_for_isolation():
     assert inserted == 2
     assert failed == 1
     assert session.committed is True
+
+    assert "synthetic-private" not in caplog.text
 
 
 @pytest.mark.asyncio
@@ -488,3 +455,63 @@ async def test_migrate_exits_zero_when_all_success(monkeypatch, tmp_path):
 
     # 不应抛出 SystemExit
     await migrate(fake_db_path)
+
+
+
+@pytest.mark.parametrize("error", [RuntimeError("unexpected migration failure"),
+    OperationalError("controlled connection unavailable", None, OSError("source connection lost"))])
+async def test_unexpected_or_connection_failure_stops_without_committing_or_continuing(error):
+    session = FakeSession(execute_side_effects=[1, error, 1])
+    with pytest.raises(type(error)) as caught:
+        await _migrate_table(FakePgDb(session), "test_table", FakeTable(["id", "name"]),
+            [{"id": i, "name": f"complete-source-{i}"} for i in range(1, 4)], ["id"])
+    assert caught.value is error
+    assert len(session.execute_calls) == 2 and session.committed is False
+
+
+@pytest.mark.parametrize("stage", ["read", "rows", "sequences"])
+async def test_migration_releases_both_owned_connections_on_failure(monkeypatch, tmp_path, stage):
+    import sqlite3
+    from db import migration, pg_database
+
+    path = tmp_path / "complete-source.sqlite"
+    real_connect = sqlite3.connect
+    with real_connect(path) as connection:
+        connection.execute("CREATE TABLE config (key TEXT, value TEXT)")
+    connection.close()
+    opened = []
+
+    def connect(*args, **kwargs):
+        connection = real_connect(*args, **kwargs)
+        opened.append(connection)
+        return connection
+
+    pg = MagicMock(init=AsyncMock(), close=AsyncMock())
+    monkeypatch.setattr(pg_database, "pg_db", pg)
+    monkeypatch.setattr(migration.sqlite3, "connect", connect)
+    monkeypatch.setattr(migration, "_read_sqlite_table", lambda *args: [])
+
+    async def rows(*args):
+        return 0, 0
+
+    monkeypatch.setattr(migration, "_migrate_table", rows)
+    monkeypatch.setattr(migration, "_sync_pg_sequences", rows)
+    error = RuntimeError("controlled migration stage failure")
+
+    def failed_read(*args):
+        raise error
+
+    async def failed_stage(*args):
+        raise error
+
+    if stage == "read":
+        monkeypatch.setattr(migration, "_read_sqlite_table", failed_read)
+    else:
+        monkeypatch.setattr(migration, "_migrate_table" if stage == "rows" else "_sync_pg_sequences", failed_stage)
+    with pytest.raises(RuntimeError) as caught:
+        await migration.migrate(path)
+    assert caught.value is error
+    pg.close.assert_awaited_once()
+    assert len(opened) == 1
+    with pytest.raises(sqlite3.ProgrammingError, match="closed"):
+        opened[0].execute("SELECT 1")
