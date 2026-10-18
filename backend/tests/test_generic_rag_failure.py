@@ -8,8 +8,8 @@ from knowledge import rag_helper
 
 QUERY = '档案馆周一开门时间和借阅期限'
 ROWS = [
-    dict(id='opening', content='档案馆周一九点开门。', score=.8),
-    dict(id='loan', content='借阅期限为十四天。', score=.7),
+    dict(id='opening', content='档案馆周一九点开门。', score=.8, fused_score=.8),
+    dict(id='loan', content='借阅期限为十四天。', score=.7, fused_score=.7),
 ]
 
 
@@ -135,3 +135,13 @@ def test_single_candidate_still_uses_enabled_reranker(prepared):
     assert helper.retrieve_context(QUERY)[0]['rerank_score'] == .8
     helper.reranker.rerank.assert_called_once()
     factory.assert_called_once()
+
+
+@pytest.mark.parametrize("entry", ["context", "citations"])
+def test_missing_fusion_score_cannot_use_vector_score_or_cache_success(prepared, entry):
+    helper, index, _ = prepared
+    index.hybrid_search.return_value = [{k: v for k, v in ROWS[0].items() if k != "fused_score"}]
+    invoke = helper.retrieve_context if entry == "context" else helper.retrieve_with_citations
+    with pytest.raises(KeyError, match="fused_score"):
+        invoke(QUERY)
+    assert index.hybrid_search.call_count == 1 and not helper._query_cache

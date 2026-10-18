@@ -11,7 +11,7 @@ class Index:
     def hybrid_search(self, query, **kwargs):
         self.calls.append((query, kwargs["filters"]))
         key = "rule" if query == "青川通道 费用 时长" else "context"
-        return [dict(id=key, title=key, content="complete-" + key, score=.8, document_id=1 if key == "rule" else 2)]
+        return [dict(id=key, title=key, content="complete-" + key, score=.8, fused_score=.8, document_id=1 if key == "rule" else 2)]
 
 
 def helper_for(monkeypatch):

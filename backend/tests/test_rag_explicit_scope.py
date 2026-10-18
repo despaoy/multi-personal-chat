@@ -61,7 +61,7 @@ def test_incidental_game_terms_cannot_rewrite_query_or_filter_public_evidence(ri
     assert {row["content"] for row in rows} >= {document["content"] for document in DOCUMENTS[:2]}
     rig.search.assert_called_once_with(QUERY, top_k=20, threshold=0.05, keyword_weight=0.3, filters=None)
     assert all("query_count" not in row and "region_boost" not in row for row in rows)
-    assert all(row["final_score"] == row["fused_score"] for row in rows)
+    assert all(row["normalized_score"] == row["fused_score"] and "final_score" not in row for row in rows)
 
 
 def test_validated_model_views_keep_both_complete_sources_and_scope_in_cache(rig):

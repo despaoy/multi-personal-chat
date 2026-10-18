@@ -129,9 +129,7 @@ class RAGHelper:
             logger.info("RAG检索未找到相关文档")
             return []
 
-        for result in recall_results:
-            result["final_score"] = result.get("fused_score", result.get("score"))
-        recall_results.sort(key=lambda row: (-row["final_score"], _stable_result_key(row)))
+        recall_results.sort(key=lambda row: (-row["fused_score"], _stable_result_key(row)))
         logger.info("第一阶段混合检索完成: %s 个候选文档", len(recall_results))
 
         if enable_rerank and self.enable_reranking:
@@ -141,7 +139,7 @@ class RAGHelper:
             score_key = "rerank_normalized_score"
         else:
             results = recall_results[:final_top_k]
-            score_key = "final_score"
+            score_key = "fused_score"
         for result in results:
             result["normalized_score"] = result[score_key]
         logger.info("检索完成")
@@ -174,7 +172,7 @@ class RAGHelper:
     @staticmethod
     def _absolute_score(result: dict[str, Any]) -> float:
         """Return a cross-query comparable score instead of per-result-list normalization."""
-        value = result.get("score", result.get("fused_score", result.get("final_score")))
+        value = result.get("score", result.get("fused_score"))
         message = "RAG retrieval score must be a finite number"
         try:
             score = float(value)

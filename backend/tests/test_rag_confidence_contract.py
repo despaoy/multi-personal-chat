@@ -13,6 +13,7 @@ def helper():
     {"score": float("nan"), "fused_score": 0.8},
     {"fused_score": float("inf")},
     {"final_score": float("-inf")},
+    {"final_score": 1.2},
     {"score": None, "fused_score": 0.8},
     {"score": "invalid"},
     {"score": True},
@@ -28,7 +29,7 @@ def test_invalid_score_cannot_return_a_citation_or_abstention(helper, monkeypatc
 @pytest.mark.parametrize("fields,confidence", [
     ({"score": 0.8}, 0.8),
     ({"fused_score": 0.1}, 0.1),
-    ({"final_score": 1.2}, 1.0),
+    ({"fused_score": 1.2}, 1.0),
     ({"score": -0.2}, 0.0),
     ({"score": 0.0, "fused_score": 0.9}, 0.0),
 ])

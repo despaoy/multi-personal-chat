@@ -17,7 +17,7 @@ class Index:
     def hybrid_search(self, q, **kwargs):
         self.calls.append((q, kwargs["filters"]))
         key = q if q in VIEWS else "root"
-        return [dict(id=key, title=key, content="complete " + key, score=0.8)]
+        return [dict(id=key, title=key, content="complete " + key, score=0.8, fused_score=0.8)]
 
 
 def prepared(monkeypatch):
@@ -48,7 +48,7 @@ def test_reranking_is_bound_to_each_task_and_does_not_globally_truncate(monkeypa
     old = i.hybrid_search
 
     def search(q, **kw):
-        return old(q, **kw) + [dict(id="common", title="common", content="same", score=0.7)]
+        return old(q, **kw) + [dict(id="common", title="common", content="same", score=0.7, fused_score=0.7)]
 
     i.hybrid_search = search
 

@@ -52,8 +52,8 @@ class TestFusion:
     def test_distinct_source_ids_preserve_common_prefix_evidence(self, monkeypatch):
         # 索引中的不同来源片段即使标题和前缀相同，也不能误融合。
         shared_prefix = "胡桃是往生堂第七十七代堂主，掌管往生堂事务，" + "火系角色。" * 20
-        doc_a = {"id": "source-a", "title": "胡桃", "content": shared_prefix + "尾部差异A", "score": 0.6}
-        doc_b = {"id": "source-b", "title": "胡桃", "content": shared_prefix + "尾部差异B", "score": 0.7}
+        doc_a = {"id": "source-a", "title": "胡桃", "content": shared_prefix + "尾部差异A", "score": 0.6, "fused_score": 0.6}
+        doc_b = {"id": "source-b", "title": "胡桃", "content": shared_prefix + "尾部差异B", "score": 0.7, "fused_score": 0.7}
         assert _stable_result_key(doc_a) != _stable_result_key(doc_b)
         assert _stable_result_key(doc_a) == _stable_result_key(dict(doc_a))
 
