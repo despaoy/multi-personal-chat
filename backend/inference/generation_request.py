@@ -380,18 +380,14 @@ def build_generation_request(request: GenerationRequest) -> GenerationPlan:
         )
         request = replace(request, retrieval=replace(request.retrieval, task_coverage=tasks))
     if request.retrieval.public_task_review:
-        from knowledge.public_task_evidence import render_public_tasks
-
         if request.retrieval.public_task_query != request.message:
             raise ValueError("Public task review discarded the original message")
-        render_public_tasks(request.retrieval)
     if request.retrieval.public_curated_review:
-        from knowledge.curated_task_evidence import exclude_changed_sources, render_curated_tasks
+        from knowledge.curated_task_evidence import exclude_changed_sources
 
         request = replace(request, retrieval=exclude_changed_sources(request.retrieval))
         if request.retrieval.public_task_query != request.message:
             raise ValueError("Curated task review discarded the original message")
-        render_curated_tasks(request.retrieval)
     request = admit_deferred_sources(request, _build_generation_request_core)
     return _build_generation_request_core(request)
 
