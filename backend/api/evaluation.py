@@ -7,8 +7,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Depends
-from app.dependencies import get_current_admin, get_current_user
-from db.adapter import db
+from app.dependencies import get_current_admin, get_current_user, get_request_database
 from db.schemas import EvalRunRequest, FeedbackCreate
 
 logger = logging.getLogger(__name__)
@@ -54,13 +53,15 @@ async def get_gold_set(dataset_id: str = "kisaki_v21", category: Optional[str] =
 
 
 @router.post("/api/evaluation/run")
-async def run_evaluation(req: EvalRunRequest, current_user: dict = Depends(get_current_admin)):
+async def run_evaluation(req: EvalRunRequest, current_user: dict = Depends(get_current_admin),
+    database=Depends(get_request_database),
+):
     """Persist and queue one bounded evaluation run."""
     run_id = f"eval_{secrets.token_hex(8)}"
     queued_metrics = {"status": "queued", "mock": req.mock}
     try:
         await asyncio.to_thread(
-            db.execute_sql_insert,
+            database.execute_sql_insert,
             "INSERT INTO gold_eval_runs (id, run_at, adapter_name, model_label, total_prompts, category_breakdown, metrics, config_snapshot, notes) "
             "VALUES (:id, :run_at, :adapter_name, :model_label, 0, :cb, :metrics, :cfg, :notes)",
             {
@@ -85,12 +86,12 @@ async def run_evaluation(req: EvalRunRequest, current_user: dict = Depends(get_c
     from evaluation.runtime_runner import schedule_generation_evaluation
 
     try:
-        schedule_generation_evaluation(run_id, req.model_dump(), db)
+        schedule_generation_evaluation(run_id, req.model_dump(), database)
     except Exception as exc:
         logger.exception("failed to schedule evaluation run=%s", run_id)
         try:
             await asyncio.to_thread(
-                db.execute_sql,
+                database.execute_sql,
                 "UPDATE gold_eval_runs SET metrics=:metrics, notes=:notes WHERE id=:id",
                 {
                     "metrics": json.dumps({"status": "failed", "error": "schedule_failed", "mock": req.mock}),
@@ -106,20 +107,22 @@ async def run_evaluation(req: EvalRunRequest, current_user: dict = Depends(get_c
 
 
 @router.get("/api/evaluation/runs")
-async def list_runs(limit: int = 20, offset: int = 0, current_user: dict = Depends(get_current_admin)):
+async def list_runs(limit: int = 20, offset: int = 0, current_user: dict = Depends(get_current_admin),
+    database=Depends(get_request_database),
+):
     """列出评估运行历史"""
     try:
         limit = max(1, min(int(limit), 500))
         offset = max(0, int(offset))
         rows, count_rows = await asyncio.gather(
             asyncio.to_thread(
-                db.execute_sql,
+                database.execute_sql,
                 "SELECT id, run_at, adapter_name, model_label, total_prompts, metrics, notes "
                 "FROM gold_eval_runs ORDER BY run_at DESC LIMIT :lim OFFSET :off",
                 {"lim": limit, "off": offset},
             ),
             asyncio.to_thread(
-                db.execute_sql,
+                database.execute_sql,
                 "SELECT COUNT(*) AS cnt FROM gold_eval_runs",
                 {},
             ),
@@ -147,11 +150,13 @@ async def list_runs(limit: int = 20, offset: int = 0, current_user: dict = Depen
 
 
 @router.get("/api/evaluation/runs/{run_id}")
-async def get_run_detail(run_id: str, current_user: dict = Depends(get_current_admin)):
+async def get_run_detail(run_id: str, current_user: dict = Depends(get_current_admin),
+    database=Depends(get_request_database),
+):
     """获取单个评估运行的详细结果"""
     try:
         rows = await asyncio.to_thread(
-            db.execute_sql,
+            database.execute_sql,
             "SELECT * FROM gold_eval_runs WHERE id=:id",
             {"id": run_id},
         )
@@ -187,11 +192,13 @@ async def get_run_detail(run_id: str, current_user: dict = Depends(get_current_a
 
 
 @router.post("/api/feedback")
-async def create_feedback(req: FeedbackCreate, current_user: dict = Depends(get_current_user)):
+async def create_feedback(req: FeedbackCreate, current_user: dict = Depends(get_current_user),
+    database=Depends(get_request_database),
+):
     """创建用户反馈（在线反馈闭环）"""
     try:
         await asyncio.to_thread(
-            db.execute_sql_insert,
+            database.execute_sql_insert,
             "INSERT INTO feedback (trace_id, message_id, rating, reason, adapter_name, kb_revision, prompt_version, detail, created_at) "
             "VALUES (:trace_id, :message_id, :rating, :reason, :adapter_name, :kb_revision, :prompt_version, :detail, :created_at)",
             {
@@ -214,7 +221,9 @@ async def create_feedback(req: FeedbackCreate, current_user: dict = Depends(get_
 
 @router.get("/api/feedback")
 async def list_feedback(limit: int = 50, offset: int = 0, rating: Optional[str] = None,
-                        current_user: dict = Depends(get_current_admin)):
+                        current_user: dict = Depends(get_current_admin),
+    database=Depends(get_request_database),
+):
     """列出用户反馈"""
     try:
         limit = max(1, min(int(limit), 500))
@@ -234,8 +243,8 @@ async def list_feedback(limit: int = 50, offset: int = 0, rating: Optional[str] 
             count_params = {}
 
         rows, count_rows = await asyncio.gather(
-            asyncio.to_thread(db.execute_sql, rows_query, rows_params),
-            asyncio.to_thread(db.execute_sql, count_query, count_params),
+            asyncio.to_thread(database.execute_sql, rows_query, rows_params),
+            asyncio.to_thread(database.execute_sql, count_query, count_params),
         )
         feedbacks = [dict(row) for row in rows or []]
         total = (count_rows[0]["cnt"] if count_rows else 0) or 0

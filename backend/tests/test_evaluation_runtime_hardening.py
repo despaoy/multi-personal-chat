@@ -12,6 +12,7 @@ from pydantic import ValidationError
 
 from api import evaluation as evaluation_api
 from app.dependencies import get_current_admin
+from app.runtime import RuntimeContainer
 from db.schemas import EvalRunRequest, FeedbackCreate
 from evaluation import runtime_runner
 
@@ -38,9 +39,9 @@ class _FailingInsertDatabase:
         raise RuntimeError("database unavailable")
 
 
-def _evaluation_client(monkeypatch, database) -> TestClient:
-    monkeypatch.setattr(evaluation_api, "db", database)
+def _evaluation_client(database) -> TestClient:
     app = FastAPI()
+    app.state.runtime_container = RuntimeContainer(db=database, is_pg_mode=lambda: False, startup_env={})
     app.include_router(evaluation_api.router)
     app.dependency_overrides[get_current_admin] = lambda: {
         "user_id": 1,
@@ -115,16 +116,16 @@ def test_update_run_uses_cross_database_named_parameters():
     assert json.loads(params["breakdown"]) == {"persona": 2}
 
 
-def test_evaluation_run_returns_503_when_record_cannot_be_created(monkeypatch):
-    with _evaluation_client(monkeypatch, _FailingInsertDatabase()) as client:
+def test_evaluation_run_returns_503_when_record_cannot_be_created():
+    with _evaluation_client(_FailingInsertDatabase()) as client:
         response = client.post("/api/evaluation/run", json={"mock": False})
 
     assert response.status_code == 503
     assert response.headers["retry-after"] == "1"
 
 
-def test_evaluation_runs_returns_sql_total(monkeypatch):
-    with _evaluation_client(monkeypatch, _ListDatabase()) as client:
+def test_evaluation_runs_returns_sql_total():
+    with _evaluation_client(_ListDatabase()) as client:
         response = client.get("/api/evaluation/runs", params={"limit": 1})
 
     assert response.status_code == 200

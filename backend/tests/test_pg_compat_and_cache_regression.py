@@ -146,7 +146,7 @@ class TestPaginationTotalCount:
         original_db = adapter_module.db
         adapter_module.db = test_db
         # Also patch the db imported into each router module (bound at import)
-        for mod in (experiments, evaluation):
+        for mod in (experiments,):
             mod.db = test_db
 
         app = FastAPI()
@@ -172,7 +172,7 @@ class TestPaginationTotalCount:
             except Exception:
                 pass
             adapter_module.db = original_db
-            for mod in (experiments, evaluation):
+            for mod in (experiments,):
                 mod.db = original_db
 
         return client, test_db, _cleanup
