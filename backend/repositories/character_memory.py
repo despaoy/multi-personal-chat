@@ -205,17 +205,31 @@ def _decode_evidence(value: Any) -> list[str | dict[str, str]]:
     return values
 
 
+def decode_memory_evidence(row: dict[str, Any]) -> dict[str, Any]:
+    """Normalize raw or typed evidence once at a repository adapter boundary."""
+    values = {}
+    for field in ("evidence", "source_message_ids"):
+        if field in row:
+            value = row[field]
+            if not isinstance(value, (list, tuple)):
+                raise MemoryRecordError(field, f"Memory {field} must contain a list")
+            values[field] = list(value)
+        else:
+            values[field] = row.get(field + "_json")
+    ids = _decode_text_list(values["source_message_ids"], "source_message_ids_json").copy()
+    legacy_source = str(row.get("source_message_id") or "").strip()
+    if legacy_source and legacy_source not in ids:
+        ids.insert(0, legacy_source)
+    return {"source_message_ids": ids, "evidence": _decode_evidence(values["evidence"])}
+
+
 def _decode_memory_record(row: dict[str, Any]) -> dict[str, Any]:
     """Expose JSON payloads as typed convenience fields without hiding raw columns."""
     record = dict(row)
-    source_ids = _decode_text_list(record.get("source_message_ids_json"), "source_message_ids_json").copy()
-    legacy_source = str(record.get("source_message_id") or "").strip()
-    if legacy_source and legacy_source not in source_ids:
-        source_ids.insert(0, legacy_source)
-    evidence = _decode_evidence(record.get("evidence_json"))
+    record.update(decode_memory_evidence({
+        key: record.get(key) for key in ("evidence_json", "source_message_ids_json", "source_message_id")
+    }))
     metadata = _decode_json(record.get("metadata_json"), dict, "metadata_json")
-    record["source_message_ids"] = source_ids
-    record["evidence"] = evidence
     record["metadata"] = metadata
     for field, allowed in (("memory_type", _VALID_MEMORY_TYPES), ("status", _VALID_MEMORY_STATUSES),
                            ("relation_type", _VALID_RELATION_TYPES)):

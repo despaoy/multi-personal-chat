@@ -50,3 +50,48 @@ def test_unsupported_service_parameters_fail_instead_of_disappearing(monkeypatch
     with pytest.raises(TypeError, match="unexpected keyword argument"):
         evaluator._service_for_variant(evaluator._CaseRepository(), evaluator.RETRIEVAL_VARIANTS[1], provider(),
                                        min_hybrid_score=0.35, candidate_limit=100)
+
+
+
+@pytest.mark.parametrize("balanced", [False, True])
+@pytest.mark.parametrize("canonical", [False, True])
+def test_case_repository_decodes_complete_evidence_at_its_boundary(balanced, canonical):
+    from copy import deepcopy
+    from experiments.evaluate_cahm import _CaseRepository
+
+    body = "完整虚构原文：仅本人可申请，周末不受理，不得自动续借。"
+    record = dict(id="fixture", memory_type="user_fact", content=body, source_message_id="first")
+    if canonical:
+        record.update(evidence=[body], source_message_ids=["second"],
+                      evidence_json='["旧摘要"]', source_message_ids_json='["旧来源"]')
+    else:
+        import json
+        record.update(evidence_json=json.dumps([body]), source_message_ids_json='["second"]')
+    original = deepcopy(record)
+    adapter = evaluator._CaseRepository if balanced else _CaseRepository
+    row = adapter([record]).records[0]
+    assert row["evidence"] == [body] and row["source_message_ids"] == ["first", "second"]
+    assert record == original
+
+
+@pytest.mark.parametrize("balanced", [False, True])
+def test_case_repository_rejects_corrupt_raw_evidence(balanced):
+    from experiments.evaluate_cahm import _CaseRepository
+    from character.memory_read_authority import MemoryRecordError
+
+    adapter = evaluator._CaseRepository if balanced else _CaseRepository
+    with pytest.raises(MemoryRecordError, match="evidence_json"):
+        adapter([dict(id="fixture", content="完整虚构原话", evidence_json='["未结束')])
+
+
+
+@pytest.mark.parametrize("balanced", [False, True])
+@pytest.mark.parametrize("field", ["evidence", "source_message_ids"])
+def test_case_repository_rejects_null_canonical_evidence(balanced, field):
+    from experiments.evaluate_cahm import _CaseRepository
+    from character.memory_read_authority import MemoryRecordError
+
+    adapter = evaluator._CaseRepository if balanced else _CaseRepository
+    with pytest.raises(MemoryRecordError) as caught:
+        adapter([dict(id="fixture", content="完整虚构原话", **{field: None})])
+    assert caught.value.field == field

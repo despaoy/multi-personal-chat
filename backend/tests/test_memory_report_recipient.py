@@ -67,7 +67,7 @@ def test_explicit_self_after_recipient_still_uses_self_intent(query, field):
 class Repo:
     async def list_memory_records(self, *args, **kwargs):
         return [
-            dict(
+            dict({"source_message_ids": []},
                 id="1",
                 memory_key="preference_桂花乌龙茶",
                 memory_type="user_fact",

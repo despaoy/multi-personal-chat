@@ -33,11 +33,13 @@ async def status(rows=(), *, limit=None, error=False, query='你保存了我的�
 @pytest.mark.asyncio
 @pytest.mark.parametrize('rows,expected', [
     ([], False),
-    ([{"memory_type": "user_fact", 'id': '1', 'memory_key': 'user_name', 'content': '用户叫温宁'}], True),
-    ([{"memory_type": "user_fact", 'id': '1', 'memory_key': 'user_name', 'content': '用户叫温宁', 'status': 'retracted'}], False),
-    ([{"memory_type": "user_fact", 'id': '1', 'memory_key': 'user_name', 'content': '用户叫温宁', 'status': 'pending'}], False),
-    ([{"memory_type": "user_fact", 'id': '1', 'memory_key': 'user_name', 'content': '用户叫温宁', 'valid_to': '2000-01-01'}], False),
-    ([{"memory_type": "user_fact", 'id': '1', 'memory_key': 'preference_x', 'content': '用户喜欢读书'}], False),
+    ([{
+       "evidence": [], "source_message_ids": [],"memory_type": "user_fact", 'id': '1', 'memory_key': 'user_name', 'content': '用户叫温宁'}], True),
+    ([{"evidence": [], "source_message_ids": [], "memory_type": "user_fact", 'id': '1', 'memory_key': 'user_name', 'content': '用户叫温宁', 'status': 'retracted'}], False),
+    ([{"evidence": [], "source_message_ids": [], "memory_type": "user_fact", 'id': '1', 'memory_key': 'user_name', 'content': '用户叫温宁', 'status': 'pending'}], False),
+    ([{"evidence": [], "source_message_ids": [], "memory_type": "user_fact", 'id': '1', 'memory_key': 'user_name', 'content': '用户叫温宁', 'valid_to': '2000-01-01'}], False),
+    ([{
+       "evidence": [], "source_message_ids": [],"memory_type": "user_fact", 'id': '1', 'memory_key': 'preference_x', 'content': '用户喜欢读书'}], False),
 ])
 async def test_scoped_current_presence_is_not_retrieval_relevance(rows, expected):
     _, trace = await status(rows)
@@ -54,7 +56,8 @@ async def test_partial_read_and_error_never_prove_absence():
 
 @pytest.mark.asyncio
 async def test_presence_survives_irrelevant_query():
-    row = {"memory_type": "user_fact", 'id': '1', 'memory_key': 'user_name', 'content': '用户说自己叫温宁'}
+    row = {
+           "evidence": [], "source_message_ids": [],"memory_type": "user_fact", 'id': '1', 'memory_key': 'user_name', 'content': '用户说自己叫温宁'}
     _, trace = await status([row], query='我的专业是什么？')
     assert trace['field_presence']['name'] is True
     assert trace['field_presence']['major'] is False
@@ -69,7 +72,8 @@ async def test_ranking_failure_cannot_return_a_partial_storage_result(monkeypatc
 
     monkeypatch.setattr(memory_service, '_retrieval_text', broken)
     with pytest.raises(RuntimeError, match='ranking failed'):
-        await status([{"memory_type": "user_fact", 'id': '1', 'memory_key': 'user_name', 'content': '用户说自己叫温宁'}])
+        await status([{
+                       "evidence": [], "source_message_ids": [],"memory_type": "user_fact", 'id': '1', 'memory_key': 'user_name', 'content': '用户说自己叫温宁'}])
 
 
 @pytest.mark.parametrize('message', ['你保存了我的姓名吗？', '你记住我的姓名了吗？',

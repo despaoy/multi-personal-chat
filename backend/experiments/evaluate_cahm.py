@@ -35,6 +35,7 @@ from character.memory_service import (  # noqa: E402
     validate_retrieval_settings,
 )
 from character.models import UserScope  # noqa: E402
+from repositories.character_memory import decode_memory_evidence  # noqa: E402
 from knowledge.retrieval_core.embedding import get_default_embedding_provider  # noqa: E402
 
 DEFAULT_DATASET = BACKEND_ROOT / "evaluation" / "data" / "cahm_memory_gold.jsonl"
@@ -60,7 +61,8 @@ ABLATIONS = (
 class _CaseRepository:
     def __init__(self, records: list[dict[str, Any]]) -> None:
         now = datetime.now(timezone.utc).isoformat()
-        self.records = [{**record, "updated_at": record.get("updated_at", now)} for record in records]
+        self.records = [dict(record, updated_at=record.get("updated_at", now),
+                             **decode_memory_evidence(record)) for record in records]
 
     async def list_memory_records(self, character_id, user_scope, limit=30, *, include_inactive=False):
         records = self.records if include_inactive else [row for row in self.records if row.get("status", "active") == "active"]

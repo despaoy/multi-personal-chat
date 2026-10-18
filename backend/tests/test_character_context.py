@@ -617,6 +617,8 @@ def _memory_record(
     from datetime import datetime
 
     return {
+        "evidence": [],
+        "source_message_ids": [],
         "id": index,
         "memory_type": memory_type,
         "memory_key": memory_key,

@@ -46,6 +46,8 @@ def _scope():
 
 def _row(index, key, content, importance=0.6):
     return {
+        "evidence": [],
+        "source_message_ids": [],
         "id": index,
         "memory_key": key,
         "memory_type": "shared_event" if key.startswith("goal_") else "user_fact",

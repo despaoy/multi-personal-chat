@@ -104,7 +104,7 @@ async def test_default_recall_retains_late_evidence():
 
     class Repo:
         async def list_memory_records(self, *args, **kwargs):
-            return [dict(id='a', memory_type='user_fact', memory_key='preference_徒步',
+            return [dict({"source_message_ids": []}, id='a', memory_type='user_fact', memory_key='preference_徒步',
                          content='用户喜欢徒步', evidence=evidence)]
 
     scope = build_user_scope(platform='web', adapter='test', sender_id='u',

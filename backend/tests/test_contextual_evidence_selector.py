@@ -142,10 +142,14 @@ async def test_widened_recall_preserves_lifecycle_subject_and_confidence_guards(
     class Repo:
         async def list_memory_records(self, *args, **kwargs):
             return [
-                {"memory_type": "user_fact", "id": "a", "content": "用户研究点云补全", "memory_key": "goal", "status": "active"},
-                {"memory_type": "user_fact", "id": "b", "content": "用户研究点云识别", "status": "superseded"},
-                {"memory_type": "user_fact", "id": "c", "content": "用户喜欢咖啡", "memory_key": "preference_coffee"},
-                {"memory_type": "user_fact", "id": "d", "content": "用户在月球工作", "confidence": 0.1},
+                {
+                 "evidence": [], "source_message_ids": [],"memory_type": "user_fact", "id": "a", "content": "用户研究点云补全", "memory_key": "goal", "status": "active"},
+                {
+                 "evidence": [], "source_message_ids": [],"memory_type": "user_fact", "id": "b", "content": "用户研究点云识别", "status": "superseded"},
+                {
+                 "evidence": [], "source_message_ids": [],"memory_type": "user_fact", "id": "c", "content": "用户喜欢咖啡", "memory_key": "preference_coffee"},
+                {
+                 "evidence": [], "source_message_ids": [],"memory_type": "user_fact", "id": "d", "content": "用户在月球工作", "confidence": 0.1},
             ]
 
     service = CharacterMemoryService(Repo(), semantic_enabled=False)
@@ -183,6 +187,7 @@ async def test_context_service_selects_before_compiling_and_reuses_loaded_histor
         async def list_memory_records(self, *args, **kwargs):
             return [
                 {
+                    "source_message_ids": [],
                     "memory_type": "user_fact",
                     "id": "a",
                     "content": "用户研究点云补全",
@@ -231,9 +236,12 @@ async def test_ablation_flags_cannot_disable_contextual_lifecycle_guards():
     class Repo:
         async def list_memory_records(self, *args, **kwargs):
             return [
-                {"memory_type": "user_fact", "id": "erased", "content": "用户研究点云", "status": "erased"},
-                {"memory_type": "user_fact", "id": "pending", "content": "用户研究点云", "status": "pending"},
-                {"memory_type": "user_fact", "id": "low", "content": "用户研究点云", "confidence": 0.1},
+                {
+                 "evidence": [], "source_message_ids": [],"memory_type": "user_fact", "id": "erased", "content": "用户研究点云", "status": "erased"},
+                {
+                 "evidence": [], "source_message_ids": [],"memory_type": "user_fact", "id": "pending", "content": "用户研究点云", "status": "pending"},
+                {
+                 "evidence": [], "source_message_ids": [],"memory_type": "user_fact", "id": "low", "content": "用户研究点云", "confidence": 0.1},
             ]
 
     service = CharacterMemoryService(
@@ -254,8 +262,9 @@ async def test_ablation_flags_cannot_disable_contextual_lifecycle_guards():
 async def test_contextual_recall_finds_old_claim_beyond_recent_window():
     class Repo:
         async def list_memory_records(self, *args, limit=100, **kwargs):
-            records = [{"memory_type": "user_fact", "id": str(index), "content": "用户喜欢咖啡", "importance": 0.9} for index in range(120)]
-            records.append({"memory_type": "user_fact", "id": "old-research", "content": "用户实验使用特殊数据集 ShapeNet", "importance": 0.5})
+            records = [{"evidence": [], "source_message_ids": [], "memory_type": "user_fact", "id": str(index), "content": "用户喜欢咖啡", "importance": 0.9} for index in range(120)]
+            records.append({
+                            "evidence": [], "source_message_ids": [],"memory_type": "user_fact", "id": "old-research", "content": "用户实验使用特殊数据集 ShapeNet", "importance": 0.5})
             return records[:limit]
 
     service = CharacterMemoryService(Repo(), semantic_enabled=False)
@@ -315,9 +324,12 @@ async def test_compound_goal_keeps_non_goal_resources_for_semantic_review():
     class Repo:
         async def list_memory_records(self, *args, **kwargs):
             return [
-                {"memory_type": "user_fact", "id": "topic", "memory_key": "goal_research", "content": "用户研究点云补全"},
-                {"memory_type": "user_fact", "id": "hardware", "content": "用户显卡有八 GB 显存"},
-                {"memory_type": "user_fact", "id": "erased", "content": "用户显卡有二十四 GB 显存", "status": "erased"},
+                {
+                 "evidence": [], "source_message_ids": [],"memory_type": "user_fact", "id": "topic", "memory_key": "goal_research", "content": "用户研究点云补全"},
+                {
+                 "evidence": [], "source_message_ids": [],"memory_type": "user_fact", "id": "hardware", "content": "用户显卡有八 GB 显存"},
+                {
+                 "evidence": [], "source_message_ids": [],"memory_type": "user_fact", "id": "erased", "content": "用户显卡有二十四 GB 显存", "status": "erased"},
             ]
 
     service = CharacterMemoryService(Repo(), semantic_enabled=False)
@@ -335,7 +347,8 @@ async def test_recall_preserves_fifth_evidence_correction_for_semantic_review():
 
     class Repo:
         async def list_memory_records(self, *args, **kwargs):
-            return [{"memory_type": "user_fact", "id": "a", "content": "用户研究点云补全", "evidence": evidence}]
+            return [{
+                     "source_message_ids": [],"memory_type": "user_fact", "id": "a", "content": "用户研究点云补全", "evidence": evidence}]
 
     service = CharacterMemoryService(Repo(), semantic_enabled=False)
     candidates, _ = await service.load_relevant_memories(
@@ -362,7 +375,8 @@ async def test_oversized_selected_packet_fails_before_policy():
             return {}
 
         async def list_memory_records(self, *args, **kwargs):
-            return [{"memory_type": "user_fact", "id": "a", "content": "用户研究点云补全", "evidence": ["原始来源" * 1600]}]
+            return [{
+                     "source_message_ids": [],"memory_type": "user_fact", "id": "a", "content": "用户研究点云补全", "evidence": ["原始来源" * 1600]}]
 
         async def list_relationship_notes(self, *args):
             return []
@@ -394,5 +408,5 @@ async def test_oversized_selected_packet_fails_before_policy():
 def test_source_event_link_cannot_resurrect_unusable_record(status):
     from character.memory_service import _row_evidence
 
-    row = {"source_event_ids": ["event"]}
+    row = {"evidence": [], "source_message_ids": [], "source_event_ids": ["event"]}
     assert _row_evidence(row, {"event": {"content": "不应泄漏", "status": status}}, complete=True) == ()

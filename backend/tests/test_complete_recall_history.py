@@ -46,6 +46,7 @@ async def test_full_context_reaches_semantic_and_lexical_recall(monkeypatch):
         async def list_memory_records(self, *args, **kwargs):
             return [
                 {
+                    "evidence": [], "source_message_ids": [],
                     "id": 1,
                     "memory_type": "user_fact",
                     "memory_key": "project",

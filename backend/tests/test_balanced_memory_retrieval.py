@@ -31,6 +31,8 @@ def _scope() -> UserScope:
 
 def _row(index: int, content: str, **overrides):
     row = {
+        "evidence": [],
+        "source_message_ids": [],
         "id": index,
         "memory_key": f"goal_{index}",
         "memory_type": "shared_event",
@@ -112,7 +114,7 @@ async def test_historical_month_reads_inactive_chain_and_selects_overlapping_ver
                 status="active",
                 relation_type="SUPERSEDE",
                 valid_from="2026-07-01T00:00:00+00:00",
-                evidence_json='["七月改做点云识别"]',
+                evidence=["七月改做点云识别"],
             ),
         ]
     )
@@ -193,13 +195,26 @@ async def test_selected_claim_carries_decoded_evidence_validity_relation_and_sou
             status="active",
             confidence=0.88,
             valid_from=now.isoformat(),
-            source_message_ids_json='["msg-10", "msg-11"]',
-            evidence_json='["用户说：改做点云识别"]',
+            source_message_ids=["msg-10", "msg-11"],
+            evidence=["用户说：改做点云识别"],
             source_event_ids=[99],
         ),
         _row(99, "相邻事件：用户先暂停代码补全方向", status="archived"),
     ]
-    service = CharacterMemoryService(_Repo(records), semantic_enabled=False)
+    import hashlib
+
+    repo = _Repo(records)
+
+    async def read_revisions(character_id, user_scope, *, claim_sources):
+        assert character_id == "kisaki" and user_scope == _scope()
+        assert claim_sources == ((1, "msg-10"), (1, "msg-11"))
+        body = records[0]["evidence"][0]
+        return [dict(memory_id=key, source_message_id=sid, body=body,
+                     body_sha256=hashlib.sha256(body.encode()).hexdigest(), observed_at=now.isoformat())
+                for key, sid in claim_sources]
+
+    repo.linked_source_revisions = read_revisions
+    service = CharacterMemoryService(repo, semantic_enabled=False)
 
     selected, _ = await service.load_relevant_memories("kisaki", _scope(), "点云识别进度")
 
@@ -321,14 +336,15 @@ def test_evidence_decode_canonical_fields_do_not_merge_stale_raw_columns(empty):
     assert _source_ids(row) == tuple(sources)
 
 
-@pytest.mark.parametrize("field", ["evidence_json", "source_message_ids_json"])
-@pytest.mark.parametrize("bad", ['["incomplete"', '{}', 'null'])
-async def test_evidence_decode_invalid_legacy_fields_error_instead_of_text(field, bad):
-    row = _row(1, "用户说喜欢咖啡", memory_key="preference_咖啡", memory_type="user_fact",
-               confidence=0.98, **{field: bad})
+@pytest.mark.parametrize("field", ["evidence", "source_message_ids"])
+async def test_recall_requires_canonical_repository_fields(field):
+    row = _row(1, "用户说喜欢咖啡", memory_key="preference_咖啡", memory_type="user_fact", confidence=0.98,
+               evidence_json='["旧摘要"]', source_message_ids_json='["旧来源"]')
+    del row[field]
     service = CharacterMemoryService(_Repo([row]), semantic_enabled=False)
-    with pytest.raises(ValueError):
+    with pytest.raises(KeyError) as caught:
         await service.recall_with_diagnostics("kisaki", _scope(), "我喜欢咖啡吗？")
+    assert caught.value.args == (field,)
 
 
 @pytest.mark.parametrize("bad", ['[99', '{}', False])

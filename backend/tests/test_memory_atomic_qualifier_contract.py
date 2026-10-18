@@ -162,7 +162,7 @@ async def recall_stored_qualifiers(metadata, *, contextual=False):
     from character.memory_service import CharacterMemoryService
     from character.models import UserScope
 
-    row = dict(id="synthetic", memory_key="preference_蓝莓茶", memory_type="user_fact",
+    row = dict({"source_message_ids": []}, id="synthetic", memory_key="preference_蓝莓茶", memory_type="user_fact",
                content="用户说喜欢蓝莓茶", importance=0.9, confidence=0.98, status="active",
                updated_at="2026-10-13T00:00:00+00:00", evidence=[SOURCE])
     if metadata != "missing":

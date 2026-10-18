@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
-import json
 import os
 import re
 import threading
@@ -598,17 +597,6 @@ def _is_current_record(row: dict[str, Any], now: datetime, *, include_pending: b
     return valid_to is None or valid_to > now
 
 
-def _record_list(row: dict[str, Any], field: str) -> list | tuple:
-    if field in row:
-        values = row[field]
-    else:
-        raw = row.get(field + "_json")
-        values = [] if raw is None or raw == "" else json.loads(raw)
-    if not isinstance(values, (list, tuple)):
-        raise ValueError(f"Memory {field} must contain a list")
-    return values
-
-
 def _row_qualifiers(row: dict[str, Any]) -> tuple[tuple[str, str], ...]:
     """Preserve an entire valid qualifier map as data, never repair partial logic."""
     metadata = row.get('metadata')
@@ -626,13 +614,8 @@ def _row_qualifiers(row: dict[str, Any]) -> tuple[tuple[str, str], ...]:
 
 
 def _source_ids(row: dict[str, Any]) -> tuple[str, ...]:
-    values: list[str] = []
-    for decoded in (_record_list(row, "source_message_ids"), source_event_ids(row)):
-        values.extend(str(item).strip() for item in decoded if str(item).strip())
-    source_message_id = str(row.get("source_message_id") or "").strip()
-    if source_message_id:
-        values.append(source_message_id)
-    return tuple(dict.fromkeys(values))
+    values = (*row["source_message_ids"], *source_event_ids(row))
+    return tuple(dict.fromkeys(str(item).strip() for item in values if str(item).strip()))
 
 
 def _row_evidence(
@@ -640,7 +623,7 @@ def _row_evidence(
 ) -> tuple[str, ...]:
     """提取 claim 自带 evidence，并按显式 source event ID 附一跳事件。"""
 
-    values = [item if isinstance(item, str) else item["quote"] for item in _record_list(row, "evidence")]
+    values = [item if isinstance(item, str) else item["quote"] for item in row["evidence"]]
 
     for event_id in source_event_ids(row):
         related = rows_by_id.get(str(event_id))

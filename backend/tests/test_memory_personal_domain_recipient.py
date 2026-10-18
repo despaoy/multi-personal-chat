@@ -58,7 +58,7 @@ class Repo:
             ),
         ]
         return [
-            dict(
+            dict({"source_message_ids": []},
                 id=str(i + 1),
                 memory_key="preference_" + name,
                 memory_type="user_fact",

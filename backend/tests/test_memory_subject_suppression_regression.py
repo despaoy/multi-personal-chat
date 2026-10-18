@@ -12,6 +12,7 @@ class _Repo:
     async def list_memory_records(self, character_id, user_scope, limit=100, *, include_inactive=False):
         return [
             {
+                "evidence": [], "source_message_ids": [],
                 "id": 1,
                 "memory_key": "user_name",
                 "memory_type": "user_fact",
@@ -20,6 +21,7 @@ class _Repo:
                 "updated_at": datetime.now(timezone.utc).isoformat(),
             },
             {
+                "evidence": [], "source_message_ids": [],
                 "id": 2,
                 "memory_key": "preference_咖啡",
                 "memory_type": "user_fact",

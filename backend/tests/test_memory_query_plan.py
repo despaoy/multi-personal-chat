@@ -33,7 +33,7 @@ class Repo:
 
 
 def row(key, content, **extra):
-    return dict(id=key, memory_key=key, memory_type='user_fact', content=content, **extra)
+    return dict({"evidence": [], "source_message_ids": []}, id=key, memory_key=key, memory_type='user_fact', content=content, **extra)
 
 
 async def recall(rows, query, **kwargs):

@@ -42,6 +42,7 @@ from character.memory_service import (  # noqa: E402
     validate_retrieval_settings,
 )
 from character.models import UserScope  # noqa: E402
+from repositories.character_memory import decode_memory_evidence  # noqa: E402
 from knowledge.retrieval_core.embedding import (  # noqa: E402
     EmbeddingProvider,
     get_default_embedding_provider,
@@ -102,6 +103,7 @@ class _CaseRepository:
             if row.get("id") in (None, "") and row.get("memory_id") not in (None, ""):
                 row["id"] = row["memory_id"]
             row.setdefault("updated_at", now)
+            row.update(decode_memory_evidence(row))
             normalized.append(row)
         self.records = normalized
 

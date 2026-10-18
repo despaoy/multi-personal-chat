@@ -12,7 +12,7 @@ from character.models import UserScope
 
 QUERY = "请核对我已经保存的本人甜食声明，区分已确认偏好与实际行为。它实际确认的偏好不能证明已吃过蛋糕。"
 SCOPE = UserScope("web", "web", "reader", "conversation", "private")
-ROW = dict(
+ROW = dict({"source_message_ids": []},
     id="a",
     memory_key="preference_sweets",
     memory_type="user_fact",

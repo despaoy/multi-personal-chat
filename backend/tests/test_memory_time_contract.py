@@ -33,7 +33,7 @@ async def recall_stored_time(**changes):
     from character.memory_service import CharacterMemoryService
     from character.models import UserScope
 
-    row = dict(id="source", memory_type="user_fact", memory_key="preference_咖啡",
+    row = dict({"source_message_ids": []}, id="source", memory_type="user_fact", memory_key="preference_咖啡",
                content="用户说喜欢咖啡", importance=0.6, confidence=0.98, status="active",
                updated_at="2026-10-13T12:00:00+00:00", evidence=["我喜欢咖啡。"], metadata={})
     historical = changes.pop("historical", False)
