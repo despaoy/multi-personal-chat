@@ -32,8 +32,8 @@ class LocalMeanPoolingEmbeddingProvider:
         self._tokenizer = None
         self._model = None
         self._query_cache: OrderedDict[str, np.ndarray] = OrderedDict()
-        # Singleton warmup and the first request may arrive together. Protect
-        # Transformers lazy imports and CPU model inference from that race.
+        # Concurrent requests share the native model and query cache. Protect
+        # lazy initialization and CPU inference with the same reentrant lock.
         self._runtime_lock = threading.RLock()
 
     def _load(self):

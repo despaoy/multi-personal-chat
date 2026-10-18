@@ -1176,6 +1176,7 @@ async def _generate_with_retrieval(
             query_plan = await plan_retrieval(
                 rag_message, history=effective_history, context_budget=get_provider_context_budget().review,
             )
+            dependency_groups = dict(query_plan.dependencies.groups)
             if not query_plan.needs_public_retrieval:
                 retrieval = RetrievalResult(reason="local_context_dependencies")
                 rag_meta = {"citations": [], "confidence": None, "abstained": False,
@@ -1186,7 +1187,7 @@ async def _generate_with_retrieval(
                 from knowledge.public_question_binding import bound_retrieval_query, resolve_question_binding
 
                 question_binding = None
-                if query_plan.dependencies is not None and dict(query_plan.dependencies.groups)["public_knowledge"]:
+                if dependency_groups["public_knowledge"]:
                     question_binding = await resolve_question_binding(
                         query_plan.dependencies, rag_message,
                         window_tokens=get_provider_context_budget().window_tokens,
@@ -1244,7 +1245,7 @@ async def _generate_with_retrieval(
                         public_curated_review=bundle.get("public_curated_review") or {},
                         public_task_review=bundle.get("public_task_review") or {},
                         public_task_query=rag_message if bundle.get("public_task_review") or bundle.get("public_curated_review") or bundle.get("public_domain_branches") else "",
-                        public_dependency_indices=tuple(dict(query_plan.dependencies.groups)["public_knowledge"]) if query_plan.dependencies is not None else (),
+                        public_dependency_indices=tuple(dependency_groups["public_knowledge"]),
                     )
 
                 # 角色知识检索结果自带按粒度组装的 context_text；
@@ -1275,7 +1276,7 @@ async def _generate_with_retrieval(
                         public_curated_review=bundle.get("public_curated_review") or {},
                         public_task_review=bundle.get("public_task_review") or {},
                         public_task_query=rag_message if bundle.get("public_task_review") or bundle.get("public_curated_review") or bundle.get("public_domain_branches") else "",
-                        public_dependency_indices=tuple(dict(query_plan.dependencies.groups)["public_knowledge"]) if query_plan.dependencies is not None else (),
+                        public_dependency_indices=tuple(dependency_groups["public_knowledge"]),
                         identity_task=bundle.get("identity_task") or {},
                         identity_subtask=bundle.get("identity_subtask") or {},
                         documents=tuple(bundle.get("results", [])),
@@ -1394,11 +1395,7 @@ async def _generate_with_retrieval(
             )
             for task in public_tasks
         )
-        private_visible = bool(
-            query_plan.dependencies is not None
-            and dict(query_plan.dependencies.groups)["private_memory"]
-            and private_visible
-        )
+        private_visible = bool(dependency_groups["private_memory"] and private_visible)
         if (generation.model_invoked
                 and (public_visible or private_visible)):
             rag_meta["answerMode"] = "partial_answer"

@@ -24,7 +24,7 @@ from inference import model_manager
 from inference.openai_protocol import ProviderResponseError
 from inference.request_context import get_request_context
 
-pytestmark = pytest.mark.usefixtures("no_live_context_review")
+pytestmark = pytest.mark.usefixtures("no_live_context_review", "literal_grounded_query")
 PRIVATE_DETAIL = "fiction-private-provider-diagnostic-do-not-publish"
 PRIVATE_KEY = "fiction-private-provider-key-do-not-publish"
 PRIVATE_URL = "https://fiction-private-diagnostic.invalid/private-path"

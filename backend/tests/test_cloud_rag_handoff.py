@@ -36,9 +36,6 @@ def test_factory_refreshes_budget_on_provider_change(monkeypatch):
             self.context_max_chars = context_max_chars
             calls.append(context_max_chars)
 
-        def warmup_async(self):
-            pass
-
     monkeypatch.setattr(runtime, "_runtime", None)
     monkeypatch.setattr(runtime, "MultiScaleRagRuntime", Runtime)
     monkeypatch.setattr(provider, "get_provider_context_budget", lambda: budget)

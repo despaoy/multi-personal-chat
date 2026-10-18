@@ -5,6 +5,7 @@ import json
 from copy import deepcopy
 
 import pytest
+from scope_fixtures import open_scope_response
 
 from knowledge.public_question_binding import resolve_question_binding, validate_question_binding
 from knowledge.turn_dependencies import parse_dependencies
@@ -93,6 +94,7 @@ async def run_api(tmp_path, monkeypatch, defect=None, *, private=True, fee_only=
     from api import generate
     from character.models import CompiledCharacterContext
     from db.schemas import MessageRequest
+    from inference.provider_context import ProviderContextBudget
     from knowledge import intent_detector, public_fact_coverage, public_task_evidence, retrieval_query_plan
     from knowledge.retrieval_query_plan import RetrievalQueryPlan
 
@@ -108,11 +110,11 @@ async def run_api(tmp_path, monkeypatch, defect=None, *, private=True, fee_only=
     first_body = "霁浦登记不收费；当前完整公开页未载日期、材料、例外，缺项保持未知。" if fee_only else FIRST
     if private_large:
         monkeypatch.setattr(
-            generate, "get_provider_context_budget", lambda: SimpleNamespace(window_tokens=8192, evidence_max_chars=0)
+            generate, "get_provider_context_budget", lambda: ProviderContextBudget(8192)
         )
 
-    async def planner(query):
-        assert query == QUERY
+    async def planner(query, *, history, context_budget):
+        assert query == QUERY and history == () and context_budget.window_tokens > 0
         return RetrievalQueryPlan(status="applied", dependencies=deps())
 
     async def retrieve(*args, **kwargs):
@@ -136,7 +138,8 @@ async def run_api(tmp_path, monkeypatch, defect=None, *, private=True, fee_only=
     async def review(messages):
         data = json.loads(messages[-1]["content"])
         assert data["query"] == QUERY
-        if set(data) == {"query", "public_tasks"}:
+        if set(data) == {"query", "public_tasks", "scope_policy"}:
+            assert data["scope_policy"] == {"allow_independent_identity": False, "include_unresolved": False}
             observed["binding"].append(deepcopy(messages))
             if defect == "transport":
                 raise RuntimeError("controlled missing response")
@@ -145,7 +148,7 @@ async def run_api(tmp_path, monkeypatch, defect=None, *, private=True, fee_only=
             value = dict(scopes=[dict(task_id=0, objects=["霁浦登记"]), dict(task_id=1, objects=["竹原续签"])])
             if defect == "typed_id":
                 value["scopes"][0]["task_id"] = "0"
-            raw = json.dumps(value, ensure_ascii=False)
+            raw = open_scope_response(messages, value["scopes"], ensure_ascii=False)
             if defect == "json":
                 raw = "{" + MARKER
             elif defect == "fence":

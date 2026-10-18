@@ -7,7 +7,7 @@ import pytest
 from test_multiscale_rag_runtime import FakeQueryEmbeddingProvider
 
 from knowledge.multiscale_rag import runtime as module
-from knowledge.retrieval_core.documents import KnowledgeIndexDocument
+from knowledge.retrieval_core.documents import KnowledgeIndexDocument, SourceReference
 
 QUERY = '月社妃是谁？'
 
@@ -18,13 +18,16 @@ def prepared(tmp_path, monkeypatch):
     monkeypatch.delenv('MULTISCALE_RAG_INDEX_ROOT', raising=False)
     monkeypatch.setenv('CHARACTER_RAG_RERANKER_ENABLED', 'false')
     monkeypatch.setattr(module, 'LocalMeanPoolingEmbeddingProvider', lambda **kw: FakeQueryEmbeddingProvider())
+    (tmp_path / 'original.txt').write_text('月社妃在图书室阅读。', encoding='utf-8')
+    monkeypatch.setattr(module, '_REPO_ROOT', tmp_path)
     for directory, kind in [('card_index', 'fact'), ('scene_story_index', 'story'), ('evidence_index', 'evidence')]:
         root = tmp_path / directory
         root.mkdir()
         doc = KnowledgeIndexDocument(directory, 'tsukiyashiro_kisaki', kind, '月社妃',
-                                     '月社妃在图书室阅读。', '月社妃在图书室阅读。', '月社妃在图书室阅读。')
+                                     '月社妃在图书室阅读。', '月社妃在图书室阅读。', '月社妃在图书室阅读。',
+                                     source=SourceReference('original.txt', 1, 1))
         (root / 'documents.jsonl').write_text(json.dumps(doc.to_dict()), encoding='utf-8')
-        (root / 'manifest.json').write_text(json.dumps(dict(document_count=1,vector_dimension=384,normalized=True,embedding_model=FakeQueryEmbeddingProvider.model_id)), encoding='utf-8')
+        (root / 'manifest.json').write_text(json.dumps(dict(document_count=1,vector_dimension=384,normalized=True,embedding_model=FakeQueryEmbeddingProvider.model_id,embedding_encoding=FakeQueryEmbeddingProvider.encoding_contract)), encoding='utf-8')
         np.save(root / 'vectors.npy', np.eye(1, 384, dtype=np.float32))
     return module.MultiScaleRagRuntime(index_root=tmp_path)
 
@@ -86,23 +89,22 @@ def test_repaired_index_loads_on_next_request_and_returns_bundle(prepared):
     assert prepared.is_warm()
 
 
-def test_background_failure_is_sanitized_but_request_still_raises(prepared, monkeypatch, caplog):
+def test_service_lookup_is_lazy_and_required_load_failure_propagates(prepared, monkeypatch):
+    from inference.provider_context import ProviderContextBudget
+
     error = OSError('private-source-content')
-    monkeypatch.setattr(module, '_load_bundle', Mock(side_effect=error))
-    calls = []
-
-    class InlineThread:
-        def __init__(self, *, target, **kwargs):
-            self.target = target
-        def start(self):
-            calls.append(1)
-            self.target()
-
-    monkeypatch.setattr(module.threading, 'Thread', InlineThread)
-    prepared.warmup_async()
-    prepared.warmup_async()
-    assert calls == [1] and not prepared.is_warm()
-    assert 'OSError' in caplog.text and 'private-source-content' not in caplog.text
+    load = Mock(side_effect=error)
+    thread = Mock(side_effect=AssertionError('Service lookup must not launch an unowned worker'))
+    monkeypatch.setattr(module, '_load_bundle', load)
+    monkeypatch.setattr(module.threading, 'Thread', thread)
+    monkeypatch.setattr(module, '_runtime', None)
+    monkeypatch.setattr(module, 'MultiScaleRagRuntime', Mock(return_value=prepared))
+    monkeypatch.setattr('inference.provider_context.get_provider_context_budget', lambda: ProviderContextBudget(8192))
+    assert module.get_multiscale_rag_service() is prepared
+    assert module.get_multiscale_rag_service() is prepared
+    load.assert_not_called()
+    thread.assert_not_called()
+    assert not prepared.is_warm()
     with pytest.raises(OSError) as caught:
         prepared.retrieve_with_citations(QUERY)
     assert caught.value is error

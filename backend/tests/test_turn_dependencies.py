@@ -117,8 +117,8 @@ async def test_actual_route_uses_dependencies_not_presence_of_one_memory(monkeyp
     dep = None if mode == "legacy" else parse_dependencies(value, QUERY)
     calls = []
 
-    async def planner(query):
-        assert query == QUERY
+    async def planner(query, *, history, context_budget):
+        assert query == QUERY and history == () and context_budget.window_tokens > 0
         return RetrievalQueryPlan(status="applied", dependencies=dep)
 
     async def retrieve(*args, **kwargs):
@@ -141,6 +141,16 @@ async def test_actual_route_uses_dependencies_not_presence_of_one_memory(monkeyp
     monkeypatch.setattr(intent_detector, "needs_rag", lambda _: (True, "unit", None))
     monkeypatch.setattr(generate, "_retrieve_rag_bundle", retrieve)
     monkeypatch.setattr(generate, "_get_system_prompt", lambda _: "人物规则")
+    if mode == "legacy":
+        from fastapi import HTTPException
+
+        with pytest.raises(HTTPException) as error:
+            await generate._generate_with_retrieval(
+                MessageRequest(message=QUERY), None, prepared_character_turn=prepared,
+                runtime_config={"maxTokens": 2048, "useKnowledgeBase": True}, model_generate=model,
+            )
+        assert error.value.status_code == 503 and not calls
+        return
     reply, used, meta = await generate._generate_with_retrieval(
         MessageRequest(message=QUERY),
         None,
@@ -149,8 +159,9 @@ async def test_actual_route_uses_dependencies_not_presence_of_one_memory(monkeyp
         model_generate=model,
     )
     assert "没有找到" in reply and calls.count("main") == 1
-    assert ("public" not in calls) == (mode == "private")
-    if mode == "private":
+    public_expected = mode in {"mixed", "unknown"}
+    assert ("public" in calls) is public_expected
+    if not public_expected:
         assert meta["answerMode"] == "personal_context" and not meta["abstained"]
     else:
         assert meta["abstained"]

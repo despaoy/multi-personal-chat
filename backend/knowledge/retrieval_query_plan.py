@@ -20,14 +20,13 @@ class QueryPlanReviewError(RuntimeError):
 
 @dataclass(frozen=True)
 class RetrievalQueryPlan:
-    status: str = "not_needed"
-    dependencies: TurnDependencies | None = None
+    dependencies: TurnDependencies
+    status: str = "applied"
     public_obligations: tuple[dict, ...] = ()
 
     @property
     def private_context_only(self) -> bool:
-        return self.dependencies is not None and self.dependencies.private_context_only
-
+        return self.dependencies.private_context_only
 
     @property
     def needs_public_retrieval(self) -> bool:

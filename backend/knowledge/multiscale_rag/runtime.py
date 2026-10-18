@@ -101,7 +101,6 @@ class MultiScaleRagRuntime:
         )
         self.index_root = Path(configured) if configured else Path(index_root or _DEFAULT_INDEX_ROOT)
         self._load_lock = threading.Lock()
-        self._warmup_started = False
         self._service: RoutedMultiScaleService | None = None
         self._base_config = get_default_registry().require("tsukiyashiro_kisaki")
         self._gate = QueryAnalyzer([self._base_config])
@@ -187,20 +186,6 @@ class MultiScaleRagRuntime:
     def stats(self) -> dict[str, Any]:
         self._ensure_loaded()
         return dict(self._stats)
-
-    def warmup_async(self) -> None:
-        if self._warmup_started:
-            return
-        self._warmup_started = True
-
-        def _warm() -> None:
-            try:
-                self._ensure_loaded()
-                self._provider.embed_query("多粒度检索预热")
-            except Exception as exc:  # Background optimization; requests retry and propagate failures.
-                logger.warning("角色知识预热失败: %s", type(exc).__name__)
-
-        threading.Thread(target=_warm, name="character-rag-warmup", daemon=True).start()
 
     def retrieve_with_citations(
         self,
@@ -289,7 +274,6 @@ def get_multiscale_rag_service() -> MultiScaleRagRuntime:
         with _runtime_lock:
             if _runtime is None or _runtime.context_max_chars != max_chars:
                 _runtime = MultiScaleRagRuntime(context_max_chars=max_chars)
-                _runtime.warmup_async()
     return _runtime
 
 
