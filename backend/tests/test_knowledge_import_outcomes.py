@@ -43,7 +43,7 @@ def imports(tmp_path, monkeypatch):
     return SimpleNamespace(db=db, kb=kb, root=root, app=app, opened=opened)
 
 
-async def publish(rig, route, entries, *, use_existing_base=True, directory_name="合成来源"):
+async def publish(rig, route, entries, *, use_existing_base=True, directory_name="合成来源", text_encoding="unicode"):
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=rig.app), base_url="http://test") as client:
         if route == "zip":
             buffer = io.BytesIO()
@@ -53,14 +53,15 @@ async def publish(rig, route, entries, *, use_existing_base=True, directory_name
             response = await client.post(
                 f"/api/knowledge/bases/{rig.kb['id']}/upload-zip",
                 files={"file": ("完整登记规则.zip", buffer.getvalue(), "application/zip")},
+                params={"text_encoding": text_encoding},
             )
         else:
             target = rig.root / directory_name
             folder = target / "适用条件" if route == "scan_folder" else target
-            folder.mkdir(parents=True)
+            folder.mkdir(parents=True, exist_ok=True)
             for name, content in entries:
                 (folder / name).write_bytes(content.encode("utf-8") if isinstance(content, str) else content)
-            params = {"directory_name": directory_name}
+            params = {"directory_name": directory_name, "text_encoding": text_encoding}
             if use_existing_base:
                 params["kb_id"] = rig.kb["id"]
             response = await client.post("/api/knowledge/scan/import", params=params)
@@ -206,3 +207,46 @@ async def test_zip_traversal_is_rejected_before_writes_and_archive_is_closed(imp
     response = await publish(imports, "zip", [("../escape.txt", TEXT)])
     assert response.status_code == 400
     assert imports.db.get_knowledge_documents() == []
+
+
+
+@pytest.mark.parametrize("route", ROUTES)
+@pytest.mark.parametrize("encoding", ["utf-8", "utf-8-sig", "utf-16", "utf-32", "gbk"])
+async def test_import_preserves_declared_source_text_and_raw_size(imports, route, encoding):
+    source = "完整规则：借期14天，不得自动续借。\r\n周末不受理；只有本人携带书面确认才可申请。\r\n"
+    raw = source.encode(encoding)
+    selected = "gbk" if encoding == "gbk" else "unicode"
+    result = (await publish(imports, route, [("完整规则.txt", raw)], text_encoding=selected)).json()
+    assert result["success"] and result["status"] == "complete"
+    row, = imports.db.get_knowledge_documents()
+    assert row["content"] == source and row["fileSize"] == len(raw)
+
+
+@pytest.mark.parametrize("route", ROUTES)
+async def test_unlabelled_legacy_text_requires_explicit_choice_and_can_recover(imports, route):
+    source = "完整规则：仅本人可申请，不得自动续借。"
+    raw = source.encode("gbk")
+    failed = (await publish(imports, route, [("完整规则.txt", raw)])).json()
+    assert failed["status"] == "failed" and not failed["success"] and failed["createdDocs"] == 0
+    assert imports.db.get_knowledge_documents() == [] and "文本格式" in failed["errors"][0]
+    complete = (await publish(imports, route, [("完整规则.txt", raw)], text_encoding="gbk")).json()
+    assert complete["success"] and complete["createdDocs"] == 1
+    assert imports.db.get_knowledge_documents()[0]["content"] == source
+
+
+@pytest.mark.parametrize("route", ROUTES)
+async def test_invalid_encoding_choice_is_rejected_before_document_writes(imports, route):
+    response = await publish(imports, route, [("完整规则.txt", TEXT)], text_encoding="unsupported")
+    assert response.status_code == 422 and imports.db.get_knowledge_documents() == []
+
+
+@pytest.mark.parametrize("route", ROUTES)
+async def test_declared_bom_takes_priority_and_corrupt_bytes_report_partial(imports, route):
+    source = "完整规则：仅本人可申请，不得自动续借。\r\n"
+    response = await publish(imports, route, [("01-marked.txt", source.encode("utf-8-sig")),
+                                              ("02-legacy.txt", source.encode("gbk")), ("03-corrupt.txt", b"\x81")],
+                             text_encoding="gbk")
+    result = response.json()
+    assert result["status"] == "partial" and not result["success"] and result["createdDocs"] == 2
+    assert [row["content"] for row in imports.db.get_knowledge_documents()] == [source, source]
+    assert len(result["errors"]) == 1 and "文本格式" in result["errors"][0]

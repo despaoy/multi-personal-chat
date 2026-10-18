@@ -12,6 +12,7 @@ from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 
+from knowledge.text_decode import KnowledgeTextEncoding, decode_knowledge_text
 from infra.input_validator import KNOWLEDGE_DOCUMENT_SCHEMA, InputValidator
 from app.dependencies import get_current_admin
 from app.runtime import get_runtime_container
@@ -278,6 +279,8 @@ async def delete_knowledge_folder(folder_id: int, current_user: dict = Depends(g
 
 def _knowledge_import_error(entry: str, error: Exception) -> str:
     logger.warning("知识导入条目处理失败: %s", type(error).__name__)
+    if isinstance(error, UnicodeError):
+        return f"{entry}：文件编码与所选文本格式不匹配，请选择正确的文本格式后重试。"
     return f"{entry}：处理未完成（{type(error).__name__}），请核对文件权限、数据服务及已保存文档。"
 
 
@@ -315,7 +318,10 @@ def _knowledge_import_result(
 
 
 @router.post("/api/knowledge/bases/{kb_id}/upload-zip")
-async def upload_zip(kb_id: int, file: UploadFile = File(...), current_user: dict = Depends(get_current_admin)):
+async def upload_zip(
+    kb_id: int, file: UploadFile = File(...), current_user: dict = Depends(get_current_admin),
+    text_encoding: KnowledgeTextEncoding = "unicode",
+):
     """上传ZIP文件，自动按目录结构创建文件夹和文档
 
     ZIP结构要求：
@@ -378,14 +384,7 @@ async def upload_zip(kb_id: int, file: UploadFile = File(...), current_user: dic
 
                     # 读取文件内容
                     file_bytes = zf.read(zip_entry)
-                    try:
-                        file_content = file_bytes.decode("utf-8")
-                    except UnicodeDecodeError:
-                        try:
-                            file_content = file_bytes.decode("gbk")
-                        except UnicodeDecodeError:
-                            errors.append(f"文件编码不支持: {entry}")
-                            continue
+                    file_content = decode_knowledge_text(file_bytes, text_encoding)
 
                     if not file_content.strip():
                         continue
@@ -402,7 +401,7 @@ async def upload_zip(kb_id: int, file: UploadFile = File(...), current_user: dic
                         "folder_id": folder_id,
                         "sourceType": "file",
                         "fileType": filename.rsplit(".", 1)[-1] if "." in filename else "txt",
-                        "fileSize": len(file_content.encode("utf-8")),
+                        "fileSize": len(file_bytes),
                     }
 
                     # 分块处理
@@ -519,7 +518,8 @@ async def scan_knowledge_dirs(request: Request, current_user: dict = Depends(get
 
 @router.post("/api/knowledge/scan/import")
 async def import_scanned_directory(
-    directory_name: str, kb_id: int = None, current_user: dict = Depends(get_current_admin)
+    directory_name: str, kb_id: int = None, current_user: dict = Depends(get_current_admin),
+    text_encoding: KnowledgeTextEncoding = "unicode",
 ):
     """将扫描到的目录导入到知识库
 
@@ -586,24 +586,14 @@ async def import_scanned_directory(
 
                 try:
                     _knowledge_source_path(file_path)
-                    # 尝试多种编码读取
-                    content = None
-                    for encoding in ["utf-8", "gbk", "gb2312", "utf-16"]:
-                        try:
-                            content = file_path.read_text(encoding=encoding)
-                            break
-                        except UnicodeError:
-                            continue
-
-                    if content is None:
-                        errors.append(f"文件编码不支持: {file_path.name}")
-                        continue
+                    file_bytes = await asyncio.to_thread(file_path.read_bytes)
+                    content = decode_knowledge_text(file_bytes, text_encoding)
 
                     if not content.strip():
                         continue
 
                     doc_title = file_path.stem
-                    file_size = file_path.stat().st_size
+                    file_size = len(file_bytes)
 
                     # 创建文档
                     document_data = {
@@ -640,17 +630,8 @@ async def import_scanned_directory(
 
             try:
                 _knowledge_source_path(file_path)
-                content = None
-                for encoding in ["utf-8", "gbk", "gb2312", "utf-16"]:
-                    try:
-                        content = file_path.read_text(encoding=encoding)
-                        break
-                    except UnicodeError:
-                        continue
-
-                if content is None:
-                    errors.append(f"文件编码不支持: {file_path.name}")
-                    continue
+                file_bytes = await asyncio.to_thread(file_path.read_bytes)
+                content = decode_knowledge_text(file_bytes, text_encoding)
                 if not content.strip():
                     continue
 
@@ -663,7 +644,7 @@ async def import_scanned_directory(
                     "folder_id": None,
                     "sourceType": "file",
                     "fileType": file_path.suffix.lstrip("."),
-                    "fileSize": file_path.stat().st_size,
+                    "fileSize": len(file_bytes),
                 }
 
                 from knowledge.text_splitter import simple_text_split

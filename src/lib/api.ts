@@ -404,6 +404,8 @@ export interface KnowledgeFolder {
   updated_at: string;
 }
 
+export type KnowledgeTextEncoding = 'unicode' | 'gbk';
+
 /** 知识导入结果：只把全部完成标记为成功。 */
 export interface KnowledgeImportResult {
   status: 'complete' | 'partial' | 'failed' | 'unconfirmed';
@@ -1181,10 +1183,10 @@ class ApiClient {
   }
 
   /** 上传ZIP文件到知识库 */
-  async uploadKnowledgeZip(kbId: number, file: File): Promise<KnowledgeImportResult> {
+  async uploadKnowledgeZip(kbId: number, file: File, textEncoding: KnowledgeTextEncoding = 'unicode'): Promise<KnowledgeImportResult> {
     const formData = new FormData();
     formData.append('file', file);
-    return this.request<KnowledgeImportResult>(`/knowledge/bases/${kbId}/upload-zip`, {
+    return this.request<KnowledgeImportResult>(`/knowledge/bases/${kbId}/upload-zip?text_encoding=${textEncoding}`, {
       method: 'POST',
       body: formData,
     });
@@ -1196,9 +1198,10 @@ class ApiClient {
   }
 
   /** 导入扫描到的目录 */
-  async importScannedDir(directoryName: string, kbId?: number): Promise<KnowledgeImportResult & { knowledgeBase?: KnowledgeBase }> {
+  async importScannedDir(directoryName: string, kbId?: number, textEncoding: KnowledgeTextEncoding = 'unicode'): Promise<KnowledgeImportResult & { knowledgeBase?: KnowledgeBase }> {
     const params = new URLSearchParams();
     params.append('directory_name', directoryName);
+    params.append('text_encoding', textEncoding);
     if (kbId) params.append('kb_id', kbId.toString());
     return this.request<KnowledgeImportResult & { knowledgeBase?: KnowledgeBase }>(`/knowledge/scan/import?${params.toString()}`, {
       method: 'POST',

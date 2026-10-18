@@ -39,7 +39,7 @@ import { useState, useRef } from 'react';
 import { toast } from 'sonner';
 import { formatDistanceToNow } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
-import { type KnowledgeDocument, type ScanDirectory, type KnowledgeImportResult } from '@/lib/api';
+import { type KnowledgeDocument, type ScanDirectory, type KnowledgeImportResult, type KnowledgeTextEncoding } from '@/lib/api';
 
 function notifyKnowledgeImport(result: KnowledgeImportResult) {
   const notify = {
@@ -50,6 +50,19 @@ function notifyKnowledgeImport(result: KnowledgeImportResult) {
   }[result.status];
   notify(result.message);
   result.errors.forEach(error => toast.warning(error));
+}
+
+function ImportTextFormat({ value, onChange }: { value: KnowledgeTextEncoding; onChange: (value: KnowledgeTextEncoding) => void }) {
+  return (
+    <label className="flex items-center gap-2 text-sm">
+      文本格式
+      <select aria-label="导入文本格式" value={value} onChange={event => onChange(event.target.value as KnowledgeTextEncoding)}
+        className="rounded-md border bg-background px-3 py-2 text-sm">
+        <option value="unicode">标准文本（UTF-8）</option>
+        <option value="gbk">旧版中文（GBK）</option>
+      </select>
+    </label>
+  );
 }
 
 export default function KnowledgePage() {
@@ -101,6 +114,7 @@ function KnowledgeContent() {
   const [newDoc, setNewDoc] = useState({ title: '', content: '' });
   const [submitting, setSubmitting] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [textEncoding, setTextEncoding] = useState<KnowledgeTextEncoding>('unicode');
   const [isScanDialogOpen, setIsScanDialogOpen] = useState(false);
   const [importing, setImporting] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -156,10 +170,10 @@ function KnowledgeContent() {
   const handleZipUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !activeBaseId) return;
-    if (!file.name.endsWith('.zip')) { toast.error('请上传ZIP文件'); return; }
+    if (!file.name.toLowerCase().endsWith('.zip')) { toast.error('请上传ZIP文件'); return; }
     try {
       setUploading(true);
-      const result = await uploadZip(activeBaseId, file);
+      const result = await uploadZip(activeBaseId, file, textEncoding);
       notifyKnowledgeImport(result);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : '上传失败');
@@ -214,13 +228,18 @@ function KnowledgeContent() {
   // ========== 扫描操作 ==========
   const handleOpenScanDialog = async () => {
     setIsScanDialogOpen(true);
-    await scanDirs();
+    try {
+      await scanDirs();
+    } catch (err) {
+      setIsScanDialogOpen(false);
+      toast.error(err instanceof Error ? err.message : '扫描失败');
+    }
   };
 
   const handleImportDir = async (dirName: string) => {
     try {
       setImporting(dirName);
-      const result = await importDir(dirName);
+      const result = await importDir(dirName, undefined, textEncoding);
       notifyKnowledgeImport(result);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : '导入失败');
@@ -417,6 +436,7 @@ function KnowledgeContent() {
                 <ScanSearch className="mr-2 h-4 w-4" />
                 扫描文件夹
               </Button>
+              <ImportTextFormat value={textEncoding} onChange={setTextEncoding} />
               {activeBaseId && (
                 <>
                   <input ref={fileInputRef} type="file" accept=".zip" className="hidden" onChange={handleZipUpload} />
@@ -610,6 +630,7 @@ function KnowledgeContent() {
               扫描 backend/knowledge_bases/ 目录下的文件夹，预览后一键导入
             </DialogDescription>
           </DialogHeader>
+          <ImportTextFormat value={textEncoding} onChange={setTextEncoding} />
           <div className="py-4 overflow-y-auto flex-1 min-h-0">
             {scanning ? (
               <div className="flex items-center justify-center py-12">

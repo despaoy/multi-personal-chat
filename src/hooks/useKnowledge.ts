@@ -18,7 +18,8 @@ import {
   KnowledgeSearchResult,
   KnowledgeCreateRequest,
   KnowledgeUpdateRequest,
-  ScanDirectory
+  ScanDirectory,
+  KnowledgeTextEncoding
 } from '@/lib/api';
 
 export function useKnowledge(enabled = true) {
@@ -217,9 +218,9 @@ export function useKnowledge(enabled = true) {
     }
   };
 
-  const uploadZip = async (kbId: number, file: File) => {
+  const uploadZip = async (kbId: number, file: File, textEncoding: KnowledgeTextEncoding = 'unicode') => {
     try {
-      const result = await api.uploadKnowledgeZip(kbId, file);
+      const result = await api.uploadKnowledgeZip(kbId, file, textEncoding);
       await fetchFolders(kbId);
       if (activeBaseId === kbId) await fetchDocuments();
       return result;
@@ -237,17 +238,14 @@ export function useKnowledge(enabled = true) {
       const data = await api.scanKnowledgeDirs();
       setScanResults(data.directories);
       return data.directories;
-    } catch (err) {
-      console.error('Failed to scan dirs:', err);
-      return [];
     } finally {
       setScanning(false);
     }
   };
 
-  const importDir = async (directoryName: string, kbId?: number) => {
+  const importDir = async (directoryName: string, kbId?: number, textEncoding: KnowledgeTextEncoding = 'unicode') => {
     try {
-      const result = await api.importScannedDir(directoryName, kbId);
+      const result = await api.importScannedDir(directoryName, kbId, textEncoding);
       await fetchBases();
       if (activeBaseId) {
         await fetchFolders(activeBaseId);
