@@ -18,6 +18,8 @@ from typing import Protocol, runtime_checkable
 
 import numpy as np
 
+from infra.environment import read_bool
+
 logger = logging.getLogger(__name__)
 
 DEFAULT_EMBEDDING_MODEL_ID = "paraphrase-multilingual-MiniLM-L12-v2"
@@ -42,6 +44,7 @@ def resolve_local_model_path(model_id: str = DEFAULT_EMBEDDING_MODEL_ID) -> str:
     backend 本地目录。仅在 ALLOW_REMOTE_EMBEDDING_MODEL=true 且
     显式允许时返回模型名（联网加载），否则抛错。
     """
+    allow_remote = read_bool(os.environ, "ALLOW_REMOTE_EMBEDDING_MODEL")
     env_path = os.getenv("EMBEDDING_MODEL_PATH", "").strip()
     if env_path:
         if not Path(env_path).is_dir() or not (Path(env_path) / "config.json").is_file():
@@ -69,7 +72,7 @@ def resolve_local_model_path(model_id: str = DEFAULT_EMBEDDING_MODEL_ID) -> str:
             if candidate.is_dir() and (candidate / "config.json").is_file():
                 return str(candidate)
 
-    if os.getenv("ALLOW_REMOTE_EMBEDDING_MODEL", "false").strip().lower() in {"1", "true", "yes", "on"}:
+    if allow_remote:
         return model_id
 
     raise EmbeddingModelError(

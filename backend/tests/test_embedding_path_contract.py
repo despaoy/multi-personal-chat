@@ -57,8 +57,9 @@ def test_exact_requested_hub_cache(paths,model_id):
     expected=model(paths/'.cache/huggingface/hub'/('models--'+identity.replace('/','--'))/'snapshots/one')
     assert embedding.resolve_local_model_path(model_id)==expected
 
-def test_remote_opt_in_returns_requested_model(paths,monkeypatch):
-    monkeypatch.setenv('ALLOW_REMOTE_EMBEDDING_MODEL','true')
+@pytest.mark.parametrize('setting',['true',' On '])
+def test_remote_opt_in_returns_requested_model(paths,monkeypatch,setting):
+    monkeypatch.setenv('ALLOW_REMOTE_EMBEDDING_MODEL',setting)
     assert embedding.resolve_local_model_path('other-org/model')=='other-org/model'
 
 @pytest.mark.parametrize('root_name',['MULTIPERSONAL_LAB_ROOT','QQCHAT_LAB_ROOT'])
@@ -78,3 +79,13 @@ def test_both_vector_callers_use_same_explicit_path(paths,monkeypatch):
     database._load_model()
     constructor.assert_called_once_with(expected,device='cpu')
     assert LocalMeanPoolingEmbeddingProvider().model_path==expected
+
+
+@pytest.mark.parametrize('local_available',[False,True])
+def test_invalid_download_setting_is_not_hidden_by_model_availability(paths,monkeypatch,local_available):
+    if local_available:
+        monkeypatch.setenv('EMBEDDING_MODEL_PATH',model(paths/'explicit'))
+    monkeypatch.setenv('ALLOW_REMOTE_EMBEDDING_MODEL','synthetic-private-invalid')
+    with pytest.raises(ValueError,match='ALLOW_REMOTE_EMBEDDING_MODEL') as caught:
+        embedding.resolve_local_model_path()
+    assert 'synthetic-private' not in str(caught.value)
