@@ -568,23 +568,14 @@ class VLLMProvider(BaseProvider):
 
     async def async_generate(self, prompt: str, session_history: List[Dict] = None,
                              max_tokens_override: int = None) -> Tuple[str, float]:
-        """异步生成 - 复用 VLLMClient 全局单例（负载均衡 + 熔断器 + 健康检查）。
-
-        Critical fix: 此前 VLLMProvider 通过 HttpClientPool 直接 POST vLLM，
-        绕过了 VLLMClient 的负载均衡、熔断器、健康检查，导致：
-        1. 同一 vLLM 后端有 3 条独立 HTTP 客户端路径，连接数不可控
-        2. VLLMProvider 路径的失败不会触发熔断器
-        3. VLLMClient 的多实例负载均衡对 VLLMProvider 无效
-        现统一委托给 VLLMClient.generate，消除连接池冗余和状态隔离。
-        """
+        """通过共享客户端发送完整已组装消息，保留角色与原始文本。"""
         config = _get_db_config()
         start = time.time()
 
         messages = []
 
         if session_history:
-            for msg in session_history[-10:]:
-                messages.append({"role": msg.get("role", "user"), "content": msg.get("content", "")})
+            messages.extend({"role": msg["role"], "content": msg["content"]} for msg in session_history)
 
         messages.append({"role": "user", "content": prompt})
 

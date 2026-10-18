@@ -321,3 +321,44 @@ async def test_prompt_limit_defaults_stored_value_and_override_keep_precedence(m
         assert (await rig.provider.async_generate("请核对完整借阅条件。", max_tokens_override=override))[0] == "完整受控回答"
         assert rig.calls[-1] == expected
     assert rig.attempts.call_count == len(rig.calls) == 3
+
+
+@pytest.mark.asyncio
+async def test_vllm_prompt_adapter_preserves_complete_compiled_history(configured, monkeypatch):
+    from inference import vllm_client
+
+    _database, _manager = configured
+    provider = model_manager.VLLMProvider()
+    source = "虚构引文：计划周四14:00取书，尚未付款；书面确认且不下雨才出门，预约不豁免。"
+    history = [{"role": "system", "content": "只依据完整合成资料，保留引述归属。"},
+               {"role": "user", "content": source, "fixture_metadata": "ignored"},
+               {"role": "assistant", "content": "已记录必要条件。"}]
+    history += [{"role": "user" if index % 2 == 0 else "assistant", "content": f"合成闲聊{index}，不修改取书安排。"}
+                for index in range(10)]
+    original = [dict(row) for row in history]
+    generate = AsyncMock(return_value="受控的完整回答")
+    acquire = AsyncMock(return_value=SimpleNamespace(generate=generate))
+    monkeypatch.setattr(vllm_client, "get_vllm_client", acquire)
+
+    assert (await provider.async_generate("请根据全部记录回答。", history))[0] == "受控的完整回答"
+    sent = generate.await_args.kwargs["messages"]
+    assert sent == [{"role": row["role"], "content": row["content"]} for row in original] + [
+        {"role": "user", "content": "请根据全部记录回答。"}]
+    assert history == original and len(sent) == 14
+    assert sent[0]["role"] == "system" and sent[1]["content"] == source
+    acquire.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("entry,missing", [({"content": "完整合成记录。"}, "role"), ({"role": "user"}, "content")])
+async def test_vllm_prompt_adapter_does_not_invent_history_fields(configured, monkeypatch, entry, missing):
+    from inference import vllm_client
+
+    _database, _manager = configured
+    provider = model_manager.VLLMProvider()
+    acquire = AsyncMock()
+    monkeypatch.setattr(vllm_client, "get_vllm_client", acquire)
+    with pytest.raises(KeyError) as caught:
+        await provider.async_generate("检查已提供的合成记录。", [entry])
+    assert caught.value.args == (missing,)
+    acquire.assert_not_awaited()
