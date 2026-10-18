@@ -12,13 +12,16 @@ from cache.ttl_value_cache import BoundedTTLCache
 from db import memory_source
 from db.conversation_indexes import SOURCE_INDEX_STATEMENTS
 from db.errors import RegistrationClosedError
+from db.memory_claim_guard import (
+    MEMORY_RELATION_TYPES as _MEMORY_RELATION_TYPES,
+    MEMORY_SCOPE_LEVELS as _MEMORY_SCOPE_LEVELS,
+    MEMORY_STATUSES as _MEMORY_STATUSES,
+    claim_storage_scope,
+)
 from infra.environment import parse_unit_interval
 
 logger = logging.getLogger(__name__)
 
-_MEMORY_SCOPE_LEVELS = ("user_global", "user_character", "conversation")
-_MEMORY_RELATION_TYPES = ("ADD", "MERGE", "SUPERSEDE", "COEXIST", "PENDING", "RETRACT", "NOOP")
-_MEMORY_STATUSES = ("active", "pending", "superseded", "retracted", "archived")
 
 # LoRA路径映射 - 自动扫描 backend/loras/ 目录
 BACKEND_DIR = Path(__file__).resolve().parent.parent
@@ -2994,21 +2997,6 @@ class SQLiteDB:
         return [dict(zip(columns, row)) for row in cursor.fetchall()]
 
     @staticmethod
-    def _claim_storage_scope(
-        character_id: str,
-        conversation_type: str,
-        conversation_id: str,
-        scope_level: str,
-    ) -> tuple[str, str, str]:
-        if scope_level not in _MEMORY_SCOPE_LEVELS:
-            raise ValueError(f"unknown memory scope_level: {scope_level!r}")
-        if scope_level == "conversation":
-            return character_id, conversation_type, conversation_id
-        if scope_level == "user_character":
-            return character_id, "*", "*"
-        return "*", "*", "*"
-
-    @staticmethod
     def _character_claim_access_where(
         character_id: str,
         platform: str,
@@ -3247,7 +3235,7 @@ class SQLiteDB:
             raise ValueError("memory content must not be empty")
         confidence_value = parse_unit_interval(confidence, "memory confidence")
         importance_value = parse_unit_interval(importance, "memory importance")
-        storage_character, storage_type, storage_conversation = self._claim_storage_scope(
+        storage_character, storage_type, storage_conversation = claim_storage_scope(
             character_id, conversation_type, conversation_id, scope_level
         )
         conn = self._get_connection()

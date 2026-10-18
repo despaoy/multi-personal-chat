@@ -1,6 +1,21 @@
-"""Shared preconditions checked while holding the target's write lock."""
+"""Shared claim states, storage scope and locked write preconditions."""
 
 from datetime import datetime
+
+
+MEMORY_SCOPE_LEVELS = ('user_global', 'user_character', 'conversation')
+MEMORY_RELATION_TYPES = ('ADD', 'MERGE', 'SUPERSEDE', 'COEXIST', 'PENDING', 'RETRACT', 'NOOP')
+MEMORY_STATUSES = ('active', 'pending', 'superseded', 'retracted', 'archived')
+
+
+def claim_storage_scope(character_id: str, conversation_type: str, conversation_id: str, scope_level: str) -> tuple[str, str, str]:
+    if scope_level not in MEMORY_SCOPE_LEVELS:
+        raise ValueError(f'unknown memory scope_level: {scope_level!r}')
+    if scope_level == 'conversation':
+        return (character_id, conversation_type, conversation_id)
+    if scope_level == 'user_character':
+        return (character_id, '*', '*')
+    return ('*', '*', '*')
 
 
 class MemoryClaimConflict(ValueError):

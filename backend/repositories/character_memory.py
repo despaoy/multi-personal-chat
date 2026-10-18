@@ -24,6 +24,11 @@ from character.models import (
     UserScope,
 )
 from character.temporal_provenance import semantic_observation_clock
+from db.memory_claim_guard import (
+    MEMORY_RELATION_TYPES as _VALID_RELATION_TYPES,
+    MEMORY_SCOPE_LEVELS as _VALID_SCOPE_LEVELS,
+    MEMORY_STATUSES as _VALID_MEMORY_STATUSES,
+)
 
 _VALID_STAGES: tuple[str, ...] = ("stranger", "acquaintance", "familiar", "close")
 _VALID_MEMORY_TYPES: tuple[str, ...] = (
@@ -31,23 +36,6 @@ _VALID_MEMORY_TYPES: tuple[str, ...] = (
     "shared_event",
     "promise",
     "conversation_summary",
-)
-_VALID_SCOPE_LEVELS: tuple[str, ...] = ("user_global", "user_character", "conversation")
-_VALID_RELATION_TYPES: tuple[str, ...] = (
-    "ADD",
-    "MERGE",
-    "SUPERSEDE",
-    "COEXIST",
-    "PENDING",
-    "RETRACT",
-    "NOOP",
-)
-_VALID_MEMORY_STATUSES: tuple[str, ...] = (
-    "active",
-    "pending",
-    "superseded",
-    "retracted",
-    "archived",
 )
 
 

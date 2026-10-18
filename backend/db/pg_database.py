@@ -20,14 +20,17 @@ from cache.ttl_value_cache import BoundedTTLCache
 from db import memory_source
 from db.conversation_indexes import SOURCE_INDEX_STATEMENTS
 from db.errors import RegistrationClosedError
+from db.memory_claim_guard import (
+    MEMORY_RELATION_TYPES as _MEMORY_RELATION_TYPES,
+    MEMORY_SCOPE_LEVELS as _MEMORY_SCOPE_LEVELS,
+    MEMORY_STATUSES as _MEMORY_STATUSES,
+    claim_storage_scope,
+)
 from db.urls import resolve_runtime_database_url
 from infra.environment import parse_unit_interval
 
 logger = logging.getLogger(__name__)
 
-_MEMORY_SCOPE_LEVELS = ("user_global", "user_character", "conversation")
-_MEMORY_RELATION_TYPES = ("ADD", "MERGE", "SUPERSEDE", "COEXIST", "PENDING", "RETRACT", "NOOP")
-_MEMORY_STATUSES = ("active", "pending", "superseded", "retracted", "archived")
 
 
 # ============================================
@@ -1367,21 +1370,6 @@ class PgDatabase:
             return [_row_to_dict(row) for row in result.fetchall()]
 
     @staticmethod
-    def _claim_storage_scope(
-        character_id: str,
-        conversation_type: str,
-        conversation_id: str,
-        scope_level: str,
-    ) -> tuple[str, str, str]:
-        if scope_level not in _MEMORY_SCOPE_LEVELS:
-            raise ValueError(f"unknown memory scope_level: {scope_level!r}")
-        if scope_level == "conversation":
-            return character_id, conversation_type, conversation_id
-        if scope_level == "user_character":
-            return character_id, "*", "*"
-        return "*", "*", "*"
-
-    @staticmethod
     def _character_claim_access_sql(
         scope_levels: Optional[tuple[str, ...]] = None,
         *,
@@ -1593,7 +1581,7 @@ class PgDatabase:
             raise ValueError(f"unknown memory status: {resolved_status!r}")
         if not str(memory_key).strip() or not str(content).strip():
             raise ValueError("memory_key and content must not be empty")
-        storage_character, storage_type, storage_conversation = self._claim_storage_scope(
+        storage_character, storage_type, storage_conversation = claim_storage_scope(
             character_id, conversation_type, conversation_id, scope_level
         )
         now = datetime.now().isoformat()
