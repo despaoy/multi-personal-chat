@@ -205,6 +205,20 @@ def _decode_evidence(value: Any) -> list[str | dict[str, str]]:
     return values
 
 
+def decode_legacy_memory_lifecycle(row: dict[str, Any]) -> dict[str, str]:
+    """Normalize the documented legacy evaluation format before recall."""
+    status = row.get("status", row.get("memory_status", "active"))
+    if isinstance(status, str) and status.strip().lower() == "current":
+        status = "active"
+    relation = row.get("relation_type", row.get("relation", "ADD"))
+    return {
+        "status": _require_enum(status.strip().lower() if isinstance(status, str) else status,
+                                "status", (*_VALID_MEMORY_STATUSES, "erased", "deleted")),
+        "relation_type": _require_enum(relation.strip().upper() if isinstance(relation, str) else relation,
+                                       "relation_type", (*_VALID_RELATION_TYPES, "ERASE")),
+    }
+
+
 def decode_memory_evidence(row: dict[str, Any]) -> dict[str, Any]:
     """Normalize raw or typed evidence once at a repository adapter boundary."""
     values = {}

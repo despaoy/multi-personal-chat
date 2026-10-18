@@ -6,11 +6,12 @@ import numpy as np
 
 from character.memory_service import CharacterMemoryService
 from character.models import UserScope
+from repositories.character_memory import decode_legacy_memory_lifecycle
 
 
 class _Repo:
     async def list_memory_records(self, character_id, user_scope, limit=100, *, include_inactive=False):
-        return [
+        records = [
             {
                 "evidence": [], "source_message_ids": [],
                 "id": 1,
@@ -30,6 +31,9 @@ class _Repo:
                 "updated_at": datetime.now(timezone.utc).isoformat(),
             },
         ]
+        for case_row in records:
+            case_row.update(decode_legacy_memory_lifecycle(case_row))
+        return records
 
 
 class _AllSimilar:

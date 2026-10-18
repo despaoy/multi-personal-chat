@@ -6,6 +6,7 @@ from character.memory_service import CharacterMemoryService
 from character.models import CompiledCharacterContext, UserScope
 from inference.generation_request import GenerationRequest, generate_character_response
 from inference.memory_response import render_memory_response, storage_fields
+from repositories.character_memory import decode_legacy_memory_lifecycle
 
 
 class Repo:
@@ -18,7 +19,10 @@ class Repo:
         self.scope = (character, scope)
         if self.error:
             raise RuntimeError('unavailable')
-        return self.rows
+        records = self.rows
+        for case_row in records:
+            case_row.update(decode_legacy_memory_lifecycle(case_row))
+        return records
 
 
 async def status(rows=(), *, limit=None, error=False, query='你保存了我的姓名吗？'):

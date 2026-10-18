@@ -10,6 +10,7 @@ from character.memory_llm import (
     build_memory_llm_messages,
     parse_llm_proposals,
 )
+from repositories.character_memory import decode_legacy_memory_lifecycle
 
 SOURCE = (
     "我喜欢蓝莓茶。条件：申请已提交；场景：仅在静夜；频率：每周一次；"
@@ -170,7 +171,10 @@ async def recall_stored_qualifiers(metadata, *, contextual=False):
 
     class Repository:
         async def list_memory_records(self, *args, **kwargs):
-            return [row]
+            records = [row]
+            for case_row in records:
+                case_row.update(decode_legacy_memory_lifecycle(case_row))
+            return records
 
     service = CharacterMemoryService(Repository(), semantic_enabled=False)
     return await service.recall_with_diagnostics(

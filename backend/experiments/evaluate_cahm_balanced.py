@@ -42,7 +42,7 @@ from character.memory_service import (  # noqa: E402
     validate_retrieval_settings,
 )
 from character.models import UserScope  # noqa: E402
-from repositories.character_memory import decode_memory_evidence  # noqa: E402
+from repositories.character_memory import decode_legacy_memory_lifecycle, decode_memory_evidence  # noqa: E402
 from knowledge.retrieval_core.embedding import (  # noqa: E402
     EmbeddingProvider,
     get_default_embedding_provider,
@@ -104,6 +104,7 @@ class _CaseRepository:
                 row["id"] = row["memory_id"]
             row.setdefault("updated_at", now)
             row.update(decode_memory_evidence(row))
+            row.update(decode_legacy_memory_lifecycle(row))
             normalized.append(row)
         self.records = normalized
 
@@ -159,14 +160,6 @@ def _load_jsonl(path: Path) -> list[dict[str, Any]]:
             raise ValueError(f"missing task at {path}:{line_number}")
         rows.append(row)
     return rows
-
-
-def _record_id(row: dict[str, Any]) -> str:
-    return str(row.get("id") or row.get("memory_id") or "").strip()
-
-
-def _record_status(row: dict[str, Any]) -> str:
-    return str(row.get("status") or row.get("memory_status") or "active").strip().lower()
 
 
 def _safe_ratio(numerator: int, denominator: int) -> float | None:
@@ -441,7 +434,7 @@ async def _evaluate_retrieval_variant(
     for case in cases:
         records = list(case.get("records") or ())
         repository.set_records(records)
-        rows_by_id = {_record_id(row): row for row in records if _record_id(row)}
+        rows_by_id = {str(row["id"]): row for row in repository.records}
         query = str(case.get("query") or "")
         started = time.perf_counter()
         error = ""
@@ -476,8 +469,8 @@ async def _evaluate_retrieval_variant(
         invalid_time_ids: list[str] = []
         now = datetime.now(timezone.utc)
         for item_id in selected_ids:
-            row = rows_by_id.get(item_id, {})
-            status = _record_status(row)
+            row = rows_by_id[item_id]
+            status = row["status"]
             # A historical Gold claim is intentional retrieval, not leakage.
             # Lifecycle leakage is a selected non-Gold row whose source status
             # should have excluded it from this answer.

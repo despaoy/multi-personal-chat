@@ -13,6 +13,7 @@ from character.context_builder import (
 )
 from character.memory_service import CharacterMemoryService
 from character.models import MemoryItem, UserScope
+from repositories.character_memory import decode_legacy_memory_lifecycle
 
 
 class _Repo:
@@ -22,7 +23,10 @@ class _Repo:
 
     async def list_memory_records(self, character_id, user_scope, limit=100, *, include_inactive=False):
         self.include_inactive = include_inactive
-        return self.records[:limit]
+        records = self.records[:limit]
+        for case_row in records:
+            case_row.update(decode_legacy_memory_lifecycle(case_row))
+        return records
 
 
 def _scope() -> UserScope:

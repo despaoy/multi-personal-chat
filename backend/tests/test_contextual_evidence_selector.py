@@ -15,6 +15,7 @@ from character.evidence_selector import (
 from character.memory_service import CharacterMemoryService
 from character.models import MemoryItem, UserScope
 from inference.history import HistoryFormatError
+from repositories.character_memory import decode_legacy_memory_lifecycle
 
 
 def _item(key, content="用户研究点云补全"):
@@ -141,7 +142,7 @@ def test_invalid_history_role_is_explicit_failure(role):
 async def test_widened_recall_preserves_lifecycle_subject_and_confidence_guards():
     class Repo:
         async def list_memory_records(self, *args, **kwargs):
-            return [
+            records = [
                 {
                  "evidence": [], "source_message_ids": [],"memory_type": "user_fact", "id": "a", "content": "用户研究点云补全", "memory_key": "goal", "status": "active"},
                 {
@@ -151,6 +152,9 @@ async def test_widened_recall_preserves_lifecycle_subject_and_confidence_guards(
                 {
                  "evidence": [], "source_message_ids": [],"memory_type": "user_fact", "id": "d", "content": "用户在月球工作", "confidence": 0.1},
             ]
+            for case_row in records:
+                case_row.update(decode_legacy_memory_lifecycle(case_row))
+            return records
 
     service = CharacterMemoryService(Repo(), semantic_enabled=False)
     scope = UserScope("web", "web", "u", "c", "private")
@@ -185,7 +189,7 @@ async def test_context_service_selects_before_compiling_and_reuses_loaded_histor
             return {}
 
         async def list_memory_records(self, *args, **kwargs):
-            return [
+            records = [
                 {
                     "source_message_ids": [],
                     "memory_type": "user_fact",
@@ -195,6 +199,9 @@ async def test_context_service_selects_before_compiling_and_reuses_loaded_histor
                     "evidence": ["一", "二", "三", "四", "最后更正：只研究室内场景"],
                 }
             ]
+            for case_row in records:
+                case_row.update(decode_legacy_memory_lifecycle(case_row))
+            return records
 
         async def list_relationship_notes(self, *args):
             return []
@@ -235,7 +242,7 @@ async def test_context_service_selects_before_compiling_and_reuses_loaded_histor
 async def test_ablation_flags_cannot_disable_contextual_lifecycle_guards():
     class Repo:
         async def list_memory_records(self, *args, **kwargs):
-            return [
+            records = [
                 {
                  "evidence": [], "source_message_ids": [],"memory_type": "user_fact", "id": "erased", "content": "用户研究点云", "status": "erased"},
                 {
@@ -243,6 +250,9 @@ async def test_ablation_flags_cannot_disable_contextual_lifecycle_guards():
                 {
                  "evidence": [], "source_message_ids": [],"memory_type": "user_fact", "id": "low", "content": "用户研究点云", "confidence": 0.1},
             ]
+            for case_row in records:
+                case_row.update(decode_legacy_memory_lifecycle(case_row))
+            return records
 
     service = CharacterMemoryService(
         Repo(),
@@ -265,7 +275,10 @@ async def test_contextual_recall_finds_old_claim_beyond_recent_window():
             records = [{"evidence": [], "source_message_ids": [], "memory_type": "user_fact", "id": str(index), "content": "用户喜欢咖啡", "importance": 0.9} for index in range(120)]
             records.append({
                             "evidence": [], "source_message_ids": [],"memory_type": "user_fact", "id": "old-research", "content": "用户实验使用特殊数据集 ShapeNet", "importance": 0.5})
-            return records[:limit]
+            records = records[:limit]
+            for case_row in records:
+                case_row.update(decode_legacy_memory_lifecycle(case_row))
+            return records
 
     service = CharacterMemoryService(Repo(), semantic_enabled=False)
     scope = UserScope("web", "web", "u", "c", "private")
@@ -323,7 +336,7 @@ async def test_recent_history_is_atomic_instead_of_tail_clipped():
 async def test_compound_goal_keeps_non_goal_resources_for_semantic_review():
     class Repo:
         async def list_memory_records(self, *args, **kwargs):
-            return [
+            records = [
                 {
                  "evidence": [], "source_message_ids": [],"memory_type": "user_fact", "id": "topic", "memory_key": "goal_research", "content": "用户研究点云补全"},
                 {
@@ -331,6 +344,9 @@ async def test_compound_goal_keeps_non_goal_resources_for_semantic_review():
                 {
                  "evidence": [], "source_message_ids": [],"memory_type": "user_fact", "id": "erased", "content": "用户显卡有二十四 GB 显存", "status": "erased"},
             ]
+            for case_row in records:
+                case_row.update(decode_legacy_memory_lifecycle(case_row))
+            return records
 
     service = CharacterMemoryService(Repo(), semantic_enabled=False)
     selected, _ = await service.load_relevant_memories(
@@ -347,8 +363,11 @@ async def test_recall_preserves_fifth_evidence_correction_for_semantic_review():
 
     class Repo:
         async def list_memory_records(self, *args, **kwargs):
-            return [{
+            records = [{
                      "source_message_ids": [],"memory_type": "user_fact", "id": "a", "content": "用户研究点云补全", "evidence": evidence}]
+            for case_row in records:
+                case_row.update(decode_legacy_memory_lifecycle(case_row))
+            return records
 
     service = CharacterMemoryService(Repo(), semantic_enabled=False)
     candidates, _ = await service.load_relevant_memories(
@@ -375,8 +394,11 @@ async def test_oversized_selected_packet_fails_before_policy():
             return {}
 
         async def list_memory_records(self, *args, **kwargs):
-            return [{
+            records = [{
                      "source_message_ids": [],"memory_type": "user_fact", "id": "a", "content": "用户研究点云补全", "evidence": ["原始来源" * 1600]}]
+            for case_row in records:
+                case_row.update(decode_legacy_memory_lifecycle(case_row))
+            return records
 
         async def list_relationship_notes(self, *args):
             return []

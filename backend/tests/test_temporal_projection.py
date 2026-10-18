@@ -16,6 +16,7 @@ from character.models import CompiledCharacterContext, MemoryItem, UserScope
 from character.temporal_projection import project_temporal_record
 from character.temporal_provenance import model_temporal_provenance
 from inference.memory_response import read_memory_fields, render_memory_response
+from repositories.character_memory import decode_legacy_memory_lifecycle
 
 OBSERVED = datetime(2026, 9, 27, 8, tzinfo=timezone.utc)
 NOW = OBSERVED + timedelta(minutes=1)
@@ -201,7 +202,10 @@ class Repo:
         self.rows = rows
 
     async def list_memory_records(self, *args, **kwargs):
-        return deepcopy(self.rows)
+        records = deepcopy(self.rows)
+        for case_row in records:
+            case_row.update(decode_legacy_memory_lifecycle(case_row))
+        return records
 
 
 async def recall(rows, query, **kwargs):

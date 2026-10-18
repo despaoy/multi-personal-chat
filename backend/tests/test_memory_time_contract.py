@@ -4,6 +4,7 @@ import json
 import pytest
 
 from character.memory_llm import parse_llm_proposals
+from repositories.character_memory import decode_legacy_memory_lifecycle
 
 
 def parse(**fields):
@@ -41,7 +42,10 @@ async def recall_stored_time(**changes):
 
     class Repository:
         async def list_memory_records(self, *args, **kwargs):
-            return [row]
+            records = [row]
+            for case_row in records:
+                case_row.update(decode_legacy_memory_lifecycle(case_row))
+            return records
 
     return await CharacterMemoryService(Repository(), semantic_enabled=False).recall_with_diagnostics(
         "role", UserScope("web", "time", "owner", "owner", "private"),

@@ -4,6 +4,7 @@ import pytest
 from character.context_builder import MAX_MEMORY_TOTAL_CHARS, compile_reference_context
 from character.memory_extractor import extract_memories
 from character.models import MemoryItem
+from repositories.character_memory import decode_legacy_memory_lifecycle
 
 
 @pytest.mark.parametrize(('text', 'expected'), [
@@ -104,8 +105,11 @@ async def test_default_recall_retains_late_evidence():
 
     class Repo:
         async def list_memory_records(self, *args, **kwargs):
-            return [dict({"source_message_ids": []}, id='a', memory_type='user_fact', memory_key='preference_徒步',
+            records = [dict({"source_message_ids": []}, id='a', memory_type='user_fact', memory_key='preference_徒步',
                          content='用户喜欢徒步', evidence=evidence)]
+            for case_row in records:
+                case_row.update(decode_legacy_memory_lifecycle(case_row))
+            return records
 
     scope = build_user_scope(platform='web', adapter='test', sender_id='u',
                              conversation_id='c', conversation_type='private')

@@ -111,8 +111,6 @@ INTENT_HYBRID_SCORE_FLOOR = 0.4
 MIN_CLAIM_CONFIDENCE = parse_unit_interval(os.getenv("MIN_MEMORY_CLAIM_CONFIDENCE", "0.45"), "MIN_MEMORY_CLAIM_CONFIDENCE")
 PENDING_STATUS_FACTOR = 0.35
 
-_CURRENT_MEMORY_STATUSES = frozenset(("active", "current"))
-_NON_CURRENT_MEMORY_STATUSES = frozenset(("superseded", "retracted", "archived", "erased", "deleted"))
 _NON_RETRIEVABLE_RELATIONS = frozenset(("RETRACT", "NOOP", "ERASE"))
 
 # 历史问答只在查询含有明确过去时间指示时启用。具体月份会解析为
@@ -317,14 +315,10 @@ def _is_historical_record(
 ) -> bool:
     """历史模式允许已替代/归档版本，但仍拒绝撤回、删除和待确认事实。"""
 
-    status = _memory_status(row)
-    if status in {"retracted", "erased", "deleted"}:
+    status = row["status"]
+    if status not in {"active", "superseded", "archived"} and not (include_pending and status == "pending"):
         return False
-    if status == "pending" and not include_pending:
-        return False
-    if status not in {*_CURRENT_MEMORY_STATUSES, "superseded", "archived", "pending"}:
-        return False
-    relation_type = str(row.get("relation_type") or row.get("relation") or "ADD").strip().upper()
+    relation_type = row["relation_type"]
     if relation_type in _NON_RETRIEVABLE_RELATIONS:
         return False
 
@@ -571,23 +565,13 @@ def _recency(updated_at: Any, now: datetime) -> float:
     return 0.5 ** (age_days / RECENCY_HALF_LIFE_DAYS)
 
 
-def _memory_status(row: dict[str, Any]) -> str:
-    """读取新旧 schema 的 claim 状态；旧记录视为 active。"""
-
-    return str(row.get("status") or row.get("memory_status") or "active").strip().lower()
-
-
 def _is_current_record(row: dict[str, Any], now: datetime, *, include_pending: bool) -> bool:
     """仅允许当前有效 claim 进入召回池。"""
 
-    status = _memory_status(row)
-    if status in _NON_CURRENT_MEMORY_STATUSES:
+    status = row["status"]
+    if status != "active" and not (include_pending and status == "pending"):
         return False
-    if status == "pending" and not include_pending:
-        return False
-    if status not in _CURRENT_MEMORY_STATUSES and status != "pending":
-        return False
-    relation_type = str(row.get("relation_type") or row.get("relation") or "ADD").strip().upper()
+    relation_type = row["relation_type"]
     if relation_type in _NON_RETRIEVABLE_RELATIONS:
         return False
 
@@ -630,7 +614,7 @@ def _row_evidence(
         if related is None:
             continue
         # A provenance link cannot resurrect erased/retracted/pending facts.
-        if _memory_status(related) not in {*_CURRENT_MEMORY_STATUSES, "superseded", "archived"}:
+        if related["status"] not in {"active", "superseded", "archived"}:
             continue
         content = str(related.get("content") or "").strip()
         if content:
@@ -1086,7 +1070,7 @@ class CharacterMemoryService:
             for index in eligible:
                 # claim 自身置信度只作温和校准；legacy 记录默认 1.0。
                 fused_scores[index] *= 0.5 + 0.5 * confidence_scores[index]
-                if _memory_status(usable_records[index]) == "pending":
+                if usable_records[index]["status"] == "pending":
                     fused_scores[index] *= PENDING_STATUS_FACTOR
         else:
             # 与原 CAHM 一致的固定加权路径，专供消融；默认不走此分支。
@@ -1125,8 +1109,8 @@ class CharacterMemoryService:
             row = usable_records[index]
             content = event_reference_content(row, now).strip()
             importance = importance_scores[index]
-            status = _memory_status(row) if version_filter_enabled else "active"
-            relation_type = str(row.get("relation_type") or row.get("relation") or "ADD").upper()
+            status = row["status"] if version_filter_enabled else "active"
+            relation_type = row["relation_type"]
             if not evidence_enabled:
                 relation_type = "ADD"
             storage_versions, source_versions = read_versions(row, stored_versions, claim_sources)

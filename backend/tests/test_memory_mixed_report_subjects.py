@@ -6,6 +6,7 @@ import pytest
 
 from character.memory_service import CharacterMemoryService, _detect_memory_intents
 from character.models import UserScope
+from repositories.character_memory import decode_legacy_memory_lifecycle
 
 
 @pytest.mark.parametrize(
@@ -56,7 +57,7 @@ class Repo:
                 "我喜欢加速受理，但我只有完整表格已提交且身份核验通过才使用加速受理",
             ),
         ]
-        return [
+        records = [
             dict({"source_message_ids": []},
                 id=str(i + 1),
                 memory_key="preference_" + name,
@@ -69,6 +70,9 @@ class Repo:
             )
             for i, (name, content, evidence) in enumerate(values)
         ]
+        for case_row in records:
+            case_row.update(decode_legacy_memory_lifecycle(case_row))
+        return records
 
 
 async def test_three_scoped_candidates_survive_mixed_task_without_history():

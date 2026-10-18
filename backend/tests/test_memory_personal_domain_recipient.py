@@ -6,6 +6,7 @@ import pytest
 
 from character.memory_service import CharacterMemoryService, _detect_memory_intents
 from character.models import UserScope
+from repositories.character_memory import decode_legacy_memory_lifecycle
 
 
 @pytest.mark.parametrize(
@@ -57,7 +58,7 @@ class Repo:
                 "我喜欢加急受理，但我只有申请齐全且附件核验通过才使用加急受理",
             ),
         ]
-        return [
+        records = [
             dict({"source_message_ids": []},
                 id=str(i + 1),
                 memory_key="preference_" + name,
@@ -70,6 +71,9 @@ class Repo:
             )
             for i, (name, content, evidence) in enumerate(rows)
         ]
+        for case_row in records:
+            case_row.update(decode_legacy_memory_lifecycle(case_row))
+        return records
 
 
 async def test_scoped_three_preferences_and_conjunction_survive_filter():

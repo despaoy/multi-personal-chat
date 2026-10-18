@@ -30,6 +30,7 @@ from character import (
     compile_profile_context,
     compile_reference_context,
 )
+from repositories.character_memory import decode_legacy_memory_lifecycle
 
 
 def _profile() -> CharacterProfile:
@@ -604,7 +605,10 @@ class _FakeMemoryRepo:
         self._records = records
 
     async def list_memory_records(self, character_id, user_scope, limit=30, *, include_inactive=False):
-        return self._records
+        records = self._records
+        for case_row in records:
+            case_row.update(decode_legacy_memory_lifecycle(case_row))
+        return records
 
 
 def _memory_record(

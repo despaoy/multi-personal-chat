@@ -9,6 +9,7 @@ from character.evidence_selector import ContextualEvidenceSelector
 from character.memory_read_subject import closed_other_subject_fields
 from character.memory_service import CharacterMemoryService, _detect_memory_intents
 from character.models import UserScope
+from repositories.character_memory import decode_legacy_memory_lifecycle
 
 QUERY = "请核对我已经保存的本人甜食声明，区分已确认偏好与实际行为。它实际确认的偏好不能证明已吃过蛋糕。"
 SCOPE = UserScope("web", "web", "reader", "conversation", "private")
@@ -30,7 +31,10 @@ async def candidates(query=QUERY, change=None, contextual=True):
 
     class Repo:
         async def list_memory_records(self, *args, **kwargs):
-            return [row]
+            records = [row]
+            for case_row in records:
+                case_row.update(decode_legacy_memory_lifecycle(case_row))
+            return records
 
     return await CharacterMemoryService(Repo(), semantic_enabled=False).recall_with_diagnostics(
         "role", SCOPE, query, for_contextual_selection=contextual

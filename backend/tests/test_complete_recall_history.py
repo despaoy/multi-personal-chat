@@ -7,6 +7,7 @@ import pytest
 from character.memory_service import CharacterMemoryService
 from character.models import UserScope
 from services.character_context import compile_user_recall_context
+from repositories.character_memory import decode_legacy_memory_lifecycle
 
 
 def test_head_and_tail_of_long_user_message_are_preserved():
@@ -44,7 +45,7 @@ def test_missing_or_nontext_user_content_is_ignored():
 async def test_full_context_reaches_semantic_and_lexical_recall(monkeypatch):
     class Repository:
         async def list_memory_records(self, *args, **kwargs):
-            return [
+            records = [
                 {
                     "evidence": [], "source_message_ids": [],
                     "id": 1,
@@ -58,6 +59,9 @@ async def test_full_context_reaches_semantic_and_lexical_recall(monkeypatch):
                     "metadata": {},
                 }
             ]
+            for case_row in records:
+                case_row.update(decode_legacy_memory_lifecycle(case_row))
+            return records
 
     service = CharacterMemoryService(Repository(), semantic_enabled=True)
     seen = []

@@ -6,6 +6,7 @@ import pytest
 
 from character.memory_service import CharacterMemoryService, _detect_memory_intents
 from character.models import UserScope
+from repositories.character_memory import decode_legacy_memory_lifecycle
 
 QUERY = "按我目前明确告诉你的饮料偏好，列出喜欢的两种饮料、不喜欢的一种饮料，并完整说明喝低咖啡因咖啡的必要条件；条件满足也不能推断我一定会喝。"
 
@@ -66,7 +67,7 @@ def test_explicit_self_after_recipient_still_uses_self_intent(query, field):
 
 class Repo:
     async def list_memory_records(self, *args, **kwargs):
-        return [
+        records = [
             dict({"source_message_ids": []},
                 id="1",
                 memory_key="preference_桂花乌龙茶",
@@ -78,6 +79,9 @@ class Repo:
                 updated_at=datetime.now(timezone.utc).isoformat(),
             )
         ]
+        for case_row in records:
+            case_row.update(decode_legacy_memory_lifecycle(case_row))
+        return records
 
 
 @pytest.mark.asyncio

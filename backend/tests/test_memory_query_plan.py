@@ -4,6 +4,7 @@ import pytest
 from character.memory_query import plan_memory_query
 from character.memory_service import CharacterMemoryService
 from character.models import UserScope
+from repositories.character_memory import decode_legacy_memory_lifecycle
 
 
 @pytest.mark.parametrize(('query', 'fields', 'excluded'), [
@@ -29,7 +30,10 @@ class Repo:
     async def list_memory_records(self, *args, **kwargs):
         if self.error:
             raise self.error
-        return self.rows
+        records = self.rows
+        for case_row in records:
+            case_row.update(decode_legacy_memory_lifecycle(case_row))
+        return records
 
 
 def row(key, content, **extra):

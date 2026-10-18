@@ -7,6 +7,7 @@ from unittest.mock import Mock
 import pytest
 
 from character.memory_service import CharacterMemoryService
+from repositories.character_memory import decode_legacy_memory_lifecycle
 
 
 @pytest.mark.parametrize("value", [-0.1, 1.1, float("nan"), float("inf"), -float("inf"), "bad", True])
@@ -31,7 +32,10 @@ async def test_valid_boundaries_preserve_requested_read_limit(score, limit):
     class Repository:
         async def list_memory_records(self, character_id, user_scope, *, limit, include_inactive):
             reads.append(limit)
-            return []
+            records = []
+            for case_row in records:
+                case_row.update(decode_legacy_memory_lifecycle(case_row))
+            return records
     reads = []
     service = CharacterMemoryService(Repository(), semantic_enabled=False, min_hybrid_score=score, candidate_limit=limit)
     selected, count = await service.load_relevant_memories("test", None, "红茶偏好")
