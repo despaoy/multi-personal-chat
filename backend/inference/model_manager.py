@@ -126,15 +126,15 @@ class BaseProvider(ABC):
 
     @abstractmethod
     def generate(self, prompt: str, session_history: List[Dict] = None,
-                 rag_docs: List[Dict] = None, max_tokens_override: int = None) -> Tuple[str, float]:
+                 max_tokens_override: int = None) -> Tuple[str, float]:
         """子类必须实现同步生成方法"""
         raise NotImplementedError
 
     async def async_generate(self, prompt: str, session_history: List[Dict] = None,
-                             rag_docs: List[Dict] = None, max_tokens_override: int = None) -> Tuple[str, float]:
+                             max_tokens_override: int = None) -> Tuple[str, float]:
         """异步生成，默认通过线程池运行同步方法，子类可覆写以提供原生异步实现"""
         import asyncio
-        return await asyncio.to_thread(self.generate, prompt, session_history, rag_docs, max_tokens_override)
+        return await asyncio.to_thread(self.generate, prompt, session_history, max_tokens_override)
 
     def get_status(self) -> Dict[str, Any]:
         return {
@@ -199,18 +199,11 @@ class OpenAICompatProvider(BaseProvider):
         return OpenAICompatProvider(_get_db_config())
 
     async def _generate_async(self, prompt: str, session_history: List[Dict] = None,
-                              rag_docs: List[Dict] = None, max_tokens_override: int = None) -> Tuple[str, float]:
+                              max_tokens_override: int = None) -> Tuple[str, float]:
         """异步生成实现（R-1 fix: 使用共享 HttpClientPool）"""
         config = self._refresh_db_config()
 
         messages = []
-
-        if rag_docs:
-            rag_text = "\n".join(doc.get("content", "") for doc in rag_docs[:3])
-            messages.append({
-                "role": "system",
-                "content": f"参考资料：\n{rag_text[:800]}"
-            })
 
         if session_history:
             messages.extend(session_history)
@@ -275,15 +268,15 @@ class OpenAICompatProvider(BaseProvider):
             raise ProviderResponseError(response.status_code)
 
     def generate(self, prompt: str, session_history: List[Dict] = None,
-                 rag_docs: List[Dict] = None, max_tokens_override: int = None) -> Tuple[str, float]:
+                 max_tokens_override: int = None) -> Tuple[str, float]:
         # R-1 fix: 同步入口通过 asyncio.run 执行异步实现
         import asyncio
-        return asyncio.run(self._generate_async(prompt, session_history, rag_docs, max_tokens_override))
+        return asyncio.run(self._generate_async(prompt, session_history, max_tokens_override))
 
     async def async_generate(self, prompt: str, session_history: List[Dict] = None,
-                             rag_docs: List[Dict] = None, max_tokens_override: int = None) -> Tuple[str, float]:
+                             max_tokens_override: int = None) -> Tuple[str, float]:
         """异步生成 - 原生 async，无需线程池"""
-        return await self._generate_async(prompt, session_history, rag_docs, max_tokens_override)
+        return await self._generate_async(prompt, session_history, max_tokens_override)
 
 class MockProvider(BaseProvider):
     """模拟提供商，用于测试"""
@@ -294,7 +287,7 @@ class MockProvider(BaseProvider):
         self._loaded = True
 
     def generate(self, prompt: str, session_history: List[Dict] = None,
-                 rag_docs: List[Dict] = None, max_tokens_override: int = None) -> Tuple[str, float]:
+                 max_tokens_override: int = None) -> Tuple[str, float]:
         start = time.time()
         replies = [
             f"好的，我来帮您处理这个问题！您说的是：{prompt[:30]}...",
@@ -318,18 +311,11 @@ class OllamaProvider(BaseProvider):
         # R-1 fix: 不再自建 httpx.Client，统一通过 _acquire_http_client() 获取共享 AsyncClient
 
     async def _generate_async(self, prompt: str, session_history: List[Dict] = None,
-                              rag_docs: List[Dict] = None, max_tokens_override: int = None) -> Tuple[str, float]:
+                              max_tokens_override: int = None) -> Tuple[str, float]:
         """异步生成实现（R-1 fix: 使用共享 HttpClientPool）"""
         config = _get_db_config()
         start = time.time()
         messages = []
-
-        if rag_docs:
-            rag_text = "\n".join(doc.get("content", "") for doc in rag_docs[:3])
-            messages.append({
-                "role": "system",
-                "content": f"参考资料：\n{rag_text[:800]}"
-            })
 
         if session_history:
             messages.extend(session_history)
@@ -359,15 +345,15 @@ class OllamaProvider(BaseProvider):
             raise RuntimeError(f"Ollama返回错误状态码: {response.status_code}")
 
     def generate(self, prompt: str, session_history: List[Dict] = None,
-                 rag_docs: List[Dict] = None, max_tokens_override: int = None) -> Tuple[str, float]:
+                 max_tokens_override: int = None) -> Tuple[str, float]:
         # R-1 fix: 同步入口通过 asyncio.run 执行异步实现
         import asyncio
-        return asyncio.run(self._generate_async(prompt, session_history, rag_docs, max_tokens_override))
+        return asyncio.run(self._generate_async(prompt, session_history, max_tokens_override))
 
     async def async_generate(self, prompt: str, session_history: List[Dict] = None,
-                             rag_docs: List[Dict] = None, max_tokens_override: int = None) -> Tuple[str, float]:
+                             max_tokens_override: int = None) -> Tuple[str, float]:
         """异步生成 - 原生 async，无需线程池"""
-        return await self._generate_async(prompt, session_history, rag_docs, max_tokens_override)
+        return await self._generate_async(prompt, session_history, max_tokens_override)
 
 class LlamaCppProvider(BaseProvider):
     """llama.cpp 提供商"""
@@ -380,7 +366,7 @@ class LlamaCppProvider(BaseProvider):
         # R-1 fix: 不再自建 httpx.Client，统一通过 _acquire_http_client() 获取共享 AsyncClient
 
     async def _generate_async(self, prompt: str, session_history: List[Dict] = None,
-                              rag_docs: List[Dict] = None, max_tokens_override: int = None) -> Tuple[str, float]:
+                              max_tokens_override: int = None) -> Tuple[str, float]:
         """异步生成实现（R-1 fix: 使用共享 HttpClientPool）"""
         config = _get_db_config()
         start = time.time()
@@ -420,15 +406,15 @@ class LlamaCppProvider(BaseProvider):
             raise RuntimeError(f"llama.cpp返回错误状态码: {response.status_code}")
 
     def generate(self, prompt: str, session_history: List[Dict] = None,
-                 rag_docs: List[Dict] = None, max_tokens_override: int = None) -> Tuple[str, float]:
+                 max_tokens_override: int = None) -> Tuple[str, float]:
         # R-1 fix: 同步入口通过 asyncio.run 执行异步实现
         import asyncio
-        return asyncio.run(self._generate_async(prompt, session_history, rag_docs, max_tokens_override))
+        return asyncio.run(self._generate_async(prompt, session_history, max_tokens_override))
 
     async def async_generate(self, prompt: str, session_history: List[Dict] = None,
-                             rag_docs: List[Dict] = None, max_tokens_override: int = None) -> Tuple[str, float]:
+                             max_tokens_override: int = None) -> Tuple[str, float]:
         """异步生成 - 原生 async，无需线程池"""
-        return await self._generate_async(prompt, session_history, rag_docs, max_tokens_override)
+        return await self._generate_async(prompt, session_history, max_tokens_override)
 
 class TransformersPeftProvider(BaseProvider):
     """Transformers + PEFT 本地推理提供商"""
@@ -507,7 +493,7 @@ class TransformersPeftProvider(BaseProvider):
             self._lora_path = lora_path
 
     def generate(self, prompt: str, session_history: List[Dict] = None,
-                 rag_docs: List[Dict] = None, max_tokens_override: int = None) -> Tuple[str, float]:
+                 max_tokens_override: int = None) -> Tuple[str, float]:
         config = _get_db_config()
         import torch
 
@@ -515,12 +501,6 @@ class TransformersPeftProvider(BaseProvider):
         start = time.time()
 
         messages = []
-        if rag_docs:
-            rag_text = "\n".join(doc.get("content", "") for doc in rag_docs[:3])
-            messages.append({
-                "role": "system",
-                "content": f"参考资料：\n{rag_text[:800]}"
-            })
 
         if session_history:
             messages.extend(session_history)
@@ -605,7 +585,7 @@ class VLLMProvider(BaseProvider):
             logger.info("vLLM LoRA 适配器已清除")
 
     async def generate_async(self, prompt: str, session_history: List[Dict] = None,
-                             rag_docs: List[Dict] = None, max_tokens_override: int = None) -> Tuple[str, float]:
+                             max_tokens_override: int = None) -> Tuple[str, float]:
         """异步生成 - 复用 VLLMClient 全局单例（负载均衡 + 熔断器 + 健康检查）。
 
         Critical fix: 此前 VLLMProvider 通过 HttpClientPool 直接 POST vLLM，
@@ -619,9 +599,6 @@ class VLLMProvider(BaseProvider):
         start = time.time()
 
         messages = []
-        if rag_docs:
-            rag_text = "\n".join(doc.get("content", "") for doc in rag_docs[:3])
-            messages.append({"role": "system", "content": f"参考资料：\n{rag_text[:800]}"})
 
         if session_history:
             for msg in session_history[-10:]:
@@ -646,15 +623,15 @@ class VLLMProvider(BaseProvider):
         return reply, cost
 
     def generate(self, prompt: str, session_history: List[Dict] = None,
-                 rag_docs: List[Dict] = None, max_tokens_override: int = None) -> Tuple[str, float]:
+                 max_tokens_override: int = None) -> Tuple[str, float]:
         """同步生成包装 - 通过 asyncio.run 执行异步方法"""
         import asyncio
-        return asyncio.run(self.generate_async(prompt, session_history, rag_docs, max_tokens_override))
+        return asyncio.run(self.generate_async(prompt, session_history, max_tokens_override))
 
     async def async_generate(self, prompt: str, session_history: List[Dict] = None,
-                             rag_docs: List[Dict] = None, max_tokens_override: int = None) -> Tuple[str, float]:
+                             max_tokens_override: int = None) -> Tuple[str, float]:
         """异步生成入口"""
-        return await self.generate_async(prompt, session_history, rag_docs, max_tokens_override)
+        return await self.generate_async(prompt, session_history, max_tokens_override)
 
 class ProviderShutdownError(RuntimeError):
     """All provider close failures, retained across asynchronous/thread boundaries."""
@@ -705,15 +682,15 @@ class ModelManager:
         return self._providers[self._current_provider]
 
     def generate(self, prompt: str, session_history: List[Dict] = None,
-                 rag_docs: List[Dict] = None, max_tokens_override: int = None) -> Tuple[str, float]:
+                 max_tokens_override: int = None) -> Tuple[str, float]:
         provider = self.get_current_provider()
-        return provider.generate(prompt, session_history, rag_docs, max_tokens_override)
+        return provider.generate(prompt, session_history, max_tokens_override)
 
     async def async_generate(self, prompt: str, session_history: List[Dict] = None,
-                             rag_docs: List[Dict] = None, max_tokens_override: int = None) -> Tuple[str, float]:
+                             max_tokens_override: int = None) -> Tuple[str, float]:
         """异步生成，使用提供商的异步方法避免阻塞事件循环"""
         provider = self.get_current_provider()
-        return await provider.async_generate(prompt, session_history, rag_docs, max_tokens_override)
+        return await provider.async_generate(prompt, session_history, max_tokens_override)
 
     def set_lora_adapter(self, lora_path: Optional[str]):
         provider = self.get_current_provider()

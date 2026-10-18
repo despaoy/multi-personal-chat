@@ -46,7 +46,7 @@ async def test_selected_provider_receives_messages_and_budget_without_local_over
 
         # Match the actual manager signature; **kwargs previously hid a real
         # routing failure in which max_tokens never reached any provider.
-        async def async_generate(self, prompt, session_history=None, rag_docs=None, max_tokens_override=None):
+        async def async_generate(self, prompt, session_history=None, max_tokens_override=None):
             assert provider != "openai_compat", "Cloud must not re-enter legacy prompt generation"
             calls.append(dict(prompt=prompt, history=session_history, budget=max_tokens_override))
             return "原生提供方回答", 0.01

@@ -178,7 +178,7 @@ async def run(args):
                 sum(estimated_tokens(m["content"]) + 4 for m in messages) + 1024 + CONTEXT_SAFETY_MARGIN_TOKENS <= 65536
             )
         reply, _ = await manager.async_generate(
-            prompt=messages[-1]["content"], session_history=messages[:-1], rag_docs=None, max_tokens_override=max_tokens
+            prompt=messages[-1]["content"], session_history=messages[:-1], max_tokens_override=max_tokens
         )
         return reply
 

@@ -153,7 +153,7 @@ async def test_both_complete_search_sources_reach_untrusted_prompt_and_native_as
     assert "请保留资料中的否定、条件和时间范围，不编造缺失的角色事实。" in prompt
     assert "关于该角色的真实信息，请在生成对话时严格参考" not in prompt
     assert "请根据以上真实角色信息" not in prompt
-    assert DESCRIPTION in prompt and call["session_history"] == [] and call["rag_docs"] == []
+    assert DESCRIPTION in prompt and call["session_history"] == []
     assert call["max_tokens_override"] == 2048
 
 

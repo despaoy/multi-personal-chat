@@ -810,7 +810,6 @@ async def _run_dialogue_generation(request):
                 result, cost = await manager.async_generate(
                     prompt=system_prompt,
                     session_history=[],
-                    rag_docs=[],
                     max_tokens_override=max_tok
                 )
                 total_cost += cost

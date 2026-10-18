@@ -498,7 +498,7 @@ async def _generate_reply_body(
                         else:
                             text, _cost = await _mgr.async_generate(
                                 prompt=messages[-1]["content"], session_history=messages[:-1],
-                                rag_docs=None, max_tokens_override=kwargs["max_tokens"],
+                                max_tokens_override=kwargs["max_tokens"],
                             )
                         return text
 

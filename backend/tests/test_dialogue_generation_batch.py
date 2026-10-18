@@ -76,7 +76,7 @@ def rig(monkeypatch):
     async def model(**kwargs):
         ordinal = len(context.requested) + 1
         count, turns, batch = complete_prompt_batch(kwargs["prompt"], ordinal)
-        assert kwargs["session_history"] == [] and kwargs["rag_docs"] == []
+        assert kwargs["session_history"] == []
         assert kwargs["max_tokens_override"] == (2048 if turns <= 2 else 4096 if turns <= 5 else 6144)
         context.requested.append((count, turns))
         context.batches.append(deepcopy(batch))

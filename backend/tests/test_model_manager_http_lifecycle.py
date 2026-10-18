@@ -16,7 +16,7 @@ class DummyProvider(BaseProvider):
     def __init__(self):
         super().__init__("dummy")
 
-    def generate(self, prompt, session_history=None, rag_docs=None, max_tokens_override=None):
+    def generate(self, prompt, session_history=None, max_tokens_override=None):
         return prompt, 0.0
 
 
