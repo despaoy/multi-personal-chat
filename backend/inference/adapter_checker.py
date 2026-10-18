@@ -186,17 +186,3 @@ class AdapterChecker:
         # 总体兼容性：无 errors 则兼容
         report.compatible = len(report.errors) == 0
         return report
-
-    def check_all_adapters(self) -> Dict[str, AdapterCompatibilityReport]:
-        """检查 lora_root 下所有适配器。"""
-        results: Dict[str, AdapterCompatibilityReport] = {}
-        if not self.lora_root:
-            return results
-        root = Path(self.lora_root)
-        if not root.exists():
-            return results
-        for d in root.iterdir():
-            if d.is_dir():
-                report = self.check_adapter(d)
-                results[d.name] = report
-        return results

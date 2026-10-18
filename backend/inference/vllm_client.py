@@ -721,40 +721,6 @@ class VLLMClient:
         }
         return results
 
-    async def get_active_loras(self) -> List[str]:
-        """获取当前所有实例上加载的 LoRA 列表
-
-        通过 vLLM 的 /v1/models 端点查询，筛选出 LoRA 类型的模型。
-
-        Returns:
-            LoRA 名称列表（去重）
-        """
-        loras: set[str] = set()
-
-        for inst in self._instances:
-            try:
-                client = await self._ensure_client()
-                resp = await client.get(
-                    f"{inst.base_url}/v1/models",
-                    headers=self._build_headers(),
-                    timeout=httpx.Timeout(10.0, connect=5.0),
-                )
-                if resp.status_code == 200:
-                    data = resp.json()
-                    for model_info in data.get("data", []):
-                        model_id = model_info.get("id", "")
-                        # vLLM LoRA 模型 ID 格式: base_model:lora_name
-                        if ":" in model_id:
-                            lora_name = model_id.split(":", 1)[1]
-                            loras.add(lora_name)
-                        # 也可能是独立的 LoRA 模型 ID
-                        elif model_id != self._model:
-                            loras.add(model_id)
-            except Exception as exc:
-                logger.warning("获取实例 %s 的 LoRA 列表失败: %s", inst.name, exc)
-
-        return sorted(loras)
-
     # ------------------------------------------------------------------
     # 辅助方法
     # ------------------------------------------------------------------

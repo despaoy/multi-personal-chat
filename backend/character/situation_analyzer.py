@@ -580,15 +580,6 @@ class SituationAnalyzer:
         state = self.estimate(message)
         return state.primary_situation, RESPONSE_GOALS[state.primary_situation]
 
-    def detect_emotion(self, message: str) -> str:
-        """Return a coarse fixed affect label for legacy prompt fields."""
-        if not (message or "").strip():
-            return ""
-        state = self.estimate(message)
-        if abs(state.valence) < 0.05 and state.arousal <= 0.15 and abs(state.warmth) < 0.15:
-            return ""
-        return affect_label(state.valence, state.arousal)
-
     def response_goal(self, state: InteractionState) -> str:
         """Describe the goal using only fixed application-owned text."""
         goal = RESPONSE_GOALS[state.primary_situation]

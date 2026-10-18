@@ -12,7 +12,7 @@ import hashlib
 import json
 import logging
 import os
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, asdict
 from enum import Enum
 from typing import Dict, Any, List, Optional
 
@@ -224,10 +224,3 @@ def get_lora_router(config: Optional[Dict[str, Any]] = None) -> LoRARouter:
         _router._routing_logs = previous_logs[-_router._max_logs:]
         _router_config_hash = config_hash
     return _router
-
-def route_query(query: str, intent_result: Optional[tuple] = None) -> RoutingDecision:
-    """便捷函数：路由查询并记录日志。"""
-    router = get_lora_router()
-    decision = router.route(query, intent_result)
-    router.log_routing(decision)
-    return decision
