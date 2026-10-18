@@ -260,7 +260,7 @@ async def test_ambiguous_legacy_aliases_remain_untouched_and_pending_deduplicate
 @pytest.mark.parametrize("origin", ["rule_v2", "rule_candidate"])
 async def test_old_adapters_cannot_silently_discard_evidence_or_pending_status(origin):
     repo = DatabaseCharacterMemoryRepository(object())
-    with pytest.raises(RuntimeError, match="版本与证据"):
+    with pytest.raises(AttributeError, match="append_character_memory_claim"):
         await repo.append_claim(
             "kisaki",
             scope(),

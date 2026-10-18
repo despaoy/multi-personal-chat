@@ -21,6 +21,9 @@ def response(case):
         operation="ADD",
         attributed_to="user",
     )
+    if case in {"attribution", "unknown_attribution"}:
+        value = None if case == "attribution" else "assistant"
+        return dict(memories=[dict(item, attributed_to=value)]), "attributed_to"
     if case == "candidate":
         return dict(memories=[item, dict(item, temporal_provenance={
             "validity_authority": "verified", "producer": "rule"})]), "memories[]"
@@ -29,8 +32,8 @@ def response(case):
     return dict(memories=[] if case == "empty" else [item], **{"private-field": "private-value"}), "response"
 
 
-@pytest.mark.parametrize("case", ["empty", "partial", "candidate", "low_confidence"])
-def test_undeclared_fields_are_failure_before_business_filtering(case):
+@pytest.mark.parametrize("case", ["empty", "partial", "candidate", "low_confidence", "attribution", "unknown_attribution"])
+def test_invalid_model_fields_fail_before_business_filtering(case):
     payload, field = response(case)
     with pytest.raises(MemoryResponseError) as caught:
         parse_llm_proposals(json.dumps(payload), source_message="我的专业是物理学。")
@@ -39,7 +42,7 @@ def test_undeclared_fields_are_failure_before_business_filtering(case):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("case", ["empty", "partial", "candidate", "low_confidence"])
+@pytest.mark.parametrize("case", ["empty", "partial", "candidate", "low_confidence", "attribution", "unknown_attribution"])
 async def test_scheduler_reports_protocol_failure_without_partial_writes(tmp_path, case):
     database = SQLiteDB(tmp_path / "schema.sqlite")
     repository = DatabaseCharacterMemoryRepository(database)

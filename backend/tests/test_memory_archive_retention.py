@@ -82,6 +82,7 @@ def proposal(source):
                     content="",
                     evidence=source[:70],
                     operation="ERASE",
+                    attributed_to="user",
                     target_memory_id="7",
                     target_memory_key="fact_course",
                     confidence=0.99,

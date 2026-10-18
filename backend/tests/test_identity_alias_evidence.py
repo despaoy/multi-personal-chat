@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from character.memory_llm import parse_llm_proposals
+from character.memory_llm import MemoryResponseError, parse_llm_proposals
 
 POSITIVE = "我的常用别名是芷露。芷露只是本人的别名，不是本人的规范姓名。"
 NEGATIVE = "小岚不是本人的别名。小岚是朋友兰溪的别名，只属于朋友。"
@@ -13,7 +13,7 @@ SOURCE = POSITIVE + NEGATIVE + "请记住，以后这个角色记住本人别名
 
 
 def parse(
-    evidence, *, value="芷露", kind="name", source=SOURCE, operation="ADD", target="", existing=(), qualifiers=None
+    evidence, *, value="芷露", kind="name", source=SOURCE, operation="ADD", target="", existing=(), qualifiers=None, scope_level="user_character"
 ):
     raw = dict(
         kind=kind,
@@ -26,7 +26,7 @@ def parse(
         confidence=0.97,
         attributed_to="user",
         qualifiers={"certainty": "稳定"} if qualifiers is None else qualifiers,
-        scope_level="user_character",
+        scope_level=scope_level,
     )
     return parse_llm_proposals(
         json.dumps({"memories": [raw]}, ensure_ascii=False),
@@ -84,8 +84,10 @@ def test_explicit_alias_update_can_only_target_its_own_predicate():
 
 
 def test_actual_condition_and_unknown_labels_are_not_removed():
-    assert not parse(POSITIVE, qualifiers={"certainty": "稳定", "condition": "订单已付款"})
-    assert not parse(POSITIVE, qualifiers={"certainty": "hypothetical"})
+    for qualifiers in ({"certainty": "稳定", "condition": "订单已付款"}, {"certainty": "hypothetical"}):
+        with pytest.raises(MemoryResponseError) as caught:
+            parse(POSITIVE, qualifiers=qualifiers)
+        assert caught.value.field == "qualifiers"
 
 
 def test_positive_friend_name_is_not_a_negative_self_alias_predicate():
@@ -208,7 +210,7 @@ def test_unrelated_friend_index_cannot_supply_self_alias_ownership():
 @pytest.mark.parametrize('suffix', ['，不要这样叫我', ',别这么叫我', '，请不要再这样叫我'])
 def test_alias_denial_with_reinforcing_address_boundary_is_preserved(suffix):
     source = '小岚不是我的昵称' + suffix + '。'
-    proposal, = parse(source, value='不被称呼为小岚', kind='other_user_fact', source=source, qualifiers={})
+    proposal, = parse(source, value='不被称呼为小岚', kind='other_user_fact', source=source, qualifiers={}, scope_level='conversation')
     assert proposal.memory.memory_key == 'user_alias_exclusion_小岚'
     assert proposal.memory.content == '用户明确说小岚不是本人的别名'
     assert proposal.evidence == source
@@ -221,6 +223,6 @@ def test_alias_denial_with_reinforcing_address_boundary_is_preserved(suffix):
     '如果小岚不是我的昵称，不要这样叫我。',
 ])
 def test_conditional_or_quoted_denial_does_not_become_unconditional_alias_exclusion(source):
-    proposals = parse(source, value='小岚', kind='other_user_fact', source=source, qualifiers={})
+    proposals = parse(source, value='小岚', kind='other_user_fact', source=source, qualifiers={}, scope_level='conversation')
     assert all(not item.memory.memory_key.startswith('user_alias_exclusion_') for item in proposals)
     assert all(source in item.memory.content and item.evidence == source for item in proposals)

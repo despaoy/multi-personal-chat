@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from character.memory_llm import parse_llm_proposals
+from character.memory_llm import MemoryResponseError, parse_llm_proposals
 
 
 def _parse(source, initial_value, content, **changes):
@@ -36,14 +36,18 @@ def test_fallback_does_not_preserve_unverified_summary_additions():
     assert result[0].evidence == source
 
 
-@pytest.mark.parametrize("changes", [
-    {"evidence": "我的自行车是红色的。"},
-    {"attributed_to": "assistant"},
-    {"confidence": 0.1},
+@pytest.mark.parametrize("changes,error", [
+    ({"evidence": "我的自行车是红色的。"}, False),
+    ({"attributed_to": "assistant"}, True),
+    ({"confidence": 0.1}, False),
 ])
-def test_fallback_does_not_bypass_grounding_or_admission(changes):
-    assert not _parse("我的自行车是蓝色的。", "自行车是蓝色",
-                      "用户有一辆蓝色自行车", **changes)
+def test_fallback_does_not_bypass_grounding_or_admission(changes, error):
+    if error:
+        with pytest.raises(MemoryResponseError) as caught:
+            _parse("我的自行车是蓝色的。", "自行车是蓝色", "用户有一辆蓝色自行车", **changes)
+        assert caught.value.field == "attributed_to"
+    else:
+        assert not _parse("我的自行车是蓝色的。", "自行车是蓝色", "用户有一辆蓝色自行车", **changes)
 
 
 def test_unverified_generic_value_is_an_observation_not_a_fabricated_fact():

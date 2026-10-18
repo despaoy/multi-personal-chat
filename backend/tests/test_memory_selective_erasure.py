@@ -10,6 +10,7 @@ from character.erasure_authority import partial_erasure_plan
 from character.memory_llm import (
     MemoryEnrichmentScheduler,
     MemoryLlmConfig,
+    MemoryResponseError,
     build_memory_llm_messages,
     is_memory_erasure_request,
     parse_llm_proposals,
@@ -116,11 +117,12 @@ def test_unknown_retained_object_and_same_object_conflict_authorize_no_target():
 def test_model_cannot_add_duplicate_kept_preference_or_supply_its_own_protection():
     evidence = "我喜欢深蓝色油墨进行纸版压印。"
     message = source() + evidence
-    raw = json.loads(response(5, "ADD", evidence, target_memory_id="", target_memory_key="", protected_memory_keys=[]))
+    raw = json.loads(response(5, "ADD", evidence, target_memory_id="", target_memory_key=""))
     assert not parse_llm_proposals(json.dumps(raw), source_message=message, existing_memories=records())
-    parsed = parse_llm_proposals(
-        response(protected_memory_keys=[]), source_message=source(), existing_memories=records()
-    )
+    with pytest.raises(MemoryResponseError) as caught:
+        parse_llm_proposals(response(protected_memory_keys=[]), source_message=source(), existing_memories=records())
+    assert caught.value.field == "memories[]"
+    parsed = parse_llm_proposals(response(), source_message=source(), existing_memories=records())
     assert parsed[0].protected_memory_keys == (INK,)
 
 
@@ -238,7 +240,7 @@ async def test_repository_forwards_protected_keys_and_refuses_unsafe_legacy_fall
     assert await repo.erase_memory("role", scope, memory_key=COURSE, protected_memory_keys=(INK,)) == 1
     assert modern.kwargs["protected_memory_keys"] == (INK,)
     legacy = DatabaseCharacterMemoryRepository(object())
-    with pytest.raises(RuntimeError, match="保护保留条目"):
+    with pytest.raises(AttributeError, match="erase_character_memories"):
         await legacy.erase_memory("role", scope, memory_id=4, protected_memory_keys=(INK,))
 
 

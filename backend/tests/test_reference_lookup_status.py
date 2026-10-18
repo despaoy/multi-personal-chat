@@ -11,7 +11,7 @@ import pytest
 from inference.evidence_coverage import is_partial_coverage
 from inference.generation_request import GenerationRequest, RetrievalResult, build_generation_request
 from knowledge.evidence_packets import document_evidence_packets
-from knowledge.original_sources import attach_original_sources
+from knowledge.original_sources import attach_original_sources, document_authority_snapshot
 from knowledge.source_expansion import expand_source_context
 from knowledge.vector_db import VectorDatabase
 
@@ -163,10 +163,9 @@ def test_reference_title_injection_is_escaped_user_data():
 
 
 @pytest.mark.parametrize("abstained", [False, True])
-async def test_production_api_carries_reference_receipt_and_warning_once(monkeypatch, abstained):
+async def test_production_api_carries_reference_receipt_and_warning_once(monkeypatch, abstained, semantic_plan, controlled_public_bundle):
     from api import generate
     from db.schemas import MessageRequest
-    from knowledge import intent_detector
 
     data = dict(
         results=[row(1, "A", "费用3元；引用《B》。")],
@@ -175,6 +174,12 @@ async def test_production_api_carries_reference_receipt_and_warning_once(monkeyp
         citations=[],
         source_references=(reference(),),
     )
+
+    original = dict(data["results"][0], id=1)
+    data["source_coverage"] = [dict(source_id="doc_1", source_title="A",
+        indexed_document_ids=["doc_1_chunk_0"], retrieved_document_ids=["doc_1_chunk_0"],
+        source_authority_snapshot=document_authority_snapshot(original))]
+    monkeypatch.setattr(generate.db, "get_knowledge_document", lambda identity: original if identity == 1 else None)
 
     async def retrieve(*args, **kwargs):
         return copy.deepcopy(data)
@@ -186,7 +191,7 @@ async def test_production_api_carries_reference_receipt_and_warning_once(monkeyp
         return "主体条款应按本轮可见资料核对；引用版本尚不能确定。"
 
     monkeypatch.setattr(generate, "_retrieve_rag_bundle", retrieve)
-    monkeypatch.setattr(intent_detector, "needs_rag", lambda *args: (True, "source read", None))
+    planning = semantic_plan("说明主体条款及引用范围", dict(public_knowledge=[0]))
     monkeypatch.setenv("RAG_CITATIONS_ENABLED", "false")
     _, used, metadata = await generate._generate_with_retrieval(
         MessageRequest(message="说明主体条款及引用范围"),
@@ -194,5 +199,5 @@ async def test_production_api_carries_reference_receipt_and_warning_once(monkeyp
         runtime_config={"useKnowledgeBase": True, "maxTokens": 512},
         model_generate=model,
     )
-    assert len(observed) == 1 and used and "partial_source_context" in metadata["warnings"]
+    assert len(planning) == len(observed) == 1 and used and "partial_source_context" in metadata["warnings"]
     assert actual_coverage(observed[0])["source_references"] == [reference()]

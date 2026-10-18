@@ -641,11 +641,9 @@ def _search_existing_memories(
     return _select_existing_memories(tuple(item[5] for item in candidates), feedback_target_ids)
 
 
-def _normalize_attributed_to(value: Any) -> str:
-    if not isinstance(value, str) or not value.strip():
-        raise ValueError("记忆 LLM attributed_to 必须明确填写归属")
-    normalized = value.strip().lower()
-    return "user" if normalized in {"user", "self", "用户", "本人"} else ""
+def _validate_attribution(value: Any) -> None:
+    if not isinstance(value, str) or value.strip().lower() not in {"user", "self", "用户", "本人"}:
+        raise MemoryResponseError("attributed_to", "记忆 LLM attributed_to 必须明确填写用户归属")
 
 
 def _sanitize_qualifiers(
@@ -1049,9 +1047,9 @@ def _candidate_to_proposal(
     if kind == "other_user_fact" and claims_other_subject_as_user(
         source=source_message, evidence=evidence, value=value, content=proposed_content,
     ):
-        raise ValueError("记忆 LLM 提案将明确的其他主体改写为用户")
-    if not event_observation and not _normalize_attributed_to(raw.get("attributed_to")):
-        return None
+        raise MemoryResponseError("content", "记忆 LLM 提案将明确的其他主体改写为用户")
+    if not event_observation:
+        _validate_attribution(raw.get("attributed_to"))
 
     if semantic_operation in {"PENDING", "RETRACT", "ERASE"}:
         evidence_allowed = memory_write_allowed(evidence) and "?" not in evidence and "？" not in evidence

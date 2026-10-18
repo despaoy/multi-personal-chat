@@ -7,6 +7,7 @@ from repositories.character_memory import DatabaseCharacterMemoryRepository
 from character.memory_llm import MemoryEnrichmentScheduler, MemoryLlmConfig
 from character.memory_operation import operation_receipt_context
 from character.models import MemoryItem, UserScope
+from character.erasure_authority import partial_erasure_plan
 from db.database import SQLiteDB
 
 
@@ -17,12 +18,15 @@ async def test_unresolved_mixed_erasure_fails_before_model_and_preserves_all_cla
     for key, content in [('fact_pet', '用户的猫叫豆沙、糯米'), ('user_major', '用户的大学专业是海洋工程')]:
         await repo.append_claim('role', scope, MemoryItem('', 'user_fact', content, .9), memory_key=key)
     before = await repo.list_memory_records('role', scope, include_inactive=True)
-    completion = SimpleNamespace(complete=AsyncMock(), close=AsyncMock())
+    message = '请忘掉我的猫名字和新增猫的记录，保留最近提过的那项重要资料。'
+    plan = partial_erasure_plan(message, tuple(before))
+    assert plan is not None and plan.unresolved_protection
+    completion = SimpleNamespace(complete=AsyncMock(side_effect=AssertionError('Unresolved scope reached model')), close=AsyncMock())
     worker = MemoryEnrichmentScheduler(config=MemoryLlmConfig(True, 'unused', 'fixture'), completion=completion,
         embedding_provider=SimpleNamespace(embed_texts=lambda texts: [[1., 0.] for _ in texts]))
     try:
         result = await worker.schedule_and_wait(repository=repo, character_id='role', user_scope=scope,
-            message='请忘掉我的猫名字和新增猫的记录，保留大学专业。', rule_hints=[], source_message_id='erase', timeout_seconds=2)
+            message=message, rule_hints=[], source_message_id='erase', timeout_seconds=2)
         assert result['status'] == 'failed' and result['reason'] == 'unresolved_erasure_scope'
         assert result['stage'] == 'erasure_authorization' and result['persisted'] == 0
         completion.complete.assert_not_awaited()

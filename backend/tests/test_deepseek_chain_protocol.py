@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from character.memory_llm import MemoryEnrichmentScheduler, MemoryLlmConfig, parse_llm_proposals
+from character.memory_llm import MemoryEnrichmentScheduler, MemoryLlmConfig, MemoryResponseError, parse_llm_proposals
 from character.models import CompiledCharacterContext, UserScope
 from character.semantic_state_estimator import SemanticStateEstimator
 from character.situation_analyzer import SituationAnalyzer
@@ -39,13 +39,18 @@ def test_observation_does_not_promote_free_form_summary_to_a_fact():
     assert "雪饼" not in proposal.memory.content and "三只" not in proposal.memory.content
     assert proposal.evidence == fixture("deepseek_merge_admission.json")["source_message"]
 
-@pytest.mark.parametrize("changes", [
-    {"target_memory_id": "999"}, {"target_memory_key": "user_name"},
-    {"confidence": .1}, {"attributed_to": "assistant"},
-    {"evidence": "我新养的猫叫雪饼。"},
+@pytest.mark.parametrize("changes,error", [
+    ({"target_memory_id": "999"}, False), ({"target_memory_key": "user_name"}, False),
+    ({"confidence": .1}, False), ({"attributed_to": "assistant"}, True),
+    ({"evidence": "我新养的猫叫雪饼。"}, False),
 ])
-def test_quote_fallback_preserves_existing_admission_boundaries(changes):
-    assert not merge(changes)
+def test_quote_fallback_preserves_existing_admission_boundaries(changes, error):
+    if error:
+        with pytest.raises(MemoryResponseError) as caught:
+            merge(changes)
+        assert caught.value.field == "attributed_to"
+    else:
+        assert not merge(changes)
 
 def test_no_target_is_not_a_new_paraphrased_fact():
     assert not merge(targets=())

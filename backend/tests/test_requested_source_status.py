@@ -100,18 +100,22 @@ def test_inconsistent_producer_lookup_never_becomes_generation_authority(change)
         requested_source_lookups(data, "读取《A》《B》")
 
 
-async def test_shared_api_preserves_missing_title_status_without_extra_model_call(monkeypatch):
+async def test_shared_api_preserves_missing_title_status_without_extra_model_call(monkeypatch, semantic_plan, controlled_public_bundle):
     from api import generate
     from db.schemas import MessageRequest
-    from knowledge import intent_detector
+    from knowledge.original_sources import document_authority_snapshot
 
     data = producer()
     data.update(
-        results=[dict(id="doc_5_chunk_0", title="A", content="原文限制：身份核验不能豁免。")],
+        results=[dict(id="doc_5_chunk_0", document_id=5, title="A", content="原文限制：身份核验不能豁免。")],
         confidence=0.9,
         abstained=False,
         citations=[],
     )
+
+    original = dict(id=5, title="A", content=data["results"][0]["content"])
+    data["source_coverage"][0]["source_authority_snapshot"] = document_authority_snapshot(original)
+    monkeypatch.setattr(generate.db, "get_knowledge_document", lambda identity: original if identity == 5 else None)
 
     async def retrieve(*args, **kwargs):
         return data
@@ -123,7 +127,7 @@ async def test_shared_api_preserves_missing_title_status_without_extra_model_cal
         return "A明确不豁免身份核验；本次未找到B，不能核对其条件。"
 
     monkeypatch.setattr(generate, "_retrieve_rag_bundle", retrieve)
-    monkeypatch.setattr(intent_detector, "needs_rag", lambda *args: (True, "source read", None))
+    planning = semantic_plan("读取《A》《B》", dict(public_knowledge=[0]))
     monkeypatch.setenv("RAG_CITATIONS_ENABLED", "false")
     reply, used, metadata = await generate._generate_with_retrieval(
         MessageRequest(message="读取《A》《B》"),
@@ -131,6 +135,6 @@ async def test_shared_api_preserves_missing_title_status_without_extra_model_cal
         runtime_config={"useKnowledgeBase": True, "maxTokens": 512},
         model_generate=model,
     )
-    assert len(observed) == 1 and used and "partial_source_context" in metadata["warnings"]
+    assert len(planning) == len(observed) == 1 and used and "partial_source_context" in metadata["warnings"]
     actual = coverage(SimpleNamespace(messages=observed[0]))["requested_sources"]
     assert actual[1]["lookup_status"] == "not_found_in_index_scope"

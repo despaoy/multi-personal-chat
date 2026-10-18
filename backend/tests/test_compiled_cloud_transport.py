@@ -158,7 +158,7 @@ async def test_explicit_unsupported_main_sampling_is_not_replaced_with_defaults(
     installed.config["topP"] = 0.7
     with pytest.raises(HTTPException) as error:
         await receive()
-    assert error.value.status_code == 500 and isinstance(error.value.__cause__, ValueError)
+    assert error.value.status_code == 503 and isinstance(error.value.__cause__, ValueError)
     assert installed.config["topP"] == 0.7 and installed.calls == []
 
 

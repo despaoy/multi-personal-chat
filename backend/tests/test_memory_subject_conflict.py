@@ -15,7 +15,7 @@ SOURCE = '我的大学专业是物理学，不是考古学；学考古学的是�
 
 def candidate(content):
     return dict(kind='other_user_fact', value='考古学', evidence='学考古学的是我的朋友',
-                content=content, confidence=.95, operation='ADD')
+                content=content, confidence=.95, operation='ADD', attributed_to='user')
 
 
 @pytest.mark.parametrize('predicate,value', [('学', '考古学'), ('喜欢', '咖啡'), ('讨厌', '红茶')])
@@ -51,7 +51,7 @@ async def test_subject_conflict_reports_failure_before_any_fact_is_written(tmp_p
     repo = DatabaseCharacterMemoryRepository(database)
     scope = UserScope('web', 'subject-contract', 'reader', 'reader', 'private')
     valid = dict(kind='major', value='物理学', evidence='我的大学专业是物理学',
-                 content='用户的大学专业是物理学', confidence=.95, operation='ADD')
+                 content='用户的大学专业是物理学', confidence=.95, operation='ADD', attributed_to='user')
     raw = json.dumps({'memories': [valid, candidate('用户学习考古学')]})
     completion = SimpleNamespace(complete=AsyncMock(return_value=raw), close=AsyncMock())
     worker = MemoryEnrichmentScheduler(config=MemoryLlmConfig(True, 'unused', 'fixture'), completion=completion)
@@ -59,7 +59,8 @@ async def test_subject_conflict_reports_failure_before_any_fact_is_written(tmp_p
         receipt = await worker.schedule_and_wait(repository=repo, character_id='role', user_scope=scope,
             message=SOURCE, rule_hints=(), source_message_id='source')
         assert receipt['status'] == 'failed' and receipt['stage'] == 'proposal_validation'
-        assert receipt['source_capture'] == 'recorded' and receipt['error'] == 'ValueError'
+        assert receipt['source_capture'] == 'recorded' and receipt['error'] == 'MemoryResponseError'
+        assert receipt['reason'] == 'invalid_model_response' and receipt['field'] == 'content'
         assert receipt['accepted'] == receipt['persisted'] == 0
         assert await repo.list_memory_records('role', scope) == []
         assert (await repo.list_sources('role', scope, source_message_ids=('source',)))[0]['body'] == SOURCE
