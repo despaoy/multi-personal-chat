@@ -9,7 +9,7 @@ from character.memory_llm import (
     MemoryEnrichmentScheduler,
     MemoryLlmConfig,
     _search_existing_memories,
-    parse_llm_memories,
+    parse_llm_proposals,
 )
 from character.models import UserScope
 
@@ -19,7 +19,7 @@ def _response(*memories):
 
 
 def test_llm_candidate_requires_exact_evidence_and_builds_local_content():
-    result = parse_llm_memories(
+    result = parse_llm_proposals(
         _response(
             {"attributed_to": "user",
                 "operation": "ADD", "kind": "goal",
@@ -32,12 +32,12 @@ def test_llm_candidate_requires_exact_evidence_and_builds_local_content():
     )
 
     assert len(result) == 1
-    assert result[0].memory_key == "goal_保研面试"
-    assert result[0].content == "用户正在进行或准备：保研面试"
+    assert result[0].memory.memory_key == "goal_保研面试"
+    assert result[0].memory.content == "用户正在进行或准备：保研面试"
 
 
 def test_llm_candidate_cannot_invent_evidence_or_value():
-    invented_evidence = parse_llm_memories(
+    invented_evidence = parse_llm_proposals(
         _response(
             {"attributed_to": "user",
                 "operation": "ADD", "kind": "like",
@@ -48,7 +48,7 @@ def test_llm_candidate_cannot_invent_evidence_or_value():
         ),
         source_message="我喜欢红茶。",
     )
-    invented_value = parse_llm_memories(
+    invented_value = parse_llm_proposals(
         _response(
             {"attributed_to": "user",
                 "operation": "ADD", "kind": "like",
@@ -74,8 +74,8 @@ def test_llm_path_respects_opt_out_sensitive_and_uncertain_policy():
         }
     )
 
-    assert parse_llm_memories(candidate, source_message="不要记住我喜欢咖啡") == []
-    assert parse_llm_memories(candidate, source_message="我的支付密码是123456") == []
+    assert parse_llm_proposals(candidate, source_message="不要记住我喜欢咖啡") == []
+    assert parse_llm_proposals(candidate, source_message="我的支付密码是123456") == []
     uncertain = _response(
         {"attributed_to": "user",
             "operation": "ADD", "kind": "like",
@@ -84,7 +84,7 @@ def test_llm_path_respects_opt_out_sensitive_and_uncertain_policy():
             "confidence": 0.99,
         }
     )
-    assert parse_llm_memories(uncertain, source_message="我可能喜欢咖啡") == []
+    assert parse_llm_proposals(uncertain, source_message="我可能喜欢咖啡") == []
 
 
 class _Completion:

@@ -16,7 +16,6 @@ from knowledge.public_question_binding import (
     QuestionBindingReviewError,
     bound_object_search_views,
     bound_task_search_views,
-    failed_question_binding_review,
     resolve_question_binding,
     validate_question_binding,
 )
@@ -121,13 +120,12 @@ async def test_failure_diagnostic_keeps_complete_reference_input_without_grantin
 
     with pytest.raises(QuestionBindingReviewError) as caught:
         await resolve_question_binding(dependencies(), QUERY, window_tokens=65536, history=HISTORY, reviewer=invalid)
-    diagnostic = failed_question_binding_review(caught.value, dependencies(), QUERY, history=HISTORY)
-    assert diagnostic["review_status"] == "unavailable" and diagnostic["decisions"] == []
-    assert (
-        json.loads(diagnostic["failure_diagnostic"]["input"][-1]["content"])["reference_context"]["history"] == HISTORY
-    )
+    diagnostic = caught.value.diagnostic
+    assert diagnostic["stage"] == "object" and diagnostic["raw"] == '{"scopes":[]}'
+    payload = json.loads(diagnostic["input"][-1]["content"])
+    assert payload["reference_context"]["history"] == HISTORY
     with pytest.raises(ValueError):
-        failed_question_binding_review(caught.value, dependencies(), QUERY)
+        validate_question_binding(diagnostic, payload)
 
 
 async def test_only_exact_bound_reference_views_pass_retrieval_validation():

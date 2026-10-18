@@ -119,37 +119,6 @@ async def resolve_question_binding(dependencies, query, *, window_tokens, public
         raise QuestionBindingReviewError("provider_error", messages, raw) from exc
 
 
-def failed_question_binding_review(error, dependencies, query, public_obligations=(), *, history=(), context_budget=None, with_retrieval_scope=False):
-    """Carry unavailable obligations and diagnostics, never resolver assertions."""
-    payload = question_scope_input(dependencies, query, public_obligations, history=history, context_budget=context_budget, with_retrieval_scope=with_retrieval_scope)
-    expected = [
-        dict(role="system", content=resolver_instruction(payload.get("scope_policy"))),
-        dict(role="user", content=json.dumps(payload, ensure_ascii=False)),
-    ]
-    if (
-        not isinstance(error, QuestionBindingReviewError)
-        or not isinstance(error.diagnostic, dict)
-        or set(error.diagnostic) != {"stage", "input", "raw"}
-        or error.diagnostic["stage"] != "object"
-        or error.diagnostic["input"] != expected
-        or (error.diagnostic["raw"] is not None and not isinstance(error.diagnostic["raw"], str))
-    ):
-        raise ValueError("Failed question binding is not bound to the complete original input")
-    return dict(
-        query=query,
-        tasks=list(public_obligations) if public_obligations else [
-            dict(index=task["id"], query=task["text"]) for task in payload["public_tasks"]
-        ],
-        task_granularity="literal_partition" if public_obligations else "segment_unverified",
-        receipt_schema_version=2,
-        public_segment_indices=list(dict(dependencies.groups)["public_knowledge"]),
-        decisions=[], review_status="unavailable", reason=f"question_binding_{error.reason}",
-        failure_diagnostic=error.diagnostic,
-    )
-
-
-
-
 def bound_object_search_views(binding, retrieval_query):
     """Supplement a full original-query search when planner hints are absent."""
     scopes = validate_question_binding(binding, binding["input"])

@@ -1,4 +1,4 @@
-"""Full source-blind resolver input; raw response must survive caller fallback."""
+"""Full source-blind resolver input; raw response remains diagnostic and never grants a binding."""
 
 import asyncio
 import json
@@ -341,16 +341,12 @@ async def test_binding_failure_with_large_private_source_still_errors(tmp_path, 
 
 
 async def test_diagnostic_valid_json_cannot_grant_binding_or_hide_changed_input():
-    from knowledge.public_question_binding import failed_question_binding_review
-
     _, error, _ = await exercise("json")
     error.diagnostic["raw"] = json.dumps(
         dict(scopes=[dict(task_id=0, objects=["霁浦登记"]), dict(task_id=1, objects=["竹原续签"])])
     )
-    receipt = failed_question_binding_review(error, deps(), QUERY)
-    assert receipt["review_status"] == "unavailable" and receipt["decisions"] == [] and "object_scopes" not in receipt
     with pytest.raises(ValueError):
         validate_question_binding(error.diagnostic, json.loads(error.diagnostic["input"][-1]["content"]))
     error.diagnostic["input"][-1]["content"] = json.dumps(dict(query=QUERY + "其他问题", public_tasks=[]))
     with pytest.raises(ValueError, match="complete original input"):
-        failed_question_binding_review(error, deps(), QUERY)
+        validate_question_binding(error.diagnostic, json.loads(error.diagnostic["input"][-1]["content"]))

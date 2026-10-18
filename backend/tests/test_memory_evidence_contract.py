@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock
 import pytest
 from repositories.character_memory import DatabaseCharacterMemoryRepository
 
-from character.memory_llm import MemoryEnrichmentScheduler, MemoryLlmConfig, parse_llm_memories
+from character.memory_llm import MemoryEnrichmentScheduler, MemoryLlmConfig, parse_llm_proposals
 from character.models import UserScope
 from db.database import SQLiteDB
 
@@ -22,15 +22,15 @@ def response(evidence='我喜欢红茶', omit=False):
 @pytest.mark.parametrize('evidence', [None, False, 0, 1, [], {}, '', '  '])
 def test_malformed_evidence_is_explicit_failure(evidence):
     with pytest.raises(ValueError, match='evidence'):
-        parse_llm_memories(response(evidence), source_message=SOURCE)
+        parse_llm_proposals(response(evidence), source_message=SOURCE)
 
 def test_missing_evidence_is_explicit_failure():
     with pytest.raises(ValueError, match='evidence'):
-        parse_llm_memories(response(omit=True), source_message=SOURCE)
+        parse_llm_proposals(response(omit=True), source_message=SOURCE)
 
 def test_valid_evidence_preserves_success_and_unsupported_evidence_is_rejected():
-    assert len(parse_llm_memories(response(), source_message=SOURCE)) == 1
-    assert parse_llm_memories(response('我喜欢咖啡'), source_message=SOURCE) == []
+    assert len(parse_llm_proposals(response(), source_message=SOURCE)) == 1
+    assert parse_llm_proposals(response('我喜欢咖啡'), source_message=SOURCE) == []
 
 async def test_protocol_failure_reaches_receipt_without_claim_write(tmp_path):
     repo = DatabaseCharacterMemoryRepository(SQLiteDB(tmp_path/'evidence.sqlite'))

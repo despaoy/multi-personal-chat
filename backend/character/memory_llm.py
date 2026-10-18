@@ -1465,15 +1465,6 @@ def _proposals_from_payload(
     )
 
 
-def parse_llm_memories(text: str, *, source_message: str) -> list[ExtractedMemory]:
-    """向后兼容入口：解析无上下文的 ADD 候选。"""
-    return [
-        item.memory
-        for item in parse_llm_proposals(text, source_message=source_message)
-        if item.memory is not None and item.operation not in {"NOOP", "RETRACT", "ERASE"}
-    ]
-
-
 def build_memory_llm_messages(
     message: str,
     rule_hints: tuple[ExtractedMemory, ...],
