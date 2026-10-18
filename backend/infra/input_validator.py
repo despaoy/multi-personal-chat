@@ -45,11 +45,9 @@ class FieldRule:
         max_value: 数值最大值
         pattern: 正则匹配模式
         allowed_values: 允许的枚举值列表
-        check_sql_injection: 是否检测SQL注入
         check_xss: 是否检测XSS
         check_path_traversal: 是否检测路径遍历
-        check_command_injection: 是否检测命令注入
-        sanitize: 是否自动清理控制字符
+        sanitize: 是否拒绝非法控制字符（不改写原文）
         custom_validator: 自定义验证函数 (value) -> Optional[str]，返回错误消息或None
     """
 
@@ -61,10 +59,8 @@ class FieldRule:
     max_value: Optional[float] = None
     pattern: Optional[str] = None
     allowed_values: Optional[list[Any]] = None
-    check_sql_injection: bool = False
     check_xss: bool = False
     check_path_traversal: bool = False
-    check_command_injection: bool = False
     sanitize: bool = True
     custom_validator: Optional[Callable[[Any], Optional[str]]] = None
 
@@ -85,25 +81,6 @@ class Schema:
 # ---------------------------------------------------------------------------
 # 安全检测模式
 # ---------------------------------------------------------------------------
-
-# SQL注入模式
-_SQL_INJECTION_PATTERNS: list[re.Pattern[str]] = [
-    re.compile(r"(\b|\')(?:OR|AND)\s+\d+\s*=\s*\d+", re.IGNORECASE),
-    re.compile(r"\bUNION\b\s+(?:ALL\s+)?\bSELECT\b", re.IGNORECASE),
-    re.compile(r"\bDROP\s+(?:TABLE|DATABASE|INDEX)", re.IGNORECASE),
-    re.compile(r"\bDELETE\s+FROM\b", re.IGNORECASE),
-    re.compile(r"\bINSERT\s+INTO\b", re.IGNORECASE),
-    re.compile(r"\bUPDATE\s+\w+\s+SET\b", re.IGNORECASE),
-    re.compile(r";\s*(?:SELECT|DROP|DELETE|INSERT|UPDATE|ALTER|CREATE)\b", re.IGNORECASE),
-    re.compile(r"--\s*$", re.IGNORECASE),
-    re.compile(r"/\*.*\*/", re.IGNORECASE | re.DOTALL),
-    re.compile(r"\bEXEC(?:UTE)?\b", re.IGNORECASE),
-    re.compile(r"\bXP_\(CMDSHELL\)", re.IGNORECASE),
-    re.compile(r"'\s*OR\s+'", re.IGNORECASE),
-    re.compile(r"\bWAITFOR\s+DELAY\b", re.IGNORECASE),
-    re.compile(r"\bBENCHMARK\s*\(", re.IGNORECASE),
-    re.compile(r"\bSLEEP\s*\(", re.IGNORECASE),
-]
 
 # XSS检测模式
 _XSS_PATTERNS: list[re.Pattern[str]] = [
@@ -132,23 +109,6 @@ _PATH_TRAVERSAL_PATTERNS: list[re.Pattern[str]] = [
     re.compile(r"~\\"),
 ]
 
-# 命令注入模式
-_COMMAND_INJECTION_PATTERNS: list[re.Pattern[str]] = [
-    re.compile(r";\s*rm\b", re.IGNORECASE),
-    re.compile(r";\s*del\b", re.IGNORECASE),
-    re.compile(r"\|\s*cat\b", re.IGNORECASE),
-    re.compile(r"\|\s*sh\b", re.IGNORECASE),
-    re.compile(r"\|\s*bash\b", re.IGNORECASE),
-    re.compile(r"&&\s*del\b", re.IGNORECASE),
-    re.compile(r"&&\s*rm\b", re.IGNORECASE),
-    re.compile(r"`[^`]+`"),
-    re.compile(r"\$\([^)]+\)"),
-    re.compile(r"\b(?:wget|curl)\s+", re.IGNORECASE),
-    re.compile(r"\b(?:chmod|chown|chgrp)\s+", re.IGNORECASE),
-    re.compile(r"\bnc\s+-", re.IGNORECASE),
-    re.compile(r">\s*/dev/", re.IGNORECASE),
-]
-
 # 控制字符模式（\x00-\x1f，排除\t\n\r）
 _CONTROL_CHAR_PATTERN = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f]")
 
@@ -164,16 +124,13 @@ MESSAGE_SCHEMA = Schema(
             required=True,
             min_length=1,
             max_length=10000,
-            check_sql_injection=True,
             check_xss=True,
-            check_command_injection=True,
             sanitize=True,
         ),
         "title": FieldRule(
             field_type=FieldType.STRING,
             required=False,
             max_length=200,
-            check_sql_injection=True,
             check_xss=True,
             sanitize=True,
         ),
@@ -199,7 +156,6 @@ KNOWLEDGE_DOCUMENT_SCHEMA = Schema(
             required=True,
             min_length=1,
             max_length=200,
-            check_sql_injection=True,
             check_xss=True,
             sanitize=True,
         ),
@@ -208,7 +164,6 @@ KNOWLEDGE_DOCUMENT_SCHEMA = Schema(
             required=True,
             min_length=1,
             max_length=50000,
-            check_sql_injection=True,
             check_xss=True,
             sanitize=True,
         ),
@@ -216,7 +171,6 @@ KNOWLEDGE_DOCUMENT_SCHEMA = Schema(
             field_type=FieldType.STRING,
             required=False,
             max_length=100,
-            check_sql_injection=True,
             sanitize=True,
         ),
         "tags": FieldRule(
@@ -234,7 +188,6 @@ KNOWLEDGE_SEARCH_SCHEMA = Schema(
             required=True,
             min_length=1,
             max_length=1000,
-            check_sql_injection=True,
             check_xss=True,
             sanitize=True,
         ),
@@ -258,7 +211,6 @@ TRAINING_SCHEMA = Schema(
             required=True,
             min_length=1,
             max_length=200,
-            check_sql_injection=True,
             check_path_traversal=True,
             sanitize=True,
         ),
@@ -267,7 +219,6 @@ TRAINING_SCHEMA = Schema(
             required=True,
             min_length=1,
             max_length=100,
-            check_sql_injection=True,
             check_path_traversal=True,
             sanitize=True,
         ),
@@ -276,7 +227,6 @@ TRAINING_SCHEMA = Schema(
             required=True,
             min_length=1,
             max_length=200,
-            check_sql_injection=True,
             check_path_traversal=True,
             sanitize=True,
         ),
@@ -321,14 +271,12 @@ CONFIG_SCHEMA = Schema(
             required=True,
             min_length=1,
             max_length=100,
-            check_sql_injection=True,
             sanitize=True,
         ),
         "value": FieldRule(
             field_type=FieldType.STRING,
             required=True,
             max_length=10000,
-            check_sql_injection=True,
             check_xss=True,
             sanitize=True,
         ),
@@ -507,10 +455,6 @@ class InputValidator:
             })
 
         # 安全检测
-        if rule.check_sql_injection:
-            sql_error = InputValidator._check_sql_injection(field_name, value)
-            if sql_error:
-                errors.append(sql_error)
 
         if rule.check_xss:
             xss_error = InputValidator._check_xss(field_name, value)
@@ -522,10 +466,6 @@ class InputValidator:
             if path_error:
                 errors.append(path_error)
 
-        if rule.check_command_injection:
-            cmd_error = InputValidator._check_command_injection(field_name, value)
-            if cmd_error:
-                errors.append(cmd_error)
 
         # 控制字符检测
         if rule.sanitize and _CONTROL_CHAR_PATTERN.search(value):
@@ -576,17 +516,6 @@ class InputValidator:
     # 安全检测方法
     # -----------------------------------------------------------------------
 
-    @staticmethod
-    def _check_sql_injection(field_name: str, value: str) -> Optional[dict[str, str]]:
-        """检测SQL注入模式。"""
-        for pattern in _SQL_INJECTION_PATTERNS:
-            if pattern.search(value):
-                logger.warning("SQL注入检测触发: field=%s, pattern=%s", field_name, pattern.pattern)
-                return {
-                    "field": field_name,
-                    "message": "输入包含潜在的SQL注入内容",
-                }
-        return None
 
     @staticmethod
     def _check_xss(field_name: str, value: str) -> Optional[dict[str, str]]:
@@ -609,17 +538,5 @@ class InputValidator:
                 return {
                     "field": field_name,
                     "message": "输入包含潜在的路径遍历内容",
-                }
-        return None
-
-    @staticmethod
-    def _check_command_injection(field_name: str, value: str) -> Optional[dict[str, str]]:
-        """检测命令注入模式。"""
-        for pattern in _COMMAND_INJECTION_PATTERNS:
-            if pattern.search(value):
-                logger.warning("命令注入检测触发: field=%s, pattern=%s", field_name, pattern.pattern)
-                return {
-                    "field": field_name,
-                    "message": "输入包含潜在的命令注入内容",
                 }
         return None
