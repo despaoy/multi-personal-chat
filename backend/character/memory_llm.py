@@ -71,6 +71,8 @@ _ALLOWED_KINDS = {
     "major",
     "study_stage",
     "location",
+    "origin",
+    "residence",
     "workplace",
     "goal",
     "promise",
@@ -80,7 +82,7 @@ _ALLOWED_KINDS = {
 _PROPOSAL_FIELDS = {
     "kind", "value", "content", "evidence", "confidence", "operation",
     "target_memory_id", "target_memory_key", "attributed_to", "qualifiers",
-    "valid_from", "valid_to", "valid_at", "invalid_at", "observed_at", "scope_level",
+    "valid_from", "valid_to", "observed_at", "scope_level",
 }
 
 DEFAULT_CONFIDENCE_THRESHOLD = 0.85
@@ -149,10 +151,12 @@ MERGE/SUPERSEDE/COEXIST/RETRACT/ERASE 必须从白名单逐字复制 target_memo
 - 旧“不喜欢咖啡” + “喝无咖啡因咖啡，普通咖啡才不喝” → COEXIST dislike=普通咖啡；
 - “请记住，推荐饮料时避开含咖啡因的” → ADD dislike=含咖啡因的饮料。
 
-对明确表达的本人未来计划，“说过这个计划”与“已经实施”是两个不同的命题。若计划的时间、地点、条件或尚未实施说明分散在长消息里，使用 kind=shared_event、operation=ADD 保存当前完整发言的原话观察，绝不确认行动发生。value 取当前连续原文中的短话题（不超过 payload.proposal_constraints.max_value_chars），evidence 只复制一段相关连续原文（不超过 max_evidence_chars），content 留空；qualifiers 可留空，或逐字复制完整当前消息中的限定（键仍须在白名单内）。后端会保留整条当前消息，包括末尾条件，不会用短引文代替完整来源。不要拼接开头和末尾当作连续 evidence。虚构材料、第三方计划不是用户本人的计划；未确定的外部事实仍按 PENDING 处理，不因这条规则变成事实。
+对明确表达的本人未来计划，“说过这个计划”与“已经实施”是两个不同的命题。若计划的时间、地点、条件或尚未实施说明分散在长消息里，使用 kind=shared_event、operation=ADD 保存当前完整发言的原话观察，绝不确认行动发生。value 取当前连续原文中的短话题（不超过 payload.proposal_constraints.max_value_chars），evidence 只复制一段相关连续原文（不超过 max_evidence_chars），content 留空、qualifiers 使用空对象 {}，不要再次概括条件。后端保留整条当前消息及全部限定，包括末尾条件，不会用短引文代替完整来源。不要拼接开头和末尾当作连续 evidence。虚构材料、第三方计划不是用户本人的计划；未确定的外部事实仍按 PENDING 处理，不因这条规则变成事实。
 
 写入新内容的 ADD/MERGE/SUPERSEDE/COEXIST/PENDING 必须填写合法 kind 和非空 value；不能因为已有 target 就省略类型或猜测类型。
 value 是短索引，不要把整段计划和全部限定塞进 value。qualifiers 的键只能来自 payload.proposal_constraints.qualifier_keys，值只能逐字复制 evidence，不要创造 status 等新键或概括条件。不能满足这些要求时使用上述完整原话观察，而不是裁掉末尾限定。
+
+籍贯或家乡使用 kind=origin；当前长期居住地使用 kind=residence，二者分别保存，不要归入 other_user_fact。只有来源没有区分来处与居住地时才用 location。
 
 结构化事实的 value 应取证据中连续出现的短对象，不把场景与对象重新拼接成新的短语；场景保留在 context 限定中。若提供 content，必须包含同一个 value 的原文，不能只在 value 中改写词序或添加连接词。明确省略的消歧仍按下述规则处理。
 先确定要保留的全部条件、否定与范围，再选择一段连续 evidence；它必须逐字覆盖该提议的所有自然语言 qualifiers，而不只是核心偏好句。如果完整当前消息在 max_evidence_chars 内，可以直接引用整条消息以保留末尾限定。不要为了缩短 evidence 删除必要条件或“未实际发生”说明；超过长度且无法完整覆盖时，使用完整原话观察保留整条消息，不输出缺限定的结构化事实。
@@ -162,7 +166,7 @@ value 是短索引，不要把整段计划和全部限定塞进 value。qualifie
 明确且稳定的信息可直接 ADD；不确定陈述不要丢弃，应使用 PENDING。confidence 表示“是否准确读懂证据和关系”的把握，不是事实发生概率；因此用户清楚表达“可能/不确定”时，PENDING 的 confidence 仍应较高。低于 payload.confidence_threshold 时用 NOOP 或不返回。最多返回 4 条。
 
 只输出严格 JSON，不要 Markdown、解释或思考过程：
-{"memories":[{"kind":"name|like|dislike|major|study_stage|location|workplace|goal|promise|shared_event|other_user_fact","value":"结构化值","content":"用户开头的第三人称事实","evidence":"当前消息连续原文","confidence":0.0,"operation":"ADD|MERGE|SUPERSEDE|COEXIST|PENDING|RETRACT|NOOP|ERASE","target_memory_id":"","target_memory_key":"","attributed_to":"user","qualifiers":{},"valid_from":"","valid_to":"","observed_at":"","scope_level":"conversation"}]}
+{"memories":[{"kind":"name|like|dislike|major|study_stage|origin|residence|location|workplace|goal|promise|shared_event|other_user_fact","value":"结构化值","content":"用户开头的第三人称事实","evidence":"当前消息连续原文","confidence":0.0,"operation":"ADD|MERGE|SUPERSEDE|COEXIST|PENDING|RETRACT|NOOP|ERASE","target_memory_id":"","target_memory_key":"","attributed_to":"user","qualifiers":{},"valid_from":"","valid_to":"","observed_at":"","scope_level":"conversation"}]}
 顶层只允许 memories 和本轮明确提供的 erase_source_ids，候选只能包含以上声明字段。
 没有合格记忆时输出 {"memories":[]}。"""
 
@@ -813,6 +817,8 @@ def _target_key_matches_kind(kind: str, target_memory_key: str) -> bool:
         "dislike": "preference_",
         "major": "user_major",
         "study_stage": "user_study_stage",
+        "origin": "user_origin",
+        "residence": "user_residence",
         "location": "user_location",
         "workplace": "user_workplace",
         "goal": "goal_",
@@ -847,7 +853,11 @@ def _infer_kind_from_target(record: dict[str, Any]) -> str:
         return "major"
     if key == "user_study_stage":
         return "study_stage"
-    if key in {"user_location", "user_origin", "user_residence"}:
+    if key == "user_origin":
+        return "origin"
+    if key == "user_residence":
+        return "residence"
+    if key == "user_location":
         return "location"
     if key == "user_workplace":
         return "workplace"
@@ -914,10 +924,12 @@ def _canonical_memory_fields(kind: str, value: str, evidence: str) -> tuple[str,
             f"用户说{'喜欢' if kind == 'like' else '不喜欢'}{value}",
             0.6 if kind == "like" else 0.5,
         )
-    if kind in {"major", "study_stage", "location", "workplace"}:
+    if kind in {"major", "study_stage", "origin", "residence", "location", "workplace"}:
         field = {
             "major": ("user_major", "用户说自己的专业是", 0.8),
             "study_stage": ("user_study_stage", "用户说自己是", 0.7),
+            "origin": ("user_origin", "用户说自己来自", 0.6),
+            "residence": ("user_residence", "用户说自己居住在", 0.6),
             "location": ("user_location", "用户说自己来自或居住在", 0.6),
             "workplace": ("user_workplace", "用户说自己在", 0.7),
         }[kind]
@@ -1028,7 +1040,7 @@ def _candidate_to_proposal(
     if (not event_observation and not self_alias_exclusion
             and (_THIRD_PARTY_FACT_PATTERN.search(evidence) or _NAMED_THIRD_PARTY_PATTERN.search(evidence))):
         return None
-    if (kind in {'name', 'like', 'dislike', 'major', 'study_stage', 'location', 'workplace'}
+    if (kind in {'name', 'like', 'dislike', 'major', 'study_stage', 'origin', 'residence', 'location', 'workplace'}
             and semantic_operation not in {'NOOP', 'RETRACT', 'ERASE'}
             and explicitly_other_subject(source=source_message, evidence=evidence, value=value)):
         return None
@@ -1057,7 +1069,7 @@ def _candidate_to_proposal(
                 normalized_evidence = _normalize(evidence)
                 proposed_content = item.content
                 evidence_allowed = memory_evidence_allowed(evidence)
-    if evidence_allowed and kind == "location" and semantic_operation in {"ADD", "SUPERSEDE", "COEXIST", "MERGE"}:
+    if evidence_allowed and kind in {"origin", "residence", "location"} and semantic_operation in {"ADD", "SUPERSEDE", "COEXIST", "MERGE"}:
         # A clipped quote must not turn a hypothetical source clause into
         # an asserted residence/origin. Check each original overlapping
         # clause; independent assertions elsewhere retain their own scope.
@@ -1248,15 +1260,7 @@ def _candidate_to_proposal(
 
     raw_qualifiers = raw.get("qualifiers")
     raw_qualifiers = normalize_alias_labels(raw_qualifiers, projection=alias_projection)
-    misplaced_validity: dict[str, Any] = {}
     if isinstance(raw_qualifiers, dict):
-        # Known envelope fields sometimes occur alongside real qualifiers.
-        # Split only those fields; retain all other entries for the ordinary
-        # grounding/allowlist checks. Model observation time is ignored in
-        # either location, never used as source provenance.
-        temporal_fields = {"valid_from", "valid_to", "valid_at", "invalid_at", "observed_at"}
-        misplaced_validity = {key: value for key, value in raw_qualifiers.items() if key in temporal_fields}
-        raw_qualifiers = {key: value for key, value in raw_qualifiers.items() if key not in temporal_fields}
         # A known model schema label is redundant only when the ordinary
         # source predicate independently proves the same location field.
         if kind == "location" and "type" in raw_qualifiers:
@@ -1283,12 +1287,8 @@ def _candidate_to_proposal(
     qualifiers = _sanitize_qualifiers(
         raw_qualifiers, evidence=qualifier_evidence, pending=semantic_operation == "PENDING"
     )
-    raw_valid_from = next((value for value in (
-        raw.get("valid_from"), raw.get("valid_at"), misplaced_validity.get("valid_from"), misplaced_validity.get("valid_at")
-    ) if value is not None and value != ""), None)
-    raw_valid_to = next((value for value in (
-        raw.get("valid_to"), raw.get("invalid_at"), misplaced_validity.get("valid_to"), misplaced_validity.get("invalid_at")
-    ) if value is not None and value != ""), None)
+    raw_valid_from = raw.get("valid_from")
+    raw_valid_to = raw.get("valid_to")
     valid_from = _normalize_iso_time(raw_valid_from, "valid_from")
     valid_to = _normalize_iso_time(raw_valid_to, "valid_to")
     # Observation time belongs to server provenance, not semantic extraction.

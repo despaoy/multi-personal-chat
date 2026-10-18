@@ -11,7 +11,7 @@ def parse(**fields):
              confidence=.96,attributed_to='user',**fields)
     return parse_llm_proposals(json.dumps({'memories':[row]},ensure_ascii=False),source_message='今年刚升大三')
 
-@pytest.mark.parametrize('field',['valid_from','valid_to','valid_at','invalid_at'])
+@pytest.mark.parametrize('field',['valid_from','valid_to'])
 @pytest.mark.parametrize('bad',['not-a-date','2026-02-30',0,False,[],{}])
 def test_invalid_date_or_structure_is_not_a_normal_empty_result(field,bad):
     with pytest.raises(ValueError,match='valid_from|valid_to'):

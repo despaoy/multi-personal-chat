@@ -80,16 +80,10 @@ def test_requires_trusted_aware_clock(clock):
         model_temporal_provenance(evidence="今年", observed_at=clock)
 
 
-@pytest.mark.parametrize("location", ["top", "aliases", "qualifiers"])
-def test_parser_keeps_raw_precision_across_legacy_date_locations(location):
+def test_parser_keeps_raw_precision_in_canonical_dates():
     entry = {"attributed_to": "user", "operation": "ADD", "kind": "study_stage", "value": "大三", "evidence": "今年刚升大三", "confidence": .96}
     dates = {"valid_from": "2025-09-01", "valid_to": "2026-07-01"}
-    if location == "top":
-        entry.update(dates)
-    elif location == "aliases":
-        entry.update(valid_at=dates["valid_from"], invalid_at=dates["valid_to"])
-    else:
-        entry["qualifiers"] = dates
+    entry.update(dates)
     proposals = parse_llm_proposals(json.dumps({"memories": [entry]}), source_message=entry["evidence"])
     assert len(proposals) == 1
     proposal = proposals[0]

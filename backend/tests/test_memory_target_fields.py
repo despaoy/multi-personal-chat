@@ -20,7 +20,7 @@ async def test_erasure_preserves_stored_fields(tmp_path,importance):
     records=await repo.list_memory_records('role',scope)
     assert len(records)==1 and records[0]['importance']==importance
     source='请把你记住的我的住址彻底删掉。'
-    payload=dict(operation='ERASE',kind='erasure',value='用户要求彻底删除住址信息',evidence=source,confidence=1.0,attributed_to='user',target_memory_id=str(records[0]['id']),target_memory_key='user_location')
+    payload=dict(operation='ERASE',kind='location',value='用户要求彻底删除住址信息',evidence=source,confidence=1.0,attributed_to='user',target_memory_id=str(records[0]['id']),target_memory_key='user_location')
     result=parse_llm_proposals(json.dumps(dict(memories=[payload]),ensure_ascii=False),source_message=source,existing_memories=records)
     assert len(result)==1 and result[0].operation=='ERASE'
     assert result[0].memory.importance==importance

@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import pytest
 
 from character.context_builder import compile_reference_context
-from character.memory_llm import parse_llm_proposals
+from character.memory_llm import MemoryResponseError, parse_llm_proposals
 from character.models import MemoryItem
 
 PLAN = (
@@ -125,7 +125,9 @@ def test_plan_observation_accepts_exact_late_source_condition():
 def test_plan_observation_still_rejects_invented_or_unknown_late_qualifiers(qualifiers):
     raw = json.loads(proposal())
     raw["memories"][0]["qualifiers"] = qualifiers
-    assert parse_llm_proposals(json.dumps(raw, ensure_ascii=False), source_message=PLAN) == []
+    with pytest.raises(MemoryResponseError) as caught:
+        parse_llm_proposals(json.dumps(raw, ensure_ascii=False), source_message=PLAN)
+    assert caught.value.field == "qualifiers"
 
 
 def test_semantic_fact_cannot_borrow_an_unquoted_late_qualifier():
@@ -141,9 +143,8 @@ def test_semantic_fact_cannot_borrow_an_unquoted_late_qualifier():
             }
         ]
     }
-    assert (
+    with pytest.raises(MemoryResponseError) as caught:
         parse_llm_proposals(
             json.dumps(raw, ensure_ascii=False), source_message="我喜欢红茶。" + "背景文字。" * 100 + "仅周末喝"
         )
-        == []
-    )
+    assert caught.value.field == "qualifiers"

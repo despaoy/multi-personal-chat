@@ -71,7 +71,7 @@ async def test_scheduler_reports_protocol_failure_without_partial_writes(tmp_pat
 
 
 @pytest.mark.parametrize("wrapped", [True, False])
-def test_declared_optional_fields_and_time_aliases_preserve_valid_proposals(wrapped):
+def test_declared_optional_fields_preserve_valid_proposals(wrapped):
     item = dict(
         kind="major",
         value="物理学",
@@ -85,8 +85,6 @@ def test_declared_optional_fields_and_time_aliases_preserve_valid_proposals(wrap
         target_memory_key="",
         valid_from="",
         valid_to="",
-        valid_at="",
-        invalid_at="",
         observed_at="",
         scope_level="conversation",
     )
