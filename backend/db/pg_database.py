@@ -13,6 +13,7 @@ from functools import partial
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import text
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from cache.ttl_value_cache import BoundedTTLCache
@@ -635,25 +636,16 @@ class PgDatabase:
     # 知识库管理
     # ============================================
     async def create_knowledge_base(self, name: str, description: str = "") -> Optional[Dict]:
-        """创建知识库"""
+        """Create once; only the declared name conflict is a normal duplicate."""
         now = datetime.now().isoformat()
-        async with self.async_session() as session:
-            try:
-                stmt = knowledge_bases_table.insert().values(
-                    name=name,
-                    description=description,
-                    created_at=now,
-                    updated_at=now,
-                )
-                result = await session.execute(stmt)
-                await session.commit()
-                kb_id = result.inserted_primary_key[0]
-                return {"id": kb_id, "name": name, "description": description, "created_at": now, "updated_at": now}
-            except Exception as e:
-                await session.rollback()
-                if "unique" in str(e).lower() or "duplicate" in str(e).lower():
-                    return None
-                raise
+        async with self.async_session() as session, session.begin():
+            stmt = pg_insert(knowledge_bases_table).values(
+                name=name, description=description, created_at=now, updated_at=now,
+            ).on_conflict_do_nothing(index_elements=["name"]).returning(knowledge_bases_table.c.id)
+            kb_id = (await session.execute(stmt)).scalar_one_or_none()
+            if kb_id is None:
+                return None
+            return {"id": kb_id, "name": name, "description": description, "created_at": now, "updated_at": now}
 
     async def get_knowledge_bases(self) -> List[Dict]:
         """获取所有知识库（单次 LEFT JOIN + 聚合，消除 N+1 查询）"""
@@ -735,33 +727,17 @@ class PgDatabase:
     # 知识库文件夹管理
     # ============================================
     async def create_knowledge_folder(self, kb_id: int, name: str, description: str = "") -> Optional[Dict]:
-        """创建知识库文件夹"""
+        """Create once within a base; storage errors remain transaction failures."""
         now = datetime.now().isoformat()
-        async with self.async_session() as session:
-            try:
-                stmt = knowledge_folders_table.insert().values(
-                    knowledge_base_id=kb_id,
-                    name=name,
-                    description=description,
-                    created_at=now,
-                    updated_at=now,
-                )
-                result = await session.execute(stmt)
-                await session.commit()
-                folder_id = result.inserted_primary_key[0]
-                return {
-                    "id": folder_id,
-                    "knowledge_base_id": kb_id,
-                    "name": name,
-                    "description": description,
-                    "created_at": now,
-                    "updated_at": now,
-                }
-            except Exception as e:
-                await session.rollback()
-                if "unique" in str(e).lower() or "duplicate" in str(e).lower():
-                    return None
-                raise
+        async with self.async_session() as session, session.begin():
+            stmt = pg_insert(knowledge_folders_table).values(
+                knowledge_base_id=kb_id, name=name, description=description, created_at=now, updated_at=now,
+            ).on_conflict_do_nothing(index_elements=["knowledge_base_id", "name"]).returning(knowledge_folders_table.c.id)
+            folder_id = (await session.execute(stmt)).scalar_one_or_none()
+            if folder_id is None:
+                return None
+            return {"id": folder_id, "knowledge_base_id": kb_id, "name": name, "description": description,
+                    "created_at": now, "updated_at": now}
 
     async def get_knowledge_folders(self, kb_id: int) -> List[Dict]:
         """获取知识库下的所有文件夹（LEFT JOIN 聚合，消除 N+1）"""

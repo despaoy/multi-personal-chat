@@ -1758,15 +1758,17 @@ class SQLiteDB:
         now = datetime.now().isoformat()
         try:
             cursor.execute(
-                'INSERT INTO knowledge_bases (name, description, created_at, updated_at) VALUES (?, ?, ?, ?)',
+                'INSERT INTO knowledge_bases (name, description, created_at, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT (name) DO NOTHING',
                 (name, description, now, now)
             )
             conn.commit()
+            if cursor.rowcount == 0:
+                return None
             kb_id = cursor.lastrowid
             return {"id": kb_id, "name": name, "description": description, "created_at": now, "updated_at": now}
-        except sqlite3.IntegrityError:
+        except BaseException:
             conn.rollback()
-            return None
+            raise
 
     def get_knowledge_bases(self):
         """获取所有知识库（单次 JOIN 查询，避免 N+1）"""
@@ -1850,15 +1852,17 @@ class SQLiteDB:
         now = datetime.now().isoformat()
         try:
             cursor.execute(
-                'INSERT INTO knowledge_folders (knowledge_base_id, name, description, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
+                'INSERT INTO knowledge_folders (knowledge_base_id, name, description, created_at, updated_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT (knowledge_base_id, name) DO NOTHING',
                 (kb_id, name, description, now, now)
             )
             conn.commit()
+            if cursor.rowcount == 0:
+                return None
             folder_id = cursor.lastrowid
             return {"id": folder_id, "knowledge_base_id": kb_id, "name": name, "description": description, "created_at": now, "updated_at": now}
-        except sqlite3.IntegrityError:
+        except BaseException:
             conn.rollback()
-            return None
+            raise
 
     def get_knowledge_folders(self, kb_id: int):
         """获取知识库下的所有文件夹"""
