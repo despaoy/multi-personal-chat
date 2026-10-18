@@ -1,94 +1,37 @@
-"""
-文本分块工具模块 - 项目统一文本分割策略
-段落优先 → 句子分割 → 定长截断，三阶递进式中文语义感知分块
-"""
+"""Bounded original-text slices, preferring paragraph and sentence boundaries."""
 
-from typing import List
+import re
+from bisect import bisect_right
 
 
-def smart_text_split(text: str, chunk_size: int = 600, overlap: int = 100) -> List[str]:
-    """智能文本分块：段落优先 → 句子分割 → 定长截断
-
-    Args:
-        text: 输入文本
-        chunk_size: 每个分块的最大字符数
-        overlap: 分块间的重叠字符数
-
-    Returns:
-        文本分块列表
-    """
-    if not text:
+def smart_text_split(text: str, chunk_size: int = 600, overlap: int = 100) -> list[str]:
+    """Keep source characters and exact overlap; budgets are measured in characters."""
+    if type(chunk_size) is not int or chunk_size < 1:
+        raise ValueError("chunk_size must be a positive integer")
+    if type(overlap) is not int or not 0 <= overlap < chunk_size:
+        raise ValueError("overlap must be an integer from zero to chunk_size - 1")
+    if not text.strip():
         return []
 
-    PAIRS = [('「', '」'), ('『', '』'), ('【', '】'), ('《', '》'), ('（', '）'), ('"', '"'), ("'", "'")]
-
-    def _inside_pair(t: str, pos: int) -> bool:
-        for left, right in PAIRS:
-            lc = t[:pos].count(left)
-            rc = t[:pos].count(right)
-            if lc > rc:
-                return True
-        return False
-
-    SENTENCE_ENDS = set('。！？；.!?;\n')
-
-    paragraphs = [p.strip() for p in text.split('\n\n') if p.strip()]
+    paragraph_ends = [match.end() for match in re.finditer(r"\r?\n[ \t]*\r?\n", text)]
+    sentence_ends = [match.end() for match in re.finditer(r"[。！？；.!?;\n]", text)]
     chunks = []
-    current_chunk = []
-    current_length = 0
-
-    for para in paragraphs:
-        para_length = len(para)
-        if para_length > chunk_size:
-            sentences = []
-            sentence_start = 0
-            for i, char in enumerate(para):
-                if char in SENTENCE_ENDS and not _inside_pair(para, i):
-                    s = para[sentence_start:i + 1].strip()
-                    if s:
-                        sentences.append(s)
-                    sentence_start = i + 1
-            if sentence_start < para_length and (s := para[sentence_start:].strip()):
-                sentences.append(s)
-            if not sentences:
-                sentences = [para[i:i + chunk_size] for i in range(0, para_length, chunk_size)]
-
-            for s in sentences:
-                sl = len(s)
-                if current_length + sl <= chunk_size:
-                    current_chunk.append(s)
-                    current_length += sl
-                else:
-                    if current_chunk:
-                        chunks.append(' '.join(current_chunk))
-                    if overlap > 0 and current_chunk:
-                        tail = ' '.join(current_chunk[-2:]) if len(current_chunk) >= 2 else current_chunk[-1]
-                        tail = tail[-overlap:] if len(tail) > overlap else tail
-                        current_chunk = [tail, s]
-                        current_length = len(tail) + sl
-                    else:
-                        current_chunk = [s]
-                        current_length = sl
-        else:
-            if current_length + para_length <= chunk_size:
-                current_chunk.append(para)
-                current_length += para_length
-            else:
-                if current_chunk:
-                    chunks.append(' '.join(current_chunk))
-                if overlap > 0 and current_chunk:
-                    tail = ' '.join(current_chunk[-2:]) if len(current_chunk) >= 2 else current_chunk[-1]
-                    tail = tail[-overlap:] if len(tail) > overlap else tail
-                    current_chunk = [tail, para]
-                    current_length = len(tail) + para_length
-                else:
-                    current_chunk = [para]
-                    current_length = para_length
-
-    if current_chunk:
-        chunks.append(' '.join(current_chunk))
+    start = 0
+    while start < len(text):
+        end = min(start + chunk_size, len(text))
+        if end < len(text):
+            minimum = start + max(overlap + 1, chunk_size // 2)
+            for boundaries in (paragraph_ends, sentence_ends):
+                position = bisect_right(boundaries, end) - 1
+                if position >= 0 and boundaries[position] >= minimum:
+                    end = boundaries[position]
+                    break
+        chunks.append(text[start:end])
+        if end == len(text):
+            break
+        start = end - overlap
     return chunks
 
 
-# 旧名兼容
+# Existing API and evaluation callers share this implementation.
 simple_text_split = smart_text_split
