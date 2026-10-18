@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from inference.answer_citations import prepare_answer_citations
+from inference.context_budget import estimated_tokens
 from inference.generation_request import GenerationRequest, RetrievalResult, build_generation_request
 from knowledge.evidence_packets import document_evidence_packets
 
@@ -128,6 +129,7 @@ def test_true_token_overflow_excludes_entire_chunk_and_dependent_citation():
         {"id": "fits", "content": "完整较小证据：仍需审批。"},
     )
     packets = document_evidence_packets(docs)
+    assert estimated_tokens(packets[0]["text"]) > 8192
     retrieval = prepare_answer_citations(
         RetrievalResult(
             status="ok",
@@ -138,7 +140,7 @@ def test_true_token_overflow_excludes_entire_chunk_and_dependent_citation():
         )
     )
     result = build_generation_request(
-        GenerationRequest(message="询问规程", context_window_tokens=65536, evidence_max_chars=0, retrieval=retrieval)
+        GenerationRequest(message="询问规程", context_window_tokens=8192, evidence_max_chars=0, retrieval=retrieval)
     )
     assert [p["document_ids"] for p in result.retrieval.evidence_packets] == [["fits"]]
     assert [c["source_id"] for c in result.retrieval.citations] == ["fits"]
@@ -152,18 +154,18 @@ def test_true_token_overflow_excludes_entire_chunk_and_dependent_citation():
     {"retrieval_role": "source_context", "supporting_document_ids": "anchor"},
     {"retrieval_role": "source_context", "supporting_document_ids": [""]},
 ])
-async def test_corrupt_retrieved_document_returns_error_before_model(monkeypatch, corrupt):
+async def test_corrupt_retrieved_document_returns_error_before_model(monkeypatch, corrupt, semantic_plan, controlled_public_bundle):
     from fastapi import HTTPException
 
     from api import generate
     from db.schemas import MessageRequest
-    from knowledge import intent_detector
 
+    planning = semantic_plan("按规程说明验收时间和全部限制。", dict(public_knowledge=[0]))
     valid = {"id": "anchor", "title": "合成验收规程", "content": "周五验收；只允许离线测试，禁止联网。"}
     broken = {**valid, "id": "other", **corrupt}
     calls = []
 
-    async def retrieve(*args):
+    async def retrieve(*args, **kwargs):
         return {"results": [valid, broken], "citations": [{"source_id": "anchor"}],
                 "confidence": 0.9, "abstained": False}
 
@@ -174,11 +176,10 @@ async def test_corrupt_retrieved_document_returns_error_before_model(monkeypatch
     monkeypatch.setenv("RAG_CITATIONS_ENABLED", "false")
     monkeypatch.setattr(generate, "_retrieve_rag_bundle", retrieve)
     monkeypatch.setattr(generate, "_get_system_prompt", lambda _: "人物规则")
-    monkeypatch.setattr(intent_detector, "needs_rag", lambda _: (True, "fixture", None))
     with pytest.raises(HTTPException) as error:
         await generate._generate_with_retrieval(
             MessageRequest(message="按规程说明验收时间和全部限制。"), None,
             runtime_config={"maxTokens": 1024, "useKnowledgeBase": True}, model_generate=model,
         )
     assert error.value.status_code == 503 and isinstance(error.value.__cause__, ValueError)
-    assert not calls
+    assert len(planning) == 1 and not calls

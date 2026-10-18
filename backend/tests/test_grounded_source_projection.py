@@ -19,6 +19,9 @@ FACT_ID = source_fixture.FACT_ID
 QUERY = "虚构星禾档案馆目前哪天哪个时段办理什么业务，谁能进门，恶劣天气和预约分别有哪些限制？"
 MODEL_ID = "synthetic-source-projection"
 
+# Source freshness, cache and transport contracts control query preparation.
+pytestmark = pytest.mark.usefixtures("literal_grounded_query")
+
 
 def arrange_grounded_projection(tmp_path, monkeypatch):
     """Return a rig usable by an old-version preflight without assuming repair.

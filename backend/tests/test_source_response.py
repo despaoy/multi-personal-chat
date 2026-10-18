@@ -76,37 +76,44 @@ async def test_regular_reply_keeps_model_path():
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize('message,direct', [
-    ('请给出原文依据。', True),
-    ('不要分析，但请查找原文。', True),
-    ('请展示原句，不需要总结。', True),
-    ('请给出原文并分析人物动机。', False),
-    ('不要分析，请给出原文并翻译。', False),
-    ('不用解释，不要引用原文。', False),
-    ('不要分析，请给出原文，告诉我作者是谁。', False),
+@pytest.mark.parametrize('message,direct,dependency', [
+    ('请给出原文依据。', True, 'public_knowledge'),
+    ('不要分析，但请查找原文。', True, 'public_knowledge'),
+    ('请展示原句，不需要总结。', True, 'public_knowledge'),
+    ('请给出原文并分析人物动机。', False, 'public_knowledge'),
+    ('不要分析，请给出原文并翻译。', False, 'public_knowledge'),
+    ('不用解释，不要引用原文。', False, 'control'),
+    ('不要分析，请给出原文，告诉我作者是谁。', False, 'public_knowledge'),
 ])
-async def test_production_retrieval_preserves_source_packet_and_reports_actual_model_usage(monkeypatch, message, direct):
+async def test_production_retrieval_preserves_source_packet_and_reports_actual_model_usage(
+    monkeypatch, message, direct, dependency, semantic_plan, controlled_public_bundle
+):
     from api import generate
     from db.schemas import MessageRequest
-    from knowledge import intent_detector
 
+    planning = semantic_plan(message, {dependency: [0]})
+    # Citation recovery has its own tests; direct source citations stay enabled.
+    monkeypatch.setenv("RAG_CITATIONS_ENABLED", "true" if direct else "false")
     calls = []
 
-    async def retrieve(*args):
+    async def retrieve(*args, **kwargs):
+        body = packet()['text']
         return dict(retrieval_strategy='multi_scale_character', confidence=.8, abstained=False,
-                    context_text='摘要不是原文', raw_excerpt=packet(), results=[],
-                    citations=[{'id': 'unrelated-source'}])
+                    context_text='摘要不是原文' if direct else body, raw_excerpt=packet(),
+                    results=[dict(id='card-a', title='合成原作', content=body)],
+                    evidence_packets=[dict(kind='evidence', document_ids=['card-a'], text=body)],
+                    citations=[dict(id='unrelated-source' if direct else 'card-a')])
 
     async def model(**kwargs):
         calls.append(kwargs)
         return '模型对复合任务的回答'
 
-    monkeypatch.setattr(intent_detector, 'needs_rag', lambda _: (True, 'source', None))
     monkeypatch.setattr(generate, '_retrieve_rag_bundle', retrieve)
     monkeypatch.setattr(generate, '_get_system_prompt', lambda _: 'persona')
     reply, used_rag, meta = await generate._generate_with_retrieval(
         MessageRequest(message=message), None, runtime_config={'useKnowledgeBase': True}, model_generate=model)
-    assert used_rag
+    assert len(planning) == 1
+    assert used_rag is (dependency == "public_knowledge")
     if direct:
         assert not calls and meta['modelInvoked'] is False
         assert meta['answerMode'] == 'source_excerpt'

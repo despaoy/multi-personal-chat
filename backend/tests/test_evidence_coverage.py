@@ -139,13 +139,16 @@ def test_invalid_source_receipts_never_claim_complete_coverage(indexed, retrieve
         settle_source_coverage(coverage(indexed, retrieved), {"a"})
 
 
-def test_missing_support_and_invalid_packet_are_visible_as_not_admitted():
-    result = plan(
-        [packet("a", "独立已知条件"), packet("b", "缺失父依据", support=["other"]), packet("c", "")], coverage()
-    )
+def test_missing_support_is_visible_as_not_admitted():
+    result = plan([packet("a", "独立已知条件"), packet("b", "缺失父依据", support=["other"])], coverage())
     assert wire_coverage(result)["packets"]["admitted_packet_count"] == 1
     assert wire_coverage(result)["sources"][0]["admitted_chunk_count"] == 1
     assert "缺失父依据" not in result.messages[-1]["content"]
+
+
+def test_invalid_packet_is_explicit_failure_before_coverage():
+    with pytest.raises(ValueError, match="Invalid generation evidence packet"):
+        plan([packet("a", "独立已知条件"), packet("c", "")], coverage())
 
 
 def test_citation_binding_preserves_coverage_of_original_source_identities():
@@ -163,21 +166,32 @@ def test_citation_binding_preserves_coverage_of_original_source_identities():
     assert len(result.retrieval.citations) == 1 and result.retrieval.citations[0]["id"] == "a"
 
 
-async def test_shared_api_exports_partial_source_warning_without_extra_model_call(monkeypatch):
+async def test_shared_api_exports_partial_source_warning_without_extra_model_call(monkeypatch, semantic_plan, controlled_public_bundle):
     from api import generate
     from db.schemas import MessageRequest
-    from knowledge import intent_detector
+    from types import SimpleNamespace
+    from inference.context_budget import ReviewContextBudget
+
+    planning = semantic_plan("核对整份规程", dict(public_knowledge=[0]))
+    from knowledge.original_sources import document_authority_snapshot
+
+    documents = [
+        dict(id="doc_1_chunk_0", document_id=1, title="设备", content="设备 RTX 3060 12GB"),
+        dict(id="doc_1_chunk_1", document_id=1, title="大章", content="大章" * 40000),
+    ]
+    original = dict(id=1, title="完整合成规程", category="规程", knowledge_base_id=1,
+                    content="\n".join(row["content"] for row in documents))
+    receipts = coverage(tuple(row["id"] for row in documents))
+    receipts[0]["source_authority_snapshot"] = document_authority_snapshot(original)
+    monkeypatch.setattr(generate.db, "get_knowledge_document", lambda identity: original if identity == 1 else None)
 
     async def retrieve(*args, **kwargs):
         return {
-            "results": [
-                {"id": "a", "title": "设备", "content": "设备 RTX 3060 12GB"},
-                {"id": "b", "title": "大章", "content": "大章" * 40000},
-            ],
+            "results": documents,
             "confidence": 0.9,
             "abstained": False,
             "citations": [],
-            "source_coverage": coverage(("a", "b")),
+            "source_coverage": receipts,
         }
 
     observed = []
@@ -187,7 +201,8 @@ async def test_shared_api_exports_partial_source_warning_without_extra_model_cal
         return "当前能核对部分资料，设备为 RTX 3060 12GB，其余条件无法确认。"
 
     monkeypatch.setattr(generate, "_retrieve_rag_bundle", retrieve)
-    monkeypatch.setattr(intent_detector, "needs_rag", lambda *args: (True, "source task", None))
+    monkeypatch.setattr(generate, "get_provider_context_budget", lambda: SimpleNamespace(
+        review=ReviewContextBudget(8192), window_tokens=8192, evidence_max_chars=0))
     monkeypatch.setenv("RAG_CITATIONS_ENABLED", "false")
     reply, used, metadata = await generate._generate_with_retrieval(
         MessageRequest(message="核对整份规程"),
@@ -195,5 +210,5 @@ async def test_shared_api_exports_partial_source_warning_without_extra_model_cal
         runtime_config={"useKnowledgeBase": True, "maxTokens": 512},
         model_generate=model,
     )
-    assert len(observed) == 1 and used and "partial_source_context" in metadata["warnings"]
+    assert len(planning) == len(observed) == 1 and used and "partial_source_context" in metadata["warnings"]
     assert "部分资料" in reply and metadata["citations"] == []
