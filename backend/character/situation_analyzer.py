@@ -328,15 +328,6 @@ _INFORMATION_PATTERNS = (
     "where",
     "who is",
 )
-_AFFILIATION_PATTERNS = (
-    "喜欢你",
-    "爱你",
-    "想你",
-    "想死你了",
-    "在乎你",
-    "陪着我",
-    "抱抱",
-)
 _PLAYFUL_PATTERNS = (
     "哈哈",
     "嘿嘿",

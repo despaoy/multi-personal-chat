@@ -222,10 +222,6 @@ class VLLMClient:
     - VLLM_MAX_RETRIES: 最大尝试次数（含首次请求，必须为正数）
     """
 
-    # 连续失败多少次后标记为不可用
-    _UNHEALTHY_THRESHOLD = 3
-    # 不可用实例的冷却时间（秒）
-    _RECOVERY_COOLDOWN = 30.0
     # 重试的基础延迟（秒）
     _RETRY_BASE_DELAY = 1.0
     # 重试的最大延迟（秒）

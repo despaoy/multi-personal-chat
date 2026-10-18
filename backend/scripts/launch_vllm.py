@@ -27,7 +27,6 @@ from pathlib import Path
 
 def build_args(args) -> list:
     """构建 vLLM 启动参数"""
-    _BACKEND = Path(__file__).parent.parent
     cmd = [
         sys.executable, "-m", "vllm.entrypoints.openai.api_server",
         "--host", args.host,

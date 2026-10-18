@@ -51,8 +51,6 @@ RetrieveFn = Callable[..., Any]
 DEFAULT_ABSTENTION_REPLY = "关于这个问题，我目前掌握的资料还不足以给出可靠回答。"
 _THINK_BLOCK_RE = re.compile(r"<think>.*?</think>", re.DOTALL)
 _DEFAULT_GENERATION_TIMEOUT = 60.0
-# 与 inference.generation_request 的既有策略一致：有证据时温度收紧
-_GROUNDED_TEMPERATURE_CAP = 0.5
 
 
 def _strip_think_blocks(text: str) -> str:
