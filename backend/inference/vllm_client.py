@@ -503,28 +503,15 @@ class VLLMClient:
                 # 4xx 客户端错误不重试
                 raise ProviderResponseError(resp.status_code)
 
-            except httpx.TimeoutException as exc:
+            except (httpx.TimeoutException, httpx.ConnectError) as exc:
                 last_error = exc
                 async with self._instance_lock:
                     instance.record_failure()
                 if attempt < self._max_retries - 1:
                     delay = self._compute_backoff(attempt)
                     logger.warning(
-                        "实例 %s 请求超时 (尝试 %d/%d)，%.1fs 后重试",
-                        instance.name, attempt + 1, self._max_retries, delay,
-                    )
-                    await asyncio.sleep(delay)
-                continue
-
-            except httpx.ConnectError as exc:
-                last_error = exc
-                async with self._instance_lock:
-                    instance.record_failure()
-                if attempt < self._max_retries - 1:
-                    delay = self._compute_backoff(attempt)
-                    logger.warning(
-                        "实例 %s 连接失败 (尝试 %d/%d)，%.1fs 后重试",
-                        instance.name, attempt + 1, self._max_retries, delay,
+                        "实例 %s 传输失败 type=%s (尝试 %d/%d)，%.1fs 后重试",
+                        instance.name, type(exc).__name__, attempt + 1, self._max_retries, delay,
                     )
                     await asyncio.sleep(delay)
                 continue
