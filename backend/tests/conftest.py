@@ -32,7 +32,6 @@ for path in (PROJECT_ROOT, BACKEND_ROOT):
         sys.path.insert(0, value)
 
 collect_ignore_glob = [
-    "security_test.py",
     "fault_injection_test.py",
 ]
 
