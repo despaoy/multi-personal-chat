@@ -7,7 +7,7 @@
 - 字段级加密/解密
 - 批量加密/解密
 - 敏感字段自动识别
-- 数据库集成（写入前加密、读取后解密）
+- 由调用方显式执行加密和解密
 
 使用方式：
     from encryption import EncryptionManager
@@ -545,73 +545,3 @@ class EncryptionManager:
             if isinstance(value, str) and value and EncryptionManager._is_sensitive_field(field_name):
                 sensitive_fields.append(field_name)
         return sensitive_fields
-
-
-# ---------------------------------------------------------------------------
-# 数据库集成辅助
-# ---------------------------------------------------------------------------
-
-class DatabaseEncryptionMiddleware:
-    """数据库加密中间件，在SQLite写入前自动加密、读取后自动解密。
-
-    使用方式：
-        middleware = DatabaseEncryptionMiddleware(encryption_manager)
-
-        # 写入前加密
-        row = middleware.before_write(row_data)
-
-        # 读取后解密
-        row = middleware.after_read(row_data)
-    """
-
-    def __init__(self, encryption_manager: EncryptionManager) -> None:
-        """初始化数据库加密中间件。
-
-        Args:
-            encryption_manager: 加密管理器实例
-        """
-        self._manager = encryption_manager
-
-    def before_write(self, row: dict[str, Any]) -> dict[str, Any]:
-        """在数据库写入前加密敏感字段。
-
-        Args:
-            row: 待写入的数据行
-
-        Returns:
-            加密后的数据行
-        """
-        return self._manager.encrypt_batch([row])[0] if row else row
-
-    def after_read(self, row: dict[str, Any]) -> dict[str, Any]:
-        """在数据库读取后解密敏感字段。
-
-        Args:
-            row: 从数据库读取的数据行
-
-        Returns:
-            解密后的数据行
-        """
-        return self._manager.decrypt_batch([row])[0] if row else row
-
-    def before_write_batch(self, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        """批量写入前加密。
-
-        Args:
-            rows: 待写入的数据行列表
-
-        Returns:
-            加密后的数据行列表
-        """
-        return self._manager.encrypt_batch(rows)
-
-    def after_read_batch(self, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        """批量读取后解密。
-
-        Args:
-            rows: 从数据库读取的数据行列表
-
-        Returns:
-            解密后的数据行列表
-        """
-        return self._manager.decrypt_batch(rows)

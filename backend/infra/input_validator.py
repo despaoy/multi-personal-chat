@@ -15,30 +15,6 @@ logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# 异常类
-# ---------------------------------------------------------------------------
-
-class ValidationError(Exception):
-    """输入验证失败时抛出的异常。
-
-    Attributes:
-        errors: 验证错误详情列表，每项包含字段名和错误描述
-    """
-
-    def __init__(self, errors: list[dict[str, str]]) -> None:
-        self.errors = errors
-        message = "; ".join(f"{e['field']}: {e['message']}" for e in errors)
-        super().__init__(f"Validation failed: {message}")
-
-    def to_dict(self) -> dict[str, Any]:
-        """将验证错误转换为字典格式，便于API响应。"""
-        return {
-            "detail": "Validation failed",
-            "errors": self.errors,
-        }
-
-
-# ---------------------------------------------------------------------------
 # 字段类型枚举
 # ---------------------------------------------------------------------------
 
