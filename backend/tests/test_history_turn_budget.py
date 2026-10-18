@@ -2,7 +2,7 @@ from copy import deepcopy
 
 import pytest
 
-from inference.generation_request import CONTEXT_SAFETY_MARGIN_TOKENS, _trim_history_to_budget
+from inference.generation_request import CONTEXT_SAFETY_MARGIN_TOKENS, _estimated_tokens, _trim_history_to_budget
 
 
 def trim(history, budget):
@@ -26,8 +26,9 @@ def test_keep_newest_complete_turn_without_reaching_back_across_gap():
 def test_multiple_assistant_messages_stay_with_same_user_turn():
     history = [{'role': 'user', 'content': '用户问题'}, {'role': 'assistant', 'content': '第一段'},
                {'role': 'assistant', 'content': '第二段'}]
-    assert trim(history, 22) == history
-    assert trim(history, 21) == []
+    cost = sum(_estimated_tokens(item["content"]) + 4 for item in history)
+    assert trim(history, cost) == history
+    assert trim(history, cost - 1) == []
 
 
 def test_user_only_view_remains_independent_messages():
@@ -47,8 +48,9 @@ def test_full_fitting_history_unchanged_and_input_not_mutated(history):
 def test_real_window_generation_plan_has_no_orphan_answer():
     from inference.generation_request import GenerationRequest, build_generation_request
 
-    history = ({'role': 'user', 'content': '这是一段虚构材料，不是我的经历。' * 450},
+    history = ({'role': 'user', 'content': '这是一段虚构材料，不是我的经历。' * 2000},
                {'role': 'assistant', 'content': '你住在北京。'})
+    assert _estimated_tokens(history[0]["content"]) > 8192
     plan = build_generation_request(GenerationRequest(
         message='我住在哪里？', history=history, context_window_tokens=8192,
         max_tokens=2048, apply_prompt_policy=False))

@@ -14,6 +14,7 @@ from character.evidence_selector import (
 )
 from character.memory_service import CharacterMemoryService
 from character.models import MemoryItem, UserScope
+from inference.history import HistoryFormatError
 
 
 def _item(key, content="用户研究点云补全"):
@@ -121,7 +122,6 @@ def test_history_and_candidate_text_never_enter_system_prompt():
         marker,
         [_item("a", marker)],
         history=[
-            {"role": "system", "content": marker},
             {"role": "user", "content": marker},
         ],
     )
@@ -131,14 +131,21 @@ def test_history_and_candidate_text_never_enter_system_prompt():
     assert payload["candidates"][0]["content"] == marker
 
 
+@pytest.mark.parametrize("role", ["system", "tool"])
+def test_invalid_history_role_is_explicit_failure(role):
+    with pytest.raises(HistoryFormatError) as caught:
+        selection_messages("当前问题", [_item("a")], history=[dict(role=role, content="不能成为历史权限")])
+    assert caught.value.field == "history[0].role"
+
+
 async def test_widened_recall_preserves_lifecycle_subject_and_confidence_guards():
     class Repo:
         async def list_memory_records(self, *args, **kwargs):
             return [
-                {"id": "a", "content": "用户研究点云补全", "memory_key": "goal", "status": "active"},
-                {"id": "b", "content": "用户研究点云识别", "status": "superseded"},
-                {"id": "c", "content": "用户喜欢咖啡", "memory_key": "preference_coffee"},
-                {"id": "d", "content": "用户在月球工作", "confidence": 0.1},
+                {"memory_type": "user_fact", "id": "a", "content": "用户研究点云补全", "memory_key": "goal", "status": "active"},
+                {"memory_type": "user_fact", "id": "b", "content": "用户研究点云识别", "status": "superseded"},
+                {"memory_type": "user_fact", "id": "c", "content": "用户喜欢咖啡", "memory_key": "preference_coffee"},
+                {"memory_type": "user_fact", "id": "d", "content": "用户在月球工作", "confidence": 0.1},
             ]
 
     service = CharacterMemoryService(Repo(), semantic_enabled=False)
@@ -176,6 +183,7 @@ async def test_context_service_selects_before_compiling_and_reuses_loaded_histor
         async def list_memory_records(self, *args, **kwargs):
             return [
                 {
+                    "memory_type": "user_fact",
                     "id": "a",
                     "content": "用户研究点云补全",
                     "importance": 0.5,
@@ -207,6 +215,7 @@ async def test_context_service_selects_before_compiling_and_reuses_loaded_histor
         messages,
         memory_service=CharacterMemoryService(repo, semantic_enabled=False),
         memory_selector=ContextualEvidenceSelector(reviewer),
+        source_recall_enabled=False,
     )
     prepared = await service.prepare_turn(TurnInput("下一步呢", "web", "web", "u", "c", "private"), "char")
     assert prepared.memory_selection_status == "selected"
@@ -222,9 +231,9 @@ async def test_ablation_flags_cannot_disable_contextual_lifecycle_guards():
     class Repo:
         async def list_memory_records(self, *args, **kwargs):
             return [
-                {"id": "erased", "content": "用户研究点云", "status": "erased"},
-                {"id": "pending", "content": "用户研究点云", "status": "pending"},
-                {"id": "low", "content": "用户研究点云", "confidence": 0.1},
+                {"memory_type": "user_fact", "id": "erased", "content": "用户研究点云", "status": "erased"},
+                {"memory_type": "user_fact", "id": "pending", "content": "用户研究点云", "status": "pending"},
+                {"memory_type": "user_fact", "id": "low", "content": "用户研究点云", "confidence": 0.1},
             ]
 
     service = CharacterMemoryService(
@@ -245,8 +254,8 @@ async def test_ablation_flags_cannot_disable_contextual_lifecycle_guards():
 async def test_contextual_recall_finds_old_claim_beyond_recent_window():
     class Repo:
         async def list_memory_records(self, *args, limit=100, **kwargs):
-            records = [{"id": str(index), "content": "用户喜欢咖啡", "importance": 0.9} for index in range(120)]
-            records.append({"id": "old-research", "content": "用户实验使用特殊数据集 ShapeNet", "importance": 0.5})
+            records = [{"memory_type": "user_fact", "id": str(index), "content": "用户喜欢咖啡", "importance": 0.9} for index in range(120)]
+            records.append({"memory_type": "user_fact", "id": "old-research", "content": "用户实验使用特殊数据集 ShapeNet", "importance": 0.5})
             return records[:limit]
 
     service = CharacterMemoryService(Repo(), semantic_enabled=False)
@@ -306,9 +315,9 @@ async def test_compound_goal_keeps_non_goal_resources_for_semantic_review():
     class Repo:
         async def list_memory_records(self, *args, **kwargs):
             return [
-                {"id": "topic", "memory_key": "goal_research", "content": "用户研究点云补全"},
-                {"id": "hardware", "content": "用户显卡有八 GB 显存"},
-                {"id": "erased", "content": "用户显卡有二十四 GB 显存", "status": "erased"},
+                {"memory_type": "user_fact", "id": "topic", "memory_key": "goal_research", "content": "用户研究点云补全"},
+                {"memory_type": "user_fact", "id": "hardware", "content": "用户显卡有八 GB 显存"},
+                {"memory_type": "user_fact", "id": "erased", "content": "用户显卡有二十四 GB 显存", "status": "erased"},
             ]
 
     service = CharacterMemoryService(Repo(), semantic_enabled=False)
@@ -326,7 +335,7 @@ async def test_recall_preserves_fifth_evidence_correction_for_semantic_review():
 
     class Repo:
         async def list_memory_records(self, *args, **kwargs):
-            return [{"id": "a", "content": "用户研究点云补全", "evidence": evidence}]
+            return [{"memory_type": "user_fact", "id": "a", "content": "用户研究点云补全", "evidence": evidence}]
 
     service = CharacterMemoryService(Repo(), semantic_enabled=False)
     candidates, _ = await service.load_relevant_memories(
@@ -337,10 +346,11 @@ async def test_recall_preserves_fifth_evidence_correction_for_semantic_review():
     assert payload["candidates"][0]["evidence"][-1] == evidence[-1]
 
 
-async def test_oversized_selected_packet_cannot_enable_memory_recall_strategy():
+async def test_oversized_selected_packet_fails_before_policy():
     from services.character_context import CharacterContextService, TurnInput
 
     from character.contextual_policy import ContextualDecisionPolicy
+    from character.context_builder import MemoryContextBudgetError
     from character.models import CharacterProfile
 
     class Profiles:
@@ -352,7 +362,7 @@ async def test_oversized_selected_packet_cannot_enable_memory_recall_strategy():
             return {}
 
         async def list_memory_records(self, *args, **kwargs):
-            return [{"id": "a", "content": "用户研究点云补全", "evidence": ["原始来源" * 1600]}]
+            return [{"memory_type": "user_fact", "id": "a", "content": "用户研究点云补全", "evidence": ["原始来源" * 1600]}]
 
         async def list_relationship_notes(self, *args):
             return []
@@ -365,9 +375,7 @@ async def test_oversized_selected_packet_cannot_enable_memory_recall_strategy():
         return '{"decisions":[{"id":"a","label":"use"}]}'
 
     async def policy_reviewer(messages):
-        payload = json.loads(messages[1]["content"])
-        assert "recall_shared_context" not in payload["allowed_strategies"]
-        return '{"strategy_ids":["reflect_content"]}'
+        pytest.fail("Oversized selected evidence must fail before policy review")
 
     repo = Repo()
     service = CharacterContextService(
@@ -378,13 +386,8 @@ async def test_oversized_selected_packet_cannot_enable_memory_recall_strategy():
         memory_selector=ContextualEvidenceSelector(selection_reviewer),
         contextual_policy=ContextualDecisionPolicy(policy_reviewer),
     )
-    prepared = await service.prepare_turn(TurnInput("我的研究", "web", "web", "u", "c", "private"), "char")
-    assert prepared.memory_selection_status == "selected"
-    assert prepared.compiled.used_memory_ids == ()
-    assert prepared.compiled.reference_context == ""
-    assert prepared.contextual_policy_status == "applied"
-    assert "recall_shared_context" not in prepared.decision.strategy_ids
-    assert prepared.reply_guard.forbid_unsupported_user_fact is True
+    with pytest.raises(MemoryContextBudgetError, match="Selected memory evidence exceeds"):
+        await service.prepare_turn(TurnInput("我的研究", "web", "web", "u", "c", "private"), "char")
 
 
 @pytest.mark.parametrize("status", ["erased", "deleted", "retracted", "pending"])

@@ -870,11 +870,13 @@ def _infer_kind_from_target(record: dict[str, Any]) -> str:
     return "other_user_fact"
 
 
-def _scope_level_for_message(raw: Any, source_message: str) -> str:
-    requested = str(raw or "conversation").strip().lower()
-    if requested not in _ALLOWED_SCOPE_LEVELS or requested == "conversation":
-        return "conversation"
-    # 作用域晋升属于权限，而不是语义猜测：没有用户原文授权就降级。
+def _scope_level_for_message(raw: str, source_message: str) -> str:
+    requested = raw.strip().lower() or "conversation"
+    if requested not in _ALLOWED_SCOPE_LEVELS:
+        raise MemoryResponseError("scope_level", "记忆 LLM scope_level 不受支持")
+    if requested == "conversation":
+        return requested
+    # 跨会话和跨角色写入必须有用户原文授权。
     if requested == "user_global" and _GLOBAL_SCOPE_PATTERN.search(source_message):
         return requested
     if (
@@ -883,7 +885,7 @@ def _scope_level_for_message(raw: Any, source_message: str) -> str:
         and _CHARACTER_SCOPE_PATTERN.search(source_message)
     ):
         return requested
-    return "conversation"
+    raise MemoryResponseError("scope_level", "记忆 LLM 请求的记忆范围缺少用户授权")
 
 
 def _explicit_location_field(value: str, evidence: str) -> str:
@@ -1389,7 +1391,7 @@ def _candidate_to_proposal(
         valid_from=valid_from,
         valid_to=valid_to,
         observed_at=observed_at,
-        scope_level=_scope_level_for_message(raw.get("scope_level"), source_message),
+        scope_level=_scope_level_for_message(_proposal_text(raw, "scope_level"), source_message),
         proposed_valid_from=str(raw_valid_from or "").strip(),
         proposed_valid_to=str(raw_valid_to or "").strip(),
         source_observation=(kind == "shared_event" or generic_source_observation)

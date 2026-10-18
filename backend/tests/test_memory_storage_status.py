@@ -33,11 +33,11 @@ async def status(rows=(), *, limit=None, error=False, query='你保存了我的�
 @pytest.mark.asyncio
 @pytest.mark.parametrize('rows,expected', [
     ([], False),
-    ([{'id': '1', 'memory_key': 'user_name', 'content': '用户叫温宁'}], True),
-    ([{'id': '1', 'memory_key': 'user_name', 'content': '用户叫温宁', 'status': 'retracted'}], False),
-    ([{'id': '1', 'memory_key': 'user_name', 'content': '用户叫温宁', 'status': 'pending'}], False),
-    ([{'id': '1', 'memory_key': 'user_name', 'content': '用户叫温宁', 'valid_to': '2000-01-01'}], False),
-    ([{'id': '1', 'memory_key': 'preference_x', 'content': '用户喜欢读书'}], False),
+    ([{"memory_type": "user_fact", 'id': '1', 'memory_key': 'user_name', 'content': '用户叫温宁'}], True),
+    ([{"memory_type": "user_fact", 'id': '1', 'memory_key': 'user_name', 'content': '用户叫温宁', 'status': 'retracted'}], False),
+    ([{"memory_type": "user_fact", 'id': '1', 'memory_key': 'user_name', 'content': '用户叫温宁', 'status': 'pending'}], False),
+    ([{"memory_type": "user_fact", 'id': '1', 'memory_key': 'user_name', 'content': '用户叫温宁', 'valid_to': '2000-01-01'}], False),
+    ([{"memory_type": "user_fact", 'id': '1', 'memory_key': 'preference_x', 'content': '用户喜欢读书'}], False),
 ])
 async def test_scoped_current_presence_is_not_retrieval_relevance(rows, expected):
     _, trace = await status(rows)
@@ -54,7 +54,7 @@ async def test_partial_read_and_error_never_prove_absence():
 
 @pytest.mark.asyncio
 async def test_presence_survives_irrelevant_query():
-    row = {'id': '1', 'memory_key': 'user_name', 'content': '用户说自己叫温宁'}
+    row = {"memory_type": "user_fact", 'id': '1', 'memory_key': 'user_name', 'content': '用户说自己叫温宁'}
     _, trace = await status([row], query='我的专业是什么？')
     assert trace['field_presence']['name'] is True
     assert trace['field_presence']['major'] is False
@@ -69,7 +69,7 @@ async def test_ranking_failure_cannot_return_a_partial_storage_result(monkeypatc
 
     monkeypatch.setattr(memory_service, '_retrieval_text', broken)
     with pytest.raises(RuntimeError, match='ranking failed'):
-        await status([{'id': '1', 'memory_key': 'user_name', 'content': '用户说自己叫温宁'}])
+        await status([{"memory_type": "user_fact", 'id': '1', 'memory_key': 'user_name', 'content': '用户说自己叫温宁'}])
 
 
 @pytest.mark.parametrize('message', ['你保存了我的姓名吗？', '你记住我的姓名了吗？',
@@ -111,7 +111,7 @@ def test_snapshot_is_independent_of_injection_budget_and_not_inferred_from_no_ma
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize('presence', [(), (('name', False),), (('name', True),)])
-async def test_api_status_task_needs_neither_rag_nor_model(monkeypatch, presence):
+async def test_api_status_task_skips_public_retrieval_and_answer_generation(monkeypatch, presence, semantic_plan):
     from types import SimpleNamespace
 
     from api import generate
@@ -126,6 +126,7 @@ async def test_api_status_task_needs_neither_rag_nor_model(monkeypatch, presence
 
     prepared = SimpleNamespace(history=(), compiled=CompiledCharacterContext('', '', '',
                                 memory_field_presence=presence))
+    semantic_plan('你保存了我的姓名吗？', dict(private_memory=[0]))
     _, used_rag, meta = await generate._generate_with_retrieval(MessageRequest(message='你保存了我的姓名吗？'),
         None, prepared_character_turn=prepared, runtime_config={'useKnowledgeBase': True}, model_generate=model)
     assert not used_rag and meta['answerMode'] == 'memory_storage_status'

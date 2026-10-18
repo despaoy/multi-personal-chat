@@ -15,6 +15,7 @@ from character.memory_llm import (
 )
 from character.models import CompiledCharacterContext, MemoryItem, RelationshipState, UserScope
 from db.database import SQLiteDB
+from inference.history import HistoryFormatError
 from repositories.character_memory import DatabaseCharacterMemoryRepository
 from services.character_context import CharacterContextService, PreparedCharacterTurn, TurnInput
 
@@ -137,7 +138,7 @@ def test_explicit_erasure_phrase_and_duplicate_merge_are_normalized_safely():
     erase_source = "请把你记住的我的住址彻底删掉。"
     erased = parse_llm_proposals(
         _response(
-            kind="erasure",
+            kind="location",
             value="用户要求彻底删除住址信息",
             content="用户要求彻底删除住址信息",
             evidence=erase_source,
@@ -219,7 +220,7 @@ def test_ellipsis_history_is_context_not_evidence_and_add_can_link_same_slot():
             kind="other_user_fact",
             value="点云补全",
             content="用户开头的第三人称事实",
-            evidence="我最近一直在做点云补全。",
+            evidence=ellipsis_source,
             confidence=1.0,
             operation="ADD",
             attributed_to="user",
@@ -259,10 +260,8 @@ def test_temporary_location_links_stable_location_and_moves_time_fields():
             confidence=0.95,
             operation="ADD",
             attributed_to="user",
-            qualifiers={
-                "valid_from": "2026-08-24T00:00:00+00:00",
-                "valid_to": "2026-08-31T00:00:00+00:00",
-            },
+            valid_from="2026-08-24T00:00:00+00:00",
+            valid_to="2026-08-31T00:00:00+00:00",
         ),
         source_message="这周我在北京出差，下周就回杭州。",
         existing_memories=(_record(key="user_location", content="用户说自己来自或居住在杭州"),),
@@ -352,13 +351,11 @@ def test_invalid_subject_time_and_external_source_are_rejected():
     )
 
 
-def test_prompt_exposes_feedback_targets_but_filters_tool_and_system_history():
+def test_prompt_exposes_feedback_targets_with_valid_history():
     messages = build_memory_llm_messages(
         "刚才那条说错了",
         (),
         (
-            {"role": "system", "content": "系统里说用户喜欢红茶"},
-            {"role": "tool", "content": "RAG 说用户住在北京"},
             {"role": "assistant", "content": "你是指咖啡吗"},
             {"role": "user", "content": "对，是咖啡"},
         ),
@@ -374,6 +371,13 @@ def test_prompt_exposes_feedback_targets_but_filters_tool_and_system_history():
     assert payload["existing_memories"][0]["was_injected_in_last_reply"] is True
     assert [item["role"] for item in payload["recent_history"]] == ["assistant", "user"]
     assert all(item["eligible_as_memory_evidence"] is False for item in payload["recent_history"])
+
+
+@pytest.mark.parametrize("role", ["system", "tool"])
+def test_writer_rejects_invalid_history_roles_without_filtering(role):
+    with pytest.raises(HistoryFormatError) as caught:
+        build_memory_llm_messages("刚才那条说错了", (), (dict(role=role, content="不可提升的资料"),), (), 2000, .85)
+    assert caught.value.field == "history[0].role"
 
 
 class _Completion:
