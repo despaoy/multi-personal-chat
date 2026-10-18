@@ -1,5 +1,6 @@
 """Explicit additive evidence must survive versioning and cross-session reads."""
 import json
+from html import unescape
 from dataclasses import replace
 from datetime import datetime, timezone
 
@@ -50,21 +51,32 @@ async def test_add_read_repeat_correct_across_sessions(tmp_path, monkeypatch, se
         from db.schemas import MessageRequest
 
         async def forbidden(*args, **kwargs):
-            pytest.fail('Structured additive reads require neither RAG nor generation')
+            pytest.fail('Private conditional recall must not request public RAG')
+
+        calls = []
+
+        async def controlled_answer(**kwargs):
+            # Transport control; real semantic quality is checked separately.
+            wire = unescape('\n'.join(message['content'] for message in kwargs['messages']))
+            assert all(text in wire for text in texts)
+            calls.append(kwargs)
+            return reply
 
         monkeypatch.setattr(generate, '_retrieve_rag_bundle', forbidden)
         monkeypatch.setattr(generate, '_get_system_prompt', lambda _: 'persona')
         semantic_plan(query, {"private_memory": [0]})
         delivered, _, meta = await generate._generate_with_retrieval(
             MessageRequest(message=query), None, runtime_config={'useKnowledgeBase': True},
-            model_generate=forbidden, prepared_character_turn=prepared, message_db=db)
-        assert delivered == reply and meta['modelInvoked'] is False
-    correction, = extract_memories(f'更正一下，我只有取得新许可才{action}。')
-    assert await repo.capture_source('tsukiyashiro_kisaki', scope, source_message_id='correction', body=f'更正一下，我只有取得新许可才{action}。', observed_at=datetime.now(timezone.utc)) == 'recorded'
+            model_generate=controlled_answer, prepared_character_turn=prepared, message_db=db)
+        assert delivered == reply and meta['modelInvoked'] is True and len(calls) == 1
+    correction_text = f'更正一下，我只有取得新许可才{action}。之前说的{first}、{second}这两项条件全部作废，不再适用。'
+    correction, = extract_memories(correction_text)
+    assert await repo.capture_source('tsukiyashiro_kisaki', scope, source_message_id='correction', body=correction_text, observed_at=datetime.now(timezone.utc)) == 'recorded'
     assert await write_rule_memory(repo, 'tsukiyashiro_kisaki', scope, correction, 'correction')
     prepared = await service.prepare_turn(TurnInput(f'我{action}需要什么条件？', 'web', 'test', 'u1', 'third', 'private'), 'tsukiyashiro_kisaki')
     reply = render_constraint_response(f'我{action}需要什么条件？', prepared.compiled)
     assert '取得新许可' in reply and first not in reply and second not in reply
+    assert correction_text in unescape(prepared.compiled.episodic_reference_context)
     other = await service.prepare_turn(TurnInput(f'我{action}需要什么条件？', 'web', 'test', 'u2', 'new', 'private'), 'tsukiyashiro_kisaki')
     assert not other.compiled.memory_packets
 
