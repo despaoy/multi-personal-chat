@@ -13,3 +13,12 @@ def cloud_connection(model, *, completion=None):
     provider.snapshot = lambda: provider
     provider.get_status = lambda: {"modelName": model}
     return provider
+
+
+def completed_provider_response(kind, content):
+    """Complete native responses for the three HTTP provider fixtures."""
+    return {
+        "OpenAICompatProvider": {"choices": [{"finish_reason": "stop", "message": {"content": content}}]},
+        "OllamaProvider": {"message": {"role": "assistant", "content": content}, "done": True, "done_reason": "stop"},
+        "LlamaCppProvider": {"content": content, "stop": True, "stop_type": "eos", "truncated": False},
+    }[kind]

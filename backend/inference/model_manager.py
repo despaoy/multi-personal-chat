@@ -329,13 +329,15 @@ class OllamaProvider(BaseProvider):
                 },
                 timeout=120.0,
             )
-        if response.status_code == 200:
-            data = response.json()
-            reply = data["message"]["content"].strip()
-            cost = round(time.time() - start, 2)
-            return reply, cost
-        else:
+        if response.status_code != 200:
             raise RuntimeError(f"Ollama返回错误状态码: {response.status_code}")
+        data = response.json()
+        if data["done"] is not True or data["done_reason"] != "stop":
+            raise ValueError("Ollama completion did not finish normally")
+        reply = data["message"]["content"]
+        if not isinstance(reply, str) or not reply.strip():
+            raise ValueError("Ollama completion has no usable content")
+        return reply.strip(), round(time.time() - start, 2)
 
     def generate(self, prompt: str, session_history: List[Dict] = None,
                  max_tokens_override: int = None) -> Tuple[str, float]:
@@ -385,13 +387,16 @@ class LlamaCppProvider(BaseProvider):
                 },
                 timeout=120.0,
             )
-        if response.status_code == 200:
-            data = response.json()
-            reply = data.get("content", "").strip()
-            cost = round(time.time() - start, 2)
-            return reply, cost
-        else:
+        if response.status_code != 200:
             raise RuntimeError(f"llama.cpp返回错误状态码: {response.status_code}")
+        data = response.json()
+        if (data["stop"] is not True or data["stop_type"] not in {"eos", "word"}
+                or data["truncated"] is not False):
+            raise ValueError("llama.cpp completion did not finish normally")
+        reply = data["content"]
+        if not isinstance(reply, str) or not reply.strip():
+            raise ValueError("llama.cpp completion has no usable content")
+        return reply.strip(), round(time.time() - start, 2)
 
     def generate(self, prompt: str, session_history: List[Dict] = None,
                  max_tokens_override: int = None) -> Tuple[str, float]:

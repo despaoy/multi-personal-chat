@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock
 import httpx
 import pytest
 from fastapi import HTTPException
+from provider_fixtures import completed_provider_response
 
 from api import config as config_api
 from db import adapter
@@ -147,10 +148,7 @@ async def test_http_generation_refreshes_parameters_and_propagates_config_read_f
 
     def respond(raw):
         calls.append(json.loads(raw.content))
-        return httpx.Response(200, json={
-            "choices": [{"finish_reason": "stop", "message": {"content": "完整回答"}}],
-            "message": {"content": "完整回答"}, "content": "完整回答",
-        })
+        return httpx.Response(200, json=completed_provider_response(kind, '完整回答'))
 
     @asynccontextmanager
     async def acquire(timeout):
@@ -282,8 +280,7 @@ def token_limit_provider(monkeypatch, kind):
             body = kwargs["json"]
             calls.append(body["options"]["num_predict"] if kind == "OllamaProvider" else
                          body["n_predict"] if kind == "LlamaCppProvider" else body["max_tokens"])
-            return httpx.Response(200, json={"choices": [{"finish_reason": "stop", "message": {"content": "完整受控回答"}}],
-                                            "message": {"content": "完整受控回答"}, "content": "完整受控回答"})
+            return httpx.Response(200, json=completed_provider_response(kind, '完整受控回答'))
 
         @asynccontextmanager
         async def acquire(timeout):

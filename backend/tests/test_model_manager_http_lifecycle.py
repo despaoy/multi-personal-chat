@@ -10,6 +10,7 @@ import pytest
 
 from app import config as app_config
 from inference.model_manager import BaseProvider
+from provider_fixtures import completed_provider_response
 
 
 class DummyProvider(BaseProvider):
@@ -99,9 +100,7 @@ async def test_http_provider_errors_propagate_without_private_body_logging(monke
     if mode == 'http_error':
         response = httpx.Response(502, text='private-response-body')
     else:
-        response = httpx.Response(200, json={
-            'choices': [{'finish_reason': 'stop', 'message': {'content': '有效回答'}}],
-            'message': {'content': '有效回答'}, 'content': '有效回答'})
+        response = httpx.Response(200, json=completed_provider_response(kind, '有效回答'))
     failure = httpx.ConnectError('private-transport-detail')
     post = AsyncMock(side_effect=failure) if mode == 'transport_error' else AsyncMock(return_value=response)
     released = []
@@ -127,3 +126,43 @@ async def test_http_provider_errors_propagate_without_private_body_logging(monke
     assert released == [True]
     assert 'private-response-body' not in caplog.text and 'private-transport-detail' not in caplog.text
     assert post.await_count == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("kind", ["OllamaProvider", "LlamaCppProvider"])
+@pytest.mark.parametrize("fault", ["healthy", "empty", "partial", "limit", "missing_completion"])
+async def test_local_provider_accepts_only_complete_text(monkeypatch, kind, fault):
+    from inference import model_manager
+
+    monkeypatch.setattr(model_manager, "_get_db_config", lambda: {"maxTokens": 64, "temperature": .2})
+    provider = getattr(model_manager, kind)()
+    payload = completed_provider_response(kind, "6元；尚未付款，下雨取消。")
+    content = payload["message"] if kind == "OllamaProvider" else payload
+    marker, reason = ("done", "done_reason") if kind == "OllamaProvider" else ("stop", "stop_type")
+    if fault == "empty":
+        content["content"] = " \n\t "
+    elif fault == "partial":
+        payload[marker] = False
+    elif fault == "limit":
+        payload[reason] = "length" if kind == "OllamaProvider" else "limit"
+    elif fault == "missing_completion":
+        del payload[reason]
+    requests = []
+
+    def respond(request):
+        requests.append(request)
+        return httpx.Response(200, json=payload)
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as http:
+        @asynccontextmanager
+        async def acquire(timeout):
+            yield http
+
+        monkeypatch.setattr(provider, "_acquire_http_client", acquire)
+        prompt = "完整虚构题设：三张票每张2元，尚未付款，下雨取消。请计算总额并保留条件。"
+        if fault == "healthy":
+            assert (await provider.async_generate(prompt))[0] == "6元；尚未付款，下雨取消。"
+        else:
+            with pytest.raises(KeyError if fault == "missing_completion" else ValueError):
+                await provider.async_generate(prompt)
+    assert len(requests) == 1 and http.is_closed
