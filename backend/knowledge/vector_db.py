@@ -679,6 +679,7 @@ class VectorDatabase:
         logger.info("向量查询缓存已清除")
 
 _vector_db: Optional[VectorDatabase] = None
+_vector_db_init_lock = RLock()
 
 
 def get_vector_db() -> VectorDatabase:
@@ -690,12 +691,13 @@ def get_vector_db() -> VectorDatabase:
         VectorDatabase: 全局唯一的向量数据库实例
     """
     global _vector_db
-    if _vector_db is None:
-        configured_path = os.getenv("VECTOR_DB_PATH", "").strip()
-        if configured_path:
-            candidate = Path(configured_path).expanduser()
-            db_path = str(candidate if candidate.is_absolute() else Path(__file__).parent.parent / candidate)
-        else:
-            db_path = str(Path(__file__).parent / "data" / "vector_db")
-        _vector_db = VectorDatabase(db_path=db_path)
-    return _vector_db
+    with _vector_db_init_lock:
+        if _vector_db is None:
+            configured_path = os.getenv("VECTOR_DB_PATH", "").strip()
+            if configured_path:
+                candidate = Path(configured_path).expanduser()
+                db_path = str(candidate if candidate.is_absolute() else Path(__file__).parent.parent / candidate)
+            else:
+                db_path = str(Path(__file__).parent / "data" / "vector_db")
+            _vector_db = VectorDatabase(db_path=db_path)
+        return _vector_db

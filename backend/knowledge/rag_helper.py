@@ -267,10 +267,12 @@ class RAGHelper:
 
 
 _rag_helper: RAGHelper | None = None
+_rag_helper_init_lock = RLock()
 
 
 def get_rag_helper() -> RAGHelper:
     global _rag_helper
-    if _rag_helper is None:
-        _rag_helper = RAGHelper()
-    return _rag_helper
+    with _rag_helper_init_lock:
+        if _rag_helper is None:
+            _rag_helper = RAGHelper()
+        return _rag_helper

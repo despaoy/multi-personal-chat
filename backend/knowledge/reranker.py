@@ -12,6 +12,7 @@ import os
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
+from threading import RLock
 from typing import Any
 
 import torch
@@ -60,6 +61,7 @@ class CrossEncoderReranker:
         self.model = None
         self._model_loaded = False
         self._warmup_done = False
+        self._load_lock = RLock()
 
         if self.device == "auto":
             self.device = "cuda:0" if torch.cuda.is_available() else "cpu"
@@ -69,54 +71,55 @@ class CrossEncoderReranker:
         logger.info("Cross-Encoder device: %s", self.device)
 
     def _load_model(self) -> bool:
-        if self._model_loaded:
-            return True
-        try:
-            logger.info(
-                f"正在加载Cross-Encoder模型: {self.config.model_name} (允许联网下载={self.config.allow_download})"
-            )
+        with self._load_lock:
+            if self._model_loaded:
+                return True
+            try:
+                logger.info(
+                    f"正在加载Cross-Encoder模型: {self.config.model_name} (允许联网下载={self.config.allow_download})"
+                )
 
-            from transformers import AutoModelForSequenceClassification, AutoTokenizer
+                from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
-            start_time = time.time()
+                start_time = time.time()
 
-            # 默认离线加载：local_files_only=True保证不会静默联网下载
-            load_kwargs: dict[str, Any] = {"local_files_only": not self.config.allow_download}
-            if self.device != "cpu":
-                # CPU路径不使用CUDA专属dtype
-                load_kwargs["torch_dtype"] = torch.float16
+                # 默认离线加载：local_files_only=True保证不会静默联网下载
+                load_kwargs: dict[str, Any] = {"local_files_only": not self.config.allow_download}
+                if self.device != "cpu":
+                    # CPU路径不使用CUDA专属dtype
+                    load_kwargs["torch_dtype"] = torch.float16
 
-            self.tokenizer = AutoTokenizer.from_pretrained(self.config.model_name, **load_kwargs)
-            self.model = AutoModelForSequenceClassification.from_pretrained(self.config.model_name, **load_kwargs)
+                self.tokenizer = AutoTokenizer.from_pretrained(self.config.model_name, **load_kwargs)
+                self.model = AutoModelForSequenceClassification.from_pretrained(self.config.model_name, **load_kwargs)
 
-            self.model.to(self.device)
-            self.model.eval()
+                self.model.to(self.device)
+                self.model.eval()
 
-            for param in self.model.parameters():
-                param.requires_grad = False
+                for param in self.model.parameters():
+                    param.requires_grad = False
 
-            load_time = time.time() - start_time
+                load_time = time.time() - start_time
 
-            model_size = sum(p.numel() for p in self.model.parameters())
-            model_mem = sum(p.numel() * p.element_size() for p in self.model.parameters()) / 1024**2
-            logger.info(
-                f"Cross-Encoder模型加载完成: "
-                f"参数量={model_size:,}, "
-                f"模型大小={model_mem:.1f}MB, "
-                f"设备={self.device}, "
-                f"加载时间={load_time:.2f}s"
-            )
+                model_size = sum(p.numel() for p in self.model.parameters())
+                model_mem = sum(p.numel() * p.element_size() for p in self.model.parameters()) / 1024**2
+                logger.info(
+                    f"Cross-Encoder模型加载完成: "
+                    f"参数量={model_size:,}, "
+                    f"模型大小={model_mem:.1f}MB, "
+                    f"设备={self.device}, "
+                    f"加载时间={load_time:.2f}s"
+                )
 
-            if self.config.warmup_on_init:
-                self._warmup()
+                if self.config.warmup_on_init:
+                    self._warmup()
 
-            self._model_loaded = True
-            return True
+                self._model_loaded = True
+                return True
 
-        except Exception:
-            self.tokenizer = None
-            self.model = None
-            raise
+            except Exception:
+                self.tokenizer = None
+                self.model = None
+                raise
 
     def _warmup(self):
         if self._warmup_done:
@@ -243,6 +246,7 @@ class CrossEncoderReranker:
 
 
 _reranker_instance: CrossEncoderReranker | None = None
+_reranker_instance_init_lock = RLock()
 
 
 def get_reranker(config: RerankConfig | None = None) -> CrossEncoderReranker:
@@ -257,9 +261,10 @@ def get_reranker(config: RerankConfig | None = None) -> CrossEncoderReranker:
         CrossEncoderReranker: 全局唯一的重排器实例
     """
     global _reranker_instance
-    if _reranker_instance is None:
-        _reranker_instance = CrossEncoderReranker(config)
-    return _reranker_instance
+    with _reranker_instance_init_lock:
+        if _reranker_instance is None:
+            _reranker_instance = CrossEncoderReranker(config)
+        return _reranker_instance
 
 
 if __name__ == "__main__":
