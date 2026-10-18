@@ -13,6 +13,7 @@ import time
 from enum import Enum
 from pathlib import Path
 
+from inference.generation_options import read_provider_max_tokens
 from inference.openai_protocol import (
     ProviderResponseError,
     chat_completions_endpoint,
@@ -207,7 +208,7 @@ class OpenAICompatProvider(BaseProvider):
 
         messages.append({"role": "user", "content": prompt})
 
-        max_tokens = max_tokens_override if max_tokens_override else int(config.get('maxTokens', 512))
+        max_tokens = read_provider_max_tokens(config, max_tokens_override)
 
         return await self._complete_messages(
             messages, temperature=float(config.get('temperature', 0.8)), max_tokens=max_tokens)
@@ -314,7 +315,7 @@ class OllamaProvider(BaseProvider):
 
         messages.append({"role": "user", "content": prompt})
 
-        max_tokens = max_tokens_override if max_tokens_override else int(config.get('maxTokens', 512))
+        max_tokens = read_provider_max_tokens(config, max_tokens_override)
 
         async with self._acquire_http_client(timeout=120.0) as client:
             # P1-M4 fix: 请求级 timeout 覆盖 pool 默认值
@@ -370,7 +371,7 @@ class LlamaCppProvider(BaseProvider):
             parts.append(f"User: {prompt}")
             full_prompt = "\n".join(parts)
 
-        max_tokens = max_tokens_override if max_tokens_override else int(config.get('maxTokens', 512))
+        max_tokens = read_provider_max_tokens(config, max_tokens_override)
 
         async with self._acquire_http_client(timeout=120.0) as client:
             # P1-M4 fix: 请求级 timeout 覆盖 pool 默认值
@@ -477,6 +478,7 @@ class TransformersPeftProvider(BaseProvider):
     def generate(self, prompt: str, session_history: List[Dict] = None,
                  max_tokens_override: int = None) -> Tuple[str, float]:
         config = _get_db_config()
+        max_tokens = read_provider_max_tokens(config, max_tokens_override)
         import torch
 
         self._ensure_loaded()
@@ -499,8 +501,6 @@ class TransformersPeftProvider(BaseProvider):
             input_ids = torch.tensor(encoded['input_ids'], dtype=torch.long, device=self._model.device)
         else:
             input_ids = torch.tensor(encoded, dtype=torch.long, device=self._model.device)
-
-        max_tokens = max_tokens_override if max_tokens_override else int(config.get('maxTokens', 512))
 
         with torch.no_grad():
             output = self._model.generate(
@@ -566,7 +566,7 @@ class VLLMProvider(BaseProvider):
             self._lora_adapter = None
             logger.info("vLLM LoRA 适配器已清除")
 
-    async def generate_async(self, prompt: str, session_history: List[Dict] = None,
+    async def async_generate(self, prompt: str, session_history: List[Dict] = None,
                              max_tokens_override: int = None) -> Tuple[str, float]:
         """异步生成 - 复用 VLLMClient 全局单例（负载均衡 + 熔断器 + 健康检查）。
 
@@ -588,7 +588,7 @@ class VLLMProvider(BaseProvider):
 
         messages.append({"role": "user", "content": prompt})
 
-        max_tokens = max_tokens_override if max_tokens_override else int(config.get('maxTokens', 512))
+        max_tokens = read_provider_max_tokens(config, max_tokens_override)
         temperature = float(config.get('temperature', 0.8))
 
         # 复用 VLLMClient 全局单例（内部已有 3 次重试 + 熔断器 + 负载均衡）
@@ -608,12 +608,8 @@ class VLLMProvider(BaseProvider):
                  max_tokens_override: int = None) -> Tuple[str, float]:
         """同步生成包装 - 通过 asyncio.run 执行异步方法"""
         import asyncio
-        return asyncio.run(self.generate_async(prompt, session_history, max_tokens_override))
+        return asyncio.run(self.async_generate(prompt, session_history, max_tokens_override))
 
-    async def async_generate(self, prompt: str, session_history: List[Dict] = None,
-                             max_tokens_override: int = None) -> Tuple[str, float]:
-        """异步生成入口"""
-        return await self.generate_async(prompt, session_history, max_tokens_override)
 
 class ProviderShutdownError(RuntimeError):
     """All provider close failures, retained across asynchronous/thread boundaries."""

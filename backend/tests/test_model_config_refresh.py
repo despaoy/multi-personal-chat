@@ -241,3 +241,83 @@ def test_loaded_local_generation_reads_current_parameters_without_loading_weight
         assert error.value is failure and len(calls) == 2
     finally:
         provider._model = None
+
+
+
+def token_limit_provider(monkeypatch, kind):
+    from unittest.mock import Mock
+    from inference import vllm_client
+
+    settings = dict(openaiCompatBaseUrl="https://api.deepseek.com", openaiCompatApiKey="synthetic-not-a-real-key",
+                    openaiCompatModel="synthetic-token-limit", temperature=0.25)
+    monkeypatch.setattr(model_manager, "_get_db_config", lambda: settings)
+    provider = getattr(model_manager, kind)()
+    calls = []
+    attempts = Mock()
+    if kind == "TransformersPeftProvider":
+        tensor = SimpleNamespace(shape=(1, 2), to=lambda device: tensor)
+        monkeypatch.setitem(sys.modules, "torch", SimpleNamespace(no_grad=nullcontext))
+        provider._ensure_loaded = attempts
+        provider._tokenizer = SimpleNamespace(eos_token_id=0,
+            apply_chat_template=lambda *args, **kwargs: SimpleNamespace(input_ids=tensor),
+            decode=lambda *args, **kwargs: "完整受控回答")
+
+        def generate(*args, **kwargs):
+            calls.append(kwargs["max_new_tokens"])
+            return [[1, 2, 3]]
+
+        provider._model = SimpleNamespace(device="cpu", generate=generate)
+    elif kind == "VLLMProvider":
+        async def generate(**kwargs):
+            calls.append(kwargs["max_tokens"])
+            return "完整受控回答"
+
+        async def acquire():
+            attempts()
+            return SimpleNamespace(generate=generate)
+
+        monkeypatch.setattr(vllm_client, "get_vllm_client", acquire)
+    else:
+        async def post(*args, **kwargs):
+            body = kwargs["json"]
+            calls.append(body["options"]["num_predict"] if kind == "OllamaProvider" else
+                         body["n_predict"] if kind == "LlamaCppProvider" else body["max_tokens"])
+            return httpx.Response(200, json={"choices": [{"finish_reason": "stop", "message": {"content": "完整受控回答"}}],
+                                            "message": {"content": "完整受控回答"}, "content": "完整受控回答"})
+
+        @asynccontextmanager
+        async def acquire(timeout):
+            attempts()
+            yield SimpleNamespace(post=post)
+
+        monkeypatch.setattr(provider, "_acquire_http_client", acquire)
+    return SimpleNamespace(provider=provider, settings=settings, calls=calls, attempts=attempts)
+
+
+@pytest.mark.parametrize("kind", ["OpenAICompatProvider", "OllamaProvider", "LlamaCppProvider", "TransformersPeftProvider", "VLLMProvider"])
+@pytest.mark.parametrize("setting,override", [(64, 0), (0, None), (2.5, None), (64, False)])
+async def test_invalid_prompt_limit_stops_before_resource_use_and_recovers(monkeypatch, kind, setting, override):
+    from pydantic import ValidationError
+
+    rig = token_limit_provider(monkeypatch, kind)
+    rig.settings["maxTokens"] = setting
+    with pytest.raises(ValidationError, match="maxTokens"):
+        await rig.provider.async_generate("完整问题：借期14天，不得自动续借，仅本人可申请。", max_tokens_override=override)
+    rig.attempts.assert_not_called()
+    assert rig.calls == []
+    rig.settings["maxTokens"] = 29
+    assert (await rig.provider.async_generate("请按完整条件核对。"))[0] == "完整受控回答"
+    assert rig.calls == [29]
+
+
+@pytest.mark.parametrize("kind", ["OpenAICompatProvider", "OllamaProvider", "LlamaCppProvider", "TransformersPeftProvider", "VLLMProvider"])
+async def test_prompt_limit_defaults_stored_value_and_override_keep_precedence(monkeypatch, kind):
+    rig = token_limit_provider(monkeypatch, kind)
+    for setting, override, expected in [(None, None, 512), (64, None, 64), (64, 29, 29)]:
+        if setting is None:
+            rig.settings.pop("maxTokens", None)
+        else:
+            rig.settings["maxTokens"] = setting
+        assert (await rig.provider.async_generate("请核对完整借阅条件。", max_tokens_override=override))[0] == "完整受控回答"
+        assert rig.calls[-1] == expected
+    assert rig.attempts.call_count == len(rig.calls) == 3

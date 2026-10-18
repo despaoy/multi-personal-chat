@@ -33,3 +33,9 @@ def read_generation_options(config: dict[str, Any]) -> dict[str, float | int]:
         elif env_name in os.environ:
             values[name] = os.environ[env_name]
     return GenerationOptions(**values).model_dump()
+
+
+def read_provider_max_tokens(config: dict[str, Any], override: int | None = None) -> int:
+    """Validate prompt-adapter limits, retaining their existing 512-token default."""
+    value = config.get("maxTokens", 512) if override is None else override
+    return GenerationOptions(maxTokens=value).maxTokens
