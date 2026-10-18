@@ -20,6 +20,7 @@ from typing import Any, AsyncGenerator, Dict, List, Optional
 import httpx
 
 from infra.circuit_breaker import CircuitBreaker
+from infra.environment import read_positive_float, read_positive_int
 from inference.openai_protocol import ProviderResponseError, completed_chat_content
 from inference.reasoning_text import ReasoningTextFilter, strip_reasoning_text
 
@@ -218,7 +219,7 @@ class VLLMClient:
     - VLLM_API_KEY: API密钥（可选）
     - VLLM_MODEL: 模型名称
     - VLLM_TIMEOUT: 请求超时秒数
-    - VLLM_MAX_RETRIES: 最大重试次数
+    - VLLM_MAX_RETRIES: 最大尝试次数（含首次请求，必须为正数）
     """
 
     # 连续失败多少次后标记为不可用
@@ -232,7 +233,7 @@ class VLLMClient:
 
     def __init__(
         self,
-        base_urls: Optional[List[str]] = None,
+        base_urls: str | List[str] | None = None,
         api_key: Optional[str] = None,
         model: Optional[str] = None,
         timeout: Optional[float] = None,
@@ -242,39 +243,34 @@ class VLLMClient:
         """初始化 vLLM 客户端
 
         Args:
-            base_urls: vLLM 实例 URL 列表，None 则从环境变量读取
+            base_urls: URL 列表或逗号分隔字符串，None 则从环境变量读取
             api_key: API 密钥，None 则从环境变量读取
             model: 模型名称，None 则从环境变量读取
             timeout: 请求超时秒数，None 则从环境变量读取
-            max_retries: 最大重试次数，None 则从环境变量读取
+            max_retries: 最大尝试次数（含首次请求），None 则从环境变量读取
             strategy: 负载均衡策略
         """
-        # 从环境变量读取配置
-        raw_urls = (
-            base_urls
-            or os.getenv("VLLM_BASE_URLS", "").strip()
-            or os.getenv("VLLM_BASE_URL", "").strip()
-            or "http://localhost:8001"
+        raw_urls = base_urls if base_urls is not None else os.getenv(
+            "VLLM_BASE_URLS", os.getenv("VLLM_BASE_URL", "http://localhost:8001"),
         )
-        self._base_urls: List[str] = [
-            u.strip().rstrip("/") for u in raw_urls.split(",") if u.strip()
-        ]
-        self._api_key: str = api_key or os.getenv("VLLM_API_KEY", "")
-        # D-4 fix: 统一使用 get_vllm_served_model_name() 解析模型名
+        urls = raw_urls.split(",") if isinstance(raw_urls, str) else raw_urls
+        self._base_urls = [url.strip().rstrip("/") for url in urls]
+        if not self._base_urls or any(not url for url in self._base_urls):
+            raise ValueError("VLLM_BASE_URLS must contain non-empty URLs")
+        self._api_key: str = api_key if api_key is not None else os.getenv("VLLM_API_KEY", "")
         from app.config import get_vllm_served_model_name
         self._model: str = model or get_vllm_served_model_name()
-        self._timeout: float = timeout or float(os.getenv("VLLM_TIMEOUT", "120"))
-        self._max_retries: int = max_retries or int(os.getenv("VLLM_MAX_RETRIES", "3"))
-        self._max_concurrency: int = int(os.getenv("VLLM_MAX_CONCURRENCY", "8"))
-        self._request_semaphore = asyncio.Semaphore(max(1, self._max_concurrency))
 
-        # 初始化实例列表
-        self._instances: List[VLLMInstance] = []
-        for idx, url in enumerate(self._base_urls):
-            self._instances.append(VLLMInstance(
-                name=f"vllm-{idx}",
-                base_url=url,
-            ))
+        settings = dict(os.environ)
+        if timeout is not None:
+            settings["VLLM_TIMEOUT"] = str(timeout)
+        if max_retries is not None:
+            settings["VLLM_MAX_RETRIES"] = str(max_retries)
+        self._timeout = read_positive_float(settings, "VLLM_TIMEOUT", 120)
+        self._max_retries = read_positive_int(settings, "VLLM_MAX_RETRIES", 3)
+        self._max_concurrency = read_positive_int(settings, "VLLM_MAX_CONCURRENCY", 8)
+        self._request_semaphore = asyncio.Semaphore(self._max_concurrency)
+        self._instances = [VLLMInstance(name=f"vllm-{idx}", base_url=url) for idx, url in enumerate(self._base_urls)]
 
         # 初始化负载均衡器
         self._strategy = strategy
@@ -915,16 +911,7 @@ async def get_vllm_client() -> "VLLMClient":
     async with _get_shared_client_lock():
         if _shared_client is not None:
             return _shared_client
-        base_urls = os.getenv("VLLM_BASE_URLS", os.getenv("VLLM_BASE_URL", ""))
-        # D-4 fix: 模型名统一通过 get_vllm_served_model_name() 解析
-        from app.config import get_vllm_served_model_name
-        model = get_vllm_served_model_name()
-        timeout = float(os.getenv("VLLM_TIMEOUT", "120"))
-        _shared_client = VLLMClient(
-            base_urls=base_urls,
-            model=model,
-            timeout=timeout,
-        )
+        _shared_client = VLLMClient()
         logger.info("VLLMClient 全局单例已创建")
         return _shared_client
 
