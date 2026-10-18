@@ -195,7 +195,7 @@ class OpenAICompatProvider(BaseProvider):
             return self
         return OpenAICompatProvider(_get_db_config())
 
-    async def _generate_async(self, prompt: str, session_history: List[Dict] = None,
+    async def async_generate(self, prompt: str, session_history: List[Dict] = None,
                               max_tokens_override: int = None) -> Tuple[str, float]:
         """异步生成实现（R-1 fix: 使用共享 HttpClientPool）"""
         config = self._refresh_db_config()
@@ -268,12 +268,7 @@ class OpenAICompatProvider(BaseProvider):
                  max_tokens_override: int = None) -> Tuple[str, float]:
         # R-1 fix: 同步入口通过 asyncio.run 执行异步实现
         import asyncio
-        return asyncio.run(self._generate_async(prompt, session_history, max_tokens_override))
-
-    async def async_generate(self, prompt: str, session_history: List[Dict] = None,
-                             max_tokens_override: int = None) -> Tuple[str, float]:
-        """异步生成 - 原生 async，无需线程池"""
-        return await self._generate_async(prompt, session_history, max_tokens_override)
+        return asyncio.run(self.async_generate(prompt, session_history, max_tokens_override))
 
 class MockProvider(BaseProvider):
     """模拟提供商，用于测试"""
@@ -307,7 +302,7 @@ class OllamaProvider(BaseProvider):
         self._loaded = True
         # R-1 fix: 不再自建 httpx.Client，统一通过 _acquire_http_client() 获取共享 AsyncClient
 
-    async def _generate_async(self, prompt: str, session_history: List[Dict] = None,
+    async def async_generate(self, prompt: str, session_history: List[Dict] = None,
                               max_tokens_override: int = None) -> Tuple[str, float]:
         """异步生成实现（R-1 fix: 使用共享 HttpClientPool）"""
         config = _get_db_config()
@@ -345,12 +340,7 @@ class OllamaProvider(BaseProvider):
                  max_tokens_override: int = None) -> Tuple[str, float]:
         # R-1 fix: 同步入口通过 asyncio.run 执行异步实现
         import asyncio
-        return asyncio.run(self._generate_async(prompt, session_history, max_tokens_override))
-
-    async def async_generate(self, prompt: str, session_history: List[Dict] = None,
-                             max_tokens_override: int = None) -> Tuple[str, float]:
-        """异步生成 - 原生 async，无需线程池"""
-        return await self._generate_async(prompt, session_history, max_tokens_override)
+        return asyncio.run(self.async_generate(prompt, session_history, max_tokens_override))
 
 class LlamaCppProvider(BaseProvider):
     """llama.cpp 提供商"""
@@ -362,7 +352,7 @@ class LlamaCppProvider(BaseProvider):
         self._loaded = True
         # R-1 fix: 不再自建 httpx.Client，统一通过 _acquire_http_client() 获取共享 AsyncClient
 
-    async def _generate_async(self, prompt: str, session_history: List[Dict] = None,
+    async def async_generate(self, prompt: str, session_history: List[Dict] = None,
                               max_tokens_override: int = None) -> Tuple[str, float]:
         """异步生成实现（R-1 fix: 使用共享 HttpClientPool）"""
         config = _get_db_config()
@@ -406,12 +396,7 @@ class LlamaCppProvider(BaseProvider):
                  max_tokens_override: int = None) -> Tuple[str, float]:
         # R-1 fix: 同步入口通过 asyncio.run 执行异步实现
         import asyncio
-        return asyncio.run(self._generate_async(prompt, session_history, max_tokens_override))
-
-    async def async_generate(self, prompt: str, session_history: List[Dict] = None,
-                             max_tokens_override: int = None) -> Tuple[str, float]:
-        """异步生成 - 原生 async，无需线程池"""
-        return await self._generate_async(prompt, session_history, max_tokens_override)
+        return asyncio.run(self.async_generate(prompt, session_history, max_tokens_override))
 
 class TransformersPeftProvider(BaseProvider):
     """Transformers + PEFT 本地推理提供商"""
