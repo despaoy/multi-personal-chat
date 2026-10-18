@@ -10,11 +10,14 @@ import hashlib
 import logging
 import shutil
 import sqlite3
+from contextlib import closing
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import Enum
 from pathlib import Path
 from typing import Any, Optional
+from tempfile import TemporaryDirectory
+from uuid import uuid4
 
 logger = logging.getLogger(__name__)
 
@@ -116,11 +119,11 @@ class BackupManager:
     def _generate_backup_filename(self, backup_type: BackupType) -> str:
         """生成备份文件名。
 
-        格式: {db_name}_{timestamp}_{type}.bak.gz
+        格式: {db_name}_{timestamp}-{unique_id}_{type}.bak.gz
         """
         db_name = self.db_path.stem
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        return f"{db_name}_{timestamp}_{backup_type.value}.bak.gz"
+        return f"{db_name}_{timestamp}-{uuid4().hex}_{backup_type.value}.bak.gz"
 
     def _compute_sha256(self, file_path: Path) -> str:
         """计算文件的SHA256哈希值。"""
@@ -130,144 +133,46 @@ class BackupManager:
                 sha256.update(chunk)
         return sha256.hexdigest()
 
-    def _create_full_backup(self) -> Optional[BackupInfo]:
-        """创建全量备份。
+    def _backup_sync(self, backup_type: BackupType) -> BackupInfo:
+        """Create a complete snapshot; publish it only after compression succeeds.
 
-        使用SQLite的backup API进行一致性备份，然后压缩存储。
-
-        Returns:
-            备份信息，失败返回None。
+        The historical incremental type is also a complete SQLite snapshot.
         """
-        if not self.db_path.exists():
-            logger.error("数据库文件不存在: %s", self.db_path)
-            return None
-
+        if not self.db_path.is_file():
+            raise FileNotFoundError(f"Backup source database does not exist: {self.db_path}")
         self.backup_dir.mkdir(parents=True, exist_ok=True)
-        filename = self._generate_backup_filename(BackupType.FULL)
-        temp_path = self.backup_dir / filename.replace(".gz", "")
+        filename = self._generate_backup_filename(backup_type)
         final_path = self.backup_dir / filename
+        with TemporaryDirectory(prefix=".backup-", dir=self.backup_dir) as workspace:
+            snapshot = Path(workspace) / "snapshot.sqlite"
+            compressed = Path(workspace) / filename
+            with closing(sqlite3.connect(self.db_path.resolve().as_uri() + "?mode=ro", uri=True)) as source:
+                with closing(sqlite3.connect(str(snapshot))) as target:
+                    source.backup(target)
+            sha256 = self._compute_sha256(snapshot)
+            with snapshot.open("rb") as source, gzip.open(compressed, "wb") as target:
+                shutil.copyfileobj(source, target)
+            size_bytes = compressed.stat().st_size
+            compressed.replace(final_path)
 
-        try:
-            # 使用SQLite backup API进行一致性备份
-            source_conn = sqlite3.connect(str(self.db_path))
-            dest_conn = sqlite3.connect(str(temp_path))
-            try:
-                source_conn.backup(dest_conn)
-            finally:
-                dest_conn.close()
-                source_conn.close()
-
-            # 计算哈希（压缩前）
-            sha256 = self._compute_sha256(temp_path)
-
-            # 压缩存储
-            with open(temp_path, "rb") as f_in:
-                with gzip.open(final_path, "wb") as f_out:
-                    shutil.copyfileobj(f_in, f_out)
-
-            # 删除临时文件
-            temp_path.unlink()
-
-            size_bytes = final_path.stat().st_size
-            backup_info = BackupInfo(
-                filename=filename,
-                path=str(final_path),
-                backup_type=BackupType.FULL,
-                timestamp=datetime.now(),
-                size_bytes=size_bytes,
-                sha256=sha256,
-                db_name=self.db_path.stem,
-            )
-
+        backup_info = BackupInfo(
+            filename=filename, path=str(final_path), backup_type=backup_type,
+            timestamp=datetime.now(), size_bytes=size_bytes,
+            sha256=sha256, db_name=self.db_path.stem,
+        )
+        if backup_type is BackupType.FULL:
             self._last_full_backup_time = backup_info.timestamp
             self._stats.full_backups += 1
-            self._stats.total_backups += 1
-            self._stats.total_size_bytes += size_bytes
-            self._stats.last_backup_time = backup_info.timestamp
-            self._update_time_range(backup_info.timestamp)
-
-            logger.info(
-                "全量备份完成: %s (大小: %d bytes, SHA256: %s...)",
-                filename, size_bytes, sha256[:16],
-            )
-            return backup_info
-
-        except Exception as e:
-            logger.error("全量备份失败: %s", e)
-            # 清理临时文件
-            if temp_path.exists():
-                temp_path.unlink()
-            if final_path.exists():
-                final_path.unlink()
-            return None
-
-    def _create_incremental_backup(self) -> Optional[BackupInfo]:
-        """创建增量备份。
-
-        保留历史 incremental 类型，产物仍为完整 SQLite 快照，并非差分文件。
-
-        Returns:
-            备份信息，失败返回None。
-        """
-        if not self.db_path.exists():
-            logger.error("数据库文件不存在: %s", self.db_path)
-            return None
-
-        self.backup_dir.mkdir(parents=True, exist_ok=True)
-        filename = self._generate_backup_filename(BackupType.INCREMENTAL)
-        temp_path = self.backup_dir / filename.replace(".gz", "")
-        final_path = self.backup_dir / filename
-
-        try:
-            # Native backup preserves indexes, views and triggers as well as rows.
-            source_conn = sqlite3.connect(str(self.db_path))
-            dest_conn = sqlite3.connect(str(temp_path))
-            try:
-                source_conn.backup(dest_conn)
-
-            finally:
-                dest_conn.close()
-                source_conn.close()
-
-            # 计算哈希
-            sha256 = self._compute_sha256(temp_path)
-
-            # 压缩存储
-            with open(temp_path, "rb") as f_in:
-                with gzip.open(final_path, "wb") as f_out:
-                    shutil.copyfileobj(f_in, f_out)
-
-            temp_path.unlink()
-
-            size_bytes = final_path.stat().st_size
-            backup_info = BackupInfo(
-                filename=filename,
-                path=str(final_path),
-                backup_type=BackupType.INCREMENTAL,
-                timestamp=datetime.now(),
-                size_bytes=size_bytes,
-                sha256=sha256,
-                db_name=self.db_path.stem,
-            )
-
+        else:
             self._stats.incremental_backups += 1
-            self._stats.total_backups += 1
-            self._stats.total_size_bytes += size_bytes
-            self._stats.last_backup_time = backup_info.timestamp
-            self._update_time_range(backup_info.timestamp)
-
-            logger.info(
-                "增量备份完成: %s (大小: %d bytes)", filename, size_bytes,
-            )
-            return backup_info
-
-        except Exception as e:
-            logger.error("增量备份失败: %s", e)
-            if temp_path.exists():
-                temp_path.unlink()
-            if final_path.exists():
-                final_path.unlink()
-            return None
+        self._stats.total_backups += 1
+        self._stats.total_size_bytes += size_bytes
+        self._stats.last_backup_time = backup_info.timestamp
+        self._update_time_range(backup_info.timestamp)
+        self._change_count = 0
+        self._backups_cache.append(backup_info)
+        logger.info("备份完成 type=%s file=%s bytes=%d", backup_type.value, filename, size_bytes)
+        return backup_info
 
     def _update_time_range(self, timestamp: datetime) -> None:
         """更新备份时间范围统计。"""
@@ -276,33 +181,9 @@ class BackupManager:
         if self._stats.newest_backup is None or timestamp > self._stats.newest_backup:
             self._stats.newest_backup = timestamp
 
-    def _backup_sync(self, backup_type: BackupType) -> Optional[BackupInfo]:
-        """同步执行备份操作（应在executor中运行以避免阻塞事件循环）。"""
-        if backup_type == BackupType.FULL:
-            result = self._create_full_backup()
-        else:
-            result = self._create_incremental_backup()
-
-        if result is not None:
-            self._change_count = 0
-            self._backups_cache.append(result)
-
-        return result
-
-    async def backup(self, backup_type: BackupType = BackupType.FULL) -> Optional[BackupInfo]:
-        """执行备份操作。
-
-        使用 run_in_executor 避免阻塞事件循环。
-
-        Args:
-            backup_type: 备份类型，FULL或INCREMENTAL。
-
-        Returns:
-            备份信息，失败返回None。
-        """
-        loop = asyncio.get_running_loop()
-        result = await loop.run_in_executor(None, self._backup_sync, backup_type)
-        return result
+    async def backup(self, backup_type: BackupType = BackupType.FULL) -> BackupInfo:
+        """Return a completed backup or propagate its original failure."""
+        return await asyncio.to_thread(self._backup_sync, BackupType(backup_type))
 
     def restore(self, backup_path: str) -> bool:
         """从指定备份恢复数据库。
@@ -405,12 +286,9 @@ class BackupManager:
 
         backups: list[BackupInfo] = []
         for path in self.backup_dir.glob("*.bak.gz"):
-            try:
-                info = self._parse_backup_filename(path)
-                if info is not None:
-                    backups.append(info)
-            except Exception as e:
-                logger.warning("解析备份文件名失败 %s: %s", path.name, e)
+            info = self._parse_backup_filename(path)
+            if info is not None:
+                backups.append(info)
 
         backups.sort(key=lambda b: b.timestamp, reverse=True)
         self._backups_cache = backups
@@ -419,7 +297,7 @@ class BackupManager:
     def _parse_backup_filename(self, path: Path) -> Optional[BackupInfo]:
         """从文件名解析备份信息。
 
-        文件名格式: {db_name}_{YYYYMMDD_HHMMSS}_{type}.bak.gz
+        文件名格式: {db_name}_{YYYYMMDD_HHMMSS}[-unique_id]_{type}.bak.gz
         """
         name = path.stem.replace(".bak", "")  # 去掉 .bak (stem 已去掉 .gz)
         parts = name.rsplit("_", 1)
@@ -440,6 +318,8 @@ class BackupManager:
         time_str = prefix_parts[-1]
 
         try:
+            # Existing second-resolution names and new unique names share the same timestamp.
+            time_str = time_str.partition("-")[0]
             timestamp = datetime.strptime(f"{date_str}_{time_str}", "%Y%m%d_%H%M%S")
         except ValueError:
             return None

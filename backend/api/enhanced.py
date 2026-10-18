@@ -1,6 +1,7 @@
 """增强功能API"""
 import asyncio
 import logging
+import sqlite3
 from typing import Literal, Optional
 
 from fastapi import APIRouter, HTTPException, Depends
@@ -145,9 +146,11 @@ async def create_backup(
         raise HTTPException(status_code=503, detail="备份管理器不可用")
     from infra.backup_manager import BackupType
 
-    result = await _bm.backup(BackupType(backup_type))
-    if result is None:
-        raise HTTPException(status_code=500, detail="备份创建失败，请检查服务器日志")
+    try:
+        result = await _bm.backup(BackupType(backup_type))
+    except (OSError, sqlite3.Error) as exc:
+        logger.exception("备份创建失败 type=%s", type(exc).__name__)
+        raise HTTPException(status_code=500, detail="备份创建失败，请检查服务器日志") from exc
     payload = result.to_dict()
     return {
         "success": True,
