@@ -28,6 +28,7 @@ from app.runtime import get_runtime_container
 from db.adapter import db
 from db.schemas import MessageRequest
 from infra.concurrency_control import InferenceQueueFull, RateLimitExceeded, inference_runtime
+from infra.environment import read_bool
 from infra.observability import increment, log_event
 from infra.security_utils import (
     constant_time_contains,
@@ -90,22 +91,6 @@ class AstrBotMessageResponse(BaseModel):
     retryable: bool = False
 
 
-def _parse_bool(value: Any, default: bool) -> bool:
-    if value is None:
-        return default
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, (int, float)):
-        return bool(value)
-    if isinstance(value, str):
-        normalized = value.strip().lower()
-        if normalized in {"1", "true", "yes", "on", "enabled"}:
-            return True
-        if normalized in {"0", "false", "no", "off", "disabled"}:
-            return False
-    return default
-
-
 async def _run_blocking(label: str, func: Callable[[], T], timeout: float = _DB_TIMEOUT) -> T:
     try:
         return await asyncio.wait_for(asyncio.to_thread(func), timeout=timeout)
@@ -133,10 +118,7 @@ def _allowed_tokens() -> list[str]:
 
 
 def _signature_required() -> bool:
-    configured = os.getenv("INTEGRATION_SIGNATURE_REQUIRED")
-    if configured is not None:
-        return _parse_bool(configured, False)
-    return is_production()
+    return read_bool(os.environ, "INTEGRATION_SIGNATURE_REQUIRED", is_production())
 
 
 async def _check_token(token: str | None) -> tuple[str, list[str]]:
@@ -152,18 +134,17 @@ async def _check_token(token: str | None) -> tuple[str, list[str]]:
 
 async def _is_platform_enabled(platform: str) -> bool:
     global_env = os.getenv("ASTRBOT_ENABLED")
-    if global_env is not None and not _parse_bool(global_env, True):
+    if global_env is not None and not read_bool(os.environ, "ASTRBOT_ENABLED", True):
         return False
 
     config = await _load_config()
-    if global_env is None and not _parse_bool(config.get("astrbotEnabled"), True):
+    if global_env is None and not read_bool(config, "astrbotEnabled", True):
         return False
 
-    env_key, config_key, default = _PLATFORM_SETTINGS.get(platform, ("", "", True))
-    env_value = os.getenv(env_key) if env_key else None
-    if env_value is not None:
-        return _parse_bool(env_value, default)
-    return _parse_bool(config.get(config_key), default)
+    env_key, config_key, default = _PLATFORM_SETTINGS[platform]
+    if env_key in os.environ:
+        return read_bool(os.environ, env_key, default)
+    return read_bool(config, config_key, default)
 
 
 def _session_id(platform: str, conversation_type: str, conversation_id: str) -> str:

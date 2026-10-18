@@ -531,3 +531,40 @@ async def test_plugin_http_failure_is_not_marked_seen_or_delivered(plugin):
         assert len(notices) == 1 and notices[0].startswith("[系统提示]")
         assert not plugin._seen_events and not plugin._sent_receipts and not plugin._inflight
     assert len(attempts) == 2
+
+
+
+@pytest.mark.parametrize("target,value,key", [
+    ("global_env", "garbage", "ASTRBOT_ENABLED"),
+    ("platform_env", "2", "ASTRBOT_QQ_ENABLED"),
+    ("global_db", None, "astrbotEnabled"),
+    ("platform_db", {"invalid": 1}, "astrbotQQEnabled"),
+    ("platform_db", 0.5, "astrbotQQEnabled"),
+    ("platform_db", "enabled", "astrbotQQEnabled"),
+])
+async def test_gateway_invalid_switch_is_a_named_error_instead_of_default(gateway, monkeypatch, target, value, key):
+    database, _, payload = gateway
+    monkeypatch.delenv("ASTRBOT_QQ_ENABLED", raising=False)
+    if target.endswith("env"):
+        monkeypatch.setenv(key, value)
+    else:
+        database.set_config_value(key, value)
+        if target == "global_db":
+            monkeypatch.delenv("ASTRBOT_ENABLED", raising=False)
+    with pytest.raises(ValueError, match=key):
+        await integrations._is_platform_enabled(payload.platform)
+
+
+@pytest.mark.parametrize("environment", ["production", "development"])
+def test_invalid_signature_configuration_never_disables_verification(monkeypatch, environment):
+    monkeypatch.setenv("ENVIRONMENT", environment)
+    monkeypatch.setenv("INTEGRATION_SIGNATURE_REQUIRED", "garbage")
+    with pytest.raises(ValueError, match="INTEGRATION_SIGNATURE_REQUIRED"):
+        integrations._signature_required()
+
+
+@pytest.mark.parametrize("environment,expected", [("production", True), ("development", False)])
+def test_signature_absence_keeps_the_explicit_environment_default(monkeypatch, environment, expected):
+    monkeypatch.setenv("ENVIRONMENT", environment)
+    monkeypatch.delenv("INTEGRATION_SIGNATURE_REQUIRED", raising=False)
+    assert integrations._signature_required() is expected
