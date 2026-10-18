@@ -692,6 +692,7 @@ def test_local_model_lock_restarts_on_a_fresh_event_loop(monkeypatch):
 def test_shared_vllm_client_restarts_on_a_fresh_event_loop(monkeypatch):
     from app import config
     from inference import vllm_client
+    from infra.circuit_breaker import CircuitBreaker
 
     created = []
 
@@ -699,6 +700,7 @@ def test_shared_vllm_client_restarts_on_a_fresh_event_loop(monkeypatch):
         def __init__(self, **kwargs):
             self.kwargs = kwargs
             self.closed = False
+            self._circuit_breaker = CircuitBreaker("vllm")
             created.append(self)
 
         async def close(self):

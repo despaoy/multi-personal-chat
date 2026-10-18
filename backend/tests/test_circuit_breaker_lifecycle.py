@@ -64,3 +64,62 @@ def test_app_config_uses_the_exported_global_registry():
     from infra.circuit_breaker import global_registry
 
     assert config.circuit_breaker_registry is global_registry
+
+def test_managed_vllm_registration_follows_client_lifecycle(monkeypatch):
+    from app import config
+    from inference import vllm_client
+
+    registry = CircuitBreakerRegistry()
+    monkeypatch.setattr(config, "circuit_breaker_registry", registry)
+    monkeypatch.setattr(vllm_client, "_shared_client", None)
+    monkeypatch.setenv("VLLM_BASE_URLS", "https://registry.fixture.invalid")
+
+    async def exercise():
+        try:
+            first = await vllm_client.get_vllm_client()
+            assert await registry.get("vllm") is first._circuit_breaker
+            await vllm_client.close_shared_vllm_client()
+            assert await registry.get("vllm") is None
+            independent = vllm_client.VLLMClient()
+            assert await registry.get("vllm") is None
+            await independent.close()
+            second = await vllm_client.get_vllm_client()
+            assert second is not first and await registry.get("vllm") is second._circuit_breaker
+            await second._circuit_breaker.trip()
+            await enhanced.reset_circuit_breaker("vllm", current_user={"role": "admin"})
+            assert second._circuit_breaker.state.value == "closed"
+        finally:
+            await vllm_client.close_shared_vllm_client()
+
+    monkeypatch.setattr(enhanced, "circuit_breaker_registry", registry)
+    asyncio.run(exercise())
+
+
+def test_registration_failure_keeps_shared_slot_empty_for_next_request(monkeypatch):
+    from unittest.mock import AsyncMock
+
+    import pytest
+
+    from app import config
+    from inference import vllm_client
+
+    registry = CircuitBreakerRegistry()
+    monkeypatch.setattr(config, "circuit_breaker_registry", registry)
+    monkeypatch.setattr(vllm_client, "_shared_client", None)
+    monkeypatch.setenv("VLLM_BASE_URLS", "https://registry.fixture.invalid")
+    register = registry.register
+    failure = RuntimeError("synthetic-registry-error")
+    monkeypatch.setattr(registry, "register", AsyncMock(side_effect=failure))
+
+    async def exercise():
+        with pytest.raises(RuntimeError) as caught:
+            await vllm_client.get_vllm_client()
+        assert caught.value is failure and vllm_client._shared_client is None
+        monkeypatch.setattr(registry, "register", register)
+        try:
+            client = await vllm_client.get_vllm_client()
+            assert await registry.get("vllm") is client._circuit_breaker
+        finally:
+            await vllm_client.close_shared_vllm_client()
+
+    asyncio.run(exercise())

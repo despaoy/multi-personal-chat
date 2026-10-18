@@ -263,6 +263,11 @@ class CircuitBreakerRegistry:
                 )
             return self._breakers[name]
 
+    async def register(self, breaker: CircuitBreaker) -> None:
+        """Track the circuit currently owned by a managed service."""
+        async with self._get_lock():
+            self._breakers[breaker.name] = breaker
+
     async def get(self, name: str) -> CircuitBreaker | None:
         async with self._get_lock():
             return self._breakers.get(name)
