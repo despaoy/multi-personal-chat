@@ -1,36 +1,11 @@
-"""
-访问权限精细化控制模块 - 基于角色的访问控制(RBAC)
+"""托管 API Key 的认证、角色权限、限流与审计。
 
-提供完整的访问控制功能，包括：
-- 基于角色的访问控制（admin/operator/viewer/api_user）
-- API Key认证和管理
-- FastAPI依赖注入中间件
-- 权限检查装饰器
-- 速率限制（每API Key独立）
-- 审计日志
-
-使用方式：
-    from access_control import (
-        AccessControlManager, Permission, Role,
-        require_permission, get_current_user
-    )
-
-    # FastAPI依赖注入
-    @router.post("/config")
-    async def update_config(user: dict = Depends(get_current_user)):
-        ...
-
-    # 权限检查装饰器
-    @router.delete("/loras/{id}")
-    @require_permission(Permission.DELETE_LORA)
-    async def delete_lora(id: str):
-        ...
-"""
+AccessControlManager 由应用生命周期创建并绑定当前数据库。
+HTTP 身份校验由安全中间件和 app.dependencies 负责。"""
 
 from __future__ import annotations
 
 import asyncio
-import functools
 import hashlib
 import hmac
 import logging
@@ -38,7 +13,7 @@ import os
 import secrets
 import time
 from enum import Enum, Flag, auto
-from typing import Any, Callable, Optional
+from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -527,148 +502,3 @@ class AccessControlManager:
             detail=detail,
             ip_address=ip_address,
         )
-
-
-# ---------------------------------------------------------------------------
-# FastAPI集成
-# ---------------------------------------------------------------------------
-
-def get_current_user() -> Callable:
-    """FastAPI依赖注入函数，从请求头获取并验证API Key。
-
-    从X-API-Key请求头读取API Key，执行认证和速率限制。
-
-    Returns:
-        依赖注入函数
-
-    使用示例:
-        from fastapi import Depends
-
-        @router.get("/stats")
-        async def get_stats(user: dict = Depends(get_current_user())):
-            ...
-    """
-    from fastapi import Request
-
-    _manager: Optional[AccessControlManager] = None
-
-    async def _get_user(request: Request) -> dict[str, Any]:
-        nonlocal _manager
-        if _manager is None:
-            _manager = AccessControlManager()
-
-        api_key = request.headers.get("X-API-Key", "")
-        if not api_key:
-            from fastapi import HTTPException
-            raise HTTPException(
-                status_code=401,
-                detail="缺少API Key，请在请求头中提供 X-API-Key",
-            )
-
-        try:
-            user_info = await _manager.authenticate(api_key)
-            # 将用户信息存储到request.state供后续使用
-            request.state.user = user_info
-            return user_info
-        except AuthenticationError as exc:
-            from fastapi import HTTPException
-            raise HTTPException(status_code=401, detail=str(exc)) from exc
-        except RateLimitError as exc:
-            from fastapi import HTTPException
-            raise HTTPException(
-                status_code=429,
-                detail=str(exc),
-                headers={"Retry-After": str(exc.retry_after)},
-            ) from exc
-
-    return _get_user
-
-
-def require_permission(permission: Permission) -> Callable:
-    """权限检查装饰器，用于FastAPI路由函数。
-
-    需要与get_current_user()依赖注入配合使用。
-
-    Args:
-        permission: 需要的权限
-
-    Returns:
-        装饰器函数
-
-    使用示例:
-        @router.delete("/loras/{id}")
-        @require_permission(Permission.DELETE_LORA)
-        async def delete_lora(id: str, user: dict = Depends(get_current_user())):
-            ...
-    """
-    _manager: Optional[AccessControlManager] = None
-
-    def decorator(func: Callable) -> Callable:
-        @functools.wraps(func)
-        async def wrapper(*args: Any, **kwargs: Any) -> Any:
-            nonlocal _manager
-            if _manager is None:
-                _manager = AccessControlManager()
-
-            # 从kwargs中查找user参数
-            user_info = kwargs.get("user")
-
-            # 如果没有在kwargs中，尝试从args中查找
-            if user_info is None:
-                for arg in args:
-                    if isinstance(arg, dict) and "permissions" in arg:
-                        user_info = arg
-                        break
-
-            # 尝试从request.state获取
-            if user_info is None:
-                for arg in args:
-                    if hasattr(arg, "state") and hasattr(arg.state, "user"):
-                        user_info = arg.state.user
-                        break
-
-            if user_info is None:
-                from fastapi import HTTPException
-                raise HTTPException(
-                    status_code=401,
-                    detail="未认证，请先通过API Key认证",
-                )
-
-            try:
-                _manager.authorize(user_info, permission)
-
-                # 记录审计日志
-                _manager.log_action(
-                    user_info=user_info,
-                    action=func.__name__,
-                    resource=str(kwargs.get("id", "")),
-                )
-
-            except AuthorizationError as exc:
-                from fastapi import HTTPException
-                raise HTTPException(status_code=403, detail=str(exc)) from exc
-
-            return await func(*args, **kwargs)
-
-        return wrapper
-
-    return decorator
-
-
-# ---------------------------------------------------------------------------
-# 全局单例（懒加载）
-# ---------------------------------------------------------------------------
-
-_access_control_manager: Optional[AccessControlManager] = None
-
-
-def get_access_control_manager() -> AccessControlManager:
-    """获取全局访问控制管理器单例。
-
-    Returns:
-        AccessControlManager实例
-    """
-    global _access_control_manager
-    if _access_control_manager is None:
-        _access_control_manager = AccessControlManager()
-    return _access_control_manager

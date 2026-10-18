@@ -615,22 +615,3 @@ class DatabaseEncryptionMiddleware:
             解密后的数据行列表
         """
         return self._manager.decrypt_batch(rows)
-
-
-# ---------------------------------------------------------------------------
-# 全局单例（懒加载）
-# ---------------------------------------------------------------------------
-
-_encryption_manager: Optional[EncryptionManager] = None
-
-
-def get_encryption_manager() -> EncryptionManager:
-    """获取全局加密管理器单例。
-
-    Returns:
-        EncryptionManager实例
-    """
-    global _encryption_manager
-    if _encryption_manager is None:
-        _encryption_manager = EncryptionManager()
-    return _encryption_manager
