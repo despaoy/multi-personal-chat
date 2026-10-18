@@ -13,6 +13,8 @@ import subprocess
 from dataclasses import asdict
 from pathlib import Path
 
+from evaluation.generation_observer import observe_generation
+
 
 async def run(args):
     phase = Path(args.phase).resolve()
@@ -262,22 +264,9 @@ async def run(args):
         return result
 
     CharacterContextService.prepare_turn = observed_prepare
-    original_generation = api.generate_character_response
-
-    async def observed_generation(request, generate):
-        result = await original_generation(request, generate)
-        proof["generation"].append(
-            {
-                "messages": list(result.plan.messages),
-                "retrieval": asdict(result.plan.retrieval),
-                "response_mode": result.response_mode,
-                "model_invoked": result.model_invoked,
-                "citation_repair_status": result.citation_repair_status,
-            }
-        )
-        return result
-
-    api.generate_character_response = observed_generation
+    api.generate_character_response = observe_generation(
+        api.generate_character_response, proof["generation"],
+    )
     app = create_app()
     password = secrets.token_urlsafe(24)
     connection = await asyncpg.connect(user="boot", database=label, host=str(cluster / "socket"), port=25433)
