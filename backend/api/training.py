@@ -149,21 +149,6 @@ class _TemporaryExportFileResponse(FileResponse):
 
 
 
-def _validate_path(path_str: str, allowed_base: str = None) -> str:
-    """Validate path doesn't contain traversal sequences and is within allowed base."""
-    if not path_str:
-        raise ValueError("Path cannot be empty")
-    # Block path traversal
-    if '..' in path_str or '\x00' in path_str:
-        raise ValueError("Path contains invalid sequences")
-    resolved = Path(path_str).resolve()
-    if allowed_base:
-        base = Path(allowed_base).resolve()
-        if not resolved.is_relative_to(base):
-            raise ValueError(f"Path must be within {allowed_base}")
-    return str(resolved)
-
-
 def _validate_resource_name(name: str, label: str = "名称") -> str:
     """Require one filesystem-safe path component while allowing Unicode."""
     value = (name or "").strip()
@@ -334,26 +319,11 @@ async def import_dataset(req: ImportDatasetRequest, current_user: dict = Depends
     s2 fix: 可探测服务器目录结构并写入训练目录，限定 admin。
     """
     try:
-        # Validate source_path to prevent path traversal
-        backend_dir = str(Path(__file__).parent.parent.resolve())
-        allowed_dirs = [backend_dir]
-        # Allow a configured lab root when present. The default remains the
-        # backend directory only, so local deployments are fail-closed.
-        lab_root = (os.getenv("MULTIPERSONAL_LAB_ROOT") or os.getenv("QQCHAT_LAB_ROOT", "")).strip()
-        if lab_root and Path(lab_root).exists():
-            allowed_dirs.append(str(Path(lab_root).resolve()))
-        try:
-            validated_path = _validate_path(req.source_path)
-            resolved = Path(validated_path)
-            if not any(resolved.is_relative_to(Path(d)) for d in allowed_dirs):
-                raise HTTPException(status_code=400, detail="源路径不在允许的目录范围内")
-        except ValueError as e:
-            raise HTTPException(status_code=400, detail=str(e))
-
         from training.preprocessor import import_dataset_from_folder
         dataset_name = _validate_resource_name(req.dataset_name, "数据集名称") if req.dataset_name else None
-        result = import_dataset_from_folder(req.source_path, dataset_name)
-        return result
+        return import_dataset_from_folder(req.source_path, dataset_name)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except HTTPException:

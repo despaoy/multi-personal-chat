@@ -130,7 +130,7 @@ def test_postgresql_sync_adapter_keeps_api_method_contracts():
 
 
 def test_path_validation_rejects_prefix_collision():
-    from api.training import _validate_path
+    from training.preprocessor import _validate_path
 
     base = BACKEND_ROOT / "data"
     sibling = BACKEND_ROOT / "database-escape"

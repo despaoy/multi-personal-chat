@@ -471,82 +471,41 @@ def scan_datasets_folder(folder_path: str = None) -> list:
 
 
 def import_dataset_from_folder(source_path: str, dataset_name: str = None) -> dict:
-    """将数据集文件夹导入到 data_dir。
-
-    直接复制或链接整个文件夹到 preprocessor 的 data_dir 下。
-
-    Args:
-        source_path: 源数据集文件夹路径
-        dataset_name: 数据集名称，默认使用源文件夹名
-
-    Returns:
-        {success, name, path, stats}
-    """
+    """Validate the source and read statistics before copying the dataset."""
     import shutil
 
-    # Validate source_path to prevent path traversal
-    backend_dir = str(Path(__file__).parent.parent.resolve())
-    allowed_dirs = [backend_dir]
-    # Allow a configured lab root when present. The default remains the
-    # backend directory only, so local deployments are fail-closed.
+    allowed_dirs = [Path(__file__).parent.parent.resolve()]
     lab_root = (os.getenv("MULTIPERSONAL_LAB_ROOT") or os.getenv("QQCHAT_LAB_ROOT", "")).strip()
     if lab_root and Path(lab_root).exists():
-        allowed_dirs.append(str(Path(lab_root).resolve()))
-    try:
-        validated_path = _validate_path(source_path)
-        resolved = Path(validated_path)
-        if not any(resolved.is_relative_to(Path(d)) for d in allowed_dirs):
-            raise ValueError("源路径不在允许的目录范围内")
-    except ValueError as e:
-        raise ValueError(f"源路径验证失败: {e}")
-
-    src = Path(source_path)
-    if not src.exists() or not src.is_dir():
+        allowed_dirs.append(Path(lab_root).resolve())
+    src = Path(_validate_path(source_path))
+    if not any(src.is_relative_to(base) for base in allowed_dirs):
+        raise ValueError("源路径不在允许的目录范围内")
+    if not src.is_dir():
         raise FileNotFoundError(f"数据集文件夹不存在: {source_path}")
-    
+
+    stats = {"total": 0, "train": 0, "eval": 0}
+    info_path = src / "dataset_info.json"
+    if info_path.exists():
+        with open(info_path, 'r', encoding='utf-8') as f:
+            stats = json.load(f).get("stats", stats)
+    else:
+        for fname in ["train.json", "data.json", "dataset.json"]:
+            fpath = src / fname
+            if fpath.exists():
+                with open(fpath, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                count = len(data) if isinstance(data, list) else 0
+                stats["total"] = count
+                stats["train"] = count
+                break
+
     name = dataset_name or src.name
     preprocessor = get_dataset_preprocessor()
     dest = preprocessor.data_dir / name
-    
-    # 如果目标已存在，追加序号
     counter = 1
     while dest.exists():
         dest = preprocessor.data_dir / f"{name}_{counter}"
         counter += 1
-    
-    # 复制文件夹
     shutil.copytree(src, dest)
-    
-    # 读取或生成 dataset_info.json
-    info_path = dest / "dataset_info.json"
-    stats = {"total": 0, "train": 0, "eval": 0}
-    if info_path.exists():
-        try:
-            with open(info_path, 'r', encoding='utf-8') as f:
-                info = json.load(f)
-                stats = info.get("stats", stats)
-        except Exception as e:
-            # H3 fix: 此前静默吞噬，dataset_info.json 读取失败时无法排障
-            logger.warning("读取 dataset_info.json 失败: %s", e)
-    else:
-        # 尝试从 JSON 文件推断统计信息
-        for fname in ["train.json", "data.json", "dataset.json"]:
-            fpath = dest / fname
-            if fpath.exists():
-                try:
-                    with open(fpath, 'r', encoding='utf-8') as f:
-                        data = json.load(f)
-                    count = len(data) if isinstance(data, list) else 0
-                    stats["total"] = count
-                    stats["train"] = count
-                    break
-                except Exception as e:
-                    # H3 fix: 此前静默吞噬，数据集统计推断失败时无法排障
-                    logger.warning("从 %s 推断统计信息失败: %s", fname, e)
-    
-    return {
-        "success": True,
-        "name": dest.name,
-        "path": str(dest),
-        "stats": stats
-    }
+    return {"success": True, "name": dest.name, "path": str(dest), "stats": stats}
