@@ -142,9 +142,6 @@ class BaseProvider(ABC):
             "modelName": self._model_name,
         }
 
-    def set_lora_adapter(self, lora_path: Optional[str]):
-        pass
-
     @asynccontextmanager
     async def _acquire_http_client(self, timeout: float = 120.0):
         """Borrow the shared pool client, or own a client for a standalone call."""

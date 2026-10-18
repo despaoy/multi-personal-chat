@@ -14,12 +14,15 @@ pytestmark = pytest.mark.usefixtures("no_live_context_review")
 
 
 def test_manager_only_configures_the_selected_adapter_provider():
-    from inference.model_manager import ModelManager, ModelProvider
+    from inference.model_manager import ModelManager, ModelProvider, OpenAICompatProvider
 
     setter = Mock()
     manager = ModelManager.__new__(ModelManager)
     manager._providers = {
-        ModelProvider.OPENAI_COMPAT: SimpleNamespace(),
+        ModelProvider.OPENAI_COMPAT: OpenAICompatProvider(dict(
+            openaiCompatBaseUrl="https://isolated-provider.invalid/v1",
+            openaiCompatApiKey="synthetic-unused-key", openaiCompatModel="synthetic-selected-model",
+        )),
         ModelProvider.TRANSFORMERS_PEFT: SimpleNamespace(set_lora_adapter=setter),
     }
     manager._current_provider = ModelProvider.OPENAI_COMPAT
