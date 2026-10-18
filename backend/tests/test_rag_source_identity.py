@@ -83,3 +83,25 @@ def test_malformed_result_cannot_get_a_substitute_identity_or_success_cache(monk
     with pytest.raises(KeyError, match="id"):
         helper.retrieve_context(QUERY, enable_rerank=False)
     assert not helper._query_cache
+
+
+@pytest.mark.parametrize("field", ["id", "title", "content"])
+def test_citation_requires_source_fields_without_aliases_or_empty_defaults(field):
+    row = dict(id="source", title="虚构档案馆规程", content=TEXTS[0], score=.8,
+               chunk_id="legacy-alias", original_title="legacy-title")
+    del row[field]
+    with pytest.raises(KeyError, match=field):
+        object.__new__(rag_helper.RAGHelper).build_citations([row])
+
+
+@pytest.mark.parametrize("scores, expected", [({"fused_score": .6}, .6), ({"score": 1.7}, 1.)])
+def test_raw_producer_citation_uses_existing_absolute_score_projection(scores, expected):
+    row = dict(id="source", title="虚构档案馆规程", content=TEXTS[0], **scores)
+    helper = object.__new__(rag_helper.RAGHelper)
+    assert helper.build_citations([row])[0]["score"] == helper.compute_confidence([row]) == expected
+
+
+def test_missing_citation_score_is_an_error_instead_of_a_fabricated_zero():
+    row = dict(id="source", title="虚构档案馆规程", content=TEXTS[0])
+    with pytest.raises(ValueError, match="RAG retrieval score must be a finite number"):
+        object.__new__(rag_helper.RAGHelper).build_citations([row])

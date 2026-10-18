@@ -8,8 +8,8 @@ from knowledge import rag_helper
 
 QUERY = '档案馆周一开门时间和借阅期限'
 ROWS = [
-    dict(id='opening', content='档案馆周一九点开门。', score=.8, fused_score=.8),
-    dict(id='loan', content='借阅期限为十四天。', score=.7, fused_score=.7),
+    dict(id='opening', title='档案馆开放规程', content='档案馆周一九点开门。', score=.8, fused_score=.8),
+    dict(id='loan', title='档案馆借阅规程', content='借阅期限为十四天。', score=.7, fused_score=.7),
 ]
 
 

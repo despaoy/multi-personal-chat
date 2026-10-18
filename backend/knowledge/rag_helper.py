@@ -195,13 +195,13 @@ class RAGHelper:
         """从检索结果构建引用列表，供前端展示证据来源。"""
         citations: list[dict[str, Any]] = []
         for r in results:
-            content = r.get("content", "")
+            content = r["content"]
             citations.append(
                 {
-                    "source_id": str(r.get("id", r.get("chunk_id", ""))),
-                    "source_title": r.get("title", r.get("original_title", "未知来源")),
+                    "source_id": str(r["id"]),
+                    "source_title": r["title"],
                     "evidence_excerpt": content[:200] + ("..." if len(content) > 200 else ""),
-                    "score": round(r.get("normalized_score", r.get("score", 0)), 4),
+                    "score": round(r["normalized_score"] if "normalized_score" in r else self._absolute_score(r), 4),
                     "kb_revision": r.get("kb_revision", ""),
                     "source_path": r.get("source_path", ""),
                     "source_line": r.get("source_line"),

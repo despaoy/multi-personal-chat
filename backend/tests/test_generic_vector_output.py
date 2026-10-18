@@ -117,3 +117,17 @@ def test_empty_library_and_legitimate_threshold_miss_do_not_fake_failure(prepare
     assert vector.search(QUERY) == vector.hybrid_search(QUERY) == []
     vector.add_documents([])
     assert encode.call_count == 1
+
+
+@pytest.mark.parametrize("field", ["title", "content"])
+def test_missing_document_field_fails_before_embedding_or_snapshot_change(prepared, field):
+    vector, encode, _ = prepared
+    before = vector.snapshot_path.read_bytes()
+    malformed = dict(DOCUMENT, id="malformed")
+    del malformed[field]
+    with pytest.raises(KeyError, match=field):
+        vector.add_documents([malformed])
+    encode.assert_not_called()
+    assert vector.index.ntotal == len(vector.metadata) == 1 and vector.snapshot_path.read_bytes() == before
+    vector.add_documents([dict(DOCUMENT, id="complete")])
+    assert vector.index.ntotal == len(vector.metadata) == 2 and encode.call_count == 1

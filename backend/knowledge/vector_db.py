@@ -393,7 +393,7 @@ class VectorDatabase:
         rev = kb_revision or datetime.now().strftime("%Y%m%d")
         now_iso = datetime.now().isoformat()
         for doc in documents:
-            chunk_text = doc.get("content", "")
+            chunk_text = doc["content"]
             doc.setdefault("content_hash", hashlib.md5(chunk_text.encode("utf-8")).hexdigest()[:12])
             doc.setdefault("kb_revision", rev)
             doc.setdefault("section", doc.get("category", ""))
@@ -409,7 +409,7 @@ class VectorDatabase:
 
             texts = []
             for doc in documents:
-                full_text = f"{doc.get('title', '')} {doc.get('content', '')}"
+                full_text = f"{doc['title']} {doc['content']}"
                 texts.append(full_text)
 
             logger.info(f"正在生成 {len(texts)} 个向量...")

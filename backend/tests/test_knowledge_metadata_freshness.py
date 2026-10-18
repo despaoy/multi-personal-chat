@@ -132,7 +132,7 @@ async def test_generic_generation_checks_freshness_before_cache(monkeypatch):
         return {**record, "id": identity}
 
     monkeypatch.setattr(generate.db, "get_knowledge_document", read_original)
-    bundle = dict(results=[record], citations=[], confidence=0.8, abstained=False)
+    bundle = dict(results=[dict(record, score=0.8, fused_score=0.8, normalized_score=0.8)], citations=[], confidence=0.8, abstained=False)
     indexed = SimpleNamespace(_lock=RLock(), cache_generation=11, snapshot_validated=True, metadata=[record],
                               _match_filters=lambda row, filters: all(row.get(k) == v for k, v in filters.items()))
     monkeypatch.setattr(vector_db, "get_vector_db", lambda: indexed)
@@ -148,7 +148,7 @@ async def test_generic_generation_checks_freshness_before_cache(monkeypatch):
         return bundle
 
     monkeypatch.setattr(knowledge, "_ensure_vector_index", ready)
-    monkeypatch.setattr(rag_module, "get_rag_helper", lambda: SimpleNamespace(retrieve_with_citations=generic, build_citations=lambda rows: rag_module.RAGHelper.build_citations(None, rows)))
+    monkeypatch.setattr(rag_module, "get_rag_helper", lambda: SimpleNamespace(retrieve_with_citations=generic, build_citations=lambda rows: object.__new__(rag_module.RAGHelper).build_citations(rows)))
     actual = await generate._retrieve_rag_bundle("核对规则", 3, {"knowledge_base_id": 7})
     assert actual["results"] == bundle["results"] and actual["source_coverage"] and calls == ["ensure", "generic", "source"]
     assert actual["source_coverage"][0]["original_source_receipt"]["authority"] == "fresh_knowledge_document_read"
