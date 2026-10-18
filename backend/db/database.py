@@ -3061,6 +3061,7 @@ class SQLiteDB:
         scope_levels: Optional[tuple[str, ...]] = None,
         relationship_notes_only: bool = False,
         memory_keys: Optional[tuple[str, ...]] = None,
+        memory_ids: Optional[tuple[int, ...]] = None,
     ) -> list:
         """Read the three visible claim layers for one user and character.
 
@@ -3082,11 +3083,13 @@ class SQLiteDB:
         status_sql = "" if include_inactive else " AND status = 'active'"
         if relationship_notes_only:
             status_sql += " AND memory_key LIKE 'relationship:%'"
-        if memory_keys is not None:
-            if not memory_keys:
+        for column, values in (("memory_key", memory_keys), ("id", memory_ids)):
+            if values is None:
+                continue
+            if not values:
                 return []
-            status_sql += " AND memory_key IN (" + ",".join("?" for _ in memory_keys) + ")"
-            params.extend(memory_keys)
+            status_sql += f" AND {column} IN (" + ",".join("?" for _ in values) + ")"
+            params.extend(values)
         cursor.execute(
             "SELECT * FROM character_memories WHERE "
             + where

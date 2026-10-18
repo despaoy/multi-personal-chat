@@ -108,6 +108,7 @@ class CharacterMemoryRepository(Protocol):
         *,
         include_inactive: bool = False,
         scope_levels: Optional[tuple[str, ...]] = None,
+        memory_ids: Optional[tuple[int, ...]] = None,
     ) -> list[dict[str, Any]]: ...
 
     async def get_memory_record(
@@ -376,8 +377,9 @@ class DatabaseCharacterMemoryRepository:
         *,
         include_inactive: bool = False,
         scope_levels: Optional[tuple[str, ...]] = None,
+        memory_ids: Optional[tuple[int, ...]] = None,
     ) -> list[dict[str, Any]]:
-        """Return visible claims; limit=None scans all for contextual/write recall."""
+        """Return visible claims, optionally restricted to exact storage IDs."""
         invalid_levels = set(scope_levels or ()) - set(_VALID_SCOPE_LEVELS)
         if invalid_levels:
             raise ValueError(f"未知的记忆作用域: {sorted(invalid_levels)!r}")
@@ -392,6 +394,7 @@ class DatabaseCharacterMemoryRepository:
             limit,
             include_inactive=include_inactive,
             scope_levels=scope_levels,
+            memory_ids=memory_ids,
         )
         return [_decode_memory_record(dict(row)) for row in rows]
 

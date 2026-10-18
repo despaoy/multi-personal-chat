@@ -1454,17 +1454,21 @@ class PgDatabase:
         scope_levels: Optional[tuple[str, ...]] = None,
         relationship_notes_only: bool = False,
         memory_keys: Optional[tuple[str, ...]] = None,
+        memory_ids: Optional[tuple[int, ...]] = None,
     ) -> List[dict]:
         access_sql = self._character_claim_access_sql(scope_levels)
         status_sql = "" if include_inactive else " AND status = 'active'"
         if relationship_notes_only:
             status_sql += " AND memory_key LIKE 'relationship:%'"
-        key_params = {}
-        if memory_keys is not None:
-            if not memory_keys:
+        filter_params = {}
+        for column, values in (("memory_key", memory_keys), ("id", memory_ids)):
+            if values is None:
+                continue
+            if not values:
                 return []
-            key_params = {f"memory_key_{index}": key for index, key in enumerate(memory_keys)}
-            status_sql += " AND memory_key IN (" + ",".join(":" + key for key in key_params) + ")"
+            bindings = {f"{column}_{index}": value for index, value in enumerate(values)}
+            status_sql += f" AND {column} IN (" + ",".join(":" + key for key in bindings) + ")"
+            filter_params.update(bindings)
         limit_sql = "" if limit is None else " LIMIT :limit"
         order_sql = (
             " ORDER BY CASE scope_level WHEN 'conversation' THEN 0 "
@@ -1481,7 +1485,7 @@ class PgDatabase:
                     conversation_type,
                     conversation_id,
                     **({} if limit is None else {"limit": max(1, min(int(limit), 500))}),
-                    **key_params,
+                    **filter_params,
                 ),
             )
             return [_row_to_dict(row) for row in result.fetchall()]
@@ -3304,6 +3308,7 @@ class SyncPgAdapter:
         scope_levels=None,
         relationship_notes_only=False,
         memory_keys=None,
+        memory_ids=None,
     ):
         return self._run(
             self._pg.list_character_memory_claims(
@@ -3318,6 +3323,7 @@ class SyncPgAdapter:
                 scope_levels=scope_levels,
                 relationship_notes_only=relationship_notes_only,
                 memory_keys=memory_keys,
+                memory_ids=memory_ids,
             )
         )
 

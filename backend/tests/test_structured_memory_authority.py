@@ -227,7 +227,7 @@ async def test_storage_change_invalidates_reviewed_claim_without_substituting_ne
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("reader", ["get_memory_record", "linked_source_revisions", "linked_source_receipts"])
+@pytest.mark.parametrize("reader", ["list_memory_records", "linked_source_revisions", "linked_source_receipts"])
 async def test_scoped_read_failure_stops_generation(tmp_path, monkeypatch, reader):
     from unittest.mock import AsyncMock
 

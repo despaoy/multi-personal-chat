@@ -1,4 +1,4 @@
-"""Scoped SQLite controls for fresh, exact, batched pre-send source reads.
+"""Scoped controls for fresh, exact, batched pre-send claim and source reads.
 
 The 201-source boundary uses a complete controlled repository, not a model.
 No remote provider or semantic quality evaluation is claimed.
@@ -130,7 +130,7 @@ def many_source_request():
             return [row for row in records if (row["memory_id"], row["source_message_id"]) in pairs]
         return AsyncMock(side_effect=read)
 
-    repo = SimpleNamespace(get_memory_record=AsyncMock(return_value=claim),
+    repo = SimpleNamespace(list_memory_records=AsyncMock(return_value=[claim]),
                            linked_source_revisions=reader_for(revisions), linked_source_receipts=reader_for(rows))
     return request, repo, scope
 
@@ -142,7 +142,7 @@ async def test_more_than_200_pairs_are_all_read_in_bounded_batches():
         batches = [call.kwargs["claim_sources"] for call in reader.await_args_list]
         assert [len(batch) for batch in batches] == [200, 1]
         assert len(set(pair for batch in batches for pair in batch)) == 201
-    repo.get_memory_record.assert_awaited_once_with(1, ROLE, scope)
+    repo.list_memory_records.assert_awaited_once_with(ROLE, scope, limit=None, include_inactive=True, memory_ids=(1,))
 
 
 @pytest.mark.parametrize("reader_name", ["linked_source_revisions", "linked_source_receipts"])
@@ -171,3 +171,82 @@ async def test_failed_second_batch_is_not_cached_or_sent_to_model(reader_name):
     assert await revalidate_private_memories(request, repo, ROLE, scope) is request
     for reader in (repo.linked_source_revisions, repo.linked_source_receipts):
         assert [len(call.kwargs["claim_sources"]) for call in reader.await_args_list] == [200, 1]
+
+
+def many_claim_request():
+    request, repo, scope = many_source_request()
+    rows = [dict(id=index, content=f"完整虚构档案{index}：借期14天，不得自动续借，周末不受理。")
+            for index in range(1, 202)]
+    packets = tuple(MemoryItem(str(row["id"]), "user_fact", row["content"], evidence=(row["content"],),
+        storage_versions=((str(row["id"]), record_version(row)),)) for row in rows)
+    packets = (replace(packets[0], storage_versions=packets[0].storage_versions + (("001", record_version(rows[0])),)),
+               *packets[1:])
+    reference, ids = compile_reference_context(packets, complete_evidence=True, max_chars=1000000)
+    request = replace(request, character_context=replace(request.character_context,
+        memory_packets=packets, used_memory_ids=ids, reference_context=reference))
+
+    async def read(role, actual_scope, *, limit, include_inactive, memory_ids):
+        assert role == ROLE and actual_scope == scope and limit is None and include_inactive
+        assert 0 < len(memory_ids) <= 200
+        return [row for row in rows if row["id"] in memory_ids]
+
+    repo.list_memory_records = AsyncMock(side_effect=read)
+    repo.get_memory_record = AsyncMock(side_effect=AssertionError("Claims must be read in exact batches"))
+    return request, repo, scope, rows
+
+
+async def test_claim_batches_deduplicate_ids_and_recheck_fresh_versions():
+    request, repo, scope, rows = many_claim_request()
+    assert await revalidate_private_memories(request, repo, ROLE, scope) is request
+    batches = [call.kwargs["memory_ids"] for call in repo.list_memory_records.await_args_list]
+    assert [len(batch) for batch in batches] == [200, 1]
+    assert len({key for batch in batches for key in batch}) == 201
+    original = rows[0]["content"]
+    rows[0]["content"] = "未经本轮审核的新内容"
+    refreshed = await revalidate_private_memories(request, repo, ROLE, scope, max_chars=1000000)
+    assert len(refreshed.character_context.memory_packets) == 200
+    assert original not in refreshed.character_context.reference_context
+    assert "未经本轮审核" not in refreshed.character_context.reference_context
+    assert rows[-1]["content"] in refreshed.character_context.reference_context
+    assert repo.list_memory_records.await_count == 4
+    repo.get_memory_record.assert_not_awaited()
+
+
+@pytest.mark.parametrize("corruption", ["duplicate", "unrequested"])
+async def test_malformed_claim_batch_stops_before_model(corruption):
+    request, repo, scope, _rows = many_claim_request()
+    read = repo.list_memory_records.side_effect
+
+    async def corrupt(*args, **kwargs):
+        rows = await read(*args, **kwargs)
+        return [*rows, rows[0] if corruption == "duplicate" else dict(rows[0], id=999999)]
+
+    repo.list_memory_records.side_effect = corrupt
+    request = replace(request, private_context_revalidator=lambda value: revalidate_private_memories(value, repo, ROLE, scope))
+    model = AsyncMock()
+    with pytest.raises(RuntimeError, match="duplicate or unrequested"):
+        await generate_character_response(request, model)
+    model.assert_not_awaited()
+
+
+async def test_failed_second_claim_batch_preserves_error_and_can_recover():
+    request, repo, scope, _rows = many_claim_request()
+    read = repo.list_memory_records.side_effect
+    failure = OSError("Controlled second claim batch unavailable")
+
+    async def fail_second(*args, **kwargs):
+        if repo.list_memory_records.await_count == 2:
+            raise failure
+        return await read(*args, **kwargs)
+
+    repo.list_memory_records.side_effect = fail_second
+    request = replace(request, private_context_revalidator=lambda value: revalidate_private_memories(value, repo, ROLE, scope))
+    model = AsyncMock()
+    with pytest.raises(OSError) as caught:
+        await generate_character_response(request, model)
+    assert caught.value is failure
+    model.assert_not_awaited()
+    repo.list_memory_records.side_effect = read
+    repo.list_memory_records.reset_mock()
+    assert await revalidate_private_memories(request, repo, ROLE, scope) is request
+    assert [len(call.kwargs["memory_ids"]) for call in repo.list_memory_records.await_args_list] == [200, 1]

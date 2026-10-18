@@ -49,12 +49,19 @@ async def revalidate_private_memories(
     context = request.character_context
     if context is None or not context.memory_packets:
         return request
+    memory_ids = tuple(dict.fromkeys(
+        int(key) for packet in context.memory_packets for key, _expected in packet.storage_versions
+    ))
     claim_versions = {}
-    for packet in context.memory_packets:
-        for memory_id, _expected in packet.storage_versions:
-            if memory_id not in claim_versions:
-                row = await repository.get_memory_record(int(memory_id), character_id, scope)
-                claim_versions[memory_id] = record_version(row) if row is not None else None
+    for start in range(0, len(memory_ids), 200):
+        batch = memory_ids[start:start + 200]
+        for row in await repository.list_memory_records(
+            character_id, scope, limit=None, include_inactive=True, memory_ids=batch,
+        ):
+            key = int(row["id"])
+            if key not in batch or key in claim_versions:
+                raise RuntimeError("Memory claim reader returned a duplicate or unrequested ID")
+            claim_versions[key] = record_version(row)
     revisions = await _read_source_versions(
         repository, "linked_source_revisions", character_id, scope,
         (pair for packet in context.memory_packets for pair in packet.source_record_pairs),
@@ -69,7 +76,7 @@ async def revalidate_private_memories(
     for packet in context.memory_packets:
         valid = bool(packet.storage_versions)
         for memory_id, expected in packet.storage_versions:
-            if claim_versions[memory_id] != expected:
+            if claim_versions.get(int(memory_id)) != expected:
                 valid = False
         if packet.source_record_pairs:
             expected = {(key, sid): version for key, sid, version in packet.source_record_versions}

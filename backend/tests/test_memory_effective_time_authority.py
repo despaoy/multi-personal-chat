@@ -241,15 +241,15 @@ async def test_expiry_checked_after_async_storage_reads_complete(tmp_path, monke
     from inference.structured_context_authority import revalidate_private_memories
 
     request, repo, scope, selected, _historical, deadline, _public = await time_request(tmp_path, monkeypatch)
-    read = repo.get_memory_record
+    read = repo.list_memory_records
 
-    async def waited(memory_id, *args):
-        row = await read(memory_id, *args)
-        if str(memory_id) == selected.memory_id:
+    async def waited(*args, **kwargs):
+        rows = await read(*args, **kwargs)
+        if int(selected.memory_id) in kwargs["memory_ids"]:
             await pass_deadline(deadline)
-        return row
+        return rows
 
-    monkeypatch.setattr(repo, "get_memory_record", waited)
+    monkeypatch.setattr(repo, "list_memory_records", waited)
     refreshed = await revalidate_private_memories(request, repo, "fiction-role", scope)
     wire, result = await send_wire(refreshed)
     assert selected.content not in wire and "我喜欢豆浆" in wire

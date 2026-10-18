@@ -41,3 +41,32 @@ async def test_database_remains_authority_for_active_history_and_owner_scope(tmp
     assert await repo.list_memory_records('role', foreign, include_inactive=True) == []
     assert await repo.get_memory_record(first['id'], 'role', foreign) is None
     assert await repo.get_memory_record(current['id'] + 999, 'role', SCOPE) is None
+
+
+
+@pytest.mark.asyncio
+async def test_exact_id_filter_keeps_history_and_scope_and_empty_means_no_rows(tmp_path):
+    database = SQLiteDB(tmp_path / 'exact-claims.sqlite')
+    repo = DatabaseCharacterMemoryRepository(database)
+    rows = []
+    try:
+        for index, level in enumerate(('conversation', 'user_character', 'user_global')):
+            row = await repo.append_claim('role', SCOPE, MemoryItem('', 'user_fact', f'完整虚构事实{index}'),
+                memory_key=f'fact-{index}', scope_level=level, status='superseded' if index == 0 else 'active')
+            rows.append(row)
+        ids = tuple(row['id'] for row in rows)
+        selected = await repo.list_memory_records('role', SCOPE, limit=None, include_inactive=True, memory_ids=ids)
+        expected = {row['id']: await repo.get_memory_record(row['id'], 'role', SCOPE) for row in rows}
+        assert {row['id']: row for row in selected} == expected
+        assert await repo.list_memory_records('role', SCOPE, limit=None, include_inactive=True, memory_ids=()) == []
+        assert await repo.list_memory_records('role', SCOPE, limit=None, include_inactive=True, memory_ids=(999999,)) == []
+        foreign = UserScope('test', 'claim-read', 'foreign-owner', 'room', 'private')
+        assert await repo.list_memory_records('role', foreign, limit=None, include_inactive=True, memory_ids=ids) == []
+        narrowed = await repo.list_memory_records('role', SCOPE, limit=None, memory_ids=ids, scope_levels=('user_global',))
+        assert [row['id'] for row in narrowed] == [rows[2]['id']]
+        fields = ('role', SCOPE.platform, SCOPE.adapter, SCOPE.sender_id, SCOPE.conversation_type, SCOPE.conversation_id)
+        both = database.list_character_memory_claims(*fields, limit=None, include_inactive=True,
+                                                     memory_ids=ids, memory_keys=('fact-1',))
+        assert [row['id'] for row in both] == [rows[1]['id']]
+    finally:
+        database.close_connection()
