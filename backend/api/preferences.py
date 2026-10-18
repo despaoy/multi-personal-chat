@@ -24,6 +24,15 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _read_object(value: str | None, field: str) -> dict:
+    if value is None:
+        return {}
+    decoded = json.loads(value)
+    if not isinstance(decoded, dict):
+        raise ValueError(f"{field} must be a JSON object")
+    return decoded
+
+
 @router.get("/api/preferences/")
 async def list_preferences(
     review_status: Optional[PreferenceReviewStatus] = None, limit: int = 50, offset: int = 0,
@@ -51,26 +60,18 @@ async def list_preferences(
                 {"lim": limit, "off": offset},
             )
             count_rows = await asyncio.to_thread(database.execute_sql, "SELECT COUNT(*) as cnt FROM preference_pairs")
-        total = count_rows[0]["cnt"] if count_rows else 0
+        total = count_rows[0]["cnt"]
         pairs = []
-        for r in (rows or []):
-            try:
-                rubric = json.loads(r["rubric"]) if r["rubric"] else {}
-            except Exception:
-                rubric = {}
-            try:
-                metadata = json.loads(r["metadata"]) if r["metadata"] else {}
-            except Exception:
-                metadata = {}
+        for r in rows:
             pairs.append({
                 "id": r["id"], "prompt": r["prompt"], "chosen": r["chosen"],
-                "rejected": r["rejected"], "rubric": rubric, "annotator": r["annotator"],
-                "metadata": metadata, "review_status": r["review_status"],
+                "rejected": r["rejected"], "rubric": _read_object(r["rubric"], "rubric"), "annotator": r["annotator"],
+                "metadata": _read_object(r["metadata"], "metadata"), "review_status": r["review_status"],
                 "created_at": r["created_at"],
             })
         return {"success": True, "preferences": pairs, "total": total, "limit": limit, "offset": offset}
     except Exception as e:
-        logger.error(f"列出偏好对失败: {e}")
+        logger.error("列出偏好对失败: %s", type(e).__name__)
         raise HTTPException(status_code=500, detail="偏好数据操作失败") from e
 
 
@@ -96,7 +97,7 @@ async def create_preference(
         )
         return {"success": True, "id": pid}
     except Exception as e:
-        logger.error(f"创建偏好对失败: {e}")
+        logger.error("创建偏好对失败: %s", type(e).__name__)
         raise HTTPException(status_code=500, detail="偏好数据操作失败") from e
 
 
@@ -132,7 +133,7 @@ async def update_preference(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"更新偏好对失败: {e}")
+        logger.error("更新偏好对失败: %s", type(e).__name__)
         raise HTTPException(status_code=500, detail="偏好数据操作失败") from e
 
 
@@ -153,7 +154,7 @@ async def delete_preference(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"删除偏好对失败: {e}")
+        logger.error("删除偏好对失败: %s", type(e).__name__)
         raise HTTPException(status_code=500, detail="偏好数据操作失败") from e
 
 
@@ -171,14 +172,14 @@ async def export_preferences(
             {"rs": req.review_status, "lim": req.limit},
         )
         pairs = []
-        for r in (rows or []):
+        for r in rows:
             pairs.append({
                 "prompt": r["prompt"], "chosen": r["chosen"], "rejected": r["rejected"],
-                "rubric": json.loads(r["rubric"]) if r["rubric"] else {},
+                "rubric": _read_object(r["rubric"], "rubric"),
             })
         return {"success": True, "format": req.format, "count": len(pairs), "data": pairs}
     except Exception as e:
-        logger.error(f"导出偏好对失败: {e}")
+        logger.error("导出偏好对失败: %s", type(e).__name__)
         raise HTTPException(status_code=500, detail="偏好数据操作失败") from e
 
 
@@ -202,7 +203,7 @@ async def sample_from_history(
                 {"min_len": req.min_length, "lim": req.limit},
             )
         candidates = []
-        for r in (rows or []):
+        for r in rows:
             candidates.append({
                 "prompt": r["message"], "response": r["reply"],
                 "lora_name": r["loraName"], "trace_id": r["traceId"],
@@ -210,5 +211,5 @@ async def sample_from_history(
             })
         return {"success": True, "candidates": candidates, "total": len(candidates)}
     except Exception as e:
-        logger.error(f"采样历史失败: {e}")
+        logger.error("采样历史失败: %s", type(e).__name__)
         raise HTTPException(status_code=500, detail="偏好数据操作失败") from e

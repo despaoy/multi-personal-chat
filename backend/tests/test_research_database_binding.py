@@ -124,3 +124,47 @@ async def test_anonymous_and_demoted_users_cannot_read_or_write_research_data(st
         assert (await api.delete('/api/retrieval-eval/questions/shared')).status_code == 403
     stores.retrieve.assert_not_called()
     stores.forbidden.assert_not_called()
+
+
+@pytest.mark.parametrize('field', ['rubric', 'metadata'])
+@pytest.mark.parametrize('stored', ['{broken-json', '', '[]', 'null'])
+async def test_invalid_preference_objects_fail_before_success_or_export(stores, field, stored):
+    database = stores.databases[0]
+    database.execute_sql('UPDATE preference_pairs SET ' + field + '=:value', {'value': stored})
+    async with client(database) as api:
+        response = await api.get('/api/preferences/')
+        assert response.status_code == 500 and response.json() == {'detail': '偏好数据操作失败'}
+        if field == 'rubric':
+            exported = await api.post('/api/preferences/export', json={})
+            assert exported.status_code == 500 and exported.json() == {'detail': '偏好数据操作失败'}
+
+
+@pytest.mark.parametrize('stored', [None, '{}'])
+async def test_absent_optional_preference_objects_and_genuine_empty_results(stores, stored):
+    database = stores.databases[0]
+    database.execute_sql('UPDATE preference_pairs SET rubric=:value,metadata=:value', {'value': stored})
+    async with client(database) as api:
+        listed = await api.get('/api/preferences/')
+        exported = await api.post('/api/preferences/export', json={})
+        assert listed.status_code == exported.status_code == 200
+        assert listed.json()['preferences'][0]['rubric'] == listed.json()['preferences'][0]['metadata'] == {}
+        assert exported.json()['data'][0]['rubric'] == {}
+        database.execute_sql('DELETE FROM preference_pairs')
+        listed = await api.get('/api/preferences/')
+        exported = await api.post('/api/preferences/export', json={})
+        assert listed.status_code == exported.status_code == 200
+        assert listed.json()['preferences'] == [] and listed.json()['total'] == 0
+        assert exported.json()['data'] == [] and exported.json()['count'] == 0
+
+
+async def test_preference_write_failure_keeps_cause_without_logging_content(stores, monkeypatch, caplog):
+    from fastapi import HTTPException
+    from db.schemas import PreferencePairCreate
+
+    database = stores.databases[0]
+    error = OSError('synthetic-private-preference-content')
+    monkeypatch.setattr(database, 'execute_sql_insert', Mock(side_effect=error))
+    with pytest.raises(HTTPException) as caught:
+        await preferences.create_preference(PreferencePairCreate(**pair('complete')), current_user={'role': 'admin'}, database=database)
+    assert caught.value.status_code == 500 and caught.value.__cause__ is error
+    assert 'OSError' in caplog.text and str(error) not in caplog.text
