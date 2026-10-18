@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient
 
 
 @pytest.mark.asyncio
-async def test_managed_api_keys_are_authenticatable_listable_and_revocable(tmp_path) -> None:
+async def test_managed_api_keys_are_authenticatable_listable_and_revocable(tmp_path, monkeypatch) -> None:
     from db.database import SQLiteDB
     from infra.access_control import AccessControlManager, AuthenticationError, Role
 
@@ -33,6 +33,16 @@ async def test_managed_api_keys_are_authenticatable_listable_and_revocable(tmp_p
     assert manager.revoke_api_key_by_id(rows[0]["id"]) is False
     with pytest.raises(AuthenticationError):
         await manager.authenticate(created["api_key"])
+
+    failure = OSError("synthetic authentication store failure")
+
+    def unavailable(_prefix):
+        raise failure
+
+    monkeypatch.setattr(database, "get_api_key_rows_by_prefix", unavailable)
+    with pytest.raises(OSError) as raised:
+        await manager.authenticate(created["api_key"])
+    assert raised.value is failure
 
 
 def test_managed_api_keys_flow_through_security_dependencies(tmp_path, monkeypatch) -> None:
@@ -201,3 +211,38 @@ async def test_api_key_storage_failures_return_stable_503_responses(monkeypatch)
         assert exc_info.value.status_code == 503
         assert exc_info.value.detail == "API Key 存储暂时不可用"
         assert "private" not in exc_info.value.detail
+
+
+@pytest.mark.parametrize("failure_at, expected_status", [("store", 503), ("manager", 503), ("route", 500)])
+def test_managed_authentication_preserves_service_and_route_failures(tmp_path, monkeypatch, failure_at, expected_status):
+    from app import config
+    from app.dependencies import get_current_user
+    from db.database import SQLiteDB
+    from infra.access_control import AccessControlManager, Role
+    from middleware.security import SecurityMiddleware
+
+    database = SQLiteDB(tmp_path / "auth-failure.db")
+    manager = AccessControlManager(database)
+    key = manager.create_api_key(Role.API_USER)["api_key"]
+    monkeypatch.setattr(config, "access_control_mgr", None if failure_at == "manager" else manager)
+    failure = OSError("synthetic private failure detail")
+
+    def unavailable(_prefix):
+        raise failure
+
+    if failure_at == "store":
+        monkeypatch.setattr(database, "get_api_key_rows_by_prefix", unavailable)
+    application = FastAPI()
+    application.add_middleware(SecurityMiddleware, api_keys=[])
+    calls = []
+
+    @application.get("/protected")
+    async def protected(user: dict = Depends(get_current_user)):
+        calls.append(user)
+        raise failure
+
+    with TestClient(application, raise_server_exceptions=False) as client:
+        response = client.get("/protected", headers={"X-API-Key": key})
+    assert response.status_code == expected_status
+    assert len(calls) == (1 if failure_at == "route" else 0)
+    assert key not in response.text and str(failure) not in response.text

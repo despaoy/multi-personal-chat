@@ -13,7 +13,7 @@ import re
 import threading
 import time
 from collections import OrderedDict, deque
-from datetime import datetime, timedelta
+from datetime import datetime
 from logging.handlers import TimedRotatingFileHandler
 from pathlib import Path
 from typing import Any, Callable
@@ -21,6 +21,8 @@ from typing import Any, Callable
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
+
+from infra.access_control import AuthenticationError, RateLimitError
 
 
 logger = logging.getLogger(__name__)
@@ -626,19 +628,15 @@ class SecurityMiddleware(BaseHTTPMiddleware):
 
             try:
                 from app import config as app_config
-                from infra.access_control import AuthenticationError, RateLimitError
 
-                manager = app_config.access_control_mgr
-                if manager is not None:
-                    principal = await manager.authenticate(api_key)
-                    role = principal["role"]
-                    request.state.user = f"managed_api_key:{role.value}"
-                    request.state.auth_type = "managed_api_key"
-                    request.state.api_key_payload = {
-                        "role": role.value,
-                        "permissions": principal["permissions"].value,
-                    }
-                    return await call_next(request)
+                principal = await app_config.access_control_mgr.authenticate(api_key)
+                role = principal["role"]
+                request.state.user = f"managed_api_key:{role.value}"
+                request.state.auth_type = "managed_api_key"
+                request.state.api_key_payload = {
+                    "role": role.value,
+                    "permissions": principal["permissions"].value,
+                }
             except RateLimitError as exc:
                 return JSONResponse(
                     status_code=429,
@@ -649,6 +647,12 @@ class SecurityMiddleware(BaseHTTPMiddleware):
                 pass
             except Exception as exc:
                 logger.warning("动态 API Key 认证不可用: %s", type(exc).__name__)
+                return JSONResponse(
+                    status_code=503,
+                    content={"detail": "托管 API Key 认证服务不可用，请检查认证数据库和服务状态"},
+                )
+            else:
+                return await call_next(request)
         # 没有任何有效凭证
         return JSONResponse(
             status_code=401,

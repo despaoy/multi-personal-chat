@@ -422,33 +422,27 @@ class AccessControlManager:
         if not api_key:
             raise AuthenticationError("缺少API Key")
 
-        try:
-            matched_row = await asyncio.to_thread(self._authenticate_record, api_key)
-            role = Role(matched_row["role"])
-            permissions = _ROLE_PERMISSIONS.get(role, Permission(0))
-            stored_hash = matched_row["key_hash"]
-            custom_limit = matched_row["rate_limit"]
+        matched_row = await asyncio.to_thread(self._authenticate_record, api_key)
+        role = Role(matched_row["role"])
+        permissions = _ROLE_PERMISSIONS.get(role, Permission(0))
+        stored_hash = matched_row["key_hash"]
+        custom_limit = matched_row["rate_limit"]
 
-            if custom_limit:
-                limiter = self._custom_rate_limiters.get(stored_hash)
-                if limiter is None:
-                    limiter = RateLimiter(limit=custom_limit)
-                    self._custom_rate_limiters[stored_hash] = limiter
-                await limiter.check(stored_hash)
-            else:
-                await self._rate_limiter.check(stored_hash)
+        if custom_limit:
+            limiter = self._custom_rate_limiters.get(stored_hash)
+            if limiter is None:
+                limiter = RateLimiter(limit=custom_limit)
+                self._custom_rate_limiters[stored_hash] = limiter
+            await limiter.check(stored_hash)
+        else:
+            await self._rate_limiter.check(stored_hash)
 
-            return {
-                "role": role,
-                "permissions": permissions,
-                "key_hash": stored_hash,
-                "rate_limit": custom_limit or _DEFAULT_RATE_LIMIT,
-            }
-        except (AuthenticationError, RateLimitError):
-            raise
-        except Exception as exc:
-            logger.error("认证过程异常: %s", exc)
-            raise AuthenticationError("认证失败") from exc
+        return {
+            "role": role,
+            "permissions": permissions,
+            "key_hash": stored_hash,
+            "rate_limit": custom_limit or _DEFAULT_RATE_LIMIT,
+        }
 
     def authorize(self, user_info: dict[str, Any], required_permission: Permission) -> bool:
         """检查用户是否拥有所需权限。"""
