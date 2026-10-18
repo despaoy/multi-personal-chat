@@ -1,5 +1,5 @@
 from types import SimpleNamespace
-from unittest.mock import Mock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 
@@ -68,7 +68,10 @@ def test_numeric_boundaries_remain_exact_and_errors_do_not_echo_values():
 @pytest.mark.asyncio
 async def test_invalid_writer_configuration_stops_startup_before_database(monkeypatch):
     from app import main
+    from services import turn_completion
 
+    shutdown = AsyncMock(side_effect=AssertionError("invalid preflight must not close unowned resources"))
+    monkeypatch.setattr(turn_completion, 'shutdown_turn_completions', shutdown)
     runtime = SimpleNamespace(db=object(), is_pg_mode=lambda: False, inference_runtime=None, knowledge_scan_executor=None,
                               startup_env={'MEMORY_LLM_ENABLED': 'true'})
     initialize = Mock()
@@ -79,3 +82,4 @@ async def test_invalid_writer_configuration_stops_startup_before_database(monkey
         async with main.lifespan(SimpleNamespace(state=SimpleNamespace())):
             pytest.fail('invalid writer configuration admitted startup')
     initialize.assert_not_called()
+    shutdown.assert_not_awaited()

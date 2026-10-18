@@ -132,13 +132,13 @@ async def lifespan(app: FastAPI):
     database = container.db
     postgres_mode = bool(container.is_pg_mode())
 
+    validate_or_raise_for_startup(container.startup_env)
+    from character.memory_llm import MemoryLlmConfig
+
+    MemoryLlmConfig.from_env(container.startup_env)
     try:
         logger.info("🚀 MultiPersonal Chat System后端服务启动中（增强版）...")
 
-        validate_or_raise_for_startup(container.startup_env)
-        from character.memory_llm import MemoryLlmConfig
-
-        MemoryLlmConfig.from_env(container.startup_env)
         container.knowledge_scan_executor = BoundedThreadExecutor(
             name="knowledge-scan", max_workers=2, max_pending=4, default_timeout=30.0
         )

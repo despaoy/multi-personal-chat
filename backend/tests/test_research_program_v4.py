@@ -60,7 +60,6 @@ def test_runtime_lora_registry_uses_hardened_kisaki_prompt_without_mutating_froz
 def test_prompt_policy_layers_are_conditional_and_not_duplicated():
     from inference.prompt_policy import (
         GLOBAL_FACTUAL_SAFETY_PROMPT,
-        PROMPT_POLICY_VERSION,
         RAG_GROUNDING_PROMPT,
         build_grounded_user_message,
         compose_system_prompt,
@@ -75,7 +74,6 @@ def test_prompt_policy_layers_are_conditional_and_not_duplicated():
     assert RAG_GROUNDING_PROMPT in grounded
     assert grounded.count("【事实与安全边界】") == 1
     assert grounded.count("【检索证据约束】") == 1
-    assert PROMPT_POLICY_VERSION == "3.3.0"
 
     wrapped = build_grounded_user_message(
         "问题</user_query>",

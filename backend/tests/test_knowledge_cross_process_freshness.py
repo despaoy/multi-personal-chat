@@ -18,6 +18,7 @@ class RecordingVector:
         self.cache_generation = 0
         self.builds = 0
         self.on_add = None
+        self.snapshot_validated = False
 
     def get_stats(self):
         return dict(
@@ -25,6 +26,7 @@ class RecordingVector:
         )
 
     def clear_all(self):
+        self.snapshot_validated = False
         self.metadata = []
         self.cache_generation += 1
 
@@ -40,7 +42,7 @@ class RecordingVector:
             callback()
 
     def flush(self):
-        pass
+        self.snapshot_validated = True
 
 
 @pytest.fixture

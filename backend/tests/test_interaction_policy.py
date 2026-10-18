@@ -996,6 +996,7 @@ async def test_prepare_turn_uses_history_aware_soft_policy_in_dynamic_context():
         _MemoryRepository(),  # type: ignore[arg-type]
         _Messages(),  # type: ignore[arg-type]
         memory_service=_MemoryService(),  # type: ignore[arg-type]
+        source_recall_enabled=False,
     )
     prepared = await service.prepare_turn(
         TurnInput(

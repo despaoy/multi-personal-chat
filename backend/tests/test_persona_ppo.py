@@ -194,7 +194,7 @@ def test_controlled_abstention_and_reward_binding(tiny, tmp_path):
     trainer = PersonaPPO(tiny, reward)
     trainer._load()
     trainer.run_signature = "synthetic-unit-test"
-    trainer._generate = lambda *a, **kw: (torch.tensor([[1, 3, 2]]), 1, "hello", True)
+    trainer._generate = lambda *a, **kw: (torch.tensor([[1, 3, 2]], device=next(trainer.model.parameters()).device), 1, "hello", True)
     segments, trace = trainer._collect_episode(scene(), 0)
     assert not segments and trace["status"] == "abstained"
     reward.abstain = False

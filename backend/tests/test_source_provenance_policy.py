@@ -4,6 +4,7 @@ from dataclasses import replace
 
 import pytest
 
+from character.evidence_selector import InputBudgetError
 from character.models import CompiledCharacterContext
 from character.source_memory import SourceRecall, attach_sources, compile_sources
 from inference.generation_request import SOURCE_SPEECH_PROVENANCE_POLICY, GenerationRequest, build_generation_request
@@ -53,9 +54,12 @@ def test_deferred_source_policy_matches_final_canonical_admission(window, admitt
         episodic_reference_context="",
         memory_source_status="budget_omitted",
     )
-    plan = build_generation_request(
-        GenerationRequest(message="复述原话", character_context=ctx, context_window_tokens=window, max_tokens=1024)
-    )
+    request = GenerationRequest(message="复述原话", character_context=ctx, context_window_tokens=window, max_tokens=1024)
+    if not admitted:
+        with pytest.raises(InputBudgetError, match="exceed"):
+            build_generation_request(request)
+        return
+    plan = build_generation_request(request)
     assert (SOURCE_SPEECH_PROVENANCE_POLICY in system(plan)) is admitted
     assert bool(plan.character_context.episodic_reference_context) is admitted
     assert not plan.character_context.source_candidate_context

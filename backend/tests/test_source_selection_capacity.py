@@ -136,6 +136,7 @@ async def test_whole_six_source_deferred_packet_obeys_actual_final_window(window
     import re
     from html import unescape
 
+    from character.evidence_selector import InputBudgetError
     from character.models import CompiledCharacterContext
     from character.source_memory import attach_sources
     from inference.generation_request import GenerationRequest, build_generation_request
@@ -151,21 +152,20 @@ async def test_whole_six_source_deferred_packet_obeys_actual_final_window(window
         ),
         result,
     )
-    plan = build_generation_request(
-        GenerationRequest(
-            message="逐字列出所有提供的原话", character_context=ctx, context_window_tokens=window, max_tokens=1024
-        )
+    request = GenerationRequest(
+        message="逐字列出所有提供的原话", character_context=ctx, context_window_tokens=window, max_tokens=1024
     )
+    if not expected_count:
+        with pytest.raises(InputBudgetError, match="exceed"):
+            build_generation_request(request)
+        return
+    plan = build_generation_request(request)
     match = re.search(
         r"<dialogue_evidence[^>]*>\n(.*?)\n</dialogue_evidence>", unescape(plan.messages[-1]["content"]), re.S
     )
-    if expected_count:
-        records = json.loads(match[1])["records"]
-        assert len(records) == expected_count
-        assert {r["text"] for r in records} == {r["body"] for r in original}
-    else:
-        assert match is None and plan.character_context.memory_source_status == "budget_omitted"
-        assert plan.character_context.memory_field_presence == (("workplace", None),)
+    records = json.loads(match[1])["records"]
+    assert len(records) == expected_count
+    assert {r["text"] for r in records} == {r["body"] for r in original}
     assert plan.character_context.memory_packets == ()
     assert all(r["body"] not in m["content"] for r in original for m in plan.messages if m["role"] == "system")
 

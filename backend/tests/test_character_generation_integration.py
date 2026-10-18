@@ -38,6 +38,7 @@ from inference.lora_registry import (
 )
 from inference.prompt_policy import (
     GLOBAL_FACTUAL_SAFETY_PROMPT,
+    MEMORY_ATTRIBUTION_POLICY,
     RAG_GROUNDING_PROMPT,
     build_grounded_user_message,
     compose_system_prompt,
@@ -241,7 +242,7 @@ def test_memories_enter_user_message_not_system():
     assert '<character_memory trust="untrusted"' in user_message
     assert '<memory_response_contract source="application">' in user_message
     assert "用户喜欢喝咖啡" in user_message
-    assert "长期记忆参考中的‘用户’始终指当前对话者" in system
+    assert MEMORY_ATTRIBUTION_POLICY in system
     # 记忆在系统提示词中不出现安全声明
     assert "仅作为历史事实参考" not in system
 

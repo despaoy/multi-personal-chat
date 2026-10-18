@@ -94,7 +94,7 @@ def test_prompt_policy_alignment_preserves_persona_and_gold_blocker(tmp_path):
     stale_configs = json.loads(config_manifest.read_text(encoding="utf-8"))
     assert result["status"] == "aligned"
     assert prompt.read_text(encoding="utf-8") == original_prompt
-    assert aligned_manifest["prompt_policy"]["version"] == "3.3.0"
+    assert aligned_manifest["prompt_policy"]["version"] == module.PROMPT_POLICY_VERSION
     assert aligned_manifest["freeze_blockers"] == [
         "gold_v3_refreeze_after_train_cleanup"
     ]
@@ -103,7 +103,7 @@ def test_prompt_policy_alignment_preserves_persona_and_gold_blocker(tmp_path):
     ]["persona_content_changed"] is False
     assert aligned_registry["active_assets"]["prompt_policy"]["status"] == "active"
     assert stale_configs["formal_use_allowed"] is False
-    assert stale_configs["required_prompt_policy_version"] == "3.3.0"
+    assert stale_configs["required_prompt_policy_version"] == module.PROMPT_POLICY_VERSION
 
     second = module.align(
         prompt_path=prompt,
@@ -115,7 +115,7 @@ def test_prompt_policy_alignment_preserves_persona_and_gold_blocker(tmp_path):
     assert second["status"] == "already_aligned"
 
 
-def test_active_prompt_contract_is_frozen_while_r1_configs_remain_stale():
+def test_frozen_training_prompt_contract_retains_its_reviewed_version():
     module = _module()
     manifest = json.loads(module.DEFAULT_MANIFEST.read_text(encoding="utf-8"))
     review = json.loads(module.DEFAULT_REVIEW.read_text(encoding="utf-8"))
@@ -124,18 +124,19 @@ def test_active_prompt_contract_is_frozen_while_r1_configs_remain_stale():
         module.DEFAULT_CONFIG_MANIFEST.read_text(encoding="utf-8")
     )
 
-    assert manifest["prompt_policy"]["version"] == module.PROMPT_POLICY_VERSION
+    assert manifest["prompt_policy"]["version"] == "3.3.0"
     assert manifest["prompt_policy"]["stable_persona_content_changed"] is False
     assert manifest["status"] == "frozen"
     assert manifest["freeze_blockers"] == []
     assert review["approval"]["items"]["system_prompt_v3"][
         "prompt_policy_version"
-    ] == module.PROMPT_POLICY_VERSION
+    ] == manifest["prompt_policy"]["version"]
     assert registry["active_assets"]["prompt_policy"]["status"] == "active"
+    assert registry["active_assets"]["prompt_policy"]["version"] == manifest["prompt_policy"]["version"]
     assert next(item for item in registry["research"] if item["id"] == "R0V4")[
         "status"
     ] == "complete"
     assert config_manifest["status"] == "generated_for_frozen_dataset"
     assert config_manifest["formal_use_allowed"] is True
-    assert config_manifest["prompt_policy_version"] == module.PROMPT_POLICY_VERSION
+    assert config_manifest["prompt_policy_version"] == manifest["prompt_policy"]["version"]
     assert config_manifest["single_variable_contract"]["status"] == "validated"

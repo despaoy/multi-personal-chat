@@ -18,6 +18,7 @@ from knowledge.curated_task_evidence import (
     parse_curated_review,
     render_curated_tasks,
     review_curated_bundle,
+    source_spans,
 )
 from knowledge.multiscale_rag.source_text import OriginalTextExtractor
 from knowledge.multiscale_rag.visibility import KnowledgeBoundary
@@ -164,7 +165,7 @@ async def test_complete_question_and_exact_registered_aliases_bind_literal_curat
     payload = curated_payload(bundle(corpus), plan)
     assert payload["query"] == QUERY and [task["id"] for task in payload["tasks"]] == [1]
     assert [obj["canonical_entity"] for obj in payload["objects"]] == ["澄澈", "露川"]
-    assert [span["source_quote"] for span in payload["source_spans"]] == BODY.splitlines()
+    assert "".join(span["source_quote"] for span in payload["source_spans"]) == BODY
 
 
 async def test_attributed_source_scope_quote_and_reference_are_program_generated(corpus):
@@ -174,7 +175,7 @@ async def test_attributed_source_scope_quote_and_reference_are_program_generated
     row = render_curated_tasks(retrieval(result))[0]
     assert row["status"] == "related_candidate_admitted" and row["scope"] == "attributed_statement"
     assert row["scope_truth"] == "model_judgement_not_program_truth" and row["semantic_coverage"] == "unverified"
-    assert row["evidence"][0]["source_quote"] == BODY.splitlines()[0]
+    assert row["evidence"][0]["source_quote"] == BODY
     assert row["evidence"][0]["source_reference"] == "fictional-original.txt L1"
 
 
@@ -314,7 +315,7 @@ async def test_review_capacity_never_crops_complete_question_or_sources(corpus):
     assert original == before and original["curated_source_catalog"]["sources"][0]["excerpt"]["text"] == BODY
 
 
-async def test_complete_catalogue_overflow_is_explicit_without_sending(corpus):
+async def test_many_short_lines_use_complete_blocks_within_actual_review_budget(corpus):
     corpus.path.write_text("\n".join(["澄澈和露川的独立叙事行。"] * 300), encoding="utf8")
     corpus.evidence.source.line_end = 300
     catalog = collect_curated_sources(
@@ -324,14 +325,21 @@ async def test_complete_catalogue_overflow_is_explicit_without_sending(corpus):
     original["curated_source_catalog"] = catalog
     plan, _ = await plan_for(corpus)
 
-    async def forbidden(messages):
-        pytest.fail("Catalogue must not omit lines to call a model")
+    body = catalog["sources"][0]["excerpt"]["text"]
+    calls = []
+
+    async def reviewer(messages):
+        payload = json.loads(messages[-1]["content"])
+        assert payload["sources"][0]["excerpt"]["text"] == body
+        assert "".join(span["source_quote"] for span in payload["source_spans"]) == body
+        calls.append(payload)
+        return json.dumps(selection(payload))
 
     before = copy.deepcopy(original)
-    with pytest.raises(CuratedTaskCapacityError):
-        await review_curated_bundle(original, plan, window_tokens=65536, reviewer=forbidden)
-    assert original == before
-    assert len(original["curated_source_catalog"]["sources"][0]["excerpt"]["text"].splitlines()) == 300
+    result = await review_curated_bundle(original, plan, window_tokens=65536, reviewer=reviewer)
+    assert original == before and len(calls) == 1
+    assert result["public_curated_review"]["status"] == "reviewed"
+    assert len(body.splitlines()) == 300
 
 
 async def test_cancelled_curated_review_propagates(corpus):
@@ -699,3 +707,15 @@ async def test_name_registration_survives_missing_admission_without_becoming_fac
     assert row["status"] == "related_candidate_not_admitted" and row["scope"] == "not_admitted"
     assert row["semantic_coverage"] == "unverified" and row["limitations"] == ""
     assert all("source_quotes" not in proof for proof in row["evidence"])
+
+
+@pytest.mark.parametrize("body", ["甲乙\n" * 700, "首行\r\n" + "长" * 1100 + "\n尾行", "\n空白\n\n末尾\n"])
+def test_curated_blocks_cover_exact_original_offsets_and_starting_lines(body):
+    spans = source_spans([dict(source_id="independent-original", excerpt=dict(text=body, line_start=7))])
+    assert "".join(span["source_quote"] for span in spans) == body
+    assert len({span["span_id"] for span in spans}) == len(spans)
+    for span in spans:
+        assert span["source_id"] == "independent-original"
+        assert span["source_quote"] == body[span["start"]:span["end"]]
+        assert 0 < len(span["source_quote"]) <= 512
+        assert span["line_number"] == 7 + body[:span["start"]].count("\n")

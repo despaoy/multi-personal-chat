@@ -151,7 +151,12 @@ def test_no_explicit_query_keeps_original_reference_dependency():
     ] == [anchor["id"]]
 
 
-def test_abstention_is_not_overridden_by_explicit_titles():
-    anchor = row(1, "A")
-    result = expand([anchor, row(2, "B")], [anchor], "分别读取《A》《B》", abstained=True)
-    assert result["results"] == [anchor] and result["abstained"]
+def test_exact_title_read_discards_rejected_semantic_candidates():
+    rejected = row(3, "无关候选", "不能作为这次读取的证据")
+    originals = [row(1, "A"), row(2, "B")]
+    result = expand([*originals, rejected], [rejected], "分别读取《A》《B》", abstained=True)
+    assert not result["abstained"] and result["semantic_candidates_discarded"]
+    assert result["citations"] == []
+    assert {r["id"] for r in result["results"]} == {r["id"] for r in originals}
+    assert all(r["retrieval_role"] == "requested_source" and r["score"] == 0 for r in result["results"])
+    assert all("supporting_document_ids" not in r for r in result["results"])

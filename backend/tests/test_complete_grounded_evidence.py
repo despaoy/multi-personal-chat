@@ -163,7 +163,7 @@ async def test_broken_citation_aborts_before_model_generation(failure):
         data["results"].pop(0)
     generate = AsyncMock(side_effect=AssertionError("broken evidence must not reach the model"))
     service = GroundedAnswerService(retriever=lambda *a, **kw: data)
-    with pytest.raises(KeyError if failure == "missing_document" else ValueError):
+    with pytest.raises(ValueError):
         await service.answer("月社妃是否获批许可？", generate=generate, domain_id="fixture")
     generate.assert_not_awaited()
 

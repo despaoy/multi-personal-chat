@@ -13,10 +13,10 @@ def candidate(message, kind, value, **kwargs):
 
 
 @pytest.mark.parametrize('statement,kind,value,key', [
-    ('我搬到晋城了', 'location', '晋城', 'user_residence'),
-    ('我已经搬家到江门了', 'location', '江门', 'user_residence'),
-    ('我刚搬到衡阳了', 'location', '衡阳', 'user_residence'),
-    ('我来自延吉', 'location', '延吉', 'user_origin'),
+    ('我搬到晋城了', 'residence', '晋城', 'user_residence'),
+    ('我已经搬家到江门了', 'residence', '江门', 'user_residence'),
+    ('我刚搬到衡阳了', 'residence', '衡阳', 'user_residence'),
+    ('我来自延吉', 'origin', '延吉', 'user_origin'),
     ('我的专业是考古学', 'major', '考古学', 'user_major'),
     ('我叫林夏', 'name', '林夏', 'user_name'),
     ('我喜欢木工', 'like', '木工', 'preference_木工'),
@@ -50,7 +50,7 @@ def test_question_split_does_not_certify_uncertain_or_qualified_residence(messag
     assert not parse_llm_proposals(candidate(message, 'location', '晋城'), source_message=message)
 
 
-@pytest.mark.parametrize('kind', ['location', 'user_fact'])
+@pytest.mark.parametrize('kind', ['residence', 'user_fact'])
 def test_existing_residence_can_be_superseded_with_scoped_evidence(kind):
     message = '我搬到宣城了，你还记得我的专业吗？'
     raw = dict(attributed_to='user', kind=kind, value='宣城', evidence=message, confidence=.96,
@@ -114,7 +114,7 @@ async def test_scoped_update_persists_versions_and_keeps_full_source(tmp_path):
             payload = json.loads(messages[-1]['content'])
             source = payload['current_user_message']
             update = source == statements[1]
-            proposal = dict(attributed_to='user', kind='location', value='宣城' if update else '衡水',
+            proposal = dict(attributed_to='user', kind='residence', value='宣城' if update else '衡水',
                 evidence=source, confidence=.96, operation='SUPERSEDE' if update else 'ADD')
             if update:
                 old, = payload['existing_memories']

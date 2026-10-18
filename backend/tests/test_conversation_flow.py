@@ -163,7 +163,8 @@ async def test_service_integrates_all_cues_without_new_reads_or_writes():
 
     repo = Repository()
     service = CharacterContextService(
-        Profiles(), repo, SimpleNamespace(), memory_service=Memories(), situation_analyzer=Analyzer()
+        Profiles(), repo, SimpleNamespace(), memory_service=Memories(), situation_analyzer=Analyzer(),
+        source_recall_enabled=False,
     )
     turn = TurnInput(
         "还是有点怕",

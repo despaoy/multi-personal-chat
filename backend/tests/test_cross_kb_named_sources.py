@@ -133,5 +133,5 @@ def test_unvalidated_rank_authority_is_not_rescued_by_direct_titles():
 
 
 def test_abstained_bundle_does_not_gain_cross_kb_authority():
-    result = expand(abstained=True)
+    result = expand(abstained=True, query="这些办理条件是什么？")
     assert result["results"] == CASE["frozen_ranked_anchors"] and result["abstained"]

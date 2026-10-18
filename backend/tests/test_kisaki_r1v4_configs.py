@@ -196,7 +196,7 @@ def test_e1_capacity_calibration_reduces_rank_and_freezes_mlp_projections():
         assert calibration[field] == baseline[field]
 
 
-def test_active_r1v4_configs_bind_current_data_prompt_and_single_variables():
+def test_frozen_r1v4_configs_bind_recorded_data_prompt_and_single_variables():
     builder = _module(
         "build_kisaki_r1v4_configs_active", "scripts/build_kisaki_r1v4_configs.py"
     )
@@ -218,7 +218,7 @@ def test_active_r1v4_configs_bind_current_data_prompt_and_single_variables():
     assert config_manifest["formal_use_allowed"] is True
     assert config_manifest["train"]["sha256"] == canonical["train"]["sha256"]
     assert config_manifest["validation"]["sha256"] == canonical["validation"]["sha256"]
-    assert config_manifest["prompt_policy_version"] == builder.PROMPT_POLICY_VERSION
+    assert config_manifest["prompt_policy_version"] == canonical["prompt_policy"]["version"] == "3.3.0"
     assert config_manifest["single_variable_contract"]["status"] == "validated"
     assert config_manifest["calibration_config"]["experiment_id"] == "R1-E1-CAL-LR2E5"
     assert config_manifest["calibration_config"]["formal_use_allowed"] is False
@@ -272,7 +272,7 @@ def test_active_r1v4_configs_bind_current_data_prompt_and_single_variables():
     for name, config in configs.items():
         assert config["_train_data_sha256"] == canonical["train"]["sha256"]
         assert config["_validation_data_sha256"] == canonical["validation"]["sha256"]
-        assert config["_prompt_policy_version"] == builder.PROMPT_POLICY_VERSION
+        assert config["_prompt_policy_version"] == config_manifest["prompt_policy_version"]
         assert config_manifest["config_files"][name]["sha256"] == builder._text_sha256(
             builder.DEFAULT_OUTPUT / f"kisaki_r1v4_{name}.json"
         )

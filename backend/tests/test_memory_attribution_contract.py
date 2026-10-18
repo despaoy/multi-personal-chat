@@ -3,7 +3,7 @@ import json
 
 import pytest
 
-from character.memory_llm import parse_llm_memories
+from character.memory_llm import MemoryResponseError, parse_llm_memories
 
 
 def response(owner='user', *, omit=False):
@@ -26,5 +26,7 @@ def test_missing_attribution_raises():
 def test_explicit_user_attribution_preserves_supported_labels(owner):
     assert len(parse_llm_memories(response(owner), source_message='请记住，我喜欢红茶。')) == 1
 
-def test_other_subject_is_legitimate_no_user_memory_result():
-    assert parse_llm_memories(response('assistant'), source_message='请记住，我喜欢红茶。') == []
+def test_wrong_fact_owner_is_an_explicit_model_protocol_error():
+    with pytest.raises(MemoryResponseError) as caught:
+        parse_llm_memories(response('assistant'), source_message='请记住，我喜欢红茶。')
+    assert caught.value.field == 'attributed_to'

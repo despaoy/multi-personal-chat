@@ -170,7 +170,7 @@ async def test_partial_selected_evidence_cannot_reuse_whole_selection_scope_or_l
     assert row["scope"] == "not_revalidated_for_partial_evidence" and row["limitations"] == ""
     assert STALE_DETAIL not in json.dumps(row, ensure_ascii=False)
     visible = [proof for proof in row["evidence"] if proof["status"] == "literal_source_evidence_admitted"]
-    assert len(visible) == 1 and visible[0]["source_quote"] == SECOND.splitlines()[0]
+    assert len(visible) == 1 and visible[0]["source_quote"] == SECOND
 
 
 async def test_complete_selection_preserves_original_scope_and_negation_limits(sources):

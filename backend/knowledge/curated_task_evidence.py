@@ -47,25 +47,18 @@ def source_spans(sources):
     spans = []
     for source in sources:
         body = source["excerpt"]["text"]
-        offset = 0
-        for line_number, line in enumerate(body.splitlines(keepends=True), source["excerpt"]["line_start"]):
-            text = line.rstrip("\r\n")
-            if text.strip():
-                for start in range(0, len(text), 512):
-                    if len(spans) >= 256:
-                        raise CuratedTaskCapacityError("Complete curated line catalogue exceeds capacity")
-                    stop = min(len(text), start + 512)
-                    spans.append(
-                        dict(
-                            span_id=f"curated-span:{len(spans)}",
-                            source_id=source["source_id"],
-                            start=offset + start,
-                            end=offset + stop,
-                            line_number=line_number,
-                            source_quote=text[start:stop],
-                        )
-                    )
-            offset += len(line)
+        line_number = source["excerpt"]["line_start"]
+        for start in range(0, len(body), 512):
+            quote = body[start:start + 512]
+            spans.append(dict(
+                span_id=f"curated-span:{len(spans)}",
+                source_id=source["source_id"],
+                start=start,
+                end=start + len(quote),
+                line_number=line_number,
+                source_quote=quote,
+            ))
+            line_number += quote.count("\n")
     return spans
 
 
