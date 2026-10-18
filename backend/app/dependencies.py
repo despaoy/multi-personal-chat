@@ -7,6 +7,10 @@ from infra.bounded_executor import BlockingWorkRejected, BlockingWorkTimeout
 from infra.observability import increment
 
 
+def get_request_database(request: Request):
+    return get_runtime_container(request.app).db
+
+
 async def get_current_user(request: Request) -> dict:
     """从请求中提取并验证当前用户（支持 Authorization 头、Cookie 和中间件预验证）
 
@@ -80,7 +84,7 @@ async def get_current_admin(request: Request) -> dict:
 
     # Revalidate the current role against this application's database.
     try:
-        database = get_runtime_container(request.app).db
+        database = get_request_database(request)
 
         row = await run_auth_database(
             database.get_user_by_username,

@@ -3,11 +3,9 @@ import asyncio
 import json
 import logging
 from datetime import datetime, timezone
-from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Depends
-from app.dependencies import get_current_admin
-from db.adapter import db
+from app.dependencies import get_current_admin, get_request_database
 from db.schemas import RouterConfigUpdate
 
 logger = logging.getLogger(__name__)
@@ -24,10 +22,6 @@ def _get_router_config_lock() -> asyncio.Lock:
         _router_config_lock = asyncio.Lock()
         _router_config_lock_loop = loop
     return _router_config_lock
-
-
-async def _execute_sql(query: str, params: Optional[dict] = None):
-    return await asyncio.to_thread(db.execute_sql, query, params or {})
 
 
 def _normalize_config(config: dict) -> dict:
@@ -51,10 +45,14 @@ def _normalize_config(config: dict) -> dict:
 
 
 @router.get("/api/router/config")
-async def get_router_config(current_user: dict = Depends(get_current_admin)):
+async def get_router_config(
+    current_user: dict = Depends(get_current_admin), database=Depends(get_request_database),
+):
     """获取路由配置"""
     try:
-        rows = await _execute_sql("SELECT value FROM config WHERE key='lora_router_config'")
+        rows = await asyncio.to_thread(
+            database.execute_sql, "SELECT value FROM config WHERE key='lora_router_config'"
+        )
         if rows:
             config = json.loads(rows[0]["value"])
         else:
@@ -79,15 +77,17 @@ async def get_router_config(current_user: dict = Depends(get_current_admin)):
 
 
 @router.put("/api/router/config")
-async def update_router_config(req: RouterConfigUpdate,
-                               current_user: dict = Depends(get_current_admin)):
+async def update_router_config(
+    req: RouterConfigUpdate, current_user: dict = Depends(get_current_admin),
+    database=Depends(get_request_database),
+):
     """更新路由配置并原子化同进程内的读改写。"""
     if req.enabled is True or req.mode in {"rule", "intent"}:
         raise HTTPException(409, "在线自动路由未接入训练后的分类器，当前请明确选择角色或适配器")
     try:
         async with _get_router_config_lock():
-            rows = await _execute_sql(
-                "SELECT value FROM config WHERE key='lora_router_config'"
+            rows = await asyncio.to_thread(
+                database.execute_sql, "SELECT value FROM config WHERE key='lora_router_config'"
             )
             if rows:
                 config = json.loads(rows[0]["value"])
@@ -103,7 +103,8 @@ async def update_router_config(req: RouterConfigUpdate,
             config.update(req.model_dump(exclude_none=True))
             config = _normalize_config(config)
             serialized = json.dumps(config, ensure_ascii=False)
-            await _execute_sql(
+            await asyncio.to_thread(
+                database.execute_sql,
                 "INSERT INTO config (key, value) VALUES ('lora_router_config', :val) "
                 "ON CONFLICT(key) DO UPDATE SET value=:val",
                 {"val": serialized},
@@ -119,7 +120,9 @@ async def update_router_config(req: RouterConfigUpdate,
 
 
 @router.get("/api/router/adapters")
-async def list_adapters(current_user: dict = Depends(get_current_admin)):
+async def list_adapters(
+    current_user: dict = Depends(get_current_admin), database=Depends(get_request_database),
+):
     try:
         from db.database import refresh_lora_dir_map
         directory_map = await asyncio.to_thread(refresh_lora_dir_map)
@@ -127,7 +130,7 @@ async def list_adapters(current_user: dict = Depends(get_current_admin)):
         if directory_map:
             params = {f"name_{i}": name for i, name in enumerate(directory_map)}
             rows = await asyncio.to_thread(
-                db.execute_sql,
+                database.execute_sql,
                 "SELECT * FROM (SELECT *, ROW_NUMBER() OVER "
                 "(PARTITION BY adapter_name ORDER BY checked_at DESC, id DESC) AS report_rank "
                 f"FROM adapter_compatibility WHERE adapter_name IN ({', '.join(':' + key for key in params)})) "
@@ -170,7 +173,9 @@ async def get_routing_logs(limit: int = 100, current_user: dict = Depends(get_cu
 
 
 @router.post("/api/router/check/{adapter_name}")
-async def check_adapter_compat(adapter_name: str, current_user: dict = Depends(get_current_admin)):
+async def check_adapter_compat(
+    adapter_name: str, current_user: dict = Depends(get_current_admin), database=Depends(get_request_database),
+):
     try:
         from db.database import refresh_lora_dir_map
         from inference.adapter_checker import AdapterChecker
@@ -184,7 +189,7 @@ async def check_adapter_compat(adapter_name: str, current_user: dict = Depends(g
         }
         try:
             written = await asyncio.to_thread(
-                db.execute_sql,
+                database.execute_sql,
                 "INSERT INTO adapter_compatibility (adapter_name, checked_at, compatible, checks, warnings, errors) "
                 "VALUES (:adapter_name, :checked_at, :compatible, :checks, :warnings, :errors)",
                 {

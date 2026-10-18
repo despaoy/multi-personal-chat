@@ -7,10 +7,9 @@ import time
 from fastapi import APIRouter, HTTPException, Depends, Response, Request
 
 from db.schemas import RegisterRequest, LoginRequest
-from app.runtime import get_runtime_container
 from db.errors import RegistrationClosedError
 from app.config import create_access_token
-from app.dependencies import get_current_user
+from app.dependencies import get_current_user, get_request_database
 from infra.auth_work import run_auth_database
 from infra.environment import read_positive_int, read_positive_float
 from infra.bounded_executor import (
@@ -180,13 +179,9 @@ def _set_auth_cookie(response: Response, token: str):
     )
 
 
-def _get_auth_database(request: Request):
-    return get_runtime_container(request.app).db
-
-
 @router.post("/api/auth/register")
 async def register(
-    request: RegisterRequest, response: Response, database=Depends(_get_auth_database),
+    request: RegisterRequest, response: Response, database=Depends(get_request_database),
 ):
     """用户注册"""
     try:
@@ -224,7 +219,7 @@ async def register(
 
 @router.post("/api/auth/login")
 async def login(
-    request: LoginRequest, response: Response, database=Depends(_get_auth_database),
+    request: LoginRequest, response: Response, database=Depends(get_request_database),
 ):
     """用户登录"""
     row = await _run_database_work(database.get_user_by_username, request.username)
@@ -264,7 +259,7 @@ async def logout(request: Request, response: Response):
 
 @router.get("/api/auth/me")
 async def get_current_user_info(
-    current_user: dict = Depends(get_current_user), database=Depends(_get_auth_database),
+    current_user: dict = Depends(get_current_user), database=Depends(get_request_database),
 ):
     """获取当前用户信息"""
     user_row = await _run_database_work(database.get_user_by_username, current_user["username"])

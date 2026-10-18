@@ -83,17 +83,18 @@ def test_router_config_updates_are_serialized_without_lost_fields(monkeypatch) -
     from db.schemas import RouterConfigUpdate
 
     database = _ResearchDatabase()
-    monkeypatch.setattr(router_api, "db", database)
 
     async def update_both():
         return await asyncio.gather(
             router_api.update_router_config(
                 RouterConfigUpdate(enabled=False),
                 current_user={"role": "admin"},
+                database=database,
             ),
             router_api.update_router_config(
                 RouterConfigUpdate(default_adapter="kisaki"),
                 current_user={"role": "admin"},
+                database=database,
             ),
         )
 

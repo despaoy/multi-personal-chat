@@ -21,24 +21,23 @@ from inference import model_manager
 async def test_retired_live_routing_cannot_be_reenabled(body, monkeypatch):
     from db.schemas import RouterConfigUpdate
     writer = Mock(side_effect=AssertionError("Unsupported routing must not change historical configuration"))
-    monkeypatch.setattr(compatibility, "_execute_sql", writer)
+    database = SimpleNamespace(execute_sql=writer)
     with pytest.raises(HTTPException) as error:
-        await compatibility.update_router_config(RouterConfigUpdate(**body), current_user={"isAdmin": True})
+        await compatibility.update_router_config(RouterConfigUpdate(**body), current_user={"isAdmin": True}, database=database)
     assert error.value.status_code == 409
     writer.assert_not_called()
 
 
 @pytest.mark.asyncio
 async def test_preserved_configuration_is_marked_as_historical(monkeypatch):
-    monkeypatch.setattr(compatibility, "_execute_sql", AsyncMock(return_value=[{"value": json.dumps({"enabled": False})}]))
-    result = await compatibility.get_router_config(current_user={"isAdmin": True})
+    database = SimpleNamespace(execute_sql=Mock(return_value=[{"value": json.dumps({"enabled": False})}]))
+    result = await compatibility.get_router_config(current_user={"isAdmin": True}, database=database)
     assert result["success"] and result["routingAvailable"] is False and result["config"]["enabled"] is False
 
 
 @pytest.fixture
 def records(monkeypatch, tmp_path):
     database = SQLiteDB(tmp_path / "compat.sqlite")
-    monkeypatch.setattr(compatibility, "db", database)
     from db import database as module
     scan = Mock(return_value={"fixture-adapter": str(tmp_path / "fixture-adapter")})
     monkeypatch.setattr(module, "refresh_lora_dir_map", scan)
@@ -48,10 +47,10 @@ def records(monkeypatch, tmp_path):
 @pytest.mark.asyncio
 async def test_empty_scan_and_unchecked_adapter_are_normal_results(records):
     database, scan = records
-    first = await compatibility.list_adapters(current_user={"isAdmin": True})
+    first = await compatibility.list_adapters(current_user={"isAdmin": True}, database=database)
     assert first["success"] and first["total"] == 1 and first["adapters"][0]["compatibility"] is None
     scan.return_value = {}
-    assert await compatibility.list_adapters(current_user={"isAdmin": True}) == {"success": True, "adapters": [], "total": 0}
+    assert await compatibility.list_adapters(current_user={"isAdmin": True}, database=database) == {"success": True, "adapters": [], "total": 0}
 
 
 @pytest.mark.asyncio
@@ -64,7 +63,7 @@ async def test_stored_report_fault_does_not_remove_failed_fields_and_return_succ
         "INSERT INTO adapter_compatibility (adapter_name, checked_at, compatible, checks, warnings, errors) "
         "VALUES (:name, '2026-10-14T01:00:00+00:00', 1, :checks, :warnings, :errors)", values)
     with pytest.raises(HTTPException) as error:
-        await compatibility.list_adapters(current_user={"isAdmin": True})
+        await compatibility.list_adapters(current_user={"isAdmin": True}, database=database)
     assert error.value.status_code == 503 and error.value.__cause__ is not None
 
 
@@ -78,7 +77,7 @@ async def test_read_failure_never_becomes_empty_adapter_list(records, monkeypatc
     else:
         monkeypatch.setattr(database, "execute_sql", Mock(side_effect=failure))
     with pytest.raises(HTTPException) as error:
-        await compatibility.list_adapters(current_user={"isAdmin": True})
+        await compatibility.list_adapters(current_user={"isAdmin": True}, database=database)
     assert error.value.status_code == 503 and error.value.__cause__ is failure
     assert "fiction-private" not in str(error.value.detail)
 
@@ -99,7 +98,7 @@ async def test_success_and_incompatibility_both_store_the_actual_report(records,
     report, check = checker
     report.compatible = compatible
     report.errors = [] if compatible else ["base_model_mismatch"]
-    result = await compatibility.check_adapter_compat("fixture-adapter", current_user={"isAdmin": True})
+    result = await compatibility.check_adapter_compat("fixture-adapter", current_user={"isAdmin": True}, database=database)
     assert result["success"] and result["compatible"] is compatible and result["checks"] == report.checks
     rows = database.execute_sql("SELECT * FROM adapter_compatibility")
     assert len(rows) == 1 and bool(rows[0]["compatible"]) is compatible
@@ -116,7 +115,7 @@ async def test_completed_check_with_unconfirmed_storage_returns_partial_failure(
     writer = Mock(side_effect=failure) if write_result == "exception" else Mock(return_value=write_result)
     monkeypatch.setattr(database, "execute_sql", writer)
     with pytest.raises(HTTPException) as error:
-        await compatibility.check_adapter_compat("fixture-adapter", current_user={"isAdmin": True})
+        await compatibility.check_adapter_compat("fixture-adapter", current_user={"isAdmin": True}, database=database)
     assert error.value.status_code == 503 and error.value.detail["stage"] == "adapter_compatibility_record"
     assert error.value.detail["checkCompleted"] is True and error.value.detail["recordSaved"] is None
     assert "fiction-private" not in str(error.value.detail)
@@ -127,10 +126,10 @@ async def test_completed_check_with_unconfirmed_storage_returns_partial_failure(
 
 @pytest.mark.asyncio
 async def test_missing_adapter_is_not_checked_or_created(records, checker):
-    _, _ = records
+    database, _ = records
     _, check = checker
     with pytest.raises(HTTPException) as error:
-        await compatibility.check_adapter_compat("absent-adapter", current_user={"isAdmin": True})
+        await compatibility.check_adapter_compat("absent-adapter", current_user={"isAdmin": True}, database=database)
     assert error.value.status_code == 404
     check.assert_not_called()
 
@@ -143,7 +142,7 @@ async def test_checker_failure_or_cancel_never_creates_a_report(records, checker
     failure = asyncio.CancelledError() if cancel else OSError("fiction-checker-fault")
     check.side_effect = failure
     with pytest.raises(asyncio.CancelledError if cancel else HTTPException) as error:
-        await compatibility.check_adapter_compat("fixture-adapter", current_user={"isAdmin": True})
+        await compatibility.check_adapter_compat("fixture-adapter", current_user={"isAdmin": True}, database=database)
     if not cancel:
         assert error.value.__cause__ is failure
     assert database.execute_sql("SELECT id FROM adapter_compatibility") == []
@@ -198,7 +197,7 @@ async def test_adapter_list_reads_latest_reports_together_and_keeps_unchecked_st
         )
     reader = Mock(wraps=database.execute_sql)
     monkeypatch.setattr(database, 'execute_sql', reader)
-    result = await compatibility.list_adapters(current_user={'isAdmin': True})
+    result = await compatibility.list_adapters(current_user={'isAdmin': True}, database=database)
     assert result['success'] and result['total'] == 3
     assert [row['name'] for row in result['adapters']] == list(scan.return_value)
     first, second, unchecked = result['adapters']
