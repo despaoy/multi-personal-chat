@@ -11,7 +11,7 @@ from db.schemas import MessageRequest
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    "provider,available", [("openai_compat", True), ("openai_compat", False), ("ollama", True), ("vllm", False)]
+    "provider,available", [("openai_compat", True), ("openai_compat", False), ("ollama", True), ("vllm", False), ("vllm", True)]
 )
 async def test_selected_provider_receives_messages_and_budget_without_local_override(monkeypatch, provider, available):
     from api import generate
@@ -26,7 +26,7 @@ async def test_selected_provider_receives_messages_and_budget_without_local_over
             pass
 
         def get_status(self):
-            return {"currentProvider": provider, "providers": {provider: {"modelName": "selected-native"}}}
+            return {"modelName": "selected-native", "currentProvider": provider, "providers": {provider: {"modelName": "selected-native"}}}
 
         def get_current_provider(self):
             return self
@@ -52,15 +52,16 @@ async def test_selected_provider_receives_messages_and_budget_without_local_over
             return "原生提供方回答", 0.01
 
     manager = Manager()
+    manager._providers = {model_manager.ModelProvider(provider): manager}
     monkeypatch.setattr(model_manager, "get_model_manager", lambda: manager)
     monkeypatch.setattr(generate, "response_cache", None)
     monkeypatch.setattr(generate, "db", SimpleNamespace(config={}, loras=[]))
     monkeypatch.setattr(generate, "circuit_breaker_registry", None)
     monkeypatch.setattr(generate, "get_llm_semaphore", lambda: asyncio.Semaphore(1))
-    available_check = AsyncMock(return_value=available)
-    monkeypatch.setattr(generate, "_ensure_vllm", available_check)
-    local_call = AsyncMock(side_effect=AssertionError("Configured native provider must not call local inference"))
-    monkeypatch.setattr(generate, "_vllm_client", SimpleNamespace(generate=local_call))
+    local_call = AsyncMock(return_value="原生提供方回答",
+        side_effect=None if provider == "vllm" else AssertionError("Cloud must not call local inference"))
+    available_check = AsyncMock(return_value=SimpleNamespace(generate=local_call) if available else None)
+    monkeypatch.setattr(generate, "get_vllm_client", available_check)
 
     async def compiled_retrieval(request, lora_name, *, model_generate, **kwargs):
         reply = await model_generate(
@@ -97,9 +98,14 @@ async def test_selected_provider_receives_messages_and_budget_without_local_over
             {"role": "user", "content": "当前住处丽水；完整已知记忆和当前问题"},
         ], temperature=0.17, max_tokens=733, top_p=1.0, frequency_penalty=0.0,
             repetition_penalty=1.0, enable_thinking=False, lora_name=None)]
+    elif provider == "vllm":
+        assert not calls
+        local_call.assert_awaited_once()
+        assert local_call.await_args.kwargs["max_tokens"] == 733
+        assert local_call.await_args.kwargs["messages"][-1]["content"] == "当前住处丽水；完整已知记忆和当前问题"
     else:
         assert calls == [dict(prompt="当前住处丽水；完整已知记忆和当前问题",
                              history=[{"role": "system", "content": "编译后角色及表达边界"}], budget=733)]
-    local_call.assert_not_awaited()
     if provider != "vllm":
+        local_call.assert_not_awaited()
         available_check.assert_not_awaited()

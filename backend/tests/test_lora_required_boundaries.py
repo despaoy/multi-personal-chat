@@ -120,9 +120,8 @@ async def test_selected_lora_requires_successful_inventory_before_generation(mon
     failure = httpx.ConnectError("fiction-private-vllm-probe-error")
     listing = AsyncMock(side_effect=failure) if inventory == "fault" else AsyncMock(
         return_value=["controlled-adapter"] if inventory == "ready" else None if inventory == "unknown" else [])
-    fake = SimpleNamespace(list_loras=listing)
-    monkeypatch.setattr(generate, "_vllm_client", fake)
-    monkeypatch.setattr(generate, "_ensure_vllm", AsyncMock(return_value=inventory != "unavailable"))
+    fake = SimpleNamespace(list_loras=listing, generate=AsyncMock())
+    monkeypatch.setattr(generate, "get_vllm_client", AsyncMock(return_value=fake if inventory != 'unavailable' else None))
     monkeypatch.setattr(generate, "_generate_with_retrieval", state.generation)
     req = MessageRequest(message="完整题设：3张票，每张2元，计算总额。", loraName="controlled-adapter")
     if inventory == "ready":
@@ -150,8 +149,7 @@ async def test_selected_lora_requires_successful_inventory_before_generation(mon
 async def test_explicit_base_model_does_not_require_adapter_inventory(monkeypatch):
     state = install_api(monkeypatch, "vllm")
     listing = AsyncMock(side_effect=AssertionError("Base model does not require adapter discovery"))
-    monkeypatch.setattr(generate, "_vllm_client", SimpleNamespace(list_loras=listing))
-    monkeypatch.setattr(generate, "_ensure_vllm", AsyncMock(return_value=True))
+    monkeypatch.setattr(generate, "get_vllm_client", AsyncMock(return_value=SimpleNamespace(list_loras=listing, generate=AsyncMock())))
     monkeypatch.setattr(generate, "_generate_with_retrieval", state.generation)
     result = await generate._generate_reply_impl(MessageRequest(message="完整题设：3张票，每张2元。", loraName="default"),
         record_invocation=False)

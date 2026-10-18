@@ -19,9 +19,6 @@ def rig(monkeypatch):
     client = SimpleNamespace(health_check=AsyncMock(return_value=[{"healthy": True}]))
     factory = AsyncMock(return_value=client)
     close = AsyncMock()
-    monkeypatch.setattr(generate, "_vllm_client", None)
-    monkeypatch.setattr(generate, "_vllm_init_lock", None)
-    monkeypatch.setattr(generate, "_vllm_init_lock_loop", None)
     monkeypatch.setattr(config, "is_vllm_enabled", lambda: True)
     monkeypatch.setattr(vllm_client, "get_vllm_client", factory)
     monkeypatch.setattr(vllm_client, "close_shared_vllm_client", close)
@@ -37,21 +34,12 @@ async def test_explicit_disable_is_still_a_normal_disabled_result(rig, monkeypat
 
 
 @pytest.mark.asyncio
-async def test_concurrent_initialization_reuses_one_shared_client(rig):
-    clients = await asyncio.gather(*(generate.get_vllm_client() for _ in range(5)))
-    assert all(client is rig.client for client in clients)
-    rig.factory.assert_awaited_once()
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("entry", ["ensure", "get", "status"])
+@pytest.mark.parametrize("entry", ["get", "status"])
 async def test_initialization_failure_is_safe_and_only_later_request_retries(rig, caplog, entry):
     failure = ConnectionError("synthetic-private-service-details")
     rig.factory.side_effect = [failure, rig.client]
 
     async def invoke():
-        if entry == "ensure":
-            return await generate._ensure_vllm()
         if entry == "get":
             return await generate.get_vllm_client()
         return await generate.vllm_status(current_user={"role": "admin"})
@@ -60,15 +48,13 @@ async def test_initialization_failure_is_safe_and_only_later_request_retries(rig
         await invoke()
     assert caught.value.status_code == 503 and caught.value.__cause__ is failure
     assert "synthetic-private" not in caught.value.detail + caplog.text
-    assert generate._vllm_client is None and rig.factory.await_count == 1
+    assert rig.factory.await_count == 1
     result = await invoke()
-    if entry == "ensure":
-        assert result is True
-    elif entry == "get":
+    if entry == "get":
         assert result is rig.client
     else:
         assert result == {"enabled": True, "instances": [{"healthy": True}]}
-    assert generate._vllm_client is rig.client and rig.factory.await_count == 2
+    assert rig.factory.await_count == 2
 
 
 @pytest.mark.asyncio
@@ -77,22 +63,21 @@ async def test_empty_shared_factory_result_is_an_error(rig):
     with pytest.raises(HTTPException) as caught:
         await generate.get_vllm_client()
     assert caught.value.status_code == 503 and isinstance(caught.value.__cause__, RuntimeError)
-    assert generate._vllm_client is None
 
 
 @pytest.mark.asyncio
-async def test_cancelled_initialization_releases_lock_for_a_later_request(rig):
+async def test_cancelled_initialization_is_not_retried_within_the_request(rig):
     failure = asyncio.CancelledError()
     rig.factory.side_effect = [failure, rig.client]
     with pytest.raises(asyncio.CancelledError) as caught:
         await generate.get_vllm_client()
-    assert caught.value is failure and generate._vllm_client is None
+    assert caught.value is failure
     assert await asyncio.wait_for(generate.get_vllm_client(), 1) is rig.client
     assert rig.factory.await_count == 2
 
 
 @pytest.mark.asyncio
-async def test_status_probe_error_does_not_report_disabled_or_rebuild_client(rig, caplog):
+async def test_status_probe_error_is_not_reported_as_disabled(rig, caplog):
     failure = OSError("synthetic-private-probe-details")
     rig.client.health_check.side_effect = [failure, [{"healthy": True}]]
     with pytest.raises(HTTPException) as caught:
@@ -103,7 +88,7 @@ async def test_status_probe_error_does_not_report_disabled_or_rebuild_client(rig
         "enabled": True,
         "instances": [{"healthy": True}],
     }
-    rig.factory.assert_awaited_once()
+    assert rig.factory.await_count == 2
 
 
 @pytest.mark.asyncio
@@ -113,20 +98,10 @@ async def test_close_error_reaches_lifecycle_handler_without_false_success(rig, 
     await generate.get_vllm_client()
     rig.close.side_effect = failure
     with pytest.raises(type(failure)) as caught:
-        await main._close_resource("vLLM 客户端", generate, "close_vllm_client")
-    assert caught.value is failure and generate._vllm_client is None
+        await main._close_resource("vLLM 客户端", vllm_client, "close_shared_vllm_client")
+    assert caught.value is failure
     rig.close.assert_awaited_once()
     assert "vLLM 客户端已关闭" not in caplog.text and "synthetic-private" not in caplog.text
-
-
-@pytest.mark.asyncio
-async def test_successful_close_allows_new_lifecycle_initialization(rig):
-    assert await generate.get_vllm_client() is rig.client
-    await generate.close_vllm_client()
-    assert generate._vllm_client is None
-    rig.close.assert_awaited_once()
-    assert await generate.get_vllm_client() is rig.client
-    assert rig.factory.await_count == 2
 
 
 @pytest.mark.asyncio

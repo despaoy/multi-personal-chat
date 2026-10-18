@@ -235,7 +235,9 @@ async def run(args):
                         response.raise_for_status()
     finally:
         await scheduler.shutdown(timeout=3)
-        await gen.close_vllm_client()
+        from inference.vllm_client import close_shared_vllm_client
+
+        await close_shared_vllm_client()
         if cloud is not None:
             await cloud.close()
         manifest.update(generation_calls=len(all_calls),

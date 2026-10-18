@@ -194,7 +194,7 @@ async def lifespan(app: FastAPI):
             ("备份调度器", _cfg.backup_mgr, "stop_scheduled_backup"),
             ("PostgreSQL 适配器", database if postgres_mode else None, "close"),
             ("模型管理器", "inference.model_manager", "_model_manager.shutdown"),
-            ("vLLM 客户端", "api.generate", "close_vllm_client"),
+            ("vLLM 客户端", "inference.vllm_client", "close_shared_vllm_client"),
             ("熔断器注册表", _cfg.circuit_breaker_registry, "clear"),
             ("async Redis 客户端", "cache.redis_client", "close_async_redis"),
         )

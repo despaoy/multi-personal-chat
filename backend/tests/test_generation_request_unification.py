@@ -1,3 +1,4 @@
+from unittest.mock import AsyncMock
 from types import SimpleNamespace
 
 import pytest
@@ -31,7 +32,7 @@ async def test_generation_failure_is_reported_and_recorded(monkeypatch, provider
     from inference import model_manager
 
     records, counters = [], []
-    from unittest.mock import AsyncMock, Mock
+    from unittest.mock import Mock
 
     switch = Mock(side_effect=AssertionError("A failed request must not switch the configured provider"))
     manager = SimpleNamespace(_current_provider=SimpleNamespace(value=provider),
@@ -41,11 +42,9 @@ async def test_generation_failure_is_reported_and_recorded(monkeypatch, provider
     monkeypatch.setattr(model_manager, "get_model_manager", lambda: manager)
     monkeypatch.setattr(generate, "db", SimpleNamespace(config={}, loras=[]))
     monkeypatch.setattr(generate, "response_cache", None)
-    monkeypatch.setattr(generate, "_vllm_client", object())
+    monkeypatch.setattr(generate, "get_vllm_client", AsyncMock(return_value=SimpleNamespace(generate=AsyncMock())))
     monkeypatch.setattr(generate, "set_consecutive", lambda *args: counters.append(args))
 
-    async def available():
-        return True
 
     from inference.generation_request import ContextAuthorityChangedError, ReplyValidationError
     failure = {
@@ -62,7 +61,6 @@ async def test_generation_failure_is_reported_and_recorded(monkeypatch, provider
     async def record(*args, **kwargs):
         records.append(kwargs)
 
-    monkeypatch.setattr(generate, "_ensure_vllm", available)
     monkeypatch.setattr(generate, "circuit_breaker_registry", None)
     monkeypatch.setattr(generate, "_generate_with_retrieval", failed_expression)
     monkeypatch.setattr(generate, "_record_model_invocation", record)
@@ -144,7 +142,6 @@ async def test_production_and_character_benchmark_share_model_request(monkeypatc
             return "production reply"
 
     monkeypatch.setattr(generate, "_get_system_prompt", lambda _: "persona")
-    monkeypatch.setattr(generate, "_vllm_client", Client())
     await generate._generate_with_retrieval(
         MessageRequest(message="question", senderName="琉璃"),
         None,
@@ -154,6 +151,7 @@ async def test_production_and_character_benchmark_share_model_request(monkeypatc
             "maxTokens": 256,
             "topP": 0.9,
         },
+        model_generate=Client().generate,
     )
 
     benchmark_call = {}
@@ -235,13 +233,13 @@ async def test_production_rag_uses_shared_grounded_request(monkeypatch, semantic
     monkeypatch.setattr(public_task_evidence, "review_public_candidates", transmission_control)
     monkeypatch.setattr(generate, "_retrieve_rag_bundle", retrieve)
     monkeypatch.setattr(generate, "_get_system_prompt", lambda _: "persona")
-    monkeypatch.setattr(generate, "_vllm_client", Client())
     monkeypatch.setattr(generate, "get_provider_context_budget", lambda: SimpleNamespace(
         review=ReviewContextBudget(65536), window_tokens=65536, evidence_max_chars=0,
     ))
     reply, _, meta = await generate._generate_with_retrieval(
         MessageRequest(message=query, senderName="虚构读者"), None,
         runtime_config=dict(useKnowledgeBase=True, temperature=0.7, maxTokens=256),
+        model_generate=Client().generate,
     )
     packets = document_evidence_packets([document])
     expected = build_generation_request(GenerationRequest(
@@ -263,7 +261,6 @@ async def test_production_rag_uses_shared_grounded_request(monkeypatch, semantic
 
 @pytest.mark.asyncio
 async def test_configuration_read_failure_stops_before_model_or_save(monkeypatch):
-    from unittest.mock import AsyncMock
 
     from fastapi import HTTPException
 
@@ -296,7 +293,6 @@ async def test_configuration_read_failure_stops_before_model_or_save(monkeypatch
 @pytest.mark.asyncio
 async def test_native_timeout_cancels_work_and_releases_capacity_without_breaker(monkeypatch):
     import asyncio
-    from unittest.mock import AsyncMock
 
     from fastapi import HTTPException
 

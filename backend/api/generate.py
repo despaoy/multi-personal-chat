@@ -57,11 +57,6 @@ from infra.input_validator import MESSAGE_SCHEMA, InputValidator
 
 logger = logging.getLogger(__name__)
 
-# ── vLLM 客户端（延迟初始化） ──
-_vllm_client = None
-_vllm_init_lock: asyncio.Lock | None = None
-_vllm_init_lock_loop: asyncio.AbstractEventLoop | None = None
-
 _RAG_TIMEOUT = float(os.getenv("RAG_TIMEOUT", "8"))
 _RAG_COLD_START_TIMEOUT = float(os.getenv("RAG_COLD_START_TIMEOUT", "60"))
 _DB_WRITE_TIMEOUT = float(os.getenv("DB_WRITE_TIMEOUT", "3"))
@@ -105,23 +100,14 @@ _HIGH_RISK_PROMPT_PATTERNS = (
 )
 
 
-def _loop_local_lock(name: str) -> asyncio.Lock:
-    """Return a module lock owned by the active application event loop."""
-    global _vllm_init_lock, _vllm_init_lock_loop
+def _get_local_model_lock() -> asyncio.Lock:
+    """Serialize stateful local model access within the active event loop."""
     global _local_model_lock, _local_model_lock_loop
-
     loop = asyncio.get_running_loop()
-    if name == "vllm":
-        if _vllm_init_lock is None or _vllm_init_lock_loop is not loop:
-            _vllm_init_lock = asyncio.Lock()
-            _vllm_init_lock_loop = loop
-        return _vllm_init_lock
-    if name == "local_model":
-        if _local_model_lock is None or _local_model_lock_loop is not loop:
-            _local_model_lock = asyncio.Lock()
-            _local_model_lock_loop = loop
-        return _local_model_lock
-    raise ValueError(f"unknown lock name: {name}")
+    if _local_model_lock is None or _local_model_lock_loop is not loop:
+        _local_model_lock = asyncio.Lock()
+        _local_model_lock_loop = loop
+    return _local_model_lock
 
 
 def _is_high_risk_prompt(text: str) -> bool:
@@ -137,49 +123,20 @@ def _security_policy_response() -> GenerateResponse:
     )
 
 
-async def _ensure_vllm():
-    """初始化已启用的共享客户端；故障明确失败，后续请求可重新尝试。"""
-    global _vllm_client
-    if _vllm_client is not None:
-        return True
-
-    async with _loop_local_lock("vllm"):
-        if _vllm_client is not None:
-            return True
-
-        from app.config import is_vllm_enabled
-
-        if not is_vllm_enabled():
-            return False
-
-        try:
-            from inference.vllm_client import get_vllm_client as _get_shared
-
-            client = await _get_shared()
-            if client is None:
-                raise RuntimeError("共享 vLLM 客户端返回空实例")
-        except Exception as exc:
-            raise HTTPException(503, "vLLM 客户端初始化失败，请检查服务及配置后重试") from exc
-        _vllm_client = client
-        logger.info("vLLM 客户端初始化成功（共享单例）")
-        return True
-
-
 async def get_vllm_client():
-    if not await _ensure_vllm():
+    """Apply API enablement and error semantics; the adapter owns the client."""
+    from app.config import is_vllm_enabled
+    from inference.vllm_client import get_vllm_client as get_shared_client
+
+    if not is_vllm_enabled():
         return None
-    return _vllm_client
-
-
-async def close_vllm_client():
-    """关闭共享客户端，失败交由生命周期处理器保留并继续清理其他资源。"""
-    global _vllm_client
-    async with _loop_local_lock("vllm"):
-        _vllm_client = None
-        from inference.vllm_client import close_shared_vllm_client
-
-        await close_shared_vllm_client()
-        logger.info("vLLM 客户端已关闭（共享单例）")
+    try:
+        client = await get_shared_client()
+        if client is None:
+            raise RuntimeError("共享 vLLM 客户端返回空实例")
+        return client
+    except Exception as exc:
+        raise HTTPException(503, "vLLM 客户端初始化失败，请检查服务及配置后重试") from exc
 
 
 router = APIRouter()
@@ -435,9 +392,10 @@ async def _generate_reply_body(
     vllm_effective_lora = vllm_lora_name if lora_name != "default" else None
     if request_provider == "vllm" and vllm_effective_lora:
         try:
-            if not await _ensure_vllm() or _vllm_client is None:
+            client = await get_vllm_client()
+            if client is None:
                 raise RuntimeError("Selected vLLM service is unavailable")
-            available_loras = await _vllm_client.list_loras()
+            available_loras = await client.list_loras()
             if vllm_effective_lora not in available_loras:
                 raise HTTPException(409, "所选 LoRA 尚未加载到 vLLM，请先重新激活")
         except HTTPException:
@@ -503,12 +461,13 @@ async def _generate_reply_body(
     model_name = f"vllm/{get_vllm_served_model_name()}" if is_vllm else "model_manager"
     try:
         if is_vllm:
-            if not await _ensure_vllm() or _vllm_client is None:
+            client = await get_vllm_client()
+            if client is None:
                 raise HTTPException(503, "所选 vLLM 服务不可用，请恢复服务后重试")
             reply, used_rag, rag_meta = await _generate_with_retrieval(
-                request, vllm_effective_lora, vllm_lora_name, runtime_config,
+                request, vllm_effective_lora, prompt_lora_name=vllm_lora_name, runtime_config=runtime_config,
                 enable_rag=enable_rag, prepared_character_turn=prepared_character_turn,
-                message_db=message_db,
+                message_db=message_db, model_generate=client.generate,
             )
             model_label = model_name
             stored_model_name = "vllm"
@@ -519,7 +478,7 @@ async def _generate_reply_body(
             except TimeoutError as exc:
                 raise HTTPException(503, "服务繁忙，请稍后再试") from exc
             try:
-                async with (nullcontext() if request_provider == "openai_compat" else _loop_local_lock("local_model")):
+                async with (nullcontext() if request_provider == "openai_compat" else _get_local_model_lock()):
                     try:
                         lora_path = get_lora_path_by_id(selected_lora["id"], loras=loras) if selected_lora else None
                     except OSError as exc:
@@ -1187,10 +1146,10 @@ async def _generate_with_retrieval(
     prompt_lora_name: str | None = None,
     runtime_config: dict[str, Any] | None = None,
     *,
+    model_generate,
     enable_rag: bool = True,
     prepared_character_turn=None,
     message_db=None,
-    model_generate=None,
 ) -> tuple[str, bool, dict[str, Any]]:
     """Shared retrieval, abstention and character policy for either transport."""
     # 使用请求开始时读取的配置快照，避免同一次生成多次同步访问数据库。
@@ -1349,8 +1308,6 @@ async def _generate_with_retrieval(
                 detail=(e.public_detail() if isinstance(e, (RetrievalIndexError, QuestionBindingCapacityError)) else
                         with_provider_error("检索或证据审核失败，请检查检索服务及审核模型状态后重试", e)),
             ) from e
-
-    model_generate = model_generate or _vllm_client.generate
 
     async def generate_reply(**kwargs):
         reply = await model_generate(**kwargs)
@@ -1607,10 +1564,11 @@ async def _save_message(
 @router.get("/api/vllm/status")
 async def vllm_status(current_user: dict = Depends(get_current_admin)):
     """查询 vLLM 实例状态"""
-    if not await _ensure_vllm() or not _vllm_client:
+    client = await get_vllm_client()
+    if client is None:
         return {"enabled": False, "instances": []}
     try:
-        instances = await _vllm_client.health_check()
+        instances = await client.health_check()
     except Exception as exc:
         raise HTTPException(503, "vLLM 状态查询失败，请检查服务连接后重试") from exc
     return {"enabled": True, "instances": instances}

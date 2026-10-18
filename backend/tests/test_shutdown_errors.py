@@ -60,7 +60,7 @@ async def test_all_cleanup_runs_and_multiple_errors_keep_original_startup_failur
     first = RuntimeError("synthetic first close failure")
     second = ValueError("synthetic second close failure")
     monkeypatch.setattr("evaluation.runtime_runner.shutdown_generation_evaluations", AsyncMock(side_effect=first))
-    monkeypatch.setattr("api.generate.close_vllm_client", AsyncMock(side_effect=second))
+    monkeypatch.setattr("inference.vllm_client.close_shared_vllm_client", AsyncMock(side_effect=second))
     if startup_failure:
         lifecycle.worker.side_effect = lifecycle.failure
     app, _ = lifecycle.application()
@@ -98,7 +98,7 @@ async def test_normal_shutdown_keeps_dependency_order(lifecycle, monkeypatch, ca
         ("services.delivery_memory.shutdown_delivery_memory", "delivery"),
         ("services.turn_completion.shutdown_turn_completions", "completions"),
         ("character.memory_llm.shutdown_memory_enrichment", "memory"),
-        ("api.generate.close_vllm_client", "vllm"),
+        ("inference.vllm_client.close_shared_vllm_client", "vllm"),
         ("cache.redis_client.close_async_redis", "redis"),
     ]
     for name, label in operations:

@@ -52,6 +52,8 @@ def installed(monkeypatch):
         set_lora_adapter=Mock(side_effect=lambda path: setattr(state, "selected", path)),
         get_status=lambda: {"currentProvider": manager._current_provider.value,
             "providers": {"openai_compat": {"modelName": "fixture-cloud"}, "transformers_peft": {"modelName": "fixture-local"}}})
+    manager._providers = {model_manager.ModelProvider("transformers_peft"):
+        SimpleNamespace(get_status=lambda: {"modelName": "fixture-local"})}
     monkeypatch.setattr(model_manager, "get_model_manager", lambda: manager)
     database = SimpleNamespace(config={"useKnowledgeBase": False}, loras=[])
     monkeypatch.setattr(generate, "db", database)
@@ -98,7 +100,7 @@ async def test_independent_cloud_requests_overlap_only_up_to_admission_capacity(
 @pytest.mark.asyncio
 async def test_cloud_does_not_wait_for_unrelated_local_adapter_lock(installed):
     state, _, _, _ = installed
-    async with generate._loop_local_lock("local_model"):
+    async with generate._get_local_model_lock():
         response = await asyncio.wait_for(receive(), timeout=1)
     assert FACTS in response.reply and state.maximum == 1
 

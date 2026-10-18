@@ -309,7 +309,7 @@ async def test_composite_rate_limit_refunds_earlier_scopes(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_vllm_generation_reuses_one_rag_result(monkeypatch):
+async def test_vllm_generation_reuses_one_rag_result(monkeypatch, semantic_plan, controlled_public_bundle):
     from api import generate
     from db.schemas import MessageRequest
     from knowledge import intent_detector
@@ -321,8 +321,8 @@ async def test_vllm_generation_reuses_one_rag_result(monkeypatch):
         nonlocal calls
         calls += 1
         return {
-            "results": [{"title": "source", "content": "evidence", "score": 0.9}],
-            "citations": [{"source_title": "source"}],
+            "results": [{"id": "controlled-source", "title": "source", "content": "evidence", "score": 0.9}],
+            "citations": [{"source_id": "controlled-source", "source_title": "source"}],
             "confidence": 0.9,
             "abstained": False,
             "domains": ["tsukiyashiro_kisaki"],
@@ -330,25 +330,32 @@ async def test_vllm_generation_reuses_one_rag_result(monkeypatch):
 
     class Client:
         async def generate(self, **kwargs):
-            captured.update(kwargs)
-            return "answer"
+            if not captured:
+                captured.update(kwargs)
+                return "answer"
+            import json
+
+            payload = json.loads(kwargs["messages"][-1]["content"])
+            assert payload["answer"] == "answer" and "evidence" in payload["sources"][0]["body"]
+            return '{"citations": []}'
 
     monkeypatch.setattr(intent_detector, "needs_rag", lambda _: (True, "test", None))
     monkeypatch.setattr(generate, "_retrieve_rag_bundle", retrieve)
     monkeypatch.setattr(generate, "_get_system_prompt", lambda _: "system")
-    monkeypatch.setattr(generate, "_vllm_client", Client())
 
+    semantic_plan("question", {"public_knowledge": [0]})
     request = MessageRequest(message="question", sessionId="session")
     reply, used_rag, meta = await generate._generate_with_retrieval(
         request,
         None,
         runtime_config={"useKnowledgeBase": True},
+        model_generate=Client().generate,
     )
 
     assert reply == "answer"
     assert used_rag is True
     assert calls == 1
-    # A title without a stable admitted source ID cannot authorize a citation.
+    # This answer does not use a source marker, so it must not claim a citation.
     assert meta["citations"] == []
     assert meta["answerMode"] == "grounded_answer"
     assert meta["domainId"] == "tsukiyashiro_kisaki"
@@ -372,12 +379,12 @@ async def test_vllm_generation_omits_rag_policy_without_evidence(monkeypatch):
             return "answer"
 
     monkeypatch.setattr(generate, "_get_system_prompt", lambda _: "persona")
-    monkeypatch.setattr(generate, "_vllm_client", Client())
 
     reply, used_rag, meta = await generate._generate_with_retrieval(
         MessageRequest(message="ordinary chat", sessionId="session"),
         None,
         runtime_config={"useKnowledgeBase": False},
+        model_generate=Client().generate,
     )
 
     assert reply == "answer"
@@ -395,7 +402,7 @@ async def test_vllm_generation_omits_rag_policy_without_evidence(monkeypatch):
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("outcome", ["character reply", "", "error"])
-async def test_vllm_rag_abstention_generates_character_uncertainty(monkeypatch, outcome):
+async def test_vllm_rag_abstention_generates_character_uncertainty(monkeypatch, outcome, semantic_plan, controlled_public_bundle):
     from api import generate
     from db.schemas import MessageRequest
     from knowledge import intent_detector
@@ -421,14 +428,15 @@ async def test_vllm_rag_abstention_generates_character_uncertainty(monkeypatch, 
     monkeypatch.setattr(intent_detector, "needs_rag", lambda _: (True, "test", None))
     monkeypatch.setattr(generate, "_retrieve_rag_bundle", retrieve)
     monkeypatch.setattr(generate, "_get_system_prompt", lambda _: "system")
-    monkeypatch.setattr(generate, "_vllm_client", Client())
 
+    semantic_plan("unknown question", {"public_knowledge": [0]})
     if outcome != "character reply":
         expected = RuntimeError if outcome == "error" else ValueError
         with pytest.raises(expected, match="model unavailable|non-empty text"):
             await generate._generate_with_retrieval(
                 MessageRequest(message="unknown question", sessionId="session"),
                 "character-adapter", runtime_config={"useKnowledgeBase": True},
+                model_generate=Client().generate,
             )
         assert captured
         return
@@ -437,6 +445,7 @@ async def test_vllm_rag_abstention_generates_character_uncertainty(monkeypatch, 
         MessageRequest(message="unknown question", sessionId="session"),
         "character-adapter",
         runtime_config={"useKnowledgeBase": True},
+        model_generate=Client().generate,
     )
 
     assert reply == "character reply"
@@ -655,41 +664,30 @@ async def test_vllm_initialization_retries_after_transient_failure(monkeypatch):
 
     monkeypatch.setattr(config, "is_vllm_enabled", lambda: True)
     monkeypatch.setattr(vllm_client, "get_vllm_client", get_shared_client)
-    monkeypatch.setattr(generate, "_vllm_client", None)
-    monkeypatch.setattr(generate, "_vllm_init_lock", None)
-    monkeypatch.setattr(generate, "_vllm_init_lock_loop", None)
 
     with pytest.raises(HTTPException) as caught:
-        await generate._ensure_vllm()
+        await generate.get_vllm_client()
     assert caught.value.status_code == 503 and caught.value.__cause__ is failure
-    assert generate._vllm_client is None
-    assert await generate._ensure_vllm() is True
-    assert generate._vllm_client is expected_client
+    assert await generate.get_vllm_client() is expected_client
     assert attempts == 2
 
 
-def test_generate_module_locks_restart_on_a_fresh_event_loop(monkeypatch):
+def test_local_model_lock_restarts_on_a_fresh_event_loop(monkeypatch):
     from api import generate
 
-    monkeypatch.setattr(generate, "_vllm_init_lock", None)
-    monkeypatch.setattr(generate, "_vllm_init_lock_loop", None)
     monkeypatch.setattr(generate, "_local_model_lock", None)
     monkeypatch.setattr(generate, "_local_model_lock_loop", None)
 
-    async def use_locks():
-        vllm_lock = generate._loop_local_lock("vllm")
-        local_lock = generate._loop_local_lock("local_model")
-        async with vllm_lock:
+    async def use_lock():
+        lock = generate._get_local_model_lock()
+        async with lock:
             pass
-        async with local_lock:
-            pass
-        return vllm_lock, local_lock
+        return lock
 
-    first_vllm, first_local = asyncio.run(use_locks())
-    second_vllm, second_local = asyncio.run(use_locks())
+    first = asyncio.run(use_lock())
+    second = asyncio.run(use_lock())
+    assert second is not first
 
-    assert second_vllm is not first_vllm
-    assert second_local is not first_local
 
 def test_shared_vllm_client_restarts_on_a_fresh_event_loop(monkeypatch):
     from app import config
@@ -713,8 +711,9 @@ def test_shared_vllm_client_restarts_on_a_fresh_event_loop(monkeypatch):
     monkeypatch.setattr(vllm_client, "_shared_client_lock_loop", None)
 
     async def lifecycle():
-        client = await vllm_client.get_vllm_client()
-        assert await vllm_client.get_vllm_client() is client
+        clients = await asyncio.gather(*(vllm_client.get_vllm_client() for _ in range(5)))
+        client = clients[0]
+        assert all(item is client for item in clients)
         await vllm_client.close_shared_vllm_client()
         assert client.closed is True
         return client

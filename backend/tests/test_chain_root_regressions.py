@@ -1,4 +1,5 @@
 """Regressions from the real-model effect evaluation, without model calls."""
+from unittest.mock import AsyncMock
 from types import SimpleNamespace
 
 import pytest
@@ -37,7 +38,6 @@ def test_no_match_is_explicit_and_does_not_claim_user_never_said_it():
 
 @pytest.mark.asyncio
 async def test_missing_evidence_fabrication_fails_after_bounded_correction():
-    from unittest.mock import AsyncMock
 
     from inference.generation_request import ReplyValidationError, generate_character_response
     model = AsyncMock(return_value='我记得你喜欢喝柠檬茶。')
@@ -104,15 +104,13 @@ def test_lightweight_advice_is_soft_but_explicit_boundary_still_blocks():
 
 @pytest.mark.asyncio
 async def test_character_entry_does_not_require_or_auto_select_lora(monkeypatch):
-    from unittest.mock import AsyncMock
 
     import api.generate as gen
     from inference import model_manager as mm
 
     monkeypatch.setattr(mm, 'get_model_manager', lambda: SimpleNamespace(_current_provider=SimpleNamespace(value='vllm')))
     monkeypatch.setattr(gen, 'response_cache', None)
-    monkeypatch.setattr(gen, '_ensure_vllm', AsyncMock(return_value=True))
-    monkeypatch.setattr(gen, '_vllm_client', object())
+    monkeypatch.setattr(gen, "get_vllm_client", AsyncMock(return_value=SimpleNamespace(generate=AsyncMock())))
     prepare = AsyncMock(return_value=SimpleNamespace(character_id='tsukiyashiro_kisaki'))
     monkeypatch.setattr(gen, '_prepare_character_turn', prepare)
     generate = AsyncMock(return_value=('reply', False, {}))
@@ -130,7 +128,6 @@ async def test_character_entry_does_not_require_or_auto_select_lora(monkeypatch)
 
 @pytest.mark.asyncio
 async def test_public_character_scope_belongs_to_login():
-    from unittest.mock import AsyncMock
 
     import api.generate as gen
     service = SimpleNamespace(generate_queued=AsyncMock(return_value='ok'))

@@ -91,3 +91,16 @@ def literal_grounded_query(monkeypatch):
         return dialogue_query.RetrievalQuery(query)
 
     monkeypatch.setattr("knowledge.grounded_answer.service.resolve_retrieval_query", resolve)
+
+
+@pytest.fixture
+def controlled_public_bundle(monkeypatch):
+    """Pre-reviewed synthetic bundles for transport tests, not semantic evidence."""
+    async def binding(*args, **kwargs):
+        return None
+
+    async def reviewed(bundle, *args, **kwargs):
+        return bundle
+
+    monkeypatch.setattr("knowledge.public_question_binding.resolve_question_binding", binding)
+    monkeypatch.setattr("knowledge.public_task_evidence.review_public_candidates", reviewed)

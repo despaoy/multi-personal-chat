@@ -1,4 +1,5 @@
 """HTTP receipt identity must reach saved dialogue and actual completion writes."""
+from unittest.mock import AsyncMock
 from types import SimpleNamespace
 
 import httpx
@@ -14,12 +15,12 @@ from services.character_context import CharacterContextService, TurnInput
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("message,captured", [
+@pytest.mark.parametrize("message,retained", [
     ("我现在住在芜湖。", True),
     ("不要记住，我喜欢素描。", False),
-    ("我在讨论小说：主角说‘我搬家了’，不是我的经历。", False),
+    ("我在讨论小说：主角说‘我搬家了’，不是我的经历。", True),
 ])
-async def test_http_web_receipt_survives_real_save_and_completion_without_client_id(tmp_path, monkeypatch, message, captured):
+async def test_http_web_receipt_survives_real_save_and_completion_without_client_id(tmp_path, monkeypatch, message, retained):
     import api.generate as gen
     import character.memory_llm as memory_llm
     from inference import model_manager
@@ -42,15 +43,12 @@ async def test_http_web_receipt_survives_real_save_and_completion_without_client
     monkeypatch.setattr(model_manager, "get_model_manager", lambda: SimpleNamespace(_current_provider=SimpleNamespace(value="vllm")))
     monkeypatch.setattr(gen, "response_cache", None)
     monkeypatch.setattr(gen, "circuit_breaker_registry", None)
-    monkeypatch.setattr(gen, "_vllm_client", object())
+    monkeypatch.setattr(gen, "get_vllm_client", AsyncMock(return_value=SimpleNamespace(generate=AsyncMock())))
 
-    async def available():
-        return True
 
     async def model_reply(*args, **kwargs):
         return "知道了。", False, {}
 
-    monkeypatch.setattr(gen, "_ensure_vllm", available)
     monkeypatch.setattr(gen, "_generate_with_retrieval", model_reply)
     requests = []
 
@@ -79,7 +77,9 @@ async def test_http_web_receipt_survives_real_save_and_completion_without_client
         assert [row[0] for row in saved] == ids
         scope = (await context.prepare_turn(TurnInput(
             "我住哪里？", "web", "web-character", "alice", "room", "private"), "tsukiyashiro_kisaki")).user_scope
-        assert {row["source_message_id"] for row in await repo.list_sources("tsukiyashiro_kisaki", scope)} == (set(ids) if captured else set())
+        assert {row["source_message_id"] for row in await repo.list_sources("tsukiyashiro_kisaki", scope)} == (set(ids) if retained else set())
+        if message == "我在讨论小说：主角说‘我搬家了’，不是我的经历。":
+            assert not await repo.list_memory_records("tsukiyashiro_kisaki", scope, include_inactive=True)
     finally:
         await scheduler.shutdown(timeout=3)
 

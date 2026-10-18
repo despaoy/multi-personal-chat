@@ -1,4 +1,6 @@
 """Mechanism tests, never evidence of real-model counterfactual quality."""
+from unittest.mock import AsyncMock
+from types import SimpleNamespace
 
 import asyncio
 
@@ -290,7 +292,6 @@ def test_gateway_rejects_branch_instead_of_ignoring():
 def test_character_mismatch_rejected_before_provider_call(repo, monkeypatch):
     # This test covers adapter ownership, independently of semantic strategy selection.
     monkeypatch.setenv("CONTEXTUAL_DECISION_POLICY_ENABLED", "false")
-    from types import SimpleNamespace
 
     import api.generate as gen
     from inference import model_manager as mm
@@ -312,7 +313,6 @@ def test_character_mismatch_rejected_before_provider_call(repo, monkeypatch):
 
 
 def test_full_web_generation_and_canonical_return(repo, monkeypatch):
-    from types import SimpleNamespace
 
     import api.generate as gen
     from api.narrative import router as narrative_router
@@ -340,8 +340,6 @@ def test_full_web_generation_and_canonical_return(repo, monkeypatch):
 
     seen = []
 
-    async def ensure():
-        return True
 
     async def model(request, *args, **kwargs):
         seen.append(kwargs["prepared_character_turn"])
@@ -352,8 +350,7 @@ def test_full_web_generation_and_canonical_return(repo, monkeypatch):
     monkeypatch.setattr(
         mm, "get_model_manager", lambda: SimpleNamespace(_current_provider=SimpleNamespace(value="vllm"))
     )
-    monkeypatch.setattr(gen, "_ensure_vllm", ensure)
-    monkeypatch.setattr(gen, "_vllm_client", object())
+    monkeypatch.setattr(gen, "get_vllm_client", AsyncMock(return_value=SimpleNamespace(generate=AsyncMock())))
     monkeypatch.setattr(gen, "_generate_with_retrieval", model)
     monkeypatch.setattr(gen, "response_cache", ForbiddenCache())
     runtime = Runtime()

@@ -120,7 +120,7 @@ def test_explicit_source_lookup_and_non_rag_literal_markers_stay_unchanged():
     assert finalize_answer_citations(result) is result
 
 
-async def test_api_propagates_budget_abstention_instead_of_claiming_grounded_answer(monkeypatch):
+async def test_api_propagates_budget_abstention_instead_of_claiming_grounded_answer(monkeypatch, semantic_plan, controlled_public_bundle):
     from api import generate
     from db.schemas import MessageRequest
     from inference.provider_context import ProviderContextBudget
@@ -138,10 +138,10 @@ async def test_api_propagates_budget_abstention_instead_of_claiming_grounded_ans
     monkeypatch.setattr(intent_detector, "needs_rag", lambda _: (True, "fact", None))
     monkeypatch.setattr(generate, "_retrieve_rag_bundle", retrieve)
     monkeypatch.setattr(generate, "_get_system_prompt", lambda _: "persona")
-    monkeypatch.setattr(generate, "_vllm_client", Client())
     monkeypatch.setattr(generate, "get_provider_context_budget", lambda: ProviderContextBudget(8192))
+    semantic_plan("课程编号", {"public_knowledge": [0]})
     _, _, meta = await generate._generate_with_retrieval(MessageRequest(message="课程编号"), None,
-        runtime_config={"useKnowledgeBase": True, "maxTokens": 128})
+        runtime_config={"useKnowledgeBase": True, "maxTokens": 128}, model_generate=Client().generate)
     assert meta["abstained"] is True
     assert meta["answerMode"] == "abstention"
     assert meta["citations"] == []

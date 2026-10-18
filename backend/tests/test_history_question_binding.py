@@ -1,6 +1,7 @@
 """Independent fictional controls; injected reviewers are unit controls only."""
 
 import json
+from unittest.mock import AsyncMock
 from copy import deepcopy
 from dataclasses import replace
 from types import SimpleNamespace
@@ -287,6 +288,7 @@ async def test_normal_api_binding_receives_same_effective_history_as_planning(mo
             None,
             prepared_character_turn=prepared,
             runtime_config={"useKnowledgeBase": True},
+            model_generate=AsyncMock(side_effect=AssertionError("Retrieval must stop before generation")),
         )
     assert observed == ["planner", "binding", "retrieval"]
 

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from types import SimpleNamespace
 
 import pytest
 
@@ -38,7 +37,6 @@ async def test_vllm_generation_receives_request_history(monkeypatch):
         captured["request"] = req
         return GenerationResult(reply="second-reply", plan=build_generation_request(req))
 
-    monkeypatch.setattr(gen, "_vllm_client", SimpleNamespace(generate=fake_generate))
     monkeypatch.setattr(gen, "generate_character_response", fake_character_response)
     monkeypatch.setattr(gen, "_get_system_prompt", lambda *args, **kwargs: "")
     monkeypatch.setattr(gen, "_retrieve_rag_bundle", lambda *args, **kwargs: {})
@@ -54,6 +52,7 @@ async def test_vllm_generation_receives_request_history(monkeypatch):
             None,
             {"useKnowledgeBase": False},
             enable_rag=False,
+            model_generate=fake_generate,
         )
 
     assert reply == "second-reply"

@@ -87,7 +87,7 @@ def lifecycle(monkeypatch, tmp_path):
         ("services.delivery_memory", "shutdown_delivery_memory"),
         ("services.turn_completion", "shutdown_turn_completions"),
         ("character.memory_llm", "shutdown_memory_enrichment"),
-        ("api.generate", "close_vllm_client"),
+        ("inference.vllm_client", "close_shared_vllm_client"),
         ("cache.redis_client", "close_async_redis"),
     ]:
         monkeypatch.setattr(module + "." + name, AsyncMock())
