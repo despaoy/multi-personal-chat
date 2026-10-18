@@ -13,14 +13,13 @@ import logging
 import os
 import time
 from contextlib import aclosing
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
-from typing import Any, AsyncGenerator, Dict, List, Optional, Tuple
+from typing import Any, AsyncGenerator, Dict, List, Optional
 
 import httpx
 
 from infra.circuit_breaker import CircuitBreaker
-from interfaces import InferenceInterface
 from inference.openai_protocol import ProviderResponseError, completed_chat_content
 from inference.reasoning_text import ReasoningTextFilter, strip_reasoning_text
 
@@ -677,53 +676,6 @@ class VLLMClient:
                     0, instance.current_connections - 1
                 )
 
-    async def generate_with_rag(
-        self,
-        messages: List[Dict[str, str]],
-        rag_context: str,
-        lora_name: Optional[str] = None,
-        temperature: float = 0.7,
-        max_tokens: int = 2048,
-    ) -> str:
-        """带 RAG 上下文的生成
-
-        将 RAG 检索结果注入 system 消息，然后调用 generate。
-
-        Args:
-            messages: 消息列表
-            rag_context: RAG 检索到的上下文文本
-            lora_name: LoRA 适配器名称
-            temperature: 采样温度
-            max_tokens: 最大生成 token 数
-
-        Returns:
-            生成的文本
-        """
-        rag_system = {
-            "role": "system",
-            "content": f"参考资料：\n{rag_context[:2000]}",
-        }
-        # 如果已有 system 消息，将 RAG 上下文追加到其中
-        augmented = list(messages)
-        has_system = False
-        for i, msg in enumerate(augmented):
-            if msg.get("role") == "system":
-                augmented[i] = {
-                    "role": "system",
-                    "content": f"{msg['content']}\n\n参考资料：\n{rag_context[:2000]}",
-                }
-                has_system = True
-                break
-        if not has_system:
-            augmented.insert(0, rag_system)
-
-        return await self.generate(
-            messages=augmented,
-            lora_name=lora_name,
-            temperature=temperature,
-            max_tokens=max_tokens,
-            stream=False,
-        )
 
     # ------------------------------------------------------------------
     # 健康检查与状态查询
@@ -979,24 +931,6 @@ class VLLMClient:
             "instances": instances_info,
             "circuit_breaker": self._circuit_breaker.get_stats(),
         }
-
-
-# 接口契约验证：确保 VLLMClient 的方法签名与 InferenceInterface 一致。
-# 原实现 _check_interface() 在导入时实例化 VLLMClient("", "")（空实例 + 日志副作用），
-# 且对非 @runtime_checkable 的 Protocol 做 isinstance 永真/永假，校验无意义。
-# 改为静态方法签名比对，避免导入副作用。
-def _check_interface() -> None:
-    expected = {
-        "generate", "generate_with_rag", "health_check", "get_active_loras",
-        "close",
-    }
-    missing = expected - set(dir(VLLMClient))
-    if missing:
-        raise TypeError(
-            f"VLLMClient 未实现 InferenceInterface 要求的方法: {missing}"
-        )
-
-_check_interface()
 
 
 # ---------------------------------------------------------------------------
