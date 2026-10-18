@@ -7,7 +7,9 @@ import json
 import logging
 import os
 import time
+from contextlib import AsyncExitStack
 from datetime import datetime
+from functools import partial
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import text
@@ -2909,19 +2911,33 @@ class SyncPgAdapter:
         if callable(close):
             close()
 
-    async def _shutdown_backend(self) -> None:
-        """Cancel adapter-owned tasks before disposing the async engine."""
-        current = asyncio.current_task()
-        tasks = [task for task in asyncio.all_tasks() if task is not current and not task.done()]
-        for task in tasks:
-            task.cancel()
-        if tasks:
-            await asyncio.gather(*tasks, return_exceptions=True)
-        # Idle async generators also own checked-out read transactions.
-        for reader in tuple(self._knowledge_readers):
-            await reader.aclose()
-        self._knowledge_readers.clear()
-        await self._pg.close()
+    async def _shutdown_backend(self, finished: threading.Event) -> None:
+        """Drain work, attempt every owned close, and acknowledge task completion."""
+        async def close_reader(reader, _type, previous, _traceback):
+            try:
+                await reader.aclose()
+            except BaseException as error:
+                # Async-generator teardown has its own GeneratorExit context.
+                if previous is not None and error is not previous:
+                    raise error from previous
+                raise
+
+        try:
+            async with AsyncExitStack() as cleanup:
+                for reader in tuple(self._knowledge_readers):
+                    cleanup.push_async_exit(partial(close_reader, reader))
+                self._knowledge_readers.clear()
+                current = asyncio.current_task()
+                tasks = [task for task in asyncio.all_tasks() if task is not current and not task.done()]
+                for task in tasks:
+                    task.cancel()
+                if tasks:
+                    await asyncio.gather(*tasks, return_exceptions=True)
+        finally:
+            try:
+                await self._pg.close()
+            finally:
+                finished.set()
 
     def _stop_loop_locked(self, *, close_backend: bool) -> None:
         loop = self._loop
@@ -2930,27 +2946,28 @@ class SyncPgAdapter:
             self._thread = None
             return
 
-        if close_backend and loop.is_running():
-            shutdown_future = asyncio.run_coroutine_threadsafe(self._shutdown_backend(), loop)
-            try:
-                shutdown_future.result(timeout=self._close_timeout)
-            except concurrent.futures.TimeoutError:
-                shutdown_future.cancel()
-                logger.warning("Timed out while closing SyncPgAdapter backend")
-            except Exception as exc:
-                logger.warning("Failed to close SyncPgAdapter backend: %s", exc)
-
-        if loop.is_running():
-            loop.call_soon_threadsafe(loop.stop)
-        if thread is not None and thread is not threading.current_thread():
-            thread.join(timeout=self._thread_join_timeout)
-        if thread is not None and thread.is_alive():
-            logger.warning("SyncPgAdapter event-loop thread did not stop in time")
-        elif not loop.is_running() and not loop.is_closed():
-            loop.close()
-
-        self._loop = None
-        self._thread = None
+        try:
+            if close_backend and loop.is_running():
+                finished = threading.Event()
+                shutdown_future = asyncio.run_coroutine_threadsafe(self._shutdown_backend(finished), loop)
+                try:
+                    shutdown_future.result(timeout=self._close_timeout)
+                except concurrent.futures.TimeoutError:
+                    shutdown_future.cancel()
+                    # Future.cancel() acknowledges the request, not the coroutine's cleanup.
+                    finished.wait(timeout=self._close_timeout)
+                    raise
+        finally:
+            if loop.is_running():
+                loop.call_soon_threadsafe(loop.stop)
+            if thread is not None and thread is not threading.current_thread():
+                thread.join(timeout=self._thread_join_timeout)
+            if thread is not None and thread.is_alive():
+                raise TimeoutError("SyncPgAdapter event-loop thread did not stop in time")
+            if not loop.is_running() and not loop.is_closed():
+                loop.close()
+            self._loop = None
+            self._thread = None
 
     def _ensure_loop_locked(self) -> None:
         """Start and initialize the private loop while holding the state lock."""
@@ -3016,7 +3033,7 @@ class SyncPgAdapter:
     def close(self):
         """Cancel pending work and close the private loop exactly once."""
         with self._state_lock:
-            if self._closed:
+            if self._closed and self._loop is None:
                 return
             self._closed = True
             for future in tuple(self._pending):

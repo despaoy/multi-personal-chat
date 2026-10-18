@@ -160,3 +160,26 @@ async def test_shutdown_closes_model_first_created_while_draining_background_wor
         assert model_manager._model_manager is None
     model.shutdown.assert_awaited_once()
     lifecycle.getter.assert_not_called()
+
+
+@pytest.mark.parametrize("startup_failure", [False, True])
+async def test_real_sync_adapter_close_error_reaches_lifespan_after_other_cleanup(lifecycle, monkeypatch, startup_failure):
+    from db.pg_database import SyncPgAdapter
+
+    failure = OSError("synthetic-private-postgresql-close")
+    backend = SimpleNamespace(init=AsyncMock(), execute_sql=AsyncMock(return_value=[{"value": 1}]),
+                              close=AsyncMock(side_effect=failure))
+    adapter = SyncPgAdapter(backend)
+    app, _ = lifecycle.application(postgres=True, db_path=False)
+    app.state.runtime_container.db = adapter
+    if startup_failure:
+        lifecycle.worker.side_effect = lifecycle.failure
+    with pytest.raises(OSError) as caught:
+        async with main.lifespan(app):
+            assert not startup_failure
+    assert caught.value is failure
+    if startup_failure:
+        assert lifecycle.failure in exception_chain(caught.value)
+    assert lifecycle.events == ["http"]
+    backend.close.assert_awaited_once()
+    assert adapter._loop is adapter._thread is None
