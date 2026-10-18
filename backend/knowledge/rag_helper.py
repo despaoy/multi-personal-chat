@@ -98,6 +98,9 @@ class RAGHelper:
         Returns:
             按相关性降序排列的文档列表，每项包含normalized_score等字段
         """
+        top_k = self.top_k if top_k is None else top_k
+        if isinstance(top_k, bool) or not isinstance(top_k, int) or top_k < 1:
+            raise ValueError("RAG candidate limit must be a positive integer")
         views = literal_task_views(query, additional_queries)
         if views:
             return self._task_candidate_plan(
@@ -109,7 +112,7 @@ class RAGHelper:
         vector_generation = vector_db.cache_generation
         serialized_filters = json.dumps(filters or {}, ensure_ascii=False, sort_keys=True)
         cache_key = (
-            f"{query}|{top_k or self.top_k}|rerank={enable_rerank and self.enable_reranking}|"
+            f"{query}|{top_k}|rerank={enable_rerank and self.enable_reranking}|"
             f"threshold={self.min_score_threshold}|"
             f"recall_multiplier={self.recall_multiplier}|filters={serialized_filters}|"
             f"generation={vector_generation}"
@@ -120,9 +123,8 @@ class RAGHelper:
                 logger.info("RAG缓存命中")
                 return cached
 
-        final_top_k = top_k or self.top_k
         recall_results = [dict(row) for row in vector_db.hybrid_search(
-            query, top_k=final_top_k * self.recall_multiplier,
+            query, top_k=top_k * self.recall_multiplier,
             threshold=self.min_score_threshold, keyword_weight=0.3, filters=filters or None,
         )]
         if not recall_results:
@@ -133,12 +135,12 @@ class RAGHelper:
         logger.info("第一阶段混合检索完成: %s 个候选文档", len(recall_results))
 
         if enable_rerank and self.enable_reranking:
-            results = self.reranker.rerank(query, recall_results, top_k=final_top_k)
+            results = self.reranker.rerank(query, recall_results, top_k=top_k)
             if not results:
                 raise RuntimeError("RAG reranker returned no results for non-empty candidates")
             score_key = "rerank_normalized_score"
         else:
-            results = recall_results[:final_top_k]
+            results = recall_results[:top_k]
             score_key = "fused_score"
         for result in results:
             result["normalized_score"] = result[score_key]
@@ -164,7 +166,7 @@ class RAGHelper:
             )
 
         return collect_task_candidates(
-            query, views, top_k=top_k or self.top_k, filters=resolved_filters,
+            query, views, top_k=self.top_k if top_k is None else top_k, filters=resolved_filters,
             retrieve=retrieve, confidence=self.compute_confidence,
             stable_key=_stable_result_key, snapshot=snapshot, threshold=threshold, question_binding=question_binding,
         )

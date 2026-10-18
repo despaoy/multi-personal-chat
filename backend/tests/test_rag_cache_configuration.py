@@ -79,3 +79,65 @@ def test_invalid_configuration_cannot_publish_a_partial_singleton(monkeypatch):
     monkeypatch.setenv(SETTING, "3")
     helper = rag_helper.get_rag_helper()
     assert helper._cache_ttl == 3 and rag_helper.get_rag_helper() is helper
+
+
+@pytest.mark.parametrize("method", ["retrieve_context", "retrieve_with_citations"])
+@pytest.mark.parametrize("task_views", [False, True])
+def test_explicit_zero_limit_cannot_reuse_default_query_cache(monkeypatch, method, task_views):
+    monkeypatch.setenv("RERANKER_ENABLED", "false")
+    index = SimpleNamespace(cache_generation=1, hybrid_search=Mock(return_value=[ROW]))
+    get_index = Mock(return_value=index)
+    monkeypatch.setattr(rag_helper, "get_vector_db", get_index)
+    helper = rag_helper.RAGHelper()
+    query = "合成档案馆周一开门时间与周三不开门的规则"
+    views = ("周一开门时间", "周三不开门") if task_views else ()
+    call = getattr(helper, method)
+    assert call(query, additional_queries=views)
+    cache = Mock(wraps=helper._get_from_cache)
+    monkeypatch.setattr(helper, "_get_from_cache", cache)
+    get_index.reset_mock()
+    index.hybrid_search.reset_mock()
+    with pytest.raises(ValueError, match="candidate limit must be a positive integer"):
+        call(query, top_k=0, additional_queries=views)
+    cache.assert_not_called()
+    get_index.assert_not_called()
+    index.hybrid_search.assert_not_called()
+
+
+def test_boolean_limit_does_not_become_a_single_result_request(monkeypatch):
+    monkeypatch.setenv("RERANKER_ENABLED", "false")
+    get_index = Mock(side_effect=AssertionError("Invalid request must not initialize an index"))
+    monkeypatch.setattr(rag_helper, "get_vector_db", get_index)
+    helper = rag_helper.RAGHelper()
+    with pytest.raises(ValueError, match="candidate limit must be a positive integer"):
+        helper.retrieve_context(QUERY, top_k=True)
+    get_index.assert_not_called()
+
+
+def test_benchmark_zero_limit_stops_before_prompt_retrieval_or_model(tmp_path, monkeypatch, capsys):
+    import json
+    import sys
+    from evaluation import rag_benchmark_v2 as benchmark
+
+    dataset = tmp_path / "complete-synthetic.json"
+    dataset.write_text(json.dumps(dict(persona_key="kisaki", prompts=[dict(
+        id="synthetic-opening", benchmark_suite="rag", prompt=QUERY,
+        expected_refs=[ROW["id"]], gold_answer=ROW["content"], expected_action="answer",
+        evidence=[ROW],
+    )]), ensure_ascii=False), encoding="utf-8")
+    output = tmp_path / "result.json"
+    prompt = Mock(side_effect=AssertionError("Invalid limit reached prompt loading"))
+    retrieve = Mock(side_effect=AssertionError("Invalid limit reached retrieval"))
+    model = Mock(side_effect=AssertionError("Invalid limit reached model"))
+    monkeypatch.setattr(benchmark, "get_lora_system_prompt", prompt)
+    monkeypatch.setattr(benchmark, "get_rag_helper", retrieve)
+    monkeypatch.setattr(benchmark, "_call", model)
+    monkeypatch.setattr(sys, "argv", ["rag_benchmark_v2", "--dataset", str(dataset), "--output", str(output),
+        "--model", "synthetic-model", "--base-url", "https://unit.invalid", "--top-k", "0"])
+    with pytest.raises(SystemExit) as caught:
+        benchmark.main()
+    assert caught.value.code == 2 and "--top-k must be a positive integer" in capsys.readouterr().err
+    prompt.assert_not_called()
+    retrieve.assert_not_called()
+    model.assert_not_called()
+    assert not output.exists()

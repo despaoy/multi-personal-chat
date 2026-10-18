@@ -71,6 +71,8 @@ def main() -> int:
     parser.add_argument("--mock", action="store_true")
     parser.add_argument("--review-scores", type=Path)
     args = parser.parse_args()
+    if args.top_k < 1:
+        parser.error("--top-k must be a positive integer")
 
     dataset = json.loads(args.dataset.read_text(encoding="utf-8"))
     review_document = (
