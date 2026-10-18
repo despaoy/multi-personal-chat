@@ -75,45 +75,10 @@ class DatasetPreprocessor:
         self.data_dir = self.base_dir / "data"
         self.styles_file = self.data_dir / "user_styles.json"
         self.data_dir.mkdir(exist_ok=True)
-        self._load_user_styles()
-    
-    def _load_user_styles(self):
         self.user_styles: Dict[str, CharacterStyleConfig] = {}
         if self.styles_file.exists():
-            try:
-                with open(self.styles_file, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-                    for name, style_data in data.items():
-                        self.user_styles[name] = CharacterStyleConfig(**style_data)
-            except Exception as e:
-                logger.warning(f"加载用户风格失败: {e}")
-    
-    def _save_user_styles(self):
-        try:
-            data = {}
-            for name, style in self.user_styles.items():
-                data[name] = {
-                    "name": style.name,
-                    "description": style.description,
-                    "filler_words": style.filler_words,
-                    "sentence_enders": style.sentence_enders,
-                    "punctuation_style": style.punctuation_style,
-                    "ellipsis_frequency": style.ellipsis_frequency,
-                    "capitalization": style.capitalization,
-                    "response_length": style.response_length,
-                    "question_frequency": style.question_frequency,
-                    "empathy_level": style.empathy_level,
-                    "formality": style.formality
-                }
-            with open(self.styles_file, 'w', encoding='utf-8') as f:
-                json.dump(data, f, indent=2, ensure_ascii=False)
-        except Exception as e:
-            logger.error(f"保存用户风格失败: {e}")
-    
-    def add_user_style(self, name: str, config: CharacterStyleConfig):
-        self.user_styles[name] = config
-        self._save_user_styles()
-        logger.info(f"添加用户风格: {name}")
+            with open(self.styles_file, 'r', encoding='utf-8') as f:
+                self.user_styles = {name: CharacterStyleConfig(**data) for name, data in json.load(f).items()}
     
     def get_style(self, name: str) -> Optional[CharacterStyleConfig]:
         return self.user_styles.get(name)
