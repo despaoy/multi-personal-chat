@@ -69,7 +69,7 @@ def test_numeric_boundaries_remain_exact_and_errors_do_not_echo_values():
 async def test_invalid_writer_configuration_stops_startup_before_database(monkeypatch):
     from app import main
 
-    runtime = SimpleNamespace(db=object(), is_pg_mode=lambda: False, inference_runtime=None,
+    runtime = SimpleNamespace(db=object(), is_pg_mode=lambda: False, inference_runtime=None, knowledge_scan_executor=None,
                               startup_env={'MEMORY_LLM_ENABLED': 'true'})
     initialize = Mock()
     monkeypatch.setattr(main, 'get_runtime_container', lambda app: runtime)

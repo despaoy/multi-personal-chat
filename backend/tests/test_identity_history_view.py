@@ -85,14 +85,14 @@ def test_packet_budget_preserves_contract_but_no_evidence_disables_it():
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize('query_bound', [True, False])
-async def test_production_adapter_preserves_query_binding(monkeypatch, query_bound):
+async def test_production_adapter_preserves_query_binding(monkeypatch, query_bound, semantic_plan, controlled_public_bundle):
     from api import generate
     from db.schemas import MessageRequest
-    from knowledge import intent_detector
 
+    semantic_plan('林远是谁？', dict(public_knowledge=[0]))
     observed = []
 
-    async def retrieve(*args):
+    async def retrieve(*args, **kwargs):
         return dict(retrieval_strategy='multi_scale_character', confidence=.9, abstained=False,
                     context_text='已检索的身份来源', results=[], citations=[],
                     identity_task={'query': '林远是谁？' if query_bound else '另一问题', 'subject': '林远'})
@@ -101,7 +101,6 @@ async def test_production_adapter_preserves_query_binding(monkeypatch, query_bou
         observed.append(kwargs['messages'])
         return '身份回答'
 
-    monkeypatch.setattr(intent_detector, 'needs_rag', lambda _: (True, 'identity', None))
     monkeypatch.setattr(generate, '_retrieve_rag_bundle', retrieve)
     monkeypatch.setattr(generate, '_get_system_prompt', lambda _: 'persona')
     await generate._generate_with_retrieval(

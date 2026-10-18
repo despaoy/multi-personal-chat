@@ -44,7 +44,10 @@ def rig(tmp_path, monkeypatch):
             rows.append(row / np.linalg.norm(row))
         return np.asarray(rows, dtype=np.float32)
 
-    vector._model = SimpleNamespace(encode=encode)
+    # Scope and index tests control embedding values, not the native model protocol.
+    vector._model = object()
+    monkeypatch.setattr("knowledge.vector_db.sentence_transformer_embeddings",
+                        lambda _model, texts, **kwargs: encode(texts, **kwargs))
     vector.add_documents([dict(document) for document in DOCUMENTS])
     search = Mock(wraps=vector.hybrid_search)
     monkeypatch.setattr(vector, "hybrid_search", search)

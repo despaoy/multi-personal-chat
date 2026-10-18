@@ -85,10 +85,11 @@ async def test_review_delegation_never_bypasses_lifecycle_or_confidence(change):
 
 
 @pytest.mark.parametrize(
-    "response",
-    ['{"decisions":[{"id":"a","label":"wrong_subject"}]}', '{"decisions":[{"id":"invented","label":"use"}]}'],
+    "response,error",
+    [('{"decisions":[{"id":"a","label":"wrong_subject"}]}', None),
+     ('{"decisions":[{"id":"invented","label":"use"}]}', "invalid_candidate_id")],
 )
-async def test_rejected_or_invalid_review_never_injects_recalled_candidates(response):
+async def test_rejected_or_invalid_review_never_injects_recalled_candidates(response, error):
     items, _, _ = await candidates()
 
     async def accept(_messages):
@@ -99,7 +100,11 @@ async def test_rejected_or_invalid_review_never_injects_recalled_candidates(resp
     async def reject(_messages):
         return response
 
-    assert (await ContextualEvidenceSelector(reject).select(QUERY, items)).memories == ()
+    if error:
+        with pytest.raises(ValueError, match=error):
+            await ContextualEvidenceSelector(reject).select(QUERY, items)
+    else:
+        assert (await ContextualEvidenceSelector(reject).select(QUERY, items)).memories == ()
 
 
 async def test_legacy_non_reviewed_retrieval_preserves_its_subject_gate():

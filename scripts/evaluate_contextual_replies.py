@@ -121,6 +121,7 @@ async def evaluate(
                 EmptyRepository(relationship_stage),
                 EmptyMessages(),
                 memory_service=EmptyMemories(),
+                source_recall_enabled=False,
                 semantic_estimator=estimator,
                 contextual_policy=policy,
             )
@@ -232,6 +233,7 @@ async def evaluate(
         "persona_lora_loaded": False,
         "relationship_stage": relationship_stage,
         "reply_attempts_recorded": capture_reply_attempts,
+        "source_recall_enabled": False,
         "arms": list(arms),
         "cases": rows,
         "summary": {

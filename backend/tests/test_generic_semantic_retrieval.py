@@ -168,8 +168,8 @@ async def test_generic_index_failure_still_stops_api_with_503_before_answer(tmp_
                 MessageRequest(message=QUERY, history=history_fixture.HISTORY), None,
                 runtime_config=dict(useKnowledgeBase=True, maxTokens=256), model_generate=forbidden_answer,
             )
-        assert caught.value.status_code == 503 and isinstance(caught.value.__cause__, RuntimeError)
-        assert "index is not ready" in str(caught.value.__cause__)
+        assert caught.value.status_code == 503 and caught.value.__cause__ is failed_publication.side_effect
+        assert "synthetic index publication failure" in str(caught.value.__cause__)
         assert len(planning) == 1 and not rig.searches and not rig.helper._query_cache
         failed_publication.assert_called_once()
         assert knowledge._read_rebuild_status()[0] != "complete" and knowledge._vector_index_built is False

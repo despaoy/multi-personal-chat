@@ -45,6 +45,7 @@ def test_fixture_validation(cases):
 
 
 async def test_real_context_and_guard_pipeline_has_no_gold_leakage(monkeypatch):
+    monkeypatch.setenv("MEMORY_SOURCE_RECALL_ENABLED", "true")
     monkeypatch.setenv("CONTEXTUAL_MEMORY_SELECTION_ENABLED", "false")
     monkeypatch.setenv("CONTEXTUAL_DECISION_POLICY_ENABLED", "false")
     calls = []
@@ -61,6 +62,7 @@ async def test_real_context_and_guard_pipeline_has_no_gold_leakage(monkeypatch):
 
     report = await evaluate([{"id": "a", "query": "你好", "gold": "secret_gold_marker"}], reviewer)
     assert len(report["cases"]) == 3
+    assert report["source_recall_enabled"] is False
     assert report["summary"]["generation_failures"] == 2
     assert report["summary"]["human_reviews_completed"] == 0
     assert report["cases"][0]["diagnostics"]["state_status"] == "disabled"

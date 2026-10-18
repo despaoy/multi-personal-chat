@@ -23,7 +23,11 @@ async def test_public_profile_uses_same_pipeline_without_metric_or_id_leakage(mo
         assert "hidden_book_marker" not in serialized
         assert "月社妃" not in serialized
         if "state 必须包含" in messages[0]["content"]:
-            return "invalid"
+            return json.dumps(dict(state=dict(
+                primary_situation="daily", situation_scores={"daily": .9}, user_acts={"greeting": .9},
+                user_needs={}, valence=0.0, arousal=.2, warmth=.1, face_threat=0.0,
+                conversation_phase="sustaining", confidence=.9,
+            )))
         assert "角色甲" in messages[0]["content"]
         assert "人物性格" in messages[0]["content"]
         return "嗯，来得正好。"
