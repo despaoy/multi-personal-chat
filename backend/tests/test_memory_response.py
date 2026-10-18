@@ -120,18 +120,18 @@ async def test_correction_with_other_task_remains_generation():
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize('use_kb', [False, True])
-async def test_api_reports_memory_read_as_zero_model_calls_not_rag_source(monkeypatch, use_kb):
+async def test_api_reports_memory_read_as_zero_model_calls_not_rag_source(monkeypatch, use_kb, semantic_plan):
     from types import SimpleNamespace
 
     from api import generate
     from db.schemas import MessageRequest
-    from knowledge import intent_detector
 
     async def model(**kwargs):
         pytest.fail('No model invocation for a verified field read')
 
     monkeypatch.setattr(generate, '_get_system_prompt', lambda _: 'persona')
-    monkeypatch.setattr(intent_detector, 'needs_rag', lambda _: pytest.fail('Verified field read needs no external RAG'))
+    monkeypatch.setattr(generate, '_retrieve_rag_bundle', model)
+    planning = semantic_plan('我现在住哪里？', dict(private_memory=[0]))
     prepared = SimpleNamespace(history=(), compiled=context(packets('我住在银川。')))
     reply, used_rag, meta = await generate._generate_with_retrieval(
         MessageRequest(message='我现在住哪里？'), None, runtime_config={'useKnowledgeBase': use_kb},
@@ -139,31 +139,34 @@ async def test_api_reports_memory_read_as_zero_model_calls_not_rag_source(monkey
     assert '银川' in reply and not used_rag
     assert meta['modelInvoked'] is False and meta['answerMode'] == 'memory_lookup'
     assert meta['abstained'] is False and meta['citations'] == []
+    assert len(planning) == int(use_kb)
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize('message,external', [('我来自哪里，目前住哪里？', False), ('我住哪里，那里有什么景点？', True)])
-async def test_partial_or_mixed_read_routes_by_dependency(monkeypatch, message, external):
+async def test_partial_or_mixed_read_routes_by_dependency(monkeypatch, message, external, semantic_plan, controlled_public_bundle):
     from types import SimpleNamespace
 
     from api import generate
     from db.schemas import MessageRequest
-    from knowledge import intent_detector
 
     routed = []
 
-    def needs_rag(query):
+    async def retrieve(query, *args, **kwargs):
         routed.append(query)
-        return False, 'test', None
+        return dict(results=[], citations=[], confidence=0.0, abstained=True)
 
     async def model(**kwargs):
         return '普通生成路径'
 
     monkeypatch.setattr(generate, '_get_system_prompt', lambda _: 'persona')
-    monkeypatch.setattr(intent_detector, 'needs_rag', needs_rag)
+    monkeypatch.setattr(generate, '_retrieve_rag_bundle', retrieve)
+    groups = dict(private_memory=[0], public_knowledge=[0] if external else [])
+    planning = semantic_plan(message, groups)
     reply, _, _ = await generate._generate_with_retrieval(
         MessageRequest(message=message), None, runtime_config={'useKnowledgeBase': True},
         prepared_character_turn=SimpleNamespace(history=(), compiled=context(packets('我住在银川。'))),
         model_generate=model)
     # A missing private field still needs generation, not external knowledge.
+    assert len(planning) == 1
     assert bool(routed) is external and reply == '普通生成路径'

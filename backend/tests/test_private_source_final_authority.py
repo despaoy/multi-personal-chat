@@ -404,9 +404,8 @@ async def test_missing_source_reader_is_not_a_successful_empty_read():
 
     repository = DatabaseCharacterMemoryRepository(SimpleNamespace())
     scope = UserScope("web", "unit", "owner", "owner", "private")
-    with pytest.raises(RuntimeError, match="scoped source reads") as caught:
+    with pytest.raises(AttributeError, match="list_memory_sources"):
         await repository.list_sources("fiction-role", scope, source_message_ids=("source-1",))
-    assert isinstance(caught.value.__cause__, AttributeError)
 
 
 @pytest.mark.asyncio

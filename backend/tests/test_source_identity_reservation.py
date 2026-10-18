@@ -164,4 +164,10 @@ def test_scope_clear_erases_pending_digest_without_resurrection(database):
     run_sqlite(cursor, revoke_plan(scope, (), clear=True))
     connection.commit()
     assert row(database)['state'] == 'revoked' and row(database)['body_digest'] is None
-    assert reserve(database, when=WHEN + timedelta(days=3))['status'] == 'revoked'
+    fence = connection.execute("SELECT revoked_before FROM memory_source_fences WHERE owner_key = ?",
+                               (scope['owner_key'],)).fetchone()[0]
+    cleared_at = datetime.fromisoformat(fence)
+    assert reserve(database, when=cleared_at - timedelta(seconds=1))['status'] == 'stale'
+    after_clear = cleared_at + timedelta(days=1)
+    assert reserve(database, when=after_clear)['status'] == 'revoked'
+    assert row(database)['state'] == 'revoked' and row(database)['body_digest'] is None

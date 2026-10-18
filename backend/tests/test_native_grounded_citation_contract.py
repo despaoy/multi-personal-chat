@@ -41,16 +41,14 @@ def test_native_and_legacy_citations_bind_to_same_authoritative_document(citatio
 
 
 def test_conflicting_native_and_legacy_ids_never_bind_another_document():
-    packet = EvidencePacketBuilder().build(
-        "课程几点开始？", bundle(dict(id="other-card", source_id="card-7")), AnswerMode.GROUNDED_ANSWER
-    )
-    assert not packet.documents and not packet.citations
-    assert "citation_conflicting_document_id" in packet.warnings
+    with pytest.raises(ValueError, match="conflicting document identifiers"):
+        EvidencePacketBuilder().build(
+            "课程几点开始？", bundle(dict(id="other-card", source_id="card-7")), AnswerMode.GROUNDED_ANSWER
+        )
 
 
 def test_unmatched_native_id_never_creates_an_evidence_packet():
-    packet = EvidencePacketBuilder().build(
-        "课程几点开始？", bundle(dict(id="missing-card")), AnswerMode.GROUNDED_ANSWER
-    )
-    assert not packet.documents and not packet.citations
-    assert "citation_missing_document" in packet.warnings
+    with pytest.raises(ValueError, match="Citation document was not retrieved"):
+        EvidencePacketBuilder().build(
+            "课程几点开始？", bundle(dict(id="missing-card")), AnswerMode.GROUNDED_ANSWER
+        )

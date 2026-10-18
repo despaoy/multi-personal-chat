@@ -79,13 +79,16 @@ async def test_explicit_storage_query_stays_storage_only_with_recent_correction(
 
 
 @pytest.mark.asyncio
-async def test_api_passes_the_same_effective_history_to_shortcut_and_generation(monkeypatch):
+async def test_api_passes_the_same_effective_history_to_shortcut_and_generation(monkeypatch, semantic_plan):
     from api import generate
     from db.schemas import MessageRequest
-    from knowledge import intent_detector
 
     monkeypatch.setattr(generate, '_get_system_prompt', lambda _: '角色设定')
-    monkeypatch.setattr(intent_detector, 'needs_rag', lambda _: pytest.fail('Private lookup needs no external RAG'))
+    async def forbidden(*args, **kwargs):
+        pytest.fail('Private lookup needs no external RAG')
+
+    monkeypatch.setattr(generate, '_retrieve_rag_bundle', forbidden)
+    planning = semantic_plan('我住哪里？', dict(private_memory=[0]))
     calls = []
 
     async def model(**kwargs):
@@ -98,4 +101,5 @@ async def test_api_passes_the_same_effective_history_to_shortcut_and_generation(
         prepared_character_turn=SimpleNamespace(compiled=saved(), history=history), model_generate=model)
     # Ordinary generation need not emit RAG metadata; actual calls are the evidence.
     assert len(calls) == 1 and meta.get('modelInvoked') is not False and not used_rag
+    assert len(planning) == 1
     assert reply == '我会依据最新对话。'

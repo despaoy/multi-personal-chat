@@ -50,7 +50,7 @@ def test_branch_and_missing_context_do_not_use_current_shortcut():
 
 
 @pytest.mark.asyncio
-async def test_current_statement_contract_bypasses_rag_but_does_not_report_storage(monkeypatch):
+async def test_current_statement_contract_bypasses_rag_but_does_not_report_storage(monkeypatch, semantic_plan):
     from api import generate
     from db.schemas import MessageRequest
 
@@ -59,6 +59,7 @@ async def test_current_statement_contract_bypasses_rag_but_does_not_report_stora
 
     monkeypatch.setattr(generate, '_retrieve_rag_bundle', forbidden)
     monkeypatch.setattr(generate, '_get_system_prompt', lambda _: 'persona')
+    semantic_plan('更正一下，我只有负责人批准才预约会议。', dict(current_input=[0]))
     reply, rag, meta = await generate._generate_with_retrieval(
         MessageRequest(message='更正一下，我只有负责人批准才预约会议。'), None,
         prepared_character_turn=SimpleNamespace(compiled=context(), history=()),

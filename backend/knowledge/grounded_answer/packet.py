@@ -164,6 +164,8 @@ class EvidencePacketBuilder:
 
         for citation in citations:
             doc_id = citation_document_id(citation)
+            if doc_id not in result_by_id:
+                raise ValueError("Citation document was not retrieved")
             item = result_by_id[doc_id]
 
             key = f"S{len(documents) + 1}"
