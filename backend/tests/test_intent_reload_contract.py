@@ -281,7 +281,6 @@ def test_classifier_decisions_are_not_overridden_by_rules_or_private_keyword_sho
 
     from knowledge import task_dependency
 
-    monkeypatch.setattr(detector, "get_intent_detector", forbidden)
     monkeypatch.setattr(task_dependency, "local_context_only", forbidden)
     before = len(rig.encoded)
     result, reason, selected = detector.needs_rag(query)

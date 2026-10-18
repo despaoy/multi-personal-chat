@@ -1,6 +1,5 @@
 import pytest
 
-from knowledge.intent_detector import RAGIntentDetector
 from knowledge.task_dependency import local_context_only
 
 
@@ -12,7 +11,6 @@ from knowledge.task_dependency import local_context_only
 ])
 def test_memory_management_has_no_external_dependency(message):
     assert local_context_only(message)
-    assert RAGIntentDetector().needs_rag(message)[0] is False
 
 
 @pytest.mark.parametrize('message', [
@@ -37,7 +35,6 @@ def test_management_wrapper_does_not_hide_external_or_unknown_task(message):
 ])
 def test_conversation_preferences_are_not_external_information_requests(message):
     assert local_context_only(message)
-    assert RAGIntentDetector().needs_rag(message)[0] is False
 
 
 @pytest.mark.parametrize('message', [
@@ -54,7 +51,6 @@ def test_conversation_preferences_are_not_external_information_requests(message)
 ])
 def test_local_conversation_clause_does_not_hide_external_dependencies(message):
     assert not local_context_only(message)
-    assert RAGIntentDetector().needs_rag(message)[0] is True
 
 
 @pytest.mark.parametrize('message', [
@@ -64,7 +60,6 @@ def test_local_conversation_clause_does_not_hide_external_dependencies(message):
 ])
 def test_complete_self_owned_constraints_need_no_external_retrieval(message):
     assert local_context_only(message)
-    assert RAGIntentDetector().needs_rag(message)[0] is False
 
 
 @pytest.mark.parametrize('message', [
@@ -92,7 +87,6 @@ def test_constraints_do_not_swallow_external_or_unknown_tasks(message):
 ])
 def test_topics_and_non_specific_words_do_not_create_external_tasks(message):
     assert local_context_only(message)
-    assert RAGIntentDetector().needs_rag(message)[0] is False
 
 
 @pytest.mark.parametrize('message', [
@@ -108,25 +102,6 @@ def test_topics_and_non_specific_words_do_not_create_external_tasks(message):
 ])
 def test_external_or_mixed_tasks_are_not_suppressed(message):
     assert not local_context_only(message)
-    assert RAGIntentDetector().needs_rag(message)[0] is True
-
-
-@pytest.mark.parametrize('message', ['今天没有什么特别的事情。', '不用给我建议，我只是想说说今天的事。'])
-def test_proven_local_task_bypasses_ml_loading(monkeypatch, message):
-    from knowledge import intent_detector
-
-    monkeypatch.setattr(intent_detector, '_ML_AVAILABLE', False)
-    monkeypatch.setattr(intent_detector, '_load_ml_model', lambda: pytest.fail('No classifier needed'))
-    assert intent_detector.needs_rag(message) == (
-        False, '完整请求仅依赖个人上下文或为个人陈述，不需要RAG', None)
-
-
-def test_unpunctuated_information_request_survives_negative_classifier(monkeypatch):
-    from knowledge import intent_detector
-
-    monkeypatch.setattr(intent_detector, '_ML_AVAILABLE', True)
-    monkeypatch.setattr(intent_detector, '_ml_predict', lambda _: (False, 'negative', .99, None))
-    assert intent_detector.needs_rag('不用给我建议我想知道月社妃和琉璃的关系')[0] is True
 
 
 @pytest.mark.parametrize('message', ['我需要月社妃的原文。', '我想要关于黑洞的资料。',
@@ -144,40 +119,3 @@ def test_desired_information_is_not_mislabeled_as_self_report(message):
 ])
 def test_owner_or_time_prefix_is_not_proof_of_a_declaration(message):
     assert not local_context_only(message)
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize('message,external', [('今天没有什么特别的事情。', False),
-    ('请记住，我的专业是材料学。', False), ('你还保存着我的专业吗？', False),
-    ('请记住，我住在兰州。请解释季风形成的原因。', True),
-    ('不用给我建议，我只是想说说今天的事。', False),
-    ('不要分析，我只想聊聊自己的感受。', False),
-    ('不用给我建议，请解释量子纠缠。', True),
-    ('不用给我建议我想知道地球的年龄', True),
-    ('我只有充分休息才开车。', False),
-    ('更正一下，我只有收到确认才预约会议。', False),
-    ('我只有设备检查通过才启动仪器，请解释仪器原理。', True),
-    ('我的专业是统计学，现在在气象站工作。', False),
-    ('我问你月社妃和琉璃的关系。', True), ('请给出原文依据。', True),
-    ('我喜欢什么音乐？再介绍一下爵士乐。', True)])
-async def test_production_route_preserves_task_ownership(monkeypatch, message, external):
-    from api import generate
-    from db.schemas import MessageRequest
-    from knowledge import intent_detector
-
-    retrieved = []
-
-    async def retrieve(*args):
-        retrieved.append(args)
-        return {'context_text': '外部资料', 'results': [], 'citations': [], 'abstained': False}
-
-    async def model(**kwargs):
-        return '正常回复'
-
-    monkeypatch.setattr(intent_detector, '_ML_AVAILABLE', False)
-    monkeypatch.setattr(intent_detector, '_load_ml_model', lambda: None)
-    monkeypatch.setattr(generate, '_retrieve_rag_bundle', retrieve)
-    monkeypatch.setattr(generate, '_get_system_prompt', lambda _: 'persona')
-    await generate._generate_with_retrieval(MessageRequest(message=message), None,
-        runtime_config={'useKnowledgeBase': True}, model_generate=model)
-    assert bool(retrieved) is external

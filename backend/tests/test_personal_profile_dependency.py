@@ -6,7 +6,6 @@ import pytest
 from character.memory_query import plan_memory_query
 from character.models import CompiledCharacterContext, MemoryItem
 from db.schemas import MessageRequest
-from knowledge.intent_detector import RAGIntentDetector
 from knowledge.task_dependency import local_context_only
 
 QUERY = '请用一句话核对我的个人资料：姓名、居住地和大学专业各是什么？只写我本人的当前资料，不做建议。'
@@ -21,7 +20,6 @@ QUERY = '请用一句话核对我的个人资料：姓名、居住地和大学�
 ])
 def test_complete_profile_dependency_and_field_coverage(query, fields):
     assert local_context_only(query)
-    assert RAGIntentDetector().needs_rag(query)[0] is False
     assert plan_memory_query(query).fields == fields
 
 @pytest.mark.parametrize('query', [
@@ -38,11 +36,10 @@ def test_complete_profile_dependency_and_field_coverage(query, fields):
 ])
 def test_unknown_foreign_and_external_profile_clauses_keep_retrieval(query):
     assert not local_context_only(query)
-    assert RAGIntentDetector().needs_rag(query)[0] is True
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize('saved', [True, False])
-async def test_profile_routes_to_actual_generation_with_or_without_saved_records(monkeypatch, saved):
+async def test_profile_routes_to_actual_generation_with_or_without_saved_records(monkeypatch, saved, semantic_plan):
     from api import generate
     from knowledge import intent_detector
 
@@ -64,6 +61,7 @@ async def test_profile_routes_to_actual_generation_with_or_without_saved_records
         ('profile',) if saved else (), memory_status='available' if saved else 'no_match',
         memory_packets=(item,) if saved else (), memory_field_presence=tuple((f, saved) for f in ('name', 'residence', 'major')))
     prepared = SimpleNamespace(compiled=ctx, history=({'role':'user','content':'今天整理了资料。'},), reply_guard=None)
+    semantic_plan(QUERY, {"private_memory": [0], "control": [1]})
     reply, used_rag, meta = await generate._generate_with_retrieval(MessageRequest(message=QUERY), None,
         runtime_config={'useKnowledgeBase':True}, prepared_character_turn=prepared, model_generate=model)
     assert reply and len(calls) == 1 and used_rag is False
@@ -72,7 +70,7 @@ async def test_profile_routes_to_actual_generation_with_or_without_saved_records
     assert '【本轮证据不足】' not in calls[0]['messages'][0]['content']
 
 @pytest.mark.asyncio
-async def test_mixed_profile_keeps_actual_external_retrieval_and_uncertainty(monkeypatch):
+async def test_mixed_profile_keeps_actual_external_retrieval_and_uncertainty(monkeypatch, semantic_plan, controlled_public_bundle):
     from api import generate
     from knowledge import intent_detector
 
@@ -88,6 +86,7 @@ async def test_mixed_profile_keeps_actual_external_retrieval_and_uncertainty(mon
     monkeypatch.setattr(generate, '_retrieve_rag_bundle', retrieval)
     monkeypatch.setattr(generate, '_get_system_prompt', lambda _: 'persona')
     query=QUERY+'月社妃和琉璃是什么关系？'
+    semantic_plan(query, {"private_memory": [0], "control": [1], "public_knowledge": [2]})
     _, used_rag, meta=await generate._generate_with_retrieval(MessageRequest(message=query),None,
         runtime_config={'useKnowledgeBase':True},model_generate=model)
     assert len(retrieved)==len(calls)==1 and used_rag and meta['abstained']

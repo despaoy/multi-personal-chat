@@ -15,12 +15,8 @@ def test_loaded_classifier_failure_is_not_replaced_by_rules(monkeypatch, error_t
     def predict(_message):
         raise error
 
-    def forbidden():
-        pytest.fail("A prediction failure cannot switch to a rule result")
-
     monkeypatch.setattr(intent_detector, "_ML_AVAILABLE", True)
     monkeypatch.setattr(intent_detector, "_ml_predict", predict)
-    monkeypatch.setattr(intent_detector, "get_intent_detector", forbidden)
     with pytest.raises(error_type) as caught:
         intent_detector.needs_rag(QUERY)
     assert caught.value is error

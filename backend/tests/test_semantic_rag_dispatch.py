@@ -66,7 +66,6 @@ async def test_complete_semantic_plan_alone_controls_public_dispatch(monkeypatch
     monkeypatch.setenv("RAG_TASK_PLANNER_ENABLED", "false")
     monkeypatch.setenv("DYNAMIC_CONTEXT_SEMANTIC_REVIEW_ENABLED", "false")
     monkeypatch.setattr(intent_detector, "needs_rag", forbidden)
-    monkeypatch.setattr(intent_detector, "get_intent_detector", forbidden)
     monkeypatch.setattr(intent_detector, "_load_ml_model", forbidden)
     monkeypatch.setattr(retrieval_query_plan, "plan_retrieval", planner)
     monkeypatch.setattr(public_question_binding, "resolve_question_binding", binding)

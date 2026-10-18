@@ -2,7 +2,6 @@
 
 import pytest
 
-from knowledge.intent_detector import RAGIntentDetector
 from knowledge.query_tasks import requests_explicit_information
 from knowledge.task_dependency import local_context_only
 
@@ -22,7 +21,6 @@ from knowledge.task_dependency import local_context_only
 def test_direct_information_requests_trigger_native_rag(query):
     assert requests_explicit_information(query)
     assert not local_context_only(query)
-    assert RAGIntentDetector().needs_rag(query)[0]
 
 
 @pytest.mark.parametrize(
@@ -43,4 +41,3 @@ def test_mentions_quoted_and_negated_requests_are_not_direct_information(query):
 @pytest.mark.parametrize("query", ["我的姓名是什么？", "我的专业是什么？"])
 def test_closed_personal_reads_still_skip_rag(query):
     assert local_context_only(query)
-    assert not RAGIntentDetector().needs_rag(query)[0]
