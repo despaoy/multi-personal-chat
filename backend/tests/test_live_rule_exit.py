@@ -178,3 +178,31 @@ async def test_legacy_rule_config_cannot_choose_a_persona_from_a_name(monkeypatc
         assert error.value.status_code == 422
         operation.assert_not_awaited()
     manager.set_provider.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_adapter_list_reads_latest_reports_together_and_keeps_unchecked_state(records, monkeypatch):
+    database, scan = records
+    scan.return_value = {name: '/fiction/' + name for name in ['alpha', "quoted' adapter", 'unchecked']}
+    for name, timestamp, valid in [
+        ('alpha', '2026-10-17T00:00:00+00:00', False),
+        ('alpha', '2026-10-18T00:00:00+00:00', True),
+        ("quoted' adapter", '2026-10-18T00:00:00+00:00', True),
+        ("quoted' adapter", '2026-10-18T00:00:00+00:00', False),
+    ]:
+        database.execute_sql(
+            "INSERT INTO adapter_compatibility (adapter_name, checked_at, compatible, checks, warnings, errors) "
+            "VALUES (:name, :time, :valid, :checks, '[]', :errors)",
+            dict(name=name, time=timestamp, valid=int(valid), checks=json.dumps({'rank': valid}),
+                 errors=json.dumps([] if valid else ['rank_mismatch'])),
+        )
+    reader = Mock(wraps=database.execute_sql)
+    monkeypatch.setattr(database, 'execute_sql', reader)
+    result = await compatibility.list_adapters(current_user={'isAdmin': True})
+    assert result['success'] and result['total'] == 3
+    assert [row['name'] for row in result['adapters']] == list(scan.return_value)
+    first, second, unchecked = result['adapters']
+    assert first['compatibility']['compatible'] is True and first['compatibility']['checks'] == {'rank': True}
+    assert second['compatibility']['compatible'] is False and second['compatibility']['errors'] == ['rank_mismatch']
+    assert unchecked['compatibility'] is None
+    reader.assert_called_once()

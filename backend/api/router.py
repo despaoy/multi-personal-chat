@@ -30,14 +30,6 @@ async def _execute_sql(query: str, params: Optional[dict] = None):
     return await asyncio.to_thread(db.execute_sql, query, params or {})
 
 
-async def _execute_sql_insert(query: str, params: Optional[dict] = None):
-    return await asyncio.to_thread(db.execute_sql_insert, query, params or {})
-
-
-def _now() -> str:
-    return datetime.now(timezone.utc).isoformat()
-
-
 def _normalize_config(config: dict) -> dict:
     """Merge newly supported personas without overwriting administrator choices."""
     from inference.lora_router import DEFAULT_PERSONA_ADAPTERS, DEFAULT_PERSONA_KEYWORDS
@@ -131,16 +123,23 @@ async def list_adapters(current_user: dict = Depends(get_current_admin)):
     try:
         from db.database import refresh_lora_dir_map
         directory_map = await asyncio.to_thread(refresh_lora_dir_map)
-        adapters = []
-        for name, path in directory_map.items():
+        reports = {}
+        if directory_map:
+            params = {f"name_{i}": name for i, name in enumerate(directory_map)}
             rows = await asyncio.to_thread(
                 db.execute_sql,
-                "SELECT * FROM adapter_compatibility WHERE adapter_name=:name ORDER BY checked_at DESC LIMIT 1",
-                {"name": name},
+                "SELECT * FROM (SELECT *, ROW_NUMBER() OVER "
+                "(PARTITION BY adapter_name ORDER BY checked_at DESC, id DESC) AS report_rank "
+                f"FROM adapter_compatibility WHERE adapter_name IN ({', '.join(':' + key for key in params)})) "
+                "AS latest_reports WHERE report_rank=1",
+                params,
             )
+            reports = {row["adapter_name"]: row for row in rows}
+        adapters = []
+        for name, path in directory_map.items():
             compatibility = None
-            if rows:
-                row = rows[0]
+            row = reports.get(name)
+            if row:
                 checks, warnings, errors = (json.loads(row[key]) for key in ("checks", "warnings", "errors"))
                 if not isinstance(checks, dict) or not isinstance(warnings, list) or not isinstance(errors, list):
                     raise ValueError("Invalid stored adapter compatibility report")
