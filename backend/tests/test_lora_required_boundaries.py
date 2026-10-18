@@ -17,7 +17,7 @@ from inference.vllm_client import VLLMClient
 
 def client_for(http, urls=("https://first.example",)):
     client = VLLMClient.__new__(VLLMClient)
-    client._instances = [SimpleNamespace(base_url=url) for url in urls]
+    client._instances = [SimpleNamespace(base_url=url, name=f"vllm-{index}") for index, url in enumerate(urls)]
     client._model = "base-model"
     client._api_key = "fiction-key"
     client._timeout = 0.5
@@ -86,7 +86,8 @@ async def test_pool_adapters_must_be_loaded_on_every_routable_instance():
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("cancel", [False, True])
-async def test_probe_failure_or_cancellation_closes_other_pool_requests(cancel):
+@pytest.mark.parametrize("action", ["list", "load"])
+async def test_probe_failure_or_cancellation_closes_other_pool_requests(cancel, action):
     started, exited, release = asyncio.Event(), asyncio.Event(), asyncio.Event()
     failure = httpx.ConnectError("fiction-pool-private-error")
     async def reply(request):
@@ -102,7 +103,9 @@ async def test_probe_failure_or_cancellation_closes_other_pool_requests(cancel):
             raise failure
         await release.wait()
     async with httpx.AsyncClient(transport=httpx.MockTransport(reply)) as http:
-        operation = asyncio.create_task(client_for(http, urls=("https://slow.example", "https://fail.example")).list_loras())
+        client = client_for(http, urls=("https://slow.example", "https://fail.example"))
+        operation = asyncio.create_task(client.list_loras() if action == "list" else
+            client.load_lora_adapter("fiction-adapter", "/synthetic/adapters/complete"))
         await asyncio.wait_for(started.wait(), 1)
         if cancel:
             operation.cancel()
@@ -180,3 +183,37 @@ def test_optional_prompt_for_base_or_custom_adapter_keeps_existing_semantics():
     assert generate._get_system_prompt("default") == ""
     assert generate._get_system_prompt("fixture-custom-adapter") == ""
     assert generate._get_system_prompt("minamo") == lora_registry.LORA_REGISTRY["minamo"]["system_prompt"]
+
+
+
+@pytest.mark.parametrize("failure", ["http", "transport", "json", "structure", "no_instances"])
+async def test_load_requires_complete_pool_catalog_before_any_mutation(failure):
+    requests = []
+    original = httpx.ConnectError("fiction-private-catalog-failure")
+
+    def reply(request):
+        requests.append(request)
+        if request.method == "POST":
+            return httpx.Response(200, json={})
+        if request.url.host == "first.example":
+            return httpx.Response(200, json={"data": [{"id": "base-model"}]})
+        if failure == "transport":
+            raise original
+        if failure == "http":
+            return httpx.Response(503)
+        if failure == "json":
+            return httpx.Response(200, text="not-json")
+        return httpx.Response(200, json={})
+
+    urls = () if failure == "no_instances" else ("https://first.example", "https://second.example")
+    async with httpx.AsyncClient(transport=httpx.MockTransport(reply)) as http:
+        client = client_for(http, urls=urls)
+        expected = {"http": httpx.HTTPStatusError, "transport": httpx.ConnectError,
+                    "json": ValueError, "structure": ValueError, "no_instances": RuntimeError}[failure]
+        with pytest.raises(expected) as caught:
+            await client.load_lora_adapter("fiction-adapter", "/synthetic/adapters/complete")
+        if failure == "transport":
+            assert caught.value is original
+        if failure == "no_instances":
+            client._ensure_client.assert_not_awaited()
+    assert all(request.method == "GET" for request in requests)

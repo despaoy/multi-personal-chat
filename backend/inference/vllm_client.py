@@ -725,24 +725,38 @@ class VLLMClient:
     # 辅助方法
     # ------------------------------------------------------------------
 
-    async def _model_ids_for_instance(self, instance: VLLMInstance) -> Optional[List[str]]:
-        try:
-            client = await self._ensure_client()
+    async def _model_inventories(self) -> list[set[str]]:
+        """Read the complete pool before any adapter mutation; errors stay errors."""
+        if not self._instances:
+            raise RuntimeError("No vLLM instances are configured")
+        client = await self._ensure_client()
+
+        async def catalog(instance):
             response = await client.get(
-                f"{instance.base_url}/v1/models",
-                headers=self._build_headers(),
-                timeout=httpx.Timeout(10.0, connect=5.0),
+                f"{instance.base_url}/v1/models", headers=self._build_headers(), timeout=self._timeout,
             )
-            if response.status_code != 200:
-                return None
-            return [
-                str(item.get("id", ""))
-                for item in response.json().get("data", [])
-                if item.get("id")
-            ]
-        except Exception as exc:
-            logger.warning("Failed to list models from %s: %s", instance.name, exc)
-            return None
+            response.raise_for_status()
+            payload = response.json()
+            rows = payload.get("data") if isinstance(payload, dict) else None
+            if not isinstance(rows, list):
+                raise ValueError("vLLM model catalog must contain a data list")
+            names = set()
+            for row in rows:
+                name = row.get("id") if isinstance(row, dict) else None
+                if not isinstance(name, str) or not name.strip():
+                    raise ValueError("vLLM model catalog contains an invalid model id")
+                names.add(name)
+            return names
+
+        tasks = [asyncio.create_task(catalog(instance)) for instance in self._instances]
+        try:
+            inventories = await asyncio.gather(*tasks)
+        finally:
+            for task in tasks:
+                if not task.done():
+                    task.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
+        return inventories
 
     async def load_lora_adapter(self, lora_name: str, lora_path: str) -> None:
         """Load a trusted local LoRA on every configured vLLM instance."""
@@ -751,10 +765,10 @@ class VLLMClient:
 
         loaded_instances: list[str] = []
         errors: list[str] = []
+        inventories = await self._model_inventories()
         client = await self._ensure_client()
-        for instance in self._instances:
-            model_ids = await self._model_ids_for_instance(instance)
-            if model_ids is not None and (
+        for instance, model_ids in zip(self._instances, inventories, strict=True):
+            if (
                 lora_name in model_ids
                 or any(model_id.endswith(f":{lora_name}") for model_id in model_ids)
             ):
@@ -807,37 +821,8 @@ class VLLMClient:
 
     async def list_loras(self) -> list[str]:
         """Only adapters present throughout the configured pool are selectable."""
-        if not self._instances:
-            raise RuntimeError("No vLLM instances are configured")
-        client = await self._ensure_client()
-
-        async def catalog(instance):
-            response = await client.get(
-                f"{instance.base_url}/v1/models", headers=self._build_headers(), timeout=self._timeout,
-            )
-            response.raise_for_status()
-            payload = response.json()
-            rows = payload.get("data") if isinstance(payload, dict) else None
-            if not isinstance(rows, list):
-                raise ValueError("vLLM model catalog must contain a data list")
-            names = set()
-            for row in rows:
-                name = row.get("id") if isinstance(row, dict) else None
-                if not isinstance(name, str) or not name.strip():
-                    raise ValueError("vLLM model catalog contains an invalid model id")
-                if name != self._model:
-                    names.add(name)
-            return names
-
-        tasks = [asyncio.create_task(catalog(instance)) for instance in self._instances]
-        try:
-            inventories = await asyncio.gather(*tasks)
-        finally:
-            for task in tasks:
-                if not task.done():
-                    task.cancel()
-            await asyncio.gather(*tasks, return_exceptions=True)
-        return sorted(set.intersection(*inventories))
+        inventories = await self._model_inventories()
+        return sorted(set.intersection(*inventories) - {self._model})
 
     def _resolve_model_name(self, lora_name: Optional[str]) -> str:
         """解析模型名称，返回 LoRA 或基础模型 ID

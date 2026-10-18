@@ -239,34 +239,23 @@ def test_lora_served_name_mapping_can_be_configured(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_vllm_runtime_lora_load_uses_official_endpoint(monkeypatch):
+    import json
+    from unittest.mock import AsyncMock
+    import httpx
     from inference.vllm_client import VLLMClient
 
     requests = []
 
-    class FakeResponse:
-        def __init__(self, status_code, payload=None):
-            self.status_code = status_code
-            self._payload = payload or {}
-            self.text = ""
-
-        def json(self):
-            return self._payload
-
-    class FakeClient:
-        async def get(self, url, **kwargs):
-            return FakeResponse(200, {"data": [{"id": "qwen3-8b-instruct-awq"}]})
-
-        async def post(self, url, **kwargs):
-            requests.append((url, kwargs.get("json")))
-            return FakeResponse(200)
+    def reply(request):
+        if request.method == "GET":
+            return httpx.Response(200, json={"data": [{"id": "qwen3-8b-instruct-awq"}]})
+        requests.append((str(request.url), json.loads(request.content)))
+        return httpx.Response(200, json={})
 
     client = VLLMClient(base_urls="http://vllm:8001", model="qwen3-8b-instruct-awq")
-
-    async def fake_ensure_client():
-        return FakeClient()
-
-    monkeypatch.setattr(client, "_ensure_client", fake_ensure_client)
-    await client.load_lora_adapter("minamo", "/loras/minamo/final")
+    async with httpx.AsyncClient(transport=httpx.MockTransport(reply)) as http:
+        monkeypatch.setattr(client, "_ensure_client", AsyncMock(return_value=http))
+        await client.load_lora_adapter("minamo", "/loras/minamo/final")
 
     assert requests == [
         (
