@@ -37,12 +37,13 @@ class FixtureRepository:
         return self.records[:limit]
 
 
-def validate_cases(cases):
+def validate_cases(cases, *, complete_pairs=True):
     """Reject malformed corpora before loading several GB of model weights."""
     if not cases:
         raise ValueError("evaluation corpus is empty")
     seen = set()
     pairs = Counter()
+    required = {"id", "content", "memory_type", "status", "relation_type", "source_message_ids", "evidence"}
     for case in cases:
         if not isinstance(case, dict) or not isinstance(case.get("id"), str) or not case["id"].strip():
             raise ValueError("case needs a nonempty string ID")
@@ -55,9 +56,9 @@ def validate_cases(cases):
         if not isinstance(records, list) or not isinstance(gold, list):
             raise ValueError("memories and gold_ids must be lists")
         if any(
-            not isinstance(row, dict) or not isinstance(row.get("id"), str) or not row["id"].strip() for row in records
+            not isinstance(row, dict) or not required <= row.keys() or not isinstance(row.get("id"), str) or not row["id"].strip() for row in records
         ):
-            raise ValueError("memory needs a nonempty string ID")
+            raise ValueError("memory needs complete persisted fields and a nonempty string ID")
         ids = [row["id"] for row in records]
         if any(not isinstance(key, str) for key in gold):
             raise ValueError("gold ID must be a string")
@@ -67,13 +68,14 @@ def validate_cases(cases):
             if not isinstance(case["pair_id"], str) or not case["pair_id"].strip():
                 raise ValueError("pair_id must be a nonempty string")
             pairs[case["pair_id"]] += 1
-    if any(count != 2 for count in pairs.values()):
+    if complete_pairs and any(count != 2 for count in pairs.values()):
         raise ValueError("full fixture must contain exactly two cases per pair")
 
 
 async def evaluate(
     cases, mode, reviewer=None, embedding_provider=None, capture_responses=False, selection_protocol="direct"
 ):
+    validate_cases(cases, complete_pairs=False)
     observations = []
     details = []
     responses = []
@@ -105,9 +107,6 @@ async def evaluate(
         responses.clear()
         key = case["id"]
         records = case["memories"]
-        ids = [str(record["id"]) for record in records]
-        if len(ids) != len(set(ids)) or not set(case["gold_ids"]) <= set(ids):
-            raise ValueError(f"invalid candidate or gold IDs in {key}")
         service = CharacterMemoryService(
             FixtureRepository(records),
             semantic_enabled=embedding_provider is not None,

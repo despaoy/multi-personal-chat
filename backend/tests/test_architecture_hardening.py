@@ -66,7 +66,7 @@ def test_rag_citations_keep_knowledge_base_filters():
 
     def retrieve(query, top_k=None, filters=None):
         captured["filters"] = filters
-        return [{"title": "doc", "content": "evidence", "score": 0.9}]
+        return [{"id": "fixture-doc", "title": "doc", "content": "evidence", "score": 0.9}]
 
     helper.retrieve_context = retrieve
     result = helper.retrieve_with_citations(

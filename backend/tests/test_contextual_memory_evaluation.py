@@ -3,7 +3,7 @@ import copy
 import pytest
 from scripts.evaluate_contextual_memory import evaluate, validate_cases
 
-CASE = {"id": "a", "query": "hi", "memories": [{"id": "m", "content": "用户喜欢苹果"}], "gold_ids": []}
+CASE = {"id": "a", "query": "hi", "memories": [{"id": "m", "content": "用户喜欢苹果", "memory_type": "user_fact", "status": "active", "relation_type": "ADD", "source_message_ids": [], "evidence": []}], "gold_ids": []}
 
 
 @pytest.mark.parametrize(
@@ -37,3 +37,14 @@ async def test_explicit_diagnostic_subset_reports_unscored_pair():
 
 def test_complete_pair_is_valid():
     validate_cases([{**CASE, "pair_id": "p"}, {**CASE, "id": "b", "pair_id": "p"}])
+
+
+async def test_incomplete_memory_fixture_stops_before_review():
+    from unittest.mock import AsyncMock
+
+    case = copy.deepcopy(CASE)
+    del case["memories"][0]["status"]
+    reviewer = AsyncMock()
+    with pytest.raises(ValueError, match="complete persisted fields"):
+        await evaluate([case], "offline_model", reviewer=reviewer)
+    reviewer.assert_not_awaited()

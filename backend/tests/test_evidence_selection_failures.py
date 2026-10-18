@@ -98,7 +98,7 @@ async def test_evaluation_does_not_report_failed_review_as_empty_success():
     reviewer = AsyncMock(side_effect=RuntimeError("review failed"))
     case = {"id": "fiction", "query": "我晚上喝咖啡吗？", "gold_ids": ["preference"],
         "memories": [{"id": "preference", "memory_type": "user_fact", "content": "用户喜欢咖啡但晚上不喝",
-                      "evidence": ["我喜欢咖啡，但晚上不喝。"]}]}
+                      "evidence": ["我喜欢咖啡，但晚上不喝。"], "status": "active", "relation_type": "ADD", "source_message_ids": []}]}
     with pytest.raises(RuntimeError, match="review failed"):
         await evaluate([case], "offline_model", reviewer=reviewer)
     reviewer.assert_awaited_once()

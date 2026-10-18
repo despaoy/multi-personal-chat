@@ -512,8 +512,12 @@ async def test_duplicate_integration_message_does_not_emit_rate_limit_reply(monk
     monkeypatch.setenv("ASTRBOT_ENABLED", "true")
     monkeypatch.setenv("ASTRBOT_INTEGRATION_TOKEN", "test-token")
     monkeypatch.setenv("INTEGRATION_SIGNATURE_REQUIRED", "false")
-    monkeypatch.setattr(integrations, "db", db)
-    monkeypatch.setattr(integrations, "inference_runtime", Runtime())
+    from app.runtime import RuntimeContainer
+
+    http_request = Request()
+    http_request.app = SimpleNamespace(state=SimpleNamespace(runtime_container=RuntimeContainer(
+        db=db, is_pg_mode=lambda: False, inference_runtime=Runtime(),
+    )))
 
     payload = integrations.AstrBotMessageRequest(
         platform="qq",
@@ -534,7 +538,7 @@ async def test_duplicate_integration_message_does_not_emit_rate_limit_reply(monk
     db.integration_receipt("delivery", key=key, owner="owner", status="delivered")
     response = await integrations.receive_astrbot_message(
         payload,
-        Request(),
+        http_request,
         x_integration_token="test-token",
     )
 
