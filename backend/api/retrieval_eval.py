@@ -27,6 +27,16 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _expected_labels(row):
+    labels = [
+        json.loads(row[field]) if row[field] is not None else []
+        for field in ("expected_doc_ids", "expected_doc_titles")
+    ]
+    if any(not isinstance(values, list) or any(not isinstance(value, str) for value in values) for values in labels):
+        raise ValueError("Stored expected document labels must be lists of strings")
+    return labels
+
+
 @router.get("/api/retrieval-eval/questions")
 async def list_questions(category: Optional[str] = None, limit: int = 100, offset: int = 0,
                          current_user: dict = Depends(get_current_admin)):
@@ -57,25 +67,18 @@ async def list_questions(category: Optional[str] = None, limit: int = 100, offse
                 {},
             )
         questions = []
-        for r in (rows or []):
-            try:
-                doc_ids = json.loads(r["expected_doc_ids"]) if r["expected_doc_ids"] else []
-            except Exception:
-                doc_ids = []
-            try:
-                doc_titles = json.loads(r["expected_doc_titles"]) if r["expected_doc_titles"] else []
-            except Exception:
-                doc_titles = []
+        for r in rows:
+            doc_ids, doc_titles = _expected_labels(r)
             questions.append({
                 "id": r["id"], "question": r["question"],
                 "expected_doc_ids": doc_ids, "expected_doc_titles": doc_titles,
                 "gold_answer": r["gold_answer"], "category": r["category"],
                 "created_at": r["created_at"],
             })
-        total = (count_rows[0]["cnt"] if count_rows else 0) or 0
+        total = count_rows[0]["cnt"]
         return {"success": True, "questions": questions, "total": total}
     except Exception as e:
-        logger.error(f"列出检索评估问题失败: {e}")
+        logger.error("列出检索评估问题失败: %s", type(e).__name__)
         raise HTTPException(status_code=500, detail="检索评估数据操作失败") from e
 
 
@@ -97,7 +100,7 @@ async def create_question(req: RetrievalEvalQuestionCreate,
         )
         return {"success": True, "id": qid}
     except Exception as e:
-        logger.error(f"创建检索评估问题失败: {e}")
+        logger.error("创建检索评估问题失败: %s", type(e).__name__)
         raise HTTPException(status_code=500, detail="检索评估数据操作失败") from e
 
 
@@ -115,7 +118,7 @@ async def delete_question(qid: str, current_user: dict = Depends(get_current_adm
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"删除检索评估问题失败: {e}")
+        logger.error("删除检索评估问题失败: %s", type(e).__name__)
         raise HTTPException(status_code=500, detail="检索评估数据操作失败") from e
 
 
@@ -126,24 +129,18 @@ async def run_retrieval_eval(current_user: dict = Depends(get_current_admin)):
         from evaluation.retrieval_metrics import RetrievalMetrics
         from knowledge.rag_helper import get_rag_helper
         rows = await asyncio.to_thread(db.execute_sql, "SELECT * FROM retrieval_eval_questions")
-        if not rows:
-            return {"success": True, "metrics": {}, "total": 0, "note": "no questions in dataset"}
         questions = []
         for r in rows:
-            try:
-                doc_ids = json.loads(r["expected_doc_ids"]) if r["expected_doc_ids"] else []
-            except (TypeError, json.JSONDecodeError):
-                doc_ids = []
-            try:
-                doc_titles = json.loads(r["expected_doc_titles"]) if r["expected_doc_titles"] else []
-            except (TypeError, json.JSONDecodeError):
-                doc_titles = []
+            doc_ids, doc_titles = _expected_labels(r)
             questions.append({
                 "id": r["id"],
                 "question": r["question"],
                 "expected_doc_ids": doc_ids,
                 "expected_doc_titles": doc_titles,
             })
+
+        if not questions:
+            return {"success": True, "metrics": {}, "total": 0, "note": "no questions in dataset"}
 
         helper = await asyncio.to_thread(get_rag_helper)
         metrics = RetrievalMetrics()
@@ -163,5 +160,5 @@ async def run_retrieval_eval(current_user: dict = Depends(get_current_admin)):
             detail="检索评估模块不可用",
         ) from exc
     except Exception as exc:
-        logger.exception("检索评估失败")
-        raise HTTPException(status_code=500, detail="检索评估失败") from exc
+        logger.error("检索评估失败: %s", type(exc).__name__)
+        raise HTTPException(status_code=500, detail="检索评估未完成，请检查评测数据和检索服务") from exc

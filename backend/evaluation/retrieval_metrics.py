@@ -9,13 +9,7 @@ from __future__ import annotations
 import json
 import math
 import re
-import logging
-from datetime import datetime
-from pathlib import Path
-from typing import List, Dict, Any, Optional, Callable
-
-logger = logging.getLogger(__name__)
-
+from typing import List, Dict, Any, Callable
 
 def _tokenize(text: str) -> List[str]:
     """简易分词：中文按字符 + 英文按空格。"""
@@ -94,7 +88,7 @@ class RetrievalMetrics:
         """Load a versioned dataset file and evaluate its question records."""
         with open(dataset_path, "r", encoding="utf-8") as handle:
             dataset = json.load(handle)
-        questions = dataset.get("questions", []) if isinstance(dataset, dict) else dataset
+        questions = dataset["questions"] if isinstance(dataset, dict) else dataset
         if not isinstance(questions, list):
             raise ValueError("retrieval evaluation dataset must contain a questions list")
         return self.evaluate_questions(questions, retrieve_fn, k=k)
@@ -127,12 +121,7 @@ class RetrievalMetrics:
             ))
 
             error_type = ""
-            try:
-                results = retrieve_fn(query) or []
-            except Exception as exc:
-                logger.warning("检索失败 (%s): %s", qid, exc)
-                results = []
-                error_type = type(exc).__name__
+            results = retrieve_fn(query)
 
             if expected_ids:
                 expected = expected_ids
@@ -194,17 +183,4 @@ class RetrievalMetrics:
             "k": k,
             "mock": False,
             "per_question": per_question,
-        }
-    def evaluate_mock(self) -> Dict[str, Any]:
-        """Mock 模式：返回预置结果用于 CPU 验证。"""
-        return {
-            "total": 50,
-            "avg_recall_at_k": 0.72,
-            "avg_mrr": 0.58,
-            "avg_ndcg_at_k": 0.65,
-            "k": 5,
-            "mock": True,
-            "per_question": [
-                {"id": "q001", "question": "mock", "recall_at_k": 0.8, "mrr": 0.5, "ndcg_at_k": 0.6, "retrieved_count": 5},
-            ],
         }
