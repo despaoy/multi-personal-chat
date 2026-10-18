@@ -488,6 +488,7 @@ def _build_packet_budgeted_request(request: GenerationRequest) -> GenerationPlan
     from inference.evidence_coverage import packet_coverage, settle_source_coverage
     from inference.evidence_dependencies import dependency_satisfied
     from inference.task_evidence_coverage import settle_task_coverage
+    from knowledge.evidence_packets import validate_evidence_packet
 
     accepted = []
     accepted_ids: set[str] = set()
@@ -497,11 +498,7 @@ def _build_packet_budgeted_request(request: GenerationRequest) -> GenerationPlan
         deferred = []
         previous_count = len(accepted)
         for packet in pending:
-            text = packet.get("text")
-            ids = packet.get("document_ids", ())
-            if (not isinstance(text, str) or not text.strip() or not isinstance(ids, (list, tuple))
-                    or any(not isinstance(identity, str) or not identity.strip() for identity in ids)):
-                raise ValueError("Invalid generation evidence packet: text and document identities must be valid")
+            text, ids = validate_evidence_packet(packet)
             if not dependency_satisfied(packet, accepted, request.retrieval.source_coverage):
                 deferred.append(packet)
                 continue

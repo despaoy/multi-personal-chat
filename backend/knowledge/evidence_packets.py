@@ -9,6 +9,16 @@ def evidence_source_id(value) -> str | None:
     return str(value) if isinstance(value, (str, int)) and not isinstance(value, bool) and str(value).strip() else None
 
 
+def validate_evidence_packet(packet: Mapping[str, Any]) -> tuple[str, Sequence[str]]:
+    """Read raw text and identities before annotation or budget admission."""
+    text = packet.get("text")
+    ids = packet.get("document_ids", ())
+    if (not isinstance(text, str) or not text.strip() or not isinstance(ids, (list, tuple))
+            or any(not isinstance(identity, str) or not identity.strip() for identity in ids)):
+        raise ValueError("Invalid generation evidence packet: text and document identities must be valid")
+    return text, ids
+
+
 def document_evidence_packets(results: Sequence[Mapping[str, Any]]) -> tuple[dict[str, Any], ...]:
     packets = []
     for document in results:

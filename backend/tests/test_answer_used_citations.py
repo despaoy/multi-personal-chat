@@ -216,7 +216,8 @@ async def test_citation_preparation_failure_stops_before_model(defect):
         calls.append(kwargs)
         raise AssertionError("Citation preparation failure must precede model generation")
 
-    with pytest.raises(ValueError, match="Answer citation"):
+    reason = "Invalid generation evidence packet" if defect.startswith("invalid_packet_") else "Answer citation"
+    with pytest.raises(ValueError, match=reason):
         await generate_character_response(GenerationRequest(
             message="核对全部完整来源和限制。", retrieval=original, context_window_tokens=65536,
         ), model)

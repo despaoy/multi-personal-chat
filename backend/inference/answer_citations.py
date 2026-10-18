@@ -4,7 +4,7 @@ import re
 import secrets
 from dataclasses import replace
 
-from knowledge.evidence_packets import document_evidence_packets, evidence_source_id
+from knowledge.evidence_packets import document_evidence_packets, evidence_source_id, validate_evidence_packet
 
 CITATION_OUTPUT_POLICY = (
     "【回答出处】仅使用本轮应用来源标记，逐字复制参考中与来源对应的标记。"
@@ -62,12 +62,10 @@ def prepare_answer_citations(retrieval):
     namespace = secrets.token_hex(6)
     packets = []
     for packet in retrieval.evidence_packets or document_evidence_packets(retrieval.documents):
-        ids = packet.get('document_ids', ())
-        if not isinstance(ids, (list, tuple)) or not isinstance(packet.get('text'), str):
-            raise ValueError("Answer citation evidence packet requires document IDs and text")
+        text, ids = validate_evidence_packet(packet)
         labels = [f"{citation_marker(namespace, by_id[str(i)]['key'])} {by_id[str(i)]['source_title']}" for i in ids if str(i) in by_id]
         # Labels never change source bodies, IDs or background dependencies.
-        packets.append(dict(packet, text=('来源标记：' + '；'.join(labels) + '\n' if labels else '') + packet['text']))
+        packets.append(dict(packet, text=('来源标记：' + '；'.join(labels) + '\n' if labels else '') + text))
     return replace(retrieval, citations=tuple(by_id.values()), evidence_packets=tuple(packets),
                    evidence='\n\n'.join(p['text'] for p in packets),
                    answer_citations_bound=True, citation_namespace=namespace)

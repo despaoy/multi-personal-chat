@@ -61,6 +61,7 @@ def test_malformed_packet_errors_instead_of_partial_answer_or_abstention(invalid
         message="什么时间及条件下可以验收？", apply_prompt_policy=False,
         context_window_tokens=8192, max_tokens=512,
         retrieval=RetrievalResult(status="ok", evidence=valid["text"], evidence_packets=packets,
+                                  documents=({"id": "a", "content": valid["text"]},),
                                   citations=({"id": "a"},)),
     )
     calls = []
