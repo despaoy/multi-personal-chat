@@ -181,8 +181,16 @@ async def test_busy_ack_persists_then_automatic_worker_waits_for_exact_semantic_
         )
 
     service = SimpleNamespace(complete_turn=complete)
-    monkeypatch.setattr(integrations, "_request_container_db", lambda _: database)
-    monkeypatch.setattr(integrations, "_request_character_service", lambda _: service)
+    from app.runtime import RuntimeContainer
+
+    monkeypatch.setattr(integrations, "_request_dependencies", lambda _: RuntimeContainer(
+        db=database, is_pg_mode=lambda: False))
+
+    def owning_service(current_database):
+        assert current_database is database
+        return service
+
+    monkeypatch.setattr("services.character_context.build_character_context_service", owning_service)
     monkeypatch.setenv("ASTRBOT_INTEGRATION_TOKEN", "synthetic-token")
     monkeypatch.setenv("ASTRBOT_INTEGRATION_TOKENS", "")
     monkeypatch.setenv("INTEGRATION_SIGNATURE_REQUIRED", "false")

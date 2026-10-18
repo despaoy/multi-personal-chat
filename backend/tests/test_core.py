@@ -10,9 +10,10 @@
 """
 
 import asyncio
-import time
 import uuid
 from pathlib import Path
+from types import SimpleNamespace
+from app.runtime import RuntimeContainer
 import pytest
 
 # ============================================
@@ -367,7 +368,7 @@ class TestMultiPlatformStorage:
         from api.integrations import _is_platform_enabled
 
         monkeypatch.setenv("ASTRBOT_ENABLED", "false")
-        assert await _is_platform_enabled("qq") is False
+        assert await _is_platform_enabled("qq", database=SimpleNamespace(config={})) is False
 
     @pytest.mark.asyncio
     async def test_astrbot_personal_wechat_can_be_disabled_by_env(self, monkeypatch):
@@ -375,7 +376,7 @@ class TestMultiPlatformStorage:
 
         monkeypatch.setenv("ASTRBOT_ENABLED", "true")
         monkeypatch.setenv("ASTRBOT_WECHAT_PERSONAL_ENABLED", "false")
-        assert await _is_platform_enabled("wechat_personal") is False
+        assert await _is_platform_enabled("wechat_personal", database=SimpleNamespace(config={})) is False
 
 class TestIntegrationSecurity:
     def test_integration_signature_accepts_once_and_rejects_replay(self):
@@ -554,8 +555,8 @@ class TestAstrBotIntegrationFlow:
         monkeypatch.setenv("ASTRBOT_ENABLED", "true")
         monkeypatch.setenv("ASTRBOT_INTEGRATION_TOKEN", "test-token")
         monkeypatch.setenv("INTEGRATION_SIGNATURE_REQUIRED", "false")
-        monkeypatch.setattr(integrations, "db", temp_db)
-        monkeypatch.setattr(integrations, "inference_runtime", _FakeRuntime())
+        application = SimpleNamespace(state=SimpleNamespace(runtime_container=RuntimeContainer(
+            db=temp_db, is_pg_mode=lambda: False, inference_runtime=_FakeRuntime(), startup_env={})))
 
         async def fake_generate(message_request, current_user=None, **kwargs):
             assert message_request.platform == platform
@@ -576,7 +577,9 @@ class TestAstrBotIntegrationFlow:
             raw={"conversationName": "Room", "timestamp": 123456},
         )
 
-        return await integrations.receive_astrbot_message(req, _DummyRequest(), x_integration_token="test-token")
+        http_request = _DummyRequest()
+        http_request.app = application
+        return await integrations.receive_astrbot_message(req, http_request, x_integration_token="test-token")
 
     @pytest.mark.asyncio
     async def test_simulated_astrbot_qq_group_message(self, monkeypatch):

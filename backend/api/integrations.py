@@ -24,10 +24,9 @@ from api.generate import (
     _is_high_risk_prompt,
     generate_reply_core,
 )
-from app.runtime import get_runtime_container
-from db.adapter import db
+from app.runtime import RuntimeContainer, get_runtime_container
 from db.schemas import MessageRequest
-from infra.concurrency_control import InferenceQueueFull, RateLimitExceeded, inference_runtime
+from infra.concurrency_control import InferenceQueueFull, RateLimitExceeded
 from infra.environment import read_bool
 from infra.observability import increment, log_event
 from infra.security_utils import (
@@ -102,8 +101,8 @@ async def _run_blocking(label: str, func: Callable[[], T], timeout: float = _DB_
         raise
 
 
-async def _load_config(timeout: float = _DB_TIMEOUT) -> dict[str, Any]:
-    config = await _run_blocking("load-config", lambda: db.config, timeout=timeout)
+async def _load_config(database, timeout: float = _DB_TIMEOUT) -> dict[str, Any]:
+    config = await _run_blocking("load-config", lambda: database.config, timeout=timeout)
     if not isinstance(config, dict):
         raise TypeError("AstrBot configuration must be a mapping")
     return config
@@ -132,12 +131,12 @@ async def _check_token(token: str | None) -> tuple[str, list[str]]:
     return token or "", allowed_tokens
 
 
-async def _is_platform_enabled(platform: str) -> bool:
+async def _is_platform_enabled(platform: str, database) -> bool:
     global_env = os.getenv("ASTRBOT_ENABLED")
     if global_env is not None and not read_bool(os.environ, "ASTRBOT_ENABLED", True):
         return False
 
-    config = await _load_config()
+    config = await _load_config(database)
     if global_env is None and not read_bool(config, "astrbotEnabled", True):
         return False
 
@@ -186,7 +185,7 @@ def _dedup_message_id(request: AstrBotMessageRequest, text: str) -> str:
 
 
 async def _record_integration_event(
-    request: AstrBotMessageRequest, trace_id: str, text: str, source_message_id: str, status: str = "received"
+    request: AstrBotMessageRequest, trace_id: str, text: str, source_message_id: str, *, database, status: str = "received"
 ) -> None:
     raw_summary = json.dumps(redact_sensitive(request.raw), ensure_ascii=False, default=str)[:4096]
     event_hash_basis = "|".join(
@@ -203,7 +202,7 @@ async def _record_integration_event(
     try:
         await _run_blocking(
             "integration-event",
-            lambda: db.add_integration_event(
+            lambda: database.add_integration_event(
                 {
                     "platform": request.platform,
                     "adapter": request.adapter or "other",
@@ -223,42 +222,17 @@ async def _record_integration_event(
         logger.warning("AstrBot integration event log failed traceId=%s", trace_id, exc_info=True)
 
 
-def _request_inference_runtime(http_request: Request):
-    """Resolve the scheduler owned by this FastAPI application."""
+def _request_dependencies(http_request: Request) -> RuntimeContainer:
+    """Bind this application's database; missing wiring cannot select globals."""
     try:
-        runtime = get_runtime_container(http_request.app).inference_runtime
-    except (AttributeError, RuntimeError):
-        runtime = None
-    return inference_runtime if runtime is None else runtime
-
-
-def _request_container_db(http_request: Request):
-    """Resolve this app's container db when it differs from the global singleton.
-
-    生成链路（消息持久化/调用记录/生成配置）与人物上下文必须读写
-    同一数据库；返回 None 表示与全局单例相同，调用方直接用全局。
-    """
-    try:
-        container_db = get_runtime_container(http_request.app).db
-    except (AttributeError, RuntimeError):
-        return None
-    if container_db is db:
-        return None
-    return container_db
-
-
-def _request_character_service(http_request: Request):
-    """Resolve the character context service bound to this app's container db.
-
-    生成链路的角色记忆/关系必须与角色管理接口读写同一（容器）数据库；
-    容器数据库即全局单例时返回 None，回退全局默认服务。
-    """
-    container_db = _request_container_db(http_request)
-    if container_db is None:
-        return None
-    from services.character_context import build_character_context_service
-
-    return build_character_context_service(container_db)
+        container = get_runtime_container(http_request.app)
+        if container.db is None:
+            raise RuntimeError("AstrBot application database is not configured")
+    except (AttributeError, RuntimeError) as exc:
+        raise HTTPException(503, detail={
+            "stage": "dependencies", "message": "Gateway database unavailable; check application startup",
+        }) from exc
+    return container
 
 
 @router.post("/api/integrations/astrbot/messages", response_model=AstrBotMessageResponse)
@@ -338,8 +312,16 @@ async def receive_astrbot_message(
         raise HTTPException(status_code=403, detail="Request blocked by the system credential policy")
 
     try:
-        if not await _is_platform_enabled(request.platform):
+        container = _request_dependencies(http_request)
+        source_db, runtime = container.db, container.inference_runtime
+        if not await _is_platform_enabled(request.platform, source_db):
             return AstrBotMessageResponse(shouldReply=False, model="platform-disabled", traceId=trace_id)
+        if runtime is None:
+            raise HTTPException(503, detail={
+                "stage": "dependencies", "message": "Gateway scheduler unavailable; check application startup",
+            })
+    except HTTPException:
+        raise
     except Exception as exc:
         logger.warning("AstrBot configuration failed traceId=%s errorType=%s", trace_id, type(exc).__name__)
         raise HTTPException(status_code=503, detail={
@@ -348,9 +330,8 @@ async def receive_astrbot_message(
         }) from exc
 
     dedup_message_id = _dedup_message_id(request, text)
-    await _record_integration_event(request, trace_id, text, dedup_message_id)
+    await _record_integration_event(request, trace_id, text, dedup_message_id, database=source_db)
 
-    source_db = _request_container_db(http_request) or db
     # Include conversation and sender: some adapters only guarantee local IDs.
     key = hashlib.sha256(
         json.dumps(
@@ -396,12 +377,13 @@ async def receive_astrbot_message(
         reply = await asyncio.wait_for(
             _process_astrbot_message(
                 request,
-                http_request,
                 text,
                 dedup_message_id,
                 trace_id,
                 start_time,
                 context,
+                source_db=source_db,
+                runtime=runtime,
             ),
             timeout=remaining,
         )
@@ -444,9 +426,7 @@ async def receive_astrbot_message(
         }) from exc
 
 
-async def _process_astrbot_message(request, http_request, text, dedup_message_id, trace_id, start_time, context):
-    runtime = _request_inference_runtime(http_request)
-    source_db = _request_container_db(http_request) or db
+async def _process_astrbot_message(request, text, dedup_message_id, trace_id, start_time, context, *, source_db, runtime):
     await runtime.check_rate_limits(request.platform, request.conversationId, request.senderId)
 
     session_id = _session_id(request.platform, request.conversationType, request.conversationId)
@@ -487,14 +467,11 @@ async def _process_astrbot_message(request, http_request, text, dedup_message_id
     )
     priority = runtime.priority_for("astrbot", request.conversationType)
     context["request"] = msg.model_dump()
-    character_service = _request_character_service(http_request)
-    message_db = _request_container_db(http_request)
     result = await runtime.submit(
         lambda: generate_reply_core(
             msg,
             current_user={"username": "astrbot", "user_id": 0},
-            character_service=character_service,
-            message_db=message_db,
+            message_db=source_db,
             delivery_context=context,
         ),
         session_id=session_id,
@@ -539,7 +516,7 @@ async def acknowledge_delivery(payload: DeliveryAcknowledgement, http_request: R
             body=await http_request.body(),
             skew_seconds=_SIGNATURE_SKEW_SECONDS,
         )
-    source_db = _request_container_db(http_request) or db
+    source_db = _request_dependencies(http_request).db
     record = await _run_blocking("delivery-read", lambda: source_db.integration_receipt("get", key=payload.receiptId))
     if not record or record["owner"] != payload.deliveryToken:
         raise HTTPException(status_code=404, detail="Unknown delivery receipt")
@@ -567,5 +544,5 @@ async def acknowledge_delivery(payload: DeliveryAcknowledgement, http_request: R
     if latest and latest["status"] == "delivered":
         state = json.loads(latest["response"] or "{}").get("memory_completion_state", "legacy_unknown")
         if state in {"pending", "running"}:
-            ensure_delivery_memory_worker(source_db, _request_character_service(http_request))
+            ensure_delivery_memory_worker(source_db)
     return {"acknowledged": True, "changed": changed, "memoryStatus": "pending" if state == "running" else state}

@@ -152,51 +152,6 @@ def test_generate_service_binds_character_context_to_container_db() -> None:
     assert handler.keywords["character_service"] is None
 
 
-def test_astrbot_endpoint_uses_runtime_container_inference_runtime() -> None:
-    from fastapi import Request
-
-    from api.integrations import _request_inference_runtime
-    from app.main import create_app
-    from app.runtime import RuntimeContainer
-
-    class Runtime:
-        def __bool__(self) -> bool:
-            return False
-
-    runtime = Runtime()
-    application = create_app(
-        RuntimeContainer(
-            db=SimpleNamespace(),
-            is_pg_mode=lambda: False,
-            inference_runtime=runtime,
-            startup_env={},
-        )
-    )
-    request = Request({"type": "http", "app": application})
-
-    assert _request_inference_runtime(request) is runtime
-
-def test_astrbot_endpoint_resolves_container_character_service() -> None:
-    """astrbot 生成链路的角色上下文服务必须绑定容器数据库。"""
-    from fastapi import Request
-
-    from api.integrations import _request_character_service
-    from app.main import create_app
-    from app.runtime import RuntimeContainer
-
-    container = RuntimeContainer(
-        db=SimpleNamespace(),
-        is_pg_mode=lambda: False,
-        inference_runtime=None,
-        startup_env={},
-    )
-    application = create_app(container)
-    request = Request({"type": "http", "app": application})
-
-    service = _request_character_service(request)
-    assert service is not None
-    assert service._memory_repo._database is container.db
-
 def test_lifespan_resource_references_are_cleared_between_application_runs() -> None:
     from app.main import _clear_lifespan_resource_references
 
