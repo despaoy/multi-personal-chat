@@ -141,3 +141,46 @@ def test_benchmark_zero_limit_stops_before_prompt_retrieval_or_model(tmp_path, m
     retrieve.assert_not_called()
     model.assert_not_called()
     assert not output.exists()
+
+
+@pytest.mark.parametrize("operation", ["read", "write"])
+def test_independent_read_does_not_wait_for_another_cache_snapshot_copy(monkeypatch, operation):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Event
+
+    monkeypatch.setenv("RERANKER_ENABLED", "false")
+    helper = rag_helper.RAGHelper()
+    helper._add_to_cache("held", [dict(ROW, id="held")])
+    helper._add_to_cache("other", [dict(ROW, id="other")])
+    incoming = [dict(ROW, id="incoming")]
+    target = helper._query_cache["held"][1] if operation == "read" else incoming
+    entered, release, independent_started = Event(), Event(), Event()
+    deepcopy = rag_helper.copy.deepcopy
+
+    def blocked_copy(value, *args, **kwargs):
+        if value is target:
+            entered.set()
+            assert release.wait(10)
+        return deepcopy(value, *args, **kwargs)
+
+    def independent_read():
+        independent_started.set()
+        return helper._get_from_cache("other")
+
+    monkeypatch.setattr(rag_helper.copy, "deepcopy", blocked_copy)
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        held = pool.submit(helper._get_from_cache, "held") if operation == "read" else pool.submit(helper._add_to_cache, "incoming", incoming)
+        try:
+            assert entered.wait(3)
+            other = pool.submit(independent_read)
+            assert independent_started.wait(3)
+            assert other.result(timeout=3) == [dict(ROW, id="other")]
+        finally:
+            release.set()
+        returned = held.result(timeout=3)
+    if operation == "read":
+        returned[0]["content"] = "caller mutation"
+        assert helper._get_from_cache("held") == [dict(ROW, id="held")]
+    else:
+        incoming[0]["content"] = "caller mutation"
+        assert helper._get_from_cache("incoming") == [dict(ROW, id="incoming")]

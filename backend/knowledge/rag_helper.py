@@ -53,6 +53,7 @@ class RAGHelper:
             self.reranker = get_reranker()
 
     def _get_from_cache(self, query: str) -> list[dict[str, Any]] | None:
+        """Copy an owned snapshot outside the LRU critical section."""
         with self._cache_lock:
             cached = self._query_cache.get(query)
             if cached is None:
@@ -62,14 +63,12 @@ class RAGHelper:
                 self._query_cache.pop(query, None)
                 return None
             self._query_cache.move_to_end(query)
-            return copy.deepcopy(results)
+        return copy.deepcopy(results)
 
     def _add_to_cache(self, query: str, results: list[dict[str, Any]]) -> None:
+        snapshot = copy.deepcopy(results)
         with self._cache_lock:
-            self._query_cache[query] = (
-                time.monotonic() + self._cache_ttl,
-                copy.deepcopy(results),
-            )
+            self._query_cache[query] = (time.monotonic() + self._cache_ttl, snapshot)
             self._query_cache.move_to_end(query)
             while len(self._query_cache) > self._cache_max_size:
                 self._query_cache.popitem(last=False)
@@ -110,12 +109,10 @@ class RAGHelper:
 
         vector_db = get_vector_db()
         vector_generation = vector_db.cache_generation
-        serialized_filters = json.dumps(filters or {}, ensure_ascii=False, sort_keys=True)
-        cache_key = (
-            f"{query}|{top_k}|rerank={enable_rerank and self.enable_reranking}|"
-            f"threshold={self.min_score_threshold}|"
-            f"recall_multiplier={self.recall_multiplier}|filters={serialized_filters}|"
-            f"generation={vector_generation}"
+        cache_key = json.dumps(
+            [query, top_k, enable_rerank and self.enable_reranking, self.min_score_threshold,
+             self.recall_multiplier, filters or {}, vector_generation],
+            ensure_ascii=False, sort_keys=True,
         )
         if use_cache:
             cached = self._get_from_cache(cache_key)
