@@ -130,7 +130,7 @@ class TestPaginationTotalCount:
         bypassed via dependency_overrides.
 
         Returns (client, test_db, cleanup) where cleanup closes the client
-        and DB connection and restores patched modules.
+        and DB connection.
         """
         from fastapi import FastAPI
         from fastapi.testclient import TestClient
@@ -138,17 +138,9 @@ class TestPaginationTotalCount:
         from api import evaluation, experiments, retrieval_eval
         from app.dependencies import get_current_admin, get_current_user
         from app.runtime import RuntimeContainer
-        from db import adapter as adapter_module
         from db.database import SQLiteDB
 
         test_db = SQLiteDB(tmp_path / "api_test.db")
-        # Patch the module-level db object used by routers
-        original_db = adapter_module.db
-        adapter_module.db = test_db
-        # Also patch the db imported into each router module (bound at import)
-        for mod in (experiments,):
-            mod.db = test_db
-
         app = FastAPI()
         app.state.runtime_container = RuntimeContainer(db=test_db, is_pg_mode=lambda: False, startup_env={})
         app.include_router(experiments.router)
@@ -165,15 +157,8 @@ class TestPaginationTotalCount:
         def _cleanup():
             try:
                 client.close()
-            except Exception:
-                pass
-            try:
+            finally:
                 test_db.close_connection()
-            except Exception:
-                pass
-            adapter_module.db = original_db
-            for mod in (experiments,):
-                mod.db = original_db
 
         return client, test_db, _cleanup
 

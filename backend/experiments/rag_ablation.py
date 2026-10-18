@@ -130,16 +130,10 @@ class RAGAblation:
         mrr_values: List[float] = []
         ndcg_values: List[float] = []
         latencies: List[float] = []
-        for question in dataset.get("questions", []):
+        for question in dataset["questions"]:
             expected = list(question.get("expected_doc_ids", []))
             started = time.perf_counter()
-            error = ""
-            try:
-                retrieved = retrieve(str(question.get("question", "")), self.k)
-            except Exception as exc:
-                retrieved = []
-                error = str(exc)[:300]
-                result.failed_queries += 1
+            retrieved = retrieve(str(question.get("question", "")), self.k)
             latency = (time.perf_counter() - started) * 1000
             latencies.append(latency)
             retrieved_ids = [str(row.get("id", row.get("chunk_id", ""))) for row in retrieved]
@@ -163,7 +157,7 @@ class RAGAblation:
                 "mrr": mrr,
                 "ndcg_at_5": ndcg,
                 "latency_ms": round(latency, 3),
-                "error": error,
+                "error": "",
             })
         result.recall_at_1 = round(statistics.mean(recalls_1), 4) if recalls_1 else 0.0
         result.recall_at_5 = round(statistics.mean(recalls_5), 4) if recalls_5 else 0.0
@@ -172,8 +166,6 @@ class RAGAblation:
         result.avg_latency_ms = round(statistics.mean(latencies), 3) if latencies else 0.0
         result.p50_latency_ms = _percentile(latencies, 0.50)
         result.p95_latency_ms = _percentile(latencies, 0.95)
-        if self.formal and result.failed_queries:
-            result.error = f"{result.failed_queries} formal retrieval queries failed"
         return result
 
     def run_all(self, variants: Optional[List[str]] = None) -> List[RAGAblationResult]:

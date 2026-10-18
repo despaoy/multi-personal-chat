@@ -30,32 +30,30 @@ class _RecordingDatabase:
         return []
 
 
-def test_experiment_creation_fails_closed_when_database_is_unavailable(monkeypatch):
-    monkeypatch.setattr(experiments, "db", _RecordingDatabase(fail_insert=True))
+def test_experiment_creation_fails_closed_when_database_is_unavailable():
+    database = _RecordingDatabase(fail_insert=True)
 
     with pytest.raises(HTTPException) as exc_info:
         asyncio.run(
             experiments.start_lora_ablation(
                 ExperimentStartRequest(mock=True),
-                current_user={"role": "admin"},
+                current_user={"role": "admin"}, database=database,
             )
         )
 
     assert exc_info.value.status_code == 503
 
 
-def test_missing_quantization_module_cannot_turn_real_run_into_mock(
-    monkeypatch,
-):
+@pytest.mark.parametrize("mock", [False, True])
+def test_missing_quantization_module_cannot_turn_real_run_into_mock(monkeypatch, mock):
     database = _RecordingDatabase()
-    monkeypatch.setattr(experiments, "db", database)
     monkeypatch.setitem(sys.modules, "experiments.quantization_benchmark", None)
 
     with pytest.raises(HTTPException) as exc_info:
         asyncio.run(
             experiments.start_quantization_benchmark(
-                ExperimentStartRequest(mock=False),
-                current_user={"role": "admin"},
+                ExperimentStartRequest(mock=mock),
+                current_user={"role": "admin"}, database=database,
             )
         )
 
@@ -63,7 +61,7 @@ def test_missing_quantization_module_cannot_turn_real_run_into_mock(
     assert database.inserts
     assert database.updates
     assert database.updates[-1][1]["id"].startswith("quant_bench_")
-    assert '"mock": false' in database.updates[-1][1]["r"]
+    assert ('"mock": ' + str(mock).lower()) in database.updates[-1][1]["r"]
 
 class _QueryDatabase:
     def __init__(self, *, fail: bool = False):
@@ -79,13 +77,12 @@ class _QueryDatabase:
         return []
 
 
-def test_experiment_queries_leave_the_event_loop_thread(monkeypatch):
+def test_experiment_queries_leave_the_event_loop_thread():
     database = _QueryDatabase()
-    monkeypatch.setattr(experiments, "db", database)
     caller_thread = threading.get_ident()
 
     result = asyncio.run(
-        experiments.list_experiments(current_user={"role": "admin"})
+        experiments.list_experiments(current_user={"role": "admin"}, database=database)
     )
 
     assert result == {"success": True, "experiments": [], "total": 0}
@@ -93,17 +90,19 @@ def test_experiment_queries_leave_the_event_loop_thread(monkeypatch):
     assert all(thread_id != caller_thread for thread_id in database.thread_ids)
 
 
-def test_experiment_query_errors_do_not_expose_database_details(monkeypatch):
-    monkeypatch.setattr(experiments, "db", _QueryDatabase(fail=True))
+def test_experiment_query_errors_do_not_expose_database_details(caplog):
+    database = _QueryDatabase(fail=True)
 
     with pytest.raises(HTTPException) as exc_info:
         asyncio.run(
             experiments.get_experiment(
                 "private-experiment",
-                current_user={"role": "admin"},
+                current_user={"role": "admin"}, database=database,
             )
         )
 
     assert exc_info.value.status_code == 503
     assert exc_info.value.detail == "实验记录暂时不可用"
     assert "secret" not in exc_info.value.detail
+
+    assert "secret" not in caplog.text
