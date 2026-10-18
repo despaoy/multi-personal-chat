@@ -968,7 +968,11 @@ def get_request_chat_generation_service(request: Request) -> ChatGenerationServi
     Memory reads, completion writes and message storage use the same database.
     """
     container = get_runtime_container(request.app)
-    runtime = inference_runtime if container.inference_runtime is None else container.inference_runtime
+    runtime = container.inference_runtime
+    if container.db is None or runtime is None:
+        raise HTTPException(503, detail={
+            "stage": "dependencies", "message": "Chat database or scheduler is not configured; check application startup",
+        })
     if runtime is inference_runtime and container.db is db:
         return get_chat_generation_service()
     return _build_chat_generation_service(runtime, message_db=container.db)

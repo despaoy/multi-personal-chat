@@ -54,7 +54,7 @@ async def test_generate_endpoint_uses_runtime_container_inference_runtime() -> N
 
     class Runtime:
         def __bool__(self) -> bool:
-            # Only None should trigger fallback to the module runtime.
+            # A configured falsey runtime must remain the owning runtime.
             return False
 
         def priority_for(self, platform: str, session_type: str) -> int:
@@ -134,10 +134,12 @@ def test_generate_service_binds_character_context_to_container_db() -> None:
     from app.main import create_app
     from app.runtime import RuntimeContainer
 
+    from infra.concurrency_control import inference_runtime
+
     container = RuntimeContainer(
         db=SimpleNamespace(),
         is_pg_mode=lambda: False,
-        inference_runtime=None,
+        inference_runtime=inference_runtime,
         startup_env={},
     )
     application = create_app(container)
@@ -170,3 +172,24 @@ def test_lifespan_resource_references_are_cleared_between_application_runs() -> 
     assert config.backup_mgr is None
     assert config.access_control_mgr is None
     assert config.unrelated == "preserved"
+
+
+@pytest.mark.parametrize("missing", ["database", "scheduler", "both"])
+def test_generate_service_rejects_missing_dependencies(missing) -> None:
+    from fastapi import HTTPException, Request
+
+    from api.generate import get_request_chat_generation_service
+    from app.main import create_app
+    from app.runtime import RuntimeContainer
+
+    container = RuntimeContainer(
+        db=None if missing in {"database", "both"} else SimpleNamespace(),
+        is_pg_mode=lambda: False,
+        inference_runtime=None if missing in {"scheduler", "both"} else SimpleNamespace(),
+        startup_env={},
+    )
+    request = Request({"type": "http", "app": create_app(container)})
+    with pytest.raises(HTTPException) as error:
+        get_request_chat_generation_service(request)
+    assert error.value.status_code == 503
+    assert error.value.detail["stage"] == "dependencies"
