@@ -22,7 +22,7 @@ from typing import Any, Dict, List, Optional
 import faiss
 import numpy as np
 
-from knowledge.retrieval_core.embedding import resolve_local_model_path, sentence_transformer_embeddings, vector_norm
+from knowledge.retrieval_core.embedding import resolve_local_model_path, sentence_transformer_embeddings
 from knowledge.retrieval_core.tokenization import tokenize
 from knowledge.snapshot_store import SNAPSHOT_NAME, document_ids, load_snapshot, save_snapshot
 
@@ -323,19 +323,9 @@ class VectorDatabase:
 
     def _get_embeddings_batch(self, texts: List[str]) -> np.ndarray:
         self._load_model()
-        batch_size = self.config.batch_encode_size
-        all_embeddings = []
-        for i in range(0, len(texts), batch_size):
-            batch = texts[i:i + batch_size]
-            embeddings = np.asarray(
-                sentence_transformer_embeddings(self._model, batch, batch_size=len(batch), dimension=self.EMBEDDING_DIM), dtype=np.float32
-            )
-            if embeddings.shape != (len(batch), self.EMBEDDING_DIM):
-                raise ValueError(f"embedding shape mismatch: {embeddings.shape}, expected {(len(batch), self.EMBEDDING_DIM)}")
-            for vector in embeddings:
-                vector_norm(vector)
-            all_embeddings.append(embeddings)
-        return np.vstack(all_embeddings)
+        return sentence_transformer_embeddings(
+            self._model, texts, batch_size=self.config.batch_encode_size, dimension=self.EMBEDDING_DIM,
+        )
 
     def _get_embedding(self, text: str) -> np.ndarray:
         return self._get_embeddings_batch([text])[0]

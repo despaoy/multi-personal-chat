@@ -1,10 +1,10 @@
 """Bad generic model output cannot publish a successful retrieval or index write."""
 import hashlib
-from types import SimpleNamespace
 from unittest.mock import Mock
 
 import numpy as np
 import pytest
+import torch
 
 from knowledge import rag_helper
 from knowledge.vector_db import IndexConfig, VectorDatabase
@@ -23,11 +23,34 @@ def prepared(tmp_path, monkeypatch):
     monkeypatch.setattr(VectorDatabase, '_check_gpu_availability', lambda self: False)
     vector = VectorDatabase(str(tmp_path / 'vectors'), IndexConfig(index_type='flat', batch_encode_size=1))
     encode = Mock(side_effect=healthy)
-    vector._model = SimpleNamespace(encode=encode)
-    # The complete native-window encoder has separate token-coverage tests.
-    # This control exercises how retrieval handles its returned vector batches.
-    monkeypatch.setattr("knowledge.vector_db.sentence_transformer_embeddings",
-                        lambda model, texts, **kwargs: model.encode(texts, **kwargs))
+    class OneTokenTokenizer:
+        """Declared test codec: one source-length token per complete source."""
+        def num_special_tokens_to_add(self, pair):
+            return 2
+
+        def __call__(self, texts, **kwargs):
+            tokens = [[len(text) + 1] for text in texts]
+            if not kwargs.get("return_overflowing_tokens"):
+                return {"input_ids": tokens}
+            return dict(input_ids=torch.tensor([[100, *row, 101] for row in tokens]),
+                attention_mask=torch.ones((len(tokens), 3), dtype=torch.long),
+                special_tokens_mask=torch.tensor([[1, 0, 1]] * len(tokens)),
+                overflow_to_sample_mapping=torch.arange(len(tokens)))
+
+    class Model:
+        tokenizer = OneTokenTokenizer()
+        max_seq_length = 5
+        device = "cpu"
+
+        def eval(self):
+            return self
+
+        def __call__(self, features):
+            # Inject only the untrusted model output; run the real shared encoder.
+            rows = encode([None] * len(features["input_ids"]))
+            return {"sentence_embedding": torch.as_tensor(rows)}
+
+    vector._model = Model()
     vector.add_documents([dict(DOCUMENT)])
     monkeypatch.setattr(rag_helper, 'get_vector_db', lambda: vector)
     helper = rag_helper.RAGHelper()
@@ -104,7 +127,7 @@ def test_healthy_batches_preserve_values_dtype_and_single_loading_boundary(prepa
     assert load.call_count == 1
     rows = vector._get_embeddings_batch(['first', 'second'])
     assert rows.shape == (2, 384) and rows.dtype == np.float32
-    assert np.array_equal(rows, 2.0 * healthy(['first', 'second']))
+    assert np.array_equal(rows, healthy(['first', 'second']))
     assert encode.call_count == 3
 
 
@@ -131,3 +154,32 @@ def test_missing_document_field_fails_before_embedding_or_snapshot_change(prepar
     assert vector.index.ntotal == len(vector.metadata) == 1 and vector.snapshot_path.read_bytes() == before
     vector.add_documents([dict(DOCUMENT, id="complete")])
     assert vector.index.ntotal == len(vector.metadata) == 2 and encode.call_count == 1
+
+
+
+@pytest.mark.parametrize("batch_size", [0, True, 1.5])
+def test_vector_batch_configuration_uses_shared_validation(prepared, batch_size):
+    vector, encode, _ = prepared
+    vector.config.batch_encode_size = batch_size
+    with pytest.raises(ValueError, match="positive integers"):
+        vector._get_embeddings_batch(["完整来源"])
+    encode.assert_not_called()
+
+
+def test_total_encoding_deadline_does_not_restart_for_each_source_batch(prepared, monkeypatch):
+    from knowledge.retrieval_core import embedding
+
+    vector, encode, _ = prepared
+    clock = [0.0]
+    monkeypatch.setattr(embedding.time, "monotonic", lambda: clock[0])
+
+    def slow(texts, **kwargs):
+        clock[0] += 200.0
+        return healthy(texts)
+
+    encode.side_effect = slow
+    snapshot = vector.snapshot_path.read_bytes()
+    with pytest.raises(TimeoutError, match="deadline"):
+        vector._get_embeddings_batch(["第一份完整来源", "第二份完整来源", "第三份完整来源"])
+    assert encode.call_count == 2
+    assert vector.snapshot_path.read_bytes() == snapshot and vector.index.ntotal == 1
