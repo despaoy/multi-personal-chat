@@ -5,7 +5,7 @@ import pytest
 from provider_fixtures import cloud_connection
 
 from db.schemas import MessageRequest
-from inference.generation_request import GenerationRequest, build_generation_request
+from inference.generation_request import GenerationRequest, build_generation_request, generate_character_response
 
 pytestmark = pytest.mark.usefixtures("no_live_context_review")
 
@@ -325,3 +325,21 @@ async def test_native_timeout_cancels_work_and_releases_capacity_without_breaker
     assert caught.value.status_code == 500 and isinstance(caught.value.__cause__, TimeoutError)
     assert cancelled.is_set() and not semaphore.locked()
     save.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("reply", [None, {"text": "21元"}, " \n "])
+async def test_direct_generation_rejects_invalid_model_text_without_retry(reply):
+    query = "完整隔离题设：虚构工坊的门票每张7元，买3张，不收其他费用。请回答总价。"
+    calls = []
+
+    async def model(**kwargs):
+        assert query in kwargs["messages"][-1]["content"]
+        calls.append(kwargs)
+        return reply
+
+    with pytest.raises(ValueError, match="Model response must be non-empty text"):
+        await generate_character_response(
+            GenerationRequest(message=query, max_tokens=128, context_window_tokens=8192), model
+        )
+    assert len(calls) == 1

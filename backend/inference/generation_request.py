@@ -8,6 +8,7 @@ generation-parameter contract seen by the model.
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
+from functools import partial
 from typing import TYPE_CHECKING, Any, Literal
 
 from character.evidence_selector import InputBudgetError
@@ -550,6 +551,13 @@ def _build_packet_budgeted_request(request: GenerationRequest) -> GenerationPlan
 
 
 
+async def _generate_text(generate: Callable[..., Awaitable[str]], **kwargs) -> str:
+    reply = await generate(**kwargs)
+    if not isinstance(reply, str) or not reply.strip():
+        raise ValueError("Model response must be non-empty text")
+    return reply
+
+
 async def _revalidate_context(request):
     for revalidate in (request.private_context_revalidator, request.public_context_revalidator):
         if revalidate is not None:
@@ -634,7 +642,7 @@ async def generate_character_response(
         if refreshed != request:
             return await refresh_answer(refreshed)
         result = finalize_answer_citations(result)
-        result = await recover_missing_citations(result, generate, context_window_tokens=request.context_window_tokens)
+        result = await recover_missing_citations(result, generate_text, context_window_tokens=request.context_window_tokens)
         refreshed = await _revalidate_context(request)
         if refreshed != request:
             return await refresh_answer(refreshed)
@@ -722,7 +730,8 @@ async def generate_character_response(
             request = refreshed
             plan = build_generation_request(request)
     messages = [dict(message) for message in plan.messages]
-    reply = await generate(
+    generate_text = partial(_generate_text, generate)
+    reply = await generate_text(
         messages=messages,
         lora_name=plan.lora_name,
         **dict(plan.generation),
@@ -764,7 +773,7 @@ async def generate_character_response(
         max_output_tokens=request.max_tokens,
     )
     corrected_messages = [*fixed_retry[:-1], *retry_history, fixed_retry[-1]]
-    reply = await generate(
+    reply = await generate_text(
         messages=corrected_messages,
         lora_name=plan.lora_name,
         **dict(plan.generation),

@@ -1310,12 +1310,6 @@ async def _generate_with_retrieval(
                         with_provider_error("检索或证据审核失败，请检查检索服务及审核模型状态后重试", e)),
             ) from e
 
-    async def generate_reply(**kwargs):
-        reply = await model_generate(**kwargs)
-        if not isinstance(reply, str) or not reply.strip():
-            raise ValueError("Model response must be non-empty text")
-        return reply
-
     from inference.private_context_authority import make_private_context_revalidator
     from inference.public_context_authority import make_public_context_revalidator
 
@@ -1348,7 +1342,7 @@ async def _generate_with_retrieval(
             context_window_tokens=get_provider_context_budget().window_tokens,
             evidence_max_chars=get_provider_context_budget().evidence_max_chars,
         ),
-        generate_reply,
+        model_generate,
     )
 
     if retrieval.evidence_packets or generation.plan.retrieval.answer_citations_bound:
