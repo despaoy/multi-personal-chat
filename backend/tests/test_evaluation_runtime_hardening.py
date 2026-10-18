@@ -159,3 +159,35 @@ def test_runtime_evaluation_preserves_multiturn_user_context():
     assert runtime_runner.conversation_turns(item) == [
         message["content"] for message in item["conversation"]
     ]
+
+
+@pytest.mark.parametrize('defect', ['missing_module', 'missing_file', 'broken_file', 'wrong_shape'])
+def test_gold_dataset_dependency_and_storage_faults_are_server_errors(tmp_path, monkeypatch, defect):
+    if defect == 'missing_module':
+        import builtins
+        real_import = builtins.__import__
+
+        def without_evaluator(name, *args, **kwargs):
+            if name == 'evaluation.runtime_runner':
+                raise ImportError('synthetic-required-module-unavailable')
+            return real_import(name, *args, **kwargs)
+
+        monkeypatch.setattr(builtins, '__import__', without_evaluator)
+    else:
+        path = tmp_path / 'controlled-dataset.json'
+        if defect != 'missing_file':
+            path.write_text('{broken-json' if defect == 'broken_file' else '{"prompts":null}')
+        monkeypatch.setitem(runtime_runner.RUNTIME_DATASETS, 'kisaki_v21', path)
+    with _evaluation_client(_ListDatabase()) as api:
+        response = api.get('/api/evaluation/gold-set')
+    assert response.status_code == 500 and response.json() == {'detail': '加载 Gold Set 失败'}
+
+
+def test_gold_dataset_success_empty_filter_and_unknown_selector_remain_distinct():
+    with _evaluation_client(_ListDatabase()) as api:
+        actual = api.get('/api/evaluation/gold-set')
+        empty = api.get('/api/evaluation/gold-set', params={'category': 'synthetic-no-match-category'})
+        unknown = api.get('/api/evaluation/gold-set', params={'dataset_id': 'synthetic-unknown'})
+    assert actual.status_code == 200 and actual.json()['total'] == len(runtime_runner.load_runtime_dataset('kisaki_v21')['prompts'])
+    assert empty.status_code == 200 and empty.json()['total'] == 0 and empty.json()['prompts'] == []
+    assert unknown.status_code == 400 and unknown.json() == {'detail': 'unknown evaluation dataset: synthetic-unknown'}

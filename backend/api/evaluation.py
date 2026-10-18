@@ -8,6 +8,7 @@ from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Depends
 from app.dependencies import get_current_admin, get_current_user, get_request_database
+from db.json_fields import read_json_object
 from db.schemas import EvalRunRequest, FeedbackCreate
 
 logger = logging.getLogger(__name__)
@@ -19,8 +20,10 @@ def _now() -> str:
 
 
 @router.get("/api/evaluation/gold-set")
-async def get_gold_set(dataset_id: str = "kisaki_v21", category: Optional[str] = None, split: Optional[str] = None,
-                       current_user: dict = Depends(get_current_admin)):
+async def get_gold_set(
+    dataset_id: str = "kisaki_v21", category: Optional[str] = None, split: Optional[str] = None,
+    current_user: dict = Depends(get_current_admin),
+):
     """返回 Gold 评估集（可按 category/split 过滤）"""
     try:
         from evaluation.runtime_runner import load_runtime_dataset
@@ -43,17 +46,16 @@ async def get_gold_set(dataset_id: str = "kisaki_v21", category: Optional[str] =
             "category_breakdown": categories,
             "prompts": prompts,
         }
-    except ValueError as exc:
+    except LookupError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except ImportError:
-        return {"success": True, "total": 0, "category_breakdown": {}, "prompts": [], "note": "evaluation module not initialized"}
     except Exception as exc:
-        logger.exception("加载 Gold Set 失败")
+        logger.error("加载 Gold Set 失败: %s", type(exc).__name__)
         raise HTTPException(status_code=500, detail="加载 Gold Set 失败") from exc
 
 
 @router.post("/api/evaluation/run")
-async def run_evaluation(req: EvalRunRequest, current_user: dict = Depends(get_current_admin),
+async def run_evaluation(
+    req: EvalRunRequest, current_user: dict = Depends(get_current_admin),
     database=Depends(get_request_database),
 ):
     """Persist and queue one bounded evaluation run."""
@@ -76,7 +78,7 @@ async def run_evaluation(req: EvalRunRequest, current_user: dict = Depends(get_c
             },
         )
     except Exception as exc:
-        logger.exception("failed to create evaluation run=%s", run_id)
+        logger.error("failed to create evaluation run=%s type=%s", run_id, type(exc).__name__)
         raise HTTPException(
             status_code=503,
             detail="无法创建评估任务，请稍后重试",
@@ -88,7 +90,7 @@ async def run_evaluation(req: EvalRunRequest, current_user: dict = Depends(get_c
     try:
         schedule_generation_evaluation(run_id, req.model_dump(), database)
     except Exception as exc:
-        logger.exception("failed to schedule evaluation run=%s", run_id)
+        logger.error("failed to schedule evaluation run=%s type=%s", run_id, type(exc).__name__)
         try:
             await asyncio.to_thread(
                 database.execute_sql,
@@ -99,15 +101,17 @@ async def run_evaluation(req: EvalRunRequest, current_user: dict = Depends(get_c
                     "id": run_id,
                 },
             )
-        except Exception:
-            logger.exception("failed to persist scheduling failure run=%s", run_id)
+        except Exception as persist_error:
+            logger.error("failed to persist scheduling failure run=%s type=%s", run_id, type(persist_error).__name__)
         raise HTTPException(status_code=500, detail="评估任务调度失败") from exc
 
     return {"success": True, "run_id": run_id, "status": "queued", "mock": req.mock}
 
 
 @router.get("/api/evaluation/runs")
-async def list_runs(limit: int = 20, offset: int = 0, current_user: dict = Depends(get_current_admin),
+async def list_runs(
+    limit: int = 20, offset: int = 0,
+    current_user: dict = Depends(get_current_admin),
     database=Depends(get_request_database),
 ):
     """列出评估运行历史"""
@@ -128,29 +132,26 @@ async def list_runs(limit: int = 20, offset: int = 0, current_user: dict = Depen
             ),
         )
         runs = []
-        for row in rows or []:
-            try:
-                metrics = json.loads(row["metrics"]) if row["metrics"] else {}
-            except (TypeError, json.JSONDecodeError):
-                metrics = {}
+        for row in rows:
             runs.append({
                 "id": row["id"],
                 "run_at": row["run_at"],
                 "adapter_name": row["adapter_name"],
                 "model_label": row["model_label"],
                 "total_prompts": row["total_prompts"],
-                "metrics": metrics,
+                "metrics": read_json_object(row["metrics"], "metrics"),
                 "notes": row["notes"],
             })
-        total = (count_rows[0]["cnt"] if count_rows else 0) or 0
+        total = count_rows[0]["cnt"]
         return {"success": True, "runs": runs, "total": total}
     except Exception as exc:
-        logger.exception("列出评估运行失败")
+        logger.error("列出评估运行失败: %s", type(exc).__name__)
         raise HTTPException(status_code=500, detail="列出评估运行失败") from exc
 
 
 @router.get("/api/evaluation/runs/{run_id}")
-async def get_run_detail(run_id: str, current_user: dict = Depends(get_current_admin),
+async def get_run_detail(
+    run_id: str, current_user: dict = Depends(get_current_admin),
     database=Depends(get_request_database),
 ):
     """获取单个评估运行的详细结果"""
@@ -163,36 +164,25 @@ async def get_run_detail(run_id: str, current_user: dict = Depends(get_current_a
         if not rows:
             raise HTTPException(status_code=404, detail="run not found")
         r = rows[0]
-        try:
-            metrics = json.loads(r["metrics"]) if r["metrics"] else {}
-        except Exception:
-            metrics = {}
-        try:
-            breakdown = json.loads(r["category_breakdown"]) if r["category_breakdown"] else {}
-        except Exception:
-            breakdown = {}
-        try:
-            config = json.loads(r["config_snapshot"]) if r["config_snapshot"] else {}
-        except Exception:
-            config = {}
         return {
             "success": True,
             "run": {
                 "id": r["id"], "run_at": r["run_at"], "adapter_name": r["adapter_name"],
                 "model_label": r["model_label"], "total_prompts": r["total_prompts"],
-                "category_breakdown": breakdown, "metrics": metrics,
-                "config_snapshot": config, "notes": r["notes"],
+                "category_breakdown": read_json_object(r["category_breakdown"], "category_breakdown"), "metrics": read_json_object(r["metrics"], "metrics"),
+                "config_snapshot": read_json_object(r["config_snapshot"], "config_snapshot"), "notes": r["notes"],
             },
         }
     except HTTPException:
         raise
     except Exception as exc:
-        logger.exception("获取评估运行详情失败 run=%s", run_id)
+        logger.error("获取评估运行详情失败 run=%s type=%s", run_id, type(exc).__name__)
         raise HTTPException(status_code=500, detail="获取评估运行详情失败") from exc
 
 
 @router.post("/api/feedback")
-async def create_feedback(req: FeedbackCreate, current_user: dict = Depends(get_current_user),
+async def create_feedback(
+    req: FeedbackCreate, current_user: dict = Depends(get_current_user),
     database=Depends(get_request_database),
 ):
     """创建用户反馈（在线反馈闭环）"""
@@ -215,13 +205,14 @@ async def create_feedback(req: FeedbackCreate, current_user: dict = Depends(get_
         )
         return {"success": True}
     except Exception as exc:
-        logger.exception("创建反馈失败")
+        logger.error("创建反馈失败: %s", type(exc).__name__)
         raise HTTPException(status_code=500, detail="创建反馈失败") from exc
 
 
 @router.get("/api/feedback")
-async def list_feedback(limit: int = 50, offset: int = 0, rating: Optional[str] = None,
-                        current_user: dict = Depends(get_current_admin),
+async def list_feedback(
+    limit: int = 50, offset: int = 0, rating: Optional[str] = None,
+    current_user: dict = Depends(get_current_admin),
     database=Depends(get_request_database),
 ):
     """列出用户反馈"""
@@ -246,9 +237,9 @@ async def list_feedback(limit: int = 50, offset: int = 0, rating: Optional[str] 
             asyncio.to_thread(database.execute_sql, rows_query, rows_params),
             asyncio.to_thread(database.execute_sql, count_query, count_params),
         )
-        feedbacks = [dict(row) for row in rows or []]
-        total = (count_rows[0]["cnt"] if count_rows else 0) or 0
+        feedbacks = [dict(row) for row in rows]
+        total = count_rows[0]["cnt"]
         return {"success": True, "feedbacks": feedbacks, "total": total}
     except Exception as exc:
-        logger.exception("列出反馈失败")
+        logger.error("列出反馈失败: %s", type(exc).__name__)
         raise HTTPException(status_code=500, detail="列出反馈失败") from exc

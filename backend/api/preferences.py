@@ -8,6 +8,7 @@ from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Depends
 from app.dependencies import get_current_admin, get_request_database
+from db.json_fields import read_json_object
 from db.schemas import (
     PreferenceExportRequest,
     PreferencePairCreate,
@@ -22,15 +23,6 @@ router = APIRouter()
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
-
-
-def _read_object(value: str | None, field: str) -> dict:
-    if value is None:
-        return {}
-    decoded = json.loads(value)
-    if not isinstance(decoded, dict):
-        raise ValueError(f"{field} must be a JSON object")
-    return decoded
 
 
 @router.get("/api/preferences/")
@@ -65,8 +57,8 @@ async def list_preferences(
         for r in rows:
             pairs.append({
                 "id": r["id"], "prompt": r["prompt"], "chosen": r["chosen"],
-                "rejected": r["rejected"], "rubric": _read_object(r["rubric"], "rubric"), "annotator": r["annotator"],
-                "metadata": _read_object(r["metadata"], "metadata"), "review_status": r["review_status"],
+                "rejected": r["rejected"], "rubric": read_json_object(r["rubric"], "rubric"), "annotator": r["annotator"],
+                "metadata": read_json_object(r["metadata"], "metadata"), "review_status": r["review_status"],
                 "created_at": r["created_at"],
             })
         return {"success": True, "preferences": pairs, "total": total, "limit": limit, "offset": offset}
@@ -175,7 +167,7 @@ async def export_preferences(
         for r in rows:
             pairs.append({
                 "prompt": r["prompt"], "chosen": r["chosen"], "rejected": r["rejected"],
-                "rubric": _read_object(r["rubric"], "rubric"),
+                "rubric": read_json_object(r["rubric"], "rubric"),
             })
         return {"success": True, "format": req.format, "count": len(pairs), "data": pairs}
     except Exception as e:

@@ -128,3 +128,48 @@ async def test_evaluation_requires_current_admin_but_feedback_allows_authenticat
         assert (await api.post('/api/evaluation/run', json={})).status_code == 403
         assert (await api.post('/api/feedback', json={'rating': 'positive'})).status_code == 200
     stores.forbidden.assert_not_called()
+
+
+@pytest.mark.parametrize('field', ['metrics', 'category_breakdown', 'config_snapshot'])
+@pytest.mark.parametrize('stored', ['{broken-json', '', '[]', 'null'])
+async def test_corrupt_evaluation_objects_are_not_successful_empty_results(stores, field, stored):
+    database = stores.databases[0]
+    database.execute_sql('UPDATE gold_eval_runs SET ' + field + '=:value', {'value': stored})
+    async with client(database) as api:
+        response = await api.get('/api/evaluation/runs/shared')
+        assert response.status_code == 500 and response.json() == {'detail': '获取评估运行详情失败'}
+        if field == 'metrics':
+            listed = await api.get('/api/evaluation/runs')
+            assert listed.status_code == 500 and listed.json() == {'detail': '列出评估运行失败'}
+
+
+@pytest.mark.parametrize('stored', [None, '{}'])
+async def test_nullable_evaluation_objects_and_genuine_empty_records_remain_valid(stores, stored):
+    database = stores.databases[0]
+    database.execute_sql('UPDATE gold_eval_runs SET metrics=:value,category_breakdown=:value,config_snapshot=:value', {'value': stored})
+    async with client(database) as api:
+        listed = await api.get('/api/evaluation/runs')
+        detail = await api.get('/api/evaluation/runs/shared')
+        assert listed.status_code == detail.status_code == 200
+        assert listed.json()['runs'][0]['metrics'] == {}
+        assert all(detail.json()['run'][field] == {} for field in ['metrics', 'category_breakdown', 'config_snapshot'])
+        database.execute_sql('DELETE FROM gold_eval_runs')
+        database.execute_sql('DELETE FROM feedback')
+        listed = await api.get('/api/evaluation/runs')
+        feedback = await api.get('/api/feedback')
+        assert listed.status_code == feedback.status_code == 200
+        assert listed.json()['runs'] == [] and listed.json()['total'] == 0
+        assert feedback.json()['feedbacks'] == [] and feedback.json()['total'] == 0
+        assert (await api.get('/api/evaluation/runs/shared')).status_code == 404
+
+
+async def test_evaluation_failure_keeps_original_cause_without_logging_content(stores, monkeypatch, caplog):
+    from fastapi import HTTPException
+
+    database = stores.databases[0]
+    error = OSError('synthetic-private-evaluation-content')
+    monkeypatch.setattr(database, 'execute_sql', Mock(side_effect=error))
+    with pytest.raises(HTTPException) as caught:
+        await evaluation.list_runs(current_user={'role': 'admin'}, database=database)
+    assert caught.value.status_code == 500 and caught.value.__cause__ is error
+    assert 'OSError' in caplog.text and str(error) not in caplog.text

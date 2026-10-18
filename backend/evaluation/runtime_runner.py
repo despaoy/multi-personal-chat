@@ -25,9 +25,7 @@ RUNTIME_DATASETS = {
 def load_runtime_dataset(dataset_id: str) -> dict[str, Any]:
     path = RUNTIME_DATASETS.get(dataset_id)
     if path is None:
-        raise ValueError(f"unknown evaluation dataset: {dataset_id}")
-    if not path.exists():
-        raise ValueError(f"evaluation dataset is unavailable: {dataset_id}")
+        raise LookupError(f"unknown evaluation dataset: {dataset_id}")
     value = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(value, dict) or not isinstance(value.get("prompts"), list):
         raise ValueError(f"evaluation dataset is invalid: {dataset_id}")
