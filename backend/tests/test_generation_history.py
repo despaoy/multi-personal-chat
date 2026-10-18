@@ -50,7 +50,7 @@ async def test_vllm_generation_receives_request_history(monkeypatch):
             request,
             None,
             None,
-            {"useKnowledgeBase": False},
+            runtime_config={"useKnowledgeBase": False},
             enable_rag=False,
             model_generate=fake_generate,
         )

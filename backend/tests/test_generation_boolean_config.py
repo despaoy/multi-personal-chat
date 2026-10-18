@@ -113,3 +113,17 @@ async def test_cache_hit_requires_valid_configuration(installed, monkeypatch, se
         assert result.modelInvoked is False and "cached_model_response" in result.warnings
         cache.get.assert_awaited_once()
     assert state.calls == []
+
+
+async def test_falsey_explicit_mapping_keeps_disabled_retrieval_and_parameters(control):
+    class FalsyMapping(dict):
+        def __bool__(self):
+            return False
+
+    reply, used, _meta = await generate._generate_with_retrieval(
+        control.request, None, runtime_config=FalsyMapping(config()), model_generate=control.model)
+    assert reply == "你好，很高兴见到你。" and used is False
+    control.model.assert_awaited_once()
+    assert control.model.await_args.kwargs["max_tokens"] == 256
+    control.rag.assert_not_awaited()
+    control.source.assert_not_called()

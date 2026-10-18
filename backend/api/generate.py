@@ -301,16 +301,16 @@ async def _generate_reply_body(
     try:
         if select_active_lora or request.loraName not in {"", "default"}:
             runtime_config, loras = await asyncio.gather(
-                asyncio.to_thread(lambda: source_db.config or {}),
+                asyncio.to_thread(lambda: source_db.config),
                 asyncio.to_thread(lambda: list(source_db.loras)),
             )
         else:
-            runtime_config = await asyncio.to_thread(lambda: source_db.config or {})
+            runtime_config = await asyncio.to_thread(lambda: source_db.config)
             loras = []
+        runtime_config = {**runtime_config}
     except Exception as exc:
         raise HTTPException(503, "生成配置读取失败，请检查数据库连接后重试") from exc
 
-    runtime_config = dict(runtime_config)
     if request_provider == "openai_compat":
         runtime_config.setdefault("topP", 1.0)
     try:
@@ -1149,8 +1149,8 @@ async def _generate_with_retrieval(
     request: MessageRequest,
     lora_name: str | None,
     prompt_lora_name: str | None = None,
-    runtime_config: dict[str, Any] | None = None,
     *,
+    runtime_config: dict[str, Any],
     model_generate,
     enable_rag: bool = True,
     prepared_character_turn=None,
@@ -1158,7 +1158,7 @@ async def _generate_with_retrieval(
 ) -> tuple[str, bool, dict[str, Any]]:
     """Shared retrieval, abstention and character policy for either transport."""
     # 使用请求开始时读取的配置快照，避免同一次生成多次同步访问数据库。
-    _cfg = runtime_config or {}
+    _cfg = runtime_config
     options = read_generation_options(_cfg)
     _temperature, _max_tokens, _top_p = options["temperature"], options["maxTokens"], options["topP"]
     _use_kb = read_bool(_cfg, "useKnowledgeBase", True) and enable_rag

@@ -203,3 +203,33 @@ async def test_requested_or_active_adapter_is_used_once(monkeypatch, selection, 
     assert state.generation.await_args.args[1] == "controlled-adapter"
     assert state.prepare.await_count == int(character and not override)
     state.manager.set_provider.assert_not_called()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("stored", [None, []])
+async def test_invalid_generation_config_stops_before_model(monkeypatch, stored):
+    state = install_api(monkeypatch, "openai_compat")
+    prepare(state, monkeypatch)
+    with pytest.raises(HTTPException) as caught:
+        await state.api._generate_reply_impl(request(),
+            message_db=SimpleNamespace(config=stored, loras=[]),
+            persist_message=False, record_invocation=False)
+    assert caught.value.status_code == 503 and isinstance(caught.value.__cause__, TypeError)
+    assert_no_generation(state)
+
+
+@pytest.mark.asyncio
+async def test_falsey_mapping_keeps_generation_settings(monkeypatch):
+    class FalsyMapping(dict):
+        def __bool__(self):
+            return False
+
+    state = install_api(monkeypatch, "openai_compat")
+    stored = FalsyMapping(useKnowledgeBase=False, topP=1.0, temperature=.23, maxTokens=97)
+    response = await state.api._generate_reply_impl(request(),
+        message_db=SimpleNamespace(config=stored, loras=[]),
+        persist_message=False, record_invocation=False)
+    assert response.reply == "根据完整当前输入回答。"
+    snapshot = state.generation.await_args.kwargs["runtime_config"]
+    assert snapshot == stored and snapshot is not stored and type(snapshot) is dict
+    assert stored["temperature"] == .23 and stored["maxTokens"] == 97
