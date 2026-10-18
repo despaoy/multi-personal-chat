@@ -8,24 +8,15 @@ import asyncio
 import gzip
 import hashlib
 import logging
-import os
-import re
 import shutil
 import sqlite3
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import Enum
 from pathlib import Path
 from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
-
-
-def _validate_table_name(name: str) -> str:
-    """Validate SQL table name to prevent injection."""
-    if not re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*$', name):
-        raise ValueError(f"Invalid table name: {name}")
-    return name
 
 
 class BackupType(Enum):
@@ -213,7 +204,7 @@ class BackupManager:
     def _create_incremental_backup(self) -> Optional[BackupInfo]:
         """创建增量备份。
 
-        基于上次全量备份后的变更，导出变更数据。
+        保留历史 incremental 类型，产物仍为完整 SQLite 快照，并非差分文件。
 
         Returns:
             备份信息，失败返回None。
@@ -228,39 +219,12 @@ class BackupManager:
         final_path = self.backup_dir / filename
 
         try:
-            # 增量备份：导出所有表的变更数据
+            # Native backup preserves indexes, views and triggers as well as rows.
             source_conn = sqlite3.connect(str(self.db_path))
             dest_conn = sqlite3.connect(str(temp_path))
             try:
-                # 获取所有表名
-                cursor = source_conn.cursor()
-                cursor.execute(
-                    "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
-                )
-                tables = [row[0] for row in cursor.fetchall()]
+                source_conn.backup(dest_conn)
 
-                for table in tables:
-                    _validate_table_name(table)
-                    # 获取建表语句
-                    cursor.execute(
-                        "SELECT sql FROM sqlite_master WHERE type='table' AND name=?",
-                        (table,),
-                    )
-                    create_sql = cursor.fetchone()
-                    if create_sql and create_sql[0]:
-                        dest_conn.execute(create_sql[0])
-
-                        # 复制数据
-                        cursor.execute(f"SELECT * FROM {table}")
-                        rows = cursor.fetchall()
-                        if rows:
-                            placeholders = ",".join(["?"] * len(rows[0]))
-                            dest_conn.executemany(
-                                f"INSERT INTO {table} VALUES ({placeholders})",
-                                rows,
-                            )
-
-                dest_conn.commit()
             finally:
                 dest_conn.close()
                 source_conn.close()
