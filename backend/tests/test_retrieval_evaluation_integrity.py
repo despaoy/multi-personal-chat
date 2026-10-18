@@ -71,11 +71,11 @@ def test_retrieval_api_uses_structured_results_without_mock(monkeypatch):
         def retrieve_context(self, query, top_k, use_cache):
             return [{"document_id": 7, "id": "doc_7_chunk_0", "title": "Doc"}]
 
-    monkeypatch.setattr(retrieval_eval, "db", Database())
+    database = Database()
     monkeypatch.setattr(rag_helper, "get_rag_helper", lambda: Helper())
 
     response = asyncio.run(
-        retrieval_eval.run_retrieval_eval(current_user={"role": "admin"})
+        retrieval_eval.run_retrieval_eval(current_user={"role": "admin"}, database=database)
     )
 
     assert response["metrics"]["mock"] is False
@@ -83,11 +83,15 @@ def test_retrieval_api_uses_structured_results_without_mock(monkeypatch):
 
 
 def test_missing_retrieval_metrics_module_returns_503(monkeypatch):
+    from types import SimpleNamespace
+    from unittest.mock import Mock
+
+    database = SimpleNamespace(execute_sql=Mock(side_effect=AssertionError("Missing module must fail before SQL")))
     monkeypatch.setitem(sys.modules, "evaluation.retrieval_metrics", None)
 
     with pytest.raises(HTTPException) as exc_info:
         asyncio.run(
-            retrieval_eval.run_retrieval_eval(current_user={"role": "admin"})
+            retrieval_eval.run_retrieval_eval(current_user={"role": "admin"}, database=database)
         )
 
     assert exc_info.value.status_code == 503
@@ -144,7 +148,6 @@ def complete_evaluation(monkeypatch, tmp_path):
     )
     retrieve = Mock(return_value=[dict(document_id=42, title='会议安排', content='会议2026-12-20举行。')])
     factory = Mock(return_value=SimpleNamespace(retrieve_context=retrieve))
-    monkeypatch.setattr(retrieval_eval, 'db', database)
     monkeypatch.setattr(rag_helper, 'get_rag_helper', factory)
     try:
         yield SimpleNamespace(database=database, retrieve=retrieve, factory=factory)
@@ -162,7 +165,7 @@ async def test_invalid_labels_fail_before_retrieval(complete_evaluation, operati
     control.database.execute_sql(f'UPDATE retrieval_eval_questions SET {field}=:value', {'value': value})
     method = retrieval_eval.list_questions if operation == 'list' else retrieval_eval.run_retrieval_eval
     with pytest.raises(HTTPException) as caught:
-        await method(current_user={'role': 'admin'})
+        await method(current_user={'role': 'admin'}, database=control.database)
     assert caught.value.status_code == 500 and isinstance(caught.value.__cause__, ValueError)
     control.factory.assert_not_called()
     control.retrieve.assert_not_called()
@@ -171,13 +174,13 @@ async def test_invalid_labels_fail_before_retrieval(complete_evaluation, operati
 async def test_nullable_labels_and_empty_dataset_keep_normal_business_results(complete_evaluation):
     control = complete_evaluation
     control.database.execute_sql('UPDATE retrieval_eval_questions SET expected_doc_ids=NULL, expected_doc_titles=NULL')
-    listed = await retrieval_eval.list_questions(current_user={'role': 'admin'})
+    listed = await retrieval_eval.list_questions(current_user={'role': 'admin'}, database=control.database)
     assert listed['questions'][0]['expected_doc_ids'] == listed['questions'][0]['expected_doc_titles'] == []
-    result = await retrieval_eval.run_retrieval_eval(current_user={'role': 'admin'})
+    result = await retrieval_eval.run_retrieval_eval(current_user={'role': 'admin'}, database=control.database)
     assert result['success'] and result['total'] == 1 and result['metrics']['evaluated'] == 0
     control.factory.reset_mock()
     control.database.execute_sql('DELETE FROM retrieval_eval_questions')
-    empty = await retrieval_eval.run_retrieval_eval(current_user={'role': 'admin'})
+    empty = await retrieval_eval.run_retrieval_eval(current_user={'role': 'admin'}, database=control.database)
     assert empty == dict(success=True, metrics={}, total=0, note='no questions in dataset')
     control.factory.assert_not_called()
 

@@ -7,8 +7,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Depends
-from app.dependencies import get_current_admin
-from db.adapter import db
+from app.dependencies import get_current_admin, get_request_database
 from db.schemas import (
     PreferenceExportRequest,
     PreferencePairCreate,
@@ -21,40 +20,37 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-async def _execute_sql(query: str, params: Optional[dict] = None):
-    return await asyncio.to_thread(db.execute_sql, query, params or {})
-
-
-async def _execute_sql_insert(query: str, params: Optional[dict] = None):
-    return await asyncio.to_thread(db.execute_sql_insert, query, params or {})
-
-
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
 @router.get("/api/preferences/")
-async def list_preferences(review_status: Optional[PreferenceReviewStatus] = None, limit: int = 50, offset: int = 0,
-                           current_user: dict = Depends(get_current_admin)):
+async def list_preferences(
+    review_status: Optional[PreferenceReviewStatus] = None, limit: int = 50, offset: int = 0,
+    current_user: dict = Depends(get_current_admin), database=Depends(get_request_database),
+):
     """列出偏好对（分页）"""
     try:
         limit = max(1, min(int(limit), 500))
         offset = max(0, int(offset))
         if review_status:
-            rows = await _execute_sql(
+            rows = await asyncio.to_thread(
+                database.execute_sql,
                 "SELECT * FROM preference_pairs WHERE review_status=:rs ORDER BY created_at DESC LIMIT :lim OFFSET :off",
                 {"rs": review_status, "lim": limit, "off": offset},
             )
-            count_rows = await _execute_sql(
+            count_rows = await asyncio.to_thread(
+                database.execute_sql,
                 "SELECT COUNT(*) as cnt FROM preference_pairs WHERE review_status=:rs",
                 {"rs": review_status},
             )
         else:
-            rows = await _execute_sql(
+            rows = await asyncio.to_thread(
+                database.execute_sql,
                 "SELECT * FROM preference_pairs ORDER BY created_at DESC LIMIT :lim OFFSET :off",
                 {"lim": limit, "off": offset},
             )
-            count_rows = await _execute_sql("SELECT COUNT(*) as cnt FROM preference_pairs")
+            count_rows = await asyncio.to_thread(database.execute_sql, "SELECT COUNT(*) as cnt FROM preference_pairs")
         total = count_rows[0]["cnt"] if count_rows else 0
         pairs = []
         for r in (rows or []):
@@ -79,12 +75,14 @@ async def list_preferences(review_status: Optional[PreferenceReviewStatus] = Non
 
 
 @router.post("/api/preferences/")
-async def create_preference(req: PreferencePairCreate,
-                            current_user: dict = Depends(get_current_admin)):
+async def create_preference(
+    req: PreferencePairCreate, current_user: dict = Depends(get_current_admin), database=Depends(get_request_database),
+):
     """创建偏好对"""
     pid = f"pref_{secrets.token_hex(8)}"
     try:
-        await _execute_sql_insert(
+        await asyncio.to_thread(
+            database.execute_sql_insert,
             "INSERT INTO preference_pairs (id, prompt, chosen, rejected, rubric, annotator, metadata, review_status, created_at) "
             "VALUES (:id, :prompt, :chosen, :rejected, :rubric, :annotator, :metadata, :review_status, :created_at)",
             {
@@ -103,8 +101,10 @@ async def create_preference(req: PreferencePairCreate,
 
 
 @router.put("/api/preferences/{pid}")
-async def update_preference(pid: str, req: PreferencePairUpdate,
-                            current_user: dict = Depends(get_current_admin)):
+async def update_preference(
+    pid: str, req: PreferencePairUpdate, current_user: dict = Depends(get_current_admin),
+    database=Depends(get_request_database),
+):
     """更新偏好对（审核状态变更等）"""
     try:
         updates = []
@@ -121,7 +121,8 @@ async def update_preference(pid: str, req: PreferencePairUpdate,
         if not updates:
             return {"success": True, "id": pid, "note": "no fields to update"}
         params["id"] = pid
-        updated = await _execute_sql(
+        updated = await asyncio.to_thread(
+            database.execute_sql,
             f"UPDATE preference_pairs SET {', '.join(updates)} WHERE id=:id",
             params,
         )
@@ -136,10 +137,16 @@ async def update_preference(pid: str, req: PreferencePairUpdate,
 
 
 @router.delete("/api/preferences/{pid}")
-async def delete_preference(pid: str, current_user: dict = Depends(get_current_admin)):
+async def delete_preference(
+    pid: str, current_user: dict = Depends(get_current_admin), database=Depends(get_request_database),
+):
     """删除偏好对"""
     try:
-        deleted = await _execute_sql("DELETE FROM preference_pairs WHERE id=:id", {"id": pid})
+        deleted = await asyncio.to_thread(
+            database.execute_sql,
+            "DELETE FROM preference_pairs WHERE id=:id",
+            {"id": pid},
+        )
         if not deleted:
             raise HTTPException(status_code=404, detail="偏好对不存在")
         return {"success": True}
@@ -151,11 +158,14 @@ async def delete_preference(pid: str, current_user: dict = Depends(get_current_a
 
 
 @router.post("/api/preferences/export")
-async def export_preferences(req: PreferenceExportRequest,
-                             current_user: dict = Depends(get_current_admin)):
+async def export_preferences(
+    req: PreferenceExportRequest, current_user: dict = Depends(get_current_admin),
+    database=Depends(get_request_database),
+):
     """导出偏好对为训练格式（JSONL）"""
     try:
-        rows = await _execute_sql(
+        rows = await asyncio.to_thread(
+            database.execute_sql,
             "SELECT * FROM preference_pairs WHERE review_status=:rs "
             "ORDER BY created_at LIMIT :lim",
             {"rs": req.review_status, "lim": req.limit},
@@ -173,17 +183,21 @@ async def export_preferences(req: PreferenceExportRequest,
 
 
 @router.post("/api/preferences/sample-from-history")
-async def sample_from_history(req: SampleFromHistoryRequest,
-                              current_user: dict = Depends(get_current_admin)):
+async def sample_from_history(
+    req: SampleFromHistoryRequest, current_user: dict = Depends(get_current_admin),
+    database=Depends(get_request_database),
+):
     """从消息历史采样候选偏好对（待人工标注）"""
     try:
         if req.session_id:
-            rows = await _execute_sql(
+            rows = await asyncio.to_thread(
+                database.execute_sql,
                 'SELECT message, reply, "loraName", "traceId" FROM messages WHERE "branchId" IS NULL AND "sessionId"=:sid AND reply != \'\' AND LENGTH(reply) >= :min_len ORDER BY RANDOM() LIMIT :lim',
                 {"sid": req.session_id, "min_len": req.min_length, "lim": req.limit},
             )
         else:
-            rows = await _execute_sql(
+            rows = await asyncio.to_thread(
+                database.execute_sql,
                 'SELECT message, reply, "loraName", "traceId" FROM messages WHERE "branchId" IS NULL AND reply != \'\' AND LENGTH(reply) >= :min_len ORDER BY RANDOM() LIMIT :lim',
                 {"min_len": req.min_length, "lim": req.limit},
             )

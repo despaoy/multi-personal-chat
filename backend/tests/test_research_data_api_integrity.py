@@ -34,11 +34,10 @@ class _ResearchDatabase:
         return {"lastrowid": 1, "rowcount": 1}
 
 
-def test_preference_queries_are_bounded_offloaded_and_preserve_not_found(monkeypatch) -> None:
+def test_preference_queries_are_bounded_offloaded_and_preserve_not_found() -> None:
     from api import preferences
 
     database = _ResearchDatabase()
-    monkeypatch.setattr(preferences, "db", database)
     caller_thread = threading.get_ident()
 
     listed = asyncio.run(
@@ -46,6 +45,7 @@ def test_preference_queries_are_bounded_offloaded_and_preserve_not_found(monkeyp
             limit=-100,
             offset=-50,
             current_user={"role": "admin"},
+            database=database,
         )
     )
     assert listed["limit"] == 1
@@ -58,27 +58,29 @@ def test_preference_queries_are_bounded_offloaded_and_preserve_not_found(monkeyp
             preferences.delete_preference(
                 "missing",
                 current_user={"role": "admin"},
+                database=database,
             )
         )
     assert exc_info.value.status_code == 404
 
 
-def test_retrieval_question_delete_preserves_not_found(monkeypatch) -> None:
+def test_retrieval_question_delete_preserves_not_found() -> None:
     from api import retrieval_eval
 
-    monkeypatch.setattr(retrieval_eval, "db", _ResearchDatabase())
+    database = _ResearchDatabase()
 
     with pytest.raises(HTTPException) as exc_info:
         asyncio.run(
             retrieval_eval.delete_question(
                 "missing",
                 current_user={"role": "admin"},
+                database=database,
             )
         )
     assert exc_info.value.status_code == 404
 
 
-def test_router_config_updates_are_serialized_without_lost_fields(monkeypatch) -> None:
+def test_router_config_updates_are_serialized_without_lost_fields() -> None:
     from api import router as router_api
     from db.schemas import RouterConfigUpdate
 
