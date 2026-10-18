@@ -137,16 +137,20 @@ async def test_local_provider_accepts_only_complete_text(monkeypatch, kind, faul
     monkeypatch.setattr(model_manager, "_get_db_config", lambda: {"maxTokens": 64, "temperature": .2})
     provider = getattr(model_manager, kind)()
     payload = completed_provider_response(kind, "6元；尚未付款，下雨取消。")
-    content = payload["message"] if kind == "OllamaProvider" else payload
-    marker, reason = ("done", "done_reason") if kind == "OllamaProvider" else ("stop", "stop_type")
+    content = payload["message"] if kind == "OllamaProvider" else payload["choices"][0]["message"]
+    completion = payload if kind == "OllamaProvider" else payload["choices"][0]
+    reason = "done_reason" if kind == "OllamaProvider" else "finish_reason"
     if fault == "empty":
         content["content"] = " \n\t "
     elif fault == "partial":
-        payload[marker] = False
+        if kind == "OllamaProvider":
+            payload["done"] = False
+        else:
+            completion[reason] = None
     elif fault == "limit":
-        payload[reason] = "length" if kind == "OllamaProvider" else "limit"
+        completion[reason] = "length"
     elif fault == "missing_completion":
-        del payload[reason]
+        del payload["done_reason" if kind == "OllamaProvider" else "__verbose"]
     requests = []
 
     def respond(request):
@@ -166,3 +170,24 @@ async def test_local_provider_accepts_only_complete_text(monkeypatch, kind, faul
             with pytest.raises(KeyError if fault == "missing_completion" else ValueError):
                 await provider.async_generate(prompt)
     assert len(requests) == 1 and http.is_closed
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("metadata", [{"truncated": True}, {}])
+async def test_llama_chat_rejects_lost_context(monkeypatch, metadata):
+    from inference import model_manager
+
+    monkeypatch.setattr(model_manager, "_get_db_config", lambda: {"maxTokens": 64, "temperature": .2})
+    provider = model_manager.LlamaCppProvider()
+    payload = completed_provider_response("LlamaCppProvider", "完整受控回答")
+    payload["__verbose"] = metadata
+    post = AsyncMock(return_value=httpx.Response(200, json=payload))
+
+    @asynccontextmanager
+    async def acquire(timeout):
+        yield SimpleNamespace(post=post)
+
+    monkeypatch.setattr(provider, "_acquire_http_client", acquire)
+    with pytest.raises(ValueError if metadata else KeyError):
+        await provider.async_generate("完整题设：预约尚未付款，改期需要书面同意。请核对付款及改期条件。")
+    assert post.await_count == 1

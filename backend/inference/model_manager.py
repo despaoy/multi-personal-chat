@@ -357,46 +357,33 @@ class LlamaCppProvider(BaseProvider):
 
     async def async_generate(self, prompt: str, session_history: List[Dict] = None,
                               max_tokens_override: int = None) -> Tuple[str, float]:
-        """异步生成实现（R-1 fix: 使用共享 HttpClientPool）"""
+        """Let the server apply its model's chat template to complete messages."""
         config = _get_db_config()
         start = time.time()
-        full_prompt = prompt
-        if session_history:
-            parts = []
-            for msg in session_history:
-                role = msg.get("role", "user")
-                content = msg.get("content", "")
-                if role == "user":
-                    parts.append(f"User: {content}")
-                elif role == "assistant":
-                    parts.append(f"Assistant: {content}")
-            parts.append(f"User: {prompt}")
-            full_prompt = "\n".join(parts)
-
+        messages = [{"role": msg["role"], "content": msg["content"]} for msg in session_history] if session_history else []
+        messages.append({"role": "user", "content": prompt})
         max_tokens = read_provider_max_tokens(config, max_tokens_override)
 
         async with self._acquire_http_client(timeout=120.0) as client:
-            # P1-M4 fix: 请求级 timeout 覆盖 pool 默认值
             response = await client.post(
-                f"{self.base_url}/completion",
+                chat_completions_endpoint(self.base_url),
                 json={
-                    "prompt": full_prompt,
-                    "n_predict": max_tokens,
+                    "messages": messages,
+                    "max_tokens": max_tokens,
                     "temperature": float(config.get('temperature', 0.8)),
                     "top_p": 0.9,
+                    "stream": False,
+                    "verbose": True,
+                    "response_fields": ["truncated"],
                 },
                 timeout=120.0,
             )
         if response.status_code != 200:
             raise RuntimeError(f"llama.cpp返回错误状态码: {response.status_code}")
         data = response.json()
-        if (data["stop"] is not True or data["stop_type"] not in {"eos", "word"}
-                or data["truncated"] is not False):
-            raise ValueError("llama.cpp completion did not finish normally")
-        reply = data["content"]
-        if not isinstance(reply, str) or not reply.strip():
-            raise ValueError("llama.cpp completion has no usable content")
-        return reply.strip(), round(time.time() - start, 2)
+        if data["__verbose"]["truncated"] is not False:
+            raise ValueError("llama.cpp completion truncated its context")
+        return completed_chat_content(data), round(time.time() - start, 2)
 
     def generate(self, prompt: str, session_history: List[Dict] = None,
                  max_tokens_override: int = None) -> Tuple[str, float]:

@@ -20,5 +20,5 @@ def completed_provider_response(kind, content):
     return {
         "OpenAICompatProvider": {"choices": [{"finish_reason": "stop", "message": {"content": content}}]},
         "OllamaProvider": {"message": {"role": "assistant", "content": content}, "done": True, "done_reason": "stop"},
-        "LlamaCppProvider": {"content": content, "stop": True, "stop_type": "eos", "truncated": False},
+        "LlamaCppProvider": {"choices": [{"finish_reason": "stop", "message": {"content": content}}], "__verbose": {"truncated": False}},
     }[kind]
