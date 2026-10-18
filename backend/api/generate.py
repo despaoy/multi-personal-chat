@@ -1108,9 +1108,10 @@ async def _retrieve_rag_bundle(
         revision = knowledge_api._vector_index_revision
         binding_options = {"question_binding": question_binding} if question_binding is not None else {}
         bundle = get_rag_helper().retrieve_with_citations(query, top_k=top_k, filters=filters, **binding_options)
+        budget = get_provider_context_budget()
         expanded = expand_source_context(
             bundle, vector_db, expected_generation=generation,
-            source_budget_tokens=get_provider_context_budget().window_tokens, filters=filters, query=query,
+            source_budget_tokens=budget.window_tokens, filters=filters, query=query,
         )
         if knowledge_api._get_rebuild_revision() != revision:
             raise RuntimeError("Knowledge authority changed during retrieval")
@@ -1118,7 +1119,7 @@ async def _retrieve_rag_bundle(
 
         expanded = attach_original_sources(
             expanded, db.get_knowledge_document,
-            source_budget_tokens=get_provider_context_budget().window_tokens,
+            source_budget_tokens=budget.window_tokens,
             authority_revision=revision,
         )
         if knowledge_api._get_rebuild_revision() != revision:
@@ -1165,16 +1166,18 @@ async def _generate_with_retrieval(
     independent_tasks_enabled = read_bool(os.environ, "CHARACTER_INDEPENDENT_TASKS_ENABLED", False)
     retrieval = RetrievalResult()
     filters = None
+    # Nonempty caller history takes precedence over the prepared server history.
+    effective_history = tuple(request.history or []) or (
+        prepared_character_turn.history if prepared_character_turn else ()
+    )
     if _use_kb:
         try:
             from knowledge.retrieval_query_plan import plan_retrieval
 
-            effective_history = tuple(request.history or []) or (
-                prepared_character_turn.history if prepared_character_turn else ()
-            )
             rag_message = request.message
+            budget = get_provider_context_budget()
             query_plan = await plan_retrieval(
-                rag_message, history=effective_history, context_budget=get_provider_context_budget().review,
+                rag_message, history=effective_history, context_budget=budget.review,
             )
             dependency_groups = dict(query_plan.dependencies.groups)
             if not query_plan.needs_public_retrieval:
@@ -1190,10 +1193,10 @@ async def _generate_with_retrieval(
                 if dependency_groups["public_knowledge"]:
                     question_binding = await resolve_question_binding(
                         query_plan.dependencies, rag_message,
-                        window_tokens=get_provider_context_budget().window_tokens,
+                        window_tokens=budget.window_tokens,
                         public_obligations=query_plan.public_obligations,
                         with_retrieval_scope=True,
-                        **({"history": effective_history, "context_budget": get_provider_context_budget().review}
+                        **({"history": effective_history, "context_budget": budget.review}
                            if effective_history else {}),
                     )
                 retrieval_query = bound_retrieval_query(question_binding, rag_message)
@@ -1207,7 +1210,7 @@ async def _generate_with_retrieval(
 
                 bundle = await review_public_candidates(
                     bundle, query_plan.dependencies, rag_message,
-                    window_tokens=get_provider_context_budget().window_tokens,
+                    window_tokens=budget.window_tokens,
                     public_obligations=query_plan.public_obligations,
                     question_binding=question_binding,
                 )
@@ -1229,23 +1232,26 @@ async def _generate_with_retrieval(
                 source_lookup = bundle.get(
                     "retrieval_strategy"
                 ) == "multi_scale_character" and requests_only_source_excerpt(rag_message)
+                retrieval_fields = dict(
+                    confidence=bundle.get("confidence"),
+                    requested_sources=source_requests,
+                    source_references=tuple(bundle.get("source_references") or ()),
+                    source_lookup=source_lookup,
+                    task_coverage=tuple(bundle.get("task_candidate_coverage") or ()),
+                    task_query=retrieval_query,
+                    public_curated_review=bundle.get("public_curated_review") or {},
+                    public_task_review=bundle.get("public_task_review") or {},
+                    public_task_query=rag_message if bundle.get("public_task_review") or bundle.get("public_curated_review") or bundle.get("public_domain_branches") else "",
+                    public_dependency_indices=tuple(dependency_groups["public_knowledge"]),
+                )
                 if bundle.get("abstained", False):
                     # Generate only the character's expression of uncertainty.
                     # Unreliable candidates and their citations never reach it.
                     rag_meta["citations"] = []
                     retrieval = RetrievalResult(
+                        **retrieval_fields,
                         status="character_abstention",
-                        confidence=bundle.get("confidence"),
                         reason="insufficient_retrieval_evidence",
-                        requested_sources=source_requests,
-                        source_references=tuple(bundle.get("source_references") or ()),
-                        source_lookup=source_lookup,
-                        task_coverage=tuple(bundle.get("task_candidate_coverage") or ()),
-                        task_query=retrieval_query,
-                        public_curated_review=bundle.get("public_curated_review") or {},
-                        public_task_review=bundle.get("public_task_review") or {},
-                        public_task_query=rag_message if bundle.get("public_task_review") or bundle.get("public_curated_review") or bundle.get("public_domain_branches") else "",
-                        public_dependency_indices=tuple(dependency_groups["public_knowledge"]),
                     )
 
                 # 角色知识检索结果自带按粒度组装的 context_text；
@@ -1265,26 +1271,17 @@ async def _generate_with_retrieval(
                         )
                         rag_context = "\n\n".join(packet["text"] for packet in evidence_packets)
                     retrieval = RetrievalResult(
+                        **retrieval_fields,
                         status="ok" if rag_context else "character_abstention",
                         reason="" if rag_context else "evidence_budget_exhausted",
                         evidence=rag_context,
                         evidence_packets=evidence_packets,
                         public_domain_branches=bundle.get("public_domain_branches") or {},
                         source_coverage=tuple(bundle.get("source_coverage") or ()),
-                        task_coverage=tuple(bundle.get("task_candidate_coverage") or ()),
-                        task_query=retrieval_query,
-                        public_curated_review=bundle.get("public_curated_review") or {},
-                        public_task_review=bundle.get("public_task_review") or {},
-                        public_task_query=rag_message if bundle.get("public_task_review") or bundle.get("public_curated_review") or bundle.get("public_domain_branches") else "",
-                        public_dependency_indices=tuple(dependency_groups["public_knowledge"]),
                         identity_task=bundle.get("identity_task") or {},
                         identity_subtask=bundle.get("identity_subtask") or {},
                         documents=tuple(bundle.get("results", [])),
                         citations=tuple(rag_meta.get("citations", [])),
-                        confidence=bundle.get("confidence"),
-                        requested_sources=source_requests,
-                        source_references=tuple(bundle.get("source_references") or ()),
-                        source_lookup=source_lookup,
                         source_excerpts=(
                             (bundle["raw_excerpt"],) if isinstance(bundle.get("raw_excerpt"), dict) else ()
                         ),
@@ -1309,6 +1306,8 @@ async def _generate_with_retrieval(
                 detail=(e.public_detail() if isinstance(e, (RetrievalIndexError, QuestionBindingCapacityError)) else
                         with_provider_error("检索或证据审核失败，请检查检索服务及审核模型状态后重试", e)),
             ) from e
+    else:
+        budget = get_provider_context_budget()
 
     from inference.private_context_authority import make_private_context_revalidator
     from inference.public_context_authority import make_public_context_revalidator
@@ -1316,13 +1315,7 @@ async def _generate_with_retrieval(
     generation = await generate_character_response(
         CharacterGenerationRequest(
             message=request.message,
-            # 角色上下文已按用户范围从数据库加载完整历史；
-            # 调用方现场历史（bot 传入）非空时优先。
-            history=(
-                tuple(request.history or [])
-                if (request.history or [])
-                else (prepared_character_turn.history if prepared_character_turn else ())
-            ),
+            history=effective_history,
             persona_prompt=_get_system_prompt(prompt_lora_name or lora_name),
             interlocutor=request.senderName or request.userName or "普通用户",
             retrieval=retrieval,
@@ -1339,8 +1332,8 @@ async def _generate_with_retrieval(
             temperature=_temperature,
             max_tokens=_max_tokens,
             top_p=_top_p,
-            context_window_tokens=get_provider_context_budget().window_tokens,
-            evidence_max_chars=get_provider_context_budget().evidence_max_chars,
+            context_window_tokens=budget.window_tokens,
+            evidence_max_chars=budget.evidence_max_chars,
         ),
         model_generate,
     )
