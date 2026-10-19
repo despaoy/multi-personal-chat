@@ -9,9 +9,18 @@ SQLAlchemy ORM 模型（数据库 schema）定义在 db/models.py。
 from datetime import datetime
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, StringConstraints, field_validator
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, PrivateAttr, StringConstraints, field_validator
 
-from inference.history import validate_history
+from inference.history import is_message_text, validate_history
+
+
+def _require_message_text(value: str) -> str:
+    if not is_message_text(value):
+        raise ValueError("Message text must not be blank or contain unsupported control characters")
+    return value
+
+
+MessageText = Annotated[str, AfterValidator(_require_message_text)]
 
 # ============================================
 # 核心消息模型
@@ -22,7 +31,7 @@ class MessageRequest(BaseModel):
     _source_received_at: datetime | None = PrivateAttr(default=None)
     characterId: str | None = Field(default=None, min_length=1, max_length=100, pattern=r"^[A-Za-z0-9_-]+$")
     branchId: str | None = Field(default=None, min_length=1, max_length=64)
-    message: str = Field(..., min_length=1, max_length=8000)
+    message: MessageText = Field(..., min_length=1, max_length=8000)
     sessionType: str = "private"
     conversationType: str = ""
     sessionId: str = ""
@@ -88,7 +97,7 @@ class GenerateResponse(BaseModel):
 class AskRequest(BaseModel):
     """知识问答请求：域门控 + 证据约束回答 + 引用返回。"""
 
-    message: str = Field(..., min_length=1, max_length=2000)
+    message: MessageText = Field(..., min_length=1, max_length=2000)
     domainId: str | None = Field(None, max_length=64)
     topK: int = Field(3, ge=1, le=10)
     history: list[dict[str, str]] = Field(default_factory=list, max_length=20)

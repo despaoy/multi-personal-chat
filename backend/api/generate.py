@@ -50,7 +50,6 @@ from infra.circuit_breaker import CircuitOpenError
 from infra.concurrency_control import InferenceQueueFull, RateLimitExceeded, inference_runtime
 from infra.environment import read_bool
 from infra.observability import increment, log_event, set_consecutive
-from infra.security_utils import strip_control_chars
 from knowledge.public_question_binding import QuestionBindingCapacityError
 from knowledge.retrieval_core.errors import RetrievalIndexError
 
@@ -949,7 +948,6 @@ def _build_chat_generation_service(runtime, character_service=None, message_db=N
     return ChatGenerationService(
         generate_handler=handler,
         inference_runtime=runtime,
-        sanitize_message=strip_control_chars,
         is_high_risk_prompt=_is_high_risk_prompt,
         security_response_factory=_security_policy_response,
         trace_id_factory=lambda: uuid.uuid4().hex,

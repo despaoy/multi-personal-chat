@@ -2,8 +2,17 @@
 
 from collections.abc import Mapping, Sequence
 from itertools import islice
+import re
 
 from inference.context_budget import InputBudgetError
+
+
+_CONTROL_CHARS_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+
+
+def is_message_text(value: object) -> bool:
+    """Accept meaningful text unchanged, including indentation and line breaks."""
+    return isinstance(value, str) and bool(value.strip()) and not _CONTROL_CHARS_RE.search(value)
 
 
 class HistoryFormatError(ValueError):
@@ -29,7 +38,7 @@ def validate_history(history: Sequence[Mapping[str, str]]) -> None:
         role, content = item.get("role"), item.get("content")
         if role not in ("user", "assistant"):
             raise HistoryFormatError(field + ".role")
-        if not isinstance(content, str) or not content.strip():
+        if not is_message_text(content):
             raise HistoryFormatError(field + ".content")
 
 

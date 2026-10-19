@@ -103,8 +103,8 @@ function Workspace() {
   }
 
   async function send() {
-    const text = input.trim();
-    if (!text || busy || loading) return;
+    const text = input;
+    if (!text.trim() || busy || loading) return;
     setBusy(true); setError('');
     const key = JSON.stringify([selected, character, text]);
     if (retry.current?.key !== key) retry.current = { key, trace: crypto.randomUUID() };

@@ -3,6 +3,7 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 from fastapi import HTTPException
+from pydantic import ValidationError
 
 from db.schemas import MessageRequest
 
@@ -79,12 +80,13 @@ async def test_branch_owned_path_keeps_its_existing_authority(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_source_comparison_uses_same_sanitized_text_as_generation(monkeypatch):
-    chat, handler, _ = service(monkeypatch, 'recorded')
+async def test_source_comparison_uses_same_original_text_as_generation(monkeypatch):
+    chat, handler, reader = service(monkeypatch, 'recorded')
     incoming = request()
-    incoming.message = '\x00新完整陈述 \n'
+    incoming.message = '    新完整陈述 \n'
     assert await chat.generate(incoming, {'id': '1'}) == 'allowed'
-    assert handler.call_args.args[0].message == '新完整陈述'
+    assert handler.call_args.args[0].message == '    新完整陈述 \n'
+    assert reader.call_args.kwargs['body'] == incoming.message
 
 
 @pytest.mark.asyncio
@@ -113,13 +115,7 @@ async def test_unknown_source_admission_state_is_not_silently_allowed(monkeypatc
     handler.assert_not_awaited()
 
 
-@pytest.mark.asyncio
-async def test_empty_sanitized_source_text_is_validation_error_not_database_failure(monkeypatch):
-    chat, handler, reader = service(monkeypatch)
-    incoming = request()
-    incoming.message = ' \x00 '
-    with pytest.raises(HTTPException) as error:
-        await chat.generate(incoming, {'id': '1'})
-    assert error.value.status_code == 422
-    handler.assert_not_awaited()
-    reader.assert_not_called()
+@pytest.mark.parametrize("message", [" \n\t", "正文\x00"])
+def test_invalid_source_text_is_rejected_at_request_boundary(message):
+    with pytest.raises(ValidationError):
+        MessageRequest(message=message, characterId="tsukiyashiro_kisaki")

@@ -13,7 +13,6 @@ from typing import Any
 
 from fastapi import HTTPException
 
-CONTROL_CHARS_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 SENSITIVE_KEY_RE = re.compile(
     r"(authorization|cookie|token|secret|password|api[_-]?key|credential|openid|unionid|phone|mobile)",
     re.IGNORECASE,
@@ -40,10 +39,6 @@ def constant_time_contains(candidate: str | None, allowed_tokens: Iterable[str])
     if not candidate:
         return False
     return any(hmac.compare_digest(candidate, token) for token in allowed_tokens if token)
-
-
-def strip_control_chars(text: str) -> str:
-    return CONTROL_CHARS_RE.sub("", text)
 
 
 def raw_json_size(value: Any) -> int:

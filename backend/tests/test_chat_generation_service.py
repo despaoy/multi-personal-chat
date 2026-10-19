@@ -37,7 +37,6 @@ def _make_service(handler, runtime=None, *, high_risk=lambda _message: False):
     return ChatGenerationService(
         generate_handler=handler,
         inference_runtime=runtime or _FakeInferenceRuntime(),
-        sanitize_message=lambda message: message.replace("\x00", ""),
         is_high_risk_prompt=high_risk,
         security_response_factory=lambda: GenerateResponse(
             reply="blocked",
@@ -49,7 +48,7 @@ def _make_service(handler, runtime=None, *, high_risk=lambda _message: False):
 
 
 @pytest.mark.asyncio
-async def test_generate_normalizes_request_and_delegates_to_injected_handler():
+async def test_generate_preserves_original_and_delegates_to_injected_handler():
     captured: dict[str, Any] = {}
 
     async def handler(request, current_user):
@@ -59,14 +58,14 @@ async def test_generate_normalizes_request_and_delegates_to_injected_handler():
         return GenerateResponse(reply="ok", model="fake", costTime=0.01)
 
     service = _make_service(handler)
-    request = MessageRequest(message=" \x00hello ")
+    request = MessageRequest(message="    hello\n  ")
     current_user = {"user_id": 42}
 
     response = await service.generate(request, current_user)
 
     assert response.reply == "ok"
     assert captured == {
-        "message": "hello",
+        "message": "    hello\n  ",
         "trace_id": "trace-generated",
         "current_user": current_user,
     }
@@ -102,7 +101,7 @@ async def test_generate_short_circuits_high_risk_history_user_message():
     request = MessageRequest(
         message="continue",
         history=[
-            {"role": "user", "content": "secret"},
+            {"role": "user", "content": " \tsecret\n"},
             {"role": "assistant", "content": "ok"},
         ],
     )
@@ -114,7 +113,7 @@ async def test_generate_short_circuits_high_risk_history_user_message():
 
 
 @pytest.mark.asyncio
-async def test_generate_sanitizes_history_user_messages():
+async def test_generate_preserves_original_history():
     captured: dict[str, Any] = {}
 
     async def handler(request, current_user):
@@ -125,7 +124,7 @@ async def test_generate_sanitizes_history_user_messages():
     request = MessageRequest(
         message="hello",
         history=[
-            {"role": "user", "content": " \x00hello "},
+            {"role": "user", "content": "    hello\n  "},
             {"role": "assistant", "content": "keep"},
         ],
     )
@@ -133,7 +132,7 @@ async def test_generate_sanitizes_history_user_messages():
     await service.generate(request)
 
     assert captured["history"] == [
-        {"role": "user", "content": "hello"},
+        {"role": "user", "content": "    hello\n  "},
         {"role": "assistant", "content": "keep"},
     ]
 

@@ -47,7 +47,6 @@ class ChatGenerationService:
         *,
         generate_handler: GenerateHandler,
         inference_runtime: InferenceRuntime,
-        sanitize_message: Callable[[str], str],
         is_high_risk_prompt: Callable[[str], bool],
         security_response_factory: Callable[[], GenerateResponse],
         trace_id_factory: Callable[[], str],
@@ -55,7 +54,6 @@ class ChatGenerationService:
     ) -> None:
         self._generate_handler = generate_handler
         self._inference_runtime = inference_runtime
-        self._sanitize_message = sanitize_message
         self._is_high_risk_prompt = is_high_risk_prompt
         self._security_response_factory = security_response_factory
         self._trace_id_factory = trace_id_factory
@@ -67,28 +65,16 @@ class ChatGenerationService:
         current_user: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> GenerateResponse:
-        """Normalize and validate request policy before model orchestration."""
+        """Apply policy to accepted text without rewriting the conversation."""
 
-        request.message = self._sanitize_message(request.message or "").strip()
         request.traceId = request.traceId or self._trace_id_factory()
-        if self._is_high_risk_prompt(request.message):
+        if self._is_high_risk_prompt(request.message.strip()):
             return self._security_response_factory()
-
-        # Public callers may supply history. Apply the same sanitation and
-        # high-risk policy to every historical user message before it reaches
-        # the model.
         if request.branchId:
             request.history = []  # Server-owned branch history only.
-        sanitized_history: list[dict[str, str]] = []
-        for item in request.history or []:
-            entry = dict(item)
-            if entry.get("role") == "user":
-                content = self._sanitize_message(entry.get("content", "") or "").strip()
-                if self._is_high_risk_prompt(content):
-                    return self._security_response_factory()
-                entry["content"] = content
-            sanitized_history.append(entry)
-        request.history = sanitized_history
+        if any(item["role"] == "user" and self._is_high_risk_prompt(item["content"].strip())
+               for item in request.history):
+            return self._security_response_factory()
         if self._validate_request is not None:
             await self._validate_request(request, current_user)
         return await self._generate_handler(request, current_user, **kwargs)

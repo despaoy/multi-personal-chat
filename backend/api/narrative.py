@@ -11,7 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.dependencies import get_current_user
 from app.runtime import get_runtime_container
 from character.profile_registry import CharacterProfileNotFoundError, get_default_profile_registry
-from db.schemas import GenerateResponse, MessageRequest
+from db.schemas import GenerateResponse, MessageRequest, MessageText
 from repositories.narrative import NarrativeRepository, owner_id
 
 
@@ -40,7 +40,7 @@ class Decision(Revision):
 
 class CanonicalMessage(BaseModel):
     character_id: str = Field(min_length=1, max_length=100)
-    message: str = Field(min_length=1, max_length=8000)
+    message: MessageText = Field(min_length=1, max_length=8000)
     traceId: str = Field(default="", max_length=128)
 
 
@@ -65,15 +65,12 @@ def characters(user=Depends(get_current_user)):
 async def canonical_generate(body: CanonicalMessage, request: Request, user=Depends(get_current_user)):
     from api.generate import _generate_reply_impl, _is_high_risk_prompt, _security_policy_response
     from infra.concurrency_control import InferenceQueueFull, RateLimitExceeded, inference_runtime
-    from infra.security_utils import strip_control_chars
     from services.character_context import TurnInput, build_character_context_service
 
     owner = owner_id(user)
     validate_character(body.character_id)
-    message = strip_control_chars(body.message).strip()
-    if not message:
-        raise HTTPException(422, "消息不能为空")
-    if _is_high_risk_prompt(message):
+    message = body.message
+    if _is_high_risk_prompt(message.strip()):
         return _security_policy_response()
     container = get_runtime_container(request.app)
     runtime = container.inference_runtime or inference_runtime

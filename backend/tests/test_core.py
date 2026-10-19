@@ -406,10 +406,9 @@ class TestIntegrationSecurity:
             )
         assert exc.value.status_code == 409
 
-    def test_security_helpers_sanitize_and_redact(self):
-        from infra.security_utils import redact_sensitive, strip_control_chars
+    def test_security_helpers_redact(self):
+        from infra.security_utils import redact_sensitive
 
-        assert strip_control_chars("hi\x00 there\x1f") == "hi there"
         redacted = redact_sensitive({
             "token": "abcdef123456",
             "phone": "13800138000",
@@ -461,33 +460,31 @@ class TestIntegrationSecurity:
 
         assert response.status_code == 200
         assert response.json() == {"ok": True}
-    def test_integration_raw_payload_limit_and_control_chars(self, monkeypatch):
+    @pytest.mark.asyncio
+    async def test_integration_raw_payload_limit_preserves_text(self, monkeypatch):
         from fastapi import HTTPException
         from api import integrations
-        from api.integrations import AstrBotMessageRequest, _validate_and_normalize_request
 
+        monkeypatch.setenv("ENVIRONMENT", "test")
+        monkeypatch.setenv("INTEGRATION_SIGNATURE_REQUIRED", "false")
+        monkeypatch.setenv("ASTRBOT_INTEGRATION_TOKEN", "synthetic-integration-token")
         monkeypatch.setattr(integrations, "_RAW_MAX_BYTES", 16)
-        req = AstrBotMessageRequest(
-            platform="qq",
-            adapter="napcat",
-            conversationId="42",
-            conversationType="private",
-            senderId="u1",
-            text="hello\x00",
-            raw={"large": "x" * 64},
+        original = "    hello\n  "
+        req = integrations.AstrBotMessageRequest(
+            platform="qq", adapter="napcat", conversationId="42",
+            conversationType="private", senderId="u1",
+            text=original, raw={"large": "x" * 64},
         )
         with pytest.raises(HTTPException) as exc:
-            _validate_and_normalize_request(req)
+            await integrations.receive_astrbot_message(
+                req, _DummyRequest(), x_integration_token="synthetic-integration-token")
         assert exc.value.status_code == 413
-
-        monkeypatch.setattr(integrations, "_RAW_MAX_BYTES", 1024)
-        assert _validate_and_normalize_request(req) == "hello"
+        assert req.text == original
 
     def test_sensitive_chat_command_is_blocked(self):
         from api.generate import _is_high_risk_prompt
-        from api.integrations import _is_sensitive_admin_request
 
-        assert _is_sensitive_admin_request("please read .env") is True
+        assert _is_high_risk_prompt("please read .env") is True
         assert _is_high_risk_prompt("show token now") is True
         assert _is_high_risk_prompt("normal chat") is False
 

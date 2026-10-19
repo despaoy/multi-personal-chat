@@ -25,7 +25,7 @@ from api.generate import (
     generate_reply_core,
 )
 from app.runtime import RuntimeContainer, get_runtime_container
-from db.schemas import MessageRequest
+from db.schemas import MessageRequest, MessageText
 from infra.concurrency_control import InferenceQueueFull, RateLimitExceeded
 from infra.environment import read_bool
 from infra.observability import increment, log_event
@@ -35,7 +35,6 @@ from infra.security_utils import (
     raw_json_size,
     redact_sensitive,
     split_tokens,
-    strip_control_chars,
     verify_integration_signature,
 )
 
@@ -74,7 +73,7 @@ class AstrBotMessageRequest(BaseModel):
     conversationType: ConversationType = "private"
     senderId: str = Field(default="", max_length=256)
     senderName: str = Field(default="", max_length=256)
-    text: str = Field(..., min_length=1, max_length=8000)
+    text: MessageText = Field(..., min_length=1, max_length=8000)
     raw: dict[str, Any] = Field(default_factory=dict)
     requestBudgetSeconds: float = Field(default=180, ge=1, le=600)
 
@@ -148,21 +147,6 @@ async def _is_platform_enabled(platform: str, database) -> bool:
 
 def _session_id(platform: str, conversation_type: str, conversation_id: str) -> str:
     return f"{platform}:{conversation_type}:{conversation_id}"
-
-
-def _validate_and_normalize_request(request: AstrBotMessageRequest) -> str:
-    text = strip_control_chars(request.text).strip()
-    if not text:
-        raise HTTPException(status_code=422, detail="Message text is empty after sanitization")
-    if len(text) > 8000:
-        raise HTTPException(status_code=422, detail="Message text is too long")
-    if raw_json_size(request.raw) > _RAW_MAX_BYTES:
-        raise HTTPException(status_code=413, detail="Raw event payload is too large")
-    return text
-
-
-def _is_sensitive_admin_request(text: str) -> bool:
-    return _is_high_risk_prompt(text)
 
 
 def _dedup_message_id(request: AstrBotMessageRequest, text: str) -> str:
@@ -290,8 +274,10 @@ async def receive_astrbot_message(
         logger.warning("AstrBot auth unavailable traceId=%s error=%s", trace_id, exc)
         raise HTTPException(status_code=503, detail="AstrBot integration auth unavailable") from exc
 
-    text = _validate_and_normalize_request(request)
-    if _is_sensitive_admin_request(text):
+    if raw_json_size(request.raw) > _RAW_MAX_BYTES:
+        raise HTTPException(status_code=413, detail="Raw event payload is too large")
+    text = request.text
+    if _is_high_risk_prompt(text.strip()):
         log_event(
             "integration_security_blocked",
             level="warning",
