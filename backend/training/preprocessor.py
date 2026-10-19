@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 数据集预处理模块
-负责加载原始对话数据（JSON/JSONL/TXT），进行清洗、验证、风格分析和训练集切分。
+负责验证对话、分析风格、切分训练集并导出训练数据。
 仅支持用户自定义角色风格配置，为LoRA微调准备标准化的训练数据。
 """
 
@@ -65,7 +65,7 @@ class CharacterStyleConfig:
 
 
 class DatasetPreprocessor:
-    """数据集预处理器，提供原始数据加载、文本清洗、对话验证、风格分析和训练集切分功能。"""
+    """数据集预处理器，提供对话验证、风格分析和训练集切分功能。"""
 
     def __init__(self, base_dir: Optional[Path] = None):
         """初始化预处理器。
@@ -87,84 +87,6 @@ class DatasetPreprocessor:
     
     def list_styles(self) -> Dict[str, CharacterStyleConfig]:
         return self.user_styles.copy()
-    
-    def load_raw_data(self, file_path: Path) -> List[Dict[str, Any]]:
-        """加载原始对话数据，支持JSON、JSONL和TXT格式。
-
-        Args:
-            file_path: 数据文件路径
-
-        Returns:
-            解析后的对话数据列表
-
-        Raises:
-            FileNotFoundError: 文件不存在时抛出
-            ValueError: 文件格式不支持时抛出
-        """
-        if not file_path.exists():
-            raise FileNotFoundError(f"数据文件不存在: {file_path}")
-        
-        data = []
-        
-        if file_path.suffix == '.json':
-            with open(file_path, 'r', encoding='utf-8') as f:
-                content = json.load(f)
-                if isinstance(content, list):
-                    data = content
-                elif isinstance(content, dict) and 'data' in content:
-                    data = content['data']
-        
-        elif file_path.suffix == '.jsonl':
-            with open(file_path, 'r', encoding='utf-8') as f:
-                for line in f:
-                    line = line.strip()
-                    if line:
-                        data.append(json.loads(line))
-        
-        elif file_path.suffix == '.txt':
-            data = self._parse_txt_file(file_path)
-        
-        else:
-            raise ValueError(f"不支持的文件格式: {file_path.suffix}")
-        
-        logger.info(f"加载原始数据: {len(data)} 条")
-        return data
-    
-    def _parse_txt_file(self, file_path: Path) -> List[Dict[str, Any]]:
-        data = []
-        with open(file_path, 'r', encoding='utf-8') as f:
-            lines = f.readlines()
-            
-            current_conv = []
-            for line in lines:
-                line = line.strip()
-                if not line:
-                    continue
-                
-                if line.startswith(('User:', 'user:', '用户:')):
-                    if current_conv:
-                        data.append({
-                            'conversations': current_conv
-                        })
-                        current_conv = []
-                    content = line.split(':', 1)[1].strip()
-                    current_conv.append({
-                        'role': 'user',
-                        'content': content
-                    })
-                elif line.startswith(('Assistant:', 'assistant:', '助手:')):
-                    content = line.split(':', 1)[1].strip()
-                    current_conv.append({
-                        'role': 'assistant',
-                        'content': content
-                    })
-            
-            if current_conv:
-                data.append({
-                    'conversations': current_conv
-                })
-        
-        return data
     
     def analyze_style(self, data: List[List[Dict[str, str]]]) -> Dict[str, Any]:
         """Analyze the already validated messages without reparsing input formats."""
