@@ -102,16 +102,16 @@ class AnswerCache:
                 del self._store[key]
                 self.misses += 1
                 return None
-            cached = deepcopy(result)
             self._store.move_to_end(key)
             self.hits += 1
-            return cached
+        return deepcopy(result)
 
     def set(self, key: str, result: GroundedAnswerResult) -> None:
         if self.ttl <= 0:
             return
+        snapshot = deepcopy(result)
         with self._lock:
-            self._store[key] = (time.monotonic(), deepcopy(result))
+            self._store[key] = (time.monotonic(), snapshot)
             self._store.move_to_end(key)
             if len(self._store) > self.max_entries:
                 self._store.popitem(last=False)

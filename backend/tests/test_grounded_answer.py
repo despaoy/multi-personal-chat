@@ -723,3 +723,49 @@ async def test_stream_done_reuses_actual_decision_and_matches_normal_result(vari
     assert next(event.data["citations"] for event in events if event.type == "citations") == result.citations
     assert len(calls) == (0 if variant in {"abstention", "no_domain"} else 2)
     assert not calls or calls[0] == calls[1]
+
+
+@pytest.mark.parametrize("operation", ["read", "write"])
+def test_answer_cache_independent_read_during_snapshot_copy(monkeypatch, operation):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Event
+
+    from knowledge.grounded_answer import cache as cache_module
+    from knowledge.grounded_answer.models import GroundedAnswerResult
+
+    body = "虚构档案馆周三17:00至18:00只办理归还，不办理续借；雨天暂停开放。"
+    result = GroundedAnswerResult(
+        answer=body, answer_mode=AnswerMode.GROUNDED_ANSWER, domain_id="story",
+        citations=[{"document_id": "fiction-source", "evidence_excerpt": body}],
+    )
+    cache = AnswerCache()
+    cache.set("held", result)
+    cache.set("other", result)
+    target = cache._store["held"][1] if operation == "read" else result
+    entered, release, started = Event(), Event(), Event()
+    deepcopy = cache_module.deepcopy
+
+    def copying(value):
+        if value is target:
+            entered.set()
+            assert release.wait(10)
+        return deepcopy(value)
+
+    def independent_read():
+        started.set()
+        return cache.get("other")
+
+    monkeypatch.setattr(cache_module, "deepcopy", copying)
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        held = pool.submit(cache.get, "held") if operation == "read" else pool.submit(cache.set, "incoming", result)
+        try:
+            assert entered.wait(3)
+            other = pool.submit(independent_read)
+            assert started.wait(3)
+            assert other.result(timeout=3).citations[0]["evidence_excerpt"] == body
+        finally:
+            release.set()
+        returned = held.result(timeout=3)
+    changed = returned if operation == "read" else result
+    changed.citations[0]["evidence_excerpt"] = "caller mutation"
+    assert cache.get("held" if operation == "read" else "incoming").citations[0]["evidence_excerpt"] == body
