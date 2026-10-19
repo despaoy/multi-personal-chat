@@ -26,14 +26,11 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def _index_names(table_name: str) -> set[str]:
     inspector = sa.inspect(op.get_bind())
-    try:
-        return {
-            str(index["name"])
-            for index in inspector.get_indexes(table_name)
-            if index.get("name")
-        }
-    except Exception:
-        return set()
+    return {
+        str(index["name"])
+        for index in inspector.get_indexes(table_name)
+        if index.get("name")
+    }
 
 
 def upgrade() -> None:

@@ -28,10 +28,7 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def _index_exists(inspector: sa.Inspector, table_name: str, index_name: str) -> bool:
     """检查索引是否已存在（幂等迁移）。"""
-    try:
-        indexes = inspector.get_indexes(table_name)
-    except Exception:
-        return False
+    indexes = inspector.get_indexes(table_name)
     return any(idx["name"] == index_name for idx in indexes)
 
 
