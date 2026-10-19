@@ -1,11 +1,14 @@
 """Internal decisions must not see answers stripped of their user premise."""
 
 import json
+from collections import UserDict
 from copy import deepcopy
+from types import MappingProxyType
 
 import pytest
 
-from character.evidence_selector import _history_view, selection_messages
+from character.evidence_selector import selection_messages
+from inference.history import review_history
 from inference.context_budget import InputBudgetError
 from character.models import MemoryItem
 
@@ -32,7 +35,7 @@ def test_assistant_chunks_never_outlive_cut_user_premise():
     rows = [{'role': 'user', 'content': '限定条件'}] + [
         {'role': 'assistant', 'content': f'分段{i}'} for i in range(12)]
     with pytest.raises(InputBudgetError):
-        _history_view(rows)
+        review_history(rows)
 
 
 async def test_decision_policy_uses_same_complete_turn_boundary():
@@ -55,6 +58,20 @@ async def test_decision_policy_uses_same_complete_turn_boundary():
 
 def test_fitting_and_user_only_histories_remain_unchanged():
     for rows in ([], _history()[2:], [{'role': 'assistant', 'content': '旧系统记录'}]):
-        assert _history_view(rows) == rows
+        assert review_history(rows) == rows
     rows = [{'role': 'user', 'content': str(index)} for index in range(15)]
-    assert _history_view(rows) == rows[-12:]
+    assert review_history(rows) == rows[-12:]
+
+
+
+@pytest.mark.parametrize("mapping", [UserDict, MappingProxyType])
+def test_reference_context_counts_all_validated_mapping_messages(mapping):
+    from knowledge.question_reference_context import build_reference_context, validate_reference_context
+
+    rows = _history()
+    context = build_reference_context(tuple(mapping(row) for row in rows))
+    assert context == build_reference_context(rows)
+    assert context["omitted_messages"] == 2 and context["history"] == rows[2:]
+    assert validate_reference_context(context) is context
+    context["history"][-1]["content"] = "修改派生副本"
+    assert rows == _history()

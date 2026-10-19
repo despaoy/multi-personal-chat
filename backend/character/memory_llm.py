@@ -27,7 +27,7 @@ from typing import TYPE_CHECKING, Any, Protocol
 import httpx
 
 from character.event_memory import EVENT_TZ
-from character.evidence_selector import _history_view
+from inference.history import review_history
 from inference.context_budget import InputBudgetError
 from character.identity_alias_evidence import explicit_alias_value, identity_alias_projection, normalize_alias_labels
 from character.memory_clock import observation_clock
@@ -1483,7 +1483,7 @@ def build_memory_llm_messages(
     reference_time = observation_clock(observed_at)
     if not context_window_tokens and len(message) > max_input_chars:
         raise InputBudgetError("current memory message exceeds input budget")
-    safe_history = _history_view(history, max_messages=MAX_HISTORY_MESSAGES,
+    safe_history = review_history(history, max_messages=MAX_HISTORY_MESSAGES,
                                  max_chars=4 * context_window_tokens if context_window_tokens else 2000)
     selected_memories = _select_existing_memories(existing_memories, feedback_target_ids)
     from character.quoted_erasure_authority import partial_source_packet

@@ -91,14 +91,14 @@ async def _review(messages):
 
 def planning_messages(query: str, *, history=(), context_budget=None):
     "Preserve original segments and authorized whole-turn history separately."
-    from character.evidence_selector import _history_view
+    from inference.history import review_history
     from inference.context_budget import InputBudgetError
 
     segments = query_segments(query)
     payload = {"query": query, "segments": [
         {"id": index, "text": segment} for index, segment in enumerate(segments)]}
     if history:
-        complete = _history_view(history, **(
+        complete = review_history(history, **(
             {"max_messages": context_budget.history_messages,
              "max_chars": 4 * context_budget.window_tokens} if context_budget else {}))
         payload["history"] = complete

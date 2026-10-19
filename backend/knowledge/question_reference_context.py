@@ -26,9 +26,9 @@ def validate_reference_context(context):
 
 
 def build_reference_context(history, *, context_budget=None):
-    from character.evidence_selector import _history_view
+    from inference.history import review_history
 
-    complete = _history_view(
+    complete = review_history(
         history,
         **(
             dict(max_messages=context_budget.history_messages, max_chars=4 * context_budget.window_tokens)
@@ -38,14 +38,7 @@ def build_reference_context(history, *, context_budget=None):
     )
     if not complete:
         return None
-    count = sum(
-        isinstance(row, dict)
-        and row.get("role") in {"user", "assistant"}
-        and isinstance(row.get("content"), str)
-        and bool(row["content"].strip())
-        for row in history
-    )
-    return validate_reference_context(dict(history=complete, omitted_messages=count - len(complete)))
+    return dict(history=complete, omitted_messages=len(history) - len(complete))
 
 
 def object_reference_origin(name, query, context=None):

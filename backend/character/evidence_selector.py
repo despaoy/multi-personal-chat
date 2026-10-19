@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING
 
 from character.source_fragment_provenance import source_completeness_payload
 from inference.context_budget import InputBudgetError
-from inference.history import validate_history
+from inference.history import review_history
 from infra.environment import read_bool
 
 if TYPE_CHECKING:
@@ -27,8 +27,6 @@ if TYPE_CHECKING:
     from inference.context_budget import ReviewContextBudget
 
 MAX_CANDIDATES = 24
-MAX_HISTORY_MESSAGES = 12
-MAX_HISTORY_CHARS = 6000
 MAX_RESPONSE_CHARS = 16000
 MAX_INPUT_CHARS = 18000
 LABELS = frozenset({"use", "background", "irrelevant", "wrong_subject", "stale", "unsupported"})
@@ -81,37 +79,6 @@ class SelectionOutcome:
     latency_ms: float = 0.0
 
 
-def _history_view(history: Sequence[Mapping[str, str]], *,
-                  max_messages: int = MAX_HISTORY_MESSAGES,
-                  max_chars: int = MAX_HISTORY_CHARS) -> list[dict[str, str]]:
-    """Keep a suffix of complete user-led turns or reject the review.
-
-    A tail slice can detach a quotation or negation from its subject. The
-    Message-count cuts must not leave an assistant claim without the user
-    premise that qualified it. Legacy leading assistant-only history remains
-    unchanged when it fits; this view cannot reconstruct missing upstream data.
-    """
-    validate_history(history)
-    turns: list[list[dict[str, str]]] = []
-    for entry in history:
-        if entry['role'] == 'user' or not turns:
-            turns.append([])
-        turns[-1].append({"role": entry["role"], "content": entry["content"]})
-    selected: list[list[dict[str, str]]] = []
-    count = 0
-    for turn in reversed(turns):
-        if count + len(turn) > max_messages:
-            if not selected:
-                raise InputBudgetError("latest turn exceeds history message budget")
-            break
-        selected.append(turn)
-        count += len(turn)
-    kept = [entry for turn in reversed(selected) for entry in turn]
-    if sum(len(entry['content']) for entry in kept) > max_chars:
-        raise InputBudgetError("recent history exceeds budget; must not be partially sliced")
-    return kept
-
-
 def selection_messages(
     query: str,
     candidates: Sequence[MemoryItem],
@@ -128,7 +95,7 @@ def selection_messages(
         "query": query,
         "required_ids": [item.memory_id for item in candidates],
         "decision_count": len(candidates),
-        "history": _history_view(history, **(dict(max_messages=context_budget.history_messages,
+        "history": review_history(history, **(dict(max_messages=context_budget.history_messages,
             max_chars=4 * context_budget.window_tokens) if context_budget else {})),
         "character": {
             "name": profile.display_name[:100],

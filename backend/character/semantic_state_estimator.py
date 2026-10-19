@@ -18,7 +18,8 @@ from contextvars import ContextVar
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any, Literal
 
-from character.evidence_selector import _history_view, _unique_object
+from character.evidence_selector import _unique_object
+from inference.history import review_history
 from inference.context_budget import InputBudgetError
 from character.models import InteractionState, WeightedSignal
 from character.situation_analyzer import ACT_LABELS, NEED_LABELS, PHASE_LABELS, SITUATION_LABELS
@@ -394,7 +395,7 @@ def _build_review_messages(message, recent_history, selected_reasons, context_bu
 def _recent_dialogue(history: Sequence[Mapping[str, Any]], *,
                      context_budget: ReviewContextBudget | None = None) -> list[dict[str, str]]:
     try:
-        return _history_view(history,
+        return review_history(history,
             max_messages=context_budget.history_messages if context_budget else MAX_REVIEW_HISTORY_MESSAGES,
             max_chars=4 * context_budget.window_tokens if context_budget else MAX_REVIEW_HISTORY_TOTAL_CHARS)
     except InputBudgetError as exc:

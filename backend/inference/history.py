@@ -1,6 +1,9 @@
 """One text-message contract for external, stored and reviewed history."""
 
 from collections.abc import Mapping, Sequence
+from itertools import islice
+
+from inference.context_budget import InputBudgetError
 
 
 class HistoryFormatError(ValueError):
@@ -28,3 +31,29 @@ def validate_history(history: Sequence[Mapping[str, str]]) -> None:
             raise HistoryFormatError(field + ".role")
         if not isinstance(content, str) or not content.strip():
             raise HistoryFormatError(field + ".content")
+
+
+def review_history(history: Sequence[Mapping[str, str]], *,
+                  max_messages: int = 12,
+                  max_chars: int = 6000) -> list[dict[str, str]]:
+    """Keep a suffix of complete user-led turns or reject the review.
+
+    A tail slice can detach a quotation or negation from its subject. The
+    Message-count cuts must not leave an assistant claim without the user
+    premise that qualified it. Legacy leading assistant-only history remains
+    unchanged when it fits; this view cannot reconstruct missing upstream data.
+    """
+    validate_history(history)
+    start = len(history)
+    for index in reversed(range(len(history))):
+        if index and history[index]["role"] != "user":
+            continue
+        if len(history) - index > max_messages:
+            if start == len(history):
+                raise InputBudgetError("latest turn exceeds history message budget")
+            break
+        start = index
+    kept = [{"role": entry["role"], "content": entry["content"]} for entry in islice(history, start, None)]
+    if sum(len(entry['content']) for entry in kept) > max_chars:
+        raise InputBudgetError("recent history exceeds budget; must not be partially sliced")
+    return kept

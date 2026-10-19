@@ -16,7 +16,8 @@ from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
 
 from character.decision_policy import STRATEGY_INSTRUCTIONS, strategies_compatible
-from character.evidence_selector import _history_view, _unique_object
+from character.evidence_selector import _unique_object
+from inference.history import review_history
 from inference.context_budget import InputBudgetError
 from infra.environment import read_bool
 
@@ -89,7 +90,7 @@ class ContextualDecisionPolicy:
         started = time.perf_counter()
         if self.context_budget is None and len(query) > 4000:
             raise InputBudgetError("complete policy query exceeds input budget")
-        bounded_history = _history_view(history, **(dict(max_messages=self.context_budget.history_messages,
+        bounded_history = review_history(history, **(dict(max_messages=self.context_budget.history_messages,
             max_chars=4 * self.context_budget.window_tokens) if self.context_budget else {}))
         allowed = set(STRATEGY_INSTRUCTIONS) - {"ensure_safety", "check_safety_gently"}
         if not has_relevant_memory:
