@@ -154,14 +154,9 @@ def _render_chat(
         return "\n".join(
             f"{message['role']}: {message['content']}" for message in messages
         )
-    kwargs = {
-        "tokenize": False,
-        "add_generation_prompt": False,
-    }
-    try:
-        return tokenizer.apply_chat_template(messages, enable_thinking=False, **kwargs)
-    except TypeError:
-        return tokenizer.apply_chat_template(messages, **kwargs)
+    return tokenizer.apply_chat_template(
+        messages, tokenize=False, add_generation_prompt=False, enable_thinking=False,
+    )
 
 
 def _content_spans(

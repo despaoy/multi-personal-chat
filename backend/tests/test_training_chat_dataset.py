@@ -427,3 +427,30 @@ def test_qwen3_truncation_keeps_supervised_tokens():
     )
     assert len(tokenized["input_ids"]) <= 32
     assert any(label != -100 for label in tokenized["labels"])
+
+
+@pytest.mark.parametrize("mode", ["healthy", "error", "plain"])
+def test_template_render_preserves_requested_mode_or_original_error(mode):
+    from training.chat_dataset import _render_chat
+
+    messages = [{"role": "system", "content": "虚构角色按证据回答。"},
+                {"role": "user", "content": "三张票每张2元，尚未付款，下雨取消。"},
+                {"role": "assistant", "content": "共6元，尚未付款，下雨取消。"}]
+    calls = []
+    failure = TypeError("synthetic-template-failure")
+
+    class ObservedTokenizer(TinyChatTokenizer):
+        def apply_chat_template(self, values, **kwargs):
+            calls.append(kwargs)
+            if mode == "error":
+                raise failure
+            return super().apply_chat_template(values, **kwargs)
+
+    if mode == "error":
+        with pytest.raises(TypeError) as caught:
+            _render_chat(ObservedTokenizer(), messages, use_chat_template=True)
+        assert caught.value is failure
+    else:
+        rendered = _render_chat(ObservedTokenizer(), messages, use_chat_template=mode != "plain")
+        assert all(message["content"] in rendered for message in messages)
+    assert calls == ([] if mode == "plain" else [{"tokenize": False, "add_generation_prompt": False, "enable_thinking": False}])
