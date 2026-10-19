@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from character.memory_llm import MemoryEnrichmentScheduler, MemoryLlmConfig, MemoryResponseError, parse_llm_proposals, build_memory_llm_messages
+from character.memory_llm import MemoryEnrichmentScheduler, MemoryLlmConfig, MemoryResponseError, MemoryScopeAuthorization, parse_llm_proposals, build_memory_llm_messages
 from character.models import UserScope
 from db.database import SQLiteDB
 from repositories.character_memory import DatabaseCharacterMemoryRepository
@@ -16,8 +16,8 @@ def entry(**extra):
     return dict(kind="name", value="清舟", evidence="我叫清舟", confidence=.98, operation="ADD", attributed_to="user", **extra)
 
 
-def parse(item, source="我叫清舟。"):
-    return parse_llm_proposals(json.dumps(dict(memories=[item]), ensure_ascii=False), source_message=source)
+def parse(item, source="我叫清舟。", authorization=None):
+    return parse_llm_proposals(json.dumps(dict(memories=[item]), ensure_ascii=False), source_message=source, scope_authorization=authorization)
 
 
 @pytest.mark.parametrize("scope,source,allowed", [
@@ -27,9 +27,10 @@ def parse(item, source="我叫清舟。"):
     ("user_global", "我叫清舟，请所有角色记住这个姓名。", ["conversation", "user_global"]),
 ])
 def test_authorized_scope_is_kept(scope, source, allowed):
-    proposal, = parse(entry(scope_level=scope), source)
+    authorization = MemoryScopeAuthorization(source, tuple(allowed))
+    proposal, = parse(entry(scope_level=scope), source, authorization)
     assert proposal.scope_level == scope
-    messages = build_memory_llm_messages(source, (), (), (), 2000, .85)
+    messages = build_memory_llm_messages(source, (), (), (), 2000, .85, scope_authorization=authorization)
     assert json.loads(messages[1]["content"])["proposal_constraints"]["scope_levels"] == allowed
 
 

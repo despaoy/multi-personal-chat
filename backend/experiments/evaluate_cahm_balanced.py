@@ -35,6 +35,7 @@ from character.memory_llm import (  # noqa: E402
     build_memory_llm_messages,
     classify_memory_write_mode,
     parse_llm_proposals,
+    review_memory_scopes,
 )
 from character.memory_service import (  # noqa: E402
     MIN_HYBRID_MEMORY_SCORE,
@@ -276,6 +277,9 @@ async def _evaluate_relations(
             proposals: list[ValidatedMemoryProposal] = []
             started = time.perf_counter()
             try:
+                scope_authorization = await review_memory_scopes(
+                    model_completion, message, max_input_chars=config.max_input_chars,
+                )
                 raw_output = await model_completion.complete(
                     build_memory_llm_messages(
                         message,
@@ -286,6 +290,7 @@ async def _evaluate_relations(
                         config.confidence_threshold,
                         feedback_target_ids=feedback_target_ids,
                         write_mode=classify_memory_write_mode(message),
+                        scope_authorization=scope_authorization,
                     )
                 )
                 proposals = parse_llm_proposals(
@@ -294,6 +299,7 @@ async def _evaluate_relations(
                     history=history,
                     existing_memories=existing,
                     confidence_threshold=config.confidence_threshold,
+                    scope_authorization=scope_authorization,
                     feedback_target_ids=feedback_target_ids,
                 )
                 successfully_processed += 1

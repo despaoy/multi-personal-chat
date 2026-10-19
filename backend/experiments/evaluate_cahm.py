@@ -24,6 +24,7 @@ from character.memory_llm import (  # noqa: E402
     OpenAICompatibleMemoryCompletion,
     build_memory_llm_messages,
     parse_llm_proposals,
+    review_memory_scopes,
 )
 from character.memory_service import (  # noqa: E402
     HYBRID_WEIGHT_IMPORTANCE,
@@ -137,6 +138,9 @@ async def _context_predictions(
             history = tuple(case.get("history", []))[-4:]
             existing = tuple(case.get("existing_memories", []))[:MAX_EXISTING_MEMORIES]
             rules = tuple(extract_memories(case["message"]))
+            scope_authorization = await review_memory_scopes(
+                completion, case["message"], max_input_chars=config.max_input_chars,
+            )
             response = await completion.complete(
                 build_memory_llm_messages(
                     case["message"],
@@ -145,6 +149,7 @@ async def _context_predictions(
                     existing,
                     config.max_input_chars,
                     config.confidence_threshold,
+                    scope_authorization=scope_authorization,
                 )
             )
             raw_outputs[case["id"]] = response
@@ -154,6 +159,7 @@ async def _context_predictions(
                 history=history,
                 existing_memories=existing,
                 confidence_threshold=config.confidence_threshold,
+                scope_authorization=scope_authorization,
             )
             semantic = "gold_keys" not in case
             predictions.append({_proposal_label(item, semantic=semantic) for item in proposals})
