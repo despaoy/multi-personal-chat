@@ -78,7 +78,7 @@ def token_counter_info():
         )
     else:
         model = (_deepseek_model(context.provider_name, context.provider.base_url, context.provider.model)
-                 if context.provider is not None else None)
+                 if context.provider_name == "openai_compat" else None)
     if not model:
         return {"mode": "generic_character_estimate"}
     _deepseek_tokenizer(model)

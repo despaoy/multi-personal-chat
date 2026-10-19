@@ -38,6 +38,7 @@ async def test_generation_failure_is_reported_and_recorded(monkeypatch, provider
     manager = SimpleNamespace(_current_provider=SimpleNamespace(value=provider),
                               set_lora_adapter=lambda _: None, set_provider=switch)
     connection = cloud_connection("fixture-model")
+    connection.name = provider
     manager.get_current_provider = lambda: connection
     monkeypatch.setattr(model_manager, "get_model_manager", lambda: manager)
     monkeypatch.setattr(generate, "db", SimpleNamespace(config={}, loras=[]))

@@ -2,7 +2,7 @@
 
 import asyncio
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import Mock
 
 import pytest
 from fastapi import HTTPException
@@ -18,7 +18,7 @@ FACTS = "虚构题设：3张票，每张2元，共6元；尚未付款，下雨�
 def installed(monkeypatch):
     state = SimpleNamespace(active=0, maximum=0, selected=None, calls=[], fault=None,
         entered=asyncio.Event(), release=None, capacity_reached=asyncio.Event(), expected_capacity=None)
-    provider = SimpleNamespace(base_url="https://native.invalid/v1", model="fixture-cloud")
+    provider = SimpleNamespace(name="openai_compat", base_url="https://native.invalid/v1", model="fixture-cloud")
 
     async def complete(messages, **kwargs):
         state.active += 1
@@ -52,8 +52,11 @@ def installed(monkeypatch):
         set_lora_adapter=Mock(side_effect=lambda path: setattr(state, "selected", path)),
         get_status=lambda: {"currentProvider": manager._current_provider.value,
             "providers": {"openai_compat": {"modelName": "fixture-cloud"}, "transformers_peft": {"modelName": "fixture-local"}}})
-    manager._providers = {model_manager.ModelProvider("transformers_peft"):
-        SimpleNamespace(get_status=lambda: {"modelName": "fixture-local"})}
+    local_provider = SimpleNamespace(name="transformers_peft", async_generate=local,
+        set_lora_adapter=manager.set_lora_adapter, get_status=lambda: {"modelName": "fixture-local"})
+    manager._providers = {model_manager.ModelProvider.OPENAI_COMPAT: provider,
+        model_manager.ModelProvider.TRANSFORMERS_PEFT: local_provider}
+    manager.get_current_provider = lambda: manager._providers[model_manager.ModelProvider(manager._current_provider.value)]
     monkeypatch.setattr(model_manager, "get_model_manager", lambda: manager)
     database = SimpleNamespace(config={"useKnowledgeBase": False}, loras=[])
     monkeypatch.setattr(generate, "db", database)
@@ -136,19 +139,6 @@ async def test_failure_or_cancellation_releases_capacity_without_retry(installed
     assert state.active == 0 and semaphore._value == 2 and len(state.calls) == 1
 
 
-@pytest.mark.asyncio
-async def test_provider_change_before_dispatch_is_an_error_instead_of_switching(installed, monkeypatch):
-    _, manager, _, semaphore = installed
-    operation = manager.async_generate = AsyncMock()
-    async def changed(request, lora_name, *, model_generate, **kwargs):
-        manager._current_provider.value = "ollama"
-        await model_generate(messages=[{"role": "user", "content": request.message}], max_tokens=128)
-    monkeypatch.setattr(generate, "_generate_with_retrieval", changed)
-    with pytest.raises(HTTPException) as error:
-        await receive()
-    assert error.value.status_code == 500 and isinstance(error.value.__cause__, RuntimeError)
-    operation.assert_not_awaited()
-    assert semaphore._value == 2
 
 
 @pytest.mark.asyncio

@@ -43,6 +43,7 @@ async def test_native_reviewers_follow_selected_cloud_without_reentering_reply_g
     calls = []
 
     class Cloud:
+        name = "openai_compat"
         async def async_complete(self, messages, *, temperature, max_tokens):
             calls.append(dict(messages=messages, temperature=temperature, max_tokens=max_tokens))
             return "云端复核结果", 0.01
@@ -78,7 +79,8 @@ async def test_vllm_selection_keeps_shared_low_level_client(monkeypatch, kind, b
             calls.append(kwargs)
             return "本地复核结果"
 
-    manager = SimpleNamespace(_current_provider=SimpleNamespace(value="vllm"))
+    manager = SimpleNamespace(_current_provider=SimpleNamespace(value="vllm"),
+        get_current_provider=lambda: SimpleNamespace(name="vllm"))
     monkeypatch.setattr(model_manager, "get_model_manager", lambda: manager)
 
     async def selected_local():
@@ -95,7 +97,8 @@ async def test_vllm_selection_keeps_shared_low_level_client(monkeypatch, kind, b
 async def test_unsupported_selected_provider_does_not_silently_switch_review_model(monkeypatch, kind):
     from inference import model_manager, vllm_client
 
-    manager = SimpleNamespace(_current_provider=SimpleNamespace(value="ollama"))
+    manager = SimpleNamespace(_current_provider=SimpleNamespace(value="ollama"),
+        get_current_provider=lambda: SimpleNamespace(name="ollama"))
     monkeypatch.setattr(model_manager, "get_model_manager", lambda: manager)
 
     async def wrong_local_provider():

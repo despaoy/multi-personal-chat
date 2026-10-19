@@ -49,11 +49,8 @@ async def _resolve_generate_adapters(context: InferenceRequestContext) -> tuple[
     Returns:
         (generate, generate_stream, model_id, cache_identity)
     """
-    from inference.model_manager import get_model_manager
-
-    manager = get_model_manager()
     selected = context.provider_name
-    provider = context.provider if selected == "openai_compat" else manager.get_current_provider()
+    provider = context.provider
     status = provider.get_status()
     model_id = f"{selected}/{status.get('modelName') or selected}"
     identity = {"provider": selected, "status": status}
@@ -107,18 +104,12 @@ async def _resolve_generate_adapters(context: InferenceRequestContext) -> tuple[
             resolved = (vllm_generate, vllm_stream)
             return resolved
 
-    def check_provider():
-        if manager._current_provider.value != selected:
-            raise RuntimeError("Selected provider changed before knowledge generation; retry the request")
-
     async def generate(**kwargs: Any) -> str:
         generate_fn, _ = await resolve()
-        check_provider()
         return await generate_fn(**kwargs)
 
     async def generate_stream(**kwargs: Any) -> AsyncIterator[str]:
         generate_fn, stream_fn = await resolve()
-        check_provider()
         if stream_fn is None:
             text = await generate_fn(**kwargs)
             yield text

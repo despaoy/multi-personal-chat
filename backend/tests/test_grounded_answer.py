@@ -180,7 +180,7 @@ async def test_api_generation_adapters_resolve_vllm_only_on_first_generation(mon
 
     from inference import model_manager
 
-    provider = SimpleNamespace(get_status=lambda: {"modelName": "local-test-model"})
+    provider = SimpleNamespace(name="vllm", get_status=lambda: {"modelName": "local-test-model"})
     manager = SimpleNamespace(_current_provider=SimpleNamespace(value="vllm"), get_current_provider=lambda: provider)
     monkeypatch.setattr(model_manager, "get_model_manager", lambda: manager)
     monkeypatch.setattr(generate_api, "get_vllm_client", get_client)

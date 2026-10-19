@@ -99,7 +99,7 @@ async def test_knowledge_provider_cannot_fall_back_to_flattened_generation(monke
     from inference import model_manager
 
     fallback = AsyncMock(side_effect=AssertionError("must not flatten or redirect the request"))
-    provider = SimpleNamespace(get_status=lambda: {"modelName": "synthetic-model"})
+    provider = SimpleNamespace(name=selected, get_status=lambda: {"modelName": "synthetic-model"})
     manager = SimpleNamespace(
         _current_provider=SimpleNamespace(value=selected),
         get_current_provider=lambda: provider, async_generate=fallback,

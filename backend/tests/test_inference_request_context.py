@@ -21,7 +21,7 @@ from tokenizers import Tokenizer
 
 from api import generate
 from db.schemas import GenerateResponse, MessageRequest
-from inference import model_manager, token_counting
+from inference import token_counting
 from inference.context_budget import estimated_tokens
 from inference.request_context import get_request_context, resolve_request_context, use_request_context
 from inference.review_client import get_context_review_client
@@ -291,24 +291,3 @@ async def test_real_memory_tasks_detach_only_provider_scope_and_preserve_other_c
     assert provider_observations == [(None, "keep-this-context")]
     assert timer_observations == ([(None, "keep-this-context")] if idle else [])
     assert installed.calls == [] and get_request_context() is None
-
-
-async def test_bound_review_rejects_changed_provider_type_before_transport(installed, monkeypatch):
-    snapshots = own_cloud_model(installed, monkeypatch)
-    context = await resolve_request_context(installed.manager)
-    original_type = installed.manager._current_provider
-    with use_request_context(context):
-        installed.manager._current_provider = model_manager.ModelProvider.OLLAMA
-        try:
-            with pytest.raises(RuntimeError):
-                await get_context_review_client()
-            assert installed.calls == [] and get_request_context() is context
-        finally:
-            installed.manager._current_provider = original_type
-        client = await get_context_review_client()
-        assert await client.generate(
-            messages=[{"role": "user", "content": QUERY}], lora_name=None,
-            temperature=0.0, max_tokens=64, stream=False, enable_thinking=False,
-        ) == ANSWER
-    assert snapshots.call_count == 1 and len(installed.calls) == 1
-    assert get_request_context() is None

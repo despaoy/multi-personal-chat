@@ -39,6 +39,8 @@ async def test_deterministic_response_has_no_model_invocation(monkeypatch, mode,
     saved, recorded = _install_common(monkeypatch, gen)
 
     connection = cloud_connection("not-called")
+    connection.name = provider
+    connection.set_lora_adapter = lambda _: None
 
     class Manager:
         _current_provider = SimpleNamespace(value=provider)
@@ -101,6 +103,9 @@ async def test_internal_mode_success_does_not_persist(monkeypatch):
     class FakeManager:
         _current_provider = SimpleNamespace(value="vllm")
 
+        def get_current_provider(self):
+            return SimpleNamespace(name="vllm")
+
     monkeypatch.setattr(mm, "get_model_manager", lambda: FakeManager())
     monkeypatch.setattr(gen, "get_vllm_client", AsyncMock(return_value=SimpleNamespace(generate=AsyncMock())))
 
@@ -130,6 +135,9 @@ async def test_internal_mode_vllm_failure_does_not_persist(monkeypatch):
 
     class FakeManager:
         _current_provider = SimpleNamespace(value="vllm")
+
+        def get_current_provider(self):
+            return SimpleNamespace(name="vllm")
 
         def set_lora_adapter(self, value):
             pass
@@ -225,7 +233,7 @@ async def test_explicit_memory_operations_respect_internal_and_delivery_modes(mo
     monkeypatch.setattr(gen, '_complete_character_turn', AsyncMock(return_value=None))
     monkeypatch.setattr(gen, '_generate_with_retrieval', generate)
     monkeypatch.setattr(gen, "get_vllm_client", AsyncMock(return_value=SimpleNamespace(generate=AsyncMock())))
-    monkeypatch.setattr(mm, 'get_model_manager', lambda: SimpleNamespace(_current_provider=SimpleNamespace(value='vllm')))
+    monkeypatch.setattr(mm, 'get_model_manager', lambda: SimpleNamespace(_current_provider=SimpleNamespace(value="vllm"), get_current_provider=lambda: SimpleNamespace(name="vllm")))
     request = MessageRequest(message='忘掉我的住址。', characterId='tsukiyashiro_kisaki', loraName='default', sessionType='private', sessionId='s1')
     await gen._generate_reply_impl(request, persist_message=persist, delivery_context=delivery,
                                   enable_rag=False, record_invocation=False)
@@ -249,6 +257,8 @@ async def test_message_db_reaches_save_and_invocation_record(monkeypatch, provid
     _install_common(monkeypatch, gen)
 
     connection = cloud_connection("unit-model")
+    connection.name = provider
+    connection.set_lora_adapter = lambda _: None
 
     class FakeManager:
         _current_provider = SimpleNamespace(value=provider)
@@ -359,6 +369,7 @@ async def test_unavailable_selected_vllm_never_dispatches_another_provider(monke
 
     saved, recorded = _install_common(monkeypatch, gen)
     manager = SimpleNamespace(_current_provider=SimpleNamespace(value="vllm"),
+                              get_current_provider=lambda: SimpleNamespace(name="vllm"),
                               async_generate=AsyncMock())
     monkeypatch.setattr(mm, "get_model_manager", lambda: manager)
     monkeypatch.setattr(gen, "get_vllm_client", AsyncMock(return_value=None))
@@ -421,6 +432,9 @@ async def test_injected_character_service_reaches_prepare_and_complete(monkeypat
 
     class FakeManager:
         _current_provider = SimpleNamespace(value="vllm")
+
+        def get_current_provider(self):
+            return SimpleNamespace(name="vllm")
 
     monkeypatch.setattr(mm, "get_model_manager", lambda: FakeManager())
 

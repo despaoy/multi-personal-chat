@@ -40,7 +40,7 @@ async def test_http_web_receipt_survives_real_save_and_completion_without_client
 
     scheduler = MemoryEnrichmentScheduler(config=MemoryLlmConfig(True, "unused", "unused"), completion=EmptyWriter())
     monkeypatch.setattr(memory_llm, "get_memory_enrichment_scheduler", lambda: scheduler)
-    monkeypatch.setattr(model_manager, "get_model_manager", lambda: SimpleNamespace(_current_provider=SimpleNamespace(value="vllm")))
+    monkeypatch.setattr(model_manager, "get_model_manager", lambda: SimpleNamespace(_current_provider=SimpleNamespace(value="vllm"), get_current_provider=lambda: SimpleNamespace(name="vllm")))
     monkeypatch.setattr(gen, "response_cache", None)
     monkeypatch.setattr(gen, "circuit_breaker_registry", None)
     monkeypatch.setattr(gen, "get_vllm_client", AsyncMock(return_value=SimpleNamespace(generate=AsyncMock())))

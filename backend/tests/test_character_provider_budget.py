@@ -110,7 +110,8 @@ async def arrange_provider_budget(tmp_path, monkeypatch):
     connection = cloud_connection("fiction-budget-model", completion=completion)
     manager = SimpleNamespace(
         _current_provider=model_manager.ModelProvider.VLLM,
-        get_current_provider=lambda: connection,
+        get_current_provider=lambda: connection if manager._current_provider == model_manager.ModelProvider.OPENAI_COMPAT
+            else SimpleNamespace(name=manager._current_provider.value),
     )
     rig.manager = manager
     monkeypatch.setattr(model_manager, "get_model_manager", lambda: manager)

@@ -20,6 +20,7 @@ async def test_selected_provider_receives_messages_and_budget_without_local_over
     calls = []
 
     class Manager:
+        name = provider
         _current_provider = SimpleNamespace(value=provider)
 
         def set_lora_adapter(self, value):

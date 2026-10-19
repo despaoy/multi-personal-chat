@@ -278,10 +278,8 @@ async def _generate_reply_body(
     # C11 fix: 主聊天端点 mock provider 防护
     # 此前仅 training/generate-dialogues 有此检查，主聊天端点遗漏，
     # 导致生产环境默认 mock 时静默返回罐头回复。现统一拦截。
-    from inference.model_manager import ModelProvider, get_model_manager
     from inference.request_context import get_request_context
 
-    _mgr = get_model_manager()
     request_context = get_request_context()
     request_provider = request_context.provider_name
     if request_provider == "mock":
@@ -413,10 +411,9 @@ async def _generate_reply_body(
         response_cache is not None and prepared_character_turn is None and selected_lora is None
         and not (read_bool(runtime_config, "useKnowledgeBase", True) and enable_rag)
     )
-    cloud_provider = request_context.provider
+    provider = request_context.provider
     if use_response_cache:
         try:
-            provider = cloud_provider if cloud_provider is not None else _mgr.get_current_provider()
             model_identity = {
                 "provider": request_provider, "status": provider.get_status(),
                 "endpoint": getattr(provider, "base_url", None),
@@ -486,22 +483,20 @@ async def _generate_reply_body(
                     if selected_lora and lora_path is None:
                         raise HTTPException(409, "所选 LoRA 没有可用本地目录，请先重新激活")
                     if request_provider != "openai_compat":
-                        _mgr.set_lora_adapter(lora_path)
+                        provider.set_lora_adapter(lora_path)
 
                     async def adapter(*, messages, **kwargs):
                         nonlocal model_name
-                        if _mgr._current_provider.value != request_provider:
-                            raise RuntimeError("Selected provider changed before generation; retry the request")
                         breaker = (
                             await circuit_breaker_registry.get_or_create(f"model_generate:{request_context.connection_id}")
                             if circuit_breaker_registry else None
                         )
                         async with (breaker() if breaker is not None else nullcontext()):
                             if request_provider == "openai_compat":
-                                model_name = cloud_provider.get_status()["modelName"]
-                                text, _cost = await cloud_provider.async_complete(messages, **kwargs)
+                                model_name = provider.get_status()["modelName"]
+                                text, _cost = await provider.async_complete(messages, **kwargs)
                             else:
-                                text, _cost = await _mgr.async_generate(
+                                text, _cost = await provider.async_generate(
                                     prompt=messages[-1]["content"], session_history=messages[:-1],
                                     max_tokens_override=kwargs["max_tokens"],
                                 )
@@ -519,10 +514,6 @@ async def _generate_reply_body(
                 semaphore.release()
             if rag_meta.get("modelInvoked", True) is not False:
                 try:
-                    provider = (
-                        cloud_provider if cloud_provider is not None
-                        else _mgr._providers[ModelProvider(request_provider)]
-                    )
                     name = provider.get_status()["modelName"]
                     if not isinstance(name, str) or not name.strip():
                         raise ValueError("Selected provider must report a nonempty model name")

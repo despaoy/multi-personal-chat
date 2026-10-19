@@ -20,7 +20,7 @@ class InferenceRequestContext:
 
     @property
     def connection_id(self) -> str:
-        if self.provider is None:
+        if self.provider_name != "openai_compat":
             return self.provider_name
         connection = (self.provider.base_url, self.provider.model, self.provider.api_key)
         digest = hashlib.sha256(json.dumps(connection).encode()).hexdigest()
@@ -35,10 +35,11 @@ def get_request_context() -> InferenceRequestContext | None:
 
 
 async def resolve_request_context(manager) -> InferenceRequestContext:
-    name = manager._current_provider.value
-    provider = await asyncio.to_thread(manager.get_current_provider().snapshot) if name == "openai_compat" else None
+    selected = manager.get_current_provider()
+    name = selected.name
+    provider = await asyncio.to_thread(selected.snapshot) if name == "openai_compat" else selected
     counter = (text_token_counter(name, provider.base_url, provider.model)
-               if provider is not None else text_token_counter(name, "", ""))
+               if name == "openai_compat" else text_token_counter(name, "", ""))
     return InferenceRequestContext(name, provider, counter)
 
 

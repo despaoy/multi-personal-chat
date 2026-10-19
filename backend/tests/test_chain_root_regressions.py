@@ -108,7 +108,7 @@ async def test_character_entry_does_not_require_or_auto_select_lora(monkeypatch)
     import api.generate as gen
     from inference import model_manager as mm
 
-    monkeypatch.setattr(mm, 'get_model_manager', lambda: SimpleNamespace(_current_provider=SimpleNamespace(value='vllm')))
+    monkeypatch.setattr(mm, 'get_model_manager', lambda: SimpleNamespace(_current_provider=SimpleNamespace(value="vllm"), get_current_provider=lambda: SimpleNamespace(name="vllm")))
     monkeypatch.setattr(gen, 'response_cache', None)
     monkeypatch.setattr(gen, "get_vllm_client", AsyncMock(return_value=SimpleNamespace(generate=AsyncMock())))
     prepare = AsyncMock(return_value=SimpleNamespace(character_id='tsukiyashiro_kisaki'))

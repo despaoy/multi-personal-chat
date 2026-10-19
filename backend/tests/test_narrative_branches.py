@@ -301,7 +301,7 @@ def test_character_mismatch_rejected_before_provider_call(repo, monkeypatch):
     _, _, prepared = asyncio.run(prepare_branch(request, "1", repo))
     database = SimpleNamespace(config={}, loras=[{"name": "wrong", "status": "inactive"}])
     monkeypatch.setattr(
-        mm, "get_model_manager", lambda: SimpleNamespace(_current_provider=SimpleNamespace(value="vllm"))
+        mm, "get_model_manager", lambda: SimpleNamespace(_current_provider=SimpleNamespace(value="vllm"), get_current_provider=lambda: SimpleNamespace(name="vllm"))
     )
     with pytest.raises(HTTPException) as exc:
         asyncio.run(
@@ -348,7 +348,7 @@ def test_full_web_generation_and_canonical_return(repo, monkeypatch):
     monkeypatch.setenv("NARRATIVE_BRANCHES_ENABLED", "true")
     monkeypatch.setenv("MEMORY_LLM_ENABLED", "false")
     monkeypatch.setattr(
-        mm, "get_model_manager", lambda: SimpleNamespace(_current_provider=SimpleNamespace(value="vllm"))
+        mm, "get_model_manager", lambda: SimpleNamespace(_current_provider=SimpleNamespace(value="vllm"), get_current_provider=lambda: SimpleNamespace(name="vllm"))
     )
     monkeypatch.setattr(gen, "get_vllm_client", AsyncMock(return_value=SimpleNamespace(generate=AsyncMock())))
     monkeypatch.setattr(gen, "_generate_with_retrieval", model)

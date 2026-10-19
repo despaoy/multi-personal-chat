@@ -30,17 +30,15 @@ async def get_context_review_client():
     from inference.model_manager import get_model_manager
     from inference.request_context import get_request_context
 
-    manager = get_model_manager()
     context = get_request_context()
-    selected = context.provider_name if context is not None else manager._current_provider.value
-    if context is not None and manager._current_provider.value != selected:
-        raise RuntimeError("Selected provider changed before review; retry the request")
+    provider = context.provider if context is not None else get_model_manager().get_current_provider()
+    selected = context.provider_name if context is not None else provider.name
     if selected == "vllm":
         from inference.vllm_client import get_vllm_client
 
         return await get_vllm_client()
     if selected == "openai_compat":
-        return OpenAICompatibleReviewClient(context.provider if context is not None else manager.get_current_provider())
+        return OpenAICompatibleReviewClient(provider)
     raise RuntimeError("unsupported selected context-review provider: " + selected)
 
 

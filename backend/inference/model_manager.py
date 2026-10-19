@@ -143,6 +143,10 @@ class BaseProvider(ABC):
             "modelName": self._model_name,
         }
 
+    def set_lora_adapter(self, lora_path: Optional[str]):
+        if lora_path is not None:
+            raise ValueError("Selected model provider does not support LoRA")
+
     @asynccontextmanager
     async def _acquire_http_client(self, timeout: float = 120.0):
         """Borrow the shared pool client, or own a client for a standalone call."""
@@ -654,13 +658,7 @@ class ModelManager:
         return await provider.async_generate(prompt, session_history, max_tokens_override)
 
     def set_lora_adapter(self, lora_path: Optional[str]):
-        provider = self.get_current_provider()
-        setter = getattr(provider, 'set_lora_adapter', None)
-        if setter is None:
-            if lora_path is not None:
-                raise ValueError("Selected model provider does not support LoRA")
-            return
-        setter(lora_path)
+        self.get_current_provider().set_lora_adapter(lora_path)
 
     def get_status(self) -> Dict[str, Any]:
         providers_status = {}
