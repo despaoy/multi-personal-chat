@@ -674,3 +674,52 @@ async def test_generation_config_zero_explicitly_disables_character_limit():
     service = GroundedAnswerService(retriever=lambda *a, **kw: _bundle(),  answer_max_chars=0)
     result = await service.answer("甲是谁", generate=generate, domain_id="story")
     assert result.answer == body and not result.abstained
+
+
+
+@pytest.mark.parametrize("variant,confidence", [
+    ("direct", .9), ("ambiguous", .85), ("single_channel", .87),
+    ("clarification", .35), ("abstention", .2), ("no_domain", None),
+])
+async def test_stream_done_reuses_actual_decision_and_matches_normal_result(variant, confidence):
+    from copy import deepcopy
+
+    data = _bundle()
+    if variant == "no_domain":
+        data = None
+    elif variant == "ambiguous":
+        data["results"][0]["rerank_score"] = .8
+        second = deepcopy(data["results"][0])
+        second.update(id="doc-2", rerank_score=.79)
+        data["results"].append(second)
+        data["citations"].append({**data["citations"][0], "source_id": "doc-2"})
+    elif variant == "single_channel":
+        data["results"][0]["bm25_score"] = 0
+    elif variant == "clarification":
+        data["confidence"] = .35
+        data["query_analysis"]["entities"] = []
+        data["results"][0]["rerank_score"] = .5
+    elif variant == "abstention":
+        data["confidence"] = .2
+    calls = []
+
+    async def generate(**kwargs):
+        calls.append(kwargs)
+        return "甲是学生。[S1]"
+
+    service = GroundedAnswerService(retriever=lambda *a, **kw: data, cache=AnswerCache(ttl_seconds=0))
+    options = dict(generate=generate, domain_id="story", model_id="controlled/model")
+    result = await service.answer("甲是谁？", **options)
+    events = [event async for event in service.answer_stream("甲是谁？", **options)]
+    done = next(event.data for event in events if event.type == "done")
+    expected = {name: getattr(result, name) for name in [
+        "answer", "domain_id", "confidence", "abstained", "warnings", "failure_kind",
+        "used_rag", "model_invoked", "model_id", "retrieval_metadata",
+    ]}
+    expected["answer_mode"] = result.answer_mode.value
+    assert {name: done[name] for name in expected} == expected
+    assert result.confidence == (pytest.approx(confidence) if confidence is not None else None)
+    assert result.retrieval_metadata["confidence"] == pytest.approx(confidence or 0)
+    assert next(event.data["citations"] for event in events if event.type == "citations") == result.citations
+    assert len(calls) == (0 if variant in {"abstention", "no_domain"} else 2)
+    assert not calls or calls[0] == calls[1]

@@ -279,15 +279,12 @@ class GroundedAnswerService:
                 data=self._done_payload(
                     answer=self.abstention_reply,
                     packet=packet,
-                    citations=[],
+                    decision=decision,
                     warnings=["abstention:no_domain"],
                     timings=timings,
                     start=start,
                     model_invoked=False,
                     model_id=model_id,
-                    abstained=True,
-                    failure_kind=FailureKind.NO_DOMAIN.value,
-                    answer_mode=AnswerMode.ABSTENTION,
                 ),
             )
             return
@@ -300,7 +297,7 @@ class GroundedAnswerService:
                 data=self._done_payload(
                     answer=self.abstention_reply,
                     packet=packet,
-                    citations=[],
+                    decision=decision,
                     warnings=[
                         *packet.warnings,
                         f"abstention:{packet.abstention_reason}",
@@ -309,7 +306,6 @@ class GroundedAnswerService:
                     start=start,
                     model_invoked=False,
                     model_id=model_id,
-                    abstained=True,
                 ),
             )
             return
@@ -379,13 +375,12 @@ class GroundedAnswerService:
             data=self._done_payload(
                 answer=answer_text,
                 packet=packet,
-                citations=result_citations,
+                decision=decision,
                 warnings=warnings,
                 timings=timings,
                 start=start,
                 model_invoked=True,
                 model_id=model_id,
-                abstained=False,
             ),
         )
 
@@ -611,35 +606,28 @@ class GroundedAnswerService:
         *,
         answer: str,
         packet: EvidencePacket,
-        citations: list[dict[str, Any]],
+        decision: ModeDecision,
         warnings: list[str],
         timings: AnswerTimings,
         start: float,
         model_invoked: bool,
         model_id: str = "",
-        abstained: bool | None = None,
-        failure_kind: str = "",
-        answer_mode: AnswerMode | None = None,
-        used_rag: bool | None = None,
     ) -> dict[str, Any]:
         timings.total_ms = (time.perf_counter() - start) * 1000
-        effective_mode = answer_mode or packet.answer_mode
-        decision = ModeDecision(mode=effective_mode)
+        no_domain = packet.answer_mode == AnswerMode.NO_RAG
+        effective_mode = AnswerMode.ABSTENTION if no_domain else packet.answer_mode
         return {
             "answer_mode": effective_mode.value,
             "domain_id": packet.domain_id,
             "answer": answer,
-            "abstained": (
-                abstained
-                if abstained is not None
-                else not model_invoked and packet.answer_mode == AnswerMode.ABSTENTION
-            ),
-            "confidence": packet.retrieval_confidence,
+            "abstained": not model_invoked,
+            "confidence": (None if no_domain else decision.effective_confidence
+                           if model_invoked else packet.retrieval_confidence),
             "warnings": warnings,
             "model_invoked": model_invoked,
             "model_id": model_id,
-            "failure_kind": failure_kind,
-            "used_rag": (used_rag if used_rag is not None else packet.answer_mode != AnswerMode.NO_RAG),
+            "failure_kind": FailureKind.NO_DOMAIN.value if no_domain else "",
+            "used_rag": not no_domain,
             "costTime": round(timings.total_ms / 1000, 2),
             "retrieval_metadata": self._retrieval_metadata(packet, decision, model_id=model_id),
             "timings": timings.to_dict(),
