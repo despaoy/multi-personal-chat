@@ -956,46 +956,6 @@ class PgDatabase:
             result = await session.execute(stmt)
             return [_row_to_dict(row) for row in result.fetchall()]
 
-    async def get_all_knowledge_chunks(self, limit: int | None = None, offset: int = 0) -> List[Dict]:
-        """获取所有知识库片段（用于检索）。
-
-        Args:
-            limit: 返回数量上限，None 表示全量（谨慎使用，大库可能 OOM）
-            offset: 跳过前 N 条
-        """
-        async with self.async_session() as session:
-            stmt = knowledge_chunks_table.select().order_by(
-                knowledge_chunks_table.c.documentId, knowledge_chunks_table.c.chunkIndex
-            )
-            if limit is not None:
-                stmt = stmt.limit(limit).offset(offset)
-            result = await session.execute(stmt)
-            return [_row_to_dict(row) for row in result.fetchall()]
-
-    async def iter_all_knowledge_chunks(self, batch_size: int = 500):
-        """分页迭代所有知识库片段，避免大库 OOM。
-
-        异步生成器，每次 yield 一条 chunk dict。
-        """
-        async with self.async_session() as session:
-            offset = 0
-            while True:
-                stmt = (
-                    knowledge_chunks_table.select()
-                    .order_by(knowledge_chunks_table.c.documentId, knowledge_chunks_table.c.chunkIndex)
-                    .limit(batch_size)
-                    .offset(offset)
-                )
-                result = await session.execute(stmt)
-                rows = result.fetchall()
-                if not rows:
-                    break
-                for row in rows:
-                    yield _row_to_dict(row)
-                offset += len(rows)
-                if len(rows) < batch_size:
-                    break
-
     async def iter_chunk_document_batches(self, batch_size: int = 500):
         """Read all pages from one read-only repeatable database snapshot."""
         from sqlalchemy import select
@@ -1039,34 +999,6 @@ class PgDatabase:
                     yield row
         finally:
             await batches.aclose()
-
-    async def get_chunks_with_document(self, limit: int = 500, offset: int = 0) -> List[Dict]:
-        """单页查询 chunk + document（LEFT JOIN），返回 dict 列表。
-
-        供 SyncPgAdapter 同步包装使用（async generator 无法直接 _run）。
-        """
-        from sqlalchemy import select
-
-        async with self.async_session() as session:
-            stmt = (
-                select(
-                    knowledge_chunks_table,
-                    knowledge_documents_table.c.title.label("doc_title"),
-                    knowledge_documents_table.c.category.label("doc_category"),
-                    knowledge_documents_table.c.knowledge_base_id.label("doc_kb_id"),
-                )
-                .select_from(
-                    knowledge_chunks_table.outerjoin(
-                        knowledge_documents_table,
-                        knowledge_chunks_table.c.documentId == knowledge_documents_table.c.id,
-                    )
-                )
-                .order_by(knowledge_chunks_table.c.documentId, knowledge_chunks_table.c.chunkIndex)
-                .limit(limit)
-                .offset(offset)
-            )
-            result = await session.execute(stmt)
-            return [_row_to_dict(row) for row in result.fetchall()]
 
     async def get_knowledge_stats(self) -> Dict:
         """获取知识库统计数据"""
@@ -3129,25 +3061,6 @@ class SyncPgAdapter:
 
     def get_knowledge_chunks(self, doc_id):
         return self._run(self._pg.get_knowledge_chunks(doc_id))
-
-    def get_all_knowledge_chunks(self, limit: int | None = None, offset: int = 0):
-        return self._run(self._pg.get_all_knowledge_chunks(limit=limit, offset=offset))
-
-    def iter_all_knowledge_chunks(self, batch_size: int = 500):
-        """SyncPgAdapter 不支持异步生成器委托，回退到分页批量拉取。
-
-        调用方如需流式迭代，应直接使用 PgDatabase.iter_all_knowledge_chunks（async）。
-        """
-        offset = 0
-        while True:
-            batch = self._run(self._pg.get_all_knowledge_chunks(limit=batch_size, offset=offset))
-            if not batch:
-                break
-            for chunk in batch:
-                yield chunk
-            offset += len(batch)
-            if len(batch) < batch_size:
-                break
 
     def iter_chunks_with_document(self, batch_size: int = 500):
         """Bridge whole snapshot batches, keeping memory bounded to one page."""

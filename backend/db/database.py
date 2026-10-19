@@ -2115,51 +2115,6 @@ class SQLiteDB:
             chunks.append(dict(row))
         return chunks
 
-    def get_all_knowledge_chunks(self, limit: int | None = None, offset: int = 0):
-        """获取所有知识库片段（用于检索）。
-
-        Args:
-            limit: 返回数量上限，None 表示全量（谨慎使用，大库可能 OOM）
-            offset: 跳过前 N 条
-        """
-        conn = self._get_connection()
-        cursor = conn.cursor()
-        if limit is not None:
-            cursor.execute(
-                'SELECT * FROM knowledge_chunks ORDER BY documentId, chunkIndex LIMIT ? OFFSET ?',
-                (limit, offset)
-            )
-        else:
-            cursor.execute('SELECT * FROM knowledge_chunks ORDER BY documentId, chunkIndex')
-        rows = cursor.fetchall()
-
-        chunks = []
-        for row in rows:
-            chunks.append(dict(row))
-        return chunks
-
-    def iter_all_knowledge_chunks(self, batch_size: int = 500):
-        """分页迭代所有知识库片段，避免大库 OOM。
-
-        生成器，每次 yield 一批（最多 batch_size 条）chunk dict。
-        """
-        conn = self._get_connection()
-        cursor = conn.cursor()
-        offset = 0
-        while True:
-            cursor.execute(
-                'SELECT * FROM knowledge_chunks ORDER BY documentId, chunkIndex LIMIT ? OFFSET ?',
-                (batch_size, offset)
-            )
-            rows = cursor.fetchall()
-            if not rows:
-                break
-            for row in rows:
-                yield dict(row)
-            offset += len(rows)
-            if len(rows) < batch_size:
-                break
-
     def iter_chunks_with_document(self, batch_size: int = 500):
         """Keep every page in one dedicated read-only SQLite transaction."""
         if not isinstance(batch_size, int) or isinstance(batch_size, bool) or batch_size <= 0:
