@@ -16,7 +16,8 @@ from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
 
 from character.decision_policy import STRATEGY_INSTRUCTIONS, strategies_compatible
-from character.evidence_selector import InputBudgetError, _history_view, _unique_object
+from character.evidence_selector import _history_view, _unique_object
+from inference.context_budget import InputBudgetError
 from infra.environment import read_bool
 
 if TYPE_CHECKING:

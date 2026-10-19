@@ -4,7 +4,7 @@ from dataclasses import replace
 
 import pytest
 
-from character.evidence_selector import InputBudgetError
+from inference.context_budget import InputBudgetError
 from character.models import CompiledCharacterContext
 from character.source_memory import SourceRecall, attach_sources, compile_sources
 from inference.generation_request import SOURCE_SPEECH_PROVENANCE_POLICY, GenerationRequest, build_generation_request

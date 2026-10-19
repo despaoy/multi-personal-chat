@@ -91,7 +91,8 @@ async def _review(messages):
 
 def planning_messages(query: str, *, history=(), context_budget=None):
     "Preserve original segments and authorized whole-turn history separately."
-    from character.evidence_selector import InputBudgetError, _history_view
+    from character.evidence_selector import _history_view
+    from inference.context_budget import InputBudgetError
 
     segments = query_segments(query)
     payload = {"query": query, "segments": [

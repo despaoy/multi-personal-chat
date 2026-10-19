@@ -6,7 +6,8 @@ from dataclasses import replace
 import pytest
 
 from character.context_builder import _complete_memory_evidence_packet
-from character.evidence_selector import ContextualEvidenceSelector, InputBudgetError, selection_messages
+from character.evidence_selector import ContextualEvidenceSelector, selection_messages
+from inference.context_budget import InputBudgetError
 from character.models import MemoryItem
 
 

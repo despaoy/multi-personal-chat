@@ -41,7 +41,8 @@ def test_expanded_source_budget_preserves_whole_long_source():
 
 
 def test_selector_and_semantic_keep_complete_large_inputs():
-    from character.evidence_selector import InputBudgetError, selection_messages
+    from character.evidence_selector import selection_messages
+    from inference.context_budget import InputBudgetError
     from character.models import InteractionState, MemoryItem
     from character.semantic_state_estimator import build_semantic_review_messages
     from inference.context_budget import ReviewContextBudget

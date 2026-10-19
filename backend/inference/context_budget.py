@@ -7,6 +7,18 @@ CONTEXT_SAFETY_MARGIN_TOKENS = 512
 MIN_CONTEXT_WINDOW_TOKENS = 1024
 
 
+class InputBudgetError(ValueError):
+    """Required input cannot fit the configured budget without losing data."""
+
+    http_status = 503
+
+    def public_detail(self):
+        return {
+            "kind": "context_budget_exceeded", "stage": "context_budget", "reason": "capacity_exceeded",
+            "message": "完整输入或输出预留超出当前处理预算，本轮无法完成。请缩小问题范围或检查预算配置。",
+        }
+
+
 def configured_context_window(*, env=None) -> int:
     """Read the actual local serving limit; never expand invalid configuration."""
     source = os.environ if env is None else env

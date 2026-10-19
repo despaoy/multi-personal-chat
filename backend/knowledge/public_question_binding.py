@@ -4,7 +4,7 @@ import asyncio
 import hashlib
 import json
 
-from character.evidence_selector import InputBudgetError
+from inference.context_budget import InputBudgetError
 from inference.context_budget import CONTEXT_SAFETY_MARGIN_TOKENS, estimated_tokens
 from knowledge.public_object_scope import parse_object_scopes, resolver_instruction
 

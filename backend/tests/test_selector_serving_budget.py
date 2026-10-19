@@ -4,7 +4,8 @@ import json
 
 import pytest
 
-from character.evidence_selector import ContextualEvidenceSelector, InputBudgetError, selection_messages
+from character.evidence_selector import ContextualEvidenceSelector, selection_messages
+from inference.context_budget import InputBudgetError
 from character.models import MemoryItem
 from inference.context_budget import ReviewContextBudget
 

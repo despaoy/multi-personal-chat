@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 from tokenizers import Tokenizer
 
-from character.evidence_selector import InputBudgetError
+from inference.context_budget import InputBudgetError
 from character.models import CompiledCharacterContext
 from character.output_guard import ReplyGuard
 from character.source_memory import compile_sources

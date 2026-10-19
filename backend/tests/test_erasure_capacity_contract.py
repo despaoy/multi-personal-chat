@@ -6,7 +6,7 @@ import pytest
 from repositories.character_memory import DatabaseCharacterMemoryRepository
 
 from character.erasure_authority import partial_erasure_plan
-from character.evidence_selector import InputBudgetError
+from inference.context_budget import InputBudgetError
 from character.memory_llm import (
     MAX_EXISTING_MEMORIES,
     MemoryEnrichmentScheduler,

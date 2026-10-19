@@ -27,7 +27,8 @@ from typing import TYPE_CHECKING, Any, Protocol
 import httpx
 
 from character.event_memory import EVENT_TZ
-from character.evidence_selector import InputBudgetError, _history_view
+from character.evidence_selector import _history_view
+from inference.context_budget import InputBudgetError
 from character.identity_alias_evidence import explicit_alias_value, identity_alias_projection, normalize_alias_labels
 from character.memory_clock import observation_clock
 from character.memory_extractor import (

@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from character.evidence_selector import InputBudgetError
+from inference.context_budget import InputBudgetError
 from inference.context_budget import ReviewContextBudget
 from knowledge.retrieval_query_plan import QueryPlanReviewError, plan_retrieval, planning_messages
 from knowledge.turn_dependencies import KINDS, parse_dependencies, query_segments

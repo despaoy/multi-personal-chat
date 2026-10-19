@@ -17,7 +17,7 @@ from __future__ import annotations
 import logging
 from html import escape
 
-from inference.context_budget import ReviewContextBudget
+from inference.context_budget import InputBudgetError, ReviewContextBudget
 
 from .models import AnswerMode, EvidencePacket
 
@@ -174,5 +174,5 @@ class GroundedPromptBuilder:
         messages.extend({"role": item["role"], "content": item["content"]} for item in history or [])
         messages.append({"role": "user", "content": self.build_user_message(packet, speaker=speaker)})
         if self.context_budget is not None and not self.context_budget.fits(messages, max_tokens):
-            raise ValueError("Complete grounded prompt and output exceed the model context window")
+            raise InputBudgetError("Complete grounded prompt and output exceed the model context window")
         return messages

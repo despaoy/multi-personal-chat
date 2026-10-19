@@ -5,7 +5,8 @@ from copy import deepcopy
 
 import pytest
 
-from character.evidence_selector import InputBudgetError, _history_view, selection_messages
+from character.evidence_selector import _history_view, selection_messages
+from inference.context_budget import InputBudgetError
 from character.models import MemoryItem
 
 

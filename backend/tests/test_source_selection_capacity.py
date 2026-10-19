@@ -136,7 +136,7 @@ async def test_whole_six_source_deferred_packet_obeys_actual_final_window(window
     import re
     from html import unescape
 
-    from character.evidence_selector import InputBudgetError
+    from inference.context_budget import InputBudgetError
     from character.models import CompiledCharacterContext
     from character.source_memory import attach_sources
     from inference.generation_request import GenerationRequest, build_generation_request

@@ -55,7 +55,7 @@ async def test_selection_keeps_candidate_bound_and_explicit_caller_limits():
         for i in range(26)
     )
     selector = ContextualEvidenceSelector(all_use, context_budget=ReviewContextBudget(65536))
-    from character.evidence_selector import InputBudgetError
+    from inference.context_budget import InputBudgetError
 
     with pytest.raises(InputBudgetError, match="candidate count exceeds selection budget"):
         await selector.select("核对所有提供的本人资料", original)

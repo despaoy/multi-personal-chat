@@ -11,7 +11,7 @@ from dataclasses import replace
 
 import pytest
 
-from character.evidence_selector import InputBudgetError
+from inference.context_budget import InputBudgetError
 from character.models import CompiledCharacterContext
 from inference.context_budget import ReviewContextBudget
 from inference.generation_request import GenerationRequest, build_generation_request

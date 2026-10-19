@@ -11,7 +11,7 @@ from dataclasses import dataclass, field, replace
 from functools import partial
 from typing import TYPE_CHECKING, Any, Literal
 
-from character.evidence_selector import InputBudgetError
+from inference.context_budget import InputBudgetError
 from inference.context_budget import CONTEXT_SAFETY_MARGIN_TOKENS as CONTEXT_SAFETY_MARGIN_TOKENS
 from inference.context_budget import configured_context_window
 from inference.context_budget import estimated_tokens as _estimated_tokens

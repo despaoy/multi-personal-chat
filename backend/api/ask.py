@@ -18,6 +18,7 @@ import hashlib
 import json
 import logging
 import time
+from contextlib import aclosing
 from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, Depends, Request
@@ -27,6 +28,7 @@ from app.dependencies import get_current_user
 from db.schemas import AskRequest, AskResponse
 from inference.openai_protocol import ProviderResponseError
 from inference.request_context import InferenceRequestContext, resolve_request_context, use_request_context
+from inference.context_budget import InputBudgetError
 from knowledge.grounded_answer.service import get_grounded_answer_service
 from knowledge.grounded_answer.validator import public_citation_view
 
@@ -196,39 +198,38 @@ async def ask_stream(
 
     context = await resolve_request_context(get_model_manager())
     generate, generate_stream, model_id, _cache_identity = await _resolve_generate_adapters(context)
-    with use_request_context(context):
-        service = await get_grounded_answer_service()
     debug = request.debug and current_user.get("role") == "admin"
 
     async def event_stream() -> AsyncIterator[bytes]:
         with use_request_context(context):
-            stream = service.answer_stream(
-                request.message,
-                generate=generate,
-                generate_stream=generate_stream,
-                domain_id=request.domainId,
-                top_k=request.topK,
-                history=request.history or None,
-                model_id=model_id,
-                temperature=request.temperature,
-                max_tokens=request.maxTokens,
-                top_p=request.topP,
-                want_citations=request.wantCitations,
-            )
             try:
-                async for event in stream:
-                    # 客户端断开：终止生成器（取消传播到底层 httpx 流）
-                    if await http_request.is_disconnected():
-                        logger.info("grounded_answer_stream client disconnected")
-                        break
-                    payload = dict(event.data)
-                    if event.type == "citations":
-                        payload["citations"] = _safe_citations(payload.get("citations") or [], debug=debug)
-                    yield "data: {}\n\n".format(json.dumps({"type": event.type, **payload}, ensure_ascii=False)).encode(
-                        "utf-8"
-                    )
+                service = await get_grounded_answer_service()
+                async with aclosing(service.answer_stream(
+                    request.message,
+                    generate=generate,
+                    generate_stream=generate_stream,
+                    domain_id=request.domainId,
+                    top_k=request.topK,
+                    history=request.history or None,
+                    model_id=model_id,
+                    temperature=request.temperature,
+                    max_tokens=request.maxTokens,
+                    top_p=request.topP,
+                    want_citations=request.wantCitations,
+                )) as stream:
+                    async for event in stream:
+                        # 客户端断开：终止生成器（取消传播到底层 httpx 流）
+                        if await http_request.is_disconnected():
+                            logger.info("grounded_answer_stream client disconnected")
+                            break
+                        payload = dict(event.data)
+                        if event.type == "citations":
+                            payload["citations"] = _safe_citations(payload.get("citations") or [], debug=debug)
+                        yield "data: {}\n\n".format(json.dumps({"type": event.type, **payload}, ensure_ascii=False)).encode(
+                            "utf-8"
+                        )
             except Exception as e:  # noqa: BLE001 - SSE 中途异常以 error 事件收尾
-                detail = (e.public_detail() if isinstance(e, ProviderResponseError)
+                detail = (e.public_detail() if isinstance(e, (ProviderResponseError, InputBudgetError))
                           else {"kind": "internal_error", "message": "服务内部错误"})
                 logger.warning("grounded_answer_stream failed: %s upstream_status=%s",
                                detail["kind"], detail.get("upstreamStatus"))
@@ -238,8 +239,6 @@ async def ask_stream(
                         ensure_ascii=False,
                     )
                 ).encode("utf-8")
-            finally:
-                await stream.aclose()
 
     return StreamingResponse(
         event_stream(),

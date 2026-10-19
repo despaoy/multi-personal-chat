@@ -8,7 +8,8 @@ from __future__ import annotations
 
 import json
 
-from character.evidence_selector import MAX_INPUT_CHARS, InputBudgetError
+from character.evidence_selector import MAX_INPUT_CHARS
+from inference.context_budget import InputBudgetError
 
 VIEWS = frozenset({"status_neutral", "interval_prose"})
 

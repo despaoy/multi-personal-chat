@@ -18,6 +18,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 
 from character.source_fragment_provenance import source_completeness_payload
+from inference.context_budget import InputBudgetError
 from inference.history import validate_history
 from infra.environment import read_bool
 
@@ -32,10 +33,6 @@ MAX_RESPONSE_CHARS = 16000
 MAX_INPUT_CHARS = 18000
 LABELS = frozenset({"use", "background", "irrelevant", "wrong_subject", "stale", "unsupported"})
 Reviewer = Callable[[Sequence[Mapping[str, str]]], Awaitable[object]]
-
-
-class InputBudgetError(ValueError):
-    """Required input cannot fit the configured budget without losing data."""
 
 
 SELECTION_INSTRUCTION = """你执行逐条记忆分类，不是聊天角色，也不回答问题。

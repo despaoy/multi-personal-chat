@@ -39,6 +39,7 @@ from inference.generation_request import (
     GenerationRequest as CharacterGenerationRequest,
 )
 from inference.generation_options import read_generation_options
+from inference.context_budget import InputBudgetError
 from inference.history import HistoryFormatError, validate_history
 from inference.lora_registry import get_lora_character_id
 from inference.lora_registry import get_lora_system_prompt as _get_system_prompt
@@ -492,14 +493,16 @@ async def _generate_reply_body(
                         nonlocal model_name
                         if _mgr._current_provider.value != request_provider:
                             raise RuntimeError("Selected provider changed before generation; retry the request")
-                        if request_provider == "openai_compat":
-                            model_name = cloud_provider.get_status()["modelName"]
-                            text, _cost = await cloud_provider.async_complete(messages, **kwargs)
-                        else:
-                            text, _cost = await _mgr.async_generate(
-                                prompt=messages[-1]["content"], session_history=messages[:-1],
-                                max_tokens_override=kwargs["max_tokens"],
-                            )
+                        breaker = await circuit_breaker_registry.get_or_create("model_generate") if circuit_breaker_registry else None
+                        async with (breaker() if breaker is not None else nullcontext()):
+                            if request_provider == "openai_compat":
+                                model_name = cloud_provider.get_status()["modelName"]
+                                text, _cost = await cloud_provider.async_complete(messages, **kwargs)
+                            else:
+                                text, _cost = await _mgr.async_generate(
+                                    prompt=messages[-1]["content"], session_history=messages[:-1],
+                                    max_tokens_override=kwargs["max_tokens"],
+                                )
                         return text
 
                     async def generate():
@@ -509,9 +512,7 @@ async def _generate_reply_body(
                             message_db=message_db, model_generate=adapter,
                         )
 
-                    breaker = await circuit_breaker_registry.get_or_create("model_generate") if circuit_breaker_registry else None
-                    operation = breaker.call(generate) if breaker else generate()
-                    reply, used_rag, rag_meta = await asyncio.wait_for(operation, timeout=_MODEL_INFERENCE_TIMEOUT)
+                    reply, used_rag, rag_meta = await asyncio.wait_for(generate(), timeout=_MODEL_INFERENCE_TIMEOUT)
             finally:
                 semaphore.release()
             if rag_meta.get("modelInvoked", True) is not False:
@@ -618,11 +619,13 @@ async def _generate_reply_body(
         raise
     except Exception as e:
         failed_cost = round(time.time() - start_time, 2)
-        increment("model_failures")
-        set_consecutive("model_failure", False)
+        budget_failure = isinstance(e, InputBudgetError)
+        if not budget_failure:
+            increment("model_failures")
+            set_consecutive("model_failure", False)
         log_event(
-            "model_invocation_failed",
-            level="error",
+            "generation_rejected" if budget_failure else "model_invocation_failed",
+            level="warning" if budget_failure else "error",
             traceId=request.traceId,
             platform=request.platform,
             conversationId=request.conversationId or request.sessionId,
@@ -631,7 +634,6 @@ async def _generate_reply_body(
             costTime=failed_cost,
             errorType=type(e).__name__,
         )
-        logger.error("Generation failed: %s", type(e).__name__)
         if record_invocation:
             try:
                 await _record_model_invocation(
@@ -646,7 +648,7 @@ async def _generate_reply_body(
             except HTTPException as record_error:
                 # Keep the model cause and recording error on separate chains.
                 raise HTTPException(503, detail=with_provider_error(record_error.detail, e)) from e
-        if isinstance(e, HistoryFormatError):
+        if isinstance(e, (HistoryFormatError, InputBudgetError)):
             raise HTTPException(503, detail=e.public_detail()) from e
         if isinstance(e, _ModelIdentityError):
             raise HTTPException(503, detail={
@@ -742,7 +744,7 @@ async def _prepare_character_turn(
             "message": "角色上下文准备失败，回复未生成。请先核对本轮记忆操作回执，再检查审核模型和上下文配置。",
             "memoryOperation": exc.operation_summary,
         }, exc)) from exc
-    except HistoryFormatError as exc:
+    except (HistoryFormatError, InputBudgetError) as exc:
         raise HTTPException(503, detail=exc.public_detail()) from exc
     except MemoryContextBudgetError as exc:
         raise HTTPException(503, detail={

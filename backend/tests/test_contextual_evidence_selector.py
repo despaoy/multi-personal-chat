@@ -6,12 +6,8 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from character.evidence_selector import (
-    ContextualEvidenceSelector,
-    InputBudgetError,
-    parse_decisions,
-    selection_messages,
-)
+from character.evidence_selector import ContextualEvidenceSelector, parse_decisions, selection_messages
+from inference.context_budget import InputBudgetError
 from character.memory_service import CharacterMemoryService
 from character.models import MemoryItem, UserScope
 from inference.history import HistoryFormatError
