@@ -48,6 +48,9 @@ def _require_enum(value: Any, field: str, allowed: tuple[str, ...]) -> str:
 class CharacterMemoryRepository(Protocol):
     """角色关系与长期记忆的持久化接口。"""
 
+    @property
+    def storage_owner(self) -> object: ...
+
     async def erase_unlinked_sources(self, character_id: str, user_scope: UserScope, *,
                                      source_message_ids: tuple[str, ...]) -> int: ...
 
@@ -247,6 +250,11 @@ class DatabaseCharacterMemoryRepository:
 
     def __init__(self, database: Any) -> None:
         self._database = database
+
+    @property
+    def storage_owner(self) -> object:
+        """The backing store owns buffering across short-lived repository views."""
+        return self._database
 
     async def source_windows(self, character_id: str, user_scope: UserScope, *,
                              source_message_ids: tuple[str, ...], radius: int = 1) -> list[dict[str, Any]]:

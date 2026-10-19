@@ -102,6 +102,10 @@ class _Completion:
 
 
 class _Repository:
+    @property
+    def storage_owner(self):
+        return self
+
     async def capture_source(self, *args, **kwargs):
         return "recorded"
 

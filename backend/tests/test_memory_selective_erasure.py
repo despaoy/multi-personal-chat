@@ -248,6 +248,7 @@ async def test_repository_forwards_protected_keys_and_refuses_unsafe_legacy_fall
 async def test_actual_scheduler_guards_unlinked_sources_and_passes_kept_keys_to_eraser(source_ids):
     class Repo:
         def __init__(self):
+            self.storage_owner = self
             self.erased = []
             self.raw_erased = []
             self.captured = []

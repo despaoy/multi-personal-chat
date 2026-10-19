@@ -23,7 +23,7 @@ def scheduler():
 @pytest.mark.parametrize("timeout", [-1.0, float("nan"), float("inf"), float("-inf")])
 async def test_invalid_deadline_preserves_buffered_work_timers_and_open_owner(operation, timeout):
     worker = scheduler()
-    repository = SimpleNamespace(capture_source=AsyncMock(return_value="recorded"))
+    repository = SimpleNamespace(storage_owner=object(), capture_source=AsyncMock(return_value="recorded"))
     receipt = asyncio.get_running_loop().create_future()
     assert worker.schedule(
         repository=repository,

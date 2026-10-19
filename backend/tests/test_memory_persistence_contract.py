@@ -68,7 +68,7 @@ async def test_repository_erasure_requires_complete_erasure_interface(target):
                                  {'persisted': True}, {'persisted': False}, 'missing-interface'])
 async def test_writer_reports_only_explicit_persistence_results(record):
     legacy = AsyncMock()
-    repo = SimpleNamespace(list_memory_records=AsyncMock(return_value=[]),
+    repo = SimpleNamespace(storage_owner=object(), list_memory_records=AsyncMock(return_value=[]),
         capture_source=AsyncMock(return_value='recorded'), add_or_update_memory=legacy)
     if record != 'missing-interface':
         repo.append_claim = AsyncMock(return_value=record)

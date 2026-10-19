@@ -1634,7 +1634,7 @@ class MemoryEnrichmentScheduler:
         character_id: str,
         user_scope: UserScope,
     ) -> tuple[Any, ...]:
-        return (id(repository), character_id, *user_scope.memory_scope_key)
+        return (id(repository.storage_owner), character_id, *user_scope.memory_scope_key)
 
     def _ensure_worker(self) -> None:
         if self._worker is None or self._worker.done():

@@ -51,6 +51,7 @@ def response(source):
 
 class Repo:
     def __init__(self, *, fail=False):
+        self.storage_owner = self
         self.deleted = []
         self.fail = fail
 

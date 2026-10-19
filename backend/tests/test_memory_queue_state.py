@@ -3,11 +3,15 @@ import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
+import pytest
+from repositories.character_memory import DatabaseCharacterMemoryRepository
+
 from character.memory_llm import MemoryEnrichmentScheduler, MemoryLlmConfig
 from character.models import UserScope
 
 
-async def test_capacity_survives_buffer_flush_processing_and_release(monkeypatch):
+@pytest.mark.parametrize("separate_wrapper", [False, True])
+async def test_capacity_survives_buffer_flush_processing_and_release(monkeypatch, separate_wrapper):
     worker = MemoryEnrichmentScheduler(config=MemoryLlmConfig(True, "unused", "test", queue_size=2, idle_seconds=3600),
         completion=SimpleNamespace(close=AsyncMock()))
     started, release = asyncio.Event(), asyncio.Event()
@@ -17,12 +21,14 @@ async def test_capacity_survives_buffer_flush_processing_and_release(monkeypatch
         await release.wait()
         processed.append(job.source_message_id)
     monkeypatch.setattr(worker, "_process_job", process)
-    values = dict(repository=object(), character_id="test", user_scope=UserScope("web", "test", "u", "u", "private"),
+    repository = DatabaseCharacterMemoryRepository(object())
+    values = dict(repository=repository, character_id="test", user_scope=UserScope("web", "test", "u", "u", "private"),
                   message="我喜欢红茶", rule_hints=[])
     try:
         assert worker.schedule(**values, immediate=False, source_message_id="buffered")
         assert worker.status.buffered == worker._inflight == 1
-        assert worker.schedule(**values, immediate=True, source_message_id="hot")
+        hot_repository = DatabaseCharacterMemoryRepository(repository.storage_owner) if separate_wrapper else repository
+        assert worker.schedule(**dict(values, repository=hot_repository), immediate=True, source_message_id="hot")
         assert worker.status.queued == worker._inflight == 2
         assert not worker.schedule(**values, immediate=True, source_message_id="refused")
         await asyncio.wait_for(started.wait(), 1)
@@ -51,7 +57,7 @@ async def test_batch_capacity_counts_jobs_and_preserves_accepted_batch(monkeypat
         await release.wait()
         processed.append(job.source_message_id)
     monkeypatch.setattr(worker, "_process_job", process)
-    values = dict(repository=object(), character_id="test", user_scope=UserScope("web", "test", "u", "u", "private"),
+    values = dict(repository=SimpleNamespace(storage_owner=object()), character_id="test", user_scope=UserScope("web", "test", "u", "u", "private"),
                   message="我喜欢红茶", rule_hints=[], immediate=False)
     try:
         assert worker.schedule(**values, source_message_id="first")
@@ -78,7 +84,7 @@ async def test_internal_enqueue_failure_is_not_reported_as_capacity_skip(monkeyp
     monkeypatch.setattr(worker._queue, "put_nowait", fail)
     try:
         with pytest.raises(asyncio.QueueFull):
-            worker.schedule(repository=object(), character_id="test",
+            worker.schedule(repository=SimpleNamespace(storage_owner=object()), character_id="test",
                 user_scope=UserScope("web", "test", "u", "u", "private"),
                 message="请记住我喜欢红茶", rule_hints=[], immediate=True)
         assert worker.status.skipped == 0 and worker._inflight == 0

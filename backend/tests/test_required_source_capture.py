@@ -11,7 +11,7 @@ from character.models import UserScope
 @pytest.mark.parametrize('source_only', [False, True])
 @pytest.mark.parametrize('mode', ['missing_id', 'missing_interface', 'unknown_result', 'empty_result', 'storage_error', 'recorded'])
 async def test_capture_must_complete_before_source_only_success_or_interpretation(mode, source_only):
-    repo = SimpleNamespace(list_memory_records=AsyncMock(return_value=[]), append_claim=AsyncMock())
+    repo = SimpleNamespace(storage_owner=object(), list_memory_records=AsyncMock(return_value=[]), append_claim=AsyncMock())
     if mode != 'missing_interface':
         repo.capture_source = AsyncMock(return_value=(None if mode == 'empty_result' else
             'unsupported_adapter' if mode == 'unknown_result' else 'recorded'))

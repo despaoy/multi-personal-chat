@@ -395,6 +395,10 @@ class _Completion:
 
 
 class _ClaimRepository:
+    @property
+    def storage_owner(self):
+        return self
+
     async def capture_source(self, *args, **kwargs):
         return "recorded"
 
