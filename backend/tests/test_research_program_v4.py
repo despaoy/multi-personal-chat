@@ -356,13 +356,12 @@ def test_s1_router_supports_project_personas_and_keeps_modes_separate():
     intent = LoRARouter({**config, "mode": "intent"}).route("查资料", (True, 0.9, "kisaki"))
     assert intent.target == RouteTarget.RAG_REQUIRED.value
     detector_router = LoRARouter({**config, "mode": "intent"})
-    detector_router._intent_detector = lambda _: (True, "knowledge intent", "kisaki")
+    detector_router._intent_detector = lambda _: (True, 0.93, "kisaki")
     detected = detector_router.route("请检索原作资料")
     assert detected.target == RouteTarget.RAG_REQUIRED.value
-    assert detected.confidence == 1.0
-    explicit_reason = detector_router.route("请检索原作资料", (True, "matched rule", "kisaki"))
-    assert explicit_reason.target == RouteTarget.RAG_REQUIRED.value
-    assert explicit_reason.confidence == 1.0
+    assert detected.confidence == 0.93
+    with pytest.raises(ValueError):
+        detector_router.route("请检索原作资料", (True, "matched rule", "kisaki"))
 
 
 def test_s1_dataset_keeps_external_roles_out_of_formal_generalization_claims():

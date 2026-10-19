@@ -109,9 +109,6 @@ async def update_router_config(
                 "ON CONFLICT(key) DO UPDATE SET value=:val",
                 {"val": serialized},
             )
-            from inference.lora_router import get_lora_router
-
-            get_lora_router(config)
         return {"success": True, "config": config, "routingAvailable": False,
                 "message": "在线规则路由已退出；旧配置仅保留历史资料，角色请明确选择"}
     except Exception as exc:

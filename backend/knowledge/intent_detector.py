@@ -105,3 +105,10 @@ def needs_rag(message: str, context: Optional[Dict[str, Any]] = None) -> Tuple[b
     _load_ml_model()
     pred, reason, _confidence, kb_name = _ml_predict(message)
     return pred, reason, kb_name
+
+
+def predict_rag_intent(message: str) -> Tuple[bool, float, Optional[str]]:
+    """Return the trained classifier score and knowledge target for routing."""
+    _load_ml_model()
+    pred, _reason, confidence, kb_name = _ml_predict(message)
+    return pred, confidence, kb_name

@@ -1,10 +1,7 @@
-"""多 LoRA 路由器 - 基于意图和角色关键词的轻量级路由。
+"""离线多 LoRA 路由研究基线。
 
-遵循路线图 guardrail：
-- 路由目标: base_chat / rag_required / persona_adapter
-- 记录路由置信度和降级决策
-- 由环境变量 LORA_ROUTER_ENABLED 控制（默认 false）
-- 规则版路由，不依赖 LLM
+在线聊天明确选择角色，路由决策仅用于研究实验。
+intent 模式依赖已训练分类器；依赖或配置失败直接报错。
 """
 from __future__ import annotations
 
@@ -84,12 +81,8 @@ class LoRARouter:
     def _get_intent_detector(self):
         """延迟加载意图检测器。"""
         if self._intent_detector is None:
-            try:
-                from knowledge.intent_detector import needs_rag
-                self._intent_detector = needs_rag
-            except ImportError:
-                logger.warning("intent_detector 不可用，路由器将仅依赖关键词匹配")
-                self._intent_detector = None
+            from knowledge.intent_detector import predict_rag_intent
+            self._intent_detector = predict_rag_intent
         return self._intent_detector
 
     def route(self, query: str, intent_result: Optional[tuple] = None) -> RoutingDecision:
@@ -114,28 +107,11 @@ class LoRARouter:
         # 1. 检查是否需要 RAG（知识检索）
         need_rag = False
         rag_confidence = 0.0
-        if self.mode == "rule":
-            need_rag = False
-        elif intent_result is not None:
-            need_rag = bool(intent_result[0]) if len(intent_result) > 0 else False
-            second = intent_result[1] if len(intent_result) > 1 else None
-            rag_confidence = (
-                float(second)
-                if isinstance(second, (int, float))
-                else (1.0 if need_rag else 0.0)
-            )
-        else:
-            detector = self._get_intent_detector()
-            if detector:
-                try:
-                    detected = detector(query)
-                    need_rag = bool(detected[0])
-                    second = detected[1] if len(detected) > 1 else None
-                    rag_confidence = float(second) if isinstance(second, (int, float)) else (1.0 if need_rag else 0.0)
-                except Exception:
-                    need_rag = False
-                    rag_confidence = 0.0
-
+        if self.mode != "rule":
+            detected = intent_result if intent_result is not None else self._get_intent_detector()(query)
+            need_rag, rag_confidence, _kb_name = detected
+            need_rag = bool(need_rag)
+            rag_confidence = float(rag_confidence)
 
         # 2. 检查角色关键词匹配
         best_persona = None
@@ -148,10 +124,10 @@ class LoRARouter:
 
         if best_persona and best_match_count > 0:
             confidence = min(1.0, best_match_count / 3.0)
-            adapter_name = self.persona_adapters.get(best_persona, f"{best_persona}_lora_7b")
+            adapter_name = self.persona_adapters[best_persona]
             # 验证适配器名称安全性
-            if not all(c.isalnum() or c in "_-" for c in adapter_name):
-                adapter_name = self.default_adapter
+            if not adapter_name or not all(c.isalnum() or c in "_-" for c in adapter_name):
+                raise ValueError("Invalid configured persona adapter name")
             return RoutingDecision(
                 target=RouteTarget.PERSONA_ADAPTER.value,
                 adapter_name=adapter_name,

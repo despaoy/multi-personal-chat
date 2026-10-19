@@ -50,7 +50,11 @@ def client(database):
                              headers={'Authorization': 'Bearer ' + token})
 
 
-async def test_two_applications_keep_config_and_check_reports_in_their_own_store(stores):
+async def test_two_applications_keep_config_and_check_reports_in_their_own_store(stores, monkeypatch):
+    from inference import lora_router
+
+    unused_factory = Mock(side_effect=RuntimeError("Offline research router must not participate in config writes"))
+    monkeypatch.setattr(lora_router, 'get_lora_router', unused_factory)
     for index, database in enumerate(stores.databases):
         async with client(database) as api:
             response = await api.get('/api/router/config')
@@ -69,6 +73,7 @@ async def test_two_applications_keep_config_and_check_reports_in_their_own_store
         assert json.loads(value)['default_adapter'] == f'updated-{index}'
     stores.forbidden.assert_not_called()
     assert stores.check.call_count == 2
+    unused_factory.assert_not_called()
 
 
 @pytest.mark.parametrize('operation', ['list', 'record'])
