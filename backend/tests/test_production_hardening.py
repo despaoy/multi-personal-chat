@@ -160,13 +160,13 @@ def test_zip_validation_rejects_traversal_and_accepts_text():
 
 
 def test_claw_validator_blocks_dunder_escape_and_allows_basic_code():
-    from api.claw import _validate_tool_code
+    from services.tool_execution import validate_tool_code
 
-    _validate_tool_code("return sum([1, 2, 3])")
+    validate_tool_code("return sum([1, 2, 3])")
     with pytest.raises(ValueError):
-        _validate_tool_code("return ().__class__.__base__.__subclasses__()")
+        validate_tool_code("return ().__class__.__base__.__subclasses__()")
     with pytest.raises(ValueError):
-        _validate_tool_code("import os\nreturn os.getcwd()")
+        validate_tool_code("import os\nreturn os.getcwd()")
 
 
 @pytest.mark.asyncio
@@ -183,14 +183,14 @@ async def test_claw_execution_is_opt_in_in_production(monkeypatch):
 
 @pytest.mark.skipif(sys.platform == "win32", reason="Codex Windows sandbox blocks multiprocessing pipes")
 def test_claw_executor_runs_in_child_and_enforces_timeout(monkeypatch):
-    from api.claw import _run_in_sandbox_process
+    from services.tool_execution import run_tool_code
 
     monkeypatch.setenv("CLAW_EXECUTION_TIMEOUT", "5")
-    success = _run_in_sandbox_process("return sum([1, 2, 3])", {})
+    success = run_tool_code("return sum([1, 2, 3])", {})
     assert success["success"] is True
     assert success["result"] == "6"
 
-    timed_out = _run_in_sandbox_process("while True:\n    pass", {})
+    timed_out = run_tool_code("while True:\n    pass", {})
     assert timed_out["success"] is False
     assert "timed out" in timed_out["error"] or "exited without a result" in timed_out["error"]
 
