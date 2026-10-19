@@ -111,7 +111,6 @@ async def test_chat_feedback_reports_unaccepted_memory_without_claiming_raw_stor
     service = SimpleNamespace(complete_turn=AsyncMock(return_value=_TurnOutcome(
         memory_enrichment_status=status, source_capture=capture)))
     warning = await generate._complete_character_turn(SimpleNamespace(character_id='tsukiyashiro_kisaki'),
-        MessageRequest(message='我本人长期喜欢深蓝色油墨，这是明确的个人偏好。', sourceMessageId='synthetic-source'),
-        '合成回复', character_service=service)
+        MessageRequest(message='我本人长期喜欢深蓝色油墨，这是明确的个人偏好。', sourceMessageId='synthetic-source'), character_service=service)
     assert '尚未受理' in warning and '不代表结构化记忆已写入' in warning
     assert ('原文已保存' in warning) is (capture == 'recorded')

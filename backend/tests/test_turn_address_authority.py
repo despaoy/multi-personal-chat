@@ -128,7 +128,7 @@ async def test_complete_turn_does_not_write_rejected_source_address(database, mo
         conversation_type="private",
         received_at=stamp,
     )
-    result = await service.complete_turn(prepared, turn, "此前生成的回复", source_message_id=sid)
+    result = await service.complete_turn(prepared, turn, source_message_id=sid)
     assert result.source_capture == "stale" and not result.memory_enrichment_scheduled
     assert database.get_character_relationship(*fields)["preferred_address"] == "知禾"
 

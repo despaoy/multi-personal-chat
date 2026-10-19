@@ -26,7 +26,7 @@ def scenario(monkeypatch):
 @pytest.mark.asyncio
 async def test_scheduling_failure_preserves_source_receipt_and_reports_failure(scenario, caplog):
     service, prepared, turn, repo, scheduler = scenario
-    result = await service.complete_turn(prepared, turn, '已生成的回复', source_message_id='source')
+    result = await service.complete_turn(prepared, turn, source_message_id='source')
     assert result.source_capture == 'recorded' and result.memory_enrichment_status == 'failed'
     assert result.new_memories == 0 and not result.memory_enrichment_scheduled
     assert result.interaction_count == 1
@@ -42,7 +42,7 @@ async def test_actual_service_failure_is_visible_through_web_completion(scenario
     service, prepared, turn, _, _ = scenario
     request = MessageRequest(message=turn.message, characterId='role', platform='web', adapter='web-character',
         senderId='reader', conversationId='reader', conversationType='private', sourceMessageId='source')
-    warning = await generate._complete_character_turn(prepared, request, '模型原始回复', character_service=service)
+    warning = await generate._complete_character_turn(prepared, request, character_service=service)
     assert '原文已保存' in warning and '失败' in warning
     assert 'private-storage-detail' not in warning + caplog.text
 
@@ -54,7 +54,7 @@ async def test_partial_completion_warning_is_distinct_from_total_failure():
     service = SimpleNamespace(complete_turn=AsyncMock(return_value=_TurnOutcome(
         source_capture='', memory_enrichment_status='partial', new_memories=1)))
     warning = await generate._complete_character_turn(SimpleNamespace(character_id='role'),
-        MessageRequest(message='我今年大三，专业是统计学。', sourceMessageId='source'), '原始回复', character_service=service)
+        MessageRequest(message='我今年大三，专业是统计学。', sourceMessageId='source'), character_service=service)
     assert '部分保存' in warning and '部分写入失败' in warning
 
 
@@ -76,7 +76,7 @@ async def test_required_completion_writes_are_explicit_and_do_not_use_legacy_pat
     if failure == 'unknown_status':
         repo.set_address_from_turn.return_value = {'status': 'unknown'}
     turn = TurnInput('请叫我杉岚。', 'web', 'web-character', 'reader', 'reader', 'private')
-    result = await service.complete_turn(prepared, turn, '已生成的回复', source_message_id='source')
+    result = await service.complete_turn(prepared, turn, source_message_id='source')
     expected = (() if failure not in {'count', 'both'} else ('interaction_count',))
     if failure in {'address', 'missing_adapter', 'unknown_status', 'both'}:
         expected += ('preferred_address',)
@@ -97,6 +97,6 @@ async def test_web_completion_preserves_memory_failure_alongside_counter_failure
     repo.increment_interaction.side_effect = OSError('private-counter-body')
     request = MessageRequest(message=turn.message, characterId='role', platform='web', adapter='web-character',
         senderId='reader', conversationId='reader', conversationType='private', sourceMessageId='source')
-    warning = await generate._complete_character_turn(prepared, request, '模型原始回复', character_service=service)
+    warning = await generate._complete_character_turn(prepared, request, character_service=service)
     assert '交互统计' in warning and '原文已保存' in warning and '长期记忆处理失败' in warning
     assert 'private-counter-body' not in warning

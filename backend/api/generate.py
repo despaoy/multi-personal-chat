@@ -572,7 +572,6 @@ async def _generate_reply_body(
             completion_warning = await _complete_character_turn(
                 prepared_character_turn,
                 request,
-                reply,
                 character_service=character_service,
                 completion_slot=completion_slot,
             )
@@ -790,7 +789,7 @@ async def _persist_completion_feedback(receipt: dict, warning: str, *, database=
         return False
 
 
-async def _complete_character_turn(prepared, request: MessageRequest, reply: str, *, character_service=None, completion_slot=None) -> str | None:
+async def _complete_character_turn(prepared, request: MessageRequest, *, character_service=None, completion_slot=None) -> str | None:
     """生成成功后回写；保留已生成内容，向调用方返回独立的保存提示。
 
     character_service 语义同 _prepare_character_turn：必须与准备阶段
@@ -819,7 +818,6 @@ async def _complete_character_turn(prepared, request: MessageRequest, reply: str
             lambda: service.complete_turn(
                 prepared,
                 turn_input,
-                reply,
                 source_message_id=request.sourceMessageId,
             ),
             timeout=_DB_WRITE_TIMEOUT,

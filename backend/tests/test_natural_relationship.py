@@ -186,7 +186,7 @@ async def test_current_turn_overlay_then_successful_persistence(repo, monkeypatc
     assert "不以亲近为由追问" in prepared.compiled.dynamic_context
     assert not await repo.list_relationship_notes("kisaki", SCOPE)  # prepare never writes
     await repo.upsert_relationship("kisaki", SCOPE, RelationshipState(stage="close"))
-    await service.complete_turn(prepared, turn, "知道了", source_message_id="m1")
+    await service.complete_turn(prepared, turn, source_message_id="m1")
     assert len(await repo.list_relationship_notes("kisaki", SCOPE)) == 1
     assert relationship_from_record(await repo.get_relationship_record("kisaki", SCOPE)).stage == "close"  # no stale override
     plain = TurnInput("你好", "qq", "nonebot", "alice", "group1", "group", history=turn.history)
@@ -210,7 +210,7 @@ async def test_fiction_does_not_fall_through_to_memory(repo, monkeypatch):
         history=({"role": "user", "content": "你好"},),
     )
     prepared = await service.prepare_turn(turn, "kisaki")
-    await service.complete_turn(prepared, turn, "好的")
+    await service.complete_turn(prepared, turn)
     assert not await repo.list_memory_records("kisaki", SCOPE)
     assert not relationship_from_record(await repo.get_relationship_record("kisaki", SCOPE)).preferred_address
 

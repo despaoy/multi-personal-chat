@@ -21,8 +21,8 @@ async def test_response_deadline_retains_exact_write_and_later_stage(monkeypatch
     release = asyncio.Event()
     seen = []
 
-    async def complete(prepared, turn, reply, *, source_message_id):
-        seen.append((turn.message, turn.received_at, reply, source_message_id))
+    async def complete(prepared, turn, *, source_message_id):
+        seen.append((prepared, turn.message, turn.received_at, source_message_id))
         await release.wait()
         seen.append("captured_then_scheduled")
         return SimpleNamespace(source_capture="recorded")
@@ -30,14 +30,15 @@ async def test_response_deadline_retains_exact_write_and_later_stage(monkeypatch
     at = datetime.now(timezone.utc)
     request = MessageRequest(message="我喜欢青绿色油墨做木版套色。", sourceMessageId="owned-original")
     request._source_received_at = at
+    owned_prepared = SimpleNamespace(character_id="role")
     warning = await gen._complete_character_turn(
-        SimpleNamespace(character_id="role"),
+        owned_prepared,
         request,
-        "original-answer",
         character_service=SimpleNamespace(complete_turn=complete),
     )
     assert "尚未确认" in warning and "保存失败" not in warning
-    assert runtime.active == 1 and seen == [(request.message, at, "original-answer", "owned-original")]
+    assert runtime.active == 1 and seen == [(owned_prepared, request.message, at, "owned-original")]
+    assert seen[0][0] is owned_prepared
     release.set()
     await runtime.shutdown(timeout=1)
     assert seen[-1] == "captured_then_scheduled" and len(seen) == 2

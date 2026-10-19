@@ -68,7 +68,7 @@ async def test_actual_complete_stores_source_without_model_or_fact_writes(tmp_pa
     turn = TurnInput(text, "web", "test", "u", "u", "private")
     prepared = await service.prepare_turn(turn, "tsukiyashiro_kisaki")
     try:
-        await service.complete_turn(prepared, turn, "明白。", source_message_id="actual-input")
+        await service.complete_turn(prepared, turn, source_message_id="actual-input")
         assert await scheduler.flush_memory(timeout=3)
         rows = await repo.list_sources(prepared.character_id, prepared.user_scope)
         assert [row["body"] for row in rows] == ([text] if captured else [])

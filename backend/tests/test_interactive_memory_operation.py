@@ -38,7 +38,7 @@ async def test_explicit_operation_precedes_snapshot_and_is_not_resubmitted(monke
     assert prepared.memory_operation_receipt['status'] == status
     assert '操作执行回执' in prepared.compiled.dynamic_context
     assert worker.schedule_and_wait.await_args.kwargs['source_message_id'] == 'request-1'
-    outcome = await service.complete_turn(prepared, turn, '回复', source_message_id='request-1')
+    outcome = await service.complete_turn(prepared, turn, source_message_id='request-1')
     assert outcome.memory_enrichment_status == status
     assert outcome.memory_enrichment_mode == 'explicit_operation'
     assert not outcome.memory_enrichment_scheduled

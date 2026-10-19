@@ -183,7 +183,7 @@ async def test_actual_completion_routes_quoted_erasure_to_writer_and_preserves_o
         prepared = await service.prepare_turn(turn, "tsukiyashiro_kisaki")
         receipt = asyncio.get_running_loop().create_future()
         outcome = await service.complete_turn(
-            prepared, turn, "收到。", source_message_id="new-lifecycle-erase", memory_receipt=receipt
+            prepared, turn, source_message_id="new-lifecycle-erase", memory_receipt=receipt
         )
         assert await scheduler.flush_memory(timeout=4)
         assert outcome.memory_enrichment_scheduled and len(writer.calls) == 1

@@ -173,8 +173,9 @@ async def test_busy_ack_persists_then_automatic_worker_waits_for_exact_semantic_
     exact = asyncio.Event()
     calls = []
 
-    async def complete(prepared, turn, reply, **kwargs):
-        calls.append((prepared, turn, reply, kwargs))
+    async def complete(prepared, turn, **kwargs):
+        stored_reply = json.loads(database.integration_receipt("get", key=key)["response"])["reply"]["replyText"]
+        calls.append((prepared, turn, stored_reply, kwargs))
         exact.set()
         return _TurnOutcome(
             source_capture="recorded", memory_enrichment_scheduled=True, memory_enrichment_status="queued_hot"
@@ -241,7 +242,7 @@ async def test_started_restart_receipt_is_blocked_without_answer_regeneration(da
     )
     calls = []
 
-    async def complete(prepared, turn, reply, **kwargs):
+    async def complete(prepared, turn, **kwargs):
         calls.append(kwargs)
         return _TurnOutcome(source_capture="recorded", memory_enrichment_status="no_change")
 
@@ -268,7 +269,7 @@ async def test_completion_write_failure_is_blocked_with_preserved_semantic_recei
     deliver(database, key, owner, stored)
     calls = []
 
-    async def complete(prepared, turn, reply, **kwargs):
+    async def complete(prepared, turn, **kwargs):
         calls.append(kwargs)
         kwargs['memory_receipt'].set_result({'status': 'saved', 'source_capture': 'recorded'})
         return _TurnOutcome(failed_writes=('preferred_address',), source_capture='recorded',

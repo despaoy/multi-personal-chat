@@ -28,7 +28,6 @@ async def test_actual_operation_receipt_is_visible_without_resubmitting_it(scena
     warning = await _complete_character_turn(
         prepared,
         MessageRequest(message=turn.message, sourceMessageId="synthetic-source"),
-        "原始模型回复",
         character_service=service,
     )
     assert expected in warning and "已完成" not in warning
@@ -48,7 +47,6 @@ async def test_missing_completion_fields_cannot_be_reported_as_clean_success(out
     warning = await _complete_character_turn(
         SimpleNamespace(character_id="synthetic-role"),
         MessageRequest(message="完整的合成个人记录。"),
-        "原始模型回复",
         character_service=SimpleNamespace(complete_turn=AsyncMock(return_value=outcome)),
     )
     assert "尚未确认" in warning and "保存失败" not in warning
@@ -63,7 +61,6 @@ async def test_normal_accepted_background_work_retains_existing_feedback(scenari
     warning = await _complete_character_turn(
         prepared,
         MessageRequest(message=turn.message, sourceMessageId="synthetic-source"),
-        "原始模型回复",
         character_service=service,
     )
     assert warning is None
@@ -80,7 +77,6 @@ async def test_pending_operation_and_counter_failure_are_both_visible(scenario):
     warning = await _complete_character_turn(
         prepared,
         MessageRequest(message=turn.message, sourceMessageId="synthetic-source"),
-        "原始模型回复",
         character_service=service,
     )
     assert "交互统计" in warning and "尚未确认" in warning

@@ -164,8 +164,8 @@ async def test_same_pre_generation_slot_survives_response_deadline(monkeypatch, 
     release = asyncio.Event()
     observed = []
 
-    async def complete(prepared, turn, reply, *, source_message_id):
-        observed.append((runtime.reserved, runtime.active, turn.message, turn.received_at, source_message_id, reply))
+    async def complete(prepared, turn, *, source_message_id):
+        observed.append((runtime.reserved, runtime.active, turn.message, turn.received_at, source_message_id, storage.await_args.args[1]))
         await release.wait()
         return SimpleNamespace(source_capture="recorded")
 
@@ -255,7 +255,7 @@ async def test_relation_failure_reports_stage_without_private_diagnostic(monkeyp
         compiled=SimpleNamespace(used_memory_ids=()),
     )
     turn = TurnInput("请叫我杉岚。", "web", "unit", "owner", "owner", "private")
-    result = await service.complete_turn(prepared, turn, "ack", source_message_id="source")
+    result = await service.complete_turn(prepared, turn, source_message_id="source")
     records = [r for r in caplog.records if r.name == "services.character_context" and "角色关系更新失败" in str(r.msg)]
     assert result.interaction_count == 1 and len(records) == 1
     assert result.failed_writes == ("preferred_address",)

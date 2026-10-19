@@ -283,7 +283,6 @@ class DeliveryMemoryWorker:
                 return await self.service.complete_turn(
                     prepared,
                     turn,
-                    stored["reply"]["replyText"],
                     source_message_id=context["request"]["sourceMessageId"],
                     memory_receipt=receipt,
                     memory_retry_only=bool(marker.get("turn_finished")),

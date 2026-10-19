@@ -612,7 +612,7 @@ async def test_complete_turn_passes_only_actual_injected_memory_ids(monkeypatch)
         conversation_type="private",
     )
 
-    outcome = await service.complete_turn(prepared, turn, "assistant reply", source_message_id="msg-2")
+    outcome = await service.complete_turn(prepared, turn, source_message_id="msg-2")
 
     assert outcome.memory_enrichment_mode == "hot"
     assert outcome.memory_enrichment_status == "queued_hot"

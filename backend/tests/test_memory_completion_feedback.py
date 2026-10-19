@@ -43,7 +43,7 @@ async def test_capture_outcome_is_not_discarded(capture, expected):
         )
     )
     warning = await gen._complete_character_turn(
-        SimpleNamespace(character_id="tsukiyashiro_kisaki"), request(), "模型原文", character_service=service
+        SimpleNamespace(character_id="tsukiyashiro_kisaki"), request(), character_service=service
     )
     assert warning is None if expected is None else expected in warning
     assert service.complete_turn.await_args.kwargs["source_message_id"] == "new-source"
@@ -65,7 +65,7 @@ async def test_real_coroutine_timeout_is_unknown_not_failed(monkeypatch):
         finished.set()
 
     warning = await gen._complete_character_turn(
-        SimpleNamespace(character_id="tsukiyashiro_kisaki"), request(), "原文",
+        SimpleNamespace(character_id="tsukiyashiro_kisaki"), request(),
         character_service=SimpleNamespace(complete_turn=slow),
     )
     assert started.is_set() and not finished.is_set() and runtime.active == 1
@@ -81,7 +81,7 @@ async def test_unexpected_completion_failure_does_not_leak_exception():
 
     service = SimpleNamespace(complete_turn=AsyncMock(side_effect=RuntimeError("private-internal-detail")))
     warning = await gen._complete_character_turn(
-        SimpleNamespace(character_id="tsukiyashiro_kisaki"), request(), "原文", character_service=service
+        SimpleNamespace(character_id="tsukiyashiro_kisaki"), request(), character_service=service
     )
     assert "尚未确认" in warning and "private-internal-detail" not in warning
 
@@ -93,7 +93,7 @@ async def test_external_cancel_is_not_converted_to_success_feedback():
     service = SimpleNamespace(complete_turn=AsyncMock(side_effect=asyncio.CancelledError))
     with pytest.raises(asyncio.CancelledError):
         await gen._complete_character_turn(
-            SimpleNamespace(character_id="tsukiyashiro_kisaki"), request(), "原文", character_service=service
+            SimpleNamespace(character_id="tsukiyashiro_kisaki"), request(), character_service=service
         )
 
 

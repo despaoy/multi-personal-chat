@@ -105,7 +105,7 @@ async def test_actual_completion_captures_full_source_receipt_and_recall_without
     receipt = asyncio.get_running_loop().create_future()
     try:
         outcome = await service.complete_turn(
-            prepared, turn, "收到。", source_message_id="quoted-input", memory_receipt=receipt
+            prepared, turn, source_message_id="quoted-input", memory_receipt=receipt
         )
         assert await scheduler.flush_memory(timeout=3)
         sources = await repo.list_sources(prepared.character_id, prepared.user_scope)

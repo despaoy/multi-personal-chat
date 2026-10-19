@@ -172,9 +172,9 @@ async def run(args, cases: list[dict], out: Path):
             current['prepare_seconds'] = time.monotonic()-t
             return prepared
 
-        async def complete_turn(self, prepared, turn, reply, **kwargs):
+        async def complete_turn(self, prepared, turn, **kwargs):
             started = time.monotonic()
-            outcome = await self.inner.complete_turn(prepared, turn, reply, **kwargs)
+            outcome = await self.inner.complete_turn(prepared, turn, **kwargs)
             current['write_seconds'] = time.monotonic() - started
             current['write_outcome'] = asdict(outcome)
             return outcome

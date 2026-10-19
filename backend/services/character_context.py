@@ -435,7 +435,6 @@ class CharacterContextService:
         self,
         prepared: PreparedCharacterTurn | CompletionSnapshot,
         turn: TurnInput,
-        reply: str,
         *,
         source_message_id: str = "",
         memory_receipt: asyncio.Future | None = None,

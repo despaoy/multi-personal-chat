@@ -148,7 +148,7 @@ async def test_complete_turn_and_scheduler_both_capture_but_index_original_only_
     receipt = asyncio.get_running_loop().create_future()
     start = len(probe.sql)
     try:
-        outcome = await service.complete_turn(snapshot, turn, "合成回复，不作为记忆证据。",
+        outcome = await service.complete_turn(snapshot, turn,
             source_message_id=source_id, memory_receipt=receipt)
         assert outcome.source_capture == "recorded" and outcome.memory_enrichment_scheduled
         assert not outcome.failed_writes

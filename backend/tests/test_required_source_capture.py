@@ -57,7 +57,7 @@ async def test_completion_cannot_enqueue_without_confirmed_capture(monkeypatch, 
     prepared = PreparedCharacterTurn('role', scope, CompiledCharacterContext('', '', ''), (),
                                      RelationshipState(), 0, 0, None)
     turn = TurnInput('请记住，我今年大三。', 'test', 'capture', 'reader', 'reader', 'private')
-    outcome = await service.complete_turn(prepared, turn, '已生成的回复',
+    outcome = await service.complete_turn(prepared, turn,
                                          source_message_id='' if mode == 'missing_id' else 'source')
     assert outcome.memory_enrichment_status == ('failed' if mode == 'unknown_result' else 'source_capture_failed')
     assert not outcome.memory_enrichment_scheduled
