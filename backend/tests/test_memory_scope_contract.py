@@ -27,7 +27,7 @@ def parse(item, source="我叫清舟。", authorization=None):
     ("user_global", "我叫清舟，请所有角色记住这个姓名。", ["conversation", "user_global"]),
 ])
 def test_authorized_scope_is_kept(scope, source, allowed):
-    authorization = MemoryScopeAuthorization(source, tuple(allowed))
+    authorization = MemoryScopeAuthorization(source, tuple((level, source) for level in allowed if level != "conversation"))
     proposal, = parse(entry(scope_level=scope), source, authorization)
     assert proposal.scope_level == scope
     messages = build_memory_llm_messages(source, (), (), (), 2000, .85, scope_authorization=authorization)

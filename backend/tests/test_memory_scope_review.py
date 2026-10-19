@@ -83,7 +83,7 @@ async def test_incomplete_uncertain_or_invalid_review_is_an_error(raw):
 
 
 def test_missing_review_and_review_from_different_source_cannot_authorize():
-    for authorization in (None, MemoryScopeAuthorization(LOCAL, ("conversation", "user_global"))):
+    for authorization in (None, MemoryScopeAuthorization(GLOBAL + "这是另一条消息。", (("user_global", "请所有角色记住这个名字"),))):
         with pytest.raises(MemoryResponseError):
             parse_llm_proposals(proposal("user_global"), source_message=GLOBAL, scope_authorization=authorization)
         with pytest.raises(MemoryResponseError):
@@ -134,3 +134,26 @@ async def test_review_and_writer_success_and_failure_are_truthful(tmp_path, gran
     finally:
         await worker.shutdown(timeout=1)
         database.close_connection()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("scope,source,decisions", [
+    ("user_global", "请记住：我叫海岚，请所有角色记住我的名字；我的专业是工业设计，这项专业信息只在当前会话中使用，不要跨会话或与其他角色共享。",
+     [decision(authorized=True, evidence="请所有角色记住我的名字")]),
+    ("user_character", "请记住：我叫海岚，以后这个角色也记住我的名字；我的专业是工业设计，这项专业只在当前会话中使用，不要让所有角色记住。",
+     [decision("user_character", True, "以后这个角色也记住我的名字"), decision(evidence="不要让所有角色记住")]),
+])
+async def test_authorized_fact_quote_reaches_writer_without_expanding_other_facts(scope, source, decisions):
+    completion = SimpleNamespace(complete=AsyncMock(return_value=response(decisions)))
+    authorization = await review_memory_scopes(completion, source)
+    messages = build_memory_llm_messages(source, (), (), (), 2000, .85, scope_authorization=authorization)
+    constraints = json.loads(messages[1]["content"])["proposal_constraints"]
+    assert constraints["scope_levels"] == ["conversation", scope]
+    assert constraints["scope_authorizations"] == [dict(scope_level=scope, evidence=decisions[0]["evidence"])]
+    items = json.loads(proposal(scope))["memories"]
+    items.append(dict(kind="major", value="工业设计", evidence="我的专业是工业设计", confidence=.99,
+                      operation="ADD", attributed_to="user", scope_level="conversation"))
+    parsed = parse_llm_proposals(json.dumps(dict(memories=items), ensure_ascii=False),
+                                 source_message=source, scope_authorization=authorization)
+    assert {item.memory.memory_key: item.scope_level for item in parsed} == {"user_name": scope, "user_major": "conversation"}
+    completion.complete.assert_awaited_once()
