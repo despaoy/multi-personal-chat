@@ -20,6 +20,7 @@ def _resolve_path(p: str) -> str:
 
 import torch
 from transformers import (
+    AutoConfig,
     AutoModelForCausalLM,
     AutoTokenizer,
     DataCollatorForSeq2Seq,
@@ -430,126 +431,35 @@ class LoRATrainer:
 
         return {"train": train_dataset, "eval": eval_dataset}
 
-    def _detect_quantization_type(self) -> Optional[str]:
-        """读取模型 config.json 中的 quantization_config，返回量化方式。"""
-        config_path = Path(self.config.base_model_path) / "config.json"
-        if not config_path.exists():
-            return None
-        try:
-            with open(config_path, "r", encoding="utf-8") as f:
-                model_config = json.load(f)
-            quant_config = model_config.get("quantization_config")
-            if isinstance(quant_config, dict):
-                return quant_config.get("quant_method", "unknown")
-        except Exception as e:
-            logger.warning(f"读取模型 config.json 失败: {e}")
-        return None
-
     def _load_model(self) -> AutoModelForCausalLM:
         logger.info("加载基础模型...")
-
+        with open(Path(self.config.base_model_path) / "config.json", encoding="utf-8") as stream:
+            model_config = AutoConfig.for_model(**json.load(stream))
+        quantization = getattr(model_config, "quantization_config", None)
         torch_dtype = torch.bfloat16 if self.config.bf16 else torch.float16
-        quant_method = self._detect_quantization_type()
-        is_quantized = quant_method in ("awq", "gptq", "bitsandbytes") or self.config.load_in_4bit or self.config.load_in_8bit
         load_kwargs: Dict[str, Any] = {
+            "config": model_config,
             "device_map": "auto",
             "low_cpu_mem_usage": True,
+            "local_files_only": True,
         }
-
-        if quant_method == "awq":
-            logger.warning(
-                "检测到 AWQ 预量化模型。AWQ/GPTQ 模型主要用于推理，对其训练 LoRA "
-                "可能遇到兼容性或精度问题。建议训练时使用 FP16/BF16 原始模型。"
-            )
-            logger.info("检测到 AWQ 预量化模型，使用 AwqConfig 加载")
-            try:
-                from transformers import AwqConfig
-            except ImportError as e:
-                raise ImportError(
-                    "加载 AWQ 量化模型需要 autoawq。请在服务器执行：pip install autoawq"
-                ) from e
-            config_path = Path(self.config.base_model_path) / "config.json"
-            awq_kwargs: Dict[str, Any] = {
-                "bits": 4,
-                "group_size": 128,
-                "zero_point": True,
-            }
-            try:
-                with open(config_path, "r", encoding="utf-8") as f:
-                    model_config = json.load(f)
-                qcfg = model_config.get("quantization_config", {})
-                for key in ("bits", "group_size", "zero_point", "version", "desc_act"):
-                    if key in qcfg:
-                        awq_kwargs[key] = qcfg[key]
-            except Exception:
-                pass
-            # 明确指定 autoawq 后端，避免 transformers 自动选择 gptqmodel 导致兼容性错误
-            awq_kwargs["backend"] = "autoawq"
-            # 新版 autoawq 不再接受 version='GEMM'，遇到 TypeError 时剔除
-            try:
-                load_kwargs["quantization_config"] = AwqConfig(**awq_kwargs)
-            except TypeError as e:
-                awq_kwargs.pop("version", None)
-                load_kwargs["quantization_config"] = AwqConfig(**awq_kwargs)
-            # AWQ 权重已是 4bit，BitsAndBytes 与之冲突，关闭
-            load_kwargs.pop("torch_dtype", None)
-        elif quant_method == "gptq":
-            logger.warning(
-                "检测到 GPTQ 预量化模型。AWQ/GPTQ 模型主要用于推理，对其训练 LoRA "
-                "可能遇到兼容性或精度问题。建议训练时使用 FP16/BF16 原始模型。"
-            )
-            logger.info("检测到 GPTQ 预量化模型，使用 GPTQConfig 加载")
-            try:
-                from transformers import GPTQConfig
-            except ImportError as e:
-                raise ImportError(
-                    "加载 GPTQ 量化模型需要 gptqmodel 或 auto-gptq。请在服务器执行：pip install gptqmodel"
-                ) from e
-            # 从 config.json 读取 bits/group_size，避免硬编码
-            bits = 4
-            group_size = 128
-            config_path = Path(self.config.base_model_path) / "config.json"
-            try:
-                with open(config_path, "r", encoding="utf-8") as f:
-                    model_config = json.load(f)
-                qcfg = model_config.get("quantization_config", {})
-                bits = qcfg.get("bits", bits)
-                group_size = qcfg.get("group_size", group_size)
-            except Exception:
-                pass
-            load_kwargs["quantization_config"] = GPTQConfig(
-                bits=bits,
-                group_size=group_size,
-                disable_exllama=False,
-            )
-            load_kwargs.pop("torch_dtype", None)
-        elif quant_method == "bitsandbytes":
-            # A saved NF4/INT8 checkpoint already owns its quantization config.
-            # Do not re-quantize it or mistake load_in_4bit=False for FP weights.
+        if quantization is None:
             load_kwargs["torch_dtype"] = torch_dtype
-        elif self.config.load_in_4bit:
-            logger.info("启用 4-bit 量化加载 (NF4)")
-            load_kwargs["torch_dtype"] = torch_dtype
-            load_kwargs["quantization_config"] = BitsAndBytesConfig(
-                load_in_4bit=True,
-                bnb_4bit_compute_dtype=torch_dtype,
-                bnb_4bit_use_double_quant=True,
-                bnb_4bit_quant_type="nf4",
-            )
-        elif self.config.load_in_8bit:
-            logger.info("启用 8-bit 量化加载")
-            load_kwargs["torch_dtype"] = torch_dtype
-            load_kwargs["quantization_config"] = BitsAndBytesConfig(load_in_8bit=True)
-        else:
-            # transformers 4.x forwards unknown kwargs to the model constructor.
-            # Use torch_dtype here; dtype is only accepted by newer releases.
+            if self.config.load_in_4bit:
+                load_kwargs["quantization_config"] = BitsAndBytesConfig(
+                    load_in_4bit=True,
+                    bnb_4bit_compute_dtype=torch_dtype,
+                    bnb_4bit_use_double_quant=True,
+                    bnb_4bit_quant_type="nf4",
+                )
+            elif self.config.load_in_8bit:
+                load_kwargs["quantization_config"] = BitsAndBytesConfig(load_in_8bit=True)
+        elif quantization["quant_method"] not in {"awq", "gptq"}:
             load_kwargs["torch_dtype"] = torch_dtype
 
-        model = AutoModelForCausalLM.from_pretrained(
-            str(self.config.base_model_path),
-            **load_kwargs,
-        )
-        if is_quantized or getattr(model, "is_loaded_in_4bit", False) or getattr(model, "is_loaded_in_8bit", False):
+        model = AutoModelForCausalLM.from_pretrained(str(self.config.base_model_path), **load_kwargs)
+        if (quantization is not None or self.config.load_in_4bit or self.config.load_in_8bit
+                or getattr(model, "is_loaded_in_4bit", False) or getattr(model, "is_loaded_in_8bit", False)):
             model = prepare_model_for_kbit_training(model)
         self.print_gpu_memory("基础模型加载后")
         self._model = model

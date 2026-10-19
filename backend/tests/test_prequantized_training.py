@@ -14,6 +14,7 @@ def test_sft_prepares_prequantized_checkpoint_without_requantizing(
     config = (
         {"quantization_config": {"quant_method": "bitsandbytes", "load_in_4bit": True}} if prequantized_config else {}
     )
+    config["model_type"] = "qwen3"
     (tmp_path / "config.json").write_text(json.dumps(config), encoding="utf-8")
     model = SimpleNamespace(is_loaded_in_4bit=loaded_flag, is_loaded_in_8bit=False)
     prepared = object()
