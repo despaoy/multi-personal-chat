@@ -626,10 +626,11 @@ async def _run_dialogue_generation(request):
     total_cost = 0.0
     try:
         from inference.model_manager import get_model_manager
-        manager = get_model_manager()
+        from inference.request_context import resolve_request_context
 
-        # 检查模型提供商是否可用
-        if manager._current_provider.value == "mock":
+        context = await resolve_request_context(get_model_manager())
+        provider = context.provider
+        if context.provider_name == "mock":
             raise HTTPException(status_code=400, detail="当前模型提供商为 mock 模式，无法调用大模型生成对话。请在设置中配置有效的模型提供商（如 DeepSeek API）。")
 
         # 构建生成 prompt - 风格描述
@@ -777,7 +778,7 @@ async def _run_dialogue_generation(request):
 
                 # 根据轮次计算合理输出上限（本地模型 context 有限，系统 prompt 已占 ~1000-1500 tokens）
                 max_tok = 2048 if target_turns <= 2 else 4096 if target_turns <= 5 else 6144
-                result, cost = await manager.async_generate(
+                result, cost = await provider.async_generate(
                     prompt=system_prompt,
                     session_history=[],
                     max_tokens_override=max_tok

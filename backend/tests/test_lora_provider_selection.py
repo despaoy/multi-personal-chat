@@ -13,7 +13,7 @@ from db.schemas import MessageRequest
 pytestmark = pytest.mark.usefixtures("no_live_context_review")
 
 
-def test_manager_only_configures_the_selected_adapter_provider():
+def test_selected_provider_only_configures_its_own_adapter():
     from inference.model_manager import ModelManager, ModelProvider, OpenAICompatProvider
 
     setter = Mock()
@@ -26,13 +26,13 @@ def test_manager_only_configures_the_selected_adapter_provider():
         ModelProvider.TRANSFORMERS_PEFT: SimpleNamespace(set_lora_adapter=setter),
     }
     manager._current_provider = ModelProvider.OPENAI_COMPAT
-    manager.set_lora_adapter(None)
+    manager.get_current_provider().set_lora_adapter(None)
     with pytest.raises(ValueError, match="does not support LoRA"):
-        manager.set_lora_adapter("controlled-adapter")
+        manager.get_current_provider().set_lora_adapter("controlled-adapter")
     setter.assert_not_called()
     assert manager._current_provider == ModelProvider.OPENAI_COMPAT
     manager._current_provider = ModelProvider.TRANSFORMERS_PEFT
-    manager.set_lora_adapter("controlled-adapter")
+    manager.get_current_provider().set_lora_adapter("controlled-adapter")
     setter.assert_called_once_with("controlled-adapter")
 
 

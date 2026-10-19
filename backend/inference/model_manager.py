@@ -646,19 +646,11 @@ class ModelManager:
     def get_current_provider(self) -> BaseProvider:
         return self._providers[self._current_provider]
 
-    def generate(self, prompt: str, session_history: List[Dict] = None,
-                 max_tokens_override: int = None) -> Tuple[str, float]:
-        provider = self.get_current_provider()
-        return provider.generate(prompt, session_history, max_tokens_override)
-
     async def async_generate(self, prompt: str, session_history: List[Dict] = None,
                              max_tokens_override: int = None) -> Tuple[str, float]:
         """异步生成，使用提供商的异步方法避免阻塞事件循环"""
         provider = self.get_current_provider()
         return await provider.async_generate(prompt, session_history, max_tokens_override)
-
-    def set_lora_adapter(self, lora_path: Optional[str]):
-        self.get_current_provider().set_lora_adapter(lora_path)
 
     def get_status(self) -> Dict[str, Any]:
         providers_status = {}

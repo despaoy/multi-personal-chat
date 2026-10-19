@@ -14,6 +14,7 @@ from unittest.mock import AsyncMock, Mock
 
 import httpx
 import pytest
+from provider_fixtures import cloud_connection
 from fastapi import FastAPI
 from services import character_research as research
 
@@ -46,6 +47,9 @@ def rig(monkeypatch):
         async_generate=AsyncMock(return_value=(MODEL_OUTPUT, 0.25)),
         generate=Mock(side_effect=AssertionError("This async route must not call the synchronous model API")),
     )
+    provider = cloud_connection("fixture-dialogue-model")
+    provider.async_generate = manager.async_generate
+    manager.get_current_provider = lambda: provider
     monkeypatch.setattr(model_manager, "get_model_manager", lambda: manager)
     context = SimpleNamespace(
         state=state, manager=manager, mode="success", clients=[], requests=[],

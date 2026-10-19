@@ -15,6 +15,7 @@ from unittest.mock import AsyncMock, Mock
 
 import httpx
 import pytest
+from provider_fixtures import cloud_connection
 from fastapi import FastAPI, HTTPException
 
 from api import training
@@ -112,6 +113,9 @@ def rig(monkeypatch):
         async_generate=AsyncMock(side_effect=model),
         generate=Mock(side_effect=AssertionError("Synchronous model generation is forbidden")),
     )
+    provider = cloud_connection("fixture-dialogue-model")
+    provider.async_generate = manager.async_generate
+    manager.get_current_provider = lambda: provider
     monkeypatch.setattr(model_manager, "get_model_manager", lambda: manager)
     context.manager = manager
     app = FastAPI()
