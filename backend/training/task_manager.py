@@ -440,7 +440,7 @@ class SimpleLoRATrainer:
         # 透传前端可能发送的额外字段（LoRATrainingConfig 可能支持）
         extra_keys = {
             "target_modules", "lr_scheduler_type", "truncation_direction",
-            "chat_template", "use_8bit_adam", "use_deepspeed",
+            "chat_template", "use_8bit_adam",
             "lora_target_modules", "load_in_4bit", "load_in_8bit",
             "use_cache", "preprocessing_num_workers", "dataloader_num_workers",
             "logging_steps", "save_steps", "eval_steps", "save_total_limit",
@@ -481,10 +481,6 @@ class SimpleLoRATrainer:
         # 处理 use_8bit_adam：切换优化器
         if kwargs.get("use_8bit_adam"):
             kwargs["optim"] = "adamw_8bit"
-
-        # 处理 use_deepspeed：当前仅记录，未配置 ds_config 时保持普通训练
-        if kwargs.get("use_deepspeed"):
-            logger.warning("use_deepspeed=true 已设置，但当前未提供 DeepSpeed 配置文件，将按普通训练执行")
 
         train_config = LoRATrainingConfig(**kwargs)
 

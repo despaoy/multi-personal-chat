@@ -232,7 +232,7 @@ class LoRATrainingConfig:
     optim: str = "paged_adamw_32bit"
     gradient_checkpointing: bool = True
     use_8bit_adam: bool = False
-    use_deepspeed: bool = False
+    use_deepspeed: bool = False  # Accept disabled legacy configs; enabling is unsupported.
     load_in_4bit: bool = False
     load_in_8bit: bool = False
 
@@ -267,6 +267,8 @@ class LoRATrainingConfig:
             errors.append(f"learning_rate必须大于0: {self.learning_rate}")
         if self.num_train_epochs <= 0:
             errors.append(f"num_train_epochs必须大于0: {self.num_train_epochs}")
+        if self.use_deepspeed is not False:
+            errors.append("DeepSpeed training is not supported; use_deepspeed must be false")
         if self.fp16 and self.bf16:
             errors.append("不能同时启用fp16和bf16")
         if self.early_stopping_patience < 0:

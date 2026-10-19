@@ -73,7 +73,6 @@ interface AdvancedParams {
   mixed_precision: 'fp16' | 'bf16' | 'no';
   use_8bit_adam: boolean;
   gradient_checkpointing: boolean;
-  use_deepspeed: boolean;
   packing: boolean;
   neftune_noise_alpha: number;
   use_dora: boolean;
@@ -119,7 +118,6 @@ const DEFAULT_ADVANCED: AdvancedParams = {
   mixed_precision: 'fp16',
   use_8bit_adam: true,
   gradient_checkpointing: true,
-  use_deepspeed: false,
   packing: true,
   neftune_noise_alpha: 5.0,
   use_dora: false,
@@ -407,17 +405,23 @@ export function TrainingParamsEditor({
   const handleImport = useCallback(async (file: File) => {
     try {
       const text = await file.text();
-      const parsed = JSON.parse(text) as Partial<TrainingConfigFile>;
+      const parsed = JSON.parse(text) as Partial<TrainingConfigFile> & {
+        advanced?: { use_deepspeed?: unknown };
+      };
+      const { use_deepspeed = false, ...advanced } = parsed.advanced ?? {};
+      if (use_deepspeed !== false) {
+        throw new Error('当前不支持 DeepSpeed 训练，请关闭此选项后重新导入');
+      }
       if (parsed.required) {
         setRequired({ ...DEFAULT_REQUIRED, ...parsed.required });
       }
       if (parsed.advanced) {
-        setAdvanced({ ...DEFAULT_ADVANCED, ...parsed.advanced });
+        setAdvanced({ ...DEFAULT_ADVANCED, ...advanced });
       }
       setActivePreset(null);
       toast.success('配置已导入');
-    } catch {
-      toast.error('导入失败：文件不是合法的配置 JSON');
+    } catch (e) {
+      toast.error(e instanceof Error ? `导入失败：${e.message}` : '导入失败：文件不是合法的配置 JSON');
     }
   }, []);
 
@@ -468,7 +472,6 @@ export function TrainingParamsEditor({
       bf16: advanced.mixed_precision === 'bf16',
       use_gradient_checkpointing: advanced.gradient_checkpointing,
       use_8bit_adam: advanced.use_8bit_adam,
-      use_deepspeed: advanced.use_deepspeed,
       packing: advanced.packing,
       neftune_noise_alpha: advanced.neftune_noise_alpha,
       use_dora: advanced.use_dora,
@@ -967,22 +970,6 @@ export function TrainingParamsEditor({
                       </Label>
                       <p className="text-xs text-muted-foreground">
                         用时间换显存，低配用户建议开启
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <Checkbox
-                      id="use-deepspeed"
-                      checked={advanced.use_deepspeed}
-                      onCheckedChange={(v) => updateAdvanced('use_deepspeed', v === true)}
-                      className="mt-0.5"
-                    />
-                    <div>
-                      <Label htmlFor="use-deepspeed" className="text-sm font-medium cursor-pointer">
-                        使用 DeepSpeed
-                      </Label>
-                      <p className="text-xs text-muted-foreground">
-                        多卡训练或极限省显存时启用，需提前配置
                       </p>
                     </div>
                   </div>
