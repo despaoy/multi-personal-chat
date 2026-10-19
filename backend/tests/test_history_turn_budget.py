@@ -6,8 +6,7 @@ from inference.generation_request import CONTEXT_SAFETY_MARGIN_TOKENS, _estimate
 
 
 def trim(history, budget):
-    return _trim_history_to_budget(history, fixed_messages=(), max_output_tokens=0,
-                                   context_window_tokens=CONTEXT_SAFETY_MARGIN_TOKENS + budget)
+    return _trim_history_to_budget(history, available_tokens=budget)
 
 
 def test_budget_does_not_leave_answer_without_its_user_turn():
@@ -73,5 +72,12 @@ def test_all_budget_boundaries_preserve_suffix_turns_and_reservation():
         fixed = [{'role': 'system', 'content': '固定角色设定'}]
         cost = _estimated_tokens(fixed[0]['content']) + 4
         assert _trim_history_to_budget(
-            history, fixed_messages=fixed, max_output_tokens=200,
-            context_window_tokens=CONTEXT_SAFETY_MARGIN_TOKENS + 200 + cost + budget) == kept
+            history,
+            available_tokens=CONTEXT_SAFETY_MARGIN_TOKENS
+            + 200
+            + cost
+            + budget
+            - 200
+            - CONTEXT_SAFETY_MARGIN_TOKENS
+            - sum((_estimated_tokens(item["content"]) + 4 for item in fixed)),
+        ) == kept

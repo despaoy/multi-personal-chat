@@ -239,9 +239,7 @@ def _task_history(request: GenerationRequest) -> tuple[list[Message], str, int]:
 def _trim_history_to_budget(
     history: list[Message],
     *,
-    fixed_messages: Sequence[Message],
-    context_window_tokens: int,
-    max_output_tokens: int,
+    available_tokens: int,
 ) -> list[Message]:
     """Keep a recent suffix of complete user-led turns within the budget.
 
@@ -249,11 +247,6 @@ def _trim_history_to_budget(
     A legacy leading assistant-only group remains unchanged if it fits; this
     is a budget boundary, not a global assistant-history deletion policy.
     """
-    fixed_tokens = sum(_estimated_tokens(item["content"]) + 4 for item in fixed_messages)
-    available = max(
-        0,
-        int(context_window_tokens) - int(max_output_tokens) - CONTEXT_SAFETY_MARGIN_TOKENS - fixed_tokens,
-    )
     turns: list[list[Message]] = []
     for item in history:
         if item["role"] == "user" or not turns:
@@ -263,7 +256,7 @@ def _trim_history_to_budget(
     used = 0
     for turn in reversed(turns):
         cost = sum(_estimated_tokens(item["content"]) + 4 for item in turn)
-        if used + cost > available:
+        if used + cost > available_tokens:
             break
         kept.append(turn)
         used += cost
@@ -452,9 +445,8 @@ def _build_generation_request_core(request: GenerationRequest) -> GenerationPlan
     task_history, history_policy, excluded_assistant_messages = _task_history(request)
     history = _trim_history_to_budget(
         task_history,
-        fixed_messages=(*messages, current_user_message),
-        context_window_tokens=request.context_window_tokens,
-        max_output_tokens=request.max_tokens,
+        available_tokens=(int(request.context_window_tokens) - int(request.max_tokens)
+                          - CONTEXT_SAFETY_MARGIN_TOKENS - fixed_cost),
     )
     messages.extend(history)
     messages.append(current_user_message)
@@ -768,9 +760,8 @@ async def generate_character_response(
         )
     retry_history = _trim_history_to_budget(
         retry_history,
-        fixed_messages=fixed_retry,
-        context_window_tokens=request.context_window_tokens,
-        max_output_tokens=request.max_tokens,
+        available_tokens=(int(request.context_window_tokens) - int(request.max_tokens)
+                          - CONTEXT_SAFETY_MARGIN_TOKENS - fixed_cost),
     )
     corrected_messages = [*fixed_retry[:-1], *retry_history, fixed_retry[-1]]
     reply = await generate_text(

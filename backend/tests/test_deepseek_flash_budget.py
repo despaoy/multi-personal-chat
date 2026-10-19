@@ -8,7 +8,7 @@ import pytest
 from tokenizers import Tokenizer
 
 from inference import token_counting as counter
-from inference.context_budget import estimated_tokens
+from inference.context_budget import CONTEXT_SAFETY_MARGIN_TOKENS, estimated_tokens
 from inference.generation_request import _trim_history_to_budget
 
 
@@ -32,7 +32,13 @@ def test_flash_complete_numeric_request_keeps_whole_required_sources(flash):
     count = sum(estimated_tokens(m["content"]) + 4 for m in original)
     assert count > 65536 > golden["measured_counting"]["old_estimate"]
     kept = _trim_history_to_budget(
-        original[1:-1], fixed_messages=[original[0], original[-1]], context_window_tokens=65536, max_output_tokens=2048
+        original[1:-1],
+        available_tokens=65536
+        - 2048
+        - CONTEXT_SAFETY_MARGIN_TOKENS
+        - sum(
+            (estimated_tokens(item["content"]) + 4 for item in [original[0], original[-1]])
+        ),
     )
     assert 0 < len(kept) < len(original[1:-1]) and kept == original[1:-1][-len(kept) :]
     assert all(kept[i]["role"] == "user" and kept[i + 1]["role"] == "assistant" for i in range(0, len(kept), 2))

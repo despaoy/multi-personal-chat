@@ -63,7 +63,13 @@ def test_real_history_budget_keeps_full_recent_turns_and_all_mandatory_wire_evid
     before = deepcopy(messages)
     fixed = [messages[0], messages[-1]]
     history = messages[1:-1]
-    kept = _trim_history_to_budget(history, fixed_messages=fixed, context_window_tokens=65536, max_output_tokens=2048)
+    kept = _trim_history_to_budget(
+        history,
+        available_tokens=65536
+        - 2048
+        - CONTEXT_SAFETY_MARGIN_TOKENS
+        - sum((estimated_tokens(item["content"]) + 4 for item in fixed)),
+    )
     assert 0 < len(kept) < len(history)
     assert kept == history[-len(kept) :] and kept[0]["role"] == "user"
     assert all(kept[i]["role"] == "user" and kept[i + 1]["role"] == "assistant" for i in range(0, len(kept), 2))
@@ -80,7 +86,13 @@ def test_review_budget_uses_same_real_numeric_count(deepseek):
     assert not budget.fits(GOLDEN["request"]["messages"], 2048)
     messages = GOLDEN["request"]["messages"]
     kept = _trim_history_to_budget(
-        messages[1:-1], fixed_messages=[messages[0], messages[-1]], context_window_tokens=65536, max_output_tokens=2048
+        messages[1:-1],
+        available_tokens=65536
+        - 2048
+        - CONTEXT_SAFETY_MARGIN_TOKENS
+        - sum(
+            (estimated_tokens(item["content"]) + 4 for item in [messages[0], messages[-1]])
+        ),
     )
     assert budget.fits([messages[0], *kept, messages[-1]], 2048)
 
