@@ -13,12 +13,14 @@ import math
 import os
 import time
 from dataclasses import dataclass, replace
+from functools import partial
 from typing import TYPE_CHECKING
 
 from character.decision_policy import STRATEGY_INSTRUCTIONS, strategies_compatible
 from inference.history import review_history
 from inference.context_budget import InputBudgetError
 from inference.json_decoding import load_unique_json
+from inference.review_client import review_context
 from infra.environment import read_bool
 
 if TYPE_CHECKING:
@@ -146,18 +148,7 @@ class ContextualDecisionPolicy:
         return PolicyOutcome(plan, "applied", "", (time.perf_counter() - started) * 1000)
 
 
-async def _reviewer(messages):
-    from inference.review_client import get_context_review_client
-
-    client = await get_context_review_client()
-    return await client.generate(
-        messages=[dict(message) for message in messages],
-        lora_name=None,
-        temperature=0.0,
-        max_tokens=160,
-        stream=False,
-        enable_thinking=False,
-    )
+_reviewer = partial(review_context, max_tokens=160)
 
 
 def create_contextual_policy(*, context_budget: ReviewContextBudget | None = None) -> ContextualDecisionPolicy | None:

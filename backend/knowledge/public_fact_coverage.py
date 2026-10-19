@@ -2,9 +2,11 @@
 
 import asyncio
 import json
+from functools import partial
 
 from inference.context_budget import CONTEXT_SAFETY_MARGIN_TOKENS, estimated_tokens
 from inference.json_decoding import load_unique_json
+from inference.review_client import review_context
 from knowledge.public_identity_dependencies import quote_admitted, validate_identity_receipt, verified_object_proof
 from knowledge.public_object_scope import scope_input_digest, validate_object_scopes
 
@@ -207,13 +209,7 @@ def parse_fact_evidence(raw, payload, scopes, scoped, decisions):
     return [result[i] for i in aspects]
 
 
-async def _review_facts(messages):
-    from inference.review_client import get_context_review_client
-
-    client = await get_context_review_client()
-    return await client.generate(
-        messages=messages, lora_name=None, temperature=0.0, max_tokens=2048, stream=False, enable_thinking=False
-    )
+_review_facts = partial(review_context, max_tokens=2048)
 
 
 async def bounded_review(messages, reviewer, window_tokens, output_tokens):

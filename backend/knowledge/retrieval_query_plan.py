@@ -6,8 +6,10 @@ import asyncio
 import json
 import os
 from dataclasses import dataclass
+from functools import partial
 
 from inference.json_decoding import load_unique_json
+from inference.review_client import review_context
 from knowledge.turn_dependencies import TurnDependencies, parse_dependencies, query_segments
 
 
@@ -71,14 +73,7 @@ cuts按原文顺序列出第二及之后业务开始处的1至64字原文字面�
 """
 
 
-async def _review(messages):
-    from inference.review_client import get_context_review_client
-
-    client = await get_context_review_client()
-    return await client.generate(
-        messages=messages, lora_name=None, temperature=0.0, max_tokens=768,
-        stream=False, enable_thinking=False,
-    )
+_review = partial(review_context, max_tokens=768)
 
 
 def planning_messages(query: str, *, history=(), context_budget=None):

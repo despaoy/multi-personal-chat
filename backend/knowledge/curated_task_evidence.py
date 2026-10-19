@@ -3,9 +3,11 @@
 import asyncio
 import hashlib
 import json
+from functools import partial
 
 from inference.context_budget import CONTEXT_SAFETY_MARGIN_TOKENS, estimated_tokens
 from inference.json_decoding import load_unique_json
+from inference.review_client import review_context
 from knowledge import public_domains
 from knowledge.curated_sources import CuratedSourceChangedError, curated_source_packet, validate_curated_source
 
@@ -187,13 +189,7 @@ def parse_curated_review(raw, payload, *, verify_original=True):
     return checked, len(value["tasks"]) - len(checked)
 
 
-async def _review(messages):
-    from inference.review_client import get_context_review_client
-
-    client = await get_context_review_client()
-    return await client.generate(
-        messages=messages, lora_name=None, temperature=0.0, max_tokens=2048, stream=False, enable_thinking=False
-    )
+_review = partial(review_context, max_tokens=2048)
 
 
 async def review_curated_bundle(bundle, plan, *, window_tokens, reviewer=None):

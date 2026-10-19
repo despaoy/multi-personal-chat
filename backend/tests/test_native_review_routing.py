@@ -18,16 +18,25 @@ async def invoke_default_reviewer(kind, monkeypatch):
 
         monkeypatch.setenv("CONTEXTUAL_MEMORY_SELECTION_ENABLED", "true")
         reviewer = create_evidence_selector().reviewer
-    else:
+    elif kind == "policy":
         from character.contextual_policy import create_contextual_policy
 
         monkeypatch.setenv("CONTEXTUAL_DECISION_POLICY_ENABLED", "true")
         reviewer = create_contextual_policy().reviewer
+    else:
+        from knowledge import retrieval_query_plan, public_task_evidence, curated_task_evidence, public_fact_coverage
+
+        reviewer = {
+            "planner": retrieval_query_plan._review,
+            "public_tasks": public_task_evidence._review,
+            "curated_tasks": curated_task_evidence._review,
+            "facts": public_fact_coverage._review_facts,
+        }[kind]
     return await reviewer(messages)
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("kind,budget", [("semantic", 768), ("selection", 2048), ("policy", 160)])
+@pytest.mark.parametrize("kind,budget", [("semantic", 768), ("selection", 2048), ("policy", 160), ("planner", 768), ("public_tasks", 768), ("curated_tasks", 2048), ("facts", 2048)])
 async def test_native_reviewers_follow_selected_cloud_without_reentering_reply_generation(monkeypatch, kind, budget):
     from inference import model_manager, vllm_client
 
@@ -58,7 +67,7 @@ async def test_native_reviewers_follow_selected_cloud_without_reentering_reply_g
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("kind,budget", [("semantic", 768), ("selection", 2048), ("policy", 160)])
+@pytest.mark.parametrize("kind,budget", [("semantic", 768), ("selection", 2048), ("policy", 160), ("planner", 768), ("public_tasks", 768), ("curated_tasks", 2048), ("facts", 2048)])
 async def test_vllm_selection_keeps_shared_low_level_client(monkeypatch, kind, budget):
     from inference import model_manager, vllm_client
 
@@ -82,7 +91,7 @@ async def test_vllm_selection_keeps_shared_low_level_client(monkeypatch, kind, b
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("kind", ["semantic", "selection", "policy"])
+@pytest.mark.parametrize("kind", ["semantic", "selection", "policy", "planner", "public_tasks", "curated_tasks", "facts"])
 async def test_unsupported_selected_provider_does_not_silently_switch_review_model(monkeypatch, kind):
     from inference import model_manager, vllm_client
 

@@ -15,12 +15,14 @@ import time
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
+from functools import partial
 from typing import TYPE_CHECKING
 
 from character.source_fragment_provenance import source_completeness_payload
 from inference.context_budget import InputBudgetError
 from inference.history import review_history
 from inference.json_decoding import load_unique_json
+from inference.review_client import review_context
 from infra.environment import read_bool
 
 if TYPE_CHECKING:
@@ -252,18 +254,7 @@ class ContextualEvidenceSelector:
         )
 
 
-async def _local_reviewer(messages: Sequence[Mapping[str, str]]) -> object:
-    from inference.review_client import get_context_review_client
-
-    client = await get_context_review_client()
-    return await client.generate(
-        messages=[dict(message) for message in messages],
-        lora_name=None,
-        temperature=0.0,
-        max_tokens=2048,
-        stream=False,
-        enable_thinking=False,
-    )
+_local_reviewer = partial(review_context, max_tokens=2048)
 
 
 def create_evidence_selector(*, context_budget: ReviewContextBudget | None = None) -> ContextualEvidenceSelector | None:

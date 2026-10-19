@@ -42,3 +42,12 @@ async def get_context_review_client():
     if selected == "openai_compat":
         return OpenAICompatibleReviewClient(context.provider if context is not None else manager.get_current_provider())
     raise RuntimeError("unsupported selected context-review provider: " + selected)
+
+
+async def review_context(messages, *, max_tokens):
+    """Run a deterministic base-model review on the selected request connection."""
+    client = await get_context_review_client()
+    return await client.generate(
+        messages=messages, lora_name=None, temperature=0.0, max_tokens=max_tokens,
+        stream=False, enable_thinking=False,
+    )
