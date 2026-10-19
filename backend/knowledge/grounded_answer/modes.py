@@ -73,7 +73,7 @@ class AnswerModeDecider:
         *,
         persona: bool = False,
     ) -> ModeDecision:
-        """bundle 为 None（未命中域）由调用方决定回退，此处只处理已检索情况。"""
+        """保留无域状态；已检索结果依据证据和置信度决定回答模式。"""
         if bundle is None:
             return ModeDecision(
                 mode=AnswerMode.NO_RAG,

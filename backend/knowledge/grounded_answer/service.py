@@ -188,27 +188,6 @@ class GroundedAnswerService:
             want_citations=want_citations,
             timings=timings,
         )
-        # 独立知识问答没有 legacy 聊天链路可回退。未命中域时应返回
-        # 明确弃答，而不是一个 answer 为空且 abstained=false 的结果。
-        if result.answer_mode == AnswerMode.NO_RAG:
-            result = GroundedAnswerResult(
-                answer=self.abstention_reply,
-                answer_mode=AnswerMode.ABSTENTION,
-                domain_id=None,
-                citations=[],
-                confidence=None,
-                abstained=True,
-                warnings=["abstention:no_domain"],
-                failure_kind=FailureKind.NO_DOMAIN.value,
-                used_rag=False,
-                model_invoked=False,
-                model_id=model_id,
-                retrieval_metadata={
-                    **result.retrieval_metadata,
-                    "abstention_reason": FailureKind.NO_DOMAIN.value,
-                },
-                timings=timings,
-            )
         timings.total_ms = (time.perf_counter() - start) * 1000
 
         if (
@@ -291,7 +270,7 @@ class GroundedAnswerService:
             )
             return
 
-        if packet.answer_mode == AnswerMode.ABSTENTION or not packet.documents:
+        if packet.answer_mode == AnswerMode.ABSTENTION:
             yield AnswerStreamEvent(type="delta", data={"text": self.abstention_reply})
             yield AnswerStreamEvent(type="citations", data={"citations": []})
             yield AnswerStreamEvent(
@@ -433,16 +412,15 @@ class GroundedAnswerService:
         metadata = self._retrieval_metadata(packet, decision, model_id=model_id)
 
         if packet.answer_mode == AnswerMode.NO_RAG:
-            # 未命中域：调用方（聊天链路）应回退既有检索；此处返回
-            # no_rag 结果，answer 为空、不调用模型
+            metadata["abstention_reason"] = FailureKind.NO_DOMAIN.value
             return GroundedAnswerResult(
-                answer="",
-                answer_mode=AnswerMode.NO_RAG,
+                answer=self.abstention_reply,
+                answer_mode=AnswerMode.ABSTENTION,
                 domain_id=None,
                 citations=[],
                 confidence=None,
-                abstained=False,
-                warnings=[],
+                abstained=True,
+                warnings=["abstention:no_domain"],
                 failure_kind=FailureKind.NO_DOMAIN.value,
                 used_rag=False,
                 model_invoked=False,
@@ -451,7 +429,7 @@ class GroundedAnswerService:
                 timings=timings,
             )
 
-        if packet.answer_mode == AnswerMode.ABSTENTION or not packet.documents:
+        if packet.answer_mode == AnswerMode.ABSTENTION:
             # abstention：结构上不调用模型（防绕过）；无答案也返回正常结构
             reason = packet.abstention_reason
             return GroundedAnswerResult(
