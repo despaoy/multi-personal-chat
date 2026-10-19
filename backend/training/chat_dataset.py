@@ -47,22 +47,42 @@ def normalize_chat_record(
 ) -> list[dict[str, str]]:
     """Return one validated OpenAI-style message sequence."""
 
+    # Arrow fills absent columns with None when records use different formats.
+    record = {key: value for key, value in record.items() if value is not None}
     speaker_contract = parse_speaker_contract(record)
 
     if isinstance(record.get("messages"), list):
         raw_messages: Iterable[Mapping[str, Any]] = record["messages"]
     elif isinstance(record.get("conversations"), list):
         raw_messages = record["conversations"]
-    elif "user_question" in record and "agent_response" in record:
-        raw_messages = (
-            {"role": "user", "content": record["user_question"]},
-            {"role": "assistant", "content": record["agent_response"]},
-        )
     else:
-        raise ValueError(
-            "chat record must contain messages, conversations, or "
-            "user_question/agent_response"
-        )
+        if "instruction" in record and "output" in record:
+            question, extra = record["instruction"], record.get("input", "")
+            if not isinstance(question, str) or not isinstance(extra, str):
+                raise ValueError("instruction and input must be text")
+            question = question + ("\n" + extra if extra else "")
+            answer = record["output"]
+        elif "prompt" in record and "response" in record:
+            question, answer = record["prompt"], record["response"]
+        elif "user_question" in record and "agent_response" in record:
+            question, answer = record["user_question"], record["agent_response"]
+        else:
+            raise ValueError("chat record needs messages, conversations, instruction/output, prompt/response, or user_question/agent_response")
+        history = record.get("history", [])
+        if not isinstance(history, list):
+            raise ValueError("history must be a list of user/assistant pairs")
+        raw_messages = []
+        for pair in history:
+            if not isinstance(pair, (list, tuple)) or len(pair) != 2:
+                raise ValueError("history must contain complete user/assistant pairs")
+            raw_messages.extend((
+                {"role": "user", "content": pair[0]},
+                {"role": "assistant", "content": pair[1]},
+            ))
+        raw_messages.extend((
+            {"role": "user", "content": question},
+            {"role": "assistant", "content": answer},
+        ))
 
     messages: list[dict[str, str]] = []
     for index, raw in enumerate(raw_messages):

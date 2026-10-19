@@ -15,6 +15,8 @@ from typing import Optional, List, Dict, Any, Tuple
 from dataclasses import dataclass
 from collections import Counter
 
+from training.chat_dataset import normalize_chat_record
+
 logger = logging.getLogger(__name__)
 
 
@@ -164,101 +166,27 @@ class DatasetPreprocessor:
         
         return data
     
-    def clean_text(self, text: str) -> str:
-        if not text:
-            return ""
-
-        text = re.sub(r'\s+', ' ', text)
-        # 保留中文标点，不替换为英文标点（中文聊天机器人需要中文标点）
-        text = re.sub(r'[\x00-\x1F\x7F]', '', text)
-
-        return text.strip()
-    
-    def validate_conversation(self, conv: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
-        """校验单条对话数据的格式合法性。
-
-        支持的格式：
-        - ShareGPT多轮对话: conversations列表（from: human/gpt, value）
-        - Qwen格式: conversations列表（role: user/assistant, content）
-        - Alpaca格式: instruction/output
-        - Prompt格式: prompt/response
-
-        Args:
-            conv: 单条对话数据
-
-        Returns:
-            (是否合法, 错误信息)，合法时错误信息为None
-        """
-        try:
-            if 'conversations' in conv:
-                conversations = conv['conversations']
-                if len(conversations) < 2:
-                    return False, "对话轮次不足"
-
-                for i, msg in enumerate(conversations):
-                    # ShareGPT格式: from/value
-                    if 'from' in msg and 'value' in msg:
-                        if msg['from'] not in ('human', 'gpt', 'user', 'assistant'):
-                            return False, f"第{i}轮对话角色无效: {msg.get('from')}"
-                        if not msg['value'].strip():
-                            return False, f"第{i}轮对话内容为空"
-                    # Qwen格式: role/content
-                    elif 'role' in msg and 'content' in msg:
-                        if msg['role'] not in ('user', 'assistant', 'system'):
-                            return False, f"第{i}轮对话角色无效: {msg.get('role')}"
-                        if not msg['content'].strip():
-                            return False, f"第{i}轮对话内容为空"
-                    else:
-                        return False, f"第{i}轮对话格式错误: 缺少from/value或role/content"
-
-            elif 'instruction' in conv:
-                if not conv.get('output'):
-                    return False, "缺少output字段"
-
-            elif 'prompt' in conv and 'response' in conv:
-                pass
-
-            else:
-                return False, "不支持的数据格式"
-
-            return True, None
-
-        except Exception as e:
-            return False, str(e)
-    
-    def analyze_style(self, data: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def analyze_style(self, data: List[List[Dict[str, str]]]) -> Dict[str, Any]:
+        """Analyze the already validated messages without reparsing input formats."""
         all_text = []
         response_lengths = []
         sentence_counts = []
         question_count = 0
         total_sentences = 0
         
-        for item in data:
-            response = ""
-            if 'output' in item:
-                response = item['output']
-            elif 'response' in item:
-                response = item['response']
-            elif 'conversations' in item:
-                convs = item['conversations']
-                for conv in convs:
-                    if conv.get('role') == 'assistant' or conv.get('from') == 'gpt':
-                        response = conv.get('content', '') or conv.get('value', '')
-                        break
-            
-            if response:
-                all_text.append(response)
-                response_lengths.append(len(response))
-                
-                sentences = re.split(r'[.!?。！？]', response)
-                sentences = [s.strip() for s in sentences if s.strip()]
-                sentence_counts.append(len(sentences))
-                total_sentences += len(sentences)
-                
-                for s in sentences:
-                    if '?' in s or '？' in s:
-                        question_count += 1
-        
+        for messages in data:
+            response = next(message["content"] for message in messages if message["role"] == "assistant")
+            all_text.append(response)
+            response_lengths.append(len(response))
+
+            sentences = re.split(r'[.!?。！？]', response)
+            sentences = [sentence.strip() for sentence in sentences if sentence.strip()]
+            sentence_counts.append(len(sentences))
+            total_sentences += len(sentences)
+            for sentence in sentences:
+                if '?' in sentence or '？' in sentence:
+                    question_count += 1
+
         if not all_text:
             return {}
         
@@ -287,7 +215,7 @@ class DatasetPreprocessor:
         min_samples: int = 10,
         custom_prompt: Optional[str] = None
     ) -> Tuple[Path, Dict[str, Any]]:
-        """准备训练数据：验证 -> 清洗 -> 风格分析 -> 训练/验证集切分 -> 保存。
+        """准备训练数据：共享格式验证 -> 风格分析 -> 训练/验证集切分 -> 原样保存。
 
         Args:
             raw_data: 原始对话数据列表
@@ -305,13 +233,15 @@ class DatasetPreprocessor:
         """
         valid_data = []
         invalid_data = []
-        
+        conversations = []
         for item in raw_data:
-            is_valid, error = self.validate_conversation(item)
-            if is_valid:
-                valid_data.append(item)
+            try:
+                messages = normalize_chat_record(item, default_system_prompt=custom_prompt or "")
+            except ValueError as error:
+                invalid_data.append((item, str(error)))
             else:
-                invalid_data.append((item, error))
+                valid_data.append(item)
+                conversations.append(messages)
         
         if len(valid_data) < min_samples:
             raise ValueError(f"有效数据不足，当前: {len(valid_data)}, 要求: {min_samples}")
@@ -319,7 +249,7 @@ class DatasetPreprocessor:
         if invalid_data:
             logger.warning(f"过滤了 {len(invalid_data)} 条无效数据")
         
-        style_analysis = self.analyze_style(valid_data)
+        style_analysis = self.analyze_style(conversations)
         
         import random
         random.shuffle(valid_data)

@@ -13,7 +13,7 @@ import time
 import uuid
 from pathlib import Path
 from typing import TYPE_CHECKING, Dict, Any, Optional, List
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass
 
 from fastapi import HTTPException
 
@@ -244,7 +244,7 @@ class SimpleLoRATrainer:
         self._persist_task(task_id)
 
         try:
-            from training.trainer import LoRATrainingConfig, LoRATrainer
+            from training.trainer import LoRATrainer
 
             train_config = self._build_config(lora_name, dataset_path, config)
             errors = train_config.validate()
@@ -399,7 +399,20 @@ class SimpleLoRATrainer:
     def _build_config(self, lora_name: str, dataset_path: Path, config: Dict[str, Any]) -> "LoRATrainingConfig":
         from training.trainer import LoRATrainingConfig
 
-        dataset_file = self._find_dataset_file(dataset_path)
+        dataset_root = dataset_path.parent if dataset_path.is_file() else dataset_path
+        info_path = dataset_root / "dataset_info.json"
+        if info_path.exists():
+            with info_path.open(encoding="utf-8") as stream:
+                info = json.load(stream)
+        else:
+            info = {}
+        dataset_file = self._find_dataset_file(dataset_path, file_name=info.get("file_name"))
+        dataset_options = {}
+        if info.get("custom_prompt") is not None:
+            dataset_options["system_prompt"] = info["custom_prompt"]
+        if "eval_data_path" not in config and info.get("file_name_eval") is not None:
+            dataset_options["eval_data_path"] = str(self._find_dataset_file(dataset_root, file_name=info["file_name_eval"]))
+        config = {**dataset_options, **config}
 
         # 已知字段从 config dict 提取（前端 TrainingParamsEditor 发送 + 预设兜底）
         kwargs: Dict[str, Any] = {
@@ -477,9 +490,15 @@ class SimpleLoRATrainer:
 
         return train_config
 
-    def _find_dataset_file(self, dataset_path: Path) -> Path:
+    def _find_dataset_file(self, dataset_path: Path, *, file_name: Optional[str] = None) -> Path:
         if dataset_path.is_file():
             return dataset_path
+        if file_name is not None:
+            candidate = (dataset_path / file_name).resolve(strict=True)
+            candidate.relative_to(dataset_path.resolve())
+            if not candidate.is_file():
+                raise ValueError("Dataset manifest must select a file")
+            return candidate
 
         for name in ["train.jsonl", "train.json", "data.jsonl", "data.json", "dataset.jsonl", "dataset.json"]:
             candidate = dataset_path / name
@@ -488,7 +507,7 @@ class SimpleLoRATrainer:
 
         json_files = sorted(
             path for path in dataset_path.iterdir()
-            if path.is_file() and path.suffix.lower() in {".json", ".jsonl"}
+            if path.is_file() and path.name != "dataset_info.json" and path.suffix.lower() in {".json", ".jsonl"}
         ) if dataset_path.is_dir() else []
         if len(json_files) == 1:
             return json_files[0]

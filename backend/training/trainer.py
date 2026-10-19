@@ -6,7 +6,6 @@ import os as _os
 import logging
 import inspect
 import json
-import math
 from pathlib import Path
 from dataclasses import dataclass, field, asdict
 from typing import Optional, Dict, Any, List
@@ -20,7 +19,6 @@ def _resolve_path(p: str) -> str:
     return str(_BACKEND_DIR / p)
 
 import torch
-import transformers
 from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
@@ -241,7 +239,7 @@ class LoRATrainingConfig:
     report_to: str = "tensorboard"
     logging_dir: Optional[str] = None
 
-    system_prompt: str = "你是胡桃，保持你的风格"
+    system_prompt: str = ""
     system_prompt_policy: str = "preserve"
     train_test_split: float = 0.9
     seed: int = 42
