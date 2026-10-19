@@ -3,9 +3,9 @@
 
 提供敏感数据的加密和解密功能，包括：
 - AES-256-GCM加密算法
-- 密钥管理（显式加载、历史路径迁移、主动密钥轮换）
+- 密钥管理（显式加载、历史路径迁移）
 - 字段级加密/解密
-- 批量加密/解密
+- 批量加密
 - 敏感字段自动识别
 - 由调用方显式执行加密和解密
 
@@ -106,7 +106,7 @@ class EncryptionManager:
     """管理敏感数据的加密和解密。
 
     使用AES-256-GCM加密算法，按配置优先级加载已有密钥。
-    支持字段级加密、批量操作和密钥轮换。
+    支持字段级加密、解密和批量加密。
 
     Attributes:
         _key: 当前使用的加密密钥（32字节）
@@ -243,42 +243,6 @@ class EncryptionManager:
                 temp_path.unlink(missing_ok=True)
             except OSError:
                 logger.warning("无法清理临时密钥文件 %s", temp_path)
-
-    def rotate_key(self, new_key: Optional[bytes] = None) -> None:
-        """密钥轮换：使用新密钥替换当前密钥。
-
-        注意：轮换后，使用旧密钥加密的数据将无法解密。
-        需要先解密所有数据，再使用新密钥重新加密。
-
-        Args:
-            new_key: 新的加密密钥（32字节）。如果未提供，将自动生成。
-
-        Raises:
-            KeyManagementError: 密钥轮换失败
-        """
-        if new_key is not None and len(new_key) != _KEY_LENGTH:
-            raise KeyManagementError(
-                f"新密钥长度必须为 {_KEY_LENGTH} 字节，实际为 {len(new_key)} 字节"
-            )
-
-        old_key = self._key
-
-        try:
-            if new_key is None:
-                new_key = AESGCM.generate_key(bit_length=256)
-
-            self._key = new_key
-            self._aesgcm = AESGCM(self._key)
-            self._save_key_to_env(new_key)
-
-            logger.warning(
-                "密钥轮换完成。旧密钥已失效，使用旧密钥加密的数据需要重新加密。"
-            )
-        except Exception as exc:
-            # 回滚到旧密钥
-            self._key = old_key
-            self._aesgcm = AESGCM(self._key)
-            raise KeyManagementError(f"密钥轮换失败: {exc}") from exc
 
     # -------------------------------------------------------------------
     # 加密/解密核心方法
@@ -460,41 +424,6 @@ class EncryptionManager:
                     item[field_name] = self.encrypt_field(item[field_name], field_name)
 
         logger.debug("批量加密完成，处理 %d 条数据", len(items))
-        return items
-
-    def decrypt_batch(self, items: list[dict[str, Any]], fields: Optional[list[str]] = None) -> list[dict[str, Any]]:
-        """批量解密数据项中的指定字段。
-
-        如果未指定字段列表，则自动识别并解密所有已加密字段。
-
-        Args:
-            items: 待解密的数据项列表
-            fields: 需要解密的字段名列表。如果为None，自动识别已加密字段。
-
-        Returns:
-            解密后的数据项列表（原地修改并返回）
-        """
-        if not items:
-            return items
-
-        for item in items:
-            if not isinstance(item, dict):
-                continue
-
-            if fields:
-                target_fields = fields
-            else:
-                # 自动查找已加密的字段
-                target_fields = [
-                    k for k, v in item.items()
-                    if isinstance(v, str) and self.is_encrypted(v)
-                ]
-
-            for field_name in target_fields:
-                if field_name in item:
-                    item[field_name] = self.decrypt_field(item[field_name], field_name)
-
-        logger.debug("批量解密完成，处理 %d 条数据", len(items))
         return items
 
     # -------------------------------------------------------------------

@@ -474,25 +474,3 @@ class AccessControlManager:
     ) -> list[dict[str, Any]]:
         """查询统一 DB 中的审计日志。"""
         return self._db.get_audit_logs(limit, offset, role, action)
-
-    def log_action(
-        self,
-        user_info: dict[str, Any],
-        action: str,
-        resource: Optional[str] = None,
-        detail: Optional[str] = None,
-        ip_address: Optional[str] = None,
-    ) -> None:
-        """记录用户操作审计日志到统一 DB。"""
-        role = user_info.get("role", Role.VIEWER)
-        role_value = role.value if isinstance(role, Role) else str(role)
-        key_hash = user_info.get("key_hash", "unknown")
-
-        self._db.add_audit_log(
-            api_key_hash=key_hash,
-            role=role_value,
-            action=action,
-            resource=resource,
-            detail=detail,
-            ip_address=ip_address,
-        )

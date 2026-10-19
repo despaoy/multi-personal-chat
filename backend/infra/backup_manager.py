@@ -1,7 +1,7 @@
 """数据备份与恢复机制模块。
 
 实现SQLite数据库的自动备份管理，支持全量备份和增量备份，
-提供定时备份、事件触发备份、备份轮转、压缩存储和完整性校验。
+提供定时备份、备份轮转和压缩存储；恢复由停机工具负责。
 """
 
 import asyncio
@@ -81,14 +81,13 @@ class BackupStats:
 class BackupManager:
     """SQLite数据库备份管理器。
 
-    支持全量备份和增量备份，定时备份和事件触发备份，
-    备份文件压缩存储和轮转管理，恢复前安全副本创建和完整性校验。
+    支持定时备份、备份文件压缩和轮转管理。
+    数据恢复使用 scripts/restore_sqlite_backup.py 停机工具。
 
     Args:
         db_path: SQLite数据库文件路径。
         backup_dir: 备份文件存储目录。
         schedule_interval_hours: 定时备份间隔（小时）。
-        change_threshold: 事件触发备份的数据变更条数阈值。
         daily_retention_days: 每日备份保留天数。
         weekly_retention_weeks: 每周备份保留周数。
     """
@@ -98,23 +97,19 @@ class BackupManager:
         db_path: str,
         backup_dir: str = "backups",
         schedule_interval_hours: float = 6.0,
-        change_threshold: int = 100,
         daily_retention_days: int = 7,
         weekly_retention_weeks: int = 4,
     ) -> None:
         self.db_path = Path(db_path)
         self.backup_dir = Path(backup_dir)
         self.schedule_interval_hours = schedule_interval_hours
-        self.change_threshold = change_threshold
         self.daily_retention_days = daily_retention_days
         self.weekly_retention_weeks = weekly_retention_weeks
 
         self._stats = BackupStats()
-        self._change_count: int = 0
         self._last_full_backup_time: Optional[datetime] = None
         self._scheduled_task: Optional[asyncio.Task[None]] = None
         self._running: bool = False
-        self._backups_cache: list[BackupInfo] = []
 
     def _generate_backup_filename(self, backup_type: BackupType) -> str:
         """生成备份文件名。
@@ -169,8 +164,6 @@ class BackupManager:
         self._stats.total_size_bytes += size_bytes
         self._stats.last_backup_time = backup_info.timestamp
         self._update_time_range(backup_info.timestamp)
-        self._change_count = 0
-        self._backups_cache.append(backup_info)
         logger.info("备份完成 type=%s file=%s bytes=%d", backup_type.value, filename, size_bytes)
         return backup_info
 
@@ -184,94 +177,6 @@ class BackupManager:
     async def backup(self, backup_type: BackupType = BackupType.FULL) -> BackupInfo:
         """Return a completed backup or propagate its original failure."""
         return await asyncio.to_thread(self._backup_sync, BackupType(backup_type))
-
-    def restore(self, backup_path: str) -> bool:
-        """从指定备份恢复数据库。
-
-        恢复前自动创建当前数据库的安全副本。
-
-        Args:
-            backup_path: 备份文件路径。
-
-        Returns:
-            是否恢复成功。
-        """
-        backup_file = Path(backup_path)
-        if not backup_file.exists():
-            logger.error("备份文件不存在: %s", backup_path)
-            return False
-
-        if not self.db_path.exists():
-            logger.error("当前数据库文件不存在: %s", self.db_path)
-            return False
-
-        try:
-            # 创建安全副本
-            safety_filename = (
-                f"{self.db_path.stem}_safety_"
-                f"{datetime.now().strftime('%Y%m%d_%H%M%S')}.db"
-            )
-            safety_path = self.backup_dir / safety_filename
-            self.backup_dir.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(str(self.db_path), str(safety_path))
-            logger.info("已创建安全副本: %s", safety_path)
-
-            # 解压备份文件
-            temp_db_path = self.backup_dir / f"_restore_temp_{datetime.now().strftime('%Y%m%d_%H%M%S')}.db"
-            with gzip.open(backup_file, "rb") as f_in:
-                with open(temp_db_path, "wb") as f_out:
-                    shutil.copyfileobj(f_in, f_out)
-
-            # 完整性校验
-            sha256 = self._compute_sha256(temp_db_path)
-            # 查找对应的备份信息
-            backup_info = self._find_backup_info(backup_file.name)
-            if backup_info and backup_info.sha256 != sha256:
-                logger.error(
-                    "备份完整性校验失败: 期望 %s, 实际 %s",
-                    backup_info.sha256[:16], sha256[:16],
-                )
-                temp_db_path.unlink()
-                return False
-
-            # 验证备份文件是否为有效SQLite数据库
-            try:
-                test_conn = sqlite3.connect(str(temp_db_path))
-                test_conn.execute("SELECT 1")
-                test_conn.close()
-            except sqlite3.Error as e:
-                logger.error("备份文件不是有效的SQLite数据库: %s", e)
-                temp_db_path.unlink()
-                return False
-
-            # 替换当前数据库
-            shutil.move(str(temp_db_path), str(self.db_path))
-            self._stats.last_restore_time = datetime.now()
-
-            logger.info("数据库恢复成功: %s", backup_path)
-            return True
-
-        except Exception as e:
-            logger.error("数据库恢复失败: %s", e)
-            # 尝试从安全副本恢复
-            safety_files = sorted(
-                self.backup_dir.glob(f"{self.db_path.stem}_safety_*.db"),
-                reverse=True,
-            )
-            if safety_files:
-                try:
-                    shutil.copy2(str(safety_files[0]), str(self.db_path))
-                    logger.info("已从安全副本恢复: %s", safety_files[0])
-                except Exception as restore_err:
-                    logger.error("安全副本恢复也失败: %s", restore_err)
-            return False
-
-    def _find_backup_info(self, filename: str) -> Optional[BackupInfo]:
-        """在缓存中查找备份信息。"""
-        for info in self._backups_cache:
-            if info.filename == filename:
-                return info
-        return None
 
     def list_backups(self) -> list[BackupInfo]:
         """列出所有备份文件信息。
@@ -291,7 +196,6 @@ class BackupManager:
                 backups.append(info)
 
         backups.sort(key=lambda b: b.timestamp, reverse=True)
-        self._backups_cache = backups
         return backups
 
     def _parse_backup_filename(self, path: Path) -> Optional[BackupInfo]:
@@ -403,24 +307,6 @@ class BackupManager:
 
         return deleted_count
 
-    async def record_change(self, count: int = 1) -> Optional[BackupInfo]:
-        """记录数据变更，达到阈值时触发增量备份。
-
-        Args:
-            count: 变更条数。
-
-        Returns:
-            如果触发了备份则返回备份信息，否则返回None。
-        """
-        self._change_count += count
-        if self._change_count >= self.change_threshold:
-            logger.info(
-                "数据变更达到阈值 (%d/%d)，触发增量备份",
-                self._change_count, self.change_threshold,
-            )
-            return await self.backup(BackupType.INCREMENTAL)
-        return None
-
     async def start_scheduled_backup(self) -> None:
         """启动定时备份任务。"""
         if self._running:
@@ -479,56 +365,3 @@ class BackupManager:
             包含备份数量、大小、时间范围等信息的字典。
         """
         return self._stats.to_dict()
-
-    def verify_backup(self, backup_path: str) -> bool:
-        """验证备份文件的完整性。
-
-        Args:
-            backup_path: 备份文件路径。
-
-        Returns:
-            是否通过完整性校验。
-        """
-        backup_file = Path(backup_path)
-        if not backup_file.exists():
-            logger.error("备份文件不存在: %s", backup_path)
-            return False
-
-        try:
-            # 尝试解压并验证
-            temp_path = self.backup_dir / f"_verify_temp_{datetime.now().strftime('%Y%m%d_%H%M%S')}.db"
-            with gzip.open(backup_file, "rb") as f_in:
-                with open(temp_path, "wb") as f_out:
-                    shutil.copyfileobj(f_in, f_out)
-
-            # 计算哈希
-            actual_sha256 = self._compute_sha256(temp_path)
-
-            # 验证是否为有效SQLite数据库
-            try:
-                conn = sqlite3.connect(str(temp_path))
-                conn.execute("SELECT 1")
-                conn.close()
-            except sqlite3.Error:
-                temp_path.unlink()
-                logger.error("备份文件不是有效的SQLite数据库: %s", backup_path)
-                return False
-
-            # 与备份信息中的哈希对比
-            backup_info = self._find_backup_info(backup_file.name)
-            if backup_info and backup_info.sha256:
-                if actual_sha256 != backup_info.sha256:
-                    temp_path.unlink()
-                    logger.error(
-                        "SHA256校验失败: 期望 %s, 实际 %s",
-                        backup_info.sha256[:16], actual_sha256[:16],
-                    )
-                    return False
-
-            temp_path.unlink()
-            logger.info("备份文件完整性校验通过: %s", backup_path)
-            return True
-
-        except Exception as e:
-            logger.error("备份文件完整性校验失败: %s", e)
-            return False
