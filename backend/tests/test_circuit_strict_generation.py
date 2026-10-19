@@ -18,6 +18,7 @@ from api import generate
 from db.database import SQLiteDB
 from db.schemas import MessageRequest
 from inference import model_manager
+from inference.request_context import resolve_request_context
 from inference.context_budget import InputBudgetError
 from infra.circuit_breaker import CircuitBreakerRegistry, CircuitOpenError, CircuitState
 
@@ -73,6 +74,7 @@ async def circuit_rig(tmp_path, monkeypatch):
         _current_provider=SimpleNamespace(value="openai_compat"),
         get_current_provider=lambda: connection,
     )
+    rig.circuit_name = f"model_generate:{(await resolve_request_context(manager)).connection_id}"
     monkeypatch.setattr(model_manager, "get_model_manager", lambda: manager)
     monkeypatch.setattr(generate, "db", database)
     monkeypatch.setattr(generate, "response_cache", None)
@@ -114,7 +116,7 @@ async def test_healthy_native_success_records_and_archives_real_reply(circuit_ri
     result = await turn(rig, "healthy")
     assert result.reply == REPLY and result.modelInvoked is True
     assert len(rig.calls) == 1 and rig.calls[0]["provider_fee"] == 0
-    breaker = await rig.registry.get("model_generate")
+    breaker = await rig.registry.get(rig.circuit_name)
     assert breaker.state == CircuitState.CLOSED
     stats = breaker.get_stats()
     assert stats["success_calls"] == 1 and stats["failure_calls"] == 0
@@ -135,7 +137,7 @@ async def test_five_real_failures_then_open_rejection_has_actual_cause_and_recov
         with pytest.raises(HTTPException) as caught:
             await turn(rig, f"failed-{number}")
         assert caught.value.__cause__ is failure
-    breaker = await rig.registry.get("model_generate")
+    breaker = await rig.registry.get(rig.circuit_name)
     assert breaker.failure_threshold == 5 and breaker.state == CircuitState.OPEN
     assert len(rig.calls) == 5 and archives(rig) == []
     assert [row["errorType"] for row in records(rig)] == ["RuntimeError"] * 5
@@ -210,7 +212,7 @@ async def test_real_half_open_admission_rejects_concurrent_extra_probe():
 async def test_cancelled_half_open_native_probe_releases_admission_and_can_recover(circuit_rig):
     rig = circuit_rig
     breaker = await rig.registry.get_or_create(
-        "model_generate", failure_threshold=1, recovery_timeout=30,
+        rig.circuit_name, failure_threshold=1, recovery_timeout=30,
         half_open_max_calls=1,
     )
     await breaker.record_failure()
@@ -367,9 +369,9 @@ async def test_capacity_failures_keep_audit_without_disabling_a_healthy_provider
     assert not rig.calls and not archives(rig)
     assert [row["errorType"] for row in records(rig)] == ["InputBudgetError"] * 5
     assert "model_failures" not in counters
-    assert await rig.registry.get("model_generate") is None
+    assert await rig.registry.get(rig.circuit_name) is None
     monkeypatch.setattr(generate, "get_provider_context_budget", lambda: SimpleNamespace(window_tokens=65536, evidence_max_chars=0))
     result = await turn(rig, "healthy-after-capacity")
     assert result.modelInvoked and result.reply == REPLY and len(rig.calls) == 1
-    breaker = await rig.registry.get("model_generate")
+    breaker = await rig.registry.get(rig.circuit_name)
     assert breaker.state == CircuitState.CLOSED and breaker.get_stats()["failure_calls"] == 0

@@ -493,7 +493,10 @@ async def _generate_reply_body(
                         nonlocal model_name
                         if _mgr._current_provider.value != request_provider:
                             raise RuntimeError("Selected provider changed before generation; retry the request")
-                        breaker = await circuit_breaker_registry.get_or_create("model_generate") if circuit_breaker_registry else None
+                        breaker = (
+                            await circuit_breaker_registry.get_or_create(f"model_generate:{request_context.connection_id}")
+                            if circuit_breaker_registry else None
+                        )
                         async with (breaker() if breaker is not None else nullcontext()):
                             if request_provider == "openai_compat":
                                 model_name = cloud_provider.get_status()["modelName"]

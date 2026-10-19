@@ -1,6 +1,8 @@
 """One resolved inference connection and counter for a generation request."""
 
 import asyncio
+import hashlib
+import json
 from collections.abc import Callable
 from contextlib import contextmanager
 from contextvars import ContextVar, copy_context
@@ -15,6 +17,14 @@ class InferenceRequestContext:
     provider_name: str
     provider: Any = field(repr=False)
     count_tokens: Callable[[str], int] = field(repr=False)
+
+    @property
+    def connection_id(self) -> str:
+        if self.provider is None:
+            return self.provider_name
+        connection = (self.provider.base_url, self.provider.model, self.provider.api_key)
+        digest = hashlib.sha256(json.dumps(connection).encode()).hexdigest()
+        return f"{self.provider_name}:{digest}"
 
 
 _current: ContextVar[InferenceRequestContext | None] = ContextVar("inference_request", default=None)
