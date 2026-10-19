@@ -412,7 +412,7 @@ async def test_injected_character_service_reaches_prepare_and_complete(monkeypat
         seen["prepare_service"] = character_service
         return fake_prepared
 
-    async def fake_complete(prepared, request, reply, *, character_service=None, completion_slot=None):
+    async def fake_complete(prepared, request, *, character_service=None, completion_slot=None):
         seen["complete_service"] = character_service
         assert completion_slot is not None
 
