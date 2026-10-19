@@ -11,6 +11,8 @@ from html import unescape
 
 import pytest
 import test_grounded_source_lifecycle as source_fixture
+from knowledge.grounded_answer.packet import EvidencePacketBuilder
+from knowledge.grounded_answer.prompt import GroundedPromptBuilder
 
 DOMAIN = source_fixture.DOMAIN
 BODY_A = source_fixture.BODY_A
@@ -144,6 +146,8 @@ async def test_invalid_fresh_source_binding_fails_before_model(tmp_path, monkeyp
 
 async def test_complete_curated_source_over_grounded_budget_fails_without_partial_answer(tmp_path, monkeypatch):
     rig = arrange_grounded_projection(tmp_path, monkeypatch)
+    rig.service.packet_builder = EvidencePacketBuilder(6000)
+    rig.service.prompt_builder = GroundedPromptBuilder(6000)
     first, second = BODY_B.splitlines()
     body = first + "\n" + second + "另外：仍须保留完整日期、时段和天气限制；" * 450
     assert len(body.splitlines()) == 2
@@ -185,6 +189,8 @@ async def test_low_confidence_with_legal_large_original_abstains_without_generat
     from dataclasses import replace
 
     rig = arrange_grounded_projection(tmp_path, monkeypatch)
+    rig.service.packet_builder = EvidencePacketBuilder(6000)
+    rig.service.prompt_builder = GroundedPromptBuilder(6000)
     first, second = BODY_B.splitlines()
     body = first + "\n" + second + "另外：仍须保留完整日期、时段和天气限制；" * 450
     assert len(body.splitlines()) == 2
