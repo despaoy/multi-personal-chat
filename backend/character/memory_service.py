@@ -969,8 +969,8 @@ class CharacterMemoryService:
         )
         if for_contextual_selection and retrieval_query != query:
             query_views = (*query_views, retrieval_query)
-        query_views = tuple(view for view in query_views if view)
-        lexical_routes: list[dict[int, float]] = [dict() for _view in query_views]
+        query_grams = tuple(_bigrams(view) for view in query_views if view)
+        lexical_routes: list[dict[int, float]] = [dict() for _ in query_grams]
         lexical_max_scores: dict[int, float] = {}
         importance_scores: dict[int, float] = {}
         recency_scores: dict[int, float] = {}
@@ -984,11 +984,11 @@ class CharacterMemoryService:
             event = (row.get("metadata") or {}).get("event")
             event_subject = str(event.get("subject") or "") if isinstance(event, dict) else ""
             relevances: list[float] = []
-            for route, view in zip(lexical_routes, query_views, strict=True):
-                relevance = _relevance(_bigrams(view), retrieval_text)
+            for route, grams in zip(lexical_routes, query_grams, strict=True):
+                relevance = _relevance(grams, retrieval_text)
                 if event_subject:
                     # Status/date labels must not dilute an exact event-topic match.
-                    relevance = max(relevance, _relevance(_bigrams(view), event_subject))
+                    relevance = max(relevance, _relevance(grams, event_subject))
                 route[index] = relevance
                 relevances.append(relevance)
             max_relevance = max(relevances, default=0.0)
