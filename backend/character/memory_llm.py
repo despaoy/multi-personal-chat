@@ -987,15 +987,11 @@ def _candidate_to_proposal(
     if not isinstance(operation, str):
         raise MemoryResponseError('operation', "记忆 LLM operation 必须是明确的操作名称")
     operation = operation.strip().upper()
-    # UPDATE 与 IGNORE 保留现有公开解析契约。
-    semantic_operation = "SUPERSEDE" if operation == "UPDATE" else operation
-    if operation == "IGNORE":
-        return None
-    if semantic_operation not in _SEMANTIC_OPERATIONS:
+    if operation not in _SEMANTIC_OPERATIONS:
         raise MemoryResponseError('operation', "记忆 LLM operation 不受支持")
     kind = _proposal_text(raw, "kind").strip()
     value = re.sub(r"\s+", " ", _proposal_text(raw, "value")).strip()
-    writes_content = semantic_operation not in {"NOOP", "RETRACT", "ERASE"}
+    writes_content = operation not in {"NOOP", "RETRACT", "ERASE"}
     if (kind or writes_content) and kind not in _ALLOWED_KINDS and kind != "user_fact":
         raise MemoryResponseError("kind", "记忆 LLM kind 缺失或不受支持")
     if writes_content and (not value or len(value) > _MAX_VALUE_CHARS):
@@ -1015,22 +1011,22 @@ def _candidate_to_proposal(
     normalized_source = _normalize(source_message)
     normalized_evidence = _normalize(evidence)
     unretracted_source = unretracted_memory_source(source_message)
-    if (semantic_operation not in {"NOOP", "RETRACT", "ERASE"}
+    if (operation not in {"NOOP", "RETRACT", "ERASE"}
             and unretracted_source != source_message
             and normalized_evidence
             and normalized_evidence not in _normalize(unretracted_source)):
         return None
     required_confidence = (
         min(confidence_threshold, PENDING_CONFIDENCE_THRESHOLD)
-        if semantic_operation == "PENDING"
+        if operation == "PENDING"
         else confidence_threshold
     )
-    if semantic_operation != "NOOP" and confidence < required_confidence:
+    if operation != "NOOP" and confidence < required_confidence:
         return None
-    event_observation = kind == "shared_event" and semantic_operation not in {"NOOP", "RETRACT", "ERASE"}
+    event_observation = kind == "shared_event" and operation not in {"NOOP", "RETRACT", "ERASE"}
     generic_source_observation = False
     alias_projection = (identity_alias_projection(source=source_message, evidence=evidence, value=value)
-        if kind in {'name', 'other_user_fact'} and semantic_operation in {'ADD', 'MERGE', 'SUPERSEDE', 'COEXIST'} else None)
+        if kind in {'name', 'other_user_fact'} and operation in {'ADD', 'MERGE', 'SUPERSEDE', 'COEXIST'} else None)
     if kind == 'name' and explicit_alias_value(source_message, value) and alias_projection is None:
         supported_name = _supported_generic_fact(value, evidence)
         if supported_name is None or supported_name[0] != 'name':
@@ -1042,7 +1038,7 @@ def _candidate_to_proposal(
             and (_THIRD_PARTY_FACT_PATTERN.search(evidence) or _NAMED_THIRD_PARTY_PATTERN.search(evidence))):
         return None
     if (kind in {'name', 'like', 'dislike', 'major', 'study_stage', 'origin', 'residence', 'location', 'workplace'}
-            and semantic_operation not in {'NOOP', 'RETRACT', 'ERASE'}
+            and operation not in {'NOOP', 'RETRACT', 'ERASE'}
             and explicitly_other_subject(source=source_message, evidence=evidence, value=value)):
         return None
     if kind == "other_user_fact" and claims_other_subject_as_user(
@@ -1052,11 +1048,11 @@ def _candidate_to_proposal(
     if not event_observation:
         _validate_attribution(raw.get("attributed_to"))
 
-    if semantic_operation in {"PENDING", "RETRACT", "ERASE"}:
+    if operation in {"PENDING", "RETRACT", "ERASE"}:
         evidence_allowed = memory_write_allowed(evidence) and "?" not in evidence and "？" not in evidence
     else:
         evidence_allowed = memory_evidence_allowed(evidence)
-    if (not evidence_allowed and semantic_operation in {"ADD", "SUPERSEDE"}
+    if (not evidence_allowed and operation in {"ADD", "SUPERSEDE"}
             and normalized_evidence == normalized_source
             and assertion_before_lookup(source_message)):
         # Recover a model's over-wide quote only from an independently parsed
@@ -1070,7 +1066,7 @@ def _candidate_to_proposal(
                 normalized_evidence = _normalize(evidence)
                 proposed_content = item.content
                 evidence_allowed = memory_evidence_allowed(evidence)
-    if evidence_allowed and kind in {"origin", "residence", "location"} and semantic_operation in {"ADD", "SUPERSEDE", "COEXIST", "MERGE"}:
+    if evidence_allowed and kind in {"origin", "residence", "location"} and operation in {"ADD", "SUPERSEDE", "COEXIST", "MERGE"}:
         # A clipped quote must not turn a hypothetical source clause into
         # an asserted residence/origin. Check each original overlapping
         # clause; independent assertions elsewhere retain their own scope.
@@ -1094,18 +1090,16 @@ def _candidate_to_proposal(
         return None
 
     if (
-        semantic_operation in {"MERGE", "SUPERSEDE"}
+        operation in {"MERGE", "SUPERSEDE"}
         and target_memory_id
         and _CONDITIONAL_COEXIST_PATTERN.search(source_message)
     ):
-        semantic_operation = "COEXIST"
         operation = "COEXIST"
 
-    if semantic_operation == "ADD" and not (target_memory_id or target_memory_key):
+    if operation == "ADD" and not (target_memory_id or target_memory_key):
         inferred = _infer_add_relation_target(kind, evidence, existing_memories)
         if inferred is not None:
-            semantic_operation, inferred_target = inferred
-            operation = semantic_operation
+            operation, inferred_target = inferred
             target_memory_id = _record_id(inferred_target)
             target_memory_key = str(inferred_target.get("memory_key") or "")
 
@@ -1116,22 +1110,22 @@ def _candidate_to_proposal(
     )
     if alias_projection is not None and target_record is not None and target_memory_key != alias_projection[1]:
         return None  # Alias ownership cannot mutate the primary-name predicate.
-    if semantic_operation in _TARGET_REQUIRED_OPERATIONS and target_record is None:
+    if operation in _TARGET_REQUIRED_OPERATIONS and target_record is None:
         return None
     if target_record is not None:
         target_memory_id = _record_id(target_record)
         target_memory_key = str(target_record.get("memory_key") or "")
-        if semantic_operation != "ERASE" and str(target_record.get("status") or "active") not in {
+        if operation != "ERASE" and str(target_record.get("status") or "active") not in {
             "active",
             "pending",
         }:
             return None
-    elif semantic_operation == "ADD":
+    elif operation == "ADD":
         target_memory_id = ""
         target_memory_key = ""
 
     if (
-        semantic_operation == "MERGE"
+        operation == "MERGE"
         and target_record is not None
         and value
         and re.sub(r"[，。！？,!?：:；;]", "", _normalize(value))
@@ -1150,19 +1144,19 @@ def _candidate_to_proposal(
             confidence=confidence,
         )
 
-    if semantic_operation == "ERASE" and not is_memory_erasure_request(source_message):
+    if operation == "ERASE" and not is_memory_erasure_request(source_message):
         return None
-    if semantic_operation == "RETRACT" and not _CORRECTION_PATTERN.search(source_message):
+    if operation == "RETRACT" and not _CORRECTION_PATTERN.search(source_message):
         return None
     if (
-        semantic_operation in _TARGET_REQUIRED_OPERATIONS
+        operation in _TARGET_REQUIRED_OPERATIONS
         and feedback_target_ids
         and _DEICTIC_CORRECTION_PATTERN.search(source_message)
         and target_memory_id not in {str(item) for item in feedback_target_ids}
     ):
         return None
 
-    if semantic_operation == "NOOP":
+    if operation == "NOOP":
         return ValidatedMemoryProposal(
             operation="NOOP",
             evidence=evidence,
@@ -1172,7 +1166,7 @@ def _candidate_to_proposal(
     # Generic labels must not hide independently proven personal fields.
     # Preserve qualified/ambiguous observations and existing generic targets.
     if (kind == "other_user_fact" and target_record is None
-            and semantic_operation == "ADD" and not raw.get("qualifiers")):
+            and operation == "ADD" and not raw.get("qualifiers")):
         supported = _supported_generic_fact(value, evidence)
         complete_support = _supported_generic_fact(value, source_message)
         if (supported is not None and complete_support is not None
@@ -1192,11 +1186,11 @@ def _candidate_to_proposal(
         # Only target-only withdrawal/erasure or the supported user_fact type
         # can reach this branch; an unknown model kind is never inferred.
         kind = _infer_kind_from_target(target_record)
-    if not value and target_record is not None and semantic_operation in {"RETRACT", "ERASE"}:
+    if not value and target_record is not None and operation in {"RETRACT", "ERASE"}:
         value = target_memory_key or "target"
-    if not value or (len(value) > _MAX_VALUE_CHARS and semantic_operation not in {"RETRACT", "ERASE"}):
+    if not value or (len(value) > _MAX_VALUE_CHARS and operation not in {"RETRACT", "ERASE"}):
         return None
-    if kind in {"like", "dislike"} and semantic_operation not in {"RETRACT", "ERASE"}:
+    if kind in {"like", "dislike"} and operation not in {"RETRACT", "ERASE"}:
         from character.preference_index import conditional_preference_label, grounded_preference_index
 
         if conditional_preference_label(value) and _normalize(value) not in normalized_evidence:
@@ -1210,7 +1204,7 @@ def _candidate_to_proposal(
             # Rebuild the display from the literal short object and all ordinary
             # source-checked qualifiers, never the model's decorated paraphrase.
             proposed_content = ""
-    if semantic_operation not in {"RETRACT", "ERASE"} and not _grounded_value(
+    if operation not in {"RETRACT", "ERASE"} and not _grounded_value(
         value,
         evidence=evidence,
         history=history,
@@ -1222,20 +1216,20 @@ def _candidate_to_proposal(
             # observation instead of discarding a real later correction.
             generic_source_observation = True
             proposed_content = ""
-            if target_record is not None and semantic_operation in {"MERGE", "SUPERSEDE"}:
+            if target_record is not None and operation in {"MERGE", "SUPERSEDE"}:
                 # Earlier utterances remain valid observations of what was
                 # said. Link the new source without erasing that chronology.
-                operation = semantic_operation = "COEXIST"
+                operation = "COEXIST"
         elif (kind == "other_user_fact" and (
-                semantic_operation == "ADD" and target_record is None
-                or semantic_operation == "MERGE" and target_record is not None
+                operation == "ADD" and target_record is None
+                or operation == "MERGE" and target_record is not None
                 and target_memory_key.startswith("fact_"))):
             # A generic summary's surface form is not its source. Retain a
             # complete, explicitly labelled utterance observation instead of
             # certifying the model's value/content as a semantic fact.
             generic_source_observation = True
             if target_record is not None:
-                operation = semantic_operation = "COEXIST"
+                operation = "COEXIST"
             proposed_content = ""
         else:
             grounded_negative = _negative_object_from_evidence(evidence) if kind in {"like", "dislike"} else ""
@@ -1253,7 +1247,7 @@ def _candidate_to_proposal(
 
     if (
         target_record is not None
-        and semantic_operation not in {"RETRACT", "ERASE"}
+        and operation not in {"RETRACT", "ERASE"}
         and alias_projection is None
         and not _target_key_matches_kind(kind, target_memory_key)
     ):
@@ -1272,11 +1266,11 @@ def _candidate_to_proposal(
                 raw_qualifiers = {key: value for key, value in raw_qualifiers.items() if key != "type"}
         # Keep the actual Chinese qualifier, not an unsupported English enum.
         # PENDING still controls lifecycle; labels cannot supply missing facts.
-        if semantic_operation == "PENDING" and raw_qualifiers.get("certainty") == "planned":
+        if operation == "PENDING" and raw_qualifiers.get("certainty") == "planned":
             planned = re.search(r"计划|打算|准备|预计", evidence)
             if planned:
                 raw_qualifiers = {**raw_qualifiers, "certainty": planned.group()}
-    if semantic_operation in {"ADD", "MERGE", "SUPERSEDE", "COEXIST"}:
+    if operation in {"ADD", "MERGE", "SUPERSEDE", "COEXIST"}:
         raw_qualifiers = normalize_preference_labels(
             raw_qualifiers, kind=kind, evidence=evidence, source_message=source_message,
             canonical=_canonical_memory_fields(kind, value, evidence),
@@ -1286,7 +1280,7 @@ def _candidate_to_proposal(
     # actual evidence. Semantic facts retain the stricter quote-only gate.
     qualifier_evidence = source_message if event_observation or generic_source_observation else evidence
     qualifiers = _sanitize_qualifiers(
-        raw_qualifiers, evidence=qualifier_evidence, pending=semantic_operation == "PENDING"
+        raw_qualifiers, evidence=qualifier_evidence, pending=operation == "PENDING"
     )
     raw_valid_from = raw.get("valid_from")
     raw_valid_to = raw.get("valid_to")
@@ -1298,7 +1292,7 @@ def _candidate_to_proposal(
     if valid_from and valid_to and datetime.fromisoformat(valid_from) > datetime.fromisoformat(valid_to):
         raise ValueError("记忆 LLM valid_from 不能晚于 valid_to")
 
-    if target_record is not None and semantic_operation in {"RETRACT", "ERASE"}:
+    if target_record is not None and operation in {"RETRACT", "ERASE"}:
         memory_type = target_record["memory_type"]
         key = target_memory_key
         canonical_content = str(target_record.get("content") or f"用户撤回记忆：{target_memory_key}")
@@ -1320,9 +1314,7 @@ def _candidate_to_proposal(
     if alias_projection is not None:
         proposed_content = ''  # Keep only the independently grounded alias predicate.
 
-    # 旧 UPDATE 入口一直承诺由本地模板生成 content；新关系操作才允许
-    # 使用已通过主体/证据硬校验的 LLM 自包含表述。
-    if proposed_content and operation != "UPDATE" and kind != "shared_event":
+    if proposed_content and kind != "shared_event":
         if (
             len(proposed_content) > MAX_MEMORY_CONTENT_CHARS
             or not proposed_content.startswith("用户")
@@ -1330,7 +1322,7 @@ def _candidate_to_proposal(
         ):
             return None
         if (_normalize(value) not in _normalize(proposed_content)
-                and semantic_operation not in {"RETRACT", "ERASE"}):
+                and operation not in {"RETRACT", "ERASE"}):
             if kind != "other_user_fact":
                 return None
             # Generic values can encode a predicate whose word order differs
@@ -1344,7 +1336,7 @@ def _candidate_to_proposal(
     else:
         content = canonical_content
 
-    if (kind == "shared_event" or generic_source_observation) and semantic_operation not in {"RETRACT", "ERASE"}:
+    if (kind == "shared_event" or generic_source_observation) and operation not in {"RETRACT", "ERASE"}:
         # A selected event topic is not proof of its actor. Keep the complete
         # utterance (including later qualifications) instead of promoting the
         # model's free-form summary to an event owned by the speaker.
@@ -1353,20 +1345,20 @@ def _candidate_to_proposal(
         evidence = source_message
         label = "用户原话记录：" if generic_source_observation else "用户原话事件记录："
         quoted = label + json.dumps(source_message, ensure_ascii=False)
-        prefix_size = len("待确认：") if semantic_operation == "PENDING" else 0
+        prefix_size = len("待确认：") if operation == "PENDING" else 0
         content = quoted if len(quoted) + prefix_size <= MAX_MEMORY_CONTENT_CHARS else "用户原话事件记录（完整内容见证据）"
-        if semantic_operation == "MERGE":
+        if operation == "MERGE":
             # A new utterance is not a complete replacement for the older
             # event evidence. Retain both linked observations instead of
             # superseding the old one with a non-cumulative quotation.
-            operation = semantic_operation = "COEXIST"
+            operation = "COEXIST"
 
-    if qualifiers and kind != "shared_event" and (not proposed_content or operation == "UPDATE"):
+    if qualifiers and kind != "shared_event" and not proposed_content:
         qualifier_text = "；".join(f"{key_name}={item_value}" for key_name, item_value in qualifiers)
         content = f"{content}（{qualifier_text}）"
-    if semantic_operation == "PENDING" and not content.startswith("待确认："):
+    if operation == "PENDING" and not content.startswith("待确认："):
         content = f"待确认：{content}"
-    if semantic_operation == "MERGE" and target_record is not None and kind != "shared_event":
+    if operation == "MERGE" and target_record is not None and kind != "shared_event":
         previous = str(target_record.get("content") or "").strip()
         if previous and _normalize(previous) != _normalize(content):
             content = f"{previous}；补充：{content}"
@@ -1394,7 +1386,7 @@ def _candidate_to_proposal(
         proposed_valid_from=str(raw_valid_from or "").strip(),
         proposed_valid_to=str(raw_valid_to or "").strip(),
         source_observation=(kind == "shared_event" or generic_source_observation)
-            and semantic_operation not in {"RETRACT", "ERASE"},
+            and operation not in {"RETRACT", "ERASE"},
     )
 
 
@@ -2025,8 +2017,8 @@ class MemoryEnrichmentScheduler:
                 job.receipt.set_result(dict(result))
 
     async def _persist_proposal(self, job: _MemoryJob, proposal: ValidatedMemoryProposal) -> str:
-        semantic_operation = "SUPERSEDE" if proposal.operation == "UPDATE" else proposal.operation
-        if semantic_operation == "NOOP":
+        operation = proposal.operation
+        if operation == "NOOP":
             return "no_change"
 
         target_id: int | str | None = None
@@ -2036,7 +2028,7 @@ class MemoryEnrichmentScheduler:
             )
 
         deferred = None
-        if semantic_operation in {"MERGE", "SUPERSEDE", "RETRACT", "ERASE"}:
+        if operation in {"MERGE", "SUPERSEDE", "RETRACT", "ERASE"}:
             from character.deferred_memory_mutation import deferred_evidence_start, deferred_source_start
 
             deferred = deferred_source_start(proposal.evidence, observed_at=job.observed_at)
@@ -2044,7 +2036,7 @@ class MemoryEnrichmentScheduler:
                 deferred = deferred_evidence_start(
                     proposal.evidence, job.message, observed_at=job.observed_at
                 )
-            if (deferred is None and semantic_operation == "ERASE"
+            if (deferred is None and operation == "ERASE"
                     and _future_only_erasure_request(job.message, observed_at=job.observed_at)):
                 # A contiguous quoted command can omit its preceding date.
                 # Whole-message future authority still forbids deleting now.
@@ -2052,9 +2044,9 @@ class MemoryEnrichmentScheduler:
             if deferred is not None:
                 # The source explicitly starts later. Preserve today's target;
                 # this quote does not authorize executing a future lifetime.
-                semantic_operation = "COEXIST"
+                operation = "COEXIST"
 
-        if semantic_operation == "ERASE":
+        if operation == "ERASE":
             deleted = await job.repository.erase_memory(
                 job.character_id,
                 job.user_scope,
@@ -2085,16 +2077,16 @@ class MemoryEnrichmentScheduler:
             valid_from=proposal.valid_from,
             valid_to=proposal.valid_to,
             confidence=proposal.confidence,
-            status="pending" if semantic_operation == "PENDING" else "active",  # type: ignore[arg-type]
-            relation_type=semantic_operation,
+            status="pending" if operation == "PENDING" else "active",  # type: ignore[arg-type]
+            relation_type=operation,
             source_message_ids=(job.source_message_id,) if job.source_message_id else (),
         )
 
-        parent_id = target_id if semantic_operation in {"MERGE", "COEXIST"} else None
+        parent_id = target_id if operation in {"MERGE", "COEXIST"} else None
         # MERGE 的新 claim 已在 parser 中聚合旧内容，因此它是新的
         # canonical active 版本；旧版本要进入 superseded，不能继续以
         # active 重复参与检索。parent 同时保留可追溯关系。
-        supersedes_id = target_id if semantic_operation in {"MERGE", "SUPERSEDE", "RETRACT"} else None
+        supersedes_id = target_id if operation in {"MERGE", "SUPERSEDE", "RETRACT"} else None
         metadata = {
             "qualifiers": dict(proposal.qualifiers),
             "target_memory_key": proposal.target_memory_key,
@@ -2124,9 +2116,9 @@ class MemoryEnrichmentScheduler:
             job.user_scope,
             memory,
             memory_key=item.memory_key,
-            relation_type=semantic_operation,
+            relation_type=operation,
             scope_level=proposal.scope_level,
-            status="pending" if semantic_operation == "PENDING" else None,
+            status="pending" if operation == "PENDING" else None,
             parent_memory_id=parent_id,
             supersedes_memory_id=supersedes_id,
             evidence=(proposal.evidence,),

@@ -9,7 +9,7 @@ def _response(*, attributed_to="user", **memory):
     return json.dumps({"memories": [dict(memory, attributed_to=attributed_to)]}, ensure_ascii=False)
 
 
-def test_update_must_use_existing_memory_key_and_overwrites_that_key():
+def test_supersede_must_use_existing_memory_key_and_overwrites_that_key():
     old = (
         {
             "memory_key": "goal_点云补全",
@@ -23,7 +23,7 @@ def test_update_must_use_existing_memory_key_and_overwrites_that_key():
         content="用户正在进行或准备：点云识别",
         evidence="补全方向暂时不考虑了，我最近改做点云识别",
         confidence=0.97,
-        operation="UPDATE",
+        operation="SUPERSEDE",
         target_memory_key="goal_点云补全",
     )
 
@@ -34,19 +34,19 @@ def test_update_must_use_existing_memory_key_and_overwrites_that_key():
     )
 
     assert len(proposals) == 1
-    assert proposals[0].operation == "UPDATE"
+    assert proposals[0].operation == "SUPERSEDE"
     assert proposals[0].memory.memory_key == "goal_点云补全"
     assert proposals[0].memory.content == "用户正在进行或准备：点云识别"
 
 
-def test_update_rejects_invented_target_memory_key():
+def test_supersede_rejects_invented_target_memory_key():
     raw = _response(
         kind="goal",
         value="点云识别",
         content="用户正在进行或准备：点云识别",
         evidence="我最近改做点云识别",
         confidence=0.99,
-        operation="UPDATE",
+        operation="SUPERSEDE",
         target_memory_key="goal_不存在",
     )
     proposals = parse_llm_proposals(
@@ -57,14 +57,14 @@ def test_update_rejects_invented_target_memory_key():
     assert proposals == []
 
 
-def test_update_rejects_real_but_incompatible_target_key():
+def test_supersede_rejects_real_but_incompatible_target_key():
     raw = _response(
         kind="name",
         value="小明",
         content="用户说自己叫小明",
         evidence="我叫小明",
         confidence=0.99,
-        operation="UPDATE",
+        operation="SUPERSEDE",
         target_memory_key="goal_点云补全",
     )
     proposals = parse_llm_proposals(
@@ -95,7 +95,7 @@ def test_ellipsis_value_must_be_grounded_in_supplied_context():
     assert invented == []
 
 
-def test_third_party_fact_and_ignore_are_not_saved():
+def test_third_party_fact_is_not_saved():
     third_party = _response(
         kind="like",
         value="咖啡",
@@ -105,17 +105,7 @@ def test_third_party_fact_and_ignore_are_not_saved():
         operation="ADD",
         target_memory_key="",
     )
-    ignored = _response(
-        kind="like",
-        value="咖啡",
-        content="用户喜欢咖啡",
-        evidence="我喜欢咖啡",
-        confidence=0.99,
-        operation="IGNORE",
-        target_memory_key="",
-    )
     assert parse_llm_proposals(third_party, source_message="我的朋友喜欢咖啡。") == []
-    assert parse_llm_proposals(ignored, source_message="我喜欢咖啡。") == []
 
 
 def test_add_ignores_model_generated_key_and_normalizes_goal_value():
@@ -141,7 +131,7 @@ def test_negative_preference_kind_and_value_are_normalized():
         content="用户不喜欢太苦的咖啡",
         evidence="不是完全讨厌咖啡，只是不喜欢太苦的。",
         confidence=0.95,
-        operation="UPDATE",
+        operation="SUPERSEDE",
         target_memory_key="preference_咖啡",
     )
     proposals = parse_llm_proposals(
@@ -150,4 +140,4 @@ def test_negative_preference_kind_and_value_are_normalized():
         existing_memories=({"memory_key": "preference_咖啡", "content": "用户说不喜欢咖啡"},),
     )
     assert len(proposals) == 1
-    assert proposals[0].memory.content == "用户说不喜欢太苦的"
+    assert proposals[0].memory.content == "用户不喜欢太苦的咖啡"

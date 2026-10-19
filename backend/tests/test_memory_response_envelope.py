@@ -130,7 +130,7 @@ def test_valid_numeric_confidence_preserves_admission(confidence, accepted):
     assert bool(result) is accepted
 
 
-@pytest.mark.parametrize('operation', [None, True, 1, [], {}, '', ' ', 'private-invalid'])
+@pytest.mark.parametrize('operation', [None, True, 1, [], {}, '', ' ', 'private-invalid', 'UPDATE', 'IGNORE'])
 def test_invalid_operation_is_protocol_failure(operation):
     raw = dict(candidate(), operation=operation)
     with pytest.raises(ValueError, match='operation') as caught:
