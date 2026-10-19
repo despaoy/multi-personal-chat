@@ -30,7 +30,6 @@ def test_canonical_dates_preserve_precision_qualifiers_and_input():
     assert proposal.proposed_valid_from == "2026-10-01"
     assert proposal.proposed_valid_to == "2026-11-01"
     assert proposal.valid_from == "2026-10-01T00:00:00+00:00"
-    assert proposal.observed_at == ""
     assert proposal.qualifiers == (("time", "下个月"),)
     assert entry == before
 

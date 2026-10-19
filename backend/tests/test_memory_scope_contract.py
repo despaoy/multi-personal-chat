@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from character.memory_llm import MemoryEnrichmentScheduler, MemoryLlmConfig, MemoryResponseError, parse_llm_proposals
+from character.memory_llm import MemoryEnrichmentScheduler, MemoryLlmConfig, MemoryResponseError, parse_llm_proposals, build_memory_llm_messages
 from character.models import UserScope
 from db.database import SQLiteDB
 from repositories.character_memory import DatabaseCharacterMemoryRepository
@@ -20,14 +20,17 @@ def parse(item, source="我叫清舟。"):
     return parse_llm_proposals(json.dumps(dict(memories=[item]), ensure_ascii=False), source_message=source)
 
 
-@pytest.mark.parametrize("scope,source", [
-    ("conversation", "我叫清舟。"),
-    ("user_character", "请记住我叫清舟，以后你记住这个姓名。"),
-    ("user_global", "我叫清舟，请所有角色记住这个姓名。"),
+@pytest.mark.parametrize("scope,source,allowed", [
+    ("conversation", "我叫清舟。", ["conversation"]),
+    ("conversation", "请记住我叫清舟，这个姓名一直没变。", ["conversation"]),
+    ("user_character", "请记住我叫清舟，以后你记住这个姓名。", ["conversation", "user_character"]),
+    ("user_global", "我叫清舟，请所有角色记住这个姓名。", ["conversation", "user_global"]),
 ])
-def test_authorized_scope_is_kept(scope, source):
+def test_authorized_scope_is_kept(scope, source, allowed):
     proposal, = parse(entry(scope_level=scope), source)
     assert proposal.scope_level == scope
+    messages = build_memory_llm_messages(source, (), (), (), 2000, .85)
+    assert json.loads(messages[1]["content"])["proposal_constraints"]["scope_levels"] == allowed
 
 
 def test_omitted_optional_scope_is_conversation():

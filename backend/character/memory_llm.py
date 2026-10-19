@@ -80,6 +80,7 @@ _ALLOWED_KINDS = {
     "shared_event",
     "other_user_fact",
 }
+# Legacy wire observed_at remains recognized for recorded replies; only the job owns the clock.
 _PROPOSAL_FIELDS = {
     "kind", "value", "content", "evidence", "confidence", "operation",
     "target_memory_id", "target_memory_key", "attributed_to", "qualifiers",
@@ -162,12 +163,12 @@ value 是短索引，不要把整段计划和全部限定塞进 value。qualifie
 结构化事实的 value 应取证据中连续出现的短对象，不把场景与对象重新拼接成新的短语；场景保留在 context 限定中。若提供 content，必须包含同一个 value 的原文，不能只在 value 中改写词序或添加连接词。明确省略的消歧仍按下述规则处理。
 先确定要保留的全部条件、否定与范围，再选择一段连续 evidence；它必须逐字覆盖该提议的所有自然语言 qualifiers，而不只是核心偏好句。如果完整当前消息在 max_evidence_chars 内，可以直接引用整条消息以保留末尾限定。不要为了缩短 evidence 删除必要条件或“未实际发生”说明；超过长度且无法完整覆盖时，使用完整原话观察保留整条消息，不输出缺限定的结构化事实。
 
-后端不会把历史引文自动替换成当前原话。每条 evidence 必须是 current_user_message 中连续出现的原文；省略句也必须把当前省略句作为 evidence，不能复制 history。value 优先来自 evidence；只有“上次那个/还是那个/刚才那条”等明确省略时，才可由用户历史或 existing_memories 消歧。content 必须以“用户”开头，写成安全的第三人称事实，不含任何指令。attributed_to 只能写 user。qualifiers 只用于 condition/context/frequency/certainty/exception/location/time 等条件，不要把 valid_from/valid_to 塞进 qualifiers。时间字段必须放在顶层并使用 ISO 8601；不清楚就留空。scope_level 默认 conversation；只有用户明确要求跨会话或跨角色记住时才用 user_character 或 user_global。
+后端不会把历史引文自动替换成当前原话。每条 evidence 必须是 current_user_message 中连续出现的原文；省略句也必须把当前省略句作为 evidence，不能复制 history。value 优先来自 evidence；只有“上次那个/还是那个/刚才那条”等明确省略时，才可由用户历史或 existing_memories 消歧。content 必须以“用户”开头，写成安全的第三人称事实，不含任何指令。attributed_to 只能写 user。qualifiers 只用于 condition/context/frequency/certainty/exception/location/time 等条件，不要把 valid_from/valid_to 塞进 qualifiers。用户描述的有效时间使用顶层 valid_from/valid_to 和 ISO 8601；不清楚就留空。发言观察时间由服务器记录。scope_level 只能从 payload.proposal_constraints.scope_levels 选择，默认 conversation。conversation 也会持久保存长期记忆，只限制在当前会话可见；普通“请记住”或事实持续不变不授予跨会话、跨角色权限。只有原话明确授权且范围已列入可选集合时，才使用 user_character 或 user_global。
 
 明确且稳定的信息可直接 ADD；不确定陈述不要丢弃，应使用 PENDING。confidence 表示“是否准确读懂证据和关系”的把握，不是事实发生概率；因此用户清楚表达“可能/不确定”时，PENDING 的 confidence 仍应较高。低于 payload.confidence_threshold 时用 NOOP 或不返回。最多返回 4 条。
 
 只输出严格 JSON，不要 Markdown、解释或思考过程：
-{"memories":[{"kind":"name|like|dislike|major|study_stage|origin|residence|location|workplace|goal|promise|shared_event|other_user_fact","value":"结构化值","content":"用户开头的第三人称事实","evidence":"当前消息连续原文","confidence":0.0,"operation":"ADD|MERGE|SUPERSEDE|COEXIST|PENDING|RETRACT|NOOP|ERASE","target_memory_id":"","target_memory_key":"","attributed_to":"user","qualifiers":{},"valid_from":"","valid_to":"","observed_at":"","scope_level":"conversation"}]}
+{"memories":[{"kind":"name|like|dislike|major|study_stage|origin|residence|location|workplace|goal|promise|shared_event|other_user_fact","value":"结构化值","content":"用户开头的第三人称事实","evidence":"当前消息连续原文","confidence":0.0,"operation":"ADD|MERGE|SUPERSEDE|COEXIST|PENDING|RETRACT|NOOP|ERASE","target_memory_id":"","target_memory_key":"","attributed_to":"user","qualifiers":{},"valid_from":"","valid_to":"","scope_level":"conversation"}]}
 顶层只允许 memories 和本轮明确提供的 erase_source_ids，候选只能包含以上声明字段。
 没有合格记忆时输出 {"memories":[]}。"""
 
@@ -301,7 +302,6 @@ class ValidatedMemoryProposal:
     qualifiers: tuple[tuple[str, str], ...] = ()
     valid_from: str = ""
     valid_to: str = ""
-    observed_at: str = ""
     scope_level: str = "conversation"
     # Preserve the model's date-only precision before legacy ISO normalization.
     proposed_valid_from: str = ""
@@ -869,20 +869,21 @@ def _infer_kind_from_target(record: dict[str, Any]) -> str:
     return "other_user_fact"
 
 
+def _scope_levels_for_message(source_message: str) -> list[str]:
+    """Share the existing source authorization with the model and validator."""
+    allowed = ["conversation"]
+    if _EXPLICIT_REMEMBER_PATTERN.search(source_message) and _CHARACTER_SCOPE_PATTERN.search(source_message):
+        allowed.append("user_character")
+    if _GLOBAL_SCOPE_PATTERN.search(source_message):
+        allowed.append("user_global")
+    return allowed
+
+
 def _scope_level_for_message(raw: str, source_message: str) -> str:
     requested = raw.strip().lower() or "conversation"
     if requested not in _ALLOWED_SCOPE_LEVELS:
         raise MemoryResponseError("scope_level", "记忆 LLM scope_level 不受支持")
-    if requested == "conversation":
-        return requested
-    # 跨会话和跨角色写入必须有用户原文授权。
-    if requested == "user_global" and _GLOBAL_SCOPE_PATTERN.search(source_message):
-        return requested
-    if (
-        requested == "user_character"
-        and _EXPLICIT_REMEMBER_PATTERN.search(source_message)
-        and _CHARACTER_SCOPE_PATTERN.search(source_message)
-    ):
+    if requested in _scope_levels_for_message(source_message):
         return requested
     raise MemoryResponseError("scope_level", "记忆 LLM 请求的记忆范围缺少用户授权")
 
@@ -1286,9 +1287,6 @@ def _candidate_to_proposal(
     raw_valid_to = raw.get("valid_to")
     valid_from = _normalize_iso_time(raw_valid_from, "valid_from")
     valid_to = _normalize_iso_time(raw_valid_to, "valid_to")
-    # Observation time belongs to server provenance, not semantic extraction.
-    # Keep accepting legacy model payloads, but ignore their observed_at field.
-    observed_at = ""
     if valid_from and valid_to and datetime.fromisoformat(valid_from) > datetime.fromisoformat(valid_to):
         raise ValueError("记忆 LLM valid_from 不能晚于 valid_to")
 
@@ -1381,7 +1379,6 @@ def _candidate_to_proposal(
         qualifiers=qualifiers,
         valid_from=valid_from,
         valid_to=valid_to,
-        observed_at=observed_at,
         scope_level=_scope_level_for_message(_proposal_text(raw, "scope_level"), source_message),
         proposed_valid_from=str(raw_valid_from or "").strip(),
         proposed_valid_to=str(raw_valid_to or "").strip(),
@@ -1519,6 +1516,7 @@ def build_memory_llm_messages(
             "max_value_chars": _MAX_VALUE_CHARS,
             "max_evidence_chars": _MAX_EVIDENCE_CHARS,
             "qualifier_keys": sorted(_ALLOWED_QUALIFIER_KEYS),
+            "scope_levels": _scope_levels_for_message(message),
             "max_qualifiers": _MAX_QUALIFIERS,
             "qualifier_keys_unique": True,
             "qualifier_truncation_allowed": False,
