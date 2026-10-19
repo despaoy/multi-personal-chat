@@ -61,11 +61,12 @@ def select_sources(linked, found, *, contextual=(), limit=4):
 def covered_by_fact(row, memories):
     """Do not add an identical quote merely to disable an already complete read.
 
-    Both complete text AND receipt must match an admitted, unconditional fact.
+    Source ID, complete text and clock must match an admitted unconditional fact.
     Newer repeated speech, observations and conditional evidence still matter.
     """
     for item in memories:
         if (item.memory_type != "user_fact" or item.status != "active" or item.qualifiers
+                or row["source_message_id"] not in item.source_message_ids
                 or item.temporal_mode == "observation" or row["body"] not in item.evidence):
             continue
         try:

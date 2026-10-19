@@ -114,8 +114,8 @@ def test_full_fact_evidence_is_not_duplicated_but_newer_or_conditional_speech_is
     from dataclasses import replace
 
     item = MemoryItem("1", "user_fact", "用户说自己叫阿黎", evidence=("我叫阿黎。",),
-                      observed_at="2026-09-27T00:00:00+00:00")
-    row = dict(body="我叫阿黎。", observed_at="2026-09-27T08:00:00.000000+08:00")
+                      source_message_ids=("original",), observed_at="2026-09-27T00:00:00+00:00")
+    row = dict(source_message_id="original", body="我叫阿黎。", observed_at="2026-09-27T08:00:00.000000+08:00")
     assert covered_by_fact(row, (item,))
     assert not covered_by_fact(row | {"observed_at": "2026-09-28T00:00:00Z"}, (item,))
     assert not covered_by_fact(row, (replace(item, temporal_mode="observation"),))
@@ -211,3 +211,27 @@ def test_search_plan_uses_scope_term_index_not_full_body_scan(tmp_path):
 def test_non_searchable_queries_do_not_scan_source_text(tmp_path, query):
     db = SQLiteDB(tmp_path / "bounds.sqlite")
     assert db.search_memory_sources(**FIELDS, query=query) == []
+
+
+
+@pytest.mark.parametrize("source_ids,expected", [
+    (("first",), {"second"}),
+    ((), {"first", "second"}),
+    (("first", "second"), set()),
+])
+async def test_same_text_and_clock_do_not_replace_source_identity(tmp_path, source_ids, expected):
+    db = SQLiteDB(tmp_path / "source-identity.sqlite")
+    observed = datetime(2026, 10, 1, tzinfo=timezone.utc)
+    body = "我叫阿黎。"
+    for sid in ("first", "second"):
+        assert db.capture_memory_source(**FIELDS, source_message_id=sid, body=body, observed_at=observed) == "recorded"
+    claim = db.append_character_memory_claim(**FIELDS, memory_type="user_fact", memory_key="name",
+        content="用户说自己叫阿黎", source_message_id="first")
+    item = MemoryItem(str(claim["id"]), "user_fact", "用户说自己叫阿黎", evidence=(body,),
+        source_message_ids=source_ids, observed_at=observed.isoformat())
+    repo = DatabaseCharacterMemoryRepository(db)
+    result = await SourceMemoryService(repo).recall("role", SCOPE, "阿黎", memories=(item,))
+    records = json.loads(result.context)["records"] if result.context else []
+    assert {row["source_id"] for row in records} == expected
+    assert all(row["text"] == body for row in records)
+    assert len(await repo.list_sources("role", SCOPE, source_message_ids=("first", "second"))) == 2
