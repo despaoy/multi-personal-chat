@@ -279,12 +279,6 @@ class CircuitBreakerRegistry:
     def get_all_stats(self) -> dict[str, dict[str, Any]]:
         return {name: breaker.get_stats() for name, breaker in self._breakers.items()}
 
-    async def reset_all(self) -> None:
-        async with self._get_lock():
-            breakers = tuple(self._breakers.values())
-        for breaker in breakers:
-            await breaker.reset()
-
     async def clear(self) -> None:
         async with self._get_lock():
             breakers = tuple(self._breakers.values())

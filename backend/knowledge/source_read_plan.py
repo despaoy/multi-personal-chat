@@ -28,11 +28,6 @@ class SourceReadPlan:
     def selectors(self):
         return tuple(dict.fromkeys(atom for group in self.atom_groups for atom in group))
 
-    def matches_fragment(self, fragment, body):
-        if self.match_mode == 'mixed':
-            raise ValueError('Mixed source dependencies require their individual matcher')
-        return SourceReadAtom(fragment, self.match_mode).matches(body)
-
     def matches(self, body):
         return any(all(atom.matches(body) for atom in group) for group in self.atom_groups)
 

@@ -345,7 +345,7 @@ class EncryptionManager:
             raise DecryptionError(f"解密失败: {exc}") from exc
 
     # -------------------------------------------------------------------
-    # 字段级加密/解密
+    # 字段级加密
     # -------------------------------------------------------------------
 
     def encrypt_field(self, value: Any, field_name: str) -> Any:
@@ -371,26 +371,6 @@ class EncryptionManager:
         # 检查是否为敏感字段
         if self._is_sensitive_field(field_name):
             return self.encrypt(value)
-
-        return value
-
-    def decrypt_field(self, value: Any, field_name: str) -> Any:
-        """对特定字段值进行解密。
-
-        仅对已加密的字符串值进行解密。
-
-        Args:
-            value: 字段值
-            field_name: 字段名称
-
-        Returns:
-            解密后的值（如果已加密）或原值
-        """
-        if not isinstance(value, str) or not value:
-            return value
-
-        if self.is_encrypted(value):
-            return self.decrypt(value)
 
         return value
 

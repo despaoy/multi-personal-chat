@@ -88,9 +88,6 @@ class KnowledgeDomainConfig:
         """把查询中的别名/规范名映射到规范实体名。"""
         return self.aliases.get(token)
 
-    def known_entities(self) -> list[str]:
-        return sorted(set(self.aliases.values()))
-
 
 class DomainRegistry:
     """知识域注册表：新增域 = 注册一个 KnowledgeDomainConfig。"""
