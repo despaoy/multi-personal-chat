@@ -2,7 +2,8 @@
 
 import json
 
-from knowledge.public_object_scope import _unique, validate_object_scopes
+from inference.json_decoding import load_unique_json
+from knowledge.public_object_scope import validate_object_scopes
 
 SPAN_INSTRUCTION = """object_scopes只根据完整问题绑定查询对象；identity_review只确认完整授权正文中的单跳名称同一性。
 source_span_catalog是程序从当前完整来源抽取的逐字片段，只提供可选择位置，不代表任务相关或事实充分。完整sources仍是事实审核依据。
@@ -62,7 +63,7 @@ def expand_span_decisions(raw, payload, scopes):
     if payload.get("source_span_catalog") != catalogue:
         raise ValueError("Source reference catalogue changed the authorized original input")
     references = {row["span_id"]: row for row in catalogue}
-    value = json.loads(raw, object_pairs_hook=_unique)
+    value = load_unique_json(raw, duplicate_message="Duplicate scope key")
     if not isinstance(value, dict) or set(value) != {"decisions"} or not isinstance(value["decisions"], list):
         raise ValueError("Invalid source reference envelope")
     rows = []

@@ -18,9 +18,9 @@ from contextvars import ContextVar
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any, Literal
 
-from character.evidence_selector import _unique_object
 from inference.history import review_history
 from inference.context_budget import InputBudgetError
+from inference.json_decoding import load_unique_json
 from character.models import InteractionState, WeightedSignal
 from character.situation_analyzer import ACT_LABELS, NEED_LABELS, PHASE_LABELS, SITUATION_LABELS
 
@@ -411,7 +411,7 @@ def _parse_reviewed_state(raw: object) -> InteractionState:
         fence = re.fullmatch(r"```(?:json)?[ \t]*\r?\n([\s\S]*?)\r?\n```", text)
         if fence is not None:
             text = fence.group(1)
-        payload = json.loads(text, object_pairs_hook=_unique_object)
+        payload = load_unique_json(text)
     if not isinstance(payload, Mapping) or set(payload) != {"state"}:
         raise ValueError("semantic review envelope must contain only state")
 

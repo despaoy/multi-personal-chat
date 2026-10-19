@@ -7,6 +7,7 @@ from dataclasses import replace
 from difflib import SequenceMatcher
 
 from inference.context_budget import ReviewContextBudget
+from inference.json_decoding import load_unique_json
 
 ANNOTATION_TOKENS = 512
 ANNOTATION_TIMEOUT_SECONDS = 20
@@ -64,16 +65,9 @@ def _sources(retrieval):
     return sources
 
 
-def _annotation_object(pairs):
-    value = dict(pairs)
-    if len(value) != len(pairs):
-        raise ValueError("Duplicate citation annotation field")
-    return value
-
-
 def validate_annotations(raw, answer, sources):
     """Return exact source-bound spans or raise for an invalid complete batch."""
-    data = json.loads(raw, object_pairs_hook=_annotation_object)
+    data = load_unique_json(raw, duplicate_message="Duplicate citation annotation field")
     if not isinstance(data, dict) or set(data) != {"citations"} or not isinstance(data["citations"], list):
         raise ValueError("Invalid citation annotation envelope")
     by_key = {source["key"]: source for source in sources}

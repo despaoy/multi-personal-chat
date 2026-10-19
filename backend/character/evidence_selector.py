@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING
 from character.source_fragment_provenance import source_completeness_payload
 from inference.context_budget import InputBudgetError
 from inference.history import review_history
+from inference.json_decoding import load_unique_json
 from infra.environment import read_bool
 
 if TYPE_CHECKING:
@@ -179,19 +180,10 @@ def selection_messages(
     return messages
 
 
-def _unique_object(pairs):
-    result = {}
-    for key, value in pairs:
-        if key in result:
-            raise ValueError("duplicate_json_key")
-        result[key] = value
-    return result
-
-
 def parse_decisions(raw: object, candidate_ids: set[str]) -> tuple[tuple[str, str], ...]:
     if not isinstance(raw, str) or len(raw) > MAX_RESPONSE_CHARS:
         raise ValueError("invalid_response")
-    value = json.loads(raw, object_pairs_hook=_unique_object)
+    value = load_unique_json(raw)
     if not isinstance(value, dict) or set(value) != {"decisions"}:
         raise ValueError("invalid_schema")
     decisions = value["decisions"]

@@ -9,7 +9,8 @@ from __future__ import annotations
 
 import json
 
-from character.evidence_selector import SELECTION_INSTRUCTION, _unique_object
+from inference.json_decoding import load_unique_json
+from character.evidence_selector import SELECTION_INSTRUCTION
 
 PLAN_INSTRUCTION = """分析一段对话中最后一句用户发言的任务需求，不回答它。
 说话者是用户，接收者是另一个人（角色）。所以“我/我的家人”属于说话者，
@@ -31,7 +32,7 @@ TARGET_SCOPES = frozenset({"user_side", "character_side", "multiple", "general",
 def parse_plan(raw):
     if not isinstance(raw, str) or len(raw) > 2000:
         raise ValueError("invalid_plan_response")
-    plan = json.loads(raw, object_pairs_hook=_unique_object)
+    plan = load_unique_json(raw)
     if not isinstance(plan, dict) or set(plan) != {"task_kind", "target_scope", "time_reference"}:
         raise ValueError("invalid_plan_schema")
     if not isinstance(plan["task_kind"], str) or plan["task_kind"] not in TASK_KINDS:

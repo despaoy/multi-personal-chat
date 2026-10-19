@@ -16,9 +16,9 @@ from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
 
 from character.decision_policy import STRATEGY_INSTRUCTIONS, strategies_compatible
-from character.evidence_selector import _unique_object
 from inference.history import review_history
 from inference.context_budget import InputBudgetError
+from inference.json_decoding import load_unique_json
 from infra.environment import read_bool
 
 if TYPE_CHECKING:
@@ -125,7 +125,7 @@ class ContextualDecisionPolicy:
         )
         if not isinstance(raw, str) or len(raw) > 2000:
             raise ValueError("invalid_response")
-        value = json.loads(raw, object_pairs_hook=_unique_object)
+        value = load_unique_json(raw)
         if not isinstance(value, dict) or set(value) != {"strategy_ids"}:
             raise ValueError("invalid_schema")
         ids = value["strategy_ids"]

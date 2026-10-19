@@ -5,9 +5,9 @@ import hashlib
 import json
 
 from inference.context_budget import CONTEXT_SAFETY_MARGIN_TOKENS, estimated_tokens
+from inference.json_decoding import load_unique_json
 from knowledge import public_domains
 from knowledge.curated_sources import CuratedSourceChangedError, curated_source_packet, validate_curated_source
-from knowledge.public_object_scope import _unique
 
 POLICY = (
     "【角色任务原作依据】curated_tasks保留原始角色任务；source_quotes和source_reference由后端按原文位置逐字生成。"
@@ -109,7 +109,7 @@ def parse_curated_review(raw, payload, *, verify_original=True):
     )
     if rebuilt != payload:
         raise ValueError("Curated source catalogue discarded original tasks or spans")
-    value = json.loads(raw, object_pairs_hook=_unique)
+    value = load_unique_json(raw, duplicate_message="Duplicate scope key")
     if (
         not isinstance(value, dict)
         or set(value) != {"tasks"}

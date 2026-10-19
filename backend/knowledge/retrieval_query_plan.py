@@ -7,6 +7,7 @@ import json
 import os
 from dataclasses import dataclass
 
+from inference.json_decoding import load_unique_json
 from knowledge.turn_dependencies import TurnDependencies, parse_dependencies, query_segments
 
 
@@ -70,15 +71,6 @@ cuts按原文顺序列出第二及之后业务开始处的1至64字原文字面�
 """
 
 
-def _unique_object(pairs):
-    result = {}
-    for key, value in pairs:
-        if key in result:
-            raise ValueError("Duplicate query-plan key")
-        result[key] = value
-    return result
-
-
 async def _review(messages):
     from inference.review_client import get_context_review_client
 
@@ -129,7 +121,7 @@ async def plan_retrieval(query: str, *, history=(), context_budget=None, reviewe
     try:
         if not isinstance(raw, str):
             raise ValueError("Query planner must return text")
-        value = json.loads(raw, object_pairs_hook=_unique_object)
+        value = load_unique_json(raw, duplicate_message="Duplicate query-plan key")
         if not isinstance(value, dict) or set(value) != {"dependencies", "public_partitions"}:
             raise ValueError("Unexpected task-plan fields")
         dependencies = parse_dependencies(value["dependencies"], query)
