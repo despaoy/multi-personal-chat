@@ -23,7 +23,9 @@ from functools import partial
 from math import isfinite
 from typing import Any
 
+from inference.context_budget import ReviewContextBudget
 from inference.history import validate_history
+from inference.provider_context import ProviderContextBudget, get_provider_context_budget
 from knowledge.curated_sources import CuratedSourceChangedError, curated_source_receipts, validate_curated_source
 from knowledge.dialogue_query import resolve_retrieval_query
 
@@ -318,6 +320,7 @@ class GroundedAnswerService:
             domain_supplement=self._supplement_for(packet),
             speaker=speaker,
             history=history,
+            max_tokens=max_tokens,
         )
         timings.prompt_ms = (time.perf_counter() - prompt_start) * 1000
 
@@ -475,6 +478,7 @@ class GroundedAnswerService:
             domain_supplement=self._supplement_for(packet),
             speaker=speaker,
             history=history,
+            max_tokens=max_tokens,
         )
         timings.prompt_ms = (time.perf_counter() - prompt_start) * 1000
 
@@ -652,14 +656,17 @@ def _prompt_version() -> str:
 
 
 _service: GroundedAnswerService | None = None
+_service_budget: ProviderContextBudget | None = None
 _service_lock = asyncio.Lock()
 
 
-def build_default_grounded_answer_service() -> GroundedAnswerService:
+def build_default_grounded_answer_service(*, context_budget: ProviderContextBudget | None = None) -> GroundedAnswerService:
     """默认服务实例：角色知识检索 + 进程内缓存 + env 配置。"""
     from knowledge.multiscale_rag.constants import INDEX_FORMAT_VERSION
     from knowledge.multiscale_rag.runtime import get_multiscale_rag_service
 
+    context_budget = get_provider_context_budget() if context_budget is None else context_budget
+    evidence_chars = context_budget.evidence_max_chars or None
     character_rag = get_multiscale_rag_service()
 
     def _retriever(query: str, *, top_k: int, filters: dict | None, domain_id: str | None, question_binding=None):
@@ -693,6 +700,8 @@ def build_default_grounded_answer_service() -> GroundedAnswerService:
         return f"{character_rag.config.domain_id}:{INDEX_FORMAT_VERSION}"
 
     return GroundedAnswerService(
+        packet_builder=EvidencePacketBuilder(evidence_chars),
+        prompt_builder=GroundedPromptBuilder(evidence_chars, context_budget=ReviewContextBudget(context_budget.window_tokens)),
         retriever=_retriever,
         domain_supplements=_domain_supplement,
         index_version_resolver=_index_version_resolver,
@@ -704,15 +713,18 @@ def build_default_grounded_answer_service() -> GroundedAnswerService:
 
 async def get_grounded_answer_service() -> GroundedAnswerService:
     """全局单例（异步锁，惰性构建）。"""
-    global _service
-    if _service is None:
+    global _service, _service_budget
+    budget = get_provider_context_budget()
+    if _service is None or _service_budget != budget:
         async with _service_lock:
-            if _service is None:
-                _service = build_default_grounded_answer_service()
+            if _service is None or _service_budget != budget:
+                _service = build_default_grounded_answer_service(context_budget=budget)
+                _service_budget = budget
     return _service
 
 
 def reset_grounded_answer_service() -> None:
     """重置单例（测试用）。"""
-    global _service
+    global _service, _service_budget
     _service = None
+    _service_budget = None

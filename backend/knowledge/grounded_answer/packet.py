@@ -123,9 +123,9 @@ def _curated_answer_documents(bundle):
 class EvidencePacketBuilder:
     """Retrieval bundle → EvidencePacket。"""
 
-    def __init__(self, evidence_budget_chars: int = 6000):
-        # Answer evidence has its own complete-document admission budget.
-        if type(evidence_budget_chars) is not int or evidence_budget_chars < 600:
+    def __init__(self, evidence_budget_chars: int | None = 6000):
+        # None delegates whole-packet admission to the final model token budget.
+        if evidence_budget_chars is not None and (type(evidence_budget_chars) is not int or evidence_budget_chars < 600):
             raise ValueError("evidence_budget_chars must be an integer >= 600")
         self.evidence_budget = evidence_budget_chars
 
@@ -197,7 +197,7 @@ class EvidencePacketBuilder:
             )
             block = evidence_item.to_block()
             size = len(block) + (2 if blocks else 0)
-            if used + size > self.evidence_budget:
+            if self.evidence_budget is not None and used + size > self.evidence_budget:
                 if curated:
                     raise ValueError("Complete curated answer evidence exceeds its character budget")
                 truncated = True
@@ -245,7 +245,7 @@ class EvidencePacketBuilder:
             citations=tuple(bound_citations),
             filters=dict(bundle.get("filters") or {}),
             warnings=packet_warnings,
-            evidence_budget=self.evidence_budget,
+            evidence_budget=self.evidence_budget if self.evidence_budget is not None else 0,
             truncated=truncated,
             abstention_reason=str(bundle.get("abstention_reason") or ""),
             query_analysis=dict(bundle.get("query_analysis") or {}),

@@ -136,12 +136,12 @@ async def ask(request: AskRequest, current_user: dict = Depends(get_current_user
     """知识问答（非流式）。"""
     from inference.model_manager import get_model_manager
 
-    service = await get_grounded_answer_service()
     context = await resolve_request_context(get_model_manager())
     generate, _stream, model_id, cache_identity = await _resolve_generate_adapters(context)
 
     start = time.perf_counter()
     with use_request_context(context):
+        service = await get_grounded_answer_service()
         result = await service.answer(
             request.message,
             generate=generate,
@@ -194,9 +194,10 @@ async def ask_stream(
     """
     from inference.model_manager import get_model_manager
 
-    service = await get_grounded_answer_service()
     context = await resolve_request_context(get_model_manager())
     generate, generate_stream, model_id, _cache_identity = await _resolve_generate_adapters(context)
+    with use_request_context(context):
+        service = await get_grounded_answer_service()
     debug = request.debug and current_user.get("role") == "admin"
 
     async def event_stream() -> AsyncIterator[bytes]:

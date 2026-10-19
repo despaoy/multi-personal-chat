@@ -17,6 +17,8 @@ from __future__ import annotations
 import logging
 from html import escape
 
+from inference.context_budget import ReviewContextBudget
+
 from .models import AnswerMode, EvidencePacket
 
 logger = logging.getLogger(__name__)
@@ -62,10 +64,13 @@ def _escape_data(text: str) -> str:
 class GroundedPromptBuilder:
     """构建 grounded-answer 的 system + user 消息。"""
 
-    def __init__(self, evidence_max_chars: int = 6000):
-        if type(evidence_max_chars) is not int or evidence_max_chars < 600:
+    def __init__(self, evidence_max_chars: int | None = 6000, *, context_budget: ReviewContextBudget | None = None):
+        if evidence_max_chars is not None and (type(evidence_max_chars) is not int or evidence_max_chars < 600):
             raise ValueError("evidence_max_chars must be an integer >= 600")
+        if evidence_max_chars is None and context_budget is None:
+            raise ValueError("Deferred evidence characters require a model context budget")
         self.evidence_max_chars = evidence_max_chars
+        self.context_budget = context_budget
 
     # -- system -------------------------------------------------------------
     def build_system_prompt(
@@ -136,11 +141,11 @@ class GroundedPromptBuilder:
                 "</retrieved_evidence>"
             )
         blocks: list[str] = []
-        # EvidencePacket is already an atomic admission decision. Re-slicing
-        # each document would lose late negations and invalidate its citation.
+        # Keep whole source blocks for final message admission. Re-slicing
+        # a document would lose late negations and invalidate its citation.
         source_blocks = [item.to_block() for item in packet.documents]
         source_chars = sum(map(len, source_blocks)) + 2 * (len(source_blocks) - 1)
-        if source_chars > self.evidence_max_chars:
+        if self.evidence_max_chars is not None and source_chars > self.evidence_max_chars:
             raise ValueError("Complete evidence packet exceeds grounded prompt budget")
         for item, bounded in zip(packet.documents, source_blocks, strict=True):
             attrs = [f'id="{item.citation_key}"']
@@ -162,9 +167,12 @@ class GroundedPromptBuilder:
         domain_supplement: str = "",
         speaker: str = "",
         history: list[dict[str, str]] | None = None,
+        max_tokens: int = 1024,
     ) -> list[dict[str, str]]:
         system = self.build_system_prompt(packet, persona_prompt=persona_prompt, domain_supplement=domain_supplement)
         messages: list[dict[str, str]] = [{"role": "system", "content": system}]
         messages.extend({"role": item["role"], "content": item["content"]} for item in history or [])
         messages.append({"role": "user", "content": self.build_user_message(packet, speaker=speaker)})
+        if self.context_budget is not None and not self.context_budget.fits(messages, max_tokens):
+            raise ValueError("Complete grounded prompt and output exceed the model context window")
         return messages
