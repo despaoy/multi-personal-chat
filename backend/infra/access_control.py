@@ -473,4 +473,4 @@ class AccessControlManager:
         action: Optional[str] = None,
     ) -> list[dict[str, Any]]:
         """查询统一 DB 中的审计日志。"""
-        return self._db.get_audit_logs(limit, offset, role, action)
+        return self._db.get_audit_logs(limit=limit, offset=offset, role=role, action=action)
