@@ -8,7 +8,7 @@ import threading
 import zipfile
 from collections.abc import Awaitable
 from pathlib import Path, PurePosixPath
-from typing import Any, Literal
+from typing import Any
 
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 
@@ -35,30 +35,15 @@ from infra.bounded_executor import BlockingWorkTimeout
 
 logger = logging.getLogger(__name__)
 
-KnowledgeRetrievalMode = Literal["evidence", "hybrid", "keyword", "empty"]
-
-_LEGACY_SEARCH_TYPE: dict[KnowledgeRetrievalMode, str] = {
-    "evidence": "rag_pipeline",
-    "hybrid": "hybrid",
-    "keyword": "keyword",
-    "empty": "empty",
-}
-
-
-def _knowledge_search_response(
-    query: str,
-    results: list[dict[str, Any]],
-    retrieval_mode: KnowledgeRetrievalMode,
-) -> dict[str, Any]:
-    """Build the versioned search contract while preserving legacy clients."""
+def _knowledge_search_response(query: str, results: list[dict[str, Any]]) -> dict[str, Any]:
+    """Derive the two supported response labels from the completed results."""
     return {
         "success": True,
         "query": query,
         "results": results,
-        "searchType": _LEGACY_SEARCH_TYPE[retrieval_mode],
-        "retrievalMode": retrieval_mode,
+        "searchType": "rag_pipeline" if results else "empty",
+        "retrievalMode": "evidence" if results else "empty",
     }
-
 
 router = APIRouter()
 
@@ -1184,7 +1169,7 @@ async def search_knowledge(
                 # fail-closed: 用户明确指定的知识库不存在时不应退化为全库搜索，
                 # 否则会返回其他知识库的内容。返回空结果。
                 logger.warning("未找到知识库「%s」，返回空结果（不退化为全库搜索）", request.knowledgeBaseName)
-                return _knowledge_search_response(query, [], "empty")
+                return _knowledge_search_response(query, [])
 
         if not await asyncio.to_thread(_ensure_vector_index):
             raise RuntimeError("Knowledge index rebuild did not complete")
@@ -1197,16 +1182,16 @@ async def search_knowledge(
         )
         formatted = [
             {
-                "documentId": row.get("id"),
-                "documentTitle": row.get("title", ""),
-                "chunkIndex": row.get("chunk_index", 0),
-                "content": row.get("content", ""),
-                "score": row.get("normalized_score", row.get("score", 0)),
+                "documentId": row["document_id"],
+                "documentTitle": row["title"],
+                "chunkIndex": row["chunk_index"],
+                "content": row["content"],
+                "score": row["normalized_score"],
                 "searchType": "rag_pipeline",
             }
             for row in results
         ]
-        return _knowledge_search_response(query, formatted, "evidence" if formatted else "empty")
+        return _knowledge_search_response(query, formatted)
     except Exception as exc:
         logger.error("知识库搜索失败: %s", type(exc).__name__)
         raise HTTPException(

@@ -439,10 +439,10 @@ export interface KnowledgeSearchResult {
 }
 
 /** @deprecated 使用 KnowledgeRetrievalMode。保留该类型用于兼容旧 API 客户端。 */
-export type KnowledgeSearchType = "rag_pipeline" | "hybrid" | "keyword" | "empty";
+export type KnowledgeSearchType = "rag_pipeline" | "empty";
 
 /** 稳定的知识检索模式。 */
-export type KnowledgeRetrievalMode = "evidence" | "hybrid" | "keyword" | "empty";
+export type KnowledgeRetrievalMode = "evidence" | "empty";
 
 /** 知识库统计数据 */
 export interface KnowledgeStats {
@@ -506,7 +506,7 @@ export interface KnowledgeSearchResponse {
   results: KnowledgeSearchResult[];
   /** @deprecated 使用 retrievalMode；将在下一个 API major 版本移除。 */
   searchType: KnowledgeSearchType;
-  /** 检索路径；向量索引不可用或目标知识库不存在时会降级。 */
+  /** 完成检索时为 evidence，无匹配时为 empty；系统故障由接口报错。 */
   retrievalMode: KnowledgeRetrievalMode;
 }
 
