@@ -183,3 +183,37 @@ async def test_real_sync_adapter_close_error_reaches_lifespan_after_other_cleanu
     assert lifecycle.events == ["http"]
     backend.close.assert_awaited_once()
     assert adapter._loop is adapter._thread is None
+
+async def test_live_generation_exits_before_its_memory_dependencies_close(lifecycle, monkeypatch):
+    from infra.concurrency_control import InferenceRuntime
+
+    runtime = InferenceRuntime()
+    started, cancelled = asyncio.Event(), asyncio.Event()
+    blocked = asyncio.Event()
+
+    async def generate():
+        started.set()
+        try:
+            await blocked.wait()
+        finally:
+            cancelled.set()
+
+    async def close_memory():
+        assert cancelled.is_set(), "memory closed while generation still running"
+        assert runtime.stats()["active"] == 0
+
+    monkeypatch.setattr("services.delivery_memory.shutdown_delivery_memory", close_memory)
+    app, _ = lifecycle.application()
+    app.state.runtime_container.inference_runtime = runtime
+    caller = None
+    try:
+        async with main.lifespan(app):
+            caller = asyncio.create_task(runtime.submit(generate, session_id="isolated", priority=0, timeout=5))
+            await asyncio.wait_for(started.wait(), 1)
+        with pytest.raises(asyncio.CancelledError):
+            await caller
+        assert not runtime._workers and runtime.stats()["queue_size"] == 0
+    finally:
+        await runtime.shutdown()
+        if caller is not None:
+            await asyncio.gather(caller, return_exceptions=True)
