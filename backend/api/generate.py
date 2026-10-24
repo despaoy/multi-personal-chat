@@ -44,6 +44,7 @@ from inference.generation_request import (
 )
 from inference.generation_options import read_generation_options
 from inference.context_budget import InputBudgetError
+from inference.usage import collect_usage, has_pending_usage
 from inference.history import HistoryFormatError, validate_history
 from inference.lora_registry import get_lora_character_id
 from inference.lora_registry import get_lora_system_prompt as _get_system_prompt
@@ -202,17 +203,32 @@ async def _generate_reply_impl(
             context = await resolve_request_context(get_model_manager())
         except Exception as exc:
             raise HTTPException(503, "模型配置读取失败，请检查配置及模型状态后重试") from exc
-    from inference.usage import collect_usage
-
     slots = []
+    started_at = time.time()
     try:
         with use_request_context(context), collect_usage():
-            return await _generate_reply_body(
-                request, current_user, persist_message=persist_message, enable_rag=enable_rag,
-                record_invocation=record_invocation, character_service=character_service,
-                message_db=message_db, delivery_context=delivery_context,
-                prepared_override=prepared_override, _completion_slots=slots,
-            )
+            try:
+                return await _generate_reply_body(
+                    request, current_user, persist_message=persist_message, enable_rag=enable_rag,
+                    record_invocation=record_invocation, character_service=character_service,
+                    message_db=message_db, delivery_context=delivery_context,
+                    prepared_override=prepared_override, _completion_slots=slots,
+                )
+            except (Exception, asyncio.CancelledError) as error:
+                if record_invocation and has_pending_usage():
+                    try:
+                        await _record_model_invocation(
+                            request, context.provider.model, "default", round(time.time() - started_at, 2),
+                            error_type=type(error.__cause__ or error).__name__, database=message_db,
+                        )
+                    except HTTPException as record_error:
+                        if isinstance(error, asyncio.CancelledError):
+                            raise error from record_error
+                        detail = with_provider_error(record_error.detail, error)
+                        if isinstance(error, HTTPException):
+                            detail = dict(detail, requestError=error.detail)
+                        raise HTTPException(503, detail=detail) from error
+                raise
     finally:
         for slot in slots:
             slot.release()
@@ -521,12 +537,12 @@ async def _generate_reply_body(
             model_name = _DETERMINISTIC_MODEL_LABELS.get(rag_meta.get("answerMode"), "rag/abstained")
             model_label = stored_model_name = model_name
         stored_lora_name = lora_name if model_invoked else "default"
+        if record_invocation and (model_invoked or has_pending_usage()):
+            await _record_model_invocation(
+                request, model_name if model_invoked else provider.model, stored_lora_name,
+                cost_time, used_rag=used_rag, error_type="", model_invoked=model_invoked, database=message_db,
+            )
         if model_invoked:
-            if record_invocation:
-                await _record_model_invocation(
-                    request, model_name, lora_name, cost_time, used_rag=used_rag,
-                    error_type="", database=message_db,
-                )
             set_consecutive("model_failure", True)
         message_saved = False
         archive_receipt = {}
@@ -1381,6 +1397,7 @@ async def _record_model_invocation(
     *,
     used_rag: bool = False,
     error_type: str = "",
+    model_invoked: bool | None = None,
     database=None,
 ):
     """Record required accounting before archive; timed-out writes may still commit."""
@@ -1399,7 +1416,7 @@ async def _record_model_invocation(
                     "modelName": model_name,
                     "loraName": lora_name,
                     "costTime": cost_time,
-                    **invocation_usage(),
+                    **invocation_usage(record_started=True),
                     "usedRag": used_rag,
                     "usedLora": bool(lora_name and lora_name != "default"),
                     "errorType": error_type,
@@ -1427,7 +1444,7 @@ async def _record_model_invocation(
                         if error_type else "模型已完成，但调用记录保存失败或未确认，请检查数据库后重试"),
             "generationErrorType": error_type or None,
             "recordErrorType": type(e).__name__,
-            "modelInvoked": None if error_type else True,
+            "modelInvoked": model_invoked if model_invoked is not None else (None if error_type else True),
             "invocationRecorded": None, "messageSaved": False,
         }) from e
 
