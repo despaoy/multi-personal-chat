@@ -86,12 +86,8 @@ class ChatGenerationService:
     ) -> GenerateResponse:
         """Apply admission control and execute one queued generation."""
 
-        identity = str(
-            current_user.get(
-                "user_id",
-                current_user.get("username", "unknown"),
-            )
-        )
+        user_id = current_user.get("user_id")
+        identity = str(user_id if user_id is not None else current_user["username"])
         session_id = request.sessionId or f"manual:{identity}"
         if request.branchId:
             session_id = f"narrative:{identity}:{request.branchId}"

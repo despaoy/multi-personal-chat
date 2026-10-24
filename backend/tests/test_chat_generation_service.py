@@ -138,7 +138,14 @@ async def test_generate_preserves_original_history():
 
 
 @pytest.mark.asyncio
-async def test_generate_queued_owns_admission_control_and_session_identity():
+@pytest.mark.parametrize("current_user,identity", [
+    ({"user_id": 42, "username": "ignored-name", "role": "user"}, "42"),
+    ({"user_id": 0, "username": "ignored-name", "role": "user"}, "0"),
+    ({"user_id": None, "username": "isolated-alice", "role": "user"}, "isolated-alice"),
+    ({"user_id": None, "username": "isolated-bob", "role": "user"}, "isolated-bob"),
+    ({"username": "legacy-user", "role": "user"}, "legacy-user"),
+])
+async def test_generate_queued_owns_admission_control_and_session_identity(current_user, identity):
     runtime = _FakeInferenceRuntime()
 
     async def handler(_request, _current_user):
@@ -147,12 +154,12 @@ async def test_generate_queued_owns_admission_control_and_session_identity():
     service = _make_service(handler, runtime)
     request = MessageRequest(message="hello", sessionType="group")
 
-    response = await service.generate_queued(request, {"user_id": 42})
+    response = await service.generate_queued(request, current_user)
 
     assert response.reply == "queued-ok"
     assert runtime.priority_calls == [("admin", "group")]
-    assert runtime.rate_limit_calls == [("admin", "manual:42", "42")]
-    assert runtime.submit_calls == [("manual:42", 7)]
+    assert runtime.rate_limit_calls == [("admin", f"manual:{identity}", identity)]
+    assert runtime.submit_calls == [(f"manual:{identity}", 7)]
 
 
 @pytest.mark.asyncio
