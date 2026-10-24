@@ -42,7 +42,7 @@ def _is_unstarted_receipt(receipt: dict, scheduled: bool | None) -> bool:
 
 def _is_retryable_receipt(receipt: dict) -> bool:
     return (receipt.get("status") == "failed" and receipt.get("retryable") is True
-            and receipt.get("stage") == "proposal_generation")
+            and receipt.get("stage") in {"scope_review", "proposal_generation"})
 
 
 @dataclass(frozen=True)

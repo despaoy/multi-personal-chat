@@ -688,3 +688,51 @@ async def test_default_memory_http_transport_obeys_delivery_retry_policy(
             assert relationship["interaction_count"] == 1
     finally:
         await completion.close()
+
+@pytest.mark.parametrize("statuses", [(503, 200), (503, 503, 503), (401,)])
+async def test_scope_review_uses_the_same_bounded_delivery_retry_contract(delivered_memory, statuses):
+    rig = delivered_memory
+    rig.body += "请让所有角色都记住我喜欢深蓝色油墨。"
+    stored = rig.stored_response()
+    stored["context"]["request"]["message"] = rig.body
+    rig.write_response(stored, "pending")
+    reviews, proposals = [], []
+
+    async def complete(messages):
+        payload = json.loads(messages[-1]["content"])
+        assert payload["current_user_message"] == rig.body
+        if "candidate_scopes" in payload:
+            assert payload["candidate_scopes"] == ["user_global"]
+            assert len(reviews) < len(statuses)
+            status = statuses[len(reviews)]
+            reviews.append(status)
+            if status != 200:
+                raise provider_error(str(status))
+            return json.dumps({"decisions": [dict(scope_level="user_global", authorized=True, evidence=rig.body)]})
+        proposals.append(payload)
+        return proposal(rig.body)
+
+    rig.completion.complete.side_effect = complete
+    for attempt, status in enumerate(statuses, 1):
+        response = await rig.step()
+        marker = response["context"]["memory_completion"]
+        assert marker["attempts"] == attempt and len(reviews) == attempt
+        if status != 200:
+            receipt = marker["semantic_receipt"]
+            assert receipt["stage"] == "scope_review" and receipt["status"] == "failed"
+            assert receipt["retryable"] is (status == 503) and receipt["persisted"] == 0
+            assert not proposals
+        if attempt < len(statuses):
+            assert response["memory_completion_state"] == "pending" and rig.selectable()
+            assert marker["reason"] == "transient_model_failure"
+            await rig.rebuild()
+    if statuses[-1] == 200:
+        assert len(proposals) == 1
+        await assert_saved_once(rig, response, attempts=len(statuses))
+    else:
+        assert response["memory_completion_state"] == "blocked" and not rig.selectable()
+        assert marker["reason"] == ("retry_limit_reached" if statuses[-1] == 503 else "semantic_failure")
+        assert not await rig.repo.list_memory_records(rig.snapshot.character_id, rig.snapshot.user_scope)
+        relationship = await rig.repo.get_relationship_record(rig.snapshot.character_id, rig.snapshot.user_scope)
+        assert relationship["interaction_count"] == 1
+    assert response["reply"] == rig.original_reply
