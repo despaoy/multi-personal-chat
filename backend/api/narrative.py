@@ -1,26 +1,20 @@
 """Authenticated Web narrative workspace."""
 
 import asyncio
-import os
 import uuid
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.dependencies import get_current_user
+from app.dependencies import get_current_user, require_narrative_enabled
 from app.runtime import get_runtime_container
 from character.profile_registry import CharacterProfileNotFoundError, get_default_profile_registry
 from db.schemas import GenerateResponse, MessageRequest, MessageText
 from repositories.narrative import NarrativeRepository, owner_id
 
 
-def require_enabled():
-    if os.getenv("NARRATIVE_BRANCHES_ENABLED", "false").lower() not in {"true", "1"}:
-        raise HTTPException(404, "假想分支功能尚未启用")
-
-
-router = APIRouter(prefix="/api/narrative-branches", dependencies=[Depends(require_enabled)])
+router = APIRouter(prefix="/api/narrative-branches", dependencies=[Depends(require_narrative_enabled)])
 
 
 class CreateBranch(BaseModel):

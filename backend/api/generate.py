@@ -257,9 +257,9 @@ async def _generate_reply_body(
         # generic callers choose its senderId would poison another owner's history.
         raise HTTPException(422, "请通过假想分支工作区访问该会话")
     if request.branchId and prepared_override is None:
-        from api.narrative import require_enabled
+        from app.dependencies import require_narrative_enabled
 
-        require_enabled()
+        require_narrative_enabled()
         if delivery_context is not None or not persist_message or request.platform != "web":
             raise HTTPException(422, "假想分支第一版仅支持 Web 交互")
         from services.narrative import generate_branch_reply

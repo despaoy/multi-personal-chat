@@ -396,3 +396,31 @@ def test_full_web_generation_and_canonical_return(repo, monkeypatch):
     history = client.get("/api/narrative-branches/canonical/messages", params={"character_id": branch["character_id"]})
     assert history.status_code == 200
     assert len(history.json()["messages"]) == 2
+
+
+@pytest.mark.parametrize("value,enabled", [("true", True), (" ON ", True), ("1", True), ("false", False), ("off", False), ("0", False), (None, False)])
+def test_branch_feature_gate_uses_explicit_boolean_configuration(monkeypatch, value, enabled):
+    from app.dependencies import require_narrative_enabled
+    from fastapi import HTTPException
+
+    if value is None:
+        monkeypatch.delenv("NARRATIVE_BRANCHES_ENABLED", raising=False)
+    else:
+        monkeypatch.setenv("NARRATIVE_BRANCHES_ENABLED", value)
+    if enabled:
+        require_narrative_enabled()
+    else:
+        with pytest.raises(HTTPException) as caught:
+            require_narrative_enabled()
+        assert caught.value.status_code == 404
+
+
+@pytest.mark.parametrize("value", ["ture", "flase", "", "isolated-private-value"])
+def test_invalid_branch_setting_is_not_reported_as_disabled(monkeypatch, value):
+    from app.dependencies import require_narrative_enabled
+
+    monkeypatch.setenv("NARRATIVE_BRANCHES_ENABLED", value)
+    with pytest.raises(ValueError, match="NARRATIVE_BRANCHES_ENABLED must be an explicit boolean") as caught:
+        require_narrative_enabled()
+    if value:
+        assert value not in str(caught.value)

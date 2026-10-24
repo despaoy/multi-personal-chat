@@ -1,5 +1,8 @@
 """FastAPI 依赖注入"""
+import os
+
 from fastapi import Request, HTTPException
+from infra.environment import read_bool
 from app.config import verify_token
 from app.runtime import get_runtime_container
 from infra.auth_work import run_auth_database
@@ -107,3 +110,8 @@ async def get_current_admin(request: Request) -> dict:
     # 用 DB 中的最新 role 覆盖 token 中的可能过期值
     user["role"] = current_role
     return user
+
+
+def require_narrative_enabled():
+    if not read_bool(os.environ, "NARRATIVE_BRANCHES_ENABLED"):
+        raise HTTPException(404, "假想分支功能尚未启用")
