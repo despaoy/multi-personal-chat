@@ -2,7 +2,7 @@ from dataclasses import replace
 
 import pytest
 
-from character.context_builder import build_user_scope
+from character.models import build_user_scope
 from db.database import SQLiteDB
 from db.integration_receipts import CREATE_SQL
 from evaluation.episodic_recall_audit import select_evidence

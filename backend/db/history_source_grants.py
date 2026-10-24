@@ -4,7 +4,7 @@ from db.memory_source import source_identity, source_scope
 
 
 def filter_plan(rows, platform, adapter, sender_id):
-    from character.context_builder import build_user_scope
+    from character.models import build_user_scope
 
     keyed = []
     for row in rows:

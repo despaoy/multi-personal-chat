@@ -863,7 +863,7 @@ async def _validate_web_source_identity(request, current_user, *, database=None)
     """
     if request.branchId or not request.characterId or request.platform != "web" or request.adapter != "web-character" or not request.sourceMessageId:
         return
-    from character.context_builder import build_user_scope
+    from character.models import build_user_scope
 
     identity = str((current_user or {}).get("id") or (current_user or {}).get("user_id") or (current_user or {}).get("username") or "")
     if not identity:

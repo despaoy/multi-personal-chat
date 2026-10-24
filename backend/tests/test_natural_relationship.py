@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 from api.characters import router
 from app.dependencies import get_current_admin
 from app.providers import get_character_memory_repository
-from character.context_builder import build_user_scope
+from character.models import build_user_scope
 from character.memory_extractor import next_relationship_stage
 from character.models import CharacterProfile, RelationshipState, UserScope
 from character.natural_relationship import (

@@ -21,7 +21,7 @@ from services.character_context import CharacterContextService, PreparedCharacte
 from test_delivery_memory import deliver, generated
 
 from api import generate
-from character.context_builder import build_user_scope
+from character.models import build_user_scope
 from character.memory_extractor import extract_memories
 from character.memory_llm import MemoryEnrichmentScheduler, MemoryLlmConfig
 from character.models import CompiledCharacterContext, RelationshipState

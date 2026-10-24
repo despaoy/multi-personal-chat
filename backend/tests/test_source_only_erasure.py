@@ -71,7 +71,7 @@ def test_source_claim_check_uses_reverse_index(tmp_path):
 
 
 async def test_repository_exposes_source_only_delete_without_claim_fallback(tmp_path):
-    from character.context_builder import build_user_scope
+    from character.models import build_user_scope
     from repositories.character_memory import DatabaseCharacterMemoryRepository
 
     db = SQLiteDB(tmp_path / 'repository.sqlite')

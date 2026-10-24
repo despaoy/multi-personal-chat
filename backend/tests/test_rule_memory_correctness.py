@@ -4,7 +4,7 @@ import asyncio
 
 import pytest
 
-from character.context_builder import build_user_scope
+from character.models import build_user_scope
 from character.memory_extractor import extract_memories, extract_preferred_address
 from character.models import MemoryItem
 from character.natural_relationship import relationship_write_blocked

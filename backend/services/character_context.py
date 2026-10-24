@@ -19,13 +19,8 @@ from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
-from character.context_builder import (
-    build_user_scope,
-    compile_dynamic_context,
-    compile_profile_context,
-    compile_reference_context,
-    compile_relationship_style,
-)
+from character.context_builder import compile_dynamic_context, compile_profile_context, compile_reference_context, compile_relationship_style
+from character.models import build_user_scope
 from character.contextual_policy import ContextualDecisionPolicy, PolicyOutcome, create_contextual_policy
 from character.conversation_flow import compile_continuity, compile_rhythm
 from character.decision_policy import DecisionPolicy

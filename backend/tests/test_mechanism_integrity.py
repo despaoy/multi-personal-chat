@@ -98,7 +98,7 @@ def test_oversize_packet_is_skipped_not_partially_injected_and_next_fits():
 
 @pytest.mark.asyncio
 async def test_default_recall_retains_late_evidence():
-    from character.context_builder import build_user_scope
+    from character.models import build_user_scope
     from character.memory_service import CharacterMemoryService
 
     evidence = ['依据一', '依据二', '依据三', '依据四', '最后补充：下雨不参加']

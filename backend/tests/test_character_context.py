@@ -14,15 +14,8 @@ from datetime import timezone
 
 import pytest
 
-from character.context_builder import (
-    MAX_MEMORY_TOTAL_CHARS,
-    MEMORY_REFERENCE_DISCLAIMER,
-    build_user_scope,
-    compile_character_context,
-    compile_dynamic_context,
-    compile_profile_context,
-    compile_reference_context,
-)
+from character.context_builder import MAX_MEMORY_TOTAL_CHARS, MEMORY_REFERENCE_DISCLAIMER, compile_character_context, compile_dynamic_context, compile_profile_context, compile_reference_context
+from character.models import build_user_scope
 from character.models import (
     CharacterContext,
     CharacterProfile,

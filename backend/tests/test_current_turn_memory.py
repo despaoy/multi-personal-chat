@@ -1,7 +1,7 @@
 """A current assertion can mask stale facts without pretending to save it."""
 import pytest
 
-from character.context_builder import build_user_scope
+from character.models import build_user_scope
 from character.current_turn_memory import shadowed_memory_ids
 from character.memory_extractor import extract_memories
 from character.memory_service import CharacterMemoryService

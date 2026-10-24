@@ -7,7 +7,7 @@ from dataclasses import asdict
 
 import asyncpg
 
-from character.context_builder import build_user_scope
+from character.models import build_user_scope
 from character.memory_llm import get_memory_enrichment_scheduler
 from db.memory_source import source_identity, source_scope
 from repositories.character_memory import DatabaseCharacterMemoryRepository

@@ -18,7 +18,7 @@ from contextlib import suppress
 from dataclasses import asdict, dataclass
 from datetime import datetime
 
-from character.context_builder import build_user_scope
+from character.models import build_user_scope
 from character.models import RelationshipState, UserScope
 from inference.request_context import detached_request_context
 from services.turn_completion import CompletionUnavailable, get_turn_completion_runtime

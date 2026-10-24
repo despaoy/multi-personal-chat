@@ -2,7 +2,7 @@ import pytest
 from repositories.character_memory import DatabaseCharacterMemoryRepository
 from services.character_context import TurnInput, build_character_context_service
 
-from character.context_builder import build_user_scope
+from character.models import build_user_scope
 from character.memory_extractor import extract_memories
 from character.memory_mentions import mention_query, review_mentions
 from character.memory_service import CharacterMemoryService

@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from character.context_builder import build_user_scope
+from character.models import build_user_scope
 from character.memory_llm import parse_llm_proposals
 from character.memory_service import CharacterMemoryService
 from character.models import MemoryItem

@@ -175,7 +175,7 @@ def test_linked_erasure_removes_posting_fragments_too(tmp_path):
 
 @pytest.mark.asyncio
 async def test_real_prepare_turn_routes_source_only_through_dialogue_evidence(tmp_path):
-    from character.context_builder import build_user_scope
+    from character.models import build_user_scope
     from services.character_context import TurnInput, build_character_context_service
 
     db = SQLiteDB(tmp_path / "prepare.sqlite")

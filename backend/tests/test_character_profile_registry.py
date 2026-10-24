@@ -27,10 +27,8 @@ from character.profile_registry import (
     CharacterProfileRegistry,
     get_default_profile_registry,
 )
-from character.context_builder import (
-    build_user_scope,
-    compile_character_context,
-)
+from character.context_builder import compile_character_context
+from character.models import build_user_scope
 from character.profile_registry import PROFILES_DIR
 
 KISAKI_ID = "tsukiyashiro_kisaki"

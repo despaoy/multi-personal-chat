@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from character.context_builder import build_user_scope
+from character.models import build_user_scope
 from db.database import SQLiteDB
 from evaluation.episodic_chain_probe import attach_evidence, seed_cases, seed_saved_claims
 from evaluation.sqlite_episode_source import read_scoped_episodes

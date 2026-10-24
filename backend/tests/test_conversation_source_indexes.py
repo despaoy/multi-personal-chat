@@ -1,4 +1,4 @@
-from character.context_builder import build_user_scope
+from character.models import build_user_scope
 from db.conversation_indexes import SOURCE_INDEX_STATEMENTS
 from db.conversation_source import TurnCursor, turn_source_query
 from db.database import SQLiteDB

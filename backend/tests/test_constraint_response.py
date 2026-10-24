@@ -109,7 +109,7 @@ async def test_persisted_constraint_is_executable_in_new_session(tmp_path, monke
     from repositories.character_memory import DatabaseCharacterMemoryRepository
     from services.character_context import TurnInput, build_character_context_service
 
-    from character.context_builder import build_user_scope
+    from character.models import build_user_scope
     from character.memory_service import CharacterMemoryService
     from character.rule_memory_writer import write_rule_memory
     from db.database import SQLiteDB

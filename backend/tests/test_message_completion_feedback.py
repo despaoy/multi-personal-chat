@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock
 import pytest
 from provider_fixtures import cloud_connection
 
-from character.context_builder import build_user_scope
+from character.models import build_user_scope
 from db.database import SQLiteDB
 from db.schemas import MessageRequest
 

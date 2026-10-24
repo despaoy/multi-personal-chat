@@ -118,7 +118,7 @@ async def test_repeated_pending_constraint_is_not_added_or_promoted(tmp_path):
 async def test_condition_packet_survives_new_private_session_preparation(tmp_path, monkeypatch):
     from services.character_context import TurnInput, build_character_context_service
 
-    from character.context_builder import build_user_scope
+    from character.models import build_user_scope
 
     monkeypatch.setenv('CONTEXTUAL_MEMORY_SELECTION_ENABLED', 'false')
     database = SQLiteDB(tmp_path / 'cross-session.sqlite')
@@ -171,7 +171,7 @@ def test_correction_does_not_bypass_assertion_gates(text):
     ('休息好', '睡够八小时', '开长途车'), ('有空', '完成工作', '看电影'),
 ])
 async def test_explicit_correction_replaces_only_current_same_action(tmp_path, old, new, action):
-    from character.context_builder import build_user_scope
+    from character.models import build_user_scope
     from character.memory_mentions import review_mentions
 
     repo = DatabaseCharacterMemoryRepository(SQLiteDB(tmp_path / 'correction.sqlite'))

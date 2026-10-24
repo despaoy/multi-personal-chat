@@ -11,7 +11,7 @@ import os
 from dataclasses import asdict
 from pathlib import Path
 
-from character.context_builder import build_user_scope
+from character.models import build_user_scope
 from db.database import SQLiteDB
 from repositories.messages import DatabaseMessageRepository
 

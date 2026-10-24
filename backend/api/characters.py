@@ -17,7 +17,7 @@ from pydantic import BaseModel, Field
 
 from app.dependencies import get_current_admin
 from app.providers import get_character_memory_repository
-from character.context_builder import build_user_scope
+from character.models import build_user_scope
 from character.models import MemoryItem, RelationshipState
 from character.natural_relationship import CATEGORIES, NoteCommand, is_note, save_note
 from character.profile_registry import get_default_profile_registry

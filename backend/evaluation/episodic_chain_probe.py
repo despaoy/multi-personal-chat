@@ -72,7 +72,7 @@ def seed_cases(db, suite):
 
 async def seed_saved_claims(db, suite):
     """Explicit synthetic saved subset, never inferred from expected answers."""
-    from character.context_builder import build_user_scope
+    from character.models import build_user_scope
     from character.memory_extractor import extract_memories
     from character.models import MemoryItem
     from repositories.character_memory import DatabaseCharacterMemoryRepository

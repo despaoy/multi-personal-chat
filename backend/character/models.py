@@ -1,6 +1,6 @@
 """角色上下文的数据模型。
 
-只定义人物相关的不可变数据结构。本模块不依赖 FastAPI、数据库、
+定义人物相关的不可变数据结构及身份范围规范化。本模块不依赖 FastAPI、数据库、
 RAG 和 vLLM，保证可以独立测试。
 
 所有对象均为 frozen dataclass：并发请求处理中不会被意外修改，
@@ -10,7 +10,7 @@ RAG 和 vLLM，保证可以独立测试。
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Literal
+from typing import Literal, cast
 
 RelationshipStage = Literal["stranger", "acquaintance", "familiar", "close"]
 MemoryType = Literal["user_fact", "shared_event", "promise", "conversation_summary"]
@@ -119,6 +119,61 @@ class UserScope:
             self.conversation_id,
             self.sender_id,
         )
+
+
+def build_user_scope(
+    platform: str,
+    adapter: str,
+    sender_id: str,
+    conversation_id: str,
+    conversation_type: str,
+) -> UserScope:
+    """规范化用户身份与会话范围。
+
+    规则：
+    - platform / adapter 统一转成小写，所有字段去除首尾空格；
+    - 平台或适配器为空时抛出 ValueError，拒绝建立记忆范围；
+    - 私聊始终按用户ID隔离，忽略可能随客户端会话变化的 conversation_id；
+    - 群聊和频道按"会话ID+用户ID"隔离，缺少会话ID时拒绝；
+    - 管理台测试没有外部 sender_id 时，调用方应传入当前登录用户ID
+      作为备用身份；
+    - 用户身份仍为空时抛出 ValueError，拒绝建立长期记忆范围。
+
+    本函数只负责规范化身份，不访问数据库。
+    """
+    platform_norm = platform.strip().lower()
+    adapter_norm = adapter.strip().lower()
+    sender_norm = sender_id.strip()
+    conversation_norm = conversation_id.strip()
+    conv_type = conversation_type.strip().lower()
+
+    if not platform_norm:
+        raise ValueError("平台为空，拒绝建立长期记忆范围")
+    if not adapter_norm:
+        raise ValueError("适配器为空，拒绝建立长期记忆范围")
+
+    if conv_type not in ("private", "group", "channel"):
+        raise ValueError(f"未知的会话类型: {conversation_type!r}，应为 private、group 或 channel")
+
+    if not sender_norm:
+        raise ValueError("用户身份为空，拒绝建立长期记忆范围")
+
+    if conv_type in ("group", "channel"):
+        if not conversation_norm:
+            raise ValueError("群聊/频道缺少会话（群/频道）ID，拒绝建立长期记忆范围")
+    else:
+        # 私聊长期记忆属于稳定的用户身份，而不是一次前端/HTTP 会话。
+        # 数据库仓储仍以 conversation_id 作为物理隔离字段，因此在边界处
+        # 将其规范化为 sender_id，确保跨 conversation 召回与模型契约一致。
+        conversation_norm = sender_norm
+
+    return UserScope(
+        platform=platform_norm,
+        adapter=adapter_norm,
+        sender_id=sender_norm,
+        conversation_id=conversation_norm,
+        conversation_type=cast("ConversationType", conv_type),
+    )
 
 
 @dataclass(frozen=True)

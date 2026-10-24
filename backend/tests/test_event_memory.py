@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from character.context_builder import build_user_scope
+from character.models import build_user_scope
 from character.event_memory import event_reference_content, parse_event
 from character.memory_extractor import extract_memories
 from character.memory_service import CharacterMemoryService
