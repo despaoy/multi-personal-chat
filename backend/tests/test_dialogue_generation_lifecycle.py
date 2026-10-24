@@ -17,6 +17,8 @@ from unittest.mock import AsyncMock, Mock
 
 import httpx
 import pytest
+from app.runtime import RuntimeContainer
+from db.database import SQLiteDB
 from provider_fixtures import cloud_connection
 from fastapi import FastAPI
 from services import character_research as research
@@ -66,7 +68,7 @@ async def reached(*events):
 
 
 @pytest.fixture
-async def rig(monkeypatch):
+async def rig(monkeypatch, tmp_path):
     state = dict(is_generating=False, cancel_requested=False, progress=0, total=0,
                  batch_num=0, total_batches=0, generated_count=0, new_dialogues=[],
                  all_generated_dialogues=[], started_at=None)
@@ -99,6 +101,8 @@ async def rig(monkeypatch):
     context.manager.get_current_provider = lambda: provider
     monkeypatch.setattr(model_manager, "get_model_manager", lambda: context.manager)
     app = FastAPI()
+    app.state.runtime_container = RuntimeContainer(
+        db=SQLiteDB(tmp_path / "dialogue-accounting.sqlite"), is_pg_mode=lambda: False)
     app.include_router(training.router)
     app.dependency_overrides[get_current_admin] = lambda: {"id": 901, "role": "admin"}
     context.app = app

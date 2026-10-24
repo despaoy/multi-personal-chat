@@ -7,6 +7,8 @@ from unittest.mock import Mock
 
 import httpx
 import pytest
+from app.runtime import RuntimeContainer
+from db.database import SQLiteDB
 from fastapi import FastAPI
 from test_dialogue_generation_batch import complete_prompt_batch, mapped_messages
 
@@ -25,7 +27,7 @@ DESCRIPTION = "完全虚构角色青汐研究员；2031年以前不适用，仅�
     ("ollama", "research", False),
     ("openai_compat", "first_batch", True),
 ])
-async def test_dialogue_task_keeps_owner_and_reports_real_failure(monkeypatch, selected, switch_at, upstream_failure):
+async def test_dialogue_task_keeps_owner_and_reports_real_failure(monkeypatch, tmp_path, selected, switch_at, upstream_failure):
     config = dict(openaiCompatBaseUrl="https://api.deepseek.com", openaiCompatModel="deepseek-flash",
                   openaiCompatApiKey="synthetic-dialogue-original-key", temperature=.2, maxTokens=512)
     monkeypatch.setattr(model_manager, "_get_db_config", lambda: dict(config))
@@ -60,7 +62,7 @@ async def test_dialogue_task_keeps_owner_and_reports_real_failure(monkeypatch, s
             change_default()
         if upstream_failure and len(calls) == 2:
             return httpx.Response(503, text="synthetic-private-upstream-detail")
-        return httpx.Response(200, json={"choices": [{"finish_reason": "stop", "message": {"content": raw}}]})
+        return httpx.Response(200, json={"usage": {"prompt_tokens": 100, "completion_tokens": 20, "total_tokens": 120}, "choices": [{"finish_reason": "stop", "message": {"content": raw}}]})
 
     @asynccontextmanager
     async def acquire(_self, timeout):
@@ -106,6 +108,8 @@ async def test_dialogue_task_keeps_owner_and_reports_real_failure(monkeypatch, s
     monkeypatch.setattr(training, "_dialogue_generation_task", None)
     monkeypatch.setattr(training, "search_character_info", research)
     app = FastAPI()
+    app.state.runtime_container = RuntimeContainer(
+        db=SQLiteDB(tmp_path / "dialogue-accounting.sqlite"), is_pg_mode=lambda: False)
     app.include_router(training.router)
     app.dependency_overrides[get_current_admin] = lambda: {"id": 901, "role": "admin"}
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://fixture.invalid") as client:
