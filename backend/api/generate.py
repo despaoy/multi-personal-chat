@@ -125,16 +125,10 @@ def _security_policy_response() -> GenerateResponse:
 
 async def get_vllm_client():
     """Apply API enablement and error semantics; the adapter owns the client."""
-    from app.config import is_vllm_enabled
-    from inference.vllm_client import get_vllm_client as get_shared_client
+    from inference.vllm_client import get_enabled_vllm_client
 
-    if not is_vllm_enabled():
-        return None
     try:
-        client = await get_shared_client()
-        if client is None:
-            raise RuntimeError("共享 vLLM 客户端返回空实例")
-        return client
+        return await get_enabled_vllm_client()
     except Exception as exc:
         raise HTTPException(503, "vLLM 客户端初始化失败，请检查服务及配置后重试") from exc
 

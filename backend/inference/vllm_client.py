@@ -883,6 +883,18 @@ async def get_vllm_client() -> "VLLMClient":
         return _shared_client
 
 
+async def get_enabled_vllm_client() -> "VLLMClient | None":
+    """Resolve the enabled chat client without imposing HTTP error semantics."""
+    from app.config import is_vllm_enabled
+
+    if not is_vllm_enabled():
+        return None
+    client = await get_vllm_client()
+    if client is None:
+        raise RuntimeError("共享 vLLM 客户端返回空实例")
+    return client
+
+
 async def close_shared_vllm_client() -> None:
     """关闭共享客户端；与创建互斥并允许下一生命周期重新创建。"""
     global _shared_client

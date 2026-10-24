@@ -32,9 +32,9 @@ def _has_model(payload, model: str) -> bool:
 async def _check_remote_model(provider) -> bool:
     if provider.name == "vllm":
         # Use the same initialization gate and shared client as chat generation.
-        from api.generate import get_vllm_client
+        from inference.vllm_client import get_enabled_vllm_client
 
-        client = await get_vllm_client()
+        client = await get_enabled_vllm_client()
         if client is None:
             return False
         health = await client.health_check()

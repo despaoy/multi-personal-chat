@@ -159,15 +159,18 @@ async def test_other_remote_providers_probe_their_protocol(monkeypatch, provider
 @pytest.mark.asyncio
 @pytest.mark.parametrize("client_available,healthy", [(False, 0), (True, 0), (True, 1)])
 async def test_vllm_uses_chat_initialization_gate(monkeypatch, providers, client_available, healthy):
-    from api import generate
+    from app import config
+    from inference import vllm_client
 
     async def health_check():
         return {"summary": {"healthy": healthy}}
 
     async def get_client():
-        return SimpleNamespace(health_check=health_check) if client_available else None
+        assert client_available
+        return SimpleNamespace(health_check=health_check)
 
-    monkeypatch.setattr(generate, "get_vllm_client", get_client)
+    monkeypatch.setattr(config, "is_vllm_enabled", lambda: client_available)
+    monkeypatch.setattr(vllm_client, "get_vllm_client", get_client)
     select(monkeypatch, providers["vllm"])
     assert await check_model_readiness() is bool(client_available and healthy)
 
@@ -255,3 +258,20 @@ async def test_concurrent_cloud_readiness_keeps_each_resolved_connection(monkeyp
     assert await asyncio.gather(*checks) == [True, True]
     assert requests == [("first.invalid", "Bearer synthetic-first"), ("second.invalid", "Bearer synthetic-second")]
     assert (provider.base_url, provider.model, provider.api_key) == original
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("failure", [ConnectionError("synthetic-init"), asyncio.CancelledError()])
+async def test_vllm_readiness_keeps_adapter_error_without_http_conversion(monkeypatch, providers, failure):
+    from app import config
+    from inference import vllm_client
+
+    async def fail():
+        raise failure
+
+    monkeypatch.setattr(config, "is_vllm_enabled", lambda: True)
+    monkeypatch.setattr(vllm_client, "get_vllm_client", fail)
+    select(monkeypatch, providers["vllm"])
+    with pytest.raises(type(failure)) as caught:
+        await check_model_readiness()
+    assert caught.value is failure
