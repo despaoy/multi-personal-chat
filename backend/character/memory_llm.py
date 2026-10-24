@@ -718,30 +718,28 @@ def _normalize_iso_time(raw: Any, field: str) -> str:
 
 def _resolve_target_record(
     *,
+    operation: str,
     target_memory_id: str,
     target_memory_key: str,
     existing_memories: tuple[dict[str, Any], ...],
 ) -> dict[str, Any] | None:
-    by_id = [item for item in existing_memories if target_memory_id and _record_id(item) == target_memory_id]
-    by_key = [
-        item
-        for item in existing_memories
-        if target_memory_key and str(item.get("memory_key") or "") == target_memory_key
-    ]
-    if target_memory_id and not by_id:
+    if operation == "NOOP" or (
+        operation not in _TARGET_REQUIRED_OPERATIONS and not target_memory_id and not target_memory_key
+    ):
         return None
-    if target_memory_key and not by_key:
-        return None
-    if target_memory_id and target_memory_key:
-        return next(
-            (item for item in by_id if str(item.get("memory_key") or "") == target_memory_key),
-            None,
-        )
-    candidates = by_id or by_key
-    return next(
-        (item for item in candidates if str(item.get("status") or "active") in {"active", "pending"}),
-        candidates[0] if candidates else None,
-    )
+    if not target_memory_id:
+        raise MemoryResponseError("target_memory_id", "记忆 LLM 关联旧记忆必须提供白名单中的明确 ID")
+    if not target_memory_key:
+        raise MemoryResponseError("target_memory_key", "记忆 LLM 关联旧记忆必须同时提供对应 key")
+    matches = [item for item in existing_memories if _record_id(item) == target_memory_id]
+    if len(matches) != 1:
+        raise MemoryResponseError("target_memory_id", "记忆 LLM 目标 ID 必须唯一存在于本轮白名单")
+    record = matches[0]
+    if str(record.get("memory_key") or "") != target_memory_key:
+        raise MemoryResponseError("target_memory_key", "记忆 LLM 目标 ID 和 key 必须指向白名单中的同一条记录")
+    if operation != "ERASE" and str(record.get("status") or "active") not in {"active", "pending"}:
+        raise MemoryResponseError("target_memory_id", "记忆 LLM 目标已失效，不能用于本次写入")
+    return record
 
 
 def _grounded_value(
@@ -1023,6 +1021,10 @@ def _candidate_to_proposal(
     proposed_content = re.sub(r"\s+", " ", _proposal_text(raw, "content")).strip()
     target_memory_id = _proposal_text(raw, "target_memory_id").strip()
     target_memory_key = _proposal_text(raw, "target_memory_key").strip()
+    target_record = _resolve_target_record(
+        operation=operation, target_memory_id=target_memory_id,
+        target_memory_key=target_memory_key, existing_memories=existing_memories,
+    )
 
     normalized_source = _normalize(source_message)
     normalized_evidence = _normalize(evidence)
@@ -1104,27 +1106,8 @@ def _candidate_to_proposal(
     if not normalized_evidence or normalized_evidence not in normalized_source:
         return None
 
-    target_record = _resolve_target_record(
-        target_memory_id=target_memory_id,
-        target_memory_key=target_memory_key,
-        existing_memories=existing_memories,
-    )
     if alias_projection is not None and target_record is not None and target_memory_key != alias_projection[1]:
         return None  # Alias ownership cannot mutate the primary-name predicate.
-    if operation in _TARGET_REQUIRED_OPERATIONS and target_record is None:
-        return None
-    if target_record is not None:
-        target_memory_id = _record_id(target_record)
-        target_memory_key = str(target_record.get("memory_key") or "")
-        if operation != "ERASE" and str(target_record.get("status") or "active") not in {
-            "active",
-            "pending",
-        }:
-            return None
-    elif operation == "ADD":
-        target_memory_id = ""
-        target_memory_key = ""
-
     if operation == "ERASE" and not is_memory_erasure_request(source_message):
         return None
     if operation == "RETRACT" and not _CORRECTION_PATTERN.search(source_message):

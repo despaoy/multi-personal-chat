@@ -6,6 +6,8 @@
 
 近期已同步服务器、本地和 GitHub 的主要链路：
 
+- 记忆关联必须提供匹配的ID和key，删除按首条记录猜选与无效目标静默漏条；318项相关检查及一次新DeepSeek同key目标写入通过，见[记忆目标身份](reports/backend-memory-target-owner-20261025.md)。
+
 - 记忆操作不再由条件词、短索引或首条宠物记录改写；模型可显式给出原文片段，来源随记录保留，非法提议不降级或部分保存，见[记忆操作与证据片段](reports/backend-memory-relation-owner-20261025.md)。
 
 - 记忆后处理不再根据同段否定词改写偏好或猜测无证据对象；保留模型目标原值，缺证据值明确报错，见[记忆模型值归属](reports/backend-memory-value-owner-20261025.md)。

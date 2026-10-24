@@ -79,7 +79,9 @@ def test_value_contract_uses_declared_index_limit(length):
 
 def test_valid_low_confidence_and_unsupported_evidence_remain_normal_rejection():
     assert parse(candidate(confidence=0.1)) == []
-    assert parse(candidate(value="化学")) == []
+    with pytest.raises(MemoryResponseError) as caught:
+        parse(candidate(value="化学"))
+    assert caught.value.field == "value"
 
 
 @pytest.mark.asyncio

@@ -78,8 +78,13 @@ def test_full_original_request_authorizes_only_named_course_and_freezes_kept_log
 
 @pytest.mark.parametrize("operation", ["ERASE", "RETRACT", "MERGE", "SUPERSEDE", "COEXIST"])
 def test_model_cannot_mutate_explicit_retained_target_using_positive_other_item_evidence(operation):
-    parsed = parse_llm_proposals(response(5, operation), source_message=source(), existing_memories=records())
-    assert all(item.operation == "NOOP" and item.memory is None for item in parsed)
+    if operation in {"MERGE", "SUPERSEDE", "COEXIST"}:
+        with pytest.raises(MemoryResponseError) as caught:
+            parse_llm_proposals(response(5, operation), source_message=source(), existing_memories=records())
+        assert caught.value.field == "value"
+    else:
+        parsed = parse_llm_proposals(response(5, operation), source_message=source(), existing_memories=records())
+        assert all(item.operation == "NOOP" and item.memory is None for item in parsed)
 
 
 @pytest.mark.parametrize(
@@ -344,3 +349,9 @@ def test_ambiguous_preference_pointer_cannot_choose_between_retained_objects():
     message = ERASE + KEEP + "不要忘掉白色油墨进行纸版压印。请保留这项偏好。"
     plan = partial_erasure_plan(message, (*records(), second))
     assert plan.unresolved_protection and plan.allowed_ids == ()
+
+
+@pytest.mark.parametrize("operation", ["MERGE", "SUPERSEDE", "COEXIST"])
+def test_grounded_other_item_value_still_cannot_mutate_a_protected_target(operation):
+    payload = response(5, operation, value="海庭鹤林工坊纸版压印课预约确认")
+    assert parse_llm_proposals(payload, source_message=source(), existing_memories=records()) == []

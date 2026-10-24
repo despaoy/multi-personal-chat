@@ -77,7 +77,12 @@ def test_literal_new_event_keeps_the_complete_original_utterance():
 def test_observation_recovery_preserves_existing_admission_guards(change):
     data = protocol_example()
     data['model_output']['memories'][0].update(change)
-    assert parse(data) == []
+    if 'target_memory_id' in change:
+        with pytest.raises(MemoryResponseError) as caught:
+            parse(data)
+        assert caught.value.field == 'target_memory_id'
+    else:
+        assert parse(data) == []
 
 
 def test_generic_fact_cannot_use_event_observation_exception():

@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 
 from character.memory_llm import (
+    MemoryResponseError,
     build_memory_llm_messages,
     is_memory_erasure_request,
     parse_llm_proposals,
@@ -99,7 +100,9 @@ def test_original_authorization_reaches_existing_whitelist_without_rewriting_evi
     assert parsed[0].target_memory_id == "7" and parsed[0].target_memory_key == "fact_course"
     wrong = json.loads(proposal(source))
     wrong["memories"][0]["target_memory_id"] = "8"
-    assert not parse_llm_proposals(json.dumps(wrong), source_message=source, existing_memories=records())
+    with pytest.raises(MemoryResponseError) as caught:
+        parse_llm_proposals(json.dumps(wrong), source_message=source, existing_memories=records())
+    assert caught.value.field == "target_memory_id"
 
 
 def test_archive_retention_does_not_allow_model_to_override_memory_denial():
