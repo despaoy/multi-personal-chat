@@ -79,7 +79,7 @@ def test_scope_precedes_reranking_and_applies_to_timeline(monkeypatch, query, sc
     instance = object.__new__(service.RoutedMultiScaleService)
     instance.config = SimpleNamespace(domain_id='test')
     instance.analyzer = None
-    instance.retriever = SimpleNamespace(search=lambda *a, **kw: candidates, index=SimpleNamespace(documents=[c.document for c in candidates]))
+    instance.retriever = SimpleNamespace(search=lambda *a, **kw: candidates, index=SimpleNamespace(documents=[c.document for c in candidates], count=lambda: len(candidates)))
     instance.reranker = None
     instance.extractor = None
     instance.by_id = {}

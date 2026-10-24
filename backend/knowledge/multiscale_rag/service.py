@@ -125,10 +125,10 @@ class RoutedMultiScaleService:
             )
         retriever = self.retriever
         recall_k = max(top_k * 12, 60)
-        if knowledge_boundary is not None:
-            # Until visibility-aware ANN indexes are built, recall the complete
-            # route so hidden documents cannot exhaust the pre-filter top-k.
-            # This opt-in correctness path is deliberately not a latency claim.
+        if knowledge_boundary is not None or query_scope is not None:
+            # Apply visibility and ownership before truncating the candidate pool.
+            # Until scoped indexes exist, scan the route so excluded documents
+            # cannot consume the entire recall window.
             recall_k = max(recall_k, retriever.index.count())
         recalled = retriever.search(analysis, top_k=recall_k, recall_k=recall_k, mode="hybrid")
         recalled = [candidate for candidate in recalled if visible_to(candidate.document, knowledge_boundary)]

@@ -190,3 +190,37 @@ async def test_names_only_binding_cannot_silently_supply_required_character_scop
     with pytest.raises(ValueError, match="requires a semantic task scope"):
         retrieve_curated_scope(plan, query, 3, curated=retrieve)
     retrieve.assert_not_called()
+
+
+@pytest.mark.parametrize("kind,mode,names", [
+    ("fact", "identity", ("林栖",)),
+    ("relation", "direct_relation", ("林栖", "穆远")),
+])
+def test_scope_retains_complete_source_beyond_unfiltered_candidate_window(tmp_path, kind, mode, names):
+    from knowledge.retrieval_scope import QueryScope
+
+    rig = arrange(tmp_path)
+    docs = [doc for doc in rig.documents if doc.id in {kind, "source-" + kind}]
+    original = docs[0].content
+    query = "核对登记资料，按指定对象范围提供完整依据。"
+    for i in range(80):
+        body = f"登记资料第{i}项：程砚与顾青登记为同学；此材料不说明其他人的身份或关系。"
+        source = SourceReference(f"distractor-{i}.txt", 1, 1)
+        (tmp_path / source.source_path).write_text(body, encoding="utf-8")
+        identity = f"distractor-{i}"
+        docs.append(KnowledgeIndexDocument(identity, rig.config.domain_id, kind, query, body, body, body,
+                    entities=["程砚", "顾青"], source=source, metadata=dict(subject="程砚", target="顾青")))
+        docs.append(KnowledgeIndexDocument("source-" + identity, rig.config.domain_id, "evidence", "登记原文",
+                    body, body, body, source=source, metadata=dict(parent_id=identity)))
+    vectors = np.ones((len(docs), 384), dtype=np.float32) / np.sqrt(384)
+    vectors[:2] = 0
+    vectors[:2, 0] = 1
+    ranking = ControlledRanking([kind])
+    service = RoutedMultiScaleService(rig.config, _retrieval_index(rig.config.domain_id, docs, vectors),
+                rig.embedding, all_documents=docs, source_extractor=rig.service.extractor, reranker=ranking)
+    scope = QueryScope(rig.config.domain_id, query, ((0, mode, names),))
+    result = service.retrieve(query, query_scope=scope, top_k=1)
+    assert ranking.pools == [[kind]]
+    assert [row["id"] for row in result["results"]] == [kind]
+    assert any(row["excerpt"]["text"] == original for row in result["curated_source_catalog"]["sources"])
+    assert rig.embedding.calls == [query]

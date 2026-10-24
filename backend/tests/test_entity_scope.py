@@ -79,7 +79,7 @@ def test_filter_runs_before_ranking_and_preserves_retrieval_diagnostics(monkeypa
     instance.config = SimpleNamespace(domain_id='test')
     instance.analyzer = instance.reranker = instance.extractor = None
     instance.by_id = instance.evidence_by_parent = {}
-    instance.retriever = SimpleNamespace(search=lambda *a, **kw: candidates)
+    instance.retriever = SimpleNamespace(search=lambda *a, **kw: candidates, index=SimpleNamespace(count=lambda: len(candidates)))
     instance.analyzer = SimpleNamespace(analyze=lambda *a, **_scope: SimpleNamespace(entities=['林远'], normalized_query=query))
 
     def rank(_analysis, recalled, **kwargs):
