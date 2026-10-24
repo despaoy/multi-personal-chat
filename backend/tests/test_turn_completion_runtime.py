@@ -212,3 +212,20 @@ async def test_explicit_start_reopens_only_drained_lifecycle(monkeypatch):
     await reopened.run(work, timeout=1)
     await turn_completion.shutdown_turn_completions()
     assert done == [True] and reopened.closed and reopened.active == 0
+
+
+@pytest.mark.parametrize("kind", [TimeoutError, OSError])
+async def test_terminal_task_failure_keeps_its_own_cause(kind):
+    from services.turn_completion import CompletionWaitTimeout
+
+    runtime = TurnCompletionRuntime()
+    failure = kind("synthetic-terminal-write-error")
+    async def work():
+        raise failure
+    try:
+        with pytest.raises(kind) as caught:
+            await runtime.run(work, timeout=1)
+        assert caught.value is failure and not isinstance(caught.value, CompletionWaitTimeout)
+        assert runtime.active == 0 and runtime.failed == 1
+    finally:
+        await runtime.shutdown(timeout=1)

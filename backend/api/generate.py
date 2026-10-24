@@ -565,12 +565,18 @@ async def _generate_reply_body(
 
                 delivery_context["completion_snapshot"] = freeze_completion(prepared_character_turn)
         if prepared_character_turn is not None and persist_message and delivery_context is None:
-            completion_warning = await _complete_character_turn(
-                prepared_character_turn,
-                request,
-                character_service=character_service,
-                completion_slot=completion_slot,
-            )
+            try:
+                completion_warning = await _complete_character_turn(
+                    prepared_character_turn, request, character_service=character_service,
+                    completion_slot=completion_slot,
+                )
+            except Exception as exc:
+                logger.warning("回写处理失败 traceId=%s type=%s", request.traceId, type(exc).__name__)
+                raise HTTPException(503, detail={
+                    "stage": "turn_completion", "reason": "completion_failed",
+                    "modelInvoked": model_invoked, "messageSaved": message_saved,
+                    "message": "回复已存档，但后续回写未能确认完成。请核对聊天与记忆记录后再重试。",
+                }) from exc
             if completion_warning:
                 stored = await _persist_completion_feedback(
                     archive_receipt, completion_warning, database=message_db,
@@ -799,6 +805,8 @@ async def _complete_character_turn(prepared, request: MessageRequest, *, charact
     character_service 语义同 _prepare_character_turn：必须与准备阶段
     使用同一服务实例，保证读写同一（容器）数据库。
     """
+    from services.turn_completion import CompletionWaitTimeout, get_turn_completion_runtime
+
     try:
         from services.character_context import (
             get_default_character_context_service,
@@ -806,7 +814,6 @@ async def _complete_character_turn(prepared, request: MessageRequest, *, charact
 
         turn_input = _character_turn_input(request)
         service = character_service or get_default_character_context_service()
-        from services.turn_completion import get_turn_completion_runtime
 
         outcome = await get_turn_completion_runtime().run(
             lambda: service.complete_turn(
@@ -841,7 +848,7 @@ async def _complete_character_turn(prepared, request: MessageRequest, *, charact
             warning = "本轮长期记忆操作的结果尚未确认；请稍后检查，避免重复提交。"
         elif status == "conflict":
             warning = "长期记忆记录在处理期间发生变化，本轮操作未完成；请检查后重试。"
-        elif capture not in {"", "recorded"} or status not in {
+        elif capture not in {"", "recorded", "erase_request"} or status not in {
             "saved", "erased", "no_change", "source_only", "relationship_note_saved",
             "skipped_fiction_or_note", "skipped", "queued_hot", "buffered_idle", "write_gate",
         }:
@@ -853,12 +860,10 @@ async def _complete_character_turn(prepared, request: MessageRequest, *, charact
             partial = f"部分回写失败（{detail}）；已完成的保存不会撤销，请检查后重试。"
             warning = partial + (warning or "")
         return warning
-    except Exception as e:
-        logger.warning("角色记忆回写失败 character=%s type=%s", prepared.character_id, type(e).__name__)
-        # Cancelling a to_thread write does not prove its transaction rolled
-        # back. Never claim failure or successful storage on timeout/unknown.
+    except CompletionWaitTimeout:
+        # The runtime still owns this same task; elapsed waiting proves no
+        # rollback and does not authorize submitting the work again.
         return "这条信息的长期记忆保存状态尚未确认；本次回复不代表已保存，请稍后检查。"
-
 
 # ═══════════════════════════════════════════
 # vLLM 推理辅助函数

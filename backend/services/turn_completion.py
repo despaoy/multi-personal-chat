@@ -16,6 +16,10 @@ class CompletionUnavailable(RuntimeError):
     """No completion capacity is available before stateful generation."""
 
 
+class CompletionWaitTimeout(TimeoutError):
+    """The caller's observation deadline expired while runtime work remains owned."""
+
+
 class CompletionReservation:
     """One runtime-owned slot, released or consumed exactly once."""
 
@@ -93,7 +97,14 @@ class TurnCompletionRuntime:
         slot.state = "consumed"
         self._tasks.add(task)
         task.add_done_callback(self._finished)
-        return await asyncio.wait_for(asyncio.shield(task), timeout=timeout)
+        deadline = asyncio.timeout(timeout)
+        try:
+            async with deadline:
+                return await asyncio.shield(task)
+        except TimeoutError as exc:
+            if deadline.expired():
+                raise CompletionWaitTimeout("Completion observation deadline expired") from exc
+            raise
 
     async def shutdown(self, timeout: float = 35.0) -> None:
         if asyncio.get_running_loop() is not self.loop:

@@ -102,3 +102,21 @@ async def test_web_completion_preserves_memory_failure_alongside_counter_failure
     warning = await generate._complete_character_turn(prepared, request, character_service=service)
     assert '交互统计' in warning and '原文已保存' in warning and '长期记忆处理失败' in warning
     assert 'private-counter-body' not in warning
+
+
+@pytest.mark.parametrize("status,capture", [("erased", "erase_request"), ("failed", "recorded"), ("partial", "recorded")])
+async def test_existing_operation_receipt_needs_no_unused_interpretation_or_writer(scenario, monkeypatch, status, capture):
+    service, prepared, turn, repo, scheduler = scenario
+    receipt = {"status": status, "source_capture": capture, "persisted": int(status != "failed")}
+    prepared.memory_operation_receipt = dict(receipt)
+    unused = Mock(side_effect=AssertionError("Already executed operation must not be reinterpreted"))
+    monkeypatch.setattr("services.character_context.parse_command", unused)
+    monkeypatch.setattr("services.character_context.extract_memories", unused)
+    monkeypatch.setattr("character.memory_llm.get_memory_enrichment_scheduler", unused)
+    outcome = await service.complete_turn(prepared, turn, source_message_id="already-executed")
+    assert outcome.memory_enrichment_mode == "explicit_operation"
+    assert outcome.memory_enrichment_status == status and outcome.source_capture == capture
+    assert prepared.memory_operation_receipt == receipt and not outcome.memory_enrichment_scheduled
+    unused.assert_not_called()
+    repo.capture_source.assert_not_awaited()
+    repo.increment_interaction.assert_awaited_once()

@@ -154,7 +154,7 @@ def test_missing_or_branch_authority_never_writes(database, changes):
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("provider", ["vllm", "openai_compat"])
-@pytest.mark.parametrize("mode", ["failed", "recorded", "feedback_store_failed"])
+@pytest.mark.parametrize("mode", ["failed", "recorded", "feedback_store_failed", "completion_exception"])
 async def test_both_consumers_use_actual_saved_row_and_keep_visible_failure(monkeypatch, database, provider, mode):
     import asyncio
 
@@ -212,6 +212,25 @@ async def test_both_consumers_use_actual_saved_row_and_keep_visible_failure(monk
         return writer(receipt, warning=warning)
 
     monkeypatch.setattr(database, "update_message_feedback", observe)
+    if mode == "completion_exception":
+        from fastapi import HTTPException
+
+        failure = TimeoutError("synthetic-private-terminal-error")
+        service.complete_turn.side_effect = failure
+        accounting = AsyncMock()
+        monkeypatch.setattr(gen, "_record_model_invocation", accounting)
+        with pytest.raises(HTTPException) as caught:
+            await gen._generate_reply_impl(request, persist_message=True, enable_rag=False,
+                record_invocation=True, character_service=service, message_db=database)
+        assert caught.value.status_code == 503 and caught.value.detail["stage"] == "turn_completion"
+        assert caught.value.detail["modelInvoked"] is True and caught.value.detail["messageSaved"] is True
+        assert caught.value.__cause__ is failure and "synthetic-private" not in str(caught.value.detail)
+        stored = [r for r in database.get_messages(limit=1000) if r["traceId"] == request.traceId]
+        assert len(stored) == 1 and stored[0]["message"] == BODY and stored[0]["reply"] == "原始模型内容"
+        assert history(database, stored[0])[-1]["content"] == "原始模型内容" and receipts == []
+        accounting.assert_awaited_once()
+        service.complete_turn.assert_awaited_once()
+        return
     result = await gen._generate_reply_impl(
         request,
         persist_message=True,

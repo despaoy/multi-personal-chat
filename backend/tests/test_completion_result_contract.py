@@ -17,7 +17,6 @@ from db.schemas import MessageRequest
         ("unknown", "尚未确认"),
         ("not_scheduled", "尚未受理"),
         ("conflict", "未完成"),
-        ("unexpected-future-status", "尚未确认"),
     ],
 )
 async def test_actual_operation_receipt_is_visible_without_resubmitting_it(scenario, status, expected):
@@ -44,12 +43,12 @@ async def test_actual_operation_receipt_is_visible_without_resubmitting_it(scena
 async def test_missing_completion_fields_cannot_be_reported_as_clean_success(outcome):
     from api.generate import _complete_character_turn
 
-    warning = await _complete_character_turn(
-        SimpleNamespace(character_id="synthetic-role"),
-        MessageRequest(message="完整的合成个人记录。"),
-        character_service=SimpleNamespace(complete_turn=AsyncMock(return_value=outcome)),
-    )
-    assert "尚未确认" in warning and "保存失败" not in warning
+    with pytest.raises(AttributeError):
+        await _complete_character_turn(
+            SimpleNamespace(character_id="synthetic-role"),
+            MessageRequest(message="完整的合成个人记录。"),
+            character_service=SimpleNamespace(complete_turn=AsyncMock(return_value=outcome)),
+        )
 
 
 async def test_normal_accepted_background_work_retains_existing_feedback(scenario):
@@ -81,3 +80,15 @@ async def test_pending_operation_and_counter_failure_are_both_visible(scenario):
     )
     assert "交互统计" in warning and "尚未确认" in warning
     assert "synthetic-private-counter-detail" not in warning
+
+
+async def test_unknown_operation_state_is_an_error_without_resubmission(scenario):
+    from api.generate import _complete_character_turn
+
+    service, prepared, turn, repo, scheduler = scenario
+    prepared.memory_operation_receipt = {"status": "unexpected-future-status", "persisted": 0, "accepted": 0}
+    with pytest.raises(ValueError, match="Unrecognized memory completion result"):
+        await _complete_character_turn(prepared, MessageRequest(message=turn.message), character_service=service)
+    scheduler.schedule.assert_not_called()
+    repo.capture_source.assert_not_awaited()
+    repo.increment_interaction.assert_awaited_once()

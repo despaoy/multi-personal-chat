@@ -32,7 +32,6 @@ def request():
         ("stale", "已删除"),
         ("conflict", "其他内容"),
         ("recorded", None),
-        ("unsupported_scope", "尚未确认"),
         ("", None),
     ],
 )
@@ -82,10 +81,10 @@ async def test_unexpected_completion_failure_does_not_leak_exception():
     from api import generate as gen
 
     service = SimpleNamespace(complete_turn=AsyncMock(side_effect=RuntimeError("private-internal-detail")))
-    warning = await gen._complete_character_turn(
-        SimpleNamespace(character_id="tsukiyashiro_kisaki"), request(), character_service=service
-    )
-    assert "尚未确认" in warning and "private-internal-detail" not in warning
+    with pytest.raises(RuntimeError, match="private-internal-detail"):
+        await gen._complete_character_turn(
+            SimpleNamespace(character_id="tsukiyashiro_kisaki"), request(), character_service=service
+        )
 
 
 @pytest.mark.asyncio
@@ -101,7 +100,7 @@ async def test_external_cancel_is_not_converted_to_success_feedback():
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("provider", ["vllm", "openai_compat"])
-@pytest.mark.parametrize("mode", ["failed", "recorded", "internal", "archive_failure"])
+@pytest.mark.parametrize("mode", ["failed", "recorded", "internal", "archive_failure", "completion_failure"])
 async def test_generation_preserves_answer_and_existing_warnings(monkeypatch, provider, mode):
     from api import generate as gen
     from inference import model_manager as mm
@@ -137,6 +136,18 @@ async def test_generation_preserves_answer_and_existing_warnings(monkeypatch, pr
     service = SimpleNamespace(
         complete_turn=AsyncMock(return_value=_TurnOutcome(source_capture=mode, memory_enrichment_status="skipped"))
     )
+    if mode == "completion_failure":
+        failure = TimeoutError("synthetic-private-completion-error")
+        service.complete_turn.side_effect = failure
+        with pytest.raises(HTTPException) as error:
+            await gen._generate_reply_impl(request(), enable_rag=False, record_invocation=False,
+                character_service=service, message_db=gen.db)
+        assert error.value.status_code == 503 and error.value.detail["stage"] == "turn_completion"
+        assert error.value.detail["modelInvoked"] is True and error.value.detail["messageSaved"] is True
+        assert error.value.__cause__ is failure and "synthetic-private" not in str(error.value.detail)
+        gen._save_message.assert_awaited_once()
+        service.complete_turn.assert_awaited_once()
+        return
     if mode == "archive_failure":
         with pytest.raises(HTTPException) as error:
             await gen._generate_reply_impl(request(), enable_rag=False, record_invocation=False, character_service=service, message_db=gen.db)
@@ -164,3 +175,12 @@ async def test_generation_preserves_answer_and_existing_warnings(monkeypatch, pr
         service.complete_turn.assert_not_awaited()
     else:
         service.complete_turn.assert_awaited_once()
+
+
+async def test_unknown_capture_is_not_converted_to_success_feedback():
+    from api import generate as gen
+
+    service = SimpleNamespace(complete_turn=AsyncMock(return_value=_TurnOutcome(
+        source_capture="unsupported_scope", memory_enrichment_status="skipped")))
+    with pytest.raises(ValueError, match="Unrecognized memory completion result"):
+        await gen._complete_character_turn(SimpleNamespace(character_id="role"), request(), character_service=service)
