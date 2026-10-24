@@ -9,6 +9,8 @@ from dataclasses import replace
 
 from character.models import UserScope
 from inference.source_context_budget import _parse_complete_packet
+from inference.history import without_history_turns
+from inference.structured_context_authority import revalidate_private_memories, without_memories
 
 
 def _packet(text):
@@ -31,17 +33,6 @@ def _retain_packet(text, packet, granted):
         return ""
     return json.dumps(dict(packet, records=kept), ensure_ascii=False, separators=(",", ":"))
 
-
-def _without_history_turns(history, bodies):
-    kept = []
-    excluded_turn = False
-    for item in history:
-        contains = any(body in item.get("content", "") for body in bodies)
-        if item.get("role") == "user":
-            excluded_turn = contains
-        if not contains and not excluded_turn:
-            kept.append(item)
-    return history if len(kept) == len(history) else tuple(kept)
 
 
 async def revalidate_private_sources(
@@ -116,7 +107,6 @@ async def revalidate_private_sources(
             removed.add(packet.memory_id)
     reference_changed = any(body in context.reference_context for body in bodies)
     if removed or (reference_changed and context.memory_packets):
-        from inference.structured_context_authority import without_memories
 
         updated = without_memories(updated, removed, preferred_address=preferred_address, max_chars=max_chars)
     elif reference_changed:
@@ -134,7 +124,7 @@ async def revalidate_private_sources(
             changes[field] = ""
     if changes:
         updated = replace(updated, **changes)
-    return replace(request, character_context=updated, history=_without_history_turns(request.history, bodies))
+    return replace(request, character_context=updated, history=without_history_turns(request.history, bodies))
 
 
 def make_private_context_revalidator(prepared, database):
@@ -150,8 +140,6 @@ def make_private_context_revalidator(prepared, database):
     max_chars = prepared.memory_budget.get("budget_chars")
 
     async def revalidate(request):
-        from inference.structured_context_authority import revalidate_private_memories
-
         request = await revalidate_private_memories(
             request, repository, character_id, scope, preferred_address=preferred_address, max_chars=max_chars,
         )

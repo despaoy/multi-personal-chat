@@ -1,6 +1,7 @@
 """Refresh selected stored claim inputs before every generation send."""
 
 from dataclasses import replace
+from inference.history import without_history_turns
 from datetime import datetime, timezone
 
 from character.context_builder import _memory_is_injectable, compile_reference_context
@@ -113,6 +114,4 @@ async def revalidate_private_memories(
     }
     if changes:
         updated = replace(updated, **changes)
-    from inference.private_context_authority import _without_history_turns
-
-    return replace(request, character_context=updated, history=_without_history_turns(request.history, bodies))
+    return replace(request, character_context=updated, history=without_history_turns(request.history, bodies))

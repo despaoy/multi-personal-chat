@@ -66,3 +66,15 @@ def review_history(history: Sequence[Mapping[str, str]], *,
     if sum(len(entry['content']) for entry in kept) > max_chars:
         raise InputBudgetError("recent history exceeds budget; must not be partially sliced")
     return kept
+
+
+def without_history_turns(history, bodies):
+    kept = []
+    excluded_turn = False
+    for item in history:
+        contains = any(body in item.get("content", "") for body in bodies)
+        if item.get("role") == "user":
+            excluded_turn = contains
+        if not contains and not excluded_turn:
+            kept.append(item)
+    return history if len(kept) == len(history) else tuple(kept)
