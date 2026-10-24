@@ -699,10 +699,3 @@ async def get_grounded_answer_service() -> GroundedAnswerService:
                 _service = build_default_grounded_answer_service(context_budget=budget)
                 _service_budget = budget
     return _service
-
-
-def reset_grounded_answer_service() -> None:
-    """重置单例（测试用）。"""
-    global _service, _service_budget
-    _service = None
-    _service_budget = None

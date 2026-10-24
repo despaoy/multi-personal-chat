@@ -78,7 +78,7 @@ def test_startup_imports_only_the_selected_backend(load_adapter, environment, pg
     load, imports, store = load_adapter
     namespace = load(pg=str(pg), environment=environment)
     assert imports == ["db.pg_database" if pg else "db.database"]
-    assert namespace["get_db"]() is store and namespace["is_pg_mode"]() is pg
+    assert namespace["db"] is store and namespace["is_pg_mode"]() is pg
 
 
 @pytest.mark.parametrize("environment", ["development", "production"])

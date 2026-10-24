@@ -50,11 +50,6 @@ else:
 assert isinstance(db, DatabaseInterface), f"Database adapter must implement DatabaseInterface, got {type(db)}"
 
 
-def get_db():
-    """获取当前活跃的数据库实例"""
-    return db
-
-
 def is_pg_mode() -> bool:
     """当前是否使用 PostgreSQL"""
     return _USE_PG

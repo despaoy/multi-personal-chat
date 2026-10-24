@@ -70,16 +70,14 @@ async def test_default_service_rebinds_and_invalidates_cache_when_provider_budge
     monkeypatch.setattr(module, "get_provider_context_budget", lambda: state[0])
     monkeypatch.setattr("knowledge.multiscale_rag.runtime.get_multiscale_rag_service",
                         lambda: SimpleNamespace(config=SimpleNamespace(domain_id="story")))
-    module.reset_grounded_answer_service()
-    try:
-        cloud = await module.get_grounded_answer_service()
-        assert cloud.packet_builder.evidence_budget is None
-        assert cloud.prompt_builder.context_budget.window_tokens == 65536
-        assert await module.get_grounded_answer_service() is cloud
-        state[0] = ProviderContextBudget(8192, evidence_max_chars=6000)
-        local = await module.get_grounded_answer_service()
-        assert local is not cloud and local.cache is not cloud.cache
-        assert local.packet_builder.evidence_budget == 6000
-        assert local.prompt_builder.context_budget.window_tokens == 8192
-    finally:
-        module.reset_grounded_answer_service()
+    monkeypatch.setattr(module, "_service", None)
+    monkeypatch.setattr(module, "_service_budget", None)
+    cloud = await module.get_grounded_answer_service()
+    assert cloud.packet_builder.evidence_budget is None
+    assert cloud.prompt_builder.context_budget.window_tokens == 65536
+    assert await module.get_grounded_answer_service() is cloud
+    state[0] = ProviderContextBudget(8192, evidence_max_chars=6000)
+    local = await module.get_grounded_answer_service()
+    assert local is not cloud and local.cache is not cloud.cache
+    assert local.packet_builder.evidence_budget == 6000
+    assert local.prompt_builder.context_budget.window_tokens == 8192
