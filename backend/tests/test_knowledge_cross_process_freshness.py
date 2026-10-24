@@ -1,5 +1,7 @@
 """Only persisted cross-worker authority, loaded evidence and cache freshness."""
 
+from knowledge import index_lifecycle
+
 from copy import deepcopy
 from threading import RLock
 
@@ -66,9 +68,10 @@ def readers(tmp_path, monkeypatch):
     reader.add_knowledge_chunk(dict(documentId=doc["id"], chunkIndex=0, content=doc["content"]))
     vector = RecordingVector()
     monkeypatch.setattr(knowledge, "db", reader)
+    monkeypatch.setattr(index_lifecycle, "db", reader)
     monkeypatch.setattr(vector_module, "get_vector_db", lambda: vector)
-    monkeypatch.setattr(knowledge, "_vector_index_revision", None)
-    assert knowledge._ensure_vector_index()
+    monkeypatch.setattr(index_lifecycle, "_vector_index_revision", None)
+    assert index_lifecycle._ensure_vector_index()
     return reader, writer, doc, new, vector
 
 
@@ -77,12 +80,12 @@ def external_update(writer, doc, change, complete=False):
     if "content" in change:
         writer.execute_sql("DELETE FROM knowledge_chunks WHERE documentId = :doc_id", {"doc_id": doc["id"]})
         writer.add_knowledge_chunk(dict(documentId=doc["id"], chunkIndex=0, content=change["content"]))
-    revision = int(writer.get_config_value(knowledge._VECTOR_REBUILD_REVISION_KEY, "0")) + 1
-    writer.set_config_value(knowledge._VECTOR_REBUILD_REVISION_KEY, str(revision))
+    revision = int(writer.get_config_value(index_lifecycle._VECTOR_REBUILD_REVISION_KEY, "0")) + 1
+    writer.set_config_value(index_lifecycle._VECTOR_REBUILD_REVISION_KEY, str(revision))
     # Unit-only simulated global marker; live probe builds a real second index.
     writer.set_config_value(
-        knowledge._VECTOR_REBUILD_STATUS_KEY,
-        f"complete:1:{knowledge._compute_chunk_fingerprint()}:{revision}" if complete else "dirty",
+        index_lifecycle._VECTOR_REBUILD_STATUS_KEY,
+        f"complete:1:{index_lifecycle._compute_chunk_fingerprint()}:{revision}" if complete else "dirty",
     )
     return revision
 
@@ -105,10 +108,10 @@ def test_external_revision_refreshes_warm_reader_even_when_other_worker_complete
     generation = vector.cache_generation
     builds = vector.builds
     revision = external_update(writer, doc, {field: value}, complete)
-    assert (knowledge._vector_index_revision is not None) and vector.metadata == old
-    assert knowledge._ensure_vector_index()
+    assert (index_lifecycle._vector_index_revision is not None) and vector.metadata == old
+    assert index_lifecycle._ensure_vector_index()
     assert vector.cache_generation > generation and vector.builds == builds + 1
-    assert knowledge._vector_index_revision == revision and knowledge._read_rebuild_status()[3] == revision
+    assert index_lifecycle._vector_index_revision == revision and index_lifecycle._read_rebuild_status()[3] == revision
     current = vector.metadata[0]
     if field == "content":
         assert value in current["content"]
@@ -133,9 +136,9 @@ def test_unchanged_revision_uses_one_authority_read_without_chunk_scan(readers, 
     monkeypatch.setattr(reader, "iter_chunks_with_document", forbidden)
     builds = vector.builds
     generation = vector.cache_generation
-    assert knowledge._ensure_vector_index()
+    assert index_lifecycle._ensure_vector_index()
     assert (
-        reads == [knowledge._VECTOR_REBUILD_REVISION_KEY]
+        reads == [index_lifecycle._VECTOR_REBUILD_REVISION_KEY]
         and vector.builds == builds
         and vector.cache_generation == generation
     )
@@ -144,20 +147,20 @@ def test_unchanged_revision_uses_one_authority_read_without_chunk_scan(readers, 
 def test_fresh_process_rejects_same_count_stale_local_disk_metadata(readers, monkeypatch):
     reader, writer, doc, new, vector = readers
     revision = external_update(writer, doc, dict(title="新标题"), True)
-    monkeypatch.setattr(knowledge, "_vector_index_revision", None)
+    monkeypatch.setattr(index_lifecycle, "_vector_index_revision", None)
     builds = vector.builds
-    assert knowledge._ensure_vector_index() and vector.builds == builds + 1
-    assert vector.metadata[0]["title"] == "新标题" and knowledge._vector_index_revision == revision
+    assert index_lifecycle._ensure_vector_index() and vector.builds == builds + 1
+    assert vector.metadata[0]["title"] == "新标题" and index_lifecycle._vector_index_revision == revision
 
 
 def test_valid_local_persisted_evidence_is_reused_without_reembedding(readers, monkeypatch):
     reader, writer, doc, new, vector = readers
-    monkeypatch.setattr(knowledge, "_vector_index_revision", None)
+    monkeypatch.setattr(index_lifecycle, "_vector_index_revision", None)
     builds = vector.builds
     generation = vector.cache_generation
-    assert knowledge._ensure_vector_index() and vector.builds == builds
+    assert index_lifecycle._ensure_vector_index() and vector.builds == builds
     assert (
-        vector.cache_generation > generation and knowledge._vector_index_revision == knowledge._get_rebuild_revision()
+        vector.cache_generation > generation and index_lifecycle._vector_index_revision == index_lifecycle._get_rebuild_revision()
     )
 
 
@@ -171,11 +174,11 @@ def test_failed_persisted_authority_never_authorizes_warm_cached_index(readers, 
 
         monkeypatch.setattr(reader, "get_config_value", fail)
     else:
-        writer.set_config_value(knowledge._VECTOR_REBUILD_REVISION_KEY, "bad" if failure == "malformed" else "-1")
+        writer.set_config_value(index_lifecycle._VECTOR_REBUILD_REVISION_KEY, "bad" if failure == "malformed" else "-1")
     builds = vector.builds
     metadata = deepcopy(vector.metadata)
     with pytest.raises(RuntimeError if failure == "unreadable" else ValueError):
-        knowledge._ensure_vector_index()
+        index_lifecycle._ensure_vector_index()
     assert vector.builds == builds and vector.metadata == metadata
 
 
@@ -183,20 +186,20 @@ def test_external_update_during_rebuild_cannot_commit_an_old_revision(readers):
     reader, writer, doc, new, vector = readers
     external_update(writer, doc, dict(title="第一次更新"))
     vector.on_add = lambda: external_update(writer, doc, dict(title="重建中再次更新"))
-    assert knowledge._ensure_vector_index() is False and knowledge._vector_index_revision is None
-    assert knowledge._ensure_vector_index() and vector.metadata[0]["title"] == "重建中再次更新"
-    assert knowledge._vector_index_revision == knowledge._get_rebuild_revision()
+    assert index_lifecycle._ensure_vector_index() is False and index_lifecycle._vector_index_revision is None
+    assert index_lifecycle._ensure_vector_index() and vector.metadata[0]["title"] == "重建中再次更新"
+    assert index_lifecycle._vector_index_revision == index_lifecycle._get_rebuild_revision()
 
 
 def test_external_last_document_delete_clears_old_index_and_cache(readers):
     reader, writer, doc, new, vector = readers
     generation = vector.cache_generation
-    revision = knowledge._get_rebuild_revision() + 1
+    revision = index_lifecycle._get_rebuild_revision() + 1
     writer.delete_knowledge_document(doc["id"])
-    writer.set_config_value(knowledge._VECTOR_REBUILD_REVISION_KEY, str(revision))
-    writer.set_config_value(knowledge._VECTOR_REBUILD_STATUS_KEY, "dirty")
-    assert knowledge._ensure_vector_index() and vector.metadata == [] and vector.cache_generation > generation
-    assert knowledge._vector_index_revision == revision and knowledge._read_rebuild_status() == (
+    writer.set_config_value(index_lifecycle._VECTOR_REBUILD_REVISION_KEY, str(revision))
+    writer.set_config_value(index_lifecycle._VECTOR_REBUILD_STATUS_KEY, "dirty")
+    assert index_lifecycle._ensure_vector_index() and vector.metadata == [] and vector.cache_generation > generation
+    assert index_lifecycle._vector_index_revision == revision and index_lifecycle._read_rebuild_status() == (
         "complete",
         0,
         "empty",
@@ -207,8 +210,8 @@ def test_external_last_document_delete_clears_old_index_and_cache(readers):
 def test_corrupt_local_identity_cannot_pass_global_complete_count(readers, monkeypatch):
     reader, writer, doc, new, vector = readers
     vector.metadata[0]["id"] = "wrong-local-id"
-    monkeypatch.setattr(knowledge, "_vector_index_revision", None)
-    assert knowledge._ensure_vector_index() and vector.metadata[0]["id"] == f"doc_{doc['id']}_chunk_0"
+    monkeypatch.setattr(index_lifecycle, "_vector_index_revision", None)
+    assert index_lifecycle._ensure_vector_index() and vector.metadata[0]["id"] == f"doc_{doc['id']}_chunk_0"
 
 
 
@@ -221,7 +224,7 @@ async def test_missing_count_row_cannot_authorize_empty_index(readers, monkeypat
     reader, writer, doc, new, vector = readers
     external_update(writer, doc, dict(title="完整新规则"))
     before = deepcopy(vector.metadata)
-    revision = knowledge._get_rebuild_revision()
+    revision = index_lifecycle._get_rebuild_revision()
     clear = Mock(wraps=vector.clear_all)
     monkeypatch.setattr(vector, "clear_all", clear)
     execute = reader.execute_sql
@@ -237,7 +240,7 @@ async def test_missing_count_row_cannot_authorize_empty_index(readers, monkeypat
         await knowledge.search_knowledge(request, {"role": "admin"})
     assert caught.value.status_code == 503 and isinstance(caught.value.__cause__, IndexError)
     clear.assert_not_called()
-    assert vector.metadata == before and knowledge._vector_index_revision is None
-    assert knowledge._read_rebuild_status()[0] == "dirty"
-    assert knowledge._get_rebuild_revision() == revision
+    assert vector.metadata == before and index_lifecycle._vector_index_revision is None
+    assert index_lifecycle._read_rebuild_status()[0] == "dirty"
+    assert index_lifecycle._get_rebuild_revision() == revision
     assert reader.get_knowledge_chunks(doc["id"])[0]["content"] == doc["content"]

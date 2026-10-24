@@ -1,5 +1,7 @@
 """Accepted filename suffix case must not change named-source identity."""
 
+from knowledge import index_lifecycle
+
 import io
 import json
 import zipfile
@@ -39,7 +41,7 @@ async def test_case_variants_publish_the_same_exact_named_source(publication, ar
     assert doc["knowledge_base_id"] == rig.kb["id"] and doc["folder_id"] == rig.folder["id"]
     assert doc["category"] == "适用条件" and doc["fileType"] == extension
     assert "".join(row["content"] for row in rig.db.get_knowledge_chunks(doc["id"])) == body
-    assert knowledge._ensure_vector_index()
+    assert index_lifecycle._ensure_vector_index()
     query = "请读取《登记规则》。"
     assert requested_document_titles(query) == ("登记规则",)
     rejected_semantic_candidates = dict(results=[], abstained=True, confidence=0.0)
@@ -86,5 +88,5 @@ async def test_uppercase_archive_keeps_content_and_path_failures_explicit(public
                 await file.close()
     assert caught.value.status_code == 400
     assert rig.db.get_knowledge_documents() == []
-    assert knowledge._get_rebuild_revision() == rig.revision
+    assert index_lifecycle._get_rebuild_revision() == rig.revision
     rig.add.assert_not_called()

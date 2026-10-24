@@ -1,5 +1,7 @@
 """Create/import publish source once; the shared search gate owns indexing."""
 
+from knowledge import index_lifecycle
+
 import io
 import zipfile
 from types import SimpleNamespace
@@ -21,7 +23,8 @@ TEXT = "2026年10月23日15:30在青岚楼二层办理登记。申请人须本�
 def publication(tmp_path, monkeypatch):
     db = SQLiteDB(tmp_path / "source.sqlite")
     monkeypatch.setattr(knowledge, "db", db)
-    monkeypatch.setattr(knowledge, "_vector_index_revision", None)
+    monkeypatch.setattr(index_lifecycle, "db", db)
+    monkeypatch.setattr(index_lifecycle, "_vector_index_revision", None)
     monkeypatch.setattr(vectors.VectorDatabase, "_check_gpu_availability", lambda self: False)
     vector = vectors.VectorDatabase(str(tmp_path / "vectors"))
     monkeypatch.setattr(vector, "_model", object())
@@ -34,9 +37,9 @@ def publication(tmp_path, monkeypatch):
     monkeypatch.setattr(vectors, "get_vector_db", getter)
     kb = db.create_knowledge_base("完整合成登记库")
     folder = db.create_knowledge_folder(kb["id"], "适用条件")
-    assert knowledge._ensure_vector_index()
+    assert index_lifecycle._ensure_vector_index()
     getter.reset_mock()
-    revision = knowledge._get_rebuild_revision()
+    revision = index_lifecycle._get_rebuild_revision()
     lookup = Mock(wraps=db.get_knowledge_base)
     monkeypatch.setattr(db, "get_knowledge_base", lookup)
     root = tmp_path / "knowledge_bases"
@@ -92,18 +95,18 @@ async def test_create_and_import_use_one_authoritative_index_publication(publica
     expected_category = "未分类" if route == "scan_root" else "适用条件"
     assert doc["category"] == expected_category and doc["knowledge_base_id"] == rig.kb["id"]
     assert "".join(row["content"] for row in rig.db.get_knowledge_chunks(doc["id"])) == TEXT
-    assert knowledge._get_rebuild_revision() == rig.revision + 1
-    assert knowledge._read_rebuild_status()[0] == "dirty" and knowledge._vector_index_revision is None
+    assert index_lifecycle._get_rebuild_revision() == rig.revision + 1
+    assert index_lifecycle._read_rebuild_status()[0] == "dirty" and index_lifecycle._vector_index_revision is None
     rig.add.assert_not_called()
     rig.encode.assert_not_called()
     rig.getter.assert_not_called()
     if route == "create":
         rig.lookup.assert_not_called()
-    assert knowledge._ensure_vector_index()
+    assert index_lifecycle._ensure_vector_index()
     rig.add.assert_called_once()
     rig.encode.assert_called_once()
-    assert knowledge._read_rebuild_status()[0] == "complete"
-    assert knowledge._ensure_vector_index()
+    assert index_lifecycle._read_rebuild_status()[0] == "complete"
+    assert index_lifecycle._ensure_vector_index()
     rig.add.assert_called_once()
     matches = rig.vector.search(
         "登记办理条件和未确认时付款限制", threshold=0.0, filters={"knowledge_base_id": rig.kb["id"]}
@@ -130,8 +133,8 @@ async def test_index_failure_keeps_complete_source_and_returns_search_failure(pu
     assert raised.value.status_code == 503
     assert raised.value.__cause__ is failure
     assert "synthetic-private" not in str(raised.value.detail) + caplog.text
-    assert knowledge._read_rebuild_status()[0] != "complete" and knowledge._vector_index_revision is None
-    assert knowledge._get_rebuild_revision() == rig.revision + 1
+    assert index_lifecycle._read_rebuild_status()[0] != "complete" and index_lifecycle._vector_index_revision is None
+    assert index_lifecycle._get_rebuild_revision() == rig.revision + 1
     docs = rig.db.get_knowledge_documents()
     assert len(docs) == 1 and docs[0]["content"] == TEXT
     assert "".join(row["content"] for row in rig.db.get_knowledge_chunks(docs[0]["id"])) == TEXT
@@ -152,7 +155,7 @@ def test_duplicate_parent_creation_ends_transaction_before_document_commit(publi
         chunks=[TEXT],
     )
     assert document["content"] == TEXT
-    assert rig.db.get_config_value(knowledge._VECTOR_REBUILD_REVISION_KEY) == rig.revision + 1
+    assert rig.db.get_config_value(index_lifecycle._VECTOR_REBUILD_REVISION_KEY) == rig.revision + 1
     assert len(rig.db.get_knowledge_bases()) == len(rig.db.get_knowledge_folders(rig.kb["id"])) == 1
 
 
@@ -166,11 +169,11 @@ async def test_scan_reuses_existing_named_base_before_atomic_document_publicatio
     documents = rig.db.get_knowledge_documents()
     assert len(documents) == 1 and documents[0]["content"] == TEXT
     assert documents[0]["knowledge_base_id"] == rig.kb["id"]
-    assert knowledge._get_rebuild_revision() == rig.revision + 1
+    assert index_lifecycle._get_rebuild_revision() == rig.revision + 1
     assert len(rig.db.get_knowledge_bases()) == 1
     rig.add.assert_not_called()
     rig.getter.assert_not_called()
-    assert knowledge._ensure_vector_index()
+    assert index_lifecycle._ensure_vector_index()
     rig.add.assert_called_once()
 
 
@@ -187,7 +190,7 @@ async def test_generation_retrieval_preserves_index_failure_before_evidence_use(
     assert row["content"] == TEXT
     failure = OSError("synthetic-private-index-" + stage)
     if stage == "authority":
-        assert knowledge._ensure_vector_index()
+        assert index_lifecycle._ensure_vector_index()
         monkeypatch.setattr(rig.db, "get_config_value", Mock(side_effect=failure))
     else:
         monkeypatch.setattr(rig.vector, "flush", Mock(side_effect=failure))
@@ -204,7 +207,7 @@ async def test_generation_retrieval_preserves_index_failure_before_evidence_use(
     if stage == "authority":
         assert rig.add.call_count == builds
     else:
-        assert knowledge._vector_index_revision is None and knowledge._read_rebuild_status()[0] != "complete"
+        assert index_lifecycle._vector_index_revision is None and index_lifecycle._read_rebuild_status()[0] != "complete"
     assert rig.db.get_knowledge_document(row["id"])["content"] == TEXT
 
 
@@ -226,8 +229,8 @@ async def test_document_creation_preserves_schema_defaults_metadata_and_folder_c
         assert doc[key] == expected and result["document"][key] == expected
     assert request.model_dump() == original
     assert doc["chunkCount"] == 1 and "".join(row["content"] for row in rig.db.get_knowledge_chunks(doc["id"])) == TEXT
-    assert knowledge._get_rebuild_revision() == rig.revision + 1 and knowledge._read_rebuild_status()[0] == "dirty"
-    assert knowledge._vector_index_revision is None
+    assert index_lifecycle._get_rebuild_revision() == rig.revision + 1 and index_lifecycle._read_rebuild_status()[0] == "dirty"
+    assert index_lifecycle._vector_index_revision is None
     rig.add.assert_not_called()
     rig.getter.assert_not_called()
 
@@ -240,8 +243,8 @@ def test_loaded_native_snapshot_reuses_complete_two_chunk_source(publication, mo
         dict(title="完整登记规则", content=TEXT + second, knowledge_base_id=rig.kb["id"], folder_id=rig.folder["id"]),
         chunks=[TEXT, second],
     )
-    assert knowledge._ensure_vector_index()
-    status = knowledge._read_rebuild_status()
+    assert index_lifecycle._ensure_vector_index()
+    status = index_lifecycle._read_rebuild_status()
     assert status[0:2] == ("complete", 2)
     loaded = vectors.VectorDatabase(rig.vector.db_path)
     assert loaded.snapshot_validated and loaded.index.ntotal == len(loaded.bm25.corpus) == len(loaded.metadata) == 2
@@ -251,11 +254,11 @@ def test_loaded_native_snapshot_reuses_complete_two_chunk_source(publication, mo
     monkeypatch.setattr(loaded, "clear_all", clear)
     monkeypatch.setattr(loaded, "_get_embeddings_batch", encode)
     rig.getter.return_value = loaded
-    monkeypatch.setattr(knowledge, "_vector_index_revision", None)
-    assert knowledge._ensure_vector_index()
+    monkeypatch.setattr(index_lifecycle, "_vector_index_revision", None)
+    assert index_lifecycle._ensure_vector_index()
     clear.assert_not_called()
     encode.assert_not_called()
-    assert (knowledge._vector_index_revision is not None) and knowledge._vector_index_revision == knowledge._get_rebuild_revision()
-    assert knowledge._read_rebuild_status() == status
+    assert (index_lifecycle._vector_index_revision is not None) and index_lifecycle._vector_index_revision == index_lifecycle._get_rebuild_revision()
+    assert index_lifecycle._read_rebuild_status() == status
     assert rig.db.get_knowledge_document(row["id"])["content"] == TEXT + second
     assert [chunk["content"] for chunk in rig.db.get_knowledge_chunks(row["id"])] == [TEXT, second]

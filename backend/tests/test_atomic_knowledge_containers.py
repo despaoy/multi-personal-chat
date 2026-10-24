@@ -1,5 +1,7 @@
 """Container paths, folder detachment and cascades share durable authority."""
 
+from knowledge import index_lifecycle
+
 import sqlite3
 
 import pytest
@@ -170,6 +172,7 @@ async def test_public_container_route_requires_no_postcommit_database_signal(tmp
     db = SQLiteDB(tmp_path / "paths.db")
     kb, folder, doc, _, revision = setup(db)
     monkeypatch.setattr(knowledge, "db", db)
+    monkeypatch.setattr(index_lifecycle, "db", db)
 
     def forbidden():
         raise AssertionError("Public container mutation must already have durable dirty authority")

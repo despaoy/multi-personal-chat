@@ -1,3 +1,5 @@
+
+from knowledge import index_lifecycle
 from unittest.mock import AsyncMock
 from types import SimpleNamespace
 
@@ -14,7 +16,7 @@ pytestmark = pytest.mark.usefixtures("no_live_context_review")
 @pytest.mark.parametrize("outcome", ["success", "load_failure", "retrieval_failure"])
 async def test_character_runtime_owns_domain_and_failure(monkeypatch, outcome):
     from unittest.mock import Mock
-    from api import generate, knowledge
+    from api import generate
     from knowledge.multiscale_rag import runtime
     from test_multiscale_rag_runtime import ranking_score_runtime
 
@@ -29,7 +31,7 @@ async def test_character_runtime_owns_domain_and_failure(monkeypatch, outcome):
     elif outcome == "retrieval_failure":
         service._service.retrieve = Mock(side_effect=failure)
     generic = Mock(side_effect=AssertionError("Character failure must not switch to generic KB"))
-    monkeypatch.setattr(knowledge, "_ensure_vector_index", generic)
+    monkeypatch.setattr(index_lifecycle, "_ensure_vector_index", generic)
     monkeypatch.setattr(runtime, "get_multiscale_rag_service", lambda: service)
     if outcome == "success":
         result = await generate._retrieve_rag_bundle("妃和琉璃是什么关系？", 3, None)

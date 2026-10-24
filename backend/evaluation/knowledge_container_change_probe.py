@@ -1,5 +1,7 @@
 """Retain full parent rules while real administrative paths change."""
 
+from knowledge import index_lifecycle
+
 import asyncio
 import hashlib
 import json
@@ -27,7 +29,7 @@ async def run_container_probe(
 ):
     import asyncpg
 
-    from api import generate, knowledge
+    from api import generate
     from knowledge.vector_db import get_vector_db
 
     async def parent_snapshot():
@@ -92,8 +94,8 @@ async def run_container_probe(
             "folder": database.get_knowledge_folder(folder_id),
             "document": database.get_knowledge_document(doc_id),
             "chunks": database.get_knowledge_chunks(doc_id),
-            "revision": knowledge._get_rebuild_revision(),
-            "status": knowledge._read_rebuild_status(),
+            "revision": index_lifecycle._get_rebuild_revision(),
+            "status": index_lifecycle._read_rebuild_status(),
             "vector_metadata": deepcopy(vector.metadata),
             "cache_generation": vector.cache_generation,
         }

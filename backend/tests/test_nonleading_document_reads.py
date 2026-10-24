@@ -1,5 +1,7 @@
 """Independent synthetic compound-task examples; no native private fixtures."""
 
+from knowledge import index_lifecycle
+
 from threading import RLock
 from types import SimpleNamespace
 
@@ -41,7 +43,7 @@ def test_quoted_negative_ambiguous_or_incomplete_tasks_do_not_grant_reads(query)
 
 
 async def test_nonleading_read_resolves_exact_originals_after_semantic_abstention(monkeypatch):
-    from api import generate, knowledge
+    from api import generate
     from knowledge import rag_helper, vector_db
     from knowledge.multiscale_rag import runtime
 
@@ -62,9 +64,9 @@ async def test_nonleading_read_resolves_exact_originals_after_semantic_abstentio
         "get_multiscale_rag_service",
         lambda: pytest.fail("Explicit independent reads cannot be replaced by curated lore"),
     )
-    monkeypatch.setattr(knowledge, "_ensure_vector_index", lambda: True)
-    monkeypatch.setattr(knowledge, "_vector_index_revision", 77)
-    monkeypatch.setattr(knowledge, "_get_rebuild_revision", lambda: 77)
+    monkeypatch.setattr(index_lifecycle, "_ensure_vector_index", lambda: True)
+    monkeypatch.setattr(index_lifecycle, "_vector_index_revision", 77)
+    monkeypatch.setattr(index_lifecycle, "_get_rebuild_revision", lambda: 77)
     monkeypatch.setattr(vector_db, "get_vector_db", lambda: indexed)
     monkeypatch.setattr(generate, "db", SimpleNamespace(get_knowledge_document=lambda identity: docs[identity - 1]))
     monkeypatch.setenv("CORRECTIVE_RAG_ENABLED", "false")

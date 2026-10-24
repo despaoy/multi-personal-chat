@@ -1,5 +1,7 @@
 """Original evidence coverage, bounded windows and real public publication."""
 
+from knowledge import index_lifecycle
+
 import io
 import zipfile
 
@@ -85,7 +87,7 @@ async def test_public_paths_preserve_bounded_evidence_through_real_index(publica
     chunks = [row["content"] for row in rig.db.get_knowledge_chunks(doc["id"])]
     assert doc["content"] == source and doc["chunkCount"] == len(chunks)
     assert_slices(source, chunks, 600, 100)
-    assert knowledge._ensure_vector_index()
+    assert index_lifecycle._ensure_vector_index()
     prefix = f"[{rig.kb['name']}/{doc['category'] or ''}] {doc['title']}: "
     assert [row["content"] for row in rig.vector.metadata] == [prefix + chunk for chunk in chunks]
     assert all(row["document_id"] == doc["id"] and row["knowledge_base_id"] == rig.kb["id"] for row in rig.vector.metadata)

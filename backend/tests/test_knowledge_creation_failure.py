@@ -1,5 +1,7 @@
 """Declared duplicates are distinct from real knowledge storage failures."""
 
+from knowledge import index_lifecycle
+
 import asyncio
 import sqlite3
 from types import SimpleNamespace
@@ -18,6 +20,7 @@ def creation(tmp_path, monkeypatch):
     database = SQLiteDB(tmp_path / "creation.sqlite")
     owner = database.create_knowledge_base("完整合成知识库")
     monkeypatch.setattr(knowledge, "db", database)
+    monkeypatch.setattr(index_lifecycle, "db", database)
     app = FastAPI()
     app.include_router(knowledge.router)
     app.dependency_overrides[get_current_admin] = lambda: {"role": "admin"}

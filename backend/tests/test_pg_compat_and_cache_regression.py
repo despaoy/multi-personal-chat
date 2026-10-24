@@ -11,6 +11,8 @@ Covers the three gaps flagged in the review:
 
 from __future__ import annotations
 
+from knowledge import index_lifecycle
+
 import ast
 import sys
 from pathlib import Path
@@ -471,9 +473,9 @@ class TestVectorRebuildStatus:
         return SQLiteDB(tmp_path / "status.db")
 
     def _patch_kmod_db(self, kmod, db):
-        """Point api.knowledge.db at the temp db so status helpers use it."""
-        original = kmod.db
-        kmod.db = db
+        """Bind the API and index owner to the isolated database; restore both."""
+        original = (kmod.db, index_lifecycle.db)
+        kmod.db = index_lifecycle.db = db
         return original
 
     def test_status_round_trip(self, tmp_path):
@@ -483,7 +485,7 @@ class TestVectorRebuildStatus:
         db = self._make_db(tmp_path)
         original_db = self._patch_kmod_db(kmod, db)
         try:
-            from api.knowledge import (
+            from knowledge.index_lifecycle import (
                 _VECTOR_REBUILD_STATUS_KEY,
                 _read_rebuild_status,
             )
@@ -497,7 +499,7 @@ class TestVectorRebuildStatus:
             assert (status, count, fp, rev) == ("building", 500, "", -1)
 
             # Completion must match actual persisted revision authority.
-            db.set_config_value(kmod._VECTOR_REBUILD_REVISION_KEY, "7")
+            db.set_config_value(index_lifecycle._VECTOR_REBUILD_REVISION_KEY, "7")
             assert db.commit_knowledge_index_revision(7, 500, "abc123def456")
             status, count, fp, rev = _read_rebuild_status()
             assert (status, count, fp, rev) == ("complete", 500, "abc123def456", 7)
@@ -517,7 +519,7 @@ class TestVectorRebuildStatus:
             status, count, fp, rev = _read_rebuild_status()
             assert status == "complete" and count == 500 and fp == "abc" and rev == -1
         finally:
-            kmod.db = original_db
+            kmod.db, index_lifecycle.db = original_db
             db.close_connection()
 
     def test_building_status_triggers_rebuild_not_skip(self, tmp_path):
@@ -527,13 +529,13 @@ class TestVectorRebuildStatus:
         db = self._make_db(tmp_path)
         original_db = self._patch_kmod_db(kmod, db)
         try:
-            from api.knowledge import _VECTOR_REBUILD_STATUS_KEY, _read_rebuild_status
+            from knowledge.index_lifecycle import _VECTOR_REBUILD_STATUS_KEY, _read_rebuild_status
 
             db.set_config_value(_VECTOR_REBUILD_STATUS_KEY, "building:100")
             status, _, _, _ = _read_rebuild_status()
             assert status == "building", "building status must not be treated as complete"
         finally:
-            kmod.db = original_db
+            kmod.db, index_lifecycle.db = original_db
             db.close_connection()
 
     def test_dirty_status_triggers_rebuild(self, tmp_path):
@@ -543,17 +545,17 @@ class TestVectorRebuildStatus:
         db = self._make_db(tmp_path)
         original_db = self._patch_kmod_db(kmod, db)
         try:
-            from api.knowledge import _get_rebuild_revision, _read_rebuild_status
+            from knowledge.index_lifecycle import _get_rebuild_revision, _read_rebuild_status
 
             rev_before = _get_rebuild_revision()
             db.mark_knowledge_index_dirty()
-            kmod._invalidate_local_knowledge_index()
+            index_lifecycle._invalidate_local_knowledge_index()
             status, _, _, _ = _read_rebuild_status()
             assert status == "dirty", "dirty status must trigger rebuild"
             rev_after = _get_rebuild_revision()
             assert rev_after == rev_before + 1, "revision must increment on dirty"
         finally:
-            kmod.db = original_db
+            kmod.db, index_lifecycle.db = original_db
             db.close_connection()
 
     def test_complete_with_mismatched_count_triggers_rebuild(self, tmp_path):
@@ -563,7 +565,7 @@ class TestVectorRebuildStatus:
         db = self._make_db(tmp_path)
         original_db = self._patch_kmod_db(kmod, db)
         try:
-            from api.knowledge import _VECTOR_REBUILD_STATUS_KEY, _read_rebuild_status
+            from knowledge.index_lifecycle import _VECTOR_REBUILD_STATUS_KEY, _read_rebuild_status
 
             db.set_config_value(_VECTOR_REBUILD_STATUS_KEY, "complete:50:fp:0")
             db.execute_sql_insert(
@@ -580,7 +582,7 @@ class TestVectorRebuildStatus:
             status, count, _, _ = _read_rebuild_status()
             assert count == 50 and actual_count == 100, "count mismatch must be detectable"
         finally:
-            kmod.db = original_db
+            kmod.db, index_lifecycle.db = original_db
             db.close_connection()
 
     def test_expected_count_excludes_orphan_chunks(self, tmp_path):
@@ -592,7 +594,7 @@ class TestVectorRebuildStatus:
         db = self._make_db(tmp_path)
         original_db = self._patch_kmod_db(kmod, db)
         try:
-            from api.knowledge import _get_expected_chunk_count
+            from knowledge.index_lifecycle import _get_expected_chunk_count
 
             db.execute_sql_insert(
                 "INSERT INTO knowledge_documents (id, title, content, category, createdAt, updatedAt) VALUES (1, 'd', 'c', 'x', '2026-01-01', '2026-01-01')",
@@ -616,7 +618,7 @@ class TestVectorRebuildStatus:
 
             assert _get_expected_chunk_count() == 2, "expected_count must exclude orphan chunks"
         finally:
-            kmod.db = original_db
+            kmod.db, index_lifecycle.db = original_db
             db.close_connection()
 
     def test_fingerprint_excludes_orphan_chunks(self, tmp_path):
@@ -629,7 +631,7 @@ class TestVectorRebuildStatus:
         db = self._make_db(tmp_path)
         original_db = self._patch_kmod_db(kmod, db)
         try:
-            from api.knowledge import _compute_chunk_fingerprint
+            from knowledge.index_lifecycle import _compute_chunk_fingerprint
 
             db.execute_sql_insert(
                 "INSERT INTO knowledge_documents (id, title, content, category, createdAt, updatedAt) VALUES (1, 'd', 'c', 'x', '2026-01-01', '2026-01-01')",
@@ -655,7 +657,7 @@ class TestVectorRebuildStatus:
             fp_with_orphan = _compute_chunk_fingerprint()
             assert fp_clean == fp_with_orphan, "orphan chunks must not affect fingerprint"
         finally:
-            kmod.db = original_db
+            kmod.db, index_lifecycle.db = original_db
             db.close_connection()
 
 
@@ -705,10 +707,10 @@ class TestEnsureVectorIndexEndToEnd:
         vector_db and write complete:0:empty:{rev}, even if old index existed."""
         from api import knowledge as kmod
 
-        original_db = kmod.db
+        original_db = (kmod.db, index_lifecycle.db)
         db = self._make_db(tmp_path)
-        kmod.db = db
-        kmod._vector_index_revision = None
+        kmod.db = index_lifecycle.db = db
+        index_lifecycle._vector_index_revision = None
 
         cleared = {"called": False}
         class MockVectorDB:
@@ -724,14 +726,14 @@ class TestEnsureVectorIndexEndToEnd:
         self._patch_vector_db(monkeypatch, MockVectorDB())
 
         try:
-            assert kmod._ensure_vector_index() is True
+            assert index_lifecycle._ensure_vector_index() is True
             assert cleared["called"], "clear_all must be called when stale index exists with 0 chunks"
-            status, count, fp, rev = kmod._read_rebuild_status()
-            assert (status, count, fp) == ("complete", 0, kmod._EMPTY_FINGERPRINT)
+            status, count, fp, rev = index_lifecycle._read_rebuild_status()
+            assert (status, count, fp) == ("complete", 0, index_lifecycle._EMPTY_FINGERPRINT)
             assert rev >= 0, "revision must be recorded"
-            assert kmod._vector_index_revision is not None
+            assert index_lifecycle._vector_index_revision is not None
         finally:
-            kmod.db = original_db
+            kmod.db, index_lifecycle.db = original_db
             db.close_connection()
 
     def test_dirty_status_forces_rebuild(self, tmp_path, monkeypatch):
@@ -740,9 +742,9 @@ class TestEnsureVectorIndexEndToEnd:
         from api import knowledge as kmod
 
         db = self._make_db(tmp_path)
-        original_db = kmod.db
-        kmod.db = db
-        kmod._vector_index_revision = None
+        original_db = (kmod.db, index_lifecycle.db)
+        kmod.db = index_lifecycle.db = db
+        index_lifecycle._vector_index_revision = None
 
         self._insert_doc_with_chunks(db, 1, "Doc1", ["c0", "c1"])
 
@@ -750,7 +752,7 @@ class TestEnsureVectorIndexEndToEnd:
         # after database revision invalidation increments it
         db.commit_knowledge_index_revision(0, 2, "stale_fp")
         db.mark_knowledge_index_dirty()
-        kmod._invalidate_local_knowledge_index()
+        index_lifecycle._invalidate_local_knowledge_index()
 
         added_docs = {"count": 0}
         class MockVectorDB:
@@ -771,16 +773,16 @@ class TestEnsureVectorIndexEndToEnd:
         self._patch_vector_db(monkeypatch, mock_inst)
 
         try:
-            assert kmod._ensure_vector_index() is True
+            assert index_lifecycle._ensure_vector_index() is True
             assert added_docs["count"] == 2, "dirty status must trigger rebuild"
-            status, count, fp, rev = kmod._read_rebuild_status()
+            status, count, fp, rev = index_lifecycle._read_rebuild_status()
             assert status == "complete"
             assert count == 2
             assert fp and fp != "stale_fp", "fingerprint must be updated after rebuild"
             assert rev == 1, "revision must match the post-dirty revision"
-            assert kmod._vector_index_revision is not None
+            assert index_lifecycle._vector_index_revision is not None
         finally:
-            kmod.db = original_db
+            kmod.db, index_lifecycle.db = original_db
             db.close_connection()
 
 
@@ -790,13 +792,13 @@ class TestEnsureVectorIndexEndToEnd:
         from api import knowledge as kmod
 
         db = self._make_db(tmp_path)
-        original_db = kmod.db
-        kmod.db = db
-        kmod._vector_index_revision = None
+        original_db = (kmod.db, index_lifecycle.db)
+        kmod.db = index_lifecycle.db = db
+        index_lifecycle._vector_index_revision = None
 
         self._insert_doc_with_chunks(db, 1, "Doc1", ["original0", "original1"])
-        fp_before = kmod._compute_chunk_fingerprint()
-        current_rev = kmod._get_rebuild_revision()
+        fp_before = index_lifecycle._compute_chunk_fingerprint()
+        current_rev = index_lifecycle._get_rebuild_revision()
         db.commit_knowledge_index_revision(current_rev, 2, fp_before)
 
         # Update content WITHOUT database revision invalidation (revision unchanged)
@@ -804,7 +806,7 @@ class TestEnsureVectorIndexEndToEnd:
             "UPDATE knowledge_chunks SET content = :new WHERE documentId = 1 AND chunkIndex = 0",
             {"new": "modified0"},
         )
-        fp_after = kmod._compute_chunk_fingerprint()
+        fp_after = index_lifecycle._compute_chunk_fingerprint()
         assert fp_after != fp_before, "content change must produce different fingerprint"
 
         added_docs = {"count": 0}
@@ -826,12 +828,12 @@ class TestEnsureVectorIndexEndToEnd:
         self._patch_vector_db(monkeypatch, mock_inst)
 
         try:
-            assert kmod._ensure_vector_index() is True
+            assert index_lifecycle._ensure_vector_index() is True
             assert added_docs["count"] == 2, "content change must trigger rebuild despite same count"
-            status, count, fp, rev = kmod._read_rebuild_status()
+            status, count, fp, rev = index_lifecycle._read_rebuild_status()
             assert status == "complete" and count == 2 and fp == fp_after
         finally:
-            kmod.db = original_db
+            kmod.db, index_lifecycle.db = original_db
             db.close_connection()
 
 
@@ -843,9 +845,9 @@ class TestEnsureVectorIndexEndToEnd:
         from api import knowledge as kmod
 
         db = self._make_db(tmp_path)
-        original_db = kmod.db
-        kmod.db = db
-        kmod._vector_index_revision = None
+        original_db = (kmod.db, index_lifecycle.db)
+        kmod.db = index_lifecycle.db = db
+        index_lifecycle._vector_index_revision = None
 
         self._insert_doc_with_chunks(db, 1, "Doc1", ["c0", "c1"])
 
@@ -865,20 +867,20 @@ class TestEnsureVectorIndexEndToEnd:
                 self._docs += len(docs)
                 # 真实 CRUD 路径：自增 revision + 写 dirty + 重置 local committed revision
                 db.mark_knowledge_index_dirty()
-                kmod._invalidate_local_knowledge_index()
+                index_lifecycle._invalidate_local_knowledge_index()
 
         mock_inst = MockVectorDB()
         self._patch_vector_db(monkeypatch, mock_inst)
 
         try:
-            result = kmod._ensure_vector_index()
+            result = index_lifecycle._ensure_vector_index()
             assert result is False, "must return False when revision changed during rebuild"
-            status, _, _, _ = kmod._read_rebuild_status()
+            status, _, _, _ = index_lifecycle._read_rebuild_status()
             assert status == "dirty", "status must be dirty after concurrent CRUD path"
             assert added_docs["count"] == 2, "rebuild must still index the documents"
-            assert kmod._vector_index_revision is None
+            assert index_lifecycle._vector_index_revision is None
         finally:
-            kmod.db = original_db
+            kmod.db, index_lifecycle.db = original_db
             db.close_connection()
 
     def test_partial_index_corruption_triggers_rebuild(self, tmp_path, monkeypatch):
@@ -888,13 +890,13 @@ class TestEnsureVectorIndexEndToEnd:
         from api import knowledge as kmod
 
         db = self._make_db(tmp_path)
-        original_db = kmod.db
-        kmod.db = db
-        kmod._vector_index_revision = None
+        original_db = (kmod.db, index_lifecycle.db)
+        kmod.db = index_lifecycle.db = db
+        index_lifecycle._vector_index_revision = None
 
         self._insert_doc_with_chunks(db, 1, "Doc1", ["c0", "c1"])
-        real_fp = kmod._compute_chunk_fingerprint()
-        current_rev = kmod._get_rebuild_revision()
+        real_fp = index_lifecycle._compute_chunk_fingerprint()
+        current_rev = index_lifecycle._get_rebuild_revision()
         db.commit_knowledge_index_revision(current_rev, 2, real_fp)
 
         added_docs = {"count": 0}
@@ -916,11 +918,11 @@ class TestEnsureVectorIndexEndToEnd:
         self._patch_vector_db(monkeypatch, mock_inst)
 
         try:
-            assert kmod._ensure_vector_index() is True
+            assert index_lifecycle._ensure_vector_index() is True
             assert added_docs["count"] == 2, "index_size mismatch must trigger rebuild"
-            assert kmod._vector_index_revision is not None
+            assert index_lifecycle._vector_index_revision is not None
         finally:
-            kmod.db = original_db
+            kmod.db, index_lifecycle.db = original_db
             db.close_connection()
 
     def test_concurrent_crud_in_commit_window_does_not_mark_complete(self, tmp_path, monkeypatch):
@@ -938,9 +940,9 @@ class TestEnsureVectorIndexEndToEnd:
         from api import knowledge as kmod
 
         db = self._make_db(tmp_path)
-        original_db = kmod.db
-        kmod.db = db
-        kmod._vector_index_revision = None
+        original_db = (kmod.db, index_lifecycle.db)
+        kmod.db = index_lifecycle.db = db
+        index_lifecycle._vector_index_revision = None
 
         self._insert_doc_with_chunks(db, 1, "Doc1", ["c0", "c1"])
 
@@ -963,20 +965,20 @@ class TestEnsureVectorIndexEndToEnd:
                 # database revision invalidation 会自增 revision 并设 _vector_index_revision=None。
                 # commit 临界区随后检测到 revision 变化，拒绝标记 complete。
                 db.mark_knowledge_index_dirty()
-                kmod._invalidate_local_knowledge_index()
+                index_lifecycle._invalidate_local_knowledge_index()
 
         mock_inst = MockVectorDB()
         self._patch_vector_db(monkeypatch, mock_inst)
 
         try:
-            result = kmod._ensure_vector_index()
+            result = index_lifecycle._ensure_vector_index()
             assert result is False, "must return False when CRUD happens in commit window"
-            status, _, _, _ = kmod._read_rebuild_status()
+            status, _, _, _ = index_lifecycle._read_rebuild_status()
             assert status == "dirty", "status must be dirty (from concurrent CRUD), not complete"
             assert added_docs["count"] == 2, "rebuild must still index the documents"
-            assert kmod._vector_index_revision is None, "must not set a committed revision"
+            assert index_lifecycle._vector_index_revision is None, "must not set a committed revision"
         finally:
-            kmod.db = original_db
+            kmod.db, index_lifecycle.db = original_db
             db.close_connection()
 
     def test_skip_rebuild_concurrent_crud_does_not_set_built(self, tmp_path, monkeypatch):
@@ -986,26 +988,26 @@ class TestEnsureVectorIndexEndToEnd:
         from api import knowledge as kmod
 
         db = self._make_db(tmp_path)
-        original_db = kmod.db
-        kmod.db = db
-        kmod._vector_index_revision = None
+        original_db = (kmod.db, index_lifecycle.db)
+        kmod.db = index_lifecycle.db = db
+        index_lifecycle._vector_index_revision = None
 
         self._insert_doc_with_chunks(db, 1, "Doc1", ["c0", "c1"])
-        real_fp = kmod._compute_chunk_fingerprint()
-        current_rev = kmod._get_rebuild_revision()
+        real_fp = index_lifecycle._compute_chunk_fingerprint()
+        current_rev = index_lifecycle._get_rebuild_revision()
         db.commit_knowledge_index_revision(current_rev, 2, real_fp)
 
         # Patch _compute_chunk_fingerprint to simulate CRUD during fingerprint calc.
         # The real fingerprint is computed, then a CRUD is triggered (incrementing
         # revision). The commit critical section must detect the mismatch.
-        original_compute_fp = kmod._compute_chunk_fingerprint
+        original_compute_fp = index_lifecycle._compute_chunk_fingerprint
         def fingerprint_with_concurrent_crud():
             fp = original_compute_fp()
             # Simulate CRUD happening right after fingerprint computation
             db.mark_knowledge_index_dirty()
-            kmod._invalidate_local_knowledge_index()
+            index_lifecycle._invalidate_local_knowledge_index()
             return fp
-        monkeypatch.setattr(kmod, "_compute_chunk_fingerprint", fingerprint_with_concurrent_crud)
+        monkeypatch.setattr(index_lifecycle, "_compute_chunk_fingerprint", fingerprint_with_concurrent_crud)
 
         add_called = {"called": False}
         from threading import RLock
@@ -1035,15 +1037,15 @@ class TestEnsureVectorIndexEndToEnd:
             # It falls through to rebuild path. Rebuild will succeed because
             # database revision invalidation already incremented revision; the rebuild's
             # start_revision = latest revision, so commit CAS passes.
-            result = kmod._ensure_vector_index()
+            result = index_lifecycle._ensure_vector_index()
             assert result is True, "rebuild after concurrent CRUD should succeed"
             # add_documents may or may not be called depending on whether
             # rebuild path re-fetches; the key assertion is that the skip
             # branch did NOT set local committed revision without re-checking
-            assert kmod._vector_index_revision is not None
+            assert index_lifecycle._vector_index_revision is not None
             assert add_called["called"], "Unvalidated old snapshot must be rebuilt"
         finally:
-            kmod.db = original_db
+            kmod.db, index_lifecycle.db = original_db
             db.close_connection()
 
     def test_real_document_commit_invalidates_paused_index_completion(self, tmp_path, monkeypatch):
@@ -1057,7 +1059,8 @@ class TestEnsureVectorIndexEndToEnd:
         db = self._make_db(tmp_path)
         other = type(db)(db.db_path)
         monkeypatch.setattr(kmod, 'db', db)
-        monkeypatch.setattr(kmod, '_vector_index_revision', None)
+        monkeypatch.setattr(index_lifecycle, 'db', db)
+        monkeypatch.setattr(index_lifecycle, '_vector_index_revision', None)
         document = db.save_knowledge_document(dict(title='完整规则', content='须书面确认。'), chunks=['须书面确认。'])
         monkeypatch.setattr(vector_db, 'get_vector_db', lambda: RecordingVector())
         entered, committed = Event(), Event()
@@ -1074,7 +1077,7 @@ class TestEnsureVectorIndexEndToEnd:
                 assert entered.wait(5)
                 other.save_knowledge_document(dict(title='新规则'), doc_id=document['id'])
                 committed.set()
-                kmod._invalidate_local_knowledge_index()
+                index_lifecycle._invalidate_local_knowledge_index()
             except Exception as exc:
                 failures.append(exc)
                 committed.set()
@@ -1083,12 +1086,12 @@ class TestEnsureVectorIndexEndToEnd:
         thread = Thread(target=writer)
         thread.start()
         try:
-            assert kmod._ensure_vector_index() is False
+            assert index_lifecycle._ensure_vector_index() is False
             thread.join(5)
             assert not thread.is_alive() and not failures
             assert other.get_knowledge_document(document['id'])['title'] == '新规则'
-            assert kmod._read_rebuild_status()[0] == 'dirty'
-            assert kmod._vector_index_revision is None
+            assert index_lifecycle._read_rebuild_status()[0] == 'dirty'
+            assert index_lifecycle._vector_index_revision is None
         finally:
             entered.set()
             thread.join(5)
@@ -1104,7 +1107,7 @@ class TestEnsureVectorIndexEndToEnd:
         from db.schemas import KnowledgeSearchRequest
         from knowledge import rag_helper
 
-        monkeypatch.setattr(kmod, "_ensure_vector_index", lambda: False)
+        monkeypatch.setattr(index_lifecycle, "_ensure_vector_index", lambda: False)
         factory = Mock(side_effect=AssertionError("incomplete index"))
         monkeypatch.setattr(rag_helper, "get_rag_helper", factory)
         with pytest.raises(HTTPException) as caught:
@@ -1119,9 +1122,9 @@ class TestEnsureVectorIndexEndToEnd:
         from db.schemas import KnowledgeSearchRequest
 
         db = self._make_db(tmp_path)
-        original_db = kmod.db
-        kmod.db = db
-        kmod._vector_index_revision = None
+        original_db = (kmod.db, index_lifecycle.db)
+        kmod.db = index_lifecycle.db = db
+        index_lifecycle._vector_index_revision = None
 
         # 创建两个知识库
         db.execute_sql_insert(
@@ -1147,7 +1150,7 @@ class TestEnsureVectorIndexEndToEnd:
                 {"doc": doc_id, "content": "shared_term body"},
             )
 
-        monkeypatch.setattr(kmod, "_ensure_vector_index", lambda: True)
+        monkeypatch.setattr(index_lifecycle, "_ensure_vector_index", lambda: True)
         from types import SimpleNamespace
 
         from knowledge import rag_helper
@@ -1181,7 +1184,7 @@ class TestEnsureVectorIndexEndToEnd:
             assert len(response_beta["results"]) == 1
             assert response_beta["results"][0]["documentTitle"] == "BetaDoc"
         finally:
-            kmod.db = original_db
+            kmod.db, index_lifecycle.db = original_db
             db.close_connection()
 
     @pytest.mark.asyncio
@@ -1193,8 +1196,8 @@ class TestEnsureVectorIndexEndToEnd:
         from db.schemas import KnowledgeSearchRequest
 
         db = self._make_db(tmp_path)
-        original_db = kmod.db
-        kmod.db = db
+        original_db = (kmod.db, index_lifecycle.db)
+        kmod.db = index_lifecycle.db = db
 
         # 创建一个知识库和文档（不应被检索到）
         db.execute_sql_insert(
@@ -1214,7 +1217,7 @@ class TestEnsureVectorIndexEndToEnd:
         )
 
         # 即使索引重建成功，不存在的知识库名称也应直接返回空，不应进入检索路径
-        monkeypatch.setattr(kmod, "_ensure_vector_index", lambda: True)
+        monkeypatch.setattr(index_lifecycle, "_ensure_vector_index", lambda: True)
 
         # 跟踪 RAG/vector 是否被调用
         rag_called = {"value": False}
@@ -1238,7 +1241,7 @@ class TestEnsureVectorIndexEndToEnd:
             assert response["searchType"] == "empty"
             assert not rag_called["value"], "RAG must not be invoked for nonexistent KB"
         finally:
-            kmod.db = original_db
+            kmod.db, index_lifecycle.db = original_db
             db.close_connection()
 
 

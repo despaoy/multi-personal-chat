@@ -4,6 +4,8 @@ Resolver and retrieval components are controlled; these are routing tests,
 not native authorization, vector quality, or actual model evaluations.
 """
 
+from knowledge import index_lifecycle
+
 import json
 from threading import RLock
 from types import SimpleNamespace
@@ -57,7 +59,7 @@ async def binding(*, empty=False):
 
 @pytest.mark.parametrize("curated_error", [False, True])
 async def test_api_preserves_normal_business_or_propagates_curated_fault(monkeypatch, curated_error):
-    from api import generate, knowledge
+    from api import generate
     from knowledge import rag_helper, vector_db
     from knowledge.multiscale_rag import runtime
 
@@ -83,9 +85,9 @@ async def test_api_preserves_normal_business_or_propagates_curated_fault(monkeyp
     monkeypatch.setattr(
         runtime, "get_multiscale_rag_service", lambda: SimpleNamespace(config=config(), retrieve_with_citations=curated)
     )
-    monkeypatch.setattr(knowledge, "_ensure_vector_index", lambda: calls.append("fresh") or True)
-    monkeypatch.setattr(knowledge, "_vector_index_revision", 88)
-    monkeypatch.setattr(knowledge, "_get_rebuild_revision", lambda: 88)
+    monkeypatch.setattr(index_lifecycle, "_ensure_vector_index", lambda: calls.append("fresh") or True)
+    monkeypatch.setattr(index_lifecycle, "_vector_index_revision", 88)
+    monkeypatch.setattr(index_lifecycle, "_get_rebuild_revision", lambda: 88)
     monkeypatch.setattr(
         vector_db,
         "get_vector_db",

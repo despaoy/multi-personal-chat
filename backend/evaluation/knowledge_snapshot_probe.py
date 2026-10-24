@@ -1,5 +1,7 @@
 """A new ordinary generation on real, concurrently published complete sources."""
 
+from knowledge import index_lifecycle
+
 import hashlib
 import json
 import shutil
@@ -14,7 +16,6 @@ async def run_snapshot_probe(
 ):
     import asyncpg
 
-    from api import knowledge
     from knowledge import vector_db
 
     async def parent_snapshot():
@@ -52,14 +53,14 @@ async def run_snapshot_probe(
     proof["legacy"] = {
         "stats": vector.get_stats(),
         "validated": vector.snapshot_validated,
-        "may_skip": knowledge._loaded_metadata_matches_database(vector),
+        "may_skip": index_lifecycle._loaded_metadata_matches_database(vector),
     }
     response = await client.post("/api/knowledge/search", json={"query": "LL-842-Q", "topK": 3})
     proof["migration"] = {
         "http_status": response.status_code,
         "validated": vector.snapshot_validated,
-        "revision": knowledge._get_rebuild_revision(),
-        "status": knowledge._read_rebuild_status(),
+        "revision": index_lifecycle._get_rebuild_revision(),
+        "status": index_lifecycle._read_rebuild_status(),
     }
     assert response.status_code == 200 and vector.snapshot_validated
     folder = output.parent / "stage51-storage-fixed"
@@ -74,7 +75,7 @@ async def run_snapshot_probe(
     # Start a genuinely cold vector reader on the saved real writer snapshot.
     vector = vector_db.VectorDatabase(str(output / "vectors"))
     vector_db._vector_db = vector
-    knowledge._vector_index_revision = None
+    index_lifecycle._vector_index_revision = None
     proof["cold_snapshot"] = {
         "validated": vector.snapshot_validated,
         "metadata_ids": [d["id"] for d in vector.metadata],

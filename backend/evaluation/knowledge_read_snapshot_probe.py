@@ -1,5 +1,7 @@
 """Real keyword fallback crossing its unchanged 500-row page boundary."""
 
+from knowledge import index_lifecycle
+
 import asyncio
 import hashlib
 import json
@@ -29,7 +31,6 @@ async def run_read_snapshot_probe(
 ):
     import asyncpg
 
-    from api import knowledge
     from knowledge.vector_db import get_vector_db
 
     async def parent_snapshot():
@@ -94,7 +95,7 @@ async def run_read_snapshot_probe(
     proof["initial_paired_documents"] = [database.get_knowledge_document(i) for i in ids]
     proof["noise_count"] = len(noise)
     proof["noise_digest"] = hashlib.sha256(json.dumps(noise, sort_keys=True, default=str).encode()).hexdigest()
-    proof["expected_count"] = knowledge._get_expected_chunk_count()
+    proof["expected_count"] = index_lifecycle._get_expected_chunk_count()
     assert proof["expected_count"] == 503
     vector = get_vector_db()
     folder = vector.db_path

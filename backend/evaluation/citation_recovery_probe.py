@@ -57,7 +57,7 @@ async def run_citation_recovery_probe(
     bundle = source_proof["retrieval_diagnostics"][0]["bundle"]
     documents = tuple(bundle["results"])
     citations = tuple(dict(c, id=c["source_id"]) for c in bundle["citations"])
-    from api.knowledge import _vector_chunk_document
+    from knowledge.index_lifecycle import _vector_chunk_document
 
     kb_names = {kb["id"]: kb["name"] for kb in database.get_knowledge_bases()}
     actual = {

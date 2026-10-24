@@ -1,5 +1,7 @@
 """Complete question bindings precede and constrain domain routing."""
 
+from knowledge import index_lifecycle
+
 import copy
 import json
 from types import SimpleNamespace
@@ -102,7 +104,7 @@ async def test_cancellation_propagates_without_invented_binding():
 async def test_generic_route_reaches_fresh_authority_and_full_body(monkeypatch):
     from threading import RLock
 
-    from api import generate, knowledge
+    from api import generate
     from knowledge import rag_helper, vector_db
     from knowledge.multiscale_rag import runtime
 
@@ -126,9 +128,9 @@ async def test_generic_route_reaches_fresh_authority_and_full_body(monkeypatch):
         "get_multiscale_rag_service",
         lambda: SimpleNamespace(config=config(), retrieve_with_citations=no_character),
     )
-    monkeypatch.setattr(knowledge, "_ensure_vector_index", lambda: calls.append("fresh") or True)
-    monkeypatch.setattr(knowledge, "_vector_index_revision", 77)
-    monkeypatch.setattr(knowledge, "_get_rebuild_revision", lambda: 77)
+    monkeypatch.setattr(index_lifecycle, "_ensure_vector_index", lambda: calls.append("fresh") or True)
+    monkeypatch.setattr(index_lifecycle, "_vector_index_revision", 77)
+    monkeypatch.setattr(index_lifecycle, "_get_rebuild_revision", lambda: 77)
     monkeypatch.setattr(
         vector_db,
         "get_vector_db",

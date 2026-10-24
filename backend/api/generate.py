@@ -1,5 +1,7 @@
 """消息生成API - 支持vLLM高并发推理"""
 
+from knowledge import index_lifecycle
+
 import asyncio
 import functools
 import hashlib
@@ -1077,7 +1079,6 @@ async def _retrieve_rag_bundle(
         return retrieve_generic()
 
     def retrieve_generic() -> dict[str, Any]:
-        from api import knowledge as knowledge_api
         from knowledge.rag_helper import get_rag_helper
         from knowledge.source_expansion import expand_source_context
         from knowledge.vector_db import get_vector_db
@@ -1085,12 +1086,12 @@ async def _retrieve_rag_bundle(
         # A normal generation does not necessarily follow the search API.
         # Resolve dirty metadata/content before consulting cached RAG
         # lookup; an incomplete rebuild cannot authorize stale source evidence.
-        if not knowledge_api._ensure_vector_index():
+        if not index_lifecycle._ensure_vector_index():
             raise RuntimeError("Generic knowledge index is not ready")
 
         vector_db = get_vector_db()
         generation = vector_db.cache_generation
-        revision = knowledge_api._vector_index_revision
+        revision = index_lifecycle._vector_index_revision
         binding_options = {"question_binding": question_binding} if question_binding is not None else {}
         bundle = get_rag_helper().retrieve_with_citations(query, top_k=top_k, filters=filters, **binding_options)
         budget = get_provider_context_budget()
@@ -1098,7 +1099,7 @@ async def _retrieve_rag_bundle(
             bundle, vector_db, expected_generation=generation,
             source_budget_tokens=budget.window_tokens, filters=filters, query=query,
         )
-        if knowledge_api._get_rebuild_revision() != revision:
+        if index_lifecycle._get_rebuild_revision() != revision:
             raise RuntimeError("Knowledge authority changed during retrieval")
         from knowledge.original_sources import attach_original_sources
 
@@ -1107,7 +1108,7 @@ async def _retrieve_rag_bundle(
             source_budget_tokens=budget.window_tokens,
             authority_revision=revision,
         )
-        if knowledge_api._get_rebuild_revision() != revision:
+        if index_lifecycle._get_rebuild_revision() != revision:
             raise RuntimeError("Knowledge authority changed during retrieval")
         if expanded is not bundle:
             expanded["citations"] = get_rag_helper().build_citations(expanded["results"])

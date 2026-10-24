@@ -1,5 +1,7 @@
 """Same-object businesses need independent candidates from complete source data."""
 
+from knowledge import index_lifecycle
+
 import json
 from copy import deepcopy
 from types import SimpleNamespace
@@ -49,8 +51,9 @@ async def arrange(tmp_path, monkeypatch):
         category="规程", knowledge_base_id=base["id"]), chunks=[body]) for body in BODIES]
     monkeypatch.setenv("RERANKER_ENABLED", "false")
     monkeypatch.setattr(knowledge, "db", database)
+    monkeypatch.setattr(index_lifecycle, "db", database)
     monkeypatch.setattr(generate, "db", database)
-    monkeypatch.setattr(knowledge, "_vector_index_revision", None)
+    monkeypatch.setattr(index_lifecycle, "_vector_index_revision", None)
     monkeypatch.setattr(vector_db.VectorDatabase, "_check_gpu_availability", lambda _: False)
     vector = vector_db.VectorDatabase(str(tmp_path / "vectors"), vector_db.IndexConfig(index_type="flat"))
 
@@ -76,7 +79,7 @@ async def arrange(tmp_path, monkeypatch):
     monkeypatch.setattr(vector_db, "sentence_transformer_embeddings", lambda _model, texts, **options: encode(texts, **options))
     monkeypatch.setattr(vector_db, "get_vector_db", lambda: vector)
     monkeypatch.setattr(rag_helper, "get_vector_db", lambda: vector)
-    assert knowledge._ensure_vector_index()
+    assert index_lifecycle._ensure_vector_index()
     helper = rag_helper.RAGHelper()
     monkeypatch.setattr(rag_helper, "get_rag_helper", lambda: helper)
     for task, document in zip(obligations, (documents[0], documents[-1]), strict=True):

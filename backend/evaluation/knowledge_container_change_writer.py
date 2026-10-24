@@ -1,5 +1,7 @@
 """Independent actual admin requests for rename and folder removal."""
 
+from knowledge import index_lifecycle
+
 import asyncio
 import json
 import os
@@ -19,7 +21,6 @@ async def main():
     os.environ["AUDIT_LOG_DIR"] = str(output / f"audit-{label}")
     import httpx
 
-    from api import knowledge
     from app.main import create_app
     from db.adapter import db
 
@@ -51,8 +52,8 @@ async def main():
         proof["after_base"] = db.get_knowledge_base(request["kb_id"])
         proof["after_folder"] = db.get_knowledge_folder(request["folder_id"])
         proof["after_document"] = db.get_knowledge_document(request["doc_id"])
-        proof["after_revision"] = knowledge._get_rebuild_revision()
-        proof["after_status"] = knowledge._read_rebuild_status()
+        proof["after_revision"] = index_lifecycle._get_rebuild_revision()
+        proof["after_status"] = index_lifecycle._read_rebuild_status()
         proof["sync_pending_final"] = len(db._pending)
     (output / (label + "-result.json")).write_text(json.dumps(proof, ensure_ascii=False, indent=2, default=str))
 

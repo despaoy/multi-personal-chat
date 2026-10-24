@@ -1,5 +1,7 @@
 """Fictional source authorities exercise real review and final packet admission."""
 
+from knowledge import index_lifecycle
+
 import copy
 import json
 from dataclasses import replace
@@ -254,7 +256,7 @@ async def test_actual_api_mixed_retrieval_reads_fresh_business_after_curated_suc
 def install_api_retrieval(config, monkeypatch, filters=None):
     from threading import RLock
 
-    from api import generate, knowledge
+    from api import generate
     from knowledge import rag_helper, vector_db
     from knowledge.multiscale_rag import runtime
 
@@ -273,9 +275,9 @@ def install_api_retrieval(config, monkeypatch, filters=None):
 
     character = SimpleNamespace(config=config, retrieve_with_citations=actual_curated, is_warm=lambda: True)
     monkeypatch.setattr(runtime, "get_multiscale_rag_service", lambda: character)
-    monkeypatch.setattr(knowledge, "_ensure_vector_index", lambda: calls.append("fresh") or True)
-    monkeypatch.setattr(knowledge, "_vector_index_revision", 79)
-    monkeypatch.setattr(knowledge, "_get_rebuild_revision", lambda: 79)
+    monkeypatch.setattr(index_lifecycle, "_ensure_vector_index", lambda: calls.append("fresh") or True)
+    monkeypatch.setattr(index_lifecycle, "_vector_index_revision", 79)
+    monkeypatch.setattr(index_lifecycle, "_get_rebuild_revision", lambda: 79)
     monkeypatch.setattr(
         vector_db,
         "get_vector_db",

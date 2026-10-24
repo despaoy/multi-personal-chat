@@ -209,7 +209,7 @@ def expand_history(fixture):
 
 def capture_storage_proof(proof, output):
     """Snapshot adapter-owned facts while application resources remain open."""
-    from api.knowledge import _get_expected_chunk_count
+    from knowledge.index_lifecycle import _get_expected_chunk_count
     from knowledge.vector_db import VectorDatabase
 
     proof["persisted_vector_stats"] = VectorDatabase(db_path=str(output / "vectors")).get_stats()

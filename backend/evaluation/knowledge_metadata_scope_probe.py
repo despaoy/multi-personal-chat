@@ -1,5 +1,7 @@
 """One new metadata-only document migration, real retrieval and pro answer."""
 
+from knowledge import index_lifecycle
+
 import json
 from copy import deepcopy
 
@@ -10,7 +12,6 @@ from services.turn_completion import get_turn_completion_runtime
 async def run_metadata_scope_probe(
     client, args, proof, fixture, cloud_calls, *, database, runtime, output, capture_storage_proof
 ):
-    from api import knowledge
     from knowledge.vector_db import get_vector_db
 
     vector = get_vector_db()
@@ -45,15 +46,15 @@ async def run_metadata_scope_probe(
 
     warm = await search("original_scope_warm", fixture["knowledge_bases"][0])
     assert any(r["documentId"] == f"doc_{doc_id}_chunk_0" for r in warm["response"]["results"])
-    assert (knowledge._vector_index_revision is not None)
+    assert (index_lifecycle._vector_index_revision is not None)
     proof["before_update"] = dict(
         document=database.get_knowledge_document(doc_id),
         chunks=database.get_knowledge_chunks(doc_id),
         vector_metadata=deepcopy(vector.metadata),
         cache_generation=vector.cache_generation,
-        revision=knowledge._get_rebuild_revision(),
-        status=knowledge._read_rebuild_status(),
-        index_built=(knowledge._vector_index_revision is not None),
+        revision=index_lifecycle._get_rebuild_revision(),
+        status=index_lifecycle._read_rebuild_status(),
+        index_built=(index_lifecycle._vector_index_revision is not None),
     )
     payload = dict(**fixture["metadata_update"], knowledge_base_id=bases[1])
     proof["actual_update_payload"] = payload
@@ -65,9 +66,9 @@ async def run_metadata_scope_probe(
         chunks=database.get_knowledge_chunks(doc_id),
         vector_metadata=deepcopy(vector.metadata),
         cache_generation=vector.cache_generation,
-        revision=knowledge._get_rebuild_revision(),
-        status=knowledge._read_rebuild_status(),
-        index_built=(knowledge._vector_index_revision is not None),
+        revision=index_lifecycle._get_rebuild_revision(),
+        status=index_lifecycle._read_rebuild_status(),
+        index_built=(index_lifecycle._vector_index_revision is not None),
     )
     # No search/index repair between the actual update and ordinary generation.
     before = len(cloud_calls)
@@ -94,9 +95,9 @@ async def run_metadata_scope_probe(
     proof["after_generation"] = dict(
         vector_metadata=deepcopy(vector.metadata),
         cache_generation=vector.cache_generation,
-        revision=knowledge._get_rebuild_revision(),
-        status=knowledge._read_rebuild_status(),
-        index_built=(knowledge._vector_index_revision is not None),
+        revision=index_lifecycle._get_rebuild_revision(),
+        status=index_lifecycle._read_rebuild_status(),
+        index_built=(index_lifecycle._vector_index_revision is not None),
     )
     await search("old_scope_after_update", fixture["knowledge_bases"][0])
     await search("new_scope_after_update", fixture["knowledge_bases"][1])

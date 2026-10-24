@@ -1,5 +1,7 @@
 """Exact named reads use verified source authority, never weak semantic candidates."""
 
+from knowledge import index_lifecycle
+
 from threading import RLock
 
 import pytest
@@ -114,14 +116,14 @@ def test_budget_exhausted_is_located_but_not_visible_or_usable_evidence():
 
 
 async def test_named_read_rejects_original_authority_revision_race(monkeypatch):
-    from api import generate, knowledge
+    from api import generate
     from knowledge import rag_helper, vector_db
 
     v = vector([row(1, "A")])
     revision = [77]
-    monkeypatch.setattr(knowledge, "_ensure_vector_index", lambda: True)
-    monkeypatch.setattr(knowledge, "_vector_index_revision", 77)
-    monkeypatch.setattr(knowledge, "_get_rebuild_revision", lambda: revision[0])
+    monkeypatch.setattr(index_lifecycle, "_ensure_vector_index", lambda: True)
+    monkeypatch.setattr(index_lifecycle, "_vector_index_revision", 77)
+    monkeypatch.setattr(index_lifecycle, "_get_rebuild_revision", lambda: revision[0])
     monkeypatch.setattr(vector_db, "get_vector_db", lambda: v)
 
     class Helper:

@@ -1,5 +1,7 @@
 """Publish arrangement then confirmation through independent authenticated requests."""
 
+from knowledge import index_lifecycle
+
 import asyncio
 import json
 import os
@@ -15,7 +17,6 @@ async def main():
     os.environ["AUDIT_LOG_DIR"] = str(output / "writer-audit")
     import httpx
 
-    from api import knowledge
     from app.main import create_app
     from db.adapter import db
 
@@ -29,7 +30,7 @@ async def main():
     def snapshot():
         return {
             "documents": [db.get_knowledge_document(i) for i in request["ids"]],
-            "revision": knowledge._get_rebuild_revision(),
+            "revision": index_lifecycle._get_rebuild_revision(),
         }
 
     async with (

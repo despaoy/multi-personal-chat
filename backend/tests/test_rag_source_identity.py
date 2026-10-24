@@ -6,7 +6,7 @@ from unittest.mock import Mock
 import numpy as np
 import pytest
 
-from api.knowledge import _vector_chunk_document
+from knowledge.index_lifecycle import _vector_chunk_document
 from knowledge import rag_helper
 from knowledge.vector_db import IndexConfig, VectorDatabase
 

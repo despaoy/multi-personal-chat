@@ -1,5 +1,7 @@
 """A proven source scope cannot be replaced by a second keyword decision."""
 
+from knowledge import index_lifecycle
+
 import json
 from types import SimpleNamespace
 from unittest.mock import Mock
@@ -10,7 +12,6 @@ from scope_fixtures import open_scope_response
 from test_multiscale_card_recall import ControlledRanking, arrange
 
 from api import generate
-from api import knowledge as knowledge_api
 from knowledge.multiscale_rag import runtime as runtime_module
 from knowledge.multiscale_rag.runtime import MultiScaleRagRuntime, _retrieval_index
 from knowledge.multiscale_rag.service import RoutedMultiScaleService
@@ -49,7 +50,7 @@ def setup_scope(tmp_path, monkeypatch):
     runtime._service = service
     monkeypatch.setattr(runtime_module, "get_multiscale_rag_service", lambda: runtime)
     generic = Mock(side_effect=GenericRouteReached("Generic route selected"))
-    monkeypatch.setattr(knowledge_api, "_ensure_vector_index", generic)
+    monkeypatch.setattr(index_lifecycle, "_ensure_vector_index", generic)
     return SimpleNamespace(
         runtime=runtime, service=service, config=rig.config, embedding=rig.embedding, generic=generic
     )

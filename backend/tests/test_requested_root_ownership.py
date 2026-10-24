@@ -1,5 +1,7 @@
 """Complete synthetic source ownership, not native private fixtures."""
 
+from knowledge import index_lifecycle
+
 import copy
 from types import SimpleNamespace
 
@@ -207,7 +209,7 @@ def test_referenced_context_cannot_survive_omitted_root_in_generation_budget():
 
 
 async def test_real_retrieval_assembly_attaches_only_scoped_complete_original_bodies(monkeypatch):
-    from api import generate, knowledge
+    from api import generate
     from knowledge import rag_helper, vector_db
 
     docs = [
@@ -220,9 +222,9 @@ async def test_real_retrieval_assembly_attaches_only_scoped_complete_original_bo
     ]
     records = [d | dict(id=f"doc_{d['id']}_chunk_0", document_id=d["id"], chunk_index=0) for d in docs]
     indexed = vector(records)
-    monkeypatch.setattr(knowledge, "_ensure_vector_index", lambda: True)
-    monkeypatch.setattr(knowledge, "_vector_index_revision", 77)
-    monkeypatch.setattr(knowledge, "_get_rebuild_revision", lambda: 77)
+    monkeypatch.setattr(index_lifecycle, "_ensure_vector_index", lambda: True)
+    monkeypatch.setattr(index_lifecycle, "_vector_index_revision", 77)
+    monkeypatch.setattr(index_lifecycle, "_get_rebuild_revision", lambda: 77)
     monkeypatch.setattr(vector_db, "get_vector_db", lambda: indexed)
     monkeypatch.setattr(
         generate, "db", SimpleNamespace(get_knowledge_document=lambda i: next(d for d in docs if d["id"] == i))

@@ -1,5 +1,7 @@
 """Original-body grants require fresh scope, whole actual wire packets and exact body fingerprints."""
 
+from knowledge import index_lifecycle
+
 import copy
 import json
 import re
@@ -212,7 +214,7 @@ def test_abstention_never_reads_or_grants_raw_originals():
 
 
 async def test_revision_change_during_original_read_rejects_whole_retrieval(monkeypatch):
-    from api import generate, knowledge
+    from api import generate
     from knowledge import rag_helper, vector_db
 
     anchor = record()
@@ -222,9 +224,9 @@ async def test_revision_change_during_original_read_rejects_whole_retrieval(monk
     v.snapshot_validated = True
     v.metadata = [anchor]
     revision = [77]
-    monkeypatch.setattr(knowledge, "_ensure_vector_index", lambda: True)
-    monkeypatch.setattr(knowledge, "_vector_index_revision", 77)
-    monkeypatch.setattr(knowledge, "_get_rebuild_revision", lambda: revision[0])
+    monkeypatch.setattr(index_lifecycle, "_ensure_vector_index", lambda: True)
+    monkeypatch.setattr(index_lifecycle, "_vector_index_revision", 77)
+    monkeypatch.setattr(index_lifecycle, "_get_rebuild_revision", lambda: revision[0])
     monkeypatch.setattr(vector_db, "get_vector_db", lambda: v)
 
     class Helper:

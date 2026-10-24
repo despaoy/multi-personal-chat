@@ -1,5 +1,7 @@
 """Actual authenticated writes; a gate delays a real revision read unchanged."""
 
+from knowledge import index_lifecycle
+
 import asyncio
 import json
 import os
@@ -21,7 +23,6 @@ async def main():
     os.environ["AUDIT_LOG_DIR"] = str(output / f"audit-{label}")
     import httpx
 
-    from api import knowledge
     from app.main import create_app
     from db.adapter import db
 
@@ -48,7 +49,7 @@ async def main():
         assert proof["auth_statuses"] == [200, 200]
         proof["role"] = me.json()["user"]["role"]
         assert proof["role"] == "admin"
-        proof["before_revision"] = knowledge._get_rebuild_revision()
+        proof["before_revision"] = index_lifecycle._get_rebuild_revision()
         gated = False
 
         def hold(value, location):
@@ -78,19 +79,19 @@ async def main():
 
                 knowledge_index_state.parse_revision = observed_parse
             else:
-                original = knowledge._get_rebuild_revision
+                original = index_lifecycle._get_rebuild_revision
 
                 def observed_read():
                     value = original()
                     hold(value, "unlocked_original_api_read")
                     return value
 
-                knowledge._get_rebuild_revision = observed_read
+                index_lifecycle._get_rebuild_revision = observed_read
         updated = await client.put(f"/api/knowledge/documents/{request['doc_id']}", json=request["payload"])
         proof["update_response"] = dict(http_status=updated.status_code, response=updated.json())
         assert updated.status_code == 200
-        proof["after_revision"] = knowledge._get_rebuild_revision()
-        proof["after_status"] = knowledge._read_rebuild_status()
+        proof["after_revision"] = index_lifecycle._get_rebuild_revision()
+        proof["after_status"] = index_lifecycle._read_rebuild_status()
         proof["sync_pending_final"] = len(db._pending)
     (output / f"{label}-result.json").write_text(json.dumps(proof, ensure_ascii=False, indent=2, default=str))
 

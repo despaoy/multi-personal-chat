@@ -1,5 +1,7 @@
 """Two new citation questions against unchanged, verified parent documents."""
 
+from knowledge import index_lifecycle
+
 import hashlib
 import json
 
@@ -12,7 +14,6 @@ async def run_citation_policy_probe(
 ):
     import asyncpg
 
-    from api import knowledge
 
     async def parent_snapshot():
         connection = await asyncpg.connect(
@@ -52,7 +53,7 @@ async def run_citation_policy_probe(
     proof["initial_chunks"] = source_proof["final_chunks"]
     proof["document_imports_replayed"] = 0
     proof["document_mutations"] = 0
-    proof["initial_revision"] = knowledge._get_rebuild_revision()
+    proof["initial_revision"] = index_lifecycle._get_rebuild_revision()
     proof["new_queries_distinct_from_parent"] = all(
         c["message"] not in [old["message"] for old in source_proof["cases"]] for c in fixture["cases"]
     )
@@ -92,7 +93,7 @@ async def run_citation_policy_probe(
     proof["sync_pending_final"] = len(database._pending)
     proof["final_documents"] = [database.get_knowledge_document(d["id"]) for d in proof["initial_documents"]]
     proof["final_chunks"] = {str(d["id"]): database.get_knowledge_chunks(d["id"]) for d in proof["initial_documents"]}
-    proof["final_revision"] = knowledge._get_rebuild_revision()
+    proof["final_revision"] = index_lifecycle._get_rebuild_revision()
     proof["parent_source_unchanged"] = parent_before == await parent_snapshot()
     capture_storage_proof(proof, output)
     from evaluation.citation_policy_consistency_audit import audit_citation_policy

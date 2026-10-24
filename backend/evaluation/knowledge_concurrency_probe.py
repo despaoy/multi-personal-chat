@@ -1,5 +1,7 @@
 """A delayed real writer read, intervening commits and one new pro answer."""
 
+from knowledge import index_lifecycle
+
 import asyncio
 import hashlib
 import json
@@ -28,7 +30,7 @@ async def run_concurrency_probe(
 ):
     import asyncpg
 
-    from api import generate, knowledge
+    from api import generate
     from knowledge.vector_db import get_vector_db
 
     async def connect(name):
@@ -90,9 +92,9 @@ async def run_concurrency_probe(
             document=database.get_knowledge_document(doc_id),
             vector_metadata=deepcopy(vector.metadata),
             cache_generation=vector.cache_generation,
-            revision=knowledge._get_rebuild_revision(),
-            status=knowledge._read_rebuild_status(),
-            index_built=(knowledge._vector_index_revision is not None),
+            revision=index_lifecycle._get_rebuild_revision(),
+            status=index_lifecycle._read_rebuild_status(),
+            index_built=(index_lifecycle._vector_index_revision is not None),
         )
 
     async def search(label):

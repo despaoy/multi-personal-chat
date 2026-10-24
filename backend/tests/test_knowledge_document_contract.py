@@ -1,5 +1,7 @@
 """Document patches preserve meaning and failed writes expose only safe errors."""
 
+from knowledge import index_lifecycle
+
 import sqlite3
 from types import SimpleNamespace
 from unittest.mock import Mock
@@ -37,10 +39,11 @@ def documents(tmp_path, monkeypatch):
         ),
         chunks=[OLD],
     )
-    revision = db.get_config_value(knowledge._VECTOR_REBUILD_REVISION_KEY)
+    revision = db.get_config_value(index_lifecycle._VECTOR_REBUILD_REVISION_KEY)
     assert db.commit_knowledge_index_revision(revision, 1, "synthetic")
     monkeypatch.setattr(knowledge, "db", db)
-    monkeypatch.setattr(knowledge, "_vector_index_revision", revision)
+    monkeypatch.setattr(index_lifecycle, "db", db)
+    monkeypatch.setattr(index_lifecycle, "_vector_index_revision", revision)
     return SimpleNamespace(db=db, row=row, revision=revision, destination=destination, target=target)
 
 
@@ -99,9 +102,9 @@ async def test_document_patch_preserves_full_partial_empty_and_null_semantics(do
     else:
         assert chunks == old_chunks and stored["chunkCount"] == 1
     changed = mode in {"all", "metadata", "empty"}
-    assert knowledge._get_rebuild_revision() == rig.revision + int(changed)
-    assert knowledge._read_rebuild_status()[0] == ("dirty" if changed else "complete")
-    assert knowledge._vector_index_revision is None
+    assert index_lifecycle._get_rebuild_revision() == rig.revision + int(changed)
+    assert index_lifecycle._read_rebuild_status()[0] == ("dirty" if changed else "complete")
+    assert index_lifecycle._vector_index_revision is None
 
 
 @pytest.mark.parametrize("operation", ["create", "update", "delete"])
@@ -118,7 +121,7 @@ async def test_atomic_document_write_error_preserves_data_and_safe_cause(documen
     assert "synthetic-private" not in str(caught.value.detail) + caplog.text
     assert "IntegrityError" in caplog.text
     assert snapshot(rig) == before
-    assert (knowledge._vector_index_revision is not None) and knowledge._vector_index_revision == rig.revision
+    assert (index_lifecycle._vector_index_revision is not None) and index_lifecycle._vector_index_revision == rig.revision
 
 
 @pytest.mark.parametrize("operation", ["create", "update", "delete"])
@@ -136,7 +139,7 @@ async def test_document_lookup_failure_preserves_original_cause_without_writing(
             await invoke(rig, operation)
     assert caught.value.status_code == 500 and caught.value.__cause__ is failure
     assert "synthetic-private" not in str(caught.value.detail) + caplog.text
-    assert snapshot(rig) == before and (knowledge._vector_index_revision is not None)
+    assert snapshot(rig) == before and (index_lifecycle._vector_index_revision is not None)
     lookup.assert_called_once()
 
 

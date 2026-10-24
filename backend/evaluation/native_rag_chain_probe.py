@@ -347,7 +347,7 @@ async def main(args):
                 all(v in wire for v in case["knowledge_expected"]) for wire in wires
             )
         checks.update(audit_rag_wire(proof, cloud_calls, fixture))
-        from api.knowledge import _get_expected_chunk_count
+        from knowledge.index_lifecycle import _get_expected_chunk_count
         from knowledge.vector_db import VectorDatabase
 
         reopened = VectorDatabase(db_path=str(OUT / "vectors")).get_stats()

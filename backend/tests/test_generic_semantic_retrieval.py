@@ -5,6 +5,8 @@ object-binding parser, source expansion and fresh original reads are used.
 Only embeddings/review outputs are controlled; no real model or network.
 """
 
+from knowledge import index_lifecycle
+
 import json
 from types import SimpleNamespace
 from unittest.mock import Mock
@@ -44,8 +46,9 @@ async def arrange_generic_plan(tmp_path, monkeypatch):
     ) for name, body in zip(NAMES, BODIES, strict=True)]
     monkeypatch.setenv("RERANKER_ENABLED", "false")
     monkeypatch.setattr(knowledge, "db", database)
+    monkeypatch.setattr(index_lifecycle, "db", database)
     monkeypatch.setattr(generate, "db", database)
-    monkeypatch.setattr(knowledge, "_vector_index_revision", None)
+    monkeypatch.setattr(index_lifecycle, "_vector_index_revision", None)
     monkeypatch.setattr(vector_db.VectorDatabase, "_check_gpu_availability", lambda _: False)
     vector = vector_db.VectorDatabase(str(tmp_path / "vectors"), vector_db.IndexConfig(index_type="flat"))
 
@@ -64,7 +67,7 @@ async def arrange_generic_plan(tmp_path, monkeypatch):
     monkeypatch.setattr(vector_db, "sentence_transformer_embeddings", lambda _model, texts, **options: encode(texts, **options))
     monkeypatch.setattr(vector_db, "get_vector_db", lambda: vector)
     monkeypatch.setattr(rag_helper, "get_vector_db", lambda: vector)
-    assert knowledge._ensure_vector_index() is True
+    assert index_lifecycle._ensure_vector_index() is True
     helper = rag_helper.RAGHelper()
     monkeypatch.setattr(rag_helper, "get_rag_helper", lambda: helper)
     budget = get_provider_context_budget(
@@ -129,7 +132,7 @@ async def test_generic_plan_keeps_both_bound_objects_and_fresh_full_sources(tmp_
         receipts = [row["original_source_receipt"] for row in bundle["source_coverage"]]
         assert len(receipts) == 2
         assert all(receipt["authority"] == "fresh_knowledge_document_read" and receipt["candidate_included"] for receipt in receipts)
-        assert {receipt["authority_revision"] for receipt in receipts} == {knowledge._get_rebuild_revision()}
+        assert {receipt["authority_revision"] for receipt in receipts} == {index_lifecycle._get_rebuild_revision()}
         rig.forbidden_curated.assert_not_called()
     finally:
         rig.database.close_connection()
@@ -171,6 +174,6 @@ async def test_generic_index_failure_still_stops_api_with_503_before_answer(tmp_
         assert "synthetic index publication failure" in str(caught.value.__cause__)
         assert len(planning) == 1 and not rig.searches and not rig.helper._query_cache
         failed_publication.assert_called_once()
-        assert knowledge._read_rebuild_status()[0] != "complete" and knowledge._vector_index_revision is None
+        assert index_lifecycle._read_rebuild_status()[0] != "complete" and index_lifecycle._vector_index_revision is None
     finally:
         rig.database.close_connection()

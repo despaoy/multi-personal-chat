@@ -1,5 +1,7 @@
 """Only the source expansion, authority and final packet budget boundaries."""
 
+from knowledge import index_lifecycle
+
 import copy
 from threading import RLock
 
@@ -139,15 +141,15 @@ def test_abstained_candidates_never_gain_source_support():
 
 
 async def test_database_revision_change_during_retrieval_rejects_expanded_evidence(monkeypatch):
-    from api import generate, knowledge
+    from api import generate
     from knowledge import rag_helper, vector_db
 
     anchor = row(0)
     database = vector([anchor, row(1)])
     revision = [77]
-    monkeypatch.setattr(knowledge, "_ensure_vector_index", lambda: True)
-    monkeypatch.setattr(knowledge, "_vector_index_revision", 77)
-    monkeypatch.setattr(knowledge, "_get_rebuild_revision", lambda: revision[0])
+    monkeypatch.setattr(index_lifecycle, "_ensure_vector_index", lambda: True)
+    monkeypatch.setattr(index_lifecycle, "_vector_index_revision", 77)
+    monkeypatch.setattr(index_lifecycle, "_get_rebuild_revision", lambda: revision[0])
     monkeypatch.setattr(vector_db, "get_vector_db", lambda: database)
 
     def retrieve(*args, **kwargs):

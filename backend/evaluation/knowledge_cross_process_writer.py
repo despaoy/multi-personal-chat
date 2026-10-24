@@ -1,5 +1,7 @@
 """A separate authenticated writer against the disposable reader database."""
 
+from knowledge import index_lifecycle
+
 import asyncio
 import json
 import os
@@ -15,7 +17,6 @@ async def main():
     os.environ["AUDIT_LOG_DIR"] = str(output / "writer-audit")
     import httpx
 
-    from api import knowledge
     from app.main import create_app
     from db.adapter import db
 
@@ -41,14 +42,14 @@ async def main():
         assert proof["auth_statuses"] == [200, 200]
         proof["role"] = me.json()["user"]["role"]
         assert proof["role"] == "admin"
-        proof["before_revision"] = knowledge._get_rebuild_revision()
+        proof["before_revision"] = index_lifecycle._get_rebuild_revision()
         updated = await client.put(f"/api/knowledge/documents/{request['doc_id']}", json=request["payload"])
         proof["update_response"] = dict(http_status=updated.status_code, response=updated.json())
         assert updated.status_code == 200
         proof["after_update"] = dict(
-            revision=knowledge._get_rebuild_revision(),
-            status=knowledge._read_rebuild_status(),
-            index_built=(knowledge._vector_index_revision is not None),
+            revision=index_lifecycle._get_rebuild_revision(),
+            status=index_lifecycle._read_rebuild_status(),
+            index_built=(index_lifecycle._vector_index_revision is not None),
         )
         # An actual writer-side search rebuilds its independent local index.
         rebuilt = await client.post(
@@ -57,9 +58,9 @@ async def main():
         assert rebuilt.status_code == 200
         proof["search_response"] = rebuilt.json()
         proof["after_rebuild"] = dict(
-            revision=knowledge._get_rebuild_revision(),
-            status=knowledge._read_rebuild_status(),
-            index_built=(knowledge._vector_index_revision is not None),
+            revision=index_lifecycle._get_rebuild_revision(),
+            status=index_lifecycle._read_rebuild_status(),
+            index_built=(index_lifecycle._vector_index_revision is not None),
         )
         proof["sync_pending_final"] = len(db._pending)
     (output / "writer-result.json").write_text(json.dumps(proof, ensure_ascii=False, indent=2, default=str))

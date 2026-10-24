@@ -1,4 +1,6 @@
 """Named document tasks own their source route despite character topic words."""
+
+from knowledge import index_lifecycle
 from threading import RLock
 from types import SimpleNamespace
 
@@ -30,7 +32,7 @@ def test_background_negative_or_incomplete_named_read_does_not_grant_a_route(que
 
 
 async def test_named_role_document_uses_fresh_generic_authority_and_complete_body(monkeypatch):
-    from api import generate, knowledge
+    from api import generate
     from knowledge import rag_helper, vector_db
     from knowledge.multiscale_rag import runtime
 
@@ -45,9 +47,9 @@ async def test_named_role_document_uses_fresh_generic_authority_and_complete_bod
         pytest.fail('Named document task must not first load an unrelated curated index')
 
     monkeypatch.setattr(runtime, 'get_multiscale_rag_service', character_forbidden)
-    monkeypatch.setattr(knowledge, '_ensure_vector_index', lambda: calls.append('fresh') or True)
-    monkeypatch.setattr(knowledge, '_vector_index_revision', 77)
-    monkeypatch.setattr(knowledge, '_get_rebuild_revision', lambda: 77)
+    monkeypatch.setattr(index_lifecycle, '_ensure_vector_index', lambda: calls.append('fresh') or True)
+    monkeypatch.setattr(index_lifecycle, '_vector_index_revision', 77)
+    monkeypatch.setattr(index_lifecycle, '_get_rebuild_revision', lambda: 77)
     monkeypatch.setattr(vector_db, 'get_vector_db', lambda: indexed)
     monkeypatch.setattr(generate, 'db', SimpleNamespace(get_knowledge_document=lambda identity:
         dict(id=identity, title='合成偏好', category='演练', knowledge_base_id=7, content=body)))
@@ -69,10 +71,10 @@ async def test_named_role_document_uses_fresh_generic_authority_and_complete_bod
 
 
 async def test_named_read_with_unready_generic_index_fails_without_curated_substitution(monkeypatch):
-    from api import generate, knowledge
+    from api import generate
     from knowledge.multiscale_rag import runtime
 
-    monkeypatch.setattr(knowledge, '_ensure_vector_index', lambda: False)
+    monkeypatch.setattr(index_lifecycle, '_ensure_vector_index', lambda: False)
     monkeypatch.setattr(runtime, 'get_multiscale_rag_service', lambda:
         pytest.fail('A missing named document index must not substitute curated character material'))
     with pytest.raises(RuntimeError, match='Generic knowledge index is not ready'):

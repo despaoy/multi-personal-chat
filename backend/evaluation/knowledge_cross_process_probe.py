@@ -1,5 +1,7 @@
 """Warm reader, real separate writer rebuild, then one new pro answer."""
 
+from knowledge import index_lifecycle
+
 import asyncio
 import hashlib
 import json
@@ -28,7 +30,7 @@ async def run_cross_process_probe(
 ):
     import asyncpg
 
-    from api import generate, knowledge
+    from api import generate
     from knowledge.rag_helper import get_rag_helper
     from knowledge.vector_db import get_vector_db
 
@@ -105,9 +107,9 @@ async def run_cross_process_probe(
             chunks=database.get_knowledge_chunks(doc_id),
             vector_metadata=deepcopy(vector.metadata),
             cache_generation=vector.cache_generation,
-            revision=knowledge._get_rebuild_revision(),
-            status=knowledge._read_rebuild_status(),
-            index_built=(knowledge._vector_index_revision is not None),
+            revision=index_lifecycle._get_rebuild_revision(),
+            status=index_lifecycle._read_rebuild_status(),
+            index_built=(index_lifecycle._vector_index_revision is not None),
         )
 
     proof["before_update"] = snapshot()

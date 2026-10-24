@@ -1,5 +1,7 @@
 """Atomic public document publication, rollback and supported import paths."""
 
+from knowledge import index_lifecycle
+
 import io
 import sqlite3
 
@@ -131,6 +133,7 @@ def test_content_without_complete_replacement_is_rejected_without_partial_commit
 async def test_public_document_paths_use_atomic_publication_before_local_notification(tmp_path, monkeypatch, route):
     db = SQLiteDB(tmp_path / "api.db")
     monkeypatch.setattr(knowledge, "db", db)
+    monkeypatch.setattr(index_lifecycle, "db", db)
 
     def forbidden():
         raise AssertionError("Legacy post-commit database notification must not run")

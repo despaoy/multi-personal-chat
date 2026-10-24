@@ -1,4 +1,6 @@
 """Literal teaching examples remain data through validation, model transport and storage."""
+
+from knowledge import index_lifecycle
 import httpx
 import pytest
 from fastapi import FastAPI
@@ -43,7 +45,8 @@ async def test_literal_course_text_reaches_compiled_provider_unchanged(installed
 async def test_sql_example_is_preserved_as_document_and_bound_parameter(tmp_path, monkeypatch, content):
     database = SQLiteDB(tmp_path / "literal-text.sqlite")
     monkeypatch.setattr(knowledge, "db", database)
-    monkeypatch.setattr(knowledge, "_vector_index_revision", None)
+    monkeypatch.setattr(index_lifecycle, "db", database)
+    monkeypatch.setattr(index_lifecycle, "_vector_index_revision", None)
     try:
         database.add_message(dict(sessionId="sentinel", message="隔离保留记录", reply="必须保留", modelName="synthetic"))
         request = KnowledgeDocumentCreate(title="SQL课程：UNION SELECT", content=content, category="课程")

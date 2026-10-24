@@ -1,5 +1,7 @@
 """Real dirty-write failure in a clone, independent API writer and warm reader."""
 
+from knowledge import index_lifecycle
+
 import asyncio
 import hashlib
 import json
@@ -27,7 +29,7 @@ async def run_mutation_probe(
 ):
     import asyncpg
 
-    from api import generate, knowledge
+    from api import generate
     from knowledge.vector_db import get_vector_db
 
     async def connection(name):
@@ -80,11 +82,11 @@ async def run_mutation_probe(
         return {
             "document": database.get_knowledge_document(doc_id),
             "chunks": database.get_knowledge_chunks(doc_id),
-            "revision": knowledge._get_rebuild_revision(),
-            "status": knowledge._read_rebuild_status(),
+            "revision": index_lifecycle._get_rebuild_revision(),
+            "status": index_lifecycle._read_rebuild_status(),
             "vector_metadata": deepcopy(vector.metadata),
             "cache_generation": vector.cache_generation,
-            "built": (knowledge._vector_index_revision is not None),
+            "built": (index_lifecycle._vector_index_revision is not None),
         }
 
     warm = await client.post("/api/knowledge/search", json={"query": fixture["search_query"], "topK": 3})

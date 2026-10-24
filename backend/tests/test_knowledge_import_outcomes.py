@@ -1,5 +1,7 @@
 """Real batch imports report confirmed work, errors and unknown writes honestly."""
 
+from knowledge import index_lifecycle
+
 import asyncio
 import io
 import threading
@@ -26,6 +28,7 @@ def imports(tmp_path, monkeypatch):
     kb = db.create_knowledge_base("完整合成登记库")
     db.create_knowledge_folder(kb["id"], "适用条件")
     monkeypatch.setattr(knowledge, "db", db)
+    monkeypatch.setattr(index_lifecycle, "db", db)
     root = tmp_path / "knowledge_bases"
     monkeypatch.setattr(knowledge, "KNOWLEDGE_BASES_DIR", root)
     opened = []
@@ -116,7 +119,7 @@ async def test_unsupported_encoding_is_a_failed_item_including_root_files(import
 @pytest.mark.parametrize("route", ROUTES)
 async def test_post_commit_notification_failure_still_counts_saved_documents(imports, monkeypatch, caplog, route):
     monkeypatch.setattr(
-        knowledge,
+        index_lifecycle,
         "_invalidate_local_knowledge_index",
         Mock(side_effect=OSError("synthetic-private-notification-detail")),
     )
@@ -135,7 +138,7 @@ async def test_real_executor_timeout_stops_batch_and_preserves_late_commit(impor
     release = threading.Event()
     entered = threading.Event()
     executor = BoundedThreadExecutor(name="controlled-import", max_workers=1, max_pending=2, default_timeout=0.1)
-    target = rig.db.save_knowledge_document if operation == "write" else knowledge._invalidate_local_knowledge_index
+    target = rig.db.save_knowledge_document if operation == "write" else index_lifecycle._invalidate_local_knowledge_index
 
     def delayed(*args, **kwargs):
         entered.set()
@@ -145,7 +148,7 @@ async def test_real_executor_timeout_stops_batch_and_preserves_late_commit(impor
     if operation == "write":
         monkeypatch.setattr(rig.db, "save_knowledge_document", delayed)
     else:
-        monkeypatch.setattr(knowledge, "_invalidate_local_knowledge_index", delayed)
+        monkeypatch.setattr(index_lifecycle, "_invalidate_local_knowledge_index", delayed)
 
     async def run_db(function, *args, **kwargs):
         return await executor.run(function, *args, **kwargs)
