@@ -17,6 +17,7 @@ from app.providers import get_vllm_client
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import ValidationError
 from services.chat_generation import ChatGenerationService
+from services.model_usage import write_invocation
 
 from api.error_details import with_provider_error
 from app.config import (
@@ -1332,13 +1333,11 @@ async def _record_model_invocation(
     database=None,
 ):
     """Record required accounting before archive; timed-out writes may still commit."""
-    from inference.usage import invocation_usage
-
     target_db = database if database is not None else db
     try:
         await asyncio.wait_for(
-            asyncio.to_thread(
-                target_db.add_model_invocation,
+            write_invocation(
+                target_db,
                 {
                     "traceId": request.traceId,
                     "platform": request.platform,
@@ -1347,7 +1346,6 @@ async def _record_model_invocation(
                     "modelName": model_name,
                     "loraName": lora_name,
                     "costTime": cost_time,
-                    **invocation_usage(record_started=True),
                     "usedRag": used_rag,
                     "usedLora": bool(lora_name and lora_name != "default"),
                     "errorType": error_type,

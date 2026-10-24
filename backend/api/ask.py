@@ -18,19 +18,22 @@ import hashlib
 import json
 import logging
 import time
+import uuid
 from contextlib import aclosing
 from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 
-from app.dependencies import get_current_user
+from app.dependencies import get_current_user, get_request_database
 from db.schemas import AskRequest, AskResponse
 from inference.openai_protocol import ProviderResponseError
 from inference.request_context import InferenceRequestContext, resolve_request_context, use_request_context
 from inference.context_budget import InputBudgetError
 from knowledge.grounded_answer.service import get_grounded_answer_service
 from knowledge.grounded_answer.validator import public_citation_view
+from inference.usage import begin_completion
+from services.model_usage import UsageRecordingError, account_usage
 
 logger = logging.getLogger(__name__)
 
@@ -87,10 +90,12 @@ async def _resolve_generate_adapters(context: InferenceRequestContext) -> tuple[
 
     async def generate(**kwargs: Any) -> str:
         selected_client = await resolve_client()
+        begin_completion()
         return await selected_client.generate(**kwargs)
 
     async def generate_stream(**kwargs: Any) -> AsyncIterator[str]:
         selected_client = await resolve_client()
+        begin_completion()
         stream = await selected_client.generate(**kwargs, stream=True)
         try:
             async for chunk in stream:
@@ -108,8 +113,15 @@ def _safe_citations(citations: list[dict[str, Any]], *, debug: bool) -> list[dic
     return [public_citation_view(c, debug=debug) for c in citations]
 
 
+def _usage_metadata(model_id, current_user):
+    identity = current_user["user_id"] if current_user["user_id"] is not None else current_user["username"]
+    return {"traceId": "ask:" + uuid.uuid4().hex, "platform": "web", "sessionId": f"ask:{identity}",
+            "purpose": "knowledge_answer", "modelName": model_id, "usedRag": True}
+
+
 @router.post("/api/ask")
-async def ask(request: AskRequest, current_user: dict = Depends(get_current_user)):
+async def ask(request: AskRequest, current_user: dict = Depends(get_current_user),
+              database=Depends(get_request_database)):
     """知识问答（非流式）。"""
     from inference.model_manager import get_model_manager
 
@@ -118,20 +130,22 @@ async def ask(request: AskRequest, current_user: dict = Depends(get_current_user
 
     start = time.perf_counter()
     with use_request_context(context):
-        service = await get_grounded_answer_service()
-        result = await service.answer(
-            request.message,
-            generate=generate,
-            domain_id=request.domainId,
-            top_k=request.topK,
-            history=request.history or None,
-            model_id=model_id,
-            cache_identity=cache_identity,
-            temperature=request.temperature,
-            max_tokens=request.maxTokens,
-            top_p=request.topP,
-            want_citations=request.wantCitations,
-        )
+        async with account_usage(database, _usage_metadata(model_id, current_user)) as confirm_usage:
+            service = await get_grounded_answer_service()
+            result = await service.answer(
+                request.message,
+                generate=generate,
+                before_publish=confirm_usage,
+                domain_id=request.domainId,
+                top_k=request.topK,
+                history=request.history or None,
+                model_id=model_id,
+                cache_identity=cache_identity,
+                temperature=request.temperature,
+                max_tokens=request.maxTokens,
+                top_p=request.topP,
+                want_citations=request.wantCitations,
+            )
     cost_time = time.perf_counter() - start
     logger.info(
         "grounded_answer domain=%s mode=%s abstained=%s citations=%d cost=%.2fs",
@@ -162,6 +176,7 @@ async def ask_stream(
     request: AskRequest,
     http_request: Request,
     current_user: dict = Depends(get_current_user),
+    database=Depends(get_request_database),
 ):
     """知识问答（SSE 流式）。
 
@@ -178,33 +193,39 @@ async def ask_stream(
     async def event_stream() -> AsyncIterator[bytes]:
         with use_request_context(context):
             try:
-                service = await get_grounded_answer_service()
-                async with aclosing(service.answer_stream(
-                    request.message,
-                    generate=generate,
-                    generate_stream=generate_stream,
-                    domain_id=request.domainId,
-                    top_k=request.topK,
-                    history=request.history or None,
-                    model_id=model_id,
-                    temperature=request.temperature,
-                    max_tokens=request.maxTokens,
-                    top_p=request.topP,
-                    want_citations=request.wantCitations,
-                )) as stream:
-                    async for event in stream:
-                        # 客户端断开：终止生成器（取消传播到底层 httpx 流）
-                        if await http_request.is_disconnected():
-                            logger.info("grounded_answer_stream client disconnected")
-                            break
-                        payload = dict(event.data)
-                        if event.type == "citations":
-                            payload["citations"] = _safe_citations(payload.get("citations") or [], debug=debug)
-                        yield "data: {}\n\n".format(json.dumps({"type": event.type, **payload}, ensure_ascii=False)).encode(
-                            "utf-8"
-                        )
+                terminal_event = None
+                async with account_usage(database, _usage_metadata(model_id, current_user)):
+                    service = await get_grounded_answer_service()
+                    async with aclosing(service.answer_stream(
+                        request.message,
+                        generate=generate,
+                        generate_stream=generate_stream,
+                        domain_id=request.domainId,
+                        top_k=request.topK,
+                        history=request.history or None,
+                        model_id=model_id,
+                        temperature=request.temperature,
+                        max_tokens=request.maxTokens,
+                        top_p=request.topP,
+                        want_citations=request.wantCitations,
+                    )) as stream:
+                        async for event in stream:
+                            # 客户端断开：终止生成器（取消传播到底层 httpx 流）
+                            if await http_request.is_disconnected():
+                                logger.info("grounded_answer_stream client disconnected")
+                                break
+                            payload = dict(event.data)
+                            if event.type == "citations":
+                                payload["citations"] = _safe_citations(payload.get("citations") or [], debug=debug)
+                            encoded = "data: {}\n\n".format(json.dumps({"type": event.type, **payload}, ensure_ascii=False)).encode("utf-8")
+                            if event.type == "done":
+                                terminal_event = encoded
+                            else:
+                                yield encoded
+                if terminal_event is not None:
+                    yield terminal_event
             except Exception as e:  # noqa: BLE001 - SSE 中途异常以 error 事件收尾
-                detail = (e.public_detail() if isinstance(e, (ProviderResponseError, InputBudgetError))
+                detail = (e.public_detail() if isinstance(e, (ProviderResponseError, InputBudgetError, UsageRecordingError))
                           else {"kind": "internal_error", "message": "服务内部错误"})
                 logger.warning("grounded_answer_stream failed: %s upstream_status=%s",
                                detail["kind"], detail.get("upstreamStatus"))

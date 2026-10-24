@@ -404,6 +404,7 @@ class ModelInvocation(Base):
     completionTokens: Mapped[Optional[int]] = mapped_column(Integer, server_default="0")
     totalTokens: Mapped[Optional[int]] = mapped_column(Integer, server_default="0")
     usageSource: Mapped[str] = mapped_column(Text, nullable=False, server_default="legacy_unverified")
+    purpose: Mapped[str] = mapped_column(Text, nullable=False, server_default="chat")
     usedRag: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     usedLora: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     errorType: Mapped[Optional[str]] = mapped_column(Text, server_default="")

@@ -642,7 +642,7 @@ async def test_default_memory_http_transport_obeys_delivery_retry_policy(
         status = statuses[len(requests)]
         requests.append(wire)
         if status == 200:
-            return httpx.Response(200, json={"choices": [{
+            return httpx.Response(200, json={"usage": {"prompt_tokens": 100, "completion_tokens": 20, "total_tokens": 120}, "choices": [{
                 "finish_reason": "stop",
                 "message": {"role": "assistant", "content": proposal(rig.body)},
             }]})

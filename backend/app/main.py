@@ -39,7 +39,8 @@ _STARTUP_ENV = dict(os.environ)
 from app.readiness import ReadinessProbe, ReadinessProbeTimeout
 from app.runtime import RuntimeContainer, get_runtime_container
 from inference.context_budget import InputBudgetError
-from inference.openai_protocol import ProviderResponseError  # noqa: E402
+from inference.openai_protocol import ProviderResponseError
+from services.model_usage import UsageRecordingError  # noqa: E402
 from infra.deployment import validate_or_raise_for_startup
 from infra.access_control import AccessControlManager
 from infra.backup_manager import BackupManager
@@ -339,7 +340,7 @@ async def readiness_check(request: Request):
 # 全局异常处理
 # ═══════════════════════════════════════════
 async def global_exception_handler(request: Request, exc: Exception):
-    if isinstance(exc, (ProviderResponseError, InputBudgetError)):
+    if isinstance(exc, (ProviderResponseError, InputBudgetError, UsageRecordingError)):
         detail = exc.public_detail()
         logger.warning("Request failed: %s upstream_status=%s", detail["kind"], detail.get("upstreamStatus"))
         return JSONResponse(status_code=exc.http_status, content={
@@ -380,7 +381,7 @@ def create_app(container: RuntimeContainer | None = None) -> FastAPI:
     application.add_api_route("/", root, methods=["GET"])
     application.add_api_route("/health", health_check, methods=["GET"])
     application.add_api_route("/ready", readiness_check, methods=["GET"])
-    for error_type in (ProviderResponseError, InputBudgetError, Exception):
+    for error_type in (ProviderResponseError, InputBudgetError, UsageRecordingError, Exception):
         application.add_exception_handler(error_type, global_exception_handler)
     return application
 

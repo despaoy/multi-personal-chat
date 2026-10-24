@@ -199,6 +199,7 @@ class PgDatabase:
             # C4 fix: 为已有 PG 数据库添加 users.role 列（新数据库由 create_all 创建）
             await self._ensure_column(conn, "users", "role", "TEXT NOT NULL DEFAULT 'user'")
             await self._ensure_column(conn, "model_invocations", "usageSource", "TEXT NOT NULL DEFAULT 'legacy_unverified'")
+            await self._ensure_column(conn, "model_invocations", "purpose", "TEXT NOT NULL DEFAULT 'chat'")
             await conn.execute(
                 text("CREATE UNIQUE INDEX IF NOT EXISTS idx_training_tasks_task_id ON training_tasks (task_id)")
             )
@@ -2077,8 +2078,8 @@ class PgDatabase:
         async with self.async_session() as session:
             await session.execute(
                 text("""
-                INSERT INTO model_invocations ("traceId", platform, "conversationId", "sessionId", "modelName", "loraName", "costTime", "promptTokens", "completionTokens", "totalTokens", "usageSource", "usedRag", "usedLora", "errorType", "createdAt")
-                VALUES (:trace_id, :platform, :conversation_id, :session_id, :model_name, :lora_name, :cost_time, :prompt_tokens, :completion_tokens, :total_tokens, :usage_source, :used_rag, :used_lora, :error_type, :created_at)
+                INSERT INTO model_invocations ("traceId", platform, "conversationId", "sessionId", "modelName", "loraName", "costTime", "promptTokens", "completionTokens", "totalTokens", "usageSource", "usedRag", "usedLora", "errorType", purpose, "createdAt")
+                VALUES (:trace_id, :platform, :conversation_id, :session_id, :model_name, :lora_name, :cost_time, :prompt_tokens, :completion_tokens, :total_tokens, :usage_source, :used_rag, :used_lora, :error_type, :purpose, :created_at)
             """),
                 {
                     "trace_id": invocation.get("traceId", ""),
@@ -2095,6 +2096,7 @@ class PgDatabase:
                     "used_rag": int(bool(invocation.get("usedRag", False))),
                     "used_lora": int(bool(invocation.get("usedLora", False))),
                     "error_type": invocation.get("errorType", ""),
+                    "purpose": invocation.get("purpose", "chat"),
                     "created_at": invocation.get("createdAt", datetime.now().isoformat()),
                 },
             )

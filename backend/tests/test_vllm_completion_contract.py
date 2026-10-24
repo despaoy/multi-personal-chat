@@ -200,6 +200,8 @@ def complete_bundle(source_path):
 async def test_actual_ask_stream_rejects_corruption_after_fully_cited_body_and_closes_upstream(
     stream_rig, monkeypatch, tmp_path,
 ):
+    from db.database import SQLiteDB
+
     rig = stream_rig
     rig.events = frames("malformed_json")
     source_path = tmp_path / "fiction-complete-source.txt"
@@ -224,7 +226,8 @@ async def test_actual_ask_stream_rejects_corruption_after_fully_cited_body_and_c
                          maxTokens=256, topP=.9, wantCitations=True)
     response = await ask.ask_stream(
         request, SimpleNamespace(is_disconnected=AsyncMock(return_value=False)),
-        current_user={"id": 901, "role": "user"},
+        current_user={"user_id": 901, "username": "synthetic", "role": "user"},
+        database=SQLiteDB(tmp_path / "ask-accounting.sqlite"),
     )
     events = []
     async for chunk in response.body_iterator:

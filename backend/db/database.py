@@ -747,6 +747,7 @@ class SQLiteDB:
         ''')
 
         self._ensure_column(cursor, "model_invocations", "usageSource", "TEXT NOT NULL DEFAULT 'legacy_unverified'")
+        self._ensure_column(cursor, "model_invocations", "purpose", "TEXT NOT NULL DEFAULT 'chat'")
         self._ensure_column(cursor, "messages", "platform", "TEXT NOT NULL DEFAULT 'qq'")
         self._ensure_column(cursor, "messages", "adapter", "TEXT NOT NULL DEFAULT 'nonebot'")
         self._ensure_column(cursor, "messages", "conversationId", "TEXT")
@@ -2272,8 +2273,8 @@ class SQLiteDB:
         cursor.execute('''
             INSERT INTO model_invocations (
                 traceId, platform, conversationId, sessionId, modelName, loraName, costTime,
-                promptTokens, completionTokens, totalTokens, usageSource, usedRag, usedLora, errorType, createdAt
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                promptTokens, completionTokens, totalTokens, usageSource, usedRag, usedLora, errorType, purpose, createdAt
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
             invocation.get("traceId", ""),
             invocation.get("platform", "qq"),
@@ -2289,6 +2290,7 @@ class SQLiteDB:
             int(bool(invocation.get("usedRag", False))),
             int(bool(invocation.get("usedLora", False))),
             invocation.get("errorType", ""),
+            invocation.get("purpose", "chat"),
             created_at,
         ))
         conn.commit()

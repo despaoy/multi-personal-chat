@@ -124,6 +124,7 @@ class GroundedAnswerService:
         max_tokens: int = 1024,
         top_p: float = 1.0,
         want_citations: bool = True,
+        before_publish: Callable[[], Awaitable[None]] | None = None,
     ) -> GroundedAnswerResult:
         if history is not None:
             validate_history(history)
@@ -189,6 +190,10 @@ class GroundedAnswerService:
             timings=timings,
         )
         timings.total_ms = (time.perf_counter() - start) * 1000
+
+        if before_publish is not None:
+            await before_publish()
+            await _validate_sources(result.curated_source_receipts)
 
         if (
             self.cache.ttl > 0

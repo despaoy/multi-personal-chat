@@ -54,6 +54,8 @@ from db.memory_source import ClaimSourceRevokedError
 from inference.context_budget import CONTEXT_SAFETY_MARGIN_TOKENS, estimated_tokens
 from inference.openai_protocol import chat_completions_endpoint, completed_chat_content, nonthinking_parameters
 from inference.request_context import detached_request_context
+from inference.usage import begin_completion
+from services.model_usage import UsageRecordingError, account_usage
 from inference.token_counting import text_token_counter
 from infra.environment import parse_unit_interval, read_bool
 
@@ -251,6 +253,7 @@ class OpenAICompatibleMemoryCompletion:
         headers = {"Content-Type": "application/json"}
         if self._api_key:
             headers["Authorization"] = f"Bearer {self._api_key}"
+        usage_attempt = begin_completion()
         response = await self._client.post(
             self._endpoint,
             headers=headers,
@@ -265,6 +268,8 @@ class OpenAICompatibleMemoryCompletion:
         )
         response.raise_for_status()
         payload = response.json()
+        if usage_attempt is not None:
+            usage_attempt.read(payload)
         return completed_chat_content(payload)
 
     async def close(self) -> None:
@@ -1644,6 +1649,7 @@ class MemoryEnrichmentScheduler:
         embedding_provider: EmbeddingProvider | None = None,
     ) -> None:
         self.enabled = config.enabled
+        self._model_name = config.model
         self._completion = completion
         self._embedding_provider = embedding_provider
         self._max_input_chars = config.max_input_chars
@@ -1959,45 +1965,50 @@ class MemoryEnrichmentScheduler:
                 source_candidates, result['source_candidate_coverage'] = await candidates(
                     job.repository, job.character_id, job.user_scope, job.message, records,
                     context_window_tokens=self._context_window_tokens, count_tokens=self._count_tokens)
-            result["stage"] = "proposal_generation"
-            response = await self._completion.complete(
-                build_memory_llm_messages(
-                    job.message,
-                    job.rule_hints,
-                    job.history,
-                    existing_memories,
-                    self._max_input_chars,
-                    self._confidence_threshold,
-                    feedback_target_ids=job.feedback_target_ids,
-                    write_mode=job.write_mode,
-                    observed_at=job.observed_at,
-                    context_window_tokens=self._context_window_tokens,
-                    source_erasure_candidates=source_candidates,
-                    count_tokens=self._count_tokens,
+            async with account_usage(job.repository.storage_owner, {
+                "traceId": job.source_message_id, "platform": job.user_scope.platform,
+                "conversationId": job.user_scope.conversation_id, "sessionId": job.character_id,
+                "modelName": self._model_name, "purpose": "memory_judgement",
+            }):
+                result["stage"] = "proposal_generation"
+                response = await self._completion.complete(
+                    build_memory_llm_messages(
+                        job.message,
+                        job.rule_hints,
+                        job.history,
+                        existing_memories,
+                        self._max_input_chars,
+                        self._confidence_threshold,
+                        feedback_target_ids=job.feedback_target_ids,
+                        write_mode=job.write_mode,
+                        observed_at=job.observed_at,
+                        context_window_tokens=self._context_window_tokens,
+                        source_erasure_candidates=source_candidates,
+                        count_tokens=self._count_tokens,
+                    )
                 )
-            )
-            result["stage"] = "proposal_validation"
-            payload = _extract_json(response)
-            requested_scopes = tuple(dict.fromkeys(
-                scope for raw in payload["memories"]
-                if (scope := _proposal_text(raw, "scope_level").strip().lower()) in {"user_character", "user_global"}
-            ))
-            result["stage"] = "scope_review"
-            scope_authorization = await review_memory_scopes(
-                self._completion, job.message, max_input_chars=self._max_input_chars,
-                context_window_tokens=self._context_window_tokens, count_tokens=self._count_tokens,
-                requested_scopes=requested_scopes,
-            )
-            result["stage"] = "proposal_validation"
-            proposals = _proposals_from_payload(
-                payload,
-                source_message=job.message,
-                history=job.history,
-                existing_memories=existing_memories,
-                confidence_threshold=self._confidence_threshold,
-                feedback_target_ids=job.feedback_target_ids,
-                scope_authorization=scope_authorization,
-            )
+                result["stage"] = "proposal_validation"
+                payload = _extract_json(response)
+                requested_scopes = tuple(dict.fromkeys(
+                    scope for raw in payload["memories"]
+                    if (scope := _proposal_text(raw, "scope_level").strip().lower()) in {"user_character", "user_global"}
+                ))
+                result["stage"] = "scope_review"
+                scope_authorization = await review_memory_scopes(
+                    self._completion, job.message, max_input_chars=self._max_input_chars,
+                    context_window_tokens=self._context_window_tokens, count_tokens=self._count_tokens,
+                    requested_scopes=requested_scopes,
+                )
+                result["stage"] = "proposal_validation"
+                proposals = _proposals_from_payload(
+                    payload,
+                    source_message=job.message,
+                    history=job.history,
+                    existing_memories=existing_memories,
+                    confidence_threshold=self._confidence_threshold,
+                    feedback_target_ids=job.feedback_target_ids,
+                    scope_authorization=scope_authorization,
+                )
             if partial is not None and not deferred_erasure:
                 result['source_erasure_policy'] = 'claim_targets_only_for_partial_retention'
             source_ids = selected_ids(payload, {row['source_id'] for row in source_candidates},
@@ -2089,6 +2100,8 @@ class MemoryEnrichmentScheduler:
                 result.update(reason="invalid_model_response", field=exc.field, message=str(exc))
             if isinstance(exc, InputBudgetError):
                 result["reason"] = "input_budget"
+            if isinstance(exc, UsageRecordingError):
+                result.update(stage="model_invocation_record", reason="usage_record_failed", retryable=False)
             logger.warning("后台记忆处理失败 stage=%s type=%s", result["stage"], type(exc).__name__)
         finally:
             # Publish confirmed commits once, including failed or cancelled jobs.

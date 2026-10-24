@@ -134,11 +134,12 @@ class StatsService:
         if count == 0:
             return 0.0, 0.0
         p95, p99 = (round((count - 1) * fraction) + 1 for fraction in (0.95, 0.99))
+        purpose = " AND purpose = 'chat'" if table == "model_invocations" else ""
         rows = self._query(
             f"SELECT latency, position FROM ("
             f'SELECT COALESCE("costTime", 0) AS latency, '
             f'ROW_NUMBER() OVER (ORDER BY COALESCE("costTime", 0)) AS position '
-            f'FROM {table} WHERE "createdAt" >= :start AND "createdAt" < :end'
+            f'FROM {table} WHERE "createdAt" >= :start AND "createdAt" < :end{purpose}'
             f") AS ranked WHERE position IN (:p95, :p99)",
             {**bounds, "p95": p95, "p99": p99},
         )
@@ -163,7 +164,7 @@ class StatsService:
             "COALESCE(SUM(CASE WHEN TRIM(COALESCE(\"errorType\", '')) <> '' THEN 1 ELSE 0 END), 0) AS failures, "
             'COALESCE(SUM(CASE WHEN "usedRag" = 1 THEN 1 ELSE 0 END), 0) AS used_rag, '
             'COALESCE(MIN("costTime"), 0) AS minimum, COALESCE(MAX("costTime"), 0) AS maximum '
-            'FROM model_invocations WHERE "createdAt" >= :start AND "createdAt" < :end',
+            'FROM model_invocations WHERE purpose = \'chat\' AND "createdAt" >= :start AND "createdAt" < :end',
             bounds,
         )
         costs = [float(row[key]) for row in (messages, invocations) for key in ("minimum", "maximum")]

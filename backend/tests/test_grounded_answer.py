@@ -4,6 +4,8 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
+from app.runtime import RuntimeContainer
+from db.database import SQLiteDB
 from provider_fixtures import cloud_connection
 
 from inference.request_context import resolve_request_context
@@ -216,7 +218,7 @@ async def test_malformed_model_output_is_an_error(value):
         await service.answer("甲是谁", generate=generate, domain_id="story")
 
 
-async def test_ask_returns_http_error_for_provider_failure(monkeypatch):
+async def test_ask_returns_http_error_for_provider_failure(monkeypatch, tmp_path):
     from unittest.mock import AsyncMock
 
     from fastapi import FastAPI
@@ -232,13 +234,16 @@ async def test_ask_returns_http_error_for_provider_failure(monkeypatch):
     monkeypatch.setattr(ask, "get_grounded_answer_service", AsyncMock(return_value=service))
     monkeypatch.setattr(ask, "_resolve_generate_adapters", AsyncMock(return_value=(generate, None, "test", "0" * 64)))
     app = FastAPI()
+    app.state.runtime_container = RuntimeContainer(
+        db=SQLiteDB(tmp_path / "ask-accounting.sqlite"), is_pg_mode=lambda: False)
     app.include_router(ask.router)
     app.add_exception_handler(Exception, global_exception_handler)
-    app.dependency_overrides[ask.get_current_user] = lambda: {"id": 1, "role": "user"}
+    app.dependency_overrides[ask.get_current_user] = lambda: {"user_id": 1, "username": "synthetic", "role": "user"}
     async with AsyncClient(transport=ASGITransport(app=app, raise_app_exceptions=False), base_url="http://test") as client:
         result = await client.post("/api/ask", json={"message": "甲是谁", "domainId": "story"})
     assert result.status_code == 500
     assert result.json()["success"] is False
+    generate.assert_awaited_once()
     assert "synthetic private detail" not in result.text
     assert "answer" not in result.json()
 
@@ -284,7 +289,7 @@ async def test_stream_failure_propagates_without_success_events_and_closes(kind)
 
 
 @pytest.mark.parametrize("failure", ["retrieval", "provider"])
-async def test_ask_stream_ends_with_error_without_done(monkeypatch, failure):
+async def test_ask_stream_ends_with_error_without_done(monkeypatch, failure, tmp_path):
     import json
     from unittest.mock import AsyncMock
 
@@ -305,8 +310,10 @@ async def test_ask_stream_ends_with_error_without_done(monkeypatch, failure):
     monkeypatch.setattr(ask, "get_grounded_answer_service", AsyncMock(return_value=service))
     monkeypatch.setattr(ask, "_resolve_generate_adapters", AsyncMock(return_value=(generate, None, "test", "0" * 64)))
     app = FastAPI()
+    app.state.runtime_container = RuntimeContainer(
+        db=SQLiteDB(tmp_path / "ask-accounting.sqlite"), is_pg_mode=lambda: False)
     app.include_router(ask.router)
-    app.dependency_overrides[ask.get_current_user] = lambda: {"id": 1, "role": "user"}
+    app.dependency_overrides[ask.get_current_user] = lambda: {"user_id": 1, "username": "synthetic", "role": "user"}
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.post("/api/ask/stream", json={"message": "甲是谁", "domainId": "story"})
     events = [json.loads(line[6:]) for line in response.text.splitlines() if line.startswith("data: ")]
@@ -541,7 +548,7 @@ def test_cache_lru_failed_copy_preserves_existing_answer(monkeypatch, key):
     assert cache.get("a").answer == result.answer
 
 
-async def test_api_cache_provenance_distinguishes_reuse_from_generation(monkeypatch):
+async def test_api_cache_provenance_distinguishes_reuse_from_generation(monkeypatch, tmp_path):
     from unittest.mock import AsyncMock
 
     from fastapi import FastAPI
@@ -557,8 +564,10 @@ async def test_api_cache_provenance_distinguishes_reuse_from_generation(monkeypa
     monkeypatch.setattr(ask, "get_grounded_answer_service", AsyncMock(return_value=service))
     monkeypatch.setattr(ask, "_resolve_generate_adapters", AsyncMock(return_value=(generate, None, "test", "0" * 64)))
     app = FastAPI()
+    app.state.runtime_container = RuntimeContainer(
+        db=SQLiteDB(tmp_path / "ask-accounting.sqlite"), is_pg_mode=lambda: False)
     app.include_router(ask.router)
-    app.dependency_overrides[ask.get_current_user] = lambda: {"id": 1, "role": "user"}
+    app.dependency_overrides[ask.get_current_user] = lambda: {"user_id": 1, "username": "synthetic", "role": "user"}
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         first = await client.post("/api/ask", json={"message": "甲是谁", "domainId": "story"})
         second = await client.post("/api/ask", json={"message": "甲是谁", "domainId": "story"})

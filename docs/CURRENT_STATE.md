@@ -10,8 +10,10 @@
 - 记忆模型依据完整原话提出范围；请求扩大范围时，执行前进行语义授权审核，不用固定措辞筛选授权，见[记忆范围修复](reports/backend-memory-scope-routing-20261024.md)。
 - 模型收到本轮实际记忆写入启用状态；支持保存、待后台处理和已经完成分别表述，见[能力状态传递](reports/backend-memory-capability-20261025.md)。
 - 独立问答完整校验后返回正文，适配器直接管理并及时关闭实际上游流，见[问答流所有权](reports/backend-ask-stream-owner-20261025.md)。
+- 网络代理统一转发原始请求，取消和超时覆盖响应读取，删除重复路由转换，见[代理生命周期](reports/backend-proxy-lifecycle-20261025.md)。
+- 独立问答和后台记忆接入实际用量记录，按用途保持聊天统计口径；记录确认先于缓存或完成回执，见[独立操作计量](reports/backend-operation-usage-20261025.md)。
 
-本轮整体验证关闭 GPU 和付费模型调用，不能替代模型理解质量、浏览器或外部平台验收。近期实际 DeepSeek Flash 抽查及其范围单独记录在上述阶段报告中；部署开关仍以实际配置为准。公网开放不在当前目标内。
+开头的整体验证结果对应 `ea09dd5`；此后的代理与独立操作计量改动按各自阶段定向验证，尚未再次执行后端整体检查。本轮整体验证关闭 GPU 和付费模型调用，不能替代模型理解质量、浏览器或外部平台验收。近期实际 DeepSeek Flash 抽查及其范围单独记录在上述阶段报告中；部署开关仍以实际配置为准。公网开放不在当前目标内。
 
 下方带日期的段落保留当时实现和实验结论；现行代码事实以本节、当前事实表及对应验证记录为准。
 
@@ -88,7 +90,7 @@
 | --- | --- | --- |
 | 应用入口 | 在backend目录执行python run.py；app/main.py组装应用 | backend/run.py、backend/app/main.py |
 | 后端进程 | SQLite与PostgreSQL均保持BACKEND_WORKERS=1 | backend/README.md、backend/run.py |
-| 数据库迁移 | 唯一head为015_invocation_usage_source，本轮实际Alembic命令已核对 | backend/alembic/versions |
+| 数据库迁移 | 唯一head为016_invocation_purpose，本轮实际Alembic命令已核对 | backend/alembic/versions |
 | 角色RAG | multiscale_rag为活动入口；旧P6保留为归档 | backend/knowledge/multiscale_rag、archive/p6_rag_pipeline |
 | 通用知识库 | 用户上传资料经rag_helper/vector_db处理 | backend/knowledge/rag_helper.py |
 | LoRA选择 | 显式选择及人物映射经过兼容检查；未显式选择LoRA且未选择人物时才使用激活适配器 | backend/api/generate.py |
