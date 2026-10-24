@@ -22,8 +22,7 @@
   - knowledge_quality_report.json 质量报告（去重/冲突/分布/失败）
   - knowledge_review.md           人工复核材料
 
-模型客户端：OllamaKnowledgeClient 是最薄适配层，复用 P4C
-run_scene_metadata_candidates.OllamaCandidateClient 的请求契约
+模型客户端：共享 knowledge.game_rag.ollama_client 的请求实现
 （POST {base_url}/api/chat；options: temperature/top_p/num_predict/num_ctx；
 模型与地址同 OLLAMA_MODEL/OLLAMA_BASE_URL 环境变量默认值）。不直接 import
 OllamaProvider 的原因：该模块导入链会触发 Redis 连接与 .env 写入等应用级
@@ -42,9 +41,6 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-import time
-import urllib.error
-import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -53,6 +49,8 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 BACKEND_DIR = REPO_ROOT / "backend"
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
+
+from knowledge.game_rag.ollama_client import OllamaCandidateClient  # noqa: E402
 
 from knowledge.game_rag import (  # noqa: E402
     KnowledgeGenerationStatus,
@@ -124,101 +122,12 @@ def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()  # noqa: UP017  # 运行环境为 Python 3.10，无 datetime.UTC
 
 
-class OllamaKnowledgeClient:
-    """最薄 KnowledgeModelClient 适配层：同步调用本机 Ollama /api/chat。
-
-    - 请求契约与 inference.model_manager.OllamaProvider 一致（messages/stream/options），
-      额外显式设置 num_ctx 防止 Ollama 静默截断超长 prompt；
-    - 超时抛 TimeoutError（P5 收敛为 error_kind=timeout）；HTTP/连接错误抛 RuntimeError
-      （P5 收敛为 error_kind=model_error）——异常消息不含 prompt 或密钥；
-    - 累计调用统计（次数/token/时延/失败）供运行 manifest 使用，不进入运行状态；
-    - 每次调用后打印进度行（ASCII），便于长任务外部观察。
-    """
-
-    def __init__(
-        self,
-        *,
-        base_url: str = OLLAMA_BASE_URL,
-        model: str = OLLAMA_MODEL,
-        temperature: float = TEMPERATURE,
-        top_p: float = TOP_P,
-        num_predict: int = NUM_PREDICT,
-        num_ctx: int = NUM_CTX,
-        timeout_s: float = REQUEST_TIMEOUT_S,
-    ) -> None:
-        self.base_url = base_url.rstrip("/")
-        self.model = model
-        self.temperature = temperature
-        self.top_p = top_p
-        self.num_predict = num_predict
-        self.num_ctx = num_ctx
-        self.timeout_s = timeout_s
-        self.stats: dict[str, float | int] = {
-            "calls": 0,
-            "failures": 0,
-            "prompt_tokens": 0,
-            "eval_tokens": 0,
-            "total_latency_s": 0.0,
-            "max_latency_s": 0.0,
-        }
-
-    def __call__(self, prompt: str) -> str:
-        payload = json.dumps(
-            {
-                "model": self.model,
-                "messages": [{"role": "user", "content": prompt}],
-                "stream": False,
-                "options": {
-                    "temperature": self.temperature,
-                    "top_p": self.top_p,
-                    "num_predict": self.num_predict,
-                    "num_ctx": self.num_ctx,
-                },
-            },
-            ensure_ascii=False,
-        ).encode("utf-8")
-        request = urllib.request.Request(
-            f"{self.base_url}/api/chat",
-            data=payload,
-            headers={"Content-Type": "application/json"},
-            method="POST",
-        )
-        started = time.monotonic()
-        self.stats["calls"] = int(self.stats["calls"]) + 1
-        call_no = int(self.stats["calls"])
-        try:
-            with urllib.request.urlopen(request, timeout=self.timeout_s) as response:
-                body = response.read()
-        except urllib.error.HTTPError as exc:
-            self.stats["failures"] = int(self.stats["failures"]) + 1
-            raise RuntimeError(f"ollama http status {exc.code}") from exc
-        except urllib.error.URLError as exc:
-            self.stats["failures"] = int(self.stats["failures"]) + 1
-            if isinstance(exc.reason, TimeoutError):
-                raise TimeoutError("ollama request timeout") from exc
-            raise RuntimeError(f"ollama connection error: {type(exc.reason).__name__}") from exc
-        except TimeoutError as exc:
-            self.stats["failures"] = int(self.stats["failures"]) + 1
-            raise TimeoutError("ollama request timeout") from exc
-        latency = time.monotonic() - started
-        self.stats["total_latency_s"] = float(self.stats["total_latency_s"]) + latency
-        self.stats["max_latency_s"] = max(float(self.stats["max_latency_s"]), latency)
-        try:
-            data = json.loads(body.decode("utf-8"))
-            content = data["message"]["content"]
-            self.stats["prompt_tokens"] = int(self.stats["prompt_tokens"]) + int(data.get("prompt_eval_count") or 0)
-            self.stats["eval_tokens"] = int(self.stats["eval_tokens"]) + int(data.get("eval_count") or 0)
-        except (json.JSONDecodeError, KeyError, TypeError, UnicodeDecodeError) as exc:
-            self.stats["failures"] = int(self.stats["failures"]) + 1
-            raise RuntimeError("ollama response parse error") from exc
-        if not isinstance(content, str):
-            self.stats["failures"] = int(self.stats["failures"]) + 1
-            raise RuntimeError("ollama response content is not a string")
-        print(
-            f"[P5] call#{call_no} ok {latency:.1f}s eval={int(data.get('eval_count') or 0)}tok",
-            flush=True,
-        )
-        return content
+def _model_client() -> OllamaCandidateClient:
+    return OllamaCandidateClient(
+        base_url=OLLAMA_BASE_URL, model=OLLAMA_MODEL,
+        temperature=TEMPERATURE, top_p=TOP_P, num_predict=NUM_PREDICT,
+        num_ctx=NUM_CTX, timeout_s=REQUEST_TIMEOUT_S, progress_prefix="[P5]",
+    )
 
 
 def _load_inputs():
@@ -264,7 +173,7 @@ def _run_phase(scene_ids: list[str] | None, label: str) -> None:
     bundle, alias_config = _load_inputs()
     state = _load_or_create_state(bundle)
     OUT_DIR.mkdir(parents=True, exist_ok=True)
-    client = OllamaKnowledgeClient()
+    client = _model_client()
     started_at = _utc_now()
     pending = sum(1 for i in state.scene_states if i.status is KnowledgeGenerationStatus.pending)
     failed = sum(1 for i in state.scene_states if i.status is KnowledgeGenerationStatus.failed)
