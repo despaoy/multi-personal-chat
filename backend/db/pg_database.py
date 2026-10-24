@@ -198,6 +198,7 @@ class PgDatabase:
             await self._ensure_column(conn, "training_tasks", "updated_at", "TEXT DEFAULT ''")
             # C4 fix: 为已有 PG 数据库添加 users.role 列（新数据库由 create_all 创建）
             await self._ensure_column(conn, "users", "role", "TEXT NOT NULL DEFAULT 'user'")
+            await self._ensure_column(conn, "model_invocations", "usageSource", "TEXT NOT NULL DEFAULT 'legacy_unverified'")
             await conn.execute(
                 text("CREATE UNIQUE INDEX IF NOT EXISTS idx_training_tasks_task_id ON training_tasks (task_id)")
             )
@@ -2069,14 +2070,15 @@ class PgDatabase:
             await session.commit()
 
     async def add_model_invocation(self, invocation: Dict) -> None:
-        prompt_tokens = int(invocation.get("promptTokens", 0) or 0)
-        completion_tokens = int(invocation.get("completionTokens", 0) or 0)
-        total_tokens = int(invocation.get("totalTokens", prompt_tokens + completion_tokens) or 0)
+        prompt_tokens = invocation.get("promptTokens")
+        completion_tokens = invocation.get("completionTokens")
+        total_tokens = invocation.get("totalTokens",
+            prompt_tokens + completion_tokens if prompt_tokens is not None and completion_tokens is not None else None)
         async with self.async_session() as session:
             await session.execute(
                 text("""
-                INSERT INTO model_invocations ("traceId", platform, "conversationId", "sessionId", "modelName", "loraName", "costTime", "promptTokens", "completionTokens", "totalTokens", "usedRag", "usedLora", "errorType", "createdAt")
-                VALUES (:trace_id, :platform, :conversation_id, :session_id, :model_name, :lora_name, :cost_time, :prompt_tokens, :completion_tokens, :total_tokens, :used_rag, :used_lora, :error_type, :created_at)
+                INSERT INTO model_invocations ("traceId", platform, "conversationId", "sessionId", "modelName", "loraName", "costTime", "promptTokens", "completionTokens", "totalTokens", "usageSource", "usedRag", "usedLora", "errorType", "createdAt")
+                VALUES (:trace_id, :platform, :conversation_id, :session_id, :model_name, :lora_name, :cost_time, :prompt_tokens, :completion_tokens, :total_tokens, :usage_source, :used_rag, :used_lora, :error_type, :created_at)
             """),
                 {
                     "trace_id": invocation.get("traceId", ""),
@@ -2089,6 +2091,7 @@ class PgDatabase:
                     "prompt_tokens": prompt_tokens,
                     "completion_tokens": completion_tokens,
                     "total_tokens": total_tokens,
+                    "usage_source": invocation.get("usageSource", "legacy_unverified"),
                     "used_rag": int(bool(invocation.get("usedRag", False))),
                     "used_lora": int(bool(invocation.get("usedLora", False))),
                     "error_type": invocation.get("errorType", ""),

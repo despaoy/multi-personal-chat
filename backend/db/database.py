@@ -746,6 +746,7 @@ class SQLiteDB:
             )
         ''')
 
+        self._ensure_column(cursor, "model_invocations", "usageSource", "TEXT NOT NULL DEFAULT 'legacy_unverified'")
         self._ensure_column(cursor, "messages", "platform", "TEXT NOT NULL DEFAULT 'qq'")
         self._ensure_column(cursor, "messages", "adapter", "TEXT NOT NULL DEFAULT 'nonebot'")
         self._ensure_column(cursor, "messages", "conversationId", "TEXT")
@@ -2264,14 +2265,15 @@ class SQLiteDB:
         conn = self._get_connection()
         cursor = conn.cursor()
         created_at = invocation.get("createdAt", datetime.now().isoformat())
-        prompt_tokens = int(invocation.get("promptTokens", 0) or 0)
-        completion_tokens = int(invocation.get("completionTokens", 0) or 0)
-        total_tokens = int(invocation.get("totalTokens", prompt_tokens + completion_tokens) or 0)
+        prompt_tokens = invocation.get("promptTokens")
+        completion_tokens = invocation.get("completionTokens")
+        total_tokens = invocation.get("totalTokens",
+            prompt_tokens + completion_tokens if prompt_tokens is not None and completion_tokens is not None else None)
         cursor.execute('''
             INSERT INTO model_invocations (
                 traceId, platform, conversationId, sessionId, modelName, loraName, costTime,
-                promptTokens, completionTokens, totalTokens, usedRag, usedLora, errorType, createdAt
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                promptTokens, completionTokens, totalTokens, usageSource, usedRag, usedLora, errorType, createdAt
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
             invocation.get("traceId", ""),
             invocation.get("platform", "qq"),
@@ -2283,6 +2285,7 @@ class SQLiteDB:
             prompt_tokens,
             completion_tokens,
             total_tokens,
+            invocation.get("usageSource", "legacy_unverified"),
             int(bool(invocation.get("usedRag", False))),
             int(bool(invocation.get("usedLora", False))),
             invocation.get("errorType", ""),

@@ -48,7 +48,7 @@ async def test_direct_chat_401_is_502_with_failed_accounting_and_no_saved_answer
     invocation = records(rig)
     assert len(invocation) == 1
     assert invocation[0]["errorType"] == "ProviderResponseError"
-    assert invocation[0]["completionTokens"] == 0 and archives(rig) == []
+    assert invocation[0]["completionTokens"] is None and archives(rig) == []
     assert rig.active == 0 and rig.semaphore._value == 4
 
 
@@ -83,7 +83,7 @@ async def test_401_and_record_failure_keep_primary_503_receipt_fields(circuit_ri
     assert "synthetic-private" not in json.dumps(error.detail, ensure_ascii=False)
     assert len(rig.calls) == len(attempted_records) == 1
     assert attempted_records[0]["errorType"] == "ProviderResponseError"
-    assert attempted_records[0]["completionTokens"] == 0
+    assert attempted_records[0]["completionTokens"] is None
     assert records(rig) == archives(rig) == []
     assert rig.active == 0 and rig.semaphore._value == 4
 

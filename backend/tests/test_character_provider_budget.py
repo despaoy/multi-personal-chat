@@ -342,7 +342,7 @@ async def test_queued_http_turn_uses_execution_provider_and_one_owning_service(b
         assert len(saved) == len(invocations) == 1
         assert saved[0]["message"] == QUERY and saved[0]["reply"] == BODY
         assert saved[0]["traceId"] == request.traceId
-        assert invocations[0]["errorType"] == "" and invocations[0]["completionTokens"] > 0
+        assert invocations[0]["errorType"] == "" and invocations[0]["completionTokens"] is None
         relationship = await DatabaseCharacterMemoryRepository(database).get_relationship_record(ROLE, rig.scope)
         assert relationship["interaction_count"] == 1
         assert other_database.execute_sql("SELECT * FROM messages") == []

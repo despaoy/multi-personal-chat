@@ -66,7 +66,7 @@ def installed(monkeypatch):
         calls.append(dict(body=json.loads(request.content), endpoint=str(request.url), auth=request.headers["Authorization"]))
         if state.on_request is not None:
             state.on_request()
-        return httpx.Response(state.status, json={"choices": [{"finish_reason": state.finish, "message": {"content": ANSWER}}]})
+        return httpx.Response(state.status, json={"usage": {"prompt_tokens": 100, "completion_tokens": 20, "total_tokens": 120}, "choices": [{"finish_reason": state.finish, "message": {"content": ANSWER}}]})
 
     @asynccontextmanager
     async def acquire(_self, timeout):

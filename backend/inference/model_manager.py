@@ -235,12 +235,15 @@ class OpenAICompatProvider(BaseProvider):
         frequency_penalty=0.0, repetition_penalty=1.0, enable_thinking=False, lora_name=None,
     ):
         base_url, api_key, model = self.base_url, self.api_key, self.model
+        from inference.usage import begin_completion
+
         validate_completion_options(
             base_url, top_p=top_p, frequency_penalty=frequency_penalty,
             repetition_penalty=repetition_penalty, enable_thinking=enable_thinking, lora_name=lora_name,
         )
         if not api_key:
             raise RuntimeError("未配置 API Key，请在设置页面配置 OpenAI 兼容 API Key")
+        usage_attempt = begin_completion()
         start = time.time()
         async with self._acquire_http_client(timeout=120.0) as client:
             # P1-M4 fix: 请求级 timeout 覆盖 pool 默认值，确保生效
@@ -263,6 +266,8 @@ class OpenAICompatProvider(BaseProvider):
             )
         if response.status_code == 200:
             data = response.json()
+            if usage_attempt is not None:
+                usage_attempt.read(data)
             reply = completed_chat_content(data)
             cost = round(time.time() - start, 2)
             return reply, cost

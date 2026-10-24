@@ -208,9 +208,11 @@ async def _generate_reply_impl(
             context = await resolve_request_context(get_model_manager())
         except Exception as exc:
             raise HTTPException(503, "模型配置读取失败，请检查配置及模型状态后重试") from exc
+    from inference.usage import collect_usage
+
     slots = []
     try:
-        with use_request_context(context):
+        with use_request_context(context), collect_usage():
             return await _generate_reply_body(
                 request, current_user, persist_message=persist_message, enable_rag=enable_rag,
                 record_invocation=record_invocation, character_service=character_service,
@@ -529,7 +531,7 @@ async def _generate_reply_body(
             if record_invocation:
                 await _record_model_invocation(
                     request, model_name, lora_name, cost_time, used_rag=used_rag,
-                    completion_text=reply, error_type="", database=message_db,
+                    error_type="", database=message_db,
                 )
             set_consecutive("model_failure", True)
         message_saved = False
@@ -1377,12 +1379,6 @@ async def _generate_with_retrieval(
     return generation.reply, generation.plan.retrieval.has_evidence or bool(rag_meta.get("abstained")), rag_meta
 
 
-def _estimate_tokens(text: str) -> int:
-    if not text:
-        return 0
-    return max(1, len(text) // 4)
-
-
 async def _record_model_invocation(
     request: MessageRequest,
     model_name: str,
@@ -1391,14 +1387,13 @@ async def _record_model_invocation(
     *,
     used_rag: bool = False,
     error_type: str = "",
-    completion_text: str = "",
     database=None,
 ):
     """Record required accounting before archive; timed-out writes may still commit."""
+    from inference.usage import invocation_usage
+
     target_db = database if database is not None else db
     try:
-        prompt_tokens = _estimate_tokens(request.message)
-        completion_tokens = 0 if error_type else _estimate_tokens(completion_text)
         await asyncio.wait_for(
             asyncio.to_thread(
                 target_db.add_model_invocation,
@@ -1410,9 +1405,7 @@ async def _record_model_invocation(
                     "modelName": model_name,
                     "loraName": lora_name,
                     "costTime": cost_time,
-                    "promptTokens": prompt_tokens,
-                    "completionTokens": completion_tokens,
-                    "totalTokens": prompt_tokens + completion_tokens,
+                    **invocation_usage(),
                     "usedRag": used_rag,
                     "usedLora": bool(lora_name and lora_name != "default"),
                     "errorType": error_type,

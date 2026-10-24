@@ -122,7 +122,7 @@ async def test_healthy_native_success_records_and_archives_real_reply(circuit_ri
     assert stats["success_calls"] == 1 and stats["failure_calls"] == 0
     rows, saved = records(rig), archives(rig)
     assert len(rows) == len(saved) == 1
-    assert rows[0]["errorType"] == "" and rows[0]["completionTokens"] > 0
+    assert rows[0]["errorType"] == "" and rows[0]["completionTokens"] is None
     assert saved[0]["message"] == FACTS and saved[0]["reply"] == REPLY
     assert saved[0]["traceId"] == request("healthy").traceId
     assert rig.active == 0 and rig.semaphore._value == 4
@@ -156,7 +156,7 @@ async def test_five_real_failures_then_open_rejection_has_actual_cause_and_recov
     rows = records(rig)
     assert len(rows) == 6
     assert [row["errorType"] for row in rows] == ["RuntimeError"] * 5 + ["CircuitOpenError"]
-    assert all(row["completionTokens"] == 0 for row in rows)
+    assert all(row["completionTokens"] is None for row in rows)
     assert breaker.get_stats()["failure_calls"] == 5  # Rejection never executes the provider.
 
     expire_open_interval(breaker)
@@ -166,7 +166,7 @@ async def test_five_real_failures_then_open_rejection_has_actual_cause_and_recov
     assert len(rig.calls) == 6 and sum(call["provider_fee"] for call in rig.calls) == 0
     assert breaker.state == CircuitState.CLOSED
     rows, saved = records(rig), archives(rig)
-    assert len(rows) == 7 and rows[-1]["errorType"] == "" and rows[-1]["completionTokens"] > 0
+    assert len(rows) == 7 and rows[-1]["errorType"] == "" and rows[-1]["completionTokens"] is None
     assert len(saved) == 1 and saved[0]["reply"] == REPLY
     assert saved[0]["traceId"] == request("recovered").traceId
     assert rig.active == 0 and rig.semaphore._value == 4

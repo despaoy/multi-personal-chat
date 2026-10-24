@@ -65,7 +65,7 @@ def owned(monkeypatch):
 
     def respond(request):
         http_calls.append(dict(body=json.loads(request.content), auth=request.headers["Authorization"]))
-        return httpx.Response(200, json={"choices": [{"finish_reason": "stop", "message": {"content": ANSWER}}]})
+        return httpx.Response(200, json={"usage": {"prompt_tokens": 100, "completion_tokens": 20, "total_tokens": 120}, "choices": [{"finish_reason": "stop", "message": {"content": ANSWER}}]})
 
     @asynccontextmanager
     async def acquire(_self, timeout):

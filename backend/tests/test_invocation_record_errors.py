@@ -48,11 +48,12 @@ def generation(monkeypatch, database):
 @pytest.mark.asyncio
 async def test_success_records_real_sqlite_row_without_copying_private_text(database):
     await generate._record_model_invocation(request(), "fixture-model", "default", 0.2,
-        completion_text=REPLY, used_rag=True, database=database)
+        used_rag=True, database=database)
     rows = database.execute_sql("SELECT * FROM model_invocations")
     assert len(rows) == 1 and rows[0]["traceId"] == "fiction-invocation-trace"
     assert rows[0]["usedRag"] == 1 and rows[0]["errorType"] == ""
-    assert rows[0]["totalTokens"] == rows[0]["promptTokens"] + rows[0]["completionTokens"] > 0
+    assert rows[0]["totalTokens"] is rows[0]["promptTokens"] is rows[0]["completionTokens"] is None
+    assert rows[0]["usageSource"] == "unavailable"
     assert FACTS not in str(rows) and REPLY not in str(rows)
 
 
@@ -102,7 +103,7 @@ async def test_model_failure_keeps_primary_cause_and_reports_recording_failure(g
         assert counts == ["model_failures", "db_write_failures"]
     else:
         rows = database.execute_sql("SELECT * FROM model_invocations")
-        assert len(rows) == 1 and rows[0]["errorType"] == "RuntimeError" and rows[0]["completionTokens"] == 0
+        assert len(rows) == 1 and rows[0]["errorType"] == "RuntimeError" and rows[0]["completionTokens"] is None and rows[0]["usageSource"] == "unavailable"
         assert counts == ["model_failures"]
     assert "fiction-private-model-error" not in str(error.value.detail) + caplog.text
     assert "fiction-private-accounting-error" not in str(error.value.detail) + caplog.text
@@ -133,7 +134,7 @@ async def test_timeout_or_cancellation_does_not_claim_thread_rollback_or_retry(d
             done.set()
     monkeypatch.setattr(generate, "_DB_WRITE_TIMEOUT", 1 if cancel else 0.02)
     task = asyncio.create_task(generate._record_model_invocation(request(), "fixture-model", "default", 0.2,
-        completion_text=REPLY, database=SimpleNamespace(add_model_invocation=delayed)))
+        database=SimpleNamespace(add_model_invocation=delayed)))
     try:
         assert await asyncio.to_thread(entered.wait, 1)
         if cancel:

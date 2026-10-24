@@ -56,4 +56,7 @@ def detached_request_context():
     """Long-lived owners keep logging context, without retaining this request."""
     context = copy_context()
     context.run(_current.set, None)
+    from inference.usage import clear_usage_context
+
+    context.run(clear_usage_context)
     return context
