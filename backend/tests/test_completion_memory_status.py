@@ -3,7 +3,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
 import pytest
-from services.character_context import CharacterContextService, TurnInput, _TurnOutcome
+from services.character_context import CharacterContextService, TurnInput
 
 from character.models import RelationshipState, UserScope
 from db.schemas import MessageRequest
@@ -28,7 +28,7 @@ async def test_scheduling_failure_preserves_source_receipt_and_reports_failure(s
     service, prepared, turn, repo, scheduler = scenario
     result = await service.complete_turn(prepared, turn, source_message_id='source')
     assert result.source_capture == 'recorded' and result.memory_enrichment_status == 'failed'
-    assert result.new_memories == 0 and not result.memory_enrichment_scheduled
+    assert not result.memory_enrichment_scheduled
     assert result.interaction_count == 1
     repo.capture_source.assert_awaited_once()
     scheduler.schedule.assert_called_once()
@@ -48,14 +48,16 @@ async def test_actual_service_failure_is_visible_through_web_completion(scenario
 
 
 @pytest.mark.asyncio
-async def test_partial_completion_warning_is_distinct_from_total_failure():
+async def test_partial_completion_warning_is_distinct_from_total_failure(scenario):
     from api import generate
 
-    service = SimpleNamespace(complete_turn=AsyncMock(return_value=_TurnOutcome(
-        source_capture='', memory_enrichment_status='partial', new_memories=1)))
-    warning = await generate._complete_character_turn(SimpleNamespace(character_id='role'),
-        MessageRequest(message='我今年大三，专业是统计学。', sourceMessageId='source'), character_service=service)
+    service, prepared, turn, repo, scheduler = scenario
+    prepared.memory_operation_receipt = dict(status='partial', accepted=2, persisted=1)
+    warning = await generate._complete_character_turn(prepared,
+        MessageRequest(message=turn.message, sourceMessageId='source'), character_service=service)
     assert '部分保存' in warning and '部分写入失败' in warning
+    repo.capture_source.assert_not_awaited()
+    scheduler.schedule.assert_not_called()
 
 
 @pytest.mark.asyncio

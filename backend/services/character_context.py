@@ -159,7 +159,6 @@ class _TurnOutcome:
     """生成后写回的执行回执，供接口反馈和投递状态判断使用。"""
 
     failed_writes: tuple[str, ...] = ()
-    new_memories: int = 0
     memory_enrichment_scheduled: bool = False
     source_capture: str = ""
     memory_enrichment_status: str = "skipped"
@@ -530,7 +529,7 @@ class CharacterContextService:
                 outcome.memory_enrichment_status = "disabled"
         except Exception as exc:
             if outcome.source_capture != "failed":
-                outcome.memory_enrichment_status = "partial" if outcome.new_memories else "failed"
+                outcome.memory_enrichment_status = "failed"
             logger.warning("角色长期记忆写入失败 character=%s type=%s",
                            prepared.character_id, type(exc).__name__)
 

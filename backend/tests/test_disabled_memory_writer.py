@@ -144,7 +144,7 @@ async def test_real_disabled_completion_is_visible_in_web_reply_and_exact_archiv
     assert len(rig.outcomes) == 1
     outcome = rig.outcomes[0]
     assert outcome.memory_enrichment_status == outcome.memory_enrichment_mode == "disabled"
-    assert outcome.new_memories == 0 and not outcome.memory_enrichment_scheduled
+    assert not outcome.memory_enrichment_scheduled
     assert outcome.source_capture == "" and outcome.failed_writes == () and outcome.interaction_count == 1
     assert result.modelInvoked is False and result.warnings[0] == "合成生成夹具提示"
     warning = result.warnings[-1]
@@ -204,7 +204,7 @@ async def test_real_disabled_delivery_is_terminal_with_reason_and_never_replayed
         assert marker["semantic_receipt"]["status"] == "disabled"
         outcome = marker["completion_outcome"]
         assert outcome["memory_enrichment_status"] == outcome["memory_enrichment_mode"] == "disabled"
-        assert outcome["memory_enrichment_scheduled"] is False and outcome["new_memories"] == 0
+        assert outcome["memory_enrichment_scheduled"] is False
         assert outcome["failed_writes"] == [] and outcome["interaction_count"] == 1
         assert marker["turn_finished"] is True and response["reply"] == original_reply
         assert len(rig.outcomes) == 1
