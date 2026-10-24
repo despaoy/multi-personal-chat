@@ -14,6 +14,8 @@ from contextlib import nullcontext
 from datetime import datetime, timezone
 from typing import Any
 
+from app.providers import get_vllm_client
+
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import ValidationError
 from services.chat_generation import ChatGenerationService
@@ -125,14 +127,6 @@ def _security_policy_response() -> GenerateResponse:
     )
 
 
-async def get_vllm_client():
-    """Apply API enablement and error semantics; the adapter owns the client."""
-    from inference.vllm_client import get_enabled_vllm_client
-
-    try:
-        return await get_enabled_vllm_client()
-    except Exception as exc:
-        raise HTTPException(503, "vLLM 客户端初始化失败，请检查服务及配置后重试") from exc
 
 
 router = APIRouter()

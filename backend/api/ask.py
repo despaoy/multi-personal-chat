@@ -69,7 +69,7 @@ async def _resolve_generate_adapters(context: InferenceRequestContext) -> tuple[
             if resolved is not None:
                 return resolved
 
-            from api.generate import get_vllm_client
+            from app.providers import get_vllm_client
 
             if selected == "openai_compat":
 

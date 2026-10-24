@@ -10,7 +10,8 @@ from inference.request_context import resolve_request_context
 
 @pytest.mark.asyncio
 async def test_cloud_knowledge_answer_keeps_roles_parameters_and_selected_model(monkeypatch):
-    from api import ask, generate
+    from api import ask
+    from app import providers as model_dependencies
     from inference import model_manager
 
     calls = []
@@ -35,7 +36,7 @@ async def test_cloud_knowledge_answer_keeps_roles_parameters_and_selected_model(
     async def wrong_provider():
         raise AssertionError("Selecting cloud must never initialize local vLLM")
 
-    monkeypatch.setattr(generate, "get_vllm_client", wrong_provider)
+    monkeypatch.setattr(model_dependencies, "get_vllm_client", wrong_provider)
     context = await resolve_request_context(manager)
     answer, stream, model, _identity = await ask._resolve_generate_adapters(context)
     assert not calls
@@ -56,7 +57,8 @@ async def test_cloud_knowledge_answer_keeps_roles_parameters_and_selected_model(
 async def test_cloud_knowledge_cancellation_propagates_without_local_fallback(monkeypatch):
     import asyncio
 
-    from api import ask, generate
+    from api import ask
+    from app import providers as model_dependencies
     from inference import model_manager
 
     entered = asyncio.Event()
@@ -78,7 +80,7 @@ async def test_cloud_knowledge_cancellation_propagates_without_local_fallback(mo
     async def wrong_provider():
         raise AssertionError("Cancellation must not switch provider")
 
-    monkeypatch.setattr(generate, "get_vllm_client", wrong_provider)
+    monkeypatch.setattr(model_dependencies, "get_vllm_client", wrong_provider)
     context = await resolve_request_context(manager)
     answer, _, _, _identity = await ask._resolve_generate_adapters(context)
     pending = asyncio.create_task(
@@ -95,7 +97,8 @@ async def test_cloud_knowledge_cancellation_propagates_without_local_fallback(mo
 async def test_knowledge_provider_cannot_fall_back_to_flattened_generation(monkeypatch, selected, streaming):
     from unittest.mock import AsyncMock
 
-    from api import ask, generate
+    from api import ask
+    from app import providers as model_dependencies
     from inference import model_manager
 
     fallback = AsyncMock(side_effect=AssertionError("must not flatten or redirect the request"))
@@ -106,7 +109,7 @@ async def test_knowledge_provider_cannot_fall_back_to_flattened_generation(monke
     )
     monkeypatch.setattr(model_manager, "get_model_manager", lambda: manager)
     client = AsyncMock(return_value=None)
-    monkeypatch.setattr(generate, "get_vllm_client", client)
+    monkeypatch.setattr(model_dependencies, "get_vllm_client", client)
     context = await resolve_request_context(manager)
     answer, stream, _, _identity = await ask._resolve_generate_adapters(context)
     client.assert_not_awaited()

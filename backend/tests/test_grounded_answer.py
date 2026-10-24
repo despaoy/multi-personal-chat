@@ -156,7 +156,7 @@ async def test_stream_only_emits_validated_answer_and_closes_provider_stream():
 @pytest.mark.asyncio
 async def test_api_generation_adapters_resolve_vllm_only_on_first_generation(monkeypatch):
     from api import ask as ask_api
-    from api import generate as generate_api
+    from app import providers as model_dependencies
 
     resolutions = 0
 
@@ -183,7 +183,7 @@ async def test_api_generation_adapters_resolve_vllm_only_on_first_generation(mon
     provider = SimpleNamespace(name="vllm", get_status=lambda: {"modelName": "local-test-model"})
     manager = SimpleNamespace(_current_provider=SimpleNamespace(value="vllm"), get_current_provider=lambda: provider)
     monkeypatch.setattr(model_manager, "get_model_manager", lambda: manager)
-    monkeypatch.setattr(generate_api, "get_vllm_client", get_client)
+    monkeypatch.setattr(model_dependencies, "get_vllm_client", get_client)
     context = await resolve_request_context(manager)
     generate, generate_stream, _model_id, _identity = await ask_api._resolve_generate_adapters(context)
     assert resolutions == 0

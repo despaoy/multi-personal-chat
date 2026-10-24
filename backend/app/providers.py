@@ -1,6 +1,6 @@
 """FastAPI providers for application-level dependencies."""
 
-from fastapi import Request
+from fastapi import HTTPException, Request
 
 from app.runtime import get_runtime_container
 from repositories.character_memory import (
@@ -42,3 +42,13 @@ def get_model_management_service() -> ModelManagementService:
     from inference.model_manager import get_model_manager
 
     return ModelManagerService(get_model_manager())
+
+
+async def get_vllm_client():
+    """Apply API enablement and error semantics; the adapter owns the client."""
+    from inference.vllm_client import get_enabled_vllm_client
+
+    try:
+        return await get_enabled_vllm_client()
+    except Exception as exc:
+        raise HTTPException(503, "vLLM 客户端初始化失败，请检查服务及配置后重试") from exc
