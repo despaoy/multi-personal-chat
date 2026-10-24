@@ -424,3 +424,84 @@ def test_invalid_branch_setting_is_not_reported_as_disabled(monkeypatch, value):
         require_narrative_enabled()
     if value:
         assert value not in str(caught.value)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("failure", [None, "snapshot", "prepare"])
+async def test_canonical_preparation_and_generation_share_one_model_context(monkeypatch, failure):
+    from api import narrative, generate
+    from app.runtime import RuntimeContainer
+    from inference import model_manager
+    from inference.request_context import get_request_context
+    from inference.provider_context import get_provider_context_budget
+    from services import character_context
+
+    events = []
+    error = RuntimeError("isolated context preparation failure")
+    provider = SimpleNamespace(name="openai_compat", base_url="https://isolated.invalid/v1", model="isolated-model", api_key="")
+    manager = SimpleNamespace(_current_provider=SimpleNamespace(value="openai_compat"), get_current_provider=lambda: provider)
+
+    def snapshot():
+        events.append("snapshot")
+        if failure == "snapshot":
+            raise error
+        manager._current_provider.value = "vllm"
+        return provider
+
+    provider.snapshot = snapshot
+    monkeypatch.setattr(model_manager, "get_model_manager", lambda: manager)
+    monkeypatch.setenv("OPENAI_COMPAT_CONTEXT_WINDOW_TOKENS", "32768")
+    database = object()
+    captured = []
+    prepared = object()
+
+    def build(actual_database):
+        assert actual_database is database
+        assert get_request_context() is not None
+        captured.append(get_request_context())
+        assert get_provider_context_budget().window_tokens == 32768
+        events.append("build")
+
+        async def prepare(turn, character_id):
+            assert turn.message == "核对已提供的完整记录，不推断实际办理结果。"
+            assert character_id == "isolated-character"
+            assert get_request_context() is captured[0]
+            events.append("prepare")
+            if failure == "prepare":
+                raise error
+            return prepared
+
+        return SimpleNamespace(prepare_turn=prepare)
+
+    async def reply(request, user, **kwargs):
+        assert get_request_context() is captured[0]
+        assert kwargs["prepared_override"] is prepared
+        assert kwargs["message_db"] is database
+        events.append("generate")
+        return GenerateResponse(reply="隔离测试回答", model="isolated-model", costTime=0)
+
+    async def submit(job, **kwargs):
+        return await job()
+
+    runtime = SimpleNamespace(check_rate_limits=AsyncMock(), priority_for=lambda *args: 1, submit=submit)
+    app = FastAPI()
+    app.state.runtime_container = RuntimeContainer(database, lambda: False, runtime)
+    monkeypatch.setattr(narrative, "validate_character", lambda _: None)
+    monkeypatch.setattr(character_context, "build_character_context_service", build)
+    monkeypatch.setattr(generate, "_generate_reply_impl", reply)
+    body = narrative.CanonicalMessage(character_id="isolated-character", message="核对已提供的完整记录，不推断实际办理结果。")
+    assert get_request_context() is None
+    if failure == "snapshot":
+        with pytest.raises(HTTPException) as caught:
+            await narrative.canonical_generate(body, SimpleNamespace(app=app), {"user_id": 1})
+        assert caught.value.status_code == 503 and caught.value.__cause__ is error
+        assert events == ["snapshot"]
+    elif failure == "prepare":
+        with pytest.raises(RuntimeError) as caught:
+            await narrative.canonical_generate(body, SimpleNamespace(app=app), {"user_id": 1})
+        assert caught.value is error and events == ["snapshot", "build", "prepare"]
+    else:
+        response = await narrative.canonical_generate(body, SimpleNamespace(app=app), {"user_id": 1})
+        assert response.model == "isolated-model"
+        assert events == ["snapshot", "build", "prepare", "generate"]
+    assert get_request_context() is None
