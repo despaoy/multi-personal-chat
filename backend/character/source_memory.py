@@ -81,6 +81,9 @@ def compile_sources(rows, *, max_chars=2400, max_items=4):
     if max_chars is not None and (type(max_chars) is not int or max_chars <= 0):
         raise ValueError("Source character budget must be positive or deferred")
     records = []
+    payload = dict(source_kind="historical_user_utterances", speaker_role="user",
+                   described_subject="not_resolved", current_validity="not_resolved", records=records)
+    size = len(escape(json.dumps(payload, ensure_ascii=False, separators=(",", ":")), quote=False)) if max_chars is not None else 0
     omitted = []
     for row in rows:
         if max_items is not None and len(records) == max_items:
@@ -88,18 +91,14 @@ def compile_sources(rows, *, max_chars=2400, max_items=4):
             continue
         record = dict(source_id=row["source_message_id"], observed_at=row["observed_at"], text=row["body"])
         if max_chars is not None:
-            candidate = json.dumps(dict(source_kind="historical_user_utterances", speaker_role="user",
-                described_subject="not_resolved", current_validity="not_resolved", records=[*records, record]),
-                ensure_ascii=False, separators=(",", ":"))
-            if len(escape(candidate, quote=False)) > max_chars:
+            size += len(escape(json.dumps(record, ensure_ascii=False, separators=(",", ":")), quote=False)) + bool(records)
+            if size > max_chars:
                 # Do not substitute older/lower-ranked excerpts when the best
                 # complete source (possibly a correction) cannot fit.
                 omitted.append(dict(source_id=row["source_message_id"], reason="whole_source_budget"))
                 return SourceRecall("", dict(status="budget_omitted", omitted=omitted, selected_ids=[]))
         records.append(record)
-    packet = (json.dumps(dict(source_kind="historical_user_utterances", speaker_role="user",
-                 described_subject="not_resolved", current_validity="not_resolved", records=records),
-                 ensure_ascii=False, separators=(",", ":")) if records else "")
+    packet = json.dumps(payload, ensure_ascii=False, separators=(",", ":")) if records else ""
     return SourceRecall(packet, dict(status="available" if records else "no_match", omitted=omitted,
                                     selected_ids=[row["source_id"] for row in records]))
 
