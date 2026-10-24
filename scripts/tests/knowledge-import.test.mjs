@@ -29,7 +29,7 @@ function declaration(source, name) {
 }
 const { harness } = await load(`export function harness(bindings) {
   const { api, toast, fetchFolders, fetchDocuments, fetchBases, setError,
-    setUploading, setImporting, activeBaseId, fileInputRef } = bindings;
+    setUploading, setImporting, activeBaseId, fileInputRef, textEncoding } = bindings;
   ${declaration(hookSource, 'uploadZip')}
   ${declaration(hookSource, 'importDir')}
   ${declaration(pageSource, 'notifyKnowledgeImport')}
@@ -42,7 +42,7 @@ function fixture() {
   const notices = [], refreshes = [], errors = [], busy = [];
   const toast = Object.fromEntries(['success', 'info', 'warning', 'error'].map(kind => [kind, message => notices.push({ kind, message })]));
   const fileInputRef = { current: { value: 'selected' } };
-  const handlers = harness({ api, toast, activeBaseId: 17, fileInputRef,
+  const handlers = harness({ api, toast, activeBaseId: 17, fileInputRef, textEncoding: 'unicode',
     fetchFolders: async () => refreshes.push('folders'),
     fetchDocuments: async () => refreshes.push('documents'),
     fetchBases: async () => refreshes.push('bases'),
@@ -73,7 +73,9 @@ for (const route of ['zip', 'directory']) {
       let calls = 0;
       t.mock.method(globalThis, 'fetch', async (url, options) => {
         calls++;
-        assert.match(url, route === 'zip' ? /\/knowledge\/bases\/17\/upload-zip$/ : /\/knowledge\/scan\/import\?/);
+        const requestUrl = new URL(url, 'http://localhost');
+        assert.match(requestUrl.pathname, route === 'zip' ? /\/knowledge\/bases\/17\/upload-zip$/ : /\/knowledge\/scan\/import$/);
+        assert.equal(requestUrl.searchParams.get('text_encoding'), 'unicode');
         assert.equal(options.credentials, 'include');
         return Response.json(result);
       });

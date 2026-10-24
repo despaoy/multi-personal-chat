@@ -88,13 +88,6 @@ export function isProxyPathAllowed(backendPath: string): boolean {
   return PROXY_ROUTE_POLICIES.some(({ prefix }) => matchesProxyPrefix(pathOnly, prefix));
 }
 
-interface ProxyOptions {
-  method?: string;
-  body?: unknown;
-  headers?: Record<string, string>;
-  timeout?: number;
-}
-
 function isUnsafeMethod(method: string): boolean {
   return ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method.toUpperCase());
 }
@@ -152,171 +145,70 @@ function isSameOriginRequest(request: Request): boolean {
   return true;
 }
 
-/**
- * 代理请求到后端 FastAPI 服务
- *
- * 认证策略：
- * 1. 从 httpOnly Cookie (access_token) 中提取 JWT，转为 Authorization: Bearer 头转发
- *    （Node.js fetch 会忽略手动设置的 Cookie 头，因此必须转为 Authorization 头）
- * 2. 回退到原始 Authorization header（向后兼容）
- */
+/** Forward the original request; own cancellation until the response body finishes. */
 export async function proxyRequest(
   request: Request,
   path: string,
-  options: ProxyOptions = {}
+  options: { timeout?: number } = {}
 ): Promise<Response> {
-  const { method = 'GET', body, headers: optHeaders = {}, timeout } = options;
-  const effectiveTimeout = timeout ?? defaultProxyTimeout(path);
-  const isFormDataBody = typeof FormData !== 'undefined' && body instanceof FormData;
-  const isStreamBody = typeof ReadableStream !== 'undefined' && body instanceof ReadableStream;
-
+  const method = request.method;
   if (isUnsafeMethod(method) && !isSameOriginRequest(request)) {
-    return new Response(JSON.stringify({ detail: 'CSRF check failed' }), {
-      status: 403,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return Response.json({ detail: 'CSRF check failed' }, { status: 403 });
   }
-
-  // 安全：禁止转发到未授权的后端路径，防止把整张后端 API 表面开放成代理
   if (!isProxyPathAllowed(path)) {
-    return new Response(
-      JSON.stringify({ detail: '禁止访问该路径' }),
-      { status: 403, headers: { 'Content-Type': 'application/json' } }
-    );
+    return Response.json({ detail: '禁止访问该路径' }, { status: 403 });
   }
 
-  const headers: Record<string, string> = { ...optHeaders };
-
-  // 认证：从 Cookie 中提取 JWT token，转为 Authorization 头转发
-  // 注意：Node.js fetch 会忽略手动设置的 Cookie 头，必须用 Authorization 头传递认证信息
-  const cookieHeader = request.headers.get('Cookie') || '';
-  if (cookieHeader) {
-    // 正确解析 Cookie：用 substring 而非 split('=') 避免 JWT 中的 = 字符被截断
-    const cookieParts = cookieHeader.split(';');
-    for (const part of cookieParts) {
-      const trimmed = part.trim();
-      if (trimmed.startsWith('access_token=')) {
-        const token = trimmed.substring('access_token='.length);
-        if (token) {
-          headers['Authorization'] = `Bearer ${token}`;
-        }
-        break;
-      }
-    }
-  }
-  if (!headers['Authorization']) {
-    const authHeader = request.headers.get('Authorization');
-    if (authHeader) {
-      headers['Authorization'] = authHeader;
-    }
-  }
-
-  // 转发 Content-Type
-  const contentType = request.headers.get('Content-Type');
-  if (contentType && method !== 'GET' && !isFormDataBody) {
-    headers['Content-Type'] = contentType;
-  }
-  if (isStreamBody) {
-    const contentLength = request.headers.get('Content-Length');
-    if (contentLength) headers['Content-Length'] = contentLength;
+  const headers = new Headers();
+  const cookie = request.headers.get('Cookie')?.split(';')
+    .map(part => part.trim()).find(part => part.startsWith('access_token='));
+  const token = cookie?.substring('access_token='.length);
+  const authorization = token ? `Bearer ${token}` : request.headers.get('Authorization');
+  if (authorization) headers.set('Authorization', authorization);
+  for (const name of ['Content-Type', 'Content-Length']) {
+    const value = request.headers.get(name);
+    if (value) headers.set(name, value);
   }
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), effectiveTimeout);
+  const signal = AbortSignal.any([request.signal, controller.signal]);
+  const finish = () => clearTimeout(timeoutId);
+  const timeoutId = setTimeout(
+    () => controller.abort(new DOMException('请求超时', 'TimeoutError')),
+    options.timeout ?? defaultProxyTimeout(path)
+  );
 
   try {
-    const fetchOptions: RequestInit = {
-      method,
-      headers,
-      signal: controller.signal,
-    };
-
-    if (body && method !== 'GET') {
-      if (isFormDataBody || isStreamBody) {
-        fetchOptions.body = body as BodyInit;
-        if (isStreamBody) {
-          (fetchOptions as RequestInit & { duplex: 'half' }).duplex = 'half';
-        }
-      } else {
-        fetchOptions.body = typeof body === 'string' ? body : JSON.stringify(body);
-      }
+    const fetchOptions: RequestInit & { duplex?: 'half' } = { method, headers, signal };
+    if (request.body) {
+      fetchOptions.body = request.body;
+      fetchOptions.duplex = 'half';
     }
-
     const response = await fetch(`${BACKEND_URL}${path}`, fetchOptions);
-    return response;
-  } catch (error) {
-    if (error instanceof DOMException && error.name === 'AbortError') {
-      return new Response(JSON.stringify({ detail: '请求超时' }), {
-        status: 504,
-        headers: { 'Content-Type': 'application/json' },
-      });
+    const responseHeaders = new Headers(response.headers);
+    // fetch has already decoded compressed responses; their wire headers are stale.
+    responseHeaders.delete('Content-Encoding');
+    responseHeaders.delete('Content-Length');
+    const init = { status: response.status, statusText: response.statusText, headers: responseHeaders };
+    if (!response.body || response.headers.get('Content-Type')?.includes('application/json')) {
+      const body = response.body ? await response.arrayBuffer() : null;
+      finish();
+      return new Response(body, init);
     }
-    return new Response(JSON.stringify({ detail: '后端服务不可用' }), {
-      status: 502,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  } finally {
-    clearTimeout(timeoutId);
+
+    const stream = new TransformStream<Uint8Array, Uint8Array>();
+    // pipeTo forwards failure/cancellation to the readable side; both outcomes release the timer.
+    void response.body.pipeTo(stream.writable, { signal }).then(finish, finish);
+    return new Response(stream.readable, init);
+  } catch (error) {
+    finish();
+    request.signal.throwIfAborted();
+    if (controller.signal.aborted) {
+      return Response.json({ detail: '请求超时' }, { status: 504 });
+    }
+    if (error instanceof TypeError) {
+      return Response.json({ detail: '后端服务不可用' }, { status: 502 });
+    }
+    throw error;
   }
 }
-
-/**
- * 代理 GET 请求
- */
-export async function proxyGet(request: Request, path: string): Promise<Response> {
-  return proxyRequest(request, path);
-}
-
-/**
- * 代理 POST 请求，自动读取请求体
- */
-export async function proxyPost(request: Request, path: string): Promise<Response> {
-  let body: unknown;
-  try {
-    const text = await request.text();
-    body = JSON.parse(text);
-  } catch {
-    return new Response(JSON.stringify({ detail: '请求体不是有效的 JSON' }), {
-      status: 400,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
-  return proxyRequest(request, path, {
-    method: 'POST',
-    body,
-    headers: { 'Content-Type': 'application/json' },
-  });
-}
-
-/**
- * 代理 PUT 请求，自动读取请求体
- */
-export async function proxyPut(request: Request, path: string): Promise<Response> {
-  const body = await request.json();
-  return proxyRequest(request, path, {
-    method: 'PUT',
-    body,
-    headers: { 'Content-Type': 'application/json' },
-  });
-}
-
-/**
- * 代理 PATCH 请求，自动读取请求体
- */
-export async function proxyPatch(request: Request, path: string): Promise<Response> {
-  const body = await request.json();
-  return proxyRequest(request, path, {
-    method: 'PATCH',
-    body,
-    headers: { 'Content-Type': 'application/json' },
-  });
-}
-
-/**
- * 代理 DELETE 请求
- */
-export async function proxyDelete(request: Request, path: string): Promise<Response> {
-  return proxyRequest(request, path, { method: 'DELETE' });
-}
-
-export { BACKEND_URL };

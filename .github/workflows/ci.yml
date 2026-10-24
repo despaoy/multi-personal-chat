@@ -24,6 +24,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm ts-check
       - run: pnpm lint
+      - run: node --test scripts/tests/*.test.mjs
       - run: pnpm audit --prod --registry=https://registry.npmjs.org
       - run: pnpm build
 
