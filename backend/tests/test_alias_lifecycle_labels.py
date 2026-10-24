@@ -14,7 +14,7 @@ SOURCE = (
 )
 
 
-def parse(*, certainty="明确立即生效", context=CONDITION):
+def parse(*, certainty=None, context=CONDITION):
     return parse_llm_proposals(
         json.dumps(
             {
@@ -26,7 +26,7 @@ def parse(*, certainty="明确立即生效", context=CONDITION):
                         operation="ADD",
                         attributed_to="user",
                         confidence=0.97,
-                        qualifiers={"context": context, "certainty": certainty},
+                        qualifiers={"context": context, **({"certainty": certainty} if certainty is not None else {})},
                         scope_level="user_global",
                     )
                 ]
@@ -48,7 +48,7 @@ def test_asserted_alias_lifecycle_label_preserves_full_global_default_condition(
     assert proposal.target_memory_id == "" and proposal.target_memory_key == ""
 
 
-@pytest.mark.parametrize("certainty", ["planned", "hypothetical"])
+@pytest.mark.parametrize("certainty", ["planned", "hypothetical", "明确立即生效"])
 def test_other_certainty_labels_do_not_gain_asserted_alias_admission(certainty):
     with pytest.raises(MemoryResponseError) as caught:
         parse(certainty=certainty)

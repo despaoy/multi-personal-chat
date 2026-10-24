@@ -29,12 +29,11 @@ def proposal(source, evidence, *, kind="dislike", qualifiers=None, operation="AD
 @pytest.mark.parametrize("kind,verb,label", [("dislike", "不喜欢", "否定"), ("like", "喜欢", "肯定")])
 def test_complete_self_preference_ignores_only_redundant_labels(kind, verb, label):
     evidence = f"我{verb}紫樱茶。"
-    result = proposal(
-        evidence + "我喜欢菱谷饼，但只有周五在家才选择。",
-        evidence,
-        kind=kind,
-        qualifiers={"certainty": "稳定", "preference_strength": label},
-    )
+    with pytest.raises(ValueError, match="qualifiers"):
+        proposal(evidence + "我喜欢菱谷饼，但只有周五在家才选择。", evidence,
+                 kind=kind, qualifiers={"certainty": "稳定", "preference_strength": label})
+    result = proposal(evidence + "我喜欢菱谷饼，但只有周五在家才选择。", evidence,
+                      kind=kind, qualifiers={})
     assert len(result) == 1
     assert result[0].memory.content == f"用户说{verb}紫樱茶"
     assert not result[0].qualifiers
@@ -71,7 +70,7 @@ def test_actual_literal_preference_qualification_remains():
     result = proposal(
         "我不喜欢紫樱茶。",
         "我不喜欢紫樱茶。",
-        qualifiers={"certainty": "稳定", "preference_strength": "否定", "context": "紫樱茶"},
+        qualifiers={"context": "紫樱茶"},
     )
     assert len(result) == 1
     assert dict(result[0].qualifiers) == {"context": "紫樱茶"}

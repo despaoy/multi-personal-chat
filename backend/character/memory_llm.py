@@ -30,7 +30,7 @@ import httpx
 from character.event_memory import EVENT_TZ
 from inference.history import review_history
 from inference.context_budget import InputBudgetError
-from character.identity_alias_evidence import explicit_alias_value, identity_alias_projection, normalize_alias_labels
+from character.identity_alias_evidence import explicit_alias_value, identity_alias_projection
 from character.memory_clock import observation_clock
 from character.memory_extractor import (
     MAX_EXTRACTED_MEMORIES,
@@ -47,7 +47,6 @@ from character.memory_extractor import (
 from character.memory_query import lookup_fields
 from character.memory_subject import claims_other_subject_as_user, explicitly_other_subject
 from character.models import MemoryItem, UserScope
-from character.preference_qualifier_labels import normalize_preference_labels
 from character.temporal_provenance import model_temporal_provenance
 from db.memory_claim_guard import MemoryClaimConflict
 from db.memory_source import ClaimSourceRevokedError
@@ -158,7 +157,7 @@ MERGE/SUPERSEDE/COEXIST/RETRACT/ERASE 必须从白名单逐字复制 target_memo
 
 对明确表达的本人未来计划，“说过这个计划”与“已经实施”是两个不同的命题。若计划的时间、地点、条件或尚未实施说明分散在长消息里，使用 kind=shared_event、operation=ADD 保存当前完整发言的原话观察，绝不确认行动发生。value 取当前连续原文中的短话题（不超过 payload.proposal_constraints.max_value_chars），evidence 只复制一段相关连续原文（不超过 max_evidence_chars），content 留空、qualifiers 使用空对象 {}，不要再次概括条件。后端保留整条当前消息及全部限定，包括末尾条件，不会用短引文代替完整来源。不要拼接开头和末尾当作连续 evidence。虚构材料、第三方计划不是用户本人的计划；未确定的外部事实仍按 PENDING 处理，不因这条规则变成事实。
 
-写入新内容的 ADD/MERGE/SUPERSEDE/COEXIST/PENDING 必须填写合法 kind 和非空 value；不能因为已有 target 就省略类型或猜测类型。
+写入新内容的 ADD/MERGE/SUPERSEDE/COEXIST/PENDING 必须填写合法 kind 和非空 value；不能因为已有 target 就省略类型或猜测类型。kind 必须逐字选自 payload.proposal_constraints.kinds；existing_memories.memory_type 是存储类型，不是 kind。qualifiers 的值必须引用原文，不使用抽象状态标签代替证据。
 value 是短索引，不要把整段计划和全部限定塞进 value。qualifiers 的键只能来自 payload.proposal_constraints.qualifier_keys，值只能逐字复制 evidence，不要创造 status 等新键或概括条件。不能满足这些要求时使用上述完整原话观察，而不是裁掉末尾限定。
 
 籍贯或家乡使用 kind=origin；当前长期居住地使用 kind=residence，二者分别保存，不要归入 other_user_fact。只有来源没有区分来处与居住地时才用 location。
@@ -1027,11 +1026,7 @@ def _canonical_memory_fields(kind: str, value: str, evidence: str) -> tuple[str,
 
 
 def _supported_generic_fact(value: str, evidence: str) -> tuple[str, ExtractedMemory] | None:
-    """Recover a field from the known storage-type/kind schema collision.
-
-    Never infer from the model's prose: the existing independent extractor
-    must produce exactly one matching unqualified field/value assertion.
-    """
+    """Resolve one literal source field for evidence and target consistency."""
     matches = []
     for item in extract_memories(evidence):
         if item.memory_type != "user_fact" or item.qualifiers:
@@ -1072,7 +1067,7 @@ def _candidate_to_proposal(
     kind = _proposal_text(raw, "kind").strip()
     value = re.sub(r"\s+", " ", _proposal_text(raw, "value")).strip()
     writes_content = operation not in {"NOOP", "RETRACT", "ERASE"}
-    if (kind or writes_content) and kind not in _ALLOWED_KINDS and kind != "user_fact":
+    if (kind or writes_content) and kind not in _ALLOWED_KINDS:
         raise MemoryResponseError("kind", "记忆 LLM kind 缺失或不受支持")
     if writes_content and (not value or len(value) > _MAX_VALUE_CHARS):
         raise MemoryResponseError("value", "记忆 LLM value 必须是约定长度内的非空短索引")
@@ -1139,7 +1134,7 @@ def _candidate_to_proposal(
         # unqualified assertion. Values in the question cannot support a fact;
         # unknown kinds/operations keep their original admission behavior.
         supported = _supported_generic_fact(value, source_message)
-        if supported is not None and (supported[0] == kind or kind == "user_fact"):
+        if supported is not None and supported[0] == kind:
             item = supported[1]
             if item.evidence and _normalize(item.evidence) in normalized_evidence:
                 evidence = item.evidence
@@ -1256,15 +1251,8 @@ def _candidate_to_proposal(
             kind, supported_memory = supported
             proposed_content = supported_memory.content
 
-    if kind == "user_fact" and target_record is None:
-        supported = _supported_generic_fact(value, evidence)
-        if supported is None:
-            return None
-        kind, supported_memory = supported
-        proposed_content = supported_memory.content
-    elif kind not in _ALLOWED_KINDS:
-        # Only target-only withdrawal/erasure or the supported user_fact type
-        # can reach this branch; an unknown model kind is never inferred.
+    if kind not in _ALLOWED_KINDS:
+        # Target-only withdrawal and erasure may omit a new fact kind.
         kind = _infer_kind_from_target(target_record)
     if not value and target_record is not None and operation in {"RETRACT", "ERASE"}:
         value = target_memory_key or "target"
@@ -1334,27 +1322,6 @@ def _candidate_to_proposal(
         return None
 
     raw_qualifiers = raw.get("qualifiers")
-    raw_qualifiers = normalize_alias_labels(raw_qualifiers, projection=alias_projection)
-    if isinstance(raw_qualifiers, dict):
-        # A known model schema label is redundant only when the ordinary
-        # source predicate independently proves the same location field.
-        if kind == "location" and "type" in raw_qualifiers:
-            field_labels = {"hometown": "user_origin", "current_residence": "user_residence"}
-            expected_field = field_labels.get(str(raw_qualifiers["type"]))
-            canonical = _canonical_memory_fields(kind, value, evidence)
-            if expected_field and canonical and canonical[1] == expected_field:
-                raw_qualifiers = {key: value for key, value in raw_qualifiers.items() if key != "type"}
-        # Keep the actual Chinese qualifier, not an unsupported English enum.
-        # PENDING still controls lifecycle; labels cannot supply missing facts.
-        if operation == "PENDING" and raw_qualifiers.get("certainty") == "planned":
-            planned = re.search(r"计划|打算|准备|预计", evidence)
-            if planned:
-                raw_qualifiers = {**raw_qualifiers, "certainty": planned.group()}
-    if operation in {"ADD", "MERGE", "SUPERSEDE", "COEXIST"}:
-        raw_qualifiers = normalize_preference_labels(
-            raw_qualifiers, kind=kind, evidence=evidence, source_message=source_message,
-            canonical=_canonical_memory_fields(kind, value, evidence),
-        )
     # Source observations persist the entire current utterance, not this short
     # admission quote. A literal later condition is therefore part of their
     # actual evidence. Semantic facts retain the stricter quote-only gate.
@@ -1586,6 +1553,7 @@ def build_memory_llm_messages(
         "write_mode": write_mode,
         "confidence_threshold": confidence_threshold,
         "proposal_constraints": {
+            "kinds": sorted(_ALLOWED_KINDS),
             "max_value_chars": _MAX_VALUE_CHARS,
             "max_evidence_chars": _MAX_EVIDENCE_CHARS,
             "qualifier_keys": sorted(_ALLOWED_QUALIFIER_KEYS),

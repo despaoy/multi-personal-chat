@@ -27,7 +27,7 @@ def parse(
         target_memory_key=target,
         confidence=0.97,
         attributed_to="user",
-        qualifiers={"certainty": "稳定"} if qualifiers is None else qualifiers,
+        qualifiers={} if qualifiers is None else qualifiers,
         scope_level=scope_level,
     )
     return parse_llm_proposals(
@@ -166,7 +166,7 @@ async def test_normal_scheduler_storage_keeps_primary_and_alias_separate(tmp_pat
                             confidence=0.97,
                             operation="ADD",
                             attributed_to="user",
-                            qualifiers={"certainty": "稳定"},
+                            qualifiers={},
                             scope_level="user_character",
                         )
                     ]
@@ -205,8 +205,12 @@ async def test_normal_scheduler_storage_keeps_primary_and_alias_separate(tmp_pat
 
 
 def test_exclusion_index_can_include_its_own_contiguous_friend_explanation():
+    with pytest.raises(MemoryResponseError) as caught:
+        parse(NEGATIVE, value="小岚是朋友兰溪的别名", kind="other_user_fact",
+              qualifiers={"certainty": "明确"}, scope_authorization=AUTHORIZATION)
+    assert caught.value.field == "qualifiers"
     (proposal,) = parse(
-        NEGATIVE, value="小岚是朋友兰溪的别名", kind="other_user_fact", qualifiers={"certainty": "明确"}, scope_authorization=AUTHORIZATION
+        NEGATIVE, value="小岚是朋友兰溪的别名", kind="other_user_fact", qualifiers={}, scope_authorization=AUTHORIZATION
     )
     assert proposal.memory.memory_key == "user_alias_exclusion_小岚"
     assert proposal.memory.content == "用户明确说小岚不是本人的别名"

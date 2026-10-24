@@ -1,10 +1,10 @@
-"""Repair a known type/field schema collision only from independently supported evidence."""
+"""Explicit fact kinds preserve supported fields; storage types are protocol errors."""
 
 import json
 
 import pytest
 
-from character.memory_llm import parse_llm_proposals
+from character.memory_llm import MemoryResponseError, parse_llm_proposals
 
 
 def parse(source, value, **changes):
@@ -22,7 +22,12 @@ def parse(source, value, **changes):
     ("我住在漳州。", "漳州", "user_residence", "用户说自己居住在漳州"),
 ])
 def test_generic_storage_type_uses_unique_supported_field(source, value, key, content):
-    proposals = parse(source, value)
+    with pytest.raises(MemoryResponseError) as caught:
+        parse(source, value)
+    assert caught.value.field == "kind"
+    kinds = {"user_name": "name", "user_major": "major", "user_study_stage": "study_stage",
+             "user_workplace": "workplace", "user_origin": "origin", "user_residence": "residence"}
+    proposals = parse(source, value, kind=kinds[key])
     assert len(proposals) == 1
     assert proposals[0].memory.memory_key == key
     assert proposals[0].memory.content == content
@@ -41,11 +46,21 @@ def test_generic_storage_type_uses_unique_supported_field(source, value, key, co
     ("我现在读大二。", "大二", {}),
 ])
 def test_schema_repair_does_not_guess_or_weaken_other_checks(source, value, changes):
-    assert parse(source, value, **changes) == []
+    if source == "不要记住我住在漳州。":
+        # Explicit opt-out stops the writer before any response is interpreted.
+        assert parse(source, value, **changes) == []
+        return
+    with pytest.raises(MemoryResponseError) as caught:
+        parse(source, value, **changes)
+    assert caught.value.field == "kind"
+
 
 
 def test_generic_content_is_reconstructed_from_evidence_not_model_paraphrase():
-    proposals = parse("我的专业是气象学。", "气象学", content="用户在气象学机构工作")
+    with pytest.raises(MemoryResponseError) as caught:
+        parse("我的专业是气象学。", "气象学", content="用户在气象学机构工作")
+    assert caught.value.field == "kind"
+    proposals = parse("我的专业是气象学。", "气象学", kind="major", content="用户说自己的专业是气象学")
     assert len(proposals) == 1
     assert proposals[0].memory.content == "用户说自己的专业是气象学"
 

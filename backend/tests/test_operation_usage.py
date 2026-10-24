@@ -136,7 +136,7 @@ async def test_cancelled_ask_accounts_unknown_usage_and_still_cancels(ask_rig, m
         assert rows[0]['usageSource'] == 'unavailable' and rows[0]['errorType'] == 'CancelledError'
 
 
-@pytest.mark.parametrize('outcome', ['saved', 'invalid_json', 'http503', 'record_failure'])
+@pytest.mark.parametrize('outcome', ['saved', 'invalid_json', 'http503', 'record_failure', 'invalid_kind', 'invalid_qualifier'])
 async def test_background_memory_records_its_own_usage_without_charging_the_parent(delivered_memory, monkeypatch, outcome):
     rig = delivered_memory
     await rig.scheduler.shutdown()
@@ -148,6 +148,13 @@ async def test_background_memory_records_its_own_usage_without_charging_the_pare
         if outcome == 'http503':
             return httpx.Response(503, json={'error': {'message': 'synthetic failure'}})
         content = '{broken' if outcome == 'invalid_json' else proposal(rig.body)
+        if outcome in {'invalid_kind', 'invalid_qualifier'}:
+            batch = json.loads(content)
+            invalid = dict(batch['memories'][0])
+            invalid.update(kind='user_fact') if outcome == 'invalid_kind' else invalid.update(qualifiers={'type': 'undeclared'})
+            batch['memories'].append(invalid)
+            content = json.dumps(batch)
+
         return httpx.Response(200, json={**usage(), 'choices': [{'finish_reason': 'stop', 'message': {'content': content}}]})
     completion = OpenAICompatibleMemoryCompletion(config)
     completion._client = httpx.AsyncClient(transport=httpx.MockTransport(respond))
@@ -172,9 +179,15 @@ async def test_background_memory_records_its_own_usage_without_charging_the_pare
         assert rows[0]['totalTokens'] == (None if outcome == 'http503' else 120)
         assert rows[0]['usageSource'] == ('unavailable' if outcome == 'http503' else 'provider')
         assert (receipt['status'], receipt['persisted']) == (('saved', 1) if outcome == 'saved' else ('failed', 0))
-        if outcome == 'invalid_json':
+        if outcome in {'invalid_json', 'invalid_kind', 'invalid_qualifier'}:
             assert rows[0]['errorType'] == 'MemoryResponseError'
-            assert receipt['reason'] == 'invalid_model_response' and receipt['field'] == 'response'
+            field = {'invalid_json': 'response', 'invalid_kind': 'kind', 'invalid_qualifier': 'qualifiers'}[outcome]
+            assert receipt['reason'] == 'invalid_model_response' and receipt['field'] == field
+            assert receipt['stage'] == 'proposal_validation' and not receipt['retryable']
+            assert await rig.repo.list_memory_records(rig.snapshot.character_id, rig.snapshot.user_scope,
+                                                      include_inactive=True) == []
+            assert not rig.selectable()
+
 
 
 def test_background_and_knowledge_records_do_not_change_chat_metrics(tmp_path):

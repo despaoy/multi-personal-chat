@@ -40,15 +40,3 @@ def identity_alias_projection(*, source, evidence, value):
             name = excluded["name"]
             matches.append(("user_fact", "user_alias_exclusion_" + name, f"用户明确说{name}不是本人的别名", 0.6))
     return matches[0] if len(matches) == 1 else None
-
-
-def normalize_alias_labels(raw, *, projection):
-    if projection is None or not isinstance(raw, dict):
-        return raw
-    # The independent complete declarative predicate supplies admission.
-    # All actual conditions/unknown labels still face ordinary validation.
-    return {
-        key: value
-        for key, value in raw.items()
-        if key != "certainty" or value not in ("稳定", "stable", "明确", "明确立即生效")
-    }

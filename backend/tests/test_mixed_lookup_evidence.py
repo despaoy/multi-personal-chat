@@ -55,6 +55,12 @@ def test_existing_residence_can_be_superseded_with_scoped_evidence(kind):
     message = '我搬到宣城了，你还记得我的专业吗？'
     raw = dict(attributed_to='user', kind=kind, value='宣城', evidence=message, confidence=.96,
                operation='SUPERSEDE', target_memory_id='7', target_memory_key='user_residence')
+    if kind == 'user_fact':
+        with pytest.raises(ValueError, match='kind'):
+            parse_llm_proposals(json.dumps({'memories': [raw]}), source_message=message,
+                existing_memories=({'id': '7', 'memory_key': 'user_residence',
+                                   'content': '用户说自己居住在衡水', 'status': 'active'},))
+        return
     result, = parse_llm_proposals(json.dumps({'memories': [raw]}), source_message=message,
         existing_memories=({'id':'7', 'memory_key':'user_residence',
                            'content':'用户说自己居住在衡水', 'status':'active'},))
