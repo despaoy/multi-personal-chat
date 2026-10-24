@@ -15,7 +15,7 @@ import time
 import asyncio
 import threading
 from pathlib import Path
-from typing import Optional, Dict, Any, List
+from typing import Dict, Any, List
 
 from dotenv import load_dotenv
 from nonebot import on_command, on_message
@@ -211,136 +211,60 @@ _context_tokens = _context_window_map.get(str(config.CONTEXT_WINDOW), 24576)
 session_history = SessionHistory(max_tokens=_context_tokens // 3)
 claw_sessions: Dict[str, bool] = {}
 
-# ============================================
-# 多LoRA热切换模型管理
-# ============================================
-_hutao_7b_model = None
-_hutao_7b_tokenizer = None
-# C12 fix: 保护 _hutao_7b_model/_hutao_7b_tokenizer/_current_lora 的 check-then-set 序列。
-# 防止消息推理过程中 /lora 切换命令并发修改模型，导致正在进行的推理使用错误 LoRA。
-_lora_model_lock: asyncio.Lock | None = None
-_lora_model_lock_loop: asyncio.AbstractEventLoop | None = None
+# Empty selection follows backend configuration; "default" explicitly selects its base model.
+_selected_lora = ""
 
 
-def _get_lora_model_lock() -> asyncio.Lock:
-    """Return the model mutation lock for the active bot event loop."""
-    global _lora_model_lock, _lora_model_lock_loop
-    loop = asyncio.get_running_loop()
-    if _lora_model_lock is None or _lora_model_lock_loop is not loop:
-        _lora_model_lock = asyncio.Lock()
-        _lora_model_lock_loop = loop
-    return _lora_model_lock
+class LoraSelectionError(RuntimeError):
+    """A requested bot-wide adapter cannot be selected."""
 
 
-def _get_active_lora_from_db() -> str:
-    """从后端数据库读取当前激活的LoRA名称（通过db.adapter统一访问）"""
-    try:
-        loras = db.get_loras(status="active")
-        if loras:
-            name = loras[0].get('name', '')
-            if name in LORA_REGISTRY:
-                return name
-            # 前缀匹配（数据库中可能是hutao_lora_7b，LORA_REGISTRY中是hutao）
-            for key in LORA_REGISTRY:
-                if name.startswith(key) or key.startswith(name.split("_")[0]):
-                    return key
-    except Exception as e:
-        logger.warning(f"从db adapter读取LoRA状态失败: {e}")
-    return _current_lora
+async def _select_lora(target: str) -> str:
+    """Select a registered adapter; the shared backend owns all model weights."""
+    global _selected_lora
+    if target == "default":
+        _selected_lora = target
+        return target
+
+    from inference.lora_utils import resolve_lora_served_name
+    from inference.model_manager import get_model_manager
+
+    loras = await asyncio.to_thread(db.get_loras)
+    matches = [item for item in loras if item["name"] == target]
+    if not matches:
+        served_name = resolve_lora_served_name(target)
+        matches = [item for item in loras if resolve_lora_served_name(item["name"]) == served_name]
+    if len(matches) != 1:
+        raise LoraSelectionError("LoRA 不存在或别名对应多项，请使用 /lora 查看登记名称。")
+    selected = matches[0]
+    provider = get_model_manager().get_current_provider().name
+    if provider == "vllm":
+        from inference.vllm_client import get_enabled_vllm_client
+
+        client = await get_enabled_vllm_client()
+        if client is None:
+            raise LoraSelectionError("vLLM 服务未启用，请先在管理页配置。")
+        if resolve_lora_served_name(selected["name"]) not in await client.list_loras():
+            raise LoraSelectionError("LoRA 尚未加载，请先在管理页加载后再选择。")
+    elif provider == "transformers_peft":
+        from db.database import get_lora_path_by_id
+
+        path = await asyncio.to_thread(get_lora_path_by_id, selected["id"], loras=loras)
+        if path is None:
+            raise LoraSelectionError("LoRA 文件不存在，请先在管理页配置适配器。")
+    else:
+        raise LoraSelectionError("当前提供商不支持 LoRA，可用 /lora default 选择已配置的基础模型。")
+    _selected_lora = selected["name"]
+    return _selected_lora
 
 
-def _sync_current_lora():
-    """从数据库同步当前LoRA到内存变量"""
-    global _current_lora
-    active = _get_active_lora_from_db()
-    logger.info(f"LoRA同步检查: DB返回={active}, 当前={_current_lora}")
-    if active != _current_lora:
-        logger.info(f"LoRA 同步: {_current_lora} → {active}")
-        _current_lora = active
+def _get_char_name(lora_name: str) -> str:
+    from inference.lora_registry import get_char_name
+    from inference.lora_utils import resolve_lora_served_name
 
-
-_current_lora = "hutao"
-
-_BACKEND_DIR = Path(__file__).parent
-_BACKEND_ROOT = _BACKEND_DIR.parent  # backend/ 目录
-
-
-def _resolve_path(p: str) -> str:
-    if os.path.isabs(p):
-        return p
-    return str(_BACKEND_ROOT / p)
-
-
-# H1 fix: LORA_REGISTRY 已抽取到 inference/lora_registry.py 作为中立层，
-# 消除 api/generate.py 对 bot 层的反向依赖。bot.py 保留导入以兼容现有代码。
-from inference.lora_registry import LORA_REGISTRY, LORA_NAMES
-
-
-def _get_char_name(lora_name: str = None) -> str:
-    """从 LORA_REGISTRY 中提取角色名称"""
-    from inference.lora_registry import get_char_name as _get_char_name_impl
-    return _get_char_name_impl(lora_name, _current_lora)
-
-
-def _load_7b_model(lora_name: str = None):
-    """加载 Qwen3-8B 4bit + 指定 LoRA 适配器（支持热切换）"""
-    global _hutao_7b_model, _hutao_7b_tokenizer, _current_lora
-
-    lora_name = lora_name or _current_lora
-    if lora_name not in LORA_REGISTRY:
-        logger.warning(f"未知 LoRA: {lora_name}，回退到 hutao")
-        lora_name = "hutao"
-
-    from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
-    from peft import PeftModel
-    import torch
-
-    # 首次加载
-    if _hutao_7b_model is None:
-        base_model_path = os.getenv("BASE_MODEL_PATH", "models/Qwen3-8B-Instruct")
-        if not os.path.isabs(base_model_path):
-            base_model_path = str(Path(__file__).parent / base_model_path)
-        base_model_path = str(Path(base_model_path).resolve())
-        if not Path(base_model_path).exists():
-            raise FileNotFoundError(f"模型路径不存在: {base_model_path}，请设置 BASE_MODEL_PATH 环境变量或下载模型")
-
-        nf4_config = BitsAndBytesConfig(
-            load_in_4bit=True,
-            bnb_4bit_quant_type="nf4",
-            bnb_4bit_compute_dtype=torch.float16,
-            bnb_4bit_use_double_quant=True,
-        )
-
-        logger.info(f"加载 Qwen3-8B (4bit)...")
-        _hutao_7b_tokenizer = AutoTokenizer.from_pretrained(base_model_path)
-
-        base_model = AutoModelForCausalLM.from_pretrained(
-            base_model_path,
-            quantization_config=nf4_config,
-            device_map="auto",
-            low_cpu_mem_usage=True,
-        )
-        _hutao_7b_model = PeftModel.from_pretrained(
-            base_model, LORA_REGISTRY[lora_name]["path"], adapter_name=lora_name
-        )
-        _hutao_7b_model.eval()
-        _current_lora = lora_name
-
-        vram = torch.cuda.memory_allocated() / 1024**3
-        logger.info(f"7B 模型加载完成 (LoRA={lora_name})，显存: {vram:.1f}GB")
-
-    # 热切换
-    elif lora_name != _current_lora:
-        if lora_name not in _hutao_7b_model.peft_config:
-            logger.info(f"加载新 LoRA 适配器: {lora_name}")
-            _hutao_7b_model.load_adapter(
-                LORA_REGISTRY[lora_name]["path"], adapter_name=lora_name
-            )
-        _hutao_7b_model.set_adapter(lora_name)
-        logger.info(f"LoRA 切换: {_current_lora} → {lora_name}")
-        _current_lora = lora_name
-
-    return _hutao_7b_model, _hutao_7b_tokenizer
+    if lora_name in {"", "default"}:
+        return config.BOT_NAME
+    return get_char_name(resolve_lora_served_name(lora_name))
 
 
 def is_superuser(event: MessageEvent) -> bool:
@@ -348,22 +272,22 @@ def is_superuser(event: MessageEvent) -> bool:
     return user_id in config.SUPERUSERS
 
 
-async def _unified_generate(prompt: str, session_id: str, lora_name: str | None = None) -> str:
+async def _unified_generate(prompt: str, session_id: str, lora_name: str) -> str:
     """Run any NoneBot-side generation through the shared ChatGenerationService."""
     msg = MessageRequest(
         message=prompt,
         sessionType="private",
         conversationType="private",
-        sessionId=session_id or "claw",
+        sessionId=session_id,
         sessionName="nonebot",
         userId="nonebot",
         userName="nonebot",
         senderName="nonebot",
         platform="qq",
         adapter="nonebot",
-        conversationId=session_id or "claw",
+        conversationId=session_id,
         senderId="nonebot",
-        loraName=lora_name or "",
+        loraName=lora_name,
         traceId="",
     )
     result = await inference_runtime.submit(
@@ -372,19 +296,14 @@ async def _unified_generate(prompt: str, session_id: str, lora_name: str | None 
             current_user={"username": "nonebot", "user_id": 0},
             persist_message=False,
             enable_rag=False,
-            record_invocation=False,
+            invocation_purpose="tool_generation",
             message_db=db,
         ),
-        session_id=session_id or "claw",
+        session_id=session_id,
         priority=inference_runtime.priority_for("nonebot", "private"),
         timeout=float(os.getenv("MODEL_INFERENCE_TIMEOUT", "180")),
     )
     return result.reply
-
-
-async def generate_with_local_model(prompt: str, session_id: Optional[str] = None, is_claw: bool = False, lora_name: str = None) -> str:
-    """Legacy-compatible wrapper: all generation now uses the shared service."""
-    return await _unified_generate(prompt, session_id or "claw", lora_name or _current_lora)
 
 
 # ============================================
@@ -427,7 +346,7 @@ async def should_reply(event: MessageEvent) -> bool:
             logger.info("检测到包含机器人名称，回复")
             return True
         trigger_words = ["你好", "在吗", "有人吗", config.BOT_NAME, "@ad"]
-        char_name = _get_char_name(_current_lora)
+        char_name = _get_char_name(_selected_lora)
         if char_name != config.BOT_NAME:
             trigger_words.append(char_name)
         for word in trigger_words:
@@ -466,8 +385,8 @@ async def process_message(event: MessageEvent) -> str:
     )
 
     start_time = time.time()
-    _sync_current_lora()
-    logger.info(f"开始处理消息: LoRA={_current_lora}")
+    lora_name = _selected_lora
+    logger.info("开始处理消息: LoRA={}", lora_name or "backend-config")
 
     await inference_runtime.check_rate_limits("qq", conversation_id, sender_id)
     msg = MessageRequest(
@@ -483,6 +402,7 @@ async def process_message(event: MessageEvent) -> str:
         adapter="nonebot",
         conversationId=conversation_id,
         senderId=sender_id,
+        loraName=lora_name,
         traceId="",
     )
 
@@ -519,25 +439,16 @@ async def process_message(event: MessageEvent) -> str:
     return reply
 
 
-async def llm_raw(prompt: str) -> str:
-    """Raw LLM helper now uses the same unified generation chain."""
-    return await _unified_generate(prompt, "claw-raw", _current_lora)
-
-
-async def call_llm_claw(prompt: str, lora_name: str = None) -> str:
-    """claw 模式专用推理调用"""
-    return await generate_with_local_model(prompt, is_claw=True, lora_name=lora_name)
-
-
-async def handle_claw(bot: Bot, user_message: str, event: MessageEvent, lora_name: str = None) -> str:
+async def handle_claw(bot: Bot, user_message: str, event: MessageEvent, lora_name: str) -> str:
     """处理工具命令"""
-    char_name = _get_char_name(lora_name or _current_lora)
+    char_name = _get_char_name(lora_name)
+    session_id = str(event.user_id)
 
     tool_list = "\n".join(
         [f"{name}: {tool['description']}" for name, tool in TOOLS.items()]
     )
     analysis_prompt = f"你是{char_name}，可用工具:\n{tool_list}\n用户请求：{user_message}\n简要说明你打算用什么工具来解决，风格自然。"
-    thinking = await call_llm_claw(analysis_prompt, lora_name or _current_lora)
+    thinking = await _unified_generate(analysis_prompt, session_id, lora_name)
     await bot.send(event, thinking)
     # M5 fix (扩展): 思考结果可能回显用户消息中的 PII，只记长度与短预览（≤60 chars）
     logger.info(f"[claw] 思考结果: 字符数={len(thinking)}")
@@ -553,7 +464,7 @@ async def handle_claw(bot: Bot, user_message: str, event: MessageEvent, lora_nam
 [输出要求]
 只输出JSON，格式: {{"tool": "工具名", "args": {{"参数名": "值"}}}}
 如果没有参数，args设为{{}}。"""
-    json_reply = await llm_raw(prompt)
+    json_reply = await _unified_generate(prompt, session_id, lora_name)
     # M5 fix: LLM 原始输出可能回显用户消息中的 PII，只记长度与短预览（≤60 chars）
     logger.info(f"[claw] LLM输出: 字符数={len(json_reply)}")
 
@@ -574,7 +485,7 @@ async def handle_claw(bot: Bot, user_message: str, event: MessageEvent, lora_nam
 
     tool_name = call["tool"]
     if tool_name == "write_code":
-        explain = await call_llm_claw(f"你是{char_name}，你正在帮用户编写代码，向用户简单解释代码的功能，用户要求{user_message}", lora_name or _current_lora)
+        explain = await _unified_generate(f"你是{char_name}，你正在帮用户编写代码，向用户简单解释代码的功能，用户要求{user_message}", session_id, lora_name)
         await bot.send(event, explain)
         # M5 fix (扩展): 解释结果可能回显用户请求中的 PII，只记长度与短预览（≤60 chars）
         logger.info(f"[claw] 解释结果: 字符数={len(explain)}")
@@ -587,11 +498,11 @@ async def handle_claw(bot: Bot, user_message: str, event: MessageEvent, lora_nam
         await bot.send(event=event, message=f" **{filename}**：\n```python\n{code}\n```")
 
     if tool_name == "write_code":
-        done = await call_llm_claw(f"你是{char_name}，代码已经编写完成{code}，向用户回复代码已经编写完成，任务结束，自然收尾。", lora_name or _current_lora)
+        done = await _unified_generate(f"你是{char_name}，代码已经编写完成{code}，向用户回复代码已经编写完成，任务结束，自然收尾。", session_id, lora_name)
         await bot.send(event, done)
         await bot.send(event, message=f"运行结果如下：\n{raw}")
     else:
-        done = await call_llm_claw(f"以{char_name}的语气报告结果。请求:{user_message}。结果:{raw}", lora_name or _current_lora)
+        done = await _unified_generate(f"以{char_name}的语气报告结果。请求:{user_message}。结果:{raw}", session_id, lora_name)
         await bot.send(event, done)
 
 
@@ -604,7 +515,7 @@ def init_bot():
     from nonebot.adapters.onebot.v11 import Adapter as OneBotV11Adapter
 
     logger.info("=" * 50)
-    logger.info(f"QQ自动回复机器人 - 当前角色: {_current_lora}")
+    logger.info(f"QQ自动回复机器人 - 当前选择: {_selected_lora or '跟随后端配置'}")
     logger.info("=" * 50)
     logger.info("模型推理与检索: 统一后端生成服务")
     logger.info(f"回复延迟: {config.REPLY_DELAY}秒")
@@ -651,7 +562,7 @@ def init_bot():
                         await message_handler.finish("你不是超级用户，不能使用该命令")
                         return
                 else:
-                    logger.info(f"[聊天] 普通消息，走{_current_lora}回复")
+                    logger.info(f"[聊天] 普通消息，走{_selected_lora}回复")
 
                     # 分析型问题偶尔发预消息
                     import random
@@ -782,7 +693,7 @@ def init_bot():
                     return
                 else:
                     logger.info("开始处理消息...")
-                    await handle_claw(bot, user_message, event, _current_lora)
+                    await handle_claw(bot, user_message, event, _selected_lora)
                     logger.info("回复发送成功")
         except FinishedException:
             logger.info("消息处理完成")
@@ -815,7 +726,7 @@ def init_bot():
     @help_cmd.handle()
     async def handle_help(bot: Bot, event: MessageEvent):
         """帮助命令"""
-        char_name = _get_char_name(_current_lora)
+        char_name = _get_char_name(_selected_lora)
         help_text = f"""{char_name} - QQ自动回复机器人
 
 使用说明：
@@ -827,9 +738,9 @@ def init_bot():
 /help 或 /帮助 - 查看帮助
 /clear 或 /清除 - 清除对话历史
 /lora - 查看可用角色
-/lora <角色名> - 切换到指定角色
+/lora <登记名称或default> - 超管切换后续消息使用的模型
 
-当前角色: {_current_lora}"""
+当前选择: {_selected_lora or '跟随后端配置'}"""
 
         await help_cmd.finish(help_text)
 
@@ -850,29 +761,27 @@ def init_bot():
 
     @lora_cmd.handle()
     async def handle_lora(bot: Bot, event: MessageEvent):
-        """LoRA角色切换命令"""
-        global _current_lora
+        """Display registered adapters or change the bot-wide selection."""
         args = str(event.message).strip().split()
-        if len(args) < 2:
-            names = ", ".join(LORA_NAMES)
-            await lora_cmd.finish(f"可用角色: {names}\n当前: {_current_lora} ({_get_char_name(_current_lora)})\n用法: /lora <角色名>")
+        if len(args) > 1 and not is_superuser(event):
+            await lora_cmd.finish("仅超级用户可以更改机器人全局模型选择。")
             return
-        target = args[1].lower()
-        if target not in LORA_REGISTRY:
-            await lora_cmd.finish(f"没有叫 {target} 的角色哦~ 可用: {', '.join(LORA_NAMES)}")
-            return
-        if target == _current_lora:
-            await lora_cmd.finish(f"已经是 {target} 啦！")
-            return
-        # C12 fix: 与 generate_with_local_model 的 transformers 路径互斥，
-        # 防止切换过程中正在进行的推理读到中间状态
-        async with _get_lora_model_lock():
-            try:
-                _load_7b_model(target)
-                await lora_cmd.finish(f"好嘞，现在我是 {target} 啦！")
-            except Exception as e:
-                logger.error(f"LoRA切换失败: {e}")
-                await lora_cmd.finish(f"切换失败: {e}")
+        try:
+            if len(args) < 2:
+                loras = await asyncio.to_thread(db.get_loras)
+                names = ", ".join(["default", *[item["name"] for item in loras]])
+                reply = f"已登记: {names}\n当前: {_selected_lora or '跟随后端配置'}\n用法: /lora <登记名称或default>"
+            elif len(args) == 2:
+                selected = await _select_lora(args[1])
+                reply = f"已选择 {selected}，后续消息由统一后端使用该模型生成。"
+            else:
+                reply = "用法: /lora <登记名称或default>"
+        except LoraSelectionError as exc:
+            reply = f"切换失败，选择未更改：{exc}"
+        except Exception as exc:
+            logger.error("LoRA 选择失败: {}", type(exc).__name__)
+            reply = "LoRA 读取或选择失败，选择未更改。请检查数据库及模型服务配置。"
+        await lora_cmd.finish(reply)
 
     logger.info("机器人初始化完成")
     bot_port = int(os.getenv("BOT_PORT", "8081"))

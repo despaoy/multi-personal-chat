@@ -176,6 +176,7 @@ async def _generate_reply_impl(
     persist_message: bool = True,
     enable_rag: bool = True,
     record_invocation: bool = True,
+    invocation_purpose: str = "chat",
     character_service=None,
     message_db,
     delivery_context: dict | None = None,
@@ -197,7 +198,8 @@ async def _generate_reply_impl(
             try:
                 return await _generate_reply_body(
                     request, current_user, persist_message=persist_message, enable_rag=enable_rag,
-                    record_invocation=record_invocation, character_service=character_service,
+                    record_invocation=record_invocation, invocation_purpose=invocation_purpose,
+                    character_service=character_service,
                     message_db=message_db, delivery_context=delivery_context,
                     prepared_override=prepared_override, _completion_slots=slots,
                 )
@@ -207,6 +209,7 @@ async def _generate_reply_impl(
                         await _record_model_invocation(
                             request, context.provider.model, "default", round(time.time() - started_at, 2),
                             error_type=type(error.__cause__ or error).__name__, database=message_db,
+                            purpose=invocation_purpose,
                         )
                     except HTTPException as record_error:
                         if isinstance(error, asyncio.CancelledError):
@@ -228,6 +231,7 @@ async def _generate_reply_body(
     persist_message: bool = True,
     enable_rag: bool = True,
     record_invocation: bool = True,
+    invocation_purpose: str = "chat",
     character_service=None,
     message_db,
     delivery_context: dict | None = None,
@@ -533,6 +537,7 @@ async def _generate_reply_body(
             await _record_model_invocation(
                 request, model_name if model_invoked else provider.model, stored_lora_name,
                 cost_time, used_rag=used_rag, error_type="", model_invoked=model_invoked, database=message_db,
+                purpose=invocation_purpose,
             )
         if model_invoked:
             set_consecutive("model_failure", True)
@@ -638,6 +643,7 @@ async def _generate_reply_body(
                     used_rag=False,
                     error_type=type(e).__name__,
                     database=message_db,
+                    purpose=invocation_purpose,
                 )
             except HTTPException as record_error:
                 # Keep the model cause and recording error on separate chains.
@@ -956,6 +962,7 @@ async def generate_reply_core(
     persist_message: bool = True,
     enable_rag: bool = True,
     record_invocation: bool = True,
+    invocation_purpose: str = "chat",
     character_service=None,
     message_db,
     delivery_context: dict | None = None,
@@ -971,6 +978,7 @@ async def generate_reply_core(
         persist_message=persist_message,
         enable_rag=enable_rag,
         record_invocation=record_invocation,
+        invocation_purpose=invocation_purpose,
         delivery_context=delivery_context,
     )
 
@@ -1024,6 +1032,7 @@ async def _record_model_invocation(
     used_rag: bool = False,
     error_type: str = "",
     model_invoked: bool | None = None,
+    purpose: str = "chat",
     database,
 ):
     """Record required accounting before archive; timed-out writes may still commit."""
@@ -1033,6 +1042,7 @@ async def _record_model_invocation(
                 database,
                 {
                     "traceId": request.traceId,
+                    "purpose": purpose,
                     "platform": request.platform,
                     "conversationId": request.conversationId or request.sessionId,
                     "sessionId": request.sessionId,

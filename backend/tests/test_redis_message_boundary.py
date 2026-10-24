@@ -179,7 +179,7 @@ def message_handler(bot_module, private_event, monkeypatch):
     matchers = []
 
     def matcher(*args, **kwargs):
-        item = SimpleNamespace(handlers=[], finish=AsyncMock(side_effect=FinishedException))
+        item = SimpleNamespace(name=args[0] if args else None, handlers=[], finish=AsyncMock(side_effect=FinishedException))
 
         def handle():
             def register(function):
@@ -199,6 +199,7 @@ def message_handler(bot_module, private_event, monkeypatch):
     monkeypatch.setattr(bot_module, "should_reply", AsyncMock(return_value=True))
     monkeypatch.setattr(bot_module, "process_message", AsyncMock(return_value="不应生成"))
     bot_module.init_bot()
+    matchers[0].commands = {item.name: item for item in matchers if item.name}
     return matchers[0], private_event, SimpleNamespace(send=AsyncMock())
 
 
@@ -288,7 +289,6 @@ def generation_control(bot_module, monkeypatch):
     monkeypatch.setattr(bot_module, "inference_runtime", runtime)
     monkeypatch.setattr(bot_module, "session_history", history)
     monkeypatch.setattr(bot_module, "generate_reply_core", generate)
-    monkeypatch.setattr(bot_module, "_sync_current_lora", Mock())
     monkeypatch.setattr(bot_module, "config", SimpleNamespace(REPLY_DELAY=-100))
     return runtime, history, generate
 
