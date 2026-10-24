@@ -9,7 +9,7 @@ import logging
 import re
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Callable, Optional
+from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -23,9 +23,7 @@ class FieldType(Enum):
     STRING = "str"
     INTEGER = "int"
     FLOAT = "float"
-    BOOLEAN = "bool"
     LIST = "list"
-    DICT = "dict"
 
 
 # ---------------------------------------------------------------------------
@@ -43,12 +41,10 @@ class FieldRule:
         max_length: 字符串最大长度
         min_value: 数值最小值
         max_value: 数值最大值
-        pattern: 正则匹配模式
         allowed_values: 允许的枚举值列表
         check_xss: 是否检测XSS
         check_path_traversal: 是否检测路径遍历
         sanitize: 是否拒绝非法控制字符（不改写原文）
-        custom_validator: 自定义验证函数 (value) -> Optional[str]，返回错误消息或None
     """
 
     field_type: FieldType = FieldType.STRING
@@ -57,12 +53,10 @@ class FieldRule:
     max_length: Optional[int] = None
     min_value: Optional[float] = None
     max_value: Optional[float] = None
-    pattern: Optional[str] = None
     allowed_values: Optional[list[Any]] = None
     check_xss: bool = False
     check_path_traversal: bool = False
     sanitize: bool = True
-    custom_validator: Optional[Callable[[Any], Optional[str]]] = None
 
 
 @dataclass
@@ -350,24 +344,6 @@ class InputValidator:
                 "message": f"值不在允许范围内，允许值: {rule.allowed_values}",
             })
 
-        # 正则模式验证
-        if rule.pattern is not None and isinstance(value, str):
-            if not re.match(rule.pattern, value):
-                errors.append({
-                    "field": field_name,
-                    "message": f"值不匹配要求的格式",
-                })
-
-        # 自定义验证器
-        if rule.custom_validator is not None:
-            try:
-                custom_error = rule.custom_validator(value)
-                if custom_error:
-                    errors.append({"field": field_name, "message": custom_error})
-            except Exception as exc:
-                logger.error("自定义验证器异常: %s", exc)
-                errors.append({"field": field_name, "message": "自定义验证失败"})
-
         return errors
 
     @staticmethod
@@ -377,14 +353,10 @@ class InputValidator:
             FieldType.STRING: (str,),
             FieldType.INTEGER: (int,),  # 注意：bool是int的子类，需要额外排除
             FieldType.FLOAT: (int, float),
-            FieldType.BOOLEAN: (bool,),
             FieldType.LIST: (list,),
-            FieldType.DICT: (dict,),
         }
 
-        expected = type_checks.get(expected_type)
-        if expected is None:
-            return None
+        expected = type_checks[expected_type]
 
         # 特殊处理：bool不是int
         if expected_type == FieldType.INTEGER and isinstance(value, bool):
