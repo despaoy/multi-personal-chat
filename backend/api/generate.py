@@ -1066,17 +1066,13 @@ async def _retrieve_rag_bundle(
                     return retrieve_generic()
         if not filters and not requested_document_titles(query):
             from knowledge.multiscale_rag.runtime import get_multiscale_rag_service
-            from knowledge.retrieval_core.query import QueryAnalyzer
 
             character_rag = get_multiscale_rag_service()
-            matched = QueryAnalyzer([character_rag.config]).analyze(query).matched_domains
             # retrieve_with_citations 内部完成惰性加载和域门控。不能先用
             # is_available() 短路，否则冷启动首条请求无法触发索引加载。
             bundle = character_rag.retrieve_with_citations(query, top_k=top_k, filters=filters)
             if bundle is not None:
                 return bundle
-            if matched:
-                raise RuntimeError("Requested character knowledge domain is unavailable")
 
         return retrieve_generic()
 

@@ -11,17 +11,36 @@ pytestmark = pytest.mark.usefixtures("no_live_context_review")
 
 
 @pytest.mark.asyncio
-async def test_unavailable_character_domain_does_not_switch_to_generic_kb(monkeypatch):
-    from api import generate
+@pytest.mark.parametrize("outcome", ["success", "load_failure", "retrieval_failure"])
+async def test_character_runtime_owns_domain_and_failure(monkeypatch, outcome):
+    from unittest.mock import Mock
+    from api import generate, knowledge
     from knowledge.multiscale_rag import runtime
-    from knowledge.retrieval_core import query
+    from test_multiscale_rag_runtime import ranking_score_runtime
 
-    service = SimpleNamespace(config=object(), retrieve_with_citations=lambda *args, **kwargs: None)
+    # Exercise the production runtime and its real domain analyzer; only the
+    # local index payload and injected I/O failures are synthetic.
+    service = runtime.MultiScaleRagRuntime()
+    service._service = ranking_score_runtime(0.9)._service
+    failure = OSError("synthetic character index failure")
+    if outcome == "load_failure":
+        service._service = None
+        monkeypatch.setattr(service, "_ensure_loaded", Mock(side_effect=failure))
+    elif outcome == "retrieval_failure":
+        service._service.retrieve = Mock(side_effect=failure)
+    generic = Mock(side_effect=AssertionError("Character failure must not switch to generic KB"))
+    monkeypatch.setattr(knowledge, "_ensure_vector_index", generic)
     monkeypatch.setattr(runtime, "get_multiscale_rag_service", lambda: service)
-    monkeypatch.setattr(query, "QueryAnalyzer", lambda _: SimpleNamespace(
-        analyze=lambda _: SimpleNamespace(matched_domains=["character"])))
-    with pytest.raises(RuntimeError, match="domain is unavailable"):
-        await generate._retrieve_rag_bundle("人物关系是什么", 3, None)
+    if outcome == "success":
+        result = await generate._retrieve_rag_bundle("妃和琉璃是什么关系？", 3, None)
+        assert result["domains"] == [service.config.domain_id]
+        assert result["results"][0]["content"] == "只能离线验收，禁止联网。"
+        assert result["abstained"] is False
+    else:
+        with pytest.raises(OSError) as raised:
+            await generate._retrieve_rag_bundle("妃和琉璃是什么关系？", 3, None)
+        assert raised.value is failure
+    generic.assert_not_called()
 
 
 @pytest.mark.asyncio
