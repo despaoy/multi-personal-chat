@@ -92,11 +92,17 @@ class ReadinessProbe:
 
         return copy.deepcopy(self._cache)
 
-    def shutdown(self) -> None:
-        if self._refresh_task is not None and not self._refresh_task.done():
-            self._refresh_task.cancel()
-        if self._owns_sync_executor:
-            self._sync_executor.shutdown(wait=False)
+    async def shutdown(self) -> None:
+        try:
+            if self._refresh_task is not None and not self._refresh_task.done():
+                self._refresh_task.cancel()
+                try:
+                    await self._refresh_task
+                except asyncio.CancelledError:
+                    pass
+        finally:
+            if self._owns_sync_executor:
+                self._sync_executor.shutdown(wait=False)
 
     def _fresh_cache(self) -> dict[str, Any] | None:
         if self._cache is None:

@@ -136,7 +136,8 @@ proof = dict(
 )
 os.environ["ENCRYPTION_KEY"] = base64.urlsafe_b64encode(b"N" * 32).decode("ascii")
 proof["snapshot_stays_frozen"] = snapshot.get("ENCRYPTION_KEY") == encoded
-main.app.state.readiness_probe.shutdown()
+import asyncio
+asyncio.run(main.app.state.readiness_probe.shutdown())
 print("ENCRYPTION_IMPORT_PROOF=" + json.dumps(proof, sort_keys=True))
 """
     proof = _encryption_import_proof(backend, isolated, env, probe)

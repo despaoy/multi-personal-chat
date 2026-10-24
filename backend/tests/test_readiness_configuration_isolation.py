@@ -39,5 +39,5 @@ async def test_readiness_dependency_and_cache_are_isolated_per_application(monke
         assert (await readiness_check(SimpleNamespace(app=first)))["status"] == "ready"
         assert calls == [1, 1]
     finally:
-        first.state.readiness_probe.shutdown()
-        second.state.readiness_probe.shutdown()
+        await first.state.readiness_probe.shutdown()
+        await second.state.readiness_probe.shutdown()

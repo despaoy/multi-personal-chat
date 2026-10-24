@@ -55,7 +55,7 @@ async def test_app_readiness_collapses_concurrent_calls_without_loading_rag(
             *(readiness_check(SimpleNamespace(app=app)) for _ in range(50))
         )
     finally:
-        app.state.readiness_probe.shutdown()
+        await app.state.readiness_probe.shutdown()
 
     assert all(result["status"] == "ready" for result in results)
     assert calls == {"database": 1, "model": 1, "rag": 0}

@@ -102,7 +102,7 @@ async def provider_api(ask_rig, monkeypatch):
         ) as client:
             yield SimpleNamespace(client=client, state=state)
     finally:
-        app.state.readiness_probe.shutdown()
+        await app.state.readiness_probe.shutdown()
         await transport.aclose()
 
 

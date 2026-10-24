@@ -84,7 +84,7 @@ async def test_openai_failure_never_becomes_ready(monkeypatch, providers, status
     try:
         result = await probe.get()
     finally:
-        probe.shutdown()
+        await probe.shutdown()
     assert result["ready"] is False and result["deps"] == {"database": True, "model": False}
     assert result["details"]["model"] == expected
     assert "fiction-private" not in str(result) and "fiction-readiness-key" not in str(result)
@@ -112,7 +112,7 @@ async def test_remote_failure_and_timeout_are_explicit_and_cancelled(monkeypatch
     try:
         result = await probe.get()
     finally:
-        probe.shutdown()
+        await probe.shutdown()
     assert result["ready"] is False and result["details"]["model"] == expected
     if fault == "timeout":
         assert events == ["cancelled"]
@@ -220,7 +220,7 @@ async def test_default_app_checks_selected_provider_when_vllm_is_disabled(monkey
             assert result["status"] == "ready" and result["deps"] == {"database": True, "model": True}
         assert len(requests) == 1
     finally:
-        app.state.readiness_probe.shutdown()
+        await app.state.readiness_probe.shutdown()
 
 
 @pytest.mark.asyncio

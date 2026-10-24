@@ -30,7 +30,7 @@ async def test_concurrent_callers_share_one_database_and_model_refresh():
     try:
         results = await asyncio.gather(*(probe.get() for _ in range(50)))
     finally:
-        probe.shutdown()
+        await probe.shutdown()
 
     assert calls == {"database": 1, "model": 1}
     assert all(result["ready"] for result in results)
@@ -61,7 +61,7 @@ async def test_waiter_timeout_does_not_cancel_shared_refresh():
         await asyncio.sleep(0)
         result = await probe.get()
     finally:
-        probe.shutdown()
+        await probe.shutdown()
 
     assert result["ready"] is True
     assert calls == 1
@@ -99,7 +99,7 @@ async def test_sync_timeout_keeps_bounded_probe_slot_until_work_finishes():
         assert calls == 2
     finally:
         release.set()
-        probe.shutdown()
+        await probe.shutdown()
 
 
 @pytest.mark.asyncio
@@ -139,7 +139,7 @@ async def test_success_and_failure_use_different_cache_ttls():
         assert (await probe.get())["ready"] is True
         assert calls == 3
     finally:
-        probe.shutdown()
+        await probe.shutdown()
 
 @pytest.mark.asyncio
 async def test_database_and_model_sync_checks_have_independent_capacity():
@@ -165,9 +165,44 @@ async def test_database_and_model_sync_checks_have_independent_capacity():
     try:
         result = await probe.get()
     finally:
-        probe.shutdown()
+        await probe.shutdown()
 
     assert result["ready"] is True
     assert result["deps"] == {"database": True, "model": True}
     assert calls == {"database": 1, "model": 1}
 
+@pytest.mark.asyncio
+async def test_application_close_waits_for_readiness_cancellation_cleanup():
+    from app.main import _close_resource
+
+    started, cleaning, release = asyncio.Event(), asyncio.Event(), asyncio.Event()
+    finished = asyncio.Event()
+
+    async def check():
+        started.set()
+        try:
+            await asyncio.Event().wait()
+        finally:
+            cleaning.set()
+            await release.wait()
+            finished.set()
+
+    probe = ReadinessProbe(database_check=check, check_timeout=5, wait_timeout=5)
+    waiter = asyncio.create_task(probe.get())
+    closer = None
+    try:
+        await asyncio.wait_for(started.wait(), 1)
+        closer = asyncio.create_task(_close_resource("readiness", probe, "shutdown"))
+        await asyncio.wait_for(cleaning.wait(), 1)
+        # Give the original synchronous close enough loop turns to return.
+        for _ in range(10):
+            await asyncio.sleep(0)
+        assert not closer.done(), "shutdown returned before readiness cleanup finished"
+        release.set()
+        await asyncio.wait_for(closer, 1)
+        assert finished.is_set() and probe._refresh_task.done()
+        with pytest.raises(asyncio.CancelledError):
+            await waiter
+    finally:
+        release.set()
+        await asyncio.gather(waiter, *([closer] if closer else []), return_exceptions=True)
