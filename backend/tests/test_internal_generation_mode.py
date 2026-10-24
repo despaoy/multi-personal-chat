@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from services import chat_answer
+
 import asyncio
 from datetime import datetime, timezone
 from types import SimpleNamespace
@@ -62,7 +64,7 @@ async def test_deterministic_response_has_no_model_invocation(monkeypatch, mode,
 
     monkeypatch.setattr(mm, 'get_model_manager', lambda: Manager())
     monkeypatch.setattr(gen, "get_vllm_client", AsyncMock(return_value=SimpleNamespace(generate=AsyncMock())))
-    monkeypatch.setattr(gen, '_generate_with_retrieval', deterministic)
+    monkeypatch.setattr(chat_answer, 'generate_chat_answer', deterministic)
     monkeypatch.setattr(gen, 'get_llm_semaphore', lambda: asyncio.Semaphore(2))
     result = await gen._generate_reply_impl(_request(), persist_message=True, enable_rag=False,
                                            record_invocation=True)
@@ -112,7 +114,7 @@ async def test_internal_mode_success_does_not_persist(monkeypatch):
     async def fake_vllm(*args, **kwargs):
         return "tool-reply", False, {}
 
-    monkeypatch.setattr(gen, "_generate_with_retrieval", fake_vllm)
+    monkeypatch.setattr(chat_answer, 'generate_chat_answer', fake_vllm)
 
     result = await gen._generate_reply_impl(
         _request(),
@@ -155,7 +157,7 @@ async def test_internal_mode_vllm_failure_does_not_persist(monkeypatch):
     async def fake_vllm(*args, **kwargs):
         raise RuntimeError("vllm down")
 
-    monkeypatch.setattr(gen, "_generate_with_retrieval", fake_vllm)
+    monkeypatch.setattr(chat_answer, 'generate_chat_answer', fake_vllm)
 
     with pytest.raises(HTTPException) as caught:
         await gen._generate_reply_impl(
@@ -231,7 +233,7 @@ async def test_explicit_memory_operations_respect_internal_and_delivery_modes(mo
 
     monkeypatch.setattr(gen, '_prepare_character_turn', prepare)
     monkeypatch.setattr(gen, '_complete_character_turn', AsyncMock(return_value=None))
-    monkeypatch.setattr(gen, '_generate_with_retrieval', generate)
+    monkeypatch.setattr(chat_answer, 'generate_chat_answer', generate)
     monkeypatch.setattr(gen, "get_vllm_client", AsyncMock(return_value=SimpleNamespace(generate=AsyncMock())))
     monkeypatch.setattr(mm, 'get_model_manager', lambda: SimpleNamespace(_current_provider=SimpleNamespace(value="vllm"), get_current_provider=lambda: SimpleNamespace(name="vllm")))
     request = MessageRequest(message='忘掉我的住址。', characterId='tsukiyashiro_kisaki', loraName='default', sessionType='private', sessionId='s1')
@@ -278,7 +280,7 @@ async def test_message_db_reaches_save_and_invocation_record(monkeypatch, provid
     async def fake_vllm(*args, **kwargs):
         return "reply", False, {}
 
-    monkeypatch.setattr(gen, "_generate_with_retrieval", fake_vllm)
+    monkeypatch.setattr(chat_answer, 'generate_chat_answer', fake_vllm)
 
     captured = {}
 
@@ -374,7 +376,7 @@ async def test_unavailable_selected_vllm_never_dispatches_another_provider(monke
     monkeypatch.setattr(mm, "get_model_manager", lambda: manager)
     monkeypatch.setattr(gen, "get_vllm_client", AsyncMock(return_value=None))
     retrieval = AsyncMock()
-    monkeypatch.setattr(gen, "_generate_with_retrieval", retrieval)
+    monkeypatch.setattr(chat_answer, 'generate_chat_answer', retrieval)
     with pytest.raises(HTTPException) as error:
         await gen._generate_reply_impl(_request(), persist_message=False, enable_rag=False, record_invocation=False)
     assert error.value.status_code == 503 and saved == recorded == []
@@ -442,7 +444,7 @@ async def test_injected_character_service_reaches_prepare_and_complete(monkeypat
         return "reply", False, {}
 
     monkeypatch.setattr(gen, "get_vllm_client", AsyncMock(return_value=SimpleNamespace(generate=AsyncMock())))
-    monkeypatch.setattr(gen, "_generate_with_retrieval", fake_vllm)
+    monkeypatch.setattr(chat_answer, 'generate_chat_answer', fake_vllm)
 
     request = MessageRequest(message="你好", characterId="tsukiyashiro_kisaki", loraName="default", sessionType="private", sessionId="s1")
     result = await gen._generate_reply_impl(

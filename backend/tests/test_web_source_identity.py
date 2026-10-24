@@ -1,4 +1,6 @@
 """HTTP receipt identity must reach saved dialogue and actual completion writes."""
+
+from services import chat_answer
 from unittest.mock import AsyncMock
 from types import SimpleNamespace
 
@@ -49,7 +51,7 @@ async def test_http_web_receipt_survives_real_save_and_completion_without_client
     async def model_reply(*args, **kwargs):
         return "知道了。", False, {}
 
-    monkeypatch.setattr(gen, "_generate_with_retrieval", model_reply)
+    monkeypatch.setattr(chat_answer, 'generate_chat_answer', model_reply)
     requests = []
 
     class Queued:

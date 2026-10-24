@@ -1,3 +1,5 @@
+
+from services import chat_answer
 import pytest
 
 from character.memory_operation import is_only_memory_erasure, render_operation_response, split_operation_request
@@ -43,12 +45,11 @@ async def test_operation_receipt_does_not_require_a_model_context_budget(status,
 async def test_api_operation_receipt_has_no_external_retrieval_dependency(monkeypatch, semantic_plan, status):
     from types import SimpleNamespace
 
-    from api import generate
     from db.schemas import MessageRequest
 
     query = '请把我的宠物名字从记忆里删除。'
     planning = semantic_plan(query, dict(control=[0]))
-    monkeypatch.setattr(generate, '_get_system_prompt', lambda _: 'persona')
+    monkeypatch.setattr(chat_answer, 'get_lora_system_prompt', lambda _: 'persona')
     context = CompiledCharacterContext('', '', '',
         memory_operation_receipt={'status': status, 'persisted': 1 if status == 'erased' else 0})
     prepared = SimpleNamespace(history=(), compiled=context)
@@ -56,7 +57,7 @@ async def test_api_operation_receipt_has_no_external_retrieval_dependency(monkey
     async def must_not_call(**kwargs):
         pytest.fail('Operation receipt must not invoke answer model')
 
-    _, used_rag, meta = await generate._generate_with_retrieval(
+    _, used_rag, meta = await chat_answer.generate_chat_answer(
         MessageRequest(message='请把我的宠物名字从记忆里删除。'), None,
         prepared_character_turn=prepared, runtime_config={'useKnowledgeBase': True}, model_generate=must_not_call)
     assert len(planning) == 1 and planning[0]["query"] == query

@@ -133,7 +133,7 @@ async def run(args):
         return response
 
     httpx.AsyncClient.send = observed_send
-    from api import generate as api
+    from services import chat_answer
     from api.auth import _hash_password
     from app.main import create_app
     from cache.config_cache import invalidate_config_cache
@@ -155,14 +155,14 @@ async def run(args):
         "generation": [],
         "auth_statuses": [],
     }
-    original_retrieve = api.retrieve_chat_knowledge
+    original_retrieve = chat_answer.retrieve_chat_knowledge
 
     async def observed_retrieve(*pos, **kwargs):
         result = await original_retrieve(*pos, **kwargs)
         proof["retrieval"].append(result)
         return result
 
-    api.retrieve_chat_knowledge = observed_retrieve
+    chat_answer.retrieve_chat_knowledge = observed_retrieve
     original_prepare = CharacterContextService.prepare_turn
 
     async def observed_prepare(service, turn, character_id):
@@ -188,8 +188,8 @@ async def run(args):
         return result
 
     CharacterContextService.prepare_turn = observed_prepare
-    api.generate_character_response = observe_generation(
-        api.generate_character_response, proof["generation"],
+    chat_answer.generate_character_response = observe_generation(
+        chat_answer.generate_character_response, proof["generation"],
     )
     app = create_app()
     password = secrets.token_urlsafe(24)

@@ -1,5 +1,7 @@
 """Independent complete protocols for evidence dependency admission and routing."""
 
+from services import chat_answer
+
 import copy
 import json
 from types import SimpleNamespace
@@ -104,7 +106,6 @@ async def test_every_full_original_segment_reaches_planner(monkeypatch):
 @pytest.mark.asyncio
 @pytest.mark.parametrize("mode", ["private", "mixed", "unknown", "missing_context", "branch", "legacy"])
 async def test_actual_route_uses_dependencies_not_presence_of_one_memory(monkeypatch, mode):
-    from api import generate
     from db.schemas import MessageRequest
     from knowledge import public_question_binding, retrieval_query_plan
 
@@ -138,19 +139,18 @@ async def test_actual_route_uses_dependencies_not_presence_of_one_memory(monkeyp
 
     monkeypatch.setattr(public_question_binding, "resolve_question_binding", no_binding)
     monkeypatch.setattr(retrieval_query_plan, "plan_retrieval", planner)
-    monkeypatch.setattr(generate, "retrieve_chat_knowledge", retrieve)
-    monkeypatch.setattr(generate, "_get_system_prompt", lambda _: "人物规则")
+    monkeypatch.setattr(chat_answer, 'retrieve_chat_knowledge', retrieve)
+    monkeypatch.setattr(chat_answer, 'get_lora_system_prompt', lambda _: "人物规则")
     if mode == "legacy":
-        from fastapi import HTTPException
 
-        with pytest.raises(HTTPException) as error:
-            await generate._generate_with_retrieval(
+        with pytest.raises(chat_answer.ChatRetrievalError) as error:
+            await chat_answer.generate_chat_answer(
                 MessageRequest(message=QUERY), None, prepared_character_turn=prepared,
                 runtime_config={"maxTokens": 2048, "useKnowledgeBase": True}, model_generate=model,
             )
-        assert error.value.status_code == 503 and not calls
+        assert error.value.http_status == 503 and not calls
         return
-    reply, used, meta = await generate._generate_with_retrieval(
+    reply, used, meta = await chat_answer.generate_chat_answer(
         MessageRequest(message=QUERY),
         None,
         prepared_character_turn=prepared,

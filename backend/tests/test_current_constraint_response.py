@@ -1,3 +1,5 @@
+
+from services import chat_answer
 from dataclasses import replace
 from types import SimpleNamespace
 
@@ -51,16 +53,15 @@ def test_branch_and_missing_context_do_not_use_current_shortcut():
 
 @pytest.mark.asyncio
 async def test_current_statement_contract_bypasses_rag_but_does_not_report_storage(monkeypatch, semantic_plan):
-    from api import generate
     from db.schemas import MessageRequest
 
     async def forbidden(*args, **kwargs):
         pytest.fail('No RAG or model call required')
 
-    monkeypatch.setattr(generate, 'retrieve_chat_knowledge', forbidden)
-    monkeypatch.setattr(generate, '_get_system_prompt', lambda _: 'persona')
+    monkeypatch.setattr(chat_answer, 'retrieve_chat_knowledge', forbidden)
+    monkeypatch.setattr(chat_answer, 'get_lora_system_prompt', lambda _: 'persona')
     semantic_plan('更正一下，我只有负责人批准才预约会议。', dict(current_input=[0]))
-    reply, rag, meta = await generate._generate_with_retrieval(
+    reply, rag, meta = await chat_answer.generate_chat_answer(
         MessageRequest(message='更正一下，我只有负责人批准才预约会议。'), None,
         prepared_character_turn=SimpleNamespace(compiled=context(), history=()),
         runtime_config={'useKnowledgeBase': True}, model_generate=forbidden)

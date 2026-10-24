@@ -1,5 +1,7 @@
 """Retired rule dispatch and surviving compatibility operations remain explicit."""
 
+from services import chat_answer
+
 import asyncio
 import json
 from types import SimpleNamespace
@@ -165,7 +167,7 @@ async def test_legacy_rule_config_cannot_choose_a_persona_from_a_name(monkeypatc
     monkeypatch.setattr(generate, "circuit_breaker_registry", None)
     monkeypatch.setattr(generate, "get_llm_semaphore", lambda: asyncio.Semaphore(1))
     operation = AsyncMock(return_value=("3张票，每张2元，总额6元。", False, {"modelInvoked": True}))
-    monkeypatch.setattr(generate, "_generate_with_retrieval", operation)
+    monkeypatch.setattr(chat_answer, 'generate_chat_answer', operation)
     req = MessageRequest(message="只是讨论胡桃这个名字，不要求切换角色。完整题设：3张票，每张2元，计算总额。",
         loraName="hutao" if selection == "explicit_adapter" else "")
     if selection == "base":

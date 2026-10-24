@@ -1,5 +1,7 @@
 """Required retrieval channels cannot silently disappear from a hybrid query."""
 
+from services import chat_answer
+
 from types import SimpleNamespace
 from unittest.mock import Mock
 
@@ -147,9 +149,6 @@ def test_repaired_index_can_be_used_by_a_later_request(retrieval):
 async def test_generation_stops_when_a_required_index_is_missing(retrieval, semantic_plan, monkeypatch, channel):
     from unittest.mock import AsyncMock
 
-    from fastapi import HTTPException
-
-    from api import generate
     from db.schemas import MessageRequest
     from knowledge.turn_dependencies import query_segments
 
@@ -169,12 +168,12 @@ async def test_generation_stops_when_a_required_index_is_missing(retrieval, sema
 
     lookup = AsyncMock(side_effect=retrieve)
     model = AsyncMock(side_effect=AssertionError("Required index failure must stop answer generation"))
-    monkeypatch.setattr(generate, "retrieve_chat_knowledge", lookup)
-    monkeypatch.setattr(generate, "_rag_retrieval_timeout", lambda: 30.0)
-    with pytest.raises(HTTPException) as caught:
-        await generate._generate_with_retrieval(MessageRequest(message=QUERY), None,
+    monkeypatch.setattr(chat_answer, 'retrieve_chat_knowledge', lookup)
+    monkeypatch.setattr(chat_answer, '_rag_retrieval_timeout', lambda: 30.0)
+    with pytest.raises(chat_answer.ChatRetrievalError) as caught:
+        await chat_answer.generate_chat_answer(MessageRequest(message=QUERY), None,
             runtime_config={"useKnowledgeBase": True}, model_generate=model)
-    assert caught.value.status_code == 503
+    assert caught.value.http_status == 503
     assert isinstance(caught.value.__cause__, RetrievalIndexError)
     assert caught.value.detail == RetrievalIndexError(channel, "invalid_row" if channel == "documents" else "not_initialized").public_detail()
     assert QUERY not in str(caught.value.detail)

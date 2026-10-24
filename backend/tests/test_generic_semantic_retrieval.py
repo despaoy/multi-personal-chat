@@ -5,6 +5,8 @@ object-binding parser, source expansion and fresh original reads are used.
 Only embeddings/review outputs are controlled; no real model or network.
 """
 
+from services import chat_answer
+
 from knowledge import chat_retrieval
 
 from knowledge import index_lifecycle
@@ -16,10 +18,9 @@ from unittest.mock import Mock
 import numpy as np
 import pytest
 import test_history_question_binding as history_fixture
-from fastapi import HTTPException
 from scope_fixtures import open_scope_response
 
-from api import generate, knowledge
+from api import knowledge
 from db.database import SQLiteDB
 from db.schemas import MessageRequest
 from inference.provider_context import get_provider_context_budget
@@ -49,7 +50,7 @@ async def arrange_generic_plan(tmp_path, monkeypatch):
     monkeypatch.setenv("RERANKER_ENABLED", "false")
     monkeypatch.setattr(knowledge, "db", database)
     monkeypatch.setattr(index_lifecycle, "db", database)
-    monkeypatch.setattr(generate, "db", database)
+    monkeypatch.setattr(chat_answer, 'public_knowledge_db', database)
     monkeypatch.setattr(chat_retrieval, "db", database)
     monkeypatch.setattr(index_lifecycle, "_vector_index_revision", None)
     monkeypatch.setattr(vector_db.VectorDatabase, "_check_gpu_availability", lambda _: False)
@@ -77,7 +78,7 @@ async def arrange_generic_plan(tmp_path, monkeypatch):
         manager=SimpleNamespace(_current_provider=SimpleNamespace(value="openai_compat")),
         env={"OPENAI_COMPAT_CONTEXT_WINDOW_TOKENS": "65536"},
     )
-    monkeypatch.setattr(generate, "get_provider_context_budget", lambda: budget)
+    monkeypatch.setattr(chat_answer, 'get_provider_context_budget', lambda: budget)
     monkeypatch.setattr(chat_retrieval, "get_provider_context_budget", lambda: budget)
     config = KnowledgeDomainConfig("fixture-curated", tmp_path, lambda _: [])
     forbidden_curated = Mock(side_effect=AssertionError("Bound generic objects must not load a curated model"))
@@ -169,12 +170,12 @@ async def test_generic_index_failure_still_stops_api_with_503_before_answer(tmp_
         async def forbidden_answer(**kwargs):
             pytest.fail("A failed required knowledge index must not reach the answer model")
 
-        with pytest.raises(HTTPException) as caught:
-            await generate._generate_with_retrieval(
+        with pytest.raises(chat_answer.ChatRetrievalError) as caught:
+            await chat_answer.generate_chat_answer(
                 MessageRequest(message=QUERY, history=history_fixture.HISTORY), None,
                 runtime_config=dict(useKnowledgeBase=True, maxTokens=256), model_generate=forbidden_answer,
             )
-        assert caught.value.status_code == 503 and caught.value.__cause__ is failed_publication.side_effect
+        assert caught.value.http_status == 503 and caught.value.__cause__ is failed_publication.side_effect
         assert "synthetic index publication failure" in str(caught.value.__cause__)
         assert len(planning) == 1 and not rig.searches and not rig.helper._query_cache
         failed_publication.assert_called_once()

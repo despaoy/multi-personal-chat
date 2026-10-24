@@ -1,12 +1,13 @@
 """Declared planner failures with real private-source reads, no cloud or vector claims."""
 
+from services import chat_answer
+
 import asyncio
 import json
 from datetime import datetime, timezone
 from html import unescape
 
 import pytest
-from fastapi import HTTPException
 from repositories.character_memory import DatabaseCharacterMemoryRepository
 from services.character_context import PreparedCharacterTurn
 
@@ -21,11 +22,10 @@ PUBLIC = "虚构公共规程：桐屿续签收费31元，需要本人申请卡�
 
 
 async def exercise(tmp_path, monkeypatch, mode):
-    from api import generate
     from db.schemas import MessageRequest
     from knowledge import public_question_binding, retrieval_query_plan
 
-    monkeypatch.setattr(generate, "_rag_retrieval_timeout", lambda: 30.0)
+    monkeypatch.setattr(chat_answer, '_rag_retrieval_timeout', lambda: 30.0)
 
     database = SQLiteDB(tmp_path / "native-source.sqlite")
     scope = UserScope("web", "failed-plan-unit", "fiction-owner", "fiction-owner", "private")
@@ -119,7 +119,7 @@ async def exercise(tmp_path, monkeypatch, mode):
             abstained=False,
         )
 
-    actual_generate = generate.generate_character_response
+    actual_generate = chat_answer.generate_character_response
 
     async def capture(request, model):
         result = await actual_generate(request, model)
@@ -136,11 +136,11 @@ async def exercise(tmp_path, monkeypatch, mode):
 
     monkeypatch.setattr(retrieval_query_plan, "plan_retrieval", planner)
     monkeypatch.setattr(public_question_binding, "resolve_question_binding", binding)
-    monkeypatch.setattr(generate, "retrieve_chat_knowledge", retrieve)
-    monkeypatch.setattr(generate, "_get_system_prompt", lambda _: "虚构角色依据可见来源回答")
-    monkeypatch.setattr(generate, "generate_character_response", capture)
+    monkeypatch.setattr(chat_answer, 'retrieve_chat_knowledge', retrieve)
+    monkeypatch.setattr(chat_answer, 'get_lora_system_prompt', lambda _: "虚构角色依据可见来源回答")
+    monkeypatch.setattr(chat_answer, 'generate_character_response', capture)
     try:
-        pending = generate._generate_with_retrieval(
+        pending = chat_answer.generate_chat_answer(
             MessageRequest(message=QUERY, characterId="fiction-role"),
             None,
             runtime_config=dict(maxTokens=2048, useKnowledgeBase=True),
@@ -158,10 +158,10 @@ async def exercise(tmp_path, monkeypatch, mode):
             message_db=database,
         )
         if mode not in {"valid"}:
-            with pytest.raises(HTTPException) as caught:
+            with pytest.raises(chat_answer.ChatRetrievalError) as caught:
                 await pending
             error = caught.value
-            assert error.status_code == 503 and isinstance(error.__cause__, QueryPlanReviewError)
+            assert error.http_status == 503 and isinstance(error.__cause__, QueryPlanReviewError)
             assert error.__cause__.__cause__ is not None
             assert seen["retrieval"] == seen["binding"] == seen["model"] == 0
             assert database.list_memory_sources(**fields) == before

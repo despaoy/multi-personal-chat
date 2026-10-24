@@ -1,4 +1,6 @@
 """Mechanism tests, never evidence of real-model counterfactual quality."""
+
+from services import chat_answer
 from unittest.mock import AsyncMock
 from types import SimpleNamespace
 
@@ -354,7 +356,7 @@ def test_full_web_generation_and_canonical_return(repo, monkeypatch):
         mm, "get_model_manager", lambda: SimpleNamespace(_current_provider=SimpleNamespace(value="vllm"), get_current_provider=lambda: SimpleNamespace(name="vllm"))
     )
     monkeypatch.setattr(gen, "get_vllm_client", AsyncMock(return_value=SimpleNamespace(generate=AsyncMock())))
-    monkeypatch.setattr(gen, "_generate_with_retrieval", model)
+    monkeypatch.setattr(chat_answer, 'generate_chat_answer', model)
     monkeypatch.setattr(gen, "response_cache", ForbiddenCache())
     runtime = Runtime()
     app = FastAPI()

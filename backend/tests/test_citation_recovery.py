@@ -1,5 +1,7 @@
 """Only omitted citation recovery and immutable, admitted source spans."""
 
+from services import chat_answer
+
 import asyncio
 import json
 from dataclasses import replace
@@ -324,7 +326,6 @@ async def test_chat_annotation_failure_propagates_without_returning_an_answer(mo
 
     from tests.test_public_fact_coverage import FULL, QUERY, run
 
-    from api import generate
     from db.schemas import MessageRequest
     from inference.context_budget import ReviewContextBudget
     from knowledge import public_question_binding, public_task_evidence
@@ -358,16 +359,16 @@ async def test_chat_annotation_failure_propagates_without_returning_an_answer(mo
             raise error
         return "{"
 
-    monkeypatch.setattr(generate, "db", SimpleNamespace(get_knowledge_document=authoritative.get))
-    monkeypatch.setattr(generate, "retrieve_chat_knowledge", retrieve)
-    monkeypatch.setattr(generate, "_get_system_prompt", lambda _: "保留原文的全部费用、日期、原件及雨天例外。")
+    monkeypatch.setattr(chat_answer, 'public_knowledge_db', SimpleNamespace(get_knowledge_document=authoritative.get))
+    monkeypatch.setattr(chat_answer, 'retrieve_chat_knowledge', retrieve)
+    monkeypatch.setattr(chat_answer, 'get_lora_system_prompt', lambda _: "保留原文的全部费用、日期、原件及雨天例外。")
     monkeypatch.setattr(public_question_binding, "resolve_question_binding", binding)
     monkeypatch.setattr(public_task_evidence, "review_public_candidates", reviewed)
-    monkeypatch.setattr(generate, "get_provider_context_budget", lambda: SimpleNamespace(
+    monkeypatch.setattr(chat_answer, 'get_provider_context_budget', lambda: SimpleNamespace(
         review=ReviewContextBudget(65536), window_tokens=65536, evidence_max_chars=0,
     ))
     with pytest.raises(ValueError if failure == "invalid" else type(error)) as caught:
-        await generate._generate_with_retrieval(
+        await chat_answer.generate_chat_answer(
             MessageRequest(message=QUERY), None,
             runtime_config=dict(maxTokens=2048, useKnowledgeBase=True), model_generate=model,
         )

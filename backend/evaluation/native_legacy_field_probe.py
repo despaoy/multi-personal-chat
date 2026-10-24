@@ -109,18 +109,18 @@ async def main(args):
         return response
 
     httpx.AsyncClient.send = observed_send
-    from api import generate as generate_api
+    from services import chat_answer
     from app.main import create_app
 
     retrieval_requests = []
-    original_retrieval = generate_api.retrieve_chat_knowledge
+    original_retrieval = chat_answer.retrieve_chat_knowledge
 
     async def observed_retrieval(query, top_k, filters):
         bundle = await original_retrieval(query, top_k, filters)
         retrieval_requests.append(dict(query=query, abstained=bundle.get("abstained"), domains=bundle.get("domains")))
         return bundle
 
-    generate_api.retrieve_chat_knowledge = observed_retrieval
+    chat_answer.retrieve_chat_knowledge = observed_retrieval
     from character.models import MemoryItem, UserScope
     from db.adapter import db, is_pg_mode
     from repositories.character_memory import DatabaseCharacterMemoryRepository
@@ -274,7 +274,7 @@ async def main(args):
                 )
             )
     httpx.AsyncClient.send = original_send
-    generate_api.retrieve_chat_knowledge = original_retrieval
+    chat_answer.retrieve_chat_knowledge = original_retrieval
     assert all(result["http_status"] == 200 for result in results)
     assert all(result["storage_unchanged"] and result["diagnostics"]["history_count"] == 0 for result in results)
     checks = {

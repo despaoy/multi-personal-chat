@@ -1,10 +1,11 @@
 """Semantic dependencies alone dispatch retrieval; no rule or classifier gate."""
 
+from services import chat_answer
+
 import json
 from types import SimpleNamespace
 
 import pytest
-from fastapi import HTTPException
 
 from db.schemas import MessageRequest
 from inference.context_budget import ReviewContextBudget
@@ -22,10 +23,9 @@ CASES = [
 
 @pytest.mark.parametrize("query,groups,expected", CASES)
 async def test_complete_semantic_plan_alone_controls_public_dispatch(monkeypatch, query, groups, expected):
-    from api import generate
     from knowledge import intent_detector, public_question_binding, retrieval_query_plan
 
-    monkeypatch.setattr(generate, "_rag_retrieval_timeout", lambda: 30.0)
+    monkeypatch.setattr(chat_answer, '_rag_retrieval_timeout', lambda: 30.0)
 
     seen = []
     actual_plan = retrieval_query_plan.plan_retrieval
@@ -69,12 +69,12 @@ async def test_complete_semantic_plan_alone_controls_public_dispatch(monkeypatch
     monkeypatch.setattr(intent_detector, "_load_ml_model", forbidden)
     monkeypatch.setattr(retrieval_query_plan, "plan_retrieval", planner)
     monkeypatch.setattr(public_question_binding, "resolve_question_binding", binding)
-    monkeypatch.setattr(generate, "retrieve_chat_knowledge", retrieve)
-    monkeypatch.setattr(generate, "_get_system_prompt", lambda _: "完整虚构角色，只依据已给出的内容回答。")
-    monkeypatch.setattr(generate, "get_provider_context_budget", lambda: SimpleNamespace(
+    monkeypatch.setattr(chat_answer, 'retrieve_chat_knowledge', retrieve)
+    monkeypatch.setattr(chat_answer, 'get_lora_system_prompt', lambda _: "完整虚构角色，只依据已给出的内容回答。")
+    monkeypatch.setattr(chat_answer, 'get_provider_context_budget', lambda: SimpleNamespace(
         review=budget, window_tokens=65536, evidence_max_chars=0,
     ))
-    _, used, metadata = await generate._generate_with_retrieval(
+    _, used, metadata = await chat_answer.generate_chat_answer(
         MessageRequest(message=query, history=list(history)), None,
         runtime_config=dict(useKnowledgeBase=True, maxTokens=256), model_generate=model,
     )
@@ -84,7 +84,6 @@ async def test_complete_semantic_plan_alone_controls_public_dispatch(monkeypatch
 
 @pytest.mark.parametrize("failure", ["provider", "invalid", "capacity"])
 async def test_semantic_gate_failure_never_continues_with_rules_or_answer(monkeypatch, failure):
-    from api import generate
     from knowledge import intent_detector, retrieval_query_plan
 
     query = CASES[3][0]
@@ -106,22 +105,21 @@ async def test_semantic_gate_failure_never_continues_with_rules_or_answer(monkey
 
     monkeypatch.setattr(intent_detector, "predict_rag_intent", forbidden)
     monkeypatch.setattr(retrieval_query_plan, "plan_retrieval", planner)
-    monkeypatch.setattr(generate, "retrieve_chat_knowledge", forbidden)
-    monkeypatch.setattr(generate, "_get_system_prompt", forbidden)
-    monkeypatch.setattr(generate, "get_provider_context_budget", lambda: SimpleNamespace(
+    monkeypatch.setattr(chat_answer, 'retrieve_chat_knowledge', forbidden)
+    monkeypatch.setattr(chat_answer, 'get_lora_system_prompt', forbidden)
+    monkeypatch.setattr(chat_answer, 'get_provider_context_budget', lambda: SimpleNamespace(
         review=ReviewContextBudget(1024 if failure == "capacity" else 65536),
     ))
-    with pytest.raises(HTTPException) as caught:
-        await generate._generate_with_retrieval(
+    with pytest.raises(chat_answer.ChatRetrievalError) as caught:
+        await chat_answer.generate_chat_answer(
             MessageRequest(message=query), None, runtime_config=dict(useKnowledgeBase=True), model_generate=forbidden,
         )
-    assert caught.value.status_code == 503
+    assert caught.value.http_status == 503
     if failure == "provider":
         assert caught.value.__cause__.__cause__ is error
 
 
 async def test_explicit_retrieval_off_does_not_pay_for_planning(monkeypatch):
-    from api import generate
     from knowledge import retrieval_query_plan
 
     query = "只按本题完整假设计费：票数3、单价2.25元、没有其他费用。"
@@ -134,10 +132,10 @@ async def test_explicit_retrieval_off_does_not_pay_for_planning(monkeypatch):
         return "本题假设总额为6.75元。"
 
     monkeypatch.setattr(retrieval_query_plan, "plan_retrieval", forbidden)
-    monkeypatch.setattr(generate, "retrieve_chat_knowledge", forbidden)
-    monkeypatch.setattr(generate, "_get_system_prompt", lambda _: "只根据完整题设计算。")
-    monkeypatch.setattr(generate, "get_provider_context_budget", lambda: SimpleNamespace(window_tokens=65536, evidence_max_chars=0))
-    _, used, _ = await generate._generate_with_retrieval(
+    monkeypatch.setattr(chat_answer, 'retrieve_chat_knowledge', forbidden)
+    monkeypatch.setattr(chat_answer, 'get_lora_system_prompt', lambda _: "只根据完整题设计算。")
+    monkeypatch.setattr(chat_answer, 'get_provider_context_budget', lambda: SimpleNamespace(window_tokens=65536, evidence_max_chars=0))
+    _, used, _ = await chat_answer.generate_chat_answer(
         MessageRequest(message=query), None, runtime_config=dict(useKnowledgeBase=False), model_generate=model,
     )
     assert not used

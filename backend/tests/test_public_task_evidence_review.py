@@ -1,5 +1,7 @@
 """Complete fictional positives precede public relevance/admission negative controls."""
 
+from services import chat_answer
+
 import hashlib
 import json
 import re
@@ -240,7 +242,6 @@ async def test_empty_candidate_path_adds_no_review_call():
 async def test_actual_api_marks_partial_answer_only_for_visible_private_context(monkeypatch):
     from types import SimpleNamespace
 
-    from api import generate
     from db.schemas import MessageRequest
     from knowledge import public_fact_coverage, public_task_evidence, retrieval_query_plan
 
@@ -273,18 +274,18 @@ async def test_actual_api_marks_partial_answer_only_for_visible_private_context(
         return "本人偏好有记录，公共规定本次无法确认。"
 
     monkeypatch.setattr(retrieval_query_plan, "plan_retrieval", planner)
-    monkeypatch.setattr(generate, "retrieve_chat_knowledge", retrieve)
+    monkeypatch.setattr(chat_answer, 'retrieve_chat_knowledge', retrieve)
     async def no_fact_support(messages):
         payload = json.loads(messages[-1]["content"])
         return json.dumps(dict(assessments=[dict(aspect_id=row["aspect_id"], evidence=[])
                                             for row in payload["fact_scope_review"]["scope"]["aspects"]]))
     monkeypatch.setattr(public_fact_coverage, "_review_facts", no_fact_support)
     monkeypatch.setattr(public_task_evidence, "_review", reject)
-    monkeypatch.setattr(generate, "_get_system_prompt", lambda _: "人物规则")
+    monkeypatch.setattr(chat_answer, 'get_lora_system_prompt', lambda _: "人物规则")
     for reference, expected in [(PRIVATE, "partial_answer"), ("", "abstention")]:
         context = CompiledCharacterContext("", "", reference, used_memory_ids=("private-a",))
         prepared = SimpleNamespace(compiled=context, history=())
-        _, used, meta = await generate._generate_with_retrieval(
+        _, used, meta = await chat_answer.generate_chat_answer(
             MessageRequest(message=QUERY),
             None,
             prepared_character_turn=prepared,
@@ -298,7 +299,6 @@ async def test_actual_api_marks_partial_answer_only_for_visible_private_context(
 async def test_abstention_model_failure_propagates(monkeypatch):
     from types import SimpleNamespace
 
-    from api import generate
     from db.schemas import MessageRequest
     from knowledge import public_fact_coverage, public_task_evidence, retrieval_query_plan
 
@@ -330,18 +330,18 @@ async def test_abstention_model_failure_propagates(monkeypatch):
         raise RuntimeError("generation failed")
 
     monkeypatch.setattr(retrieval_query_plan, "plan_retrieval", planner)
-    monkeypatch.setattr(generate, "retrieve_chat_knowledge", retrieve)
+    monkeypatch.setattr(chat_answer, 'retrieve_chat_knowledge', retrieve)
     async def no_fact_support(messages):
         payload = json.loads(messages[-1]["content"])
         return json.dumps(dict(assessments=[dict(aspect_id=row["aspect_id"], evidence=[])
                                             for row in payload["fact_scope_review"]["scope"]["aspects"]]))
     monkeypatch.setattr(public_fact_coverage, "_review_facts", no_fact_support)
     monkeypatch.setattr(public_task_evidence, "_review", reject)
-    monkeypatch.setattr(generate, "_get_system_prompt", lambda _: "人物规则")
+    monkeypatch.setattr(chat_answer, 'get_lora_system_prompt', lambda _: "人物规则")
     context = CompiledCharacterContext("", "", PRIVATE, used_memory_ids=("private-a",))
     prepared = SimpleNamespace(compiled=context, history=())
     with pytest.raises(RuntimeError, match="generation failed"):
-        await generate._generate_with_retrieval(
+        await chat_answer.generate_chat_answer(
             MessageRequest(message=QUERY),
             None,
             prepared_character_turn=prepared,

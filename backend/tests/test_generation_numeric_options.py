@@ -1,5 +1,7 @@
 """Invalid stored generation settings must fail before semantic work or cache."""
 
+from services import chat_answer
+
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
@@ -65,7 +67,7 @@ async def test_invalid_owned_number_stops_before_semantic_work_or_slot(rig, monk
     from services import turn_completion
 
     owned = SimpleNamespace(config={"topP": 1.0, "useKnowledgeBase": True, field: value})
-    monkeypatch.setattr(rig.api, "db", SimpleNamespace(config={"temperature": 0.7, "maxTokens": 2048, "topP": 1.0}))
+    monkeypatch.setattr(chat_answer, 'public_knowledge_db', SimpleNamespace(config={"temperature": 0.7, "maxTokens": 2048, "topP": 1.0}))
     reserve = Mock(side_effect=AssertionError("Invalid settings reserved a completion slot"))
     monkeypatch.setattr(turn_completion, "get_turn_completion_runtime", reserve)
     with pytest.raises(HTTPException) as caught:
@@ -154,9 +156,8 @@ async def test_cloud_absent_top_p_keeps_one_while_other_missing_values_use_envir
 
 @pytest.mark.asyncio
 async def test_shared_options_reach_the_actual_generation_request(control):
-    from api import generate
 
-    reply, used, _ = await generate._generate_with_retrieval(
+    reply, used, _ = await chat_answer.generate_chat_answer(
         control.request,
         None,
         runtime_config={"temperature": "0.25", "maxTokens": "384", "topP": "0.9", "useKnowledgeBase": False},

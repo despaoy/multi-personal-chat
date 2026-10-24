@@ -3,6 +3,8 @@
 The provider and model are explicit controls; no cloud or vector evaluation.
 """
 
+from services import chat_answer
+
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
@@ -21,11 +23,12 @@ def control(monkeypatch):
     monkeypatch.setenv("OPENAI_COMPAT_CONTEXT_WINDOW_TOKENS", "65536")
     monkeypatch.setenv("RAG_CITATIONS_ENABLED", "true")
     monkeypatch.setenv("CHARACTER_INDEPENDENT_TASKS_ENABLED", "false")
-    monkeypatch.setattr(generate, "_get_system_prompt", lambda _: "合成角色：准确回应当前问题。")
+    monkeypatch.setattr(chat_answer, 'get_lora_system_prompt', lambda _: "合成角色：准确回应当前问题。")
     source = Mock(side_effect=AssertionError("No public source read is expected"))
     monkeypatch.setattr(generate, "db", SimpleNamespace(get_knowledge_document=source))
+    monkeypatch.setattr(chat_answer, "public_knowledge_db", generate.db)
     rag = AsyncMock(side_effect=AssertionError("Disabled or invalid configuration must not retrieve"))
-    monkeypatch.setattr(generate, "retrieve_chat_knowledge", rag)
+    monkeypatch.setattr(chat_answer, 'retrieve_chat_knowledge', rag)
     provider = cloud_connection("boolean-config-control")
     context = InferenceRequestContext("openai_compat", provider,
                                       text_token_counter("openai_compat", provider.base_url, provider.model))
@@ -45,7 +48,7 @@ def config(use_kb=False):
 async def test_invalid_environment_boolean_stops_before_model(control, monkeypatch, name):
     monkeypatch.setenv(name, "synthetic-private-invalid-boolean")
     with pytest.raises(ValueError, match=name) as caught:
-        await generate._generate_with_retrieval(control.request, None, runtime_config=config(), model_generate=control.model)
+        await chat_answer.generate_chat_answer(control.request, None, runtime_config=config(), model_generate=control.model)
     assert "synthetic-private" not in str(caught.value)
     control.model.assert_not_awaited()
     control.rag.assert_not_awaited()
@@ -54,7 +57,7 @@ async def test_invalid_environment_boolean_stops_before_model(control, monkeypat
 
 async def test_invalid_knowledge_base_setting_stops_before_retrieval(control):
     with pytest.raises(ValueError, match="useKnowledgeBase"):
-        await generate._generate_with_retrieval(control.request, None, runtime_config=config("invalid"),
+        await chat_answer.generate_chat_answer(control.request, None, runtime_config=config("invalid"),
                                                 model_generate=control.model)
     control.model.assert_not_awaited()
     control.rag.assert_not_awaited()
@@ -62,7 +65,7 @@ async def test_invalid_knowledge_base_setting_stops_before_retrieval(control):
 
 @pytest.mark.parametrize("setting", [False, "false"])
 async def test_disabled_knowledge_base_reaches_model_without_retrieval(control, setting):
-    reply, used, _meta = await generate._generate_with_retrieval(
+    reply, used, _meta = await chat_answer.generate_chat_answer(
         control.request, None, runtime_config=config(setting), model_generate=control.model
     )
     assert reply == "你好，很高兴见到你。" and used is False
@@ -72,7 +75,7 @@ async def test_disabled_knowledge_base_reaches_model_without_retrieval(control, 
 
 
 async def test_explicit_rag_disable_keeps_precedence(control):
-    reply, used, _meta = await generate._generate_with_retrieval(
+    reply, used, _meta = await chat_answer.generate_chat_answer(
         control.request, None, runtime_config=config(True), enable_rag=False, model_generate=control.model
     )
     assert reply == "你好，很高兴见到你。" and used is False
@@ -120,7 +123,7 @@ async def test_falsey_explicit_mapping_keeps_disabled_retrieval_and_parameters(c
         def __bool__(self):
             return False
 
-    reply, used, _meta = await generate._generate_with_retrieval(
+    reply, used, _meta = await chat_answer.generate_chat_answer(
         control.request, None, runtime_config=FalsyMapping(config()), model_generate=control.model)
     assert reply == "你好，很高兴见到你。" and used is False
     control.model.assert_awaited_once()

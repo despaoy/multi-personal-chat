@@ -1,5 +1,7 @@
 """Cloud dispatch uses admission capacity; mutable local adapters stay serial."""
 
+from services import chat_answer
+
 import asyncio
 from types import SimpleNamespace
 from unittest.mock import Mock
@@ -71,7 +73,7 @@ def installed(monkeypatch):
         text = await model_generate(messages=[{"role": "system", "content": "保留完整题设。"},
             {"role": "user", "content": request.message}], temperature=0.1, max_tokens=128, top_p=1)
         return text, False, {"modelInvoked": True}
-    monkeypatch.setattr(generate, "_generate_with_retrieval", compiled)
+    monkeypatch.setattr(chat_answer, 'generate_chat_answer', compiled)
     return state, manager, database, semaphore
 
 

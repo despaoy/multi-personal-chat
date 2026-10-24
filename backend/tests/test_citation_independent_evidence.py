@@ -1,5 +1,7 @@
 """Citation presentation never clips or changes selected source evidence."""
 
+from services import chat_answer
+
 import json
 from html import unescape
 from pathlib import Path
@@ -77,7 +79,6 @@ def test_enabled_citations_label_exact_existing_packet_without_rebuilding_body()
 async def test_citations_off_reaches_model_once_with_complete_evidence(monkeypatch, semantic_plan):
     from types import SimpleNamespace
 
-    from api import generate
     from db.schemas import MessageRequest
     from inference.context_budget import ReviewContextBudget
     from knowledge import public_question_binding, public_task_evidence
@@ -108,14 +109,14 @@ async def test_citations_off_reaches_model_once_with_complete_evidence(monkeypat
         return "规程 XL-936-N 的最终限制禁止联网、训练和微调。"
 
     monkeypatch.setenv("RAG_CITATIONS_ENABLED", "false")
-    monkeypatch.setattr(generate, "retrieve_chat_knowledge", retrieve)
-    monkeypatch.setattr(generate, "_get_system_prompt", lambda _: "人物规则")
+    monkeypatch.setattr(chat_answer, 'retrieve_chat_knowledge', retrieve)
+    monkeypatch.setattr(chat_answer, 'get_lora_system_prompt', lambda _: "人物规则")
     monkeypatch.setattr(public_question_binding, "resolve_question_binding", binding)
     monkeypatch.setattr(public_task_evidence, "review_public_candidates", transmission_control)
-    monkeypatch.setattr(generate, "get_provider_context_budget", lambda: SimpleNamespace(
+    monkeypatch.setattr(chat_answer, 'get_provider_context_budget', lambda: SimpleNamespace(
         review=ReviewContextBudget(65536), window_tokens=65536, evidence_max_chars=0,
     ))
-    reply, used, meta = await generate._generate_with_retrieval(
+    reply, used, meta = await chat_answer.generate_chat_answer(
         MessageRequest(message=fixture["question"]), None,
         runtime_config=dict(maxTokens=1024, useKnowledgeBase=True), model_generate=model,
     )
@@ -155,9 +156,7 @@ def test_true_token_overflow_excludes_entire_chunk_and_dependent_citation():
     {"retrieval_role": "source_context", "supporting_document_ids": [""]},
 ])
 async def test_corrupt_retrieved_document_returns_error_before_model(monkeypatch, corrupt, semantic_plan, controlled_public_bundle):
-    from fastapi import HTTPException
 
-    from api import generate
     from db.schemas import MessageRequest
 
     planning = semantic_plan("按规程说明验收时间和全部限制。", dict(public_knowledge=[0]))
@@ -174,12 +173,12 @@ async def test_corrupt_retrieved_document_returns_error_before_model(monkeypatch
         return "must not silently omit invalid source evidence"
 
     monkeypatch.setenv("RAG_CITATIONS_ENABLED", "false")
-    monkeypatch.setattr(generate, "retrieve_chat_knowledge", retrieve)
-    monkeypatch.setattr(generate, "_get_system_prompt", lambda _: "人物规则")
-    with pytest.raises(HTTPException) as error:
-        await generate._generate_with_retrieval(
+    monkeypatch.setattr(chat_answer, 'retrieve_chat_knowledge', retrieve)
+    monkeypatch.setattr(chat_answer, 'get_lora_system_prompt', lambda _: "人物规则")
+    with pytest.raises(chat_answer.ChatRetrievalError) as error:
+        await chat_answer.generate_chat_answer(
             MessageRequest(message="按规程说明验收时间和全部限制。"), None,
             runtime_config={"maxTokens": 1024, "useKnowledgeBase": True}, model_generate=model,
         )
-    assert error.value.status_code == 503 and isinstance(error.value.__cause__, ValueError)
+    assert error.value.http_status == 503 and isinstance(error.value.__cause__, ValueError)
     assert len(planning) == 1 and not calls

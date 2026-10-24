@@ -1,5 +1,7 @@
 """Full fictional scope positives precede wrong-object and quote controls."""
 
+from services import chat_answer
+
 import asyncio
 import json
 from copy import deepcopy
@@ -284,16 +286,16 @@ async def test_actual_api_uses_verified_object_links_and_retains_private_answer(
         return "已有私人偏好及前者费用可答，后者时长本次没有对应依据。"
 
     monkeypatch.setattr(retrieval_query_plan, "plan_retrieval", planner)
-    monkeypatch.setattr(generate, "retrieve_chat_knowledge", retrieve)
+    monkeypatch.setattr(chat_answer, 'retrieve_chat_knowledge', retrieve)
     install_public_source_reader(monkeypatch, generate, bundle())
     from knowledge import public_fact_coverage
 
     monkeypatch.setattr(public_fact_coverage, "_review_facts", facts)
     monkeypatch.setattr(public_task_evidence, "_review", review)
-    monkeypatch.setattr(generate, "_get_system_prompt", lambda _: "人物规则")
+    monkeypatch.setattr(chat_answer, 'get_lora_system_prompt', lambda _: "人物规则")
     context = CompiledCharacterContext("", "", PRIVATE, used_memory_ids=("fiction-private",))
     prepared = SimpleNamespace(compiled=context, history=())
-    _, used, meta = await generate._generate_with_retrieval(
+    _, used, meta = await chat_answer.generate_chat_answer(
         MessageRequest(message=QUERY),
         None,
         prepared_character_turn=prepared,

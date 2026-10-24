@@ -1,5 +1,7 @@
 """Independent fictional controls; injected reviewers are unit controls only."""
 
+from services import chat_answer
+
 import json
 from unittest.mock import AsyncMock
 from copy import deepcopy
@@ -245,12 +247,11 @@ async def test_reference_binding_is_reused_in_source_review_and_canonical_receip
 
 @pytest.mark.parametrize("history_source", ["prepared_database", "request_override"])
 async def test_normal_api_binding_receives_same_effective_history_as_planning(monkeypatch, history_source):
-    from api import generate
     from character.models import CompiledCharacterContext
     from db.schemas import MessageRequest
     from knowledge import public_question_binding, retrieval_query_plan
 
-    monkeypatch.setattr(generate, "_rag_retrieval_timeout", lambda: 30.0)
+    monkeypatch.setattr(chat_answer, '_rag_retrieval_timeout', lambda: 30.0)
 
     expected = (
         HISTORY
@@ -278,10 +279,10 @@ async def test_normal_api_binding_receives_same_effective_history_as_planning(mo
 
     monkeypatch.setattr(retrieval_query_plan, "plan_retrieval", planner)
     monkeypatch.setattr(public_question_binding, "resolve_question_binding", resolver)
-    monkeypatch.setattr(generate, "retrieve_chat_knowledge", retrieval)
+    monkeypatch.setattr(chat_answer, 'retrieve_chat_knowledge', retrieval)
     prepared = SimpleNamespace(compiled=CompiledCharacterContext("", "", ""), history=tuple(HISTORY))
     with pytest.raises(ExpectedStop):
-        await generate._generate_with_retrieval(
+        await chat_answer.generate_chat_answer(
             MessageRequest(message=QUERY, history=expected if history_source == "request_override" else []),
             None,
             prepared_character_turn=prepared,

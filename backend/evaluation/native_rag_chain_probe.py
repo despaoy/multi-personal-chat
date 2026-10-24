@@ -170,18 +170,18 @@ async def main(args):
 
     CharacterContextService._load_history = controlled_history
 
-    from api import generate as generation_api
 
+    from services import chat_answer
     retrieval_diagnostics = []
-    original_retrieval = generation_api.retrieve_chat_knowledge
+    original_retrieval = chat_answer.retrieve_chat_knowledge
 
     async def observed_retrieval(query, top_k, filters):
         bundle = await original_retrieval(query, top_k, filters)
         retrieval_diagnostics.append(dict(query=query, filters=filters, bundle=bundle))
         return bundle
 
-    generation_api.retrieve_chat_knowledge = observed_retrieval
-    original_generation = generation_api.generate_character_response
+    chat_answer.retrieve_chat_knowledge = observed_retrieval
+    original_generation = chat_answer.generate_character_response
 
     async def observed_prepare(service, turn, character_id):
         prepared = await original_prepare(service, turn, character_id)
@@ -215,7 +215,7 @@ async def main(args):
             raise
 
     CharacterContextService.prepare_turn = observed_prepare
-    generation_api.generate_character_response = observed_generation
+    chat_answer.generate_character_response = observed_generation
     assert is_pg_mode()
     db.update_config(dict(useKnowledgeBase=True, temperature=0.2, maxTokens=1024, topP=0.9))
     app = create_app()

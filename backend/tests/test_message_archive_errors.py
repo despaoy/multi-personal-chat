@@ -1,5 +1,7 @@
 """Required message writes fail explicitly before memory or delivery completion."""
 
+from services import chat_answer
+
 import asyncio
 import threading
 from datetime import datetime, timezone
@@ -127,7 +129,7 @@ async def generation(monkeypatch):
     service = SimpleNamespace(complete_turn=AsyncMock(return_value=_TurnOutcome(
         source_capture="recorded", memory_enrichment_status="skipped")))
     model = AsyncMock(return_value=(REPLY, False, {"modelInvoked": True}))
-    monkeypatch.setattr(generate, "_generate_with_retrieval", model)
+    monkeypatch.setattr(chat_answer, 'generate_chat_answer', model)
     yield SimpleNamespace(runtime=runtime, service=service, model=model)
     await runtime.shutdown(timeout=1)
 

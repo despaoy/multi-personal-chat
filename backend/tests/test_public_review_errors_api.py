@@ -1,14 +1,14 @@
 """Public review failures stop the actual chat entry before answer generation."""
 
+from services import chat_answer
+
 import asyncio
 import json
 from types import SimpleNamespace
 
 import pytest
-from fastapi import HTTPException
 from tests.test_public_fact_coverage import FULL, QUERY, TASK, bundle, evidence_reply, scope_reply, source_reply
 
-from api import generate
 from db.schemas import MessageRequest
 from inference.context_budget import ReviewContextBudget
 from knowledge import public_question_binding, public_task_evidence
@@ -66,16 +66,16 @@ async def test_public_review_errors_api_stop_before_answer(monkeypatch, semantic
         review=ReviewContextBudget(65536), window_tokens=1024 if stage == "capacity" else 65536,
         evidence_max_chars=0,
     )
-    monkeypatch.setattr(generate, "get_provider_context_budget", lambda: budget)
-    monkeypatch.setattr(generate, "retrieve_chat_knowledge", retrieve)
+    monkeypatch.setattr(chat_answer, 'get_provider_context_budget', lambda: budget)
+    monkeypatch.setattr(chat_answer, 'retrieve_chat_knowledge', retrieve)
     monkeypatch.setattr(public_question_binding, "resolve_question_binding", binding)
     monkeypatch.setattr(public_task_evidence, "review_public_candidates", review)
-    with pytest.raises(HTTPException) as caught:
-        await generate._generate_with_retrieval(
+    with pytest.raises(chat_answer.ChatRetrievalError) as caught:
+        await chat_answer.generate_chat_answer(
             MessageRequest(message=QUERY), None,
             runtime_config=dict(maxTokens=2048, useKnowledgeBase=True), model_generate=answer,
         )
-    assert caught.value.status_code == 503 and len(planning) == 1 and not answers
+    assert caught.value.http_status == 503 and len(planning) == 1 and not answers
     if stage == "capacity":
         assert not events and isinstance(caught.value.__cause__, ValueError)
         assert "scope input exceeds context budget" in str(caught.value.__cause__)

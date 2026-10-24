@@ -1,3 +1,5 @@
+
+from services import chat_answer
 import pytest
 from repositories.character_memory import DatabaseCharacterMemoryRepository
 from services.character_context import TurnInput, build_character_context_service
@@ -80,7 +82,6 @@ def test_unknown_read_is_not_reported_as_empty_history():
 async def test_provenance_display_uses_no_external_rag_or_model(monkeypatch, use_kb, semantic_plan):
     from types import SimpleNamespace
 
-    from api import generate
     from db.schemas import MessageRequest
     from knowledge import intent_detector
 
@@ -90,10 +91,10 @@ async def test_provenance_display_uses_no_external_rag_or_model(monkeypatch, use
     async def model(**kwargs):
         pytest.fail('Provenance display must not invent or rewrite statements')
 
-    monkeypatch.setattr(generate, '_get_system_prompt', lambda _: 'persona')
+    monkeypatch.setattr(chat_answer, 'get_lora_system_prompt', lambda _: 'persona')
     monkeypatch.setattr(intent_detector, 'predict_rag_intent', lambda _: pytest.fail('Not external knowledge'))
     semantic_plan(message, {"private_memory": [0]})
-    reply, used_rag, meta = await generate._generate_with_retrieval(MessageRequest(message=message), None,
+    reply, used_rag, meta = await chat_answer.generate_chat_answer(MessageRequest(message=message), None,
         runtime_config={'useKnowledgeBase': use_kb}, prepared_character_turn=SimpleNamespace(history=(), compiled=context),
         model_generate=model)
     assert '待确认' in reply and not used_rag

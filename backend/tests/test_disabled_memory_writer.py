@@ -6,6 +6,8 @@ generation use explicitly synthetic fixtures; every actual model boundary and
 the automatic rule writer are hard-blocked. No paid model calls are used.
 
 """
+
+from services import chat_answer
 import asyncio
 import json
 from datetime import datetime, timezone
@@ -133,7 +135,7 @@ async def test_real_disabled_completion_is_visible_in_web_reply_and_exact_archiv
     # response or a model-quality test. Completion, archive and feedback stay real.
     synthetic_reply = AsyncMock(return_value=(REPLY, False, dict(modelInvoked=False,
         answerMode="fixture_existing_reply", warnings=["合成生成夹具提示"])))
-    monkeypatch.setattr(generate, "_generate_with_retrieval", synthetic_reply)
+    monkeypatch.setattr(chat_answer, 'generate_chat_answer', synthetic_reply)
     monkeypatch.setattr(generate, "response_cache", None)
     monkeypatch.setattr(generate, "circuit_breaker_registry", None)
     monkeypatch.setattr(generate, "get_llm_semaphore", lambda: asyncio.Semaphore(1))

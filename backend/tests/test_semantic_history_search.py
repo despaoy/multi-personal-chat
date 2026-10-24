@@ -1,11 +1,12 @@
 """History search anchors require the existing semantic object receipt."""
 
+from services import chat_answer
+
 import json
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
-from fastapi import HTTPException
 from scope_fixtures import open_scope_response
 
 from db.schemas import MessageRequest
@@ -64,8 +65,8 @@ def install(monkeypatch, tmp_path, query, history, *, resolved=True, corrupt=Non
 
     monkeypatch.setattr(retrieval_query_plan, "plan_retrieval", planner)
     monkeypatch.setattr(public_question_binding, "resolve_question_binding", resolver)
-    monkeypatch.setattr(generate, "get_provider_context_budget", lambda: SimpleNamespace(review=budget, window_tokens=65536, evidence_max_chars=0))
-    monkeypatch.setattr(generate, "_rag_retrieval_timeout", lambda: 30.0)
+    monkeypatch.setattr(chat_answer, 'get_provider_context_budget', lambda: SimpleNamespace(review=budget, window_tokens=65536, evidence_max_chars=0))
+    monkeypatch.setattr(chat_answer, '_rag_retrieval_timeout', lambda: 30.0)
     model = AsyncMock(side_effect=AssertionError("Retrieval admission controls must not generate an answer"))
     return generate, observed, model
 
@@ -94,9 +95,9 @@ async def test_only_semantically_bound_names_extend_the_complete_question(monkey
         observed.append("retrieval")
         raise ReachedRetrieval()
 
-    monkeypatch.setattr(generate, "retrieve_chat_knowledge", retrieve)
+    monkeypatch.setattr(chat_answer, 'retrieve_chat_knowledge', retrieve)
     with pytest.raises(ReachedRetrieval):
-        await generate._generate_with_retrieval(MessageRequest(message=query, history=history), None,
+        await chat_answer.generate_chat_answer(MessageRequest(message=query, history=history), None,
             runtime_config={"useKnowledgeBase": True}, model_generate=model)
     assert observed == ["plan", "binding", "retrieval"]
     model.assert_not_awaited()
@@ -108,11 +109,11 @@ async def test_modified_binding_cannot_authorize_history_search(monkeypatch, tmp
     history = [dict(row) for row in HISTORY]
     generate, observed, model = install(monkeypatch, tmp_path, query, history, corrupt=corrupt)
     retrieve = AsyncMock()
-    monkeypatch.setattr(generate, "retrieve_chat_knowledge", retrieve)
-    with pytest.raises(HTTPException) as caught:
-        await generate._generate_with_retrieval(MessageRequest(message=query, history=history), None,
+    monkeypatch.setattr(chat_answer, 'retrieve_chat_knowledge', retrieve)
+    with pytest.raises(chat_answer.ChatRetrievalError) as caught:
+        await chat_answer.generate_chat_answer(MessageRequest(message=query, history=history), None,
             runtime_config={"useKnowledgeBase": True}, model_generate=model)
-    assert caught.value.status_code == 503 and isinstance(caught.value.__cause__, ValueError)
+    assert caught.value.http_status == 503 and isinstance(caught.value.__cause__, ValueError)
     assert observed == ["plan", "binding"]
     retrieve.assert_not_awaited()
     model.assert_not_awaited()

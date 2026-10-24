@@ -1,3 +1,5 @@
+
+from services import chat_answer
 from types import SimpleNamespace
 
 import pytest
@@ -61,7 +63,6 @@ def test_native_service_propagates_actual_cloud_budget_to_all_reviewers_and_hist
 
 @pytest.mark.asyncio
 async def test_native_api_compiler_keeps_complete_cloud_message_and_three_large_prior_turns(monkeypatch):
-    from api import generate as api
     from db.schemas import MessageRequest
     from inference import model_manager
     from inference.generation_request import GenerationResult, build_generation_request
@@ -78,8 +79,8 @@ async def test_native_api_compiler_keeps_complete_cloud_message_and_three_large_
         observed.append((request, plan))
         return GenerationResult(reply="保留完整内容", plan=plan)
 
-    monkeypatch.setattr(api, "generate_character_response", observe)
-    result = await api._generate_with_retrieval(
+    monkeypatch.setattr(chat_answer, 'generate_character_response', observe)
+    result = await chat_answer.generate_chat_answer(
         MessageRequest(message=query, history=[]),
         "default",
         runtime_config={"maxTokens": 1024},

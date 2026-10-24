@@ -1,3 +1,5 @@
+
+from services import chat_answer
 from dataclasses import replace
 from types import SimpleNamespace
 
@@ -86,7 +88,6 @@ def test_packet_budget_preserves_contract_but_no_evidence_disables_it():
 @pytest.mark.asyncio
 @pytest.mark.parametrize('query_bound', [True, False])
 async def test_production_adapter_preserves_query_binding(monkeypatch, query_bound, semantic_plan, controlled_public_bundle):
-    from api import generate
     from db.schemas import MessageRequest
 
     semantic_plan('林远是谁？', dict(public_knowledge=[0]))
@@ -101,9 +102,9 @@ async def test_production_adapter_preserves_query_binding(monkeypatch, query_bou
         observed.append(kwargs['messages'])
         return '身份回答'
 
-    monkeypatch.setattr(generate, 'retrieve_chat_knowledge', retrieve)
-    monkeypatch.setattr(generate, '_get_system_prompt', lambda _: 'persona')
-    await generate._generate_with_retrieval(
+    monkeypatch.setattr(chat_answer, 'retrieve_chat_knowledge', retrieve)
+    monkeypatch.setattr(chat_answer, 'get_lora_system_prompt', lambda _: 'persona')
+    await chat_answer.generate_chat_answer(
         MessageRequest(message='林远是谁？', history=list(identity_request().history)), None,
         runtime_config={'useKnowledgeBase': True}, model_generate=model)
     assert len(observed) == 1

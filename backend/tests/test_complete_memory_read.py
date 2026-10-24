@@ -1,3 +1,5 @@
+
+from services import chat_answer
 from dataclasses import replace
 from types import SimpleNamespace
 
@@ -64,9 +66,9 @@ async def test_api_private_plan_keeps_zero_answer_calls(monkeypatch, semantic_pl
     async def model(**_):
         pytest.fail('Unexpected model call')
 
-    monkeypatch.setattr(generate, '_get_system_prompt', lambda _: 'persona')
+    monkeypatch.setattr(chat_answer, 'get_lora_system_prompt', lambda _: 'persona')
     planning = semantic_plan('我的专业是什么？', dict(private_memory=[0]))
-    reply, rag, meta = await generate._generate_with_retrieval(
+    reply, rag, meta = await chat_answer.generate_chat_answer(
         MessageRequest(message='我的专业是什么？'), None, runtime_config={'useKnowledgeBase': use_kb},
         prepared_character_turn=SimpleNamespace(history=(), compiled=missing_context()), model_generate=model)
     assert len(planning) == int(use_kb)
@@ -79,7 +81,6 @@ async def test_api_private_plan_keeps_zero_answer_calls(monkeypatch, semantic_pl
 @pytest.mark.parametrize('query', ['我来自哪里？', '我的专业是什么？', '我住哪里？', '我叫什么？'])
 @pytest.mark.parametrize('status', ['no_match', 'retrieval_error'])
 async def test_personal_read_with_history_never_requires_external_knowledge(monkeypatch, semantic_plan, query, status):
-    from api import generate
     from db.schemas import MessageRequest
 
     calls = []
@@ -88,10 +89,10 @@ async def test_personal_read_with_history_never_requires_external_knowledge(monk
         calls.append(kwargs)
         return '这点还不能确定。'
 
-    monkeypatch.setattr(generate, '_get_system_prompt', lambda _: 'persona')
+    monkeypatch.setattr(chat_answer, 'get_lora_system_prompt', lambda _: 'persona')
     planning = semantic_plan(query, dict(private_memory=[0]))
     history = ({'role': 'user', 'content': '说回我本人，我来自贵阳。'},)
-    _, rag, meta = await generate._generate_with_retrieval(
+    _, rag, meta = await chat_answer.generate_chat_answer(
         MessageRequest(message=query), None, runtime_config={'useKnowledgeBase': True},
         prepared_character_turn=SimpleNamespace(history=history, compiled=replace(missing_context(), memory_status=status)),
         model_generate=model)
@@ -108,7 +109,6 @@ async def test_personal_read_with_history_never_requires_external_knowledge(monk
     ('我来自哪里？', '分支场景', dict(private_memory=[0]), False),
 ])
 async def test_nonpersonal_or_branch_turns_use_full_semantic_plan(monkeypatch, semantic_plan, query, branch, groups, external):
-    from api import generate
     from db.schemas import MessageRequest
     from knowledge import public_question_binding
 
@@ -125,10 +125,10 @@ async def test_nonpersonal_or_branch_turns_use_full_semantic_plan(monkeypatch, s
     async def model(**_):
         return '还不能确定。'
 
-    monkeypatch.setattr(generate, '_get_system_prompt', lambda _: 'persona')
+    monkeypatch.setattr(chat_answer, 'get_lora_system_prompt', lambda _: 'persona')
     monkeypatch.setattr(public_question_binding, 'resolve_question_binding', binding)
-    monkeypatch.setattr(generate, 'retrieve_chat_knowledge', retrieve)
-    await generate._generate_with_retrieval(
+    monkeypatch.setattr(chat_answer, 'retrieve_chat_knowledge', retrieve)
+    await chat_answer.generate_chat_answer(
         MessageRequest(message=query), None, runtime_config={'useKnowledgeBase': True},
         prepared_character_turn=SimpleNamespace(history=(), compiled=replace(missing_context(), branch_context=branch)),
         model_generate=model)

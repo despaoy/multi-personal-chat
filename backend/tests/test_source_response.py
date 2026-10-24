@@ -1,3 +1,5 @@
+
+from services import chat_answer
 import pytest
 
 from inference.generation_request import GenerationRequest, RetrievalResult, generate_character_response
@@ -88,7 +90,6 @@ async def test_regular_reply_keeps_model_path():
 async def test_production_retrieval_preserves_source_packet_and_reports_actual_model_usage(
     monkeypatch, message, direct, dependency, semantic_plan, controlled_public_bundle
 ):
-    from api import generate
     from db.schemas import MessageRequest
 
     planning = semantic_plan(message, {dependency: [0]})
@@ -108,9 +109,9 @@ async def test_production_retrieval_preserves_source_packet_and_reports_actual_m
         calls.append(kwargs)
         return '模型对复合任务的回答'
 
-    monkeypatch.setattr(generate, 'retrieve_chat_knowledge', retrieve)
-    monkeypatch.setattr(generate, '_get_system_prompt', lambda _: 'persona')
-    reply, used_rag, meta = await generate._generate_with_retrieval(
+    monkeypatch.setattr(chat_answer, 'retrieve_chat_knowledge', retrieve)
+    monkeypatch.setattr(chat_answer, 'get_lora_system_prompt', lambda _: 'persona')
+    reply, used_rag, meta = await chat_answer.generate_chat_answer(
         MessageRequest(message=message), None, runtime_config={'useKnowledgeBase': True}, model_generate=model)
     assert len(planning) == 1
     assert used_rag is (dependency == "public_knowledge")

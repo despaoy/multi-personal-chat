@@ -1,3 +1,5 @@
+
+from services import chat_answer
 from dataclasses import replace
 
 import pytest
@@ -122,11 +124,10 @@ def test_snapshot_is_independent_of_injection_budget_and_not_inferred_from_no_ma
 async def test_api_status_task_skips_public_retrieval_and_answer_generation(monkeypatch, presence, semantic_plan):
     from types import SimpleNamespace
 
-    from api import generate
     from db.schemas import MessageRequest
     from knowledge import intent_detector
 
-    monkeypatch.setattr(generate, '_get_system_prompt', lambda _: 'persona')
+    monkeypatch.setattr(chat_answer, 'get_lora_system_prompt', lambda _: 'persona')
     monkeypatch.setattr(intent_detector, 'predict_rag_intent', lambda _: pytest.fail('Storage status is not external knowledge'))
 
     async def model(**kwargs):
@@ -135,7 +136,7 @@ async def test_api_status_task_skips_public_retrieval_and_answer_generation(monk
     prepared = SimpleNamespace(history=(), compiled=CompiledCharacterContext('', '', '',
                                 memory_field_presence=presence))
     semantic_plan('你保存了我的姓名吗？', dict(private_memory=[0]))
-    _, used_rag, meta = await generate._generate_with_retrieval(MessageRequest(message='你保存了我的姓名吗？'),
+    _, used_rag, meta = await chat_answer.generate_chat_answer(MessageRequest(message='你保存了我的姓名吗？'),
         None, prepared_character_turn=prepared, runtime_config={'useKnowledgeBase': True}, model_generate=model)
     assert not used_rag and meta['answerMode'] == 'memory_storage_status'
     assert meta['modelInvoked'] is False

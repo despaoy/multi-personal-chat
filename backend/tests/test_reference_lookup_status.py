@@ -1,5 +1,7 @@
 """Ambiguous references preserve independent roots without choosing versions."""
 
+from services import chat_answer
+
 import copy
 import json
 import re
@@ -164,7 +166,6 @@ def test_reference_title_injection_is_escaped_user_data():
 
 @pytest.mark.parametrize("abstained", [False, True])
 async def test_production_api_carries_reference_receipt_and_warning_once(monkeypatch, abstained, semantic_plan, controlled_public_bundle):
-    from api import generate
     from db.schemas import MessageRequest
 
     data = dict(
@@ -179,7 +180,7 @@ async def test_production_api_carries_reference_receipt_and_warning_once(monkeyp
     data["source_coverage"] = [dict(source_id="doc_1", source_title="A",
         indexed_document_ids=["doc_1_chunk_0"], retrieved_document_ids=["doc_1_chunk_0"],
         source_authority_snapshot=document_authority_snapshot(original))]
-    monkeypatch.setattr(generate.db, "get_knowledge_document", lambda identity: original if identity == 1 else None)
+    monkeypatch.setattr(chat_answer.public_knowledge_db, "get_knowledge_document", lambda identity: original if identity == 1 else None)
 
     async def retrieve(*args, **kwargs):
         return copy.deepcopy(data)
@@ -190,10 +191,10 @@ async def test_production_api_carries_reference_receipt_and_warning_once(monkeyp
         observed.append(kwargs["messages"])
         return "主体条款应按本轮可见资料核对；引用版本尚不能确定。"
 
-    monkeypatch.setattr(generate, "retrieve_chat_knowledge", retrieve)
+    monkeypatch.setattr(chat_answer, 'retrieve_chat_knowledge', retrieve)
     planning = semantic_plan("说明主体条款及引用范围", dict(public_knowledge=[0]))
     monkeypatch.setenv("RAG_CITATIONS_ENABLED", "false")
-    _, used, metadata = await generate._generate_with_retrieval(
+    _, used, metadata = await chat_answer.generate_chat_answer(
         MessageRequest(message="说明主体条款及引用范围"),
         "default",
         runtime_config={"useKnowledgeBase": True, "maxTokens": 512},

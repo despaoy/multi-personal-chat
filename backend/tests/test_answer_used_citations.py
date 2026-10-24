@@ -1,5 +1,7 @@
 """Citations follow answer use and whole-source admission, never rank alone."""
 
+from services import chat_answer
+
 import json
 import re
 from dataclasses import replace
@@ -121,7 +123,6 @@ def test_explicit_source_lookup_and_non_rag_literal_markers_stay_unchanged():
 
 
 async def test_api_propagates_budget_abstention_instead_of_claiming_grounded_answer(monkeypatch, semantic_plan, controlled_public_bundle):
-    from api import generate
     from db.schemas import MessageRequest
     from inference.provider_context import ProviderContextBudget
 
@@ -134,11 +135,11 @@ async def test_api_propagates_budget_abstention_instead_of_claiming_grounded_ans
         return {"results": [{"id": "oversized", "content": "完整原始资料" * 2000}],
                 "citations": [{"source_id": "oversized"}], "confidence": 0.9, "abstained": False}
 
-    monkeypatch.setattr(generate, "retrieve_chat_knowledge", retrieve)
-    monkeypatch.setattr(generate, "_get_system_prompt", lambda _: "persona")
-    monkeypatch.setattr(generate, "get_provider_context_budget", lambda: ProviderContextBudget(8192))
+    monkeypatch.setattr(chat_answer, 'retrieve_chat_knowledge', retrieve)
+    monkeypatch.setattr(chat_answer, 'get_lora_system_prompt', lambda _: "persona")
+    monkeypatch.setattr(chat_answer, 'get_provider_context_budget', lambda: ProviderContextBudget(8192))
     semantic_plan("课程编号", {"public_knowledge": [0]})
-    _, _, meta = await generate._generate_with_retrieval(MessageRequest(message="课程编号"), None,
+    _, _, meta = await chat_answer.generate_chat_answer(MessageRequest(message="课程编号"), None,
         runtime_config={"useKnowledgeBase": True, "maxTokens": 128}, model_generate=Client().generate)
     assert meta["abstained"] is True
     assert meta["answerMode"] == "abstention"

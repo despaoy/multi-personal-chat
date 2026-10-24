@@ -6,6 +6,8 @@ Only model output and queue timing are controlled. No live model, external
 HTTP, real credentials or paid inference are used.
 """
 
+from services import chat_answer
+
 import asyncio
 import json
 from datetime import datetime, timedelta, timezone
@@ -123,7 +125,7 @@ async def arrange_provider_budget(tmp_path, monkeypatch):
     monkeypatch.setattr(generate, "response_cache", None)
     monkeypatch.setattr(generate, "circuit_breaker_registry", circuit_registry)
     monkeypatch.setattr(generate, "get_llm_semaphore", lambda: asyncio.Semaphore(4))
-    monkeypatch.setattr(generate, "_get_system_prompt", lambda _: "只核对所给完整虚构记录，保留引述属性。")
+    monkeypatch.setattr(chat_answer, 'get_lora_system_prompt', lambda _: "只核对所给完整虚构记录，保留引述属性。")
     # Explicitly disable the independent post-reply semantic writer; its
     # interpreter is outside this budget-factory test. Actual counter writes run.
     monkeypatch.setattr("character.memory_llm.get_memory_enrichment_scheduler", lambda: SimpleNamespace(enabled=False))

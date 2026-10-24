@@ -1,5 +1,7 @@
 """Full source-blind resolver input; raw response remains diagnostic and never grants a binding."""
 
+from services import chat_answer
+
 import asyncio
 import json
 from copy import deepcopy
@@ -91,7 +93,6 @@ async def run_api(tmp_path, monkeypatch, defect=None, *, private=True, fee_only=
         scope_value,
     )
 
-    from api import generate
     from character.models import CompiledCharacterContext
     from db.schemas import MessageRequest
     from inference.provider_context import ProviderContextBudget
@@ -110,7 +111,7 @@ async def run_api(tmp_path, monkeypatch, defect=None, *, private=True, fee_only=
     first_body = "霁浦登记不收费；当前完整公开页未载日期、材料、例外，缺项保持未知。" if fee_only else FIRST
     if private_large:
         monkeypatch.setattr(
-            generate, "get_provider_context_budget", lambda: ProviderContextBudget(8192)
+            chat_answer, 'get_provider_context_budget', lambda: ProviderContextBudget(8192)
         )
 
     async def planner(query, *, history, context_budget):
@@ -133,7 +134,7 @@ async def run_api(tmp_path, monkeypatch, defect=None, *, private=True, fee_only=
     else:
         source_bundle = complete_sources()
     documents = {row["document_id"]: dict(row, id=row["document_id"]) for row in source_bundle["results"]}
-    monkeypatch.setattr(generate.db, "get_knowledge_document", documents.get)
+    monkeypatch.setattr(chat_answer.public_knowledge_db, "get_knowledge_document", documents.get)
 
     async def review(messages):
         data = json.loads(messages[-1]["content"])
@@ -194,7 +195,7 @@ async def run_api(tmp_path, monkeypatch, defect=None, *, private=True, fee_only=
                 aspect["evidence"] = []
         return json.dumps(value)
 
-    actual_generate = generate.generate_character_response
+    actual_generate = chat_answer.generate_character_response
 
     async def capture(request, model):
         observed["initial_retrieval"] = request.retrieval
@@ -220,12 +221,12 @@ async def run_api(tmp_path, monkeypatch, defect=None, *, private=True, fee_only=
         )
 
     monkeypatch.setattr(retrieval_query_plan, "plan_retrieval", planner)
-    monkeypatch.setattr(generate, "retrieve_chat_knowledge", retrieve)
+    monkeypatch.setattr(chat_answer, 'retrieve_chat_knowledge', retrieve)
     monkeypatch.setattr(public_task_evidence, "_review", review)
     monkeypatch.setattr(public_fact_coverage, "_review_facts", facts)
-    monkeypatch.setattr(generate, "_get_system_prompt", lambda _: "独立测试人物规则")
-    monkeypatch.setattr(generate, "generate_character_response", capture)
-    _, used, meta = await generate._generate_with_retrieval(
+    monkeypatch.setattr(chat_answer, 'get_lora_system_prompt', lambda _: "独立测试人物规则")
+    monkeypatch.setattr(chat_answer, 'generate_character_response', capture)
+    _, used, meta = await chat_answer.generate_chat_answer(
         MessageRequest(message=QUERY),
         None,
         prepared_character_turn=SimpleNamespace(compiled=context, history=()),
@@ -249,13 +250,12 @@ async def test_actual_generation_positive_keeps_five_facts_and_normal_private(tm
 @pytest.mark.parametrize("defect", ["json", "typed_id", "fence", "non_text", "transport", "timeout"])
 @pytest.mark.parametrize("private", [True, False])
 async def test_failed_binding_stops_generation(tmp_path, monkeypatch, defect, private, caplog):
-    from fastapi import HTTPException
 
     from knowledge.public_question_binding import QuestionBindingReviewError
 
-    with pytest.raises(HTTPException) as caught:
+    with pytest.raises(chat_answer.ChatRetrievalError) as caught:
         await run_api(tmp_path, monkeypatch, defect, private=private)
-    assert caught.value.status_code == 503
+    assert caught.value.http_status == 503
     assert isinstance(caught.value.__cause__, QuestionBindingReviewError)
     assert MARKER not in caplog.text
 
@@ -332,11 +332,10 @@ async def test_current_protocol_fee_only_and_private_original_is_partial(tmp_pat
 
 
 async def test_binding_failure_with_large_private_source_still_errors(tmp_path, monkeypatch):
-    from fastapi import HTTPException
 
-    with pytest.raises(HTTPException) as caught:
+    with pytest.raises(chat_answer.ChatRetrievalError) as caught:
         await run_api(tmp_path, monkeypatch, "json", private_large=True)
-    assert caught.value.status_code == 503
+    assert caught.value.http_status == 503
 
 
 async def test_diagnostic_valid_json_cannot_grant_binding_or_hide_changed_input():

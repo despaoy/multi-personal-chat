@@ -1,5 +1,7 @@
 """Required invocation accounting fails explicitly without hiding model errors."""
 
+from services import chat_answer
+
 import asyncio
 import threading
 from types import SimpleNamespace
@@ -41,7 +43,7 @@ def generation(monkeypatch, database):
     monkeypatch.setattr(generate, "circuit_breaker_registry", None)
     monkeypatch.setattr(generate, "get_llm_semaphore", lambda: asyncio.Semaphore(1))
     model = AsyncMock(return_value=(REPLY, False, {"modelInvoked": True}))
-    monkeypatch.setattr(generate, "_generate_with_retrieval", model)
+    monkeypatch.setattr(chat_answer, 'generate_chat_answer', model)
     return model
 
 

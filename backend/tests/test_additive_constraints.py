@@ -1,4 +1,6 @@
 """Explicit additive evidence must survive versioning and cross-session reads."""
+
+from services import chat_answer
 import json
 from html import unescape
 from dataclasses import replace
@@ -47,7 +49,6 @@ async def test_add_read_repeat_correct_across_sessions(tmp_path, monkeypatch, se
         prepared = await service.prepare_turn(TurnInput(query, 'web', 'test', 'u1', 'new', 'private'), 'tsukiyashiro_kisaki')
         reply = render_constraint_response(query, prepared.compiled)
         assert first in reply and second in reply and '不表示行动一定发生' in reply
-        from api import generate
         from db.schemas import MessageRequest
 
         async def forbidden(*args, **kwargs):
@@ -62,10 +63,10 @@ async def test_add_read_repeat_correct_across_sessions(tmp_path, monkeypatch, se
             calls.append(kwargs)
             return reply
 
-        monkeypatch.setattr(generate, 'retrieve_chat_knowledge', forbidden)
-        monkeypatch.setattr(generate, '_get_system_prompt', lambda _: 'persona')
+        monkeypatch.setattr(chat_answer, 'retrieve_chat_knowledge', forbidden)
+        monkeypatch.setattr(chat_answer, 'get_lora_system_prompt', lambda _: 'persona')
         semantic_plan(query, {"private_memory": [0]})
-        delivered, _, meta = await generate._generate_with_retrieval(
+        delivered, _, meta = await chat_answer.generate_chat_answer(
             MessageRequest(message=query), None, runtime_config={'useKnowledgeBase': True},
             model_generate=controlled_answer, prepared_character_turn=prepared, message_db=db)
         assert delivered == reply and meta['modelInvoked'] is True and len(calls) == 1

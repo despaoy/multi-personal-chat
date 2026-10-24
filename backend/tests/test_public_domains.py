@@ -1,5 +1,7 @@
 """Fictional source authorities exercise real review and final packet admission."""
 
+from services import chat_answer
+
 from knowledge import chat_retrieval
 
 from knowledge import index_lifecycle
@@ -338,9 +340,7 @@ def test_service_scope_retains_full_question_and_excludes_incidental_entity(conf
 @pytest.mark.parametrize("failed", ["curated", "generic"])
 @pytest.mark.parametrize("defect", ["provider", "timeout"])
 async def test_actual_chat_branch_failure_stops_review_and_answer(config, monkeypatch, semantic_plan, failed, defect):
-    from fastapi import HTTPException
 
-    from api import generate
     from db.schemas import MessageRequest
     from inference.context_budget import ReviewContextBudget
     from knowledge import public_task_evidence
@@ -377,15 +377,15 @@ async def test_actual_chat_branch_failure_stops_review_and_answer(config, monkey
     monkeypatch.setattr(installed.character if failed == "curated" else installed.generic, "retrieve_with_citations", unavailable)
     monkeypatch.setattr(public_task_evidence, "_review", scope)
     monkeypatch.setattr(public_task_evidence, "review_public_candidates", forbidden_review)
-    monkeypatch.setattr(generate, "get_provider_context_budget", lambda: SimpleNamespace(
+    monkeypatch.setattr(chat_answer, 'get_provider_context_budget', lambda: SimpleNamespace(
         review=ReviewContextBudget(65536), window_tokens=65536, evidence_max_chars=0,
     ))
-    with pytest.raises(HTTPException) as caught:
-        await generate._generate_with_retrieval(
+    with pytest.raises(chat_answer.ChatRetrievalError) as caught:
+        await chat_answer.generate_chat_answer(
             MessageRequest(message=QUERY), None,
             runtime_config=dict(maxTokens=2048, useKnowledgeBase=True), model_generate=forbidden_answer,
         )
-    assert caught.value.status_code == 503
+    assert caught.value.http_status == 503
     if defect == "timeout":
         # asyncio converts the thread future's TimeoutError to a new instance.
         assert type(caught.value.__cause__) is TimeoutError and caught.value.__cause__.args == error.args

@@ -1,5 +1,7 @@
 """Same-object businesses need independent candidates from complete source data."""
 
+from services import chat_answer
+
 from knowledge import chat_retrieval
 
 from knowledge import index_lifecycle
@@ -13,7 +15,7 @@ import numpy as np
 import pytest
 from scope_fixtures import open_scope_response
 
-from api import generate, knowledge
+from api import knowledge
 from db.database import SQLiteDB
 from inference.provider_context import get_provider_context_budget
 from knowledge import rag_helper, vector_db
@@ -54,7 +56,7 @@ async def arrange(tmp_path, monkeypatch):
     monkeypatch.setenv("RERANKER_ENABLED", "false")
     monkeypatch.setattr(knowledge, "db", database)
     monkeypatch.setattr(index_lifecycle, "db", database)
-    monkeypatch.setattr(generate, "db", database)
+    monkeypatch.setattr(chat_answer, 'public_knowledge_db', database)
     monkeypatch.setattr(chat_retrieval, "db", database)
     monkeypatch.setattr(index_lifecycle, "_vector_index_revision", None)
     monkeypatch.setattr(vector_db.VectorDatabase, "_check_gpu_availability", lambda _: False)
@@ -91,7 +93,7 @@ async def arrange(tmp_path, monkeypatch):
     vector.clear_cache()
     budget = get_provider_context_budget(manager=SimpleNamespace(_current_provider=SimpleNamespace(value="openai_compat")),
         env={"OPENAI_COMPAT_CONTEXT_WINDOW_TOKENS": "65536"})
-    monkeypatch.setattr(generate, "get_provider_context_budget", lambda: budget)
+    monkeypatch.setattr(chat_answer, 'get_provider_context_budget', lambda: budget)
     monkeypatch.setattr(chat_retrieval, "get_provider_context_budget", lambda: budget)
     curated = Mock(side_effect=AssertionError("These bound businesses are not curated character evidence"))
     monkeypatch.setattr(runtime, "get_multiscale_rag_service", lambda: SimpleNamespace(
@@ -209,8 +211,6 @@ async def test_bound_businesses_reject_separate_query_hints_before_search(tmp_pa
 async def test_capacity_error_reaches_generation_as_actionable_failure(monkeypatch, semantic_plan):
     from unittest.mock import AsyncMock
 
-    from fastapi import HTTPException
-
     from db.schemas import MessageRequest
     from knowledge import public_question_binding
     from knowledge.public_question_binding import QuestionBindingCapacityError
@@ -221,11 +221,11 @@ async def test_capacity_error_reaches_generation_as_actionable_failure(monkeypat
     retrieve = AsyncMock(side_effect=failure)
     model = AsyncMock()
     monkeypatch.setattr(public_question_binding, "resolve_question_binding", AsyncMock(return_value=None))
-    monkeypatch.setattr(generate, "retrieve_chat_knowledge", retrieve)
-    monkeypatch.setattr(generate, "_rag_retrieval_timeout", lambda: 30.0)
-    with pytest.raises(HTTPException) as caught:
-        await generate._generate_with_retrieval(MessageRequest(message=query), None,
+    monkeypatch.setattr(chat_answer, 'retrieve_chat_knowledge', retrieve)
+    monkeypatch.setattr(chat_answer, '_rag_retrieval_timeout', lambda: 30.0)
+    with pytest.raises(chat_answer.ChatRetrievalError) as caught:
+        await chat_answer.generate_chat_answer(MessageRequest(message=query), None,
             runtime_config={"useKnowledgeBase": True}, model_generate=model)
-    assert caught.value.status_code == 503 and caught.value.detail == failure.public_detail()
+    assert caught.value.http_status == 503 and caught.value.detail == failure.public_detail()
     assert caught.value.__cause__ is failure
     model.assert_not_awaited()

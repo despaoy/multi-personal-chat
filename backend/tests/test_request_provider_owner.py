@@ -4,6 +4,8 @@ Real manager/provider and compiled-message interfaces use isolated HTTP or
 explicit synthetic local resources; no model, database write or live network.
 """
 
+from services import chat_answer
+
 import asyncio
 import json
 from contextlib import asynccontextmanager
@@ -92,7 +94,7 @@ def owned(monkeypatch):
             top_p=runtime_config["topP"], context_window_tokens=8192), model_generate)
         return result.reply, False, {"modelInvoked": True}
 
-    monkeypatch.setattr(generate, "_generate_with_retrieval", compiled)
+    monkeypatch.setattr(chat_answer, 'generate_chat_answer', compiled)
     return SimpleNamespace(manager=manager, resources=resources, reads=reads, snapshots=snapshots,
         local_calls=local_calls, http_calls=http_calls, legacy_calls=legacy_calls, state=state, semaphore=semaphore)
 

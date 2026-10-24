@@ -1,5 +1,7 @@
 """Complete multi-object controls retain independently supported public/private facts."""
 
+from services import chat_answer
+
 import json
 from copy import deepcopy
 from dataclasses import replace
@@ -285,17 +287,17 @@ async def test_actual_api_marks_partial_multi_object_scope_without_erasing_priva
         return "青桥费用及末尾限定有依据，蓝岸本次缺对应资料；你的私人偏好保留。"
 
     monkeypatch.setattr(retrieval_query_plan, "plan_retrieval", planner)
-    monkeypatch.setattr(generate, "retrieve_chat_knowledge", retrieve)
+    monkeypatch.setattr(chat_answer, 'retrieve_chat_knowledge', retrieve)
     install_public_source_reader(monkeypatch, generate, bundle(missing=True))
     from knowledge import public_fact_coverage
 
     monkeypatch.setattr(public_fact_coverage, "_review_facts", facts)
     monkeypatch.setattr(public_task_evidence, "_review", review)
-    monkeypatch.setattr(generate, "_get_system_prompt", lambda _: "人物规则")
+    monkeypatch.setattr(chat_answer, 'get_lora_system_prompt', lambda _: "人物规则")
     prepared = SimpleNamespace(
         compiled=CompiledCharacterContext("", "", PRIVATE, used_memory_ids=("fiction-private",)), history=()
     )
-    _, used, meta = await generate._generate_with_retrieval(
+    _, used, meta = await chat_answer.generate_chat_answer(
         MessageRequest(message=QUERY),
         None,
         prepared_character_turn=prepared,

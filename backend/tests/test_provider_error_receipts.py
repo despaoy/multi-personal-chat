@@ -7,6 +7,8 @@ case uses the actual planner, reviewer adapter and API exception boundaries.
 
 """
 
+from services import chat_answer
+
 import json
 from datetime import datetime, timezone
 from types import SimpleNamespace
@@ -171,19 +173,19 @@ async def test_actual_query_planner_cause_is_attached_to_api_review_failure(monk
     monkeypatch.setattr(review_client, "get_context_review_client", AsyncMock(return_value=client))
     monkeypatch.setenv("RAG_TASK_PLANNER_TIMEOUT_SECONDS", "1")
     budget = SimpleNamespace(review=ReviewContextBudget(65536), window_tokens=65536, evidence_max_chars=0)
-    monkeypatch.setattr(generate, "get_provider_context_budget", lambda: budget)
+    monkeypatch.setattr(chat_answer, 'get_provider_context_budget', lambda: budget)
 
     async def answer(**kwargs):
         answers.append(kwargs)
         pytest.fail("A failed planner exchange must not continue to answer generation")
 
-    with pytest.raises(HTTPException) as caught:
-        await generate._generate_with_retrieval(
+    with pytest.raises(chat_answer.ChatRetrievalError) as caught:
+        await chat_answer.generate_chat_answer(
             MessageRequest(message=PUBLIC_QUERY), None,
             runtime_config={"maxTokens": 2048, "useKnowledgeBase": True}, model_generate=answer,
         )
     error = caught.value
-    assert error.status_code == 503 and len(exchanges) == 1 and not answers
+    assert error.http_status == 503 and len(exchanges) == 1 and not answers
     assert isinstance(error.__cause__, QueryPlanReviewError)
     assert error.__cause__.status == "provider_error" and error.__cause__.__cause__ is rejection
     assert error.detail["message"] == "检索或证据审核失败，请检查检索服务及审核模型状态后重试"

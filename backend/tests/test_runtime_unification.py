@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from services import chat_answer
+
 import asyncio
 import sqlite3
 import sys
@@ -310,7 +312,6 @@ async def test_composite_rate_limit_refunds_earlier_scopes(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_vllm_generation_reuses_one_rag_result(monkeypatch, semantic_plan, controlled_public_bundle):
-    from api import generate
     from db.schemas import MessageRequest
 
     calls = 0
@@ -338,12 +339,12 @@ async def test_vllm_generation_reuses_one_rag_result(monkeypatch, semantic_plan,
             assert payload["answer"] == "answer" and "evidence" in payload["sources"][0]["body"]
             return '{"citations": []}'
 
-    monkeypatch.setattr(generate, "retrieve_chat_knowledge", retrieve)
-    monkeypatch.setattr(generate, "_get_system_prompt", lambda _: "system")
+    monkeypatch.setattr(chat_answer, 'retrieve_chat_knowledge', retrieve)
+    monkeypatch.setattr(chat_answer, 'get_lora_system_prompt', lambda _: "system")
 
     semantic_plan("question", {"public_knowledge": [0]})
     request = MessageRequest(message="question", sessionId="session")
-    reply, used_rag, meta = await generate._generate_with_retrieval(
+    reply, used_rag, meta = await chat_answer.generate_chat_answer(
         request,
         None,
         runtime_config={"useKnowledgeBase": True},
@@ -366,7 +367,6 @@ async def test_vllm_generation_reuses_one_rag_result(monkeypatch, semantic_plan,
 
 @pytest.mark.asyncio
 async def test_vllm_generation_omits_rag_policy_without_evidence(monkeypatch):
-    from api import generate
     from db.schemas import MessageRequest
 
     captured = {}
@@ -376,9 +376,9 @@ async def test_vllm_generation_omits_rag_policy_without_evidence(monkeypatch):
             captured.update(kwargs)
             return "answer"
 
-    monkeypatch.setattr(generate, "_get_system_prompt", lambda _: "persona")
+    monkeypatch.setattr(chat_answer, 'get_lora_system_prompt', lambda _: "persona")
 
-    reply, used_rag, meta = await generate._generate_with_retrieval(
+    reply, used_rag, meta = await chat_answer.generate_chat_answer(
         MessageRequest(message="ordinary chat", sessionId="session"),
         None,
         runtime_config={"useKnowledgeBase": False},
@@ -401,7 +401,6 @@ async def test_vllm_generation_omits_rag_policy_without_evidence(monkeypatch):
 @pytest.mark.asyncio
 @pytest.mark.parametrize("outcome", ["character reply", "", "error"])
 async def test_vllm_rag_abstention_generates_character_uncertainty(monkeypatch, outcome, semantic_plan, controlled_public_bundle):
-    from api import generate
     from db.schemas import MessageRequest
 
     captured = {}
@@ -422,14 +421,14 @@ async def test_vllm_rag_abstention_generates_character_uncertainty(monkeypatch, 
                 raise RuntimeError("model unavailable")
             return outcome
 
-    monkeypatch.setattr(generate, "retrieve_chat_knowledge", retrieve)
-    monkeypatch.setattr(generate, "_get_system_prompt", lambda _: "system")
+    monkeypatch.setattr(chat_answer, 'retrieve_chat_knowledge', retrieve)
+    monkeypatch.setattr(chat_answer, 'get_lora_system_prompt', lambda _: "system")
 
     semantic_plan("unknown question", {"public_knowledge": [0]})
     if outcome != "character reply":
         expected = RuntimeError if outcome == "error" else ValueError
         with pytest.raises(expected, match="model unavailable|non-empty text"):
-            await generate._generate_with_retrieval(
+            await chat_answer.generate_chat_answer(
                 MessageRequest(message="unknown question", sessionId="session"),
                 "character-adapter", runtime_config={"useKnowledgeBase": True},
                 model_generate=Client().generate,
@@ -437,7 +436,7 @@ async def test_vllm_rag_abstention_generates_character_uncertainty(monkeypatch, 
         assert captured
         return
 
-    reply, used_rag, meta = await generate._generate_with_retrieval(
+    reply, used_rag, meta = await chat_answer.generate_chat_answer(
         MessageRequest(message="unknown question", sessionId="session"),
         "character-adapter",
         runtime_config={"useKnowledgeBase": True},

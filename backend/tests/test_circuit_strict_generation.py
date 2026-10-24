@@ -5,6 +5,8 @@ The cloud completion boundary has complete synthetic input/output and never
 creates an HTTP client. All provider fees are zero.
 """
 
+from services import chat_answer
+
 import asyncio
 from contextlib import suppress
 from html import unescape
@@ -80,8 +82,8 @@ async def circuit_rig(tmp_path, monkeypatch):
     monkeypatch.setattr(generate, "response_cache", None)
     monkeypatch.setattr(generate, "circuit_breaker_registry", registry)
     monkeypatch.setattr(generate, "get_llm_semaphore", lambda: semaphore)
-    monkeypatch.setattr(generate, "_get_system_prompt", lambda _: "只依据完整给定题设；保留时间、否定和例外。")
-    monkeypatch.setattr(generate, "get_provider_context_budget", lambda: SimpleNamespace(window_tokens=65536, evidence_max_chars=0))
+    monkeypatch.setattr(chat_answer, 'get_lora_system_prompt', lambda _: "只依据完整给定题设；保留时间、否定和例外。")
+    monkeypatch.setattr(chat_answer, 'get_provider_context_budget', lambda: SimpleNamespace(window_tokens=65536, evidence_max_chars=0))
     monkeypatch.setenv("CHARACTER_INDEPENDENT_TASKS_ENABLED", "false")
     try:
         yield rig
@@ -357,7 +359,7 @@ async def test_capacity_failures_keep_audit_without_disabling_a_healthy_provider
     rig = circuit_rig
     counters = []
     monkeypatch.setattr(generate, "increment", lambda name, *args, **kwargs: counters.append(name))
-    monkeypatch.setattr(generate, "get_provider_context_budget", lambda: SimpleNamespace(window_tokens=1024, evidence_max_chars=0))
+    monkeypatch.setattr(chat_answer, 'get_provider_context_budget', lambda: SimpleNamespace(window_tokens=1024, evidence_max_chars=0))
     for index in range(5):
         value = request(f"capacity-{index}")
         value.message = FACTS * 30
@@ -370,7 +372,7 @@ async def test_capacity_failures_keep_audit_without_disabling_a_healthy_provider
     assert [row["errorType"] for row in records(rig)] == ["InputBudgetError"] * 5
     assert "model_failures" not in counters
     assert await rig.registry.get(rig.circuit_name) is None
-    monkeypatch.setattr(generate, "get_provider_context_budget", lambda: SimpleNamespace(window_tokens=65536, evidence_max_chars=0))
+    monkeypatch.setattr(chat_answer, 'get_provider_context_budget', lambda: SimpleNamespace(window_tokens=65536, evidence_max_chars=0))
     result = await turn(rig, "healthy-after-capacity")
     assert result.modelInvoked and result.reply == REPLY and len(rig.calls) == 1
     breaker = await rig.registry.get(rig.circuit_name)

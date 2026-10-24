@@ -179,9 +179,9 @@ async def main(args):
 
     CharacterContextService._load_history = controlled_history
 
-    from api import generate as generation_api
 
-    original_generation = generation_api.generate_character_response
+    from services import chat_answer
+    original_generation = chat_answer.generate_character_response
 
     async def observed_prepare(service, turn, character_id):
         prepared = await original_prepare(service, turn, character_id)
@@ -215,7 +215,7 @@ async def main(args):
             raise
 
     CharacterContextService.prepare_turn = observed_prepare
-    generation_api.generate_character_response = observed_generation
+    chat_answer.generate_character_response = observed_generation
     assert is_pg_mode()
     db.update_config(dict(useKnowledgeBase=False, temperature=0.2, maxTokens=1024, topP=0.9))
     app = create_app()

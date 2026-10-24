@@ -1,4 +1,6 @@
 """Provider-reported counts, including failed answers and concurrent requests."""
+
+from services import chat_answer
 import asyncio
 from contextlib import asynccontextmanager
 
@@ -90,12 +92,13 @@ async def test_api_records_actual_usage_even_if_answer_rejected(installed, monke
     from types import SimpleNamespace
     database = SQLiteDB(tmp_path / "measured.sqlite")
     monkeypatch.setattr(generate, "db", SimpleNamespace(config=installed.config, loras=[], add_model_invocation=database.add_model_invocation))
+    monkeypatch.setattr(chat_answer, "public_knowledge_db", generate.db)
     installed.state.finish = finish
-    compiled = generate._generate_with_retrieval
+    compiled = chat_answer.generate_chat_answer
     async def twice(*args, **kwargs):
         await compiled(*args, **kwargs)
         return await compiled(*args, **kwargs)
-    monkeypatch.setattr(generate, "_generate_with_retrieval", twice)
+    monkeypatch.setattr(chat_answer, 'generate_chat_answer', twice)
     request = MessageRequest(message="Synthetic facts: project A is approved; B is rejected. Which is approved?", loraName="default", traceId="usage-fixture")
     if finish == "stop":
         await generate._generate_reply_impl(request, persist_message=False)

@@ -1,5 +1,7 @@
 """Only generation admission, slot handoff, and failed-request cleanup."""
 
+from services import chat_answer
+
 import asyncio
 from datetime import datetime, timezone
 from types import SimpleNamespace
@@ -127,7 +129,7 @@ def generation_environment(monkeypatch, provider):
         )
     )
     monkeypatch.setattr(gen, "_prepare_character_turn", preparation)
-    monkeypatch.setattr(gen, "_generate_with_retrieval", generation)
+    monkeypatch.setattr(chat_answer, 'generate_chat_answer', generation)
     monkeypatch.setattr(gen, "_save_message", storage)
     monkeypatch.setattr(gen, "_persist_completion_feedback", AsyncMock(return_value=True))
     request = MessageRequest(

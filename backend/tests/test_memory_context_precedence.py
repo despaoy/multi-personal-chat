@@ -1,4 +1,6 @@
 """A saved projection cannot certify current facts over unprocessed context."""
+
+from services import chat_answer
 from dataclasses import replace
 from types import SimpleNamespace
 
@@ -80,14 +82,13 @@ async def test_explicit_storage_query_stays_storage_only_with_recent_correction(
 
 @pytest.mark.asyncio
 async def test_api_passes_the_same_effective_history_to_shortcut_and_generation(monkeypatch, semantic_plan):
-    from api import generate
     from db.schemas import MessageRequest
 
-    monkeypatch.setattr(generate, '_get_system_prompt', lambda _: '角色设定')
+    monkeypatch.setattr(chat_answer, 'get_lora_system_prompt', lambda _: '角色设定')
     async def forbidden(*args, **kwargs):
         pytest.fail('Private lookup needs no external RAG')
 
-    monkeypatch.setattr(generate, 'retrieve_chat_knowledge', forbidden)
+    monkeypatch.setattr(chat_answer, 'retrieve_chat_knowledge', forbidden)
     planning = semantic_plan('我住哪里？', dict(private_memory=[0]))
     calls = []
 
@@ -96,7 +97,7 @@ async def test_api_passes_the_same_effective_history_to_shortcut_and_generation(
         return '我会依据最新对话。'
 
     history = ({'role': 'user', 'content': '我现在住在西宁。'},)
-    reply, used_rag, meta = await generate._generate_with_retrieval(
+    reply, used_rag, meta = await chat_answer.generate_chat_answer(
         MessageRequest(message='我住哪里？'), None, runtime_config={'useKnowledgeBase': True},
         prepared_character_turn=SimpleNamespace(compiled=saved(), history=history), model_generate=model)
     # Ordinary generation need not emit RAG metadata; actual calls are the evidence.

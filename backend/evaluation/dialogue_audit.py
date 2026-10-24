@@ -129,6 +129,7 @@ def load_cases(path: Path) -> list[dict]:
 async def run(args, cases: list[dict], out: Path):
     # Imports must follow DATABASE_PATH initialization in main().
     import api.generate as gen
+    from services import chat_answer
     from db.adapter import db
     from db.schemas import MessageRequest
     from repositories.character_memory import DatabaseCharacterMemoryRepository
@@ -138,7 +139,7 @@ async def run(args, cases: list[dict], out: Path):
     repo = DatabaseCharacterMemoryRepository(db)
     current = {}
     prepared_turn = None
-    original_generation = gen.generate_character_response
+    original_generation = chat_answer.generate_character_response
 
     async def traced_generation(request, generate):
         current['generation_features'] = {'independent_tasks_enabled': request.independent_tasks_enabled}
@@ -157,7 +158,7 @@ async def run(args, cases: list[dict], out: Path):
         current['generation'] = asdict(result)
         current['model_calls'] = calls
         return result
-    gen.generate_character_response = traced_generation
+    chat_answer.generate_character_response = traced_generation
 
     class TracedService:
         def __init__(self, inner=service):

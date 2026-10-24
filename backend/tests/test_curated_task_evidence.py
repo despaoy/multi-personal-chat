@@ -1,5 +1,7 @@
 """Independent fictional originals exercise scope and final source admission."""
 
+from services import chat_answer
+
 import asyncio
 import copy
 import json
@@ -603,9 +605,7 @@ def test_catalogue_snapshot_keeps_excerpt_and_file_hash_on_same_original(corpus,
 
 @pytest.mark.parametrize("failure", ["provider", "timeout", "invalid", "capacity", "source_changed", "source_deleted"])
 async def test_curated_review_failure_stops_chat_before_answer(corpus, monkeypatch, failure):
-    from fastapi import HTTPException
 
-    from api import generate
     from db.schemas import MessageRequest
     from inference.context_budget import ReviewContextBudget
     from knowledge import curated_task_evidence, public_question_binding, retrieval_query_plan
@@ -650,13 +650,13 @@ async def test_curated_review_failure_stops_chat_before_answer(corpus, monkeypat
     monkeypatch.setattr(retrieval_query_plan, "plan_retrieval", planner)
     monkeypatch.setattr(public_question_binding, "resolve_question_binding", binding)
     monkeypatch.setattr(runtime, "get_multiscale_rag_service", lambda: SimpleNamespace(config=corpus.config, is_warm=lambda: True))
-    monkeypatch.setattr(generate, "retrieve_chat_knowledge", retrieve)
+    monkeypatch.setattr(chat_answer, 'retrieve_chat_knowledge', retrieve)
     monkeypatch.setattr(curated_task_evidence, "_review", reviewer)
-    monkeypatch.setattr(generate, "get_provider_context_budget", lambda: SimpleNamespace(
+    monkeypatch.setattr(chat_answer, 'get_provider_context_budget', lambda: SimpleNamespace(
         review=ReviewContextBudget(budget), window_tokens=budget, evidence_max_chars=0,
     ))
-    with pytest.raises(HTTPException) as caught:
-        await generate._generate_with_retrieval(
+    with pytest.raises(chat_answer.ChatRetrievalError) as caught:
+        await chat_answer.generate_chat_answer(
             MessageRequest(message=QUERY), None,
             runtime_config=dict(useKnowledgeBase=True, maxTokens=256), model_generate=answer,
         )
@@ -665,7 +665,7 @@ async def test_curated_review_failure_stops_chat_before_answer(corpus, monkeypat
         "capacity": CuratedTaskCapacityError, "source_changed": curated_sources.CuratedSourceChangedError,
         "source_deleted": FileNotFoundError,
     }
-    assert caught.value.status_code == 503 and isinstance(caught.value.__cause__, expected[failure])
+    assert caught.value.http_status == 503 and isinstance(caught.value.__cause__, expected[failure])
     if failure in {"provider", "timeout"}:
         assert caught.value.__cause__ is error
     assert seen == dict(review=0 if failure == "capacity" else 1, answer=0)

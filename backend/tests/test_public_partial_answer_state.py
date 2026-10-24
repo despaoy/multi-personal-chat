@@ -1,11 +1,12 @@
 """Final coverage uses complete synthetic receipts and send-time source authority."""
 
+from services import chat_answer
+
 from copy import deepcopy
 from html import unescape
 from unittest.mock import AsyncMock
 
 import pytest
-from fastapi import HTTPException
 from scope_fixtures import install_public_source_reader
 from tests.test_public_fact_coverage import FEE, FULL, QUERY, bundle, deps, obligations, run
 
@@ -41,9 +42,9 @@ async def test_unprepared_public_state_uses_final_fact_coverage(monkeypatch, mod
 
     monkeypatch.setattr(retrieval_query_plan, "plan_retrieval", planner)
     monkeypatch.setattr("knowledge.public_question_binding.resolve_question_binding", no_binding)
-    monkeypatch.setattr(generate, "retrieve_chat_knowledge", retrieved_or_reviewed)
+    monkeypatch.setattr(chat_answer, 'retrieve_chat_knowledge', retrieved_or_reviewed)
     monkeypatch.setattr(public_task_evidence, "review_public_candidates", retrieved_or_reviewed)
-    _, used, meta = await generate._generate_with_retrieval(
+    _, used, meta = await chat_answer.generate_chat_answer(
         MessageRequest(message=QUERY), None,
         runtime_config=dict(maxTokens=2048, useKnowledgeBase=True), model_generate=model,
     )
@@ -64,13 +65,13 @@ async def test_fact_scope_failure_stops_before_generation(monkeypatch, semantic_
         return (await run("full", scope_failure=True))[0]
 
     model = AsyncMock(side_effect=AssertionError("Failed evidence review must stop before generation"))
-    monkeypatch.setattr(generate, "retrieve_chat_knowledge", retrieve)
+    monkeypatch.setattr(chat_answer, 'retrieve_chat_knowledge', retrieve)
     monkeypatch.setattr(public_task_evidence, "review_public_candidates", failing_review)
-    with pytest.raises(HTTPException) as error:
-        await generate._generate_with_retrieval(
+    with pytest.raises(chat_answer.ChatRetrievalError) as error:
+        await chat_answer.generate_chat_answer(
             MessageRequest(message=QUERY), None,
             runtime_config=dict(maxTokens=2048, useKnowledgeBase=True), model_generate=model,
         )
-    assert error.value.status_code == 503 and isinstance(error.value.__cause__, RuntimeError)
+    assert error.value.http_status == 503 and isinstance(error.value.__cause__, RuntimeError)
     assert str(error.value.__cause__) == "reviewer unavailable"
     model.assert_not_awaited()

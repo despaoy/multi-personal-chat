@@ -24,6 +24,7 @@ async def run(args):
     from fastapi import FastAPI
 
     import api.generate as gen
+    from services import chat_answer
     from character.memory_llm import MemoryEnrichmentScheduler, MemoryLlmConfig
     from character.profile_registry import CharacterProfileRegistry
     from db.database import SQLiteDB
@@ -117,7 +118,7 @@ async def run(args):
     login = {"id": "evaluation"}
     app.dependency_overrides[gen.get_current_user] = lambda: login
     app.dependency_overrides[gen.get_request_chat_generation_service] = lambda: service
-    original = gen.generate_character_response
+    original = chat_answer.generate_character_response
     all_calls = []
 
     async def traced_generation(request, generate):
@@ -170,7 +171,7 @@ async def run(args):
     manifest["canonical_plan_remains_inline"] = args.separate_source_packet
     unexpected_local_calls = []
     from evaluation.retrieval_trace import RecordedRetrieval
-    retrieval_trace = RecordedRetrieval(gen.retrieve_chat_knowledge, current,
+    retrieval_trace = RecordedRetrieval(chat_answer.retrieve_chat_knowledge, current,
                                         top_k=getattr(args, 'rag_top_k', None))
     manifest['experimental_rag_top_k'] = retrieval_trace.top_k
 
@@ -181,8 +182,8 @@ async def run(args):
     try:
         with ExitStack() as routes, \
              patch("character.memory_llm.get_memory_enrichment_scheduler", return_value=scheduler), \
-             patch.object(gen, "generate_character_response", traced_generation), patch.object(gen, "response_cache", None):
-            routes.enter_context(patch.object(gen, 'retrieve_chat_knowledge', retrieval_trace))
+             patch.object(chat_answer, 'generate_character_response', traced_generation), patch.object(gen, "response_cache", None):
+            routes.enter_context(patch.object(chat_answer, 'retrieve_chat_knowledge', retrieval_trace))
             if cloud is not None:
                 routes.enter_context(patch('inference.vllm_client.VLLMClient.generate', reject_local_generation))
                 if args.rag:

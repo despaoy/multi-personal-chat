@@ -1,5 +1,7 @@
 """Compiled cloud requests and direct-response cache keep truthful provenance."""
 
+from services import chat_answer
+
 import asyncio
 import json
 from contextlib import asynccontextmanager
@@ -52,11 +54,12 @@ def installed(monkeypatch):
     monkeypatch.setattr(model_manager, "get_model_manager", lambda: manager)
     runtime_config = {"useKnowledgeBase": False, "temperature": 0.83, "maxTokens": 173}
     monkeypatch.setattr(generate, "db", SimpleNamespace(config=runtime_config, loras=[]))
+    monkeypatch.setattr(chat_answer, "public_knowledge_db", generate.db)
     monkeypatch.setattr(generate, "response_cache", None)
     monkeypatch.setattr(generate, "circuit_breaker_registry", None)
     monkeypatch.setattr(generate, "get_llm_semaphore", lambda: asyncio.Semaphore(1))
-    monkeypatch.setattr(generate, "_get_system_prompt", lambda _: "只依据本题完整资料；保留时间、否定和例外。")
-    monkeypatch.setattr(generate, "get_provider_context_budget", lambda: SimpleNamespace(window_tokens=65536, evidence_max_chars=0))
+    monkeypatch.setattr(chat_answer, 'get_lora_system_prompt', lambda _: "只依据本题完整资料；保留时间、否定和例外。")
+    monkeypatch.setattr(chat_answer, 'get_provider_context_budget', lambda: SimpleNamespace(window_tokens=65536, evidence_max_chars=0))
     calls = []
     state = SimpleNamespace(status=200, finish="stop", failure=None, on_request=None)
 
@@ -85,7 +88,7 @@ def installed(monkeypatch):
         return result.reply, result.plan.retrieval.has_evidence, {}
 
     state.evidence = False
-    monkeypatch.setattr(generate, "_generate_with_retrieval", compiled)
+    monkeypatch.setattr(chat_answer, 'generate_chat_answer', compiled)
     return SimpleNamespace(provider=provider, manager=manager, stored=stored, config=runtime_config, calls=calls, state=state)
 
 
@@ -263,7 +266,7 @@ async def test_normal_no_model_result_keeps_false_invocation_provenance(installe
     async def abstain(*args, **kwargs):
         return "当前资料未找到足够依据。", False, {"modelInvoked": False, "abstained": True, "answerMode": "abstention"}
 
-    monkeypatch.setattr(generate, "_generate_with_retrieval", abstain)
+    monkeypatch.setattr(chat_answer, 'generate_chat_answer', abstain)
     result = await receive()
     assert result.abstained and not result.modelInvoked and result.model_dump()["modelInvoked"] is False
     assert installed.calls == []
@@ -318,12 +321,12 @@ async def test_snapshot_owns_settings_and_next_request_reads_new_configuration(i
 async def test_cache_identity_and_wire_use_same_snapshot_when_settings_change_before_dispatch(installed, monkeypatch):
     cache = Cache()
     monkeypatch.setattr(generate, "response_cache", cache)
-    compiled = generate._generate_with_retrieval
+    compiled = chat_answer.generate_chat_answer
     async def changed(*args, **kwargs):
         installed.stored.update(openaiCompatModel="next-model", openaiCompatApiKey="fiction-next-key")
         installed.provider._refresh_db_config()
         return await compiled(*args, **kwargs)
-    monkeypatch.setattr(generate, "_generate_with_retrieval", changed)
+    monkeypatch.setattr(chat_answer, 'generate_chat_answer', changed)
     first = await receive()
     assert first.model == "fixture-model (openai_compat)"
     assert installed.calls[0]["body"]["model"] == "fixture-model" and installed.calls[0]["auth"] == "Bearer fiction-key"
@@ -348,13 +351,13 @@ async def test_configuration_change_during_transport_does_not_relabel_completed_
 
 @pytest.mark.asyncio
 async def test_multiple_model_calls_in_one_turn_share_configuration_snapshot(installed, monkeypatch):
-    compiled = generate._generate_with_retrieval
+    compiled = chat_answer.generate_chat_answer
     async def two_calls(*args, **kwargs):
         await compiled(*args, **kwargs)
         installed.stored["openaiCompatModel"] = "next-model"
         installed.provider._refresh_db_config()
         return await compiled(*args, **kwargs)
-    monkeypatch.setattr(generate, "_generate_with_retrieval", two_calls)
+    monkeypatch.setattr(chat_answer, 'generate_chat_answer', two_calls)
     result = await receive()
     assert len(installed.calls) == 2 and {call["body"]["model"] for call in installed.calls} == {"fixture-model"}
     assert result.model == "fixture-model (openai_compat)"

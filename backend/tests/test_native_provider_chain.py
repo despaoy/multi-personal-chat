@@ -1,5 +1,7 @@
 """Native providers must receive compiled messages and explicit output budgets."""
 
+from services import chat_answer
+
 import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
@@ -75,7 +77,7 @@ async def test_selected_provider_receives_messages_and_budget_without_local_over
         )
         return reply, False, {}
 
-    monkeypatch.setattr(generate, "_generate_with_retrieval", compiled_retrieval)
+    monkeypatch.setattr(chat_answer, 'generate_chat_answer', compiled_retrieval)
     if provider == "vllm" and not available:
         from fastapi import HTTPException
 

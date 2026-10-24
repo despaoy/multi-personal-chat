@@ -51,7 +51,7 @@ async def run(args):
     )
     import httpx
 
-    from api import generate as api
+    from services import chat_answer
     from character.memory_query import lookup_fields, storage_fields
     from db.database import SQLiteDB
     from db.schemas import MessageRequest
@@ -134,15 +134,15 @@ async def run(args):
         "retrieval": [],
         "generation": [],
     }
-    original_retrieve = api.retrieve_chat_knowledge
+    original_retrieve = chat_answer.retrieve_chat_knowledge
 
     async def observed_retrieve(*pos, **kwargs):
         bundle = await original_retrieve(*pos, **kwargs)
         proof["retrieval"].append(bundle)
         return bundle
 
-    api.retrieve_chat_knowledge = observed_retrieve
-    original_generation = api.generate_character_response
+    chat_answer.retrieve_chat_knowledge = observed_retrieve
+    original_generation = chat_answer.generate_character_response
 
     async def observed_generation(request, generate):
         proof["requested_budget"] = {
@@ -161,7 +161,7 @@ async def run(args):
         )
         return result
 
-    api.generate_character_response = observed_generation
+    chat_answer.generate_character_response = observed_generation
     manager = get_model_manager()
 
     async def model_generate(*, messages, temperature, max_tokens, top_p=None, **kwargs):
@@ -182,7 +182,7 @@ async def run(args):
         )
         return reply
 
-    reply, rag_used, meta = await api._generate_with_retrieval(
+    reply, rag_used, meta = await chat_answer.generate_chat_answer(
         MessageRequest(
             message=question,
             characterId=fields["character_id"],

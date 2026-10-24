@@ -1,5 +1,7 @@
 """Completed reviews remain accounted for when later preparation fails."""
 
+from services import chat_answer
+
 import asyncio
 import json
 import threading
@@ -78,7 +80,7 @@ async def test_review_only_answer_is_accounted_without_claiming_main_generation(
         await rig.consume()
         return SimpleNamespace(character_id=role)
     rig.service.prepare_turn = prepare
-    monkeypatch.setattr(generate, "_generate_with_retrieval", AsyncMock(return_value=(
+    monkeypatch.setattr(chat_answer, 'generate_chat_answer', AsyncMock(return_value=(
         "The currently stored synthetic facts were read.", False,
         {"modelInvoked": False, "answerMode": "memory_lookup"},
     )))
@@ -177,15 +179,17 @@ async def test_rag_review_http_failure_keeps_its_error_and_usage(review_usage, m
     rig = review_usage
     rig.service.prepare_turn = AsyncMock(return_value=SimpleNamespace(character_id="tsukiyashiro_kisaki"))
     detail = {"stage": "synthetic_rag_review", "message": "Evidence review failed"}
+    failure = ValueError("Synthetic evidence review failure")
     async def retrieve(*args, **kwargs):
         await rig.consume()
-        raise HTTPException(503, detail=detail)
-    monkeypatch.setattr(generate, "_generate_with_retrieval", retrieve)
+        raise chat_answer.ChatRetrievalError(detail) from failure
+    monkeypatch.setattr(chat_answer, 'generate_chat_answer', retrieve)
     with pytest.raises(HTTPException) as caught:
         await rig.run()
     assert caught.value.status_code == 503 and caught.value.detail == detail
     row, = rig.rows()
-    assert row["totalTokens"] == 120 and row["errorType"] == "HTTPException"
+    assert row["totalTokens"] == 120 and row["errorType"] == "ValueError"
+    assert caught.value.__cause__ is failure
     assert rig.writer.call_count == len(rig.installed.calls) == 1
 
 
@@ -205,7 +209,7 @@ async def test_review_only_record_failure_does_not_claim_main_generation(review_
         await rig.consume()
         return SimpleNamespace(character_id=role)
     rig.service.prepare_turn = prepare
-    monkeypatch.setattr(generate, "_generate_with_retrieval", AsyncMock(return_value=(
+    monkeypatch.setattr(chat_answer, 'generate_chat_answer', AsyncMock(return_value=(
         "The currently stored synthetic facts were read.", False,
         {"modelInvoked": False, "answerMode": "memory_lookup"},
     )))

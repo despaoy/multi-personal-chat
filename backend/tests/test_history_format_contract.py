@@ -1,5 +1,7 @@
 """History corruption must stop a real prompt build, never remove a premise."""
 
+from services import chat_answer
+
 import json
 from copy import deepcopy
 from types import SimpleNamespace
@@ -108,7 +110,7 @@ async def test_actual_generation_api_reports_history_failure_before_model(monkey
     }))
     monkeypatch.setattr(generate, "response_cache", cache if cached else None)
     monkeypatch.setattr(generate, "circuit_breaker_registry", None)
-    monkeypatch.setattr(generate, "_get_system_prompt", lambda _: "")
+    monkeypatch.setattr(chat_answer, 'get_lora_system_prompt', lambda _: "")
     save, record = AsyncMock(), AsyncMock()
     monkeypatch.setattr(generate, "_save_message", save)
     monkeypatch.setattr(generate, "_record_model_invocation", record)

@@ -1,5 +1,7 @@
 """Identity evidence is a dependency, never a substitute for rule evidence."""
 
+from services import chat_answer
+
 import json
 from copy import deepcopy
 from dataclasses import replace
@@ -308,17 +310,17 @@ async def test_actual_api_production_identity_stage_keeps_registry_rules_and_pri
         return "续办费用与原件及例外依完整规则回答，周末偏好保留。"
 
     monkeypatch.setattr(retrieval_query_plan, "plan_retrieval", planner)
-    monkeypatch.setattr(generate, "retrieve_chat_knowledge", retrieve)
+    monkeypatch.setattr(chat_answer, 'retrieve_chat_knowledge', retrieve)
     install_public_source_reader(monkeypatch, generate, bundle())
     from knowledge import public_fact_coverage
 
     monkeypatch.setattr(public_fact_coverage, "_review_facts", facts)
     monkeypatch.setattr(public_task_evidence, "_review", review)
-    monkeypatch.setattr(generate, "_get_system_prompt", lambda _: "人物规则")
+    monkeypatch.setattr(chat_answer, 'get_lora_system_prompt', lambda _: "人物规则")
     prepared = SimpleNamespace(
         compiled=CompiledCharacterContext("", "", PRIVATE, used_memory_ids=("fiction-private",)), history=()
     )
-    _, used, meta = await generate._generate_with_retrieval(
+    _, used, meta = await chat_answer.generate_chat_answer(
         MessageRequest(message=QUERY),
         None,
         prepared_character_turn=prepared,

@@ -1,3 +1,5 @@
+
+from services import chat_answer
 from dataclasses import replace
 
 import pytest
@@ -123,17 +125,16 @@ async def test_correction_with_other_task_remains_generation():
 async def test_api_reports_memory_read_as_zero_model_calls_not_rag_source(monkeypatch, use_kb, semantic_plan):
     from types import SimpleNamespace
 
-    from api import generate
     from db.schemas import MessageRequest
 
     async def model(**kwargs):
         pytest.fail('No model invocation for a verified field read')
 
-    monkeypatch.setattr(generate, '_get_system_prompt', lambda _: 'persona')
-    monkeypatch.setattr(generate, 'retrieve_chat_knowledge', model)
+    monkeypatch.setattr(chat_answer, 'get_lora_system_prompt', lambda _: 'persona')
+    monkeypatch.setattr(chat_answer, 'retrieve_chat_knowledge', model)
     planning = semantic_plan('我现在住哪里？', dict(private_memory=[0]))
     prepared = SimpleNamespace(history=(), compiled=context(packets('我住在银川。')))
-    reply, used_rag, meta = await generate._generate_with_retrieval(
+    reply, used_rag, meta = await chat_answer.generate_chat_answer(
         MessageRequest(message='我现在住哪里？'), None, runtime_config={'useKnowledgeBase': use_kb},
         prepared_character_turn=prepared, model_generate=model)
     assert '银川' in reply and not used_rag
@@ -147,7 +148,6 @@ async def test_api_reports_memory_read_as_zero_model_calls_not_rag_source(monkey
 async def test_partial_or_mixed_read_routes_by_dependency(monkeypatch, message, external, semantic_plan, controlled_public_bundle):
     from types import SimpleNamespace
 
-    from api import generate
     from db.schemas import MessageRequest
 
     routed = []
@@ -159,11 +159,11 @@ async def test_partial_or_mixed_read_routes_by_dependency(monkeypatch, message, 
     async def model(**kwargs):
         return '普通生成路径'
 
-    monkeypatch.setattr(generate, '_get_system_prompt', lambda _: 'persona')
-    monkeypatch.setattr(generate, 'retrieve_chat_knowledge', retrieve)
+    monkeypatch.setattr(chat_answer, 'get_lora_system_prompt', lambda _: 'persona')
+    monkeypatch.setattr(chat_answer, 'retrieve_chat_knowledge', retrieve)
     groups = dict(private_memory=[0], public_knowledge=[0] if external else [])
     planning = semantic_plan(message, groups)
-    reply, _, _ = await generate._generate_with_retrieval(
+    reply, _, _ = await chat_answer.generate_chat_answer(
         MessageRequest(message=message), None, runtime_config={'useKnowledgeBase': True},
         prepared_character_turn=SimpleNamespace(history=(), compiled=context(packets('我住在银川。'))),
         model_generate=model)

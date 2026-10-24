@@ -5,6 +5,8 @@ compiler and API error conversion are real. Only semantic labels and the final
 answer are synthetic. No network or paid model calls.
 """
 
+from services import chat_answer
+
 import asyncio
 import json
 from datetime import datetime, timedelta, timezone
@@ -110,7 +112,7 @@ async def arrange_selected_memory(tmp_path, monkeypatch, *, cap=6000):
     monkeypatch.setattr(generate, "response_cache", None)
     monkeypatch.setattr(generate, "circuit_breaker_registry", rig.registry)
     monkeypatch.setattr(generate, "get_llm_semaphore", lambda: asyncio.Semaphore(4))
-    monkeypatch.setattr(generate, "_get_system_prompt", lambda _: "仅核对两份完整虚构引文，保留所有否定和例外。")
+    monkeypatch.setattr(chat_answer, 'get_lora_system_prompt', lambda _: "仅核对两份完整虚构引文，保留所有否定和例外。")
     service = CharacterContextService(
         registry, repository, DatabaseMessageRepository(database),
         memory_service=CharacterMemoryService(repository, semantic_enabled=False),

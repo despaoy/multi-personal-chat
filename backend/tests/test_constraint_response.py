@@ -1,3 +1,5 @@
+
+from services import chat_answer
 from dataclasses import replace
 
 import pytest
@@ -87,17 +89,16 @@ async def test_shared_generation_executes_logic_without_model():
 async def test_condition_read_uses_no_external_retrieval(monkeypatch, semantic_plan):
     from types import SimpleNamespace
 
-    from api import generate
     from db.schemas import MessageRequest
     from knowledge import intent_detector
 
     async def model(**kwargs):
         pytest.fail('No generation needed')
 
-    monkeypatch.setattr(generate, '_get_system_prompt', lambda _: 'persona')
+    monkeypatch.setattr(chat_answer, 'get_lora_system_prompt', lambda _: 'persona')
     monkeypatch.setattr(intent_detector, 'predict_rag_intent', lambda _: pytest.fail('No external RAG needed'))
     semantic_plan("如果休息好，我就一定开长途车吗？", {"private_memory": [0]})
-    reply, rag, meta = await generate._generate_with_retrieval(
+    reply, rag, meta = await chat_answer.generate_chat_answer(
         MessageRequest(message='如果休息好，我就一定开长途车吗？'), None,
         runtime_config={'useKnowledgeBase': True}, model_generate=model,
         prepared_character_turn=SimpleNamespace(history=(), compiled=context()))

@@ -1,5 +1,7 @@
 """Required adapter identity/prompt checks cannot turn failure into base generation."""
 
+from services import chat_answer
+
 import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
@@ -125,7 +127,7 @@ async def test_selected_lora_requires_successful_inventory_before_generation(mon
         return_value=["controlled-adapter"] if inventory == "ready" else None if inventory == "unknown" else [])
     fake = SimpleNamespace(list_loras=listing, generate=AsyncMock())
     monkeypatch.setattr(generate, "get_vllm_client", AsyncMock(return_value=fake if inventory != 'unavailable' else None))
-    monkeypatch.setattr(generate, "_generate_with_retrieval", state.generation)
+    monkeypatch.setattr(chat_answer, 'generate_chat_answer', state.generation)
     req = MessageRequest(message="完整题设：3张票，每张2元，计算总额。", loraName="controlled-adapter")
     if inventory == "ready":
         result = await generate._generate_reply_impl(req, record_invocation=False)
@@ -153,7 +155,7 @@ async def test_explicit_base_model_does_not_require_adapter_inventory(monkeypatc
     state = install_api(monkeypatch, "vllm")
     listing = AsyncMock(side_effect=AssertionError("Base model does not require adapter discovery"))
     monkeypatch.setattr(generate, "get_vllm_client", AsyncMock(return_value=SimpleNamespace(list_loras=listing, generate=AsyncMock())))
-    monkeypatch.setattr(generate, "_generate_with_retrieval", state.generation)
+    monkeypatch.setattr(chat_answer, 'generate_chat_answer', state.generation)
     result = await generate._generate_reply_impl(MessageRequest(message="完整题设：3张票，每张2元。", loraName="default"),
         record_invocation=False)
     assert result.reply == "根据完整当前输入回答。"
@@ -165,7 +167,7 @@ async def test_explicit_base_model_does_not_require_adapter_inventory(monkeypatc
 def test_known_persona_prompt_fault_cannot_turn_into_empty_prompt(monkeypatch, entry, error_type):
     monkeypatch.setitem(lora_registry.LORA_REGISTRY, "minamo", entry)
     with pytest.raises(error_type):
-        generate._get_system_prompt("minamo")
+        chat_answer.get_lora_system_prompt("minamo")
 
 
 def test_real_prompt_read_error_survives_the_api_lookup(monkeypatch):
@@ -175,14 +177,14 @@ def test_real_prompt_read_error_survives_the_api_lookup(monkeypatch):
             raise failure
     monkeypatch.setattr(lora_registry, "LORA_REGISTRY", BrokenRegistry({"minamo": {"system_prompt": "完整合法角色提示词"}}))
     with pytest.raises(OSError) as error:
-        generate._get_system_prompt("minamo")
+        chat_answer.get_lora_system_prompt("minamo")
     assert error.value is failure
 
 
 def test_optional_prompt_for_base_or_custom_adapter_keeps_existing_semantics():
-    assert generate._get_system_prompt("default") == ""
-    assert generate._get_system_prompt("fixture-custom-adapter") == ""
-    assert generate._get_system_prompt("minamo") == lora_registry.LORA_REGISTRY["minamo"]["system_prompt"]
+    assert chat_answer.get_lora_system_prompt("default") == ""
+    assert chat_answer.get_lora_system_prompt("fixture-custom-adapter") == ""
+    assert chat_answer.get_lora_system_prompt("minamo") == lora_registry.LORA_REGISTRY["minamo"]["system_prompt"]
 
 
 

@@ -1,5 +1,7 @@
 """Only trusted archive receipt feedback, actual SQLite/PG and its consumers."""
 
+from services import chat_answer
+
 import os
 import uuid
 from types import SimpleNamespace
@@ -186,7 +188,7 @@ async def test_both_consumers_use_actual_saved_row_and_keep_visible_failure(monk
     monkeypatch.setattr(gen, "get_llm_semaphore", lambda: asyncio.Semaphore(1))
     monkeypatch.setattr(gen, "get_vllm_client", AsyncMock(return_value=SimpleNamespace(generate=AsyncMock()) if provider == 'vllm' else None))
     meta = dict(warnings=["原有检索提示"], answerMode="unit", confidence=0.3, citations=[])
-    monkeypatch.setattr(gen, "_generate_with_retrieval", AsyncMock(return_value=("原始模型内容", False, meta)))
+    monkeypatch.setattr(chat_answer, 'generate_chat_answer', AsyncMock(return_value=("原始模型内容", False, meta)))
     prepared = SimpleNamespace(
         character_id=request.characterId,
         compiled=SimpleNamespace(profile_context="", dynamic_context="", reference_context=""),

@@ -4,6 +4,8 @@ Semantic planner, empty public retrieval and main provider are mocks;
 this file makes no paid provider request and claims no native auth/vector test.
 """
 
+from services import chat_answer
+
 from datetime import datetime, timezone
 from html import unescape
 
@@ -24,7 +26,6 @@ BODY = "虚构评测原话：我偏好青柚茶；只在周五晚间阅读时选
 async def exercise(tmp_path, monkeypatch, *, erase_during_review):
     from services.character_context import PreparedCharacterTurn
 
-    from api import generate
     from character.models import RelationshipState
     from db.schemas import MessageRequest
     from knowledge import public_question_binding, retrieval_query_plan
@@ -90,9 +91,9 @@ async def exercise(tmp_path, monkeypatch, *, erase_during_review):
 
     monkeypatch.setattr(retrieval_query_plan, "plan_retrieval", planner)
     monkeypatch.setattr(public_question_binding, "resolve_question_binding", binding)
-    monkeypatch.setattr(generate, "retrieve_chat_knowledge", empty_public_result)
-    monkeypatch.setattr(generate, "_get_system_prompt", lambda _: "虚构评测角色规则")
-    _, used, meta = await generate._generate_with_retrieval(
+    monkeypatch.setattr(chat_answer, 'retrieve_chat_knowledge', empty_public_result)
+    monkeypatch.setattr(chat_answer, 'get_lora_system_prompt', lambda _: "虚构评测角色规则")
+    _, used, meta = await chat_answer.generate_chat_answer(
         MessageRequest(message=QUERY, characterId="fiction-role"),
         None,
         prepared_character_turn=PreparedCharacterTurn(

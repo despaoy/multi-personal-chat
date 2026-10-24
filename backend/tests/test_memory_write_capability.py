@@ -1,5 +1,7 @@
 """Only backend write enablement supplies memory capabilities to model input."""
 
+from services import chat_answer
+
 from dataclasses import replace
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
@@ -19,7 +21,7 @@ from inference.generation_request import (
 )
 from services.turn_completion import get_turn_completion_runtime, start_turn_completions, shutdown_turn_completions
 
-actual_generation = generate._generate_with_retrieval
+actual_generation = chat_answer.generate_chat_answer
 
 
 @pytest.mark.parametrize("enabled", [True, False, None])
@@ -40,7 +42,8 @@ async def test_real_cloud_wire_uses_actual_write_path(installed, monkeypatch, tm
     database = SQLiteDB(tmp_path / "capability.sqlite")
     database.update_config(installed.config)
     monkeypatch.setattr(generate,"db",database)
-    monkeypatch.setattr(generate,"_generate_with_retrieval",actual_generation)
+    monkeypatch.setattr(chat_answer, "public_knowledge_db", generate.db)
+    monkeypatch.setattr(chat_answer,'generate_chat_answer',actual_generation)
     monkeypatch.setattr(memory_llm,"get_memory_enrichment_scheduler",lambda:SimpleNamespace(enabled=enabled))
     complete = AsyncMock(return_value=None)
     monkeypatch.setattr(generate,"_complete_character_turn",complete)

@@ -1,5 +1,7 @@
 """Independent history contracts; model stubs here are explicit unit controls."""
 
+from services import chat_answer
+
 import json
 from types import SimpleNamespace
 
@@ -93,7 +95,6 @@ async def test_authority_fields_in_model_output_are_rejected(monkeypatch):
 @pytest.mark.asyncio
 @pytest.mark.parametrize("history_source", ["prepared_database", "request_override"])
 async def test_actual_generation_route_passes_the_same_effective_history(monkeypatch, history_source):
-    from api import generate
     from character.models import CompiledCharacterContext
     from db.schemas import MessageRequest
     from knowledge import retrieval_query_plan
@@ -123,9 +124,9 @@ async def test_actual_generation_route_passes_the_same_effective_history(monkeyp
 
     prepared = SimpleNamespace(compiled=CompiledCharacterContext("", "", ""), history=database_history)
     monkeypatch.setattr(retrieval_query_plan, "plan_retrieval", unit_planner)
-    monkeypatch.setattr(generate, "retrieve_chat_knowledge", forbidden_public)
-    monkeypatch.setattr(generate, "_get_system_prompt", lambda _: "单元角色规则")
-    _, _, meta = await generate._generate_with_retrieval(
+    monkeypatch.setattr(chat_answer, 'retrieve_chat_knowledge', forbidden_public)
+    monkeypatch.setattr(chat_answer, 'get_lora_system_prompt', lambda _: "单元角色规则")
+    _, _, meta = await chat_answer.generate_chat_answer(
         MessageRequest(message=QUERY, history=request_history if history_source == "request_override" else []),
         None,
         prepared_character_turn=prepared,

@@ -1,5 +1,7 @@
 """Coverage follows real source selection and final packet admission."""
 
+from services import chat_answer
+
 import json
 import re
 from html import unescape
@@ -167,7 +169,6 @@ def test_citation_binding_preserves_coverage_of_original_source_identities():
 
 
 async def test_shared_api_exports_partial_source_warning_without_extra_model_call(monkeypatch, semantic_plan, controlled_public_bundle):
-    from api import generate
     from db.schemas import MessageRequest
     from types import SimpleNamespace
     from inference.context_budget import ReviewContextBudget
@@ -183,7 +184,7 @@ async def test_shared_api_exports_partial_source_warning_without_extra_model_cal
                     content="\n".join(row["content"] for row in documents))
     receipts = coverage(tuple(row["id"] for row in documents))
     receipts[0]["source_authority_snapshot"] = document_authority_snapshot(original)
-    monkeypatch.setattr(generate.db, "get_knowledge_document", lambda identity: original if identity == 1 else None)
+    monkeypatch.setattr(chat_answer.public_knowledge_db, "get_knowledge_document", lambda identity: original if identity == 1 else None)
 
     async def retrieve(*args, **kwargs):
         return {
@@ -200,11 +201,11 @@ async def test_shared_api_exports_partial_source_warning_without_extra_model_cal
         observed.append(kwargs)
         return "当前能核对部分资料，设备为 RTX 3060 12GB，其余条件无法确认。"
 
-    monkeypatch.setattr(generate, "retrieve_chat_knowledge", retrieve)
-    monkeypatch.setattr(generate, "get_provider_context_budget", lambda: SimpleNamespace(
+    monkeypatch.setattr(chat_answer, 'retrieve_chat_knowledge', retrieve)
+    monkeypatch.setattr(chat_answer, 'get_provider_context_budget', lambda: SimpleNamespace(
         review=ReviewContextBudget(8192), window_tokens=8192, evidence_max_chars=0))
     monkeypatch.setenv("RAG_CITATIONS_ENABLED", "false")
-    reply, used, metadata = await generate._generate_with_retrieval(
+    reply, used, metadata = await chat_answer.generate_chat_answer(
         MessageRequest(message="核对整份规程"),
         "default",
         runtime_config={"useKnowledgeBase": True, "maxTokens": 512},

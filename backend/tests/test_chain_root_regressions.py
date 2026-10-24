@@ -1,4 +1,6 @@
 """Regressions from the real-model effect evaluation, without model calls."""
+
+from services import chat_answer
 from unittest.mock import AsyncMock
 from types import SimpleNamespace
 
@@ -114,7 +116,7 @@ async def test_character_entry_does_not_require_or_auto_select_lora(monkeypatch)
     prepare = AsyncMock(return_value=SimpleNamespace(character_id='tsukiyashiro_kisaki'))
     monkeypatch.setattr(gen, '_prepare_character_turn', prepare)
     generate = AsyncMock(return_value=('reply', False, {}))
-    monkeypatch.setattr(gen, '_generate_with_retrieval', generate)
+    monkeypatch.setattr(chat_answer, 'generate_chat_answer', generate)
     database = SimpleNamespace(config={}, loras=[{'name': 'hutao', 'status': 'active'}])
     req = MessageRequest(message='你好', characterId='tsukiyashiro_kisaki', userId='alice', sessionId='a')
     await gen._generate_reply_impl(req, message_db=database, persist_message=False, record_invocation=False)

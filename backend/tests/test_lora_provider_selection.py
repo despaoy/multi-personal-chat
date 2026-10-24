@@ -1,5 +1,7 @@
 """Selected-provider ownership and explicit adapter failures; no real inference."""
 
+from services import chat_answer
+
 import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
@@ -82,7 +84,7 @@ def install_api(monkeypatch, provider):
     monkeypatch.setattr(generate, "get_llm_semaphore", lambda: asyncio.Semaphore(1))
     generation = AsyncMock(return_value=("根据完整当前输入回答。", False, {}))
     save = AsyncMock(return_value=True)
-    monkeypatch.setattr(generate, "_generate_with_retrieval", generation)
+    monkeypatch.setattr(chat_answer, 'generate_chat_answer', generation)
     monkeypatch.setattr(generate, "_save_message", save)
     return SimpleNamespace(api=generate, manager=manager, generation=generation, save=save, inactive=inactive)
 

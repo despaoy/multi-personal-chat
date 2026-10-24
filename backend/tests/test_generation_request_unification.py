@@ -1,4 +1,6 @@
 
+from services import chat_answer
+
 from knowledge import chat_retrieval
 
 from knowledge import index_lifecycle
@@ -64,6 +66,7 @@ async def test_generation_failure_is_reported_and_recorded(monkeypatch, provider
     manager.get_current_provider = lambda: connection
     monkeypatch.setattr(model_manager, "get_model_manager", lambda: manager)
     monkeypatch.setattr(generate, "db", SimpleNamespace(config={}, loras=[]))
+    monkeypatch.setattr(chat_answer, "public_knowledge_db", generate.db)
     monkeypatch.setattr(generate, "response_cache", None)
     monkeypatch.setattr(generate, "get_vllm_client", AsyncMock(return_value=SimpleNamespace(generate=AsyncMock())))
     monkeypatch.setattr(generate, "set_consecutive", lambda *args: counters.append(args))
@@ -85,7 +88,7 @@ async def test_generation_failure_is_reported_and_recorded(monkeypatch, provider
         records.append(kwargs)
 
     monkeypatch.setattr(generate, "circuit_breaker_registry", None)
-    monkeypatch.setattr(generate, "_generate_with_retrieval", failed_expression)
+    monkeypatch.setattr(chat_answer, 'generate_chat_answer', failed_expression)
     monkeypatch.setattr(generate, "_record_model_invocation", record)
     from fastapi import HTTPException
 
@@ -109,7 +112,6 @@ async def test_generation_failure_is_reported_and_recorded(monkeypatch, provider
 @pytest.mark.asyncio
 @pytest.mark.parametrize("failure", [RuntimeError("retrieval unavailable"), TimeoutError("timeout")])
 async def test_retrieval_errors_stop_before_model_generation(monkeypatch, semantic_plan, failure):
-    from api import generate
 
     captured = {}
 
@@ -121,16 +123,15 @@ async def test_retrieval_errors_stop_before_model_generation(monkeypatch, semant
         return "暂时还不能确定。"
 
     semantic_plan("人物关系是什么", dict(unresolved_source=[0]))
-    monkeypatch.setattr(generate, "retrieve_chat_knowledge", broken_retrieval)
-    monkeypatch.setattr(generate, "_get_system_prompt", lambda _: "persona")
-    from fastapi import HTTPException
+    monkeypatch.setattr(chat_answer, 'retrieve_chat_knowledge', broken_retrieval)
+    monkeypatch.setattr(chat_answer, 'get_lora_system_prompt', lambda _: "persona")
 
-    with pytest.raises(HTTPException) as caught:
-        await generate._generate_with_retrieval(
+    with pytest.raises(chat_answer.ChatRetrievalError) as caught:
+        await chat_answer.generate_chat_answer(
             MessageRequest(message="人物关系是什么"), None,
             runtime_config={"useKnowledgeBase": True}, model_generate=model,
         )
-    assert caught.value.status_code == 503
+    assert caught.value.http_status == 503
     assert caught.value.__cause__ is failure
     assert not captured
 
@@ -154,7 +155,6 @@ def test_only_character_abstention_allows_uncertainty_generation(status):
 
 @pytest.mark.asyncio
 async def test_production_and_character_benchmark_share_model_request(monkeypatch):
-    from api import generate
     from evaluation import character_benchmark_v3
 
     production_call = {}
@@ -164,8 +164,8 @@ async def test_production_and_character_benchmark_share_model_request(monkeypatc
             production_call.update(kwargs)
             return "production reply"
 
-    monkeypatch.setattr(generate, "_get_system_prompt", lambda _: "persona")
-    await generate._generate_with_retrieval(
+    monkeypatch.setattr(chat_answer, 'get_lora_system_prompt', lambda _: "persona")
+    await chat_answer.generate_chat_answer(
         MessageRequest(message="question", senderName="琉璃"),
         None,
         runtime_config={
@@ -218,7 +218,6 @@ async def test_production_rag_uses_shared_grounded_request(monkeypatch, semantic
     """Transport/building control with complete fiction, not a relevance eval."""
     import re
 
-    from api import generate
     from inference import answer_citations
     from inference.answer_citations import prepare_answer_citations
     from inference.context_budget import ReviewContextBudget
@@ -254,12 +253,12 @@ async def test_production_rag_uses_shared_grounded_request(monkeypatch, semantic
 
     monkeypatch.setattr(public_question_binding, "resolve_question_binding", binding)
     monkeypatch.setattr(public_task_evidence, "review_public_candidates", transmission_control)
-    monkeypatch.setattr(generate, "retrieve_chat_knowledge", retrieve)
-    monkeypatch.setattr(generate, "_get_system_prompt", lambda _: "persona")
-    monkeypatch.setattr(generate, "get_provider_context_budget", lambda: SimpleNamespace(
+    monkeypatch.setattr(chat_answer, 'retrieve_chat_knowledge', retrieve)
+    monkeypatch.setattr(chat_answer, 'get_lora_system_prompt', lambda _: "persona")
+    monkeypatch.setattr(chat_answer, 'get_provider_context_budget', lambda: SimpleNamespace(
         review=ReviewContextBudget(65536), window_tokens=65536, evidence_max_chars=0,
     ))
-    reply, _, meta = await generate._generate_with_retrieval(
+    reply, _, meta = await chat_answer.generate_chat_answer(
         MessageRequest(message=query, senderName="虚构读者"), None,
         runtime_config=dict(useKnowledgeBase=True, temperature=0.7, maxTokens=256),
         model_generate=Client().generate,
@@ -267,7 +266,7 @@ async def test_production_rag_uses_shared_grounded_request(monkeypatch, semantic
     packets = document_evidence_packets([document])
     expected = build_generation_request(GenerationRequest(
         message=query, persona_prompt="persona", interlocutor="虚构读者",
-        retrieval=prepare_answer_citations(generate.RetrievalResult(
+        retrieval=prepare_answer_citations(chat_answer.RetrievalResult(
             status="ok", evidence="\n\n".join(packet["text"] for packet in packets),
             evidence_packets=packets, documents=(document,), citations=tuple(citations), confidence=0.9,
             public_dependency_indices=(0,),
@@ -304,7 +303,7 @@ async def test_configuration_read_failure_stops_before_model_or_save(monkeypatch
         _current_provider=SimpleNamespace(value="openai_compat"),
         get_current_provider=lambda: connection))
     model, save = AsyncMock(), AsyncMock()
-    monkeypatch.setattr(generate, "_generate_with_retrieval", model)
+    monkeypatch.setattr(chat_answer, 'generate_chat_answer', model)
     monkeypatch.setattr(generate, "_save_message", save)
     with pytest.raises(HTTPException) as caught:
         await generate._generate_reply_impl(MessageRequest(message="完整测试问题"), message_db=BrokenDatabase())
@@ -336,11 +335,12 @@ async def test_native_timeout_cancels_work_and_releases_capacity_without_breaker
         _current_provider=SimpleNamespace(value="openai_compat"), set_lora_adapter=lambda _: None,
         get_current_provider=lambda: connection))
     monkeypatch.setattr(generate, "db", SimpleNamespace(config={}, loras=[]))
+    monkeypatch.setattr(chat_answer, "public_knowledge_db", generate.db)
     monkeypatch.setattr(generate, "response_cache", None)
     monkeypatch.setattr(generate, "circuit_breaker_registry", None)
     monkeypatch.setattr(generate, "get_llm_semaphore", lambda: semaphore)
     monkeypatch.setattr(generate, "_MODEL_INFERENCE_TIMEOUT", 0.01)
-    monkeypatch.setattr(generate, "_generate_with_retrieval", pending)
+    monkeypatch.setattr(chat_answer, 'generate_chat_answer', pending)
     save = AsyncMock()
     monkeypatch.setattr(generate, "_save_message", save)
     with pytest.raises(HTTPException) as caught:

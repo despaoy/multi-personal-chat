@@ -6,6 +6,8 @@ The nested-body case isolates the branch protocol; it is not a full narrative
 product test. No live model, network, real credentials or semantic assessment.
 """
 
+from services import chat_answer
+
 import asyncio
 from contextvars import ContextVar
 from types import SimpleNamespace
@@ -102,14 +104,14 @@ async def test_preparation_default_review_main_answer_and_counter_share_one_snap
         observations.append(("prepare", context, before))
         return SimpleNamespace(character_id=character_id, history=(), compiled=None, reply_guard=None)
 
-    compiled = generate._generate_with_retrieval
+    compiled = chat_answer.generate_chat_answer
 
     async def compile_with_observation(*args, **kwargs):
         observations.append(("main", get_request_context(), estimated_tokens(COUNT_TEXT)))
         return await compiled(*args, **kwargs)
 
     monkeypatch.setattr(generate, "_prepare_character_turn", prepare)
-    monkeypatch.setattr(generate, "_generate_with_retrieval", compile_with_observation)
+    monkeypatch.setattr(chat_answer, 'generate_chat_answer', compile_with_observation)
     first = await receive("first", character=True)
     assert first.model == "deepseek-flash (openai_compat)" and first.reply == ANSWER
     assert snapshots.call_count == 1 and get_request_context() is None
@@ -135,7 +137,7 @@ async def test_preparation_default_review_main_answer_and_counter_share_one_snap
 
 async def test_concurrent_requests_keep_distinct_provider_and_thread_counter_contexts(installed, monkeypatch):
     snapshots = own_cloud_model(installed, monkeypatch)
-    compiled = generate._generate_with_retrieval
+    compiled = chat_answer.generate_chat_answer
     entered = {name: asyncio.Event() for name in ("first", "second")}
     release = asyncio.Event()
     observations, cleaned = {}, []
@@ -155,7 +157,7 @@ async def test_concurrent_requests_keep_distinct_provider_and_thread_counter_con
         finally:
             cleaned.append(get_request_context())
 
-    monkeypatch.setattr(generate, "_generate_with_retrieval", pause_compile)
+    monkeypatch.setattr(chat_answer, 'generate_chat_answer', pause_compile)
     first = asyncio.create_task(invoke("first"))
     second = None
     try:
@@ -178,7 +180,7 @@ async def test_concurrent_requests_keep_distinct_provider_and_thread_counter_con
 @pytest.mark.parametrize("cancel", [False, True], ids=["exception", "cancellation"])
 async def test_actual_api_failure_or_cancellation_resets_its_own_task_context(installed, monkeypatch, cancel):
     snapshots = own_cloud_model(installed, monkeypatch)
-    compiled = generate._generate_with_retrieval
+    compiled = chat_answer.generate_chat_answer
     entered, release = asyncio.Event(), asyncio.Event()
     cleaned = []
     failure = ValueError("synthetic request-scope failure")
@@ -197,7 +199,7 @@ async def test_actual_api_failure_or_cancellation_resets_its_own_task_context(in
             # not just the parent's independently isolated ContextVar value.
             cleaned.append(get_request_context())
 
-    monkeypatch.setattr(generate, "_generate_with_retrieval", fail_compile)
+    monkeypatch.setattr(chat_answer, 'generate_chat_answer', fail_compile)
     task = asyncio.create_task(invoke())
     try:
         await asyncio.wait_for(entered.wait(), 2)
@@ -217,7 +219,7 @@ async def test_actual_api_failure_or_cancellation_resets_its_own_task_context(in
         await asyncio.gather(task, return_exceptions=True)
     assert cleaned == [None] and get_request_context() is None
     assert installed.calls == []
-    monkeypatch.setattr(generate, "_generate_with_retrieval", compiled)
+    monkeypatch.setattr(chat_answer, 'generate_chat_answer', compiled)
     assert (await receive("healthy-after-failure")).reply == ANSWER
     assert snapshots.call_count == 2 and len(installed.calls) == 1
     assert get_request_context() is None
