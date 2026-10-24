@@ -87,19 +87,27 @@ async def test_service_rejects_invalid_history_before_cache_or_retrieval(monkeyp
     [{"role": "user", "content": " \n\t"}],
     [{"role": "user", "content": "背景" * 1000 + "不允许省略末尾否定。"}],
 ], ids=["role", "blank", "oversize"])
-async def test_ask_rejects_invalid_history_before_dependencies(monkeypatch, path, history):
+async def test_ask_rejects_invalid_history_before_dependencies(monkeypatch, tmp_path, path, history):
     from api import ask
+    from app.runtime import RuntimeContainer
+    from db.database import SQLiteDB
 
+    database = SQLiteDB(tmp_path / "invalid-history.sqlite")
+    record = Mock(wraps=database.add_model_invocation)
+    monkeypatch.setattr(database, "add_model_invocation", record)
     service = AsyncMock(side_effect=AssertionError("Invalid request must not initialize the service"))
     monkeypatch.setattr(ask, "get_grounded_answer_service", service)
     app = FastAPI()
+    app.state.runtime_container = RuntimeContainer(database, lambda: False)
     app.include_router(ask.router)
-    app.dependency_overrides[ask.get_current_user] = lambda: {"id": 1, "role": "user"}
+    app.dependency_overrides[ask.get_current_user] = lambda: {"user_id": 1, "username": "synthetic", "role": "user"}
     async with AsyncClient(transport=ASGITransport(app=app, raise_app_exceptions=False), base_url="http://test") as client:
         response = await client.post(path, json={"message": "甲是谁", "domainId": "story", "history": history})
+    database.close_connection()
     assert response.status_code == 422
     assert all(error["loc"][:2] == ["body", "history"] for error in response.json()["detail"])
     service.assert_not_awaited()
+    record.assert_not_called()
 
 
 def test_ask_accepts_original_history_at_the_declared_text_limit():
