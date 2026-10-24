@@ -1,6 +1,7 @@
 """Explicit source dependencies identify speech; they never certify its facts."""
 import re
 from dataclasses import dataclass
+from functools import cached_property
 
 
 def identifier_pattern(identifier):
@@ -19,12 +20,12 @@ class SourceReadPlan:
     group_modes: tuple[tuple[str, ...], ...] = ()
     document_titles: tuple[str, ...] = ()
 
-    @property
+    @cached_property
     def atom_groups(self):
         return tuple(tuple(SourceReadAtom(value, self.group_modes[i][j] if self.group_modes else self.match_mode)
                            for j, value in enumerate(group)) for i, group in enumerate(self.groups))
 
-    @property
+    @cached_property
     def selectors(self):
         return tuple(dict.fromkeys(atom for group in self.atom_groups for atom in group))
 
