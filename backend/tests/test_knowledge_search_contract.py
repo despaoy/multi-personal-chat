@@ -14,6 +14,13 @@ from db.schemas import KnowledgeSearchRequest
 from knowledge import rag_helper
 
 
+@pytest.fixture(autouse=True)
+def published_revision(monkeypatch):
+    # Synthetic successful preparation must publish a matching index revision.
+    monkeypatch.setattr(index_lifecycle, "_vector_index_revision", 7)
+    monkeypatch.setattr(index_lifecycle, "_get_rebuild_revision", lambda: 7)
+
+
 def test_evidence_mode_preserves_legacy_search_type() -> None:
     response = _knowledge_search_response("query", [{"documentId": 1}])
 

@@ -821,6 +821,7 @@ async def search_knowledge(
 
         if not await asyncio.to_thread(index_lifecycle._ensure_vector_index):
             raise RuntimeError("Knowledge index rebuild did not complete")
+        revision = index_lifecycle._vector_index_revision
 
         from knowledge.rag_helper import get_rag_helper
 
@@ -828,6 +829,8 @@ async def search_knowledge(
             get_rag_helper().retrieve_context, query, top_k=top_k,
             enable_rerank=True, filters=filters, use_cache=False,
         )
+        if await run_db(index_lifecycle._get_rebuild_revision) != revision:
+            raise RuntimeError("Knowledge authority changed during search")
         formatted = [
             {
                 "documentId": row["document_id"],

@@ -1151,6 +1151,7 @@ class TestEnsureVectorIndexEndToEnd:
             )
 
         monkeypatch.setattr(index_lifecycle, "_ensure_vector_index", lambda: True)
+        monkeypatch.setattr(index_lifecycle, "_vector_index_revision", index_lifecycle._get_rebuild_revision())
         from types import SimpleNamespace
 
         from knowledge import rag_helper
@@ -1218,6 +1219,7 @@ class TestEnsureVectorIndexEndToEnd:
 
         # 即使索引重建成功，不存在的知识库名称也应直接返回空，不应进入检索路径
         monkeypatch.setattr(index_lifecycle, "_ensure_vector_index", lambda: True)
+        monkeypatch.setattr(index_lifecycle, "_vector_index_revision", index_lifecycle._get_rebuild_revision())
 
         # 跟踪 RAG/vector 是否被调用
         rag_called = {"value": False}
