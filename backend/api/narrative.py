@@ -58,7 +58,7 @@ def characters(user=Depends(get_current_user)):
 @router.post("/canonical/generate")
 async def canonical_generate(body: CanonicalMessage, request: Request, user=Depends(get_current_user)):
     from api.generate import _generate_reply_impl, _is_high_risk_prompt, _security_policy_response
-    from infra.concurrency_control import InferenceQueueFull, RateLimitExceeded, inference_runtime
+    from infra.concurrency_control import InferenceQueueFull, RateLimitExceeded
     from services.character_context import TurnInput, build_character_context_service
     from inference.model_manager import get_model_manager
     from inference.request_context import resolve_request_context, use_request_context
@@ -69,7 +69,11 @@ async def canonical_generate(body: CanonicalMessage, request: Request, user=Depe
     if _is_high_risk_prompt(message.strip()):
         return _security_policy_response()
     container = get_runtime_container(request.app)
-    runtime = container.inference_runtime or inference_runtime
+    runtime = container.inference_runtime
+    if container.db is None or runtime is None:
+        raise HTTPException(503, detail={
+            "stage": "dependencies", "message": "Chat database or scheduler is not configured; check application startup",
+        })
     session = "canonical:" + body.character_id
 
     async def job():

@@ -322,6 +322,9 @@ def test_full_web_generation_and_canonical_return(repo, monkeypatch):
     from services.character_context import build_character_context_service
 
     class Runtime:
+        def __bool__(self):
+            return False
+
         async def check_rate_limits(self, *args):
             pass
 
@@ -505,3 +508,30 @@ async def test_canonical_preparation_and_generation_share_one_model_context(monk
         assert response.model == "isolated-model"
         assert events == ["snapshot", "build", "prepare", "generate"]
     assert get_request_context() is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("missing", ["db", "scheduler"])
+async def test_canonical_missing_dependencies_stop_before_queue_or_model(monkeypatch, missing):
+    from api import narrative
+    from app.runtime import RuntimeContainer
+    from infra import concurrency_control
+    from inference import model_manager
+
+    def forbidden(*args, **kwargs):
+        pytest.fail("Missing application dependency must not use global runtime or model")
+
+    runtime = SimpleNamespace(check_rate_limits=forbidden, submit=forbidden, priority_for=forbidden)
+    monkeypatch.setattr(concurrency_control, "inference_runtime", runtime)
+    monkeypatch.setattr(model_manager, "get_model_manager", forbidden)
+    monkeypatch.setattr(narrative, "validate_character", lambda _: None)
+    app = FastAPI()
+    app.state.runtime_container = RuntimeContainer(
+        None if missing == "db" else object(), lambda: False,
+        None if missing == "scheduler" else runtime,
+    )
+    body = narrative.CanonicalMessage(character_id="isolated-character", message="继续已提供的正史记录。")
+    with pytest.raises(HTTPException) as caught:
+        await narrative.canonical_generate(body, SimpleNamespace(app=app), {"user_id": 1})
+    assert caught.value.status_code == 503
+    assert caught.value.detail["stage"] == "dependencies"
