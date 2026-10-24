@@ -1,4 +1,4 @@
-"""偏好对齐数据模式 - 偏好对(pairwise)数据结构、序列化与统计。
+"""偏好对齐数据模式 - 现用偏好对(pairwise)数据结构与 JSONL 导出。
 
 遵循路线图 guardrail：
 - 偏好数据存为不可变记录，含标注者 rubric 和分歧元数据
@@ -42,28 +42,6 @@ class PreferencePair(BaseModel):
         }
 
 
-class PreferenceDataset(BaseModel):
-    """偏好数据集，含统计信息。"""
-    schema_version: int = 1
-    created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
-    pairs: List[PreferencePair] = Field(default_factory=list)
-
-    @property
-    def statistics(self) -> Dict[str, Any]:
-        total = len(self.pairs)
-        approved = sum(1 for p in self.pairs if p.review_status == "approved")
-        pending = sum(1 for p in self.pairs if p.review_status == "pending")
-        rejected = sum(1 for p in self.pairs if p.review_status == "rejected")
-        annotators = list({p.annotator for p in self.pairs})
-        return {
-            "total": total,
-            "approved": approved,
-            "pending": pending,
-            "rejected": rejected,
-            "annotators": annotators,
-        }
-
-
 def save_jsonl(pairs: List[PreferencePair], path: Path) -> Path:
     """将偏好对列表保存为 JSONL 文件。"""
     path = Path(path)
@@ -72,19 +50,3 @@ def save_jsonl(pairs: List[PreferencePair], path: Path) -> Path:
         for pair in pairs:
             f.write(json.dumps(pair.to_jsonl_dict(), ensure_ascii=False) + "\n")
     return path
-
-
-def load_jsonl(path: Path) -> List[PreferencePair]:
-    """从 JSONL 文件加载偏好对列表。"""
-    path = Path(path)
-    if not path.exists():
-        return []
-    pairs: List[PreferencePair] = []
-    with open(path, "r", encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            data = json.loads(line)
-            pairs.append(PreferencePair(**data))
-    return pairs
