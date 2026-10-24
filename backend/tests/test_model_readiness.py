@@ -35,12 +35,12 @@ def select(monkeypatch, provider):
 
 def install_http(monkeypatch, provider, handler):
     @asynccontextmanager
-    async def acquire(timeout):
+    async def acquire(self, timeout):
         assert timeout == 3.0
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
             yield client
 
-    monkeypatch.setattr(provider, "_acquire_http_client", acquire)
+    monkeypatch.setattr(type(provider), "_acquire_http_client", acquire)
 
 
 @pytest.mark.asyncio
@@ -231,3 +231,27 @@ async def test_other_remote_failure_is_not_ready(monkeypatch, providers, name):
     install_http(monkeypatch, provider, lambda request: httpx.Response(503, json={"error": "unavailable"}))
     with pytest.raises(httpx.HTTPStatusError):
         await check_model_readiness()
+
+@pytest.mark.asyncio
+async def test_concurrent_cloud_readiness_keeps_each_resolved_connection(monkeypatch, providers):
+    provider = providers["openai_compat"]
+    original = (provider.base_url, provider.model, provider.api_key)
+    select(monkeypatch, provider)
+    current = {}
+    monkeypatch.setattr(model_manager, "_get_db_config", lambda: dict(current))
+    requests = []
+
+    def handler(request):
+        host = request.url.host
+        requests.append((host, request.headers["Authorization"]))
+        return httpx.Response(200, json={"data": [{"id": host.split(".")[0]}]})
+
+    install_http(monkeypatch, provider, handler)
+    checks = []
+    for label in ("first", "second"):
+        current.update(openaiCompatBaseUrl=f"https://{label}.invalid", openaiCompatModel=label,
+                       openaiCompatApiKey=f"synthetic-{label}")
+        checks.append(check_model_readiness())
+    assert await asyncio.gather(*checks) == [True, True]
+    assert requests == [("first.invalid", "Bearer synthetic-first"), ("second.invalid", "Bearer synthetic-second")]
+    assert (provider.base_url, provider.model, provider.api_key) == original

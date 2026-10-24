@@ -13,7 +13,7 @@ def check_model_readiness():
     if provider.name == "transformers_peft":
         return provider.get_status()["loaded"] is True
     if provider.name == "openai_compat":
-        provider._refresh_db_config()
+        provider = provider.snapshot()
         if not provider.api_key or not provider.model:
             raise ValueError("Configure the selected provider's API key and model")
     return _check_remote_model(provider)
