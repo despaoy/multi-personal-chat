@@ -790,6 +790,7 @@ async def delete_knowledge_document(doc_id: int, current_user: dict = Depends(ge
 # ============================================
 
 _vector_index_revision: int | None = None
+_vector_index_owner: tuple[object, object] | None = None
 _vector_index_lock = threading.Lock()
 # 只保护本进程完成标志与缓存失效；持久化版本由数据库事务和 CAS 管理。
 # 嵌套锁顺序固定为 _vector_index_lock → _revision_lock。
@@ -954,24 +955,21 @@ def _ensure_vector_index():
       start_revision 才写入 complete，避免重建期间并发 CRUD 被旧重建任务覆盖
     - 落盘失败（clear_all/add_documents 抛异常）不会标记 complete，状态保持 building
     """
-    global _vector_index_revision
-    # The local committed revision must match the durable database revision.
-    # A failed authority read must not authorize old cached evidence.
-    try:
-        if _vector_index_revision is not None and _vector_index_revision == _get_rebuild_revision():
-            return True
-    except Exception as exc:
-        logger.warning("读取知识索引修订号失败: %s", type(exc).__name__)
-        raise
-
+    global _vector_index_revision, _vector_index_owner
     with _vector_index_lock:
         try:
-            if _vector_index_revision is not None and _vector_index_revision == _get_rebuild_revision():
-                return True
-            _vector_index_revision = None
             from knowledge.vector_db import get_vector_db
 
             vector_db = get_vector_db()
+            # Revisions only identify content inside one database/index binding.
+            if (_vector_index_owner is not None
+                    and _vector_index_owner[0] is db
+                    and _vector_index_owner[1] is vector_db
+                    and _vector_index_revision is not None
+                    and _vector_index_revision == _get_rebuild_revision()):
+                return True
+            _vector_index_revision = None
+            _vector_index_owner = (db, vector_db)
             stats = vector_db.get_stats()
             expected_count = _get_expected_chunk_count()
             status, status_count, status_fp, status_rev = _read_rebuild_status()
