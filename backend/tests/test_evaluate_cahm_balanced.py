@@ -54,6 +54,14 @@ def _response(**memory):
     return json.dumps({"memories": [memory]}, ensure_ascii=False)
 
 
+def _local_scope_review(source):
+    # Both complete test inputs authorize no cross-conversation/character sharing.
+    return json.dumps({"decisions": [
+        dict(scope_level=scope, authorized=False, evidence=source)
+        for scope in ("user_character", "user_global")
+    ]}, ensure_ascii=False)
+
+
 def test_balanced_gold_is_valid_and_covers_both_tasks():
     rows = _load_jsonl(DEFAULT_DATASET)
 
@@ -109,6 +117,7 @@ async def test_relation_operation_target_status_macro_f1_and_failures_use_valida
     ]
     completion = _SequenceCompletion(
         [
+            _local_scope_review(cases[0]["message"]),
             _response(
                 kind="name",
                 value="小明",
@@ -118,6 +127,7 @@ async def test_relation_operation_target_status_macro_f1_and_failures_use_valida
                 operation="NOOP",
                 attributed_to="user",
             ),
+            _local_scope_review(cases[1]["message"]),
             _response(
                 kind="goal",
                 value="点云识别",
@@ -136,6 +146,7 @@ async def test_relation_operation_target_status_macro_f1_and_failures_use_valida
     report = await _evaluate_relations(cases, config, completion=completion)
 
     assert completion.closed is True
+    assert completion.responses == []
     assert report["evaluated"] is True
     assert report["successfully_processed_cases"] == 2
     assert report["operation_accuracy"] == pytest.approx(0.5)

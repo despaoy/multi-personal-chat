@@ -1,5 +1,20 @@
 # 当前实现与阅读入口
 
+## 2026-10-25：后端验证基线与当前链路
+
+本轮业务源码验证基线为 `ea09dd5`。整体验证运行一次，补齐一项离线评测测试的授权审核响应后，只复测直接相关文件；按用例身份汇总为 **10,551 通过、1 项合理跳过、0 项未解决失败**，共 10,552 个不同案例。首次失败、固定 CPU 环境、真实 PostgreSQL 范围及限制见[后端里程碑验证](reports/backend-milestone-20261025.md)。
+
+近期已同步服务器、本地和 GitHub 的主要链路：
+
+- 聊天知识检索由 `knowledge/chat_retrieval.py` 管理来源路由、索引准备与原文核验，生成入口调用实际知识业务，见[检索职责调整](reports/backend-chat-retrieval-owner-20261024.md)。
+- 记忆模型依据完整原话提出范围；请求扩大范围时，执行前进行语义授权审核，不用固定措辞筛选授权，见[记忆范围修复](reports/backend-memory-scope-routing-20261024.md)。
+- 模型收到本轮实际记忆写入启用状态；支持保存、待后台处理和已经完成分别表述，见[能力状态传递](reports/backend-memory-capability-20261025.md)。
+- 独立问答完整校验后返回正文，适配器直接管理并及时关闭实际上游流，见[问答流所有权](reports/backend-ask-stream-owner-20261025.md)。
+
+本轮整体验证关闭 GPU 和付费模型调用，不能替代模型理解质量、浏览器或外部平台验收。近期实际 DeepSeek Flash 抽查及其范围单独记录在上述阶段报告中；部署开关仍以实际配置为准。公网开放不在当前目标内。
+
+下方带日期的段落保留当时实现和实验结论；现行代码事实以本节、当前事实表及对应验证记录为准。
+
 ## 2026-09-22：长期记忆 M2 事项生命周期
 
 规则路径新增小范围事项计划、进行、完成、取消、延期识别，支持今天/明天/后天及完整日期，固定按 +08:00 日历日解析。明确更新沿用版本链；日期已过但未报告结果的事项在检索时标注“结果未知”，不自动判完成。同名多项不猜测更新目标，不新增模型、定时任务或数据库迁移。具体表达、边界与实现见 [M2 事项生命周期](architecture/EVENT_MEMORY_M2.md)。
@@ -54,7 +69,7 @@
 实现独立历史、关系状态、事实提议确认、revision 事务提交和分支幂等；正史索引只读、分支暂停普通长期记忆写入。
 说明、启用步骤和开发评测见 [假想分支架构](architecture/NARRATIVE_BRANCHES.md)。未部署、未迁移用户真实数据库，尚无真实模型提升结论。
 
-文档核对日期：2026-09-11。范围为本地工作区的源码、配置与已保存实验记录；不代表当天重新验证了服务器、GPU或外部平台。
+早期文档核对日期为2026-09-11，其范围为当时本地源码、配置和已保存实验记录；后续实现与验证按本页各日期分别记录。
 
 后续全仓库核查及未完成发布条件见[发布前源码审查](maintainer/RELEASE_AUDIT_2026-09-11.md)。
 
@@ -69,23 +84,23 @@
 
 ## 当前事实
 
-| 项目 | 本地可核实状态 | 主要依据 |
+| 项目 | 当前代码及已验证范围 | 主要依据 |
 | --- | --- | --- |
 | 应用入口 | 在backend目录执行python run.py；app/main.py组装应用 | backend/run.py、backend/app/main.py |
 | 后端进程 | SQLite与PostgreSQL均保持BACKEND_WORKERS=1 | backend/README.md、backend/run.py |
-| 数据库迁移 | head为008_integration_receipts，前序为007_memory_claims | backend/alembic/versions |
+| 数据库迁移 | 唯一head为015_invocation_usage_source，本轮实际Alembic命令已核对 | backend/alembic/versions |
 | 角色RAG | multiscale_rag为活动入口；旧P6保留为归档 | backend/knowledge/multiscale_rag、archive/p6_rag_pipeline |
 | 通用知识库 | 用户上传资料经rag_helper/vector_db处理 | backend/knowledge/rag_helper.py |
-| LoRA选择 | 显式loraName优先；否则激活适配器；无显式选择且启用自动路由时另有关键词分支 | backend/api/generate.py |
-| 低置信聊天 | 人物化表达不知道，引用为空，仍属于abstention；表达失败使用固定兜底 | backend/README.md、backend/api/generate.py |
+| LoRA选择 | 显式选择及人物映射经过兼容检查；未显式选择LoRA且未选择人物时才使用激活适配器 | backend/api/generate.py |
+| 低置信聊天 | 人物化表达不知道、引用为空并标记abstention；检索或生成故障明确失败，不使用固定回复伪装完成 | backend/README.md、backend/api/generate.py |
 | 平台交付 | 生成回执持久化；平台发送成功确认后才提交角色历史、记忆和关系 | backend/api/integrations.py、backend/db/integration_receipts.py |
 | V4训练数据 | frozen，926条，1961个监督目标；独立validation为70条 | canonical_dataset_manifest.json |
 | 模型质量 | 已保存记录中E1与recovery未通过生成/语义门禁；无正式adapter，E2-E5暂停 | 实验总览及checkpoint审核记录 |
 | V5 | 候选盘点与审核工作区已经存在，尚未晋升替换V4 | backend/data/character_dialogues/experiments/v5_candidate |
 
-## 本地未提交变更
+## 历史工作区说明（2026-09-11）
 
-核对开始时，memory_llm.py、SQLite/PostgreSQL数据库适配、记忆仓储与相关测试已有用户修改。本次只同步文档，保留这些修改。
+以下描述当时的工作区，不代表本轮已同步仓库存在未提交修改。核对开始时，memory_llm.py、SQLite/PostgreSQL数据库适配、记忆仓储与相关测试已有用户修改。本次只同步文档，保留这些修改。
 
 该工作区的记忆写入路径已改为读取当前作用域可见的全部active记录，按词面、语义、规则key和反馈目标匹配，再压缩到最多10条交给记忆LLM。旧说明中的“先取最近10条，纠错扩大到100条”不再符合这份工作区。完整流程及规模限制见[记忆说明](architecture/CHARACTER_CONTEXT_AND_MEMORY.md)。这些事实不应推断为远端已部署或已通过真实模型规模评测。
 
