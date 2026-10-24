@@ -92,10 +92,6 @@ class KnowledgeIndexDocument:
     def embedding_text_fingerprint(self) -> str:
         return _fingerprint(self.embedding_text)
 
-    @property
-    def content_fingerprint(self) -> str:
-        return _fingerprint(f"{self.id}\n{self.embedding_text}")
-
     def to_dict(self) -> dict[str, Any]:
         return {
             "id": self.id,

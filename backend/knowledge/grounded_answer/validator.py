@@ -62,10 +62,6 @@ class CitationValidation:
     duplicate_count: int = 0
     warnings: list[str] = field(default_factory=list)
 
-    @property
-    def has_invalid(self) -> bool:
-        return bool(self.invalid_keys) or self.duplicate_count > 0
-
 
 class CitationValidator:
     """模型输出 → 合法 citation key 集合 → 服务端回填 metadata。"""
