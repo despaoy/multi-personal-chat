@@ -5,6 +5,8 @@ container. The worker owns no application imports, credentials or live resources
 """
 
 import ast
+import asyncio
+import signal
 import contextlib
 import io
 import json
@@ -117,6 +119,56 @@ def _execute(code: str, args: dict, memory_limit: int, cpu_limit: int) -> dict:
                 "error": f"{type(exc).__name__}: {exc}"[:_MAX_OUTPUT_CHARS], "result": ""}
 
 
+def _worker_environment() -> dict[str, str]:
+    environment = {"PATH": os.defpath}
+    environment.update({key: os.environ[key] for key in ("SYSTEMROOT", "TZ", "LANG", "LC_ALL") if key in os.environ})
+    return environment
+
+
+async def run_tool_script(path: Path, *, timeout: float = 30.0) -> str:
+    """Run a trusted standalone script; own output, deadline and child lifetime.
+
+    Unlike function tools, standalone scripts retain Python script semantics.
+    This executor does not provide an operating-system security sandbox.
+    """
+    path = path.resolve(strict=True)
+    process = await asyncio.create_subprocess_exec(
+        sys.executable, "-X", "utf8", str(path), cwd=path.parent,
+        stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        env=_worker_environment(), start_new_session=os.name == "posix",
+    )
+
+    async def read_output(stream):
+        chunks, size = [], 0
+        while chunk := await stream.read(4096):
+            size += len(chunk)
+            if size > _MAX_OUTPUT_CHARS:
+                raise ToolCodeError("script output exceeds output limit")
+            chunks.append(chunk)
+        return b"".join(chunks).decode("utf-8")
+
+    tasks = [asyncio.create_task(read_output(process.stdout)),
+             asyncio.create_task(read_output(process.stderr)),
+             asyncio.create_task(process.wait())]
+    try:
+        output, error, returncode = await asyncio.wait_for(asyncio.gather(*tasks), timeout)
+    finally:
+        if os.name == "posix":
+            with contextlib.suppress(ProcessLookupError):
+                os.killpg(process.pid, signal.SIGKILL)
+        elif process.returncode is None:
+            process.kill()
+        for task in tasks:
+            if not task.done():
+                task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+        await process.communicate()
+    if returncode:
+        raise subprocess.CalledProcessError(returncode, [sys.executable, str(path)], output, error)
+    output, error = output.strip(), error.strip()
+    return "\n".join(part for part in (output, f"标准错误输出:\n{error}" if error else "") if part)
+
+
 def run_tool_code(code: str, args: dict) -> dict:
     validate_tool_code(code)
     timeout = float(os.getenv("CLAW_EXECUTION_TIMEOUT", "3"))
@@ -127,8 +179,7 @@ def run_tool_code(code: str, args: dict) -> dict:
         raise ValueError("CLAW_MEMORY_LIMIT_MB must be positive")
     request = json.dumps({"code": code, "args": args, "memory_limit": memory_limit,
                           "cpu_limit": max(1, int(timeout))}, ensure_ascii=False)
-    environment = {"PATH": os.defpath}
-    environment.update({key: os.environ[key] for key in ("SYSTEMROOT", "TZ", "LANG", "LC_ALL") if key in os.environ})
+    environment = _worker_environment()
     try:
         with tempfile.TemporaryDirectory(prefix="claw-") as directory:
             completed = subprocess.run(

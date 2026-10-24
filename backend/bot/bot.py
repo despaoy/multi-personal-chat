@@ -28,7 +28,8 @@ from nonebot.adapters.onebot.v11 import (
 )
 from nonebot.log import logger
 from nonebot.exception import FinishedException
-from bot.tools import execute_tool, TOOLS
+from bot.tools import execute_tool, ToolCall, ToolError, TOOLS
+from pydantic import ValidationError
 
 # 加载环境变量 - 优先加载backend/.env，回退到bot/.env
 _backend_env = Path(__file__).parent.parent / ".env"
@@ -447,12 +448,6 @@ async def handle_claw(bot: Bot, user_message: str, event: MessageEvent, lora_nam
     tool_list = "\n".join(
         [f"{name}: {tool['description']}" for name, tool in TOOLS.items()]
     )
-    analysis_prompt = f"你是{char_name}，可用工具:\n{tool_list}\n用户请求：{user_message}\n简要说明你打算用什么工具来解决，风格自然。"
-    thinking = await _unified_generate(analysis_prompt, session_id, lora_name)
-    await bot.send(event, thinking)
-    # M5 fix (扩展): 思考结果可能回显用户消息中的 PII，只记长度与短预览（≤60 chars）
-    logger.info(f"[claw] 思考结果: 字符数={len(thinking)}")
-
     prompt = f"""
 你是一个命令解释器。根据用户请求，选择最合适的工具并输出JSON。
 [可用工具]
@@ -465,45 +460,20 @@ async def handle_claw(bot: Bot, user_message: str, event: MessageEvent, lora_nam
 只输出JSON，格式: {{"tool": "工具名", "args": {{"参数名": "值"}}}}
 如果没有参数，args设为{{}}。"""
     json_reply = await _unified_generate(prompt, session_id, lora_name)
-    # M5 fix: LLM 原始输出可能回显用户消息中的 PII，只记长度与短预览（≤60 chars）
     logger.info(f"[claw] LLM输出: 字符数={len(json_reply)}")
 
-    text = json_reply.strip()
-    if text.startswith("```"):
-        text = text.split("\n", 1)[-1] if "\n" in text else text
-        text = text.rsplit("```", 1)[0] if "```" in text else text
-    start = text.find("{")
-    end = text.rfind("}")
-    if start != -1 and end != -1:
-        text = text[start:end+1]
-
     try:
-        call = json.loads(text)
-    except (json.JSONDecodeError, KeyError):
-        await bot.send(event, "没能理解你的意思，不如换种说法？")
-        return "工具调用解析失败"
-
-    tool_name = call["tool"]
-    if tool_name == "write_code":
-        explain = await _unified_generate(f"你是{char_name}，你正在帮用户编写代码，向用户简单解释代码的功能，用户要求{user_message}", session_id, lora_name)
-        await bot.send(event, explain)
-        # M5 fix (扩展): 解释结果可能回显用户请求中的 PII，只记长度与短预览（≤60 chars）
-        logger.info(f"[claw] 解释结果: 字符数={len(explain)}")
-    raw = await execute_tool(call["tool"], call.get("args", {}), bot=bot, event=event)
-    args = call.get("args", {})
-    code = ""
-    if tool_name == "write_code":
-        code = args.get("code", "")
-        filename = args.get("filename", "")
-        await bot.send(event=event, message=f" **{filename}**：\n```python\n{code}\n```")
-
-    if tool_name == "write_code":
-        done = await _unified_generate(f"你是{char_name}，代码已经编写完成{code}，向用户回复代码已经编写完成，任务结束，自然收尾。", session_id, lora_name)
-        await bot.send(event, done)
-        await bot.send(event, message=f"运行结果如下：\n{raw}")
-    else:
-        done = await _unified_generate(f"以{char_name}的语气报告结果。请求:{user_message}。结果:{raw}", session_id, lora_name)
-        await bot.send(event, done)
+        call = ToolCall.model_validate_json(json_reply)
+    except ValidationError as exc:
+        raise ToolError("模型返回的工具调用格式无效，本次未执行工具。") from exc
+    raw = await execute_tool(call.tool, call.args, bot=bot, event=event)
+    if call.tool == "write_code":
+        await bot.send(event, f" **{call.args['filename']}**：\n```python\n{call.args['code']}\n```")
+        await bot.send(event, raw)
+    done = await _unified_generate(
+        f"以{char_name}的语气如实报告工具结果。请求:{user_message}。实际结果:{raw}", session_id, lora_name,
+    )
+    await bot.send(event, done)
 
 
 # ============================================
@@ -712,6 +682,9 @@ def init_bot():
         except asyncio.TimeoutError:
             logger.warning("消息处理超时")
             await message_handler.finish("[系统提示] 消息处理超时，本轮回复未完成，请稍后重试。")
+        except ToolError as exc:
+            logger.error("工具调用未完成: {}", type(exc.__cause__ or exc).__name__)
+            await message_handler.finish(f"[系统提示] {exc}")
         except Exception as exc:
             import traceback
 

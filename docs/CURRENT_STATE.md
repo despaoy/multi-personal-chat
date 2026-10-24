@@ -6,6 +6,8 @@
 
 近期已同步服务器、本地和 GitHub 的主要链路：
 
+- 旧NoneBot严格解析工具调用，脚本失败停止完成通知；异步执行及进程清理归工具执行模块，删除执行前重复模型说明，见[工具执行与失败语义](reports/backend-nonebot-tools-owner-20261025.md)。
+
 - 旧NoneBot删除独立模型加载和隐式选择回退，统一生成实际接收所选模型；工具调用独立计量，见[机器人模型归属与计量](reports/backend-nonebot-provider-owner-20261025.md)。
 
 - 聊天知识检索由 `knowledge/chat_retrieval.py` 管理来源路由、索引准备与原文核验，生成入口调用实际知识业务，见[检索职责调整](reports/backend-chat-retrieval-owner-20261024.md)。

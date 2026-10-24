@@ -175,12 +175,12 @@ async def test_all_tool_steps_share_the_callers_selection_and_session(bot_module
     bot = SimpleNamespace(send=AsyncMock())
     bot_module._selected_lora = 'unrelated-global-choice'
     monkeypatch.setattr(bot_module, 'config', SimpleNamespace(BOT_NAME='合成机器人'))
-    completion = AsyncMock(side_effect=['先查询资料。', '{"tool":"lookup","args":{"query":"周五安排"}}', '查询结果：周五执行，出差顺延。'])
+    completion = AsyncMock(side_effect=['{"tool":"lookup","args":{"query":"周五安排"}}', '查询结果：周五执行，出差顺延。'])
     execute = AsyncMock(return_value='合成档案：周五执行，出差顺延。')
     monkeypatch.setattr(bot_module, '_unified_generate', completion)
     monkeypatch.setattr(bot_module, 'execute_tool', execute)
     await bot_module.handle_claw(bot, '查询周五安排及出差例外', private_event, 'default')
-    assert len(completion.await_args_list) == 3
+    assert len(completion.await_args_list) == 2
     assert all(call.args[1:] == ('1001', 'default') for call in completion.await_args_list)
     execute.assert_awaited_once_with('lookup', {'query':'周五安排'}, bot=bot, event=private_event)
 
