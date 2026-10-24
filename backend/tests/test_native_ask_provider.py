@@ -49,8 +49,8 @@ async def test_cloud_knowledge_answer_keeps_roles_parameters_and_selected_model(
     params = dict(messages=messages, temperature=0.23, max_tokens=300, top_p=0.77)
     assert await answer(**params) == "课程十点半开始。[S1]"
     assert calls == [params]
-    assert [part async for part in stream(**params)] == ["课程十点半开始。[S1]"]
-    assert calls == [params, params]
+    assert stream is None  # The answer service adapts this one-shot result to SSE.
+    assert calls == [params]
 
 
 @pytest.mark.asyncio
@@ -124,3 +124,67 @@ async def test_knowledge_provider_cannot_fall_back_to_flattened_generation(monke
             await answer(**params)
     fallback.assert_not_awaited()
     assert client.await_count == (1 if selected == "vllm" else 0)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("ending", ["close", "complete", "error", "cancel"])
+async def test_native_adapter_closes_its_upstream_before_returning(ending, monkeypatch):
+    import asyncio
+    from unittest.mock import AsyncMock
+
+    from api import ask
+    from app import providers
+
+    entered = asyncio.Event()
+    failure = RuntimeError("synthetic upstream generation failure")
+
+    class Upstream:
+        reads = 0
+        closes = 0
+
+        def __aiter__(self):
+            return self
+
+        async def __anext__(self):
+            self.reads += 1
+            if self.reads == 1:
+                return "first complete synthetic chunk"
+            if ending == "error":
+                raise failure
+            if ending == "cancel":
+                entered.set()
+                await asyncio.Future()
+            raise StopAsyncIteration
+
+        async def aclose(self):
+            self.closes += 1
+
+    upstream = Upstream()
+    client = SimpleNamespace(generate=AsyncMock(return_value=upstream))
+    resolve = AsyncMock(return_value=client)
+    monkeypatch.setattr(providers,"get_vllm_client",resolve)
+    provider = SimpleNamespace(name="vllm",get_status=lambda:{"modelName":"synthetic-vllm"})
+    context = await resolve_request_context(SimpleNamespace(
+        _current_provider=SimpleNamespace(value="vllm"),get_current_provider=lambda:provider))
+    _,generate_stream,_,_ = await ask._resolve_generate_adapters(context)
+    resolve.assert_not_awaited()
+    messages = [dict(role="user",content="完整合成证据：青栎馆周三开放，雨天停办。问题：何时开放？")]
+    stream = generate_stream(messages=messages,temperature=0,max_tokens=64,top_p=1)
+    assert await anext(stream) == "first complete synthetic chunk"
+    if ending == "close":
+        await stream.aclose()
+    elif ending == "complete":
+        assert [chunk async for chunk in stream] == []
+    elif ending == "error":
+        with pytest.raises(RuntimeError) as caught:
+            await anext(stream)
+        assert caught.value is failure
+    else:
+        task = asyncio.create_task(anext(stream))
+        await asyncio.wait_for(entered.wait(),timeout=1)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+    assert upstream.closes == 1
+    resolve.assert_awaited_once()
+    client.generate.assert_awaited_once_with(messages=messages,temperature=0,max_tokens=64,top_p=1,stream=True)

@@ -7,7 +7,7 @@
 - 不绕过现有 Provider 抽象：生成函数使用当前选中的提供方；
   云端保持原始消息契约，本地选择才复用共享 vLLM 客户端
 - 域门控：未命中知识域时返回 abstention（no_domain）
-- 客户端断开：SSE 生成器随请求取消而终止，不继续模型工作
+- 客户端断开：取消本地等待并关闭已打开的上游流
 - 用户可见错误简洁；内部日志不含密钥/完整系统提示词
 """
 
@@ -58,66 +58,50 @@ async def _resolve_generate_adapters(context: InferenceRequestContext) -> tuple[
         identity.update(endpoint=provider.base_url,
                         credential_sha256=hashlib.sha256(provider.api_key.encode()).hexdigest())
     cache_identity = hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()
-    resolved: tuple[Any, Any | None] | None = None
+    if selected == "openai_compat":
+        async def cloud_generate(*, messages, temperature, max_tokens, top_p):
+            reply, _cost = await provider.async_complete(
+                messages, temperature=temperature, max_tokens=max_tokens, top_p=top_p
+            )
+            return reply
+
+        # The answer service owns one-shot-to-SSE adaptation and full validation.
+        return cloud_generate, None, model_id, cache_identity
+
+    client = None
     resolve_lock = asyncio.Lock()
 
-    async def resolve() -> tuple[Any, Any | None]:
-        nonlocal resolved
-        if resolved is not None:
-            return resolved
-        async with resolve_lock:
-            if resolved is not None:
-                return resolved
+    async def resolve_client():
+        nonlocal client
+        if client is None:
+            async with resolve_lock:
+                if client is None:
+                    if selected != "vllm":
+                        raise ValueError(f"Knowledge answers require openai_compat or vllm; selected provider: {selected}")
+                    from app.providers import get_vllm_client
 
-            from app.providers import get_vllm_client
-
-            if selected == "openai_compat":
-
-                async def cloud_generate(*, messages, temperature, max_tokens, top_p):
-                    reply, _cost = await provider.async_complete(
-                        messages, temperature=temperature, max_tokens=max_tokens, top_p=top_p
-                    )
-                    return reply
-
-                resolved = (cloud_generate, None)
-                return resolved
-
-            if selected != "vllm":
-                raise ValueError(f"Knowledge answers require openai_compat or vllm; selected provider: {selected}")
-            client = await get_vllm_client()
-            if client is None:
-                raise RuntimeError("Selected vLLM client is unavailable; check VLLM_ENABLED and vLLM configuration")
-
-            async def vllm_generate(**kwargs: Any) -> str:
-                return await client.generate(**kwargs)
-
-            async def vllm_stream(**kwargs: Any) -> AsyncIterator[str]:
-                stream = await client.generate(**kwargs, stream=True)
-                try:
-                    async for chunk in stream:
-                        yield chunk
-                finally:
-                    close = getattr(stream, "aclose", None)
-                    if close is not None:
-                        await close()
-
-            resolved = (vllm_generate, vllm_stream)
-            return resolved
+                    client = await get_vllm_client()
+                    if client is None:
+                        raise RuntimeError("Selected vLLM client is unavailable; check VLLM_ENABLED and vLLM configuration")
+        return client
 
     async def generate(**kwargs: Any) -> str:
-        generate_fn, _ = await resolve()
-        return await generate_fn(**kwargs)
+        selected_client = await resolve_client()
+        return await selected_client.generate(**kwargs)
 
     async def generate_stream(**kwargs: Any) -> AsyncIterator[str]:
-        generate_fn, stream_fn = await resolve()
-        if stream_fn is None:
-            text = await generate_fn(**kwargs)
-            yield text
-            return
-        async for chunk in stream_fn(**kwargs):
-            yield chunk
+        selected_client = await resolve_client()
+        stream = await selected_client.generate(**kwargs, stream=True)
+        try:
+            async for chunk in stream:
+                yield chunk
+        finally:
+            close = getattr(stream, "aclose", None)
+            if close is not None:
+                await close()
 
     return generate, generate_stream, model_id, cache_identity
+
 
 
 def _safe_citations(citations: list[dict[str, Any]], *, debug: bool) -> list[dict[str, Any]]:

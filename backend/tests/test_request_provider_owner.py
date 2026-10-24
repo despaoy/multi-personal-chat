@@ -166,7 +166,9 @@ async def test_knowledge_adapter_identity_uses_the_bound_local_resource(owned, m
     owned.manager.set_provider(model_manager.ModelProvider.VLLM)
     context = await resolve_request_context(owned.manager)
     gateway = AsyncMock(side_effect=AssertionError("Adapter construction must remain lazy"))
-    monkeypatch.setattr(generate, "get_vllm_client", gateway)
+    from app import providers
+
+    monkeypatch.setattr(providers, "get_vllm_client", gateway)
     first = await ask._resolve_generate_adapters(context)
     owned.manager.set_provider(model_manager.ModelProvider.OPENAI_COMPAT)
     second = await ask._resolve_generate_adapters(context)
@@ -200,7 +202,11 @@ async def test_bound_cloud_knowledge_generation_survives_default_change(owned, s
                             {"role": "user", "content": FACTS}],
                   temperature=.2, max_tokens=128, top_p=1.0)
     if streaming:
-        assert [part async for part in stream(**params)] == [ANSWER]
+        from knowledge.grounded_answer.service import GroundedAnswerService
+
+        assert stream is None
+        adapted = GroundedAnswerService._wrap_as_stream(answer)
+        assert [part async for part in adapted(**params)] == [ANSWER]
     else:
         assert await answer(**params) == ANSWER
     assert model == "openai_compat/deepseek-flash" and owned.local_calls == []
