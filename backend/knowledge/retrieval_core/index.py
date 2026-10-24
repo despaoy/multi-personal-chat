@@ -33,7 +33,7 @@ class BM25Index:
         self.k1 = k1
         self.b = b
         self.field_weight = max(1, field_weight)
-        self._doc_tokens: list[list[str]] = []
+        self._doc_counts: list[Counter[str]] = []
         self._doc_lens: list[int] = []
         self._doc_freqs: dict[str, int] = defaultdict(int)
         self._avgdl: float = 0.0
@@ -53,13 +53,12 @@ class BM25Index:
         return "\n".join([precise] * field_weight + [doc.summary, doc.content])
 
     def build(self, documents: Sequence[KnowledgeIndexDocument]) -> None:
-        tokenized = [tokenize(self.document_text(doc, self.field_weight)) for doc in documents]
-        self._doc_tokens = tokenized
+        self._doc_counts = [Counter(tokenize(self.document_text(doc, self.field_weight))) for doc in documents]
         self._doc_lens = []
         self._doc_freqs = defaultdict(int)
-        for tokens in tokenized:
-            self._doc_lens.append(len(tokens))
-            for token in set(tokens):
+        for counts in self._doc_counts:
+            self._doc_lens.append(sum(counts.values()))
+            for token in counts:
                 self._doc_freqs[token] += 1
         n_docs = len(documents)
         self._avgdl = (sum(self._doc_lens) / n_docs) if n_docs else 0.0
@@ -74,14 +73,13 @@ class BM25Index:
             return []
         if not self._built:
             raise RetrievalIndexError("sparse", "not_initialized")
-        if not self._doc_tokens:
+        if not self._doc_counts:
             return []
         query_tokens = tokenize(query)
         if not query_tokens:
             return []
         scores: list[tuple[int, float]] = []
-        for doc_idx, tokens in enumerate(self._doc_tokens):
-            counts = Counter(tokens)
+        for doc_idx, counts in enumerate(self._doc_counts):
             doc_len = self._doc_lens[doc_idx] or 1
             score = 0.0
             for token in query_tokens:
@@ -99,7 +97,7 @@ class BM25Index:
 
     def stats(self) -> dict[str, Any]:
         return {
-            "docs": len(self._doc_tokens),
+            "docs": len(self._doc_counts),
             "vocab": len(self._doc_freqs),
             "avgdl": round(self._avgdl, 1),
             "built": self._built,
@@ -174,7 +172,7 @@ class DomainIndex:
         if mode in {"sparse", "hybrid"}:
             if not self.bm25._built:
                 raise RetrievalIndexError("sparse", "not_initialized")
-            if len(self.bm25._doc_tokens) != len(self.documents):
+            if len(self.bm25._doc_counts) != len(self.documents):
                 raise RetrievalIndexError("sparse", "row_count_mismatch")
         if mode in {"vector", "hybrid"}:
             if self._faiss_index is None:
